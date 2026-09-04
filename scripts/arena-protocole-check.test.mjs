@@ -118,6 +118,31 @@ AUTOWIN_LESSON_V1: {"outcome":"success","title":"A gagne","body":"Δ = 0,29 $ co
 const point = (res, id) => res.points.find((p) => p.id === id)
 
 describe('arena-protocole-check — contrôle déterministe du banc /arena', () => {
+  /*
+   * UN SECOND LANCEUR NE DOIT PAS MASQUER CELUI DES BRAS.
+   *
+   * Mesure du 2026-09-03 (banc « remontees des agents ») : le banc portait `lance.sh` (les quatre
+   * bras) ET `lance-juge.sh` (le juge). Le controle prenait le PREMIER fichier `lance*` par ordre
+   * alphabetique — celui du juge — et rendait P6 « 2 dossiers distincts pour 4 bras » plus P7
+   * « lancement sequentiel » sur un banc ou les quatre bras etaient bel et bien partis ensemble.
+   * Un faux RATE fait corriger ce qui marchait deja.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : revenir a un `readdirSync(bench).find(...)` qui retient
+   * le premier nom rencontre au lieu de celui qui parle des quatre bras.
+   */
+  it('choisit le lanceur des QUATRE BRAS, meme si un autre lance*.sh le precede', () => {
+    const f = bancConforme()
+    writeFileSync(
+      join(f.bench, 'lance-juge.sh'),
+      ['#!/bin/sh', 'cd "/tmp/le-juge"', 'claude -p prompt-judge.txt > out-judge.json'].join('\n')
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    const p6 = res.points.find((p) => p.id === 'P6')
+    const p7 = res.points.find((p) => p.id === 'P7')
+    expect('P6 ' + p6.detail).toBe('P6 ok')
+    expect('P7 ' + p7.detail).toBe('P7 ok')
+  })
+
   it('un banc conforme passe tous les points lisibles', () => {
     const f = bancConforme()
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
