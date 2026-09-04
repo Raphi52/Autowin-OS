@@ -47,11 +47,13 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   // Anthropic — toute la famille servie par le CLI (`model-aliases.ts` : opus, sonnet, haiku,
   // fable) plus `mythos`, present dans MODEL_RATES et jusqu'ici SANS fenetre : un modele
   // reellement servi n'affichait donc aucune jauge.
-  // OPUS : 1 M. L'app n'atteint pas l'API mais le CLI `claude` (`providers/claude.ts`), qui
-  // negocie lui-meme sa fenetre — aucun en-tete beta n'est a poser ici, et le denominateur est la
-  // SEULE chose que ce depot decide. Fenetre du compte servi declaree par l'utilisateur
-  // (conv-267, 2026-09-04) ; l'affichage a 200 k annoncait « critique » a 17 % d'occupation reelle.
-  { match: 'opus', provider: 'claude', tokens: 1_000_000, source: 'Compte Claude de l’utilisateur — Opus, fenêtre 1M (déclaré conv-267, 2026-09-04)' },
+  // OPUS : 200 k, la fenetre standard documentee. Ce champ a porte 1_000_000 entre le 2026-09-04
+  // et le 2026-09-04 (conv-267 puis conv-292) sur la seule DECLARATION de l'utilisateur — aucune
+  // source Anthropic ne l'etablit, et la fenetre 1 M est un mode beta reserve a Sonnet 4/4.5,
+  // conditionne a un en-tete que ce depot n'envoie pas. Un denominateur trop GRAND est l'erreur
+  // dangereuse : il affiche 20 % la ou le fil est sature. On revient donc a la valeur sourcee, et
+  // seule une saturation OBSERVEE au-dela de 200 k pourra justifier de la relever.
+  { match: 'opus', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'sonnet', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'haiku', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'fable', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },

@@ -18,9 +18,9 @@ import { contextGauge, CONTEXT_WINDOWS } from './context-gauge'
  */
 describe('jauge de contexte', () => {
   it('rend la part occupee de la fenetre du modele', () => {
-    const jauge = contextGauge({ inputTokens: 500_000, model: 'claude-opus-5' })
-    expect(jauge?.limit).toBe(1_000_000)
-    expect(jauge?.used).toBe(500_000)
+    const jauge = contextGauge({ inputTokens: 100_000, model: 'claude-opus-5' })
+    expect(jauge?.limit).toBe(200_000)
+    expect(jauge?.used).toBe(100_000)
     expect(jauge?.ratio).toBeCloseTo(0.5)
   })
 
@@ -36,17 +36,17 @@ describe('jauge de contexte', () => {
   })
 
   it('nomme trois paliers, pour que la couleur ne soit pas decidee dans la vue', () => {
-    expect(contextGauge({ inputTokens: 100_000, model: 'claude-opus-5' })?.level).toBe('ok')
-    expect(contextGauge({ inputTokens: 700_000, model: 'claude-opus-5' })?.level).toBe('tendu')
-    expect(contextGauge({ inputTokens: 950_000, model: 'claude-opus-5' })?.level).toBe('critique')
+    expect(contextGauge({ inputTokens: 20_000, model: 'claude-opus-5' })?.level).toBe('ok')
+    expect(contextGauge({ inputTokens: 140_000, model: 'claude-opus-5' })?.level).toBe('tendu')
+    expect(contextGauge({ inputTokens: 190_000, model: 'claude-opus-5' })?.level).toBe('critique')
   })
 
   it('borne a 1 un depassement plutot que d afficher 130 %', () => {
-    const jauge = contextGauge({ inputTokens: 1_300_000, model: 'claude-opus-5' })
+    const jauge = contextGauge({ inputTokens: 260_000, model: 'claude-opus-5' })
     expect(jauge?.ratio).toBe(1)
     expect(jauge?.level).toBe('critique')
     // Le depassement reste LISIBLE : borner l'affichage ne doit pas effacer le fait.
-    expect(jauge?.used).toBe(1_300_000)
+    expect(jauge?.used).toBe(260_000)
   })
 
   it('distingue le contexte RELU du cache de ce qui a ete paye plein tarif', () => {
@@ -62,7 +62,7 @@ describe('jauge de contexte', () => {
   it('donne a CHAQUE provider servi sa vraie fenetre, pas celle d Anthropic', () => {
     // Les quatre providers de `main/models.ts` ont des fenetres qui vont de 200 k a 1 M.
     // Appliquer 200 k partout affichait « sature » a 20 % d'occupation reelle sur Gemini.
-    expect(contextGauge({ inputTokens: 10, model: 'claude-opus-5', provider: 'claude' })?.limit).toBe(1_000_000)
+    expect(contextGauge({ inputTokens: 10, model: 'claude-opus-5', provider: 'claude' })?.limit).toBe(200_000)
     expect(contextGauge({ inputTokens: 10, model: 'claude-sonnet-5', provider: 'claude' })?.limit).toBe(200_000)
     expect(contextGauge({ inputTokens: 10, model: 'claude-mythos-1', provider: 'claude' })?.limit).toBe(200_000)
     expect(contextGauge({ inputTokens: 10, model: 'gpt-5.6-sol', provider: 'codex' })?.limit).toBe(400_000)
