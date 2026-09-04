@@ -797,6 +797,14 @@
   color: var(--text);
 }
 
+/* Lecture impossible d'un RUN.md : dit comme une erreur, jamais comme le contenu du run. */
+.run-detail-error {
+  font-size: 12px;
+  color: var(--err, #e5534b);
+  padding: var(--s2);
+  white-space: pre-wrap;
+}
+
 /*
  * LES TROIS ONGLETS DU PANNEAU DROIT — Graph / Runs / Logs.
  *

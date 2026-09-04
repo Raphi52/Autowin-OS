@@ -130,7 +130,6 @@ export function InterlocuteursWidget({
       <EcranConversation
         conversation={conversation}
         contact={contact}
-        now={now}
         onOuvrir={onOuvrir}
         ouvertureEnCours={ouvertureEnCours}
         onRepondre={onRepondre}
@@ -326,7 +325,6 @@ function EcranFils({
 function EcranConversation({
   conversation,
   contact,
-  now,
   onOuvrir,
   ouvertureEnCours,
   onRepondre,
@@ -334,7 +332,6 @@ function EcranConversation({
 }: {
   conversation: FilConversation
   contact: Interlocuteur
-  now: number
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
   onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>

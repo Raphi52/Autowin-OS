@@ -25,16 +25,16 @@ export function RunInspector({
   summary: RunInspectorSummary
 }): React.JSX.Element {
   const contentRef = useRef<HTMLDivElement>(null)
-  let headingIndex = 0
-  const sections = SECTIONS.map((name) => {
-    const present = hasSection(content, name)
-    const index = present ? headingIndex++ : undefined
-    return { name, present, index }
-  })
+  const sections = SECTIONS.map((name) => ({ name, present: hasSection(content, name) }))
 
-  function jumpToSection(index: number | undefined): void {
-    if (index === undefined) return
-    contentRef.current?.querySelectorAll('h2')[index]?.scrollIntoView({ block: 'start' })
+  /**
+   * On vise le titre qui PORTE le nom de la section, jamais le n-ieme titre : un RUN.md contient
+   * des titres de niveau 2 hors de cette liste, et compter les titres envoyait alors ailleurs.
+   */
+  function jumpToSection(name: string): void {
+    const titres = [...(contentRef.current?.querySelectorAll('h2') ?? [])]
+    const cible = titres.find((h) => (h.textContent ?? '').trim() === name)
+    cible?.scrollIntoView({ block: 'start' })
   }
 
   return (
@@ -53,13 +53,13 @@ export function RunInspector({
         data-testid="run-section-nav"
         aria-label="Sections du RUN"
       >
-        {sections.map(({ name, present, index }) => (
+        {sections.map(({ name, present }) => (
           <button
             key={name}
             type="button"
             disabled={!present}
             title={present ? `Aller à ${name}` : `${name} absent`}
-            onClick={() => jumpToSection(index)}
+            onClick={() => jumpToSection(name)}
           >
             {present ? name : `${name} absent`}
           </button>

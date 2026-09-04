@@ -85,3 +85,29 @@ describe('RunInspector', () => {
     expect(container.querySelector('.brain-markdown')).not.toBeNull()
   })
 })
+
+describe('RunInspector — ancrage des sections', () => {
+  it('vise le titre PORTANT le nom, même si le RUN.md contient d’autres titres de niveau 2', () => {
+    const cibles: (string | null)[] = []
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      value: function (this: Element) {
+        cibles.push(this.textContent)
+      },
+      configurable: true
+    })
+    act(() =>
+      root.render(
+        createElement(RunInspector, {
+          content:
+            '## Contexte annexe\nTexte\n\n## Besoin\nTexte\n\n## Notes libres\nTexte\n\n## Journal\n[2026-07-21] événement',
+          summary: { status: 'open', dodChecked: 0, dodTotal: 0, journalEvents: 1, defauts: 0 }
+        })
+      )
+    )
+    const buttons = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-testid="run-section-nav"] button')
+    ]
+    act(() => buttons.find((button) => button.textContent === 'Journal')?.click())
+    expect(cibles).toEqual(['Journal'])
+  })
+})
