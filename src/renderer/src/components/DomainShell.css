@@ -52,6 +52,15 @@
   overflow: hidden;
 }
 
+/* Vue SANS barre d'onglets (Knowledge/Memory) : son unique enfant tombait dans la
+   premiere ligne `auto` de la grille, donc le `height: 100%` du graphe se resolvait
+   contre une hauteur de CONTENU — la vue apparaissait tronquee au tiers de l'ecran.
+   On le place dans la ligne extensible ; la ligne `auto` restee vide vaut 0. */
+.domain-shell > .domain-content:only-child {
+  grid-row: 2;
+  height: 100%;
+}
+
 .settings-preflight {
   /* Remplit la vue en conteneur opaque (la classe .surface-panel fournit fond 95% + bord + radius),
      comme les autres sections Settings — plus une boîte flottante insérée. */
