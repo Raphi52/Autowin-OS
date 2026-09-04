@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { configureAutowinAppDataBase } from './app-data'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { pilotJournalEvents } from './runs/turn-journal-enrich'
+import { appendTurnEvent, readTurnJournal } from './runs/turn-journal'
+import { evenementResultatDurable } from './chat/durable-result-event'
 import type { Message, SendOptions, SendResult } from './providers/types'
 
 /**
@@ -14,8 +16,8 @@ import type { Message, SendOptions, SendResult } from './providers/types'
  *  - REPRISE : un succes sur la MEME cible porte `retryOf` = l'`actionId` de l'echec repare ;
  *  - ABANDON : un echec jamais repris est ECRIT (evenement `echecs-abandonnes`), pas deduit d'une
  *    absence — et un succes sur une AUTRE cible ne se fait pas passer pour un rattrapage ;
- *  - FRONTIERE : le champ survit aux deux recopies champ-par-champ qui menent au journal, la seule
- *    facon connue de perdre un champ en silence dans cette chaine.
+ *  - FRONTIERE : le champ survit a la recopie champ-par-champ (la seule facon connue de le perdre
+ *    en silence) et se retrouve dans le FICHIER journal apres ecriture puis relecture.
  */
 function pilot(reponses: string[], echoueSi: (args: Record<string, unknown>) => boolean) {
   const registry = {
@@ -94,24 +96,37 @@ describe('journal des tours : lien entre un échec et l’action qui le rattrape
     expect(cibles[0].actionId).toBe(resultats[0].actionId)
   })
 
-  it('FRONTIÈRE — le lien survit aux deux recopies champ par champ qui mènent au journal', () => {
-    // 1. La frontière durable de `run-pilot-chat` recopie explicitement `retryOf`.
-    const frontiere = readFileSync(join(process.cwd(), 'src/main/chat/run-pilot-chat.ts'), 'utf8')
-    expect(frontiere).toMatch(
-      /\.\.\.\(pilotEvent\.retryOf \? \{ retryOf: pilotEvent\.retryOf \} :/u
+  it('FRONTIÈRE — le lien survit à la recopie durable ET atterrit dans le fichier journal', () => {
+    // 1. La recopie CHAMP PAR CHAMP est ici EXECUTEE (pas relue) : retirer la ligne `retryOf` de
+    //    `evenementResultatDurable` rend ce test rouge, un simple renommage ne le casse pas.
+    const durable = evenementResultatDurable(
+      { actionId: '1:0', name: 'edit_file', ok: true, data: 'ok', retryOf: '0:0' },
+      '9:9'
     )
-    // ... et le type durable partagé le porte, sinon la recopie ne compilerait pas.
-    expect(readFileSync(join(process.cwd(), 'src/shared/chat-turn.ts'), 'utf8')).toMatch(
-      /retryOf\?: string/u
-    )
-    // 2. La liste blanche du journal laisse passer `retryOf` ET l’événement d’abandon complet.
-    const ligne = pilotJournalEvents(
-      { kind: 'echec-rattrape', actionId: '1:1', name: 'edit_file', retryOf: '0:0' },
-      42
-    )
-    expect(ligne).toEqual([
-      { kind: 'echec-rattrape', actionId: '1:1', name: 'edit_file', retryOf: '0:0', at: 42 }
-    ])
+    expect(durable).toEqual({
+      kind: 'result',
+      actionId: '1:0',
+      name: 'edit_file',
+      ok: true,
+      data: 'ok',
+      retryOf: '0:0'
+    })
+    // Un resultat sans rattrapage ne fabrique pas de lien vide.
+    expect(evenementResultatDurable({ name: 'edit_file', ok: false }, '9:9')).toEqual({
+      kind: 'result',
+      actionId: '9:9',
+      name: 'edit_file',
+      ok: false,
+      data: undefined
+    })
+
+    // 2. ... et le meme evenement, ecrit puis RELU sur disque, porte encore le lien.
+    appendTurnEvent(racine, 'conv-frontiere', 'tour-1', { ...durable, at: 42 })
+    const journal = readTurnJournal(racine, 'conv-frontiere', 'tour-1')
+    expect(journal).toEqual([{ ...durable, at: 42 }])
+
+    // 3. L'evenement d'ABANDON passe, lui, par la liste blanche du journal (kind inconnu de la
+    //    recopie durable) : c'est le chemin REEL de `echecs-abandonnes`.
     const abandon = pilotJournalEvents(
       {
         kind: 'echecs-abandonnes',

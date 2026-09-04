@@ -213,7 +213,10 @@ const CHAMPS_PILOTE = [
   'name',
   'ok',
   'text',
-  // Lien vers l'echec rattrape : liste FERMEE, un champ absent d'ici est perdu en silence.
+  // Lien vers l'echec rattrape : liste FERMEE, un champ absent d'ici serait perdu en silence.
+  // A ce jour AUCUN `kind` reel portant `retryOf` ne passe par ici — le resultat, seul porteur du
+  // lien, est ecrit par la recopie durable (voir `DEJA_JOURNALISES`). C'est donc une precaution
+  // pour un futur `kind`, pas un chemin actif : ne pas en tirer de preuve.
   'retryOf',
   'data'
 ] as const
