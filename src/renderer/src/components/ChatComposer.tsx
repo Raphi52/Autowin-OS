@@ -128,7 +128,7 @@ function IconeEnvoyer(): React.JSX.Element {
           fleche a 16px (retour utilisateur conv-257, 2026-09-04). Le pli separe l aile du corps
           et rend l objet identifiable a cette taille. */}
       <path
-        d="M2.8 20.4 21.6 12 2.8 3.6l0 6.6 12.4 1.8-12.4 1.8z"
+        d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z"
         fill="currentColor"
         stroke="none"
       />
