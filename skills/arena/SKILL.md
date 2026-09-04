@@ -49,6 +49,13 @@ Deux artefacts, jamais un seul :
 ## Procédure
 
 ### 1. Cadrer le banc (1 message, pas de sous-agent)
+- **`/arena <CIBLE>` sans défaut nommé (un fichier, un widget, un écran) → la tâche se FABRIQUE, elle
+  ne se demande pas.** Au moment où l'énoncé ne porte qu'une cible : lire la cible et ses tests
+  (lecture seule), en tirer LE défaut le plus mesurable — celui qu'un test peut constater rouge —,
+  l'annoncer en UNE ligne comme hypothèse (« je prends X comme tâche du banc — corrige-moi »), puis
+  CONTINUER. Rendre la main pour réclamer une cible est un ÉCHEC de la skill : l'utilisateur a déjà
+  donné ce qu'il avait. `ask` n'est légitime que si la lecture ne produit AUCUN défaut testable, et
+  alors la question propose deux défauts TROUVÉS, jamais « dis-moi lequel ».
 - Reformuler la tâche en **critère de succès vérifiable** (le test, la commande, la capture qui dira
   « livré »). Sans lui, il n'y a pas de gagnant possible → le fabriquer, ne pas le demander.
 - **CRITÈRE CONSTATÉ ROUGE AVANT LE LANCEMENT — sinon le banc est REFUSÉ.** Le critère s'EXÉCUTE sur
