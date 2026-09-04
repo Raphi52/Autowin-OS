@@ -70,6 +70,18 @@ export async function readBrainHealth(
   }
 }
 
+/**
+ * Le serveur ne sait pas ENCORE nommer la cause : `state: "unavailable"` avec AUCUNE raison, parce
+ * que la fraîcheur est en cours de réévaluation (`_on_corpus_change` remet `freshness` à null,
+ * brain_retrieval.py:297). Mesuré le 2026-09-04 : cette fenêtre dure ~6 s après un changement du
+ * corpus, PUIS l'état devient `degraded` avec la vraie raison. Abandonner dedans = ne rien
+ * réindexer pour tout ce démarrage. Un `unavailable` MOTIVÉ, lui, est un état stable : inutile
+ * d'attendre.
+ */
+export function isCauseUndetermined(health: BrainHealth | null): boolean {
+  return health?.state === 'unavailable' && health.reasons.length === 0
+}
+
 /** Un index périmé se reconstruit ; toute autre dégradation, non. */
 export function needsIndexRebuild(health: BrainHealth | null): boolean {
   if (!health || health.state !== 'degraded') return false
