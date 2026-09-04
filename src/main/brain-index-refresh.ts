@@ -131,12 +131,35 @@ export function startBrainIndexRebuild(
   delete childEnv.PYTHONPATH
   childEnv.AMITEL_BRAIN_ROOT = brainRoot
   attempted = true
-  const child = spawnFn(
-    python,
-    [script, '--knowledge', join(brainRoot, 'knowledge'), '--out', outDir],
-    { cwd: tooling, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
-  )
-  child.unref?.()
+  const args = [script, '--knowledge', join(brainRoot, 'knowledge'), '--out', outDir]
+  const options = { cwd: tooling, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
+
+  const lancer = (essaiFinal: boolean): void => {
+    const child = spawnFn(python, args, options)
+    // Sans cette écoute, un échec passait pour un succès : `launched` était rendu dès le lancement,
+    // et le Brain restait dégradé jusqu'au prochain démarrage de l'app sans que rien ne le dise.
+    child.once?.('error', (erreur) => {
+      console.warn('[brain-index] lancement impossible —', String(erreur))
+      if (!essaiFinal) lancer(true)
+    })
+    child.once?.('exit', (code) => {
+      if (code === 0) {
+        console.log('[brain-index] réindexation terminée —', outDir)
+        return
+      }
+      console.warn('[brain-index] réindexation échouée (code', String(code), ')')
+      // UN seul deuxième essai : une reconstruction coûte plusieurs minutes sur le partage, et une
+      // cause durable (corpus illisible, disque plein) ne se répare pas en réessayant en boucle.
+      if (essaiFinal) {
+        console.warn('[brain-index] second essai également échoué — Brain laissé dégradé')
+        return
+      }
+      console.log('[brain-index] second et dernier essai')
+      lancer(true)
+    })
+    child.unref?.()
+  }
+  lancer(false)
   return { status: 'launched', detail: `réindexation lancée (${outDir})` }
 }
 
