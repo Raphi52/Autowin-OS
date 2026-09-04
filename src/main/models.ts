@@ -10,7 +10,8 @@
 // (un poste tiers voyait `opus-4-6` annoncé comme le meilleur opus, alors qu'Opus 5 existait).
 //   claude → les alias du CLI (`opus`, `sonnet`…, résolus côté serveur) + les modèles NOMMÉS lus dans
 //            le binaire du CLI installé + les versions d'un service local s'il y en a un.
-//   codex  → le listing de l'App Server, sinon le dernier catalogue vu en cache, sinon rien.
+// Claude est la SEULE voie sondée depuis le 2026-09-04 : Codex, Kimi et Gemini sont retirés, on ne
+// paie plus le listing d'un moteur dont le résultat était de toute façon filtré à la sortie.
 // Le CLI est présent par construction : l'app le spawne pour tout appel Claude. C'est donc la source
 // à la fois portable et exacte — aucun service tiers, aucun appel payé, jamais périmée.
 
@@ -18,14 +19,12 @@ import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { isReasoningEffort, type ReasoningEffort } from './roles'
 import type { ComputeBinding } from '../shared/compute-fabric'
-import { CODEX_VALID_EFFORTS } from './providers/codex'
 import {
   compareClaudeVersions,
   isKnownAlias,
   parseClaudeVersion,
   resolveAlias
 } from './model-aliases'
-import { listCodexAppServerModels, type CodexAppServerModel } from './codex-model-source'
 import { claudeCliModelIds } from './claude-cli-catalog'
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import { resolveClaudeBin } from './providers/claude'
@@ -83,87 +82,6 @@ interface DiscoveryResult {
    * d'etre memorise pour survivre a son absence. Absent = `models` fait office.
    */
   cacheable?: ImportedModel[]
-}
-
-async function discoverCodexModels(
-  listModelsFn: () => Promise<CodexAppServerModel[]>
-): Promise<DiscoveryResult> {
-  // Meme regle que pour Claude : aucun modele codex INVENTE quand le listing live ne repond pas. Le
-  // repli precedent (`DEFAULT_IMPORTED_MODELS[0]`) proposait UN modele fige, donc un id qui pouvait
-  // avoir disparu du compte — l'UI le presentait comme utilisable et la requete echouait plus tard.
-  const fallback: DiscoveryResult = { models: [], live: false }
-  try {
-    const payload = await listModelsFn()
-    const discovered = payload.flatMap<ImportedModel>((entry, priority) => {
-      if (typeof entry.model !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.model)) return []
-      // Filtre au set RÉELLEMENT accepté par /responses codex (live 2026-07-24 : minimal & ultra → 400).
-      // Sinon l'UI proposerait un effort qui fait planter la requête (le bug ChatGPT HTTP 400).
-      const efforts = (entry.supportedReasoningEfforts ?? [])
-        .map((level) => level.reasoningEffort)
-        .filter(
-          (effort): effort is ReasoningEffort =>
-            typeof effort === 'string' &&
-            isReasoningEffort(effort) &&
-            CODEX_VALID_EFFORTS.has(effort)
-        )
-      if (efforts.length === 0) return []
-      const requestedDefault = entry.defaultReasoningEffort
-      const defaultReasoningEffort =
-        typeof requestedDefault === 'string' &&
-        efforts.includes(requestedDefault as ReasoningEffort)
-          ? (requestedDefault as ReasoningEffort)
-          : efforts[0]
-      return [
-        {
-          id: `codex/${entry.model}`,
-          provider: 'codex',
-          model: entry.model,
-          label: `${entry.displayName || entry.model} · ChatGPT`,
-          reasoningEfforts: efforts,
-          defaultReasoningEffort,
-          priority,
-          visibility: entry.hidden ? 'hide' : 'list',
-          dynamicallyLoaded: true
-        }
-      ]
-    })
-    return discovered.length > 0 ? { models: discovered, live: true } : fallback
-  } catch {
-    return fallback
-  }
-}
-
-/**
- * Modèles codex NOMMÉS ajoutés par demande explicite de l'utilisateur, quand le listing de l'App
- * Server ne les rend pas encore. C'est une exception ASSUMÉE à la règle « aucun modèle inventé » :
- * l'utilisateur a demandé Sol trois fois, catalogue live à l'appui (terra, luna, gpt-5.5,
- * gpt-5.4-mini). Un seul id, cité, jamais une famille — et jamais en doublon du live.
- */
-const CODEX_MODELES_DEMANDES: { model: string; label: string }[] = [
-  { model: 'gpt-5.6-sol', label: 'GPT-5.6 Sol · ChatGPT' }
-]
-
-export function withCodexNamedSupplements(models: ImportedModel[]): ImportedModel[] {
-  const gabarit = models.find((m) => m.provider === 'codex')
-  // Catalogue codex VIDE = provider injoignable : on n'ajoute rien, sinon l'UI proposerait une
-  // cible unique et non joignable (la regle « aucun modele invente hors listing » tient toujours).
-  if (!gabarit) return models
-  const efforts = (gabarit?.reasoningEfforts ?? ['low', 'medium', 'high', 'xhigh']).filter(
-    (effort): effort is ReasoningEffort => CODEX_VALID_EFFORTS.has(effort)
-  )
-  const manquants = CODEX_MODELES_DEMANDES.filter(
-    (demande) => !models.some((m) => m.provider === 'codex' && m.model === demande.model)
-  ).map<ImportedModel>((demande) => ({
-    id: `codex/${demande.model}`,
-    provider: 'codex',
-    model: demande.model,
-    label: demande.label,
-    reasoningEfforts: efforts.length > 0 ? efforts : ['high'],
-    defaultReasoningEffort: efforts.includes('xhigh') ? 'xhigh' : efforts[0],
-    visibility: 'list',
-    dynamicallyLoaded: true
-  }))
-  return [...manquants, ...models]
 }
 
 function labelClaudeModel(id: string): string {
@@ -387,22 +305,21 @@ function writeCatalogCache(
  * Catalogue disponible AVANT le réseau : uniquement ce qui a été RÉELLEMENT observé sur cette machine.
  *
  * Le cache est une source légitime — il contient un listing live d'une session précédente, pas une
- * liste inventée. En son absence on ne rend RIEN pour codex et claude : un seed figé dans le code
+ * liste inventée. En son absence on ne rend RIEN pour claude : un seed figé dans le code
  * devient faux dès qu'un modèle est publié, et il l'affirme sans le moindre signal (constaté le
  * 2026-07-30 : `opus-4-6` presenté comme le meilleur opus alors que le service en expose `opus-5`).
  *
- * `kimi` et `gemini` ont été RETIRÉS (adaptateurs supprimés le 2026-09-04) : plus aucune entrée
- * déclarée en dur ne subsiste pour eux, et le filtre de sortie ci-dessous écarte ce qu'un cache
- * antérieur au retrait contiendrait encore.
+ * `codex`, `kimi` et `gemini` ont été RETIRÉS : plus aucune entrée déclarée en dur ne subsiste pour
+ * eux, leur section de cache n'est plus relue, et le filtre de sortie ci-dessous écarte ce qu'un
+ * cache antérieur au retrait contiendrait encore.
  */
 export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
-  const codex = readCatalogCache(cachePath, 'codex') ?? []
   const claude = readCatalogCache(cachePath, 'claude') ?? []
-  // MÊME FILTRE DE SORTIE QUE `discoverImportedModels`, et pour la même raison : ce cache a été
-  // écrit AVANT le retrait des moteurs et en contient encore. Sans lui, le catalogue du DÉMARRAGE
-  // (avant toute découverte) reproposait Codex dans Agent Studio et un rôle pouvait y être routé.
-  // Le fichier de cache n'est PAS réécrit : les données anciennes restent lisibles pour l'historique.
-  return [...codex, ...claude, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
+  // FILTRE DE SORTIE, comme dans `discoverImportedModels` : le cache disque a été écrit AVANT le
+  // retrait des moteurs et contient encore des entrées Codex. On ne LIT plus sa section codex, et
+  // le filtre reste comme seconde barrière. Le fichier n'est PAS réécrit : les données anciennes
+  // restent lisibles pour l'historique.
+  return [...claude, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
     ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
   )
 }
@@ -415,24 +332,16 @@ export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
   cachePath?: string,
-  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels,
   cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds
 ): Promise<ImportedModel[]> {
-  const [codex, claude] = await Promise.all([
-    discoverCodexModels(listCodexModelsFn),
-    discoverClaudeModels(fetchFn, cliModelIds)
-  ])
+  const claude = await discoverClaudeModels(fetchFn, cliModelIds)
   const cacheUpdates: Partial<ModelCatalogCache> = {}
-  if (codex.live) cacheUpdates.codex = codex.models
   // On ne met en cache que les VERSIONS reellement decouvertes, jamais les alias du CLI : ceux-ci sont
   // disponibles en permanence (contrat du CLI), les cacher n'apporte rien et polluerait le cache d'ids
   // qui ne sont pas des modeles mais des pointeurs vers « le dernier ».
   const claudeToCache = claude.cacheable ?? claude.models
   if (claude.live && claudeToCache.length > 0) cacheUpdates.claude = claudeToCache
   writeCatalogCache(cachePath, cacheUpdates)
-  const codexModels = codex.live
-    ? codex.models
-    : (readCatalogCache(cachePath, 'codex') ?? codex.models)
   // Claude se compose en DEUX couches, et il fallait les separer : les alias du CLI (socle permanent,
   // jamais caches) et les versions EXACTES (live si un service repond, sinon le dernier catalogue vu).
   // Sans cette separation, `claude.live` etant desormais toujours vrai, le cache n'aurait plus jamais
@@ -444,16 +353,12 @@ export async function discoverImportedModels(
       ? claude.models
       : [...claude.models, ...(readCatalogCache(cachePath, 'claude') ?? [])]
   const resolvedClaudeModels = resolveClaudeAliasLabels(uniqueModels(discoveredClaudeModels))
-  // FILTRE DE SORTIE — le catalogue ne propose que des moteurs RÉELLEMENT routés. Il est appliqué
-  // ici, en dernier, plutôt qu'à chaque source : le cache disque a été écrit AVANT le retrait de
-  // Codex/Kimi/Gemini et en contient encore ; sans ce filtre, ces moteurs morts réapparaîtraient
-  // dans Agent Studio au prochain démarrage et un rôle pourrait de nouveau y être routé.
-  // Le cache n'est PAS réécrit : les données anciennes restent lisibles pour l'historique.
-  return [
-    ...withCodexNamedSupplements(codexModels),
-    ...resolvedClaudeModels,
-    ...DEFAULT_IMPORTED_MODELS
-  ].filter((model) => ROUTED_PROVIDERS.includes(model.provider as RoutedProvider))
+  // FILTRE DE SORTIE — le catalogue ne propose que des moteurs RÉELLEMENT routés. Gardé même si
+  // plus aucune voie retirée n'est sondée : `DEFAULT_IMPORTED_MODELS` ou un futur ajout pourraient
+  // réintroduire un moteur mort, et c'est ce filtre qui l'arrête.
+  return [...resolvedClaudeModels, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
+    ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
+  )
 }
 
 /**

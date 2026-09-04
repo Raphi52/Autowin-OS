@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
 
-const noCodexModels = async (): Promise<[]> => []
 /**
  * Le catalogue Claude lit desormais les ids du BINAIRE du CLI installe. Sans stub, ces tests
  * dependraient de la machine qui les execute (et changeraient a chaque mise a jour du CLI). On injecte
@@ -31,14 +30,11 @@ describe('catalogue Agents dynamique', () => {
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
       undefined,
-      noCodexModels,
       cliIds
     )
 
     expect(models.find((model) => model.model === 'opus')?.label).toBe('Claude Opus 5 · CLI')
-    expect(models.find((model) => model.model === 'sonnet')?.label).toBe(
-      'Claude Sonnet 4.6 · CLI'
-    )
+    expect(models.find((model) => model.model === 'sonnet')?.label).toBe('Claude Sonnet 4.6 · CLI')
     expect(models.find((model) => model.model === 'fable')?.label).toBe('Claude Fable 5 · CLI')
 
     // Ordre du catalogue : les ALIAS du CLI — le socle portable, present sur toute machine qui a le
@@ -85,14 +81,20 @@ describe('catalogue Agents dynamique', () => {
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
       undefined,
-      noCodexModels,
       cliIds
     )
 
     const claude = models.filter((model) => model.provider === 'claude').map((model) => model.model)
     // LE point : Opus 5 est la, NOMME, sans aucun service tiers — lu dans le binaire du CLI.
     expect(claude).toContain('claude-opus-5')
-    expect(claude).toEqual(['opus', 'sonnet', 'haiku', 'fable', 'claude-opus-5', 'claude-sonnet-4-6'])
+    expect(claude).toEqual([
+      'opus',
+      'sonnet',
+      'haiku',
+      'fable',
+      'claude-opus-5',
+      'claude-sonnet-4-6'
+    ])
     // CONTRÔLE NÉGATIF : aucun moteur retiré ne reparaît, quelle que soit la panne de source.
     expect(models.some((model) => model.provider === 'codex')).toBe(false)
     expect(models.some((model) => model.provider === 'kimi')).toBe(false)
@@ -101,45 +103,15 @@ describe('catalogue Agents dynamique', () => {
 
   it('n’importe AUCUN modèle du compte ChatGPT : Codex est retiré du produit', async () => {
     const fetchFn = vi.fn(async () => Response.json({ data: [{ id: 'claude-fable-5' }] }))
-    const listCodexModels = vi.fn(async () => [
-      {
-        id: 'gpt-5.6-sol',
-        model: 'gpt-5.6-sol',
-        displayName: 'GPT-5.6-Sol',
-        hidden: false,
-        isDefault: true,
-        supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'ultra' }],
-        defaultReasoningEffort: 'low'
-      },
-      {
-        id: 'gpt-5.4-mini',
-        model: 'gpt-5.4-mini',
-        displayName: 'GPT-5.4-Mini',
-        hidden: true,
-        isDefault: false,
-        supportedReasoningEfforts: [{ reasoningEffort: 'medium' }],
-        defaultReasoningEffort: 'medium'
-      },
-      {
-        id: '../intrus',
-        model: '../intrus',
-        displayName: 'Intrus',
-        hidden: false,
-        isDefault: false,
-        supportedReasoningEfforts: [],
-        defaultReasoningEffort: 'medium'
-      }
-    ])
 
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
       undefined,
-      listCodexModels,
       cliIds
     )
 
-    // Le compte ChatGPT expose toujours ces modèles (le stub ci-dessus le prouve), mais Codex est
-    // RETIRÉ du produit : le catalogue ne doit plus en proposer un seul. Il ne reste que Claude.
+    // Codex est RETIRÉ : son listing n'est même plus sondé (la fonction n'a plus de source codex à
+    // injecter — cf. le banc `models.moteurs-retires`). Il ne reste que Claude.
     expect(models.map((model) => model.model)).toEqual([
       // Les alias du CLI Claude sont le socle portable : presents quoi que rende le service local.
       'opus',
@@ -151,7 +123,6 @@ describe('catalogue Agents dynamique', () => {
       'claude-fable-5'
     ])
     expect(models.some((model) => model.provider === 'codex')).toBe(false)
-    expect(listCodexModels).toHaveBeenCalled()
   })
 })
 
@@ -179,7 +150,6 @@ describe('cache disque du dernier catalogue vu', () => {
     const live = await discoverImportedModels(
       liveClaudeFetch as unknown as typeof fetch,
       cachePath,
-      noCodexModels,
       cliIds
     )
     expect(live.some((m) => m.model === 'claude-opus-4-8')).toBe(true)
@@ -194,7 +164,6 @@ describe('cache disque du dernier catalogue vu', () => {
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
       cachePath,
-      noCodexModels,
       cliIds
     )
     expect(offline.some((m) => m.model === 'claude-opus-4-8')).toBe(true)
@@ -208,16 +177,10 @@ describe('cache disque du dernier catalogue vu', () => {
     const oldCliIds = (): string[] => ['claude-opus-4-8']
     const opus5Fetch = vi.fn(async () => Response.json({ data: [{ id: 'claude-opus-5' }] }))
 
-    await discoverImportedModels(
-      opus5Fetch as unknown as typeof fetch,
-      cachePath,
-      noCodexModels,
-      oldCliIds
-    )
+    await discoverImportedModels(opus5Fetch as unknown as typeof fetch, cachePath, oldCliIds)
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
       cachePath,
-      noCodexModels,
       oldCliIds
     )
     const alias = offline.find((model) => model.model === 'opus')
@@ -233,7 +196,6 @@ describe('cache disque du dernier catalogue vu', () => {
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
       makeCachePath(),
-      noCodexModels,
       noCliIds
     )
     const claude = offline.filter((m) => m.provider === 'claude').map((m) => m.model)

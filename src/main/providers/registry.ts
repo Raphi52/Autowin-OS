@@ -36,7 +36,7 @@ const COORDINATION_DRAIN_GRACE_MS = ((): number => {
  * tirer des centaines d'appels dans le vide (mesuré : 852 runs rouges) ; bloquer sur le second
  * transformerait une attente de 20 s en panne de provider pour tout le run.
  *
- * Deux sources acceptées : la signature structurée que pose l'adaptateur codex, et le texte brut — pour
+ * Deux sources acceptées : la signature structurée posée par un adaptateur, et le texte brut — pour
  * qu'un provider qui n'a pas (encore) de signature soit couvert quand même.
  */
 function quotaWallReason(error: unknown): string | undefined {
@@ -165,12 +165,11 @@ export class ProviderRegistry {
       const requested = this.get(id)
       if (requested.supportsExecution === true) return { id, opts }
 
-      // Un rôle NON-exécuteur demandant une exécution est délégué à un runner
-      // outillé local. Ordre de préférence DÉTERMINISTE : codex (exécuteur canonique éprouvé) en
-      // premier, sinon le 1er exécuteur déclaré. Évite qu'un nouvel exécuteur enregistré avant
-      // (ex. claude, dont l'auth peut être expirée) devienne silencieusement le fallback par défaut.
+      // Un rôle NON-exécuteur demandant une exécution est délégué à un runner outillé local : le
+      // 1er exécuteur déclaré. La préférence explicite pour `codex` a été retirée avec ce moteur —
+      // son adaptateur n'étant plus enregistré, elle ne pouvait plus élire personne.
       const executors = [...this.adapters.values()].filter((a) => a.supportsExecution === true)
-      const localExecutor = executors.find((a) => a.id === 'codex') ?? executors[0]
+      const localExecutor = executors[0]
       if (localExecutor) {
         return {
           id: localExecutor.id,
@@ -179,8 +178,7 @@ export class ProviderRegistry {
       }
       return { id, opts }
     }
-    // Chat direct : route vers l'adaptateur du provider DEMANDÉ (le binding de rôle, ex. claude/
-    // codex/kimi) tel quel. Chaque adaptateur streame nativement en mode conversation (send =
+    // Chat direct : route vers l'adaptateur du provider DEMANDÉ (le binding de rôle) tel quel. Chaque adaptateur streame nativement en mode conversation (send =
     // AsyncGenerator yield delta). Plus d'intermédiaire « transport » : le provider affiché EST
     // celui qui répond (fin de la redirection silencieuse + du throw obligatoire).
     this.get(id)
