@@ -11,6 +11,8 @@
  * Les timers sont `unref()` : ils ne retiennent jamais l'event loop (pas de fuite au quit).
  */
 
+import { tuerArbre } from '../verify-extinction'
+
 const envMs = (name: string, fallback: number): number => {
   const raw = Number(process.env[name])
   return Number.isFinite(raw) && raw > 0 ? raw : fallback
@@ -45,11 +47,15 @@ export function resolveProviderTimeoutMs(explicit: number | undefined, fallback:
  * s'il n'a pas rendu la main (zombie / SIGTERM ignoré). Best-effort, ne throw jamais. Le timer de
  * grâce est unref → ne retient pas l'event loop.
  */
-export function killEscalate(child: {
-  kill: (signal?: NodeJS.Signals) => boolean
-  killed?: boolean
-  exitCode?: number | null
-}): void {
+export function killEscalate(
+  child: {
+    kill: (signal?: NodeJS.Signals) => boolean
+    killed?: boolean
+    exitCode?: number | null
+    pid?: number
+  },
+  tuerArbreDuProcess: (pid: number) => void = tuerArbre
+): void {
   try {
     child.kill('SIGTERM')
   } catch {
@@ -57,7 +63,16 @@ export function killEscalate(child: {
   }
   const grace = setTimeout(() => {
     try {
-      if (child.exitCode === null || child.exitCode === undefined) child.kill('SIGKILL')
+      if (child.exitCode !== null && child.exitCode !== undefined) return
+      child.kill('SIGKILL')
+      /*
+       * WINDOWS : `child.kill()` ne tue QUE le process direct — Node appelle `TerminateProcess` sur
+       * lui seul. Un CLI de provider est un ARBRE (shim npm → node → outils shell, serveurs MCP) :
+       * le fils meurt, ses enfants continuent d'écrire, et le Stop de l'utilisateur ne stoppe donc
+       * rien du travail réel. `tuerArbre` (taskkill /T /F) est le seul geste qui coupe l'arbre — il
+       * est déjà utilisé pour les arbres de vérification, il manquait ici.
+       */
+      if (child.pid) tuerArbreDuProcess(child.pid)
     } catch {
       /* best-effort */
     }
