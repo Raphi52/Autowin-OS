@@ -38,10 +38,16 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
     })
 
     const messages = store.get(conv.id)!.messages
-    expect(messages.map((message) => message.content)).toContain('ensuite push sur azure sur main')
-    expect(messages.findIndex((message) => message.messageId === messageId)).toBeGreaterThanOrEqual(
-      0
+    expect(messages.map((message) => message.content)).toEqual([
+      'commite le chantier',
+      '',
+      'ensuite push sur azure sur main'
+    ])
+    const rangConsigne = messages.findIndex((message) => message.messageId === messageId)
+    const rangReponse = messages.findIndex(
+      (message) => message.role === 'assistant' && message.turnId === 't1'
     )
+    expect(rangConsigne).toBeGreaterThan(rangReponse)
   })
 
   it('écrit un message utilisateur PERSISTÉ et prévient l’écran', () => {
