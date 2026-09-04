@@ -196,6 +196,52 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
     expect(attentes).toEqual([])
   })
 
+  it('une réindexation qui échoue est relancée UNE fois, puis abandonnée', async () => {
+    const { env } = fauxBrain()
+    const finsExit: ((code: number) => void)[] = []
+    let lancements = 0
+    const spawnFn = () => {
+      lancements++
+      return {
+        unref: vi.fn(),
+        once: (ev: string, cb: (...a: unknown[]) => void) => {
+          if (ev === 'exit') finsExit.push(cb as (code: number) => void)
+        }
+      }
+    }
+    const r = await ensureBrainIndexFresh({
+      env,
+      readHealth: async () => DEGRADE,
+      spawnFn: spawnFn as never
+    })
+    expect(r.status).toBe('launched')
+    expect(lancements).toBe(1)
+
+    finsExit[0](1) // premier essai : échec
+    expect(lancements).toBe(2) // relancé
+
+    finsExit[1](1) // second essai : échec aussi
+    expect(lancements).toBe(2) // PAS de troisième : borné
+  })
+
+  it('une réindexation réussie ne relance rien', async () => {
+    const { env } = fauxBrain()
+    const finsExit: ((code: number) => void)[] = []
+    let lancements = 0
+    const spawnFn = () => {
+      lancements++
+      return {
+        unref: vi.fn(),
+        once: (ev: string, cb: (...a: unknown[]) => void) => {
+          if (ev === 'exit') finsExit.push(cb as (code: number) => void)
+        }
+      }
+    }
+    await ensureBrainIndexFresh({ env, readHealth: async () => DEGRADE, spawnFn: spawnFn as never })
+    finsExit[0](0) // succès
+    expect(lancements).toBe(1)
+  })
+
   it('un service injoignable ne déclenche rien (ce n’est pas un index périmé)', () => {
     expect(needsIndexRebuild(null)).toBe(false)
     expect(needsIndexRebuild({ state: 'unavailable', reasons: ['index freshness mismatch'] })).toBe(
