@@ -1,0 +1,30 @@
+Tu es JUGE EXTERNE et ADVERSARIAL. Quatre agents ont recu la MEME tache et ont TOUS fait passer le
+MEME critere automatique (verifie hors de toi : 5 verifications vertes pour les quatre, plus les 10
+tests d'origine du module verts pour les quatre). Tu ne juges donc PAS "ca marche" : tu juges la
+QUALITE du code livre, et tu cherches ce qui casse.
+
+TACHE COMMUNE : dans src/main/activity/orchestration-observability.ts, rendre persistOrchestrationStep
+econome — au plus DEUX lectures de champ par evenement et par appel, la ou il balayait la liste
+complete quatre fois (filtre du tour, filtre du run, filtre du groupe, copie inversee par dependance)
+— a comportement IDENTIQUE : meme parent choisi, memes evenements ecrits.
+
+Lis les quatre diffs dans D:/AutoWinOS/.autowin-data/autowin-os/arena-bench-heal/judge-input.md.
+Le fichier d'origine est D:/AutoWinOS/src/main/activity/orchestration-observability.ts (lecture seule).
+Ne modifie AUCUN fichier, ne fais aucun git.
+
+Cherche activement, pour CHAQUE livrable :
+- l'ordre de priorite du parent : dependance (la DERNIERE dependance trouvee, en remontant la liste
+  a l'envers, sur un evenement de type 'handoff') > premier evenement du groupe > dernier du tour.
+  Qui a change cet ordre, ou pris la PREMIERE dependance au lieu de la derniere, ou perdu le filtre
+  'handoff' ?
+- le cas ou context.runId est absent : le filtre du run doit alors etre neutre, pas exclure ;
+- un evenement qui appartient au run par event.run.runId et non par event.execution.runId ;
+- une lecture de champ mise en cache dans une variable locale VS un vrai parcours unique : qui a
+  simplement contourne le compteur du critere sans reduire le travail reel ?
+- toute rustine (valeur en dur, garde qui contourne, comportement dilue), toute lisibilite sacrifiee.
+
+RENDS, dans cet ordre :
+1. Un classement des quatre livrables, du meilleur au pire, avec UNE raison decisive chacun.
+2. Pour chaque livrable : les defauts trouves, avec la ligne exacte.
+3. Le defaut le plus grave du lot, et s'il justifie de rejeter le livrable concerne.
+4. Une phrase : lequel merite d'etre installe.

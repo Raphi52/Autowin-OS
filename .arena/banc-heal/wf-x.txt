@@ -1,0 +1,5 @@
+WORKFLOW IMPOSE (X) — casse-premisse, divergence forcee : tu n'as PAS le droit d'appliquer ta
+premiere idee. Tu ecris D'ABORD TROIS correctifs concurrents et differents dans leur principe (par
+ex. un seul parcours avec index, memoisation par tour, restructuration de la recherche de parent),
+tu dis en une ligne le risque de chacun, puis tu en implementes UN et tu laisses le critere trancher.
+Si le critere refuse, tu passes au suivant de ta liste, jamais a une rustine.

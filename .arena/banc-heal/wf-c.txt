@@ -1,0 +1,3 @@
+WORKFLOW IMPOSE (C) — direct : aucune phase ecrite, aucun plan, aucun rapport d'etape. Tu lances le
+critere pour voir le rouge, tu lis le seul endroit fautif, tu appliques le correctif minimal, tu
+relances le critere. Boucle jusqu'au vert. Rien d'autre.

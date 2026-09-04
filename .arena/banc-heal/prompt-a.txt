@@ -1,0 +1,27 @@
+TACHE (identique pour tous) :
+Dans CE dossier, `src/main/activity/orchestration-observability.ts` fait payer a chaque pas
+persiste un balayage REPETE de la liste complete des evenements du fil : filtre du tour, puis
+filtre du run, puis filtre du groupe, puis une copie inversee par dependance. Rends
+`persistOrchestrationStep` econome : au plus DEUX lectures de champ par evenement et par appel,
+a comportement IDENTIQUE (meme parent choisi, memes evenements ecrits).
+
+CRITERE DE SUCCES — le seul qui compte, il est deterministe et il est AUJOURD'HUI ROUGE :
+  node D:/AutoWinOS/.autowin-data/autowin-os/arena-bench-heal/check.mjs .
+doit afficher "CRITERE ATTEINT" avec le code de sortie 0.
+Etat de depart (verifie) : 4 verifications vertes, 1 rouge — "expected 1200 to be less than or
+equal to 800".
+
+REGLES DURES :
+- Tu ne modifies que `src/main/activity/orchestration-observability.ts`.
+- Tu ne modifies PAS check.mjs ni critere.test.ts (re-verifies depuis une copie neuve : tricher se voit).
+- Tu ne fais aucun commit, aucun push, aucun git. Tu ne relances pas l'application.
+- Avant de conclure, relance aussi `npx vitest run src/main/activity/orchestration-observability.test.ts`
+  et rends sa derniere ligne : une regression la-bas annule ton resultat.
+
+RENDS A LA FIN, en clair : (1) la liste ordonnee de ce que tu as fait, (2) la sortie exacte du
+critere de succes, (3) la sortie du test d'origine, (4) ce qui a echoue en route.
+
+WORKFLOW IMPOSE (A) : le pipeline complet actuel. Tu deroules DANS L'ORDRE et tu ECRIS chaque etape
+avant d'agir : scout (survol de la cible) -> frame (probleme reel, perimetre, criteres) -> terrain
+(procedure etape par etape avec le signal attendu de chacune) -> build (implementation par petits
+pas verifies) -> clean (residus) -> judge (confrontation au critere). Aucune etape sautee.

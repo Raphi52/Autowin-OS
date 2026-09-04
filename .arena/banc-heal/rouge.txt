@@ -1,0 +1,6 @@
+$ node check.mjs .   (avant lancement, dans la copie du bras a)
+ ❯ src/main/activity/arena-heal-critere.test.ts (5 tests | 1 failed)
+AssertionError: expected 1200 to be less than or equal to 800
+ ❯ src/main/activity/arena-heal-critere.test.ts:101:19
+      Tests  1 failed | 4 passed (5)
+CRITERE NON ATTEINT (exit 1)

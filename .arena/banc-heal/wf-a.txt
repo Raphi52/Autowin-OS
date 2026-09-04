@@ -1,0 +1,4 @@
+WORKFLOW IMPOSE (A) : le pipeline complet actuel. Tu deroules DANS L'ORDRE et tu ECRIS chaque etape
+avant d'agir : scout (survol de la cible) -> frame (probleme reel, perimetre, criteres) -> terrain
+(procedure etape par etape avec le signal attendu de chacune) -> build (implementation par petits
+pas verifies) -> clean (residus) -> judge (confrontation au critere). Aucune etape sautee.

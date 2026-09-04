@@ -1,0 +1,89 @@
+diff --git a/src/main/activity/orchestration-observability.ts b/src/main/activity/orchestration-observability.ts
+index 28305293..a85853ae 100644
+--- a/src/main/activity/orchestration-observability.ts
++++ b/src/main/activity/orchestration-observability.ts
+@@ -125,6 +125,57 @@ export function persistOrchestrationPhaseStart(
+   )
+ }
+ 
++/**
++ * Choisit le parent causal d'un pas en UN SEUL parcours de la liste du fil.
++ *
++ * Jusqu'au 2026-09-04 cette resolution enchainait quatre balayages de la liste complete par pas
++ * persiste — filtre du tour, filtre du run, filtre du groupe, puis une copie INVERSEE de la liste
++ * par dependance — soit O(4 x evenements) alors que la liste grandit a chaque pas d'un tour long.
++ * Un evenement retenu ne coute plus que deux lectures de champ (`turnId`, puis `execution` lu une
++ * fois et garde en local) ; `run` reste consulte exactement la ou l'ancienne condition le
++ * consultait, c'est-a-dire seulement quand `execution.runId` n'a pas conclu.
++ *
++ * Choix du parent, a l'identique de l'ancienne cascade :
++ *  1. le DERNIER evenement `handoff` du run portant la dependance la plus tardive qui en ait un ;
++ *  2. sinon le parent du PREMIER evenement du groupe, s'il y en a un ;
++ *  3. sinon le DERNIER evenement du run.
++ */
++function resolveStepParentId(
++  events: readonly TraceEventV1[],
++  turnId: string,
++  runId: string | undefined,
++  execution: OrchestrationStep['execution']
++): string | undefined {
++  const groupId = execution?.groupId
++  const dependencyIds = execution?.dependencyIds ?? []
++  const wanted = dependencyIds.length > 0 ? new Set(dependencyIds) : undefined
++  const dependencyHandoffs = new Map<string, TraceEventV1>()
++  let lastRunEvent: TraceEventV1 | undefined
++  let firstGroupEvent: TraceEventV1 | undefined
++
++  for (const event of events) {
++    if (event.turnId !== turnId) continue
++    const eventExecution = event.execution
++    if (runId && eventExecution?.runId !== runId && event.run?.runId !== runId) continue
++    lastRunEvent = event
++    if (groupId && !firstGroupEvent && eventExecution?.groupId === groupId) firstGroupEvent = event
++    if (wanted && event.type === 'handoff') {
++      const taskId = eventExecution?.taskId
++      // Ecrase : la Map garde le DERNIER handoff de chaque dependance, comme la recherche inversee.
++      if (taskId !== undefined && wanted.has(taskId)) dependencyHandoffs.set(taskId, event)
++    }
++  }
++
++  if (wanted) {
++    for (let index = dependencyIds.length - 1; index >= 0; index -= 1) {
++      const dependencyParent = dependencyHandoffs.get(dependencyIds[index])
++      if (dependencyParent) return dependencyParent.id
++    }
++  }
++  if (firstGroupEvent) return firstGroupEvent.parentId
++  return lastRunEvent?.id
++}
++
+ export function persistOrchestrationStep(
+   step: OrchestrationStep,
+   context: OrchestrationTraceContext,
+@@ -132,25 +183,7 @@ export function persistOrchestrationStep(
+   traceStore = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
+ ): void {
+   const existing = traceStore.readConversation(context.conversationId)
+-  const currentTurn = existing.filter((event) => event.turnId === context.turnId)
+-  const runTurn = context.runId
+-    ? currentTurn.filter(
+-        (event) => event.execution?.runId === context.runId || event.run?.runId === context.runId
+-      )
+-    : currentTurn
+-  const groupEvents = step.execution?.groupId
+-    ? runTurn.filter((event) => event.execution?.groupId === step.execution?.groupId)
+-    : []
+-  const dependencyParent = [...(step.execution?.dependencyIds ?? [])]
+-    .reverse()
+-    .map((dependencyId) =>
+-      [...runTurn]
+-        .reverse()
+-        .find((event) => event.execution?.taskId === dependencyId && event.type === 'handoff')
+-    )
+-    .find(Boolean)
+-  let parentId =
+-    dependencyParent?.id ?? (groupEvents.length > 0 ? groupEvents[0].parentId : runTurn.at(-1)?.id)
++  let parentId = resolveStepParentId(existing, context.turnId, context.runId, step.execution)
+   let sequence = traceStore.nextSequence(context.conversationId)
+   const structuralType: TraceEventV1['type'] =
+     step.step === 'exec' ? 'handoff' : step.step === 'judge' ? 'verdict' : 'gate'
