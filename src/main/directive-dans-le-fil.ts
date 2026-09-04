@@ -53,9 +53,9 @@ export function enregistrerDirectiveDansLeFil(params: {
        */
       avantLaReponseEnCours: false
     })
-    // La consigne n'est PAS forcément le dernier message du fil : quand un tour est en cours, elle
-    // se pose AVANT le brouillon de réponse. On la retrouve donc par son contenu, en repartant de
-    // la fin — la plus récente est la nôtre.
+    // On retrouve la consigne par son CONTENU en repartant de la fin (et non par « le dernier
+    // message »)  : l'ordre du fil est décidé par le store, pas ici — un jour où l'insertion
+    // reviendrait, cette lecture resterait juste.
     const messageId = [...conversation.messages]
       .reverse()
       .find((message) => message.role === 'user' && message.content === texte)?.messageId
