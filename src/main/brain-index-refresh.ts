@@ -101,17 +101,22 @@ export function startBrainIndexRebuild(
   if (!existsSync(python) || !existsSync(script)) {
     return { status: 'unavailable', detail: `brain_index.py ou venv introuvable (${script})` }
   }
+  // L'index SERVI est celui de la racine du Brain : `brain_server.py:405` lit `root/tooling/index`.
+  // Écrire dans le `tooling/` LOCAL (%LOCALAPPDATA%\AmitelBrain\tooling) construirait un index que
+  // le serveur ne lit JAMAIS — mesuré le 2026-09-04 : ce dossier local n'existe même pas, alors que
+  // la génération servie vit sur le partage. Le Brain resterait dégradé indéfiniment.
+  const outDir = join(brainRoot, 'tooling', 'index')
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
   childEnv.AMITEL_BRAIN_ROOT = brainRoot
   attempted = true
   const child = spawnFn(
     python,
-    [script, '--knowledge', join(brainRoot, 'knowledge'), '--out', join(tooling, 'index')],
+    [script, '--knowledge', join(brainRoot, 'knowledge'), '--out', outDir],
     { cwd: tooling, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
   )
   child.unref?.()
-  return { status: 'launched', detail: `réindexation lancée (${join(tooling, 'index')})` }
+  return { status: 'launched', detail: `réindexation lancée (${outDir})` }
 }
 
 /** Point d'entrée du démarrage : sonde `/health`, puis réindexe si — et seulement si — c'est la cause. */

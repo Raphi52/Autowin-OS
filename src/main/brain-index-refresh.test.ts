@@ -11,7 +11,10 @@ import {
 
 function fauxBrain(): { env: NodeJS.ProcessEnv; tooling: string; root: string } {
   const root = mkdtempSync(join(tmpdir(), 'index-refresh-'))
-  const tooling = join(root, 'tooling')
+  // Le `tooling/` INSTALLÉ est HORS de la racine du Brain (en vrai : %LOCALAPPDATA%\AmitelBrain\
+  // tooling, alors que la racine est le partage). Le mettre DANS la racine rendait le défaut du
+  // 2026-09-04 invisible : `join(tooling,'index')` et `join(root,'tooling','index')` coïncidaient.
+  const tooling = mkdtempSync(join(tmpdir(), 'index-refresh-tooling-'))
   mkdirSync(join(root, 'knowledge'), { recursive: true })
   mkdirSync(tooling, { recursive: true })
   const python = join(tooling, 'python.exe')
@@ -26,7 +29,10 @@ function fauxBrain(): { env: NodeJS.ProcessEnv; tooling: string; root: string } 
 
 const DEGRADE = {
   state: 'degraded',
-  reasons: ['index freshness mismatch (content_fresh=false): 3 notes changed']
+  // Chaîne RELEVÉE sur le serveur réel le 2026-09-04, en provoquant un index périmé.
+  reasons: [
+    'index freshness mismatch (content_fresh=false): knowledge notes changed since the index was built'
+  ]
 }
 
 describe('réindexation automatique au démarrage sur Brain dégradé', () => {
@@ -76,7 +82,10 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
     const args = appels[0].args
     expect(args[0]).toBe(join(tooling, 'brain_index.py'))
     expect(args[args.indexOf('--knowledge') + 1]).toBe(join(root, 'knowledge'))
-    expect(args[args.indexOf('--out') + 1]).toBe(join(tooling, 'index'))
+    // L'index doit être écrit là où le SERVEUR le lit : racine du Brain / tooling / index
+    // (`brain_server.py:405`), jamais dans le `tooling/` installé localement.
+    expect(args[args.indexOf('--out') + 1]).toBe(join(root, 'tooling', 'index'))
+    expect(args[args.indexOf('--out') + 1]).not.toBe(join(tooling, 'index'))
   })
 
   it('ne réindexe pas pour une dégradation qui n’est pas un index périmé', async () => {
