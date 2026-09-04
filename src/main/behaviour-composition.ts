@@ -114,7 +114,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     blocks.push({
       label: 'constitution',
       value:
-        'Constitution (13 réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.',
+        'Constitution (19 réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.',
       source: 'src/main/constitution.ts:14',
       excerpt: injectedText(CONSTITUTION)
     })

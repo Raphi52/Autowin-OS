@@ -53,7 +53,7 @@ describe('ordre des blocs système — préfixe cachable', () => {
 
       const constantsAvant = [
         'PIPELINE_DISCIPLINE_INSTRUCTION',
-        'CONCISE_STRUCTURED_RESPONSE_INSTRUCTION'
+        'STYLE_TON'
       ].filter((nom) => {
         const p = voisinage.indexOf(nom)
         return p !== -1 && p < phase
@@ -72,7 +72,7 @@ describe('ordre des blocs système — préfixe cachable', () => {
     // Branche `resuming` uniquement : elle s'arrête au `: [` qui ouvre la branche complète.
     const branche = source.slice(debut, source.indexOf(': [', debut))
     const phase = branche.indexOf('this.phasePrompt(')
-    const style = branche.indexOf('CONCISE_STRUCTURED_RESPONSE_INSTRUCTION')
+    const style = branche.indexOf('STYLE_TON')
     expect(phase).toBeGreaterThan(-1)
     expect(style).toBeGreaterThan(-1)
     expect(

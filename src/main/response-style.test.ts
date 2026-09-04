@@ -183,7 +183,7 @@ describe('relance sans cible — un accord execute la derniere recommandation', 
 })
 
 /**
- * LANGAGE SIMPLE.
+ * PARLE COMME À UN COLLÈGUE (ex-« LANGAGE SIMPLE », fusionné : c'était un doublon strict).
  *
  * Demande de l'utilisateur du 2026-09-01 (conv-30) : « les termes employés sont trop poussés »,
  * puis, apres levee d'ambiguite, « je parlais uniquement des réponses du model, faut simplifier un
@@ -203,7 +203,7 @@ describe('langage simple — le vocabulaire, pas seulement la longueur', () => {
   const consigne = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
 
   it('pose la regle et nomme les termes de mecanique a traduire', () => {
-    expect(consigne).toMatch(/LANGAGE SIMPLE/u)
+    expect(consigne).toMatch(/PARLE COMME À UN COLLÈGUE/u)
     for (const jargon of ['gate', 'worktree', 'livrable', 'verdict', 'provider']) {
       expect(consigne).toContain(jargon)
     }
@@ -226,6 +226,12 @@ describe('langage simple — le vocabulaire, pas seulement la longueur', () => {
   })
 
   it('place la regle AVANT le bloc de cloture, la ou le ton se decide', () => {
-    expect(consigne.indexOf('LANGAGE SIMPLE')).toBeLessThan(consigne.indexOf('✅ Fait'))
+    const regle = consigne.indexOf('PARLE COMME À UN COLLÈGUE')
+    const cloture = consigne.indexOf('✅ Fait')
+
+    // Les deux repères doivent EXISTER : un indexOf à -1 rendrait la comparaison vraie pour rien.
+    expect(regle).toBeGreaterThanOrEqual(0)
+    expect(cloture).toBeGreaterThan(0)
+    expect(regle).toBeLessThan(cloture)
   })
 })

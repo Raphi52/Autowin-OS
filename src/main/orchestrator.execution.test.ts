@@ -14,7 +14,7 @@ import type {
 import { RoleModelConfig } from './roles'
 import { compileExecutionQuote } from './execution-quote'
 import { TrustLedger } from './trust/ledger'
-import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { STYLE_CLOTURE_CHAT, STYLE_TON } from './response-style'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 import { forgetEcho, noteRemembered } from './session-memory-echo'
 import { retrieveBrainContext } from './brain-retrieval'
@@ -498,8 +498,12 @@ describe('Orchestrator execution contract', () => {
       cwd: 'C:\\workspace',
       sandbox: 'read-only'
     })
-    expect(provider.calls[0].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
-    expect(provider.calls[1].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
+    expect(provider.calls[0].system).toContain(STYLE_TON)
+    expect(provider.calls[1].system).toContain(STYLE_TON)
+    // Les phases ne reçoivent PAS le protocole de clôture d'un tour de chat visible : leur sortie
+    // est reprise par la phase suivante, pas affichée telle quelle à l'utilisateur.
+    expect(provider.calls[0].system).not.toContain(STYLE_CLOTURE_CHAT.trim())
+    expect(provider.calls[1].system).not.toContain(STYLE_CLOTURE_CHAT.trim())
   })
 
   it('garde le gate rouge si le worker prétend réussir sans preuve d’outil', async () => {

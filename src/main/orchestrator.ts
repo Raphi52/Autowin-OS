@@ -384,7 +384,7 @@ import { preparedCommitMutationEvidence } from './providers/workspace-mutation-e
 import { appendExecutionEvidenceFileTrace } from './activity/conversation-file-trace-spool'
 import type { WatchdogMutationClaims, WatchdogMutationClaimsSink } from './task-manager/types'
 import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
-import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { STYLE_TON } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { evidenceDeLErreur } from './providers/evidence-portee-par-erreur'
@@ -2482,7 +2482,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const messages = [{ role: 'user' as const, content: judgePrompt }]
     const parts = [
       this.phasePrompt('judge', true),
-      { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+      { name: 'style', text: STYLE_TON },
       { name: 'projectContext', text: projectContext }
     ]
     const systemBlocks = parts
@@ -2716,7 +2716,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           const parts = [
             { name: 'constitution', text: CONSTITUTION },
             { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            { name: 'style', text: STYLE_TON },
             // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
             // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
             // Constant pour la durée du run.
@@ -2962,7 +2962,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
             // revendiquait. Meme decomposition nommee que les autres sites d'envoi.
             const synthNodeParts = [
               { name: 'constitution', text: CONSTITUTION },
-              { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+              { name: 'style', text: STYLE_TON },
               { name: 'projectContext', text: projectContext }
             ]
             const synthOptions: SendOptions = {
@@ -3608,7 +3608,7 @@ ${empreinteDepot}`
       if (phase !== 'scout' && phase !== 'frame' && phase !== 'terrain') return ''
       return [
         `MISSION ACTIVE — ${phase.toUpperCase()} UNIQUEMENT : produis le livrable textuel de cette phase en lecture seule.`,
-        `Le BESOIN GLOBAL ci-dessous décrit le résultat final du workflow ; ses verbes de mutation sont réservés à BUILD. N'essaie pas d'écrire ni de préparer un patch, et ne signale pas l'absence de Write/Edit/Bash comme un blocage.`
+        `Le BESOIN GLOBAL ci-dessous décrit le résultat final du workflow ; ses verbes de mutation sont réservés à BUILD. N'essaie pas d'écrire ni de préparer un patch, et ne signale pas l'absence de Write/Edit comme un blocage.`
       ].join(' ')
     }
     /**
@@ -3748,7 +3748,7 @@ ${empreinteDepot}`
         const parts = [
           { name: 'constitution', text: CONSTITUTION },
           { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
-          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+          { name: 'style', text: STYLE_TON },
           // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
           // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
           // Constant pour toute la durée d'un run (dépend du graphe, pas de la phase).
@@ -3953,7 +3953,7 @@ ${empreinteDepot}`
           .join('\n\n')
         const synthParts = [
           { name: 'constitution', text: CONSTITUTION },
-          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+          { name: 'style', text: STYLE_TON },
           { name: 'projectContext', text: projectContext }
         ]
         const synthOptions: SendOptions = {
@@ -4119,7 +4119,7 @@ ${empreinteDepot}`
       // qui change permet au préfixe d'être réutilisé au lieu d'être invalidé dès le second bloc.
       const parts = resuming
         ? [
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            { name: 'style', text: STYLE_TON },
             // VARIABLE par phase.
             this.phasePrompt(phase, false),
             // VARIABLE par sandbox.
@@ -4131,7 +4131,7 @@ ${empreinteDepot}`
         : [
             { name: 'constitution', text: CONSTITUTION },
             { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            { name: 'style', text: STYLE_TON },
             // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
             // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
             // Constant pour la durée du run.
@@ -4818,7 +4818,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
       const judgeParts = [
         this.phasePrompt('judge', true),
-        { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+        { name: 'style', text: STYLE_TON },
         { name: 'projectContext', text: projectContext }
       ]
       const judgeBlocks = judgeParts

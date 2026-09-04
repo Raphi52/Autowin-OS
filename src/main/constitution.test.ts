@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { CONSTITUTION } from './constitution'
+import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
+
+const SOURCE_CONSTITUTION = readFileSync(new URL('./constitution.ts', import.meta.url), 'utf8')
 
 describe('CONSTITUTION (source unique du soul)', () => {
   it('reste portable entre providers et machines', () => {
     expect(CONSTITUTION).not.toMatch(/[A-Z]:\\Users\\|\/Users\/|~\/[.]claude|[.]brain/i)
     expect(CONSTITUTION).not.toMatch(/Hermes Agent|Claude Code/i)
     expect(CONSTITUTION).toContain('provider-neutral')
-    expect(CONSTITUTION).toContain('capacités réellement disponibles')
+    // La section descriptive « Portabilité des capacités » a été retirée du texte INJECTÉ : son
+    // seul contenu opérant vit dans la discipline de phase, qui est le bloc outillage.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('capacités réellement disponibles')
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/n'invente jamais un outil/iu)
   })
 
   it('looks beyond the immediate request instead of stopping at minimum compliance', () => {
@@ -46,8 +53,14 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain('attendre une récidive')
   })
 
-  it('porte les 13 réflexes et la limite honnête', () => {
-    expect(CONSTITUTION).toContain('Les 13 réflexes')
+  it('annonce un nombre de réflexes ÉGAL à celui réellement listé, et la limite honnête', () => {
+    const derniere = [...CONSTITUTION.matchAll(/^(\d+)\. /gmu)]
+      .map((m) => Number(m[1]))
+      .reduce((max, n) => Math.max(max, n), 0)
+
+    expect(derniere).toBeGreaterThan(0)
+    expect(CONSTITUTION).toContain(`Les ${derniere} réflexes`)
+    expect(CONSTITUTION).not.toContain('Les 13 réflexes')
     expect(CONSTITUTION).toContain('La limite honnête')
   })
 
@@ -73,6 +86,10 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain('la localisation est TON travail')
     expect(CONSTITUTION).toContain("Ne renvoie JAMAIS l'utilisateur décrire")
     expect(CONSTITUTION).toContain('APRÈS deux tentatives de localisation distinctes')
-    expect(CONSTITUTION).toContain('ts=1788375433820')
+    // L'ancrage reste TRAÇABLE dans le fichier (commentaire), mais n'est plus PAYÉ à chaque
+    // injection : c'est un justificatif pour un humain, pas un point de décision pour l'agent.
+    expect(CONSTITUTION).not.toContain('ts=1788375433820')
+    expect(SOURCE_CONSTITUTION).toContain('ts=1788375433820')
+    expect(SOURCE_CONSTITUTION).toContain('ts=1788351936324')
   })
 })
