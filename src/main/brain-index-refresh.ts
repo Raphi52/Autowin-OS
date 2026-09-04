@@ -138,7 +138,17 @@ export async function ensureBrainIndexFresh(deps?: {
   spawnFn?: SpawnLike
 }): Promise<BrainIndexRefresh> {
   const env = deps?.env ?? process.env
-  const health = await (deps?.readHealth ?? (() => readBrainHealth(fetch, env)))()
+  const lire = deps?.readHealth ?? (() => readBrainHealth(fetch, env))
+  const attendre = deps?.sleepFn ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))) // sleep-ok: laisse le Brain finir d'évaluer la fraîcheur
+  const essais = deps?.essais ?? 5
+  const delaiMs = deps?.delaiMs ?? 2000
+
+  let health = await lire()
+  // Tant que la cause n'est pas NOMMÉE, on resonde : la réponse utile arrive ~6 s plus tard.
+  for (let i = 1; i < essais && isCauseUndetermined(health); i++) {
+    await attendre(delaiMs)
+    health = await lire()
+  }
   if (!needsIndexRebuild(health)) {
     return { status: 'not-needed', detail: `état du Brain : ${health?.state ?? 'injoignable'}` }
   }
