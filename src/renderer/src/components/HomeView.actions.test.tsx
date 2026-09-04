@@ -76,6 +76,7 @@ function poserApi(over: Record<string, unknown> = {}): void {
     taskManagerAcknowledge: vi.fn(async () => true),
     outlookSnapshot: vi.fn(async () => outlookSnapshot()),
     outlookOuvrir: vi.fn(async () => ({ ok: true })),
+    outlookMarquerLu: vi.fn(async () => ({ ok: true })),
     ...over
   }
 }
@@ -172,12 +173,29 @@ async function touche(el: Element, key: string, modifs: Partial<KeyboardEvent> =
   })
 }
 
+/**
+ * Amene la tuile Mails jusqu'a la CONVERSATION, et rend son bouton « Ouvrir dans Outlook ».
+ *
+ * La tuile est passee d'une liste plate de messages a trois ecrans successifs (contacts → fils →
+ * conversation) le 2026-09-03 : le bouton d'ouverture ne vit plus sur la ligne du contact, il vit
+ * dans la conversation, sur son dernier message. Ces trois tests visaient encore l'ancien bouton et
+ * restaient rouges depuis ; ils suivent desormais le meme chemin que l'utilisateur.
+ */
+async function ouvrirLaConversation(container: HTMLDivElement): Promise<HTMLButtonElement> {
+  const mails = tile(container, 'mails')
+  await act(async () =>
+    (mails.querySelector('[data-testid^="home-contact-"]') as HTMLButtonElement).click()
+  )
+  await act(async () =>
+    (mails.querySelector('[data-testid^="home-fil-"]') as HTMLButtonElement).click()
+  )
+  return mails.querySelector('.home-chat__ouvrir') as HTMLButtonElement
+}
+
 describe('la vue agit : ouvrir dans Outlook', () => {
   it('ouvre le message le plus recent d un fil', async () => {
     const container = await mount()
-    const bouton = tile(container, 'mails').querySelector(
-      '[data-testid^="home-ouvrir-mail-"]'
-    ) as HTMLButtonElement
+    const bouton = await ouvrirLaConversation(container)
     expect(bouton).not.toBeNull()
     await act(async () => bouton.click())
     // On ouvre un ELEMENT, donc son identifiant, pas la cle du fil.
@@ -197,19 +215,54 @@ describe('la vue agit : ouvrir dans Outlook', () => {
     // Un clic sans effet ET sans explication est pire que pas de clic du tout.
     poserApi({ outlookOuvrir: vi.fn(async () => ({ ok: false, erreur: 'Cet element n existe plus' })) })
     const container = await mount()
-    await act(async () =>
-      (container.querySelector('[data-testid^="home-ouvrir-mail-"]') as HTMLButtonElement).click()
-    )
+    const bouton = await ouvrirLaConversation(container)
+    await act(async () => bouton.click())
     expect(container.querySelector('.home-view__alerte')?.textContent).toContain('n existe plus')
   })
 
   it('le dit aussi quand la version de l app ne sait pas ouvrir', async () => {
     poserApi({ outlookOuvrir: undefined })
     const container = await mount()
-    await act(async () =>
-      (container.querySelector('[data-testid^="home-ouvrir-mail-"]') as HTMLButtonElement).click()
-    )
+    const bouton = await ouvrirLaConversation(container)
+    await act(async () => bouton.click())
     expect(container.querySelector('.home-view__alerte')).not.toBeNull()
+  })
+})
+
+describe('la vue agit : marquer lu', () => {
+  it('marque le fil ouvert comme lu, puis relit Outlook aussitot', async () => {
+    // Defaut releve par l'utilisateur le 2026-09-04 : « la notif reste meme apres avoir lu le
+    // message ». Il faut les DEUX moitiés : ecrire dans Outlook, et relire pour que la pastille parte
+    // tout de suite au lieu d'attendre le cycle suivant.
+    const container = await mount()
+    const mails = tile(container, 'mails')
+    const contact = mails.querySelector('[data-testid^="home-contact-"]') as HTMLButtonElement
+    await act(async () => contact.click())
+    const fil = mails.querySelector('[data-testid^="home-fil-"]') as HTMLButtonElement
+    await act(async () => fil.click())
+
+    expect(api().outlookMarquerLu).toHaveBeenCalledWith(['m1'])
+    // Deux lectures : celle du montage, puis la relecture FORCEE qui suit le marquage.
+    expect(api().outlookSnapshot).toHaveBeenCalledTimes(2)
+    expect(api().outlookSnapshot).toHaveBeenLastCalledWith(true)
+  })
+
+  it('ne relit PAS quand Outlook a refuse le marquage', async () => {
+    poserApi({
+      outlookMarquerLu: vi.fn(async () => ({ ok: false, erreur: 'Outlook est ferme' }))
+    })
+    const container = await mount()
+    const mails = tile(container, 'mails')
+    await act(async () =>
+      (mails.querySelector('[data-testid^="home-contact-"]') as HTMLButtonElement).click()
+    )
+    await act(async () =>
+      (mails.querySelector('[data-testid^="home-fil-"]') as HTMLButtonElement).click()
+    )
+    expect(api().outlookSnapshot).toHaveBeenCalledTimes(1)
+    // La cause est AFFICHEE : une pastille qui ne part pas se lirait comme une panne du widget.
+    const dit = container.querySelector('[data-testid="home-inter-lu-erreur"]')?.textContent
+    expect(dit).toContain('Outlook est ferme')
   })
 })
 

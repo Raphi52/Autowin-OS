@@ -35,6 +35,11 @@ export interface OutlookReplyResult {
   erreur?: string
 }
 
+export interface OutlookMarkReadResult {
+  ok: boolean
+  erreur?: string
+}
+
 /** Plafond du corps d'une reponse. Assez pour un message, assez peu pour rester un widget. */
 const MAX_CORPS = 20_000
 
@@ -49,6 +54,8 @@ export interface OutlookGatewayOptions {
   opener?: (scriptPath: string, id: string) => Promise<number>
   /** Idem pour la RÉPONSE. Le corps est passé par un fichier, pas en argument. */
   replier?: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
+  /** Idem pour le MARQUAGE LU. Les identifiants passent par un fichier, un par ligne. */
+  marqueur?: (scriptPath: string, idsPath: string) => Promise<number>
   now?: () => number
 }
 
@@ -109,6 +116,32 @@ const REPLY_FAILURES: Readonly<Record<number, string>> = {
   4: 'La réponse est vide : rien n’a été envoyé.'
 }
 
+/**
+ * Codes de sortie du script de marquage lu, traduits en phrases.
+ *
+ * Marquer lu ÉCRIT dans la boîte réelle. Un échec doit donc se voir : sinon la pastille reste, on
+ * la croit cassée, et personne ne sait que c'est Outlook qui a refusé.
+ */
+const MARK_FAILURES: Readonly<Record<number, string>> = {
+  1: "Outlook n'a pas pu marquer ces messages comme lus.",
+  2: "Aucun de ces messages n'a la forme d'un élément Outlook.",
+  3: 'Ces messages n’existent plus dans Outlook — ils ont peut-être été supprimés ou déplacés.'
+}
+
+function defaultMarqueur(scriptPath: string, idsPath: string): Promise<number> {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-IdsFichier', idsPath],
+      { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 256 * 1024 },
+      (error) => {
+        const code = (error as { code?: number } | null)?.code
+        resolve(typeof code === 'number' ? code : error ? 1 : 0)
+      }
+    )
+  })
+}
+
 function defaultReplier(scriptPath: string, id: string, corpsPath: string): Promise<number> {
   return new Promise((resolve) => {
     execFile(
@@ -154,6 +187,7 @@ export class OutlookLocalGateway {
   private readonly runner: (scriptPath: string, outPath: string) => Promise<void>
   private readonly opener: (scriptPath: string, id: string) => Promise<number>
   private readonly replier: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
+  private readonly marqueur: (scriptPath: string, idsPath: string) => Promise<number>
   private readonly now: () => number
   private cache: { at: number; result: OutlookGatewayResult } | null = null
   /** Lecture en cours : deux widgets qui interrogent en même temps ne doivent lancer QU'UN script. */
@@ -165,6 +199,7 @@ export class OutlookLocalGateway {
     this.runner = options.runner ?? defaultRunner
     this.opener = options.opener ?? defaultOpener
     this.replier = options.replier ?? defaultReplier
+    this.marqueur = options.marqueur ?? defaultMarqueur
     this.now = options.now ?? (() => Date.now())
   }
 
@@ -265,6 +300,45 @@ export class OutlookLocalGateway {
       return { ok: false, erreur: describeFailure(error) }
     } finally {
       // Le texte d'un message ne traîne pas dans le dossier temporaire une fois parti.
+      if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  /**
+   * MARQUE des messages comme LUS dans Outlook.
+   *
+   * Le défaut corrigé, relevé par l'utilisateur le 2026-09-04 : « la notif reste même après avoir lu
+   * le message ». Lire dans le widget ne touchait rien dans la boîte, donc l'instantané suivant
+   * rendait toujours `nonLu: true` et la pastille ne partait jamais — sauf en ouvrant Outlook.
+   *
+   * Deux propriétés dont dépend l'effet visible :
+   *  - les identifiants voyagent par un FICHIER, un par ligne : un fil peut en compter des dizaines,
+   *    chacun jusqu'à 512 caractères, et une ligne de commande a une longueur maximale ;
+   *  - un succès VIDE le cache. Sans cela, l'écran continuerait d'afficher l'instantané d'avant le
+   *    marquage pendant toute sa durée de vie, et le correctif ne se verrait pas.
+   */
+  async markRead(ids: unknown): Promise<OutlookMarkReadResult> {
+    // Filtré et non refusé en bloc : un seul identifiant abîmé ne doit pas empêcher de marquer les
+    // autres messages du fil. La validation est ici AUSSI, pas seulement dans le script — ces
+    // identifiants viennent du renderer par IPC.
+    const valides = (Array.isArray(ids) ? ids : []).filter(
+      (id): id is string => typeof id === 'string' && /^[0-9A-Fa-f]{16,512}$/.test(id)
+    )
+    if (valides.length === 0) return { ok: false, erreur: MARK_FAILURES[2] }
+    let dossier: string | null = null
+    try {
+      dossier = await mkdtemp(join(tmpdir(), 'autowin-outlook-lu-'))
+      const idsPath = join(dossier, 'ids.txt')
+      await writeFile(idsPath, valides.join('\n'), 'utf8')
+      const code = await this.marqueur(this.scriptVoisin('outlook-local-marquer-lu.ps1'), idsPath)
+      if (code !== 0) return { ok: false, erreur: MARK_FAILURES[code] ?? MARK_FAILURES[1] }
+      // L'instantané en cache décrit une boîte qui n'existe plus : ces messages viennent de passer
+      // en lu. On l'oublie, la prochaine lecture rendra l'état réel.
+      this.invalidate()
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, erreur: describeFailure(error) }
+    } finally {
       if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
     }
   }

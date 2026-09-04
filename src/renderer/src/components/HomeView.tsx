@@ -88,8 +88,21 @@ const NOTICE_OUVERTURES = 4
 /** Pas de déplacement au clavier, en pixels. Assez grand pour avancer, assez petit pour viser. */
 const PAS_CLAVIER = 16
 const REFRESH_MS = 30_000
-/** Outlook se relit moins souvent : chaque lecture est un dialogue COM avec une application lourde. */
-const OUTLOOK_REFRESH_MS = 120_000
+/**
+ * Outlook se relit moins souvent que le Task Manager : chaque lecture est un dialogue COM avec une
+ * application lourde.
+ *
+ * Ramene de deux minutes a une : demande de l'utilisateur du 2026-09-04, « je voudrais aussi que ca
+ * s'actualise automatiquement ». Deux minutes, c'est assez long pour qu'un message arrive, qu'on
+ * regarde la tuile, et qu'on la croie figee.
+ */
+const OUTLOOK_REFRESH_MS = 60_000
+/**
+ * Ecart MINIMUM entre deux relectures declenchees par un retour dans la fenetre.
+ *
+ * Sans lui, alterner entre Autowin et une autre application lancerait un appel COM par aller-retour.
+ */
+const OUTLOOK_ECART_MIN_MS = 15_000
 
 interface TaskSnapshotLike {
   tasks: {
@@ -185,6 +198,11 @@ export function HomeView({
   const [histoire, setHistoire] = useState<ArrangementHistory>(() => emptyHistory())
   const [ouvertureEnCours, setOuvertureEnCours] = useState<string | null>(null)
   const [erreurOuverture, setErreurOuverture] = useState<string | null>(null)
+  /**
+   * Instant de la derniere lecture d'Outlook. Une reference, pas un etat : elle sert a espacer les
+   * relectures, et la faire re-rendre la page serait un rendu de plus a chaque relecture.
+   */
+  const derniereLecture = useRef(0)
   /**
    * Nombre d'ouvertures DEJA comptees, lu une fois et fige pour toute la vie du montage.
    *
@@ -432,6 +450,9 @@ export function HomeView({
    * bouton, qui le fait desormais lui-meme, la ou l'intention est visible.
    */
   const readOutlook = useCallback(async (force = false): Promise<void> => {
+    // Horodate AVANT l'appel, et non apres : deux declencheurs qui se suivent de pres (l'intervalle
+    // et un retour dans la fenetre) doivent se voir l'un l'autre, meme pendant que la lecture dure.
+    derniereLecture.current = Date.now()
     const api = (
       window as unknown as { api?: { outlookSnapshot?: (f?: boolean) => Promise<unknown> } }
     ).api
@@ -476,6 +497,31 @@ export function HomeView({
     void readOutlook()
     const timer = window.setInterval(() => void readOutlook(), OUTLOOK_REFRESH_MS)
     return () => window.clearInterval(timer)
+  }, [active, readOutlook])
+
+  /**
+   * Relit Outlook quand on REVIENT dans la fenetre.
+   *
+   * L'intervalle seul ne suffit pas : Windows ralentit fortement les minuteries d'une fenetre en
+   * arriere-plan, donc revenir apres une heure passee dans Outlook affichait encore la boite d'avant.
+   * Le retour au premier plan est exactement l'instant ou l'utilisateur REGARDE la tuile.
+   *
+   * `force` court-circuite le cache de la passerelle : sinon on reafficherait l'instantane deja lu,
+   * c'est-a-dire precisement ce qu'on cherche a remplacer.
+   */
+  useEffect(() => {
+    if (!active) return
+    const relire = (): void => {
+      if (document.visibilityState === 'hidden') return
+      if (Date.now() - derniereLecture.current < OUTLOOK_ECART_MIN_MS) return
+      void readOutlook(true)
+    }
+    window.addEventListener('focus', relire)
+    document.addEventListener('visibilitychange', relire)
+    return () => {
+      window.removeEventListener('focus', relire)
+      document.removeEventListener('visibilitychange', relire)
+    }
   }, [active, readOutlook])
 
   const departures = useMemo(
@@ -664,6 +710,41 @@ export function HomeView({
       }
     },
     []
+  )
+
+  /**
+   * MARQUE des messages comme lus dans Outlook, puis relit la boîte AUSSITÔT.
+   *
+   * Défaut relevé par l'utilisateur le 2026-09-04 : « la notif reste même après avoir lu le message ».
+   * Le widget lisait sans rien écrire, donc l'instantané suivant rendait toujours ces messages non
+   * lus. Deux moitiés sont nécessaires pour que la pastille parte : l'écriture dans Outlook, et la
+   * RELECTURE forcée — c'est elle qui fait passer le compteur de la tuile à jour tout de suite. Sans
+   * elle, le clic resterait sans effet visible jusqu'au cycle suivant.
+   */
+  const marquerLuDansOutlook = useCallback(
+    async (ids: string[]): Promise<{ ok: boolean; erreur?: string }> => {
+      const api = (
+        window as unknown as {
+          api?: {
+            outlookMarquerLu?: (ids: readonly string[]) => Promise<{ ok: boolean; erreur?: string }>
+          }
+        }
+      ).api
+      if (!api?.outlookMarquerLu) {
+        return {
+          ok: false,
+          erreur: 'Cette version ne sait pas encore marquer un message comme lu.'
+        }
+      }
+      try {
+        const resultat = await api.outlookMarquerLu(ids)
+        if (resultat.ok) await readOutlook(true)
+        return resultat
+      } catch (error) {
+        return { ok: false, erreur: error instanceof Error ? error.message : String(error) }
+      }
+    },
+    [readOutlook]
   )
 
   /** Acquitte une alerte d'agent depuis l'accueil, sans aller la chercher ailleurs. */
@@ -942,6 +1023,7 @@ export function HomeView({
                 onOuvrirConversation={ouvrirConversation}
                 onOuvrir={ouvrirDansOutlook}
                 onRepondre={repondreDansOutlook}
+                onMarquerLu={marquerLuDansOutlook}
                 onAcquitter={acquitter}
                 ouvertureEnCours={ouvertureEnCours}
               />
@@ -975,6 +1057,7 @@ function WidgetBody({
   onOuvrirConversation,
   onOuvrir,
   onRepondre,
+  onMarquerLu,
   onAcquitter,
   ouvertureEnCours
 }: {
@@ -990,6 +1073,7 @@ function WidgetBody({
   onOuvrirConversation: (id: string) => void
   onOuvrir: (id: string) => Promise<void>
   onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  onMarquerLu: (ids: string[]) => Promise<{ ok: boolean; erreur?: string }>
   onAcquitter: (alertId: string) => Promise<void>
   ouvertureEnCours: string | null
 }): React.JSX.Element {
@@ -1029,6 +1113,7 @@ function WidgetBody({
         onOuvrir={onOuvrir}
         ouvertureEnCours={ouvertureEnCours}
         onRepondre={onRepondre}
+        onMarquerLu={onMarquerLu}
       />
     ) : (
       <AgendaList agenda={outlook.agenda} onOuvrir={onOuvrir} ouvertureEnCours={ouvertureEnCours} />

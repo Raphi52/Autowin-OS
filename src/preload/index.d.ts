@@ -423,6 +423,8 @@ interface ChatApi {
   outlookOuvrir: (id: string) => Promise<{ ok: boolean; erreur?: string }>
   /** Envoie une réponse à un message Outlook. Irréversible : à confirmer avant l'appel. */
   outlookRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  /** Marque des messages Outlook comme lus. Ecrit dans la boite : reserve a un geste utilisateur. */
+  outlookMarquerLu: (ids: readonly string[]) => Promise<{ ok: boolean; erreur?: string }>
   taskManagerCreate: (task: unknown) => Promise<ScheduledTask>
   taskManagerUpdate: (id: string, task: unknown) => Promise<ScheduledTask>
   taskManagerRemove: (id: string) => Promise<boolean>

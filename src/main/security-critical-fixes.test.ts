@@ -336,7 +336,16 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:micro:reglages` — ouvre la page micro de Windows. Il ne prend AUCUNE url : l'adresse
     //     est une constante ecrite cote main, la fenetre ne peut que la declencher.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(165)
+    // MISE A JOUR 2026-09-04 — 165 -> 167. DEUX canaux, tous deux gardes des leur PREMIERE ligne :
+    //   `outlook:repondre` — arrive avec la tuile Interlocuteurs (commit 51f65bb7) SANS que ce compte
+    //     soit remis a jour : le fil-piege etait donc rouge avant ce changement, sur 166. Il ECRIT
+    //     (envoie une reponse), l'identifiant et le corps sont valides cote main, et le corps part
+    //     par un fichier temporaire — jamais concatene dans une ligne de commande.
+    //   `outlook:marquer-lu` — marque des messages comme lus. Ecrit aussi dans la boite, et rien n'en
+    //     sort : chaque identifiant est valide contre `^[0-9A-Fa-f]{16,512}$` cote main AVANT de
+    //     partir dans un appel COM, et ils voyagent par un fichier temporaire.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(167)
     expect(unguarded).toEqual([])
   })
 
