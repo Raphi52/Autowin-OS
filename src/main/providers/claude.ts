@@ -1531,11 +1531,35 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrTail = `${stderrTail}${chunk.toString('utf8')}`.slice(-STDERR_TAIL_MAX)
     })
-    child.on('error', (e) => {
+    /**
+     * POINT DE NETTOYAGE UNIQUE, idempotent et ASYNCHRONE.
+     *
+     * Il etait branche sur le seul `close`. Un appel qui sort par `error` (spawn ENOENT, binaire
+     * absent) ne nettoyait donc rien : mesure du 2026-09-04 dans %TEMP%, 39 `autowin-os-system-*`
+     * et 39 `autowin-os-settings-*` orphelins, appaires un couple par appel avorte.
+     * Un point unique plutot qu'un appel par branche : une 6e sortie ajoutee demain ne refuira pas.
+     * Garde : `claude.nettoyage-sur-echec-spawn.test.ts`.
+     */
+    let nettoyageFait = false
+    const nettoyerFinDAppel = async (): Promise<void> => {
+      if (nettoyageFait) return
+      nettoyageFait = true
+      await nettoyerTemporairesDeLAppel({
+        systemPromptDir,
+        settingsDir,
+        inputPath: invocation.inputPath,
+        journalPath: journal?.path
+      })
+      // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
+      await mcpConfigDir?.nettoyer()
+      await materialized?.cleanup()
+    }
+    child.on('error', async (e) => {
       if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
       errored = e
+      await nettoyerFinDAppel()
       done = true
       wake()
     })
@@ -1548,15 +1572,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // Meme hygiene que le system prompt : un dossier temporaire par appel ne doit pas s'accumuler
       // (c'est exactement la fuite disque constatee ce jour sur run-stdout/). Tout passe par le
       // nettoyage ASYNCHRONE : la version synchrone figeait la fenetre 1,6 s a chaque appel.
-      await nettoyerTemporairesDeLAppel({
-        systemPromptDir,
-        settingsDir,
-        inputPath: invocation.inputPath,
-        journalPath: journal?.path
-      })
-      // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
-      await mcpConfigDir?.nettoyer()
-      await materialized?.cleanup()
+      await nettoyerFinDAppel()
       // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait
       // jamais parsé (result/session_id perdus silencieusement) — on le traite ici.
       const rest = buffer.trim()
