@@ -3362,8 +3362,13 @@ ol.md-list li {
    Portée STRICTE : `.model-select-menu` du Chat/Routage. Agent Studio n'importe
    pas cette feuille — sa vue n'est pas touchée. */
 .model-select-menu {
+  /* TEINTE DOREE, SANS BORDURE (choix utilisateur du 2026-09-04). L'accent global du theme est
+     rose ; on le REDEFINIT localement en or, ce qui reteinte d'un coup le fond, le survol, la
+     selection, les intitules et la barre de defilement — sans toucher au reste de l'app. */
+  --accent: #d4a94f;
+  --accent-soft: rgba(212, 169, 79, 0.16);
   padding: 8px;
-  border-color: color-mix(in srgb, var(--accent) 26%, rgba(255, 255, 255, 0.1));
+  border: 0;
   border-radius: 12px;
   background:
     radial-gradient(
