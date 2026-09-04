@@ -45,6 +45,7 @@ export type ProviderFailureKind =
 const ABNORMAL_EXIT_CODES: Readonly<Record<number, string>> = {
   0x40010004: 'arrêt du process demandé par l’hôte',
   0xc000013a: 'interruption Ctrl-C',
+  0xc000013b: 'connexion locale au process perdue (pipe coupé)',
   0xc0000005: 'violation d’accès (crash du CLI)',
   0xc0000409: 'corruption de pile détectée (crash du CLI)',
   0xc000026b: 'échec d’initialisation d’une DLL (arrêt de session Windows)'
@@ -58,6 +59,53 @@ export function describeExitCode(code: number | null | undefined): string | unde
   if (typeof code !== 'number' || !Number.isInteger(code)) return undefined
   const label = ABNORMAL_EXIT_CODES[code >>> 0]
   return label ? `0x${(code >>> 0).toString(16)} ${label}` : undefined
+}
+
+/**
+ * Statuts de TERMINAISON / DÉCONNEXION : le process a été arrêté ou son canal coupé. Ils décrivent le
+ * TRANSPORT, jamais un refus métier — si la réponse a déjà été produite, elle reste valide, et sinon
+ * un simple relancement a du sens. Un `exit 1` ordinaire ou une violation d'accès ne sont PAS de ce
+ * genre : un crash du CLI est un vrai défaut, pas un canal coupé, et le confondre avec du transport
+ * ferait réessayer indéfiniment sur un bug.
+ *
+ * Incident ak-a3cb0ebf2e4bc217 (2026-08-06), récidive de ak-820d7029b0c5e76d.
+ */
+const TRANSPORT_EXIT_CODES: readonly number[] = [0x40010004, 0xc000013a, 0xc000013b, 0xc000026b]
+
+export function isTransportExitCode(code: number | null | undefined): boolean {
+  if (typeof code !== 'number' || !Number.isInteger(code)) return false
+  return TRANSPORT_EXIT_CODES.includes(code >>> 0)
+}
+
+/**
+ * Un message d'échec d'adaptateur porte-t-il un code de terminaison/déconnexion ? Lit les DEUX formes
+ * réellement jetées : « claude CLI exit <décimal> » et « exit-code=<décimal> » (codex).
+ */
+export function isTransportFailure(message: string): boolean {
+  for (const match of message.matchAll(/exit(?:-code=|\s+)(-?\d+)/gi)) {
+    if (isTransportExitCode(Number(match[1]))) return true
+  }
+  return false
+}
+
+/**
+ * Message d'arrêt anormal qui NOMME le provider, le modèle et le code — sans lui, « exit 3221226091 »
+ * ne dit ni QUI est tombé ni AVEC QUOI.
+ */
+export function describeProviderExit(exit: {
+  provider: string
+  model?: string
+  code: number | null | undefined
+  signal?: string | null
+}): string {
+  const label = describeExitCode(exit.code)
+  return [
+    `${exit.provider} CLI`,
+    exit.model ? ` (modèle ${exit.model})` : '',
+    ` s’est terminé : exit ${exit.code ?? 'null'}`,
+    label ? ` (${label})` : '',
+    exit.signal ? ` signal=${exit.signal}` : ''
+  ].join('')
 }
 
 export interface ProviderFailure {

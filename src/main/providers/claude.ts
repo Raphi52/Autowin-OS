@@ -10,7 +10,7 @@ import {
 } from './watchdog'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { rm as rmAsync, stat as statAsync } from 'node:fs/promises'
 import {
   openStdoutJournal,
@@ -48,7 +48,11 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { abortFailure } from './abort-diagnostic'
-import { describeExitCode } from '../provider-failure-diagnosis'
+import {
+  describeExitCode,
+  describeProviderExit,
+  isTransportExitCode
+} from '../provider-failure-diagnosis'
 
 /**
  * NETTOYAGE DE FIN D'APPEL — sans tenir la boucle principale.
@@ -453,6 +457,36 @@ export function resolveClaudeBin(explicit?: string): string {
 
 /** Sous-chemin du binaire natif dans le paquet npm `@anthropic-ai/claude-code`. */
 const CLAUDE_PACKAGE_BIN = join('node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')
+
+/** Taille max conservee de la sortie d'erreur du CLI (fin de flux) — assez pour la cause, pas un dump. */
+const STDERR_TAIL_MAX = 800
+
+/**
+ * Cause d'echec quand le CLI n'ecrit PAS dans un pipe : en mode journal sa sortie d'erreur part dans
+ * un FICHIER (`<journal>.stderr.log` avec le relais Windows, sinon melangee au journal lui-meme).
+ * Sans cette lecture `child.stderr` est nul et le message d'echec reste nu — c'est le chemin qu'emprunte
+ * l'application. Les lignes JSON du journal sont la sortie normale : on les ecarte.
+ */
+export function stderrTailFromJournal(
+  journalPath: string,
+  read: (chemin: string) => string = (chemin) => readFileSync(chemin, 'utf8')
+): string {
+  const lire = (chemin: string): string => {
+    try {
+      return read(chemin)
+    } catch {
+      return ''
+    }
+  }
+  const diagnostic = lire(`${journalPath}.stderr.log`).trim()
+  if (diagnostic) return diagnostic.slice(-STDERR_TAIL_MAX)
+  const nonJson = lire(journalPath)
+    .split(/[\r\n]+/)
+    .filter((ligne) => ligne.trim() && !ligne.trimStart().startsWith('{'))
+    .join('\n')
+    .trim()
+  return nonJson.slice(-STDERR_TAIL_MAX)
+}
 
 export interface ClaudeBinLookupDeps {
   platform?: string
@@ -993,6 +1027,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
 
     assertArgvWithinLimit('claude CLI', args) // anti-ENAMETOOLONG : le prompt passe par stdin
+    /** Fin de la sortie d'erreur du CLI, bornee : la cause d'un exit non nul est ecrite la. */
+    let stderrTail = ''
     const spawnToken = randomUUID()
     execution?.onSpawnIntent?.(spawnToken, true)
     /**
@@ -1450,6 +1486,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     } else {
       child.stdout?.on('data', (chunk: Buffer) => consumeText(chunk.toString('utf8')))
     }
+    // Sortie d'ERREUR du CLI : personne ne la lisait, donc un « claude CLI exit 1 » arrivait NU a
+    // l'utilisateur alors que la cause (cle invalide, /login, quota) est ecrite juste la. On garde
+    // la FIN, bornee : c'est la ou est la cause, et un pave n'est pas un message d'erreur.
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderrTail = `${stderrTail}${chunk.toString('utf8')}`.slice(-STDERR_TAIL_MAX)
+    })
     child.on('error', (e) => {
       if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       watchdog.dispose()
@@ -1493,8 +1535,27 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (code !== 0 && !errored) {
         // Un NTSTATUS decimal brut (« exit 1073807364 ») ne dit rien : on nomme le statut systeme
         // quand il est connu, pour que le diagnostic de role puisse conseiller un relancement.
-        const abnormal = describeExitCode(code)
-        errored = new Error(`claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''}`)
+        // Incident ak-a3cb0ebf2e4bc217 : un code de TERMINAISON/DECONNEXION arrive APRES l'event
+        // `result`. La reponse est deja la ; la jeter transformait un transport coupe en echec dur.
+        // On n'absout QUE ce cas precis — reponse deja produite ET code de transport. Un crash du
+        // CLI (violation d'acces) ou un exit 1 restent des echecs, sinon on masquerait un vrai bug.
+        const transportApresReponse =
+          isTransportExitCode(code) && resultSeen && text.trim().length > 0
+        if (!transportApresReponse) {
+          const abnormal = describeExitCode(code)
+          const brut = stderrTail.trim() || (journal ? stderrTailFromJournal(journal.path) : '')
+          const detail = brut.trim().split(/[\r\n]+/).filter(Boolean).slice(-4).join(' | ')
+          const usedModel = resolvedModel ?? opts.model
+          errored = new Error(
+            `claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''} — ` +
+              describeProviderExit({
+                provider: 'claude',
+                ...(usedModel ? { model: usedModel } : {}),
+                code
+              }) +
+              (detail ? ` — sortie du CLI : ${detail}` : '')
+          )
+        }
       }
       // Retries epuises sans reponse : le CLI sort en 0 sans event `result`, donc le tour passait
       // pour un succes VIDE et l'UI ne quittait jamais l'etat « reflexion ». C'est un ECHEC, nomme.
