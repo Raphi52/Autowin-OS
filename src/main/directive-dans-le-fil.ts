@@ -41,11 +41,17 @@ export function enregistrerDirectiveDansLeFil(params: {
       // bloc `ask` le prend pour la reponse a la question du tour : le bloc affiche « Répondu » et
       // le clic de l'utilisateur ne part plus. Le verrou anti-double-envoi, lui, reste entier.
       orientation: true,
-      // ELLE SE LIT AVANT LA RÉPONSE QU'ELLE ORIENTE (conv-46, 2026-09-01). Écrite en fin de fil,
-      // la consigne se retrouvait SOUS le brouillon de réponse du tour en cours : l'utilisateur
-      // voyait sa phrase en dernier, sans rien en dessous, et croyait qu'il ne se passait rien —
-      // alors que le tour l'avait bien reçue et traitée.
-      avantLaReponseEnCours: true
+      /*
+       * ORDRE CHRONOLOGIQUE — la consigne se pose APRÈS ce qui était déjà affiché (2026-09-04).
+       *
+       * Le remonter AVANT le brouillon de réponse était un choix du 2026-09-01 (conv-46) : la
+       * consigne s'écrivait sous une réponse qui la traitait déjà. Mais ce remontage produit le
+       * défaut INVERSE, rapporté par l'utilisateur le 2026-09-04 : « quand j'écris et qu'il y a un
+       * bloc action en cours, mon message part au-dessus de l'agent ». Il ne retrouve plus sa
+       * phrase là où il l'a tapée. Entre les deux, on garde l'ordre RÉEL des événements : ce que
+       * l'utilisateur vient d'écrire arrive en bas, comme dans n'importe quelle conversation.
+       */
+      avantLaReponseEnCours: false
     })
     // La consigne n'est PAS forcément le dernier message du fil : quand un tour est en cours, elle
     // se pose AVANT le brouillon de réponse. On la retrouve donc par son contenu, en repartant de
