@@ -10,7 +10,7 @@ import {
 } from './watchdog'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { rm as rmAsync, stat as statAsync } from 'node:fs/promises'
 import {
   openStdoutJournal,
@@ -457,6 +457,36 @@ export function resolveClaudeBin(explicit?: string): string {
 
 /** Sous-chemin du binaire natif dans le paquet npm `@anthropic-ai/claude-code`. */
 const CLAUDE_PACKAGE_BIN = join('node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')
+
+/** Taille max conservee de la sortie d'erreur du CLI (fin de flux) — assez pour la cause, pas un dump. */
+const STDERR_TAIL_MAX = 800
+
+/**
+ * Cause d'echec quand le CLI n'ecrit PAS dans un pipe : en mode journal sa sortie d'erreur part dans
+ * un FICHIER (`<journal>.stderr.log` avec le relais Windows, sinon melangee au journal lui-meme).
+ * Sans cette lecture `child.stderr` est nul et le message d'echec reste nu — c'est le chemin qu'emprunte
+ * l'application. Les lignes JSON du journal sont la sortie normale : on les ecarte.
+ */
+export function stderrTailFromJournal(
+  journalPath: string,
+  read: (chemin: string) => string = (chemin) => readFileSync(chemin, 'utf8')
+): string {
+  const lire = (chemin: string): string => {
+    try {
+      return read(chemin)
+    } catch {
+      return ''
+    }
+  }
+  const diagnostic = lire(`${journalPath}.stderr.log`).trim()
+  if (diagnostic) return diagnostic.slice(-STDERR_TAIL_MAX)
+  const nonJson = lire(journalPath)
+    .split(/[\r\n]+/)
+    .filter((ligne) => ligne.trim() && !ligne.trimStart().startsWith('{'))
+    .join('\n')
+    .trim()
+  return nonJson.slice(-STDERR_TAIL_MAX)
+}
 
 export interface ClaudeBinLookupDeps {
   platform?: string
@@ -997,6 +1027,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
 
     assertArgvWithinLimit('claude CLI', args) // anti-ENAMETOOLONG : le prompt passe par stdin
+    /** Fin de la sortie d'erreur du CLI, bornee : la cause d'un exit non nul est ecrite la. */
+    let stderrTail = ''
     const spawnToken = randomUUID()
     execution?.onSpawnIntent?.(spawnToken, true)
     /**
@@ -1454,6 +1486,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     } else {
       child.stdout?.on('data', (chunk: Buffer) => consumeText(chunk.toString('utf8')))
     }
+    // Sortie d'ERREUR du CLI : personne ne la lisait, donc un « claude CLI exit 1 » arrivait NU a
+    // l'utilisateur alors que la cause (cle invalide, /login, quota) est ecrite juste la. On garde
+    // la FIN, bornee : c'est la ou est la cause, et un pave n'est pas un message d'erreur.
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderrTail = `${stderrTail}${chunk.toString('utf8')}`.slice(-STDERR_TAIL_MAX)
+    })
     child.on('error', (e) => {
       if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       watchdog.dispose()
@@ -1505,6 +1543,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           isTransportExitCode(code) && resultSeen && text.trim().length > 0
         if (!transportApresReponse) {
           const abnormal = describeExitCode(code)
+          const brut = stderrTail.trim() || (journal ? stderrTailFromJournal(journal.path) : '')
+          const detail = brut.trim().split(/[\r\n]+/).filter(Boolean).slice(-4).join(' | ')
           const usedModel = resolvedModel ?? opts.model
           errored = new Error(
             `claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''} — ` +
@@ -1512,7 +1552,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
                 provider: 'claude',
                 ...(usedModel ? { model: usedModel } : {}),
                 code
-              })
+              }) +
+              (detail ? ` — sortie du CLI : ${detail}` : '')
           )
         }
       }
