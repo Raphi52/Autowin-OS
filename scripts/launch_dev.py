@@ -389,6 +389,20 @@ def main() -> int:
         return 2
 
     deja_ouvertes = fenetres_app()
+    if deja_ouvertes and os.environ.get("AUTOWIN_DEV_RESTART") == "1":
+        # RESTART : l'ANCIENNE fenetre est encore a l'ecran le temps qu'Electron meure. Refuser ici
+        # tuait le redemarrage demande par l'app elle-meme (constate le 2026-09-04) : l'app se
+        # fermait et le nouveau lanceur affichait « deja ouvert ». On ATTEND sa disparition.
+        journaliser("restart detecte — attente de la fermeture de l'ancienne fenetre (max 60 s)")
+        debut_attente = time.monotonic()
+        while time.monotonic() - debut_attente < 60.0:
+            deja_ouvertes = fenetres_app()
+            if not deja_ouvertes:
+                break
+            time.sleep(0.4)
+        if deja_ouvertes:
+            journaliser("restart : fenetre toujours presente apres 60 s — on lance quand meme")
+            deja_ouvertes = set()
     if deja_ouvertes:
         # Le mutex ne suffit pas : il meurt avec le lanceur, alors que l'application lui survit. Sans
         # ce controle, un second `npm run dev` demarrait a cote du premier.

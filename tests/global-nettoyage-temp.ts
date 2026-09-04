@@ -1,5 +1,11 @@
 import { tmpdir } from 'node:os'
-import { nettoyerDossiersTemporairesDeTest } from './temp-cleanup'
+import {
+  nettoyerDossiersTemporairesDeTest,
+  purgerDossiersTemporairesAnciens
+} from './temp-cleanup'
+
+/** Au-dela de 24 h, un dossier temporaire n'appartient plus a aucun appel ni a aucune suite. */
+const AGE_DE_PURGE_MS = 24 * 60 * 60 * 1000
 
 /**
  * TEARDOWN GLOBAL — range les dossiers temporaires que la suite vient de créer.
@@ -17,6 +23,10 @@ export default function setup(): () => void {
 
   return function teardown(): void {
     const resultat = nettoyerDossiersTemporairesDeTest(tmpdir(), debutDuRun)
+    const purge = purgerDossiersTemporairesAnciens(tmpdir(), Date.now(), AGE_DE_PURGE_MS)
+    if (purge.supprimes.length > 0) {
+      console.log(`[nettoyage temporaire] ${purge.supprimes.length} residu(s) de plus de 24 h purge(s)`)
+    }
     if (resultat.supprimes.length > 0 || resultat.echecs.length > 0) {
       // Une ligne, à la fin : le nettoyage doit être VISIBLE, sinon personne ne saura qu'il agit.
       console.log(

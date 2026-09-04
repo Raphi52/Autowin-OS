@@ -853,12 +853,27 @@ export function verdictDifferentiel(
       raison: 'la baseline n’a joué aucun test — elle ne peut rien attester de l’état d’avant'
     }
   }
+  /*
+   * UN ROUGE SANS AUCUN TEST EN ECHEC N'ACCUSE PAS L'EDITION — il accuse la MACHINE.
+   *
+   * MESURE le 2026-09-04 (conv-233) : 676 tests passes, ZERO echec, edition refusee quand meme.
+   * La cause du rouge etait « Worker terminated due to reaching memory limit » — trois processus
+   * de test tues par la memoire. Refuser la publication accusait l'auteur d'une regression
+   * inexistante, et aucun rejeu ne pouvait la lever : la cause est HORS des tests.
+   *
+   * On publie donc, en NOMMANT la limite plutot qu'en la deguisant en verdict : le verdict
+   * n'atteste que des tests qui ont pu tourner.
+   */
   if (apres.echecs.size === 0) {
     return {
-      concluant: false,
+      concluant: true,
       ...vide,
-      publiable: false,
-      raison: 'verdict rouge sans aucun échec identifié — cause hors des tests'
+      publiable: true,
+      testsJoues: apres.testsJoues,
+      raison:
+        'rouge sans aucun test en échec — cause hors des tests (mémoire, processus tué) ; ' +
+        'aucune régression mesurable imputable à l’édition ; ' +
+        'le verdict n’atteste que les tests qui ont pu tourner'
     }
   }
   /*

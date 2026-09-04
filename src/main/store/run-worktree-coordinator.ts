@@ -64,6 +64,7 @@ export interface RunWorktreeCoordinatorDeps {
         | 'commitDejaReference'
         | 'commitsDejaReferences'
         | 'travauxNonPublies'
+        | 'bureauPeutPorterDuTravail'
         | 'marquerTravailTrie'
         | 'oublierTravailTrie'
         | 'shaTravailTrie'
@@ -1457,6 +1458,17 @@ export class RunWorktreeCoordinator {
       })
     }
     return rendu
+  }
+
+  /**
+   * Ce bureau PRECIS peut-il porter du travail ? Cout borne a UN bureau.
+   *
+   * Sert la sortie courte d'`edit_file` : sans dossier ni branche pour cet identifiant, inutile de
+   * payer le recensement complet (18 699 ms mesures le 2026-09-04 avec 40 copies accumulees).
+   * Absent le manager, on repond `true` : on ne saute JAMAIS le recensement sur une ignorance.
+   */
+  bureauPeutPorterDuTravail(agentId: string): boolean {
+    return this.manager.bureauPeutPorterDuTravail?.(agentId) ?? true
   }
 
   /** Tous les travaux finis mais non publies, avec leurs fichiers. Lecture seule, a la demande. */

@@ -161,6 +161,9 @@ verifie('OBTENU True' in _restart.stdout,
 _src_lanceur = Path(_lanceur.__file__).read_text(encoding='utf-8')
 verifie("AUTOWIN_DEV_RESTART" in _src_lanceur and "attendre_verrou(" in _src_lanceur,
         "le flux de lancement doit ATTENDRE le verrou quand AUTOWIN_DEV_RESTART est pose")
+
+verifie("deja_ouvertes and os.environ.get(\"AUTOWIN_DEV_RESTART\")" in _src_lanceur,
+        "un restart doit ATTENDRE la fermeture de l'ancienne fenetre au lieu de refuser")
 verifie(_src_lanceur.count("attendre_verrou(60") >= 1,
         "l'attente de restart doit etre bornee et reellement appelee dans main()")
 

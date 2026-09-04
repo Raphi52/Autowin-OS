@@ -104,6 +104,31 @@ describe('decisionDeCommande — plus aucune autorisation a retaper', () => {
     expect(decisionDeCommande('ls>/tmp/x', sansRien).autorise).toBe(false)
   })
 
+  /*
+   * UN OPERATEUR ENTRE GUILLEMETS EST DU TEXTE, PAS UN ENCHAINEMENT.
+   *
+   * Mesure le 2026-09-04 (conv-233) : une ligne dont le `||` vivait a l'interieur d'une chaine de
+   * caracteres etait refusee comme enchainement shell — deux appels perdus. La ligne part en
+   * `shell: false` : ce qui est guillemete devient UN argument litteral, il n'enchaine rien.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retester la ligne ENTIERE au lieu de ses seuls
+   * caracteres hors guillemets.
+   */
+  it('accepte un opérateur situé À L’INTÉRIEUR d’une chaîne de caractères', () => {
+    for (const ligne of [
+      'python -c "print(1 || 2)"',
+      'node -e "console.log(a && b)"',
+      "git commit -m 'corrige a; b'"
+    ]) {
+      expect(decisionDeCommande(ligne, []).autorise).toBe(true)
+    }
+  })
+
+  /* La garde reste entiere HORS guillemets : c'est elle qui empeche `git status && rm -rf /`. */
+  it('refuse toujours un enchaînement réel quand la ligne porte aussi des guillemets', () => {
+    expect(decisionDeCommande('git commit -m "ok" && rm -rf /', []).autorise).toBe(false)
+  })
+
   it('refuse un enchaînement shell, même sur un binaire autorisé', () => {
     // `shell: false` ne les interpréterait pas — ils partiraient comme ARGUMENTS, ce qui est pire :
     // silencieusement inerte au lieu d'être refusé.

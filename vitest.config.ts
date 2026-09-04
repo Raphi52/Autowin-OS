@@ -129,6 +129,13 @@ export default defineConfig({
      * Gardes et cas limites : `tests/temp-cleanup.test.ts`.
      */
     globalSetup: ['./tests/global-nettoyage-temp.ts'],
+    /*
+     * PAS de redirection de TMPDIR par fichier de test. Tentee le 2026-09-04 (`tests/temp-suivi.ts`,
+     * supprime) : les workers de vitest partagent le MEME `process.env` (threads en SHARE_ENV), donc
+     * des que deux fichiers tournent en parallele, le bac de l'un est restaure/supprime sous les
+     * pieds de l'autre — mesure : 74 tests rouges sur 84 a 4 workers, 84 verts a 1 worker. Le
+     * rangement reste donc au teardown global ci-dessus, qui ne borne que par horodatage de run.
+     */
     pool: 'threads',
     maxWorkers: 4,
     testTimeout: 20_000,

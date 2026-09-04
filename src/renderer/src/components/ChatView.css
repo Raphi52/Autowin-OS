@@ -4070,6 +4070,54 @@ ol.md-list li {
   box-shadow: none;
   font-size: 14px;
 }
+/* APPARENCE DU BOUTON D'ENVOI (conv-257, 2026-09-04).
+
+   Verdict utilisateur sur le rond plat actuel : « un bouton envoyer meilleur que cette merde ».
+   Perimetre EXPLICITEMENT borne par lui : « l'apparence du bouton SEULEMENT ». Donc la taille
+   (32px), la forme ronde et la position restent celles de la regle groupee ci-dessus — on ne
+   touche qu'a ce qui se PEINT.
+
+   Trois defauts d'apparence, et leur correction :
+   1. Aplat uniforme, sans aucun relief : un leger degrade de haut en bas suffit a poser le disque.
+   2. AUCUNE difference lisible entre « pret a envoyer » et « rien a envoyer ». Le seul signal
+      etait l'opacite 0.45 de `.btn:disabled` (theme.css l.257) — un rond d'accent delave reste un
+      rond d'accent. On l'ETEINT franchement : plus de fond d'accent du tout quand le champ est
+      vide. La couleur devient alors une INFORMATION (« ton message peut partir »), pas une
+      decoration.
+   3. Aucun retour au clic. Un enfoncement de 6 % rend le geste tangible. */
+.composer-input-row > .composer-send.btn-accent:not(:disabled) {
+  border: 1px solid color-mix(in srgb, var(--accent) 65%, #ffffff 18%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 86%, #ffffff 14%),
+    var(--accent)
+  );
+  color: #ffffff;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 90ms ease;
+}
+.composer-input-row > .composer-send.btn-accent:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, #ffffff 60%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 72%, #ffffff 28%),
+    color-mix(in srgb, var(--accent) 94%, #ffffff 6%)
+  );
+}
+.composer-input-row > .composer-send.btn-accent:active:not(:disabled) {
+  transform: scale(0.94);
+}
+/* ETEINT — champ vide. `opacity: 1` neutralise le delavage de `.btn:disabled`, qui gardait la
+   couleur d'accent en plus pale : on veut une ABSENCE de couleur, pas une couleur affaiblie. */
+.composer-input-row > .composer-send.btn-accent:disabled {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(221, 227, 238, 0.42);
+  opacity: 1;
+}
+
 /* STOP VISIBLE ET ATTEIGNABLE (conv-254, 2026-09-04) : mesure a l'ecran — le clic PASSE, mais la
    cible fait 32px, porte un carre muet et touche le bouton d'envoi. On l'agrandit, on l'ecarte et
    on lui donne sa couleur d'arret : la cible devient visible et visable. */

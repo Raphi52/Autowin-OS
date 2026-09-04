@@ -314,14 +314,24 @@ describe('verdictDifferentiel — ne refuser que les échecs NOUVEAUX', () => {
   })
 
   /*
-   * INCOHERENCE : le runner dit ROUGE mais le rapport ne porte aucun echec. On ne sait pas ce qui
-   * s'est passe (crash apres ecriture, echec hors test, runner introuvable) — donc on refuse.
+   * UN ROUGE SANS AUCUN TEST EN ECHEC N'ACCUSE PAS L'EDITION — il accuse la MACHINE.
+   *
+   * MESURE le 2026-09-04 (conv-233) : 676 tests passes, ZERO echec, edition refusee quand meme
+   * parce que trois processus de test avaient ete tues par la memoire. Le refus etait indefendable
+   * — aucune regression mesurable, et aucun rejeu ne pouvait lever la cause, qui est HORS des
+   * tests. On publie donc en NOMMANT la limite.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : refuser de nouveau ce cas, ou publier sans dire que le
+   * verdict n'atteste que les tests qui ont pu tourner.
    */
-  it('REFUSE un rouge dont le rapport ne porte AUCUN échec', () => {
-    expect(verdictDifferentiel(false, lu(rapport([])), lu(rapport([A])))).toMatchObject({
-      concluant: false,
-      publiable: false
-    })
+  it('PUBLIE un rouge dont le rapport ne porte AUCUN échec, en nommant la limite', () => {
+    const v = verdictDifferentiel(false, lu(rapport([])), lu(rapport([A])))
+    expect(v).toMatchObject({ concluant: true, publiable: true })
+    expect(v.raison ?? '').toContain('hors des tests')
+    expect(v.raison ?? '').toContain('qui ont pu tourner')
+    // Le compte reste celui REELLEMENT joue : on ne maquille pas la mesure en la publiant.
+    expect(v.testsJoues).toBe(lu(rapport([])).testsJoues)
+    expect(v.nouvelles).toHaveLength(0)
   })
 
   it('publie un VERT sans rien différencier, et sans exiger de baseline', () => {

@@ -61,8 +61,9 @@ import {
   pickOrchestrationToResume,
   pickAcquiredAnalysis,
   pickResumeForTask,
-  saveOrchestrationAgentCheckpoint,
+  saveOrchestrationAgentCheckpointAsync,
   saveOrchestrationState,
+  saveOrchestrationStateAsync,
   suppressOrchestrationPipeline,
   type OrchestrationRunState
 } from './runs/orchestration-state'
@@ -535,7 +536,9 @@ export class AutowinOS {
         usage,
         agents
       }) =>
-        saveOrchestrationState(this.orchestrationStateRoot, {
+        // ECRITURE DIFFEREE, mesuree : ce checkpoint bloquait 21,6 s de fil principal le 2026-09-04
+        // (`gels.jsonl`, pointes a 10 s pour un rename de 173 Ko). Atomicite et ordre preserves.
+        void saveOrchestrationStateAsync(this.orchestrationStateRoot, {
           runId,
           task,
           ...(conversationId ? { conversationId } : {}),
@@ -552,7 +555,7 @@ export class AutowinOS {
           updatedAt: Date.now()
         }),
       onAgentsChanged: (runId, agents) => {
-        saveOrchestrationAgentCheckpoint(
+        saveOrchestrationAgentCheckpointAsync(
           this.orchestrationStateRoot,
           runId,
           agents,

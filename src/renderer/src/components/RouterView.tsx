@@ -253,13 +253,14 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     try {
       const result = await action()
       if ('accounts' in result) setAccounts(result.accounts)
+      // Le compte actif change AUSSI les quotas mesures : la barre de quota de la zone de saisie
+      // vit dans un autre composant. Le signal part AVANT `reloadCatalog()`, qui re-teste l'auth en
+      // lancant les CLI (plusieurs secondes) : place APRES, la barre restait sur le quota de
+      // l'ancien compte pendant toute cette attente, et semblait ne se mettre a jour qu'au clic.
+      window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
       // Le compte actif change l'identite du CLI : le badge d'auth affiche ne vaut plus rien tant
       // qu'il n'a pas ete re-teste. On recharge donc les statuts au lieu de laisser un vert perime.
       await reloadCatalog()
-      // Le compte actif change AUSSI les quotas mesures : la barre de quota de la zone de saisie
-      // vit dans un autre composant et ne se rafraichissait qu'au clic (ou toutes les 60 s). On la
-      // previent tout de suite pour qu'elle recharge le quota du NOUVEAU compte.
-      window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
     } catch (error) {
       // fail-open sur la LISTE (on garde l'affichage précédent plutôt qu'un écran vide), mais
       // l'échec est DIT : un `catch {}` muet rendait « + Ajouter un compte » sans effet apparent —

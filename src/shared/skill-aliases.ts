@@ -17,3 +17,53 @@ export const SKILL_ALIASES: Readonly<Record<string, string>> = {
 export function resolveSkillAlias(id: string): string {
   return SKILL_ALIASES[id.toLowerCase()] ?? id
 }
+
+/**
+ * Une SEULE faute de frappe sépare-t-elle `a` de `b` ? (insertion, suppression ou substitution)
+ *
+ * Défaut vécu le 2026-09-04 (conv-257) : `/draf` — une lettre manquante — n'a résolu AUCUNE skill.
+ * `skillInstruction` rend alors la chaîne vide EN SILENCE : le corps de `draft` n'a jamais été
+ * injecté, l'agent a improvisé une maquette hors de toutes les règles de la skill, et personne —
+ * ni l'utilisateur ni l'agent — n'a su que la commande n'avait pas pris. Un `/` mal tapé doit
+ * porter, pas échouer sans bruit.
+ */
+export function uneSeuleFauteDeFrappe(a: string, b: string): boolean {
+  if (a === b) return false
+  const [court, long] = a.length <= b.length ? [a, b] : [b, a]
+  if (long.length - court.length > 1) return false
+  let i = 0
+  let j = 0
+  let fautes = 0
+  while (i < court.length && j < long.length) {
+    if (court[i] === long[j]) {
+      i++
+      j++
+      continue
+    }
+    if (++fautes > 1) return false
+    if (court.length === long.length) {
+      i++
+      j++
+    } else {
+      j++
+    }
+  }
+  return fautes + (long.length - j) === 1
+}
+
+/**
+ * Rattrape un `/nom` mal tapé vers la SEULE skill connue à une faute près.
+ *
+ * Volontairement STRICT : deux candidats (`/buld` entre `build` et `bold`) = AUCUNE correction.
+ * Deviner à la place de l'utilisateur coûte plus cher que de ne rien faire.
+ */
+export function corrigeSkillMalTapee(
+  id: string,
+  nomsConnus: Iterable<string>
+): string | undefined {
+  const cible = id.toLowerCase()
+  const candidats = [...new Set([...nomsConnus].map((n) => n.toLowerCase()))].filter((n) =>
+    uneSeuleFauteDeFrappe(cible, n)
+  )
+  return candidats.length === 1 ? candidats[0] : undefined
+}

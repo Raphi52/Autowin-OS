@@ -3222,6 +3222,19 @@ export class AppCommandBus {
      * (`travauxNonPubliesAsync`, worker) ; sans worker elle retombe d'elle-meme sur la voie
      * synchrone, meme reponse.
      */
+    /*
+     * SORTIE COURTE : ne pas payer le recensement COMPLET pour une question a UN bureau.
+     *
+     * Mesure le 2026-09-04 (conv-233) : ce recensement coute 18 699 ms avec 40 copies accumulees,
+     * paye AVANT la moindre edition et dans le meme budget que l'operation worktree — au-dela du
+     * delai, `edit_file` echoue sur « Operation worktree interrompue » sans avoir rien ecrit. Le
+     * cout croit avec le nombre de copies : allonger le delai deplace le mur, il ne l'enleve pas.
+     *
+     * La sortie est NEGATIVE, donc sure : sans dossier de bureau ni branche pour cette cle, le
+     * recensement n'aurait rien trouve non plus. Une reponse inconnue vaut `true` — on recense.
+     */
+    if (this.os.worktrees?.bureauPeutPorterDuTravail?.(cle) === false) return cle
+
     const retenus =
       (await this.os.worktrees?.travauxNonPubliesAsync?.()) ??
       this.os.worktrees?.travauxNonPublies?.() ??

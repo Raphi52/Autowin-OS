@@ -7,6 +7,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
+import { rename as renameAsync, writeFile as writeFileAsync, mkdir as mkdirAsync } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type PipelinePhase, type NodePhase } from '../skill-pipeline'
 import { estIdentifiantDeNoeud } from '../../shared/pipeline-phases'
@@ -637,6 +638,7 @@ export function saveOrchestrationAgentCheckpoint(
 }
 
 export function clearOrchestrationState(root: string, runId: string): void {
+  etatsEnVol.delete(runId)
   try {
     rmSync(statePath(root, runId), { force: true })
   } catch {
@@ -644,10 +646,83 @@ export function clearOrchestrationState(root: string, runId: string): void {
   }
 }
 
+/*
+ * ECRITURE DU CHECKPOINT HORS DU THREAD PRINCIPAL.
+ *
+ * Mesure du 2026-09-04 (`.autowin-data/autowin-os/gels.jsonl`) : le `renameSync` de ce fichier,
+ * appele depuis `os.ts` a chaque fin de phase et a chaque changement d'agents, porte 21,6 s de fil
+ * principal bloque sur 365 s de gels, avec des pointes a 10 s pour UN rename de 173 Ko. Le cout ne
+ * vient pas du volume mais de la contention disque : ce n'est donc pas une ecriture a alleger, c'est
+ * une ecriture qui n'a rien a faire sur le thread qui pompe les messages de la fenetre.
+ *
+ * Ce que la version asynchrone PRESERVE : l'atomicite (ecrire a cote puis renommer), l'ORDRE (les
+ * ecritures d'un meme run sont chainees), et la LISIBILITE immediate (l'etat en vol est rendu par
+ * `loadOrchestrationStates` avant meme que le disque ait repondu, sinon un checkpoint d'agents
+ * relirait une version perimee). Ce qu'elle concede, et il faut le dire : un kill du process pendant
+ * le vol perd le DERNIER checkpoint — jamais un fichier tronque, le rename restant atomique.
+ */
+const etatsEnVol = new Map<string, OrchestrationRunState>()
+const ecrituresEnCours = new Map<string, Promise<void>>()
+
+export function saveOrchestrationStateAsync(
+  root: string,
+  state: OrchestrationRunState
+): Promise<void> {
+  safeRunId(state.runId)
+  if (!isOrchestrationRunState(state)) {
+    throw new Error(
+      `checkpoint orchestration causalement invalide : ${raisonsCheckpointInvalide(state).join(' ; ')}`
+    )
+  }
+  etatsEnVol.set(state.runId, state)
+  const charge = JSON.stringify(withLegacyAllocationMirror(state))
+  const target = statePath(root, state.runId)
+  const precedente = ecrituresEnCours.get(state.runId) ?? Promise.resolve()
+  const suite: Promise<void> = precedente
+    .then(async () => {
+      await mkdirAsync(root, { recursive: true })
+      await writeFileAsync(`${target}.tmp`, charge, 'utf8')
+      await renameAsync(`${target}.tmp`, target)
+    })
+    .catch(() => {
+      /* disque indisponible : le checkpoint est perdu, jamais l'orchestration en cours */
+    })
+    .finally(() => {
+      if (ecrituresEnCours.get(state.runId) === suite) {
+        ecrituresEnCours.delete(state.runId)
+        if (etatsEnVol.get(state.runId) === state) etatsEnVol.delete(state.runId)
+      }
+    })
+  ecrituresEnCours.set(state.runId, suite)
+  return suite
+}
+
+/** Variante non bloquante de `saveOrchestrationAgentCheckpoint` (meme calcul, ecriture differee). */
+export function saveOrchestrationAgentCheckpointAsync(
+  root: string,
+  runId: string,
+  agents: NonNullable<OrchestrationRunState['agents']>,
+  usage: ExecutionUsageSnapshot | undefined,
+  nowMs = Date.now()
+): OrchestrationRunState {
+  const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  if (!current) {
+    throw new Error(`checkpoint orchestration absent ou invalide: ${runId}`)
+  }
+  const updated: OrchestrationRunState = {
+    ...current,
+    agents,
+    ...(usage ? { usage } : {}),
+    updatedAt: nowMs
+  }
+  void saveOrchestrationStateAsync(root, updated)
+  return updated
+}
+
 /** États encore présents = runs qui n'ont jamais atteint leur clôture (l'app est morte avant). */
 export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
-  if (!existsSync(root)) return []
   const states: OrchestrationRunState[] = []
+  if (!existsSync(root)) return fusionnerEtatsEnVol(root, states)
   for (const entry of readdirSync(root)) {
     if (!entry.endsWith('.json')) continue
     try {
@@ -657,6 +732,21 @@ export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
     } catch {
       // JSON tronqué par un crash : on ignore ce run plutôt que de perdre les autres.
     }
+  }
+  return fusionnerEtatsEnVol(root, states)
+}
+
+/** L'etat dont l'ecriture est encore en vol PRIME sur ce que le disque montre encore. */
+function fusionnerEtatsEnVol(
+  root: string,
+  states: OrchestrationRunState[]
+): OrchestrationRunState[] {
+  if (etatsEnVol.size === 0) return states
+  for (const [runId, state] of etatsEnVol) {
+    if (statePath(root, runId) !== statePath(root, state.runId)) continue
+    const index = states.findIndex((candidate) => candidate.runId === runId)
+    if (index >= 0) states[index] = state
+    else states.push(state)
   }
   return states
 }

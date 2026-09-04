@@ -617,7 +617,7 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
 
     expect(start).toBeGreaterThanOrEqual(0)
     expect(end).toBeGreaterThan(start)
-    expect(callback).toContain('saveOrchestrationAgentCheckpoint(')
+    expect(callback).toContain('saveOrchestrationAgentCheckpointAsync(')
     expect(callback).toContain('this.executionSupervisor.currentSnapshot()')
   })
 

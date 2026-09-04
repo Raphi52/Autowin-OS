@@ -55,7 +55,10 @@ describe('ChatComposer — le separateur porte la jauge de contexte', () => {
 
     expect(filet.style.getPropertyValue('--context-fill')).toBe('72%')
     expect(filet.dataset.contextLevel).toBe('tendu')
-    expect(filet.title).toContain('Contexte')
+    const bulle = filet.querySelector('[data-testid="composer-context-tip"]')
+    expect(bulle).not.toBeNull()
+    expect((bulle as HTMLElement).title).toContain('Contexte')
+    expect((bulle as HTMLElement).textContent).toContain('Contexte')
   })
 
   it('laisse le filet GRIS quand l occupation est inconnue — jamais 0 %', () => {

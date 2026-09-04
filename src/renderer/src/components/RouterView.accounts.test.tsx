@@ -122,6 +122,50 @@ describe('RouterView — comptes Claude', () => {
     expect(providerStatus.mock.calls.length).toBeGreaterThan(callsBefore)
   })
 
+  it('previent la barre de quota AVANT le re-test d’auth (qui dure plusieurs secondes)', async () => {
+    let libererStatuts: () => void = () => undefined
+    const providerStatus = vi.fn(
+      async () =>
+        await new Promise<{ provider: string; status: string; testable: boolean }[]>((resolve) => {
+          libererStatuts = () =>
+            resolve([{ provider: 'claude', status: 'authenticated', testable: true }])
+        })
+    )
+    const stale = vi.fn()
+    window.addEventListener('autowin:quotas-stale', stale)
+    mountWith({
+      providerStatus,
+      claudeAccounts: async () => ({
+        activeId: 'default',
+        accounts: [
+          { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: true },
+          { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: false }
+        ]
+      }),
+      claudeAccountSwitch: async () => ({
+        activeId: 'compte-2',
+        accounts: [
+          { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: false },
+          { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: true }
+        ]
+      })
+    })
+    await act(async () => root.render(createElement(RouterView, {})))
+    libererStatuts()
+    await flush()
+
+    await act(async () => {
+      chips()[1].click()
+    })
+    await flush()
+
+    // Le re-test d'auth est encore EN COURS : la barre de quota doit deja avoir ete prevenue.
+    expect(stale).toHaveBeenCalled()
+    libererStatuts()
+    await flush()
+    window.removeEventListener('autowin:quotas-stale', stale)
+  })
+
   it('ajoute un compte (le login dédié est déclenché côté principal)', async () => {
     const claudeAccountAdd = vi.fn(async () => ({
       activeId: 'default',

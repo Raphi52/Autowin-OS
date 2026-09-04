@@ -155,6 +155,35 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 /* ---------- Constantes ---------- */
 
 /**
+ * LA JAUGE SURVIT A LA FERMETURE DU FIL.
+ *
+ * L'occupation n'est calculee qu'a la fin d'un tour, et l'usage n'est PAS persiste avec les
+ * messages (verifie : aucun champ `usage` dans conversations.json). Rouvrir une conversation
+ * rendait donc la barre vide alors que le fil etait plein. On garde ici la DERNIERE occupation
+ * connue par conversation, cote interface — une mesure datee, pas un recalcul invente.
+ */
+const CLE_JAUGES = 'autowin.context-gauges.v1'
+
+function lireJaugesMemorisees(): Record<string, ContextGauge> {
+  try {
+    const brut = globalThis.localStorage?.getItem(CLE_JAUGES)
+    if (!brut) return {}
+    const lu: unknown = JSON.parse(brut)
+    return lu && typeof lu === 'object' ? (lu as Record<string, ContextGauge>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function memoriserJauges(jauges: Record<string, ContextGauge>): void {
+  try {
+    globalThis.localStorage?.setItem(CLE_JAUGES, JSON.stringify(jauges))
+  } catch {
+    /* stockage indisponible : la jauge reste seulement en memoire. */
+  }
+}
+
+/**
  * Ghost-text d'un FIL donne : prompt suivant ecrit par le modele, sinon rubrique Recommande.
  * Extrait du composant pour que la MOSAIQUE l'obtienne aussi, par conversation (2026-08-30).
  */
@@ -509,7 +538,9 @@ export function ChatView({
    * ce que le fil PORTE encore. Autowin savait repondre a la premiere question et pas a la
    * seconde -- un fil pouvait s'approcher de la saturation sans qu'un ecran ne l'indique.
    */
-  const [contextGauges, setContextGauges] = useState<Record<string, ContextGauge>>({})
+  const [contextGauges, setContextGauges] = useState<Record<string, ContextGauge>>(() =>
+    lireJaugesMemorisees()
+  )
   // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
   const [convFolderMenu, setConvFolderMenu] = useState<{
@@ -1710,7 +1741,12 @@ export function ChatView({
           model: usage.model,
           provider: usage.provider
         })
-        if (jauge) setContextGauges((current) => ({ ...current, [conversationId]: jauge }))
+        if (jauge)
+          setContextGauges((current) => {
+            const suivant = { ...current, [conversationId]: jauge }
+            memoriserJauges(suivant)
+            return suivant
+          })
       }
       if (e.kind === 'stream-reset' && e.streamId)
         rebaseDirectiveReceiptsAfterStreamReset(conversationId, e.streamId)

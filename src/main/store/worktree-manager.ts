@@ -55,7 +55,7 @@ const SAFE_ID = /^[A-Za-z0-9_-]+$/
 
 /** Un SHA git tel que `rev-parse` le rend : c'est ce qu'on accepte comme adresse de travail. */
 const HEX_SHA = /^[0-9a-f]{7,40}$/i
-const GIT_COMMAND_TIMEOUT_MS = 30_000
+const GIT_COMMAND_TIMEOUT_MS = Number(process.env.AUTOWIN_GIT_TIMEOUT_MS ?? 180_000)
 
 /**
  * Budget de l'inventaire de récupération, distinct de celui d'une commande git.
@@ -420,7 +420,7 @@ const LIGNES = /\r?\n/
  * « quelqu'un d'autre a hérité du numéro ». Exportée : le rattachement d'un run en a besoin aussi.
  */
 const IDENTITE_MEMOIRE_MS = 5_000
-const identitesMemoisees = new Map<number, { identite: string; a: number }>()
+const identitesMemoisees = new Map<number, { identite: string | null; a: number }>()
 
 /** Vide la memoire courte des empreintes — pour les tests qui sondent la PANNE de la sonde. */
 export function oublierEmpreintesProcessus(): void {
@@ -501,8 +501,15 @@ export function defaultProcessIdentity(
   const t = maintenant()
   if (memo && t - memo.a < IDENTITE_MEMOIRE_MS) return memo.identite
   const identity = sonde(pid)
-  if (identity) identitesMemoisees.set(pid, { identite: identity, a: t })
-  else identitesMemoisees.delete(pid)
+  /*
+   * L'ECHEC EST MEMOISE COMME LE SUCCES. Mesure du 2026-09-04 (gels.jsonl) : 39,3 s de fil
+   * principal tenu sur cette sonde, avec des gels a exactement 3013 ms — la duree du `timeout`
+   * PowerShell. Ne retenir que les succes laissait donc le cas le PLUS CHER (empreinte illisible :
+   * droits, timeout) se rejouer a chaque appel du recensement. Dans une fenetre de quelques
+   * secondes, un echec de lecture est un fait aussi stable qu'une empreinte : la memoire courte le
+   * garde, et la purge sur PID disparu (plus haut) protege toujours la detection d'un numero recycle.
+   */
+  identitesMemoisees.set(pid, { identite: identity ?? null, a: t })
   return identity
 }
 
@@ -1266,6 +1273,32 @@ export class WorktreeManager {
    * Rien n'est detruit — la branche archivee reste dans git, seulement hors du recensement.
    */
   private static readonly ARCHIVE_SALVAGE = /^salvage-/
+
+  /**
+   * CE BUREAU PRECIS PEUT-IL PORTER DU TRAVAIL ? — question a UN bureau, prix d'UN bureau.
+   *
+   * DEFAUT MESURE le 2026-09-04 (conv-233) : `edit_file` commence par demander la liste COMPLETE
+   * des travaux non publies (`travauxNonPublies` + apercu, jusqu'a 100 entrees) uniquement pour
+   * savoir si LE bureau qu'il s'apprete a prendre porte deja quelque chose. Sur ce depot, avec 40
+   * copies accumulees, ce recensement coute 18 699 ms MESURES — payes avant la moindre edition, et
+   * dans le meme budget que l'operation worktree : au-dela du delai, l'edition echoue avec
+   * « Operation worktree interrompue », sans qu'aucune ligne n'ait ete ecrite. Le cout croit avec
+   * le nombre de copies : allonger le delai ne fait que deplacer le mur.
+   *
+   * La sortie courte est SURE parce qu'elle est NEGATIVE : sans dossier de bureau, sans branche de
+   * secours et sans sauvetage pour cet identifiant, le recensement ne pouvait rien trouver non
+   * plus. Des que l'un des trois existe, on repasse par le recensement complet — meme reponse.
+   */
+  bureauPeutPorterDuTravail(agentId: string): boolean {
+    if (!SAFE_ID.test(agentId)) return false
+    if (existsSync(join(this.worktreeRoot, `agent__${agentId}`))) return true
+    for (const ref of [`refs/heads/autowin/recovery/${agentId}`, `refs/autowin/rescue/${agentId}`]) {
+      if (this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', '--quiet', ref]).code === 0) {
+        return true
+      }
+    }
+    return false
+  }
 
   travauxNonPublies(baseRef = 'HEAD'): string[] {
     try {

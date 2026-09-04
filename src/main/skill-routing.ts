@@ -1,4 +1,5 @@
 import { nativeSkills } from './native-registry'
+import { corrigeSkillMalTapee } from '../shared/skill-aliases'
 import type { PipelinePhase } from './skill-pipeline'
 
 export interface SkillRoute {
@@ -94,8 +95,13 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
 
   const slash = SLASH_COMMAND.exec(text)
   if (slash) {
-    const name = slash[1].toLowerCase()
-    if (knownSkillNames().has(name)) {
+    const brut = slash[1].toLowerCase()
+    // Un `/` mal tape d'une lettre (`/draf`) partait comme message ORDINAIRE : aucune trace
+    // d'intention, et le corps de la skill jamais injecte. On rattrape vers un candidat UNIQUE.
+    const name = knownSkillNames().has(brut)
+      ? brut
+      : corrigeSkillMalTapee(brut, knownSkillNames())
+    if (name) {
       const body = slash[2]?.trim()
       return { task: body ? `/${name} ${body}` : `/${name}`, skill: name, reason: 'explicit-skill' }
     }

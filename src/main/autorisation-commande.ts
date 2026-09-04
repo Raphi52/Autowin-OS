@@ -78,6 +78,35 @@ export function decouperArguments(ligne: string): string[] {
 /** Opérateurs qui donnent à une ligne un sens que `shell: false` n'exécutera pas. */
 const ENCHAINEMENTS = /[;|&`$><\n]|\$\(/
 
+/**
+ * UN OPERATEUR ENTRE GUILLEMETS N'EST PAS UN ENCHAINEMENT — c'est du TEXTE.
+ *
+ * Defaut mesure le 2026-09-04 (conv-233) : une ligne portant `||` A L'INTERIEUR d'une chaine de
+ * caracteres etait refusee comme « enchainement shell ». Deux appels perdus dans la session. La
+ * ligne partant en `shell: false`, ce qui est guillemete est passe TEL QUEL en argument : il ne
+ * peut rien enchainer du tout.
+ *
+ * La garde reste ENTIERE hors guillemets — `git status && rm -rf /` est toujours refuse —, car
+ * seuls les caracteres HORS guillemets sont examines. Un guillemet reste ouvert ferme en fin de
+ * ligne, comme dans `decouperArguments`.
+ */
+export function porteUnEnchainement(ligne: string): boolean {
+  let horsGuillemets = ''
+  let ouvert: '"' | "'" | undefined
+  for (const caractere of ligne) {
+    if (ouvert) {
+      if (caractere === ouvert) ouvert = undefined
+      continue
+    }
+    if (caractere === '"' || caractere === "'") {
+      ouvert = caractere
+      continue
+    }
+    horsGuillemets += caractere
+  }
+  return ENCHAINEMENTS.test(horsGuillemets)
+}
+
 export interface DecisionCommande {
   autorise: boolean
   binaire?: string
@@ -146,7 +175,7 @@ export function decisionDeCommande(
 ): DecisionCommande {
   const binaire = binaireDe(ligne)
   if (!binaire) return { autorise: false, motif: 'aucune commande à lancer' }
-  if (ENCHAINEMENTS.test(ligne)) {
+  if (porteUnEnchainement(ligne)) {
     return {
       autorise: false,
       binaire,

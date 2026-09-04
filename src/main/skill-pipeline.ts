@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { listNativeRegistry, skillRoots } from './native-registry'
@@ -24,7 +24,7 @@ import { listNativeRegistry, skillRoots } from './native-registry'
 // Un `export … from` ne met PAS les noms dans la portée locale : ce fichier utilise `PipelinePhase`
 // dans ses propres signatures, d'où l'import en plus du re-export.
 import { type PipelinePhase } from '../shared/pipeline-phases'
-import { resolveSkillAlias } from '../shared/skill-aliases'
+import { corrigeSkillMalTapee, resolveSkillAlias } from '../shared/skill-aliases'
 
 export {
   PIPELINE_PHASES,
@@ -90,15 +90,41 @@ export function invokedSkillId(message: string): string | undefined {
  */
 const ID_SKILL_VALIDE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
+/** Noms de dossiers portant un SKILL.md dans les racines du kit (silencieux si illisible). */
+function dossiersDeSkills(roots: string[]): string[] {
+  const noms: string[] = []
+  for (const root of roots) {
+    try {
+      for (const e of readdirSync(root, { withFileTypes: true })) {
+        if (e.isDirectory() && existsSync(join(root, e.name, 'SKILL.md'))) noms.push(e.name)
+      }
+    } catch {
+      /* racine absente : elle n'apporte simplement aucun nom */
+    }
+  }
+  return noms
+}
+
 export function skillInstruction(id: string, roots = skillRoots()): string {
   // La garde reste EN TÊTE : on ne résout un alias que sur une entrée déjà bornée, jamais l'inverse
   // (résoudre d'abord rouvrirait la traversée par une clé d'alias forgée).
   if (!ID_SKILL_VALIDE.test(id)) return ''
-  const cible = resolveSkillAlias(id)
+  let cible = resolveSkillAlias(id)
   if (!ID_SKILL_VALIDE.test(cible)) return ''
-  const root = roots.find(
+  let root = roots.find(
     (candidate) => readIfExists(join(candidate, cible, 'SKILL.md')).length > 0
   )
+  // `/draf` au lieu de `/draft` : sans ce rattrapage, on rend '' et la skill n'est jamais chargee,
+  // en silence (cf. `uneSeuleFauteDeFrappe`). On ne corrige que vers un candidat UNIQUE.
+  if (!root) {
+    const corrige = corrigeSkillMalTapee(cible, dossiersDeSkills(roots))
+    if (corrige && ID_SKILL_VALIDE.test(corrige)) {
+      root = roots.find(
+        (candidate) => readIfExists(join(candidate, corrige, 'SKILL.md')).length > 0
+      )
+      if (root) cible = corrige
+    }
+  }
   if (!root) return ''
   const body = stripSkillFrontmatter(readIfExists(join(root, cible, 'SKILL.md')))
   return body ? `\n=== SKILL ${cible.toUpperCase()} (kit) ===\n${body}\n` : ''
