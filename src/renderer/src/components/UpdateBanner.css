@@ -84,10 +84,19 @@
   font-weight: 700;
 }
 
+/* Le message d'erreur de git peut faire dix lignes : non borne, il POUSSAIT le bouton
+   « Faire reparer » hors de l'ecran (le rail n'a pas de hauteur infinie). On le borne a
+   3 lignes ; le texte complet reste lisible au survol (attribut title). */
 .rail-update-error {
   padding: 0 2px;
   color: var(--danger, #e6635b);
   font-size: 11px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  max-height: 4.2em;
 }
 
 .rail-update-error.is-visually-hidden {

@@ -302,6 +302,7 @@ export function UpdateBanner({
             className={`rail-update-error${collapsed ? ' is-visually-hidden' : ''}`}
             data-testid="update-error"
             role="status"
+            title={applyError}
           >
             {applyError}
           </span>
