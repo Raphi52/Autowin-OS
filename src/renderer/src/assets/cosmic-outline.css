@@ -895,7 +895,7 @@
 .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled {
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(221, 227, 238, 0.42);
+  color: rgba(221, 227, 238, 0.66);
   border-top-color: rgba(255, 255, 255, 0.26);
   border-bottom-color: rgba(0, 0, 0, 0.38);
   box-shadow:
