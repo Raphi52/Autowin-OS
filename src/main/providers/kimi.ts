@@ -14,6 +14,7 @@ import { findNpmGlobalFile } from './npm-global-resolve'
 import { join } from 'node:path'
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { abortFailure } from './abort-diagnostic'
+import { describeExitCode, describeProviderExit } from '../provider-failure-diagnosis'
 import type {
   Message,
   PromptEnvelope,
@@ -287,8 +288,22 @@ export class KimiCliAdapter implements ProviderAdapter {
       .tail(consumeLine, { isComplete: () => childClosed, signal: opts.signal })
       .then(() => {
         if (exitCode !== 0 && !errored) {
+          /*
+           * NE PAS ACCUSER LA CONNEXION QUAND LE MOTEUR A CRASHE.
+           *
+           * Ce message disait « indisponible ou non connecté » pour TOUT code non nul — y compris
+           * un plantage systeme (violation d'acces) ou une coupure de transport. L'utilisateur
+           * partait alors verifier son compte alors que le binaire etait tombe.
+           * `describeExitCode` nomme le statut systeme quand il est connu ; on ne garde le conseil
+           * de connexion QUE pour les codes qui ne sont pas des accidents systeme.
+           * Meme traitement que `claude.ts` l.1497, etendu ici le 2026-09-04.
+           */
+          const accident = describeExitCode(exitCode)
           errored = new Error(
-            `Kimi Code indisponible ou non connecté (exit ${exitCode}). Installe Kimi Code puis lance \`kimi login\` pour relier ton compte.`
+            accident
+              ? `Kimi Code s'est arrêté anormalement (exit ${exitCode} — ${accident}). ` +
+                describeProviderExit({ provider: 'kimi', code: exitCode })
+              : `Kimi Code indisponible ou non connecté (exit ${exitCode}). Installe Kimi Code puis lance \`kimi login\` pour relier ton compte.`
           )
         }
       })

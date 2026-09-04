@@ -398,6 +398,30 @@
    `#a8b1ba` (l.1889), fond des boutons d'en-tête `#070d13` (l.1866). Presque
    blanches, donc invisibles sur un en-tête devenu blanc.
    ---------------------------------------------------------------------------- */
+/* Le titre est rendu par `.chat-head-kicker` (ChatView.tsx l.4504), peint en
+   `#ffffff` EN DUR (ChatView.css l.1854) : blanc sur blanc, il DISPARAIT.
+   Signale le 2026-09-03 : « on ne voit plus du tout les titres ».
+   La regle `.chat-conv-title` juste en dessous vise une classe qui n'est PLUS
+   rendue — la barre du haut a ete refaite depuis. On la garde par prudence (elle
+   ne coute rien et couvre un rendu ancien), mais c'est le kicker qui agit. */
+:root[data-theme='clair'] .cosmic-outline .chat-head-kicker {
+  color: var(--text);
+}
+/* LIGNE D'IDENTITE sous le titre (fournisseur · modele · conv · depot · branche) :
+   peinte en `#ffffff` EN DUR a CINQ endroits de `cosmic-outline.css` — l.433 (la
+   ligne entiere), l.447 (les separateurs « · »), l.454 (le fournisseur), l.464 et
+   l.468 (le nom de la conversation, occupe ou non). Blanc sur blanc : la ligne
+   disparait en entier, seuls survivent l'icone dossier et le cout, qui ont leur
+   propre couleur. Signale le 2026-09-04 : « il manque la petite ligne en dessous
+   du titre ». On la remet en gris de second plan, comme en mode nuit ou elle est
+   volontairement discrete. */
+:root[data-theme='clair'] .cosmic-outline .chat-runtime,
+:root[data-theme='clair'] .cosmic-outline .chat-runtime > span + span::before,
+:root[data-theme='clair'] .cosmic-outline .chat-runtime-provider,
+:root[data-theme='clair'] .cosmic-outline .chat-runtime-state,
+:root[data-theme='clair'] .cosmic-outline .chat-runtime-state.is-busy {
+  color: var(--text-dim);
+}
 :root[data-theme='clair'] .cosmic-outline .chat-conv-title {
   color: var(--text);
 }

@@ -184,6 +184,39 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       }
     })
 
+    // Clic droit dans un champ de saisie : Electron SOULIGNE les fautes tout seul, mais n'affiche
+    // aucune suggestion sans menu contextuel applicatif — il faut le construire à partir de
+    // params.dictionarySuggestions et appeler replaceMisspelling.
+    mainWindow.webContents.on('context-menu', (_event, params) => {
+      const items: Electron.MenuItemConstructorOptions[] = []
+      for (const suggestion of params.dictionarySuggestions) {
+        items.push({
+          label: suggestion,
+          click: () => mainWindow.webContents.replaceMisspelling(suggestion)
+        })
+      }
+      if (params.misspelledWord) {
+        if (items.length === 0) items.push({ label: 'Aucune suggestion', enabled: false })
+        items.push({ type: 'separator' })
+        items.push({
+          label: 'Ajouter au dictionnaire',
+          click: () =>
+            mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+        })
+        items.push({ type: 'separator' })
+      }
+      if (params.isEditable || params.selectionText) {
+        if (params.selectionText) {
+          if (params.isEditable) items.push({ role: 'cut', label: 'Couper' })
+          items.push({ role: 'copy', label: 'Copier' })
+        }
+        if (params.isEditable) items.push({ role: 'paste', label: 'Coller' })
+        items.push({ role: 'selectAll', label: 'Tout sélectionner' })
+      }
+      if (items.length === 0) return
+      Menu.buildFromTemplate(items).popup({ window: mainWindow })
+    })
+
     mainWindow.webContents.setWindowOpenHandler((details) => {
       // Allowlist : n'ouvre à l'extérieur QUE http/https (une réponse modèle peut
       // contenir un lien hostile file://, ms-*: … → jamais shell.openExternal dessus).

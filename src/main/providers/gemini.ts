@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { killEscalate, resolveProviderTimeoutMs } from './watchdog'
 import { abortFailure } from './abort-diagnostic'
+import { describeExitCode, describeProviderExit } from '../provider-failure-diagnosis'
 import type {
   Message,
   PromptEnvelope,
@@ -317,8 +318,18 @@ export class GeminiCliAdapter implements ProviderAdapter {
       .then(() => {
         if (exitCode !== 0 && !errored) {
           const detail = text.trim().split(/\r?\n/).at(-1)
+          /*
+           * NE PAS ACCUSER LA CONNEXION QUAND LE MOTEUR A CRASHE — meme defaut que kimi.ts,
+           * corrige le meme jour. « Ouvre Connecter Gemini » envoyait l'utilisateur verifier son
+           * compte Google alors que le binaire venait de tomber sur un accident systeme.
+           */
+          const accident = describeExitCode(exitCode)
           errored = new Error(
-            `Gemini via Antigravity indisponible ou non connecté (exit ${exitCode}). Ouvre « Connecter Gemini » pour relier ton compte Google.${detail ? ` ${detail}` : ''}`
+            accident
+              ? `Gemini s'est arrêté anormalement (exit ${exitCode} — ${accident}). ` +
+                describeProviderExit({ provider: 'gemini', code: exitCode }) +
+                (detail ? ` ${detail}` : '')
+              : `Gemini via Antigravity indisponible ou non connecté (exit ${exitCode}). Ouvre « Connecter Gemini » pour relier ton compte Google.${detail ? ` ${detail}` : ''}`
           )
         }
       })
