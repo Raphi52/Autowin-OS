@@ -26,6 +26,7 @@ asarUnpack:
   - scripts/outlook-local-snapshot.ps1
   - scripts/outlook-local-open.ps1
   - scripts/outlook-local-reply.ps1
+  - scripts/outlook-local-marquer-lu.ps1
 win:
   executableName: autowin-os
   icon: build/icon.ico

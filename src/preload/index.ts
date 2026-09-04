@@ -516,6 +516,12 @@ const api = {
    */
   outlookRepondre: (id: string, corps: string): Promise<{ ok: boolean; erreur?: string }> =>
     ipcRenderer.invoke('outlook:repondre', id, corps),
+  /**
+   * MARQUE des messages comme lus dans Outlook. Ecrit dans la boite, et c'est voulu : sans cela la
+   * pastille de non-lus reste apres lecture dans le widget.
+   */
+  outlookMarquerLu: (ids: readonly string[]): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('outlook:marquer-lu', [...ids]),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:create', task),
   taskManagerUpdate: (id: string, task: unknown): Promise<ScheduledTask> =>

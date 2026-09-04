@@ -2851,6 +2851,13 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.replyToItem(id, corps)
   })
+  // MARQUE des messages comme lus. Ecrit aussi dans la boite, mais rien n'en sort : declenche par le
+  // geste de l'utilisateur qui OUVRE un fil, jamais par la relecture periodique -- une relecture qui
+  // marque lu viderait la boite de ses non-lus pendant qu'il regarde ailleurs.
+  ipcMain.handle('outlook:marquer-lu', async (event, ids: unknown) => {
+    assertTrustedRendererSender(event, 'Outlook')
+    return outlookGateway.markRead(ids)
+  })
 
   registerTaskManagerIpc({
     ipc: ipcMain,

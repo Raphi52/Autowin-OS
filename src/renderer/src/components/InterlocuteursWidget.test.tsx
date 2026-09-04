@@ -64,18 +64,48 @@ const zoe: Interlocuteur = {
   ]
 }
 
-function monter(onRepondre = vi.fn().mockResolvedValue({ ok: true })) {
+/** Un contact avec du NON LU : ce que la pastille annonce, et ce que l'ouverture doit effacer. */
+const nonLus: Interlocuteur = {
+  echange: true,
+  cle: 'luc@ex.fr',
+  nom: 'Luc Petit',
+  adresse: 'luc@ex.fr',
+  dernierNomRecu: NOW,
+  nonLus: 1,
+  dernierEchange: NOW,
+  messages: [
+    message({ id: 'u1', sujet: 'Urgent', fil: 'urgent', corps: 'A lire', nonLu: true }),
+    message({
+      id: 'u2',
+      sujet: 'Urgent',
+      fil: 'urgent',
+      corps: 'Mon envoi',
+      deMoi: true,
+      nonLu: true,
+      recuLe: NOW - 30_000
+    }),
+    message({ id: 'u3', sujet: 'Urgent', fil: 'urgent', corps: 'Deja lu' }),
+    message({ id: 'u4', sujet: 'Autre', fil: 'autre', corps: 'Autre fil', nonLu: true })
+  ]
+}
+
+function monter(
+  onRepondre = vi.fn().mockResolvedValue({ ok: true }),
+  extra: { fils?: Interlocuteur[]; onMarquerLu?: ReturnType<typeof vi.fn> } = {}
+) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
+  const onMarquerLu = extra.onMarquerLu ?? vi.fn().mockResolvedValue({ ok: true })
   act(() => {
     root.render(
       createElement(InterlocuteursWidget, {
-        fils: [zoe],
+        fils: extra.fils ?? [zoe],
         now: NOW,
         onOuvrir: vi.fn().mockResolvedValue(undefined),
         ouvertureEnCours: null,
-        onRepondre
+        onRepondre,
+        onMarquerLu
       })
     )
   })
@@ -104,7 +134,7 @@ function monter(onRepondre = vi.fn().mockResolvedValue({ ok: true })) {
       champ.dispatchEvent(new Event('input', { bubbles: true }))
     })
   }
-  return { container, onRepondre, trouver, cliquer, saisir }
+  return { container, onRepondre, onMarquerLu, trouver, cliquer, saisir }
 }
 
 describe('InterlocuteursWidget', () => {
@@ -169,5 +199,40 @@ describe('InterlocuteursWidget', () => {
     await cliquer('home-inter-confirmer')
 
     expect(container.querySelector('[role="alert"]')?.textContent).toBe('Outlook est fermé.')
+  })
+
+  it('marque les messages du fil comme LUS des qu on l ouvre', async () => {
+    // Le defaut releve par l'utilisateur le 2026-09-04 : « la notif reste meme apres avoir lu le
+    // message ». Ouvrir le fil est le geste qui vaut lecture ; c'est lui, et lui seul, qui ecrit.
+    const onMarquerLu = vi.fn().mockResolvedValue({ ok: true })
+    const { cliquer } = monter(undefined, { fils: [nonLus], onMarquerLu })
+
+    // Rien AVANT le geste : afficher la liste des noms ne lit aucun message.
+    await cliquer('home-contact-luc@ex.fr')
+    expect(onMarquerLu).not.toHaveBeenCalled()
+
+    await cliquer('home-fil-urgent')
+    // `u1` seul : `u2` est mon propre envoi, `u3` etait deja lu, `u4` est dans un AUTRE fil.
+    expect(onMarquerLu).toHaveBeenCalledTimes(1)
+    expect(onMarquerLu).toHaveBeenCalledWith(['u1'])
+  })
+
+  it('ne marque RIEN quand le fil n a aucun message non lu', async () => {
+    const onMarquerLu = vi.fn().mockResolvedValue({ ok: true })
+    const { cliquer } = monter(undefined, { onMarquerLu })
+    await cliquer('home-contact-zoe@ex.fr')
+    await cliquer('home-fil-devis')
+    expect(onMarquerLu).not.toHaveBeenCalled()
+  })
+
+  it('affiche la cause quand Outlook refuse le marquage', async () => {
+    // Un echec avale ferait croire que la pastille est cassee, alors que c'est Outlook qui a refuse.
+    const onMarquerLu = vi.fn().mockResolvedValue({ ok: false, erreur: 'Outlook est ferme.' })
+    const { container, cliquer } = monter(undefined, { fils: [nonLus], onMarquerLu })
+    await cliquer('home-contact-luc@ex.fr')
+    await cliquer('home-fil-urgent')
+    expect(container.querySelector('[data-testid="home-inter-lu-erreur"]')?.textContent).toContain(
+      'Outlook est ferme.'
+    )
   })
 })
