@@ -56,11 +56,11 @@ describe('hasBin — un lancement rate ne vaut pas « absent »', () => {
       return emitter
     })
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
-    // Le PATH REEL de cette machine contient les shims npm (codex/claude/kimi) : c'est precisement
+    // Le PATH REEL de cette machine contient le shim npm de claude : c'est precisement
     // la situation de l'utilisateur, ou le CLI existe mais le lancement n'a pas abouti.
-    const onPath = resolveBinOnPath('codex') !== null
+    const onPath = resolveBinOnPath('claude') !== null
     const { appPreflightProbes } = await import('./preflight-probes')
-    const result = await appPreflightProbes().hasBin('codex')
+    const result = await appPreflightProbes().hasBin('claude')
     expect(spawnMock).toHaveBeenCalled()
     expect(result).toBe(onPath) // installe sur le PATH => present malgre l exit 1
     vi.doUnmock('node:child_process')

@@ -51,7 +51,7 @@ describe('runAppPreflight', () => {
     })
 
     const probe = appPreflightProbes()
-      .hasBin('codex')
+      .hasBin('claude')
       .then(() => 'probe' as const)
 
     expect(await Promise.race([timer, probe])).toBe('timer')
@@ -72,7 +72,7 @@ describe('runAppPreflight', () => {
     const fetchMock = vi.fn(() => fetchGate)
     globalThis.fetch = fetchMock as typeof fetch
 
-    const options = { standbyProviders: ['kimi'] as const }
+    const options = { standbyProviders: ['claude'] as const }
     const first = runAppPreflight(false, { standbyProviders: [...options.standbyProviders] })
     const second = runAppPreflight(false, { standbyProviders: [...options.standbyProviders] })
     releaseFetch()
@@ -92,40 +92,36 @@ describe('runAppPreflight', () => {
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(2)
   })
 
-  it('probe réellement le CLI Kimi lorsqu’il est explicitement actif', async () => {
+  it('probe réellement le CLI Claude lorsqu’il est explicitement actif', async () => {
     const { appPreflightProbes } = await import('./preflight-probes')
 
-    expect(await appPreflightProbes().hasBin('kimi')).toBe(true)
+    expect(await appPreflightProbes().hasBin('claude')).toBe(true)
     expect(mocks.spawn).toHaveBeenCalledWith(
-      'kimi',
+      'claude',
       ['--version'],
       expect.objectContaining({ windowsHide: true })
     )
+  })
+
+  it('CONTRÔLE NÉGATIF : ne lance JAMAIS un binaire de moteur retiré', async () => {
+    const { appPreflightProbes } = await import('./preflight-probes')
+
+    // @ts-expect-error — `codex` n'est plus un moteur routé : le typage l'interdit déjà.
+    expect(await appPreflightProbes().hasBin('codex')).toBe(false)
+    expect(mocks.spawn).not.toHaveBeenCalledWith('codex', expect.anything(), expect.anything())
   })
 
   it('ne réutilise pas un cache calculé pour une autre configuration standby', async () => {
     globalThis.fetch = vi.fn(async () => new Response(null, { status: 200 })) as typeof fetch
     const { runAppPreflight } = await import('./preflight-probes')
 
-    await runAppPreflight(false, { standbyProviders: ['kimi'] })
-    // codex + claude (--version) + `claude auth status`
-    expect(mocks.spawn).toHaveBeenCalledTimes(3)
+    // Claude en standby : aucun `--version`, aucun `auth status`.
+    await runAppPreflight(false, { standbyProviders: ['claude'] })
+    expect(mocks.spawn).toHaveBeenCalledTimes(0)
 
+    // Sans standby : claude (--version) + `claude auth status`. Codex et Kimi ne sont plus sondés.
     await runAppPreflight(false, { standbyProviders: [] })
-    // + codex, claude, kimi (--version) + `claude auth status`
-    expect(mocks.spawn).toHaveBeenCalledTimes(7)
-  })
-
-  it('refuse une session Codex dont l’expiration est dépassée', async () => {
-    mocks.loadTokens.mockReturnValueOnce({
-      accessToken: 'expired-access',
-      refreshToken: 'expired-refresh',
-      obtainedAt: Date.now() - 2000,
-      expiresInSec: 1
-    })
-    const { appPreflightProbes } = await import('./preflight-probes')
-
-    expect(await appPreflightProbes().hasCodexSession()).toBe(false)
+    expect(mocks.spawn).toHaveBeenCalledTimes(2)
   })
 
   it('re-sonde avec backoff tant que brain échoue puis s’arrête à la récupération', async () => {
@@ -193,7 +189,7 @@ describe('runAppPreflight', () => {
       summary: '',
       checks: [
         { id: 'brain', label: 'b', ok: true },
-        { id: 'codex', label: 'c', ok: false }
+        { id: 'claude', label: 'c', ok: false }
       ]
     }
     const run = vi.fn(async () => brainOkCodexKo)
