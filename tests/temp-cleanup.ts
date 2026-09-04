@@ -23,7 +23,6 @@ import { fileURLToPath } from 'node:url'
  *
  * Le préfixe seul ne suffirait pas comme critère : `autowin-tests-appdata` le porte aussi.
  */
-export const PREFIXE_TEMPORAIRE_DE_TEST = 'autowin'
 
 /**
  * PREFIXES DES DOSSIERS TEMPORAIRES DE LA SUITE.
@@ -215,7 +214,6 @@ export function nettoyerDossiersTemporairesDeTest(
 
   return resultat
 }
-
 
 /**
  * PURGE BORNEE PAR L'AGE — le tas deja accumule, que la garde « ne pendant ce run » ne peut pas
