@@ -34,3 +34,8 @@ export type PilotEventKind =
   | 'cancellation'
   | 'prompt-call'
   | 'artifact'
+  /**
+   * Bilan de fin de tour : les echecs restes SANS reprise. Ecrit dans le journal du tour pour que
+   * « abandonne » soit un fait, et non l'absence d'une ligne de rattrapage.
+   */
+  | 'echecs-abandonnes'

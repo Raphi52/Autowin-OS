@@ -201,11 +201,22 @@ export interface PilotJournalEventLike {
   name?: string
   ok?: boolean
   text?: string
+  retryOf?: string
   data?: unknown
 }
 
 /** Champs d'un événement de pilote qui ont un sens dans le journal, dans un ordre stable. */
-const CHAMPS_PILOTE = ['iteration', 'actionId', 'streamId', 'name', 'ok', 'text', 'data'] as const
+const CHAMPS_PILOTE = [
+  'iteration',
+  'actionId',
+  'streamId',
+  'name',
+  'ok',
+  'text',
+  // Lien vers l'echec rattrape : liste FERMEE, un champ absent d'ici est perdu en silence.
+  'retryOf',
+  'data'
+] as const
 
 /**
  * TOUT le reste du pilote dans le journal — `error`, `retry`, `provider-status`,

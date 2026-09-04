@@ -149,6 +149,8 @@ export type ChatTurnEvent =
       name: string
       ok?: boolean
       data?: unknown
+      /** `actionId` de l'action EN ECHEC que cette reussite rattrape (meme nom, meme cible). */
+      retryOf?: string
       /** Payload brut durable, reserve a la reprise du modele et jamais projete dans la vue. */
       attachments?: ChatAttachment[]
     }

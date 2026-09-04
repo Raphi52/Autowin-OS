@@ -566,6 +566,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             name: pilotEvent.name,
             ok: pilotEvent.ok,
             data: pilotEvent.data,
+            // Recopie CHAMP PAR CHAMP : un champ non repris ici est jete en silence. `retryOf`
+            // porte le lien vers l'echec rattrape, et le journal du tour est ecrit A PARTIR de cet
+            // evenement durable — l'oublier ici, c'est produire le lien puis le perdre.
+            ...(pilotEvent.retryOf ? { retryOf: pilotEvent.retryOf } : {}),
             ...(pilotEvent.attachments?.length
               ? { attachments: guardAttachments(pilotEvent.attachments) }
               : {})
