@@ -136,6 +136,11 @@ export async function ensureBrainIndexFresh(deps?: {
   readHealth?: () => Promise<BrainHealth | null>
   env?: NodeJS.ProcessEnv
   spawnFn?: SpawnLike
+  /** Attente entre deux sondes — injectée par les tests pour ne rien attendre réellement. */
+  sleepFn?: (ms: number) => Promise<void>
+  /** Nombre total de sondes, la première comprise. 5 sondes × 2 s couvrent la fenêtre de ~6 s. */
+  essais?: number
+  delaiMs?: number
 }): Promise<BrainIndexRefresh> {
   const env = deps?.env ?? process.env
   const lire = deps?.readHealth ?? (() => readBrainHealth(fetch, env))
