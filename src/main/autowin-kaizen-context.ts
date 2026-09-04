@@ -40,6 +40,56 @@ const TURN_EVENT_TOTAL_LIMIT = TURN_JOURNAL_LIMIT * TURN_EVENT_LIMIT
 const TURN_EVENT_CAP = 400
 const SAISIE_LIMIT = 30
 const SAISIE_CAP = 700
+/*
+  DEUX REGIMES DE LECTURE. Les plafonds ci-dessus sont taillés pour le dossier INJECTÉ dans un run
+  `/kaizen`, qui doit tenir dans TOTAL_CAP (28 000 signes). L'outil `retrospective`, lui, ne part
+  dans aucun prompt de sous-agent : il est rendu à l'agent qui LIT. Lui appliquer le budget d'un
+  prompt le faisait mentir par omission — 80 événements causaux sur des milliers, 4 RUN.md sur
+  douze, 3 tours de journal — alors que l'utilisateur demande précisément ce qui s'est passé.
+  Le régime `ample` relève chaque plafond d'un ordre de grandeur ; le régime par défaut est inchangé.
+*/
+export interface PlafondsKaizen {
+  trace: number
+  runs: number
+  runCap: number
+  promptCalls: number
+  promptCallCap: number
+  turnJournals: number
+  turnEvents: number
+  turnEventCap: number
+  saisies: number
+  saisieCap: number
+  tracePayloadCap: number
+}
+
+export const PLAFONDS_KAIZEN: PlafondsKaizen = {
+  trace: TRACE_LIMIT,
+  runs: RUN_LIMIT,
+  runCap: RUN_CAP,
+  promptCalls: PROMPT_CALL_LIMIT,
+  promptCallCap: PROMPT_CALL_CAP,
+  turnJournals: TURN_JOURNAL_LIMIT,
+  turnEvents: TURN_EVENT_LIMIT,
+  turnEventCap: TURN_EVENT_CAP,
+  saisies: SAISIE_LIMIT,
+  saisieCap: SAISIE_CAP,
+  tracePayloadCap: 900
+}
+
+export const PLAFONDS_AMPLES: PlafondsKaizen = {
+  trace: 2_000,
+  runs: 20,
+  runCap: 60_000,
+  promptCalls: 200,
+  promptCallCap: 6_000,
+  turnJournals: 30,
+  turnEvents: 400,
+  turnEventCap: 4_000,
+  saisies: 300,
+  saisieCap: 4_000,
+  tracePayloadCap: 6_000
+}
+
 /* Marge réservée au champ `troncature`, ajouté APRÈS l'ajustement au budget. */
 const TRONCATURE_MARGE = 160
 
@@ -134,7 +184,7 @@ function clipped(value: string, cap: number): string {
   return value.length <= cap ? value : `${value.slice(0, cap)}…[tronqué]`
 }
 
-function compactCausalEvent(event: TraceEventV1): KaizenCausalEvent {
+function compactCausalEvent(event: TraceEventV1, cap = 900): KaizenCausalEvent {
   return {
     timestamp: event.timestamp,
     type: event.type,
@@ -142,7 +192,7 @@ function compactCausalEvent(event: TraceEventV1): KaizenCausalEvent {
     actor: event.actor.label,
     payload: clipped(
       event.payloads.map((payload) => `${payload.kind}: ${payload.content}`).join(' | '),
-      900
+      cap
     ),
     turnId: event.turnId,
     sequence: event.sequence,
@@ -163,11 +213,15 @@ function compactCausalEvent(event: TraceEventV1): KaizenCausalEvent {
   }
 }
 
-function compactSaisie(saisie: SaisieJournalisee): KaizenSaisie {
-  return { ts: saisie.ts, voie: saisie.voie, texte: clipped(saisie.texte, SAISIE_CAP) }
+function compactSaisie(saisie: SaisieJournalisee, cap = SAISIE_CAP): KaizenSaisie {
+  return { ts: saisie.ts, voie: saisie.voie, texte: clipped(saisie.texte, cap) }
 }
 
-function readNativeRuns(conversationId: string, appData: string): KaizenRun[] {
+function readNativeRuns(
+  conversationId: string,
+  appData: string,
+  plafonds: PlafondsKaizen = PLAFONDS_KAIZEN
+): KaizenRun[] {
   if (!/^[a-zA-Z0-9_-]+$/.test(conversationId)) return []
   const root = join(appData, 'runs', conversationId)
   try {
@@ -186,8 +240,8 @@ function readNativeRuns(conversationId: string, appData: string): KaizenRun[] {
       .filter(existsSync)
       .map((path) => ({ path, mtimeMs: statSync(path).mtimeMs }))
       .sort((a, b) => a.mtimeMs - b.mtimeMs || a.path.localeCompare(b.path))
-      .slice(-RUN_LIMIT)
-      .map(({ path }) => ({ path, content: clipped(readFileSync(path, 'utf8'), RUN_CAP) }))
+      .slice(-plafonds.runs)
+      .map(({ path }) => ({ path, content: clipped(readFileSync(path, 'utf8'), plafonds.runCap) }))
   } catch {
     return []
   }
@@ -226,10 +280,15 @@ export function selectionnerAppelsModele<T extends { status?: string; error?: st
   return index.filter((position) => retenus.has(position)).map((position) => calls[position])
 }
 
-function readPromptCalls(conversationId: string, appData: string): KaizenPromptCall[] {
+function readPromptCalls(
+  conversationId: string,
+  appData: string,
+  plafonds: PlafondsKaizen = PLAFONDS_KAIZEN
+): KaizenPromptCall[] {
   try {
     return selectionnerAppelsModele(
-      loadPromptCalls(conversationId, join(appData, 'prompt-observability'))
+      loadPromptCalls(conversationId, join(appData, 'prompt-observability')),
+      plafonds.promptCalls
     ).map((call) => ({
       ts: call.ts,
       turnId: call.turnId,
@@ -240,35 +299,39 @@ function readPromptCalls(conversationId: string, appData: string): KaizenPromptC
       model: call.model,
       resolvedModel: call.resolvedModel,
       status: call.status,
-      error: call.error ? clipped(call.error, PROMPT_CALL_CAP) : undefined,
+      error: call.error ? clipped(call.error, plafonds.promptCallCap) : undefined,
       durationMs: call.durationMs,
       boundary: call.boundary,
       limitation: call.limitation,
-      response: clipped(call.response ?? '', PROMPT_CALL_CAP)
+      response: clipped(call.response ?? '', plafonds.promptCallCap)
     }))
   } catch {
     return []
   }
 }
 
-function readTurnEvents(conversationId: string, appData: string): KaizenTurnEvent[] {
+function readTurnEvents(
+  conversationId: string,
+  appData: string,
+  plafonds: PlafondsKaizen = PLAFONDS_KAIZEN
+): KaizenTurnEvent[] {
   try {
     return readConversationTurnJournals(
       join(appData, 'turn-journals'),
       conversationId,
-      TURN_JOURNAL_LIMIT
+      plafonds.turnJournals
     )
       .flatMap(({ turnId, events }) =>
-        events.slice(-TURN_EVENT_LIMIT).map((event) => {
+        events.slice(-plafonds.turnEvents).map((event) => {
           const { kind, ...reste } = event
           return {
             turnId,
             kind: String(kind),
-            payload: clipped(JSON.stringify(reste), TURN_EVENT_CAP)
+            payload: clipped(JSON.stringify(reste), plafonds.turnEventCap)
           }
         })
       )
-      .slice(-TURN_EVENT_TOTAL_LIMIT)
+      .slice(-(plafonds.turnJournals * plafonds.turnEvents))
   } catch {
     return []
   }
@@ -277,7 +340,8 @@ function readTurnEvents(conversationId: string, appData: string): KaizenTurnEven
 /** Collecte uniquement les preuves persistées par Autowin OS pour la conversation ciblée. */
 export function collectAutowinKaizenEvidence(
   conversation: Conversation,
-  appData = ensureAutowinAppData()
+  appData = ensureAutowinAppData(),
+  plafonds: PlafondsKaizen = PLAFONDS_KAIZEN
 ): AutowinKaizenEvidence {
   let causalEvents: TraceEventV1[] = []
   try {
@@ -303,13 +367,17 @@ export function collectAutowinKaizenEvidence(
     },
     activity: loadConvActivity(conversation.id, join(appData, 'activity')),
     brainTraces: readBrainTraces(conversation.id, appData),
-    causalEvents: causalEvents.slice(-TRACE_LIMIT).map(compactCausalEvent),
+    causalEvents: causalEvents
+      .slice(-plafonds.trace)
+      .map((event) => compactCausalEvent(event, plafonds.tracePayloadCap)),
     // `conversation.runPaths` contient des pièces externes attachées manuellement (historiquement
     // des RUN Claude). Kaizen les ignore intégralement et ne lit que les RUN natifs d'Autowin.
-    runs: readNativeRuns(conversation.id, appData),
-    promptCalls: readPromptCalls(conversation.id, appData),
-    turnEvents: readTurnEvents(conversation.id, appData),
-    saisies: lireSaisies(conversation.id, appData, SAISIE_LIMIT).map(compactSaisie)
+    runs: readNativeRuns(conversation.id, appData, plafonds),
+    promptCalls: readPromptCalls(conversation.id, appData, plafonds),
+    turnEvents: readTurnEvents(conversation.id, appData, plafonds),
+    saisies: lireSaisies(conversation.id, appData, plafonds.saisies).map((saisie) =>
+      compactSaisie(saisie, plafonds.saisieCap)
+    )
   }
 }
 

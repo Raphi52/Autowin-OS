@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
+import {
+  buildAutowinKaizenTask,
+  collectAutowinKaizenEvidence,
+  PLAFONDS_AMPLES
+} from './autowin-kaizen-context'
 import { isMutationTask } from './orchestrator'
 
 describe('buildAutowinKaizenTask', () => {
@@ -603,6 +607,66 @@ describe('dossier de preuve /kaizen — le deroule des 3 tours arrive en entier'
         (snapshot.turnEvents as Array<{ turnId: string }>).map((event) => event.turnId)
       )
       expect([...toursEnvoyes].sort()).toEqual(['turn-1', 'turn-2', 'turn-3'])
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+})
+
+/*
+  DEFAUT VECU 2026-09-04. Les plafonds du dossier sont un BUDGET DE PROMPT (`/kaizen` doit tenir
+  dans 28 000 signes), pas une verite sur ce qui s'est passe. L'outil `retrospective` rendait
+  pourtant le meme echantillon a un agent qui LIT : 4 RUN.md et 80 evenements causaux au maximum,
+  sans que rien ne le dise. On repond alors « voila ce qui s'est passe » sur un echantillon.
+
+  ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LA COUPE REVIENT : 9 RUN.md et 300 evenements causaux.
+  Sous les plafonds serres on en verrait 4 et 80.
+*/
+describe('regime ample : la retrospective ne rend pas un echantillon muet', () => {
+  it('garde 9 RUN.md et 300 evenements causaux la ou le regime kaizen en couperait 4 et 80', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-ample-'))
+    try {
+      for (let i = 0; i < 9; i += 1) {
+        const dossier = join(appData, 'runs', 'conv-77', `run-${i}-workspace`)
+        mkdirSync(dossier, { recursive: true })
+        const fichier = join(dossier, 'RUN.md')
+        writeFileSync(fichier, `RUN ${i}`)
+        utimesSync(fichier, new Date(1000 + i), new Date(1000 + i))
+      }
+      mkdirSync(join(appData, 'causal-trace'), { recursive: true })
+      const lignes = Array.from({ length: 300 }, (_, i) =>
+        JSON.stringify({
+          schema: 'autowin.trace/v1',
+          id: `evt-${i}`,
+          conversationId: 'conv-77',
+          turnId: 'turn-1',
+          timestamp: new Date(1_000 + i).toISOString(),
+          sequence: i,
+          type: 'message',
+          status: 'completed',
+          actor: { id: 'human', kind: 'human', label: 'Vous' },
+          recipient: { id: 'autowin', kind: 'system', label: 'Autowin OS' },
+          channel: 'user',
+          payloads: [{ kind: 'user-message', content: `appel ${i}` }],
+          observation: { boundary: 'renderer', fidelity: 'exact' }
+        })
+      ).join(String.fromCharCode(10))
+      writeFileSync(join(appData, 'causal-trace', 'conv-77.jsonl'), lignes + String.fromCharCode(10))
+
+      const conversation = {
+        id: 'conv-77',
+        title: 'ample',
+        messages: [],
+        runPaths: []
+      } as never
+
+      const serre = collectAutowinKaizenEvidence(conversation, appData)
+      expect(serre.runs.length).toBe(4)
+      expect(serre.causalEvents.length).toBe(80)
+
+      const ample = collectAutowinKaizenEvidence(conversation, appData, PLAFONDS_AMPLES)
+      expect(ample.runs.length).toBe(9)
+      expect(ample.causalEvents.length).toBe(300)
     } finally {
       rmSync(appData, { recursive: true, force: true })
     }

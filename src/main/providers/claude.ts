@@ -1259,7 +1259,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (!Number.isFinite(elapsed) || elapsed <= 0) return
         const outil =
           typeof o['tool_name'] === 'string' && o['tool_name'] ? o['tool_name'] : 'outil'
-        queue.push({ delta: '', status: `${outil} en cours - ${dureeLisible(elapsed)}` })
+        /*
+         * NOMMER CE QUI TOURNE — « Bash en cours - 9 min » ne dit RIEN de ce que la machine fait.
+         * Mesure du 2026-09-04 (conv-288) : 9 minutes de battements nus sur un `vitest run` de six
+         * suites, l'utilisateur ne pouvait pas savoir si c'etait une suite de tests ou une boucle
+         * folle. La commande EXISTE deja cote Autowin — elle a ete captee au `tool_use` dans
+         * `pendingTools` — elle n'etait simplement jamais relue ici.
+         */
+        const idProgress = typeof o['tool_use_id'] === 'string' ? o['tool_use_id'] : ''
+        let cibleBattement = idProgress ? (pendingTools.get(idProgress)?.command ?? '') : ''
+        if (!cibleBattement) {
+          // Le CLI n'attache pas toujours l'id : on retombe sur le DERNIER appel encore ouvert qui
+          // porte ce nom d'outil — c'est celui dont on attend le resultat.
+          for (const call of pendingTools.values()) {
+            if (call.name === outil && call.command) cibleBattement = call.command
+          }
+        }
+        const cibleLisible = resumerCommandeDeFond(cibleBattement)
+        queue.push({
+          delta: '',
+          status: cibleLisible
+            ? `${outil} en cours - ${dureeLisible(elapsed)} - ${cibleLisible}`
+            : `${outil} en cours - ${dureeLisible(elapsed)}`,
+          statusTarget: cibleLisible || undefined
+        })
         return
       }
       if (

@@ -109,6 +109,67 @@ describe('ClaudeCliAdapter — un outil long donne signe de vie', () => {
     expect(statuts[0]).not.toContain('undefined')
   })
 
+  /*
+   * « BASH EN COURS - 9 MIN » NE DIT RIEN. Mesure du 2026-09-04 (conv-288) : neuf minutes de
+   * battements nus pendant un `vitest run` sur six suites. L'utilisateur voyait la machine tourner
+   * sans pouvoir distinguer une suite de tests d'une boucle folle. La commande etait DEJA connue de
+   * l'app — captee au `tool_use` — elle n'etait simplement pas relue au moment du battement.
+   */
+  it('nomme la COMMANDE qui tourne, pas seulement « Bash »', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_long',
+              name: 'Bash',
+              input: { command: 'cd "$(pwd)" && npx vitest run src/main/store' }
+            }
+          ]
+        }
+      },
+      {
+        type: 'tool_progress',
+        tool_use_id: 'toolu_long',
+        tool_name: 'Bash',
+        elapsed_time_seconds: 540,
+        heartbeat: true
+      },
+      succes
+    ]
+    const statuts = await drainStatus()
+
+    const battement = statuts[statuts.length - 1]
+    expect(battement).toContain('9 min')
+    expect(battement).toContain('vitest run src/main/store')
+    expect(battement).not.toContain('$(pwd)')
+  })
+
+  it('retombe sur le dernier appel ouvert quand le CLI n’attache pas l’id', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_sans_id',
+              name: 'Bash',
+              input: { command: 'npm run build' }
+            }
+          ]
+        }
+      },
+      { type: 'tool_progress', tool_name: 'Bash', elapsed_time_seconds: 60, heartbeat: true },
+      succes
+    ]
+    const statuts = await drainStatus()
+
+    expect(statuts[statuts.length - 1]).toContain('npm run build')
+  })
+
   it('ignore un tool_progress SANS durée : il n’apprend rien', async () => {
     spawnCapture.stdoutEvents = [
       { type: 'tool_progress', tool_name: 'Bash', heartbeat: true },
