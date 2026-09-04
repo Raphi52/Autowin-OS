@@ -48,7 +48,11 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { abortFailure } from './abort-diagnostic'
-import { describeExitCode } from '../provider-failure-diagnosis'
+import {
+  describeExitCode,
+  describeProviderExit,
+  isTransportExitCode
+} from '../provider-failure-diagnosis'
 
 /**
  * NETTOYAGE DE FIN D'APPEL — sans tenir la boucle principale.
@@ -1493,8 +1497,24 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (code !== 0 && !errored) {
         // Un NTSTATUS decimal brut (« exit 1073807364 ») ne dit rien : on nomme le statut systeme
         // quand il est connu, pour que le diagnostic de role puisse conseiller un relancement.
-        const abnormal = describeExitCode(code)
-        errored = new Error(`claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''}`)
+        // Incident ak-a3cb0ebf2e4bc217 : un code de TERMINAISON/DECONNEXION arrive APRES l'event
+        // `result`. La reponse est deja la ; la jeter transformait un transport coupe en echec dur.
+        // On n'absout QUE ce cas precis — reponse deja produite ET code de transport. Un crash du
+        // CLI (violation d'acces) ou un exit 1 restent des echecs, sinon on masquerait un vrai bug.
+        const transportApresReponse =
+          isTransportExitCode(code) && resultSeen && text.trim().length > 0
+        if (!transportApresReponse) {
+          const abnormal = describeExitCode(code)
+          const usedModel = resolvedModel ?? opts.model
+          errored = new Error(
+            `claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''} — ` +
+              describeProviderExit({
+                provider: 'claude',
+                ...(usedModel ? { model: usedModel } : {}),
+                code
+              })
+          )
+        }
       }
       // Retries epuises sans reponse : le CLI sort en 0 sans event `result`, donc le tour passait
       // pour un succes VIDE et l'UI ne quittait jamais l'etat « reflexion ». C'est un ECHEC, nomme.

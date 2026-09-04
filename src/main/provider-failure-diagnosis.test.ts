@@ -4,9 +4,12 @@ import { join } from 'node:path'
 import {
   classifyProviderFailure,
   describeFanoutFailure,
+  describeProviderExit,
   diagnoseProviderFailure,
   describeExitCode,
   explainRoleFailure,
+  isTransportExitCode,
+  isTransportFailure,
   repairHint
 } from './provider-failure-diagnosis'
 
@@ -440,5 +443,48 @@ describe('sortie anormale d’un CLI (codes NTSTATUS Windows)', () => {
 
   it('ne confond pas un exit 1 ordinaire avec un crash', () => {
     expect(classifyProviderFailure('claude CLI exit 1')).toBe('other')
+  })
+})
+
+/**
+ * Incident ak-a3cb0ebf2e4bc217 (2026-08-06), récidive de ak-820d7029b0c5e76d : le CLI enfant se
+ * termine sur un statut de TERMINAISON/DÉCONNEXION (0x40010004, 0xC000013B, 0xC000026B) alors que la
+ * réponse a déjà été produite. Un tel code décrit le TRANSPORT, jamais un refus métier.
+ */
+describe('codes de terminaison/déconnexion — transport, pas erreur métier', () => {
+  it('0xC000013B (3221225787) est nommé, comme les autres statuts observés', () => {
+    expect(describeExitCode(3221225787)).toContain('0xc000013b')
+  })
+
+  it('les statuts de terminaison sont reconnus comme transport', () => {
+    for (const code of [0x40010004, 0xc000013a, 0xc000013b, 0xc000026b]) {
+      expect(isTransportExitCode(code)).toBe(true)
+    }
+  })
+
+  it('un exit ordinaire (1, 2) ou un crash mémoire NE SONT PAS du transport', () => {
+    expect(isTransportExitCode(1)).toBe(false)
+    expect(isTransportExitCode(2)).toBe(false)
+    expect(isTransportExitCode(0xc0000005)).toBe(false)
+    expect(isTransportExitCode(null)).toBe(false)
+  })
+
+  it('isTransportFailure lit le code dans le message RÉELLEMENT jeté', () => {
+    expect(isTransportFailure('claude CLI exit 3221226091 (0xc000026b …)')).toBe(true)
+    expect(isTransportFailure('codex exec échec\nexit-code=1073807364\nsignal=none')).toBe(true)
+    expect(isTransportFailure('claude CLI exit 1')).toBe(false)
+    expect(isTransportFailure('codex non authentifié')).toBe(false)
+  })
+
+  it('describeProviderExit NOMME provider, modèle et code — le message manquant', () => {
+    const message = describeProviderExit({ provider: 'claude', model: 'opus', code: 3221226091 })
+    expect(message).toContain('claude')
+    expect(message).toContain('opus')
+    expect(message).toContain('3221226091')
+    expect(message).toContain('0xc000026b')
+  })
+
+  it('sans modèle connu, on ne l’invente pas', () => {
+    expect(describeProviderExit({ provider: 'kimi', code: 1 })).not.toContain('modèle')
   })
 })
