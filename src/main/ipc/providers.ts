@@ -23,7 +23,6 @@ import {
   probeResultStatus
 } from '../provider-status'
 import { compileExecutionQuote } from '../execution-quote'
-import { loadTokens } from '../providers/codex-auth'
 import type { AutowinOS } from '../os'
 import type { ProviderStateStore, ProviderMode } from '../provider-state-store'
 
@@ -103,8 +102,8 @@ export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDep
     os.startProviderLogin(guardString(provider, 'provider'))
     return { ok: true }
   })
-  // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : codex exact (expiry token),
-  // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
+  // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : claude = présence CLI seulement
+  // (JAMAIS « authenticated » sans probe réel). Borné.
   ipcMain.handle('os:providerStatus', async (event) => {
     assertTrustedRendererSender(event, 'Provider status')
     const bounded = (p: Promise<boolean>): Promise<boolean> =>
@@ -127,9 +126,7 @@ export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDep
     // Gemini). Leur statut n'était de toute façon plus publié — on payait le spawn pour rien.
     const claudeResponds = await responds('claude')
     return buildProviderStatuses({
-      codexTokens: loadTokens(),
       claudeResponds,
-      kimiResponds: false,
       now: Date.now(),
       states: { claude: providerStateStore.get('claude') }
     })

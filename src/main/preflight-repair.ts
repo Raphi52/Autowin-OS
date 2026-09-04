@@ -1,13 +1,12 @@
 /**
  * RÉPARER un prérequis rouge depuis la popup de diagnostic, au lieu de lire une commande à recopier.
  *
- * Constaté en réel (2026-07-29) : la popup affichait « ✗ Session OAuth Codex — npm run codex:login »
+ * Constaté en réel (2026-07-29) : la popup affichait un prérequis rouge et sa commande à recopier,
  * et c'est tout. L'utilisateur doit quitter l'app, trouver un terminal, se placer dans le bon dossier.
  * Or l'app SAIT déjà faire les deux réparations possibles — `spawnLoginTerminal` (page Routeur) et
  * `ensureBrainServerStarted` (démarrage). Le savoir-faire existait, le bouton manquait.
  *
  * HONNÊTETÉ, la règle du module : on ne renvoie un plan QUE pour ce qu'on sait réellement réparer.
- *  - `codex-session` → ouvre le login OAuth (le CLI gère la saisie ; l'app ne voit aucun credential).
  *  - `brain`         → tente de démarrer le brain_server local.
  *  - `brain-token`   → AUCUN plan : un secret ne s'invente pas.
  *  - `claude-session` → ouvre le login Anthropic ; CLI absent → la console l'INSTALLE puis enchaîne
@@ -38,21 +37,29 @@ export const CLAUDE_CLI_INSTALL_COMMAND = 'npm i -g @anthropic-ai/claude-code'
 /** Nom du package du dépôt Autowin OS : l'IDENTITÉ exigée d'un candidat, pas juste un script. */
 export const AUTOWIN_PACKAGE_NAME = 'autowin-os'
 
+/** Script du manifeste qui atteste « c'est bien le repo, et il sait faire ce qu'on va lui demander ». */
+export const REPO_MARKER_SCRIPT = 'bootstrap:deps'
+
 /**
- * Où lancer `npm run codex:login`. Le script vit dans le package.json du REPO : lancé ailleurs, npm
- * répond « Missing script » et le bouton échoue en silence. En dev `process.cwd()` suffit — l'app
- * EMPAQUETÉE, elle, démarre depuis n'importe où (raccourci bureau), donc on ne suppose pas : on
- * CHERCHE le premier dossier qui déclare réellement le script, en remontant les parents.
- * `undefined` si aucun ne le déclare → on le dit, plutôt que d'ouvrir une console qui va échouer.
+ * Où lancer le bootstrap du runtime Brain. Le script vit dans le package.json du REPO : lancé
+ * ailleurs, npm répond « Missing script » et le bouton échoue en silence. En dev `process.cwd()`
+ * suffit — l'app EMPAQUETÉE, elle, démarre depuis n'importe où (raccourci bureau), donc on ne
+ * suppose pas : on CHERCHE le premier dossier qui déclare réellement le script, en remontant les
+ * parents. `undefined` si aucun ne le déclare → on le dit, plutôt que d'ouvrir une console qui va
+ * échouer.
+ *
+ * Le script exigé est `bootstrap:deps` — celui que le bouton lance vraiment. Il était `codex:login`
+ * tant que la connexion Codex existait ; ce moteur est retiré, et garder sa clé aurait cassé le
+ * bouton « Installer » le jour où le script disparaît du manifeste.
  *
  * SÉCURITÉ — pourquoi « déclare le script » ne suffit PAS : la remontée finit par atteindre `C:\`,
  * dont la racine autorise par défaut la création de fichiers aux utilisateurs authentifiés. Un
- * `C:\package.json` planté avec `{"scripts":{"codex:login":"<payload>"}}` serait adopté comme « le
- * repo Autowin OS », puis exécuté (`npm run`, via `powershell -ExecutionPolicy Bypass`). On exige
- * donc l'IDENTITÉ du dépôt (`name: autowin-os`), on refuse les candidats non absolus, et on
+ * `C:\package.json` planté avec `{"scripts":{"bootstrap:deps":"<payload>"}}` serait adopté comme
+ * « le repo Autowin OS », puis exécuté (`npm run`, via `powershell -ExecutionPolicy Bypass`). On
+ * exige donc l'IDENTITÉ du dépôt (`name: autowin-os`), on refuse les candidats non absolus, et on
  * n'inspecte jamais une racine de volume.
  */
-export function resolveCodexLoginCwd(
+export function resolveRepoScriptCwd(
   candidates: readonly string[],
   exists: (p: string) => boolean = existsSync,
   read: (p: string) => string = (p) => readFileSync(p, 'utf8')
@@ -73,7 +80,8 @@ export function resolveCodexLoginCwd(
             name?: unknown
             scripts?: Record<string, string>
           }
-          if (parsed.name === AUTOWIN_PACKAGE_NAME && parsed.scripts?.['codex:login']) return dir
+          if (parsed.name === AUTOWIN_PACKAGE_NAME && parsed.scripts?.[REPO_MARKER_SCRIPT])
+            return dir
         } catch {
           /* manifeste illisible → ce n'est pas le bon, on continue de remonter */
         }
@@ -88,7 +96,7 @@ export function resolveCodexLoginCwd(
 
 export type PreflightRepairPlan =
   /** Ouvre une console où le CLI mène son propre flow d'authentification. */
-  | { kind: 'login'; provider: 'codex' | 'claude'; label: string; note: string }
+  | { kind: 'login'; provider: 'claude'; label: string; note: string }
   /** Tente un démarrage local du brain_server (jamais un kill/restart : instance par machine). */
   | { kind: 'brain-start'; label: string; note: string }
   /** Ouvre une console sur le bootstrap qui POSE le runtime Python du Brain (venv + tooling). */
@@ -107,13 +115,6 @@ export interface PreflightRepairOutcome {
  */
 export function planPreflightRepair(checkId: string): PreflightRepairPlan | undefined {
   switch (checkId) {
-    case 'codex-session':
-      return {
-        kind: 'login',
-        provider: 'codex',
-        label: 'Se connecter',
-        note: 'Une console s’ouvre : le login OAuth s’y fait. Rien n’est saisi dans Autowin.'
-      }
     case 'claude-session':
       return {
         kind: 'login',
@@ -146,7 +147,7 @@ export interface PreflightRepairDeps {
   startBrain?: () => Promise<{ status: string; detail: string }>
   /** Ping utilisé par le démarrage pour ne pas doubler une instance vivante. */
   pingBrain?: () => Promise<boolean>
-  /** Dossiers où chercher le repo déclarant `codex:login` (le 1ᵉʳ qui le déclare gagne). */
+  /** Dossiers où chercher le repo déclarant `bootstrap:deps` (le 1ᵉʳ qui le déclare gagne). */
   cwdCandidates?: readonly string[]
   resolveLoginCwd?: (candidates: readonly string[]) => string | undefined
   spawnFn?: typeof spawn
@@ -172,8 +173,8 @@ export async function repairPreflightCheck(
   }
   try {
     if (plan.kind === 'login' && plan.provider === 'claude') {
-      // `claude auth login` s'adresse au CLI GLOBAL : contrairement à `npm run codex:login`, il ne
-      // dépend d'aucun script du repo, donc aucun cwd à résoudre — en exiger un ferait échouer le
+      // `claude auth login` s'adresse au CLI GLOBAL : il ne dépend d'aucun script du repo, donc
+      // aucun cwd à résoudre — en exiger un ferait échouer le
       // bouton sur l'app empaquetée, qui démarre depuis n'importe où.
       const open =
         deps.openLoginTerminal ??
@@ -227,42 +228,16 @@ export async function repairPreflightCheck(
           : 'Console de connexion ouverte. Termine le login, puis re-vérifie.'
       }
     }
-    if (plan.kind === 'login') {
-      // `npm run codex:login` peuple le store LU par l'app → doit tourner dans le repo qui déclare
-      // le script. On le RÉSOUT : ouvrir une console qui répond « Missing script » serait un faux fix.
-      const candidates = deps.cwdCandidates ?? [
-        process.env.AUTOWIN_OS_WORKSPACE ?? '',
-        process.cwd(),
-        process.execPath
-      ]
-      const resolve = deps.resolveLoginCwd ?? ((c) => resolveCodexLoginCwd(c))
-      const cwd = resolve(candidates.filter((c) => Boolean(c)))
-      if (!cwd) {
-        return {
-          started: false,
-          detail:
-            'Repo Autowin OS introuvable depuis l’app : lance « npm run codex:login » dans le dossier du repo.'
-        }
-      }
-      const open =
-        deps.openLoginTerminal ??
-        ((command, opts): void => spawnLoginTerminal(command, { ...opts, spawnFn: deps.spawnFn }))
-      open('npm run codex:login', { cwd })
-      return {
-        started: true,
-        detail: 'Console de connexion ouverte. Termine le login, puis re-vérifie.'
-      }
-    }
     if (plan.kind === 'brain-install') {
-      // MÊME résolution que `npm run codex:login` : le script vit dans le repo, et l'identité du
-      // dépôt (`name: autowin-os`) est exigée — sans quoi la remontée pourrait élire un
-      // `package.json` planté dans une racine de volume, puis l'exécuter.
+      // Le script vit dans le repo, et l'identité du dépôt (`name: autowin-os`) est exigée — sans
+      // quoi la remontée pourrait élire un `package.json` planté dans une racine de volume, puis
+      // l'exécuter.
       const candidates = deps.cwdCandidates ?? [
         process.env.AUTOWIN_OS_WORKSPACE ?? '',
         process.cwd(),
         process.execPath
       ]
-      const resolve = deps.resolveLoginCwd ?? ((c) => resolveCodexLoginCwd(c))
+      const resolve = deps.resolveLoginCwd ?? ((c) => resolveRepoScriptCwd(c))
       const cwd = resolve(candidates.filter((c) => Boolean(c)))
       if (!cwd) {
         return {

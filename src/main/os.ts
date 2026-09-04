@@ -927,7 +927,8 @@ export class AutowinOS {
 
   /**
    * Lance le login OFFICIEL d'un provider (bouton « Se reconnecter » de la page Routeur).
-   * Les adapters qui exposent `startLogin` gèrent leur connexion ; claude/codex passent par un terminal.
+   * Les adapters qui exposent `startLogin` gèrent leur connexion ; claude passe par un terminal.
+   * Seul Claude est connectable : les moteurs retirés n'ont plus de plan de login (throw).
    */
   startProviderLogin(provider: string, configDir?: string): void {
     const adapter = this.registry.get(provider)
@@ -942,10 +943,7 @@ export class AutowinOS {
     // ecrasait la session de son PREMIER compte sans le voir (incident 2026-09-01).
     const cible = configDir ?? claudeAccountEnv().CLAUDE_CONFIG_DIR
     const plan = planProviderLogin(provider, undefined, cible)
-    if (plan.kind === 'adapter')
-      throw new Error(`Le provider ${provider} n'expose pas de connexion interactive.`)
-    // codex : `npm run codex:login` doit tourner à la racine du repo (dev) → cwd = process.cwd().
-    spawnLoginTerminal(plan.command, provider === 'codex' ? { cwd: process.cwd() } : {})
+    spawnLoginTerminal(plan.command, {})
   }
 
   /** Change le binding d'un rôle ET persiste sur disque. */

@@ -5,7 +5,7 @@ import { Spinner } from './Spinner'
 
 /**
  * #5 — Wizard first-run. L'installeur NSIS installe l'APP, mais ne peut pas tout automatiser (OAuth
- * codex/claude interactif, brain_server = service Python séparé, tokens secrets). Ce wizard DÉTECTE
+ * claude interactif, brain_server = service Python séparé, tokens secrets). Ce wizard DÉTECTE
  * l'état réel (via preflight:recheck), GUIDE explicitement le reste (étapes/commandes exactes), et
  * offre un bouton "re-vérifier". HONNÊTE : il ne prétend JAMAIS avoir configuré ce qu'il n'a pas fait.
  * VISIBILITÉ pilotée par l'ÉTAT (pas par un flag first-run) : n'apparaît QUE si une dépendance est
@@ -32,10 +32,10 @@ const STARTUP_PATIENCE_MS = 120_000
  * Provider concerné par un check, pour l'affordance « Facultatif ». Rend null pour les checks non
  * liés à un provider (brain…).
  */
-function checkProvider(id: string): 'codex' | 'claude' | 'kimi' | null {
-  if (id === 'codex' || id === 'codex-session') return 'codex'
+function checkProvider(id: string): 'claude' | null {
+  // Claude est le seul moteur branché : les checks des moteurs retirés (Codex, Kimi, Gemini) ne
+  // sont plus produits, donc plus rattachés à un provider ici.
   if (id === 'claude' || id === 'claude-session') return 'claude'
-  if (id === 'kimi') return 'kimi'
   return null
 }
 

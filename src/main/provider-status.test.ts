@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildProviderStatuses,
-  codexTokenStatus,
   presenceStatus,
   probePresenceUnlessStandby,
   probeResultStatus
@@ -9,26 +8,7 @@ import {
 
 const NOW = 1_000_000_000_000
 
-describe('codexTokenStatus (exact, cheap)', () => {
-  it('absent si pas de token', () => {
-    expect(codexTokenStatus(null, NOW)).toBe('absent')
-  })
-  it('authenticated si non expiré', () => {
-    expect(codexTokenStatus({ obtainedAt: NOW - 1000, expiresInSec: 3600 }, NOW)).toBe(
-      'authenticated'
-    )
-  })
-  it('expired si dépassé', () => {
-    expect(codexTokenStatus({ obtainedAt: NOW - 7200_000, expiresInSec: 3600 }, NOW)).toBe(
-      'expired'
-    )
-  })
-  it('authenticated si aucune expiry déclarée', () => {
-    expect(codexTokenStatus({ obtainedAt: NOW }, NOW)).toBe('authenticated')
-  })
-})
-
-describe('presenceStatus (claude/kimi au chargement — jamais authenticated)', () => {
+describe('presenceStatus (claude au chargement — jamais authenticated)', () => {
   it('installed-untested si le CLI répond', () => {
     expect(presenceStatus(true)).toBe('installed-untested')
   })
@@ -68,9 +48,7 @@ describe('probeResultStatus (test réel à la demande)', () => {
 describe('buildProviderStatuses (chargement)', () => {
   it('ne publie que Claude, en présence, avec testable correct', () => {
     const out = buildProviderStatuses({
-      codexTokens: { obtainedAt: NOW - 7200_000, expiresInSec: 3600 },
       claudeResponds: true,
-      kimiResponds: false,
       now: NOW
     })
     expect(out).toEqual([{ provider: 'claude', status: 'installed-untested', testable: true }])
@@ -78,9 +56,7 @@ describe('buildProviderStatuses (chargement)', () => {
 
   it('restaure le dernier probe réel de Claude', () => {
     const statuses = buildProviderStatuses({
-      codexTokens: null,
       claudeResponds: true,
-      kimiResponds: false,
       now: NOW + 500,
       states: {
         claude: {
@@ -97,9 +73,7 @@ describe('buildProviderStatuses (chargement)', () => {
 
   it('honore le standby de Claude sans lancer de probe', () => {
     const statuses = buildProviderStatuses({
-      codexTokens: null,
       claudeResponds: true,
-      kimiResponds: false,
       now: NOW,
       states: { claude: { mode: 'standby' } }
     })
@@ -111,10 +85,7 @@ describe('buildProviderStatuses (chargement)', () => {
 
   it('CONTRÔLE NÉGATIF : aucun moteur retiré ne ressort, même avec un état enregistré', () => {
     const statuses = buildProviderStatuses({
-      codexTokens: { obtainedAt: NOW - 1000, expiresInSec: 3600 },
       claudeResponds: false,
-      kimiResponds: true,
-      geminiResponds: true,
       now: NOW,
       states: {
         codex: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: NOW - 500 } },

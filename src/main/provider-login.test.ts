@@ -10,13 +10,12 @@ describe('planProviderLogin', () => {
       command: 'Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue; claude auth login'
     })
   })
-  it('codex → terminal `npm run codex:login` (bon store, PAS `codex login`)', () => {
-    const plan = planProviderLogin('codex')
-    expect(plan).toEqual({ kind: 'terminal', command: 'npm run codex:login' })
-    expect((plan as { command: string }).command).not.toBe('codex login')
-  })
-  it('kimi → délégué à l’adapter', () => {
-    expect(planProviderLogin('kimi')).toEqual({ kind: 'adapter', provider: 'kimi' })
+  it('MOTEURS RETIRÉS : Codex, Kimi et Gemini n’ont plus AUCUN plan de connexion', () => {
+    // Contrôle négatif du retrait : réinjecter l'un de ces moteurs doit lever ici, plutôt
+    // qu'ouvrir une console sur un moteur qui n'est plus branché (cf. routed-providers.ts).
+    expect(() => planProviderLogin('codex')).toThrow(/Aucun login connu/)
+    expect(() => planProviderLogin('kimi')).toThrow(/Aucun login connu/)
+    expect(() => planProviderLogin('gemini')).toThrow(/Aucun login connu/)
   })
   it('provider inconnu → throw', () => {
     expect(() => planProviderLogin('provider-inconnu')).toThrow(/Aucun login connu/)

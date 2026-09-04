@@ -4,14 +4,14 @@
 
   L'installeur NSIS pose l'APP ; ce script configure ce qu'il ne peut pas : les CLI providers et le
   venv du brain_server. Il est IDEMPOTENT (ne réinstalle pas ce qui est déjà là) et HONNÊTE : il
-  n'automatise JAMAIS un secret ni un login interactif (token Brain, OAuth Codex) — il les GUIDE.
+  n'automatise JAMAIS un secret ni un login interactif (token Brain, login Claude) — il les GUIDE.
 
   Ce qu'il fait :
-    - installe les CLI codex (@openai/codex) et claude (@anthropic-ai/claude-code) si absentes ;
+    - installe la CLI claude (@anthropic-ai/claude-code) si absente ;
     - prépare Graphify depuis la source partagée GED avec un cache uv local par machine ;
     - crée/complète le venv Python du brain_server (uv venv + requirements) dans le tooling résolu ;
   Ce qu'il GUIDE (manuel, non automatisable) :
-    - login OAuth Codex (npm run codex:login), token Brain (AMITEL_BRAIN_TOKEN), Kimi Code (optionnel).
+    - login Claude (claude auth login) et token Brain (AMITEL_BRAIN_TOKEN).
 
 .PARAMETER HermesBrainRepo
   Source de confiance du code Python du Brain. Son install.ps1 pose le runtime exactement la ou
@@ -72,8 +72,9 @@ if (Have 'git') {
 # --- CLI providers ---
 if (-not $SkipCli) {
   Step "CLI providers (npm global)"
+  # Claude est le seul moteur branche : Codex, Kimi et Gemini sont retires, on n'installe plus
+  # leur CLI au bootstrap.
   $clis = @(
-    @{ Bin = 'codex';  Pkg = '@openai/codex' },
     @{ Bin = 'claude'; Pkg = '@anthropic-ai/claude-code' }
   )
   foreach ($c in $clis) {
@@ -180,5 +181,5 @@ if (-not $SkipBrain) {
 Step "Manuel (non automatisable)"
 if ($env:AMITEL_BRAIN_TOKEN) { Ok "AMITEL_BRAIN_TOKEN défini" }
 else { Warn "AMITEL_BRAIN_TOKEN absent → le définir (secret Brain) pour activer le RAG." }
-Warn "Login OAuth Codex : dans le repo Autowin OS, 'npm run codex:login'."
+Warn "Login Claude : 'claude auth login' (ou le bouton « Se connecter » du wizard)."
 Write-Host "`nEnsuite : lancer Autowin OS. Le wizard n'apparaît QUE s'il reste un rouge, tente de démarrer le brain, et guide le reste." -ForegroundColor White

@@ -9,12 +9,12 @@ describe('provider routing product wiring', () => {
 
   it('ne publie aucun statut pour les moteurs retirés', () => {
     const statuses = buildProviderStatuses({
-      codexTokens: null,
       claudeResponds: true,
-      kimiResponds: false,
-      geminiResponds: true,
       now: 1_000,
-      states: {}
+      states: {
+        codex: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: 500 } },
+        kimi: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: 500 } }
+      }
     })
 
     expect(statuses.map((status) => status.provider)).toEqual(['claude'])

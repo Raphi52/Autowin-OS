@@ -112,7 +112,7 @@ describe('FirstRunWizard (#5)', () => {
         ok: false,
         summary: 'incomplète',
         checks: [
-          { id: 'codex-session', label: 'Session OAuth Codex', ok: true },
+          { id: 'claude-session', label: 'Session claude', ok: true },
           { id: 'brain', label: 'brain_server (:8765)', ok: false, detail: 'injoignable' }
         ]
       })
@@ -127,7 +127,7 @@ describe('FirstRunWizard (#5)', () => {
 
     await act(async () => retry?.click())
     await flush()
-    expect(container.querySelector('[data-testid="frw-check-codex-session"]')?.className).toContain(
+    expect(container.querySelector('[data-testid="frw-check-claude-session"]')?.className).toContain(
       'ok'
     )
     expect(container.textContent).not.toMatch(/diagnostic.*échoué/i)
@@ -179,8 +179,8 @@ describe('FirstRunWizard (#5)', () => {
 })
 
 /**
- * BOUTON « RÉPARER » — constaté en réel (2026-07-29) : la popup affichait « ✗ Session OAuth Codex —
- * npm run codex:login » et rien de plus, alors que l'app sait lancer ce login. On vérifie ici que le
+ * BOUTON « RÉPARER » — constaté en réel (2026-07-29) : la popup affichait un prérequis rouge et sa
+ * commande à recopier, rien de plus, alors que l'app sait lancer ce login. On vérifie ici que le
  * bouton EXISTE, qu'il APPELLE le main, et qu'il ne mente pas sur ce qu'il a fait.
  */
 describe('réparer un prérequis rouge depuis la popup', () => {
@@ -204,24 +204,27 @@ describe('réparer un prérequis rouge depuis la popup', () => {
     return { repairCalls }
   }
 
-  const codexKo = [
-    { id: 'codex-session', label: 'Session OAuth Codex', ok: false, detail: 'npm run codex:login' },
+  const sessionKo = [
+    { id: 'claude-session', label: 'Session claude', ok: false, detail: 'claude auth login' },
     { id: 'brain-token', label: 'token Brain', ok: false, detail: 'absent' },
     { id: 'claude', label: 'CLI claude', ok: true }
   ]
 
   /**
-   * TROU FERMÉ (audit du 2026-07-30) : `checkProvider` mappait `codex-session → codex` mais avait
-   * oublié `claude-session → claude`. Conséquence : sur la ligne rouge « Session claude », le bouton
-   * « Facultatif — ne plus demander » n'apparaissait PAS (il exige un provider ET `!c.ok`), et la
-   * ligne « CLI claude » étant VERTE n'affichait pas le sien non plus. L'utilisateur qui ne veut pas
-   * se logguer à claude n'avait donc AUCUNE sortie in-app : le wizard se réclamait à chaque
-   * démarrage — alors que Codex, lui, offrait l'échappatoire.
+   * TROU FERMÉ (audit du 2026-07-30) : `checkProvider` avait oublié `claude-session → claude`.
+   * Conséquence : sur la ligne rouge « Session claude », le bouton « Facultatif — ne plus demander »
+   * n'apparaissait PAS (il exige un provider ET `!c.ok`), et la ligne « CLI claude » étant VERTE
+   * n'affichait pas le sien non plus. L'utilisateur qui ne veut pas se logguer à claude n'avait donc
+   * AUCUNE sortie in-app : le wizard se réclamait à chaque démarrage.
    *
-   * La règle verrouillée ici : tout check `<provider>-session` doit résoudre le MÊME provider que
-   * `<provider>`, sinon l'affordance « Facultatif » disparaît en silence.
+   * La règle verrouillée ici : le check `claude-session` doit résoudre le MÊME provider que
+   * `claude`, sinon l'affordance « Facultatif » disparaît en silence.
+   *
+   * MOTEURS RETIRÉS : un check d'un moteur retiré (Codex, Kimi, Gemini) n'est plus rattaché à un
+   * provider — donc plus d'affordance du tout. C'est le contrôle négatif du retrait : le jour où
+   * l'un d'eux revient dans `checkProvider`, cette assertion tombe.
    */
-  it('un check « <provider>-session » rouge offre la même sortie « Facultatif » que son provider', async () => {
+  it('un check « claude-session » rouge offre la même sortie « Facultatif » que son provider', async () => {
     withChecks([
       { id: 'claude', label: 'CLI claude', ok: true },
       { id: 'claude-session', label: 'Session claude', ok: false, detail: 'claude auth login' },
@@ -229,20 +232,19 @@ describe('réparer un prérequis rouge depuis la popup', () => {
         id: 'codex-session',
         label: 'Session OAuth Codex',
         ok: false,
-        detail: 'npm run codex:login'
+        detail: 'moteur retiré'
       }
     ])
     await render()
 
     expect(container.querySelector('[data-testid="frw-optional-claude-session"]')).not.toBeNull()
-    // Le pendant Codex, qui marchait déjà : la symétrie est le contrat.
-    expect(container.querySelector('[data-testid="frw-optional-codex-session"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="frw-optional-codex-session"]')).toBeNull()
   })
 
   it('un rouge RÉPARABLE porte un bouton ; un rouge NON réparable n’en a pas', async () => {
-    withChecks(codexKo)
+    withChecks(sessionKo)
     await render()
-    expect(container.querySelector('[data-testid="frw-repair-codex-session"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="frw-repair-claude-session"]')).not.toBeNull()
     // Le token est un SECRET : proposer un bouton serait une promesse intenable.
     expect(container.querySelector('[data-testid="frw-repair-brain-token"]')).toBeNull()
     // Un check VERT n'a aucun bouton.
@@ -283,51 +285,51 @@ describe('réparer un prérequis rouge depuis la popup', () => {
   })
 
   it('cliquer LANCE la réparation et affiche son compte-rendu, sans dire « réparé »', async () => {
-    const { repairCalls } = withChecks(codexKo)
+    const { repairCalls } = withChecks(sessionKo)
     await render()
     const button = container.querySelector<HTMLButtonElement>(
-      '[data-testid="frw-repair-codex-session"]'
+      '[data-testid="frw-repair-claude-session"]'
     )
     await act(async () => button?.click())
     await flush()
-    expect(repairCalls).toEqual(['codex-session'])
-    const note = container.querySelector('[data-testid="frw-repair-note-codex-session"]')
+    expect(repairCalls).toEqual(['claude-session'])
+    const note = container.querySelector('[data-testid="frw-repair-note-claude-session"]')
     expect(note?.textContent).toContain('Console de connexion ouverte')
     expect(note?.textContent).not.toMatch(/réparé|résolu/i)
   })
 
   it('une réparation qui ÉCHOUE le dit — le rouge reste rouge', async () => {
-    withChecks(codexKo, async () => ({ started: false, detail: 'venv Python introuvable' }))
+    withChecks(sessionKo, async () => ({ started: false, detail: 'venv Python introuvable' }))
     await render()
     await act(async () =>
       container
-        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-codex-session"]')
+        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-claude-session"]')
         ?.click()
     )
     await flush()
     expect(
-      container.querySelector('[data-testid="frw-repair-note-codex-session"]')?.textContent
+      container.querySelector('[data-testid="frw-repair-note-claude-session"]')?.textContent
     ).toContain('venv Python introuvable')
     // Le check est toujours affiché en rouge : aucune fausse guérison.
-    expect(container.querySelector('[data-testid="frw-check-codex-session"]')?.className).toContain(
+    expect(container.querySelector('[data-testid="frw-check-claude-session"]')?.className).toContain(
       'ko'
     )
   })
 
   it('un main qui JETTE ne casse pas la popup', async () => {
-    withChecks(codexKo, async () => {
+    withChecks(sessionKo, async () => {
       throw new Error('IPC coupé')
     })
     await render()
     await act(async () =>
       container
-        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-codex-session"]')
+        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-claude-session"]')
         ?.click()
     )
     await flush()
     expect(container.querySelector('[data-testid="first-run-wizard"]')).not.toBeNull()
     expect(
-      container.querySelector('[data-testid="frw-repair-note-codex-session"]')?.textContent
+      container.querySelector('[data-testid="frw-repair-note-claude-session"]')?.textContent
     ).toContain('échoué')
   })
 
@@ -372,17 +374,17 @@ describe('réparer un prérequis rouge depuis la popup', () => {
 
   it('sans canal de réparation, le bouton le DIT au lieu de ne rien faire', async () => {
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
-      recheckPreflight: async () => ({ ok: false, summary: 'incomplète', checks: codexKo })
+      recheckPreflight: async () => ({ ok: false, summary: 'incomplète', checks: sessionKo })
     }
     await render()
     await act(async () =>
       container
-        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-codex-session"]')
+        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-claude-session"]')
         ?.click()
     )
     await flush()
     expect(
-      container.querySelector('[data-testid="frw-repair-note-codex-session"]')?.textContent
+      container.querySelector('[data-testid="frw-repair-note-claude-session"]')?.textContent
     ).toContain('indisponible')
   })
 })

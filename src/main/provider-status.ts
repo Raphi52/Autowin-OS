@@ -2,20 +2,22 @@
  * Statut d'authentification par provider pour la page Routeur.
  *
  * INVARIANT ANTI-MENSONGE : un provider n'est JAMAIS marqué `authenticated` sans preuve réelle.
- *  - codex : preuve cheap au chargement = expiry du token (auth.json). authenticated si non expiré,
- *    `expired` si dépassé, `absent` si pas de token.
- *  - claude / kimi : l'OAuth est privé au CLI → `--version` ne prouve QUE la présence (`installed-untested`).
+ *  - claude : l'OAuth est privé au CLI → `--version` ne prouve QUE la présence (`installed-untested`).
  *    La vraie validité vient d'un PROBE réel à la demande (bouton « Tester ») ; un probe qui timeout/jette
  *    → `unknown` (jamais `authenticated` par défaut).
  *
- * Module PUR (aucune I/O directe) : les entrées (tokens, présence CLI, résultat de probe) sont injectées,
- * donc entièrement testable hors réseau. Le câblage réel (loadTokens, adapter.auth(), appel minimal) vit
- * dans l'IPC main.
+ * Claude est le SEUL moteur dont un statut est publié. Codex, Kimi et Gemini sont retirés : plus de
+ * lecture de jeton, plus de sondage, plus d'entrée dans la signature. Un état ENCORE enregistré sur
+ * disque pour l'un d'eux est ignoré, jamais republié (contrôle négatif dans le banc).
+ *
+ * Module PUR (aucune I/O directe) : les entrées (présence CLI, résultat de probe) sont injectées,
+ * donc entièrement testable hors réseau. Le câblage réel (adapter.auth(), appel minimal) vit dans
+ * l'IPC main.
  */
 export type AuthStatus =
   | 'authenticated' // preuve réelle de validité
   | 'expired' // preuve réelle d'expiration
-  | 'installed-untested' // CLI présent, validité non testée (claude/kimi au chargement)
+  | 'installed-untested' // CLI présent, validité non testée (claude au chargement)
   | 'absent' // ni token ni CLI
   | 'unknown' // le check lui-même a échoué (timeout/erreur) — surtout PAS « authenticated »
 
@@ -30,8 +32,6 @@ export interface ProviderStatus {
   lastCheckedAt?: number
 }
 
-const FRESH_STARTUP_PROBE_MS = 60_000
-
 interface ProviderStateSnapshot {
   mode: 'active' | 'standby'
   lastProbe?: { status: AuthStatus; checkedAt: number }
@@ -45,24 +45,13 @@ export async function probePresenceUnlessStandby(
   return state.mode === 'standby' ? false : probe()
 }
 
-/** Statut codex depuis le token (cheap, exact) : expiry vs horloge. */
-export function codexTokenStatus(
-  tokens: { obtainedAt: number; expiresInSec?: number } | null,
-  now: number
-): AuthStatus {
-  if (!tokens) return 'absent'
-  if (tokens.expiresInSec == null) return 'authenticated' // pas d'expiry déclaré → présent, réputé valide
-  const expiresAt = tokens.obtainedAt + tokens.expiresInSec * 1000
-  return expiresAt > now ? 'authenticated' : 'expired'
-}
-
-/** Statut de PRÉSENCE (claude/kimi au chargement) : CLI répond ou non — jamais « authenticated ». */
+/** Statut de PRÉSENCE (claude au chargement) : le CLI répond ou non — jamais « authenticated ». */
 export function presenceStatus(cliResponds: boolean): AuthStatus {
   return cliResponds ? 'installed-untested' : 'absent'
 }
 
 /**
- * Traduit le résultat d'un PROBE réel (appel minimal claude/kimi, à la demande) en statut.
+ * Traduit le résultat d'un PROBE réel (appel minimal claude, à la demande) en statut.
  * `errored` (timeout / exception) → `unknown` : on ne ment JAMAIS « authenticated » sur un check raté.
  */
 export function probeResultStatus(result: {
@@ -82,53 +71,37 @@ function isTestable(status: AuthStatus): boolean {
 
 /** Assemble la liste de statuts au chargement depuis des entrées déjà résolues (injectées). */
 export function buildProviderStatuses(inputs: {
-  codexTokens: { obtainedAt: number; expiresInSec?: number } | null
   claudeResponds: boolean
-  kimiResponds: boolean
-  geminiResponds?: boolean
   now: number
-  states?: Partial<Record<'codex' | 'claude' | 'kimi' | 'gemini', ProviderStateSnapshot>>
+  /**
+   * États persistés, indexés par identifiant de provider. Volontairement ouvert (`string`) : le
+   * disque peut encore porter des entrées de moteurs RETIRÉS, et la garde est de ne pas les
+   * publier — pas de refuser de les lire.
+   */
+  states?: Partial<Record<string, ProviderStateSnapshot>>
 }): ProviderStatus[] {
-  const codex = codexTokenStatus(inputs.codexTokens, inputs.now)
-  const claude = presenceStatus(inputs.claudeResponds)
-  const kimi = presenceStatus(inputs.kimiResponds)
-  const gemini = presenceStatus(inputs.geminiResponds ?? false)
-  const display = (
-    provider: 'codex' | 'claude' | 'kimi' | 'gemini',
-    fallback: AuthStatus
-  ): ProviderStatus => {
-    const state = inputs.states?.[provider]
-    if (state?.mode === 'standby') {
-      return {
-        provider,
+  const state = inputs.states?.claude
+  if (state?.mode === 'standby') {
+    return [
+      {
+        provider: 'claude',
         status: 'standby',
         testable: false,
         detail: 'En standby — aucun probe ni reconnexion automatique.'
       }
-    }
-    // Le probe de démarrage frais est la preuve la plus actuelle, y compris pour Codex. Passé la
-    // fenêtre de démarrage, Codex retombe sur l'expiration locale déterministe ; les CLI opaques
-    // conservent leur dernier test daté jusqu'au prochain démarrage.
-    const probeIsFresh =
-      state?.lastProbe &&
-      state.lastProbe.checkedAt <= inputs.now &&
-      inputs.now - state.lastProbe.checkedAt <= FRESH_STARTUP_PROBE_MS
-    if (state?.lastProbe && (provider !== 'codex' || probeIsFresh)) {
-      return {
-        provider,
+    ]
+  }
+  if (state?.lastProbe) {
+    return [
+      {
+        provider: 'claude',
         status: state.lastProbe.status,
         // Un probe persisté est une preuve datée, jamais un oracle courant : toujours retestable.
         testable: true,
         lastCheckedAt: state.lastProbe.checkedAt
       }
-    }
-    return { provider, status: fallback, testable: isTestable(fallback) }
+    ]
   }
-  // Codex, Kimi et Gemini sont des projets abandonnés : plus aucun statut publié, donc plus aucune
-  // connexion proposée ni sondée. Les entrées correspondantes restent ACCEPTÉES en signature pour
-  // que la relecture de l'historique et les appelants existants continuent de compiler.
-  void codex
-  void kimi
-  void gemini
-  return [display('claude', claude)]
+  const fallback = presenceStatus(inputs.claudeResponds)
+  return [{ provider: 'claude', status: fallback, testable: isTestable(fallback) }]
 }

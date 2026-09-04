@@ -4,18 +4,16 @@ import { spawn } from 'node:child_process'
  * Lancement du login OFFICIEL d'un provider depuis l'app (bouton « Se reconnecter » de la page Routeur).
  *
  * SÉCURITÉ : l'app LANCE le flow du CLI/provider (qui gère lui-même la saisie), elle ne capture JAMAIS
- * de credential. Modèle : `kimi.startLogin` (spawn d'un terminal détaché). kimi garde sa propre
- * résolution d'exe (adapter) ; claude/codex passent par une commande terminal.
+ * de credential. Claude passe par une commande terminal.
  *
  * Commandes (confirmées) :
  *  - claude → `claude auth login` (« Sign in to your Anthropic account »).
- *  - codex  → `npm run codex:login` : peuple le store LU par l'app (autowin-os/auth.json). PAS
- *    `codex login` (CLI natif → autre store → faux-fix).
- *  - kimi   → délégué à l'adapter (kimi.startLogin, exe résolu).
+ *
+ * Claude est le SEUL moteur connectable : Codex, Kimi et Gemini sont retirés (voir
+ * `routed-providers.ts`). Leur connexion n'est plus proposée ni planifiable — demander leur login
+ * lève, au lieu d'ouvrir une console sur un moteur qui n'est plus branché.
  */
-export type LoginPlan =
-  | { kind: 'adapter'; provider: 'kimi' }
-  | { kind: 'terminal'; command: string }
+export type LoginPlan = { kind: 'terminal'; command: string }
 
 /**
  * Plan de login par provider (pur, testable). Throw si le provider n'a pas de login connu.
@@ -31,8 +29,6 @@ export type LoginPlan =
  */
 export function planProviderLogin(provider: string, bin?: string, configDir?: string): LoginPlan {
   switch (provider) {
-    case 'kimi':
-      return { kind: 'adapter', provider: 'kimi' }
     case 'claude': {
       // Multi-comptes : le login doit ecrire dans le dossier du compte VISE, pas dans l'identite
       // courante. Sans ce prefixe, ajouter un second compte ecraserait le premier — le CLI ne sait
@@ -51,8 +47,6 @@ export function planProviderLogin(provider: string, bin?: string, configDir?: st
         command: prefix + (bin ? `& "${bin}" auth login` : 'claude auth login')
       }
     }
-    case 'codex':
-      return { kind: 'terminal', command: 'npm run codex:login' }
     default:
       throw new Error(`Aucun login connu pour le provider: ${provider}`)
   }
