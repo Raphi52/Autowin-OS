@@ -391,21 +391,20 @@ function writeCatalogCache(
  * devient faux dès qu'un modèle est publié, et il l'affirme sans le moindre signal (constaté le
  * 2026-07-30 : `opus-4-6` presenté comme le meilleur opus alors que le service en expose `opus-5`).
  *
- * `kimi` et `gemini` restent, et ce n'est PAS la même chose : aucune source dynamique n'existe pour
- * eux, leurs entrées sont la DÉCLARATION DE CAPACITÉ de leur adaptateur (`providers/kimi.ts`,
- * `providers/gemini.ts`) — il n'y a pas de catalogue distant dont elles pourraient dériver, donc rien
- * qui puisse mentir. Les retirer supprimerait deux providers fonctionnels.
+ * `kimi` et `gemini` ont été RETIRÉS (adaptateurs supprimés le 2026-09-04) : plus aucune entrée
+ * déclarée en dur ne subsiste pour eux, et le filtre de sortie ci-dessous écarte ce qu'un cache
+ * antérieur au retrait contiendrait encore.
  */
 export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
   const codex = readCatalogCache(cachePath, 'codex') ?? []
   const claude = readCatalogCache(cachePath, 'claude') ?? []
-  return [
-    ...codex,
-    ...claude,
-    ...DEFAULT_IMPORTED_MODELS.filter(
-      (model) => model.provider === 'kimi' || model.provider === 'gemini'
-    )
-  ]
+  // MÊME FILTRE DE SORTIE QUE `discoverImportedModels`, et pour la même raison : ce cache a été
+  // écrit AVANT le retrait des moteurs et en contient encore. Sans lui, le catalogue du DÉMARRAGE
+  // (avant toute découverte) reproposait Codex dans Agent Studio et un rôle pouvait y être routé.
+  // Le fichier de cache n'est PAS réécrit : les données anciennes restent lisibles pour l'historique.
+  return [...codex, ...claude, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
+    ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
+  )
 }
 
 /**

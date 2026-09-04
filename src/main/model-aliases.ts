@@ -27,17 +27,15 @@ const CLAUDE_FAMILIES = ['fable', 'haiku', 'opus', 'sonnet'] as const
 /**
  * Alias connus — dérivés MÉCANIQUEMENT des familles de la regex, pas figés par modèle.
  * - claude : une famille par valeur de la regex → `claude/<family>-latest`.
- * - codex : `codex/flagship` uniquement (les slugs codex n'ont pas de familles
- *   versionnées fiables ; « latest » = `priority` min parmi visibility 'list').
- * - kimi : pas d'endpoint de listing → jamais d'alias dynamique (alias identité only).
+ * - moteurs retirés (codex, kimi, gemini) : plus aucun alias — un alias ne se résout que contre le
+ *   catalogue courant, qui ne les contient plus, il ne pouvait donc que rendre `undefined`.
  */
 export const KNOWN_ALIASES: ModelAlias[] = [
   ...CLAUDE_FAMILIES.map((family) => ({
     id: `claude/${family}-latest`,
     provider: 'claude',
     family
-  })),
-  { id: 'codex/flagship', provider: 'codex', family: 'flagship' }
+  }))
 ]
 
 export function isKnownAlias(id: string): boolean {

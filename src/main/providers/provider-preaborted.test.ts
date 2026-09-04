@@ -29,7 +29,6 @@ vi.mock('./workspace-mutation-evidence', async (importOriginal) => ({
 
 import { ClaudeCliAdapter } from './claude'
 import { CodexAdapter } from './codex'
-import { KimiCliAdapter } from './kimi'
 
 const previousCodexBin = process.env.CODEX_BIN
 /** Restaurations à jouer après chaque test (variables d'environnement, dossiers privés). */
@@ -81,16 +80,6 @@ describe('providers CLI — annulation avant lancement', () => {
       signal: abortedSignal(),
       execution: { cwd: process.cwd(), sandbox: 'workspace-write' }
     })
-
-    await expect(stream.next()).rejects.toMatchObject({ name: 'AbortError' })
-    expect(spawns).toEqual({ direct: 0, survivable: 0 })
-  })
-
-  it('Kimi refuse avant tout spawn', async () => {
-    const stream = new KimiCliAdapter({ bin: 'kimi-test' }).send(
-      [{ role: 'user', content: 'travaille' }],
-      { signal: abortedSignal() }
-    )
 
     await expect(stream.next()).rejects.toMatchObject({ name: 'AbortError' })
     expect(spawns).toEqual({ direct: 0, survivable: 0 })

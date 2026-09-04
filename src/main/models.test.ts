@@ -284,7 +284,9 @@ describe('résolution des alias par famille via findModel', () => {
     // que le seed statique produisait (il figeait `opus-latest` sur opus-4-6).
     expect(findModel(catalog, 'claude/opus-latest')?.model).toBe('claude-opus-5')
     expect(findModel(catalog, 'claude/fable-latest')?.model).toBe('claude-fable-5')
-    expect(findModel(catalog, 'codex/flagship')?.model).toBe('gpt-5.6-terra')
+    // Moteur retiré : plus d'alias, donc plus de résolution — même si le catalogue de test en
+    // garde une entrée (cas d'un cache antérieur au retrait).
+    expect(findModel(catalog, 'codex/flagship')).toBeUndefined()
     expect(findModel(catalog, 'claude/sonnet-latest')).toBeUndefined()
     expect(findModel(catalog, 'claude/inexistant')).toBeUndefined()
   })

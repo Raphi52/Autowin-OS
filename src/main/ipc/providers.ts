@@ -123,23 +123,15 @@ export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDep
         }
       })
     }
-    const [claudeResponds, kimiResponds, geminiResponds] = await Promise.all([
-      responds('claude'),
-      responds('kimi'),
-      responds('gemini')
-    ])
+    // Un seul moteur routé : plus aucun spawn de sondage pour les moteurs retirés (Codex, Kimi,
+    // Gemini). Leur statut n'était de toute façon plus publié — on payait le spawn pour rien.
+    const claudeResponds = await responds('claude')
     return buildProviderStatuses({
       codexTokens: loadTokens(),
       claudeResponds,
-      kimiResponds,
-      geminiResponds,
+      kimiResponds: false,
       now: Date.now(),
-      states: {
-        codex: providerStateStore.get('codex'),
-        claude: providerStateStore.get('claude'),
-        kimi: providerStateStore.get('kimi'),
-        gemini: providerStateStore.get('gemini')
-      }
+      states: { claude: providerStateStore.get('claude') }
     })
   })
   ipcMain.handle('os:providerMode:set', (event, provider: unknown, mode: unknown) => {

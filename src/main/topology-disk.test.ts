@@ -110,8 +110,8 @@ describe('agent topology disk persistence', () => {
     const topology = createDefaultTopology(TEST_MODEL_CATALOG)
     topology.orchestrator = {
       slotId: 'orchestrator',
-      provider: 'codex',
-      modelId: 'codex/flagship',
+      provider: 'claude',
+      modelId: 'claude/opus-latest',
       reasoningEffort: 'medium'
     }
     saveAgentTopology(path, topology, TEST_MODEL_CATALOG)
@@ -120,7 +120,7 @@ describe('agent topology disk persistence', () => {
 
     expect(loaded).toEqual(topology)
     expect(() => runtimeRoleBinding(loaded.orchestrator, DEFAULT_IMPORTED_MODELS)).toThrow(
-      'Modèle indisponible hors catalogue : codex/flagship'
+      'Modèle indisponible hors catalogue : claude/opus-latest'
     )
   })
 
