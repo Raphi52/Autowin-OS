@@ -4073,6 +4073,26 @@ ol.md-list li {
   box-shadow: none;
   font-size: 14px;
 }
+/* STOP VISIBLE ET ATTEIGNABLE (conv-254, 2026-09-04) : mesure a l'ecran — le clic PASSE, mais la
+   cible fait 32px, porte un carre muet et touche le bouton d'envoi. On l'agrandit, on l'ecarte et
+   on lui donne sa couleur d'arret : la cible devient visible et visable. */
+.composer-input-row > .composer-stop,
+.cosmic-outline .composer-input-row > .composer-stop {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  margin-right: 8px;
+  border: 1px solid rgba(255, 120, 120, 0.55);
+  background: rgba(180, 40, 40, 0.18);
+  color: #ff9b9b;
+  font-size: 15px;
+}
+.composer-input-row > .composer-stop:hover:not(:disabled) {
+  border-color: #ff9b9b;
+  background: rgba(180, 40, 40, 0.32);
+  color: #fff;
+}
 .composer-input-row > .attachment-button .attachment-icon,
 .cosmic-outline .composer-input-row > .attachment-button .attachment-icon {
   width: 16px;
