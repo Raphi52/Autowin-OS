@@ -136,5 +136,8 @@ describe('journal des tours : lien entre un échec et l’action qui le rattrape
       7
     )
     expect(abandon[0].data).toEqual([{ actionId: '0:0', cible: 'edit_file::a.ts' }])
+    // ... et lui aussi atterrit sur DISQUE, relu tel quel.
+    appendTurnEvent(racine, 'conv-frontiere', 'tour-2', { ...abandon[0], at: 43 })
+    expect(readTurnJournal(racine, 'conv-frontiere', 'tour-2')).toEqual([{ ...abandon[0], at: 43 }])
   })
 })
