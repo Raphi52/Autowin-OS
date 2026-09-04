@@ -40,6 +40,26 @@ describe('barre de quota cliquable', () => {
     )
   })
 
+  /**
+   * DEFAUT SIGNALE LE 2026-09-04 (capture utilisateur) : a 100 %, la pastille du chiffre restait
+   * plafonnee a `100% - 22px`, donc un bout de barre verte depassait a sa droite. Le retrait est
+   * desormais PROPORTIONNEL au restant : nul a 0 %, egal a la largeur de la pastille a 100 %.
+   */
+  it('colle la pastille au bout de la barre quand le restant vaut 100 %', () => {
+    expect(component).toContain("'--quota-ratio': `${(remaining ?? 0) / 100}`")
+    expect(styles).toMatch(
+      /\.model-quota-bar-value\s*{[^}]*left:\s*var\(--quota-fill, 0%\);/s
+    )
+    expect(styles).toMatch(
+      /\.model-quota-bar-value\s*{[^}]*--quota-retrait:\s*calc\(20px \* var\(--quota-ratio, 0\)\);/s
+    )
+    expect(styles).toMatch(
+      /\.model-quota-bar-value\s*{[^}]*transform:\s*translate\(calc\(-1 \* var\(--quota-retrait, 0px\)\), -50%\);/s
+    )
+    // L'ancien plafond fixe ne doit plus exister : c'est LUI qui laissait le bout de barre nu.
+    expect(styles).not.toContain('calc(100% - 22px)')
+  })
+
   it('conserve les quatre états de couleur du nombre', () => {
     // Teintes SERVIES par la barre actuelle (cf. `.model-quota-trigger.is-*` dans le CSS).
     const stateColors = {
