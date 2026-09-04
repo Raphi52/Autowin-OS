@@ -2415,8 +2415,11 @@ ol.md-list li {
   background: rgba(255, 255, 255, 0.14);
   pointer-events: none;
 }
-/* LA JAUGE : meme trait, en BLANC PLEIN, sur la part occupee. Choix utilisateur du 2026-09-04 :
-   une jauge blanche sur un trait blanc, AUCUNE couleur de palier — le rouge alarmait a tort. */
+/* LA JAUGE : meme trait, en DEGRADE GRIS -> BLANC PUR sur la part occupee. Choix utilisateur du
+   2026-09-04 : aucune couleur de palier (le rouge alarmait a tort), et le degrade remplace le
+   blanc plat — la pointe blanche marque le bord courant, la naissance grise se fond dans le rail.
+   Le degrade est cale sur la PORTION (et non sur toute la largeur) a dessein : la pointe blanche
+   suit ainsi l'occupation au lieu de n'apparaitre qu'a 100 %. */
 .composer[data-context-level]::before {
   content: '';
   position: absolute;
@@ -2425,7 +2428,12 @@ ol.md-list li {
   z-index: 1;
   height: 2px;
   width: var(--context-fill, 0%);
-  background: #ffffff;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.55) 45%,
+    #ffffff 100%
+  );
   opacity: 0.95;
   pointer-events: none;
   transition: width 220ms ease;

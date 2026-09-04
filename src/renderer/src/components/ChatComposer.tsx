@@ -124,7 +124,17 @@ function IconeEnvoyer(): React.JSX.Element {
       aria-hidden="true"
       focusable="false"
     >
-      <path d="M4 11.2 20 4l-7.2 16-2.2-6.6z" fill="currentColor" stroke="none" />
+      {/* Avion en PLEIN avec son pli visible : le dart precedent se lisait comme une simple
+          fleche a 16px (retour utilisateur conv-257, 2026-09-04). Le pli separe l aile du corps
+          et rend l objet identifiable a cette taille. */}
+      <path d="M21.6 2.4 2.7 10.3l7.3 2.9 2.9 7.3z" fill="currentColor" stroke="none" />
+      <path
+        d="M21.6 2.4 10 13.2"
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.45"
+        strokeWidth="1.6"
+      />
     </svg>
   )
 }

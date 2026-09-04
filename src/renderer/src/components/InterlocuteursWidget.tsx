@@ -326,7 +326,6 @@ function EcranFils({
 function EcranConversation({
   conversation,
   contact,
-  now,
   onOuvrir,
   ouvertureEnCours,
   onRepondre,

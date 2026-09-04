@@ -860,10 +860,17 @@
   border: 1px solid rgba(255, 138, 205, 0.55);
   border-top-color: rgba(255, 214, 236, 0.85);
   border-bottom-color: rgba(74, 8, 46, 0.85);
-  background: linear-gradient(180deg, rgba(243, 92, 180, 0.97), rgba(168, 26, 110, 0.97));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 132, 205, 0.99) 0%,
+    rgba(224, 60, 158, 0.99) 46%,
+    rgba(145, 16, 92, 0.99) 100%
+  );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.32);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.6),
+    inset 0 6px 8px -6px rgba(255, 255, 255, 0.45),
+    inset 0 -2px 4px -2px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.45);
   color: #ffffff;
   transition: background 140ms ease, border-color 140ms ease, box-shadow 120ms ease,
     transform 90ms ease;
@@ -896,6 +903,3 @@
     inset 0 -1px 0 rgba(0, 0, 0, 0.28);
   opacity: 1;
 }
-
-/* SONDE TEMPORAIRE conv-257 - a retirer */
-.cosmic-outline .composer-send { background: #00ff66 !important; }
