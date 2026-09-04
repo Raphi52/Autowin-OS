@@ -306,3 +306,38 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* INFOBULLE AU SURVOL de la barre de quota (demande utilisateur du 2026-09-04). Le balisage vit
+   dans `ModelQuotaIndicator.tsx` ; sans CE style elle s'afficherait EN CLAIR et EN PERMANENCE
+   dans la barre du haut, au lieu d'apparaitre au survol. */
+.model-quota-tip {
+  position: absolute;
+  z-index: 9;
+  top: calc(100% + 7px);
+  right: 0;
+  display: none;
+  width: max-content;
+  max-width: 300px;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.14));
+  border-radius: 9px;
+  background: var(--surface-panel, rgba(10, 12, 16, 0.98));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  color: var(--text, #dde3ee);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  pointer-events: none;
+}
+
+.model-quota-trigger:hover .model-quota-tip,
+.model-quota-trigger:focus-visible .model-quota-tip {
+  display: flex;
+}
+
+.model-quota-tip-hint {
+  color: var(--text-dim, #a9b2c4);
+  font-size: 10px;
+}

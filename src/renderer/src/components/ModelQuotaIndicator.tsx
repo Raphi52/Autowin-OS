@@ -420,6 +420,26 @@ export function ModelQuotaIndicator({
         >
           {remaining === undefined ? '···' : Math.round(remaining)}
         </span>
+        {/* INFOBULLE AU SURVOL (demande utilisateur du 2026-09-04) : la barre disait seulement un
+           chiffre nu. La bulle nomme ce que le chiffre MESURE, sur quelle fenetre, et rappelle
+           l'occupation du fil — sans ouvrir le panneau. */}
+        <span className="model-quota-tip" role="tooltip" data-testid="model-quota-tip">
+          <b>Quotas fournisseurs</b>
+          <span>
+            {remaining === undefined
+              ? 'Occupation inconnue'
+              : `${Math.round(remaining)} % restant sur ${windowLabel}`}
+            {alert}
+          </span>
+          {contextGauge ? (
+            <span>
+              Contexte du fil : {contextGauge.used.toLocaleString('fr-FR')} /{' '}
+              {contextGauge.limit.toLocaleString('fr-FR')} tokens (
+              {Math.round(contextGauge.ratio * 100)} %)
+            </span>
+          ) : null}
+          <span className="model-quota-tip-hint">Clic : detail par modele</span>
+        </span>
       </button>
       {open && (
         <section
