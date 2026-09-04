@@ -3,23 +3,20 @@ import { buildProviderStatuses } from './provider-status'
 import { ROUTED_PROVIDERS } from './routed-providers'
 
 describe('provider routing product wiring', () => {
-  it('routes every provider exposed by the product, including Gemini', () => {
-    expect(ROUTED_PROVIDERS).toEqual(['codex', 'claude', 'kimi', 'gemini'])
+  it('ne route plus que Claude : Codex, Kimi et Gemini sont des projets abandonnés', () => {
+    expect(ROUTED_PROVIDERS).toEqual(['claude'])
   })
 
-  it('publishes a real Gemini status and honours standby without probing', () => {
+  it('ne publie aucun statut pour les moteurs retirés', () => {
     const statuses = buildProviderStatuses({
       codexTokens: null,
-      claudeResponds: false,
+      claudeResponds: true,
       kimiResponds: false,
       geminiResponds: true,
       now: 1_000,
-      states: { gemini: { mode: 'standby' } }
+      states: {}
     })
 
-    expect(statuses.find((status) => status.provider === 'gemini')).toMatchObject({
-      status: 'standby',
-      testable: false
-    })
+    expect(statuses.map((status) => status.provider)).toEqual(['claude'])
   })
 })

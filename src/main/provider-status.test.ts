@@ -66,21 +66,17 @@ describe('probeResultStatus (test réel à la demande)', () => {
 })
 
 describe('buildProviderStatuses (chargement)', () => {
-  it('codex exact + claude/kimi présence, avec testable correct', () => {
+  it('ne publie que Claude, en présence, avec testable correct', () => {
     const out = buildProviderStatuses({
       codexTokens: { obtainedAt: NOW - 7200_000, expiresInSec: 3600 },
       claudeResponds: true,
       kimiResponds: false,
       now: NOW
     })
-    expect(out).toEqual([
-      { provider: 'codex', status: 'expired', testable: false },
-      { provider: 'claude', status: 'installed-untested', testable: true },
-      { provider: 'kimi', status: 'absent', testable: false }
-    ])
+    expect(out).toEqual([{ provider: 'claude', status: 'installed-untested', testable: true }])
   })
 
-  it('restaure le dernier probe réel et distingue Kimi standby d’une erreur', () => {
+  it('restaure le dernier probe réel de Claude', () => {
     const statuses = buildProviderStatuses({
       codexTokens: null,
       claudeResponds: true,
@@ -90,61 +86,43 @@ describe('buildProviderStatuses (chargement)', () => {
         claude: {
           mode: 'active',
           lastProbe: { status: 'authenticated', checkedAt: NOW }
-        },
-        kimi: { mode: 'standby' }
+        }
       }
     })
 
     expect(statuses.find((item) => item.provider === 'claude')).toEqual(
       expect.objectContaining({ status: 'authenticated', testable: true, lastCheckedAt: NOW })
     )
-    expect(statuses.find((item) => item.provider === 'kimi')).toEqual(
-      expect.objectContaining({ status: 'standby', testable: false })
-    )
   })
 
-  it('fait prévaloir un probe Codex frais sur le token local', () => {
-    const unknown = buildProviderStatuses({
+  it('honore le standby de Claude sans lancer de probe', () => {
+    const statuses = buildProviderStatuses({
+      codexTokens: null,
+      claudeResponds: true,
+      kimiResponds: false,
+      now: NOW,
+      states: { claude: { mode: 'standby' } }
+    })
+
+    expect(statuses).toEqual([
+      expect.objectContaining({ provider: 'claude', status: 'standby', testable: false })
+    ])
+  })
+
+  it('CONTRÔLE NÉGATIF : aucun moteur retiré ne ressort, même avec un état enregistré', () => {
+    const statuses = buildProviderStatuses({
       codexTokens: { obtainedAt: NOW - 1000, expiresInSec: 3600 },
       claudeResponds: false,
-      kimiResponds: false,
+      kimiResponds: true,
+      geminiResponds: true,
       now: NOW,
       states: {
-        codex: { mode: 'active', lastProbe: { status: 'unknown', checkedAt: NOW - 500 } }
-      }
-    })
-    const recovered = buildProviderStatuses({
-      codexTokens: { obtainedAt: NOW - 7200_000, expiresInSec: 3600 },
-      claudeResponds: false,
-      kimiResponds: false,
-      now: NOW,
-      states: {
-        codex: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: NOW - 500 } }
+        codex: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: NOW - 500 } },
+        kimi: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: NOW - 500 } },
+        gemini: { mode: 'standby' }
       }
     })
 
-    expect(unknown[0]).toEqual(
-      expect.objectContaining({ status: 'unknown', lastCheckedAt: NOW - 500 })
-    )
-    expect(recovered[0]).toEqual(
-      expect.objectContaining({ status: 'authenticated', lastCheckedAt: NOW - 500 })
-    )
-  })
-
-  it('ignore un ancien probe Codex au profit de l’expiration locale', () => {
-    const statuses = buildProviderStatuses({
-      codexTokens: { obtainedAt: NOW - 7200_000, expiresInSec: 3600 },
-      claudeResponds: false,
-      kimiResponds: false,
-      now: NOW,
-      states: {
-        codex: {
-          mode: 'active',
-          lastProbe: { status: 'authenticated', checkedAt: NOW - 120_000 }
-        }
-      }
-    })
-
-    expect(statuses[0]).toEqual({ provider: 'codex', status: 'expired', testable: false })
+    expect(statuses.map((item) => item.provider)).toEqual(['claude'])
   })
 })

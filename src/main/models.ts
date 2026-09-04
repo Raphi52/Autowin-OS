@@ -56,69 +56,19 @@ export interface ImportedModel {
 /**
  * Déclarations de capacité des adaptateurs SANS source dynamique. Ce n'est PAS un repli.
  *
- * `kimi` et `gemini` n'ont aucun listing distant : ces entrées décrivent ce que
- * `providers/kimi.ts` et `providers/gemini.ts` savent réellement piloter. Il n'existe donc aucun
- * catalogue dont elles pourraient dériver, rien qui puisse mentir.
+ * VIDE depuis le retrait des moteurs abandonnés (2026-09-04). Cette liste ne portait que `kimi` et
+ * `gemini`, les deux seules voies sans listing distant. Elles sont retirées du produit : plus
+ * proposées au premier lancement, plus sondées, plus listées au catalogue.
  *
- * `claude` et `codex` n'ont PLUS d'entrée ici, volontairement. Ils ont, eux, une source vivante
- * (service de modèles local pour Claude, App Server pour codex) — et une copie figée dans le code
- * devient fausse dès qu'un modèle est publié, en l'affirmant sans le moindre signal. Constaté le
- * 2026-07-30 : sur un poste sans le service, Agent Studio annonçait `opus-4-6` comme meilleur opus
- * alors que le service en exposait onze, dont `claude-opus-5`.
+ * `claude` n'a jamais eu d'entrée ici, volontairement : il a une source vivante (service de modèles
+ * local) — et une copie figée dans le code devient fausse dès qu'un modèle est publié, en
+ * l'affirmant sans le moindre signal. Constaté le 2026-07-30 : sur un poste sans le service, Agent
+ * Studio annonçait `opus-4-6` comme meilleur opus alors que le service en exposait onze.
+ *
+ * La constante SURVIT (plutôt que d'être supprimée) parce qu'elle est le point d'extension d'un
+ * futur adaptateur sans listing, et qu'elle est déjà câblée chez ses appelants.
  */
-export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
-  {
-    // Alias officiel Kimi Code pour les comptes OAuth (pas une clé API).
-    // Le CLI sélectionne ensuite le modèle effectivement autorisé par le compte.
-    id: 'kimi/kimi-code/kimi-for-coding',
-    provider: 'kimi',
-    model: 'kimi-code/kimi-for-coding',
-    label: 'Kimi Code · compte OAuth',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    // Modèles réellement exposés par Antigravity 1.1.4 au compte Google local.
-    id: 'gemini/Gemini 3.5 Flash (Low)',
-    provider: 'gemini',
-    model: 'Gemini 3.5 Flash (Low)',
-    label: 'Gemini 3.5 Flash · Low',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    id: 'gemini/Gemini 3.5 Flash (Medium)',
-    provider: 'gemini',
-    model: 'Gemini 3.5 Flash (Medium)',
-    label: 'Gemini 3.5 Flash · Medium',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    id: 'gemini/Gemini 3.5 Flash (High)',
-    provider: 'gemini',
-    model: 'Gemini 3.5 Flash (High)',
-    label: 'Gemini 3.5 Flash · High',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    id: 'gemini/Gemini 3.1 Pro (Low)',
-    provider: 'gemini',
-    model: 'Gemini 3.1 Pro (Low)',
-    label: 'Gemini 3.1 Pro · Low',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    id: 'gemini/Gemini 3.1 Pro (High)',
-    provider: 'gemini',
-    model: 'Gemini 3.1 Pro (High)',
-    label: 'Gemini 3.1 Pro · High',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  }
-]
+export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = []
 
 const CLAUDE_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 /** Résultat par voie : `live` distingue un listing réussi d'un repli (cache/seed). */

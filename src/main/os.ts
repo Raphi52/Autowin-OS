@@ -347,10 +347,10 @@ export class AutowinOS {
       // gardent donc exactement le comportement d'avant (l'echec de quota remonte tel quel).
       (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined)
     )
+      // Claude est le SEUL moteur enregistré. Codex, Kimi et Gemini sont des projets abandonnés :
+      // leurs adaptateurs restent dans l'arbre (relecture de l'historique, types) mais ne sont plus
+      // branchés — donc jamais lancés, jamais sondés, jamais routés. Voir `routed-providers.ts`.
       .register(new ClaudeCliAdapter())
-      .register(new CodexAdapter())
-      .register(new KimiCliAdapter())
-      .register(new GeminiCliAdapter())
     const executionWorkspace = resolveExecutionWorkspace()
     this.executionWorkspace = executionWorkspace
     // Le workspace resolu est republie dans l'environnement pour que le TRANSPORT y ait acces sans
