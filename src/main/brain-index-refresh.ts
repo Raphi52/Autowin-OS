@@ -73,7 +73,11 @@ export async function readBrainHealth(
 /** Un index périmé se reconstruit ; toute autre dégradation, non. */
 export function needsIndexRebuild(health: BrainHealth | null): boolean {
   if (!health || health.state !== 'degraded') return false
-  return health.reasons.some((r) => /freshness|manifest|generation/i.test(r))
+  // Une panne de SURVEILLANCE (« freshness watcher … », brain_retrieval.py:304 et :311) n'est pas
+  // un index périmé : reconstruire ne la répare pas et coûte plusieurs minutes sur le partage.
+  return health.reasons.some(
+    (r) => !/watcher/i.test(r) && /index freshness mismatch|manifest missing|generation/i.test(r)
+  )
 }
 
 let attempted = false

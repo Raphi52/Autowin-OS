@@ -85,10 +85,34 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
     const r = await ensureBrainIndexFresh({
       env,
       spawnFn,
-      readHealth: async () => ({ state: 'degraded', reasons: ['embedding backend unreachable'] })
+      readHealth: async () => ({
+        state: 'degraded',
+        // Vraies chaînes du Brain (brain_retrieval.py:304 et :311) : panne de SURVEILLANCE,
+        // pas un index périmé — reconstruire ne la répare pas et coûte plusieurs minutes.
+        reasons: [
+          'index freshness watcher error: boom',
+          'index freshness watcher is not active for every source root'
+        ]
+      })
     })
     expect(r.status).toBe('not-needed')
     expect(spawnFn).not.toHaveBeenCalled()
+  })
+
+  it('réindexe sur la vraie chaîne d’index périmé du Brain', () => {
+    // brain_retrieval.py:281 et :288
+    expect(
+      needsIndexRebuild({
+        state: 'degraded',
+        reasons: ['index freshness mismatch (hash): corpus changed']
+      })
+    ).toBe(true)
+    expect(
+      needsIndexRebuild({
+        state: 'degraded',
+        reasons: ['index freshness mismatch: manifest missing']
+      })
+    ).toBe(true)
   })
 
   it('ne relance pas une deuxième fois dans la même session', async () => {
