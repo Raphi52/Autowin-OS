@@ -17,6 +17,13 @@ interface PersistChatUsageSettlementInput {
   label: string
   durationMs?: number
   text?: string
+  /**
+   * Entree du DERNIER appel provider du tour, et sa part relue du cache. Fournies par l'appelant
+   * (`run-pilot-chat.ts`), car le snapshot du superviseur ne porte que des CUMULS : la fenetre de
+   * contexte se mesure sur un appel, pas sur leur somme.
+   */
+  derniereEntree?: number
+  derniereEntreeCache?: number
   activityRoot?: string
   traceStore: TraceStore
 }
@@ -122,6 +129,10 @@ export function persistChatUsageSettlement(
       inputTokens,
       outputTokens,
       cacheReadTokens,
+      // Non deltaises a dessein : ce sont des NIVEAUX (l'occupation au dernier appel), pas des
+      // compteurs cumulatifs. Un delta les rendrait negatifs des que le contexte se compacte.
+      derniereEntree: input.derniereEntree,
+      derniereEntreeCache: input.derniereEntreeCache,
       costUsd,
       // Rattachement EXACT du cout de chat a son tour : la valeur est COPIEE de `input.turnId`,
       // deja utilisee pour la trace juste en dessous. Sans elle, /rendement devinait par l'heure.

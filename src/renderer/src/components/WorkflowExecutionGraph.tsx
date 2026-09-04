@@ -54,10 +54,30 @@ const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   boundary: 'Frontière'
 }
 
-function durationLabel(durationMs: number | undefined): string {
-  if (durationMs == null) return 'durée inconnue'
-  if (durationMs < 1000) return `${Math.round(durationMs)} ms`
-  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(durationMs / 1000)} s`
+function elapsedLabel(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(ms / 1000)} s`
+}
+
+/**
+ * AUCUNE DUREE « INCONNUE ». Tout evenement de la trace porte un horodatage exact ; seuls certains
+ * portent une duree MESUREE (un appel provider, une phase). Un marqueur ponctuel (injection, appel
+ * d'outil, frontiere de run) n'a pas de duree a mesurer : on affiche alors sa POSITION dans la
+ * demande — « a +12,4 s » —, un fait tire du meme journal, au lieu d'un aveu d'ignorance qui laissait
+ * croire a une perte de log. Reste « non horodate » si meme le timestamp manque : ce cas est un
+ * vrai defaut de trace, et il doit rester visible.
+ */
+function durationLabel(durationMs: number | undefined, offsetMs?: number): string {
+  if (durationMs != null) return elapsedLabel(durationMs)
+  if (offsetMs != null) return `a +${elapsedLabel(offsetMs)}`
+  return 'instant non horodate'
+}
+
+/** Position de l'evenement depuis le debut de la demande, depuis son horodatage logue. */
+function offsetFromStart(timestamp: string | undefined, baseMs: number | undefined): number | undefined {
+  if (baseMs == null || !timestamp) return undefined
+  const at = Date.parse(timestamp)
+  return Number.isFinite(at) ? Math.max(0, at - baseMs) : undefined
 }
 
 function costLabel(costUsd: number | undefined): string {
@@ -92,7 +112,13 @@ function workspaceModeLabel(mode: string | undefined): string {
   return mode === 'worktree' ? 'Copie isolée' : 'Dépôt de travail'
 }
 
-function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
+function ExecutionNodeMeta({
+  event,
+  offsetMs
+}: {
+  event: HarnessTimelineEvent
+  offsetMs?: number
+}): React.JSX.Element {
   const display = event.display
   if (display?.kind === 'workspace') {
     return (
@@ -151,7 +177,7 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
       <>
         <span>{closureStatusLabel(display.closure?.status)}</span>
         <span aria-hidden="true">·</span>
-        <span>{durationLabel(display.closure?.totalDurationMs)}</span>
+        <span>{durationLabel(display.closure?.totalDurationMs, offsetMs)}</span>
         <span aria-hidden="true">·</span>
         <span>
           {costLabel(display.closure?.totalCostUsd)}
@@ -180,7 +206,7 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
       )}
       <span className="workflow-execution-agent">{event.actor}</span>
       <span aria-hidden="true">·</span>
-      <span>{durationLabel(event.durationMs)}</span>
+      <span>{durationLabel(event.durationMs, offsetMs)}</span>
     </>
   )
 }
@@ -225,7 +251,13 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }):
   )
 }
 
-function ExecutionNodeDetail({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
+function ExecutionNodeDetail({
+  event,
+  offsetMs
+}: {
+  event: HarnessTimelineEvent
+  offsetMs?: number
+}): React.JSX.Element {
   const display = event.display
   if (display?.kind === 'workspace') {
     const workspace = display.workspace
@@ -287,7 +319,7 @@ function ExecutionNodeDetail({ event }: { event: HarnessTimelineEvent }): React.
           value={display.attemptId ?? event.execution?.attemptId ?? 'Non exposé'}
         />
         <DetailRow label="Skill" value={display.skillName ?? 'Non exposée'} />
-        <DetailRow label="Durée" value={durationLabel(event.durationMs)} />
+        <DetailRow label="Durée" value={durationLabel(event.durationMs, offsetMs)} />
         {event.provider && <DetailRow label="Provider" value={event.provider} />}
         {event.model && <DetailRow label="Modèle" value={event.model} />}
         {(display.dependencyIds?.length ?? 0) > 0 && (
@@ -316,7 +348,7 @@ function ExecutionNodeDetail({ event }: { event: HarnessTimelineEvent }): React.
     return (
       <dl>
         <DetailRow label="État de clôture" value={closureStatusLabel(closure?.status)} />
-        <DetailRow label="Temps total" value={durationLabel(closure?.totalDurationMs)} />
+        <DetailRow label="Temps total" value={durationLabel(closure?.totalDurationMs, offsetMs)} />
         <DetailRow label="Coût total" value={costLabel(closure?.totalCostUsd)} />
         {closure?.usage && (
           <>
@@ -349,7 +381,7 @@ function ExecutionNodeDetail({ event }: { event: HarnessTimelineEvent }): React.
   return (
     <dl>
       <DetailRow label="Acteur" value={event.actor} />
-      <DetailRow label="Durée" value={durationLabel(event.durationMs)} />
+      <DetailRow label="Durée" value={durationLabel(event.durationMs, offsetMs)} />
       {skillLabel(event) && <DetailRow label="Skill" value={skillLabel(event)} />}
       {event.provider && <DetailRow label="Provider" value={event.provider} />}
       {event.model && <DetailRow label="Modèle" value={event.model} />}
@@ -471,6 +503,14 @@ export function WorkflowExecutionGraph({
   )
   const graph = useMemo(() => buildCausalPath(settledEvents), [settledEvents])
   const nodes = useMemo(() => flattenCausalNodes(graph.roots), [graph.roots])
+  // Debut de la demande = plus petit horodatage projete. Sert de reference aux evenements sans
+  // duree mesuree, pour qu'aucun bloc n'affiche « inconnue ».
+  const baseMs = useMemo(() => {
+    const stamps = nodes
+      .map((node) => Date.parse(node.event.timestamp ?? ''))
+      .filter((at) => Number.isFinite(at))
+    return stamps.length > 0 ? Math.min(...stamps) : undefined
+  }, [nodes])
   const selected = selectedId ? graph.byId.get(selectedId) : undefined
 
   // La publication passe par un effet plutôt que par le gestionnaire de clic : la sélection change
@@ -636,7 +676,10 @@ export function WorkflowExecutionGraph({
                     <em>{statusLabel(node.event.status)}</em>
                   </span>
                   <span className="workflow-execution-node-meta">
-                    <ExecutionNodeMeta event={node.event} />
+                    <ExecutionNodeMeta
+                      event={node.event}
+                      offsetMs={offsetFromStart(node.event.timestamp, baseMs)}
+                    />
                   </span>
                 </span>
               </button>
@@ -651,7 +694,10 @@ export function WorkflowExecutionGraph({
             <strong>{selected.event.display?.title ?? EVENT_LABEL[selected.event.kind]}</strong>
             <span>{statusLabel(selected.event.status)}</span>
           </header>
-          <ExecutionNodeDetail event={selected.event} />
+          <ExecutionNodeDetail
+            event={selected.event}
+            offsetMs={offsetFromStart(selected.event.timestamp, baseMs)}
+          />
           <ExecutionNodeReasoning event={selected.event} />
           {selected.issues.length > 0 && (
             <p className="workflow-execution-warning">

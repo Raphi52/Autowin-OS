@@ -99,9 +99,12 @@ describe('`salvage` peut REELLEMENT trier', () => {
     expect(sandboxForPhase('corrige le bug de rendu', 'salvage')).toBe('danger-full-access')
   })
 
-  it('une tache NON mutante ne gagne aucun droit — l’entree qui falsifie un elargissement', () => {
-    expect(sandboxForPhase('explique-moi comment marche le routage', 'salvage')).toBe('read-only')
-    expect(sandboxForPhase('corrige le bug de rendu', 'scout')).toBe('read-only')
+  it('AUCUNE phase n’est bridee : meme droits partout (demande utilisateur 2026-09-04)', () => {
+    // « tout le monde doit pouvoir tout faire a tout moment » : plus de frontiere par phase.
+    expect(sandboxForPhase('explique-moi comment marche le routage', 'salvage')).toBe(
+      'danger-full-access'
+    )
+    expect(sandboxForPhase('corrige le bug de rendu', 'scout')).toBe('danger-full-access')
   })
 
   it('`kaizen` ecrit, meme si sa demande est formulee comme une lecture', () => {
@@ -110,8 +113,10 @@ describe('`salvage` peut REELLEMENT trier', () => {
     expect(sandboxForPhase('/kaizen audite cette conversation', 'kaizen')).toBe(
       'danger-full-access'
     )
-    // Falsifieur : le droit vient de la PHASE, il ne fuit pas vers les autres.
-    expect(sandboxForPhase('/kaizen audite cette conversation', 'judge')).toBe('read-only')
+    // Le juge aussi : sans shell ni ecriture il ne peut pas verifier ce qu'il note.
+    expect(sandboxForPhase('/kaizen audite cette conversation', 'judge')).toBe(
+      'danger-full-access'
+    )
   })
 
   it('la skill `salvage` charge de vraies instructions', () => {

@@ -63,7 +63,6 @@ import type { AutoCloseReport } from '../main/run-autoclose'
 import type { FabricNodeSummary } from '../main/compute-fabric/control-plane'
 import type { Role, RoleBinding } from '../main/roles'
 import type { WorkflowProfilesFile } from '../main/workflow-profiles'
-import type { WorkflowBenchReport } from '../main/workflow-bench'
 import type { AutowinProfile } from '../main/profile-store'
 import type { ShadowRouteResult } from '../main/shadow-router'
 import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
@@ -284,22 +283,6 @@ const api = {
     ipcRenderer.invoke('git:graph', repoPath),
   checkWorkflowGraph: (graph: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:workflowGraph:check', graph),
-  workflowBenchRun: (
-    objective: string,
-    profileIds: (string | null)[],
-    options?: { mode?: 'comparison' | 'tournament' | 'counterfactual' }
-  ): Promise<WorkflowBenchReport> =>
-    ipcRenderer.invoke('os:workflowBench:run', { objective, profileIds, ...options }),
-  workflowBenchCancel: (): Promise<boolean> => ipcRenderer.invoke('os:workflowBench:cancel'),
-  // La confrontation dure plusieurs runs : sans ce flux, l'attente serait aveugle.
-  onWorkflowBenchProgress: (
-    listener: (p: { done: number; total: number; label: string }) => void
-  ): (() => void) => {
-    const handler = (_e: unknown, p: { done: number; total: number; label: string }): void =>
-      listener(p)
-    ipcRenderer.on('os:workflowBench:progress', handler)
-    return () => ipcRenderer.removeListener('os:workflowBench:progress', handler)
-  },
   roles: (): Promise<Record<Role, RoleBinding>> => ipcRenderer.invoke('os:roles'),
   semanticTimeline: (conversationId: string): Promise<SemanticTemporalProjectionV1> =>
     ipcRenderer.invoke('os:semanticTimeline', conversationId),

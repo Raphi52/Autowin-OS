@@ -168,9 +168,10 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     )
 
     expect(provider.calls.map((call) => call.model).slice(0, 3)).toEqual(['m1', 'm2', 'orch'])
+    // Droits UNIFORMES depuis le 2026-09-04 : aucune phase n'est bridee par rapport a une autre.
     expect(provider.calls.slice(0, 2).map((call) => call.execution?.sandbox)).toEqual([
-      'read-only',
-      'read-only'
+      'danger-full-access',
+      'danger-full-access'
     ])
     const terrainSteps = result.trace.filter((step) => step.execution?.groupId === 'terrain:fanout')
     expect(terrainSteps).toHaveLength(2)

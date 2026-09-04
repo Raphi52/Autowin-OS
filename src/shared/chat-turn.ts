@@ -258,19 +258,29 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
       )
     }
 
-  if (event.kind === 'command')
-    return {
-      ...state,
-      parts: [
-        ...state.parts,
-        {
-          kind: 'action',
-          actionId: event.actionId,
-          name: event.name,
-          ...(event.args === undefined ? {} : { args: sanitizePersistedValue(event.args) })
-        }
-      ]
+  if (event.kind === 'command') {
+    /**
+     * `actionId` est l'IDENTITE de l'action : deux parts ne peuvent pas la partager. Une commande
+     * RE-EMISE (reprise d'un tour dont l'action n'etait pas resolue) doit donc retrouver sa part,
+     * pas en ajouter une seconde — le fil montrait sinon DEUX blocs pour une seule action, l'un
+     * muet et l'autre portant l'issue (capture du 2026-09-04). On garde le PLUS RICHE : l'issue et
+     * les details deja recus survivent, seuls les arguments manquants sont completes.
+     */
+    const existant = state.parts.findIndex(
+      (part) => part.kind === 'action' && part.actionId === event.actionId
+    )
+    const nouvelleAction = {
+      kind: 'action' as const,
+      actionId: event.actionId,
+      name: event.name,
+      ...(event.args === undefined ? {} : { args: sanitizePersistedValue(event.args) })
     }
+    if (existant < 0) return { ...state, parts: [...state.parts, nouvelleAction] }
+    const parts = state.parts.slice()
+    const precedent = parts[existant] as PersistedChatActionPart
+    parts[existant] = { ...nouvelleAction, ...precedent, name: event.name }
+    return { ...state, parts }
+  }
 
   if (event.kind === 'progress') {
     const parts = state.parts.slice()

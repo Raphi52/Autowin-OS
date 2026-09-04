@@ -18,6 +18,16 @@ export interface ConvActivityEntry {
   inputTokens?: number
   outputTokens?: number
   cacheReadTokens?: number
+  /**
+   * ENTREE DU DERNIER APPEL PROVIDER de ce tour — l'OCCUPATION de la fenetre, et non la depense.
+   * `inputTokens` ci-dessus est un CUMUL (toutes les iterations du tour), donc inexploitable pour
+   * mesurer une fenetre : un tour a affiche 10,6 M de cumul sur un modele servi bien en dessous.
+   * ABSENT jusqu'au 2026-09-04 : la jauge de contexte calculait ce nombre a l'ecran sans qu'aucune
+   * ligne ne le garde, donc la fenetre servie ne pouvait etre que DECLAREE, jamais mesuree.
+   */
+  derniereEntree?: number
+  /** Part de `derniereEntree` relue depuis le cache : occupe la fenetre sans etre repayee. */
+  derniereEntreeCache?: number
   costUsd?: number
   /** Stable id of the provider call, when this entry mirrors prompt observability. */
   usageCallId?: string
@@ -84,6 +94,8 @@ export function appendConvActivity(
       inputTokens: entry.inputTokens,
       outputTokens: entry.outputTokens,
       cacheReadTokens: entry.cacheReadTokens,
+      derniereEntree: entry.derniereEntree,
+      derniereEntreeCache: entry.derniereEntreeCache,
       costUsd: entry.costUsd,
       usageCallId: entry.usageCallId,
       turnId: entry.turnId,

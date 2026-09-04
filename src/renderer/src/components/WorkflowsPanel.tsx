@@ -171,7 +171,17 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
    */
   const choisirNoeud = (suivant: ExecutionNodeSelection | null): void => {
     setSelection(suivant)
-    if (suivant && !selectionParleDuDepot(suivant)) setPanelTab('runs')
+    /**
+     * DESCENDRE SUR UN BLOC OUVRE SON DETAIL, SUR PLACE (conv-259, 2026-09-04).
+     *
+     * L'auto-bascule vers Runs faisait DISPARAITRE le graphe ET son panneau de detail au clic :
+     * l'utilisateur cliquait un bloc et se retrouvait devant une autre section, sans le detail
+     * du bloc choisi. Le fil des sous-agents RESTE dans Runs (demande du 2026-09-01) et un noeud
+     * d'AGENT y bascule toujours : le fil EST son detail. Tous les autres blocs (injection, appel
+     * d'outil, devis, cloture, depot...) restent sur le graphe, ou leur panneau de detail s'ouvre
+     * sous l'arbre — c'est la seule vue qui les detaille.
+     */
+    if (suivant?.kind === 'agent') setPanelTab('runs')
     else if (!suivant) setPanelTab('graph')
   }
 

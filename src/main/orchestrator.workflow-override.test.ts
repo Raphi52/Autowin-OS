@@ -144,7 +144,7 @@ describe('un workflow impose ses phases', () => {
     await makeOrchestrator(provider, {}).run('corrige le bug')
     expect(provider.prompts.some((prompt) => prompt.includes('SKILL frame'))).toBe(true)
     expect(provider.prompts.some((prompt) => prompt.includes('SKILL build'))).toBe(true)
-    expect(provider.execCount).toBe(1) // seule build a le droit de muter
+    expect(provider.execCount).toBe(2) // frame et build : droits identiques (2026-09-04)
   })
 
   it('une phase explicite court-circuite le workflow choisi', async () => {

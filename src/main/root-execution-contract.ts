@@ -201,11 +201,11 @@ const PHASES_PIPELINE = new Set([
 /**
  * Ce noeud produit-il un texte plutot qu'une mutation ?
  *
- * Les trois phases d'analyse, PLUS tout noeud SKILL. Un noeud skill s'execute en `read-only`
- * (`sandboxForPhase` ne donne les droits d'ecriture qu'a build et clean) : lui demander une preuve
- * de mutation a la cloture serait une exigence structurellement insatisfaisable — exactement le
- * defaut vecu le 2026-08-18 sur scout, ou un run correct sortait rouge a chaque fois parce qu'on
- * exigeait de lui ce que son propre contrat lui interdit de produire.
+ * Les trois phases d'analyse, PLUS tout noeud SKILL. Leur LIVRABLE est un texte : exiger d'eux une
+ * preuve de mutation a la cloture ferait sortir rouge un run correct — defaut vecu le 2026-08-18
+ * sur scout. Ce classement porte sur ce que la phase DOIT produire, pas sur ses droits : depuis le
+ * 2026-09-04 toutes les phases ont les memes droits que le chat (`sandboxForPhase`), donc une phase
+ * d'analyse PEUT ecrire si la tache l'exige — on ne le lui RECLAME simplement pas.
  *
  * Les huit phases gardent leur classement d'origine : `judge`, `kaizen` et `remake` ne sont PAS
  * ajoutes ici, ce serait un changement de comportement hors sujet.

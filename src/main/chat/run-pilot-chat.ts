@@ -276,6 +276,14 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     let turnPromptIdentity:
       { provider: string; model?: string; reasoningEffort?: string } | undefined
     let turnResolvedModel: string | undefined
+    /**
+     * ENTREE DU DERNIER APPEL PROVIDER — ECRASEE a chaque appel, jamais cumulee : c'est ce que le
+     * modele vient de RECEVOIR, donc l'occupation reelle de sa fenetre. La jauge de l'ecran la
+     * calculait deja (`shared/context-gauge.ts`) mais rien ne la gardait : la fenetre servie ne
+     * pouvait etre que declaree. Journalisee ici, elle devient mesurable a posteriori.
+     */
+    let derniereEntree: number | undefined
+    let derniereEntreeCache: number | undefined
     let activityLabel = 'tour agent'
     let supervisedUsage: ExecutionUsageSnapshot | undefined
     let persistedSupervisedUsage: ExecutionUsageSnapshot | undefined
@@ -296,6 +304,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           turnRuntimeBinding.model,
         reasoningEffort: turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort,
         label: activityLabel,
+        ...(derniereEntree !== undefined ? { derniereEntree } : {}),
+        ...(derniereEntreeCache !== undefined ? { derniereEntreeCache } : {}),
         durationMs: Math.round(performance.now() - turnStartedAtMs),
         text:
           (streamedSpoken || spoken.join('\n') || etiquettesAction.join('\n')).slice(0, 600) ||
@@ -886,6 +896,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             })
             if (coupe) controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : ${tripped.reason}`)
           }
+        }
+        if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
+          derniereEntree = pilotEvent.callUsage.inputTokens
+          derniereEntreeCache = pilotEvent.callUsage.cacheReadTokens
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
           turnSessionId = pilotEvent.sessionId

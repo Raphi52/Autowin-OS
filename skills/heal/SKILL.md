@@ -1,6 +1,6 @@
 ---
 name: heal
-description: Drive the FULL pipeline (scout → frame → terrain → build → clean → judge) against the SICKNESS of a codebase — slowness, bugs, under-optimised and unstructured code — until a vibe-coded project becomes a structured, measured, working one. Unlike `remake`, which spends design hindsight on a FINISHED deliverable, `heal` starts from SYMPTOMS: a measured latency, a reproduced bug, a hot path nobody profiled. Every candidate it retains must carry a FALSIFIABLE symptom (a number, a red test, a trace) before any phase runs — no symptom, no heal. Trigger on `/heal`, "c'est lent", "ça rame", "optimise le projet", "répare le projet", "make it fast", "clean up this vibe-coded mess". Do NOT use to: pick a feature to build (→ `scout`), redesign a screen's look (→ `draft`), audit a finished deliverable (→ `judge`), or improve the kit's own rules (→ `kaizen`). heal SEQUENCES phases, it never re-implements one.
+description: Drive the FULL pipeline (scout → frame → terrain → build → clean → judge) against the SICKNESS of a codebase — slowness, bugs, under-optimised and unstructured code — until a vibe-coded project becomes a structured, measured, working one. Unlike `remake`, which spends design hindsight on a FINISHED deliverable, `heal` starts from SYMPTOMS: a measured latency, a reproduced bug, a hot path nobody profiled. Every candidate it retains must carry a FALSIFIABLE symptom before any phase runs — a number, a red test, a trace, OR, when nothing can be timed, a COUNTED static criterion (O(n2) scan, N+1 query, sync I/O on a hot path) with its `file:line`; no falsifiable symptom, no heal, but an unmeasurable perf defect is still healed (see step 0 bis). Trigger on `/heal`, "c'est lent", "ça rame", "optimise le projet", "répare le projet", "make it fast", "clean up this vibe-coded mess". Do NOT use to: pick a feature to build (→ `scout`), redesign a screen's look (→ `draft`), audit a finished deliverable (→ `judge`), or improve the kit's own rules (→ `kaizen`). heal SEQUENCES phases, it never re-implements one.
 ---
 
 # heal — from vibe-coded to structured, measured, fast
@@ -30,6 +30,41 @@ No optimisation starts without a number that exists BEFORE the change.
 Record every baseline value with its source. **A dated measurement is not the current state** — re-probe
 before using it as a target.
 
+### 0 bis. NO MEASUREMENT AVAILABLE — the static perf path
+
+A perf defect whose cost cannot be TIMED is still a perf defect. The moment step 0 cannot produce a
+number (no profiler on this path, cold code, timing dominated by noise, measurement harness itself
+too expensive) → **do NOT drop the candidate and do NOT stop the heal**: switch it to a STATIC
+criterion, and say so.
+
+A static criterion is COUNTED in the code, not timed at runtime, and it must be falsifiable by
+reading or by a test:
+
+- **complexity** — a nested scan over the same collection (O(n²) where O(n) suffices): count the
+  scans, name the two loops with `file:line`;
+- **repetition** — the same read / query / parse executed N times where 1 suffices (per-item query
+  instead of one batch, file re-read per call, JSON re-parsed per render): count N;
+- **blocking** — synchronous I/O, `readFileSync`, or an `await` in a loop on a path that serves the
+  UI or a request;
+- **waste** — work produced then thrown away (full list built to take the first item, render without
+  memo on a stable input), missing index on a filtered column.
+
+Rules of this path, all mandatory:
+1. **The cause is LOCALISED** (`file:line`) before the fix — a static criterion never licenses a
+   guess. No localisation → the candidate is dropped, exactly as before.
+2. **The done-signal becomes countable, not chronometric**: `3 scans → 1`, `N+1 queries → 1 batch`,
+   `readFileSync in render → cached`. Where possible it is FROZEN by a test (call counter, spy,
+   assertion on the number of queries) so a regression comes back red.
+3. **The gain is reported as `gain non mesuré — cause localisée`**, never as a speed-up in ms. Writing
+   "3× faster" without a measurement is a false green (réflexe 2).
+4. **Behaviour is preserved and PROVEN**: the existing tests of the touched files go red→green or
+   stay green. An optimisation with no behavioural proof is not shipped.
+5. **No static candidate that only makes the code prettier.** If nothing countable changes, it is a
+   `🧱 structure` candidate, not a perf one — rank it as such instead of disguising it.
+
+Mark these candidates `🐌 perf (statique)` in the table so the report never mixes a measured delta
+with a counted one.
+
 ### 1. SCOUT — surface the symptoms
 
 Run `scout` on the target with the heal bar: each candidate MUST carry
@@ -58,7 +93,9 @@ Anything not re-measured is reported as **non vérifié**, never as an improveme
 
 ## Don't
 
-- **Don't optimise without a baseline.** The most common heal failure is speeding up cold code.
+- **Don't optimise without a baseline OR a static criterion.** The most common heal failure is
+  speeding up cold code; the second is abandoning a localised waste because nothing could be timed
+  (see 0 bis). One of the two is required — never neither, never a vibe.
 - **Don't widen a timeout, swallow an error, or loosen an assertion** to make a symptom disappear.
   If a stopgap is genuinely the right call, LABEL it ("rustine temporaire — cause réelle : X") and
   dispatch the real cause.

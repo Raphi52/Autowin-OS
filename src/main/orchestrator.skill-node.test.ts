@@ -98,8 +98,8 @@ describe('nœud portant une skill du disque', () => {
     expect(systeme.indexOf(GARDE_TACHE)).toBeLessThan(systeme.indexOf('SKILL THINK'))
   })
 
-  it('reste en LECTURE SEULE : seules build et clean écrivent', () => {
-    expect(sandboxForPhase('modifie le bouton', 'think')).toBe('read-only')
+  it('a les MEMES droits que toutes les autres phases', () => {
+    expect(sandboxForPhase('modifie le bouton', 'think')).toBe('danger-full-access')
     expect(sandboxForPhase('modifie le bouton', 'build')).toBe('danger-full-access')
   })
 })

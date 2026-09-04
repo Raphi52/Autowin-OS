@@ -11,9 +11,12 @@ description: >-
   X = variante qui CASSE une prémisse (chemin court, phase sautée, outil différent) ; un bras peut
   aussi ne différer QUE par le TEXTE d'une skill ou d'une consigne (même tâche, même modèle,
   formulation réécrite) ; (3) JUGE externe
-  et adversarial qui compare les quatre livrables sur la MÊME grille (qualité d'abord, puis $ et
-  minutes lus dans les journaux, jamais estimés) et rend UN workflow gagnant avec sa preuve, puis
-  l'installe au point qui le déclenche. Déclencher sur `/arena <tâche>`, « quel est le meilleur
+  et adversarial qui compare les quatre livrables sur la MÊME grille des QUATRE dimensions — qualité
+  d'abord, puis coût $, temps, et efficacité (tours et appels d'outils dépensés pour atteindre le
+  critère) —, tous lus dans les journaux et jamais estimés, et rend UN workflow gagnant avec sa
+  preuve, puis l'installe au point qui le déclenche. Déclencher sur `/arena <tâche>`,
+  `/arena /<skill> <cible>` (ex. `/arena /heal autowin os` : c'est alors la SKILL nommée qui est au
+  banc, A = son texte actuel), « quel est le meilleur
   workflow pour X », « teste plusieurs façons de faire X », « A/B teste cette tâche »,
   « optimise la manière dont on fait X », « teste des formulations de cette skill ». N'UTILISE PAS pour : exécuter simplement la tâche (→ `build`),
   analyser le corpus passé sans rien exécuter (→ `rendement`), auditer un livrable unique (→ `judge`),
@@ -34,6 +37,20 @@ Deux artefacts, jamais un seul :
 2. **Le workflow gagnant**, écrit en réflexe (« au moment où X → fais Y »), posé à l'endroit qui le
    déclenche vraiment (consigne de phase, règle de routage, garde-fou, skill), + un `remember`
    `type: lesson` avec les chiffres mesurés.
+
+## Les QUATRE dimensions mesurées (aucune n'est optionnelle)
+Tout banc rend, pour CHAQUE bras, ces quatre-là — dans cet ordre de priorité :
+1. **QUALITÉ** — critère de succès atteint avec preuve, puis défauts / rustines / dette laissée. Un
+   bras qui rate le critère ne gagne pas, même à 0 $.
+2. **COÛT** — `$` LU dans `out-<bras>.json` (`total_cost_usd`), jamais estimé.
+3. **TEMPS** — minutes LUES dans `activity/conv-N.jsonl` (`durationMs`), du départ au livrable.
+4. **EFFICACITÉ (rendement)** — le chemin : nombre de tours, nombre d'appels d'outils, reprises et
+   relances. C'est ce qui distingue deux bras au même prix : `$ ÷ critère atteint` et
+   `tours ÷ critère atteint`. Un bras qui atteint le critère en 3 tours bat un bras qui l'atteint en
+   9 à coût égal, et un bras qui n'y arrive pas a un rendement NUL, pas « bon marché ».
+
+Une dimension non mesurable se marque `non mesuré` dans le tableau — jamais laissée vide, jamais
+remplie d'une estimation.
 
 ## Invariant — l'expérience ne prouve rien si elle n'est pas comparable
 - **Même tâche, même énoncé, mêmes entrées** pour les quatre bras. Un bras qui reformule la tâche
@@ -56,6 +73,18 @@ Deux artefacts, jamais un seul :
   CONTINUER. Rendre la main pour réclamer une cible est un ÉCHEC de la skill : l'utilisateur a déjà
   donné ce qu'il avait. `ask` n'est légitime que si la lecture ne produit AUCUN défaut testable, et
   alors la question propose deux défauts TROUVÉS, jamais « dis-moi lequel ».
+- **`/arena /<skill> <cible>` — la tâche EST une invocation de skill : c'est alors la SKILL qui est
+  au banc, pas le code.** Au moment où l'énoncé du banc commence par un slash (`/arena /heal autowin
+  os`, `/arena /judge ce livrable`) : la skill nommée devient le WORKFLOW testé, la cible reste son
+  entrée identique pour les quatre bras, et les bras se répartissent ainsi — **A** = la skill telle
+  qu'elle est écrite aujourd'hui, intacte · **B** et **C** = deux variantes de SON texte ou de son
+  routage issues du tri de l'étape 2 · **X** = casse-prémisse (faire la cible SANS la skill, ou en
+  sautant l'étape que la skill impose). Le banc devient un banc de formulation → l'étape 2 bis
+  s'applique en entier. Le critère de succès porte alors sur ce que la skill PROMET, transformé en
+  vérification exécutable sur la sortie du bras (`check.mjs` qui ouvre `out-<bras>.json` et le RUN du
+  bras : sections obligatoires présentes, chiffres présents et non estimés, cause localisée en
+  `file:line`, aucune dimension laissée vide) — pas sur l'impression de qualité du texte rendu. Ne
+  demande JAMAIS de reformuler l'énoncé dans ce cas : `/arena /heal autowin os` est un banc complet.
 - Reformuler la tâche en **critère de succès vérifiable** (le test, la commande, la capture qui dira
   « livré »). Sans lui, il n'y a pas de gagnant possible → le fabriquer, ne pas le demander.
 - **CRITÈRE CONSTATÉ ROUGE AVANT LE LANCEMENT — sinon le banc est REFUSÉ.** Le critère s'EXÉCUTE sur
@@ -162,7 +191,8 @@ dimension ne peut PAS gagner sur les suivantes :
 1. **Le critère de succès est-il atteint, avec preuve ?** (oui/non, jamais « presque »)
 2. **Qualité du livrable** (défauts avec preuve, rustines, dette laissée)
 3. **Coût $ mesuré**
-4. **Durée / tours mesurés**
+4. **Durée / tours mesurés**, et **efficacité** : tours et appels d'outils dépensés POUR atteindre le
+   critère, reprises comprises (un bras qui y arrive en 3 tours bat un bras à 9 tours au même prix)
 5. **Reproductibilité** — le workflow marche-t-il hors de cette tâche, ou a-t-il gagné par chance ?
 
 Le juge rend : **un gagnant nommé**, l'écart chiffré au témoin A, et les défauts renvoyés au
@@ -231,12 +261,12 @@ mécanisables ; ils restent au juge.
 
 **Banc** : tâche · critère de succès · baseline (ou « aucune, A la fabrique »).
 
-| bras | workflow | critère atteint | $ mesuré | min | tours | défauts | verdict |
-|---|---|---|---|---|---|---|---|
-| A (témoin) | … | … | … | … | … | … | … |
-| B | … | … | … | … | … | … | … |
-| C | … | … | … | … | … | … | … |
-| X (casse-prémisse) | … | … | … | … | … | … | … |
+| bras | workflow | critère atteint | $ mesuré | min | tours | rendement ($/tours pour le critère) | défauts | verdict |
+|---|---|---|---|---|---|---|---|---|
+| A (témoin) | … | … | … | … | … | … | … | … |
+| B | … | … | … | … | … | … | … | … |
+| C | … | … | … | … | … | … | … | … |
+| X (casse-prémisse) | … | … | … | … | … | … | … | … |
 
 **Gagnant** : bras + workflow en une phrase · **Δ contre A** : $ et minutes · **Preuve** : l'artefact
 et le journal cités · **Installé où** : le fichier/point de déclenchement · **Limite** : ce qui reste

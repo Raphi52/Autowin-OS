@@ -41,7 +41,6 @@ import type { AutoCloseReport } from '../main/run-autoclose'
 import type { FabricNodeSummary } from '../main/compute-fabric/control-plane'
 import type { Role, RoleBinding } from '../main/roles'
 import type { WorkflowProfilesFile } from '../main/workflow-profiles'
-import type { WorkflowBenchReport } from '../main/workflow-bench'
 import type { AutowinProfile } from '../main/profile-store'
 import type { ShadowRouteResult } from '../main/shadow-router'
 import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
@@ -255,16 +254,6 @@ interface ChatApi {
     defects: { target?: string; message: string }[]
     worstCaseNodeExecutions: number | null
   }>
-  /** Confrontation : un même objectif joué sous plusieurs workflows, puis comparé. */
-  workflowBenchRun: (
-    objective: string,
-    profileIds: (string | null)[],
-    options?: { mode?: 'comparison' | 'tournament' | 'counterfactual' }
-  ) => Promise<WorkflowBenchReport>
-  workflowBenchCancel: () => Promise<boolean>
-  onWorkflowBenchProgress: (
-    listener: (p: { done: number; total: number; label: string }) => void
-  ) => () => void
   roles: () => Promise<Record<Role, RoleBinding>>
   semanticTimeline: (conversationId: string) => Promise<SemanticTemporalProjectionV1>
   setRole: (

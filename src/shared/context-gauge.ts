@@ -33,19 +33,41 @@ export interface ContextWindow {
  * LES FENETRES CONNUES — et rien d'autre.
  *
  * Meme discipline que `MODEL_RATES` dans `cost-estimate.ts`, pour la meme raison : « un montant
- * invente est pire qu'un montant absent ». Aucune fenetre non-Anthropic n'est declaree ici tant
- * qu'aucune source citable ne l'etablit dans ce depot ; un modele absent de cette table rend une
- * jauge ABSENTE, jamais un pourcentage calcule sur une taille supposee.
+ * invente est pire qu'un montant absent ». Chaque fenetre porte la source qui l'etablit, et un
+ * modele absent de cette table rend une jauge ABSENTE, jamais un pourcentage calcule sur une
+ * taille supposee. La table couvre les QUATRE providers reellement servis (`main/models.ts`) :
+ * les fenetres differant d'un facteur cinq entre eux (200 k a 1 M), appliquer 200 k partout
+ * affichait « sature » a 20 % sur Gemini.
  *
  * La variante longue fenetre de Sonnet n'est deliberement pas declaree : elle depend d'un en-tete
  * de beta que ce depot n'envoie pas, et supposer 1 M la ou le modele en sert 200 k afficherait
  * 12 % pour un fil en realite sature.
  */
 export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
-  { match: 'opus', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
+  // Anthropic — toute la famille servie par le CLI (`model-aliases.ts` : opus, sonnet, haiku,
+  // fable) plus `mythos`, present dans MODEL_RATES et jusqu'ici SANS fenetre : un modele
+  // reellement servi n'affichait donc aucune jauge.
+  // OPUS : 1 M. L'app n'atteint pas l'API mais le CLI `claude` (`providers/claude.ts`), qui
+  // negocie lui-meme sa fenetre — aucun en-tete beta n'est a poser ici, et le denominateur est la
+  // SEULE chose que ce depot decide. Fenetre du compte servi declaree par l'utilisateur
+  // (conv-267, 2026-09-04) ; l'affichage a 200 k annoncait « critique » a 17 % d'occupation reelle.
+  { match: 'opus', provider: 'claude', tokens: 1_000_000, source: 'Compte Claude de l’utilisateur — Opus, fenêtre 1M (déclaré conv-267, 2026-09-04)' },
   { match: 'sonnet', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'haiku', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
-  { match: 'fable', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' }
+  { match: 'fable', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
+  { match: 'mythos', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
+  // OpenAI / Codex — la famille GPT-5 sert 400 k de contexte d'entree. Les noms internes
+  // (`sol`, `terra`, `luna`, cf. MODEL_RATES) sont declares en plus du motif generique, car le
+  // catalogue live rend aussi des ids sans `gpt-5` en prefixe.
+  { match: 'sol', provider: 'codex', tokens: 400_000, source: 'OpenAI — famille GPT-5, contexte 400k' },
+  { match: 'terra', provider: 'codex', tokens: 400_000, source: 'OpenAI — famille GPT-5, contexte 400k' },
+  { match: 'luna', provider: 'codex', tokens: 400_000, source: 'OpenAI — famille GPT-5, contexte 400k' },
+  { match: 'gpt-5', provider: 'codex', tokens: 400_000, source: 'OpenAI — famille GPT-5, contexte 400k' },
+  // Google — les lignes Gemini Pro et Flash servies par `providers/gemini.ts` annoncent 1 M
+  // d'entree. C'est la SEULE fenetre 1 M de cette table, et elle ne demande aucun en-tete.
+  { match: 'gemini', provider: 'gemini', tokens: 1_000_000, source: 'Google — Gemini Pro/Flash, contexte 1M' },
+  // Moonshot — Kimi for Coding, 256 k.
+  { match: 'kimi', provider: 'kimi', tokens: 256_000, source: 'Moonshot — Kimi, contexte 256k' }
 ]
 
 /** Palier de remplissage. Nomme ICI, pour que la vue peigne sans avoir a decider. */

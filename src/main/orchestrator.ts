@@ -1011,28 +1011,25 @@ function porterVersPhaseSuivante(texte: string): string {
 const JUDGE_PHASE_CAP = 6000
 
 /**
- * Les droits suivent la RESPONSABILITE de la phase, pas seulement le verbe de la demande.
+ * AUCUNE DIFFERENCE DE DROITS ENTRE L'ORCHESTRATEUR ET LES SOUS-AGENTS.
  *
- * Une demande de mutation traverse aussi scout/frame/terrain : leur donner les droits de la tache
- * globale permettait a scout d'implementer, builder et tester avant la phase build. Seules BUILD et
- * CLEAN produisent ou nettoient le livrable ; toutes les autres phases observent et decident.
+ * Demande utilisateur du 2026-09-04 : « je ne veux aucune difference d'autorisation entre
+ * l'orchestrateur et les sous agents, tout le monde doit pouvoir tout faire a tout moment ».
+ *
+ * Avant, les droits suivaient la phase : seules build/clean/salvage/kaizen ecrivaient, toutes les
+ * autres partaient en `read-only`. Consequence vecue : une phase amont qui trouvait la cause devait
+ * REDIGER ce qu'elle aurait fait, et le pre-gate reclamait parfois une preuve de mutation a une
+ * phase a qui l'ecriture etait interdite. Le tour de chat, lui, ecrit deja (`providers/claude.ts`).
+ *
+ * Toutes les phases recoivent donc les MEMES droits que le chat. La seule frontiere qui reste
+ * fermee est le fond autonome (`watchdog-read-only`) : personne ne le declenche, son contexte
+ * d'evenement n'est pas fiable.
  */
 export function sandboxForPhase(
-  task: string,
-  phase: NodePhase
+  _task: string,
+  _phase: NodePhase
 ): NonNullable<SendOptions['execution']>['sandbox'] {
-  // `salvage` trie le travail (fusionner / jeter / laisser) : en lecture seule il REDIGERAIT ce
-  // qu il ferait, exactement le theatre que ce depot proscrit. Il ecrit donc, aux memes conditions
-  // que build/clean — une tache de MUTATION, et rien d autre.
-  // `kaizen` APPLIQUE ses propres editions : sa consigne de phase le lui ordonne (`phase-briefs.ts`
-  // : « les editions elles-memes, APPLIQUEES... kaizen n'attend aucun accord humain ») et le contrat
-  // racine le classe deja comme phase qui ecrit (`root-execution-contract.ts`). En lecture seule il
-  // ne pouvait que REDIGER ce qu'il ferait. Ses droits ne dependent pas du verbe de la demande : une
-  // retrospective est TOUJOURS formulee comme une lecture, alors que son livrable est une correction.
-  if (phase === 'kaizen') return 'danger-full-access'
-  return isMutationTask(task) && (phase === 'build' || phase === 'clean' || phase === 'salvage')
-    ? 'danger-full-access'
-    : 'read-only'
+  return 'danger-full-access'
 }
 
 /**

@@ -844,3 +844,55 @@
   border: 1px dashed rgba(140, 190, 230, 0.4);
   color: #9fc3de;
 }
+
+/* BOUTON D ENVOI : APPARENCE (conv-257, 2026-09-04).
+
+   Verdict utilisateur : un bouton envoyer meilleur que le disque plat actuel. Perimetre borne
+   par lui a l APPARENCE seule : taille, forme et position restent celles de ChatView.css.
+
+   POSE ICI, et pas dans ChatView.css : la premiere version y avait ete ecrite et n avait AUCUN
+   effet a l ecran. Cause mesuree par observation puis lecture -- ce fichier repeint deja
+   .composer-send a specificite egale et il est charge APRES, donc le theme gagnait la cascade.
+
+   Les etats PORTEURS DE SENS sont exclus et restent intacts : is-resume (vert, Reprendre) et
+   is-stop (rouge, Arreter). Seul l envoi ordinaire est repeint. */
+.cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
+  border: 1px solid rgba(255, 138, 205, 0.55);
+  border-top-color: rgba(255, 214, 236, 0.85);
+  border-bottom-color: rgba(74, 8, 46, 0.85);
+  background: linear-gradient(180deg, rgba(243, 92, 180, 0.97), rgba(168, 26, 110, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32);
+  color: #ffffff;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 120ms ease,
+    transform 90ms ease;
+}
+.cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
+  border-color: rgba(255, 197, 228, 0.9);
+  border-top-color: rgba(255, 235, 246, 0.95);
+  border-bottom-color: rgba(96, 12, 60, 0.85);
+  background: linear-gradient(180deg, rgba(255, 132, 205, 0.99), rgba(203, 42, 137, 0.99));
+}
+.cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled):active {
+  transform: scale(0.94);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.42),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.14);
+  border-top-color: rgba(120, 16, 74, 0.9);
+  border-bottom-color: rgba(255, 190, 224, 0.6);
+}
+/* ETEINT quand le champ est vide. opacity 1 neutralise le delavage de .btn:disabled, qui gardait
+   la couleur en simplement plus pale : on veut une ABSENCE de couleur, pour que l allumage
+   signifie que le message peut partir au lieu d etre un ornement permanent. */
+.cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(221, 227, 238, 0.42);
+  border-top-color: rgba(255, 255, 255, 0.26);
+  border-bottom-color: rgba(0, 0, 0, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+  opacity: 1;
+}

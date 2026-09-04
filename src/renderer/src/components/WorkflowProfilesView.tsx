@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { WorkflowBenchPanel } from './WorkflowBenchPanel'
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
 import { profileSummary, promptEffectif } from './workflow-profile-summary'
 import { rolesEffectifs, trackNodes, workflowIssues } from './workflow-executability'
@@ -404,8 +403,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         <div>
           <h2>Workflows</h2>
           <p className="workflow-profiles-sub">
-            Une façon de travailler nommée — modèles, efforts, phases, consignes. Sélectionne-la
-            pour comparer plus tard le même objectif sous plusieurs workflows.
+            Une façon de travailler nommée — modèles, efforts, phases, consignes.
           </p>
         </div>
         <div className="workflow-profiles-actions">
@@ -697,8 +695,6 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
           })}
         </ul>
       )}
-
-      <WorkflowBenchPanel profiles={file.profiles} />
     </section>
   )
 }

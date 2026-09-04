@@ -77,6 +77,7 @@ import { projectContextBlock } from './context-files'
 import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
 import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
+import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
@@ -224,7 +225,6 @@ import { ModelCatalogRefresher } from './model-refresh'
 import { loadAgentTopology, saveAgentTopology, type IncidentTopologie } from './topology-disk'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
-  assertRuntimeBindingAvailable,
   assertRuntimeTopologyAvailable,
   runtimeRoleBinding,
   runtimeRoleSlots,
@@ -279,11 +279,7 @@ import {
   WorkflowRefusalMailbox,
   type WorkflowProfilesFile
 } from './workflow-profiles'
-import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
-import {
-  captureRetainedWorkspaceState,
-  captureWorkflowBenchCheckpoint
-} from './workflow-bench-checkpoint'
+import { overrideFor } from './workflow-run-override'
 import {
   DEFAULT_BRAIN_GRACE_MS,
   decidePreflightAnnouncement,
@@ -887,6 +883,9 @@ const { createWindow, setupTray, openQuestionWindow, rendererLocation, questionW
 const diagnosticCapabilities = new DiagnosticCapabilities()
 /** Boucle de re-probe du diagnostic de démarrage (#4) — arrêtée à la fermeture pour ne pas fuir de timer. */
 let preflightWatchHandle: { stop: () => void } | null = null
+// Surveillance du brain_server APRÈS le démarrage : la boucle de preflight est bornée, celle-ci dure
+// toute la session et relance le service s'il meurt (conv-270, 2026-09-04).
+let brainSupervisionHandle: { stop: () => void } | null = null
 
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
@@ -1994,58 +1993,6 @@ Le fil reprend ensuite normalement.`
       defects,
       worstCaseNodeExecutions: defects.length ? null : worstCaseNodeExecutions(graph)
     }
-  })
-  // Confronter plusieurs workflows sur un même objectif. La logique vit dans son module : ce point
-  // d'entrée n'a qu'à la brancher.
-  registerWorkflowBenchIpc({
-    ipcMain,
-    assertTrusted: (event, label) => assertTrustedRendererSender(event, label),
-    assertBindingAvailable: (binding) => assertRuntimeBindingAvailable(binding, agentModels),
-    currentRoles: () => os.roles.all(),
-    captureCheckpoint: (objective) =>
-      captureWorkflowBenchCheckpoint(os.executionWorkspace, objective),
-    captureWorkspaceState: captureRetainedWorkspaceState,
-    // Le juge de QUALITE. Sans lui, le banc departageait sur le PRIX en laissant croire qu'il
-    // departageait la valeur — mesure du 2026-08-06 : un workflow recommande parce qu'il coutait
-    // 0,65 $ de moins, sans que rien n'ait lu ce qu'il produisait. La comparaison qu'il recoit est
-    // AVEUGLE (livrables etiquetes A/B, aucun nom de workflow).
-    judgeQuality: async (prompt) => {
-      const binding = os.roles.all().judge ?? os.roles.all().orchestrator
-      if (!binding?.provider) return ''
-      const res = await os.registry.send(binding.provider, [{ role: 'user', content: prompt }], {
-        model: binding.model,
-        reasoningEffort: 'low'
-      })
-      return res.text ?? ''
-    },
-    runOrchestration: (
-      objective,
-      bindingOverride,
-      signal,
-      workflowOverride,
-      publication,
-      sourceSnapshot
-    ) =>
-      os.runTask(
-        objective,
-        undefined,
-        undefined,
-        undefined,
-        signal,
-        '',
-        [],
-        undefined,
-        bindingOverride,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        [],
-        undefined,
-        { workflowOverride, publication, sourceSnapshot }
-      )
   })
   /*
    * ETAT DU MOTEUR — le pied de page doit pouvoir dire que le code qui tourne n'est plus celui des
@@ -3776,6 +3723,14 @@ app.whenReady().then(async () => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
   }, preflightProviderOptions())
 
+  // Le preflight ne couvre que le DÉMARRAGE. Ce battement, lui, dure toute la session : si le
+  // brain_server meurt, Autowin le relance lui-même — sans fenêtre — au lieu d'attendre un
+  // démarrage à la main dans une console.
+  brainSupervisionHandle = superviseBrainServer({
+    pingBrain: () => appPreflightProbes().pingBrain(),
+    onEvent: (message) => console.log(message)
+  })
+
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
@@ -3797,6 +3752,8 @@ app.on('before-quit', (event) => {
   flushAllTurnJournals()
   preflightWatchHandle?.stop() // couper la boucle de re-probe démarrage (pas de timer résiduel)
   preflightWatchHandle = null
+  brainSupervisionHandle?.stop() // couper le battement de surveillance du brain_server
+  brainSupervisionHandle = null
   if (!otelQuitDrainStarted && otelGenAiExporter.stats().queued > 0) {
     event.preventDefault()
     otelQuitDrainStarted = true

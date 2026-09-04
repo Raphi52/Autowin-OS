@@ -304,7 +304,7 @@ describe('#3 session-resume chaîné', () => {
 })
 
 describe('discipline des phases et continuite du worktree', () => {
-  it('borne les droits a la responsabilite de chaque phase', async () => {
+  it('donne les MEMES droits a toutes les phases', async () => {
     const provider = new RecordingProvider()
     const orch = makeOrchestrator(provider, {
       classifyPhases: () => ['scout', 'frame', 'terrain', 'build', 'clean']
@@ -312,16 +312,18 @@ describe('discipline des phases et continuite du worktree', () => {
 
     await orch.run('ajoute une fonctionnalite')
 
+    // Demande utilisateur du 2026-09-04 : plus aucune difference d'autorisation entre
+    // l'orchestrateur et les sous-agents. Falsifieur de l'ancien bornage par phase.
     expect(provider.calls.slice(0, 5).map((call) => call.execution?.sandbox)).toEqual([
-      'read-only',
-      'read-only',
-      'read-only',
+      'danger-full-access',
+      'danger-full-access',
+      'danger-full-access',
       'danger-full-access',
       'danger-full-access'
     ])
   })
 
-  it('ancre chaque phase sur le worktree et ne reprend pas une session a travers un changement de droits', async () => {
+  it('ancre chaque phase sur le worktree et chaine la session (droits desormais identiques)', async () => {
     const provider = new RecordingProvider()
     const worktree = 'C:\\ws\\.worktrees\\agent-1'
     const orch = makeOrchestrator(provider, {
@@ -341,8 +343,8 @@ describe('discipline des phases et continuite du worktree', () => {
       expect(call.system).toContain('agent-1')
     }
     expect(phaseCalls[1].resumeSessionId).toBe('sess-1')
-    expect(phaseCalls[2].resumeSessionId).toBeUndefined()
-    expect(provider.userMessages[2]).toContain('TÂCHE:')
+    // Les droits ne changent plus entre phases : la session n'est plus coupee au passage a build.
+    expect(phaseCalls[2].resumeSessionId).toBe('sess-2')
   })
 })
 

@@ -160,6 +160,33 @@ describe('WorkflowExecutionGraph', () => {
     return container
   }
 
+  /**
+   * AUCUNE « duree inconnue » DANS LE GRAPHE (conv-259). Un marqueur ponctuel (injection, appel
+   * d'outil) n'a pas de duree mesuree : la trace porte quand meme son horodatage, donc le bloc dit
+   * sa POSITION dans la demande. Test discriminant : le fallback ne doit pas etre un texte
+   * d'ignorance, et il ne doit pas non plus inventer une duree de 0 ms.
+   */
+  it('remplace toute duree manquante par la position de l evenement, jamais par « inconnue »', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('agent', 1, {
+        type: 'handoff',
+        metrics: undefined,
+        execution: { phase: 'build', agentId: 'builder', taskId: 'task-build' }
+      }),
+      trace('outil', 2, {
+        parentId: 'agent',
+        metrics: undefined
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+
+    expect(view.textContent).not.toContain('inconnue')
+    // Le 2e evenement est logue une seconde apres le 1er : sa position est un fait, pas un 0.
+    expect(view.textContent).toContain('a +1 s')
+  })
+
   it('met le nom exact de la skill sur la card et réserve provider/modèle au détail', async () => {
     const causalTrace = vi.fn().mockResolvedValue([
       trace('old-agent', 1, {

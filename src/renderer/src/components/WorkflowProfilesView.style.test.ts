@@ -92,8 +92,7 @@ describe('vue Workflows — le style tient ses promesses', () => {
 
   it.each([
     ['WorkflowProfilesView.css', '.workflow-profile'],
-    ['WorkflowProfilesView.css', '.workflow-profiles-head'],
-    ['WorkflowBenchPanel.css', '.workflow-bench']
+    ['WorkflowProfilesView.css', '.workflow-profiles-head']
   ])('%s › %s pose une surface, au lieu de flotter sur le fond cosmique', (fichier, selecteur) => {
     // Défaut vécu : titre et panneaux posés À NU sur `autowin-galaxy-bg-hq.png`. Lisible là où
     // l'image est sombre, illisible dès qu'une nébuleuse passe derrière — donc un défaut qui ne se
