@@ -149,6 +149,54 @@ export interface TurnMessageBlock {
  * `buildTurnMessages` en DÉRIVE le texte : une seule composition, donc pas de seconde vérité qui
  * dériverait de la première à la prochaine évolution du format.
  */
+/**
+ * LE BESOIN INITIAL DE LA CONVERSATION, RAPPELE A CHAQUE TOUR.
+ *
+ * DEFAUT MESURE le 2026-09-04 (conv-257). Demande d'ouverture : « un bouton envoyer meilleur que
+ * cette merde ». Trois tours plus tard, l'agent corrigeait le routage des slash mal tapes et
+ * cloturait sur « Recommande : lance /salvage » — sujet sans AUCUN rapport. Verdict de
+ * l'utilisateur : « tu as oublie mon besoin initial ». La tache avait ete REMPLACEE, pas oubliee.
+ *
+ * Le garde-fou existait deja, mais ne pouvait pas mordre ici, pour trois raisons verifiees par
+ * lecture : `conversation-task-contract.ts` ne se nourrit que des `RUN.md` (donc des tours
+ * ORCHESTRES — un tour de chat n'en ecrit aucun) ; son unique consommateur est le prompt du JUGE
+ * (`orchestrator.ts:4806`), jamais le chat ; et il exige un ancrage `chemin:ligne` qu'une demande
+ * en langage naturel ne porte presque jamais (31 conversations sur 1086).
+ *
+ * Le chat — le chemin que l'utilisateur emprunte le plus — n'avait donc AUCUN rappel de sa propre
+ * demande d'ouverture. Pire dans le cas vecu : la session CLI etant reprise, seul le DERNIER
+ * message repart, et le premier tour du fil sort du contexte. D'ou l'injection dans les DEUX
+ * branches ci-dessous.
+ *
+ * INFORME, NE BLOQUE PAS — c'est la leçon deja payee et ecrite dans `conversation-task-contract.ts`
+ * (l.15-17) : une premiere version heuristique et bloquante avait produit onze faux blocages sur du
+ * travail legitime. Une conversation a parfaitement le droit de changer de sujet ; ce qu'on refuse,
+ * c'est qu'elle en change SANS LE DIRE.
+ */
+const LONGUEUR_BESOIN_RAPPELE = 300
+
+export function besoinInitialDuFil(
+  history: TurnMessageParts['history']
+): string {
+  const demandes = history.filter((m) => m.role === 'user')
+  // Un seul tour : le besoin initial EST le message courant, le rappeler serait du bruit.
+  if (demandes.length < 2) return ''
+  const premier = (demandes[0]?.content ?? '').trim()
+  if (!premier) return ''
+  const borne =
+    premier.length <= LONGUEUR_BESOIN_RAPPELE
+      ? premier
+      : `${premier.slice(0, LONGUEUR_BESOIN_RAPPELE)}…`
+  return (
+    `BESOIN INITIAL DE CETTE CONVERSATION (rappel injecte par l'app, l'utilisateur ne l'a pas ` +
+    `re-tape) : « ${borne} »\n` +
+    `Ce rappel INFORME, il n'ordonne rien : un fil a le droit de changer de sujet. Mais AVANT de ` +
+    `clore, verifie que ce que tu livres et ce que tu recommandes se rattachent encore a ce ` +
+    `besoin. Si tu t'en eloignes, DIS-LE explicitement dans ta reponse — un travail de bonne ` +
+    `qualite sur autre chose ne vaut pas la demande.`
+  )
+}
+
 export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBlock[] {
   const nonVu = parts.compteRenduNonVu?.trim()
   const nommes: TurnMessageBlock[] = parts.resumeSessionId
