@@ -19,7 +19,6 @@
  */
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import { amitelBrainOrigin } from './amitel-paths'
 import { brainServiceToken } from './brain-retrieval'
