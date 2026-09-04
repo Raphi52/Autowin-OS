@@ -1365,6 +1365,29 @@ export class WorktreeManager {
    */
   private static readonly ARCHIVE_SALVAGE = /^salvage-/
 
+  /*
+   * UNE EDITION REFUSEE PAR LE TEST N'EST PAS DU TRAVAIL EN ATTENTE DE PUBLICATION.
+   *
+   * Meme raisonnement pour `command-verify-*` (la copie ne fait que REJOUER les tests, elle n'ecrit
+   * rien) : sur cette installation, 19 copies `command-edit-*` et 6 `command-verify-*` sur 26.
+   *
+   * `edit_file` ouvre une copie isolee nommee `command-edit-<...>`, y pose UN remplacement, lance la
+   * verification, et ne publie QUE si elle passe. Une copie `command-edit-*` qui survit est donc, par
+   * construction, une edition que le test a REFUSEE : la fusionner remettrait du rouge dans la base.
+   * Le recensement la comptait pourtant comme « travail termine jamais publie », au meme titre qu'un
+   * run entier.
+   *
+   * MESURE sur cette installation le 2026-09-04 : 30 branches de secours, 23 sauvetages, et surtout
+   * 134 marqueurs `refs/autowin/trie/` — 134 tris deja faits a la main pour une liste qui repart a
+   * chaque edition. Le bandeau ne pouvait pas se vider, puisque l'outil qui ecrit le code alimentait
+   * lui-meme la file qu'il demandait de trier.
+   *
+   * Rien n'est detruit : branche de secours, sauvetage et copie restent en place, `salvage` peut
+   * toujours les ouvrir nommement. Ils ne CRIENT simplement plus. Les travaux de run (`run-*`), eux,
+   * restent recenses : ce sont les seuls qui portent du travail acheve non publie.
+   */
+  private static readonly EDITION_OUTIL = /^command-(edit|verify|graphify)-/
+
   /**
    * CE BUREAU PRECIS PEUT-IL PORTER DU TRAVAIL ? — question a UN bureau, prix d'UN bureau.
    *
@@ -1502,7 +1525,7 @@ export class WorktreeManager {
           ),
           ...salis
         ])
-      ]
+      ].filter((agentId) => !WorktreeManager.EDITION_OUTIL.test(agentId))
     } catch {
       // Un depot qui ne repond pas ne prouve AUCUNE perte : on n'annonce rien plutot que d'alarmer.
       return []

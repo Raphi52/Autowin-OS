@@ -830,6 +830,34 @@ export class RunWorktreeCoordinator {
         if (!options.retainGreen && tracked.files.length === 0) {
           this.libererLaCopieEnConflit(tracked.runId)
         }
+        /*
+         * UN RUN QUI FINIT ROUGE SE TRIE LUI-MEME, A CHAUD.
+         *
+         * Demande utilisateur du 2026-09-04 (« je passe ma vie a /salvage »), mesure a l'appui : 30
+         * branches de secours, 23 sauvetages, et 134 marqueurs `refs/autowin/trie/` — 134 tris deja
+         * faits A LA MAIN pour une file qui repart a chaque run. Une file ne se vide jamais par des
+         * tris manuels quand elle se remplit plus vite qu'on ne trie.
+         *
+         * Le seul instant ou le tri est GRATUIT est celui-ci : le run vient de finir, il y a UN
+         * travail, et sa conclusion est connue. `red` / `not-requested` veut dire que le contrat de
+         * cloture a REFUSE ce travail — le publier remettrait du rouge dans la base. Le remonter a
+         * l'humain trois jours plus tard, en tas, ne change pas ce verdict : il lui fait seulement
+         * payer une relecture.
+         *
+         * RIEN N'EST DETRUIT, et c'est ce qui rend le geste sur : `marquerTravailTrie` POSE une
+         * annotation a cote du SHA (ou de l'empreinte, pour un bureau sali). La copie, la branche de
+         * secours et le sauvetage restent intacts et ouvrables nommement ; `oublierTravailTrie` rend
+         * le travail a la file d'un seul geste. Et le marquage porte le SHA JUGE : un travail qui
+         * REPREND ressort de lui-meme — sinon on remplacerait un bandeau qui crie par un bandeau qui
+         * se tait, ce qui est pire.
+         *
+         * `retainGreen` (un tournoi conserve sa solution) est exclu : ce travail-la est vert et
+         * attend une vraie decision. Pose sur les DEUX jumeaux (`end` et `endAsync`), comme le
+         * commentaire ci-dessus l'exige.
+         */
+        if (!options.retainGreen && tracked.files.length > 0) {
+          this.manager.marquerTravailTrie?.(tracked.runId)
+        }
       }
       /*
        * ON REINVALIDE A LA SORTIE, pas seulement a l'entree.
@@ -967,6 +995,34 @@ export class RunWorktreeCoordinator {
          */
         if (!options.retainGreen && tracked.files.length === 0) {
           this.libererLaCopieEnConflit(tracked.runId)
+        }
+        /*
+         * UN RUN QUI FINIT ROUGE SE TRIE LUI-MEME, A CHAUD.
+         *
+         * Demande utilisateur du 2026-09-04 (« je passe ma vie a /salvage »), mesure a l'appui : 30
+         * branches de secours, 23 sauvetages, et 134 marqueurs `refs/autowin/trie/` — 134 tris deja
+         * faits A LA MAIN pour une file qui repart a chaque run. Une file ne se vide jamais par des
+         * tris manuels quand elle se remplit plus vite qu'on ne trie.
+         *
+         * Le seul instant ou le tri est GRATUIT est celui-ci : le run vient de finir, il y a UN
+         * travail, et sa conclusion est connue. `red` / `not-requested` veut dire que le contrat de
+         * cloture a REFUSE ce travail — le publier remettrait du rouge dans la base. Le remonter a
+         * l'humain trois jours plus tard, en tas, ne change pas ce verdict : il lui fait seulement
+         * payer une relecture.
+         *
+         * RIEN N'EST DETRUIT, et c'est ce qui rend le geste sur : `marquerTravailTrie` POSE une
+         * annotation a cote du SHA (ou de l'empreinte, pour un bureau sali). La copie, la branche de
+         * secours et le sauvetage restent intacts et ouvrables nommement ; `oublierTravailTrie` rend
+         * le travail a la file d'un seul geste. Et le marquage porte le SHA JUGE : un travail qui
+         * REPREND ressort de lui-meme — sinon on remplacerait un bandeau qui crie par un bandeau qui
+         * se tait, ce qui est pire.
+         *
+         * `retainGreen` (un tournoi conserve sa solution) est exclu : ce travail-la est vert et
+         * attend une vraie decision. Pose sur les DEUX jumeaux (`end` et `endAsync`), comme le
+         * commentaire ci-dessus l'exige.
+         */
+        if (!options.retainGreen && tracked.files.length > 0) {
+          this.manager.marquerTravailTrie?.(tracked.runId)
         }
       }
       /*

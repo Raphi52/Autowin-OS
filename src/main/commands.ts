@@ -179,7 +179,11 @@ import type {
   TicketUpdateRequest
 } from './ticket-providers/provider-contract'
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
-import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
+import {
+  buildAutowinKaizenTask,
+  collectAutowinKaizenEvidence,
+  PLAFONDS_AMPLES
+} from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import {
   persistOrchestrationPhaseStart,
@@ -1733,6 +1737,35 @@ export class AppCommandBus {
     })
   }
 
+  /*
+   * LA CONSIGNE SE DIT UNE FOIS PAR TRAVAIL, PAS A CHAQUE TOUR.
+   *
+   * Defaut vecu le 2026-09-04 (« je passe ma vie a /salvage »). Ce champ etait pose des que la file
+   * n'etait pas vide, donc REPETE a chaque tour, dans chaque conversation, tant que l'utilisateur
+   * n'avait pas tout trie. Ce n'etait meme plus lui qui decidait d'ecrire `/salvage` : l'application
+   * le lui remettait sous le nez indefiniment. Une consigne qui revient sans fin n'est plus une
+   * consigne, c'est un bruit de fond — et on finit par la lire en diagonale, ce que le commentaire
+   * d'origine redoutait deja pour une regle permanente.
+   *
+   * La consigne parle donc au moment ou elle APPREND quelque chose : un travail JAMAIS annonce. Un
+   * travail deja presente et laisse de cote est une decision prise, on ne la redemande pas. Un
+   * travail NOUVEAU rouvre la bouche, pour lui et pour ceux qui l'accompagnent — l'apercu reste
+   * complet, car trier un travail sans voir ses voisins est ce qui produisait les balayages
+   * partiels.
+   *
+   * La memoire est volontairement EN MEMOIRE : au redemarrage, l'application redit une fois ce qui
+   * reste. Se taire pour toujours serait le defaut inverse, et le pire des deux.
+   */
+  private readonly travauxDejaAnnonces = new Set<string>()
+
+  private travauxNonAnnonces(
+    travaux: Array<{ agentId: string; date: string; fichiers: string[] }>
+  ): Array<{ agentId: string; date: string; fichiers: string[] }> {
+    const nouveaux = travaux.filter((travail) => !this.travauxDejaAnnonces.has(travail.agentId))
+    for (const travail of nouveaux) this.travauxDejaAnnonces.add(travail.agentId)
+    return nouveaux
+  }
+
   /** Version réduite pour l'injection prompt — voir {@link PromptSnapshot}. */
   async snapshotForPrompt(jalon?: (nom: string) => void): Promise<PromptSnapshot> {
     const full = await this.snapshot(jalon)
@@ -1745,7 +1778,7 @@ export class AppCommandBus {
         .map((r) => ({ subject: r.subject, status: r.status })),
       conversationsCount: full.conversations.length,
       ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),
-      ...(full.travauxNonPublies.length > 0
+      ...(this.travauxNonAnnonces(full.travauxNonPublies).length > 0
         ? {
             travauxNonFusionnes: {
               compte: full.travauxNonPublies.length,
@@ -2559,13 +2592,25 @@ export class AppCommandBus {
         // « il ne s'est rien passe » sur un identifiant simplement faux -- la conclusion inverse
         // de celle qu'une retrospective doit produire.
         if (!conversation) throw new Error(`Conversation introuvable: ${id}`)
-        const dossier = collectAutowinKaizenEvidence(conversation)
+        /*
+         * REGIME AMPLE. Ce dossier ne part dans AUCUN prompt de sous-agent : il est rendu a
+         * l'agent qui lit. Les plafonds serres de `/kaizen` (80 evenements causaux, 4 RUN.md,
+         * 3 tours de journal) sont un budget de prompt, pas une verite sur ce qui s'est passe :
+         * appliques ici, ils faisaient repondre « voila ce qui s'est passe » sur un echantillon
+         * muet de son propre echantillonnage.
+         */
+        const dossier = collectAutowinKaizenEvidence(conversation, undefined, PLAFONDS_AMPLES)
         return {
           ...dossier,
           note:
             `${dossier.conversation.messages.length} message(s), ` +
             `${dossier.causalEvents.length} evenement(s) causal(aux), ` +
-            `${dossier.activity.length} entree(s) d'activite, ${dossier.runs.length} RUN.md. ` +
+            `${dossier.activity.length} entree(s) d'activite, ${dossier.runs.length} RUN.md, ` +
+            `${dossier.promptCalls?.length ?? 0} appel(s) modele, ` +
+            `${dossier.turnEvents?.length ?? 0} evenement(s) de tour. ` +
+            `Lecture large (plafonds: ${PLAFONDS_AMPLES.trace} evenements causaux, ` +
+            `${PLAFONDS_AMPLES.runs} RUN.md, ${PLAFONDS_AMPLES.promptCalls} appels modele) : ` +
+            `si un compte touche exactement son plafond, le reste a ete coupe. ` +
             `Lecture seule : aucun run lance.`
         }
       }
