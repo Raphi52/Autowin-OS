@@ -27,6 +27,7 @@ import {
 } from './model-aliases'
 import { listCodexAppServerModels, type CodexAppServerModel } from './codex-model-source'
 import { claudeCliModelIds } from './claude-cli-catalog'
+import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import { resolveClaudeBin } from './providers/claude'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
@@ -444,13 +445,16 @@ export async function discoverImportedModels(
       ? claude.models
       : [...claude.models, ...(readCatalogCache(cachePath, 'claude') ?? [])]
   const resolvedClaudeModels = resolveClaudeAliasLabels(uniqueModels(discoveredClaudeModels))
+  // FILTRE DE SORTIE — le catalogue ne propose que des moteurs RÉELLEMENT routés. Il est appliqué
+  // ici, en dernier, plutôt qu'à chaque source : le cache disque a été écrit AVANT le retrait de
+  // Codex/Kimi/Gemini et en contient encore ; sans ce filtre, ces moteurs morts réapparaîtraient
+  // dans Agent Studio au prochain démarrage et un rôle pourrait de nouveau y être routé.
+  // Le cache n'est PAS réécrit : les données anciennes restent lisibles pour l'historique.
   return [
     ...withCodexNamedSupplements(codexModels),
     ...resolvedClaudeModels,
-    ...DEFAULT_IMPORTED_MODELS.filter(
-      (model) => model.provider === 'kimi' || model.provider === 'gemini'
-    )
-  ]
+    ...DEFAULT_IMPORTED_MODELS
+  ].filter((model) => ROUTED_PROVIDERS.includes(model.provider as RoutedProvider))
 }
 
 /**

@@ -72,7 +72,8 @@ describe('runAppPreflight', () => {
     const fetchMock = vi.fn(() => fetchGate)
     globalThis.fetch = fetchMock as typeof fetch
 
-    const options = { standbyProviders: ['claude'] as const }
+    // Aucun standby : on veut justement voir les spawns pour prouver le partage de l'appel en vol.
+    const options = { standbyProviders: [] as const }
     const first = runAppPreflight(false, { standbyProviders: [...options.standbyProviders] })
     const second = runAppPreflight(false, { standbyProviders: [...options.standbyProviders] })
     releaseFetch()
@@ -80,15 +81,13 @@ describe('runAppPreflight', () => {
     const [firstResult, secondResult] = await Promise.all([first, second])
     expect(secondResult).toBe(firstResult)
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    // 3 spawns : `codex --version`, `claude --version`, `claude auth status` (kimi en standby).
-    expect(mocks.spawn).toHaveBeenCalledTimes(3)
-    expect(mocks.loadTokens).toHaveBeenCalledTimes(1)
+    // 2 spawns : `claude --version`, `claude auth status`. Codex et Kimi ne sont plus sondés.
+    expect(mocks.spawn).toHaveBeenCalledTimes(2)
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(1)
 
     await runAppPreflight(true, { standbyProviders: [...options.standbyProviders] })
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(mocks.spawn).toHaveBeenCalledTimes(6)
-    expect(mocks.loadTokens).toHaveBeenCalledTimes(2)
+    expect(mocks.spawn).toHaveBeenCalledTimes(4)
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(2)
   })
 
