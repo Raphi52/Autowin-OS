@@ -21,8 +21,14 @@ import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 describe('cap d’itérations — une seule valeur par défaut, celle qui est documentée', () => {
   const source = (relatif: string): string => readFileSync(join(__dirname, relatif), 'utf8')
 
-  it('la constante exportée vaut 12, la valeur documentée', () => {
-    expect(CAP_ITERATIONS_TOUR).toBe(12)
+  /*
+   * L'ASSERTION VERROUILLAIT UN CHIFFRE, PLUS UN COMPORTEMENT. Demande utilisateur du 2026-09-04 :
+   * « ENLEVE CE PUTAIN DE BLOQUAGE DE BUDGET » — le compteur d'appels coupait des tours engagés
+   * sans rien mesurer du coût réel. Ce qui reste exigé : le cap par défaut n'est JAMAIS plus serré
+   * que les 12 documentés (il vaut désormais l'infini, la dépense réelle prenant le relais).
+   */
+  it('le cap par défaut n’est jamais plus serré que les 12 documentés', () => {
+    expect(CAP_ITERATIONS_TOUR).toBeGreaterThanOrEqual(12)
   })
 
   /*
