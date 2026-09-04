@@ -285,9 +285,18 @@ export const ChatMessageRow = memo(
   }): React.JSX.Element {
     if (message.role === 'user') {
       return (
-        <div className="msg user fade-in">
+        <div className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}>
           <div className="msg-meta">
             <span className="msg-role">Toi</span>
+            {/* MESSAGE INJECTE EN COURS DE TOUR (conv-257, 2026-09-04). Le drapeau `orientation`
+                existait deja cote donnees, mais RIEN ne le montrait : un message tape pendant un
+                tour n'ouvre pas de nouveau tour, il rejoint celui qui court -- et l'utilisateur
+                concluait qu'il etait perdu (« mon dernier msg a pas lance de tour »). */}
+            {message.orientation ? (
+              <span className="msg-orientation-tag" title="Envoyé pendant un tour en cours : ce texte a rejoint la réponse en cours au lieu d’ouvrir un nouveau tour">
+                orienté en cours de tour
+              </span>
+            ) : null}
           </div>
           {message.content && (
             <div className="msg-body" dir="auto">
