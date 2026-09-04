@@ -389,6 +389,7 @@ import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { evidenceDeLErreur } from './providers/evidence-portee-par-erreur'
 import { describeFanoutFailure, explainRoleFailure } from './provider-failure-diagnosis'
+import { retryOnTransientOverload } from './transient-overload'
 import { alignReportWithDisk, dispositionPourIssue } from './worktree-path-rewrite'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
 import type { ChatArtifact } from '../shared/artifacts'
@@ -767,6 +768,11 @@ export interface OrchestratorLifecycleDeps {
    * est alors dans la base). Best-effort : son échec ne change pas le verdict du run.
    */
   closeGreenRun?: RunCloser
+  /**
+   * Horloge d'attente entre deux tentatives après une SURCHARGE API transitoire (529/503). Injectable
+   * pour que les tests ne dorment pas ; absent ⇒ `setTimeout` réel (backoff linéaire).
+   */
+  sleep?: (ms: number) => Promise<void>
 }
 
 /**
@@ -3097,6 +3103,27 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
    * savoir quel role pointait sur un provider indisponible. On enveloppe au plus pres de l'appel : les
    * `catch` existants en amont recoivent alors le message enrichi et le journalisent tel quel.
    */
+  /**
+   * Rejoue un appel provider quand l'échec est une SURCHARGE serveur explicitement temporaire
+   * (529/503). Incident ak-9d3fa074346ba9da : un `API Error: 529 Overloaded` sur une seule phase
+   * faisait échouer l'orchestrate entier. Toute autre erreur remonte immédiatement, inchangée.
+   */
+  private async sendSurvivingOverload<T>(
+    send: () => Promise<T>,
+    onRetry?: (note: string) => void,
+    signal?: AbortSignal
+  ): Promise<T> {
+    return retryOnTransientOverload(send, {
+      ...(this.deps.sleep ? { sleep: this.deps.sleep } : {}),
+      ...(signal ? { signal } : {}),
+      onRetry: ({ attempt, attempts, delayMs, message }) =>
+        onRetry?.(
+          `Surcharge API — nouvelle tentative ${attempt}/${attempts} dans ` +
+            `${(delayMs / 1000).toFixed(1)}s (${message})`
+        )
+    })
+  }
+
   private async sendWithRoleContext<T>(
     label: string,
     role: string,
@@ -3105,7 +3132,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     send: () => Promise<T>
   ): Promise<T> {
     try {
-      return await send()
+      return await this.sendSurvivingOverload(send)
     } catch (error) {
       throw new Error(
         explainRoleFailure(label, role, {
@@ -4328,10 +4355,19 @@ ${empreinteDepot}`
       })
       let phaseRes
       try {
-        phaseRes = await registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) => {
-          supervision.onDelta(c.delta)
-          if (c.reasoning) onDelta?.('exec', '', c.reasoning)
-        })
+        // Surcharge API transitoire (529/503) : on rejoue la MÊME phase au lieu de perdre le run
+        // (incident ak-9d3fa074346ba9da). Le réessai est annoncé dans le flux, jamais silencieux.
+        // La supervision mi-phase de HEAD est CONSERVÉE : elle vit dans le callback de flux, donc
+        // elle continue de recevoir les deltas de la tentative qui aboutit.
+        phaseRes = await this.sendSurvivingOverload(
+          () =>
+            registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) => {
+              supervision.onDelta(c.delta)
+              if (c.reasoning) onDelta?.('exec', '', c.reasoning)
+            }),
+          (note) => onDelta?.('exec', `\n${note}\n`),
+          signal
+        )
       } catch (error) {
         supervision.dispose()
         // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.

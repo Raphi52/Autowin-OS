@@ -108,6 +108,7 @@ export default defineConfig(
       'src/main/orchestrator.execution.test.ts',
       'src/main/orchestrator.hooks.test.ts',
       'src/main/orchestrator.lean-fast.test.ts',
+      'src/main/orchestrator.overload-retry.test.ts',
       'src/main/orchestrator.provider-identity.test.ts',
       'src/main/orchestrator.resume-skips-paid-phases.test.ts',
       'src/main/orchestrator.workflow-override.test.ts',
