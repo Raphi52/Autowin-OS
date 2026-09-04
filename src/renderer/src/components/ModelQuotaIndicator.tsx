@@ -407,7 +407,6 @@ export function ModelQuotaIndicator({
             : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % restant sur ${windowLabel}${alert}`
         }
         aria-expanded={open}
-        title={`Quotas par fournisseur — barre sur ${windowLabel}${alert}`}
         onClick={() => {
           const next = !open
           setOpen(next)
