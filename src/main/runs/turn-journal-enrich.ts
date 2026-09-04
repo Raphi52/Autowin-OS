@@ -201,11 +201,25 @@ export interface PilotJournalEventLike {
   name?: string
   ok?: boolean
   text?: string
+  retryOf?: string
   data?: unknown
 }
 
 /** Champs d'un événement de pilote qui ont un sens dans le journal, dans un ordre stable. */
-const CHAMPS_PILOTE = ['iteration', 'actionId', 'streamId', 'name', 'ok', 'text', 'data'] as const
+const CHAMPS_PILOTE = [
+  'iteration',
+  'actionId',
+  'streamId',
+  'name',
+  'ok',
+  'text',
+  // Lien vers l'echec rattrape : liste FERMEE, un champ absent d'ici serait perdu en silence.
+  // A ce jour AUCUN `kind` reel portant `retryOf` ne passe par ici — le resultat, seul porteur du
+  // lien, est ecrit par la recopie durable (voir `DEJA_JOURNALISES`). C'est donc une precaution
+  // pour un futur `kind`, pas un chemin actif : ne pas en tirer de preuve.
+  'retryOf',
+  'data'
+] as const
 
 /**
  * TOUT le reste du pilote dans le journal — `error`, `retry`, `provider-status`,

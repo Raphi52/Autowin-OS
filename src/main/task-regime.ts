@@ -43,13 +43,18 @@ const NEGATED_CRITICAL_SIGNALS =
 
 /**
  * Signaux de TRIVIALITÉ (→ trivial) : micro-édition ciblée, déjà précise.
- * Inclut les RETOUCHES D'APPARENCE (couleur, pastille, icône, taille, alignement, espacement) :
- * mesuré sur conv-210, chacune de ces demandes d'une ligne partait en pipeline complet alors qu'un
+ * Inclut les RETOUCHES D'APPARENCE (couleur, pastille, icône, alignement, espacement) : les mots
+ * AMBIGUS restent HORS de la liste nue — `taille`, `fond`, `background`, `border`, `contour`,
+ * `format` désignent aussi du vrai code (« taille du cache LRU », « fond de secours si le provider
+ * tombe », « border case du parseur »). Ils ne comptent que sous une forme sans équivoque visuelle
+ * (`taille de la police`, `border-radius`, `background-color`…), listée à part.
+ *
+ * Mesuré sur conv-210 : chacune de ces demandes d'une ligne partait en pipeline complet alors qu'un
  * seul pas de build suffit. La rétrogradation reste bornée : `critical` est testé AVANT, et la tâche
  * doit rester courte et mono-clause.
  */
 const TRIVIAL_SIGNALS =
-  /\b(typo|renomm\w*|rename|corrige la faute|coquille|commentaire|comment|reformul\w*|un mot|one word|bump\w*|version|lint|format\w*|pastille|badge|ic[oôö]ne|icon|couleur|color|gris|grey|gray|blanc|white|noir|black|police|font|padding|marge|margin|align\w*|gras|bold|italique|majuscule|uppercase|css|arrondi|bordure|border|bo[iî]te|encadr\w*|contour|fond|background|ombre|shadow|espacement|taille)\b/i
+  /\b(typo|renomm\w*|rename|corrige la faute|coquille|commentaire|comment|reformul\w*|un mot|one word|bump\w*|version|lint|pastille|badge|ic[oôö]ne|icon|couleur|color|gris|grey|gray|blanc|white|noir|black|police|font|padding|marge|margin|align\w*|gras|bold|italique|majuscule|uppercase|css|arrondi|bordure|bo[iî]te|encadr\w*|ombre|shadow|espacement|plus gros|plus petit)\b|\b(?:taille|couleur)\s+(?:de\s+)?(?:la\s+|du\s+|des\s+)?(?:police|texte|titre|fond|font)\b|\b(?:border-radius|border-color|background-color|font-size|line-height|box-shadow|text-align)\b/i
 
 /**
  * Classe une tâche. Ordre : critical d'abord (prudence), puis trivial (signal FORT + tâche courte),

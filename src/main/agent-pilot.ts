@@ -181,6 +181,8 @@ export type PilotEventVariant =
       name: string
       ok: boolean
       data?: unknown
+      /** `actionId` de l'action EN ECHEC que cette reussite rattrape (meme nom, meme cible). */
+      retryOf?: string
       attachments?: NonNullable<Message['attachments']>
     }
   | {
@@ -195,6 +197,16 @@ export type PilotEventVariant =
       outcome?: Record<string, unknown>
     }
   | { kind: 'error'; text: string; usage?: TurnUsage }
+  /**
+   * ABANDON ECRIT, pas deduit. Emis une seule fois juste avant la fin du tour : la liste des
+   * echecs restes sans reprise. Sans cet evenement, « abandonne » ne se lisait que par l'ABSENCE
+   * d'une ligne de rattrapage — une absence ne se distingue pas d'un journal tronque.
+   */
+  | {
+      kind: 'echecs-abandonnes'
+      name: string
+      data: { actionId: string; cible: string }[]
+    }
   | { kind: 'retry'; iteration: number; name: string; text: string; data: unknown }
   | { kind: 'cancellation'; iteration: number; name: string; text: string; data: unknown }
   | {
@@ -238,6 +250,8 @@ export interface PilotEvent {
   args?: unknown
   ok?: boolean
   data?: unknown
+  /** `actionId` de l'action EN ECHEC que cette reussite rattrape (meme nom, meme cible). */
+  retryOf?: string
   iteration?: number
   prompt?: PromptEnvelope
   response?: string
@@ -632,9 +646,7 @@ function aPieceJointeLisible(piece: PieceJointeDuFil | undefined): boolean {
  * perd donc le binaire d'origine. La miniature, elle, est une vraie image (data URL) : degradee mais
  * LISIBLE. Le nom porte la mention pour que le modele ne prenne jamais la reduction pour la source.
  */
-function replierSurLaMiniature(
-  piece: PieceJointeDuFil | undefined
-): PieceJointeDuFil | undefined {
+function replierSurLaMiniature(piece: PieceJointeDuFil | undefined): PieceJointeDuFil | undefined {
   const thumbnail = piece?.thumbnail
   if (!piece || typeof thumbnail !== 'string' || !thumbnail.startsWith('data:image/'))
     return undefined
@@ -837,7 +849,18 @@ export class AgentPilot {
      * repris par un `edit_file` reussi sur `b.ts` — la reponse inverse a la question posee.
      */
     const clefParAction = new Map<string, string>()
+    /*
+     * Rempli plus bas, des que le registre des echecs existe. `emit` ne peut pas lire ce registre
+     * (il est declare apres lui, et certains chemins emettent avant), d'ou ce relais : la seule
+     * facon de couvrir TOUS les points de sortie du tour sans en oublier un.
+     */
+    let emettreEchecsAbandonnes: (() => void) | undefined
     const emit = (e: PilotEventVariant): void => {
+      if (e.kind === 'done' || e.kind === 'error') {
+        const dire = emettreEchecsAbandonnes
+        emettreEchecsAbandonnes = undefined
+        dire?.()
+      }
       if (e.kind === 'result' && e.name) {
         const clef = clefParAction.get(e.actionId) ?? e.name
         if (e.ok) echecsNonRepris.delete(clef)
@@ -1473,6 +1496,24 @@ export class AgentPilot {
      * succes doit desarmer la reprise » — simplement tenue sur tout le tour au lieu d'une iteration.
      */
     const commandesEnEchecNonRattrape = new Set<string>()
+    /*
+     * LE LIEN DE REPRISE. Pour chaque cible encore en echec, l'`actionId` de l'action QUI A ECHOUE.
+     * Quand une action reussit sur la MEME clef (nom + argument identifiant, cf. `cleDEchec`), le
+     * resultat emis porte `retryOf` = cet identifiant : le journal montre alors explicitement quel
+     * echec a ete rattrape, au lieu de laisser deviner par voisinage.
+     */
+    const actionIdParEchec = new Map<string, string>()
+    emettreEchecsAbandonnes = (): void => {
+      if (commandesEnEchecNonRattrape.size === 0) return
+      publier({
+        kind: 'echecs-abandonnes',
+        name: 'échecs abandonnés',
+        data: [...commandesEnEchecNonRattrape].map((cible) => ({
+          actionId: actionIdParEchec.get(cible) ?? '',
+          cible
+        }))
+      })
+    }
     /*
      * AUTO-KAIZEN EN COURS DE TOUR. Le registre des murs deja rencontres : sans lui, corriger-et-
      * poursuivre autorise le pire des retours — rejouer la meme commande, remanger le meme mur, et
@@ -2477,6 +2518,13 @@ export class AgentPilot {
             }
           })
         }
+        // Meme clef que la comptabilite d'echec plus bas (nom + cible), calculee ici parce que le
+        // resultat est emis AVANT le bloc qui la tient : c'est le seul endroit ou l'on sait encore
+        // quel echec cette reussite repare.
+        const cleDeCetteAction = cleDEchec(token.name, authoritativeArgs as Record<string, unknown>)
+        const echecRattrape = commandResultSucceeded(r)
+          ? actionIdParEchec.get(cleDeCetteAction)
+          : undefined
         if (!settledAction)
           emit({
             kind: 'result',
@@ -2484,6 +2532,7 @@ export class AgentPilot {
             name: token.name,
             ok: commandResultSucceeded(r),
             data: r.ok ? r.data : r.error,
+            ...(echecRattrape ? { retryOf: echecRattrape } : {}),
             ...(r.attachments?.length ? { attachments: r.attachments } : {})
           })
         // `orchestrate` rend déjà l'issue AUTORITATIVE du pipeline complet : build, juge, gate,
@@ -2522,9 +2571,12 @@ export class AgentPilot {
           if (orchestrationEnEchec(outcome ?? {})) {
             anyActionFailed = true
             echecDeLaDerniereIteration = true
-            commandesEnEchecNonRattrape.add(
-              cleDEchec(token.name, authoritativeArgs as Record<string, unknown>)
+            const cleOrchestration = cleDEchec(
+              token.name,
+              authoritativeArgs as Record<string, unknown>
             )
+            commandesEnEchecNonRattrape.add(cleOrchestration)
+            actionIdParEchec.set(cleOrchestration, actionId)
           }
           const closureNotice = deliveryClosed
             ? 'Clôture Autowin : gate validé, RUN fermé green ; aucune autre orchestration ni aucun second judge ne sont nécessaires dans ce tour.'
@@ -2586,11 +2638,15 @@ export class AgentPilot {
          */
         const cleCible = cleDEchec(token.name, authoritativeArgs as Record<string, unknown>)
         // Rejouee avec succes sur la MEME cible : l'echec est repare, il ne pese plus sur la cloture.
-        if (commandSucceeded) commandesEnEchecNonRattrape.delete(cleCible)
+        if (commandSucceeded) {
+          commandesEnEchecNonRattrape.delete(cleCible)
+          actionIdParEchec.delete(cleCible)
+        }
         if (!commandSucceeded) {
           anyActionFailed = true
           echecDeLaDerniereIteration = true
           commandesEnEchecNonRattrape.add(cleCible)
+          actionIdParEchec.set(cleCible, actionId)
           const signature = signatureDEchec(
             token.name,
             String(r.ok ? JSON.stringify(r.data) : (r.error ?? ''))

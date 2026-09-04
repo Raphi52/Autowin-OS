@@ -393,14 +393,20 @@ export function ModelQuotaIndicator({
         type="button"
         className={`model-quota-trigger is-${level}`}
         data-testid="model-quota-trigger"
-        style={{ '--quota-fill': `${remaining ?? 0}%` } as CSSProperties}
+        style={
+          {
+            '--quota-fill': `${remaining ?? 0}%`,
+            // Le MEME restant, sans unite : le CSS s'en sert pour retirer la pastille de sa
+            // propre largeur a 100 %, sinon elle resterait bloquee avant le bout de la barre.
+            '--quota-ratio': `${(remaining ?? 0) / 100}`
+          } as CSSProperties
+        }
         aria-label={
           remaining === undefined
             ? 'Afficher les quotas fournisseurs'
             : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % restant sur ${windowLabel}${alert}`
         }
         aria-expanded={open}
-        title={`Quotas par fournisseur — barre sur ${windowLabel}${alert}`}
         onClick={() => {
           const next = !open
           setOpen(next)

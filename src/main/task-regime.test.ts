@@ -166,6 +166,14 @@ describe('classifyRegime — retouches d\'apparence (conv-210)', () => {
     expect(classifyRegime('masque le badge auth en production')).toBe('critical')
   })
 
+  it('ne rétrograde pas un mot visuel employé au sens technique (courte, sans mot à risque)', () => {
+    expect(classifyRegime('change la taille du cache LRU a 500 entrees')).toBe('standard')
+    expect(classifyRegime('ajoute un fond de secours si le provider tombe')).toBe('standard')
+    expect(classifyRegime('implemente le border case du parseur de dates')).toBe('standard')
+    expect(classifyRegime('change le format de la date de sortie')).toBe('standard')
+    expect(classifyRegime('ajoute un contour de validation sur les entrees')).toBe('standard')
+  })
+
   it('ne rétrograde pas une retouche visuelle longue ou multi-clauses', () => {
     expect(
       classifyRegime('enleve la pastille verte ; ensuite met le nom de la conv en gris')

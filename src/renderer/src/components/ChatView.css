@@ -2436,25 +2436,29 @@ ol.md-list li {
 /* LA JAUGE : meme trait, en DEGRADE GRIS -> BLANC PUR sur la part occupee. Choix utilisateur du
    2026-09-04 : aucune couleur de palier (le rouge alarmait a tort), et le degrade remplace le
    blanc plat — la pointe blanche marque le bord courant, la naissance grise se fond dans le rail.
-   Le degrade est cale sur la PORTION (et non sur toute la largeur) a dessein : la pointe blanche
-   suit ainsi l'occupation au lieu de n'apparaitre qu'a 100 %. */
+   PROGRESSIVE, PAS DEGRESSIVE (demande utilisateur du 2026-09-04) : le degrade est cale sur la
+   LARGEUR TOTALE et seul le surplus est DECOUPE. Chaque point du filet garde donc une teinte fixe,
+   et la barre s'eclaircit a mesure que le fil se remplit. Porter la largeur sur l'element, au
+   contraire, recomprimait le degrade a chaque tour : la teinte du bord ne bougeait plus, seule la
+   longueur changeait — un remplissage qui se relit comme une decroissance. */
 .composer[data-context-level]::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
+  right: 0;
   z-index: 1;
   height: 2px;
-  width: var(--context-fill, 0%);
   background-image: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.34) 0%,
     rgba(255, 255, 255, 0.55) 45%,
     #ffffff 100%
   );
+  clip-path: inset(0 calc(100% - var(--context-fill, 0%)) 0 0);
   opacity: 0.95;
   pointer-events: none;
-  transition: width 220ms ease;
+  transition: clip-path 220ms ease;
 }
 
 /* DIRECTION C1 « NU » (choix utilisateur, conv-167) : la barre de prompting n'est plus une boite.
@@ -3368,8 +3372,13 @@ ol.md-list li {
    Portée STRICTE : `.model-select-menu` du Chat/Routage. Agent Studio n'importe
    pas cette feuille — sa vue n'est pas touchée. */
 .model-select-menu {
+  /* TEINTE DOREE, SANS BORDURE (choix utilisateur du 2026-09-04). L'accent global du theme est
+     rose ; on le REDEFINIT localement en or, ce qui reteinte d'un coup le fond, le survol, la
+     selection, les intitules et la barre de defilement — sans toucher au reste de l'app. */
+  --accent: #d4a94f;
+  --accent-soft: rgba(212, 169, 79, 0.16);
   padding: 8px;
-  border-color: color-mix(in srgb, var(--accent) 26%, rgba(255, 255, 255, 0.1));
+  border: 0;
   border-radius: 12px;
   background:
     radial-gradient(
@@ -4035,6 +4044,24 @@ ol.md-list li {
 .conv-auto-toggle:hover {
   border-color: rgba(255, 255, 255, 0.28);
 }
+
+/* MESSAGE ORIENTE EN COURS DE TOUR (conv-257, 2026-09-04).
+   Un message tape pendant qu'un tour tourne n'ouvre PAS un nouveau tour : il rejoint la reponse en
+   cours. Rien ne le distinguait dans le fil, donc l'utilisateur le croyait perdu. Marque DISCRETE :
+   un filet a gauche + une mention en petites capitales, pas une carte de plus. */
+.msg.user.is-orientation {
+  border-left: 2px solid rgba(212, 169, 79, 0.55);
+  padding-left: 10px;
+}
+.msg-orientation-tag {
+  margin-left: 8px;
+  color: #d4a94f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: help;
+}
 .conv-auto-toggle .conv-auto-dot {
   width: 7px;
   height: 7px;
@@ -4302,4 +4329,14 @@ ol.md-list li {
   height: 28px;
   min-height: 28px;
   margin-right: 4px;
+}
+
+/* Le sélecteur modèle/effort a été déplacé à GAUCHE de la barre de saisie (à côté de
+   joindre/micro). Ancrée à droite (`right: 0`), la popup partait vers la gauche et sortait
+   de l'écran : on n'en voyait plus la moitié. Dans la barre de saisie, elle s'ancre donc à
+   GAUCHE du bouton et se borne à la largeur de la fenêtre. */
+.composer-meta-actions .model-select-menu {
+  right: auto;
+  left: 0;
+  max-width: calc(100vw - 24px);
 }

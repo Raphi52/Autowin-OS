@@ -114,8 +114,12 @@ function IconeEnvoyer(): React.JSX.Element {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="16"
-      height="16"
+      width="19"
+      height="19"
+      /* RECENTRAGE OPTIQUE (conv-257, 2026-09-04) : la masse de l avion penche vers le haut
+         gauche, donc le centre GEOMETRIQUE ne tombe pas sur le centre PERCU du cercle.
+         1 px vers le bas et vers la droite, demande par l utilisateur apres observation. */
+      style={{ transform: 'translate(1px, 1px)' }}
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -127,13 +131,10 @@ function IconeEnvoyer(): React.JSX.Element {
       {/* Avion en PLEIN avec son pli visible : le dart precedent se lisait comme une simple
           fleche a 16px (retour utilisateur conv-257, 2026-09-04). Le pli separe l aile du corps
           et rend l objet identifiable a cette taille. */}
-      <path d="M21.6 2.4 2.7 10.3l7.3 2.9 2.9 7.3z" fill="currentColor" stroke="none" />
       <path
-        d="M21.6 2.4 10 13.2"
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity="0.45"
-        strokeWidth="1.6"
+        d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z"
+        fill="currentColor"
+        stroke="none"
       />
     </svg>
   )

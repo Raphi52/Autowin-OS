@@ -1610,17 +1610,29 @@ export function ChatView({
     const courant = liveMessagesRef.current.get(conversationId)
     if (!courant || courant.length === 0) return
     const next = courant.slice()
+    // OU ECRIRE : dans la bulle ouverte EN FIN DE FIL, jamais au-dessus d'une demande.
+    let cible = -1
     for (let i = next.length - 1; i >= 0; i--) {
-      if (next[i].role !== 'assistant') continue
-      const copy: AsstMsg = { ...(next[i] as AsstMsg), parts: (next[i] as AsstMsg).parts.slice() }
-      fn(copy)
-      // Invariant impose ICI, dans l'entonnoir UNIQUE de mutation, et non aux trois sites qui closent
-      // un tour (annule / echoue / termine) : un quatrieme site futur l'oublierait. Un tour `done` ne
-      // laisse aucune action « en cours » — sinon l'indicateur tourne indefiniment et le bouton
-      // « Reprendre » n'apparait qu'apres un redemarrage de l'app.
-      next[i] = settleIfDone(copy) as AsstMsg
-      break
+      if (next[i].role === 'user') break
+      if (next[i].role === 'assistant') {
+        cible = i
+        break
+      }
     }
+    if (cible === -1) {
+      next.push(hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' }))
+      cible = next.length - 1
+    }
+    const copy: AsstMsg = {
+      ...(next[cible] as AsstMsg),
+      parts: (next[cible] as AsstMsg).parts.slice()
+    }
+    fn(copy)
+    // Invariant impose ICI, dans l'entonnoir UNIQUE de mutation, et non aux trois sites qui closent
+    // un tour (annule / echoue / termine) : un quatrieme site futur l'oublierait. Un tour `done` ne
+    // laisse aucune action « en cours » — sinon l'indicateur tourne indefiniment et le bouton
+    // « Reprendre » n'apparait qu'apres un redemarrage de l'app.
+    next[cible] = settleIfDone(copy) as AsstMsg
     liveMessagesRef.current.set(conversationId, next)
     publierFil(conversationId, next)
   }
