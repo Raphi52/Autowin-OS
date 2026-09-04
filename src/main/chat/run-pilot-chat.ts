@@ -39,6 +39,7 @@ import {
 import type { AttachmentMeta } from '../store/conversations'
 import { closingTurnDelivery } from '../runs/turn-closing'
 import { appendTurnEvent } from '../runs/turn-journal'
+import { evenementResultatDurable } from './durable-result-event'
 import { ouvrirTourDeChat } from '../gel-main'
 import {
   closingJournalEvents,
@@ -593,18 +594,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
               : {})
           }
         else if (pilotEvent.kind === 'result' && pilotEvent.name)
-          durableEvent = {
-            kind: 'result',
-            actionId:
-              pilotEvent.actionId ??
-              `${pilotEvent.iteration ?? 0}:${Math.max(0, traceActionIndex - 1)}`,
-            name: pilotEvent.name,
-            ok: pilotEvent.ok,
-            data: pilotEvent.data,
-            ...(pilotEvent.attachments?.length
-              ? { attachments: guardAttachments(pilotEvent.attachments) }
-              : {})
-          }
+          // Recopie CHAMP PAR CHAMP (dont `retryOf`, le lien vers l'echec rattrape) : extraite dans
+          // `evenementResultatDurable` pour etre EXECUTEE par un test, pas seulement relue.
+          durableEvent = evenementResultatDurable(
+            pilotEvent,
+            `${pilotEvent.iteration ?? 0}:${Math.max(0, traceActionIndex - 1)}`,
+            pilotEvent.attachments?.length ? guardAttachments(pilotEvent.attachments) : undefined
+          )
         else if (pilotEvent.kind === 'artifact' && pilotEvent.artifact)
           durableEvent = { kind: 'artifact', artifact: pilotEvent.artifact }
         else if (pilotEvent.kind === 'done') {
