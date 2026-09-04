@@ -119,7 +119,7 @@ import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
-import { WorkflowsPanel, type RunDetailTab } from './WorkflowsPanel'
+import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   mergeLiveAndPersisted,
@@ -698,7 +698,7 @@ export function ChatView({
     () => buildHomeSuggestions({ runs, resumedDraft: brouillonPresent ? 'brouillon' : '' }),
     [runs, brouillonPresent]
   )
-  const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
+  const [openRun, setOpenRun] = useState<OpenRunState | null>(null)
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
   // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
   const [runDetailTab, setRunDetailTab] = useState<RunDetailTab>('trace')
@@ -3592,6 +3592,10 @@ export function ChatView({
   /* --- workflows --- */
 
   async function viewRun(r: RunEntry): Promise<void> {
+    // La carte s'ouvre TOUT DE SUITE en attente : sans ce premier etat, le clic ne renvoyait
+    // aucun signe de vie jusqu'au retour des deux lectures.
+    setOpenRun({ path: r.path, content: '', pending: true })
+    setRunDetailTab('trace')
     // Fil des sous-agents (trace) d'abord ; à défaut, le RUN.md brut.
     try {
       const trace = (await window.api.runTrace(r.path)) as OrchStep[] | null
@@ -3601,9 +3605,10 @@ export function ChatView({
       setOpenTrace(null)
     }
     try {
-      setOpenRun(await window.api.readNodeFile(r.path))
+      const fichier = await window.api.readNodeFile(r.path)
+      setOpenRun({ path: fichier.path, content: fichier.content })
     } catch (e) {
-      setOpenRun({ path: r.path, content: String(e) })
+      setOpenRun({ path: r.path, content: '', error: String(e) })
     }
   }
 

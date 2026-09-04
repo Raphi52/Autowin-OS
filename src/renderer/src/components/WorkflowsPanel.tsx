@@ -16,6 +16,14 @@ const PANEL_TABS: ReadonlyArray<readonly [PanelTab, string]> = [
 
 /** Onglets du détail d'un RUN. `trace` = fil des sous-agents, `runmd` = fichier produit. */
 export type RunDetailTab = 'trace' | 'runmd'
+
+/**
+ * Ce que le clic sur une carte de run produit : d'abord une attente (`pending`), puis SOIT le
+ * contenu du RUN.md, SOIT un echec de lecture (`error`). L'echec ne passe plus par `content` :
+ * il s'affichait alors comme si la pile d'erreur ETAIT le run.
+ */
+export type OpenRunState = { path: string; content: string; pending?: boolean; error?: string }
+
 import { SourceControlPane } from './SourceControlPane'
 import { WorkflowExecutionGraph, type ExecutionNodeSelection } from './WorkflowExecutionGraph'
 import { ModelActivityLogPane } from './ModelActivityLogPane'
@@ -66,9 +74,9 @@ export type WorkflowsPanelProps = {
   forkedCheckpoint: string
   setForkedCheckpoint: (id: string) => void
   runs: RunEntry[]
-  openRun: { path: string; content: string } | null
+  openRun: OpenRunState | null
   viewRun: (r: RunEntry) => void
-  setOpenRun: (value: { path: string; content: string } | null) => void
+  setOpenRun: (value: OpenRunState | null) => void
   setOpenTrace: (value: OrchStep[] | null) => void
   requestDeleteRun: (run: RunEntry) => void
   openTrace: OrchStep[] | null
@@ -490,6 +498,14 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                       )}
                       {openTrace && (runDetailTab === 'trace' || !openRun) ? (
                         <StepThread steps={openTrace} />
+                      ) : openRun?.error ? (
+                        <div className="run-detail-error" data-testid="run-detail-error">
+                          Lecture impossible de ce RUN.md — {openRun.error}
+                        </div>
+                      ) : openRun?.pending ? (
+                        <div className="c-faint" data-testid="run-detail-loading">
+                          Ouverture du RUN.md…
+                        </div>
                       ) : (
                         openRun && <RunInspector content={openRun.content} summary={r.summary} />
                       )}

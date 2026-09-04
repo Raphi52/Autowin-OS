@@ -272,3 +272,55 @@ describe('WorkflowsPanel', () => {
     expect(setShowRuns).toHaveBeenCalledWith(false)
   })
 })
+
+describe('WorkflowsPanel — ouverture d’un RUN.md', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  function render(props: WorkflowsPanelProps): void {
+    act(() => {
+      root.render(<WorkflowsPanel {...props} />)
+    })
+    const onglet = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
+    ).find((b) => b.textContent?.trim() === 'Runs')
+    if (!onglet) throw new Error('onglet Runs introuvable')
+    act(() => onglet.click())
+  }
+
+  it('montre que ça charge tant que le contenu n’est pas arrivé', () => {
+    render(
+      baseProps({
+        runs: [run()],
+        openRun: { path: '/runs/one/RUN.md', content: '', pending: true },
+        runDetailTab: 'runmd'
+      })
+    )
+    expect(container.querySelector('[data-testid="run-detail-loading"]')).not.toBeNull()
+    expect(container.querySelector('.run-inspector')).toBeNull()
+  })
+
+  it('affiche l’échec de lecture comme une erreur, pas comme le contenu du run', () => {
+    render(
+      baseProps({
+        runs: [run()],
+        openRun: { path: '/runs/one/RUN.md', content: '', error: 'ENOENT: fichier absent' },
+        runDetailTab: 'runmd'
+      })
+    )
+    const erreur = container.querySelector('[data-testid="run-detail-error"]')
+    expect(erreur?.textContent).toContain('ENOENT')
+    expect(container.querySelector('.run-inspector')).toBeNull()
+  })
+})
