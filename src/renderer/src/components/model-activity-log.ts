@@ -363,7 +363,16 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
     if (kind === 'command') {
       const key = String(event.actionId ?? `${String(event.name ?? '')}:${index}`)
       actionIndex.set(key, out.length)
-      const detail = joinDetail(short(event.args), rest(event, 'args', 'name', 'actionId'))
+      // Le lien de reprise est une PHRASE, pas une cle brute : sans cela il finit noye dans le
+      // bloc de champs et personne ne voit qu'un echec a ete rattrape.
+      const reprise = event.repriseProbableDe
+      const mentionReprise =
+        typeof reprise === 'string' && reprise ? `reprend l'action ${reprise}` : undefined
+      const detail = joinDetail(
+        mentionReprise,
+        short(event.args),
+        rest(event, 'args', 'name', 'actionId', 'repriseProbableDe')
+      )
       out.push({
         id,
         turnId,

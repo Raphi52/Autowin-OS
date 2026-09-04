@@ -679,3 +679,38 @@ describe('buildModelActivityLog — les FICHIERS touchés', () => {
     expect(ligne.turnId).toBe('turn-9')
   })
 })
+
+describe('lien de reprise', () => {
+  it('affiche « reprend l’action X » sur la ligne qui rattrape un échec', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [{ kind: 'text', text: 'ok' }])],
+      journalByTurn: {
+        'turn-1': [
+          { kind: 'command', name: 'edit_file', actionId: 'c1', args: { path: 'a.ts' } },
+          { kind: 'result', name: 'edit_file', actionId: 'c1', ok: false },
+          {
+            kind: 'command',
+            name: 'edit_file',
+            actionId: 'c2',
+            args: { path: 'a.ts' },
+            repriseProbableDe: 'c1'
+          }
+        ]
+      }
+    })
+    const reprise = entries.find((entry) => entry.detail?.includes('reprend'))
+    expect(reprise?.detail).toContain("reprend l'action c1")
+    // L'échec d'origine, lui, ne prétend rien reprendre.
+    expect(entries.filter((e) => e.detail?.includes('reprend'))).toHaveLength(1)
+  })
+
+  it('ne change rien aux lignes sans lien de reprise', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [{ kind: 'text', text: 'ok' }])],
+      journalByTurn: {
+        'turn-1': [{ kind: 'command', name: 'Bash', actionId: 'c1', args: { command: 'ls' } }]
+      }
+    })
+    expect(entries.some((entry) => entry.detail?.includes('reprend'))).toBe(false)
+  })
+})
