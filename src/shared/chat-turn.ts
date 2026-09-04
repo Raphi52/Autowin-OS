@@ -142,7 +142,18 @@ export type ChatTurnEvent =
   | { kind: 'reasoning'; text: string }
   | { kind: 'stream-reset'; streamId: string }
   | { kind: 'resumed' }
-  | { kind: 'command'; actionId: string; name: string; args?: unknown }
+  | {
+      kind: 'command'
+      actionId: string
+      name: string
+      args?: unknown
+      /**
+       * `actionId` d'une action de meme nom qui avait ECHOUE plus tot dans le tour et que celle-ci
+       * retente. Absent sur les anciens evenements et sur les actions qui ne rattrapent rien : tout
+       * lecteur doit rester tolerant a son absence.
+       */
+      repriseProbableDe?: string
+    }
   | {
       kind: 'result'
       actionId: string

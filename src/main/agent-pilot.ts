@@ -112,7 +112,20 @@ export type PilotEventVariant =
   | { kind: 'think'; text: string }
   /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
   | { kind: 'reasoning'; text: string; iteration: number }
-  | { kind: 'command'; actionId: string; name: string; args: unknown }
+  | {
+      kind: 'command'
+      actionId: string
+      name: string
+      args: unknown
+      /**
+       * Lien de REPRISE : `actionId` d'une action de MEME nom qui a echoue plus tot dans le tour et
+       * qui n'avait pas encore ete retentee. Heuristique assumee (d'ou « probable »), pas une
+       * verite : le journal est append-only, on ne peut pas annoter l'echec apres coup, donc c'est
+       * l'action qui rattrape qui porte le lien. Un echec sans aucune ligne pointant vers lui a
+       * donc ete ABANDONNE — c'est exactement ce qu'on veut pouvoir lire.
+       */
+      repriseProbableDe?: string
+    }
   /** Signe de vie d'une action LONGUE encore en cours : ne resout rien, remplace le precedent. */
   | { kind: 'action-progress'; actionId: string; text: string }
   /** Signe de vie TECHNIQUE du provider (outil, tache de fond, retry) — jamais du raisonnement. */
@@ -196,6 +209,8 @@ export interface PilotEvent {
   sessionId?: string
   streamId?: string
   actionId?: string
+  /** Cf. la variante `command` : action echouee que cette action retente (heuristique). */
+  repriseProbableDe?: string
   artifact?: ChatArtifact
   /** Modele concret rapporte par le provider pour un appel termine. */
   resolvedModel?: string
@@ -764,7 +779,24 @@ export class AgentPilot {
      * un catch avale — l'echec est signale — il cesse seulement d'emporter le tour.
      */
     const publier = protegerRappel<[PilotEvent]>('chat:onEvent', onEvent) ?? onEvent
+    /**
+     * ECHECS EN ATTENTE DE REPRISE — nom d'action -> `actionId` du dernier echec non retente.
+     * Alimente le champ `repriseProbableDe` pose sur la commande suivante de meme nom.
+     */
+    const echecsNonRepris = new Map<string, string>()
     const emit = (e: PilotEventVariant): void => {
+      if (e.kind === 'result' && e.name) {
+        if (e.ok) echecsNonRepris.delete(e.name)
+        else echecsNonRepris.set(e.name, e.actionId)
+      }
+      if (e.kind === 'command' && e.name) {
+        const echec = echecsNonRepris.get(e.name)
+        if (echec !== undefined && echec !== e.actionId) {
+          echecsNonRepris.delete(e.name)
+          publier({ ...e, repriseProbableDe: echec })
+          return
+        }
+      }
       if (e.kind === 'delta' && e.streamId && e.text) {
         // Deux collages DISTINCTS, dans cet ordre. D'abord celui qui vit DANS le texte du delta
         // (fence soudee a la phrase precedente, cf. detacherFenceCollee), sinon la separation

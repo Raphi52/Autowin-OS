@@ -555,7 +555,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             kind: 'command',
             actionId: pilotEvent.actionId ?? `${pilotEvent.iteration ?? 0}:${traceActionIndex}`,
             name: pilotEvent.name,
-            args: pilotEvent.args
+            args: pilotEvent.args,
+            // Le lien de reprise vers l'action echouee que celle-ci retente. Sans cette recopie il
+            // serait jete ICI, a la frontiere de persistance, comme le cout l'a deja ete.
+            ...(pilotEvent.repriseProbableDe
+              ? { repriseProbableDe: pilotEvent.repriseProbableDe }
+              : {})
           }
         else if (pilotEvent.kind === 'result' && pilotEvent.name)
           durableEvent = {
