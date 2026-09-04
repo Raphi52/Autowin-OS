@@ -186,13 +186,77 @@ export function UpdateBanner({
   const primary = strategies[0]
   const alternatives = strategies.slice(1)
 
+  /**
+   * Relit l'état du dépôt, ou `undefined` si la sonde est indisponible/en erreur. Un échec de sonde
+   * ne doit RIEN bloquer : on retombe alors sur le choix cliqué, et la garde du main reste le
+   * dernier rempart.
+   */
+  const relireEtat = async (): Promise<UpdateInfo | undefined> => {
+    try {
+      const fresh = (await window.api.checkUpdate?.()) as UpdateInfo | undefined
+      return fresh && fresh.error === undefined ? fresh : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Applique une voie d'intégration, mais RE-SONDE le dépôt juste avant.
+   *
+   * Le choix affiché peut avoir jusqu'à trois minutes de retard (durée du cycle de sonde), et
+   * l'état réel bouge sans passer par ce bouton : un `git pull` dans un terminal, une copie de
+   * travail d'agent, un commit poussé entre-temps. On envoyait alors au main une voie devenue
+   * inapplicable, et il la refusait à juste titre — « La stratégie « rebase » ne s'applique pas
+   * depuis « main ». ». Un refus qui ne dit rien de l'état courant et n'offre aucune issue :
+   * l'utilisateur ne pouvait que recliquer le même bouton périmé (constaté le 2026-09-04, alors
+   * que `main` était déjà exactement alignée sur `origin/main`).
+   *
+   * Trois issues après la re-sonde, et AUCUNE n'est un refus :
+   * - plus rien à intégrer → on rafraîchit, le bouton disparaît de lui-même ;
+   * - une seule voie reste → ce n'est plus un choix mais la seule porte, on la prend ;
+   * - plusieurs voies restent → on REPOSE la question avec la liste à jour. Choisir à la place de
+   *   l'utilisateur quand plusieurs historiques sont possibles reste interdit : c'est exactement la
+   *   garde que ce composant protège (aucune fusion fabriquée sur la branche de quelqu'un).
+   */
   const apply = async (strategy: UpdateStrategy): Promise<void> => {
     applyOwnsBanner.current = true
     setApplying(strategy)
     setApplyError(undefined)
     setChoicesOpen(false)
+
+    let retenue = strategy
+    const fresh = await relireEtat()
+    if (fresh) {
+      const encorePossibles = fresh.strategies?.length
+        ? fresh.strategies
+        : (['fast-forward'] as UpdateStrategy[])
+      if (!fresh.available) {
+        applyOwnsBanner.current = false
+        setApplying(null)
+        setInfo(fresh)
+        return
+      }
+      if (!encorePossibles.includes(strategy)) {
+        if (encorePossibles.length === 1) {
+          retenue = encorePossibles[0]
+          setApplying(retenue)
+        } else {
+          applyOwnsBanner.current = false
+          setApplying(null)
+          setInfo(fresh)
+          setChoicesOpen(true)
+          setApplyError(
+            `L’état du dépôt a changé : « ${UPDATE_STRATEGY_LABELS[strategy]} » ne s’applique plus. ` +
+              `Choisis parmi les voies encore possibles.`
+          )
+          return
+        }
+      }
+      setInfo(fresh)
+    }
+
     try {
-      const r = await window.api.applyUpdate?.(strategy)
+      const r = await window.api.applyUpdate?.(retenue)
       // Succès → le main relance l'app (app.relaunch/quit) : rien à faire ici. Échec → afficher la raison.
       if (r?.ok) {
         const noEffect = r.effect === 'none' || (r.reload === false && r.relaunch === false)

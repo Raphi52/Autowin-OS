@@ -244,7 +244,7 @@ describe('mise à jour disponible — un bouton, pas une bannière', () => {
     const checkUpdate = vi
       .fn()
       .mockResolvedValueOnce({ available: true, behind: 1, branch: 'main' })
-      .mockResolvedValueOnce({ available: true, behind: 2, branch: 'main' })
+      .mockResolvedValue({ available: true, behind: 2, branch: 'main' })
     const applyUpdate = vi.fn().mockResolvedValue({
       ok: true,
       effect: 'none',
@@ -258,7 +258,9 @@ describe('mise à jour disponible — un bouton, pas une bannière', () => {
       container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
     )
 
-    expect(checkUpdate).toHaveBeenCalledTimes(2)
+    // Trois sondes, et chacune a sa raison : au montage, AVANT d'appliquer (le choix affiché peut
+    // avoir vieilli), puis après un succès sans effet pour revalider ce qui reste à récupérer.
+    expect(checkUpdate).toHaveBeenCalledTimes(3)
     const button = container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!
     expect(button.disabled).toBe(false)
     expect(button.textContent).toContain('2')
@@ -458,6 +460,129 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     api()
     await render()
     expect(container.querySelector('[data-testid="update-repair"]')).toBeNull()
+  })
+})
+
+describe('choix PÉRIMÉ : re-sonder avant d’appliquer, jamais refuser', () => {
+  it('une seule voie reste → on la prend, au lieu d’envoyer la voie périmée et de se faire refuser', async () => {
+    // Affiché quand `main` portait des commits en plus, puis `main` est alignée entre-temps :
+    // `rebase` n'existe plus, seule l'avance simple s'applique.
+    const applyUpdate = vi.fn().mockResolvedValue({ ok: true })
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({
+        available: true,
+        behind: 2,
+        branch: 'main',
+        strategies: ['rebase', 'merge']
+      })
+      .mockResolvedValue({
+        available: true,
+        behind: 2,
+        branch: 'main',
+        strategies: ['fast-forward']
+      })
+    api({ checkUpdate, applyUpdate })
+    await render()
+    expect(container.querySelector('[data-testid="update-apply"]')!.textContent).toContain(
+      'Rebaser sur origin/main'
+    )
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(applyUpdate).toHaveBeenCalledWith('fast-forward')
+    expect(applyUpdate).not.toHaveBeenCalledWith('rebase')
+    expect(container.querySelector('[data-testid="update-error"]')).toBeNull()
+  })
+
+  it('plusieurs voies restent → la question est REPOSÉE à jour, aucune fusion choisie à sa place', async () => {
+    const applyUpdate = vi.fn().mockResolvedValue({ ok: true })
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({
+        available: true,
+        behind: 3,
+        branch: 'feat/x',
+        strategies: ['merge', 'rebase', 'switch-main']
+      })
+      .mockResolvedValue({
+        available: true,
+        behind: 3,
+        branch: 'main',
+        strategies: ['rebase', 'merge']
+      })
+    api({ checkUpdate, applyUpdate })
+    await render()
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-more"]')!.click()
+    })
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="update-choice-switch-main"]')!
+        .click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(applyUpdate).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
+      'ne s’applique plus'
+    )
+    // Les voies encore possibles sont offertes, à jour.
+    expect(container.querySelector('[data-testid="update-choices"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="update-choice-merge"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="update-choice-switch-main"]')).toBeNull()
+  })
+
+  it('plus rien à intégrer → le bouton disparaît, sans message d’échec', async () => {
+    const applyUpdate = vi.fn().mockResolvedValue({ ok: true })
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({
+        available: true,
+        behind: 2,
+        branch: 'main',
+        strategies: ['rebase', 'merge']
+      })
+      .mockResolvedValue({ available: false, behind: 0, branch: 'main' })
+    api({ checkUpdate, applyUpdate })
+    await render()
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(applyUpdate).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="update-banner"]')).toBeNull()
+  })
+
+  it('sonde en échec → le choix cliqué part quand même (la garde du main reste le rempart)', async () => {
+    const applyUpdate = vi.fn().mockResolvedValue({ ok: true })
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({
+        available: true,
+        behind: 2,
+        branch: 'main',
+        strategies: ['rebase', 'merge']
+      })
+      .mockRejectedValue(new Error('origin inaccessible'))
+    api({ checkUpdate, applyUpdate })
+    await render()
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(applyUpdate).toHaveBeenCalledWith('rebase')
   })
 })
 
