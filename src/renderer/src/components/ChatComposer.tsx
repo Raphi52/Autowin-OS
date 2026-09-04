@@ -109,7 +109,7 @@ function IconeMicroTrait(): React.JSX.Element {
   )
 }
 
-/** ENVOYER : une flèche dessinée d'un trait, même graisse que le micro et l'arrêt. */
+/** ENVOYER : un avion en plein, lisible sur le bouton de couleur vive. */
 function IconeEnvoyer(): React.JSX.Element {
   return (
     <svg
@@ -124,8 +124,7 @@ function IconeEnvoyer(): React.JSX.Element {
       aria-hidden="true"
       focusable="false"
     >
-      <path d="M12 19V6" />
-      <path d="m6 11.5 6-6 6 6" />
+      <path d="M4 11.2 20 4l-7.2 16-2.2-6.6z" fill="currentColor" stroke="none" />
     </svg>
   )
 }
@@ -398,8 +397,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         }
         data-context-level={props.contextRatio != null ? (props.contextLevel ?? 'ok') : undefined}
         data-testid="composer-context-rule"
-        title={props.contextRatio != null ? props.contextTitle : undefined}
       >
+        {/* INFOBULLE DU FILET : une bande de survol fine posee SUR le filet — la tooltip ne se
+           declenche qu'au-dessus de la jauge, pas partout dans la zone de saisie. */}
+        {props.contextRatio != null && props.contextTitle ? (
+          <div
+            className="composer-context-tip"
+            data-testid="composer-context-tip"
+            title={props.contextTitle}
+          >
+            <span className="composer-context-tip-bulle" role="tooltip">
+              {props.contextTitle}
+            </span>
+          </div>
+        ) : null}
         <div className="composer-field">
           {props.attachmentsNode}
           {props.errorNode}
@@ -428,7 +439,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                       }}
                     >
                       <span className="slash-name mono">
-                        {c.kind === 'run' ? ';run' : ';fichier'} {c.label}
+                        {c.kind === 'run' ? '@run' : '@fichier'} {c.label}
                       </span>
                       {c.hint && <span className="slash-hint">{c.hint}</span>}
                     </li>
