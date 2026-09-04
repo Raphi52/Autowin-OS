@@ -111,3 +111,36 @@ describe('RunInspector — ancrage des sections', () => {
     expect(cibles).toEqual(['Journal'])
   })
 })
+
+describe('RunInspector — aperçu en tête', () => {
+  it('dit le besoin, ce qui reste à cocher et les fichiers AVANT le markdown', () => {
+    act(() =>
+      root.render(
+        createElement(RunInspector, {
+          content:
+            '## Besoin\njuger la skill curate\n\nCritère de succès (DoD cochable) :\n- [x] fait\n- [ ] le verdict est publié\n\n## Journal\n[2026-09-04] touche src/main/commands.ts\n\n## Défauts\n- Aucun',
+          summary: { status: 'green', dodChecked: 1, dodTotal: 2, journalEvents: 1, defauts: 0 }
+        })
+      )
+    )
+
+    const apercu = container.querySelector('[data-testid="run-apercu"]')
+    expect(apercu).not.toBeNull()
+    expect(apercu?.textContent).toContain('juger la skill curate')
+    expect(apercu?.textContent).toContain('le verdict est publié')
+    expect(apercu?.textContent).toContain('src/main/commands.ts')
+    expect(apercu?.textContent).not.toContain('Aucun')
+  })
+
+  it('n’affiche aucun aperçu quand le RUN.md ne porte rien à résumer', () => {
+    act(() =>
+      root.render(
+        createElement(RunInspector, {
+          content: 'status: green',
+          summary: { status: 'green', dodChecked: 0, dodTotal: 0, journalEvents: 0, defauts: 0 }
+        })
+      )
+    )
+    expect(container.querySelector('[data-testid="run-apercu"]')).toBeNull()
+  })
+})

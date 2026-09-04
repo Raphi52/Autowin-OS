@@ -1990,6 +1990,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
         status: 'completed',
         channel: 'model',
         actor: { id: 'builder', kind: 'agent', label: 'Builder' },
+        // Un vrai sous-agent porte TOUJOURS son run et sa tentative : c'est ce couple qui fait
+        // de lui un bloc « agent » dans le graphe (request-execution-tree-model.ts).
+        execution: { runId: 'run-A', attemptId: '1' },
         payloads: [{ kind: 'model-response', content: 'travail fait' }],
         observation: { boundary: 'orchestrator', fidelity: 'exact' }
       }
@@ -2010,12 +2013,16 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.live-run')).toBeNull()
 
     const noeudAgent = container!.querySelector<HTMLButtonElement>(
-      '[data-execution-node][data-execution-kind]'
+      '[data-execution-node][data-execution-kind="agent"]'
     )!
+    expect(noeudAgent).not.toBeNull()
     await act(async () => noeudAgent.click())
     // Le fil se lit dans l'onglet RUNS, à côté des RUN.md — demandé trois fois par l'utilisateur,
-    // acté le 2026-09-01. Descendre sur un nœud du graphe y bascule tout seul : sans cela, le fil
-    // s'empilait sous le graphe et on relisait la même exécution deux fois.
+    // acté le 2026-09-01. Descendre sur un nœud d'AGENT y bascule tout seul : sans cela, le fil
+    // s'empilait sous le graphe et on relisait la même exécution deux fois. Restriction du
+    // 2026-09-04 (conv-259) : SEUL un nœud d'agent bascule — les autres blocs (injection, outil,
+    // clôture) ouvrent leur détail SUR le graphe, seule vue qui les détaille. D'où le sélecteur
+    // explicite sur `agent` : viser « n'importe quel nœud typé » testait l'ancienne règle.
     const ongletActif = container!.querySelector('.workflow-section-tab.is-active')
     expect(ongletActif?.textContent?.trim()).toBe('Runs')
     expect(container!.querySelector('.live-run')).not.toBeNull()

@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { BrainMarkdown } from './BrainMarkdown'
+import { apercuDuRun } from './run-inspector-apercu'
 import './RunInspector.css'
 
 type RunInspectorSummary = {
@@ -26,6 +27,7 @@ export function RunInspector({
 }): React.JSX.Element {
   const contentRef = useRef<HTMLDivElement>(null)
   const sections = SECTIONS.map((name) => ({ name, present: hasSection(content, name) }))
+  const apercu = apercuDuRun(content)
 
   /**
    * On vise le titre qui PORTE le nom de la section, jamais le n-ieme titre : un RUN.md contient
@@ -48,6 +50,41 @@ export function RunInspector({
         <span>Journal {summary.journalEvents}</span>
         <span>Défauts {summary.defauts}</span>
       </div>
+      {(apercu.besoin || apercu.dodRestants.length > 0 || apercu.defauts.length > 0) && (
+        <div className="run-inspector__apercu" data-testid="run-apercu">
+          {apercu.besoin && <p className="run-inspector__besoin">{apercu.besoin}</p>}
+          {apercu.dodRestants.length > 0 && (
+            <div className="run-inspector__ligne">
+              <span className="run-inspector__kicker">Reste à cocher</span>
+              <ul>
+                {apercu.dodRestants.slice(0, 4).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {apercu.defauts.length > 0 && (
+            <div className="run-inspector__ligne">
+              <span className="run-inspector__kicker">Défauts</span>
+              <ul>
+                {apercu.defauts.slice(0, 4).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {apercu.fichiers.length > 0 && (
+            <div className="run-inspector__ligne">
+              <span className="run-inspector__kicker">Fichiers</span>
+              <span className="run-inspector__fichiers">
+                {apercu.fichiers.slice(0, 6).map((f) => (
+                  <code key={f}>{f}</code>
+                ))}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
       <nav
         className="run-inspector__nav"
         data-testid="run-section-nav"

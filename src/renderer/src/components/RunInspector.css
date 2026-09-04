@@ -44,3 +44,61 @@
   font-size: 16px;
   scroll-margin-top: 8px;
 }
+
+/*
+ * APERÇU EN TÊTE DU RUN.md — répond « qu'a fait ce run, où il en est » avant le markdown.
+ * Aucun fond opaque : filet or dégradé, typographie compacte, kickers en petites capitales.
+ */
+.run-inspector__apercu {
+  padding: 8px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.55), rgba(212, 169, 79, 0.06)) 1;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.run-inspector__besoin {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: #dde3ee;
+}
+
+.run-inspector__ligne {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.run-inspector__kicker {
+  flex: 0 0 74px;
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #e3ba55;
+  padding-top: 2px;
+}
+
+.run-inspector__ligne ul {
+  margin: 0;
+  padding-left: 14px;
+  color: #a9b2c4;
+}
+
+.run-inspector__fichiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.run-inspector__fichiers code {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 10px;
+  color: #dde3ee;
+  overflow-wrap: anywhere;
+}
