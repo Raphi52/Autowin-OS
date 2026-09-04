@@ -137,6 +137,65 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
     expect(spawnFn).toHaveBeenCalledTimes(1)
   })
 
+  it('la cause pas encore nommée est resondée, puis la réindexation part', async () => {
+    // Séquence RELEVÉE sur le serveur réel le 2026-09-04 : deux lectures « unavailable » sans
+    // aucune raison (fraîcheur en cours de réévaluation), PUIS le vrai diagnostic.
+    const { env } = fauxBrain()
+    const suite = [INDETERMINE, INDETERMINE, DEGRADE]
+    let lu = 0
+    const attentes: number[] = []
+    const appels: string[][] = []
+    const r = await ensureBrainIndexFresh({
+      env,
+      readHealth: async () => suite[lu++] ?? DEGRADE,
+      sleepFn: async (ms) => void attentes.push(ms),
+      spawnFn: (bin, args) => {
+        appels.push([bin, ...args])
+        return { unref: vi.fn() }
+      }
+    })
+    expect(r.status).toBe('launched')
+    expect(lu).toBe(3) // il n'a PAS abandonné à la première lecture muette
+    expect(attentes).toEqual([2000, 2000])
+    expect(appels).toHaveLength(1)
+  })
+
+  it('une cause jamais nommée finit par renoncer, sans réindexer', async () => {
+    const { env } = fauxBrain()
+    let lu = 0
+    const spawnFn = vi.fn()
+    const r = await ensureBrainIndexFresh({
+      env,
+      readHealth: async () => {
+        lu++
+        return INDETERMINE
+      },
+      sleepFn: async () => {},
+      spawnFn
+    })
+    expect(r.status).toBe('not-needed')
+    expect(lu).toBe(5) // borné : pas de sondage infini au démarrage
+    expect(spawnFn).not.toHaveBeenCalled()
+  })
+
+  it('un « unavailable » MOTIVÉ est stable : aucune attente', async () => {
+    const { env } = fauxBrain()
+    let lu = 0
+    const attentes: number[] = []
+    const r = await ensureBrainIndexFresh({
+      env,
+      readHealth: async () => {
+        lu++
+        return { state: 'unavailable', reasons: ['embedding model missing'] }
+      },
+      sleepFn: async (ms) => void attentes.push(ms),
+      spawnFn: vi.fn()
+    })
+    expect(r.status).toBe('not-needed')
+    expect(lu).toBe(1)
+    expect(attentes).toEqual([])
+  })
+
   it('un service injoignable ne déclenche rien (ce n’est pas un index périmé)', () => {
     expect(needsIndexRebuild(null)).toBe(false)
     expect(needsIndexRebuild({ state: 'unavailable', reasons: ['index freshness mismatch'] })).toBe(
