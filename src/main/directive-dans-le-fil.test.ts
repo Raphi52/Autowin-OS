@@ -24,7 +24,7 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
    * de réponse posé par `beginTurn`. L'utilisateur voyait sa phrase en dernier, rien en dessous, et
    * la réponse qui la traitait AU-DESSUS d'elle. Ce test fixe l'ordre de lecture.
    */
-  it('est écrite dans le fil pendant le tour en cours', () => {
+  it('se place APRÈS la réponse en cours — à l’endroit où elle a été tapée', () => {
     let horloge = 1
     const store = new ConversationStore(() => horloge++)
     const conv = store.create({ title: 'A', provider: 'claude' })
