@@ -35,6 +35,10 @@ const DEGRADE = {
   ]
 }
 
+// État RELEVÉ sur le serveur réel : la fraîcheur est en cours de réévaluation, donc AUCUNE raison
+// n'est encore disponible. Dure ~6 s après un changement du corpus (mesuré le 2026-09-04).
+const INDETERMINE = { state: 'unavailable', reasons: [] as string[] }
+
 describe('réindexation automatique au démarrage sur Brain dégradé', () => {
   afterEach(() => resetBrainIndexRefreshAttempt())
 
