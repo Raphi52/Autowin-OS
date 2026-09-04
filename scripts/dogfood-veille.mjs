@@ -17,11 +17,57 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
+/**
+ * Lit la valeur d'un drapeau en distinguant trois états, parce qu'ils n'ont pas le même sens :
+ * drapeau absent (on prend le défaut), drapeau présent SANS valeur (une saisie inachevée, donc une
+ * erreur), drapeau présent avec valeur (à valider). Confondre les deux derniers, c'est appliquer
+ * silencieusement le défaut à quelqu'un qui voulait autre chose.
+ */
 const arg = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
   return i >= 0 ? process.argv[i + 1] : defaut
 }
-const JOURS = Number(arg('--jours', '7'))
+
+// Plage maximale d'un Date JS (±8,64e15 ms depuis l'epoch) : au-delà, `new Date(...)` rend Invalid
+// Date et `toISOString()` lève une RangeError. La borne est DÉDUITE de cette contrainte, pas choisie.
+const JOURS_MAX = Math.floor((Date.now() + 8.64e15) / 86_400_000)
+
+/**
+ * La fenêtre d'observation est le seul réglage de cette veille, et une fenêtre mal saisie ne se
+ * signale pas d'elle-même : `--jours 0` et `--jours -3` rendaient un rapport parfaitement vert —
+ * 0 frustration, 0 run — qui dit « tout va bien » alors qu'il n'a rien mesuré. Un capteur qui ment
+ * en silence est plus nuisible qu'un capteur en panne, puisqu'on le croit. Tout ce qui n'est pas un
+ * entier strictement positif est donc refusé, plutôt que de rendre une mesure vide.
+ *
+ * On exige une écriture décimale au lieu de faire confiance à Number() : `Number('')` vaut 0,
+ * `Number(' ')` vaut 0, `Number('0x7')` vaut 7 et `Number('1e9999')` vaut Infinity — quatre façons
+ * d'obtenir une fenêtre qui n'est pas celle qu'on croit avoir tapée.
+ */
+const lireJours = (brut) => {
+  if (typeof brut !== 'string' || !/^[0-9]+$/.test(brut.trim())) return null
+  const n = Number(brut.trim())
+  return Number.isSafeInteger(n) && n >= 1 && n <= JOURS_MAX ? n : null
+}
+
+const brutJours = arg('--jours', '7')
+const JOURS = lireJours(brutJours)
+if (JOURS === null) {
+  const vu = brutJours === undefined ? 'aucune valeur' : `« ${String(brutJours).slice(0, 40)} »`
+  // Deux refus differents, deux messages differents : dire « attendu un entier strictement positif »
+  // a quelqu'un qui a tape 200000000 decrit une faute qu'il n'a pas commise, et cache la vraie cause.
+  const horsPlage =
+    /^[0-9]+$/.test(String(brutJours ?? '').trim()) && Number(String(brutJours).trim()) >= 1
+  console.error(
+    horsPlage
+      ? `--jours : ${vu} — fenêtre trop lointaine, le maximum est ${JOURS_MAX} jours ` +
+          "(au-delà, la date de début sort de la plage que JavaScript sait représenter)."
+      : `--jours : ${vu} — attendu un entier strictement positif (nombre de jours observés).
+` +
+          'Une fenêtre nulle ou négative ne mesurerait rien et rendrait un rapport vert trompeur.'
+  )
+  process.exit(2)
+}
+
 const JSON_OUT = process.argv.includes('--json')
 const RACINE = join(process.cwd(), '.autowin-data', 'autowin-os')
 if (!existsSync(RACINE)) {
