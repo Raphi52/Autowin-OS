@@ -21,8 +21,8 @@ import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 describe('cap d’itérations — une seule valeur par défaut, celle qui est documentée', () => {
   const source = (relatif: string): string => readFileSync(join(__dirname, relatif), 'utf8')
 
-  it('la constante exportée vaut 12, la valeur documentée', () => {
-    expect(CAP_ITERATIONS_TOUR).toBe(12)
+  it('la constante exportée vaut 40, la valeur documentée', () => {
+    expect(CAP_ITERATIONS_TOUR).toBe(40)
   })
 
   /*

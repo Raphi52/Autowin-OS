@@ -168,6 +168,36 @@
     background 120ms ease;
 }
 
+/* ----------------------------------------------------------------------------
+   MODE CLAIR — Agent Studio peint TOUT en couleurs de nuit écrites en dur :
+   `#e7edf5` pour le corps (l.17), `#dfeaf5` pour les modèles (l.162), `#c9d9e8`
+   pour les champs (l.83), `#6f8499` / `#74879a` / `#66798c` pour les libellés
+   secondaires (l.34, 50, 138), `#fff` pour le titre de la bibliothèque (l.125).
+   Aucune variable de thème : le mode clair ne les atteignait pas, d'où les titres
+   de rôle et les noms de modèles quasi invisibles signalés le 2026-09-03.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .topology-panel,
+:root[data-theme='clair'] .topology-model,
+:root[data-theme='clair'] .topology-library > h3 {
+  color: var(--text);
+}
+:root[data-theme='clair'] .topology-panel > header span,
+:root[data-theme='clair'] .topology-parallel-heading span,
+:root[data-theme='clair'] .topology-library > p {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .topology-panel > header p {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .topology-slot select,
+:root[data-theme='clair'] .topology-slot input,
+:root[data-theme='clair'] .topology-panel select,
+:root[data-theme='clair'] .topology-panel input {
+  color: var(--text);
+  background: #ffffff;
+  border-color: var(--line);
+}
+
 .topology-model:hover,
 .topology-model.is-selected {
   border-color: #4da6d2;
@@ -542,6 +572,20 @@
   text-transform: uppercase;
 }
 
+/* MODE CLAIR — choix de l'utilisateur du 2026-09-03 : « conserve un fond foncé,
+   juste changer la police, bleue me semble bien ». Le bandeau reste donc un encart
+   sombre assumé au bas d'une page claire, accordé aux vignettes de modèles ; seule
+   sa gamme passe du doré au bleu. Fond légèrement bleuté pour que le cadre suive,
+   texte et titres en bleu clair — le contraste sur fond sombre est préservé. */
+:root[data-theme='clair'] .topology-runtime-limit {
+  border-color: #2f4a63;
+  background: rgba(10, 20, 30, 0.82);
+  color: #8fb8d6;
+}
+:root[data-theme='clair'] .topology-runtime-limit b {
+  color: #6fc9f5;
+}
+
 .agents-topology-loading {
   display: grid;
   width: 100%;
@@ -616,6 +660,19 @@
   color: #e7e8eb;
 }
 
+/* MODE CLAIR — le COMPTEUR de slots (la pastille « 0 » / « 1 » dans l'en-tête de
+   chaque panneau) est peint en `#e7e8eb`, un blanc cassé, sur un fond devenu très
+   clair : blanc sur blanc. Sa bordure blanche translucide disparaît aussi. Même
+   règle à deux niveaux que les liens d'action — il faut la même forme ici.
+   Signalé le 2026-09-03 : « il reste le numéro ». */
+:root[data-theme='clair'] .theme-serious .topology-panel > header b,
+:root[data-theme='clair'] .theme-serious .topology-profiles,
+:root[data-theme='clair'] .theme-serious .topology-slot select {
+  border-color: var(--line);
+  background: #ffffff;
+  color: var(--text);
+}
+
 .theme-serious .topology-empty,
 .theme-serious .topology-assign-button {
   border-color: rgba(255, 255, 255, 0.24);
@@ -625,6 +682,31 @@
 .theme-serious .topology-assign-button:hover:not(:disabled) {
   border-color: rgba(225, 193, 103, 0.7);
   color: #ead18b;
+}
+
+/* MODE CLAIR — les liens d'action (« Glissez un modèle ici », « Remplacer avec le
+   modèle sélectionné », « + Ajouter le modèle sélectionné ») sont peints en
+   `#95999f` avec une bordure BLANCHE translucide par la règle `.theme-serious`
+   ci-dessus (l.649-653). Deux niveaux de spécificité : une règle simple ne les
+   atteint pas. Le survol doré reste doré, mais assombri pour rester lisible. */
+:root[data-theme='clair'] .theme-serious .topology-empty,
+:root[data-theme='clair'] .theme-serious .topology-assign-button {
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+
+/* Le COMPTEUR de slots est un `<b>` NU dans l'en-tête du panneau
+   (AgentsTopologyView.tsx l.367) : aucune classe, donc aucune couleur propre —
+   il héritait du sombre et disparaissait sur fond clair. Signalé le 2026-09-03
+   (« il reste le numéro »). On le cible par sa position dans l'en-tête. */
+:root[data-theme='clair'] .topology-panel > header > b {
+  color: var(--text);
+  background: rgba(15, 20, 35, 0.05);
+  border-color: var(--line);
+}
+:root[data-theme='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
+  border-color: rgba(154, 111, 16, 0.6);
+  color: #7a5a10;
 }
 
 .theme-serious .topology-panel.is-drop-target {
@@ -643,6 +725,32 @@
 .theme-serious .topology-toolbar p,
 .theme-serious .topology-panel > header p {
   color: #8b8f96;
+}
+
+/* MODE CLAIR — le bloc `.theme-serious` juste au-dessus impose `#8b8f96` à toute
+   une famille de libellés (eyebrow, nom du modèle assigné, étiquettes de slot,
+   liens d'action). Sa spécificité à deux niveaux bat une règle simple : il faut
+   donc la même forme ici. S'y ajoutent le titre de section, qui n'a aucune
+   couleur propre et héritait du sombre, et le compteur en petit. Signalé le
+   2026-09-03 : « Exploration et vérification parallèles », « Opus 5 · CLI » et
+   les liens « Glissez un modèle ici » restaient trop clairs. */
+:root[data-theme='clair'] .theme-serious .topology-eyebrow,
+:root[data-theme='clair'] .theme-serious .topology-panel > header span,
+:root[data-theme='clair'] .theme-serious .topology-parallel-heading span,
+:root[data-theme='clair'] .theme-serious .topology-model small,
+:root[data-theme='clair'] .theme-serious .topology-slot-copy span,
+:root[data-theme='clair'] .theme-serious .topology-slot-copy small,
+:root[data-theme='clair'] .theme-serious .topology-slot label,
+:root[data-theme='clair'] .theme-serious .topology-toolbar p,
+:root[data-theme='clair'] .theme-serious .topology-panel > header p {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .topology-parallel-heading h3,
+:root[data-theme='clair'] .topology-slot-copy strong {
+  color: var(--text);
+}
+:root[data-theme='clair'] .topology-parallel-heading small {
+  color: var(--text-dim);
 }
 
 @media (max-width: 1100px) {
