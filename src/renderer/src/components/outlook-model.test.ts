@@ -3,6 +3,9 @@ import {
   formatEventTime,
   splitByExchange,
   formatExchangeDate,
+  formatMessageDate,
+  extraireCorpsUtile,
+  compterFilsNonLus,
   groupByInterlocutor,
   groupThreads,
   normaliserSujet,
@@ -352,6 +355,33 @@ describe('fils de conversation d un interlocuteur', () => {
     ])
     expect(sortByName(fils).map((f) => f.nom)).toEqual(['anne bernard', 'Zoe Martin'])
   })
+
+  it('remonte en tete ceux qui ont un nouveau message', () => {
+    const fils = groupByInterlocutor([
+      mail({ id: 'a', adresse: 'anne@amitel.fr', nom: 'Anne Bernard' }),
+      mail({ id: 'b', adresse: 'bruno@amitel.fr', nom: 'Bruno Colin' }),
+      mail({
+        id: 'c',
+        adresse: 'zoe@amitel.fr',
+        nom: 'Zoe Martin',
+        nonLu: true,
+        recuLe: new Date(NOW).toISOString()
+      })
+    ])
+    expect(sortByName(fils).map((f) => f.nom)).toEqual([
+      'Zoe Martin',
+      'Anne Bernard',
+      'Bruno Colin'
+    ])
+  })
+
+  it('compte les fils qui ont du nouveau', () => {
+    const fils = groupByInterlocutor([
+      mail({ id: 'a', adresse: 'anne@amitel.fr', nom: 'Anne Bernard' }),
+      mail({ id: 'b', adresse: 'zoe@amitel.fr', nom: 'Zoe Martin', nonLu: true })
+    ])
+    expect(compterFilsNonLus(fils)).toBe(1)
+  })
 })
 
 describe('cle de fil et nom du contact, tels que la vraie boite les rend', () => {
@@ -392,5 +422,37 @@ describe('cle de fil et nom du contact, tels que la vraie boite les rend', () =>
       mail({ id: 'a', adresse: 'zoe@amitel.fr', nom: "'zoe@amitel.fr'", deMoi: true })
     ])
     expect(fil.nom).toBe('zoe@amitel.fr')
+  })
+})
+
+describe('le corps affiché ne contient que le message écrit', () => {
+  it("coupe l'en-tête de citation Outlook", () => {
+    const corps = [
+      'Reponse au test',
+      '',
+      'De : Arthur LEPLEY <arthur.lepley@amitel.fr>',
+      'Envoyé : jeudi 3 septembre 2026 14:50',
+      'À : raphael.vilain@amitel.fr',
+      'Objet : test widget',
+      '',
+      '1er message pour le test widget'
+    ].join('\n')
+    expect(extraireCorpsUtile(corps)).toBe('Reponse au test')
+  })
+
+  it('coupe sur « Le … a écrit : » et sur les lignes citées', () => {
+    expect(extraireCorpsUtile('ok\nLe 3 septembre, Paul a écrit :\n> salut')).toBe('ok')
+    expect(extraireCorpsUtile('ok\n> salut')).toBe('ok')
+  })
+
+  it("rend le texte d'origine si la coupe ne laisse rien", () => {
+    expect(extraireCorpsUtile('> tout est cité')).toBe('> tout est cité')
+  })
+})
+
+describe('la date du message', () => {
+  it("affiche le jour à côté de l'heure", () => {
+    expect(formatMessageDate(new Date(2026, 8, 3, 14, 50).getTime())).toBe('03/09 14:50')
+    expect(formatMessageDate(null)).toBe('')
   })
 })

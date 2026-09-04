@@ -170,7 +170,7 @@ export function groupByInterlocutor(
     const message: MessageInterlocuteur = {
       id: mail.id,
       sujet: mail.sujet || '(sans objet)',
-      corps: (mail.corps ?? '').trim(),
+      corps: extraireCorpsUtile(mail.corps ?? ''),
       recuLe: instant,
       // Un message que l'utilisateur a lui-meme envoye n'est jamais « a lire » : le compter
       // gonflerait la pastille de non-lus avec ses propres envois.
@@ -305,6 +305,48 @@ export function formatEventTime(entry: AgendaEntry): string {
 /** Jour lisible, pour les rendez-vous qui ne sont pas aujourd'hui. */
 export function formatEventDay(entry: AgendaEntry): string {
   return new Date(entry.debut).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })
+}
+
+
+/**
+ * Ne garder que ce que la personne a ÉCRIT : Outlook recopie tout le fil sous la réponse (en-tête
+ * « De : / Envoyé : / À : / Objet : », « -----Message d'origine----- », « Le … a écrit : », lignes
+ * citées « > »). Afficher ce bloc dans une bulle de chat répète des messages déjà présents au-dessus
+ * et noie la seule phrase neuve. On coupe donc AU PREMIER marqueur de citation rencontré.
+ *
+ * Prudence : si la coupe ne laisse RIEN, on rend le texte d'origine — un message vide se lirait
+ * comme une perte de données, alors que le seul défaut serait notre détection.
+ */
+export function extraireCorpsUtile(corps: string): string {
+  const lignes = corps.split(/\r?\n/)
+  const marqueurs: RegExp[] = [
+    /^\s*-{2,}\s*message (d'origine|transf[ée]r[ée])\s*-{2,}\s*$/i,
+    /^\s*_{5,}\s*$/,
+    /^\s*De\s*:\s*\S/i,
+    /^\s*From\s*:\s*\S/i,
+    /^\s*(Envoy[ée]|Sent)\s*:\s*\S/i,
+    /^\s*Le .+ a [ée]crit\s*:\s*$/i,
+    /^\s*On .+ wrote\s*:\s*$/i,
+    /^\s*>/
+  ]
+  let coupe = lignes.length
+  for (let i = 0; i < lignes.length; i += 1) {
+    if (marqueurs.some((marqueur) => marqueur.test(lignes[i]))) {
+      coupe = i
+      break
+    }
+  }
+  const utile = lignes.slice(0, coupe).join('\n').trim()
+  return utile === '' ? corps.trim() : utile
+}
+
+/** Date ET heure d'un message : « 03/09 14:50 ». Dans un fil, savoir QUAND fait partie du message. */
+export function formatMessageDate(instant: number | null): string {
+  if (instant === null || instant === 0) return ''
+  const date = new Date(instant)
+  const jour = date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+  const heure = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  return `${jour} ${heure}`
 }
 
 /** Date lisible du dernier échange d'un fil : l'heure aujourd'hui, le jour sinon. */
@@ -462,14 +504,22 @@ export function groupThreads(fil: Interlocuteur): FilConversation[] {
 }
 
 /**
- * Les interlocuteurs classés PAR NOM.
+ * Les interlocuteurs classés : CEUX QUI ONT DU NOUVEAU D'ABORD, puis les autres par nom.
  *
- * Un tri distinct de celui de `groupByInterlocutor`, qui classe par activité. La demande est ici une
- * liste « par nom » : on cherche quelqu'un qu'on connaît, on ne regarde pas ce qui vient d'arriver —
- * et une liste dont l'ordre change à chaque nouveau message ne se parcourt pas.
+ * Demande de l'utilisateur du 2026-09-04 : un nouveau message doit faire remonter la personne en
+ * tête, sinon il faut chercher la pastille dans une liste alphabétique. Entre deux personnes qui ont
+ * du nouveau, la plus récente passe devant. Le reste de la liste garde l'ordre alphabétique, stable :
+ * on y cherche quelqu'un qu'on connaît, son rang ne doit pas bouger à chaque relève.
  */
 export function sortByName(fils: readonly Interlocuteur[]): Interlocuteur[] {
-  return [...fils].sort((a, b) =>
-    a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base', numeric: true })
-  )
+  return [...fils].sort((a, b) => {
+    if ((a.nonLus > 0) !== (b.nonLus > 0)) return a.nonLus > 0 ? -1 : 1
+    if (a.nonLus > 0 && b.nonLus > 0) return b.dernierEchange - a.dernierEchange
+    return a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base', numeric: true })
+  })
+}
+
+/** Combien de fils ont du nouveau : le compteur affiché en tête de la liste des interlocuteurs. */
+export function compterFilsNonLus(fils: readonly Interlocuteur[]): number {
+  return fils.filter((fil) => fil.nonLus > 0).length
 }

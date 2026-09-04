@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
+  compterFilsNonLus,
   formatExchangeDate,
+  formatMessageDate,
   groupThreads,
   sortByName,
   splitByExchange,
@@ -183,8 +185,17 @@ function EcranContacts({
     return <p className="home-hint">Aucun message dans votre boîte de réception.</p>
   }
   const { personnes, automates, indistinct } = splitByExchange(fils)
+  // Combien de fils ont du nouveau, en un coup d'œil : la pastille par contact dit « ici », ce
+  // compteur dit « combien au total » sans avoir à parcourir la liste.
+  const filsNonLus = compterFilsNonLus(fils)
   return (
     <>
+      {filsNonLus > 0 ? (
+        <p className="home-subhead" data-testid="home-inter-nonlus">
+          <span className="home-threads__tally">{filsNonLus}</span> conversation
+          {filsNonLus > 1 ? 's' : ''} avec du nouveau
+        </p>
+      ) : null}
       {personnes.length > 0 ? (
         <ListeContacts fils={sortByName(personnes)} onChoisir={onChoisir} />
       ) : null}
@@ -365,7 +376,7 @@ function EcranConversation({
     <>
       <ol className="home-chat" data-testid="home-inter-conversation">
         {conversation.messages.map((message) => (
-          <Bulle key={message.id} message={message} contact={contact} now={now} />
+          <Bulle key={message.id} message={message} contact={contact} />
         ))}
       </ol>
       <div className="home-chat__repondre" onPointerDown={(event) => event.stopPropagation()}>
@@ -455,18 +466,16 @@ function EcranConversation({
 /** UN message du fil : qui, quand, et le texte. Côté droit si c'est moi. */
 function Bulle({
   message,
-  contact,
-  now
+  contact
 }: {
   message: MessageInterlocuteur
   contact: Interlocuteur
-  now: number
 }): React.JSX.Element {
   return (
     <li className="home-chat__ligne" data-moi={message.deMoi ? 'true' : undefined}>
       <span className="home-chat__meta">
         <b>{message.deMoi ? 'Moi' : contact.nom}</b>
-        <em>{formatExchangeDate(message.recuLe, now)}</em>
+        <em>{formatMessageDate(message.recuLe)}</em>
       </span>
       <span className="home-chat__bulle" data-unread={message.nonLu ? 'true' : undefined}>
         {message.corps !== '' ? (
