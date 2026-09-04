@@ -326,6 +326,16 @@
     0 0 3px currentColor,
     0 0 7px currentColor;
 }
+/* ZONE DE SURVOL ELARGIE, invisible. Le point ne fait que 7px : viser 7px a la souris est un
+   exercice, et l'info-bulle `title` ne se declenche donc jamais en pratique — une couleur qui
+   n'explique pas son sens oblige a venir demander ce qu'elle veut dire. Le disque reste 7px,
+   seule la CIBLE passe a ~21px. `inset` negatif : aucun decalage de mise en page. */
+.conversation-state::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
 /* EN COURS = le composant <Spinner/> (.aw-atom), celui que rend TOUT le reste de l'app.
    Il porte lui-meme sa geometrie ; ici on ne fait qu'ANNULER les proprietes de la pastille
    (point lumineux de 7px) qu'il ne doit pas heriter. Recopier une geometrie d'atome ici

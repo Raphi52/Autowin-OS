@@ -76,6 +76,32 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
     // effet decoratif. Fige, il affirmerait faussement que rien ne tourne.
   })
 
+  it('la pastille porte une INFO-BULLE au survol, dans les DEUX branches de rendu', () => {
+    // Defaut vecu (conv-46) : `title` n'existait que sur la pastille statique. L'etat EN COURS
+    // rend un <Spinner/>, qui ne recevait qu'un `label` — lu par les lecteurs d'ecran, invisible
+    // a la souris. Une couleur muette oblige a venir demander ce qu'elle veut dire.
+    const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    // Le texte de l'info-bulle : libelle + explication, la meme chaine pour les deux branches.
+    expect(tsx).toMatch(/const stateDescription = `\$\{conversationState\.label\} — \$\{conversationState\.detail\}`/)
+    const spinner = tsx.match(/<Spinner\b[^>]*className="conversation-state is-running"[\s\S]*?\/>/)
+    expect(spinner?.[0] ?? '', 'le spinner « en cours » doit porter title').toMatch(
+      /title=\{stateDescription\}/
+    )
+    const pastille = tsx.match(/<span\s+className=\{`conversation-state is-\$\{[\s\S]*?\/>/)
+    expect(pastille?.[0] ?? '', 'la pastille statique doit porter title').toMatch(
+      /title=\{stateDescription\}/
+    )
+  })
+
+  it('la cible de survol est ÉLARGIE : un point de 7px ne se vise pas', () => {
+    // Sans cela l'info-bulle existe dans le DOM mais ne sort jamais : mesure au survol le
+    // 2026-09-04, deux tentatives sur le point lui-meme, aucune bulle. Le disque reste 7px.
+    const bloc = css.match(/\.conversation-state::after\s*\{[^}]*\}/s)?.[0] ?? ''
+    expect(bloc, 'zone de survol elargie absente').toMatch(/position:\s*absolute/)
+    expect(bloc).toMatch(/inset:\s*-\d+px/)
+    expect(css).toMatch(/\.conversation-state\s*\{[^}]*width:\s*7px/s)
+  })
+
   it('chaque clé produite par le modèle a une couleur (aucun état orphelin)', () => {
     const cles = new Set(
       [

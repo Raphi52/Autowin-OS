@@ -4269,6 +4269,7 @@ export function ChatView({
                               size={14}
                               className="conversation-state is-running"
                               label={`État de la conversation : ${stateDescription}`}
+                              title={stateDescription}
                               data-conversation-state={conversationState.key}
                             />
                           ) : (

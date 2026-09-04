@@ -12,6 +12,11 @@ export type SpinnerProps = {
   className?: string
   /** Libellé lu par les lecteurs d'écran ; sans lui, l'atome est purement décoratif. */
   label?: string
+  /**
+   * Info-bulle native au survol. `label` ne sert QUE les lecteurs d'écran : sans `title`, un
+   * utilisateur à la souris n'a aucun moyen de savoir ce que l'atome signale.
+   */
+  title?: string
   /** Repris tel quel pour les tests de rendu existants. */
   'data-testid'?: string
 }
