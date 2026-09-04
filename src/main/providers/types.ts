@@ -225,6 +225,20 @@ export interface Usage {
    * l'entrée, il était sous-facturé de 25 % sans que rien ne le signale.
    */
   cacheCreationTokens?: number
+  /**
+   * OCCUPATION DE LA FENETRE au DERNIER appel du tour, cache inclus — a ne pas confondre avec
+   * `inputTokens`, qui est le CUMUL de tous les appels du tour.
+   *
+   * Un tour d'agent enchaine N appels au modele, et chacun renvoie tout le prefixe. Le cumul est
+   * la bonne quantite pour la DEPENSE et la pire pour la FENETRE : mesure du 2026-09-04 sur
+   * conv-282, un tour de ~14 appels a rendu 2 181 502 tokens d'entree pour une fenetre de 1 M,
+   * donc une jauge collee a 100 % alors que l'occupation reelle tenait sous 25 %.
+   * Absent quand le provider ne sait pas isoler son dernier appel : le consommateur se replie
+   * alors sur `inputTokens`, en sachant que c'est un majorant.
+   */
+  derniereEntree?: number
+  /** Part de `derniereEntree` relue depuis le cache — sous-ensemble, jamais un ajout. */
+  derniereEntreeCache?: number
   costUsd?: number
 }
 

@@ -1893,8 +1893,11 @@ export class AgentPilot {
         usage.outputTokens += res.usage.outputTokens
         usage.costUsd += res.usage.costUsd ?? 0
         // ECRASE, ne cumule pas : la jauge de contexte veut la DERNIERE entree, pas leur somme.
-        usage.derniereEntree = res.usage.inputTokens
-        usage.derniereEntreeCache = res.usage.cacheReadTokens
+        // `res.usage.inputTokens` est le CUMUL du tour cote provider : l'ecraser ici ne le
+        // desagregeait pas, la jauge restait donc collee a 100 % (conv-282, 2026-09-04). Le
+        // provider expose desormais l'entree de son DERNIER appel ; repli sur le cumul si absent.
+        usage.derniereEntree = res.usage.derniereEntree ?? res.usage.inputTokens
+        usage.derniereEntreeCache = res.usage.derniereEntreeCache ?? res.usage.cacheReadTokens
         // Le modele SERVI, sinon aucune fenetre de contexte n'est trouvable en aval.
         if (res.model) usage.model = res.model
         usage.provider = provider

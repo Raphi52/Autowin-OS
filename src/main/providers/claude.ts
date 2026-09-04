@@ -1142,6 +1142,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     let resolvedModel: string | undefined
     let sessionId: string | undefined
     let usage: SendResult['usage']
+    /*
+     * OCCUPATION DE LA FENETRE — l'entree du DERNIER message assistant du flux, pas le cumul.
+     *
+     * L'evenement `result` du CLI porte l'usage AGREGE de tout le tour : le prefixe y est compte
+     * autant de fois qu'il y a eu d'appels. Chaque message `assistant`, lui, porte l'usage de SON
+     * appel. On garde donc le dernier vu : c'est exactement ce que le modele avait en fenetre au
+     * moment de repondre.
+     */
+    let derniereEntree: number | undefined
+    let derniereEntreeCache: number | undefined
     const executionEvidence: ExecutionEvidence[] = []
     const artifactCandidates: ProviderArtifactCandidate[] = []
     const inputImageFingerprints = new Set(
@@ -1330,6 +1340,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             }
           | undefined
         if (msg?.model) resolvedModel = msg.model // modèle RÉEL rapporté par Claude
+        const usageAppel = normalizeClaudeUsage((msg as { usage?: unknown } | undefined)?.usage)
+        if (usageAppel) {
+          derniereEntree = usageAppel.inputTokens
+          derniereEntreeCache = usageAppel.cacheReadTokens
+        }
         collectArtifacts(msg?.content)
         for (const part of msg?.content ?? []) {
           if (part.type === 'text' && part.text) {
@@ -1442,7 +1457,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           o['total_cost_usd'],
           hasReportedCost
         )
-        if (normalizedUsage) usage = normalizedUsage
+        if (normalizedUsage)
+          usage = {
+            ...normalizedUsage,
+            // Repli sur le cumul quand aucun message assistant n'a porte d'usage : un majorant
+            // reste plus utile qu'une jauge absente, et le champ dit d'ou il vient.
+            derniereEntree: derniereEntree ?? normalizedUsage.inputTokens,
+            ...(derniereEntreeCache === undefined ? {} : { derniereEntreeCache })
+          }
         const resultFailed = o['is_error'] === true
         if (resultFailed) {
           const code = typeof o['subtype'] === 'string' ? o['subtype'] : 'provider-result-error'
