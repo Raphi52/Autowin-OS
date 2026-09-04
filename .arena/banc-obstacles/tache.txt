@@ -1,0 +1,13 @@
+Dans le widget de remontée des agents (src/renderer/src/components/run-progress-model.ts, affiché par
+RunProgress.tsx), la liste des obstacles d'une étape est construite en concaténant trois sources sans
+jamais dédupliquer : l'erreur de l'étape en échec, les lignes de friction du texte, et les lignes de
+friction du raisonnement. Or la même ligne « ⛔ Bloqué : … » apparaît très souvent dans deux de ces
+sources à la fois. Conséquence visible : le même obstacle s'affiche deux ou trois fois dans la carte,
+et le compteur « N obstacles » du récapitulatif est gonflé — il ne dit plus combien de frictions
+réelles le run a rencontrées.
+
+Corrige buildRunProgress (et extractObstacles si nécessaire) pour qu'un obstacle IDENTIQUE ne soit
+compté et affiché qu'UNE fois par étape, en conservant l'ordre de première apparition et sans perdre
+aucun obstacle réellement distinct. Ne renomme rien d'autre, ne touche pas aux preuves (evidence).
+
+Critère de succès : node <BENCH>/check.mjs <racine-du-depot> sort en code 0.

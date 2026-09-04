@@ -60,6 +60,28 @@ describe('buildRunProgress', () => {
     expect(view.totalCost).toBeCloseTo(0.01)
   })
 
+  it('une même friction remontée par plusieurs sources ne compte QUE pour un obstacle', () => {
+    const ligne = '⛔ Bloqué : le worktree refuse la publication'
+    const autre = '⚠️ Non résolu : le brief dépasse son plafond'
+    const view = buildRunProgress([
+      {
+        step: 'build',
+        status: 'failed',
+        error: ligne,
+        text: `${ligne}
+
+${autre}
+${ligne}`,
+        thinking: ligne
+      } as never
+    ])
+    // Ordre de PREMIÈRE apparition conservé, et aucune friction réelle perdue.
+    expect(view.entries[0].obstacles).toEqual([ligne, autre])
+    expect(view.obstacleCount).toBe(2)
+    // Le doublon ne doit pas non plus réapparaître dans les sous-étapes affichées.
+    expect(view.entries[0].substeps.filter((s) => s.label === ligne)).toHaveLength(1)
+  })
+
   it('sans phase active, aucune entrée en cours', () => {
     const view = buildRunProgress([steps[0]])
     expect(view.entries).toHaveLength(1)

@@ -110,10 +110,17 @@ export function buildRunProgress(steps: OrchStep[], activePhase?: LiveRunPhase):
   const entries: RunProgressEntry[] = steps.map((s, i) => {
     const failed = s.status === 'failed'
     const label = phaseLabel({ step: s.step, phase: phaseOf(s) })
+    // La MÊME friction arrive couramment par deux sources (l'erreur de l'étape est recopiée dans son
+    // texte, le raisonnement reprend la ligne du texte). Sans déduplication elle s'affiche deux ou
+    // trois fois et gonfle le compteur « N obstacles ». Ordre de PREMIÈRE apparition conservé.
     const obstacles = [
-      ...(failed && s.error ? [s.error] : []),
-      ...extractObstacles(s.text),
-      ...extractObstacles(s.thinking)
+      ...new Set(
+        [
+          ...(failed && s.error ? [s.error] : []),
+          ...extractObstacles(s.text),
+          ...extractObstacles(s.thinking)
+        ].map((o) => o.trim())
+      )
     ]
     const evidence = (s.evidence ?? []).map((e) => ({ ok: e.ok, summary: evidenceSummary(e) }))
     return {
