@@ -154,6 +154,26 @@ export type DirectChatRecovery = {
   providerCall: RecoveredPilotProviderCall
 }
 
+/**
+ * LA DECISION DU VEILLEUR D'INACTIVITE, isolee pour etre testable sans horloge ni minuterie.
+ *
+ * Trois issues, et la nuance porte sur la deuxieme :
+ *  - `patienter` : le plafond n'est pas atteint, rien a faire ;
+ *  - `commande-en-vol` : le plafond est franchi MAIS une commande tourne encore — le tour attend,
+ *    il n'est pas mort. L'appelant rearme le compte a rebours au lieu de couper ;
+ *  - `couper` : plus rien ne tourne et le silence dure — c'est un tour REELLEMENT fige.
+ *
+ * Garde : `veilleur-inactivite.test.ts`.
+ */
+export function verdictVeilleurInactivite(etat: {
+  inactifDepuisMs: number
+  commandesEnVol: number
+  plafondMs: number
+}): 'patienter' | 'commande-en-vol' | 'couper' {
+  if (etat.commandesEnVol > 0) return 'commande-en-vol'
+  return etat.inactifDepuisMs < etat.plafondMs ? 'patienter' : 'couper'
+}
+
 export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
   const {
     os,
@@ -727,8 +747,32 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
        */
       const PLAFOND_INACTIVITE_MS = 20 * 60 * 1000
       let dernierSigneDeVie = Date.now()
+      let commandesEnVol = 0
+      /*
+       * UNE COMMANDE QUI TOURNE EST UN SIGNE DE VIE — MEME QUAND ELLE N'EMET RIEN.
+       *
+       * Defaut vecu le 2026-09-04 (conv-233) : entre `command` (le depart) et `result` (l'arrivee),
+       * une commande longue n'emet AUCUN evenement. Une suite de tests de 233 s, deux editions
+       * coupees a 182 s et l'attente du modele ont suffi a franchir le plafond : le tour a ete tue
+       * avec « aucun signe de vie depuis 20 minutes » ALORS QU'IL TRAVAILLAIT.
+       *
+       * On ne relache pas la garde — elle existe pour les tours REELLEMENT morts (conv-1181,
+       * conv-1242 : figes sur « [a execute orchestrate] »). On la rend EXACTE. La decision elle-meme
+       * vit dans `verdictVeilleurInactivite`, pour etre testable sans horloge : voir
+       * `veilleur-inactivite.test.ts`.
+       */
       veilleur = setInterval(() => {
-        if (Date.now() - dernierSigneDeVie < PLAFOND_INACTIVITE_MS) return
+        const verdict = verdictVeilleurInactivite({
+          inactifDepuisMs: Date.now() - dernierSigneDeVie,
+          commandesEnVol,
+          plafondMs: PLAFOND_INACTIVITE_MS
+        })
+        // Une commande en vol REARME le compte a rebours : des qu'elle revient, il repart de zero.
+        if (verdict === 'commande-en-vol') {
+          dernierSigneDeVie = Date.now()
+          return
+        }
+        if (verdict === 'patienter') return
         if (veilleur) clearInterval(veilleur)
         // Un motif NOMME, jamais un arret muet : l'utilisateur doit lire pourquoi son tour s'arrete.
         // Le motif porte le PREFIXE qui le requalifie en ECHEC plus bas — sans lui, cet arret
@@ -811,6 +855,11 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
         if (pilotEvent.kind === 'command' && pilotEvent.name)
           etiquettesAction.push(`[a exécuté ${pilotEvent.name}]`)
+        // LE COMPTEUR DU VEILLEUR. Une commande part (`command`) et revient (`result`) : entre les
+        // deux, le tour peut rester muet des minutes sans etre mort. `Math.max(0, …)` garde le
+        // compte sain si un `result` arrive sans `command` (evenement rejoue, reprise apres crash).
+        if (pilotEvent.kind === 'command') commandesEnVol += 1
+        if (pilotEvent.kind === 'result') commandesEnVol = Math.max(0, commandesEnVol - 1)
         if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
         if (pilotEvent.kind === 'done' && pilotEvent.text?.trim())
           completedText = pilotEvent.text.trim()
