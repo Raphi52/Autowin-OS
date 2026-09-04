@@ -1558,6 +1558,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
+      /*
+       * UN APPEL QUI N'A JAMAIS DEMARRE LAISSAIT SES TEMPORAIRES DERRIERE LUI.
+       *
+       * Tout le nettoyage vivait dans `close`. Or Node n'emet PAS `close` quand le processus ne peut
+       * pas etre lance du tout (binaire introuvable, droits) : `error` est alors la seule sortie. Les
+       * dossiers du system prompt et des reglages, crees AVANT le spawn, restaient donc orphelins.
+       *
+       * MESURE du 2026-09-04 dans le dossier temporaire de l'installation : 39 `autowin-os-system-*`
+       * et 39 `autowin-os-settings-*` abandonnes, apparies UN POUR UN — la signature exacte d'un
+       * couple perdu par appel avorte — le plus recent date du jour meme.
+       *
+       * Le nettoyage part sans etre attendu, et c'est delibere : ce point de sortie doit rendre la
+       * main tout de suite (`wake()`), et la version bloquante figeait la fenetre 1,6 s. Un echec de
+       * suppression est avale comme dans `close` — perdre un dossier temporaire ne doit jamais
+       * masquer l'erreur de lancement, qui est la vraie information pour l'utilisateur.
+       */
+      void nettoyerTemporairesDeLAppel({
+        systemPromptDir,
+        settingsDir,
+        inputPath: invocation.inputPath,
+        journalPath: journal?.path
+      }).catch(() => undefined)
+      void mcpConfigDir?.nettoyer().catch(() => undefined)
+      void materialized?.cleanup().catch(() => undefined)
       errored = e
       done = true
       wake()
