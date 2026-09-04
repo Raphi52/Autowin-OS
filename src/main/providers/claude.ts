@@ -10,7 +10,7 @@ import {
 } from './watchdog'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { rm as rmAsync, stat as statAsync } from 'node:fs/promises'
 import {
   openStdoutJournal,
@@ -1077,58 +1077,93 @@ export class ClaudeCliAdapter implements ProviderAdapter {
 
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
 
-    assertArgvWithinLimit('claude CLI', args) // anti-ENAMETOOLONG : le prompt passe par stdin
     /** Fin de la sortie d'erreur du CLI, bornee : la cause d'un exit non nul est ecrite la. */
     let stderrTail = ''
     const spawnToken = randomUUID()
-    execution?.onSpawnIntent?.(spawnToken, true)
+    let intentPose = false
     /**
-     * Survie niveau 2 (opt-in `AUTOWIN_DETACHED_RUNS=1` + racine de journaux fournie) : le CLI est
-     * spawné DÉTACHÉ et sa sortie va dans un FICHIER au lieu d'un pipe → il continue de produire même
-     * si l'app se ferme, et tout est relisible au redémarrage. Sans le flag : pipe, comportement
-     * historique strictement inchangé (rétrocompat).
+     * MENAGE DES SORTIES PAR EXCEPTION *AVANT* LE LANCEMENT.
+     *
+     * Les deux dossiers temporaires sont crees plus haut (system-prompt, settings), mais le CLI
+     * n'est lance qu'a la fin de ce bloc. Entre les deux, trois sorties par exception : la garde
+     * anti-ligne-de-commande-trop-longue, le journal survivable indisponible, et l'echec de
+     * `onJournal`. Aucune ne passait par `close` ni par `error` : le couple restait dans %TEMP%.
+     * Garde : `claude.nettoyage-sur-exception-avant-spawn.test.ts`.
      */
-    const journalRoot = process.env.AUTOWIN_RUN_JOURNAL_ROOT
     let journal: StdoutJournalHandle | undefined
-    // ACTIVÉ PAR DÉFAUT dès que l'app fournit une racine de journaux (les tests, qui n'en fournissent
-    // pas, restent sur le pipe). Survie prouvée en réel : parent tué → l'enfant détaché continue
-    // d'écrire dans le journal. Porte de sortie : AUTOWIN_DETACHED_RUNS=0 → pipe historique.
-    if (process.env.AUTOWIN_DETACHED_RUNS !== '0' && journalRoot) {
-      try {
-        journal = openStdoutJournal(journalRoot, spawnToken)
-      } catch {
-        journal = undefined // journal impossible → on retombe sur le pipe plutôt que d'échouer
-      }
-    }
-    const onJournal = execution?.onJournal ?? opts.onJournal
-    if (onJournal) {
-      if (!journal) {
-        throw new Error(
-          'Journal survivable Claude indisponible — provider non lancé pour éviter un doublon'
-        )
-      }
-      try {
-        onJournal(spawnToken, journal.path)
-      } catch (error) {
+    let invocation:
+      | ReturnType<typeof backgroundSurvivalInvocation>
+      | {
+          bin: string
+          args: string[]
+          relay: boolean
+          env: undefined
+          inputPath: undefined
+          completionPath: string
+        }
+    try {
+      assertArgvWithinLimit('claude CLI', args) // anti-ENAMETOOLONG : le prompt passe par stdin
+      execution?.onSpawnIntent?.(spawnToken, true)
+      intentPose = true
+      /**
+       * Survie niveau 2 (opt-in `AUTOWIN_DETACHED_RUNS=1` + racine de journaux fournie) : le CLI est
+       * spawné DÉTACHÉ et sa sortie va dans un FICHIER au lieu d'un pipe → il continue de produire même
+       * si l'app se ferme, et tout est relisible au redémarrage. Sans le flag : pipe, comportement
+       * historique strictement inchangé (rétrocompat).
+       */
+      const journalRoot = process.env.AUTOWIN_RUN_JOURNAL_ROOT
+      // ACTIVÉ PAR DÉFAUT dès que l'app fournit une racine de journaux (les tests, qui n'en fournissent
+      // pas, restent sur le pipe). Survie prouvée en réel : parent tué → l'enfant détaché continue
+      // d'écrire dans le journal. Porte de sortie : AUTOWIN_DETACHED_RUNS=0 → pipe historique.
+      if (process.env.AUTOWIN_DETACHED_RUNS !== '0' && journalRoot) {
         try {
-          closeSync(journal.fd)
+          journal = openStdoutJournal(journalRoot, spawnToken)
         } catch {
-          /* déjà fermé */
+          journal = undefined // journal impossible → on retombe sur le pipe plutôt que d'échouer
         }
-        rmSync(journal.path, { force: true })
-        throw error
       }
-    }
-    const invocation = journal
-      ? backgroundSurvivalInvocation(this.bin, args, journalRoot!, journal.path, lastUser)
-      : {
-          bin: this.bin,
-          args,
-          relay: false,
-          env: undefined,
-          inputPath: undefined,
-          completionPath: ''
+      const onJournal = execution?.onJournal ?? opts.onJournal
+      if (onJournal) {
+        if (!journal) {
+          throw new Error(
+            'Journal survivable Claude indisponible — provider non lancé pour éviter un doublon'
+          )
         }
+        try {
+          onJournal(spawnToken, journal.path)
+        } catch (error) {
+          try {
+            closeSync(journal.fd)
+          } catch {
+            /* déjà fermé */
+          }
+          await rmAsync(journal.path, { force: true }).catch(() => {})
+          throw error
+        }
+      }
+      invocation = journal
+        ? backgroundSurvivalInvocation(this.bin, args, journalRoot!, journal.path, lastUser)
+        : {
+            bin: this.bin,
+            args,
+            relay: false,
+            env: undefined,
+            inputPath: undefined,
+            completionPath: ''
+          }
+    } catch (error) {
+      // Point de menage unique de ce chemin : idempotent, asynchrone (jamais de retour au
+      // synchrone, qui figeait la fenetre 1,6 s), tolerant a un temporaire deja parti.
+      await nettoyerTemporairesDeLAppel({
+        systemPromptDir,
+        settingsDir,
+        journalPath: journal?.path
+      })
+      await mcpConfigDir?.nettoyer()
+      await materialized?.cleanup()
+      if (intentPose) execution?.onSpawnIntent?.(spawnToken, false)
+      throw error
+    }
     const child = spawn(invocation.bin, invocation.args, {
       shell: false,
       windowsHide: true,
@@ -1588,7 +1623,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrTail = `${stderrTail}${chunk.toString('utf8')}`.slice(-STDERR_TAIL_MAX)
     })
-    child.on('error', (e) => {
+    /**
+     * POINT DE NETTOYAGE UNIQUE, idempotent et ASYNCHRONE.
+     *
+     * Il etait branche sur le seul `close`. Un appel qui sort par `error` (spawn ENOENT, binaire
+     * absent) ne nettoyait donc rien : mesure du 2026-09-04 dans %TEMP%, 39 `autowin-os-system-*`
+     * et 39 `autowin-os-settings-*` orphelins, appaires un couple par appel avorte.
+     * Un point unique plutot qu'un appel par branche : une 6e sortie ajoutee demain ne refuira pas.
+     * Garde : `claude.nettoyage-sur-echec-spawn.test.ts`.
+     */
+    let nettoyageFait = false
+    const nettoyerFinDAppel = async (): Promise<void> => {
+      if (nettoyageFait) return
+      nettoyageFait = true
+      await nettoyerTemporairesDeLAppel({
+        systemPromptDir,
+        settingsDir,
+        inputPath: invocation.inputPath,
+        journalPath: journal?.path
+      })
+      // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
+      await mcpConfigDir?.nettoyer()
+      await materialized?.cleanup()
+    }
+    child.on('error', async (e) => {
       if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
@@ -1617,6 +1675,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       void mcpConfigDir?.nettoyer().catch(() => undefined)
       void materialized?.cleanup().catch(() => undefined)
       errored = e
+      await nettoyerFinDAppel()
       done = true
       wake()
     })
@@ -1629,15 +1688,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // Meme hygiene que le system prompt : un dossier temporaire par appel ne doit pas s'accumuler
       // (c'est exactement la fuite disque constatee ce jour sur run-stdout/). Tout passe par le
       // nettoyage ASYNCHRONE : la version synchrone figeait la fenetre 1,6 s a chaque appel.
-      await nettoyerTemporairesDeLAppel({
-        systemPromptDir,
-        settingsDir,
-        inputPath: invocation.inputPath,
-        journalPath: journal?.path
-      })
-      // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
-      await mcpConfigDir?.nettoyer()
-      await materialized?.cleanup()
+      await nettoyerFinDAppel()
       // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait
       // jamais parsé (result/session_id perdus silencieusement) — on le traite ici.
       const rest = buffer.trim()
@@ -1664,7 +1715,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (!transportApresReponse) {
           const abnormal = describeExitCode(code)
           const brut = stderrTail.trim() || (journal ? stderrTailFromJournal(journal.path) : '')
-          const detail = brut.trim().split(/[\r\n]+/).filter(Boolean).slice(-4).join(' | ')
+          const detail = brut
+            .trim()
+            .split(/[\r\n]+/)
+            .filter(Boolean)
+            .slice(-4)
+            .join(' | ')
           const usedModel = resolvedModel ?? opts.model
           errored = new Error(
             `claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''} — ` +
