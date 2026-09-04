@@ -24,6 +24,7 @@ import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
+import { balayerTemporairesOrphelins } from './temporaires-orphelins'
 import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
 import { isShellMutation, isVerificationCommand } from './evidence-vocabulary'
 import {
@@ -69,6 +70,36 @@ import {
  * NON PROUVE ici : que ce seul chemin explique les gels `inconnu` de 4 s du meme journal — ceux-la
  * n'ont pas encore de nom.
  */
+/*
+ * LE BALAYAGE DES ORPHELINS DEJA SUR LE DISQUE — UNE SEULE FOIS PAR DEMARRAGE.
+ *
+ * `nettoyerTemporairesDeLAppel` couvre l'appel qui SE TERMINE, et le chemin d'erreur couvre l'appel
+ * qui ne demarre pas. Aucun des deux ne couvre le cas ou le process PARENT meurt pendant qu'un CLI
+ * tourne : application fermee, plantage. Ces dossiers-la ne seront JAMAIS reclames par personne.
+ *
+ * MESURE du 2026-09-04 sur le temp de Windows : 1 906 dossiers `autowin-os-*`, dont 14 nes le jour
+ * meme, en paires `settings`/`system` — une par appel.
+ *
+ * UNE SEULE FOIS, et c'est le point de conception : parcourir le dossier temporaire du systeme coute
+ * un `readdir` de plusieurs milliers d'entrees. Le payer a chaque appel au CLI rendrait l'hygiene
+ * plus chere que la fuite qu'elle repare.
+ *
+ * La borne d'age (24 h, cf. `AGE_ORPHELIN_MS`) est ce qui rend le geste sur : aucun appel ne dure
+ * aussi longtemps, donc un appel EN COURS — le sien, ou celui d'une seconde fenetre ouverte a cote —
+ * n'est jamais touche.
+ */
+let orphelinsBalayes = false
+
+export function balayerOrphelinsUneFois(): void {
+  if (orphelinsBalayes) return
+  orphelinsBalayes = true
+  try {
+    balayerTemporairesOrphelins(tmpdir())
+  } catch {
+    // L'hygiene n'a jamais le droit de casser un appel : un temp illisible ne dit rien de l'appel.
+  }
+}
+
 export async function nettoyerTemporairesDeLAppel(cibles: {
   systemPromptDir?: string
   settingsDir?: string
@@ -1029,6 +1060,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     } catch {
       settingsDir = undefined // impossible d'ecrire : on garde le comportement d'origine
     }
+    // Les orphelins laisses par une fermeture ou un plantage anterieur partent AVANT qu'on en cree
+    // de nouveaux. Borne a un seul passage par demarrage, cf. `balayerOrphelinsUneFois`.
+    balayerOrphelinsUneFois()
     let systemPromptDir: string | undefined
     if (systemInjected && system!.length > 4_000) {
       systemPromptDir = mkdtempSync(join(tmpdir(), 'autowin-os-system-'))
