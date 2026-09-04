@@ -69,7 +69,13 @@ import type { ChatArtifact } from '../shared/artifacts'
  * aucun livrable. Deux valeurs par défaut concurrentes pour un même fait — le commentaire qui
  * justifiait 12 décrivait un monde qui n'existait pas.
  */
-export const CAP_ITERATIONS_TOUR = 12
+/*
+ * RELEVÉ DE 12 À 40 le 2026-09-03 : demande utilisateur mesurée dans conv-37. La boucle réelle d'une
+ * correction pilotée depuis le chat (chercher la règle → lire le fichier → éditer → naviguer →
+ * observer → lire la capture → revenir) dépense à elle seule une dizaine d'appels ; à 12, le tour se
+ * coupait AVANT la phrase de clôture et l'app affichait « Réponse interrompue avant la fin ».
+ */
+export const CAP_ITERATIONS_TOUR = 40
 import type { PilotEventKind } from '../shared/pilot-events'
 import { blocEtatSuivant, type EtatPrompt } from './etat-diff'
 import { protegerRappel } from './observabilite-non-bloquante'

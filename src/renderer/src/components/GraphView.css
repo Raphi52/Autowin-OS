@@ -157,6 +157,50 @@
     background 320ms ease,
     box-shadow 320ms ease;
 }
+/* MODE CLAIR — cet interrupteur est illisible : sa piste est un dégradé quasi noir
+   (#0a1018 → #101722, l.125) et ses DEUX icônes — celles qui disent justement dans
+   quel mode on est — sont assombries par `filter: grayscale(.6) brightness(.75)`
+   (l.136). Sur fond clair on ne voit qu'une pastille noire au contenu indevinable.
+   Signalé le 2026-09-03 : « on ne voit pas ce qu'il y a dans la zone ».
+   La piste passe en gris très clair, le pouce en blanc, et les icônes cessent
+   d'être ternies — celle du mode ACTIF était déjà en pleine couleur, c'est
+   l'inactive qui reste discrète, sans disparaître. */
+:root[data-theme='clair'] .graph-mode-switch__track {
+  border-color: rgba(18, 24, 40, 0.28);
+  background: linear-gradient(180deg, #eef1f5, #e2e7ee);
+  box-shadow: inset 0 2px 5px rgba(18, 24, 40, 0.12);
+}
+:root[data-theme='clair'] .graph-mode-switch__thumb {
+  background: radial-gradient(circle at 32% 30%, #ffffff, #d7dde6 68%);
+  box-shadow:
+    0 2px 5px rgba(18, 24, 40, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+/* Les icônes sont les emojis 🌑 (disque noir) et 🌌 (rectangle sombre) : rendus
+   à égalité, ils forment un « carré » parasite à côté du pouce rond — constat
+   utilisateur du 2026-09-03. En clair, l'INACTIVE s'efface presque entièrement,
+   l'ACTIVE reste nette : l'œil ne voit qu'un seul symbole, celui du mode courant. */
+:root[data-theme='clair'] .graph-mode-switch__icon {
+  filter: grayscale(1) brightness(1.35);
+  opacity: 0.28;
+}
+:root[data-theme='clair'] .graph-mode-switch.is-galaxy .graph-mode-switch__icon:last-of-type,
+:root[data-theme='clair'] .graph-mode-switch:not(.is-galaxy) .graph-mode-switch__icon:first-of-type {
+  filter: none;
+  opacity: 1;
+}
+/* Le pouce manquait de contraste : blanc sur gris très clair. Il devient un
+   disque BLANC cerclé de sombre, franchement détaché de sa piste. */
+:root[data-theme='clair'] .graph-mode-switch__track {
+  background: linear-gradient(180deg, #dfe4ec, #ccd4df);
+  border-color: rgba(18, 24, 40, 0.34);
+}
+:root[data-theme='clair'] .graph-mode-switch__thumb {
+  background: #ffffff;
+  border: 1px solid rgba(18, 24, 40, 0.45);
+  box-shadow: 0 1px 3px rgba(18, 24, 40, 0.35);
+}
+
 .graph-mode-switch.is-galaxy .graph-mode-switch__track {
   border-color: rgba(255, 93, 222, 0.6);
   background: linear-gradient(120deg, #1b1038, #3d1150 55%, #131c3f);

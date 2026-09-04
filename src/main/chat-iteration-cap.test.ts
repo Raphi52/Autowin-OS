@@ -25,7 +25,8 @@ describe('cap d’itérations — une seule valeur par défaut, celle qui est do
    * L'ASSERTION VERROUILLAIT UN CHIFFRE, PLUS UN COMPORTEMENT. Demande utilisateur du 2026-09-04 :
    * « ENLEVE CE PUTAIN DE BLOQUAGE DE BUDGET » — le compteur d'appels coupait des tours engagés
    * sans rien mesurer du coût réel. Ce qui reste exigé : le cap par défaut n'est JAMAIS plus serré
-   * que les 12 documentés (il vaut désormais l'infini, la dépense réelle prenant le relais).
+   * que les 12 documentés (il vaut 40 depuis l'integration du 2026-09-04, la depense reelle prenant
+   * le relais du comptage d'appels).
    */
   it('le cap par défaut n’est jamais plus serré que les 12 documentés', () => {
     expect(CAP_ITERATIONS_TOUR).toBeGreaterThanOrEqual(12)

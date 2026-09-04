@@ -14,9 +14,12 @@
     - login OAuth Codex (npm run codex:login), token Brain (AMITEL_BRAIN_TOKEN), Kimi Code (optionnel).
 
 .PARAMETER HermesBrainRepo
-  Clone LOCAL du depot Hermes-Brain : la SEULE source de confiance du code Python du Brain. Son
-  install.ps1 pose le runtime exactement la ou l app le cherche (%LOCALAPPDATA%\AmitelBrain).
-  Defaut = env AUTOWIN_HERMES_BRAIN_REPO, sinon %USERPROFILE%\Hermes-Brain.
+  Source de confiance du code Python du Brain. Son install.ps1 pose le runtime exactement la ou
+  l app le cherche (%LOCALAPPDATA%\AmitelBrain).
+  Defaut = env AUTOWIN_HERMES_BRAIN_REPO, sinon le dossier brain\ EMBARQUE dans ce depot, sinon
+  %USERPROFILE%\Hermes-Brain (ancien clone externe, conserve comme repli).
+  Le dossier brain\ est prioritaire : il est versionne avec l app, donc toujours coherent avec
+  elle, et une machine neuve n a plus a cloner un second depot avant de bootstrapper.
 
 .PARAMETER BrainRoot
   Racine du CORPUS (les notes knowledge/), transmise a install.ps1. Defaut = env AMITEL_BRAIN_ROOT,
@@ -28,7 +31,13 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$HermesBrainRepo = $(if ($env:AUTOWIN_HERMES_BRAIN_REPO) { $env:AUTOWIN_HERMES_BRAIN_REPO } else { Join-Path $env:USERPROFILE 'Hermes-Brain' }),
+  [string]$HermesBrainRepo = $(
+    if ($env:AUTOWIN_HERMES_BRAIN_REPO) { $env:AUTOWIN_HERMES_BRAIN_REPO }
+    elseif (Test-Path (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'brain') 'install.ps1')) {
+      Join-Path (Split-Path -Parent $PSScriptRoot) 'brain'
+    }
+    else { Join-Path $env:USERPROFILE 'Hermes-Brain' }
+  ),
   [string]$BrainRoot = $(if ($env:AMITEL_BRAIN_ROOT) { $env:AMITEL_BRAIN_ROOT } else { '\\ged2\rig\Projets IA\Amitel Brain' }),
   [string]$GraphifySource = $(if ($env:AUTOWIN_GRAPHIFY_SOURCE) { $env:AUTOWIN_GRAPHIFY_SOURCE } else { '\\ged2\rig\Projets IA\Graphify' }),
   [switch]$SkipCli,
@@ -149,8 +158,9 @@ if (-not $SkipBrain) {
   $brainPython = Join-Path $env:LOCALAPPDATA "AmitelBrain\.venv\Scripts\python.exe"
   if (Test-Path $brainPython) { Ok "runtime deja installe ($brainPython)" }
   elseif (-not (Test-Path $brainInstaller)) {
-    Warn "clone Hermes-Brain introuvable : $HermesBrainRepo"
-    Warn "  git clone https://github.com/Raphi52/Hermes-Brain.git `"$HermesBrainRepo`""
+    Warn "install.ps1 introuvable : $HermesBrainRepo"
+    Warn "  normalement le dossier brain\ embarque dans ce depot suffit -- verifier qu il est bien la."
+    Warn "  repli possible : git clone https://github.com/Raphi52/Hermes-Brain.git `"$HermesBrainRepo`""
     Warn "  puis relancer ce script (ou passer -HermesBrainRepo <chemin>)."
   }
   elseif (-not (Have "uv")) {

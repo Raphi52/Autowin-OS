@@ -2126,6 +2126,18 @@ ol.md-list li {
   white-space: nowrap;
 }
 
+/* MODE CLAIR — le nom du modèle actif hérite de `.model-select { color: #eaf6ff }`
+   (l.2014), un blanc bleuté : invisible sur fond clair. Le niveau d'effort à côté
+   est en `#88949d`, trop pâle lui aussi. Aucune variable de thème dans les deux
+   cas. Signalé le 2026-09-03 : « le modèle actif est trop clair ». */
+:root[data-theme='clair'] .model-select,
+:root[data-theme='clair'] .model-select summary > strong {
+  color: var(--text);
+}
+:root[data-theme='clair'] .model-select summary > em {
+  color: var(--text-dim);
+}
+
 .model-select summary > em {
   color: #88949d;
   font: 500 9px/1.2 var(--font);
@@ -3644,6 +3656,28 @@ ol.md-list li {
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0.85;
+}
+
+/* MODE CLAIR — cette zone dépliée appelle `--muted` et `--line2`, DEUX variables
+   qui n'existent dans aucun thème : c'est donc toujours leur valeur de secours,
+   un gris prévu pour du noir, qui s'applique — plus un fond noir à 22 %. Même
+   famille de défaut que `--surface2` et `--text-muted`, corrigés le 2026-09-03.
+   Signalé le même jour : « une des zones quand on déplie les actions en cours est
+   peu visible ». */
+:root[data-theme='clair'] .activity-step-pipeline {
+  background: rgba(15, 20, 35, 0.04);
+  border-left-color: var(--line);
+}
+:root[data-theme='clair'] .activity-step-role,
+:root[data-theme='clair'] .activity-step-agent,
+:root[data-theme='clair'] .activity-pipeline-titre {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .activity-step-agent {
+  opacity: 1;
+}
+:root[data-theme='clair'] .activity-step-phase {
+  color: var(--accent);
 }
 .activity-step-detail.failed {
   border-left-color: var(--err, #ef6b6b);
