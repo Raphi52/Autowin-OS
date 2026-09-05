@@ -563,7 +563,8 @@ const CATALOG: CommandSpec[] = [
   },
   {
     name: 'chat_send',
-    description: 'Envoyer un message de chat',
+    description:
+      'Poser une question ponctuelle au modele. NE cible AUCUNE conversation et ne lance AUCUNE skill : une commande /xxx est refusee, utiliser orchestrate (conversationId) pour agir dans un fil.',
     args: { message: 'texte', provider: 'claude|codex (optionnel)', role: 'rôle (optionnel)' }
   },
   {
@@ -1891,6 +1892,20 @@ export class AppCommandBus {
         return { question: s('question'), options, ...(choixMultiple && { choixMultiple }) }
       }
       case 'chat_send': {
+        // Une commande `/xxx` est un chemin d'INTERFACE : la zone de saisie reconnait la skill et
+        // construit la tache. `chat_send` n'a AUCUNE destination — son texte part en echange
+        // ponctuel avec le modele, qui repond « Unknown command ». Mesure le 2026-09-05
+        // (conv-297 -> conv-300 « /curate ») : le fil est reste vide, la skill n'a jamais tourne.
+        // Refus DETERMINISTE, qui nomme la commande capable de cibler une conversation.
+        const messageEnvoye = s('message').trim()
+        if (/^\/[a-z0-9][\w-]*/i.test(messageEnvoye)) {
+          const skill = messageEnvoye.split(/\s/)[0]
+          throw new Error(
+            `chat_send ne peut pas lancer « ${skill} » : il n'a pas de conversation destinataire ` +
+              `et le texte partirait en simple question au modele. Utiliser orchestrate ` +
+              `(argument conversationId) pour lancer une skill dans une conversation.`
+          )
+        }
         const text = this.onChat
           ? await this.onChat(
               a.provider ? s('provider') : undefined,
