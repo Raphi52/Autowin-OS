@@ -28,16 +28,22 @@ export interface TempIsole {
   demonter(): void
 }
 
-export function isolerTemp(prefixe = 'autowin-test-temp-'): TempIsole {
-  const racine = mkdtempSync(join(tmpdir(), prefixe))
+/** Les temporaires d'appel du provider : un couple par appel au CLI. */
+export const PREFIXES_APPEL = ['autowin-os-system-', 'autowin-os-settings-'] as const
+/** Les rapports de verdict ecrits par la verification d'une edition. */
+export const PREFIXES_VERDICT = ['autowin-verdict-'] as const
+
+export function isolerTemp(
+  prefixesObserves: readonly string[] = PREFIXES_APPEL,
+  prefixeRacine = 'autowin-test-temp-'
+): TempIsole {
+  const racine = mkdtempSync(join(tmpdir(), prefixeRacine))
   const precedentes = VARIABLES_TEMP.map((nom) => [nom, process.env[nom]] as const)
   for (const nom of VARIABLES_TEMP) process.env[nom] = racine
   return {
     racine,
     lister: () =>
-      readdirSync(racine).filter(
-        (nom) => nom.startsWith('autowin-os-system-') || nom.startsWith('autowin-os-settings-')
-      ),
+      readdirSync(racine).filter((nom) => prefixesObserves.some((p) => nom.startsWith(p))),
     demonter: () => {
       for (const [nom, valeur] of precedentes) {
         if (valeur === undefined) delete process.env[nom]

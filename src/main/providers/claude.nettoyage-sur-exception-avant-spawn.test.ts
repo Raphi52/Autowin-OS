@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { isolerTemp, type TempIsole } from './temp-isole.test-helpers'
+import { isolerTemp, type TempIsole } from '../temp-isole.test-helpers'
 import { ClaudeCliAdapter } from './claude'
 
 /*

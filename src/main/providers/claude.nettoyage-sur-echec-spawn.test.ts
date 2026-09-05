@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isolerTemp, type TempIsole } from './temp-isole.test-helpers'
+import { isolerTemp, type TempIsole } from '../temp-isole.test-helpers'
 import { ClaudeCliAdapter } from './claude'
 
 /*
@@ -22,11 +22,6 @@ vi.mock('node:child_process', async (importOriginal) => ({
     return child
   }
 }))
-
-const temporairesAutowin = (): string[] =>
-  readdirSync(tmpdir()).filter(
-    (nom) => nom.startsWith('autowin-os-system-') || nom.startsWith('autowin-os-settings-')
-  )
 
 describe('claude — un appel avorte ne laisse aucun temporaire', () => {
   let temp: TempIsole
