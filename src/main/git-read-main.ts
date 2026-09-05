@@ -157,3 +157,29 @@ export async function readGitState(cwd: string, historyLimit = 20): Promise<GitR
     return { available: false, error: error instanceof Error ? error.message : String(error) }
   }
 }
+
+/**
+ * Liste des branches LOCALES d'un dépôt, triée par date de dernier commit (la plus récente d'abord).
+ *
+ * Strictement en lecture (`for-each-ref`) : aucun changement de branche ici — la barre du chat
+ * propose de choisir, l'agent seul exécute la bascule. Bornée à 200 entrées et appelée à
+ * l'OUVERTURE du menu, jamais au dessin de la fenêtre (les recensements de branches au rendu ont
+ * déjà produit des gels mesurés à plusieurs secondes).
+ */
+export async function readGitBranches(cwd: string, limit = 200): Promise<string[]> {
+  const run = promisify(execFile)
+  try {
+    const r = await run(
+      'git',
+      ['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)', 'refs/heads'],
+      { cwd, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }
+    )
+    return r.stdout
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .slice(0, Math.max(1, limit))
+  } catch {
+    return []
+  }
+}

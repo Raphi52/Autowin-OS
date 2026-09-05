@@ -554,6 +554,18 @@ export function ChatView({
     top: number
     left: number
   } | null>(null)
+  /*
+   * Menu de choix de la branche, ouvert depuis la barre du haut du chat.
+   *
+   * `branches: null` = la liste n'est pas encore lue. La lecture part a l'OUVERTURE du menu, en
+   * asynchrone : recenser les branches pendant le dessin de la fenetre a deja fige l'interface
+   * plusieurs secondes.
+   */
+  const [brancheMenu, setBrancheMenu] = useState<{
+    top: number
+    left: number
+    branches: string[] | null
+  } | null>(null)
   /**
    * Saisie du dossier en cours de creation, dans le sous-menu « Ranger dans un dossier ».
    *
@@ -4471,6 +4483,52 @@ export function ChatView({
           </>,
           document.body
         )}
+      {brancheMenu &&
+        createPortal(
+          <>
+            <div className="conv-menu-backdrop" onClick={() => setBrancheMenu(null)} />
+            <div
+              className="conv-menu-pop"
+              role="menu"
+              aria-label="Branches du depot"
+              style={{ top: brancheMenu.top, left: brancheMenu.left }}
+            >
+              {brancheMenu.branches === null ? (
+                <span className="conv-menu-empty">Lecture des branches…</span>
+              ) : brancheMenu.branches.length === 0 ? (
+                <span className="conv-menu-empty">Aucune branche lue</span>
+              ) : (
+                brancheMenu.branches.map((nom) => (
+                  <button
+                    key={nom}
+                    role="menuitem"
+                    data-testid="chat-branch-choice"
+                    data-branch={nom}
+                    onClick={() => {
+                      setBrancheMenu(null)
+                      /*
+                        L'interface ne fait AUCUNE action git (contrat ecrit dans git-read.ts) :
+                        choisir une branche prepare la demande dans la zone de saisie, et c'est
+                        l'agent qui bascule. Le texte reste modifiable avant l'envoi.
+                      */
+                      setDraftInput(
+                        composerDraftKeyRef.current,
+                        `Bascule le depot de travail sur la branche \`${nom}\`.`
+                      )
+                    }}
+                  >
+                    <span className="conv-menu-ic" aria-hidden="true">
+                      ⑂
+                    </span>
+                    {nom}
+                    {nom === gitBranch ? ' · courante' : ''}
+                  </button>
+                ))
+              )}
+            </div>
+          </>,
+          document.body
+        )}
       {convFolderMenu &&
         createPortal(
           <>
@@ -4509,6 +4567,22 @@ export function ChatView({
                   </button>
                 ))
               )}
+              <button
+                role="menuitem"
+                data-testid="conv-project-pick"
+                onClick={() => {
+                  const conv = convFolderMenu.conv
+                  setConvFolderMenu(null)
+                  void window.api.pickGitRepo?.().then((chemin) => {
+                    if (chemin) void rangerDans(conv.id, chemin)
+                  })
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  📁
+                </span>
+                Choisir un dossier…
+              </button>
               {nouveauDossier === undefined ? (
                 <button
                   role="menuitem"
@@ -4659,14 +4733,22 @@ export function ChatView({
                       ? `Dossier de travail assigné à cette conversation : ${dossierProjet}`
                       : `Dossier racine par défaut de l’agent : ${cheminEffectif ?? 'racine du dépôt'}`
                     return (
-                      <span
+                      <button
+                        type="button"
                         className="chat-cost-dot chat-project-dot"
-                        title={titreDossier}
+                        title={`${titreDossier}
+Cliquer pour changer le dossier de travail.`}
                         aria-label={titreDossier}
                         data-testid="chat-project-dot"
+                        disabled={!active}
+                        onClick={(event) => {
+                          if (!active) return
+                          const r = event.currentTarget.getBoundingClientRect()
+                          setConvFolderMenu({ conv: active, top: r.bottom + 4, left: r.left })
+                        }}
                       >
                         📁 {labelDossier}
-                      </span>
+                      </button>
                     )
                   })()}
                   {(() => {
@@ -4702,12 +4784,26 @@ export function ChatView({
                     )
                   })()}
                   {gitBranch && (
-                    <span
+                    <button
+                      type="button"
+                      className="chat-git-branch-btn"
                       data-testid="chat-git-branch"
-                      title={`Branche git courante du depot : ${gitBranch}`}
+                      title={`Branche git courante du depot : ${gitBranch}
+Cliquer pour choisir une autre branche.`}
+                      onClick={(event) => {
+                        const r = event.currentTarget.getBoundingClientRect()
+                        setBrancheMenu({ top: r.bottom + 4, left: r.left, branches: null })
+                        const cwd = active?.projectPath?.trim() || defaultWorkspace || undefined
+                        void window.api
+                          .getGitBranches?.(cwd)
+                          .then((liste) =>
+                            setBrancheMenu((m) => (m ? { ...m, branches: liste ?? [] } : m))
+                          )
+                          .catch(() => setBrancheMenu((m) => (m ? { ...m, branches: [] } : m)))
+                      }}
                     >
                       <ForkIcon /> {gitBranch}
-                    </span>
+                    </button>
                   )}
                   {/* La depense du fil vit dans la barre du haut, plus dans la zone de saisie. */}
                   <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />

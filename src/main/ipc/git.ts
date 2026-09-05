@@ -15,7 +15,7 @@
  */
 import { ipcMain } from 'electron'
 import { readGitGraph } from '../git-graph-main'
-import { readGitState, readGitDiff } from '../git-read-main'
+import { readGitState, readGitDiff, readGitBranches } from '../git-read-main'
 import {
   readConversationGitDiff,
   readConversationGitState
@@ -37,6 +37,11 @@ export function registerGitIpc({ os, pickDirectory }: GitIpcDeps): void {
   ipcMain.handle('git:read', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitRead')
     return readGitState(cwd && typeof cwd === 'string' ? cwd : process.cwd())
+  })
+  // Branches LOCALES d'un dépôt, pour le sélecteur de la barre du chat. Lecture seule.
+  ipcMain.handle('git:branches', (event, cwd?: string) => {
+    assertTrustedRendererSender(event, 'GitBranches')
+    return readGitBranches(cwd && typeof cwd === 'string' ? cwd : process.cwd())
   })
   // Historique git : la frise de commits de la vue Worktrees. Lecture seule, bornée côté main.
   ipcMain.handle('git:graph', (event, cwd?: string) => {
