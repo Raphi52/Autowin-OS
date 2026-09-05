@@ -242,4 +242,21 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     for (const [nom, motif] of exigences) expect(build, nom).toMatch(motif)
     expect(build.length, 'place reelle pour la prochaine clause').toBeLessThan(2600)
   })
+  /*
+   * CONTRADICTION MESUREE (garde recuperee le 2026-09-06 d'un commit orphelin du 2026-09-04) : les
+   * briefs scout/frame/terrain disaient « l'absence de Write/Edit/Bash est normale », alors que
+   * `pipeline-discipline.ts` accorde Bash a TOUTES les phases. Un agent d'observation croyait donc
+   * ne pas pouvoir lancer une commande. Le contrat de lecture seule porte sur Write/Edit — les
+   * outils qui MODIFIENT — jamais sur Bash. Le correctif est dans le depot depuis le 2026-09-04 ;
+   * cette garde, elle, ne l'avait jamais rejoint : sans elle, la contradiction peut revenir muette.
+   */
+  it('aucun brief ne declare Bash absent : la lecture seule porte sur Write/Edit', () => {
+    for (const phase of PIPELINE_PHASES) {
+      expect(PHASE_BRIEFS[phase], phase).not.toMatch(/Write\/Edit\/Bash/u)
+    }
+    for (const phase of ['scout', 'frame', 'terrain'] as const) {
+      expect(PHASE_BRIEFS[phase], phase).toContain('absence de Write/Edit')
+    }
+  })
+
 })
