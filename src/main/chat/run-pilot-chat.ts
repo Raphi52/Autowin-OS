@@ -901,9 +901,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // 2026-09-05 sur les 435 enregistrements `chat-usage` de `.autowin-data` : 423 (97 %)
           // portaient `derniereEntree === inputTokens`, jusqu'a 18,9 M pour une fenetre de 200 k.
           // Le champ desagrege existe sur le MEME objet — on le prend, cumul en repli seulement.
-          derniereEntree = pilotEvent.callUsage.derniereEntree ?? pilotEvent.callUsage.inputTokens
-          derniereEntreeCache =
-            pilotEvent.callUsage.derniereEntreeCache ?? pilotEvent.callUsage.cacheReadTokens
+          const occupation = occupationDeFenetre(pilotEvent.callUsage)
+          derniereEntree = occupation.entree
+          derniereEntreeCache = occupation.cache
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
           turnSessionId = pilotEvent.sessionId
