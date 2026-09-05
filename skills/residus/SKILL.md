@@ -14,9 +14,9 @@ description: >-
 # residus — scout du code résiduel inutile (lecture seule)
 
 ## Règle d'entrée — la sonde est un DÉPART, jamais le périmètre
-AU MOMENT où la sonde a rendu son rapport → compare son nombre de fichiers scannés au nombre de
-fichiers RÉELS du dossier (`ls`). L'écart est ton angle mort, et il se balaie À LA MAIN avant toute
-shortlist. La sonde ne lit que les extensions de `EXT` (`scripts/scout-residus.mjs:10`) : les `.ps1`,
+AU MOMENT où la sonde a rendu son rapport → lis sa section `## 0. Angle mort` : elle compte et NOMME
+les fichiers qu'elle n'a PAS ouverts, par extension. Cet angle mort se balaie À LA MAIN avant toute
+shortlist — il ne se déduit plus d'un `ls`, la sonde le déclare elle-même. La sonde ne lit que les extensions de `EXT` (`scripts/scout-residus.mjs:10`) : les `.ps1`,
 `.py`, `.bat`, `.vbs` en sont dehors. Mesuré au banc du 2026-09-05 : la sonde voyait 13 fichiers sur
 159 dans `scripts/` — le bras qui ne s'est PAS arrêté à elle a trouvé le double de résidus.
 
@@ -26,7 +26,8 @@ chemin en dur vers un dossier disparu. Cherche-le explicitement avant de rendre.
 
 ## Procédure
 1. `npm run scout:residus` (ou `node scripts/scout-residus.mjs <racine>` pour cibler un sous-dossier).
-2. Applique la règle d'entrée : liste les extensions non couvertes du dossier et balaie-les à la main
+2. Applique la règle d'entrée : la section `## 0. Angle mort` du rapport donne les extensions non
+   couvertes et leur nombre — balaie ces fichiers à la main
    (cibles de scripts `.ps1`/`.bat` : le fichier visé existe-t-il encore ? le dossier en dur existe-t-il ?).
 3. **Culler les faux positifs AVANT de lister** — ouvrir le `file:line` :
    - fichier « jamais importé » → vérifier `new Worker(...)`, `fork`, chemin en dur, `package.json`

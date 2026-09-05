@@ -10,17 +10,29 @@ const PROJET = process.cwd()
 const EXT = new Set(['.ts', '.tsx', '.mts', '.js', '.jsx', '.mjs', '.cjs'])
 const IGNORE = /(^|[\/])(node_modules|out|dist|build|worktrees|graphify-out|\.git)([\/]|$)/
 
+// Ce que la sonde N'ANALYSE PAS, par extension. Sans ce compte, un lecteur croit le rapport
+// exhaustif : sur `scripts/`, 52 des 159 fichiers sont des `.ps1` que EXT ne couvre pas, et les
+// deux residus les plus flagrants du dossier y vivaient (banc /arena du 2026-09-05, bras a/b/c
+// battus par un balayage direct precisement sur cet angle mort).
+const horsPerimetre = new Map()
+
 function lister(dir, acc = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name)
     if (IGNORE.test(p)) continue
     if (e.isDirectory()) lister(p, acc)
     else if (EXT.has(extname(e.name))) acc.push(p)
+    else {
+      const ext = extname(e.name) || '(sans extension)'
+      horsPerimetre.set(ext, (horsPerimetre.get(ext) ?? 0) + 1)
+    }
   }
   return acc
 }
 
 const fichiers = lister(RACINE)
+const nonAnalyses = [...horsPerimetre.entries()].sort((a, b) => b[1] - a[1])
+const totalNonAnalyses = nonAnalyses.reduce((n, [, c]) => n + c, 0)
 const src = new Map(fichiers.map((f) => [f, readFileSync(f, 'utf8')]))
 const rel = (f) => relative(PROJET, f).split(String.fromCharCode(92)).join('/')
 const estTest = (f) => /\.(test|spec)\.[tj]sx?$/.test(f)
@@ -88,6 +100,14 @@ const groupe = (arr, k) => arr.reduce((m, x) => ((m[x[k]] ??= []).push(x), m), {
 const out = []
 out.push(`# Scout du code résiduel — ${rel(RACINE)}`)
 out.push(`\n_${fichiers.length} fichiers scannés · ${new Date().toISOString().slice(0, 16).replace('T', ' ')}_`)
+out.push(
+  totalNonAnalyses
+    ? `\n## 0. Angle mort — ${totalNonAnalyses} fichier(s) NON analysé(s)\n` +
+        nonAnalyses.map(([e, c]) => `- \`${e}\` : ${c}`).join('\n') +
+        `\n\nLa sonde ne lit que ${[...EXT].join(', ')}. Ces fichiers ne sont PAS propres : ils sont INVISIBLES. ` +
+        `Les balayer à la main avant de conclure que le dossier est trié.`
+    : `\n## 0. Angle mort — aucun : toutes les extensions présentes sont analysées.`
+)
 out.push(`\n## 1. Fichiers jamais importés (${orphelins.length})`)
 out.push(orphelins.length ? orphelins.map((f) => `- \`${rel(f)}\``).join('\n') : '- rien')
 out.push(`\n## 2. Exports jamais référencés ailleurs (${exportsMorts.length})`)
