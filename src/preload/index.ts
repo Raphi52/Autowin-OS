@@ -113,6 +113,8 @@ const api = {
   // Source control — lecture git READ-ONLY (statut, branche, changements, historique). Aucune action git.
   getGitState: (repoPath?: string): Promise<GitReadResult> =>
     ipcRenderer.invoke('git:read', repoPath),
+  getGitBranches: (repoPath?: string): Promise<string[]> =>
+    ipcRenderer.invoke('git:branches', repoPath),
   conversationGitState: (conversationId: string): Promise<GitReadResult> =>
     ipcRenderer.invoke('git:conversationRead', conversationId),
   conversationGitDiff: (

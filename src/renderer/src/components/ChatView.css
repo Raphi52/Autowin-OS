@@ -2653,6 +2653,31 @@ ol.md-list li {
   align-items: center;
   gap: 5px;
 }
+/* Dossier de travail et branche : ce sont des BOUTONS (ils ouvrent un choix), mais ils doivent
+   rester lus comme le reste du bandeau — pas de cadre ni de fond de bouton natif. */
+button.chat-project-dot,
+.chat-git-branch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+}
+button.chat-project-dot:hover:not(:disabled),
+.chat-git-branch-btn:hover {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.08));
+}
+button.chat-project-dot:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .status-dot.st-neutral {
   background: var(--text-faint, #7c869b);
   opacity: 0.6;
