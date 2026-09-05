@@ -60,4 +60,37 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
     expect(resumePilotChat.mock.calls.map(([id]) => id)).toEqual(['B', 'D'])
     await vue.unmount()
   })
+
+  /**
+   * DEFAUT VECU le 2026-09-05 : « j'ai cliqué, ça n'en a repris qu'une sur 3 ». Les trois etaient
+   * bien en file, mais un fil repris passe OCCUPE et sort aussitot de la liste des coupes : le bloc
+   * entier disparaissait au premier clic, emportant toute trace de la file. Deux fils attendaient
+   * leur tour sans que rien ne le dise.
+   */
+  it('reste visible pendant la file et annonce ou elle en est', async () => {
+    let libererLePremier!: (v: unknown) => void
+    const resumePilotChat = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((resolve) => (libererLePremier = resolve)))
+      .mockResolvedValue({ ok: true, cancelled: false, turnId: 't' })
+    const vue = await mountChat(
+      chatApi({
+        conversations: vi
+          .fn()
+          .mockResolvedValue([
+            coupee('B', 'You’ve hit your session limit · resets 2am'),
+            coupee('D', 'insufficient_quota')
+          ]),
+        resumePilotChat
+      })
+    )
+    await vue.click('[data-testid="conv-reprise-quota-bouton"]')
+    // Le premier fil tourne encore : le bouton ne doit NI disparaitre, NI taire la file.
+    await vi.waitFor(() => expect(bouton(vue.container)?.textContent).toContain('1/2'))
+    expect(bouton(vue.container)?.textContent).toContain('1 en attente')
+    libererLePremier({ ok: true, cancelled: false, turnId: 't' })
+    await vi.waitFor(() => expect(resumePilotChat).toHaveBeenCalledTimes(2))
+    await vue.unmount()
+  })
+
 })

@@ -3669,6 +3669,11 @@ export function ChatView({
     [convs, busyConversations]
   )
   const [repriseQuotaEnCours, setRepriseQuotaEnCours] = useState(false)
+  /**
+   * Ou en est la file. Une reprise attend la FIN d'un tour avant de lancer le suivant : sans ce
+   * compteur, une file de trois ne montre que le premier fil qui bouge, et se lit comme une panne.
+   */
+  const [repriseQuotaProgres, setRepriseQuotaProgres] = useState<string | null>(null)
   const [repriseQuotaNotice, setRepriseQuotaNotice] = useState<string | null>(null)
   async function reprendreConversationsCoupeesParQuota(): Promise<void> {
     if (repriseQuotaEnCours) return
@@ -3680,7 +3685,10 @@ export function ChatView({
     try {
       // SEQUENTIEL, a dessein : lancer dix fils d'un coup retomberait sur le meme mur, et
       // consommerait le quota qui vient tout juste de revenir.
-      for (const id of cibles) {
+      for (const [rang, id] of cibles.entries()) {
+        setRepriseQuotaProgres(
+          `Reprise ${rang + 1}/${cibles.length} — ${cibles.length - rang - 1} en attente…`
+        )
         try {
           await resumePilotTurn(id)
           reprises += 1
@@ -3690,6 +3698,7 @@ export function ChatView({
       }
     } finally {
       setRepriseQuotaEnCours(false)
+      setRepriseQuotaProgres(null)
       setRepriseQuotaNotice(
         reprises === cibles.length
           ? `${reprises} conversation${reprises > 1 ? 's' : ''} reprise${reprises > 1 ? 's' : ''}.`
@@ -4351,8 +4360,12 @@ export function ChatView({
             </button>
           </div>
         )}
-        {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor. */}
-        {convsCoupeesParQuota.length > 0 && (
+        {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor.
+            MAIS reste VISIBLE tant qu'une reprise tourne : les fils repris sortent de la liste des
+            coupes des qu'ils passent occupes, si bien que le bloc disparaissait au premier clic et
+            emportait la progression avec lui — « ca n'en a repris qu'une sur 3 » (2026-09-05),
+            alors que les deux autres attendaient leur tour, invisibles. */}
+        {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) && (
           <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
             <button
               type="button"
@@ -4363,7 +4376,7 @@ export function ChatView({
               title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
             >
               {repriseQuotaEnCours
-                ? 'Reprise en cours…'
+                ? (repriseQuotaProgres ?? 'Reprise en cours…')
                 : `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`}
             </button>
             {repriseQuotaNotice ? (
