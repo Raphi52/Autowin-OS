@@ -297,12 +297,28 @@ export function demarrerDetecteurDeGel(
           ? dernierFerme.nom
           : undefined
       const accumulation = nommerAccumulation(cumules, blocageMs)
+      /*
+       * L'APPELANT REMONTE AU PREMIER PLAN QUAND RIEN N'EST DECLARE.
+       *
+       * Mesure du 2026-09-05 (gels.jsonl, 1036 lignes) : 363 gels sortent en `operation:'inconnu'`
+       * pour 1392 s de fenetre figee, et AUCUN ne porte de champ `appelant` — alors que 134
+       * d'entre eux en transportent deja un, enfoui dans `accumulation[].appelant`. Le detecteur
+       * connaissait donc l'origine et ne la disait pas : chaque diagnostic repartait en fouille du
+       * depot. On promeut l'appelant du contributeur le PLUS COUTEUX (accumulation est deja triee
+       * par cumul decroissant) au premier plan, et SEULEMENT faute d'operation declaree — sur un
+       * gel deja nomme, ce serait une seconde accusation sans preuve.
+       */
+      const appelant =
+        operation === 'inconnu'
+          ? accumulation?.find((contributeur) => contributeur.appelant)?.appelant
+          : undefined
       ecrire({
         ts: new Date(maintenant).toISOString(),
         blocageMs,
         operation,
         cause,
         ...(indice ? { indice } : {}),
+        ...(appelant ? { appelant } : {}),
         ...(accumulation ? { accumulation } : {})
       })
     }
