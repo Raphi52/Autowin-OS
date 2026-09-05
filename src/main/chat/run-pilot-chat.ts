@@ -11,6 +11,7 @@
  * `index.ts` ; il est donc reçu ici comme LECTEUR (`watchdogEngine()`) et non comme valeur, sinon
  * le tour figerait la valeur `undefined` du démarrage.
  */
+import { occupationDeFenetre } from '../../shared/occupation-fenetre'
 import { seedTraceActionOrdinal, traceActionEventId } from '../activity/trace-event'
 import { emitToLiveWindows } from '../renderer-emit'
 import { BrowserWindow, type WebContents } from 'electron'
