@@ -14,6 +14,10 @@ import {
 } from './gel-main'
 import type { Gel } from '../shared/gel-detector'
 
+// Le detecteur pose une LIGNE DE VIE a son demarrage (`temoin: 'demarrage'`) : elle prouve que
+// l'instrument tourne, ce n'est PAS un gel. Les assertions ci-dessous portent donc sur les GELS.
+const gelsSeuls = (lignes: readonly Gel[]): Gel[] => lignes.filter((g) => g.temoin === undefined)
+
 // La pile d'operations est un etat de MODULE : sans remise a zero, un test en contamine un autre.
 beforeEach(() => marquerOperation(''))
 
@@ -34,9 +38,10 @@ describe('detecteur de gel — un blocage REEL du main est capte et nomme', () =
     }
     await new Promise((r) => setTimeout(r, 80))
     arreter()
-    expect(captures.length).toBeGreaterThan(0)
-    expect(captures[0]?.operation).toBe('test:blocage-synchrone')
-    expect(captures[0]?.blocageMs).toBeGreaterThan(0)
+    const gels = gelsSeuls(captures)
+    expect(gels.length).toBeGreaterThan(0)
+    expect(gels[0]?.operation).toBe('test:blocage-synchrone')
+    expect(gels[0]?.blocageMs).toBeGreaterThan(0)
   })
 
   it('ne bat pas a vide : une boucle libre ne journalise AUCUN gel', async () => {
@@ -46,7 +51,7 @@ describe('detecteur de gel — un blocage REEL du main est capte et nomme', () =
     )
     await new Promise((r) => setTimeout(r, 120))
     arreter()
-    expect(captures).toEqual([])
+    expect(gelsSeuls(captures)).toEqual([])
   })
 })
 
@@ -279,7 +284,7 @@ describe('mesure DIRECTE du segment synchrone d’un canal IPC', () => {
     faux.handle('os:rapide', (() => 'ok') as unknown as (...a: never[]) => unknown)
     ;(enregistres.get('os:rapide') as () => unknown)()
     arreter()
-    expect(captures).toEqual([])
+    expect(gelsSeuls(captures)).toEqual([])
   })
   /*
    * REGRESSION du 2026-08-30 : le jalon de demarrage restait en pile pour toujours, si bien qu'un

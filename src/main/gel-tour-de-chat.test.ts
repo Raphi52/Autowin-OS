@@ -38,7 +38,9 @@ describe('journal des gels — la ligne dit PENDANT QUEL tour la fenetre a gele'
     const fermer = ouvrirTourDeChat({ conversationId: 'conv-131', turnId: 'turn-77' })
     journaliserGel(gel())
     fermer()
-    expect(ecrits[0]).toMatchObject({ conversationId: 'conv-131', turnId: 'turn-77' })
+    // La premiere ligne ecrite est le TEMOIN DE VIE du detecteur, pas un gel : on vise le gel.
+    const gels = ecrits.filter((g) => g.temoin === undefined)
+    expect(gels[0]).toMatchObject({ conversationId: 'conv-131', turnId: 'turn-77' })
   })
 
   it('n invente RIEN quand aucun tour ne tourne — hors tour, la ligne reste muette', () => {
@@ -65,7 +67,8 @@ describe('journal des gels — la ligne dit PENDANT QUEL tour la fenetre a gele'
     // Le tour A refermerait un scalaire partage : ici il ne retire QUE son entree.
     fermerB()
     journaliserGel(gel())
-    expect(ecrits[1]).toMatchObject({ turnId: 'turn-77' })
+    const gelsEcrits = ecrits.filter((g) => g.temoin === undefined)
+    expect(gelsEcrits[1]).toMatchObject({ turnId: 'turn-77' })
     fermerA()
   })
 })

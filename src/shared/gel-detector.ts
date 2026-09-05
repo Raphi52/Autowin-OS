@@ -54,6 +54,17 @@ export interface Gel {
   /** Absent sur les gels journalises avant l'introduction de la preuve par le CPU. */
   cause?: CauseGel
   /**
+   * TEMOIN DE VIE — ce n'est PAS un gel, c'est la preuve que l'instrument tourne.
+   *
+   * Defaut vecu le 2026-09-05 (conv-303) : apres un redemarrage, `gels.jsonl` n'a plus rien ecrit
+   * pendant que l'application etait sollicitee. Deux lectures possibles, et AUCUN moyen de les
+   * distinguer : « plus aucun blocage » (le correctif marche) ou « plus rien ne s'ecrit » (la
+   * mesure est morte). Un journal muet est donc indecidable, et une preuve indecidable ne vaut
+   * rien. Le detecteur pose desormais UNE ligne a chaque demarrage : si elle manque, l'instrument
+   * est en panne ; si elle est seule, l'application n'a vraiment pas gele.
+   */
+  temoin?: 'demarrage'
+  /**
    * PISTE, pas verdict — renseigne uniquement quand `operation` vaut `inconnu`. C'est la derniere
    * operation qui s'est REFERMEE pendant la fenetre figee : elle a donc reellement tourne pendant
    * le gel. Une operation refermee AVANT la fenetre n'est jamais reportee ici (l'erreur d'alibi
@@ -117,6 +128,14 @@ export interface ResumeGels {
   parOperation: Array<{ operation: string; gels: number; cumulMs: number; pireMs: number }>
   /** Lignes du journal qu'on n'a pas su relire — comptees, jamais jetees en silence. */
   lignesIllisibles: number
+  /**
+   * Demarrages de l'instrument observes dans la fenetre lue.
+   *
+   * A ZERO alors que la fenetre couvre un lancement, la mesure est MORTE : un journal sans gel ne
+   * prouve alors rien. Compte a part, jamais melange aux lignes illisibles — un temoin de vie est
+   * une ligne parfaitement lisible qui ne porte simplement aucun blocage.
+   */
+  demarrages: number
   /** Gels REELS mais non imputables a notre boucle — exclus de l'attribution, jamais caches. */
   gelsNonImputables: number
   /** Temps fige total non imputable a notre code. */
@@ -205,6 +224,7 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
   let pireMs = 0
   let cumulMs = 0
   let lignesIllisibles = 0
+  let demarrages = 0
   let gelsNonImputables = 0
   let msNonImputables = 0
   for (const ligne of lignes) {
@@ -215,6 +235,13 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
       gel = JSON.parse(brut) as Partial<Gel>
     } catch {
       lignesIllisibles += 1
+      continue
+    }
+    // Le temoin de vie se compte AVANT le filtre sur la duree : il ne porte aucun blocage, et le
+    // ranger dans les lignes illisibles ferait passer la preuve que l'instrument vit pour une
+    // corruption du journal.
+    if (gel.temoin === 'demarrage') {
+      demarrages += 1
       continue
     }
     const ms =
@@ -256,6 +283,7 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
     .sort((a, b) => b.cumulMs - a.cumulMs)
   return {
     gels,
+    demarrages,
     pireMs,
     cumulMs,
     parOperation,

@@ -286,6 +286,20 @@ export function demarrerDetecteurDeGel(
   ;(
     globalThis as { __autowinGel__?: { ouvrirOperation: (nom: string) => () => void } }
   ).__autowinGel__ = { ouvrirOperation }
+  /*
+   * LA PREMIERE LIGNE EST UN TEMOIN DE VIE, ecrite AVANT tout gel.
+   *
+   * Sans elle, un journal muet est indecidable (defaut vecu le 2026-09-05, conv-303) : on ne sait
+   * pas si l'application ne gele plus ou si la mesure est morte. Elle est ecrite par le MEME puits
+   * que les gels, donc son absence prouve la panne du chemin d'ecriture lui-meme, pas seulement
+   * celle du battement.
+   */
+  ecrire({
+    ts: new Date().toISOString(),
+    blocageMs: 0,
+    operation: 'detecteur:demarre',
+    temoin: 'demarrage'
+  })
   let precedent = Date.now()
   /*
    * PREUVE PAR LE CPU. Un reveil tardif dit que le temps a passe, pas OU il a passe. On releve donc
