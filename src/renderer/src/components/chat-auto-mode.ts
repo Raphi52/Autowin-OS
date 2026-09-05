@@ -36,6 +36,25 @@ export function texteDernierAssistant(fil: readonly Msg[]): string | null {
     .join('\n')
 }
 
+/**
+ * LE TOUR AFFICHE EST-IL UN SCOUT ? Lu sur le pipeline REELLEMENT joue, pas sur le texte.
+ *
+ * Deriver ce signal du mot « scout » dans la demande serait faux dans les deux sens : « scout sur X »
+ * peut router ailleurs, et un run lance autrement peut jouer un scout. Le bloc d'orchestration du
+ * tour annonce les phases engagees dans l'ordre (`PipelineChoice.phase`) : on lit la DERNIERE.
+ *
+ * Pourquoi la derniere et pas « contient un scout » : un run `scout → frame → build` a DEJA choisi
+ * sa cible et travaille dessus. Exiger de lui une ligne `CIBLE:` couperait une chaine saine.
+ */
+export function dernierTourEstUnScout(fil: readonly Msg[]): boolean {
+  const dernier = [...fil].reverse().find((m) => m.role === 'assistant') as AsstMsg | undefined
+  const phases = (dernier?.parts ?? []).flatMap((part) =>
+    part.kind === 'action' ? (part.pipeline ?? []) : []
+  )
+  const derniereNommee = [...phases].reverse().find((choix) => choix.phase)?.phase
+  return derniereNommee === 'scout'
+}
+
 /** La DERNIERE demande de l'utilisateur — ce a quoi le tour courant repond. */
 export function texteDerniereDemande(fil: readonly Msg[]): string | null {
   const dernier = [...fil].reverse().find((m) => m.role === 'user') as
@@ -253,7 +272,11 @@ export type DecisionAuto =
 const MESSAGES_ARRET: Record<string, string> = {
   'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.',
   'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.',
-  'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.'
+  'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.',
+  'scout-sans-cible':
+    'Mode auto terminé : le scout n’a retenu aucune piste (aucune ligne `CIBLE:`). Choisis une ligne du tableau pour continuer.',
+  'cible-destructrice':
+    'Mode auto en pause : la piste retenue détruit quelque chose. Elle ne part pas toute seule — dis-moi si tu la lances.'
 }
 
 /**
@@ -299,6 +322,23 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   if (entree.brouillonPresent) return { action: 'attendre', raison: 'brouillon' }
   const texteReponse = texteDernierAssistant(entree.fil) ?? ''
   /*
+   * APRES UN SCOUT — la porte lit la ligne `CIBLE:` AVANT tout le reste du raisonnement de suite.
+   *
+   * Defaut vecu : la rubrique « Recommande — enchaine sur le tableau ci-dessus » suffisait a lancer
+   * un tour PAYANT sur une cible que personne n'avait choisie. Un scout rend une LISTE ; sans choix
+   * nomme, le maillon suivant travaille sur tout, c'est-a-dire sur rien de precis.
+   *
+   * Elle est placee APRES les gardes d'entree (inactif / tour en cours / brouillon) : ces gardes
+   * disent « pas maintenant », elles ne disent rien du contenu, et les inverser volerait son tour a
+   * l'utilisateur en train d'ecrire.
+   */
+  const choixScout = entree.tourEstUnScout ? lireCibleScout(texteReponse) : undefined
+  if (choixScout && choixScout.statut !== 'cible') {
+    const raison: RaisonArret =
+      choixScout.statut === 'cible-destructrice' ? 'cible-destructrice' : 'scout-sans-cible'
+    return { action: 'arreter', raison, message: MESSAGES_ARRET[raison] }
+  }
+  /*
    * LES TROIS PORTES « RIEN » — elles disent toutes la MEME chose : ce fil n'a plus de suite.
    * Garde-fou 1 : la recommandation se lit sur la rubrique, pas sur le prompt. Garde-fou 1 bis : le
    * bloc « Fait » vide (c'est la que le mot tombe le plus souvent). Garde-fou 1 ter : « ⏳ Reste à
@@ -333,7 +373,14 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * RÉELLEMENT envoyé qui est mémorisé dans `dernierPromptEnvoye`. Comparer la suite NUE à un
    * précédent ancré ne serait jamais égal, et le garde-fou « deux fois la même suite » mourrait.
    */
-  const texte = ancrerSurLaTacheInitiale(suite, tacheInitiale(entree.fil))
+  /*
+   * LA CIBLE VOYAGE AVEC LA SUITE. Le prompt propose par un scout parle souvent du tableau (« la
+   * ligne 1 », « le candidat ci-dessus ») : envoye seul, il arrive dans un tour qui n'a pas le
+   * tableau sous les yeux. La cible NOMMEE est donc recopiee en tete de ce qui part.
+   */
+  const suiteCiblee = choixScout ? `CIBLE RETENUE : ${choixScout.cible}
+${suite}` : suite
+  const texte = ancrerSurLaTacheInitiale(suiteCiblee, tacheInitiale(entree.fil))
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
   if (entree.dernierPromptEnvoye && texte.trim() === entree.dernierPromptEnvoye.trim())
     return { action: 'attendre', raison: 'prompt-identique' }

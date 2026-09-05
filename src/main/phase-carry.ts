@@ -48,6 +48,10 @@ import { clampMiddle } from './evidence-digest'
  * comportement sûr par défaut.
  */
 const SECTIONS_PORTEUSES = [
+  // `cible` : la piste qu'un scout ENGAGE (voir `scout-cible.ts`). Sans elle ici, l'etage 1 ne
+  // transmettait que les sections porteuses et jetait le choix — la phase suivante repartait du
+  // tableau entier, donc sans cible. Reproduit par `scout-cible.test.ts` avant correction.
+  'cible',
   'besoin',
   'decision',
   'verdict',

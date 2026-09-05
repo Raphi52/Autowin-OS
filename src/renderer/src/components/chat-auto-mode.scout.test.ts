@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
-import { deciderRelanceAuto, lireCibleScout } from './chat-auto-mode'
+import { deciderRelanceAuto, dernierTourEstUnScout, lireCibleScout } from './chat-auto-mode'
 
 /*
  * APRES UN SCOUT — un scout rend PLUSIEURS pistes. Sans regle, le maillon suivant du mode auto
@@ -223,5 +223,33 @@ describe('deciderRelanceAuto — NON-REGRESSION : hors scout, rien ne change', (
       action: 'attendre',
       raison: 'inactif'
     })
+  })
+})
+
+/*
+ * LE SIGNAL D'ENTREE — sans lui, la porte ci-dessus est branchee sur un champ que personne ne
+ * remplit. `tourEstUnScout` se DERIVE du tour affiche : la derniere phase que le pipeline annonce.
+ */
+describe('dernierTourEstUnScout — d’ou vient le signal', () => {
+  const tourPipeline = (...phases: string[]): Msg =>
+    ({
+      role: 'assistant',
+      parts: [
+        { kind: 'action', pipeline: phases.map((phase) => ({ phase })) },
+        { kind: 'text', text: 'CIBLE: une piste' }
+      ]
+    }) as unknown as Msg
+
+  it('un tour dont la DERNIERE phase est un scout', () => {
+    expect(dernierTourEstUnScout([tourPipeline('scout')])).toBe(true)
+  })
+
+  it('un scout SUIVI d’un build n’est plus un tour de scout : le choix a deja ete fait', () => {
+    expect(dernierTourEstUnScout([tourPipeline('scout', 'frame', 'build')])).toBe(false)
+  })
+
+  it('un tour sans pipeline annonce n’est pas un scout', () => {
+    expect(dernierTourEstUnScout([agent('un texte quelconque')])).toBe(false)
+    expect(dernierTourEstUnScout([])).toBe(false)
   })
 })

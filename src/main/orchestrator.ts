@@ -106,6 +106,7 @@ import {
   type WorkflowGraph
 } from './workflow-graph'
 import { porterSortieDePhase } from './phase-carry'
+import { sortieScoutAvecCible } from './scout-cible'
 import {
   briefArbitrage,
   createMidPhaseSupervision,
@@ -3386,6 +3387,16 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     }
     /** `true` = occurrence déjà payée, donc aucun appel provider à rejouer. */
     const dejaPayee = (phase: NodePhase): boolean => takePaidPhase(phase) !== undefined
+    /**
+     * LA GARDE « un scout engage une cible » (`scout-cible.ts`), appliquee AU TEXTE DE PHASE.
+     *
+     * Appliquee dans `recordPhase` SEULE, elle ne servait a rien : ce qui part vers la phase
+     * suivante n'est pas `phaseOutputs` mais le texte pousse dans le contexte par l'appelant.
+     * Elle est donc appliquee sur la variable que LES DEUX chemins lisent.
+     */
+    const garderCibleScout = (phase: NodePhase, texte: string): string =>
+      phase === 'scout' ? sortieScoutAvecCible(texte) : texte
+
     /** Enregistre une phase terminée ET notifie l'appelant pour qu'il persiste l'acquis. */
     const recordPhase = (
       phase: NodePhase,
@@ -3399,11 +3410,16 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // `frame` rédige librement ; l'un d'eux ouvrant par « KO » ou « Rejeté » aurait fait basculer
       // tout le run sur une arête rouge que personne n'a demandée. Les autres phases sont vertes —
       // elles racontent leur travail, elles ne se prononcent pas.
-      dernierVerdict = verdictDePhase(phase, text)
+      // UN SCOUT QUI N'ENGAGE RIEN ne se poursuit pas en silence. Il rend une LISTE ; en mode auto
+      // personne ne choisit, et la phase suivante repart du tableau entier — donc de rien de precis.
+      // La garde est de FORME (une cible declaree existe, ou non), la seule verifiable quand le
+      // producteur et le juge sont le meme modele. Voir `scout-cible.ts`.
+      const texte = garderCibleScout(phase, text)
+      dernierVerdict = verdictDePhase(phase, texte)
       // Le souhait du modèle pour la suite, s'il s'est prononcé. Il PRIME sur le graphe : un workflow
       // est un outil, et l'agent qui vient de travailler sait mieux que le plan si l'étape prévue a
       // encore un sens. Silence = le graphe décide, ce qui reste le cas courant.
-      souhaitModele = readModelChoice(text)
+      souhaitModele = readModelChoice(texte)
       const alreadyAttributed = new Set(
         phaseOutputs.flatMap((output) => (output.agentToken ? [output.agentToken] : []))
       )
@@ -3417,7 +3433,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       const agentToken = attributableAgents.length === 1 ? attributableAgents[0].token : undefined
       phaseOutputs.push({
         phase,
-        text,
+        text: texte,
         ...(agentToken ? { agentToken } : {}),
         ...(executionEvidence.length > 0 ? { executionEvidence: [...executionEvidence] } : {})
       })
@@ -3729,10 +3745,11 @@ ${empreinteDepot}`
         )
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
-        recordPhase(phase, greedy.aggregate, aggregatedEvidence.slice(evidenceStart))
+        const agregatGreedy = garderCibleScout(phase, greedy.aggregate)
+        recordPhase(phase, agregatGreedy, aggregatedEvidence.slice(evidenceStart))
         pousserContexte(
           `acquisPhase:${phase}`,
-          `[phase ${phase}] ${porterVersPhaseSuivante(greedy.aggregate)}`
+          `[phase ${phase}] ${porterVersPhaseSuivante(agregatGreedy)}`
         )
         // Plusieurs phases peuvent réutiliser le même DAG. Une phase suivante réussie ne doit pas
         // effacer les échecs/skips déjà observés (sinon un Terrain rouge disparaît après Build).
@@ -3957,7 +3974,7 @@ ${empreinteDepot}`
         if (good.length === 1) {
           // Un seul survivant → rien à agréger : on réutilise sa sortie directement, sans appel de
           // synthèse (inutile + risque de reformulation d'un texte unique).
-          const solo = good[0].text
+          const solo = garderCibleScout(phase, good[0].text)
           lastExecText = solo
           recordPhase(phase, solo, aggregatedEvidence.slice(evidenceStart))
           pousserContexte(
@@ -4061,10 +4078,11 @@ ${empreinteDepot}`
         })
         lastExecText = synth.text
         lastUsage = synth.usage
-        recordPhase(phase, synth.text, aggregatedEvidence.slice(evidenceStart))
+        const texteSynth = garderCibleScout(phase, synth.text)
+        recordPhase(phase, texteSynth, aggregatedEvidence.slice(evidenceStart))
         pousserContexte(
           `acquisPhase:${phase}`,
-          `[phase ${phase}] ${porterVersPhaseSuivante(synth.text)}`
+          `[phase ${phase}] ${porterVersPhaseSuivante(texteSynth)}`
         )
         prevSessionId = undefined // fan-out : pas de session linéaire à chaîner
         return
@@ -4637,6 +4655,7 @@ ${empreinteDepot}`
         onDelta?.('exec', `[dérive] ${decision}\n`)
         texteDePhase = `${phaseRes.text}\n\n[dérive] ${constat} — ${decision}.${suite}`
       }
+      texteDePhase = garderCibleScout(phase, texteDePhase)
       recordPhase(phase, texteDePhase, aggregatedEvidence.slice(evidenceStart))
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.
