@@ -57,13 +57,14 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   // `context-gauge.test.ts` figeaient la meme valeur et la rendaient carrement inapplicable : ils
   // prennent desormais `sonnet` comme modele d'exemple a 200 k, et opus porte son assertion propre.
   //
-  // Qui decide ici : l'utilisateur exploite SON abonnement sur SON poste et observe la fenetre
-  // qu'on lui sert. Cette observation est une source, et elle prime sur une page de documentation
-  // que ce depot ne peut pas interroger. Le risque d'un denominateur trop GRAND (afficher 20 % la
-  // ou le fil sature) est reel, il l'assume, et il verra la troncature. Seule une saturation
-  // OBSERVEE en dessous de 1 M justifierait d'y revenir — jamais un raisonnement sur la doc.
-  { match: 'opus', provider: 'claude', tokens: 1_000_000, source: 'Utilisateur — fenêtre observée sur son abonnement (conv-267, conv-292, conv-297)' },
-  { match: 'sonnet', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
+  // LA SOURCE EXISTE, et les passages qui l'ont niee ne l'avaient simplement pas cherchee :
+  // Anthropic a rendu la fenetre 1 M GENERALEMENT DISPONIBLE le 2026-03-13 pour Opus et Sonnet, au
+  // tarif standard, sans en-tete de beta. L'utilisateur avait donc raison les trois fois, et
+  // « aucune source ne l'etablit » etait un raisonnement tenu a la place d'une verification.
+  //
+  // HAIKU garde 200 k : c'est desormais LUI le modele d'exemple des tests, plus opus ni sonnet.
+  { match: 'opus', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — 1M généralement disponible depuis 2026-03-13 (Opus/Sonnet), tarif standard' },
+  { match: 'sonnet', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — 1M généralement disponible depuis 2026-03-13 (Opus/Sonnet), tarif standard' },
   { match: 'haiku', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'fable', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'mythos', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
