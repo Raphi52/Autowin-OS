@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { alignerEnvPourRelance } from './execution-workspace-preference'
 
 export interface RestartableApp {
   isPackaged: boolean
@@ -22,6 +23,12 @@ export function restartApplication(
   app: RestartableApp,
   launchDev: DevLauncher = launchDevelopmentUi
 ): void {
+  // C'EST ICI, et seulement ici, que l'environnement est aligné sur le dossier de travail choisi :
+  // le processus meurt dans la foulée, donc aucun code ne peut observer deux dépôts à la fois. Le
+  // faire au clic « Enregistrer » ouvrirait une fenêtre où les outils de lecture du chat pointeraient
+  // le NOUVEAU dépôt pendant que les runs travaillent encore sur l'ANCIEN. Sans cet alignement, la
+  // variable republiée au démarrage repart telle quelle dans le processus suivant et écrase le choix.
+  alignerEnvPourRelance()
   if (app.isPackaged) app.relaunch()
   else launchDev(app.getAppPath())
   app.quit()

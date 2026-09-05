@@ -85,7 +85,7 @@ import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { loadAutoClose, saveAutoClose } from './autoclose-store'
-import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
+import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../shared/app-identity'
 import { ExecutionSupervisor, type ExecutionUsageSnapshot } from './execution-supervisor'
 import { compileExecutionQuote } from './execution-quote'
 import { loadOrchestrationBudget } from './orchestration-budget'
@@ -366,6 +366,10 @@ export class AutowinOS {
     // nouvelle dependance : c'est ce qui permet au tour de chat de LIRE le projet (Read/Grep/Glob en
     // lecture seule) au lieu d'etre aveugle et de devoir orchestrer pour repondre a une question.
     process.env[AUTOWIN_WORKSPACE_ENV] = executionWorkspace
+    // ... et TRACE que cette valeur vient de nous. Le redemarrage transmet l'environnement au
+    // processus suivant : sans ce marqueur, notre propre republication y passerait pour une consigne
+    // de lanceur externe et gagnerait contre le dossier choisi dans les Reglages.
+    process.env[AUTOWIN_WORKSPACE_ORIGIN_ENV] = 'resolved'
     // Garde : `git worktree` exige un vrai repo. Absent (.git manquant) → pas d'isolation (undefined).
     if (existsSync(join(executionWorkspace, '.git'))) {
       try {
