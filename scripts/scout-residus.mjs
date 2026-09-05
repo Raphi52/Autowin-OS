@@ -49,6 +49,10 @@ const rel = (f) => relative(PROJET, f).split(String.fromCharCode(92)).join('/')
 const cheminsMorts = []
 const vusChemins = new Set()
 for (const f of tousFichiers) {
+  // Un fichier de TEST invente ses chemins : `C:/repo/src/a.ts` y est une donnee d'essai, pas une
+  // racine de production. Les inclure noyait la passe (282 signalements sur `src/`, presque tous
+  // des fixtures) et rendait la section illisible, donc inutile.
+  if (/\.(test|spec)\./.test(f) || /[\\/](fixtures?|__mocks__)[\\/]/.test(f)) continue
   let contenu
   try {
     contenu = readFileSync(f, 'utf8')
