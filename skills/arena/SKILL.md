@@ -103,7 +103,10 @@ remplie d'une estimation.
   discriminante quand le livrable est un RAPPORT : au banc `clean`, les six assertions ne regardaient
   que l'état final des fichiers, donc 4 bras sur 4 passaient ; l'assertion ajoutée le 2026-09-06
   (« aucune commande du rapport ne porte sur un fichier inexistant ») a fait tomber 2 bras sur 4 —
-  ceux qui invoquaient un `scripts/fingerprint.py` absent du dépôt. Chaque assertion s'écrit dans le RUN.md avec ce qu'elle interdit.
+  ceux qui invoquaient un `scripts/fingerprint.py` absent du dépôt. **Elle ne se réécrit pas : un banc
+  à livrable-rapport l'IMPORTE** —
+  `import { assertionPreuveFictive } from 'scripts/arena-critere-preuve-fictive.mjs'` dans son
+  `check.mjs`, ou `npm run arena:preuve-fictive -- <rapport.md> <racine>` en ligne de commande. Chaque assertion s'écrit dans le RUN.md avec ce qu'elle interdit.
   Un critère qui ne teste que le chemin heureux ne départage personne : au banc du 2026-09-02, les
   **4 bras sur 4** l'ont passé et ont tous raté les MÊMES cas limites (dates absurdes acceptées,
   fenêtre vide) — c'est le critère qui a échoué, pas les bras, et le classement s'est joué sur une

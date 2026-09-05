@@ -126,6 +126,7 @@
     "scout:pilote": "node scripts/pilote-prompts.cli.mjs",
     "scout:rendement": "node scripts/scout-rendement.mjs",
     "arena:protocole": "node scripts/arena-protocole-check.mjs",
+    "arena:preuve-fictive": "node scripts/arena-critere-preuve-fictive.mjs",
     "arena:duel": "node scripts/arena-duel.mjs"
   },
   "dependencies": {
