@@ -204,6 +204,7 @@ export type RaisonArret =
   | 'reste-rien'
   | 'aucun-prompt'
   | 'prompt-identique'
+  | 'chaine-finie'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -217,6 +218,14 @@ export interface EntreeDecisionAuto {
   dernierPromptEnvoye: string | null
   /** L'utilisateur a du texte dans le champ : on ne lui vole pas son tour, on PATIENTE. */
   brouillonPresent: boolean
+  /**
+   * FIN DE CHAINE : au lieu d'ETEINDRE l'interrupteur, demander a l'agent de PROPOSER une nouvelle
+   * cible (demande utilisateur du 2026-09-05, conv-307 : « rien » ne doit plus couper le mode).
+   *
+   * Reserve au fil AFFICHE. Un fil d'arriere-plan garde l'ancien comportement : on cesse de le
+   * suivre sans depenser un tour payant sur une conversation que personne ne regarde.
+   */
+  proposerNouvelleCible?: boolean
 }
 
 export type DecisionAuto =
@@ -237,6 +246,17 @@ const MESSAGES_ARRET: Record<string, string> = {
   'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.',
   'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.'
 }
+
+/**
+ * LE TOUR DE RELEVE, envoye UNE SEULE FOIS quand la chaine est finie.
+ *
+ * Il ne fabrique aucune tache : il demande a l'agent de PROPOSER des cibles et d'attendre le choix
+ * de l'utilisateur. La borne de cout est le garde-fou anti-boucle deja present : ce texte etant
+ * fixe, un second passage tombe sur `prompt-identique` et la boucle patiente au lieu de repartir.
+ */
+export const PROMPT_NOUVELLE_CIBLE =
+  'La chaîne de ce fil est terminée. Ne lance aucun chantier : propose-moi avec `ask` 2 à 4 ' +
+  'nouvelles cibles concrètes issues de ce qui vient d’être fait, et attends mon choix.'
 
 /**
  * PREMIER PASSAGE DANS UN FIL : faut-il figer le tour deja affiche, ou le laisser partir ?
@@ -269,21 +289,28 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // Le mode reste ARMÉ pendant que l'utilisateur écrit : on patiente, on ne se coupe pas.
   if (entree.brouillonPresent) return { action: 'attendre', raison: 'brouillon' }
   const texteReponse = texteDernierAssistant(entree.fil) ?? ''
-  // Garde-fou 1 : la condition d'arrêt se lit sur la rubrique, pas sur le prompt.
-  if (recommandationDitRien(extractRecommendation(texteReponse)))
-    return {
-      action: 'arreter',
-      raison: 'recommandation-rien',
-      message: MESSAGES_ARRET['recommandation-rien']
-    }
-  // Garde-fou 1 bis : le bloc « Fait » vide dit la même chose — c'est là que le mot tombe le plus
-  // souvent (précision utilisateur du 2026-09-02).
-  if (blocFaitDitRien(texteReponse))
-    return { action: 'arreter', raison: 'fait-rien', message: MESSAGES_ARRET['fait-rien'] }
-  // Garde-fou 1 ter : la chaîne est FINIE — « ⏳ Reste à faire : rien ». C'est le texte d'Autowin
-  // lui-même après le dernier maillon ; sans cette lecture la boucle repartait pour un tour payant.
-  if (resteAFaireDitRien(texteReponse))
-    return { action: 'arreter', raison: 'reste-rien', message: MESSAGES_ARRET['reste-rien'] }
+  /*
+   * LES TROIS PORTES « RIEN » — elles disent toutes la MEME chose : ce fil n'a plus de suite.
+   * Garde-fou 1 : la recommandation se lit sur la rubrique, pas sur le prompt. Garde-fou 1 bis : le
+   * bloc « Fait » vide (c'est la que le mot tombe le plus souvent). Garde-fou 1 ter : « ⏳ Reste à
+   * faire : rien », le texte qu'Autowin ecrit lui-meme apres le dernier maillon.
+   */
+  const finDeChaine: RaisonArret | null = recommandationDitRien(extractRecommendation(texteReponse))
+    ? 'recommandation-rien'
+    : blocFaitDitRien(texteReponse)
+      ? 'fait-rien'
+      : resteAFaireDitRien(texteReponse)
+        ? 'reste-rien'
+        : null
+  if (finDeChaine) {
+    // Fil d'arriere-plan : on cesse de le suivre, sans depenser un tour sur ce qu'on ne regarde pas.
+    if (!entree.proposerNouvelleCible)
+      return { action: 'arreter', raison: finDeChaine, message: MESSAGES_ARRET[finDeChaine] }
+    // Deja demande : la releve n'a rien donne. On PATIENTE, l'interrupteur reste allume.
+    if (entree.dernierPromptEnvoye?.trim().startsWith(PROMPT_NOUVELLE_CIBLE))
+      return { action: 'attendre', raison: 'chaine-finie' }
+    return { action: 'envoyer', texte: PROMPT_NOUVELLE_CIBLE, signature }
+  }
   // Même garde qu'en affichage : si la demande de CE tour était déjà l'ordre de tri, la publication
   // proposée passe telle quelle — sinon le mode auto renvoie `/salvage` en boucle, à ses frais.
   const demandeDuTour = texteDerniereDemande(entree.fil) ?? undefined

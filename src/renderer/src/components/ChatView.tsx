@@ -3031,7 +3031,9 @@ export function ChatView({
       fil: messages,
       dernierTourTraite: etat.tour,
       dernierPromptEnvoye: etat.prompt,
-      brouillonPresent
+      brouillonPresent,
+      // Fil AFFICHÉ : une chaîne finie demande une nouvelle cible au lieu de couper l'interrupteur.
+      proposerNouvelleCible: true
     })
     if (decision.action === 'attendre') {
       // VISIBILITÉ : deux attentes sont des impasses réelles — plus aucune suite écrite, ou la même
@@ -3041,6 +3043,8 @@ export function ChatView({
         setAutoNotice('Mode auto en attente : la dernière réponse ne propose aucune suite.')
       else if (decision.raison === 'prompt-identique')
         setAutoNotice('Mode auto en attente : la même suite revenait deux fois — non renvoyée.')
+      else if (decision.raison === 'chaine-finie')
+        setAutoNotice('Mode auto en attente : ce fil est terminé — donne-moi une nouvelle cible.')
       return
     }
     if (decision.action === 'arreter') {

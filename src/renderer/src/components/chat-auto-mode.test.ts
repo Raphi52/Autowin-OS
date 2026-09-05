@@ -7,7 +7,8 @@ import {
   tacheInitiale,
   recommandationDitRien,
   signatureTour,
-  texteDernierAssistant
+  texteDernierAssistant,
+  PROMPT_NOUVELLE_CIBLE
 } from './chat-auto-mode'
 
 const agent = (texte: string): Msg =>
@@ -86,6 +87,31 @@ describe('deciderRelanceAuto — envoi', () => {
     for (let i = 0; i < 50; i += 1) fil.push(humain(`t${i}`))
     fil.push(agent(REPONSE_AVEC_SUITE))
     expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({ action: 'envoyer' })
+  })
+})
+
+describe('fin de chaîne — proposer une cible au lieu d’éteindre (conv-307)', () => {
+  it('DEMANDE une nouvelle cible sur « rien » quand le fil est AFFICHÉ', () => {
+    const fil = [agent(REPONSE_RIEN)]
+    expect(deciderRelanceAuto({ ...base, fil, proposerNouvelleCible: true })).toMatchObject({
+      action: 'envoyer',
+      texte: PROMPT_NOUVELLE_CIBLE
+    })
+  })
+  it('ne la redemande pas deux fois : elle a déjà été envoyée', () => {
+    const fil = [agent(REPONSE_RIEN)]
+    expect(
+      deciderRelanceAuto({
+        ...base,
+        fil,
+        proposerNouvelleCible: true,
+        dernierPromptEnvoye: PROMPT_NOUVELLE_CIBLE
+      })
+    ).toMatchObject({ action: 'attendre', raison: 'chaine-finie' })
+  })
+  it('un fil d’ARRIÈRE-PLAN garde l’arrêt : pas de tour payant sur ce qu’on ne regarde pas', () => {
+    const fil = [agent(REPONSE_RIEN)]
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({ action: 'arreter' })
   })
 })
 
