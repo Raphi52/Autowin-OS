@@ -8,6 +8,7 @@ import {
   SUBAGENT_INACTIVITY_MS,
   SUBAGENT_TOTAL_MS
 } from './watchdog'
+import { contextWindowFor } from '../../shared/context-gauge'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
