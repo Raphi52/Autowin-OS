@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contextGauge, CONTEXT_WINDOWS } from './context-gauge'
+import { contextGauge, CONTEXT_WINDOWS, doitCompacterAutomatiquement, COMPACT_REQUEST } from './context-gauge'
 
 /**
  * LA JAUGE DE CONTEXTE — combien de la fenetre du modele ce fil occupe-t-il DEJA.
@@ -91,5 +91,29 @@ describe('jauge de contexte', () => {
       expect(fenetre.tokens).toBeGreaterThan(0)
       expect(fenetre.source.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('doitCompacterAutomatiquement', () => {
+  const jauge = (ratio: number, model = 'haiku'): ReturnType<typeof contextGauge> =>
+    contextGauge({ inputTokens: Math.round(200_000 * ratio), model, provider: 'claude' })
+
+  it('declenche au palier critique', () => {
+    expect(jauge(0.9)?.level).toBe('critique')
+    expect(doitCompacterAutomatiquement(jauge(0.9), 'une demande quelconque')).toBe(true)
+  })
+
+  it('ne declenche ni a ok ni a tendu — la marge restante ne se gaspille pas', () => {
+    expect(doitCompacterAutomatiquement(jauge(0.2), 'demande')).toBe(false)
+    expect(doitCompacterAutomatiquement(jauge(0.7), 'demande')).toBe(false)
+  })
+
+  it('n agit pas sur une jauge absente : on ne sait pas, donc on ne fait rien', () => {
+    expect(doitCompacterAutomatiquement(undefined, 'demande')).toBe(false)
+  })
+
+  it('ne relance PAS la compaction juste apres une compaction — pas de boucle', () => {
+    expect(doitCompacterAutomatiquement(jauge(0.95), COMPACT_REQUEST)).toBe(false)
+    expect(doitCompacterAutomatiquement(jauge(0.95), `  ${COMPACT_REQUEST}  `)).toBe(false)
   })
 })

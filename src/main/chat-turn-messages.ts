@@ -68,42 +68,169 @@ export interface TurnMessageParts {
 }
 
 /**
- * Borne l'historique sans laisser une réponse assistant privée de sa question en tête.
+ * COMBIEN PESE UN TEXTE — approximation assumee, jamais presentee comme une mesure.
  *
- * Un tour entrant contient normalement `2n + 1` messages (les paires précédentes, puis la nouvelle
- * question). Une tranche paire comme `slice(-40)` commence alors par la dernière réponse du tour
- * écarté. On conserve la même borne puis on réaligne uniquement le début sur le prochain utilisateur.
+ * Aucun tokeniseur n'est embarque cote main, et en appeler un ici couterait a chaque tour. Le
+ * rapport de 4 caracteres par token est l'approximation usuelle pour du texte latin ; elle sous-
+ * estime le code dense et surestime la prose. Elle n'a pas besoin d'etre juste au token pres : ce
+ * qu'elle doit attraper, c'est l'ordre de grandeur — un fil de 40 messages qui pese 300 k.
  */
-export function boundedTurnHistory<T extends { role: 'user' | 'assistant' }>(
+export const CARACTERES_PAR_TOKEN = 4
+
+/** Poids approximatif d'un message, en tokens. */
+function poidsApproximatif(message: { content?: string }): number {
+  return Math.ceil((message.content?.length ?? 0) / CARACTERES_PAR_TOKEN)
+}
+
+/**
+ * BUDGET EN TOKENS DE L'HISTORIQUE RENVOYE.
+ *
+ * Choix de politique, pas une constante physique : 60 k, soit moins d'un tiers de la PLUS PETITE
+ * fenetre declaree dans `shared/context-gauge.ts` (200 k pour haiku/fable/mythos). Le reste de la
+ * fenetre n'est pas libre — le prompt systeme, l'etat de l'app, le savoir Brain, l'echo de memoire
+ * et la reponse a produire s'y logent aussi. Un budget cale sur la fenetre entiere ne laisserait
+ * rien pour repondre.
+ */
+export const TOKENS_MAX_HISTORIQUE = 60_000
+
+/** Ce qu'accepte une borne : l'ancienne forme (un nombre de messages) ou les deux plafonds. */
+export interface BorneHistorique {
+  readonly maxMessages?: number
+  readonly maxTokens?: number
+}
+
+function normaliserBorne(borne: number | BorneHistorique | undefined): {
+  maxMessages: number
+  maxTokens: number
+} {
+  if (typeof borne === 'number') return { maxMessages: borne, maxTokens: TOKENS_MAX_HISTORIQUE }
+  return {
+    maxMessages: borne?.maxMessages ?? 40,
+    maxTokens: borne?.maxTokens ?? TOKENS_MAX_HISTORIQUE
+  }
+}
+
+/**
+ * L'AVIS DE COUPE — ce qui manque est DIT, jamais retire en silence.
+ *
+ * La borne enlevait des tours sans laisser aucune trace : le modele recevait un fil qui commencait
+ * au milieu d'un travail et le lisait comme un fil COMPLET. Il redemandait alors ce qui avait deja
+ * ete decide, ou repartait d'une intention qu'il n'avait plus. Une coupe muette est un mensonge par
+ * omission ; ce message la rend visible, avec le nombre exact de tours ecartes.
+ */
+export function avisDeCoupe(nombreEcarte: number): string {
+  return (
+    `[HISTORIQUE TRONQUE PAR L'APP — ${nombreEcarte} message(s) plus anciens de ce fil ne sont PAS ` +
+    `dans ce prompt. Tu ne lis donc PAS le debut de la conversation. Si la demande courante ` +
+    `s'appuie sur un echange que tu ne retrouves pas, ne devine pas : relis le fil avec ` +
+    `conversation_read avant de conclure.]`
+  )
+}
+
+/**
+ * Un message minimal — le seul contrat dont la borne a besoin pour peser et pour se raconter.
+ *
+ * `content` est desormais REQUIS (il ne l'etait pas) : sans lui, aucun poids en tokens n'est
+ * calculable et l'avis de coupe ne pourrait pas etre fabrique.
+ */
+export interface MessageBorne {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/** Prepend l'avis de coupe quand des messages ont reellement ete ecartes. */
+function avecAvisDeCoupe<T extends MessageBorne>(retenus: T[], total: number): T[] {
+  const ecartes = total - retenus.length
+  if (ecartes <= 0 || retenus.length === 0) return retenus
+  // Fabrique un message de la forme attendue par l'appelant. Le cast est assume et borne : les
+  // deux appelants ne lisent que `role`, `content` et `attachments` (optionnel) sur ces objets.
+  const avis = { role: 'user', content: avisDeCoupe(ecartes) } as unknown as T
+  return [avis, ...retenus]
+}
+
+/**
+ * Borne l'historique EN VOLUME ET EN NOMBRE, sans laisser une reponse assistant privee de sa
+ * question en tete, et en DISANT ce qui a ete ecarte.
+ *
+ * Un tour entrant contient normalement `2n + 1` messages (les paires precedentes, puis la nouvelle
+ * question). Une tranche paire comme `slice(-40)` commence alors par la derniere reponse du tour
+ * ecarte. On conserve la meme borne puis on realigne uniquement le debut sur le prochain utilisateur.
+ *
+ * LE NOMBRE DE MESSAGES NE DIT RIEN DU VOLUME. Cette borne ne comptait que des bulles : 40 messages
+ * pesent 2 k ou 2 M selon ce qu'ils portent, et un seul tour charge (un fichier colle, une longue
+ * sortie d'outil) saturait la fenetre sans que rien ne coupe. Le plafond en tokens s'applique donc
+ * APRES la borne en messages, en retirant les plus ANCIENS d'abord, et il garde toujours au moins
+ * le dernier message : une demande courante n'est jamais amputee, meme si elle depasse a elle seule
+ * le budget.
+ *
+ * LIMITE ASSUMEE : le poids est mesure sur le `content` remis ici. L'appelant reconstruit ensuite
+ * le contenu des messages assistant depuis leurs `parts` (`chat/run-pilot-chat.ts`), qui peut etre
+ * plus long. Le budget est donc un ORDRE DE GRANDEUR, pas une garantie au token pres.
+ */
+export function boundedTurnHistory<T extends MessageBorne>(
   history: readonly T[],
-  maxMessages = 40
+  borne: number | BorneHistorique = 40
 ): T[] {
+  return avecAvisDeCoupe(noyauBorne(history, borne), history.length)
+}
+
+/** La borne SANS l'avis : partagee avec la variante continuation, qui pose le sien. */
+function noyauBorne<T extends MessageBorne>(
+  history: readonly T[],
+  borne: number | BorneHistorique
+): T[] {
+  const { maxMessages, maxTokens } = normaliserBorne(borne)
   if (!Number.isInteger(maxMessages) || maxMessages <= 0) return []
   const tail = history.slice(-maxMessages)
-  const firstUser = tail.findIndex((message) => message.role === 'user')
-  return firstUser < 0 ? [] : tail.slice(firstUser)
+  const parVolume = bornerParVolume(tail, maxTokens)
+  const firstUser = parVolume.findIndex((message) => message.role === 'user')
+  return firstUser < 0 ? [] : parVolume.slice(firstUser)
+}
+
+/** Retire les messages les plus anciens jusqu'a tenir dans le budget ; garde toujours le dernier. */
+function bornerParVolume<T extends MessageBorne>(messages: readonly T[], maxTokens: number): T[] {
+  if (!Number.isFinite(maxTokens) || maxTokens <= 0 || messages.length === 0) return [...messages]
+  const retenus: T[] = []
+  let total = 0
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] as T
+    const poids = poidsApproximatif(message)
+    if (retenus.length > 0 && total + poids > maxTokens) break
+    retenus.unshift(message)
+    total += poids
+  }
+  return retenus
 }
 
 /**
  * Variante pour une continuation dont le dernier `user` est une instruction transport interne.
  * Le dernier vrai prompt humain reste l'ancre de permissions/RAG, même s'il tombe hors de la borne.
  */
-export function boundedContinuationHistory<T extends { role: 'user' | 'assistant' }>(
+export function boundedContinuationHistory<T extends MessageBorne>(
   history: readonly T[],
-  maxMessages = 40
+  borne: number | BorneHistorique = 40
 ): { history: T[]; routingUserMessage?: T } {
+  const { maxMessages, maxTokens } = normaliserBorne(borne)
   const priorMessages = history.slice(0, -1)
   const routingUserMessage = [...priorMessages].reverse().find((message) => message.role === 'user')
-  const bounded = boundedTurnHistory(history, maxMessages)
-  if (!routingUserMessage || !Number.isInteger(maxMessages) || maxMessages <= 0)
-    return { history: bounded, routingUserMessage }
-  if (bounded.includes(routingUserMessage)) return { history: bounded, routingUserMessage }
-  if (maxMessages === 1) return { history: [routingUserMessage], routingUserMessage }
-
-  return {
-    history: [routingUserMessage, ...history.slice(-(maxMessages - 1))],
+  const bounded = noyauBorne(history, borne)
+  const rendre = (retenus: T[]): { history: T[]; routingUserMessage?: T } => ({
+    history: avecAvisDeCoupe(retenus, history.length),
     routingUserMessage
-  }
+  })
+  if (!routingUserMessage || !Number.isInteger(maxMessages) || maxMessages <= 0)
+    return rendre(bounded)
+  if (bounded.includes(routingUserMessage)) return rendre(bounded)
+  if (maxMessages === 1) return rendre([routingUserMessage])
+
+  // Le prompt humain d'ancrage est REMIS EN TETE meme s'il est tombe hors de la borne. Le budget en
+  // tokens s'applique ensuite au reste, sans jamais le reprendre : c'est lui qui porte les
+  // permissions et le sujet.
+  const reste = bornerParVolume(
+    history.slice(-(maxMessages - 1)),
+    Math.max(0, maxTokens - poidsApproximatif(routingUserMessage))
+  )
+  return rendre([routingUserMessage, ...reste])
 }
 
 /**

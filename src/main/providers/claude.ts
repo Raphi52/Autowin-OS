@@ -608,10 +608,18 @@ export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): vo
   // et Sonnet portent 1 M depuis le 2026-03-13. La valeur vient de CONTEXT_WINDOWS, seule table
   // sourcee du depot — jamais un nombre reecrit ici, sinon les deux divergent au prochain modele
   // publie et l'app compacterait sur une taille qu'elle n'affiche plus. Un modele absent de la
-  // table, ou sous le plancher de 100 k accepte par le CLI, garde `auto` : on ne force pas un
-  // seuil sur une fenetre qu'on ne connait pas.
+  // table, ou dont le seuil tomberait sous le plancher de 100 k accepte par le CLI, garde `auto` :
+  // on ne force pas un seuil sur une fenetre qu'on ne connait pas.
+  //
+  // 85 % ET NON 100 %. Le seuil valait la fenetre ENTIERE : le CLI n'aurait donc resume qu'une
+  // fois la place deja epuisee — or produire un resume demande justement de la place, et le tour
+  // qui declenche la compaction est celui qui deborde. On garde la meme marge que le palier
+  // `critique` de la jauge (`SEUIL_CRITIQUE = 0.85`, `shared/context-gauge.ts`) : ce que l'ecran
+  // appelle « critique » est exactement le moment ou le CLI compacte, au lieu de deux reglages
+  // qui divergent.
   const fenetre = contextWindowFor(opts.model, 'claude')?.tokens
-  if (fenetre !== undefined && fenetre >= 100_000) args.push('--autocompact', String(fenetre))
+  const seuil = fenetre === undefined ? undefined : Math.floor(fenetre * 0.85)
+  if (seuil !== undefined && seuil >= 100_000) args.push('--autocompact', String(seuil))
 }
 
 export function claudeTransportEnvelope(
@@ -1564,9 +1572,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (normalizedUsage)
           usage = {
             ...normalizedUsage,
-            // Repli sur le cumul quand aucun message assistant n'a porte d'usage : un majorant
-            // reste plus utile qu'une jauge absente, et le champ dit d'ou il vient.
-            derniereEntree: derniereEntree ?? normalizedUsage.inputTokens,
+            // AUCUN REPLI SUR LE CUMUL. Le champ pretendait « dire d'ou il vient » — il ne le
+            // disait pas : une occupation reellement mesuree et un majorant recopie du cumul
+            // sortaient d'ici sous la MEME forme, donc plus rien en aval ne pouvait les separer.
+            // Consequence mesuree le 2026-09-05 sur les 244 enregistrements `chat-usage` du jour :
+            // 81 occupations distinctes du cumul (mesure sure), 156 identiques — impossible de
+            // dire lesquelles etaient un repli. Le champ etant toujours rempli, `replicumul`
+            // (`shared/occupation-fenetre.ts`) ne valait JAMAIS vrai et les garde-fous poses en
+            // aval ne pouvaient pas se declencher.
+            //
+            // Quand aucun message assistant n'a porte d'usage, on n'ecrit donc RIEN : la jauge
+            // disparait au lieu d'afficher un nombre qui n'est pas une occupation. Meme regle que
+            // `context-gauge.ts` et `chat/run-pilot-chat.ts` — « une jauge fausse est pire qu'une
+            // jauge absente, elle est crue ». Choix tranche par l'utilisateur le 2026-09-05.
+            ...(derniereEntree === undefined ? {} : { derniereEntree }),
             ...(derniereEntreeCache === undefined ? {} : { derniereEntreeCache })
           }
         const resultFailed = o['is_error'] === true

@@ -24,8 +24,11 @@ describe('boundedTurnHistory', () => {
 
     const bounded = boundedTurnHistory(history, 40)
 
-    expect(bounded).toHaveLength(39)
-    expect(bounded[0]).toEqual({ role: 'user', content: 'question-2' })
+    // 39 messages retenus + l'AVIS DE COUPE en tete : ce qui a ete retire est DIT.
+    expect(bounded).toHaveLength(40)
+    expect(bounded[0]?.content).toContain('HISTORIQUE TRONQUE')
+    expect(bounded[0]?.content).toContain('2 message(s)')
+    expect(bounded[1]).toEqual({ role: 'user', content: 'question-2' })
     expect(bounded.at(-1)).toEqual({ role: 'user', content: 'question-courante' })
     expect(bounded.some((message) => message.content === 'réponse-1')).toBe(false)
   })
@@ -41,6 +44,44 @@ describe('boundedTurnHistory', () => {
 
     expect(bounded).toEqual(history)
     expect(bounded[0]).toBe(history[0])
+  })
+
+  it('coupe sur le VOLUME quand 40 messages pesent trop lourd, et garde le dernier', () => {
+    // 4 caracteres par token : 40 000 caracteres = 10 000 tokens par message.
+    const gros = (nom: string): { role: 'user'; content: string } => ({
+      role: 'user',
+      content: `${nom}:${'x'.repeat(40_000)}`
+    })
+    const history = [gros('a'), gros('b'), gros('c'), gros('d')]
+
+    // Budget de 25 000 tokens : deux messages tiennent, pas trois.
+    const bounded = boundedTurnHistory(history, { maxMessages: 40, maxTokens: 25_000 })
+
+    expect(bounded).toHaveLength(3) // avis + 2 messages
+    expect(bounded[0]?.content).toContain('HISTORIQUE TRONQUE')
+    expect(bounded[1]?.content.startsWith('c:')).toBe(true)
+    expect(bounded.at(-1)?.content.startsWith('d:')).toBe(true)
+  })
+
+  it('ne coupe jamais le dernier message, meme s il depasse a lui seul le budget', () => {
+    const history = [
+      { role: 'user' as const, content: 'ancien' },
+      { role: 'user' as const, content: 'x'.repeat(400_000) }
+    ]
+
+    const bounded = boundedTurnHistory(history, { maxMessages: 40, maxTokens: 1_000 })
+
+    expect(bounded).toHaveLength(2) // avis + le dernier message, intact
+    expect(bounded.at(-1)?.content).toHaveLength(400_000)
+  })
+
+  it('n annonce aucune coupe quand rien n a ete ecarte', () => {
+    const history = [
+      { role: 'user' as const, content: 'question' },
+      { role: 'assistant' as const, content: 'reponse' }
+    ]
+
+    expect(boundedTurnHistory(history, 40)).toEqual(history)
   })
 
   it('ne transmet pas un historique malformé composé uniquement de réponses assistant', () => {
@@ -70,8 +111,9 @@ describe('boundedContinuationHistory', () => {
     const result = boundedContinuationHistory(history, 40)
 
     expect(result.routingUserMessage?.content).toBe('Analyse ce depot en lecture seule')
-    expect(result.history).toHaveLength(40)
-    expect(result.history[0]?.content).toBe('Analyse ce depot en lecture seule')
+    expect(result.history).toHaveLength(41)
+    expect(result.history[0]?.content).toContain('HISTORIQUE TRONQUE')
+    expect(result.history[1]?.content).toBe('Analyse ce depot en lecture seule')
     expect(result.history.some((message) => message.role === 'assistant')).toBe(true)
     expect(result.history.at(-1)?.content).toBe('INSTRUCTION INTERNE DE CONTINUATION')
   })

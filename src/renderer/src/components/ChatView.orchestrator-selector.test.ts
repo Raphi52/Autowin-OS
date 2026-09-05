@@ -341,6 +341,17 @@ describe('selecteur orchestrateur Chat', () => {
     expect(source).toMatch(
       /contextGauge=\{activeId != null \? contextGauges\[activeId\] : undefined\}/
     )
+    // AUCUN REPLI SUR LE CUMUL DANS LA VUE. `inputTokens` est le cumul du tour, un MAJORANT :
+    // l'afficher comme une occupation rejouait la jauge fausse que le moteur refuse d'ecrire
+    // (`chat/run-pilot-chat.ts`). La vue passe par `occupationDeFenetre` et n'affiche rien quand
+    // il annonce un repli.
+    expect(source).toContain('occupationDeFenetre({')
+    expect(source).toContain('occupation.replicumul')
+    expect(source).not.toContain('usage.derniereEntree ?? usage.inputTokens')
+    // COMPACTION AUTOMATIQUE : le palier critique DECLENCHE, il ne se contente plus d'etre peint.
+    expect(source).toContain('doitCompacterAutomatiquement(')
+    expect(source).toContain('compactionAutoRef.current.add(conversationId)')
+    expect(source).toContain('send(COMPACT_REQUEST, { targetConversationId: conversationId })')
     // Rendu du sélecteur : extrait dans OrchestratorModelSelector.
     expect(selectorSource).toContain('const disabled = busy || pending || models.length === 0')
     expect(selectorSource).toContain('className="model-select-menu"')

@@ -156,6 +156,29 @@ export function contextGauge(usage: TokenUsage): ContextGauge | undefined {
  * normal, visible dans le fil et journalise comme tout autre message : l'agent produit le resume,
  * et c'est ce resume qui porte le fil ensuite.
  */
+/**
+ * FAUT-IL COMPACTER TOUT SEUL ?
+ *
+ * Le palier `critique` etait calcule, peint... et n'agissait pas : la compaction attendait un CLIC.
+ * Un palier qui n'entraine rien est une decoration — au moment ou il s'allume, il reste par
+ * definition tres peu de place, donc c'est exactement le moment ou personne n'a le temps de lire
+ * une barre de couleur.
+ *
+ * Fonction PURE, ici et pas dans la vue, pour que la regle se teste sans monter un composant.
+ * Trois refus, chacun pour une raison distincte :
+ *   - pas de jauge : on ne SAIT pas, on n'agit pas sur une ignorance ;
+ *   - palier non critique : `tendu` laisse encore de la marge, compacter la gaspillerait ;
+ *   - le dernier message est DEJA la demande de compaction : sans ce garde-fou, un fil sature
+ *     relancerait la compaction a chaque tour, en boucle, aux frais de l'utilisateur.
+ */
+export function doitCompacterAutomatiquement(
+  jauge: ContextGauge | undefined,
+  dernierMessageUtilisateur?: string
+): boolean {
+  if (!jauge || jauge.level !== 'critique') return false
+  return (dernierMessageUtilisateur ?? '').trim() !== COMPACT_REQUEST
+}
+
 export const COMPACT_REQUEST =
   'Compacte ce fil : produis un resume dense et autonome de la conversation jusqu ici — objectif ' +
   'poursuivi, decisions prises et leurs raisons, fichiers et artefacts touches, preuves obtenues, ' +

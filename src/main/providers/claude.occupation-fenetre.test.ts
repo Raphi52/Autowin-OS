@@ -97,8 +97,13 @@ describe('ClaudeCliAdapter — occupation de la fenetre vs depense du tour', () 
     expect(usage?.derniereEntreeCache).toBe(99_000)
   })
 
-  it('se replie sur le cumul quand aucun message assistant ne porte d’usage', async () => {
-    // Un provider muet sur l'usage par appel doit donner un MAJORANT, jamais une jauge absente.
+  it('n’ecrit AUCUNE occupation quand aucun message assistant ne porte d’usage', async () => {
+    /*
+     * Le repli sur le cumul a ete SUPPRIME (choix de l'utilisateur, 2026-09-05). Il rendait un
+     * majorant sous la meme forme qu'une mesure : plus rien en aval ne pouvait les distinguer, et
+     * `replicumul` (`shared/occupation-fenetre.ts`) ne valait donc jamais vrai. Sans occupation,
+     * la jauge disparait — c'est la reponse honnete quand on ne sait pas.
+     */
     spawnCapture.stdoutEvents = [
       assistant('voici'),
       {
@@ -114,7 +119,9 @@ describe('ClaudeCliAdapter — occupation de la fenetre vs depense du tour', () 
       }
     ]
     const usage = await drainUsage()
+    // La depense reste mesuree : seule l'occupation manque.
     expect(usage?.inputTokens).toBe(5_000)
-    expect(usage?.derniereEntree).toBe(5_000)
+    expect(usage?.derniereEntree).toBeUndefined()
+    expect(usage?.derniereEntreeCache).toBeUndefined()
   })
 })

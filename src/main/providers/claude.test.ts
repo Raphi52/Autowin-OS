@@ -71,14 +71,14 @@ describe('ClaudeCliAdapter — plafond de depense provider', () => {
 
     appendClaudeSelectionArgs(args, { model: 'haiku', maxBudgetUsd: 0.0625 })
 
-    // `--autocompact` suit la fenetre declaree : haiku porte 200 k dans CONTEXT_WINDOWS.
+    // `--autocompact` suit la fenetre declaree, a 85 % : haiku porte 200 k dans CONTEXT_WINDOWS, donc 170 k.
     expect(args).toEqual([
       '--model',
       'haiku',
       '--max-budget-usd',
       '0.0625',
       '--autocompact',
-      '200000'
+      '170000'
     ])
   })
 

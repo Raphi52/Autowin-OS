@@ -130,6 +130,8 @@ import {
 // autre vue, sinon l'apparence de Chat dependrait de l'ordre de chargement des AUTRES vues.
 import './ViewPage.css'
 import { contextGauge, type ContextGauge } from '../../../shared/context-gauge'
+import { doitCompacterAutomatiquement } from '../../../shared/context-gauge'
+import { occupationDeFenetre } from '../../../shared/occupation-fenetre'
 import './ChatView.css'
 import './SlashPalette.css'
 import './ChatComposerExtras.css'
@@ -543,6 +545,13 @@ export function ChatView({
    * ce que le fil PORTE encore. Autowin savait repondre a la premiere question et pas a la
    * seconde -- un fil pouvait s'approcher de la saturation sans qu'un ecran ne l'indique.
    */
+  /** Fils dont la compaction automatique a deja ete demandee pour ce franchissement du palier. */
+  const compactionAutoRef = useRef<Set<string>>(new Set())
+  /** Dernier message ecrit par l'utilisateur dans un fil — ancre du garde-fou anti-boucle. */
+  const dernierMessageUtilisateurDe = (conversationId: string): string | undefined =>
+    [...(liveMessagesRef.current.get(conversationId) ?? [])]
+      .reverse()
+      .find((message) => message.role === 'user')?.content
   const [contextGauges, setContextGauges] = useState<Record<string, ContextGauge>>(() =>
     lireJaugesMemorisees()
   )
@@ -1757,7 +1766,15 @@ export function ChatView({
         fenetre, car le prefixe est renvoye a chaque appel. Un tour de neuf appels rendait
         578 207 tokens pour une fenetre de 200 000 et la jauge restait collee a 100 %
         (mesure du 2026-09-04, journal d'activite de conv-240). `derniereEntree` porte donc ce que
-        le DERNIER appel a recu ; repli sur le cumul pour les tours d'avant ce correctif.
+        le DERNIER appel a recu.
+
+        AUCUN REPLI SUR LE CUMUL ICI. Cette vue repliait sur `inputTokens` quand le fournisseur
+        n'avait pas desagrege : elle reintroduisait donc la jauge fausse que le moteur
+        (`main/chat/run-pilot-chat.ts`) refuse deja d'ecrire pour cette raison exacte — un cumul
+        est un MAJORANT, pas une occupation (2 413 317 tokens observes pour une fenetre de 1 M).
+        On passe par `occupationDeFenetre`, le seul endroit qui tranche, et on n'affiche RIEN
+        quand il annonce un repli : `context-gauge.ts` tient deja la meme regle, « une jauge
+        fausse est pire qu'une jauge absente — elle est crue ».
         */
         const usage = e.usage as typeof e.usage & {
           derniereEntree?: number
@@ -1765,19 +1782,46 @@ export function ChatView({
           model?: string
           provider?: string
         }
-        const jauge = contextGauge({
-          inputTokens: usage.derniereEntree ?? usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          cacheReadTokens: usage.derniereEntreeCache,
-          model: usage.model,
-          provider: usage.provider
+        const occupation = occupationDeFenetre({
+          inputTokens: usage.inputTokens ?? 0,
+          derniereEntree: usage.derniereEntree,
+          derniereEntreeCache: usage.derniereEntreeCache
         })
+        const jauge = occupation.replicumul
+          ? undefined
+          : contextGauge({
+              inputTokens: occupation.entree,
+              outputTokens: usage.outputTokens,
+              cacheReadTokens: occupation.cache,
+              model: usage.model,
+              provider: usage.provider
+            })
         if (jauge)
           setContextGauges((current) => {
             const suivant = { ...current, [conversationId]: jauge }
             memoriserJauges(suivant)
             return suivant
           })
+        /*
+        COMPACTION AUTOMATIQUE AU PALIER CRITIQUE.
+
+        Le bouton existait, le palier aussi, et rien ne les reliait : c'est au moment ou la place
+        manque que l'utilisateur est le moins disponible pour cliquer. On envoie donc un TOUR
+        NORMAL — visible dans le fil, journalise comme tout autre message, jamais un elagage
+        silencieux : l'agent produit le resume, et c'est ce resume qui porte la suite.
+
+        UNE SEULE FOIS PAR FRANCHISSEMENT. `compactionAutoRef` retient les fils deja compactes et
+        les oublie des que la jauge redescend : sans lui, un fil qui reste critique redemanderait
+        un resume a chaque tour, en boucle et aux frais de l'utilisateur.
+        */
+        if (doitCompacterAutomatiquement(jauge, dernierMessageUtilisateurDe(conversationId))) {
+          if (!compactionAutoRef.current.has(conversationId)) {
+            compactionAutoRef.current.add(conversationId)
+            void send(COMPACT_REQUEST, { targetConversationId: conversationId })
+          }
+        } else if (jauge && jauge.level !== 'critique') {
+          compactionAutoRef.current.delete(conversationId)
+        }
       }
       if (e.kind === 'stream-reset' && e.streamId)
         rebaseDirectiveReceiptsAfterStreamReset(conversationId, e.streamId)

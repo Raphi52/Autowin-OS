@@ -301,9 +301,9 @@ describe('sélection Claude depuis Agents', () => {
       reasoningEffort: 'xhigh'
     })
 
-    // `--autocompact` suit la fenetre declaree pour le modele : fable porte 200 k dans
-    // CONTEXT_WINDOWS, donc le seuil vaut 200 000 et non le `auto` du CLI.
-    expect(args).toEqual(['--model', 'claude-fable-5', '--effort', 'xhigh', '--autocompact', '200000'])
+    // `--autocompact` suit la fenetre declaree, a 85 % : fable porte 200 k dans
+    // CONTEXT_WINDOWS, donc le seuil vaut 170 000 et non le `auto` du CLI.
+    expect(args).toEqual(['--model', 'claude-fable-5', '--effort', 'xhigh', '--autocompact', '170000'])
   })
 
   it('n’invente pas de flag effort pour none', () => {
@@ -311,6 +311,6 @@ describe('sélection Claude depuis Agents', () => {
 
     appendClaudeSelectionArgs(args, { model: 'claude-haiku-4-5-20251001', reasoningEffort: 'none' })
 
-    expect(args).toEqual(['--model', 'claude-haiku-4-5-20251001', '--autocompact', '200000'])
+    expect(args).toEqual(['--model', 'claude-haiku-4-5-20251001', '--autocompact', '170000'])
   })
 })
