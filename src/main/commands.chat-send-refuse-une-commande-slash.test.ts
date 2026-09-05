@@ -38,6 +38,16 @@ describe('chat_send — une commande slash est refusee, pas envoyee au modele', 
     expect(String(result.error)).toContain('orchestrate')
   })
 
+  it('laisse passer un chemin de fichier absolu', async () => {
+    const { appels, os } = osQuiRepondTouJours()
+    const bus = new AppCommandBus(os as never, () => undefined)
+
+    const result = await bus.exec('chat_send', { message: '/home/raph/notes.txt que contient ce fichier ?' })
+
+    expect(result.ok).toBe(true)
+    expect(appels).toEqual(['/home/raph/notes.txt que contient ce fichier ?'])
+  })
+
   it('laisse passer un message normal', async () => {
     const { appels, os } = osQuiRepondTouJours()
     const bus = new AppCommandBus(os as never, () => undefined)

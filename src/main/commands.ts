@@ -1897,9 +1897,12 @@ export class AppCommandBus {
         // ponctuel avec le modele, qui repond « Unknown command ». Mesure le 2026-09-05
         // (conv-297 -> conv-300 « /curate ») : le fil est reste vide, la skill n'a jamais tourne.
         // Refus DETERMINISTE, qui nomme la commande capable de cibler une conversation.
+        // Un chemin de fichier absolu (`/home/x/y.txt`) commence AUSSI par `/` : le premier mot
+        // d'une commande de skill ne contient ni second `/` ni point, ce qui separe les deux.
         const messageEnvoye = s('message').trim()
-        if (/^\/[a-z0-9][\w-]*/i.test(messageEnvoye)) {
-          const skill = messageEnvoye.split(/\s/)[0]
+        const premierMot = messageEnvoye.split(/\s/)[0]
+        if (/^\/[a-z0-9][\w-]*$/i.test(premierMot)) {
+          const skill = premierMot
           throw new Error(
             `chat_send ne peut pas lancer « ${skill} » : il n'a pas de conversation destinataire ` +
               `et le texte partirait en simple question au modele. Utiliser orchestrate ` +
