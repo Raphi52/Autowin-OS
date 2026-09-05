@@ -1128,7 +1128,20 @@ export function GraphView({
     if (!active || !showThemeClusterLabels) return
     let frame = 0
     const followCamera = (): void => {
-      syncThemeClusterLabels()
+      /*
+       * LE SEUL TRAVAIL CONTINU DE CETTE VUE — et le seul qui n'etait mesure nulle part.
+       *
+       * Mesure du 2026-09-05 sur le Brain reel (862 noeuds, 17 themes) : l'ouverture de Memory
+       * n'ecrit AUCUNE ligne de gel, meme seuil abaisse a 150 ms. Les quatre blocs deja
+       * instrumentes sont donc innocentes. Ici, en revanche, la synchro lit la geometrie
+       * (`offsetHeight`) puis ecrit `style.transform` etiquette par etiquette, a chaque image :
+       * un passage isole reste court, mais il se rejoue soixante fois par seconde.
+       *
+       * Le chronometre nomme n'ecrit rien sous le seuil ; il ALIMENTE le registre glissant. Une
+       * tache longue survenant pendant cette boucle ressort donc sous `graph:etiquettes` au lieu
+       * de `renderer:longtask`, le nom qui portait 368 s de fenetre morte sans accuser personne.
+       */
+      mesurerBlocGraphe('graph:etiquettes', syncThemeClusterLabels)
       frame = requestAnimationFrame(followCamera)
     }
     frame = requestAnimationFrame(followCamera)
