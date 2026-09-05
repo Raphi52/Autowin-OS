@@ -221,11 +221,10 @@ function ghostDuFil(fil: Msg[]): string | null {
     .join('\n')
   // La demande de CE tour compte : quand elle EST l'ordre de tri, le tri vient d'avoir lieu et
   // rejouer `/salvage` fabrique une boucle sans fin (vécu trois tours d'affilée le 2026-09-04).
-  const demandeDuTour = [...fil].reverse().find((m): m is UserMsg & { messageId?: string } =>
-    m.role === 'user'
-  )?.content
-  const suite =
-    extrairePromptSuivant(text, demandeDuTour) ?? extractRecommendation(text)
+  const demandeDuTour = [...fil]
+    .reverse()
+    .find((m): m is UserMsg & { messageId?: string } => m.role === 'user')?.content
+  const suite = extrairePromptSuivant(text, demandeDuTour) ?? extractRecommendation(text)
   // Le repli sur la rubrique « Recommandé » obéit à la même règle : publier passe par /salvage.
   return suite && estPromptDePublication(suite, demandeDuTour) ? PROMPT_SALVAGE : suite
 }
@@ -565,6 +564,8 @@ export function ChatView({
     top: number
     left: number
     branches: string[] | null
+    /** Motif de refus rendu par l'application (arbre sale, branche absente). Affiche tel quel. */
+    refus?: string
   } | null>(null)
   /**
    * Saisie du dossier en cours de creation, dans le sous-menu « Ranger dans un dossier ».
@@ -2894,9 +2895,7 @@ export function ChatView({
     // Le drain n'est PAS un geste de l'utilisateur : il ne doit rien prendre au composer.
     void send(nextMessage.text, {
       keepComposerDraft: true,
-      ...(nextMessage.attachments?.length
-        ? { piecesJointesImposees: nextMessage.attachments }
-        : {})
+      ...(nextMessage.attachments?.length ? { piecesJointesImposees: nextMessage.attachments } : {})
     })
     // `activeId` AUTANT que `busy` : une file remplie pendant le tour de A survit à un aller-retour
     // vers une autre conversation. Le tour de A se terminant PENDANT l'absence, la transition
@@ -4505,16 +4504,26 @@ export function ChatView({
                     data-testid="chat-branch-choice"
                     data-branch={nom}
                     onClick={() => {
-                      setBrancheMenu(null)
                       /*
-                        L'interface ne fait AUCUNE action git (contrat ecrit dans git-read.ts) :
-                        choisir une branche prepare la demande dans la zone de saisie, et c'est
-                        l'agent qui bascule. Le texte reste modifiable avant l'envoi.
+                        BASCULE REELLE, et bornee : l'application refuse si l'arbre de travail porte
+                        des modifications non enregistrees. On NE ferme PAS le menu tout de suite --
+                        un refus doit rester visible la ou l'utilisateur vient de cliquer, sinon la
+                        branche « ne change pas » sans que rien ne l'explique.
                       */
-                      setDraftInput(
-                        composerDraftKeyRef.current,
-                        `Bascule le depot de travail sur la branche \`${nom}\`.`
-                      )
+                      const cwd = active?.projectPath?.trim() || defaultWorkspace || undefined
+                      setBrancheMenu((m) => (m ? { ...m, refus: undefined } : m))
+                      void window.api
+                        .checkoutGitBranch?.(nom, cwd)
+                        .then((r) => {
+                          if (r?.ok) setBrancheMenu(null)
+                          else
+                            setBrancheMenu((m) =>
+                              m ? { ...m, refus: r?.reason ?? 'Bascule refusee.' } : m
+                            )
+                        })
+                        .catch((e: unknown) =>
+                          setBrancheMenu((m) => (m ? { ...m, refus: String(e) } : m))
+                        )
                     }}
                   >
                     <span className="conv-menu-ic" aria-hidden="true">
@@ -4524,6 +4533,11 @@ export function ChatView({
                     {nom === gitBranch ? ' · courante' : ''}
                   </button>
                 ))
+              )}
+              {brancheMenu.refus && (
+                <span className="conv-menu-empty" role="alert" data-testid="chat-branch-refus">
+                  {brancheMenu.refus}
+                </span>
               )}
             </div>
           </>,
@@ -5222,9 +5236,7 @@ Cliquer pour choisir une autre branche.`}
             placeholderPendantTour={busy && activeId !== null}
             /* Le filet au-dessus du champ porte l'occupation de la fenetre du modele. Meme source
                que la jauge de l'en-tete : `contextGauges`, jamais un calcul refait ici. */
-            contextRatio={
-              activeId != null ? contextGauges[activeId]?.ratio : undefined
-            }
+            contextRatio={activeId != null ? contextGauges[activeId]?.ratio : undefined}
             contextLevel={activeId != null ? contextGauges[activeId]?.level : undefined}
             contextTitle={(() => {
               const j = activeId != null ? contextGauges[activeId] : undefined

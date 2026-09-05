@@ -115,6 +115,11 @@ const api = {
     ipcRenderer.invoke('git:read', repoPath),
   getGitBranches: (repoPath?: string): Promise<string[]> =>
     ipcRenderer.invoke('git:branches', repoPath),
+  checkoutGitBranch: (
+    branch: string,
+    repoPath?: string
+  ): Promise<{ ok: true; branch: string } | { ok: false; reason: string }> =>
+    ipcRenderer.invoke('git:checkout', branch, repoPath),
   conversationGitState: (conversationId: string): Promise<GitReadResult> =>
     ipcRenderer.invoke('git:conversationRead', conversationId),
   conversationGitDiff: (

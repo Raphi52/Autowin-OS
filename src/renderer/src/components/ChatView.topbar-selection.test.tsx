@@ -56,8 +56,9 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
     expect(document.querySelector('[data-testid="conv-project-pick"]')).not.toBeNull()
   })
 
-  it('liste les branches et prepare la bascule quand on en choisit une', async () => {
+  it('liste les branches et BASCULE quand on en choisit une', async () => {
     const getGitBranches = vi.fn().mockResolvedValue(['main', 'feat/topbar'])
+    const checkoutGitBranch = vi.fn().mockResolvedValue({ ok: true, branch: 'feat/topbar' })
     harness = await mountChat(
       chatApi({
         conversations: vi.fn().mockResolvedValue([conversation('conv-1')]),
@@ -66,7 +67,8 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
           available: true,
           state: { branch: 'main', ahead: 0, behind: 0, changes: [] }
         }),
-        getGitBranches
+        getGitBranches,
+        checkoutGitBranch
       })
     )
 
@@ -88,8 +90,41 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
       items[1]!.click()
     })
 
-    // L'interface ne fait AUCUNE action git : le choix prepare la demande dans la zone de saisie.
-    const saisie = harness.container.querySelector<HTMLTextAreaElement>('textarea')
-    expect(saisie?.value ?? '').toContain('feat/topbar')
+    // La bascule est REELLE : l'application recoit l'ordre, et le menu se ferme sur un succes.
+    expect(checkoutGitBranch.mock.calls[0]?.[0]).toBe('feat/topbar')
+    expect(document.querySelectorAll('[data-testid="chat-branch-choice"]').length).toBe(0)
+  })
+
+  it('affiche le refus et ne ferme pas le menu quand le depot est sale', async () => {
+    const checkoutGitBranch = vi
+      .fn()
+      .mockResolvedValue({ ok: false, reason: 'Le depot a 3 fichier(s) non enregistre(s)' })
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([conversation('conv-1')]),
+        conversation: vi.fn().mockResolvedValue({ id: 'conv-1', messages: [] }),
+        getGitState: vi.fn().mockResolvedValue({
+          available: true,
+          state: { branch: 'main', ahead: 0, behind: 0, changes: [] }
+        }),
+        getGitBranches: vi.fn().mockResolvedValue(['main', 'feat/topbar']),
+        checkoutGitBranch
+      })
+    )
+
+    await act(async () => {
+      harness!.container.querySelector<HTMLElement>('[data-testid="chat-git-branch"]')!.click()
+    })
+    const items = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-testid="chat-branch-choice"]')
+    )
+    await act(async () => {
+      items[1]!.click()
+    })
+
+    const refus = document.querySelector('[data-testid="chat-branch-refus"]')
+    expect(refus?.textContent ?? '').toContain('non enregistre')
+    // Le menu reste ouvert : un refus invisible ferait croire a une bascule silencieuse.
+    expect(document.querySelectorAll('[data-testid="chat-branch-choice"]').length).toBe(2)
   })
 })

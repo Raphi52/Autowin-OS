@@ -117,6 +117,10 @@ interface ChatApi {
   setShadowRoutingPilot: (enabled: boolean) => Promise<ShadowRoutingPilotState>
   getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
   getGitBranches: (repoPath?: string) => Promise<string[]>
+  checkoutGitBranch: (
+    branch: string,
+    repoPath?: string
+  ) => Promise<{ ok: true; branch: string } | { ok: false; reason: string }>
   conversationGitState: (
     conversationId: string
   ) => Promise<import('../shared/git-read').GitReadResult>

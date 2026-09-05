@@ -16,6 +16,7 @@
 import { ipcMain } from 'electron'
 import { readGitGraph } from '../git-graph-main'
 import { readGitState, readGitDiff, readGitBranches } from '../git-read-main'
+import { checkoutBranch } from '../git-checkout-main'
 import {
   readConversationGitDiff,
   readConversationGitState
@@ -42,6 +43,17 @@ export function registerGitIpc({ os, pickDirectory }: GitIpcDeps): void {
   ipcMain.handle('git:branches', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitBranches')
     return readGitBranches(cwd && typeof cwd === 'string' ? cwd : process.cwd())
+  })
+  /*
+    LA SEULE action git de ce canal : basculer sur une branche LOCALE existante, refusée si l'arbre
+    de travail est sale. Elle rend un motif explicite au lieu d'échouer en silence.
+  */
+  ipcMain.handle('git:checkout', (event, branch: string, cwd?: string) => {
+    assertTrustedRendererSender(event, 'GitCheckout')
+    return checkoutBranch(
+      cwd && typeof cwd === 'string' ? cwd : process.cwd(),
+      typeof branch === 'string' ? branch : ''
+    )
   })
   // Historique git : la frise de commits de la vue Worktrees. Lecture seule, bornée côté main.
   ipcMain.handle('git:graph', (event, cwd?: string) => {
