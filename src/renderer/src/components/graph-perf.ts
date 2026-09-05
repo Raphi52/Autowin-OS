@@ -1,4 +1,3 @@
-import { SEUIL_GEL_MS } from '../../../shared/gel-detector'
 import { noterRendu } from './rendu-long'
 
 /**
