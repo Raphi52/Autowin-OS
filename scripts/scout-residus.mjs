@@ -15,13 +15,17 @@ const IGNORE = /(^|[\/])(node_modules|out|dist|build|worktrees|graphify-out|\.gi
 // deux residus les plus flagrants du dossier y vivaient (banc /arena du 2026-09-05, bras a/b/c
 // battus par un balayage direct precisement sur cet angle mort).
 const horsPerimetre = new Map()
+// TOUS les fichiers, extensions non analysees comprises : la passe « chemins absolus morts »
+// ci-dessous doit lire les `.ps1`/`.py` que EXT laisse dehors, c'est precisement la ou vivent
+// les racines codees en dur.
+const tousFichiers = []
 
 function lister(dir, acc = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name)
     if (IGNORE.test(p)) continue
     if (e.isDirectory()) lister(p, acc)
-    else if (EXT.has(extname(e.name))) acc.push(p)
+    else if ((tousFichiers.push(p), EXT.has(extname(e.name)))) acc.push(p)
     else {
       const ext = extname(e.name) || '(sans extension)'
       horsPerimetre.set(ext, (horsPerimetre.get(ext) ?? 0) + 1)
@@ -33,8 +37,48 @@ function lister(dir, acc = []) {
 const fichiers = lister(RACINE)
 const nonAnalyses = [...horsPerimetre.entries()].sort((a, b) => b[1] - a[1])
 const totalNonAnalyses = nonAnalyses.reduce((n, [, c]) => n + c, 0)
-const src = new Map(fichiers.map((f) => [f, readFileSync(f, 'utf8')]))
+
 const rel = (f) => relative(PROJET, f).split(String.fromCharCode(92)).join('/')
+// --- 0 bis. Chemins absolus MORTS dans des fichiers par ailleurs vivants.
+// Un script qui n'est pas « code mort » peut avoir cessé de FONCTIONNER : une racine codée en dur
+// vers un dossier disparu le tue dès sa première ligne, sans qu'aucun détecteur de code mort ne le
+// voie. Mesuré au banc /arena du 2026-09-06 : `assert-package-content.ps1` pointait
+// `C:\Amitel\Autowin OS` et rendait exit 1, entraînant deux `verify-*.ps1` VIVANTS avec lui — le
+// bras qui suivait la sonde les avait déclarés verts. Critère retenu : le DOSSIER PARENT du chemin
+// cité n'existe pas (un fichier de sortie encore à produire est légitime, son dossier doit exister).
+const cheminsMorts = []
+const vusChemins = new Set()
+for (const f of tousFichiers) {
+  let contenu
+  try {
+    contenu = readFileSync(f, 'utf8')
+  } catch {
+    continue
+  }
+  const lignes = contenu.split(String.fromCharCode(10))
+  for (let i = 0; i < lignes.length; i += 1) {
+    // Une VRAIE racine Windows : une lettre isolée suivie de `:\` ou `:/`, jamais un schéma
+    // d'URL (`http://` se termine par `p:/`) ni un double séparateur.
+    for (const m of lignes[i].matchAll(/(?<![A-Za-z0-9])[A-Za-z]:[\\/](?![\\/])[^'"`\r\n)]*/g)) {
+      const brut = m[0].replace(/[\s,;)\]}]+$/, '')
+      const parent = dirname(brut)
+      // Un chemin interpolé n'est pas vérifiable : sa valeur réelle dépend de l'exécution.
+      if (brut.length < 6 || parent === brut || brut.includes('$')) continue
+      const cle = f + '|' + brut
+      if (vusChemins.has(cle)) continue
+      vusChemins.add(cle)
+      let existe = true
+      try {
+        statSync(parent)
+      } catch {
+        existe = false
+      }
+      if (!existe) cheminsMorts.push({ ref: rel(f) + ':' + (i + 1), chemin: brut })
+    }
+  }
+}
+const src = new Map(fichiers.map((f) => [f, readFileSync(f, 'utf8')]))
+
 const estTest = (f) => /\.(test|spec)\.[tj]sx?$/.test(f)
 
 // --- 1. Fichiers jamais importés (hors tests, hors points d'entrée)
@@ -107,6 +151,15 @@ out.push(
         `\n\nLa sonde ne lit que ${[...EXT].join(', ')}. Ces fichiers ne sont PAS propres : ils sont INVISIBLES. ` +
         `Les balayer à la main avant de conclure que le dossier est trié.`
     : `\n## 0. Angle mort — aucun : toutes les extensions présentes sont analysées.`
+)
+out.push(
+  cheminsMorts.length
+    ? `\n## 0 bis. Chemins absolus morts dans des fichiers VIVANTS (${cheminsMorts.length})\n` +
+        cheminsMorts.slice(0, 40).map((x) => `- \`${x.ref}\` → \`${x.chemin}\` (dossier parent absent)`).join('\n') +
+        (cheminsMorts.length > 40 ? `\n- … ${cheminsMorts.length - 40} de plus` : '') +
+        `\n\nCes fichiers ne sont pas du code MORT : ils sont CASSÉS. Un script qui n'est jamais listé ` +
+        `ici peut quand même ne plus marcher — EXÉCUTE ceux que tu vas déclarer vivants avant de conclure.`
+    : `\n## 0 bis. Chemins absolus morts — aucun. Cela ne prouve PAS que les scripts marchent : exécute ceux que tu déclares vivants.`
 )
 out.push(`\n## 1. Fichiers jamais importés (${orphelins.length})`)
 out.push(orphelins.length ? orphelins.map((f) => `- \`${rel(f)}\``).join('\n') : '- rien')

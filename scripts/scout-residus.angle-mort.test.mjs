@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
+const chr10 = String.fromCharCode(10)
+
 // Pourquoi ce test : la sonde ne lit que .ts/.tsx/.mts/.js/.jsx/.mjs/.cjs. Sur `scripts/`,
 // 67 des 165 fichiers (41 %) sont hors de ce filtre — .ps1, .py, .vbs. Un rapport muet sur
 // ce trou se lit comme un inventaire complet. Mesure du banc /arena du 2026-09-05 : les trois
@@ -45,5 +47,39 @@ describe('scout-residus — angle mort', () => {
   it('place l angle mort AVANT la premiere section de candidats', () => {
     const rapport = sonde(dossier({ 'a.mjs': 'export const a = 1\n', 'b.ps1': 'x\n' }))
     expect(rapport.indexOf('## 0. Angle mort')).toBeLessThan(rapport.indexOf('## 1. Fichiers'))
+  })
+})
+
+describe('scout-residus — chemins absolus morts dans des fichiers vivants', () => {
+  it('signale une racine Windows dont le dossier parent n existe pas', () => {
+    const d = dossier({
+      'runner.ps1': ["param([string]$Root = 'C:", 'Amitel', "Autowin OS')"].join(String.fromCharCode(92)) + chr10
+    })
+    const rapport = sonde(d)
+    expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts/)
+    expect(rapport).toMatch(/runner\.ps1:1/)
+    expect(rapport).toContain(['C:', 'Amitel', 'Autowin OS'].join(String.fromCharCode(92)))
+  })
+
+  it('lit les extensions que la sonde n analyse PAS — .ps1 y compris', () => {
+    // Le defaut decisif du banc du 2026-09-06 vivait dans un `.ps1`, hors du filtre EXT.
+    const contenu = ["Set-Location 'Z:", 'dossier-inexistant', "sous'"].join(String.fromCharCode(92)) + chr10
+    const rapport = sonde(dossier({ 'seul.ps1': contenu }))
+    expect(rapport).toMatch(/seul\.ps1:1/)
+  })
+
+  it('ne confond pas une URL avec une racine Windows', () => {
+    const rapport = sonde(dossier({ 'a.mjs': "const u = 'http://127.0.0.1:9222/json'\n" }))
+    expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts — aucun/)
+  })
+
+  it('ignore un chemin interpole, invérifiable hors execution', () => {
+    const rapport = sonde(dossier({ 'a.mjs': 'const p = `C:/sortie/${nom}.png`\n' }))
+    expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts — aucun/)
+  })
+
+  it('rappelle d EXECUTER les scripts declares vivants, meme quand rien n est signale', () => {
+    const rapport = sonde(dossier({ 'a.mjs': 'export const a = 1\n' }))
+    expect(rapport).toMatch(/exécute ceux que tu déclares vivants/)
   })
 })
