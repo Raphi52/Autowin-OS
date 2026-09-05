@@ -47,13 +47,22 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   // Anthropic — toute la famille servie par le CLI (`model-aliases.ts` : opus, sonnet, haiku,
   // fable) plus `mythos`, present dans MODEL_RATES et jusqu'ici SANS fenetre : un modele
   // reellement servi n'affichait donc aucune jauge.
-  // OPUS : 200 k, la fenetre standard documentee. Ce champ a porte 1_000_000 entre le 2026-09-04
-  // et le 2026-09-04 (conv-267 puis conv-292) sur la seule DECLARATION de l'utilisateur — aucune
-  // source Anthropic ne l'etablit, et la fenetre 1 M est un mode beta reserve a Sonnet 4/4.5,
-  // conditionne a un en-tete que ce depot n'envoie pas. Un denominateur trop GRAND est l'erreur
-  // dangereuse : il affiche 20 % la ou le fil est sature. On revient donc a la valeur sourcee, et
-  // seule une saturation OBSERVEE au-dela de 200 k pourra justifier de la relever.
-  { match: 'opus', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
+  // OPUS : 1 M. NE REMETS PAS 200_000 ICI.
+  //
+  // Tranche par l'utilisateur TROIS fois (conv-267, conv-292, puis conv-297 du 2026-09-05, ou il a
+  // du le redire une troisieme fois). Le champ avait deja fait l'aller-retour : chaque passage
+  // relisait le commentaire qui defendait 200 k, concluait « aucune source publique ne l'etablit »
+  // et ANNULAIT la decision. Ce commentaire-la n'etait pas une garde, il etait la CAUSE de la
+  // recidive — il transformait une preference tranchee en anomalie a corriger. Les tests de
+  // `context-gauge.test.ts` figeaient la meme valeur et la rendaient carrement inapplicable : ils
+  // prennent desormais `sonnet` comme modele d'exemple a 200 k, et opus porte son assertion propre.
+  //
+  // Qui decide ici : l'utilisateur exploite SON abonnement sur SON poste et observe la fenetre
+  // qu'on lui sert. Cette observation est une source, et elle prime sur une page de documentation
+  // que ce depot ne peut pas interroger. Le risque d'un denominateur trop GRAND (afficher 20 % la
+  // ou le fil sature) est reel, il l'assume, et il verra la troncature. Seule une saturation
+  // OBSERVEE en dessous de 1 M justifierait d'y revenir — jamais un raisonnement sur la doc.
+  { match: 'opus', provider: 'claude', tokens: 1_000_000, source: 'Utilisateur — fenêtre observée sur son abonnement (conv-267, conv-292, conv-297)' },
   { match: 'sonnet', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'haiku', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'fable', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
