@@ -32,10 +32,16 @@ const REPONSE_AVEC_SUITE = [
 const REPONSE_RIEN = '👉 Recommandé — rien'
 
 describe('recommandationDitRien — la condition d’arrêt demandée', () => {
-  it('arrête sur « rien »', () => {
+  it('arrête sur « rien » posé SEUL', () => {
     expect(recommandationDitRien('rien')).toBe(true)
-    expect(recommandationDitRien('Rien à faire de plus')).toBe(true)
-    expect(recommandationDitRien('plus rien.')).toBe(true)
+    expect(recommandationDitRien('Rien.')).toBe(true)
+    expect(recommandationDitRien('- rien à signaler')).toBe(true)
+  })
+  it('n’arrête PAS quand une suite est proposée dans la même phrase', () => {
+    // Le défaut « le mode auto se désactive tout seul » : ces trois lignes RECOMMANDENT un tour.
+    expect(recommandationDitRien('rien ne bloque, lance le judge')).toBe(false)
+    expect(recommandationDitRien('plus rien à vérifier ici, passe au build')).toBe(false)
+    expect(recommandationDitRien('Rien à faire de plus sur X — enchaîne sur Y')).toBe(false)
   })
   it('n’arrête pas sur un mot qui contient les mêmes lettres', () => {
     expect(recommandationDitRien('terrain sur X')).toBe(false)

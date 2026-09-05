@@ -56,13 +56,16 @@ export function signatureTour(fil: readonly Msg[]): string | null {
 }
 
 /**
- * « rien » comme MOT, pas comme morceau de mot : « Recommandé — rien » arrête, « rien à signaler »
- * aussi, mais « rienvoyer » (faute de frappe) ou « terrain » ne doivent pas arrêter la boucle.
+ * « rien » posé SEUL sur sa ligne — MÊME EXIGENCE que pour « Fait » et « Reste à faire ».
+ *
+ * DÉFAUT VÉCU (« le mode auto se désactive tout seul ») : cette porte était la SEULE des trois à
+ * accepter le mot n'importe où dans la phrase. Une recommandation bien réelle — « rien ne bloque,
+ * lance le judge », « plus rien à vérifier ici, passe à X » — était lue comme une fin et coupait
+ * l'interrupteur alors qu'une suite était proposée. Une suite qui existe n'est pas une fin.
  */
 export function recommandationDitRien(recommandation: string | null): boolean {
   if (!recommandation) return false
-  const nu = recommandation.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-  return /(^|[^\p{L}\p{N}])rien([^\p{L}\p{N}]|$)/u.test(nu)
+  return ligneNueDitRien(recommandation.split(SAUT_ANCRAGE))
 }
 
 /** Les quatre en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. */
