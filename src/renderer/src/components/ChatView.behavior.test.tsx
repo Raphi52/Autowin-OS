@@ -203,85 +203,86 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(conversationsSetProject).not.toHaveBeenCalledWith('A', undefined)
   })
 
-  // Defaut vecu le 2026-08-18 : la liste du menu est DERIVEE des conversations deja rangees, donc
-  // avec zero dossier le menu n'affichait que « Aucun dossier de conversations » — aucun moyen d'en
-  // creer un, et donc aucun moyen d'en avoir un. Circulaire.
-  it('permet de creer un nouveau dossier depuis le sous-menu, meme quand il n en existe aucun', async () => {
+  /**
+   * Defaut vecu le 2026-09-05 : la liste etait DERIVEE des conversations rangees. Reclasser la
+   * DERNIERE conversation d'un dossier le faisait donc disparaitre du menu -- il fallait
+   * re-parcourir le disque pour le retrouver. Le dossier doit SURVIVRE au reclassement.
+   */
+  it('garde un dossier dans la liste apres avoir reclasse sa derniere conversation', async () => {
     const conversationsSetProject = vi.fn().mockResolvedValue(undefined)
-    const mockApi = api({
-      conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      conversationsSetProject
-    })
-    await mount(mockApi)
+    const conversations = vi
+      .fn()
+      .mockResolvedValueOnce([{ ...conversation('A'), projectPath: 'C:\RIGApplication' }])
+      .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\AutowinOS' }])
+    // La memoire des dossiers survit entre les tests (meme jsdom) : on repart a blanc.
+    window.localStorage.removeItem('autowin.conv-folders.connus')
+    await mount(api({ conversations, conversationsSetProject }))
 
-    const conversationA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find(
-      (button) => button.textContent?.includes('Conversation A')
-    )
-    const trigger =
-      conversationA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')
-    await act(async () => trigger!.click())
-    await act(async () =>
-      document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-project"]')!.click()
-    )
+    const ouvrirMenuDossiers = async (): Promise<void> => {
+      const convA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find((b) =>
+        b.textContent?.includes('Conversation A')
+      )
+      await act(async () =>
+        convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
+      )
+      await act(async () =>
+        document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-project"]')!.click()
+      )
+    }
+    const dossiersAffiches = (): string[] =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
+      ].map((bouton) => bouton.dataset.projectPath!)
 
-    // Aucun dossier existant : l action de creation doit malgre tout etre la.
-    expect(document.querySelectorAll('[data-testid="conv-project-choice"]').length).toBe(0)
-    const creer = document.querySelector<HTMLButtonElement>('[data-testid="conv-project-new"]')
-    expect(
-      creer,
-      'l action « Nouveau dossier » manque : le menu vide est un cul-de-sac'
-    ).not.toBeNull()
-    await act(async () => creer!.click())
+    await ouvrirMenuDossiers()
+    expect(dossiersAffiches()).toContain('C:\RIGApplication')
 
-    const champ = document.querySelector<HTMLInputElement>('[data-testid="conv-project-new-input"]')
-    expect(champ).not.toBeNull()
+    // On range la conversation AILLEURS : plus aucune conversation ne porte RIGApplication.
+    const cible = [
+      ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
+    ].find((b) => b.dataset.projectPath === 'C:\RIGApplication')
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(champ, 'Clients/Amitel')
-      champ!.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await act(async () => {
-      champ!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      cible!.click()
       await Promise.resolve()
     })
 
-    expect(conversationsSetProject).toHaveBeenCalledWith('A', 'Clients/Amitel')
-    // Le selecteur Windows reste banni : jamais d appel sans chemin.
-    expect(conversationsSetProject).not.toHaveBeenCalledWith('A', undefined)
-    // Le menu se referme apres la creation.
-    expect(document.querySelector('[data-testid="conv-project-new-input"]')).toBeNull()
+    await ouvrirMenuDossiers()
+    expect(
+      dossiersAffiches(),
+      'le dossier a disparu du menu des qu aucune conversation ne le portait plus'
+    ).toContain('C:\RIGApplication')
   })
 
-  it('ignore une saisie vide et ne cree aucun dossier', async () => {
+  it('retire un dossier de la liste par sa croix, sans ranger la conversation dedans', async () => {
     const conversationsSetProject = vi.fn().mockResolvedValue(undefined)
     const mockApi = api({
-      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      conversations: vi
+        .fn()
+        .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\Amitel\Projet Alpha' }]),
       conversationsSetProject
     })
+    window.localStorage.removeItem('autowin.conv-folders.connus')
     await mount(mockApi)
 
-    const conversationA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find(
-      (button) => button.textContent?.includes('Conversation A')
+    const convA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find((b) =>
+      b.textContent?.includes('Conversation A')
     )
     await act(async () =>
-      conversationA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
+      convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
     )
     await act(async () =>
       document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-project"]')!.click()
     )
-    await act(async () =>
-      document.querySelector<HTMLButtonElement>('[data-testid="conv-project-new"]')!.click()
-    )
 
-    const champ = document.querySelector<HTMLInputElement>('[data-testid="conv-project-new-input"]')
+    const croix = document.querySelector<HTMLButtonElement>('[data-testid="conv-project-forget"]')
+    expect(croix, 'aucune croix pour retirer un dossier de la liste').not.toBeNull()
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(champ, '   ')
-      champ!.dispatchEvent(new Event('input', { bubbles: true }))
-      champ!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      croix!.click()
       await Promise.resolve()
     })
 
+    expect(document.querySelectorAll('[data-testid="conv-project-choice"]').length).toBe(0)
+    // La croix RETIRE de la liste, elle ne RANGE pas : aucun classement ne doit partir.
     expect(conversationsSetProject).not.toHaveBeenCalled()
   })
 

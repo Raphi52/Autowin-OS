@@ -507,20 +507,6 @@
   background: #000;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
-.conv-menu-input {
-  min-width: 0;
-  margin: 2px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--r1);
-  background: #000;
-  color: var(--text);
-  font: inherit;
-}
-.conv-menu-input:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
 .conv-menu-pop button {
   display: flex;
   align-items: center;
@@ -548,6 +534,32 @@
 }
 .conv-menu-pop button.c-err:hover {
   background: rgba(239, 63, 63, 0.14);
+}
+/* Une ligne de dossier = le choix (large) + sa croix d'oubli (etroite, revelee au survol). */
+.conv-menu-ligne {
+  display: flex;
+  align-items: center;
+}
+.conv-menu-ligne > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.conv-menu-pop .conv-menu-oubli {
+  flex: 0 0 auto;
+  justify-content: center;
+  width: 24px;
+  padding: 7px 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  opacity: 0;
+}
+.conv-menu-ligne:hover .conv-menu-oubli,
+.conv-menu-oubli:focus-visible {
+  opacity: 1;
+}
+.conv-menu-pop .conv-menu-oubli:hover {
+  background: rgba(239, 63, 63, 0.14);
+  color: var(--c-err, #ef3f3f);
 }
 .conv-menu-empty {
   padding: 8px 10px;
