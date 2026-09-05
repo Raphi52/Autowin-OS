@@ -69,6 +69,7 @@ import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from '
 import { promptDeRelanceGratuite } from './auto-relance'
 import {
   deciderRelanceAuto,
+  dernierTourEstUnScout,
   premierPassageLaisseSortirLeTour,
   signatureTour
 } from './chat-auto-mode'
@@ -3033,7 +3034,9 @@ export function ChatView({
       dernierPromptEnvoye: etat.prompt,
       brouillonPresent,
       // Fil AFFICHÉ : une chaîne finie demande une nouvelle cible au lieu de couper l'interrupteur.
-      proposerNouvelleCible: true
+      proposerNouvelleCible: true,
+      // APRES UN SCOUT : la suite ne part que si une ligne `CIBLE:` nomme UNE piste.
+      tourEstUnScout: dernierTourEstUnScout(messages)
     })
     if (decision.action === 'attendre') {
       // VISIBILITÉ : deux attentes sont des impasses réelles — plus aucune suite écrite, ou la même
@@ -3087,7 +3090,8 @@ export function ChatView({
         fil: liveMessagesRef.current.get(id) ?? [],
         dernierTourTraite: etat.tour,
         dernierPromptEnvoye: etat.prompt,
-        brouillonPresent: false
+        brouillonPresent: false,
+        tourEstUnScout: dernierTourEstUnScout(liveMessagesRef.current.get(id) ?? [])
       })
       /*
        * UN FIL D'ARRIÈRE-PLAN NE COUPE PLUS L'INTERRUPTEUR GLOBAL (demande du 2026-09-02).
