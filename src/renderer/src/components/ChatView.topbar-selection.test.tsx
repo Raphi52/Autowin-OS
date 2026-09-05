@@ -95,6 +95,46 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
     expect(document.querySelectorAll('[data-testid="chat-branch-choice"]').length).toBe(0)
   })
 
+  /*
+    DEFAUT MESURE : le badge lisait le depot du PROCESSUS (getGitState() sans chemin) alors que le
+    menu basculait le depot de la CONVERSATION. Cliquer une branche ne « positionnait » donc jamais
+    l'ecran dessus. Le badge et la bascule doivent viser le MEME depot.
+  */
+  it('lit et bascule le MEME depot que celui de la conversation', async () => {
+    const getGitState = vi.fn().mockResolvedValue({
+      available: true,
+      state: { branch: 'main', ahead: 0, behind: 0, changes: [] }
+    })
+    const getGitBranches = vi.fn().mockResolvedValue(['main', 'feat/topbar'])
+    const checkoutGitBranch = vi.fn().mockResolvedValue({ ok: true, branch: 'feat/topbar' })
+    harness = await mountChat(
+      chatApi({
+        conversations: vi
+          .fn()
+          .mockResolvedValue([{ ...conversation('conv-1'), projectPath: 'D:/Projets/Autre' }]),
+        conversation: vi.fn().mockResolvedValue({ id: 'conv-1', messages: [] }),
+        getGitState,
+        getGitBranches,
+        checkoutGitBranch
+      })
+    )
+
+    const branche = harness.container.querySelector<HTMLElement>('[data-testid="chat-git-branch"]')
+    await act(async () => {
+      branche!.click()
+    })
+    const items = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-testid="chat-branch-choice"]')
+    )
+    await act(async () => {
+      items[1]!.click()
+    })
+
+    expect(getGitState.mock.calls.at(-1)?.[0]).toBe('D:/Projets/Autre')
+    expect(getGitBranches.mock.calls.at(-1)?.[0]).toBe('D:/Projets/Autre')
+    expect(checkoutGitBranch.mock.calls.at(-1)?.[1]).toBe('D:/Projets/Autre')
+  })
+
   it('affiche le refus et ne ferme pas le menu quand le depot est sale', async () => {
     const checkoutGitBranch = vi
       .fn()

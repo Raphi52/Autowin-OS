@@ -5,10 +5,17 @@ export type GitCheckoutResult = { ok: true; branch: string } | { ok: false; reas
 
 /**
  * LA SEULE action git déclenchable depuis un bouton de l'interface, et elle est BORNÉE :
- * bascule sur une branche LOCALE qui existe déjà, et REFUSE net si l'arbre de travail porte des
- * modifications non enregistrées. Aucun stash, aucun `-f`, aucune création de branche : un
- * changement de branche qui « arrange » l'arbre au passage est exactement la façon de perdre du
- * travail sans s'en apercevoir. En cas de refus, on rend le motif — jamais un échec silencieux.
+ * bascule sur une branche LOCALE qui existe déjà. Aucun stash, aucun `-f`, aucune création de
+ * branche : un changement de branche qui « arrange » l'arbre au passage est exactement la façon de
+ * perdre du travail sans s'en apercevoir. En cas de refus, on rend le motif — jamais un échec
+ * silencieux.
+ *
+ * UN ARBRE SALE N'EST PLUS REFUSÉ D'EMBLÉE. Le refus systématique sur `status --porcelain` était
+ * PLUS STRICT QUE GIT : git accepte de changer de branche avec des fichiers modifiés tant qu'ils
+ * ne diffèrent pas entre les deux branches. Il bloquait donc des bascules parfaitement sûres, et
+ * l'utilisateur n'avait aucun moyen d'avancer. Même politique que la mise à jour de `git-update.ts`
+ * (« ni stashé ni refusé d'emblée ») : on TENTE, et si git refuse, c'est SON message qui remonte —
+ * il nomme les fichiers réellement en cause. Le travail local reste INTACT dans les deux cas.
  */
 export async function checkoutBranch(cwd: string, branch: string): Promise<GitCheckoutResult> {
   const run = promisify(execFile)
@@ -24,22 +31,6 @@ export async function checkoutBranch(cwd: string, branch: string): Promise<GitCh
       return { ok: false, reason: `Branche locale « ${nom} » introuvable.` }
   } catch {
     return { ok: false, reason: `Branche locale « ${nom} » introuvable.` }
-  }
-  try {
-    const statut = await run('git', ['status', '--porcelain'], {
-      cwd,
-      windowsHide: true,
-      maxBuffer: 8 * 1024 * 1024
-    })
-    const sales = statut.stdout.split('\n').filter((l) => l.trim()).length
-    if (sales > 0) {
-      return {
-        ok: false,
-        reason: `Le dépôt a ${sales} fichier(s) modifié(s) non enregistré(s) : bascule refusée pour ne rien écraser.`
-      }
-    }
-  } catch (error) {
-    return { ok: false, reason: `Impossible de lire l'état du dépôt : ${String(error)}` }
   }
   try {
     await run('git', ['checkout', nom], { cwd, windowsHide: true })

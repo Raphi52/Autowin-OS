@@ -165,6 +165,8 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
  * connue par conversation, cote interface — une mesure datee, pas un recalcul invente.
  */
 const CLE_JAUGES = 'autowin.context-gauges.v1'
+/** Dossiers de classement deja choisis, memorises entre les sessions. */
+const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
 
 function lireJaugesMemorisees(): Record<string, ContextGauge> {
   try {
@@ -535,9 +537,17 @@ export function ChatView({
     pire que pas de nom sur un badge cense dire ce qu’on s’autorise.
   */
   // Appel OPTIONNEL : certaines surfaces (tests, preload partiel) n’exposent pas cette lecture.
-  const lireEtatGit = useCallback(() => Promise.resolve(window.api.getGitState?.()), [])
-  const gitBranch = useBrancheCourante(lireEtatGit)
   const [defaultWorkspace, setDefaultWorkspace] = useState<string | undefined>(undefined)
+  /*
+    DEFAUT MESURE : le badge lisait le depot du PROCESSUS (aucun cwd), alors que le menu liste et
+    bascule les branches du depot de la CONVERSATION. Cliquer une branche basculait donc un depot
+    dont le badge ne parlait pas : l'ecran ne « se positionnait » jamais dessus. Meme cwd des deux
+    cotes, sinon le badge ment.
+  */
+  const gitCwd =
+    convs.find((c) => c.id === activeId)?.projectPath?.trim() || defaultWorkspace || undefined
+  const lireEtatGit = useCallback(() => Promise.resolve(window.api.getGitState?.(gitCwd)), [gitCwd])
+  const gitBranch = useBrancheCourante(lireEtatGit)
   /*
    * Occupation de la fenetre de contexte, par conversation.
    *
@@ -584,7 +594,6 @@ export function ChatView({
    * pour toujours (constate le 2026-08-18). On saisit ICI plutot que via le selecteur natif :
    * un dossier de conversations est une etiquette, pas un repertoire Windows.
    */
-  const [nouveauDossier, setNouveauDossier] = useState<string | undefined>(undefined)
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
   const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
   const [steeringDirectives, setSteeringDirectives] = useState<Set<number>>(() => new Set())
@@ -3964,19 +3973,62 @@ export function ChatView({
   /** La cible d'un glisser en cours, pour que l'utilisateur VOIE où il va déposer. */
   const [surviole, setSurvole] = useState<string | null>(null)
 
+  /**
+   * Dossiers de classement MEMORISES. Defaut vecu le 2026-09-05 : la liste etait DERIVEE des
+   * conversations rangees, donc reclasser la derniere conversation d'un dossier le faisait
+   * DISPARAITRE du menu -- il fallait re-parcourir le disque pour le retrouver. On persiste donc
+   * les dossiers deja choisis, et on les retire seulement sur un geste EXPLICITE (la croix).
+   * `localStorage` et non le store disque : c'est une preference d'affichage locale.
+   */
+  const [dossiersMemorises, setDossiersMemorises] = useState<string[]>(() => {
+    try {
+      const brut = window.localStorage.getItem(CLE_DOSSIERS_CONNUS)
+      const lu = brut ? (JSON.parse(brut) as unknown) : null
+      if (Array.isArray(lu)) return lu.filter((x): x is string => typeof x === 'string' && !!x.trim())
+    } catch {
+      /* preference illisible : on repart des dossiers reellement utilises */
+    }
+    return []
+  })
+  const memoriserDossier = useCallback((chemin: string): void => {
+    const propre = chemin.trim()
+    if (!propre) return
+    setDossiersMemorises((connus) => (connus.includes(propre) ? connus : [...connus, propre]))
+  }, [])
+  const oublierDossier = useCallback((chemin: string): void => {
+    setDossiersMemorises((connus) => connus.filter((connu) => connu !== chemin))
+  }, [])
+  useEffect(() => {
+    window.localStorage.setItem(CLE_DOSSIERS_CONNUS, JSON.stringify(dossiersMemorises))
+  }, [dossiersMemorises])
+
   const rangerDans = useCallback(
     async (conversationId: string, chemin?: string | null): Promise<void> => {
+      if (chemin) memoriserDossier(chemin)
       await window.api.conversationsSetProject?.(conversationId, chemin)
       await refreshConvs()
     },
-    [refreshConvs]
+    [refreshConvs, memoriserDossier]
   )
+  /**
+   * AMORCAGE unique : au tout premier chargement, la memoire est vide alors que des conversations
+   * sont deja rangees. On l'amorce avec ces dossiers-la. Ensuite la memoire fait autorite -- sinon
+   * un dossier retire par la croix reviendrait tant qu'une conversation le porte encore.
+   */
+  const amorce = useRef(false)
+  useEffect(() => {
+    if (amorce.current || convs.length === 0) return
+    amorce.current = true
+    const utilises = convs.map((conv) => conv.projectPath?.trim()).filter(Boolean) as string[]
+    if (utilises.length > 0) setDossiersMemorises((connus) => [...new Set([...connus, ...utilises])])
+  }, [convs])
+
   const dossiersConversations = useMemo(
     () =>
-      [...new Set(convs.map((conv) => conv.projectPath?.trim()).filter(Boolean) as string[])].sort(
-        (a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })
+      [...new Set(dossiersMemorises.map((chemin) => chemin.trim()).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, 'fr', { sensitivity: 'base' })
       ),
-    [convs]
+    [dossiersMemorises]
   )
 
   /**
@@ -4554,12 +4606,16 @@ export function ChatView({
                         un refus doit rester visible la ou l'utilisateur vient de cliquer, sinon la
                         branche « ne change pas » sans que rien ne l'explique.
                       */
-                      const cwd = active?.projectPath?.trim() || defaultWorkspace || undefined
                       setBrancheMenu((m) => (m ? { ...m, refus: undefined } : m))
                       void window.api
-                        .checkoutGitBranch?.(nom, cwd)
+                        .checkoutGitBranch?.(nom, gitCwd)
                         .then((r) => {
-                          if (r?.ok) setBrancheMenu(null)
+                          if (r?.ok) {
+                            setBrancheMenu(null)
+                            // Relecture IMMEDIATE du badge : sans elle, il garde l'ancien nom
+                            // jusqu'au prochain battement (5 s) et la bascule parait sans effet.
+                            window.dispatchEvent(new Event('focus'))
+                          }
                           else
                             setBrancheMenu((m) =>
                               m ? { ...m, refus: r?.reason ?? 'Bascule refusee.' } : m
@@ -4593,7 +4649,6 @@ export function ChatView({
             <div
               className="conv-menu-backdrop"
               onClick={() => {
-                setNouveauDossier(undefined)
                 setConvFolderMenu(null)
               }}
             />
@@ -4607,22 +4662,37 @@ export function ChatView({
                 <span className="conv-menu-empty">Aucun dossier de conversations</span>
               ) : (
                 dossiersConversations.map((chemin) => (
-                  <button
-                    key={chemin}
-                    role="menuitem"
-                    data-testid="conv-project-choice"
-                    data-project-path={chemin}
-                    onClick={() => {
-                      const conv = convFolderMenu.conv
-                      setConvFolderMenu(null)
-                      void rangerDans(conv.id, chemin)
-                    }}
-                  >
-                    <span className="conv-menu-ic" aria-hidden="true">
-                      🗂
-                    </span>
-                    {chemin}
-                  </button>
+                  <div className="conv-menu-ligne" key={chemin}>
+                    <button
+                      role="menuitem"
+                      data-testid="conv-project-choice"
+                      data-project-path={chemin}
+                      onClick={() => {
+                        const conv = convFolderMenu.conv
+                        setConvFolderMenu(null)
+                        void rangerDans(conv.id, chemin)
+                      }}
+                    >
+                      <span className="conv-menu-ic" aria-hidden="true">
+                        🗂
+                      </span>
+                      {chemin}
+                    </button>
+                    <button
+                      className="conv-menu-oubli"
+                      data-testid="conv-project-forget"
+                      data-project-path={chemin}
+                      aria-label={`Retirer ${chemin} de la liste`}
+                      title="Retirer de la liste"
+                      onClick={(event) => {
+                        // Le clic ne doit PAS ranger la conversation dans le dossier qu'on retire.
+                        event.stopPropagation()
+                        oublierDossier(chemin)
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))
               )}
               <button
@@ -4641,43 +4711,6 @@ export function ChatView({
                 </span>
                 Choisir un dossier…
               </button>
-              {nouveauDossier === undefined ? (
-                <button
-                  role="menuitem"
-                  data-testid="conv-project-new"
-                  onClick={() => setNouveauDossier('')}
-                >
-                  <span className="conv-menu-ic" aria-hidden="true">
-                    ＋
-                  </span>
-                  Nouveau dossier…
-                </button>
-              ) : (
-                <input
-                  className="conv-menu-input"
-                  data-testid="conv-project-new-input"
-                  autoFocus
-                  value={nouveauDossier}
-                  placeholder="Nom du dossier"
-                  aria-label="Nom du nouveau dossier de conversations"
-                  onChange={(event) => setNouveauDossier(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      setNouveauDossier(undefined)
-                      return
-                    }
-                    if (event.key !== 'Enter') return
-                    // Une saisie vide n'est PAS un dossier : sans cette garde, `rangerDans` partait
-                    // avec une chaine vide et le classement se faisait silencieusement sur rien.
-                    const chemin = nouveauDossier.trim()
-                    if (!chemin) return
-                    const conv = convFolderMenu.conv
-                    setNouveauDossier(undefined)
-                    setConvFolderMenu(null)
-                    void rangerDans(conv.id, chemin)
-                  }}
-                />
-              )}
             </div>
           </>,
           document.body
@@ -4851,9 +4884,8 @@ Cliquer pour choisir une autre branche.`}
                       onClick={(event) => {
                         const r = event.currentTarget.getBoundingClientRect()
                         setBrancheMenu({ top: r.bottom + 4, left: r.left, branches: null })
-                        const cwd = active?.projectPath?.trim() || defaultWorkspace || undefined
                         void window.api
-                          .getGitBranches?.(cwd)
+                          .getGitBranches?.(gitCwd)
                           .then((liste) =>
                             setBrancheMenu((m) => (m ? { ...m, branches: liste ?? [] } : m))
                           )
