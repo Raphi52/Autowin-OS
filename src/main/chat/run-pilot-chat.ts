@@ -900,10 +900,20 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // defaut que `claude.occupation-fenetre.test.ts` avait ferme cote provider. Mesure du
           // 2026-09-05 sur les 435 enregistrements `chat-usage` de `.autowin-data` : 423 (97 %)
           // portaient `derniereEntree === inputTokens`, jusqu'a 18,9 M pour une fenetre de 200 k.
-          // Le champ desagrege existe sur le MEME objet — on le prend, cumul en repli seulement.
+          // Le champ desagrege existe sur le MEME objet — on le prend, et on ECARTE le repli.
+          //
+          // POURQUOI ON N'ECRIT RIEN QUAND LE PROVIDER NE DESAGREGE PAS : le repli sur le cumul
+          // rendait un MAJORANT, ecrit ensuite comme une occupation qu'on ne pouvait plus
+          // distinguer d'une mesure. Constat du 2026-09-05, APRES la desagregation : une occupation
+          // de 2 413 317 tokens ecrite pour une fenetre de 1 M — plus du double, donc impossible.
+          // `context-gauge.ts` tranche deja ce dilemme dans l'autre sens et ses tests le figent :
+          // « une jauge fausse est pire qu'une jauge absente — elle est crue ». On applique la meme
+          // regle a la source : pas de mesure plutot qu'un nombre qui n'en est pas une.
           const occupation = occupationDeFenetre(pilotEvent.callUsage)
-          derniereEntree = occupation.entree
-          derniereEntreeCache = occupation.cache
+          if (!occupation.replicumul) {
+            derniereEntree = occupation.entree
+            derniereEntreeCache = occupation.cache
+          }
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
           turnSessionId = pilotEvent.sessionId
