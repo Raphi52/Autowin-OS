@@ -334,8 +334,45 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd() }) {
       : true
   })
 
+  /*
+   * P16 - B est-il un bras de TEXTE ? Depuis la demande du 2026-09-05 (conv-305), chaque banc doit
+   * faire progresser le CONTENU des skills : B est obligatoirement une variante de formulation
+   * d'une skill utilisee par la tache. Sans cela, /arena mesure des workflows et ne rend jamais une
+   * ligne de texte amelioree. Seule dispense lisible : la mention explicite
+   * `B non-texte, motif :` dans le RUN.md, qui oblige a justifier au lieu de supposer.
+   */
+  ajoute('P16', 'B est une variante de TEXTE de skill (ou dispense justifiee)', () => {
+    if (/B non-texte,\s*motif\s*:/i.test(md)) return true
+    const bloc = section(md, '## Candidats scoutés') ?? section(md, '## Candidats scoutes')
+    if (bloc === null) return 'section des candidats absente : impossible de lire ce qu_est B'
+    const ligneB = lignesTableau(bloc).find(
+      (l) => !/^candidat$/i.test(l[0]) && l[l.length - 1].trim().toUpperCase() === 'B'
+    )
+    if (!ligneB) return 'aucune ligne retenue `B` dans le tableau des candidats'
+    return /\bformulation\b|\btextes?\b|\bwording\b|SKILL\.md/i.test(ligneB.join(' '))
+      ? true
+      : 'B n_est pas un candidat de la famille formulation : le banc n_ameliore aucun texte de skill'
+  })
+
+  /*
+   * P17 - X est-il l'APPEL NU ? Le plancher de la mesure : la meme tache sans aucune skill, sans
+   * consigne de phase, sans pipeline. Sans lui, on ne sait pas si l'outillage bat le fait de
+   * n'avoir rien du tout. Se lit dans `prompt-x.txt`, le prompt reellement envoye au bras X.
+   */
+  ajoute('P17', 'X est l_appel NU (aucune skill, aucun pipeline)', () => {
+    const prompt = lire(path.join(bench, 'prompt-x.txt'))
+    if (prompt === null || prompt.trim() === '')
+      return 'prompt-x.txt absent ou vide : impossible de verifier que X est l_appel nu'
+    const cite = prompt.match(/\/(?:frame|terrain|build|clean|judge|heal|scout|arena)\b|SKILL\.md|skills[\/]/gi)
+    if (cite)
+      return 'prompt-x.txt cite de l_outillage (' + [...new Set(cite.map((c) => c.toLowerCase()))].join(', ') + ') : X n_est pas un appel nu'
+    return /appel nu|aucune skill/i.test(prompt + md)
+      ? true
+      : 'ni prompt-x.txt ni le RUN.md ne declarent X comme appel nu'
+  })
+
   const jugements = [
-    'X est-il VRAIMENT une premisse cassee, ou une variante de B ? (lecture humaine des workflows)',
+    'X, appel nu : le bras a-t-il VRAIMENT travaille sans outillage ? (lecture de sa trace)',
     'Un bras a-t-il reformule la tache malgre un enonce identique ? (lecture des livrables)',
     'Qualite reelle des livrables et dette laissee — dimension 2 de la grille du juge.',
     'Reproductibilite hors de cette tache : un seul banc = un seul point de mesure.'

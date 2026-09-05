@@ -8,9 +8,10 @@ description: >-
   `.autowin-data/<profil>/activity/conv-N.jsonl` ; (2) EXPÉRIENCE A/B/C/X — la MÊME tâche exécutée par
   QUATRE bras LANCÉS EN PARALLÈLE dans un SEUL message, chacun dans sa copie de travail isolée :
   A = workflow actuel (témoin, obligatoire), B et C = les deux meilleurs candidats scoutés,
-  X = variante qui CASSE une prémisse (chemin court, phase sautée, outil différent) ; un bras peut
-  aussi ne différer QUE par le TEXTE d'une skill ou d'une consigne (même tâche, même modèle,
-  formulation réécrite) ; (3) JUGE externe
+  X = variante qui CASSE une prémisse (chemin court, phase sautée, outil différent) ; AU MOINS UN bras
+  (B ou C) ne diffère QUE par le TEXTE d'une skill utilisée par la tâche — même tâche, même modèle,
+  formulation réécrite —, et X est TOUJOURS l'APPEL NU : la même tâche sans aucune skill, sans
+  pipeline, sans consigne de phase, pour prouver que l'outillage vaut mieux que rien ; (3) JUGE externe
   et adversarial qui compare les quatre livrables sur la MÊME grille des QUATRE dimensions — qualité
   d'abord, puis coût $, temps, et efficacité (tours et appels d'outils dépensés pour atteindre le
   critère) —, tous lus dans les journaux et jamais estimés, et rend UN workflow gagnant avec sa
@@ -105,6 +106,27 @@ remplie d'une estimation.
 - **Contrôle de discrimination, après coup** : si les 4 bras passent le critère, le banc est déclaré
   **NON DISCRIMINANT** dans la sortie. Le gagnant devient une piste, jamais une mesure, et le vrai
   correctif est de durcir le critère puis de rejouer — pas de trancher à l'œil.
+- **COMPOSITION IMPOSÉE DES BRAS — vraie pour TOUT banc, pas seulement pour `/arena /<skill>`.**
+  Quelle que soit la tâche, les quatre bras se répartissent ainsi :
+  **A** = le workflow actuel, textes de skills intacts (témoin) ·
+  **B** = obligatoirement une **VARIANTE DE TEXTE** d'une skill réellement utilisée par la tâche
+  (voir 2 bis) ·
+  **C** = le meilleur candidat non-texte du tri (routage, profondeur, parallélisme, contexte, preuve) ·
+  **X** = obligatoirement l'**APPEL NU**.
+  Un banc dont B n'est pas une variante de texte, ou dont X n'est pas l'appel nu, est REFUSÉ : c'est
+  ce couple qui fait progresser le contenu des skills à chaque `/arena` et qui prouve que ce contenu
+  sert à quelque chose.
+- **QUELLE SKILL METTRE AU BANC EN B**, quand la tâche n'en nomme aucune : prendre celle qui PORTE le
+  plus de décisions dans la tâche (la skill de la phase jouée, ou la consigne de routage qui la
+  déclenche), et le DIRE en une ligne. Aucune skill impliquée du tout → le banc de texte porte alors
+  sur la CONSIGNE de phase employée ; s'il n'y en a pas non plus, écrire `B non-texte, motif : aucun
+  texte pilote la tâche` dans le RUN.md — c'est la SEULE dispense, elle se justifie, elle ne se
+  suppose pas.
+- **L'APPEL NU (X), défini précisément** : la tâche est confiée à un agent qui reçoit UNIQUEMENT
+  l'énoncé et le critère de succès — aucune skill chargée, aucune consigne de phase, aucun pipeline,
+  aucun rappel de constitution au-delà du socle du modèle. C'est le PLANCHER de la mesure : si X
+  gagne, l'outillage testé COÛTE plus qu'il ne rapporte sur cette tâche, et c'est le résultat le plus
+  important du banc — il s'écrit en tête de la sortie, jamais enterré dans le tableau.
 - Fixer le **régime** : jetable ≤2 bras · standard = 4 bras (A/B/C/X) · critique = 4 bras + 2 tours
   de juge. Par défaut : standard.
 - **Baseline** : coût et durée observés des tâches comparables (sonde rendement + journaux). Si rien
@@ -138,10 +160,14 @@ d'amélioration du code. Familles à balayer (au moins 4) :
   concret ajouté ou retiré. Famille la moins chère à tester et la plus souvent oubliée : le texte est
   ce qui DÉCLENCHE le comportement, donc c'est un facteur mesurable comme un autre.
 
+La famille **formulation** n'est PAS optionnelle : le scout doit produire au moins **3 variantes de
+texte** distinctes de la skill mise au banc, pour que B soit un choix trié et non la seule idée venue.
+
 Chaque candidat porte : `hypothèse mesurable` (ce qui devrait baisser : tours / $ / minutes /
-reprises) · `coût prévu` · `risque`. Classer par (gain attendu ÷ risque). **Garder 2** pour B et C,
-et **1 casse-prémisse** pour X — X n'est jamais le 3e meilleur du classement, c'est le plus
-DIFFÉRENT, sinon les quatre bras testent la même idée.
+reprises) · `coût prévu` · `risque`. Classer par (gain attendu ÷ risque). **B est le meilleur
+candidat de la famille formulation** ; **C est le meilleur candidat des autres familles** ; **X n'est
+pas tiré du classement du tout** — c'est l'appel nu, fixé d'avance. Un classement qui place deux
+candidats non-texte en B et C est un tri à refaire.
 
 **TRACE ÉCRITE OBLIGATOIRE — avant de choisir B, C et X.** Le classement des 6 à 10 candidats
 s'ÉCRIT SUR DISQUE dans le RUN.md du banc, section `## Candidats scoutés`, sous forme de tableau :
@@ -154,8 +180,8 @@ C ne sont pas des candidats triés mais deux idées improvisées, et l'expérien
 2026-09-02 (relevé par le juge) : c'est l'étape de tri qui disparaît, pas une formalité de rédaction.
 
 ### 2 bis. Banc de FORMULATION — quand les bras diffèrent par le TEXTE
-Dès qu'un candidat retenu (B, C ou X) est une variation de formulation, le banc devient un banc de
-texte, et ces règles s'ajoutent :
+B étant TOUJOURS une variante de formulation (voir étape 1), ces règles s'appliquent à **tout** banc,
+et pas seulement quand la cible est une skill :
 - **UN SEUL facteur bouge** : le texte. Même tâche, même critère, même modèle, même régime, même
   découpage. Un bras qui change le texte ET le routage ne dit plus lequel des deux a agi → INVALIDE.
 - **A garde le texte ACTUEL, intact.** Chaque autre bras reçoit sa copie du fichier de skill réécrite
@@ -175,7 +201,8 @@ texte, et ces règles s'ajoutent :
 ### 3. EXPÉRIENCE A/B/C/X — les quatre bras dans UN SEUL message
 Lancer les quatre en même temps (un sous-agent par bras). Chaque bras reçoit, mot pour mot :
 - l'énoncé de la tâche (identique), le critère de succès, sa copie de travail,
-- **son workflow imposé** (A : actuel · B, C : candidats scoutés · X : casse-prémisse),
+- **son workflow imposé** (A : actuel, textes intacts · B : texte de skill réécrit · C : candidat
+  non-texte scouté · X : appel nu, aucune skill ni consigne),
 - l'obligation de rendre : le livrable, la preuve du critère (exit code / test / capture), la liste
   ordonnée de ce qu'il a fait, et **ce qui a échoué en route**.
 
@@ -202,6 +229,18 @@ pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi
 ### 5. Installer et retenir
 - Livrer le meilleur livrable pour de vrai ; jeter les copies de travail perdantes.
 - Écrire le workflow gagnant à son point de déclenchement, en une règle-réflexe.
+- **SI B GAGNE — le texte de la skill est RÉÉCRIT pour de vrai, dans le fichier réel du dépôt, avec
+  la formulation exacte du bras gagnant, en commit dédié.** C'est le but même de la règle « B est
+  toujours une variante de texte » : chaque `/arena` doit laisser le contenu des skills MEILLEUR
+  qu'avant, pas seulement un rapport. Un banc où B gagne et où `skills/<nom>/SKILL.md` n'a pas changé
+  sur disque est un banc INACHEVÉ, à dire tel quel.
+- **SI B PERD — l'écrire aussi** : la formulation actuelle a tenu contre une variante triée, c'est
+  une mesure en faveur du texte en place, et la variante perdante se journalise pour ne pas être
+  re-proposée au banc suivant.
+- **SI X (l'appel nu) GAGNE — c'est le résultat qui prime sur tous les autres** : l'outillage a coûté
+  plus qu'il n'a rapporté. Il s'annonce en tête, et la suite n'est pas d'installer un texte mais
+  d'ALLÉGER la skill (retirer l'étape que l'appel nu a sautée sans perte) ou de restreindre son
+  déclenchement.
 - **Journaliser les QUATRE bras — une ligne chacun, gagnant ET perdants.** Sans ça le banc suivant
   refait ce tournoi :
 
@@ -264,9 +303,9 @@ mécanisables ; ils restent au juge.
 | bras | workflow | critère atteint | $ mesuré | min | tours | rendement ($/tours pour le critère) | défauts | verdict |
 |---|---|---|---|---|---|---|---|---|
 | A (témoin) | … | … | … | … | … | … | … | … |
-| B | … | … | … | … | … | … | … | … |
-| C | … | … | … | … | … | … | … | … |
-| X (casse-prémisse) | … | … | … | … | … | … | … | … |
+| B (texte de skill réécrit) | … | … | … | … | … | … | … | … |
+| C (candidat non-texte) | … | … | … | … | … | … | … | … |
+| X (appel nu, sans skill) | … | … | … | … | … | … | … | … |
 
 **Gagnant** : bras + workflow en une phrase · **Δ contre A** : $ et minutes · **Preuve** : l'artefact
 et le journal cités · **Installé où** : le fichier/point de déclenchement · **Limite** : ce qui reste
@@ -277,7 +316,10 @@ ont passé le critère — `4/4` ⇒ banc NON DISCRIMINANT, le gagnant n'est qu'
 - **Pas de témoin** → aucun écart interprétable.
 - **Bras lancés l'un après l'autre** → le second profite du travail du premier ; ils doivent partir
   ensemble, dans un seul message.
-- **X mou** (une variante de B) → l'expérience ne teste que trois fois la même idée.
+- **X mou** (une variante de B au lieu de l'appel nu) → on perd le plancher de mesure : sans lui, on
+  ne sait pas si l'outillage bat le fait de ne rien avoir du tout.
+- **Aucun bras de texte** (B pris hors de la famille formulation) → le banc mesure des workflows mais
+  ne rend AUCUNE amélioration au contenu des skills : `/arena` cesse alors de les faire progresser.
 - **Chiffres estimés** présentés comme mesurés → faux vert.
 - **Le producteur se juge** → le classement se fait par `judge` externe, jamais par toi.
 - **Gagnant généralisé sur une seule tâche** → l'annoncer comme une piste mesurée, pas comme une loi.

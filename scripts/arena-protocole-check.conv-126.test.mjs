@@ -32,7 +32,10 @@ const RATES_ATTENDUS = {
   P3: /1 cas limite sur 5 assertions/,
   P11: /aucune ligne Discrimination/,
   // Le banc de conv-126 date d'avant le journal des duels : aucun de ses 4 bras n'y figure.
-  P15: /aucun bras journalise/
+  P15: /aucun bras journalise/,
+  // Banc d'avant la regle du 2026-09-05 (conv-305) : ni bras de TEXTE en B, ni appel NU en X.
+  P16: /section des candidats absente/,
+  P17: /cite de l_outillage/
 }
 
 describe('arena-protocole-check face au banc réel de conv-126', () => {
@@ -51,7 +54,7 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
     expect(attendus.filter((f) => !existsSync(f))).toEqual([])
   })
 
-  it('refuse le run : ok=false, et RATE exactement P1, P2, P3, P11, P15', () => {
+  it('refuse le run : ok=false, et RATE exactement P1, P2, P3, P11, P15, P16, P17', () => {
     const res = verifierProtocole({ run: RUN, bench: BENCH, racineDuels: FIXTURE })
     expect(res.erreur).toBeUndefined()
     const rates = res.points.filter((p) => !p.ok)
@@ -62,11 +65,11 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
     expect(res.ok).toBe(false)
   })
 
-  it('les dix autres points restent tenus : le refus est ciblé, pas un rejet en bloc', () => {
+  it('les huit autres points restent tenus : le refus est ciblé, pas un rejet en bloc', () => {
     const res = verifierProtocole({ run: RUN, bench: BENCH, racineDuels: FIXTURE })
     const tenus = res.points.filter((p) => p.ok).map((p) => p.id)
     expect(tenus).toEqual(['P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P12', 'P13', 'P14'])
-    expect(res.points).toHaveLength(15)
+    expect(res.points).toHaveLength(17)
   })
 
   it('en ligne de commande, le contrôle sort en code 1 et dit PROTOCOLE NON TENU', () => {

@@ -21,11 +21,16 @@ function bancConforme() {
   const copies = join(racine, 'worktrees-arena')
   mkdirSync(bench, { recursive: true })
 
-  const tache = 'TACHE (identique pour tous) :\najoute --depuis a scripts/scout-rendement.mjs\n'
+  const tache = 'TACHE (identique pour tous) :\najoute --depuis a scripts/rendement-sonde.mjs\n'
   writeFileSync(join(bench, 'tache.txt'), tache)
   const couts = { a: 0.6365555, b: 0.3490945, c: 0.52714, x: 0.506905 }
   for (const bras of ARMS) {
-    writeFileSync(join(bench, `prompt-${bras}.txt`), `${tache}\nWORKFLOW IMPOSE (${bras}) : ...\n`)
+    writeFileSync(
+      join(bench, `prompt-${bras}.txt`),
+      bras === 'x'
+        ? `${tache}\nWORKFLOW IMPOSE (x) : appel nu — aucune skill, aucune consigne de phase.\n`
+        : `${tache}\nWORKFLOW IMPOSE (${bras}) : ...\n`
+    )
     writeFileSync(
       join(bench, `out-${bras}.json`),
       JSON.stringify({ session_id: `sess-${bras}`, total_cost_usd: couts[bras], num_turns: 13 })
@@ -69,9 +74,9 @@ function bancConforme() {
 | candidat | famille | hypothèse mesurable | coût prévu | risque | score | retenu ? |
 |---|---|---|---|---|---|---|
 | pipeline complet | routage | témoin | 0,6 $ | bas | — | A |
-| grep + édition directe | profondeur | −40 % de $ | 0,3 $ | moyen | 3,0 | B |
-| preuve d'abord | preuve | −1 reprise | 0,5 $ | bas | 2,4 | C |
-| lecture interdite | prémisse cassée | −50 % de tours | 0,5 $ | haut | 1,1 | X |
+| réflexe en tête de SKILL.md | formulation | −40 % de $ | 0,3 $ | moyen | 3,0 | B |
+| grep + édition directe | profondeur | −1 reprise | 0,5 $ | bas | 2,4 | C |
+| appel nu, aucune skill | prémisse cassée | −50 % de tours | 0,5 $ | haut | 1,1 | X |
 | fan-out 3 agents | parallélisme | −30 % de minutes | 0,9 $ | haut | 0,8 | non |
 | brain_query d'abord | contexte | −1 tour | 0,4 $ | bas | 0,7 | non |
 
@@ -79,7 +84,7 @@ function bancConforme() {
 Critère **rouge constaté avant le lancement**, sortie collée :
 
 \`\`\`
-$ node check.mjs scripts/scout-rendement.mjs
+$ node check.mjs scripts/rendement-sonde.mjs
 RATE C3 cas limite — date absurde 2026-13-45 REFUSEE — acceptée
 RATE C4 cas limite — fenetre vide : aucun plantage — exit 1
 CRITERE NON ATTEINT (code de sortie 1)
@@ -94,7 +99,18 @@ CRITERE NON ATTEINT (code de sortie 1)
 
 **Discrimination** : 3/4 bras ont passé le critère.
 AUTOWIN_LESSON_V1: {"outcome":"success","title":"A gagne","body":"Δ = 0,29 $ contre A"}
+
+## Variantes de texte
+
+| bras | fichier | levier | hypothese de comportement |
+|---|---|---|---|
+| bras B | skills/arena/SKILL.md | regle remontee en tete | verifie avant de conclure |
 `
+  )
+  mkdirSync(join(bench, 'variantes'), { recursive: true })
+  writeFileSync(
+    join(bench, 'variantes', 'b.diff'),
+    ['--- a/skills/arena/SKILL.md', '+++ b/skills/arena/SKILL.md', '+reflexe remonte en tete', ''].join('\n')
   )
   // Un banc CONFORME est aussi JOURNALISE : ses 4 bras sont dans arena-duels.jsonl (P15).
   const verdicts = { a: 'gagnant', b: 'perdant', c: 'perdant', x: 'perdant' }
@@ -205,10 +221,58 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     expect(point(res, 'P13').ok).toBe(false)
   })
 
-  it('P14 est sans objet (OK) sur un banc de workflow qui ne teste aucun texte', () => {
+  /*
+   * Depuis la demande du 2026-09-05 (conv-305), B est TOUJOURS un bras de TEXTE : chaque banc doit
+   * laisser le contenu des skills meilleur qu'avant. P16 le verifie, et la SEULE dispense est la
+   * mention ecrite `B non-texte, motif : ...` — qui oblige a justifier au lieu de supposer.
+   */
+  it('P16 RATE quand B n_est pas un candidat de la famille formulation', () => {
     const f = bancConforme()
+    writeFileSync(
+      f.run,
+      readFileSync(f.run, 'utf8').replace(
+        '| réflexe en tête de SKILL.md | formulation |',
+        '| fan-out 3 agents | parallélisme |'
+      )
+    )
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
-    expect(point(res, 'P14').ok).toBe(true)
+    expect(point(res, 'P16').ok).toBe(false)
+    expect(point(res, 'P16').detail).toMatch(/formulation/)
+  })
+
+  it('P16 est tenu quand le banc porte la dispense écrite `B non-texte, motif :`', () => {
+    const f = bancConforme()
+    writeFileSync(
+      f.run,
+      readFileSync(f.run, 'utf8').replace(
+        '| réflexe en tête de SKILL.md | formulation |',
+        '| fan-out 3 agents | parallélisme |'
+      ) + ['', '', 'B non-texte, motif : aucun texte ne pilote cette tache.', ''].join(String.fromCharCode(10))
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P16').ok).toBe(true)
+  })
+
+  /*
+   * X est le PLANCHER de la mesure : la meme tache sans aucune skill. Un prompt de X qui cite de
+   * l'outillage (`/heal`, `SKILL.md`, `skills/...`) n'est plus un appel nu, et le banc perd son
+   * point de comparaison le plus important.
+   */
+  it('P17 RATE quand le prompt du bras X cite de l_outillage', () => {
+    const f = bancConforme()
+    writeFileSync(
+      join(f.bench, 'prompt-x.txt'),
+      ['TACHE', 'WORKFLOW IMPOSE (x) : applique skills/heal/SKILL.md', ''].join(String.fromCharCode(10))
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P17').ok).toBe(false)
+  })
+
+  it('P17 RATE quand prompt-x.txt est absent', () => {
+    const f = bancConforme()
+    rmSync(join(f.bench, 'prompt-x.txt'))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P17').ok).toBe(false)
   })
 })
 
@@ -218,28 +282,15 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
  * ce que le bras a lu, et le resultat n'est attribuable a aucun changement de formulation.
  */
 describe('arena-protocole-check — P14 banc de formulation', () => {
-  /** Le banc conforme, converti en banc de texte : B devient un candidat de formulation. */
+  /** Le banc conforme est DEJA un banc de texte (B = formulation) : on en degrade des morceaux. */
   function bancFormulation({ section = true, diffs = ['b'] } = {}) {
     const f = bancConforme()
-    let md = readFileSync(f.run, 'utf8').replace(
-      '| grep + édition directe | profondeur | −40 % de $ | 0,3 $ | moyen | 3,0 | B |',
-      '| skill réécrite en réflexes | formulation | −2 tours | 0,3 $ | moyen | 3,0 | B |'
-    )
-    if (section) {
-      md += [
-        '',
-        '## Variantes de texte',
-        '',
-        '| bras | fichier | levier | hypothèse de comportement |',
-        '|---|---|---|---|',
-        '| B | skills/build/SKILL.md | règle remontée en tête | vérifie avant de conclure |',
-        ''
-      ].join('\n')
-    }
-    writeFileSync(f.run, md)
-    mkdirSync(join(f.bench, 'variantes'), { recursive: true })
-    for (const bras of diffs)
-      writeFileSync(join(f.bench, 'variantes', `${bras}.diff`), '-ancien texte\n+nouveau texte\n')
+    if (!section)
+      writeFileSync(
+        f.run,
+        readFileSync(f.run, 'utf8').replace('## Variantes de texte', '## Notes diverses')
+      )
+    if (!diffs.includes('b')) rmSync(join(f.bench, 'variantes', 'b.diff'))
     return f
   }
 
@@ -277,7 +328,7 @@ describe('arena-protocole-check — P14 banc de formulation', () => {
     const f = bancFormulation()
     writeFileSync(
       f.run,
-      readFileSync(f.run, 'utf8').replace('règle remontée en tête', 'texte différent')
+      readFileSync(f.run, 'utf8').replace('regle remontee en tete', 'autre chose')
     )
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P14').ok).toBe(false)
