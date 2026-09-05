@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { lireCibleScout } from './chat-auto-mode'
+import type { Msg } from './chat-view-types'
+import { deciderRelanceAuto, lireCibleScout } from './chat-auto-mode'
 
 /*
  * APRES UN SCOUT — un scout rend PLUSIEURS pistes. Sans regle, le maillon suivant du mode auto
@@ -21,6 +22,13 @@ describe('lireCibleScout — la ligne CIBLE:', () => {
         scout('CIBLE: durcir la porte anti-boucle', 'POURQUOI: 19,38 $ de tours perdus', '| autre piste |')
       )
     ).toEqual({ statut: 'cible', cible: 'durcir la porte anti-boucle' })
+  })
+
+  it('la JUSTIFICATION `— parce que ...` ne fait pas partie de la cible', () => {
+    expect(lireCibleScout('CIBLE: durcir la porte — parce que 19,38 $ perdus')).toEqual({
+      statut: 'cible',
+      cible: 'durcir la porte'
+    })
   })
 
   it('accepte les decorations de mise en forme autour de la ligne', () => {
@@ -57,6 +65,12 @@ describe('lireCibleScout — aucune cible = fin de run', () => {
     expect(lireCibleScout('CIBLE: rien')).toEqual({ statut: 'aucune-cible' })
   })
 
+  it('« CIBLE: aucune — raison » compte comme aucune cible, justification comprise', () => {
+    expect(lireCibleScout('CIBLE: aucune — rien de rentable a court terme')).toEqual({
+      statut: 'aucune-cible'
+    })
+  })
+
   it('CAS LIMITE — une ligne CIBLE: VIDE ne vaut pas une cible', () => {
     expect(lireCibleScout(scout('CIBLE:', 'POURQUOI: je ne sais pas'))).toEqual({
       statut: 'aucune-cible'
@@ -91,5 +105,123 @@ describe('lireCibleScout — cible destructrice', () => {
     expect(
       lireCibleScout(scout('CIBLE: documenter la porte anti-boucle', 'Ecartee : supprimer le cache'))
     ).toEqual({ statut: 'cible', cible: 'documenter la porte anti-boucle' })
+  })
+})
+
+/*
+ * ===========================================================================================
+ * LA VRAIE PORTE — ce qui suit teste la DECISION D'ENVOI, pas l'etiquetage d'une chaine.
+ *
+ * Objection deja emise par le controle final sur le run precedent : `lireCibleScout` n'est
+ * branchee NULLE PART, donc les tests ci-dessus decrivent une regle que le mode auto n'applique
+ * pas. Ces tests-la echouent tant que `deciderRelanceAuto` ignore la ligne `CIBLE:` — c'est leur
+ * role. Ils sont ROUGES pour cause de COMPORTEMENT ABSENT, pas de compilation.
+ * ===========================================================================================
+ */
+const agent = (texte: string): Msg =>
+  ({ role: 'assistant', content: texte, parts: [{ kind: 'text', text: texte }] }) as unknown as Msg
+const humain = (texte: string): Msg => ({ role: 'user', content: texte }) as Msg
+
+const base = {
+  actif: true,
+  occupe: false,
+  dernierTourTraite: null,
+  dernierPromptEnvoye: null,
+  brouillonPresent: false
+}
+
+/** Un livrable de scout realiste : un tableau de pistes, et une cloture qui propose une suite. */
+const SCOUT_AVEC_TABLEAU = [
+  '| # | piste | cout |',
+  '| 1 | durcir la porte anti-boucle | faible |',
+  '| 2 | ranger les journaux | moyen |',
+  '',
+  '👉 Recommandé — enchaîne sur le tableau ci-dessus'
+].join('\n')
+
+describe('deciderRelanceAuto — apres un SCOUT, la ligne CIBLE: commande l’envoi', () => {
+  it('1. `CIBLE: X — parce que Y` en tete : la suite PART, et son texte porte X', () => {
+    const fil = [
+      humain('scout sur le mode auto'),
+      agent(
+        [
+          'CIBLE: durcir la porte anti-boucle — parce que 19,38 $ de tours ont ete perdus',
+          '',
+          SCOUT_AVEC_TABLEAU
+        ].join('\n')
+      )
+    ]
+    const decision = deciderRelanceAuto({ ...base, fil, tourEstUnScout: true })
+    expect(decision.action).toBe('envoyer')
+    expect(decision).toHaveProperty('texte', expect.stringContaining('durcir la porte anti-boucle'))
+  })
+
+  it('2. `CIBLE: aucune — raison` : la chaine s’ARRETE, avec une raison NOMMEE', () => {
+    const fil = [
+      humain('scout'),
+      agent(['CIBLE: aucune — rien de rentable a court terme', '', SCOUT_AVEC_TABLEAU].join('\n'))
+    ]
+    const decision = deciderRelanceAuto({ ...base, fil, tourEstUnScout: true })
+    expect(decision.action).toBe('arreter')
+    expect(decision).toHaveProperty('raison', 'scout-sans-cible')
+  })
+
+  it('3. scout SANS ligne CIBLE: aucun enchainement a vide sur le tableau entier', () => {
+    const fil = [humain('scout'), agent(SCOUT_AVEC_TABLEAU)]
+    const decision = deciderRelanceAuto({ ...base, fil, tourEstUnScout: true })
+    // Le defaut vecu : la rubrique « Recommandé » suffisait a lancer un tour PAYANT sans cible.
+    expect(decision.action).not.toBe('envoyer')
+    expect(decision).toHaveProperty('raison', 'scout-sans-cible')
+  })
+
+  it('4. cible DESTRUCTRICE : jamais d’envoi automatique, meme avec un prompt tout pret', () => {
+    const fil = [
+      humain('scout'),
+      agent(
+        [
+          'CIBLE: supprimer les 6 396 dossiers de run accumules — parce que 12 Go',
+          '',
+          'AUTOWIN_PROMPT_V1: supprime les dossiers de run'
+        ].join('\n')
+      )
+    ]
+    const decision = deciderRelanceAuto({ ...base, fil, tourEstUnScout: true })
+    expect(decision.action).not.toBe('envoyer')
+    expect(decision).toHaveProperty('raison', 'cible-destructrice')
+  })
+})
+
+describe('deciderRelanceAuto — NON-REGRESSION : hors scout, rien ne change', () => {
+  const REPONSE_AVEC_SUITE = [
+    '✅ Fait',
+    '- un truc',
+    '👉 Recommandé — passer en terrain',
+    'AUTOWIN_PROMPT_V1: lance le terrain sur X'
+  ].join('\n')
+
+  it('un tour ORDINAIRE avec une suite part toujours, sans exiger de ligne CIBLE:', () => {
+    const fil = [humain('go'), agent(REPONSE_AVEC_SUITE)]
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({ action: 'envoyer' })
+  })
+
+  it('« Recommandé — rien » arrete toujours un fil d’arriere-plan', () => {
+    expect(
+      deciderRelanceAuto({ ...base, fil: [agent('👉 Recommandé — rien')] })
+    ).toMatchObject({ action: 'arreter', raison: 'recommandation-rien' })
+  })
+
+  it('les garde-fous d’entree passent AVANT la lecture d’un scout', () => {
+    const fil = [humain('scout'), agent(`CIBLE: une piste — parce que oui\n${SCOUT_AVEC_TABLEAU}`)]
+    expect(deciderRelanceAuto({ ...base, fil, tourEstUnScout: true, occupe: true })).toEqual({
+      action: 'attendre',
+      raison: 'tour-en-cours'
+    })
+    expect(
+      deciderRelanceAuto({ ...base, fil, tourEstUnScout: true, brouillonPresent: true })
+    ).toEqual({ action: 'attendre', raison: 'brouillon' })
+    expect(deciderRelanceAuto({ ...base, fil, tourEstUnScout: true, actif: false })).toEqual({
+      action: 'attendre',
+      raison: 'inactif'
+    })
   })
 })

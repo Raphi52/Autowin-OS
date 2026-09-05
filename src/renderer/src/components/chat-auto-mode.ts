@@ -205,6 +205,9 @@ export type RaisonArret =
   | 'aucun-prompt'
   | 'prompt-identique'
   | 'chaine-finie'
+  /* APRES UN SCOUT (conv-308) — types poses par le harnais, la logique reste a ecrire. */
+  | 'scout-sans-cible'
+  | 'cible-destructrice'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -226,6 +229,12 @@ export interface EntreeDecisionAuto {
    * suivre sans depenser un tour payant sur une conversation que personne ne regarde.
    */
   proposerNouvelleCible?: boolean
+  /**
+   * CE TOUR EST-IL UN SCOUT ? Un scout rend plusieurs pistes : sa suite ne part que si une ligne
+   * `CIBLE:` nomme UNE piste (conv-308). Champ pose par le harnais de tests ; encore lu par
+   * personne dans `deciderRelanceAuto` — c'est exactement ce que les tests rouges reclament.
+   */
+  tourEstUnScout?: boolean
 }
 
 export type DecisionAuto =
@@ -357,7 +366,12 @@ export function lireCibleScout(texteScout: string): DecisionScout {
   for (const ligne of (texteScout ?? '').split(SAUT_ANCRAGE)) {
     const trouve = ligne.match(LIGNE_CIBLE)
     if (!trouve) continue
-    const cible = trouve[1].replace(/^[\s*_`]+/u, '').trim()
+    // La JUSTIFICATION (`— parce que ...`) n'appartient pas a la cible : sans ce retrait,
+    // `CIBLE: aucune — raison` se lirait comme une vraie piste et lancerait un tour payant.
+    const cible = trouve[1]
+      .replace(/^[\s*_`]+/u, '')
+      .split(/\s+[—–-]\s+|\s+parce\s+que\s+/iu)[0]
+      .trim()
     // La PREMIERE ligne `CIBLE:` fait foi : une seconde serait un choix de plus, pas un choix.
     if (!cible) return { statut: 'aucune-cible' }
     const nu = cible
