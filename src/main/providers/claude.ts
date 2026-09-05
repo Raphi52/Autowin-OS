@@ -601,6 +601,17 @@ export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): vo
   if (opts.reasoningEffort && EFFORTS_CLI_CLAUDE.has(opts.reasoningEffort)) {
     args.push('--effort', opts.reasoningEffort)
   }
+  // SEUIL DE COMPACTAGE ALIGNE SUR LA VRAIE FENETRE (demande utilisateur du 2026-09-05).
+  //
+  // `--autocompact <auto|tokens>` regle le volume a partir duquel le CLI resume la conversation
+  // pour la faire tenir. Laisse sur `auto`, il visait un seuil que ce depot n'a jamais dit : Opus
+  // et Sonnet portent 1 M depuis le 2026-03-13. La valeur vient de CONTEXT_WINDOWS, seule table
+  // sourcee du depot — jamais un nombre reecrit ici, sinon les deux divergent au prochain modele
+  // publie et l'app compacterait sur une taille qu'elle n'affiche plus. Un modele absent de la
+  // table, ou sous le plancher de 100 k accepte par le CLI, garde `auto` : on ne force pas un
+  // seuil sur une fenetre qu'on ne connait pas.
+  const fenetre = contextWindowFor(opts.model, 'claude')?.tokens
+  if (fenetre !== undefined && fenetre >= 100_000) args.push('--autocompact', String(fenetre))
 }
 
 export function claudeTransportEnvelope(

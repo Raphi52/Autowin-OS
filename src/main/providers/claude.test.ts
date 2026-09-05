@@ -71,7 +71,15 @@ describe('ClaudeCliAdapter — plafond de depense provider', () => {
 
     appendClaudeSelectionArgs(args, { model: 'haiku', maxBudgetUsd: 0.0625 })
 
-    expect(args).toEqual(['--model', 'haiku', '--max-budget-usd', '0.0625'])
+    // `--autocompact` suit la fenetre declaree : haiku porte 200 k dans CONTEXT_WINDOWS.
+    expect(args).toEqual([
+      '--model',
+      'haiku',
+      '--max-budget-usd',
+      '0.0625',
+      '--autocompact',
+      '200000'
+    ])
   })
 
   it('conserve le cout reel et interdit le retry quand Claude coupe sur la borne', async () => {
