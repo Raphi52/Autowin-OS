@@ -20,6 +20,11 @@ import path from 'node:path'
 import { lireDuels, cheminJournal } from './arena-duel.mjs'
 
 const BRAS = ['a', 'b', 'c', 'x']
+
+/** Compte `n/4` de bras ayant passe le critere, lu dans la ligne Discrimination du RUN.md. */
+const REGEX_DISCRIMINATION =
+  /discrimin\w*.{0,60}?([0-4])\s*\/\s*4|([0-4])\s*\/\s*4.{0,60}?discrimin/i
+
 /** Mots qui marquent un cas HORS chemin heureux dans le libelle d'une assertion. */
 const MOTS_CAS_LIMITE =
   /absurd|invalid|vide|zero|zéro|borne|limite|erreur|refus|plantage|stack|hors|farfelu|20\d\d-1[3-9]|2099/i
@@ -82,7 +87,15 @@ function scriptLancement(bench) {
   return candidats.find((c) => parleDesQuatre(c.texte)) ?? candidats[0]
 }
 
-export function verifierProtocole({ run, bench, racineDuels = process.cwd() }) {
+/**
+ * Points verifiables AVANT de lancer les bras : ils ne lisent que le RUN.md et les prompts, donc ils
+ * peuvent tous etre controles pendant que le banc ne coute encore rien. Motif (bancs `residus` et
+ * `dogfood` du 2026-09-05) : X n_etait pas l_appel nu et B n_etait pas un bras de texte — defauts
+ * constates APRES coup, quand les quatre bras avaient deja ete payes.
+ */
+export const POINTS_AVANT_LANCEMENT = ['P1', 'P2', 'P3', 'P5', 'P16', 'P17']
+
+export function verifierProtocole({ run, bench, racineDuels = process.cwd(), avantLancement = false }) {
   const md = lire(run)
   if (md === null) return { erreur: `RUN.md introuvable : ${run}` }
   const points = []
@@ -238,8 +251,7 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd() }) {
   ajoute('P11', 'Ligne Discrimination presente, et 4/4 declare NON DISCRIMINANT', () => {
     if (!/discrimin/i.test(md))
       return 'aucune ligne Discrimination : on ne sait pas si le banc departage'
-    const m =
-      /discrimin\w*[^\n]{0,60}?([0-4])\s*\/\s*4|([0-4])\s*\/\s*4[^\n]{0,60}?discrimin/i.exec(md)
+    const m = REGEX_DISCRIMINATION.exec(md)
     const n = m ? Number(m[1] ?? m[2]) : null
     if (n === null) return 'mention Discrimination sans compte n/4'
     if (n === 4 && !/NON DISCRIMINANT/i.test(md))
@@ -371,13 +383,40 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd() }) {
       : 'ni prompt-x.txt ni le RUN.md ne declarent X comme appel nu'
   })
 
+  /*
+   * P18 - Un banc NON DISCRIMINANT (4/4) doit laisser de quoi le REJOUER. Constate au banc `clean`
+   * du 2026-09-05 (et deja au banc du 2026-09-02) : les 4 bras passent, le RUN.md declare
+   * honnetement NON DISCRIMINANT... et le banc se cloture quand meme sur un gagnant choisi a
+   * l_impression. La declaration seule ne corrige rien : on exige la section `## Critere durci`
+   * nommant l_assertion a AJOUTER pour la reprise, sinon le meme banc mou se rejouera identique.
+   */
+  ajoute('P18', 'Banc 4/4 : section `## Critere durci` avec l_assertion a ajouter', () => {
+    const m = REGEX_DISCRIMINATION.exec(md)
+    const n = m ? Number(m[1] ?? m[2]) : null
+    if (n !== 4) return true
+    const bloc = section(md, '## Critère durci') ?? section(md, '## Critere durci')
+    if (bloc === null)
+      return 'banc non discriminant sans section `## Critère durci` : rien ne dit quelle assertion ajouter pour rejouer'
+    return bloc.trim().length >= 40
+      ? true
+      : 'section `## Critère durci` presente mais vide : nommer l_assertion ajoutee et ce qu_elle interdit'
+  })
+
   const jugements = [
     'X, appel nu : le bras a-t-il VRAIMENT travaille sans outillage ? (lecture de sa trace)',
     'Un bras a-t-il reformule la tache malgre un enonce identique ? (lecture des livrables)',
     'Qualite reelle des livrables et dette laissee — dimension 2 de la grille du juge.',
     'Reproductibilite hors de cette tache : un seul banc = un seul point de mesure.'
   ]
-  return { points, jugements, ok: points.every((p) => p.ok) }
+  const retenus = avantLancement
+    ? points.filter((p) => POINTS_AVANT_LANCEMENT.includes(p.id))
+    : points
+  return {
+    points: retenus,
+    jugements,
+    avantLancement,
+    ok: retenus.every((p) => p.ok)
+  }
 }
 
 const estCLI = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))
@@ -390,11 +429,16 @@ if (estCLI) {
   const bench = arg('--bench')
   if (!run || !bench) {
     console.error(
-      'Usage : node scripts/arena-protocole-check.mjs --run <RUN.md> --bench <dossier> [--duels <racine du depot>] [--json]'
+      'Usage : node scripts/arena-protocole-check.mjs --run <RUN.md> --bench <dossier> [--avant-lancement] [--duels <racine du depot>] [--json]'
     )
     process.exit(2)
   }
-  const res = verifierProtocole({ run, bench, racineDuels: arg('--duels') ?? process.cwd() })
+  const res = verifierProtocole({
+    run,
+    bench,
+    racineDuels: arg('--duels') ?? process.cwd(),
+    avantLancement: process.argv.includes('--avant-lancement')
+  })
   if (res.erreur) {
     console.error(res.erreur)
     process.exit(2)
@@ -404,9 +448,18 @@ if (estCLI) {
   } else {
     for (const p of res.points)
       console.log(`${p.ok ? 'OK  ' : 'RATE'} ${p.id} ${p.nom} — ${p.detail}`)
-    console.log('\nNON MECANISABLE (jugement humain, aucun script ne tranche) :')
-    for (const j of res.jugements) console.log(`  - ${j}`)
-    console.log(res.ok ? '\nPROTOCOLE TENU' : '\nPROTOCOLE NON TENU')
+    if (!res.avantLancement) {
+      console.log('\nNON MECANISABLE (jugement humain, aucun script ne tranche) :')
+      for (const j of res.jugements) console.log(`  - ${j}`)
+    }
+    const verdict = res.avantLancement
+      ? res.ok
+        ? '\nPRE-VOL TENU — les quatre bras peuvent partir'
+        : '\nPRE-VOL NON TENU — NE PAS LANCER LES BRAS (corriger avant de payer)'
+      : res.ok
+        ? '\nPROTOCOLE TENU'
+        : '\nPROTOCOLE NON TENU'
+    console.log(verdict)
   }
   process.exit(res.ok ? 0 : 1)
 }

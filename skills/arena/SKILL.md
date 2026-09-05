@@ -104,8 +104,14 @@ remplie d'une estimation.
   fenêtre vide) — c'est le critère qui a échoué, pas les bras, et le classement s'est joué sur une
   impression de qualité au lieu d'une mesure.
 - **Contrôle de discrimination, après coup** : si les 4 bras passent le critère, le banc est déclaré
-  **NON DISCRIMINANT** dans la sortie. Le gagnant devient une piste, jamais une mesure, et le vrai
-  correctif est de durcir le critère puis de rejouer — pas de trancher à l'œil.
+  **NON DISCRIMINANT** dans la sortie. Le gagnant devient une piste, jamais une mesure.
+- **AU MOMENT où le banc sort 4/4 → écrire la section `## Critère durci` dans le RUN.md, avant de
+  clore.** Elle nomme l'assertion PRÉCISE à ajouter pour la reprise et ce qu'elle interdit — pas
+  « il faudrait durcir ». Sans elle le banc est déclaré non tenu (point P18 du contrôle). Motif : aux
+  bancs du 2026-09-02 et du 2026-09-05 (`clean`), les 4 bras sont passés, le RUN.md l'a dit
+  honnêtement… et le tournoi s'est quand même clos sur un gagnant choisi à l'impression, sans que
+  rien n'existe pour rejouer. Une déclaration d'échec de mesure qui ne laisse aucun artefact de
+  reprise n'est pas un constat : c'est un abandon.
 - **COMPOSITION IMPOSÉE DES BRAS — vraie pour TOUT banc, pas seulement pour `/arena /<skill>`.**
   Quelle que soit la tâche, les quatre bras se répartissent ainsi :
   **A** = le workflow actuel, textes de skills intacts (témoin) ·
@@ -199,6 +205,21 @@ et pas seulement quand la cible est une skill :
   LEVIER qui a marché, pas seulement le nom du bras.
 
 ### 3. EXPÉRIENCE A/B/C/X — les quatre bras dans UN SEUL message
+
+**PRÉ-VOL OBLIGATOIRE — AU MOMENT où les prompts sont écrits et AVANT d'envoyer quoi que ce soit :**
+
+```
+npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc> --avant-lancement
+```
+
+Ce mode ne lit que le RUN.md et les `prompt-<bras>.txt` : il tranche les six points qui coûtent le
+plus cher à découvrir trop tard (candidats triés, rouge collé, cas limites, énoncé identique, B de
+texte, X réellement nu). Code de sortie ≠ 0 → **NE PAS LANCER** : on corrige le prompt, on relance le
+pré-vol. Motif mesuré, bancs `residus` et `dogfood` du 2026-09-05 : X citait `/scout` et `/arena`
+dans son prompt — donc X n'était pas le plancher de mesure —, et le contrôle ne l'a dit qu'APRÈS que
+les quatre bras aient été payés (≈ 11 $ et 15 $ de tournoi rendus ininterprétables sur leur bras X).
+Un défaut de prompt se corrige pour zéro dollar avant le départ, jamais après.
+
 Lancer les quatre en même temps (un sous-agent par bras). Chaque bras reçoit, mot pour mot :
 - l'énoncé de la tâche (identique), le critère de succès, sa copie de travail,
 - **son workflow imposé** (A : actuel, textes intacts · B : texte de skill réécrit · C : candidat
@@ -284,14 +305,17 @@ noms-là, dès la préparation du banc (étape 1) et au retour de chaque bras (�
 Le `RUN.md` passé en `--run` reste à part : c'est le compte rendu (candidats scoutés, rouge collé,
 tableau, Discrimination), pas un des artefacts ci-dessus.
 
-Il lit les fichiers du banc et rend 15 points OK/RATE (candidats écrits, rouge collé, cas limites du
+Il lit les fichiers du banc et rend 18 points OK/RATE (candidats écrits, rouge collé, cas limites du
 critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
 `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
 copies perdantes retirées, et — si le banc teste des variations de TEXTE — section `## Variantes de
 texte` avec son levier plus un `variantes/<bras>.diff` non vide par bras, et enfin les QUATRE lignes
 du banc dans `arena-duels.jsonl` — un tournoi non journalisé est RATE, gagnant seul journalisé
-compris). Code de sortie 0 =
-protocole tenu. Un RATE se corrige, ou s'écrit dans la
+compris), et enfin — si le banc est sorti 4/4 — la section `## Critère durci` nommant l'assertion à
+ajouter pour la reprise (P18). Code de sortie 0 =
+protocole tenu. Les six points lisibles avant le départ des bras se contrôlent avec
+`--avant-lancement` (étape 3) : le faire à la fin seulement, c'est payer le tournoi pour apprendre
+qu'il était invalide. Un RATE se corrige, ou s'écrit dans la
 sortie tel quel — il ne se tait pas : au banc du 2026-09-02, quatre de ces points étaient RATE sans
 que rien ne le dise. Les 4 points de **jugement** que le script liste en fin de sortie ne sont pas
 mécanisables ; ils restent au juge.
@@ -334,3 +358,7 @@ ont passé le critère — `4/4` ⇒ banc NON DISCRIMINANT, le gagnant n'est qu'
 - **Texte ET workflow changés dans le même bras** → l'effet n'est plus attribuable.
 - **Critère chemin-heureux seul** → les 4 bras passent, le banc ne départage plus rien et le
   classement retombe sur le goût du juge.
+- **Banc 4/4 clos sans `## Critère durci`** → on sait que la mesure a échoué et on ne laisse rien
+  pour la refaire : le banc suivant repaiera le même tournoi mou.
+- **Pré-vol sauté** → un X qui cite une skill ou un B qui n'est pas du texte se découvre APRÈS les
+  quatre bras, quand l'argent est dépensé et le tournoi ininterprétable.

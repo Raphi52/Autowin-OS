@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { verifierProtocole } from './arena-protocole-check.mjs'
+import { POINTS_AVANT_LANCEMENT, verifierProtocole } from './arena-protocole-check.mjs'
 import { cheminJournal, noterDuel } from './arena-duel.mjs'
 
 const ARMS = ['a', 'b', 'c', 'x']
@@ -427,5 +427,70 @@ describe('P15 — le banc doit etre journalise dans arena-duels.jsonl', () => {
     writeFileSync(cheminJournal(f.racine), `${lignes.join('\n')}\n`)
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P15').ok).toBe(true)
+  })
+})
+
+describe('P18 — un banc non discriminant doit laisser de quoi le rejouer', () => {
+  it('banc 3/4 : P18 ne s_applique pas', () => {
+    const f = bancConforme()
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P18').ok).toBe(true)
+  })
+
+  it('banc 4/4 sans section `## Critère durci` : RATE (defaut du banc clean du 2026-09-05)', () => {
+    const f = bancConforme()
+    const md = readFileSync(f.run, 'utf8').replace(
+      '**Discrimination** : 3/4 bras ont passé le critère.',
+      '**Discrimination** : 4/4 bras ont passé le critère → banc NON DISCRIMINANT.'
+    )
+    writeFileSync(f.run, md)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P18').ok).toBe(false)
+  })
+
+  it('banc 4/4 avec l_assertion a ajouter nommee : OK', () => {
+    const f = bancConforme()
+    const md = `${readFileSync(f.run, 'utf8').replace(
+      '**Discrimination** : 3/4 bras ont passé le critère.',
+      '**Discrimination** : 4/4 bras ont passé le critère → banc NON DISCRIMINANT.'
+    )}
+## Critère durci
+Assertion A7 a ajouter : refuser un rapport qui cite un fichier inexistant du depot.
+`
+    writeFileSync(f.run, md)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P18').ok).toBe(true)
+  })
+})
+
+describe('pre-vol — controler AVANT de payer les quatre bras', () => {
+  it('ne rend que les points lisibles avant lancement', () => {
+    const f = bancConforme()
+    const res = verifierProtocole({
+      run: f.run,
+      bench: f.bench,
+      racineDuels: f.racine,
+      avantLancement: true
+    })
+    expect(res.points.map((p) => p.id)).toEqual(POINTS_AVANT_LANCEMENT)
+    expect(res.avantLancement).toBe(true)
+  })
+
+  it('X non nu est refuse AVANT lancement (defaut des bancs residus et dogfood)', () => {
+    const f = bancConforme()
+    writeFileSync(
+      join(f.bench, 'prompt-x.txt'),
+      `${readFileSync(join(f.bench, 'prompt-x.txt'), 'utf8')}
+lance /scout d_abord
+`
+    )
+    const res = verifierProtocole({
+      run: f.run,
+      bench: f.bench,
+      racineDuels: f.racine,
+      avantLancement: true
+    })
+    expect(res.ok).toBe(false)
+    expect(point(res, 'P17').ok).toBe(false)
   })
 })
