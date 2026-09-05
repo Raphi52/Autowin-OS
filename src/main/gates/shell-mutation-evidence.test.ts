@@ -345,3 +345,58 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     expect(envBlock).toMatch(/\.\.\.\s*NON_INTERACTIVE_ENV\s*,?\s*\}$/)
   })
 })
+
+/**
+ * BOUCLE MESURÉE le 2026-09-03 (conv-15, `run-004c4179e077-1`) — un run tué par sa propre preuve.
+ *
+ * Déroulé lu dans `.autowin-data/autowin-os/causal-trace/conv-15.jsonl` : la phase `build` a fait le
+ * travail et lancé ses tests avec succès (`EXIT_CODE=0`, séquences 189, 191, 203). Le contrôle final
+ * a pourtant bloqué CINQ fois d'affilée sur le même reproche — « Promis mais pas fait : "Tests
+ * demandes executes avec un code de sortie 0" » — et relancé `build` 4 à 20 ms après chaque refus,
+ * jusqu'à ce que le plafond d'agents du régime (5) refuse le 6ᵉ lancement. Run rouge, budget brûlé,
+ * travail pourtant fait.
+ *
+ * CAUSE : `tokensOf` préfixe tout segment redirigé par `__redirection__`. Ce marqueur prend la place
+ * du VERBE, donc la table `VERIFYING` — indexée sur `tokens[0]` — ne voit plus jamais `vitest` ni
+ * `npx`. La précédence « verification > mutation » que `classifyShellCommand` documente était donc
+ * inatteignable dès qu'une sortie était redirigée. La preuve était classée `mutation`, et
+ * `rootRequirementChecks` ne coche sa case QUE sur un `kind === 'verification'` : case
+ * insatisfaisable par construction, exactement la pathologie déjà refermée ici pour les mutations
+ * par commande le 2026-08-04.
+ *
+ * Ce qui rend le défaut systémique : rediriger une sortie longue vers un fichier est la consigne
+ * donnée aux agents. Suivre la consigne rendait sa propre preuve invisible au gate.
+ */
+describe('une preuve de test redirigée vers un fichier reste une VÉRIFICATION', () => {
+  // La commande EXACTE de l'incident, recopiée depuis la trace (séquence 189).
+  const commandeIncident =
+    'cd /e/GIT/Autowin-OS && npx vitest run src/main/task-manager/watchdog-suppression.test.ts ' +
+    '--reporter=basic > "/e/AutoWin Temp/preuve-abort-2026-09-03/01-depot-reel-baseline.log" 2>&1; ' +
+    'echo "EXIT_CODE=$?"'
+
+  it('classe en verification la commande qui a tué le run', () => {
+    expect(claudeToolEvidenceKind('Bash', commandeIncident)).toBe('verification')
+  })
+
+  it.each([
+    'npx vitest run a.test.ts > out.log',
+    'npm test >> journal.txt 2>&1',
+    'pytest -q > /tmp/p.log',
+    'dotnet test > out.txt'
+  ])('reconnaît le verbe de test derrière la redirection : %s', (commande) => {
+    expect(claudeToolEvidenceKind('Bash', commande)).toBe('verification')
+  })
+
+  /**
+   * LA FRONTIÈRE — sans elle, la correction serait un trou : une écriture qui ne lance aucun test
+   * doit rester une mutation, redirection ou pas. Ces trois cas passaient AVANT le correctif et
+   * doivent continuer à passer, sinon `evidenceSatisfiesTask` accepterait un `echo` pour un oracle.
+   */
+  it.each([
+    'echo "git status" > f.txt',
+    'git stash push -u > sortie.txt',
+    'cat src/a.ts > copie.ts'
+  ])('laisse en mutation une écriture sans verbe de test : %s', (commande) => {
+    expect(claudeToolEvidenceKind('Bash', commande)).toBe('mutation')
+  })
+})

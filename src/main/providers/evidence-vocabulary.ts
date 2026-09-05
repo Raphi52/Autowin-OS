@@ -350,7 +350,18 @@ function matches(table: Record<string, Rule>, tokens: string[]): boolean {
 function classifyShellCommand(command: string | undefined): ShellCommandKind {
   if (!command) return 'inspection'
   const segments = segmentsOf(command).map(tokensOf)
-  if (segments.some((tokens) => matches(VERIFYING, tokens))) return 'verification'
+  // Le marqueur de redirection occupe la place du VERBE. `matches` s'indexant sur `tokens[0]`, la
+  // table `VERIFYING` ne voyait donc JAMAIS `vitest`/`npx`/`pytest` dès qu'une sortie était
+  // redirigée : la précédence annoncée juste au-dessus était inatteignable, et un test dont la
+  // sortie part dans un fichier — la consigne donnée aux agents pour les sorties longues —
+  // ressortait en `mutation`. Le gate ne cochant sa case « tests » que sur un `verification`,
+  // l'exigence devenait insatisfaisable et le run bouclait jusqu'à épuisement du budget d'agents
+  // (mesuré le 2026-09-03, conv-15 `run-004c4179e077-1` : 5 refus, 6ᵉ agent refusé, run rouge).
+  // Le marqueur RESTE en place pour les deux lignes suivantes : une redirection sans verbe de test
+  // demeure une écriture.
+  const verbeReel = (tokens: string[]): string[] =>
+    tokens[0] === '__redirection__' ? tokens.slice(1) : tokens
+  if (segments.some((tokens) => matches(VERIFYING, verbeReel(tokens)))) return 'verification'
   if (segments.some((tokens) => tokens[0] === '__redirection__')) return 'mutation'
   if (segments.some((tokens) => matches(MUTATING, tokens))) return 'mutation'
   return 'inspection'
