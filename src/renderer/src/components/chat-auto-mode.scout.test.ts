@@ -24,6 +24,13 @@ describe('lireCibleScout — la ligne CIBLE:', () => {
     ).toEqual({ statut: 'cible', cible: 'durcir la porte anti-boucle' })
   })
 
+  it('la JUSTIFICATION `— parce que ...` ne fait pas partie de la cible', () => {
+    expect(lireCibleScout('CIBLE: durcir la porte — parce que 19,38 $ perdus')).toEqual({
+      statut: 'cible',
+      cible: 'durcir la porte'
+    })
+  })
+
   it('accepte les decorations de mise en forme autour de la ligne', () => {
     expect(lireCibleScout(scout('**CIBLE :** ranger les journaux', 'POURQUOI: bruit'))).toEqual({
       statut: 'cible',
@@ -56,6 +63,12 @@ describe('lireCibleScout — aucune cible = fin de run', () => {
   it('rend « aucune-cible » quand le scout ecrit explicitement CIBLE: aucune', () => {
     expect(lireCibleScout('CIBLE: aucune')).toEqual({ statut: 'aucune-cible' })
     expect(lireCibleScout('CIBLE: rien')).toEqual({ statut: 'aucune-cible' })
+  })
+
+  it('« CIBLE: aucune — raison » compte comme aucune cible, justification comprise', () => {
+    expect(lireCibleScout('CIBLE: aucune — rien de rentable a court terme')).toEqual({
+      statut: 'aucune-cible'
+    })
   })
 
   it('CAS LIMITE — une ligne CIBLE: VIDE ne vaut pas une cible', () => {

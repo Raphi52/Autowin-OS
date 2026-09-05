@@ -366,7 +366,12 @@ export function lireCibleScout(texteScout: string): DecisionScout {
   for (const ligne of (texteScout ?? '').split(SAUT_ANCRAGE)) {
     const trouve = ligne.match(LIGNE_CIBLE)
     if (!trouve) continue
-    const cible = trouve[1].replace(/^[\s*_`]+/u, '').trim()
+    // La JUSTIFICATION (`— parce que ...`) n'appartient pas a la cible : sans ce retrait,
+    // `CIBLE: aucune — raison` se lirait comme une vraie piste et lancerait un tour payant.
+    const cible = trouve[1]
+      .replace(/^[\s*_`]+/u, '')
+      .split(/\s+[—–-]\s+|\s+parce\s+que\s+/iu)[0]
+      .trim()
     // La PREMIERE ligne `CIBLE:` fait foi : une seconde serait un choix de plus, pas un choix.
     if (!cible) return { statut: 'aucune-cible' }
     const nu = cible
