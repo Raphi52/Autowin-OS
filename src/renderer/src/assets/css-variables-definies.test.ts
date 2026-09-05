@@ -165,6 +165,37 @@ export function variablesAppeleesSansDefinition(fichiers: string[]): string[] {
   return manquantes.sort()
 }
 
+/**
+ * SECONDE GARDE, ajoutee le 2026-09-05 apres TROIS pannes de la meme famille dans la meme journee :
+ * `--surface2` (boutons « Pour demarrer » noirs), `--text-muted` (texte des bandeaux SORTANT /
+ * REPONSE invisible), `--muted` + `--line2` (zone depliee d'une action illisible en mode clair).
+ *
+ * Ces noms PORTAIENT une valeur de secours, donc la garde ci-dessus les acceptait : la propriete
+ * reste valide, CSS ne se plaint pas, `tsc` ne voit rien. Le defaut est ailleurs : la valeur de
+ * secours est une COULEUR EN DUR choisie pour le fond sombre, et comme la variable n'existe dans
+ * AUCUN theme c'est TOUJOURS elle qui s'applique. Le mode clair ne peut pas l'atteindre — pas parce
+ * qu'il est mal ecrit, mais parce qu'il n'y a aucun point d'accroche.
+ * `var(--muted, #9aa4b2)` n'est donc pas « une surcharge optionnelle » : c'est `#9aa4b2` deguise.
+ *
+ * CORRECTION ATTENDUE quand elle se declenche : definir le nom dans `theme-modes.css` pour les deux
+ * modes, ou remplacer l'appel par la variable de theme reellement existante (`--text-dim`, `--line`).
+ * PAS ajouter le nom a une liste d'exceptions : ce serait re-fabriquer le trou.
+ *
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : ajouter `color: var(--absente-du-theme, #9aa4b2)` dans
+ * n'importe quelle feuille du perimetre — verifie par le cas temoin ci-dessous.
+ */
+export function variablesDeSecoursSansDefinition(fichiers: string[]): string[] {
+  const { definies, usages } = analyseVariablesCss(fichiers)
+  const manquantes: string[] = []
+  for (const [nom, liste] of usages) {
+    if (definies.has(nom)) continue
+    const avecSecours = liste.filter((u) => u.avecSecours)
+    if (avecSecours.length === 0) continue
+    manquantes.push(`${nom} — ${avecSecours.map((u) => `${u.fichier}:${u.ligne}`).join(', ')}`)
+  }
+  return manquantes.sort()
+}
+
 describe('variables CSS appelees mais jamais definies', () => {
   const fichiers = [
     ...fichiersSources(join(RACINE, 'src')),
