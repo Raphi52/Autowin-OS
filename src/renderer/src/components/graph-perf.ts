@@ -20,7 +20,8 @@ type CanalGel = { signalerGelRenderer?: (ms: number, etiquette?: string) => unkn
 export function mesurerBlocGraphe<T>(
   etiquette: string,
   calcul: () => T,
-  seuilMs: number = SEUIL_GEL_MS,
+  // SONDE TEMPORAIRE D'ISOLEMENT (2026-09-05) : seuil abaisse pour NOMMER les blocs courts.
+  seuilMs: number = 150,
   maintenant: () => number = () => performance.now()
 ): T {
   const debut = maintenant()
