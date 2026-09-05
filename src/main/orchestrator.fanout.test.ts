@@ -157,7 +157,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
 
     await expect(
       supervisor.run(quote, undefined, () => orch.run('ajoute une page de réglages'))
-    ).rejects.toThrow(/devis impossible.*avant exécution/i)
+    ).rejects.toThrow(/plan d['’]exécution impossible/i)
     expect(provider.calls).toHaveLength(0)
   })
 

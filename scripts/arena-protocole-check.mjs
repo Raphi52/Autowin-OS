@@ -278,7 +278,7 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd() }) {
       for (const l of lignesTableau(bloc)) {
         if (/^candidat$/i.test(l[0])) continue
         const retenu = l[l.length - 1].toUpperCase()
-        if (['B', 'C', 'X'].includes(retenu) && /formulation|textes?|wording/i.test(l.join(' ')))
+        if (['B', 'C', 'X'].includes(retenu) && /\bformulation\b|\btextes?\b|\bwording\b/i.test(l.join(' ')))
           brasFormulation.add(retenu.toLowerCase())
       }
     }

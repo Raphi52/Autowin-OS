@@ -112,3 +112,34 @@ describe('suppression — le marqueur [abort] est un abandon voulu', () => {
     ).toBeUndefined()
   })
 })
+
+describe('suppression — un RENOMMAGE ne doit pas rouvrir la boucle d’incidents', () => {
+  /*
+   * Le 2026-09-05 (commit 5dab5172), le message « Devis impossible avant exécution » a été renommé
+   * « Plan d’exécution impossible » pour l'utilisateur. Le garde, lui, cherchait encore l'ANCIENNE
+   * formulation : le mur redevenait donc « actionnable », et chaque dépassement de plafond relançait
+   * un agent qui ne peut rien y faire — exactement la boucle que ce fichier existe pour couper.
+   * Un renommage d'interface casse en silence tout code qui RECONNAÎT le texte : ce test l'attrape.
+   */
+  it('reconnaît la formulation ACTUELLE du mur de plafond', () => {
+    for (const detail of [
+      "Plan d’exécution impossible : 3 agent(s) obligatoires pour 1 place(s) restante(s).",
+      "Plan d’exécution impossible : l'allocation du workflow dépasse les plafonds du run.",
+      'plan d execution impossible'.replace(' execution', "'exécution")
+    ]) {
+      expect(isNonActionableWall('Orchestration en échec', detail), detail).toBe(true)
+    }
+  })
+
+  it('reconnaît TOUJOURS l’ancienne formulation, encore présente dans les incidents archivés', () => {
+    expect(
+      isNonActionableWall('Orchestration en échec', 'Devis impossible avant exécution : plafond atteint.')
+    ).toBe(true)
+  })
+
+  it('CONTRÔLE NÉGATIF : un vrai défaut qui parle de plan d’exécution n’est PAS avalé', () => {
+    expect(
+      isNonActionableWall('un test a échoué', "le plan d'exécution affiché ne correspond pas au graphe")
+    ).toBe(false)
+  })
+})

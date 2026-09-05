@@ -124,12 +124,12 @@ describe('ExecutionQuote', () => {
         phaseFanOut: {},
         judgeFanOut: 0
       })
-    ).toThrow(/plan d'exécution impossible/i)
+    ).toThrow(/plan d['’]exécution impossible/i)
   })
 })
 
 describe('devis face à un workflow plus large que le régime', () => {
-  // Mesuré sur conv-1148 (13/08) : « Plan d'exécution impossible : 12 agent(s) obligatoires
+  // Mesuré sur conv-1148 (13/08) : « Plan d’exécution impossible : 12 agent(s) obligatoires
   // pour 10 place(s) restante(s) ». Le workflow choisi est un graphe DÉTERMINISTE au pire cas fini
   // et connu ; le refuser avant le premier appel contredit la décision utilisateur du 12/08
   // (« je m'en fous que ça dépense, détruis le blocage ») — le régime servait de plafond de
@@ -161,6 +161,6 @@ describe('devis face à un workflow plus large que le régime', () => {
     const quote = compileExecutionQuote('corrige tous les défauts', { spendEnforcement: 'blocking' })
     quote.limits.maxAgents = 10
     quote.limits.maxProviderCalls = 10
-    expect(() => allocateExecutionTopology(quote, demande as never)).toThrow(/Plan d'exécution impossible/)
+    expect(() => allocateExecutionTopology(quote, demande as never)).toThrow(/Plan d’exécution impossible/)
   })
 })

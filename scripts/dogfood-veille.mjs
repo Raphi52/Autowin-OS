@@ -24,8 +24,14 @@ import { join } from 'node:path'
  * silencieusement le défaut à quelqu'un qui voulait autre chose.
  */
 const arg = (nom, defaut) => {
-  const i = process.argv.indexOf(nom)
-  return i >= 0 ? process.argv[i + 1] : defaut
+  const positions = process.argv.reduce((acc, v, i) => (v === nom ? [...acc, i] : acc), [])
+  // QUATRIEME etat, releve par un juge externe le 2026-09-05 : le drapeau REPETE. `indexOf` prenait
+  // le premier et ignorait le reste en silence — `--jours 7 --jours 0` observait 7 jours sans le
+  // dire, alors que `--jours 0 --jours 7` refusait. Un meme couple d'arguments, deux verdicts
+  // opposes selon l'ordre : c'est l'utilisateur qui ne peut plus savoir ce qu'il mesure.
+  if (positions.length > 1) return { repete: true }
+  const i = positions[0]
+  return i === undefined ? defaut : process.argv[i + 1]
 }
 
 // Plage maximale d'un Date JS (±8,64e15 ms depuis l'epoch) : au-delà, `new Date(...)` rend Invalid
@@ -50,9 +56,19 @@ const lireJours = (brut) => {
 }
 
 const brutJours = arg('--jours', '7')
+if (brutJours !== null && typeof brutJours === 'object' && brutJours.repete) {
+  console.error(
+    "--jours : à donner une seule fois — la fenêtre d’observation ne peut pas avoir deux valeurs."
+  )
+  process.exit(2)
+}
 const JOURS = lireJours(brutJours)
 if (JOURS === null) {
-  const vu = brutJours === undefined ? 'aucune valeur' : `« ${String(brutJours).slice(0, 40)} »`
+  // « aucune valeur » couvre les TROIS facons de n'avoir rien saisi : drapeau nu (undefined), chaine
+  // vide, chaine d'espaces. Afficher « « » » a quelqu'un qui a tape `--jours ""` lui montre son
+  // erreur sous une forme qu'il ne reconnait pas (releve par un juge externe le 2026-09-05).
+  const vide = brutJours === undefined || String(brutJours).trim() === ''
+  const vu = vide ? 'aucune valeur' : `« ${String(brutJours).slice(0, 40)} »`
   // Deux refus differents, deux messages differents : dire « attendu un entier strictement positif »
   // a quelqu'un qui a tape 200000000 decrit une faute qu'il n'a pas commise, et cache la vraie cause.
   const horsPlage =

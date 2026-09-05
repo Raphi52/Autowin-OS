@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { workflowQuoteLabel } from './workflow-quote-label'
 
 /**
- * Ce que ces tests protègent : que la carte « Plan d'exécution » nomme la façon de travailler qui
+ * Ce que ces tests protègent : que la carte « Plan d’exécution » nomme la façon de travailler qui
  * pilote le run.
  *
  * Le devis annonce des plafonds qui DÉCOULENT du workflow retenu (`worstCaseNodeExecutions` dans

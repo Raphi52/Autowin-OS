@@ -306,7 +306,7 @@ describe('un graphe pilote le run', () => {
         { graph: boucle },
         compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
       ).run('corrige le bug')
-    ).rejects.toThrow("Plan d'exécution impossible")
+    ).rejects.toThrow("Plan d’exécution impossible")
     const mesure = compileExecutionQuote('corrige le bug')
     await expect(
       makeOrchestrator(new Recorder(), { graph: boucle }, mesure).run('corrige le bug')
@@ -523,7 +523,7 @@ describe('un graphe pilote le run', () => {
         },
         quote
       ).run('refonte architecture sécurité migration')
-    ).rejects.toThrow("Plan d'exécution impossible")
+    ).rejects.toThrow("Plan d’exécution impossible")
     expect(provider.prompts).toHaveLength(0)
   })
 
@@ -811,7 +811,7 @@ describe('allocation imposée par le workflow (conv-188)', () => {
     const run = override()
     await expect(
       makeOrchestrator(provider, run, quote).run('stabilise le devis du workflow')
-    ).rejects.toThrow("Plan d'exécution impossible")
+    ).rejects.toThrow("Plan d’exécution impossible")
     expect(provider.prompts).toHaveLength(0)
   })
 })

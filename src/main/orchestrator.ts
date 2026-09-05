@@ -1657,7 +1657,7 @@ export class Orchestrator {
         maxPanel > executionQuote.limits.maxConcurrency
       ) {
         throw new Error(
-          `Plan d'exécution impossible : workflow exige ${mandatory} appel(s) et ${maxPanel} agent(s) simultané(s), plafonds ${executionQuote.limits.maxProviderCalls}/${executionQuote.limits.maxConcurrency}.`
+          `Plan d’exécution impossible : workflow exige ${mandatory} appel(s) et ${maxPanel} agent(s) simultané(s), plafonds ${executionQuote.limits.maxProviderCalls}/${executionQuote.limits.maxConcurrency}.`
         )
       }
       /*
@@ -1757,7 +1757,7 @@ export class Orchestrator {
           // le refus ne subsiste qu'en `spendEnforcement: 'blocking'`, choisi explicitement.
           if (executionQuote.limits.spendEnforcement === 'blocking') {
             throw new Error(
-              `Plan d'exécution impossible : l'allocation du workflow dépasse les plafonds du run.`
+              `Plan d’exécution impossible : l'allocation du workflow dépasse les plafonds du run.`
             )
           }
           if (impose.judgeMembers !== undefined) {

@@ -35,6 +35,11 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
       text
     ) ||
     /\bdevis impossible avant ex[ée]cution\b/.test(text) ||
+    // MUR DE PLAFOND — le libelle a change le 2026-09-05 (commit 5dab5172, « devis » ->
+    // « plan d'execution »). Les DEUX formulations restent reconnues : la nouvelle pour les runs a
+    // venir, l'ancienne parce que le magasin d'incidents porte encore des lignes qui la citent.
+    // Ne garder que la neuve rouvrirait exactement la boucle que ce garde existe pour couper.
+    /\bplan d['’]ex[ée]cution impossible\b/.test(text) ||
     /\bhttp 429\b/.test(text) ||
     // TOKEN D'AUTH EXPIRE — mur non actionnable : l'agent ne peut PAS passer, seul l'utilisateur peut
     // se re-authentifier, et Auto-Kaizen ne peut rien « corriger » a un token expire. Vecu sur

@@ -293,7 +293,7 @@ function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjec
         actor: 'Autowin OS',
         label: quote.regime,
         content: '',
-        detail: `Plan d'exécution compilé avant le premier appel provider`,
+        detail: `Plan d’exécution compilé avant le premier appel provider`,
         timestamp: quoteFact.timestamp,
         status: 'completed',
         durationMs: 0,

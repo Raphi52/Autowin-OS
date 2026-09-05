@@ -241,7 +241,7 @@ export function allocateExecutionTopology(
       quote.limits.maxProviderCalls = Math.max(quote.limits.maxProviderCalls, requis)
     } else {
       throw new Error(
-        `Plan d'exécution impossible : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
+        `Plan d’exécution impossible : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
       )
     }
   }
