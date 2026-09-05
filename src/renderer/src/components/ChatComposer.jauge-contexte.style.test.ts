@@ -24,9 +24,23 @@ describe('jauge de contexte du composer — degrade progressif', () => {
   })
 
   it('va du gris vers le blanc PUR, dans ce sens', () => {
-    expect(regle).toMatch(
-      /linear-gradient\(\s*90deg,\s*rgba\(255, 255, 255, 0\.16\) 0%,\s*rgba\(255, 255, 255, 0\.55\) 45%,\s*#ffffff 100%\s*\)/s
-    )
+    /*
+     * La PROPRIETE, pas le reglage. Ce test figeait la valeur exacte du premier palier (0.16) ;
+     * une retouche visuelle du 2026-09-04 l'a portee a 0.34 et le test est reste rouge des jours
+     * durant, alors que le degrade faisait exactement ce qu'il promet. Un test qui interdit de
+     * regler une teinte n'apporte rien et finit par etre ignore. Ce qui compte et qui est verifie
+     * ici : trois paliers, une opacite qui MONTE, et une arrivee au blanc PUR.
+     */
+    const degrade = /linear-gradient\(\s*90deg,([^)]*\))*[^)]*\)/s.exec(regle)?.[0] ?? ''
+    expect(degrade, 'aucun degrade horizontal trouve').not.toBe('')
+    const alphas = [...degrade.matchAll(/rgba\(255, 255, 255, ([0-9.]+)\)/g)].map((m) => Number(m[1]))
+    expect(alphas.length, 'au moins deux paliers gris avant le blanc').toBeGreaterThanOrEqual(2)
+    for (let k = 1; k < alphas.length; k += 1) {
+      expect(alphas[k], `palier ${k} doit etre plus clair que le precedent`).toBeGreaterThan(alphas[k - 1])
+    }
+    // Le dernier palier est le blanc PUR, et il est bien EN FIN de degrade.
+    expect(degrade).toMatch(/#ffffff 100%/)
+    expect(degrade.indexOf('#ffffff')).toBeGreaterThan(degrade.lastIndexOf('rgba('))
   })
 
   it('ne reintroduit aucune couleur de palier sur le filet', () => {

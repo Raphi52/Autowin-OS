@@ -203,7 +203,11 @@ describe('cablage de edit_file', () => {
     const fs = require('node:fs') as typeof import('node:fs')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('node:path') as typeof import('node:path')
-    return fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8')
+    // FINS DE LIGNE NORMALISEES. Ces tests reperent des ancres qui contiennent des sauts de ligne
+    // ; sur une copie Windows (CRLF), `indexOf` ne trouvait rien, `slice(0, -1)` rendait tout le
+    // fichier et les assertions echouaient sur du code sain. Le defaut etait dans la LECTURE,
+    // pas dans `commands.ts` : on lit donc toujours en LF, comme le depot les stocke.
+    return fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8').replace(/\r\n/g, '\n')
   }
 
   it('est declaree DESTRUCTIVE (l’UI et l’agent doivent le savoir)', () => {

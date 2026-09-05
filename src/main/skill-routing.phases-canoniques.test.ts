@@ -48,7 +48,10 @@ describe('aucune phase canonique n est inatteignable', () => {
 
 describe('la liste des phases acceptees par le modele est DERIVEE, pas recopiee', () => {
   it('ORCHESTRATE_PHASES se construit depuis PIPELINE_PHASES', () => {
-    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    // Lecture en fins de ligne NORMALISEES : l'ancre ci-dessous est une ligne vide, qui s'ecrit
+    // sur deux caracteres en CRLF. Sans ca, le decoupage rendait le fichier ENTIER et le test
+    // echouait sur du code parfaitement sain (copie Windows).
+    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8').replace(/\r\n/g, '\n')
     const declaration = source.slice(source.indexOf('const ORCHESTRATE_PHASES'))
     const corps = declaration.slice(0, declaration.indexOf('\n\n'))
     expect(corps).toContain('PIPELINE_PHASES')
