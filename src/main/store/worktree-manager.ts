@@ -1,5 +1,5 @@
 import { causeGit, sortieGit } from './cause-git'
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
 import { verdictDeBureau, type VerdictBureau } from './verdict-bureau'
@@ -514,6 +514,103 @@ function sondeIdentitesSystemeGroupee(pids: number[]): Map<number, string | null
 }
 
 /**
+ * Le sondage bloquant est INTERDIT par defaut — c'est le fil principal qui est la regle.
+ *
+ * `isMainThread` a ete essaye et REJETE comme critere : sous vitest, les tests tournent eux-memes
+ * dans des threads, donc il vaut FAUX la ou on veut precisement verrouiller le contrat. Le seul
+ * endroit ou bloquer est legitime est le worker d'operations, dont l'appelant ATTEND deja la
+ * reponse : il le declare explicitement au demarrage.
+ */
+let sondageBloquantAutorise = false
+
+/** Appele par le worker d'operations : ici, tenir la boucle ne gele l'interface de personne. */
+export function autoriserSondageBloquant(): void {
+  sondageBloquantAutorise = true
+}
+
+/** VRAI quand un sondage SYNCHRONE tiendrait la boucle du fil principal. */
+function sondageSynchroneInterdit(sondeUtilisee: unknown, sondeParDefaut: unknown): boolean {
+  return !sondageBloquantAutorise && sondeUtilisee === sondeParDefaut
+}
+
+/** Les PID deja en cours de sondage asynchrone — pour ne pas relancer N fois le meme. */
+const sondagesEnVol = new Set<number>()
+
+/**
+ * Le sondage GROUPE, mais ASYNCHRONE : le processus externe tourne HORS de la boucle du fil
+ * principal, et remplit la meme memoire courte que la voie synchrone consultait deja.
+ *
+ * Aucun appelant n'attend ce resultat : `defaultProcessIdentity` reste synchrone et rend ce qu'il
+ * SAIT. Une empreinte encore inconnue vaut `null` — c'est-a-dire « existe peut-etre, non lue »,
+ * le cas conservateur que `hasActiveProcesses` traite deja en GARDANT le bail. La detection d'un
+ * numero recycle n'est donc pas perdue, elle arrive au passage suivant.
+ */
+function planifierSondageAsynchrone(pids: number[], maintenant: () => number): void {
+  const aLire = pids.filter((pid) => !sondagesEnVol.has(pid))
+  if (aLire.length === 0) return
+  for (const pid of aLire) sondagesEnVol.add(pid)
+  const finir = (empreintes: Map<number, string | null>): void => {
+    const t = maintenant()
+    for (const pid of aLire) {
+      sondagesEnVol.delete(pid)
+      identitesMemoisees.set(pid, { identite: empreintes.get(pid) ?? null, a: t })
+    }
+  }
+  const surSortie = (erreur: Error | null, sortie: string): void => {
+    const empreintes = new Map<number, string | null>(aLire.map((pid) => [pid, null]))
+    if (!erreur || sortie) {
+      for (const ligne of String(sortie ?? '').split(LIGNES)) {
+        const brut = ligne.trim()
+        if (!brut) continue
+        const separateur = brut.indexOf('|')
+        if (separateur <= 0) continue
+        const pid = Number(brut.slice(0, separateur))
+        if (!Number.isSafeInteger(pid) || !empreintes.has(pid)) continue
+        empreintes.set(pid, brut.slice(separateur + 1) || null)
+      }
+    }
+    finir(empreintes)
+  }
+  try {
+    if (platform() === 'win32') {
+      const command =
+        `Get-Process -Id ${aLire.join(',')} -ErrorAction SilentlyContinue | ForEach-Object { ` +
+        `$path = ''; try { $path = $_.Path } catch {}; ` +
+        `Write-Output ($_.Id.ToString() + '|' + $_.StartTime.ToUniversalTime().Ticks.ToString() + '|' + $path) }`
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', command],
+        { encoding: 'utf8', timeout: 5_000, windowsHide: true },
+        (erreur, sortie) => surSortie(erreur, String(sortie))
+      )
+      return
+    }
+    execFile(
+      'ps',
+      ['-o', 'pid=,lstart=,comm=', '-p', aLire.join(',')],
+      { encoding: 'utf8', timeout: 5_000 },
+      (erreur, sortie) => {
+        const empreintes = new Map<number, string | null>(aLire.map((pid) => [pid, null]))
+        for (const ligne of String(sortie ?? '').split(LIGNES)) {
+          const brut = ligne.trim()
+          if (!brut) continue
+          const espace = brut.indexOf(' ')
+          if (espace <= 0) continue
+          const pid = Number(brut.slice(0, espace))
+          if (!Number.isSafeInteger(pid) || !empreintes.has(pid)) continue
+          empreintes.set(pid, brut.slice(espace + 1).trim() || null)
+        }
+        void erreur
+        finir(empreintes)
+      }
+    )
+  } catch {
+    // Un echec de LANCEMENT reste un echec de lecture : `null` partout, memoise comme tel.
+    finir(new Map())
+  }
+}
+
+/**
  * Precharge la memoire courte pour TOUS les PID d'un recensement, en un seul processus externe.
  *
  * Les PID morts sont ecartes AVANT le lancement (`process.kill(pid, 0)` : l'absence est prouvee
@@ -542,10 +639,46 @@ export function prechargerEmpreintesProcessus(
     aLire.push(pid)
   }
   if (aLire.length === 0) return
+  if (sondageSynchroneInterdit(sonde, sondeIdentitesSystemeGroupee)) {
+    planifierSondageAsynchrone(aLire, maintenant)
+    return
+  }
   const empreintes = sonde(aLire)
   for (const pid of aLire) {
     identitesMemoisees.set(pid, { identite: empreintes.get(pid) ?? null, a: t })
   }
+}
+
+/**
+ * L'empreinte SANS JAMAIS BLOQUER — ce que la memoire courte sait deja, rien de plus.
+ *
+ * C'est la lecture du RECENSEMENT des baux (`hasActiveProcesses`), le poste qui a coute 240 s de
+ * boucle main le 2026-09-04 : il balaie N PID d'affilee, donc il payait N lancements de PowerShell.
+ * Une empreinte encore inconnue vaut `null`, c'est-a-dire « existe peut-etre, non lue » — le cas
+ * que le recensement traite deja en GARDANT le bail. La detection d'un numero recycle n'est donc
+ * pas perdue : le sondage lance en fond remplit la memoire, et le passage suivant tranche.
+ *
+ * A ne PAS confondre avec `defaultProcessIdentity`, qui reste bloquante : le rattachement d'un run
+ * a besoin de l'empreinte TOUT DE SUITE pour ne pas relancer un agent bien vivant.
+ */
+export function empreinteConnue(
+  pid: number,
+  maintenant: () => number = Date.now
+): string | null | undefined {
+  try {
+    process.kill(pid, 0)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    identitesMemoisees.delete(pid)
+    return code === 'ESRCH' ? undefined : null
+  }
+  const memo = identitesMemoisees.get(pid)
+  if (memo && maintenant() - memo.a < IDENTITE_MEMOIRE_MS) return memo.identite
+  if (!sondageBloquantAutorise) {
+    planifierSondageAsynchrone([pid], maintenant)
+    return null
+  }
+  return defaultProcessIdentity(pid, sondeIdentiteSysteme, maintenant)
 }
 
 export function defaultProcessIdentity(
@@ -2314,7 +2447,11 @@ export class WorktreeManager {
       } catch {
         lease = { identity: null, recordedAt: 0 }
       }
-      const currentIdentity = this.processIdentity(pid)
+      // Le recensement ne BLOQUE plus : il lit ce que la memoire courte sait (cf. `empreinteConnue`).
+      const currentIdentity =
+        this.processIdentity === defaultProcessIdentity
+          ? empreinteConnue(pid)
+          : this.processIdentity(pid)
       if (
         lease.identity &&
         currentIdentity &&

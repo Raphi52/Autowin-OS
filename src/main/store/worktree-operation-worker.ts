@@ -1,9 +1,13 @@
 import { parentPort, workerData } from 'node:worker_threads'
-import { WorktreeManager } from './worktree-manager'
+import { autoriserSondageBloquant, WorktreeManager } from './worktree-manager'
 import type { WorktreeOperationRequest } from './worktree-operation-protocol'
 
 if (!parentPort) throw new Error('worktree-operation-worker doit être exécuté dans un Worker')
 const port = parentPort
+
+// Ici, un sondage d'empreinte bloquant ne gele l'interface de personne : l'appelant attend
+// deja la reponse de ce worker. C'est le SEUL endroit ou la voie synchrone reste ouverte.
+autoriserSondageBloquant()
 
 const data = workerData as {
   baseRepo: string
