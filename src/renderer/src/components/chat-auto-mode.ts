@@ -330,3 +330,44 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
     return { action: 'attendre', raison: 'prompt-identique' }
   return { action: 'envoyer', texte, signature }
 }
+
+/**
+ * APRES UN SCOUT — ce que le mode auto a le droit d'enchainer.
+ *
+ * Un scout rend plusieurs pistes. Sans regle, le maillon suivant repart sur le tableau entier et la
+ * boucle depense un tour PAYANT sur une cible que personne n'a choisie. Cadrage du 2026-09-05
+ * (conv-308) : la sortie porte une ligne `CIBLE:` ; pas de cible = fin de chaine ; une cible
+ * destructrice ne part jamais toute seule.
+ *
+ * La porte lit la FORME (une cible nommee existe), jamais la qualite du choix : producteur et juge
+ * sont le meme modele.
+ */
+export type DecisionScout =
+  | { statut: 'cible'; cible: string }
+  | { statut: 'aucune-cible' }
+  | { statut: 'cible-destructrice'; cible: string }
+
+/** Formulations dont le cout est IRREVERSIBLE : elles exigent l'accord de l'utilisateur. */
+const CIBLE_DESTRUCTRICE =
+  /\b(supprim\w*|effac\w*|ecras\w*|purg\w*|detrui\w*|delete|drop\s+(table|database)|truncate|rm\s+-[a-z]*[rf]|reset\s+--hard|force[- ]push|push\s+--force|clean\s+-[a-z]*f)\b/u
+
+const LIGNE_CIBLE = /^\s*[>*_`\s]*cible\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu
+
+export function lireCibleScout(texteScout: string): DecisionScout {
+  for (const ligne of (texteScout ?? '').split(SAUT_ANCRAGE)) {
+    const trouve = ligne.match(LIGNE_CIBLE)
+    if (!trouve) continue
+    const cible = trouve[1].replace(/^[\s*_`]+/u, '').trim()
+    // La PREMIERE ligne `CIBLE:` fait foi : une seconde serait un choix de plus, pas un choix.
+    if (!cible) return { statut: 'aucune-cible' }
+    const nu = cible
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+    if (nu === 'aucune' || nu === 'rien' || nu === 'aucune cible')
+      return { statut: 'aucune-cible' }
+    if (CIBLE_DESTRUCTRICE.test(nu)) return { statut: 'cible-destructrice', cible }
+    return { statut: 'cible', cible }
+  }
+  return { statut: 'aucune-cible' }
+}
