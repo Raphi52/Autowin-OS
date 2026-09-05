@@ -4617,7 +4617,13 @@ export function ChatView({
               style={{ top: brancheMenu.top, left: brancheMenu.left }}
             >
               {brancheMenu.branches === null ? (
-                <span className="conv-menu-empty">Lecture des branches…</span>
+                <span
+                  className="conv-menu-empty"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Spinner size={12} label="Lecture des branches en cours" />
+                  Lecture des branches…
+                </span>
               ) : brancheMenu.branches.length === 0 ? (
                 <span className="conv-menu-empty">Aucune branche lue</span>
               ) : (

@@ -345,7 +345,15 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     sort : chaque identifiant est valide contre `^[0-9A-Fa-f]{16,512}$` cote main AVANT de
     //     partir dans un appel COM, et ils voyagent par un fichier temporaire.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(170)
+    // MISE A JOUR 2026-09-05 - 170 -> 172. DEUX canaux, arrives avec la bascule de branche
+    //   depuis la barre du chat (commit 058bd531), tous deux gardes des leur PREMIERE ligne
+    //   par `assertTrustedRendererSender` (`src/main/ipc/git.ts:43` et `:51`) :
+    //   `git:branches` - LIT les branches locales du depot. Aucune ecriture. Le dossier recu est
+    //     accepte seulement s'il est une chaine, sinon `process.cwd()`.
+    //   `git:checkout` - bascule sur une branche LOCALE existante, REFUSEE si l'arbre de travail
+    //     est sale. Le nom de branche n'est pas concatene dans une ligne de commande.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(172)
     expect(unguarded).toEqual([])
   })
 
