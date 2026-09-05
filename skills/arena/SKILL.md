@@ -98,7 +98,12 @@ remplie d'une estimation.
 - **LE CRITÈRE DOIT COUVRIR LES CAS LIMITES — sinon le banc est REFUSÉ.** Au moins **3 assertions**,
   dont au moins **1 cas nominal** et au moins **2 cas limites** pris hors du chemin heureux : entrée
   invalide ou absurde · limite vide / zéro résultat · borne (premier, dernier, égalité) · erreur
-  attendue qui DOIT être refusée. Chaque assertion s'écrit dans le RUN.md avec ce qu'elle interdit.
+  attendue qui DOIT être refusée · **preuve fictive** — le bras cite-t-il une commande, un fichier ou
+  un chiffre qui n'existe pas ? Cette dernière famille est la plus souvent oubliée et la plus
+  discriminante quand le livrable est un RAPPORT : au banc `clean`, les six assertions ne regardaient
+  que l'état final des fichiers, donc 4 bras sur 4 passaient ; l'assertion ajoutée le 2026-09-06
+  (« aucune commande du rapport ne porte sur un fichier inexistant ») a fait tomber 2 bras sur 4 —
+  ceux qui invoquaient un `scripts/fingerprint.py` absent du dépôt. Chaque assertion s'écrit dans le RUN.md avec ce qu'elle interdit.
   Un critère qui ne teste que le chemin heureux ne départage personne : au banc du 2026-09-02, les
   **4 bras sur 4** l'ont passé et ont tous raté les MÊMES cas limites (dates absurdes acceptées,
   fenêtre vide) — c'est le critère qui a échoué, pas les bras, et le classement s'est joué sur une
