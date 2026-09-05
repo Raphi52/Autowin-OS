@@ -7,7 +7,7 @@ import { join, relative, resolve, dirname, basename, extname } from 'node:path'
 
 const RACINE = resolve(process.argv[2] ?? 'src')
 const PROJET = process.cwd()
-const EXT = new Set(['.ts', '.tsx', '.mts', '.js', '.jsx'])
+const EXT = new Set(['.ts', '.tsx', '.mts', '.js', '.jsx', '.mjs', '.cjs'])
 const IGNORE = /(^|[\/])(node_modules|out|dist|build|worktrees|graphify-out|\.git)([\/]|$)/
 
 function lister(dir, acc = []) {
