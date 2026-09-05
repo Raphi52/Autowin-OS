@@ -162,6 +162,12 @@ ne se re-teste pas comme s'il était neuf : soit on l'écarte en citant sa ligne
 explicitement ce qui change cette fois. Un workflow déjà `gagnant` devient un candidat B/C fort. Si
 le journal est vide, le dire — c'est un premier banc, pas une absence de mesure.
 
+Un bras déjà noté ne se re-note PAS : `noter` refuse un second appel sur le même banc et le même
+bras. Pour corriger une ligne (libellé de tâche faux, note à compléter), rejoue-la avec
+`--remplace` — la lecture ne garde alors que la plus récente et dit combien elle a écartées.
+Sans cela le journal double-compte et les moyennes de coût sont fausses (mesuré le 2026-09-06 :
+28 lignes pour 20 mesures réelles).
+
 Chercher **6 à 10 candidats**, chacun étant une manière DIFFÉRENTE de mener la tâche, pas une idée
 d'amélioration du code. Familles à balayer (au moins 4) :
 - **routage** — quelle phase joue, dans quel ordre ; phases sautées ou fusionnées ;

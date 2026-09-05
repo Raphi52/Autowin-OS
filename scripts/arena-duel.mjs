@@ -12,8 +12,8 @@
  *
  * Usage :
  *   node scripts/arena-duel.mjs noter --tache "..." --workflow "..." --bras a \
- *        --duree-ms 123456 --cout-usd 0.63 --verdict gagnant [--banc <dossier>] [--note "..."]
- *   node scripts/arena-duel.mjs lire [--tache <filtre>] [--workflow <filtre>] [--limite 20] [--json]
+ *        --duree-ms 123456 --cout-usd 0.63 --verdict gagnant [--banc <dossier>] [--note "..."] [--remplace]
+ *   node scripts/arena-duel.mjs lire [--tache <filtre>] [--workflow <filtre>] [--limite 20] [--json] [--brut]
  *
  * Exit 0 = ecrit / lu · 1 = entree refusee (champ manquant ou absurde).
  * Ecrit sous `.autowin-data/<profil>/arena-duels.jsonl` (append seul, jamais de reecriture).
@@ -66,15 +66,40 @@ export function normaliserDuel(entree, maintenant = new Date()) {
   }
 }
 
+/**
+ * Cle d'un bras MESURE : un meme bras, du meme banc, sur le meme workflow, est UN duel.
+ * Deux lignes de meme cle sont donc une RE-NOTATION (libelle corrige, note completee),
+ * pas deux mesures : les compter deux fois fausse toute lecture du journal
+ * (mesure du 2026-09-06 : bancs `clean` note 3x, `heal` 2x -> 28 lignes pour 20 mesures).
+ */
+export function cleDuel(d) {
+  const t = (v) => String(v ?? '').trim().toLowerCase()
+  // Dans un banc donne, un bras est UNIQUE : re-noter le bras `a` du meme banc corrige la ligne,
+  // meme si son libelle de workflow a change entre-temps. Hors banc, le workflow fait la difference.
+  const banc = t(d.banc)
+  return banc ? `${banc} :: ${t(d.bras)}` : ` :: ${t(d.bras)} :: ${t(d.workflow)}`
+}
+
 export function noterDuel(entree, racine = process.cwd(), profil = 'autowin-os') {
   const ligne = normaliserDuel(entree)
   const fichier = cheminJournal(racine, profil)
+  if (!entree.remplace) {
+    const { duels } = lireDuels({ brut: true }, racine, profil)
+    if (duels.some((d) => cleDuel(d) === cleDuel(ligne)))
+      throw new Error(
+        `ce bras est DEJA note (banc \`${ligne.banc ?? '(aucun)'}\`, bras \`${ligne.bras ?? '-'}\`, workflow \`${ligne.workflow}\`) — ajoute --remplace pour corriger la ligne existante`
+      )
+  }
   mkdirSync(path.dirname(fichier), { recursive: true })
   appendFileSync(fichier, `${JSON.stringify(ligne)}\n`, 'utf8')
   return { fichier, ligne }
 }
 
-/** Les duels deja journalises, du plus recent au plus ancien. Lignes abimees IGNOREES, comptees. */
+/**
+ * Les duels deja journalises, du plus recent au plus ancien. Lignes abimees IGNOREES, comptees.
+ * Par defaut une RE-NOTATION remplace la precedente (seule la plus recente de chaque cle sort),
+ * et `remplacees` dit combien ont ete ecartees. `brut: true` rend le fichier tel quel.
+ */
 export function lireDuels(filtres = {}, racine = process.cwd(), profil = 'autowin-os') {
   const fichier = cheminJournal(racine, profil)
   if (!existsSync(fichier)) return { fichier, duels: [], abimees: 0 }
@@ -89,13 +114,27 @@ export function lireDuels(filtres = {}, racine = process.cwd(), profil = 'autowi
     }
   }
   const contient = (v, f) => !f || String(v ?? '').toLowerCase().includes(String(f).toLowerCase())
-  const gardes = duels
+  let gardes = duels
     .filter((d) => contient(d.tache, filtres.tache) && contient(d.workflow, filtres.workflow))
     .reverse()
+  let remplacees = 0
+  if (!filtres.brut) {
+    const vues = new Set()
+    gardes = gardes.filter((d) => {
+      const c = cleDuel(d)
+      if (vues.has(c)) {
+        remplacees += 1
+        return false
+      }
+      vues.add(c)
+      return true
+    })
+  }
   return {
     fichier,
     duels: filtres.limite ? gardes.slice(0, Number(filtres.limite)) : gardes,
-    abimees
+    abimees,
+    remplacees
   }
 }
 
@@ -125,9 +164,9 @@ function main(argv) {
     return 0
   }
   if (commande === 'lire') {
-    const { fichier, duels, abimees } = lireDuels(o)
+    const { fichier, duels, abimees, remplacees } = lireDuels(o)
     if (o.json) {
-      console.log(JSON.stringify({ fichier, duels, abimees }, null, 2))
+      console.log(JSON.stringify({ fichier, duels, abimees, remplacees }, null, 2))
       return 0
     }
     if (!duels.length) {
@@ -143,6 +182,8 @@ function main(argv) {
       )
     }
     if (abimees) console.log(`\n(${abimees} ligne(s) abimee(s) ignoree(s))`)
+    if (remplacees)
+      console.log(`(${remplacees} re-notation(s) ecartee(s) — seule la plus recente de chaque bras compte)`)
     return 0
   }
   console.error('usage : arena-duel.mjs noter|lire — voir l’en-tete du fichier')

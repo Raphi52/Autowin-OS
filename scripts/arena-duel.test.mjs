@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cheminJournal, lireDuels, noterDuel, normaliserDuel } from './arena-duel.mjs'
+import { cheminJournal, cleDuel, lireDuels, noterDuel, normaliserDuel } from './arena-duel.mjs'
 
 const aNettoyer = []
 afterEach(() => {
@@ -61,6 +61,35 @@ describe('arena-duel — journal des duels', () => {
     expect(lireDuels({ tache: 'alpha' }, r).duels).toHaveLength(1)
     expect(lireDuels({ workflow: 'terrain' }, r).duels).toHaveLength(1)
     expect(lireDuels({ limite: 1 }, r).duels).toHaveLength(1)
+  })
+
+  it('refuse de re-noter le meme bras du meme banc deux fois', () => {
+    const r = racineTmp()
+    const b = { banc: '.autowin-data/x/arena-bench-clean', bras: 'a', workflow: 'A temoin' }
+    noterDuel(duel(b), r)
+    expect(() => noterDuel(duel(b), r)).toThrow(/DEJA note/)
+    expect(() => noterDuel(duel({ ...b, bras: 'b' }), r)).not.toThrow()
+  })
+
+  it('une re-notation explicite remplace la ligne au lieu de la doubler', () => {
+    const r = racineTmp()
+    const b = { banc: '.autowin-data/x/arena-bench-clean', bras: 'a', workflow: 'A temoin' }
+    noterDuel(duel({ ...b, tache: 'D:/chemin/windows' }), r)
+    noterDuel(duel({ ...b, tache: 'libelle corrige', remplace: true }), r)
+    expect(readFileSync(cheminJournal(r), 'utf8').trim().split(String.fromCharCode(10))).toHaveLength(2)
+    const v = lireDuels({}, r)
+    expect(v.duels).toHaveLength(1)
+    expect(v.duels[0].tache).toBe('libelle corrige')
+    expect(v.remplacees).toBe(1)
+    expect(lireDuels({ brut: true }, r).duels).toHaveLength(2)
+  })
+
+  it('la cle d un duel ignore la casse et les espaces de bord', () => {
+    expect(cleDuel({ banc: ' B ', bras: 'A', workflow: 'W' })).toBe(cleDuel({ banc: 'b', bras: 'a', workflow: 'w' }))
+    // meme banc, meme bras, libelle du workflow corrige = LA MEME mesure
+    expect(cleDuel({ banc: 'b', bras: 'a', workflow: 'A temoin' })).toBe(cleDuel({ banc: 'b', bras: 'a', workflow: 'A : temoin skill actuelle' }))
+    // sans banc, seul le workflow distingue
+    expect(cleDuel({ bras: 'a', workflow: 'W1' })).not.toBe(cleDuel({ bras: 'a', workflow: 'W2' }))
   })
 
   it('journal absent = corpus vide, pas une erreur', () => {
