@@ -103,7 +103,14 @@ const SEUIL_TENDU = 0.6
 /** Au-dela, CRITIQUE : la prochaine reponse longue peut ne plus tenir. */
 const SEUIL_CRITIQUE = 0.85
 
-function contextWindowFor(
+/**
+ * La fenetre declaree pour un modele, ou `undefined` si aucune source ne la couvre.
+ *
+ * EXPORTEE parce que le seuil d'auto-compactage envoye au CLI (`providers/claude.ts`) doit venir de
+ * CETTE table et d'aucune autre : un nombre recopie la-bas divergerait de celui-ci au prochain
+ * modele publie, et l'app compacterait sur une taille qu'elle n'affiche plus.
+ */
+export function contextWindowFor(
   model: string | undefined,
   provider?: string
 ): ContextWindow | undefined {
