@@ -238,6 +238,27 @@ const MESSAGES_ARRET: Record<string, string> = {
   'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.'
 }
 
+/**
+ * PREMIER PASSAGE DANS UN FIL : faut-il figer le tour deja affiche, ou le laisser partir ?
+ *
+ * Figer est le defaut, et c'est voulu : rouvrir une conversation de la veille ne doit pas relancer
+ * un tour payant que personne n'a demande. Deux situations disent le CONTRAIRE, et elles ne sont
+ * pas des « ouvertures » :
+ *  - l'utilisateur vient d'allumer l'interrupteur EN VOYANT la suite proposee — c'est sa demande ;
+ *  - l'agent a redemarre l'app LUI-MEME au milieu de la chaine (`restart_app` a pose une consigne
+ *    de reprise sur le disque). Defaut vecu le 2026-09-05 (conv-303) : le repere de passage vit en
+ *    memoire, le redemarrage l'efface, la boucle croit arriver dans le fil et saute le maillon
+ *    suivant. L'interrupteur reste allume mais la chaine meurt en silence.
+ *
+ * Hors de ces deux cas — fermeture subie, simple rafraichissement — on fige, comme avant.
+ */
+export function premierPassageLaisseSortirLeTour(entree: {
+  allumageManuel: boolean
+  repriseApresRedemarrage: boolean
+}): boolean {
+  return entree.allumageManuel || entree.repriseApresRedemarrage
+}
+
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
 export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   if (!entree.actif) return { action: 'attendre', raison: 'inactif' }

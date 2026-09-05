@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   cumulerAccesBloquant,
   demarrerDetecteurDeGel,
+  cumulReclameUnAppelant,
   marquerOperation,
   preleverAccesCumules
 } from './gel-main'
@@ -86,5 +87,37 @@ describe('gel non declare — l’origine remonte au premier plan', () => {
     const gel = captures.find((g) => g.operation === 'test:operation-declaree')
     expect(gel).toBeDefined()
     expect(gel?.appelant).toBeUndefined()
+  })
+})
+
+/*
+ * MORT PAR MILLE COUPURES — le cas REEL observe le 2026-09-05 a 21:05 locales : un gel de 1222 ms
+ * fait de 908 `openSync` de 1,16 ms. Aucun appel n'atteint le seuil par appel (40 ms), donc le gel
+ * sortait anonyme alors que c'est la forme la plus frequente. La pile se preleve desormais sur le
+ * CUMUL de l'API dans la fenetre, une seule fois.
+ */
+describe('mort par mille coupures — le cumul reclame une origine', () => {
+  it('reclame une pile quand une API depasse le cumul, meme sans aucun appel lent', () => {
+    preleverAccesCumules()
+    for (let i = 0; i < 150; i += 1) {
+      expect(cumulReclameUnAppelant('openSync')).toBe(false)
+      cumulerAccesBloquant('openSync', 1)
+    }
+    // 150 ms cumules : sous le seuil de cumul, on ne paie toujours pas de pile.
+    expect(cumulReclameUnAppelant('openSync')).toBe(false)
+    for (let i = 0; i < 60; i += 1) cumulerAccesBloquant('openSync', 1)
+    // 210 ms cumules : l'API a assez coute, la pile devient legitime.
+    expect(cumulReclameUnAppelant('openSync')).toBe(true)
+  })
+
+  it('CAS LIMITE — ne reclame plus rien des qu’un appelant est connu pour cette API', () => {
+    preleverAccesCumules()
+    cumulerAccesBloquant('openSync', 300, 'main/index.js:1:1 < coupable.js:2:2')
+    expect(cumulReclameUnAppelant('openSync')).toBe(false)
+  })
+
+  it('CAS LIMITE — une API jamais vue ne reclame rien', () => {
+    preleverAccesCumules()
+    expect(cumulReclameUnAppelant('jamais-appelee')).toBe(false)
   })
 })

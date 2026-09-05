@@ -67,7 +67,11 @@ import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
-import { deciderRelanceAuto, signatureTour } from './chat-auto-mode'
+import {
+  deciderRelanceAuto,
+  premierPassageLaisseSortirLeTour,
+  signatureTour
+} from './chat-auto-mode'
 import { reprendreApresRedemarrage } from './chat-reprise'
 import type {
   AsstMsg,
@@ -375,6 +379,20 @@ export function ChatView({
    * fil, marquait aussi ce tour-là comme déjà traité, et il ne partait rien.
    */
   const autoAllumageManuelRef = useRef(false)
+  /**
+   * REDEMARRAGE VOULU PAR L'AGENT — ce n'est PAS l'ouverture d'un fil.
+   *
+   * Defaut vecu le 2026-09-05 (conv-303) : l'agent appelle `restart_app` au milieu d'une chaine en
+   * mode auto. Au retour, le repere « premier passage dans ce fil » vit en memoire seule, donc il
+   * est vide : la boucle croit ARRIVER dans la conversation, fige le dernier tour comme deja traite
+   * et saute le maillon suivant. L'interrupteur reste allume, mais la chaine s'arrete en silence —
+   * l'utilisateur voit une suite proposee qui ne part jamais et doit la renvoyer a la main.
+   *
+   * Une consigne de reprise POSEE SUR LE DISQUE prouve que le redemarrage etait volontaire et que
+   * la chaine continue. On ne fige donc pas ce tour-la. Sans consigne (fermeture subie, simple
+   * rafraichissement), le garde-fou d'origine s'applique tel quel : on ne relance pas un vieux fil.
+   */
+  const autoRepriseApresRedemarrageRef = useRef(false)
   /** Fil où la boucle a déjà pris son point de départ (anti-relance d'une vieille réponse). */
   const autoFilAmorceRef = useRef<string | null>(null)
   /*
@@ -2998,8 +3016,12 @@ export function ChatView({
       etat.prompt = null
       // ALLUMAGE MANUEL : l'utilisateur clique EN VOYANT la suite proposée — c'est sa demande de
       // l'envoyer. On ne fige donc pas ce tour, on le laisse passer la porte de décision.
-      const allumageManuel = autoAllumageManuelRef.current
+      const allumageManuel = premierPassageLaisseSortirLeTour({
+        allumageManuel: autoAllumageManuelRef.current,
+        repriseApresRedemarrage: autoRepriseApresRedemarrageRef.current
+      })
       autoAllumageManuelRef.current = false
+      autoRepriseApresRedemarrageRef.current = false
       etat.tour = allumageManuel ? null : signatureArrivee
       if (!allumageManuel) return
     }
@@ -3163,6 +3185,8 @@ export function ChatView({
         return true
       },
       envoyer: async (consigne, conversationId) => {
+        // La chaine du mode auto REPREND ici : ce fil n'est pas « ouvert », il est poursuivi.
+        autoRepriseApresRedemarrageRef.current = true
         await sendRef.current(consigne, { targetConversationId: conversationId })
       }
     })

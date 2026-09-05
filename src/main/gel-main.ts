@@ -61,6 +61,19 @@ let dernierFerme: { nom: string; a: number } | undefined
  */
 const SEUIL_APPELANT_MS = 40
 
+/**
+ * MORT PAR MILLE COUPURES — le seuil PAR APPEL ne l'attrape jamais.
+ *
+ * Mesure du 2026-09-05 (gels.jsonl, gel de 21:05 locales, 1222 ms) : 908 `openSync` de 1,16 ms
+ * chacun. Aucun n'atteint `SEUIL_APPELANT_MS`, donc aucune pile n'est prelevee et le gel sort
+ * anonyme — alors que c'est la population la PLUS frequente des gels non attribues. Ce qui est
+ * anormal ici n'est pas la duree d'UN appel, c'est le CUMUL d'une API dans la fenetre.
+ *
+ * On preleve donc UNE pile, une seule fois par API et par fenetre, des que son cumul depasse ce
+ * seuil : le cout est d'un `new Error().stack` par fenetre figee, pas d'un par appel.
+ */
+const SEUIL_CUMUL_APPELANT_MS = 200
+
 const cumulFenetre = new Map<
   string,
   { cumulMs: number; appels: number; parAppelant?: Map<string, number> }
@@ -73,6 +86,19 @@ const cumulFenetre = new Map<
  * Garder toutes les piles ferait exploser la ligne de journal pour une information deja portee par
  * la premiere.
  */
+/**
+ * Cette API a-t-elle assez COUTE dans la fenetre pour qu'on paie enfin sa pile ?
+ *
+ * Rend `true` une seule fois par API et par fenetre : des qu'un appelant est connu pour elle, le
+ * cumul cesse de reclamer. Sans cette borne, une API tres appelee paierait une pile a chaque appel.
+ */
+export function cumulReclameUnAppelant(api: string): boolean {
+  const courant = cumulFenetre.get(api || 'inconnu')
+  if (!courant) return false
+  if (courant.parAppelant && courant.parAppelant.size > 0) return false
+  return courant.cumulMs >= SEUIL_CUMUL_APPELANT_MS
+}
+
 export function cumulerAccesBloquant(api: string, dureeMs: number, appelant?: string): void {
   if (dureeMs <= 0) return
   const cle = api || 'inconnu'
@@ -487,9 +513,12 @@ export function instrumenterAccesBloquants<H extends Record<string, unknown>>(
          * la boucle plus de `SEUIL_APPELANT_MS`. C'est exactement la population qui compose les
          * gels par mille coupures — la seule qui restait anonyme.
          */
+        const cle = cleDeCumul(nom, args)
         const appelantDeCetAppel =
-          dureeMs >= SEUIL_APPELANT_MS ? appelantApplicatif(new Error('acces').stack) : undefined
-        cumulerAccesBloquant(cleDeCumul(nom, args), dureeMs, appelantDeCetAppel)
+          dureeMs >= SEUIL_APPELANT_MS || cumulReclameUnAppelant(cle)
+            ? appelantApplicatif(new Error('acces').stack)
+            : undefined
+        cumulerAccesBloquant(cle, dureeMs, appelantDeCetAppel)
         if (dureeMs >= seuilMs) {
           /*
            * QUI a lance cet appel — capture SEULEMENT ici, jamais sur le chemin normal.
