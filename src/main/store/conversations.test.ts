@@ -493,11 +493,7 @@ describe('réconciliation au chargement des tours interrompus', () => {
    * ce que le code dit deja en toutes lettres a `beginTurn` : « Le chemin REEL des messages passe
    * ICI, pas par `append` ». C'est probablement pour ca que ce travail n'a jamais ete publie.
    */
-  function poserUneQuestion(
-    store: ConversationStore,
-    id: string,
-    options: string[]
-  ): void {
+  function poserUneQuestion(store: ConversationStore, id: string, options: string[]): void {
     store.beginTurn(id, { content: 'go' }, { turnId: 'turn-ask' })
     store.applyTurnEvent(id, 'turn-ask', { kind: 'command', actionId: 'a1', name: 'ask', args: {} })
     store.applyTurnEvent(id, 'turn-ask', {
@@ -532,5 +528,27 @@ describe('réconciliation au chargement des tours interrompus', () => {
     const resumes = store.listSummaries()
     expect(resumes.find((s) => s.id === repondue)!.lastAssistantAsksUser).toBe(undefined)
     expect(resumes.find((s) => s.id === uneSeule)!.lastAssistantAsksUser).toBe(undefined)
+  })
+})
+
+describe('résumé IPC — motif de l’échec du dernier tour', () => {
+  it('sert lastAssistantError quand le tour a ÉCHOUÉ, et rien sinon', () => {
+    const store = new ConversationStore(makeClock())
+    const casse = store.create({ title: 'cassée', provider: 'claude' }).id
+    store.beginTurn(casse, { content: 'go' }, { turnId: 'turn-1' })
+    store.applyTurnEvent(casse, 'turn-1', {
+      kind: 'failed',
+      error: 'Claude usage limit reached'
+    })
+    const ok = store.create({ title: 'ok', provider: 'claude' }).id
+    store.beginTurn(ok, { content: 'go' }, { turnId: 'turn-2' })
+    store.applyTurnEvent(ok, 'turn-2', { kind: 'done' })
+
+    const resumes = store.listSummaries()
+    expect(resumes.find((s) => s.id === casse)!.lastAssistantStatus).toBe('failed')
+    expect(resumes.find((s) => s.id === casse)!.lastAssistantError).toBe(
+      'Claude usage limit reached'
+    )
+    expect(resumes.find((s) => s.id === ok)!.lastAssistantError).toBeUndefined()
   })
 })

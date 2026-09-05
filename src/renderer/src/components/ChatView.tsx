@@ -61,6 +61,7 @@ import {
 import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
+import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
 import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
@@ -3649,9 +3650,58 @@ export function ChatView({
     }
   }
 
-  /** Continue le fil sans recréer ni renvoyer le dernier message utilisateur. */
-  async function resumePilotTurn(): Promise<void> {
-    const conversationId = activeRef.current
+  /**
+   * REPRISE DES CONVERSATIONS COUPÉES PAR LE QUOTA (demande du 2026-09-05).
+   *
+   * Une pastille ROUGE dont le motif est le mur de quota n'est pas un travail raté : c'est un
+   * travail arrêté net. Quand l'abonnement revient, il faut relancer chaque fil À LA MAIN, un par
+   * un. Ce bouton les reprend tous — et SEULEMENT ceux-là : une pastille rouge tombée sur une
+   * vraie erreur se relancerait dans le vide (tri dans `conversationsCoupeesParQuota`).
+   *
+   * Rien d'automatique : reprendre COÛTE du quota, donc c'est un clic, jamais une devinette.
+   */
+  const convsCoupeesParQuota = useMemo(
+    () => conversationsCoupeesParQuota(convs, busyConversations),
+    [convs, busyConversations]
+  )
+  const [repriseQuotaEnCours, setRepriseQuotaEnCours] = useState(false)
+  const [repriseQuotaNotice, setRepriseQuotaNotice] = useState<string | null>(null)
+  async function reprendreConversationsCoupeesParQuota(): Promise<void> {
+    if (repriseQuotaEnCours) return
+    const cibles = convsCoupeesParQuota.map((c) => c.id)
+    if (cibles.length === 0) return
+    setRepriseQuotaEnCours(true)
+    setRepriseQuotaNotice(null)
+    let reprises = 0
+    try {
+      // SEQUENTIEL, a dessein : lancer dix fils d'un coup retomberait sur le meme mur, et
+      // consommerait le quota qui vient tout juste de revenir.
+      for (const id of cibles) {
+        try {
+          await resumePilotTurn(id)
+          reprises += 1
+        } catch {
+          // Un fil qui refuse ne doit pas emporter les suivants.
+        }
+      }
+    } finally {
+      setRepriseQuotaEnCours(false)
+      setRepriseQuotaNotice(
+        reprises === cibles.length
+          ? `${reprises} conversation${reprises > 1 ? 's' : ''} reprise${reprises > 1 ? 's' : ''}.`
+          : `${reprises}/${cibles.length} reprises.`
+      )
+    }
+  }
+
+  /**
+   * Continue le fil sans recréer ni renvoyer le dernier message utilisateur.
+   *
+   * `cible` : la reprise groupée des conversations coupées par le quota vise des fils qui ne sont
+   * PAS ouverts. Sans ce paramètre, chaque reprise aurait relancé la conversation active.
+   */
+  async function resumePilotTurn(cible?: string): Promise<void> {
+    const conversationId = cible ?? activeRef.current
     if (
       !conversationId ||
       busyConversationsRef.current.has(conversationId) ||
@@ -4295,6 +4345,28 @@ export function ChatView({
             >
               Supprimer ({selectedConvIds.size})
             </button>
+          </div>
+        )}
+        {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor. */}
+        {convsCoupeesParQuota.length > 0 && (
+          <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
+            <button
+              type="button"
+              className="conv-date-sort"
+              data-testid="conv-reprise-quota-bouton"
+              disabled={repriseQuotaEnCours}
+              onClick={() => void reprendreConversationsCoupeesParQuota()}
+              title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
+            >
+              {repriseQuotaEnCours
+                ? 'Reprise en cours…'
+                : `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`}
+            </button>
+            {repriseQuotaNotice ? (
+              <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
+                {repriseQuotaNotice}
+              </span>
+            ) : null}
           </div>
         )}
         <div className="conv-list scroll-y">

@@ -113,6 +113,12 @@ export type Conv = {
    * pastille `asking` ne pouvait jamais s'allumer dans la liste.
    */
   lastAssistantAsksUser?: boolean
+  /**
+   * Motif de l'echec du DERNIER tour, servi par la projection IPC. Il distingue, parmi toutes les
+   * pastilles ROUGES, celles coupees par le mur de QUOTA — les seules qui se relancent telles
+   * quelles (`estMurDeQuota`, src/shared/reprise-quota.ts).
+   */
+  lastAssistantError?: string
   /** Le dossier de travail qui GROUPE la conversation dans la liste. Absent → « Divers ». */
   projectPath?: string
   /** Marque une analyse Auto-Kaizen : elles vivent dans leur propre groupe, replié par défaut. */
