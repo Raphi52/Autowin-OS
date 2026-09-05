@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events'
-import { readdirSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { isolerTemp, type TempIsole } from './temp-isole.test-helpers'
 import { ClaudeCliAdapter } from './claude'
 
 /*
@@ -30,8 +29,16 @@ const temporairesAutowin = (): string[] =>
   )
 
 describe('claude — un appel avorte ne laisse aucun temporaire', () => {
+  let temp: TempIsole
+  beforeEach(() => {
+    temp = isolerTemp()
+  })
+  afterEach(() => {
+    temp.demonter()
+  })
+
   it('nettoie system-prompt et settings quand le spawn echoue', async () => {
-    const avant = new Set(temporairesAutowin())
+    const avant = new Set(temp.lister())
 
     const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }], {
       system: 'S'.repeat(5_000)
@@ -42,6 +49,6 @@ describe('claude — un appel avorte ne laisse aucun temporaire', () => {
       })()
     ).rejects.toThrow()
 
-    expect(temporairesAutowin().filter((nom) => !avant.has(nom))).toEqual([])
+    expect(temp.lister().filter((nom) => !avant.has(nom))).toEqual([])
   })
 })
