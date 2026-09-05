@@ -2720,6 +2720,18 @@ Le fil reprend ensuite normalement.`
         onLateMutationClaims
       )
   }
+  // CABLAGE TARDIF de `chat_send` vers une conversation NOMMEE. La capacite existait deja
+  // (`runPrompt`, utilisee par les taches planifiees) mais n'etait branchee sur aucune commande
+  // du chat : un agent qui creait un fil ne pouvait rien y lancer (conv-300 vide, 2026-09-05).
+  bus.conversationExiste = (conversationId) => scheduledChatRuntime.hasConversation(conversationId)
+  bus.lancerDansConversation = async (conversationId, prompt) => {
+    const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt)
+    return {
+      ok: resultat.ok,
+      ...(resultat.turnId ? { turnId: resultat.turnId } : {}),
+      ...(resultat.error ? { error: resultat.error } : {})
+    }
+  }
   const taskDispatcher = new ScheduledChatDispatcher(scheduledChatRuntime)
   const relay = new PowerShellWindowsRelay({
     scriptPath: relayScriptPath,

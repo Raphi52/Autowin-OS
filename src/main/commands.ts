@@ -564,8 +564,13 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'chat_send',
     description:
-      'Poser une question ponctuelle au modele. NE cible AUCUNE conversation et ne lance AUCUNE skill : une commande /xxx est refusee, utiliser orchestrate (conversationId) pour agir dans un fil.',
-    args: { message: 'texte', provider: 'claude|codex (optionnel)', role: 'rôle (optionnel)' }
+      'Envoyer un message. Avec `conversationId`, il devient un VRAI tour utilisateur dans cette conversation (une commande /skill y est reconnue). Sans destination, ce n est qu une simple question ponctuelle au modele et une commande /xxx est refusee.',
+    args: {
+      message: 'texte',
+      conversationId: 'conversation destinataire (optionnel) — sans elle, aucun fil ne recoit le message',
+      provider: 'claude|codex (optionnel)',
+      role: 'rôle (optionnel)'
+    }
   },
   {
     name: 'orchestrate',
@@ -1570,6 +1575,19 @@ export class AppCommandBus {
    */
   redemarrerApp?: () => void
 
+  /**
+   * Lance un VRAI tour dans une conversation NOMMEE, cable tardivement depuis index.ts sur la
+   * meme capacite que les taches planifiees (`runPrompt`). Absent -> `chat_send` refuse la
+   * destination au lieu de faire croire qu'un fil a recu le message.
+   */
+  lancerDansConversation?: (
+    conversationId: string,
+    prompt: string
+  ) => Promise<{ ok: boolean; turnId?: string; error?: string }>
+
+  /** Existence REELLE d'une conversation, cablee depuis index.ts. */
+  conversationExiste?: (conversationId: string) => boolean
+
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,
@@ -1900,6 +1918,34 @@ export class AppCommandBus {
         // Un chemin de fichier absolu (`/home/x/y.txt`) commence AUSSI par `/` : le premier mot
         // d'une commande de skill ne contient ni second `/` ni point, ce qui separe les deux.
         const messageEnvoye = s('message').trim()
+        // DESTINATION NOMMEE : le message devient un vrai tour utilisateur dans ce fil, via la
+        // meme capacite que les taches planifiees. Le pilote y resout `/xxx` comme une skill
+        // (agent-pilot.ts, invokedSkillId) : c'est le chemin qui manquait le 2026-09-05.
+        const cibleConversation =
+          typeof a.conversationId === 'string' && a.conversationId.trim()
+            ? a.conversationId.trim()
+            : ''
+        if (cibleConversation) {
+          if (!this.lancerDansConversation)
+            throw new Error(
+              `chat_send ne peut pas viser « ${cibleConversation} » : l'envoi vers une ` +
+                `conversation n'est pas disponible dans ce processus.`
+            )
+          if (this.conversationExiste && !this.conversationExiste(cibleConversation))
+            throw new Error(`chat_send : conversation inconnue « ${cibleConversation} ».`)
+          const lance = await this.lancerDansConversation(cibleConversation, messageEnvoye)
+          if (!lance.ok)
+            throw new Error(
+              `chat_send : le tour n'a pas demarre dans « ${cibleConversation} » ` +
+                `(${lance.error ?? 'cause non renseignee'}).`
+            )
+          this.broadcast({ type: 'refresh', scope: 'chat' })
+          return {
+            conversationId: cibleConversation,
+            ...(lance.turnId ? { turnId: lance.turnId } : {}),
+            envoye: true
+          }
+        }
         const premierMot = messageEnvoye.split(/\s/)[0]
         if (/^\/[a-z0-9][\w-]*$/i.test(premierMot)) {
           const skill = premierMot
