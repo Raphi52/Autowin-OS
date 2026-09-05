@@ -205,6 +205,9 @@ export type RaisonArret =
   | 'aucun-prompt'
   | 'prompt-identique'
   | 'chaine-finie'
+  /* APRES UN SCOUT (conv-308) — types poses par le harnais, la logique reste a ecrire. */
+  | 'scout-sans-cible'
+  | 'cible-destructrice'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -226,6 +229,12 @@ export interface EntreeDecisionAuto {
    * suivre sans depenser un tour payant sur une conversation que personne ne regarde.
    */
   proposerNouvelleCible?: boolean
+  /**
+   * CE TOUR EST-IL UN SCOUT ? Un scout rend plusieurs pistes : sa suite ne part que si une ligne
+   * `CIBLE:` nomme UNE piste (conv-308). Champ pose par le harnais de tests ; encore lu par
+   * personne dans `deciderRelanceAuto` — c'est exactement ce que les tests rouges reclament.
+   */
+  tourEstUnScout?: boolean
 }
 
 export type DecisionAuto =
