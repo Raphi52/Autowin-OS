@@ -1,4 +1,5 @@
 import { SEUIL_GEL_MS } from '../../../shared/gel-detector'
+import { noterRendu } from './rendu-long'
 
 /**
  * CHRONOMETRE NOMME DU GRAPHE — ce qui manquait pour trancher « quel calcul gele Memory ? ».
@@ -19,12 +20,23 @@ type CanalGel = { signalerGelRenderer?: (ms: number, etiquette?: string) => unkn
 export function mesurerBlocGraphe<T>(
   etiquette: string,
   calcul: () => T,
-  seuilMs: number = SEUIL_GEL_MS,
+  // SONDE TEMPORAIRE D'ISOLEMENT (2026-09-05) : seuil abaisse pour NOMMER les blocs courts.
+  seuilMs: number = 150,
   maintenant: () => number = () => performance.now()
 ): T {
   const debut = maintenant()
   const valeur = calcul()
   const dureeMs = Math.round(maintenant() - debut)
+  /*
+   * COMPTE D'ABORD, ECRIS ENSUITE. Un gel de Memory n'est presque jamais UN bloc de plus d'une
+   * seconde : c'est une rafale de blocs de 200 a 700 ms. Chacun restait sous le seuil, donc AUCUN
+   * n'etait ecrit, et la tache longue agregee repartait sous `renderer:longtask` — 0 ligne
+   * `graph:*` sur 1029 gels journalises, pendant que `renderer:longtask` en portait 368 s dont un
+   * pic de 31,2 s a l'ouverture de Memory. On verse donc chaque bloc dans le MEME registre
+   * glissant que les vues React : la tache longue est alors etiquetee par le bloc qui a le plus
+   * coute juste avant elle.
+   */
+  noterRendu(etiquette, dureeMs)
   if (dureeMs >= seuilMs) {
     try {
       const api = (window as unknown as { api?: CanalGel }).api
