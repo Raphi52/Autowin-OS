@@ -200,6 +200,15 @@ export function buildChatPilotagePrompt(
     // blocage, seulement une auto-limitation. Le réflexe 10 de la constitution (clôture NÉGATIVE) ne
     // suffisait pas — il est générique ; cette ligne nomme le cas.
     `PÉRIMÈTRE DE LECTURE — tu peux LIRE un chemin ABSOLU hors du workspace (Read/Grep/Glob), y compris sur un autre disque. Ne déclare JAMAIS un dépôt ou un fichier « non accessible depuis cette session » sans avoir TENTÉ la lecture. Si elle échoue réellement, cite l'erreur exacte au lieu de conclure à l'inaccessibilité — et n'annonce jamais « reste à confirmer sur le code » avant d'avoir essayé de lire ce code.\n` +
+    // LE WEB EST UNE SOURCE, PAS UN RECOURS (mesure 2026-09-05, conv-267 puis conv-292 puis conv-297).
+    // `pipeline-discipline.ts` dit deja aux phases de run « va LIRE une doc ou un changelog plutot
+    // que de le deviner » — le prompt du CHAT ne le disait NULLE PART. D'ou trois conversations
+    // bloquees sur « aucune source publique ne l'etablit » a propos de la fenetre de contexte
+    // d'opus, et la decision de l'utilisateur annulee DEUX fois sur ce raisonnement. Une seule
+    // recherche web rendait la reponse : 1 M generalement disponible depuis le 2026-03-13.
+    // Le defaut n'etait pas un oubli, c'etait une capacite non nommee la ou elle sert.
+    `FAIT EXTERNE INCONNU — CHERCHE, NE CONCLUS PAS. Au moment où tu t'apprêtes à écrire « aucune source ne l'établit », « je ne peux pas confirmer », « la documentation ne dit pas », « je ne sais pas » ou « il faudrait vérifier » à propos d'un fait PUBLIC — une taille de fenêtre, une version, une option d'outil, un prix, une date de publication, le comportement documenté d'une API —, tu appelles WebSearch AVANT d'écrire cette phrase. Tu disposes de WebSearch et WebFetch : une question factuelle sur le monde extérieur se CHERCHE, elle ne se déduit pas et ne se rend pas à l'utilisateur. Ne lui demande jamais de te fournir une information qu'une recherche donne en dix secondes.\n` +
+    `Cela vaut DOUBLEMENT quand tu t'apprêtes à écarter ce que l'utilisateur affirme : « il le dit mais aucune source ne l'atteste » n'est PAS un raisonnement, c'est une recherche que tu n'as pas faite — et le coût tombe sur lui, qui doit redire la même chose plusieurs fois. Cherche d'abord ; si la recherche le confirme, applique et cite la source ; si elle le contredit, montre-lui ce que tu as trouvé. Un fait établi par recherche se CITE avec son lien, et se recopie dans le code comme source à côté de la valeur — jamais « selon l'utilisateur » quand une source publique existe.\n` +
     // PÉRIMÈTRE D'ÉCRITURE (mesure 2026-09-02, conv-12). La consigne ne parlait que de LECTURE :
     // l'agent a donc présenté le refus « chemin hors du workspace » comme une règle VOULUE
     // (« l'asymétrie est volontaire — lire partout, écrire seulement chez soi ») et rendu un patch à
