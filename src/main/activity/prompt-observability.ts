@@ -53,6 +53,20 @@ function fileFor(conversationId: string, root: string): string {
   return join(root, `${conversationId.replace(/[^a-zA-Z0-9_-]/g, '_')}.jsonl`)
 }
 
+/**
+ * Le chemin du journal d'une conversation, SANS le lire.
+ *
+ * Exposé pour la migration des traces au démarrage : elle a besoin de savoir si ce journal a bougé,
+ * question à laquelle un `statSync` répond — là où l'ouvrir coûtait, sur ce poste, 1347 ms pour 283
+ * conversations (mesure du 2026-09-05, `gels.jsonl`).
+ */
+export function cheminPromptCalls(
+  conversationId: string,
+  root = promptObservabilityRoot()
+): string {
+  return fileFor(conversationId, root)
+}
+
 const WINDOWS_1252_BYTES = new Map<string, number>([
   ['\u20ac', 0x80],
   ['\u201a', 0x82],

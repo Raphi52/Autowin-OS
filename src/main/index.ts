@@ -172,8 +172,16 @@ import {
   loadPromptCalls,
   applyRecoveredUsage,
   costSamplesFrom,
-  summarizeCostSamples
+  summarizeCostSamples,
+  cheminPromptCalls
 } from './activity/prompt-observability'
+import {
+  doitMigrerLaConversation,
+  ecrireEtatMigration,
+  empreinteFichier,
+  lireEtatMigration,
+  type EtatMigrationTraces
+} from './activity/migration-traces-etat'
 import { recoverUnpricedCallsUsage } from './activity/cli-usage-recovery'
 import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { appendObservedOrchestrationOutcome } from './activity/orchestration-outcome-trace'
@@ -270,7 +278,8 @@ import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
 import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
-import { consommerReprise } from './redemarrage-reprise'
+import { consommerReprise, poserReprise } from './redemarrage-reprise'
+import { basculeDeDossierRequise } from './bascule-dossier-conversation'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -2627,8 +2636,52 @@ Le fil reprend ensuite normalement.`
   )
   balayagePeriodiqueTimer.unref()
 
+  /**
+   * Le dossier de travail est GLOBAL et fige au demarrage : une conversation rangee dans un autre
+   * depot faisait quand meme travailler le modele dans celui d'Autowin (defaut du 2026-09-05).
+   * On bascule donc AVANT de lancer le tour : preference ecrite, tache mise de cote, relance. La
+   * consigne est rejouee toute seule au retour, l'utilisateur n'a rien a retaper.
+   *
+   * Rend `true` quand la bascule part — l'appelant ne doit alors PAS lancer le tour ici.
+   */
+  const basculerVersLeDossierDeLaConversation = (conversationId: unknown, demande: string): boolean => {
+    if (typeof conversationId !== 'string' || !conversationId.trim()) return false
+    const conversation = os.conversations.get(conversationId)
+    const cible = basculeDeDossierRequise(conversation?.projectPath, os.executionWorkspace)
+    if (!cible) return false
+    const consigne = demande.trim()
+    // Sans demande a rejouer, un redemarrage PERDRAIT la tache : mieux vaut le mauvais dossier
+    // qu'un tour evapore. On laisse alors partir le tour normalement.
+    if (!consigne) return false
+    if (!bus.redemarrerApp) return false
+    writeExecutionWorkspacePreference(cible)
+    poserReprise(ensureAutowinAppData(appDataRoot), {
+      conversationId,
+      consigne,
+      raison: `bascule vers le dossier de la conversation (${cible})`
+    })
+    annoncerFermeture(`bascule de dossier (${conversationId}) — ${cible}`)
+    const relancer = bus.redemarrerApp
+    // Le quit part APRES la reponse, sinon l'utilisateur ne voit jamais l'accuse de bascule.
+    setTimeout(() => relancer(), 1200)
+    return true
+  }
+
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')
+    const dernier = Array.isArray(messages)
+      ? [...messages].reverse().find((m) => (m as { role?: string })?.role === 'user')
+      : undefined
+    const demande = typeof (dernier as { content?: unknown })?.content === 'string'
+      ? ((dernier as { content: string }).content)
+      : ''
+    if (basculerVersLeDossierDeLaConversation(conversationId, demande)) {
+      return {
+        ok: true,
+        bascule: true,
+        detail: 'Autowin bascule sur le dossier de cette conversation et se relance — ta demande repart toute seule.'
+      }
+    }
     return runPilotChat(event.sender, messages, conversationId)
   })
   ipcMain.handle('os:pilotChat:resume', (event, rawConversationId: unknown) => {
@@ -3142,8 +3195,26 @@ Le fil reprend ensuite normalement.`
   }
   const migrateLegacyCausalTraces = (): void => {
     const nativePreflight = loadNativeTraces()
+    /*
+     * NE PAS REFAIRE CE QUI EST DÉJÀ FAIT. Cette migration est idempotente, mais elle relisait la
+     * trace causale ET le journal de prompts de CHAQUE conversation à CHAQUE démarrage : mesure du
+     * 2026-09-05 (`gels.jsonl`), 3579 ms de fenêtre figée dont 1347 ms dans 283 `readFileSync`, et
+     * ce coût grandit à chaque conversation créée. On compare désormais une empreinte (`statSync`)
+     * avant d'ouvrir quoi que ce soit ; au moindre doute on migre comme avant.
+     */
+    const cheminEtat = join(ensureAutowinAppData(), 'migration-traces-causales.json')
+    const etatPrecedent = lireEtatMigration(cheminEtat)
+    const empreinteSpool = empreinteFichier(nativeSpoolRoot())
+    const etatSuivant: EtatMigrationTraces = { spool: empreinteSpool, conversations: {} }
     for (const conversation of os.conversations.list()) {
       const conversationId = conversation.id
+      const empreintePrompts = empreinteFichier(cheminPromptCalls(conversationId))
+      if (!doitMigrerLaConversation(conversationId, empreintePrompts, etatPrecedent, empreinteSpool)) {
+        // Rien n'a bougé : on reporte tel quel ce qu'on savait, sans ouvrir un seul fichier.
+        etatSuivant.conversations[conversationId] =
+          etatPrecedent!.conversations[conversationId]
+        continue
+      }
       const events = causalTrace.readConversation(conversationId)
       const knownIds = new Set(events.map((traceEvent) => traceEvent.id))
       let nextSequence = events.length
@@ -3202,7 +3273,14 @@ Le fil reprend ensuite normalement.`
         })
         knownIds.add(id)
       }
+      // Ce qu'on vient de migrer, et de quoi cette conversation dépendait : c'est ce qui permettra
+      // de la sauter au prochain démarrage si rien n'a bougé.
+      etatSuivant.conversations[conversationId] = {
+        prompts: empreintePrompts,
+        natif: nativeCalls.length > 0
+      }
     }
+    ecrireEtatMigration(cheminEtat, etatSuivant)
   }
   migrateLegacyCausalTraces()
   ipcMain.handle('os:promptTraceSummary', (event) => {
