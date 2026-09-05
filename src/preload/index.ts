@@ -578,6 +578,15 @@ const api = {
     text?: string
     error?: string
   }> => ipcRenderer.invoke('os:pilotChat:resume', conversationId),
+  /**
+   * « Reprendre tout » : relance TOUS les runs interrompus la ou ils se sont arretes. Le triage
+   * (publication deja acquise, agent encore vivant) et la file sequentielle vivent cote principal.
+   */
+  resumeAllRuns: (): Promise<{
+    dejaEnCours: boolean
+    relances: string[]
+    ignores: Array<{ runId: string; raison: string }>
+  }> => ipcRenderer.invoke('runs:resumeAll'),
   cancelPilotChat: (conversationId: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:pilotChat:cancel', conversationId),
   /** Un tour pilote est-il REELLEMENT en vol cote main ? Le renderer ne peut pas le savoir seul. */

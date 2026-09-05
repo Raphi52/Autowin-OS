@@ -231,6 +231,12 @@ interface ChatApi {
     choice: WorktreeConflictResolutionChoice
   ) => Promise<WorktreeConflictResolutionResult>
   retryWorktreeRecovery: (agentId: string) => Promise<WorktreeAgentActivity | undefined>
+  /** « Reprendre tout » : relance les runs interrompus la ou ils se sont arretes. */
+  resumeAllRuns?: () => Promise<{
+    dejaEnCours: boolean
+    relances: string[]
+    ignores: Array<{ runId: string; raison: string }>
+  }>
   discardHeldWorktree: (agentId: string) => Promise<boolean>
   setWorktreeFixture: (fixture: {
     activity: WorktreeAgentActivity[]

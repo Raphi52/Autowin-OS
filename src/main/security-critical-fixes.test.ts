@@ -353,7 +353,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `git:checkout` - bascule sur une branche LOCALE existante, REFUSEE si l'arbre de travail
     //     est sale. Le nom de branche n'est pas concatene dans une ligne de commande.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(172)
+    expect(handlers).toHaveLength(173)
     expect(unguarded).toEqual([])
   })
 

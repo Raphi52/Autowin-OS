@@ -140,6 +140,7 @@ import { deleteListedRun } from './dashboards/runs-scan'
 import { regimePhases } from './task-regime'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
 import { StartupResumeQueue } from './runs/startup-resume-queue'
+import { creerReprendreTout } from './runs/resume-all-interrupted-runs'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import { classifierRefusDeReprise } from './runs/resume-refusal'
 import { creerRelanceDeRunReprenable } from './runs/relaunch-resumable-run'
@@ -2644,7 +2645,10 @@ Le fil reprend ensuite normalement.`
    *
    * Rend `true` quand la bascule part — l'appelant ne doit alors PAS lancer le tour ici.
    */
-  const basculerVersLeDossierDeLaConversation = (conversationId: unknown, demande: string): boolean => {
+  const basculerVersLeDossierDeLaConversation = (
+    conversationId: unknown,
+    demande: string
+  ): boolean => {
     if (typeof conversationId !== 'string' || !conversationId.trim()) return false
     const conversation = os.conversations.get(conversationId)
     const cible = basculeDeDossierRequise(conversation?.projectPath, os.executionWorkspace)
@@ -2672,14 +2676,16 @@ Le fil reprend ensuite normalement.`
     const dernier = Array.isArray(messages)
       ? [...messages].reverse().find((m) => (m as { role?: string })?.role === 'user')
       : undefined
-    const demande = typeof (dernier as { content?: unknown })?.content === 'string'
-      ? ((dernier as { content: string }).content)
-      : ''
+    const demande =
+      typeof (dernier as { content?: unknown })?.content === 'string'
+        ? (dernier as { content: string }).content
+        : ''
     if (basculerVersLeDossierDeLaConversation(conversationId, demande)) {
       return {
         ok: true,
         bascule: true,
-        detail: 'Autowin bascule sur le dossier de cette conversation et se relance — ta demande repart toute seule.'
+        detail:
+          'Autowin bascule sur le dossier de cette conversation et se relance — ta demande repart toute seule.'
       }
     }
     return runPilotChat(event.sender, messages, conversationId)
@@ -3209,10 +3215,11 @@ Le fil reprend ensuite normalement.`
     for (const conversation of os.conversations.list()) {
       const conversationId = conversation.id
       const empreintePrompts = empreinteFichier(cheminPromptCalls(conversationId))
-      if (!doitMigrerLaConversation(conversationId, empreintePrompts, etatPrecedent, empreinteSpool)) {
+      if (
+        !doitMigrerLaConversation(conversationId, empreintePrompts, etatPrecedent, empreinteSpool)
+      ) {
         // Rien n'a bougé : on reporte tel quel ce qu'on savait, sans ouvrir un seul fichier.
-        etatSuivant.conversations[conversationId] =
-          etatPrecedent!.conversations[conversationId]
+        etatSuivant.conversations[conversationId] = etatPrecedent!.conversations[conversationId]
         continue
       }
       const events = causalTrace.readConversation(conversationId)
@@ -3554,7 +3561,58 @@ app.whenReady().then(async () => {
       )
     }
   }
+  // La relance vit dans son propre module : sortie de cette fermeture, elle est EXERCEE par ses
+  // tests (faux os, faux runTask) au lieu d'etre relue caractere par caractere dans ce fichier.
+  const relaunchResumableRun = creerRelanceDeRunReprenable({
+    os,
+    bus,
+    broadcast,
+    causalTrace,
+    turnJournalRoot,
+    appendConvActivity,
+    admitAutomaticResumeRuntime,
+    createOrchestrateTurnPersistence,
+    appendTurnEvent,
+    reuseOrCreateConvRun,
+    regimePhases,
+    saveConvRunTrace,
+    populateConvRunSections,
+    closeConvRun,
+    phasesAvecJuge,
+    persistOrchestrationStep,
+    persistOrchestrationPhaseStart,
+    persistRunLifecycle,
+    materializeChatArtifact,
+    artifactsFromExecutionEvidence,
+    emitToLiveWindows,
+    appendBrainTrace,
+    appendExecutionEvidenceFileTrace,
+    appendObservedOrchestrationOutcome,
+    executionCostCoverageFields,
+    reconcileLateRunLifecycle,
+    classifierRefusDeReprise,
+    randomUUID,
+    fenetresVivantes: () => BrowserWindow.getAllWindows(),
+    defaultProcessIdentity
+  })
   const startupResumeQueue = new StartupResumeQueue()
+
+  // « REPRENDRE TOUT » A LA DEMANDE. Le demarrage ne relance que ce qu'il trouve AU BOOT ; un run
+  // interrompu plus tard restait a reprendre conversation par conversation. Ce bouton refait le
+  // MEME triage, avec la MEME file : jamais deux relances a la fois, jamais un run deja publie.
+  const reprendreTousLesRuns = creerReprendreTout<OrchestrationRunState>({
+    listerRunsReprenables: () => os.resumableOrchestrations(),
+    publicationDejaProuvee: (state) =>
+      Boolean(publishedWorktreeProofForResume(state.runId, os.getWorktreeActivity())),
+    actionDeReprise: (state) =>
+      resumeActionFor(state, defaultProcessIdentity, Date.now(), persistedJournalLastWriteMs),
+    mettreEnFile: (tache) => startupResumeQueue.enqueue(tache),
+    relancer: (state) => relaunchResumableRun(state)
+  })
+  ipcMain.handle('runs:resumeAll', (event) => {
+    assertTrustedRendererSender(event, 'Reprendre tout')
+    return reprendreTousLesRuns.reprendreTout()
+  })
   for (const resumableRun of resumableRuns) {
     let durableLiveReattachment: ReturnType<typeof createOrchestrateTurnPersistence> | undefined
     let liveReattachment: ReturnType<typeof admitLiveReattachment> | undefined
@@ -3707,40 +3765,6 @@ app.whenReady().then(async () => {
         console.warn('[resume-orchestration] rattachement impossible :', error)
       }
     }
-    // La relance vit dans son propre module : sortie de cette fermeture, elle est EXERCEE par ses
-    // tests (faux os, faux runTask) au lieu d'etre relue caractere par caractere dans ce fichier.
-    const relaunchResumableRun = creerRelanceDeRunReprenable({
-      os,
-      bus,
-      broadcast,
-      causalTrace,
-      turnJournalRoot,
-      appendConvActivity,
-      admitAutomaticResumeRuntime,
-      createOrchestrateTurnPersistence,
-      appendTurnEvent,
-      reuseOrCreateConvRun,
-      regimePhases,
-      saveConvRunTrace,
-      populateConvRunSections,
-      closeConvRun,
-      phasesAvecJuge,
-      persistOrchestrationStep,
-      persistOrchestrationPhaseStart,
-      persistRunLifecycle,
-      materializeChatArtifact,
-      artifactsFromExecutionEvidence,
-      emitToLiveWindows,
-      appendBrainTrace,
-      appendExecutionEvidenceFileTrace,
-      appendObservedOrchestrationOutcome,
-      executionCostCoverageFields,
-      reconcileLateRunLifecycle,
-      classifierRefusDeReprise,
-      randomUUID,
-      fenetresVivantes: () => BrowserWindow.getAllWindows(),
-      defaultProcessIdentity
-    })
     if (reprise === 'bloquer') {
       const reason =
         'Appel provider terminé sans preuve récupérable — relance bloquée pour éviter un double coût.'

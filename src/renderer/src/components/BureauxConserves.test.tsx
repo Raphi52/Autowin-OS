@@ -50,7 +50,9 @@ function poserApi(surcharge: Partial<ApiDouble> = {}): ApiDouble {
         verdict: 'a-reprendre'
       }
     ]),
-    getPatchTravailNonPublie: vi.fn().mockResolvedValue({ patch: 'diff --git a b', tronque: false }),
+    getPatchTravailNonPublie: vi
+      .fn()
+      .mockResolvedValue({ patch: 'diff --git a b', tronque: false }),
     retryWorktreeRecovery: vi.fn().mockResolvedValue({ agentId: 'run-thinking-1' }),
     discardHeldWorktree: vi.fn().mockResolvedValue(true),
     ...surcharge
@@ -99,7 +101,7 @@ describe('BureauxConserves — la prise qui manquait', () => {
     await rendre()
 
     expect(boutonNomme(/voir le diff/i)).toBeTruthy()
-    expect(boutonNomme(/reprendre/i)).toBeTruthy()
+    expect(boutonNomme(/^reprendre$/i)).toBeTruthy()
     expect(boutonNomme(/purger/i)).toBeTruthy()
   })
 
@@ -108,7 +110,7 @@ describe('BureauxConserves — la prise qui manquait', () => {
     await rendre()
 
     await act(async () => {
-      boutonNomme(/reprendre/i)?.click()
+      boutonNomme(/^reprendre$/i)?.click()
     })
 
     expect(api.retryWorktreeRecovery).toHaveBeenCalledWith('run-thinking-1')
@@ -197,5 +199,64 @@ describe('BureauxConserves — le verdict, sans ouvrir le patch', () => {
 
     expect(container.textContent).toContain('sans-verdict')
     expect(container.querySelector('.bureaux-conserves-verdict')).toBeNull()
+  })
+})
+
+/**
+ * « REPRENDRE TOUT » — un clic relance TOUS les runs interrompus, pas un par conversation.
+ * Le triage (deja publie, agent encore vivant) vit cote principal ; l'ecran ne fait que le
+ * declencher UNE fois et DIRE ce qui a ete relance, sans jamais l'inventer.
+ */
+describe('BureauxConserves — reprendre tout', () => {
+  it('relance tous les runs interrompus en un clic et rend compte', async () => {
+    const resumeAllRuns = vi
+      .fn()
+      .mockResolvedValue({ dejaEnCours: false, relances: ['r1', 'r2'], ignores: [] })
+    poserApi({ resumeAllRuns } as never)
+    await rendre()
+
+    const bouton = boutonNomme(/reprendre tout/i)
+    expect(bouton).toBeTruthy()
+    await act(async () => {
+      bouton!.click()
+    })
+    expect(resumeAllRuns).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toMatch(/2 run/i)
+  })
+
+  it('ne lance pas une deuxieme reprise pendant que la premiere tourne', async () => {
+    let liberer!: (v: unknown) => void
+    const resumeAllRuns = vi.fn(() => new Promise((resolve) => (liberer = resolve)))
+    poserApi({ resumeAllRuns } as never)
+    await rendre()
+
+    const bouton = boutonNomme(/reprendre tout/i)!
+    await act(async () => {
+      bouton.click()
+    })
+    expect(bouton.disabled).toBe(true)
+    await act(async () => {
+      bouton.click()
+    })
+    expect(resumeAllRuns).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      liberer({ dejaEnCours: false, relances: [], ignores: [] })
+    })
+    expect(bouton.disabled).toBe(false)
+  })
+
+  it('dit clairement quand rien n etait a reprendre', async () => {
+    const resumeAllRuns = vi.fn().mockResolvedValue({
+      dejaEnCours: false,
+      relances: [],
+      ignores: [{ runId: 'x', raison: 'deja-publie' }]
+    })
+    poserApi({ resumeAllRuns } as never)
+    await rendre()
+
+    await act(async () => {
+      boutonNomme(/reprendre tout/i)!.click()
+    })
+    expect(container.textContent).toMatch(/aucun run à reprendre/i)
   })
 })

@@ -51,6 +51,8 @@ export function BureauxConserves(): JSX.Element {
   const [bureaux, setBureaux] = useState<TravailNonPublie[] | undefined>(undefined)
   const [patch, setPatch] = useState<{ agentId: string; texte: string } | undefined>(undefined)
   const [erreur, setErreur] = useState<Record<string, string>>({})
+  const [repriseEnCours, setRepriseEnCours] = useState(false)
+  const [bilanReprise, setBilanReprise] = useState<string | undefined>(undefined)
 
   const charger = useCallback(async (): Promise<void> => {
     try {
@@ -101,6 +103,31 @@ export function BureauxConserves(): JSX.Element {
     }
   }
 
+  // « REPRENDRE TOUT » : un seul geste pour relancer les runs interrompus la ou ils se sont
+  // arretes. Le triage (deja publie, agent encore vivant, file sequentielle) est fait cote
+  // principal ; ici on empeche seulement le double clic et on RAPPORTE ce qui a ete relance.
+  const reprendreTout = async (): Promise<void> => {
+    if (repriseEnCours) return
+    setRepriseEnCours(true)
+    setBilanReprise(undefined)
+    try {
+      const bilan = await window.api.resumeAllRuns?.()
+      const relances = bilan?.relances?.length ?? 0
+      setBilanReprise(
+        bilan?.dejaEnCours
+          ? 'Une reprise est déjà en cours.'
+          : relances > 0
+            ? `${relances} run(s) relancé(s).`
+            : 'Aucun run à reprendre.'
+      )
+      await charger()
+    } catch (cause) {
+      setBilanReprise(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setRepriseEnCours(false)
+    }
+  }
+
   const purger = async (agentId: string, fichiers: number): Promise<void> => {
     // La confirmation NOMME ce qui est en jeu. « Supprimer ce bureau ? » sans le nombre de fichiers
     // laisserait l'utilisateur valider la destruction d'un travail qu'il ne sait pas être là.
@@ -128,6 +155,27 @@ export function BureauxConserves(): JSX.Element {
   return (
     <section className="bureaux-conserves" data-testid="bureaux-conserves">
       <h3 className="bureaux-conserves-titre">Bureaux conservés</h3>
+      <div className="bureaux-conserves-reprise">
+        <button
+          type="button"
+          data-testid="reprendre-tout"
+          disabled={repriseEnCours}
+          onClick={() => void reprendreTout()}
+        >
+          {repriseEnCours ? (
+            <>
+              <Spinner /> Reprise en cours…
+            </>
+          ) : (
+            'Reprendre tout'
+          )}
+        </button>
+        {bilanReprise ? (
+          <span className="bureaux-conserves-reprise-bilan" role="status">
+            {bilanReprise}
+          </span>
+        ) : null}
+      </div>
       {bureaux.length === 0 ? (
         <p className="bureaux-conserves-vide">Aucun bureau conservé — rien à trier.</p>
       ) : (
