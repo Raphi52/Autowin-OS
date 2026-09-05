@@ -4071,6 +4071,22 @@ button.chat-project-dot:disabled {
 
 /* MODE AUTO (barre de gauche) : allumé, il renvoie tout seul la suite proposée jusqu'à « rien ».
    Actif jusqu'à désactivation — son état doit donc rester visible en permanence. */
+/* REPRISE APRES QUOTA — meme geometrie que le bloc « Mode auto » juste au-dessus : c'est la meme
+   bande d'actions de la colonne des conversations. Le bouton emprunte `.conv-date-sort`, deja
+   dimensionne pour cette colonne. Il n'existe QUE quand au moins un fil est coupe. */
+.conv-reprise-quota {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 var(--s2) var(--s2);
+}
+.conv-reprise-quota .conv-date-sort {
+  width: 100%;
+  justify-content: center;
+  /* Le ROUGE de la pastille `is-failed` : le bouton designe visuellement les fils qu'il reprend. */
+  border-color: color-mix(in srgb, #ff4057 45%, transparent);
+  color: #ff4057;
+}
 .conv-auto {
   display: flex;
   flex-direction: column;

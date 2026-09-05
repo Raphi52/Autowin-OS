@@ -133,6 +133,12 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
    * ferait grossir chaque résumé IPC sans rien dire de plus.
    */
   lastAssistantAsksUser?: true
+  /**
+   * Motif de l'échec du DERNIER tour, quand il a échoué. C'est lui qui permet de reconnaître une
+   * conversation coupée par le mur de QUOTA (`estMurDeQuota`, src/shared/reprise-quota.ts) parmi
+   * toutes les pastilles rouges : elle seule se relance à l'identique.
+   */
+  lastAssistantError?: string
 }
 
 /**
@@ -1573,17 +1579,28 @@ export class ConversationStore {
 
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */
   listSummaries(): ConversationSummary[] {
-    return this.list().map(({ messages, ...summary }) => ({
-      ...summary,
-      messageCount: messages.length,
-      lastMessageRole: messages.at(-1)?.role,
-      lastAssistantStatus: [...messages].reverse().find((message) => message.role === 'assistant')
-        ?.status,
-      ...(lastUserMessageAt(messages) !== undefined
-        ? { lastUserMessageAt: lastUserMessageAt(messages) }
-        : {}),
-      ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {})
-    }))
+    return this.list().map(({ messages, ...summary }) => {
+      const dernierAssistant = [...messages]
+        .reverse()
+        .find((message) => message.role === 'assistant')
+      return {
+        ...summary,
+        messageCount: messages.length,
+        lastMessageRole: messages.at(-1)?.role,
+        lastAssistantStatus: dernierAssistant?.status,
+        // Le MOTIF de l'échec, pas seulement le fait qu'il y en ait un : la liste ne peut pas
+        // distinguer un fil coupé par le quota (qui se relance tel quel) d'un fil tombé sur une
+        // vraie erreur sans lire ce texte. Servi uniquement quand le tour a échoué — sinon chaque
+        // résumé IPC porterait une erreur périmée.
+        ...(dernierAssistant?.status === 'failed' && dernierAssistant.error
+          ? { lastAssistantError: dernierAssistant.error }
+          : {}),
+        ...(lastUserMessageAt(messages) !== undefined
+          ? { lastUserMessageAt: lastUserMessageAt(messages) }
+          : {}),
+        ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {})
+      }
+    })
   }
 
   /**
