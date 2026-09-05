@@ -1,4 +1,15 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  rmSync,
+  statSync
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 
 /**
@@ -162,6 +173,64 @@ export function isTurnFinished(events: readonly TurnJournalEvent[]): boolean {
  * Tours restés INACHEVÉS (à rejouer/reprendre au démarrage), les plus récents d'abord.
  * Racine absente → [] (aucun journal, comportement historique).
  */
+/** Taille du bloc de queue relu : un événement terminal est court, quelques Ko suffisent. */
+const QUEUE_OCTETS = 8_192
+
+/**
+ * Le tour est-il TERMINÉ, sans lire tout son journal ? `undefined` = indéterminé, il faut le lire.
+ *
+ * Mesure du 2026-09-05 (`gels.jsonl`) : l'inventaire des tours inachevés a bloqué l'application
+ * 2124 ms, dont 1730 ms dans 946 `readFileSync` — un journal ENTIER ouvert et analysé ligne à ligne
+ * par tour, pour n'en retenir qu'une poignée. Or un événement terminal vide le tampon
+ * IMMÉDIATEMENT (voir `TERMINAL_KINDS` dans `appendTurnEvent`) : il est donc en FIN de fichier.
+ *
+ * On relit ce seul bloc final. La première ligne du bloc est jetée quand elle peut être coupée par
+ * la troncature de lecture — juger sur une ligne incomplète serait deviner. Et toute incertitude
+ * (fichier vide, queue illisible, aucun événement exploitable) rend `undefined` : on retombe alors
+ * sur la lecture complète, jamais sur une conclusion optimiste. Un tour déclaré terminé à tort ne
+ * serait plus jamais repris — c'est exactement la perte que la survie niveau 2 doit empêcher.
+ */
+function journalTermineParLaQueue(path: string): boolean | undefined {
+  let fd: number | undefined
+  try {
+    const taille = statSync(path).size
+    if (taille === 0) return undefined
+    fd = openSync(path, 'r')
+    const debut = Math.max(0, taille - QUEUE_OCTETS)
+    const tampon = Buffer.allocUnsafe(taille - debut)
+    const lus = readSync(fd, tampon, 0, tampon.length, debut)
+    const lignes = tampon.subarray(0, lus).toString('utf8').split('\n')
+    // Le bloc commence au milieu du fichier : sa première ligne est peut-être coupée en deux.
+    if (debut > 0) lignes.shift()
+    let vuUnEvenement = false
+    for (const ligne of lignes) {
+      const nette = ligne.trim()
+      if (!nette) continue
+      try {
+        const evenement = JSON.parse(nette) as TurnJournalEvent
+        if (!evenement || typeof evenement.kind !== 'string') continue
+        vuUnEvenement = true
+        if (TERMINAL_KINDS.has(evenement.kind)) return true
+      } catch {
+        // Ligne tronquée par un crash : la queue ne conclut plus rien de fiable.
+        return undefined
+      }
+    }
+    // Des événements lisibles jusqu'au bout, aucun terminal : le tour est bien en vol.
+    return vuUnEvenement && debut === 0 ? false : undefined
+  } catch {
+    return undefined
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd)
+      } catch {
+        /* fermeture best-effort : un descripteur déjà clos ne doit rien casser */
+      }
+    }
+  }
+}
+
 export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
   // Un SCAN de l'arborescence décide de ce qui est inachevé ou obsolète : les tampons encore en
   // mémoire doivent être sur disque AVANT, sinon un tour en vol serait invisible (donc jamais repris).
@@ -180,6 +249,10 @@ export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
     for (const file of entries) {
       if (!file.endsWith('.jsonl')) continue
       const turnId = file.slice(0, -'.jsonl'.length)
+      // La FIN du journal suffit presque toujours à trancher, et elle coûte un bloc au lieu du
+      // fichier entier. Les tours terminés — l'immense majorité — ne sont donc plus jamais ouverts
+      // en entier ; seuls les tours réellement en vol, ou les queues douteuses, sont relus.
+      if (journalTermineParLaQueue(join(dir, file)) === true) continue
       const events = readTurnJournal(root, conversationId, turnId)
       if (events.length === 0 || isTurnFinished(events)) continue
       found.push({
