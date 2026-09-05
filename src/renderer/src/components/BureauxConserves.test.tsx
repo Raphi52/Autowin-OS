@@ -61,9 +61,9 @@ function poserApi(surcharge: Partial<ApiDouble> = {}): ApiDouble {
   return api
 }
 
-async function rendre(): Promise<void> {
+async function rendre(props?: { runsInterrompus?: number }): Promise<void> {
   await act(async () => {
-    root.render(createElement(BureauxConserves))
+    root.render(createElement(BureauxConserves, props ?? {}))
   })
 }
 
@@ -222,6 +222,20 @@ describe('BureauxConserves — reprendre tout', () => {
     })
     expect(resumeAllRuns).toHaveBeenCalledTimes(1)
     expect(container.textContent).toMatch(/2 run/i)
+  })
+
+  /**
+   * OBSERVE A L'ECRAN le 2026-09-05 : « 0 runs interrompus » au bandeau, et pourtant le bouton
+   * « Reprendre tout » offert, sans compte. Un geste offert qui ne peut rien faire ment sur l'etat.
+   */
+  it('se cache quand aucun run n est interrompu, et porte le compte sinon', async () => {
+    poserApi({ resumeAllRuns: vi.fn() } as never)
+
+    await rendre({ runsInterrompus: 0 })
+    expect(boutonNomme(/reprendre tout/i)).toBeUndefined()
+
+    await rendre({ runsInterrompus: 3 })
+    expect(boutonNomme(/reprendre tout/i)?.textContent).toContain('Reprendre tout (3)')
   })
 
   it('ne lance pas une deuxieme reprise pendant que la premiere tourne', async () => {

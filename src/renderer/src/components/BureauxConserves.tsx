@@ -47,7 +47,19 @@ interface TravailNonPublie {
   verdict?: VerdictBureau
 }
 
-export function BureauxConserves(): JSX.Element {
+/**
+ * `runsInterrompus` : le NOMBRE de runs réellement interrompus, compté par le bandeau chef de
+ * projet (`resumerFlux`). Il gouverne l'affichage du geste « Reprendre tout » : un bouton offert
+ * alors qu'il n'y a rien à reprendre promet une action qui ne fera rien — mesuré à l'écran le
+ * 2026-09-05 (0 run interrompu, bouton pourtant présent et sans compte).
+ * Non fourni (preload ancien, double de test) = on garde le bouton, sans compte : mieux vaut un
+ * geste disponible qu'un geste caché sur une donnée qu'on n'a pas.
+ */
+export function BureauxConserves({
+  runsInterrompus
+}: {
+  runsInterrompus?: number
+}): JSX.Element {
   const [bureaux, setBureaux] = useState<TravailNonPublie[] | undefined>(undefined)
   const [patch, setPatch] = useState<{ agentId: string; texte: string } | undefined>(undefined)
   const [erreur, setErreur] = useState<Record<string, string>>({})
@@ -155,27 +167,31 @@ export function BureauxConserves(): JSX.Element {
   return (
     <section className="bureaux-conserves" data-testid="bureaux-conserves">
       <h3 className="bureaux-conserves-titre">Bureaux conservés</h3>
-      <div className="bureaux-conserves-reprise">
-        <button
-          type="button"
-          data-testid="reprendre-tout"
-          disabled={repriseEnCours}
-          onClick={() => void reprendreTout()}
-        >
-          {repriseEnCours ? (
-            <>
-              <Spinner /> Reprise en cours…
-            </>
-          ) : (
-            'Reprendre tout'
-          )}
-        </button>
-        {bilanReprise ? (
-          <span className="bureaux-conserves-reprise-bilan" role="status">
-            {bilanReprise}
-          </span>
-        ) : null}
-      </div>
+      {runsInterrompus === 0 && !bilanReprise ? null : (
+        <div className="bureaux-conserves-reprise">
+          <button
+            type="button"
+            data-testid="reprendre-tout"
+            disabled={repriseEnCours}
+            onClick={() => void reprendreTout()}
+          >
+            {repriseEnCours ? (
+              <>
+                <Spinner /> Reprise en cours…
+              </>
+            ) : runsInterrompus === undefined ? (
+              'Reprendre tout'
+            ) : (
+              `Reprendre tout (${runsInterrompus})`
+            )}
+          </button>
+          {bilanReprise ? (
+            <span className="bureaux-conserves-reprise-bilan" role="status">
+              {bilanReprise}
+            </span>
+          ) : null}
+        </div>
+      )}
       {bureaux.length === 0 ? (
         <p className="bureaux-conserves-vide">Aucun bureau conservé — rien à trier.</p>
       ) : (

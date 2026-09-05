@@ -307,6 +307,9 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   }, [active])
 
   const health = projectState(snapshot, agents, activityAvailable)
+  // Le MEME comptage que le bandeau chef de projet (resumerFlux), pour que le geste « Reprendre
+  // tout » et le nombre affiche ne puissent pas se contredire.
+  const runsInterrompus = resumerFlux(agents, Date.now()).runsInterrompus
   const dispositionGraphe = useMemo(() => {
     const commits = snapshot?.commits ?? []
     const axes = projectGitGraphAxes(commits, snapshot?.refs ?? [], {
@@ -369,7 +372,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               c'est ici que l'utilisateur vient les chercher, et deux messages de refus le renvoient
               explicitement a cette vue. Un renvoi vers une section invisible vaut un renvoi vers
               rien. */}
-          <BureauxConserves />
+          <BureauxConserves runsInterrompus={runsInterrompus} />
           <section className={`project-strip is-${health.state}`} aria-label="Santé du projet">
             <div>
               <span>Santé du projet</span>
