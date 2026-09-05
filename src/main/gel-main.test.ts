@@ -329,11 +329,25 @@ describe('temoin ordonnance — un blocage SANS CPU n’est plus excuse en conte
     )
     await new Promise((r) => setTimeout(r, 60))
     const verrou = new Int32Array(new SharedArrayBuffer(4))
+    const avant = Date.now()
     Atomics.wait(verrou, 0, 0, 300)
     await new Promise((r) => setTimeout(r, 80))
     arreter()
-    const gel = captures.find((g) => g.blocageMs >= 100)
-    expect(gel, `aucun gel >=100ms capte: ${JSON.stringify(captures)}`).toBeDefined()
+    /*
+     * ON VISE LE BLOCAGE QU'ON VIENT DE CREER, pas le premier venu.
+     *
+     * Ce test etait instable en suite complete (mesure du 2026-09-05) : `find(blocageMs >= 100)`
+     * prenait le PREMIER gel de la fenetre, et sous charge le worker en produit d'autres — une
+     * compilation, un autre fichier de test — qui eux BRULENT du CPU et sortent donc en
+     * 'boucle-tenue'. Le detecteur avait raison, c'est la selection qui designait le mauvais gel.
+     * On borne desormais au blocage POSTERIEUR a `Atomics.wait` et on garde le PLUS LONG : le notre
+     * dure ~300 ms, aucun bruit d'ordonnancement ne l'approche. L'assertion, elle, ne bouge pas.
+     */
+    const candidats = captures.filter(
+      (g) => g.blocageMs >= 200 && Date.parse(g.ts) >= avant - 5
+    )
+    const gel = candidats.sort((a, b) => b.blocageMs - a.blocageMs)[0]
+    expect(gel, `aucun gel >=200ms apres le verrou: ${JSON.stringify(captures)}`).toBeDefined()
     expect(gel?.cause).toBe('entree-sortie-bloquante')
   })
 })
