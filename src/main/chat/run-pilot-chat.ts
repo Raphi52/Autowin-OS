@@ -894,8 +894,15 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           }
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
-          derniereEntree = pilotEvent.callUsage.inputTokens
-          derniereEntreeCache = pilotEvent.callUsage.cacheReadTokens
+          // L'OCCUPATION N'EST PAS LE CUMUL. `callUsage.inputTokens` est l'usage AGREGE que le
+          // `result` du CLI porte pour tout l'appel de pilote : le lire ici rejouait exactement le
+          // defaut que `claude.occupation-fenetre.test.ts` avait ferme cote provider. Mesure du
+          // 2026-09-05 sur les 435 enregistrements `chat-usage` de `.autowin-data` : 423 (97 %)
+          // portaient `derniereEntree === inputTokens`, jusqu'a 18,9 M pour une fenetre de 200 k.
+          // Le champ desagrege existe sur le MEME objet — on le prend, cumul en repli seulement.
+          derniereEntree = pilotEvent.callUsage.derniereEntree ?? pilotEvent.callUsage.inputTokens
+          derniereEntreeCache =
+            pilotEvent.callUsage.derniereEntreeCache ?? pilotEvent.callUsage.cacheReadTokens
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
           turnSessionId = pilotEvent.sessionId
