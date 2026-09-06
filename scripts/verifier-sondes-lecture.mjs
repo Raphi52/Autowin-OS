@@ -50,7 +50,13 @@ const SONDES = [
    * Elle seme une galerie de cinq artefacts, amene chaque carte au champ, la deplie, verifie les
    * cinq rendus (vecteur, markdown, diagramme, tableau, 3D) — puis SUPPRIME ses conversations.
    */
-  'cdp-artifact-previews.mjs'
+  'cdp-artifact-previews.mjs',
+  /*
+   * Migree sur la fixture gratuite le 2026-09-06 : elle envoyait un vrai prompt payant, dont la
+   * reponse changeait a chaque passage. La cible `cloture` produit desormais, a l'identique, un fil
+   * qui DEPASSE la fenetre et un bloc de cloture porte par le seul evenement final.
+   */
+  'cdp-sonde-bloc-cloture.mjs'
 ]
 
 if (!existsSync(binaire)) {

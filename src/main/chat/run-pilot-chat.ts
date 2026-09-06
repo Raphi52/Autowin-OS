@@ -1189,6 +1189,50 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             const commande = suppression
               ? `d>{"name":"remove_conversation","args":{"id":${JSON.stringify(suppression)}}}</cmd>`
               : `d>{"name":"get_state","args":{"target":${JSON.stringify(target)},"token":"fixture-secret"}}</cmd>`
+            /*
+             * CIBLE `cloture` — un fil LONG dont le bloc de clôture n'arrive QU'À LA FIN.
+             *
+             * Elle reproduit la forme exacte du défaut vécu le 2026-08-17 : « je n'ai vu que la
+             * première ligne, le reste n'est apparu qu'après mon message suivant ». Deux propriétés
+             * sont nécessaires pour l'exercer, et aucune fixture ne les avait ensemble :
+             *   · le fil doit DÉPASSER la hauteur de la fenêtre, sinon « le bloc est hors champ »
+             *     n'est même pas une hypothèse testable — une sonde précédente a rendu « rien à
+             *     défiler », donc rien à conclure ;
+             *   · le bloc de clôture ne doit PAS être dans les deltas : il n'existe que dans le
+             *     texte final, celui que porte l'événement `done`. C'est précisément ce chemin-là
+             *     qui lâchait.
+             * Déterministe, sans appel de modèle, et réservée à l'instance isolée comme tout ce bloc.
+             */
+            if (target === 'cloture') {
+              const lignes = Array.from(
+                { length: 40 },
+                (_, index) =>
+                  `Ligne ${String(index + 1).padStart(2, '0')} — corps de réponse assez long pour dépasser la fenêtre du fil.\n`
+              )
+              for (const ligne of lignes) {
+                yield { delta: ligne }
+                await new Promise((resolve) => setTimeout(resolve, 20))
+              }
+              const cloture = [
+                '',
+                '✅ Fait',
+                'Le corps de la réponse a été diffusé en 40 lignes.',
+                '',
+                '📍 Maintenant',
+                "Le bloc de clôture n'existe que dans le texte final.",
+                '',
+                '⏳ Reste à faire',
+                'aucune limite connue',
+                '',
+                '👉 Recommandé',
+                'vérifier que ce bloc est visible sans faire défiler.'
+              ].join('\n')
+              return {
+                text: lignes.join('') + cloture,
+                provider: 'autowin-durable-fixture',
+                systemInjected: true
+              }
+            }
             const chunks = ['Je ', 'réponds ', 'progressivement.', '<cm', commande, ' Terminé.']
             for (const delta of chunks) {
               yield { delta }

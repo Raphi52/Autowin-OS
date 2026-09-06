@@ -55,13 +55,44 @@ const ev = async (expression) => {
 const json = (v) => JSON.stringify(v)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/*
+ * MIGREE SUR LA FIXTURE GRATUITE le 2026-09-06.
+ *
+ * Elle envoyait un vrai prompt au modele (« liste les 30 premiers fichiers du dossier scripts... »)
+ * : chaque passage coutait de l'argent, et sa reponse changeait a chaque fois — donc son verdict
+ * aussi. Elle ne pouvait pas etre branchee sur une verification automatique.
+ *
+ * La cible `cloture` de la fixture durable produit exactement la forme voulue, gratuitement et a
+ * l'identique : 40 lignes diffusees en deltas — le fil DEPASSE la fenetre, donc l'hypothese « le
+ * bloc est hors champ » est reellement exercable — puis un bloc de cloture qui n'existe QUE dans le
+ * texte final porte par l'evenement `done`.
+ */
 const titre = `Sonde bloc-cloture ${Date.now()}`
 // Prompt LONG par défaut : le fil doit DÉPASSER la fenêtre, sinon l'hypothèse « défilement » n'est
 // même pas exerçable (une première sonde a rendu « rien à défiler », donc rien à conclure).
-const PROMPT = arg(
-  '--prompt',
-  'Liste les 30 premiers fichiers du dossier scripts, un par ligne, et pour chacun une phrase sur ce que son nom laisse deviner.'
-)
+const PROMPT = arg('--prompt', '[[autowin-fixture-durable-stream]] cloture')
+
+/*
+ * ON ATTEND QUE L'APPLICATION SOIT MONTEE AVANT DE LUI PARLER.
+ *
+ * Le lanceur rend « pret » des que le port de pilotage repond, ce qui precede le montage de React.
+ * Mesure du 2026-09-06 : le premier appel a window.api partait trop tot et revenait avec « Origine
+ * renderer non autorisee pour Conversations : null » — un refus de securite tout a fait normal, mais
+ * qui ressemblait a une panne de l'application.
+ */
+{
+  const echeance = Date.now() + 30_000
+  for (;;) {
+    const monte = await ev(`Boolean(document.querySelector('[data-testid="nav-chat"]') && window.api)`).catch(
+      () => false
+    )
+    if (monte) break
+    if (Date.now() >= echeance) throw new Error("L'interface n'est pas montee apres 30 s")
+    await sleep(300)
+  }
+  await ev(`(() => { document.querySelector('[data-testid="nav-chat"]').click(); return true })()`)
+  await sleep(800)
+}
 
 // JOURNAL DES ÉVÉNEMENTS PILOTE — vérité terrain sur l'ORDRE (texte tardif après `done` ?).
 await ev(`(() => {
@@ -85,13 +116,14 @@ await ev(`(() => {
 // catégories : la sonde mesurerait alors une conversation qu'elle n'a pas produite).
 const avant = await ev(`(async () => (await window.api.conversations()).map((c) => c.id))()`)
 await ev(`(() => {
-  const b = [...document.querySelectorAll('button')].find((n) => (n.textContent ?? '').trim() === 'Nouveau')
-  if (!b) throw new Error('bouton Nouveau introuvable')
+  const b = document.querySelector('.conv-new-row')
+  if (!b) throw new Error('controle « Nouveau fil » introuvable (.conv-new-row)')
   b.click()
   return 'ok'
 })()`)
 await sleep(900)
-const titreAffiche = await ev(`document.querySelector('.chat-conv-title')?.textContent ?? null`)
+// Le titre du fil se lit dans `.chat-head-kicker` : `.chat-conv-title` n'existe plus.
+const titreAffiche = await ev(`document.querySelector('.chat-head-kicker')?.textContent ?? null`)
 if (!/Nouvelle conversation|Sans titre/u.test(String(titreAffiche ?? '')))
   throw new Error(`fil neuf non affiché (titre affiché = ${titreAffiche})`)
 
@@ -232,4 +264,33 @@ console.log(`\n→ ${sortie}`)
 
 if (convId && !garder) await ev(`window.api.conversationsRemove(${json(convId)})`).catch(() => {})
 ws.close()
+
+/*
+ * UN VERDICT, PAS SEULEMENT UN DIAGNOSTIC.
+ *
+ * Cette sonde a longtemps SORTI ZERO quoi qu'elle observe : elle imprimait son diagnostic et s'en
+ * allait. Mesure du 2026-09-06 : avec la livraison du bloc de cloture coupee, elle rendait bien
+ * `blocRenduDansLeFilActif: false` — donc elle VOYAIT le defaut — et sortait quand meme 0. Une
+ * sonde qui ne peut pas rougir ne protege de rien et ne peut etre branchee nulle part.
+ *
+ * Les deux echecs nommes correspondent aux deux hypotheses qu'elle departage :
+ *   B. le texte n'atteint pas le fil vivant — il est persiste mais absent de l'ecran ;
+ *   A. il l'atteint mais reste hors champ, sous le bas du fil.
+ */
+const echecs = []
+if (!rapport.diagnostic.blocPersiste)
+  echecs.push('le bloc de cloture n est meme pas persiste — la fixture n a pas produit sa forme')
+else if (!rapport.diagnostic.blocRenduDansLeFilActif)
+  echecs.push('le bloc de cloture est PERSISTE mais ABSENT du fil vivant (le defaut du 2026-08-17)')
+else if (rapport.diagnostic.horsChamp)
+  echecs.push(
+    `le bloc est rendu mais HORS CHAMP : ${etatApres.scroll?.distanceDuBas}px sous le bas du fil`
+  )
+
+if (echecs.length) {
+  console.error('\nECHEC :')
+  for (const echec of echecs) console.error(`- ${echec}`)
+  process.exit(1)
+}
+console.log('\nOK — le bloc de clôture atteint le fil vivant, et il est visible sans défiler.')
 process.exit(0)
