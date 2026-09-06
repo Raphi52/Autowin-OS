@@ -57,8 +57,12 @@ const canonicalDestinations = [
     id: 'worktree',
     navSelector: '[data-testid="nav-worktree"]',
     viewSelector: '.worktree-tab[data-active="true"]',
-    expectedText: 'Aucune copie en cours',
-    nestedSelector: '[data-testid="wt-view"]'
+    // `Aucune copie en cours` et `wt-view` ne sont plus rendus par cette vue (2026-09-06) : le
+    // premier n'existe nulle part dans src/, le second appartient a WorktreeActivityView, qui
+    // n'est plus montee ici. On vise donc le sous-titre LITTERAL de la vue
+    // (WorktreeView.tsx:351) et le panneau chef de projet, rendu dans ses TROIS etats.
+    expectedText: 'Suis l’état, l’activité et les branches de ton dépôt.',
+    nestedSelector: '[data-testid="worktree-chef-de-projet"]'
   },
   {
     id: 'tickets',
@@ -188,11 +192,24 @@ if (verifyCanonicalNavigation) {
       for (const destination of destinations) {
         const target = document.querySelector(destination.navSelector)
         target?.click()
-        await new Promise((resolve) => setTimeout(resolve, 200))
+        // Une vue qui CHARGE ses donnees (Worktrees rend d'abord « Chargement du cockpit
+        // projet… ») n'a pas fini de peindre en 200 ms. On ATTEND donc le contenu attendu,
+        // jusqu'a 8 s, au lieu de photographier un ecran intermediaire. L'assertion ne bouge
+        // pas : au-dela du delai, le rate reste un rate.
+        let view = null
+        let renderedText = ''
+        for (let essai = 0; essai < 40; essai += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 200))
+          view = document.querySelector(destination.viewSelector)
+          renderedText = view?.textContent?.replace(/\\s+/g, ' ').trim() ?? ''
+          const contenuPret = renderedText.includes(destination.expectedText)
+          const imbriquePret = destination.nestedSelector
+            ? Boolean(view?.querySelector(destination.nestedSelector))
+            : true
+          if (contenuPret && imbriquePret) break
+        }
         const activeTarget = document.querySelector(destination.navSelector)
-        const view = document.querySelector(destination.viewSelector)
         const state = await window.api.appState()
-        const renderedText = view?.textContent?.replace(/\\s+/g, ' ').trim() ?? ''
         proof.push({
           id: destination.id,
           found: Boolean(target),
