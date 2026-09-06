@@ -7,7 +7,9 @@
      declare lui-meme comme deja supprimes (commit f045a1f3). Lecture seule : aucun fichier de
      scripts/ n.a ete supprime a la recuperation ; 9 des candidats ont ete RETIRES depuis par le
      commit de nettoyage du 2026-09-06 (les 7 lanceurs a racine morte, verify-a2-hub-proof.ps1 et
-     capture-printwindow.ps1). Remplace docs/residus-scripts-2026-09-05.md, plus ancien et
+     capture-printwindow.ps1), puis 2 sondes a echec garanti (cdp-a2-hub-proof.mjs,
+     cdp-e2e-chat.mjs) et 2 blocs morts (--verify-behaviour-filters d'autowin-cdp-proof.mjs,
+     verify-worktrees de cdp-dogfood-inspect.mjs). Remplace docs/residus-scripts-2026-09-05.md, plus ancien et
      moins couvrant. -->
 
 # Shortlist — code résiduel inutile de `scripts/`

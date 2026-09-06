@@ -10,7 +10,6 @@ const jsonOutput = value('--json-out', output.replace(/\.png$/i, '') + '.json')
 const section = value('--section', '')
 const theme = value('--theme', '')
 const hoverTheme = value('--hover-theme', '')
-const verifyBehaviourFilters = process.argv.includes('--verify-behaviour-filters')
 const verifyCanonicalNavigation = process.argv.includes('--verify-navigation')
 const skipDialogs = process.argv.includes('--skip-dialogs')
 const skipScreenshot = process.argv.includes('--skip-screenshot')
@@ -250,35 +249,6 @@ if (section) {
   if (!navigation.result.value) throw new Error(`Section introuvable : ${section}`)
   await new Promise((resolve) => setTimeout(resolve, 500))
 }
-let behaviourFilters
-if (verifyBehaviourFilters) {
-  const verification = await send('Runtime.evaluate', {
-    expression: `(async () => {
-      const wait = () => new Promise((resolve) => setTimeout(resolve, 150))
-      const button = (label) => [...document.querySelectorAll('.behaviour-toolbar button')]
-        .find((item) => item.textContent?.trim() === label)
-      button('Claude')?.click()
-      await wait()
-      const activePath = document.querySelector('.behaviour-files button.active')?.dataset.path ?? null
-      const readerPath = document.querySelector('.behaviour-reader header p')?.getAttribute('title') ?? null
-      const input = document.querySelector('.behaviour-toolbar input')
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(input, '__aucun_fichier__')
-      input?.dispatchEvent(new Event('input', { bubbles: true }))
-      await wait()
-      const emptyConsistent = !document.querySelector('.behaviour-files button.active')
-        && !document.querySelector('.behaviour-reader header')
-      setter?.call(input, '')
-      input?.dispatchEvent(new Event('input', { bubbles: true }))
-      button('Tous')?.click()
-      await wait()
-      return { sameVisibleFile: Boolean(activePath) && activePath === readerPath, emptyConsistent }
-    })()`,
-    awaitPromise: true,
-    returnByValue: true
-  })
-  behaviourFilters = verification.result.value
-}
 const inspected = await send('Runtime.evaluate', {
   expression: `({ title: document.title, bodyCharacters: document.body?.innerText.length ?? 0, url: location.href })`,
   returnByValue: true
@@ -330,8 +300,7 @@ const result = {
   ...inspected.result.value,
   nativeDialogs: dialogs.result.value,
   rendererIssues: runtimeIssues,
-  ...(navigationProof ? { navigation: navigationProof } : {}),
-  ...(behaviourFilters ? { behaviourFilters } : {})
+  ...(navigationProof ? { navigation: navigationProof } : {})
 }
 writeFileSync(jsonOutput, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
 console.log(JSON.stringify(result))
@@ -341,8 +310,6 @@ if (
   !result.nativeDialogs?.suppressed ||
   (verifyCanonicalNavigation &&
     (!result.navigation?.wizardDismissed ||
-      result.navigation?.destinations?.length !== canonicalDestinations.length)) ||
-  (verifyBehaviourFilters &&
-    (!result.behaviourFilters?.sameVisibleFile || !result.behaviourFilters?.emptyConsistent))
+      result.navigation?.destinations?.length !== canonicalDestinations.length))
 )
   process.exit(1)

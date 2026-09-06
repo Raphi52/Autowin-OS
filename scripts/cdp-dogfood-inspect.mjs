@@ -109,7 +109,6 @@ const statusConversationId = action?.startsWith('status:')
   : undefined
 const verifySettings = action === 'verify-settings'
 const verifyAgentStudio = action === 'verify-agent-studio'
-const verifyWorktrees = action === 'verify-worktrees'
 const inspectWorktreeActivity = action === 'activity'
 const cancelConversationId =
   action &&
@@ -127,7 +126,6 @@ const cancelConversationId =
   !statusConversationId &&
   !verifySettings &&
   !verifyAgentStudio &&
-  !verifyWorktrees &&
   !inspectWorktreeActivity
     ? action
     : undefined
@@ -558,46 +556,6 @@ if (verifyAgentStudio) {
   console.log(JSON.stringify({ opened, topology, routingOpened, routing, screenshotPath }, null, 2))
   socket.close()
   process.exit(topology?.visible && routing?.visible ? 0 : 1)
-}
-
-if (verifyWorktrees) {
-  const opened = await evaluate(`(() => {
-    const button = document.querySelector('[data-testid="nav-worktree"]')
-    button?.click()
-    return Boolean(button)
-  })()`)
-  if (!opened) throw new Error('Navigation Worktrees introuvable')
-  await sleep(50)
-  const initial = await evaluate(`(() => ({
-    loading: document.querySelector('[data-testid="worktree-map-loading"]')?.textContent?.trim() ?? null,
-    loadingRole: document.querySelector('[data-testid="worktree-map-loading"]')?.getAttribute('role') ?? null,
-    statsHidden: document.querySelector('.wtmap-stats')?.hasAttribute('hidden') ?? null
-  }))()`)
-  let settled = null
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    settled = await evaluate(`(() => {
-      const view = document.querySelector('[data-testid="worktree-map"]')
-      const error = document.querySelector('[data-testid="worktree-map-error"]')
-      return {
-        visible: Boolean(view),
-        title: document.querySelector('.module-header h1')?.textContent?.trim() ?? null,
-        map: Boolean(document.querySelector('svg.wtmap-plan')),
-        error: error?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,
-        retry: Boolean(document.querySelector('[data-testid="worktree-map-retry"]')),
-        pick: Boolean(document.querySelector('[data-testid="worktree-map-error-pick"]')),
-        loading: Boolean(document.querySelector('[data-testid="worktree-map-loading"]'))
-      }
-    })()`)
-    if (settled?.map || settled?.error) break
-    await sleep(500)
-  }
-  const image = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
-  const screenshotPath =
-    'C:/Amitel/Autowin OS/artifacts/dogfood-one-prompt/worktrees-states-published.png'
-  writeFileSync(screenshotPath, Buffer.from(image.data, 'base64'))
-  console.log(JSON.stringify({ opened, initial, settled, screenshotPath }, null, 2))
-  socket.close()
-  process.exit(settled?.visible && (settled?.map || settled?.error) ? 0 : 1)
 }
 
 const response = await send('Runtime.evaluate', {

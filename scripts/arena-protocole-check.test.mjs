@@ -47,8 +47,7 @@ function bancConforme() {
   )
   writeFileSync(
     join(bench, 'prompt-judge.txt'),
-    '/judge les quatre livrables ANONYMISES du banc (bras A/B/C/X).
-'
+    '/judge les quatre livrables ANONYMISES du banc (bras A/B/C/X).\n'
   )
   writeFileSync(
     join(bench, 'lance.sh'),
@@ -189,8 +188,7 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     const f = bancConforme()
     writeFileSync(
       join(f.bench, 'prompt-judge.txt'),
-      'Tu es JUGE EXTERNE. Voici ma grille maison : note de 1 a 10.
-'
+      'Tu es JUGE EXTERNE. Voici ma grille maison : note de 1 a 10.\n'
     )
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P9').ok).toBe(false)
@@ -208,8 +206,7 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
   it('P9 accepte l_autre nom de fichier utilise par les bancs reels (judge-prompt.txt)', () => {
     const f = bancConforme()
     rmSync(join(f.bench, 'prompt-judge.txt'))
-    writeFileSync(join(f.bench, 'judge-prompt.txt'), 'Applique skills/judge/SKILL.md aux 4 bras.
-')
+    writeFileSync(join(f.bench, 'judge-prompt.txt'), 'Applique skills/judge/SKILL.md aux 4 bras.\n')
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect('P9 ' + point(res, 'P9').detail).toBe('P9 ok')
   })

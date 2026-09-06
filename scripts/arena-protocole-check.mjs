@@ -36,7 +36,7 @@ const FICHIERS_PROMPT_JUGE = ['prompt-judge.txt', 'judge-prompt.txt']
  * skills chargees : la seule preuve LISIBLE que le verdict vient de `judge` et non d_une grille
  * improvisee est l_invocation ecrite dans le prompt que ce juge a recu.
  */
-const REGEX_SKILL_JUGE = /\/judge|skills[\/]judge[\/]SKILL\.md/i
+const REGEX_SKILL_JUGE = /\/judge\b|skills[\/]judge[\/]SKILL\.md/i
 
 /** Le texte du prompt envoye au juge, quel que soit le nom de fichier retenu par le banc. */
 function promptDuJuge(bench) {
