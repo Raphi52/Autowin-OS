@@ -1,6 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { CandidatAffiche } from './veille-candidats-message'
-import { emojiType, redigerPromptWorkflowSelection } from './veille-candidats-message'
+import {
+  emojiType,
+  redigerPromptWorkflowSelection,
+  selectionAutoDepuisScout
+} from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 
 /** Une pastille muette ne dit rien : chaque couleur porte son libelle en infobulle et en aria. */
@@ -20,13 +24,33 @@ const LIBELLE_BANDE: Record<'g' | 'y' | 'r', string> = {
  */
 export function CandidatsPickPanel({
   candidats,
+  texteScout,
+  autoLancer,
   onPick
 }: {
   candidats: CandidatAffiche[]
+  /** Le texte du scout : s'il déclare `CIBLE:`/`CIBLES:`, ce choix pré-coche les cases. */
+  texteScout?: string
+  /**
+   * LE CLIC AUTOMATIQUE. Vrai = le panneau appuie lui-meme sur le bouton avec la selection decidee
+   * par le scout (mode auto). Ne part JAMAIS sans declaration ecrite : sans `CIBLE:` ni section
+   * `## Cible`, ou sur une declaration vide, rien n'est envoye et le bouton attend un clic humain.
+   */
+  autoLancer?: boolean
   onPick?: (prompt: string) => void
 }): React.JSX.Element {
-  // Tout coché par défaut : le geste courant est « enchaîne sur tout », décocher est l'exception.
-  const [coches, setCoches] = useState<ReadonlySet<number>>(new Set(candidats.map((_, i) => i)))
+  /*
+   * QUI COCHE ? L'agent quand il a DÉCLARÉ son choix, l'habitude sinon.
+   *
+   * Le scout qui écrit `CIBLES: 1, 3` a désigné ses candidats : les cases suivent sa décision, et le
+   * bandeau au-dessus dit lesquels sont gardés — un choix invisible serait le même défaut qu'une
+   * rubrique lue comme un ordre. Sans déclaration : tout coché, comme avant (le geste courant est
+   * « enchaîne sur tout », décocher est l'exception). Le bouton, lui, reste toujours à cliquer.
+   */
+  const auto = selectionAutoDepuisScout(candidats, texteScout)
+  const [coches, setCoches] = useState<ReadonlySet<number>>(
+    auto ?? new Set(candidats.map((_, i) => i))
+  )
   const [deplies, setDeplies] = useState<ReadonlySet<number>>(new Set())
   const basculer = (index: number): void => {
     setCoches((courant) => {
@@ -46,6 +70,20 @@ export function CandidatsPickPanel({
   }
   const tous = coches.size === candidats.length
   const selection = candidats.filter((_, index) => coches.has(index))
+  /*
+   * L'AGENT APPUIE SUR LE BOUTON. Une seule fois par panneau (`lanceRef`) : un re-rendu ne renvoie
+   * rien. Condition stricte — le mode auto est allume ET le scout a ecrit son choix ET ce choix
+   * retient au moins une ligne. Un workflow complet jusqu'au commit ne part pas d'un defaut.
+   */
+  const lanceRef = useRef(false)
+  useEffect(() => {
+    console.log('PANEL EFFET', autoLancer, lanceRef.current, auto && auto.size, !!onPick)
+    if (!autoLancer || lanceRef.current) return
+    if (auto === null || auto.size === 0) return
+    lanceRef.current = true
+    onPick?.(redigerPromptWorkflowSelection(candidats.filter((_, index) => auto.has(index))))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLancer])
   return (
     <div className="cpick" data-testid="candidats-pick">
       <div className="cpick-tete">
@@ -59,6 +97,13 @@ export function CandidatsPickPanel({
           />
           tout
         </label>
+        {auto !== null && (
+          <span className="cpick-auto" data-testid="cpick-auto">
+            {auto.size === 0
+              ? 'Le scout n’a retenu aucun candidat — rien n’est coché.'
+              : `Choix du scout : ${auto.size} candidat${auto.size > 1 ? 's' : ''} sur ${candidats.length} — ${autoLancer ? 'lancé automatiquement.' : 'à toi de lancer.'}`}
+          </span>
+        )}
         <span className="cpick-compte">
           {coches.size}/{candidats.length} sélectionné{coches.size > 1 ? 's' : ''}
         </span>
@@ -130,9 +175,7 @@ export function CandidatsPickPanel({
                 <b>Comment ?</b>
                 <p>
                   {candidat.how ??
-                    (candidat.url
-                      ? `Partir de l'ancrage ${candidat.url}.`
-                      : 'Non précisé.')}
+                    (candidat.url ? `Partir de l'ancrage ${candidat.url}.` : 'Non précisé.')}
                 </p>
               </div>
             </div>

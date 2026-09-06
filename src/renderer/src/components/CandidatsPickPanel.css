@@ -115,3 +115,9 @@
 .cpick-dot-r {
   background: #f87171;
 }
+
+/* Le choix ANNONCÉ par le scout : sans ce bandeau, des cases pré-cochées seraient un choix invisible. */
+.cpick-auto {
+  font-size: 11px;
+  opacity: 0.75;
+}

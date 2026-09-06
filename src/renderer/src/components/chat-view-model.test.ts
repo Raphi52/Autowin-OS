@@ -151,9 +151,9 @@ describe('conversation state indicator', () => {
 
   it('ne marque pas « attend ta réponse » quand un tour tourne ou que l’utilisateur a repris la main', () => {
     // Entrées qui feraient échouer une correction trop large :
-    expect(
-      deriveConversationState({ busy: true, messageCount: 2, asksUser: true })
-    ).toMatchObject({ key: 'running' })
+    expect(deriveConversationState({ busy: true, messageCount: 2, asksUser: true })).toMatchObject({
+      key: 'running'
+    })
     expect(
       deriveConversationState({
         busy: false,
@@ -1477,7 +1477,10 @@ describe('groupAssistantActivity', () => {
             url: 'src/main/index.ts:1',
             pertinence: 92
           }
-        ]
+        ],
+        // Le texte du scout voyage AVEC le bloc : c'est lui qui porte la ligne `CIBLE:`/`CIBLES:`
+        // par laquelle l'agent designe les candidats a pre-cocher (2026-09-06).
+        texteScout: texte
       }
     ])
   })

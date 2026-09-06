@@ -48,7 +48,12 @@ export type ChatPart = PersistedChatPart
 type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatErrorPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
-export type ChatCandidatsPickBlock = { kind: 'candidats-pick'; candidats: CandidatAffiche[] }
+export type ChatCandidatsPickBlock = {
+  kind: 'candidats-pick'
+  candidats: CandidatAffiche[]
+  /** Le texte d'origine du scout : il porte la ligne `CIBLE:`/`CIBLES:` qui pré-coche les cases. */
+  texteScout?: string
+}
 export type ChatAskDecisionBlock = {
   kind: 'ask-decision'
   decision: AskDecision
@@ -329,8 +334,12 @@ function identiteDeLigne(ligne: PipelineChoice): string {
 export function texteDuPrompt(prompt: OrchStep['prompt']): string | undefined {
   if (!prompt) return undefined
   const blocs = [
-    ...(prompt.system ? [`[system]
-${prompt.system}`] : []),
+    ...(prompt.system
+      ? [
+          `[system]
+${prompt.system}`
+        ]
+      : []),
     ...(Array.isArray(prompt.messages) ? prompt.messages : []).map(
       (message) => `[${message.role}]
 ${message.content}`
@@ -461,7 +470,6 @@ function indexDeLaLignePipeline(
   }
   return -1
 }
-
 
 /**
  * Impose l'invariant « un tour `done` n'a plus rien en cours » sur un message VIVANT.
@@ -1490,7 +1498,11 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       // sélection passe donc AVANT le rendu en lecture seule.
       const scoutRows = parseScoutTable(part.text)
       if (scoutRows) {
-        blocks.push({ kind: 'candidats-pick', candidats: candidatsDepuisScoutTable(scoutRows) })
+        blocks.push({
+          kind: 'candidats-pick',
+          candidats: candidatsDepuisScoutTable(scoutRows),
+          texteScout: part.text
+        })
         continue
       }
       // Scout de veille : charge utile JSON de candidats → panneau de sélection natif (cases +
@@ -1502,7 +1514,7 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
         // montre tout (dépliable). Le texte restant (synthèse) garde sa place au-dessus.
         const synthese = texteSansChargeJson(part.text)
         if (synthese) blocks.push({ ...part, text: synthese })
-        blocks.push({ kind: 'candidats-pick', candidats: candidatsAffiches })
+        blocks.push({ kind: 'candidats-pick', candidats: candidatsAffiches, texteScout: part.text })
         continue
       }
       // Retour scout (suggestions groupées en markdown) → vrai array de chips cliquables.

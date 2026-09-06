@@ -3231,6 +3231,36 @@ export function ChatView({
   }
   const pickSuggestion = useCallback((prompt: string) => pickRef.current(prompt), [])
   /**
+   * LE CLIC AUTOMATIQUE SUR LES CANDIDATS — mode auto seulement, et UNE SEULE FOIS par message.
+   *
+   * Demande du 2026-09-06 : « l'orchestrateur decide des candidats et clique sur le bouton avec la
+   * selection ». Le choix vient du texte du scout (`CIBLE:` / section `## Cible`), l'envoi part
+   * d'ici. La reponse est memorisee par message : rouvrir la conversation plus tard REMONTE le
+   * panneau, et sans cette memoire il relancerait un workflow payant deja lance.
+   */
+  const autoCandidatsRef = useRef<Map<string, 'en-cours' | 'lance'>>(new Map())
+  const doitAutoLancerCandidats = useCallback(
+    (cle: string, dernier: boolean, fini: boolean): boolean => {
+      const etat = autoCandidatsRef.current.get(cle)
+      console.log('DOIT', cle, dernier, fini, autoActif, etat)
+      if (etat === 'lance') return true
+      if (!fini) {
+        // Le message S'ECRIT sous nos yeux : on le marque seulement, on ne repond pas encore. Sans
+        // cette marque, la premiere reponse (« non », le message n'est pas fini) etait memorisee
+        // definitivement et le clic auto ne partait JAMAIS sur un vrai tour en direct.
+        if (dernier && autoActif) autoCandidatsRef.current.set(cle, 'en-cours')
+        return false
+      }
+      // VU S'ECRIRE ICI, sinon rien. C'est ce qui distingue un tour qui vient de se terminer d'une
+      // conversation ROUVERTE dont le dernier message etait deja termine — relancer celui-la
+      // repayait un workflow deja paye.
+      if (!autoActif || !dernier) return false
+      autoCandidatsRef.current.set(cle, 'lance')
+      return true
+    },
+    [autoActif]
+  )
+  /**
    * REPONDRE A UNE QUESTION `ask` — parite claude.exe : c'est un MESSAGE, jamais une orientation.
    *
    * `ask` clot desormais le tour (cf. `agent-pilot`), donc le cas normal est un envoi ordinaire.
@@ -3409,7 +3439,10 @@ export function ChatView({
      * l'utilisateur en bas » — armer la descente a l'envoi confisque au lecteur le droit de
      * remonter aussitot apres. La vraie cause reste a localiser.
      */
-    if (scrollRef.current && (!sourceConversationId || sourceConversationId === activeRef.current)) {
+    if (
+      scrollRef.current &&
+      (!sourceConversationId || sourceConversationId === activeRef.current)
+    ) {
       gesteLecteurRef.current = false
       dernierScrollTopRef.current = scrollRef.current.scrollTop
       setHasNewActivity(false)
@@ -4117,7 +4150,8 @@ export function ChatView({
     try {
       const brut = window.localStorage.getItem(CLE_DOSSIERS_CONNUS)
       const lu = brut ? (JSON.parse(brut) as unknown) : null
-      if (Array.isArray(lu)) return lu.filter((x): x is string => typeof x === 'string' && !!x.trim())
+      if (Array.isArray(lu))
+        return lu.filter((x): x is string => typeof x === 'string' && !!x.trim())
     } catch {
       /* preference illisible : on repart des dossiers reellement utilises */
     }
@@ -4153,7 +4187,8 @@ export function ChatView({
     if (amorce.current || convs.length === 0) return
     amorce.current = true
     const utilises = convs.map((conv) => conv.projectPath?.trim()).filter(Boolean) as string[]
-    if (utilises.length > 0) setDossiersMemorises((connus) => [...new Set([...connus, ...utilises])])
+    if (utilises.length > 0)
+      setDossiersMemorises((connus) => [...new Set([...connus, ...utilises])])
   }, [convs])
 
   const dossiersConversations = useMemo(
@@ -4257,6 +4292,15 @@ export function ChatView({
         <Fragment key={messageKey(message, index)}>
           <ChatMessageRow
             onPickSuggestion={pickSuggestion}
+            autoLancerCandidats={
+              message.role === 'assistant' &&
+              doitAutoLancerCandidats(
+                // La cle porte la conversation : `role:index` seul se RECOUVRE d'un fil a l'autre.
+                `${activeId ?? ''}#${messageKey(message, index)}`,
+                index === messages.length - 1,
+                message.done === true
+              )
+            }
             onAnswerAsk={answerAsk}
             /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
              question. Derive du fil, donc vrai apres un remontage comme apres un redemarrage.
@@ -4285,6 +4329,7 @@ export function ChatView({
       )),
     [
       messages,
+      doitAutoLancerCandidats,
       activeId,
       activeDirectiveReceiptsByMessage,
       pickSuggestion,
@@ -4785,8 +4830,7 @@ export function ChatView({
                             // Relecture IMMEDIATE du badge : sans elle, il garde l'ancien nom
                             // jusqu'au prochain battement (5 s) et la bascule parait sans effet.
                             window.dispatchEvent(new Event('focus'))
-                          }
-                          else
+                          } else
                             setBrancheMenu((m) =>
                               m ? { ...m, refus: r?.reason ?? 'Bascule refusee.' } : m
                             )

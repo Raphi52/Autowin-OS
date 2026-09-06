@@ -217,3 +217,84 @@ export function emojiType(type: string | undefined): string {
   if (type === 'ajout' || type === 'new') return '🆕'
   return '❔'
 }
+
+/**
+ * LA SÉLECTION DÉCIDÉE PAR L'AGENT — le pont entre le choix ÉCRIT du scout et les cases du panneau.
+ *
+ * Défaut nommé (2026-09-06) : deux systèmes de choix coexistaient sans se parler. Les cases du
+ * panneau (multi-sélection, tout coché par défaut) d'un côté, la ligne `CIBLE:` que le mode auto lit
+ * dans le texte (mono-sélection) de l'autre. Résultat : l'agent pouvait bien désigner des candidats,
+ * le panneau restait sur « tout », donc le clic partait sur des lignes que personne n'avait choisies.
+ *
+ * Ici la déclaration du scout — `CIBLE:` ou `CIBLES:` — pilote les cases. Un candidat est retenu s'il
+ * est désigné par son NUMÉRO de ligne (1, 2…) ou si son titre apparaît dans la déclaration. Rien de
+ * déclaré, ou déclaration qui ne correspond à AUCUNE ligne → `null` : le panneau garde son
+ * comportement d'origine (tout coché). Aucun envoi n'est déclenché ici : le bouton reste à cliquer.
+ */
+export function selectionAutoDepuisScout(
+  candidats: readonly CandidatAffiche[],
+  texteScout: string | undefined
+): ReadonlySet<number> | null {
+  const declaration = lireLignesCibles(texteScout ?? '')
+  if (declaration === null) return null
+  const nu = sansAccents(declaration)
+  // « aucune » / « rien » = le scout dit explicitement de ne rien enchaîner : zéro case cochée.
+  if (/^(aucune?|rien)\b/u.test(nu.trim())) return new Set()
+  const numeros = new Set(
+    Array.from(nu.matchAll(/(?:^|[^\d])(\d{1,2})(?![\d])/gu), (trouve) => Number(trouve[1]))
+  )
+  const retenus = new Set<number>()
+  candidats.forEach((candidat, index) => {
+    if (numeros.has(index + 1)) {
+      retenus.add(index)
+      return
+    }
+    const titre = sansAccents(candidat.titre).trim()
+    if (titre.length >= 4 && nu.includes(titre)) retenus.add(index)
+  })
+  return retenus.size > 0 ? retenus : null
+}
+
+/** Minuscules sans diacritiques : comparer un titre a une declaration ne doit pas buter sur un accent. */
+function sansAccents(texte: string): string {
+  return texte.normalize('NFD').replace(/[̀-ͯ]/gu, '').toLowerCase()
+}
+
+/**
+ * La déclaration de cible d'un scout, concaténée ; `null` s'il n'en pose aucune.
+ *
+ * DEUX formes, les mêmes que `lireCibleScout` (src/main/scout-cible.ts) : une ligne `CIBLE:`/
+ * `CIBLES:`, ou une section `## Cible` non vide. N'en reconnaître qu'une rendait le pont inerte sur
+ * la forme la plus courante — le scout déclarait, le panneau restait « tout coché ».
+ */
+function lireLignesCibles(texteScout: string): string | null {
+  const lignes = texteScout.split(String.fromCharCode(10))
+  const morceaux: string[] = []
+  for (let i = 0; i < lignes.length; i++) {
+    const ligne = lignes[i]!
+    const enLigne = ligne.match(/^\s*[>*_`\s]*cibles?\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu)
+    if (enLigne) {
+      morceaux.push(enLigne[1]!.replace(/^[\s*_`]+/u, '').trim())
+      continue
+    }
+    const titre = ligne.match(/^\s{0,3}#{1,6}\s+(.+?)\s*$/u)
+    if (
+      !titre ||
+      !/^cibles?$/u.test(
+        sansAccents(titre[1]!)
+          .replace(/[^a-z0-9]+/gu, ' ')
+          .trim()
+      )
+    )
+      continue
+    // Le corps de la section : jusqu'au titre suivant. Une section vide ne déclare rien.
+    const corps: string[] = []
+    for (let j = i + 1; j < lignes.length; j++) {
+      if (/^\s{0,3}#{1,6}\s+/u.test(lignes[j]!)) break
+      corps.push(lignes[j]!)
+    }
+    const valeur = corps.join(' ').trim()
+    if (valeur) morceaux.push(valeur)
+  }
+  return morceaux.length > 0 ? morceaux.join(' ; ') : null
+}

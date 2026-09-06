@@ -4,6 +4,7 @@ import {
   emojiType,
   extraireCandidatsAffiches,
   redigerPromptWorkflowSelection,
+  selectionAutoDepuisScout,
   texteSansChargeJson
 } from './veille-candidats-message'
 import { parseScoutTable } from './scout-table'
@@ -316,5 +317,46 @@ describe('les pastilles Impact/Effort restent sur la ligne', () => {
     expect(candidat.pertinence).toBe(82)
     expect(candidat.impact).toBe('g')
     expect(candidat.effort).toBe(undefined)
+  })
+})
+
+describe('selectionAutoDepuisScout', () => {
+  const candidats = [
+    { titre: 'Cockpit des coûts' },
+    { titre: 'Retry aveugle' },
+    { titre: 'Journal mal formé' }
+  ]
+
+  it('le scout désigne ses candidats par NUMÉRO : seuls ceux-là sont cochés', () => {
+    const choix = selectionAutoDepuisScout(candidats, 'Tableau ci-dessus.\nCIBLES: 1, 3')
+    expect(choix && [...choix].sort()).toEqual([0, 2])
+  })
+
+  it('le scout désigne par TITRE', () => {
+    const choix = selectionAutoDepuisScout(candidats, 'CIBLE: Retry aveugle — le plus rentable')
+    expect(choix && [...choix]).toEqual([1])
+  })
+
+  it('sans déclaration, aucune décision : le panneau garde son comportement d’origine', () => {
+    expect(selectionAutoDepuisScout(candidats, 'Trois pistes, à toi de voir.')).toBeNull()
+  })
+
+  it('déclaration qui ne correspond à rien = pas de décision, jamais une sélection vide muette', () => {
+    expect(selectionAutoDepuisScout(candidats, 'CIBLE: refonte du noyau')).toBeNull()
+  })
+
+  it('« CIBLE: aucune » coche zéro ligne', () => {
+    const choix = selectionAutoDepuisScout(candidats, 'CIBLE: aucune — rien ne tient')
+    expect(choix && choix.size).toBe(0)
+  })
+
+  it('forme SECTION « ## Cible » — la forme documentée de scout-cible.ts', () => {
+    const texte = ['## Candidats', 'blabla', '## Cible', '2 et 3', '## Suite', '1'].join('\n')
+    const choix = selectionAutoDepuisScout(candidats, texte)
+    expect(choix && [...choix].sort()).toEqual([1, 2])
+  })
+
+  it('section « ## Cible » VIDE = aucune décision', () => {
+    expect(selectionAutoDepuisScout(candidats, '## Cible\n\n## Suite')).toBeNull()
   })
 })

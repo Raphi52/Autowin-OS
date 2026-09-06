@@ -260,6 +260,7 @@ export const ChatMessageRow = memo(
     onResend,
     onRefineResume,
     askRepondu,
+    autoLancerCandidats,
     onAnswerAsk
   }: {
     message: Msg
@@ -273,6 +274,8 @@ export const ChatMessageRow = memo(
     onFork?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
     onPickSuggestion?: (prompt: string) => void
+    /** Mode auto : le panneau de candidats appuie lui-meme sur son bouton avec le choix du scout. */
+    autoLancerCandidats?: boolean
     onOpenLiveAction?: (mode: 'live' | 'history') => void
     directiveReceipts?: DirectiveReceipt[]
     /** Une question de ce tour a deja sa reponse dans le fil (message utilisateur posterieur). */
@@ -293,7 +296,10 @@ export const ChatMessageRow = memo(
                 tour n'ouvre pas de nouveau tour, il rejoint celui qui court -- et l'utilisateur
                 concluait qu'il etait perdu (« mon dernier msg a pas lance de tour »). */}
             {message.orientation ? (
-              <span className="msg-orientation-tag" title="Envoyé pendant un tour en cours : ce texte a rejoint la réponse en cours au lieu d’ouvrir un nouveau tour">
+              <span
+                className="msg-orientation-tag"
+                title="Envoyé pendant un tour en cours : ce texte a rejoint la réponse en cours au lieu d’ouvrir un nouveau tour"
+              >
                 orienté en cours de tour
               </span>
             ) : null}
@@ -423,6 +429,8 @@ export const ChatMessageRow = memo(
                       <CandidatsPickPanel
                         key={index}
                         candidats={part.candidats}
+                        texteScout={part.texteScout}
+                        autoLancer={autoLancerCandidats}
                         onPick={(prompt) => onPickSuggestion?.(prompt)}
                       />
                     ) : part.kind === 'error' ? (
