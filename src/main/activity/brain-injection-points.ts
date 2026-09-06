@@ -105,14 +105,12 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     label: 'Chat · contexte poussé avant l’appel provider',
     kind: 'push',
     injecte: true,
-    emission: 'non-trace',
+    emission: 'spool',
     sites: [
       { file: 'src/main/amitel-context.ts', anchor: '? retrieveBrain(boundedQuery)' },
       { file: 'src/main/amitel-context.ts', anchor: '${origin}/query`' }
     ],
-    manque:
-      "aucun appel à `appendBrainTrace` dans `amitel-context.ts` : la voie poussée du chat injecte " +
-      "du Brain dans le prompt sans laisser de trace, donc l'Observatory ne la voit pas.",
+    trace: { file: 'src/main/amitel-context.ts', anchor: "kind: 'pousse'" },
     pourquoi:
       "Voie poussée du chat (`sources: ['brain']`) : injecte un bloc Brain dans le prompt sans passer par le run."
   },

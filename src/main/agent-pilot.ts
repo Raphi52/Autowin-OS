@@ -669,7 +669,11 @@ export class AgentPilot {
     private readonly registry: ProviderRegistry,
     private readonly roles: RoleModelConfig,
     private readonly bus: AppCommandBus,
-    private readonly retrieveContext?: (query: string) => Promise<string>,
+    private readonly retrieveContext?: (
+      query: string,
+      /** Identite du tour : sans elle, le contexte pousse ne laisse aucune trace lisible. */
+      meta?: { conversationId?: string; turnId?: string }
+    ) => Promise<string>,
     /**
      * Contexte projet plié (CLAUDE.md/AGENTS.md du workspace), MÊME source que les phases
      * orchestrées (context-files). Défaut vide → le chat reste fonctionnel sans workspace.
@@ -1081,7 +1085,7 @@ export class AgentPilot {
     }
     const retrievedContext =
       this.retrieveContext && latestUserMessage
-        ? await this.retrieveContext(latestUserMessage).catch(() => '')
+        ? await this.retrieveContext(latestUserMessage, { conversationId, turnId }).catch(() => '')
         : ''
     timer.mark('ragBrain')
 

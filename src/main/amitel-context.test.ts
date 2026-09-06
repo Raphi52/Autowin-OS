@@ -369,3 +369,68 @@ describe('Amitel prompt context', () => {
     expect(context).toContain('delegated worker result')
   })
 })
+
+/**
+ * LA VOIE POUSSÉE DU CHAT LAISSE UNE TRACE.
+ *
+ * Constaté le 2026-09-06 en reprenant le registre des points d'injection Brain : `amitel-context.ts`
+ * injectait un bloc Brain dans le prompt sans appeler `appendBrainTrace`. L'Observatory, qui annonce
+ * « ce que le Brain a fait », n'en montrait rien — un contexte poussé et une absence de contexte y
+ * étaient également invisibles. Le registre le déclarait comme un TROU (`emission: 'non-trace'`).
+ *
+ * Ce que ce test verrouille : quand la voie poussée récupère réellement du Brain, elle émet une
+ * trace `pousse` portant la conversation ET le volume injecté. Et quand le Brain n'est PAS dans les
+ * sources poussées — le cas du chat depuis le 2026-07-29 — elle n'émet RIEN : une trace fantôme
+ * ferait croire à un appel qui n'a pas eu lieu.
+ */
+describe('trace de la voie poussée', () => {
+  const harnais = (sources: readonly ('brain' | 'graph')[], onTrace: (t: unknown) => void) =>
+    createAmitelContextProvider({
+      sources,
+      workspace: () => 'C:\Amitel\Autowin OS',
+      fetchFn: vi
+        .fn()
+        .mockResolvedValue(
+          textResponse(
+            signed(
+              '[AMITEL BRAIN REFERENCE DATA]\n\n---\n\n### Source 1 — knowledge/domain/autowin-os-test.md'
+            )
+          )
+        ) as never,
+      readText: vi
+        .fn()
+        .mockImplementation(async (path: string) => (path.endsWith('service-token') ? TOKEN : graph)),
+      tokenPath: 'C:/token/service-token',
+      graphPath: 'C:/brain/projects/autowin-os/graphify-out/graph.json',
+      graphLoader: vi.fn().mockResolvedValue({
+        raw: graph,
+        sourcePath: 'C:/brain/projects/autowin-os/graphify-out/graph.json',
+        sha256: 'graph-sha'
+      }),
+      graphEvidence: resolveGraphEvidence,
+      onBrainTrace: onTrace as never
+    })
+
+  it('émet une trace `pousse` quand le Brain est réellement poussé dans le prompt', async () => {
+    const traces: Record<string, unknown>[] = []
+    const provider = harnais(['brain', 'graph'], (t) => traces.push(t as never))
+    await provider('Comment fonctionne AgentPilot chat ?', { conversationId: 'conv-7', turnId: 't-1' })
+    expect(traces).toHaveLength(1)
+    expect(traces[0]).toMatchObject({ kind: 'pousse', conversationId: 'conv-7', turnId: 't-1' })
+    expect(traces[0]!.injectedChars as number).toBeGreaterThan(0)
+  })
+
+  it('n’émet RIEN quand le Brain n’est pas dans les sources poussées', async () => {
+    const traces: unknown[] = []
+    const provider = harnais(['graph'], (t) => traces.push(t))
+    await provider('Comment fonctionne AgentPilot chat ?', { conversationId: 'conv-7' })
+    expect(traces).toEqual([])
+  })
+
+  it('n’émet RIEN sans conversation : une trace sans fil est illisible dans l’Observatory', async () => {
+    const traces: unknown[] = []
+    const provider = harnais(['brain', 'graph'], (t) => traces.push(t))
+    await provider('Comment fonctionne AgentPilot chat ?')
+    expect(traces).toEqual([])
+  })
+})

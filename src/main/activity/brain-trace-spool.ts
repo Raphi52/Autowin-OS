@@ -119,8 +119,10 @@ export interface BrainTrace {
    *  - `empreinte`  : chargement de l'empreinte du dépôt (skill `think`), 1×/run ;
    *  - `recherche`  : recherche lancée par l'HUMAIN depuis la vue Knowledge ;
    *  - `depot`      : ÉCRITURE — dépôt d'un fait en `inbox/` par la commande `remember`.
+   *  - `pousse`     : contexte Brain poussé dans le prompt d'un tour de chat, HORS run (arrivée le
+   *                   2026-09-06 : ce chemin injectait sans écrire aucune trace).
    */
-  kind?: 'automatic' | 'query' | 'empreinte' | 'recherche' | 'depot'
+  kind?: 'automatic' | 'query' | 'empreinte' | 'recherche' | 'depot' | 'pousse'
   query: string
   found?: boolean
   status?: 'found' | 'empty' | 'invalid' | 'unavailable'
