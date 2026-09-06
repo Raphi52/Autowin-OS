@@ -80,11 +80,6 @@ import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
-  seedConversationScopeTest: (
-    conversationId: string,
-    variant: 'a' | 'b'
-  ): Promise<{ conversationId: string; path: string; variant: 'a' | 'b' }> =>
-    ipcRenderer.invoke('app:test:seed-conversation-scope', conversationId, variant),
   seedArtifactPreviewsTest: (
     htmlOnly = false
   ): Promise<{ conversationId: string; turnId: string }> =>

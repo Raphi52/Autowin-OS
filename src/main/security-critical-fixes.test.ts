@@ -353,7 +353,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `git:checkout` - bascule sur une branche LOCALE existante, REFUSEE si l'arbre de travail
     //     est sale. Le nom de branche n'est pas concatene dans une ligne de commande.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(174)
+    // MISE A JOUR 2026-09-06 - 174 -> 173. La surface RETRECIT, pour une fois :
+    //   `app:test:seed-conversation-scope` est RETIRE. C'etait une fixture d'instance isolee, semant
+    //   des traces de fichiers et de Brain pour la preuve d'isolation du panneau Source control. Sa
+    //   sonde a ete retiree le meme jour — le panneau n'est plus un onglet, il s'ouvre par un noeud
+    //   du graphe, donc la preuve n'avait plus de chemin d'acces —, et ce canal n'avait plus AUCUN
+    //   appelant. Un canal IPC sans appelant reste une porte : on la ferme.
+    expect(handlers).toHaveLength(173)
     expect(unguarded).toEqual([])
   })
 

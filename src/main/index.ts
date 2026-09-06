@@ -314,22 +314,16 @@ import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summ
 import { journaliserSaisie } from './store/journal-saisie'
 import { defaultProcessIdentity } from './store/worktree-manager'
 import {
-  appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
   readConversationFileTraces,
   readConversationTurnFileMutations,
-  readConversationTurnFilePaths,
-  workspaceTracePathKey
+  readConversationTurnFilePaths
 } from './activity/conversation-file-trace-spool'
 import { buildBehaviourComposition } from './behaviour-composition'
 import { ProviderStateStore } from './provider-state-store'
 import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
-import {
-  captureWorkspaceMutationSnapshot,
-  captureWorkspacePathGenerationMarker
-} from './providers/workspace-mutation-evidence'
 import {
   automationAppIdentity,
   resolveAutomationInstanceMode,
@@ -1458,46 +1452,6 @@ function registerChatIpc(): void {
       throw new Error('Capture UI de test indisponible hors instance isolée')
     return (await event.sender.capturePage()).toPNG().toString('base64')
   })
-  ipcMain.handle(
-    'app:test:seed-conversation-scope',
-    async (event, conversationId: unknown, variant: unknown) => {
-      assertTrustedRendererSender(event, 'Fixture conversation source scope')
-      if (!isolatedTestInstance) throw new Error('Fixture indisponible hors instance isolée')
-      const safeConversationId = guardString(conversationId, 'conversationId')
-      if (variant !== 'a' && variant !== 'b') throw new Error('Variante de fixture invalide')
-      const path =
-        variant === 'a'
-          ? 'src/renderer/src/components/SourceControlPane.tsx'
-          : 'src/renderer/src/components/SourceControlPane.css'
-      const fingerprint = [...(await captureWorkspaceMutationSnapshot(os.executionWorkspace))].find(
-        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-      )?.[1]
-      const generationMarker = await captureWorkspacePathGenerationMarker(
-        os.executionWorkspace,
-        path
-      )
-      appendConversationFileTrace({
-        timestamp: new Date().toISOString(),
-        conversationId: safeConversationId,
-        turnId: `fixture-turn-${variant}`,
-        workspaceRoot: os.executionWorkspace,
-        source: 'subagent',
-        paths: [path],
-        ...(fingerprint ? { pathFingerprints: { [path]: fingerprint } } : {}),
-        pathGenerationMarkers: { [path]: generationMarker }
-      })
-      appendBrainTrace({
-        timestamp: new Date().toISOString(),
-        conversationId: safeConversationId,
-        turnId: `fixture-turn-${variant}`,
-        kind: 'query',
-        query: variant === 'a' ? 'fixture brain conversation A' : 'fixture brain conversation B',
-        found: true,
-        injectedChars: variant === 'a' ? 321 : 654
-      })
-      return { conversationId: safeConversationId, path, variant }
-    }
-  )
   ipcMain.handle('app:test:seed-artifact-previews', (event, htmlOnly = false) => {
     assertTrustedRendererSender(event, 'Fixture artifact previews')
     if (!isolatedTestInstance) throw new Error('Fixture indisponible hors instance isolée')

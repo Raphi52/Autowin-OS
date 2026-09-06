@@ -68,10 +68,6 @@ export interface ClaudeAccountsPayload {
 
 interface ChatApi {
   captureTestPage: () => Promise<string>
-  seedConversationScopeTest: (
-    conversationId: string,
-    variant: 'a' | 'b'
-  ) => Promise<{ conversationId: string; path: string; variant: 'a' | 'b' }>
   seedArtifactPreviewsTest: (htmlOnly?: boolean) => Promise<{
     conversationId: string
     turnId: string
