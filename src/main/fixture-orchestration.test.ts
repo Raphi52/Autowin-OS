@@ -5,6 +5,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertDepotJetable,
+  PREFIXE_FIXTURE_ORCHESTRATION,
+  roleDeLAppel,
+  scenarioDemande,
   creerDepotJetable,
   FICHIER_ECRIT_PAR_LA_FIXTURE,
   MARQUEUR_DEPOT_JETABLE,
@@ -39,6 +42,24 @@ describe('dépôt jetable de la fixture d’orchestration', () => {
    * IDEMPOTENCE : un run interrompu ne doit pas perdre ce qu'il observait. Rappelée sur un dépôt
    * déjà créé, la fabrique le rend tel quel — elle ne réinitialise pas.
    */
+  /*
+   * LE DISTANT MANQUANT A ETE TROUVE EN JOUANT LE RUN, pas en lisant le code : le premier
+   * lancement reel s'est arrete sur « Lancement bloque : le distant origin est absent ». Le depot
+   * REEL en a un, donc rien ne l'avait revele.
+   */
+  it('pose un distant origin local, pour qu’un run puisse publier', () => {
+    const racine = creerDepotJetable(join(dossierTemporaire(), 'depot'))
+    const distant = execFileSync('git', ['remote', 'get-url', 'origin'], {
+      cwd: racine,
+      encoding: 'utf8'
+    }).trim()
+    expect(distant).toContain('-origin.git')
+    expect(existsSync(distant)).toBe(true)
+    // La branche y est POUSSEE : un origin vide ne repond pas a la question « ou publier ».
+    const distantes = execFileSync('git', ['branch', '-r'], { cwd: racine, encoding: 'utf8' })
+    expect(distantes).toContain('origin/main')
+  })
+
   it('rappelée sur un dépôt déjà créé, elle le conserve', () => {
     const racine = creerDepotJetable(join(dossierTemporaire(), 'depot'))
     writeFileSync(join(racine, 'travail-en-cours.txt'), 'observation en cours', 'utf8')
@@ -102,5 +123,41 @@ describe('scénario nominal', () => {
 
   it('l’orchestrateur clôt sans réclamer un tour de plus', () => {
     expect(reponseFixtureNominale('orchestrator')).not.toContain('<cmd>')
+  })
+})
+
+describe('déclencheur du scénario', () => {
+  const isolee = ['electron', '--isolated-test-instance']
+
+  it('reconnaît le scénario nominal dans une instance isolée', () => {
+    expect(scenarioDemande(`${PREFIXE_FIXTURE_ORCHESTRATION} nominal`, isolee)).toBe('nominal')
+  })
+
+  /*
+   * LA PORTE NE DOIT PAS EXISTER EN PRODUCTION. Hors instance isolée le préfixe est ignoré — sans
+   * erreur : une erreur signalerait justement que la porte est là.
+   */
+  it('ignore le préfixe hors instance isolée', () => {
+    expect(scenarioDemande(`${PREFIXE_FIXTURE_ORCHESTRATION} nominal`, ['electron'])).toBeUndefined()
+  })
+
+  it('laisse passer une tâche ordinaire', () => {
+    expect(scenarioDemande('Corrige le bandeau de démarrage', isolee)).toBeUndefined()
+  })
+
+  /*
+   * UN SCÉNARIO INCONNU LÈVE. Un préfixe mal orthographié qui retomberait en silence sur un vrai
+   * run payant serait le pire des résultats.
+   */
+  it('lève sur un scénario inconnu plutôt que de lancer un run payant', () => {
+    expect(() => scenarioDemande(`${PREFIXE_FIXTURE_ORCHESTRATION} nominl`, isolee)).toThrow(
+      /scénario inconnu/
+    )
+  })
+
+  it('traduit le rôle nommé par l’orchestrateur', () => {
+    expect(roleDeLAppel('judge')).toBe('judge')
+    expect(roleDeLAppel('orchestrator')).toBe('orchestrator')
+    expect(roleDeLAppel('build')).toBe('sous-agent')
   })
 })

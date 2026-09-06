@@ -1497,6 +1497,8 @@ export class Orchestrator {
     return {
       cwd,
       sandbox,
+      // La phase, NOMMÉE pour qui doit la lire (voir `phaseAppelante` dans providers/types.ts).
+      phaseAppelante: phase,
       ...(providerTimeoutMs ? { providerTimeoutMs } : {}),
       ...(cwd !== this.deps.executionWorkspace ? { causallyIsolated: true } : {}),
       ...(causalWatchPaths.length ? { causalWatchPaths } : {}),

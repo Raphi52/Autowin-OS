@@ -47,10 +47,19 @@ describe('isolation du workflow entre conversations', () => {
     expect(os).toMatch(
       /const workflowDuRun\s*=\s*runOptions\.workflowOverride\s*\?\?\s*\(await this\.poseConversationWorkflow\(/
     )
-    // …puis enfermé dans un orchestrateur bâti pour lui seul, via la fabrique.
-    expect(os).toMatch(/const orchestrator = this\.orchestrateurPour\(workflowDuRun\)/)
+    /*
+     * …puis enfermé dans un orchestrateur bâti pour lui seul, via la fabrique.
+     *
+     * La fabrique reçoit un SECOND argument depuis le 2026-09-06 — la tâche, pour reconnaître le
+     * préfixe de la fixture d'orchestration. L'ancienne forme exigeait `(workflowDuRun)` EXACTEMENT
+     * et rougissait sur cet ajout, alors que l'invariant qu'elle protège — un orchestrateur par run,
+     * avec SA closure — est intact. On exige donc le premier argument et on laisse la suite libre :
+     * verrouiller une signature entière, c'est faire tomber la garde à chaque paramètre ajouté,
+     * jusqu'à ce que quelqu'un la desserre pour de mauvaises raisons.
+     */
+    expect(os).toMatch(/const orchestrator = this\.orchestrateurPour\(workflowDuRun[,)]/)
     expect(os).toMatch(
-      /orchestrateurPour\(workflow\?: WorkflowRunOverride\)[\s\S]{0,200}currentWorkflow: \(\) => workflow/
+      /orchestrateurPour\(workflow\?: WorkflowRunOverride[^)]*\)[\s\S]{0,1600}currentWorkflow: \(\) => workflow/
     )
   })
 })

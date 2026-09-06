@@ -7,6 +7,13 @@
 import { Notification } from 'electron'
 import { interfaceVisible } from './startup-gate'
 import { ProviderRegistry } from './providers/registry'
+import {
+  assertDepotJetable,
+  fournisseurFixtureOrchestration,
+  retrieveBrainNeutre,
+  rolesFixture,
+  scenarioDemande
+} from './fixture-orchestration'
 import { claudeActiveAccountId, claudeRotateAccount, claudeAccountEnv } from './claude-accounts'
 import { ClaudeCliAdapter } from './providers/claude'
 import type { Message } from './providers/types'
@@ -217,7 +224,30 @@ export class AutowinOS {
    * est realisee, et c'est le seul endroit qu'un harnais doit remplacer pour tester le chemin sans
    * lancer un vrai orchestrateur.
    */
-  protected orchestrateurPour(workflow?: WorkflowRunOverride): Orchestrator {
+  protected orchestrateurPour(workflow?: WorkflowRunOverride, task = ''): Orchestrator {
+    /*
+     * FIXTURE D'ORCHESTRATION — on remplace le FOURNISSEUR, jamais le pipeline.
+     *
+     * Trois preuves hors-modèle observent l'orchestrateur (relance, outils d'un nœud skill,
+     * propreté des bureaux) et coûtaient de vrais agents : elles sont donc restées manuelles,
+     * c'est-à-dire jamais jouées. Ici, les phases, les juges et les portes restent les VRAIS ; seuls
+     * l'appel au modèle et le contexte Brain deviennent constants. Cadrage complet :
+     * `docs/fixture-orchestration-cadrage-2026-09-06.md`.
+     *
+     * `scenarioDemande` ignore le préfixe hors instance isolée : la porte n'existe pas ailleurs.
+     */
+    const scenario = scenarioDemande(task)
+    if (scenario) {
+      assertDepotJetable(this.executionWorkspace)
+      return new Orchestrator({
+        ...this.orchestratorDeps,
+        registry: new ProviderRegistry().register(fournisseurFixtureOrchestration(scenario)),
+        // Les QUATRE rôles avec : sans eux, le premier rôle oublié rappelle un vrai fournisseur.
+        roles: rolesFixture(),
+        retrieveBrain: retrieveBrainNeutre,
+        currentWorkflow: () => workflow
+      })
+    }
     return new Orchestrator({ ...this.orchestratorDeps, currentWorkflow: () => workflow })
   }
 
@@ -1016,7 +1046,7 @@ export class AutowinOS {
         // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
         const workflowDuRun =
           runOptions.workflowOverride ?? (await this.poseConversationWorkflow(conversationId, task))
-        const orchestrator = this.orchestrateurPour(workflowDuRun)
+        const orchestrator = this.orchestrateurPour(workflowDuRun, task)
         const result = await orchestrator.run(
           task,
           onStep,

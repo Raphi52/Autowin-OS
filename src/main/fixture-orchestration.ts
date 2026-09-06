@@ -1,4 +1,7 @@
 import { execFileSync } from 'node:child_process'
+import type { ProviderAdapter, SendResult, StreamChunk } from './providers/types'
+import type { BrainRetrievalResult } from './brain-retrieval'
+import { ALL_ROLES, RoleModelConfig } from './roles'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -89,6 +92,23 @@ export function creerDepotJetable(racine: string): string {
   )
   git('add', '-A')
   git('commit', '-m', 'base du depot jetable')
+  /*
+   * UN DISTANT `origin`, LOCAL ET NU — trouvé en jouant le run, pas en lisant le code.
+   *
+   * Premier lancement réel du scénario nominal : le run s'arrête avant toute phase sur « Lancement
+   * bloqué : le distant origin est absent ». Le contrôle est LÉGITIME — un run qui publie a besoin
+   * de savoir où — et le dépôt réel en a un, donc rien ne l'avait révélé jusqu'ici.
+   *
+   * Le distant est un dépôt NU posé à côté : la publication reste réelle et vérifiable, sans jamais
+   * sortir du profil isolé ni joindre le réseau.
+   */
+  const distant = `${racine}-origin.git`
+  if (!existsSync(distant)) {
+    mkdirSync(distant, { recursive: true })
+    execFileSync('git', ['init', '--bare', '-b', 'main'], { cwd: distant, stdio: 'ignore' })
+    git('remote', 'add', 'origin', distant)
+    git('push', '-u', 'origin', 'main')
+  }
   return racine
 }
 
@@ -113,4 +133,140 @@ export function reponseFixtureNominale(role: RoleAppel): string {
       `"oldText":"","newText":"Écrit par la fixture d’orchestration.\n"}}</cmd>`
     )
   return 'Travail terminé.'
+}
+
+/**
+ * LE DÉCLENCHEUR — un préfixe dans la tâche, comme pour les fixtures de chat.
+ *
+ * Rend le scénario demandé, ou `undefined` si la tâche n'en demande aucun.
+ *
+ * DEUX REFUS DÉLIBÉRÉS, chacun pour une raison différente :
+ *   · hors instance isolée, le préfixe est IGNORÉ — pas d'erreur, pas de fixture : la porte ne doit
+ *     simplement pas exister en production ;
+ *   · un scénario INCONNU lève. Un préfixe mal orthographié qui retomberait silencieusement sur un
+ *     vrai run payant serait le pire des résultats — mieux vaut une erreur bruyante.
+ */
+export const PREFIXE_FIXTURE_ORCHESTRATION = '[[autowin-fixture-orchestration]]'
+
+export function scenarioDemande(
+  task: string,
+  argv: readonly string[] = process.argv
+): ScenarioOrchestration | undefined {
+  if (!task.startsWith(PREFIXE_FIXTURE_ORCHESTRATION)) return undefined
+  if (!argv.includes('--isolated-test-instance')) return undefined
+  const demande = task.slice(PREFIXE_FIXTURE_ORCHESTRATION.length).trim().split(/\s+/)[0] ?? ''
+  if (demande !== 'nominal')
+    throw new Error(
+      `Fixture orchestration : scénario inconnu « ${demande} ». Le seul implémenté est « nominal ».`
+    )
+  return 'nominal'
+}
+
+/**
+ * LE RÔLE DE L'APPEL, déduit du libellé que l'orchestrateur donne lui-même à chaque envoi.
+ *
+ * L'orchestrateur passe par `sendWithRoleContext(<libellé>, <rôle>, …)` : le rôle est donc déjà
+ * nommé à la source. On le traduit dans le vocabulaire de la fixture plutôt que de deviner d'après
+ * le contenu du prompt — deviner d'après le texte, c'est exactement ce qui a fait échouer quatre
+ * sondes cette semaine.
+ */
+export function roleDeLAppel(role: string): RoleAppel {
+  if (role === 'judge') return 'judge'
+  if (role === 'orchestrator') return 'orchestrator'
+  return 'sous-agent'
+}
+
+/**
+ * LE FOURNISSEUR DE LA FIXTURE — il rend une réponse écrite d'avance, sans appeler personne.
+ *
+ * Il ne remplace QUE le fournisseur : les phases, les juges, les portes et les bureaux restent les
+ * vrais. C'est toute la thèse du cadrage — un pipeline factice ne prouverait rien du produit.
+ *
+ * `role` lui est donné par l'appelant, qui le tient de l'orchestrateur lui-même : la fixture ne
+ * devine JAMAIS d'après le contenu du prompt.
+ */
+export function fournisseurFixtureOrchestration(
+  scenario: ScenarioOrchestration
+): ProviderAdapter {
+  return {
+    id: ID_FOURNISSEUR_FIXTURE,
+    /*
+     * ELLE DÉCLARE UN EXÉCUTEUR LOCAL — et elle en produit vraiment l'effet.
+     *
+     * Trouvé en jouant le run : « Phase build — le rôle subagent est bindé sur
+     * autowin-orchestration-fixture : Provider sans exécuteur local outillé ». Le contrôle est
+     * juste. Chez les vrais fournisseurs CLI, c'est l'AGENT qui écrit les fichiers, pas
+     * l'orchestrateur : une fixture qui remplace l'agent doit donc écrire à sa place, sinon la
+     * copie de travail reste vide — et le cadrage a établi qu'une copie vide rend la preuve des
+     * bureaux verte par construction.
+     */
+    supportsExecution: true,
+    async *send(
+      _messages: unknown,
+      options?: { execution?: { phaseAppelante?: string; cwd?: string } }
+    ): AsyncGenerator<StreamChunk, SendResult, void> {
+      /*
+       * LA PHASE VIENT DE L'ORCHESTRATEUR, PAS DU TEXTE.
+       *
+       * `options.execution.phaseAppelante` est posé par `executionOptions` à chaque envoi. Deviner
+       * le rôle d'après le contenu du prompt serait exactement le défaut qui a fait échouer quatre
+       * sondes cette semaine : un libellé change, et la fixture répond à côté sans le dire.
+       */
+      const role = roleDeLAppel(options?.execution?.phaseAppelante ?? '')
+      const cwd = options?.execution?.cwd
+      if (role === 'sous-agent' && cwd) {
+        /*
+         * L'ÉCRITURE PASSE PAR LE GARDE-FOU, ici aussi et surtout.
+         *
+         * C'est le seul endroit du produit où cette fixture touche un disque. Le cwd est une copie
+         * de travail du dépôt jetable : elle en porte donc le marqueur, puisqu'il est COMMITTÉ. Si
+         * un jour ce n'est pas le cas, on lève au lieu d'écrire.
+         */
+        assertDepotJetable(cwd)
+        writeFileSync(
+          join(cwd, FICHIER_ECRIT_PAR_LA_FIXTURE),
+          'Écrit par la fixture d’orchestration, dans un dépôt jetable.\n',
+          'utf8'
+        )
+      }
+      const texte =
+        scenario === 'nominal' && role === 'sous-agent'
+          ? 'Fichier écrit.'
+          : reponseFixtureNominale(role)
+      yield { delta: texte }
+      return { text: texte, provider: ID_FOURNISSEUR_FIXTURE, systemInjected: true }
+    }
+  } as ProviderAdapter
+}
+
+/**
+ * LE CONTEXTE BRAIN, NEUTRALISÉ — sinon le déterminisme s'arrête au premier appel au Brain.
+ *
+ * Le contexte injecté dépend d'un index et d'un corpus qui vivent HORS du dépôt : deux runs
+ * identiques n'y trouvent pas forcément la même chose. Le retriever étant déjà une dépendance
+ * substituable, on lui rend un vide constant.
+ */
+export const retrieveBrainNeutre = (): Promise<BrainRetrievalResult> =>
+  // `empty` et non `unavailable` : le Brain n'est pas EN PANNE, il n'a simplement rien a dire —
+  // et un run ne doit pas croire a une panne d'infrastructure la ou il n'y en a pas.
+  Promise.resolve({ context: '', status: 'empty' })
+
+/** L'identifiant du fournisseur de la fixture — un seul, pour tous les rôles. */
+export const ID_FOURNISSEUR_FIXTURE = 'autowin-orchestration-fixture'
+
+/**
+ * LES QUATRE RÔLES POINTÉS SUR LA FIXTURE.
+ *
+ * Trouvé en jouant le run : substituer le registre ne suffit pas. Les rôles gardaient leur liaison
+ * vers `claude`, et le run tombait sur « Provider inconnu: claude (connus:
+ * autowin-orchestration-fixture) ». Le message était juste — c'est la substitution qui était à
+ * moitié faite. Les QUATRE rôles (orchestrator, subagent, judge, scout) doivent être liés, sinon le
+ * premier rôle oublié rappelle un vrai fournisseur, et la fixture n'est plus gratuite.
+ */
+export function rolesFixture(): RoleModelConfig {
+  return new RoleModelConfig(
+    Object.fromEntries(
+      ALL_ROLES.map((role) => [role, { provider: ID_FOURNISSEUR_FIXTURE, model: 'deterministe' }])
+    )
+  )
 }

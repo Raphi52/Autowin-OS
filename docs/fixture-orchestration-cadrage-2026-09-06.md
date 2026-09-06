@@ -179,3 +179,29 @@ rejoindront la liste des témoins qui ne mordent pas.
 Moyen. Le gros du travail n'est pas le code : c'est d'écrire trois scénarios qui reproduisent
 fidèlement la forme des réponses réelles. Le raccordement, lui, tient dans les deux coutures
 ci-dessus.
+
+## Journal de raccordement — 2026-09-06, quatre blocages trouvés EN JOUANT
+
+Le scénario `nominal` est raccordé et un run se déroule **de bout en bout sans un centime d'appel
+modèle**. Chaque blocage ci-dessous a été trouvé en exécutant, jamais en lisant — et chacun était un
+contrôle LÉGITIME du produit, que le dépôt réel masquait.
+
+1. **« Lancement bloqué : le distant origin est absent »** — le dépôt jetable n'avait pas de
+   distant. Le dépôt réel en a un, donc rien ne l'avait révélé. Corrigé : un dépôt **nu** posé à
+   côté, la publication reste réelle sans jamais joindre le réseau.
+2. **« Provider inconnu: claude (connus: autowin-orchestration-fixture) »** — substituer le registre
+   ne suffit pas : les **quatre rôles** (`orchestrator`, `subagent`, `judge`, `scout`) gardaient leur
+   liaison. Un seul rôle oublié rappelle un vrai fournisseur, et la fixture n'est plus gratuite.
+3. **« Provider sans exécuteur local outillé »** — chez les vrais fournisseurs CLI, c'est l'AGENT
+   qui écrit les fichiers. Une fixture qui le remplace doit donc écrire à sa place. Elle déclare
+   `supportsExecution` et produit vraiment l'effet — **sous le garde-fou**, qui vérifie que la copie
+   de travail porte bien le marqueur du dépôt jetable.
+4. **La porte de preuve, encore ouverte** — « Promis mais pas fait : mutation produite avec une
+   preuve exécutable » / « hook done-without-proof : aucune preuve d'exécution ok — green refusé ».
+   Le run écrit le fichier, atteint les portes, et s'arrête là. **C'est le comportement voulu du
+   produit** : le cadrage interdit de neutraliser une porte. Le scénario `nominal` doit donc, en
+   plus d'écrire, produire une **preuve exécutable** — c'est la prochaine étape, et elle n'est pas
+   faite.
+
+**Ce qui est établi malgré ce reste** : le fichier écrit par la fixture a bien été retrouvé dans la
+copie de travail du run, et le run n'a **rien touché** hors du profil isolé.

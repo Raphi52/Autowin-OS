@@ -105,6 +105,16 @@ export interface SendOptions {
     cwd: string
     sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
     /**
+     * LA PHASE QUI APPELLE — nommée ici plutôt que devinée là-bas.
+     *
+     * L'orchestrateur connaît déjà la phase à chaque envoi (`executionOptions(..., phase, ...)`)
+     * mais ne la transmettait qu'à des callbacks d'observation : un adaptateur ne pouvait pas la
+     * lire. La fixture d'orchestration en a besoin pour répondre selon le rôle — et la seule autre
+     * voie serait de deviner d'après le texte du prompt, exactement le défaut qui a fait échouer
+     * quatre sondes cette semaine. Purement informatif : aucun adaptateur de production ne le lit.
+     */
+    phaseAppelante?: string
+    /**
      * Plafond total de l'appel orchestré, dérivé du devis actif. Les adaptateurs et le registre
      * l'utilisent à la place de leur garde locale afin qu'un agent actif ne soit pas tué avant la
      * durée promise par le run. L'abort du superviseur reste la borne autoritaire du run entier.
