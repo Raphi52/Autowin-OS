@@ -1,5 +1,6 @@
 import { assertModelCatalogProof } from './cdp-proof-validation.mjs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
+import { attendreDansLaPage } from './cdp-attente.mjs'
 import { urlCiblesCdp } from './cdp-port.mjs'
 
 const targets = await (await fetch(urlCiblesCdp())).json()
@@ -37,13 +38,30 @@ const evaluate = async (expression) => {
   return result.result?.value
 }
 
+// Ouvrir Agent Studio par sa PASTILLE, pas par un texte de bouton.
+//
+// Mesure du 2026-09-06 : la sonde cherchait le premier bouton dont le texte matche
+// /models|agents/i. Elle tombait sur un TITRE DE CONVERSATION de la barre laterale
+// (« le fil de sous agents est encore dans grap… ») et ouvrait un fil de chat. Le catalogue
+// n'etait donc jamais affiche, et la sonde accusait le produit d'un catalogue vide alors que
+// `window.api.models()` rend bien 29 modeles. Un testid ne se laisse pas voler par du contenu.
 await evaluate(`(() => {
-  const target = [...document.querySelectorAll('button')].find((button) =>
-    /models|agents/i.test(button.textContent || ''))
-  if (!target) throw new Error('Navigation Models introuvable')
-  target.click()
+  const nav = document.querySelector('[data-testid="nav-agent-studio"]')
+  if (!nav) throw new Error('Navigation Agent Studio introuvable')
+  nav.click()
 })()`)
-await new Promise((resolve) => setTimeout(resolve, 1200))
+await attendreDansLaPage(
+  evaluate,
+  `Boolean(document.querySelector('[data-testid="agent-studio-view"]'))`
+)
+await evaluate(`(() => {
+  const onglet = [...document.querySelectorAll('button')].find((button) =>
+    /topolog/i.test(button.textContent || ''))
+  if (!onglet) throw new Error('Onglet « Modèles & topologie » introuvable')
+  onglet.click()
+})()`)
+// Le catalogue est charge de facon asynchrone (window.api.models) : on l'ATTEND.
+await attendreDansLaPage(evaluate, `document.querySelectorAll('.topology-model').length > 0`)
 const labels = await evaluate(`[
   ...document.querySelectorAll('.topology-model strong')
 ].map((element) => element.textContent?.trim()).filter(Boolean)`)
