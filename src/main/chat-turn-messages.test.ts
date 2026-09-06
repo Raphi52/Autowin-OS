@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { COMPACT_REQUEST } from '../shared/context-gauge'
 import {
+  depuisDerniereCompaction,
   boundedContinuationHistory,
   boundedTurnHistory,
   buildTurnMessages,
@@ -647,5 +649,62 @@ describe('blocVisuelNonFerme — la fence html-render jamais refermée', () => {
     expect(
       blocVisuelNonFerme('```html-render\n<p>a</p>\n```\ntexte\n```html-render\n<p>b</p>\n')
     ).toBe(true)
+  })
+})
+
+/**
+ * LE BOUTON « COMPACTER » DOIT ALLEGER POUR DE VRAI.
+ *
+ * Mesure du 2026-09-06 : « Compacter » n'envoie qu'un message demandant un resume
+ * (`COMPACT_REQUEST`, `shared/context-gauge.ts:182`). Le resume s'ajoute au fil — et RIEN d'autre
+ * ne change : les tours suivants renvoient le meme historique borne, plus le resume. La jauge de
+ * contexte, qui lit les `inputTokens` du dernier tour, ne redescend donc PAS. Le bouton promet un
+ * allegement qu'il ne produit pas.
+ *
+ * Le resume est ecrit pour qu'un agent « qui n'aurait PAS lu les messages precedents » reprenne le
+ * travail : c'est exactement le contrat qui autorise a couper avant lui. L'historique renvoye
+ * DEMARRE donc au resume — sinon on paie deux fois, le fil ET son resume.
+ */
+describe('compaction — le fil renvoye repart du resume', () => {
+  const compact = COMPACT_REQUEST
+  const fil = [
+    { role: 'user' as const, content: 'vieille demande' },
+    { role: 'assistant' as const, content: 'vieille reponse' },
+    { role: 'user' as const, content: compact },
+    { role: 'assistant' as const, content: 'RESUME DENSE du fil' },
+    { role: 'user' as const, content: 'et maintenant ?' }
+  ]
+
+  it('coupe tout ce qui precede le resume de compaction', () => {
+    const retenus = depuisDerniereCompaction(fil)
+    expect(retenus.map((m) => m.content)).toEqual([
+      'RESUME DENSE du fil',
+      'et maintenant ?'
+    ])
+  })
+
+  it('ne coupe rien tant que le resume n a pas ete produit', () => {
+    // La demande vient d'etre postee : le tour EN COURS doit voir tout le fil, sinon il resumerait
+    // le vide. On ne coupe qu'une fois le resume ecrit.
+    const enCours = fil.slice(0, 3)
+    expect(depuisDerniereCompaction(enCours)).toEqual(enCours)
+  })
+
+  it('repart de la DERNIERE compaction quand il y en a eu plusieurs', () => {
+    const deux = [
+      ...fil,
+      { role: 'user' as const, content: compact },
+      { role: 'assistant' as const, content: 'SECOND RESUME' },
+      { role: 'user' as const, content: 'suite' }
+    ]
+    expect(depuisDerniereCompaction(deux).map((m) => m.content)).toEqual([
+      'SECOND RESUME',
+      'suite'
+    ])
+  })
+
+  it('laisse un fil sans compaction intact', () => {
+    const sans = fil.slice(0, 2)
+    expect(depuisDerniereCompaction(sans)).toEqual(sans)
   })
 })

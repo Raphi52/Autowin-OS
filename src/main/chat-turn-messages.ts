@@ -11,6 +11,8 @@
  * test survit à un câblage cassé. Ici l'invariant se teste sur la sortie réelle de la fonction.
  */
 
+import { COMPACT_REQUEST } from '../shared/context-gauge'
+
 export interface TurnMessageParts {
   /** État courant de l'app, sérialisé. */
   snapshot: unknown
@@ -167,6 +169,34 @@ function avecAvisDeCoupe<T extends MessageBorne>(retenus: T[], total: number): T
  * le contenu des messages assistant depuis leurs `parts` (`chat/run-pilot-chat.ts`), qui peut etre
  * plus long. Le budget est donc un ORDRE DE GRANDEUR, pas une garantie au token pres.
  */
+/**
+ * LE FIL RENVOYE REPART DU DERNIER RESUME DE COMPACTION.
+ *
+ * Mesure du 2026-09-06 : « Compacter » ne faisait qu'AJOUTER un message demandant un resume
+ * (`COMPACT_REQUEST`). Le resume s'ecrivait, puis les tours suivants renvoyaient le meme
+ * historique borne PLUS ce resume : rien ne s'allegeait, et la jauge de contexte — qui lit les
+ * `inputTokens` du dernier tour — ne redescendait pas. Le bouton promettait un allegement qu'il
+ * ne produisait pas.
+ *
+ * Ce que le resume PROMET est exactement ce qui autorise la coupe : il est demande « pour qu'un
+ * agent qui n'aurait PAS lu les messages precedents puisse reprendre le travail a partir de ce
+ * seul message ». Renvoyer le fil ET son resume, c'est payer deux fois la meme information.
+ *
+ * COUPE UNIQUEMENT QUAND LE RESUME EXISTE : tant que la demande n'a pas recu sa reponse, le tour
+ * en cours doit voir tout le fil — sinon il resumerait le vide. Et on repart de la DERNIERE
+ * compaction : un fil peut en porter plusieurs.
+ */
+export function depuisDerniereCompaction<T extends MessageBorne>(history: readonly T[]): T[] {
+  for (let index = history.length - 1; index >= 1; index -= 1) {
+    const demande = history[index - 1] as T
+    const resume = history[index] as T
+    if (demande.role !== 'user' || demande.content.trim() !== COMPACT_REQUEST) continue
+    if (resume.role !== 'assistant') continue
+    return [...history.slice(index)]
+  }
+  return [...history]
+}
+
 export function boundedTurnHistory<T extends MessageBorne>(
   history: readonly T[],
   borne: number | BorneHistorique = 40

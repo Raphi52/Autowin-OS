@@ -31,7 +31,11 @@ import {
   type RecoveredPilotProviderCall
 } from '../agent-pilot'
 import type { RecoverableChatProviderCall } from '../runs/chat-provider-recovery'
-import { boundedContinuationHistory, boundedTurnHistory } from '../chat-turn-messages'
+import {
+  boundedContinuationHistory,
+  boundedTurnHistory,
+  depuisDerniereCompaction
+} from '../chat-turn-messages'
 import {
   flattenChatPartsForModel,
   type ChatTurnEvent,
@@ -402,7 +406,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           metas.find((candidate) => candidate.name === piece.name)
         return meta ? rechargerContenuPieceJointe(meta) : undefined
       }
-      const safe = (continuationWindow?.history ?? boundedTurnHistory(rawMessages, 40)).map((m) => {
+      const safe = (continuationWindow?.history ?? boundedTurnHistory(depuisDerniereCompaction(rawMessages), 40)).map((m) => {
         const parts = m.role === 'assistant' ? partsParContenu.get(m.content) : undefined
         // Repli sur le contenu d'origine : un message sans `parts` retrouvables (fil hydrate,
         // message d'un ancien format) doit passer tel quel, jamais disparaitre.
