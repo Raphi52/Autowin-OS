@@ -270,7 +270,19 @@ export function demarrerDetecteurDeGel(
   dir: string,
   periodeMs = PERIODE_BATTEMENT_MS,
   ecrire: (gel: Gel) => void = journaliser,
-  seuilMs = SEUIL_GEL_MS
+  seuilMs = SEUIL_GEL_MS,
+  /**
+   * TEMOIN D'ORDONNANCEMENT INJECTABLE — pour rendre un test DETERMINISTE, jamais pour changer
+   * le comportement en production (defaut : le vrai temoin, un worker separe).
+   *
+   * Le temoin repond a « la machine nous a-t-elle desordonnances ? ». Sous forte charge il prend
+   * lui-meme du retard, et le detecteur classe alors, a juste titre, `process-prive-de-cpu`. Un
+   * test de bout en bout qui exige `entree-sortie-bloquante` depend donc de la charge de la
+   * machine : mesure du 2026-09-06, rouge en suite complete, vert isole trois fois de suite. Ce
+   * n'est pas le detecteur qui est instable, c'est l'HYPOTHESE d'environnement du test. On l'injecte
+   * donc, au lieu de desserrer l'assertion ou d'accepter un test qu'on finirait par ignorer.
+   */
+  temoinInjecte?: { retardMaxDepuisLaDerniereLecture: () => number; arreter: () => void }
 ): () => void {
   dossier = dir
   puits = ecrire
@@ -308,7 +320,7 @@ export function demarrerDetecteurDeGel(
    * l'operation declaree a cet instant n'est qu'une coincidence.
    */
   let cpuPrecedent = process.cpuUsage()
-  const temoin = demarrerTemoin(periodeMs)
+  const temoin = temoinInjecte ?? demarrerTemoin(periodeMs)
   minuteur = setInterval(() => {
     const maintenant = Date.now()
     const delta = process.cpuUsage(cpuPrecedent)

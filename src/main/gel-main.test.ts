@@ -326,11 +326,20 @@ describe('temoin ordonnance — un blocage SANS CPU n’est plus excuse en conte
    */
   it('classe un blocage sans CPU en entree-sortie-bloquante quand le temoin reste a l’heure', async () => {
     const captures: Gel[] = []
+    /*
+     * TEMOIN A L'HEURE, INJECTE — c'est l'HYPOTHESE du test, elle doit etre posee, pas espere.
+     *
+     * Avec le vrai temoin (un worker), ce test dependait de la charge de la machine : sature, le
+     * temoin prend du retard et le detecteur classe `process-prive-de-cpu` — a juste titre. Rouge
+     * en suite complete, vert isole (mesure du 2026-09-06). L'assertion ne bouge pas : on rend
+     * seulement l'environnement deterministe, au lieu d'accepter un rouge qu'on finirait par ignorer.
+     */
     const arreter = demarrerDetecteurDeGel(
       mkdtempSync(join(tmpdir(), 'gel-')),
       20,
       (g) => captures.push(g),
-      30
+      30,
+      { retardMaxDepuisLaDerniereLecture: () => 0, arreter: () => {} }
     )
     await new Promise((r) => setTimeout(r, 60))
     const verrou = new Int32Array(new SharedArrayBuffer(4))
@@ -348,11 +357,41 @@ describe('temoin ordonnance — un blocage SANS CPU n’est plus excuse en conte
      * On borne desormais au blocage POSTERIEUR a `Atomics.wait` et on garde le PLUS LONG : le notre
      * dure ~300 ms, aucun bruit d'ordonnancement ne l'approche. L'assertion, elle, ne bouge pas.
      */
-    const candidats = captures.filter(
-      (g) => g.blocageMs >= 200 && Date.parse(g.ts) >= avant - 5
-    )
+    const candidats = captures.filter((g) => g.blocageMs >= 200 && Date.parse(g.ts) >= avant - 5)
     const gel = candidats.sort((a, b) => b.blocageMs - a.blocageMs)[0]
     expect(gel, `aucun gel >=200ms apres le verrou: ${JSON.stringify(captures)}`).toBeDefined()
     expect(gel?.cause).toBe('entree-sortie-bloquante')
+  })
+
+  /*
+   * LE PENDANT DU PRECEDENT — et le comportement qui rendait ce fichier instable.
+   *
+   * Quand la machine est SATUREE, le temoin prend lui-meme du retard : le detecteur ne peut plus
+   * distinguer « notre code tient la boucle » de « le systeme ne nous ordonnance pas », et il dit
+   * `process-prive-de-cpu`. C'est la bonne reponse, pas un defaut. On l'epingle ici pour que la
+   * distinction reste explicite : le test au-dessus injecte un temoin A L'HEURE justement parce que
+   * ce cas-ci existe.
+   */
+  it('un temoin EN RETARD rend process-prive-de-cpu — machine saturee, pas notre code', async () => {
+    const captures: Gel[] = []
+    const arreter = demarrerDetecteurDeGel(
+      mkdtempSync(join(tmpdir(), 'gel-')),
+      20,
+      (g) => captures.push(g),
+      30,
+      { retardMaxDepuisLaDerniereLecture: () => 9999, arreter: () => {} }
+    )
+    await new Promise((r) => setTimeout(r, 60))
+    const verrou = new Int32Array(new SharedArrayBuffer(4))
+    const avant = Date.now()
+    Atomics.wait(verrou, 0, 0, 300)
+    await new Promise((r) => setTimeout(r, 80))
+    arreter()
+
+    const gel = captures
+      .filter((g) => g.blocageMs >= 200 && Date.parse(g.ts) >= avant - 5)
+      .sort((a, b) => b.blocageMs - a.blocageMs)[0]
+    expect(gel, `aucun gel >=200ms apres le verrou: ${JSON.stringify(captures)}`).toBeDefined()
+    expect(gel?.cause).toBe('process-prive-de-cpu')
   })
 })
