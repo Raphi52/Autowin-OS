@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const rendererRoot = join(process.cwd(), 'src', 'renderer', 'src')
@@ -79,5 +79,39 @@ describe('frontend cleanup guard', () => {
       '<AgentsTopologyView active={active} />'
     )
     expect(source('components/AgentsTopologyView.tsx')).toContain('if (!active) return')
+  })
+
+  /*
+   * AUCUNE TRACE DE MISE AU POINT DANS L'INTERFACE LIVREE.
+   *
+   * Defaut vecu le 2026-09-06 : un travail recupere depuis une copie isolee portait deux
+   * `console.log` de debogage (« PANEL EFFET », « DOIT »). Ils ont traverse la relecture, les 373
+   * tests du chat et la publication SANS que rien ne les arrete — cette garde de proprete existait
+   * pourtant, mais elle ne regardait que les feuilles de style et les montages de vues. Une trace
+   * de mise au point livree bavarde dans la console de tous les utilisateurs et peut exposer des
+   * donnees internes. `console.warn` et `console.error` restent AUTORISES : ce sont des signaux
+   * destines a etre lus, pas des traces oubliees.
+   */
+  it('ne livre aucun console.log de mise au point dans le renderer', () => {
+    const fautifs: string[] = []
+    const parcourir = (dossier: string): void => {
+      for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+        const chemin = join(dossier, entree.name)
+        if (entree.isDirectory()) {
+          parcourir(chemin)
+          continue
+        }
+        if (!/\.(ts|tsx)$/.test(entree.name) || /\.test\.tsx?$/.test(entree.name)) continue
+        readFileSync(chemin, 'utf8')
+          .split('\n')
+          .forEach((ligne, index) => {
+            if (/(^|[^.\w])console\.log\(/.test(ligne))
+              fautifs.push(`${relative(rendererRoot, chemin)}:${index + 1}`)
+          })
+      }
+    }
+    parcourir(rendererRoot)
+
+    expect(fautifs).toEqual([])
   })
 })
