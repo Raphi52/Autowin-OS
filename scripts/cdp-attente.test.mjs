@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attendreDansLaPage, attendreStabilite } from './cdp-attente.mjs'
+import { agirJusqua, attendreDansLaPage, attendreStabilite } from './cdp-attente.mjs'
 
 describe('cdp-attente — attendre un ETAT, jamais une duree', () => {
   it('rend la main DES que la condition est vraie, sans dormir le plafond', async () => {
@@ -54,5 +54,30 @@ describe('cdp-attente — attendre un ETAT, jamais une duree', () => {
     let i = 0
     const ok = await attendreStabilite(() => `texte ${i++}`, 60, 10)
     expect(ok).toBe(false)
+  })
+
+  /*
+   * `agirJusqua` remplace les boucles a compteur d'essais : la borne est un PLAFOND DE TEMPS.
+   * Un compteur d'essais est un delai fixe deguise — il ne dit rien de l'etat de la page.
+   */
+  it("n'agit PAS si l'etat est deja atteint", async () => {
+    let actions = 0
+    const ok = await agirJusqua(() => true, 'deja vrai', () => (actions += 1), 8000, 10)
+    expect(ok).toBe(true)
+    expect(actions).toBe(0)
+  })
+
+  it("rejoue l'action jusqu'a ce que l'etat arrive, puis s'arrete", async () => {
+    let actions = 0
+    const ok = await agirJusqua(() => actions >= 3, 'overlay parti', () => (actions += 1), 8000, 10)
+    expect(ok).toBe(true)
+    expect(actions).toBe(3)
+  })
+
+  it('rend false au plafond au lieu de lever, comme les autres attentes', async () => {
+    let actions = 0
+    const ok = await agirJusqua(() => false, 'jamais vrai', () => (actions += 1), 60, 10)
+    expect(ok).toBe(false)
+    expect(actions).toBeGreaterThan(0)
   })
 })

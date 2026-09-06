@@ -1,7 +1,9 @@
+import { agirJusqua, attendreDansLaPage, attendreStabilite } from './cdp-attente.mjs'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9248'
+const port = portCdp()
 const output =
   process.env.AUTOWIN_OBSERVATORY_SCREENSHOT || cheminArtefact('observatory-critical-path.png')
 const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
@@ -10,8 +12,17 @@ if (!page) throw new Error(`Fenêtre Autowin introuvable sur ${port}`)
 const socket = new WebSocket(page.webSocketDebuggerUrl)
 let nextId = 0
 const pending = new Map()
+/*
+ * Les EVENEMENTS CDP (messages sans `id`) n'etaient pas ecoutes, seulement les reponses. Il
+ * fallait donc parier sur une duree apres un rechargement de page. On s'y abonne desormais.
+ */
+const abonnesEvenements = new Set()
 socket.onmessage = ({ data }) => {
   const message = JSON.parse(data)
+  if (message.id === undefined) {
+    for (const abonne of [...abonnesEvenements]) abonne(message)
+    return
+  }
   const callback = pending.get(message.id)
   if (!callback) return
   pending.delete(message.id)
@@ -44,19 +55,63 @@ const send = (method, params = {}) =>
     })
     socket.send(JSON.stringify({ id, method, params }))
   })
+/*
+ * CONTEXTE DETRUIT = ETAT TRANSITOIRE, PAS UNE PANNE. Pendant qu'Autowin se re-rend (rechargement
+ * de page, changement de vue), CDP rejette la lecture en cours avec « Execution context was
+ * destroyed ». Sans cela, la sonde tombait sur cette course AVANT meme sa premiere assertion.
+ * On relit dans le contexte suivant, un nombre BORNE de fois. Aucune assertion n'est desserree :
+ * seule la LECTURE est rejouee, et si l'etat n'est pas la, le controle qui suit rate comme avant.
+ */
+const contexteEnCoursDeRemplacement = (erreur) =>
+  /Execution context was destroyed|Cannot find context|Inspected target navigated/.test(
+    String(erreur?.message ?? '')
+  )
 const evaluate = async (expression) => {
-  const result = await send('Runtime.evaluate', {
-    expression,
-    returnByValue: true,
-    awaitPromise: true
-  })
+  let result
+  for (let essai = 0; ; essai += 1) {
+    try {
+      result = await send('Runtime.evaluate', {
+        expression,
+        returnByValue: true,
+        awaitPromise: true
+      })
+      break
+    } catch (erreur) {
+      if (!contexteEnCoursDeRemplacement(erreur) || essai >= 50) throw erreur
+      await new Promise((suite) => setTimeout(suite, 200))
+    }
+  }
   if (result.exceptionDetails)
     throw new Error(result.exceptionDetails.exception?.description ?? 'Erreur DOM')
   return result.result?.value
 }
 
 console.log('[cdp] connecté')
+/*
+ * ATTENDRE LE RECHARGEMENT, PAS UNE DUREE. `Page.reload` detruit le contexte d'execution : une
+ * `Runtime.evaluate` envoyee dans la foulee part dans un contexte mort. L'ancienne version s'en
+ * sortait par accident grace a un `setTimeout` de 700 ms pose juste apres ; en le retirant, la
+ * sonde expirait sur sa toute premiere attente (constate le 2026-09-06 contre l'app lancee).
+ * On attend donc l'evenement qui dit que la page est REELLEMENT revenue.
+ */
+const attendreChargement = (plafondMs = 30000) =>
+  new Promise((resolve, reject) => {
+    const surEvenement = (message) => {
+      if (message.method !== 'Page.loadEventFired') return
+      clearTimeout(minuteur)
+      abonnesEvenements.delete(surEvenement)
+      resolve(true)
+    }
+    const minuteur = setTimeout(() => {
+      abonnesEvenements.delete(surEvenement)
+      reject(new Error('rechargement de la page expiré'))
+    }, plafondMs)
+    abonnesEvenements.add(surEvenement)
+  })
+await send('Page.enable')
+const chargement = attendreChargement()
 await send('Page.reload', { ignoreCache: true })
+await chargement
 await withDeviceMetricsOverride(
   send,
   {
@@ -66,7 +121,24 @@ await withDeviceMetricsOverride(
     mobile: false
   },
   async () => {
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    /*
+     * Pendant la bascule de contexte, CDP repond « Execution context was destroyed » : ce n'est pas
+     * une panne, c'est « la page n'est pas encore revenue ». On le traduit en « condition pas encore
+     * vraie » — et UNIQUEMENT cette erreur-la, toute autre remonte.
+     */
+    const evaluerPendantRechargement = async (expression) => {
+      try {
+        return await evaluate(expression)
+      } catch (erreur) {
+        if (/Execution context was destroyed|Cannot find context/i.test(erreur.message))
+          return false
+        throw erreur
+      }
+    }
+    await attendreDansLaPage(
+      evaluerPendantRechargement,
+      `document.readyState === 'complete' && Boolean(document.querySelector('button'))`
+    )
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const wizard = await evaluate(`(() => {
     const overlay = document.querySelector('.frw-overlay')
@@ -95,9 +167,9 @@ await withDeviceMetricsOverride(
           clickCount: 1
         })
       }
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await attendreDansLaPage(evaluate, `!document.querySelector('.frw-overlay')`, 2000, 100)
     }
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await attendreDansLaPage(evaluate, `!document.querySelector('.frw-overlay')`, 2000, 100)
     await evaluate(`(async () => {
   const existing = (await window.api.conversations()).find((item) => item.title === 'Preuve chemin critique')
   const conversation = existing ?? await window.api.conversationsCreate({
@@ -123,18 +195,21 @@ await withDeviceMetricsOverride(
   target.click()
 })()`)
     console.log('[cdp] Observatory ouvert')
-    await new Promise((resolve) => setTimeout(resolve, 900))
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      const dismissed = await evaluate(`(() => {
-    const overlay = document.querySelector('.frw-overlay')
-    if (!overlay) return true
-    const actions = overlay.querySelectorAll('.frw-actions button')
+    await attendreDansLaPage(
+      evaluate,
+      `document.querySelectorAll('.observatory-conversations button').length > 0`
+    )
+    await agirJusqua(
+      evaluate,
+      `!document.querySelector('.frw-overlay')`,
+      () =>
+        evaluate(`(() => {
+    const actions = document.querySelectorAll('.frw-overlay .frw-actions button')
     actions[actions.length - 1]?.click()
-    return false
-  })()`)
-      if (dismissed) break
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
+  })()`),
+      8000,
+      100
+    )
     await evaluate(`(() => {
   const target = [...document.querySelectorAll('.observatory-conversations button')].find(
     (button) => button.textContent?.includes('Preuve chemin critique')
@@ -142,25 +217,34 @@ await withDeviceMetricsOverride(
   if (!target) throw new Error('Conversation fixture introuvable dans Observatory')
   target.click()
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await attendreDansLaPage(
+      evaluate,
+      `[...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Chemin critique')`
+    )
     await evaluate(`(() => {
   const target = [...document.querySelectorAll('button')].find((button) =>
     button.textContent?.trim() === 'Chemin critique')
   if (!target) throw new Error('Bascule Chemin critique introuvable')
   target.click()
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 350))
+    await attendreDansLaPage(
+      evaluate,
+      `Boolean(document.querySelector('.observatory-causal-tree .observatory-causal-node-wrap > button'))`
+    )
     await evaluate(`(() => {
   const first = document.querySelector('.observatory-causal-tree .observatory-causal-node-wrap > button')
   if (!first) throw new Error('Nœud causal cliquable introuvable')
   first.click()
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    await attendreDansLaPage(
+      evaluate,
+      `Boolean(document.querySelector('.observatory-causal-detail'))`
+    )
     await evaluate(`(() => {
   const stream = document.querySelector('.observatory-stream')
   if (stream) stream.scrollTop = 0
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await attendreStabilite(evaluate)
     const state = await evaluate(`(() => ({
   title: document.querySelector('.observatory-causal-path > header')?.textContent?.trim(),
   toolbarZones: document.querySelectorAll('.observatory-toolbar > [data-toolbar-zone]').length,
@@ -226,7 +310,7 @@ await withDeviceMetricsOverride(
   if (!target) throw new Error('Bascule Chronologie introuvable')
   target.click()
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await attendreDansLaPage(evaluate, `document.querySelectorAll('.observatory-event').length > 0`)
     const beforeLive = await evaluate(`document.querySelectorAll('.observatory-event').length`)
     await evaluate(`(async () => {
   const conversation = (await window.api.conversations()).find(
@@ -238,20 +322,22 @@ await withDeviceMetricsOverride(
   ], conversation.id)
   if (!result.ok) throw new Error(result.error || 'Fixture live en echec')
 })()`)
-    let liveEvents = beforeLive
-    for (let attempt = 0; attempt < 40 && liveEvents <= beforeLive; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      liveEvents = await evaluate(`document.querySelectorAll('.observatory-event').length`)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150))
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      const stable = await evaluate(`(() => ({
-    events: document.querySelectorAll('.observatory-event').length,
-    loading: document.querySelector('.observatory-stream')?.textContent?.includes('Lecture des traces') ?? true
-  }))()`)
-      if (!stable.loading && stable.events >= liveEvents) break
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
+    await attendreDansLaPage(
+      evaluate,
+      `document.querySelectorAll('.observatory-event').length > ${beforeLive}`,
+      4000,
+      100
+    )
+    const liveEvents = await evaluate(`document.querySelectorAll('.observatory-event').length`)
+    await attendreDansLaPage(
+      evaluate,
+      `(() => {
+    const loading = document.querySelector('.observatory-stream')?.textContent?.includes('Lecture des traces') ?? true
+    return !loading && document.querySelectorAll('.observatory-event').length >= ${liveEvents}
+  })()`,
+      4000,
+      100
+    )
     await evaluate(`(() => {
   const stream = document.querySelector('.observatory-stream')
   if (stream) stream.scrollTop = 0
@@ -286,7 +372,7 @@ await withDeviceMetricsOverride(
   for (const event of events)
     event.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await attendreDansLaPage(evaluate, `Boolean(document.querySelector('.observatory-diff'))`)
     const timelineState = await evaluate(`(() => ({
   events: document.querySelectorAll('.observatory-event').length,
   authority: document.querySelector('[data-testid="observatory-authority-ledger"]')?.textContent?.trim() ?? null,

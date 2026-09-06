@@ -43,3 +43,26 @@ export async function attendreStabilite(evaluer, plafondMs = 8000, pasMs = 200) 
     await new Promise((resolve) => setTimeout(resolve, pasMs))
   }
 }
+
+/**
+ * Attend un ETAT en REJOUANT une action entre deux lectures.
+ *
+ * Meme regle que `attendreDansLaPage`, pour les cas ou l'etat n'arrive QUE si on agit : un
+ * overlay qui ne disparait qu'apres un clic. La borne reste un PLAFOND DE TEMPS, jamais un
+ * nombre d'essais : un compteur d'essais est un delai fixe deguise, il ne dit rien de l'etat.
+ *
+ * @param evaluer fonction qui evalue une expression DANS la page et rend sa valeur
+ * @param expression expression JavaScript vraie quand l'etat attendu est atteint
+ * @param agir action rejouee tant que l'etat n'est pas atteint
+ * @param plafondMs au-dela, on rend `false` sans lever : c'est l'assertion suivante qui tranche
+ * @param pasMs intervalle entre deux lectures
+ */
+export async function agirJusqua(evaluer, expression, agir, plafondMs = 8000, pasMs = 200) {
+  const echeance = Date.now() + plafondMs
+  for (;;) {
+    if (await evaluer(expression)) return true
+    await agir()
+    if (Date.now() >= echeance) return false
+    await new Promise((resolve) => setTimeout(resolve, pasMs))
+  }
+}
