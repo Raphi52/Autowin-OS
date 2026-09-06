@@ -4375,9 +4375,14 @@ export function ChatView({
               onClick={() => void reprendreConversationsCoupeesParQuota()}
               title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
             >
-              {repriseQuotaEnCours
-                ? (repriseQuotaProgres ?? 'Reprise en cours…')
-                : `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`}
+              {repriseQuotaEnCours ? (
+                <>
+                  <Spinner size={12} label="Reprise des conversations en cours" />
+                  {repriseQuotaProgres ?? 'Reprise en cours…'}
+                </>
+              ) : (
+                `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
+              )}
             </button>
             {repriseQuotaNotice ? (
               <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
