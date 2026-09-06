@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+import { attendreDansLaPage } from './cdp-attente.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9286'
 const output = resolve(
@@ -121,12 +122,18 @@ try {
       button.textContent?.trim() === 'Continuer quand même'
     )
     continueButton?.click()
-    const chat = [...document.querySelectorAll('button')].find((button) =>
-      /^chat$/i.test(button.textContent?.trim() ?? '')
-    )
-    chat?.click()
+    // Par le REPERE : le libelle rendu est « 💬Chat » (emoji colle au mot), donc /^chat$/i ne
+    // correspondait a RIEN. La vue ne changeait pas et la sonde accusait ses propres fixtures
+    // d'etre « introuvables » alors qu'elles venaient d'etre creees sans erreur. Une vue se
+    // designe par son repere (garde scripts/navigation-sondes.test.mjs).
+    document.querySelector('[data-testid="nav-chat"]')?.click()
   })()`)
-  await wait(400)
+  const listePrete = await attendreDansLaPage(
+    evaluate,
+    `Boolean(document.querySelector('.conv-item'))`,
+    20000
+  )
+  if (!listePrete) throw new Error("La liste des conversations n'est pas montee apres 20 s")
 
   const selectConversation = async (title) => {
     await evaluate(`(() => {
@@ -139,11 +146,24 @@ try {
     })()`)
     await wait(250)
   }
+  /*
+   * BLOCAGE — L'ONGLET « Source control » N'EXISTE PLUS (mesure du 2026-09-06).
+   *
+   * Le panneau d'execution n'offre plus que trois onglets : Graph, Runs, Logs (WorkflowsPanel.tsx,
+   * PANEL_TABS). Cette preuve, elle, verifie que le panneau de controle de source reste BORNE a la
+   * conversation ouverte : son objet a disparu de l'interface, elle ne peut donc pas passer.
+   *
+   * Ce qui a ete repare ici et qui tient : la navigation vers le Chat (elle cherchait /^chat$/i
+   * alors que le libelle rendu est « 💬Chat », si bien qu'elle accusait ses PROPRES fixtures d'etre
+   * introuvables), et la bascule du panneau, RENOMMEE et non supprimee (.workflow-toggle).
+   */
   const openSourceControl = async () => {
     await evaluate(`(() => {
-      const workflows = document.querySelector('button[title="Workflows (RUN.md)"]')
-      if (!workflows) throw new Error('Bouton Workflows introuvable')
-      if (!document.querySelector('.runs-pane')) workflows.click()
+      // Le controle a ete RENOMME, pas supprime : title="Workflows (RUN.md)" est devenu la classe
+      // .workflow-toggle, libellee « Details de l'execution ». Viser la classe survit au libelle.
+      const panneau = document.querySelector('.workflow-toggle')
+      if (!panneau) throw new Error('Bascule du panneau d execution introuvable (.workflow-toggle)')
+      if (!document.querySelector('.runs-pane')) panneau.click()
     })()`)
     await wait(200)
     await evaluate(`(() => {

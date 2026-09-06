@@ -144,30 +144,34 @@ try {
       if (!filChoisi) throw new Error('Conversation de preuve introuvable dans la liste')
       await new Promise((resolve) => setTimeout(resolve, 250))
       /*
-       * BLOCAGE CONNU — CE CONTROLE N'EXISTE PLUS (mesure du 2026-09-06).
+       * LE CONTROLE A ETE RENOMME, PAS SUPPRIME.
        *
-       * Le bouton title="Workflows (RUN.md)" a disparu de l'interface : le panneau de droite a ete
-       * BORNE a la conversation et sa vue globale sortie dans l'Observatory (commit 79e9c13e). Sur
-       * une instance isolee, un fil sans orchestration n'affiche donc aucun panneau a ouvrir — les
-       * boutons rendus disent eux-memes « aucun run a ouvrir ».
-       *
-       * Cette sonde n'est PAS branchee sur build:desktop pour cette raison, et sa navigation a
-       * quand meme ete reparee ci-dessus (repere au lieu du texte, attente d'etat) : ces defauts-la
-       * la faisaient tomber AVANT d'atteindre ce point, et masquaient la vraie cause. Pour la
-       * reveiller il faut soit viser le nouveau chemin d'acces au panneau, soit semer un vrai run.
+       * Cette sonde visait button[title="Workflows (RUN.md)"] et ne trouvait rien. Premiere
+       * conclusion, FAUSSE : « le controle a disparu avec le bornage du panneau de droite ». Il
+       * existe toujours — meme bascule, meme panneau — sous la classe .workflow-toggle, libellee
+       * « Details de l'execution ». Un titre est du contenu, il se reecrit ; une classe est une
+       * adresse. C'est la lecon de la journee, prise pour la troisieme fois.
        */
       await evaluate(`(() => {
-  const workflows = document.querySelector('button[title="Workflows (RUN.md)"]')
-  if (!workflows) throw new Error('Bouton Workflows introuvable')
-  workflows.click()
+  const panneau = document.querySelector('.workflow-toggle')
+  if (!panneau) throw new Error('Bascule du panneau d execution introuvable (.workflow-toggle)')
+  if (!document.querySelector('.runs-pane')) panneau.click()
 })()`)
       await new Promise((resolve) => setTimeout(resolve, 200))
+      /*
+       * L'ONGLET S'APPELLE « Graph », PAS « Graphe ».
+       *
+       * Egalite stricte sur un LIBELLE : un « e » de moins et la sonde levait « Onglet Graphe
+       * introuvable ». Les onglets rendus sont Graph / Runs / Logs (WorkflowsPanel.tsx). On vise
+       * l'onglet par son debut de libelle, et on accepte qu'il soit DEJA actif : « graph » est
+       * l'onglet par defaut du panneau, donc ne pas le trouver a cliquer n'est pas un echec.
+       */
       await evaluate(`(() => {
-  const graph = [...document.querySelectorAll('.workflow-section-tabs button')].find(
-    (button) => button.textContent?.trim() === 'Graphe'
-  )
-  if (!graph) throw new Error('Onglet Graphe introuvable')
-  graph.click()
+  const onglets = [...document.querySelectorAll('.workflow-section-tab')]
+  const graph = onglets.find((b) => /^graph/i.test(b.textContent?.trim() ?? ''))
+  if (!graph) throw new Error('Onglet Graph introuvable parmi : ' + onglets.map((b) => b.textContent?.trim()).join(', '))
+  if (graph.getAttribute('aria-selected') !== 'true') graph.click()
+  return true
 })()`)
       await new Promise((resolve) => setTimeout(resolve, 1000))
       await evaluate(`(() => {

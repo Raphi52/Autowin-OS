@@ -1,11 +1,33 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { portCdp } from './cdp-port.mjs'
+/*
+ * PAS BRANCHEE SUR build:desktop — ELLE N'EST VERTE QU'AU SECOND PASSAGE (mesure du 2026-09-06).
+ *
+ * Sur une instance neuve, mesure faite deux fois de suite sur la MEME application : premier
+ * passage ROUGE, second VERT. L'etat observe au premier passage est sans ambiguite — cinq cartes
+ * montees, aucune repliee, diagramme, markdown, tableau et 3D presents, et `image: false` : la
+ * carte VECTEUR ne rend aucun <img>. Le produit ne construit l'apercu que si l'artefact porte son
+ * contenu en ligne (ArtifactPreview.tsx, `inlineDataUrl`), et ce contenu n'est pas encore la juste
+ * apres la premiere semence.
+ *
+ * C'est peut-etre un vrai defaut vecu — « je viens de generer un SVG et je ne le vois pas » — mais
+ * ce n'est pas etabli, et brancher une preuve qui echoue une fois sur deux ne prouverait rien : ce
+ * serait un rouge intermittent de plus, la chose la plus couteuse a diagnostiquer.
+ *
+ * Ce qui a ete repare ici, et qui tient : la resolution du port, le DEPLIAGE des cartes (les
+ * apercus d'image s'ouvrent desormais replies, l'<img> n'existe pas avant le clic), et le delai
+ * qui DIT desormais quel rendu manque au lieu d'un « delai depasse » muet.
+ */
+
 
 const argument = (name, fallback) => {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : fallback
 }
-const port = Number(argument('--port', '9257'))
+// Resolution COMMUNE du port : --port, puis AUTOWIN_CDP_PORT, puis le port REEL de l'instance
+// ouverte. Le 9257 code en dur ne repondait a personne des que l'instance en prenait un autre.
+const port = portCdp()
 const productFingerprint = argument('--fingerprint', 'unbound')
 const output = resolve(
   argument('--out', 'Audit/headless-instances/artifact-previews/artifact-previews.png')
@@ -85,7 +107,28 @@ const waitFor = async (expression, label, timeoutMs = 20_000) => {
     if (value) return value
     await sleep(150)
   }
-  throw new Error(`Délai dépassé: ${label}`)
+  /*
+   * UN DELAI QUI NE DIT PAS CE QUI MANQUE COUTE UNE ENQUETE ENTIERE.
+   *
+   * Mesure du 2026-09-06 : « Delai depasse: rendus d'artefacts » a fait chercher a la main, carte
+   * par carte, laquelle des six conditions etait fausse. L'etat des cartes est ici, gratuit : on
+   * le JOINT au message.
+   */
+  const etat = await evaluate(`(() => {
+    const cartes = [...document.querySelectorAll('.artifact-preview')]
+    return JSON.stringify({
+      cartes: cartes.length,
+      types: cartes.map((c) => c.dataset.artifactKind),
+      replies: cartes.filter((c) => c.querySelector('.artifact-preview__toggle[aria-expanded="false"]')).length,
+      enChargement: document.body.textContent.includes('Chargement de l’aperçu'),
+      diagramme: Boolean(document.querySelector('.artifact-diagram svg')),
+      image: Boolean(document.querySelector('.artifact-preview__image')),
+      markdown: Boolean(document.querySelector('.artifact-preview .brain-markdown h2')),
+      tableau: Boolean(document.querySelector('.artifact-preview table')),
+      model3d: Boolean(document.querySelector('.artifact-model3d canvas'))
+    })
+  })()`).catch(() => 'etat illisible')
+  throw new Error(`Délai dépassé: ${label} — état observé : ${etat}`)
 }
 
 await send('Runtime.enable')
@@ -117,6 +160,21 @@ await waitFor(
   `document.querySelectorAll('.artifact-preview').length === 5`,
   'montage des cartes artefact'
 )
+/*
+ * ON DEPLIE CE QUI EST REPLIE.
+ *
+ * Mesure du 2026-09-06 : les apercus d'image et de vecteur s'ouvrent desormais REPLIES
+ * (ArtifactPreview.tsx : `isCollapsible` pour ces deux types). Le `<img>` n'est donc pas dans le
+ * DOM tant que personne n'a clique « Deplier », et cette sonde attendait 30 s un element que le
+ * produit ne rendait pas encore — puis accusait le rendu. Elle deplie maintenant, comme le
+ * lecteur le ferait.
+ */
+await evaluate(`(() => {
+  for (const bouton of document.querySelectorAll('.artifact-preview__toggle')) {
+    if (bouton.getAttribute('aria-expanded') === 'false') bouton.click()
+  }
+  return true
+})()`)
 await evaluate(`(async () => {
   const scroll = document.querySelector('.chat-scroll')
   if (!scroll) return false

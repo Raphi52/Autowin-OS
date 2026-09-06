@@ -138,6 +138,20 @@ await waitFor(
   })()`,
   'conversation HTML'
 )
+/*
+ * PAS BRANCHEE — ET CE ROUGE-LA PARLE PEUT-ETRE DU PRODUIT (mesure du 2026-09-06).
+ *
+ * Sur une instance isolee neuve, la fixture est bien semee et le fil bien ouvert : la conversation
+ * « HTML rendu · fixture » s'affiche, avec sa question et sa reponse. Mais le bloc html-render y
+ * apparait en TEXTE BRUT — le fil contient litteralement « [data-html-scope="zhnmun"… » — au lieu
+ * d'etre rendu dans sa surface isolee. `[data-testid="html-render-preview"]` n'est jamais monte,
+ * alors que ce repere EXISTE bien dans le produit (SandboxedHtmlPreview.tsx).
+ *
+ * Deux lectures possibles, non tranchees : la fixture ne produit plus la forme exacte que le
+ * rendu attend, ou la surface HTML ne se monte pas dans une instance de test. La seconde serait un
+ * vrai defaut vecu. Tant que ce n'est pas tranche, cette sonde ne rejoint pas build:desktop : un
+ * rouge qu'on ne sait pas lire ne protege de rien.
+ */
 await waitFor(
   `Boolean(document.querySelector('[data-testid="html-render-preview"] iframe'))`,
   'surface HTML'
