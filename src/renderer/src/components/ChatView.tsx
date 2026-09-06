@@ -3374,18 +3374,17 @@ export function ChatView({
     }
     followTailRef.current = true
     /*
-     * ENVOYER, C'EST VOULOIR VOIR LA REPONSE — et la descente doit etre ARMEE DES MAINTENANT.
+     * ENVOYER remet a zero les signaux d'alerte du fil : le lecteur veut voir sa reponse, pas un
+     * bouton « il y a du nouveau » herite d'avant l'envoi. La DESCENTE elle-meme reste pilotee par
+     * l'effet sur `messages` plus bas.
      *
-     * Defaut vecu le 2026-09-06 : « quand je prompt ca met pas la vue sur le dernier message,
-     * je suis oblige de scroll down ». Rearmer le suivi ne suffisait pas : entre cet instant et
-     * la frame ou l'effet de descente s'execute, l'APP elle-meme bouge le fil (le composer
-     * multi-ligne se vide et rend sa hauteur, la compensation de frappe repose `scrollTop`).
-     * Ces evenements `scroll` arrivaient avec `descenteEnVolRef` a `false`, donc ils etaient lus
-     * comme un geste de lecture « loin du bas » : `followTailRef` retombait a `false` et l'effet
-     * de descente sortait aussitot par sa garde. Personne ne descendait.
-     *
-     * On declare donc la descente EN VOL des l'envoi : a partir d'ici, seul un RECUL du fil
-     * (cf. `doitSuivreLeBas`) rend la main au lecteur.
+     * Defaut vecu le 2026-09-06, NON RESOLU : « quand je prompt ca met pas la vue sur le dernier
+     * message, je suis oblige de scroll down ». Une tentative a arme ici `descenteEnVolRef` pour
+     * que les mouvements de fil provoques par l'app (le composer qui se vide) ne soient plus lus
+     * comme un geste de lecture. Elle a ete RETIREE : elle faisait tomber le test
+     * `ChatView.behavior` « un message arrive juste avant un scroll vers le haut ne ramene pas
+     * l'utilisateur en bas » — armer la descente a l'envoi confisque au lecteur le droit de
+     * remonter aussitot apres. La vraie cause reste a localiser.
      */
     if (scrollRef.current && (!sourceConversationId || sourceConversationId === activeRef.current)) {
       gesteLecteurRef.current = false
