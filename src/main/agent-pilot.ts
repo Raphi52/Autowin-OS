@@ -88,6 +88,7 @@ export const CAP_ITERATIONS_TOUR = Number.POSITIVE_INFINITY
 import type { PilotEventKind } from '../shared/pilot-events'
 import { blocEtatSuivant, type EtatPrompt } from './etat-diff'
 import { protegerRappel } from './observabilite-non-bloquante'
+import { bornerResultatDeCommande } from './resultat-de-commande-borne'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -1859,6 +1860,35 @@ export class AgentPilot {
               : {}),
             callDurationMs: performance.now() - callStartedAt
           })
+          /*
+           * SESSION EMPOISONNEE PAR UN PROMPT TROP LONG — on l'ABANDONNE au lieu de la rejouer.
+           *
+           * Mesure du 2026-09-06 (conv-312) : une injection de 2,86 Mo a fait exploser un tour en
+           * « Prompt is too long ». Le tour SUIVANT ne pesait que 65 k caracteres et echouait
+           * pourtant a l'identique — parce qu'il reprenait la meme session (`--resume`), qui porte
+           * encore le prompt geant cote fournisseur. La conversation devenait un CUL-DE-SAC :
+           * chaque relance rejouait l'echec, aucun message ne pouvait plus y passer.
+           *
+           * Reprendre une session dont le contenu ne tient plus dans la fenetre est sans issue :
+           * on l'oublie, et on repart a blanc avec le fil (borne) que ce tour porte deja. Le cout
+           * est une perte de contexte cote fournisseur, DIT au modele par le fil lui-meme —
+           * infiniment moins cher qu'un fil definitivement mort.
+           */
+          const promptTropLong = /prompt is too long|prompt too long/i.test(message)
+          if (promptTropLong && sessionEnCours) {
+            sessionEnCours = undefined
+            delete options.resumeSessionId
+            if (conversationId) this.chatSessions.delete(conversationId)
+            if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
+            emit({
+              kind: 'retry',
+              iteration: i,
+              name: provider,
+              text: `${message} — session du fournisseur abandonnee, nouvel essai sans reprise`,
+              data: { attempt, maxAttempts: 2 }
+            })
+            continue
+          }
           if (error instanceof ProviderCallError && !error.retryable) throw error
           if (attempt >= 1) throw error
           if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
@@ -2688,12 +2718,18 @@ export class AgentPilot {
             }
           }
         }
+        // BORNE OBLIGATOIRE : sans elle, une lecture volumineuse (`retrospective`, `read_file`,
+        // `conversation_read`) part telle quelle dans le prompt et tue le tour — conv-312, 2 860 957
+        // caracteres injectes, « Prompt is too long », fil devenu un cul-de-sac.
         results.push(
-          `${token.name} → ${
-            commandSucceeded
-              ? JSON.stringify(r.data)
-              : 'ERREUR ' + (r.ok ? JSON.stringify(r.data) : r.error)
-          }`
+          bornerResultatDeCommande(
+            token.name,
+            `${token.name} → ${
+              commandSucceeded
+                ? JSON.stringify(r.data)
+                : 'ERREUR ' + (r.ok ? JSON.stringify(r.data) : r.error)
+            }`
+          )
         )
         tokenIndex += 1
       }
