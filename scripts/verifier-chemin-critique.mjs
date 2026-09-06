@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
+import { choisirPortLibre } from './port-libre.mjs'
 
 /*
  * LA SONDE DU CHEMIN CRITIQUE, EN UN SEUL APPEL — et branchee automatiquement.
@@ -25,7 +26,23 @@ import { racineDepot } from './racine-depot.mjs'
 const racine = racineDepot()
 const binaire = join(racine, 'dist', 'win-unpacked', 'autowin-os.exe')
 const instance = process.env.AUTOWIN_CP_INSTANCE || 'chemin-critique'
-const port = Number(process.env.AUTOWIN_CP_PORT || 9280)
+const portDemande = Number(process.env.AUTOWIN_CP_PORT || 9280)
+/*
+ * Le port demande peut etre tenu par un socket ORPHELIN — un enfant de l'application herite du
+ * socket d'ecoute et le garde apres la mort du parent. Mesure le 2026-09-06 : 9280 etait en
+ * LISTENING pour un PID introuvable, le harnais refusait de demarrer, et cette verification
+ * automatique tombait a chaque construction pour une raison sans rapport avec le produit. Un
+ * socket fantome ne se tue pas : on prend le suivant libre, et on le DIT.
+ */
+const port = choisirPortLibre(portDemande)
+if (port === undefined) {
+  console.error(
+    `[chemin-critique] aucun port libre entre ${portDemande} et ${portDemande + 19} — machine saturee.`
+  )
+  process.exit(3)
+}
+if (port !== portDemande)
+  console.log(`[chemin-critique] port ${portDemande} occupe (socket orphelin) — repli sur ${port}`)
 
 if (!existsSync(binaire)) {
   console.error(
