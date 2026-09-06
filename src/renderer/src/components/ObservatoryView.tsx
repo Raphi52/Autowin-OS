@@ -1061,7 +1061,6 @@ export function ObservatoryView({
         <details
           className="observatory-native-diagnostics observatory-brain-inventory"
           data-testid="brain-injection-inventory"
-          open
         >
           <summary>
             Injections &amp; appels Brain ·{' '}
