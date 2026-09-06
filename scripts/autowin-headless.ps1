@@ -84,6 +84,20 @@ if ([string]::IsNullOrWhiteSpace($identity.executableVersion)) { throw "Le binai
 if ($null -ne (Read-OwnedProcess)) { throw "L'instance '$InstanceId' est déjà active." }
 if (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue) { throw "Le port CDP $Port est déjà occupé." }
 New-Item -ItemType Directory -Path $userData, $appData -Force | Out-Null
+# SEMENCE DU CATALOGUE DE MODELES. Sur un profil VIERGE, `loadCachedImportedModels` rend une liste
+# VIDE (DEFAULT_IMPORTED_MODELS est vide) et `createDefaultTopology([])` leve : le demarrage s'arrete
+# avant l'ouverture du port CDP, donc aucune instance isolee n'est pilotable. Mesure le 2026-09-06 :
+# le process restait vivant et fige a 121 ms, juste avant le chargement de la topologie.
+# La racine de donnees effective est `<user-data-dir>/app-data/autowin-os` (resolveInstanceAppDataBase
+# puis autowinAppDataRoot). On ne remplace JAMAIS un cache existant : la semence est un amorcage.
+$racineDonnees = Join-Path (Join-Path $userData 'app-data') 'autowin-os'
+$cacheModeles = Join-Path $racineDonnees 'model-catalog.json'
+if (-not (Test-Path -LiteralPath $cacheModeles)) {
+  $semence = Join-Path (Join-Path $racineDepot 'scripts') 'fixtures/model-catalog-seed.json'
+  if (-not (Test-Path -LiteralPath $semence -PathType Leaf)) { throw "Semence de catalogue introuvable : $semence" }
+  New-Item -ItemType Directory -Path $racineDonnees -Force | Out-Null
+  Copy-Item -LiteralPath $semence -Destination $cacheModeles -Force
+}
 $env:APPDATA = $appData
 $process = Start-Process -FilePath $identity.executable -ArgumentList @(
   "--remote-debugging-port=$Port",

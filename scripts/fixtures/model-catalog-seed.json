@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "discoveredAt": 1757145600000,
+  "claude": [
+    {
+      "id": "claude/claude-sonnet-4-6",
+      "provider": "claude",
+      "model": "claude-sonnet-4-6",
+      "label": "Sonnet 4.6 (semence instance isolee)",
+      "reasoningEfforts": ["low", "medium", "high", "xhigh", "max"],
+      "defaultReasoningEffort": "medium"
+    }
+  ]
+}
