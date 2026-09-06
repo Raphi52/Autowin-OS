@@ -119,7 +119,7 @@ function scriptLancement(bench) {
  * `dogfood` du 2026-09-05) : X n_etait pas l_appel nu et B n_etait pas un bras de texte — defauts
  * constates APRES coup, quand les quatre bras avaient deja ete payes.
  */
-export const POINTS_AVANT_LANCEMENT = ['P1', 'P2', 'P3', 'P5', 'P16', 'P17']
+export const POINTS_AVANT_LANCEMENT = ['P1', 'P2', 'P3', 'P5', 'P16', 'P17', 'P20']
 
 export function verifierProtocole({ run, bench, racineDuels = process.cwd(), avantLancement = false }) {
   const md = lire(run)
@@ -476,6 +476,37 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd(), ava
       : `gagnant declare alors que l'ecart de cout ET de duree avec un perdant reste sous ${Math.round(
           SEUIL_BRUIT * 100
         )} % (le bruit mesure entre deux rejeux identiques, conv-312) : nommer la difference de QUALITE sur une ligne \`Écart hors bruit :\`, ou clore le banc en « non concluant »`
+  })
+
+  /*
+   * P20 — LE CRITERE BINAIRE, la mesure qui survit au bruit. Le verdict gagnant/perdant d'un banc
+   * est rendu par un JUGE : sur la famille `residus`, il s'est INVERSE a configuration identique
+   * 3 rejeux de suite (6 bancs, 0 gagnant reproductible — 2026-09-06, conv-312). Un banc peut donc
+   * couter 25 $ et ne rien etablir. Un critere BINAIRE, lui, se rejoue par EXECUTION et ne depend
+   * d'aucun juge : sur ce meme banc v5, la skill l'atteint 2/2 passages et l'appel nu 0/2.
+   * Il doit etre pose AVANT le lancement — pose apres, il ne mesure plus, il justifie le gagnant
+   * deja connu (meme faute que P1 sur les candidats scoutes).
+   */
+  ajoute('P20', 'Critere BINAIRE + preuve rejouable, declares AVANT le lancement', () => {
+    const ligne = (regex) => md.match(regex)
+    const critere = ligne(/\*\*Crit[eè]re binaire\*\*\s*:?([^\n]*)/i)
+    if (!critere || !critere[1].trim())
+      return 'aucune ligne `**Critère binaire** :` — sans elle, le banc ne mesure que l_avis du juge, qui s_inverse au rejeu'
+    const preuve = ligne(/\*\*Preuve\*\*\s*:?([^\n]*)/i)
+    if (!preuve || !preuve[1].trim()) return 'critere binaire declare sans ligne `**Preuve** :`'
+    // Une preuve se REJOUE : elle porte une commande, pas une intention. Le seul marqueur lisible
+    // sans jugement est un extrait de code (`...`) ou un binaire connu en tete.
+    const texte = preuve[1]
+    const commande =
+      /`[^`]+`/.test(texte) || /(node|npx|pwsh|powershell|git|python|sh|bash)/i.test(texte)
+    if (!commande)
+      return 'preuve en prose : aucune commande rejouable (`...` ou node/npx/pwsh/git) — c_est un avis, pas une mesure'
+    // MEME REGLE QUE P1 : pose apres le lancement, le critere ne choisit plus, il justifie.
+    const ancres = [lancement ? path.basename(lancement.chemin) : null, 'claude -p'].filter(Boolean)
+    const lancementPos = ancres.map((a) => md.indexOf(a)).filter((i) => i >= 0)
+    if (lancementPos.length && Math.min(...lancementPos) < md.indexOf(critere[0]))
+      return 'critere binaire ecrit APRES le lancement : il ne mesure plus, il justifie le gagnant deja connu'
+    return true
   })
 
   const jugements = [

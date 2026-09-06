@@ -106,6 +106,9 @@ CRITERE NON ATTEINT (code de sortie 1)
 | C | preuve d'abord | oui | **0,527** | 1,3 | 13 | filtre invisible | 2e |
 | X (casse-prémisse) | lecture interdite | oui | **0,507** | 1,6 | 13 | garde morte | 4e |
 
+**Critère binaire** : le livrable signale-t-il les scripts vivants mais cassés ?
+**Preuve** : \`powershell -NoProfile -File scripts/assert-package-content.ps1\` -> exit 1
+
 **Discrimination** : 3/4 bras ont passé le critère.
 Écart hors bruit : A est le seul bras dont le livrable porte la preuve REJOUÉE ; les perdants la déclarent sans l'exécuter.
 AUTOWIN_LESSON_V1: {"outcome":"success","title":"A gagne","body":"Δ = 0,29 $ contre A"}
@@ -598,5 +601,61 @@ lance /scout d_abord
     })
     expect(res.ok).toBe(false)
     expect(point(res, 'P17').ok).toBe(false)
+  })
+})
+
+describe('P20 — critere BINAIRE declare avec sa preuve rejouable, AVANT le lancement', () => {
+  const SANS_CRITERE = /\*\*Critère binaire\*\*[^\n]*\n/
+  const SANS_PREUVE = /\*\*Preuve\*\*[^\n]*\n/
+
+  it('est controle des le pre-vol, avec les autres points lisibles avant de payer', () => {
+    expect(POINTS_AVANT_LANCEMENT).toContain('P20')
+  })
+
+  it('PASSE quand le RUN.md nomme le critere binaire ET une commande qui le rejoue', () => {
+    const f = bancConforme()
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P20').ok).toBe(true)
+  })
+
+  it('RATE quand aucun critere binaire n est declare', () => {
+    const f = bancConforme()
+    writeFileSync(f.run, readFileSync(f.run, 'utf8').replace(SANS_CRITERE, ''))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P20').ok).toBe(false)
+    expect(point(res, 'P20').detail).toMatch(/binaire/i)
+  })
+
+  it('RATE une preuve en PROSE : sans commande rejouable, ce n est qu un avis', () => {
+    const f = bancConforme()
+    writeFileSync(
+      f.run,
+      readFileSync(f.run, 'utf8').replace(
+        SANS_PREUVE,
+        '**Preuve** : on verra bien en lisant les livrables.\n'
+      )
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P20').ok).toBe(false)
+    expect(point(res, 'P20').detail).toMatch(/commande|rejou/i)
+  })
+
+  it('RATE un critere binaire declare APRES le lancement : il ne mesure plus, il justifie', () => {
+    const f = bancConforme()
+    const sansCritere = readFileSync(f.run, 'utf8')
+      .replace(SANS_CRITERE, '')
+      .replace(SANS_PREUVE, '')
+    writeFileSync(
+      f.run,
+      `${sansCritere}
+Lancement des bras : claude -p "..." pour chacun des quatre prompts.
+
+**Critère binaire** : le livrable signale-t-il les scripts vivants mais cassés ?
+**Preuve** : \`node check.mjs\` -> exit 1
+`
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P20').ok).toBe(false)
+    expect(point(res, 'P20').detail).toMatch(/APRES|apres/i)
   })
 })

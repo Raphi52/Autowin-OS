@@ -37,7 +37,10 @@ const RATES_ATTENDUS = {
   P15: /aucun bras journalise/,
   // Banc d'avant la regle du 2026-09-05 (conv-305) : ni bras de TEXTE en B, ni appel NU en X.
   P16: /section des candidats absente/,
-  P17: /cite de l_outillage/
+  P17: /cite de l_outillage/,
+  // Banc d'avant la regle du critere binaire (2026-09-06) : il ne declare aucune ligne
+  // `**Critere binaire** :`, donc son gagnant ne repose que sur l'avis du juge.
+  P20: /aucune ligne .\*\*Crit[eè]re binaire\*\*/
 }
 
 describe('arena-protocole-check face au banc réel de conv-126', () => {
@@ -56,7 +59,7 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
     expect(attendus.filter((f) => !existsSync(f))).toEqual([])
   })
 
-  it('refuse le run : ok=false, et RATE exactement P1, P2, P3, P11, P15, P16, P17', () => {
+  it('refuse le run : ok=false, et RATE exactement P1, P2, P3, P9, P11, P15, P16, P17, P20', () => {
     const res = verifierProtocole({ run: RUN, bench: BENCH, racineDuels: FIXTURE })
     expect(res.erreur).toBeUndefined()
     const rates = res.points.filter((p) => !p.ok)
@@ -84,7 +87,7 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
       // Aucun duel journalise pour ce banc : P19 n'a pas d'ecart a juger, il ne peut pas refuser.
       'P19'
     ])
-    expect(res.points).toHaveLength(19)
+    expect(res.points).toHaveLength(20)
   })
 
   it('en ligne de commande, le contrôle sort en code 1 et dit PROTOCOLE NON TENU', () => {
