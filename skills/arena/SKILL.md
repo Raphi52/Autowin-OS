@@ -114,6 +114,19 @@ remplie d'une estimation.
   **4 bras sur 4** l'ont passé et ont tous raté les MÊMES cas limites (dates absurdes acceptées,
   fenêtre vide) — c'est le critère qui a échoué, pas les bras, et le classement s'est joué sur une
   impression de qualité au lieu d'une mesure.
+- **UN CRITÈRE BINAIRE, AVEC SA PREUVE REJOUABLE, AVANT DE LANCER — sinon le banc est REFUSÉ.** Le
+  RUN.md porte deux lignes, écrites AVANT la commande de lancement, avec ces libellés exacts :
+  `**Critère binaire** : <une question à laquelle on répond oui ou non>` et
+  `**Preuve** : <la commande qui la rejoue>` (une commande, entre backquotes, pas une intention).
+  Chaque bras est ensuite noté au journal avec sa réponse :
+  `node scripts/arena-duel.mjs noter … --critere "…" --atteint oui|non --preuve "…"` — `--atteint`
+  sans `--preuve` est refusé par le journal lui-même. Motif MESURÉ : le verdict gagnant/perdant est
+  rendu par un JUGE, et sur la famille `residus` il s'est **inversé à configuration identique 3
+  rejeux de suite** — 6 bancs, **0 gagnant reproductible** (2026-09-06, conv-312). Un banc peut donc
+  coûter 25 $ et n'établir RIEN. Le critère binaire, lui, ne dépend d'aucun juge : sur ce même banc
+  v5, la skill l'atteint **2/2** passages et l'appel nu **0/2** — c'est la seule chose que ce tournoi
+  a établie. Écrit APRÈS le lancement, il ne mesure plus, il justifie le gagnant déjà connu : le
+  contrôle le refuse pour cette raison (point P20, vérifié dès le pré-vol).
 - **Contrôle de discrimination, après coup** : si les 4 bras passent le critère, le banc est déclaré
   **NON DISCRIMINANT** dans la sortie. Le gagnant devient une piste, jamais une mesure.
 - **AU MOMENT où le banc sort 4/4 → écrire la section `## Critère durci` dans le RUN.md, avant de
@@ -229,9 +242,9 @@ et pas seulement quand la cible est une skill :
 npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc> --avant-lancement
 ```
 
-Ce mode ne lit que le RUN.md et les `prompt-<bras>.txt` : il tranche les six points qui coûtent le
+Ce mode ne lit que le RUN.md et les `prompt-<bras>.txt` : il tranche les sept points qui coûtent le
 plus cher à découvrir trop tard (candidats triés, rouge collé, cas limites, énoncé identique, B de
-texte, X réellement nu). Code de sortie ≠ 0 → **NE PAS LANCER** : on corrige le prompt, on relance le
+texte, X réellement nu, **critère binaire + preuve rejouable**). Code de sortie ≠ 0 → **NE PAS LANCER** : on corrige le prompt, on relance le
 pré-vol. Motif mesuré, bancs `residus` et `dogfood` du 2026-09-05 : X citait `/scout` et `/arena`
 dans son prompt — donc X n'était pas le plancher de mesure —, et le contrôle ne l'a dit qu'APRÈS que
 les quatre bras aient été payés (≈ 11 $ et 15 $ de tournoi rendus ininterprétables sur leur bras X).

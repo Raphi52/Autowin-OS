@@ -108,7 +108,9 @@ function scriptLancement(bench) {
   const parleDesQuatre = (texte) => {
     const t = texte.toLowerCase()
     if (t.includes('a b c x')) return true
-    return BRAS.every((b) => ['prompt-', 'bras-', 'out-'].some((prefixe) => t.includes(prefixe + b)))
+    return BRAS.every((b) =>
+      ['prompt-', 'bras-', 'out-'].some((prefixe) => t.includes(prefixe + b))
+    )
   }
   return candidats.find((c) => parleDesQuatre(c.texte)) ?? candidats[0]
 }
@@ -121,7 +123,12 @@ function scriptLancement(bench) {
  */
 export const POINTS_AVANT_LANCEMENT = ['P1', 'P2', 'P3', 'P5', 'P16', 'P17', 'P20']
 
-export function verifierProtocole({ run, bench, racineDuels = process.cwd(), avantLancement = false }) {
+export function verifierProtocole({
+  run,
+  bench,
+  racineDuels = process.cwd(),
+  avantLancement = false
+}) {
   const md = lire(run)
   if (md === null) return { erreur: `RUN.md introuvable : ${run}` }
   const points = []
@@ -324,12 +331,14 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd(), ava
       for (const l of lignesTableau(bloc)) {
         if (/^candidat$/i.test(l[0])) continue
         const retenu = l[l.length - 1].toUpperCase()
-        if (['B', 'C', 'X'].includes(retenu) && /\bformulation\b|\btextes?\b|\bwording\b/i.test(l.join(' ')))
+        if (
+          ['B', 'C', 'X'].includes(retenu) &&
+          /\bformulation\b|\btextes?\b|\bwording\b/i.test(l.join(' '))
+        )
           brasFormulation.add(retenu.toLowerCase())
       }
     }
-    const declare =
-      brasFormulation.size > 0 || /banc de formulation|variantes de texte/i.test(md)
+    const declare = brasFormulation.size > 0 || /banc de formulation|variantes de texte/i.test(md)
     if (!declare) return true // banc de workflow : point sans objet
     const variantes = section(md, '## Variantes de texte')
     if (variantes === null)
@@ -416,9 +425,15 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd(), ava
     const prompt = lire(path.join(bench, 'prompt-x.txt'))
     if (prompt === null || prompt.trim() === '')
       return 'prompt-x.txt absent ou vide : impossible de verifier que X est l_appel nu'
-    const cite = prompt.match(/\/(?:frame|terrain|build|clean|judge|heal|scout|arena)\b|SKILL\.md|skills[\/]/gi)
+    const cite = prompt.match(
+      /\/(?:frame|terrain|build|clean|judge|heal|scout|arena)\b|SKILL\.md|skills[\/]/gi
+    )
     if (cite)
-      return 'prompt-x.txt cite de l_outillage (' + [...new Set(cite.map((c) => c.toLowerCase()))].join(', ') + ') : X n_est pas un appel nu'
+      return (
+        'prompt-x.txt cite de l_outillage (' +
+        [...new Set(cite.map((c) => c.toLowerCase()))].join(', ') +
+        ') : X n_est pas un appel nu'
+      )
     return /appel nu|aucune skill/i.test(prompt + md)
       ? true
       : 'ni prompt-x.txt ni le RUN.md ne declarent X comme appel nu'
@@ -498,7 +513,7 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd(), ava
     // sans jugement est un extrait de code (`...`) ou un binaire connu en tete.
     const texte = preuve[1]
     const commande =
-      /`[^`]+`/.test(texte) || /(node|npx|pwsh|powershell|git|python|sh|bash)/i.test(texte)
+      /`[^`]+`/.test(texte) || /\b(node|npx|pwsh|powershell|git|python|sh|bash)\b/i.test(texte)
     if (!commande)
       return 'preuve en prose : aucune commande rejouable (`...` ou node/npx/pwsh/git) — c_est un avis, pas une mesure'
     // MEME REGLE QUE P1 : pose apres le lancement, le critere ne choisit plus, il justifie.

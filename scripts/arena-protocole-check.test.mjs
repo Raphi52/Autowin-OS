@@ -123,7 +123,12 @@ AUTOWIN_LESSON_V1: {"outcome":"success","title":"A gagne","body":"Δ = 0,29 $ co
   mkdirSync(join(bench, 'variantes'), { recursive: true })
   writeFileSync(
     join(bench, 'variantes', 'b.diff'),
-    ['--- a/skills/arena/SKILL.md', '+++ b/skills/arena/SKILL.md', '+reflexe remonte en tete', ''].join('\n')
+    [
+      '--- a/skills/arena/SKILL.md',
+      '+++ b/skills/arena/SKILL.md',
+      '+reflexe remonte en tete',
+      ''
+    ].join('\n')
   )
   // Un banc CONFORME est aussi JOURNALISE : ses 4 bras sont dans arena-duels.jsonl (P15).
   const verdicts = { a: 'gagnant', b: 'perdant', c: 'perdant', x: 'perdant' }
@@ -304,7 +309,10 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
       readFileSync(f.run, 'utf8').replace(
         '| réflexe en tête de SKILL.md | formulation |',
         '| fan-out 3 agents | parallélisme |'
-      ) + ['', '', 'B non-texte, motif : aucun texte ne pilote cette tache.', ''].join(String.fromCharCode(10))
+      ) +
+        ['', '', 'B non-texte, motif : aucun texte ne pilote cette tache.', ''].join(
+          String.fromCharCode(10)
+        )
     )
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P16').ok).toBe(true)
@@ -319,7 +327,9 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     const f = bancConforme()
     writeFileSync(
       join(f.bench, 'prompt-x.txt'),
-      ['TACHE', 'WORKFLOW IMPOSE (x) : applique skills/heal/SKILL.md', ''].join(String.fromCharCode(10))
+      ['TACHE', 'WORKFLOW IMPOSE (x) : applique skills/heal/SKILL.md', ''].join(
+        String.fromCharCode(10)
+      )
     )
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P17').ok).toBe(false)
@@ -406,10 +416,7 @@ describe('arena-protocole-check — P1 lit aussi l_ORDRE (conv-158)', () => {
     const f = bancConforme()
     const md = readFileSync(f.run, 'utf8')
     const i = md.indexOf('## Banc')
-    writeFileSync(
-      f.run,
-      `## Lancement\nsh lance.sh\n\n${md.slice(i)}\n\n${md.slice(0, i)}`
-    )
+    writeFileSync(f.run, `## Lancement\nsh lance.sh\n\n${md.slice(i)}\n\n${md.slice(0, i)}`)
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P1').ok).toBe(false)
     expect(point(res, 'P1').detail).toMatch(/apr[eè]s le lancement/i)
@@ -502,7 +509,11 @@ describe('P15 — le banc doit etre journalise dans arena-duels.jsonl', () => {
       .split('\n')
       .map((l) => {
         const d = JSON.parse(l)
-        return JSON.stringify({ ...d, banc: join(f.racine, 'autre-banc'), tache: 'une autre tache' })
+        return JSON.stringify({
+          ...d,
+          banc: join(f.racine, 'autre-banc'),
+          tache: 'une autre tache'
+        })
       })
     writeFileSync(cheminJournal(f.racine), `${autres.join('\n')}\n`)
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
