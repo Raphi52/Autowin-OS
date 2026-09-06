@@ -85,12 +85,22 @@ describe('chevron du bloc Réflexion', () => {
     return css.slice(i + selecteur.length + 2, css.indexOf('}', i))
   }
 
-  it('est DESSINÉ (bordures épaisses), pas un glyphe minuscule', () => {
+  /**
+   * TAILLE REVUE LE 2026-09-05, sur retour utilisateur : « le bas est coupé, elle est trop
+   * grosse ». Un carré tourné à 45° occupe côté × 1,41 en hauteur — à 6px le chevron débordait
+   * de la ligne d'en-tête et sa pointe était rognée. Les valeurs validées sont 4px de côté et
+   * 1,25px de bordure, et la feuille de style porte cette justification.
+   *
+   * Ce test gardait les ANCIENNES valeurs : il refusait donc la correction demandée. Ce qu'il
+   * doit verrouiller reste entier — un chevron DESSINÉ (bordures + content vide), jamais un
+   * glyphe de police — mais aux tailles réellement retenues.
+   */
+  it('est DESSINÉ (bordures), pas un glyphe minuscule', () => {
     const regle = corps('.thinking-block > summary::after')
     expect(regle).toMatch(/content:\s*''/)
-    expect(regle).toMatch(/border-right:\s*1\.5px solid/)
-    expect(regle).toMatch(/border-bottom:\s*1\.5px solid/)
-    expect(regle).toMatch(/width:\s*6px/)
+    expect(regle).toMatch(/border-right:\s*1\.25px solid/)
+    expect(regle).toMatch(/border-bottom:\s*1\.25px solid/)
+    expect(regle).toMatch(/width:\s*4px/)
   })
 
   it('pointe à DROITE fermé et vers le HAUT ouvert', () => {
