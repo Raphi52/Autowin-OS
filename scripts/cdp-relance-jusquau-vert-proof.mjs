@@ -30,10 +30,13 @@ import { racineDepot } from './racine-depot.mjs'
  * Usage : node scripts/cdp-relance-jusquau-vert-proof.mjs
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { portCdp } from './cdp-port.mjs'
 import { join } from 'node:path'
 
 const racine = racineDepot()
-const port = Number(process.env.AUTOWIN_CDP_PORT || 9224)
+// Resolution COMMUNE du port : --port, puis AUTOWIN_CDP_PORT, puis le port REEL de l'instance
+// ouverte. Le 9224 code en dur ne repondait a personne des qu'une instance en prenait un autre.
+const port = portCdp()
 const traces = join(racine, '.autowin-data', 'autowin-os', 'causal-trace')
 
 /**
@@ -196,6 +199,24 @@ console.log(`api = ${await evaluer('typeof window.api')}`)
  *  - `correctif` (juge + arête rouge `maxTraversals: 2`) → des réparations sont ACCORDÉES, donc la
  *    boucle peut réellement rejouer : c'est le seul cadre où `[RÉPARATION n]`, le plafond dur et
  *    l'arrêt sur non-progrès peuvent être vus en vivant.
+ */
+/*
+ * MIGRATION SUR LA FIXTURE GRATUITE : ETUDIEE LE 2026-09-06, NON FAISABLE EN L'ETAT.
+ *
+ * Ce qui est gratuit aujourd'hui, ce sont les fixtures du PILOTE DE CHAT
+ * (`[[autowin-fixture-durable-stream]]`, `auto-kaizen-error`) : elles remplacent le fournisseur de
+ * modele pour UN tour de conversation. Or cette sonde n'exerce pas un tour de chat : elle appelle
+ * `window.api.orchestrate` et mesure la POLITIQUE DE RELANCE de l'orchestrateur — les passages
+ * `[REPARATION n]`, le refus motive, le plafond dur. Ces lignes n'existent que si un vrai pipeline
+ * tourne, avec ses phases, ses juges et leurs verdicts.
+ *
+ * Verifie avant d'ecrire ceci : `isolatedTestInstance` n'apparait NULLE PART dans orchestrator.ts,
+ * et aucune fixture d'orchestration n'existe dans src/main. La rendre gratuite demanderait donc
+ * d'ECRIRE un pipeline factice deterministe — juges compris — c'est-a-dire un morceau de produit,
+ * pas une migration de sonde. Tant que ce pipeline n'existe pas, elle reste MANUELLE et payante.
+ *
+ * Deux raisons de plus de ne pas la brancher telle quelle : elle dure plusieurs minutes, et son
+ * en-tete le dit — elle fait travailler un vrai agent, qui ECRIT dans le depot.
  */
 const profil = process.argv[2] || 'correctif'
 console.log(`profil : ${profil}`)
