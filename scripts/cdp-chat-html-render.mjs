@@ -139,18 +139,27 @@ await waitFor(
   'conversation HTML'
 )
 /*
- * PAS BRANCHEE — ET CE ROUGE-LA PARLE PEUT-ETRE DU PRODUIT (mesure du 2026-09-06).
+ * ELUCIDE LE 2026-09-06 — CE ROUGE NE PARLE PAS DU PRODUIT : L'ARCHITECTURE A CHANGE.
  *
- * Sur une instance isolee neuve, la fixture est bien semee et le fil bien ouvert : la conversation
- * « HTML rendu · fixture » s'affiche, avec sa question et sa reponse. Mais le bloc html-render y
- * apparait en TEXTE BRUT — le fil contient litteralement « [data-html-scope="zhnmun"… » — au lieu
- * d'etre rendu dans sa surface isolee. `[data-testid="html-render-preview"]` n'est jamais monte,
- * alors que ce repere EXISTE bien dans le produit (SandboxedHtmlPreview.tsx).
+ * Le soupcon de depart etait « le bloc html-render s'affiche en texte brut ». Il etait FAUX, et il
+ * venait de ma mesure : je lisais `.chat-scroll.textContent`, qui inclut le contenu des balises
+ * <style>. Ce que je prenais pour du texte brut — « [data-html-scope="zhnmun"… » — etait la
+ * feuille de style PORTEE du rendu, signe qu'il fonctionne.
  *
- * Deux lectures possibles, non tranchees : la fixture ne produit plus la forme exacte que le
- * rendu attend, ou la surface HTML ne se monte pas dans une instance de test. La seconde serait un
- * vrai defaut vecu. Tant que ce n'est pas tranche, cette sonde ne rejoint pas build:desktop : un
- * rouge qu'on ne sait pas lire ne protege de rien.
+ * Mesure sur instance isolee, fixture semee et fil ouvert :
+ *   [data-testid="chat-inline-html"] : 1     21 elements reels (DIV, H1, DETAILS, SUMMARY, A…)
+ *   [data-testid="html-render-preview"] : 0  aucun <script>, aucun attribut on*, aucune <iframe>
+ *
+ * Le bloc est donc bien rendu — mais DANS LE FIL, pas dans une vignette encadree. Markdown.tsx le
+ * dit explicitement : l'iframe imposait bordure, barre d'outils et hauteur fixe, « le contenu etait
+ * enferme dans une boite au lieu d'embellir la reponse ». La frontiere de securite est desormais
+ * portee par `sanitizeChatHtml` seul (chat-html-inline.ts, 13 tests unitaires).
+ *
+ * CONSEQUENCE POUR CETTE SONDE : ce n'est pas un selecteur a corriger. Tout ce qui suit — pilotage
+ * d'une cible CDP separee, meta CSP, canari de navigation, meta refresh — teste un mecanisme qui
+ * n'existe plus. Elle est a REECRIRE contre le nouveau contrat (rendu inline + neutralisation), pas
+ * a rafistoler. Ce qui serait perdu si on la supprimait sans la remplacer : la seule preuve
+ * HORS-MODELE que le HTML d'un modele n'execute rien dans l'application reelle.
  */
 await waitFor(
   `Boolean(document.querySelector('[data-testid="html-render-preview"] iframe'))`,
