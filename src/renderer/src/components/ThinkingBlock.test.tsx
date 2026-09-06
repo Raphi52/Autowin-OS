@@ -88,8 +88,9 @@ describe('chevron du bloc Réflexion', () => {
   /**
    * TAILLE REVUE LE 2026-09-05, sur retour utilisateur : « le bas est coupé, elle est trop
    * grosse ». Un carré tourné à 45° occupe côté × 1,41 en hauteur — à 6px le chevron débordait
-   * de la ligne d'en-tête et sa pointe était rognée. Les valeurs validées sont 4px de côté et
-   * 1,25px de bordure, et la feuille de style porte cette justification.
+   * de la ligne d'en-tête et sa pointe était rognée. Retaillé le 2026-09-06 (« un chouya trop
+   * petit ») : 6px de côté, ce qui tient dans la ligne de 18px min. Valeurs validées : 6px de
+   * côté et 1,25px de bordure, et la feuille de style porte cette justification.
    *
    * Ce test gardait les ANCIENNES valeurs : il refusait donc la correction demandée. Ce qu'il
    * doit verrouiller reste entier — un chevron DESSINÉ (bordures + content vide), jamais un
@@ -100,7 +101,7 @@ describe('chevron du bloc Réflexion', () => {
     expect(regle).toMatch(/content:\s*''/)
     expect(regle).toMatch(/border-right:\s*1\.25px solid/)
     expect(regle).toMatch(/border-bottom:\s*1\.25px solid/)
-    expect(regle).toMatch(/width:\s*4px/)
+    expect(regle).toMatch(/width:\s*6px/)
   })
 
   it('pointe à DROITE fermé et vers le HAUT ouvert', () => {

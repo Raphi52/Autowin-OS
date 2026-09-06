@@ -3817,7 +3817,7 @@ button.chat-project-dot:disabled {
   user-select: none;
   padding: 2px 0;
   overflow: visible;
-  /* La ligne doit etre PLUS HAUTE que le chevron tourne (4px * 1.41 ~ 6px) : sans hauteur mini,
+  /* La ligne doit etre PLUS HAUTE que le chevron tourne (6px * 1.41 ~ 8.5px) : sans hauteur mini,
      le carre rogne sa pointe basse sur la boite de la ligne (constat 2026-09-05). */
   min-height: 18px;
   line-height: 1.6;
@@ -3832,12 +3832,12 @@ button.chat-project-dot:disabled {
   content: '';
   /* Tourne a 45deg, un carre de cote C occupe C*1.41 en hauteur : a 6px il debordait de la ligne
      d'en-tete et le bas du chevron etait rogne (« le bas est coupe, elle est trop grosse »,
-     2026-09-05). 5px + flex:none + une marge basse gardent la pointe entiere dans le cadre. */
+     2026-09-05). Agrandi a 6px le 2026-09-06 (« un chouya trop petit ») : flex:none + une marge basse gardent la pointe entiere dans le cadre. */
   flex: none;
   align-self: center;
   box-sizing: border-box;
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
   margin: 0 1px 2px 2px;
   border-right: 1.25px solid #d4a94f;
   border-bottom: 1.25px solid #d4a94f;
