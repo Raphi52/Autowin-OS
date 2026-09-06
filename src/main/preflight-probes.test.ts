@@ -276,3 +276,34 @@ describe('runAppPreflight', () => {
     }
   })
 })
+
+/*
+ * POURQUOI CE TEST : la boucle de re-diagnostic recopiait ses options champ par champ. Tout nouveau
+ * champ de `PreflightOptions` etait donc perdu EN SILENCE — mesure du 2026-09-06, l'avertissement
+ * « historique mis de cote » n'atteignait jamais l'ecran alors qu'il etait correctement produit.
+ */
+describe('watchAppPreflight relaie TOUTES les options de diagnostic', () => {
+  it('transmet un champ qui ne concerne pas le fenetrage', async () => {
+    const vues: unknown[] = []
+    const { watchAppPreflight } = await import('./preflight-probes')
+    const handle = watchAppPreflight(
+      () => {},
+      { conversationsEcartees: ['D:\profil\conversations.json.illisible-x'], delaysMs: [] },
+      {
+        run: async (_force, options) => {
+          vues.push(options)
+          return { ok: true, checks: [], summary: '' }
+        },
+        schedule: () => ({ cancel: () => {} })
+      }
+    )
+    await new Promise((r) => setTimeout(r, 0))
+    handle.stop()
+
+    expect(vues[0]).toMatchObject({
+      conversationsEcartees: ['D:\profil\conversations.json.illisible-x']
+    })
+    // Le fenetrage, lui, appartient a la boucle et ne doit PAS partir au diagnostic.
+    expect(vues[0]).not.toHaveProperty('delaysMs')
+  })
+})

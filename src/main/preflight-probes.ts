@@ -219,7 +219,16 @@ export function watchAppPreflight(
       return { cancel: () => clearTimeout(t) }
     })
   const run = deps.run ?? runAppPreflight
-  const preflightOptions: PreflightOptions = { standbyProviders: options.standbyProviders }
+  /*
+   * TOUTES les options de diagnostic passent, sauf le fenetrage qui appartient a CETTE boucle.
+   *
+   * Recopier champ par champ (`{ standbyProviders: options.standbyProviders }`) perdait EN SILENCE
+   * tout nouveau champ de `PreflightOptions` : mesure du 2026-09-06, l'avertissement « historique
+   * mis de cote » n'arrivait jamais a l'ecran alors qu'il etait correctement produit — il tombait
+   * ici. `PreflightWatchOptions` etend `PreflightOptions` : on retire ce qui est propre a la boucle,
+   * on transmet le reste tel quel, et un futur champ suivra tout seul.
+   */
+  const { delaysMs: _fenetrage, ...preflightOptions } = options
   let stopped = false
   let pending: PreflightSchedulerHandle | null = null
   let retries = 0

@@ -16,6 +16,13 @@ export interface PreflightCheck {
     | 'claude'
     | 'claude-session'
     | 'brain-token'
+    /*
+     * Pas une dependance externe, mais un ETAT que l'utilisateur doit connaitre AVANT de croire ses
+     * conversations perdues : au demarrage precedent, un store illisible a ete mis de cote et
+     * l'application s'est ouverte sur un historique vide. Le fichier existe toujours, a cote.
+     * Sans cette ligne, l'avertissement ne vivait que dans la console — invisible pour lui.
+     */
+    | 'conversations-ecartees'
   label: string
   ok: boolean
   detail?: string
@@ -52,6 +59,8 @@ export interface PreflightProbes {
 
 export interface PreflightOptions {
   standbyProviders?: RoutedProvider[]
+  /** Chemins des fichiers de conversations mis de cote au demarrage ; vide en marche normale. */
+  conversationsEcartees?: readonly string[]
 }
 
 /**
@@ -166,6 +175,22 @@ export async function runPreflight(
           detail: claudeSessionDetail(claudeSession, claude)
         }
   ]
+  /*
+   * L'AVERTISSEMENT LE PLUS IMPORTANT QUAND IL EXISTE — et il n'existe presque jamais.
+   * Ajoute en TETE : un utilisateur qui retrouve un historique vide doit lire OU sont ses
+   * conversations avant tout le reste. Le chemin est affiche en entier, c'est le geste de
+   * restauration lui-meme.
+   */
+  if (options.conversationsEcartees?.length) {
+    checks.unshift({
+      id: 'conversations-ecartees',
+      label: 'Historique des conversations',
+      ok: false,
+      detail:
+        "illisible au demarrage — mis de cote, RIEN n'a ete supprime. " +
+        `Fichier(s) conserve(s) : ${options.conversationsEcartees.join(', ')}`
+    })
+  }
   const failed = checks.filter((c) => !c.ok)
   return {
     ok: failed.length === 0,

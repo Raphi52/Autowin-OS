@@ -19,6 +19,9 @@ interface ProviderRow {
   detail?: string
 }
 
+/** Controles qui ont un plan de reparation cote main — voir planPreflightRepair. */
+const REPARABLES = new Set(['claude-session', 'brain', 'brain-venv'])
+
 export function SettingsView({
   active,
   section,
@@ -274,7 +277,13 @@ export function SettingsView({
                         {check.ok ? '✓' : '✗'} {check.label}
                       </strong>
                       {check.detail && <span>{check.detail}</span>}
-                      {!check.ok && (
+                      {/*
+                        Un bouton « Reparer » sur un constat qui ne SE repare pas est un piege : il
+                        promet un geste qui ne peut pas aboutir. Seuls les controles ayant un plan de
+                        reparation le portent. L historique mis de cote est un CONSTAT — le fichier
+                        est nomme juste au-dessus, la restauration appartient a l utilisateur.
+                      */}
+                      {!check.ok && REPARABLES.has(check.id) && (
                         <button
                           type="button"
                           className="settings-preflight-repair"

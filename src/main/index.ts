@@ -614,6 +614,14 @@ const finishedRunOutcomeByTurnId = ((): ((turnId: string) => FinishedRunOutcome 
  * Si l'échec PERSISTE après cette mise à l'écart, la cause n'est plus le contenu du fichier
  * (disque en lecture seule, dossier inaccessible) : là, on sort en nommant, code 79.
  */
+/*
+ * Chemins des conversations mises de cote au demarrage — vide en marche normale.
+ * Renseigne juste dessous, au moment ou le store illisible est ecarte, et relu par le diagnostic de
+ * demarrage : c est le seul canal qui pousse deja une banniere au renderer. Sans lui, l avertissement
+ * ne vivait que dans la console, invisible pour l utilisateur qui decouvre un historique vide.
+ */
+const conversationsEcartees: string[] = []
+
 let flushConversations: () => void
 try {
   flushConversations = persistConversations(os.conversations, undefined, {
@@ -623,6 +631,7 @@ try {
 } catch (erreur) {
   const cause = erreur instanceof Error ? erreur.message : String(erreur)
   const ecartes = ecarterStoreIllisible()
+  conversationsEcartees.push(...ecartes)
   console.error(
     `[conversations] store illisible, mis de cote pour permettre le demarrage. Cause : ${cause}. ` +
       (ecartes.length
@@ -975,11 +984,15 @@ const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
 )
 
-function preflightProviderOptions(): { standbyProviders: RoutedProvider[] } {
+function preflightProviderOptions(): {
+  standbyProviders: RoutedProvider[]
+  conversationsEcartees: readonly string[]
+} {
   return {
     standbyProviders: ROUTED_PROVIDERS.filter(
       (provider) => providerStateStore.get(provider).mode === 'standby'
-    )
+    ),
+    conversationsEcartees
   }
 }
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
