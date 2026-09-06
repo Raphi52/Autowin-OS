@@ -240,7 +240,7 @@ export function fournisseurFixtureOrchestration(
         systemInjected: true,
         // La preuve accompagne la MUTATION : c'est la phase qui écrit qui doit la porter.
         ...(role === 'sous-agent' && cwd
-          ? { executionEvidence: [preuveExecutableDeLEcriture(cwd)] }
+          ? { executionEvidence: [preuveDeLaMutation(cwd), preuveExecutableDeLEcriture(cwd)] }
           : {})
       }
     }
@@ -290,6 +290,32 @@ export function rolesFixture(): RoleModelConfig {
  * --porcelain` sur le fichier que la fixture vient d'écrire. L'oracle est déterministe et
  * falsifiable — si l'écriture n'a pas eu lieu, la sortie est vide et la preuve est `ok: false`.
  */
+/**
+ * LA PREUVE DE LA MUTATION — l'écriture elle-même, attestée.
+ *
+ * `evidenceSatisfiesTask` exige DEUX choses pour une tâche de mutation : au moins une preuve de
+ * `kind: 'mutation'` ET une de `kind: 'verification'`. La seconde seule ne suffit pas — « une
+ * lecture n'atteste pas que la mutation est correcte », dit le code. La fixture rend donc les deux,
+ * et les deux sont vraies : elle a réellement écrit ce fichier, et elle a réellement lancé la
+ * commande qui le constate.
+ */
+export function preuveDeLaMutation(cwd: string): ExecutionEvidence {
+  const present = existsSync(join(cwd, FICHIER_ECRIT_PAR_LA_FIXTURE))
+  return {
+    type: 'file_change',
+    kind: 'mutation',
+    status: present ? 'completed' : 'failed',
+    ok: present,
+    oracleStable: true,
+    summary: present
+      ? `Fichier ${FICHIER_ECRIT_PAR_LA_FIXTURE} écrit dans la copie de travail.`
+      : `Écriture de ${FICHIER_ECRIT_PAR_LA_FIXTURE} demandée mais introuvable sur le disque.`,
+    path: FICHIER_ECRIT_PAR_LA_FIXTURE,
+    paths: [FICHIER_ECRIT_PAR_LA_FIXTURE],
+    workspaceRoot: cwd
+  }
+}
+
 export function preuveExecutableDeLEcriture(cwd: string): ExecutionEvidence {
   const commande = `git status --porcelain -- ${FICHIER_ECRIT_PAR_LA_FIXTURE}`
   let sortie = ''

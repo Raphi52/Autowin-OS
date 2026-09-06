@@ -203,11 +203,28 @@ contrôle LÉGITIME du produit, que le dépôt réel masquait.
    rapporte son VRAI code de sortie. L'oracle est falsifiable : sans écriture, la sortie est vide et
    la preuve est `ok: false`. Les deux sens sont testés. Mesure : la porte a disparu de la liste des
    refus au run suivant.
-5. **La définition de fini, ENCORE OUVERTE.** Il reste « Promis mais pas fait : « Mutation demandee
-   produite avec une preuve executable » ». Ce contrôle-là ne lit pas les preuves : il lit la
-   CHECKLIST du RUN.md (`gates/stopgate.ts` : `state.dod.filter(hasContent && !checked)`). Un vrai
-   agent coche ses cases ; la fixture ne le fait pas encore. Prochaine étape, et elle n'est pas
-   faite.
+5. **La définition de fini — RÉSOLUE, et la piste évidente était la mauvaise.** Il restait « Promis
+   mais pas fait : « Mutation demandee produite avec une preuve executable » ». La lecture naturelle
+   — « il faut cocher une case du RUN.md » — est FAUSSE : la case n'est pas cochée par un agent,
+   elle est **calculée** (`root-execution-contract.ts`, `etatDeCloture`). Ce qu'il manquait était une
+   preuve de plus : `evidenceSatisfiesTask` exige, pour une mutation, une preuve de `kind:'mutation'`
+   **ET** une de `kind:'verification'` — « une lecture n'atteste pas que la mutation est correcte ».
+   La fixture rend donc les deux, toutes deux vraies et falsifiables.
+
+## Le scénario nominal atteint le VERT — mesuré le 2026-09-06
+
+Run joué en instance isolée sur le dépôt jetable, sans un centime d'appel modèle :
+
+```
+status: "completed"   aucune erreur   13 s
+```
+
+Et le travail est allé **jusqu'au bout du cycle**, ce qui est le point qui compte pour la sonde des
+trois conversations :
+
+- le fichier de la fixture est **fusionné dans le dépôt jetable** ;
+- son journal git porte le commit du run : `agent run-123f07ef6e53-1` ;
+- **aucune copie de travail ne subsiste** — le bureau a été nettoyé, pas laissé orphelin.
 
 **Ce qui est établi malgré ce reste** : le fichier écrit par la fixture a bien été retrouvé dans la
 copie de travail du run, et le run n'a **rien touché** hors du profil isolé.

@@ -11,6 +11,7 @@ import {
   creerDepotJetable,
   FICHIER_ECRIT_PAR_LA_FIXTURE,
   MARQUEUR_DEPOT_JETABLE,
+  preuveDeLaMutation,
   preuveExecutableDeLEcriture,
   reponseFixtureNominale
 } from './fixture-orchestration'
@@ -187,5 +188,26 @@ describe('preuve exécutable', () => {
     const preuve = preuveExecutableDeLEcriture(racine)
     expect(preuve.ok).toBe(false)
     expect(preuve.summary).toContain('ABSENT')
+  })
+})
+
+describe('preuve de la mutation', () => {
+  /*
+   * DEUX PREUVES SONT EXIGÉES, PAS UNE. `evidenceSatisfiesTask` demande une preuve de MUTATION ET
+   * une de VÉRIFICATION : « une lecture n'atteste pas que la mutation est correcte ». La fixture
+   * rend donc les deux — et les deux sont vraies.
+   */
+  it('atteste l’écriture quand le fichier est là', () => {
+    const racine = creerDepotJetable(join(dossierTemporaire(), 'depot'))
+    writeFileSync(join(racine, FICHIER_ECRIT_PAR_LA_FIXTURE), 'écrit', 'utf8')
+    const preuve = preuveDeLaMutation(racine)
+    expect(preuve.ok).toBe(true)
+    expect(preuve.kind).toBe('mutation')
+    expect(preuve.path).toBe(FICHIER_ECRIT_PAR_LA_FIXTURE)
+  })
+
+  it('rend NON ok si le fichier n’existe pas — elle ne se croit pas sur parole', () => {
+    const racine = creerDepotJetable(join(dossierTemporaire(), 'depot'))
+    expect(preuveDeLaMutation(racine).ok).toBe(false)
   })
 })
