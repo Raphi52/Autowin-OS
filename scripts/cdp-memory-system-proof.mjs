@@ -312,6 +312,22 @@ try {
       metadata: result?.querySelector('small')?.textContent?.trim()
     }
   })()`)
+      /*
+       * POURQUOI CETTE SONDE N'EST PAS BRANCHEE SUR build:desktop (mesure du 2026-09-06).
+       *
+       * Elle va loin : elle demarre sa propre instance isolee, seme sa fixture Brain, interroge et
+       * capture. Mais elle tombe ICI, et la cause n'est pas le produit : les quatre scores signes
+       * (dense, lexical, graphe, fusion) ne sont renseignes que par une recherche sur un Brain
+       * INDEXE. Sa fixture, elle, ne contient que des notes — aucun index n'y est construit. Le
+       * produit se rabat donc sur la pertinence locale et affiche « — » pour les quatre canaux :
+       * l'assertion ne peut PAS passer sur cette fixture, quel que soit l'etat du produit.
+       *
+       * La reparation n'est pas de desserrer cette ligne — ce serait un faux vert — mais de faire
+       * construire l'index par la fixture. Or reindexer coute PLUSIEURS MINUTES (voir
+       * src/main/brain-index-refresh.ts) : inacceptable a chaque construction. Tant que ce cout
+       * n'est pas resolu, la sonde reste MANUELLE. Sa jumelle cdp-knowledge-circular-proof, elle,
+       * est verte en 28 s et branchee.
+       */
       const numericScoreLabels = ['dense', 'lexical', 'graphe', 'fusion'].filter(
         (label) => !new RegExp(`${label} -?\\d+,\\d{3}`).test(scoreObserved.metadata ?? '')
       )
