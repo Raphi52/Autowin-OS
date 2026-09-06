@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import type { ProviderAdapter, SendResult, StreamChunk } from './providers/types'
+import type { ExecutionEvidence, ProviderAdapter, SendResult, StreamChunk } from './providers/types'
 import type { BrainRetrievalResult } from './brain-retrieval'
 import { ALL_ROLES, RoleModelConfig } from './roles'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -231,10 +231,18 @@ export function fournisseurFixtureOrchestration(
       }
       const texte =
         scenario === 'nominal' && role === 'sous-agent'
-          ? 'Fichier écrit.'
+          ? 'Fichier écrit, et sa présence vérifiée par une commande.'
           : reponseFixtureNominale(role)
       yield { delta: texte }
-      return { text: texte, provider: ID_FOURNISSEUR_FIXTURE, systemInjected: true }
+      return {
+        text: texte,
+        provider: ID_FOURNISSEUR_FIXTURE,
+        systemInjected: true,
+        // La preuve accompagne la MUTATION : c'est la phase qui écrit qui doit la porter.
+        ...(role === 'sous-agent' && cwd
+          ? { executionEvidence: [preuveExecutableDeLEcriture(cwd)] }
+          : {})
+      }
     }
   } as ProviderAdapter
 }
@@ -269,4 +277,48 @@ export function rolesFixture(): RoleModelConfig {
       ALL_ROLES.map((role) => [role, { provider: ID_FOURNISSEUR_FIXTURE, model: 'deterministe' }])
     )
   )
+}
+
+/**
+ * LA PREUVE EXÉCUTABLE — réellement exécutée, jamais déclarée.
+ *
+ * La porte `done-without-proof` refuse le vert sans « au moins une preuve d'exécution ok ». La
+ * tentation serait de rendre un `ok: true` de complaisance : ce serait neutraliser une porte, ce que
+ * le cadrage interdit — et fabriquer précisément le faux vert que ce chantier combat.
+ *
+ * On exécute donc une VRAIE commande, dont on rapporte le VRAI code de sortie : `git status
+ * --porcelain` sur le fichier que la fixture vient d'écrire. L'oracle est déterministe et
+ * falsifiable — si l'écriture n'a pas eu lieu, la sortie est vide et la preuve est `ok: false`.
+ */
+export function preuveExecutableDeLEcriture(cwd: string): ExecutionEvidence {
+  const commande = `git status --porcelain -- ${FICHIER_ECRIT_PAR_LA_FIXTURE}`
+  let sortie = ''
+  let code = 0
+  try {
+    sortie = execFileSync(
+      'git',
+      ['status', '--porcelain', '--', FICHIER_ECRIT_PAR_LA_FIXTURE],
+      { cwd, encoding: 'utf8' }
+    )
+  } catch (erreur) {
+    code = 1
+    sortie = erreur instanceof Error ? erreur.message : String(erreur)
+  }
+  const vue = sortie.includes(FICHIER_ECRIT_PAR_LA_FIXTURE)
+  return {
+    type: 'command_execution',
+    kind: 'verification',
+    status: vue && code === 0 ? 'completed' : 'failed',
+    ok: vue && code === 0,
+    oracleStable: true,
+    summary: vue
+      ? `Le fichier ${FICHIER_ECRIT_PAR_LA_FIXTURE} est bien présent dans la copie de travail.`
+      : `Le fichier ${FICHIER_ECRIT_PAR_LA_FIXTURE} est ABSENT : l'écriture n'a pas eu lieu.`,
+    command: commande,
+    exitCode: code,
+    stdout: sortie.slice(0, 500),
+    path: FICHIER_ECRIT_PAR_LA_FIXTURE,
+    paths: [FICHIER_ECRIT_PAR_LA_FIXTURE],
+    workspaceRoot: cwd
+  }
 }

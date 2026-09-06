@@ -196,11 +196,17 @@ contrôle LÉGITIME du produit, que le dépôt réel masquait.
    qui écrit les fichiers. Une fixture qui le remplace doit donc écrire à sa place. Elle déclare
    `supportsExecution` et produit vraiment l'effet — **sous le garde-fou**, qui vérifie que la copie
    de travail porte bien le marqueur du dépôt jetable.
-4. **La porte de preuve, encore ouverte** — « Promis mais pas fait : mutation produite avec une
-   preuve exécutable » / « hook done-without-proof : aucune preuve d'exécution ok — green refusé ».
-   Le run écrit le fichier, atteint les portes, et s'arrête là. **C'est le comportement voulu du
-   produit** : le cadrage interdit de neutraliser une porte. Le scénario `nominal` doit donc, en
-   plus d'écrire, produire une **preuve exécutable** — c'est la prochaine étape, et elle n'est pas
+4. **`done-without-proof` — RÉSOLU par une preuve RÉELLE.** La porte refusait le vert « sans au
+   moins une preuve d'exécution ok ». La tentation était un `ok: true` de complaisance : ce serait
+   neutraliser une porte, et fabriquer le faux vert exact que ce chantier combat. La fixture exécute
+   donc une VRAIE commande — `git status --porcelain` sur le fichier qu'elle vient d'écrire — et
+   rapporte son VRAI code de sortie. L'oracle est falsifiable : sans écriture, la sortie est vide et
+   la preuve est `ok: false`. Les deux sens sont testés. Mesure : la porte a disparu de la liste des
+   refus au run suivant.
+5. **La définition de fini, ENCORE OUVERTE.** Il reste « Promis mais pas fait : « Mutation demandee
+   produite avec une preuve executable » ». Ce contrôle-là ne lit pas les preuves : il lit la
+   CHECKLIST du RUN.md (`gates/stopgate.ts` : `state.dod.filter(hasContent && !checked)`). Un vrai
+   agent coche ses cases ; la fixture ne le fait pas encore. Prochaine étape, et elle n'est pas
    faite.
 
 **Ce qui est établi malgré ce reste** : le fichier écrit par la fixture a bien été retrouvé dans la

@@ -11,6 +11,7 @@ import {
   creerDepotJetable,
   FICHIER_ECRIT_PAR_LA_FIXTURE,
   MARQUEUR_DEPOT_JETABLE,
+  preuveExecutableDeLEcriture,
   reponseFixtureNominale
 } from './fixture-orchestration'
 import { lireVerdictJuge } from './orchestrator'
@@ -159,5 +160,32 @@ describe('déclencheur du scénario', () => {
     expect(roleDeLAppel('judge')).toBe('judge')
     expect(roleDeLAppel('orchestrator')).toBe('orchestrator')
     expect(roleDeLAppel('build')).toBe('sous-agent')
+  })
+})
+
+describe('preuve exécutable', () => {
+  /*
+   * ELLE DOIT ÊTRE VRAIE, PAS DÉCLARÉE.
+   *
+   * La porte `done-without-proof` refuse le vert sans « au moins une preuve d'exécution ok ». La
+   * tentation serait un `ok: true` de complaisance : ce serait neutraliser une porte — et fabriquer
+   * le faux vert exact que ce chantier combat. On exécute donc une vraie commande et on rapporte son
+   * vrai résultat. Ces deux tests le vérifient dans les DEUX sens.
+   */
+  it('rend ok quand le fichier a réellement été écrit', () => {
+    const racine = creerDepotJetable(join(dossierTemporaire(), 'depot'))
+    writeFileSync(join(racine, FICHIER_ECRIT_PAR_LA_FIXTURE), 'écrit', 'utf8')
+    const preuve = preuveExecutableDeLEcriture(racine)
+    expect(preuve.ok).toBe(true)
+    expect(preuve.kind).toBe('verification')
+    expect(preuve.command).toContain('git status')
+    expect(preuve.exitCode).toBe(0)
+  })
+
+  it('rend NON ok quand rien n’a été écrit — l’oracle est falsifiable', () => {
+    const racine = creerDepotJetable(join(dossierTemporaire(), 'depot'))
+    const preuve = preuveExecutableDeLEcriture(racine)
+    expect(preuve.ok).toBe(false)
+    expect(preuve.summary).toContain('ABSENT')
   })
 })
