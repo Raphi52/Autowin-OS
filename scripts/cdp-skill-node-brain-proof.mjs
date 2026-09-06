@@ -12,6 +12,22 @@ import { racineDepot } from './racine-depot.mjs'
  * Elle exige en plus PLUSIEURS runs de la même tâche pour juger du déterminisme : le coût est dans
  * son énoncé même.
  */
+/*
+ * SECOND BLOCAGE, TROUVÉ LE 2026-09-06 : LE PROFIL VISÉ N'EXISTE PLUS.
+ *
+ * Plus bas, cette sonde appelle `workflowProfileSelect('memoire-depot')`. Le catalogue en compte
+ * sept — eclair, correctif, feature, chantier-autowin, panel-critique, exploration, remake
+ * (`src/main/workflow-defaults.ts`) — et `memoire-depot` n'en fait pas partie.
+ *
+ * La bonne nouvelle : ce qu'elle observe n'a pas disparu. Depuis le 2026-08-25, `think` et `learn`
+ * SONT des nœuds skill, présents dans six des sept profils (tous sauf `eclair`, délibérément
+ * épargné), et `skill-node-tools.ts` leur sert `brain_query` et `remember`. Il suffit donc de viser
+ * un profil existant — `correctif` par exemple.
+ *
+ * Non corrigé ici : cette sonde ne peut pas être rejouée sans payer un vrai pipeline, donc le
+ * changement ne serait pas vérifiable. À faire en même temps que la fixture d'orchestration
+ * (`docs/fixture-orchestration-cadrage-2026-09-06.md`), qui la rendra jouable.
+ */
 /**
  * PREUVE TERMINALE — un nœud SKILL appelle le Brain par le mécanisme NATIF, dans l'app RÉELLE.
  *

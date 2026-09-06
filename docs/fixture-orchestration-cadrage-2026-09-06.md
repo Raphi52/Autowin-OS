@@ -104,11 +104,40 @@ orphelin » veut dire quelque chose.
 jetable créé par elle, la fixture **lève**. Se fier à l'ordre de la cascade serait un pari ; une
 vérification explicite n'en est pas un.
 
+## Tranché le 2026-09-06 — DEUX scénarios, pas trois
+
+Le cadrage initial en annonçait trois, un par sonde. En les regardant de près, **deux suffisent** :
+deux des trois sondes n'ont besoin que du chemin nominal.
+
+| Scénario | Ce qu'il fait | Qui s'en sert |
+|---|---|---|
+| `nominal` | un run qui passe au **vert du premier coup**, écrit un fichier anodin, l'intègre | `cdp-skill-node-brain-proof`, `cdp-trois-conversations-proof` |
+| `juge-rouge-puis-vert` | juge **rouge** aux deux premiers passages, **vert** au troisième | `cdp-relance-jusquau-vert-proof` |
+
+**Pourquoi la sonde skill n'a pas besoin du sien.** Elle observe qu'un nœud skill reçoit ses outils
+natifs. Or un nœud skill n'est pas produit par la fixture : il vient du **profil de workflow**. Et
+depuis le 2026-08-25, `think` et `learn` sont des nœuds skill présents dans **six des sept profils**
+(tous sauf `eclair`, délibérément épargné), servis par `skill-node-tools.ts` avec `brain_query` et
+`remember`. La fixture n'a donc qu'à laisser le run se dérouler.
+
+**Pourquoi celle des trois conversations non plus.** Elle mesure la **concurrence** et la propreté
+des bureaux, pas une forme de réponse. Trois runs nominaux lancés ensemble sont exactement son
+sujet.
+
+**La règle qui borne l'ajout d'un troisième.** Un scénario ne se justifie que si une sonde a besoin
+d'une forme qu'aucun des deux ne produit — et cette forme doit être **nommée dans le commit qui
+l'ajoute**. « Au cas où » est le premier pas vers le pipeline factice que ce document refuse.
+
+### Trouvé en tranchant : la sonde skill vise un profil disparu
+
+`cdp-skill-node-brain-proof` appelle `workflowProfileSelect('memoire-depot')`. Ce profil **n'existe
+plus** : le catalogue en compte sept — `eclair`, `correctif`, `feature`, `chantier-autowin`,
+`panel-critique`, `exploration`, `remake`. C'est un **second blocage**, indépendant de la fixture, et
+il se corrige seul : viser un profil existant qui porte `think` et `learn`, par exemple `correctif`.
+
 ## Ce qui reste à trancher, et qui appartient à l'humain
 
-1. **Combien de scénarios ?** Trois suffisent pour ces trois sondes. Un quatrième « générique »
-   serait la première marche vers le pipeline factice qu'on veut éviter.
-2. **Où s'arrête le déterminisme ?** Le temps d'exécution, lui, restera variable : les sondes ne
+1. **Où s'arrête le déterminisme ?** Le temps d'exécution, lui, restera variable : les sondes ne
    doivent donc rien asserter sur des durées.
 
 ## Le critère de réussite
