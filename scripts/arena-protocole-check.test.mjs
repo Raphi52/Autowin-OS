@@ -98,6 +98,7 @@ CRITERE NON ATTEINT (code de sortie 1)
 | X (casse-prémisse) | lecture interdite | oui | **0,507** | 1,6 | 13 | garde morte | 4e |
 
 **Discrimination** : 3/4 bras ont passé le critère.
+Écart hors bruit : A est le seul bras dont le livrable porte la preuve REJOUÉE ; les perdants la déclarent sans l'exécuter.
 AUTOWIN_LESSON_V1: {"outcome":"success","title":"A gagne","body":"Δ = 0,29 $ contre A"}
 
 ## Variantes de texte
@@ -364,6 +365,58 @@ describe('arena-protocole-check — P1 lit aussi l_ORDRE (conv-158)', () => {
     writeFileSync(f.run, `${md}\n## Lancement\nsh lance.sh\n`)
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P1').ok).toBe(true)
+  })
+})
+
+describe('P19 — un ecart SOUS LE BRUIT ne designe pas de gagnant', () => {
+  /*
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : reduire le controle a la prose de la skill, ou
+   * abaisser SEUIL_BRUIT sous l'ecart reellement mesure entre deux rejeux identiques (conv-312 :
+   * durees +99 %, couts +70 %, verdict INVERSE sur le meme enonce).
+   */
+  const sansJustification = (f) =>
+    writeFileSync(f.run, readFileSync(f.run, 'utf8').replace(/Écart hors bruit[^\n]*\n/, ''))
+
+  it('RATE quand le gagnant ne devance les perdants que de moins de 30 % en cout ET en duree', () => {
+    const f = bancConforme()
+    sansJustification(f)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P19').ok).toBe(false)
+    expect(point(res, 'P19').detail).toMatch(/sous 30 %/)
+    expect(res.ok).toBe(false)
+  })
+
+  it('PASSE quand le RUN.md nomme la difference de QUALITE qui discrimine', () => {
+    const f = bancConforme()
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect('P19 ' + point(res, 'P19').detail).toBe('P19 ok')
+  })
+
+  it('PASSE sans justification quand l_ecart de cout depasse largement le bruit', () => {
+    const f = bancConforme()
+    sansJustification(f)
+    const lignes = readFileSync(cheminJournal(f.racine), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => {
+        const d = JSON.parse(l)
+        return JSON.stringify(d.verdict === 'gagnant' ? { ...d, coutUsd: 0.1 } : d)
+      })
+    writeFileSync(cheminJournal(f.racine), `${lignes.join('\n')}\n`)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P19').ok).toBe(true)
+  })
+
+  it('PASSE quand aucun gagnant n_est declare : un banc non concluant echappe a la regle', () => {
+    const f = bancConforme()
+    sansJustification(f)
+    const lignes = readFileSync(cheminJournal(f.racine), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.stringify({ ...JSON.parse(l), verdict: 'nul' }))
+    writeFileSync(cheminJournal(f.racine), `${lignes.join('\n')}\n`)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P19').ok).toBe(true)
   })
 })
 

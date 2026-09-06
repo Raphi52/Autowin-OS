@@ -19,6 +19,13 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { lireDuels, cheminJournal } from './arena-duel.mjs'
 
+/*
+ * Le BRUIT de mesure d'un banc /arena, en proportion. Deux rejeux A L'IDENTIQUE du banc
+ * « residus v4 » (2026-09-06, conv-312) ont donne +99 % de duree et +70 % de cout — et un verdict
+ * INVERSE. Tout ecart plus etroit que ce seuil est donc indistinguable du hasard du moment.
+ */
+export const SEUIL_BRUIT = 0.3
+
 const BRAS = ['a', 'b', 'c', 'x']
 
 /** Compte `n/4` de bras ayant passe le critere, lu dans la ligne Discrimination du RUN.md. */
@@ -325,18 +332,25 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd(), ava
    * Rattachement au banc : d'abord le champ `banc` de la ligne (compare en chemin resolu), sinon
    * l'enonce de `tache.txt`. Un verdict `casse` compte comme journalise : le bras a bien ete tranche.
    */
-  ajoute('P15', 'Les 4 bras ont leur ligne dans arena-duels.jsonl', () => {
-    const journal = cheminJournal(racineDuels)
+  /*
+   * Les lignes du journal RATTACHEES a ce banc : d'abord le champ `banc` (compare en chemin
+   * resolu), sinon l'enonce de `tache.txt`. Partage par P15 (journalisation) et P19 (ecart bruite).
+   */
+  const lignesDuBanc = () => {
     const { duels } = lireDuels({}, racineDuels)
-    if (!duels.length) return `journal vide ou absent (${journal}) : aucun bras journalise`
-    const memeBanc = (d) => {
-      if (typeof d.banc === 'string' && d.banc.trim())
-        return path.resolve(d.banc) === path.resolve(bench)
-      return false
-    }
+    const memeBanc = (d) =>
+      typeof d.banc === 'string' && d.banc.trim()
+        ? path.resolve(d.banc) === path.resolve(bench)
+        : false
     const enonce = (lire(path.join(bench, 'tache.txt')) ?? '').trim()
     const parEnonce = (d) => enonce !== '' && String(d.tache ?? '').trim() === enonce
-    const lignes = duels.filter((d) => memeBanc(d) || parEnonce(d))
+    return { duels, lignes: duels.filter((d) => memeBanc(d) || parEnonce(d)) }
+  }
+
+  ajoute('P15', 'Les 4 bras ont leur ligne dans arena-duels.jsonl', () => {
+    const journal = cheminJournal(racineDuels)
+    const { duels, lignes } = lignesDuBanc()
+    if (!duels.length) return `journal vide ou absent (${journal}) : aucun bras journalise`
     if (!lignes.length)
       return `aucune ligne rattachee a ce banc dans ${journal} (ni champ \`banc\`, ni enonce de tache.txt)`
     const vus = new Set(lignes.map((d) => String(d.bras ?? '').toLowerCase()).filter(Boolean))
@@ -400,6 +414,41 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd(), ava
     return bloc.trim().length >= 40
       ? true
       : 'section `## Critère durci` presente mais vide : nommer l_assertion ajoutee et ce qu_elle interdit'
+  })
+
+  /*
+   * P19 - Un ecart SOUS LE BRUIT ne designe pas de gagnant.
+   *
+   * Mesure du 2026-09-06 (conv-312) : le banc « residus v4 » rejoue A L'IDENTIQUE a INVERSE son
+   * verdict. Entre les deux passages du meme enonce, les durees ont varie de +99 % et les couts de
+   * +70 %. Un ecart plus etroit que ce bruit ne mesure donc rien : il designe le hasard du moment.
+   *
+   * La skill le disait deja en prose (« ecart dans le bruit -> pas de gagnant ») sans jamais
+   * chiffrer le bruit ni le verifier — une phrase que le banc de 00:27 a ignoree. On la rend
+   * deterministe : sous SEUIL_BRUIT en cout ET en duree, le gagnant doit etre discrimine par la
+   * QUALITE, nommee sur une ligne `Écart hors bruit :` du RUN.md. Sinon le banc est NON CONCLUANT.
+   */
+  ajoute('P19', 'Gagnant sur un ecart sous le bruit : discrimine par la QUALITE', () => {
+    const { lignes } = lignesDuBanc()
+    const verdict = (d) => String(d.verdict ?? '').toLowerCase()
+    const gagnants = lignes.filter((d) => verdict(d) === 'gagnant')
+    const perdants = lignes.filter((d) => verdict(d) === 'perdant')
+    if (!gagnants.length || !perdants.length) return true
+    const nombre = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null)
+    const ecart = (a, b) => (a === null || b === null ? null : Math.abs(a - b) / Math.min(a, b))
+    const indistinct = (g, p) => {
+      const dCout = ecart(nombre(g.coutUsd), nombre(p.coutUsd))
+      const dDuree = ecart(nombre(g.dureeMs), nombre(p.dureeMs))
+      if (dCout === null && dDuree === null) return false
+      return (dCout === null || dCout < SEUIL_BRUIT) && (dDuree === null || dDuree < SEUIL_BRUIT)
+    }
+    const colles = gagnants.some((g) => perdants.some((p) => indistinct(g, p)))
+    if (!colles) return true
+    return /Écart hors bruit\s*:|Ecart hors bruit\s*:/i.test(md)
+      ? true
+      : `gagnant declare alors que l'ecart de cout ET de duree avec un perdant reste sous ${Math.round(
+          SEUIL_BRUIT * 100
+        )} % (le bruit mesure entre deux rejeux identiques, conv-312) : nommer la difference de QUALITE sur une ligne \`Écart hors bruit :\`, ou clore le banc en « non concluant »`
   })
 
   const jugements = [

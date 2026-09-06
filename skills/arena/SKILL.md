@@ -261,7 +261,15 @@ dimension ne peut PAS gagner sur les suivantes :
 5. **Reproductibilité** — le workflow marche-t-il hors de cette tâche, ou a-t-il gagné par chance ?
 
 Le juge rend : **un gagnant nommé**, l'écart chiffré au témoin A, et les défauts renvoyés au
-producteur. Égalité ou écart dans le bruit → dire « pas de gagnant », garder A. **Un workflow n'est
+producteur. Égalité ou écart dans le bruit → dire « pas de gagnant », garder A.
+
+**LE BRUIT EST CHIFFRÉ : 30 %.** Mesuré le 2026-09-06 (conv-312) — le banc « résidus v4 » rejoué à
+l'identique a INVERSÉ son verdict, avec des durées à +99 % et des coûts à +70 % entre deux passages
+du même énoncé. Donc : **un gagnant dont l'avance reste sous 30 % en coût ET en durée n'est pas un
+gagnant.** Il faut alors nommer la différence de QUALITÉ qui le discrimine, sur une ligne
+`Écart hors bruit : <le défaut ou la preuve qui sépare les bras>` du RUN.md. Sans elle, le banc se
+clôt sur **NON CONCLUANT** et A est gardé. `arena-protocole-check` le refuse (P19) : la règle
+n'est plus une phrase, c'est un contrôle. **Un workflow n'est
 pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi bon, sinon il perd.**
 
 ### 5. Installer et retenir

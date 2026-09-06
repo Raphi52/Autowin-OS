@@ -79,9 +79,11 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
       'P12',
       'P13',
       'P14',
-      'P18'
+      'P18',
+      // Aucun duel journalise pour ce banc : P19 n'a pas d'ecart a juger, il ne peut pas refuser.
+      'P19'
     ])
-    expect(res.points).toHaveLength(18)
+    expect(res.points).toHaveLength(19)
   })
 
   it('en ligne de commande, le contrôle sort en code 1 et dit PROTOCOLE NON TENU', () => {
