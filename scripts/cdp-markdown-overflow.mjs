@@ -1,3 +1,4 @@
+import { attendreDansLaPage } from './cdp-attente.mjs'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { cheminArtefact } from './racine-depot.mjs'
 
@@ -39,7 +40,8 @@ await evaluate(`(() => {
     /^chat$/i.test((button.textContent || '').trim()))
   chat?.click()
 })()`)
-await new Promise((resolve) => setTimeout(resolve, 500))
+// Le fil de chat est monte de facon asynchrone : on l'ATTEND au lieu de dormir 500 ms.
+await attendreDansLaPage(evaluate, `Boolean(document.querySelector('.chat-scroll'))`)
 const metrics = await evaluate(`(() => {
   const scroll = document.querySelector('.chat-scroll')
   if (!scroll) throw new Error('Fil de chat introuvable')
@@ -59,7 +61,12 @@ const metrics = await evaluate(`(() => {
     fits: body.scrollWidth <= body.clientWidth
   }
 })()`)
-await new Promise((resolve) => setTimeout(resolve, 300))
+// La fixture doit etre PEINTE avant la capture : on attend qu'elle soit dans le document.
+await attendreDansLaPage(
+  evaluate,
+  `Boolean(document.getElementById('markdown-overflow-fixture'))`,
+  2000
+)
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 mkdirSync(cheminArtefact(), { recursive: true })
 const output = cheminArtefact('markdown-overflow-green.png')

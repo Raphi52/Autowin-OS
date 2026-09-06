@@ -1,4 +1,5 @@
 // Preuve : conteneur opaque + top-menu bordé + onglet sélectionné visible, sur routing ET diagnostic.
+import { attendreDansLaPage } from './cdp-attente.mjs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
 const targets = await (await fetch('http://127.0.0.1:9223/json')).json()
 const page = targets.find((t) => t.type === 'page')
@@ -38,11 +39,14 @@ const shot = async (name) => {
   return o
 }
 
+// Attendre l'ETAT, jamais une duree : voir scripts/cdp-attente.mjs.
+const attendre = (expression, plafond) => attendreDansLaPage(ev, expression, plafond)
+
 // ROUTING
 await ev(click('/agent studio/i'))
-await new Promise((r) => setTimeout(r, 700))
+await attendre(`Boolean(document.querySelector('.domain-tabs'))`)
 await ev(click('/routage/i'))
-await new Promise((r) => setTimeout(r, 900))
+await attendre(`Boolean(document.querySelector('.router-view'))`)
 const routing = await ev(
   `(()=>{const rv=document.querySelector('.router-view');const tabs=document.querySelector('.domain-tabs');const act=document.querySelector('.domain-tabs button.is-active');return {routerBg:rv?getComputedStyle(rv).backgroundColor:null,routerBorder:rv?getComputedStyle(rv).borderTopWidth:null,tabsBorder:tabs?getComputedStyle(tabs).borderTopWidth:null,tabsRadius:tabs?getComputedStyle(tabs).borderRadius:null,activeBg:act?getComputedStyle(act).backgroundColor:null,activeBorder:act?getComputedStyle(act).borderTopColor:null,activeLabel:act?act.textContent.trim():null}})()`
 )
@@ -50,9 +54,9 @@ const routingPng = await shot('shell-routing')
 
 // SETTINGS > DIAGNOSTIC
 await ev(click('/settings/i'))
-await new Promise((r) => setTimeout(r, 700))
+await attendre(`Boolean(document.querySelector('.domain-tabs, .settings-view'))`)
 await ev(click('/diagnostic|préflight|preflight/i'))
-await new Promise((r) => setTimeout(r, 900))
+await attendre(`Boolean(document.querySelector('.settings-preflight'))`)
 const diag = await ev(
   `(()=>{const p=document.querySelector('.settings-preflight');return {present:!!p,bg:p?getComputedStyle(p).backgroundColor:null,border:p?getComputedStyle(p).borderTopWidth:null,fills:p?p.getBoundingClientRect().height:null}})()`
 )
