@@ -8,7 +8,8 @@ import {
   buildBrainLaunchCommand,
   ensureBrainServerStarted,
   resetBrainLaunchAttempt,
-  resolveBrainRuntime
+  resolveBrainRuntime,
+  windowlessPython
 } from './brain-server-launch'
 
 let tooling: string
@@ -79,6 +80,32 @@ describe('ensureBrainServerStarted', () => {
     expect(opts.detached).toBe(true)
     expect('PYTHONPATH' in opts.env).toBe(false)
     expect(child.unref).toHaveBeenCalled()
+  })
+
+  // Fenetre noire au demarrage (2026-09-06) : python.exe est une app CONSOLE, et un cmd.exe
+  // detache n'a pas de console a lui preter -> Windows en ALLOUE une. pythonw.exe (meme
+  // interpreteur, sous-systeme GUI) n'en alloue jamais : c'est lui qui doit etre lance s'il existe.
+  it('lance pythonw.exe quand il existe a cote du python du venv (aucune console)', async () => {
+    makeValidTooling()
+    const pythonw = join(tooling, '.venv', 'Scripts', 'pythonw.exe')
+    writeFileSync(pythonw, '')
+    const spawnFn = vi.fn().mockReturnValue({ unref: vi.fn() })
+    const r = await ensureBrainServerStarted(
+      async () => false,
+      { AUTOWIN_BRAIN_TOOLING: tooling },
+      spawnFn as never
+    )
+    expect(r.status).toBe('starting')
+    const [bin, args] = spawnFn.mock.calls[0]
+    const lance = process.platform === 'win32' ? (args as string[]).join(' ') : (bin as string)
+    expect(lance).toContain('pythonw.exe')
+    expect(lance).not.toContain('Scripts\python.exe')
+  })
+
+  it('retombe sur python.exe si pythonw.exe est absent', () => {
+    const python = join(tooling, 'python.exe')
+    expect(windowlessPython(python, () => false)).toBe(python)
+    expect(windowlessPython(python, () => true)).toBe(join(tooling, 'pythonw.exe'))
   })
 
   it('ne tente qu’UNE fois par session (garde anti-spam)', async () => {

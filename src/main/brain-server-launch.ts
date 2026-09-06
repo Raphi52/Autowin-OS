@@ -48,6 +48,18 @@ export interface BrainLaunchCommand {
 }
 
 /**
+ * Sous Windows, `python.exe` est une application CONSOLE : lancé par un `cmd.exe` lui-même sans
+ * console (DETACHED_PROCESS ignore CREATE_NO_WINDOW, cf. CreateProcess), Windows lui ALLOUE une
+ * console neuve — c'est la fenêtre noire qui apparaissait à chaque `autowin dev`. `pythonw.exe`
+ * est le MÊME interpréteur en sous-système GUI : il n'alloue jamais de console. On le préfère dès
+ * qu'il est présent à côté du python du venv (uv/venv l'installent systématiquement).
+ */
+export function windowlessPython(python: string, exists: (p: string) => boolean = existsSync): string {
+  const gui = python.replace(/python\.exe$/i, 'pythonw.exe')
+  return gui !== python && exists(gui) ? gui : python
+}
+
+/**
  * Construit la commande de lancement, ou rend `null` si elle ne peut pas être construite SANS
  * risque d'injection (fail-closed : mieux vaut un brain absent qu'une ligne shell attaquable).
  *
@@ -225,7 +237,8 @@ export async function ensureBrainServerStarted(
   // permet de piloter bInheritHandles / PROC_THREAD_ATTRIBUTE_HANDLE_LIST, et `detached` +
   // `stdio:'ignore'` + `windowsHide` étaient DÉJÀ posés quand le port 9223 a été séquestré : le
   // lanceur reste donc obligatoire — mais il est fail-closed (cf. buildBrainLaunchCommand).
-  const command = buildBrainLaunchCommand(tooling, python, script)
+  // pythonw.exe quand il existe : aucune console ne peut apparaître (cf. windowlessPython).
+  const command = buildBrainLaunchCommand(tooling, windowlessPython(python), script)
   if (!command) {
     return {
       status: 'unavailable',
