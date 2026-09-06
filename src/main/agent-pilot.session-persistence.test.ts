@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
 import { configureAutowinAppDataBase } from './app-data'
 import type { PromptSnapshot } from './commands'
@@ -54,7 +54,15 @@ function harnais() {
 }
 
 describe('AgentPilot — la reprise de session survit au redémarrage', () => {
+  // Le dossier de travail fait partie de la cle de session. S'il vient de l'environnement REEL de la
+  // machine qui lance les tests, les cles attendues ici deviennent fausses selon le poste (rouge chez
+  // l'un, vert chez l'autre). On le neutralise donc explicitement : ces cas decrivent « aucun
+  // workspace configure ».
+  beforeEach(() => {
+    vi.stubEnv('AUTOWIN_OS_WORKSPACE', '')
+  })
   afterEach(() => {
+    vi.unstubAllEnvs()
     // Ne JAMAIS laisser une racine de test configurée : le prochain test écrirait dans un temp mort.
     configureAutowinAppDataBase(undefined)
     vi.restoreAllMocks()
