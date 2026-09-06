@@ -64,7 +64,16 @@ Le bras qui suivait cette skill les avait déclarés verts — et a perdu le ban
    Le signal de retrait doit ÊTRE exécutable et VRAIMENT rouge sans le fichier : vérifie-le. Piège
    mesuré : `npx vitest list <fichier absent> <fichier présent>` sort **0** — un filtre qui ne matche
    rien est ignoré en silence, donc « la suite passe encore » ne prouve pas que le code était mort.
-6. Passer la main à `clean` pour l'exécution, jamais supprimer depuis ici.
+   **Le signal doit NOMMER le fichier retiré.** AU MOMENT où tu invoques un test comme signal →
+   ouvre le test et vérifie qu'il cite le fichier que tu retires. S'il ne le cite pas, il restera
+   vert après le retrait : il ne discrimine rien, et n'est donc pas un signal. Même chose pour un
+   signal SERVI DEUX FOIS dans ta table : deux items différents ne peuvent pas partager la même
+   preuve — l'un des deux au moins n'est pas couvert. Mesuré au banc /arena du 2026-09-06 :
+   `cdp-proof-validation.test.mjs` a été servi douze fois alors qu'il ne nomme que trois fichiers
+   (l.73-75) ; les douze retraits étaient donc non prouvés. À défaut de test nommant le fichier,
+   le signal honnête est `git grep -n "<nom>" .` → 0 résultat, ou la mention « aucun signal
+   automatique — retrait à valider à la main ».
+7. Passer la main à `clean` pour l'exécution, jamais supprimer depuis ici.
 
 ## Garde-fous
 - Aucun retrait sans preuve d'absence d'appelant RÉEL (réflexe 10 : énumérer et balayer les chemins atteignables).
