@@ -2,11 +2,16 @@ param(
   [ValidateSet('Start', 'Status', 'Stop')][string]$Action = 'Start',
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
   [ValidateRange(1024, 65535)][int]$Port = 9240,
-  [string]$Executable = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\win-unpacked\autowin-os.exe'),
-  [string]$InstancesRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) 'Audit\headless-instances')
+  [string]$Executable = '',
+  [string]$InstancesRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
+# $PSScriptRoot n'est PAS encore lie quand PowerShell evalue les valeurs par defaut d'un bloc param
+# contenant un parametre Mandatory : la racine se resout donc APRES le bloc, jamais dedans.
+$racineDepot = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($Executable)) { $Executable = Join-Path (Join-Path (Join-Path $racineDepot 'dist') 'win-unpacked') 'autowin-os.exe' }
+if ([string]::IsNullOrWhiteSpace($InstancesRoot)) { $InstancesRoot = Join-Path (Join-Path $racineDepot 'Audit') 'headless-instances' }
 $instanceRoot = Join-Path $InstancesRoot $InstanceId
 $userData = Join-Path $instanceRoot 'user-data'
 $appData = Join-Path $instanceRoot 'appdata'
