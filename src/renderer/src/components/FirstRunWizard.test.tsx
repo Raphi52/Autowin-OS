@@ -127,9 +127,9 @@ describe('FirstRunWizard (#5)', () => {
 
     await act(async () => retry?.click())
     await flush()
-    expect(container.querySelector('[data-testid="frw-check-claude-session"]')?.className).toContain(
-      'ok'
-    )
+    expect(
+      container.querySelector('[data-testid="frw-check-claude-session"]')?.className
+    ).toContain('ok')
     expect(container.textContent).not.toMatch(/diagnostic.*échoué/i)
   })
 
@@ -185,7 +185,13 @@ describe('FirstRunWizard (#5)', () => {
  */
 describe('réparer un prérequis rouge depuis la popup', () => {
   const withChecks = (
-    checks: Array<{ id: string; label: string; ok: boolean; detail?: string }>,
+    checks: Array<{
+      id: string
+      label: string
+      ok: boolean
+      detail?: string
+      revealPath?: string
+    }>,
     repair?: (id: string) => Promise<{ started: boolean; detail: string }>
   ): { repairCalls: string[] } => {
     const repairCalls: string[] = []
@@ -239,6 +245,39 @@ describe('réparer un prérequis rouge depuis la popup', () => {
 
     expect(container.querySelector('[data-testid="frw-optional-claude-session"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="frw-optional-codex-session"]')).toBeNull()
+  })
+
+  /*
+   * POURQUOI : cette fenetre est le PREMIER ecran vu quand un historique a ete mis de cote. Elle
+   * affichait le chemin sans aucun geste — l'utilisateur devait le recopier a la main dans
+   * l'explorateur, ou aller le chercher dans Settings. Le bouton doit exister ICI aussi.
+   */
+  it('un constat qui designe un fichier offre « Ouvrir le dossier »', async () => {
+    const ouvertures: string[] = []
+    withChecks([
+      {
+        id: 'conversations-ecartees',
+        label: 'Historique des conversations',
+        ok: false,
+        detail: 'mis de cote',
+        revealPath: 'D:/profil/conversations.json.illisible-2026-09-06'
+      }
+    ])
+    ;(globalThis as unknown as { window: { api: Record<string, unknown> } }).window.api.openFolder =
+      async (chemin: string) => {
+        ouvertures.push(chemin)
+      }
+    await render()
+
+    const bouton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="frw-reveal-conversations-ecartees"]'
+    )
+    expect(bouton).not.toBeNull()
+    await act(async () => bouton?.click())
+
+    expect(ouvertures).toEqual(['D:/profil/conversations.json.illisible-2026-09-06'])
+    // Aucune reparation n'existe pour ce constat : ne pas promettre un geste impossible.
+    expect(container.querySelector('[data-testid="frw-repair-conversations-ecartees"]')).toBeNull()
   })
 
   it('un rouge RÉPARABLE porte un bouton ; un rouge NON réparable n’en a pas', async () => {
@@ -311,9 +350,9 @@ describe('réparer un prérequis rouge depuis la popup', () => {
       container.querySelector('[data-testid="frw-repair-note-claude-session"]')?.textContent
     ).toContain('venv Python introuvable')
     // Le check est toujours affiché en rouge : aucune fausse guérison.
-    expect(container.querySelector('[data-testid="frw-check-claude-session"]')?.className).toContain(
-      'ko'
-    )
+    expect(
+      container.querySelector('[data-testid="frw-check-claude-session"]')?.className
+    ).toContain('ko')
   })
 
   it('un main qui JETTE ne casse pas la popup', async () => {

@@ -17,6 +17,14 @@ interface Check {
   label: string
   ok: boolean
   detail?: string
+  /**
+   * Fichier a REVELER dans l'explorateur, quand ce controle designe un geste concret.
+   *
+   * Cette fenetre est le PREMIER ecran vu au demarrage : c'est ici que l'utilisateur decouvre que
+   * son historique a ete mis de cote. Lui donner le chemin sans le bouton l'obligeait a le recopier
+   * a la main, ou a aller le chercher dans Settings. Meme champ que le diagnostic (`PreflightCheck`).
+   */
+  revealPath?: string
 }
 interface PreflightResult {
   ok: boolean
@@ -259,13 +267,7 @@ export function FirstRunWizard(): React.JSX.Element | null {
                 data-testid={`frw-check-${c.id}`}
               >
                 <span className="frw-icon">
-                  {c.ok ? (
-                    '✓'
-                  ) : pending ? (
-                    <Spinner data-testid={`frw-spinner-${c.id}`} />
-                  ) : (
-                    '✗'
-                  )}
+                  {c.ok ? '✓' : pending ? <Spinner data-testid={`frw-spinner-${c.id}`} /> : '✗'}
                 </span>
                 <span className="frw-label">{c.label}</span>
                 {pending ? (
@@ -274,6 +276,18 @@ export function FirstRunWizard(): React.JSX.Element | null {
                   </span>
                 ) : !c.ok && c.detail ? (
                   <span className="frw-detail">{c.detail}</span>
+                ) : null}
+                {/* Un CHEMIN sans geste se recopie a la main. Ce bouton n'apparait que si le
+                    controle designe un fichier ; le main verifie qu'il existe avant de le reveler. */}
+                {c.revealPath ? (
+                  <button
+                    type="button"
+                    className="frw-repair"
+                    data-testid={`frw-reveal-${c.id}`}
+                    onClick={() => void window.api?.openFolder?.(c.revealPath as string)}
+                  >
+                    Ouvrir le dossier
+                  </button>
                 ) : null}
                 {!c.ok && repairAffordance(c.id) ? (
                   <button
