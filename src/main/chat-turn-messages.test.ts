@@ -708,3 +708,39 @@ describe('compaction — le fil renvoye repart du resume', () => {
     expect(depuisDerniereCompaction(sans)).toEqual(sans)
   })
 })
+
+/**
+ * REGRESSION conv-312 (2026-09-06) : deux tours consecutifs morts sur « Prompt is too long », et
+ * chaque relance rejouait le MEME prompt — le fil devenait un cul-de-sac.
+ *
+ * Cause : `bornerParVolume` pesait `content.length` seulement. Les PIECES JOINTES (captures
+ * `desktop_observe`), rehydratees en pleine taille dans le fil renvoye, pesaient ZERO pour la
+ * borne. Un fil charge d'images depassait donc la fenetre du modele sans que le budget de 60 k
+ * ne s'en apercoive.
+ */
+describe('borne en volume — les pieces jointes comptent', () => {
+  const avecImage = (n: number) =>
+    Array.from({ length: n }, (_, index) => ({
+      role: (index % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `tour ${index}`,
+      attachments: [{ name: 'desktop-current.jpg', mimeType: 'image/jpeg', size: 180_000 }]
+    }))
+
+  it('ecarte les tours anciens quand seules les images pesent', () => {
+    const fil = avecImage(30)
+    const retenus = boundedTurnHistory(fil, { maxMessages: 40, maxTokens: 60_000 })
+    const sansAvis = retenus.filter((m) => !m.content.startsWith('[HISTORIQUE TRONQUE'))
+    // 60 000 / 5 000 par image => une douzaine de tours au plus, jamais les 30.
+    expect(sansAvis.length).toBeLessThanOrEqual(13)
+    expect(sansAvis.length).toBeGreaterThan(0)
+    expect(sansAvis[sansAvis.length - 1]?.content).toBe('tour 29')
+  })
+
+  it('laisse un fil sans piece jointe inchange', () => {
+    const fil = Array.from({ length: 6 }, (_, index) => ({
+      role: (index % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `court ${index}`
+    }))
+    expect(boundedTurnHistory(fil, { maxMessages: 40, maxTokens: 60_000 })).toHaveLength(6)
+  })
+})

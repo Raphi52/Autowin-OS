@@ -80,8 +80,30 @@ export interface TurnMessageParts {
 export const CARACTERES_PAR_TOKEN = 4
 
 /** Poids approximatif d'un message, en tokens. */
-function poidsApproximatif(message: { content?: string }): number {
-  return Math.ceil((message.content?.length ?? 0) / CARACTERES_PAR_TOKEN)
+/**
+ * COUT MAJORANT D'UNE PIECE JOINTE IMAGE, EN TOKENS.
+ *
+ * Anthropic facture une image ~ (largeur x hauteur) / 750 tokens, apres redimensionnement au
+ * plafond du modele (bord long 1568 px avant Opus 4.7, 2576 px depuis) :
+ * https://platform.claude.com/docs/en/about-claude/pricing
+ * Soit au pire ~ (2576 x 1449) / 750 = 4 977 tokens. On retient ce MAJORANT plutot qu'une
+ * estimation fine : la borne sert a ne pas depasser la fenetre, sous-estimer y renvoie
+ * directement (cf. conv-312, deux tours morts sur « Prompt is too long »).
+ */
+const TOKENS_PAR_PIECE_JOINTE = 5_000
+
+/**
+ * Poids d'un message pour la borne en volume — TEXTE ET PIECES JOINTES.
+ *
+ * Ne compter que le texte rendait la borne AVEUGLE aux captures d'ecran : un fil qui en porte
+ * une dizaine depasse la fenetre du modele alors que le budget de 60 k se croit a peine entame.
+ */
+function poidsApproximatif(message: {
+  content?: string
+  attachments?: readonly { name?: string; mimeType?: string; size?: number }[]
+}): number {
+  const texte = Math.ceil((message.content?.length ?? 0) / CARACTERES_PAR_TOKEN)
+  return texte + (message.attachments?.length ?? 0) * TOKENS_PAR_PIECE_JOINTE
 }
 
 /**
@@ -138,6 +160,8 @@ export function avisDeCoupe(nombreEcarte: number): string {
 export interface MessageBorne {
   role: 'user' | 'assistant'
   content: string
+  /** Pieces jointes du message : comptees par la borne en volume, jamais gratuites. */
+  attachments?: readonly { name?: string; mimeType?: string; size?: number }[]
 }
 
 /** Prepend l'avis de coupe quand des messages ont reellement ete ecartes. */
