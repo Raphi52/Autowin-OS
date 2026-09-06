@@ -1,4 +1,12 @@
-function legacyAuthorityDecision(input: {
+/**
+ * LA politique d'autorite, en UN seul endroit.
+ *
+ * Exportee le 2026-09-06 : l'emetteur du recu (`authority-receipt-trace.ts`) doit produire
+ * exactement la decision que `assertTraceEvent` revalide ensuite. Recopier la regle chez
+ * l'emetteur ferait diverger les deux copies au premier changement de politique, et l'evenement
+ * serait rejete a l'ecriture — donc muet, comme le reste du recu l'a ete jusqu'ici.
+ */
+export function decisionDAutorite(input: {
   mode: 'plan' | 'ask' | 'auto'
   mutates: boolean
   authority: 'automatic' | 'sensitive' | 'destructive'
@@ -250,7 +258,7 @@ export function assertTraceEvent(event: TraceEventV1): TraceEventV1 {
       throw new Error('TraceEvent: authority.decision invalide')
     if (
       event.authority.decision !==
-      legacyAuthorityDecision({
+      decisionDAutorite({
         mode: event.authority.mode,
         mutates: event.authority.mutates,
         authority: event.authority.commandAuthority
@@ -342,10 +350,7 @@ export function traceActionEventId(input: {
  * Le remède est le même que `rebaseTraceSequence` pour la séquence : semer l'ordinal depuis ce que
  * la trace contient DÉJÀ pour ce tour. Compter suffit — les ordinaux existants sont 0..n-1.
  */
-export function seedTraceActionOrdinal(
-  events: readonly { id: string }[],
-  turnId: string
-): number {
+export function seedTraceActionOrdinal(events: readonly { id: string }[], turnId: string): number {
   const prefixe = `${turnId}:action:`
   return events.reduce((n, event) => (event.id.startsWith(prefixe) ? n + 1 : n), 0)
 }

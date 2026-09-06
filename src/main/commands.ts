@@ -567,7 +567,8 @@ const CATALOG: CommandSpec[] = [
       'Envoyer un message. Avec `conversationId`, il devient un VRAI tour utilisateur dans cette conversation (une commande /skill y est reconnue). Sans destination, ce n est qu une simple question ponctuelle au modele et une commande /xxx est refusee.',
     args: {
       message: 'texte',
-      conversationId: 'conversation destinataire (optionnel) — sans elle, aucun fil ne recoit le message',
+      conversationId:
+        'conversation destinataire (optionnel) — sans elle, aucun fil ne recoit le message',
       provider: 'claude|codex (optionnel)',
       role: 'rôle (optionnel)'
     }
@@ -841,7 +842,16 @@ const CATALOG: CommandSpec[] = [
       '`travauxNonPublies` liste les travaux de runs terminés qui n’ont JAMAIS rejoint la base, ' +
       'avec leurs fichiers : consulte-le avant de répondre « rien à fusionner » — un `git status` ' +
       'dans l’arbre principal ne les voit pas, ils vivent dans leur propre copie isolée.',
-    args: {}
+    args: {},
+    // Relecture PURE de l'etat en memoire : rien n'est ecrit, rien n'est appele au dehors. Sans
+    // cette declaration, le recu d'autorite la classerait « mutante » par prudence (defaut de
+    // `authority-receipt-trace.ts`) et Observatory afficherait une mutation qui n'a pas lieu.
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: 'run',

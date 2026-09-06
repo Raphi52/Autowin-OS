@@ -63,6 +63,7 @@ import { sameExecutionUsage, type ExecutionUsageSnapshot } from '../execution-su
 import { appendPromptCall } from '../activity/prompt-observability'
 import { promptCallToTraceEvents } from '../activity/prompt-call-trace'
 import { pilotActionToTraceEvent } from '../activity/pilot-action-trace'
+import { authorityReceiptToTraceEvent } from '../activity/authority-receipt-trace'
 import { chatArtifactToTraceEvent } from '../activity/chat-artifact-trace'
 import { reasoningToTraceEvent } from '../activity/reasoning-trace'
 import { appendObservedOrchestrationOutcome } from '../activity/orchestration-outcome-trace'
@@ -406,7 +407,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           metas.find((candidate) => candidate.name === piece.name)
         return meta ? rechargerContenuPieceJointe(meta) : undefined
       }
-      const safe = (continuationWindow?.history ?? boundedTurnHistory(depuisDerniereCompaction(rawMessages), 40)).map((m) => {
+      const safe = (
+        continuationWindow?.history ?? boundedTurnHistory(depuisDerniereCompaction(rawMessages), 40)
+      ).map((m) => {
         const parts = m.role === 'assistant' ? partsParContenu.get(m.content) : undefined
         // Repli sur le contenu d'origine : un message sans `parts` retrouvables (fil hydrate,
         // message d'un ancien format) doit passer tel quel, jamais disparaitre.
@@ -1046,6 +1049,41 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           })
           causalTrace.append(action)
           traceParentId = action.id
+          /*
+           * LE RECU D'AUTORITE, EMIS AU MEME ENDROIT QUE L'APPEL.
+           *
+           * Jusqu'au 2026-09-06 l'enveloppe `authority` etait definie, validee et RENDUE par
+           * Observatory, mais aucun code de production ne l'ecrivait : la piste « Ancienne autorite
+           * & mutations » n'apparaissait donc dans aucune conversation reelle. Le recu se pose ici,
+           * a l'appel de commande, parce que c'est le seul point qui connait a la fois la commande
+           * NOMMEE et le tour ou elle est jouee. Ecriture best-effort : une trace n'a jamais le
+           * droit de faire echouer un tour deja paye.
+           */
+          if (pilotEvent.kind === 'command' && pilotEvent.name) {
+            try {
+              const specification = bus
+                .catalog()
+                .find((command) => command.name === pilotEvent.name)
+              causalTrace.append(
+                authorityReceiptToTraceEvent({
+                  id: `${action.id}:authority`,
+                  conversationId,
+                  turnId,
+                  parentId: action.id,
+                  timestamp: new Date().toISOString(),
+                  sequence: traceSequence++,
+                  command: pilotEvent.name,
+                  annotations: specification?.annotations,
+                  // Le chat execute sans plan prealable ni confirmation systematique.
+                  mode: 'auto'
+                })
+              )
+            } catch (erreur) {
+              console.warn(
+                `[trace] recu d'autorite non ecrit pour ${pilotEvent.name} : ${erreur instanceof Error ? erreur.message : String(erreur)}`
+              )
+            }
+          }
         }
         /**
          * Un artefact produit par le modele entre AUSSI dans la trace causale.
