@@ -166,10 +166,17 @@ try {
         `document.readyState === 'complete' && document.body.innerText.includes('Knowledge')`
       )
       await dismissWelcome()
+      /*
+       * ON NAVIGUE PAR LA PASTILLE, PAS PAR LE LIBELLE.
+       *
+       * Cause commune prouvee TROIS fois le 2026-09-06 : chercher un bouton par son texte casse des que
+       * l'entree de menu change de nom (« Memory » est le TITRE de la vue, le menu dit « Knowledge ») ou
+       * porte une icone (le texte vaut « 💬Chat », pas « Chat »). Le clic ne part alors jamais, et la
+       * sonde echoue plus loin sur une absence de contenu — en laissant croire a un defaut du produit.
+       * Un identifiant de test ne suit ni le libelle ni l'icone, et ne peut pas etre vole par du contenu.
+       */
       const navigated = await evaluate(`(() => {
-        const button = [...document.querySelectorAll('button')].find(
-          (item) => item.textContent?.trim().includes('Knowledge')
-        )
+        const button = document.querySelector('[data-testid="nav-knowledge"]')
         button?.click()
         return Boolean(button)
       })()`)

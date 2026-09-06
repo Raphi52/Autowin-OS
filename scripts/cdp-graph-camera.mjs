@@ -69,8 +69,17 @@ const snapshot = async (name) => {
   return { name, ...state }
 }
 
+/*
+ * ON NAVIGUE PAR LA PASTILLE, PAS PAR LE LIBELLE.
+ *
+ * Cause commune prouvee TROIS fois le 2026-09-06 : chercher un bouton par son texte casse des que
+ * l'entree de menu change de nom (« Memory » est le TITRE de la vue, le menu dit « Knowledge ») ou
+ * porte une icone (le texte vaut « 💬Chat », pas « Chat »). Le clic ne part alors jamais, et la
+ * sonde echoue plus loin sur une absence de contenu — en laissant croire a un defaut du produit.
+ * Un identifiant de test ne suit ni le libelle ni l'icone, et ne peut pas etre vole par du contenu.
+ */
 const memoryOpened = await evaluate(`(() => {
-  const target = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('Memory'))
+  const target = document.querySelector('[data-testid="nav-knowledge"]')
   target?.click()
   return Boolean(target)
 })()`)
