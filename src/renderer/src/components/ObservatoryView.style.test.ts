@@ -173,4 +173,23 @@ describe('Observatory visual contracts', () => {
     expect(badgeRule).toMatch(/justify-self:\s*start/)
     expect(badgeRule).toMatch(/white-space:\s*nowrap/)
   })
+
+  /*
+   * PLANCHER DU CONTENU EN FENETRE COURTE — garde d'un defaut MESURE, pas suppose.
+   * Le 2026-09-06, sur une fenetre reelle de 900x670 : en-tete 223 px + barre d'outils 203 px
+   * laissaient 93 px au flux chronologique, alors qu'UN evenement en mesure 98. Le contenu
+   * principal etait donc invisible et la sonde du chemin critique echouait dessus. Sans plancher,
+   * `.observatory-flightdeck` (declare `min-height: 0`) absorbe tout le manque et tombe a zero.
+   * Retirer cette regle ferait revenir le defaut en silence.
+   */
+  it('garde une hauteur minimale au contenu quand la fenêtre est courte', () => {
+    const css = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
+    const requete = css.match(/@media \(max-height: 820px\) \{([\s\S]*?)\n\}/)?.[1]
+
+    expect(requete, 'la requête média des fenêtres courtes a disparu').toBeTruthy()
+    expect(requete).toMatch(/\.observatory-flightdeck\s*{[^}]*min-height:\s*300px/s)
+    // Le plancher pousse le contenu au-delà de la fenêtre : sans défilement de la vue, il serait
+    // simplement COUPÉ — on aurait troqué un invisible contre un autre.
+    expect(requete).toMatch(/\.observatory-view\s*{[^}]*overflow-y:\s*auto/s)
+  })
 })

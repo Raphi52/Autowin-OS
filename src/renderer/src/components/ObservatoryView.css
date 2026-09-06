@@ -1663,3 +1663,21 @@
   color: var(--text-dim);
   cursor: pointer;
 }
+
+/* PLANCHER DU CONTENU EN FENETRE COURTE.
+   Mesure du 2026-09-06 sur une fenetre reelle de 900x670 : l'en-tete prenait 223 px et la barre
+   d'outils 203 px (elle s'empile sous 1050 px de large), ne laissant que 93 px au flux chronologique
+   — alors qu'UN SEUL evenement en mesure 98. Le contenu principal devenait donc invisible, et la
+   sonde du chemin critique echouait sur un evenement rendu hors du cadre visible.
+   `.observatory-flightdeck` est declare « prends ce qui reste » avec `min-height: 0` : sans plancher,
+   il absorbe tout le manque et peut tomber a zero. On lui donne donc une hauteur MINIMALE, et c'est
+   la vue entiere qui defile quand la fenetre ne suffit plus — l'en-tete et les filtres remontent,
+   le contenu reste lisible. Borne aux fenetres courtes : au-dela, rien ne change. */
+@media (max-height: 820px) {
+  .observatory-view {
+    overflow-y: auto;
+  }
+  .observatory-flightdeck {
+    min-height: 300px;
+  }
+}
