@@ -35,6 +35,7 @@ import type { SemanticTemporalProjectionV1 } from '../main/knowledge/semantic-te
 import type { BehaviourComposition } from '../main/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
 import type { ConversationFileTrace } from '../main/activity/conversation-file-trace-spool'
+import type { BrainInjectionInventory } from '../main/activity/brain-injection-inventory'
 import type { PreflightResult } from '../main/preflight'
 import type { PreflightRepairOutcome } from '../main/preflight-repair'
 import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
@@ -316,6 +317,7 @@ interface ChatApi {
   brainTraces: (conversationId: string) => Promise<BrainTrace[]>
   /** Chemins lus et ecrits pendant la conversation, avec le tour et l'auteur du geste. */
   conversationFileTraces: (conversationId: string) => Promise<ConversationFileTrace[]>
+  brainInjectionInventory: (conversationId: string) => Promise<BrainInjectionInventory>
   behaviourComposition: (workspace?: string) => Promise<
     BehaviourComposition & {
       inspection: { workspace: string; files: Array<BehaviourFile & { excerpt?: string }> }

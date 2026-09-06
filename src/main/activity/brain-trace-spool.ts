@@ -123,6 +123,13 @@ export interface BrainTrace {
    *                   2026-09-06 : ce chemin injectait sans écrire aucune trace).
    */
   kind?: 'automatic' | 'query' | 'empreinte' | 'recherche' | 'depot' | 'pousse'
+  /**
+   * Identifiant du point du registre (`brain-injection-points.ts`) qui a emis la trace. Absent sur
+   * les traces historiques : l'inventaire retombe alors sur le `kind`, et refuse de deviner quand
+   * ce `kind` designe PLUSIEURS points — une trace mal attribuee vaut moins qu'une trace comptee a
+   * part.
+   */
+  point?: string
   query: string
   found?: boolean
   status?: 'found' | 'empty' | 'invalid' | 'unavailable'

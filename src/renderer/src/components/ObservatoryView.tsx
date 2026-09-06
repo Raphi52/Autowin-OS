@@ -28,6 +28,7 @@ import type {
 import { ObservatoryRagCausalStep } from './ObservatoryRagCausalStep'
 import { RagTraceCard } from './RagTraceCard'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
+import type { BrainInjectionInventory as BrainInjectionInventoryView } from '../../../main/activity/brain-injection-inventory'
 import { summarizeRagTrace } from './rag-trace-model'
 import { LatestRequestGate, settleObservatorySources } from './observatory-reliability'
 import { buildObservatoryExport } from './observatory-export-model'
@@ -107,6 +108,7 @@ export function ObservatoryView({
   const [selectedCall, setSelectedCall] = useState<PromptCall | null>(null)
   const [nativeMetadata, setNativeMetadata] = useState<NativeTraceSummaryInput[]>([])
   const [brainTraces, setBrainTraces] = useState<BrainTraceView[]>([])
+  const [brainInventory, setBrainInventory] = useState<BrainInjectionInventoryView | null>(null)
   const [selected, setSelected] = useState<HarnessTimelineEvent | null>(null)
   const [compare, setCompare] = useState<HarnessTimelineEvent[]>([])
   const [query, setQuery] = useState('')
@@ -134,6 +136,7 @@ export function ObservatoryView({
   const causalRequestGate = useRef(new LatestRequestGate())
   const promptRequestGate = useRef(new LatestRequestGate())
   const brainRequestGate = useRef(new LatestRequestGate())
+  const inventoryRequestGate = useRef(new LatestRequestGate())
   const refreshStartedAt = useRef(0)
   const liveRefreshTimer = useRef<number | null>(null)
 
@@ -247,6 +250,32 @@ export function ObservatoryView({
         if (!brainRequestGate.current.isCurrent(request)) return
         setBrainTraces([])
         updateSourceError('brainTraces', error instanceof Error ? error.message : String(error))
+      })
+  }, [active, conversationId, refreshKey, updateSourceError])
+
+  /**
+   * INVENTAIRE EXHAUSTIF des points d'appel Brain. Il ne dérive PAS des traces affichées : il vient
+   * du registre du main, pour qu'un point d'injection JAMAIS appelé apparaisse quand même — à zéro.
+   * Une chronologie ne peut pas dire « ce point n'a pas servi » ; cet inventaire le peut.
+   */
+  useEffect(() => {
+    const request = inventoryRequestGate.current.begin()
+    if (!active || !conversationId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBrainInventory(null)
+      updateSourceError('brainInventory')
+      return
+    }
+    void (window.api.brainInjectionInventory?.(conversationId) ?? Promise.resolve(null))
+      .then((inventaire) => {
+        if (!inventoryRequestGate.current.isCurrent(request)) return
+        setBrainInventory(inventaire ?? null)
+        updateSourceError('brainInventory')
+      })
+      .catch((error: unknown) => {
+        if (!inventoryRequestGate.current.isCurrent(request)) return
+        setBrainInventory(null)
+        updateSourceError('brainInventory', error instanceof Error ? error.message : String(error))
       })
   }, [active, conversationId, refreshKey, updateSourceError])
 
@@ -1027,6 +1056,66 @@ export function ObservatoryView({
             {semanticTimeline.edges.length} lien{semanticTimeline.edges.length > 1 ? 's' : ''}
           </small>
         </aside>
+      )}
+      {brainInventory && (
+        <details
+          className="observatory-native-diagnostics observatory-brain-inventory"
+          data-testid="brain-injection-inventory"
+        >
+          <summary>
+            Injections &amp; appels Brain ·{' '}
+            {brainInventory.points.filter((point) => point.appelsTotal > 0).length}/
+            {brainInventory.points.length} points déclarés ont déjà été appelés
+          </summary>
+          <p>
+            Liste tenue par le registre <code>brain-injection-points.ts</code> et verrouillée par un
+            test : un appel Brain non déclaré casse la suite. Un point à zéro appel est affiché
+            comme tel — l’absence est un fait, pas un trou.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Point d’appel</th>
+                <th>Nature</th>
+                <th>Cette conversation</th>
+                <th>Total tracé</th>
+              </tr>
+            </thead>
+            <tbody>
+              {brainInventory.points.map((point) => (
+                <tr
+                  key={point.id}
+                  data-testid="brain-injection-point"
+                  data-point={point.id}
+                  data-appels={point.appelsConversation}
+                >
+                  <td>
+                    <strong>{point.label}</strong>
+                    <small>{point.pourquoi}</small>
+                  </td>
+                  <td>
+                    {point.injecte ? 'injecté dans le prompt' : 'appel sans injection'}
+                    {point.emission === 'porte-par-appelant' ? ' · tracé par ses appelants' : ''}
+                  </td>
+                  <td>
+                    {point.appelsConversation === 0
+                      ? 'aucun appel'
+                      : `${point.appelsConversation} appel${point.appelsConversation > 1 ? 's' : ''} · ${point.caracteresConversation.toLocaleString('fr-FR')} car. injectés`}
+                  </td>
+                  <td>{point.appelsTotal}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {brainInventory.tracesNonRattachees > 0 && (
+            <p data-testid="brain-inventory-orphelines">
+              {brainInventory.tracesNonRattachees} trace
+              {brainInventory.tracesNonRattachees > 1 ? 's' : ''} sans point déclaré — comptée
+              {brainInventory.tracesNonRattachees > 1 ? 's' : ''} à part plutôt que devinée
+              {brainInventory.tracesNonRattachees > 1 ? 's' : ''}.
+            </p>
+          )}
+        </details>
       )}
       {legacyBrainTraces.length > 0 && (
         <details className="observatory-native-diagnostics">

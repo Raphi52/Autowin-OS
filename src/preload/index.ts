@@ -57,6 +57,7 @@ export interface ClaudeAccountsPayload {
 import type { BehaviourComposition } from '../main/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
 import type { ConversationFileTrace } from '../main/activity/conversation-file-trace-spool'
+import type { BrainInjectionInventory } from '../main/activity/brain-injection-inventory'
 import type { PreflightResult } from '../main/preflight'
 import type { PreflightRepairOutcome } from '../main/preflight-repair'
 import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
@@ -360,6 +361,8 @@ const api = {
     ipcRenderer.invoke('os:brainTraces', conversationId),
   conversationFileTraces: (conversationId: string): Promise<ConversationFileTrace[]> =>
     ipcRenderer.invoke('os:conversationFileTraces', conversationId),
+  brainInjectionInventory: (conversationId: string): Promise<BrainInjectionInventory> =>
+    ipcRenderer.invoke('os:brainInjectionInventory', conversationId),
   behaviourComposition: (
     workspace?: string
   ): Promise<

@@ -36,7 +36,8 @@ import {
 } from '../brain-inbox'
 import { amitelWorkspaces } from '../amitel-paths'
 import { executeCurationTransaction } from '../outcome-learning-curation-transaction'
-import { appendBrainTrace } from '../activity/brain-trace-spool'
+import { appendBrainTrace, readBrainTraces } from '../activity/brain-trace-spool'
+import { buildBrainInjectionInventory } from '../activity/brain-injection-inventory'
 import { assertTrustedRendererSender } from '../ipc-senders'
 import { guardString } from '../ipc-guards'
 import type { AutowinOS } from '../os'
@@ -119,6 +120,16 @@ export function registerBrainIpc({
       vaultRoot === undefined ? undefined : guardString(vaultRoot, 'vaultRoot')
     const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
     return brainWorker.request('readNodeFile', guardString(path, 'path'), guardedVaultRoot, corpus)
+  })
+  /**
+   * INVENTAIRE EXHAUSTIF des points d'appel Brain : la liste vient du REGISTRE, les compteurs des
+   * traces. Un point declare mais jamais appele apparait donc a zero — une chronologie, elle, ne
+   * peut jamais dire « ce point n'a pas servi », seulement « je n'ai rien ».
+   */
+  ipcMain.handle('os:brainInjectionInventory', (event, rawConversationId: unknown) => {
+    assertTrustedRendererSender(event, 'Brain inventory')
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    return buildBrainInjectionInventory(readBrainTraces(), conversationId)
   })
   ipcMain.handle('os:searchBrain', async (event, path: string, query: string) => {
     assertTrustedRendererSender(event, 'BrainSearch')
