@@ -339,7 +339,16 @@ describe('temoin ordonnance — un blocage SANS CPU n’est plus excuse en conte
       20,
       (g) => captures.push(g),
       30,
-      { retardMaxDepuisLaDerniereLecture: () => 0, arreter: () => {} }
+      { retardMaxDepuisLaDerniereLecture: () => 0, arreter: () => {} },
+      /*
+       * ET LE CPU AVEC, meme raison (elucide le 2026-09-06). Les fichiers de test tournent dans des
+       * THREADS DU MEME PROCESS : un voisin gourmand brule du CPU chez NOUS pendant la fenetre
+       * mesuree, et le detecteur classe alors `boucle-tenue` — a juste titre, notre process brulait
+       * bien du CPU. Reproduit puis leve le meme jour : avec un mock sans fin dans un fichier
+       * voisin, ce test rougissait ; le mock corrige, il repasse au vert. On POSE donc l'hypothese
+       * « ce blocage ne brule pas de CPU » au lieu de l'esperer d'un voisin silencieux.
+       */
+      () => 0
     )
     await new Promise((r) => setTimeout(r, 60))
     const verrou = new Int32Array(new SharedArrayBuffer(4))
@@ -379,7 +388,15 @@ describe('temoin ordonnance — un blocage SANS CPU n’est plus excuse en conte
       20,
       (g) => captures.push(g),
       30,
-      { retardMaxDepuisLaDerniereLecture: () => 9999, arreter: () => {} }
+      { retardMaxDepuisLaDerniereLecture: () => 9999, arreter: () => {} },
+      /*
+       * MEME HYPOTHESE POSEE QUE CHEZ SON JUMEAU : ce blocage ne brule pas de CPU. Sans elle, un
+       * voisin gourmand — les fichiers de test partagent le PROCESS — brule du CPU pendant la
+       * fenetre, le detecteur classe `boucle-tenue`, et ce test attend `process-prive-de-cpu`. Le
+       * temoin en retard, lui, est deja injecte : c'est bien l'autre moitie de l'hypothese qui
+       * manquait. Reproduit puis leve le 2026-09-06.
+       */
+      () => 0
     )
     await new Promise((r) => setTimeout(r, 60))
     const verrou = new Int32Array(new SharedArrayBuffer(4))

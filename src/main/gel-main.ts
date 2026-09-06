@@ -282,7 +282,20 @@ export function demarrerDetecteurDeGel(
    * n'est pas le detecteur qui est instable, c'est l'HYPOTHESE d'environnement du test. On l'injecte
    * donc, au lieu de desserrer l'assertion ou d'accepter un test qu'on finirait par ignorer.
    */
-  temoinInjecte?: { retardMaxDepuisLaDerniereLecture: () => number; arreter: () => void }
+  temoinInjecte?: { retardMaxDepuisLaDerniereLecture: () => number; arreter: () => void },
+  /**
+   * CPU CONSOMME PAR NOTRE PROCESS, INJECTABLE — meme raison, meme usage que le temoin ci-dessus :
+   * rendre un test deterministe, jamais changer la production (defaut : `process.cpuUsage`).
+   *
+   * Elucide le 2026-09-06. Les fichiers de test tournent dans des THREADS DU MEME PROCESS. Un
+   * voisin gourmand — ce jour-la, un mock sans condition d'arret qui montait a 4 Go — brule donc du
+   * CPU DANS NOTRE PROCESS pendant la fenetre mesuree. `process.cpuUsage()` le compte, a juste
+   * titre, et le detecteur classe alors `boucle-tenue` : il a RAISON, notre process brulait bien du
+   * CPU. C'est l'hypothese du test — « ce blocage ne brule pas de CPU » — qu'un voisin invalidait.
+   *
+   * L'injecter pose l'hypothese au lieu de l'esperer. L'assertion, elle, ne bouge pas.
+   */
+  cpuMsInjecte?: () => number
 ): () => void {
   dossier = dir
   puits = ecrire
@@ -325,7 +338,7 @@ export function demarrerDetecteurDeGel(
     const maintenant = Date.now()
     const delta = process.cpuUsage(cpuPrecedent)
     cpuPrecedent = process.cpuUsage()
-    const cpuMs = (delta.user + delta.system) / 1000
+    const cpuMs = cpuMsInjecte ? cpuMsInjecte() : (delta.user + delta.system) / 1000
     const { blocageMs, cause } = classerGel(
       maintenant - precedent,
       cpuMs,
