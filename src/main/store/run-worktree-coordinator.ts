@@ -1,3 +1,4 @@
+import { motifDeBlocagePublication } from '../../shared/blocage-git-verrou'
 import { pendantOperation } from '../gel-main'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
@@ -612,8 +613,10 @@ export class RunWorktreeCoordinator {
       } catch (error) {
         tracked.state = 'blocked'
         tracked.endedAtMs = this.now()
-        tracked.attentionReason = 'merge-failed'
         tracked.detail = error instanceof Error ? error.message : String(error)
+        // Un VERROU tenu par une publication concurrente n'est pas une fusion refusee : le motif
+        // se lit dans ce que git a dit (`blocage-git-verrou.ts`), pas dans l'endroit du code.
+        tracked.attentionReason = motifDeBlocagePublication(tracked.detail)
         if (tracked.worktreePath && tracked.baseBranch && tracked.baseSha) {
           this.persist(tracked, 'interrupted', 'blocked', tracked.detail)
         }
@@ -759,8 +762,9 @@ export class RunWorktreeCoordinator {
     } catch (error) {
       tracked.state = 'blocked'
       tracked.endedAtMs = this.now()
-      tracked.attentionReason = 'merge-failed'
       tracked.detail = error instanceof Error ? error.message : String(error)
+      // Meme lecture qu'au chemin synchrone : le motif vient du message de git, pas du site.
+      tracked.attentionReason = motifDeBlocagePublication(tracked.detail)
       // `describeAsync` peut échouer avant que le contexte durable existe. Dans ce cas, persister
       // fabriquerait trois chaînes vides et masquerait l'erreur Git par « manifeste invalide ».
       if (tracked.worktreePath && tracked.baseBranch && tracked.baseSha) {
@@ -1144,7 +1148,12 @@ export class RunWorktreeCoordinator {
         outcome: 'blocked',
         agentId: runId,
         files: tracked.files.map((file) => file.path),
-        reason: 'merge-failed',
+        // LE MOTIF SE LIT DANS CE QUE GIT A DIT. Une publication CONCURRENTE qui tient le verrou
+        // d'index ressortait ici en « la fusion dans la base a ete refusee » — alors qu'aucune
+        // fusion n'a eu lieu, et que le conseil affiche (republier a la main) ne peut rien tant que
+        // l'autre publication n'a pas rendu le verrou. Mesure du 2026-09-06 : trois runs en
+        // parallele, un publie, DEUX bloques sur `index.lock` et `ORIG_HEAD.lock`.
+        reason: motifDeBlocagePublication(detail),
         detail
       }
       this.applyFinalize(tracked, blocked)
@@ -1756,12 +1765,14 @@ export class RunWorktreeCoordinator {
         ...(res.outcome === 'blocked' && res.detail ? { detail: res.detail } : {})
       }
     } catch (error) {
+      const detailErreur = error instanceof Error ? error.message : String(error)
       const blocked: FinalizeResult = {
         outcome: 'blocked',
         agentId: runId,
         files: tracked.files.map((file) => file.path),
-        reason: 'merge-failed',
-        detail: error instanceof Error ? error.message : String(error)
+        // Meme lecture qu'au site precedent : le motif vient du message, pas de l'endroit du code.
+        reason: motifDeBlocagePublication(detailErreur),
+        detail: detailErreur
       }
       this.applyFinalize(tracked, blocked)
       this.persistFinalize(tracked, blocked)
@@ -2558,14 +2569,23 @@ export class RunWorktreeCoordinator {
           publicationAgentSha: record?.publicationAgentSha,
           publicationBaseSha: record?.publicationBaseSha,
           causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
-          // Un run interrompu n'a subi AUCUNE fusion : ne lui invente pas `merge-failed`.
+          /*
+           * Un run interrompu n'a subi AUCUNE fusion : ne lui invente pas `merge-failed`.
+           *
+           * ET QUAND LE MOTIF N'A PAS ETE PERSISTE, il est RECALCULE ici — c'etait le vrai site du
+           * defaut du 2026-09-06. Corriger les quatre endroits qui POSENT le motif ne changeait
+           * rien a l'ecran : la relecture retombait sur `merge-failed` par defaut, quel que soit ce
+           * que git avait dit. On relit donc le message conserve dans `detail`, qui, lui, porte la
+           * cause exacte — un verrou tenu par une publication concurrente n'est pas une fusion
+           * refusee, et le conseil « republie a la main » n'y peut rien.
+           */
           attentionReason: !record
             ? 'merge-failed'
             : ((record.attentionReason as Tracked['attentionReason']) ??
               (record.publication === 'blocked' &&
               record.verdict !== 'interrupted' &&
               record.verdict !== 'running'
-                ? 'merge-failed'
+                ? motifDeBlocagePublication(record.detail)
                 : undefined)),
           verdict: record?.verdict ?? 'unknown',
           publication: record?.publication ?? 'blocked',
@@ -2835,14 +2855,15 @@ export class RunWorktreeCoordinator {
       // La classification `merge-failed` ne dit PAS quoi reparer. Le `catch` nu jetait la cause
       // reelle : on la conserve EN PLUS d'elle, par le canal `detail` que `persist` porte deja
       // jusqu'a l'activite, au manifeste durable et au recu Git terminal.
+      //
+      // ET ON LIT CE QUE GIT A DIT. Un verrou tenu par une publication CONCURRENTE ressortait ici
+      // en « la fusion dans la base a ete refusee », alors qu'aucune fusion n'avait eu lieu et que
+      // le conseil affiche — republier a la main — ne pouvait rien regler tant que l'autre
+      // publication tenait le verrou (mesure du 2026-09-06, trois runs en parallele).
+      const message = error instanceof Error ? error.message : String(error)
       tracked.state = 'blocked'
-      tracked.attentionReason = 'merge-failed'
-      this.persist(
-        tracked,
-        'green',
-        'blocked',
-        error instanceof Error ? error.message : String(error)
-      )
+      tracked.attentionReason = motifDeBlocagePublication(message)
+      this.persist(tracked, 'green', 'blocked', message)
     }
   }
 
@@ -3031,14 +3052,15 @@ export class RunWorktreeCoordinator {
       // La classification `merge-failed` ne dit PAS quoi reparer. Le `catch` nu jetait la cause
       // reelle : on la conserve EN PLUS d'elle, par le canal `detail` que `persist` porte deja
       // jusqu'a l'activite, au manifeste durable et au recu Git terminal.
+      //
+      // ET ON LIT CE QUE GIT A DIT. Un verrou tenu par une publication CONCURRENTE ressortait ici
+      // en « la fusion dans la base a ete refusee », alors qu'aucune fusion n'avait eu lieu et que
+      // le conseil affiche — republier a la main — ne pouvait rien regler tant que l'autre
+      // publication tenait le verrou (mesure du 2026-09-06, trois runs en parallele).
+      const message = error instanceof Error ? error.message : String(error)
       tracked.state = 'blocked'
-      tracked.attentionReason = 'merge-failed'
-      this.persist(
-        tracked,
-        'green',
-        'blocked',
-        error instanceof Error ? error.message : String(error)
-      )
+      tracked.attentionReason = motifDeBlocagePublication(message)
+      this.persist(tracked, 'green', 'blocked', message)
     }
   }
 
