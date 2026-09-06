@@ -61,12 +61,29 @@ const screenshot = async (name) => {
   return path
 }
 
+/*
+ * ON NAVIGUE PAR LA PASTILLE, PAS PAR UN LIBELLE.
+ *
+ * La sonde cherchait un bouton contenant « Memory ». Ce mot est le TITRE de la vue, mais l'entree
+ * de navigation s'appelle « Knowledge » : le clic ne partait donc jamais, la sonde restait sur
+ * l'Accueil, et elle echouait plus loin sur « aucun theme » — en accusant le graphe. Mesure du
+ * 2026-09-06 : une fois la vue reellement ouverte, 30 themes sont presents, avec leur compte.
+ * Un identifiant de test ne suit pas les libelles et ne peut pas etre vole par du contenu.
+ */
 await evaluate(`(() => {
-  const target = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('Memory'))
+  const target = document.querySelector('[data-testid="nav-knowledge"]')
   target?.click()
   return Boolean(target)
 })()`)
-await waitFor(`document.querySelectorAll('.theme-filter[data-theme-id]').length > 0`)
+/*
+ * LE GRAPHE SE CHARGE, IL N'EST PAS LA A L'OUVERTURE DE LA VUE.
+ *
+ * 8 s suffisaient sur une application deja chaude, jamais sur un profil neuf : la lecture du Brain
+ * et le calcul des themes prennent plus longtemps au premier affichage. Mesure du 2026-09-06 :
+ * sonde rouge sur une instance fraiche, verte sur la meme instance rouverte. On attend donc le
+ * CONTENU, avec une patience a la mesure d'un premier chargement — l'assertion, elle, ne change pas.
+ */
+await waitFor(`document.querySelectorAll('.theme-filter[data-theme-id]').length > 0`, 60000)
 await waitFor(
   `[...document.querySelectorAll('.theme-filter[data-theme-id]')]
   .some((button) => Number(button.querySelector('small')?.textContent ?? 0) > 0)`,
@@ -79,8 +96,18 @@ const selectedThemeId = await evaluate(`(() => {
   return target?.dataset.themeId ?? null
 })()`)
 if (!selectedThemeId) throw new Error('Aucun thème non vide disponible')
+/*
+ * LE THEME CLIQUE EST PARMI LES ACTIFS — la selection est MULTIPLE.
+ *
+ * L'assertion lisait le PREMIER actif du DOM et exigeait que ce soit le notre. Or les filtres se
+ * cumulent : un theme deja actif (« Brain » a l'ouverture) restait en tete et la sonde declarait
+ * echec alors que le clic avait parfaitement fonctionne. On verifie donc l'APPARTENANCE, ce qui est
+ * la propriete reelle du produit — et l'assertion suivante, elle, exige toujours que le panneau de
+ * noeuds se remplisse.
+ */
 await waitFor(
-  `document.querySelector('.theme-filter.is-active[data-theme-id]')?.dataset.themeId === ${JSON.stringify(selectedThemeId)}`
+  `[...document.querySelectorAll('.theme-filter.is-active[data-theme-id]')]
+  .some((button) => button.dataset.themeId === ${JSON.stringify(selectedThemeId)})`
 )
 await waitFor(
   `document.querySelectorAll('.theme-nodes-panel .node-links button').length > 0`,
