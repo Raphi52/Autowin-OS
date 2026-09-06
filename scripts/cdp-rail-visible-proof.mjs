@@ -1,4 +1,5 @@
 import { portCdp } from './cdp-port.mjs'
+import { agirJusqua } from './cdp-attente.mjs'
 /**
  * Preuve hors-modele des DEUX regressions de fond du 2026-08-31 : « je ne vois plus le menu de
  * gauche » sur l'Accueil, et « j'ai perdu mon ancien fond d'ecran 2d sur les vues ».
@@ -64,16 +65,31 @@ await send('Runtime.enable')
  * (App.tsx). Mesurer depuis une autre vue rend `decorMonte: false` et ne prouve RIEN du cas
  * signale — c'est exactement le faux vert que ce script doit refuser.
  */
-const alleAccueil = await evaluate(`(() => {
-  const cible = [...document.querySelectorAll('button, a, [role="tab"]')]
-    .find((n) => /accueil/i.test(n.textContent || '') || /accueil/i.test(n.getAttribute('aria-label') || ''))
-  if (!cible) return 'aucun bouton Accueil trouve'
-  cible.click()
-  return 'clic emis'
-})()`)
-console.log('navigation:', alleAccueil)
-// Laisse React remonter la vue et le decor s'instancier.
-await new Promise((r) => setTimeout(r, 1200)) // sleep-ok: attente de remontage React apres un clic reel, pas un polling
+/*
+ * ON CLIQUE JUSQU'A CE QUE LA VUE TIENNE.
+ *
+ * Deux pieges mesures le 2026-09-06, tous deux dans le HARNAIS et non dans le produit :
+ *   1. le clic etait cherche par le TEXTE « accueil » — un titre de conversation pouvait le voler,
+ *      et une vue ne se designe pas par son libelle (garde scripts/navigation-sondes.test.mjs) ;
+ *   2. un clic unique suivi de 1200 ms fixes suffisait quand la vue etait deja chaude, mais sur une
+ *      instance qui restaure encore son onglet memorise, la bascule etait ECRASEE juste apres. La
+ *      preuve rendait alors « decor NON monte » sur une application saine — un faux rouge, aussi
+ *      couteux qu'un faux vert, et INTERMITTENT, donc encore plus cher a diagnostiquer.
+ *
+ * Le decor n'est monte que sur l'Accueil (App.tsx) : sa presence EST le temoin que la bascule a
+ * tenu. On rejoue donc le clic tant qu'il n'est pas la.
+ */
+const surAccueil = await agirJusqua(
+  evaluate,
+  `Boolean(document.querySelector('.decor-de-fond'))`,
+  () =>
+    evaluate(`(() => {
+      document.querySelector('[data-testid="nav-accueil"]')?.click()
+      return true
+    })()`),
+  20000
+)
+console.log('navigation:', surAccueil ? 'Accueil tenu, decor monte' : 'Accueil JAMAIS atteint')
 
 const mesure = await evaluate(`(() => {
   const rail = document.querySelector('.rail')
@@ -92,11 +108,16 @@ const mesure = await evaluate(`(() => {
     elementAuPixel: dessus ? (dessus.className || dessus.tagName) : null,
     decorMonte: Boolean(decor),
     decorZIndex: decor ? getComputedStyle(decor).zIndex : null,
-    fondBody: getComputedStyle(document.body).backgroundImage.slice(0, 120)
+    // La valeur COMPLETE pour l'assertion, une version courte pour la lecture humaine. Mesure du
+    // 2026-09-06 : en paquet, l'URL est file:///.../win-unpacked/resources/app.asar/..., si bien
+    // que le nom du fichier tombe APRES le 120e caractere. Tronquer avant de tester rendait donc un
+    // ECHEC sur une application saine — un faux rouge, aussi couteux qu'un faux vert.
+    fondBody: getComputedStyle(document.body).backgroundImage,
+    fondBodyResume: getComputedStyle(document.body).backgroundImage.slice(0, 120)
   }
 })()`)
 
-console.log(JSON.stringify(mesure, null, 2))
+console.log(JSON.stringify({ ...mesure, fondBody: mesure.fondBodyResume, fondBodyResume: undefined }, null, 2))
 socket.close()
 
 const echecs = []

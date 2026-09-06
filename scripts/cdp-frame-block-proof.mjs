@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { assertFrameBlockProof, assertTerrainPanelProof } from './cdp-proof-validation.mjs'
 import { portCdp } from './cdp-port.mjs'
+import { attendreDansLaPage } from './cdp-attente.mjs'
 
 const port = portCdp()
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
@@ -56,7 +57,41 @@ await withDeviceMetricsOverride(
       if (!t) throw new Error('Navigation Agent Studio introuvable')
       t.click()
     })()`)
-    await new Promise((r) => setTimeout(r, 1500))
+    /*
+     * ON ATTEND L'ETAT, PAS UNE DUREE.
+     *
+     * Mesure du 2026-09-06 : sur une instance FRAICHEMENT demarree, ces 1500 ms fixes tombaient
+     * avant que la topologie soit montee. La sonde levait alors « bloc Frame absent » — un faux
+     * rouge, qui accuse le produit d'un defaut appartenant au harnais. Rejouee dix secondes plus
+     * tard sur la MEME application, elle passait. On attend donc que le panneau existe.
+     */
+    await attendreDansLaPage(
+      evaluate,
+      `Boolean(document.querySelector('[data-testid="agent-studio-view"]'))`,
+      20000
+    )
+    /*
+     * ELLE OUVRE SON PROPRE ONGLET.
+     *
+     * Les panneaux de topologie vivent sous « Modeles & topologie », pas sur la vue d'accueil
+     * d'Agent Studio. Cette sonde ne cliquait PAS cet onglet : elle passait quand une autre sonde
+     * l'avait ouvert avant elle, et tombait sur « bloc Frame absent » quand elle partait la
+     * premiere. Une preuve qui depend de l'ordre de passage de ses voisines ne prouve rien.
+     */
+    await evaluate(`(() => {
+      if (document.querySelector('.topology-panel')) return true
+      const onglet = [...document.querySelectorAll('button')].find((b) => /topolog/i.test(b.textContent || ''))
+      if (!onglet) throw new Error('Onglet « Modeles & topologie » introuvable')
+      onglet.click()
+      return true
+    })()`)
+    const topologiePrete = await attendreDansLaPage(
+      evaluate,
+      `Boolean(document.querySelector('.topology-panel[data-target="frame"]'))`,
+      20000
+    )
+    if (!topologiePrete)
+      throw new Error("Le panneau Frame n'est pas monte apres 20 s sur l'onglet topologie")
 
     // Inspecte les quatre panels + la note runtime.
     const dom = await evaluate(`(() => {

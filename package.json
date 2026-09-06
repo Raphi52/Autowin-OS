@@ -116,7 +116,7 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "build:desktop": "npm run build && electron-builder --dir && powershell -ExecutionPolicy Bypass -File scripts/refresh-desktop-shortcut.ps1 && npm run test:chemin-critique && npm run test:knowledge-circulaire",
+    "build:desktop": "npm run build && electron-builder --dir && powershell -ExecutionPolicy Bypass -File scripts/refresh-desktop-shortcut.ps1 && npm run test:chemin-critique && npm run test:knowledge-circulaire && npm run test:sondes-lecture",
     "dev:shortcut": "npm run build && powershell -ExecutionPolicy Bypass -File scripts/create-dev-shortcut.ps1",
     "build:unpack": "npm run build:desktop",
     "build:win": "npm run build:desktop && electron-builder --win",
@@ -129,7 +129,8 @@
     "arena:preuve-fictive": "node scripts/arena-critere-preuve-fictive.mjs",
     "arena:duel": "node scripts/arena-duel.mjs",
     "test:chemin-critique": "node scripts/verifier-chemin-critique.mjs",
-    "test:knowledge-circulaire": "node scripts/cdp-knowledge-circular-proof.mjs"
+    "test:knowledge-circulaire": "node scripts/cdp-knowledge-circular-proof.mjs",
+    "test:sondes-lecture": "node scripts/verifier-sondes-lecture.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
