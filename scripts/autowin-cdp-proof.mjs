@@ -122,8 +122,28 @@ const send = (method, params = {}) =>
     })
     socket.send(JSON.stringify({ id: callId, method, params }))
   })
+/**
+ * Attend qu'une condition soit VRAIE dans la page, au lieu de dormir un delai fixe.
+ *
+ * Le delai fixe est le defaut de fond de cette sonde : mesure du 2026-09-06, `--verify-navigation`
+ * photographiait la vue Worktrees 200 ms apres le clic, sur son ecran « Chargement… », et rendait
+ * un ROUGE PERMANENT qui ne signalait plus rien. Attendre ne desserre aucune assertion : au-dela
+ * du plafond, la sonde reprend son cours et le controle qui suit rate comme avant.
+ */
+const attendreDansLaPage = async (expression, plafondMs = 8000, pasMs = 200) => {
+  for (let restant = plafondMs; restant > 0; restant -= pasMs) {
+    const vu = await send('Runtime.evaluate', { expression, returnByValue: true })
+    if (vu.result.value) return true
+    await new Promise((resolve) => setTimeout(resolve, pasMs))
+  }
+  return false
+}
+
 if (theme) {
   if (theme !== 'dark') throw new Error(`Mode visuel supprimé : ${theme}`)
+  // La coquille de l'app est montee par React : sur une instance qui vient de demarrer, elle
+  // n'existe pas encore a la milliseconde ou l'on se connecte.
+  await attendreDansLaPage(`Boolean(document.querySelector('.shell'))`)
   const verified = await send('Runtime.evaluate', {
     expression: `(() => ({
       dark: document.querySelector('.shell')?.classList.contains('theme-serious') === true,
@@ -264,7 +284,18 @@ if (section) {
     returnByValue: true
   })
   if (!navigation.result.value) throw new Error(`Section introuvable : ${section}`)
-  await new Promise((resolve) => setTimeout(resolve, 500))
+  // La section cliquee peut charger ses donnees : on attend que le texte de la page ne bouge
+  // PLUS (deux lectures identiques), plutot que de capturer un ecran a mi-peinture.
+  await send('Runtime.evaluate', {
+    expression: `(() => { window.__autowinTexteVu = null; return true })()`,
+    returnByValue: true
+  })
+  await attendreDansLaPage(`(() => {
+    const texte = document.body?.innerText ?? ''
+    const stable = window.__autowinTexteVu === texte
+    window.__autowinTexteVu = texte
+    return stable
+  })()`)
 }
 const inspected = await send('Runtime.evaluate', {
   expression: `({ title: document.title, bodyCharacters: document.body?.innerText.length ?? 0, url: location.href })`,
