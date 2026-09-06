@@ -324,6 +324,7 @@ noms-là, dès la préparation du banc (étape 1) et au retour de chaque bras (�
 | `check.mjs` | étape 1, avant le lancement | le critère de succès exécutable (`node check.mjs <racine>`), constaté rouge |
 | `prompt-<bras>.txt` | étape 3, à l'envoi | un par bras (`a`, `b`, `c`, `x`) : le prompt envoyé mot pour mot, preuve de l'énoncé identique |
 | `out-<bras>.json` | étape 3, au retour | un par bras : la sortie JSON brute du sous-agent, d'où sont lus `total_cost_usd` et `session_id` |
+| `prompt-judge.txt` | étape 4, à l'envoi au juge | le prompt envoyé au juge mot pour mot ; il DOIT invoquer `/judge` (ou `skills/judge/SKILL.md`), sinon P9 sort RATE : sans lui, rien ne prouve que le verdict vient de la skill `judge` et non d'une grille improvisée |
 | `out-judge.json` | étape 4, au retour du juge | la sortie brute de `judge`, avec son `session_id` — c'est elle qui prouve que le producteur ne s'est pas jugé |
 | `lance*.sh` (ou `.ps1`/`.bat`/`.mjs`/`.js`) | étape 3, avant le lancement | le script qui lance les quatre bras ; sans lui, P6, P7 et P13 sortent RATE d'un coup |
 
