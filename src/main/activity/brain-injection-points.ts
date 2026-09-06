@@ -146,11 +146,9 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     label: 'Apprentissage · leçon promue au Brain',
     kind: 'write',
     injecte: false,
-    emission: 'non-trace',
+    emission: 'spool',
     sites: [{ file: 'src/main/commands.ts', anchor: 'const deposited = await rememberFact(' }],
-    manque:
-      "le dépôt d'une leçon promue passe par `rememberFact` sans `appendBrainTrace` : seule la " +
-      'commande `remember` explicite est tracée, la promotion automatique reste muette.',
+    trace: { file: 'src/main/commands.ts', anchor: 'query: `promotion: ${trustedProposal.title}`' },
     pourquoi: 'Dépôt automatique d’une leçon validée par les preuves du run.'
   },
   {

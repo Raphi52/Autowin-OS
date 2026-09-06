@@ -1500,6 +1500,26 @@ export class AppCommandBus {
                 workspace: this.os.executionWorkspace
               }
             )
+            /**
+             * LA PROMOTION AUTOMATIQUE EST UNE ECRITURE VERS LE BRAIN, et elle n'en laissait aucune
+             * trace : seule la commande `remember` explicite ecrivait la sienne. L'Observatory
+             * montrait donc un tour muet la ou un fait venait d'etre depose — et un depot tombe
+             * dans un service injoignable y etait aussi invisible qu'un depot reussi.
+             *
+             * `injectedChars: 0` A DESSEIN, comme pour `remember` : une ecriture n'injecte rien
+             * dans le prompt, et y mettre la taille du fait gonflerait des totaux d'injection avec
+             * du texte jamais injecte.
+             */
+            appendBrainTrace({
+              timestamp: new Date().toISOString(),
+              conversationId: input.conversationId,
+              turnId: input.turnId,
+              kind: 'depot',
+              query: `promotion: ${trustedProposal.title}`,
+              found: deposited.stored,
+              status: deposited.stored ? 'found' : deposited.unknown ? 'unavailable' : 'empty',
+              injectedChars: 0
+            })
             if (deposited.fact) {
               this.outcomeLearning.recordProposal({
                 conversationId: input.conversationId,

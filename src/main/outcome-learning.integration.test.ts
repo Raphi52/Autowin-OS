@@ -8,6 +8,7 @@ import { promoteInboxCandidate, promoteOutcomeLearningCandidate } from './brain-
 import { brainCorpusForWorkspace } from './brain-corpus-scope'
 import { invalidateVaultBrainNotesCache, searchVaultBrainNotesAsync } from './viz/fs-brains'
 import { OutcomeLearningLedger } from './activity/outcome-learning-ledger'
+import { readBrainTraces } from './activity/brain-trace-spool'
 import { forgetSessionDeposits, rememberFact } from './brain-remember'
 import { AppCommandBus } from './commands'
 import { OutcomeLearningSupervisor } from './outcome-learning-supervisor'
@@ -353,6 +354,10 @@ describe('outcome learning — contrat visible par les modèles', () => {
       .update(`amitel-brain\n1\n${context}`, 'utf8')
       .digest('hex')
     vi.stubEnv('AMITEL_BRAIN_TOKEN', 'jeton')
+    // Spool ISOLE : la trace du depot s'ecrit sous APPDATA. Sans repertoire dedie, ce test lirait
+    // (et polluerait) le journal Brain reel de la machine.
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-depot-trace-'))
+    vi.stubEnv('APPDATA', appData)
     let postedBody: Record<string, unknown> | undefined
     vi.stubGlobal(
       'fetch',
@@ -394,6 +399,23 @@ describe('outcome learning — contrat visible par les modèles', () => {
       expect(ledger.read().events.find(({ kind }) => kind === 'proposal')).toMatchObject({
         value: { source: 'session:turn-1', runId: expect.any(String) }
       })
+      /**
+       * LA PROMOTION EST UNE ECRITURE VERS LE BRAIN — donc un appel Brain, donc une trace.
+       *
+       * Constate le 2026-09-06 : seule la commande `remember` explicite ecrivait sa trace `depot`.
+       * La promotion AUTOMATIQUE d'une lecon deposait un fait dans le Brain sans rien laisser, si
+       * bien que l'Observatory montrait un tour muet la ou un fait venait d'etre publie. Le
+       * registre des points d'injection le declarait comme un trou.
+       */
+      expect(readBrainTraces('conv-1')).toEqual([
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          turnId: 'turn-1',
+          kind: 'depot',
+          found: true,
+          injectedChars: 0
+        })
+      ])
     } finally {
       vi.unstubAllGlobals()
       vi.unstubAllEnvs()
