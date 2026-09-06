@@ -1,3 +1,4 @@
+import { attendreDansLaPage, attendreStabilite } from './cdp-attente.mjs'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
 
@@ -66,7 +67,10 @@ await withDeviceMetricsOverride(
     mobile: false
   },
   async () => {
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await attendreDansLaPage(
+      evaluate,
+      `document.readyState === 'complete' && Boolean(document.querySelector('button'))`
+    )
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const wizard = await evaluate(`(() => {
     const overlay = document.querySelector('.frw-overlay')
@@ -95,9 +99,9 @@ await withDeviceMetricsOverride(
           clickCount: 1
         })
       }
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await attendreDansLaPage(evaluate, `!document.querySelector('.frw-overlay')`, 2000, 100)
     }
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await attendreDansLaPage(evaluate, `!document.querySelector('.frw-overlay')`, 2000, 100)
     await evaluate(`(async () => {
   const existing = (await window.api.conversations()).find((item) => item.title === 'Preuve chemin critique')
   const conversation = existing ?? await window.api.conversationsCreate({
@@ -123,7 +127,10 @@ await withDeviceMetricsOverride(
   target.click()
 })()`)
     console.log('[cdp] Observatory ouvert')
-    await new Promise((resolve) => setTimeout(resolve, 900))
+    await attendreDansLaPage(
+      evaluate,
+      `document.querySelectorAll('.observatory-conversations button').length > 0`
+    )
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const dismissed = await evaluate(`(() => {
     const overlay = document.querySelector('.frw-overlay')
@@ -133,7 +140,7 @@ await withDeviceMetricsOverride(
     return false
   })()`)
       if (dismissed) break
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await attendreDansLaPage(evaluate, `!document.querySelector('.frw-overlay')`, 2000, 100)
     }
     await evaluate(`(() => {
   const target = [...document.querySelectorAll('.observatory-conversations button')].find(
@@ -142,25 +149,34 @@ await withDeviceMetricsOverride(
   if (!target) throw new Error('Conversation fixture introuvable dans Observatory')
   target.click()
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await attendreDansLaPage(
+      evaluate,
+      `[...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Chemin critique')`
+    )
     await evaluate(`(() => {
   const target = [...document.querySelectorAll('button')].find((button) =>
     button.textContent?.trim() === 'Chemin critique')
   if (!target) throw new Error('Bascule Chemin critique introuvable')
   target.click()
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 350))
+    await attendreDansLaPage(
+      evaluate,
+      `Boolean(document.querySelector('.observatory-causal-tree .observatory-causal-node-wrap > button'))`
+    )
     await evaluate(`(() => {
   const first = document.querySelector('.observatory-causal-tree .observatory-causal-node-wrap > button')
   if (!first) throw new Error('Nœud causal cliquable introuvable')
   first.click()
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    await attendreDansLaPage(
+      evaluate,
+      `Boolean(document.querySelector('.observatory-causal-detail'))`
+    )
     await evaluate(`(() => {
   const stream = document.querySelector('.observatory-stream')
   if (stream) stream.scrollTop = 0
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await attendreStabilite(evaluate)
     const state = await evaluate(`(() => ({
   title: document.querySelector('.observatory-causal-path > header')?.textContent?.trim(),
   toolbarZones: document.querySelectorAll('.observatory-toolbar > [data-toolbar-zone]').length,
@@ -226,7 +242,7 @@ await withDeviceMetricsOverride(
   if (!target) throw new Error('Bascule Chronologie introuvable')
   target.click()
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await attendreDansLaPage(evaluate, `document.querySelectorAll('.observatory-event').length > 0`)
     const beforeLive = await evaluate(`document.querySelectorAll('.observatory-event').length`)
     await evaluate(`(async () => {
   const conversation = (await window.api.conversations()).find(
@@ -238,20 +254,22 @@ await withDeviceMetricsOverride(
   ], conversation.id)
   if (!result.ok) throw new Error(result.error || 'Fixture live en echec')
 })()`)
-    let liveEvents = beforeLive
-    for (let attempt = 0; attempt < 40 && liveEvents <= beforeLive; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      liveEvents = await evaluate(`document.querySelectorAll('.observatory-event').length`)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150))
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      const stable = await evaluate(`(() => ({
-    events: document.querySelectorAll('.observatory-event').length,
-    loading: document.querySelector('.observatory-stream')?.textContent?.includes('Lecture des traces') ?? true
-  }))()`)
-      if (!stable.loading && stable.events >= liveEvents) break
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
+    await attendreDansLaPage(
+      evaluate,
+      `document.querySelectorAll('.observatory-event').length > ${beforeLive}`,
+      4000,
+      100
+    )
+    const liveEvents = await evaluate(`document.querySelectorAll('.observatory-event').length`)
+    await attendreDansLaPage(
+      evaluate,
+      `(() => {
+    const loading = document.querySelector('.observatory-stream')?.textContent?.includes('Lecture des traces') ?? true
+    return !loading && document.querySelectorAll('.observatory-event').length >= ${liveEvents}
+  })()`,
+      4000,
+      100
+    )
     await evaluate(`(() => {
   const stream = document.querySelector('.observatory-stream')
   if (stream) stream.scrollTop = 0
@@ -286,7 +304,7 @@ await withDeviceMetricsOverride(
   for (const event of events)
     event.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))
 })()`)
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await attendreDansLaPage(evaluate, `Boolean(document.querySelector('.observatory-diff'))`)
     const timelineState = await evaluate(`(() => ({
   events: document.querySelectorAll('.observatory-event').length,
   authority: document.querySelector('[data-testid="observatory-authority-ledger"]')?.textContent?.trim() ?? null,
