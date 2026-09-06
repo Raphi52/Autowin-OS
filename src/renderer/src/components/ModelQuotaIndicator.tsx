@@ -5,7 +5,6 @@ import type {
   ModelQuotaSnapshot,
   ModelQuotaWindow
 } from '../../../shared/model-quotas'
-import type { ContextGauge } from '../../../shared/context-gauge'
 import './ModelQuotaIndicator.css'
 
 const providerLabels: Record<string, string> = {
@@ -205,76 +204,6 @@ function observedLabel(observedAt: string | undefined, stale: boolean): string {
 }
 
 /**
- * La jauge de CONTEXTE, rendue dans la popup — ou RIEN.
- *
- * `undefined` signifie « on ne sait pas » (fenêtre du modèle non déclarée, ou entrée non mesurée) :
- * on n'affiche alors aucune barre. Un 0 % affirmerait « ce fil est vide » là où la vérité est
- * « on l'ignore » — même discipline que dans ChatView, d'où vient cette jauge.
- */
-function ContextGaugeRow({
-  gauge,
-  onCompact,
-  busy
-}: {
-  gauge?: ContextGauge
-  onCompact?: () => void
-  busy?: boolean
-}): React.JSX.Element | null {
-  if (!gauge) return null
-  const pourcent = Math.round(gauge.ratio * 100)
-  const titre =
-    `Contexte : ${gauge.used.toLocaleString('fr-FR')} tokens sur ` +
-    `${gauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
-    `${gauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
-  return (
-    <article
-      className={`model-quota-row quota-context-gauge is-${gauge.level}`}
-      data-testid="quota-context-gauge"
-      aria-label={titre}
-      title={titre}
-    >
-      <div className="model-quota-name">
-        <span>
-          <strong>Contexte de cette conversation</strong>
-          <small>
-            {gauge.used.toLocaleString('fr-FR')} / {gauge.limit.toLocaleString('fr-FR')} tokens ·{' '}
-            {gauge.cacheRead.toLocaleString('fr-FR')} relus du cache
-          </small>
-        </span>
-      </div>
-      <div className="model-quota-window">
-        <div className="quota-context-gauge-track" aria-hidden="true">
-          <i className="quota-context-gauge-fill" style={{ width: `${pourcent}%` }} />
-        </div>
-        <strong className="model-quota-values">
-          <span>{pourcent} % occupé</span>
-          <small>fenêtre du modèle servi</small>
-        </strong>
-        {/* Le bouton n'existe QUE si l'occupation est MESURÉE (on est déjà dans `gauge`) et qu'un
-            gestionnaire est câblé : proposer de compacter un fil dont on ignore le remplissage, ou
-            sans destinataire, serait un bouton qui ment. */}
-        {onCompact && (
-          <button
-            type="button"
-            className="quota-context-compact"
-            data-testid="quota-context-compact"
-            disabled={busy === true}
-            title={
-              busy === true
-                ? 'Compaction indisponible : un tour est déjà en cours'
-                : 'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé'
-            }
-            onClick={onCompact}
-          >
-            Compacter
-          </button>
-        )}
-      </div>
-    </article>
-  )
-}
-
-/**
  * COULEUR EXACTE DU POINT DE LA BARRE ou se pose la pastille.
  *
  * La pastille prenait la couleur du PALIER (vert/orange/rouge). A 74 % le degrade de la barre est
@@ -306,18 +235,7 @@ export function quotaGradientColor(percent: number): string {
   return 'rgb(53, 208, 127)'
 }
 
-export function ModelQuotaIndicator({
-  provider,
-  contextGauge,
-  onCompact,
-  busy
-}: {
-  provider?: string
-  contextGauge?: ContextGauge
-  /** Absent = AUCUN bouton Compacter : la popup ne fabrique pas une action sans destinataire. */
-  onCompact?: () => void
-  busy?: boolean
-}): React.JSX.Element {
+export function ModelQuotaIndicator({ provider }: { provider?: string }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<ModelQuotaSnapshot>()
   const [selectedProvider, setSelectedProvider] = useState<string>(lireFournisseurChoisi)
   const [open, setOpen] = useState(false)
@@ -504,13 +422,6 @@ export function ModelQuotaIndicator({
               : `${Math.round(remaining)} % restant sur ${windowLabel}`}
             {alert}
           </span>
-          {contextGauge ? (
-            <span>
-              Contexte du fil : {contextGauge.used.toLocaleString('fr-FR')} /{' '}
-              {contextGauge.limit.toLocaleString('fr-FR')} tokens (
-              {Math.round(contextGauge.ratio * 100)} %)
-            </span>
-          ) : null}
           <span className="model-quota-tip-hint">Clic : detail par modele</span>
         </span>
       </button>
@@ -575,18 +486,6 @@ export function ModelQuotaIndicator({
           </div>
           {error && <p className="model-quota-error">{error}</p>}
           <div className="model-quota-list">
-            <ContextGaugeRow
-              gauge={contextGauge}
-              busy={busy}
-              onCompact={
-                onCompact
-                  ? () => {
-                      setOpen(false)
-                      onCompact()
-                    }
-                  : undefined
-              }
-            />
             {providerQuotas.map((model) => (
               <article key={model.modelId} className="model-quota-row">
                 <div className="model-quota-name">

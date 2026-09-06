@@ -125,6 +125,7 @@ import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
+import { ContextGaugeIndicator } from './ContextGaugeIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
@@ -5057,34 +5058,18 @@ Cliquer pour changer le dossier de travail.`}
                   })()}
                   {(() => {
                     /*
-                    LA JAUGE DE CONTEXTE.
-
-                    Absente tant qu'on ne SAIT pas — fenetre du modele non declaree, ou entree non
-                    mesuree. Afficher 0 % dirait « ce fil est vide », une affirmation la ou la
-                    verite est « on l'ignore ».
+                    LA JAUGE DE CONTEXTE — cliquable, elle ouvre son propre panneau de detail
+                    (`ContextGaugeIndicator`), comme la barre de quotas. Elle ne rend rien tant
+                    qu'on ne SAIT pas : afficher 0 % dirait « ce fil est vide » la ou la verite est
+                    « on l'ignore ».
                   */
                     const jauge = activeId != null ? contextGauges[activeId] : undefined
-                    if (!jauge) return null
-                    const pourcent = Math.round(jauge.ratio * 100)
-                    const titre =
-                      `Contexte : ${jauge.used.toLocaleString('fr-FR')} tokens sur ` +
-                      `${jauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
-                      `${jauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
                     return (
-                      <span
-                        className={`chat-context-gauge is-${jauge.level}`}
-                        title={titre}
-                        aria-label={titre}
-                        data-testid="chat-context-gauge"
-                      >
-                        <span className="chat-context-gauge-track">
-                          <span
-                            className="chat-context-gauge-fill"
-                            style={{ width: `${pourcent}%` }}
-                          />
-                        </span>
-                        {pourcent} %
-                      </span>
+                      <ContextGaugeIndicator
+                        gauge={jauge}
+                        busy={busy}
+                        onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
+                      />
                     )
                   })()}
                   {gitBranch && (
@@ -5628,12 +5613,7 @@ Cliquer pour choisir une autre branche.`}
             leadingNode={
               <>
                 {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
-                <ModelQuotaIndicator
-                  provider={runtimeIdentity?.provider}
-                  contextGauge={activeId != null ? contextGauges[activeId] : undefined}
-                  busy={busy}
-                  onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
-                />
+                <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
                 <button
                   type="button"
                   className="attachment-button"

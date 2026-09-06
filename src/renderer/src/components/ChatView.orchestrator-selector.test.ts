@@ -335,12 +335,12 @@ describe('selecteur orchestrateur Chat', () => {
     expect(source).toContain('option.model,')
     expect(source).toContain('option.reasoningEffort')
     expect(source).toContain('generation === runtimeRefreshGenerationRef.current')
-    // L'indicateur reste alimente par l'identite runtime ; il recoit en plus la jauge de contexte
-    // de la conversation active (la popup des quotas la montre desormais).
+    // L'indicateur de quotas reste alimente par l'identite runtime — et RIEN d'autre : depuis le
+    // 2026-09-06 la jauge de contexte a son PROPRE bouton et son propre panneau, elle ne transite
+    // plus par la popup des quotas.
     expect(source).toMatch(/<ModelQuotaIndicator\s+provider=\{runtimeIdentity\?\.provider\}/)
-    expect(source).toMatch(
-      /contextGauge=\{activeId != null \? contextGauges\[activeId\] : undefined\}/
-    )
+    expect(source).not.toContain('contextGauge={activeId != null ? contextGauges[activeId]')
+    expect(source).toMatch(/<ContextGaugeIndicator\s+gauge=\{jauge\}/)
     // AUCUN REPLI SUR LE CUMUL DANS LA VUE. `inputTokens` est le cumul du tour, un MAJORANT :
     // l'afficher comme une occupation rejouait la jauge fausse que le moteur refuse d'ecrire
     // (`chat/run-pilot-chat.ts`). La vue passe par `occupationDeFenetre` et n'affiche rien quand

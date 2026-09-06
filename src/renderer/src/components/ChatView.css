@@ -3483,6 +3483,12 @@ button.chat-project-dot:disabled {
   ne juge pas. Or a l'aise, or vif quand ca se tend, rouge quand la place manque -- l'echelle de
   l'avertissement du theme, pas une couleur inventee pour l'occasion.
 */
+.chat-context-gauge-root {
+  display: inline-flex;
+  position: relative;
+}
+/* La jauge est devenue un BOUTON (elle ouvre son panneau) : on neutralise l'apparence native du
+   bouton pour qu'elle reste le meme libelle discret qu'avant. */
 .chat-context-gauge {
   display: inline-flex;
   align-items: center;
@@ -3490,6 +3496,17 @@ button.chat-project-dot:disabled {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.chat-context-gauge:hover,
+.chat-context-gauge[aria-expanded='true'] {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+  color: var(--text);
 }
 .chat-context-gauge-track {
   width: 34px;
