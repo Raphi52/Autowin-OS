@@ -229,6 +229,17 @@ try {
     20_000,
     'création de la tâche'
   )
+  /*
+   * BLOCAGE CONNU — LE RELAIS WINDOWS N'EXISTE PAS DANS UNE INSTANCE ISOLEE (mesure du 2026-09-06).
+   *
+   * La sonde va jusqu'ici, puis attend en vain l'enregistrement du relais (« non observe dans le
+   * delai (null) ») : la tache planifiee est une ressource de la MACHINE, pas du profil, et une
+   * instance de test ne l'enregistre pas. Ce n'est pas un defaut du produit.
+   *
+   * Elle n'est donc pas branchee sur build:desktop : elle reste une preuve manuelle, a jouer sur
+   * une installation reelle ou apres avoir donne a l'instance de test le droit d'ecrire une tache
+   * planifiee — ce qui n'est pas anodin et se decide, pas se subit.
+   */
   if (!created.relayAvailable) throw new Error('Relais Windows non disponible après création')
   const relay = await waitFor(
     async () => {

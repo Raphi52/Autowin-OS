@@ -17,6 +17,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { portCdp } from './cdp-port.mjs'
+import { agirJusqua } from './cdp-attente.mjs'
 
 const arg = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
@@ -87,8 +88,33 @@ for (let i = 0; i < 20; i++) {
 }
 
 const avant = await ev(`(async () => (await window.api.conversations()).map((c) => c.id))()`)
+/*
+ * LE LIBELLE A CHANGE — ON VISE LA CLASSE, PAS LE MOT.
+ *
+ * Ce clic cherchait un bouton dont le texte vaut EXACTEMENT « Nouveau ». Le controle rendu porte
+ * « Nouveau fil » (ChatView.tsx, .conv-new-row) : la recherche rendait `undefined` et la sonde
+ * mourait sur « Cannot read properties of undefined » — une panne du harnais deguisee en plantage.
+ * Un libelle est du CONTENU, il bouge ; une classe de controle est une adresse.
+ */
+/*
+ * ELLE OUVRE SA PROPRE VUE. Sur une instance FRAICHE, l'application s'ouvre sur l'Accueil : le
+ * controle « Nouveau fil » n'existe pas encore. Cette sonde passait quand une voisine l'avait
+ * amenee sur le Chat, et mourait en 0,1 s quand elle partait la premiere.
+ */
+const surChat = await agirJusqua(
+  ev,
+  `Boolean(document.querySelector('.conv-new-row'))`,
+  () =>
+    ev(`(() => {
+  document.querySelector('[data-testid="nav-chat"]')?.click()
+  return true
+})()`),
+  20000
+)
+if (!surChat) throw new Error("La vue Chat n'est pas montee apres 20 s")
 await ev(`(() => {
-  const b = [...document.querySelectorAll('button')].find((n) => (n.textContent ?? '').trim() === 'Nouveau')
+  const b = document.querySelector('.conv-new-row')
+  if (!b) throw new Error('Controle « Nouveau fil » introuvable (.conv-new-row)')
   b.click()
   return 'ok'
 })()`)

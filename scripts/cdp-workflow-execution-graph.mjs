@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { assertWorkflowRequestGraphProof } from './cdp-proof-validation.mjs'
 import { cheminArtefact } from './racine-depot.mjs'
+import { agirJusqua } from './cdp-attente.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9251'
 const output =
@@ -108,21 +109,53 @@ try {
   )
   continueButton?.click()
 })()`)
-      await new Promise((resolve) => setTimeout(resolve, 250))
-      await evaluate(`(() => {
-  const chat = [...document.querySelectorAll('button')].find((button) =>
-    /^chat$/i.test(button.textContent?.trim() ?? ''))
-  chat?.click()
-})()`)
-      await new Promise((resolve) => setTimeout(resolve, 300))
-      await evaluate(`(() => {
+      /*
+       * PAR LE REPERE, ET EN ATTENDANT L'ETAT.
+       *
+       * Mesure du 2026-09-06 : ce bloc cherchait la vue Chat par son TEXTE, avec /^chat$/i. Le
+       * libelle rendu est « 💬Chat » (emoji colle au mot) : aucun bouton ne correspondait, la vue
+       * ne changeait pas, et la sonde levait « Conversation de preuve introuvable » — en accusant
+       * la fixture alors qu'elle avait ete SEMEE sans erreur. Une vue se designe par son repere
+       * (garde scripts/navigation-sondes.test.mjs), et une liste asynchrone s'ATTEND.
+       */
+      const surChat = await agirJusqua(
+        evaluate,
+        `Boolean(document.querySelector('.conv-item'))`,
+        () =>
+          evaluate(`(() => {
+  document.querySelector('[data-testid="nav-chat"]')?.click()
+  return true
+})()`),
+        20000
+      )
+      if (!surChat) throw new Error("La liste des conversations n'est pas montee apres 20 s")
+      const filChoisi = await agirJusqua(
+        evaluate,
+        `Boolean(document.querySelector('.chat-scroll'))`,
+        () =>
+          evaluate(`(() => {
   const row = [...document.querySelectorAll('.conv-item')].find((item) =>
     item.textContent?.includes("Preuve graphe d'exécution"))
-  const button = row?.querySelector('.conv-pick')
-  if (!button) throw new Error('Conversation de preuve introuvable')
-  button.click()
-})()`)
+  row?.querySelector('.conv-pick')?.click()
+  return true
+})()`),
+        20000
+      )
+      if (!filChoisi) throw new Error('Conversation de preuve introuvable dans la liste')
       await new Promise((resolve) => setTimeout(resolve, 250))
+      /*
+       * BLOCAGE CONNU — CE CONTROLE N'EXISTE PLUS (mesure du 2026-09-06).
+       *
+       * Le bouton title="Workflows (RUN.md)" a disparu de l'interface : le panneau de droite a ete
+       * BORNE a la conversation et sa vue globale sortie dans l'Observatory (commit 79e9c13e). Sur
+       * une instance isolee, un fil sans orchestration n'affiche donc aucun panneau a ouvrir — les
+       * boutons rendus disent eux-memes « aucun run a ouvrir ».
+       *
+       * Cette sonde n'est PAS branchee sur build:desktop pour cette raison, et sa navigation a
+       * quand meme ete reparee ci-dessus (repere au lieu du texte, attente d'etat) : ces defauts-la
+       * la faisaient tomber AVANT d'atteindre ce point, et masquaient la vraie cause. Pour la
+       * reveiller il faut soit viser le nouveau chemin d'acces au panneau, soit semer un vrai run.
+       */
       await evaluate(`(() => {
   const workflows = document.querySelector('button[title="Workflows (RUN.md)"]')
   if (!workflows) throw new Error('Bouton Workflows introuvable')

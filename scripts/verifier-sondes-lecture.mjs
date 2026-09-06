@@ -31,7 +31,15 @@ const SONDES = [
   'cdp-shell-proof.mjs',
   'cdp-frame-block-proof.mjs',
   'cdp-rail-visible-proof.mjs',
-  'cdp-skills-registry.mjs'
+  'cdp-skills-registry.mjs',
+  /*
+   * La seule qui ECRIT — et elle passe en dernier, pour cette raison.
+   *
+   * Elle cree un fil et y joue la fixture GRATUITE [[autowin-fixture-durable-stream]] : un vrai
+   * parcours d'orchestration, sans un centime d'appel modele. Son fil vit dans le profil isole,
+   * qui est jete avec l'instance.
+   */
+  'cdp-sonde-cloture-orchestration.mjs'
 ]
 
 if (!existsSync(binaire)) {
@@ -165,4 +173,4 @@ for (const sonde of SONDES) {
 lanceur('Stop')
 
 if (echec) process.exit(1)
-console.log(`[sondes-lecture] vert — ${SONDES.length} preuves de lecture verifiees sur le paquet`)
+console.log(`[sondes-lecture] vert — ${SONDES.length} preuves verifiees sur le paquet`)

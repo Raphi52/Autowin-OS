@@ -8,6 +8,18 @@ const appData = process.env.AUTOWIN_WIRE_APPDATA
 const output = process.env.AUTOWIN_WIRE_REPORT || cheminArtefact('wire-all-packaged-report.json')
 const screenshotOutput = output.replace(/\.json$/i, '.png')
 if (!appData) throw new Error('AUTOWIN_WIRE_APPDATA requis pour la fixture isolée')
+/*
+ * BLOCAGE CONNU — CETTE PREUVE EXIGE UN PROFIL MULTI-FOURNISSEURS (mesure du 2026-09-06).
+ *
+ * Jouee sur une instance isolee, elle passe le premier controle puis leve sur
+ * `02-gemini-router-status` : le profil de test ne declare QUE Claude, et la sonde attend une ligne
+ * Gemini dans le routeur. Ce n'est pas un defaut du produit — c'est une fixture incomplete.
+ *
+ * Elle n'est donc pas branchee sur build:desktop. Pour la reveiller : semer un catalogue de
+ * modeles multi-fournisseurs dans le profil isole (scripts/fixtures/model-catalog-seed.json ne
+ * contient aujourd'hui qu'un seul modele Claude, volontairement, pour que l'instance DEMARRE).
+ */
+
 
 const checkpoint = {
   runId: 'wire-proof-source',
