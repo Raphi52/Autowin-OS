@@ -36,13 +36,20 @@ await new Promise((resolve, reject) => {
   socket.onerror = reject
   socket.addEventListener('open', () => clearTimeout(timeout), { once: true })
 })
-const send = (method, params = {}) =>
+/*
+ * DEUX ECHELLES DE TEMPS. Un appel CDP ordinaire (lire le DOM, cliquer) repond en millisecondes,
+ * et 20 s suffisent largement. Mais l'etape qui SEME la fixture appelle `window.api.pilotChat` :
+ * c'est une vraie requete au modele, qui depasse 20 s sans que rien ne soit casse. Le plafond
+ * generique la faisait donc expirer alors que la sonde etait saine. Chaque appel peut desormais
+ * porter sa propre echeance, au lieu de relever le plafond de tout le monde.
+ */
+const send = (method, params = {}, plafondMs = 20000) =>
   new Promise((resolve, reject) => {
     const id = ++nextId
     const timeout = setTimeout(() => {
       pending.delete(id)
       reject(new Error(`CDP ${method} expiré`))
-    }, 20000)
+    }, plafondMs)
     pending.set(id, {
       resolve: (value) => {
         clearTimeout(timeout)
@@ -66,15 +73,19 @@ const contexteEnCoursDeRemplacement = (erreur) =>
   /Execution context was destroyed|Cannot find context|Inspected target navigated/.test(
     String(erreur?.message ?? '')
   )
-const evaluate = async (expression) => {
+const evaluate = async (expression, plafondMs = 20000) => {
   let result
   for (let essai = 0; ; essai += 1) {
     try {
-      result = await send('Runtime.evaluate', {
-        expression,
-        returnByValue: true,
-        awaitPromise: true
-      })
+      result = await send(
+        'Runtime.evaluate',
+        {
+          expression,
+          returnByValue: true,
+          awaitPromise: true
+        },
+        plafondMs
+      )
       break
     } catch (erreur) {
       if (!contexteEnCoursDeRemplacement(erreur) || essai >= 50) throw erreur
@@ -165,23 +176,31 @@ await withDeviceMetricsOverride(
         })
     }
     await agirJusqua(evaluate, `!document.querySelector('.frw-overlay')`, fermerLeWizard, 8000, 100)
-    await evaluate(`(async () => {
+    await evaluate(
+      `(async () => {
   const existing = (await window.api.conversations()).find((item) => item.title === 'Preuve chemin critique')
   const conversation = existing ?? await window.api.conversationsCreate({
     title: 'Preuve chemin critique', category: 'codex', provider: 'codex'
   })
   const traces = await window.api.causalTrace(conversation.id)
-  if (
-    !traces.some((trace) => trace.authority?.mutates === false) ||
-    !traces.some((trace) => trace.id?.includes('fixture-decision-open'))
-  ) {
+  /*
+   * NE PLUS TESTER authority.mutates. Ce champ n'est emis par AUCUN producteur : dans
+   * src/main/activity/trace-event.ts il n'existe que dans le schema et son normalisateur, et
+   * aucun evenement reel ne le porte (verifie sur la trace de la conversation fixture : zero
+   * occurrence). La condition etait donc TOUJOURS vraie, la sonde relancait pilotChat a chaque
+   * rejeu, et ce vrai appel au modele depassait son plafond de 180 s. Le temoin durable de la
+   * fixture est l'evenement fixture-decision-open, lui bien emis.
+   */
+  if (!traces.some((trace) => trace.id?.includes('fixture-decision-open'))) {
     const result = await window.api.pilotChat([
       { role: 'user', content: '[[autowin-fixture-durable-stream]] observatory-critical-path' }
     ], conversation.id)
     if (!result.ok) throw new Error(result.error || 'Fixture pilot en échec')
   }
   return conversation.id
-})()`)
+})()`,
+      180000
+    )
     console.log('[cdp] fixture créée')
     await evaluate(`(() => {
   const target = [...document.querySelectorAll('button')].find((button) =>
@@ -204,6 +223,43 @@ await withDeviceMetricsOverride(
   })()`),
       8000,
       100
+    )
+    /*
+     * LISTE TRONQUEE. Le rail d'Observatory n'affiche qu'une PREMIERE PAGE de conversations
+     * (`ObservatoryRail.tsx` : `visibleConversations` + le bouton « Afficher N de plus »). Avec
+     * 287 conversations, la fixture n'est pas dans le DOM : chercher son titre dans la liste
+     * brute echouait donc alors que la conversation existait bel et bien. On passe par le champ
+     * de filtre prevu pour ca, ce que fait un utilisateur reel.
+     */
+    await evaluate(`(() => {
+  const champ = document.querySelector('[data-testid="observatory-conversation-filter"]')
+  if (!champ) throw new Error('Filtre des conversations introuvable')
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+  setter.call(champ, 'Preuve chemin critique')
+  champ.dispatchEvent(new Event('input', { bubbles: true }))
+})()`)
+    await attendreDansLaPage(
+      evaluate,
+      `[...document.querySelectorAll('.observatory-conversations button')].some((button) => button.textContent?.includes('Preuve chemin critique'))`
+    )
+    /*
+     * LA LISTE EST TRONQUEE, PAS VIDE. `ObservatoryRail.tsx` ne peint qu'une TRANCHE des
+     * conversations (`filteredConversations.slice(0, conversationLimit)`) : avec pres de 300
+     * fils, la fixture n'etait tout simplement pas dans le DOM et la sonde criait
+     * « introuvable » alors que le produit etait sain. On passe donc par le champ de filtre
+     * prevu pour ca. La valeur est posee via le setter NATIF puis un evenement `input`, sinon
+     * React garde l'ancienne.
+     */
+    await evaluate(`(() => {
+  const champ = document.querySelector('[data-testid="observatory-conversation-filter"]')
+  if (!champ) throw new Error('Filtre de conversations introuvable dans Observatory')
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+  setter.call(champ, 'Preuve chemin critique')
+  champ.dispatchEvent(new Event('input', { bubbles: true }))
+})()`)
+    await attendreDansLaPage(
+      evaluate,
+      `[...document.querySelectorAll('.observatory-conversations button')].some((button) => button.textContent?.includes('Preuve chemin critique'))`
     )
     await evaluate(`(() => {
   const target = [...document.querySelectorAll('.observatory-conversations button')].find(
@@ -296,7 +352,28 @@ await withDeviceMetricsOverride(
     await evaluate(
       `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`
     )
-    const screenshot = await evaluate('window.api.captureTestPage()')
+    /*
+     * `captureTestPage()` REFUSE hors instance isolee (`index.ts` : « Capture UI de test
+     * indisponible hors instance isolee ») — c'est voulu. Lance contre l'instance de dev
+     * ordinaire, la sonde mourait donc sur ce refus APRES avoir deja valide sa preuve causale.
+     * On retombe sur `Page.captureScreenshot`, la capture NATIVE de CDP, qui marche sur
+     * n'importe quelle instance. Meme correction que `autowin-cdp-proof.mjs`.
+     */
+    const parApi = await send('Runtime.evaluate', {
+      expression: 'window.api.captureTestPage()',
+      awaitPromise: true,
+      returnByValue: true
+    })
+    const refusCapture =
+      parApi.exceptionDetails?.exception?.description ?? parApi.exceptionDetails?.text
+    const screenshot =
+      typeof parApi.result?.value === 'string' && parApi.result.value
+        ? parApi.result.value
+        : (await send('Page.captureScreenshot', { format: 'png' })).data
+    if (!screenshot)
+      throw new Error(`Capture renderer vide${refusCapture ? ` — ${refusCapture}` : ''}`)
+    if (refusCapture)
+      console.warn(`[capture] API de test indisponible (${refusCapture}) -> capture CDP native`)
     ecrireSousDepot(output, Buffer.from(screenshot, 'base64'))
     await evaluate(`(() => {
   const target = [...document.querySelectorAll('button')].find((button) =>
@@ -316,7 +393,14 @@ await withDeviceMetricsOverride(
     { role: 'user', content: '[[autowin-fixture-durable-stream]] observatory-live' }
   ], conversation.id)
   if (!result.ok) throw new Error(result.error || 'Fixture live en echec')
-})()`)
+})()`,
+      /*
+       * MEME ECHELLE DE TEMPS QUE LA PREMIERE FIXTURE. Ce tour-ci est aussi un VRAI appel au
+       * modele : sous le plafond generique de 20 s il expirait systematiquement, et la sonde
+       * mourait APRES avoir deja valide toute sa preuve causale.
+       */
+      180000
+    )
     await attendreDansLaPage(
       evaluate,
       `document.querySelectorAll('.observatory-event').length > ${beforeLive}`,

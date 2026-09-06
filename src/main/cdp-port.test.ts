@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
+import {
+  DEFAULT_CDP_PORT,
+  listeningPorts,
+  resolveCdpPort,
+  resolveRemoteDebuggingPort
+} from './cdp-port'
 
 const resolveUnforced = (probe: () => Set<number>) => resolveCdpPort(probe, {})
 
@@ -73,5 +78,24 @@ describe('resolveCdpPort', () => {
       moved: false,
       forced: false
     })
+  })
+})
+
+describe('resolveRemoteDebuggingPort', () => {
+  it('lit le port demandé sur la ligne de commande', () => {
+    expect(
+      resolveRemoteDebuggingPort([
+        'autowin-os.exe',
+        '--isolated-test-instance',
+        '--remote-debugging-port=9251'
+      ])
+    ).toBe(9251)
+  })
+  it("rend undefined quand le switch est absent — l'app n'ouvre alors aucun port", () => {
+    expect(resolveRemoteDebuggingPort(['autowin-os.exe', '--isolated-test-instance'])).toBeUndefined()
+  })
+  it('rejette un port hors plage TCP plutôt que de le poser tel quel', () => {
+    expect(resolveRemoteDebuggingPort(['--remote-debugging-port=0'])).toBeUndefined()
+    expect(resolveRemoteDebuggingPort(['--remote-debugging-port=70000'])).toBeUndefined()
   })
 })

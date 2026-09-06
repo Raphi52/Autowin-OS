@@ -79,7 +79,7 @@ import {
   writeExecutionWorkspacePreference
 } from './execution-workspace-preference'
 import { projectContextBlock } from './context-files'
-import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
+import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort, resolveRemoteDebuggingPort } from './cdp-port'
 import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
@@ -399,16 +399,31 @@ const appDataRoot = resolveInstanceAppDataBase(
 )
 app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataDir = explicitUserDataPath !== undefined
-// En DEV uniquement : ouvre le port CDP pour piloter/inspecter le renderer réel. Jamais en packagé
-// (surface de debug). Doit être posé avant app ready — d'où la sonde SYNCHRONE du port.
+// Ouvre le port CDP pour piloter/inspecter le renderer réel. En DEV, systématiquement. En PACKAGÉ,
+// uniquement pour une INSTANCE ISOLÉE DE TEST qui l'a demandé : ailleurs ce serait une surface de
+// debug ouverte chez l'utilisateur. Doit être posé avant app ready — d'où la sonde SYNCHRONE du port.
 // Un enfant de l'app peut hériter du socket d'écoute et garder le port après la mort de l'app (vécu,
 // PID orphelin en LISTENING) : on prend alors le suivant libre au lieu de perdre le CDP.
-if (is.dev) {
-  const cdp = resolveCdpPort(() =>
-    listeningPorts(
-      execFileSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true, timeout: 5_000 })
-    )
-  )
+// POURQUOI RÉÉMETTRE UN DRAPEAU DÉJÀ PASSÉ : depuis Electron 1.6.11, `--remote-debugging-port` posé
+// seulement sur la ligne de commande n'ouvre plus rien (electron/electron#10445) ; seul
+// `appendSwitch` avant `ready` active le port. Mesuré le 2026-09-06 : le harnais headless lançait le
+// binaire packagé avec ce drapeau et n'obtenait JAMAIS de CDP — aucun socket en écoute, avec comme
+// sans `--headless-test-instance`, donc toute sonde restait sans point d'accroche. Le port DEMANDÉ
+// est repris tel quel : son lanceur vérifie que l'écoute appartient au PID qu'il a créé sur CE port.
+const portCdpDemande = isolatedTestInstance ? resolveRemoteDebuggingPort(process.argv) : undefined
+if (is.dev || portCdpDemande !== undefined) {
+  const cdp =
+    portCdpDemande === undefined
+      ? resolveCdpPort(() =>
+          listeningPorts(
+            execFileSync('netstat', ['-ano'], {
+              encoding: 'utf8',
+              windowsHide: true,
+              timeout: 5_000
+            })
+          )
+        )
+      : { port: portCdpDemande, moved: false, forced: false }
   app.commandLine.appendSwitch('remote-debugging-port', String(cdp.port))
   // Toujours annoncer le port EFFECTIF : sans ça, un port déplacé rendrait tout pilotage muet.
   console.log(
@@ -986,7 +1001,29 @@ function signalerIncidentTopologie(incident: IncidentTopologie): void {
   )
 }
 
-let agentTopology = loadAgentTopology(agentTopologyPath, agentModels, signalerIncidentTopologie)
+/*
+ * POURQUOI CE GARDE-FOU : sur un profil de donnees VIERGE, le cache de modeles est vide et
+ * `agent-topology.json` est absent. `loadAgentTopology` part alors dans son catch, ou
+ * `createDefaultTopology([])` LEVE a son tour (« Impossible de creer une topologie sans modele
+ * importe »). Cette erreur remontait au CORPS du module principal, donc AVANT que
+ * `app.whenReady` soit enregistre et avant `installCrashHandlers` : le chargement s'arretait, la
+ * boucle Electron tournait a vide, aucune fenetre ne s'ouvrait, Chromium n'etait jamais initialise
+ * et le port CDP restait donc ferme. Echec TOTALEMENT MUET, mesure le 2026-09-06 : le harnais
+ * headless obtenait un process vivant, sans socket ni message, et toute sonde restait sans point
+ * d'accroche. L'app ne peut objectivement PAS fonctionner sans modele : on ne masque donc pas
+ * l'arret, on le NOMME et on sort proprement au lieu de laisser un process fantome.
+ */
+let agentTopology: AgentTopology
+try {
+  agentTopology = loadAgentTopology(agentTopologyPath, agentModels, signalerIncidentTopologie)
+} catch (erreur) {
+  console.error(
+    `[topologie] demarrage impossible : aucune topologie utilisable et aucun modele en cache. ` +
+      `Fichier : ${agentTopologyPath}. Cause : ${erreur instanceof Error ? erreur.message : String(erreur)}`
+  )
+  app.exit(78)
+  throw erreur
+}
 const modelCatalog = new ModelCatalogRefresher(
   agentModels,
   () => discoverImportedModels(fetch, modelCatalogCachePath),

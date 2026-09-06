@@ -70,3 +70,27 @@ export function resolveCdpPort(
   }
   return { port: preferred, moved: false, forced: false }
 }
+
+/**
+ * Port CDP DEMANDÉ sur la ligne de commande (`--remote-debugging-port=N`).
+ *
+ * Un switch passé à un Electron PACKAGÉ n'est pas honoré de façon fiable (electron/electron#10445,
+ * cassé depuis 1.6.11) : la seule voie supportée reste `app.commandLine.appendSwitch` avant `ready`.
+ * Le harnais d'instance isolée lançait donc le binaire avec `--remote-debugging-port=9251` et le
+ * port n'écoutait JAMAIS — mesuré le 2026-09-06 : process vivant, aucun socket. La sonde du chemin
+ * critique n'avait aucun endroit où se brancher, et l'échec ressemblait à un défaut de la sonde.
+ *
+ * Un port demandé explicitement n'est jamais DÉPLACÉ vers le suivant libre : le lanceur vérifie que
+ * l'écoute appartient bien au PID qu'il a créé sur CE port. Le déplacer produirait un faux négatif.
+ */
+export function resolveRemoteDebuggingPort(argv: readonly string[]): number | undefined {
+  const flag = '--remote-debugging-port'
+  // Les deux formes que Chromium accepte sont lues : `--flag=N` (celle du harnais) et `--flag N`.
+  // N'en lire qu'une laisserait un lanceur légitime sans port, pour une raison invisible à l'oeil.
+  const colle = argv.find((argument) => argument.startsWith(`${flag}=`))?.slice(flag.length + 1)
+  const indexSepare = argv.indexOf(flag)
+  const brut = (colle ?? (indexSepare >= 0 ? argv[indexSepare + 1] : undefined))?.trim()
+  const port = Number(brut)
+  // Plancher à 1024 : sous cette barre ce sont les ports privilégiés, jamais un port de debug.
+  return Number.isInteger(port) && port >= 1024 && port <= 65_535 ? port : undefined
+}

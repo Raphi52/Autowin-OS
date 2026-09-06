@@ -137,8 +137,12 @@ describe('identite Autowin OS', () => {
       'utf8'
     )
 
+    // Le binaire par defaut n'est plus un chemin de machine en dur : il se resout depuis la
+    // racine du depot APRES le bloc param, ou $PSScriptRoot n'est pas encore lie. L'assertion
+    // porte donc sur la CIBLE canonique, pas sur le poste de qui a ecrit le test.
+    expect(headless).toContain('$racineDepot = Split-Path -Parent $PSScriptRoot')
     expect(headless).toContain(
-      "[string]$Executable = 'C:\\Amitel\\Autowin OS\\dist\\win-unpacked\\autowin-os.exe'"
+      "Join-Path (Join-Path (Join-Path $racineDepot 'dist') 'win-unpacked') 'autowin-os.exe'"
     )
     expect(headless).not.toContain('observatoire-final')
     expect(proof).toContain('window.api.authorizeDiagnostics()')
@@ -146,7 +150,10 @@ describe('identite Autowin OS', () => {
     expect(proof).toContain("process.argv.includes('--verify-navigation')")
     expect(proof).toContain('wizardDismissed')
     expect(proof).toContain('Délai CDP dépassé')
-    expect(proof).toContain('writeFileSync(jsonOutput')
+    // L'assertion portait sur `writeFileSync(jsonOutput` : elle nommait la MECANIQUE d'ecriture,
+    // donc elle a casse quand la preuve est passee par `ecrireSousDepot` (ecriture bornee a la
+    // racine du depot). Ce qui compte est que le JSON de preuve soit ECRIT, pas par quelle API.
+    expect(proof).toContain('ecrireSousDepot(jsonOutput')
     expect(chat).toContain('data-testid="chat-view"')
     expect(observatory).toContain('data-testid="observatory-view"')
     for (const id of ['chat', 'agent-studio', 'knowledge', 'observatory', 'settings']) {
