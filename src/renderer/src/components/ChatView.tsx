@@ -38,6 +38,7 @@ import {
   doitSuivreLeRoutage,
   compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
+  doitRattraperApresReapparition,
   isChatNearBottom,
   scrollChatToBottom,
   reduceScopedLiveRuns,
@@ -1985,6 +1986,25 @@ export function ChatView({
     if (!scroll || typeof ResizeObserver === 'undefined') return
     let hauteurPrecedente = scroll.clientHeight
     const observer = new ResizeObserver(() => {
+      // REAPPARITION du fil : il etait masque (hauteur 0) pendant que le tour ecrivait, donc toutes
+      // les descentes se sont exécutées dans le vide. On rattrape le bas AVANT toute compensation.
+      if (
+        doitRattraperApresReapparition({
+          suivaitLeBas: followTailRef.current,
+          hauteurPrecedente,
+          metrics: scroll
+        })
+      ) {
+        hauteurPrecedente = scroll.clientHeight
+        gesteLecteurRef.current = false
+        descenteEnVolRef.current = true
+        dernierScrollTopRef.current = scroll.scrollTop
+        scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
+          descenteEnVolRef.current = false
+          if (!landed) setHasNewActivity(true)
+        })
+        return
+      }
       const cible = compenserRetrecissementDuFil({
         suivaitLeBas: followTailRef.current,
         hauteurPrecedente,

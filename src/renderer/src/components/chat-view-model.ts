@@ -1579,6 +1579,31 @@ export function doitSuivreLeBas(input: {
   return input.suivaitLeBas && input.top >= input.precedentTop
 }
 
+/**
+ * FIL MASQUE PENDANT UN TOUR — rattrapage a la REAPPARITION.
+ *
+ * Defaut MESURE le 2026-09-06 sur l'app vivante (port CDP 9225) : l'agent quitte l'onglet Chat
+ * pendant qu'il repond (une commande `navigate`, une skill qui ouvre une autre vue). Le conteneur
+ * du fil passe alors a une hauteur de 0. Toutes les descentes du tour s'executent dans le VIDE :
+ * sur un element de hauteur nulle, `scrollHeight - clientHeight` vaut 0, donc la descente se croit
+ * ARRIVEE. Au retour sur le chat, le fil rouvre a 2293 px du bas, personne ne redescend, et le
+ * bouton « ↓ Derniere reponse » ne s'allume meme pas — l'utilisateur doit descendre a la main :
+ * « quand je prompt ca met pas la vue sur le dernier message, je suis oblige de scroll down ».
+ *
+ * Le discriminant est la REAPPARITION : une hauteur qui passe de 0 a une valeur reelle n'est pas un
+ * redimensionnement de fenetre, c'est un fil qu'on remontre. On ne rattrape que si le lecteur
+ * SUIVAIT le bas — s'il avait choisi de remonter, sa position lui appartient.
+ */
+export function doitRattraperApresReapparition(input: {
+  suivaitLeBas: boolean
+  hauteurPrecedente: number
+  metrics: Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'>
+}): boolean {
+  if (!input.suivaitLeBas) return false
+  if (input.hauteurPrecedente > 0 || input.metrics.clientHeight <= 0) return false
+  return !isChatNearBottom(input.metrics)
+}
+
 type ScrollableChat = Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'> & {
   scrollTo(options: ScrollToOptions): void
 }
