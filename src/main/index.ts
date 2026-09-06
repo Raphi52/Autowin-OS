@@ -126,7 +126,8 @@ import { type ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
 import { ecarterStoreIllisible, persistConversations } from './store/conversations-disk'
-import { collectStdoutJournals } from './runs/journal-gc'
+import { collectStdoutJournals, journauxReferencesParUneReservation } from './runs/journal-gc'
+import { loadOrchestrationStates } from './runs/orchestration-state'
 import { collectRunWorkspaces } from './runs/workspace-gc'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
 import {
@@ -1241,8 +1242,18 @@ process.env.AUTOWIN_RUN_JOURNAL_ROOT ??= join(app.getPath('userData'), 'run-stdo
 // Un journal est ecrit a CHAQUE spawn de CLI et rien ne les supprimait : 435 fichiers / 10,6 Mo
 // mesures en 2 jours d'usage. Passe au demarrage (les runs detaches en cours sont proteges par la
 // garde d'inactivite du GC), best-effort : un echec de menage ne doit jamais retarder l'app.
+//
+// PROTECTION PAR REFERENCE (2026-09-06). La garde d'inactivite ne suffisait pas : le journal de
+// l'agent `build` de conv-43 a ete supprime a 43 h alors que son appel provider n'etait pas solde.
+// Son run est devenu insolvable et s'est rejoue rouge a chaque demarrage. On passe donc au menage la
+// liste des journaux qu'un point de reprise ATTEND encore — un fait, pas une date.
 try {
-  const collected = collectStdoutJournals(process.env.AUTOWIN_RUN_JOURNAL_ROOT)
+  const journauxAttendus = journauxReferencesParUneReservation(
+    loadOrchestrationStates(join(ensureAutowinAppData(), 'run-state'))
+  )
+  const collected = collectStdoutJournals(process.env.AUTOWIN_RUN_JOURNAL_ROOT, {
+    protectedPaths: journauxAttendus
+  })
   if (collected.removed > 0) {
     console.log(
       `[run-stdout] ${collected.removed} journaux purges (${Math.round(collected.freedBytes / 1024)} Ko)`

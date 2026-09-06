@@ -3,7 +3,7 @@ import {
   saveOrchestrationState,
   type OrchestrationRunState
 } from './orchestration-state'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { survivableExitCode } from './stdout-journal'
 import {
   claudeToolEvidenceKind,
@@ -146,6 +146,47 @@ function hasUnprovenEndedActiveAgent(
 }
 
 /**
+ * VERROU FANTÔME — le trou mesuré le 2026-09-06 sur `run-f668f46966fd-1` (conv-43).
+ *
+ * Trois faits se cumulent : le processus est PROUVÉ mort (pid absent ou recyclé), sa sortie est
+ * CERTIFIÉE réussie par le sidecar du relais, et son journal N'EXISTE PLUS. Le ménage des journaux
+ * ne supprime que `.stdout.jsonl` / `.stderr.log` : le sidecar `.exit.json`, lui, survit.
+ *
+ * Aucune branche ne couvrait ce cumul. `settleCompletedDetachedPhase` ne peut plus lire le résultat,
+ * donc l'appel n'est pas soldé ; le sidecar rend `hasUnprovenEndedActiveAgent` faux, donc la
+ * terminalisation refusait de conclure. Le compteur `activeCalls` restait à 1 pour toujours — et
+ * comme un appel actif exempte le checkpoint de toute péremption, le run mort était réélu PREMIER à
+ * chaque démarrage, refusé par le contrôle de budget, et clos rouge. Six fois de suite.
+ *
+ * Ce n'est PAS une libération sur le doute : la mort du processus et la fin de l'appel sont toutes
+ * deux prouvées. Ce qui est perdu, c'est le RÉSULTAT — définitivement, le fichier n'existe plus.
+ * D'où la conclusion « interrompu » plutôt qu'une relance : rejouer la phase coûterait un appel que
+ * l'utilisateur n'a pas demandé, et l'inventer serait un faux vert.
+ *
+ * Volontairement limité à une sortie certifiée ZÉRO. Un exit non nul est déjà couvert par le chemin
+ * d'échec prouvé (`preparePersistedRunForRelaunch`), qui libère le verrou ET laisse le run reprendre :
+ * l'étendre ici tuerait cette reprise légitime.
+ */
+function hasEndedActiveAgentWithLostJournal(
+  state: Pick<OrchestrationRunState, 'agents'>,
+  liveness: RunLiveness,
+  journalExists: (path: string) => boolean = existsSync
+): boolean {
+  return (state.agents ?? []).some((agent, index) => {
+    if (agent.active === false) return false
+    const etat = liveness.agents[index]?.state
+    if (etat !== 'termine' && etat !== 'pid-recycle') return false
+    if (!hasCertifiedSuccessfulRelayExit(agent)) return false
+    if (!agent.journalPath) return false
+    try {
+      return !journalExists(agent.journalPath)
+    } catch {
+      return false // sonde de disque en échec : on ne conclut pas à la perte du journal
+    }
+  })
+}
+
+/**
  * Depuis combien de temps le journal d'un agent n'a-t-il plus bougé ?
  *
  * `runLiveness` répond « ce processus EXISTE-t-il », ce qui n'est pas la même question que « cet
@@ -279,6 +320,13 @@ export function preparePersistedRunForRelaunch(
   const completed = settleCompletedDetachedPhase(root, runId, onRecoveredUsage)
   if (completed) return completed
 
+  // Le règlement a échoué ET le journal a disparu : plus aucun règlement ne sera jamais possible.
+  // Rendre l'état inchangé ici laissait le verrou en place à vie (cf. `hasEndedActiveAgentWithLostJournal`).
+  // Placé APRÈS la tentative de règlement : un journal encore lisible gagne toujours.
+  if (hasEndedActiveAgentWithLostJournal(state, liveness)) {
+    return terminalizeInterruptedPersistedRun(root, runId, identityOf, nowMs)
+  }
+
   // Seule une sortie NON-ZERO certifiee autorise un retry : exit=0 signifie que le provider a pu
   // reussir et facturer, meme si son resultat est devenu illisible. Les checkpoints courants lient
   // chaque compteur actif a l'occurrence agent par reservationId : l'ordre du tableau, le fan-out
@@ -382,10 +430,14 @@ const INTERRUPTED_STALE_HEARTBEAT_REASON =
   'PID provider vivant mais journal expire — processus arrete et relance automatique interdite'
 const INTERRUPTED_ORPHANED_RESERVATION_REASON =
   'Reservation provider active sans agent identifiable — soldee sans relance automatique'
+const INTERRUPTED_LOST_JOURNAL_REASON =
+  'Sortie provider certifiee mais journal supprime — resultat irrecuperable, phase a redemander'
 
 export interface InterruptedTerminalizationProbes {
   lastWriteMs?: (path: string) => number | undefined
   terminatePid?: (pid: number) => boolean
+  /** Le journal d'un agent est-il encore sur le disque ? Injecte pour tester sans toucher au disque. */
+  journalExists?: (path: string) => boolean
 }
 
 /**
@@ -424,10 +476,12 @@ export function terminalizeInterruptedPersistedRun(
     }
   }
   if (!allowUnknown && hasUncertainActiveAgent(state, liveness)) return state
+  const journalPerdu = hasEndedActiveAgentWithLostJournal(state, liveness, probes.journalExists)
   const interruptible =
     orphanedReservation ||
     staleLive ||
     hasUnprovenEndedActiveAgent(state, liveness) ||
+    journalPerdu ||
     (allowUnknown && hasUncertainActiveAgent(state, liveness))
   if (!interruptible) return state
 
@@ -451,15 +505,21 @@ export function terminalizeInterruptedPersistedRun(
         limits.maxProviderCalls
       )
     : 0
+  // UNE SEULE fois : le verdict et la trace de budget lisaient la meme cascade en double, et une
+  // branche ajoutee a l'une seulement faisait dire a l'autre le CONTRAIRE du fait constate
+  // (« PID disparu sans preuve de sortie » sur un run dont la sortie etait justement certifiee).
+  const raisonInterruption = orphanedReservation
+    ? INTERRUPTED_ORPHANED_RESERVATION_REASON
+    : staleLive
+      ? INTERRUPTED_STALE_HEARTBEAT_REASON
+      : journalPerdu
+        ? INTERRUPTED_LOST_JOURNAL_REASON
+        : INTERRUPTED_WITHOUT_EXIT_REASON
   const terminal: OrchestrationRunState = {
     ...state,
     terminal: {
       status: 'interrupted',
-      reason: orphanedReservation
-        ? INTERRUPTED_ORPHANED_RESERVATION_REASON
-        : staleLive
-          ? INTERRUPTED_STALE_HEARTBEAT_REASON
-          : INTERRUPTED_WITHOUT_EXIT_REASON,
+      reason: raisonInterruption,
       decidedAt: nowMs
     },
     agents: state.agents?.map((agent) =>
@@ -475,11 +535,7 @@ export function terminalizeInterruptedPersistedRun(
       unpricedCalls: state.usage.unpricedCalls + strandedCalls,
       unmeteredCalls: state.usage.unmeteredCalls + strandedCalls,
       tokenCoverage: 'partial',
-      stoppedReason: orphanedReservation
-        ? INTERRUPTED_ORPHANED_RESERVATION_REASON
-        : staleLive
-          ? INTERRUPTED_STALE_HEARTBEAT_REASON
-          : INTERRUPTED_WITHOUT_EXIT_REASON
+      stoppedReason: raisonInterruption
     },
     updatedAt: nowMs
   }

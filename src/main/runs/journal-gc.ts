@@ -1,5 +1,5 @@
 import { readdirSync, rmSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { JOURNAL_RETENTION_MS } from './turn-journal'
 
 /**
@@ -57,6 +57,51 @@ export interface JournalGcPolicy {
    * plafond : le run est presume encore vivant. Voir la note de tete sur ce que mtime ne dit pas.
    */
   assumeDeadMs?: number
+  /**
+   * LE SIGNAL DE VIVACITE EXPLICITE annonce en tete comme reste-a-faire, et livre le 2026-09-06.
+   *
+   * Journaux qu'un point de reprise REFERENCE encore. Ces fichiers sont intouchables quel que soit
+   * leur age et quel que soit le plafond : ce n'est plus une heuristique de date, c'est une
+   * reference. Pourquoi ca compte, mesure : le journal de l'agent `build` de conv-43 a ete supprime
+   * a 43 h alors que sa reservation d'appel n'etait pas soldee. Le sidecar `.exit.json`, hors du
+   * menage, a survecu — donc le run pouvait prouver que l'appel avait FINI, mais plus jamais lire
+   * son resultat. Il est reste bloque, reelu premier a chaque demarrage, et clos rouge six fois.
+   */
+  protectedPaths?: Iterable<string>
+}
+
+/** Forme minimale d'un point de reprise : evite de faire dependre ce module pur du checkpoint. */
+export interface JournalReference {
+  /** Renseigne = run deja conclu : plus rien a solder, son journal peut partir. */
+  terminal?: unknown
+  usage?: { activeCalls?: number }
+  agents?: { active?: boolean; journalPath?: string }[]
+}
+
+/**
+ * Journaux a proteger : ceux des agents encore ACTIFS d'un point de reprise NON terminal dont un
+ * appel provider reste a solder. Protection par reference, pas par age.
+ */
+export function journauxReferencesParUneReservation(states: readonly JournalReference[]): string[] {
+  const proteges: string[] = []
+  for (const state of states) {
+    if (state.terminal !== undefined) continue
+    if ((state.usage?.activeCalls ?? 0) <= 0) continue
+    for (const agent of state.agents ?? []) {
+      if (agent.active !== true || !agent.journalPath) continue
+      if (!proteges.includes(agent.journalPath)) proteges.push(agent.journalPath)
+    }
+  }
+  return proteges
+}
+
+/**
+ * Compare deux chemins de fichier de facon stable. Les chemins d'un checkpoint sont ecrits par un
+ * AUTRE process : separateurs et casse de lecteur peuvent differer de ceux du listing de dossier.
+ * Une comparaison naive laisserait donc passer le fichier a proteger.
+ */
+function cleDeChemin(path: string): string {
+  return resolve(path).toLowerCase()
 }
 
 /**
@@ -98,9 +143,17 @@ export function planJournalGc(entries: JournalEntry[], policy: JournalGcPolicy):
     policy.minIdleMs ?? 0
   )
   const idleFor = (entry: JournalEntry): number => policy.nowMs - entry.modifiedMs
+  // REFERENCE AVANT AGE. Un journal qu'un point de reprise attend encore n'est jamais candidat,
+  // meme mort depuis des jours, meme au-dela du plafond : le supprimer rend son run insolvable.
+  const proteges = new Set<string>()
+  for (const path of policy.protectedPaths ?? []) proteges.add(cleDeChemin(path))
+  const referenceVivante = (entry: JournalEntry): boolean =>
+    proteges.size > 0 && proteges.has(cleDeChemin(entry.path))
   // Seuls les journaux presumes MORTS sont touchables. `minIdleMs` ne suffisait pas : un CLI detache
   // qui reflechit longtemps est inactif sans etre fini.
-  const touchable = entries.filter((entry) => idleFor(entry) >= assumeDeadMs)
+  const touchable = entries.filter(
+    (entry) => idleFor(entry) >= assumeDeadMs && !referenceVivante(entry)
+  )
   const doomed = new Set<string>()
 
   for (const entry of touchable) {
@@ -113,7 +166,7 @@ export function planJournalGc(entries: JournalEntry[], policy: JournalGcPolicy):
   const survivors = entries.filter((entry) => !doomed.has(entry.path))
   if (survivors.length > maxFiles) {
     const removable = survivors
-      .filter((entry) => idleFor(entry) >= assumeDeadMs)
+      .filter((entry) => idleFor(entry) >= assumeDeadMs && !referenceVivante(entry))
       .sort((a, b) => (a.size === 0) === (b.size === 0) ? a.modifiedMs - b.modifiedMs : a.size === 0 ? -1 : 1)
     for (const entry of removable.slice(0, survivors.length - maxFiles)) doomed.add(entry.path)
   }
