@@ -16,17 +16,18 @@
  *      « Je ne peux pas donner un nombre exact ». Le juge (`cdp-verdict.mjs`) refuse désormais les
  *      tours muets, les refus déclarés et les réponses fausses.
  *
- * Usage : node scripts/cdp-monitor-10.mjs [--port 9223] [--essais 10]
+ * Usage : node scripts/cdp-monitor-10.mjs [--port <port>] [--essais 10] (sans --port : le port de l_instance ouverte)
  */
 import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { juger } from './cdp-verdict.mjs'
+import { portCdp } from './cdp-port.mjs'
 
 const arg = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
   return i >= 0 ? process.argv[i + 1] : defaut
 }
-const port = arg('--port', '9223')
+const port = portCdp()
 const nbEssais = Number(arg('--essais', '10'))
 const sortie = resolve(arg('--out', 'Audit/cdp/monitor-10.json'))
 /**

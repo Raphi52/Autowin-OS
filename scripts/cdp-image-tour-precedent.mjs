@@ -9,12 +9,13 @@
  * Tour 2 : question sur l'image, SANS la rejoindre (le cas qui echouait).
  */
 import { writeFileSync } from 'node:fs'
+import { urlCiblesCdp } from './cdp-port.mjs'
 
 const IMAGE = process.argv[2]
 if (!IMAGE) throw new Error('usage: node cdp-image-tour-precedent.mjs <chemin image>')
 const OUT = process.argv[3] ?? '.'
 
-const list = await (await fetch('http://127.0.0.1:9223/json')).json()
+const list = await (await fetch(urlCiblesCdp())).json()
 const page = list.find((t) => t.type === 'page')
 const ws = new WebSocket(page.webSocketDebuggerUrl)
 let id = 0
@@ -98,13 +99,16 @@ const envoyer = `(() => {
 
 /** Attend la fin d'un tour : bouton Stop disparu, et une nouvelle bulle assistant posee. */
 const attendreFinDeTour = async (label, avant) =>
-  jusqua(`${label} termine`, `(() => {
+  jusqua(
+    `${label} termine`,
+    `(() => {
     if (${occupe}) return false
     const bulles = [...document.querySelectorAll('.msg')].filter(m => m.className.includes('assistant'))
     if (bulles.length <= ${avant}) return false
     const t = (bulles.at(-1)?.innerText ?? '').trim()
     return t.length > 8 && !/reflexion|réflexion|REMIS EN FILE|ORIENTÉ/i.test(t)
-  })()`)
+  })()`
+  )
 
 // ---------------------------------------------------------------- tour 1 : image + phrase neutre
 /*
@@ -115,12 +119,15 @@ const attendreFinDeTour = async (label, avant) =>
  * porte aussi d'anciennes images, ce qui rendrait un succes inattribuable a l'image du run.
  */
 await jusqua('chat au repos (avant reset)', pretAEnvoyer, 600000)
-console.log('[reset]', await ev(`(() => {
+console.log(
+  '[reset]',
+  await ev(`(() => {
   const b = [...document.querySelectorAll('button')].find(x => x.className.includes('conv-new-row'))
   if (!b) return 'BOUTON NOUVEAU INTROUVABLE'
   b.click()
   return 'ok'
-})()`))
+})()`)
+)
 await jusqua('fil vide', `document.querySelectorAll('.msg').length === 0`, 20000)
 
 // Partir d'un chat AU REPOS : lancer le tour 1 pendant un tour en cours le transformerait en
@@ -128,17 +135,27 @@ await jusqua('fil vide', `document.querySelectorAll('.msg').length === 0`, 20000
 await jusqua('chat au repos', pretAEnvoyer, 600000)
 await send('DOM.enable')
 const { root } = await send('DOM.getDocument')
-const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '.attachment-input' })
+const { nodeId } = await send('DOM.querySelector', {
+  nodeId: root.nodeId,
+  selector: '.attachment-input'
+})
 if (!nodeId) throw new Error("input de piece jointe introuvable ('.attachment-input')")
 await send('DOM.setFileInputFiles', { nodeId, files: [IMAGE] })
 console.log('[tour1] image posee dans le composer')
 
 // La vignette doit apparaitre : sans elle, le fichier n'est pas entre dans l'etat React.
-await jusqua('vignette de piece jointe', `document.querySelectorAll('.attachment-list.pending .attachment-chip').length > 0`, 15000)
+await jusqua(
+  'vignette de piece jointe',
+  `document.querySelectorAll('.attachment-list.pending .attachment-chip').length > 0`,
+  15000
+)
 await shot('tour1-avant-envoi.png')
 
 const avant = await ev(compterMessages)
-console.log('[tour1 type]', await ev(taper("Voici une image. Ne la decris pas maintenant, garde-la simplement en tete.")))
+console.log(
+  '[tour1 type]',
+  await ev(taper('Voici une image. Ne la decris pas maintenant, garde-la simplement en tete.'))
+)
 await jusqua('composer pret (tour 1)', pretAEnvoyer, 60000)
 console.log('[tour1 send]', await ev(envoyer))
 await attendreFinDeTour('tour 1', avant)
@@ -159,9 +176,9 @@ const avant2 = await ev(compterMessages)
  */
 const QUESTION =
   "L'image que je t'ai envoyee au message PRECEDENT (pas dans ce message-ci) : ouvre-la si tu as " +
-  "besoin de la lire, puis donne de HAUT en BAS les 4 couleurs de ses 4 bandes. Termine par une " +
+  'besoin de la lire, puis donne de HAUT en BAS les 4 couleurs de ses 4 bandes. Termine par une ' +
   "ligne 'COULEURS: a, b, c, d'. Si aucune image du tour precedent ne t'est parvenue, ecris " +
-  "exactement AUCUNE IMAGE."
+  'exactement AUCUNE IMAGE.'
 console.log('[tour2 type]', await ev(taper(QUESTION)))
 await jusqua('composer pret (tour 2)', pretAEnvoyer, 300000)
 console.log('[tour2 send]', await ev(envoyer))

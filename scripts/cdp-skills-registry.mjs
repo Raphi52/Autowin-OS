@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { cheminArtefact } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9223'
+const port = portCdp()
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = targets.find((target) => target.type === 'page')
 if (!page) throw new Error('Fenêtre Autowin introuvable via CDP')

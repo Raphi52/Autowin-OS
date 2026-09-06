@@ -9,13 +9,17 @@
  * pixels ET compte dans le bon sens — deux facons de se tromper, une seule de reussir.
  */
 import { writeFileSync, readFileSync } from 'node:fs'
+import { urlCiblesCdp } from './cdp-port.mjs'
 
 const CONV = process.argv[2]
 const OUT = process.argv[3] ?? '.'
 const ATTENDU = (process.argv[4] ?? 'magenta').toLowerCase()
-if (!CONV) throw new Error('usage: node cdp-omniscience-inter-conversation.mjs <conv-id> <out> <couleur attendue>')
+if (!CONV)
+  throw new Error(
+    'usage: node cdp-omniscience-inter-conversation.mjs <conv-id> <out> <couleur attendue>'
+  )
 
-const list = await (await fetch('http://127.0.0.1:9223/json')).json()
+const list = await (await fetch(urlCiblesCdp())).json()
 const page = list.find((t) => t.type === 'page')
 const ws = new WebSocket(page.webSocketDebuggerUrl)
 let id = 0
@@ -75,13 +79,16 @@ const dernierTexteAgent = `(() => {
   return (b.at(-1)?.innerText ?? '').slice(0, 4000)
 })()`
 const attendreFinDeTour = async (label, avant) =>
-  jusqua(`${label} termine`, `(() => {
+  jusqua(
+    `${label} termine`,
+    `(() => {
     if (${occupe}) return false
     const b = [...document.querySelectorAll('.msg')].filter(m => m.className.includes('assistant'))
     if (b.length <= ${avant}) return false
     const t = (b.at(-1)?.innerText ?? '').trim()
     return t.length > 8 && !/reflexion|réflexion|REMIS EN FILE|ORIENTÉ/i.test(t)
-  })()`)
+  })()`
+  )
 
 /*
  * (marqueur inutile ici : la conversation cible est nommee explicitement.)
@@ -91,7 +98,6 @@ const attendreFinDeTour = async (label, avant) =>
  * mesure etait celui du harnais. Le panneau contient d'ailleurs plusieurs conversations au MEME
  * premier message (les runs precedents) : seul un marqueur unique les separe.
  */
-
 
 /*
  * ATTENDRE que l'UI soit MONTEE avant tout geste.
@@ -109,12 +115,15 @@ await jusqua(
 
 await jusqua('chat au repos', auRepos, 600000)
 
-console.log('[reset]', await ev(`(() => {
+console.log(
+  '[reset]',
+  await ev(`(() => {
   const b = [...document.querySelectorAll('button')].find(x => x.className.includes('conv-new-row'))
   if (!b) return 'BOUTON NOUVEAU INTROUVABLE'
   b.click()
   return 'ok'
-})()`))
+})()`)
+)
 await jusqua('fil vide', `document.querySelectorAll('.msg').length === 0`, 20000)
 
 const avant = await ev(bullesAgent)
@@ -146,12 +155,20 @@ const autres = Object.entries(SYNONYMES)
   .filter(([cle]) => cle !== ATTENDU)
   .filter(([, mots]) => mots.some((mot) => ligne.includes(mot)))
   .map(([cle]) => cle)
-const verdict = { attendu: ATTENDU, ligne: ligne.trim(), juste, autresCouleursCitees: autres, avoue: n.includes('aucune image') }
+const verdict = {
+  attendu: ATTENDU,
+  ligne: ligne.trim(),
+  juste,
+  autresCouleursCitees: autres,
+  avoue: n.includes('aucune image')
+}
 console.log('=== VERDICT ===')
 console.log(JSON.stringify(verdict, null, 2))
 writeFileSync(OUT + '/verdict-omniscience.json', JSON.stringify({ verdict, reponse }, null, 2))
 if (verdict.avoue) {
-  console.log('ECHEC : la connaissance ne traverse pas — image inatteignable depuis une autre conversation.')
+  console.log(
+    'ECHEC : la connaissance ne traverse pas — image inatteignable depuis une autre conversation.'
+  )
   process.exit(2)
 }
 if (!juste || autres.length > 0) {

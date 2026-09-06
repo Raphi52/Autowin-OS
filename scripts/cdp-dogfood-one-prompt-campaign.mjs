@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { cheminArtefact, cheminDevToolsPort } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9223'
+const port = portCdp()
 const artifactRoot = cheminArtefact('dogfood-one-prompt')
 const registryPath = process.env.AUTOWIN_DOGFOOD_REGISTRY || `${artifactRoot}/campaign.json`
 const mode = process.argv[2] ?? 'run'

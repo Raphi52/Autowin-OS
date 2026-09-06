@@ -1,3 +1,4 @@
+import { portCdp } from './cdp-port.mjs'
 /**
  * SUIVRE UN FLUX DE BOUT EN BOUT, SANS SALIR NI FAUSSER.
  *
@@ -11,13 +12,13 @@
  * La règle appliquée ici, sans exception : UN FIL NEUF PAR ESSAI, UN SEUL PROMPT DEDANS, SUPPRIMÉ À
  * LA FIN. Sans isolation, on ne mesure pas l'application : on mesure son propre passage.
  *
- * Usage : node scripts/cdp-flux-isole.mjs --port 9223 --prompt "…" [--garder]
+ * Usage : node scripts/cdp-flux-isole.mjs [--port <port>] --prompt (sans --port : le port de l_instance ouverte) "…" [--garder]
  */
 const arg = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
   return i >= 0 ? process.argv[i + 1] : defaut
 }
-const port = arg('--port', '9223')
+const port = portCdp()
 const prompt = arg('--prompt', 'Réponds simplement « prêt », sans exécuter de commande.')
 const garder = process.argv.includes('--garder')
 
@@ -54,7 +55,7 @@ const titre = `__sonde-flux-${Date.now()}`
 const conv = await ev(
   `window.api.conversationsCreate({ title: ${JSON.stringify(titre)}, category: 'sonde', provider: 'claude' })`
 )
-if (!conv?.id) throw new Error("création du fil de sonde refusée")
+if (!conv?.id) throw new Error('création du fil de sonde refusée')
 console.log(`fil de sonde : ${conv.id}`)
 
 let verdict = { ok: false, raison: 'non conclu' }
@@ -76,7 +77,9 @@ try {
 
   console.log(`retour moteur : ok=${res?.ok} cancelled=${res?.cancelled} en ${duree}s`)
   console.log(`statut message: ${reponse?.status ?? 'aucun'}`)
-  console.log(`texte utile   : ${sansEtiquettes ? JSON.stringify(sansEtiquettes.slice(0, 200)) : 'AUCUN (tour muet)'}`)
+  console.log(
+    `texte utile   : ${sansEtiquettes ? JSON.stringify(sansEtiquettes.slice(0, 200)) : 'AUCUN (tour muet)'}`
+  )
 
   verdict = sansEtiquettes
     ? { ok: true, raison: `réponse utile en ${duree}s`, duree, texte: sansEtiquettes.slice(0, 200) }

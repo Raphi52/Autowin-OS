@@ -1,12 +1,13 @@
 // Preuve visuelle des quatre panels composés dans Agent Studio.
-// Prérequis : app lancée avec --remote-debugging-port=9223. Navigue vers Agent Studio, inspecte le
+// Prérequis : app lancée avec un port de débogage (le port se résout tout seul, cdp-port.mjs). Navigue vers Agent Studio, inspecte le
 // DOM des panels composés + les marqueurs, capture un PNG.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { assertFrameBlockProof, assertTerrainPanelProof } from './cdp-proof-validation.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9223'
+const port = portCdp()
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = targets.find((t) => t.type === 'page')
 if (!page) throw new Error('Fenêtre Autowin introuvable via CDP')

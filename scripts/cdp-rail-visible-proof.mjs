@@ -1,3 +1,4 @@
+import { portCdp } from './cdp-port.mjs'
 /**
  * Preuve hors-modele des DEUX regressions de fond du 2026-08-31 : « je ne vois plus le menu de
  * gauche » sur l'Accueil, et « j'ai perdu mon ancien fond d'ecran 2d sur les vues ».
@@ -15,13 +16,9 @@
  * clics, l'autre panne possible), mais le controle qui MORD sur la regression signalee est celui du
  * z-index calcule, plus bas dans ce fichier.
  *
- *   node scripts/cdp-rail-visible-proof.mjs --port 9223
+ *   node scripts/cdp-rail-visible-proof.mjs [--port <port>] (sans --port : le port de l_instance ouverte)
  */
-const value = (name, fallback) => {
-  const index = process.argv.indexOf(name)
-  return index >= 0 ? process.argv[index + 1] : fallback
-}
-const port = Number(value('--port', '9223'))
+const port = portCdp()
 
 const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = pages.find((item) => item.type === 'page')
@@ -39,7 +36,9 @@ socket.onmessage = (event) => {
   const call = pending.get(message.id)
   if (call) {
     pending.delete(message.id)
-    message.error ? call.reject(new Error(JSON.stringify(message.error))) : call.resolve(message.result)
+    message.error
+      ? call.reject(new Error(JSON.stringify(message.error)))
+      : call.resolve(message.result)
   }
 }
 const send = (method, params = {}) =>
@@ -103,13 +102,14 @@ socket.close()
 const echecs = []
 if (mesure.erreur) echecs.push(mesure.erreur)
 if (!mesure.pixelDuMenuAppartientAuMenu)
-  echecs.push(`le pixel du menu est occupe par « ${mesure.elementAuPixel} » — le menu est recouvert`)
+  echecs.push(
+    `le pixel du menu est occupe par « ${mesure.elementAuPixel} » — le menu est recouvert`
+  )
 if (!mesure.decorMonte)
   echecs.push('decor NON monte : la mesure ne prouve pas le cas de l Accueil (faux vert refuse)')
 if (mesure.decorMonte && Number(mesure.decorZIndex) >= 0)
   echecs.push(`decor a z-index ${mesure.decorZIndex} : il repasserait devant le menu statique`)
-if (!/autowin-galaxy-bg-hq/.test(mesure.fondBody))
-  echecs.push('le body ne porte plus le fond 2D')
+if (!/autowin-galaxy-bg-hq/.test(mesure.fondBody)) echecs.push('le body ne porte plus le fond 2D')
 
 if (echecs.length) {
   console.error('\nECHEC :\n- ' + echecs.join('\n- '))

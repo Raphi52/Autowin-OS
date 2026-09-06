@@ -1,3 +1,4 @@
+import { portCdp } from './cdp-port.mjs'
 // Harnais de mesure tokens d'orchestration (repo-map #1 + compaction juge #3).
 //
 // S'abonne au flux RÉEL `onOrchestrateStep` (chaque step exec porte .prompt = messages envoyés au
@@ -9,7 +10,7 @@
 //
 // Lecture seule côté code app ; DÉCLENCHE un vrai run (vrais tokens sous-agent) → coût réel.
 
-const port = process.env.AUTOWIN_CDP_PORT || '9223'
+const port = portCdp()
 const LABEL = process.env.RUN_LABEL || 'on'
 const task =
   process.env.RUN_TASK ||

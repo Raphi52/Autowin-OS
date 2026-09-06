@@ -10,16 +10,17 @@
  *   · les tâches longues du navigateur (PerformanceObserver `longtask`), avec leur durée ;
  *   · le nombre de deltas reçus, pour rapporter le gel au VOLUME de re-rendu.
  *
- * Usage : node scripts/cdp-sonde-gel-rendu.mjs [--port 9223] [--garder]
+ * Usage : node scripts/cdp-sonde-gel-rendu.mjs [--port <port>] [--garder] (sans --port : le port de l_instance ouverte)
  */
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { portCdp } from './cdp-port.mjs'
 
 const arg = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
   return i >= 0 ? process.argv[i + 1] : defaut
 }
-const port = arg('--port', '9223')
+const port = portCdp()
 const sortie = resolve(arg('--out', 'Audit/cdp/sonde-gel-rendu.json'))
 const garder = process.argv.includes('--garder')
 const PROMPT = arg(

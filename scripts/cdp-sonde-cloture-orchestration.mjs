@@ -12,16 +12,17 @@
  * La fixture `[[autowin-fixture-auto-kaizen-error]]` a exactement la bonne forme — aucun delta, un
  * `done` porteur de texte — et elle est déterministe : aucun appel de modèle, aucun coût.
  *
- * Usage : node scripts/cdp-sonde-cloture-orchestration.mjs [--port 9223] [--garder]
+ * Usage : node scripts/cdp-sonde-cloture-orchestration.mjs [--port <port>] [--garder] (sans --port : le port de l_instance ouverte)
  */
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { portCdp } from './cdp-port.mjs'
 
 const arg = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
   return i >= 0 ? process.argv[i + 1] : defaut
 }
-const port = arg('--port', '9223')
+const port = portCdp()
 const sortie = resolve(arg('--out', 'Audit/cdp/sonde-cloture-orchestration.json'))
 const garder = process.argv.includes('--garder')
 const PROMPT = '[[autowin-fixture-auto-kaizen-error]] sonde cloture live'
@@ -101,7 +102,8 @@ await ev(`(() => {
 })()`)
 await ev(`document.querySelector('.composer .composer-send:not(:disabled)').click()`)
 
-const lire = () => ev(`(() => {
+const lire = () =>
+  ev(`(() => {
   const usagers = [...document.querySelectorAll('.msg.user .msg-body')].map((n) => n.innerText)
   const bulles = [...document.querySelectorAll('.msg.assistant .msg-body')].map((n) => n.innerText)
   return {

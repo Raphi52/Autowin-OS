@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, realpathSync } from 'node:fs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9223'
+const port = portCdp()
 const sharedGraphPath =
   process.env.AMITEL_GRAPHIFY_PATH ||
   '\\\\ged2\\rig\\Projets IA\\Amitel Brain\\projects\\autowin-os\\graphify-out\\graph.json'

@@ -9,8 +9,9 @@
  * Ce script ne mesure plus la justesse mais ce que l'utilisateur LIT. Il ne crée ni ne supprime rien.
  */
 import { jugerLaForme } from './cdp-verdict.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9223'
+const port = portCdp()
 const prefixe = process.argv[2] || 'Sonde '
 const t = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = t.find((x) => x.type === 'page')

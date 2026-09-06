@@ -9,16 +9,17 @@
  * conversation mesurée — elle peut trouver le bloc d'un fil affiché avant. Ici on vérifie d'abord que
  * le titre affiché EST celui de la sonde, puis on ne lit que les bulles du fil actif.
  *
- * Usage : node scripts/cdp-sonde-bloc-cloture.mjs [--port 9223] [--garder]
+ * Usage : node scripts/cdp-sonde-bloc-cloture.mjs [--port <port>] [--garder] (sans --port : le port de l_instance ouverte)
  */
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { portCdp } from './cdp-port.mjs'
 
 const arg = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
   return i >= 0 ? process.argv[i + 1] : defaut
 }
-const port = arg('--port', '9223')
+const port = portCdp()
 const sortie = resolve(arg('--out', 'Audit/cdp/sonde-bloc-cloture.json'))
 const garder = process.argv.includes('--garder')
 mkdirSync(dirname(sortie), { recursive: true })
@@ -82,9 +83,7 @@ await ev(`(() => {
 // FIL NEUF PAR L'UI : le bouton « Nouveau » crée ET affiche le fil — c'est le seul moyen sûr d'avoir
 // le fil mesuré à l'écran (créer par l'API laisse l'affichage sur un AUTRE fil, et la liste replie ses
 // catégories : la sonde mesurerait alors une conversation qu'elle n'a pas produite).
-const avant = await ev(
-  `(async () => (await window.api.conversations()).map((c) => c.id))()`
-)
+const avant = await ev(`(async () => (await window.api.conversations()).map((c) => c.id))()`)
 await ev(`(() => {
   const b = [...document.querySelectorAll('button')].find((n) => (n.textContent ?? '').trim() === 'Nouveau')
   if (!b) throw new Error('bouton Nouveau introuvable')
@@ -122,7 +121,8 @@ await ev(`(() => {
 })()`)
 await ev(`document.querySelector('.composer .composer-send:not(:disabled)').click()`)
 
-const lireEtat = () => ev(`(() => {
+const lireEtat = () =>
+  ev(`(() => {
   const scroll = document.querySelector('.chat-scroll') ?? document.querySelector('.msgs')?.parentElement
   const bulles = [...document.querySelectorAll('.msg.assistant .msg-body')].map((n) => n.innerText)
   const dom = bulles.join('\\n---\\n')
@@ -225,7 +225,9 @@ console.log(JSON.stringify(rapport.diagnostic, null, 2))
 console.log(`\nDOM fin : ${JSON.stringify(etatApres.domFin.slice(-200))}`)
 console.log(`Persisté fin : ${JSON.stringify(rapport.persiste.fin.slice(-200))}`)
 console.log(`Scroll : ${JSON.stringify(etatApres.scroll)}`)
-console.log(`Événements : ${events.map((e) => `${e.t}ms ${e.kind}${e.bloc ? '(BLOC)' : ''}`).join(' | ')}`)
+console.log(
+  `Événements : ${events.map((e) => `${e.t}ms ${e.kind}${e.bloc ? '(BLOC)' : ''}`).join(' | ')}`
+)
 console.log(`\n→ ${sortie}`)
 
 if (convId && !garder) await ev(`window.api.conversationsRemove(${json(convId)})`).catch(() => {})

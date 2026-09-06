@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { cheminArtefact } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9223'
+const port = portCdp()
 const artifactRoot = cheminArtefact('autowin-live-monitor')
 const prompt =
   'Analyse package.json puis réponds exactement PREUVE_WATCHDOG_OK. Ne modifie aucun fichier.'

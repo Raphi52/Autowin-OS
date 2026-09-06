@@ -10,6 +10,7 @@
  * C'est exactement le chemin que ce run met a l'epreuve.
  */
 import { writeFileSync, readFileSync } from 'node:fs'
+import { urlCiblesCdp } from './cdp-port.mjs'
 
 const PHASE = process.argv[2]
 const IMAGE = process.argv[3]
@@ -17,7 +18,7 @@ const OUT = process.argv[4] ?? '.'
 const ORDRE = process.argv[5] ?? 'magenta,cyan,vert,orange'
 if (!['poser', 'demander'].includes(PHASE)) throw new Error('phase attendue : poser | demander')
 
-const list = await (await fetch('http://127.0.0.1:9223/json')).json()
+const list = await (await fetch(urlCiblesCdp())).json()
 const page = list.find((t) => t.type === 'page')
 const ws = new WebSocket(page.webSocketDebuggerUrl)
 let id = 0
@@ -77,13 +78,16 @@ const dernierTexteAgent = `(() => {
   return (b.at(-1)?.innerText ?? '').slice(0, 4000)
 })()`
 const attendreFinDeTour = async (label, avant) =>
-  jusqua(`${label} termine`, `(() => {
+  jusqua(
+    `${label} termine`,
+    `(() => {
     if (${occupe}) return false
     const b = [...document.querySelectorAll('.msg')].filter(m => m.className.includes('assistant'))
     if (b.length <= ${avant}) return false
     const t = (b.at(-1)?.innerText ?? '').trim()
     return t.length > 8 && !/reflexion|réflexion|REMIS EN FILE|ORIENTÉ/i.test(t)
-  })()`)
+  })()`
+  )
 
 /*
  * MARQUEUR UNIQUE partage par les deux phases.
@@ -118,12 +122,15 @@ await jusqua('chat au repos', auRepos, 600000)
 
 if (PHASE === 'poser') {
   if (!IMAGE) throw new Error('phase poser : chemin image requis')
-  console.log('[reset]', await ev(`(() => {
+  console.log(
+    '[reset]',
+    await ev(`(() => {
     const b = [...document.querySelectorAll('button')].find(x => x.className.includes('conv-new-row'))
     if (!b) return 'BOUTON NOUVEAU INTROUVABLE'
     b.click()
     return 'ok'
-  })()`))
+  })()`)
+  )
   await jusqua('fil vide', `document.querySelectorAll('.msg').length === 0`, 20000)
   await send('DOM.enable')
   const { root } = await send('DOM.getDocument')
@@ -131,7 +138,7 @@ if (PHASE === 'poser') {
     nodeId: root.nodeId,
     selector: '.attachment-input'
   })
-  if (!nodeId) throw new Error("input de piece jointe introuvable")
+  if (!nodeId) throw new Error('input de piece jointe introuvable')
   await send('DOM.setFileInputFiles', { nodeId, files: [IMAGE] })
   await jusqua(
     'vignette de piece jointe',
@@ -185,7 +192,7 @@ await shot('relance-fil-rouvert.png')
 const avant = await ev(bullesAgent)
 const QUESTION =
   "L'image que je t'ai envoyee plus tot dans CETTE conversation (avant le redemarrage de l'app) : " +
-  "ouvre-la si besoin, puis donne de HAUT en BAS les 4 couleurs de ses 4 bandes. Termine par une " +
+  'ouvre-la si besoin, puis donne de HAUT en BAS les 4 couleurs de ses 4 bandes. Termine par une ' +
   "ligne 'COULEURS: a, b, c, d'. Si aucune image ne t'est parvenue, ecris exactement AUCUNE IMAGE."
 await ev(taper(QUESTION))
 await jusqua('composer pret', auRepos, 300000)

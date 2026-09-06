@@ -1,6 +1,7 @@
 // Latence des IPC pendant la fenêtre où le balayage tourne. Un balayage bloquant produit un TROU :
 // aucune réponse pendant ~19 s. Un balayage qui rend la main produit des latences bornées.
-const p = 9223
+import { portCdp } from './cdp-port.mjs'
+const p = portCdp()
 const attendre = async () => {
   const limite = Date.now() + 120_000
   while (Date.now() < limite) {

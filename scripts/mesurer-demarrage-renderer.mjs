@@ -12,16 +12,17 @@
  * qui départage, c'est la PART d'un sous-arbre (`three`, `react-force-graph`) dans ce total, et le
  * dernier module à finir, qui borne le premier rendu.
  *
- * Usage : node scripts/mesurer-demarrage-renderer.mjs [--port 9223] [--json-out <chemin>]
+ * Usage : node scripts/mesurer-demarrage-renderer.mjs [--port <port>] [--json-out <chemin>] (sans --port : le port de l_instance ouverte)
  */
 
 import { writeFileSync } from 'node:fs'
+import { portCdp } from './cdp-port.mjs'
 
 const value = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
   return i >= 0 ? process.argv[i + 1] : defaut
 }
-const port = Number(value('--port', '9223'))
+const port = portCdp()
 const jsonOut = value('--json-out', '')
 
 const attendrePage = async () => {
@@ -61,7 +62,11 @@ const envoyer = (method, params = {}) =>
   })
 
 const evaluer = async (expression) => {
-  const r = await envoyer('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+  const r = await envoyer('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true
+  })
   if (r.exceptionDetails) throw new Error(r.exceptionDetails.text)
   return r.result.value
 }

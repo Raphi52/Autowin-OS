@@ -1,7 +1,8 @@
 import { assertModelCatalogProof } from './cdp-proof-validation.mjs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
+import { urlCiblesCdp } from './cdp-port.mjs'
 
-const targets = await (await fetch('http://127.0.0.1:9223/json')).json()
+const targets = await (await fetch(urlCiblesCdp())).json()
 const page = targets.find((target) => target.type === 'page')
 if (!page) throw new Error('Fenêtre Autowin introuvable via CDP')
 

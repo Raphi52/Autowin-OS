@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { cheminArtefact, cheminDevToolsPort, ecrireSousDepot } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9223'
+const port = portCdp()
 const discoverTargets = async () => {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/json`, {

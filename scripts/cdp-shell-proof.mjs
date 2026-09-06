@@ -1,7 +1,8 @@
 // Preuve : conteneur opaque + top-menu bordé + onglet sélectionné visible, sur routing ET diagnostic.
 import { attendreDansLaPage } from './cdp-attente.mjs'
 import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
-const targets = await (await fetch('http://127.0.0.1:9223/json')).json()
+import { urlCiblesCdp } from './cdp-port.mjs'
+const targets = await (await fetch(urlCiblesCdp())).json()
 const page = targets.find((t) => t.type === 'page')
 const socket = new WebSocket(page.webSocketDebuggerUrl)
 let nextId = 0
