@@ -73,7 +73,10 @@ export function normaliserDuel(entree, maintenant = new Date()) {
  * (mesure du 2026-09-06 : bancs `clean` note 3x, `heal` 2x -> 28 lignes pour 20 mesures).
  */
 export function cleDuel(d) {
-  const t = (v) => String(v ?? '').trim().toLowerCase()
+  const t = (v) =>
+    String(v ?? '')
+      .trim()
+      .toLowerCase()
   // Dans un banc donne, un bras est UNIQUE : re-noter le bras `a` du meme banc corrige la ligne,
   // meme si son libelle de workflow a change entre-temps. Hors banc, le workflow fait la difference.
   const banc = t(d.banc)
@@ -113,7 +116,11 @@ export function lireDuels(filtres = {}, racine = process.cwd(), profil = 'autowi
       abimees += 1
     }
   }
-  const contient = (v, f) => !f || String(v ?? '').toLowerCase().includes(String(f).toLowerCase())
+  const contient = (v, f) =>
+    !f ||
+    String(v ?? '')
+      .toLowerCase()
+      .includes(String(f).toLowerCase())
   let gardes = duels
     .filter((d) => contient(d.tache, filtres.tache) && contient(d.workflow, filtres.workflow))
     .reverse()
@@ -136,6 +143,53 @@ export function lireDuels(filtres = {}, racine = process.cwd(), profil = 'autowi
     abimees,
     remplacees
   }
+}
+
+/**
+ * REPRODUCTIBILITE d'une tache rejouee. Un banc /arena coute ~10 $ et ne se joue qu'une fois :
+ * on lit alors son gagnant comme un fait. Or le rejeu A L'IDENTIQUE du banc `residus v4`
+ * (2026-09-06) a INVERSE le gagnant — la skill gagnait le matin, le balayage nu gagnait
+ * ensuite. Un gagnant issu d'un seul banc n'est donc PAS une preuve, et le journal doit le
+ * dire lui-meme au lieu de laisser le lecteur en tirer une lecon fausse.
+ *
+ * Regle : meme `tache` (normalisee) jouee sur PLUSIEURS `banc` = rejeux.
+ *  - gagnants identiques  -> reproductible: true
+ *  - gagnants differents  -> reproductible: false (resultat NON CONCLUANT, a ne pas retenir)
+ *  - un seul banc         -> reproductible: null (on ne se prononce pas)
+ * Les re-notations sont ecartees en amont par `lireDuels` : re-noter un banc n'est pas le rejouer.
+ */
+export function reproductibilite(filtres = {}, racine = process.cwd(), profil = 'autowin-os') {
+  const { duels } = lireDuels({ ...filtres, brut: false }, racine, profil)
+  const t = (v) =>
+    String(v ?? '')
+      .trim()
+      .toLowerCase()
+  const parTache = new Map()
+  for (const d of duels) {
+    const cle = t(d.tache)
+    if (!parTache.has(cle)) parTache.set(cle, { tache: d.tache, bancs: new Map() })
+    const groupe = parTache.get(cle)
+    const banc = t(d.banc) || `${t(d.ts).slice(0, 16)}`
+    if (!groupe.bancs.has(banc)) groupe.bancs.set(banc, [])
+    groupe.bancs.get(banc).push(d)
+  }
+  const taches = []
+  for (const groupe of parTache.values()) {
+    const gagnantsParBanc = []
+    for (const lignes of groupe.bancs.values()) {
+      const g = lignes.filter((d) => d.verdict === 'gagnant').map((d) => t(d.bras) || t(d.workflow))
+      gagnantsParBanc.push(g.sort().join('+'))
+    }
+    const distincts = [...new Set(gagnantsParBanc.filter(Boolean))]
+    const bancs = groupe.bancs.size
+    taches.push({
+      tache: groupe.tache,
+      bancs,
+      gagnants: distincts,
+      reproductible: bancs < 2 ? null : distincts.length === 1
+    })
+  }
+  return { taches }
 }
 
 function args(argv) {
@@ -181,9 +235,23 @@ function main(argv) {
         `| ${String(d.ts).slice(0, 16)} | ${d.tache} | ${d.workflow} | ${d.bras ?? '-'} | ${min} min | ${Number(d.coutUsd).toFixed(4)} | ${d.verdict} |`
       )
     }
+    const { taches } = reproductibilite(o)
+    const douteuses = taches.filter((t) => t.reproductible === false)
+    const uniques = taches.filter((t) => t.reproductible === null)
+    if (douteuses.length) {
+      console.log('\nNON REPRODUCTIBLE — rejoue, gagnant DIFFERENT : ne pas en tirer de lecon')
+      for (const t of douteuses)
+        console.log(`  - ${t.tache} (${t.bancs} bancs, gagnants : ${t.gagnants.join(' vs ')})`)
+    }
+    if (uniques.length)
+      console.log(
+        `\n(${uniques.length} tache(s) jouee(s) UNE seule fois : gagnant non confirme par un rejeu)`
+      )
     if (abimees) console.log(`\n(${abimees} ligne(s) abimee(s) ignoree(s))`)
     if (remplacees)
-      console.log(`(${remplacees} re-notation(s) ecartee(s) — seule la plus recente de chaque bras compte)`)
+      console.log(
+        `(${remplacees} re-notation(s) ecartee(s) — seule la plus recente de chaque bras compte)`
+      )
     return 0
   }
   console.error('usage : arena-duel.mjs noter|lire — voir l’en-tete du fichier')
