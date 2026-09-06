@@ -103,7 +103,24 @@ balayage mécanique — ou l'audit précédent `docs/residus-scripts-2026-09-05.
 
 Récupéré le 2026-09-06 avant nettoyage des copies de travail `worktrees/arena-residus-v5/{p1-a,p2-a,p2-x}`.
 Le corps ci-dessus vient du bras p1-x (le plus complet) ; ces 21 candidats n'y figuraient pas.
-Ils n'ont PAS été rejoués à la récupération : les colonnes de preuve sont celles du bras d'origine.
+**REJEU DU 2026-09-06 — AUCUNE MORT CONFIRMÉE. Ne rien supprimer sur la foi de ce tableau.**
+
+Les colonnes de preuve ci-dessous sont celles du bras d'origine. Elles ont été rejouées :
+
+- **Cibles disparues : 0.** Tous les chemins `src/…` et `scripts/…` cités par ces candidats existent
+  encore. Le motif « la cible a disparu » ne tient sur aucun d'eux.
+- **Exécutions rejouées : 11, toutes exit=0.** `test-btw`, `test-evidence`, `test-fanout-grid`,
+  `test-subagent-obs`, `test-multimodel`, `run-vitest-conv57`, `run-categories-cerveau-signal`,
+  `verify-deblocage`, `verify-erreurs-captees` (VERT), plus `architectures-candidates` et
+  `scorer-campagne-architecture` (usage propre), `dogfood-veille` et `salvage-audit` (rapport rendu).
+- **Ce que « aucun appelant » vaut vraiment** : ces scripts sont des lanceurs de signal MANUELS.
+  N'être appelé par rien n'est pas mourir — un outil qu'on lance à la main n'a pas d'appelant par
+  construction. Ce seul critère a produit ici 100 % de faux positifs.
+- **Non rejoué, donc non statué** : les sondes `cdp-*` (exigent l'app avec le port de débogage) et le
+  trio `monitor-common` / `monitor-crash` / `monitor-runs`, qui ne se référencent qu'entre eux.
+
+Effet de bord utile du rejeu : `salvage-audit.mjs` signale la branche de secours
+`autowin/secours/copie-run-e4d38f94d862-1`, qui porte du travail absent de `main` et non statué.
 
 | bras | catégorie | cible | pourquoi | recherche | preuve d_exécution |
 |---|---|---|---|---|---|
