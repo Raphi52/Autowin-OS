@@ -7,6 +7,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+<#
+  UN ECHEC DOIT SE VOIR DANS LE CODE DE SORTIE.
+  Mesure le 2026-09-06 : `powershell -File` rend 0 meme quand le script se termine sur un `throw`
+  non attrape. Le succes faisait bien `exit 0`, mais un port deja occupe, un binaire absent ou un
+  CDP indisponible rendaient EUX AUSSI 0 — un appelant automatique (scripts/verifier-chemin-critique.mjs)
+  prenait donc l'echec pour un demarrage reussi, puis la sonde echouait plus loin sur une cause
+  incomprehensible. Ce piege rend l'erreur VISIBLE : message sur stderr, sortie non nulle.
+#>
+trap {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}
 # $PSScriptRoot n'est PAS encore lie quand PowerShell evalue les valeurs par defaut d'un bloc param
 # contenant un parametre Mandatory : la racine se resout donc APRES le bloc, jamais dedans.
 $racineDepot = Split-Path -Parent $PSScriptRoot
