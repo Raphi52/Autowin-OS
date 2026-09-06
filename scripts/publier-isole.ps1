@@ -3,7 +3,7 @@
   Publier un travail sur `main` SANS jamais toucher l'arbre partagé.
 
 .DESCRIPTION
-  L'arbre `C:\Amitel\Autowin OS` a quatre écrivains simultanés : l'humain, Claude Code, Codex et
+  L'arbre du dépôt canonique a quatre écrivains simultanés : l'humain, Claude Code, Codex et
   l'étape de publication d'Autowin. Committer dedans mêle son diff à celui des autres, et un
   `git pull` concurrent a déjà EFFACÉ du travail par auto-stash (mesuré le 2026-08-13).
 

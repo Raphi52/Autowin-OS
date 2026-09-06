@@ -1,9 +1,10 @@
+import { racineDepot } from './racine-depot.mjs'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 
-const root = 'C:\\Amitel\\Autowin OS'
+const root = racineDepot()
 const helper = join(root, 'scripts', 'autowin-headless.ps1')
 const executable = join(root, 'dist', 'win-unpacked', 'autowin-os.exe')
 const instanceId = `knowledge-circular-${Date.now()}`

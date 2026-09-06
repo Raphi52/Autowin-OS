@@ -58,7 +58,7 @@ const lireJours = (brut) => {
 const brutJours = arg('--jours', '7')
 if (brutJours !== null && typeof brutJours === 'object' && brutJours.repete) {
   console.error(
-    "--jours : à donner une seule fois — la fenêtre d’observation ne peut pas avoir deux valeurs."
+    '--jours : à donner une seule fois — la fenêtre d’observation ne peut pas avoir deux valeurs.'
   )
   process.exit(2)
 }
@@ -76,10 +76,9 @@ if (JOURS === null) {
   console.error(
     horsPlage
       ? `--jours : ${vu} — fenêtre trop lointaine, le maximum est ${JOURS_MAX} jours ` +
-          "(au-delà, la date de début sort de la plage que JavaScript sait représenter)."
+          '(au-delà, la date de début sort de la plage que JavaScript sait représenter).'
       : `--jours : ${vu} — attendu un entier strictement positif (nombre de jours observés).
-` +
-          'Une fenêtre nulle ou négative ne mesurerait rien et rendrait un rapport vert trompeur.'
+` + 'Une fenêtre nulle ou négative ne mesurerait rien et rendrait un rapport vert trompeur.'
   )
   process.exit(2)
 }
@@ -92,7 +91,7 @@ if (!existsSync(RACINE)) {
   console.error(
     `Store introuvable : ${RACINE}\n` +
       "Cette veille lit les données réelles de l'app : lance-la depuis le dépôt canonique\n" +
-      "(C:\\Amitel\\Autowin OS), pas depuis un worktree ni une copie."
+      '(celui qui porte le .autowin-data reel), pas depuis un worktree ni une copie.'
   )
   process.exit(2)
 }
@@ -157,7 +156,12 @@ for (const f of existsSync(dossierActivite) ? readdirSync(dossierActivite) : [])
     messagesHumains += 1
     for (const [motif, quoi] of FRUSTRATION) {
       if (motif.test(texte)) {
-        frustrations.push({ conv: f.replace('.jsonl', ''), ts: e.ts, quoi, texte: texte.slice(0, 120) })
+        frustrations.push({
+          conv: f.replace('.jsonl', ''),
+          ts: e.ts,
+          quoi,
+          texte: texte.slice(0, 120)
+        })
         break
       }
     }
@@ -248,15 +252,24 @@ for (const f of frustrations.slice(-12)) {
   console.log(`  · ${String(f.ts).slice(0, 16)} [${f.quoi}]`)
   console.log(`    ${f.texte}`)
 }
-if (!frustrations.length) console.log('  (aucune — ou les marqueurs sont trop étroits, voir en tête de fichier)')
+if (!frustrations.length)
+  console.log('  (aucune — ou les marqueurs sont trop étroits, voir en tête de fichier)')
 
-console.log(`\nCadrage des demandes libres : ${avecCadrage}/${libres}` + (rapport.cadrage.taux !== null ? ` (${rapport.cadrage.taux} %)` : ''))
+console.log(
+  `\nCadrage des demandes libres : ${avecCadrage}/${libres}` +
+    (rapport.cadrage.taux !== null ? ` (${rapport.cadrage.taux} %)` : '')
+)
 console.log('  Référence du 2026-08-23, AVANT correctif : 9/205 (4 %).')
 console.log('  Phases les plus jouées :')
-for (const [k, v] of Object.entries(rapport.phases)) console.log(`    ${String(v).padStart(4)}  ${k}`)
+for (const [k, v] of Object.entries(rapport.phases))
+  console.log(`    ${String(v).padStart(4)}  ${k}`)
 
 console.log(
   `\nRéparations automatiques d'incidents : ${incidentsAuto} sur la fenêtre (${incidentsAutoTotal} depuis toujours)`
 )
-console.log("  Sur la fenêtre, un nombre qui grimpe = l'app se soigne en boucle au lieu d'être soignée.")
-console.log("  Le cumul garde la trace du 2026-08-04 : 592 en une journée, emballement depuis éteint.\n")
+console.log(
+  "  Sur la fenêtre, un nombre qui grimpe = l'app se soigne en boucle au lieu d'être soignée."
+)
+console.log(
+  '  Le cumul garde la trace du 2026-08-04 : 592 en une journée, emballement depuis éteint.\n'
+)

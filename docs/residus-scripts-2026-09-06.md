@@ -9,7 +9,9 @@
      commit de nettoyage du 2026-09-06 (les 7 lanceurs a racine morte, verify-a2-hub-proof.ps1 et
      capture-printwindow.ps1), puis 2 sondes a echec garanti (cdp-a2-hub-proof.mjs,
      cdp-e2e-chat.mjs) et 2 blocs morts (--verify-behaviour-filters d'autowin-cdp-proof.mjs,
-     verify-worktrees de cdp-dogfood-inspect.mjs). Remplace docs/residus-scripts-2026-09-05.md, plus ancien et
+     verify-worktrees de cdp-dogfood-inspect.mjs). Les chemins C:/Amitel codes en dur (28 dans
+     20 sondes) ont ensuite ete remplaces par scripts/racine-depot.mjs, qui remonte au
+     package.json du depot courant ; un test garde toute reintroduction. Remplace docs/residus-scripts-2026-09-05.md, plus ancien et
      moins couvrant. -->
 
 # Shortlist — code résiduel inutile de `scripts/`

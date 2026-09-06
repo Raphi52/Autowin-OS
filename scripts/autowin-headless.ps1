@@ -2,8 +2,8 @@ param(
   [ValidateSet('Start', 'Status', 'Stop')][string]$Action = 'Start',
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
   [ValidateRange(1024, 65535)][int]$Port = 9240,
-  [string]$Executable = 'C:\Amitel\Autowin OS\dist\win-unpacked\autowin-os.exe',
-  [string]$InstancesRoot = 'C:\Amitel\Autowin OS\Audit\headless-instances'
+  [string]$Executable = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\win-unpacked\autowin-os.exe'),
+  [string]$InstancesRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) 'Audit\headless-instances')
 )
 
 $ErrorActionPreference = 'Stop'

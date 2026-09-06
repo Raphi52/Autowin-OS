@@ -1,3 +1,4 @@
+import { racineDepot } from './racine-depot.mjs'
 /**
  * PREUVE TERMINALE — un nœud SKILL appelle le Brain par le mécanisme NATIF, dans l'app RÉELLE.
  *
@@ -18,7 +19,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-const root = 'C:\\Amitel\\Autowin OS'
+const root = racineDepot()
 const port = Number(process.env.AUTOWIN_CDP_PORT || 9224)
 const nbRuns = Number(process.argv[2] || 3)
 const traceRoot = join(root, '.autowin-data', 'autowin-os', 'causal-trace')

@@ -12,13 +12,14 @@
 import { writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+import { cheminAudit } from './racine-depot.mjs'
 
 const value = (name, fallback) => {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : fallback
 }
 const port = Number(value('--port', '9224'))
-const output = value('--out', 'C:/Amitel/Autowin OS/Audit/accueil-3d.png')
+const output = value('--out', cheminAudit('accueil-3d.png'))
 const reload = process.argv.includes('--reload')
 
 const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
@@ -95,7 +96,10 @@ if (reload) {
 // `Emulation.setDeviceMetricsOverride` change ce que le RENDERER croit avoir comme surface, sans
 // toucher a la fenetre de l'utilisateur — on ne redimensionne pas l'app de quelqu'un pour se prendre
 // en photo.
-const VIEWPORT = { width: Number(value('--width', '1440')), height: Number(value('--height', '900')) }
+const VIEWPORT = {
+  width: Number(value('--width', '1440')),
+  height: Number(value('--height', '900'))
+}
 
 // Le bail garantit la RESTAURATION, meme si la preuve echoue en cours de route. Sans lui, un `throw`
 // entre la surcharge et le nettoyage laissait l'application de l'utilisateur coincee dans une taille
@@ -115,11 +119,11 @@ const verdict = await withDeviceMetricsOverride(
   send,
   { width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: 1, mobile: false },
   async () => {
-await wait(400)
+    await wait(400)
 
-// --- 1. atteindre l'accueil PAR L'INTERFACE, comme un humain : si la pastille de navigation ne
-// mène pas à la vue, la vue n'existe pas pour l'utilisateur, quoi qu'en dise le code.
-const reached = await evaluate(`(async () => {
+    // --- 1. atteindre l'accueil PAR L'INTERFACE, comme un humain : si la pastille de navigation ne
+    // mène pas à la vue, la vue n'existe pas pour l'utilisateur, quoi qu'en dise le code.
+    const reached = await evaluate(`(async () => {
   const nav = document.querySelector('[data-testid="nav-accueil"]')
   if (!nav) return { erreur: 'pastille nav-accueil absente de la barre laterale' }
   nav.click()
@@ -131,19 +135,20 @@ const reached = await evaluate(`(async () => {
     visible: view ? view.getBoundingClientRect().width > 400 : false
   }
 })()`)
-if (reached.erreur) throw new Error(reached.erreur)
-if (!reached.vue) throw new Error("La vue Accueil n'est pas montée après le clic sur sa pastille")
+    if (reached.erreur) throw new Error(reached.erreur)
+    if (!reached.vue)
+      throw new Error("La vue Accueil n'est pas montée après le clic sur sa pastille")
 
-// Laisse la scène rendre quelques images avant de juger le décor.
-await wait(1200)
+    // Laisse la scène rendre quelques images avant de juger le décor.
+    await wait(1200)
 
-// --- 2. le canevas du decor existe-t-il, avec un contexte 3D ?
-//
-// On ne relit PAS les pixels du contexte : three.js n'active pas `preserveDrawingBuffer`, donc le
-// tampon est deja echange quand on le lit, et l'oracle repondait « tout noir » sur une scene qui
-// s'affichait parfaitement. Ce que la scene a REELLEMENT dessine est verifie plus bas, sur la
-// capture — c'est aussi ce que voit l'utilisateur.
-const decor = await evaluate(`(() => {
+    // --- 2. le canevas du decor existe-t-il, avec un contexte 3D ?
+    //
+    // On ne relit PAS les pixels du contexte : three.js n'active pas `preserveDrawingBuffer`, donc le
+    // tampon est deja echange quand on le lit, et l'oracle repondait « tout noir » sur une scene qui
+    // s'affichait parfaitement. Ce que la scene a REELLEMENT dessine est verifie plus bas, sur la
+    // capture — c'est aussi ce que voit l'utilisateur.
+    const decor = await evaluate(`(() => {
   const canvas = document.querySelector('.home-view__decor canvas')
   if (!canvas) return { erreur: 'aucun canevas de decor' }
   const gl = canvas.getContext('webgl2') || canvas.getContext('webgl')
@@ -153,24 +158,25 @@ const decor = await evaluate(`(() => {
     surface: [canvas.clientWidth, canvas.clientHeight]
   }
 })()`)
-if (decor.erreur) throw new Error(decor.erreur)
-if (!decor.contexte) throw new Error('Le decor n a pas de contexte WebGL : la scene 3D ne rend pas')
+    if (decor.erreur) throw new Error(decor.erreur)
+    if (!decor.contexte)
+      throw new Error('Le decor n a pas de contexte WebGL : la scene 3D ne rend pas')
 
-// --- 3. la pose.
-//
-// D'abord « Retablir » : la disposition enregistree peut venir d'une fenetre plus etroite, et elle
-// est conservee telle quelle quand la surface grandit (on ne deplace pas ce que l'utilisateur a
-// pose). Sans ce retablissement les tuiles se chevauchent, et la premiere version de cette preuve
-// pressait au centre d'`agenda` un point occupe par une AUTRE tuile — l'oracle visait a cote.
-await evaluate(`(() => {
+    // --- 3. la pose.
+    //
+    // D'abord « Retablir » : la disposition enregistree peut venir d'une fenetre plus etroite, et elle
+    // est conservee telle quelle quand la surface grandit (on ne deplace pas ce que l'utilisateur a
+    // pose). Sans ce retablissement les tuiles se chevauchent, et la premiere version de cette preuve
+    // pressait au centre d'`agenda` un point occupe par une AUTRE tuile — l'oracle visait a cote.
+    await evaluate(`(() => {
   const bouton = [...document.querySelectorAll('.home-view__tools button')]
     .find((b) => b.textContent.includes('Retablir') || b.textContent.includes('tablir'))
   bouton?.click()
   return true
 })()`)
-await wait(500)
+    await wait(500)
 
-const tuile = await evaluate(`(() => {
+    const tuile = await evaluate(`(() => {
   const el = document.querySelector('[data-testid="home-widget-agenda"]')
   if (!el) return null
   const rect = el.getBoundingClientRect()
@@ -189,68 +195,79 @@ const tuile = await evaluate(`(() => {
     sousLeCurseur: sous ? sous.className : null
   }
 })()`)
-if (!tuile) throw new Error('Tuile Agenda absente')
-if (!tuile.prisePropre) {
-  throw new Error(
-    `Le point de prise n'appartient pas a la tuile Agenda (sous le curseur : ${tuile.sousLeCurseur})`
-  )
-}
+    if (!tuile) throw new Error('Tuile Agenda absente')
+    if (!tuile.prisePropre) {
+      throw new Error(
+        `Le point de prise n'appartient pas a la tuile Agenda (sous le curseur : ${tuile.sousLeCurseur})`
+      )
+    }
 
-await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: tuile.cx, y: tuile.cy, button: 'left', clickCount: 1 })
-for (let step = 1; step <= 6; step += 1) {
-  await send('Input.dispatchMouseEvent', {
-    type: 'mouseMoved',
-    x: tuile.cx + Math.round((GESTE.dx * step) / 6),
-    y: tuile.cy + Math.round((GESTE.dy * step) / 6),
-    button: 'left',
-    buttons: 1
-  })
-  await wait(24)
-}
-await send('Input.dispatchMouseEvent', {
-  type: 'mouseReleased',
-  x: tuile.cx + GESTE.dx,
-  y: tuile.cy + GESTE.dy,
-  button: 'left',
-  clickCount: 1
-})
+    await send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: tuile.cx,
+      y: tuile.cy,
+      button: 'left',
+      clickCount: 1
+    })
+    for (let step = 1; step <= 6; step += 1) {
+      await send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: tuile.cx + Math.round((GESTE.dx * step) / 6),
+        y: tuile.cy + Math.round((GESTE.dy * step) / 6),
+        button: 'left',
+        buttons: 1
+      })
+      await wait(24)
+    }
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: tuile.cx + GESTE.dx,
+      y: tuile.cy + GESTE.dy,
+      button: 'left',
+      clickCount: 1
+    })
 
-const apres = await evaluate(`(() => {
+    const apres = await evaluate(`(() => {
   const m = new DOMMatrixReadOnly(getComputedStyle(document.querySelector('[data-testid="home-widget-agenda"]')).transform)
   return { x: Math.round(m.m41), y: Math.round(m.m42) }
 })()`)
-await wait(700)
-const bienPlusTard = await evaluate(`(() => {
+    await wait(700)
+    const bienPlusTard = await evaluate(`(() => {
   const m = new DOMMatrixReadOnly(getComputedStyle(document.querySelector('[data-testid="home-widget-agenda"]')).transform)
   return { x: Math.round(m.m41), y: Math.round(m.m42) }
 })()`)
 
-const pose = {
-  gesteDemande: [GESTE.dx, GESTE.dy],
-  deplacementObtenu: [apres.x - tuile.x, apres.y - tuile.y],
-  deriveApresPose: [bienPlusTard.x - apres.x, bienPlusTard.y - apres.y]
-}
+    const pose = {
+      gesteDemande: [GESTE.dx, GESTE.dy],
+      deplacementObtenu: [apres.x - tuile.x, apres.y - tuile.y],
+      deriveApresPose: [bienPlusTard.x - apres.x, bienPlusTard.y - apres.y]
+    }
 
-// --- 4. la capture, APRÈS avoir remis la tuile en place : la preuve visuelle doit montrer la vue
-// telle qu'elle s'ouvre, pas telle que le test l'a laissée.
-await evaluate(`(() => {
+    // --- 4. la capture, APRÈS avoir remis la tuile en place : la preuve visuelle doit montrer la vue
+    // telle qu'elle s'ouvre, pas telle que le test l'a laissée.
+    await evaluate(`(() => {
   const bouton = [...document.querySelectorAll('.home-view__tools button')]
     .find((b) => b.textContent.includes('Rétablir'))
   bouton?.click()
   return true
 })()`)
-await wait(600)
-const shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync(output, Buffer.from(shot.data, 'base64'))
+    await wait(600)
+    const shot = await send('Page.captureScreenshot', { format: 'png' })
+    writeFileSync(output, Buffer.from(shot.data, 'base64'))
 
-// --- 5. la capture atteste-t-elle un decor DESSINE ? On compte les pixels non noirs dans une bande
-// laterale, hors des tuiles : c'est la ou vivent les nebuleuses et les planetes.
-const analyse = spawnSync('python', ['scripts/mesure-pixels-allumes.py', output, '0.80', '0.55'], {
-  encoding: 'utf8'
-})
-if (analyse.status !== 0) throw new Error(`Analyse de la capture impossible : ${analyse.stderr}`)
-const [pixelsZone, pixelsAllumes] = analyse.stdout.trim().split(/\s+/).map(Number)
-const partAllumee = pixelsAllumes / pixelsZone
+    // --- 5. la capture atteste-t-elle un decor DESSINE ? On compte les pixels non noirs dans une bande
+    // laterale, hors des tuiles : c'est la ou vivent les nebuleuses et les planetes.
+    const analyse = spawnSync(
+      'python',
+      ['scripts/mesure-pixels-allumes.py', output, '0.80', '0.55'],
+      {
+        encoding: 'utf8'
+      }
+    )
+    if (analyse.status !== 0)
+      throw new Error(`Analyse de la capture impossible : ${analyse.stderr}`)
+    const [pixelsZone, pixelsAllumes] = analyse.stdout.trim().split(/\s+/).map(Number)
+    const partAllumee = pixelsAllumes / pixelsZone
 
     return {
       port,
@@ -276,7 +293,9 @@ if (pose.deriveApresPose[0] !== 0 || pose.deriveApresPose[1] !== 0) {
 // 2 % de la bande allumee : un decor spatial est majoritairement noir, mais une bande entierement
 // eteinte signifierait que rien n'a ete dessine.
 if (partAllumee < 0.02) {
-  echecs.push(`le decor est quasi eteint dans la bande laterale : ${(partAllumee * 100).toFixed(2)} %`)
+  echecs.push(
+    `le decor est quasi eteint dans la bande laterale : ${(partAllumee * 100).toFixed(2)} %`
+  )
 }
 if (consoleErrors.length > 0) echecs.push(`erreurs console : ${consoleErrors[0]}`)
 if (echecs.length > 0) {

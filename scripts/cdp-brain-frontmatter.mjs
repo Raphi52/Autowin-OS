@@ -1,12 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { cheminArtefact } from './racine-depot.mjs'
 
 const arg = (name, fallback) => {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : fallback
 }
 const port = Number(arg('--port', '9252'))
-const output = arg('--output', 'C:/Amitel/Autowin OS/artifacts/brain-frontmatter-green.png')
+const output = arg('--output', cheminArtefact('brain-frontmatter-green.png'))
 const deadline = Date.now() + 10_000
 let pages
 do {

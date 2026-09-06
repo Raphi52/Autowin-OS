@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { cheminArtefact } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9291'
 const appData = process.env.AUTOWIN_WIRE_APPDATA
-const output =
-  process.env.AUTOWIN_WIRE_REPORT || 'C:/Amitel/Autowin OS/artifacts/wire-all-packaged-report.json'
+const output = process.env.AUTOWIN_WIRE_REPORT || cheminArtefact('wire-all-packaged-report.json')
 const screenshotOutput = output.replace(/\.json$/i, '.png')
 if (!appData) throw new Error('AUTOWIN_WIRE_APPDATA requis pour la fixture isolée')
 

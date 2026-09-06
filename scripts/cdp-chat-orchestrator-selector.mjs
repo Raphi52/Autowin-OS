@@ -1,10 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { cheminAudit } from './racine-depot.mjs'
 
 const port = Number(process.argv[2] || 9273)
-const output =
-  process.argv[3] ||
-  'C:/Amitel/Autowin OS/Audit/evidence/chat-orchestrator-selector-post-action.png'
+const output = process.argv[3] || cheminAudit('evidence/chat-orchestrator-selector-post-action.png')
 const traceOutput = output.replace(/\.png$/i, '.json')
 const inspectOnly = process.argv.includes('--inspect-only')
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()

@@ -2,11 +2,11 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { assertWorkflowRequestGraphProof } from './cdp-proof-validation.mjs'
+import { cheminArtefact } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9251'
 const output =
-  process.env.AUTOWIN_WORKFLOW_GRAPH_SCREENSHOT ||
-  'C:/Amitel/Autowin OS/artifacts/workflow-execution-graph.png'
+  process.env.AUTOWIN_WORKFLOW_GRAPH_SCREENSHOT || cheminArtefact('workflow-execution-graph.png')
 const proofOutput = output.replace(/\.png$/i, '.json')
 const proofStamp = `request-graph-${Date.now()}`
 const previousMarker = `${proofStamp}-previous`

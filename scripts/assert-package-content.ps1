@@ -1,5 +1,5 @@
 param(
-  [string]$Root = 'C:\Amitel\Autowin OS',
+  [string]$Root = (Split-Path -Parent $PSScriptRoot),
   [string]$Package = 'dist\win-unpacked\resources\app.asar'
 )
 

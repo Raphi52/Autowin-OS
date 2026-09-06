@@ -1,11 +1,12 @@
 import { writeFileSync } from 'node:fs'
+import { cheminAudit } from './racine-depot.mjs'
 
 const value = (name, fallback) => {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : fallback
 }
 const port = Number(value('--port', '9240'))
-const output = value('--out', `C:/Amitel/Autowin OS/Audit/headless-instances/proof-${port}.png`)
+const output = value('--out', cheminAudit(`headless-instances/proof-${port}.png`))
 const jsonOutput = value('--json-out', output.replace(/\.png$/i, '') + '.json')
 const section = value('--section', '')
 const theme = value('--theme', '')

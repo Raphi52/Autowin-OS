@@ -1,12 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { cheminAudit } from './racine-depot.mjs'
 
 const arg = (name, fallback) => {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : fallback
 }
 const port = Number(arg('--port', '9292'))
-const outputDir = arg('--out-dir', 'C:/Amitel/Autowin OS/Audit/graph-camera')
+const outputDir = arg('--out-dir', cheminAudit('graph-camera'))
 mkdirSync(outputDir, { recursive: true })
 
 const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()

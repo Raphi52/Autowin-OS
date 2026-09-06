@@ -1,6 +1,6 @@
 param(
   [string]$TitleLike = "Electron",
-  [string]$Out = "C:\Amitel\Autowin OS\p0-capture.png",
+  [string]$Out = (Join-Path (Split-Path -Parent $PSScriptRoot) 'p0-capture.png'),
   [int]$ProcessId = 0
 )
 Add-Type -AssemblyName System.Drawing

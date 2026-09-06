@@ -13,6 +13,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { cheminDevToolsPort } from './racine-depot.mjs'
 
 const ETATS = ['failed', 'running', 'interrupted', 'done']
 const rendre = (charge, code) => {
@@ -22,18 +23,13 @@ const rendre = (charge, code) => {
 
 const port = process.env.AUTOWIN_CDP_PORT || '9231'
 const lirePort = async (p) =>
-  (await (await fetch(`http://127.0.0.1:${p}/json`, { signal: AbortSignal.timeout(15_000) })).json())
+  await (await fetch(`http://127.0.0.1:${p}/json`, { signal: AbortSignal.timeout(15_000) })).json()
 let cibles
 let portUtilise = String(port)
 try {
   cibles = await lirePort(port)
 } catch {
-  const actif = readFileSync(
-    'C:/Amitel/Autowin OS/.autowin-data/autowin-os/DevToolsActivePort',
-    'utf8'
-  )
-    .trim()
-    .split(/\r?\n/)
+  const actif = readFileSync(cheminDevToolsPort(), 'utf8').trim().split(/\r?\n/)
   portUtilise = actif[0]
   cibles = await lirePort(actif[0])
 }

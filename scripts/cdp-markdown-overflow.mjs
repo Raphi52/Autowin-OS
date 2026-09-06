@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { cheminArtefact } from './racine-depot.mjs'
 
 const targets = await (await fetch('http://127.0.0.1:9223/json')).json()
 const page = targets.find((target) => target.type === 'page')
@@ -60,8 +61,8 @@ const metrics = await evaluate(`(() => {
 })()`)
 await new Promise((resolve) => setTimeout(resolve, 300))
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
-mkdirSync('C:/Amitel/Autowin OS/artifacts', { recursive: true })
-const output = 'C:/Amitel/Autowin OS/artifacts/markdown-overflow-green.png'
+mkdirSync(cheminArtefact(), { recursive: true })
+const output = cheminArtefact('markdown-overflow-green.png')
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
 console.log(JSON.stringify({ metrics, output }, null, 2))
 socket.close()

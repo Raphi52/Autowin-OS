@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { cheminArtefact } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9223'
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
@@ -59,7 +60,8 @@ await evaluate(`(() => {
 })()`)
 await wait(700)
 
-const sources = await evaluate(`[...document.querySelectorAll('.capability-cockpit .cockpit-sources button:not(:disabled)')]
+const sources =
+  await evaluate(`[...document.querySelectorAll('.capability-cockpit .cockpit-sources button:not(:disabled)')]
   .filter((button) => button.querySelector('small'))
   .map((button) => button.querySelector('b')?.textContent?.trim())
   .filter(Boolean)`)
@@ -92,10 +94,9 @@ if (!state.selectedTab?.startsWith('Skills')) {
 }
 
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
-mkdirSync('C:/Amitel/Autowin OS/artifacts', { recursive: true })
+mkdirSync(cheminArtefact(), { recursive: true })
 const output =
-  process.env.AUTOWIN_SKILLS_SCREENSHOT ||
-  'C:/Amitel/Autowin OS/artifacts/skills-multisource-green.png'
+  process.env.AUTOWIN_SKILLS_SCREENSHOT || cheminArtefact('skills-multisource-green.png')
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
 console.log(JSON.stringify({ counts, state, output }, null, 2))
 socket.close()

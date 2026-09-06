@@ -44,6 +44,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, parse, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { cheminDevToolsPort } from './racine-depot.mjs'
 
 /** Identifiants réels du catalogue applicatif (src/shared/navigation.ts). */
 export const VUES_CONNUES = [
@@ -236,7 +237,7 @@ const candidatsDevToolsPort = () => {
     if (dossier === racineDisque || parent === dossier) break
     dossier = parent
   }
-  candidats.push('C:/Amitel/Autowin OS/.autowin-data/autowin-os/DevToolsActivePort')
+  candidats.push(cheminDevToolsPort())
   return candidats
 }
 

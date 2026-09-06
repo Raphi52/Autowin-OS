@@ -1,10 +1,10 @@
 import { writeFileSync } from 'node:fs'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+import { cheminArtefact } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9248'
 const output =
-  process.env.AUTOWIN_OBSERVATORY_SCREENSHOT ||
-  'C:/Amitel/Autowin OS/artifacts/observatory-critical-path.png'
+  process.env.AUTOWIN_OBSERVATORY_SCREENSHOT || cheminArtefact('observatory-critical-path.png')
 const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = pages.find((target) => target.type === 'page')
 if (!page) throw new Error(`Fenêtre Autowin introuvable sur ${port}`)

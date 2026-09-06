@@ -1,3 +1,4 @@
+import { racineDepot } from './racine-depot.mjs'
 /**
  * PREUVE TERMINALE de la politique de relance, dans l'app REELLE.
  *
@@ -31,7 +32,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const racine = 'C:\\Amitel\\Autowin OS'
+const racine = racineDepot()
 const port = Number(process.env.AUTOWIN_CDP_PORT || 9224)
 const traces = join(racine, '.autowin-data', 'autowin-os', 'causal-trace')
 
@@ -111,10 +112,16 @@ const envoyer = (method, params = {}) =>
     socket.send(JSON.stringify({ id: n, method, params }))
   })
 const evaluer = async (expression) => {
-  const r = await envoyer('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+  const r = await envoyer('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true
+  })
   if (r.exceptionDetails) {
     const d = r.exceptionDetails
-    throw new Error([d.text, d.exception?.description, d.exception?.value].filter(Boolean).join(' | '))
+    throw new Error(
+      [d.text, d.exception?.description, d.exception?.value].filter(Boolean).join(' | ')
+    )
   }
   return r.result.value
 }

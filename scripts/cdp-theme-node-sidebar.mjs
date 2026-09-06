@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { cheminAudit } from './racine-depot.mjs'
 
 const arg = (name, fallback) => {
   const index = process.argv.indexOf(name)
@@ -8,7 +9,7 @@ const arg = (name, fallback) => {
 const port = Number(arg('--port', '9294'))
 const outputDir = arg(
   '--out-dir',
-  'C:/Amitel/Autowin OS/Audit/workspaces/codex-current/theme-node-sidebar-workspace/evidence'
+  cheminAudit('workspaces/codex-current/theme-node-sidebar-workspace/evidence')
 )
 mkdirSync(outputDir, { recursive: true })
 

@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cheminArtefact, cheminDevToolsPort } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9223'
-const artifactRoot = 'C:/Amitel/Autowin OS/artifacts/dogfood-one-prompt'
+const artifactRoot = cheminArtefact('dogfood-one-prompt')
 const registryPath = process.env.AUTOWIN_DOGFOOD_REGISTRY || `${artifactRoot}/campaign.json`
 const mode = process.argv[2] ?? 'run'
 const campaignId = process.env.AUTOWIN_DOGFOOD_ID || `dogfood-${Date.now()}`
@@ -44,12 +45,7 @@ const discoverTargets = async () => {
     })
     return await response.json()
   } catch {
-    const activePort = readFileSync(
-      'C:/Amitel/Autowin OS/.autowin-data/autowin-os/DevToolsActivePort',
-      'utf8'
-    )
-      .trim()
-      .split(/\r?\n/)
+    const activePort = readFileSync(cheminDevToolsPort(), 'utf8').trim().split(/\r?\n/)
     const browserSocket = new WebSocket(`ws://127.0.0.1:${activePort[0]}${activePort[1]}`)
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('CDP browser expiré')), 5_000)

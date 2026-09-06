@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs'
+import { cheminArtefact, cheminDevToolsPort } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9223'
 const discoverTargets = async () => {
@@ -8,10 +9,7 @@ const discoverTargets = async () => {
     })
     return await response.json()
   } catch {
-    const [activePort, browserPath] = readFileSync(
-      'C:/Amitel/Autowin OS/.autowin-data/autowin-os/DevToolsActivePort',
-      'utf8'
-    )
+    const [activePort, browserPath] = readFileSync(cheminDevToolsPort(), 'utf8')
       .trim()
       .split(/\r?\n/)
     const browserSocket = new WebSocket(`ws://127.0.0.1:${activePort}${browserPath}`)
@@ -500,8 +498,7 @@ if (verifySettings) {
     }
   })()`)
   const image = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
-  const screenshotPath =
-    'C:/Amitel/Autowin OS/artifacts/dogfood-one-prompt/settings-diagnostic-published.png'
+  const screenshotPath = cheminArtefact('dogfood-one-prompt/settings-diagnostic-published.png')
   writeFileSync(screenshotPath, Buffer.from(image.data, 'base64'))
   console.log(JSON.stringify({ opened, diagnosticOpened, screenshotPath, snapshot }, null, 2))
   socket.close()
@@ -550,8 +547,7 @@ if (verifyAgentStudio) {
     }
   })()`)
   const image = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
-  const screenshotPath =
-    'C:/Amitel/Autowin OS/artifacts/dogfood-one-prompt/agent-studio-p1-published.png'
+  const screenshotPath = cheminArtefact('dogfood-one-prompt/agent-studio-p1-published.png')
   writeFileSync(screenshotPath, Buffer.from(image.data, 'base64'))
   console.log(JSON.stringify({ opened, topology, routingOpened, routing, screenshotPath }, null, 2))
   socket.close()

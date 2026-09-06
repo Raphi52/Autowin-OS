@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { assertHooksProof } from './cdp-proof-validation.mjs'
+import { cheminArtefact } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9223'
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
@@ -76,9 +77,8 @@ const state = await evaluate(`({
 assertHooksProof(state)
 
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
-mkdirSync('C:/Amitel/Autowin OS/artifacts', { recursive: true })
-const output =
-  process.env.AUTOWIN_HOOKS_SCREENSHOT || 'C:/Amitel/Autowin OS/artifacts/hooks-codex.png'
+mkdirSync(cheminArtefact(), { recursive: true })
+const output = process.env.AUTOWIN_HOOKS_SCREENSHOT || cheminArtefact('hooks-codex.png')
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
 console.log(JSON.stringify({ state, output }, null, 2))
 socket.close()
