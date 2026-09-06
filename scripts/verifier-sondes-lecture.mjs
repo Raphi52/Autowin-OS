@@ -45,7 +45,12 @@ const SONDES = [
    * externe) et verifie dans le VRAI DOM que le rendu arrive et que le poison est retire. Elle
    * ouvre un serveur canari local le temps de la mesure : rien ne doit le joindre a l'affichage.
    */
-  'cdp-chat-html-render.mjs'
+  'cdp-chat-html-render.mjs',
+  /*
+   * Elle seme une galerie de cinq artefacts, amene chaque carte au champ, la deplie, verifie les
+   * cinq rendus (vecteur, markdown, diagramme, tableau, 3D) — puis SUPPRIME ses conversations.
+   */
+  'cdp-artifact-previews.mjs'
 ]
 
 if (!existsSync(binaire)) {

@@ -169,12 +169,56 @@ await waitFor(
  * produit ne rendait pas encore — puis accusait le rendu. Elle deplie maintenant, comme le
  * lecteur le ferait.
  */
-await evaluate(`(() => {
-  for (const bouton of document.querySelectorAll('.artifact-preview__toggle')) {
-    if (bouton.getAttribute('aria-expanded') === 'false') bouton.click()
+/*
+ * CAUSE ELUCIDEE LE 2026-09-06 : L'APERCU EST CHARGE A L'APPROCHE, ET IL FAUT LA CARTE DEPLIEE.
+ *
+ * Le contenu de l'artefact n'est PAS dans le message : il est ecrit sur le DISQUE, et la carte ne
+ * le lit que lorsqu'elle s'approche du champ de vision. Le produit le dit lui-meme, en toutes
+ * lettres, dans la carte : « Apercu charge a l'approche ». Deux conditions, donc, et la sonde n'en
+ * respectait aucune de facon durable :
+ *   · la carte doit etre DEPLIEE — les apercus d'image s'ouvrent replies ;
+ *   · elle doit etre PRES DU CHAMP au moment de la mesure. Or le fil redescend tout seul apres le
+ *     parcours : au moment de l'assertion, la carte vecteur etait remontee a -1072 px, hors champ,
+ *     et affichait encore son texte d'attente. D'ou un rouge qui semblait aleatoire (« verte au
+ *     second passage ») alors qu'il ne dependait que de la position finale du fil.
+ *
+ * Ce n'est donc PAS un defaut du produit : le chargement paresseux est voulu et documente a
+ * l'ecran. Verifie au passage : l'observateur de visibilite fonctionne bien dans une instance de
+ * test masquee (callback tire, document.visibilityState = "visible"), et readChatArtifact rend bien
+ * le contenu avec son encodage base64.
+ *
+ * La sonde AMENE donc chaque carte au champ ET la deplie, en boucle, jusqu'a ce que les cinq rendus
+ * soient la — borne par un plafond de TEMPS, jamais par un nombre d'essais.
+ */
+{
+  const echeance = Date.now() + 30_000
+  for (;;) {
+    const pret = await evaluate(`(() => {
+      const cartes = [...document.querySelectorAll('.artifact-preview')]
+      // 1. deplier ce qui est replie : un corps replie ne rend rien.
+      for (const bouton of document.querySelectorAll('.artifact-preview__toggle[aria-expanded="false"]'))
+        bouton.click()
+      // 2. amener au champ la premiere carte dont le rendu manque encore.
+      const manquante = cartes.find((carte) => {
+        const type = carte.dataset.artifactKind
+        if (type === 'vector' || type === 'image') return !carte.querySelector('img')
+        if (type === 'diagram') return !carte.querySelector('.artifact-diagram svg')
+        if (type === 'markdown') return !carte.querySelector('.brain-markdown')
+        if (type === 'table') return !carte.querySelector('table')
+        if (type === 'model3d') return !carte.querySelector('canvas')
+        return false
+      })
+      if (manquante) {
+        manquante.scrollIntoView({ block: 'center', behavior: 'instant' })
+        return false
+      }
+      return true
+    })()`)
+    if (pret) break
+    if (Date.now() >= echeance) break
+    await sleep(300)
   }
-  return true
-})()`)
+}
 await evaluate(`(async () => {
   const scroll = document.querySelector('.chat-scroll')
   if (!scroll) return false
