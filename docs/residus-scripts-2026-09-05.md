@@ -5,6 +5,8 @@
      'sans appelant' n'ont effectivement 0 reference dans le depot. Lecture seule : aucun
      fichier n'a ete supprime. -->
 
+> **Remplace par [docs/residus-scripts-2026-09-06.md](residus-scripts-2026-09-06.md)** (banc du 2026-09-06, 44 entrees contre 32, runners executes). Ce fichier reste pour la trace.
+
 # Shortlist — code résiduel inutile de `scripts/`
 
 Périmètre : les 159 fichiers de `scripts/` du dépôt. Lecture seule, rien n'a été supprimé, modifié ni renommé.
