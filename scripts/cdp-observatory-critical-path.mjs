@@ -1,6 +1,5 @@
-import { writeFileSync } from 'node:fs'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
-import { cheminArtefact } from './racine-depot.mjs'
+import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9248'
 const output =
@@ -219,7 +218,7 @@ await withDeviceMetricsOverride(
       `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`
     )
     const screenshot = await evaluate('window.api.captureTestPage()')
-    writeFileSync(output, Buffer.from(screenshot, 'base64'))
+    ecrireSousDepot(output, Buffer.from(screenshot, 'base64'))
     await evaluate(`(() => {
   const target = [...document.querySelectorAll('button')].find((button) =>
     button.textContent?.trim() === 'Chronologie'
@@ -280,7 +279,7 @@ await withDeviceMetricsOverride(
       `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))`
     )
     const timelineScreenshot = await evaluate('window.api.captureTestPage()')
-    writeFileSync(timelineOutput, Buffer.from(timelineScreenshot, 'base64'))
+    ecrireSousDepot(timelineOutput, Buffer.from(timelineScreenshot, 'base64'))
     await evaluate(`(() => {
   const events = [...document.querySelectorAll('.observatory-event')].slice(0, 2)
   if (events.length < 2) throw new Error('Événements A/B insuffisants')
@@ -342,7 +341,7 @@ await withDeviceMetricsOverride(
 })()`)
     if (!comparisonVisible) throw new Error('Comparaison A/B hors du viewport')
     const comparisonScreenshot = await evaluate('window.api.captureTestPage()')
-    writeFileSync(comparisonOutput, Buffer.from(comparisonScreenshot, 'base64'))
+    ecrireSousDepot(comparisonOutput, Buffer.from(comparisonScreenshot, 'base64'))
 
     const ledgersOutput = output.replace(/\.png$/i, '-ledgers.png')
     const authorityOutput = output.replace(/\.png$/i, '-authority.png')
@@ -370,7 +369,7 @@ await withDeviceMetricsOverride(
 })()`)
     if (!authorityVisible) throw new Error('Registre d autorite hors du viewport')
     const authorityScreenshot = await evaluate('window.api.captureTestPage()')
-    writeFileSync(authorityOutput, Buffer.from(authorityScreenshot, 'base64'))
+    ecrireSousDepot(authorityOutput, Buffer.from(authorityScreenshot, 'base64'))
     await evaluate(`(() => {
   const stream = document.querySelector('.observatory-stream')
   const decisions = document.querySelector('[data-testid="observatory-decision-ledger"]')
@@ -392,7 +391,7 @@ await withDeviceMetricsOverride(
 })()`)
     if (!ledgerVisible) throw new Error('Registre de decisions hors du viewport')
     const ledgersScreenshot = await evaluate('window.api.captureTestPage()')
-    writeFileSync(ledgersOutput, Buffer.from(ledgersScreenshot, 'base64'))
+    ecrireSousDepot(ledgersOutput, Buffer.from(ledgersScreenshot, 'base64'))
     console.log(
       JSON.stringify({
         state,

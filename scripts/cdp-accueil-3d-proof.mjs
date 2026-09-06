@@ -9,10 +9,9 @@
  *
  *   node scripts/cdp-accueil-3d-proof.mjs --port 9224 --out Audit/accueil-3d.png
  */
-import { writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
-import { cheminAudit } from './racine-depot.mjs'
+import { cheminAudit, ecrireSousDepot } from './racine-depot.mjs'
 
 const value = (name, fallback) => {
   const index = process.argv.indexOf(name)
@@ -253,7 +252,7 @@ const verdict = await withDeviceMetricsOverride(
 })()`)
     await wait(600)
     const shot = await send('Page.captureScreenshot', { format: 'png' })
-    writeFileSync(output, Buffer.from(shot.data, 'base64'))
+    ecrireSousDepot(output, Buffer.from(shot.data, 'base64'))
 
     // --- 5. la capture atteste-t-elle un decor DESSINE ? On compte les pixels non noirs dans une bande
     // laterale, hors des tuiles : c'est la ou vivent les nebuleuses et les planetes.

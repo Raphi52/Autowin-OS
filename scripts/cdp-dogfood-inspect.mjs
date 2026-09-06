@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs'
-import { cheminArtefact, cheminDevToolsPort } from './racine-depot.mjs'
+import { readFileSync } from 'node:fs'
+import { cheminArtefact, cheminDevToolsPort, ecrireSousDepot } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9223'
 const discoverTargets = async () => {
@@ -499,7 +499,7 @@ if (verifySettings) {
   })()`)
   const image = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
   const screenshotPath = cheminArtefact('dogfood-one-prompt/settings-diagnostic-published.png')
-  writeFileSync(screenshotPath, Buffer.from(image.data, 'base64'))
+  ecrireSousDepot(screenshotPath, Buffer.from(image.data, 'base64'))
   console.log(JSON.stringify({ opened, diagnosticOpened, screenshotPath, snapshot }, null, 2))
   socket.close()
   process.exit(snapshot?.visible ? 0 : 1)
@@ -548,7 +548,7 @@ if (verifyAgentStudio) {
   })()`)
   const image = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
   const screenshotPath = cheminArtefact('dogfood-one-prompt/agent-studio-p1-published.png')
-  writeFileSync(screenshotPath, Buffer.from(image.data, 'base64'))
+  ecrireSousDepot(screenshotPath, Buffer.from(image.data, 'base64'))
   console.log(JSON.stringify({ opened, topology, routingOpened, routing, screenshotPath }, null, 2))
   socket.close()
   process.exit(topology?.visible && routing?.visible ? 0 : 1)

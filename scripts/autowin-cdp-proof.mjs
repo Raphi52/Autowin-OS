@@ -1,5 +1,4 @@
-import { writeFileSync } from 'node:fs'
-import { cheminAudit } from './racine-depot.mjs'
+import { cheminAudit, ecrireSousDepot } from './racine-depot.mjs'
 
 const value = (name, fallback) => {
   const index = process.argv.indexOf(name)
@@ -291,7 +290,7 @@ if (!skipScreenshot) {
       : (await send('Page.captureScreenshot', { format: 'png' })).data
   if (!base64) throw new Error(`Capture renderer vide${refus ? ` — ${refus}` : ''}`)
   if (refus) console.warn(`[capture] API de test indisponible (${refus}) → capture CDP native`)
-  writeFileSync(output, Buffer.from(base64, 'base64'))
+  ecrireSousDepot(output, Buffer.from(base64, 'base64'))
 }
 socket.close()
 const result = {
@@ -303,7 +302,7 @@ const result = {
   rendererIssues: runtimeIssues,
   ...(navigationProof ? { navigation: navigationProof } : {})
 }
-writeFileSync(jsonOutput, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
+ecrireSousDepot(jsonOutput, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
 console.log(JSON.stringify(result))
 if (
   !result.url ||

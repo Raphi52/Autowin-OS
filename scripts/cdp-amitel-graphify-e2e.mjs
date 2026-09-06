@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { cheminArtefact } from './racine-depot.mjs'
+import { readFileSync, realpathSync } from 'node:fs'
+import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9223'
 const sharedGraphPath =
@@ -127,7 +127,7 @@ const proof = await evaluate(`(async () => {
 
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 const output = cheminArtefact('amitel-graphify-e2e.png')
-writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
+ecrireSousDepot(output, Buffer.from(screenshot.data, 'base64'))
 const ok = Object.entries(proof)
   .filter(([key]) =>
     [
@@ -157,7 +157,7 @@ const result = {
   screenshot: output,
   verdict: ok ? 'PASS' : 'FAIL'
 }
-writeFileSync(cheminArtefact('amitel-graphify-e2e.json'), JSON.stringify(result, null, 2), 'utf8')
+ecrireSousDepot(cheminArtefact('amitel-graphify-e2e.json'), JSON.stringify(result, null, 2), 'utf8')
 console.log(JSON.stringify(result, null, 2))
 socket.close()
 process.exit(ok ? 0 : 1)

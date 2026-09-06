@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, parse, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -52,4 +52,18 @@ export function cheminDevToolsPort() {
     return resolve(process.env.AUTOWIN_DATA_DIR, 'DevToolsActivePort')
   }
   return cheminDepot('.autowin-data', 'autowin-os', 'DevToolsActivePort')
+}
+
+/**
+ * Ecrit un fichier SOUS le depot en creant son dossier au besoin.
+ *
+ * Les sondes ecrivaient dans une arborescence qui existait DEJA sur l'ancienne machine
+ * (`Audit/headless-instances/`). Ancrees sur un depot frais, elles echouaient en `ENOENT` au
+ * moment de deposer leur preuve — apres avoir fait tout le travail. Le dossier se cree donc ici.
+ */
+export function ecrireSousDepot(chemin, contenu, encodage) {
+  mkdirSync(dirname(chemin), { recursive: true })
+  if (encodage) writeFileSync(chemin, contenu, encodage)
+  else writeFileSync(chemin, contenu)
+  return chemin
 }

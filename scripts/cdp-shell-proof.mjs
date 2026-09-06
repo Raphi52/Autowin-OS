@@ -1,6 +1,5 @@
 // Preuve : conteneur opaque + top-menu bordé + onglet sélectionné visible, sur routing ET diagnostic.
-import { writeFileSync } from 'node:fs'
-import { cheminArtefact } from './racine-depot.mjs'
+import { cheminArtefact, ecrireSousDepot } from './racine-depot.mjs'
 const targets = await (await fetch('http://127.0.0.1:9223/json')).json()
 const page = targets.find((t) => t.type === 'page')
 const socket = new WebSocket(page.webSocketDebuggerUrl)
@@ -35,7 +34,7 @@ const click = (re) =>
 const shot = async (name) => {
   const s = await send('Page.captureScreenshot', { format: 'png' })
   const o = cheminArtefact(`${name}.png`)
-  writeFileSync(o, Buffer.from(s.data, 'base64'))
+  ecrireSousDepot(o, Buffer.from(s.data, 'base64'))
   return o
 }
 
