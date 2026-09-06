@@ -1,4 +1,15 @@
 /**
+ * MANUELLE PAR NATURE — NE PAS LA BRANCHER SUR UNE VÉRIFICATION AUTOMATIQUE.
+ *
+ * Tri du 2026-09-06. Elle passe par `pilotChat`, donc la fixture gratuite s'y brancherait ; mais
+ * chaque essai porte une VÉRITÉ TERRAIN calculée hors de l'application — compter des fichiers, lire
+ * une version — et le verdict est l'EXACTITUDE de la réponse. Ce qu'elle mesure est donc la qualité
+ * du modèle, pas le comportement du produit. Avec une fixture déterministe, la réponse serait
+ * toujours la même : 10/10 par construction, et plus aucun signal.
+ *
+ * C'est un BANC de qualité : dix vrais appels, joués à la main quand on veut le chiffre.
+ */
+/**
  * MONITEUR « 1 PROMPT = 1 RÉUSSITE » — 10 essais, chacun isolé et vérifiable.
  *
  * Mandat de l'utilisateur le 2026-08-15 : « met tout ce qu'il faut en place pour monitorer et

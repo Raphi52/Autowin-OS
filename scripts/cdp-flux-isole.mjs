@@ -1,5 +1,18 @@
 import { portCdp } from './cdp-port.mjs'
 /**
+ * MANUELLE PAR NATURE — NE PAS LA BRANCHER SUR UNE VÉRIFICATION AUTOMATIQUE.
+ *
+ * Tri du 2026-09-06. Elle appelle bien `pilotChat`, donc la fixture gratuite
+ * `[[autowin-fixture-durable-stream]]` s'y brancherait sans peine — techniquement. Mais son verdict
+ * est « TOUR MUET » : le modèle a-t-il rendu une PHRASE, ou seulement des étiquettes d'action ?
+ * C'est une propriété DU MODÈLE, pas du produit. Une fixture déterministe rend toujours la même
+ * phrase : la sonde deviendrait verte par construction, donc aveugle à ce qu'elle surveille — un
+ * faux témoin de plus.
+ *
+ * Sa place est celle d'un BANC : on la joue à la main quand on veut mesurer la qualité des tours,
+ * en assumant l'appel payant.
+ */
+/**
  * SUIVRE UN FLUX DE BOUT EN BOUT, SANS SALIR NI FAUSSER.
  *
  * Ce script remplace un harnais précédent qui tapait ses prompts dans la conversation ACTIVE de

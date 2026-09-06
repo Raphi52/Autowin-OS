@@ -1,5 +1,17 @@
 import { urlCiblesCdp } from './cdp-port.mjs'
 /**
+ * MANUELLE PAR NATURE — NE PAS LA BRANCHER SUR UNE VÉRIFICATION AUTOMATIQUE.
+ *
+ * Tri du 2026-09-06. Elle lance TROIS `orchestrate` en parallèle et regarde les copies de travail
+ * qui en sortent : c'est un vrai pipeline, trois fois, avec de vrais agents qui écrivent. Aucune
+ * fixture d'orchestration n'existe (vérifié : `isolatedTestInstance` est absent d'`orchestrator.ts`),
+ * donc rien ne peut la rendre gratuite sans écrire ce pipeline factice.
+ *
+ * Et même gratuite, elle n'aurait pas sa place dans une vérification de construction : son sujet est
+ * la CONCURRENCE — trois travaux simultanés, aucun bureau orphelin à la fin. Ce prix-là ne se paie
+ * pas à chaque paquet produit ; il se paie quand on touche à la parallélisation.
+ */
+/**
  * PREUVE HORS-MODÈLE de la demande de l'utilisateur : « lancer 3 convers sur la même chose, pas
  * d'erreur avant de se lancer au travail, pas de workspace orphelin à la fin ».
  *

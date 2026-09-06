@@ -1,5 +1,18 @@
 import { racineDepot } from './racine-depot.mjs'
 /**
+ * MANUELLE PAR NATURE — NE PAS LA BRANCHER SUR UNE VÉRIFICATION AUTOMATIQUE.
+ *
+ * Tri du 2026-09-06. Elle appelle `orchestrate` : son oracle est la trace causale d'un VRAI
+ * pipeline, avec ses phases et ses nœuds. Les fixtures gratuites du dépôt remplacent le fournisseur
+ * de modèle pour UN tour de chat — elles ne savent pas jouer un pipeline. Vérifié : le mot
+ * `isolatedTestInstance` n'apparaît NULLE PART dans `orchestrator.ts`, et aucune fixture
+ * d'orchestration n'existe dans `src/main`. La rendre gratuite demanderait d'écrire un pipeline
+ * factice déterministe : un morceau de produit, pas une migration de sonde.
+ *
+ * Elle exige en plus PLUSIEURS runs de la même tâche pour juger du déterminisme : le coût est dans
+ * son énoncé même.
+ */
+/**
  * PREUVE TERMINALE — un nœud SKILL appelle le Brain par le mécanisme NATIF, dans l'app RÉELLE.
  *
  * Ce que les etapes precedentes prouvent deja, et ce qu'elles ne prouvent PAS :
