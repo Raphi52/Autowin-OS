@@ -139,37 +139,32 @@ await withDeviceMetricsOverride(
       evaluerPendantRechargement,
       `document.readyState === 'complete' && Boolean(document.querySelector('button'))`
     )
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      const wizard = await evaluate(`(() => {
+    /*
+     * Le wizard de premier lancement peut ne pas etre encore peint : on REJOUE le clic tant que
+     * l'overlay est la, au lieu de compter des essais. Le plafond rend `false` sans lever.
+     */
+    const fermerLeWizard = async () => {
+      const bouton = await evaluate(`(() => {
     const overlay = document.querySelector('.frw-overlay')
-    if (!overlay) return { dismissed: true }
+    if (!overlay) return {}
     const continueButton = [...overlay.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === 'Continuer quand même'
     )
-    if (!continueButton) return { dismissed: false }
+    if (!continueButton) return {}
     const rect = continueButton.getBoundingClientRect()
-    return { dismissed: false, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
   })()`)
-      if (wizard.dismissed) break
-      if (wizard.x != null && wizard.y != null) {
+      if (bouton.x == null || bouton.y == null) return
+      for (const type of ['mousePressed', 'mouseReleased'])
         await send('Input.dispatchMouseEvent', {
-          type: 'mousePressed',
-          x: wizard.x,
-          y: wizard.y,
+          type,
+          x: bouton.x,
+          y: bouton.y,
           button: 'left',
           clickCount: 1
         })
-        await send('Input.dispatchMouseEvent', {
-          type: 'mouseReleased',
-          x: wizard.x,
-          y: wizard.y,
-          button: 'left',
-          clickCount: 1
-        })
-      }
-      await attendreDansLaPage(evaluate, `!document.querySelector('.frw-overlay')`, 2000, 100)
     }
-    await attendreDansLaPage(evaluate, `!document.querySelector('.frw-overlay')`, 2000, 100)
+    await agirJusqua(evaluate, `!document.querySelector('.frw-overlay')`, fermerLeWizard, 8000, 100)
     await evaluate(`(async () => {
   const existing = (await window.api.conversations()).find((item) => item.title === 'Preuve chemin critique')
   const conversation = existing ?? await window.api.conversationsCreate({
