@@ -28,6 +28,25 @@ export const SEUIL_BRUIT = 0.3
 
 const BRAS = ['a', 'b', 'c', 'x']
 
+/** Noms acceptes pour le prompt envoye au juge (les deux ordres ont ete utilises par des bancs reels). */
+const FICHIERS_PROMPT_JUGE = ['prompt-judge.txt', 'judge-prompt.txt']
+
+/**
+ * Invocation de la skill judge dans le prompt du juge. Le JSON de sortie d_un appel ne liste PAS les
+ * skills chargees : la seule preuve LISIBLE que le verdict vient de `judge` et non d_une grille
+ * improvisee est l_invocation ecrite dans le prompt que ce juge a recu.
+ */
+const REGEX_SKILL_JUGE = /\/judge|skills[\/]judge[\/]SKILL\.md/i
+
+/** Le texte du prompt envoye au juge, quel que soit le nom de fichier retenu par le banc. */
+function promptDuJuge(bench) {
+  for (const nom of FICHIERS_PROMPT_JUGE) {
+    const t = lire(path.join(bench, nom))
+    if (t !== null) return t
+  }
+  return null
+}
+
 /** Compte `n/4` de bras ayant passe le critere, lu dans la ligne Discrimination du RUN.md. */
 const REGEX_DISCRIMINATION =
   /discrimin\w*.{0,60}?([0-4])\s*\/\s*4|([0-4])\s*\/\s*4.{0,60}?discrimin/i
@@ -238,13 +257,21 @@ export function verifierProtocole({ run, bench, racineDuels = process.cwd(), ava
     return ecarts.length ? ecarts.join(' ; ') : true
   })
 
-  ajoute('P9', 'Le juge est un appel DISTINCT des quatre bras', () => {
+  ajoute('P9', 'Le juge est un appel DISTINCT des quatre bras, sous la skill judge', () => {
     const juge = lireJson(path.join(bench, 'out-judge.json'))
     if (!juge) return 'out-judge.json absent : le producteur a pu se juger lui-meme'
     if (!juge.session_id) return 'out-judge.json sans session_id : appel non attribuable'
     const sessions = BRAS.map((b) => sorties[b]?.session_id)
     const i = sessions.indexOf(juge.session_id)
-    return i >= 0 ? `le juge partage la session du bras ${BRAS[i]}` : true
+    if (i >= 0) return `le juge partage la session du bras ${BRAS[i]}`
+    if (juge.is_error === true) return 'out-judge.json en erreur : aucun verdict rendu'
+    if (!String(juge.result ?? '').trim()) return 'out-judge.json sans result : aucun verdict rendu'
+    const prompt = promptDuJuge(bench)
+    if (prompt === null)
+      return `aucun prompt de juge sur disque (${FICHIERS_PROMPT_JUGE.join(' ou ')}) : rien ne prouve que la skill judge a ete chargee`
+    if (!REGEX_SKILL_JUGE.test(prompt))
+      return 'le prompt du juge n_invoque ni /judge ni skills/judge/SKILL.md : grille improvisee, pas la skill judge'
+    return true
   })
 
   ajoute('P10', 'Tableau de sortie au format impose (8 colonnes)', () => {

@@ -30,6 +30,8 @@ const RATES_ATTENDUS = {
   P1: /section `## Candidats scoutés` absente/,
   P2: /aucune sortie collee/,
   P3: /1 cas limite sur 5 assertions/,
+  // Le banc n'a gardé AUCUN prompt de juge : rien ne prouve que le verdict vient de la skill `judge`.
+  P9: /rien ne prouve que la skill judge a ete chargee/,
   P11: /aucune ligne Discrimination/,
   // Le banc de conv-126 date d'avant le journal des duels : aucun de ses 4 bras n'y figure.
   P15: /aucun bras journalise/,
@@ -74,7 +76,6 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
       'P6',
       'P7',
       'P8',
-      'P9',
       'P10',
       'P12',
       'P13',
