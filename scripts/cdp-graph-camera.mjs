@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { attendreDansLaPage } from './cdp-attente.mjs'
 import { join } from 'node:path'
 import { cheminAudit } from './racine-depot.mjs'
 
@@ -84,7 +85,26 @@ const memoryOpened = await evaluate(`(() => {
   return Boolean(target)
 })()`)
 if (!memoryOpened) throw new Error('Navigation Memory introuvable')
-await wait(4000)
+/*
+ * LA REFERENCE SE PREND SUR UN GRAPHE CHARGE, PAS APRES UN DELAI.
+ *
+ * 4 s suffisaient sur une application chaude, jamais sur un profil neuf : mesure du 2026-09-06, le
+ * premier etat portait `visibleTags: 0` et une distance de camera de 1000 (valeur d'attente) au
+ * lieu de 3037. Toutes les comparaisons se faisaient donc contre une reference FAUSSE, et les DIX
+ * etapes echouaient d'un coup — en accusant le produit. On attend le contenu : des etiquettes
+ * visibles ET une distance de camera reelle.
+ */
+await attendreDansLaPage(
+  evaluate,
+  `(() => {
+    const canvas = document.querySelector('.graph-canvas')
+    const distance = Number(canvas?.dataset.cameraDistance)
+    const etiquettes = [...document.querySelectorAll('.theme-cluster-label')]
+      .filter((item) => getComputedStyle(item).display !== 'none').length
+    return Number.isFinite(distance) && distance !== 1000 && etiquettes > 0
+  })()`,
+  60000
+)
 const states = [await snapshot('01-open-memory')]
 if (!Number.isFinite(states[0].distance))
   throw new Error('Télémétrie caméra absente après ouverture Memory')
@@ -93,14 +113,38 @@ await click('.theme-cluster-label:not(.is-active)')
 await wait(500)
 states.push(await snapshot('02-floating-tag'))
 await click('.theme-cluster-label.is-active')
-await wait(500)
+/*
+ * LE RELACHEMENT D'UN FILTRE N'EST PAS INSTANTANE — mesure du 2026-09-06 : le nombre TOTAL
+ * d'etiquettes repasse a 30 tout de suite, mais les etiquettes VISIBLES reviennent de 1 a 22 entre
+ * 0,5 s et 3 s (recalcul de la disposition). La sonde regardait a 500 ms : elle voyait 1 etiquette,
+ * concluait que le filtre restait colle, et accusait le produit. On attend donc le retour au niveau
+ * de reference. L'assertion, elle, ne bouge pas : elle exige toujours l'egalite exacte.
+ */
+await attendreDansLaPage(
+  evaluate,
+  `[...document.querySelectorAll('.theme-cluster-label')]
+    .filter((item) => getComputedStyle(item).display !== 'none').length === ${states[0].visibleTags}`,
+  15000
+)
 states.push(await snapshot('03-floating-tag-off'))
 
 await click('.theme-filter[data-theme-id]')
 await wait(500)
 states.push(await snapshot('04-sidebar-filter'))
 await click('.theme-filter.is-active[data-theme-id]')
-await wait(500)
+/*
+ * LE RELACHEMENT D'UN FILTRE N'EST PAS INSTANTANE — mesure du 2026-09-06 : le nombre TOTAL
+ * d'etiquettes repasse a 30 tout de suite, mais les etiquettes VISIBLES reviennent de 1 a 22 entre
+ * 0,5 s et 3 s (recalcul de la disposition). La sonde regardait a 500 ms : elle voyait 1 etiquette,
+ * concluait que le filtre restait colle, et accusait le produit. On attend donc le retour au niveau
+ * de reference. L'assertion, elle, ne bouge pas : elle exige toujours l'egalite exacte.
+ */
+await attendreDansLaPage(
+  evaluate,
+  `[...document.querySelectorAll('.theme-cluster-label')]
+    .filter((item) => getComputedStyle(item).display !== 'none').length === ${states[0].visibleTags}`,
+  15000
+)
 states.push(await snapshot('05-sidebar-filter-off'))
 
 await click('.graph-settings-button')
