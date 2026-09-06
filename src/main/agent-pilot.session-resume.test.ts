@@ -6,6 +6,7 @@ import { AgentPilot } from './agent-pilot'
 import { configureAutowinAppDataBase } from './app-data'
 import { configureClaudeActiveAccountId } from './claude-accounts'
 import type { Message, SendOptions, SendResult, StreamChunk } from './providers/types'
+import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 
 /**
  * Session-resume du CHAT (levier coût — mesure 2026-07-28 : 1,85 M de cache_write en 1h, ~79 k de
@@ -292,6 +293,70 @@ describe('chat() — le compte Claude actif fait partie de l’identite de sessi
       1,
       'conv-ACC2'
     )
+    expect(captured[1].options.resumeSessionId).toBe('sess-1')
+  })
+})
+
+/**
+ * CHANGEMENT DE DOSSIER DE TRAVAIL — même panne que la bascule de compte, autre axe.
+ *
+ * Le CLI Claude range ses sessions PAR DOSSIER (`~/.claude/projects/<cwd encodé>/`), et le cwd d'un
+ * tour de chat EST `process.env[AUTOWIN_WORKSPACE_ENV]` (`providers/claude.ts`, `readOnlyCwd`).
+ * Reprendre depuis un AUTRE dossier fait donc rendre au CLI « No conversation found with session ID ».
+ *
+ * VÉCU le 2026-09-06, conv-48 : conversation ouverte dans `E:\GIT\Autowin-OS`, workspace basculé sur
+ * `E:\AutoWin-Temp` le temps d'un essai. Le tour est mort à `error_during_execution`, 0 message,
+ * 0 token, 0 USD — l'appel n'avait pas démarré. La session n'était ni perdue ni corrompue : 355
+ * lignes, 141 messages assistant, `cwd = E:\GIT\Autowin-OS`. Elle était simplement réclamée depuis
+ * le mauvais dossier. Le binding stocké le disait : `conv-48 → key "claude:opus:default"`, sans
+ * trace du dossier.
+ */
+describe('chat() — le dossier de travail fait partie de l’identite de session', () => {
+  const envInitial = process.env[AUTOWIN_WORKSPACE_ENV]
+
+  beforeEach(() => {
+    configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'aos-sessws-')))
+  })
+  afterEach(() => {
+    configureAutowinAppDataBase(undefined)
+    if (envInitial === undefined) delete process.env[AUTOWIN_WORKSPACE_ENV]
+    else process.env[AUTOWIN_WORKSPACE_ENV] = envInitial
+  })
+
+  it('changer de dossier entre deux tours → PAS de resume, fil complet', async () => {
+    const captured: Captured[] = []
+    const p = pilot(captured)
+    process.env[AUTOWIN_WORKSPACE_ENV] = join('E:', 'GIT', 'Autowin-OS')
+    await p.chat(history('premier message'), () => {}, undefined, 1, 'conv-WS')
+    // L'essai bascule le workspace : la session ouverte au tour 1 n'existe pas dans ce dossier-la.
+    process.env[AUTOWIN_WORKSPACE_ENV] = join('E:', 'AutoWin-Temp')
+    await p.chat(
+      history('premier message', 'ma reponse', 'deuxieme message'),
+      () => {},
+      undefined,
+      1,
+      'conv-WS'
+    )
+    expect(captured).toHaveLength(2)
+    expect(captured[1].options.resumeSessionId).toBeUndefined()
+    // Le fil complet doit repartir : sans lui, le modele perdrait tout le contexte au changement.
+    expect(captured[1].content).toContain('premier message')
+  })
+
+  it('meme dossier entre deux tours → la reprise reste armee', async () => {
+    const captured: Captured[] = []
+    const p = pilot(captured)
+    process.env[AUTOWIN_WORKSPACE_ENV] = join('E:', 'GIT', 'Autowin-OS')
+    await p.chat(history('premier message'), () => {}, undefined, 1, 'conv-WS2')
+    await p.chat(
+      history('premier message', 'ma reponse', 'deuxieme message'),
+      () => {},
+      undefined,
+      1,
+      'conv-WS2'
+    )
+    // Discriminant : sans cette assertion, retirer le workspace de la cle passerait le test du haut
+    // en cassant la reprise pour TOUT LE MONDE — le levier de cout disparaitrait en silence.
     expect(captured[1].options.resumeSessionId).toBe('sess-1')
   })
 })

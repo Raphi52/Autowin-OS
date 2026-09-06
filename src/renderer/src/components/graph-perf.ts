@@ -20,6 +20,8 @@ export function mesurerBlocGraphe<T>(
   etiquette: string,
   calcul: () => T,
   // SONDE TEMPORAIRE D'ISOLEMENT (2026-09-05) : seuil abaisse pour NOMMER les blocs courts.
+  // Le defaut d'origine etait `SEUIL_GEL_MS` (`shared/gel-detector`) : y revenir quand la sonde
+  // aura fini son office. Son import a ete retire ici parce qu'il ne compilait plus (TS6133).
   seuilMs: number = 150,
   maintenant: () => number = () => performance.now()
 ): T {

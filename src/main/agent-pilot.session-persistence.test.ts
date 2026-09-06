@@ -65,9 +65,11 @@ describe('AgentPilot — la reprise de session survit au redémarrage', () => {
     configureAutowinAppDataBase(base)
 
     // Un tour précédent, dans une vie antérieure de l'app, avait mémorisé sa session.
-    // La cle porte AUSSI l'id du compte Claude actif (vide hors configuration) : une session
-    // ouverte sous un autre compte n'existe pas dans son CLAUDE_CONFIG_DIR et ne se reprend pas.
-    saveChatSession('conv-42', 'claude:opus:', 'sess-anterieure')
+    // La cle porte AUSSI l'id du compte Claude actif ET le dossier de travail (vides hors
+    // configuration) : une session ouverte sous un autre compte n'existe pas dans son
+    // CLAUDE_CONFIG_DIR, et une session ouverte dans un autre dossier n'existe pas dans le
+    // `projects/<cwd>` du nouveau — dans les deux cas le CLI rend « No conversation found ».
+    saveChatSession('conv-42', 'claude:opus::', 'sess-anterieure')
 
     // Pilote NEUF : sa Map mémoire est vide, comme après un redémarrage.
     const { optionsVues, registry, roles, bus } = harnais()
@@ -134,8 +136,10 @@ describe('AgentPilot — la reprise de session survit au redémarrage', () => {
       12,
       'conv-7'
     )
+    // `provider:modele:compte:dossier` — les deux derniers segments sont vides ici (ni compte
+    // configure, ni AUTOWIN_OS_WORKSPACE pose dans l'environnement de test).
     expect(loadChatSessions()['conv-7']).toEqual({
-      key: 'claude:opus:',
+      key: 'claude:opus::',
       sessionId: 'sess-neuve'
     })
   })

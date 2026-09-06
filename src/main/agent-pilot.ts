@@ -46,6 +46,7 @@ import {
 } from '../shared/outil-pretendu-absent'
 import { startTurnTimer } from './turn-timing'
 import { claudeActiveAccountId } from './claude-accounts'
+import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
@@ -1200,7 +1201,19 @@ export class AgentPilot {
      * la cle fait retomber la conversation sur le chemin deja ecrit pour un changement de binding :
      * la session perimee est oubliee (memoire ET disque) et le fil complet repart a blanc.
      */
-    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}`
+    /**
+     * LE DOSSIER DE TRAVAIL AUSSI — meme raisonnement, second axe.
+     *
+     * Le CLI range ses sessions par DOSSIER (`~/.claude/projects/<cwd encode>/`), et le cwd d'un tour
+     * de chat EST `process.env[AUTOWIN_WORKSPACE_ENV]` (`providers/claude.ts`, `readOnlyCwd`). Changer
+     * de workspace en cours de conversation faisait donc reclamer une session absente du nouveau
+     * dossier — meme `No conversation found`, meme mort a 0 message. Vecu le 2026-09-06 sur conv-48 :
+     * ouverte dans `E:\GIT\Autowin-OS`, poursuivie apres bascule sur `E:\AutoWin-Temp`, tour mort en
+     * `error_during_execution` pour 0 token et 0 USD. La session etait INTACTE (355 lignes, 141
+     * messages assistant) : elle etait simplement reclamee depuis le mauvais dossier.
+     */
+    const workspaceDeSession = process.env[AUTOWIN_WORKSPACE_ENV] ?? ''
+    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}`
     // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
     // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.
     this.hydrateChatSessions()
