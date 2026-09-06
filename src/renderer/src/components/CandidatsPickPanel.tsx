@@ -77,7 +77,6 @@ export function CandidatsPickPanel({
    */
   const lanceRef = useRef(false)
   useEffect(() => {
-    console.log('PANEL EFFET', autoLancer, lanceRef.current, auto && auto.size, !!onPick)
     if (!autoLancer || lanceRef.current) return
     if (auto === null || auto.size === 0) return
     lanceRef.current = true

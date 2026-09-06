@@ -3242,7 +3242,6 @@ export function ChatView({
   const doitAutoLancerCandidats = useCallback(
     (cle: string, dernier: boolean, fini: boolean): boolean => {
       const etat = autoCandidatsRef.current.get(cle)
-      console.log('DOIT', cle, dernier, fini, autoActif, etat)
       if (etat === 'lance') return true
       if (!fini) {
         // Le message S'ECRIT sous nos yeux : on le marque seulement, on ne repond pas encore. Sans
