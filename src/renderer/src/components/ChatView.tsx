@@ -3431,13 +3431,14 @@ export function ChatView({
      * bouton « il y a du nouveau » herite d'avant l'envoi. La DESCENTE elle-meme reste pilotee par
      * l'effet sur `messages` plus bas.
      *
-     * Defaut vecu le 2026-09-06, NON RESOLU : « quand je prompt ca met pas la vue sur le dernier
-     * message, je suis oblige de scroll down ». Une tentative a arme ici `descenteEnVolRef` pour
-     * que les mouvements de fil provoques par l'app (le composer qui se vide) ne soient plus lus
-     * comme un geste de lecture. Elle a ete RETIREE : elle faisait tomber le test
-     * `ChatView.behavior` « un message arrive juste avant un scroll vers le haut ne ramene pas
-     * l'utilisateur en bas » — armer la descente a l'envoi confisque au lecteur le droit de
-     * remonter aussitot apres. La vraie cause reste a localiser.
+     * Defaut vecu le 2026-09-06, RESOLU AILLEURS : « quand je prompt ca met pas la vue sur le
+     * dernier message, je suis oblige de scroll down ». Une premiere tentative armait ici
+     * `descenteEnVolRef` ; elle a ete retiree car elle faisait tomber `ChatView.behavior` « un
+     * message arrive juste avant un scroll vers le haut ne ramene pas l'utilisateur en bas » —
+     * armer la descente a l'envoi confisque au lecteur le droit de remonter aussitot apres.
+     * La cause a ete localisee dans le gestionnaire `onScroll` : un defilement SANS geste de
+     * lecture y coupait le suivi du bas. Le correctif est la-bas, pas ici ; temoin :
+     * `ChatView.descente-envoi.test.tsx`.
      */
     if (
       scrollRef.current &&
@@ -5403,7 +5404,21 @@ Cliquer pour choisir une autre branche.`}
               // Pendant une descente automatique (envoi d'un message, streaming, fin de tour), les
               // evenements `scroll` viennent de NOUS : les prendre pour un geste de lecture coupait le
               // suivi et laissait le fil arrete au milieu du tour. Seul un recul rend la main.
-              const suit = descenteEnVolRef.current
+              /*
+               * UN DEFILEMENT QUE PERSONNE N'A PROVOQUE NE COUPE PAS LE SUIVI.
+               *
+               * Defaut vecu le 2026-09-06 : « quand je prompt ca met pas la vue sur le dernier
+               * message ». Entre l'envoi et la frame de descente, l'app bouge le fil elle-meme (le
+               * champ de saisie se vide et rend sa hauteur). Cet evenement arrivait ici avec le fil
+               * encore en haut, `nearBottom` repondait faux, le suivi tombait, et la descente
+               * s'annulait a la frame suivante — personne ne descendait.
+               *
+               * Le discriminant existe deja : `gesteLecteurRef` n'est vrai que si la molette, un
+               * doigt, le clavier ou le pointeur ont touche le fil. Un `scroll` sans geste vient
+               * donc de NOUS, exactement comme pendant une descente en vol, et se juge sur le SIGNE
+               * du deplacement au lieu de la seule distance au bas.
+               */
+              const suit = descenteEnVolRef.current || !gesteLecteurRef.current
                 ? doitSuivreLeBas({
                     suivaitLeBas: followTailRef.current,
                     precedentTop: dernierScrollTopRef.current,
