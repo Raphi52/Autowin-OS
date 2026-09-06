@@ -168,7 +168,7 @@ console.log('ETATS_FINAUX', JSON.stringify(etatsFinaux))
 // LE SUJET : après la fin des trois, aucun bureau ne doit rester en attente d'attention.
 await pause(3000)
 const activite = await ev(
-  `(async () => { const a = await window.api.getWorktreeActivity(); return (a||[]).map(x => ({ id: x.agentId, s: x.state, p: x.publication, r: x.attentionReason })) })()`
+  `(async () => { const a = await window.api.getWorktreeActivity(); return (a||[]).map(x => ({ id: x.agentId, s: x.state, p: x.publication, r: x.attentionReason, d: String(x.detail ?? '').slice(0, 300) })) })()`
 )
 console.log('ACTIVITE_FINALE', JSON.stringify(activite))
 ws.close()
