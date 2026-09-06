@@ -129,6 +129,17 @@
   background: rgba(212, 169, 79, 0.16);
 }
 
+/* Rail replié : l'icône seule, centrée, dans la MÊME largeur que le bouton principal (36 px).
+   Ce bouton était masqué (is-visually-hidden) en replié : le blocage de mise à jour restait
+   alors sans aucun geste pour le résoudre. */
+.rail-update-repair.is-glyph {
+  width: 36px;
+  align-self: center;
+  padding-inline: 0;
+  text-align: center;
+  font-size: 13px;
+}
+
 .rail-update-repair.is-visually-hidden {
   position: absolute;
   width: 1px;

@@ -373,12 +373,13 @@ export function UpdateBanner({
           {/* Le geste que l'utilisateur refaisait à chaque blocage : on l'automatise (pré-rempli). */}
           <button
             type="button"
-            className={`rail-update-repair${collapsed ? ' is-visually-hidden' : ''}`}
+            className={`rail-update-repair${collapsed ? ' is-glyph' : ''}`}
             data-testid="update-repair"
+            aria-label="Faire réparer le blocage de mise à jour"
             onClick={() => void reparerBlocageUpdate(applyError)}
             title="Ouvre une conversation et pré-remplit un prompt pour que l'agent résolve ce blocage, puis relance la mise à jour"
           >
-            🔧 Faire réparer
+            {collapsed ? <span aria-hidden="true">🔧</span> : '🔧 Faire réparer'}
           </button>
         </>
       )}

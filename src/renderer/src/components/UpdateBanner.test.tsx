@@ -456,6 +456,22 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     }
   })
 
+  it('rail REPLIÉ + blocage → « Faire réparer » reste CLIQUABLE (icône seule, pas masqué)', async () => {
+    api({
+      applyUpdate: vi.fn().mockResolvedValue({ ok: false, error: 'rebase impossible' })
+    })
+    await render(true)
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+    )
+    const repair = container.querySelector<HTMLButtonElement>('[data-testid="update-repair"]')
+    expect(repair).not.toBeNull()
+    // Masqué = aucun geste possible alors que la mise à jour est bloquée : c'était le défaut.
+    expect(repair!.className).not.toContain('is-visually-hidden')
+    expect(repair!.className).toContain('is-glyph')
+    expect(repair!.getAttribute('aria-label')).toContain('Faire réparer')
+  })
+
   it('aucun bouton « Faire réparer » sans blocage', async () => {
     api()
     await render()
