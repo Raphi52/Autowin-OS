@@ -83,3 +83,45 @@ describe('scout-residus — chemins absolus morts dans des fichiers vivants', ()
     expect(rapport).toMatch(/exécute ceux que tu déclares vivants/)
   })
 })
+
+// Pourquoi ces trois cas : au banc /arena du 2026-09-06 (v3), le bras guidé par la sonde a perdu
+// en reprenant ~10 signalements dont le motif « dossier de sortie disparu » était REFUTÉ par la
+// ligne citée elle-même — le dossier est recréé par `mkdirSync(…, { recursive: true })`, ou le
+// chemin n'est qu'un DEFAUT surchargeable (`arg('--out-dir', …)`, `process.env.X || …`). Un
+// signalement dont la ligne porte sa propre réfutation coûte plus cher qu'un silence.
+describe('scout-residus — chemins morts : ce qui n est PAS mort', () => {
+  it('ecarte un dossier recree par mkdirSync recursive dans le meme fichier', () => {
+    const rapport = sonde(
+      dossier({
+        'a.mjs': [
+          "import { mkdirSync } from 'node:fs'",
+          "const OUT = 'C:/nulle-part-xyz/rapports'",
+          'mkdirSync(OUT, { recursive: true })',
+          ''
+        ].join(chr10)
+      })
+    )
+    expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts — aucun/)
+  })
+
+  it('ecarte un chemin qui n est qu un DEFAUT derriere un drapeau CLI', () => {
+    const rapport = sonde(
+      dossier({ 'a.mjs': "const out = arg('--out-dir', 'C:/nulle-part-xyz/rapports/x.png')" + chr10 })
+    )
+    expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts — aucun/)
+  })
+
+  it('ecarte un chemin qui n est qu un repli de variable d environnement', () => {
+    const rapport = sonde(
+      dossier({ 'a.mjs': "const out = process.env.AUTOWIN_REPORT || 'C:/nulle-part-xyz/r/x.json'" + chr10 })
+    )
+    expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts — aucun/)
+  })
+
+  it('signale ENCORE une racine codee en dur sans repli ni recreation', () => {
+    const rapport = sonde(
+      dossier({ 'b.mjs': "const racine = 'C:/nulle-part-xyz/socle'" + chr10 + 'readFileSync(racine)' + chr10 })
+    )
+    expect(rapport).toMatch(/b\.mjs:1/)
+  })
+})

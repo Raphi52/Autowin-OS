@@ -59,8 +59,17 @@ for (const f of tousFichiers) {
   } catch {
     continue
   }
+  // Un fichier qui recree son dossier de sortie ne peut pas mourir d'un dossier absent :
+  // `mkdirSync(…, { recursive: true })` le refabrique a chaque execution. Mesure du banc /arena
+  // v3 (2026-09-06) : ~10 signalements etaient refutes par la ligne meme qui les portait.
+  if (/mkdirSync\s*\([^)]*recursive\s*:\s*true/.test(contenu)) continue
   const lignes = contenu.split(String.fromCharCode(10))
   for (let i = 0; i < lignes.length; i += 1) {
+    // Un chemin qui n'est qu'un DEFAUT surchargeable n'est pas une racine morte : derriere un
+    // drapeau CLI (`arg('--out-dir', 'C:/…')`) ou un repli d'environnement
+    // (`process.env.X || 'C:/…'`), la valeur reelle vient de l'appelant.
+    if (/['"`]--[\w-]+['"`]\s*,/.test(lignes[i])) continue
+    if (/process\.env\.[A-Za-z_][A-Za-z_0-9]*\s*(\|\||\?\?)/.test(lignes[i])) continue
     // Une VRAIE racine Windows : une lettre isolée suivie de `:\` ou `:/`, jamais un schéma
     // d'URL (`http://` se termine par `p:/`) ni un double séparateur.
     for (const m of lignes[i].matchAll(/(?<![A-Za-z0-9])[A-Za-z]:[\\/](?![\\/])[^'"`\r\n)]*/g)) {
