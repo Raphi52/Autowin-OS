@@ -167,12 +167,28 @@ const verdict = await withDeviceMetricsOverride(
     // est conservee telle quelle quand la surface grandit (on ne deplace pas ce que l'utilisateur a
     // pose). Sans ce retablissement les tuiles se chevauchent, et la premiere version de cette preuve
     // pressait au centre d'`agenda` un point occupe par une AUTRE tuile — l'oracle visait a cote.
-    await evaluate(`(() => {
-  const bouton = [...document.querySelectorAll('.home-view__tools button')]
-    .find((b) => b.textContent.includes('Retablir') || b.textContent.includes('tablir'))
-  bouton?.click()
+    const retabli = await evaluate(`(() => {
+  /*
+   * « Retablir » VIT DANS UN PANNEAU QU'IL FAUT OUVRIR.
+   *
+   * Ce bloc cherchait le bouton dans .home-view__tools, une classe SUPPRIMEE du produit. Il ne
+   * levait pas : le clic etait optionnel, il ne faisait rien, et la preuve continuait
+   * en mesurant une disposition NON retablie — un faux vert silencieux, le pire des deux. Le bouton
+   * est desormais dans le dialogue de reglages home-settings-panel, qu'on ouvre par le rouage.
+   * On rend un booleen : le clic manque doit se VOIR, pas se taire.
+   */
+  const rouage = document.querySelector('[data-testid="home-settings"]')
+  if (!document.querySelector('[data-testid="home-settings-panel"]')) rouage?.click()
+  const bouton = [...document.querySelectorAll('.home-settings__actions button')]
+    .find((b) => b.textContent.includes('tablir'))
+  if (!bouton) return false
+  bouton.click()
+  // On referme : la capture doit montrer la vue telle qu'elle s'ouvre, pas le dialogue ouvert.
+  rouage?.click()
   return true
 })()`)
+    if (!retabli)
+      throw new Error('Bouton « Retablir la disposition » introuvable : la preuve mesurerait une disposition non retablie')
     await wait(500)
 
     const tuile = await evaluate(`(() => {
@@ -245,9 +261,23 @@ const verdict = await withDeviceMetricsOverride(
     // --- 4. la capture, APRÈS avoir remis la tuile en place : la preuve visuelle doit montrer la vue
     // telle qu'elle s'ouvre, pas telle que le test l'a laissée.
     await evaluate(`(() => {
-  const bouton = [...document.querySelectorAll('.home-view__tools button')]
-    .find((b) => b.textContent.includes('Rétablir'))
-  bouton?.click()
+  /*
+   * « Retablir » VIT DANS UN PANNEAU QU'IL FAUT OUVRIR.
+   *
+   * Ce bloc cherchait le bouton dans .home-view__tools, une classe SUPPRIMEE du produit. Il ne
+   * levait pas : le clic etait optionnel, il ne faisait rien, et la preuve continuait
+   * en mesurant une disposition NON retablie — un faux vert silencieux, le pire des deux. Le bouton
+   * est desormais dans le dialogue de reglages home-settings-panel, qu'on ouvre par le rouage.
+   * On rend un booleen : le clic manque doit se VOIR, pas se taire.
+   */
+  const rouage = document.querySelector('[data-testid="home-settings"]')
+  if (!document.querySelector('[data-testid="home-settings-panel"]')) rouage?.click()
+  const bouton = [...document.querySelectorAll('.home-settings__actions button')]
+    .find((b) => b.textContent.includes('tablir'))
+  if (!bouton) return false
+  bouton.click()
+  // On referme : la capture doit montrer la vue telle qu'elle s'ouvre, pas le dialogue ouvert.
+  rouage?.click()
   return true
 })()`)
     await wait(600)
