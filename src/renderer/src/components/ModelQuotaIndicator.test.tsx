@@ -343,7 +343,7 @@ describe('indicateur de quotas modèles', () => {
     await act(async () => root.unmount())
   })
 
-  it('met à jour la barre lorsque le fournisseur du modèle sélectionné change', async () => {
+  it('affiche Claude par défaut et bascule sur le fournisseur choisi dans la popup', async () => {
     const modelQuotas = vi.fn(async () => ({
       observedAt: '2026-07-29T08:00:00.000Z',
       summary: { remainingPercent: 25, status: 'warning' as const },
@@ -392,8 +392,10 @@ describe('indicateur de quotas modèles', () => {
     document.body.append(container)
     const root = createRoot(container)
 
+    // Le fournisseur du modele qui repond est `codex` : la barre doit QUAND MEME montrer Claude,
+    // valeur par defaut du choix utilisateur — c'est la demande du 2026-09-06.
     await act(async () => {
-      root.render(createElement(ModelQuotaIndicator, { provider: 'claude' }))
+      root.render(createElement(ModelQuotaIndicator, { provider: 'codex' }))
       await Promise.resolve()
     })
     const trigger = container.querySelector(
@@ -401,11 +403,15 @@ describe('indicateur de quotas modèles', () => {
     ) as HTMLButtonElement
     expect(trigger.textContent).toContain('25')
 
-    await act(async () => {
-      root.render(createElement(ModelQuotaIndicator, { provider: 'codex' }))
-    })
+    await act(async () => trigger.click())
+    const chip = container.querySelector(
+      '[data-testid="model-quota-provider-codex"]'
+    ) as HTMLButtonElement
+    expect(chip.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => chip.click())
     expect(trigger.textContent).toContain('70')
-    expect(modelQuotas).toHaveBeenCalledTimes(1)
+    expect(window.localStorage.getItem('autowin:quota-provider')).toBe('codex')
+    window.localStorage.removeItem('autowin:quota-provider')
     await act(async () => root.unmount())
   })
   it('recharge le quota quand le compte actif change (signal autowin:quotas-stale)', async () => {

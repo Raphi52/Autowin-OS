@@ -15,6 +15,24 @@ const providerLabels: Record<string, string> = {
   kimi: 'Kimi'
 }
 
+/**
+ * FOURNISSEUR AFFICHE PAR LA BARRE — choisi par l'utilisateur, pas deduit du tour courant.
+ *
+ * Demande du 2026-09-06 : la barre suivait le fournisseur du modele en cours, donc elle changeait
+ * de sujet toute seule. Le choix est desormais explicite, memorise, et vaut `claude` par defaut.
+ */
+const QUOTA_PROVIDER_KEY = 'autowin:quota-provider'
+const DEFAULT_QUOTA_PROVIDER = 'claude'
+
+function lireFournisseurChoisi(): string {
+  try {
+    const stored = window.localStorage?.getItem(QUOTA_PROVIDER_KEY)
+    return stored && stored.length > 0 ? stored : DEFAULT_QUOTA_PROVIDER
+  } catch {
+    return DEFAULT_QUOTA_PROVIDER
+  }
+}
+
 function windowKey(window: ModelQuotaWindow): string {
   return `${window.id}\0${window.modelFamily ?? ''}`
 }
@@ -301,10 +319,13 @@ export function ModelQuotaIndicator({
   busy?: boolean
 }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<ModelQuotaSnapshot>()
+  const [selectedProvider, setSelectedProvider] = useState<string>(lireFournisseurChoisi)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
   const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [ancrage, setAncrage] = useState<{ left: number; bottom: number; width: number }>()
   const requestSequenceRef = useRef(0)
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -361,8 +382,39 @@ export function ModelQuotaIndicator({
       void refresh()
     }
     window.addEventListener('autowin:quotas-stale', onStale)
-    return () => window.removeEventListener('autowin:quotas-stale', onStale)
+    // Un changement de compte fait DEHORS de l'app (login CLI dans un terminal) n'emet aucun
+    // signal : au retour dans la fenetre, on relit plutot que d'attendre la minute suivante.
+    window.addEventListener('focus', onStale)
+    return () => {
+      window.removeEventListener('autowin:quotas-stale', onStale)
+      window.removeEventListener('focus', onStale)
+    }
   }, [refresh])
+
+  /**
+   * PLACEMENT DE LA POPUP PAR RAPPORT A LA FENETRE, pas a son parent.
+   *
+   * Defaut constate le 2026-09-06 (mesure DOM) : la popup allait de 61 a 491 px alors que le
+   * panneau de chat qui la contient (`.lisere-dessus.chat`, `overflow: hidden`) commence a 194 px.
+   * Ses 133 px de gauche — dont la rangee de choix du fournisseur — etaient DECOUPES, donc
+   * invisibles et non cliquables. Un `position: absolute` reste soumis a ce decoupage : seul un
+   * ancrage sur la FENETRE y echappe. La position est donc mesuree a l'ouverture, et bornee aux
+   * bords de la fenetre pour qu'aucune largeur d'ecran ne la rejette dehors.
+   */
+  useEffect(() => {
+    if (!open) return
+    const placer = (): void => {
+      const trigger = triggerRef.current?.getBoundingClientRect()
+      if (!trigger) return
+      const width = Math.min(430, window.innerWidth - 16)
+      const droite = Math.min(trigger.right, window.innerWidth - 8)
+      const left = Math.max(8, Math.min(droite - width, window.innerWidth - width - 8))
+      setAncrage({ left, bottom: Math.max(8, window.innerHeight - trigger.top + 10), width })
+    }
+    placer()
+    window.addEventListener('resize', placer)
+    return () => window.removeEventListener('resize', placer)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -380,17 +432,32 @@ export function ModelQuotaIndicator({
     }
   }, [open])
 
-  const summary = summaryForProvider(snapshot, provider)
+  // Le fournisseur AFFICHE est celui choisi dans la popup (`claude` par defaut), plus celui du
+  // modele qui repond : la barre ne doit pas changer de sujet a chaque tour.
+  const affiche = selectedProvider || provider || DEFAULT_QUOTA_PROVIDER
+  // Aucune mesure pour ce fournisseur (snapshot sans modeles, ou fournisseur non installe) : on
+  // retombe sur le resume GLOBAL du snapshot plutot que d'afficher une barre grise trompeuse.
+  const mesureConnue = (snapshot?.models ?? []).some((model) => model.provider === affiche)
+  const summary = summaryForProvider(snapshot, mesureConnue ? affiche : undefined)
   const remaining = summary?.remainingPercent
   const level = summary?.status ?? 'unknown'
   // Le libellé vient du résumé (fenêtre RETENUE), jamais du provider : au repli il dit « 5 h ».
-  const windowLabel = summary?.windowLabel ?? windowIdLabel(summaryWindowId(provider))
+  const windowLabel = summary?.windowLabel ?? windowIdLabel(summaryWindowId(affiche))
   const alert = summary?.statusWindowLabel ? ` · ${summary.statusWindowLabel} plus contrainte` : ''
   const providerQuotas = quotasByProvider(snapshot?.models ?? [])
+  const choisirFournisseur = (nom: string): void => {
+    setSelectedProvider(nom)
+    try {
+      window.localStorage?.setItem(QUOTA_PROVIDER_KEY, nom)
+    } catch {
+      // Stockage indisponible : le choix vaut pour la session, il ne doit jamais casser la barre.
+    }
+  }
   return (
     <div className="model-quota" ref={rootRef}>
       <button
         type="button"
+        ref={triggerRef}
         className={`model-quota-trigger is-${level}`}
         data-testid="model-quota-trigger"
         style={
@@ -452,6 +519,17 @@ export function ModelQuotaIndicator({
           className="model-quota-popover"
           data-testid="model-quota-popover"
           aria-label="Quotas par fournisseur"
+          style={
+            ancrage
+              ? {
+                  position: 'fixed',
+                  left: `${ancrage.left}px`,
+                  bottom: `${ancrage.bottom}px`,
+                  right: 'auto',
+                  width: `${ancrage.width}px`
+                }
+              : undefined
+          }
         >
           <header>
             <div>
@@ -477,6 +555,24 @@ export function ModelQuotaIndicator({
               {loading ? '…' : '↻'}
             </button>
           </header>
+          <div className="model-quota-providers" role="group" aria-label="Fournisseur affiche">
+            {(providerQuotas.length > 0
+              ? providerQuotas.map((model) => model.provider)
+              : [DEFAULT_QUOTA_PROVIDER]
+            ).map((nom) => (
+              <button
+                key={nom}
+                type="button"
+                className={`model-quota-provider-chip${nom === affiche ? ' is-active' : ''}`}
+                data-testid={`model-quota-provider-${nom}`}
+                aria-pressed={nom === affiche}
+                title={`Afficher les quotas de ${providerLabels[nom] ?? nom} dans la barre`}
+                onClick={() => choisirFournisseur(nom)}
+              >
+                {providerLabels[nom] ?? nom}
+              </button>
+            ))}
+          </div>
           {error && <p className="model-quota-error">{error}</p>}
           <div className="model-quota-list">
             <ContextGaugeRow
@@ -549,7 +645,7 @@ export function ModelQuotaIndicator({
               </article>
             ))}
           </div>
-          <footer>Capacité restante · un quota de compte par fournisseur</footer>
+          <footer>Capacité restante · la barre suit le fournisseur sélectionné ci-dessus</footer>
         </section>
       )}
     </div>

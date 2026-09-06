@@ -261,6 +261,10 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
       // Le compte actif change l'identite du CLI : le badge d'auth affiche ne vaut plus rien tant
       // qu'il n'a pas ete re-teste. On recharge donc les statuts au lieu de laisser un vert perime.
       await reloadCatalog()
+      // SECOND signal, apres le re-test d'auth : la sonde de quota lancee a l'instant de la bascule
+      // peut encore repondre pour l'ANCIEN compte (appel deja en vol, ou 429 sur le nouveau token).
+      // Sans cette relecture, la barre restait sur le chiffre precedent jusqu'au clic.
+      window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
     } catch (error) {
       // fail-open sur la LISTE (on garde l'affichage précédent plutôt qu'un écran vide), mais
       // l'échec est DIT : un `catch {}` muet rendait « + Ajouter un compte » sans effet apparent —
