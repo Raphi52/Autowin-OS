@@ -373,6 +373,22 @@
   overflow: auto;
   white-space: pre-wrap;
 }
+/* INVENTAIRE BRAIN — le POURQUOI de chaque point est une seconde ligne, pas la suite de la
+   premiere. Constate a l'ecran le 2026-09-06 : rendu tel quel, le `small` colle au libelle
+   (« Run · RAG de tacheSavoir cure injecte… ») et la colonne devient illisible. */
+.observatory-brain-inventory td strong {
+  display: block;
+}
+.observatory-brain-inventory td small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-faint);
+}
+.observatory-brain-inventory th,
+.observatory-brain-inventory td {
+  padding: 4px 10px 4px 0;
+  vertical-align: top;
+}
 .observatory-toolbar input,
 .observatory-toolbar select,
 .observatory-toolbar button,
