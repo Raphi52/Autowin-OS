@@ -127,6 +127,12 @@ remplie d'une estimation.
   v5, la skill l'atteint **2/2** passages et l'appel nu **0/2** — c'est la seule chose que ce tournoi
   a établie. Écrit APRÈS le lancement, il ne mesure plus, il justifie le gagnant déjà connu : le
   contrôle le refuse pour cette raison (point P20, vérifié dès le pré-vol).
+  **Un critère binaire se lit lui aussi sur PLUSIEURS passages.** Le même critère, rejoué sur les
+  **12 bras** des bancs `residus` v2 à v5 (relecture des livrables, 2026-09-06), donne : bras à skill
+  **5/6**, appel nu **2/6** — donc le bras nu y arrive parfois, et le journal marque sa colonne
+  **INSTABLE** et refuse de départager. Une tendance sur 12 passages n'est pas un départage : le
+  critère dit alors honnêtement qu'il ne tranche pas, au lieu de promouvoir le résultat d'un seul
+  banc en règle générale.
 - **Contrôle de discrimination, après coup** : si les 4 bras passent le critère, le banc est déclaré
   **NON DISCRIMINANT** dans la sortie. Le gagnant devient une piste, jamais une mesure.
 - **AU MOMENT où le banc sort 4/4 → écrire la section `## Critère durci` dans le RUN.md, avant de
