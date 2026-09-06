@@ -39,7 +39,13 @@ const SONDES = [
    * parcours d'orchestration, sans un centime d'appel modele. Son fil vit dans le profil isole,
    * qui est jete avec l'instance.
    */
-  'cdp-sonde-cloture-orchestration.mjs'
+  'cdp-sonde-cloture-orchestration.mjs',
+  /*
+   * Elle seme une fixture HTML deliberement HOSTILE (script, meta refresh, image distante, lien
+   * externe) et verifie dans le VRAI DOM que le rendu arrive et que le poison est retire. Elle
+   * ouvre un serveur canari local le temps de la mesure : rien ne doit le joindre a l'affichage.
+   */
+  'cdp-chat-html-render.mjs'
 ]
 
 if (!existsSync(binaire)) {
