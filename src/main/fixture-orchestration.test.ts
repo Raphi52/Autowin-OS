@@ -10,6 +10,7 @@ import {
   scenarioDemande,
   creerDepotJetable,
   FICHIER_ECRIT_PAR_LA_FIXTURE,
+  fichierFixturePour,
   MARQUEUR_DEPOT_JETABLE,
   preuveDeLaMutation,
   preuveExecutableDeLEcriture,
@@ -123,6 +124,15 @@ describe('scénario nominal', () => {
     expect(reponse).toContain(FICHIER_ECRIT_PAR_LA_FIXTURE)
   })
 
+  /*
+   * UN NOM PAR COPIE DE TRAVAIL. Deux copies differentes ne doivent PAS ecrire le meme fichier :
+   * mesure du 2026-09-06, trois runs concurrents finissaient 1 fusionne et 2 bloques en conflit.
+   */
+  it('donne un nom distinct par copie de travail, stable pour une meme copie', () => {
+    expect(fichierFixturePour('/a/run-un')).not.toBe(fichierFixturePour('/a/run-deux'))
+    expect(fichierFixturePour('/a/run-un')).toBe(fichierFixturePour('/a/run-un'))
+  })
+
   it('l’orchestrateur clôt sans réclamer un tour de plus', () => {
     expect(reponseFixtureNominale('orchestrator')).not.toContain('<cmd>')
   })
@@ -175,7 +185,9 @@ describe('preuve exécutable', () => {
    */
   it('rend ok quand le fichier a réellement été écrit', () => {
     const racine = creerDepotJetable(join(dossierTemporaire(), 'depot'))
-    writeFileSync(join(racine, FICHIER_ECRIT_PAR_LA_FIXTURE), 'écrit', 'utf8')
+    // Le nom DEPEND de la copie de travail depuis le 2026-09-06 : trois runs concurrents ecrivaient
+    // sinon le meme fichier et se bloquaient sur un conflit de fusion sans rapport avec leur sujet.
+    writeFileSync(join(racine, fichierFixturePour(racine)), 'écrit', 'utf8')
     const preuve = preuveExecutableDeLEcriture(racine)
     expect(preuve.ok).toBe(true)
     expect(preuve.kind).toBe('verification')
@@ -199,11 +211,11 @@ describe('preuve de la mutation', () => {
    */
   it('atteste l’écriture quand le fichier est là', () => {
     const racine = creerDepotJetable(join(dossierTemporaire(), 'depot'))
-    writeFileSync(join(racine, FICHIER_ECRIT_PAR_LA_FIXTURE), 'écrit', 'utf8')
+    writeFileSync(join(racine, fichierFixturePour(racine)), 'écrit', 'utf8')
     const preuve = preuveDeLaMutation(racine)
     expect(preuve.ok).toBe(true)
     expect(preuve.kind).toBe('mutation')
-    expect(preuve.path).toBe(FICHIER_ECRIT_PAR_LA_FIXTURE)
+    expect(preuve.path).toBe(fichierFixturePour(racine))
   })
 
   it('rend NON ok si le fichier n’existe pas — elle ne se croit pas sur parole', () => {

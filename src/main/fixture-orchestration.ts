@@ -3,7 +3,7 @@ import type { ExecutionEvidence, ProviderAdapter, SendResult, StreamChunk } from
 import type { BrainRetrievalResult } from './brain-retrieval'
 import { ALL_ROLES, RoleModelConfig } from './roles'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 /**
  * FIXTURE D'ORCHESTRATION — scénario `nominal`, son dépôt jetable et son garde-fou.
@@ -36,6 +36,24 @@ export const MARQUEUR_DEPOT_JETABLE = '.autowin-depot-jetable'
  * jetable, personne ne se demandera d'où il sort.
  */
 export const FICHIER_ECRIT_PAR_LA_FIXTURE = 'FIXTURE-ORCHESTRATION-jetable.md'
+
+/**
+ * UN FICHIER PAR COPIE DE TRAVAIL — trouvé en jouant TROIS runs en parallèle.
+ *
+ * Avec un nom unique, les trois runs concurrents écrivaient le MÊME fichier depuis la même base :
+ * le premier fusionnait, les deux autres restaient bloqués en `merge-failed`. Mesure du 2026-09-06 :
+ * 1 fusionné, 2 bloqués.
+ *
+ * Ce conflit est un vrai comportement de git, mais ce n'est PAS le sujet de la sonde des trois
+ * conversations : elle mesure la concurrence du pipeline et la propreté des bureaux, pas la
+ * résolution de conflits. Un conflit trivial fabriqué par la fixture masquerait ce qu'elle observe.
+ *
+ * Le nom dérive du dossier de la copie de travail : distinct par run, et STABLE pour un run donné —
+ * la preuve peut donc le retrouver.
+ */
+export function fichierFixturePour(cwd: string): string {
+  return `FIXTURE-ORCHESTRATION-jetable-${basename(cwd).slice(0, 40)}.md`
+}
 
 /**
  * POURQUOI CE GARDE-FOU EXISTE, et pourquoi il lève au lieu d'avertir.
@@ -224,7 +242,7 @@ export function fournisseurFixtureOrchestration(
          */
         assertDepotJetable(cwd)
         writeFileSync(
-          join(cwd, FICHIER_ECRIT_PAR_LA_FIXTURE),
+          join(cwd, fichierFixturePour(cwd)),
           'Écrit par la fixture d’orchestration, dans un dépôt jetable.\n',
           'utf8'
         )
@@ -300,7 +318,7 @@ export function rolesFixture(): RoleModelConfig {
  * commande qui le constate.
  */
 export function preuveDeLaMutation(cwd: string): ExecutionEvidence {
-  const present = existsSync(join(cwd, FICHIER_ECRIT_PAR_LA_FIXTURE))
+  const present = existsSync(join(cwd, fichierFixturePour(cwd)))
   return {
     type: 'file_change',
     kind: 'mutation',
@@ -308,29 +326,30 @@ export function preuveDeLaMutation(cwd: string): ExecutionEvidence {
     ok: present,
     oracleStable: true,
     summary: present
-      ? `Fichier ${FICHIER_ECRIT_PAR_LA_FIXTURE} écrit dans la copie de travail.`
-      : `Écriture de ${FICHIER_ECRIT_PAR_LA_FIXTURE} demandée mais introuvable sur le disque.`,
-    path: FICHIER_ECRIT_PAR_LA_FIXTURE,
-    paths: [FICHIER_ECRIT_PAR_LA_FIXTURE],
+      ? `Fichier ${fichierFixturePour(cwd)} écrit dans la copie de travail.`
+      : `Écriture de ${fichierFixturePour(cwd)} demandée mais introuvable sur le disque.`,
+    path: fichierFixturePour(cwd),
+    paths: [fichierFixturePour(cwd)],
     workspaceRoot: cwd
   }
 }
 
 export function preuveExecutableDeLEcriture(cwd: string): ExecutionEvidence {
-  const commande = `git status --porcelain -- ${FICHIER_ECRIT_PAR_LA_FIXTURE}`
+  const fichier = fichierFixturePour(cwd)
+  const commande = `git status --porcelain -- ${fichier}`
   let sortie = ''
   let code = 0
   try {
     sortie = execFileSync(
       'git',
-      ['status', '--porcelain', '--', FICHIER_ECRIT_PAR_LA_FIXTURE],
+      ['status', '--porcelain', '--', fichier],
       { cwd, encoding: 'utf8' }
     )
   } catch (erreur) {
     code = 1
     sortie = erreur instanceof Error ? erreur.message : String(erreur)
   }
-  const vue = sortie.includes(FICHIER_ECRIT_PAR_LA_FIXTURE)
+  const vue = sortie.includes(fichier)
   return {
     type: 'command_execution',
     kind: 'verification',
@@ -338,13 +357,13 @@ export function preuveExecutableDeLEcriture(cwd: string): ExecutionEvidence {
     ok: vue && code === 0,
     oracleStable: true,
     summary: vue
-      ? `Le fichier ${FICHIER_ECRIT_PAR_LA_FIXTURE} est bien présent dans la copie de travail.`
-      : `Le fichier ${FICHIER_ECRIT_PAR_LA_FIXTURE} est ABSENT : l'écriture n'a pas eu lieu.`,
+      ? `Le fichier ${fichier} est bien présent dans la copie de travail.`
+      : `Le fichier ${fichier} est ABSENT : l'écriture n'a pas eu lieu.`,
     command: commande,
     exitCode: code,
     stdout: sortie.slice(0, 500),
-    path: FICHIER_ECRIT_PAR_LA_FIXTURE,
-    paths: [FICHIER_ECRIT_PAR_LA_FIXTURE],
+    path: fichier,
+    paths: [fichier],
     workspaceRoot: cwd
   }
 }

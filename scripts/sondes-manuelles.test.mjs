@@ -45,7 +45,16 @@ describe('sondes manuelles', () => {
    * vert sans rien verifier — le piege classique de l'echantillon vide.
    */
   it('le marqueur est reellement porte par des sondes', () => {
-    expect(sondesManuelles().length).toBeGreaterThanOrEqual(4)
+    /*
+     * TROIS, ET NON PLUS QUATRE — le 2026-09-06, cdp-trois-conversations-proof a cesse d'etre
+     * manuelle : elle joue desormais le scenario nominal de la fixture d'orchestration, gratuit et
+     * deterministe. Son marqueur est donc RETIRE en connaissance de cause, ce qui est exactement la
+     * porte prevue : « pour l'y mettre, il faut d'abord retirer le marqueur ».
+     *
+     * Ce compte n'est pas un objectif a tenir : c'est un garde-fou contre l'echantillon VIDE. Il
+     * descend quand une sonde est reellement affranchie, jamais pour faire taire un rouge.
+     */
+    expect(sondesManuelles().length).toBeGreaterThanOrEqual(3)
   })
 
   /*
