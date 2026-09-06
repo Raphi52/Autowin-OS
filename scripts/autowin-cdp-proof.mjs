@@ -170,7 +170,14 @@ if (hoverTheme) {
     x: hovered.result.value.x,
     y: hovered.result.value.y
   })
-  await new Promise((resolve) => setTimeout(resolve, 200))
+  // Le survol se PROUVE : l'element vise doit passer en `:hover`. Un sommeil de 200 ms ne disait
+  // rien — si le pointeur tombait a cote, la capture montrait l'etat au repos sans que personne
+  // ne le sache. Au-dela du plafond, on continue : l'assertion visuelle qui suit tranchera.
+  const survolVu = await attendreDansLaPage(
+    `Boolean(document.querySelector(${JSON.stringify(`[aria-label="${hoverTheme}"]:hover`)}))`,
+    2000
+  )
+  if (!survolVu) console.warn(`[hover] ${hoverTheme} n’est pas passé en survol après 2 s`)
 }
 if (collapseRail) {
   await send('Runtime.evaluate', {
@@ -181,7 +188,12 @@ if (collapseRail) {
     })()`,
     returnByValue: true
   })
-  await new Promise((resolve) => setTimeout(resolve, 150))
+  // Le repli est une transition CSS : on attend l'ETAT replie, pas une duree devinee. Si elle ne
+  // vient pas, l'assertion ci-dessous rate comme avant — rien n'est desserre.
+  await attendreDansLaPage(
+    `document.querySelector('.rail')?.classList.contains('is-collapsed') === true`,
+    4000
+  )
   const collapsed = await send('Runtime.evaluate', {
     expression: `(() => {
       const icons = [...document.querySelectorAll('.nav-item .space-toy-icon')]
