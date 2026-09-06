@@ -79,7 +79,12 @@ import {
   writeExecutionWorkspacePreference
 } from './execution-workspace-preference'
 import { projectContextBlock } from './context-files'
-import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort, resolveRemoteDebuggingPort } from './cdp-port'
+import {
+  DEFAULT_CDP_PORT,
+  listeningPorts,
+  resolveCdpPort,
+  resolveRemoteDebuggingPort
+} from './cdp-port'
 import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
@@ -586,10 +591,34 @@ const finishedRunOutcomeByTurnId = ((): ((turnId: string) => FinishedRunOutcome 
     return index.get(turnId)
   }
 })()
-const flushConversations = persistConversations(os.conversations, undefined, {
-  resumableTurnIds,
-  finishedRunOutcome: finishedRunOutcomeByTurnId
-})
+/*
+ * MEME GARDE-FOU QUE POUR LA TOPOLOGIE, et pour la MEME raison.
+ *
+ * Mesure du 2026-09-06 par bissection sur le binaire packagé : un `conversations.json` dont un seul
+ * message porte un `status` hors contrat (« done » au lieu de `completed`/`streaming`/…) fait lever
+ * `loadConversations`. Cette erreur remontait au CORPS du module principal — donc AVANT
+ * `app.whenReady` et avant les filets de crash : le chargement s'arrêtait, la boucle Electron
+ * tournait à vide, aucune fenêtre ne s'ouvrait, Chromium n'était jamais initialisé et le port de
+ * pilotage restait fermé. Échec TOTALEMENT MUET : un process vivant, figé à 78 ms, sans un mot ni
+ * dans la console ni à l'écran. L'utilisateur voit une application qui « ne se lance plus », sans
+ * la moindre piste — et le fichier fautif, lui, est nommé dans l'erreur qu'on ne lisait jamais.
+ * On ne masque donc pas l'arrêt (relire des conversations illisibles n'a pas de sens) : on le NOMME,
+ * avec le chemin du fichier, et on sort proprement au lieu de laisser un process fantôme.
+ */
+let flushConversations: () => void
+try {
+  flushConversations = persistConversations(os.conversations, undefined, {
+    resumableTurnIds,
+    finishedRunOutcome: finishedRunOutcomeByTurnId
+  })
+} catch (erreur) {
+  console.error(
+    `[conversations] demarrage impossible : le store des conversations est illisible. ` +
+      `Cause : ${erreur instanceof Error ? erreur.message : String(erreur)}`
+  )
+  app.exit(79)
+  throw erreur
+}
 const scheduledTasks = new TaskStore()
 /** Alertes déjà transmises au moteur de réveil : le store rediffuse tout son instantané à chaque
  *  changement, donc sans cette mémoire la même alerte réveillerait un agent en boucle. */
