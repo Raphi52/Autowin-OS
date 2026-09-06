@@ -22,9 +22,13 @@ description: >-
 
 ## Procédure
 1. Compter la file : `ls <brainRoot>/inbox/*.md` (README exclu).
-2. Rapport : `python tooling/brain_curate.py` → JSON `{candidates:[{verdict, reason, merge_with}]}`.
+2. Rapport : `python tooling/brain_curate.py --brain <brainRoot>` → JSON
+   `{candidates:[{verdict, reason, merge_with}]}`. `--brain` est OBLIGATOIRE : par défaut le script vise le
+   dossier parent de son propre `tooling/` (la copie locale `%LOCALAPPDATA%\AmitelBrain`), où l'`inbox/` est
+   vide — il rend alors `candidates: []` sans erreur, ce qui se lit à tort comme « file déjà vide »
+   (mesuré le 2026-09-06 : 0 rapporté alors que 18 candidats attendaient).
    Redirige vers un fichier, le modèle d'embedding pollue stderr de barres de progression.
-3. Promotions mécaniques : `python tooling/brain_curate.py --apply --reviewer autowin-app-curation`.
+3. Promotions mécaniques : `python tooling/brain_curate.py --brain <brainRoot> --apply --reviewer autowin-app-curation`.
    Le relecteur DOIT être d'une famille distincte de l'auteur, sinon la promotion est refusée.
 4. `merge` — un par un, jamais en lot : lire le candidat ET la note visée (`merge_with`), écrire UNE
    note consolidée dans `knowledge/<type>/`, marquer les deux sources `status: superseded`, puis
@@ -32,11 +36,18 @@ description: >-
    citant la note qui le couvre.
 5. `reject` — lire la raison. « source locator is not verifiable » se corrige (`git:<chemin>@<sha>`,
    `session:<id>`) ; un secret ou une donnée personnelle détecté se SUPPRIME.
-6. Réindexer : `python tooling/brain_index.py --knowledge <brainRoot>/knowledge --out <index>`
-   (les deux arguments sont obligatoires).
-7. `python tooling/brain_validate.py` doit rendre `status: ok`. Pièges connus : un candidat déposé
+6. Réindexer : `python tooling/brain_index.py --knowledge <brainRoot>/knowledge --out <brainRoot>/tooling/index`
+   (les deux arguments sont obligatoires). La sortie DOIT être `<brainRoot>/tooling/index` : c'est le seul
+   dossier que le Brain relit (il y publie `CURRENT` + `generations/`). Mesuré le 2026-09-06 : indexer vers
+   `<brainRoot>/index` réussit, dure ~20 min sur le partage réseau, et n'est JAMAIS lu — les notes promues
+   restent introuvables par la recherche.
+7. `python tooling/brain_validate.py --root <brainRoot>` doit rendre `"status": "valid"` avec
+   `errors: []` (l'option est `--root`, PAS `--brain`, qui est refusé ; le statut est `valid`, pas `ok`).
+   Le warning « legacy curated notes remain valid » est normal. Pièges connus : un candidat déposé
    à la RACINE de `knowledge/` (interdit — il doit vivre dans `inbox/` ou dans `knowledge/<type>/`),
-   et l'index Obsidian généré devenu périmé après promotion.
+   et l'index Obsidian généré devenu périmé après promotion — l'erreur `stale generated Obsidian index
+   knowledge/_maps/vault-inventory.md` se corrige avec
+   `python tooling/obsidian_graph.py --root <brainRoot> --refresh-indexes --reviewer <agent>`, puis on revalide.
 8. Commit dans le dépôt Brain, message `curation: <n> promus, <m> fusionnés, <k> rejetés`.
 
 ## Ce que la skill ne fait pas
