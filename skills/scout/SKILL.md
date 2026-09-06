@@ -53,6 +53,13 @@ ONE table, ranked **highest-IMPACT first** (NOT "most-pickable" = smallest/safes
 - **Score = a PLAIN INTEGER 0-100, written in digits — NEVER a colour pastille (🟢/🟡/🔴), never "high/medium", never a ratio ("8/10"), never a range.** This column is READ BY MACHINE as well as by the human: Autowin's scout panel parses it to show the note next to each candidate ([scout-table.ts:143](file:///C:/Amitel/Autowin%20OS/src/renderer/src/components/scout-table.ts)), and a pastille there degrades every row to a mute dot — measured 2026-08-18. It also makes the shortlist non-sortable and says nothing the row's rank doesn't already say.
 - **How to compute it, WITHOUT re-burying the bold** (ENGINE Ch.1 ranking rule — the reason this used to be two columns): judge **Impact** (does it change the target's nature? 🟢 high / 🟡 medium / 🔴 low) and **Effort** (🟢 low / 🟡 medium / 🔴 high) SEPARATELY under the hood, then surface ONE score in which **impact DOMINATES**: a high-impact candidate never scores below ~70 however hard it is, and no cheap-and-safe low-impact fix ever outranks it. Uncertainty about feasibility feeds effort — it never deflates impact. **Say the effort in the How column** (e.g. "gros chantier — …") so the human still sees the cost the single number hides. Both judgements stay producer-judged, NOT verified measures: the score is a coarse ranking handle, never false 2-digit precision.
 - Keep ALL internal machinery OUT of the table (per-lens scores, "taste"/"novelty"/baskets, the raw Impact/Effort bands stay under the hood — only the **Score** surfaces).
+- **MANDATORY closing line — `CIBLE:`.** After the table, the LAST line of the output is
+  `CIBLE: <the row you engage> — POURQUOI: <the reason>`, or `CIBLE: aucune` when no candidate is
+  defensible. This line is READ BY MACHINE: Autowin's auto-mode parses it to carry the chosen
+  candidate into the next step (`chat-auto-mode.ts`), and `src/main/scout-cible.ts` has to inject a
+  catch-up warning whenever it is missing. **Exactly ONE `CIBLE:` line** — the FIRST one is read and
+  any later one is ignored, so a second is not a choice, it is noise. Naming the row is NOT ranking
+  it twice: the table proposes, this line ENGAGES one.
 - If a 🔧 and a 🆕 point at the SAME lever, add ONE line under the table saying so. Already-owned items → one line "already covered: X" at most.
 
 ## Modes
