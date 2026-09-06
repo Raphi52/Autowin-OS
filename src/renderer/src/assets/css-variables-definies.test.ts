@@ -213,6 +213,39 @@ describe('variables CSS appelees mais jamais definies', () => {
     expect(variablesAppeleesSansDefinition(fichiers)).toEqual([])
   })
 
+  it("n'appelle aucune variable qui n'existe QUE par sa valeur de secours", () => {
+    expect(variablesDeSecoursSansDefinition(fichiers)).toEqual([])
+  })
+
+  it('signale un nom absent du theme meme quand il porte une valeur de secours', () => {
+    // ENTREE QUI DOIT FAIRE ECHOUER LA SECONDE GARDE : `var(--absente-du-theme, #9aa4b2)`.
+    // Sans ce cas temoin, l'assertion ci-dessus pourrait devenir verte A VIDE.
+    const dossier = mkdtempSync(join(tmpdir(), 'autowin-css-vars-secours-'))
+    const feuille = join(dossier, 'temoin.css')
+    writeFileSync(
+      feuille,
+      [
+        ':root { --existe: #fff; }',
+        '.a { color: var(--absente-du-theme, #9aa4b2); }',
+        '.b { color: var(--existe, #000); }',
+        '.c { color: var(--nue-et-absente); }'
+      ].join('\n'),
+      'utf8'
+    )
+
+    const manquantes = variablesDeSecoursSansDefinition([feuille])
+
+    // Signale le nom fantome a valeur de secours, et LUI SEUL.
+    expect(manquantes).toHaveLength(1)
+    expect(manquantes[0]).toContain('--absente-du-theme')
+    // Un nom DEFINI reste legitime meme avec valeur de secours.
+    expect(manquantes.join(' ')).not.toContain('--existe')
+    // Un appel NU releve de la premiere garde, pas de celle-ci : pas de double signalement.
+    expect(manquantes.join(' ')).not.toContain('--nue-et-absente')
+
+    rmSync(dossier, { recursive: true, force: true })
+  })
+
   it('compte une cle de style entre crochets comme definition, mais pas un tableau CLI', () => {
     // Les DEUX formes que le depot contient reellement, mesurees a l'ecriture :
     //   - cle de style React calculee : `style={{ ['--chip-hue' as string]: hueOf(state) }}`
