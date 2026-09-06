@@ -283,6 +283,22 @@ export function SettingsView({
                         reparation le portent. L historique mis de cote est un CONSTAT — le fichier
                         est nomme juste au-dessus, la restauration appartient a l utilisateur.
                       */}
+                      {/*
+                        UN GESTE, pas seulement un chemin. Lire « votre fichier est en D:\… » sans
+                        pouvoir l'ouvrir oblige a recopier un chemin a la main. Le bouton n'existe
+                        que si le controle designe un fichier ; le main verifie qu'il est toujours la
+                        avant de le reveler.
+                      */}
+                      {check.revealPath && (
+                        <button
+                          type="button"
+                          className="settings-preflight-repair"
+                          data-testid={`settings-reveal-${check.id}`}
+                          onClick={() => void window.api?.openFolder?.(check.revealPath as string)}
+                        >
+                          Ouvrir le dossier
+                        </button>
+                      )}
                       {!check.ok && REPARABLES.has(check.id) && (
                         <button
                           type="button"

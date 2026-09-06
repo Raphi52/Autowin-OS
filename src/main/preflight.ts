@@ -27,6 +27,15 @@ export interface PreflightCheck {
   ok: boolean
   detail?: string
   standby?: boolean
+  /**
+   * Fichier a REVELER dans l'explorateur depuis ce controle, quand un geste concret existe.
+   *
+   * Un chemin ecrit dans `detail` est une information ; ici c'est une ACTION. Ajoute le 2026-09-06
+   * pour l'historique mis de cote : lire « votre fichier est en D:\… » sans pouvoir l'ouvrir laisse
+   * l'utilisateur recopier un chemin a la main. Le champ reste optionnel : aucun autre controle n'a
+   * de fichier a montrer, et l'interface n'affiche le bouton que s'il est renseigne.
+   */
+  revealPath?: string
 }
 
 export interface PreflightResult {
@@ -188,7 +197,10 @@ export async function runPreflight(
       ok: false,
       detail:
         "illisible au demarrage — mis de cote, RIEN n'a ete supprime. " +
-        `Fichier(s) conserve(s) : ${options.conversationsEcartees.join(', ')}`
+        `Fichier(s) conserve(s) : ${options.conversationsEcartees.join(', ')}`,
+      // Le premier : le snapshot, celui qui porte les conversations. Le journal part avec lui,
+      // dans le MEME dossier — reveler l'un montre l'autre.
+      revealPath: options.conversationsEcartees[0]
     })
   }
   const failed = checks.filter((c) => !c.ok)

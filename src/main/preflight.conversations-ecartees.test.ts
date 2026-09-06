@@ -36,3 +36,21 @@ describe('diagnostic de demarrage : conversations mises de cote', () => {
     expect(resultat.summary).toContain('Historique des conversations')
   })
 })
+
+describe('le constat porte un GESTE, pas seulement un chemin', () => {
+  it('designe le fichier a reveler dans l explorateur', async () => {
+    const snapshot = 'D:/profil/conversations.json.illisible-2026-09-06T16-58-54-642Z'
+    const journal = `${snapshot.replace('.json.', '.json.journal.jsonl.')}`
+
+    const resultat = await runPreflight(sondes, { conversationsEcartees: [snapshot, journal] })
+
+    // Le SNAPSHOT, celui qui porte les conversations. Le journal vit dans le meme dossier.
+    expect(resultat.checks[0]?.revealPath).toBe(snapshot)
+  })
+
+  it('aucun autre controle ne designe de fichier — le bouton reste rare', async () => {
+    const resultat = await runPreflight(sondes)
+
+    expect(resultat.checks.every((c) => c.revealPath === undefined)).toBe(true)
+  })
+})

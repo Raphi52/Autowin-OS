@@ -498,4 +498,56 @@ describe('SettingsView diagnostic', () => {
     ).toBe(true)
     expect(container.querySelector('[data-testid="budget-panel"]')).toBeTruthy()
   })
+
+  /*
+   * POURQUOI : le constat « historique mis de cote » nomme un fichier. Sans bouton, l'utilisateur
+   * doit recopier un chemin a la main dans l'explorateur. Et sur un constat qui ne SE REPARE PAS,
+   * un bouton « Reparer » promettrait un geste qui ne peut pas aboutir.
+   */
+  it('offre d ouvrir le dossier du fichier conserve, et AUCUNE reparation', async () => {
+    const openFolder = vi.fn().mockResolvedValue(undefined)
+    const chemin = 'D:/profil/conversations.json.illisible-2026-09-06'
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        openFolder,
+        getPreflight: vi.fn().mockResolvedValue({
+          ok: false,
+          summary: 'Configuration incomplète',
+          checks: [
+            {
+              id: 'conversations-ecartees',
+              label: 'Historique des conversations',
+              ok: false,
+              detail: 'mis de cote',
+              revealPath: chemin
+            }
+          ]
+        })
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'preflight',
+          onSectionChange: vi.fn()
+        })
+      )
+    })
+    const reveal = container.querySelector<HTMLButtonElement>(
+      '[data-testid="settings-reveal-conversations-ecartees"]'
+    )
+    await act(async () => reveal?.click())
+
+    expect(openFolder).toHaveBeenCalledWith(chemin)
+    expect(
+      container.querySelector('[data-testid="settings-repair-conversations-ecartees"]')
+    ).toBeNull()
+  })
 })
