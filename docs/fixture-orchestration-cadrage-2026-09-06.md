@@ -44,8 +44,8 @@ Le chantier consiste donc à **relier deux coutures qui existent**, pas à const
 | Sonde | Ce qu'elle observe | Ce que la fixture doit scripter |
 |---|---|---|
 | `cdp-relance-jusquau-vert-proof` | `[RÉPARATION n]`, refus motivé, plafond dur | un juge **rouge** aux deux premiers passages, **vert** au troisième |
-| `cdp-skill-node-brain-proof` | « outils natifs servis à … » dans la trace causale | un nœud **skill** qui appelle réellement son outil natif |
-| `cdp-trois-conversations-proof` | aucun bureau orphelin après 3 runs | trois runs **concurrents** qui terminent |
+| `cdp-skill-node-brain-proof` | « outils natifs servis à … » dans la trace causale | **rien de particulier** — le nœud skill vient du profil, pas de la fixture (voir « DEUX scénarios ») |
+| `cdp-trois-conversations-proof` | aucun bureau orphelin après 3 runs | **rien de particulier** — trois runs nominaux lancés ensemble |
 
 Le discriminant est disponible côté fournisseur : chaque appel passe par
 `sendWithRoleContext(<libellé>, <rôle>, …)` avec le rôle (`judge`, `orchestrator`, sous-agent), et
@@ -135,10 +135,38 @@ plus** : le catalogue en compte sept — `eclair`, `correctif`, `feature`, `chan
 `panel-critique`, `exploration`, `remake`. C'est un **second blocage**, indépendant de la fixture, et
 il se corrige seul : viser un profil existant qui porte `think` et `learn`, par exemple `correctif`.
 
-## Ce qui reste à trancher, et qui appartient à l'humain
+## Tranché le 2026-09-06 — le déterminisme porte sur les DÉCISIONS, pas sur le déroulé
 
-1. **Où s'arrête le déterminisme ?** Le temps d'exécution, lui, restera variable : les sondes ne
-   doivent donc rien asserter sur des durées.
+La fixture ne rend pas un run identique au bit près. Elle rend identiques **les décisions que les
+sondes observent**. Tout le reste bouge, et c'est normal.
+
+**Ce qui est déterministe — ce sur quoi une sonde a le droit d'asserter :**
+
+- la **suite des verdicts** : rouge, rouge, vert — donc `[RÉPARATION 1]`, `[RÉPARATION 2]`, le
+  plafond dur, le refus motivé ;
+- le **chemin parcouru** : quelles phases, quels nœuds, dans quel ordre pour UN run ;
+- les **faits d'arrivée** : le fichier écrit existe, il est intégré, le bureau est supprimable ;
+- la **présence** des lignes de trace que les sondes cherchent (« outils natifs servis à … »).
+
+**Ce qui ne l'est pas — et qu'aucune sonde ne doit toucher :**
+
+| Ce qui varie | Pourquoi | La règle |
+|---|---|---|
+| **Durées, horodatages** | mesuré le 2026-09-06 : deux passages du même banc, **+99 %** d'écart ; et une fenêtre masquée fausse toute mesure d'affichage d'un facteur **~14** | aucune assertion sur un temps |
+| **Identifiants** | `conv-1`, `turn-…`, noms de bureaux dépendent de l'ordre et du profil | asserter la **forme**, jamais la valeur |
+| **Ordre entre runs concurrents** | trois runs en parallèle finissent dans l'ordre que l'ordonnanceur décide | asserter l'**état final de l'ensemble**, jamais une séquence |
+| **Coût et jetons** | les champs existent même à zéro | ne rien en attendre |
+
+**Une substitution de plus, qui découle de cette règle.** Le contexte Brain injecté dans le prompt
+dépend d'un index et d'un corpus qui vivent hors du dépôt : deux runs identiques n'y trouvent pas
+forcément la même chose. Le retriever est déjà une dépendance substituable
+(`OrchestratorCollaboratorDeps.retrieveBrain`, `src/main/orchestrator.ts` l.649, prévue pour
+« prouver les frontières d'injection sans serveur global »). La fixture le remplace donc **aussi**,
+par un retour vide et constant — sinon le déterminisme s'arrête au premier appel au Brain.
+
+**Le critère qui tranche un cas limite.** Devant une assertion douteuse, se demander : *« ce que je
+vérifie est-il une DÉCISION du produit, ou un effet de son environnement ? »* Une décision se
+scripte et s'exige ; un effet d'environnement se mesure, se raconte, mais ne se verrouille pas.
 
 ## Le critère de réussite
 
