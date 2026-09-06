@@ -1173,14 +1173,23 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
                 systemInjected: true
               }
             }
-            const chunks = [
-              'Je ',
-              'réponds ',
-              'progressivement.',
-              '<cm',
-              `d>{"name":"get_state","args":{"target":${JSON.stringify(target)},"token":"fixture-secret"}}</cmd>`,
-              ' Terminé.'
-            ]
+            /*
+             * CIBLE `supprimer:<id>` — la SEULE façon d'exercer une commande DESTRUCTIVE de bout en
+             * bout, dans une instance isolée uniquement (`isolatedTestInstance` garde tout ce bloc).
+             *
+             * Mesuré le 2026-09-06 : le reçu d'autorité disparaissait précisément sur les commandes
+             * destructives (la politique les classe « à confirmer », et le reçu était alors refusé
+             * puis avalé par un catch). Le corriger sans pouvoir le PROUVER en exécution laissait le
+             * cas le plus à risque couvert par des tests unitaires seuls. Ici la suppression est
+             * RÉELLE, sur une conversation jetable créée pour ça par l'appelant de la fixture.
+             */
+            const suppression = target.startsWith('supprimer:')
+              ? target.slice('supprimer:'.length).trim()
+              : undefined
+            const commande = suppression
+              ? `d>{"name":"remove_conversation","args":{"id":${JSON.stringify(suppression)}}}</cmd>`
+              : `d>{"name":"get_state","args":{"target":${JSON.stringify(target)},"token":"fixture-secret"}}</cmd>`
+            const chunks = ['Je ', 'réponds ', 'progressivement.', '<cm', commande, ' Terminé.']
             for (const delta of chunks) {
               yield { delta }
               if (!delta.startsWith('<') && !delta.startsWith('d>'))
