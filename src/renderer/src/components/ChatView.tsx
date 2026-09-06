@@ -3373,6 +3373,27 @@ export function ChatView({
       setDraftError(sendDraftKey, null)
     }
     followTailRef.current = true
+    /*
+     * ENVOYER, C'EST VOULOIR VOIR LA REPONSE — et la descente doit etre ARMEE DES MAINTENANT.
+     *
+     * Defaut vecu le 2026-09-06 : « quand je prompt ca met pas la vue sur le dernier message,
+     * je suis oblige de scroll down ». Rearmer le suivi ne suffisait pas : entre cet instant et
+     * la frame ou l'effet de descente s'execute, l'APP elle-meme bouge le fil (le composer
+     * multi-ligne se vide et rend sa hauteur, la compensation de frappe repose `scrollTop`).
+     * Ces evenements `scroll` arrivaient avec `descenteEnVolRef` a `false`, donc ils etaient lus
+     * comme un geste de lecture « loin du bas » : `followTailRef` retombait a `false` et l'effet
+     * de descente sortait aussitot par sa garde. Personne ne descendait.
+     *
+     * On declare donc la descente EN VOL des l'envoi : a partir d'ici, seul un RECUL du fil
+     * (cf. `doitSuivreLeBas`) rend la main au lecteur.
+     */
+    if (scrollRef.current && (!sourceConversationId || sourceConversationId === activeRef.current)) {
+      gesteLecteurRef.current = false
+      descenteEnVolRef.current = true
+      dernierScrollTopRef.current = scrollRef.current.scrollTop
+      setHasNewActivity(false)
+      setScrolledAwayFromTail(false)
+    }
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
 
     try {
