@@ -456,9 +456,7 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
           { cause: error }
         )
       }
-      ecartees.push(
-        `ligne ${index + 1}: ${error instanceof Error ? error.message : String(error)}`
-      )
+      ecartees.push(`ligne ${index + 1}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
   if (ecartees.length) {
@@ -628,4 +626,39 @@ export function persistConversations(
   // Exposé pour un flush forcé (ex. before-quit) : évite de perdre le dernier
   // fragment de streaming resté dans la fenêtre de debounce de 120 ms.
   return flush
+}
+
+/**
+ * MET DE COTE un store illisible, pour que l'application puisse quand meme s'ouvrir.
+ *
+ * DEFAUT VECU (2026-09-06) : un seul message portant un `status` hors contrat rendait le fichier
+ * ENTIER illisible, et l'application refusait de demarrer. L'utilisateur se retrouvait devant une
+ * application qui ne s'ouvre plus, sans autre issue que d'aller reparer un JSON a la main.
+ *
+ * Le fichier n'est JAMAIS supprime : il est RENOMME avec un horodatage, a cote de sa place
+ * habituelle. Son journal d'ecritures part avec lui — le laisser serait pire que tout, il serait
+ * rejoue sur un store vide et ressusciterait une moitie des donnees dans un etat incoherent.
+ *
+ * Rend les chemins reellement ecartes, pour que l'appelant puisse les NOMMER a l'utilisateur : un
+ * demarrage qui repart a vide sans dire ou sont passees les conversations serait une perte de
+ * donnees percue, meme quand rien n'est perdu.
+ */
+export function ecarterStoreIllisible(
+  path = conversationsPath(),
+  horodatage = new Date()
+): string[] {
+  const suffixe = horodatage.toISOString().replace(/[:.]/g, '-')
+  const ecartes: string[] = []
+  for (const source of [path, conversationJournalPath(path)]) {
+    if (!existsSync(source)) continue
+    const destination = `${source}.illisible-${suffixe}`
+    try {
+      renameSync(source, destination)
+      ecartes.push(destination)
+    } catch {
+      // Un renommage impossible (fichier verrouille) ne doit pas empecher la tentative suivante :
+      // ecarter le journal seul vaut mieux que ne rien ecarter du tout.
+    }
+  }
+  return ecartes
 }

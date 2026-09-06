@@ -125,7 +125,7 @@ import { commandeEditeur, ligneDemandee, racinesRevelation } from './reveal-file
 import { type ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
-import { persistConversations } from './store/conversations-disk'
+import { ecarterStoreIllisible, persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
 import { collectRunWorkspaces } from './runs/workspace-gc'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
@@ -602,8 +602,17 @@ const finishedRunOutcomeByTurnId = ((): ((turnId: string) => FinishedRunOutcome 
  * pilotage restait fermé. Échec TOTALEMENT MUET : un process vivant, figé à 78 ms, sans un mot ni
  * dans la console ni à l'écran. L'utilisateur voit une application qui « ne se lance plus », sans
  * la moindre piste — et le fichier fautif, lui, est nommé dans l'erreur qu'on ne lisait jamais.
- * On ne masque donc pas l'arrêt (relire des conversations illisibles n'a pas de sens) : on le NOMME,
- * avec le chemin du fichier, et on sort proprement au lieu de laisser un process fantôme.
+ * On ne masque donc pas l'échec : il est NOMMÉ, avec le chemin du fichier.
+ *
+ * MAIS ON N'ABANDONNE PLUS L'UTILISATEUR DEVANT UNE APPLICATION QUI NE S'OUVRE PAS. Sortir
+ * proprement valait mieux que se figer, pas mieux que démarrer : la seule issue restante était
+ * d'aller réparer un JSON à la main. Le fichier fautif est donc MIS DE CÔTÉ — renommé avec un
+ * horodatage, jamais supprimé, journal d'écritures compris — et l'application s'ouvre sur un store
+ * vide. Le message dit où le fichier est parti : un démarrage à vide sans cette phrase serait vécu
+ * comme une perte de données, même quand rien n'est perdu.
+ *
+ * Si l'échec PERSISTE après cette mise à l'écart, la cause n'est plus le contenu du fichier
+ * (disque en lecture seule, dossier inaccessible) : là, on sort en nommant, code 79.
  */
 let flushConversations: () => void
 try {
@@ -612,12 +621,27 @@ try {
     finishedRunOutcome: finishedRunOutcomeByTurnId
   })
 } catch (erreur) {
+  const cause = erreur instanceof Error ? erreur.message : String(erreur)
+  const ecartes = ecarterStoreIllisible()
   console.error(
-    `[conversations] demarrage impossible : le store des conversations est illisible. ` +
-      `Cause : ${erreur instanceof Error ? erreur.message : String(erreur)}`
+    `[conversations] store illisible, mis de cote pour permettre le demarrage. Cause : ${cause}. ` +
+      (ecartes.length
+        ? `Fichier(s) conserve(s) : ${ecartes.join(', ')}. L'application s'ouvre sur un historique vide.`
+        : `Aucun fichier n'a pu etre ecarte.`)
   )
-  app.exit(79)
-  throw erreur
+  try {
+    flushConversations = persistConversations(os.conversations, undefined, {
+      resumableTurnIds,
+      finishedRunOutcome: finishedRunOutcomeByTurnId
+    })
+  } catch (secondeErreur) {
+    console.error(
+      `[conversations] demarrage impossible meme apres mise de cote. ` +
+        `Cause : ${secondeErreur instanceof Error ? secondeErreur.message : String(secondeErreur)}`
+    )
+    app.exit(79)
+    throw secondeErreur
+  }
 }
 const scheduledTasks = new TaskStore()
 /** Alertes déjà transmises au moteur de réveil : le store rediffuse tout son instantané à chaque
