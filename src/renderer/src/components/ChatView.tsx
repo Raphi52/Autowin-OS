@@ -3389,7 +3389,6 @@ export function ChatView({
      */
     if (scrollRef.current && (!sourceConversationId || sourceConversationId === activeRef.current)) {
       gesteLecteurRef.current = false
-      descenteEnVolRef.current = true
       dernierScrollTopRef.current = scrollRef.current.scrollTop
       setHasNewActivity(false)
       setScrolledAwayFromTail(false)
