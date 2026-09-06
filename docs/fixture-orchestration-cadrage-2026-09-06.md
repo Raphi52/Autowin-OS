@@ -55,8 +55,11 @@ Le discriminant est disponible côté fournisseur : chaque appel passe par
 
 - **Ne jamais quitter l'instance isolée.** Même garde que les fixtures de chat : tout le bloc est
   sous `isolatedTestInstance`, sinon la porte existe en production.
-- **N'émettre aucune commande mutante.** Les réponses scriptées ne contiennent pas de `edit_file` ni
-  de `run` : le bus de commandes, lui, est le vrai. Le déterminisme s'arrête où l'écriture commence.
+- **N'écrire QUE dans le dépôt jetable.** Voir la décision du 2026-09-06 plus bas : l'écriture est
+  nécessaire, mais le plan de travail par défaut retombe sur le dépôt RÉEL. La fixture impose donc
+  `AUTOWIN_OS_WORKSPACE` et **lève** si ce n'est pas son propre dépôt jetable.
+- **Écrire, mais rien qui ressemble à du produit.** Un fichier anodin et nommé comme tel : si un
+  jour il fuit hors du dépôt jetable, il doit se reconnaître au premier coup d'œil.
 - **Ne pas neutraliser les portes.** Si une porte refuse, la fixture ne la contourne pas : c'est
   précisément le comportement que la sonde de relance vient observer.
 
@@ -67,14 +70,45 @@ scénario nomme la forme voulue (`juge-rouge-puis-vert`, `noeud-skill`, `trois-r
 inconnu **lève** — un préfixe mal orthographié qui retomberait sur un vrai run payant serait le pire
 des résultats.
 
+## Tranché le 2026-09-06 — elle écrit, mais dans un dépôt JETABLE
+
+**Elle doit écrire.** Une copie de travail n'est supprimée par le balayage que si **quatre
+conditions cumulatives** sont vraies (`src/main/store/worktree-manager.ts`), dont « son arborescence
+de travail est **vide** » et « son HEAD est déjà contenu dans une référence ». Une fixture qui
+n'écrit rien produit donc une copie vide : elle emprunte le chemin le plus simple, celui où la
+suppression est triviale. La sonde vérifierait qu'un cas sans enjeu ne laisse pas d'orphelin —
+verte par construction. Les orphelins n'apparaissent que là où il y a **quelque chose à perdre**.
+
+**Mais surtout pas ici.** Le plan de travail se résout en cascade (`resolveExecutionWorkspace`,
+`src/main/os.ts` l.130) et son avant-dernier repli est le dépôt git **du dossier de l'exécutable**.
+Pour un paquet dans `dist/win-unpacked`, cela remonte au dépôt RÉEL. Ce n'est pas une crainte
+théorique : `scripts/cdp-relance-jusquau-vert-proof.mjs` porte déjà l'avertissement dans son
+en-tête — « cet instrument laisse une trace dans le dépôt » — et un agent y a réellement écrit un
+fichier le 2026-08-21. Une fixture qui écrit, branchée sur `build:desktop`, créerait des copies de
+travail du vrai dépôt **à chaque construction**.
+
+**La sortie existe déjà** : la PREMIÈRE branche de la cascade est la variable d'environnement
+`AUTOWIN_OS_WORKSPACE` (`src/shared/app-identity.ts`), qui prime sur tout le reste. Le scénario
+doit donc, dans cet ordre :
+
+1. créer un **dépôt jetable** sous le profil isolé — `git init` et un commit initial ;
+2. l'imposer par `AUTOWIN_OS_WORKSPACE` au démarrage de l'instance, avant toute résolution ;
+3. y écrire pour de vrai, et n'y vérifier que ses propres bureaux.
+
+**Et aller jusqu'à l'intégration.** Un bureau conservé parce qu'il porte du travail non publié
+n'est **pas** un orphelin — la sonde le compterait à tort. Le travail écrit doit donc être publié
+pour que la copie redevienne supprimable : c'est seulement là que l'assertion « aucun bureau
+orphelin » veut dire quelque chose.
+
+**Garde-fou à écrire avec la fixture** : si `AUTOWIN_OS_WORKSPACE` ne pointe pas vers un dépôt
+jetable créé par elle, la fixture **lève**. Se fier à l'ordre de la cascade serait un pari ; une
+vérification explicite n'en est pas un.
+
 ## Ce qui reste à trancher, et qui appartient à l'humain
 
-1. **La fixture doit-elle produire de vrais artefacts ?** Sans écriture, la sonde des trois
-   conversations ne peut pas vérifier qu'aucun bureau n'est orphelin — un bureau vide n'est pas un
-   bureau. Écrire un fichier anodin dans le bureau isolé est probablement nécessaire.
-2. **Combien de scénarios ?** Trois suffisent pour ces trois sondes. Un quatrième « générique »
+1. **Combien de scénarios ?** Trois suffisent pour ces trois sondes. Un quatrième « générique »
    serait la première marche vers le pipeline factice qu'on veut éviter.
-3. **Où s'arrête le déterminisme ?** Le temps d'exécution, lui, restera variable : les sondes ne
+2. **Où s'arrête le déterminisme ?** Le temps d'exécution, lui, restera variable : les sondes ne
    doivent donc rien asserter sur des durées.
 
 ## Le critère de réussite
