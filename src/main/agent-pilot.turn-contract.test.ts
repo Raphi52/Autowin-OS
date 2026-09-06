@@ -774,13 +774,40 @@ describe('AgentPilot turn contract', () => {
           '[GRAPHIFY CODE EVIDENCE]\nstructural evidence'
       )
 
+    // L'IDENTITE DU TOUR EST PASSEE POUR DE VRAI : sans elle, l'assertion sur la trace ci-dessous
+    // ne vaudrait rien (elle verifierait deux `undefined`). conversationId est le 5e parametre,
+    // turnId le 9e.
     await new AgentPilot(registry as never, roles as never, bus as never, retrieveContext).chat(
       [{ role: 'user', content: 'Explique AgentPilot' }],
-      () => undefined
+      () => undefined,
+      undefined,
+      undefined,
+      'conv-preuve',
+      undefined,
+      undefined,
+      undefined,
+      'turn-preuve'
     )
 
     expect(retrieveContext).toHaveBeenCalledOnce()
-    expect(retrieveContext).toHaveBeenCalledWith('Explique AgentPilot')
+    /*
+     * LA QUESTION, ET L'IDENTITE DU TOUR AVEC ELLE.
+     *
+     * Cette assertion attendait le seul texte de la question. Le 2026-09-06, la voie poussee du
+     * chat s'est mise a transmettre aussi `{ conversationId, turnId }` — commit c99f6a39, « la voie
+     * poussee du chat laisse enfin une trace » : sans cette identite, le contexte injecte au modele
+     * n'etait rattachable a aucun tour, donc illisible dans l'Observatory. Le test est reste sur
+     * l'ancienne forme et rougissait depuis. Son message de commit affirmait que ce rouge
+     * PREEXISTAIT ; verification faite sur le parent du commit, c'est faux — l'appel n'y portait
+     * qu'un argument et le test passait.
+     *
+     * On ne se contente donc pas de tolerer le second argument : on EXIGE qu'il porte l'identite,
+     * puisque c'est exactement ce que ce changement a apporte.
+     */
+    expect(retrieveContext).toHaveBeenCalledWith('Explique AgentPilot', {
+      conversationId: 'conv-preuve',
+      turnId: 'turn-preuve'
+    })
     // La connaissance récupérée doit ARRIVER au modèle — c'est l'invariant. Elle voyage désormais
     // dans le MESSAGE et non dans le `system` : le contexte Brain dépend de la question, donc le
     // laisser dans le system rendait le préfixe différent à chaque tour et interdisait tout cache
@@ -1039,10 +1066,32 @@ describe('AgentPilot turn contract', () => {
     // Ce test asseyait le blocage mecanique d'une commande sur un message classe « lecture seule ».
     // Open bar (choix utilisateur 2026-08-14) : plus de blocage sur un tour utilisateur — la commande
     // atteint le bus. Le blocage mecanique RESTE, mais uniquement sur le profil systeme watchdog.
+    /*
+     * LE MOCK DOIT SAVOIR S'ARRETER — sinon c'est la MACHINE qui s'arrete.
+     *
+     * Il rendait la MEME commande a chaque appel. Or le cap d'iterations d'un tour vaut
+     * `Number.POSITIVE_INFINITY` : en production la borne est le BUDGET du tour
+     * (AUTOWIN_CHAT_USD_CAP), qui coupe sur la depense reelle. Un mock gratuit n'a pas de depense,
+     * donc rien ne l'arretait : la boucle tournait jusqu'a epuiser la memoire. Mesure du
+     * 2026-09-06 : ce seul test faisait tomber tout le fichier sur « JavaScript heap out of
+     * memory » en 2,5 s, AVANT meme qu'aucun test n'ait pu rendre son verdict — les 27 autres
+     * etaient emportes avec lui.
+     *
+     * Son voisin immediat porte deja la bonne forme, avec sa raison : « DEUX appels par tour depuis
+     * le 2026-08-27 : apres une orchestration, le modele reprend la parole pour ecrire la
+     * cloture ». Celui-ci etait reste sur l'ancienne. Il repond donc desormais comme un modele
+     * reel : la commande, PUIS la cloture.
+     */
+    let appelsAuModele = 0
     const registry = {
-      send: vi.fn().mockResolvedValue({
-        text: '<cmd>{"name":"orchestrate","args":{"task":"appel autorise"}}</cmd>',
-        provider: 'claude'
+      send: vi.fn().mockImplementation(async () => {
+        appelsAuModele += 1
+        return appelsAuModele === 1
+          ? {
+              text: '<cmd>{"name":"orchestrate","args":{"task":"appel autorise"}}</cmd>',
+              provider: 'claude'
+            }
+          : { text: 'Analyse terminée.', provider: 'claude' }
       }),
       describePrompt: () => ({
         provider: 'claude',
