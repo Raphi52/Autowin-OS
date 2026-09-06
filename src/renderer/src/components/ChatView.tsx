@@ -951,6 +951,9 @@ export function ChatView({
     composerRef.current?.setInput(draft.input)
     setAttachments(draft.attachments)
     setAttachmentError(draft.error)
+    // Ouvrir une conversation (existante ou neuve) pose le curseur DANS le champ de saisie :
+    // sans ça, chaque bascule coûtait un clic de plus (demandé le 2026-09-06).
+    requestAnimationFrame(() => composerRef.current?.focus())
   }
 
   function beginConversationsResize(event: React.PointerEvent<HTMLDivElement>): void {

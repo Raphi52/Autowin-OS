@@ -101,6 +101,19 @@ function FenetreChatBrut({
     setAttention(false)
     retirerConversationEnAttente(fenetre.id)
   }
+  const cadreRef = useRef<HTMLElement>(null)
+  /**
+   * Cliquer dans une fenetre pose le curseur DANS son champ de saisie : sinon chaque bascule de
+   * fenetre coutait un clic de plus (demande du 2026-09-06, meme reflexe que le chat plein ecran).
+   * Trois exceptions : un controle deja cliquable (bouton, lien, champ), et une SELECTION de texte
+   * en cours — lui voler le focus effacerait ce que l'utilisateur vient de surligner.
+   */
+  const poserLeFocus = (event: React.MouseEvent<HTMLElement>): void => {
+    const cible = event.target as HTMLElement | null
+    if (cible?.closest('button, a, input, textarea, select, [contenteditable="true"]')) return
+    if ((window.getSelection?.()?.toString() ?? '').length > 0) return
+    cadreRef.current?.querySelector('textarea')?.focus()
+  }
   const surDefilement = (): void => {
     const el = filRef.current
     if (!el) return
@@ -116,8 +129,10 @@ function FenetreChatBrut({
       className="chat-mosaic-window"
       data-conv-id={fenetre.id}
       data-etat={fenetre.busy ? 'occupe' : attention ? 'attention' : undefined}
+      ref={cadreRef}
       onMouseDown={repris}
       onFocusCapture={repris}
+      onClick={poserLeFocus}
     >
       <header className="chat-mosaic-window-head">
         <span className="chat-mosaic-window-title">{fenetre.title || 'Sans titre'}</span>
