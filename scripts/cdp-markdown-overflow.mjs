@@ -29,18 +29,39 @@ const send = (method, params = {}) =>
   })
 const evaluate = async (expression) => {
   const result = await send('Runtime.evaluate', { expression, returnByValue: true })
-  if (result.exceptionDetails) throw new Error('Évaluation DOM en échec')
+  /*
+   * L'ERREUR DE LA PAGE, PAS UN LIBELLE GENERIQUE.
+   *
+   * « Évaluation DOM en échec » ne dit ni quoi, ni ou : mesure du 2026-09-06, il a fallu relire la
+   * sonde ligne a ligne pour deviner laquelle des trois evaluations avait leve. La page nomme
+   * pourtant sa cause (« Fil de chat introuvable »…) — on la relaie telle quelle, avec le debut de
+   * l'expression fautive. Une sonde qui cache son motif coute un aller-retour a chaque rouge.
+   */
+  if (result.exceptionDetails) {
+    const motif =
+      result.exceptionDetails.exception?.description ??
+      result.exceptionDetails.text ??
+      'cause non renseignee'
+    throw new Error(`Évaluation DOM en échec : ${motif}
+--- expression ---
+${expression.slice(0, 200)}`)
+  }
   return result.result?.value
 }
 
 const longPath =
   'file:knowledge/domain/rigapplication-documentation/reference/20-host-plugins/' +
   'chargement-plugins-et-configuration-registre-sans-aucun-espace-dans-le-chemin.md'
-await evaluate(`(() => {
-  const chat = [...document.querySelectorAll('button')].find((button) =>
-    /^chat$/i.test((button.textContent || '').trim()))
-  chat?.click()
-})()`)
+/*
+ * ON NAVIGUE PAR LA PASTILLE, PAS PAR LE LIBELLE.
+ *
+ * La sonde cherchait un bouton dont le texte vaut EXACTEMENT « chat ». L'entree de navigation
+ * porte une icone : son texte est « 💬Chat », que ce motif ne reconnait pas. Mesure du 2026-09-06 :
+ * ZERO bouton correspondant, le clic ne partait jamais, et la sonde echouait plus loin sur « Fil de
+ * chat introuvable » — en laissant croire a un defaut du produit. Un identifiant de test ne depend
+ * ni du libelle ni de l'icone.
+ */
+await evaluate(`document.querySelector('[data-testid="nav-chat"]')?.click()`)
 // Le fil de chat est monte de facon asynchrone : on l'ATTEND au lieu de dormir 500 ms.
 await attendreDansLaPage(evaluate, `Boolean(document.querySelector('.chat-scroll'))`)
 const metrics = await evaluate(`(() => {
