@@ -75,8 +75,9 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   { match: 'terra', provider: 'codex', tokens: 400_000, source: 'OpenAI — famille GPT-5, contexte 400k' },
   { match: 'luna', provider: 'codex', tokens: 400_000, source: 'OpenAI — famille GPT-5, contexte 400k' },
   { match: 'gpt-5', provider: 'codex', tokens: 400_000, source: 'OpenAI — famille GPT-5, contexte 400k' },
-  // Google — les lignes Gemini Pro et Flash servies par `providers/gemini.ts` annoncent 1 M
-  // d'entree. C'est la SEULE fenetre 1 M de cette table, et elle ne demande aucun en-tete.
+  // Google — les lignes Gemini Pro et Flash annoncent 1 M d'entree. L'adaptateur qui les servait
+  // (`providers/gemini.ts`) a ete RETIRE le 2026-09-04 : l'entree reste ici parce que la jauge doit
+  // encore mesurer les tours DEJA ecrits sous ce moteur, que l'historique relit.
   { match: 'gemini', provider: 'gemini', tokens: 1_000_000, source: 'Google — Gemini Pro/Flash, contexte 1M' },
   // Moonshot — Kimi for Coding, 256 k.
   { match: 'kimi', provider: 'kimi', tokens: 256_000, source: 'Moonshot — Kimi, contexte 256k' }
