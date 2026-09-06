@@ -60,6 +60,15 @@ ONE table, ranked **highest-IMPACT first** (NOT "most-pickable" = smallest/safes
   catch-up warning whenever it is missing. **Exactly ONE `CIBLE:` line** — the FIRST one is read and
   any later one is ignored, so a second is not a choice, it is noise. Naming the row is NOT ranking
   it twice: the table proposes, this line ENGAGES one.
+- **SEVERAL rows to run TOGETHER — `CIBLES:` (plural).** When the shortlist rows only make sense as
+  ONE batch, write instead `CIBLES: <row A>, <row B>, <row C>` — comma, semicolon or `·` separated.
+  Do NOT stack several `CIBLE:` lines: the reader keeps the FIRST and silently drops the rest, so
+  stacking yields a single choice plus noise. Three refusals, all enforced in code
+  (`lireCiblesScout`, `chat-auto-mode.ts`): **name the rows in FULL WORDS** — bare numbers
+  (`CIBLES: 1, 3, 4`) are rejected, since the next step no longer has the table in front of it; ONE
+  destructive row stops the WHOLE batch (a batch leaves in a single send, so accepting it accepts
+  its most expensive row); `CIBLES: aucune` ends the chain like its singular form. `CIBLES:` wins
+  over `CIBLE:` when both are present. This only ever fires while auto-mode is ON.
 - If a 🔧 and a 🆕 point at the SAME lever, add ONE line under the table saying so. Already-owned items → one line "already covered: X" at most.
 
 ## Modes

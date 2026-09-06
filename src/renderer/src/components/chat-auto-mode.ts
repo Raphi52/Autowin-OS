@@ -227,6 +227,8 @@ export type RaisonArret =
   /* APRES UN SCOUT (conv-308) — types poses par le harnais, la logique reste a ecrire. */
   | 'scout-sans-cible'
   | 'cible-destructrice'
+  /* MULTI-PISTES (`CIBLES:`) — des numeros seuls ne nomment rien hors du tableau. */
+  | 'cibles-non-nommees'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -276,7 +278,9 @@ const MESSAGES_ARRET: Record<string, string> = {
   'scout-sans-cible':
     'Mode auto terminé : le scout n’a retenu aucune piste (aucune ligne `CIBLE:`). Choisis une ligne du tableau pour continuer.',
   'cible-destructrice':
-    'Mode auto en pause : la piste retenue détruit quelque chose. Elle ne part pas toute seule — dis-moi si tu la lances.'
+    'Mode auto en pause : la piste retenue détruit quelque chose. Elle ne part pas toute seule — dis-moi si tu la lances.',
+  'cibles-non-nommees':
+    'Mode auto en pause : la ligne `CIBLES:` ne donne que des numéros. Hors du tableau ils ne désignent rien — récris les pistes en toutes lettres.'
 }
 
 /**
@@ -332,7 +336,17 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * disent « pas maintenant », elles ne disent rien du contenu, et les inverser volerait son tour a
    * l'utilisateur en train d'ecrire.
    */
-  const choixScout = entree.tourEstUnScout ? lireCibleScout(texteReponse) : undefined
+  const choixMulti = entree.tourEstUnScout ? lireCiblesScout(texteReponse) : { statut: 'absente' as const }
+  if (choixMulti.statut === 'cible-destructrice' || choixMulti.statut === 'cibles-non-nommees') {
+    const raison: RaisonArret = choixMulti.statut
+    return { action: 'arreter', raison, message: MESSAGES_ARRET[raison] }
+  }
+  const choixScout =
+    choixMulti.statut === 'cibles'
+      ? undefined
+      : entree.tourEstUnScout
+        ? lireCibleScout(texteReponse)
+        : undefined
   if (choixScout && choixScout.statut !== 'cible') {
     const raison: RaisonArret =
       choixScout.statut === 'cible-destructrice' ? 'cible-destructrice' : 'scout-sans-cible'
@@ -378,8 +392,15 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * ligne 1 », « le candidat ci-dessus ») : envoye seul, il arrive dans un tour qui n'a pas le
    * tableau sous les yeux. La cible NOMMEE est donc recopiee en tete de ce qui part.
    */
-  const suiteCiblee = choixScout ? `CIBLE RETENUE : ${choixScout.cible}
-${suite}` : suite
+  const suiteCiblee =
+    choixMulti.statut === 'cibles'
+      ? `CIBLES RETENUES (traite-les ENSEMBLE, dans cet ordre) :
+${choixMulti.cibles.map((c, i) => `${i + 1}. ${c}`).join(SAUT_ANCRAGE)}
+${suite}`
+      : choixScout
+        ? `CIBLE RETENUE : ${choixScout.cible}
+${suite}`
+        : suite
   const texte = ancrerSurLaTacheInitiale(suiteCiblee, tacheInitiale(entree.fil))
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
   if (entree.dernierPromptEnvoye && texte.trim() === entree.dernierPromptEnvoye.trim())
@@ -431,4 +452,68 @@ export function lireCibleScout(texteScout: string): DecisionScout {
     return { statut: 'cible', cible }
   }
   return { statut: 'aucune-cible' }
+}
+
+/**
+ * MULTI-PISTES — la ligne `CIBLES:` d'un scout, quand plusieurs pistes se traitent ENSEMBLE.
+ *
+ * POURQUOI UN MOT-CLE DISTINCT et non plusieurs lignes `CIBLE:` : la regle en vigueur est « la
+ * PREMIERE ligne `CIBLE:` fait foi » (cf. `lireCibleScout`). En ecrire plusieurs ne produirait donc
+ * pas un choix multiple, mais un choix unique avec du bruit ignore en silence. Toucher a cette
+ * regle changerait le comportement du mode auto sur TOUS les fils existants ; `CIBLES:` la laisse
+ * intacte et s'ajoute a cote.
+ *
+ * ACTIF EN MODE AUTO SEULEMENT, par construction : le seul lecteur est `deciderRelanceAuto`, dont
+ * la toute premiere porte est `if (!entree.actif)`. Aucun envoi automatique ne peut naitre d'ici
+ * quand l'interrupteur est eteint.
+ *
+ * TROIS REFUS, tous de FORME (producteur et juge sont le meme modele — la qualite du choix ne se
+ * verifie pas ici) :
+ *  - aucune ligne `CIBLES:` -> `absente`, la lecture retombe sur `CIBLE:` : rien ne change pour
+ *    l'existant ;
+ *  - une piste destructrice, ne serait-ce qu'une seule -> le lot entier s'arrete. Un lot part d'un
+ *    seul envoi : accepter le lot, c'est accepter sa piste la plus couteuse ;
+ *  - des NUMEROS seuls (`CIBLES: 1, 3, 4`) -> refus nomme. Le tour suivant n'a pas le tableau sous
+ *    les yeux : un numero n'y designe rien.
+ */
+export type DecisionScoutMulti =
+  | { statut: 'cibles'; cibles: string[] }
+  | { statut: 'absente' }
+  | { statut: 'aucune-cible' }
+  | { statut: 'cible-destructrice'; cible: string }
+  | { statut: 'cibles-non-nommees' }
+
+const LIGNE_CIBLES = /^\s*[>*_`\s]*cibles\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu
+
+/** Une piste reduite a un numero (`3`, `#3`, `n°3`) ne nomme rien hors du tableau du scout. */
+const PISTE_NUMERIQUE = /^(?:#|n[o°]\s*)?\d+$/iu
+
+export function lireCiblesScout(texteScout: string): DecisionScoutMulti {
+  for (const ligne of (texteScout ?? '').split(SAUT_ANCRAGE)) {
+    const trouve = ligne.match(LIGNE_CIBLES)
+    if (!trouve) continue
+    // La PREMIERE ligne `CIBLES:` fait foi — meme regle que pour `CIBLE:`.
+    const brut = trouve[1]!.replace(/^[\s*_`]+/u, '').trim()
+    const nuLigne = normaliserPiste(brut)
+    if (!brut || nuLigne === 'aucune' || nuLigne === 'rien' || nuLigne === 'aucune cible')
+      return { statut: 'aucune-cible' }
+    const pistes = brut
+      .split(/\s*[,;·|]\s*|\s+\/\s+/u)
+      .map((piste) => piste.replace(/^[\s*_`]+|[\s*_`]+$/gu, '').trim())
+      .filter((piste) => piste.length > 0)
+    if (pistes.length === 0) return { statut: 'aucune-cible' }
+    const destructrice = pistes.find((piste) => CIBLE_DESTRUCTRICE.test(normaliserPiste(piste)))
+    if (destructrice) return { statut: 'cible-destructrice', cible: destructrice }
+    if (pistes.every((piste) => PISTE_NUMERIQUE.test(piste))) return { statut: 'cibles-non-nommees' }
+    return { statut: 'cibles', cibles: pistes }
+  }
+  return { statut: 'absente' }
+}
+
+function normaliserPiste(texte: string): string {
+  return texte
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/gu, '')
+    .toLowerCase()
+    .trim()
 }
