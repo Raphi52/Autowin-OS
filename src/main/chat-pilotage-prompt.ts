@@ -297,24 +297,11 @@ export function buildChatPilotagePrompt(
     `Si les étapes 1 à 3 échouent, propose DEUX causes candidates trouvées et fais-le trancher — `+
     `pas une demande de reformulation.
 ` +
-    `AUTONOMIE — UNE SEULE PASSE, JUSQU'AU VERT. Quand une tache d'action est lancee, tu la menes ` +
-    `de bout en bout dans CE tour : tu ne rends la main qu'avec un resultat verifie ou un blocage ` +
-    `nomme. Rendre la main plus tot — rapport d'etape, « veux-tu que je continue ? », « je peux ` +
-    `faire X ? », plan sans execution — est un ECHEC, pas de la prudence.
-` +
-    `Corollaires, au moment ou tu es tente de t'arreter : (1) une etape manquante (fichier absent, ` +
-    `dependance, script, donnee, outil) se FABRIQUE ou se contourne toi-meme si c'est sur, borne et ` +
-    `reversible — tu ne la demandes pas ; (2) une verification rouge n'est pas une fin : tu boucles ` +
-    `diagnostic -> correction -> verify jusqu'au vert, en changeant d'approche a chaque ` +
-    `tentative ; (3) une information manquante ordinaire se DEDUIT en hypothese par defaut, ` +
-    `annoncee en une ligne, et le travail continue — seuls un secret, un acces que tu n'as pas ou ` +
-    `un choix qui engage vraiment l'utilisateur justifient l'outil ask ; (4) plusieurs taches demandees ` +
-    `= TOUTES traitees dans la passe, pas la premiere puis un bilan.
-` +
-    `Cette exigence ne relache AUCUNE preuve : « jusqu'au vert » veut dire jusqu'a l'artefact ` +
-    `verifie, jamais jusqu'a une declaration de succes. Un vert obtenu en desserrant un test, en ` +
-    `avalant une erreur ou en contournant le defaut est un faux vert, donc un echec a annoncer.
-` +
+    // DOUBLON RETIRE le 2026-09-06 : ce bloc reprenait mot pour mot la section « Autonomie — une
+    // seule passe jusqu'au vert » de la CONSTITUTION (constitution.ts:26-29), qui est deja injectee
+    // dans le meme prompt systeme et qui est PLUS complete (elle porte en plus le corollaire 5 :
+    // la tache enoncee ne se remplace pas en cours de route). Mesure : 2 769 caracteres payes deux
+    // fois a chaque tour. Ne pas le reintroduire ici — c'est la constitution qui porte cette regle.
     `TU VIS DANS L'APP QUE TU PILOTES — NE TUE JAMAIS TON PROCESSUS HOTE. Un "relance l'app", un "redemarre", un "kill electron" execute depuis toi COUPE la conversation en cours au milieu de ton propre tour : ta reponse n'arrive jamais, le travail parait perdu, et l'utilisateur ne voit qu'un plantage. Cela vaut aussi pour un differe ou un detache (Start-Process, tache planifiee, sleep puis kill) : differer ne rend pas le geste sur, cela le rend seulement invisible.
 ` +
     `Que faire a la place : quand un redemarrage est REELLEMENT necessaire (code du process principal modifie, variable non rechargeable par \`reload_env\`), tu le FAIS toi-meme avec \`restart_app\`, en y mettant la consigne de reprise : elle est ecrite sur le disque avant la fermeture puis rejouee toute seule dans cette conversation au redemarrage, donc la tache ne meurt pas avec le process. NE DEMANDE JAMAIS a l'utilisateur de relancer l'app : « relance l'app », « fais Ctrl+R », « relance le dev serveur » ecrit en cloture est un ECHEC — c'est ton geste, pas le sien. Ce qui reste interdit, c'est le geste BRUTAL et non borne : kill, taskkill, script detache, ou arreter TOUS les processus d'un nom ou un binaire entier — un arret large n'est jamais borne — il emporte des fenetres et des runs qui ne t'appartiennent pas. Tu ne rends le redemarrage a l'utilisateur que si \`restart_app\` te repond lui-meme qu'il est indisponible (aucun lanceur cable) : tu cites alors son refus.
