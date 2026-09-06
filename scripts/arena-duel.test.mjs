@@ -8,7 +8,8 @@ import {
   lireDuels,
   noterDuel,
   normaliserDuel,
-  reproductibilite
+  reproductibilite,
+  critereBinaire
 } from './arena-duel.mjs'
 
 const aNettoyer = []
@@ -182,5 +183,88 @@ describe('arena-duel — reproductibilite d un banc rejoue', () => {
     const { taches } = reproductibilite({}, r)
     expect(taches[0].bancs).toBe(1)
     expect(taches[0].reproductible).toBe(null)
+  })
+})
+
+describe('arena-duel — critere binaire verifiable', () => {
+  const avecCritere = (extra = {}) =>
+    duel({
+      critere: 'trouve les scripts vivants mais casses',
+      atteint: true,
+      preuve: 'pwsh scripts/assert-package-content.ps1 ; exit 1 attendu',
+      ...extra
+    })
+
+  it('refuse un critere ATTEINT sans preuve executable — sinon c est un avis, pas une mesure', () => {
+    expect(() => normaliserDuel(avecCritere({ preuve: '' }))).toThrow(/preuve/i)
+  })
+
+  it('refuse une preuve sans critere nomme', () => {
+    expect(() => normaliserDuel(avecCritere({ critere: '' }))).toThrow(/critere/i)
+  })
+
+  it('garde le critere, son etat binaire et sa preuve dans la ligne normalisee', () => {
+    const l = normaliserDuel(avecCritere({ atteint: 'non' }))
+    expect(l.critere).toBe('trouve les scripts vivants mais casses')
+    expect(l.atteint).toBe(false)
+    expect(l.preuve).toMatch(/assert-package-content/)
+  })
+
+  it('reste optionnel : un duel sans critere ne porte aucun de ces champs', () => {
+    const l = normaliserDuel(duel())
+    expect(l.critere).toBeUndefined()
+    expect(l.atteint).toBeUndefined()
+  })
+
+  it('rend le critere CONSTANT par workflow meme quand le gagnant s inverse', () => {
+    const r = racineTmp()
+    const c = { critere: 'vivants mais casses', preuve: 'exit 1 reproduit' }
+    noterDuel(
+      duel({
+        banc: 'v5-p1',
+        bras: 'a',
+        workflow: 'skill',
+        verdict: 'perdant',
+        ...c,
+        atteint: true
+      }),
+      r
+    )
+    noterDuel(
+      duel({ banc: 'v5-p1', bras: 'x', workflow: 'nu', verdict: 'gagnant', ...c, atteint: false }),
+      r
+    )
+    noterDuel(
+      duel({
+        banc: 'v5-p2',
+        bras: 'a',
+        workflow: 'skill',
+        verdict: 'gagnant',
+        ...c,
+        atteint: true
+      }),
+      r
+    )
+    noterDuel(
+      duel({ banc: 'v5-p2', bras: 'x', workflow: 'nu', verdict: 'perdant', ...c, atteint: false }),
+      r
+    )
+    const { criteres } = critereBinaire({}, r)
+    expect(criteres).toHaveLength(1)
+    const skill = criteres[0].workflows.find((w) => w.workflow === 'skill')
+    const nu = criteres[0].workflows.find((w) => w.workflow === 'nu')
+    expect([skill.atteints, skill.total, skill.constant]).toEqual([2, 2, true])
+    expect([nu.atteints, nu.total, nu.constant]).toEqual([0, 2, true])
+    expect(criteres[0].departage).toBe('skill')
+  })
+
+  it('ne departage PAS quand le critere lui-meme varie d un passage a l autre', () => {
+    const r = racineTmp()
+    const c = { critere: 'vivants mais casses', preuve: 'exit 1 reproduit' }
+    noterDuel(duel({ banc: 'v5-p1', bras: 'a', workflow: 'skill', ...c, atteint: true }), r)
+    noterDuel(duel({ banc: 'v5-p2', bras: 'a', workflow: 'skill', ...c, atteint: false }), r)
+    const { criteres } = critereBinaire({}, r)
+    expect(criteres[0].workflows[0].constant).toBe(false)
+    expect(criteres[0].departage).toBe(null)
   })
 })

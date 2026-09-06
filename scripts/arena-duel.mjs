@@ -13,6 +13,7 @@
  * Usage :
  *   node scripts/arena-duel.mjs noter --tache "..." --workflow "..." --bras a \
  *        --duree-ms 123456 --cout-usd 0.63 --verdict gagnant [--banc <dossier>] [--note "..."] [--remplace]
+ *        [--critere "trouve les scripts vivants mais casses" --atteint oui|non --preuve "commande qui le rejoue"]
  *   node scripts/arena-duel.mjs lire [--tache <filtre>] [--workflow <filtre>] [--limite 20] [--json] [--brut]
  *
  * Exit 0 = ecrit / lu · 1 = entree refusee (champ manquant ou absurde).
@@ -52,6 +53,29 @@ export function normaliserDuel(entree, maintenant = new Date()) {
     if (!Number.isFinite(n) || n < 0) throw new Error(`champ \`${nom}\` invalide : ${v}`)
     return n
   }
+  const booleen = (v) => {
+    const b = String(v ?? '')
+      .trim()
+      .toLowerCase()
+    if (['true', 'oui', 'yes', '1'].includes(b)) return true
+    if (['false', 'non', 'no', '0'].includes(b)) return false
+    throw new Error(`champ \`atteint\` invalide : ${v} — attendu oui/non`)
+  }
+  const critere = texte(entree.critere)
+  const preuve = texte(entree.preuve)
+  const aUnCritere = Boolean(critere || preuve || entree.atteint !== undefined)
+  let atteint
+  if (aUnCritere) {
+    if (!critere)
+      throw new Error(
+        'champ `critere` manquant : une preuve sans critere nomme ne mesure rien de comparable'
+      )
+    if (!preuve)
+      throw new Error(
+        'champ `preuve` manquant : un critere sans commande qui le REJOUE est un avis, pas une mesure'
+      )
+    atteint = booleen(entree.atteint)
+  }
   return {
     schema: 'autowin.arena-duel/v1',
     ts: maintenant.toISOString(),
@@ -62,7 +86,8 @@ export function normaliserDuel(entree, maintenant = new Date()) {
     coutUsd: nombre(entree.coutUsd, 'cout-usd'),
     verdict,
     ...(texte(entree.banc) ? { banc: texte(entree.banc) } : {}),
-    ...(texte(entree.note) ? { note: texte(entree.note) } : {})
+    ...(texte(entree.note) ? { note: texte(entree.note) } : {}),
+    ...(aUnCritere ? { critere, atteint, preuve } : {})
   }
 }
 
@@ -192,6 +217,54 @@ export function reproductibilite(filtres = {}, racine = process.cwd(), profil = 
   return { taches }
 }
 
+/**
+ * CRITERE BINAIRE, la mesure qui survit au bruit. Le verdict `gagnant`/`perdant` d'un banc
+ * /arena est rendu par un juge : sur la famille `residus`, il s'est INVERSE a configuration
+ * identique 3 rejeux de suite (6 bancs, 0 gagnant reproductible — mesure du 2026-09-06).
+ * Un critere binaire, lui, est verifiable par EXECUTION et ne depend pas de l'humeur du juge :
+ * le bras a-t-il, oui ou non, trouve les scripts vivants mais casses ?
+ *
+ * Rend, par critere puis par workflow : combien de bras l'ont ATTEINT sur combien de passages,
+ * si la reponse est CONSTANTE d'un passage a l'autre, et le workflow qui DEPARTAGE.
+ *  - `constant: false`   -> ce workflow repond oui ici, non la : le critere ne tranche pas pour lui
+ *  - `departage: <nom>`  -> un seul workflow atteint le critere PARTOUT, les autres jamais
+ *  - `departage: null`   -> aucun ecart net, ou un workflow instable : ne rien en conclure
+ */
+export function critereBinaire(filtres = {}, racine = process.cwd(), profil = 'autowin-os') {
+  const { duels } = lireDuels({ ...filtres, brut: false }, racine, profil)
+  const t = (v) =>
+    String(v ?? '')
+      .trim()
+      .toLowerCase()
+  const parCritere = new Map()
+  for (const d of duels) {
+    if (!d.critere || typeof d.atteint !== 'boolean') continue
+    const cle = t(d.critere)
+    if (!parCritere.has(cle)) parCritere.set(cle, { critere: d.critere, workflows: new Map() })
+    const groupe = parCritere.get(cle)
+    const w = t(d.workflow)
+    if (!groupe.workflows.has(w)) groupe.workflows.set(w, { workflow: d.workflow, etats: [] })
+    groupe.workflows.get(w).etats.push(d.atteint)
+  }
+  const criteres = []
+  for (const groupe of parCritere.values()) {
+    const workflows = [...groupe.workflows.values()].map((w) => ({
+      workflow: w.workflow,
+      total: w.etats.length,
+      atteints: w.etats.filter(Boolean).length,
+      constant: new Set(w.etats).size === 1
+    }))
+    const toujours = workflows.filter((w) => w.constant && w.atteints === w.total)
+    const jamais = workflows.filter((w) => w.constant && w.atteints === 0)
+    const departage =
+      workflows.every((w) => w.constant) && toujours.length === 1 && jamais.length >= 1
+        ? toujours[0].workflow
+        : null
+    criteres.push({ critere: groupe.critere, workflows, departage })
+  }
+  return { criteres }
+}
+
 function args(argv) {
   const o = {}
   for (let i = 0; i < argv.length; i += 1) {
@@ -247,6 +320,19 @@ function main(argv) {
       console.log(
         `\n(${uniques.length} tache(s) jouee(s) UNE seule fois : gagnant non confirme par un rejeu)`
       )
+    const { criteres } = critereBinaire(o)
+    for (const c of criteres) {
+      console.log(`\nCRITERE BINAIRE (verifiable par execution) : ${c.critere}`)
+      for (const w of c.workflows)
+        console.log(
+          `  - ${w.workflow} : ${w.atteints}/${w.total} passage(s)${w.constant ? '' : ' — INSTABLE, ne tranche pas'}`
+        )
+      console.log(
+        c.departage
+          ? `  => DEPARTAGE : \`${c.departage}\` atteint le critere a TOUS les passages, les autres jamais`
+          : '  => ne departage pas (aucun ecart net, ou un workflow instable)'
+      )
+    }
     if (abimees) console.log(`\n(${abimees} ligne(s) abimee(s) ignoree(s))`)
     if (remplacees)
       console.log(
