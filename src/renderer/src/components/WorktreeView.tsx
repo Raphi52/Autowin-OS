@@ -8,6 +8,7 @@ import {
   formatAttente,
   LIBELLES_VERDICT,
   regrouperParChantier,
+  compterRunsInterrompus,
   resumerFlux,
   type Chantier
 } from './worktree-chef-de-projet'
@@ -307,9 +308,11 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   }, [active])
 
   const health = projectState(snapshot, agents, activityAvailable)
-  // Le MEME comptage que le bandeau chef de projet (resumerFlux), pour que le geste « Reprendre
-  // tout » et le nombre affiche ne puissent pas se contredire.
-  const runsInterrompus = resumerFlux(agents, Date.now()).runsInterrompus
+  // Le MEME comptage que le bandeau chef de projet, garanti par la MEME fonction : `resumerFlux`
+  // appelle `compterRunsInterrompus` lui aussi. Ce nombre ne depend pas de l'heure — le passage par
+  // `resumerFlux(agents, Date.now())` lisait l'horloge en pleine phase de rendu (React l'interdit :
+  // regle react-hooks/purity) ET regroupait tous les chantiers pour n'en garder qu'un compteur.
+  const runsInterrompus = useMemo(() => compterRunsInterrompus(agents), [agents])
   const dispositionGraphe = useMemo(() => {
     const commits = snapshot?.commits ?? []
     const axes = projectGitGraphAxes(commits, snapshot?.refs ?? [], {
