@@ -33,7 +33,8 @@ const SHA = '1'.repeat(40)
 function manager(racine: string, over: Record<string, any> = {}): any {
   return {
     acquire: vi.fn(
-      (id: string, ctx?: { worktreePath: string }) => ctx?.worktreePath ?? join(racine, `agent__${id}`)
+      (id: string, ctx?: { worktreePath: string }) =>
+        ctx?.worktreePath ?? join(racine, `agent__${id}`)
     ),
     listAgentIds: vi.fn(() => []),
     describe: vi.fn((id: string) => ({
