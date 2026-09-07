@@ -2,6 +2,7 @@ import type { ChatTurnEvent, ChatTurnRuntime } from '../../shared/chat-turn'
 import type { Conversation } from '../store/conversations'
 import type { OrchestrationStep } from '../orchestrator'
 import type { ChatArtifact } from '../../shared/artifacts'
+import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from './resume-refusal'
 
 /**
  * PERSISTANCE DU TOUR pour le chemin DIRECT `os:orchestrate` (bouton « Reprendre », pilotage
@@ -104,9 +105,7 @@ export function createOrchestrateTurnPersistence(
     const message = conversations
       .get(conversationId)
       ?.messages.find((candidat) => candidat.role === 'assistant' && candidat.turnId === turnId)
-    return (message?.parts ?? []).some(
-      (part) => part.kind === 'text' && part.text.includes(texte)
-    )
+    return (message?.parts ?? []).some((part) => part.kind === 'text' && part.text.includes(texte))
   }
 
   const emit = (event: ChatTurnEvent): void => {
@@ -217,7 +216,18 @@ export function createOrchestrateTurnPersistence(
     fail(error, aborted) {
       if (!opened || closed) return
       closed = true
-      emit(aborted ? { kind: 'cancelled' } : { kind: 'failed', error })
+      if (aborted) {
+        emit({ kind: 'cancelled' })
+        return
+      }
+      /*
+       * UN REFUS TEMPORAIRE N'EST PAS DU TRAVAIL. Le refus « appel(s) provider encore actif » se
+       * regle seul et ne touche aucun fichier ; il est ecrit dans la conversation pour laisser une
+       * trace, mais il ne doit pas faire remonter le fil en tete de liste ni le repeindre en « non
+       * lu » (mesure conv-336 du 2026-09-07, 11 conversations repeintes au demarrage).
+       */
+      const transitoire = refusDeRepriseEstTransitoire(classifierRefusDeReprise(error))
+      emit({ kind: 'failed', error, ...(transitoire && { transient: true as const }) })
     }
   }
 }

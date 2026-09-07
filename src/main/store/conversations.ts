@@ -880,7 +880,22 @@ export class ConversationStore {
      * le commentaire affirmait le contraire de ce que le code faisait.
      */
     if (!message) throw new Error(`Tour assistant inconnu: ${turnId}`)
-    conversation.updatedAt = this.now()
+    /*
+     * DEUX EVENEMENTS NE RACONTENT AUCUN TRAVAIL, et ne doivent donc pas bouger la date de
+     * derniere touche : `resumed` (on se rebranche sur un tour, on n'a encore rien produit) et un
+     * `failed` marque `transient` (refus de reprise temporaire, aucun fichier touche).
+     *
+     * Mesure du 2026-09-07 (conv-336, `conversations.json.journal.jsonl` a 07:48:19Z) : au
+     * demarrage, ces deux evenements ont ete ecrits dans 11 conversations vieilles de plusieurs
+     * jours. Leur date de derniere touche a bouge, donc elles sont remontees en tete de liste ET
+     * repassees en pastille jaune « termine, non lu » -- l'utilisateur a vu sa liste repeinte par
+     * des evenements qui n'avaient rien produit. L'evenement reste ecrit (la trace compte), c'est
+     * la DATE qui ne bouge plus. Des qu'un vrai signe de travail arrive (delta, command, done),
+     * elle repart normalement.
+     */
+    const sansTravail =
+      event.kind === 'resumed' || (event.kind === 'failed' && event.transient === true)
+    if (!sansTravail) conversation.updatedAt = this.now()
     const terminal = ['done', 'failed', 'cancelled', 'interrupted'].includes(event.kind)
     /*
      * INDEXATION SUR L'EVENEMENT TERMINAL SEULEMENT -- cause mesuree du gel du chat.

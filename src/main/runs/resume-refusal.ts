@@ -20,6 +20,23 @@ export type RefusDeReprise =
   | 'publication-acquise'
   | 'copie-durable-absente'
   | 'contexte-de-reprise-invalide'
+  /**
+   * TEMPORAIRE, et c'est tout l'inverse des trois autres : un appel provider tournait encore quand
+   * la reprise a ete tentee. Rien n'est casse, aucun fichier n'est touche, la meme demande repart
+   * plus tard.
+   *
+   * Mesure du 2026-09-07 (conv-336) : au demarrage, 11 conversations vieilles de plusieurs jours
+   * ont recu ce refus. Chaque refus etant ecrit dans la conversation, leur date de derniere touche
+   * a bouge -- elles sont remontees en tete de liste et sont repassees en pastille « termine, non
+   * lu ». L'utilisateur a vu sa liste entiere repeinte par un evenement qui n'avait rien produit.
+   * Classer ce refus permet de l'ecrire SANS bouger cette date.
+   */
+  | 'appel-provider-actif'
+
+/** Vrai quand le refus se reglera seul : l'ecrire ne doit pas compter comme du travail. */
+export function refusDeRepriseEstTransitoire(refus: RefusDeReprise | undefined): boolean {
+  return refus === 'appel-provider-actif'
+}
 
 /**
  * Les 5 `detail` DÉFINITIFS de `validateRecoveryContext` (`worktree-manager.ts:3422-3444`),
@@ -48,6 +65,12 @@ function normaliserApostrophes(texte: string): string {
 }
 
 export function classifierRefusDeReprise(message: string): RefusDeReprise | undefined {
+  // Le TEXTE exact vient de `execution-supervisor.ts:261` : « Reprise refusee : N appel(s)
+  // provider encore actif(s). Refus transitoire, aucun fichier touche […] ». Les accents ne sont
+  // pas garantis a la source (le message est ecrit sans), on ne s'appuie donc que sur l'ossature.
+  if (/Reprise refus[ée]+e?\s*:.*appel\(s\) provider encore actif/.test(message)) {
+    return 'appel-provider-actif'
+  }
   if (/Reprise du worktree refusée[^:]*: publication \S+ déjà engagée/.test(message)) {
     return 'publication-acquise'
   }
@@ -58,7 +81,9 @@ export function classifierRefusDeReprise(message: string): RefusDeReprise | unde
   }
   // Même cause, AUTRE phrase : `run-worktree-coordinator.ts:272` refuse quand la copie durable
   // suivie est absente ou incomplète. La reprise ne pourra jamais aboutir non plus.
-  if (/Reprise du worktree impossible pour .+ : copie durable absente ou incomplète/.test(message)) {
+  if (
+    /Reprise du worktree impossible pour .+ : copie durable absente ou incomplète/.test(message)
+  ) {
     return 'copie-durable-absente'
   }
   const normalise = normaliserApostrophes(message)
