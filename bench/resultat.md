@@ -65,3 +65,20 @@ node bench/journalise.mjs     # ecrit les 6 lignes dans le journal des duels du 
 empreinte SHA-256 est la preuve que les bras n'ont pas touche a leur propre critere
 (`preuves/checks-sha256-avant.txt` = `preuves/checks-sha256-apres.txt`). Les reformater casserait
 cette preuve.
+
+## Suite donnee au banc — les correctifs sont entres dans le depot
+
+Le banc mesurait des reparations qui vivaient dans des copies jetables (`bench/runs/*`) : le
+depot lui-meme restait rouge sur les 3 defauts. Les correctifs GAGNANTS ont donc ete repris
+tels quels dans le depot, commit `03d7e38a` :
+
+| defaut | source reprise | fichiers |
+| ------ | -------------- | -------- |
+| D1 | `bench/runs/d1-x` | `scripts/scout-residus.angle-mort.test.mjs` |
+| D2 | `bench/runs/d2-a` | `src/renderer/index.html`, `src/shared/boot-splash.ts` |
+| D3 | `bench/runs/d3-x` | `src/renderer/src/components/ChatComposer.tsx` |
+
+Rouge -> vert re-verifie sur le depot, defaut reinjecte pour montrer que le critere mord
+encore : `preuves/correctifs-dans-le-depot.txt`. Un rouge de base non lie au banc a ete
+repare au passage (`378ad20a`, 2 variables mortes dans `ChatView.tsx` qui rendaient
+`npm run typecheck` rouge).
