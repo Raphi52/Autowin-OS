@@ -47,7 +47,14 @@ export const THEMES: readonly Theme[] = [
   // Premier theme qui ne soit ni le sombre d origine ni son inverse clair : ses couleurs
   // viennent de la maquette maison sketches/galaxy-dark-gold-pink/obisidian-nebula. Sa BASE est
   // sombre, donc ses accents et ses filets sont ceux d un fond noir.
-  { id: 'obsidian-nebula', libelle: 'Obsidian Nebula', base: 'sombre' }
+  { id: 'obsidian-nebula', libelle: 'Obsidian Nebula', base: 'sombre' },
+  // Le VIF : or eclatant, rose franc, filets prune. Palette de la maquette maison
+  // sketches/galaxy-dark-gold-pink/solar-rose-command.
+  { id: 'solar-rose', libelle: 'Solar Rose', base: 'sombre' },
+  // Le TERRE : or assourdi, rose brique, filets brun dore. Palette de la maquette maison
+  // black-versailles. Attention : la maquette d origine changeait aussi la typographie et
+  // les formes (serif, losanges) -- ce theme ne porte que son chromatisme.
+  { id: 'black-versailles', libelle: 'Black Versailles', base: 'sombre' }
 ]
 
 export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'
