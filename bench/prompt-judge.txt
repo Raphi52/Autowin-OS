@@ -1,0 +1,28 @@
+Joue la skill du depot `skills/judge/SKILL.md` (lis-la d'abord, chemin D:\AutoWinOS\skills\judge\SKILL.md). REVUE ADVERSE. Ta mission n'est PAS de confirmer le rapport ci-dessous : c'est de le REFUTER.
+Traite chacune de ses conclusions comme une HYPOTHESE A ABATTRE. Tu as acces au depot D:\AutoWinOS
+en lecture ; les artefacts du banc sont dans D:\AutoWinOS\bench (defects.json, check-d1/2/3.mjs,
+hors-critere.mjs, preuves/*, resultat.md, prompt-d*-*.txt, wf-a.txt, wf-x.txt) et le journal des
+duels dans D:\AutoWinOS\.autowin-data\autowin-os\arena-duels.jsonl.
+
+Le rapport a refuter : bench/resultat.md (banc "pipeline complet (a)" contre "build direct + verify
+cible (x)", 3 defauts reels x 2 workflows, 1 execution par case ; conclusion actuelle : x gagne D1 et
+D3 pour ~6x moins cher, a gagne D2 parce que x y a laisse une regression hors-critere).
+
+REPONDS EXACTEMENT A CES QUATRE QUESTIONS, chacune avec la preuve LUE (fichier:ligne, exit code,
+ligne de journal) — jamais une impression :
+1. L'ecart entre les deux workflows survit-il a n=3, ou est-ce du bruit ? (le journal des duels
+   porte des mesures de dispersion intra-bras deja constatees : va les lire avant de repondre)
+2. Les criteres de mesure ont-ils ete choisis parce qu'ils favorisaient un gagnant ? Regarde en
+   particulier le SECOND axe `hors-critere.mjs` : quand a-t-il ete introduit, que mesure-t-il
+   exactement, et un axe different aurait-il inverse le classement ?
+3. Un "vert" du classement est-il en realite un FAUX VERT ? Verifie que chaque bras a corrige la
+   CAUSE et pas contourne son critere (les pieges sont ecrits dans defects.json, champ `piege`).
+   Verifie aussi que les fichiers de critere n'ont pas ete modifies APRES la mesure : compare
+   preuves/checks-sha256-apres.txt aux empreintes actuelles et lis `git log -- bench/check-*.mjs`
+   (indice : au moins un critere a bouge apres coup — dis si cela invalide la mesure ou non).
+4. Quel resultat aurait-il fallu OBSERVER pour que le gagnant PERDE ? A-t-on regarde ? Nomme
+   l'observation manquante.
+
+Rends : VERDICT (le rapport tient / tient partiellement / ne tient pas), puis les 4 reponses
+numerotees, puis une liste des affirmations du rapport que tu declares NON PROUVEES. Sois bref et
+factuel. Aucune politesse.

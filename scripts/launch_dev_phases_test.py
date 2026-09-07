@@ -201,11 +201,28 @@ verifie(
     _arcs is not None,
     "le degrade des deux arcs doit rester lisible dans index.html : c'est la SOURCE de la palette",
 )
-for _nom, _motif in (("arc-a", _arcs.group(1)), ("arc-b", _arcs.group(2))):
+# On compare les valeurs REELLEMENT utilisees par le lanceur, pas une sous-chaine de son fichier :
+# chercher l'hexadecimal dans le TEXTE source passait sur un simple COMMENTAIRE, donc la garde
+# pouvait rester verte alors que l'ecran peignait une autre teinte (constate le 2026-09-07).
+import importlib.util as _ilu
+
+_spec = _ilu.spec_from_file_location(
+    "_splash_pour_garde", Path(__file__).resolve().parent / "launch_dev_splash.py"
+)
+_mod = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+for _nom, _attendu, _obtenu in (
+    ("arc-a", _arcs.group(1), _mod._DORE),
+    ("arc-b", _arcs.group(2), _mod._VIOLET),
+):
     verifie(
-        _motif.lower() in _splash_src.lower(),
-        f"le lanceur doit reprendre la couleur {_nom} lue dans index.html ({_motif}), pas une teinte a lui",
+        _obtenu.lower() == _attendu.lower(),
+        f"le lanceur peint {_nom} en {_obtenu} alors que index.html dit {_attendu} : les deux ecrans divergent",
     )
+verifie(
+    "_DORE = _ARCS.group(1)" in _splash_src and "_VIOLET = _ARCS.group(2)" in _splash_src,
+    "le lanceur doit DERIVER sa palette de index.html, pas recopier des hexadecimaux a la main",
+)
 
 verifie("#f5f7fb" in _html and "#f5f7fb" in _splash_src,
         "la couleur de TEXTE doit etre celle de l'app")

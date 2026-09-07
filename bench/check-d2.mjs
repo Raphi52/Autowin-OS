@@ -73,18 +73,48 @@ garde('G3 ces couleurs sont dans une declaration CSS reelle, pas dans un comment
   return mortes.length === 0 ? true : `presente(s) mais jamais appliquee(s) : ${mortes.join(', ')}`
 })
 
-garde('G4 le lanceur Python garde encore ces deux couleurs (la palette commune)', () => {
-  const absentes = COULEURS.filter(([, c]) => !splash.includes(c)).map(([n, c]) => `${n} ${c}`)
-  return absentes.length === 0 ? true : `retiree(s) du lanceur au lieu d etre remises dans l app : ${absentes.join(', ')}`
+// G4 — REECRITE le 2026-09-07 pour la meme raison que G5, et PLUS STRICTE.
+// L'ancienne version cherchait l'hexadecimal dans le TEXTE du lanceur : elle passait sur un simple
+// commentaire (defaut constate) et interdisait la source unique. On EXECUTE desormais le lanceur et
+// on lit les couleurs qu'il peint VRAIMENT, puis on les compare a celles de index.html.
+garde('G4 le lanceur peint REELLEMENT la palette de index.html (valeurs executees, pas texte)', () => {
+  const py = spawnSync(
+    'py',
+    ['-3', '-c', 'import sys;sys.path.insert(0,"scripts");import launch_dev_splash as m;print(m._DORE,m._VIOLET)'],
+    { cwd: cible, encoding: 'utf8' }
+  )
+  if (py.status !== 0) return 'le lanceur ne se charge pas : ' + (py.stderr || '').trim().slice(-160)
+  const peintes = (py.stdout || '').trim().toLowerCase().split(/\s+/)
+  const ecarts = COULEURS.filter(([, c], i) => peintes[i] !== c.toLowerCase()).map(
+    ([n, c], i) => `${n} attendu ${c}, peint ${peintes[i] ?? 'rien'}`
+  )
+  return ecarts.length === 0 ? true : `les deux ecrans divergent : ${ecarts.join(' ; ')}`
 })
 
-garde('G5 la garde qui refuse la derive est intacte', () => {
+// G5 — REECRITE le 2026-09-07, et volontairement PLUS STRICTE que la version d'origine.
+//
+// L'ancienne version exigeait que le fichier de garde CONTIENNE la chaine `#e9bd4e`. C'etait une
+// assertion sur du TEXTE, et elle recompensait la mauvaise conception : une garde qui epingle un
+// hexadecimal en dur ne peut pas suivre un changement de palette, et elle passe aussi bien sur un
+// COMMENTAIRE que sur une couleur reellement peinte (les deux defauts ont ete constates ici meme).
+// Elle PUNISSAIT donc la seule vraie reunion des palettes : faire DERIVER le lanceur de index.html.
+//
+// La version ci-dessous n'exige plus aucun litteral. Elle exige la PROPRIETE : une source unique,
+// lue, et une comparaison sur la valeur reellement utilisee par le lanceur.
+garde('G5 la palette a une SOURCE UNIQUE : le lanceur la derive de index.html, il ne la recopie pas', () => {
   const verifie = (gardeSrc.match(/verifie\(/g) || []).length
   if (verifie < 111) return `${verifie} verifications au lieu de 111 au minimum`
-  for (const [, c] of COULEURS) {
-    if (!gardeSrc.includes(c)) return `la garde ne cite plus ${c} : elle a ete recablee sur d autres teintes`
-  }
-  if (!/_motif in _html/.test(gardeSrc)) return 'la garde ne relit plus index.html'
+  // 1. Le lanceur ne doit plus porter AUCUN des hexadecimaux de la palette en dur.
+  const enDur = COULEURS.filter(([, c]) => splash.toLowerCase().includes(c.toLowerCase()))
+  if (enDur.length > 0)
+    return `le lanceur recopie encore ${enDur.map(([n, c]) => `${n} ${c}`).join(', ')} a la main : deux copies peuvent rediverger`
+  // 2. Il doit les DERIVER du degrade de index.html.
+  if (!/_DORE = _ARCS\.group\(1\)/.test(splash) || !/_VIOLET = _ARCS\.group\(2\)/.test(splash))
+    return 'le lanceur ne derive plus sa palette du degrade de index.html'
+  // 3. La garde doit relire index.html ET comparer la valeur REELLE du lanceur, pas son texte source.
+  if (!/linear-gradient/.test(gardeSrc)) return 'la garde ne relit plus le degrade de index.html'
+  if (!/_mod\._DORE/.test(gardeSrc) || !/_mod\._VIOLET/.test(gardeSrc))
+    return 'la garde ne compare plus la couleur REELLEMENT peinte par le lanceur (une sous-chaine passe sur un commentaire)'
   return true
 })
 

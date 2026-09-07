@@ -28,6 +28,7 @@ l'interface — 38 s » est une information vraie.
 from __future__ import annotations
 
 import queue
+import re
 import time
 import tkinter as tk
 from pathlib import Path
@@ -37,6 +38,8 @@ import subprocess
 
 from launch_dev_phases import ETAPES, SuiviDemarrage, formater_identite, libelle_duree
 
+_RACINE_PROJET = Path(__file__).resolve().parent.parent
+
 # PALETTE — la MEME que l'ecran de demarrage de l'application, relue dans `src/renderer/index.html`
 # plutot que devinee. Les deux ecrans se suivent a l'oeil pendant un demarrage : deux codes couleur
 # differents feraient croire a deux produits.
@@ -44,8 +47,8 @@ from launch_dev_phases import ETAPES, SuiviDemarrage, formater_identite, libelle
 #   fond    #000        (`html, body { background: #000 }`)
 #   texte   #f5f7fb     (`color: #f5f7fb`)
 #   piste   rgba(245,247,251,0.07) -> tkinter ne connait pas l'alpha, donc l'equivalent OPAQUE sur noir
-#   arc A   #e9bd4e     dore
-#   arc B   #9d79ed     rose-violet
+#   arc A   dore         LU dans le degrade de index.html (aucun hexadecimal recopie ici)
+#   arc B   rose-violet  idem
 #
 # Le test `launch_dev_phases_test.py` relit ces valeurs dans `index.html` et refuse une derive : sans
 # lui, les deux palettes divergeraient au premier changement de theme cote app.
@@ -56,8 +59,23 @@ _TEXTE = "#f5f7fb"      # le GROS titre, et lui seul : blanc
 # Tous les petits textes sont DORES (demande utilisateur) : sous-titre, chrono, detail d'erreur. Le
 # gris atone d'avant ne venait d'aucune des deux palettes — c'etait une teinte inventee pour
 # "atténuer", et elle donnait un ecran terne la ou l'app est noire et doree.
-_DORE = "#e9bd4e"
-_VIOLET = "#9d79ed"
+# Les DEUX teintes de l'accent ne sont plus recopiees ici : elles sont LUES dans le degrade de
+# `src/renderer/index.html`, qui est la source unique de la palette du demarrage (elle-meme copie
+# surveillee de `src/shared/boot-splash.ts`, cf. `boot-splash.test.ts`). Un hexadecimal recopie a la
+# main derivait en silence : le commit 08016aac a change l'app sans que ce lanceur bronche. Lues a la
+# source, les deux ecrans ne PEUVENT plus diverger — et si le degrade devient illisible, on le dit au
+# lieu de repeindre avec une valeur devinee.
+_ARCS = re.search(
+    r"linear-gradient\(\s*(#[0-9a-fA-F]{6})\s+0\s+50%\s*,\s*(#[0-9a-fA-F]{6})",
+    (_RACINE_PROJET / "src" / "renderer" / "index.html").read_text(encoding="utf-8"),
+)
+if _ARCS is None:
+    raise SystemExit(
+        "src/renderer/index.html ne porte plus le degrade des deux arcs : la palette de "
+        "l'ecran de demarrage n'a plus de source. Corriger index.html avant de lancer."
+    )
+_DORE = _ARCS.group(1)
+_VIOLET = _ARCS.group(2)
 # L'ecran de demarrage de l'app n'a AUCUN etat d'erreur — cette couleur-ci est donc nouvelle. Choisie
 # dans la meme famille chaude que le dore pour ne pas jurer, mais assez distincte pour ne pas passer
 # pour une etape normale.
@@ -65,7 +83,6 @@ _ALERTE = "#e0705a"
 
 _LARGEUR = 560
 _HAUTEUR = 300
-_RACINE_PROJET = Path(__file__).resolve().parent.parent
 
 
 class Splash:
