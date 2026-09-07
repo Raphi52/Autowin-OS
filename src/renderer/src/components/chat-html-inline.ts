@@ -494,6 +494,53 @@ export function scopeChatStyleSheet(css: string, scope: string): string {
   return out.join('\n')
 }
 
+/**
+ * Assainit un noeud du namespace SVG.
+ *
+ * Deux precautions propres au dessin :
+ * - les `id` sont PREFIXES par le domaine du bloc, et les references `url(#…)` reecrites en meme
+ *   temps : deux reponses definissant toutes deux un degrade `g1` ne doivent pas se voler leurs
+ *   couleurs, et un `id` du modele ne doit jamais repondre a un `getElementById` de l'application ;
+ * - une reference qui n'est pas LOCALE (`url(https://…)`) fait tomber l'attribut : c'est une requete
+ *   sortante deguisee en couleur de remplissage.
+ */
+function sanitizeSvgNode(node: Element, tag: string, prefixeId: string): void {
+  if (!SVG_TAGS.has(tag)) {
+    node.replaceWith(...Array.from(node.childNodes))
+    return
+  }
+
+  for (const attribute of Array.from(node.attributes)) {
+    const name = attribute.name.toLowerCase()
+
+    if (name === 'style') {
+      const style = sanitizeStyle(attribute.value)
+      if (style) node.setAttribute('style', style)
+      else node.removeAttribute('style')
+      continue
+    }
+
+    if (!SVG_ATTRS.has(name) && !ALLOWED_ATTRS.has(name)) {
+      node.removeAttribute(attribute.name)
+      continue
+    }
+
+    if (name === 'id') {
+      node.setAttribute('id', `${prefixeId}${attribute.value}`)
+      continue
+    }
+
+    if (/url\s*\(/i.test(attribute.value)) {
+      const local = attribute.value.replace(
+        /url\(\s*['"]?#([^'")\s]+)['"]?\s*\)/gi,
+        (_all, cible: string) => `url(#${prefixeId}${cible})`
+      )
+      if (/url\s*\((?!#)/i.test(local)) node.removeAttribute(attribute.name)
+      else node.setAttribute(attribute.name, local)
+    }
+  }
+}
+
 export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
   const template = document.createElement('template')
   template.innerHTML = source
