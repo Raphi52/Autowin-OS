@@ -32,3 +32,6 @@ artifacts/preuve-*.png
 
 # Preferences personnelles injectees dans chaque tour (contexte projet local, non partage)
 AGENTS.md
+
+# Etat local de Visual Studio : jamais partage, et un arbre sale fait echouer la publication.
+.vs/
