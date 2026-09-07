@@ -27,7 +27,14 @@ export const BOOT_SPLASH_MARKUP = `<style>
   html,body{margin:0;height:100%;background:#000;color:#f5f7fb;
     font-family:'Segoe UI',system-ui,-apple-system,sans-serif;overflow:hidden}
   #autowin-boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:26px;background:#000;animation:boot-in 0.45s ease both}
+    justify-content:center;gap:26px;
+    /* Le filet vertical de scripts/launch_dev_splash.py : dore en haut, violet en bas.
+       Les deux ecrans se suivent a l'oeil pendant un demarrage, ils portent donc le MEME
+       accent — c'est le seul motif commun aux deux, et il vit ici a la source. Le noir de
+       l'ecran reste dessous, en derniere couche. */
+    background:linear-gradient(#e9bd4e 0 50%,#9d79ed 50% 100%)
+      left center / 2px 82% no-repeat,#000;
+    animation:boot-in 0.45s ease both}
   #autowin-boot .name{font-size:13px;font-weight:500;letter-spacing:0.24em;text-transform:uppercase;
     color:rgba(245,247,251,0.86)}
   #autowin-boot .step{font-size:12px;color:rgba(245,247,251,0.34);letter-spacing:0.01em}
