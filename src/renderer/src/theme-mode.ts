@@ -83,6 +83,49 @@ export function appliquerThemeMode(mode: ThemeId): void {
   if (!racine) return
   if (mode === THEME_MODE_PAR_DEFAUT) racine.removeAttribute('data-theme')
   else racine.setAttribute('data-theme', mode)
+  accorderBoutonsDeFenetre(racine)
+}
+
+/**
+ * LES BOUTONS DE FENETRE — reduire / agrandir / fermer — ne sont PAS dessines par la page : c'est
+ * Windows qui les peint, d'apres une couleur fixee a la creation de la fenetre. Aucune feuille de
+ * style ne les atteint, donc ils ne suivaient AUCUN theme : ils gardaient le quasi-blanc du mode
+ * sombre, et devenaient invisibles sur une barre claire. Constate a l'ecran le 2026-09-07.
+ *
+ * On lit donc la couleur de texte REELLE du theme applique — `--text`, telle que le navigateur
+ * vient de la calculer — et on la transmet au processus principal. Consequence voulue : un theme
+ * futur n'a rien a declarer ici, il suffit qu'il definisse `--text`.
+ *
+ * Silencieux par construction : hors d'Electron (test, navigateur) le pont n'existe pas, et sur une
+ * plateforme sans overlay de barre de titre l'appel rend `false`. Aucun des deux n'est une panne.
+ */
+function accorderBoutonsDeFenetre(racine: Element): void {
+  const pont = (globalThis as { api?: { setTitlebarSymbolColor?: (c: string) => unknown } }).api
+  if (!pont?.setTitlebarSymbolColor) return
+  try {
+    const calculee = globalThis.getComputedStyle?.(racine).getPropertyValue('--text').trim()
+    const couleur = enHexadecimal(calculee)
+    if (couleur) void pont.setTitlebarSymbolColor(couleur)
+  } catch {
+    // Style non calculable (document detache) : la barre garde sa couleur, rien de casse.
+  }
+}
+
+/**
+ * Windows veut un `#rrggbb`. Le theme, lui, peut ecrire `#14192a`, `#fff` ou `rgb(20, 25, 42)`
+ * selon ce que le navigateur rend — les trois formes existent dans nos feuilles, donc les trois
+ * sont converties plutot que supposees.
+ */
+export function enHexadecimal(valeur: string): string | null {
+  if (/^#[0-9a-fA-F]{6}$/.test(valeur)) return valeur.toLowerCase()
+  if (/^#[0-9a-fA-F]{3}$/.test(valeur)) {
+    const [r, v, b] = valeur.slice(1)
+    return `#${r}${r}${v}${v}${b}${b}`.toLowerCase()
+  }
+  const rgb = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(valeur)
+  if (!rgb) return null
+  const canal = (n: string): string => Math.min(255, Number(n)).toString(16).padStart(2, '0')
+  return `#${canal(rgb[1])}${canal(rgb[2])}${canal(rgb[3])}`
 }
 
 /** Mémorise ET applique. C'est ce qu'appelle l'interrupteur de Settings · Interface. */

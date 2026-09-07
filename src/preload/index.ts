@@ -159,6 +159,14 @@ const api = {
     raison?: string
     poseeA: number
   } | null> => ipcRenderer.invoke('app:reprise-en-attente'),
+  /**
+   * Couleur des boutons réduire / agrandir / fermer, dessinés par Windows et hors d'atteinte des
+   * feuilles de style. Le renderer l'envoie parce que lui seul sait ce que vaut `--text` dans le
+   * thème courant. Rend `false` sur une plateforme sans overlay de barre de titre : ce n'est pas
+   * une panne, et l'appelant n'a rien à en faire.
+   */
+  setTitlebarSymbolColor: (couleur: string): Promise<boolean> =>
+    ipcRenderer.invoke('app:titlebar-symbol-color', couleur),
   // Auto-update git au démarrage.
   checkUpdate: (): Promise<{
     available: boolean
