@@ -3030,6 +3030,18 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.markRead(ids)
   })
+  // ENVOIE un message NEUF, hors de tout fil existant : une adresse, un objet, un premier message.
+  // Il ECRIT et il SORT du poste, comme `outlook:repondre`, mais rien n'est herite d'un element
+  // existant -- l'adresse vient d'une saisie. Elle est donc contrainte a un motif ASCII cote main
+  // AVANT de partir dans un appel COM, et l'objet comme le corps voyagent par des fichiers
+  // temporaires : jamais concatenes dans une ligne de commande.
+  ipcMain.handle(
+    'outlook:nouveau-message',
+    async (event, adresse: unknown, objet: unknown, corps: unknown) => {
+      assertTrustedRendererSender(event, 'Outlook')
+      return outlookGateway.sendNew(adresse, objet, corps)
+    }
+  )
 
   registerTaskManagerIpc({
     ipc: ipcMain,

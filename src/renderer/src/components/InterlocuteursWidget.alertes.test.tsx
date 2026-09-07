@@ -64,6 +64,7 @@ function rendre(fils: Interlocuteur[]): {
     onOuvrir: async () => undefined,
     ouvertureEnCours: null,
     onRepondre: async () => ({ ok: true }),
+    onNouvelleConversation: async () => ({ ok: true }),
     onMarquerLu: async () => ({ ok: true })
   })
   act(() => root.render(createElement(InterlocuteursWidget, props(fils))))

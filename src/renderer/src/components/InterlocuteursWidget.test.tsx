@@ -91,12 +91,18 @@ const nonLus: Interlocuteur = {
 
 function monter(
   onRepondre = vi.fn().mockResolvedValue({ ok: true }),
-  extra: { fils?: Interlocuteur[]; onMarquerLu?: ReturnType<typeof vi.fn> } = {}
+  extra: {
+    fils?: Interlocuteur[]
+    onMarquerLu?: ReturnType<typeof vi.fn>
+    onNouvelleConversation?: ReturnType<typeof vi.fn>
+  } = {}
 ) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   const onMarquerLu = extra.onMarquerLu ?? vi.fn().mockResolvedValue({ ok: true })
+  const onNouvelleConversation =
+    extra.onNouvelleConversation ?? vi.fn().mockResolvedValue({ ok: true })
   act(() => {
     root.render(
       createElement(InterlocuteursWidget, {
@@ -105,6 +111,7 @@ function monter(
         onOuvrir: vi.fn().mockResolvedValue(undefined),
         ouvertureEnCours: null,
         onRepondre,
+        onNouvelleConversation,
         onMarquerLu
       })
     )
@@ -124,17 +131,27 @@ function monter(
   // apprend pas, l'evenement passe pour un non-changement et l'etat reste vide. On passe donc par le
   // setter natif de la propriete, seule facon de faire voir la frappe a React sans testing-library.
   const saisir = async (id: string, texte: string): Promise<void> => {
-    const champ = trouver(id) as HTMLTextAreaElement
-    const setter = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      'value'
-    )?.set
+    const champ = trouver(id) as HTMLTextAreaElement | HTMLInputElement
+    expect(champ, `champ absent : ${id}`).toBeTruthy()
+    // L'objet d'une nouvelle conversation est un `input`, le message un `textarea` : le setter natif
+    // vit sur le prototype de CHACUN, et celui du textarea ne s'applique pas a un input.
+    const prototype =
+      champ instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype
+    const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set
     await act(async () => {
       setter?.call(champ, texte)
       champ.dispatchEvent(new Event('input', { bubbles: true }))
     })
   }
-  return { container, onRepondre, onMarquerLu, trouver, cliquer, saisir }
+  return {
+    container,
+    onRepondre,
+    onNouvelleConversation,
+    onMarquerLu,
+    trouver,
+    cliquer,
+    saisir
+  }
 }
 
 describe('InterlocuteursWidget', () => {
@@ -234,5 +251,102 @@ describe('InterlocuteursWidget', () => {
     expect(container.querySelector('[data-testid="home-inter-lu-erreur"]')?.textContent).toContain(
       'Outlook est ferme.'
     )
+  })
+})
+
+describe('InterlocuteursWidget — ouvrir une conversation qui n existe pas encore', () => {
+  it('offre le depart depuis l ecran du contact, et le retour remonte AUX FILS', async () => {
+    // Demande du 2026-09-07 : « quand on selectionne un interlocuteur, un bouton pour creer une
+    // nouvelle conversation ». Le bouton vit donc sur l'ecran 2, pas sur la liste des noms.
+    const { trouver, cliquer } = monter()
+    expect(trouver('home-inter-nouveau')).toBeNull()
+
+    await cliquer('home-contact-zoe@ex.fr')
+    expect(trouver('home-inter-nouveau')).toBeTruthy()
+
+    await cliquer('home-inter-nouveau')
+    expect(trouver('home-inter-nouveau-objet')).toBeTruthy()
+    expect(trouver('home-inter-nouveau-message')).toBeTruthy()
+    // La liste des fils a cede la place : la tuile est etroite, un formulaire par-dessus la liste
+    // aurait pousse les fils hors de vue.
+    expect(trouver('home-fil-devis')).toBeNull()
+
+    // Le retour remonte UN cran : les fils de la personne, pas la liste des noms.
+    await cliquer('home-inter-retour')
+    expect(trouver('home-fil-devis')).toBeTruthy()
+  })
+
+  it('envoie objet et premier message a l ADRESSE du contact, en deux temps', async () => {
+    const { container, onNouvelleConversation, cliquer, saisir } = monter()
+    await cliquer('home-contact-zoe@ex.fr')
+    await cliquer('home-inter-nouveau')
+
+    await saisir('home-inter-nouveau-objet', 'Devis 2027')
+    await saisir('home-inter-nouveau-message', 'Bonjour Zoé, pouvez-vous me le renvoyer ?')
+    await cliquer('home-inter-nouveau-envoyer')
+    // Un clic ne suffit pas : un envoi part chez quelqu'un et ne se rattrape pas.
+    expect(onNouvelleConversation).not.toHaveBeenCalled()
+
+    await cliquer('home-inter-nouveau-confirmer')
+    expect(onNouvelleConversation).toHaveBeenCalledWith(
+      'zoe@ex.fr',
+      'Devis 2027',
+      'Bonjour Zoé, pouvez-vous me le renvoyer ?'
+    )
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('envoyé')
+  })
+
+  it('refuse de partir sans objet : un message sans objet se lit comme un envoi rate', async () => {
+    const { trouver, onNouvelleConversation, cliquer, saisir } = monter()
+    await cliquer('home-contact-zoe@ex.fr')
+    await cliquer('home-inter-nouveau')
+
+    await saisir('home-inter-nouveau-message', 'Un message sans objet')
+    expect((trouver('home-inter-nouveau-envoyer') as HTMLButtonElement).disabled).toBe(true)
+
+    await saisir('home-inter-nouveau-objet', '   ')
+    expect((trouver('home-inter-nouveau-envoyer') as HTMLButtonElement).disabled).toBe(true)
+    expect(onNouvelleConversation).not.toHaveBeenCalled()
+  })
+
+  it('une frappe apres la confirmation la REPREND', async () => {
+    // Sans cela, on confirmerait un texte puis on en enverrait un autre.
+    const { trouver, onNouvelleConversation, cliquer, saisir } = monter()
+    await cliquer('home-contact-zoe@ex.fr')
+    await cliquer('home-inter-nouveau')
+    await saisir('home-inter-nouveau-objet', 'Devis')
+    await saisir('home-inter-nouveau-message', 'Premier jet')
+    await cliquer('home-inter-nouveau-envoyer')
+    expect(trouver('home-inter-nouveau-confirmer')).toBeTruthy()
+
+    await saisir('home-inter-nouveau-message', 'Autre texte')
+    expect(trouver('home-inter-nouveau-confirmer')).toBeNull()
+    expect(onNouvelleConversation).not.toHaveBeenCalled()
+  })
+
+  it('affiche la cause reelle quand Outlook refuse le message neuf', async () => {
+    const onNouvelleConversation = vi
+      .fn()
+      .mockResolvedValue({ ok: false, erreur: 'Outlook ne reconnaît pas cette adresse.' })
+    const { container, cliquer, saisir } = monter(undefined, { onNouvelleConversation })
+    await cliquer('home-contact-zoe@ex.fr')
+    await cliquer('home-inter-nouveau')
+    await saisir('home-inter-nouveau-objet', 'Devis')
+    await saisir('home-inter-nouveau-message', 'Bonjour')
+    await cliquer('home-inter-nouveau-envoyer')
+    await cliquer('home-inter-nouveau-confirmer')
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      'Outlook ne reconnaît pas cette adresse.'
+    )
+  })
+
+  it('ne propose PAS d ecrire a un contact sans adresse', async () => {
+    // Un envoi sans destinataire ne partirait nulle part, et un bouton qui echoue toujours se lit
+    // comme une panne du widget.
+    const sansAdresse: Interlocuteur = { ...zoe, cle: 'zoe-sans', adresse: '' }
+    const { trouver, cliquer } = monter(undefined, { fils: [sansAdresse] })
+    await cliquer('home-contact-zoe-sans')
+    expect(trouver('home-inter-nouveau')).toBeNull()
   })
 })

@@ -77,6 +77,7 @@ function poserApi(over: Record<string, unknown> = {}): void {
     outlookSnapshot: vi.fn(async () => outlookSnapshot()),
     outlookOuvrir: vi.fn(async () => ({ ok: true })),
     outlookMarquerLu: vi.fn(async () => ({ ok: true })),
+    outlookNouveauMessage: vi.fn(async () => ({ ok: true })),
     ...over
   }
 }
@@ -479,5 +480,114 @@ describe('la tuile des conversations remplace le hublot', () => {
     const tuile = tile(container, 'conversations')
     expect(tuile.querySelector('.home-hublot__heure')).toBeNull()
     expect(tuile.textContent).toContain('Aucune conversation en attente')
+  })
+})
+
+describe('la vue agit : ouvrir une conversation qui n existe pas encore', () => {
+  /**
+   * Demande de l'utilisateur du 2026-09-07 : depuis l'ecran d'un interlocuteur, un bouton pour
+   * creer une nouvelle conversation, avec un objet et un premier message.
+   *
+   * Ce test suit le chemin COMPLET de la vue — le clic sur le contact, le bouton, les deux champs,
+   * la confirmation — jusqu'a l'appel du canal. Les tests du widget seul ne verifient pas le
+   * cablage de `HomeView`, et c'est precisement la que l'appel se perdrait sans bruit.
+   */
+  const ouvrirLeFormulaire = async (container: HTMLDivElement): Promise<HTMLElement> => {
+    const mails = tile(container, 'mails')
+    await act(async () =>
+      (mails.querySelector('[data-testid^="home-contact-"]') as HTMLButtonElement).click()
+    )
+    await act(async () =>
+      (mails.querySelector('[data-testid="home-inter-nouveau"]') as HTMLButtonElement).click()
+    )
+    return mails
+  }
+
+  const remplir = async (mails: HTMLElement, objet: string, message: string): Promise<void> => {
+    const champs: Array<[string, string, unknown]> = [
+      ['home-inter-nouveau-objet', objet, HTMLInputElement.prototype],
+      ['home-inter-nouveau-message', message, HTMLTextAreaElement.prototype]
+    ]
+    for (const [testid, valeur, prototype] of champs) {
+      const champ = mails.querySelector(`[data-testid="${testid}"]`) as HTMLInputElement
+      // React garde sa propre copie de la valeur : passer par le setter natif est la seule facon de
+      // lui faire voir la frappe sans testing-library.
+      const setter = Object.getOwnPropertyDescriptor(prototype as object, 'value')?.set
+      await act(async () => {
+        setter?.call(champ, valeur)
+        champ.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+  }
+
+  it('envoie objet et premier message a l adresse du contact, puis relit Outlook', async () => {
+    const container = await mount()
+    const mails = await ouvrirLeFormulaire(container)
+    await remplir(mails, 'Bon de commande 2027', 'Bonjour, pouvez-vous me le confirmer ?')
+
+    await act(async () =>
+      (
+        mails.querySelector('[data-testid="home-inter-nouveau-envoyer"]') as HTMLButtonElement
+      ).click()
+    )
+    // Un clic ne suffit pas : l'envoi part chez quelqu'un et ne se rattrape pas.
+    expect(api().outlookNouveauMessage).not.toHaveBeenCalled()
+
+    await act(async () =>
+      (
+        mails.querySelector('[data-testid="home-inter-nouveau-confirmer"]') as HTMLButtonElement
+      ).click()
+    )
+    expect(api().outlookNouveauMessage).toHaveBeenCalledWith(
+      'collegue@amitel.fr',
+      'Bon de commande 2027',
+      'Bonjour, pouvez-vous me le confirmer ?'
+    )
+    // Le message part dans les elements envoyes : sans relecture forcee, la conversation neuve
+    // n'apparaitrait qu'au cycle suivant et le clic paraitrait sans effet.
+    expect(api().outlookSnapshot).toHaveBeenLastCalledWith(true)
+  })
+
+  it('AFFICHE la cause quand Outlook refuse le message neuf', async () => {
+    poserApi({
+      outlookNouveauMessage: vi.fn(async () => ({
+        ok: false,
+        erreur: 'Outlook ne reconnait pas cette adresse'
+      }))
+    })
+    const container = await mount()
+    const mails = await ouvrirLeFormulaire(container)
+    await remplir(mails, 'Objet', 'Message')
+    await act(async () =>
+      (
+        mails.querySelector('[data-testid="home-inter-nouveau-envoyer"]') as HTMLButtonElement
+      ).click()
+    )
+    await act(async () =>
+      (
+        mails.querySelector('[data-testid="home-inter-nouveau-confirmer"]') as HTMLButtonElement
+      ).click()
+    )
+    expect(mails.querySelector('[role="alert"]')?.textContent).toContain('ne reconnait pas')
+    // Rien n'est parti : la boite n'a aucune raison d'etre relue.
+    expect(api().outlookSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('le dit quand la version de l app ne sait pas encore ecrire un message neuf', async () => {
+    poserApi({ outlookNouveauMessage: undefined })
+    const container = await mount()
+    const mails = await ouvrirLeFormulaire(container)
+    await remplir(mails, 'Objet', 'Message')
+    await act(async () =>
+      (
+        mails.querySelector('[data-testid="home-inter-nouveau-envoyer"]') as HTMLButtonElement
+      ).click()
+    )
+    await act(async () =>
+      (
+        mails.querySelector('[data-testid="home-inter-nouveau-confirmer"]') as HTMLButtonElement
+      ).click()
+    )
+    expect(mails.querySelector('[role="alert"]')?.textContent).toContain('ne sait pas encore')
   })
 })

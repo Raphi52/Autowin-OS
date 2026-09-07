@@ -533,6 +533,17 @@ const api = {
    */
   outlookMarquerLu: (ids: readonly string[]): Promise<{ ok: boolean; erreur?: string }> =>
     ipcRenderer.invoke('outlook:marquer-lu', [...ids]),
+  /**
+   * ENVOIE un message NEUF : une adresse, un objet, un premier message. Ce n'est PAS une reponse --
+   * il n'y a aucun element de depart, donc rien n'est herite et tout est valide cote main.
+   * Irreversible : l'appelant doit avoir fait confirmer.
+   */
+  outlookNouveauMessage: (
+    adresse: string,
+    objet: string,
+    corps: string
+  ): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('outlook:nouveau-message', adresse, objet, corps),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:create', task),
   taskManagerUpdate: (id: string, task: unknown): Promise<ScheduledTask> =>

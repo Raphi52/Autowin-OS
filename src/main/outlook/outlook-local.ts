@@ -40,8 +40,25 @@ export interface OutlookMarkReadResult {
   erreur?: string
 }
 
+export interface OutlookNewMessageResult {
+  ok: boolean
+  erreur?: string
+}
+
 /** Plafond du corps d'une reponse. Assez pour un message, assez peu pour rester un widget. */
 const MAX_CORPS = 20_000
+/** Plafond de l'OBJET d'un message neuf. Au-dela, aucune messagerie n'en montre la fin. */
+const MAX_OBJET = 255
+/**
+ * La forme d'une adresse acceptée pour un message NEUF.
+ *
+ * Un envoi neuf n'a pas d'élément de départ : l'adresse du destinataire est FOURNIE, elle ne se
+ * déduit d'aucun message existant. C'est le seul endroit de cette passerelle où l'utilisateur nomme
+ * lui-même à qui l'on écrit — donc le seul où une faute de frappe envoie un message chez un
+ * inconnu, et où une chaîne libre partirait dans un appel COM. Le motif est ASCII strict, et le
+ * script le re-vérifie : une frontière de confiance ne se garde pas d'un seul côté.
+ */
+const ADRESSE_SMTP = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}$/
 
 export interface OutlookGatewayOptions {
   /** Racine du dépôt / de l'application, d'où le script est résolu. */
@@ -56,6 +73,13 @@ export interface OutlookGatewayOptions {
   replier?: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
   /** Idem pour le MARQUAGE LU. Les identifiants passent par un fichier, un par ligne. */
   marqueur?: (scriptPath: string, idsPath: string) => Promise<number>
+  /** Idem pour un message NEUF. Objet et corps passent par des fichiers, pas en arguments. */
+  redacteur?: (
+    scriptPath: string,
+    adresse: string,
+    objetPath: string,
+    corpsPath: string
+  ) => Promise<number>
   now?: () => number
 }
 
@@ -128,6 +152,53 @@ const MARK_FAILURES: Readonly<Record<number, string>> = {
   3: 'Ces messages n’existent plus dans Outlook — ils ont peut-être été supprimés ou déplacés.'
 }
 
+/**
+ * Codes de sortie du script de message NEUF, traduits en phrases.
+ *
+ * Le code 6 est propre à ce chemin : une réponse hérite du destinataire de l'élément d'origine,
+ * un message neuf le reçoit d'une saisie. « Outlook ne sait pas à qui remettre cette adresse » est
+ * donc l'échec le plus probable ici, et c'est le seul que l'utilisateur peut corriger lui-même.
+ */
+const NEW_FAILURES: Readonly<Record<number, string>> = {
+  1: "Outlook n'a pas pu envoyer ce message.",
+  2: "Cette adresse n'a pas la forme d'une adresse e-mail.",
+  3: 'Le message n’a pas pu être préparé sur le disque.',
+  4: 'Le message est vide : rien n’a été envoyé.',
+  5: 'L’objet est vide : rien n’a été envoyé.',
+  6: 'Outlook ne reconnaît pas cette adresse — vérifiez-la avant de renvoyer.'
+}
+
+function defaultRedacteur(
+  scriptPath: string,
+  adresse: string,
+  objetPath: string,
+  corpsPath: string
+): Promise<number> {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        '-A',
+        adresse,
+        '-ObjetFichier',
+        objetPath,
+        '-CorpsFichier',
+        corpsPath
+      ],
+      { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 256 * 1024 },
+      (error) => {
+        const code = (error as { code?: number } | null)?.code
+        resolve(typeof code === 'number' ? code : error ? 1 : 0)
+      }
+    )
+  })
+}
+
 function defaultMarqueur(scriptPath: string, idsPath: string): Promise<number> {
   return new Promise((resolve) => {
     execFile(
@@ -188,6 +259,12 @@ export class OutlookLocalGateway {
   private readonly opener: (scriptPath: string, id: string) => Promise<number>
   private readonly replier: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
   private readonly marqueur: (scriptPath: string, idsPath: string) => Promise<number>
+  private readonly redacteur: (
+    scriptPath: string,
+    adresse: string,
+    objetPath: string,
+    corpsPath: string
+  ) => Promise<number>
   private readonly now: () => number
   private cache: { at: number; result: OutlookGatewayResult } | null = null
   /** Lecture en cours : deux widgets qui interrogent en même temps ne doivent lancer QU'UN script. */
@@ -200,6 +277,7 @@ export class OutlookLocalGateway {
     this.opener = options.opener ?? defaultOpener
     this.replier = options.replier ?? defaultReplier
     this.marqueur = options.marqueur ?? defaultMarqueur
+    this.redacteur = options.redacteur ?? defaultRedacteur
     this.now = options.now ?? (() => Date.now())
   }
 
@@ -339,6 +417,67 @@ export class OutlookLocalGateway {
     } catch (error) {
       return { ok: false, erreur: describeFailure(error) }
     } finally {
+      if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  /**
+   * ENVOIE un message NEUF : une adresse, un objet, un premier message.
+   *
+   * Demande de l'utilisateur du 2026-09-07 : depuis l'écran d'un interlocuteur, ouvrir une
+   * conversation qui n'existe pas encore. `replyToItem` ne pouvait pas le faire — il part d'un
+   * élément existant, dont Outlook tire le destinataire et l'objet « RE: … ». Ici il n'y a aucun
+   * élément de départ : tout vient de la saisie, donc tout est validé.
+   *
+   * Trois choses que ce chemin ne partage pas avec la réponse :
+   *  - l'ADRESSE est fournie, pas héritée : elle est contrainte à un motif ASCII strict des deux
+   *    côtés, parce qu'une faute de frappe écrit à un inconnu et qu'une chaîne libre part dans COM ;
+   *  - l'OBJET voyage par un fichier UTF-8 comme le corps (console en cp1252, texte interprétable) ;
+   *  - un succès VIDE le cache. Le message part dans les éléments envoyés, donc il APPARTIENT au fil
+   *    que la tuile affiche : sans cela, la nouvelle conversation resterait invisible jusqu'à
+   *    l'expiration du cache, et le clic paraîtrait sans effet.
+   */
+  async sendNew(
+    adresse: unknown,
+    objet: unknown,
+    corps: unknown
+  ): Promise<OutlookNewMessageResult> {
+    if (typeof adresse !== 'string' || !ADRESSE_SMTP.test(adresse.trim())) {
+      return { ok: false, erreur: NEW_FAILURES[2] }
+    }
+    // L'objet tient sur UNE ligne : un retour chariot dans un en-tête de courrier n'a pas de sens,
+    // et le laisser passer permettrait d'écrire une ligne d'en-tête de plus.
+    const sujet = typeof objet === 'string' ? objet.replace(/[\r\n]+/g, ' ').trim() : ''
+    if (sujet === '') return { ok: false, erreur: NEW_FAILURES[5] }
+    if (sujet.length > MAX_OBJET) {
+      return { ok: false, erreur: `L’objet dépasse ${MAX_OBJET} caractères.` }
+    }
+    // Un envoi ne se DEVINE pas : un corps vide ne devient pas un message vide, il devient un refus.
+    const texte = typeof corps === 'string' ? corps.trim() : ''
+    if (texte === '') return { ok: false, erreur: NEW_FAILURES[4] }
+    if (texte.length > MAX_CORPS) {
+      return { ok: false, erreur: `Le message dépasse ${MAX_CORPS} caractères.` }
+    }
+    let dossier: string | null = null
+    try {
+      dossier = await mkdtemp(join(tmpdir(), 'autowin-outlook-nouveau-'))
+      const objetPath = join(dossier, 'objet.txt')
+      const corpsPath = join(dossier, 'corps.txt')
+      await writeFile(objetPath, sujet, 'utf8')
+      await writeFile(corpsPath, texte, 'utf8')
+      const code = await this.redacteur(
+        this.scriptVoisin('outlook-local-nouveau.ps1'),
+        adresse.trim(),
+        objetPath,
+        corpsPath
+      )
+      if (code !== 0) return { ok: false, erreur: NEW_FAILURES[code] ?? NEW_FAILURES[1] }
+      this.invalidate()
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, erreur: describeFailure(error) }
+    } finally {
+      // Le texte d'un message ne traîne pas dans le dossier temporaire une fois parti.
       if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
     }
   }

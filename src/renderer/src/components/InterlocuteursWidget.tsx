@@ -32,6 +32,11 @@ import { alerter, autoriserPopups } from './outlook-alerte-notif'
  * Trois écrans, un seul chemin, un retour à chaque cran :
  *   contacts → fils de cette personne → la conversation déroulée (et la réponse).
  *
+ * Un QUATRIÈME cran s'ouvre depuis l'écran des fils, ajouté sur demande du 2026-09-07 : « quand on
+ * sélectionne un interlocuteur, un bouton pour créer une nouvelle conversation, donc entrer un objet
+ * et envoyer le premier message ». Il part de l'ADRESSE du contact et non d'un message existant :
+ * c'est le seul écran où l'objet est saisi, puisqu'il n'y a pas de « RE: … » dont hériter.
+ *
  * Deux règles qui ne doivent pas être « améliorées » par inadvertance :
  *  - l'ENVOI est irréversible : il demande une confirmation explicite, et l'échec est AFFICHÉ ;
  *  - une réponse s'accroche au dernier message REÇU. Répondre à son propre envoi n'adresse le message
@@ -43,6 +48,12 @@ type Etape =
   | { ecran: 'contacts' }
   | { ecran: 'fils'; contact: string }
   | { ecran: 'conversation'; contact: string; fil: string }
+  /**
+   * Écrire une conversation qui n'existe PAS encore. Demande du 2026-09-07. C'est un cran à part et
+   * non un panneau greffé sur l'écran des fils : la tuile est étroite, et un formulaire ouvert
+   * au-dessus de la liste aurait poussé les fils hors de vue à chaque fois.
+   */
+  | { ecran: 'nouveau'; contact: string }
 
 export function InterlocuteursWidget({
   fils,
@@ -50,6 +61,7 @@ export function InterlocuteursWidget({
   onOuvrir,
   ouvertureEnCours,
   onRepondre,
+  onNouvelleConversation,
   onMarquerLu
 }: {
   fils: Interlocuteur[]
@@ -57,6 +69,17 @@ export function InterlocuteursWidget({
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
   onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  /**
+   * ENVOIE un message NEUF : une adresse, un objet, un premier message.
+   *
+   * Distinct de `onRepondre` : celui-ci part d'un message existant dont Outlook tire destinataire et
+   * objet « RE: … ». Ici il n'y a aucun message de départ, donc l'objet est SAISI.
+   */
+  onNouvelleConversation: (
+    adresse: string,
+    objet: string,
+    corps: string
+  ) => Promise<{ ok: boolean; erreur?: string }>
   /**
    * Marque des messages comme LUS dans Outlook. Ecrit dans la boite reelle.
    *
@@ -127,7 +150,9 @@ export function InterlocuteursWidget({
 
   const retour = useCallback(() => {
     setEtape((courant) => {
-      if (courant.ecran === 'conversation') return { ecran: 'fils', contact: courant.contact }
+      if (courant.ecran === 'conversation' || courant.ecran === 'nouveau') {
+        return { ecran: 'fils', contact: courant.contact }
+      }
       return { ecran: 'contacts' }
     })
   }, [])
@@ -162,9 +187,20 @@ export function InterlocuteursWidget({
         <EnTete titre={contact.nom} sousTitre={contact.adresse} onRetour={retour} />
         <EcranFils
           conversations={conversations}
+          contact={contact}
           now={now}
           onChoisir={(cle) => setEtape({ ecran: 'conversation', contact: contact.cle, fil: cle })}
+          onNouveau={() => setEtape({ ecran: 'nouveau', contact: contact.cle })}
         />
+      </div>
+    )
+  }
+
+  if (etape.ecran === 'nouveau' && contact) {
+    return (
+      <div className="home-inter">
+        <EnTete titre="Nouvelle conversation" sousTitre={contact.nom} onRetour={retour} />
+        <EcranNouveau contact={contact} onEnvoyer={onNouvelleConversation} />
       </div>
     )
   }
@@ -358,48 +394,85 @@ function ListeContacts({
   )
 }
 
-/** Écran 2 — les fils de discussion avec CETTE personne, le plus vivant en tête. */
+/**
+ * Écran 2 — les fils de discussion avec CETTE personne, le plus vivant en tête.
+ *
+ * Et le départ d'un fil qui n'existe pas encore. Le bouton est EN HAUT, avant la liste : c'est la
+ * seule action de cet écran qui ne dépend d'aucune ligne, et la placer sous une liste de vingt fils
+ * l'aurait rendue introuvable. Il manque quand le contact n'a pas d'adresse — un envoi sans
+ * destinataire ne partirait nulle part, et un bouton qui échoue toujours se lit comme une panne.
+ */
 function EcranFils({
   conversations,
+  contact,
   now,
-  onChoisir
+  onChoisir,
+  onNouveau
 }: {
   conversations: FilConversation[]
+  contact: Interlocuteur
   now: number
   onChoisir: (cle: string) => void
+  onNouveau: () => void
 }): React.JSX.Element {
+  const depart =
+    contact.adresse !== '' ? (
+      <div className="home-chat__actions" onPointerDown={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          className="home-chat__ouvrir"
+          onClick={onNouveau}
+          title={`Écrire un nouveau message à ${contact.adresse}`}
+          data-testid="home-inter-nouveau"
+        >
+          + Nouvelle conversation
+        </button>
+      </div>
+    ) : (
+      <p className="home-hint">
+        Aucune adresse connue pour ce contact : impossible de lui écrire un nouveau message.
+      </p>
+    )
   if (conversations.length === 0) {
-    return <p className="home-hint">Aucun fil de discussion avec cette personne.</p>
+    return (
+      <>
+        {depart}
+        <p className="home-hint">Aucun fil de discussion avec cette personne.</p>
+      </>
+    )
   }
   return (
-    <ul className="home-threads">
-      {conversations.map((fil) => (
-        <li key={fil.cle} data-unread={fil.nonLus > 0 ? 'true' : undefined}>
-          <button
-            type="button"
-            className="home-threads__ouvrir"
-            onClick={() => onChoisir(fil.cle)}
-            onPointerDown={(event) => event.stopPropagation()}
-            title={fil.sujet}
-            data-testid={`home-fil-${fil.cle}`}
-          >
-            <span className="home-threads__lines">
-              <span className="home-threads__name">
-                <b>{fil.sujet}</b>
-                <em>{formatExchangeDate(fil.dernierEchange, now)}</em>
+    <>
+      {depart}
+      <ul className="home-threads">
+        {conversations.map((fil) => (
+          <li key={fil.cle} data-unread={fil.nonLus > 0 ? 'true' : undefined}>
+            <button
+              type="button"
+              className="home-threads__ouvrir"
+              onClick={() => onChoisir(fil.cle)}
+              onPointerDown={(event) => event.stopPropagation()}
+              title={fil.sujet}
+              data-testid={`home-fil-${fil.cle}`}
+            >
+              <span className="home-threads__lines">
+                <span className="home-threads__name">
+                  <b>{fil.sujet}</b>
+                  <em>{formatExchangeDate(fil.dernierEchange, now)}</em>
+                </span>
+                <span className="home-threads__last">
+                  {fil.messages.length} message{fil.messages.length > 1 ? 's' : ''}
+                </span>
               </span>
-              <span className="home-threads__last">
-                {fil.messages.length} message{fil.messages.length > 1 ? 's' : ''}
+              {fil.nonLus > 0 ? <span className="home-threads__tally">{fil.nonLus}</span> : null}
+              <span className="home-threads__chevron" aria-hidden="true">
+                ›
               </span>
-            </span>
-            {fil.nonLus > 0 ? <span className="home-threads__tally">{fil.nonLus}</span> : null}
-            <span className="home-threads__chevron" aria-hidden="true">
-              ›
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   )
 }
 
@@ -608,6 +681,138 @@ function EcranConversation({
         )}
       </div>
     </>
+  )
+}
+
+/**
+ * Écran 4 — ouvrir une conversation qui n'existe pas encore.
+ *
+ * Demande de l'utilisateur du 2026-09-07 : depuis l'écran d'un interlocuteur, entrer un objet et
+ * envoyer le premier message. Ce n'est pas une réponse : Outlook n'a aucun message d'où tirer le
+ * destinataire ni l'objet, donc les deux viennent d'ici — l'adresse du contact affiché, et l'objet
+ * saisi.
+ *
+ * Les mêmes deux règles que la réponse, pour la même raison : un envoi part chez quelqu'un et ne se
+ * rattrape pas. Confirmation explicite en deux temps, et cause de l'échec AFFICHÉE.
+ */
+function EcranNouveau({
+  contact,
+  onEnvoyer
+}: {
+  contact: Interlocuteur
+  onEnvoyer: (
+    adresse: string,
+    objet: string,
+    corps: string
+  ) => Promise<{ ok: boolean; erreur?: string }>
+}): React.JSX.Element {
+  const [objet, setObjet] = useState('')
+  const [message, setMessage] = useState('')
+  const [confirme, setConfirme] = useState(false)
+  const [envoiEnCours, setEnvoiEnCours] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const [envoye, setEnvoye] = useState(false)
+
+  // Les DEUX champs sont requis. Un message sans objet arrive chez le destinataire comme « (aucun
+  // objet) » et se lit comme un envoi raté ; le script le refuse d'ailleurs (code 5).
+  const incomplet = objet.trim() === '' || message.trim() === ''
+
+  const envoyer = useCallback(async () => {
+    if (incomplet) return
+    setEnvoiEnCours(true)
+    setErreur(null)
+    try {
+      const resultat = await onEnvoyer(contact.adresse, objet.trim(), message.trim())
+      if (resultat.ok) {
+        setObjet('')
+        setMessage('')
+        setConfirme(false)
+        setEnvoye(true)
+      } else {
+        // La cause est AFFICHÉE : un envoi qui échoue en silence fait croire que le message est parti.
+        setErreur(resultat.erreur ?? "Outlook n'a pas pu envoyer ce message.")
+      }
+    } catch (error) {
+      setErreur(error instanceof Error ? error.message : String(error))
+    } finally {
+      setEnvoiEnCours(false)
+    }
+  }, [contact, objet, message, incomplet, onEnvoyer])
+
+  // Toute frappe ANNULE la confirmation : sans cela, on confirmerait un message puis on en
+  // enverrait un autre.
+  const modifier = (appliquer: () => void): void => {
+    appliquer()
+    setConfirme(false)
+    setEnvoye(false)
+  }
+
+  return (
+    <div className="home-chat__repondre" onPointerDown={(event) => event.stopPropagation()}>
+      <p className="home-hint">Nouveau message à {contact.adresse}</p>
+      <input
+        type="text"
+        className="home-chat__saisie"
+        value={objet}
+        onChange={(event) => modifier(() => setObjet(event.target.value))}
+        placeholder="Objet"
+        maxLength={255}
+        data-testid="home-inter-nouveau-objet"
+      />
+      <textarea
+        className="home-chat__saisie"
+        value={message}
+        onChange={(event) => modifier(() => setMessage(event.target.value))}
+        placeholder={`Premier message à ${contact.nom}…`}
+        rows={3}
+        data-testid="home-inter-nouveau-message"
+      />
+      <div className="home-chat__actions">
+        {/* DEUX temps, comme la réponse : le premier clic annonce ce qui va se passer, le second le
+            fait. Un envoi ne se rattrape pas. */}
+        {confirme ? (
+          <>
+            <button
+              type="button"
+              className="home-chat__envoyer"
+              onClick={() => void envoyer()}
+              disabled={envoiEnCours || incomplet}
+              data-testid="home-inter-nouveau-confirmer"
+            >
+              {envoiEnCours ? <Spinner /> : `Confirmer l’envoi à ${contact.nom}`}
+            </button>
+            <button
+              type="button"
+              className="home-chat__annuler"
+              onClick={() => setConfirme(false)}
+              disabled={envoiEnCours}
+            >
+              Annuler
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="home-chat__envoyer"
+            onClick={() => setConfirme(true)}
+            disabled={incomplet}
+            data-testid="home-inter-nouveau-envoyer"
+          >
+            Envoyer par Outlook
+          </button>
+        )}
+      </div>
+      {erreur !== null ? (
+        <p className="home-error" role="alert">
+          {erreur}
+        </p>
+      ) : null}
+      {envoye && erreur === null ? (
+        <p className="home-hint" role="status">
+          Message envoyé. La conversation apparaîtra dans la liste à la prochaine actualisation.
+        </p>
+      ) : null}
+    </div>
   )
 }
 
