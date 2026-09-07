@@ -279,3 +279,37 @@ La seconde ligne est ce qui compte autant que la première : la sonde **peut rou
 `cdp-skill-node-brain-proof.mjs` sélectionne le profil `memoire-depot`, qui **n'existe plus** dans le
 catalogue (sept profils, pas celui-là). Le scénario `nominal` lui suffirait — les nœuds skill
 viennent du profil, pas de la fixture — mais son profil doit d'abord être corrigé.
+
+## CORRECTION du 2026-09-07 — la sonde skill ne peut PAS devenir gratuite
+
+Ce document affirmait que `cdp-skill-node-brain-proof` n'aurait besoin d'**aucun scénario dédié**,
+au motif que les nœuds skill viennent du profil et non de la fixture. **C'était faux**, et il vaut
+mieux le corriger ici que laisser le prochain lecteur le découvrir en essayant.
+
+Ce que cette sonde observe n'est pas le pipeline : c'est un **vrai CLI** qui reçoit `--mcp-config`,
+ouvre le serveur d'outils du nœud skill, et appelle `brain_query` / `remember` par son canal natif.
+Deux obstacles, chacun suffisant :
+
+- `PROVIDERS_OUTILS_NATIFS` ne contient que `claude` (`skill-node-mcp.ts`). La fixture, enregistrée
+  sous `autowin-orchestration-fixture`, n'en fait pas partie : l'orchestrateur trace « outils natifs
+  indisponibles … repli sur le protocole texte » au lieu de les servir ;
+- même en l'y ajoutant, une réponse **écrite d'avance** ne peut pas APPELER un outil. Les lignes
+  `outil natif <nom> (<phase>) : ok` viennent d'un modèle qui décide, pas d'un texte constant.
+
+La rendre gratuite reviendrait donc à **scripter l'appel qu'elle est censée constater** : verte par
+construction, donc aveugle. Elle reste payante et manuelle — c'est le bon arbitrage, et il rejoint
+la famille déjà triée : « une fixture déterministe les rendrait vertes par construction ».
+
+**Bilan réel du chantier : 2 sondes affranchies sur 3**, et la troisième pour une raison nommée.
+
+### Ce qui a quand même été corrigé sur elle
+
+Son profil `memoire-depot` **n'existait plus** : la sélection ne pouvait qu'échouer, donc la sonde
+tournait sur un profil qu'elle n'avait pas choisi. Elle vise désormais `correctif`, qui existe et
+porte ce qu'elle observe (`think` et `learn` sont des nœuds skill dans six des sept profils).
+
+Ce correctif est **vérifiable sans payer** : `scripts/profils-des-sondes.test.mjs` confronte chaque
+identifiant de profil cité par une sonde au catalogue réel. Sans cette garde, la correction n'aurait
+été qu'une affirmation — et le défaut reviendrait au prochain renommage. Prouvée rouge en remettant
+`memoire-depot` : « profils inexistants cités par des sondes : cdp-skill-node-brain-proof.mjs →
+« memoire-depot » ».

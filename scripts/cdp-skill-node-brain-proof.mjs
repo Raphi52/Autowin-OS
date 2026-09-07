@@ -2,31 +2,39 @@ import { racineDepot } from './racine-depot.mjs'
 /**
  * MANUELLE PAR NATURE — NE PAS LA BRANCHER SUR UNE VÉRIFICATION AUTOMATIQUE.
  *
- * Tri du 2026-09-06. Elle appelle `orchestrate` : son oracle est la trace causale d'un VRAI
- * pipeline, avec ses phases et ses nœuds. Les fixtures gratuites du dépôt remplacent le fournisseur
- * de modèle pour UN tour de chat — elles ne savent pas jouer un pipeline. Vérifié : le mot
- * `isolatedTestInstance` n'apparaît NULLE PART dans `orchestrator.ts`, et aucune fixture
- * d'orchestration n'existe dans `src/main`. La rendre gratuite demanderait d'écrire un pipeline
- * factice déterministe : un morceau de produit, pas une migration de sonde.
+ * RAISON RÉVISÉE LE 2026-09-07, et ce n'est plus celle d'hier. Le tri du 2026-09-06 disait « aucune
+ * fixture d'orchestration n'existe » : cette fixture existe maintenant, et deux sondes en vivent
+ * (`cdp-trois-conversations-proof`, `cdp-relance-jusquau-vert-proof`). J'avais donc écrit dans le
+ * cadrage que celle-ci n'aurait besoin d'AUCUN scénario dédié. C'ÉTAIT FAUX, et voici pourquoi.
  *
- * Elle exige en plus PLUSIEURS runs de la même tâche pour juger du déterminisme : le coût est dans
- * son énoncé même.
+ * Ce qu'elle observe n'est pas le pipeline : c'est un VRAI CLI qui reçoit `--mcp-config`, ouvre le
+ * serveur d'outils du nœud skill et appelle `brain_query` / `remember` par son canal NATIF. Or :
+ *  - `PROVIDERS_OUTILS_NATIFS` ne contient que `claude` (`skill-node-mcp.ts`) — la fixture,
+ *    enregistrée sous `autowin-orchestration-fixture`, n'en fait pas partie, donc l'orchestrateur
+ *    trace « outils natifs indisponibles … repli sur le protocole texte » au lieu de les servir ;
+ *  - même en l'y ajoutant, une réponse ÉCRITE D'AVANCE ne peut pas APPELER un outil : les lignes
+ *    `outil natif <nom> (<phase>) : ok` viennent d'un modèle qui décide, pas d'un texte constant.
+ *
+ * Rendre cette sonde gratuite reviendrait donc à scripter l'appel qu'elle est censée constater :
+ * verte par construction, donc aveugle. C'est exactement le faux vert que ce chantier combat. Elle
+ * reste PAYANTE et manuelle, et c'est le bon arbitrage.
  */
 /*
- * SECOND BLOCAGE, TROUVÉ LE 2026-09-06 : LE PROFIL VISÉ N'EXISTE PLUS.
+ * LE PROFIL VISÉ N'EXISTAIT PLUS — CORRIGÉ LE 2026-09-07.
  *
- * Plus bas, cette sonde appelle `workflowProfileSelect('memoire-depot')`. Le catalogue en compte
- * sept — eclair, correctif, feature, chantier-autowin, panel-critique, exploration, remake
- * (`src/main/workflow-defaults.ts`) — et `memoire-depot` n'en fait pas partie.
+ * Elle appelait `workflowProfileSelect('correctif')`. Le catalogue en compte sept — eclair,
+ * correctif, feature, chantier-autowin, panel-critique, exploration, remake
+ * (`src/main/workflow-defaults.ts`) — et `memoire-depot` n'en fait pas partie : la sélection ne
+ * pouvait qu'échouer, donc le run tournait sur un profil non voulu.
  *
- * La bonne nouvelle : ce qu'elle observe n'a pas disparu. Depuis le 2026-08-25, `think` et `learn`
- * SONT des nœuds skill, présents dans six des sept profils (tous sauf `eclair`, délibérément
- * épargné), et `skill-node-tools.ts` leur sert `brain_query` et `remember`. Il suffit donc de viser
- * un profil existant — `correctif` par exemple.
+ * Elle vise désormais `correctif`, qui EXISTE et porte ce qu'elle observe : depuis le 2026-08-25,
+ * `think` et `learn` sont des nœuds skill présents dans six des sept profils (tous sauf `eclair`,
+ * délibérément épargné), servis par `skill-node-tools.ts` avec `brain_query` et `remember`.
  *
- * Non corrigé ici : cette sonde ne peut pas être rejouée sans payer un vrai pipeline, donc le
- * changement ne serait pas vérifiable. À faire en même temps que la fixture d'orchestration
- * (`docs/fixture-orchestration-cadrage-2026-09-06.md`), qui la rendra jouable.
+ * CE CORRECTIF EST VÉRIFIABLE SANS PAYER UN PIPELINE : `scripts/profils-des-sondes.test.mjs`
+ * confronte chaque identifiant de profil cité par une sonde au catalogue réel. Sans cette garde, la
+ * correction n'aurait été qu'une affirmation — et le même défaut reviendrait au prochain
+ * renommage.
  */
 /**
  * PREUVE TERMINALE — un nœud SKILL appelle le Brain par le mécanisme NATIF, dans l'app RÉELLE.
@@ -162,7 +170,7 @@ const argvDuRun = (evenements) => {
 console.log(`API disponible : ${await evaluate('typeof window.api')}`)
 console.log(
   await evaluate(
-    `(async () => JSON.stringify(await window.api.workflowProfileSelect('memoire-depot')))()`
+    `(async () => JSON.stringify(await window.api.workflowProfileSelect('correctif')))()`
   )
 )
 
