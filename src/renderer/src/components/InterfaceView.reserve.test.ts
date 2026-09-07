@@ -34,11 +34,19 @@ function compterCouleursEnDur(chemin: string): number {
   return (readFileSync(chemin, 'utf8').match(COULEUR_EN_DUR) ?? []).length
 }
 
-/** Une reprise claire existe si theme-modes.css cible la classe de l'écran sous data-theme. */
+/*
+ * Une reprise claire existe si theme-modes.css cible la classe de l'ecran sous le selecteur du
+ * mode clair. LES DEUX NOMS SONT ACCEPTES : mesure du 2026-09-07 (conv-334), le commit 640f92ea a
+ * renomme `data-theme='clair'` en `data-base='clair'` (les surcharges visent la BASE du theme).
+ * Ce test ne cherchait que l'ancien nom : plus AUCUNE reprise n'etait vue, tous les ecrans
+ * passaient pour « restera sombre », et la reserve etait declaree incomplete a tort.
+ */
 function aUneRepriseClaire(themeModes: string, classe: string): boolean {
   return themeModes
     .split(/\}/)
-    .some((bloc) => bloc.includes("data-theme='clair'") && bloc.includes(classe))
+    .some(
+      (bloc) => /data-(base|theme)=['"]clair['"]/.test(bloc) && bloc.includes(classe)
+    )
 }
 
 function texteDeLaReserve(): string {

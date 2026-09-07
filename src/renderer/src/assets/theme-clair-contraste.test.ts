@@ -13,7 +13,16 @@ import { describe, expect, it } from 'vitest'
  * dans le bloc clair.
  */
 const css = readFileSync('src/renderer/src/assets/theme-modes.css', 'utf8')
-const blocClair = css.slice(css.indexOf(":root[data-theme='clair']"))
+/*
+ * LE SELECTEUR EST CHERCHE, PAS RECOPIE. Mesure du 2026-09-07 (conv-334) : le commit 640f92ea
+ * a renomme `:root[data-theme='clair']` en `:root[data-base='clair']` — les surcharges claires
+ * visent desormais la BASE du theme. Ce test citait l'ancien nom en dur : `indexOf` rendait -1,
+ * `slice(-1)` gardait UN caractere, et la garde jetait « Variable --bg-0 absente du mode clair »
+ * au lieu de mesurer le moindre contraste. Une garde qui ne trouve plus sa cible ne protege rien.
+ */
+const debutClair = /:root\[data-(base|theme)=['"]clair['"]\]/.exec(css)
+if (!debutClair) throw new Error('bloc du mode clair introuvable dans theme-modes.css')
+const blocClair = css.slice(debutClair.index)
 
 function hex(variable: string): string {
   const trouve = new RegExp(`${variable}:\\s*(#[0-9a-f]{6})`, 'i').exec(blocClair)

@@ -368,7 +368,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     main ET dans le script, l'objet est ramene sur une ligne, et objet comme corps partent par
     //     des fichiers temporaires -- jamais concatenes dans une ligne de commande.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(174)
+    // MISE A JOUR 2026-09-07 - 174 -> 175. UN canal ajoute par le commit 803ac88c, garde des sa
+    //   PREMIERE ligne par `assertTrustedRendererSender(event, 'Couleur des boutons de fenetre')` :
+    //   `app:titlebar-symbol-color` - pose la couleur des boutons de fenetre pour que la barre de
+    //     titre suive le theme. La valeur part vers une API NATIVE de Windows : elle n'est donc
+    //     acceptee que sous la forme d'un hexadecimal strict (`^#[0-9a-fA-F]{6}$`), et la fenetre
+    //     visee est celle de l'emetteur, jamais un identifiant fourni par le renderer.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(175)
     expect(unguarded).toEqual([])
   })
 

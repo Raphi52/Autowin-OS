@@ -1099,7 +1099,15 @@ export const NUAGE_COSMIQUE = {
    * inférieure à 1, sinon le nuage quitte le milieu et la demande n'est plus tenue.
    */
   derive: { amplitude: 0.3, vitesseX: 0.062, vitesseY: 0.049 }
-} as const
+}
+/*
+ * PAS DE `as const` ICI, ET C'EST VOULU. Mesure du 2026-09-07 (conv-334) : le correctif du decor
+ * (commit 16037b48) recharge cinq teintes de ce nuage a chaque changement de theme, dans
+ * `relireTeintesDuTheme()`. Avec `as const`, ces cinq champs etaient figes en lecture seule et
+ * `npm run typecheck` rendait 5 erreurs TS2540 — le code tournait quand meme (Vite ne bloque pas),
+ * donc la verification de types etait ROUGE en permanence sans que rien ne le montre a l'ecran.
+ * L'objet reste une constante : c'est sa REFERENCE qui ne change pas, pas ses teintes.
+ */
 
 /**
  * LE BORD (conv-1455 : « le container du nuage est un cercle c moche »). Le masque etait un disque

@@ -115,9 +115,25 @@ describe('Autowin UI contract', () => {
       fonds.length,
       'aucune règle de fond trouvée : le sélecteur a été renommé'
     ).toBeGreaterThan(0)
+    /*
+     * LE FOND PASSE PAR LE JETON, PLUS PAR UN NOIR EN DUR. Mesure du 2026-09-07 (conv-334) :
+     * depuis le commit 6c580973, la coque peint `var(--lisere-haut), var(--bg-0)` — c'est ce qui
+     * permet aux themes clairs d'exister. Exiger `#000` ECRIT ICI rendait donc la garde
+     * incompatible avec le produit : elle refusait le seul fond correct.
+     * La garantie VISEE n'a jamais ete « du noir », c'est « rien de TRANSLUCIDE derriere ce
+     * panneau ». Elle est donc verifiee en DEUX temps, sans rien relacher : le fond est un noir en
+     * dur OU le jeton de fond, et CHAQUE valeur donnee a ce jeton, dans tous les themes, est
+     * opaque. Un `--bg-0: rgba(...)` ajoute demain fait echouer ce test.
+     */
     for (const [nom, fond] of fonds) {
       expect(fond, nom).not.toMatch(/rgba\(/)
-      expect(fond, nom).toMatch(/#000(?![0-9a-fA-F])/)
+      expect(fond, nom).toMatch(/#000(?![0-9a-fA-F])|var\(--bg-0\)/)
+    }
+
+    const valeursDuJeton = [...themeModes.matchAll(/--bg-0:\s*([^;]+);/g)].map((m) => m[1].trim())
+    expect(valeursDuJeton.length, 'le jeton --bg-0 a disparu des themes').toBeGreaterThan(0)
+    for (const valeur of valeursDuJeton) {
+      expect(valeur, '--bg-0 doit rester opaque').toMatch(/^#[0-9a-fA-F]{6}$/)
     }
   })
 

@@ -33,7 +33,17 @@ describe('jauge de contexte du composer — degrade progressif', () => {
      */
     const degrade = /linear-gradient\(\s*90deg,([^)]*\))*[^)]*\)/s.exec(regle)?.[0] ?? ''
     expect(degrade, 'aucun degrade horizontal trouve').not.toBe('')
-    const alphas = [...degrade.matchAll(/rgba\(255, 255, 255, ([0-9.]+)\)/g)].map((m) => Number(m[1]))
+    /*
+     * LE PALIER EST LU PAR SON OPACITE, PAS PAR SES CANAUX. Mesure du 2026-09-07 (conv-334) :
+     * le passage aux themes a remplace `rgba(255, 255, 255, X)` par `rgba(var(--voile-rgb), X)` —
+     * c'est ce qui permet au filet de s'inverser en mode clair. Le test cherchait le blanc ECRIT
+     * EN TOUTES LETTRES : il ne trouvait plus AUCUN palier et refusait un degrade qui fait
+     * pourtant exactement ce qu'il promet (0.34 -> 0.55 -> blanc pur). La propriete verifiee reste
+     * la meme : des paliers dont l'opacite MONTE, puis une arrivee au blanc pur en fin de course.
+     */
+    const alphas = [...degrade.matchAll(/rgba\((?:255, 255, 255|var\(--voile-rgb\)), ([0-9.]+)\)/g)].map(
+      (m) => Number(m[1])
+    )
     expect(alphas.length, 'au moins deux paliers gris avant le blanc').toBeGreaterThanOrEqual(2)
     for (let k = 1; k < alphas.length; k += 1) {
       expect(alphas[k], `palier ${k} doit etre plus clair que le precedent`).toBeGreaterThan(alphas[k - 1])

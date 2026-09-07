@@ -66,9 +66,10 @@ export function InterfaceView(): React.JSX.Element {
         <strong>Ce qui ne suit pas encore.</strong> Le thème choisi s’applique à presque tout
         l’écran : le menu, les panneaux, les textes, les champs, et les pages <strong>Chat</strong>,{' '}
         <strong>Accueil</strong>, <strong>Observatory</strong> et <strong>Agent Studio</strong>.
-        Trois endroits gardent leurs couleurs sombres quel que soit le thème, parce qu’ils les
+        Quatre endroits gardent leurs couleurs sombres quel que soit le thème, parce qu’ils les
         peignent en dur : la <strong>toile du graphe Memory</strong> (ses étiquettes et son bandeau
-        d’avertissement), le bandeau <strong>Runtime actuel</strong> au bas de l’Agent Studio, et le{' '}
+        d’avertissement), la vue <strong>topologie</strong> des agents, le bandeau{' '}
+        <strong>Runtime actuel</strong> au bas de l’Agent Studio, et le{' '}
         <strong>décor animé du fond</strong>. Constaté à l’écran le 7 septembre 2026 sous un thème
         clair.
       </p>

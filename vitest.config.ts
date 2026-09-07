@@ -100,7 +100,28 @@ const EXCLUSIONS = [
  * Les fichiers qui creent de VRAIS depots git (worktrees, publications, editions verifiees).
  * Groupes a part pour etre joues sans concurrence : voir `projects` plus bas.
  */
-const GIT_LOURDS = ['src/main/store/worktree-manager*.test.ts', 'src/main/edit-file-portee.test.ts']
+/*
+ * MESURE du 2026-09-07 (conv-334) : la liste ne couvrait que `worktree-manager*` et
+ * `edit-file-portee`, alors que d'autres fichiers creent eux aussi de VRAIS depots git et
+ * restaient dans le groupe `unite`, joue a quatre workers. Symptomes releves sur des passages
+ * successifs, avec un jeu de fichiers DIFFERENT a chaque fois et TOUS verts en isolation :
+ * « fatal: Unable to read current working directory », « spawn git ENOENT », `git worktree add`
+ * en echec. On retire la contention a sa source, comme pour les fichiers deja listes.
+ *
+ * TOUTE ADDITION SE VERIFIE SUR LE NOMBRE DE FICHIERS COLLECTES (1250 au 2026-09-07), jamais sur
+ * la seule couleur du run : un motif trop large exclut d'`unite` sans etre repris par le groupe
+ * git, et fait DISPARAITRE des fichiers en silence (mesure : 1184 au lieu de 1218).
+ */
+const GIT_LOURDS = [
+  'src/main/store/worktree-*.test.ts',
+  'src/main/store/bandeau-sur-le-contenu.test.ts',
+  'src/main/store/bureau-publie-ne-revient-pas.test.ts',
+  'src/main/store/travail-detache-*.test.ts',
+  'src/main/store/balayage-*.test.ts',
+  'src/main/edit-file-portee.test.ts',
+  'src/main/run-autoclose.test.ts',
+  'src/main/e2e-chaine*.test.ts'
+]
 
 export default defineConfig({
   test: {
@@ -198,7 +219,19 @@ export default defineConfig({
           include: GIT_LOURDS,
           // Joue APRES tout le reste (groupOrder 1), dans UN SEUL thread : plus aucun autre
           // worker ne cree de depot git pendant qu'ils tournent.
-          poolOptions: { threads: { singleThread: true } },
+          /*
+           * MESURE du 2026-09-07 (conv-334) : `singleThread: true` joue ce groupe DANS LE
+           * PROCESSUS PRINCIPAL de vitest. En fin de suite complete, ce processus porte deja les
+           * ~10 700 resultats du groupe `unite` : il est proche du plafond V8 (4288 Mo mesures),
+           * et le groupe git mourait aussitot sur `ERR_WORKER_OUT_OF_MEMORY` (2 par passage).
+           * Consequence invisible : AUCUN des 19 fichiers git n'etait joue dans un run complet
+           * (verifie en `--reporter=verbose` : pas une seule ligne `git-lourd`), alors que joue
+           * SEUL le groupe passe sans aucune coupure. La suite sortait en exit 1 sans jamais dire
+           * qu'elle avait saute des fichiers.
+           * `maxThreads/minThreads: 1` garde la serialisation — un seul depot git a la fois — mais
+           * sort du processus principal, donc le groupe demarre avec une memoire vierge.
+           */
+          poolOptions: { threads: { maxThreads: 1, minThreads: 1 } },
           sequence: { groupOrder: 1 }
         }
       },
