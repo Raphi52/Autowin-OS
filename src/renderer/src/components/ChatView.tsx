@@ -5709,6 +5709,11 @@ Cliquer pour choisir une autre branche.`}
                   className={`btn composer-auto${autoConvs.has(activeId ?? '') ? ' actif' : ''}`}
                   data-testid="composer-auto-toggle"
                   aria-pressed={autoConvs.has(activeId ?? '')}
+                  aria-label={
+                    autoConvs.has(activeId ?? '')
+                      ? 'Arrêter le mode auto de cette conversation'
+                      : 'Mode auto de cette conversation'
+                  }
                   onClick={() => basculerModeAuto()}
                   title={
                     autoConvs.has('*')
@@ -5718,9 +5723,8 @@ Cliquer pour choisir une autre branche.`}
                         : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
                   }
                 >
-                  <span className="composer-btn-label">
-                    {autoConvs.has(activeId ?? '') ? 'Auto : ce fil' : 'Auto'}
-                  </span>
+                  {/* ROND 34 px comme le micro, glyphe INFINI : « ça continue sans moi ». */}
+                  <span aria-hidden="true">∞</span>
                 </button>
                 <button
                   type="button"

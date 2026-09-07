@@ -110,8 +110,8 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     await h.click('[data-testid="composer-auto-toggle"]')
     const armé = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(armé?.getAttribute('aria-pressed')).toBe('true')
-    // LIBELLÉ : réglage propre à la conversation affichée, donc « ce fil ».
-    expect(armé?.textContent).toContain('ce fil')
+    // LIBELLÉ : le rond ne porte qu'un glyphe — l'état se lit dans l'infobulle accessible.
+    expect(armé?.getAttribute('aria-label')).toContain('Arrêter le mode auto de cette conversation')
     // Le bouton de la liste, lui, reste le réglage GLOBAL et donc éteint.
     expect(
       document.querySelector('[data-testid="conv-auto-toggle"]')?.getAttribute('aria-pressed')
@@ -123,7 +123,7 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     })
     const eteint = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(eteint?.getAttribute('aria-pressed')).toBe('false')
-    expect(eteint?.textContent?.trim()).toBe('Auto')
+    expect(eteint?.getAttribute('aria-label')).toBe('Mode auto de cette conversation')
     expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toEqual([
       'A'
     ])
