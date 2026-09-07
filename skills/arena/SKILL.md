@@ -288,7 +288,20 @@ du même énoncé. Donc : **un gagnant dont l'avance reste sous 30 % en coût ET
 gagnant.** Il faut alors nommer la différence de QUALITÉ qui le discrimine, sur une ligne
 `Écart hors bruit : <le défaut ou la preuve qui sépare les bras>` du RUN.md. Sans elle, le banc se
 clôt sur **NON CONCLUANT** et A est gardé. `arena-protocole-check` le refuse (P19) : la règle
-n'est plus une phrase, c'est un contrôle. **Un workflow n'est
+n'est plus une phrase, c'est un contrôle.
+
+**LE SEUIL DE 30 % EST UN PLANCHER, PAS LA MESURE : le bruit se MESURE sur le banc, avec 2 répliques
+par bras.** Au moment où un banc veut départager deux bras qui atteignent TOUS LES DEUX le critère,
+chaque bras part en **2 répliques identiques dans une seule vague** (`for bras; for replique;` puis
+un seul `wait`) et le RUN.md porte une section `## Dispersion mesurée` : l'écart intra-bras entre
+répliques. Un écart INTER-bras plus petit que la dispersion INTRA-bras n'est pas un résultat, quel
+que soit le seuil. Mesuré le 2026-09-07 (banc `arena-bench-dogfood-v2`, conv-335) : le tir unique du
+06/09 donnait b vs c à +34 % de coût et concluait « c gagnant » ; rejoué à 2 répliques, l'écart tombe
+à **+9,3 %** de coût et +11,6 % de durée, alors que la dispersion intra-bras de c seul est de
+**+28 %** de coût et +37 % de durée (et celle de x, **+131 %**). Le « gagnant » du tir unique était un
+artefact de la dispersion. Un banc à UN tir par bras ne peut donc conclure que sur un résultat
+CATÉGORIEL (un bras atteint le critère, l'autre pas) — jamais sur une marge de coût ou de durée : à
+tir unique, l'écart s'écrit `non mesuré`. **Un workflow n'est
 pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi bon, sinon il perd.**
 
 ### 5. Installer et retenir
