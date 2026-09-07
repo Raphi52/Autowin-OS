@@ -33,9 +33,27 @@ export type RefusDeReprise =
    */
   | 'appel-provider-actif'
 
-/** Vrai quand le refus se reglera seul : l'ecrire ne doit pas compter comme du travail. */
+/** Vrai quand le refus se reglera seul : la meme demande repart plus tard, telle quelle. */
 export function refusDeRepriseEstTransitoire(refus: RefusDeReprise | undefined): boolean {
   return refus === 'appel-provider-actif'
+}
+
+/**
+ * Vrai pour TOUT refus de reprise, transitoire ou definitif : aucun d'eux ne raconte du travail.
+ *
+ * DEUX AXES DISTINCTS, longtemps confondus. « Definitif » decide si le checkpoint doit etre
+ * retire (ne pas rejouer un run mort). « Raconte du travail » decide si la date de derniere
+ * touche de la conversation doit bouger. Un refus de reprise n'execute rien et ne touche aucun
+ * fichier, quelle que soit sa cause : il ne doit donc JAMAIS repeindre la liste.
+ *
+ * Mesure du 2026-09-07 (conv-336), journal de demarrage de 10:20 : 13 refus de reprise ecrits en
+ * 12 secondes dans 11 conversations vieilles de plusieurs jours. UN SEUL etait
+ * `appel-provider-actif` ; les 12 autres etaient `copie-durable-absente`, classes definitifs donc
+ * encore comptes comme du travail. Ne traiter que le cas transitoire ne couvrait qu'un
+ * treizieme du defaut observe.
+ */
+export function refusDeRepriseRaconteDuTravail(refus: RefusDeReprise | undefined): boolean {
+  return refus === undefined
 }
 
 /**
