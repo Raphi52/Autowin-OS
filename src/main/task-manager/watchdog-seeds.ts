@@ -156,18 +156,21 @@ const PRIOR_READ_ONLY_AUTO_KAIZEN_PROMPT = [
 ].join('\n')
 
 /**
- * Empreinte exacte du semis livre par `e8f084db` : le prompt BRUT, sans aucun prefixe de commande.
+ * Empreinte exacte de la PREMIERE version livree (commit `e8f084db`) : le prompt sans en-tete
+ * `/build`, avec les gardes 5 min / 4 par heure / largeur 3.
  *
- * C'est cette version-la qui est reellement posee sur les postes. Les prefixes `/build ` et
- * `build ` sont venus APRES ; les empreintes qui les cherchent ne la reconnaissent donc pas, et
- * elle a survecu a chaque demarrage. Constate le 2026-09-07 : la regle etait toujours active
- * dans `scheduled-tasks.json`, 21 reveils factures pour 1 seul mene a terme.
+ * Elle manquait a la liste, et c'est ce trou qui a coute le plus cher. Mesure du 2026-09-07 sur le
+ * poste : `scheduled-tasks.json` ne portait plus qu'UNE tache, celle-ci, `enabled: true` et
+ * `action: 'orchestration'`, alors que l'auto-kaizen a ete retire du produit. Le binaire en cours
+ * contenait bien les sept empreintes : le menage tournait a chaque demarrage et ne reconnaissait
+ * simplement pas ce semis-la. Cinq reveils payants sur la MEME cause en trois jours (7,64 $ le
+ * 09-05, 12,28 $ le 09-06) avant qu'on le voie.
  *
- * Litteral fige volontairement : une empreinte derivee de `previousOrchestrationAutoKaizenSeed()`
- * suivrait toute evolution du semis et cesserait de reconnaitre la forme historique — exactement
- * le defaut qu'elle repare.
+ * La lecon a garder : ce n'est pas la prudence des empreintes exactes qui etait fausse — c'est
+ * d'oublier une version livree. Toute version future qui pose cette regle doit arriver ici en meme
+ * temps qu'elle est livree, sinon elle deviendra le prochain semis increvable.
  */
-const SEEDED_ORCHESTRATION_AUTO_KAIZEN_PROMPT = [
+const FIRST_ORCHESTRATION_AUTO_KAIZEN_PROMPT = [
   'Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien',
   "n'etaye. Etablis ce qui s'est reellement passe avant de conclure.",
   '',
@@ -183,9 +186,6 @@ const SEEDED_ORCHESTRATION_AUTO_KAIZEN_PROMPT = [
   "5. Si la cause n'est pas etablie, ne repare rien : rapporte ce que tu as ecarte et ce qui",
   '   reste a verifier. Une reparation sur une cause supposee cree le defaut suivant.'
 ].join('\n')
-
-const SEEDED_ORCHESTRATION_AUTO_KAIZEN_TITLE =
-  'Auto-kaizen — orchestration rouge ou workflow douteux'
 
 const LEGACY_AUTO_KAIZEN_TITLE = 'Auto-kaizen — une orchestration rouge'
 const LEGACY_AUTO_KAIZEN_PROMPT = [
@@ -325,30 +325,25 @@ function isUntouchedOrchestrationAutoKaizen(task: ScheduledTask): boolean {
 }
 
 /**
- * Version d'origine `e8f084db` : prompt brut, orchestration complete, 4 reveils par heure.
- * C'est la forme reellement presente sur les postes ; sans cette empreinte, le menage la voyait
- * comme une regle personnalisee et la laissait en place indefiniment.
+ * PREMIERE version livree (`e8f084db`) : meme titre et memes evenements qu'aujourd'hui, mais le
+ * prompt sans en-tete `/build` et les gardes d'origine (5 min, 4/h, largeur 3). C'est l'empreinte
+ * qui manquait ; voir la note de `FIRST_ORCHESTRATION_AUTO_KAIZEN_PROMPT` pour ce que ce trou a
+ * coute. `authorityMode` n'est pas compare : `TaskStore.hydrate` l'efface deja comme champ legacy.
  */
-function isUntouchedSeededOrchestrationAutoKaizen(task: ScheduledTask): boolean {
+function isUntouchedFirstOrchestrationAutoKaizen(task: ScheduledTask): boolean {
+  const previous = previousOrchestrationAutoKaizenSeed()
+  const destination = previous.destination
+  const watchdog = previous.watchdog
   const source = task.watchdog?.source
   return (
-    task.title === SEEDED_ORCHESTRATION_AUTO_KAIZEN_TITLE &&
-    task.prompt === SEEDED_ORCHESTRATION_AUTO_KAIZEN_PROMPT &&
-    hasExactSeedDestination(task, {
-      kind: 'new',
-      title: 'Auto-kaizen',
-      category: 'Qualite',
-      provider: 'claude'
-    }) &&
+    destination.kind === 'new' &&
+    watchdog?.source.kind === 'app-event' &&
+    task.title === previous.title &&
+    task.prompt === FIRST_ORCHESTRATION_AUTO_KAIZEN_PROMPT &&
+    hasExactSeedDestination(task, destination) &&
     task.watchdog?.action === 'orchestration' &&
     source?.kind === 'app-event' &&
-    JSON.stringify(source.events) ===
-      JSON.stringify([
-        'orchestration-red',
-        'workflow-gate-failed',
-        'workflow-unverified',
-        'workflow-proof-lost'
-      ]) &&
+    JSON.stringify(source.events) === JSON.stringify(watchdog.source.events) &&
     task.watchdog.guards.dedupWindowMs === 300_000 &&
     task.watchdog.guards.maxTriggersPerHour === 4 &&
     task.watchdog.guards.maxChainDepth === 0 &&
@@ -443,7 +438,7 @@ function removeSeededAutoKaizen(store: TaskStore): void {
         !isUntouchedBareBuildAutoKaizen(task) &&
         !isUntouchedPriorBoundedAutoKaizen(task) &&
         !isUntouchedOrchestrationAutoKaizen(task) &&
-        !isUntouchedSeededOrchestrationAutoKaizen(task) &&
+        !isUntouchedFirstOrchestrationAutoKaizen(task) &&
         !isUntouchedPriorReadOnlyAutoKaizen(task) &&
         !isUntouchedClaudeReadOnlyAutoKaizen(task) &&
         !isUntouchedCurrentAutoKaizen(task)) ||
