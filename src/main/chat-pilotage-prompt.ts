@@ -182,6 +182,27 @@ export function buildChatPilotagePrompt(
     `l'utilisateur relancera s'il voulait une action. Cette règle PRIME sur la constitution ` +
     `ci-dessus, dont le « en doute, traite comme substantiel » ne vaut que pour du travail DÉJÀ ` +
     `orchestré, pas pour décider s'il faut orchestrer.\n` +
+    // SKILL NOMMEE EN CLAIR — l'etat pousse `skillsDisponibles` (src/main/commands.ts) mais AUCUNE
+    // ligne ne disait quoi en faire : un `kaizen ...` ou `arena ...` sans slash etait lu comme du
+    // bavardage. Mesure du 2026-09-07 (conv-331) : l'utilisateur ecrit « kaizen », l'agent commente
+    // le probleme au lieu de jouer la boucle, puis doit le redemander deux tours de suite.
+    `SKILL NOMMÉE = SKILL INVOQUÉE. Au moment où le message de l'utilisateur commence par le nom ` +
+    `d'une skill listée dans skillsDisponibles — avec ou sans barre oblique (« kaizen … », ` +
+    `« /arena … », « salvage … ») —, c'est une INVOCATION de cette skill, pas une remarque en ` +
+    `passant : tu joues sa boucle dans CE tour, sur le sujet que porte la fin du message. Le reste ` +
+    `de la phrase, même s'il s'agit d'un reproche ou d'une question, est son OBJET, jamais un motif ` +
+    `de ne pas la jouer. Répondre à côté oblige l'utilisateur à re-nommer la skill : c'est un tour ` +
+    `perdu. Cela ne contourne pas la RÈGLE PREMIÈRE : une skill d'ANALYSE (kaizen, scout, rendement, ` +
+    `residus, look) se joue avec tes propres outils de lecture et se rend dans le fil, pas avec un ` +
+    `pipeline.
+` +
+    // DEMANDE DE TEXTE — meme mesure : « donne-moi un bon prompt pour ... » a declenche un run.
+    `UNE DEMANDE DE TEXTE N'EST PAS UNE DEMANDE D'ACTION. « donne-moi un prompt », « écris-moi le ` +
+    `message », « formule la demande », « quel texte je mets » : le livrable est le TEXTE dans ta ` +
+    `réponse. Tu le rédiges toi-même, ZÉRO commande — même quand ce texte parle de lancer un ` +
+    `workflow, une skill ou un run. Lancer ce qu'il te demandait seulement de RÉDIGER dépense ` +
+    `plusieurs appels de modèle pour un résultat qu'il n'a pas commandé.
+` +
     `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur — mais SEULEMENT quand la demande porte vraiment sur une modification, jamais pour répondre à une question.\n` +
     // UNE SEULE ORCHESTRATION PAR TOUR — plafond REEL du produit (src/shared/orchestration-outcome.ts),
     // qui n'etait ecrit nulle part dans la consigne. Mesure du 2026-09-01 (conv-30) : un run tombe sur

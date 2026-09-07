@@ -111,3 +111,30 @@ describe('chat() — gate conversationnel', () => {
     expect(graphifyPrompt).toContain('simple question')
   })
 })
+
+/**
+ * SKILL NOMMEE EN CLAIR / DEMANDE DE TEXTE.
+ *
+ * Mesure du 2026-09-07 (conv-331) : « donne moi un bon prompt pour lancer de l'arena » a declenche
+ * un run, puis « kaizen ... » a ete lu comme un commentaire et non comme l'invocation de la skill.
+ * Cause : `skillsDisponibles` etait pousse dans l'etat sans qu'aucune ligne du prompt dise quoi en
+ * faire, et rien ne distinguait un livrable TEXTE d'une demande d'action.
+ */
+describe('chat() — skill nommée et demande de texte', () => {
+  it('traite un nom de skill en tête de message comme une INVOCATION', () => {
+    expect(prompt).toContain('SKILL NOMMÉE = SKILL INVOQUÉE')
+    expect(prompt).toContain('avec ou sans barre oblique')
+    expect(prompt).toMatch(/skill d'ANALYSE[^`]*se rend dans le fil/)
+  })
+
+  it('exclut le pipeline quand le livrable demandé est du TEXTE', () => {
+    expect(prompt).toContain("UNE DEMANDE DE TEXTE N'EST PAS UNE DEMANDE D'ACTION")
+    expect(prompt).toContain('ZÉRO commande')
+  })
+
+  it('place ces deux règles APRÈS la RÈGLE PREMIÈRE dont elles précisent le tri', () => {
+    expect(prompt.indexOf('RÈGLE PREMIÈRE')).toBeLessThan(
+      prompt.indexOf('SKILL NOMMÉE = SKILL INVOQUÉE')
+    )
+  })
+})
