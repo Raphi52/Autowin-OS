@@ -4449,10 +4449,10 @@ button.chat-project-dot:disabled {
 }
 /* CENTRAGE OPTIQUE DU GLYPHE : la boite de la police pose le ∞ sur la ligne de base, donc bas
    dans le cercle meme avec un centrage flex parfait. On le remonte de 1 px (constat utilisateur
-   du 2026-09-07 : « faut remonter l'icone infini »). */
+   du 2026-09-07 : « faut remonter l'icone infini », puis « remonte de 1 px encore »). */
 .composer-auto > span {
   display: block;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 /* ALLUME = DORE (choix utilisateur du 2026-09-07), pas le rose d'accent. */
 .composer-auto.actif {
