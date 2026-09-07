@@ -155,6 +155,38 @@ const PRIOR_READ_ONLY_AUTO_KAIZEN_PROMPT = [
   '   automatique n’est autorisee ; utilise `investigate` ou `report` pour une suite.'
 ].join('\n')
 
+/**
+ * Empreinte exacte du semis livre par `e8f084db` : le prompt BRUT, sans aucun prefixe de commande.
+ *
+ * C'est cette version-la qui est reellement posee sur les postes. Les prefixes `/build ` et
+ * `build ` sont venus APRES ; les empreintes qui les cherchent ne la reconnaissent donc pas, et
+ * elle a survecu a chaque demarrage. Constate le 2026-09-07 : la regle etait toujours active
+ * dans `scheduled-tasks.json`, 21 reveils factures pour 1 seul mene a terme.
+ *
+ * Litteral fige volontairement : une empreinte derivee de `previousOrchestrationAutoKaizenSeed()`
+ * suivrait toute evolution du semis et cesserait de reconnaitre la forme historique — exactement
+ * le defaut qu'elle repare.
+ */
+const SEEDED_ORCHESTRATION_AUTO_KAIZEN_PROMPT = [
+  'Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien',
+  "n'etaye. Etablis ce qui s'est reellement passe avant de conclure.",
+  '',
+  '1. Lis le RUN.md cite dans le contexte : son besoin, ses decisions, son journal.',
+  '2. Cherche la cause RACINE, pas le symptome le plus visible. Un echec en fin de chaine vient',
+  "   souvent d'une decision prise bien plus tot.",
+  "3. Si le workflow s'est dit REUSSI sans preuve, la question n'est pas « qu'est-ce qui a",
+  "   casse » mais « est-ce reellement fait ? ». Cherche la preuve manquante ; si elle n'existe",
+  "   pas, dis-le : un faux vert coute plus cher qu'un rouge.",
+  '4. Si la cause est claire ET la correction bornee, corrige-la et prouve-le par un signal',
+  '   hors-modele (test rouge->vert, code de sortie, requete). Sans preuve, ne dis pas que',
+  "   c'est repare.",
+  "5. Si la cause n'est pas etablie, ne repare rien : rapporte ce que tu as ecarte et ce qui",
+  '   reste a verifier. Une reparation sur une cause supposee cree le defaut suivant.'
+].join('\n')
+
+const SEEDED_ORCHESTRATION_AUTO_KAIZEN_TITLE =
+  'Auto-kaizen — orchestration rouge ou workflow douteux'
+
 const LEGACY_AUTO_KAIZEN_TITLE = 'Auto-kaizen — une orchestration rouge'
 const LEGACY_AUTO_KAIZEN_PROMPT = [
   "Une orchestration vient d'echouer. Etablis ce qui s'est reellement passe avant de conclure.",
@@ -292,6 +324,39 @@ function isUntouchedOrchestrationAutoKaizen(task: ScheduledTask): boolean {
   )
 }
 
+/**
+ * Version d'origine `e8f084db` : prompt brut, orchestration complete, 4 reveils par heure.
+ * C'est la forme reellement presente sur les postes ; sans cette empreinte, le menage la voyait
+ * comme une regle personnalisee et la laissait en place indefiniment.
+ */
+function isUntouchedSeededOrchestrationAutoKaizen(task: ScheduledTask): boolean {
+  const source = task.watchdog?.source
+  return (
+    task.title === SEEDED_ORCHESTRATION_AUTO_KAIZEN_TITLE &&
+    task.prompt === SEEDED_ORCHESTRATION_AUTO_KAIZEN_PROMPT &&
+    hasExactSeedDestination(task, {
+      kind: 'new',
+      title: 'Auto-kaizen',
+      category: 'Qualite',
+      provider: 'claude'
+    }) &&
+    task.watchdog?.action === 'orchestration' &&
+    source?.kind === 'app-event' &&
+    JSON.stringify(source.events) ===
+      JSON.stringify([
+        'orchestration-red',
+        'workflow-gate-failed',
+        'workflow-unverified',
+        'workflow-proof-lost'
+      ]) &&
+    task.watchdog.guards.dedupWindowMs === 300_000 &&
+    task.watchdog.guards.maxTriggersPerHour === 4 &&
+    task.watchdog.guards.maxChainDepth === 0 &&
+    task.watchdog.guards.maxPerRoot === 3 &&
+    hasNoCustomizedDailyGuard(task)
+  )
+}
+
 function isUntouchedPriorReadOnlyAutoKaizen(task: ScheduledTask): boolean {
   const current = autoKaizenSeed()
   const source = task.watchdog?.source
@@ -378,6 +443,7 @@ function removeSeededAutoKaizen(store: TaskStore): void {
         !isUntouchedBareBuildAutoKaizen(task) &&
         !isUntouchedPriorBoundedAutoKaizen(task) &&
         !isUntouchedOrchestrationAutoKaizen(task) &&
+        !isUntouchedSeededOrchestrationAutoKaizen(task) &&
         !isUntouchedPriorReadOnlyAutoKaizen(task) &&
         !isUntouchedClaudeReadOnlyAutoKaizen(task) &&
         !isUntouchedCurrentAutoKaizen(task)) ||
