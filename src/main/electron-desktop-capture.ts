@@ -196,7 +196,9 @@ async function captureForegroundWindow(motifRepli?: string): Promise<DesktopObse
     quality: 'best'
   })
   if (!hasVisiblePixels(image.toBitmap())) {
-    throw new Error('Capture de la fenetre active noire ou protegee')
+    throw new Error(
+      `Capture de la fenetre active noire ou protegee${cause} — ecran en veille, verrouille ou fenetre en cours de composition : reessayer dans quelques secondes, ou capturer TOUS les ecrans en omettant le parametre display`
+    )
   }
   return observation(image.toJPEG(JPEG_QUALITY), image.getSize(), geometry, 'foreground-window')
 }
