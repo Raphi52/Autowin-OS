@@ -1,0 +1,5 @@
+OK   précondition — le paquet de bureau est bien ABSENT (sinon ce critère ne mesure rien)
+OK   (a) paquet absent : la sonde sort exactement 2 (comme ses quatre frères)
+OK   (b) la sortie DIT « binaire absent » et ne déverse aucune trace brute
+OK   (c) cas limite — la preuve n’est pas neutralisée (statSync et control Start toujours là)
+CRITERE ATTEINT

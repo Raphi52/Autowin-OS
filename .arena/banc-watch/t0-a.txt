@@ -1,0 +1,4 @@
+RATE (a) le contrôle PowerShell du script dev sort 0 — exit 1 : +                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ |     + CategoryInfo          : OperationStopped: (Assertion faile...o electron-vite:String) [], RuntimeException |     + FullyQualifiedErrorId : Assertion failed: dev must delegate one watch loop to electron-vite
+OK   (b) le produit n’a PAS régressé : scripts.dev reste `electron-vite dev` et son test reste vert
+OK   (c) cas limite — aucun juge désarmé (test vitest intact, contrôle .ps1 non vidé)
+CRITERE RATE (1)

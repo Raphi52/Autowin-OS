@@ -1,0 +1,4 @@
+RATE (a) le contrôle Python des phases du lanceur sort 0 — exit 1 : FAIL: la couleur dor� (arc-a) doit exister dans index.html (sinon ce test ment) | FAIL: la couleur rose-violet (arc-b) doit exister dans index.html (sinon ce test ment)
+RATE (b) les deux écrans partagent la palette : les accents du lanceur sont dans index.html — absents de index.html : #e9bd4e, #9d79ed (palette encore divergente)
+OK   (c) cas limite — le contrôle Python n’est pas désarmé (assertions et deux sources relues)
+CRITERE RATE (2)

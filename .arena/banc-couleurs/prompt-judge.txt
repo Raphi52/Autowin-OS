@@ -1,0 +1,198 @@
+/judge en mode ADVERSE. Tu ne valides rien : tu essaies de faire TOMBER ce resultat.
+
+CONTEXTE — banc /arena "banc-couleurs". Meme tache mot pour mot dans les deux bras, meme commit de depart
+(a2499eb3), copies de travail separees. Bras a = kit complet (scout→frame→terrain→build→clean→judge).
+Bras b = build direct + verification ciblee, sans phases amont.
+
+Depart ROUGE constate avant les bras :
+T0 2026-09-07 depot reel C:\Sources\AutoWinOS
+commande: py -3 scripts/launch_dev_phases_test.py
+exit=1
+
+CRITERE DU BANC (script externe que les deux bras ont recu, et que J'AI rejoue moi-meme apres coup) :
+/**
+ * Critère du banc /arena « couleurs » — défaut : l'écran d'attente du lanceur dev
+ * (`scripts/launch_dev_splash.py`, doré/violet) et l'écran de démarrage de l'app
+ * (`src/renderer/index.html`, rose/orange depuis 08016aac) ont divergé, et le contrôle
+ * censé l'empêcher recopie les hexadécimaux à la main.
+ *
+ * Usage : node check.mjs <racine-de-la-copie>
+ * Exit 0 = critère atteint · 1 = au moins une assertion RATE.
+ *
+ * Le SENS de la convergence est libre (aligner l'app sur le lanceur ou l'inverse) : (b) relit
+ * les valeurs dans le lanceur, quelles qu'elles soient. (c) refuse qu'un bras vide le contrôle.
+ */
+import { spawnSync } from 'node:child_process'
+
+RESULTAT REJOUE PAR MOI, bras a (exit 0) :
+OK   (a) le contrôle Python des phases du lanceur sort 0
+OK   (b) les deux écrans partagent la palette : les accents du lanceur sont dans index.html
+OK   (c) cas limite — le contrôle Python n’est pas désarmé (assertions et deux sources relues)
+CRITERE ATTEINT
+
+RESULTAT REJOUE PAR MOI, bras b (exit 0) :
+OK   (a) le contrôle Python des phases du lanceur sort 0
+OK   (b) les deux écrans partagent la palette : les accents du lanceur sont dans index.html
+OK   (c) cas limite — le contrôle Python n’est pas désarmé (assertions et deux sources relues)
+CRITERE ATTEINT
+
+Chiffres lus dans les artefacts (jamais dans le rapport des bras) :
+- bras a : cout 2.3605544999999997 USD, duree 436023 ms, tours 38, fichiers modifies scripts/launch_dev_phases_test.py, scripts/launch_dev_splash.py
+- bras b : cout 0.8606175000000001 USD, duree 149935 ms, tours 14, fichiers modifies scripts/launch_dev_phases_test.py, scripts/launch_dev_splash.py
+
+DIFF DU BRAS A :
+diff --git a/scripts/launch_dev_phases_test.py b/scripts/launch_dev_phases_test.py
+index a307ec84..a8e7e9f7 100644
+--- a/scripts/launch_dev_phases_test.py
++++ b/scripts/launch_dev_phases_test.py
+@@ -2,6 +2,7 @@
+ 
+ from __future__ import annotations
+ 
++import re
+ import sys
+ from pathlib import Path
+ 
+@@ -189,12 +190,32 @@ _html = (Path(__file__).resolve().parent.parent / "src" / "renderer" / "index.ht
+ )
+ _splash_src = (Path(__file__).resolve().parent / "launch_dev_splash.py").read_text(encoding="utf-8")
+ 
+-for _nom, _motif in (("doré (arc-a)", "#e9bd4e"), ("rose-violet (arc-b)", "#9d79ed")):
+-    verifie(_motif in _html, f"la couleur {_nom} doit exister dans index.html (sinon ce test ment)")
+-    verifie(
+-        _motif in _splash_src,
+-        f"le lanceur doit reprendre la couleur {_nom} de l'app, pas une teinte a lui",
+-    )
++# Le bloc `#autowin-boot` de index.html, et lui seul, peint l'ecran de demarrage de l'app : c'est
++# LA reference. On y cherche les accents du lanceur tels qu'ils sont ECRITS dans le lanceur — aucun
++# hexadecimal n'est recopie ici. Un test qui recopie les codes fige un instantane : il sort rouge au
++# premier changement de theme cote app sans jamais dire lequel des deux ecrans a bouge.
++_debut_boot = _html.find("#autowin-boot")
++_fin_boot = _html.find("</style>", _debut_boot if _debut_boot != -1 else 0)
++verifie(_debut_boot != -1 and _fin_boot > _debut_boot,
++        "le bloc de style `#autowin-boot` doit exister dans index.html, sinon ce test ne mesure rien")
++_boot = _html[_debut_boot:_fin_boot].lower() if 0 <= _debut_boot < _fin_boot else ""
++
++
++def _accent_lanceur(constante: str) -> str:
++    """La valeur de `constante` LUE dans launch_dev_splash.py, quelle qu'elle soit."""
++    trouve = re.search(constante + r'\s*=\s*"(#[0-9a-fA-F]{3,8})"', _splash_src)
++    verifie(trouve is not None,
++            f"la constante {constante} doit rester lisible dans launch_dev_splash.py")
++    return trouve.group(1) if trouve else "<illisible>"
++
++
++for _nom, _constante in (("doré (accent-a)", "_DORE"), ("rose-violet (accent-b)", "_VIOLET")):
++    _motif = _accent_lanceur(_constante)
++    verifie(_motif.lower() in _boot,
++            f"l'accent {_nom} du lanceur ({_constante} = {_motif}) doit se retrouver dans l'ecran"
++            " de demarrage de l'app : deux ecrans qui se suivent a l'oeil ont derive")
++    verifie(_splash_src.count(_constante) >= 3,
++            f"le lanceur doit PEINDRE avec {_constante}, pas seulement le declarer")
+ 
+ verifie("#f5f7fb" in _html and "#f5f7fb" in _splash_src,
+         "la couleur de TEXTE doit etre celle de l'app")
+diff --git a/scripts/launch_dev_splash.py b/scripts/launch_dev_splash.py
+index 77cc5cba..2fe1b42d 100644
+--- a/scripts/launch_dev_splash.py
++++ b/scripts/launch_dev_splash.py
+@@ -44,8 +44,8 @@ from launch_dev_phases import ETAPES, SuiviDemarrage, formater_identite, libelle
+ #   fond    #000        (`html, body { background: #000 }`)
+ #   texte   #f5f7fb     (`color: #f5f7fb`)
+ #   piste   rgba(245,247,251,0.07) -> tkinter ne connait pas l'alpha, donc l'equivalent OPAQUE sur noir
+-#   arc A   #e9bd4e     dore
+-#   arc B   #9d79ed     rose-violet
++#   accent A #ffd66b    l'etoile CHAUDE de l'atome (`.aw-atom__star--hot`)
++#   accent B #ff2d95    l'etoile de BORD de l'atome (`.aw-atom__star--edge`)
+ #
+ # Le test `launch_dev_phases_test.py` relit ces valeurs dans `index.html` et refuse une derive : sans
+ # lui, les deux palettes divergeraient au premier changement de theme cote app.
+@@ -56,8 +56,12 @@ _TEXTE = "#f5f7fb"      # le GROS titre, et lui seul : blanc
+ # Tous les petits textes sont DORES (demande utilisateur) : sous-titre, chrono, detail d'erreur. Le
+ # gris atone d'avant ne venait d'aucune des deux palettes — c'etait une teinte inventee pour
+ # "atténuer", et elle donnait un ecran terne la ou l'app est noire et doree.
+-_DORE = "#e9bd4e"
+-_VIOLET = "#9d79ed"
++# Les deux noms disent le ROLE (accent principal / accent secondaire), pas la teinte litterale :
++# ils suivent l'app, qui a redessine son atome en rose-orange (08016aac). Ne pas les figer ici — le
++# test `launch_dev_phases_test.py` relit ces deux valeurs et exige de les retrouver dans l'ecran de
++# demarrage de l'app.
++_DORE = "#ffd66b"
++_VIOLET = "#ff2d95"
+ # L'ecran de demarrage de l'app n'a AUCUN etat d'erreur — cette couleur-ci est donc nouvelle. Choisie
+ # dans la meme famille chaude que le dore pour ne pas jurer, mais assez distincte pour ne pas passer
+ # pour une etape normale.
+
+
+DIFF DU BRAS B :
+diff --git a/scripts/launch_dev_phases_test.py b/scripts/launch_dev_phases_test.py
+index a307ec84..0cf53dd5 100644
+--- a/scripts/launch_dev_phases_test.py
++++ b/scripts/launch_dev_phases_test.py
+@@ -189,11 +189,23 @@ _html = (Path(__file__).resolve().parent.parent / "src" / "renderer" / "index.ht
+ )
+ _splash_src = (Path(__file__).resolve().parent / "launch_dev_splash.py").read_text(encoding="utf-8")
+ 
+-for _nom, _motif in (("doré (arc-a)", "#e9bd4e"), ("rose-violet (arc-b)", "#9d79ed")):
+-    verifie(_motif in _html, f"la couleur {_nom} doit exister dans index.html (sinon ce test ment)")
++# Les hexadecimaux n'apparaissent PAS ici : on les EXTRAIT du lanceur. Un changement de theme cote
++# app se propage donc au lanceur, et ce test suit — la ou une recopie a la main aurait menti.
++def _accent_du_lanceur(_variable: str) -> str:
++    _trouve = _re.search(_variable + r'\s*=\s*"(#[0-9a-fA-F]{3,8})"', _splash_src)
+     verifie(
+-        _motif in _splash_src,
+-        f"le lanceur doit reprendre la couleur {_nom} de l'app, pas une teinte a lui",
++        _trouve is not None,
++        f"{_variable} doit rester lisible dans launch_dev_splash.py (sinon ce test ment)",
++    )
++    return _trouve.group(1) if _trouve else ""
++
++
++for _nom, _variable in (("doré (arc-a)", "_DORE"), ("rose (arc-b)", "_VIOLET")):
++    _motif = _accent_du_lanceur(_variable)
++    verifie(
++        _motif.lower() in _html.lower(),
++        f"l'accent {_nom} du lanceur ({_motif}) doit exister dans index.html : "
++        "les deux ecrans partagent la MEME palette",
+     )
+ 
+ verifie("#f5f7fb" in _html and "#f5f7fb" in _splash_src,
+diff --git a/scripts/launch_dev_splash.py b/scripts/launch_dev_splash.py
+index 77cc5cba..83ca447d 100644
+--- a/scripts/launch_dev_splash.py
++++ b/scripts/launch_dev_splash.py
+@@ -44,8 +44,8 @@ from launch_dev_phases import ETAPES, SuiviDemarrage, formater_identite, libelle
+ #   fond    #000        (`html, body { background: #000 }`)
+ #   texte   #f5f7fb     (`color: #f5f7fb`)
+ #   piste   rgba(245,247,251,0.07) -> tkinter ne connait pas l'alpha, donc l'equivalent OPAQUE sur noir
+-#   arc A   #e9bd4e     dore
+-#   arc B   #9d79ed     rose-violet
++#   arc A   #ffd66b     dore (l'etoile CHAUDE de l'atome de demarrage)
++#   arc B   #ff2d95     rose (l'etoile de BORD de l'atome de demarrage)
+ #
+ # Le test `launch_dev_phases_test.py` relit ces valeurs dans `index.html` et refuse une derive : sans
+ # lui, les deux palettes divergeraient au premier changement de theme cote app.
+@@ -56,8 +56,8 @@ _TEXTE = "#f5f7fb"      # le GROS titre, et lui seul : blanc
+ # Tous les petits textes sont DORES (demande utilisateur) : sous-titre, chrono, detail d'erreur. Le
+ # gris atone d'avant ne venait d'aucune des deux palettes — c'etait une teinte inventee pour
+ # "atténuer", et elle donnait un ecran terne la ou l'app est noire et doree.
+-_DORE = "#e9bd4e"
+-_VIOLET = "#9d79ed"
++_DORE = "#ffd66b"
++_VIOLET = "#ff2d95"
+ # L'ecran de demarrage de l'app n'a AUCUN etat d'erreur — cette couleur-ci est donc nouvelle. Choisie
+ # dans la meme famille chaude que le dore pour ne pas jurer, mais assez distincte pour ne pas passer
+ # pour une etape normale.
+
+
+MA THESE, A REFUTER (ne la reprends pas en postulat) : les deux bras finissent au MEME etat de critere (atteint) : sur ce defaut, le workflow ne fait pas la difference.
+
+Reponds a ces quatre questions, chacune avec la ligne de diff ou le code de sortie qui la fonde :
+1. Un "vert" ci-dessus est-il en realite un FAUX vert (assertion desserree, erreur avalee, garde qui
+   contourne le defaut, cible deplacee au lieu d'etre corrigee) ?
+2. Le critere de ce banc a-t-il ete choisi ou ecrit de facon a favoriser un des deux bras ?
+3. L'ecart mesure entre les deux bras est-il du BRUIT (n=1 sur ce banc, moins de 30 % d'ecart) ?
+4. Quel resultat aurait-il fallu observer pour que le gagnant PERDE ? A-t-on regarde ?
+
+Rends : VERDICT (valide / invalide / non concluant) puis les 4 reponses, puis CE QUI RESTE NON PROUVE.
+N'ecris aucun fichier, ne modifie rien : tu ne fais que lire et juger.

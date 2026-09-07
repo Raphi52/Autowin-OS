@@ -1,0 +1,6 @@
+bras=a essai=1 exit=0 0 ratees
+bras=b essai=1 exit=0 0 ratees
+bras=a essai=2 exit=0 0 ratees
+bras=b essai=2 exit=0 0 ratees
+bras=a essai=3 exit=0 0 ratees
+bras=b essai=3 exit=0 0 ratees

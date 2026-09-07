@@ -1,0 +1,58 @@
+diff --git a/scripts/launch_dev_phases_test.py b/scripts/launch_dev_phases_test.py
+index a307ec84..0cf53dd5 100644
+--- a/scripts/launch_dev_phases_test.py
++++ b/scripts/launch_dev_phases_test.py
+@@ -189,11 +189,23 @@ _html = (Path(__file__).resolve().parent.parent / "src" / "renderer" / "index.ht
+ )
+ _splash_src = (Path(__file__).resolve().parent / "launch_dev_splash.py").read_text(encoding="utf-8")
+ 
+-for _nom, _motif in (("doré (arc-a)", "#e9bd4e"), ("rose-violet (arc-b)", "#9d79ed")):
+-    verifie(_motif in _html, f"la couleur {_nom} doit exister dans index.html (sinon ce test ment)")
++# Les hexadecimaux n'apparaissent PAS ici : on les EXTRAIT du lanceur. Un changement de theme cote
++# app se propage donc au lanceur, et ce test suit — la ou une recopie a la main aurait menti.
++def _accent_du_lanceur(_variable: str) -> str:
++    _trouve = _re.search(_variable + r'\s*=\s*"(#[0-9a-fA-F]{3,8})"', _splash_src)
+     verifie(
+-        _motif in _splash_src,
+-        f"le lanceur doit reprendre la couleur {_nom} de l'app, pas une teinte a lui",
++        _trouve is not None,
++        f"{_variable} doit rester lisible dans launch_dev_splash.py (sinon ce test ment)",
++    )
++    return _trouve.group(1) if _trouve else ""
++
++
++for _nom, _variable in (("doré (arc-a)", "_DORE"), ("rose (arc-b)", "_VIOLET")):
++    _motif = _accent_du_lanceur(_variable)
++    verifie(
++        _motif.lower() in _html.lower(),
++        f"l'accent {_nom} du lanceur ({_motif}) doit exister dans index.html : "
++        "les deux ecrans partagent la MEME palette",
+     )
+ 
+ verifie("#f5f7fb" in _html and "#f5f7fb" in _splash_src,
+diff --git a/scripts/launch_dev_splash.py b/scripts/launch_dev_splash.py
+index 77cc5cba..83ca447d 100644
+--- a/scripts/launch_dev_splash.py
++++ b/scripts/launch_dev_splash.py
+@@ -44,8 +44,8 @@ from launch_dev_phases import ETAPES, SuiviDemarrage, formater_identite, libelle
+ #   fond    #000        (`html, body { background: #000 }`)
+ #   texte   #f5f7fb     (`color: #f5f7fb`)
+ #   piste   rgba(245,247,251,0.07) -> tkinter ne connait pas l'alpha, donc l'equivalent OPAQUE sur noir
+-#   arc A   #e9bd4e     dore
+-#   arc B   #9d79ed     rose-violet
++#   arc A   #ffd66b     dore (l'etoile CHAUDE de l'atome de demarrage)
++#   arc B   #ff2d95     rose (l'etoile de BORD de l'atome de demarrage)
+ #
+ # Le test `launch_dev_phases_test.py` relit ces valeurs dans `index.html` et refuse une derive : sans
+ # lui, les deux palettes divergeraient au premier changement de theme cote app.
+@@ -56,8 +56,8 @@ _TEXTE = "#f5f7fb"      # le GROS titre, et lui seul : blanc
+ # Tous les petits textes sont DORES (demande utilisateur) : sous-titre, chrono, detail d'erreur. Le
+ # gris atone d'avant ne venait d'aucune des deux palettes — c'etait une teinte inventee pour
+ # "atténuer", et elle donnait un ecran terne la ou l'app est noire et doree.
+-_DORE = "#e9bd4e"
+-_VIOLET = "#9d79ed"
++_DORE = "#ffd66b"
++_VIOLET = "#ff2d95"
+ # L'ecran de demarrage de l'app n'a AUCUN etat d'erreur — cette couleur-ci est donc nouvelle. Choisie
+ # dans la meme famille chaude que le dore pour ne pas jurer, mais assez distincte pour ne pas passer
+ # pour une etape normale.

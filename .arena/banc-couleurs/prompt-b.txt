@@ -1,0 +1,29 @@
+Faire passer une correction d'un défaut réel du dépôt de l'état signalé à l'état vérifié hors-modèle.
+
+DÉFAUT SIGNALÉ (réel, présent dans ta copie de travail) :
+L'écran d'attente du lanceur dev et l'écran de démarrage de l'application n'ont plus la même palette.
+- `scripts/launch_dev_splash.py:59-60` garde `_DORE = "#e9bd4e"` et `_VIOLET = "#9d79ed"`.
+- `src/renderer/index.html:173-184` est passé à `#ff2d95` / `#ff8a1f` / `#ffd66b` (commit 08016aac, « wip »).
+- `scripts/launch_dev_phases_test.py` prétend « relire les valeurs à la SOURCE » (son commentaire) mais
+  RECOPIE les deux codes hexadécimaux à la main, donc il ne suit aucun changement de thème.
+
+COMMANDE QUI SORT ROUGE AUJOURD'HUI (constaté, exit 1) :
+  py -3 scripts/launch_dev_phases_test.py
+
+CRITÈRE QUI TE JUGERA (script externe, lecture seule, tu peux le lancer autant que tu veux) :
+  node "C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-c79f2dd06e2b-1/.arena/banc-couleurs/check.mjs" <racine de ta copie>
+Il vérifie : (a) le contrôle Python sort 0 ; (b) les deux écrans partagent RÉELLEMENT la palette — les
+deux couleurs d'accent lues dans `scripts/launch_dev_splash.py` (`_DORE`, `_VIOLET`, quelles que
+soient leurs valeurs) sont présentes dans `src/renderer/index.html` ; (c) tu n'as pas désarmé le
+contrôle — `scripts/launch_dev_phases_test.py` compte toujours au moins 111 appels `verifie(` et lit
+toujours `index.html` ET `launch_dev_splash.py`. Le sens de la convergence est LIBRE.
+
+INTERDITS : pas de commit, pas de push, ne lance pas l'application, ne modifie pas le script de critère
+ci-dessus, ne supprime ni ne vide aucun fichier de test.
+Travaille UNIQUEMENT dans ta copie de travail (ton dossier courant). Termine par le code de sortie
+que tu as LU, pas par une déclaration.
+
+MÉTHODE IMPOSÉE — BUILD DIRECT + VÉRIFICATION CIBLÉE, sans aucune phase amont :
+pas de scout, pas de frame, pas de terrain, pas de clean, pas de juge. Tu lis le strict nécessaire,
+tu corriges, tu relances la commande de critère, tu rends son code de sortie.
+Rends deux sections dans ta réponse finale, titrées CORRECTION / VÉRIFICATION.

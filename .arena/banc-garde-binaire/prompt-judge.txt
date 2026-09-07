@@ -1,0 +1,132 @@
+/judge en mode ADVERSE. Tu ne valides rien : tu essaies de faire TOMBER ce resultat.
+
+CONTEXTE — banc /arena "banc-garde-binaire". Meme tache mot pour mot dans les deux bras, meme commit de depart
+(a2499eb3), copies de travail separees. Bras a = kit complet (scout→frame→terrain→build→clean→judge).
+Bras b = build direct + verification ciblee, sans phases amont.
+
+Depart ROUGE constate avant les bras :
+T0 2026-09-07 depot reel C:\Sources\AutoWinOS
+commande: npm run -s test:knowledge-circulaire
+exit=1
+
+CRITERE DU BANC (script externe que les deux bras ont recu, et que J'AI rejoue moi-meme apres coup) :
+/**
+ * Critère du banc /arena « garde binaire » — défaut : `scripts/cdp-knowledge-circular-proof.mjs:91`
+ * appelle `statSync(executable)` sans garde, donc quand le paquet de bureau n'est pas construit la
+ * sonde plante en trace brute (`node:fs`, ENOENT, exit 1) au lieu de dire « binaire absent » et de
+ * sortir 2 comme ses quatre frères (`scripts/verifier-chemin-critique.mjs:47-52`).
+ *
+ * Usage : node check.mjs <racine-de-la-copie>
+ * Exit 0 = critère atteint · 1 = au moins une assertion RATE.
+ *
+ * Limite nommée : le chemin « binaire présent » n'est pas testable sans un build (~292 s) — hors critère.
+ */
+import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+
+RESULTAT REJOUE PAR MOI, bras a (exit 0) :
+OK   précondition — le paquet de bureau est bien ABSENT (sinon ce critère ne mesure rien)
+OK   (a) paquet absent : la sonde sort exactement 2 (comme ses quatre frères)
+OK   (b) la sortie DIT « binaire absent » et ne déverse aucune trace brute
+OK   (c) cas limite — la preuve n’est pas neutralisée (statSync et control Start toujours là)
+CRITERE ATTEINT
+
+RESULTAT REJOUE PAR MOI, bras b (exit 0) :
+OK   précondition — le paquet de bureau est bien ABSENT (sinon ce critère ne mesure rien)
+OK   (a) paquet absent : la sonde sort exactement 2 (comme ses quatre frères)
+OK   (b) la sortie DIT « binaire absent » et ne déverse aucune trace brute
+OK   (c) cas limite — la preuve n’est pas neutralisée (statSync et control Start toujours là)
+CRITERE ATTEINT
+
+Chiffres lus dans les artefacts (jamais dans le rapport des bras) :
+- bras a : cout 1.3567300000000002 USD, duree 300979 ms, tours 27, fichiers modifies scripts/cdp-knowledge-circular-proof.mjs
+- bras b : cout 0.47792699999999994 USD, duree 56843 ms, tours 8, fichiers modifies scripts/cdp-knowledge-circular-proof.mjs
+
+DIFF DU BRAS A :
+diff --git a/scripts/cdp-knowledge-circular-proof.mjs b/scripts/cdp-knowledge-circular-proof.mjs
+index afe73be3..bafe86d0 100644
+--- a/scripts/cdp-knowledge-circular-proof.mjs
++++ b/scripts/cdp-knowledge-circular-proof.mjs
+@@ -1,12 +1,30 @@
+ import { racineDepot } from './racine-depot.mjs'
+ import { execFileSync } from 'node:child_process'
+-import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
++import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+ import { dirname, join } from 'node:path'
+ import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+ 
+ const root = racineDepot()
+ const helper = join(root, 'scripts', 'autowin-headless.ps1')
+ const executable = join(root, 'dist', 'win-unpacked', 'autowin-os.exe')
++
++/*
++ * LE PAQUET ABSENT EST UN CAS NORMAL, PAS UN PLANTAGE.
++ *
++ * Sans cette garde, le `statSync(executable)` plus bas leve un ENOENT non attrape : la sonde se
++ * termine sur une trace `node:fs` et un code 1, indistinguable d'un vrai defaut du produit. Ses
++ * quatre freres (chemin-critique, sondes-lecture, relance, trois-conversations) disent la meme
++ * chose avec le meme code 2 : « il n'y a rien a mesurer, construis d'abord ». On s'arrete AVANT
++ * d'ecrire la moindre fixture, pour ne laisser aucun residu d'une execution qui n'aura pas lieu.
++ */
++if (!existsSync(executable)) {
++  console.error(
++    `[knowledge-circulaire] binaire absent : ${executable}\n` +
++      "Construis-le d'abord (npm run build:desktop) — cette preuve porte sur le PAQUET, pas sur les sources."
++  )
++  process.exit(2)
++}
++
+ const instanceId = `knowledge-circular-${Date.now()}`
+ const port = 9274
+ const runStamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
+
+
+DIFF DU BRAS B :
+diff --git a/scripts/cdp-knowledge-circular-proof.mjs b/scripts/cdp-knowledge-circular-proof.mjs
+index afe73be3..3c683d83 100644
+--- a/scripts/cdp-knowledge-circular-proof.mjs
++++ b/scripts/cdp-knowledge-circular-proof.mjs
+@@ -1,6 +1,6 @@
+ import { racineDepot } from './racine-depot.mjs'
+ import { execFileSync } from 'node:child_process'
+-import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
++import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+ import { dirname, join } from 'node:path'
+ import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+ 
+@@ -61,6 +61,22 @@ function note(title, frontmatter = '') {
+   return `---\ntype: knowledge\nthemes: [theme/knowledge]\n${frontmatter}---\n\n# ${title}\n\nFixture ${runStamp}.\n`
+ }
+ 
++/*
++ * LE BINAIRE D'ABORD, ET ON LE DIT.
++ * Cette preuve porte sur le PAQUET de bureau, pas sur les sources : sans binaire il n'y a rien a
++ * prouver. Jusqu'ici l'absence tombait sur le `statSync` de peremption plus bas, en trace brute
++ * `node:fs` et code 1 — indiscernable d'une vraie panne du produit. Ses quatre soeurs disent
++ * « binaire absent » et sortent 2 ; celle-ci fait desormais pareil, AVANT de fabriquer la fixture.
++ */
++if (!existsSync(executable)) {
++  console.error(
++    `[knowledge-circulaire] binaire absent : ${executable}
++` +
++      "Construis-le d'abord (npm run build:desktop) — cette preuve porte sur le PAQUET, pas sur les sources."
++  )
++  process.exit(2)
++}
++
+ rmSync(fixtureRoot, { recursive: true, force: true })
+ for (const folder of ['projects/alpha', 'projects/beta', 'knowledge/decisions', 'governance']) {
+   mkdirSync(join(fixtureRoot, folder), { recursive: true })
+
+
+MA THESE, A REFUTER (ne la reprends pas en postulat) : les deux bras finissent au MEME etat de critere (atteint) : sur ce defaut, le workflow ne fait pas la difference.
+
+Reponds a ces quatre questions, chacune avec la ligne de diff ou le code de sortie qui la fonde :
+1. Un "vert" ci-dessus est-il en realite un FAUX vert (assertion desserree, erreur avalee, garde qui
+   contourne le defaut, cible deplacee au lieu d'etre corrigee) ?
+2. Le critere de ce banc a-t-il ete choisi ou ecrit de facon a favoriser un des deux bras ?
+3. L'ecart mesure entre les deux bras est-il du BRUIT (n=1 sur ce banc, moins de 30 % d'ecart) ?
+4. Quel resultat aurait-il fallu observer pour que le gagnant PERDE ? A-t-on regarde ?
+
+Rends : VERDICT (valide / invalide / non concluant) puis les 4 reponses, puis CE QUI RESTE NON PROUVE.
+N'ecris aucun fichier, ne modifie rien : tu ne fais que lire et juger.

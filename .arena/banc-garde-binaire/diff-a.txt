@@ -1,0 +1,36 @@
+diff --git a/scripts/cdp-knowledge-circular-proof.mjs b/scripts/cdp-knowledge-circular-proof.mjs
+index afe73be3..bafe86d0 100644
+--- a/scripts/cdp-knowledge-circular-proof.mjs
++++ b/scripts/cdp-knowledge-circular-proof.mjs
+@@ -1,12 +1,30 @@
+ import { racineDepot } from './racine-depot.mjs'
+ import { execFileSync } from 'node:child_process'
+-import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
++import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+ import { dirname, join } from 'node:path'
+ import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+ 
+ const root = racineDepot()
+ const helper = join(root, 'scripts', 'autowin-headless.ps1')
+ const executable = join(root, 'dist', 'win-unpacked', 'autowin-os.exe')
++
++/*
++ * LE PAQUET ABSENT EST UN CAS NORMAL, PAS UN PLANTAGE.
++ *
++ * Sans cette garde, le `statSync(executable)` plus bas leve un ENOENT non attrape : la sonde se
++ * termine sur une trace `node:fs` et un code 1, indistinguable d'un vrai defaut du produit. Ses
++ * quatre freres (chemin-critique, sondes-lecture, relance, trois-conversations) disent la meme
++ * chose avec le meme code 2 : « il n'y a rien a mesurer, construis d'abord ». On s'arrete AVANT
++ * d'ecrire la moindre fixture, pour ne laisser aucun residu d'une execution qui n'aura pas lieu.
++ */
++if (!existsSync(executable)) {
++  console.error(
++    `[knowledge-circulaire] binaire absent : ${executable}\n` +
++      "Construis-le d'abord (npm run build:desktop) — cette preuve porte sur le PAQUET, pas sur les sources."
++  )
++  process.exit(2)
++}
++
+ const instanceId = `knowledge-circular-${Date.now()}`
+ const port = 9274
+ const runStamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')

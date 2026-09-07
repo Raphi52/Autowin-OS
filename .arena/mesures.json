@@ -1,0 +1,125 @@
+[
+  {
+    "banc": "banc-watch",
+    "bras": "a",
+    "workflow": "kit complet scout→frame→terrain→build→clean→judge",
+    "critereExit": 0,
+    "critereAtteint": true,
+    "assertionsRatees": 0,
+    "coutUsd": 2.775607,
+    "dureeMs": 647134,
+    "tours": 35,
+    "erreurClaude": false,
+    "fichiersTouches": [
+      "scripts/launch-dev.test.ps1"
+    ],
+    "nonSuivis": [],
+    "testsTouches": [
+      "scripts/launch-dev.test.ps1"
+    ],
+    "rejeux": [
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "banc": "banc-watch",
+    "bras": "b",
+    "workflow": "build direct + verification ciblee",
+    "critereExit": 0,
+    "critereAtteint": true,
+    "assertionsRatees": 1,
+    "coutUsd": 0.9649895000000001,
+    "dureeMs": 172336,
+    "tours": 15,
+    "erreurClaude": false,
+    "fichiersTouches": [
+      "scripts/launch-dev.test.ps1"
+    ],
+    "nonSuivis": [],
+    "testsTouches": [
+      "scripts/launch-dev.test.ps1"
+    ],
+    "rejeux": [
+      0,
+      0,
+      0
+    ],
+    "note": "1 rouge NON reproductible a la 1re mesure (fixture PowerShell temporaire), puis 3 rejeux verts -> critere FLAKY, signale"
+  },
+  {
+    "banc": "banc-couleurs",
+    "bras": "a",
+    "workflow": "kit complet scout→frame→terrain→build→clean→judge",
+    "critereExit": 0,
+    "critereAtteint": true,
+    "assertionsRatees": 0,
+    "coutUsd": 2.3605544999999997,
+    "dureeMs": 436023,
+    "tours": 38,
+    "erreurClaude": false,
+    "fichiersTouches": [
+      "scripts/launch_dev_phases_test.py",
+      "scripts/launch_dev_splash.py"
+    ],
+    "nonSuivis": [],
+    "testsTouches": [
+      "scripts/launch_dev_phases_test.py"
+    ]
+  },
+  {
+    "banc": "banc-couleurs",
+    "bras": "b",
+    "workflow": "build direct + verification ciblee",
+    "critereExit": 0,
+    "critereAtteint": true,
+    "assertionsRatees": 0,
+    "coutUsd": 0.8606175000000001,
+    "dureeMs": 149935,
+    "tours": 14,
+    "erreurClaude": false,
+    "fichiersTouches": [
+      "scripts/launch_dev_phases_test.py",
+      "scripts/launch_dev_splash.py"
+    ],
+    "nonSuivis": [],
+    "testsTouches": [
+      "scripts/launch_dev_phases_test.py"
+    ]
+  },
+  {
+    "banc": "banc-garde-binaire",
+    "bras": "a",
+    "workflow": "kit complet scout→frame→terrain→build→clean→judge",
+    "critereExit": 0,
+    "critereAtteint": true,
+    "assertionsRatees": 0,
+    "coutUsd": 1.3567300000000002,
+    "dureeMs": 300979,
+    "tours": 27,
+    "erreurClaude": false,
+    "fichiersTouches": [
+      "scripts/cdp-knowledge-circular-proof.mjs"
+    ],
+    "nonSuivis": [],
+    "testsTouches": []
+  },
+  {
+    "banc": "banc-garde-binaire",
+    "bras": "b",
+    "workflow": "build direct + verification ciblee",
+    "critereExit": 0,
+    "critereAtteint": true,
+    "assertionsRatees": 0,
+    "coutUsd": 0.47792699999999994,
+    "dureeMs": 56843,
+    "tours": 8,
+    "erreurClaude": false,
+    "fichiersTouches": [
+      "scripts/cdp-knowledge-circular-proof.mjs"
+    ],
+    "nonSuivis": [],
+    "testsTouches": []
+  }
+]

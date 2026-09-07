@@ -1,0 +1,4 @@
+OK   (a) le contrôle PowerShell du script dev sort 0
+OK   (b) le produit n’a PAS régressé : scripts.dev reste `electron-vite dev` et son test reste vert
+OK   (c) cas limite — aucun juge désarmé (test vitest intact, contrôle .ps1 non vidé)
+CRITERE ATTEINT

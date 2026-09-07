@@ -1,0 +1,291 @@
+/judge en mode ADVERSE. Tu ne valides rien : tu essaies de faire TOMBER ce resultat.
+
+CONTEXTE — banc /arena "banc-watch". Meme tache mot pour mot dans les deux bras, meme commit de depart
+(a2499eb3), copies de travail separees. Bras a = kit complet (scout→frame→terrain→build→clean→judge).
+Bras b = build direct + verification ciblee, sans phases amont.
+
+Depart ROUGE constate avant les bras :
+T0 2026-09-07 depot reel C:\Sources\AutoWinOS
+commande: powershell -ExecutionPolicy Bypass -File scripts/launch-dev.test.ps1
+exit=1
+
+CRITERE DU BANC (script externe que les deux bras ont recu, et que J'AI rejoue moi-meme apres coup) :
+/**
+ * Critère du banc /arena « watch » — défaut : `scripts/launch-dev.test.ps1:11` exige
+ * `electron-vite dev --watch` alors que `package.json` et `src/main/dev-sans-watch.test.ts`
+ * (VERT) exigent l'inverse, pour une cause documentée (commit 447b85d4 : --watch tuait les runs).
+ *
+ * Usage : node check.mjs <racine-de-la-copie>
+ * Exit 0 = critère atteint · 1 = au moins une assertion RATE.
+ *
+ * Le sens du correctif n'est PAS libre ici : remettre `--watch` rendrait le rouge vert en
+ * RÉGRESSANT le produit. L'assertion (b) est le garde-fou anti-faux-vert, au site d'appel du
+ * test déjà présent ; (c) refuse qu'un bras désarme son juge.
+ */
+import { spawnSync } from 'node:child_process'
+
+RESULTAT REJOUE PAR MOI, bras a (exit 0) :
+OK   (a) le contrôle PowerShell du script dev sort 0
+OK   (b) le produit n’a PAS régressé : scripts.dev reste `electron-vite dev` et son test reste vert
+OK   (c) cas limite — aucun juge désarmé (test vitest intact, contrôle .ps1 non vidé)
+CRITERE ATTEINT
+
+RESULTAT REJOUE PAR MOI, bras b (exit 0) :
+OK   (a) le contrôle PowerShell du script dev sort 0
+OK   (b) le produit n’a PAS régressé : scripts.dev reste `electron-vite dev` et son test reste vert
+OK   (c) cas limite — aucun juge désarmé (test vitest intact, contrôle .ps1 non vidé)
+CRITERE ATTEINT
+[note de mesure] 1re mesure : RATE (a) sur une erreur de fixture PowerShell temporaire NON reproductible ; 3 rejeux ensuite : exit 0. Critere FLAKY, signale tel quel.
+
+Chiffres lus dans les artefacts (jamais dans le rapport des bras) :
+- bras a : cout 2.775607 USD, duree 647134 ms, tours 35, fichiers modifies scripts/launch-dev.test.ps1
+- bras b : cout 0.9649895000000001 USD, duree 172336 ms, tours 15, fichiers modifies scripts/launch-dev.test.ps1
+
+DIFF DU BRAS A :
+diff --git a/scripts/launch-dev.test.ps1 b/scripts/launch-dev.test.ps1
+index afadeb0d..19494b82 100644
+--- a/scripts/launch-dev.test.ps1
++++ b/scripts/launch-dev.test.ps1
+@@ -8,8 +8,13 @@ function Assert-True {
+ $projectRoot = Split-Path -Parent $PSScriptRoot
+ $manifest = Get-Content -Raw (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
+ $devCommand = $manifest.scripts.dev
+-Assert-True ($devCommand -eq 'electron-vite dev --watch') 'dev must delegate one watch loop to electron-vite'
+-Assert-True (($devCommand -split '--watch').Count -eq 2) 'dev must contain exactly one --watch flag'
++# `dev` NE DOIT PAS PORTER `--watch`. Avec ce drapeau, electron-vite redemarrait Electron des qu'un
++# module `main` ou `preload` changeait, ce qui TUAIT l'orchestration en cours (demande `conv-1267`,
++# corrige au commit 447b85d4). Le rechargement a chaud du RENDERER est conserve : il passe par le
++# dev-server, pas par ce drapeau. Contrat miroir de `src/main/dev-sans-watch.test.ts`, qui garde la
++# meme regle cote produit.
++Assert-True ($devCommand -eq 'electron-vite dev') 'dev must delegate to electron-vite WITHOUT restarting the main process'
++Assert-True (($devCommand -split '--watch').Count -eq 1) 'dev must carry NO --watch flag: it killed the runs in progress'
+ 
+ $electronVite = Join-Path $projectRoot 'node_modules\.bin\electron-vite.cmd'
+ $help = & $electronVite dev --help 2>&1 | Out-String
+@@ -47,7 +52,12 @@ Assert-True ($pySource -match 'CreateMutexW') `
+ Assert-True ($pySource -match 'CREATE_NO_WINDOW') 'the dev loop must start without allocating a console'
+ Assert-True ($pySource -match 'st_mtime >= avant') `
+   'the launcher must PROVE the bundle was rebuilt after the last source change'
+-Assert-True ($pySource -match 'ATTENTE_FRAICHEUR_S') 'the freshness wait must be bounded, not infinite'
++# La borne existe toujours, sous un AUTRE NOM : `ATTENTE_FRAICHEUR_S` est devenu `ATTENTE_TOTALE_S`
++# au commit 79e9c13e (declare `scripts/launch_dev.py:79`, applique au tour de lecture ligne 526-531,
++# celui-la meme qui evalue `st_mtime >= avant`). On verifie donc le nom REEL de la borne, et qu'elle
++# vaut un nombre fini plutot que de simplement exister.
++Assert-True ($pySource -match 'ATTENTE_TOTALE_S *= *[0-9]+') `
++  'the freshness wait must be bounded by a finite value, not infinite'
+ Assert-True (($pySource -split 'alerter\(').Count -ge 6) `
+   'every abnormal exit must reach the user, not just the first one'
+ 
+@@ -120,4 +130,4 @@ try {
+   Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+ }
+ 
+-Write-Output 'PASS launch-dev watcher contract: renderer HMR, main/preload watch, single hidden launch, clean cmd exit'
++Write-Output 'PASS launch-dev contract: renderer HMR only (NO main/preload restart), single hidden launch, clean cmd exit'
+
+
+DIFF DU BRAS B :
+diff --git a/scripts/launch-dev.test.ps1 b/scripts/launch-dev.test.ps1
+index afadeb0d..8e446aa3 100644
+--- a/scripts/launch-dev.test.ps1
++++ b/scripts/launch-dev.test.ps1
+@@ -1,123 +1,140 @@
+-$ErrorActionPreference = 'Stop'
+-
+-function Assert-True {
+-  param([bool]$Condition, [string]$Message)
+-  if (-not $Condition) { throw "Assertion failed: $Message" }
+-}
+-
+-$projectRoot = Split-Path -Parent $PSScriptRoot
+-$manifest = Get-Content -Raw (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
+-$devCommand = $manifest.scripts.dev
+-Assert-True ($devCommand -eq 'electron-vite dev --watch') 'dev must delegate one watch loop to electron-vite'
+-Assert-True (($devCommand -split '--watch').Count -eq 2) 'dev must contain exactly one --watch flag'
+-
+-$electronVite = Join-Path $projectRoot 'node_modules\.bin\electron-vite.cmd'
+-$help = & $electronVite dev --help 2>&1 | Out-String
+-Assert-True ($LASTEXITCODE -eq 0) 'electron-vite dev --help must succeed'
+-Assert-True ($help -match '--watch.*main process or preload script modules') `
+-  '--watch must cover main and preload; renderer remains on its dev-server hot update path'
+-
+-# LE HAUT DE LA CHAÎNE NE DOIT PAS ÊTRE UNE APPLICATION CONSOLE.
+-# Viser powershell.exe donnait une console allouée par Windows, confiée à Windows Terminal sur
+-# Windows 11 — lequel ignore le SW_HIDE de `-WindowStyle Hidden` (fenêtre visible 242 ms, mesuré le
+-# 2026-08-05). `pyw.exe` est graphique : la contrainte est satisfaite par la CIBLE elle-même, donc le
+-# duo VBS + PowerShell n'a plus de raison d'être et la chaîne passe de cinq maillons à deux.
+-$shortcutSource = Get-Content -Raw (Join-Path $PSScriptRoot 'create-dev-shortcut.ps1')
+-Assert-True ($shortcutSource -match '\$shortcut\.TargetPath\s*=\s*\$interpreteur') `
+-  'the shortcut must target the resolved GUI Python interpreter'
+-Assert-True ($shortcutSource -match "notmatch '\(pyw\|pythonw\)") `
+-  'the creator must REFUSE a console interpreter (python.exe / py.exe) and say so'
+-Assert-True ($shortcutSource -notmatch '\$shortcut\.TargetPath\s*=[^
+-]*powershell\.exe') `
+-  'the shortcut must never target powershell.exe directly: Windows Terminal would show its console'
+-Assert-True ($shortcutSource -match "resources\\python\\pythonw\.exe") `
+-  'an EMBEDDED CPython must win over any interpreter on the PATH (Brain decision python-runtime)'
+-
+-# LE LANCEUR PYTHON NE DOIT JAMAIS ÉCHOUER EN SILENCE.
+-# C'est le défaut réellement subi : `shell.Run commande, 0, False` ne récupérait pas le code de
+-# sortie, donc « déjà lancé » et un échec de compilation étaient tous deux invisibles. L'utilisateur
+-# double-cliquait, rien ne se passait, la fenêtre périmée restait à l'écran.
+-$launcherPy = Join-Path $PSScriptRoot 'launch_dev.py'
+-Assert-True (Test-Path -LiteralPath $launcherPy) 'the Python launcher must exist'
+-$pySource = Get-Content -Raw $launcherPy
+-Assert-True ($pySource -match 'MessageBoxW') `
+-  'without a console, a dialog box is the ONLY channel the user can see'
+-Assert-True ($pySource -match 'CreateMutexW') `
+-  'single instance must use the exact Windows primitive, not command-line sniffing'
+-Assert-True ($pySource -match 'CREATE_NO_WINDOW') 'the dev loop must start without allocating a console'
+-Assert-True ($pySource -match 'st_mtime >= avant') `
+-  'the launcher must PROVE the bundle was rebuilt after the last source change'
+-Assert-True ($pySource -match 'ATTENTE_FRAICHEUR_S') 'the freshness wait must be bounded, not infinite'
+-Assert-True (($pySource -split 'alerter\(').Count -ge 6) `
+-  'every abnormal exit must reach the user, not just the first one'
+-
+-# L'ancien duo ne doit plus être RÉFÉRENCÉ : un raccourci qui pointe sur un fichier supprimé
+-# retomberait exactement dans l'échec muet qu'on vient de corriger.
+-Assert-True ($shortcutSource -notmatch 'launch-dev\.vbs') 'the VBS bootstrap must no longer be wired'
+-Assert-True ($shortcutSource -notmatch 'launch-dev\.ps1') 'the PowerShell launcher must no longer be wired'
+-
+-$fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) "autowin-launch-dev-test-$PID"
+-New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
+-Set-Content -LiteralPath (Join-Path $fixtureRoot 'package.json') -Value '{}'
+-
+-$script:processMode = 'existing'
+-$script:startCalls = @()
+-function Get-CimInstance {
+-  param([string]$ClassName, [string]$Filter)
+-  if ($script:processMode -eq 'existing') {
+-    return [pscustomobject]@{
+-      ProcessId = 4242
+-      CommandLine = 'cmd.exe /c title Autowin OS Dev && npm run dev'
+-    }
+-  }
+-  return $null
+-}
+-# Le lanceur est injecté : la vraie implémentation crée un PROCESSUS (CREATE_NO_WINDOW), elle ne
+-# passe plus par Start-Process, dont le -WindowStyle Hidden était ignoré par Windows Terminal.
+-$launcherEspion = {
+-  param([string]$FilePath, [string]$Arguments, [string]$WorkingDirectory)
+-  $script:startCalls += [pscustomobject]@{
+-    FilePath = $FilePath
+-    Arguments = $Arguments
+-    WorkingDirectory = $WorkingDirectory
+-  }
+-}
+-
+-try {
+-  $duplicateError = $null
+-  try {
+-    . (Join-Path $PSScriptRoot 'launch-dev.ps1') -ProjectRoot $fixtureRoot -Launcher $launcherEspion
+-  } catch {
+-    $duplicateError = $_
+-  }
+-  Assert-True ($null -ne $duplicateError) 'a second dev terminal must be rejected'
+-  Assert-True ($duplicateError.Exception.Message -match '4242') 'duplicate rejection must identify the existing PID'
+-  Assert-True ($script:startCalls.Count -eq 0) 'duplicate rejection must not launch another terminal'
+-
+-  $script:processMode = 'none'
+-  . (Join-Path $PSScriptRoot 'launch-dev.ps1') -ProjectRoot $fixtureRoot -Launcher $launcherEspion
+-  Assert-True ($script:startCalls.Count -eq 1) 'normal launch must delegate exactly once'
+-  Assert-True ($script:startCalls[0].Arguments -eq '/c title Autowin OS Dev && npm run dev') `
+-    'the delegated command must stay the unique marked dev loop, with /c so cmd exits with electron-vite'
+-  Assert-True ($script:startCalls[0].WorkingDirectory -eq $fixtureRoot) 'the dev loop must start in the requested project'
+-
+-  # LA CAUSE, verrouillée sur la source : `-WindowStyle Hidden` posait SW_HIDE, que conhost honore
+-  # mais que Windows Terminal — terminal par defaut de Windows 11 — ignore. Une fenetre titree
+-  # « Autowin OS Dev » s'affichait donc a cote de l'app. Seul CREATE_NO_WINDOW n'alloue aucune
+-  # console, ce qui rend le reglage terminal de l'utilisateur sans effet.
+-  $launchSource = Get-Content -Raw (Join-Path $PSScriptRoot 'launch-dev.ps1')
+-  # Le CODE seul : sans cette mise à l'écart des commentaires, l'assertion suivante se déclenchait sur
+-  # la ligne d'explication qui NOMME `-WindowStyle Hidden` pour dire pourquoi on ne s'en sert plus.
+-  $launchCode = (Get-Content (Join-Path $PSScriptRoot 'launch-dev.ps1') |
+-    Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+-  Assert-True ($launchSource -match '\$psi\.CreateNoWindow\s*=\s*\$true') `
+-    'the dev loop must allocate NO console (CREATE_NO_WINDOW), not merely hide a window style'
+-  Assert-True ($launchSource -match '\$psi\.UseShellExecute\s*=\s*\$false') `
+-    'CreateNoWindow is only honoured when UseShellExecute is false'
+-  Assert-True ($launchCode -notmatch 'Start-Process[^\r\n]*-WindowStyle\s+Hidden') `
+-    'no launch path may rely on -WindowStyle Hidden: Windows Terminal ignores it'
+-} finally {
+-  Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+-}
+-
+-Write-Output 'PASS launch-dev watcher contract: renderer HMR, main/preload watch, single hidden launch, clean cmd exit'
++$ErrorActionPreference = 'Stop'
++
++function Assert-True {
++  param([bool]$Condition, [string]$Message)
++  if (-not $Condition) { throw "Assertion failed: $Message" }
++}
++
++$projectRoot = Split-Path -Parent $PSScriptRoot
++$manifest = Get-Content -Raw (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
++# `--watch` A ÉTÉ RETIRÉ DU SCRIPT dev (commit 447b85d4) : il redémarrait Electron dès qu'un module
++# de `main` ou `preload` changeait sur le disque, ce qui tuait les runs d'orchestration en cours
++# (`conv-1267`). Le rechargement à chaud du RENDERER, lui, est conservé — il vient du dev-server et
++# ne redémarre pas le processus principal. `src/main/dev-sans-watch.test.ts` verrouille cette
++# absence côté produit ; les deux assertions ci-dessous la verrouillent au même endroit que le reste
++# de la chaîne de lancement, pour qu'aucun des deux contrôles ne contredise l'autre.
++$devCommand = $manifest.scripts.dev
++Assert-True ($devCommand -eq 'electron-vite dev') 'dev must delegate exactly one dev loop to electron-vite'
++Assert-True ($devCommand -notmatch '--watch') `
++  'dev must carry NO --watch: restarting main/preload killed in-flight runs (447b85d4)'
++
++$electronVite = Join-Path $projectRoot 'node_modules\.bin\electron-vite.cmd'
++$help = & $electronVite dev --help 2>&1 | Out-String
++Assert-True ($LASTEXITCODE -eq 0) 'electron-vite dev --help must succeed'
++# La sémantique du flag EST la raison de son exclusion : il rebuilde main/preload, donc il redémarre
++# Electron. Si un jour electron-vite le limitait au renderer, cette assertion tomberait et le choix
++# serait à réexaminer.
++Assert-True ($help -match '--watch.*main process or preload script modules') `
++  '--watch rebuilds main/preload — that restart is exactly what the dev script must avoid'
++
++# LE HAUT DE LA CHAÎNE NE DOIT PAS ÊTRE UNE APPLICATION CONSOLE.
++# Viser powershell.exe donnait une console allouée par Windows, confiée à Windows Terminal sur
++# Windows 11 — lequel ignore le SW_HIDE de `-WindowStyle Hidden` (fenêtre visible 242 ms, mesuré le
++# 2026-08-05). `pyw.exe` est graphique : la contrainte est satisfaite par la CIBLE elle-même, donc le
++# duo VBS + PowerShell n'a plus de raison d'être et la chaîne passe de cinq maillons à deux.
++$shortcutSource = Get-Content -Raw (Join-Path $PSScriptRoot 'create-dev-shortcut.ps1')
++Assert-True ($shortcutSource -match '\$shortcut\.TargetPath\s*=\s*\$interpreteur') `
++  'the shortcut must target the resolved GUI Python interpreter'
++Assert-True ($shortcutSource -match "notmatch '\(pyw\|pythonw\)") `
++  'the creator must REFUSE a console interpreter (python.exe / py.exe) and say so'
++Assert-True ($shortcutSource -notmatch '\$shortcut\.TargetPath\s*=[^
++]*powershell\.exe') `
++  'the shortcut must never target powershell.exe directly: Windows Terminal would show its console'
++Assert-True ($shortcutSource -match "resources\\python\\pythonw\.exe") `
++  'an EMBEDDED CPython must win over any interpreter on the PATH (Brain decision python-runtime)'
++
++# LE LANCEUR PYTHON NE DOIT JAMAIS ÉCHOUER EN SILENCE.
++# C'est le défaut réellement subi : `shell.Run commande, 0, False` ne récupérait pas le code de
++# sortie, donc « déjà lancé » et un échec de compilation étaient tous deux invisibles. L'utilisateur
++# double-cliquait, rien ne se passait, la fenêtre périmée restait à l'écran.
++$launcherPy = Join-Path $PSScriptRoot 'launch_dev.py'
++Assert-True (Test-Path -LiteralPath $launcherPy) 'the Python launcher must exist'
++$pySource = Get-Content -Raw $launcherPy
++Assert-True ($pySource -match 'MessageBoxW') `
++  'without a console, a dialog box is the ONLY channel the user can see'
++Assert-True ($pySource -match 'CreateMutexW') `
++  'single instance must use the exact Windows primitive, not command-line sniffing'
++Assert-True ($pySource -match 'CREATE_NO_WINDOW') 'the dev loop must start without allocating a console'
++Assert-True ($pySource -match 'st_mtime >= avant') `
++  'the launcher must PROVE the bundle was rebuilt after the last source change'
++# La borne d'attente a été SCINDÉE : un démarrage lent est normal (interface vers 70-80 s), c'est le
++# SILENCE qui est suspect — d'où `SILENCE_MAX_S` plus un filet total très large. L'ancien nom unique
++# `ATTENTE_FRAICHEUR_S` n'existe plus ; ce qui doit rester vrai, c'est qu'AUCUNE des deux attentes
++# n'est infini
+[...tronque, 16327 caracteres au total]
+
+MA THESE, A REFUTER (ne la reprends pas en postulat) : les deux bras finissent au MEME etat de critere (atteint) : sur ce defaut, le workflow ne fait pas la difference.
+
+Reponds a ces quatre questions, chacune avec la ligne de diff ou le code de sortie qui la fonde :
+1. Un "vert" ci-dessus est-il en realite un FAUX vert (assertion desserree, erreur avalee, garde qui
+   contourne le defaut, cible deplacee au lieu d'etre corrigee) ?
+2. Le critere de ce banc a-t-il ete choisi ou ecrit de facon a favoriser un des deux bras ?
+3. L'ecart mesure entre les deux bras est-il du BRUIT (n=1 sur ce banc, moins de 30 % d'ecart) ?
+4. Quel resultat aurait-il fallu observer pour que le gagnant PERDE ? A-t-on regarde ?
+
+Rends : VERDICT (valide / invalide / non concluant) puis les 4 reponses, puis CE QUI RESTE NON PROUVE.
+N'ecris aucun fichier, ne modifie rien : tu ne fais que lire et juger.
