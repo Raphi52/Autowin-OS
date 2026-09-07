@@ -1,4 +1,4 @@
-import { motifDeBlocagePublication } from '../../shared/blocage-git-verrou'
+import { estVerrouGitTenu, motifDeBlocagePublication } from '../../shared/blocage-git-verrou'
 import { pendantOperation } from '../gel-main'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
@@ -301,6 +301,22 @@ export class RunWorktreeCoordinator {
   private readonly waitingForProcess = new Set<string>()
   private readonly waitingForRetry = new Set<string>()
   private readonly retryCounts = new Map<string, number>()
+
+  /*
+   * LA FILE DES PUBLICATIONS — un seul dépôt de base, une seule opération git à la fois.
+   *
+   * Mesure du 2026-09-06, trois runs lancés en parallèle sur le même dépôt : le premier publie,
+   * LES DEUX AUTRES ÉCHOUENT — `Unable to create '.git/index.lock': File exists`. Les copies sont
+   * séparées et les fichiers distincts, mais la publication écrit dans le MÊME dépôt de base, et
+   * git n'y tolère qu'une opération d'index à la fois. Le travail n'était pas perdu, mais il
+   * fallait intervenir à la main : c'est exactement le cas d'usage revendiqué (« trois
+   * conversations sur la même chose ») qui échouait deux fois sur trois.
+   *
+   * On SÉRIALISE donc les publications au lieu de les laisser se marcher dessus. Ce n'est pas un
+   * réessai aveugle : chacune attend son tour. Un échec ne bloque pas la file
+   * (`then(travail, travail)`), sinon un seul refus figerait toutes les publications suivantes.
+   */
+  private filePublication: Promise<unknown> = Promise.resolve()
   private readonly resumeClaims = new Set<string>()
   /** Quand chaque run a été repêché AUTOMATIQUEMENT pour la dernière fois, pour ne pas le marteler. */
   private readonly derniersRepechages = new Map<string, number>()
@@ -1089,23 +1105,26 @@ export class RunWorktreeCoordinator {
       }))
       this.persist(tracked, 'green', 'integrating')
       let preparedPublication: { baseSha: string; agentSha: string } | undefined
-      const res = await this.manager.finalizeAsync(runId, {
-        baseBranch: tracked.baseBranch,
-        onPrepared: (agentSha, baseSha) => {
-          tracked.publicationAgentSha = agentSha
-          tracked.publicationBaseSha = baseSha
-          this.persist(tracked, 'green', 'integrating')
-          preparedPublication = { baseSha, agentSha }
-          this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
-        },
-        onIntegrated: (integratedSha, agentSha, baseSha) => {
-          tracked.publishedSha = integratedSha
-          tracked.publicationAgentSha = agentSha
-          tracked.publicationBaseSha = baseSha
-          this.persist(tracked, 'green', 'integrating')
-          preparedPublication = { baseSha, agentSha: integratedSha }
-        }
-      })
+      // Une seule publication a la fois dans la base : voir `filePublication`.
+      const res = await this.enFilePublication(() =>
+        this.manager.finalizeAsync!(runId, {
+          baseBranch: tracked.baseBranch,
+          onPrepared: (agentSha, baseSha) => {
+            tracked.publicationAgentSha = agentSha
+            tracked.publicationBaseSha = baseSha
+            this.persist(tracked, 'green', 'integrating')
+            preparedPublication = { baseSha, agentSha }
+            this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+          },
+          onIntegrated: (integratedSha, agentSha, baseSha) => {
+            tracked.publishedSha = integratedSha
+            tracked.publicationAgentSha = agentSha
+            tracked.publicationBaseSha = baseSha
+            this.persist(tracked, 'green', 'integrating')
+            preparedPublication = { baseSha, agentSha: integratedSha }
+          }
+        })
+      )
       this.applyFinalize(tracked, res)
       this.persistFinalize(tracked, res)
       await this.acknowledgePublicationAsync(tracked, res)
@@ -1743,15 +1762,18 @@ export class RunWorktreeCoordinator {
     tracked.conflictFile = undefined
     this.persist(tracked, 'green', 'integrating', 'Résolution de conflit demandée depuis le Hub.')
     try {
-      const res = await finalizeAsync.call(this.manager, runId, {
-        baseBranch: tracked.baseBranch,
-        conflictStrategy: choice === 'agent' ? 'theirs' : 'ours',
-        onIntegrated: (integratedSha, agentSha, baseSha) => {
-          tracked.publishedSha = integratedSha
-          tracked.publicationAgentSha = agentSha
-          tracked.publicationBaseSha = baseSha
-        }
-      })
+      // Meme file que la publication normale : une resolution de conflit publie aussi dans la base.
+      const res = await this.enFilePublication(() =>
+        finalizeAsync.call(this.manager, runId, {
+          baseBranch: tracked.baseBranch,
+          conflictStrategy: choice === 'agent' ? 'theirs' : 'ours',
+          onIntegrated: (integratedSha, agentSha, baseSha) => {
+            tracked.publishedSha = integratedSha
+            tracked.publicationAgentSha = agentSha
+            tracked.publicationBaseSha = baseSha
+          }
+        })
+      )
       this.applyFinalize(tracked, res)
       this.persistFinalize(tracked, res)
       await this.acknowledgePublicationAsync(tracked, res)
@@ -1817,9 +1839,7 @@ export class RunWorktreeCoordinator {
         this.cacheNonPublies = {
           a: this.now(),
           ids: new Set(r.ids.filter((agentId) => !enCours.has(agentId))),
-          apercu: new Map(
-            r.apercu.map((e) => [e.agentId, { date: e.date, fichiers: e.fichiers }])
-          )
+          apercu: new Map(r.apercu.map((e) => [e.agentId, { date: e.date, fichiers: e.fichiers }]))
         }
         this.emit()
       })
@@ -1927,6 +1947,32 @@ export class RunWorktreeCoordinator {
     }
   }
 
+  /** Fait attendre son tour à une publication : une seule opération git dans la base à la fois. */
+  private enFilePublication<T>(travail: () => Promise<T>): Promise<T> {
+    const tour = this.filePublication.then(travail, travail)
+    this.filePublication = tour.then(
+      () => undefined,
+      () => undefined
+    )
+    return tour
+  }
+
+  /*
+   * LE MOTIF SE LIT DANS CE QUE GIT A DIT — POINT DE PASSAGE UNIQUE.
+   *
+   * Le 2026-09-06, corriger les sites qui POSENT `merge-failed` n'a requalifié que deux familles
+   * de messages sur trois : le verrou `ORIG_HEAD` ressortait encore en « fusion refusée », parce
+   * que son motif est décidé plus tôt, dans le gestionnaire de copies (une vingtaine de retours
+   * `reason: 'merge-failed'`, dont plusieurs portent la sortie brute de git). Requalifier vingt
+   * sites un par un aurait laissé le vingt-et-unième mentir. Ici passent TOUS les refus, quel que
+   * soit le chemin : c'est le seul endroit où la règle tient une fois pour toutes.
+   */
+  private requalifierVerrouTenu(res: FinalizeResult): void {
+    if (res.outcome !== 'blocked' || res.reason !== 'merge-failed') return
+    if (!estVerrouGitTenu(res.detail)) return
+    res.reason = 'base-in-progress'
+  }
+
   private applyFinalize(tracked: Tracked, res: FinalizeResult): void {
     /*
      * LE COTE SORTIE DU RECENSEMENT, oublie au cycle 1.
@@ -1938,6 +1984,7 @@ export class RunWorktreeCoordinator {
      * integre. C'est le defaut d'origine EN MIROIR : l'agent propose de fusionner ce qui n'existe
      * plus. `applyFinalize` est le point de passage que TOUS les chemins traversent.
      */
+    this.requalifierVerrouTenu(res)
     this.invaliderRecensement()
     // Point de passage UNIQUE de tout refus d'integration : c'est donc ici qu'on le COMPTE, une fois
     // par tentative. Le tracage ne doit jamais casser l'action tracee — d'ou le try muet.
@@ -2105,6 +2152,8 @@ export class RunWorktreeCoordinator {
   }
 
   private persistFinalize(tracked: Tracked, result: FinalizeResult): void {
+    // Un chemin persiste sans passer par `applyFinalize` : la regle se relit ici aussi (idempotente).
+    this.requalifierVerrouTenu(result)
     const publication =
       result.outcome === 'merged' || result.outcome === 'nothing'
         ? 'complete'
