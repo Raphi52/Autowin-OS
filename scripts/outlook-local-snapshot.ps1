@@ -95,11 +95,39 @@ try {
   $outlook = [Activator]::CreateInstance($typeOutlook)
   $session = $outlook.GetNamespace('MAPI')
 
+  # --- les DOSSIERS par defaut, sur TOUS les magasins du profil
+  #
+  # `GetDefaultFolder` sur la SESSION ne rend que le magasin par DEFAUT du profil. Mesure de ce poste
+  # le 2026-09-07 : le profil porte deux comptes -- Exchange (onmicrosoft) et Kerio Connect
+  # (amitel.fr, magasin "Rapha..l VILAIN", 552 messages) -- et seul le premier etait lu, donc la
+  # moitie de la vie de l'utilisateur n'atteignait jamais le widget. Le compte Kerio n'expose AUCUNE
+  # adresse SMTP cote `Session.Accounts` : il ne peut se designer que par son MAGASIN, pas par une
+  # adresse. D'ou ce balayage des magasins plutot qu'un filtre par compte.
+  #
+  # Un magasin sans le dossier demande (les "Dossiers publics", par exemple) leve : il est ignore.
+  function Get-DossiersParDefaut($session, $type) {
+    $dossiers = New-Object System.Collections.ArrayList
+    foreach ($magasin in $session.Stores) {
+      try {
+        $dossier = $magasin.GetDefaultFolder($type)
+        if ($null -ne $dossier) { [void]$dossiers.Add($dossier) }
+      } catch { }
+    }
+    if ($dossiers.Count -eq 0) {
+      try { [void]$dossiers.Add($session.GetDefaultFolder($type)) } catch { }
+    }
+    return $dossiers
+  }
+
   # --- messages
-  $inbox = $session.GetDefaultFolder(6)
+  $mails = New-Object System.Collections.ArrayList
+  $nomsBoites = New-Object System.Collections.ArrayList
+  $nonLusTotal = 0
+  foreach ($inbox in (Get-DossiersParDefaut $session 6)) {
+  try { [void]$nomsBoites.Add([string]$inbox.Store.DisplayName) } catch { [void]$nomsBoites.Add([string]$inbox.Name) }
+  try { $nonLusTotal += [int]$inbox.UnReadItemCount } catch { }
   $items = $inbox.Items
   $items.Sort('[ReceivedTime]', $true)
-  $mails = New-Object System.Collections.ArrayList
   $lus = 0
   foreach ($item in $items) {
     if ($lus -ge $MaxMails) { break }
@@ -134,6 +162,7 @@ try {
       deMoi = $false
     })
   }
+  }
 
   # --- avec QUI l'utilisateur echange vraiment
   #
@@ -147,10 +176,11 @@ try {
   # a ecrit. Un echange va dans les deux sens ; une notification, non.
   $connus = New-Object System.Collections.Generic.HashSet[string]
   try {
-    $envoyes = $session.GetDefaultFolder(5).Items
+    $mailsEnvoyes = 0
+    foreach ($dossierEnvoyes in (Get-DossiersParDefaut $session 5)) {
+    $envoyes = $dossierEnvoyes.Items
     $envoyes.Sort('[SentOn]', $true)
     $vus = 0
-    $mailsEnvoyes = 0
     foreach ($envoye in $envoyes) {
       if ($vus -ge 400) { break }
       $vus++
@@ -190,6 +220,7 @@ try {
         $mailsEnvoyes++
       }
     }
+    }
   } catch {
     # Pas de dossier Elements envoyes accessible : on ne sait pas qui est une personne, et on le DIT
     # plutot que de deviner. Le cote application affichera alors tout sans distinction.
@@ -207,13 +238,14 @@ try {
   # 3. Le filtre exige une date au format court AMERICAIN, quelle que soit la langue d'Outlook.
   $debut = (Get-Date).Date.AddDays(-1 * $DepuisJours)
   $fin = (Get-Date).Date.AddDays($Jours)
-  $rdvs = $session.GetDefaultFolder(9).Items
+  $evenements = New-Object System.Collections.ArrayList
+  foreach ($calendrier in (Get-DossiersParDefaut $session 9)) {
+  $rdvs = $calendrier.Items
   $rdvs.Sort('[Start]')
   $rdvs.IncludeRecurrences = $true
   # Le filtre passe par une date au format court AMERICAIN, quelle que soit la langue d'Outlook.
   $filtre = "[Start] >= '" + $debut.ToString('MM/dd/yyyy HH:mm') + "' AND [Start] < '" + $fin.ToString('MM/dd/yyyy HH:mm') + "'"
   $filtres = $rdvs.Restrict($filtre)
-  $evenements = New-Object System.Collections.ArrayList
   $rdv = $filtres.GetFirst()
   while ($null -ne $rdv -and $evenements.Count -lt 200) {
     [void]$evenements.Add([pscustomobject]@{
@@ -227,18 +259,26 @@ try {
     })
     $rdv = $filtres.GetNext()
   }
+  }
+
+  # Les boites sont FUSIONNEES : un seul fil, trie du plus recent au plus ancien, quel que soit le
+  # compte d'origine. Le plafond `MaxMails` vaut pour le tout -- il s'applique donc APRES le tri,
+  # sinon la boite la plus bavarde evincerait l'autre.
+  $mailsTries = @($mails | Sort-Object -Property @{ Expression = { $_.recuLe }; Descending = $true })
+  if ($mailsTries.Count -gt $MaxMails) { $mailsTries = $mailsTries[0..($MaxMails - 1)] }
+  $evenementsTries = @($evenements | Sort-Object -Property debut)
 
   Write-Snapshot ([pscustomobject]@{
     ok = $true
     luLe = (Get-Date).ToString('o')
-    boite = [string]$inbox.Name
-    mailsNonLus = [int]$inbox.UnReadItemCount
-    mails = @($mails)
-    evenements = @($evenements)
+    boite = ($nomsBoites -join ' + ')
+    mailsNonLus = $nonLusTotal
+    mails = @($mailsTries)
+    evenements = @($evenementsTries)
     # `$null` signifie "je n'ai pas pu savoir", ce qui n'est PAS la meme chose qu'un ensemble vide.
     adressesEchangees = if ($null -eq $connus) { $null } else { @($connus) }
   })
-  Write-Host ("OK - " + $mails.Count + " messages, " + $evenements.Count + " evenements")
+  Write-Host ("OK - " + $mailsTries.Count + " messages, " + $evenementsTries.Count + " evenements, boites: " + ($nomsBoites -join ' + '))
   exit 0
 }
 catch {
