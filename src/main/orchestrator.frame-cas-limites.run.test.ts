@@ -105,6 +105,11 @@ function orchestrateur(f: ProviderAdapter): Orchestrator {
   })
 }
 
+/**
+ * LIMITE ASSUMEE, constatee en jouant ce run : le renvoi est UNE reprise bornee, pas un blocage
+ * definitif. Un cadrage qui reste incomplet apres la reprise finit par atteindre `terrain` — mais
+ * avec le refus en TETE de ce qu'il recoit, donc le defaut est nomme au lieu d'etre silencieux.
+ */
 describe('run reel — le cadrage sans cas limites ne part pas en terrain', () => {
   it('le refus est POSE et le run repasse par frame', async () => {
     const f = new Fournisseur(CADRAGE_INCOMPLET)
