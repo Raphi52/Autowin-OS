@@ -10,7 +10,6 @@ import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { resolve, join } from 'node:path'
 
-const NLJ = String.fromCharCode(10)
 const racine = resolve(process.argv[2] ?? '.')
 const modele = join(racine, 'src/renderer/src/components/run-progress-model.ts')
 if (!existsSync(modele)) {
@@ -44,7 +43,9 @@ const r = spawnSync(`npx tsx ${JSON.stringify(fichierSonde)}`, {
 })
 try {
   rmSync(fichierSonde, { force: true })
-} catch {}
+} catch {
+  // Le fichier de sonde peut ne pas exister : son absence est le resultat voulu, pas une erreur.
+}
 const brut = (r.stdout ?? '') + (r.stderr ?? '')
 const marque = brut.indexOf('---JSON---')
 if (marque < 0) {

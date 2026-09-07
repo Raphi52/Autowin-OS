@@ -288,7 +288,7 @@ describe('watchAppPreflight relaie TOUTES les options de diagnostic', () => {
     const { watchAppPreflight } = await import('./preflight-probes')
     const handle = watchAppPreflight(
       () => {},
-      { conversationsEcartees: ['D:\profil\conversations.json.illisible-x'], delaysMs: [] },
+      { conversationsEcartees: ['D:\\profil\\conversations.json.illisible-x'], delaysMs: [] },
       {
         run: async (_force, options) => {
           vues.push(options)
@@ -301,7 +301,7 @@ describe('watchAppPreflight relaie TOUTES les options de diagnostic', () => {
     handle.stop()
 
     expect(vues[0]).toMatchObject({
-      conversationsEcartees: ['D:\profil\conversations.json.illisible-x']
+      conversationsEcartees: ['D:\\profil\\conversations.json.illisible-x']
     })
     // Le fenetrage, lui, appartient a la boucle et ne doit PAS partir au diagnostic.
     expect(vues[0]).not.toHaveProperty('delaysMs')

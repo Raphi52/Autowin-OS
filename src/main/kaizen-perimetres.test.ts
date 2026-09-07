@@ -42,7 +42,7 @@ const LEVIERS: Array<[string, RegExp]> = [
 const SHA_AVANT = '74501455'
 
 function repoRoot(): string {
-  return bundledSkillsRoot()!.replace(/[\/]skills$/, '')
+  return bundledSkillsRoot()!.replace(/[/]skills$/, '')
 }
 
 function normalise(t: string): string {

@@ -99,7 +99,7 @@ describe('ensureBrainServerStarted', () => {
     const [bin, args] = spawnFn.mock.calls[0]
     const lance = process.platform === 'win32' ? (args as string[]).join(' ') : (bin as string)
     expect(lance).toContain('pythonw.exe')
-    expect(lance).not.toContain('Scripts\python.exe')
+    expect(lance).not.toContain('Scripts\\python.exe')
   })
 
   it('retombe sur python.exe si pythonw.exe est absent', () => {

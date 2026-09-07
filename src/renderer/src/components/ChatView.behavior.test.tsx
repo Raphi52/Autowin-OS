@@ -212,8 +212,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const conversationsSetProject = vi.fn().mockResolvedValue(undefined)
     const conversations = vi
       .fn()
-      .mockResolvedValueOnce([{ ...conversation('A'), projectPath: 'C:\RIGApplication' }])
-      .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\AutowinOS' }])
+      .mockResolvedValueOnce([{ ...conversation('A'), projectPath: 'C:\\RIGApplication' }])
+      .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\\AutowinOS' }])
     // La memoire des dossiers survit entre les tests (meme jsdom) : on repart a blanc.
     window.localStorage.removeItem('autowin.conv-folders.connus')
     await mount(api({ conversations, conversationsSetProject }))
@@ -235,12 +235,12 @@ describe('ChatView behavior under concurrent UI actions', () => {
       ].map((bouton) => bouton.dataset.projectPath!)
 
     await ouvrirMenuDossiers()
-    expect(dossiersAffiches()).toContain('C:\RIGApplication')
+    expect(dossiersAffiches()).toContain('C:\\RIGApplication')
 
     // On range la conversation AILLEURS : plus aucune conversation ne porte RIGApplication.
     const cible = [
       ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
-    ].find((b) => b.dataset.projectPath === 'C:\RIGApplication')
+    ].find((b) => b.dataset.projectPath === 'C:\\RIGApplication')
     await act(async () => {
       cible!.click()
       await Promise.resolve()
@@ -250,7 +250,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(
       dossiersAffiches(),
       'le dossier a disparu du menu des qu aucune conversation ne le portait plus'
-    ).toContain('C:\RIGApplication')
+    ).toContain('C:\\RIGApplication')
   })
 
   it('retire un dossier de la liste par sa croix, sans ranger la conversation dedans', async () => {
@@ -258,7 +258,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi
         .fn()
-        .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\Amitel\Projet Alpha' }]),
+        .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\\Amitel\\Projet Alpha' }]),
       conversationsSetProject
     })
     window.localStorage.removeItem('autowin.conv-folders.connus')

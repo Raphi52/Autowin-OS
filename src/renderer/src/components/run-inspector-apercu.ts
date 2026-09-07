@@ -13,9 +13,16 @@ export type ApercuRun = {
   fichiers: string[]
 }
 
-/** Corps d'une section `## Nom`, jusqu'au prochain titre de niveau 2. */
+/**
+ * Corps d'une section `## Nom`, jusqu'au prochain titre de niveau 2.
+ *
+ * La suite tolérée après le nom est bornée à la MÊME ligne (`[ 	]`). Avec `\s`, la classe
+ * accepte le retour à la ligne : `(?:\s.*)?$` en mode multiligne avalait la première ligne du
+ * corps, qui disparaissait de l'aperçu. Le code marchait auparavant parce que l'échappement était
+ * mangé par le gabarit et que `\s` valait la LETTRE s — un faux vert (mesure du 2026-09-07).
+ */
 export function sectionBody(content: string, section: string): string {
-  const debut = new RegExp(`^## ${section}(?:\s.*)?$`, 'm').exec(content)
+  const debut = new RegExp(`^## ${section}(?:[ \\t].*)?$`, 'm').exec(content)
   if (!debut) return ''
   const reste = content.slice(debut.index + debut[0].length)
   const fin = /^## /m.exec(reste)

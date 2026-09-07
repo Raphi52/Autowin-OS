@@ -48,7 +48,7 @@ function spinSizeDeclarations(css: string, fichier: string): Offender[] {
 describe('atome 5A — plancher de lisibilite', () => {
   it(`aucune surface ne rapetisse le spinner sous ${MIN_SPIN_SIZE_PX}px`, () => {
     const offenders = CSS_FILES.flatMap((f) =>
-      spinSizeDeclarations(readFileSync(f, 'utf8'), f.split(/[\/]/).pop() as string)
+      spinSizeDeclarations(readFileSync(f, 'utf8'), f.split(/[/]/).pop() as string)
     )
     expect(offenders).toEqual([])
   })

@@ -1507,7 +1507,7 @@ describe('la cause d’un blocage atteint le journal du run', () => {
   it('joint le `detail` de la finalisation aux raisons du gate', async () => {
     const CAUSE = 'Filename too long: src/tres/long/chemin.ts'
     const { orch } = makeOrchestrator({
-      begin: () => 'C:\wt\run-cause-journal',
+      begin: () => 'C:\\wt\\run-cause-journal',
       end: () => ({
         outcome: 'blocked' as const,
         agentId: 'run-cause-journal',

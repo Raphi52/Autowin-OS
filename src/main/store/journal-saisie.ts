@@ -102,7 +102,7 @@ export function journaliserSaisie(saisie: SaisieUtilisateur, racine?: string): b
  * Rend une liste vide sur toute défaillance : ce journal est une trace de dernier recours, le lire
  * ne doit jamais faire échouer l'appelant.
  */
-const SEPARATEUR_LIGNE = new RegExp('\r?\n')
+const SEPARATEUR_LIGNE = /\r?\n/
 
 export function lireSaisies(
   conversationId: string,
