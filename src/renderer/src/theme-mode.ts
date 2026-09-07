@@ -7,20 +7,63 @@
  *
  * Par défaut SOMBRE : personne qui n'y touche pas ne doit voir son application changer.
  */
-export type ThemeMode = 'sombre' | 'clair'
+/**
+ * Un thème est désigné par son IDENTIFIANT, une chaîne libre — et non plus par une union de deux
+ * valeurs. C'est ce qui permet d'en ajouter sans toucher au type. Le contrôle ne vient donc plus
+ * du compilateur mais du REGISTRE ci-dessous : une valeur absente du registre est refusée à la
+ * lecture, exactement comme avant (cas vérifié : `galaxy` mémorisé retombe sur le sombre).
+ */
+export type ThemeId = string
 
-export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'
-const THEME_MODE_PAR_DEFAUT: ThemeMode = 'sombre'
+/** Ancien nom, gardé pour ne pas casser les appelants existants. */
+export type ThemeMode = ThemeId
 
-function estThemeMode(valeur: unknown): valeur is ThemeMode {
-  return valeur === 'sombre' || valeur === 'clair'
+/**
+ * BASE d'un thème : clair ou sombre. Ce n'est pas décoratif — c'est ce qui décide de la variante
+ * d'accent à utiliser. Mesure du 2026-09-06 : `theme-modes.css` assombrit l'or et le rose pour le
+ * mode clair, parce que les teintes de nuit passent sous le seuil de lisibilité sur fond clair. Un
+ * nouveau thème doit donc DÉCLARER sa base, sinon ses accents seront illisibles.
+ */
+export type ThemeBase = 'sombre' | 'clair'
+
+export type Theme = {
+  /** Ce qui est écrit dans `data-theme` sur la racine, et mémorisé sur le poste. */
+  readonly id: ThemeId
+  /** Ce que l'utilisateur lit dans la liste de Settings · Interface. */
+  readonly libelle: string
+  readonly base: ThemeBase
 }
 
-/** Lit le mode mémorisé. Toute valeur absente ou abîmée retombe sur le sombre. */
-export function lireThemeMode(): ThemeMode {
+/**
+ * LE REGISTRE — la seule liste de vérité. Ajouter un thème = ajouter une entrée ICI, plus un bloc
+ * `:root[data-theme='<id>']` dans une feuille de style. Rien d'autre à modifier.
+ *
+ * `sombre` est un cas à part et le reste : il n'écrit AUCUN attribut (voir `appliquerThemeMode`),
+ * donc c'est l'état nu du document. Les 102 blocs de style existants comptent sur ça.
+ */
+export const THEMES: readonly Theme[] = [
+  { id: 'sombre', libelle: 'Sombre', base: 'sombre' },
+  { id: 'clair', libelle: 'Clair', base: 'clair' }
+]
+
+export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'
+const THEME_MODE_PAR_DEFAUT: ThemeId = 'sombre'
+
+/** Un identifiant n'est valable que s'il est DANS le registre. */
+export function estThemeConnu(valeur: unknown): valeur is ThemeId {
+  return typeof valeur === 'string' && THEMES.some((t) => t.id === valeur)
+}
+
+/** La base du thème donné, pour choisir la variante d'accent. Inconnu -> sombre. */
+export function baseDuTheme(id: ThemeId): ThemeBase {
+  return THEMES.find((t) => t.id === id)?.base ?? 'sombre'
+}
+
+/** Lit le thème mémorisé. Toute valeur absente, abîmée ou inconnue retombe sur le sombre. */
+export function lireThemeMode(): ThemeId {
   try {
     const brut = globalThis.localStorage?.getItem(THEME_MODE_STORAGE_KEY)
-    return estThemeMode(brut) ? brut : THEME_MODE_PAR_DEFAUT
+    return estThemeConnu(brut) ? brut : THEME_MODE_PAR_DEFAUT
   } catch {
     // localStorage indisponible (contexte de test, mode privé) : le sombre reste le repli.
     return THEME_MODE_PAR_DEFAUT
@@ -28,14 +71,18 @@ export function lireThemeMode(): ThemeMode {
 }
 
 /**
- * Applique le mode au document. Le sombre RETIRE l'attribut au lieu d'écrire `sombre` :
- * l'état par défaut du document reste exactement celui d'avant ce réglage.
+ * Applique le thème au document. Le sombre RETIRE l'attribut au lieu d'écrire `sombre` :
+ * l'état par défaut du document reste exactement celui d'avant ce réglage, et les règles de style
+ * écrites sans préfixe continuent de s'appliquer telles quelles.
+ *
+ * Tout AUTRE thème écrit son identifiant, y compris un identifiant inconnu du registre : cette
+ * fonction applique ce qu'on lui donne. Le filtrage est le travail de `lireThemeMode`.
  */
-export function appliquerThemeMode(mode: ThemeMode): void {
+export function appliquerThemeMode(mode: ThemeId): void {
   const racine = globalThis.document?.documentElement
   if (!racine) return
-  if (mode === 'clair') racine.setAttribute('data-theme', 'clair')
-  else racine.removeAttribute('data-theme')
+  if (mode === THEME_MODE_PAR_DEFAUT) racine.removeAttribute('data-theme')
+  else racine.setAttribute('data-theme', mode)
 }
 
 /** Mémorise ET applique. C'est ce qu'appelle l'interrupteur de Settings · Interface. */
