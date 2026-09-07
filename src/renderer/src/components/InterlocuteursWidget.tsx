@@ -11,6 +11,14 @@ import {
   type MessageInterlocuteur
 } from './outlook-model'
 import { Spinner } from './Spinner'
+import {
+  basculerAlerte,
+  ecrireAlertes,
+  lireAlertes,
+  messagesAAlerter,
+  type AlertesInterlocuteurs
+} from './outlook-alertes'
+import { alerter, autoriserPopups } from './outlook-alerte-notif'
 
 /**
  * La tuile Interlocuteurs, en TROIS écrans successifs dans la même tuile.
@@ -60,6 +68,46 @@ export function InterlocuteursWidget({
 }): React.JSX.Element {
   const [etape, setEtape] = useState<Etape>({ ecran: 'contacts' })
 
+  /**
+   * Les interlocuteurs dont l'utilisateur veut être ALERTÉ (popup + son), relus au montage depuis le
+   * poste : un réglage qu'il faudrait recocher à chaque démarrage ne serait pas un réglage.
+   */
+  const [alertes, setAlertes] = useState<AlertesInterlocuteurs>(() =>
+    lireAlertes(window.localStorage)
+  )
+  const basculer = useCallback((cle: string) => {
+    setAlertes((courantes) => {
+      const suivantes = basculerAlerte(courantes, cle)
+      ecrireAlertes(window.localStorage, suivantes)
+      // L'autorisation système n'est demandée qu'au moment où quelqu'un ACTIVE une alerte : la
+      // réclamer au chargement de l'accueil ferait surgir une demande que personne n'a provoquée.
+      if (suivantes.has(cle)) void autoriserPopups()
+      return suivantes
+    })
+  }, [])
+
+  /**
+   * Les messages DÉJÀ annoncés. Une référence, pas un état : elle ne doit rien re-rendre, et elle
+   * doit survivre au rendu que déclenche la relecture d'Outlook — sinon la même popup repartirait
+   * toutes les deux minutes jusqu'à ce que le message soit lu.
+   */
+  const dejaAnnonces = useRef<Set<string>>(new Set())
+  /**
+   * Le premier instantané ne SONNE PAS : à l'ouverture de l'accueil, tous les non-lus de la boîte
+   * sont « nouveaux » et feraient partir une rafale de popups pour des messages parfois vieux de
+   * plusieurs jours. On l'enregistre comme déjà vu, et on n'alerte qu'à partir de ce qui ARRIVE.
+   */
+  const amorce = useRef(false)
+  useEffect(() => {
+    const nouveaux = messagesAAlerter(fils, alertes, dejaAnnonces.current)
+    for (const message of nouveaux) dejaAnnonces.current.add(message.id)
+    if (!amorce.current) {
+      amorce.current = true
+      return
+    }
+    for (const message of nouveaux) alerter(message)
+  }, [fils, alertes])
+
   // Le contact et le fil sont RETROUVÉS à chaque rendu depuis la liste fraîche, jamais recopiés dans
   // l'état. Outlook se relit toutes les deux minutes : une copie figée afficherait la conversation
   // d'il y a deux minutes, sans le nouveau message, et le rafraîchissement paraîtrait cassé.
@@ -99,7 +147,12 @@ export function InterlocuteursWidget({
 
   if (etape.ecran === 'contacts') {
     return (
-      <EcranContacts fils={fils} onChoisir={(cle) => setEtape({ ecran: 'fils', contact: cle })} />
+      <EcranContacts
+        fils={fils}
+        alertes={alertes}
+        onBasculerAlerte={basculer}
+        onChoisir={(cle) => setEtape({ ecran: 'fils', contact: cle })}
+      />
     )
   }
 
@@ -186,9 +239,13 @@ function EnTete({
  */
 function EcranContacts({
   fils,
+  alertes,
+  onBasculerAlerte,
   onChoisir
 }: {
   fils: Interlocuteur[]
+  alertes: AlertesInterlocuteurs
+  onBasculerAlerte: (cle: string) => void
   onChoisir: (cle: string) => void
 }): React.JSX.Element {
   if (fils.length === 0) {
@@ -207,7 +264,12 @@ function EcranContacts({
         </p>
       ) : null}
       {personnes.length > 0 ? (
-        <ListeContacts fils={sortByName(personnes)} onChoisir={onChoisir} />
+        <ListeContacts
+          fils={sortByName(personnes)}
+          alertes={alertes}
+          onBasculerAlerte={onBasculerAlerte}
+          onChoisir={onChoisir}
+        />
       ) : null}
       {personnes.length === 0 && !indistinct ? (
         <p className="home-hint">
@@ -219,7 +281,12 @@ function EcranContacts({
         <>
           {/* Nommé, pas masqué : ces messages existent, ils ne sont simplement pas des échanges. */}
           <p className="home-subhead">Envois automatiques</p>
-          <ListeContacts fils={sortByName(automates)} onChoisir={onChoisir} />
+          <ListeContacts
+            fils={sortByName(automates)}
+            alertes={alertes}
+            onBasculerAlerte={onBasculerAlerte}
+            onChoisir={onChoisir}
+          />
         </>
       ) : null}
     </>
@@ -228,9 +295,13 @@ function EcranContacts({
 
 function ListeContacts({
   fils,
+  alertes,
+  onBasculerAlerte,
   onChoisir
 }: {
   fils: Interlocuteur[]
+  alertes: AlertesInterlocuteurs
+  onBasculerAlerte: (cle: string) => void
   onChoisir: (cle: string) => void
 }): React.JSX.Element {
   return (
@@ -265,6 +336,22 @@ function ListeContacts({
               ›
             </span>
           </button>
+          {/* Le switch est HORS du bouton d'ouverture : imbriqué dedans, le basculer ouvrirait
+              aussi le fil de la personne. */}
+          <label
+            className="home-threads__alerte"
+            title={`Popup + son à chaque nouveau message de ${fil.nom}`}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              role="switch"
+              checked={alertes.has(fil.cle)}
+              onChange={() => onBasculerAlerte(fil.cle)}
+              data-testid={`home-contact-alerte-${fil.cle}`}
+            />
+            <span aria-hidden="true">Alerte</span>
+          </label>
         </li>
       ))}
     </ul>

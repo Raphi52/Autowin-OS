@@ -2055,3 +2055,65 @@
   cursor: default;
   opacity: 0.45;
 }
+
+/* Le switch d'alerte d'un interlocuteur : discret tant qu'il est éteint, doré quand il veille.
+   Il est posé à DROITE de la ligne, hors du bouton d'ouverture (sinon le cocher ouvrirait le fil). */
+.home-threads__alerte {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #a9b2c4);
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.home-threads li:hover .home-threads__alerte,
+.home-threads__alerte:has(input:checked) {
+  opacity: 1;
+}
+
+.home-threads__alerte:has(input:checked) {
+  color: #e3ba55;
+}
+
+.home-threads__alerte input {
+  appearance: none;
+  width: 26px;
+  height: 14px;
+  margin: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+  cursor: pointer;
+}
+
+.home-threads__alerte input::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #a9b2c4;
+  transition: transform 0.12s linear;
+}
+
+.home-threads__alerte input:checked {
+  border-color: rgba(212, 169, 79, 0.55);
+  background: rgba(212, 169, 79, 0.22);
+}
+
+.home-threads__alerte input:checked::after {
+  transform: translateX(12px);
+  background: #e3ba55;
+}
+
+.home-threads__alerte input:focus-visible {
+  outline: 1px solid var(--line-strong);
+}
