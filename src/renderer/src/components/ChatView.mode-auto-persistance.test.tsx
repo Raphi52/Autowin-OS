@@ -124,4 +124,33 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
       'A'
     ])
   })
+  /**
+   * DEFAUT VECU (2026-09-07, conv-339) : « j'avais pas le bouton allume mais quand meme le mode
+   * auto arme ». L'ancien reglage GLOBAL herite armait tous les fils pendant que le bouton, lui,
+   * ne regardait que le reglage propre au fil : arme et invisible, donc ineteignable.
+   */
+  it('le réglage global hérité s’éteint par le rond ∞', async () => {
+    window.localStorage.setItem('autowin.chat.modeAuto', '1')
+    const filA = fil('lancer terrain sur A.')
+    h = await mountChat(
+      chatApi({
+        pilotChat: vi.fn().mockResolvedValue({ ok: true }),
+        conversations: vi.fn().mockResolvedValue([conversation('A', filA), conversation('B', [])]),
+        conversation: vi.fn(async (id: string) => conversation(id, id === 'A' ? filA : []))
+      })
+    )
+    await h.click('.conv-item .conv-pick')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const bouton = (): Element | null =>
+      document.querySelector('[data-testid="composer-auto-toggle"]')
+    expect(bouton()?.getAttribute('aria-pressed')).toBe('true')
+    await h.click('[data-testid="composer-auto-toggle"]')
+    expect(bouton()?.getAttribute('aria-pressed')).toBe('false')
+    // Le joker disparaît vraiment du stockage : il ne peut plus armer un autre fil en douce.
+    expect(
+      JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')
+    ).not.toContain('*')
+  })
 })
