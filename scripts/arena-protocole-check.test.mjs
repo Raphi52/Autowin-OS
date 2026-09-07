@@ -717,7 +717,9 @@ describe('P8 — duree lue dans statut.txt quand la sortie du bras ne porte pas 
         .map(([b, s]) => `${b} exit=0 wall=${s}s`)
         .join('\n') + '\n'
     )
-    expect(point(verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine }), 'P8').ok).toBe(true)
+    expect(
+      point(verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine }), 'P8').ok
+    ).toBe(true)
 
     writeFileSync(join(f.bench, 'statut.txt'), 'a exit=0 wall=114s\nb exit=0 wall=600s\n')
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
