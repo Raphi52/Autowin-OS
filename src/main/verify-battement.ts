@@ -83,3 +83,26 @@ export function bornerLigneDeVie(texte: string): string {
  * empilees (le reducteur REMPLACE, il n'accumule pas).
  */
 export const VERIFY_BATTEMENT_MS = 5_000
+
+/**
+ * LE SIGNE DE VIE D'UNE ORCHESTRATION EN COURS.
+ *
+ * DEFAUT MESURE le 2026-09-07 (conv-42). Un run d'orchestration a travaille de 09:45 a 10:08 sans
+ * qu'UNE seule ligne n'arrive dans le fil : l'utilisateur a signale « arret depuis 9:45 » sur un run
+ * qui a fini VERT. La cause n'est pas l'absence de source -- la note d'activite existe deja
+ * (`commands.ts`, evenement `orchestrate-delta`) -- mais l'absence d'HORLOGE : cette note ne part
+ * que lorsque le modele emet un fragment de raisonnement (`orchestrator.ts`, rappel `onDelta`).
+ * Pendant qu'un sous-agent passe vingt minutes dans ses outils, il n'y a aucun fragment, donc aucun
+ * signe de vie. `verify` avait deja son battement periodique ; l'orchestration, non.
+ *
+ * Meme forme que `battementDeVerification` : aucune IPC, aucune horloge interne -- le temps ecoule
+ * et le dernier fait connu entrent, une ligne sort. Testable sans attendre vingt minutes.
+ */
+export function battementDOrchestration(
+  dernierSigne: string | undefined,
+  ecouleMs: number
+): string {
+  const duree = dureeCourte(ecouleMs)
+  const propre = dernierSigne ? sansSequencesAnsi(dernierSigne).replace(/\s+/g, ' ').trim() : ''
+  return bornerLigneDeVie(`${duree} · ${propre.length > 0 ? propre : 'travail en cours…'}`)
+}

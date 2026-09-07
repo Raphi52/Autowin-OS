@@ -62,7 +62,11 @@ import {
   verifyTimeoutOutcome,
   type VerifyOutcome
 } from './verify-command'
-import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
+import {
+  battementDeVerification,
+  battementDOrchestration,
+  VERIFY_BATTEMENT_MS
+} from './verify-battement'
 import { natureDeLEchec } from './verify-echec-nature'
 import { bornerLigneDeVie } from './verify-battement'
 import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from './issue-de-refus'
@@ -2179,6 +2183,26 @@ export class AppCommandBus {
         const steps: OrchestrationStep[] = []
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
         const abortController = new AbortController()
+        const debutRun = Date.now()
+        /*
+         * L'HORLOGE DU SIGNE DE VIE. Sans elle, le fil ne parlait que quand le modele parlait.
+         *
+         * DEFAUT MESURE le 2026-09-07 (conv-42) : un run a travaille de 09:45 a 10:08 sans une
+         * ligne dans le fil, et l'utilisateur l'a signale comme un « arret » alors qu'il a fini
+         * VERT. Les signes de vie existants sont tous EVENEMENTIELS (fin de phase, fragment de
+         * raisonnement) : pendant qu'un sous-agent passe vingt minutes dans ses outils, il ne se
+         * produit aucun evenement, donc rien ne distingue un travail en cours d'une app morte.
+         * `verify` avait deja son battement periodique ; celui-ci le donne a l'orchestration, en
+         * REUTILISANT le dernier fait connu au lieu d'inventer une seconde verite.
+         */
+        let dernierSigneDeVie: string | undefined
+        const battementOrchestration = onProgress
+          ? setInterval(() => {
+              onProgress(battementDOrchestration(dernierSigneDeVie, Date.now() - debutRun))
+            }, VERIFY_BATTEMENT_MS)
+          : undefined
+        // Un battement ne doit JAMAIS retenir la fermeture du process : le timer suit le run.
+        battementOrchestration?.unref?.()
         this.claimOrchestration(convId, orchestrationRank, abortController)
         try {
           await this.os.waitUntilReady?.()
@@ -2249,13 +2273,12 @@ export class AppCommandBus {
                * coupe a 20, compte-rendu perdu alors que le run a fini VERT. Chaque phase battue ici
                * remet le veilleur a zero — il distingue enfin « long » de « mort ».
                */
-              onProgress?.(
-                bornerLigneDeVie(
-                  `phase ${step.step}${step.status ? ` · ${step.status}` : ''}${
-                    step.detail ? ` · ${step.detail}` : ''
-                  }`
-                )
+              dernierSigneDeVie = bornerLigneDeVie(
+                `phase ${step.step}${step.status ? ` · ${step.status}` : ''}${
+                  step.detail ? ` · ${step.detail}` : ''
+                }`
               )
+              onProgress?.(dernierSigneDeVie)
               persistOrchestrationStep(
                 step,
                 {
@@ -2372,7 +2395,10 @@ export class AppCommandBus {
               // veille ne couvrait que `verify` : le trou noir n'avait pas disparu, il s'etait
               // deplace d'un cran. On REUTILISE la note existante — en fabriquer une seconde ferait
               // diverger deux verites sur le meme fait.
-              if (note) onProgress?.(bornerLigneDeVie(note))
+              if (note) {
+                dernierSigneDeVie = bornerLigneDeVie(note)
+                onProgress?.(dernierSigneDeVie)
+              }
               this.broadcast({
                 type: 'orchestrate-delta',
                 convId,
@@ -2639,6 +2665,7 @@ export class AppCommandBus {
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           throw e
         } finally {
+          if (battementOrchestration) clearInterval(battementOrchestration)
           this.clearOrchestration(convId, abortController)
           if (this.activeOrchestrationByFingerprint.get(fingerprint) === runReady) {
             this.activeOrchestrationByFingerprint.delete(fingerprint)

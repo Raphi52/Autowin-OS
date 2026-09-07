@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppCommandBus } from './commands'
 
 /**
@@ -81,8 +81,13 @@ describe('orchestrate — la note d’activité devient le battement de l’acti
     const vus: string[] = []
     const bus = new AppCommandBus(osQuiEmetUneNote('Bash en cours — 2 min 30 s'), () => {})
 
-    await bus.exec('orchestrate', { task: '/build corrige la typo' }, 'conv-1', undefined, undefined, (t) =>
-      vus.push(t)
+    await bus.exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      undefined,
+      (t) => vus.push(t)
     )
 
     expect(vus).toContain('Bash en cours — 2 min 30 s')
@@ -93,8 +98,13 @@ describe('orchestrate — la note d’activité devient le battement de l’acti
     const sale = `\u001b[33m${'x'.repeat(300)}\u001b[39m`
     const bus = new AppCommandBus(osQuiEmetUneNote(sale), () => {})
 
-    await bus.exec('orchestrate', { task: '/build corrige la typo' }, 'conv-1', undefined, undefined, (t) =>
-      vus.push(t)
+    await bus.exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      undefined,
+      (t) => vus.push(t)
     )
 
     expect(vus).toHaveLength(1)
@@ -107,10 +117,75 @@ describe('orchestrate — la note d’activité devient le battement de l’acti
     const vus: string[] = []
     const bus = new AppCommandBus(osQuiEmetUneNote(''), () => {})
 
-    await bus.exec('orchestrate', { task: '/build corrige la typo' }, 'conv-1', undefined, undefined, (t) =>
-      vus.push(t)
+    await bus.exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      undefined,
+      (t) => vus.push(t)
     )
 
     expect(vus).toHaveLength(0)
+  })
+})
+
+/**
+ * LE TROU NOIR QUAND LE MODELE NE PARLE PAS -- mesure le 2026-09-07 (conv-42).
+ *
+ * Les battements ci-dessus sont tous EVENEMENTIELS : ils supposent qu'un fait arrive (fin de phase,
+ * fragment de raisonnement). Un run a travaille de 09:45 a 10:08 SANS aucun fait, parce que les
+ * sous-agents etaient dans leurs outils : le fil est reste muet 23 minutes et l'utilisateur a
+ * signale un « arret » sur un run qui a fini VERT. Ce cas exige l'HORLOGE : une ligne qui part meme
+ * quand rien n'est emis.
+ */
+function osQuiTravailleEnSilence(fin: Promise<void>): OsDouble {
+  const base = osQuiEmetUneNote('') as unknown as Record<string, unknown>
+  return {
+    ...base,
+    runTask: async (...args: unknown[]) => {
+      await fin
+      return {
+        task: String(args[0] ?? ''),
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+  } as unknown as OsDouble
+}
+
+describe('orchestrate -- le signe de vie ne depend pas du modele', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('bat toutes les 5 s meme quand aucune note n arrive', async () => {
+    vi.useFakeTimers()
+    const vus: string[] = []
+    let libere: () => void = () => {}
+    const fin = new Promise<void>((resolve) => {
+      libere = resolve
+    })
+    const bus = new AppCommandBus(osQuiTravailleEnSilence(fin), () => {})
+
+    const tour = bus.exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      undefined,
+      (t) => vus.push(t)
+    )
+    await vi.advanceTimersByTimeAsync(12_000)
+    libere()
+    await tour
+
+    expect(vus.length).toBeGreaterThanOrEqual(2)
+    expect(vus[0]).toContain('travail en cours')
+    expect(vus[0]).toContain('5 s')
   })
 })
