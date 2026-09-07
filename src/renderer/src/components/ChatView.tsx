@@ -3166,7 +3166,6 @@ export function ChatView({
        */
       if (decision.action === 'arreter') {
         autoEssaisRef.current.delete(id)
-        const fini = convsRef.current.find((c) => c.id === id)?.title ?? id
         continue
       }
       if (decision.action !== 'envoyer') {
@@ -3189,7 +3188,6 @@ export function ChatView({
       autoEssaisRef.current.delete(id)
       etat.tour = decision.signature
       etat.prompt = decision.texte
-      const titre = convsRef.current.find((c) => c.id === id)?.title ?? id
       void send(decision.texte, { keepComposerDraft: true, targetConversationId: id })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
