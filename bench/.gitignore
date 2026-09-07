@@ -1,0 +1,4 @@
+# Les copies de travail des bras et leurs journaux sont des ARTEFACTS de banc :
+# ils se regenerent (mkcopy.sh / log.sh) et ne doivent jamais entrer dans l'historique.
+runs/
+logs/

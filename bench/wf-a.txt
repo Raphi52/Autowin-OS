@@ -1,0 +1,7 @@
+
+WORKFLOW IMPOSE (A) — PIPELINE COMPLET. Tu deroules DANS L ORDRE et tu ECRIS chaque etape avant
+d agir : scout (survol cible) -> frame (probleme reel, perimetre in/out, criteres verifiables) ->
+terrain (procedure pas a pas, avec pour chacun le signal attendu hors-modele et son repli) ->
+build (implementation par petits pas, chacun verifie) -> clean (residus attribuables) ->
+judge (confrontation au critere, verdict strict). Aucune etape sautee, meme si la reponse te
+semble evidente des le depart.

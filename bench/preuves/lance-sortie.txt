@@ -1,0 +1,19 @@
+[log] d3-x/bras exit=0 duree=62s -> logs/d3-x.log
+[log] d3-x/critere-vert exit=0 duree=6s -> logs/d3-x.log
+[log] d1-x/bras exit=0 duree=71s -> logs/d1-x.log
+[log] d1-x/critere-vert exit=0 duree=2s -> logs/d1-x.log
+[log] d2-x/bras exit=0 duree=109s -> logs/d2-x.log
+[log] d2-x/critere-vert exit=0 duree=3s -> logs/d2-x.log
+[log] d1-a/bras exit=0 duree=648s -> logs/d1-a.log
+[log] d1-a/critere-vert exit=0 duree=7s -> logs/d1-a.log
+[log] d2-a/bras exit=0 duree=720s -> logs/d2-a.log
+[log] d2-a/critere-vert exit=0 duree=3s -> logs/d2-a.log
+[log] d3-a/bras exit=0 duree=756s -> logs/d3-a.log
+[log] d3-a/critere-vert exit=0 duree=14s -> logs/d3-a.log
+TOUS LES BRAS TERMINES
+d1-a bras_exit=0 critere_exit=0 mur=657s
+d1-x bras_exit=0 critere_exit=0 mur=76s
+d2-a bras_exit=0 critere_exit=0 mur=726s
+d2-x bras_exit=0 critere_exit=0 mur=115s
+d3-a bras_exit=0 critere_exit=0 mur=772s
+d3-x bras_exit=0 critere_exit=0 mur=70s

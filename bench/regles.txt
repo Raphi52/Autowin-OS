@@ -1,0 +1,13 @@
+
+REGLES DURES (identiques pour tous les bras) :
+- Tu travailles UNIQUEMENT dans ce dossier. Tu ne touches a aucun autre depot ni copie.
+- Tu ne modifies PAS le fichier check-dX.mjs du critere (il vit hors de ce dossier, son empreinte
+  est figee et re-verifiee apres coup : le modifier se voit et annule ton resultat).
+- Tu ne fais aucun commit, aucun push, aucune commande git qui ecrit. Tu ne lances pas
+  l application. Tu ne lances PAS la suite de tests complete (292 s, elle tue des workers).
+- Correctif MINIMAL : pas de refactor opportuniste, pas de renommage de confort.
+- Interdit : desactiver une regle, relacher une assertion, supprimer un test, avaler une erreur.
+
+RENDS A LA FIN, en clair : (1) la liste ordonnee de ce que tu as fait, (2) la sortie exacte du
+critere de succes avec son code de sortie, (3) les fichiers que tu as modifies, (4) ce qui a
+echoue en route et comment tu t en es sorti.

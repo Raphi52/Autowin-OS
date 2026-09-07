@@ -1,0 +1,35 @@
+=== BASELINE hors-critere, copie NON MODIFIEE (commit 889095b4) ===
+Mon Sep  7 10:42:52     2026
+
+--- prettier sur les 4 fichiers touchables ---
+Checking formatting...
+[[33mwarn[39m] scripts/scout-residus.angle-mort.test.mjs
+[[33mwarn[39m] src/renderer/src/components/ChatComposer.tsx
+[[33mwarn[39m] Code style issues found in 2 files. Run Prettier with --write to fix.
+prettier_exit=1
+
+--- tests voisins D2 ---
+    [90m   | [39m                     [31m^[39m
+    [90m 36| [39m  })
+    [90m 37| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m20 passed[39m[22m[90m (21)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m132 passed[39m[22m[90m (133)[39m
+[2m   Start at [22m 10:42:56
+[2m   Duration [22m 1.13s[2m (transform 251ms, setup 0ms, collect 479ms, tests 114ms, environment 2ms, prepare 963ms)[22m
+
+
+--- tests voisins D3 ---
+ [32m✓[39m [30m[45m unite [49m[39m bench/runs/d2-x/src/renderer/src/components/ChatComposer.jauge-contexte.style.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m [30m[45m unite [49m[39m bench/runs/d3-x/src/renderer/src/components/ChatComposer.jauge-contexte.style.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m [30m[45m unite [49m[39m bench/runs/d3-a/src/renderer/src/components/ChatComposer.jauge-contexte.style.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m [30m[45m unite [49m[39m bench/runs/d3-a/src/renderer/src/components/ChatComposer.jauge-contexte.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m21 passed[39m[22m[90m (21)[39m
+[2m      Tests [22m [1m[32m84 passed[39m[22m[90m (84)[39m
+[2m   Start at [22m 10:42:59
+[2m   Duration [22m 2.71s[2m (transform 994ms, setup 0ms, collect 3.14s, tests 549ms, environment 3.15s, prepare 1.07s)[22m
+

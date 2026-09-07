@@ -1,0 +1,49 @@
+[
+  {
+    "id": "D1",
+    "titre": "scout-residus : la donnee du test pointe C:AmitelAutowin OS, un dossier qui EXISTE sur ce poste — le test n est pas reproductible d une machine a l autre",
+    "fichiers": [
+      "scripts/scout-residus.angle-mort.test.mjs:55-63 (assertion ligne 60)",
+      "scripts/scout-residus.mjs:42-140 (passe « 0 bis. Chemins absolus morts »)"
+    ],
+    "repro_cmd": "npx vitest run scripts/scout-residus.angle-mort.test.mjs",
+    "exit_code": 1,
+    "duree_s": 0.9,
+    "stabilite": "rouge 3/3 (depot reel, copie neuve, relance par le JSON)",
+    "cause_prouvee": "Le test ecrit un runner.ps1 contenant C:AmitelAutowin OS puis exige que la sonde le signale comme chemin MORT. Or `ls -d '/c/Amitel/Autowin OS'` repond : le dossier EXISTE sur ce poste. La sonde a donc raison de ne rien signaler — c est la donnee du test qui est fausse. Le test voisin de la meme section (Z:dossier-inexistantsous) passe, ce qui prouve que la detection elle-meme marche.",
+    "piege": "Supprimer l assertion ligne 60 ou relacher la regex rend le vert sans rien prouver. Le fix doit garder une preuve de detection avec un chemin absolu GARANTI absent partout (racine tiree du bac temporaire, ou identifiant aleatoire), jamais un chemin en dur.",
+    "sortie_rouge": "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯\n FAIL   unite  scripts/scout-residus.angle-mort.test.mjs > scout-residus — chemins absolus morts dans des fichiers vivants > signale une racine Windows dont le dossier parent n existe pas\nAssertionError: expected '# Scout du code résiduel — ../../../.…' to match /runner\\.ps1:1/\n- Expected: \n/runner\\.ps1:1/\n+ Received: \n\"# Scout du code résiduel — ../../../../../../../Users/ARTHUR~1.LEP/AppData/Local/Temp/scout-residus-lxel9c\n_0 fichiers scannés · 2026-09-07 07:58_\n## 0. Angle mort — 1 fichier(s) NON analysé(s)\n- `.ps1` : 1\nLa sonde ne lit que .ts, .tsx, .mts, .js, .jsx, .mjs, .cjs. Ces fichiers ne sont PAS propres : ils sont INVISIBLES. Les balayer à la main avant de conclure que le dossier est trié.\n## 0 bis. Chemins absolus morts — aucun. Cela ne prouve PAS que les scripts marchent : exécute ceux que tu déclares vivants.\n## 1. Fichiers jamais importés (0)\n- rien\n## 2. Exports jamais référencés ailleurs (0)\n- rien\n## 3. Résidus dans le code (0)\n> Lecture seule : rien n'a été supprimé. Chaque item est un CANDIDAT — vérifier l'appelant réel (chargement dynamique, IPC, test) avant tout retrait, puis passer par `clean`.\n\"\n ❯ scripts/scout-residus.angle-mort.test.mjs:60:21\n     58|     const rapport = sonde(d)\n     59|     expect(rapport).toMatch(/## 0 bis\\. Chemins absolus morts/)\n     60|     expect(rapport).toMatch(/runner\\.ps1:1/)\n       |                     ^"
+  },
+  {
+    "id": "D2",
+    "titre": "ecran de demarrage : index.html a perdu le dore #e9bd4e et le violet #9d79ed que le lanceur reprend encore — les deux ecrans du demarrage ont divergé",
+    "fichiers": [
+      "src/renderer/index.html:173-184 (les couleurs sont devenues #ff2d95 / #ff8a1f / #ffd66b)",
+      "scripts/launch_dev_splash.py (porte encore #e9bd4e et #9d79ed)",
+      "scripts/launch_dev_phases_test.py:192-193 (la garde qui refuse la derive)"
+    ],
+    "repro_cmd": "py -3 scripts/launch_dev_phases_test.py",
+    "exit_code": 1,
+    "duree_s": 3,
+    "stabilite": "rouge 4/4, toujours les 2 memes FAIL (aucune part d alea)",
+    "cause_prouvee": "git diff c654ea20 HEAD -- src/renderer/index.html : les lignes `stroke: #e9bd4e` et `stroke: #9d79ed` ont ete retirees et remplacees par `background: #ff2d95 / #ff8a1f / #ffd66b` dans le commit 08016aac (« wip(chat) … »). `grep -n '#e9bd4e' src/renderer/index.html` ne rend plus rien. Le lanceur Python, lui, garde les anciennes teintes : les deux ecrans qui se suivent a l oeil pendant un demarrage n ont plus la meme palette.",
+    "piege": "Editer le test (ou le lanceur) pour qu il accepte les nouvelles teintes ferait passer la commande en laissant les deux ecrans divergents — c est exactement ce que la garde interdit. Le fix doit reunir les deux palettes a la SOURCE, et la garde doit rester executable.",
+    "sortie_rouge": "FAIL: la couleur doré (arc-a) doit exister dans index.html (sinon ce test ment)\nFAIL: la couleur rose-violet (arc-b) doit exister dans index.html (sinon ce test ment)"
+  },
+  {
+    "id": "D3",
+    "titre": "ChatComposer : un ref est ECRIT pendant le rendu (et deux refs passes a une fonction appelee en rendu) — 3 erreurs react-hooks/refs qui rendent `npm run lint`, donc `npm test`, rouge",
+    "fichiers": [
+      "src/renderer/src/components/ChatComposer.tsx:295 (dicteeGainRef.current = dicteeGain, en pleine fonction de rendu)",
+      "src/renderer/src/components/ChatComposer.tsx:449 (acceptMention(c))",
+      "src/renderer/src/components/ChatComposer.tsx:474 (acceptSlash(c))"
+    ],
+    "repro_cmd": "npx eslint --no-cache src/renderer/src/components/ChatComposer.tsx",
+    "exit_code": 1,
+    "duree_s": 3,
+    "stabilite": "rouge 3/3 ; retrouve aussi par `npx eslint .` sur le depot reel (47 erreurs au total, dont ces 3)",
+    "cause_prouvee": "La ligne 295 mute un ref a chaque rendu — regle react-hooks/refs, « Cannot update ref during render » : le volume du micro lu a chaque bloc audio peut ne pas suivre l etat affiche. `npm test` enchaine `npm run lint` : ces 3 erreurs suffisent a rendre la validation complete rouge.",
+    "piege": "Un `// eslint-disable-next-line` fait passer la commande sans rien corriger au rendu. Le fix doit sortir la synchronisation du ref hors du rendu (useEffect) et le fichier doit rester SANS directive de desactivation.",
+    "sortie_rouge": "  295:5   error    Error: Cannot access refs during render\nReact refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).\nC:\\Sources\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\846afeda47fa9e64\\agent__run-e4466f8bc37f-1\\src\\renderer\\src\\components\\ChatComposer.tsx:295:5\n  293 |     const [dicteeGain, setDicteeGain] = useState(gainMemorise)\n  294 |     const dicteeGainRef = useRef(dicteeGain)\n> 295 |     dicteeGainRef.current = dicteeGain\n      |     ^^^^^^^^^^^^^^^^^^^^^ Cannot update ref during render\n  296 |     const dicteeRef = useRef<Dictee | null>(null)\n  297 |     // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.\n  298 |     const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)  react-hooks/refs"
+  }
+]

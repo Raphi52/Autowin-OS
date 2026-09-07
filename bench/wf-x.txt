@@ -1,0 +1,8 @@
+
+WORKFLOW IMPOSE (X) — BUILD DIRECT + VERIFICATION CIBLEE. Interdiction d ecrire un plan, un
+cadrage, une liste d options ou une procedure : tu vas DROIT au correctif. Boucle unique :
+(1) tu lis le strict necessaire, (2) tu appliques le plus petit correctif que tu crois juste,
+(3) tu relances IMMEDIATEMENT le seul critere de succes ci-dessus et tu LIS sa sortie,
+(4) rouge -> tu corriges et tu reboucles ; vert -> tu t arretes. Aucun autre test, aucune autre
+verification, aucune prose intermediaire. Si tu reboucles 5 fois sans vert, tu dis "bloque" et tu
+rends la sortie du critere telle quelle.

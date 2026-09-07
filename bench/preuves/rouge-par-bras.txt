@@ -1,0 +1,6 @@
+d2-a rouge_exit=1
+d2-x rouge_exit=1
+d1-a rouge_exit=1
+d1-x rouge_exit=1
+d3-a rouge_exit=1
+d3-x rouge_exit=1

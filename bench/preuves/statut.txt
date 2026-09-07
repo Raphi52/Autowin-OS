@@ -1,0 +1,6 @@
+d3-x bras_exit=0 critere_exit=0 mur=70s
+d1-x bras_exit=0 critere_exit=0 mur=76s
+d2-x bras_exit=0 critere_exit=0 mur=115s
+d1-a bras_exit=0 critere_exit=0 mur=657s
+d2-a bras_exit=0 critere_exit=0 mur=726s
+d3-a bras_exit=0 critere_exit=0 mur=772s

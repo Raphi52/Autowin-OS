@@ -1,0 +1,36 @@
+TACHE (identique pour les deux bras de ce duel) :
+Dans CE dossier, `src/renderer/index.html` a PERDU le dore `#e9bd4e` et le violet `#9d79ed`
+(commit 08016aac les a remplaces par #ff2d95 / #ff8a1f / #ffd66b), alors que
+`scripts/launch_dev_splash.py` les porte encore. Les deux ecrans qui se suivent a l oeil pendant
+un demarrage n ont donc plus la meme palette. Reunis les deux palettes A LA SOURCE : les deux
+couleurs doivent revenir dans index.html, dans de vraies declarations CSS appliquees a l ecran de
+demarrage (`#autowin-boot`), sans casser le rendu existant.
+
+CRITERE DE SUCCES — le seul qui compte, deterministe, AUJOURD HUI ROUGE :
+  node C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-e4466f8bc37f-1/bench/check-d2.mjs .
+doit afficher "CRITERE ATTEINT" avec le code de sortie 0.
+Etat de depart (mesure) : G1 RATE (py -3 scripts/launch_dev_phases_test.py rend 2 FAIL),
+G2 et G3 RATE (couleurs absentes de index.html), G4/G5 deja OK.
+ATTENTION : recabler la garde ou le lanceur sur les nouvelles teintes est refuse par G4/G5 —
+cela laisserait les deux ecrans divergents.
+
+REGLES DURES (identiques pour tous les bras) :
+- Tu travailles UNIQUEMENT dans ce dossier. Tu ne touches a aucun autre depot ni copie.
+- Tu ne modifies PAS le fichier check-dX.mjs du critere (il vit hors de ce dossier, son empreinte
+  est figee et re-verifiee apres coup : le modifier se voit et annule ton resultat).
+- Tu ne fais aucun commit, aucun push, aucune commande git qui ecrit. Tu ne lances pas
+  l application. Tu ne lances PAS la suite de tests complete (292 s, elle tue des workers).
+- Correctif MINIMAL : pas de refactor opportuniste, pas de renommage de confort.
+- Interdit : desactiver une regle, relacher une assertion, supprimer un test, avaler une erreur.
+
+RENDS A LA FIN, en clair : (1) la liste ordonnee de ce que tu as fait, (2) la sortie exacte du
+critere de succes avec son code de sortie, (3) les fichiers que tu as modifies, (4) ce qui a
+echoue en route et comment tu t en es sorti.
+
+WORKFLOW IMPOSE (X) — BUILD DIRECT + VERIFICATION CIBLEE. Interdiction d ecrire un plan, un
+cadrage, une liste d options ou une procedure : tu vas DROIT au correctif. Boucle unique :
+(1) tu lis le strict necessaire, (2) tu appliques le plus petit correctif que tu crois juste,
+(3) tu relances IMMEDIATEMENT le seul critere de succes ci-dessus et tu LIS sa sortie,
+(4) rouge -> tu corriges et tu reboucles ; vert -> tu t arretes. Aucun autre test, aucune autre
+verification, aucune prose intermediaire. Si tu reboucles 5 fois sans vert, tu dis "bloque" et tu
+rends la sortie du critere telle quelle.
