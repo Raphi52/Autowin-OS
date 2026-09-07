@@ -657,8 +657,8 @@
 :root[data-theme='obsidian-nebula'] .shell,
 :root[data-theme='obsidian-nebula'] .shell.theme-serious {
   --surface-page: transparent;
-  --surface-panel: rgba(17, 19, 29, 0.86);
-  --surface-card: rgba(17, 19, 29, 0.7);
+  --surface-panel: rgba(24, 29, 51, 0.94);
+  --surface-card: rgba(30, 36, 60, 0.82);
   --surface-inset: rgba(232, 226, 216, 0.045);
   --surface-hover: rgba(232, 226, 216, 0.06);
   --surface-selected: rgba(216, 92, 159, 0.14);
@@ -717,8 +717,8 @@
 :root[data-theme='solar-rose'] .shell,
 :root[data-theme='solar-rose'] .shell.theme-serious {
   --surface-page: transparent;
-  --surface-panel: rgba(22, 16, 30, 0.88);
-  --surface-card: rgba(22, 16, 30, 0.72);
+  --surface-panel: rgba(40, 23, 48, 0.94);
+  --surface-card: rgba(48, 28, 56, 0.82);
   --surface-inset: rgba(255, 244, 230, 0.045);
   --surface-hover: rgba(255, 203, 101, 0.07);
   --surface-selected: rgba(255, 79, 154, 0.16);
@@ -776,8 +776,8 @@
 :root[data-theme='black-versailles'] .shell,
 :root[data-theme='black-versailles'] .shell.theme-serious {
   --surface-page: transparent;
-  --surface-panel: rgba(17, 16, 14, 0.9);
-  --surface-card: rgba(33, 24, 29, 0.72);
+  --surface-panel: rgba(34, 29, 18, 0.94);
+  --surface-card: rgba(42, 35, 22, 0.82);
   --surface-inset: rgba(233, 225, 210, 0.04);
   --surface-hover: rgba(201, 167, 93, 0.07);
   --surface-selected: rgba(184, 70, 116, 0.13);
@@ -791,4 +791,154 @@
 }
 :root[data-theme='black-versailles'] .theme-serious .brand {
   background: rgba(17, 16, 14, 0.95);
+}
+
+/* ===========================================================================
+   TROIS THEMES CLAIRS DE PLUS. Aucune maquette maison n en proposait : mesure du
+   2026-09-07, les douze maquettes de sketches/ sont toutes sombres, la plus lumineuse
+   etant le theme sombre lui-meme. Ces palettes sont donc PROPOSEES, pas relevees --
+   a corriger a l oeil, contrairement aux trois themes sombres qui venaient de maquettes
+   dessinees et arbitrees.
+
+   Chacun est le PENDANT CLAIR d un theme sombre : Ardoise pour Obsidian Nebula,
+   Parchemin pour Black Versailles, Rose poudre pour Solar Rose.
+
+   `color-scheme: light` est INDISPENSABLE dans chacun : sans lui Chromium peint listes
+   deroulantes, champs et ascenseurs en sombre au milieu d une page claire.
+
+   Les accents sont ASSOMBRIS comme dans le mode clair d origine : les teintes de nuit
+   passent sous le seuil de lisibilite sur fond clair (jaune pale sur blanc).
+   =========================================================================== */
+
+/* ARDOISE -- gris-bleu dense, moins eblouissant qu un blanc pur sur grand ecran. */
+:root[data-theme='ardoise'] {
+  color-scheme: light;
+  --bg-0: #e8ebf0;
+  --bg-1: rgba(255, 255, 255, 0.78);
+  --bg-2: rgba(255, 255, 255, 0.62);
+  --bg-3: rgba(30, 45, 70, 0.07);
+  --bg-inset: rgba(255, 255, 255, 0.9);
+  --line: rgba(30, 45, 70, 0.18);
+  --line-strong: rgba(30, 45, 70, 0.38);
+  --text: #16202f;
+  --text-dim: #47576b;
+  --text-faint: #71808f;
+  --gold: #8a6410;
+  --gold-bright: #a3781c;
+  --gold-doux: #7d5a10;
+  --gold-clair: #946c12;
+  --rose: #b8195f;
+  --rose-bright: #9c1250;
+  --cyan: #0e6285;
+  --violet: #4e3fb0;
+  --accent: var(--rose);
+  --accent-dim: #efc6da;
+  --accent-soft: rgba(184, 25, 95, 0.1);
+  --ok: #38702a;
+  --warn: #8a6410;
+  --err: #a83530;
+  --info: var(--cyan);
+  --voile-rgb: 30, 45, 70;
+}
+:root[data-theme='ardoise'] .shell,
+:root[data-theme='ardoise'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 255, 255, 0.94);
+  --surface-card: rgba(255, 255, 255, 0.86);
+  --surface-inset: rgba(30, 45, 70, 0.06);
+  --surface-hover: rgba(30, 45, 70, 0.06);
+  --surface-selected: rgba(184, 25, 95, 0.1);
+  --container-border: rgba(30, 45, 70, 0.18);
+  --container-border-strong: rgba(30, 45, 70, 0.34);
+  --container-shadow: none;
+}
+
+/* PARCHEMIN -- blanc CHAUD ivoire, pendant clair de Black Versailles. Ses filets sont
+   bruns et non gris : c est ce qui le distingue du clair d origine, froid et bleute. */
+:root[data-theme='parchemin'] {
+  color-scheme: light;
+  --bg-0: #f6f1e6;
+  --bg-1: rgba(255, 252, 245, 0.82);
+  --bg-2: rgba(255, 252, 245, 0.66);
+  --bg-3: rgba(90, 70, 40, 0.07);
+  --bg-inset: rgba(255, 253, 248, 0.92);
+  --line: rgba(90, 70, 40, 0.2);
+  --line-strong: rgba(90, 70, 40, 0.4);
+  --text: #2a2318;
+  --text-dim: #5c5140;
+  --text-faint: #8a7d68;
+  --gold: #8a6d3b;
+  --gold-bright: #a08145;
+  --gold-doux: #7a6034;
+  --gold-clair: #93753e;
+  --rose: #a4325c;
+  --rose-bright: #8c2650;
+  --cyan: #2c6470;
+  --violet: #5c4a8a;
+  --accent: var(--rose);
+  --accent-dim: #e8d0da;
+  --accent-soft: rgba(164, 50, 92, 0.1);
+  --ok: #4a6b28;
+  --warn: #8a6d3b;
+  --err: #a03c2e;
+  --info: var(--cyan);
+  --voile-rgb: 90, 70, 40;
+}
+:root[data-theme='parchemin'] .shell,
+:root[data-theme='parchemin'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 252, 245, 0.95);
+  --surface-card: rgba(255, 252, 245, 0.88);
+  --surface-inset: rgba(90, 70, 40, 0.06);
+  --surface-hover: rgba(90, 70, 40, 0.06);
+  --surface-selected: rgba(164, 50, 92, 0.1);
+  --container-border: rgba(90, 70, 40, 0.2);
+  --container-border-strong: rgba(90, 70, 40, 0.36);
+  --container-shadow: none;
+}
+
+/* ROSE POUDRE -- pendant clair de Solar Rose. Le rose d Autowin devient la teinte
+   DOMINANTE du fond, plus une simple ponctuation. Le plus affirme des trois, donc
+   celui qui demande le plus de retenue : les surfaces restent presque blanches, sinon
+   le texte se noie dans le rose. */
+:root[data-theme='rose-poudre'] {
+  color-scheme: light;
+  --bg-0: #fdf2f6;
+  --bg-1: rgba(255, 250, 252, 0.84);
+  --bg-2: rgba(255, 250, 252, 0.68);
+  --bg-3: rgba(120, 30, 70, 0.06);
+  --bg-inset: rgba(255, 252, 253, 0.92);
+  --line: rgba(120, 30, 70, 0.18);
+  --line-strong: rgba(120, 30, 70, 0.38);
+  --text: #2b1420;
+  --text-dim: #644754;
+  --text-faint: #8f7480;
+  --gold: #8a6410;
+  --gold-bright: #a3781c;
+  --gold-doux: #7d5a10;
+  --gold-clair: #946c12;
+  --rose: #a8175c;
+  --rose-bright: #8e1049;
+  --cyan: #0e6285;
+  --violet: #5c3fa8;
+  --accent: var(--rose);
+  --accent-dim: #f2c8dc;
+  --accent-soft: rgba(168, 23, 92, 0.1);
+  --ok: #3d6b2a;
+  --warn: #8a6410;
+  --err: #a5302f;
+  --info: var(--cyan);
+  --voile-rgb: 120, 30, 70;
+}
+:root[data-theme='rose-poudre'] .shell,
+:root[data-theme='rose-poudre'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 250, 252, 0.95);
+  --surface-card: rgba(255, 250, 252, 0.88);
+  --surface-inset: rgba(120, 30, 70, 0.05);
+  --surface-hover: rgba(120, 30, 70, 0.06);
+  --surface-selected: rgba(168, 23, 92, 0.11);
+  --container-border: rgba(120, 30, 70, 0.18);
+  --container-border-strong: rgba(120, 30, 70, 0.34);
+  --container-shadow: none;
 }

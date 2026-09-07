@@ -54,7 +54,14 @@ export const THEMES: readonly Theme[] = [
   // Le TERRE : or assourdi, rose brique, filets brun dore. Palette de la maquette maison
   // black-versailles. Attention : la maquette d origine changeait aussi la typographie et
   // les formes (serif, losanges) -- ce theme ne porte que son chromatisme.
-  { id: 'black-versailles', libelle: 'Black Versailles', base: 'sombre' }
+  { id: 'black-versailles', libelle: 'Black Versailles', base: 'sombre' },
+  // TROIS CLAIRS DE PLUS, chacun pendant d un sombre. Base CLAIRE : c est elle qui
+  // commande la variante d accent, les teintes de nuit etant illisibles sur fond clair.
+  // Aucune maquette maison n en proposait (les douze sont sombres, mesure du 2026-09-07) :
+  // ces palettes sont PROPOSEES, a corriger a l oeil.
+  { id: 'ardoise', libelle: 'Ardoise', base: 'clair' },
+  { id: 'parchemin', libelle: 'Parchemin', base: 'clair' },
+  { id: 'rose-poudre', libelle: 'Rose poudre', base: 'clair' }
 ]
 
 export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'
