@@ -228,3 +228,54 @@ trois conversations :
 
 **Ce qui est établi malgré ce reste** : le fichier écrit par la fixture a bien été retrouvé dans la
 copie de travail du run, et le run n'a **rien touché** hors du profil isolé.
+
+## Second scénario `juge-rouge-puis-vert` — livré le 2026-09-07
+
+Le juge **refuse les deux premiers passages, puis valide**. Deux et non un : un seul refus ne
+distingue pas « la boucle a rejoué » de « elle a rejoué une fois par accident ». Deux refus font
+apparaître `[RÉPARATION 1]` **et** `[RÉPARATION 2]`, donc une boucle, puis le vert montre sa sortie
+par le haut.
+
+**La raison du refus CHANGE à chaque passage, et ce n'est pas cosmétique.**
+`arretDeLaReparation` coupe la boucle sur un refus IDENTIQUE d'un passage à l'autre : deux refus mot
+pour mot arrêteraient la relance au premier constat, et la sonde verrait un arrêt là où elle attend
+une réparation. Un test passe par la VRAIE règle du produit (`doitArreterLaReparation`) pour le
+tenir.
+
+Le compte des passages vit dans une **closure du fournisseur**, donc un compte par run : trois runs
+concurrents ne se volent pas leurs verdicts.
+
+### La sonde de relance est branchée, et son oracle a dû être refait
+
+`cdp-relance-jusquau-vert-proof.mjs` était **payante et dangereuse** : elle faisait travailler un
+vrai agent sur une tâche volontairement impossible, et son en-tête avertissait qu'il **écrivait dans
+le dépôt réel** (mesure du 2026-08-21). Elle est maintenant autonome et gratuite, sur le modèle de
+la sonde des trois conversations : dépôt jetable, distant nu local, instance isolée à laquelle
+`AUTOWIN_OS_WORKSPACE` impose ce dépôt, profil `correctif` (qui accorde des réparations, là où
+`eclair` en refuse toute).
+
+**L'oracle d'origine rendait ROUGE un mécanisme VERT.** Il ne comptait que les payloads `gate` ou
+`handoff` courts et sans saut de ligne. Or `[RÉPARATION n]` n'est **pas** une ligne de gate : c'est
+un CONTEXTE réinjecté dans le build suivant (`pousserContexte('reparation:n', …)`), donc un long
+payload de type `message` — exclu par construction. Trouvé en jouant, pas en relisant. La sonde lit
+désormais deux signaux à leur place : les **verdicts** du juge (`type: 'verdict'`) et les **numéros**
+de réparation réinjectés, dédupliqués.
+
+La contamination que l'ancien filtre combattait est écartée **à la source** : la réponse du modèle
+est écrite d'avance, donc aucun agent ne peut faire écho à ces marqueurs.
+
+### Mesure
+
+| Passage | Résultat |
+|---|---|
+| Profil `correctif` (le scénario) | `completed`, **2 refus du juge**, **réparations 1 et 2** rejouées, gratuit |
+| Profil `eclair` (falsification) | **exit 1** : `failed`, 1 refus, 0 réparation, « aucune réparation : le plafond déclaré vaut zéro » |
+
+La seconde ligne est ce qui compte autant que la première : la sonde **peut rougir**. Elle rejoint
+`build:desktop` (`npm run test:relance`) après la sonde des trois conversations.
+
+### Il reste UNE sonde payante liée à ce chantier
+
+`cdp-skill-node-brain-proof.mjs` sélectionne le profil `memoire-depot`, qui **n'existe plus** dans le
+catalogue (sept profils, pas celui-là). Le scénario `nominal` lui suffirait — les nœuds skill
+viennent du profil, pas de la fixture — mais son profil doit d'abord être corrigé.

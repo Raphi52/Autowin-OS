@@ -1,290 +1,276 @@
+import { execFileSync, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
+import { choisirPortLibre } from './port-libre.mjs'
+
 /**
  * PREUVE TERMINALE de la politique de relance, dans l'app REELLE.
  *
  * Ce que les tests unitaires prouvent : que les fonctions se comportent comme prevu. Ce qu'ils ne
  * prouvent PAS : que le process VIVANT les execute. Le bundle peut porter le correctif sans que le
- * process l'ait charge — piege paye deux fois dans cette session.
+ * process l'ait charge -- piege paye deux fois.
  *
  * L'ORACLE est la trace causale du run, jamais le compte rendu de l'agent. On cherche les lignes que
  * l'orchestrateur pousse LUI-MEME :
  *  - `[REPARATION n]` : la boucle a rejoue en reinjectant les raisons du gate ;
- *  - « aucune réparation : … » : la politique a refuse, et elle DIT pourquoi (avant, ce refus etait
- *    muet — c'est le defaut corrige) ;
+ *  - « aucune reparation : ... » : la politique a refuse, et elle DIT pourquoi ;
  *  - « plafond dur de N passage(s) atteint » : le garde-fou a mordu, et il le dit.
  *
- * La tache est volontairement une ANALYSE (non-mutation) : c'est le cas qui n'avait droit a AUCUNE
- * reparation, et l'hypothese H2 du RUN n'avait jamais ete mesuree.
+ * GRATUITE ET AUTONOME DEPUIS LE 2026-09-07. Elle faisait travailler un vrai agent sur une tache
+ * volontairement impossible : plusieurs minutes et un cout reel par passage, donc elle n'etait
+ * jamais jouee. Pire, son en-tete l'avertissait -- l'agent ECRIVAIT dans le depot reel (mesure du
+ * 2026-08-21). Elle joue maintenant le scenario `juge-rouge-puis-vert` de la fixture
+ * d'orchestration : le pipeline reste le VRAI -- ses phases, ses juges, ses portes, sa politique de
+ * relance -- seul l'appel au modele est ecrit d'avance, et toute ecriture a lieu dans un depot
+ * JETABLE impose par `AUTOWIN_OS_WORKSPACE`.
  *
- * ATTENTION — CET INSTRUMENT LAISSE UNE TRACE DANS LE DEPOT.
+ * POURQUOI DEUX REFUS PUIS UN VERT : un run qui reussit du premier coup ne prouve rien sur ce qui se
+ * passe quand il echoue. Deux refus font apparaitre `[REPARATION 1]` ET `[REPARATION 2]` -- donc une
+ * boucle -- puis le vert montre sa sortie par le haut. Le profil `correctif` est impose : il accorde
+ * des reparations, la ou `eclair` en refuse toute (mesure conv-1349 : on mesurait un refus de
+ * politique en croyant mesurer une relance).
  *
- * La tache `echec` fait travailler un vrai agent : il produit donc un vrai artefact. Mesure du
- * 2026-08-21 : face a la cible inexistante, l'agent a refuse de FABRIQUER le module pour pouvoir
- * « corriger » un bug invente — bon reflexe — et a ecrit a la place un ORACLE D'ABSENCE falsifiable
- * (`src/main/facturation-remise-fidelite-cible.test.ts`), qui deviendrait rouge le jour ou la cible
- * apparait. Ce fichier a ete RETIRE au nettoyage : il gardait une fiction inventee pour les besoins
- * d'une preuve, dans un domaine (`facturation`) qui appartient a RIG et non a ce depot.
- *
- * Apres tout usage de la tache `echec`, verifier `git status` et retirer l'artefact produit.
- *
- * Usage : node scripts/cdp-relance-jusquau-vert-proof.mjs
+ * Usage : node scripts/cdp-relance-jusquau-vert-proof.mjs [profil]
  */
-import { existsSync, readFileSync } from 'node:fs'
-import { portCdp } from './cdp-port.mjs'
-import { join } from 'node:path'
-
 const racine = racineDepot()
-// Resolution COMMUNE du port : --port, puis AUTOWIN_CDP_PORT, puis le port REEL de l'instance
-// ouverte. Le 9224 code en dur ne repondait a personne des qu'une instance en prenait un autre.
-const port = portCdp()
-const traces = join(racine, '.autowin-data', 'autowin-os', 'causal-trace')
+const instance = 'relance-jusquau-vert'
+const base = join(racine, 'Audit', 'headless-instances', instance)
+const depot = join(base, 'depot-jetable')
+const traces = join(base, 'user-data', 'app-data', 'autowin-os', 'causal-trace')
+const TACHE = '[[autowin-fixture-orchestration]] juge-rouge-puis-vert'
+const PROFIL = process.argv[2] || 'correctif'
 
-/**
- * Une ANALYSE, formulee pour tomber dans la branche lecture seule du classifieur (`analys…`), et
- * assez exigeante pour que le gate ait une chance de refuser le premier passage.
- */
-/**
- * La tache ne parle PAS de son propre sujet.
- *
- * La premiere version demandait d'analyser la politique de relance : l'agent a lu `stopgate.ts` et
- * cite les phrases exactes que ce pilote cherche dans la trace. L'oracle comptait alors les echos de
- * l'agent comme des preuves. Une tache neutre supprime la contamination a la source.
- */
-/**
- * DEUX taches, parce qu'elles prouvent des choses opposees.
- *
- * `neutre` : une analyse ordinaire. Sur conv-1351 elle est passee VERTE du premier coup — donc la
- * boucle de reparation n'a jamais ete sollicitee, et I4 est reste invisible. Un run qui reussit ne
- * prouve rien sur ce qui se passe quand il echoue.
- *
- * `echec` : une MUTATION sur une cible qui n'existe pas. Le contrat racine exige alors une preuve de
- * mutation executable, impossible a produire, et la garde « cible nommee » bloque un miss TOTAL des
- * chemins ancres dans la demande. Le gate refuse donc le premier passage, ce qui est le SEUL cadre ou
- * `[REPARATION n]`, le plafond dur et l'arret sur non-progres peuvent etre observes en vivant.
- * Provoquer l'echec est ici legitime : c'est une vraie tache, refusee pour une vraie raison.
- */
-const TACHES = {
-  neutre:
-    'Analyse en lecture seule la structure des dossiers de premier niveau de ce depot et resume en ' +
-    'cinq lignes ce que chacun contient. Ne modifie aucun fichier.',
-  /**
-   * LE COUPLE MANQUANT, signale par un juge externe : un refus de tache NON-MUTATION sur un profil
-   * qui ACCORDE des reparations.
-   *
-   * J'avais ecrit que ce refus etait « inatteignable par construction ». C'etait faux, et le juge l'a
-   * prouve avec mes propres traces : conv-1349 et conv-1350 ONT ete refuses pour « Promis mais pas
-   * fait : Analyse demandee presente dans le livrable » — un refus de lecture seule, bien reel. Si
-   * aucune reparation n'a suivi, c'est que ces runs tournaient sur `eclair`, qui en accorde ZERO :
-   * je mesurais I6 en croyant mesurer I3. Cette tache-ci rejoue le MEME enonce sur un profil qui
-   * accorde, pour observer refus -> relance sur une tache non-mutation.
-   */
-  'analyse-echec':
-    "Analyse la politique de relance de l'orchestrateur d'Autowin OS et explique en quoi le plafond " +
-    'de reparations decidait a la place du progres. Ne modifie aucun fichier.',
-  echec:
-    'Corrige le bug de la fonction `calculerRemiseFidelite` dans ' +
-    '`src/main/facturation/remise-fidelite-inexistante.ts` : elle arrondit au centime superieur au ' +
-    'lieu de l inferieur. Fournis un test rouge puis vert qui le prouve.'
+const binaire = join(racine, 'dist', 'win-unpacked', 'autowin-os.exe')
+if (!existsSync(binaire)) {
+  console.error(`[relance] binaire absent : ${binaire} - construis-le d abord.`)
+  process.exit(2)
 }
-const cle = process.argv[3]
-const tache = TACHES[cle && TACHES[cle] ? cle : 'neutre']
 
-const attendre = (ms) => new Promise((r) => setTimeout(r, ms))
+const port = choisirPortLibre(Number(process.env.AUTOWIN_RELANCE_PORT || 9294))
+if (port === undefined) {
+  console.error('[relance] aucun port libre - machine saturee.')
+  process.exit(3)
+}
 
-const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
-const page = pages.find((p) => p.type === 'page')
-if (!page) throw new Error(`aucune page Electron sur ${port} — l'app tourne-t-elle ?`)
-const socket = new WebSocket(page.webSocketDebuggerUrl)
-await new Promise((ok, ko) => {
-  socket.onopen = ok
-  socket.onerror = ko
-})
+/*
+ * LE DEPOT JETABLE, REFAIT A NEUF. Le distant nu permet au run de publier sans joindre le reseau ;
+ * le marqueur `.autowin-depot-jetable` est ce que le garde-fou de la fixture EXIGE avant d'ecrire.
+ */
+rmSync(base, { recursive: true, force: true })
+mkdirSync(depot, { recursive: true })
+const git = (...args) => execFileSync('git', args, { cwd: depot, stdio: 'ignore' })
+git('init', '-b', 'main')
+git('config', 'user.email', 'fixture@autowin.local')
+git('config', 'user.name', 'Fixture Orchestration')
+writeFileSync(join(depot, '.autowin-depot-jetable'), 'jetable\n', 'utf8')
+writeFileSync(join(depot, 'README.md'), '# Depot jetable\n', 'utf8')
+git('add', '-A')
+git('commit', '-m', 'base du depot jetable')
+const distant = `${depot}-origin.git`
+mkdirSync(distant, { recursive: true })
+execFileSync('git', ['init', '--bare', '-b', 'main'], { cwd: distant, stdio: 'ignore' })
+git('remote', 'add', 'origin', distant)
+git('push', '-u', 'origin', 'main')
+
+const lanceur = (action) =>
+  spawnSync(
+    'powershell',
+    [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      join(racine, 'scripts', 'autowin-headless.ps1'),
+      '-Action',
+      action,
+      '-InstanceId',
+      instance,
+      '-Port',
+      String(port)
+    ],
+    { cwd: racine, encoding: 'utf8', env: { ...process.env, AUTOWIN_OS_WORKSPACE: depot } }
+  )
+
+lanceur('Stop')
+const demarrage = lanceur('Start')
+if (demarrage.status !== 0) {
+  console.error(`[relance] instance non demarree :\n${demarrage.stderr || demarrage.stdout}`)
+  process.exit(1)
+}
+
+const cibles = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
+const page = cibles.find((cible) => cible.type === 'page')
+const ws = new WebSocket(page.webSocketDebuggerUrl)
 let id = 0
-const attente = new Map()
-socket.onmessage = ({ data }) => {
-  const m = JSON.parse(data)
-  const appel = attente.get(m.id)
-  if (!appel) return
-  attente.delete(m.id)
-  m.error ? appel.ko(new Error(m.error.message)) : appel.ok(m.result)
-}
-const envoyer = (method, params = {}) =>
-  new Promise((ok, ko) => {
-    const n = ++id
-    attente.set(n, { ok, ko })
-    socket.send(JSON.stringify({ id: n, method, params }))
-  })
-const evaluer = async (expression) => {
-  const r = await envoyer('Runtime.evaluate', {
-    expression,
-    awaitPromise: true,
-    returnByValue: true
-  })
-  if (r.exceptionDetails) {
-    const d = r.exceptionDetails
-    throw new Error(
-      [d.text, d.exception?.description, d.exception?.value].filter(Boolean).join(' | ')
+const pending = new Map()
+const erreursConsole = []
+ws.onmessage = (message) => {
+  const m = JSON.parse(message.data)
+  if (m.method === 'Runtime.exceptionThrown')
+    erreursConsole.push(
+      String(m.params?.exceptionDetails?.exception?.description ?? '').slice(0, 200)
     )
+  if (m.id && pending.has(m.id)) {
+    const { res, rej } = pending.get(m.id)
+    pending.delete(m.id)
+    m.error ? rej(new Error(m.error.message)) : res(m.result)
   }
+}
+await new Promise((r) => (ws.onopen = r))
+const send = (method, params = {}) =>
+  new Promise((res, rej) => {
+    const i = ++id
+    pending.set(i, { res, rej })
+    ws.send(JSON.stringify({ id: i, method, params }))
+  })
+const ev = async (expression) => {
+  const r = await send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true
+  })
+  if (r.exceptionDetails)
+    throw new Error('EVAL: ' + JSON.stringify(r.exceptionDetails).slice(0, 300))
   return r.result.value
 }
+const pause = (ms) => new Promise((r) => setTimeout(r, ms))
+await send('Runtime.enable')
+
+// L'interface doit etre MONTEE : le port repond avant que React ait pose quoi que ce soit.
+for (let reste = 30_000; reste > 0; reste -= 300) {
+  if (await ev(`Boolean(document.querySelector('[data-testid="nav-chat"]') && window.api)`)) break
+  await pause(300)
+}
+console.log(`profil : ${PROFIL}`)
+console.log(
+  await ev(
+    `(async () => JSON.stringify(await window.api.workflowProfileSelect(${JSON.stringify(PROFIL)})))()`
+  )
+)
+
+const conv = await ev(
+  `(async () => { const c = await window.api.conversationsCreate({ title: 'preuve relance jusquau vert', category: '', provider: 'claude' }); return c?.id ?? c })()`
+)
+console.log(`conversation : ${conv}`)
+await ev(
+  `(() => { window.api.orchestrate(${JSON.stringify(TACHE)}, ${JSON.stringify(conv)}); return true })()`
+)
+
+/*
+ * LE DECOUPAGE DE LIGNES ET LE MARQUEUR DE REPARATION, POSES UNE FOIS.
+ * Ce fichier melange des regex et des gabarits ; les reecrire a chaque usage est la porte d'entree
+ * des coquilles d'echappement.
+ */
+const SAUTS_DE_LIGNE = /\r?\n/
+const MARQUEUR_REPARATION = /\[R[EÉ]PARATION (\d+)\]/g
+const SAUT = '\n'
 
 /**
- * Les lignes POUSSEES PAR L'ORCHESTRATEUR, et elles seules.
+ * L'ORACLE, ETABLI SUR CE QUE LA TRACE PORTE VRAIMENT -- mesure du 2026-09-07.
  *
- * DEFAUT MESURE sur conv-1350 : ma premiere version cherchait une chaine dans TOUS les payloads. Or la
- * tache demandait d'ANALYSER la politique de relance : l'agent a donc lu `stopgate.ts` et l'a CITE
- * dans sa sortie. Quatre des cinq « lignes » comptees etaient des echos de l'agent — un vert
- * entierement faux, produit par mon propre choix de tache.
+ * Ma premiere version ne comptait que les payloads de type `gate` ou `handoff`, courts et sans saut
+ * de ligne. Elle a rendu ROUGE un mecanisme VERT : le run avait bien refuse deux fois puis valide,
+ * mais `[REPARATION n]` n'est PAS une ligne de gate. C'est un CONTEXTE reinjecte dans le build
+ * suivant (`pousserContexte('reparation:n', ...)`), donc un long payload de type `message` : le
+ * filtre « court et sans saut de ligne » l'excluait par construction.
  *
- * Le discriminant est le TYPE de l'evenement : les lignes de politique sont poussees en `gate` ou
- * `handoff` par l'orchestrateur, jamais en `tool-call` ni `model-response`. On exige en plus une
- * ligne COURTE et sans saut de ligne : un extrait de fichier n'en est jamais.
+ * On lit donc DEUX signaux, chacun a sa place :
+ *  - les VERDICTS du juge (`type: 'verdict'`) : deux refus, c'est la sequence voulue ;
+ *  - les reinjections `[REPARATION n]` dans le contexte pousse : la preuve que la boucle a REJOUE en
+ *    redonnant au build les raisons du refus.
+ *
+ * LA CONTAMINATION EST ECARTEE A LA SOURCE, et autrement qu'avant : la reponse du modele est ECRITE
+ * D'AVANCE par la fixture, donc aucun agent ne peut echo-er ces marqueurs -- c'est le scenario, pas
+ * un filtre, qui rend l'oracle propre. On exclut malgre tout du comptage des reparations les
+ * payloads qui PORTENT une sortie de modele (`model-response`, `verdict`).
  */
-const TYPES_POUSSES = new Set(['gate', 'handoff'])
-const lignesPoussees = (conversationId) => {
-  const chemin = join(traces, `${conversationId}.jsonl`)
+const evenements = () => {
+  const chemin = join(traces, `${conv}.jsonl`)
   if (!existsSync(chemin)) return []
   const sorties = []
-  for (const l of readFileSync(chemin, 'utf8').split(/\r?\n/)) {
-    if (!l) continue
-    let e
+  for (const ligne of readFileSync(chemin, 'utf8').split(SAUTS_DE_LIGNE)) {
+    if (!ligne) continue
     try {
-      e = JSON.parse(l)
+      sorties.push(JSON.parse(ligne))
     } catch {
       continue
-    }
-    if (!TYPES_POUSSES.has(e?.type)) continue
-    for (const pl of Array.isArray(e?.payloads) ? e.payloads : []) {
-      const c = pl?.content
-      if (typeof c !== 'string' || !c.trim()) continue
-      // Un extrait de fichier porte des sauts de ligne ; une ligne poussée n'en a jamais.
-      if (c.length > 220 || /\r?\n/.test(c.trim())) continue
-      sorties.push(c.trim())
     }
   }
   return sorties
 }
 
-/**
- * Tous les contenus, gardes uniquement pour le diagnostic quand rien n'est trouve.
- *
- * Prefixe `_` : elle n'est appelee par personne AUJOURD'HUI, et c'est voulu -- on la decommente au
- * besoin. Le prefixe dit cette intention a l'outil, la ou une suppression aurait detruit un outil
- * de diagnostic que son auteur a garde exprès.
- */
-const _contenus = (conversationId) => {
-  const chemin = join(traces, `${conversationId}.jsonl`)
-  if (!existsSync(chemin)) return []
-  return readFileSync(chemin, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .flatMap((l) => {
-      try {
-        const e = JSON.parse(l)
-        return Array.isArray(e?.payloads) ? e.payloads : []
-      } catch {
-        return []
-      }
-    })
-    .map((p) => p?.content)
-    .filter((c) => typeof c === 'string' && c.length > 0)
-}
-
-console.log(`api = ${await evaluer('typeof window.api')}`)
-/**
- * Le PROFIL est un paramètre, parce que les deux cas prouvent des choses différentes :
- *  - `eclair` (aucun juge, aucune arête rouge) → la politique doit REFUSER toute réparation et LE
- *    DIRE. C'est ce qui a été observé sur conv-1349 et conv-1350.
- *  - `correctif` (juge + arête rouge `maxTraversals: 2`) → des réparations sont ACCORDÉES, donc la
- *    boucle peut réellement rejouer : c'est le seul cadre où `[RÉPARATION n]`, le plafond dur et
- *    l'arrêt sur non-progrès peuvent être vus en vivant.
- */
 /*
- * MIGRATION SUR LA FIXTURE GRATUITE : ETUDIEE LE 2026-09-06, NON FAISABLE EN L'ETAT.
+ * ON ATTEND LA FIN DU RUN, pas la premiere ligne interessante.
  *
- * Ce qui est gratuit aujourd'hui, ce sont les fixtures du PILOTE DE CHAT
- * (`[[autowin-fixture-durable-stream]]`, `auto-kaizen-error`) : elles remplacent le fournisseur de
- * modele pour UN tour de conversation. Or cette sonde n'exerce pas un tour de chat : elle appelle
- * `window.api.orchestrate` et mesure la POLITIQUE DE RELANCE de l'orchestrateur — les passages
- * `[REPARATION n]`, le refus motive, le plafond dur. Ces lignes n'existent que si un vrai pipeline
- * tourne, avec ses phases, ses juges et leurs verdicts.
- *
- * Verifie avant d'ecrire ceci : `isolatedTestInstance` n'apparait NULLE PART dans orchestrator.ts,
- * et aucune fixture d'orchestration n'existe dans src/main. La rendre gratuite demanderait donc
- * d'ECRIRE un pipeline factice deterministe — juges compris — c'est-a-dire un morceau de produit,
- * pas une migration de sonde. Tant que ce pipeline n'existe pas, elle reste MANUELLE et payante.
- *
- * Deux raisons de plus de ne pas la brancher telle quelle : elle dure plusieurs minutes, et son
- * en-tete le dit — elle fait travailler un vrai agent, qui ECRIT dans le depot.
+ * La version payante sortait des qu'une ligne de politique apparaissait, parce qu'un vrai run durait
+ * plusieurs minutes. Ici le run est gratuit et court : on peut donc exiger la SEQUENCE ENTIERE --
+ * deux refus, deux reparations, PUIS un statut final vert -- ce qui est bien plus fort qu'une ligne.
  */
-const profil = process.argv[2] || 'correctif'
-console.log(`profil : ${profil}`)
-console.log(
-  await evaluer(
-    `(async () => JSON.stringify(await window.api.workflowProfileSelect(${JSON.stringify(profil)})))()`
+let statut = 'en-cours'
+const echeance = Date.now() + 240_000
+while (Date.now() < echeance) {
+  await pause(3000)
+  statut = await ev(
+    `(async () => { const c = await window.api.conversation(${JSON.stringify(conv)}); return (c.messages||[]).at(-1)?.status ?? 'en-cours' })()`
   )
-)
-
-const conv = JSON.parse(
-  await evaluer(
-    `(async () => JSON.stringify(await window.api.conversationsCreate({title:"preuve relance jusquau vert", category:"", provider:"claude"})))()`
-  )
-).id
-console.log(`conversation : ${conv}`)
-await evaluer(
-  `(() => { window.api.orchestrate(${JSON.stringify(tache)}, ${JSON.stringify(conv)}); return true })()`
-)
-
-const limite = Date.now() + 12 * 60 * 1000
-let lignes = []
-let stable = 0
-let taille = -1
-while (Date.now() < limite) {
-  await attendre(5_000)
-  lignes = lignesPoussees(conv)
-  /**
-   * STABILITE = SILENCE LONG, pas silence court.
-   *
-   * Ma premiere version coupait apres 8 releves identiques a 5 s, soit 40 s. Or une phase est un
-   * APPEL DE MODELE : elle n'ecrit rien pendant plusieurs minutes. Le pilote concluait donc en pleine
-   * phase, sur 5 lignes de trace, et rendait ROUGE un mecanisme VERT — verifie sur conv-1349, ou la
-   * trace est passee de 5 a 24 payloads APRES la sortie du script, ligne de politique incluse.
-   *
-   * Il faut aussi une CONDITION DE SORTIE POSITIVE : des qu'une ligne de la nouvelle politique est
-   * vue, la preuve est faite, inutile d'attendre la fin du run.
-   */
-  const vuUneLigne =
-    lignes.some((l) => l.includes('[RÉPARATION') || l.includes('[REPARATION')) ||
-    lignes.some((l) => l.startsWith('aucune réparation')) ||
-    lignes.some((l) => l.includes('plafond dur'))
-  if (vuUneLigne) break
-  if (lignes.length === taille) {
-    stable += 1
-    if (stable >= 60) break // 5 minutes de silence reel, pas 40 secondes
-  } else {
-    stable = 0
-    taille = lignes.length
-  }
+  if (statut === 'completed' || statut === 'failed') break
 }
-socket.close()
+const evts = evenements()
+ws.close()
+lanceur('Stop')
 
-const reparations = lignes.filter((l) => l.includes('[RÉPARATION') || l.includes('[REPARATION'))
-const refusPolitique = lignes.filter((l) => l.startsWith('aucune réparation'))
-const plafond = lignes.filter((l) => l.includes('plafond dur'))
-const arretProgres = lignes.filter((l) => l.includes('hors de portée de build'))
+const contenus = (predicat) =>
+  evts
+    .filter(predicat)
+    .flatMap((e) => (Array.isArray(e.payloads) ? e.payloads : []))
+    .map((p) => (typeof p?.content === 'string' ? p.content : ''))
+    .filter((c) => c.length > 0)
 
-console.log('\n=== CE QUE LA TRACE MONTRE ===')
-console.log(`lignes de trace : ${lignes.length}`)
-for (const l of [...reparations, ...refusPolitique, ...plafond, ...arretProgres]) {
-  console.log(`  · ${l.slice(0, 160)}`)
+const refusDuJuge = contenus((e) => e.type === 'verdict').filter((c) => /^DEFAUT/i.test(c.trim()))
+// Les NUMEROS de reparation, dedupliques : quatre reinjections du meme numero restent UNE reparation.
+const numerosReparation = new Set(
+  contenus((e) => e.type !== 'verdict' && e.type !== 'model-response')
+    .flatMap((c) => [...c.matchAll(MARQUEUR_REPARATION)])
+    .map((trouve) => Number(trouve[1]))
+)
+const lignesCourtes = contenus((e) => e.type === 'gate' || e.type === 'handoff').filter(
+  (c) => c.length <= 220 && !SAUTS_DE_LIGNE.test(c.trim())
+)
+const refusPolitique = lignesCourtes.filter((l) => l.trim().startsWith('aucune réparation'))
+const plafond = lignesCourtes.filter((l) => l.includes('plafond dur'))
+const arretProgres = lignesCourtes.filter((l) => l.includes('hors de portée de build'))
+
+console.log(SAUT + '=== CE QUE LA TRACE MONTRE ===')
+console.log(`statut final         : ${statut}`)
+console.log(`refus du juge        : ${refusDuJuge.length}`)
+console.log(`reparations rejouees : ${[...numerosReparation].sort().join(', ') || 'aucune'}`)
+for (const l of [...refusPolitique, ...plafond, ...arretProgres])
+  console.log(`  . ${l.slice(0, 160)}`)
+
+const echecs = []
+if (statut !== 'completed')
+  echecs.push(`le run s est termine en « ${statut} » au lieu de completed`)
+// LE SUJET : le juge refuse DEUX fois, donc la boucle doit avoir rejoue DEUX fois. Moins, et la
+// relance n'a pas eu lieu -- l'oracle serait vert sans avoir rien observe.
+if (refusDuJuge.length < 2)
+  echecs.push(`${refusDuJuge.length} refus du juge trace(s) au lieu des 2 attendus`)
+if (numerosReparation.size < 2)
+  echecs.push(`${numerosReparation.size} reparation(s) rejouee(s) au lieu des 2 attendues`)
+if (plafond.length) echecs.push('le plafond dur a mordu, ce que ce scenario ne doit pas atteindre')
+if (arretProgres.length) echecs.push(`la boucle s est arretee sur non-progres : ${arretProgres[0]}`)
+if (refusPolitique.length)
+  echecs.push(`la politique a refuse toute reparation : ${refusPolitique[0]}`)
+if (erreursConsole.length)
+  echecs.push(`${erreursConsole.length} erreur(s) JavaScript : ${erreursConsole[0]}`)
+
+if (echecs.length) {
+  console.error(SAUT + 'ECHEC :')
+  for (const echec of echecs) console.error(`- ${echec}`)
+  process.exit(1)
 }
-const nouveauCodeVu = refusPolitique.length + plafond.length + reparations.length > 0
+rmSync(base, { recursive: true, force: true })
 console.log(
-  `\nPREUVE ${nouveauCodeVu ? 'VERTE' : 'ROUGE'} — la trace porte au moins une ligne de la NOUVELLE politique`
+  SAUT +
+    `OK - juge rouge ${refusDuJuge.length} fois, ${numerosReparation.size} reparations rejouees, run termine VERT, sans un centime.`
 )
-console.log(`  réparations jouées        : ${reparations.length}`)
-console.log(`  refus de politique DIT    : ${refusPolitique.length}`)
-console.log(`  plafond dur annoncé       : ${plafond.length}`)
-console.log(`  arrêt sur non-progrès     : ${arretProgres.length}`)
-process.exitCode = nouveauCodeVu ? 0 : 1

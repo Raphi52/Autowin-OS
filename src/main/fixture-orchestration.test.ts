@@ -14,8 +14,12 @@ import {
   MARQUEUR_DEPOT_JETABLE,
   preuveDeLaMutation,
   preuveExecutableDeLEcriture,
-  reponseFixtureNominale
+  reponseFixtureNominale,
+  fournisseurFixtureOrchestration,
+  PASSAGES_REFUSES_PAR_LE_JUGE,
+  verdictJugeSequentiel
 } from './fixture-orchestration'
+import { doitArreterLaReparation } from './gates/stopgate'
 import { lireVerdictJuge } from './orchestrator'
 
 const aNettoyer: string[] = []
@@ -138,6 +142,80 @@ describe('scénario nominal', () => {
   })
 })
 
+describe('scénario juge-rouge-puis-vert', () => {
+  /*
+   * LA SÉQUENCE EST LE SUJET : deux refus, puis un vert. C'est le seul cadre où la politique de
+   * relance se montre en vivant — un run vert du premier coup ne prouve rien sur l'échec.
+   */
+  it('refuse les deux premiers passages, puis valide', () => {
+    expect(lireVerdictJuge(verdictJugeSequentiel(1))).toBe(false)
+    expect(lireVerdictJuge(verdictJugeSequentiel(2))).toBe(false)
+    expect(lireVerdictJuge(verdictJugeSequentiel(3))).toBe(true)
+    expect(PASSAGES_REFUSES_PAR_LE_JUGE).toBe(2)
+  })
+
+  /*
+   * LA RAISON DOIT CHANGER — sinon `arretDeLaReparation` coupe la boucle sur « refus identique et
+   * hors de portée de build », et la sonde verrait un arrêt là où elle attend une réparation. Ce
+   * test passe par la VRAIE règle du produit, pas par une comparaison de chaînes.
+   */
+  it('donne une raison différente à chaque refus, sinon la relance s’arrêterait', () => {
+    const un = verdictJugeSequentiel(1)
+    const deux = verdictJugeSequentiel(2)
+    expect(un).not.toBe(deux)
+    expect(doitArreterLaReparation([deux], [un])).toBe(false)
+  })
+
+  /*
+   * LE COMPTE VIT DANS LE FOURNISSEUR, donc par run. Deux fournisseurs ne partagent pas leurs
+   * passages : trois runs concurrents ne se voleraient pas leurs verdicts.
+   */
+  it('compte les passages par run, sans état partagé', async () => {
+    const verdicts = async (fournisseur: ReturnType<typeof fournisseurFixtureOrchestration>) => {
+      const sortis: string[] = []
+      for (let n = 0; n < 3; n++) {
+        const flux = fournisseur.send(
+          [] as never,
+          {
+            execution: { phaseAppelante: 'judge' }
+          } as never
+        ) as AsyncGenerator<{ delta?: string }, { text: string }, void>
+        let dernier = ''
+        while (true) {
+          const pas = await flux.next()
+          if (pas.done) {
+            dernier = pas.value.text
+            break
+          }
+        }
+        sortis.push(dernier)
+      }
+      return sortis
+    }
+    const a = await verdicts(fournisseurFixtureOrchestration('juge-rouge-puis-vert'))
+    expect(a.map(lireVerdictJuge)).toEqual([false, false, true])
+    const b = await verdicts(fournisseurFixtureOrchestration('juge-rouge-puis-vert'))
+    expect(b.map(lireVerdictJuge)).toEqual([false, false, true])
+  })
+
+  /* Le nominal ne devient pas rouge au passage : il reste vert du premier coup. */
+  it('ne change rien au scénario nominal', async () => {
+    const flux = fournisseurFixtureOrchestration('nominal').send(
+      [] as never,
+      {
+        execution: { phaseAppelante: 'judge' }
+      } as never
+    ) as AsyncGenerator<{ delta?: string }, { text: string }, void>
+    while (true) {
+      const pas = await flux.next()
+      if (pas.done) {
+        expect(lireVerdictJuge(pas.value.text)).toBe(true)
+        break
+      }
+    }
+  })
+})
+
 describe('déclencheur du scénario', () => {
   const isolee = ['electron', '--isolated-test-instance']
 
@@ -145,12 +223,20 @@ describe('déclencheur du scénario', () => {
     expect(scenarioDemande(`${PREFIXE_FIXTURE_ORCHESTRATION} nominal`, isolee)).toBe('nominal')
   })
 
+  it('reconnaît le second scénario', () => {
+    expect(scenarioDemande(`${PREFIXE_FIXTURE_ORCHESTRATION} juge-rouge-puis-vert`, isolee)).toBe(
+      'juge-rouge-puis-vert'
+    )
+  })
+
   /*
    * LA PORTE NE DOIT PAS EXISTER EN PRODUCTION. Hors instance isolée le préfixe est ignoré — sans
    * erreur : une erreur signalerait justement que la porte est là.
    */
   it('ignore le préfixe hors instance isolée', () => {
-    expect(scenarioDemande(`${PREFIXE_FIXTURE_ORCHESTRATION} nominal`, ['electron'])).toBeUndefined()
+    expect(
+      scenarioDemande(`${PREFIXE_FIXTURE_ORCHESTRATION} nominal`, ['electron'])
+    ).toBeUndefined()
   })
 
   it('laisse passer une tâche ordinaire', () => {

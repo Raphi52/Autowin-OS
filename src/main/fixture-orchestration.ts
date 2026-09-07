@@ -18,8 +18,52 @@ import { basename, join } from 'node:path'
  * déterministe. Le raccordement au registre de l'orchestrateur est une étape distincte.
  */
 
-/** Le seul scénario implémenté pour l'instant. Un troisième ne s'ajoute pas « au cas où ». */
-export type ScenarioOrchestration = 'nominal'
+/**
+ * LES DEUX SCÉNARIOS, et pourquoi il n'y en a pas trois.
+ *
+ * `nominal` : un run VERT du premier coup, qui écrit un fichier et l'intègre. Il sert la sonde des
+ * trois conversations et celle des outils d'un nœud skill — ni l'une ni l'autre n'a besoin d'une
+ * forme de réponse particulière.
+ *
+ * `juge-rouge-puis-vert` : le juge REFUSE les deux premiers passages, puis valide. C'est le seul
+ * cadre où la politique de relance se montre en vivant : `[RÉPARATION n]`, la reprise du build, et
+ * le retour au vert. Un run qui réussit du premier coup ne prouve RIEN sur ce qui se passe quand il
+ * échoue.
+ *
+ * UN TROISIÈME NE S'AJOUTE PAS « AU CAS OÙ » : il faut qu'une sonde ait besoin d'une forme
+ * qu'aucun des deux ne produit, et cette forme doit être NOMMÉE dans le commit qui l'ajoute. C'est
+ * la règle du cadrage, et elle protège du pipeline factice.
+ */
+export type ScenarioOrchestration = 'nominal' | 'juge-rouge-puis-vert'
+
+export const SCENARIOS: readonly ScenarioOrchestration[] = ['nominal', 'juge-rouge-puis-vert']
+
+/**
+ * COMBIEN DE PASSAGES LE JUGE REFUSE avant de valider, dans `juge-rouge-puis-vert`.
+ *
+ * Deux, et pas un : un seul refus ne distingue pas « la boucle a rejoué » de « la boucle a rejoué
+ * UNE fois par accident ». Deux refus suivis d'un vert montrent `[RÉPARATION 1]` ET `[RÉPARATION 2]`,
+ * donc une boucle, puis sa sortie par le haut.
+ */
+export const PASSAGES_REFUSES_PAR_LE_JUGE = 2
+
+/**
+ * LE VERDICT DU JUGE AU PASSAGE `passage` (1 pour le premier).
+ *
+ * LA RAISON CHANGE À CHAQUE REFUS, et ce n'est pas cosmétique : `arretDeLaReparation` coupe la
+ * boucle sur un refus IDENTIQUE d'un passage à l'autre. Deux refus mot pour mot arrêteraient donc
+ * la relance au premier constat, et la sonde verrait un arrêt là où elle attend une réparation.
+ *
+ * La forme est celle qu'impose le brief du juge et que `lireVerdictJuge` accepte : « VALIDE » ou
+ * « DEFAUT: <raison> ».
+ */
+export function verdictJugeSequentiel(passage: number): string {
+  if (passage > PASSAGES_REFUSES_PAR_LE_JUGE) return 'VALIDE'
+  return (
+    `DEFAUT: le livrable ne couvre pas encore le point ${passage} du contrat de la fixture ` +
+    `(refus deterministe du passage ${passage} sur ${PASSAGES_REFUSES_PAR_LE_JUGE}).`
+  )
+}
 
 /**
  * MARQUEUR D'UN DÉPÔT JETABLE.
@@ -173,11 +217,11 @@ export function scenarioDemande(
   if (!task.startsWith(PREFIXE_FIXTURE_ORCHESTRATION)) return undefined
   if (!argv.includes('--isolated-test-instance')) return undefined
   const demande = task.slice(PREFIXE_FIXTURE_ORCHESTRATION.length).trim().split(/\s+/)[0] ?? ''
-  if (demande !== 'nominal')
+  if (!SCENARIOS.includes(demande as ScenarioOrchestration))
     throw new Error(
-      `Fixture orchestration : scénario inconnu « ${demande} ». Le seul implémenté est « nominal ».`
+      `Fixture orchestration : scénario inconnu « ${demande} ». Implémentés : ${SCENARIOS.join(', ')}.`
     )
-  return 'nominal'
+  return demande as ScenarioOrchestration
 }
 
 /**
@@ -203,9 +247,15 @@ export function roleDeLAppel(role: string): RoleAppel {
  * `role` lui est donné par l'appelant, qui le tient de l'orchestrateur lui-même : la fixture ne
  * devine JAMAIS d'après le contenu du prompt.
  */
-export function fournisseurFixtureOrchestration(
-  scenario: ScenarioOrchestration
-): ProviderAdapter {
+export function fournisseurFixtureOrchestration(scenario: ScenarioOrchestration): ProviderAdapter {
+  /*
+   * LE COMPTEUR DE PASSAGES DU JUGE — une closure, donc UNE par run.
+   *
+   * `orchestrateurPour` fabrique un fournisseur par run : le compte ne fuit pas d'un run à l'autre,
+   * et trois runs concurrents ne se volent pas leurs passages. C'est ce qui rend la séquence
+   * « rouge, rouge, vert » observable sans état global.
+   */
+  let passagesDuJuge = 0
   return {
     id: ID_FOURNISSEUR_FIXTURE,
     /*
@@ -248,9 +298,11 @@ export function fournisseurFixtureOrchestration(
         )
       }
       const texte =
-        scenario === 'nominal' && role === 'sous-agent'
-          ? 'Fichier écrit, et sa présence vérifiée par une commande.'
-          : reponseFixtureNominale(role)
+        role === 'judge' && scenario === 'juge-rouge-puis-vert'
+          ? verdictJugeSequentiel(++passagesDuJuge)
+          : role === 'sous-agent'
+            ? 'Fichier écrit, et sa présence vérifiée par une commande.'
+            : reponseFixtureNominale(role)
       yield { delta: texte }
       return {
         text: texte,
@@ -340,11 +392,10 @@ export function preuveExecutableDeLEcriture(cwd: string): ExecutionEvidence {
   let sortie = ''
   let code = 0
   try {
-    sortie = execFileSync(
-      'git',
-      ['status', '--porcelain', '--', fichier],
-      { cwd, encoding: 'utf8' }
-    )
+    sortie = execFileSync('git', ['status', '--porcelain', '--', fichier], {
+      cwd,
+      encoding: 'utf8'
+    })
   } catch (erreur) {
     code = 1
     sortie = erreur instanceof Error ? erreur.message : String(erreur)
