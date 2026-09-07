@@ -45,10 +45,19 @@ if (existsSync(journal)) {
   }
 }
 
+/**
+ * Les dossiers de `chat-artifacts` ne portent PAS l'id nu : `safeSegment()` (voir
+ * src/main/store/chat-artifact-store.ts) leur ajoute une empreinte de 16 caractères hexa —
+ * `conv-49` devient `conv-49-63c58c4cc92fb594`. Comparer le nom brut à la liste des vivants
+ * déclarait donc TOUTES les captures orphelines, y compris celles de conversations ouvertes
+ * (mesuré le 2026-09-07 : 8 vivantes sur 9 dossiers, 27,8 Mo qu'un `--apply` aurait détruits).
+ */
+const sansEmpreinte = (n) => n.replace(/-[0-9a-f]{16}$/, '')
+
 /** Un satellite orphelin ne se reconnaît QUE par un id de conversation reconstituable depuis son nom. */
 const cibles = [
   { dir: 'causal-trace', id: (n) => n.replace(/^\./, '').replace(/\.(jsonl|sequence)$/, '') },
-  { dir: 'chat-artifacts', id: (n) => n },
+  { dir: 'chat-artifacts', id: sansEmpreinte },
   { dir: 'prompt-observability', id: (n) => n.replace(/\.jsonl$/, '') },
   { dir: 'turn-journals', id: (n) => n }
 ]
