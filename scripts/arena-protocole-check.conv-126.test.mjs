@@ -87,9 +87,11 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
       // Aucun duel journalise pour ce banc : P19 n'a pas d'ecart a juger, il ne peut pas refuser.
       'P19',
       // Ce banc donnait bien son `check.mjs` aux quatre bras (prompt-a.txt:10) : P21 est tenu.
-      'P21'
+      'P21',
+      // Banc a TIR UNIQUE : moins de deux bras au critere, P22 n'a pas de dispersion a exiger.
+      'P22'
     ])
-    expect(res.points).toHaveLength(21)
+    expect(res.points).toHaveLength(22)
   })
 
   it('en ligne de commande, le contrôle sort en code 1 et dit PROTOCOLE NON TENU', () => {

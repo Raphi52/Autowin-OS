@@ -175,6 +175,8 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 const CLE_JAUGES = 'autowin.context-gauges.v1'
 /** Dossiers de classement deja choisis, memorises entre les sessions. */
 const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
+/** Fils armes en mode auto (reglage PAR conversation ; `*` = ancien reglage global migre). */
+const CLE_MODE_AUTO_CONVS = 'autowin.chat.modeAuto.convs'
 
 function lireJaugesMemorisees(): Record<string, ContextGauge> {
   try {
@@ -348,12 +350,46 @@ export function ChatView({
    * marque le tour déjà présent comme traité (`autoAllumageManuelRef` reste faux au démarrage), donc
    * elle repart sur le PROCHAIN tour terminé, jamais sur une réponse d'avant la fermeture.
    */
-  const [autoActif, setAutoActif] = useState(
-    () => window.localStorage.getItem('autowin.chat.modeAuto') === '1'
-  )
+  /**
+   * REGLAGE PAR CONVERSATION (demande utilisateur du 2026-09-07 : « je veux pouvoir regler le mode
+   * auto a l'echelle d'une conversation »). L'interrupteur ne vit plus en booleen unique : on
+   * memorise l'ENSEMBLE des fils armes. Le bouton porte donc sur le fil AFFICHE, et un fil arme
+   * continue d'enchainer en arriere-plan pendant qu'on regarde ailleurs.
+   *
+   * L'ancien reglage global est migre en joker `*` : « tous les fils », jusqu'a la premiere
+   * extinction. Ainsi une session qui redemarre avec le mode global allume le retrouve allume.
+   */
+  const [autoConvs, setAutoConvs] = useState<Set<string>>(() => {
+    const brut = window.localStorage.getItem(CLE_MODE_AUTO_CONVS)
+    if (brut) {
+      try {
+        const lu = JSON.parse(brut)
+        if (Array.isArray(lu)) return new Set(lu.filter((x): x is string => typeof x === 'string'))
+      } catch {
+        /* reglage illisible : on repart a vide plutot que de planter l'ecran */
+      }
+    }
+    return window.localStorage.getItem('autowin.chat.modeAuto') === '1' ? new Set(['*']) : new Set()
+  })
   useEffect(() => {
-    window.localStorage.setItem('autowin.chat.modeAuto', autoActif ? '1' : '0')
-  }, [autoActif])
+    window.localStorage.setItem(CLE_MODE_AUTO_CONVS, JSON.stringify([...autoConvs]))
+  }, [autoConvs])
+  const autoArmePour = useCallback(
+    (id: string | null | undefined): boolean =>
+      autoConvs.has('*') || (!!id && autoConvs.has(id)),
+    [autoConvs]
+  )
+  /** Vrai quand le fil AFFICHE est arme — c'est ce que montre le bouton. */
+  const autoActif = autoArmePour(activeId)
+  /** Desarme un fil precis (le joker `*` disparait : eteindre ici eteint le reglage herite). */
+  const desarmerAuto = useCallback((id: string | null | undefined): void => {
+    setAutoConvs((precedent) => {
+      const suivant = new Set(precedent)
+      suivant.delete('*')
+      if (id) suivant.delete(id)
+      return suivant
+    })
+  }, [])
   const [autoNotice, setAutoNotice] = useState<string | null>(null)
   /**
    * L'avancement de la boucle, PAR CONVERSATION — `tour` = dernier tour déjà traité (un re-rendu du
@@ -3076,7 +3112,8 @@ export function ChatView({
       return
     }
     if (decision.action === 'arreter') {
-      setAutoActif(false)
+      // N'eteint QUE le fil affiche : les autres fils armes gardent leur reglage.
+      desarmerAuto(activeId)
       setAutoNotice(decision.message)
       return
     }
@@ -3101,10 +3138,14 @@ export function ChatView({
    * jamais relancée — c'est un tour que personne n'a demandé.
    */
   useEffect(() => {
-    if (!autoActif) return
-    for (const id of busyConversations) autoSuiviesRef.current.add(id)
+    if (autoConvs.size === 0) return
+    for (const id of busyConversations) if (autoArmePour(id)) autoSuiviesRef.current.add(id)
     for (const id of [...autoSuiviesRef.current]) {
       if (busyConversations.has(id)) continue
+      if (!autoArmePour(id)) {
+        autoSuiviesRef.current.delete(id)
+        continue
+      }
       autoSuiviesRef.current.delete(id)
       // Le fil affiché a son propre effet, qui sait en plus respecter un brouillon en cours.
       if (id === activeId) continue
@@ -3156,28 +3197,32 @@ export function ChatView({
       void send(decision.texte, { keepComposerDraft: true, targetConversationId: id })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoActif, activeId, busyConversations, autoTic])
+  }, [autoConvs, autoArmePour, activeId, busyConversations, autoTic])
 
   /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
   function basculerModeAuto(): void {
     if (autoActif) {
       autoAllumageManuelRef.current = false
-      // Éteindre coupe TOUT : les fils suivis en arrière-plan ne doivent pas repartir plus tard.
-      autoSuiviesRef.current.clear()
-      autoEssaisRef.current.clear()
-      setAutoActif(false)
-      setAutoNotice('Mode auto arrêté.')
+      // Éteindre ne coupe QUE ce fil : les autres conversations armées continuent leur chaîne.
+      if (activeId) {
+        autoSuiviesRef.current.delete(activeId)
+        autoEssaisRef.current.delete(activeId)
+      }
+      desarmerAuto(activeId)
+      setAutoNotice('Mode auto arrêté pour cette conversation.')
       return
     }
-    autoEtatsRef.current.clear()
-    autoSuiviesRef.current.clear()
-    autoEssaisRef.current.clear()
+    if (activeId) {
+      autoEtatsRef.current.delete(activeId)
+      autoSuiviesRef.current.delete(activeId)
+      autoEssaisRef.current.delete(activeId)
+    }
     // À l'allumage, le fil courant est amorcé par la boucle elle-même — mais le tour SOUS LES YEUX
     // est justement celui que ce clic demande d'enchaîner, pas un vieux tour rouvert.
     autoFilAmorceRef.current = null
     autoAllumageManuelRef.current = true
     setAutoNotice(null)
-    setAutoActif(true)
+    if (activeId) setAutoConvs((precedent) => new Set(precedent).add(activeId))
   }
 
   // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
@@ -4415,12 +4460,20 @@ export function ChatView({
             onClick={() => basculerModeAuto()}
             title={
               autoActif
-                ? 'Arrêter le mode auto'
-                : "Mode auto : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
+                ? autoConvs.has('*')
+                  ? "Mode auto hérité de l'ancien réglage global (tous les fils) — cliquer l'arrête partout, puis chaque fil se règle séparément"
+                  : 'Arrêter le mode auto de cette conversation'
+                : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien ». Les autres fils gardent leur propre réglage."
             }
           >
             <span className="conv-auto-dot" aria-hidden="true" />
-            {autoActif ? 'Mode auto : actif' : 'Mode auto'}
+            {/* LISIBILITÉ DU RÉGLAGE : « tous les fils » = l'ancien réglage global encore hérité,
+                « ce fil » = un réglage propre à la conversation affichée. */}
+            {autoConvs.has('*')
+              ? 'Mode auto : tous les fils'
+              : autoActif
+                ? 'Mode auto : ce fil'
+                : 'Mode auto'}
           </button>
           {autoNotice ? (
             <span className="conv-auto-notice" data-testid="conv-auto-notice">

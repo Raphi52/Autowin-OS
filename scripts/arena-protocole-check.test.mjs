@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -43,6 +43,25 @@ function bancConforme() {
         duration_ms: durees[bras]
       })
     )
+  }
+  /*
+   * P22 — trois bras atteignent le critere dans ce banc, donc la DISPERSION doit etre mesuree :
+   * deux repliques pour b et c, et la section `## Dispersion mesuree` dans le RUN.md ci-dessous.
+   * Sans elle, un ecart inter-bras ne se distingue pas du bruit intra-bras (mesure du 2026-09-07,
+   * banc `arena-bench-dogfood-v2` : ecart b/c a +9,3 % pour une dispersion intra-bras de +28 %).
+   */
+  for (const bras of ['b', 'c']) {
+    for (const replique of ['r1', 'r2']) {
+      writeFileSync(
+        join(bench, `out-${bras}-${replique}.json`),
+        JSON.stringify({
+          session_id: `sess-${bras}-${replique}`,
+          total_cost_usd: couts[bras] * (replique === 'r2' ? 1.28 : 1),
+          num_turns: tours[bras],
+          duration_ms: durees[bras] * (replique === 'r2' ? 1.37 : 1)
+        })
+      )
+    }
   }
   writeFileSync(
     join(bench, 'out-judge.json'),
@@ -116,6 +135,11 @@ CRITERE NON ATTEINT (code de sortie 1)
 
 **Critère binaire** : le livrable signale-t-il les scripts vivants mais cassés ?
 **Preuve** : \`powershell -NoProfile -File scripts/assert-package-content.ps1\` -> exit 1
+
+## Dispersion mesurée
+
+Deux répliques par bras pour b et c : dispersion intra-bras de +28 % en coût et +37 % en durée.
+L'écart inter-bras retenu est donc lu contre ce bruit-là.
 
 **Discrimination** : 3/4 bras ont passé le critère.
 Écart hors bruit : A est le seul bras dont le livrable porte la preuve REJOUÉE ; les perdants la déclarent sans l'exécuter.
@@ -706,6 +730,10 @@ describe('P8 — duree lue dans statut.txt quand la sortie du bras ne porte pas 
   it('PASSE avec les seuls wall=NNs du lanceur, et RATE si le tableau les contredit', () => {
     const f = bancConforme()
     const sansDuree = { a: 114, b: 48, c: 78, x: 96 }
+    // Ce test porte sur le repli sur statut.txt d_un banc a TIR UNIQUE : on retire les repliques.
+    for (const nom of readdirSync(f.bench).filter((n) => /^out-[abcx]-/.test(n))) {
+      rmSync(join(f.bench, nom))
+    }
     for (const bras of ['a', 'b', 'c', 'x']) {
       const j = JSON.parse(readFileSync(join(f.bench, `out-${bras}.json`), 'utf8'))
       delete j.duration_ms
@@ -748,5 +776,88 @@ describe('P21 — le script de critere est cite dans le prompt de chaque bras', 
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P21').ok).toBe(true)
     expect(point(res, 'P17').ok).toBe(true)
+  })
+})
+
+/*
+ * BANC A REPLIQUES — mesure du 2026-09-07 (banc `arena-bench-dogfood-v2`, conv-335). Un banc rejoue
+ * a 2 repliques par bras mesure la DISPERSION intra-bras (+28 % de cout sur le seul bras c) et a
+ * montre que l'ecart inter-bras de +34 % du tir unique etait un artefact. Le controle le declarait
+ * pourtant NON TENU : il ne cherchait que `out-<bras>.json`. Il lit desormais les repliques, et
+ * P22 refuse un banc qui pretend departager deux bras sans avoir mesure ce bruit.
+ */
+describe('banc a repliques : out-<bras>-<replique>.json et P22 dispersion', () => {
+  it('P4 et P8 sont tenus quand un bras n_a que des repliques, sans out-<bras>.json', () => {
+    const f = bancConforme()
+    for (const bras of ['b', 'c']) rmSync(join(f.bench, `out-${bras}.json`))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect('P4 ' + point(res, 'P4').detail).toBe('P4 ok')
+    expect('P8 ' + point(res, 'P8').detail).toBe('P8 ok')
+  })
+
+  it('P8 accepte le chiffre du tableau s_il colle a UNE des repliques', () => {
+    const f = bancConforme()
+    // 0,349 $ est la replique r1 du bras b ; r2 vaut 1,28 fois plus. Le tableau garde r1.
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P8').ok).toBe(true)
+  })
+
+  it('P22 RATE quand deux bras atteignent le critere sans section Dispersion mesuree', () => {
+    const f = bancConforme()
+    writeFileSync(
+      f.run,
+      readFileSync(f.run, 'utf8').replace(/## Dispersion mesurée[\s\S]*?\n\n/, '')
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P22').ok).toBe(false)
+    expect(point(res, 'P22').detail).toMatch(/Dispersion|bruit/i)
+  })
+
+  it('P22 RATE quand la dispersion est annoncee sans aucune replique sur disque', () => {
+    const f = bancConforme()
+    for (const nom of readdirSync(f.bench).filter((n) => /^out-[abcx]-/.test(n))) {
+      rmSync(join(f.bench, nom))
+    }
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P22').ok).toBe(false)
+    expect(point(res, 'P22').detail).toMatch(/aucun bras n_a 2 sorties/)
+  })
+
+  it('P22 se tait sur un banc ou un seul bras atteint le critere', () => {
+    const f = bancConforme()
+    writeFileSync(
+      f.run,
+      readFileSync(f.run, 'utf8').replace(
+        '**Discrimination** : 3/4 bras ont passé le critère.',
+        '**Discrimination** : 1/4 bras a passé le critère.'
+      )
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P22').ok).toBe(true)
+  })
+
+  it('P11 accepte un compte en repliques (4/8) et refuse un denominateur invente', () => {
+    const f = bancConforme()
+    const base = readFileSync(f.run, 'utf8')
+    writeFileSync(
+      f.run,
+      base.replace(
+        '**Discrimination** : 3/4 bras ont passé le critère.',
+        '**Discrimination** : 3/6 répliques ont passé le critère.'
+      )
+    )
+    expect(
+      point(verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine }), 'P11').ok
+    ).toBe(true)
+    writeFileSync(
+      f.run,
+      base.replace(
+        '**Discrimination** : 3/4 bras ont passé le critère.',
+        '**Discrimination** : 3/9 répliques ont passé le critère.'
+      )
+    )
+    expect(
+      point(verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine }), 'P11').ok
+    ).toBe(false)
   })
 })

@@ -91,6 +91,97 @@ const ALLOWED_TAGS = new Set([
  */
 const DROP_WITH_CONTENT = new Set(['script', 'link', 'meta', 'title', 'noscript', 'template'])
 
+/**
+ * Le dessin VECTORIEL declaratif, autorise explicitement.
+ *
+ * MESURE du 2026-09-07 (conv-335) : une reponse contenant quatre propositions d'icone en `<svg>` s'est
+ * affichee vide — seuls les libelles texte restaient. La liste blanche ci-dessus ne nommait aucune
+ * balise SVG, donc chaque `<svg>` etait DEPLIE et son contenu graphique perdu. Un dessin est pourtant
+ * exactement ce qu'un modele doit pouvoir montrer dans le fil.
+ *
+ * Ce qui reste refuse ici, et pourquoi : `foreignObject` (re-ouvre du HTML arbitraire), `image` et
+ * `use` (references SORTANTES), les animations, et tout attribut hors de la liste — donc `on*`.
+ */
+const SVG_TAGS = new Set([
+  'svg',
+  'g',
+  'defs',
+  'path',
+  'circle',
+  'ellipse',
+  'rect',
+  'line',
+  'polyline',
+  'polygon',
+  'text',
+  'tspan',
+  'lineargradient',
+  'radialgradient',
+  'stop',
+  'clippath',
+  'mask',
+  'pattern',
+  'symbol',
+  'title',
+  'desc'
+])
+
+/** Attributs de PRESENTATION du dessin. Geometrie, trait, remplissage — rien de referencable dehors. */
+const SVG_ATTRS = new Set([
+  'clip-path',
+  'clip-rule',
+  'cx',
+  'cy',
+  'd',
+  'dominant-baseline',
+  'dx',
+  'dy',
+  'fill',
+  'fill-opacity',
+  'fill-rule',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'gradienttransform',
+  'gradientunits',
+  'height',
+  'id',
+  'letter-spacing',
+  'mask',
+  'offset',
+  'opacity',
+  'patterncontentunits',
+  'patterntransform',
+  'patternunits',
+  'points',
+  'preserveaspectratio',
+  'r',
+  'rx',
+  'ry',
+  'stop-color',
+  'stop-opacity',
+  'stroke',
+  'stroke-dasharray',
+  'stroke-dashoffset',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'stroke-miterlimit',
+  'stroke-opacity',
+  'stroke-width',
+  'text-anchor',
+  'transform',
+  'viewbox',
+  'width',
+  'x',
+  'x1',
+  'x2',
+  'y',
+  'y1',
+  'y2'
+])
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
 const ALLOWED_ATTRS = new Set([
   'align',
   'alt',
@@ -403,14 +494,70 @@ export function scopeChatStyleSheet(css: string, scope: string): string {
   return out.join('\n')
 }
 
+/**
+ * Assainit un noeud du namespace SVG.
+ *
+ * Deux precautions propres au dessin :
+ * - les `id` sont PREFIXES par le domaine du bloc, et les references `url(#…)` reecrites en meme
+ *   temps : deux reponses definissant toutes deux un degrade `g1` ne doivent pas se voler leurs
+ *   couleurs, et un `id` du modele ne doit jamais repondre a un `getElementById` de l'application ;
+ * - une reference qui n'est pas LOCALE (`url(https://…)`) fait tomber l'attribut : c'est une requete
+ *   sortante deguisee en couleur de remplissage.
+ */
+function sanitizeSvgNode(node: Element, tag: string, prefixeId: string): void {
+  if (!SVG_TAGS.has(tag)) {
+    node.replaceWith(...Array.from(node.childNodes))
+    return
+  }
+
+  for (const attribute of Array.from(node.attributes)) {
+    const name = attribute.name.toLowerCase()
+
+    if (name === 'style') {
+      const style = sanitizeStyle(attribute.value)
+      if (style) node.setAttribute('style', style)
+      else node.removeAttribute('style')
+      continue
+    }
+
+    if (!SVG_ATTRS.has(name) && !ALLOWED_ATTRS.has(name)) {
+      node.removeAttribute(attribute.name)
+      continue
+    }
+
+    if (name === 'id') {
+      node.setAttribute('id', `${prefixeId}${attribute.value}`)
+      continue
+    }
+
+    if (/url\s*\(/i.test(attribute.value)) {
+      const local = attribute.value.replace(
+        /url\(\s*['"]?#([^'")\s]+)['"]?\s*\)/gi,
+        (_all, cible: string) => `url(#${prefixeId}${cible})`
+      )
+      if (/url\s*\((?!#)/i.test(local)) node.removeAttribute(attribute.name)
+      else node.setAttribute(attribute.name, local)
+    }
+  }
+}
+
 export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
   const template = document.createElement('template')
   template.innerHTML = source
 
+  // Domaine du bloc, reutilise pour prefixer les `id` du dessin (degrades, masques, decoupes).
+  const prefixeId = `svg-${/data-html-scope="([^"]+)"/.exec(scopeSelector_)?.[1] ?? 'bloc'}-`
+
   const walk = (node: Element): void => {
     for (const child of Array.from(node.children)) walk(child)
 
-    const tag = node.tagName.toLowerCase()
+    // `localName` et non `tagName` : en SVG, `tagName` conserve la casse (`linearGradient`).
+    const tag = node.localName.toLowerCase()
+
+    if (node.namespaceURI === SVG_NS) {
+      sanitizeSvgNode(node, tag, prefixeId)
+      return
+    }
 
     if (tag === 'style') {
       // Conservee mais CONFINEE. Sans domaine de style, on ne rendrait pas ce bloc plus beau, on

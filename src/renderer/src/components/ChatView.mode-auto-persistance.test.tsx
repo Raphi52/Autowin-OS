@@ -55,6 +55,8 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     })
     const bouton = document.querySelector('[data-testid="conv-auto-toggle"]')
     expect(bouton?.getAttribute('aria-pressed')).toBe('true')
+    // LIBELLÉ : l'ancien réglage global est hérité — il dit « tous les fils », pas « ce fil ».
+    expect(bouton?.textContent).toContain('tous les fils')
     // La vieille réponse déjà à l'écran n'est PAS relancée : aucun tour payant à la reprise.
     expect(pilotChat.mock.calls.length).toBe(0)
   })
@@ -88,6 +90,38 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
 
     const bouton = document.querySelector('[data-testid="conv-auto-toggle"]')
     expect(bouton?.getAttribute('aria-pressed')).toBe('true')
-    expect(window.localStorage.getItem('autowin.chat.modeAuto')).toBe('1')
+    expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toContain(
+      'A'
+    )
+  })
+
+  it('le réglage est PAR conversation : armer A laisse B éteint', async () => {
+    const filA = fil('lancer terrain sur A.')
+    h = await mountChat(
+      chatApi({
+        pilotChat: vi.fn().mockResolvedValue({ ok: true }),
+        conversations: vi.fn().mockResolvedValue([conversation('A', filA), conversation('B', [])]),
+        conversation: vi.fn(async (id: string) => conversation(id, id === 'A' ? filA : []))
+      })
+    )
+    const items = document.querySelectorAll('.conv-item .conv-pick')
+    await h.click('.conv-item .conv-pick') // A
+    await h.click('[data-testid="conv-auto-toggle"]')
+    const armé = document.querySelector('[data-testid="conv-auto-toggle"]')
+    expect(armé?.getAttribute('aria-pressed')).toBe('true')
+    // LIBELLÉ : réglage propre à la conversation affichée, donc « ce fil ».
+    expect(armé?.textContent).toContain('ce fil')
+    expect(armé?.textContent).not.toContain('tous les fils')
+    expect(items.length).toBeGreaterThan(1)
+    await act(async () => (items[1] as HTMLElement).click()) // B
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const eteint = document.querySelector('[data-testid="conv-auto-toggle"]')
+    expect(eteint?.getAttribute('aria-pressed')).toBe('false')
+    expect(eteint?.textContent?.trim()).toBe('Mode auto')
+    expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toEqual([
+      'A'
+    ])
   })
 })

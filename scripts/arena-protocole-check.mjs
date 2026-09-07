@@ -49,7 +49,7 @@ function promptDuJuge(bench) {
 
 /** Compte `n/4` de bras ayant passe le critere, lu dans la ligne Discrimination du RUN.md. */
 const REGEX_DISCRIMINATION =
-  /discrimin\w*.{0,60}?([0-4])\s*\/\s*4|([0-4])\s*\/\s*4.{0,60}?discrimin/i
+  /discrimin\w*.{0,80}?(\d+)\s*\/\s*(\d+)|(\d+)\s*\/\s*(\d+).{0,80}?discrimin/i
 
 /** Mots qui marquent un cas HORS chemin heureux dans le libelle d'une assertion. */
 const MOTS_CAS_LIMITE =
@@ -143,6 +143,37 @@ export function verifierProtocole({
   const sorties = Object.fromEntries(
     BRAS.map((b) => [b, lireJson(path.join(bench, `out-${b}.json`))])
   )
+  /**
+   * BANC A REPLIQUES — `out-<bras>-<replique>.json`. Mesure du 2026-09-07 (banc
+   * `arena-bench-dogfood-v2`, conv-335) : rejoue a 2 repliques par bras, le banc mesure la
+   * DISPERSION intra-bras (+28 % de cout sur le seul bras c, +131 % sur x) et montre que l_ecart
+   * inter-bras de +34 % du tir unique etait un artefact. Il mesure donc MIEUX qu_un tir unique —
+   * mais le controle le declarait NON TENU faute de chercher autre chose que `out-<bras>.json`.
+   * Les sorties de repliques sont lues comme autant de mesures du MEME bras.
+   */
+  const repliquesDuBras = (b) => {
+    if (!existsSync(bench)) return []
+    const motif = new RegExp(`^out-${b}-(.+)\.json$`, 'i')
+    return readdirSync(bench)
+      .map((n) => ({ n, m: motif.exec(n) }))
+      .filter(({ m }) => m)
+      .sort((x, y) => x.n.localeCompare(y.n))
+      .map(({ n, m }) => ({ replique: m[1], json: lireJson(path.join(bench, n)) }))
+      .filter((r) => r.json)
+  }
+  const nomsDeSortie = (b) => [b, ...repliquesDuBras(b).map((r) => `${b}-${r.replique}`)]
+  /** Toutes les valeurs MESUREES d_un bras : une par replique, ou une seule si tir unique. */
+  const mesuresDuBras = (b) => {
+    const sources = []
+    if (sorties[b]) sources.push(sorties[b])
+    for (const r of repliquesDuBras(b)) sources.push(r.json)
+    return {
+      nombre: sources.length,
+      couts: sources.map((o) => o?.total_cost_usd).filter(Number.isFinite),
+      tours: sources.map((o) => o?.num_turns).filter(Number.isFinite)
+    }
+  }
+  const nombreDeRepliques = BRAS.reduce((n, b) => n + Math.max(1, repliquesDuBras(b).length), 0)
   const lancement = scriptLancement(bench)
 
   /**
@@ -151,11 +182,23 @@ export function verifierProtocole({
    * colonne `min` du tableau n_est adossee a RIEN — P8 le dit au lieu de la croire.
    */
   const statutTexte = lire(path.join(bench, 'statut.txt')) ?? ''
-  const dureeMinutes = (b) => {
-    const ms = sorties[b]?.duration_ms
-    if (Number.isFinite(ms)) return ms / 60000
-    const m = new RegExp(`^\\s*${b}\\b.*?wall=(\\d+)s`, 'im').exec(statutTexte)
-    return m ? Number(m[1]) / 60 : NaN
+  const dureeMinutes = (b) => minutesDuBras(b)[0] ?? NaN
+  /** Durees MESUREES d_un bras, en minutes : une par replique (sortie JSON, sinon statut.txt). */
+  const minutesDuBras = (b) => {
+    const valeurs = []
+    for (const nom of nomsDeSortie(b)) {
+      const source =
+        nom === b
+          ? sorties[b]
+          : repliquesDuBras(b).find((r) => `${b}-${r.replique}` === nom)?.json
+      const ms = source?.duration_ms
+      if (Number.isFinite(ms)) valeurs.push(ms / 60000)
+      else {
+        const m = new RegExp(String.raw`^\s*${nom}\b.*?wall=(\d+)s`, 'im').exec(statutTexte)
+        if (m) valeurs.push(Number(m[1]) / 60)
+      }
+    }
+    return valeurs
   }
 
   ajoute('P1', 'Candidats scoutes ecrits sur disque : >=6 lignes, B/C/X marques', () => {
@@ -216,7 +259,9 @@ export function verifierProtocole({
     const manque = []
     for (const b of BRAS) {
       if (!existsSync(path.join(bench, `prompt-${b}.txt`))) manque.push(`prompt-${b}.txt`)
-      if (!sorties[b]) manque.push(`out-${b}.json`)
+      // Une sortie par bras, ou une par replique (`out-<bras>-<replique>.json`) : les deux comptent.
+      if (!sorties[b] && !repliquesDuBras(b).length)
+        manque.push(`out-${b}.json (ni out-${b}-<replique>.json)`)
     }
     return manque.length ? `manquant ou illisible : ${manque.join(', ')}` : true
   })
@@ -271,36 +316,54 @@ export function verifierProtocole({
           ecarts.push(`${b}: absent du tableau`)
           continue
         }
+        /**
+         * Un banc a repliques annonce une ligne PAR replique : le chiffre du tableau doit donc
+         * correspondre a l_UNE des mesures du bras (ou a leur moyenne), pas a une sortie unique.
+         * A tir unique il n_y a qu_une mesure : le controle est inchange.
+         */
+        const mesures = mesuresDuBras(b)
+        const moyenne = (v) => v.reduce((a, x) => a + x, 0) / v.length
+        const colle = (dit, valeurs, tolerance) =>
+          valeurs.some((v) => Math.abs(dit - v) <= tolerance) ||
+          (valeurs.length > 1 && Math.abs(dit - moyenne(valeurs)) <= tolerance)
         const dit = nombre(ligne[iCout])
-        const mesure = sorties[b]?.total_cost_usd
         if (!Number.isFinite(dit)) ecarts.push(`${b}: cout illisible "${ligne[iCout]}"`)
-        else if (!Number.isFinite(mesure))
-          ecarts.push(`${b}: aucun total_cost_usd dans out-${b}.json`)
-        else if (Math.abs(dit - mesure) > 0.001)
-          ecarts.push(`${b}: tableau ${ligne[iCout]} vs journal ${mesure.toFixed(4)}`)
+        else if (!mesures.couts.length)
+          ecarts.push(
+            `${b}: aucun total_cost_usd mesure (ni out-${b}.json ni out-${b}-<replique>.json)`
+          )
+        else if (!colle(dit, mesures.couts, 0.001))
+          ecarts.push(
+            `${b}: tableau ${ligne[iCout]} vs mesure(s) ${mesures.couts.map((v) => v.toFixed(4)).join(' / ')}`
+          )
 
         // MINUTES — le tableau les annonce, out-<bras>.json (ou statut.txt) les MESURE.
         if (iMin >= 0) {
           const minDit = nombre(ligne[iMin])
-          const minMesure = dureeMinutes(b)
+          const minMesures = minutesDuBras(b)
           if (!Number.isFinite(minDit)) ecarts.push(`${b}: min illisible "${ligne[iMin]}"`)
-          else if (!Number.isFinite(minMesure))
+          else if (!minMesures.length)
             ecarts.push(
-              `${b}: aucune duree mesuree (ni duration_ms dans out-${b}.json, ni wall dans statut.txt)`
+              `${b}: aucune duree mesuree (ni duration_ms dans les sorties, ni wall dans statut.txt)`
             )
-          else if (Math.abs(minDit - minMesure) > 0.1)
-            ecarts.push(`${b}: min tableau ${ligne[iMin]} vs duree mesuree ${minMesure.toFixed(2)}`)
+          else if (!colle(minDit, minMesures, 0.1))
+            ecarts.push(
+              `${b}: min tableau ${ligne[iMin]} vs duree(s) mesuree(s) ${minMesures.map((v) => v.toFixed(2)).join(' / ')}`
+            )
         }
 
         // TOURS — num_turns est dans la sortie du bras : aucun arrondi possible.
         if (iTours >= 0) {
           const toursDits = nombre(ligne[iTours])
-          const toursMesures = sorties[b]?.num_turns
           if (!Number.isFinite(toursDits)) ecarts.push(`${b}: tours illisibles "${ligne[iTours]}"`)
-          else if (!Number.isFinite(toursMesures))
-            ecarts.push(`${b}: aucun num_turns dans out-${b}.json (tours non mesures)`)
-          else if (toursDits !== toursMesures)
-            ecarts.push(`${b}: tours tableau ${toursDits} vs journal ${toursMesures}`)
+          else if (!mesures.tours.length)
+            ecarts.push(
+              `${b}: aucun num_turns mesure (ni out-${b}.json ni out-${b}-<replique>.json)`
+            )
+          else if (!colle(toursDits, mesures.tours, 0))
+            ecarts.push(
+              `${b}: tours tableau ${toursDits} vs mesure(s) ${mesures.tours.join(' / ')}`
+            )
         }
       }
       return ecarts.length ? ecarts.join(' ; ') : true
@@ -336,10 +399,18 @@ export function verifierProtocole({
     if (!/discrimin/i.test(md))
       return 'aucune ligne Discrimination : on ne sait pas si le banc departage'
     const m = REGEX_DISCRIMINATION.exec(md)
-    const n = m ? Number(m[1] ?? m[2]) : null
-    if (n === null) return 'mention Discrimination sans compte n/4'
-    if (n === 4 && !/NON DISCRIMINANT/i.test(md))
-      return '4/4 bras ont passe le critere sans mention NON DISCRIMINANT : le gagnant est une piste, pas une mesure'
+    const n = m ? Number(m[1] ?? m[3]) : null
+    const total = m ? Number(m[2] ?? m[4]) : null
+    if (n === null || !Number.isFinite(total) || total < 1)
+      return 'mention Discrimination sans compte n/N (bras ou repliques ayant passe le critere)'
+    /**
+     * Un banc a repliques compte en repliques (`4/8`), pas en bras : le denominateur doit etre 4
+     * (un tir par bras) ou le nombre total de repliques du banc.
+     */
+    if (total !== 4 && total !== nombreDeRepliques)
+      return `compte Discrimination ${n}/${total} : le banc porte 4 bras et ${nombreDeRepliques} sortie(s) mesuree(s)`
+    if (n === total && !/NON DISCRIMINANT/i.test(md))
+      return `${n}/${total} ont passe le critere sans mention NON DISCRIMINANT : le gagnant est une piste, pas une mesure`
     return true
   })
 
@@ -591,6 +662,33 @@ export function verifierProtocole({
       ? manque.join(' ; ') +
           ' — un bras qui ignore le critere mesure son ignorance, pas le workflow (banc du 2026-09-07 : sans critere 9/28 rouges, avec critere 28/28)'
       : true
+  })
+
+  /**
+   * P22 — DEUX BRAS AU CRITERE => LA DISPERSION SE MESURE. Mesure du 2026-09-07 (banc
+   * `arena-bench-dogfood-v2`, conv-335) : au tir unique, b vs c sortait a +34 % de cout et le banc
+   * concluait « c gagnant » ; rejoue a 2 repliques, l_ecart tombe a +9,3 % alors que la dispersion
+   * INTRA-bras de c seul atteint +28 %. Un ecart inter-bras plus petit que le bruit d_un seul bras
+   * n_est pas un resultat — donc des que deux bras atteignent le critere, le RUN.md doit porter la
+   * dispersion MESUREE, et elle exige au moins deux sorties pour l_un des bras.
+   */
+  ajoute('P22', 'Deux bras au critere : section `## Dispersion mesuree` avec 2 repliques', () => {
+    const m = REGEX_DISCRIMINATION.exec(md)
+    const n = m ? Number(m[1] ?? m[3]) : null
+    if (n === null || n < 2) return true
+    const bloc =
+      section(md, '## Dispersion mesurée') ??
+      section(md, '## Dispersion mesuree') ??
+      section(md, '## Dispersion')
+    if (!bloc)
+      return `${n} bras/repliques atteignent le critere : sans section \`## Dispersion mesuree\`, un ecart inter-bras ne peut pas etre distingue du bruit intra-bras`
+    if (!/intra[- ]bras/i.test(bloc))
+      return 'section Dispersion sans ecart INTRA-bras : c_est lui qui donne le bruit du banc'
+    if (!/%/.test(bloc)) return 'section Dispersion sans chiffre en % : dispersion annoncee, non mesuree'
+    const repliquees = BRAS.filter((b) => repliquesDuBras(b).length >= 2)
+    if (!repliquees.length)
+      return 'dispersion annoncee mais aucun bras n_a 2 sorties (out-<bras>-<replique>.json) : rien ne la mesure'
+    return true
   })
 
   const jugements = [

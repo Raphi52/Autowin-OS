@@ -34,3 +34,48 @@ describe('ALLOWED_STYLE_PROPS — font et border-image', () => {
     expect(sanitizeChatHtml('<p style="font-stretch: expanded">x</p>')).not.toContain('font-stretch')
   })
 })
+
+/**
+ * MESURE du 2026-09-07 (conv-335) : quatre propositions d'icone dessinees en `<svg>` se sont affichees
+ * VIDES dans le fil — seuls les libelles texte restaient. Aucune balise SVG n'etait dans la liste
+ * blanche, donc chaque dessin etait deplie et perdu.
+ */
+describe('dessin vectoriel dans le fil', () => {
+  const DESSIN =
+    '<svg viewBox="0 0 10 10"><defs><linearGradient id="g1">' +
+    '<stop offset="0" stop-color="#e3ba55"/></linearGradient></defs>' +
+    '<rect width="10" height="10" rx="2" fill="url(#g1)"/>' +
+    '<path d="M1 1 L9 9" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>'
+
+  it('conserve la balise svg et sa geometrie', () => {
+    const html = sanitizeChatHtml(DESSIN)
+    expect(html).toContain('<svg')
+    expect(html).toContain('viewBox="0 0 10 10"')
+    expect(html).toContain('d="M1 1 L9 9"')
+    expect(html).toContain('stroke-width="2"')
+  })
+
+  it('garde le degrade en reliant la reference a son id prefixe', () => {
+    const html = sanitizeChatHtml(DESSIN, '[data-html-scope="abc"]')
+    expect(html).toContain('id="svg-abc-g1"')
+    expect(html).toContain('url(#svg-abc-g1)')
+  })
+
+  // ENTREES QUI DOIVENT FAIRE ECHOUER UN ELARGISSEMENT TROP LARGE :
+  it('retire un gestionnaire d evenement porte par le dessin', () => {
+    const html = sanitizeChatHtml('<svg onload="alert(1)"><circle cx="1" cy="1" r="1"/></svg>')
+    expect(html).not.toContain('onload')
+    expect(html).toContain('<circle')
+  })
+
+  it('refuse une reference SORTANTE deguisee en remplissage', () => {
+    const html = sanitizeChatHtml('<svg><rect fill="url(https://pisteur.example/p.png)"/></svg>')
+    expect(html).not.toContain('pisteur.example')
+  })
+
+  it('deplie une balise SVG non nommee au lieu de la rendre', () => {
+    const html = sanitizeChatHtml('<svg><foreignObject><b>texte</b></foreignObject></svg>')
+    expect(html).not.toContain('foreignObject')
+    expect(html).toContain('texte')
+  })
+})

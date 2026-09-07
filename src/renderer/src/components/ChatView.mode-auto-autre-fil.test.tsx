@@ -56,9 +56,18 @@ describe('ChatView — le mode auto enchaîne aussi un fil qui n’est pas à l�
         })
       })
     )
-    // On travaille dans A, mode auto armé.
-    await h.click('.conv-item .conv-pick')
+    /*
+     * REGLAGE PAR CONVERSATION (2026-09-07) : le mode auto s'arme fil par fil. On arme donc B —
+     * le fil qui doit enchaîner — puis on revient travailler dans A. La garantie testée reste la
+     * même : un fil ARMÉ enchaîne sa suite même quand il n'est pas à l'écran.
+     */
+    const items = document.querySelectorAll('.conv-item .conv-pick')
+    await act(async () => (items[1] as HTMLElement).click())
     await h.click('[data-testid="conv-auto-toggle"]')
+    await act(async () => (items[0] as HTMLElement).click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
     const avant = pilotChat.mock.calls.length
 
     // B tourne en arrière-plan et TERMINE, l'écran restant sur A.
