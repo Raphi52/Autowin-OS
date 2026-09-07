@@ -390,7 +390,6 @@ export function ChatView({
       return suivant
     })
   }, [])
-  const [autoNotice, setAutoNotice] = useState<string | null>(null)
   /**
    * L'avancement de la boucle, PAR CONVERSATION — `tour` = dernier tour déjà traité (un re-rendu du
    * même tour ne renvoie rien), `prompt` = dernier texte envoyé (la même suite deux fois = boucle).
@@ -3100,26 +3099,15 @@ export function ChatView({
       tourEstUnScout: dernierTourEstUnScout(messages)
     })
     if (decision.action === 'attendre') {
-      // VISIBILITÉ : deux attentes sont des impasses réelles — plus aucune suite écrite, ou la même
-      // suite renvoyée en boucle. Le badge disait « actif » pendant que la boucle était morte ;
-      // désormais il dit pourquoi. Les autres attentes sont normales et restent muettes.
-      if (decision.raison === 'aucun-prompt')
-        setAutoNotice('Mode auto en attente : la dernière réponse ne propose aucune suite.')
-      else if (decision.raison === 'prompt-identique')
-        setAutoNotice('Mode auto en attente : la même suite revenait deux fois — non renvoyée.')
-      else if (decision.raison === 'chaine-finie')
-        setAutoNotice('Mode auto en attente : ce fil est terminé — donne-moi une nouvelle cible.')
       return
     }
     if (decision.action === 'arreter') {
       // N'eteint QUE le fil affiche : les autres fils armes gardent leur reglage.
       desarmerAuto(activeId)
-      setAutoNotice(decision.message)
       return
     }
     etat.tour = decision.signature
     etat.prompt = decision.texte
-    setAutoNotice(null)
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
     void send(decision.texte, { keepComposerDraft: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3169,7 +3157,6 @@ export function ChatView({
       if (decision.action === 'arreter') {
         autoEssaisRef.current.delete(id)
         const fini = convsRef.current.find((c) => c.id === id)?.title ?? id
-        setAutoNotice(`Mode auto : « ${fini} » n'a plus rien à enchaîner — le mode reste actif.`)
         continue
       }
       if (decision.action !== 'envoyer') {
@@ -3193,7 +3180,6 @@ export function ChatView({
       etat.tour = decision.signature
       etat.prompt = decision.texte
       const titre = convsRef.current.find((c) => c.id === id)?.title ?? id
-      setAutoNotice(`Mode auto : suite envoyée dans « ${titre} ».`)
       void send(decision.texte, { keepComposerDraft: true, targetConversationId: id })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3221,7 +3207,6 @@ export function ChatView({
         if (activeId) suivant.delete(activeId)
         return suivant
       })
-      setAutoNotice('Mode auto arrêté.')
       return
     }
     if (activeId ? autoConvs.has(activeId) : autoActif) {
@@ -3237,7 +3222,6 @@ export function ChatView({
         return suivant
       })
       else desarmerAuto(activeId)
-      setAutoNotice('Mode auto arrêté pour cette conversation.')
       return
     }
     if (activeId) {
@@ -3249,7 +3233,6 @@ export function ChatView({
     // est justement celui que ce clic demande d'enchaîner, pas un vieux tour rouvert.
     autoFilAmorceRef.current = null
     autoAllumageManuelRef.current = true
-    setAutoNotice(null)
     if (activeId) setAutoConvs((precedent) => new Set(precedent).add(activeId))
   }
 
@@ -4490,15 +4473,6 @@ export function ChatView({
               ×
             </button>
           )}
-        </div>
-        {/* Le mode auto se regle par CONVERSATION, avec le bouton ∞ de la barre de saisie
-            (chat plein comme mosaique). Il ne reste ici que l'annonce de ce qu'il a envoye. */}
-        <div className="conv-auto" data-testid="conv-auto">
-          {autoNotice ? (
-            <span className="conv-auto-notice" data-testid="conv-auto-notice">
-              {autoNotice}
-            </span>
-          ) : null}
         </div>
         {/*
           La barre n'existe QUE pendant une sélection en cours : hors de ce moment elle n'offrait

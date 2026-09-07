@@ -4104,12 +4104,6 @@ button.chat-project-dot:disabled {
   border-color: color-mix(in srgb, #ff4057 45%, transparent);
   color: #ff4057;
 }
-.conv-auto {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 var(--s2) var(--s2);
-}
 /* MESSAGE ORIENTE EN COURS DE TOUR (conv-257, 2026-09-04).
    Un message tape pendant qu'un tour tourne n'ouvre PAS un nouveau tour : il rejoint la reponse en
    cours. Rien ne le distinguait dans le fil, donc l'utilisateur le croyait perdu. Marque DISCRETE :
