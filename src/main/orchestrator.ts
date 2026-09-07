@@ -4381,6 +4381,24 @@ ${empreinteDepot}`
             registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) => {
               supervision.onDelta(c.delta)
               if (c.reasoning) onDelta?.('exec', '', c.reasoning)
+              /*
+               * LE BATTEMENT D'OUTIL EXISTAIT ET ETAIT JETE ICI.
+               *
+               * Mesure du 2026-09-07 (conv-42) : le journal du tour n'a rien recu entre la fin de
+               * `frame` (1788764779503) et celle de `build` (1788766075667) — 21 min 36 s de
+               * silence pendant que la phase lisait, editait et rejouait des suites. Le fournisseur
+               * battait pourtant toutes les 30 s : `claude.ts` traduit `tool_progress` en
+               * `chunk.status` (« Bash en cours - 2 min 30 s - vitest run »), et le pilote de chat
+               * lit ce champ depuis toujours (`agent-pilot.ts`, evenement `provider-status`).
+               * Ce callback de phase ne lisait que `delta` et `reasoning` : la seule source de vie
+               * d'une phase longue tombait donc dans le vide, et le tour paraissait mort.
+               *
+               * On REUTILISE le canal de note deja prevu pour exactement ce libelle (cf. le
+               * commentaire de `commands.ts` : « Une NOTE (« Bash en cours — 2 min 30 s ») voyage
+               * sur le meme evenement mais dans son propre champ ») — en ouvrir un second ferait
+               * diverger deux verites sur le meme fait.
+               */
+              if (c.status) onDelta?.('exec', '', c.status)
             }),
           (note) => onDelta?.('exec', `\n${note}\n`),
           signal
