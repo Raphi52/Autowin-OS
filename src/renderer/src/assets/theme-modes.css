@@ -603,7 +603,7 @@
    or eteint plus son rose mauve SONT son identite. Hypothese assumee.
    =========================================================================== */
 :root[data-theme='obsidian-nebula'] {
-  --bg-0: #07080d;
+  --bg-0: #0c1022;
   --bg-1: rgba(17, 19, 29, 0.8);
   --bg-2: rgba(17, 19, 29, 0.62);
   --bg-3: rgba(232, 226, 216, 0.05);
@@ -669,7 +669,7 @@
 /* Le rail est peint en NOIR OPAQUE en dur plus haut dans ce fichier, avec un
    commentaire qui l assume. Ce theme veut son propre noir bleute. */
 :root[data-theme='obsidian-nebula'] .theme-serious .rail {
-  background: #07080d;
+  background: #0c1022;
   border-right-color: var(--line);
 }
 :root[data-theme='obsidian-nebula'] .theme-serious .brand {
@@ -688,7 +688,7 @@
    tel quel. Il gardera donc sa nebuleuse d origine, ce qui convient a un theme vif.
    =========================================================================== */
 :root[data-theme='solar-rose'] {
-  --bg-0: #08070c;
+  --bg-0: #180a1c;
   --bg-1: rgba(22, 16, 30, 0.82);
   --bg-2: rgba(22, 16, 30, 0.64);
   --bg-3: rgba(255, 203, 101, 0.07);
@@ -727,7 +727,7 @@
 }
 
 :root[data-theme='solar-rose'] .theme-serious .rail {
-  background: #08070c;
+  background: #180a1c;
   border-right-color: var(--line);
 }
 :root[data-theme='solar-rose'] .theme-serious .brand {
@@ -739,7 +739,7 @@
    sketches/galaxy-dark-gold-pink/black-versailles/index.html.
 
    Son parti pris : des filets BRUN DORE opaques la ou les autres mettent du gris
-   translucide, un or assourdi et un rose brique. Le noir est chaud (#080807), pas bleute.
+   translucide, un or assourdi et un rose brique. Le noir est chaud (#17130a), pas bleute.
 
    CE QU IL NE PEUT PAS RENDRE, et il faut le savoir : la maquette d origine change aussi
    la TYPOGRAPHIE (titres en serif, chiffres a l ancienne) et les FORMES (losanges au lieu
@@ -747,7 +747,7 @@
    c est deja distinctif, mais ce n est pas toute la maquette.
    =========================================================================== */
 :root[data-theme='black-versailles'] {
-  --bg-0: #080807;
+  --bg-0: #17130a;
   --bg-1: rgba(17, 16, 14, 0.86);
   --bg-2: rgba(33, 24, 29, 0.7);
   --bg-3: rgba(201, 167, 93, 0.06);
@@ -786,7 +786,7 @@
 }
 
 :root[data-theme='black-versailles'] .theme-serious .rail {
-  background: #080807;
+  background: #17130a;
   border-right-color: var(--line);
 }
 :root[data-theme='black-versailles'] .theme-serious .brand {
