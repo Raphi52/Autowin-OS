@@ -363,7 +363,7 @@ noms-là, dès la préparation du banc (étape 1) et au retour de chaque bras (�
 Le `RUN.md` passé en `--run` reste à part : c'est le compte rendu (candidats scoutés, rouge collé,
 tableau, Discrimination), pas un des artefacts ci-dessus.
 
-Il lit les fichiers du banc et rend 18 points OK/RATE (candidats écrits, rouge collé, cas limites du
+Il lit les fichiers du banc et rend 22 points OK/RATE (candidats écrits, rouge collé, cas limites du
 critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
 `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
 copies perdantes retirées, et — si le banc teste des variations de TEXTE — section `## Variantes de
