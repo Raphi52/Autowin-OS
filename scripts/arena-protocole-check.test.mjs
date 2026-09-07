@@ -24,6 +24,9 @@ function bancConforme() {
   const tache = 'TACHE (identique pour tous) :\najoute --depuis a scripts/rendement-sonde.mjs\n'
   writeFileSync(join(bench, 'tache.txt'), tache)
   const couts = { a: 0.6365555, b: 0.3490945, c: 0.52714, x: 0.506905 }
+  // Les minutes et les tours du tableau du RUN.md ci-dessous viennent de CES chiffres (P8).
+  const durees = { a: 114000, b: 48000, c: 78000, x: 96000 }
+  const tours = { a: 13, b: 10, c: 13, x: 13 }
   for (const bras of ARMS) {
     writeFileSync(
       join(bench, `prompt-${bras}.txt`),
@@ -33,7 +36,12 @@ function bancConforme() {
     )
     writeFileSync(
       join(bench, `out-${bras}.json`),
-      JSON.stringify({ session_id: `sess-${bras}`, total_cost_usd: couts[bras], num_turns: 13 })
+      JSON.stringify({
+        session_id: `sess-${bras}`,
+        total_cost_usd: couts[bras],
+        num_turns: tours[bras],
+        duration_ms: durees[bras]
+      })
     )
   }
   writeFileSync(
@@ -138,7 +146,7 @@ AUTOWIN_LESSON_V1: {"outcome":"success","title":"A gagne","body":"Δ = 0,29 $ co
         tache: tache.trim(),
         workflow: `workflow ${bras}`,
         bras,
-        dureeMs: 114000,
+        dureeMs: durees[bras],
         coutUsd: couts[bras],
         verdict: verdicts[bras],
         banc: bench
@@ -668,5 +676,52 @@ Lancement des bras : claude -p "..." pour chacun des quatre prompts.
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P20').ok).toBe(false)
     expect(point(res, 'P20').detail).toMatch(/APRES|apres/i)
+  })
+})
+
+/**
+ * P8 ne confrontait QUE la colonne `$` (scripts/arena-protocole-check.mjs:242) alors que le banc
+ * exige QUATRE chiffres mesures (cout, minutes, tours, verdict). Minutes et tours pouvaient donc
+ * etre inventes : le controle restait vert. Ces deux cas les rendent rouges.
+ */
+describe('P8 — les minutes et les tours sont mesures, pas racontes', () => {
+  it('RATE quand la colonne min ne colle pas a duration_ms du bras', () => {
+    const f = bancConforme()
+    writeFileSync(f.run, readFileSync(f.run, 'utf8').replace('| 0,8 | 10 |', '| 0,2 | 10 |'))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P8').ok).toBe(false)
+    expect(point(res, 'P8').detail).toMatch(/min|duree|durée/i)
+  })
+
+  it('RATE quand la colonne tours ne colle pas a num_turns du bras', () => {
+    const f = bancConforme()
+    writeFileSync(f.run, readFileSync(f.run, 'utf8').replace('| 0,8 | 10 |', '| 0,8 | 3 |'))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P8').ok).toBe(false)
+    expect(point(res, 'P8').detail).toMatch(/tours/i)
+  })
+})
+
+describe('P8 — duree lue dans statut.txt quand la sortie du bras ne porte pas duration_ms', () => {
+  it('PASSE avec les seuls wall=NNs du lanceur, et RATE si le tableau les contredit', () => {
+    const f = bancConforme()
+    const sansDuree = { a: 114, b: 48, c: 78, x: 96 }
+    for (const bras of ['a', 'b', 'c', 'x']) {
+      const j = JSON.parse(readFileSync(join(f.bench, `out-${bras}.json`), 'utf8'))
+      delete j.duration_ms
+      writeFileSync(join(f.bench, `out-${bras}.json`), JSON.stringify(j))
+    }
+    writeFileSync(
+      join(f.bench, 'statut.txt'),
+      Object.entries(sansDuree)
+        .map(([b, s]) => `${b} exit=0 wall=${s}s`)
+        .join('\n') + '\n'
+    )
+    expect(point(verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine }), 'P8').ok).toBe(true)
+
+    writeFileSync(join(f.bench, 'statut.txt'), 'a exit=0 wall=114s\nb exit=0 wall=600s\n')
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P8').ok).toBe(false)
+    expect(point(res, 'P8').detail).toMatch(/b: min tableau/)
   })
 })

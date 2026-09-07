@@ -145,6 +145,19 @@ export function verifierProtocole({
   )
   const lancement = scriptLancement(bench)
 
+  /**
+   * Duree MESUREE d_un bras, en minutes : `duration_ms` de sa sortie JSON, sinon la ligne
+   * `<bras> exit=... wall=NNs` de statut.txt ecrite par le lanceur. Sans l_une des deux, la
+   * colonne `min` du tableau n_est adossee a RIEN — P8 le dit au lieu de la croire.
+   */
+  const statutTexte = lire(path.join(bench, 'statut.txt')) ?? ''
+  const dureeMinutes = (b) => {
+    const ms = sorties[b]?.duration_ms
+    if (Number.isFinite(ms)) return ms / 60000
+    const m = new RegExp(`^\\s*${b}\\b.*?wall=(\\d+)s`, 'im').exec(statutTexte)
+    return m ? Number(m[1]) / 60 : NaN
+  }
+
   ajoute('P1', 'Candidats scoutes ecrits sur disque : >=6 lignes, B/C/X marques', () => {
     const bloc = section(md, '## Candidats scoutés') ?? section(md, '## Candidats scoutes')
     if (bloc === null) return 'section `## Candidats scoutés` absente du RUN.md'
@@ -239,30 +252,60 @@ export function verifierProtocole({
       : 'lancement sequentiel : le 2e bras profite du travail du 1er (SKILL.md, pieges)'
   })
 
-  ajoute('P8', 'Chaque $ du tableau == total_cost_usd du bras (aucun chiffre estime)', () => {
-    const lignes = lignesTableau(md)
-    const entete = lignes.find((l) => /^bras$/i.test(l[0]) && l.some((c) => c.includes('$')))
-    if (!entete) return 'tableau au format impose absent : rien a confronter'
-    const iCout = entete.findIndex((c) => c.includes('$'))
-    const ecarts = []
-    for (const b of BRAS) {
-      const ligne = lignes
-        .filter((l) => new RegExp(`^\\*{0,2}${b}\\*{0,2}( |$|\\()`, 'i').test(l[0]))
-        .pop()
-      if (!ligne) {
-        ecarts.push(`${b}: absent du tableau`)
-        continue
+  ajoute(
+    'P8',
+    'Chaque $, min et tours du tableau == out-<bras>.json (aucun chiffre estime)',
+    () => {
+      const lignes = lignesTableau(md)
+      const entete = lignes.find((l) => /^bras$/i.test(l[0]) && l.some((c) => c.includes('$')))
+      if (!entete) return 'tableau au format impose absent : rien a confronter'
+      const iCout = entete.findIndex((c) => c.includes('$'))
+      const iMin = entete.findIndex((c) => /\bmin\b|minute/i.test(c))
+      const iTours = entete.findIndex((c) => /tours?/i.test(c))
+      const ecarts = []
+      for (const b of BRAS) {
+        const ligne = lignes
+          .filter((l) => new RegExp(`^\\*{0,2}${b}\\*{0,2}( |$|\\()`, 'i').test(l[0]))
+          .pop()
+        if (!ligne) {
+          ecarts.push(`${b}: absent du tableau`)
+          continue
+        }
+        const dit = nombre(ligne[iCout])
+        const mesure = sorties[b]?.total_cost_usd
+        if (!Number.isFinite(dit)) ecarts.push(`${b}: cout illisible "${ligne[iCout]}"`)
+        else if (!Number.isFinite(mesure))
+          ecarts.push(`${b}: aucun total_cost_usd dans out-${b}.json`)
+        else if (Math.abs(dit - mesure) > 0.001)
+          ecarts.push(`${b}: tableau ${ligne[iCout]} vs journal ${mesure.toFixed(4)}`)
+
+        // MINUTES — le tableau les annonce, out-<bras>.json (ou statut.txt) les MESURE.
+        if (iMin >= 0) {
+          const minDit = nombre(ligne[iMin])
+          const minMesure = dureeMinutes(b)
+          if (!Number.isFinite(minDit)) ecarts.push(`${b}: min illisible "${ligne[iMin]}"`)
+          else if (!Number.isFinite(minMesure))
+            ecarts.push(
+              `${b}: aucune duree mesuree (ni duration_ms dans out-${b}.json, ni wall dans statut.txt)`
+            )
+          else if (Math.abs(minDit - minMesure) > 0.1)
+            ecarts.push(`${b}: min tableau ${ligne[iMin]} vs duree mesuree ${minMesure.toFixed(2)}`)
+        }
+
+        // TOURS — num_turns est dans la sortie du bras : aucun arrondi possible.
+        if (iTours >= 0) {
+          const toursDits = nombre(ligne[iTours])
+          const toursMesures = sorties[b]?.num_turns
+          if (!Number.isFinite(toursDits)) ecarts.push(`${b}: tours illisibles "${ligne[iTours]}"`)
+          else if (!Number.isFinite(toursMesures))
+            ecarts.push(`${b}: aucun num_turns dans out-${b}.json (tours non mesures)`)
+          else if (toursDits !== toursMesures)
+            ecarts.push(`${b}: tours tableau ${toursDits} vs journal ${toursMesures}`)
+        }
       }
-      const dit = nombre(ligne[iCout])
-      const mesure = sorties[b]?.total_cost_usd
-      if (!Number.isFinite(dit)) ecarts.push(`${b}: cout illisible "${ligne[iCout]}"`)
-      else if (!Number.isFinite(mesure))
-        ecarts.push(`${b}: aucun total_cost_usd dans out-${b}.json`)
-      else if (Math.abs(dit - mesure) > 0.001)
-        ecarts.push(`${b}: tableau ${ligne[iCout]} vs journal ${mesure.toFixed(4)}`)
+      return ecarts.length ? ecarts.join(' ; ') : true
     }
-    return ecarts.length ? ecarts.join(' ; ') : true
-  })
+  )
 
   ajoute('P9', 'Le juge est un appel DISTINCT des quatre bras, sous la skill judge', () => {
     const juge = lireJson(path.join(bench, 'out-judge.json'))
