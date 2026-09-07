@@ -309,7 +309,11 @@ export async function captureElectronDesktop(
     copiedDisplays += 1
   })
   if (copiedDisplays === 0 || !visibleSample) {
-    return await captureForegroundWindow()
+    return await captureForegroundWindow(
+      copiedDisplays === 0
+        ? `aucun des ${selected.length} ecran(s) demande(s) n'a pu etre copie`
+        : `${copiedDisplays} ecran(s) copie(s)${options.display === undefined ? '' : ` (display ${options.display})`}, aucun pixel visible`
+    )
   }
 
   const jpeg = nativeImage
