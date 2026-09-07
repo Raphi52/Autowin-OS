@@ -161,7 +161,17 @@ function observation(
   }
 }
 
-async function captureForegroundWindow(): Promise<DesktopObservation> {
+/**
+ * Repli quand la capture d'ECRAN n'a rien donne. `motifRepli` dit POURQUOI on est arrive ici :
+ * sans lui, l'echec final ne parle que de la fenetre active et l'appelant cherche au mauvais
+ * endroit. Mesure du 2026-09-07 (conv-49) : « Capture de la fenetre active noire ou protegee »
+ * rendu trois fois de suite alors que la vraie situation etait « l'ecran demande n'avait aucun
+ * pixel visible, l'application venait de redemarrer » — plusieurs appels brules a lire le
+ * mauvais code. Un message qui NOMME l'etape fautive et la sortie de secours coute une ligne
+ * et fait gagner un diagnostic entier.
+ */
+async function captureForegroundWindow(motifRepli?: string): Promise<DesktopObservation> {
+  const cause = motifRepli ? ` (repli : ${motifRepli})` : ''
   const sources = await desktopCapturer.getSources({
     types: ['window'],
     thumbnailSize: { width: MAX_WIDTH, height: MAX_HEIGHT },
