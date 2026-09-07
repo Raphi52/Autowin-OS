@@ -49,7 +49,16 @@ describe('mode d’affichage sombre / clair', () => {
   it('la feuille de style porte bien des surcharges pour le mode clair', () => {
     // Chemin depuis la racine du dépôt : sous happy-dom, `import.meta.url` n'est pas un `file:`.
     const css = readFileSync('src/renderer/src/assets/theme-modes.css', 'utf8')
-    expect(css).toMatch(/:root\[data-theme='clair'\]/)
+    // LA BASE, PAS LE NOM. Les surcharges claires visaient `data-theme=clair`, donc le seul
+    // theme nomme ainsi. Mesure a l ecran le 2026-09-07 : Ardoise, Parchemin et Rose poudre
+    // heritaient du fond clair SANS les corrections de texte -- gris pale sur blanc, illisible.
+    // Elles visent desormais `data-base=clair`, pose par `appliquerThemeMode` d apres le
+    // registre : tout theme de base claire en profite sans etre nomme nulle part.
+    //
+    // ENTREE QUI DOIT FAIRE ECHOUER CE CAS : reattacher une surcharge au NOM d un theme.
+    // Le defaut reviendrait pour le theme clair suivant, en silence.
+    expect(css).toMatch(/:root\[data-base='clair'\]/)
+    expect(css).not.toMatch(/:root\[data-theme='clair'\]/)
     // Les contrôles natifs (listes, champs, ascenseurs) doivent suivre, sinon fond blanc sous
     // texte clair — exactement le défaut corrigé le 2026-09-02 dans theme.css.
     expect(css).toMatch(/color-scheme:\s*light/)

@@ -176,23 +176,23 @@
    Aucune variable de thème : le mode clair ne les atteignait pas, d'où les titres
    de rôle et les noms de modèles quasi invisibles signalés le 2026-09-03.
    ---------------------------------------------------------------------------- */
-:root[data-theme='clair'] .topology-panel,
-:root[data-theme='clair'] .topology-model,
-:root[data-theme='clair'] .topology-library > h3 {
+:root[data-base='clair'] .topology-panel,
+:root[data-base='clair'] .topology-model,
+:root[data-base='clair'] .topology-library > h3 {
   color: var(--text);
 }
-:root[data-theme='clair'] .topology-panel > header span,
-:root[data-theme='clair'] .topology-parallel-heading span,
-:root[data-theme='clair'] .topology-library > p {
+:root[data-base='clair'] .topology-panel > header span,
+:root[data-base='clair'] .topology-parallel-heading span,
+:root[data-base='clair'] .topology-library > p {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .topology-panel > header p {
+:root[data-base='clair'] .topology-panel > header p {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .topology-slot select,
-:root[data-theme='clair'] .topology-slot input,
-:root[data-theme='clair'] .topology-panel select,
-:root[data-theme='clair'] .topology-panel input {
+:root[data-base='clair'] .topology-slot select,
+:root[data-base='clair'] .topology-slot input,
+:root[data-base='clair'] .topology-panel select,
+:root[data-base='clair'] .topology-panel input {
   color: var(--text);
   background: #ffffff;
   border-color: var(--line);
@@ -577,12 +577,12 @@
    sombre assumé au bas d'une page claire, accordé aux vignettes de modèles ; seule
    sa gamme passe du doré au bleu. Fond légèrement bleuté pour que le cadre suive,
    texte et titres en bleu clair — le contraste sur fond sombre est préservé. */
-:root[data-theme='clair'] .topology-runtime-limit {
+:root[data-base='clair'] .topology-runtime-limit {
   border-color: #2f4a63;
   background: rgba(10, 20, 30, 0.82);
   color: #8fb8d6;
 }
-:root[data-theme='clair'] .topology-runtime-limit b {
+:root[data-base='clair'] .topology-runtime-limit b {
   color: #6fc9f5;
 }
 
@@ -665,9 +665,9 @@
    clair : blanc sur blanc. Sa bordure blanche translucide disparaît aussi. Même
    règle à deux niveaux que les liens d'action — il faut la même forme ici.
    Signalé le 2026-09-03 : « il reste le numéro ». */
-:root[data-theme='clair'] .theme-serious .topology-panel > header b,
-:root[data-theme='clair'] .theme-serious .topology-profiles,
-:root[data-theme='clair'] .theme-serious .topology-slot select {
+:root[data-base='clair'] .theme-serious .topology-panel > header b,
+:root[data-base='clair'] .theme-serious .topology-profiles,
+:root[data-base='clair'] .theme-serious .topology-slot select {
   border-color: var(--line);
   background: #ffffff;
   color: var(--text);
@@ -689,8 +689,8 @@
    `#95999f` avec une bordure BLANCHE translucide par la règle `.theme-serious`
    ci-dessus (l.649-653). Deux niveaux de spécificité : une règle simple ne les
    atteint pas. Le survol doré reste doré, mais assombri pour rester lisible. */
-:root[data-theme='clair'] .theme-serious .topology-empty,
-:root[data-theme='clair'] .theme-serious .topology-assign-button {
+:root[data-base='clair'] .theme-serious .topology-empty,
+:root[data-base='clair'] .theme-serious .topology-assign-button {
   border-color: var(--line);
   color: var(--text-dim);
 }
@@ -699,12 +699,12 @@
    (AgentsTopologyView.tsx l.367) : aucune classe, donc aucune couleur propre —
    il héritait du sombre et disparaissait sur fond clair. Signalé le 2026-09-03
    (« il reste le numéro »). On le cible par sa position dans l'en-tête. */
-:root[data-theme='clair'] .topology-panel > header > b {
+:root[data-base='clair'] .topology-panel > header > b {
   color: var(--text);
   background: rgba(15, 20, 35, 0.05);
   border-color: var(--line);
 }
-:root[data-theme='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
+:root[data-base='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
   border-color: rgba(154, 111, 16, 0.6);
   color: #7a5a10;
 }
@@ -734,22 +734,22 @@
    couleur propre et héritait du sombre, et le compteur en petit. Signalé le
    2026-09-03 : « Exploration et vérification parallèles », « Opus 5 · CLI » et
    les liens « Glissez un modèle ici » restaient trop clairs. */
-:root[data-theme='clair'] .theme-serious .topology-eyebrow,
-:root[data-theme='clair'] .theme-serious .topology-panel > header span,
-:root[data-theme='clair'] .theme-serious .topology-parallel-heading span,
-:root[data-theme='clair'] .theme-serious .topology-model small,
-:root[data-theme='clair'] .theme-serious .topology-slot-copy span,
-:root[data-theme='clair'] .theme-serious .topology-slot-copy small,
-:root[data-theme='clair'] .theme-serious .topology-slot label,
-:root[data-theme='clair'] .theme-serious .topology-toolbar p,
-:root[data-theme='clair'] .theme-serious .topology-panel > header p {
+:root[data-base='clair'] .theme-serious .topology-eyebrow,
+:root[data-base='clair'] .theme-serious .topology-panel > header span,
+:root[data-base='clair'] .theme-serious .topology-parallel-heading span,
+:root[data-base='clair'] .theme-serious .topology-model small,
+:root[data-base='clair'] .theme-serious .topology-slot-copy span,
+:root[data-base='clair'] .theme-serious .topology-slot-copy small,
+:root[data-base='clair'] .theme-serious .topology-slot label,
+:root[data-base='clair'] .theme-serious .topology-toolbar p,
+:root[data-base='clair'] .theme-serious .topology-panel > header p {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .topology-parallel-heading h3,
-:root[data-theme='clair'] .topology-slot-copy strong {
+:root[data-base='clair'] .topology-parallel-heading h3,
+:root[data-base='clair'] .topology-slot-copy strong {
   color: var(--text);
 }
-:root[data-theme='clair'] .topology-parallel-heading small {
+:root[data-base='clair'] .topology-parallel-heading small {
   color: var(--text-dim);
 }
 

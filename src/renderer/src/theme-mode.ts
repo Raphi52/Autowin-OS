@@ -101,6 +101,22 @@ export function appliquerThemeMode(mode: ThemeId): void {
   if (!racine) return
   if (mode === THEME_MODE_PAR_DEFAUT) racine.removeAttribute('data-theme')
   else racine.setAttribute('data-theme', mode)
+  /*
+   * LA BASE, posee A COTE du nom du theme -- et c est ce qui manquait.
+   *
+   * Le premier mode clair a coute 76 blocs d exception, ecrits pour tous les endroits ou le chat
+   * peint son texte en clair EN DUR. Ces blocs visent data-theme=clair, donc son NOM. Consequence
+   * mesuree a l ecran le 2026-09-07 : les trois nouveaux themes clairs (ardoise, parchemin,
+   * rose-poudre) heritaient du fond clair SANS heriter des corrections de texte -- gris pale sur
+   * blanc, illisible.
+   *
+   * On pose donc aussi la BASE, que le registre declare deja. Les exceptions peuvent viser
+   * data-base=clair : tout theme clair, present ou futur, en profite sans etre nomme nulle part.
+   * Le sombre reste l etat NU sur les deux attributs -- rien a retirer pour lui.
+   */
+  const base = baseDuTheme(mode)
+  if (base === THEME_MODE_PAR_DEFAUT) racine.removeAttribute('data-base')
+  else racine.setAttribute('data-base', base)
   accorderBoutonsDeFenetre(racine)
 }
 
