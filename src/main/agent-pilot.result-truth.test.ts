@@ -77,7 +77,13 @@ describe('verite visible des actions', () => {
       registry as never,
       { getBinding: () => ({ provider: 'codex', model: 'gpt-test' }) } as never,
       bus as never
-    ).chat([{ role: 'user', content: 'corrige tout' }], (event) => events.push(event))
+    // maxIter FINI, obligatoire ici : CAP_ITERATIONS_TOUR est passe a l'infini le
+    // 2026-09-04 (agent-pilot.ts:87, demande utilisateur — le frein reel est le plafond
+    // de DEPENSE, AUTOWIN_CHAT_USD_CAP). Or ce faux modele renvoie TOUJOURS la meme
+    // commande : sans borne, le tour ne se termine jamais et le processus de test meurt
+    // de saturation memoire (mesure du 2026-09-07 : OOM en 3,17 s). On borne le HARNAIS,
+    // pas le produit.
+    ).chat([{ role: 'user', content: 'corrige tout' }], (event) => events.push(event), undefined, 3)
 
     const done = events.find((event) => event.kind === 'done')
     expect(done).toMatchObject({

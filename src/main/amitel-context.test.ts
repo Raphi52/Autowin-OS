@@ -387,7 +387,7 @@ describe('trace de la voie poussée', () => {
   const harnais = (sources: readonly ('brain' | 'graph')[], onTrace: (t: unknown) => void) =>
     createAmitelContextProvider({
       sources,
-      workspace: () => 'C:\Amitel\Autowin OS',
+      workspace: () => 'C:\\Amitel\\Autowin OS',
       fetchFn: vi
         .fn()
         .mockResolvedValue(

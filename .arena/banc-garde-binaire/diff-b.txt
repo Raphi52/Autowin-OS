@@ -1,0 +1,35 @@
+diff --git a/scripts/cdp-knowledge-circular-proof.mjs b/scripts/cdp-knowledge-circular-proof.mjs
+index afe73be3..3c683d83 100644
+--- a/scripts/cdp-knowledge-circular-proof.mjs
++++ b/scripts/cdp-knowledge-circular-proof.mjs
+@@ -1,6 +1,6 @@
+ import { racineDepot } from './racine-depot.mjs'
+ import { execFileSync } from 'node:child_process'
+-import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
++import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+ import { dirname, join } from 'node:path'
+ import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
+ 
+@@ -61,6 +61,22 @@ function note(title, frontmatter = '') {
+   return `---\ntype: knowledge\nthemes: [theme/knowledge]\n${frontmatter}---\n\n# ${title}\n\nFixture ${runStamp}.\n`
+ }
+ 
++/*
++ * LE BINAIRE D'ABORD, ET ON LE DIT.
++ * Cette preuve porte sur le PAQUET de bureau, pas sur les sources : sans binaire il n'y a rien a
++ * prouver. Jusqu'ici l'absence tombait sur le `statSync` de peremption plus bas, en trace brute
++ * `node:fs` et code 1 — indiscernable d'une vraie panne du produit. Ses quatre soeurs disent
++ * « binaire absent » et sortent 2 ; celle-ci fait desormais pareil, AVANT de fabriquer la fixture.
++ */
++if (!existsSync(executable)) {
++  console.error(
++    `[knowledge-circulaire] binaire absent : ${executable}
++` +
++      "Construis-le d'abord (npm run build:desktop) — cette preuve porte sur le PAQUET, pas sur les sources."
++  )
++  process.exit(2)
++}
++
+ rmSync(fixtureRoot, { recursive: true, force: true })
+ for (const folder of ['projects/alpha', 'projects/beta', 'knowledge/decisions', 'governance']) {
+   mkdirSync(join(fixtureRoot, folder), { recursive: true })

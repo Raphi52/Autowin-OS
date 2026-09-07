@@ -54,7 +54,7 @@ garde('G1 le test passe (exit 0)', () => {
 
 garde('G2 aucune donnee de test liee a un dossier qui existe ici', () => {
   if (/Amitel/i.test(src)) return 'le chemin machine-dependant `Amitel` est toujours dans le test'
-  const litteraux = [...src.matchAll(/['"`]([A-Za-z]:[\/][^'"`\n]{2,})['"`]/g)].map((m) => m[1])
+  const litteraux = [...src.matchAll(/['"`]([A-Za-z]:[/][^'"`\n]{2,})['"`]/g)].map((m) => m[1])
   const vivants = litteraux.filter((p) => existsSync(p))
   return vivants.length === 0 ? true : `chemin(s) EXISTANT(s) en dur dans le test : ${vivants.join(', ')}`
 })

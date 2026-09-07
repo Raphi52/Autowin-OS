@@ -23,7 +23,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { dirname, resolve } from 'node:path'
-import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { portCdp } from './cdp-port.mjs'
 
 const argument = (name, fallback) => {
@@ -35,7 +34,6 @@ const port = portCdp()
 const canaryPort = Number(argument('--canary-port', '9262'))
 const productFingerprint = argument('--fingerprint', 'unbound')
 const output = resolve(argument('--out', 'Audit/headless-instances/chat-html/proof/chat-html.png'))
-const narrowOutput = output.replace(/\.png$/i, '-narrow.png')
 const proofOutput = output.replace(/\.png$/i, '.json')
 mkdirSync(dirname(output), { recursive: true })
 

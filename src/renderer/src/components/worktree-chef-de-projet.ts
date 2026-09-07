@@ -153,6 +153,17 @@ export function regrouperParChantier(
 }
 
 /** Les cinq nombres du bandeau : ils répondent « est-ce que ça avance », pas « que dois-je faire ». */
+/**
+ * Nombre de runs INTERROMPUS. Ne depend PAS de l'heure : c'est un comptage d'etats, pas une mesure
+ * d'age. Expose a part pour que les deux endroits qui l'affichent (le bandeau via `resumerFlux` et
+ * le geste « Reprendre tout ») lisent la MEME fonction et ne puissent pas se contredire — l'autre
+ * appelant passait auparavant `Date.now()` a `resumerFlux` pour obtenir ce seul champ, ce qui
+ * regroupait tous les chantiers pour rien et lisait l'horloge en pleine phase de rendu.
+ */
+export function compterRunsInterrompus(agents: readonly WorktreeAgentActivity[]): number {
+  return agents.filter((agent) => agent.state === 'interrupted').length
+}
+
 export function resumerFlux(agents: readonly WorktreeAgentActivity[], nowMs: number): FluxProjet {
   const chantiers = regrouperParChantier(agents, nowMs)
   const compte = (verdict: VerdictChantier): number =>
@@ -169,7 +180,7 @@ export function resumerFlux(agents: readonly WorktreeAgentActivity[], nowMs: num
     aVerifier: compte('a-verifier'),
     interrompus: compte('interrompu'),
     // Compté sur les runs BRUTS et non sur les chantiers : c'est le seul nombre du bandeau qui le fait.
-    runsInterrompus: agents.filter((agent) => agent.state === 'interrupted').length,
+    runsInterrompus: compterRunsInterrompus(agents),
     ...(attentes.length ? { plusVieilleAttenteMs: Math.max(...attentes) } : {})
   }
 }

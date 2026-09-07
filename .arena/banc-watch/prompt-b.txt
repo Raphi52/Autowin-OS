@@ -1,0 +1,28 @@
+Faire passer une correction d'un défaut réel du dépôt de l'état signalé à l'état vérifié hors-modèle.
+
+DÉFAUT SIGNALÉ (réel, présent dans ta copie de travail) :
+Deux contrôles du dépôt s'accusent mutuellement sur le script `dev`.
+- `scripts/launch-dev.test.ps1:11` exige `scripts.dev == 'electron-vite dev --watch'`.
+- `package.json` dit `"dev": "electron-vite dev"`.
+- `src/main/dev-sans-watch.test.ts` exige l'ABSENCE de `--watch` et il est VERT ; son en-tête documente
+  pourquoi `--watch` a été retiré au commit 447b85d4 : il redémarrait Electron et tuait des runs en cours.
+
+COMMANDE QUI SORT ROUGE AUJOURD'HUI (constaté, exit 1) :
+  powershell -ExecutionPolicy Bypass -File scripts/launch-dev.test.ps1
+
+CRITÈRE QUI TE JUGERA (script externe, lecture seule, tu peux le lancer autant que tu veux) :
+  node "C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-c79f2dd06e2b-1/.arena/banc-watch/check.mjs" <racine de ta copie>
+Il vérifie : (a) le contrôle PowerShell sort 0 ; (b) le produit n'a PAS régressé — `scripts.dev` vaut
+toujours `electron-vite dev` et `src/main/dev-sans-watch.test.ts` reste vert ; (c) tu n'as désarmé
+aucun juge — `src/main/dev-sans-watch.test.ts` intact et `scripts/launch-dev.test.ps1` toujours
+porteur d'au moins 20 assertions sur `scripts.dev`.
+
+INTERDITS : pas de commit, pas de push, ne lance pas l'application, ne modifie pas le script de critère
+ci-dessus, ne supprime ni ne vide aucun fichier de test.
+Travaille UNIQUEMENT dans ta copie de travail (ton dossier courant). Termine par le code de sortie
+que tu as LU, pas par une déclaration.
+
+MÉTHODE IMPOSÉE — BUILD DIRECT + VÉRIFICATION CIBLÉE, sans aucune phase amont :
+pas de scout, pas de frame, pas de terrain, pas de clean, pas de juge. Tu lis le strict nécessaire,
+tu corriges, tu relances la commande de critère, tu rends son code de sortie.
+Rends deux sections dans ta réponse finale, titrées CORRECTION / VÉRIFICATION.

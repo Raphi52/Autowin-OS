@@ -8,7 +8,7 @@
  * Discriminant : on demande la 3e bande EN PARTANT DU BAS. Repondre juste exige d'avoir vu les
  * pixels ET compte dans le bon sens — deux facons de se tromper, une seule de reussir.
  */
-import { writeFileSync, readFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { urlCiblesCdp } from './cdp-port.mjs'
 
 const CONV = process.argv[2]

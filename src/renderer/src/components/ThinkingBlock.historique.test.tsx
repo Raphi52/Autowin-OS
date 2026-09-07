@@ -12,7 +12,8 @@
 import { describe, expect, it } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ThinkingBlock, corpsDuBloc } from './ThinkingBlock'
+import { ThinkingBlock } from './ThinkingBlock'
+import { corpsDuBloc } from './thinking-block-corps'
 import { reduceAssistantPilotEvent } from './chat-view-model'
 
 const base = { turnId: 't1', parts: [], done: false } as unknown as Parameters<

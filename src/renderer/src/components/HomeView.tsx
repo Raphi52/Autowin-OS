@@ -959,7 +959,7 @@ export function HomeView({
                   title="Rappeler comment manipuler les tuiles"
                   data-testid="home-rappel-notice"
                 >
-                  Rappeler l'aide
+                  Rappeler l&apos;aide
                 </button>
               </div>
             </section>

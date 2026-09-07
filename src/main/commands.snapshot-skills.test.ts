@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { nativeSkills } from './native-registry'
 
@@ -12,7 +14,7 @@ describe('snapshotForPrompt — skills disponibles', () => {
       .map((s) => s.id)
     expect(ids).toContain('look')
     const source = String(
-      require('node:fs').readFileSync(require('node:path').join(__dirname, 'commands.ts'), 'utf8')
+      readFileSync(join(__dirname, 'commands.ts'), 'utf8')
     )
     expect(source).toContain('skillsDisponibles')
     expect(source).toContain('skillsInvocables()')

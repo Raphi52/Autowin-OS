@@ -2,7 +2,8 @@
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { JarvisWidget, titreJarvis } from './JarvisWidget'
+import { JarvisWidget } from './JarvisWidget'
+import { titreJarvis } from './jarvis-nom'
 import { ecrireNomJarvis } from './jarvis-nom'
 import { ecouteInitiale, phraseDeJarvis } from './jarvis-voice'
 

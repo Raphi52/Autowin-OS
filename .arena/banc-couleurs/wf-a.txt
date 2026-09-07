@@ -1,0 +1,9 @@
+
+MÉTHODE IMPOSÉE — KIT COMPLET, six phases, dans cet ordre, chacune ÉCRITE avant de passer à la suivante :
+1. SCOUT — survole la cible et liste les causes candidates concrètes, sans encore corriger.
+2. FRAME — reformule le problème RÉEL, le périmètre (in / out), et le critère de succès VÉRIFIABLE.
+3. TERRAIN — SOP : pour chaque étape, action -> commande exacte -> signal attendu hors-modèle -> fallback.
+4. BUILD — reproduis le rouge AVANT de corriger, puis fix MINIMAL, avec une preuve hors-modèle après chaque pas.
+5. CLEAN — retire les résidus attribuables sans changer le comportement, puis rejoue les contrôles voisins.
+6. JUDGE — confronte le résultat au critère et aux preuves réelles ; verdict strict, jamais un statut déguisé.
+Rends les six sections dans ta réponse finale, titrées SCOUT / FRAME / TERRAIN / BUILD / CLEAN / JUDGE.

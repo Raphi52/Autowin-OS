@@ -1,0 +1,24 @@
+Faire passer une correction d'un défaut réel du dépôt de l'état signalé à l'état vérifié hors-modèle.
+
+DÉFAUT SIGNALÉ (réel, présent dans ta copie de travail) :
+Quand le paquet de bureau n'est pas construit, la sonde Knowledge plante en trace brute au lieu de le dire.
+- `scripts/cdp-knowledge-circular-proof.mjs:91` appelle `statSync(executable)` sans vérifier que le
+  binaire existe -> `ENOENT` non attrapé, trace `node:fs:1726`, code de sortie 1.
+- Ses quatre frères font l'inverse : `scripts/verifier-chemin-critique.mjs:47-52` teste `existsSync`,
+  écrit « binaire absent : <chemin> — construis-le d'abord (npm run build:desktop) » et sort `2`.
+
+COMMANDE QUI SORT ROUGE AUJOURD'HUI (constaté, exit 1 + trace node:fs) :
+  npm run -s test:knowledge-circulaire
+
+CRITÈRE QUI TE JUGERA (script externe, lecture seule, tu peux le lancer autant que tu veux) :
+  node "C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-c79f2dd06e2b-1/.arena/banc-garde-binaire/check.mjs" <racine de ta copie>
+Il vérifie : (a) binaire absent -> code de sortie exactement `2` ; (b) la sortie DIT « binaire absent »
+et ne contient ni `node:fs` ni `at statSync` ; (c) la preuve n'est pas neutralisée — `statSync(` sur
+l'exécutable et `control('Start')` sont toujours dans le fichier.
+Limite connue et assumée : le chemin « binaire présent » n'est pas testable sans un build de ~292 s,
+il est hors critère.
+
+INTERDITS : pas de commit, pas de push, ne lance pas l'application, ne modifie pas le script de critère
+ci-dessus, ne supprime ni ne vide aucun fichier de test.
+Travaille UNIQUEMENT dans ta copie de travail (ton dossier courant). Termine par le code de sortie
+que tu as LU, pas par une déclaration.

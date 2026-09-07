@@ -21,8 +21,8 @@ import {
   EVENEMENT_NOM_JARVIS,
   ecrireNomJarvis,
   lireNomJarvis,
-  NOM_JARVIS_DEFAUT,
-  NOM_JARVIS_LONGUEUR_MAX
+  NOM_JARVIS_LONGUEUR_MAX,
+  titreJarvis
 } from './jarvis-nom'
 import {
   DEBIT_MAX,
@@ -154,25 +154,7 @@ const SONDAGE_MS = 4_000
 const MAX_EVENEMENTS = 12
 
 /** Longueur du debut de phrase repris dans le titre de la conversation Jarvis. */
-const TITRE_MAX = 40
 
-/**
- * Titre de la conversation ouverte par l'assistant : « <son nom> - <debut de l'ordre> ... ».
- * Le titre garde les MOTS de l'utilisateur, coupes sur un espace, jamais reformules.
- *
- * Le nom vient du REGLAGE, plus d'une constante : un utilisateur qui renomme son assistant
- * « Alfred » voyait quand meme arriver des conversations intitulees « Jarvis - ... », donc deux noms
- * pour un seul assistant.
- */
-export function titreJarvis(texte: string, nom: string = NOM_JARVIS_DEFAUT): string {
-  const propre = texte.replace(/\s+/g, ' ').trim()
-  if (!propre) return nom
-  if (propre.length <= TITRE_MAX) return `${nom} - ${propre}`
-  const coupe = propre.slice(0, TITRE_MAX)
-  const espace = coupe.lastIndexOf(' ')
-  const debut = espace > TITRE_MAX / 2 ? coupe.slice(0, espace) : coupe
-  return `${nom} - ${debut.trimEnd()} ...`
-}
 
 /**
  * Le nom regle, RELU EN DIRECT.

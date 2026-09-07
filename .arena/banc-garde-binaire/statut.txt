@@ -1,0 +1,3 @@
+b exit=0 wall=60s
+a exit=0 wall=304s
+judge exit=0 wall=537s

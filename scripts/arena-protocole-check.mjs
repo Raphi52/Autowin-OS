@@ -36,7 +36,7 @@ const FICHIERS_PROMPT_JUGE = ['prompt-judge.txt', 'judge-prompt.txt']
  * skills chargees : la seule preuve LISIBLE que le verdict vient de `judge` et non d_une grille
  * improvisee est l_invocation ecrite dans le prompt que ce juge a recu.
  */
-const REGEX_SKILL_JUGE = /\/judge\b|skills[\/]judge[\/]SKILL\.md/i
+const REGEX_SKILL_JUGE = /\/judge\b|skills[/]judge[/]SKILL\.md/i
 
 /** Le texte du prompt envoye au juge, quel que soit le nom de fichier retenu par le banc. */
 function promptDuJuge(bench) {
@@ -153,7 +153,7 @@ export function verifierProtocole({
    */
   const repliquesDuBras = (b) => {
     if (!existsSync(bench)) return []
-    const motif = new RegExp(`^out-${b}-(.+)\.json$`, 'i')
+    const motif = new RegExp(`^out-${b}-(.+)\\.json$`, 'i')
     return readdirSync(bench)
       .map((n) => ({ n, m: motif.exec(n) }))
       .filter(({ m }) => m)
@@ -182,7 +182,6 @@ export function verifierProtocole({
    * colonne `min` du tableau n_est adossee a RIEN — P8 le dit au lieu de la croire.
    */
   const statutTexte = lire(path.join(bench, 'statut.txt')) ?? ''
-  const dureeMinutes = (b) => minutesDuBras(b)[0] ?? NaN
   /** Durees MESUREES d_un bras, en minutes : une par replique (sortie JSON, sinon statut.txt). */
   const minutesDuBras = (b) => {
     const valeurs = []
@@ -540,7 +539,7 @@ export function verifierProtocole({
     if (prompt === null || prompt.trim() === '')
       return 'prompt-x.txt absent ou vide : impossible de verifier que X est l_appel nu'
     const cite = prompt.match(
-      /\/(?:frame|terrain|build|clean|judge|heal|scout|arena)\b|SKILL\.md|skills[\/]/gi
+      /\/(?:frame|terrain|build|clean|judge|heal|scout|arena)\b|SKILL\.md|skills[/]/gi
     )
     if (cite)
       return (

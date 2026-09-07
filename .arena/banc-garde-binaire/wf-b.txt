@@ -1,0 +1,5 @@
+
+MÉTHODE IMPOSÉE — BUILD DIRECT + VÉRIFICATION CIBLÉE, sans aucune phase amont :
+pas de scout, pas de frame, pas de terrain, pas de clean, pas de juge. Tu lis le strict nécessaire,
+tu corriges, tu relances la commande de critère, tu rends son code de sortie.
+Rends deux sections dans ta réponse finale, titrées CORRECTION / VÉRIFICATION.

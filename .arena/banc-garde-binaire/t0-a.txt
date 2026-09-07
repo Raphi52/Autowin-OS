@@ -1,0 +1,10 @@
+OK   précondition — le paquet de bureau est bien ABSENT (sinon ce critère ne mesure rien)
+RATE (a) paquet absent : la sonde sort exactement 2 (comme ses quatre frères) — exit 1
+RATE (b) la sortie DIT « binaire absent » et ne déverse aucune trace brute — aucun message « binaire absent » : ode: 'ENOENT',
+  syscall: 'stat',
+  path: 'C:\\Sources\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\arena-6bras\\banc-garde-binaire-a\\dist\\win-unpacked\\autowin-os.exe'
+}
+
+Node.js v24.15.0
+OK   (c) cas limite — la preuve n’est pas neutralisée (statSync et control Start toujours là)
+CRITERE RATE (2)

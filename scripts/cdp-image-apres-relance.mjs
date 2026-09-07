@@ -180,7 +180,7 @@ const rouvert = await ev(`(() => {
     .find((c) => (c.textContent || '').includes(${JSON.stringify(marqueur)}))
   if (!cible) return 'INTROUVABLE'
   cible.click()
-  return (cible.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70)
+  return (cible.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 70)
 })()`)
 console.log('[rouvrir]', rouvert)
 if (rouvert === 'INTROUVABLE')

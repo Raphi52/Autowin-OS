@@ -1,0 +1,40 @@
+diff --git a/scripts/launch-dev.test.ps1 b/scripts/launch-dev.test.ps1
+index afadeb0d..19494b82 100644
+--- a/scripts/launch-dev.test.ps1
++++ b/scripts/launch-dev.test.ps1
+@@ -8,8 +8,13 @@ function Assert-True {
+ $projectRoot = Split-Path -Parent $PSScriptRoot
+ $manifest = Get-Content -Raw (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
+ $devCommand = $manifest.scripts.dev
+-Assert-True ($devCommand -eq 'electron-vite dev --watch') 'dev must delegate one watch loop to electron-vite'
+-Assert-True (($devCommand -split '--watch').Count -eq 2) 'dev must contain exactly one --watch flag'
++# `dev` NE DOIT PAS PORTER `--watch`. Avec ce drapeau, electron-vite redemarrait Electron des qu'un
++# module `main` ou `preload` changeait, ce qui TUAIT l'orchestration en cours (demande `conv-1267`,
++# corrige au commit 447b85d4). Le rechargement a chaud du RENDERER est conserve : il passe par le
++# dev-server, pas par ce drapeau. Contrat miroir de `src/main/dev-sans-watch.test.ts`, qui garde la
++# meme regle cote produit.
++Assert-True ($devCommand -eq 'electron-vite dev') 'dev must delegate to electron-vite WITHOUT restarting the main process'
++Assert-True (($devCommand -split '--watch').Count -eq 1) 'dev must carry NO --watch flag: it killed the runs in progress'
+ 
+ $electronVite = Join-Path $projectRoot 'node_modules\.bin\electron-vite.cmd'
+ $help = & $electronVite dev --help 2>&1 | Out-String
+@@ -47,7 +52,12 @@ Assert-True ($pySource -match 'CreateMutexW') `
+ Assert-True ($pySource -match 'CREATE_NO_WINDOW') 'the dev loop must start without allocating a console'
+ Assert-True ($pySource -match 'st_mtime >= avant') `
+   'the launcher must PROVE the bundle was rebuilt after the last source change'
+-Assert-True ($pySource -match 'ATTENTE_FRAICHEUR_S') 'the freshness wait must be bounded, not infinite'
++# La borne existe toujours, sous un AUTRE NOM : `ATTENTE_FRAICHEUR_S` est devenu `ATTENTE_TOTALE_S`
++# au commit 79e9c13e (declare `scripts/launch_dev.py:79`, applique au tour de lecture ligne 526-531,
++# celui-la meme qui evalue `st_mtime >= avant`). On verifie donc le nom REEL de la borne, et qu'elle
++# vaut un nombre fini plutot que de simplement exister.
++Assert-True ($pySource -match 'ATTENTE_TOTALE_S *= *[0-9]+') `
++  'the freshness wait must be bounded by a finite value, not infinite'
+ Assert-True (($pySource -split 'alerter\(').Count -ge 6) `
+   'every abnormal exit must reach the user, not just the first one'
+ 
+@@ -120,4 +130,4 @@ try {
+   Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+ }
+ 
+-Write-Output 'PASS launch-dev watcher contract: renderer HMR, main/preload watch, single hidden launch, clean cmd exit'
++Write-Output 'PASS launch-dev contract: renderer HMR only (NO main/preload restart), single hidden launch, clean cmd exit'

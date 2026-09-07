@@ -3,7 +3,7 @@ import {
   calculerBlocsAvecReprise,
   decouperMarkdownSansReprise,
   oublierRepriseMarkdown
-} from './Markdown'
+} from './markdown-blocs'
 
 /*
  * DEFAUT MESURE le 2026-09-05 (conv-303) : pendant le streaming, le message est REANALYSE EN ENTIER

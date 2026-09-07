@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { RunEntry, CheckpointEntry } from './ChatView'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
 import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
@@ -137,13 +137,28 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   } = props
 
   const [selection, setSelection] = useState<ExecutionNodeSelection | null>(null)
-  const [panelTab, setPanelTab] = useState<PanelTab>('graph')
   const jeton = ongletDemande?.jeton
   const tabDemande = ongletDemande?.tab
-  useEffect(() => {
-    if (jeton === undefined || !tabDemande) return
-    setPanelTab(tabDemande)
-  }, [jeton, tabDemande])
+  /**
+   * L'onglet AFFICHÉ est DÉRIVÉ, il n'est plus recopié par un effet.
+   *
+   * Avant : un `useEffect` appelait `setPanelTab(tabDemande)` à chaque nouveau jeton. React 19 le
+   * refuse (règle react-hooks/set-state-in-effect) parce qu'un `setState` synchrone dans un effet
+   * provoque un SECOND rendu en cascade : le panneau s'affichait donc une fois sur l'ancien onglet,
+   * puis une fois sur le bon — un clignotement, et une passe de rendu payée pour rien.
+   *
+   * Maintenant : le choix de l'utilisateur est mémorisé AVEC le jeton en vigueur au moment du clic.
+   * Tant que le jeton n'a pas bougé, c'est son choix qui gagne ; dès qu'un jeton PLUS RÉCENT arrive,
+   * la demande gagne. Même comportement observable, sans effet et sans second rendu.
+   */
+  const [choixOnglet, setChoixOnglet] = useState<{ tab: PanelTab; jeton: number | undefined } | null>(
+    null
+  )
+  const panelTab: PanelTab =
+    choixOnglet && choixOnglet.jeton === jeton
+      ? choixOnglet.tab
+      : (tabDemande ?? choixOnglet?.tab ?? 'graph')
+  const setPanelTab = (tab: PanelTab): void => setChoixOnglet({ tab, jeton })
 
   const depot = selectionParleDuDepot(selection)
   // Appariement par TOUR : c'est le seul lien RÉEL entre le graphe et le fil relu

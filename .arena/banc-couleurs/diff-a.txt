@@ -1,0 +1,81 @@
+diff --git a/scripts/launch_dev_phases_test.py b/scripts/launch_dev_phases_test.py
+index a307ec84..a8e7e9f7 100644
+--- a/scripts/launch_dev_phases_test.py
++++ b/scripts/launch_dev_phases_test.py
+@@ -2,6 +2,7 @@
+ 
+ from __future__ import annotations
+ 
++import re
+ import sys
+ from pathlib import Path
+ 
+@@ -189,12 +190,32 @@ _html = (Path(__file__).resolve().parent.parent / "src" / "renderer" / "index.ht
+ )
+ _splash_src = (Path(__file__).resolve().parent / "launch_dev_splash.py").read_text(encoding="utf-8")
+ 
+-for _nom, _motif in (("doré (arc-a)", "#e9bd4e"), ("rose-violet (arc-b)", "#9d79ed")):
+-    verifie(_motif in _html, f"la couleur {_nom} doit exister dans index.html (sinon ce test ment)")
+-    verifie(
+-        _motif in _splash_src,
+-        f"le lanceur doit reprendre la couleur {_nom} de l'app, pas une teinte a lui",
+-    )
++# Le bloc `#autowin-boot` de index.html, et lui seul, peint l'ecran de demarrage de l'app : c'est
++# LA reference. On y cherche les accents du lanceur tels qu'ils sont ECRITS dans le lanceur — aucun
++# hexadecimal n'est recopie ici. Un test qui recopie les codes fige un instantane : il sort rouge au
++# premier changement de theme cote app sans jamais dire lequel des deux ecrans a bouge.
++_debut_boot = _html.find("#autowin-boot")
++_fin_boot = _html.find("</style>", _debut_boot if _debut_boot != -1 else 0)
++verifie(_debut_boot != -1 and _fin_boot > _debut_boot,
++        "le bloc de style `#autowin-boot` doit exister dans index.html, sinon ce test ne mesure rien")
++_boot = _html[_debut_boot:_fin_boot].lower() if 0 <= _debut_boot < _fin_boot else ""
++
++
++def _accent_lanceur(constante: str) -> str:
++    """La valeur de `constante` LUE dans launch_dev_splash.py, quelle qu'elle soit."""
++    trouve = re.search(constante + r'\s*=\s*"(#[0-9a-fA-F]{3,8})"', _splash_src)
++    verifie(trouve is not None,
++            f"la constante {constante} doit rester lisible dans launch_dev_splash.py")
++    return trouve.group(1) if trouve else "<illisible>"
++
++
++for _nom, _constante in (("doré (accent-a)", "_DORE"), ("rose-violet (accent-b)", "_VIOLET")):
++    _motif = _accent_lanceur(_constante)
++    verifie(_motif.lower() in _boot,
++            f"l'accent {_nom} du lanceur ({_constante} = {_motif}) doit se retrouver dans l'ecran"
++            " de demarrage de l'app : deux ecrans qui se suivent a l'oeil ont derive")
++    verifie(_splash_src.count(_constante) >= 3,
++            f"le lanceur doit PEINDRE avec {_constante}, pas seulement le declarer")
+ 
+ verifie("#f5f7fb" in _html and "#f5f7fb" in _splash_src,
+         "la couleur de TEXTE doit etre celle de l'app")
+diff --git a/scripts/launch_dev_splash.py b/scripts/launch_dev_splash.py
+index 77cc5cba..2fe1b42d 100644
+--- a/scripts/launch_dev_splash.py
++++ b/scripts/launch_dev_splash.py
+@@ -44,8 +44,8 @@ from launch_dev_phases import ETAPES, SuiviDemarrage, formater_identite, libelle
+ #   fond    #000        (`html, body { background: #000 }`)
+ #   texte   #f5f7fb     (`color: #f5f7fb`)
+ #   piste   rgba(245,247,251,0.07) -> tkinter ne connait pas l'alpha, donc l'equivalent OPAQUE sur noir
+-#   arc A   #e9bd4e     dore
+-#   arc B   #9d79ed     rose-violet
++#   accent A #ffd66b    l'etoile CHAUDE de l'atome (`.aw-atom__star--hot`)
++#   accent B #ff2d95    l'etoile de BORD de l'atome (`.aw-atom__star--edge`)
+ #
+ # Le test `launch_dev_phases_test.py` relit ces valeurs dans `index.html` et refuse une derive : sans
+ # lui, les deux palettes divergeraient au premier changement de theme cote app.
+@@ -56,8 +56,12 @@ _TEXTE = "#f5f7fb"      # le GROS titre, et lui seul : blanc
+ # Tous les petits textes sont DORES (demande utilisateur) : sous-titre, chrono, detail d'erreur. Le
+ # gris atone d'avant ne venait d'aucune des deux palettes — c'etait une teinte inventee pour
+ # "atténuer", et elle donnait un ecran terne la ou l'app est noire et doree.
+-_DORE = "#e9bd4e"
+-_VIOLET = "#9d79ed"
++# Les deux noms disent le ROLE (accent principal / accent secondaire), pas la teinte litterale :
++# ils suivent l'app, qui a redessine son atome en rose-orange (08016aac). Ne pas les figer ici — le
++# test `launch_dev_phases_test.py` relit ces deux valeurs et exige de les retrouver dans l'ecran de
++# demarrage de l'app.
++_DORE = "#ffd66b"
++_VIOLET = "#ff2d95"
+ # L'ecran de demarrage de l'app n'a AUCUN etat d'erreur — cette couleur-ci est donc nouvelle. Choisie
+ # dans la meme famille chaude que le dore pour ne pas jurer, mais assez distincte pour ne pas passer
+ # pour une etape normale.

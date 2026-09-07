@@ -1,0 +1,5 @@
+OK   (a) le contrôle PowerShell du script dev sort 0
+OK   (b) le produit n’a PAS régressé : scripts.dev reste `electron-vite dev` et son test reste vert
+OK   (c) cas limite — aucun juge désarmé (test vitest intact, contrôle .ps1 non vidé)
+CRITERE ATTEINT
+[note de mesure] 1re mesure : RATE (a) sur une erreur de fixture PowerShell temporaire NON reproductible ; 3 rejeux ensuite : exit 0. Critere FLAKY, signale tel quel.

@@ -3,12 +3,12 @@
 // Sortie : rapport Markdown des candidats à `clean`, classés par catégorie.
 // Usage : node scripts/scout-residus.mjs [racine=src]
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, resolve, dirname, basename, extname } from 'node:path'
+import { join, relative, resolve, dirname, extname } from 'node:path'
 
 const RACINE = resolve(process.argv[2] ?? 'src')
 const PROJET = process.cwd()
 const EXT = new Set(['.ts', '.tsx', '.mts', '.js', '.jsx', '.mjs', '.cjs'])
-const IGNORE = /(^|[\/])(node_modules|out|dist|build|worktrees|graphify-out|\.git)([\/]|$)/
+const IGNORE = /(^|[/])(node_modules|out|dist|build|worktrees|graphify-out|\.git)([/]|$)/
 
 // Ce que la sonde N'ANALYSE PAS, par extension. Sans ce compte, un lecteur croit le rapport
 // exhaustif : sur `scripts/`, 52 des 159 fichiers sont des `.ps1` que EXT ne couvre pas, et les

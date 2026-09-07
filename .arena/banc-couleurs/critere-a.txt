@@ -1,0 +1,4 @@
+OK   (a) le contrôle Python des phases du lanceur sort 0
+OK   (b) les deux écrans partagent la palette : les accents du lanceur sont dans index.html
+OK   (c) cas limite — le contrôle Python n’est pas désarmé (assertions et deux sources relues)
+CRITERE ATTEINT

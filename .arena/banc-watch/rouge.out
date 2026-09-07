@@ -1,0 +1,7 @@
+Assertion failed: dev must delegate one watch loop to electron-vite
+Au caractäre C:\Sources\AutoWinOS\scripts\launch-dev.test.ps1:5 : 26
++   if (-not $Condition) { throw "Assertion failed: $Message" }
++                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Assertion faile...o electron-vite:String) [], RuntimeException
+    + FullyQualifiedErrorId : Assertion failed: dev must delegate one watch loop to electron-vite
+ 
