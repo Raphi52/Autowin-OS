@@ -9,6 +9,11 @@ import './InterfaceView.css'
  * que oui ou non : il plafonnait le réglage à DEUX apparences. La liste lit `THEMES`
  * (`theme-mode.ts`), donc ajouter un thème ne demande AUCUNE modification ici.
  *
+ * LA RÉSERVE affichée en bas nomme les endroits qui ne suivent pas le thème, et elle est DATÉE
+ * parce qu'elle VIEILLIT : chaque écran rattaché aux jetons doit la faire rétrécir. Mesure du
+ * 2026-09-07 : elle annonçait encore le Chat, l'Accueil et l'Observatory comme sombres alors que
+ * les trois suivaient déjà le thème. Ne jamais la recopier de mémoire — la vérifier à l'écran.
+ *
  * Le changement est IMMÉDIAT et mémorisé : aucun redémarrage. Le thème choisi est écrit sur la
  * racine du document par `theme-mode.ts`, et les feuilles de style font le reste
  * (`assets/theme-modes.css`) ; ce composant ne peint rien lui-même.
