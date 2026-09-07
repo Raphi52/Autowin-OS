@@ -359,7 +359,16 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   sonde a ete retiree le meme jour — le panneau n'est plus un onglet, il s'ouvre par un noeud
     //   du graphe, donc la preuve n'avait plus de chemin d'acces —, et ce canal n'avait plus AUCUN
     //   appelant. Un canal IPC sans appelant reste une porte : on la ferme.
-    expect(handlers).toHaveLength(173)
+    // MISE A JOUR 2026-09-07 - 173 -> 174. UN canal ajoute, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Outlook')` :
+    //   `outlook:nouveau-message` - ENVOIE un message neuf depuis la tuile Interlocuteurs (adresse,
+    //     objet, premier message). Il ECRIT et il SORT du poste. Contrairement a
+    //     `outlook:repondre`, rien n'est herite d'un element existant : l'adresse vient d'une
+    //     saisie. Elle est validee contre `^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}$` cote
+    //     main ET dans le script, l'objet est ramene sur une ligne, et objet comme corps partent par
+    //     des fichiers temporaires -- jamais concatenes dans une ligne de commande.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(174)
     expect(unguarded).toEqual([])
   })
 

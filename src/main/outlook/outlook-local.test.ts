@@ -320,3 +320,124 @@ describe('marquage lu depuis l accueil', () => {
     await expect(readFile(chemin, 'utf8')).rejects.toThrow()
   })
 })
+
+describe('message NEUF depuis l accueil', () => {
+  it('passe objet et corps par des FICHIERS en UTF-8, et l adresse en argument', async () => {
+    // La console de ce poste est en cp1252 : un objet ou un corps passe en argument arriverait
+    // abime. L'adresse, elle, est contrainte a un motif ASCII, donc un argument suffit.
+    let objetLu = ''
+    let corpsLu = ''
+    let adresseVue = ''
+    const redacteur = vi.fn(
+      async (_script: string, adresse: string, objetPath: string, corpsPath: string) => {
+        adresseVue = adresse
+        objetLu = await readFile(objetPath, 'utf8')
+        corpsLu = await readFile(corpsPath, 'utf8')
+        return 0
+      }
+    )
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), redacteur })
+    const resultat = await passerelle.sendNew('zoe@ex.fr', 'Devis à revoir', 'Bonjour, ça va ?')
+    expect(resultat.ok).toBe(true)
+    expect(adresseVue).toBe('zoe@ex.fr')
+    expect(objetLu).toBe('Devis à revoir')
+    expect(corpsLu).toBe('Bonjour, ça va ?')
+  })
+
+  it('vise le script de message neuf, pas celui de reponse', async () => {
+    const redacteur = vi.fn(
+      async (_script: string, _adresse: string, _objet: string, _corps: string) => 0
+    )
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), redacteur })
+    await passerelle.sendNew('zoe@ex.fr', 'Objet', 'Corps')
+    expect(redacteur.mock.calls[0][0]).toMatch(/outlook-local-nouveau\.ps1$/)
+  })
+
+  it('refuse une adresse qui n a pas la forme d une adresse e-mail', async () => {
+    // Un message neuf part chez quelqu'un que l'utilisateur NOMME : une chaine libre irait dans un
+    // appel COM, et une faute de frappe ecrirait a un inconnu.
+    const redacteur = vi.fn(async () => 0)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), redacteur })
+    for (const mauvaise of ['zoe', 'zoe@ex', '; rm -rf /', 'a b@ex.fr', '']) {
+      expect((await passerelle.sendNew(mauvaise, 'Objet', 'Corps')).ok).toBe(false)
+    }
+    expect(redacteur).not.toHaveBeenCalled()
+  })
+
+  it('refuse un objet vide ou un corps vide : un envoi est irreversible', async () => {
+    const redacteur = vi.fn(async () => 0)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), redacteur })
+    expect((await passerelle.sendNew('zoe@ex.fr', '   ', 'Corps')).ok).toBe(false)
+    expect((await passerelle.sendNew('zoe@ex.fr', 'Objet', '  ')).ok).toBe(false)
+    expect(redacteur).not.toHaveBeenCalled()
+  })
+
+  it('ramene l objet sur UNE ligne', async () => {
+    // Un retour chariot dans un en-tete de courrier n'a pas de sens, et le laisser passer
+    // permettrait d'ecrire une ligne d'en-tete de plus.
+    let objetLu = ''
+    const redacteur = vi.fn(async (_s: string, _a: string, objetPath: string) => {
+      objetLu = await readFile(objetPath, 'utf8')
+      return 0
+    })
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), redacteur })
+    await passerelle.sendNew('zoe@ex.fr', 'Devis\r\nBcc: tiers@ex.fr', 'Corps')
+    expect(objetLu).toBe('Devis Bcc: tiers@ex.fr')
+  })
+
+  it('nomme la cause quand Outlook ne reconnait pas le destinataire', async () => {
+    // Code 6, propre a ce chemin : une reponse herite du destinataire, un message neuf le recoit
+    // d'une saisie. C'est le seul echec que l'utilisateur peut corriger lui-meme.
+    const redacteur = vi.fn(async () => 6)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), redacteur })
+    const resultat = await passerelle.sendNew('zoe@ex.fr', 'Objet', 'Corps')
+    expect(resultat.ok).toBe(false)
+    expect(resultat.erreur).toMatch(/adresse/i)
+  })
+
+  it('vide le cache apres un envoi reussi : le nouveau fil doit apparaitre', async () => {
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const redacteur = vi.fn(async () => 0)
+    const passerelle = new OutlookLocalGateway({
+      appRoot: await racineFactice(),
+      runner,
+      redacteur,
+      ttlMs: 600_000
+    })
+    await passerelle.snapshot()
+    expect((await passerelle.sendNew('zoe@ex.fr', 'Objet', 'Corps')).ok).toBe(true)
+    await passerelle.snapshot()
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+
+  it('ne vide PAS le cache quand l envoi a echoue', async () => {
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const redacteur = vi.fn(async () => 1)
+    const passerelle = new OutlookLocalGateway({
+      appRoot: await racineFactice(),
+      runner,
+      redacteur,
+      ttlMs: 600_000
+    })
+    await passerelle.snapshot()
+    expect((await passerelle.sendNew('zoe@ex.fr', 'Objet', 'Corps')).ok).toBe(false)
+    await passerelle.snapshot()
+    expect(runner).toHaveBeenCalledTimes(1)
+  })
+
+  it('efface les fichiers du message apres l envoi', async () => {
+    let objetPathVu = ''
+    let corpsPathVu = ''
+    const redacteur = vi.fn(
+      async (_s: string, _a: string, objetPath: string, corpsPath: string) => {
+        objetPathVu = objetPath
+        corpsPathVu = corpsPath
+        return 0
+      }
+    )
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), redacteur })
+    await passerelle.sendNew('zoe@ex.fr', 'Objet', 'Corps')
+    await expect(readFile(objetPathVu, 'utf8')).rejects.toThrow()
+    await expect(readFile(corpsPathVu, 'utf8')).rejects.toThrow()
+  })
+})

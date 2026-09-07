@@ -713,6 +713,52 @@ export function HomeView({
   )
 
   /**
+   * ENVOIE un message NEUF depuis la tuile : une adresse, un objet, un premier message.
+   *
+   * Demande de l'utilisateur du 2026-09-07. Chemin distinct de la réponse, et pas un paramètre de
+   * plus : une réponse part d'un message existant dont Outlook tire le destinataire et l'objet
+   * « RE: … », alors qu'ici tout vient de la saisie. Le résultat est RENDU à la tuile, qui doit
+   * pouvoir dire « envoyé » à l'endroit exact où l'utilisateur vient de cliquer.
+   *
+   * La boîte est RELUE aussitôt après un succès : le message part dans les éléments envoyés, donc il
+   * appartient au fil que la tuile affiche. Sans cette relecture, la nouvelle conversation
+   * n'apparaîtrait qu'au cycle suivant et le clic paraîtrait sans effet.
+   */
+  const nouvelleConversationOutlook = useCallback(
+    async (
+      adresse: string,
+      objet: string,
+      corps: string
+    ): Promise<{ ok: boolean; erreur?: string }> => {
+      const api = (
+        window as unknown as {
+          api?: {
+            outlookNouveauMessage?: (
+              adresse: string,
+              objet: string,
+              corps: string
+            ) => Promise<{ ok: boolean; erreur?: string }>
+          }
+        }
+      ).api
+      if (!api?.outlookNouveauMessage) {
+        return {
+          ok: false,
+          erreur: 'Cette version ne sait pas encore ouvrir une conversation depuis Outlook.'
+        }
+      }
+      try {
+        const resultat = await api.outlookNouveauMessage(adresse, objet, corps)
+        if (resultat.ok) await readOutlook(true)
+        return resultat
+      } catch (error) {
+        return { ok: false, erreur: error instanceof Error ? error.message : String(error) }
+      }
+    },
+    [readOutlook]
+  )
+
+  /**
    * MARQUE des messages comme lus dans Outlook, puis relit la boîte AUSSITÔT.
    *
    * Défaut relevé par l'utilisateur le 2026-09-04 : « la notif reste même après avoir lu le message ».
@@ -1023,6 +1069,7 @@ export function HomeView({
                 onOuvrirConversation={ouvrirConversation}
                 onOuvrir={ouvrirDansOutlook}
                 onRepondre={repondreDansOutlook}
+                onNouvelleConversation={nouvelleConversationOutlook}
                 onMarquerLu={marquerLuDansOutlook}
                 onAcquitter={acquitter}
                 ouvertureEnCours={ouvertureEnCours}
@@ -1057,6 +1104,7 @@ function WidgetBody({
   onOuvrirConversation,
   onOuvrir,
   onRepondre,
+  onNouvelleConversation,
   onMarquerLu,
   onAcquitter,
   ouvertureEnCours
@@ -1073,6 +1121,11 @@ function WidgetBody({
   onOuvrirConversation: (id: string) => void
   onOuvrir: (id: string) => Promise<void>
   onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  onNouvelleConversation: (
+    adresse: string,
+    objet: string,
+    corps: string
+  ) => Promise<{ ok: boolean; erreur?: string }>
   onMarquerLu: (ids: string[]) => Promise<{ ok: boolean; erreur?: string }>
   onAcquitter: (alertId: string) => Promise<void>
   ouvertureEnCours: string | null
@@ -1113,6 +1166,7 @@ function WidgetBody({
         onOuvrir={onOuvrir}
         ouvertureEnCours={ouvertureEnCours}
         onRepondre={onRepondre}
+        onNouvelleConversation={onNouvelleConversation}
         onMarquerLu={onMarquerLu}
       />
     ) : (
