@@ -22,9 +22,20 @@ $interpreteur = if (Test-Path -LiteralPath $embarque -PathType Leaf) { $embarque
       if ($secours) { $secours.Source } else { throw "Aucun interpreteur Python graphique (pyw.exe) trouve." }
     }
   }
-if (-not (Test-Path -LiteralPath $png -PathType Leaf)) { throw "Icône Dev introuvable : $png" }
+if (-not (Test-Path -LiteralPath $png -PathType Leaf) -and -not (Test-Path -LiteralPath $ico -PathType Leaf)) { throw "Icône Dev introuvable : $png" }
 if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Lanceur Dev introuvable : $launcher" }
 
+
+# ICO REUTILISE tel quel s il existe deja.
+#
+# MESURE du 2026-09-07 (conv-335) : ce script reconstruisait TOUJOURS l ico en reechantillonnant le
+# seul PNG 512px. Or l ico du depot porte volontairement DEUX dessins - une variante aux points
+# blancs elargis pour les cadres 16 a 32 px, sinon les trois atomes se noient dans l epaisseur des
+# orbites. Reconstruire depuis le PNG effacait ce reglage a chaque passage. Le fichier livre est donc
+# la source de verite ; la reconstruction n est plus qu un SECOURS quand il manque.
+if (Test-Path -LiteralPath $ico -PathType Leaf) {
+  Write-Host ('ICO existant reutilise (aucune reconstruction) : ' + $ico)
+} else {
 
 # ICO multi-tailles : Windows choisit l'image native au lieu de flouter un unique 256px.
 Add-Type -AssemblyName System.Drawing
@@ -66,6 +77,8 @@ try {
   $writer.Flush()
 } finally {
   $stream.Dispose()
+}
+
 }
 
 $desktop = [Environment]::GetFolderPath('Desktop')

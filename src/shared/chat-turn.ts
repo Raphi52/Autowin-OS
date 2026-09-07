@@ -169,7 +169,18 @@ export type ChatTurnEvent =
   | { kind: 'progress'; actionId: string; text: string }
   | { kind: 'artifact'; artifact: ChatArtifact }
   | { kind: 'done'; sessionId?: string }
-  | { kind: 'failed'; error: string }
+  /**
+   * Echec du tour.
+   *
+   * `transient` marque un echec qui ne raconte AUCUN travail : un refus de reprise TEMPORAIRE au
+   * demarrage (un appel provider encore actif, l'appel se regle seul). Mesure du 2026-09-07
+   * (conv-336, journal des conversations a 07:48:19Z) : ces refus ont ecrit dans 11 conversations
+   * vieilles de plusieurs jours, ce qui a bouge leur date de derniere touche -- elles sont
+   * remontees en tete de liste et repassees en pastille « termine, non lu ». L'utilisateur a vu sa
+   * liste repeinte par un evenement qui n'a rien produit. Le drapeau existe pour que le magasin
+   * garde la date d'origine (cf. `applyTurnEvent`).
+   */
+  | { kind: 'failed'; error: string; transient?: true }
   | { kind: 'cancelled' }
   | { kind: 'interrupted' }
 
