@@ -545,10 +545,19 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
   const template = document.createElement('template')
   template.innerHTML = source
 
+  // Domaine du bloc, reutilise pour prefixer les `id` du dessin (degrades, masques, decoupes).
+  const prefixeId = `svg-${/data-html-scope="([^"]+)"/.exec(scopeSelector_)?.[1] ?? 'bloc'}-`
+
   const walk = (node: Element): void => {
     for (const child of Array.from(node.children)) walk(child)
 
-    const tag = node.tagName.toLowerCase()
+    // `localName` et non `tagName` : en SVG, `tagName` conserve la casse (`linearGradient`).
+    const tag = node.localName.toLowerCase()
+
+    if (node.namespaceURI === SVG_NS) {
+      sanitizeSvgNode(node, tag, prefixeId)
+      return
+    }
 
     if (tag === 'style') {
       // Conservee mais CONFINEE. Sans domaine de style, on ne rendrait pas ce bloc plus beau, on
