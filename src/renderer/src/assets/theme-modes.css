@@ -643,6 +643,14 @@
   --accent: var(--rose);
   --accent-dim: #7a3159;
   --accent-soft: rgba(216, 92, 159, 0.14);
+
+  /* CYAN et VIOLET : pas decoratifs ici. Le decor 3D lit --rose, --cyan, --gold et --violet
+     pour teinter sa nebuleuse et ses etoiles (home-decor-scene.ts). Sans ces deux jetons, il
+     retomberait sur le bleu-cyan vif du sombre d origine -- ce qui jurait avec ce theme,
+     constate a l ecran le 2026-09-07. On les prend SOURDS, dans la famille du violet des filets. */
+  --cyan: #6f9fc4;
+  --violet: #7d6bb5;
+  --info: var(--cyan);
 }
 
 /* SURFACES -- seconde famille de jetons, posee sur .shell et non sur la racine
