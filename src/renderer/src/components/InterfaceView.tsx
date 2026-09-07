@@ -1,24 +1,31 @@
 import { useEffect, useState } from 'react'
-import { ecrireThemeMode, lireThemeMode, type ThemeMode } from '../theme-mode'
+import { THEMES, ecrireThemeMode, lireThemeMode, type ThemeId } from '../theme-mode'
 import './InterfaceView.css'
 
 /**
  * Settings · Interface — l'apparence de l'application, et rien d'autre.
  *
- * L'interrupteur choisit entre sombre (par défaut, l'existant) et clair. Le changement est
- * IMMÉDIAT et mémorisé : aucun redémarrage. Toute la bascule tient dans `theme-mode.ts` +
- * `assets/theme-modes.css` ; ce composant ne peint rien lui-même.
+ * UNE LISTE, PAS UN INTERRUPTEUR, et c'est le point de ce composant. Un interrupteur ne sait dire
+ * que oui ou non : il plafonnait le réglage à DEUX apparences. La liste lit `THEMES`
+ * (`theme-mode.ts`), donc ajouter un thème ne demande AUCUNE modification ici.
+ *
+ * LA RÉSERVE affichée en bas nomme les endroits qui ne suivent pas le thème, et elle est DATÉE
+ * parce qu'elle VIEILLIT : chaque écran rattaché aux jetons doit la faire rétrécir. Mesure du
+ * 2026-09-07 : elle annonçait encore le Chat, l'Accueil et l'Observatory comme sombres alors que
+ * les trois suivaient déjà le thème. Ne jamais la recopier de mémoire — la vérifier à l'écran.
+ *
+ * Le changement est IMMÉDIAT et mémorisé : aucun redémarrage. Le thème choisi est écrit sur la
+ * racine du document par `theme-mode.ts`, et les feuilles de style font le reste
+ * (`assets/theme-modes.css`) ; ce composant ne peint rien lui-même.
  */
 export function InterfaceView(): React.JSX.Element {
-  const [mode, setMode] = useState<ThemeMode>(() => lireThemeMode())
+  const [theme, setTheme] = useState<ThemeId>(() => lireThemeMode())
 
-  // Le mode mémorisé est appliqué à l'ouverture aussi : si une autre fenêtre l'a changé,
-  // l'écran affiché reste d'accord avec l'interrupteur.
+  // Le thème mémorisé est appliqué à l'ouverture aussi : si une autre fenêtre l'a changé,
+  // l'écran affiché reste d'accord avec la liste.
   useEffect(() => {
-    ecrireThemeMode(mode)
-  }, [mode])
-
-  const clair = mode === 'clair'
+    ecrireThemeMode(theme)
+  }, [theme])
 
   return (
     <section className="interface-view surface-panel" aria-label="Interface">
@@ -30,34 +37,40 @@ export function InterfaceView(): React.JSX.Element {
       </header>
       <div className="interface-row">
         <div className="interface-row-text">
-          <strong>Mode clair</strong>
+          <strong>Thème</strong>
           <p>
-            Fonds clairs et texte sombre. Désactivé, l’application garde son mode nuit, qui reste le
-            réglage par défaut. Le choix est mémorisé sur ce poste.
+            L’apparence de l’application : <strong>huit thèmes</strong>, quatre sombres et quatre
+            clairs. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas ne voit
+            rien changer. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans
+            redémarrage.
           </p>
         </div>
-        <label className="interface-switch">
-          <input
-            type="checkbox"
-            role="switch"
-            checked={clair}
-            aria-label="Mode clair"
-            data-testid="interface-mode-clair"
-            onChange={(e) => setMode(e.target.checked ? 'clair' : 'sombre')}
-          />
-          <span className="interface-switch-track" aria-hidden="true">
-            <span className="interface-switch-knob" />
-          </span>
-          <span className="interface-switch-etat">{clair ? 'Clair' : 'Sombre'}</span>
+        <label className="interface-theme-choix">
+          <span className="interface-theme-label">Thème</span>
+          <select
+            className="interface-theme-select"
+            value={theme}
+            aria-label="Thème"
+            data-testid="interface-theme"
+            onChange={(e) => setTheme(e.target.value)}
+          >
+            {THEMES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.libelle}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
       <p className="interface-reserve">
-        <strong>Ce qui reste sombre.</strong> Le mode clair change le cadre de l’application : le
-        menu, les panneaux, les textes et les champs. Les écrans qui peignent leurs couleurs en dur
-        ne le suivent pas encore et resteront sombres, y compris la page <strong>Chat</strong>, l’
-        <strong>Accueil</strong>, l’<strong>Observatory</strong>, le graphe <strong>Memory</strong>,
-        la <strong>topologie</strong> des agents et les aperçus HTML générés. L’affichage sera donc
-        mixte : clair autour, sombre à l’intérieur de ces écrans.
+        <strong>Ce qui ne suit pas encore.</strong> Le thème choisi s’applique à presque tout
+        l’écran : le menu, les panneaux, les textes, les champs, et les pages <strong>Chat</strong>,{' '}
+        <strong>Accueil</strong>, <strong>Observatory</strong> et <strong>Agent Studio</strong>.
+        Trois endroits gardent leurs couleurs sombres quel que soit le thème, parce qu’ils les
+        peignent en dur : la <strong>toile du graphe Memory</strong> (ses étiquettes et son bandeau
+        d’avertissement), le bandeau <strong>Runtime actuel</strong> au bas de l’Agent Studio, et le{' '}
+        <strong>décor animé du fond</strong>. Constaté à l’écran le 7 septembre 2026 sous un thème
+        clair.
       </p>
     </section>
   )

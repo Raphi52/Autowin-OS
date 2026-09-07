@@ -19,10 +19,73 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
  */
 
 /** Palette reprise de `theme.css` — aucune couleur inventée ici. */
-const ROSE = 0xef3f91
-const CYAN = 0x49cfff
-const GOLD = 0xe9bd4e
-const VIOLET = 0x8f7cff
+/**
+ * CES QUATRE TEINTES VIENNENT DU THEME APPLIQUE, plus de ce fichier.
+ *
+ * Le commentaire au-dessus disait deja la verite du besoin -- palette reprise de theme.css,
+ * aucune couleur inventee ici -- mais les valeurs etaient RECOPIEES. Le decor 3D ne suivait donc
+ * aucun theme : constate a l ecran le 2026-09-07 sous Obsidian Nebula, sa nebuleuse bleu-magenta
+ * jurait avec le violet sourd du theme. Aucune feuille de style ne pouvait le corriger, ces
+ * couleurs partent dans des nuanceurs WebGL.
+ *
+ * Les valeurs ci-dessous restent le REPLI, et ce sont exactement celles du sombre d origine : hors
+ * navigateur (test, WebGL absent) ou si un theme ne definit pas un jeton, le decor est identique a
+ * ce qu il etait. Rien ne change tant qu aucun theme ne le demande.
+ *
+ * RELU A LA CREATION DE LA SCENE, pas a l import : au chargement du module, le theme n est pas
+ * encore forcement pose sur le document.
+ */
+const REPLI = { rose: 0xef3f91, cyan: 0x49cfff, gold: 0xe9bd4e, violet: 0x8f7cff } as const
+let ROSE: number = REPLI.rose
+let CYAN: number = REPLI.cyan
+let GOLD: number = REPLI.gold
+let VIOLET: number = REPLI.violet
+
+/** Un jeton du theme en entier 0xRRGGBB. Toute forme non reconnue rend le repli. */
+export function teinteDuTheme(jeton: string, repli: number): number {
+  try {
+    const racine = globalThis.document?.documentElement
+    if (!racine || !globalThis.getComputedStyle) return repli
+    const brut = globalThis.getComputedStyle(racine).getPropertyValue(jeton).trim()
+    const hex6 = /^#([0-9a-fA-F]{6})$/.exec(brut)
+    if (hex6) return parseInt(hex6[1], 16)
+    const hex3 = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(brut)
+    if (hex3) return parseInt(hex3[1] + hex3[1] + hex3[2] + hex3[2] + hex3[3] + hex3[3], 16)
+    const rgb = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(brut)
+    if (rgb) return (Number(rgb[1]) << 16) | (Number(rgb[2]) << 8) | Number(rgb[3])
+    return repli
+  } catch {
+    return repli
+  }
+}
+
+/** Recharge les quatre teintes depuis le theme courant. Appelee a la creation de la scene. */
+export function relireTeintesDuTheme(): void {
+  ROSE = teinteDuTheme('--rose', REPLI.rose)
+  CYAN = teinteDuTheme('--cyan', REPLI.cyan)
+  GOLD = teinteDuTheme('--gold', REPLI.gold)
+  VIOLET = teinteDuTheme('--violet', REPLI.violet)
+
+  /*
+   * LA NEBULEUSE, et c est ELLE qui occupe l ecran.
+   *
+   * Piege trouve le 2026-09-07 : NUAGE_COSMIQUE est un objet initialise A L IMPORT du module. Il
+   * a donc COPIE la valeur des teintes a ce moment-la -- y compris `secondaire: VIOLET`, alors que
+   * VIOLET est desormais variable. Reassigner les variables plus tard ne l atteignait pas, et le
+   * decor restait bleu-magenta sous tous les themes. Mesure : deux captures indiscernables entre
+   * le sombre et Obsidian Nebula, build 2717.
+   *
+   * On reassigne donc ses proprietes ICI. Cinq jetons DEDIES plutot que les accents generiques :
+   * le bleu dominant du nuage n est pas le cyan de l interface, et mapper l un sur l autre aurait
+   * change le sombre d origine -- une regression que personne n a demandee. Les replis sont les
+   * valeurs historiques exactes, donc sans jeton le decor est identique au pixel.
+   */
+  NUAGE_COSMIQUE.couleur = teinteDuTheme('--decor-nuage', 0x3f7bff)
+  NUAGE_COSMIQUE.secondaire = teinteDuTheme('--decor-nuage-2', VIOLET)
+  NUAGE_COSMIQUE.accent = teinteDuTheme('--decor-accent', 0xff4fa3)
+  NUAGE_COSMIQUE.froid = teinteDuTheme('--decor-froid', 0x2fe6ff)
+  NUAGE_COSMIQUE.chaud = teinteDuTheme('--decor-chaud', 0xff8a2b)
+}
 /** L'anthracite des surfaces sombres de `theme.css` — la nappe reste dans le monde de l'app. */
 const ANTHRACITE = 0x1b222c
 
@@ -1757,6 +1820,10 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
     return null
   }
 
+  // Le theme est relu ICI et pas a l import : au chargement du module, data-theme n est pas
+  // encore forcement pose sur le document. Sans cet appel les quatre teintes resteraient au repli
+  // et le decor ne suivrait aucun theme -- exactement le defaut constate le 2026-09-07.
+  relireTeintesDuTheme()
   renderer.setClearColor(FOND_DECOR.couleur, FOND_DECOR.alpha)
   // L'étage cinématique : ACES filmique tient les couleurs dans les surbrillances, l'exposition
   // compense la compression qu'il applique. Les deux viennent de POST_TRAITEMENT — un réglage écrit

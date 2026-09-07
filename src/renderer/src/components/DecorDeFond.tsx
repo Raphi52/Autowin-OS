@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { autowinStorageKey } from '../storage-keys'
 import {
   createDecorScene,
@@ -40,6 +40,35 @@ const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v2')
  */
 export function DecorDeFond(): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null)
+
+  /**
+   * LE THEME APPLIQUE, mis en DEPENDANCE de la scene ci-dessous.
+   *
+   * La scene 3D lit les teintes du theme A SA CREATION (relireTeintesDuTheme dans
+   * home-decor-scene.ts) et ne les relit jamais ensuite. Sans ce qui suit, changer de theme
+   * laissait le decor sur les couleurs du precedent : constate a l ecran le 2026-09-07, la
+   * nebuleuse bleu-magenta du sombre d origine restait affichee sous Obsidian Nebula.
+   *
+   * On RECONSTRUIT plutot que de muter les couleurs en place : les teintes sont figees dans des
+   * geometries et des nuanceurs a la construction, les changer demanderait de parcourir toute la
+   * scene -- beaucoup de code pour un geste rare. Le nettoyage existant (scene.dispose) est deja
+   * correct, donc il n y a rien de plus a ecrire pour liberer l ancienne.
+   */
+  const [themeApplique, setThemeApplique] = useState<string>(() =>
+    typeof document === 'undefined'
+      ? ''
+      : (document.documentElement.getAttribute('data-theme') ?? '')
+  )
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof MutationObserver !== 'function') return
+    const racine = document.documentElement
+    const observateur = new MutationObserver(() => {
+      setThemeApplique(racine.getAttribute('data-theme') ?? '')
+    })
+    observateur.observe(racine, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observateur.disconnect()
+  }, [])
 
   useEffect(() => {
     const host = hostRef.current
@@ -111,7 +140,7 @@ export function DecorDeFond(): React.JSX.Element {
       observer?.disconnect()
       scene.dispose()
     }
-  }, [])
+  }, [themeApplique])
 
   return <div className="decor-de-fond" ref={hostRef} aria-hidden="true" />
 }

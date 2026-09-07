@@ -27,7 +27,7 @@
    déroulantes, champs et ascenseurs en sombre au milieu d'une page claire — le défaut
    symétrique de celui corrigé le 2026-09-02 dans theme.css.
    ============================================================================ */
-:root[data-theme='clair'] {
+:root[data-base='clair'] {
   color-scheme: light;
 
   --bg-0: #f4f5f8;
@@ -38,6 +38,11 @@
 
   --line: rgba(18, 24, 40, 0.16);
   --line-strong: rgba(18, 24, 40, 0.34);
+
+  /* LE VOILE s'inverse : sombre sur fond clair. Les opacites, elles, restent celles ecrites au
+     point d'usage — donc un filet a 18 % reste un filet a 18 %, simplement visible.
+     `--ombre-rgb` ne s'inverse PAS : une ombre reste noire dans les deux modes. */
+  --voile-rgb: 18, 24, 40;
 
   --text: #14192a;
   --text-dim: #4d5567;
@@ -64,41 +69,41 @@
 }
 
 /* Le fond de page : plus d'image cosmique ni de voile noir en mode clair. */
-:root[data-theme='clair'] body {
+:root[data-base='clair'] body {
   background: var(--bg-0);
   color: var(--text);
 }
 /* Grain + nappe et voile de vignettage : pensés pour du noir, ils salissent un fond clair. */
-:root[data-theme='clair'] body::before,
-:root[data-theme='clair'] body::after {
+:root[data-base='clair'] body::before,
+:root[data-base='clair'] body::after {
   display: none;
 }
 
 /* Le menu de gauche était noir EN DUR (voir plus haut) : il faut le reprendre ici,
    sinon un rail noir reste collé à une application claire. */
-:root[data-theme='clair'] .theme-serious .rail {
+:root[data-base='clair'] .theme-serious .rail {
   background: #ffffff;
   border-right-color: var(--line);
 }
-:root[data-theme='clair'] .theme-serious .brand {
+:root[data-base='clair'] .theme-serious .brand {
   background: rgba(255, 255, 255, 0.95);
 }
 
 /* Bouton d'accent : texte blanc sur rose foncé, contraste conservé. */
-:root[data-theme='clair'] .btn-accent {
+:root[data-base='clair'] .btn-accent {
   color: #ffffff;
 }
 
 /* ----------------------------------------------------------------------------
    SURFACES — la SECONDE famille de variables, celle qui peint réellement les
    panneaux (`ui-system.css` l.3-33). Elle est posée sur `.shell` / `.shell.theme-serious`,
-   donc les valeurs claires de `:root[data-theme='clair']` ne l'atteignaient PAS :
+   donc les valeurs claires de `:root[data-base='clair']` ne l'atteignaient PAS :
    le panneau central restait noir pendant que le texte passait en sombre — illisible.
    Constat écran du 2026-09-03. On reprend donc les mêmes sélecteurs, préfixés par la
    racine claire pour rester plus spécifiques.
    ---------------------------------------------------------------------------- */
-:root[data-theme='clair'] .shell,
-:root[data-theme='clair'] .shell.theme-serious {
+:root[data-base='clair'] .shell,
+:root[data-base='clair'] .shell.theme-serious {
   --surface-page: transparent;
   --surface-panel: rgba(255, 255, 255, 0.96);
   --surface-card: rgba(255, 255, 255, 0.9);
@@ -111,7 +116,7 @@
 }
 
 /* Le titre de l'application était `#fff` EN DUR (app-shell.css) : blanc sur blanc. */
-:root[data-theme='clair'] .brand-name {
+:root[data-base='clair'] .brand-name {
   color: #10131c;
   text-shadow: none;
 }
@@ -124,21 +129,21 @@
    Les filets blancs des panneaux de chat deviennent sombres pour la même raison :
    un filet blanc sur fond blanc n'existe pas.
    ---------------------------------------------------------------------------- */
-:root[data-theme='clair'] .cosmic-outline .conv-pane {
+:root[data-base='clair'] .cosmic-outline .conv-pane {
   background: #ffffff;
   border-color: var(--line);
   border-right-color: var(--line);
 }
-:root[data-theme='clair'] .cosmic-outline .chat,
-:root[data-theme='clair'] .cosmic-outline .chat-head,
-:root[data-theme='clair'] .cosmic-outline .chat-layout,
-:root[data-theme='clair'] .cosmic-outline .runs-pane {
+:root[data-base='clair'] .cosmic-outline .chat,
+:root[data-base='clair'] .cosmic-outline .chat-head,
+:root[data-base='clair'] .cosmic-outline .chat-layout,
+:root[data-base='clair'] .cosmic-outline .runs-pane {
   border-color: var(--line);
 }
-:root[data-theme='clair'] .cosmic-outline .conv-search,
-:root[data-theme='clair'] .cosmic-outline .chat-head .btn,
-:root[data-theme='clair'] .cosmic-outline .chat-suggest .btn,
-:root[data-theme='clair'] .cosmic-outline .composer-field {
+:root[data-base='clair'] .cosmic-outline .conv-search,
+:root[data-base='clair'] .cosmic-outline .chat-head .btn,
+:root[data-base='clair'] .cosmic-outline .chat-suggest .btn,
+:root[data-base='clair'] .cosmic-outline .composer-field {
   border-color: var(--line);
 }
 
@@ -150,15 +155,15 @@
    et leur fond appelle `var(--surface2, #191d23)` — une variable qui n'existe dans
    AUCUN thème. C'est donc la valeur de secours, un gris très sombre, qui s'applique
    toujours : quatre pavés noirs sur page blanche. Même piège pour `--muted`. */
-:root[data-theme='clair'] .sg-chip {
+:root[data-base='clair'] .sg-chip {
   background: #ffffff;
   border-color: var(--line);
   color: var(--text);
 }
-:root[data-theme='clair'] .sg-chip:hover {
+:root[data-base='clair'] .sg-chip:hover {
   background: rgba(15, 20, 35, 0.05);
 }
-:root[data-theme='clair'] .sg-subtitle {
+:root[data-base='clair'] .sg-subtitle {
   color: var(--text-dim);
 }
 
@@ -169,24 +174,24 @@
    pour du noir. Les chiffres et les boutons de filtre n'ont aucune couleur
    propre : ils héritent, et l'héritage venait du thème sombre.
    ---------------------------------------------------------------------------- */
-:root[data-theme='clair'] .observatory-panel-title {
+:root[data-base='clair'] .observatory-panel-title {
   color: #0f6f9c;
 }
-:root[data-theme='clair'] .observatory-metrics > strong {
+:root[data-base='clair'] .observatory-metrics > strong {
   color: var(--text);
   background: #ffffff;
   border-color: var(--line);
 }
-:root[data-theme='clair'] .observatory-metrics small {
+:root[data-base='clair'] .observatory-metrics small {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .observatory-quick-filters button,
-:root[data-theme='clair'] .observatory-causal-controls button,
-:root[data-theme='clair'] .observatory-toolbar__actions button,
-:root[data-theme='clair'] .observatory-toolbar__actions summary {
+:root[data-base='clair'] .observatory-quick-filters button,
+:root[data-base='clair'] .observatory-causal-controls button,
+:root[data-base='clair'] .observatory-toolbar__actions button,
+:root[data-base='clair'] .observatory-toolbar__actions summary {
   color: var(--text);
 }
-:root[data-theme='clair'] .observatory-toolbar__scope small {
+:root[data-base='clair'] .observatory-toolbar__scope small {
   color: var(--text-dim);
 }
 
@@ -194,7 +199,7 @@
    `--surface-selected` en `rgba(225, 193, 103, 0.1)` — un or à 10 %. Sur fond
    blanc c'est le jaune pâle signalé, et le libellé sélectionné passe en or clair
    par-dessus : illisible. On densifie le fond et on force un texte sombre. */
-:root[data-theme='clair'] .observatory-view {
+:root[data-base='clair'] .observatory-view {
   --surface-selected: rgba(154, 111, 16, 0.14);
   /* `--text-muted` n'est définie NULLE PART et n'a aucune valeur de secours
      (ObservatoryView.css l.715) : le texte des bandeaux SORTANT / RÉPONSE n'avait
@@ -206,37 +211,37 @@
    disparaît sur fond clair. On le mélange à du sombre à la place. */
 /* « Mémoire temporelle reconstruite » (ObservatoryView.tsx l.1024) : ce bandeau
    garde ses couleurs de nuit, titre et compteur également pâles. */
-:root[data-theme='clair'] .observatory-semantic-timeline {
+:root[data-base='clair'] .observatory-semantic-timeline {
   color: var(--text);
 }
-:root[data-theme='clair'] .observatory-semantic-timeline strong {
+:root[data-base='clair'] .observatory-semantic-timeline strong {
   color: var(--text);
 }
-:root[data-theme='clair'] .observatory-semantic-timeline small {
+:root[data-base='clair'] .observatory-semantic-timeline small {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .observatory-group-head b {
+:root[data-base='clair'] .observatory-group-head b {
   color: color-mix(in srgb, var(--zone-accent) 55%, #101625);
 }
-:root[data-theme='clair'] .observatory-group {
+:root[data-base='clair'] .observatory-group {
   border-color: color-mix(in srgb, var(--zone-accent) 45%, #ffffff);
   background: color-mix(in srgb, #ffffff 92%, var(--zone-accent) 8%);
 }
-:root[data-theme='clair'] .observatory-conversations > button.is-active,
-:root[data-theme='clair'] .observatory-calls button.is-active,
-:root[data-theme='clair'] .observatory-event.is-selected,
-:root[data-theme='clair'] .observatory-view-switch button.is-active,
-:root[data-theme='clair'] .observatory-quick-filters button.is-active,
-:root[data-theme='clair'] .observatory-causal-controls button.is-active {
+:root[data-base='clair'] .observatory-conversations > button.is-active,
+:root[data-base='clair'] .observatory-calls button.is-active,
+:root[data-base='clair'] .observatory-event.is-selected,
+:root[data-base='clair'] .observatory-view-switch button.is-active,
+:root[data-base='clair'] .observatory-quick-filters button.is-active,
+:root[data-base='clair'] .observatory-causal-controls button.is-active {
   color: var(--text);
   border-color: rgba(154, 111, 16, 0.5);
 }
-:root[data-theme='clair'] .cosmic-outline .chat-suggest .btn {
+:root[data-base='clair'] .cosmic-outline .chat-suggest .btn {
   background: #ffffff;
   border-color: var(--line);
   color: var(--text);
 }
-:root[data-theme='clair'] .cosmic-outline .composer {
+:root[data-base='clair'] .cosmic-outline .composer {
   background: var(--bg-0);
   border-top-color: var(--line);
 }
@@ -248,7 +253,7 @@
    Signalé le 2026-09-03 : « dans certaines réponses le texte est trop clair ».
    On rend au bloc le fond qu'il suppose : il devient un encart sombre assumé.
    Écrit ICI et non dans ChatView.css, verrouillé par un test rouge préexistant. */
-:root[data-theme='clair'] .md-html {
+:root[data-base='clair'] .md-html {
   padding: 12px 14px;
   border: 1px solid rgba(18, 24, 40, 0.14);
   border-radius: 10px;
@@ -261,17 +266,17 @@
    c'est le seul levier depuis une feuille de style.
    COUT ASSUME : les accents dores passent en sombre ici — l'or pale sur blanc ne
    se lit pas. La lisibilite prime sur la couleur d'accent. */
-:root[data-theme='clair'] .md-html,
-:root[data-theme='clair'] .md-html * {
+:root[data-base='clair'] .md-html,
+:root[data-base='clair'] .md-html * {
   color: #1b2130 !important;
   background-color: transparent !important;
   border-color: rgba(18, 24, 40, 0.16) !important;
 }
 /* Les puces monospace (chemins, valeurs) garderaient sinon un fond invisible et
    se confondraient avec le texte courant : gris tres leger pour les detacher. */
-:root[data-theme='clair'] .md-html code,
-:root[data-theme='clair'] .md-html kbd,
-:root[data-theme='clair'] .md-html pre {
+:root[data-base='clair'] .md-html code,
+:root[data-base='clair'] .md-html kbd,
+:root[data-base='clair'] .md-html pre {
   background-color: rgba(18, 24, 40, 0.05) !important;
 }
 
@@ -289,66 +294,66 @@
    La bulle de l'utilisateur avait un fond violet foncé : elle passe en rose pâle
    avec un texte sombre, sinon son texte assombri disparaîtrait dedans.
    ---------------------------------------------------------------------------- */
-:root[data-theme='clair'] .cosmic-outline .msg.assistant .msg-body {
+:root[data-base='clair'] .cosmic-outline .msg.assistant .msg-body {
   color: var(--text);
   border-left-color: var(--gold);
 }
-:root[data-theme='clair'] .cosmic-outline .msg.user .msg-body {
+:root[data-base='clair'] .cosmic-outline .msg.user .msg-body {
   background: rgba(200, 26, 108, 0.08);
   border-color: rgba(200, 26, 108, 0.35);
   color: #3d0a24;
 }
-:root[data-theme='clair'] .cosmic-outline .msg-meta {
+:root[data-base='clair'] .cosmic-outline .msg-meta {
   color: var(--text-dim);
 }
 
 /* Zone de saisie du bas : elle héritait d'un gris de nuit. */
-:root[data-theme='clair'] .cosmic-outline .composer {
+:root[data-base='clair'] .cosmic-outline .composer {
   background: var(--bg-0);
 }
-:root[data-theme='clair'] .cosmic-outline .composer-field {
+:root[data-base='clair'] .cosmic-outline .composer-field {
   background: #ffffff;
 }
-:root[data-theme='clair'] .cosmic-outline .composer-field textarea {
+:root[data-base='clair'] .cosmic-outline .composer-field textarea {
   color: var(--text);
 }
 
 /* Liste de conversations : titres `#dce6ee` et métadonnées `#65778a` en dur
    (`ChatView.css` l.1775 et l.1784) — presque blancs sur le panneau devenu blanc. */
-:root[data-theme='clair'] .cosmic-outline .conv-label {
+:root[data-base='clair'] .cosmic-outline .conv-label {
   color: var(--text);
 }
-:root[data-theme='clair'] .cosmic-outline .conv-meta,
-:root[data-theme='clair'] .cosmic-outline .conv-snippet {
+:root[data-base='clair'] .cosmic-outline .conv-meta,
+:root[data-base='clair'] .cosmic-outline .conv-snippet {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .cosmic-outline .conv-group-label {
+:root[data-base='clair'] .cosmic-outline .conv-group-label {
   color: var(--text-dim);
 }
 
 /* Bandeau d'alerte en haut du fil (travaux non publiés) : fond noir plein. */
-:root[data-theme='clair'] .chat-workflow-notice,
-:root[data-theme='clair'] .chat-travail-non-publie {
+:root[data-base='clair'] .chat-workflow-notice,
+:root[data-base='clair'] .chat-travail-non-publie {
   background: rgba(154, 111, 16, 0.08);
   border-color: rgba(154, 111, 16, 0.35);
   color: var(--text);
 }
 
 /* Cartes de pièces jointes : elles restaient des blocs noirs posés sur la page claire. */
-:root[data-theme='clair'] .artifact-preview {
+:root[data-base='clair'] .artifact-preview {
   background: #ffffff;
   border-color: var(--line);
 }
 /* Les textes internes de la carte sont écrits en clair EN DUR dans ArtifactPreview.css
    (#eef0f5, #d7dae2, #8d94a2…) : éclaircir le fond sans les reprendre rend la carte
    blanche sur blanc — constaté à l'écran le 2026-09-03. */
-:root[data-theme='clair'] .artifact-preview,
-:root[data-theme='clair'] .artifact-preview * {
+:root[data-base='clair'] .artifact-preview,
+:root[data-base='clair'] .artifact-preview * {
   color: var(--text);
 }
 /* Même piège pour les boutons du bandeau (« Traiter », « Voir la liste »). */
-:root[data-theme='clair'] .chat-workflow-notice button,
-:root[data-theme='clair'] .chat-travail-non-publie button {
+:root[data-base='clair'] .chat-workflow-notice button,
+:root[data-base='clair'] .chat-travail-non-publie button {
   color: var(--text);
   border-color: rgba(154, 111, 16, 0.45);
 }
@@ -359,15 +364,15 @@
    en `--text-dim` : sur fond clair, un rectangle noir avec du gris pâle dedans.
    Signalé par l'utilisateur le 2026-09-03, capture à l'appui.
    ---------------------------------------------------------------------------- */
-:root[data-theme='clair'] .conv-menu-pop {
+:root[data-base='clair'] .conv-menu-pop {
   background: #ffffff;
   border-color: var(--line);
   box-shadow: 0 10px 28px rgba(18, 24, 40, 0.18);
 }
-:root[data-theme='clair'] .conv-menu-pop button {
+:root[data-base='clair'] .conv-menu-pop button {
   color: var(--text);
 }
-:root[data-theme='clair'] .conv-menu-pop button:hover {
+:root[data-base='clair'] .conv-menu-pop button:hover {
   background: rgba(15, 20, 35, 0.06);
 }
 
@@ -384,7 +389,7 @@
    La regle `.chat-conv-title` juste en dessous vise une classe qui n'est PLUS
    rendue — la barre du haut a ete refaite depuis. On la garde par prudence (elle
    ne coute rien et couvre un rendu ancien), mais c'est le kicker qui agit. */
-:root[data-theme='clair'] .cosmic-outline .chat-head-kicker {
+:root[data-base='clair'] .cosmic-outline .chat-head-kicker {
   color: var(--text);
 }
 /* LIGNE D'IDENTITE sous le titre (fournisseur · modele · conv · depot · branche) :
@@ -395,20 +400,20 @@
    propre couleur. Signale le 2026-09-04 : « il manque la petite ligne en dessous
    du titre ». On la remet en gris de second plan, comme en mode nuit ou elle est
    volontairement discrete. */
-:root[data-theme='clair'] .cosmic-outline .chat-runtime,
-:root[data-theme='clair'] .cosmic-outline .chat-runtime > span + span::before,
-:root[data-theme='clair'] .cosmic-outline .chat-runtime-provider,
-:root[data-theme='clair'] .cosmic-outline .chat-runtime-state,
-:root[data-theme='clair'] .cosmic-outline .chat-runtime-state.is-busy {
+:root[data-base='clair'] .cosmic-outline .chat-runtime,
+:root[data-base='clair'] .cosmic-outline .chat-runtime > span + span::before,
+:root[data-base='clair'] .cosmic-outline .chat-runtime-provider,
+:root[data-base='clair'] .cosmic-outline .chat-runtime-state,
+:root[data-base='clair'] .cosmic-outline .chat-runtime-state.is-busy {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .cosmic-outline .chat-conv-title {
+:root[data-base='clair'] .cosmic-outline .chat-conv-title {
   color: var(--text);
 }
-:root[data-theme='clair'] .workflow-toggle {
+:root[data-base='clair'] .workflow-toggle {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .cosmic-outline .chat-head .btn {
+:root[data-base='clair'] .cosmic-outline .chat-head .btn {
   background: #ffffff;
   border-color: var(--line);
   color: var(--text);
@@ -428,12 +433,12 @@
    `rgba(0, 0, 0, 0.3)` et un texte `#9caab5`. Les quatre états colorés le
    recouvrent, mais une barre SANS état garde ce voile — c'est la moitié grise
    que l'utilisateur a signalée trois fois le 2026-09-03. */
-:root[data-theme='clair'] .cosmic-outline .activity-group {
+:root[data-base='clair'] .cosmic-outline .activity-group {
   background: rgba(255, 255, 255, 0.9);
   border-color: var(--line);
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .cosmic-outline .activity-group-title {
+:root[data-base='clair'] .cosmic-outline .activity-group-title {
   color: var(--text);
 }
 
@@ -441,12 +446,12 @@
    `cosmic-outline.css` l.616-617 lui donne un fond noir `rgba(0, 0, 0, 0.35)` et
    un texte `#9caab5`. Signalé par l'utilisateur le 2026-09-03 : « quand on déplie
    une action en cours, la zone est sombre ». */
-:root[data-theme='clair'] .cosmic-outline .activity-step-detail {
+:root[data-base='clair'] .cosmic-outline .activity-step-detail {
   background: rgba(15, 20, 35, 0.04);
   border-left-color: var(--line);
   color: var(--text);
 }
-:root[data-theme='clair'] .cosmic-outline .activity-step-target {
+:root[data-base='clair'] .cosmic-outline .activity-step-target {
   color: var(--text-dim);
 }
 
@@ -459,7 +464,7 @@
    page. On la retourne en plaque blanche translucide, contour et ombre adoucis,
    pour qu'elle garde sa lisibilité PAR-DESSUS le décor.
    ---------------------------------------------------------------------------- */
-:root[data-theme='clair'] .home-tile__panel {
+:root[data-base='clair'] .home-tile__panel {
   background: rgba(255, 255, 255, 0.88);
   border-color: rgba(18, 24, 40, 0.22);
   box-shadow:
@@ -475,7 +480,7 @@
    équerres, on retourne le fond et on assombrit l'or. #d4a94f sur ivoire serait
    illisible, il devient #8c6412. Ces widgets pilotant presque tout par leurs
    variables locales, les redéfinir suffit : le contenu suit. */
-:root[data-theme='clair'] .jarvis {
+:root[data-base='clair'] .jarvis {
   --jv-or: #8c6412;
   border-color: rgba(140, 100, 18, 0.35);
   background:
@@ -484,7 +489,7 @@
   box-shadow: inset 0 0 26px rgba(140, 100, 18, 0.07);
   color: var(--text);
 }
-:root[data-theme='clair'] .enregistrements {
+:root[data-base='clair'] .enregistrements {
   --hud: 140, 100, 18;
   --or: 140, 100, 18;
   background:
@@ -505,36 +510,36 @@
    la bascule « ACTIVER L'ÉCOUTE » (#cfd4de, l.827), le nom dans l'anneau
    (#f0e6d2 + halo, l.1809), le titre « DERNIERS ENREGISTREMENTS » (or à 70 %,
    l.1438). Le halo doré autour du texte n'a plus de sens sur fond clair. */
-:root[data-theme='clair'] .jarvis__bascule {
+:root[data-base='clair'] .jarvis__bascule {
   color: #5a4a2a;
 }
-:root[data-theme='clair'] .jarvis__bascule:hover,
-:root[data-theme='clair'] .jarvis__bascule:focus-visible {
+:root[data-base='clair'] .jarvis__bascule:hover,
+:root[data-base='clair'] .jarvis__bascule:focus-visible {
   color: #3d3018;
 }
-:root[data-theme='clair'] .jarvis__anneau-texte > strong {
+:root[data-base='clair'] .jarvis__anneau-texte > strong {
   color: #3d3018;
   text-shadow: none;
 }
 /* Le DISQUE derrière ce nom est un noir à 72 % peint en SVG (HomeView.css
    l.1755) : assombrir le texte SANS lui donnait du foncé sur du foncé — vu à
    l'écran le 2026-09-03, la correction du texte seule ne suffisait pas. */
-:root[data-theme='clair'] .jarvis__anneau-coeur {
+:root[data-base='clair'] .jarvis__anneau-coeur {
   fill: rgba(255, 253, 247, 0.92);
   stroke: rgba(140, 100, 18, 0.35);
 }
-:root[data-theme='clair'] .jarvis__anneau-etat {
+:root[data-base='clair'] .jarvis__anneau-etat {
   stroke: rgba(18, 24, 40, 0.14);
 }
-:root[data-theme='clair'] .enregistrements__titre {
+:root[data-base='clair'] .enregistrements__titre {
   color: rgba(120, 86, 16, 0.95);
 }
 
 /* Les champs de Jarvis avaient un fond opaque #14120d et un texte clair
    (HomeView.css l.1116-1134) : noirs au milieu d'un widget devenu pâle. */
-:root[data-theme='clair'] .jarvis__audio-champ select,
-:root[data-theme='clair'] .jarvis__audio-champ input[type='text'],
-:root[data-theme='clair'] .jarvis__audio-champ select option {
+:root[data-base='clair'] .jarvis__audio-champ select,
+:root[data-base='clair'] .jarvis__audio-champ input[type='text'],
+:root[data-base='clair'] .jarvis__audio-champ select option {
   background: #ffffff;
   color: var(--text);
   border-color: rgba(140, 100, 18, 0.3);
@@ -547,7 +552,7 @@
    se cale juste sous le blanc des fenêtres pour qu'elles se détachent encore.
    Réversible d'une ligne : c'est l'argument qui a fait préférer cette voie au
    chantier de shaders. */
-:root[data-theme='clair'] .home-view::after {
+:root[data-base='clair'] .home-view::after {
   background:
     linear-gradient(
       170deg,
@@ -557,23 +562,383 @@
     ),
     radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
 }
-:root[data-theme='clair'] .cosmic-outline .activity-group-tools {
+:root[data-base='clair'] .cosmic-outline .activity-group-tools {
   color: var(--text-dim);
 }
-:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='done'] {
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='done'] {
   background: linear-gradient(100deg, rgba(78, 201, 165, 0.22) 0%, rgba(78, 201, 165, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
 }
-:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='running'] {
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='running'] {
   background: linear-gradient(100deg, rgba(35, 150, 195, 0.22) 0%, rgba(35, 150, 195, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
 }
-:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
   background: linear-gradient(100deg, rgba(196, 132, 30, 0.22) 0%, rgba(196, 132, 30, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
 }
-:root[data-theme='clair'] .cosmic-outline .activity-group.failed,
-:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='failed'] {
+:root[data-base='clair'] .cosmic-outline .activity-group.failed,
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='failed'] {
   background: linear-gradient(100deg, rgba(210, 60, 100, 0.2) 0%, rgba(210, 60, 100, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
 }
-:root[data-theme='clair'] .cosmic-outline .activity-group:hover {
+:root[data-base='clair'] .cosmic-outline .activity-group:hover {
   background: rgba(15, 20, 35, 0.05);
   border-color: var(--line-strong);
+}
+
+/* ===========================================================================
+   OBSIDIAN NEBULA -- troisieme theme, ni le sombre d origine ni son inverse.
+   Couleurs reprises TELLES QUELLES de la maquette maison
+   sketches/galaxy-dark-gold-pink/obisidian-nebula/index.html (7 valeurs).
+
+   CE BLOC NE REDEFINIT QUE DES JETONS : aucune regle par composant, aucun
+   selecteur de vue. Tout ce qui passe deja par le theme suit automatiquement.
+   C est la mesure de ce que le chantier a gagne : le mode clair, lui, a coute
+   76 blocs d exception.
+
+   IL RESTE SOMBRE : decor cosmique conserve, --voile-rgb garde son blanc
+   translucide. Ce qui echappe encore au theme (environ 2 240 couleurs en dur,
+   dont 392 dans le chat et 334 dans le graphe) garde les teintes du sombre
+   d origine : l ecart se voit sur le CADRE, pas encore dans ces vues.
+
+   SON OR ET SON ROSE SONT LES SIENS. La regle du 2026-09-06 verrouille
+   l identite d Autowin face a un theme IMPORTE ; celui-ci est MAISON, et son
+   or eteint plus son rose mauve SONT son identite. Hypothese assumee.
+   =========================================================================== */
+:root[data-theme='obsidian-nebula'] {
+  --bg-0: #0c1022;
+  --bg-1: rgba(17, 19, 29, 0.8);
+  --bg-2: rgba(17, 19, 29, 0.62);
+  --bg-3: rgba(232, 226, 216, 0.05);
+  --bg-inset: rgba(7, 8, 13, 0.62);
+
+  --line: rgba(45, 41, 56, 0.95);
+  --line-strong: rgba(129, 123, 132, 0.62);
+
+  /* Texte IVOIRE CHAUD, pas blanc : ce qui rend la maquette reposante. */
+  --text: #e8e2d8;
+  --text-dim: #817b84;
+  --text-faint: #5d585f;
+
+  /* Or ETEINT, rose MAUVE : plus sourds que ceux d Autowin, volontairement. */
+  --gold: #d6ad60;
+  --gold-bright: #e6c383;
+  --gold-doux: #c39d55;
+  --gold-clair: #d6ad60;
+  --rose: #d85c9f;
+  --rose-bright: #e87ab3;
+  --accent: var(--rose);
+  --accent-dim: #7a3159;
+  --accent-soft: rgba(216, 92, 159, 0.14);
+
+  /* CYAN et VIOLET : pas decoratifs ici. Le decor 3D lit --rose, --cyan, --gold et --violet
+     pour teinter sa nebuleuse et ses etoiles (home-decor-scene.ts). Sans ces deux jetons, il
+     retomberait sur le bleu-cyan vif du sombre d origine -- ce qui jurait avec ce theme,
+     constate a l ecran le 2026-09-07. On les prend SOURDS, dans la famille du violet des filets. */
+  --cyan: #6f9fc4;
+
+  /* LES CINQ LEVIERS DE LA NEBULEUSE 3D (home-decor-scene.ts, NUAGE_COSMIQUE).
+     Ce sont eux qui occupent l ecran : le bleu dominant, sa seconde teinte, les filaments,
+     les bords froids et les braises chaudes. Sans ces jetons le decor garde le bleu-magenta vif
+     du sombre d origine, ce qui jurait avec ce theme -- constate a l ecran le 2026-09-07.
+     Choix retenu : rester dans la famille violet / prune du theme, et ETEINDRE les braises
+     orange en un cuivre sourd plutot que de les supprimer (sans elles le nuage vire monochrome,
+     note conv-1449). */
+  --decor-nuage: #3a3560;
+  --decor-nuage-2: #7d6bb5;
+  --decor-accent: #b0538f;
+  --decor-froid: #5d8ca8;
+  --decor-chaud: #a8703f;
+  --violet: #7d6bb5;
+  --info: var(--cyan);
+}
+
+/* SURFACES -- seconde famille de jetons, posee sur .shell et non sur la racine
+   (ui-system.css). Sans ce bloc les panneaux gardent les valeurs du sombre
+   d origine et le theme ne se voit qu a moitie : defaut constate le 2026-09-03
+   sur le mode clair. */
+:root[data-theme='obsidian-nebula'] .shell,
+:root[data-theme='obsidian-nebula'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(24, 29, 51, 0.94);
+  --surface-card: rgba(30, 36, 60, 0.82);
+  --surface-inset: rgba(232, 226, 216, 0.045);
+  --surface-hover: rgba(232, 226, 216, 0.06);
+  --surface-selected: rgba(216, 92, 159, 0.14);
+  --container-border: rgba(45, 41, 56, 0.95);
+  --container-border-strong: rgba(129, 123, 132, 0.55);
+}
+
+/* Le rail est peint en NOIR OPAQUE en dur plus haut dans ce fichier, avec un
+   commentaire qui l assume. Ce theme veut son propre noir bleute. */
+:root[data-theme='obsidian-nebula'] .theme-serious .rail {
+  background: #0c1022;
+  border-right-color: var(--line);
+}
+:root[data-theme='obsidian-nebula'] .theme-serious .brand {
+  background: rgba(17, 19, 29, 0.95);
+}
+
+/* ===========================================================================
+   SOLAR ROSE COMMAND -- le theme VIF. Couleurs relevees dans la maquette maison
+   sketches/galaxy-dark-gold-pink/solar-rose-command/index.html.
+
+   Son parti pris, oppose a Obsidian Nebula : accents SATURES (or eclatant, rose franc)
+   sur une encre presque noire, et des filets PRUNE au lieu de gris. Le texte est un
+   ivoire tres clair, plus lumineux que partout ailleurs.
+
+   PAS DE JETON --decor-* ici : demande de l utilisateur du 2026-09-07, le decor 3D reste
+   tel quel. Il gardera donc sa nebuleuse d origine, ce qui convient a un theme vif.
+   =========================================================================== */
+:root[data-theme='solar-rose'] {
+  --bg-0: #180a1c;
+  --bg-1: rgba(22, 16, 30, 0.82);
+  --bg-2: rgba(22, 16, 30, 0.64);
+  --bg-3: rgba(255, 203, 101, 0.07);
+  --bg-inset: rgba(11, 9, 16, 0.66);
+
+  /* Filets PRUNE : la signature du theme, la ou les autres mettent du gris. */
+  --line: rgba(117, 64, 90, 0.9);
+  --line-strong: rgba(149, 126, 142, 0.7);
+
+  --text: #fff4e6;
+  --text-dim: #957e8e;
+  --text-faint: #6b5763;
+
+  /* Or ECLATANT et rose FRANC : c est tout ce qui distingue ce theme. */
+  --gold: #ffc85b;
+  --gold-bright: #ffd98a;
+  --gold-doux: #e8b34c;
+  --gold-clair: #ffc85b;
+  --rose: #ff4f9a;
+  --rose-bright: #ff77b3;
+  --accent: var(--rose);
+  --accent-dim: #75405a;
+  --accent-soft: rgba(255, 79, 154, 0.16);
+}
+
+:root[data-theme='solar-rose'] .shell,
+:root[data-theme='solar-rose'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(40, 23, 48, 0.94);
+  --surface-card: rgba(48, 28, 56, 0.82);
+  --surface-inset: rgba(255, 244, 230, 0.045);
+  --surface-hover: rgba(255, 203, 101, 0.07);
+  --surface-selected: rgba(255, 79, 154, 0.16);
+  --container-border: rgba(117, 64, 90, 0.9);
+  --container-border-strong: rgba(149, 126, 142, 0.6);
+}
+
+:root[data-theme='solar-rose'] .theme-serious .rail {
+  background: #180a1c;
+  border-right-color: var(--line);
+}
+:root[data-theme='solar-rose'] .theme-serious .brand {
+  background: rgba(11, 9, 16, 0.95);
+}
+
+/* ===========================================================================
+   BLACK VERSAILLES -- le theme TERRE. Couleurs relevees dans la maquette maison
+   sketches/galaxy-dark-gold-pink/black-versailles/index.html.
+
+   Son parti pris : des filets BRUN DORE opaques la ou les autres mettent du gris
+   translucide, un or assourdi et un rose brique. Le noir est chaud (#17130a), pas bleute.
+
+   CE QU IL NE PEUT PAS RENDRE, et il faut le savoir : la maquette d origine change aussi
+   la TYPOGRAPHIE (titres en serif, chiffres a l ancienne) et les FORMES (losanges au lieu
+   de ronds). Un theme de couleurs ne porte pas ca. On garde ici son chromatisme seul --
+   c est deja distinctif, mais ce n est pas toute la maquette.
+   =========================================================================== */
+:root[data-theme='black-versailles'] {
+  --bg-0: #17130a;
+  --bg-1: rgba(17, 16, 14, 0.86);
+  --bg-2: rgba(33, 24, 29, 0.7);
+  --bg-3: rgba(201, 167, 93, 0.06);
+  --bg-inset: rgba(9, 9, 8, 0.7);
+
+  /* Filets BRUN DORE : opaques et chauds, la signature du theme. */
+  --line: rgba(88, 72, 43, 0.95);
+  --line-strong: rgba(143, 132, 115, 0.62);
+
+  --text: #e9e1d2;
+  --text-dim: #8f8473;
+  --text-faint: #635b4d;
+
+  /* Or ASSOURDI et rose BRIQUE : des tons terre, jamais saturés. */
+  --gold: #c9a75d;
+  --gold-bright: #ddbe7c;
+  --gold-doux: #b3924c;
+  --gold-clair: #c9a75d;
+  --rose: #b84674;
+  --rose-bright: #cd6690;
+  --accent: var(--rose);
+  --accent-dim: #5c4a2c;
+  --accent-soft: rgba(184, 70, 116, 0.13);
+}
+
+:root[data-theme='black-versailles'] .shell,
+:root[data-theme='black-versailles'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(34, 29, 18, 0.94);
+  --surface-card: rgba(42, 35, 22, 0.82);
+  --surface-inset: rgba(233, 225, 210, 0.04);
+  --surface-hover: rgba(201, 167, 93, 0.07);
+  --surface-selected: rgba(184, 70, 116, 0.13);
+  --container-border: rgba(88, 72, 43, 0.95);
+  --container-border-strong: rgba(143, 132, 115, 0.55);
+}
+
+:root[data-theme='black-versailles'] .theme-serious .rail {
+  background: #17130a;
+  border-right-color: var(--line);
+}
+:root[data-theme='black-versailles'] .theme-serious .brand {
+  background: rgba(17, 16, 14, 0.95);
+}
+
+/* ===========================================================================
+   TROIS THEMES CLAIRS DE PLUS. Aucune maquette maison n en proposait : mesure du
+   2026-09-07, les douze maquettes de sketches/ sont toutes sombres, la plus lumineuse
+   etant le theme sombre lui-meme. Ces palettes sont donc PROPOSEES, pas relevees --
+   a corriger a l oeil, contrairement aux trois themes sombres qui venaient de maquettes
+   dessinees et arbitrees.
+
+   Chacun est le PENDANT CLAIR d un theme sombre : Ardoise pour Obsidian Nebula,
+   Parchemin pour Black Versailles, Rose poudre pour Solar Rose.
+
+   `color-scheme: light` est INDISPENSABLE dans chacun : sans lui Chromium peint listes
+   deroulantes, champs et ascenseurs en sombre au milieu d une page claire.
+
+   Les accents sont ASSOMBRIS comme dans le mode clair d origine : les teintes de nuit
+   passent sous le seuil de lisibilite sur fond clair (jaune pale sur blanc).
+   =========================================================================== */
+
+/* ARDOISE -- gris-bleu dense, moins eblouissant qu un blanc pur sur grand ecran. */
+:root[data-theme='ardoise'] {
+  color-scheme: light;
+  --bg-0: #e8ebf0;
+  --bg-1: rgba(255, 255, 255, 0.78);
+  --bg-2: rgba(255, 255, 255, 0.62);
+  --bg-3: rgba(30, 45, 70, 0.07);
+  --bg-inset: rgba(255, 255, 255, 0.9);
+  --line: rgba(30, 45, 70, 0.18);
+  --line-strong: rgba(30, 45, 70, 0.38);
+  --text: #16202f;
+  --text-dim: #47576b;
+  --text-faint: #71808f;
+  --gold: #8a6410;
+  --gold-bright: #a3781c;
+  --gold-doux: #7d5a10;
+  --gold-clair: #946c12;
+  --rose: #b8195f;
+  --rose-bright: #9c1250;
+  --cyan: #0e6285;
+  --violet: #4e3fb0;
+  --accent: var(--rose);
+  --accent-dim: #efc6da;
+  --accent-soft: rgba(184, 25, 95, 0.1);
+  --ok: #38702a;
+  --warn: #8a6410;
+  --err: #a83530;
+  --info: var(--cyan);
+  --voile-rgb: 30, 45, 70;
+}
+:root[data-theme='ardoise'] .shell,
+:root[data-theme='ardoise'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 255, 255, 0.94);
+  --surface-card: rgba(255, 255, 255, 0.86);
+  --surface-inset: rgba(30, 45, 70, 0.06);
+  --surface-hover: rgba(30, 45, 70, 0.06);
+  --surface-selected: rgba(184, 25, 95, 0.1);
+  --container-border: rgba(30, 45, 70, 0.18);
+  --container-border-strong: rgba(30, 45, 70, 0.34);
+  --container-shadow: none;
+}
+
+/* PARCHEMIN -- blanc CHAUD ivoire, pendant clair de Black Versailles. Ses filets sont
+   bruns et non gris : c est ce qui le distingue du clair d origine, froid et bleute. */
+:root[data-theme='parchemin'] {
+  color-scheme: light;
+  --bg-0: #f6f1e6;
+  --bg-1: rgba(255, 252, 245, 0.82);
+  --bg-2: rgba(255, 252, 245, 0.66);
+  --bg-3: rgba(90, 70, 40, 0.07);
+  --bg-inset: rgba(255, 253, 248, 0.92);
+  --line: rgba(90, 70, 40, 0.2);
+  --line-strong: rgba(90, 70, 40, 0.4);
+  --text: #2a2318;
+  --text-dim: #5c5140;
+  --text-faint: #8a7d68;
+  --gold: #8a6d3b;
+  --gold-bright: #a08145;
+  --gold-doux: #7a6034;
+  --gold-clair: #93753e;
+  --rose: #a4325c;
+  --rose-bright: #8c2650;
+  --cyan: #2c6470;
+  --violet: #5c4a8a;
+  --accent: var(--rose);
+  --accent-dim: #e8d0da;
+  --accent-soft: rgba(164, 50, 92, 0.1);
+  --ok: #4a6b28;
+  --warn: #8a6d3b;
+  --err: #a03c2e;
+  --info: var(--cyan);
+  --voile-rgb: 90, 70, 40;
+}
+:root[data-theme='parchemin'] .shell,
+:root[data-theme='parchemin'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 252, 245, 0.95);
+  --surface-card: rgba(255, 252, 245, 0.88);
+  --surface-inset: rgba(90, 70, 40, 0.06);
+  --surface-hover: rgba(90, 70, 40, 0.06);
+  --surface-selected: rgba(164, 50, 92, 0.1);
+  --container-border: rgba(90, 70, 40, 0.2);
+  --container-border-strong: rgba(90, 70, 40, 0.36);
+  --container-shadow: none;
+}
+
+/* ROSE POUDRE -- pendant clair de Solar Rose. Le rose d Autowin devient la teinte
+   DOMINANTE du fond, plus une simple ponctuation. Le plus affirme des trois, donc
+   celui qui demande le plus de retenue : les surfaces restent presque blanches, sinon
+   le texte se noie dans le rose. */
+:root[data-theme='rose-poudre'] {
+  color-scheme: light;
+  --bg-0: #fdf2f6;
+  --bg-1: rgba(255, 250, 252, 0.84);
+  --bg-2: rgba(255, 250, 252, 0.68);
+  --bg-3: rgba(120, 30, 70, 0.06);
+  --bg-inset: rgba(255, 252, 253, 0.92);
+  --line: rgba(120, 30, 70, 0.18);
+  --line-strong: rgba(120, 30, 70, 0.38);
+  --text: #2b1420;
+  --text-dim: #644754;
+  --text-faint: #8f7480;
+  --gold: #8a6410;
+  --gold-bright: #a3781c;
+  --gold-doux: #7d5a10;
+  --gold-clair: #946c12;
+  --rose: #a8175c;
+  --rose-bright: #8e1049;
+  --cyan: #0e6285;
+  --violet: #5c3fa8;
+  --accent: var(--rose);
+  --accent-dim: #f2c8dc;
+  --accent-soft: rgba(168, 23, 92, 0.1);
+  --ok: #3d6b2a;
+  --warn: #8a6410;
+  --err: #a5302f;
+  --info: var(--cyan);
+  --voile-rgb: 120, 30, 70;
+}
+:root[data-theme='rose-poudre'] .shell,
+:root[data-theme='rose-poudre'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 250, 252, 0.95);
+  --surface-card: rgba(255, 250, 252, 0.88);
+  --surface-inset: rgba(120, 30, 70, 0.05);
+  --surface-hover: rgba(120, 30, 70, 0.06);
+  --surface-selected: rgba(168, 23, 92, 0.11);
+  --container-border: rgba(120, 30, 70, 0.18);
+  --container-border-strong: rgba(120, 30, 70, 0.34);
+  --container-shadow: none;
 }

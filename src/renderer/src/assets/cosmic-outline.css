@@ -41,13 +41,13 @@
 
 .graph-observatory--galaxy {
   border-color: #000;
-  background: #000;
+  background: var(--bg-0);
 }
 
 .graph-observatory--galaxy .graph-toolbar,
 .graph-observatory--galaxy .theme-sidebar,
 .graph-observatory--galaxy .visibility-sidebar {
-  background: #000;
+  background: var(--bg-0);
 }
 
 .graph-observatory--galaxy .graph-toolbar {
@@ -77,7 +77,7 @@
 }
 
 .graph-canvas {
-  background: radial-gradient(circle at 50% 48%, rgba(32, 75, 165, 0.3), transparent 42%), #000;
+  background: radial-gradient(circle at 50% 48%, rgba(32, 75, 165, 0.3), transparent 42%), var(--bg-0);
 }
 
 /* Chat, Controls, Behaviour */
@@ -108,7 +108,7 @@
 
 /* Fenêtre question séparée */
 .model-question-layer {
-  background: radial-gradient(circle at 84% 8%, rgba(239, 63, 145, 0.12), transparent 28%), #000;
+  background: radial-gradient(circle at 84% 8%, rgba(239, 63, 145, 0.12), transparent 28%), var(--bg-0);
 }
 
 .model-question-popup {
@@ -249,7 +249,7 @@
      importee plus tot) : constate le 2026-08-18 en lisant le rendu vivant en CDP, ou le fond
      calcule restait `rgba(5, 5, 6, 0.9)` alors que ChatView.css disait deja `#000`. Un fond pose
      ailleurs sans corriger CELLE-CI est du code mort. */
-  background: var(--lisere-haut), #000;
+  background: var(--lisere-haut), var(--bg-0);
 }
 
 .cosmic-outline .chat,

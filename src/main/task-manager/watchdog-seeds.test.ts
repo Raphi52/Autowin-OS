@@ -1,10 +1,45 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TaskStore } from './task-store'
+import type { ScheduledTaskInput } from './types'
 import { autoKaizenSeed, seedWatchdogTasks } from './watchdog-seeds'
 
 function store(): TaskStore {
   let counter = 0
   return new TaskStore({ now: () => 1000, id: () => `task-${++counter}` })
+}
+
+/**
+ * La regle telle qu'elle est REELLEMENT posee sur le poste, copiee mot pour mot depuis
+ * `.autowin-data/autowin-os/scheduled-tasks.json`.
+ *
+ * Elle n'est PAS reconstruite depuis `autoKaizenSeed()` : c'est tout l'interet. Les autres cas
+ * de ce fichier comparent le code a lui-meme, donc ils restent verts meme quand une forme
+ * livree par le passe n'est reconnue par aucune empreinte. Celui-ci lit un artefact fige : il
+ * ne peut pas suivre une evolution du code, donc il mord.
+ *
+ * Provenance : semis du commit `e8f084db`, prompt BRUT (sans prefixe `/build`), action
+ * `orchestration`, gardes 300000/4/0/3 et aucun budget quotidien.
+ */
+function regleReellementPosee(): ScheduledTaskInput {
+  const brut = JSON.parse(
+    readFileSync(join(__dirname, '__fixtures__', 'regle-auto-kaizen-posee-e8f084db.json'), 'utf8')
+  )
+  return {
+    title: brut.title,
+    prompt: brut.prompt,
+    enabled: brut.enabled,
+    mode: brut.mode,
+    // `conversationId` est une donnee runtime : le magasin la repose lui-meme.
+    destination: {
+      kind: brut.destination.kind,
+      title: brut.destination.title,
+      category: brut.destination.category,
+      provider: brut.destination.provider
+    },
+    watchdog: brut.watchdog
+  }
 }
 
 describe('seedWatchdogTasks — l’auto-kaizen a été retiré du produit', () => {
@@ -67,6 +102,32 @@ describe('seedWatchdogTasks — l’auto-kaizen a été retiré du produit', () 
     seedWatchdogTasks(tasks)
 
     expect(tasks.getTask(mienne.id)?.title).toBe('Mon auto-kaizen à moi')
+  })
+
+  it('efface la règle RÉELLEMENT posée sur le poste (semis e8f084db, artefact figé)', () => {
+    const tasks = store()
+    const posee = tasks.create(regleReellementPosee())
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(posee.id)).toBeUndefined()
+    expect(tasks.listTasks()).toEqual([])
+  })
+
+  it('laisse cette même règle à l’utilisateur dès qu’il en a changé une garde', () => {
+    const brut = regleReellementPosee()
+    const tasks = store()
+    const mienne = tasks.create({
+      ...brut,
+      watchdog: {
+        ...brut.watchdog!,
+        guards: { ...brut.watchdog!.guards, maxTriggersPerHour: 2 }
+      }
+    })
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(mienne.id)?.watchdog?.guards.maxTriggersPerHour).toBe(2)
   })
 
   it('ne touche pas une règle sans rapport', () => {

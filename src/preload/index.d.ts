@@ -180,6 +180,8 @@ interface ChatApi {
     raison?: string
     poseeA: number
   } | null>
+  /** Couleur des boutons réduire / agrandir / fermer, que Windows peint hors de la page. */
+  setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   checkUpdate: () => Promise<{
     available: boolean
     behind: number

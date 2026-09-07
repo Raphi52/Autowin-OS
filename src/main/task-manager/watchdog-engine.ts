@@ -281,7 +281,22 @@ export class WatchdogEngine {
       const observedAt = this.clock.now()
       await this.fire(task, {
         signature,
-        rootSignature: this.causalRoot.getStore() ?? `${signature}@${observedAt}`,
+        /*
+         * PAS D'HORODATAGE DANS LA RACINE. Coller `@${observedAt}` rendait chaque reveil unique, et
+         * `maxPerRoot` — la garde qui borne la LARGEUR d'une cascade — ne pouvait donc jamais
+         * mordre : son compteur valait 1 a chaque fois. Mesure du 2026-09-07 : les neuf reveils
+         * enregistres portaient neuf racines distinctes, toutes en `@<ms>`.
+         *
+         * La bonne valeur etait deja ecrite dans la garde elle-meme —
+         * `admit(signature, depth, rootSignature = signature)`. On la lui rend au lieu d'en inventer
+         * une autre : deux incidents differents gardent des signatures differentes, donc des racines
+         * differentes ; le MEME incident qui revient reste rattache a la meme cause.
+         *
+         * Aucun test ne l'attrapait parce que l'horloge des tests du moteur rend une constante : avec
+         * un instant fige, la racine horodatee etait stable et le defaut invisible. La regression est
+         * desormais tenue par `watchdog-engine.racine-horodatee.test.ts`, qui fait AVANCER l'horloge.
+         */
+        rootSignature: this.causalRoot.getStore() ?? signature,
         context: `Source : événement interne Autowin « ${event} »\n${context}`,
         depth: this.causalDepth.getStore() ?? 0,
         source: 'app-event',

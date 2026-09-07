@@ -161,7 +161,17 @@ function observation(
   }
 }
 
-async function captureForegroundWindow(): Promise<DesktopObservation> {
+/**
+ * Repli quand la capture d'ECRAN n'a rien donne. `motifRepli` dit POURQUOI on est arrive ici :
+ * sans lui, l'echec final ne parle que de la fenetre active et l'appelant cherche au mauvais
+ * endroit. Mesure du 2026-09-07 (conv-49) : « Capture de la fenetre active noire ou protegee »
+ * rendu trois fois de suite alors que la vraie situation etait « l'ecran demande n'avait aucun
+ * pixel visible, l'application venait de redemarrer » — plusieurs appels brules a lire le
+ * mauvais code. Un message qui NOMME l'etape fautive et la sortie de secours coute une ligne
+ * et fait gagner un diagnostic entier.
+ */
+async function captureForegroundWindow(motifRepli?: string): Promise<DesktopObservation> {
+  const cause = motifRepli ? ` (repli : ${motifRepli})` : ''
   const sources = await desktopCapturer.getSources({
     types: ['window'],
     thumbnailSize: { width: MAX_WIDTH, height: MAX_HEIGHT },
@@ -186,7 +196,9 @@ async function captureForegroundWindow(): Promise<DesktopObservation> {
     quality: 'best'
   })
   if (!hasVisiblePixels(image.toBitmap())) {
-    throw new Error('Capture de la fenetre active noire ou protegee')
+    throw new Error(
+      `Capture de la fenetre active noire ou protegee${cause} — ecran en veille, verrouille ou fenetre en cours de composition : reessayer dans quelques secondes, ou capturer TOUS les ecrans en omettant le parametre display`
+    )
   }
   return observation(image.toJPEG(JPEG_QUALITY), image.getSize(), geometry, 'foreground-window')
 }
@@ -264,7 +276,10 @@ export async function captureElectronDesktop(
       if (sources.length === 0 && attempt + 1 < CAPTURE_ATTEMPTS) await delay(150)
     }
   }
-  if (sources.length === 0) return await captureForegroundWindow()
+  if (sources.length === 0)
+    return await captureForegroundWindow(
+      `aucune source ecran apres ${CAPTURE_ATTEMPTS} tentative(s)`
+    )
 
   const bitmap = Buffer.alloc(width * height * 4)
   let copiedDisplays = 0
@@ -294,7 +309,11 @@ export async function captureElectronDesktop(
     copiedDisplays += 1
   })
   if (copiedDisplays === 0 || !visibleSample) {
-    return await captureForegroundWindow()
+    return await captureForegroundWindow(
+      copiedDisplays === 0
+        ? `aucun des ${selected.length} ecran(s) demande(s) n'a pu etre copie`
+        : `${copiedDisplays} ecran(s) copie(s)${options.display === undefined ? '' : ` (display ${options.display})`}, aucun pixel visible`
+    )
   }
 
   const jpeg = nativeImage

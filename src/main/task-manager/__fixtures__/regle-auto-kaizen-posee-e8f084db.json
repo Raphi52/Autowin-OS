@@ -1,0 +1,35 @@
+{
+  "title": "Auto-kaizen — orchestration rouge ou workflow douteux",
+  "prompt": "Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien\nn'etaye. Etablis ce qui s'est reellement passe avant de conclure.\n\n1. Lis le RUN.md cite dans le contexte : son besoin, ses decisions, son journal.\n2. Cherche la cause RACINE, pas le symptome le plus visible. Un echec en fin de chaine vient\n   souvent d'une decision prise bien plus tot.\n3. Si le workflow s'est dit REUSSI sans preuve, la question n'est pas « qu'est-ce qui a\n   casse » mais « est-ce reellement fait ? ». Cherche la preuve manquante ; si elle n'existe\n   pas, dis-le : un faux vert coute plus cher qu'un rouge.\n4. Si la cause est claire ET la correction bornee, corrige-la et prouve-le par un signal\n   hors-modele (test rouge->vert, code de sortie, requete). Sans preuve, ne dis pas que\n   c'est repare.\n5. Si la cause n'est pas etablie, ne repare rien : rapporte ce que tu as ecarte et ce qui\n   reste a verifier. Une reparation sur une cause supposee cree le defaut suivant.",
+  "enabled": true,
+  "mode": "active-only",
+  "destination": {
+    "kind": "new",
+    "title": "Auto-kaizen",
+    "category": "Qualite",
+    "provider": "claude",
+    "conversationId": "conv-15"
+  },
+  "watchdog": {
+    "source": {
+      "kind": "app-event",
+      "events": [
+        "orchestration-red",
+        "workflow-gate-failed",
+        "workflow-unverified",
+        "workflow-proof-lost"
+      ]
+    },
+    "action": "orchestration",
+    "guards": {
+      "dedupWindowMs": 300000,
+      "maxTriggersPerHour": 4,
+      "maxChainDepth": 0,
+      "maxPerRoot": 3
+    }
+  },
+  "id": "f48eea16-d07f-4da5-bbde-409c16207ddd",
+  "nextRunAt": null,
+  "createdAt": 1786360536641,
+  "updatedAt": 1788356704924
+}

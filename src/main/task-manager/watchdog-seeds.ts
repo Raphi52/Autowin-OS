@@ -155,6 +155,38 @@ const PRIOR_READ_ONLY_AUTO_KAIZEN_PROMPT = [
   '   automatique n’est autorisee ; utilise `investigate` ou `report` pour une suite.'
 ].join('\n')
 
+/**
+ * Empreinte exacte de la PREMIERE version livree (commit `e8f084db`) : le prompt sans en-tete
+ * `/build`, avec les gardes 5 min / 4 par heure / largeur 3.
+ *
+ * Elle manquait a la liste, et c'est ce trou qui a coute le plus cher. Mesure du 2026-09-07 sur le
+ * poste : `scheduled-tasks.json` ne portait plus qu'UNE tache, celle-ci, `enabled: true` et
+ * `action: 'orchestration'`, alors que l'auto-kaizen a ete retire du produit. Le binaire en cours
+ * contenait bien les sept empreintes : le menage tournait a chaque demarrage et ne reconnaissait
+ * simplement pas ce semis-la. Cinq reveils payants sur la MEME cause en trois jours (7,64 $ le
+ * 09-05, 12,28 $ le 09-06) avant qu'on le voie.
+ *
+ * La lecon a garder : ce n'est pas la prudence des empreintes exactes qui etait fausse — c'est
+ * d'oublier une version livree. Toute version future qui pose cette regle doit arriver ici en meme
+ * temps qu'elle est livree, sinon elle deviendra le prochain semis increvable.
+ */
+const FIRST_ORCHESTRATION_AUTO_KAIZEN_PROMPT = [
+  'Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien',
+  "n'etaye. Etablis ce qui s'est reellement passe avant de conclure.",
+  '',
+  '1. Lis le RUN.md cite dans le contexte : son besoin, ses decisions, son journal.',
+  '2. Cherche la cause RACINE, pas le symptome le plus visible. Un echec en fin de chaine vient',
+  "   souvent d'une decision prise bien plus tot.",
+  "3. Si le workflow s'est dit REUSSI sans preuve, la question n'est pas « qu'est-ce qui a",
+  "   casse » mais « est-ce reellement fait ? ». Cherche la preuve manquante ; si elle n'existe",
+  "   pas, dis-le : un faux vert coute plus cher qu'un rouge.",
+  '4. Si la cause est claire ET la correction bornee, corrige-la et prouve-le par un signal',
+  '   hors-modele (test rouge->vert, code de sortie, requete). Sans preuve, ne dis pas que',
+  "   c'est repare.",
+  "5. Si la cause n'est pas etablie, ne repare rien : rapporte ce que tu as ecarte et ce qui",
+  '   reste a verifier. Une reparation sur une cause supposee cree le defaut suivant.'
+].join('\n')
+
 const LEGACY_AUTO_KAIZEN_TITLE = 'Auto-kaizen — une orchestration rouge'
 const LEGACY_AUTO_KAIZEN_PROMPT = [
   "Une orchestration vient d'echouer. Etablis ce qui s'est reellement passe avant de conclure.",
@@ -292,6 +324,34 @@ function isUntouchedOrchestrationAutoKaizen(task: ScheduledTask): boolean {
   )
 }
 
+/**
+ * PREMIERE version livree (`e8f084db`) : meme titre et memes evenements qu'aujourd'hui, mais le
+ * prompt sans en-tete `/build` et les gardes d'origine (5 min, 4/h, largeur 3). C'est l'empreinte
+ * qui manquait ; voir la note de `FIRST_ORCHESTRATION_AUTO_KAIZEN_PROMPT` pour ce que ce trou a
+ * coute. `authorityMode` n'est pas compare : `TaskStore.hydrate` l'efface deja comme champ legacy.
+ */
+function isUntouchedFirstOrchestrationAutoKaizen(task: ScheduledTask): boolean {
+  const previous = previousOrchestrationAutoKaizenSeed()
+  const destination = previous.destination
+  const watchdog = previous.watchdog
+  const source = task.watchdog?.source
+  return (
+    destination.kind === 'new' &&
+    watchdog?.source.kind === 'app-event' &&
+    task.title === previous.title &&
+    task.prompt === FIRST_ORCHESTRATION_AUTO_KAIZEN_PROMPT &&
+    hasExactSeedDestination(task, destination) &&
+    task.watchdog?.action === 'orchestration' &&
+    source?.kind === 'app-event' &&
+    JSON.stringify(source.events) === JSON.stringify(watchdog.source.events) &&
+    task.watchdog.guards.dedupWindowMs === 300_000 &&
+    task.watchdog.guards.maxTriggersPerHour === 4 &&
+    task.watchdog.guards.maxChainDepth === 0 &&
+    task.watchdog.guards.maxPerRoot === 3 &&
+    hasNoCustomizedDailyGuard(task)
+  )
+}
+
 function isUntouchedPriorReadOnlyAutoKaizen(task: ScheduledTask): boolean {
   const current = autoKaizenSeed()
   const source = task.watchdog?.source
@@ -378,6 +438,7 @@ function removeSeededAutoKaizen(store: TaskStore): void {
         !isUntouchedBareBuildAutoKaizen(task) &&
         !isUntouchedPriorBoundedAutoKaizen(task) &&
         !isUntouchedOrchestrationAutoKaizen(task) &&
+        !isUntouchedFirstOrchestrationAutoKaizen(task) &&
         !isUntouchedPriorReadOnlyAutoKaizen(task) &&
         !isUntouchedClaudeReadOnlyAutoKaizen(task) &&
         !isUntouchedCurrentAutoKaizen(task)) ||

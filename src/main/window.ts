@@ -169,6 +169,16 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       show: false,
       autoHideMenuBar: true,
       titleBarStyle: 'hidden',
+      /**
+       * Les boutons reduire / agrandir / fermer sont dessines par WINDOWS, pas par la page : leur
+       * couleur se fixe ICI, dans le processus principal, alors que le theme vit dans le renderer.
+       * `#f5f7fb` est un quasi-blanc : parfait sur le fond noir, INVISIBLE des que la page passe en
+       * clair — la barre etant transparente (`color: '#00000000'`), le symbole se pose sur le fond
+       * de la page. Constate a l'ecran le 2026-09-07 : « les boutons de gestion de fenetre sont
+       * invisibles en mode clair ».
+       * Cette valeur n'est donc qu'un DEPART, coherent avec le mode sombre qui reste le defaut ; le
+       * renderer la corrige des qu'il connait le theme, via `app:titlebar-symbol-color`.
+       */
       titleBarOverlay: {
         color: '#00000000',
         symbolColor: '#f5f7fb',

@@ -21,6 +21,21 @@
   --line: rgba(255, 255, 255, 0.18);
   --line-strong: rgba(255, 255, 255, 0.42);
 
+  /* ==========================================================================
+     LE VOILE — la couleur des filets et des surfaces translucides, SANS son opacite.
+     Mesure du 2026-09-07 : ChatView.css portait 45 `rgba(255, 255, 255, X)` ecrits en dur,
+     sur 22 opacites differentes. Un blanc a 5 % sur un fond blanc n'existe pas : c'est la
+     cause mecanique des filets et des pastilles qui disparaissent en mode clair.
+     Ecraser ces 22 opacites par trois paliers aurait change le rendu de NUIT. On rend donc
+     la COULEUR variable en laissant l'opacite au point d'usage :
+        `rgba(var(--voile-rgb), 0.18)` au lieu de `rgba(255, 255, 255, 0.18)`.
+     En nuit la valeur est identique au pixel ; en clair le voile devient sombre, donc visible.
+     Ces jetons portent des COMPOSANTES, pas une couleur : ils ne s'utilisent QUE dans un
+     `rgba(...)`. Le garde `chatview-voile.test.ts` interdit d'y revenir en dur.
+     ========================================================================== */
+  --voile-rgb: 255, 255, 255;
+  --ombre-rgb: 0, 0, 0;
+
   /* Texte */
   --text: #f5f7fb;
   --text-dim: #b5bcc8;
@@ -67,6 +82,46 @@
 
   --dur: 120ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ==========================================================================
+     ALIAS DE COMPATIBILITE — le PONT qui manquait.
+     Mesure du 2026-09-05 : 22 noms etaient appeles dans 118 endroits du produit avec une
+     valeur de secours en dur (`var(--muted, #9aa4b2)`) alors qu'ils n'etaient definis NULLE
+     PART. La valeur de secours s'appliquait donc TOUJOURS, dans les deux modes : le mode clair
+     n'avait aucun point d'accroche. Trois pannes visibles la meme journee (boutons « Pour
+     demarrer » noirs, bandeaux SORTANT/REPONSE invisibles, zone depliee d'une action illisible).
+     On definit ici les 22 noms EN JETONS du theme, une seule fois : ils suivent alors
+     automatiquement `theme-modes.css`, qui redefinit ces jetons pour le mode clair.
+     Le garde `css-variables-definies.test.ts` (cas « ni definition ni valeur de secours utile »)
+     echoue si un nouveau nom fantome reapparait. NE PAS ajouter d'exception a ce test : definir
+     l'alias ici, ou remplacer l'appel par le jeton reel.
+     ========================================================================== */
+  --border: var(--line);
+  --border-soft: var(--line);
+  --line2: var(--line);
+  --line-soft: var(--line);
+  --stroke: var(--line);
+
+  --surface: var(--bg-1);
+  --surface-2: var(--bg-2);
+  --surface2: var(--bg-2);
+  --surface-raised: var(--bg-2);
+
+  --fg: var(--text);
+  --fg-faint: var(--text-faint);
+  --muted: var(--text-dim);
+  --text-2: var(--text-dim);
+  --text-secondary: var(--text-dim);
+  --text-soft: var(--text-dim);
+
+  --success: var(--ok);
+  --warning: var(--warn);
+  --danger: var(--err);
+  --c-err: var(--err);
+  --dore: var(--gold);
+  /* Texte POSE SUR l'accent rose : il reste blanc dans les deux modes, l'accent ne s'eclaircit pas. */
+  --on-accent: #ffffff;
+  --font-mono: var(--mono);
 }
 
 * {

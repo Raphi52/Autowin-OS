@@ -1419,6 +1419,34 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Reprise après redémarrage')
     return consommerReprise(ensureAutowinAppData(appDataRoot))
   })
+  /**
+   * COULEUR DES BOUTONS DE FENETRE — reduire / agrandir / fermer.
+   *
+   * Ces trois boutons sont dessines par WINDOWS, pas par la page : aucune feuille de style ne les
+   * atteint. Leur couleur se fixe a la creation de la fenetre (`window.ts`, `titleBarOverlay`),
+   * donc dans le processus principal, alors que le theme choisi vit dans le renderer. Sans ce
+   * canal, la barre ne peut suivre AUCUN theme : elle garde son quasi-blanc de depart, invisible
+   * des que la page passe en clair. Constate a l'ecran le 2026-09-07.
+   *
+   * Le renderer envoie une couleur, pas un nom de theme : c'est lui qui sait ce que vaut
+   * `--text` dans le theme courant, et cela reste vrai pour les themes a venir sans toucher ici.
+   * ENTREE QUI DOIT FAIRE ECHOUER LE GARDE : retirer cet appel, ou remettre une couleur en dur
+   * dans `window.ts` sans point de mise a jour — le defaut reviendrait en silence.
+   */
+  ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
+    assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
+    // On n'accepte qu'un hexadecimal : cette valeur part vers une API natice de Windows.
+    if (typeof couleur !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(couleur)) return false
+    const fenetre = BrowserWindow.fromWebContents(event.sender)
+    if (!fenetre || fenetre.isDestroyed()) return false
+    try {
+      fenetre.setTitleBarOverlay({ color: '#00000000', symbolColor: couleur, height: 28 })
+      return true
+    } catch {
+      // Plateforme sans overlay de barre de titre (macOS, Linux) : ce n'est pas une panne.
+      return false
+    }
+  })
   ipcMain.handle('update:check', (event) => {
     assertTrustedRendererSender(event, 'Update')
     return checkForUpdate(os.executionWorkspace)
