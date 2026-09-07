@@ -8,8 +8,11 @@ function Assert-True {
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $manifest = Get-Content -Raw (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
 $devCommand = $manifest.scripts.dev
-Assert-True ($devCommand -eq 'electron-vite dev --watch') 'dev must delegate one watch loop to electron-vite'
-Assert-True (($devCommand -split '--watch').Count -eq 2) 'dev must contain exactly one --watch flag'
+# --watch a ete RETIRE volontairement du script `dev` au commit 447b85d4 : il redemarrait le
+# processus principal en pleine session et tuait Electron pendant le travail (2 runs utilisateur
+# perdus). Ce controle s'aligne donc sur le comportement voulu, comme src/main/dev-sans-watch.test.ts.
+Assert-True ($devCommand -eq 'electron-vite dev') 'dev must start electron-vite without any watch loop'
+Assert-True (-not ($devCommand -match '--watch')) 'dev must not carry --watch: it kills the running main process'
 
 $electronVite = Join-Path $projectRoot 'node_modules\.bin\electron-vite.cmd'
 $help = & $electronVite dev --help 2>&1 | Out-String
@@ -27,7 +30,8 @@ Assert-True ($shortcutSource -match '\$shortcut\.TargetPath\s*=\s*\$interpreteur
   'the shortcut must target the resolved GUI Python interpreter'
 Assert-True ($shortcutSource -match "notmatch '\(pyw\|pythonw\)") `
   'the creator must REFUSE a console interpreter (python.exe / py.exe) and say so'
-Assert-True ($shortcutSource -notmatch '\$shortcut\.TargetPath\s*=[^
+Assert-True ($shortcutSource -notmatch '\$shortcut\.TargetPath\s*=[^
+
 ]*powershell\.exe') `
   'the shortcut must never target powershell.exe directly: Windows Terminal would show its console'
 Assert-True ($shortcutSource -match "resources\\python\\pythonw\.exe") `
@@ -47,7 +51,10 @@ Assert-True ($pySource -match 'CreateMutexW') `
 Assert-True ($pySource -match 'CREATE_NO_WINDOW') 'the dev loop must start without allocating a console'
 Assert-True ($pySource -match 'st_mtime >= avant') `
   'the launcher must PROVE the bundle was rebuilt after the last source change'
-Assert-True ($pySource -match 'ATTENTE_FRAICHEUR_S') 'the freshness wait must be bounded, not infinite'
+# La borne s'appelle ATTENTE_TOTALE_S (scripts/launch_dev.py:79, = 600 s) : c'est elle qui arme
+# `limite_totale` et `suivre_sortie`. ATTENTE_FRAICHEUR_S n'a jamais existe dans l'historique du
+# lanceur (git log -S le confirme) : ce controle cherchait un nom, pas la propriete.
+Assert-True ($pySource -match 'ATTENTE_TOTALE_S') 'the freshness wait must be bounded, not infinite'
 Assert-True (($pySource -split 'alerter\(').Count -ge 6) `
   'every abnormal exit must reach the user, not just the first one'
 
