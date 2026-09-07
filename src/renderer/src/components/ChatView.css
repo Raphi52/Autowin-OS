@@ -4429,33 +4429,45 @@ button.chat-project-dot:disabled {
 .composer-auto {
   flex: 0 0 auto;
   /* HAUTEUR FIXE, PAS `stretch` : etire sur la rangee, le cercle devenait un OVALE
-     (constat utilisateur du 2026-09-07). Largeur = hauteur = 34 px, donc un rond. */
+     (constat utilisateur du 2026-09-07). Largeur = hauteur, donc un rond. */
   align-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  min-height: 34px;
+  /* 24 px : DEUX crans sous le micro (34 px de large). Un passage a 28 px n'avait pas ete vu
+     a l'oeil — « tu as pas reduit la taille du cercle » (2026-09-07) ; la marche etait trop
+     faible. Verifie par ChatView.composer-auto.style.test.ts. */
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
   padding: 0;
   border-radius: 50%;
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1;
   opacity: 0.72;
 }
+/* CENTRAGE OPTIQUE DU GLYPHE : la boite de la police pose le ∞ sur la ligne de base, donc bas
+   dans le cercle meme avec un centrage flex parfait. On le remonte de 1 px (constat utilisateur
+   du 2026-09-07 : « faut remonter l'icone infini »). */
+.composer-auto > span {
+  display: block;
+  transform: translateY(-1px);
+}
+/* ALLUME = DORE (choix utilisateur du 2026-09-07), pas le rose d'accent. */
 .composer-auto.actif {
   opacity: 1;
-  color: #ff8ec4;
-  border-color: rgba(239, 63, 145, 0.75);
-  background: rgba(239, 63, 145, 0.16);
+  color: #e3ba55;
+  border-color: rgba(212, 169, 79, 0.75);
+  background: rgba(212, 169, 79, 0.16);
 }
 /* Tuile mosaïque : la rangée passe à 24 px, le rond suit. */
 @container (max-width: 320px) {
   .composer-input-row > .composer-auto {
-    width: 24px;
-    min-width: 24px;
-    height: 24px;
-    font-size: 13px;
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    min-height: 22px;
+    font-size: 12px;
   }
 }
