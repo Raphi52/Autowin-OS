@@ -189,11 +189,22 @@ _html = (Path(__file__).resolve().parent.parent / "src" / "renderer" / "index.ht
 )
 _splash_src = (Path(__file__).resolve().parent / "launch_dev_splash.py").read_text(encoding="utf-8")
 
-for _nom, _motif in (("doré (arc-a)", "#e9bd4e"), ("rose-violet (arc-b)", "#9d79ed")):
-    verifie(_motif in _html, f"la couleur {_nom} doit exister dans index.html (sinon ce test ment)")
+# Les deux teintes ne sont PAS recopiees ici : on les EXTRAIT du degrade de l'app. Recopier des
+# hexadecimaux faisait deriver silencieusement les deux ecrans (constate le 2026-09-07 : le commit
+# 08016aac avait change index.html sans que cette garde bronche, parce qu'elle comparait ses propres
+# copies entre elles). Lues a la source, un changement de palette cote app fait ECHOUER cette garde
+# tant que le lanceur n'a pas suivi — c'est exactement ce qu'elle doit faire.
+_arcs = _re.search(
+    r"linear-gradient\(\s*(#[0-9a-fA-F]{6})\s+0\s+50%\s*,\s*(#[0-9a-fA-F]{6})", _html
+)
+verifie(
+    _arcs is not None,
+    "le degrade des deux arcs doit rester lisible dans index.html : c'est la SOURCE de la palette",
+)
+for _nom, _motif in (("arc-a", _arcs.group(1)), ("arc-b", _arcs.group(2))):
     verifie(
-        _motif in _splash_src,
-        f"le lanceur doit reprendre la couleur {_nom} de l'app, pas une teinte a lui",
+        _motif.lower() in _splash_src.lower(),
+        f"le lanceur doit reprendre la couleur {_nom} lue dans index.html ({_motif}), pas une teinte a lui",
     )
 
 verifie("#f5f7fb" in _html and "#f5f7fb" in _splash_src,
