@@ -91,6 +91,97 @@ const ALLOWED_TAGS = new Set([
  */
 const DROP_WITH_CONTENT = new Set(['script', 'link', 'meta', 'title', 'noscript', 'template'])
 
+/**
+ * Le dessin VECTORIEL declaratif, autorise explicitement.
+ *
+ * MESURE du 2026-09-07 (conv-335) : une reponse contenant quatre propositions d'icone en `<svg>` s'est
+ * affichee vide — seuls les libelles texte restaient. La liste blanche ci-dessus ne nommait aucune
+ * balise SVG, donc chaque `<svg>` etait DEPLIE et son contenu graphique perdu. Un dessin est pourtant
+ * exactement ce qu'un modele doit pouvoir montrer dans le fil.
+ *
+ * Ce qui reste refuse ici, et pourquoi : `foreignObject` (re-ouvre du HTML arbitraire), `image` et
+ * `use` (references SORTANTES), les animations, et tout attribut hors de la liste — donc `on*`.
+ */
+const SVG_TAGS = new Set([
+  'svg',
+  'g',
+  'defs',
+  'path',
+  'circle',
+  'ellipse',
+  'rect',
+  'line',
+  'polyline',
+  'polygon',
+  'text',
+  'tspan',
+  'lineargradient',
+  'radialgradient',
+  'stop',
+  'clippath',
+  'mask',
+  'pattern',
+  'symbol',
+  'title',
+  'desc'
+])
+
+/** Attributs de PRESENTATION du dessin. Geometrie, trait, remplissage — rien de referencable dehors. */
+const SVG_ATTRS = new Set([
+  'clip-path',
+  'clip-rule',
+  'cx',
+  'cy',
+  'd',
+  'dominant-baseline',
+  'dx',
+  'dy',
+  'fill',
+  'fill-opacity',
+  'fill-rule',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'gradienttransform',
+  'gradientunits',
+  'height',
+  'id',
+  'letter-spacing',
+  'mask',
+  'offset',
+  'opacity',
+  'patterncontentunits',
+  'patterntransform',
+  'patternunits',
+  'points',
+  'preserveaspectratio',
+  'r',
+  'rx',
+  'ry',
+  'stop-color',
+  'stop-opacity',
+  'stroke',
+  'stroke-dasharray',
+  'stroke-dashoffset',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'stroke-miterlimit',
+  'stroke-opacity',
+  'stroke-width',
+  'text-anchor',
+  'transform',
+  'viewbox',
+  'width',
+  'x',
+  'x1',
+  'x2',
+  'y',
+  'y1',
+  'y2'
+])
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
 const ALLOWED_ATTRS = new Set([
   'align',
   'alt',
