@@ -43,7 +43,11 @@ export type Theme = {
  */
 export const THEMES: readonly Theme[] = [
   { id: 'sombre', libelle: 'Sombre', base: 'sombre' },
-  { id: 'clair', libelle: 'Clair', base: 'clair' }
+  { id: 'clair', libelle: 'Clair', base: 'clair' },
+  // Premier theme qui ne soit ni le sombre d origine ni son inverse clair : ses couleurs
+  // viennent de la maquette maison sketches/galaxy-dark-gold-pink/obisidian-nebula. Sa BASE est
+  // sombre, donc ses accents et ses filets sont ceux d un fond noir.
+  { id: 'obsidian-nebula', libelle: 'Obsidian Nebula', base: 'sombre' }
 ]
 
 export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'

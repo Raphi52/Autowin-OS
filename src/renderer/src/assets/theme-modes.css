@@ -598,3 +598,75 @@
   background: rgba(15, 20, 35, 0.05);
   border-color: var(--line-strong);
 }
+
+/* ===========================================================================
+   OBSIDIAN NEBULA -- troisieme theme, ni le sombre d origine ni son inverse.
+   Couleurs reprises TELLES QUELLES de la maquette maison
+   sketches/galaxy-dark-gold-pink/obisidian-nebula/index.html (7 valeurs).
+
+   CE BLOC NE REDEFINIT QUE DES JETONS : aucune regle par composant, aucun
+   selecteur de vue. Tout ce qui passe deja par le theme suit automatiquement.
+   C est la mesure de ce que le chantier a gagne : le mode clair, lui, a coute
+   76 blocs d exception.
+
+   IL RESTE SOMBRE : decor cosmique conserve, --voile-rgb garde son blanc
+   translucide. Ce qui echappe encore au theme (environ 2 240 couleurs en dur,
+   dont 392 dans le chat et 334 dans le graphe) garde les teintes du sombre
+   d origine : l ecart se voit sur le CADRE, pas encore dans ces vues.
+
+   SON OR ET SON ROSE SONT LES SIENS. La regle du 2026-09-06 verrouille
+   l identite d Autowin face a un theme IMPORTE ; celui-ci est MAISON, et son
+   or eteint plus son rose mauve SONT son identite. Hypothese assumee.
+   =========================================================================== */
+:root[data-theme='obsidian-nebula'] {
+  --bg-0: #07080d;
+  --bg-1: rgba(17, 19, 29, 0.8);
+  --bg-2: rgba(17, 19, 29, 0.62);
+  --bg-3: rgba(232, 226, 216, 0.05);
+  --bg-inset: rgba(7, 8, 13, 0.62);
+
+  --line: rgba(45, 41, 56, 0.95);
+  --line-strong: rgba(129, 123, 132, 0.62);
+
+  /* Texte IVOIRE CHAUD, pas blanc : ce qui rend la maquette reposante. */
+  --text: #e8e2d8;
+  --text-dim: #817b84;
+  --text-faint: #5d585f;
+
+  /* Or ETEINT, rose MAUVE : plus sourds que ceux d Autowin, volontairement. */
+  --gold: #d6ad60;
+  --gold-bright: #e6c383;
+  --gold-doux: #c39d55;
+  --gold-clair: #d6ad60;
+  --rose: #d85c9f;
+  --rose-bright: #e87ab3;
+  --accent: var(--rose);
+  --accent-dim: #7a3159;
+  --accent-soft: rgba(216, 92, 159, 0.14);
+}
+
+/* SURFACES -- seconde famille de jetons, posee sur .shell et non sur la racine
+   (ui-system.css). Sans ce bloc les panneaux gardent les valeurs du sombre
+   d origine et le theme ne se voit qu a moitie : defaut constate le 2026-09-03
+   sur le mode clair. */
+:root[data-theme='obsidian-nebula'] .shell,
+:root[data-theme='obsidian-nebula'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(17, 19, 29, 0.86);
+  --surface-card: rgba(17, 19, 29, 0.7);
+  --surface-inset: rgba(232, 226, 216, 0.045);
+  --surface-hover: rgba(232, 226, 216, 0.06);
+  --surface-selected: rgba(216, 92, 159, 0.14);
+  --container-border: rgba(45, 41, 56, 0.95);
+  --container-border-strong: rgba(129, 123, 132, 0.55);
+}
+
+/* Le rail est peint en NOIR OPAQUE en dur plus haut dans ce fichier, avec un
+   commentaire qui l assume. Ce theme veut son propre noir bleute. */
+:root[data-theme='obsidian-nebula'] .theme-serious .rail {
+  background: #07080d;
+  border-right-color: var(--line);
+}
+:root[data-theme='obsidian-nebula'] .theme-serious .brand {
+  background: rgba(17, 19, 29, 0.95);
+}
