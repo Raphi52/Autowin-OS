@@ -34,9 +34,10 @@ export function InterfaceView(): React.JSX.Element {
         <div className="interface-row-text">
           <strong>Thème</strong>
           <p>
-            L’apparence de l’application. <strong>Sombre</strong> reste le réglage par défaut : qui
-            n’y touche pas ne voit rien changer. Le choix est mémorisé sur ce poste et s’applique
-            aussitôt, sans redémarrage.
+            L’apparence de l’application : <strong>huit thèmes</strong>, quatre sombres et quatre
+            clairs. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas ne voit
+            rien changer. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans
+            redémarrage.
           </p>
         </div>
         <label className="interface-theme-choix">
@@ -57,12 +58,14 @@ export function InterfaceView(): React.JSX.Element {
         </label>
       </div>
       <p className="interface-reserve">
-        <strong>Ce qui reste sombre.</strong> Le mode clair change le cadre de l’application : le
-        menu, les panneaux, les textes et les champs. Les écrans qui peignent leurs couleurs en dur
-        ne le suivent pas encore et resteront sombres, y compris la page <strong>Chat</strong>, l’
-        <strong>Accueil</strong>, l’<strong>Observatory</strong>, le graphe <strong>Memory</strong>,
-        la <strong>topologie</strong> des agents et les aperçus HTML générés. L’affichage sera donc
-        mixte : clair autour, sombre à l’intérieur de ces écrans.
+        <strong>Ce qui ne suit pas encore.</strong> Le thème choisi s’applique à presque tout
+        l’écran : le menu, les panneaux, les textes, les champs, et les pages <strong>Chat</strong>,{' '}
+        <strong>Accueil</strong>, <strong>Observatory</strong> et <strong>Agent Studio</strong>.
+        Trois endroits gardent leurs couleurs sombres quel que soit le thème, parce qu’ils les
+        peignent en dur : la <strong>toile du graphe Memory</strong> (ses étiquettes et son bandeau
+        d’avertissement), le bandeau <strong>Runtime actuel</strong> au bas de l’Agent Studio, et le{' '}
+        <strong>décor animé du fond</strong>. Constaté à l’écran le 7 septembre 2026 sous un thème
+        clair.
       </p>
     </section>
   )
