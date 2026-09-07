@@ -1545,6 +1545,18 @@ export class AgentPilot {
      */
     let reprisesApresEchecRestantes = 2
     /*
+     * RALLONGES DE DIRECTIVE TARDIVE — BORNEES. Une directive arrivee pendant l'appel provider
+     * merite bien une iteration de plus : c'est l'utilisateur qui parle, et sa phrase doit pouvoir
+     * etre traitee dans le tour. Mais l'incrément etait le SEUL des 13 motifs de rallonge sans
+     * garde : un appelant qui fixe une borne finie (`policy.maxIterations`, un harnais de test)
+     * pouvait la voir reculer indefiniment, puisque le cap grandit exactement aussi vite que la
+     * boucle avance. En production le defaut est invisible — `CAP_ITERATIONS_TOUR` vaut l'infini
+     * depuis le 2026-09-04, donc `+ 1` n'y change rien — mais une borne qui ne borne pas n'est pas
+     * une borne. Au-dela du budget, la directive est TOUJOURS injectee dans la conversation : seule
+     * la rallonge du cap s'arrete. On ne perd donc aucune parole de l'utilisateur.
+     */
+    let rallongesDirectiveTardiveRestantes = 3
+    /*
      * AMORCE depuis le disque : sans elle le registre mourait a la frontiere du tour, et l'agent
      * remangeait le meme mur au tour suivant en croyant le decouvrir. `chargerMurs` est fail-open —
      * un cache illisible vaut « aucun mur connu », jamais une exception dans le tour.
@@ -1981,7 +1993,10 @@ export class AgentPilot {
         if (successfulStreamedPrefix && !directivePorteLaReponse) {
           emit({ kind: 'stream-reset', streamId: `${i}:${successfulAttempt}`, iteration: i })
         }
-        grantRecoveryIteration('late-directive')
+        if (rallongesDirectiveTardiveRestantes > 0) {
+          rallongesDirectiveTardiveRestantes -= 1
+          grantRecoveryIteration('late-directive')
+        }
         if (!directivePorteLaReponse) continue
         reponseTardiveAUneQuestion = lateDirectives.join(' / ')
       }
