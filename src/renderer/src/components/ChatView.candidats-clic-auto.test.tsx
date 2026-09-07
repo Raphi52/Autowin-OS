@@ -71,7 +71,7 @@ async function monter(
     })
   )
   await h.click('.conv-item .conv-pick')
-  if (auto) await h.click('[data-testid="conv-auto-toggle"]')
+  if (auto) await h.click('[data-testid="composer-auto-toggle"]')
   const abonne = handler
   return { pilotChat, emettre: (e) => abonne?.(e) }
 }

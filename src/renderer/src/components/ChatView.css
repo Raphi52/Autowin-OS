@@ -4110,23 +4110,6 @@ button.chat-project-dot:disabled {
   gap: 4px;
   padding: 0 var(--s2) var(--s2);
 }
-.conv-auto-toggle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-}
-.conv-auto-toggle:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-}
-
 /* MESSAGE ORIENTE EN COURS DE TOUR (conv-257, 2026-09-04).
    Un message tape pendant qu'un tour tourne n'ouvre PAS un nouveau tour : il rejoint la reponse en
    cours. Rien ne le distinguait dans le fil, donc l'utilisateur le croyait perdu. Marque DISCRETE :
@@ -4143,19 +4126,6 @@ button.chat-project-dot:disabled {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: help;
-}
-.conv-auto-toggle .conv-auto-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
-}
-.conv-auto-toggle.actif {
-  border-color: #d4a94f;
-  color: #e3ba55;
-}
-.conv-auto-toggle.actif .conv-auto-dot {
-  background: #d4a94f;
 }
 .conv-auto-notice {
   font-size: 11px;

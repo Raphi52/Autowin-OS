@@ -63,7 +63,7 @@ describe('ChatView — le mode auto enchaîne aussi un fil qui n’est pas à l�
      */
     const items = document.querySelectorAll('.conv-item .conv-pick')
     await act(async () => (items[1] as HTMLElement).click())
-    await h.click('[data-testid="conv-auto-toggle"]')
+    await h.click('[data-testid="composer-auto-toggle"]')
     await act(async () => (items[0] as HTMLElement).click())
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20))

@@ -3201,7 +3201,29 @@ export function ChatView({
 
   /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
   function basculerModeAuto(): void {
-    // Ce bouton ne regle QUE le fil affiche : le reglage global (`*`) n'est pas touche ici.
+    basculerModeAutoPour(activeId)
+  }
+
+  /**
+   * MEME bascule, mais sur une conversation NOMMEE : le chat plein passe le fil affiche, la
+   * mosaique passe l'id de SA fenetre (chaque fenetre a donc son propre bouton infini).
+   */
+  function basculerModeAutoPour(cible: string | null): void {
+    const activeId = cible
+    // ANCIEN REGLAGE GLOBAL (`*`, herite d'avant le retrait du bouton de la liste) : il n'a plus
+    // de bouton a lui. L'eteindre ICI est donc la seule sortie possible — sinon il tournerait
+    // sans interrupteur.
+    if (autoConvs.has('*')) {
+      autoAllumageManuelRef.current = false
+      setAutoConvs((precedent) => {
+        const suivant = new Set(precedent)
+        suivant.delete('*')
+        if (activeId) suivant.delete(activeId)
+        return suivant
+      })
+      setAutoNotice('Mode auto arrêté.')
+      return
+    }
     if (activeId ? autoConvs.has(activeId) : autoActif) {
       autoAllumageManuelRef.current = false
       // Éteindre ne coupe QUE ce fil : les autres conversations armées continuent leur chaîne.
@@ -3229,28 +3251,6 @@ export function ChatView({
     autoAllumageManuelRef.current = true
     setAutoNotice(null)
     if (activeId) setAutoConvs((precedent) => new Set(precedent).add(activeId))
-  }
-
-  /**
-   * DEUX REGLAGES DISTINCTS (demande du 2026-09-07) : ce bouton-ci porte sur TOUS les fils
-   * (le joker `*`), celui de la barre de saisie porte sur la SEULE conversation affichee.
-   * Eteindre le global ne desarme pas les fils regles un par un.
-   */
-  function basculerModeAutoGlobal(): void {
-    if (autoConvs.has('*')) {
-      autoAllumageManuelRef.current = false
-      setAutoConvs((precedent) => {
-        const suivant = new Set(precedent)
-        suivant.delete('*')
-        return suivant
-      })
-      setAutoNotice('Mode auto arrêté pour tous les fils.')
-      return
-    }
-    autoFilAmorceRef.current = null
-    autoAllumageManuelRef.current = true
-    setAutoNotice(null)
-    setAutoConvs((precedent) => new Set(precedent).add('*'))
   }
 
   // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
@@ -4011,6 +4011,20 @@ export function ChatView({
         }}
         onResume={() => {}}
         onPaste={(files) => void addFiles(files, id)}
+        leadingNode={
+          <button
+            type="button"
+            className={`btn composer-auto${autoConvs.has(id) ? ' actif' : ''}`}
+            data-testid="mosaic-auto-toggle"
+            data-conv={id}
+            aria-pressed={autoConvs.has(id)}
+            aria-label="Mode auto de cette conversation"
+            onClick={() => basculerModeAutoPour(id)}
+            title="Mode auto de CETTE conversation : renvoie tout seul la suite proposée."
+          >
+            <span aria-hidden="true">∞</span>
+          </button>
+        }
         attachmentsNode={
           fichiers.length > 0 ? (
             <div className="attachment-list pending">
@@ -4477,25 +4491,9 @@ export function ChatView({
             </button>
           )}
         </div>
-        {/* MODE AUTO : la boucle est payante, son état reste LISIBLE ici, et l'arrêt est à un clic
-            du même bouton. Une fois allumé, il tient jusqu'à ce qu'on le coupe. */}
+        {/* Le mode auto se regle par CONVERSATION, avec le bouton ∞ de la barre de saisie
+            (chat plein comme mosaique). Il ne reste ici que l'annonce de ce qu'il a envoye. */}
         <div className="conv-auto" data-testid="conv-auto">
-          <button
-            type="button"
-            className={`conv-auto-toggle${autoConvs.has('*') ? ' actif' : ''}`}
-            data-testid="conv-auto-toggle"
-            aria-pressed={autoConvs.has('*')}
-            onClick={() => basculerModeAutoGlobal()}
-            title={
-              autoConvs.has('*')
-                ? 'Arrêter le mode auto sur tous les fils (les fils réglés un par un restent armés)'
-                : "Mode auto sur TOUS les fils : chaque conversation renvoie toute seule la suite proposée. Pour un seul fil, utilise le bouton de la barre de saisie."
-            }
-          >
-            <span className="conv-auto-dot" aria-hidden="true" />
-            {/* CE BOUTON = LE RÉGLAGE GLOBAL. Le réglage d'un fil vit dans la barre de saisie. */}
-            {autoConvs.has('*') ? 'Mode auto : tous les fils' : 'Mode auto'}
-          </button>
           {autoNotice ? (
             <span className="conv-auto-notice" data-testid="conv-auto-notice">
               {autoNotice}
@@ -5706,9 +5704,9 @@ Cliquer pour choisir une autre branche.`}
                 {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
                 <button
                   type="button"
-                  className={`btn composer-auto${autoConvs.has(activeId ?? '') ? ' actif' : ''}`}
+                  className={`btn composer-auto${autoConvs.has(activeId ?? '') || autoConvs.has('*') ? ' actif' : ''}`}
                   data-testid="composer-auto-toggle"
-                  aria-pressed={autoConvs.has(activeId ?? '')}
+                  aria-pressed={autoConvs.has(activeId ?? '') || autoConvs.has('*')}
                   aria-label={
                     autoConvs.has(activeId ?? '')
                       ? 'Arrêter le mode auto de cette conversation'

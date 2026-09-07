@@ -53,10 +53,10 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20))
     })
-    const bouton = document.querySelector('[data-testid="conv-auto-toggle"]')
+    // L'ancien réglage global est hérité : le bouton ∞ de la barre de saisie le montre allumé
+    // (c'est désormais le SEUL interrupteur — celui de la liste a été retiré).
+    const bouton = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(bouton?.getAttribute('aria-pressed')).toBe('true')
-    // LIBELLÉ : l'ancien réglage global est hérité — il dit « tous les fils », pas « ce fil ».
-    expect(bouton?.textContent).toContain('tous les fils')
     // La vieille réponse déjà à l'écran n'est PAS relancée : aucun tour payant à la reprise.
     expect(pilotChat.mock.calls.length).toBe(0)
   })
@@ -112,10 +112,6 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     expect(armé?.getAttribute('aria-pressed')).toBe('true')
     // LIBELLÉ : le rond ne porte qu'un glyphe — l'état se lit dans l'infobulle accessible.
     expect(armé?.getAttribute('aria-label')).toContain('Arrêter le mode auto de cette conversation')
-    // Le bouton de la liste, lui, reste le réglage GLOBAL et donc éteint.
-    expect(
-      document.querySelector('[data-testid="conv-auto-toggle"]')?.getAttribute('aria-pressed')
-    ).toBe('false')
     expect(items.length).toBeGreaterThan(1)
     await act(async () => (items[1] as HTMLElement).click()) // B
     await act(async () => {
@@ -124,44 +120,6 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     const eteint = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(eteint?.getAttribute('aria-pressed')).toBe('false')
     expect(eteint?.getAttribute('aria-label')).toBe('Mode auto de cette conversation')
-    expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toEqual([
-      'A'
-    ])
-  })
-})
-
-describe('ChatView — deux réglages distincts : global et par fil', () => {
-  beforeAll(installRafShim)
-  let h2ref: Harness | null = null
-  afterEach(async () => {
-    await h2ref?.unmount()
-    h2ref = null
-    window.localStorage.clear()
-    vi.restoreAllMocks()
-  })
-  it('le bouton global arme tous les fils sans toucher les réglages par fil', async () => {
-    const filA = fil('lancer terrain sur A.')
-    const h2 = (h2ref = await mountChat(
-      chatApi({
-        pilotChat: vi.fn().mockResolvedValue({ ok: true }),
-        conversations: vi.fn().mockResolvedValue([conversation('A', filA), conversation('B', [])]),
-        conversation: vi.fn(async (id: string) => conversation(id, id === 'A' ? filA : []))
-      })
-    ))
-    await h2.click('.conv-item .conv-pick') // A
-    await h2.click('[data-testid="composer-auto-toggle"]') // A armé individuellement
-    await h2.click('[data-testid="conv-auto-toggle"]') // global armé
-    const global = document.querySelector('[data-testid="conv-auto-toggle"]')
-    expect(global?.getAttribute('aria-pressed')).toBe('true')
-    expect(global?.textContent).toContain('tous les fils')
-    // Éteindre le global laisse le réglage individuel de A intact.
-    await h2.click('[data-testid="conv-auto-toggle"]')
-    expect(
-      document.querySelector('[data-testid="conv-auto-toggle"]')?.getAttribute('aria-pressed')
-    ).toBe('false')
-    expect(
-      document.querySelector('[data-testid="composer-auto-toggle"]')?.getAttribute('aria-pressed')
-    ).toBe('true')
     expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toEqual([
       'A'
     ])
