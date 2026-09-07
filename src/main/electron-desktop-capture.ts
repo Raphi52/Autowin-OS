@@ -276,7 +276,10 @@ export async function captureElectronDesktop(
       if (sources.length === 0 && attempt + 1 < CAPTURE_ATTEMPTS) await delay(150)
     }
   }
-  if (sources.length === 0) return await captureForegroundWindow()
+  if (sources.length === 0)
+    return await captureForegroundWindow(
+      `aucune source ecran apres ${CAPTURE_ATTEMPTS} tentative(s)`
+    )
 
   const bitmap = Buffer.alloc(width * height * 4)
   let copiedDisplays = 0
