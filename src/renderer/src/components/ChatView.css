@@ -4422,3 +4422,17 @@ button.chat-project-dot:disabled {
   left: 0;
   max-width: calc(100vw - 24px);
 }
+
+/* MODE AUTO DU FIL — bouton de la barre de saisie, distinct du réglage global de la liste. */
+.composer-auto {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  opacity: 0.72;
+}
+.composer-auto.actif {
+  opacity: 1;
+  color: #e3ba55;
+  border-color: rgba(212, 169, 79, 0.55);
+  background: rgba(212, 169, 79, 0.12);
+}

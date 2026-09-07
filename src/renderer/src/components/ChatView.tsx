@@ -376,7 +376,7 @@ export function ChatView({
   }, [autoConvs])
   const autoArmePour = useCallback(
     (id: string | null | undefined): boolean =>
-      autoConvs.has('*') || (!!id && autoConvs.has(id)),
+      autoConvs.has('*') || (!!id && autoConvs.has(activeId ?? '')),
     [autoConvs]
   )
   /** Vrai quand le fil AFFICHE est arme — c'est ce que montre le bouton. */
@@ -3201,14 +3201,20 @@ export function ChatView({
 
   /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
   function basculerModeAuto(): void {
-    if (autoActif) {
+    // Ce bouton ne regle QUE le fil affiche : le reglage global (`*`) n'est pas touche ici.
+    if (activeId ? autoConvs.has(activeId) : autoActif) {
       autoAllumageManuelRef.current = false
       // Éteindre ne coupe QUE ce fil : les autres conversations armées continuent leur chaîne.
       if (activeId) {
         autoSuiviesRef.current.delete(activeId)
         autoEssaisRef.current.delete(activeId)
       }
-      desarmerAuto(activeId)
+      if (activeId) setAutoConvs((precedent) => {
+        const suivant = new Set(precedent)
+        suivant.delete(activeId)
+        return suivant
+      })
+      else desarmerAuto(activeId)
       setAutoNotice('Mode auto arrêté pour cette conversation.')
       return
     }
@@ -3223,6 +3229,28 @@ export function ChatView({
     autoAllumageManuelRef.current = true
     setAutoNotice(null)
     if (activeId) setAutoConvs((precedent) => new Set(precedent).add(activeId))
+  }
+
+  /**
+   * DEUX REGLAGES DISTINCTS (demande du 2026-09-07) : ce bouton-ci porte sur TOUS les fils
+   * (le joker `*`), celui de la barre de saisie porte sur la SEULE conversation affichee.
+   * Eteindre le global ne desarme pas les fils regles un par un.
+   */
+  function basculerModeAutoGlobal(): void {
+    if (autoConvs.has('*')) {
+      autoAllumageManuelRef.current = false
+      setAutoConvs((precedent) => {
+        const suivant = new Set(precedent)
+        suivant.delete('*')
+        return suivant
+      })
+      setAutoNotice('Mode auto arrêté pour tous les fils.')
+      return
+    }
+    autoFilAmorceRef.current = null
+    autoAllumageManuelRef.current = true
+    setAutoNotice(null)
+    setAutoConvs((precedent) => new Set(precedent).add('*'))
   }
 
   // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
@@ -4454,26 +4482,19 @@ export function ChatView({
         <div className="conv-auto" data-testid="conv-auto">
           <button
             type="button"
-            className={`conv-auto-toggle${autoActif ? ' actif' : ''}`}
+            className={`conv-auto-toggle${autoConvs.has('*') ? ' actif' : ''}`}
             data-testid="conv-auto-toggle"
-            aria-pressed={autoActif}
-            onClick={() => basculerModeAuto()}
+            aria-pressed={autoConvs.has('*')}
+            onClick={() => basculerModeAutoGlobal()}
             title={
-              autoActif
-                ? autoConvs.has('*')
-                  ? "Mode auto hérité de l'ancien réglage global (tous les fils) — cliquer l'arrête partout, puis chaque fil se règle séparément"
-                  : 'Arrêter le mode auto de cette conversation'
-                : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien ». Les autres fils gardent leur propre réglage."
+              autoConvs.has('*')
+                ? 'Arrêter le mode auto sur tous les fils (les fils réglés un par un restent armés)'
+                : "Mode auto sur TOUS les fils : chaque conversation renvoie toute seule la suite proposée. Pour un seul fil, utilise le bouton de la barre de saisie."
             }
           >
             <span className="conv-auto-dot" aria-hidden="true" />
-            {/* LISIBILITÉ DU RÉGLAGE : « tous les fils » = l'ancien réglage global encore hérité,
-                « ce fil » = un réglage propre à la conversation affichée. */}
-            {autoConvs.has('*')
-              ? 'Mode auto : tous les fils'
-              : autoActif
-                ? 'Mode auto : ce fil'
-                : 'Mode auto'}
+            {/* CE BOUTON = LE RÉGLAGE GLOBAL. Le réglage d'un fil vit dans la barre de saisie. */}
+            {autoConvs.has('*') ? 'Mode auto : tous les fils' : 'Mode auto'}
           </button>
           {autoNotice ? (
             <span className="conv-auto-notice" data-testid="conv-auto-notice">
@@ -5682,6 +5703,25 @@ Cliquer pour choisir une autre branche.`}
               <>
                 {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
                 <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
+                {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
+                <button
+                  type="button"
+                  className={`btn composer-auto${autoConvs.has(activeId ?? '') ? ' actif' : ''}`}
+                  data-testid="composer-auto-toggle"
+                  aria-pressed={autoConvs.has(activeId ?? '')}
+                  onClick={() => basculerModeAuto()}
+                  title={
+                    autoConvs.has('*')
+                      ? 'Le mode auto est déjà actif sur TOUS les fils (bouton de la liste des conversations)'
+                      : autoConvs.has(activeId ?? '')
+                        ? 'Arrêter le mode auto de cette conversation'
+                        : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
+                  }
+                >
+                  <span className="composer-btn-label">
+                    {autoConvs.has(activeId ?? '') ? 'Auto : ce fil' : 'Auto'}
+                  </span>
+                </button>
                 <button
                   type="button"
                   className="attachment-button"

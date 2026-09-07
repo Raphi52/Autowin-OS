@@ -77,7 +77,8 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
       })
     )
     await h.click('.conv-item .conv-pick')
-    await h.click('[data-testid="conv-auto-toggle"]')
+    // Le mode auto de CE fil vit dans la barre de saisie (le bouton de la liste est le global).
+    await h.click('[data-testid="composer-auto-toggle"]')
 
     // B termine en arrière-plan en disant qu'il n'y a plus rien à faire.
     await act(async () =>
@@ -88,7 +89,7 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
       await new Promise((r) => setTimeout(r, 20))
     })
 
-    const bouton = document.querySelector('[data-testid="conv-auto-toggle"]')
+    const bouton = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(bouton?.getAttribute('aria-pressed')).toBe('true')
     expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toContain(
       'A'
@@ -106,20 +107,61 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     )
     const items = document.querySelectorAll('.conv-item .conv-pick')
     await h.click('.conv-item .conv-pick') // A
-    await h.click('[data-testid="conv-auto-toggle"]')
-    const armé = document.querySelector('[data-testid="conv-auto-toggle"]')
+    await h.click('[data-testid="composer-auto-toggle"]')
+    const armé = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(armé?.getAttribute('aria-pressed')).toBe('true')
     // LIBELLÉ : réglage propre à la conversation affichée, donc « ce fil ».
     expect(armé?.textContent).toContain('ce fil')
-    expect(armé?.textContent).not.toContain('tous les fils')
+    // Le bouton de la liste, lui, reste le réglage GLOBAL et donc éteint.
+    expect(
+      document.querySelector('[data-testid="conv-auto-toggle"]')?.getAttribute('aria-pressed')
+    ).toBe('false')
     expect(items.length).toBeGreaterThan(1)
     await act(async () => (items[1] as HTMLElement).click()) // B
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20))
     })
-    const eteint = document.querySelector('[data-testid="conv-auto-toggle"]')
+    const eteint = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(eteint?.getAttribute('aria-pressed')).toBe('false')
-    expect(eteint?.textContent?.trim()).toBe('Mode auto')
+    expect(eteint?.textContent?.trim()).toBe('Auto')
+    expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toEqual([
+      'A'
+    ])
+  })
+})
+
+describe('ChatView — deux réglages distincts : global et par fil', () => {
+  beforeAll(installRafShim)
+  let h2ref: Harness | null = null
+  afterEach(async () => {
+    await h2ref?.unmount()
+    h2ref = null
+    window.localStorage.clear()
+    vi.restoreAllMocks()
+  })
+  it('le bouton global arme tous les fils sans toucher les réglages par fil', async () => {
+    const filA = fil('lancer terrain sur A.')
+    const h2 = (h2ref = await mountChat(
+      chatApi({
+        pilotChat: vi.fn().mockResolvedValue({ ok: true }),
+        conversations: vi.fn().mockResolvedValue([conversation('A', filA), conversation('B', [])]),
+        conversation: vi.fn(async (id: string) => conversation(id, id === 'A' ? filA : []))
+      })
+    ))
+    await h2.click('.conv-item .conv-pick') // A
+    await h2.click('[data-testid="composer-auto-toggle"]') // A armé individuellement
+    await h2.click('[data-testid="conv-auto-toggle"]') // global armé
+    const global = document.querySelector('[data-testid="conv-auto-toggle"]')
+    expect(global?.getAttribute('aria-pressed')).toBe('true')
+    expect(global?.textContent).toContain('tous les fils')
+    // Éteindre le global laisse le réglage individuel de A intact.
+    await h2.click('[data-testid="conv-auto-toggle"]')
+    expect(
+      document.querySelector('[data-testid="conv-auto-toggle"]')?.getAttribute('aria-pressed')
+    ).toBe('false')
+    expect(
+      document.querySelector('[data-testid="composer-auto-toggle"]')?.getAttribute('aria-pressed')
+    ).toBe('true')
     expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toEqual([
       'A'
     ])
