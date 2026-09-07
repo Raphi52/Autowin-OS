@@ -64,3 +64,30 @@ Fusionner reintroduirait un etat ANTERIEUR : ecarte pour non-regression.
 
 - `autowin/secours/pc-20260831/agent__command-edit-732c4a48-b494-4822-a79b-fed70081708e` et son doublon `autowin/secours/pc-20260831/agent__command-edit-b593c6c3-6da0-4176-b832-bbf9701f08a9` : portent la **vue mosaique des conversations** (`ConversationMosaic`, boutons `conv-view-list` / `conv-view-mosaic`). Le composant `ConversationMosaic.tsx` N'EXISTE PAS sur main : le snapshot ne contient que le cablage dans un `ChatView.tsx` devenu obsolete. Le fusionner regresserait ChatView de 156 lignes. Verdict : conserve, a re-implementer sur le ChatView courant si l'utilisateur veut cette vue.
 - `autowin/recovery/run-17de86c7b881-1` — fusionnee sans conflit (memoisation mosaique pendant le stream).
+
+## Tri du 2026-09-07 — les 5 travaux non publies du bandeau
+
+Sweep complet (`git status --porcelain`, `--ignored`, `git stash list`, `git worktree list`,
+`git branch --no-merged`, `git log --all --not --remotes`, `git for-each-ref` hors
+heads/tags/remotes) : rien d'autre que ces 5 porteurs et le travail du banc, deja entre.
+Aucun stash. Aucun objet detache hors main : `e99969a9` (bench/preuves) est devenu main
+pendant le tri.
+
+Verdict par CONTENU, avec l'oracle du candidat (ses propres fichiers de test rejoues sur main) :
+
+| Porteur (branche `autowin/recovery/…`) | SHA consigne | Verdict | Preuve |
+|---|---|---|---|
+| `command-verify-conv-31` | `8b880fb22b44c1af816b1886f6a81734ef44f8f6` | DUPLICATE | `run-progress-model.test.ts` du candidat : 1 fichier / vert sur main (exit 0). La deduplication `new Set(...)` est en place, `run-progress-model.ts:117`. |
+| `command-verify-conv-38` | `e611419e743cfd8b10725e04807a04248837bc24` | DUPLICATE | `outlook-model.test.ts` du candidat : vert sur main (exit 0). `outlook-model.ts` IDENTIQUE octet pour octet. Le porteur ajoute en plus `.vs/` (1016 lignes de config Visual Studio) : residu, jamais a fusionner. |
+| `run-242f2ecb420d-1` | `26936f69471ef2df5b7366e305f85a1f6b98bf0f` | SUPERSEDED | `outlook-local-marquer-lu.ps1` IDENTIQUE a main ; `outlook-local.ts` du porteur est un SOUS-ENSEMBLE strict de main (0 ligne exclusive, 139 lignes en plus sur main). Ses tests : 3/4 fichiers verts ; le 4e (`security-critical-fixes.test.ts`) echoue sur un COMPTEUR perime (`toHaveLength(167)` alors que main en attend 174, ligne 371) — pas sur du contenu absent. Ses lignes exclusives de `src/preload/index.ts` sont l'ancien `workflowBench`, retire de main a dessein (`63c67761`). |
+| `run-99bdb888b3fc-1` | `5269edcaa7449cda90961e8786c690b1c2a424dc` | SUPERSEDED | `outlook-local-reply.ps1` IDENTIQUE a main. Ses 2 fichiers de test : 61 tests verts sur main (exit 0). `sortByName` est sur main (`outlook-model.ts:514`), `home-threads` aussi (26 occurrences dans `HomeView.css`). |
+| `run-a229741a8742-1` | `972aa4f2ce04013a223c346fa7bf14745b06bc2c` | SUPERSEDED | Chaque apport retrouve sur main : `parleDesQuatre` (`arena-protocole-check.mjs`), `avantLaReponseEnCours: false` (`directive-dans-le-fil.ts:54`), les filtres `ANNOTATION`/`LIGNE_MUSICALE`/`GENERIQUE` (`whisper-local.ts:259/312/322`, version evoluee), le brief build « au SITE D'APPEL » (`phase-briefs.ts`), le kaizen `/arena` « ne se demande pas » (`skills/arena/SKILL.md`). Ses tests : 4/5 fichiers verts ; `arena-protocole-check.test.mjs` echoue parce que son GABARIT de banc est anterieur aux points P16-P22 ajoutes depuis — la version de main du meme fichier passe 53/53. |
+
+Action : les 5 porteurs sont supprimes (copies de travail retirees, branches effacees). Rien
+n'est perdu : `git branch <nom> <sha>` avec les SHA du tableau les fait revenir tant que
+`git gc` n'a pas passe. Aucun `gc`, aucun `reflog expire`, aucun `worktree prune` lance.
+
+Le correctif D3 (`ChatComposer.tsx` — le ref ecrit pendant le rendu) etait deja entre dans le
+depot par `03d7e38a` : `npx eslint --no-cache src/renderer/src/components/ChatComposer.tsx`
+sort 0 erreur (exit 0). Il n'y avait donc rien a rapatrier de la copie du run bloque
+(`889095b4`, deja ancetre de main).
