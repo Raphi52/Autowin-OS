@@ -68,7 +68,7 @@ garde('G3 ces couleurs sont dans une declaration CSS reelle, pas dans un comment
   // dans un `/* ... */` ne peint aucun pixel.
   const vivant = html.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '')
   const mortes = COULEURS.filter(
-    ([, c]) => !new RegExp(`[A-Za-z-]+\s*:\s*[^;{}]*${c}`, 'i').test(vivant)
+    ([, c]) => !new RegExp(`[A-Za-z-]+\\s*:\\s*[^;{}]*${c}`, 'i').test(vivant)
   ).map(([n, c]) => `${n} ${c}`)
   return mortes.length === 0 ? true : `presente(s) mais jamais appliquee(s) : ${mortes.join(', ')}`
 })
