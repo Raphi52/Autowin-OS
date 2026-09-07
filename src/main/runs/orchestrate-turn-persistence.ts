@@ -2,7 +2,7 @@ import type { ChatTurnEvent, ChatTurnRuntime } from '../../shared/chat-turn'
 import type { Conversation } from '../store/conversations'
 import type { OrchestrationStep } from '../orchestrator'
 import type { ChatArtifact } from '../../shared/artifacts'
-import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from './resume-refusal'
+import { classifierRefusDeReprise, refusDeRepriseRaconteDuTravail } from './resume-refusal'
 
 /**
  * PERSISTANCE DU TOUR pour le chemin DIRECT `os:orchestrate` (bouton « Reprendre », pilotage
@@ -221,13 +221,15 @@ export function createOrchestrateTurnPersistence(
         return
       }
       /*
-       * UN REFUS TEMPORAIRE N'EST PAS DU TRAVAIL. Le refus « appel(s) provider encore actif » se
-       * regle seul et ne touche aucun fichier ; il est ecrit dans la conversation pour laisser une
-       * trace, mais il ne doit pas faire remonter le fil en tete de liste ni le repeindre en « non
-       * lu » (mesure conv-336 du 2026-09-07, 11 conversations repeintes au demarrage).
+       * AUCUN REFUS DE REPRISE N'EST DU TRAVAIL, temporaire ou definitif. Il est ecrit dans la
+       * conversation pour laisser une trace, mais il n'execute rien et ne touche aucun fichier :
+       * il ne doit donc pas faire remonter le fil en tete de liste ni le repeindre en « non lu ».
+       * Mesure conv-336 du 2026-09-07 : au demarrage de 10:20, 13 refus ont repeint 11
+       * conversations vieilles de plusieurs jours -- 12 d'entre eux etaient `copie-durable-absente`
+       * (definitif), un seul `appel-provider-actif` (transitoire).
        */
-      const transitoire = refusDeRepriseEstTransitoire(classifierRefusDeReprise(error))
-      emit({ kind: 'failed', error, ...(transitoire && { transient: true as const }) })
+      const sansTravail = !refusDeRepriseRaconteDuTravail(classifierRefusDeReprise(error))
+      emit({ kind: 'failed', error, ...(sansTravail && { transient: true as const }) })
     }
   }
 }

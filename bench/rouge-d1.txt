@@ -1,0 +1,67 @@
+
+ RUN  v3.2.7 C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-e4466f8bc37f-1
+
+ ❯  unite  scripts/scout-residus.angle-mort.test.mjs (12 tests | 1 failed) 642ms
+   ✓ scout-residus — angle mort > nomme les extensions NON analysees et les compte 60ms
+   ✓ scout-residus — angle mort > dit explicitement "aucun" quand tout est couvert, au lieu de se taire 52ms
+   ✓ scout-residus — angle mort > place l angle mort AVANT la premiere section de candidats 53ms
+   × scout-residus — chemins absolus morts dans des fichiers vivants > signale une racine Windows dont le dossier parent n existe pas 59ms
+     → expected '# Scout du code résiduel — ../../../.…' to match /runner\.ps1:1/
+   ✓ scout-residus — chemins absolus morts dans des fichiers vivants > lit les extensions que la sonde n analyse PAS — .ps1 y compris 54ms
+   ✓ scout-residus — chemins absolus morts dans des fichiers vivants > ne confond pas une URL avec une racine Windows 52ms
+   ✓ scout-residus — chemins absolus morts dans des fichiers vivants > ignore un chemin interpole, invérifiable hors execution 49ms
+   ✓ scout-residus — chemins absolus morts dans des fichiers vivants > rappelle d EXECUTER les scripts declares vivants, meme quand rien n est signale 54ms
+   ✓ scout-residus — chemins morts : ce qui n est PAS mort > ecarte un dossier recree par mkdirSync recursive dans le meme fichier 51ms
+   ✓ scout-residus — chemins morts : ce qui n est PAS mort > ecarte un chemin qui n est qu un DEFAUT derriere un drapeau CLI 54ms
+   ✓ scout-residus — chemins morts : ce qui n est PAS mort > ecarte un chemin qui n est qu un repli de variable d environnement 50ms
+   ✓ scout-residus — chemins morts : ce qui n est PAS mort > signale ENCORE une racine codee en dur sans repli ni recreation 53ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL   unite  scripts/scout-residus.angle-mort.test.mjs > scout-residus — chemins absolus morts dans des fichiers vivants > signale une racine Windows dont le dossier parent n existe pas
+AssertionError: expected '# Scout du code résiduel — ../../../.…' to match /runner\.ps1:1/
+
+- Expected: 
+/runner\.ps1:1/
+
++ Received: 
+"# Scout du code résiduel — ../../../../../../../Users/ARTHUR~1.LEP/AppData/Local/Temp/scout-residus-lxel9c
+
+_0 fichiers scannés · 2026-09-07 07:58_
+
+## 0. Angle mort — 1 fichier(s) NON analysé(s)
+- `.ps1` : 1
+
+La sonde ne lit que .ts, .tsx, .mts, .js, .jsx, .mjs, .cjs. Ces fichiers ne sont PAS propres : ils sont INVISIBLES. Les balayer à la main avant de conclure que le dossier est trié.
+
+## 0 bis. Chemins absolus morts — aucun. Cela ne prouve PAS que les scripts marchent : exécute ceux que tu déclares vivants.
+
+## 1. Fichiers jamais importés (0)
+- rien
+
+## 2. Exports jamais référencés ailleurs (0)
+- rien
+
+## 3. Résidus dans le code (0)
+
+> Lecture seule : rien n'a été supprimé. Chaque item est un CANDIDAT — vérifier l'appelant réel (chargement dynamique, IPC, test) avant tout retrait, puis passer par `clean`.
+"
+
+ ❯ scripts/scout-residus.angle-mort.test.mjs:60:21
+     58|     const rapport = sonde(d)
+     59|     expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts/)
+     60|     expect(rapport).toMatch(/runner\.ps1:1/)
+       |                     ^
+     61|     expect(rapport).toContain(['C:', 'Amitel', 'Autowin OS'].join(Stri…
+     62|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+   Start at  09:58:50
+   Duration  876ms (transform 41ms, setup 0ms, collect 12ms, tests 642ms, environment 0ms, prepare 47ms)
+
+[nettoyage temporaire] 1 dossier(s) supprimé(s), 1 verrouillé(s)
+[nettoyage temporaire] 2 dossier(s) supprimé(s)

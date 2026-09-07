@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import { ConversationStore } from './conversations'
-import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from '../runs/resume-refusal'
+import {
+  classifierRefusDeReprise,
+  refusDeRepriseEstTransitoire,
+  refusDeRepriseRaconteDuTravail
+} from '../runs/resume-refusal'
 
 /**
  * DEMANDE (conv-336, 2026-09-07) : « un refus de reprise transitoire ne doit plus bouger la date de
@@ -58,6 +62,36 @@ describe('un refus de reprise transitoire ne repeint pas la liste', () => {
       expect(refus).toBeDefined()
       expect(refusDeRepriseEstTransitoire(refus)).toBe(false)
     }
+  })
+
+  /**
+   * MESURE DU JOURNAL DE 10:20 (le demarrage SUIVANT, releve dans conv-336) : sur les 13 refus de
+   * reprise ecrits en 12 secondes, UN SEUL etait « appel(s) provider encore actif » ; les 12 autres
+   * portaient « copie durable absente ou incomplete » — classes DEFINITIFS, donc encore comptes
+   * comme du travail et repeignant la liste. Un refus, definitif ou non, n'execute rien.
+   */
+  it('un refus DEFINITIF ne raconte pas de travail non plus — il ne repeint pas la liste', () => {
+    const refusDuJournalDe1020 =
+      'Reprise du worktree impossible pour run-4bf63ce8f076-1 : copie durable absente ou incomplète'
+    const refus = classifierRefusDeReprise(refusDuJournalDe1020)
+    expect(refus).toBe('copie-durable-absente')
+    expect(refusDeRepriseEstTransitoire(refus)).toBe(false)
+    expect(refusDeRepriseRaconteDuTravail(refus)).toBe(false)
+
+    const store = new ConversationStore(clock())
+    const { id, turnId } = filTermine(store, 'ancienne-copie-absente')
+    const avant = store.get(id)!.updatedAt
+    store.applyTurnEvent(id, turnId, { kind: 'resumed' })
+    store.applyTurnEvent(id, turnId, {
+      kind: 'failed',
+      error: refusDuJournalDe1020,
+      transient: true
+    })
+    expect(store.get(id)!.updatedAt).toBe(avant)
+  })
+
+  it('un echec ORDINAIRE raconte du travail — sa date doit bouger', () => {
+    expect(refusDeRepriseRaconteDuTravail(classifierRefusDeReprise('Erreur reseau'))).toBe(true)
   })
 
   it('`resumed` puis `failed` transitoire laissent la date de derniere touche INTACTE', () => {

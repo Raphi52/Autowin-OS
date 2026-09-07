@@ -55,6 +55,21 @@ Open or complete the **one** living `RUN.md`: `~\.claude\runs\<session_id>\<subj
 
 **4. Blind-spot sweep** (Fusion-inspired — *what no question touched*) — before writing the need: which facet did NO archetype/question probe **and no board-gate stated-assumption already cover**? These are the **UNASKED** (unknown-unknowns), DISTINCT from open questions (known-unknowns deferred to `terrain`). **Loop, don't one-shot** — re-sweep, each round using a DIFFERENT archetype as a coverage lens (Breaker = unprobed failure mode; Naive = unexamined presupposition — its analysis use, not question-generation). Stop when a round finds nothing new (no facet with impact ≥30 not already listed). **Regime cap**: disposable = 1 pass · standard = max 2 rounds · critical = until 2 dry rounds, max 3. Name blind spots so they surface; high-impact one → ask it now rather than defer.
 
+**4 bis. Cas limites d'entree — ENUMERE-LES DANS L'ENONCE, ne les laisse pas a l'executant.**
+Des que le besoin touche une entree (drapeau CLI, argument, option, champ de formulaire, requete,
+variable d'environnement), `## Besoin` porte une rubrique **`### Cas limites d'entree`** listant au
+minimum **3 cas**, chacun avec le comportement attendu : absente · vide · mal typee · hors bornes
+(zero, negatif, enorme) · repetee · nominale. Si le besoin n'a aucune entree utilisateur, la
+rubrique n'a pas lieu d'etre ; si elle est volontairement omise malgre une entree, ecris la dispense
+en clair — `Cas limites : sans objet — <raison>`.
+**Ce n'est pas du zele : c'est le seul facteur du kit dont l'effet soit MESURE hors du bruit.**
+Banc `arena-bench-ax3` (2026-09-07, 3 repliques par bras, une vague, meme tache, meme critere de 30
+assertions comportementales) : enonce SANS cas limites = **0 vert sur 3** — les 3 repliques avalent
+un drapeau repete en silence, 2 sur 3 jettent une pile Node sur une valeur hors plage ; enonce AVEC
+la liste = **3 verts sur 3**. Separation parfaite (p = 0,10, plancher a n=3).
+**Garde-fou deterministe** : `node scripts/frame-cas-limites-check.mjs <RUN.md>` — exit 1 tant que le
+besoin decrit une entree sans enumerer ses cas limites. Passe-le AVANT de rendre la main a `terrain`.
+
 **5. Risk pass** — before writing the need, list **threats to the success criterion**: what could make this FAIL (dependency not ready, perf/scale ceiling, data loss / irreversibility, a stated assumption turning false, external blocker, scope creep). Each = **severity** (likelihood × impact) + one-line **mitigation/watch**. DISTINCT from blind spots (unprobed facets) and impact surface (existing affected): a risk is a KNOWN threat you can already name. High-severity risk with no mitigation → surface it (a need isn't fully framed while a fatal risk is unowned).
 
 **6. Write `## Besoin` + `## Contraintes`** (plain words the user reads — no internal labels): `## Besoin` holds the real problem (not the requested solution) · scope in/out · a **verifiable success criterion as a cochable DoD checklist** (`- [ ]` exit conditions, each naming a PROOF — **format + rules: see `RUN-template.md`, the single source**; `disposable` may keep a one-line criterion — proportionality) · deliberate decisions · stated assumptions · **impact surface** (existing affected, cited) · **risks** (threats to success: severity + mitigation) · **blind spots** (Pass-A sweep's unknown-unknowns) · open questions left for `terrain`. `## Contraintes` holds only solution bounds, each classified `HARD` or `SOFT` with source and consequence of violation; do not duplicate `Scope OUT`. **Short retro**: what signals showed up this run → patch thresholds so next time bites earlier.
@@ -108,13 +123,14 @@ Hand off to `terrain` (regime propagated through the RUN header). **Never report
 
 ## Output
 
-`## Besoin` + `## Contraintes` + `## Confiance` sections in RUN.md — always. `## Options` + `Décision:` line in RUN.md — only when Pass B ran. All written in the one living RUN file; never separate need/options/ledger files.
+`## Besoin` + `## Contraintes` + `## Confiance` sections in RUN.md — always. Quand le besoin touche une entree utilisateur, `## Besoin` porte en plus `### Cas limites d'entree` (>= 3 cas) ou une dispense motivee — verifie par `scripts/frame-cas-limites-check.mjs` (exit 0 exige). `## Options` + `Décision:` line in RUN.md — only when Pass B ran. All written in the one living RUN file; never separate need/options/ledger files.
 
 ## Don't
 - **Propose a HOW** during Pass A framing — that flips you from production to reaction.
 - **Outsource analysis questions** as faux-QCMs — go find out yourself.
 - **Run the heavy protocol** on an obviously trivial + disposable + already-precise one-shot — say so, offer direct implementation.
 - **Claim "done"** before `## Besoin` (and `## Options` + `Décision:` if Pass B ran) are written in RUN.md.
+- **Hand off a need that describes an INPUT without enumerating its limit cases** — mesure hors modele : 0 vert sur 3 contre 3 sur 3. Run `node scripts/frame-cas-limites-check.mjs <RUN.md>`; exit 1 = the frame is not done.
 - **Accept vague fog** — three-nothings in a row → reframe.
 - **Hand off a frame carrying an unresolved load-bearing UNVERIFIED claim** — the pipeline then builds on a maybe. Verify it, surface it, or write it as a stated assumption + risk. Never leave it looking like a fact.
 - **Report a confidence FEELING** ("I'm fairly sure X exists") in place of a receipt — name the artifact you opened, or mark it unverified.

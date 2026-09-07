@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, parse } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const chr10 = String.fromCharCode(10)
@@ -52,13 +53,15 @@ describe('scout-residus — angle mort', () => {
 
 describe('scout-residus — chemins absolus morts dans des fichiers vivants', () => {
   it('signale une racine Windows dont le dossier parent n existe pas', () => {
-    const d = dossier({
-      'runner.ps1': ["param([string]$Root = 'C:", 'Amitel', "Autowin OS')"].join(String.fromCharCode(92)) + chr10
-    })
+    // La racine est tiree du bac temporaire + un identifiant aleatoire : garantie absente sur
+    // TOUTE machine. Une racine codee en dur existait sur certains postes, et rendait ce test
+    // vert-ou-rouge selon la machine.
+    const absent = join(parse(tmpdir()).root, 'scout-residus-absent-' + randomUUID(), 'sous')
+    const d = dossier({ 'runner.ps1': "Set-Location '" + absent + "'" + chr10 })
     const rapport = sonde(d)
     expect(rapport).toMatch(/## 0 bis\. Chemins absolus morts/)
     expect(rapport).toMatch(/runner\.ps1:1/)
-    expect(rapport).toContain(['C:', 'Amitel', 'Autowin OS'].join(String.fromCharCode(92)))
+    expect(rapport).toContain(absent)
   })
 
   it('lit les extensions que la sonde n analyse PAS — .ps1 y compris', () => {

@@ -53,7 +53,9 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
       { token: 'a', pid: 999 },
       { token: 'a', pid: 999, identity: 'notre-agent' }
     ]) {
-      expect(resumeActionFor({ agents: [agent], phaseOutputs: [] }, () => undefined)).toBe('bloquer')
+      expect(resumeActionFor({ agents: [agent], phaseOutputs: [] }, () => undefined)).toBe(
+        'bloquer'
+      )
     }
   })
 
@@ -62,23 +64,32 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
     () => {
       const identity = defaultProcessIdentity(process.pid)
       expect(identity).toEqual(expect.any(String))
-      const previousPath = process.env.PATH
-      process.env.PATH = ''
       // L'empreinte d'un PID vivant est gardee quelques secondes (elle coutait 87,5 s de fenetre
       // figee en rafale, cf. process-identity-cache.test.ts). Cette memoire repondrait ici a la
       // place de la sonde et masquerait la panne que ce test observe : on l'oublie d'abord.
       oublierEmpreintesProcessus()
-      try {
-        expect(
-          agentVerdict(
-            { token: 'agent-vivant', pid: process.pid, identity: identity as string },
-            defaultProcessIdentity
-          ).state
-        ).toBe('inconnu')
-      } finally {
-        if (previousPath === undefined) delete process.env.PATH
-        else process.env.PATH = previousPath
-      }
+      /*
+       * LA PANNE EST INJECTEE, PAS PROVOQUEE PAR L'ENVIRONNEMENT.
+       *
+       * Ce test vidait `process.env.PATH` pour faire echouer la sonde PowerShell. Mais `process.env`
+       * est PARTAGE par tous les fichiers de test qui tournent dans le meme worker vitest : pendant
+       * cette fenetre, les voisins ne trouvaient plus leurs binaires. Mesure du 2026-09-07
+       * (conv-336) : `src/main/e2e-chaine.test.ts` echouait sur `spawnSync git ENOENT` et
+       * `src/main/e2e-chaine.harness.test.ts` sur `git rev-parse refs/heads/HEAD` dans la suite
+       * complete, alors que les deux passent en isolation. La copie de travail isolee naissait donc
+       * ROUGE, ce qui refusait toute edition verifiee sans aucun rapport avec elle.
+       *
+       * `defaultProcessIdentity` accepte deja sa sonde en parametre : une sonde qui rend `null`
+       * decrit exactement la panne visee, sans toucher a l'environnement de personne.
+       * `env-partage-entre-tests.test.ts` garde desormais cette regle.
+       */
+      const sondeEnPanne = (): string | null => null
+      expect(
+        agentVerdict(
+          { token: 'agent-vivant', pid: process.pid, identity: identity as string },
+          (pid) => defaultProcessIdentity(pid, sondeEnPanne)
+        ).state
+      ).toBe('inconnu')
     }
   )
 })
@@ -103,6 +114,8 @@ describe('câblage — l’orchestrateur capture bien l’empreinte au lancement
   })
 
   it('et la sonde est bien importée, pas seulement nommée', () => {
-    expect(source).toMatch(/import\s*\{[^}]*defaultProcessIdentity[^}]*\}\s*from\s*'\.\/store\/worktree-manager'/)
+    expect(source).toMatch(
+      /import\s*\{[^}]*defaultProcessIdentity[^}]*\}\s*from\s*'\.\/store\/worktree-manager'/
+    )
   })
 })

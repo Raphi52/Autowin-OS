@@ -292,7 +292,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     /** Volume de capture, réglable pendant qu'on parle : lu à chaque bloc audio via `dicteeGainRef`. */
     const [dicteeGain, setDicteeGain] = useState(gainMemorise)
     const dicteeGainRef = useRef(dicteeGain)
-    dicteeGainRef.current = dicteeGain
+    useEffect(() => {
+      dicteeGainRef.current = dicteeGain
+    }, [dicteeGain])
     const dicteeRef = useRef<Dictee | null>(null)
     // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.
     const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)
@@ -393,6 +395,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const mentionsVisibles = mentionDismissed ? [] : mentions
     const slashItems = matchSlashCommands(input, props.skillCommands)
     const slashVisibles = slashDismissed ? [] : slashItems
+    const mentionSel = Math.min(mentionIndex, mentionsVisibles.length - 1)
+    const slashSel = Math.min(slashIndex, slashVisibles.length - 1)
 
     return (
       <div
@@ -427,60 +431,52 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
           {props.errorNode}
           {props.cadrageNode}
           {props.frictionNode}
-          {mentionsVisibles.length > 0 &&
-            (() => {
-              const sel = Math.min(mentionIndex, mentionsVisibles.length - 1)
-              return (
-                <ul
-                  className="slash-palette mention-palette"
-                  role="listbox"
-                  aria-label="Cibles"
-                  data-testid="mention-palette"
+          {mentionsVisibles.length > 0 ? (
+            <ul
+              className="slash-palette mention-palette"
+              role="listbox"
+              aria-label="Cibles"
+              data-testid="mention-palette"
+            >
+              {mentionsVisibles.map((c, i) => (
+                <li
+                  key={`${c.kind}:${c.id}`}
+                  role="option"
+                  aria-selected={i === mentionSel}
+                  className={`slash-item${i === mentionSel ? ' is-selected' : ''}`}
+                  data-testid="mention-item"
+                  onMouseDown={(ev) => {
+                    ev.preventDefault() // garde le focus du composer
+                    acceptMention(c)
+                  }}
                 >
-                  {mentionsVisibles.map((c, i) => (
-                    <li
-                      key={`${c.kind}:${c.id}`}
-                      role="option"
-                      aria-selected={i === sel}
-                      className={`slash-item${i === sel ? ' is-selected' : ''}`}
-                      data-testid="mention-item"
-                      onMouseDown={(ev) => {
-                        ev.preventDefault() // garde le focus du composer
-                        acceptMention(c)
-                      }}
-                    >
-                      <span className="slash-name mono">
-                        {c.kind === 'run' ? '@run' : '@fichier'} {c.label}
-                      </span>
-                      {c.hint && <span className="slash-hint">{c.hint}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )
-            })()}
-          {slashVisibles.length > 0 &&
-            (() => {
-              const sel = Math.min(slashIndex, slashVisibles.length - 1)
-              return (
-                <ul className="slash-palette" role="listbox" aria-label="Commandes">
-                  {slashVisibles.map((c, i) => (
-                    <li
-                      key={c.name}
-                      role="option"
-                      aria-selected={i === sel}
-                      className={`slash-item${i === sel ? ' is-selected' : ''}`}
-                      onMouseDown={(ev) => {
-                        ev.preventDefault() // garde le focus du composer
-                        acceptSlash(c)
-                      }}
-                    >
-                      <span className="slash-name mono">/{c.name}</span>
-                      <span className="slash-hint">{c.hint}</span>
-                    </li>
-                  ))}
-                </ul>
-              )
-            })()}
+                  <span className="slash-name mono">
+                    {c.kind === 'run' ? '@run' : '@fichier'} {c.label}
+                  </span>
+                  {c.hint && <span className="slash-hint">{c.hint}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {slashVisibles.length > 0 ? (
+            <ul className="slash-palette" role="listbox" aria-label="Commandes">
+              {slashVisibles.map((c, i) => (
+                <li
+                  key={c.name}
+                  role="option"
+                  aria-selected={i === slashSel}
+                  className={`slash-item${i === slashSel ? ' is-selected' : ''}`}
+                  onMouseDown={(ev) => {
+                    ev.preventDefault() // garde le focus du composer
+                    acceptSlash(c)
+                  }}
+                >
+                  <span className="slash-name mono">/{c.name}</span>
+                  <span className="slash-hint">{c.hint}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <div className="composer-input-row">
             {/*
               APERCU DE DICTEE, EN GRIS, DANS LE CHAMP LUI-MEME.

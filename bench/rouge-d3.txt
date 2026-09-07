@@ -1,0 +1,45 @@
+
+C:\Sources\AutoWinOS\.autowin-data\autowin-os\worktrees\846afeda47fa9e64\agent__run-e4466f8bc37f-1\src\renderer\src\components\ChatComposer.tsx
+   16:9   warning  Replace `⏎··forwardRef,⏎··useEffect,⏎··useImperativeHandle,⏎··useRef,⏎··useState,⏎··type·ReactNode⏎` with `·forwardRef,·useEffect,·useImperativeHandle,·useRef,·useState,·type·ReactNode·`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               prettier/prettier
+  134:12  warning  Replace `⏎········d="M2.2·21·22.4·12·2.2·3l0·7.1·13.3·1.9-13.3·1.9z"⏎········fill="currentColor"⏎········stroke="none"⏎·····` with `·d="M2.2·21·22.4·12·2.2·3l0·7.1·13.3·1.9-13.3·1.9z"·fill="currentColor"·stroke="none"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               prettier/prettier
+  295:5   error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+C:\Sources\AutoWinOS\.autowin-data\autowin-os\worktrees\846afeda47fa9e64\agent__run-e4466f8bc37f-1\src\renderer\src\components\ChatComposer.tsx:295:5
+  293 |     const [dicteeGain, setDicteeGain] = useState(gainMemorise)
+  294 |     const dicteeGainRef = useRef(dicteeGain)
+> 295 |     dicteeGainRef.current = dicteeGain
+      |     ^^^^^^^^^^^^^^^^^^^^^ Cannot update ref during render
+  296 |     const dicteeRef = useRef<Dictee | null>(null)
+  297 |     // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.
+  298 |     const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)  react-hooks/refs
+  367:48  warning  Replace `ecrireDictee(texte);·setDicteeApercu('');` with `⏎··············ecrireDictee(texte)⏎··············setDicteeApercu('')⏎············`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             prettier/prettier
+  449:25  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+C:\Sources\AutoWinOS\.autowin-data\autowin-os\worktrees\846afeda47fa9e64\agent__run-e4466f8bc37f-1\src\renderer\src\components\ChatComposer.tsx:449:25
+  447 |                       onMouseDown={(ev) => {
+  448 |                         ev.preventDefault() // garde le focus du composer
+> 449 |                         acceptMention(c)
+      |                         ^^^^^^^^^^^^^ Passing a ref to a function may read its value during render
+  450 |                       }}
+  451 |                     >
+  452 |                       <span className="slash-name mono">                                                                           react-hooks/refs
+  474:25  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+C:\Sources\AutoWinOS\.autowin-data\autowin-os\worktrees\846afeda47fa9e64\agent__run-e4466f8bc37f-1\src\renderer\src\components\ChatComposer.tsx:474:25
+  472 |                       onMouseDown={(ev) => {
+  473 |                         ev.preventDefault() // garde le focus du composer
+> 474 |                         acceptSlash(c)
+      |                         ^^^^^^^^^^^ Passing a ref to a function may read its value during render
+  475 |                       }}
+  476 |                     >
+  477 |                       <span className="slash-name mono">/{c.name}</span>                                                               react-hooks/refs
+
+✖ 6 problems (3 errors, 3 warnings)
+  0 errors and 3 warnings potentially fixable with the `--fix` option.
+

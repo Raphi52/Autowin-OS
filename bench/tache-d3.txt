@@ -1,0 +1,15 @@
+TACHE (identique pour les deux bras de ce duel) :
+Dans CE dossier, `src/renderer/src/components/ChatComposer.tsx` porte 3 erreurs eslint
+`react-hooks/refs` qui rendent `npm run lint` — donc `npm test` — rouge :
+  - ligne 295 : `dicteeGainRef.current = dicteeGain` est ecrit EN PLEIN RENDU ;
+  - lignes 449 et 474 : `acceptMention(c)` / `acceptSlash(c)` sont vus comme appeles pendant le
+    rendu (ils vivent dans une fonction immediatement invoquee au milieu du JSX).
+Corrige la CAUSE : la synchronisation du ref sort du rendu, et les deux listes deroulantes
+cessent d appeler ces fonctions depuis une IIFE de rendu. Le comportement visible ne change pas.
+
+CRITERE DE SUCCES — le seul qui compte, deterministe, AUJOURD HUI ROUGE :
+  node C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-e4466f8bc37f-1/bench/check-d3.mjs .
+doit afficher "CRITERE ATTEINT" avec le code de sortie 0.
+Etat de depart (mesure) : G1 RATE (3 erreurs eslint : 295:5, 449:25, 474:25), G2/G3/G4 deja OK.
+ATTENTION : une directive `eslint-disable` ou `@ts-ignore` est refusee par G2, et retirer le
+reglage de volume est refuse par G3. G4 rejoue les tests du composant.

@@ -107,6 +107,7 @@ import {
 } from './workflow-graph'
 import { porterSortieDePhase } from './phase-carry'
 import { sortieScoutAvecCible } from './scout-cible'
+import { sortieFrameAvecCasLimites } from './frame-cas-limites'
 import {
   briefArbitrage,
   createMidPhaseSupervision,
@@ -3399,6 +3400,16 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const garderCibleScout = (phase: NodePhase, texte: string): string =>
       phase === 'scout' ? sortieScoutAvecCible(texte) : texte
 
+    /**
+     * MEME ACCROCHE, autre defaut mesure : un cadrage qui decrit une ENTREE utilisateur sans
+     * enumerer ses cas limites ne part pas tel quel a `terrain`. Le refus est mis en tete et porte
+     * `SUITE: frame`, donc le cadrage repasse par `frame` au lieu d'etre transmis incomplet.
+     * Mesure (banc arena-bench-ax3, 3 repliques, une vague) : sans cas limites 0 correctif conforme
+     * sur 3, avec la liste 3 sur 3. Voir `frame-cas-limites.ts`.
+     */
+    const garderCasLimitesFrame = (phase: NodePhase, texte: string): string =>
+      phase === 'frame' ? sortieFrameAvecCasLimites(texte) : texte
+
     /** Enregistre une phase terminée ET notifie l'appelant pour qu'il persiste l'acquis. */
     const recordPhase = (
       phase: NodePhase,
@@ -3416,7 +3427,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // personne ne choisit, et la phase suivante repart du tableau entier — donc de rien de precis.
       // La garde est de FORME (une cible declaree existe, ou non), la seule verifiable quand le
       // producteur et le juge sont le meme modele. Voir `scout-cible.ts`.
-      const texte = garderCibleScout(phase, text)
+      const texte = garderCasLimitesFrame(phase, garderCibleScout(phase, text))
       dernierVerdict = verdictDePhase(phase, texte)
       // Le souhait du modèle pour la suite, s'il s'est prononcé. Il PRIME sur le graphe : un workflow
       // est un outil, et l'agent qui vient de travailler sait mieux que le plan si l'étape prévue a
@@ -3747,7 +3758,10 @@ ${empreinteDepot}`
         )
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
-        const agregatGreedy = garderCibleScout(phase, greedy.aggregate)
+        const agregatGreedy = garderCasLimitesFrame(
+          phase,
+          garderCibleScout(phase, greedy.aggregate)
+        )
         recordPhase(phase, agregatGreedy, aggregatedEvidence.slice(evidenceStart))
         pousserContexte(
           `acquisPhase:${phase}`,
@@ -3976,7 +3990,7 @@ ${empreinteDepot}`
         if (good.length === 1) {
           // Un seul survivant → rien à agréger : on réutilise sa sortie directement, sans appel de
           // synthèse (inutile + risque de reformulation d'un texte unique).
-          const solo = garderCibleScout(phase, good[0].text)
+          const solo = garderCasLimitesFrame(phase, garderCibleScout(phase, good[0].text))
           lastExecText = solo
           recordPhase(phase, solo, aggregatedEvidence.slice(evidenceStart))
           pousserContexte(
@@ -4080,7 +4094,7 @@ ${empreinteDepot}`
         })
         lastExecText = synth.text
         lastUsage = synth.usage
-        const texteSynth = garderCibleScout(phase, synth.text)
+        const texteSynth = garderCasLimitesFrame(phase, garderCibleScout(phase, synth.text))
         recordPhase(phase, texteSynth, aggregatedEvidence.slice(evidenceStart))
         pousserContexte(
           `acquisPhase:${phase}`,
@@ -4675,7 +4689,7 @@ ${empreinteDepot}`
         onDelta?.('exec', `[dérive] ${decision}\n`)
         texteDePhase = `${phaseRes.text}\n\n[dérive] ${constat} — ${decision}.${suite}`
       }
-      texteDePhase = garderCibleScout(phase, texteDePhase)
+      texteDePhase = garderCasLimitesFrame(phase, garderCibleScout(phase, texteDePhase))
       recordPhase(phase, texteDePhase, aggregatedEvidence.slice(evidenceStart))
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.

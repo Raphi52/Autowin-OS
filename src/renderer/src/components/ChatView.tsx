@@ -376,11 +376,21 @@ export function ChatView({
   }, [autoConvs])
   const autoArmePour = useCallback(
     (id: string | null | undefined): boolean =>
+      // `id`, PAS le fil affiche : cette fonction est appelee pour les fils d'ARRIERE-PLAN.
       autoConvs.has('*') || (!!id && autoConvs.has(id)),
     [autoConvs]
   )
   /** Vrai quand le fil AFFICHE est arme — c'est ce que montre le bouton. */
   const autoActif = autoArmePour(activeId)
+  /**
+   * MODE AUTO ARME SUR UN FIL PAS ENCORE CREE. Sans cela le bouton ne faisait RIEN dans un
+   * nouveau fil : il n'y a pas encore d'identifiant a armer, donc le clic sortait en silence
+   * — « quand j'ouvre un nouveau fil je peux pas toggle le mode auto » (2026-09-07).
+   * L'intention est gardee ici, puis posee sur la conversation des sa creation.
+   */
+  const [autoNouveauFil, setAutoNouveauFil] = useState(false)
+  const autoNouveauFilRef = useRef(false)
+  autoNouveauFilRef.current = autoNouveauFil
   /** Desarme un fil precis (le joker `*` disparait : eteindre ici eteint le reglage herite). */
   const desarmerAuto = useCallback((id: string | null | undefined): void => {
     setAutoConvs((precedent) => {
@@ -390,7 +400,6 @@ export function ChatView({
       return suivant
     })
   }, [])
-  const [autoNotice, setAutoNotice] = useState<string | null>(null)
   /**
    * L'avancement de la boucle, PAR CONVERSATION — `tour` = dernier tour déjà traité (un re-rendu du
    * même tour ne renvoie rien), `prompt` = dernier texte envoyé (la même suite deux fois = boucle).
@@ -3100,26 +3109,15 @@ export function ChatView({
       tourEstUnScout: dernierTourEstUnScout(messages)
     })
     if (decision.action === 'attendre') {
-      // VISIBILITÉ : deux attentes sont des impasses réelles — plus aucune suite écrite, ou la même
-      // suite renvoyée en boucle. Le badge disait « actif » pendant que la boucle était morte ;
-      // désormais il dit pourquoi. Les autres attentes sont normales et restent muettes.
-      if (decision.raison === 'aucun-prompt')
-        setAutoNotice('Mode auto en attente : la dernière réponse ne propose aucune suite.')
-      else if (decision.raison === 'prompt-identique')
-        setAutoNotice('Mode auto en attente : la même suite revenait deux fois — non renvoyée.')
-      else if (decision.raison === 'chaine-finie')
-        setAutoNotice('Mode auto en attente : ce fil est terminé — donne-moi une nouvelle cible.')
       return
     }
     if (decision.action === 'arreter') {
       // N'eteint QUE le fil affiche : les autres fils armes gardent leur reglage.
       desarmerAuto(activeId)
-      setAutoNotice(decision.message)
       return
     }
     etat.tour = decision.signature
     etat.prompt = decision.texte
-    setAutoNotice(null)
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
     void send(decision.texte, { keepComposerDraft: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3168,8 +3166,6 @@ export function ChatView({
        */
       if (decision.action === 'arreter') {
         autoEssaisRef.current.delete(id)
-        const fini = convsRef.current.find((c) => c.id === id)?.title ?? id
-        setAutoNotice(`Mode auto : « ${fini} » n'a plus rien à enchaîner — le mode reste actif.`)
         continue
       }
       if (decision.action !== 'envoyer') {
@@ -3192,8 +3188,6 @@ export function ChatView({
       autoEssaisRef.current.delete(id)
       etat.tour = decision.signature
       etat.prompt = decision.texte
-      const titre = convsRef.current.find((c) => c.id === id)?.title ?? id
-      setAutoNotice(`Mode auto : suite envoyée dans « ${titre} ».`)
       void send(decision.texte, { keepComposerDraft: true, targetConversationId: id })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3201,15 +3195,46 @@ export function ChatView({
 
   /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
   function basculerModeAuto(): void {
-    if (autoActif) {
+    basculerModeAutoPour(activeId)
+  }
+
+  /**
+   * MEME bascule, mais sur une conversation NOMMEE : le chat plein passe le fil affiche, la
+   * mosaique passe l'id de SA fenetre (chaque fenetre a donc son propre bouton infini).
+   */
+  function basculerModeAutoPour(cible: string | null): void {
+    const activeId = cible
+    // FIL PAS ENCORE CREE : rien a armer, on garde l'intention pour la creation.
+    if (!activeId) {
+      setAutoNouveauFil((precedent) => !precedent)
+      return
+    }
+    // ANCIEN REGLAGE GLOBAL (`*`, herite d'avant le retrait du bouton de la liste) : il n'a plus
+    // de bouton a lui. L'eteindre ICI est donc la seule sortie possible — sinon il tournerait
+    // sans interrupteur.
+    if (autoConvs.has('*')) {
+      autoAllumageManuelRef.current = false
+      setAutoConvs((precedent) => {
+        const suivant = new Set(precedent)
+        suivant.delete('*')
+        if (activeId) suivant.delete(activeId)
+        return suivant
+      })
+      return
+    }
+    if (activeId ? autoConvs.has(activeId) : autoActif) {
       autoAllumageManuelRef.current = false
       // Éteindre ne coupe QUE ce fil : les autres conversations armées continuent leur chaîne.
       if (activeId) {
         autoSuiviesRef.current.delete(activeId)
         autoEssaisRef.current.delete(activeId)
       }
-      desarmerAuto(activeId)
-      setAutoNotice('Mode auto arrêté pour cette conversation.')
+      if (activeId) setAutoConvs((precedent) => {
+        const suivant = new Set(precedent)
+        suivant.delete(activeId)
+        return suivant
+      })
+      else desarmerAuto(activeId)
       return
     }
     if (activeId) {
@@ -3221,7 +3246,6 @@ export function ChatView({
     // est justement celui que ce clic demande d'enchaîner, pas un vieux tour rouvert.
     autoFilAmorceRef.current = null
     autoAllumageManuelRef.current = true
-    setAutoNotice(null)
     if (activeId) setAutoConvs((precedent) => new Set(precedent).add(activeId))
   }
 
@@ -3580,6 +3604,13 @@ export function ChatView({
           setActiveId(c.id)
           composerDraftKeyRef.current = c.id
           composerDraftsRef.current.set(c.id, { input: '', attachments: [], error: null })
+        }
+        // L'intention prise AVANT la creation se pose sur le fil qui vient de naitre.
+        if (autoNouveauFilRef.current) {
+          const filNeuf = convId
+          setAutoConvs((precedent) => new Set(precedent).add(filNeuf))
+          autoNouveauFilRef.current = false
+          setAutoNouveauFil(false)
         }
       }
 
@@ -3983,6 +4014,20 @@ export function ChatView({
         }}
         onResume={() => {}}
         onPaste={(files) => void addFiles(files, id)}
+        leadingNode={
+          <button
+            type="button"
+            className={`btn composer-auto${autoConvs.has(id) ? ' actif' : ''}`}
+            data-testid="mosaic-auto-toggle"
+            data-conv={id}
+            aria-pressed={autoConvs.has(id)}
+            aria-label="Mode auto de cette conversation"
+            onClick={() => basculerModeAutoPour(id)}
+            title="Mode auto de CETTE conversation : renvoie tout seul la suite proposée."
+          >
+            <span aria-hidden="true">∞</span>
+          </button>
+        }
         attachmentsNode={
           fichiers.length > 0 ? (
             <div className="attachment-list pending">
@@ -4448,38 +4493,6 @@ export function ChatView({
               ×
             </button>
           )}
-        </div>
-        {/* MODE AUTO : la boucle est payante, son état reste LISIBLE ici, et l'arrêt est à un clic
-            du même bouton. Une fois allumé, il tient jusqu'à ce qu'on le coupe. */}
-        <div className="conv-auto" data-testid="conv-auto">
-          <button
-            type="button"
-            className={`conv-auto-toggle${autoActif ? ' actif' : ''}`}
-            data-testid="conv-auto-toggle"
-            aria-pressed={autoActif}
-            onClick={() => basculerModeAuto()}
-            title={
-              autoActif
-                ? autoConvs.has('*')
-                  ? "Mode auto hérité de l'ancien réglage global (tous les fils) — cliquer l'arrête partout, puis chaque fil se règle séparément"
-                  : 'Arrêter le mode auto de cette conversation'
-                : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien ». Les autres fils gardent leur propre réglage."
-            }
-          >
-            <span className="conv-auto-dot" aria-hidden="true" />
-            {/* LISIBILITÉ DU RÉGLAGE : « tous les fils » = l'ancien réglage global encore hérité,
-                « ce fil » = un réglage propre à la conversation affichée. */}
-            {autoConvs.has('*')
-              ? 'Mode auto : tous les fils'
-              : autoActif
-                ? 'Mode auto : ce fil'
-                : 'Mode auto'}
-          </button>
-          {autoNotice ? (
-            <span className="conv-auto-notice" data-testid="conv-auto-notice">
-              {autoNotice}
-            </span>
-          ) : null}
         </div>
         {/*
           La barre n'existe QUE pendant une sélection en cours : hors de ce moment elle n'offrait
@@ -5682,6 +5695,35 @@ Cliquer pour choisir une autre branche.`}
               <>
                 {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
                 <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
+                {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
+                <button
+                  type="button"
+                  className={`btn composer-auto${
+                    (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
+                      ? ' actif'
+                      : ''
+                  }`}
+                  data-testid="composer-auto-toggle"
+                  aria-pressed={
+                    (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
+                  }
+                  aria-label={
+                    autoConvs.has(activeId ?? '')
+                      ? 'Arrêter le mode auto de cette conversation'
+                      : 'Mode auto de cette conversation'
+                  }
+                  onClick={() => basculerModeAuto()}
+                  title={
+                    autoConvs.has('*')
+                      ? 'Le mode auto est déjà actif sur TOUS les fils (bouton de la liste des conversations)'
+                      : autoConvs.has(activeId ?? '')
+                        ? 'Arrêter le mode auto de cette conversation'
+                        : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
+                  }
+                >
+                  {/* ROND 34 px comme le micro, glyphe INFINI : « ça continue sans moi ». */}
+                  <span aria-hidden="true">∞</span>
+                </button>
                 <button
                   type="button"
                   className="attachment-button"

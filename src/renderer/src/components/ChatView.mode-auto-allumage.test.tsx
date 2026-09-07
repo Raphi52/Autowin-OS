@@ -49,7 +49,7 @@ describe('ChatView — allumer le mode auto envoie la suite déjà affichée', (
     )
     await h.click('.conv-item .conv-pick')
     expect(pilotChat).not.toHaveBeenCalled()
-    await h.click('[data-testid="conv-auto-toggle"]')
+    await h.click('[data-testid="composer-auto-toggle"]')
     const envoyes = pilotChat.mock.calls.map((c) => JSON.stringify(c[0])).join('\n')
     expect(envoyes).toContain('lance le terrain sur X')
   })
@@ -66,7 +66,7 @@ describe('ChatView — allumer le mode auto envoie la suite déjà affichée', (
       })
     )
     await h.click('.conv-item .conv-pick')
-    await h.click('[data-testid="conv-auto-toggle"]')
+    await h.click('[data-testid="composer-auto-toggle"]')
     const dejaEnvoyes = pilotChat.mock.calls.length
     const picks = [...h.container.querySelectorAll<HTMLButtonElement>('.conv-pick')]
     expect(picks.length).toBeGreaterThan(1)

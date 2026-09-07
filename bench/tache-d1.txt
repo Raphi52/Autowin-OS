@@ -1,0 +1,14 @@
+TACHE (identique pour les deux bras de ce duel) :
+Dans CE dossier, `scripts/scout-residus.angle-mort.test.mjs` (assertion ligne 60) exige que la
+sonde signale `C:\Amitel\Autowin OS` comme chemin absolu MORT. Or ce dossier EXISTE sur la
+machine de l essai : la sonde a raison de ne rien signaler, c est la DONNEE DU TEST qui est
+fausse — elle depend de la machine. Repare-la : le test doit prouver la meme chose avec un
+chemin absolu GARANTI absent partout (racine tiree du bac temporaire ou identifiant aleatoire),
+sans jamais dependre de l existence d un dossier sur le poste.
+
+CRITERE DE SUCCES — le seul qui compte, deterministe, AUJOURD HUI ROUGE :
+  node C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-e4466f8bc37f-1/bench/check-d1.mjs .
+doit afficher "CRITERE ATTEINT" avec le code de sortie 0.
+Etat de depart (mesure) : G1 RATE (le test echoue), G2 RATE (le chemin machine-dependant est la),
+G3/G4/G5 deja OK. G4 est un oracle INDEPENDANT : il fabrique lui-meme un .ps1 avec une racine
+tiree au hasard et exige que la sonde la signale — neutraliser la sonde ne passe pas.

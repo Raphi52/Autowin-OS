@@ -50,7 +50,7 @@ describe('ChatView — le mode auto n’enchaine pas un scout sans cible', () =>
       })
     )
     await h.click('.conv-item .conv-pick')
-    await h.click('[data-testid="conv-auto-toggle"]')
+    await h.click('[data-testid="composer-auto-toggle"]')
     return pilotChat
   }
 

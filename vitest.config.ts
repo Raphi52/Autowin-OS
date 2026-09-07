@@ -75,6 +75,14 @@ const EXCLUSIONS = [
   // remontees/critere.test.tsx` = 1 suite en echec de collecte.
   '.arena/**',
   '**/.arena/**',
+  // BANC `bench/` : `bench/runs/**` porte les copies de travail des bras du banc du 2026-09-07
+  // (git worktree, un dossier par bras). Meme panne que `.arena/**` juste au-dessus, par un
+  // autre chemin : mesure du 2026-09-07, `npx vitest run src/shared/boot-splash.test.ts` depuis
+  // la racine a collecte 8 fichiers au lieu de 1 -- les 7 copies -- et a rendu ROUGE une suite
+  // verte, l'echec venant du bras qui avait modifie index.html dans SA copie. Une mesure de
+  // depart faussee de cette facon aurait fait accuser les mauvais bras.
+  'bench/runs/**',
+  '**/bench/runs/**',
   // Harnais Node autonome, couvert par cdp-verdict-collection.test.mjs.
   'scripts/cdp-verdict.test.mjs',
   /**

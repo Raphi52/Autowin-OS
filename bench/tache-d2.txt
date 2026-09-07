@@ -1,0 +1,15 @@
+TACHE (identique pour les deux bras de ce duel) :
+Dans CE dossier, `src/renderer/index.html` a PERDU le dore `#e9bd4e` et le violet `#9d79ed`
+(commit 08016aac les a remplaces par #ff2d95 / #ff8a1f / #ffd66b), alors que
+`scripts/launch_dev_splash.py` les porte encore. Les deux ecrans qui se suivent a l oeil pendant
+un demarrage n ont donc plus la meme palette. Reunis les deux palettes A LA SOURCE : les deux
+couleurs doivent revenir dans index.html, dans de vraies declarations CSS appliquees a l ecran de
+demarrage (`#autowin-boot`), sans casser le rendu existant.
+
+CRITERE DE SUCCES — le seul qui compte, deterministe, AUJOURD HUI ROUGE :
+  node C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-e4466f8bc37f-1/bench/check-d2.mjs .
+doit afficher "CRITERE ATTEINT" avec le code de sortie 0.
+Etat de depart (mesure) : G1 RATE (py -3 scripts/launch_dev_phases_test.py rend 2 FAIL),
+G2 et G3 RATE (couleurs absentes de index.html), G4/G5 deja OK.
+ATTENTION : recabler la garde ou le lanceur sur les nouvelles teintes est refuse par G4/G5 —
+cela laisserait les deux ecrans divergents.

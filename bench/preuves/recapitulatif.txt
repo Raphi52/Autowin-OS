@@ -1,0 +1,12 @@
+RECAPITULATIF DU BANC — 2026-09-07T14:17:56+0200
+
+BRAS  DEFAUT  MODE      ROUGE->VERT  HORS-CRITERE      DUREE  LANCEMENTS
+d1-a  D1      pipeline  oui          propre            704s   5
+d1-x  D1      direct    oui          propre            124s   5
+d2-a  D2      pipeline  oui          propre            753s   5
+d2-x  D2      direct    oui          defauts (exit 1)  124s   5
+d3-a  D3      pipeline  oui          propre            810s   5
+d3-x  D3      direct    oui          propre            111s   5
+
+6 bras sur 6 ont fait passer leur critere du rouge au vert.
+5 bras sur 6 n'ont rien laisse derriere eux hors du critere (formatage, lint, tests voisins, stabilite).

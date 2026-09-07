@@ -41,7 +41,13 @@
           align-items: center;
           justify-content: center;
           gap: 26px;
-          background: #000;
+          /* Le filet vertical de scripts/launch_dev_splash.py : dore en haut, violet en bas.
+             Les deux ecrans se suivent a l'oeil pendant un demarrage, ils portent donc le MEME
+             accent — c'est le seul motif commun aux deux, et il vit ici a la source. Le noir de
+             l'ecran reste dessous, en derniere couche. */
+          background:
+            linear-gradient(#e9bd4e 0 50%, #9d79ed 50% 100%) left center / 2px 82% no-repeat,
+            #000;
           animation: boot-in 0.45s ease both;
         }
         #autowin-boot .name {

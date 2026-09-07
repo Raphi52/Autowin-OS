@@ -1,0 +1,36 @@
+PREUVE — les 3 correctifs dans le depot (copie agent__run-c2cf0435fa94-1)
+commit des correctifs : 03d7e38a · reparation de la base typecheck : 378ad20a
+Mon Sep  7 12:28:44 UTC 2026
+
+AVANT (HEAD 25a77bbe, defauts presents)
+  check-d1 : exit 1 (CRITERE NON ATTEINT)
+  check-d2 : exit 1 (CRITERE NON ATTEINT)
+  check-d3 : exit 1 (CRITERE NON ATTEINT)
+
+APRES (arbre propre au commit 378ad20a)
+  check-d1 : exit 0 (CRITERE ATTEINT)
+  check-d2 : exit 0 (CRITERE ATTEINT)
+  check-d3 : exit 0 (CRITERE ATTEINT)
+
+DEFAUT REINJECTE (le critere mord encore)
+  D2 couleurs remises en #ff2d95/#ff8a1f dans index.html -> check-d2 exit 1
+  D3 ref reecrit pendant le rendu dans ChatComposer.tsx -> check-d3 exit 1
+
+VOISINAGE
+  npm run typecheck                          exit 0 (etait exit 2 : 2 x TS6133 dans ChatView.tsx)
+  npx vitest run <5 fichiers voisins>        exit 0, 32 tests
+  npx vitest run <5 fichiers mode auto>      exit 0, 10 tests
+  py -3 scripts/launch_dev_phases_test.py    exit 0
+  npx eslint --no-cache <4 fichiers touches> exit 0, 0 erreur (27 warnings deja presents)
+  npx prettier --check : 2 fichiers non conformes — DEJA non conformes dans HEAD
+    (git show HEAD:<chemin> | prettier --check --stdin-filepath -> exit 1 avant toute edition)
+
+APPOINT — lint du depot entier (npx eslint --no-cache .)
+  avant ce tour : 52 erreurs (47 mesurees apres retrait des 3 de ChatComposer, +3, +2 de bench/check-d2.mjs)
+  apres         : 47 erreurs — 5 de moins, aucune ajoutee ; 0 erreur dans les 5 fichiers touches
+  (les 47 restantes vivent dans des fichiers non nommes par la demande : ChatView.behavior.test.tsx,
+   scripts/arena-protocole-check.mjs, src/main/preflight-probes.test.ts, ... — hors perimetre)
+
+GARDE D2 non relachee apres correction de son echappement :
+  couleurs retirees -> exit 1 · couleurs en commentaire seulement -> exit 1 (G3 RATE)
+  'background :' avec espace -> exit 0 (cas refuse a tort avant la correction)

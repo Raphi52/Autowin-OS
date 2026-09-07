@@ -53,10 +53,10 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20))
     })
-    const bouton = document.querySelector('[data-testid="conv-auto-toggle"]')
+    // L'ancien réglage global est hérité : le bouton ∞ de la barre de saisie le montre allumé
+    // (c'est désormais le SEUL interrupteur — celui de la liste a été retiré).
+    const bouton = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(bouton?.getAttribute('aria-pressed')).toBe('true')
-    // LIBELLÉ : l'ancien réglage global est hérité — il dit « tous les fils », pas « ce fil ».
-    expect(bouton?.textContent).toContain('tous les fils')
     // La vieille réponse déjà à l'écran n'est PAS relancée : aucun tour payant à la reprise.
     expect(pilotChat.mock.calls.length).toBe(0)
   })
@@ -77,7 +77,8 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
       })
     )
     await h.click('.conv-item .conv-pick')
-    await h.click('[data-testid="conv-auto-toggle"]')
+    // Le mode auto de CE fil vit dans la barre de saisie (le bouton de la liste est le global).
+    await h.click('[data-testid="composer-auto-toggle"]')
 
     // B termine en arrière-plan en disant qu'il n'y a plus rien à faire.
     await act(async () =>
@@ -88,7 +89,7 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
       await new Promise((r) => setTimeout(r, 20))
     })
 
-    const bouton = document.querySelector('[data-testid="conv-auto-toggle"]')
+    const bouton = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(bouton?.getAttribute('aria-pressed')).toBe('true')
     expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toContain(
       'A'
@@ -106,22 +107,50 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     )
     const items = document.querySelectorAll('.conv-item .conv-pick')
     await h.click('.conv-item .conv-pick') // A
-    await h.click('[data-testid="conv-auto-toggle"]')
-    const armé = document.querySelector('[data-testid="conv-auto-toggle"]')
+    await h.click('[data-testid="composer-auto-toggle"]')
+    const armé = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(armé?.getAttribute('aria-pressed')).toBe('true')
-    // LIBELLÉ : réglage propre à la conversation affichée, donc « ce fil ».
-    expect(armé?.textContent).toContain('ce fil')
-    expect(armé?.textContent).not.toContain('tous les fils')
+    // LIBELLÉ : le rond ne porte qu'un glyphe — l'état se lit dans l'infobulle accessible.
+    expect(armé?.getAttribute('aria-label')).toContain('Arrêter le mode auto de cette conversation')
     expect(items.length).toBeGreaterThan(1)
     await act(async () => (items[1] as HTMLElement).click()) // B
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20))
     })
-    const eteint = document.querySelector('[data-testid="conv-auto-toggle"]')
+    const eteint = document.querySelector('[data-testid="composer-auto-toggle"]')
     expect(eteint?.getAttribute('aria-pressed')).toBe('false')
-    expect(eteint?.textContent?.trim()).toBe('Mode auto')
+    expect(eteint?.getAttribute('aria-label')).toBe('Mode auto de cette conversation')
     expect(JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')).toEqual([
       'A'
     ])
+  })
+  /**
+   * DEFAUT VECU (2026-09-07, conv-339) : « j'avais pas le bouton allume mais quand meme le mode
+   * auto arme ». L'ancien reglage GLOBAL herite armait tous les fils pendant que le bouton, lui,
+   * ne regardait que le reglage propre au fil : arme et invisible, donc ineteignable.
+   */
+  it('le réglage global hérité s’éteint par le rond ∞', async () => {
+    window.localStorage.setItem('autowin.chat.modeAuto', '1')
+    const filA = fil('lancer terrain sur A.')
+    h = await mountChat(
+      chatApi({
+        pilotChat: vi.fn().mockResolvedValue({ ok: true }),
+        conversations: vi.fn().mockResolvedValue([conversation('A', filA), conversation('B', [])]),
+        conversation: vi.fn(async (id: string) => conversation(id, id === 'A' ? filA : []))
+      })
+    )
+    await h.click('.conv-item .conv-pick')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const bouton = (): Element | null =>
+      document.querySelector('[data-testid="composer-auto-toggle"]')
+    expect(bouton()?.getAttribute('aria-pressed')).toBe('true')
+    await h.click('[data-testid="composer-auto-toggle"]')
+    expect(bouton()?.getAttribute('aria-pressed')).toBe('false')
+    // Le joker disparaît vraiment du stockage : il ne peut plus armer un autre fil en douce.
+    expect(
+      JSON.parse(window.localStorage.getItem('autowin.chat.modeAuto.convs') ?? '[]')
+    ).not.toContain('*')
   })
 })
