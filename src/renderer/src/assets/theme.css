@@ -21,6 +21,21 @@
   --line: rgba(255, 255, 255, 0.18);
   --line-strong: rgba(255, 255, 255, 0.42);
 
+  /* ==========================================================================
+     LE VOILE — la couleur des filets et des surfaces translucides, SANS son opacite.
+     Mesure du 2026-09-07 : ChatView.css portait 45 `rgba(255, 255, 255, X)` ecrits en dur,
+     sur 22 opacites differentes. Un blanc a 5 % sur un fond blanc n'existe pas : c'est la
+     cause mecanique des filets et des pastilles qui disparaissent en mode clair.
+     Ecraser ces 22 opacites par trois paliers aurait change le rendu de NUIT. On rend donc
+     la COULEUR variable en laissant l'opacite au point d'usage :
+        `rgba(var(--voile-rgb), 0.18)` au lieu de `rgba(255, 255, 255, 0.18)`.
+     En nuit la valeur est identique au pixel ; en clair le voile devient sombre, donc visible.
+     Ces jetons portent des COMPOSANTES, pas une couleur : ils ne s'utilisent QUE dans un
+     `rgba(...)`. Le garde `chatview-voile.test.ts` interdit d'y revenir en dur.
+     ========================================================================== */
+  --voile-rgb: 255, 255, 255;
+  --ombre-rgb: 0, 0, 0;
+
   /* Texte */
   --text: #f5f7fb;
   --text-dim: #b5bcc8;

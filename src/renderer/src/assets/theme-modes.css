@@ -39,6 +39,11 @@
   --line: rgba(18, 24, 40, 0.16);
   --line-strong: rgba(18, 24, 40, 0.34);
 
+  /* LE VOILE s'inverse : sombre sur fond clair. Les opacites, elles, restent celles ecrites au
+     point d'usage — donc un filet a 18 % reste un filet a 18 %, simplement visible.
+     `--ombre-rgb` ne s'inverse PAS : une ombre reste noire dans les deux modes. */
+  --voile-rgb: 18, 24, 40;
+
   --text: #14192a;
   --text-dim: #4d5567;
   --text-faint: #767f92;
