@@ -276,6 +276,18 @@ describe('InterlocuteursWidget — ouvrir une conversation qui n existe pas enco
     expect(trouver('home-fil-devis')).toBeTruthy()
   })
 
+  it('dit sur le bouton que ce depart part par MAIL, pas un fil avec l IA', async () => {
+    // Objection du controle final le 2026-09-07 : le bouton portait « + Nouvelle conversation »,
+    // mot pour mot le libelle du bouton qui ouvre un fil avec l'IA (ChatMosaic.tsx). Deux boutons
+    // au meme nom dans la meme application, et celui-ci declenche un ENVOI vers l'exterieur :
+    // l'utilisateur doit lire le canal AVANT de cliquer. Le survol ne suffit pas, il ne se voit pas.
+    const { trouver, cliquer } = monter()
+    await cliquer('home-contact-zoe@ex.fr')
+    const bouton = trouver('home-inter-nouveau')
+    expect(bouton?.textContent ?? '').toMatch(/mail/i)
+    expect((bouton?.textContent ?? '').trim()).not.toBe('+ Nouvelle conversation')
+  })
+
   it('envoie objet et premier message a l ADRESSE du contact, en deux temps', async () => {
     const { container, onNouvelleConversation, cliquer, saisir } = monter()
     await cliquer('home-contact-zoe@ex.fr')

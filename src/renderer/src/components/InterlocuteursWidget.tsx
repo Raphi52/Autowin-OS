@@ -425,7 +425,7 @@ function EcranFils({
           title={`Écrire un nouveau message à ${contact.adresse}`}
           data-testid="home-inter-nouveau"
         >
-          + Nouvelle conversation
+          + Nouvelle conversation par mail
         </button>
       </div>
     ) : (
