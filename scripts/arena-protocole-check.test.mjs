@@ -32,7 +32,7 @@ function bancConforme() {
       join(bench, `prompt-${bras}.txt`),
       bras === 'x'
         ? `${tache}\nWORKFLOW IMPOSE (x) : appel nu — aucune skill, aucune consigne de phase.\n`
-        : `${tache}\nWORKFLOW IMPOSE (${bras}) : ...\n`
+        : `${tache}\nWORKFLOW IMPOSE (${bras}) : ...\nCRITERE : node check.mjs (exit 0 exige)\n`
     )
     writeFileSync(
       join(bench, `out-${bras}.json`),
@@ -725,5 +725,28 @@ describe('P8 — duree lue dans statut.txt quand la sortie du bras ne porte pas 
     const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P8').ok).toBe(false)
     expect(point(res, 'P8').detail).toMatch(/b: min tableau/)
+  })
+})
+
+/*
+ * P21 — le critere doit ATTEINDRE les bras. Mesure du banc dogfood du 2026-09-07 : meme tache,
+ * meme depart (a51e3dc3), le bras dont le prompt ne cite pas le script de critere finit ROUGE
+ * (9 assertions sur 28), celui qui le cite finit VERT (28/28). Avant ce point, un tel banc
+ * restait vert au protocole : il mesurait l_ignorance du critere, pas le workflow.
+ */
+describe('P21 — le script de critere est cite dans le prompt de chaque bras', () => {
+  it('RATE quand un prompt de bras ne cite aucun critere executable', () => {
+    const f = bancConforme()
+    writeFileSync(join(f.bench, 'prompt-c.txt'), readFileSync(join(f.bench, 'tache.txt'), 'utf8'))
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P21').ok).toBe(false)
+    expect(point(res, 'P21').detail).toMatch(/prompt-c\.txt/)
+  })
+
+  it('PASSE sans exiger le critere dans prompt-x.txt, qui est l_appel nu', () => {
+    const f = bancConforme()
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P21').ok).toBe(true)
+    expect(point(res, 'P17').ok).toBe(true)
   })
 })

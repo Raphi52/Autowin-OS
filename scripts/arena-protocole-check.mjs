@@ -567,6 +567,32 @@ export function verifierProtocole({
     return true
   })
 
+  /*
+   * P21 — LE CRITERE DOIT ATTEINDRE LES BRAS. Mesure du banc dogfood rejoue le 2026-09-07 (conv-333),
+   * meme tache, meme depart (a51e3dc3), 4 bras : le bras dont le prompt NE cite PAS le script de
+   * critere finit ROUGE (9 assertions sur 28 en echec, 0.2739 $ / 1.03 min / 7 tours), celui dont le
+   * prompt le cite finit VERT (28/28, 0.4260 $ / 1.55 min / 10 tours). Le protocole exigeait un
+   * critere rouge AVANT le lancement (P1/P20) sans jamais verifier qu'il etait DONNE aux bras :
+   * un banc pouvait mesurer l'ignorance du critere plutot que le workflow. Le bras X reste exclu :
+   * il est l'appel nu par contrat (P17).
+   */
+  ajoute('P21', 'Le script de critere est cite dans le prompt de chaque bras (sauf X, nu)', () => {
+    const manque = []
+    for (const b of BRAS.filter((b) => b !== 'x')) {
+      const p = lire(path.join(bench, `prompt-${b}.txt`))
+      if (p === null) {
+        manque.push(`prompt-${b}.txt absent`)
+        continue
+      }
+      if (!/check[\w.-]*\.mjs|npm run [\w:-]+|npx (vitest|jest)|pytest/i.test(p))
+        manque.push(`prompt-${b}.txt ne cite aucun critere executable`)
+    }
+    return manque.length
+      ? manque.join(' ; ') +
+          ' — un bras qui ignore le critere mesure son ignorance, pas le workflow (banc du 2026-09-07 : sans critere 9/28 rouges, avec critere 28/28)'
+      : true
+  })
+
   const jugements = [
     'X, appel nu : le bras a-t-il VRAIMENT travaille sans outillage ? (lecture de sa trace)',
     'Un bras a-t-il reformule la tache malgre un enonce identique ? (lecture des livrables)',
