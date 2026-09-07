@@ -65,6 +65,26 @@ export function relireTeintesDuTheme(): void {
   CYAN = teinteDuTheme('--cyan', REPLI.cyan)
   GOLD = teinteDuTheme('--gold', REPLI.gold)
   VIOLET = teinteDuTheme('--violet', REPLI.violet)
+
+  /*
+   * LA NEBULEUSE, et c est ELLE qui occupe l ecran.
+   *
+   * Piege trouve le 2026-09-07 : NUAGE_COSMIQUE est un objet initialise A L IMPORT du module. Il
+   * a donc COPIE la valeur des teintes a ce moment-la -- y compris `secondaire: VIOLET`, alors que
+   * VIOLET est desormais variable. Reassigner les variables plus tard ne l atteignait pas, et le
+   * decor restait bleu-magenta sous tous les themes. Mesure : deux captures indiscernables entre
+   * le sombre et Obsidian Nebula, build 2717.
+   *
+   * On reassigne donc ses proprietes ICI. Cinq jetons DEDIES plutot que les accents generiques :
+   * le bleu dominant du nuage n est pas le cyan de l interface, et mapper l un sur l autre aurait
+   * change le sombre d origine -- une regression que personne n a demandee. Les replis sont les
+   * valeurs historiques exactes, donc sans jeton le decor est identique au pixel.
+   */
+  NUAGE_COSMIQUE.couleur = teinteDuTheme('--decor-nuage', 0x3f7bff)
+  NUAGE_COSMIQUE.secondaire = teinteDuTheme('--decor-nuage-2', VIOLET)
+  NUAGE_COSMIQUE.accent = teinteDuTheme('--decor-accent', 0xff4fa3)
+  NUAGE_COSMIQUE.froid = teinteDuTheme('--decor-froid', 0x2fe6ff)
+  NUAGE_COSMIQUE.chaud = teinteDuTheme('--decor-chaud', 0xff8a2b)
 }
 /** L'anthracite des surfaces sombres de `theme.css` — la nappe reste dans le monde de l'app. */
 const ANTHRACITE = 0x1b222c

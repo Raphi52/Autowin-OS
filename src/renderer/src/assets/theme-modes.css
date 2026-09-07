@@ -633,6 +633,19 @@
      retomberait sur le bleu-cyan vif du sombre d origine -- ce qui jurait avec ce theme,
      constate a l ecran le 2026-09-07. On les prend SOURDS, dans la famille du violet des filets. */
   --cyan: #6f9fc4;
+
+  /* LES CINQ LEVIERS DE LA NEBULEUSE 3D (home-decor-scene.ts, NUAGE_COSMIQUE).
+     Ce sont eux qui occupent l ecran : le bleu dominant, sa seconde teinte, les filaments,
+     les bords froids et les braises chaudes. Sans ces jetons le decor garde le bleu-magenta vif
+     du sombre d origine, ce qui jurait avec ce theme -- constate a l ecran le 2026-09-07.
+     Choix retenu : rester dans la famille violet / prune du theme, et ETEINDRE les braises
+     orange en un cuivre sourd plutot que de les supprimer (sans elles le nuage vire monochrome,
+     note conv-1449). */
+  --decor-nuage: #3a3560;
+  --decor-nuage-2: #7d6bb5;
+  --decor-accent: #b0538f;
+  --decor-froid: #5d8ca8;
+  --decor-chaud: #a8703f;
   --violet: #7d6bb5;
   --info: var(--cyan);
 }
