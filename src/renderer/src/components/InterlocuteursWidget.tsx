@@ -622,39 +622,15 @@ function EcranConversation({
               data-testid="home-inter-saisie"
             />
             <div className="home-chat__actions">
-              {/* DEUX temps, à dessein : un envoi part chez quelqu'un et ne se rattrape pas. Le
-                  premier clic annonce ce qui va se passer, le second le fait. */}
-              {confirme ? (
-                <>
-                  <button
-                    type="button"
-                    className="home-chat__envoyer"
-                    onClick={() => void envoyer()}
-                    disabled={envoiEnCours || vide}
-                    data-testid="home-inter-confirmer"
-                  >
-                    {envoiEnCours ? <Spinner /> : `Confirmer l’envoi à ${contact.nom}`}
-                  </button>
-                  <button
-                    type="button"
-                    className="home-chat__annuler"
-                    onClick={() => setConfirme(false)}
-                    disabled={envoiEnCours}
-                  >
-                    Annuler
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="home-chat__envoyer"
-                  onClick={() => setConfirme(true)}
-                  disabled={vide}
-                  data-testid="home-inter-envoyer"
-                >
-                  Envoyer par Outlook
-                </button>
-              )}
+              <EnvoiEnDeuxTemps
+                nom={contact.nom}
+                confirme={confirme}
+                onConfirme={setConfirme}
+                envoiEnCours={envoiEnCours}
+                bloque={vide}
+                onEnvoyer={envoyer}
+                prefixeTest="home-inter"
+              />
               {dernier ? (
                 <button
                   type="button"
@@ -680,6 +656,70 @@ function EcranConversation({
           </>
         )}
       </div>
+    </>
+  )
+}
+
+/**
+ * Les DEUX temps d'un envoi, à UN seul endroit.
+ *
+ * La réponse (écran 3) et la conversation neuve (écran 4) font partir un courrier hors du poste, et
+ * portaient le même geste en deux clics écrit deux fois, mot pour mot. Deux copies d'une règle de
+ * sûreté finissent par diverger : un correctif appliqué à l'une laisse l'autre en arrière, et c'est
+ * l'écran oublié qui enverra le message que personne n'a confirmé.
+ *
+ * Le rendu est INCHANGÉ des deux côtés : mêmes classes, mêmes libellés, et les mêmes repères de test
+ * qu'avant — `<prefixeTest>-envoyer` puis `<prefixeTest>-confirmer`.
+ */
+function EnvoiEnDeuxTemps({
+  nom,
+  confirme,
+  onConfirme,
+  envoiEnCours,
+  bloque,
+  onEnvoyer,
+  prefixeTest
+}: {
+  nom: string
+  confirme: boolean
+  onConfirme: (valeur: boolean) => void
+  envoiEnCours: boolean
+  bloque: boolean
+  onEnvoyer: () => void | Promise<void>
+  prefixeTest: string
+}): React.JSX.Element {
+  if (!confirme) {
+    return (
+      <button
+        type="button"
+        className="home-chat__envoyer"
+        onClick={() => onConfirme(true)}
+        disabled={bloque}
+        data-testid={`${prefixeTest}-envoyer`}
+      >
+        Envoyer par Outlook
+      </button>
+    )
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className="home-chat__envoyer"
+        onClick={() => void onEnvoyer()}
+        disabled={envoiEnCours || bloque}
+        data-testid={`${prefixeTest}-confirmer`}
+      >
+        {envoiEnCours ? <Spinner /> : `Confirmer l’envoi à ${nom}`}
+      </button>
+      <button
+        type="button"
+        className="home-chat__annuler"
+        onClick={() => onConfirme(false)}
+        disabled={envoiEnCours}
+      >
+        Annuler
+      </button>
     </>
   )
 }
@@ -768,39 +808,15 @@ function EcranNouveau({
         data-testid="home-inter-nouveau-message"
       />
       <div className="home-chat__actions">
-        {/* DEUX temps, comme la réponse : le premier clic annonce ce qui va se passer, le second le
-            fait. Un envoi ne se rattrape pas. */}
-        {confirme ? (
-          <>
-            <button
-              type="button"
-              className="home-chat__envoyer"
-              onClick={() => void envoyer()}
-              disabled={envoiEnCours || incomplet}
-              data-testid="home-inter-nouveau-confirmer"
-            >
-              {envoiEnCours ? <Spinner /> : `Confirmer l’envoi à ${contact.nom}`}
-            </button>
-            <button
-              type="button"
-              className="home-chat__annuler"
-              onClick={() => setConfirme(false)}
-              disabled={envoiEnCours}
-            >
-              Annuler
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="home-chat__envoyer"
-            onClick={() => setConfirme(true)}
-            disabled={incomplet}
-            data-testid="home-inter-nouveau-envoyer"
-          >
-            Envoyer par Outlook
-          </button>
-        )}
+        <EnvoiEnDeuxTemps
+          nom={contact.nom}
+          confirme={confirme}
+          onConfirme={setConfirme}
+          envoiEnCours={envoiEnCours}
+          bloque={incomplet}
+          onEnvoyer={envoyer}
+          prefixeTest="home-inter-nouveau"
+        />
       </div>
       {erreur !== null ? (
         <p className="home-error" role="alert">
