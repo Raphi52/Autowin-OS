@@ -376,11 +376,21 @@ export function ChatView({
   }, [autoConvs])
   const autoArmePour = useCallback(
     (id: string | null | undefined): boolean =>
-      autoConvs.has('*') || (!!id && autoConvs.has(activeId ?? '')),
+      // `id`, PAS le fil affiche : cette fonction est appelee pour les fils d'ARRIERE-PLAN.
+      autoConvs.has('*') || (!!id && autoConvs.has(id)),
     [autoConvs]
   )
   /** Vrai quand le fil AFFICHE est arme — c'est ce que montre le bouton. */
   const autoActif = autoArmePour(activeId)
+  /**
+   * MODE AUTO ARME SUR UN FIL PAS ENCORE CREE. Sans cela le bouton ne faisait RIEN dans un
+   * nouveau fil : il n'y a pas encore d'identifiant a armer, donc le clic sortait en silence
+   * — « quand j'ouvre un nouveau fil je peux pas toggle le mode auto » (2026-09-07).
+   * L'intention est gardee ici, puis posee sur la conversation des sa creation.
+   */
+  const [autoNouveauFil, setAutoNouveauFil] = useState(false)
+  const autoNouveauFilRef = useRef(false)
+  autoNouveauFilRef.current = autoNouveauFil
   /** Desarme un fil precis (le joker `*` disparait : eteindre ici eteint le reglage herite). */
   const desarmerAuto = useCallback((id: string | null | undefined): void => {
     setAutoConvs((precedent) => {
@@ -3196,6 +3206,11 @@ export function ChatView({
    */
   function basculerModeAutoPour(cible: string | null): void {
     const activeId = cible
+    // FIL PAS ENCORE CREE : rien a armer, on garde l'intention pour la creation.
+    if (!activeId) {
+      setAutoNouveauFil((precedent) => !precedent)
+      return
+    }
     // ANCIEN REGLAGE GLOBAL (`*`, herite d'avant le retrait du bouton de la liste) : il n'a plus
     // de bouton a lui. L'eteindre ICI est donc la seule sortie possible — sinon il tournerait
     // sans interrupteur.
@@ -3591,6 +3606,13 @@ export function ChatView({
           setActiveId(c.id)
           composerDraftKeyRef.current = c.id
           composerDraftsRef.current.set(c.id, { input: '', attachments: [], error: null })
+        }
+        // L'intention prise AVANT la creation se pose sur le fil qui vient de naitre.
+        if (autoNouveauFilRef.current) {
+          const filNeuf = convId
+          setAutoConvs((precedent) => new Set(precedent).add(filNeuf))
+          autoNouveauFilRef.current = false
+          setAutoNouveauFil(false)
         }
       }
 
@@ -5678,9 +5700,15 @@ Cliquer pour choisir une autre branche.`}
                 {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
                 <button
                   type="button"
-                  className={`btn composer-auto${autoConvs.has(activeId ?? '') || autoConvs.has('*') ? ' actif' : ''}`}
+                  className={`btn composer-auto${
+                    (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
+                      ? ' actif'
+                      : ''
+                  }`}
                   data-testid="composer-auto-toggle"
-                  aria-pressed={autoConvs.has(activeId ?? '') || autoConvs.has('*')}
+                  aria-pressed={
+                    (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
+                  }
                   aria-label={
                     autoConvs.has(activeId ?? '')
                       ? 'Arrêter le mode auto de cette conversation'
