@@ -19,6 +19,15 @@ import { Spinner } from './Spinner'
  * restent interdits ici. Un travail qu'on ne peut pas lire ne se jette pas.
  */
 
+/**
+ * DELAI ENTRE DEUX TENTATIVES DE LECTURE DU RAPPORT, pendant la seule fenetre ou il manque encore.
+ *
+ * Calibre sur le cout MESURE de la passe de demarrage (11 720 ms) : plus court multiplierait les
+ * lectures pour rien, plus long laisserait le panneau afficher « pas encore balayees » alors que le
+ * rapport est deja pose. La relecture cesse des qu'un rapport arrive.
+ */
+export const INTERVALLE_ATTENTE_RAPPORT_MS = 3_000
+
 export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React.JSX.Element {
   const [travaux, setTravaux] = useState<TravailNonPublie[] | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -48,25 +57,37 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
   }, [])
 
   /*
-   * LE RAPPORT DU BALAYAGE, lu au meme moment que la liste. Il ne DECLENCHE aucune passe : il rend
-   * le dernier verdict deja calcule par le minuteur horaire. Ce verdict ne vivait que dans la
-   * console, c'est-a-dire nulle part pour qui utilise l'application.
+   * LE RAPPORT DU BALAYAGE. Il ne DECLENCHE aucune passe : il rend le dernier verdict deja calcule
+   * par le minuteur. Ce verdict ne vivait que dans la console, c'est-a-dire nulle part pour qui
+   * utilise l'application.
+   *
+   * POURQUOI ON RELIT, au lieu de lire une fois au montage. La passe du demarrage arrive EN DIFFERE :
+   * elle lance un `git cherry` par sauvegarde, soit 97 appels enchaines sur ce depot -- 11 720 ms
+   * mesures. Une lecture unique tombe donc AVANT le rapport, affiche « pas encore balayees », et
+   * reste bloquee la jusqu'a ce qu'on ferme et rouvre le panneau : le rapport existe, il est
+   * invisible. On relit tant qu'il manque, et on S'ARRETE des qu'il arrive -- ce n'est pas un
+   * rafraichissement periodique, c'est une attente qui se termine.
    */
   useEffect(() => {
+    if (rapport) return
     let vivant = true
-    void (async () => {
+    const lire = async (): Promise<void> => {
       try {
         const lu = await window.api.getRapportRetention?.()
-        if (vivant) setRapport(lu ?? null)
+        if (vivant && lu) setRapport(lu)
+        else if (vivant) setRapport(null)
       } catch {
         // Un rapport illisible ne doit pas masquer la liste des travaux : on reste silencieux.
         if (vivant) setRapport(null)
       }
-    })()
+    }
+    void lire()
+    const minuteur = setInterval(() => void lire(), INTERVALLE_ATTENTE_RAPPORT_MS)
     return () => {
       vivant = false
+      clearInterval(minuteur)
     }
-  }, [])
+  }, [rapport])
 
   const voir = async (agentId: string): Promise<void> => {
     if (ouvert === agentId) {
@@ -205,7 +226,7 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
           <b>Sauvegardes automatiques</b>
           {rapport === null ? (
             <p className="tnp-vide" data-testid="tnp-retention-jamais">
-              Pas encore balayées depuis le démarrage.
+              Balayage en cours… le premier examen prend une dizaine de secondes.
             </p>
           ) : (
             <>
