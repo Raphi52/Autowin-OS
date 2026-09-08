@@ -77,10 +77,26 @@ export function surveillerFenetreInjoignable(
     debut = undefined
   }
 
+  const surDisparition = (...args: unknown[]): void => {
+    const details = args[1] as { reason?: string; exitCode?: number } | undefined
+    const fin = maintenant()
+    journaliser({
+      ts: new Date(fin).toISOString(),
+      // Si la fenetre etait deja injoignable, on connait la duree vecue avant la mort ; sinon 0,
+      // parce qu'inventer une duree fausserait les statistiques.
+      blocageMs: debut === undefined ? 0 : Math.max(0, fin - debut),
+      operation: `${OPERATION_PROCESSUS_DISPARU}:${details?.reason ?? 'inconnu'}`,
+      cause: 'boucle-tenue'
+    })
+    debut = undefined
+  }
+
   fenetre.on('unresponsive', surInjoignable)
   fenetre.on('responsive', surRevenue)
+  fenetre.webContents?.on('render-process-gone', surDisparition)
   return () => {
     fenetre.off?.('unresponsive', surInjoignable)
     fenetre.off?.('responsive', surRevenue)
+    fenetre.webContents?.off?.('render-process-gone', surDisparition)
   }
 }
