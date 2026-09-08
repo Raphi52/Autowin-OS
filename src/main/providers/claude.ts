@@ -50,6 +50,7 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { abortFailure } from './abort-diagnostic'
+import { avancementDepuisCommande } from './arene-avancement'
 import {
   describeExitCode,
   describeProviderExit,
@@ -1365,10 +1366,18 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           }
         }
         const cibleLisible = resumerCommandeDeFond(cibleBattement)
+        /*
+         * UN BANC D'ARENE LANCE SES N BRAS DANS UNE SEULE COMMANDE (`lance.sh` : une sous-shell par
+         * bras, puis `wait`). Sans cette relecture, le battement repete « Bash en cours - 2 min »
+         * pendant tout le banc et l'utilisateur ne sait pas OU il en est (conv-355, 2026-09-08 :
+         * « ca fait 10 mins que le bloc reflexion est vide »). L'avancement existe deja sur disque.
+         */
+        const avancement = cibleBattement ? avancementDepuisCommande(cibleBattement) : null
+        const detail = [cibleLisible, avancement].filter(Boolean).join(' - ')
         queue.push({
           delta: '',
-          status: cibleLisible
-            ? `${outil} en cours - ${dureeLisible(elapsed)} - ${cibleLisible}`
+          status: detail
+            ? `${outil} en cours - ${dureeLisible(elapsed)} - ${detail}`
             : `${outil} en cours - ${dureeLisible(elapsed)}`,
           statusTarget: cibleLisible || undefined
         })

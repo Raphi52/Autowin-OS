@@ -50,20 +50,53 @@ if (convs.length === 0) {
   process.exit(2)
 }
 
+// DETERMINANT francais : ce qui ouvre un GROUPE NOMINAL, donc ce qui signale qu'on NOMME une
+// chose au lieu de commenter un resultat. Sert aux contre-epreuves `sauf` ci-dessous.
+const DETERMINANT = "(?:le|la|les|un|une|des|de|du|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|nos|votre|vos|leur|leurs)"
+
 // Marqueurs de REPRISE : l'utilisateur signale que le tour precedent n'a pas livre.
+// Chaque entree porte le motif `re` et, quand le meme mot a un DOUBLE EMPLOI en francais, une
+// contre-epreuve `sauf` : la forme dans laquelle le mot designe l'OBJET du travail et non un
+// reproche. Un mot-marqueur seul ne prouve rien — c'est son EMPLOI dans la phrase qui distingue
+// « c'est faux » (reproche) de « corrige le faux vert » (nom de la chose a corriger).
 const REWORK = [
-  /\btoujours pas\b/i, /\bca marche (pas|toujours pas)\b/i, /\bc'?est pas (ca|bon)\b/i,
+  { re: /\btoujours pas\b/i }, { re: /\bca marche (pas|toujours pas)\b/i }, { re: /\bc'?est pas (ca|bon)\b/i },
   // `non` ne compte QU'EN TETE de message (« non, … », « non ça marche pas »). L'ancien motif
   // `\bnon,? ` matchait le « non » ADJECTIF au milieu d'une phrase — « travaux non publiés »,
   // « fichier non suivi », « reste non commité » —, et le prompt automatique de /salvage porte
   // justement cette formule : 20 des 27 « reprises » du corpus etaient des faux positifs, qui
   // gonflaient aussi le score de gaspillage (pondere par le taux de reprise).
-  /^\s*non\b[\s,.!:]/i, /\brefais\b/i, /\bencore\b.*\bpareil\b/i, /\bmarche pas\b/i,
-  /\btu n'?as pas\b/i, /\bje t'?ai dit\b/i, /\bpourquoi tu\b/i, /\brien n'?a chang/i,
-  /\bregarde mieux\b/i, /\bfaux\b/i
+  { re: /^\s*non\b[\s,.!:]/i },
+  // « refais » suivi d'un GROUPE NOMINAL DETERMINE nomme un nouvel objet de travail — « refais le
+  // controle », « refais l'inventaire » : c'est une consigne, pas un reproche sur le tour d'avant.
+  // La vraie reprise est ANAPHORIQUE ou nue : « refais », « refais ça », « refais-le », « refais le,
+  // ça marche pas » (pronom, donc pas suivi d'un nom).
+  { re: /\brefais\b/i, sauf: new RegExp(`\\brefais\\b\\s+(?:${DETERMINANT}\\s+|[ld]['’])\\p{L}`, 'iu') },
+  { re: /\bencore\b.*\bpareil\b/i }, { re: /\bmarche pas\b/i },
+  { re: /\btu n'?as pas\b/i }, { re: /\bje t'?ai dit\b/i }, { re: /\bpourquoi tu\b/i },
+  { re: /\brien n'?a chang/i }, { re: /\bregarde mieux\b/i },
+  // « faux » precede d'un determinant est le NOM de la chose traitee — « le faux vert D2 », « le
+  // faux positif », « des faux negatifs ». Le reproche, lui, est PREDICATIF : « c'est faux »,
+  // « ton diagnostic est faux », « faux, … » — aucun determinant ne colle au mot.
+  { re: /\bfaux\b/i, sauf: new RegExp(`\\b${DETERMINANT}\\s+faux\\b`, 'i') }
 ]
 // Marqueurs de CADRAGE MANQUANT : la demande initiale est une solution ou un flou.
 const VAGUE = [/\bun truc\b/i, /\bameliore\b/i, /\boptimise\b/i, /\bfais mieux\b/i, /\bcomme on avait dit\b/i, /^\s*(go|ok|vas-?y|continue|oui)\s*$/i]
+
+/**
+ * Ce message porte-t-il ce marqueur EN REPROCHE ? Vrai des qu'UNE occurrence du motif tombe HORS
+ * de toute forme « objet du travail » (contre-epreuve `sauf`). Rend l'extrait declencheur, ou null.
+ * Lire la contre-epreuve sur le message entier ferait taire un reproche des qu'un objet est nomme
+ * ailleurs dans la meme phrase — c'est le faux NEGATIF releve au banc du 2026-09-08.
+ */
+const occurrenceEnReproche = (texte, marqueur) => {
+  const global = (r) => new RegExp(r.source, r.flags.includes('g') ? r.flags : r.flags + 'g')
+  const zones = marqueur.sauf ? [...texte.matchAll(global(marqueur.sauf))].map((m) => [m.index, m.index + m[0].length]) : []
+  for (const m of texte.matchAll(global(marqueur.re))) {
+    if (!zones.some(([d, f]) => m.index >= d && m.index < f)) return m[0].trim()
+  }
+  return null
+}
 
 /** Etiquettes ecrites par l'orchestrateur dans le journal d'activite. */
 const ORCH_KINDS = new Set(['exec', 'judge', 'gate'])
@@ -83,17 +116,29 @@ for (const c of convs) {
   // --- TOURS : chaque evenement d'activite est rattache au DERNIER message utilisateur qui le precede.
   const turns = users.map((m, i) => {
     // Le MARQUEUR qui a fait compter ce tour comme reprise est conserve : un compteur dont on ne
-    // peut pas verifier ce qu'il compte n'est pas auditable (13 formules FR en dur, faux positifs
+    // peut pas verifier ce qu'il compte n'est pas auditable (formules FR en dur, faux positifs
     // possibles). On garde donc l'expression declenchante ET l'extrait qu'elle a touche.
     const texte = String(m.content || '')
-    const declencheur = REWORK.find((r) => r.test(texte))
+    // BORNE : le PREMIER tour d'une conversation ne REPREND rien — rien ne le precede. Un marqueur
+    // qui y apparait designe forcement autre chose (l'objet de la demande initiale, cf. « Corrige
+    // le faux vert D2 » en ouverture). Le compter, c'est facturer une reprise a un tour qui ouvre.
+    let declencheur
+    let extrait = ''
+    if (i > 0) {
+      for (const marqueur of REWORK) {
+        const trouve = occurrenceEnReproche(texte, marqueur)
+        if (trouve !== null) { declencheur = marqueur; extrait = trouve; break }
+      }
+    }
     return {
       index: i + 1,
       ts: Number(m.ts) || 0,
       demande: texte.replace(/\s+/g, ' ').slice(0, 90),
       reprise: Boolean(declencheur),
-      marqueurReprise: declencheur ? String(declencheur) : '',
-      extraitReprise: declencheur ? String(texte.match(declencheur)?.[0] || '').trim() : '',
+      marqueurReprise: declencheur
+        ? String(declencheur.re) + (declencheur.sauf ? ` sauf ${String(declencheur.sauf)}` : '')
+        : '',
+      extraitReprise: extrait,
       coutUsd: 0,
       minutes: 0
     }
@@ -239,7 +284,7 @@ if (reprises.length === 0) {
     console.log(`\n_${reprises.length - REPRISES_AFFICHEES} autre(s) non affiche(s) — \`--json\` les porte toutes._`)
   }
   console.log(
-    "\n_Detection par 13 expressions francaises en dur : verifier chaque ligne avant d'en tirer un taux. Une ligne fausse ici gonfle le score de gaspillage de sa conversation._"
+    "\n_Detection par expressions francaises en dur, hors 1er tour et hors emplois ou le mot nomme l'objet du travail : verifier chaque ligne avant d'en tirer un taux. Une ligne fausse ici gonfle le score de gaspillage de sa conversation._"
   )
 }
 

@@ -114,3 +114,102 @@ describe('scout-rendement — compteur de reprises auditable', () => {
     expect(texte).toContain('| conv-1 | #3 |')
   })
 })
+
+/**
+ * Corpus des DEUX faux positifs mesures : un mot-marqueur qui nomme l'OBJET du travail, et un
+ * marqueur sur le PREMIER tour — celui-ci ne peut rien reprendre, rien ne le precede.
+ * Les tours 4 et 5 portent les MEMES mots employes en reproche : ils doivent rester comptes.
+ */
+function corpusFauxPositifs() {
+  const data = mkdtempSync(join(tmpdir(), 'rendement-fp-'))
+  mkdirSync(join(data, 'activity'), { recursive: true })
+  writeFileSync(
+    join(data, 'conversations.json'),
+    JSON.stringify([
+      {
+        id: 'conv-1',
+        title: 'test',
+        messages: [
+          // Tour 1 : marqueur NU (aucune contre-epreuve ne l'ecarte) — seule la borne du premier
+          // tour peut l'empecher de compter. Retirer la borne rend ce test rouge.
+          { role: 'user', content: 'Regarde mieux le rapport joint et dis-moi ce qui cloche', ts: 1000 },
+          { role: 'user', content: 'Corrige le faux vert D2 dans les palettes', ts: 2000 },
+          { role: 'user', content: 'Refais le controle : les runs sont-ils finis ?', ts: 3000 },
+          { role: 'user', content: 'c est faux, le compteur affiche 27', ts: 4000 },
+          { role: 'user', content: 'refais, ca ne donne rien', ts: 5000 }
+        ]
+      }
+    ])
+  )
+  writeFileSync(join(data, 'activity', 'conv-1.jsonl'), '')
+  return data
+}
+
+describe('scout-rendement — le marqueur seul ne prouve pas la reprise', () => {
+  const comptes = (r) => r.rows[0].tours_detail.filter((t) => t.reprise).map((t) => t.index)
+
+  it('ne compte JAMAIS le premier tour : rien ne le precede, il ne reprend rien', () => {
+    const r = rapport(corpusFauxPositifs())
+    expect(r.rows[0].tours_detail[0].reprise).toBe(false)
+    expect(comptes(r)).not.toContain(1)
+  })
+
+  it('ne compte pas un mot-marqueur qui nomme l objet du travail (« le faux vert », « Refais le controle »)', () => {
+    const r = rapport(corpusFauxPositifs())
+    expect(r.rows[0].tours_detail[1].reprise).toBe(false)
+    expect(r.rows[0].tours_detail[2].reprise).toBe(false)
+  })
+
+  it('garde les MEMES mots employes en reproche (« c est faux », « refais, » nu)', () => {
+    const r = rapport(corpusFauxPositifs())
+    expect(comptes(r)).toEqual([4, 5])
+    expect(r.summary.reprises).toBe(2)
+  })
+})
+
+/**
+ * Contre-epreuve lue PAR OCCURRENCE — defaut nomme par le juge du banc arena du 2026-09-08 :
+ * testee sur le message ENTIER, une seule mention de l'objet faisait taire un reproche present
+ * ailleurs dans la meme phrase, donc la correction des faux positifs creait des faux NEGATIFS.
+ */
+function corpusDoubleEmploi() {
+  const data = mkdtempSync(join(tmpdir(), 'rendement-occ-'))
+  mkdirSync(join(data, 'activity'), { recursive: true })
+  writeFileSync(
+    join(data, 'conversations.json'),
+    JSON.stringify([
+      {
+        id: 'conv-1',
+        title: 'test',
+        messages: [
+          { role: 'user', content: 'analyse la sonde de rendement', ts: 1000 },
+          { role: 'user', content: 'le faux positif est corrige mais ton total est faux', ts: 2000 },
+          { role: 'user', content: 'refais-le, et refais le tri aussi tant que tu y es', ts: 3000 },
+          { role: 'user', content: 'liste les faux departs de la semaine', ts: 4000 }
+        ]
+      }
+    ])
+  )
+  writeFileSync(join(data, 'activity', 'conv-1.jsonl'), '')
+  return data
+}
+
+describe('scout-rendement — la contre-epreuve ne vaut que pour l occurrence qu elle couvre', () => {
+  it('compte le reproche meme si le meme mot nomme un objet ailleurs dans le message', () => {
+    const r = rapport(corpusDoubleEmploi())
+    const tours = r.rows[0].tours_detail
+    expect(tours[1].reprise).toBe(true) // « ton total est faux » : predicatif, donc reproche
+    expect(tours[2].reprise).toBe(true) // « refais-le » : anaphorique, donc reproche
+  })
+
+  it('ecarte encore le mot employe SEULEMENT comme objet du travail', () => {
+    const r = rapport(corpusDoubleEmploi())
+    expect(r.rows[0].tours_detail[3].reprise).toBe(false) // « les faux departs »
+  })
+
+  it('rend le champ d audit avec les DEUX moities de la regle (motif + contre-epreuve)', () => {
+    const r = rapport(corpusDoubleEmploi())
+    expect(r.rows[0].tours_detail[1].marqueurReprise).toContain('sauf')
+    expect(r.rows[0].tours_detail[1].extraitReprise).toBe('faux')
+  })
+})
