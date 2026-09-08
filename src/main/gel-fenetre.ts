@@ -1,4 +1,10 @@
 import { journaliserGel } from './gel-main'
+import {
+  doitReanimer,
+  OPERATION_REANIMATION,
+  REGLAGES_REANIMATION_PAR_DEFAUT,
+  type ReglagesReanimation
+} from './gel-reanimation'
 import type { Gel } from '../shared/gel-detector'
 
 /**
@@ -24,6 +30,8 @@ export interface FenetreSurveillee {
   webContents?: {
     on(evenement: 'render-process-gone', ecouteur: (...args: unknown[]) => void): unknown
     off?(evenement: 'render-process-gone', ecouteur: (...args: unknown[]) => void): unknown
+    /** Recharge le contenu : tue le processus d'affichage bloque et en repart un neuf. */
+    reloadIgnoringCache?(): void
   }
 }
 
@@ -48,12 +56,37 @@ export const OPERATION_PROCESSUS_DISPARU = 'renderer:processus-disparu'
 export function surveillerFenetreInjoignable(
   fenetre: FenetreSurveillee,
   journaliser: (gel: Gel) => void = journaliserGel,
-  maintenant: () => number = Date.now
+  maintenant: () => number = Date.now,
+  reglages: ReglagesReanimation = REGLAGES_REANIMATION_PAR_DEFAUT,
+  planifier: (action: () => void, delaiMs: number) => unknown = setTimeout
 ): () => void {
   let debut: number | undefined
+  let derniereReanimation: number | undefined
+
+  // REANIMATION : le gel n'a plus besoin que l'utilisateur ferme l'application. Le processus
+  // principal, lui, repond encore : passe le seuil, il recharge la fenetre, ce qui repart sur un
+  // processus d'affichage neuf sans toucher aux runs en cours.
+  const tenterReanimation = (): void => {
+    if (debut === undefined) return
+    const instant = maintenant()
+    const verdict = doitReanimer(
+      { gelDepuisMs: instant - debut, derniereReanimation, maintenant: instant },
+      reglages
+    )
+    if (!verdict.reanimer) return
+    derniereReanimation = instant
+    journaliser({
+      ts: new Date(instant).toISOString(),
+      blocageMs: instant - debut,
+      operation: OPERATION_REANIMATION,
+      cause: 'boucle-tenue'
+    })
+    fenetre.webContents?.reloadIgnoringCache?.()
+  }
 
   const surInjoignable = (): void => {
     debut = maintenant()
+    planifier(tenterReanimation, reglages.seuilMs)
     journaliser({
       ts: new Date(debut).toISOString(),
       // La duree n'est pas encore connue : Electron signale l'ENTREE dans le gel. Mentir ici

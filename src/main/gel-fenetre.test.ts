@@ -127,3 +127,72 @@ describe('la fenetre principale est reellement surveillee', () => {
     expect(source).toContain('surveillerFenetreInjoignable(mainWindow)')
   })
 })
+
+describe('reanimation automatique de la fenetre', () => {
+  it('recharge la fenetre quand le gel depasse le seuil, et le journalise', () => {
+    const gels: Array<{ operation: string; blocageMs: number }> = []
+    let injoignable: (() => void) | undefined
+    let recharges = 0
+    let planifiee: (() => void) | undefined
+    const fenetre = {
+      on(evenement: string, ecouteur: () => void) {
+        if (evenement === 'unresponsive') injoignable = ecouteur
+      },
+      webContents: {
+        on() {},
+        reloadIgnoringCache() {
+          recharges += 1
+        }
+      }
+    }
+    let horloge = 1_000
+    surveillerFenetreInjoignable(
+      fenetre as never,
+      (gel) => gels.push({ operation: gel.operation, blocageMs: gel.blocageMs }),
+      () => horloge,
+      { seuilMs: 20_000, delaiEntreDeuxMs: 120_000 },
+      (action) => {
+        planifiee = action
+      }
+    )
+    injoignable?.()
+    horloge = 26_000
+    planifiee?.()
+
+    expect(recharges).toBe(1)
+    expect(gels.map((gel) => gel.operation)).toContain('renderer:fenetre-reanimee')
+    expect(gels.at(-1)?.blocageMs).toBe(25_000)
+  })
+
+  it('ne recharge pas une lenteur passagere', () => {
+    let injoignable: (() => void) | undefined
+    let recharges = 0
+    let planifiee: (() => void) | undefined
+    const fenetre = {
+      on(evenement: string, ecouteur: () => void) {
+        if (evenement === 'unresponsive') injoignable = ecouteur
+      },
+      webContents: {
+        on() {},
+        reloadIgnoringCache() {
+          recharges += 1
+        }
+      }
+    }
+    let horloge = 1_000
+    surveillerFenetreInjoignable(
+      fenetre as never,
+      () => {},
+      () => horloge,
+      { seuilMs: 20_000, delaiEntreDeuxMs: 120_000 },
+      (action) => {
+        planifiee = action
+      }
+    )
+    injoignable?.()
+    horloge = 4_000
+    planifiee?.()
+
+    expect(recharges).toBe(0)
+  })
+})
