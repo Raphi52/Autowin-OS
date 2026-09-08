@@ -14,6 +14,7 @@
  */
 import { signalerInterfaceVisible } from './startup-gate'
 import { cloreDemarrage, pendantOperation } from './gel-main'
+import { surveillerFenetreInjoignable } from './gel-fenetre'
 import { app, shell, BrowserWindow, Menu, Tray } from 'electron'
 import { join } from 'path'
 import { writeFileSync } from 'node:fs'
@@ -290,6 +291,13 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     mainWindow.on('maximize', forceRelayout)
     mainWindow.on('unmaximize', forceRelayout)
     relayoutMainWindow = forceRelayout
+
+    /*
+     * LE GEL DE LA FENETRE, vu de l'EXTERIEUR. Le battement de `gel-main` ne surveille que le
+     * process principal, et l'interface ne signale ses taches longues qu'une fois terminees : un
+     * freeze qui force a tuer l'application ne laissait donc aucune trace. Electron, lui, l'annonce.
+     */
+    surveillerFenetreInjoignable(mainWindow)
 
     mainWindow.on('ready-to-show', () => {
       /*
