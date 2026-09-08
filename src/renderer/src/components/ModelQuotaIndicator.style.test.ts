@@ -45,13 +45,13 @@ describe('barre de quota cliquable', () => {
    * plafonnee a `100% - 22px`, donc un bout de barre verte depassait a sa droite. Le retrait est
    * desormais PROPORTIONNEL au restant : nul a 0 %, egal a la largeur de la pastille a 100 %.
    */
-  it('colle la pastille au bout de la barre quand le restant vaut 100 %', () => {
+  it('centre la pastille sur la fin du remplissage sans deborder a 100 %', () => {
     expect(component).toContain("'--quota-ratio': `${(remaining ?? 0) / 100}`")
     expect(styles).toMatch(
-      /\.model-quota-bar-value\s*{[^}]*left:\s*var\(--quota-fill, 0%\);/s
+      /\.model-quota-bar-value\s*{[^}]*left:\s*min\(var\(--quota-fill, 0%\), calc\(100% - 11px\)\);/s
     )
     expect(styles).toMatch(
-      /\.model-quota-bar-value\s*{[^}]*--quota-retrait:\s*calc\(20px \* var\(--quota-ratio, 0\)\);/s
+      /\.model-quota-bar-value\s*{[^}]*--quota-retrait:\s*11px;/s
     )
     expect(styles).toMatch(
       /\.model-quota-bar-value\s*{[^}]*transform:\s*translate\(calc\(-1 \* var\(--quota-retrait, 0px\)\), -50%\);/s

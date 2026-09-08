@@ -90,9 +90,63 @@ describe('porteeDUneEdition — ce qu’une édition oblige à rejouer', () => {
   })
 
   it('laisse le non-code hors portée, comme avant', async () => {
-    await expect(porteeDUneEdition('README.md', jamais)).resolves.toBeUndefined()
     await expect(porteeDUneEdition('package.json', jamais)).resolves.toBeUndefined()
     await expect(porteeDUneEdition('', jamais)).resolves.toBeUndefined()
+  })
+
+  /*
+   * LE MEME ANGLE MORT, ETENDU AUX TEXTES le 2026-09-08. Un `.md` n'est dans AUCUN graphe d'imports,
+   * donc il n'avait aucune portee : `npm test` entier (376,9 s, rouge par intermittence sur
+   * `git-lourd`) pour une correction de procedure. Les `.md` de ce depot sont pourtant juges par des
+   * tests qui les LISENT — exactement le cas du CSS, sans meme la moitie « imports ».
+   *
+   * D'ou la garde qui differe de celle du style : un style seul reste une portee valide (le composant
+   * qui l'importe le rejoue), un texte seul N'EN EST PAS UNE. Zero citation = zero test juge ce
+   * fichier = un vert qui n'a rien mesure.
+   */
+  it('ajoute à un texte les tests qui le CITENT, en cherchant son extension', async () => {
+    const demandes: string[] = []
+    const portee = await porteeDUneEdition('skills/arena/SKILL.md', async (motif) => {
+      demandes.push(motif)
+      return ['skills/arena/SKILL.test.ts', 'src/main/skills-textes.test.ts']
+    })
+    expect(portee).toEqual([
+      'skills/arena/SKILL.md',
+      'skills/arena/SKILL.test.ts',
+      'src/main/skills-textes.test.ts'
+    ])
+    expect(demandes).toEqual(['.md'])
+  })
+
+  it('ne dérive AUCUNE portée quand personne ne cite le texte édité', async () => {
+    await expect(porteeDUneEdition('README.md', async () => [])).resolves.toBeUndefined()
+    // Le fichier édité seul ne se compte pas comme son propre juge.
+    await expect(porteeDUneEdition('README.md', async () => ['README.md'])).resolves.toBeUndefined()
+  })
+
+  it('traite `.MD` comme `.md`, et cherche le motif en minuscules', async () => {
+    const demandes: string[] = []
+    const portee = await porteeDUneEdition('docs/NOTE.MD', async (motif) => {
+      demandes.push(motif)
+      return ['docs.test.ts']
+    })
+    expect(portee).toEqual(['docs/NOTE.MD', 'docs.test.ts'])
+    expect(demandes).toEqual(['.md'])
+  })
+
+  /*
+   * Les `.md` de `.autowin-data/` sont ECRITS par le produit (runs, bancs, journaux), pas juges par
+   * lui. Les cibler rendrait la cible vide deja attrapee avec `vitest related node_modules/ --run`.
+   */
+  it('ne dérive jamais un texte de DONNÉES d’exécution', async () => {
+    await expect(
+      porteeDUneEdition('.autowin-data/autowin-os/RUN.md', jamais)
+    ).resolves.toBeUndefined()
+    await expect(porteeDUneEdition('node_modules/pkg/README.md', jamais)).resolves.toBeUndefined()
+  })
+
+  it('ne dérive AUCUNE portée pour un texte quand la recherche ne peut pas conclure', async () => {
+    await expect(porteeDUneEdition('README.md', async () => undefined)).resolves.toBeUndefined()
   })
 })
 
