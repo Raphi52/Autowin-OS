@@ -5,6 +5,7 @@ import { brainSubjectOf } from './graph-brain-categories'
 import { doitResynchroniser, signatureCamera } from './graph-etiquettes-cadence'
 import { mesurerBlocGraphe } from './graph-perf'
 import { tailleSuivante } from './graph-taille-observee'
+import { exposerSondeGraphe } from './graph-sonde'
 import { degre as degreDuNoeud, deuxiemeSaut } from './graph-neighborhood'
 import {
   layoutTree,
