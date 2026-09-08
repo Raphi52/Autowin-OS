@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { loadAzureDevOpsCliToken } from './azure-cli-token'
+import {
+  AZURE_CLI_ABSENT,
+  AZURE_CLI_DECONNECTE,
+  loadAzureDevOpsCliToken
+} from './azure-cli-token'
 
 describe('credential Azure DevOps via Azure CLI', () => {
   it('demande le resource id Azure DevOps et ne retourne que le token', async () => {
