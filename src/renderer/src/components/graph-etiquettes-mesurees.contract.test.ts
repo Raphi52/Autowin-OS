@@ -48,11 +48,44 @@ describe('la boucle d etiquettes ne travaille que si la pose a change', () => {
   const corps = boucle.slice(0, boucle.indexOf('frame = requestAnimationFrame(followCamera)'))
 
   it('le rappel par image est garde par la signature de pose', () => {
-    expect(corps).toMatch(/doitResynchroniser\(/u)
-    expect(corps).toMatch(/signatureCamera\(/u)
+    // La garde a ete FACTORISEE (2026-09-08) : la boucle par image et la simulation partagent
+    // desormais le meme chemin garde. Le contrat porte donc sur l'appel a cette garde, pas sur
+    // la presence des primitives dans le corps de la boucle.
+    expect(corps).toMatch(/synchroniserSiPoseChange\(\)/u)
+    const garde = source.slice(source.indexOf('const synchroniserSiPoseChange'))
+    expect(garde.slice(0, garde.indexOf('}, [syncThemeClusterLabels])'))).toMatch(
+      /doitResynchroniser\(/u
+    )
   })
 
   it('la mesure des etiquettes est conservee au lieu d etre relue a chaque image', () => {
     expect(source).toMatch(/taillesEtiquettesRef\.current\.get\(/u)
+  })
+})
+
+/**
+ * LA SIMULATION AUSSI (2026-09-08, conv-353) — la boucle par image etait gardee, mais le moteur de
+ * forces rappelait la synchro A NU a chaque tick (`onEngineTick={syncThemeClusterLabels}`). Une
+ * synchro a nu lit la geometrie de toute la page puis reecrit sur le conteneur du canvas, ce qui
+ * peut renotifier l'observateur de taille et relancer des ticks : boucle qui se nourrit d'elle-meme.
+ * Mesure : avec ce rappel debranche, la vue a tenu 3 ouvertures sur 3 (952 noeuds, 89 a 97 images
+ * en 3 s) la ou une ouverture precedente avait tue la fenetre.
+ */
+describe('la simulation du graphe passe par la meme garde de cadence', () => {
+  const source = readFileSync(join(__dirname, 'GraphView.tsx'), 'utf8')
+
+  it('onEngineTick n appelle plus la synchro a nu', () => {
+    expect(source).not.toMatch(/onEngineTick=\{syncThemeClusterLabels\}/u)
+  })
+
+  it('onEngineTick passe par la garde de pose partagee', () => {
+    expect(source).toMatch(/onEngineTick=\{synchroniserSiPoseChange\}/u)
+  })
+
+  it('la garde partagee existe et applique la signature de pose', () => {
+    const garde = source.slice(source.indexOf('const synchroniserSiPoseChange'))
+    const corps = garde.slice(0, garde.indexOf('}, [syncThemeClusterLabels])'))
+    expect(corps).toMatch(/doitResynchroniser\(/u)
+    expect(corps).toMatch(/signatureCamera\(/u)
   })
 })

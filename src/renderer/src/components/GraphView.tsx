@@ -1176,6 +1176,35 @@ export function GraphView({
     }
   }, [renderedGraph.nodes, showThemeClusterLabels, themeSummaries])
 
+  /*
+   * LA MEME GARDE POUR TOUS LES DECLENCHEURS.
+   *
+   * Mesure du 2026-09-08 (conv-353) : la boucle par image etait bien gardee par la signature de
+   * pose, mais la SIMULATION du graphe rappelait `syncThemeClusterLabels` A NU, a chaque tick
+   * (`onEngineTick`). Une synchro a nu lit la geometrie de TOUTE la page puis reecrit sur le
+   * conteneur du canvas : l'ecriture peut renotifier l'observateur de taille, qui redimensionne,
+   * ce qui relance des ticks — boucle qui se nourrit d'elle-meme, fenetre morte sans fin.
+   *
+   * Un seul chemin de synchro, donc, garde par la meme signature : sans pose nouvelle, rien n'est
+   * lu ni ecrit, quel que soit le declencheur.
+   */
+  const synchroniserSiPoseChange = useCallback((): void => {
+    const couche = themeLabelsRef.current
+    const graphApi = graphRef.current
+    const camera = graphApi
+      ? (graphApi as unknown as { cameraPosition(): { x: number; y: number; z: number } }).cameraPosition()
+      : null
+    const signature = signatureCamera(
+      camera,
+      couche?.clientWidth ?? 0,
+      couche?.clientHeight ?? 0,
+      couche?.querySelectorAll('[data-theme-id]').length ?? 0
+    )
+    if (!doitResynchroniser(signature, posePlaceeRef.current)) return
+    posePlaceeRef.current = signature
+    mesurerBlocGraphe('graph:etiquettes', syncThemeClusterLabels)
+  }, [syncThemeClusterLabels])
+
   useEffect(() => {
     /*
      * LE CACHE DE TAILLES EST VIDE ICI, et c'est le seul endroit correct : cet effet se rejoue
@@ -1213,23 +1242,7 @@ export function GraphView({
        * donc rien a lire ni a ecrire. On compare une signature de pose plutot que de refaire le
        * travail pour aboutir au meme placement.
        */
-      const couche = themeLabelsRef.current
-      const graphApi = graphRef.current
-      const camera = graphApi
-        ? (
-            graphApi as unknown as { cameraPosition(): { x: number; y: number; z: number } }
-          ).cameraPosition()
-        : null
-      const signature = signatureCamera(
-        camera,
-        couche?.clientWidth ?? 0,
-        couche?.clientHeight ?? 0,
-        couche?.querySelectorAll('[data-theme-id]').length ?? 0
-      )
-      if (doitResynchroniser(signature, posePlaceeRef.current)) {
-        posePlaceeRef.current = signature
-        mesurerBlocGraphe('graph:etiquettes', syncThemeClusterLabels)
-      }
+      synchroniserSiPoseChange()
       frame = requestAnimationFrame(followCamera)
     }
     frame = requestAnimationFrame(followCamera)
@@ -2086,8 +2099,8 @@ export function GraphView({
             linkWidth={(value) => settings.linkWidth * (linkIsHighlighted(value) ? 1.8 : 1)}
             linkDirectionalArrowLength={settings.arrows ? 3.5 : 0}
             linkDirectionalArrowColor={() => graphLinkArrowColor(visualMode)}
-            onEngineTick={syncThemeClusterLabels}
-            onEngineStop={syncThemeClusterLabels}
+            onEngineTick={synchroniserSiPoseChange}
+            onEngineStop={synchroniserSiPoseChange}
             onBackgroundClick={surClicDeFond}
             onNodeHover={(value) => {
               const nextNode = value ? (value as GraphNode) : null
