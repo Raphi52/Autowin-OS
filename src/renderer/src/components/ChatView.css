@@ -4233,15 +4233,38 @@ button.chat-project-dot:disabled {
   height: 38px;
   min-height: 38px;
   margin-right: 8px;
-  border: 1px solid rgba(255, 120, 120, 0.55);
-  background: rgba(180, 40, 40, 0.18);
-  color: #ff9b9b;
   font-size: 15px;
 }
+/* MEME APPARENCE QUE LE BOUTON D'ENVOI (demande utilisateur 2026-09-08) : icone blanche sur
+   disque plein, degrade haut-bas pour le relief, enfoncement au clic. Seule la teinte change
+   (rouge d'arret au lieu de l'accent) — la forme et la mecanique sont copiees d'`.composer-send`. */
+.composer-input-row > .composer-stop:not(:disabled),
+.cosmic-outline .composer-input-row > .composer-stop:not(:disabled) {
+  border: 1px solid color-mix(in srgb, #d64545 65%, #ffffff 18%);
+  background: linear-gradient(180deg, color-mix(in srgb, #d64545 86%, #ffffff 14%), #d64545);
+  color: #ffffff;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 90ms ease;
+}
 .composer-input-row > .composer-stop:hover:not(:disabled) {
-  border-color: #ff9b9b;
-  background: rgba(180, 40, 40, 0.32);
-  color: #fff;
+  border-color: color-mix(in srgb, #d64545 40%, #ffffff 60%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #d64545 72%, #ffffff 28%),
+    color-mix(in srgb, #d64545 94%, #ffffff 6%)
+  );
+}
+.composer-input-row > .composer-stop:active:not(:disabled) {
+  transform: scale(0.94);
+}
+/* ETEINT — arret deja demande : meme extinction que l'envoi desactive. */
+.composer-input-row > .composer-stop:disabled {
+  border: 1px solid rgba(var(--voile-rgb), 0.16);
+  background: rgba(var(--voile-rgb), 0.045);
+  color: rgba(221, 227, 238, 0.42);
+  opacity: 1;
 }
 .composer-input-row > .attachment-button .attachment-icon,
 .cosmic-outline .composer-input-row > .attachment-button .attachment-icon {
