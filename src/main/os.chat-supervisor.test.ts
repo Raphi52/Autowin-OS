@@ -93,6 +93,29 @@ describe('AutowinOS.chat — enveloppe commune', () => {
     expect(supervisor.lastSnapshot()).toMatchObject({ startedCalls: 1, completedCalls: 1 })
   })
 
+  it("ne retombe pas sur le plafond d'appels du regime trivial (10 appels)", async () => {
+    /*
+     * Mesure du 2026-09-08 : trois tours morts sur « Budget d'appels provider atteint : 10 appels »
+     * alors que le reglage en autorise 50. Le 10 venait du PREREGLAGE du regime `trivial`, applique
+     * au tour de chat par `compileExecutionQuote`. Sans cap pose par l'utilisateur, le plafond du
+     * tour doit venir du REGLAGE, donc rester franchement au-dessus de ce 10.
+     */
+    const supervisor = new ExecutionSupervisor()
+    const os = Object.create(AutowinOS.prototype) as AutowinOS
+    Object.defineProperty(os, 'executionSupervisor', { value: supervisor })
+    const previousCap = process.env.AUTOWIN_CHAT_CALL_CAP
+    delete process.env.AUTOWIN_CHAT_CALL_CAP
+    let plafondVu = 0
+    try {
+      await os.runChatTurn('bonjour', undefined, async () => {
+        plafondVu = supervisor.currentQuote()?.limits.maxProviderCalls ?? 0
+      })
+    } finally {
+      if (previousCap !== undefined) process.env.AUTOWIN_CHAT_CALL_CAP = previousCap
+    }
+    expect(plafondVu).toBeGreaterThan(10)
+  })
+
   it("republie l'usage d'un provider de chat qui se regle apres le retour du tour", async () => {
     const supervisor = new ExecutionSupervisor()
     const os = Object.create(AutowinOS.prototype) as AutowinOS
