@@ -246,7 +246,15 @@ export function depuisDerniereCompaction<T extends MessageBorne>(history: readon
     const resume = history[index] as T
     if (demande.role !== 'user' || demande.content.trim() !== COMPACT_REQUEST) continue
     if (resume.role !== 'assistant') continue
-    return [...history.slice(index)]
+    /*
+     LA DEMANDE EST GARDEE AVEC SON RESUME — mesure du 2026-09-08 (conv-342).
+     Elle ne coutait presque rien (367 caracteres) et elle est la MARQUE qui prouve qu une
+     compaction a eu lieu. La retirer effacait cette marque : `compactionsAbouties`, applique en aval
+     de cette coupe (`agent-pilot`, cle de session), comptait alors zero — et la session du
+     fournisseur n etait jamais perimee. La compaction n allegeait donc toujours rien.
+     Elle donne aussi son sens au resume : « on m a demande un resume, le voici ».
+    */
+    return [...history.slice(index - 1)]
   }
   return [...history]
 }

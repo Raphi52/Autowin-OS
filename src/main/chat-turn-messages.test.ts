@@ -676,12 +676,17 @@ describe('compaction — le fil renvoye repart du resume', () => {
     { role: 'user' as const, content: 'et maintenant ?' }
   ]
 
-  it('coupe tout ce qui precede le resume de compaction', () => {
+  it('coupe tout ce qui precede la compaction, en GARDANT sa demande', () => {
+    // La demande reste : elle ne coute presque rien, elle donne son sens au resume, et elle est la
+    // MARQUE que `compactionsAbouties` cherche en aval pour perimer la session (conv-342).
     const retenus = depuisDerniereCompaction(fil)
     expect(retenus.map((m) => m.content)).toEqual([
+      compact,
       'RESUME DENSE du fil',
       'et maintenant ?'
     ])
+    // Et la marque SURVIT a la coupe : sans ca, la session n est jamais perimee.
+    expect(compactionsAbouties(retenus)).toBe(1)
   })
 
   it('ne coupe rien tant que le resume n a pas ete produit', () => {
@@ -721,6 +726,7 @@ describe('compaction — le fil renvoye repart du resume', () => {
       { role: 'user' as const, content: 'suite' }
     ]
     expect(depuisDerniereCompaction(deux).map((m) => m.content)).toEqual([
+      compact,
       'SECOND RESUME',
       'suite'
     ])
