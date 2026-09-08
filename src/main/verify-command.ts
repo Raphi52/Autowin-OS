@@ -329,11 +329,62 @@ export const VERIFY_STYLE_ANGLE_MORT =
   'portée = les tests qui importent la feuille éditée, PLUS ceux qui nomment ce type de fichier (ils la lisent sans l’importer) ; un test qui ne l’atteint qu’en assemblant un chemin à l’exécution, sans jamais écrire l’extension, n’est pas rejoué'
 
 /**
+ * LES TEXTES DU DEPOT — juges par des tests qui les LISENT, et JAMAIS importes.
+ *
+ * Meme angle mort que les `.css`, en pire : un `.md` n'a aucune place dans le graphe d'imports —
+ * personne n'ecrit `import './SKILL.md'`. Les procedures et les docs de ce depot sont pourtant
+ * JUGEES par des tests dedies, qui les ouvrent en lecture. Mesure du 2026-09-08, dans ce depot :
+ * l'edition d'un `.md` retombait sur la SUITE ENTIERE, `npm test` = 376,9 s, ROUGE par
+ * intermittence sur le groupe `git-lourd` — donc un refus de publier sur une correction de texte.
+ *
+ * La recherche porte sur l'EXTENSION, pas sur le nom : un test qui balaie tous les `SKILL.md` d'un
+ * coup ne cite aucun fichier precis, et il juge pourtant celui qu'on vient d'editer.
+ */
+const EXTENSIONS_DE_TEXTE = /[.]md$/i
+
+/**
+ * LES DONNEES D'EXECUTION NE SONT LE SUJET D'AUCUN TEST.
+ *
+ * `.autowin-data/` porte les runs, les bancs, les journaux — des `.md` ECRITS par le produit, pas
+ * juges par lui. Les router vers une portee fabriquerait le vert vide deja attrape le 2026-08-25
+ * avec `vitest related node_modules/ --run` : une cible qui ne prouve rien.
+ */
+const TEXTE_HORS_SUJET = /(?:^|\/)(?:[.]autowin-data|node_modules)\//
+
+export function estUnTexteDerivable(chemin: string): boolean {
+  const normalise = (chemin ?? '').split(ANTISLASH).join('/')
+  return EXTENSIONS_DE_TEXTE.test(normalise) && !TEXTE_HORS_SUJET.test(normalise)
+}
+
+export const VERIFY_TEXTE_ANGLE_MORT =
+  'portée = les tests qui nomment ce type de fichier (ils le lisent, aucun ne l’importe — `vitest related` sur un texte ne collecte RIEN, mesuré dans edit-file-portee.test.ts) ; un test qui n’atteint ce texte qu’en assemblant un chemin à l’exécution, sans jamais écrire l’extension, n’est pas rejoué'
+
+/**
+ * La famille d'un chemin, quand elle se juge PAR CITATION plutot que par le graphe d'imports.
+ *
+ * `motif` est ce qu'on va chercher dans les tests. `exigeUnCitant` dit si le fichier edite, SEUL,
+ * constitue une portee acceptable : un style oui (le graphe d'imports le rejoue via le composant
+ * qui l'importe), un texte NON — un `.md` seul dans la portee serait un vert qui n'a rien mesure.
+ */
+function familleCitee(normalise: string): { motif: string; exigeUnCitant: boolean } | undefined {
+  const style = EXTENSIONS_DE_STYLE.exec(normalise)
+  if (style) return { motif: style[0], exigeUnCitant: false }
+  const texte = EXTENSIONS_DE_TEXTE.exec(normalise)
+  // `.MD` est un `.md` : la casse vient du clavier, jamais de la nature du fichier. Le motif
+  // cherche est donc normalise en minuscules, sinon la recherche passe a cote des citations.
+  if (texte && !TEXTE_HORS_SUJET.test(normalise)) {
+    return { motif: texte[0].toLowerCase(), exigeUnCitant: true }
+  }
+  return undefined
+}
+
+/**
  * LA PORTEE D'UNE EDITION — ce que CE fichier-la oblige a rejouer.
  *
- * Deux regimes, parce que les deux familles ne se testent pas de la meme facon :
+ * Trois regimes, parce que ces familles ne se testent pas de la meme facon :
  *   - du CODE  -> le graphe d'imports suffit, regle inchangee (`porteeDerivableDesChangements`) ;
- *   - un STYLE -> le graphe d'imports PLUS les fichiers de test qui NOMMENT cette extension.
+ *   - un STYLE -> le graphe d'imports PLUS les fichiers de test qui NOMMENT cette extension ;
+ *   - un TEXTE -> RIEN QUE les fichiers de test qui le citent, et il en faut au moins un.
  *
  * La recherche porte sur l'EXTENSION, pas sur le nom du fichier : `spinner-partout.test.ts` balaie
  * tout `src/renderer` sans jamais citer une feuille precise, et il juge pourtant ce qu'on edite.
@@ -350,15 +401,18 @@ export async function porteeDUneEdition(
 ): Promise<readonly string[] | undefined> {
   const normalise = (chemin ?? '').split(ANTISLASH).join('/')
   if (!normalise.trim()) return undefined
-  const style = EXTENSIONS_DE_STYLE.exec(normalise)
-  if (!style) return porteeDerivableDesChangements([normalise])
-  const cites = await testsQuiCitent(style[0])
+  const famille = familleCitee(normalise)
+  if (!famille) return porteeDerivableDesChangements([normalise])
+  const cites = await testsQuiCitent(famille.motif)
   if (!cites) return undefined
   const portee: string[] = [normalise]
   for (const brut of cites) {
     const test = brut.split(ANTISLASH).join('/')
     if (test.trim() && !portee.includes(test)) portee.push(test)
   }
+  // Personne ne cite ce texte : il n'est juge par AUCUN test. Le cibler seul rendrait un vert qui
+  // n'a rien mesure — la suite entiere reprend la main, lente mais honnete.
+  if (famille.exigeUnCitant && portee.length === 1) return undefined
   return portee
 }
 

@@ -51,7 +51,9 @@ import {
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
   VERIFY_STYLE_ANGLE_MORT,
+  VERIFY_TEXTE_ANGLE_MORT,
   estUneFeuilleDeStyle,
+  estUnTexteDerivable,
   porteeDUneEdition,
   porteeDerivableDesChangements,
   scriptVitestUnique,
@@ -3769,7 +3771,11 @@ export class AppCommandBus {
               ? 'suite complète'
               : typeof edite === 'string' && estUneFeuilleDeStyle(edite)
                 ? VERIFY_STYLE_ANGLE_MORT
-                : VERIFY_RELATED_ANGLE_MORT,
+                : // Un TEXTE n'est dans aucun graphe d'imports : annoncer l'angle mort du
+                  // `related` promettrait une couverture qui n'existe pas pour un `.md`.
+                  typeof edite === 'string' && estUnTexteDerivable(edite)
+                  ? VERIFY_TEXTE_ANGLE_MORT
+                  : VERIFY_RELATED_ANGLE_MORT,
             ...(testsJoues === undefined ? {} : { testsJoues }),
             ...(noteDifferentielle ? { differentiel: noteDifferentielle } : {})
           } as Awaited<T>

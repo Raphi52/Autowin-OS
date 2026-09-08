@@ -4529,3 +4529,15 @@ button.chat-project-dot:disabled {
   stroke: #ffffff;
   color: #ffffff;
 }
+
+/* CENTRAGE OPTIQUE DES DEUX GLYPHES (demande du 2026-09-08). Les deux traces sont
+   geometriquement centres mais paraissent decales : le trombone d'un pixel trop bas,
+   le micro d'un pixel trop a droite. On ne bouge que le DESSIN, pas la pastille. */
+.composer-input-row > .attachment-button .attachment-icon,
+.cosmic-outline .composer-input-row > .attachment-button .attachment-icon {
+  transform: translateY(-0.5px);
+}
+.composer-input-row > .composer-dictee svg,
+.cosmic-outline .composer-input-row > .composer-dictee svg {
+  transform: translateX(-0.5px);
+}
