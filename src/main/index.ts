@@ -2879,6 +2879,9 @@ Le fil reprend ensuite normalement.`
   // (`runPrompt`, utilisee par les taches planifiees) mais n'etait branchee sur aucune commande
   // du chat : un agent qui creait un fil ne pouvait rien y lancer (conv-300 vide, 2026-09-05).
   bus.conversationExiste = (conversationId) => scheduledChatRuntime.hasConversation(conversationId)
+  // MEME autorite que la sonde `os:pilotChat:active` du renderer : l'agent du chat doit pouvoir
+  // repondre « est-ce que ca tourne encore ? » sans deviner en lisant des journaux de fin de tour.
+  bus.tourDeChatActif = (conversationId) => Boolean(activeChatTurns.get(conversationId))
   bus.lancerDansConversation = async (conversationId, prompt) => {
     const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt)
     return {
