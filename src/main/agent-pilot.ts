@@ -29,7 +29,8 @@ import {
   questionPoseeSansAvoirLu,
   statusEstUneLecture,
   RELANCE_QUESTION_SANS_LECTURE,
-  exigeUneConclusion
+  exigeUneConclusion,
+  compactionsAbouties
 } from './chat-turn-messages'
 import { invokedSkillId, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
@@ -1214,7 +1215,21 @@ export class AgentPilot {
      * messages assistant) : elle etait simplement reclamee depuis le mauvais dossier.
      */
     const workspaceDeSession = process.env[AUTOWIN_WORKSPACE_ENV] ?? ''
-    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}`
+    /**
+     * LA COMPACTION FAIT PARTIE DE L IDENTITE DE LA SESSION — mesure du 2026-09-08 (conv-342).
+     *
+     * « Compacter » ecrivait bien son resume, et le fil renvoye repartait de ce resume
+     * (`depuisDerniereCompaction`)... sauf que sur un provider qui REPREND sa session, Autowin
+     * n envoie que le dernier message : l historique vit chez le fournisseur, la coupe cote Autowin
+     * ne s applique donc a RIEN et la jauge ne bouge pas d un point. Le bouton promettait un
+     * allegement impossible.
+     *
+     * Compter les compactions ici PERIME la session a chaque nouvelle compaction, par le chemin deja
+     * ecrit pour un changement de compte ou de dossier : session oubliee, tour repart a blanc, et
+     * cette fois avec le fil coupe au resume. C est le seul geste qui allege reellement.
+     */
+    const compactions = compactionsAbouties(history)
+    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}:c${compactions}`
     // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
     // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.
     this.hydrateChatSessions()

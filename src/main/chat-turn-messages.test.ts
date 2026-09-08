@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { COMPACT_REQUEST } from '../shared/context-gauge'
 import {
   depuisDerniereCompaction,
+  compactionsAbouties,
   boundedContinuationHistory,
   boundedTurnHistory,
   buildTurnMessages,
@@ -688,6 +689,28 @@ describe('compaction — le fil renvoye repart du resume', () => {
     // le vide. On ne coupe qu'une fois le resume ecrit.
     const enCours = fil.slice(0, 3)
     expect(depuisDerniereCompaction(enCours)).toEqual(enCours)
+  })
+
+  it('compte les compactions ABOUTIES — la cle de session en depend', () => {
+    /*
+     Sur un provider qui reprend sa session, Autowin n envoie que le dernier message : couper le fil
+     ici n allege RIEN, tout l historique vit chez le fournisseur. Mesure le 2026-09-08 : la jauge
+     n a pas bouge d un point apres un « Compacter ». Ce compte entre dans la cle de session pour
+     qu une nouvelle compaction la PERIME et fasse repartir le tour a blanc.
+    */
+    expect(compactionsAbouties(fil)).toBe(1)
+    // Demande postee mais resume pas encore ecrit : rien n est abouti, la session ne doit PAS etre
+    // perimee — le tour qui doit resumer perdrait le fil a resumer.
+    expect(compactionsAbouties(fil.slice(0, 3))).toBe(0)
+    expect(compactionsAbouties([])).toBe(0)
+    expect(compactionsAbouties([...fil, { role: 'user' as const, content: compact }])).toBe(1)
+    expect(
+      compactionsAbouties([
+        ...fil,
+        { role: 'user' as const, content: compact },
+        { role: 'assistant' as const, content: 'SECOND RESUME' }
+      ])
+    ).toBe(2)
   })
 
   it('repart de la DERNIERE compaction quand il y en a eu plusieurs', () => {

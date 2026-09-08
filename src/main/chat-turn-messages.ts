@@ -210,6 +210,36 @@ function avecAvisDeCoupe<T extends MessageBorne>(retenus: T[], total: number): T
  * en cours doit voir tout le fil — sinon il resumerait le vide. Et on repart de la DERNIERE
  * compaction : un fil peut en porter plusieurs.
  */
+/**
+ * COMBIEN DE COMPACTIONS ABOUTIES porte ce fil.
+ *
+ * Sert a IDENTIFIER la session du fournisseur (`agent-pilot`, `sessionKey`). Sur un provider qui
+ * reprend sa session (Claude CLI), Autowin n envoie QUE le dernier message : tout l historique vit
+ * cote fournisseur, et couper le fil ici ne l allege donc de RIEN. Mesure le 2026-09-08 : un
+ * « Compacter » lance par l utilisateur n a pas fait bouger la jauge d un point.
+ *
+ * Compter les compactions dans la cle de session fait qu une nouvelle compaction PERIME la session
+ * — chemin deja ecrit pour un changement de compte ou de dossier : la session est oubliee et le
+ * tour repart a blanc, avec le fil coupe au resume. C est la seule chose qui allege reellement.
+ *
+ * ABOUTIE veut dire : la demande a RECU sa reponse. Une demande sans resume ne perime rien, sinon
+ * le tour qui doit ecrire le resume perdrait justement le fil a resumer.
+ */
+export function compactionsAbouties(
+  history: readonly { role: string; content: string }[]
+): number {
+  let total = 0
+  for (let index = 1; index < history.length; index += 1) {
+    const demande = history[index - 1]
+    const resume = history[index]
+    if (!demande || !resume) continue
+    if (demande.role !== 'user' || demande.content.trim() !== COMPACT_REQUEST) continue
+    if (resume.role !== 'assistant') continue
+    total += 1
+  }
+  return total
+}
+
 export function depuisDerniereCompaction<T extends MessageBorne>(history: readonly T[]): T[] {
   for (let index = history.length - 1; index >= 1; index -= 1) {
     const demande = history[index - 1] as T
