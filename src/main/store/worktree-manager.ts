@@ -1567,6 +1567,45 @@ export class WorktreeManager {
     return age > WorktreeManager.RETENTION_BRANCHE_MS ? 'supprimable-perime' : 'garder'
   }
 
+  /**
+   * LES REFS `refs/autowin/*` NE SONT PAS TOUTES DU TRAVAIL — c'est ce qui rend une purge
+   * uniforme dangereuse ici.
+   *
+   * Relevees le 2026-09-08 sur le depot reel : 207 refs, invisibles de `git branch`, donc absentes
+   * des 89 branches recensees et de toute politique. Elles se repartissent en TROIS natures que le
+   * code lui-meme distingue, et qui ne se purgent pas pareil :
+   *
+   *  - `trie/` (152) — une ANNOTATION, pas du travail : « elle annote, elle ne represente pas du
+   *    travail » (`refTravailTrie`). Elle porte le verdict TRIE d'un travail deja juge. La
+   *    supprimer ne libere rien et fait RESSORTIR ce travail dans le bandeau : on rejouerait un tri
+   *    deja fait a la main. Elle ne PERIME donc JAMAIS par l'age -- elle ne s'efface qu'avec la
+   *    chose qu'elle annote.
+   *  - `rescue/` (25) — une vraie SAUVEGARDE : le travail en cours d'une copie, committe pour
+   *    rester atteignable apres la disparition du bureau. Meme regle que les branches de secours.
+   *  - `integration/` (30) — l'ADRESSE d'un travail en attente d'integration
+   *    (`poserAttenteDIntegration`). C'est du travail joignable, pas une annotation : meme regle
+   *    que `rescue/`.
+   *
+   * FAIL-CLOSED sur l'inconnu : une famille non reconnue est traitee comme du travail, jamais comme
+   * une annotation jetable. Un futur namespace ne sera donc pas purge par surprise.
+   */
+  static decisionRetentionRefAutowin(entree: {
+    famille: string
+    apporteQuelqueChose: boolean
+    shaConsigne: boolean
+    ageMs?: number
+  }): 'garder' | 'supprimable-sans-perte' | 'supprimable-perime' {
+    if (entree.famille === 'trie') return 'garder'
+    return WorktreeManager.decisionRetentionBranche(entree)
+  }
+
+  /** La famille d'une ref `refs/autowin/<famille>/<id>`, ou `undefined` si la forme n'est pas celle-la. */
+  static familleDeRefAutowin(ref: string): string | undefined {
+    const m = /^refs\/autowin\/([^/]+)\//.exec(ref)
+    return m ? m[1] : undefined
+  }
+
+
 
   /**
    * CE BUREAU PRECIS PEUT-IL PORTER DU TRAVAIL ? — question a UN bureau, prix d'UN bureau.
