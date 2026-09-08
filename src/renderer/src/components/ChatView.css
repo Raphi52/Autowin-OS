@@ -4495,6 +4495,24 @@ button.chat-project-dot:disabled {
 }
 
 /* BLANC FRANC POUR LES TROIS PASTILLES DE GAUCHE (demande du 2026-09-08 : « leur icone et leur
+   cercle doivent etre blanc blanc »). Le trace et le cercle etaient tous deux voiles — trombone
+   a 74 % d'opacite de couleur, ∞ a `opacity: .72`, bordures a 16 %. On passe le trait ET le
+   contour en blanc PLEIN au repos ; les etats qui PORTENT une information gardent leur couleur
+   (∞ allume en dore, micro en ecoute en rouge, bouton desactive estompe). */
+.composer-input-row > .composer-auto:not(.actif):not(:disabled),
+.composer-input-row > .attachment-button:not(:disabled),
+.composer-input-row > .composer-dictee:not(.is-recording):not(:disabled) {
+  border-color: #ffffff;
+  color: #ffffff;
+  opacity: 1;
+}
+.composer-input-row > .attachment-button:not(:disabled) .attachment-icon,
+.composer-input-row > .composer-dictee:not(.is-recording):not(:disabled) svg {
+  stroke: #ffffff;
+  color: #ffffff;
+}
+
+/* BLANC FRANC POUR LES TROIS PASTILLES DE GAUCHE (demande du 2026-09-08 : « leur icone et leur
    cercle doivent etre blanc blanc »). Le tracé et le cercle étaient tous deux voilés — trombone
    à 74 % d'opacité de couleur, ∞ à `opacity: .72`, bordures à 16 %. On passe le trait ET le
    contour en blanc PLEIN au repos ; les états qui PORTENT une information gardent leur couleur
