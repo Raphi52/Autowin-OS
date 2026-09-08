@@ -1054,6 +1054,37 @@ export function GraphView({
       })
   }, [activeThemes, graphReload, selected, themeNodesReload])
 
+  // POIGNEE DE PILOTAGE (developpement seulement) : rend observables les noeuds rendus et leur
+  // position ecran, pour reproduire un clic 3D sans balayer le canvas point par point.
+  useEffect(() => {
+    return exposerSondeGraphe(
+      {
+        noeuds: () => renderedGraph.nodes.map((n) => ({ id: n.id, label: n.label })),
+        positionEcran: (id) => {
+          const graphApi = graphRef.current
+          const cible = renderedGraph.nodes.find((n) => n.id === id) as
+            | (GraphNode & { x?: number; y?: number; z?: number })
+            | undefined
+          if (!graphApi || !cible) return null
+          if (![cible.x, cible.y, cible.z].every((v) => typeof v === 'number' && Number.isFinite(v)))
+            return null
+          const ecran = graphApi.graph2ScreenCoords(cible.x as number, cible.y as number, cible.z as number)
+          if (!Number.isFinite(ecran.x) || !Number.isFinite(ecran.y)) return null
+          const cadre = wrap.current?.getBoundingClientRect()
+          return { x: ecran.x + (cadre?.left ?? 0), y: ecran.y + (cadre?.top ?? 0) }
+        },
+        ouvrir: (id) => {
+          const cible = renderedGraph.nodes.find((n) => n.id === id)
+          if (!cible) return false
+          activateGraphNode(cible)
+          return true
+        }
+      },
+      window as unknown as Record<string, unknown>,
+      import.meta.env.DEV
+    )
+  }, [renderedGraph])
+
   const syncThemeClusterLabels = useCallback((): void => {
     const graphApi = graphRef.current
     const layer = themeLabelsRef.current
