@@ -2750,23 +2750,28 @@ Le fil reprend ensuite normalement.`
    * Meme minuteur horaire que le balayage voisin : le stock bouge a l'echelle du jour, pas de la
    * minute, et un second minuteur n'ajouterait qu'un reveil.
    */
-  const balayageRetentionTimer = setInterval(
-    () => {
-      void pendantOperation('timer:balayage:retention', async () => {
-        const worktrees = os.worktrees
-        if (!worktrees) return
-        const consignes = chargerShaConsignes(app.getAppPath())
-        const plan = planifierBalayage(worktrees.recenserRetention((sha) => consignes.has(sha)))
-        if (plan.aSupprimer.length === 0 && plan.aSignaler.length === 0) return
-        console.info(
-          `[retention] ${plan.aSupprimer.length} sans perte, ${plan.aSignaler.length} perimes a trancher` +
-            (plan.reportees > 0 ? `, ${plan.reportees} reportes` : '') +
-            ' — AUCUNE suppression automatique.'
-        )
-      })
-    },
-    60 * 60 * 1_000
-  )
+  const passeDeRetention = (): void => {
+    void pendantOperation('timer:balayage:retention', async () => {
+      const worktrees = os.worktreeManager
+      if (!worktrees) return
+      const consignes = chargerShaConsignes(app.getAppPath())
+      const plan = planifierBalayage(worktrees.recenserRetention((sha) => consignes.has(sha)))
+      if (plan.aSupprimer.length === 0 && plan.aSignaler.length === 0) return
+      console.info(
+        `[retention] ${plan.aSupprimer.length} sans perte, ${plan.aSignaler.length} perimes a trancher` +
+          (plan.reportees > 0 ? `, ${plan.reportees} reportes` : '') +
+          ' — AUCUNE suppression automatique.'
+      )
+    })
+  }
+  /*
+   * UNE PASSE AU DEMARRAGE, puis toutes les heures. Un minuteur seul ne dit RIEN avant sa premiere
+   * echeance : le cas reel est « l'app demarre et le stock dort deja » -- celui qui a laisse
+   * quatorze travaux sur des branches de secours (2026-08-24). Un rapport qu'il faut attendre une
+   * heure est un rapport qu'on ne lit pas.
+   */
+  passeDeRetention()
+  const balayageRetentionTimer = setInterval(passeDeRetention, 60 * 60 * 1_000)
   balayageRetentionTimer.unref()
 
   /**

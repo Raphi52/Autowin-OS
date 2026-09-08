@@ -355,6 +355,8 @@ export class AutowinOS {
    * → comportement historique, workspace partagé). Exposé pour l'IPC d'observabilité (volet A).
    */
   readonly worktrees?: RunWorktreeCoordinator
+  /** Le gestionnaire de copies, pour les lectures qui n'orchestrent rien (retention). */
+  readonly worktreeManager?: WorktreeManager
   private worktreeRuntimeStatus!: WorktreeRuntimeStatus
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
   private refusIntegrationListener?: (refus: {
@@ -412,6 +414,8 @@ export class AutowinOS {
           worktreeRoot: identity.root,
           requireCanonicalRemote: true
         })
+        // Le manager est EXPOSE a part : la retention LIT, le coordinateur ORCHESTRE.
+        ;(this as { worktreeManager?: WorktreeManager }).worktreeManager = manager
         this.worktrees = new RunWorktreeCoordinator({
           // Promesse d'attente FOURNIE ici, et seulement ici : en production ce constructeur tourne
           // au premier niveau du module principal, et énumérer les copies git bloquait ~25 s avant

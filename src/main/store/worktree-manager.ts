@@ -1622,13 +1622,24 @@ export class WorktreeManager {
       'for-each-ref',
       '--format=%(refname) %(objectname) %(committerdate:unix)',
       'refs/heads/autowin/',
+      /*
+       * LES BRANCHES DE SECOURS VIVENT SUR LE SERVEUR, pas en local : ZERO
+       * `refs/heads/autowin/` sur ce depot le 2026-09-08, et 62 sous
+       * `refs/remotes/origin/autowin/`. Sans cette ligne le balayage ignorait
+       * exactement le stock qui a motive ce chantier. un motif a etoile ne
+       * filtre PAS avec `for-each-ref` (verifie : rend 0) -- on prend tout
+       * `refs/remotes/` et le filtre de famille ci-dessous ecarte le reste.
+       */
+      'refs/remotes/',
       'refs/autowin/'
     ])
     if (lignes.code !== 0) return entrees
     for (const ligne of lignes.stdout.split(SEPARATEUR_LIGNES)) {
       const [refname, sha, ts] = ligne.trim().split(' ')
       if (!refname || !sha) continue
-      const estBranche = refname.startsWith('refs/heads/autowin/')
+      const estBranche =
+        refname.startsWith('refs/heads/autowin/') ||
+        /^refs[/]remotes[/][^/]+[/]autowin[/]/.test(refname)
       const famille = estBranche ? 'branche' : (WorktreeManager.familleDeRefAutowin(refname) ?? '')
       if (!famille) continue
       const apporteQuelqueChose =
