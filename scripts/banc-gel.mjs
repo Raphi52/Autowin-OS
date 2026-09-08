@@ -67,10 +67,23 @@ async function unEssai(numero) {
   const s = await session()
   await s.evaluer(OUVRIR(vue), 8000)
   await new Promise((r) => setTimeout(r, 20_000))
-  const images = await s.evaluer(IMAGES, 9000)
+  // LA VIE D'ABORD, la fluidite ensuite : `requestAnimationFrame` est SUSPENDU quand la page est
+  // cachee, donc l'absence d'images ne prouve RIEN. Seule une evaluation triviale sans reponse
+  // etablit un gel (mesure du 2026-09-08 : deux verdicts de gel etaient des pages simplement
+  // cachees, la fenetre repondait instantanement).
+  const vie = await s.evaluer('({t:Date.now(),visibilite:document.visibilityState})', 8000)
+  const repond = vie !== '__MUET__'
+  const visibilite = repond ? vie.visibilite : undefined
+  const images = repond && visibilite === 'visible' ? await s.evaluer(IMAGES, 9000) : undefined
   s.fermer()
-  if (images !== '__MUET__') {
-    console.log(`essai ${numero} : VIVANTE — ${images} images en 3 s`)
+  if (repond && visibilite !== 'visible') {
+    console.log(`essai ${numero} : VIVANTE (page cachée — fluidité non mesurable)`)
+    return { gel: false, nonMesurable: true }
+  }
+  if (repond) {
+    console.log(
+      `essai ${numero} : VIVANTE — ${images === '__MUET__' ? 'images non rendues' : `${images} images en 3 s`}`
+    )
     return { gel: false }
   }
   console.log(`essai ${numero} : GEL détecté — la fenêtre ne répond plus`)
