@@ -1,5 +1,6 @@
 import { BrainMarkdown } from './BrainMarkdown'
 import { HumanJson } from './HumanJson'
+import { champsDeConnaissance } from './node-detail-fields'
 import { brainScoreChannelLabel, nodeThemeIds, type GraphNode } from './graph-view-model'
 import { Spinner } from './Spinner'
 import { useState } from 'react'
@@ -86,21 +87,12 @@ export function RangeRow({
 }
 
 /**
- * Champs du NŒUD lui-même, tels que le graphe les porte. Le panneau ne montrait que le libellé, le
- * chemin et le contenu du fichier : tout le reste (identifiant, thèmes, scores de recherche,
- * relations déclarées, position dans l'arbre) était chargé puis jeté avant l'affichage. Les
- * coordonnées de rendu (`x`, `fx`…) sont écartées : elles ne disent rien de la connaissance.
+ * Champs du NŒUD lui-même, tels que le graphe les porte : identifiant, thèmes, scores de recherche,
+ * relations déclarées, position dans l'arbre. Le tri de ce qui est réellement affichable — et la
+ * raison pour laquelle il ne peut PAS être une simple liste de noms techniques — vit dans
+ * `node-detail-fields.ts` (cause du gel total de la vue).
  */
-const NODE_RENDER_ONLY = new Set(['x', 'y', 'z', 'fx', 'fy', 'fz', 'label'])
-
-function nodeDetailFields(node: GraphNode): Record<string, unknown> {
-  const keep: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(node)) {
-    if (NODE_RENDER_ONLY.has(key) || value === undefined || value === null || value === '') continue
-    keep[key] = value
-  }
-  return keep
-}
+const nodeDetailFields = (node: GraphNode): Record<string, unknown> => champsDeConnaissance(node)
 
 export function NodePanel({
   node,

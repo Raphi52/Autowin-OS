@@ -79,6 +79,61 @@ describe('NodePanel — curation canonique', () => {
     expect(cles).toContain('group')
     await act(async () => root.unmount())
   })
+  // Cause reelle du gel total de la vue Knowledge (2026-09-08) : react-force-graph COLLE sur chaque
+  // noeud son objet 3D (`__threeObj`), qui pointe vers la scene, donc vers les 952 autres noeuds, et
+  // dont chaque enfant renvoie a son parent. Le panneau rendait les champs du noeud dans un arbre
+  // RECURSIF sans borne : le rendu ne terminait jamais et le fil d'affichage etait perdu.
+  it('ne descend pas dans les objets techniques cycliques colles sur le noeud', async () => {
+    // Fidele au reel : `__threeObj` est une INSTANCE de classe (THREE.Object3D), et son graphe de
+    // parents/enfants revient sur lui-meme.
+    class Objet3DFactice {
+      type = 'Group'
+      parent: Objet3DFactice | null = null
+      children: Objet3DFactice[] = []
+    }
+    const scene = new Objet3DFactice()
+    const objet3d = new Objet3DFactice()
+    objet3d.parent = scene
+    scene.children.push(objet3d)
+    const cycleSimple: Record<string, unknown> = { nom: 'boucle' }
+    cycleSimple.soi = cycleSimple
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        createElement(NodePanel, {
+          node: {
+            id: 'knowledge/domain/cyclique',
+            label: 'Cyclique',
+            group: 1,
+            __threeObj: objet3d,
+            cycleSimple,
+            index: 7,
+            vx: 0.1
+          } as never,
+          file: { path: 'c.md', content: '# C' },
+          fileErr: '',
+          linkedNodes: [],
+          onNavigate: vi.fn()
+        })
+      )
+    })
+    const detail = container.querySelector('[data-testid="node-panel-details"]') as HTMLDetailsElement
+    await act(async () => {
+      detail.open = true
+    })
+    const cles = [...detail.querySelectorAll('.human-json__key')].map((noeud) => noeud.textContent)
+    expect(cles).not.toContain('__threeObj')
+    expect(cles).not.toContain('index')
+    expect(cles).not.toContain('vx')
+    // Un cycle entre objets SIMPLES est coupe, pas rejete : le champ reste lisible et le rendu
+    // termine — c'est ce qui garantit qu'aucune structure ne peut plus boucler a l'affichage.
+    expect(cles).toContain('cycleSimple')
+    expect(cles).not.toContain('soi')
+    expect(cles).toContain('group')
+    await act(async () => root.unmount())
+  })
 })
 
 describe('NodePanel — profondeur de lecture', () => {
