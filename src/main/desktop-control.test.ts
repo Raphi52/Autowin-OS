@@ -137,7 +137,12 @@ describe('WindowsDesktopController', () => {
         { type: 'click', x: 1000, y: 1000 },
         { type: 'key', keys: ['CTRL', 'A'] }
       ])
-    ).resolves.toEqual({ executed: 2 })
+      // Le repere est RENDU avec le geste : observer un moniteur puis le bureau entier change la
+      // conversion des coordonnees, et l appelant ne pouvait pas s en apercevoir (conv-342).
+    ).resolves.toEqual({
+      executed: 2,
+      repere: { largeur: 2000, hauteur: 1000, originX: -1000, originY: 0 }
+    })
     expect(run).toHaveBeenCalledTimes(1)
     const encoded = run.mock.calls[0][0] as string
     const script = Buffer.from(encoded, 'base64').toString('utf16le')

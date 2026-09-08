@@ -45,7 +45,12 @@ export interface DesktopObserveOptions {
 
 export interface DesktopController {
   observe(options?: DesktopObserveOptions): Promise<DesktopObservation>
-  act(actions: unknown): Promise<{ executed: number }>
+  act(
+    actions: unknown
+  ): Promise<{
+    executed: number
+    repere?: { largeur: number; hauteur: number; originX: number; originY: number }
+  }>
 }
 
 type Platform = NodeJS.Platform | string
@@ -456,7 +461,18 @@ export class WindowsDesktopController implements DesktopController {
     }
   }
 
-  async act(input: unknown): Promise<{ executed: number }> {
+  /**
+   * LE REPERE UTILISE EST RENDU AVEC LE GESTE — mesure du 2026-09-08 (conv-342).
+   *
+   * Les coordonnees 0-1000 sont converties avec la geometrie de la DERNIERE observation. Observer
+   * un seul moniteur (`display: 1`, largeur 1920) puis le bureau entier (largeur 3840) change donc
+   * silencieusement le repere : le meme x vise deux endroits differents. L appelant ne voyait que
+   * `{ executed }` et ne pouvait pas s en apercevoir — 38 tours et 7,01 $ ont ete depenses a viser
+   * a cote sans jamais savoir pourquoi. Le geste rend maintenant le cadre sur lequel il a tire.
+   */
+  async act(
+    input: unknown
+  ): Promise<{ executed: number; repere?: { largeur: number; hauteur: number; originX: number; originY: number } }> {
     this.assertWindows()
     const actions = parseDesktopActions(input)
     const output = parseJsonObject(
@@ -467,6 +483,12 @@ export class WindowsDesktopController implements DesktopController {
     if (executed !== actions.length) {
       throw new Error(`Controle desktop partiel: ${executed}/${actions.length} gestes executes`)
     }
-    return { executed }
+    const g = this.lastObservation
+    return {
+      executed,
+      repere: g
+        ? { largeur: g.sourceWidth, hauteur: g.sourceHeight, originX: g.originX, originY: g.originY }
+        : undefined
+    }
   }
 }
