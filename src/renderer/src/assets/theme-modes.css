@@ -46,11 +46,13 @@
 
   --text: #14192a;
   --text-dim: #4d5567;
-  --text-faint: #767f92;
+  /* REMONTE le 2026-09-07 : #767f92 donnait 3,69, sous le seuil de 4,5. */
+  --text-faint: #5f6879;
 
   /* Or et rose ASSOMBRIS : les teintes de nuit passaient sous le seuil de lisibilité
      sur fond clair (jaune pâle sur blanc). Même rôle, même famille, plus de contraste. */
-  --gold: #9a6f10;
+  /* ASSOMBRI le 2026-09-07 : #9a6f10 donnait 4,14 sur ce fond, sous le seuil de 4,5. */
+  --gold: #7d5a0d;
   --gold-bright: #b4841c;
   --gold-doux: #8c6412;
   --gold-clair: #a3760f;
@@ -442,6 +444,51 @@
   color: var(--text);
 }
 
+/* LES QUATRE ETATS COLORES, oublies par les deux corrections precedentes — signale a l ecran le
+   2026-09-08 : « cette zone est tres pale ».
+   Deux defauts cumules dans `cosmic-outline.css` l.573-608 : la teinte de statut n y est qu a
+   20-22 % d opacite (pensee pour ressortir sur du NOIR, elle disparait sur du blanc), et le degrade
+   FINIT en `rgba(0, 0, 0, 0.3)` — d ou la queue grise sale a droite de la barre.
+   On remonte donc la teinte et on remplace la queue noire par du transparent : le liseré de gauche
+   reste le signal principal, la carte redevient lisible sans devenir un aplat criard. */
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='done'] {
+  background: linear-gradient(
+    100deg,
+    rgba(47, 138, 110, 0.3) 0%,
+    rgba(47, 138, 110, 0.1) 45%,
+    transparent 85%
+  );
+}
+:root[data-base='clair'] .cosmic-outline .activity-group.failed,
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='failed'] {
+  background: linear-gradient(
+    100deg,
+    rgba(178, 58, 52, 0.3) 0%,
+    rgba(178, 58, 52, 0.1) 45%,
+    transparent 85%
+  );
+}
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='running'] {
+  background: linear-gradient(
+    100deg,
+    rgba(15, 111, 156, 0.3) 0%,
+    rgba(15, 111, 156, 0.1) 45%,
+    transparent 85%
+  );
+}
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
+  background: linear-gradient(
+    100deg,
+    rgba(154, 111, 16, 0.3) 0%,
+    rgba(154, 111, 16, 0.1) 45%,
+    transparent 85%
+  );
+}
+/* Le nom de l outil (« run », « verify ») : `#657481` sur blanc donne 4,0 — sous le seuil. */
+:root[data-base='clair'] .cosmic-outline .activity-group-tools {
+  color: var(--text-dim);
+}
+
 /* La zone DÉPLIÉE d'une action (le contenu lu, la sortie d'un outil) :
    `cosmic-outline.css` l.616-617 lui donne un fond noir `rgba(0, 0, 0, 0.35)` et
    un texte `#9caab5`. Signalé par l'utilisateur le 2026-09-03 : « quand on déplie
@@ -615,7 +662,9 @@
   /* Texte IVOIRE CHAUD, pas blanc : ce qui rend la maquette reposante. */
   --text: #e8e2d8;
   --text-dim: #817b84;
-  --text-faint: #5d585f;
+  /* REMONTE le 2026-09-07 : #5d585f donnait 2,72 sur ce fond — sous le seuil de 3, donc illisible
+     pour une vision affaiblie meme en grand corps. Mesure par contraste WCAG sur --bg-0. */
+  --text-faint: #928c95;
 
   /* Or ETEINT, rose MAUVE : plus sourds que ceux d Autowin, volontairement. */
   --gold: #d6ad60;
@@ -700,7 +749,8 @@
 
   --text: #fff4e6;
   --text-dim: #957e8e;
-  --text-faint: #6b5763;
+  /* REMONTE le 2026-09-07 : #6b5763 donnait 2,88 — sous le seuil de 3. */
+  --text-faint: #9c8593;
 
   /* Or ECLATANT et rose FRANC : c est tout ce qui distingue ce theme. */
   --gold: #ffc85b;
@@ -759,7 +809,8 @@
 
   --text: #e9e1d2;
   --text-dim: #8f8473;
-  --text-faint: #635b4d;
+  /* REMONTE le 2026-09-07 : #635b4d donnait 2,76 — sous le seuil de 3. */
+  --text-faint: #968b7a;
 
   /* Or ASSOURDI et rose BRIQUE : des tons terre, jamais saturés. */
   --gold: #c9a75d;
@@ -822,8 +873,9 @@
   --line-strong: rgba(30, 45, 70, 0.38);
   --text: #16202f;
   --text-dim: #47576b;
-  --text-faint: #71808f;
-  --gold: #8a6410;
+  /* REMONTES le 2026-09-07 : le texte estompe donnait 3,39 et l or 4,49 — les deux sous 4,5. */
+  --text-faint: #5b6a7d;
+  --gold: #7a5709;
   --gold-bright: #a3781c;
   --gold-doux: #7d5a10;
   --gold-clair: #946c12;
@@ -866,8 +918,9 @@
   --line-strong: rgba(90, 70, 40, 0.4);
   --text: #2a2318;
   --text-dim: #5c5140;
-  --text-faint: #8a7d68;
-  --gold: #8a6d3b;
+  /* REMONTES le 2026-09-07 : texte estompe 3,58 et or 4,30 — les deux sous 4,5. */
+  --text-faint: #74674f;
+  --gold: #7a5f2e;
   --gold-bright: #a08145;
   --gold-doux: #7a6034;
   --gold-clair: #93753e;
@@ -912,7 +965,9 @@
   --line-strong: rgba(120, 30, 70, 0.38);
   --text: #2b1420;
   --text-dim: #644754;
-  --text-faint: #8f7480;
+  /* REMONTE le 2026-09-07 : #8f7480 donnait 3,86, sous le seuil de 4,5. L or de ce theme
+     passait deja (4,91) : il n est PAS touche. */
+  --text-faint: #7a6070;
   --gold: #8a6410;
   --gold-bright: #a3781c;
   --gold-doux: #7d5a10;

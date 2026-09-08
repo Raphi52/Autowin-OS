@@ -126,7 +126,19 @@ describe('chat action outcome', () => {
 
     expect(success).toBeDefined()
     expect(success).toMatch(/background:\s*color-mix\([^;]+12%,\s*transparent\)/)
-    expect(success).toMatch(/color:\s*#d8f5e8/)
+    /*
+     * CE QUE CE CAS EXIGE VRAIMENT — et ce qu'il exigeait a tort.
+     *
+     * Il imposait `color: #d8f5e8`, une couleur ECRITE EN DUR. Elle etait juste tant que le fond
+     * etait noir, et elle est devenue le defaut le jour ou l'application a eu des themes clairs :
+     * un vert quasi blanc sur une page blanche, donc une preuve illisible. Un test qui verrouille
+     * une valeur en dur EMPECHE de reparer ce genre de defaut au lieu de le prevenir.
+     *
+     * On exige donc la PROPRIETE qui compte : la couleur vient d'un jeton de theme, jamais d'un
+     * quasi-blanc fige. Entree qui doit faire echouer : reecrire une couleur claire en dur.
+     */
+    expect(success).toMatch(/color:\s*var\(--text/)
+    expect(success).not.toMatch(/color:\s*#[cdef][0-9a-f]{5}/i)
   })
 })
 
