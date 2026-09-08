@@ -87,3 +87,43 @@ describe('branchement du battement sur une fenetre', () => {
     expect(recharges).toBe(0)
   })
 })
+
+describe('escalade quand le rechargement reste sans effet', () => {
+  it('tue le processus d affichage si le silence persiste apres le rechargement', async () => {
+    const journal: string[] = []
+    let recharges = 0
+    let tues = 0
+    let battre: (() => void) | undefined
+    const fenetre = {
+      webContents: {
+        executeJavaScript: () => new Promise<unknown>(() => {}),
+        reloadIgnoringCache: () => {
+          recharges += 1
+        },
+        forcefullyCrashRenderer: () => {
+          tues += 1
+        }
+      }
+    }
+    surveillerParBattement(fenetre, (operation) => journal.push(operation), {
+      intervalleMs: 5,
+      silenceAvantGelMs: 10,
+      silenceAvantEscaladeMs: 10,
+      planifier: (action) => {
+        battre = action
+        return 1
+      }
+    })
+    for (let tour = 0; tour < 6; tour++) {
+      battre?.()
+      await new Promise((res) => setTimeout(res, 20))
+    }
+
+    expect(recharges).toBe(1)
+    expect(tues).toBe(1)
+    expect(journal).toEqual([
+      'renderer:silence-au-battement',
+      'renderer:affichage-force-a-repartir'
+    ])
+  })
+})

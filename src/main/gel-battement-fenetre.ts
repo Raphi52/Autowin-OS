@@ -40,8 +40,16 @@ export interface FenetreBattante {
   webContents?: {
     executeJavaScript?(code: string): Promise<unknown>
     reloadIgnoringCache?(): void
+    /** Dernier recours : tue le processus d'affichage, Electron en repart un neuf. */
+    forcefullyCrashRenderer?(): void
   }
 }
+
+/** Motif journalise quand le rechargement n'a pas suffi et qu'on tue l'affichage. */
+export const OPERATION_ESCALADE = 'renderer:affichage-force-a-repartir'
+
+/** Silence supplementaire tolere APRES un rechargement reste sans effet. */
+export const SILENCE_AVANT_ESCALADE_MS = 30_000
 
 /**
  * Branche le battement et rend la fonction qui l'arrete.
@@ -56,6 +64,7 @@ export function surveillerParBattement(
   options: {
     intervalleMs?: number
     silenceAvantGelMs?: number
+    silenceAvantEscaladeMs?: number
     planifier?: (action: () => void, delaiMs: number) => unknown
     annuler?: (jeton: unknown) => void
   } = {}
@@ -64,8 +73,11 @@ export function surveillerParBattement(
   const silenceAvantGelMs = options.silenceAvantGelMs ?? SILENCE_AVANT_GEL_MS
   const planifier = options.planifier ?? setInterval
   const annuler = options.annuler ?? ((jeton) => clearInterval(jeton as never))
+  const silenceAvantEscaladeMs = options.silenceAvantEscaladeMs ?? SILENCE_AVANT_ESCALADE_MS
   let echosManques = 0
   let dejaSignale = false
+  let silenceAuRechargement: number | undefined
+  let dejaEscalade = false
 
   const jeton = planifier(() => {
     let repondu = false
@@ -75,17 +87,38 @@ export function surveillerParBattement(
         repondu = true
         echosManques = 0
         dejaSignale = false
+        dejaEscalade = false
+        silenceAuRechargement = undefined
       })
       .catch(() => {})
     // L'echo est juge au tour SUIVANT : s'il n'est pas revenu d'ici la, il est manque.
     setTimeout(() => {
       if (repondu) return
       echosManques += 1
+      const silenceMs = echosManques * intervalleMs
       if (!fenetreSilencieuse({ echosManques, intervalleMs }, silenceAvantGelMs)) return
-      if (dejaSignale) return
-      dejaSignale = true
-      journaliser(OPERATION_GEL_PAR_BATTEMENT, echosManques * intervalleMs)
-      fenetre.webContents?.reloadIgnoringCache?.()
+      if (!dejaSignale) {
+        dejaSignale = true
+        dejaEscalade = false
+        silenceAuRechargement = silenceMs
+        journaliser(OPERATION_GEL_PAR_BATTEMENT, silenceMs)
+        fenetre.webContents?.reloadIgnoringCache?.()
+        return
+      }
+      /*
+       * ESCALADE — mesure du 2026-09-08 17:52 : le rechargement a bien ete demande (ligne
+       * `silence-au-battement`, 15 000 ms) et la fenetre est restee MORTE deux minutes de plus.
+       * C'est attendu : `reloadIgnoringCache` est un message que le processus d'affichage doit
+       * TRAITER — un blocage total ne le traite jamais. Le seul geste qui aboutit alors est de tuer
+       * ce processus : Electron en repart un neuf, et l'application, elle, survit.
+       */
+      if (silenceAuRechargement === undefined || dejaEscalade) return
+      if (silenceMs - silenceAuRechargement < silenceAvantEscaladeMs) return
+      // Une seule fois par episode : si tuer l'affichage n'a pas suffi, recommencer n'aiderait pas
+      // et transformerait la reparation en boucle de crashs.
+      dejaEscalade = true
+      journaliser(OPERATION_ESCALADE, silenceMs)
+      fenetre.webContents?.forcefullyCrashRenderer?.()
     }, Math.max(1, intervalleMs - 100))
   }, intervalleMs)
 
