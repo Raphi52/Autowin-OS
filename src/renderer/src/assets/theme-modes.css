@@ -444,6 +444,51 @@
   color: var(--text);
 }
 
+/* LES QUATRE ETATS COLORES, oublies par les deux corrections precedentes — signale a l ecran le
+   2026-09-08 : « cette zone est tres pale ».
+   Deux defauts cumules dans `cosmic-outline.css` l.573-608 : la teinte de statut n y est qu a
+   20-22 % d opacite (pensee pour ressortir sur du NOIR, elle disparait sur du blanc), et le degrade
+   FINIT en `rgba(0, 0, 0, 0.3)` — d ou la queue grise sale a droite de la barre.
+   On remonte donc la teinte et on remplace la queue noire par du transparent : le liseré de gauche
+   reste le signal principal, la carte redevient lisible sans devenir un aplat criard. */
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='done'] {
+  background: linear-gradient(
+    100deg,
+    rgba(47, 138, 110, 0.3) 0%,
+    rgba(47, 138, 110, 0.1) 45%,
+    transparent 85%
+  );
+}
+:root[data-base='clair'] .cosmic-outline .activity-group.failed,
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='failed'] {
+  background: linear-gradient(
+    100deg,
+    rgba(178, 58, 52, 0.3) 0%,
+    rgba(178, 58, 52, 0.1) 45%,
+    transparent 85%
+  );
+}
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='running'] {
+  background: linear-gradient(
+    100deg,
+    rgba(15, 111, 156, 0.3) 0%,
+    rgba(15, 111, 156, 0.1) 45%,
+    transparent 85%
+  );
+}
+:root[data-base='clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
+  background: linear-gradient(
+    100deg,
+    rgba(154, 111, 16, 0.3) 0%,
+    rgba(154, 111, 16, 0.1) 45%,
+    transparent 85%
+  );
+}
+/* Le nom de l outil (« run », « verify ») : `#657481` sur blanc donne 4,0 — sous le seuil. */
+:root[data-base='clair'] .cosmic-outline .activity-group-tools {
+  color: var(--text-dim);
+}
+
 /* La zone DÉPLIÉE d'une action (le contenu lu, la sortie d'un outil) :
    `cosmic-outline.css` l.616-617 lui donne un fond noir `rgba(0, 0, 0, 0.35)` et
    un texte `#9caab5`. Signalé par l'utilisateur le 2026-09-03 : « quand on déplie
