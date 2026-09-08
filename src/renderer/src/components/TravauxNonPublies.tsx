@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { libelleTravail, type TravailNonPublie } from './travail-non-publie'
+import type { RapportRetention } from '../../../shared/rapport-retention'
 import { Spinner } from './Spinner'
 
 /**
@@ -25,6 +26,11 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
   const [patch, setPatch] = useState<{ patch: string; tronque: boolean } | null>(null)
   const [enCours, setEnCours] = useState<string | null>(null)
   const [resultat, setResultat] = useState<string | null>(null)
+  /**
+   * `undefined` = pas encore lu · `null` = lu, mais AUCUNE passe n'a eu lieu.
+   * La distinction compte : « rien a signaler » et « on n'a rien regarde » ne se disent pas pareil.
+   */
+  const [rapport, setRapport] = useState<RapportRetention | null | undefined>(undefined)
 
   useEffect(() => {
     let vivant = true
@@ -34,6 +40,27 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
         if (vivant) setTravaux(liste)
       } catch (cause) {
         if (vivant) setErreur(String(cause))
+      }
+    })()
+    return () => {
+      vivant = false
+    }
+  }, [])
+
+  /*
+   * LE RAPPORT DU BALAYAGE, lu au meme moment que la liste. Il ne DECLENCHE aucune passe : il rend
+   * le dernier verdict deja calcule par le minuteur horaire. Ce verdict ne vivait que dans la
+   * console, c'est-a-dire nulle part pour qui utilise l'application.
+   */
+  useEffect(() => {
+    let vivant = true
+    void (async () => {
+      try {
+        const lu = await window.api.getRapportRetention?.()
+        if (vivant) setRapport(lu ?? null)
+      } catch {
+        // Un rapport illisible ne doit pas masquer la liste des travaux : on reste silencieux.
+        if (vivant) setRapport(null)
       }
     })()
     return () => {
@@ -163,6 +190,60 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
         les quatorze, en silence. Promettre une reprise automatique qui ne peut pas aboutir est pire
         que ne rien dire -- l'utilisateur a d'ailleurs demande « et apres je fais quoi avec ca ? ».
       */}
+      {/*
+        LE BALAYAGE DE RETENTION, rendu VISIBLE. Il tourne au demarrage puis chaque heure et se
+        contentait d'ecrire son verdict dans la console — un rapport qu'il faut savoir ou chercher
+        est un rapport que personne ne lit, et c'est exactement ce qui a laisse quatorze travaux
+        dormir sur des branches de secours (2026-08-24).
+
+        On montre les deux categories SEPAREMENT parce qu'elles n'engagent pas la meme chose : ce
+        qui est « deja en base » ne peut rien couter, ce qui est « perime » PORTE du travail que
+        personne n'a lu. Les melanger inviterait a tout supprimer d'un geste.
+      */}
+      {rapport !== undefined && (
+        <section className="tnp-retention" data-testid="tnp-retention">
+          <b>Sauvegardes automatiques</b>
+          {rapport === null ? (
+            <p className="tnp-vide" data-testid="tnp-retention-jamais">
+              Pas encore balayées depuis le démarrage.
+            </p>
+          ) : (
+            <>
+              <p data-testid="tnp-retention-resume">
+                {rapport.examines} sauvegarde(s) examinée(s) · {rapport.sansPerte.length} sans
+                perte · {rapport.aTrancher.length} à trancher
+                {rapport.reportees > 0 ? ` · ${rapport.reportees} au prochain passage` : ''}
+              </p>
+              {rapport.sansPerte.length > 0 && (
+                <details data-testid="tnp-retention-sans-perte">
+                  <summary>{rapport.sansPerte.length} déjà en base — rien à perdre</summary>
+                  <ul>
+                    {rapport.sansPerte.map((nom) => (
+                      <li key={nom}>{nom}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {rapport.aTrancher.length > 0 && (
+                <details data-testid="tnp-retention-a-trancher">
+                  <summary>
+                    {rapport.aTrancher.length} périmée(s) — elles portent du travail non lu
+                  </summary>
+                  <ul>
+                    {rapport.aTrancher.map((nom) => (
+                      <li key={nom}>{nom}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              <p className="tnp-note">
+                Aucune n’est supprimée automatiquement — c’est un constat, pas un geste.
+              </p>
+            </>
+          )}
+        </section>
+      )}
+
       <p className="tnp-note">
         Rien n’est supprimé ici. Autowin retente les publications qui peuvent encore aboutir ;
         certaines ne peuvent plus l’être, et « Traiter » est là pour faire trancher ces cas.

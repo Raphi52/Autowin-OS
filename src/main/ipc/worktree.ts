@@ -47,6 +47,18 @@ export function registerWorktreeIpc({ os }: WorktreeIpcDeps): WorktreeIpc {
     // HORS thread main : le recensement git synchrone figeait la fenetre 16 s (gels.jsonl, 03/09).
     return os.travauxNonPubliesAsync()
   })
+  /*
+   * LE RAPPORT DU BALAYAGE DE RETENTION. Purement LU : ce canal ne declenche aucune passe et ne
+   * supprime rien -- il rend le dernier verdict deja calcule par le minuteur horaire. Auparavant ce
+   * verdict n'existait que dans `console.info`, donc hors de portee de qui utilise l'application.
+   *
+   * `undefined` quand aucune passe n'a encore eu lieu, ce que l'interface doit distinguer d'un
+   * rapport vide (stock sain).
+   */
+  ipcMain.handle('worktree:rapport-retention', (event) => {
+    assertTrustedRendererSender(event, 'RapportRetention')
+    return os.rapportRetention()
+  })
   ipcMain.handle('worktree:patch-non-publie', (event, agentId?: unknown) => {
     assertTrustedRendererSender(event, 'PatchTravailNonPublie')
     return typeof agentId === 'string'

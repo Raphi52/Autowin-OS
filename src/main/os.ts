@@ -93,6 +93,7 @@ import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { loadAutoClose, saveAutoClose } from './autoclose-store'
 import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../shared/app-identity'
+import type { RapportRetention } from '../shared/rapport-retention'
 import { ExecutionSupervisor, type ExecutionUsageSnapshot } from './execution-supervisor'
 import { compileExecutionQuote } from './execution-quote'
 import { loadOrchestrationBudget } from './orchestration-budget'
@@ -771,6 +772,29 @@ export class AutowinOS {
   /** Le patch d'un de ces travaux, pour le lire avant d'en decider. Lecture seule. */
   patchTravailNonPublie(agentId: string): { patch: string; tronque: boolean } {
     return this.worktrees?.patchTravailNonPublie(agentId) ?? { patch: '', tronque: false }
+  }
+
+  /**
+   * LE DERNIER RAPPORT DU BALAYAGE DE RETENTION, garde en memoire pour la fenetre.
+   *
+   * Le balayage horaire ecrivait son verdict dans `console.info` — donc dans un terminal que
+   * l'utilisateur de l'application ne regarde pas. Un rapport qu'il faut savoir ou chercher est un
+   * rapport que personne ne lit : les quatorze travaux du 2026-08-24 ont dormi pour cette raison
+   * exacte. On garde donc le DERNIER plan ici, et l'interface vient le lire.
+   *
+   * `undefined` tant qu'aucune passe n'a eu lieu — a distinguer d'un plan vide, qui lui affirme
+   * que le stock est sain.
+   */
+  private dernierRapportRetention?: RapportRetention
+
+  /** Appele par la passe horaire. Ecrase le precedent : seul le dernier etat a un sens. */
+  poserRapportRetention(rapport: RapportRetention): void {
+    this.dernierRapportRetention = rapport
+  }
+
+  /** Lecture seule, pour l'IPC. `undefined` = aucune passe encore faite. */
+  rapportRetention(): RapportRetention | undefined {
+    return this.dernierRapportRetention
   }
 
   getWorktreeActivity(): WorktreeAgentActivity[] {
