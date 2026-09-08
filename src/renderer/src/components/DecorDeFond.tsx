@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { autowinStorageKey } from '../storage-keys'
+import { doitRedimensionner } from './decor-redimension'
 import {
   createDecorScene,
   DECOR_DEFAUT,
