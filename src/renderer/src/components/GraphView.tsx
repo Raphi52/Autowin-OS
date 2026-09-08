@@ -515,7 +515,11 @@ export function GraphView({
   useEffect(() => {
     const element = wrap.current
     if (!element) return
-    const updateSize = (): void => setSize({ w: element.clientWidth, h: element.clientHeight })
+    // Idempotence OBLIGATOIRE : ecrire un nouvel objet a chaque notification re-rendait tout le
+    // graphe 3D et reallouait le tampon de dessin, ce qui renotifiait l'observateur — boucle sans
+    // fin des l'ouverture de la colonne de detail.
+    const updateSize = (): void =>
+      setSize((courante) => tailleSuivante(courante, element.clientWidth, element.clientHeight))
     updateSize()
     const observer = new ResizeObserver(updateSize)
     observer.observe(element)
