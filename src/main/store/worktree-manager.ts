@@ -150,6 +150,92 @@ function tryGit(repo: string, args: string[]): { code: number; stdout: string; s
 }
 
 /**
+ * MEME CONTRAT QUE `tryGit`, MAIS SANS TENIR LA BOUCLE D'EVENEMENTS.
+ *
+ * Mesure du 2026-09-08 (`gels.jsonl`, ligne 10:23:55) : le premier passage du balayage de retention
+ * lance UN `git cherry` par ref de secours -- 97 appels ce jour-la -- en `execFileSync`. Total :
+ * 11 720 ms de fenetre figee, pendant la construction de la fenetre, donc en plein demarrage. Le
+ * travail lui-meme est legitime ; c'est sa forme SYNCHRONE sur le thread principal qui gele l'app.
+ *
+ * Rien d'autre ne change : memes arguments, meme repertoire, meme timeout, meme forme de reponse.
+ */
+export function tryGitAsync(
+  repo: string,
+  args: string[]
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      args,
+      { cwd: repo, encoding: 'utf8', windowsHide: true, timeout: GIT_COMMAND_TIMEOUT_MS },
+      (erreur, stdout, stderr) => {
+        const statut = (erreur as { code?: number } | null)?.code
+        resolve({
+          code: erreur ? (typeof statut === 'number' ? statut : 1) : 0,
+          stdout: String(stdout ?? ''),
+          stderr: String(stderr ?? '')
+        })
+      }
+    )
+  })
+}
+
+/** Les refs que le balayage de retention examine — une seule source, partagee sync/async. */
+export const ARGS_REFS_RETENTION = [
+  'for-each-ref',
+  '--format=%(refname) %(objectname) %(committerdate:unix)',
+  'refs/heads/autowin/',
+  /*
+   * LES BRANCHES DE SECOURS VIVENT SUR LE SERVEUR, pas en local : ZERO `refs/heads/autowin/` sur ce
+   * depot le 2026-09-08, et 62 sous `refs/remotes/origin/autowin/`. Sans cette ligne le balayage
+   * ignorait exactement le stock qui a motive ce chantier. Un motif a etoile ne filtre PAS avec
+   * `for-each-ref` (verifie : rend 0) -- on prend tout `refs/remotes/` et le filtre de famille
+   * ecarte le reste.
+   */
+  'refs/remotes/',
+  'refs/autowin/'
+]
+
+type CandidatRetention = { nom: string; sha: string; famille: string; ageMs?: number }
+
+/** Lit la sortie de `for-each-ref` et rend les refs retenues, avec leur famille et leur age. */
+function refsDeRetention(stdout: string, maintenant: number): CandidatRetention[] {
+  const candidats: CandidatRetention[] = []
+  for (const ligne of stdout.split(SEPARATEUR_LIGNES)) {
+    const [refname, sha, ts] = ligne.trim().split(' ')
+    if (!refname || !sha) continue
+    const estBranche =
+      refname.startsWith('refs/heads/autowin/') ||
+      /^refs[/]remotes[/][^/]+[/]autowin[/]/.test(refname)
+    const famille = estBranche ? 'branche' : (WorktreeManager.familleDeRefAutowin(refname) ?? '')
+    if (!famille) continue
+    const secondes = Number(ts)
+    candidats.push({
+      nom: refname,
+      sha,
+      famille,
+      ...(Number.isFinite(secondes) ? { ageMs: maintenant - secondes * 1_000 } : {})
+    })
+  }
+  return candidats
+}
+
+/** Compose l'entree de balayage — meme forme quelle que soit la voie qui a pose la question a git. */
+function entreeDeRetention(
+  candidat: CandidatRetention,
+  apporteQuelqueChose: boolean,
+  consigne: (sha: string) => boolean
+): EntreeBalayage {
+  return {
+    nom: candidat.nom,
+    famille: candidat.famille,
+    apporteQuelqueChose,
+    shaConsigne: consigne(candidat.sha),
+    ...(candidat.ageMs === undefined ? {} : { ageMs: candidat.ageMs })
+  }
+}
+
+/**
  * Rend une exception de finalisation LISIBLE par celui qui devra reparer le run.
  *
  * Mesure le 2026-08-27 (conv-1427) : un `catch` sans parametre remplacait l'erreur reelle par une
@@ -1616,44 +1702,43 @@ export class WorktreeManager {
    * 2026-09-08 -- pour une reponse que la regle ignore de toute facon.
    */
   recenserRetention(consigne: (sha: string) => boolean): EntreeBalayage[] {
-    const maintenant = Date.now()
+    const lignes = this.tryGitFn(this.baseRepo, ARGS_REFS_RETENTION)
+    if (lignes.code !== 0) return []
     const entrees: EntreeBalayage[] = []
-    const lignes = this.tryGitFn(this.baseRepo, [
-      'for-each-ref',
-      '--format=%(refname) %(objectname) %(committerdate:unix)',
-      'refs/heads/autowin/',
-      /*
-       * LES BRANCHES DE SECOURS VIVENT SUR LE SERVEUR, pas en local : ZERO
-       * `refs/heads/autowin/` sur ce depot le 2026-09-08, et 62 sous
-       * `refs/remotes/origin/autowin/`. Sans cette ligne le balayage ignorait
-       * exactement le stock qui a motive ce chantier. un motif a etoile ne
-       * filtre PAS avec `for-each-ref` (verifie : rend 0) -- on prend tout
-       * `refs/remotes/` et le filtre de famille ci-dessous ecarte le reste.
-       */
-      'refs/remotes/',
-      'refs/autowin/'
-    ])
-    if (lignes.code !== 0) return entrees
-    for (const ligne of lignes.stdout.split(SEPARATEUR_LIGNES)) {
-      const [refname, sha, ts] = ligne.trim().split(' ')
-      if (!refname || !sha) continue
-      const estBranche =
-        refname.startsWith('refs/heads/autowin/') ||
-        /^refs[/]remotes[/][^/]+[/]autowin[/]/.test(refname)
-      const famille = estBranche ? 'branche' : (WorktreeManager.familleDeRefAutowin(refname) ?? '')
-      if (!famille) continue
+    for (const candidate of refsDeRetention(lignes.stdout, Date.now())) {
       const apporteQuelqueChose =
-        famille === 'trie'
+        candidate.famille === 'trie'
           ? false
-          : this.tryGitFn(this.baseRepo, ['cherry', 'HEAD', refname]).stdout.includes('+')
-      const secondes = Number(ts)
-      entrees.push({
-        nom: refname,
-        famille,
-        apporteQuelqueChose,
-        shaConsigne: consigne(sha),
-        ...(Number.isFinite(secondes) ? { ageMs: maintenant - secondes * 1_000 } : {})
-      })
+          : this.tryGitFn(this.baseRepo, ['cherry', 'HEAD', candidate.nom]).stdout.includes('+')
+      entrees.push(entreeDeRetention(candidate, apporteQuelqueChose, consigne))
+    }
+    return entrees
+  }
+
+  /**
+   * MEME RECENSEMENT, SANS FIGER LA FENETRE — c'est la version que le demarrage doit appeler.
+   *
+   * Le prix ne change pas (un `git cherry` par ref) ; ce qui change, c'est qu'il est paye dans des
+   * processus fils attendus un par un, la boucle d'evenements restant libre entre deux. Mesure du
+   * 2026-09-08 : la version synchrone tenait le thread principal 11 720 ms au demarrage, pendant la
+   * construction de la fenetre. La regle, elle, est partagee mot pour mot avec `recenserRetention`.
+   */
+  async recenserRetentionAsync(
+    consigne: (sha: string) => boolean,
+    executer: (
+      repo: string,
+      args: string[]
+    ) => Promise<{ code: number; stdout: string }> = tryGitAsync
+  ): Promise<EntreeBalayage[]> {
+    const lignes = await executer(this.baseRepo, ARGS_REFS_RETENTION)
+    if (lignes.code !== 0) return []
+    const entrees: EntreeBalayage[] = []
+    for (const candidate of refsDeRetention(lignes.stdout, Date.now())) {
+      const apporteQuelqueChose =
+        candidate.famille === 'trie'
+          ? false
+          : (await executer(this.baseRepo, ['cherry', 'HEAD', candidate.nom])).stdout.includes('+')
+      entrees.push(entreeDeRetention(candidate, apporteQuelqueChose, consigne))
     }
     return entrees
   }
@@ -1663,8 +1748,6 @@ export class WorktreeManager {
     const m = /^refs\/autowin\/([^/]+)\//.exec(ref)
     return m ? m[1] : undefined
   }
-
-
 
   /**
    * CE BUREAU PRECIS PEUT-IL PORTER DU TRAVAIL ? — question a UN bureau, prix d'UN bureau.
@@ -1684,7 +1767,10 @@ export class WorktreeManager {
   bureauPeutPorterDuTravail(agentId: string): boolean {
     if (!SAFE_ID.test(agentId)) return false
     if (existsSync(join(this.worktreeRoot, `agent__${agentId}`))) return true
-    for (const ref of [`refs/heads/autowin/recovery/${agentId}`, `refs/autowin/rescue/${agentId}`]) {
+    for (const ref of [
+      `refs/heads/autowin/recovery/${agentId}`,
+      `refs/autowin/rescue/${agentId}`
+    ]) {
       if (this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', '--quiet', ref]).code === 0) {
         return true
       }
