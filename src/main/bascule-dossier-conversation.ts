@@ -20,6 +20,23 @@ function memeDossier(a: string, b: string): boolean {
  * Regle posee par l'utilisateur : le dossier range sur la conversation et le dossier de travail ne
  * doivent JAMAIS differer — toute divergence est un defaut, pas un cas a rattraper.
  */
+/**
+ * La condition d'entree COMMUNE aux deux fonctions publiques : un rangement ne designe un dossier
+ * utilisable que s'il est renseigne, absolu, et present sur ce poste. Rend le chemin resolu, ou
+ * `null` quand l'une des trois conditions manque. Factorise pour que les deux reponses (le motif
+ * affiche a l'utilisateur, et le dossier du tour) ne puissent pas diverger.
+ */
+function dossierRangeUtilisable(
+  projectPath: string | undefined | null,
+  dossierExiste: (chemin: string) => boolean
+): string | null {
+  const range = projectPath?.trim()
+  if (!range) return null
+  if (!isAbsolute(range)) return null
+  const cible = resolve(range)
+  return dossierExiste(cible) ? cible : null
+}
+
 export type MotifDossierConversation =
   'bascule-requise' | 'deja-aligne' | 'non-range' | 'libelle-non-absolu' | 'dossier-absent'
 
@@ -31,8 +48,8 @@ export function diagnostiqueDossierConversation(
   const range = projectPath?.trim()
   if (!range) return 'non-range'
   if (!isAbsolute(range)) return 'libelle-non-absolu'
-  const cible = resolve(range)
-  if (!dossierExiste(cible)) return 'dossier-absent'
+  const cible = dossierRangeUtilisable(projectPath, dossierExiste)
+  if (!cible) return 'dossier-absent'
   if (memeDossier(cible, workspaceActif)) return 'deja-aligne'
   return 'bascule-requise'
 }
@@ -68,9 +85,5 @@ export function dossierDeTravailDuTour(
   repli: string,
   dossierExiste: (chemin: string) => boolean = existsSync
 ): string {
-  const range = projectPath?.trim()
-  if (!range) return repli
-  if (!isAbsolute(range)) return repli
-  const cible = resolve(range)
-  return dossierExiste(cible) ? cible : repli
+  return dossierRangeUtilisable(projectPath, dossierExiste) ?? repli
 }
