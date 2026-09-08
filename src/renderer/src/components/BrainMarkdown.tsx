@@ -1,6 +1,6 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { splitFrontmatter } from './brain-markdown-model'
+import { markdownRendable, splitFrontmatter } from './brain-markdown-model'
 import './BrainMarkdown.css'
 
 export function BrainMarkdown({ source }: { source: string }): React.JSX.Element {
@@ -17,22 +17,31 @@ export function BrainMarkdown({ source }: { source: string }): React.JSX.Element
           ))}
         </dl>
       )}
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target={href?.startsWith('http') ? '_blank' : undefined}
-              rel={href?.startsWith('http') ? 'noreferrer' : undefined}
-            >
-              {children}
-            </a>
-          )
-        }}
-      >
-        {body}
-      </ReactMarkdown>
+      {markdownRendable(body) ? (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ href, children }) => (
+              <a
+                href={href}
+                target={href?.startsWith('http') ? '_blank' : undefined}
+                rel={href?.startsWith('http') ? 'noreferrer' : undefined}
+              >
+                {children}
+              </a>
+            )
+          }}
+        >
+          {body}
+        </ReactMarkdown>
+      ) : (
+        <>
+          <p className="brain-markdown__brut" role="status">
+            Note volumineuse : affichée en texte brut, sans mise en forme. Rien n’est coupé.
+          </p>
+          <pre className="brain-markdown__brut-corps">{body}</pre>
+        </>
+      )}
     </div>
   )
 }

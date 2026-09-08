@@ -230,3 +230,17 @@
   line-height: 1.55;
   white-space: pre;
 }
+
+/* Note trop grande pour être formatée sans figer la fenêtre — voir MARKDOWN_RENDU_MAX_CARACTERES. */
+.brain-markdown__brut {
+  color: #a9b2c4;
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.brain-markdown__brut-corps {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
