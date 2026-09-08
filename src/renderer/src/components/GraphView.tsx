@@ -1174,8 +1174,7 @@ export function GraphView({
     }
     reconcileWidths()
     const observer = new ResizeObserver(reconcileWidths)
-    // SONDE-ISOLEMENT
-    void observer
+    observer.observe(layout)
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
