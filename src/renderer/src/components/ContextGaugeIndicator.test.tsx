@@ -69,6 +69,22 @@ describe('jauge de contexte cliquable', () => {
     expect(container.querySelector('[data-testid="chat-context-popover"]')).toBeNull()
   })
 
+  it('ouvre le panneau au SURVOL, meme sur une barre vide, et le referme en sortant', async () => {
+    const vide: ContextGauge = { used: 0, limit: 200_000, ratio: 0, level: 'ok', cacheRead: 0, fresh: 0 }
+    const container = await rendre(vide)
+    const racine = container.querySelector('.chat-context-gauge-root') as HTMLElement
+    expect(container.querySelector('[data-testid="chat-context-popover"]')).toBeNull()
+    await act(async () => {
+      // React 17+ derive enter/leave des evenements DELEGUES pointerover/pointerout.
+      racine.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
+    })
+    expect(container.querySelector('[data-testid="chat-context-popover"]')).not.toBeNull()
+    await act(async () => {
+      racine.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }))
+    })
+    expect(container.querySelector('[data-testid="chat-context-popover"]')).toBeNull()
+  })
+
   it("ne rend RIEN quand le contexte n'est pas mesuré", async () => {
     const container = await rendre(undefined)
     expect(container.querySelector('[data-testid="chat-context-gauge"]')).toBeNull()

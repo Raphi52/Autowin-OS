@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contextGauge, CONTEXT_WINDOWS, doitCompacterAutomatiquement, COMPACT_REQUEST } from './context-gauge'
+import { contextGauge, CONTEXT_WINDOWS, doitCompacterAutomatiquement, COMPACT_REQUEST, jaugeVide } from './context-gauge'
 
 /**
  * LA JAUGE DE CONTEXTE — combien de la fenetre du modele ce fil occupe-t-il DEJA.
@@ -115,5 +115,23 @@ describe('doitCompacterAutomatiquement', () => {
   it('ne relance PAS la compaction juste apres une compaction — pas de boucle', () => {
     expect(doitCompacterAutomatiquement(jauge(0.95), COMPACT_REQUEST)).toBe(false)
     expect(doitCompacterAutomatiquement(jauge(0.95), `  ${COMPACT_REQUEST}  `)).toBe(false)
+  })
+})
+
+describe('jaugeVide', () => {
+  it('rend une jauge a 0 % sur la fenetre du modele servi (fil neuf)', () => {
+    expect(jaugeVide('claude-haiku-4', 'claude')).toEqual({
+      used: 0,
+      limit: 200_000,
+      ratio: 0,
+      level: 'ok',
+      cacheRead: 0,
+      fresh: 0
+    })
+  })
+
+  it('ne rend rien quand la fenetre du modele est inconnue', () => {
+    expect(jaugeVide('modele-inconnu', 'claude')).toBeUndefined()
+    expect(jaugeVide(undefined)).toBeUndefined()
   })
 })

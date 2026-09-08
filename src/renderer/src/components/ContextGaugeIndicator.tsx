@@ -67,12 +67,23 @@ export function ContextGaugeIndicator({
     `${gauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
     `${gauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
   return (
-    <div className="chat-context-gauge-root" ref={rootRef}>
+    <div
+      className="chat-context-gauge-root"
+      ref={rootRef}
+      /*
+      SURVOL = OUVERTURE — demande utilisateur du 2026-09-08. Le detail n'attend plus un clic :
+      passer la souris sur la barre (meme vide, a 0 %) ouvre le panneau, le quitter le referme.
+      Le panneau est un ENFANT de ce conteneur, donc y aller ne declenche pas la sortie.
+      Le clic reste actif : il fige l'ouverture pour ceux qui naviguent au clavier ou au doigt.
+      */
+      onPointerEnter={() => setOpen(true)}
+      onPointerLeave={() => setOpen(false)}
+    >
       <button
         type="button"
         ref={triggerRef}
         className={`chat-context-gauge is-${gauge.level}`}
-        title={`${titre}\nCliquer pour le detail.`}
+        title={titre}
         aria-label={titre}
         aria-expanded={open}
         data-testid="chat-context-gauge"

@@ -149,6 +149,20 @@ export function contextGauge(usage: TokenUsage): ContextGauge | undefined {
 }
 
 /**
+ * LA JAUGE A ZERO D'UN FIL NEUF — demande utilisateur du 2026-09-08.
+ *
+ * `contextGauge` rend `undefined` tant qu'aucun tour n'a ete mesure, et l'en-tete n'affichait donc
+ * RIEN a l'ouverture d'une conversation : la barre apparaissait d'un coup apres le premier tour.
+ * Ici l'ignorance n'existe pas — un fil sans aucun tour porte reellement 0 token. La seule
+ * inconnue restante est la FENETRE : sans modele reconnu, on ne rend toujours rien.
+ */
+export function jaugeVide(model?: string, provider?: string): ContextGauge | undefined {
+  const fenetre = contextWindowFor(model, provider)
+  if (!fenetre) return undefined
+  return { used: 0, limit: fenetre.tokens, ratio: 0, level: 'ok', cacheRead: 0, fresh: 0 }
+}
+
+/**
  * LA DEMANDE DE COMPACTION — un message adresse a l'agent, pas une troncature muette.
  *
  * Ce depot n'a AUCUNE mecanique de compaction cote moteur : la seule reponse a la saturation etait

@@ -137,7 +137,7 @@ import {
 // La classe `.lisere-dessus` vit dans cette feuille : importee ICI et non « heritee » d'une
 // autre vue, sinon l'apparence de Chat dependrait de l'ordre de chargement des AUTRES vues.
 import './ViewPage.css'
-import { contextGauge, type ContextGauge } from '../../../shared/context-gauge'
+import { contextGauge, jaugeVide, type ContextGauge } from '../../../shared/context-gauge'
 import { doitCompacterAutomatiquement } from '../../../shared/context-gauge'
 import { occupationDeFenetre } from '../../../shared/occupation-fenetre'
 import './ChatView.css'
@@ -5130,7 +5130,14 @@ Cliquer pour changer le dossier de travail.`}
                     qu'on ne SAIT pas : afficher 0 % dirait « ce fil est vide » la ou la verite est
                     « on l'ignore ».
                   */
-                    const jauge = activeId != null ? contextGauges[activeId] : undefined
+                    const mesuree = activeId != null ? contextGauges[activeId] : undefined
+                    // Fil neuf (aucun tour mesure) : on affiche 0 % plutot que rien — un fil sans
+                    // tour porte REELLEMENT zero token, ce n'est pas une ignorance.
+                    const jauge =
+                      mesuree ??
+                      (activeId != null
+                        ? jaugeVide(orchestratorBinding?.model, orchestratorBinding?.provider)
+                        : undefined)
                     return (
                       <ContextGaugeIndicator
                         gauge={jauge}
