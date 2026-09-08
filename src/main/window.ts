@@ -15,6 +15,8 @@
 import { signalerInterfaceVisible } from './startup-gate'
 import { cloreDemarrage, pendantOperation } from './gel-main'
 import { surveillerFenetreInjoignable } from './gel-fenetre'
+import { surveillerParBattement } from './gel-battement-fenetre'
+import { journaliserGel } from './gel-main'
 import { app, shell, BrowserWindow, Menu, Tray } from 'electron'
 import { join } from 'path'
 import { writeFileSync } from 'node:fs'
@@ -298,6 +300,21 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
      * freeze qui force a tuer l'application ne laissait donc aucune trace. Electron, lui, l'annonce.
      */
     surveillerFenetreInjoignable(mainWindow)
+
+    /*
+     * ET LE GEL QUE PERSONNE NE SIGNALE. Mesure du 2026-09-08 : une fenetre totalement morte n'a
+     * produit AUCUNE ligne `fenetre-injoignable` — Electron n'emet `unresponsive` que si la fenetre
+     * ne repond plus aux EVENEMENTS D'ENTREE. Sans souris ni clavier, le gel etait invisible. Le
+     * battement, lui, ne depend de personne.
+     */
+    surveillerParBattement(mainWindow, (operation, silenceMs) =>
+      journaliserGel({
+        ts: new Date().toISOString(),
+        blocageMs: silenceMs,
+        operation,
+        cause: 'boucle-tenue'
+      })
+    )
 
     mainWindow.on('ready-to-show', () => {
       /*
