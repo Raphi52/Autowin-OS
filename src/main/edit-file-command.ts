@@ -135,7 +135,18 @@ export function decideEdit(
   if (content === null) {
     return { allowed: false, reason: 'fichier inexistant (cette commande ne crée pas de fichier)' }
   }
-  const occurrences = content.split(input.oldText).length - 1
+  /*
+   FINS DE LIGNE — un fichier Windows (CRLF) refusait tout extrait de PLUSIEURS lignes.
+   Mesure du 2026-09-08 (conv-342) : deux editions rejetees d affilee sur ChatView.tsx, avec le
+   message  introuvable  alors que le texte etait bien la — seul le separateur differait. L agent
+   ecrit des sauts de ligne simples ; le fichier en porte des doubles. Ce n est pas un ecart de
+   contenu, c est une convention de fichier : on traduit l extrait dans CELLE du fichier avant de
+   chercher, au lieu de faire porter la traduction a l appelant.
+  */
+  const oldTexte = adapterFinsDeLigne(content, input.oldText)
+  const newTexte =
+    oldTexte === input.oldText ? input.newText : adapterFinsDeLigne(content, input.newText)
+  const occurrences = content.split(oldTexte).length - 1
   if (occurrences === 0) {
     // Un refus doit ENSEIGNER, pas seulement interdire. Constate en usage reel (2026-07-29) :
     // « introuvable » a fait enchainer QUATRE tentatives a l'aveugle, l'agent devinant l'extrait de
@@ -163,8 +174,8 @@ export function decideEdit(
     absolutePath,
     // Hors du dossier Autowin, le chemin RELATIF ne veut rien dire : on rend l'absolu, seul citable.
     relativePath: (externe ? absolutePath : relativePath).replace(/\\/g, '/'),
-    oldText: input.oldText,
-    newText: input.newText,
+    oldText: oldTexte,
+    newText: newTexte,
     externe
   }
 }
@@ -196,6 +207,19 @@ export function refusRacineSysteme(absolutePath: string): string | undefined {
     }
   }
   return undefined
+}
+
+/**
+ * Traduit un extrait dans la convention de fins de ligne DU FICHIER vise.
+ *
+ * Rendu tel quel si le fichier ne porte pas de CRLF, ou si l extrait en porte deja : on ne
+ * reecrit jamais un extrait qui correspond deja, pour ne pas fabriquer une correspondance
+ * differente de celle demandee.
+ */
+export function adapterFinsDeLigne(content: string, extrait: string): string {
+  if (!content.includes('\r\n')) return extrait
+  if (extrait.includes('\r')) return extrait
+  return extrait.split('\n').join('\r\n')
 }
 
 /** Premiere ligne non vide d'un extrait — la plus discriminante pour retrouver la zone visee. */

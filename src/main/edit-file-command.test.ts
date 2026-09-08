@@ -91,6 +91,42 @@ describe('decideEdit — CONFINEMENT au workspace', () => {
   })
 })
 
+describe('decideEdit — FINS DE LIGNE Windows', () => {
+  /*
+   Un fichier CRLF refusait TOUT extrait de plusieurs lignes : l agent ecrit des sauts simples,
+   le fichier en porte des doubles, et la recherche etait faite sur le texte brut. Mesure le
+   2026-09-08 (conv-342) : deux editions rejetees de suite alors que le texte etait bien la.
+  */
+  const contenuWindows = ['const a = 1', 'const b = 2'].join('\r\n')
+
+  it('accepte un extrait multi-lignes ecrit en sauts simples', () => {
+    const decision = decideEdit(
+      { path: 'a.ts', oldText: ['const a = 1', 'const b = 2'].join('\n'), newText: ['const a = 9', 'const b = 2'].join('\n') },
+      WORKSPACE,
+      file(contenuWindows)
+    )
+    expect(decision.allowed).toBe(true)
+    if (!decision.allowed) return
+    // Le remplacement porte la convention DU FICHIER : sinon l edition melangerait les deux.
+    expect(decision.oldText).toContain('\r')
+    expect(decision.newText).toContain('\r')
+    expect(applyEdit(contenuWindows, decision.oldText, decision.newText)).toBe(
+      ['const a = 9', 'const b = 2'].join('\r\n')
+    )
+  })
+
+  it('laisse intact un fichier a sauts simples', () => {
+    const decision = decideEdit(
+      { path: 'a.ts', oldText: 'const a = 1', newText: 'const a = 9' },
+      WORKSPACE,
+      file(['const a = 1', 'const b = 2'].join('\n'))
+    )
+    expect(decision.allowed).toBe(true)
+    if (!decision.allowed) return
+    expect(decision.oldText).toBe('const a = 1')
+  })
+})
+
 describe('decideEdit — ZONES INTERDITES', () => {
   it('refuse .git (corromprait le depot)', () => {
     const decision = decideEdit(
