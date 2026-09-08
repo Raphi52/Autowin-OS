@@ -4327,6 +4327,19 @@ button.chat-project-dot:disabled {
     transform 120ms ease;
   pointer-events: none;
 }
+/* LE PANNEAU DE DETAIL POSE SUR LE FILET (demande du 2026-09-08) : meme contenu que celui de la
+   barre de l en-tete. Il s ancre AU-DESSUS du filet et reprend les evenements de pointeur, que la
+   bande de survol neutralise pour la bulle — sinon le bouton Compacter serait inatteignable. */
+.composer-context-tip .model-quota-popover {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: auto;
+  top: auto;
+  width: min(380px, 100%);
+  pointer-events: auto;
+}
+
 .composer-context-tip:hover .composer-context-tip-bulle {
   opacity: 1;
   visibility: visible;

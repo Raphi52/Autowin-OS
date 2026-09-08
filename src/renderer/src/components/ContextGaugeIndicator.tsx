@@ -95,10 +95,11 @@ export function ContextGaugeIndicator({
         {pourcent} %
       </button>
       {open && (
-        <section
-          className="model-quota-popover"
-          data-testid="chat-context-popover"
-          aria-label="Contexte de cette conversation"
+        <ContextGaugeDetail
+          gauge={gauge}
+          onCompact={onCompact}
+          busy={busy}
+          fermer={() => setOpen(false)}
           style={
             ancrage
               ? {
@@ -111,61 +112,99 @@ export function ContextGaugeIndicator({
                 }
               : undefined
           }
-        >
-          <header>
-            <div>
-              <strong>Contexte de cette conversation</strong>
-              <small>fenêtre du modèle servi</small>
-            </div>
-          </header>
-          <div className="model-quota-list">
-            <article
-              className={`model-quota-row quota-context-gauge is-${gauge.level}`}
-              data-testid="quota-context-gauge"
-              aria-label={titre}
-              title={titre}
-            >
-              <div className="model-quota-name">
-                <span>
-                  <strong>Occupation du fil</strong>
-                  <small>
-                    {gauge.used.toLocaleString('fr-FR')} / {gauge.limit.toLocaleString('fr-FR')}{' '}
-                    tokens · {gauge.cacheRead.toLocaleString('fr-FR')} relus du cache
-                  </small>
-                </span>
-              </div>
-              <div className="model-quota-window">
-                <div className="quota-context-gauge-track" aria-hidden="true">
-                  <i className="quota-context-gauge-fill" style={{ width: `${pourcent}%` }} />
-                </div>
-                <strong className="model-quota-values">
-                  <span>{pourcent} % occupé</span>
-                  <small>{gauge.fresh.toLocaleString('fr-FR')} tokens frais</small>
-                </strong>
-                {onCompact && (
-                  <button
-                    type="button"
-                    className="quota-context-compact"
-                    data-testid="quota-context-compact"
-                    disabled={busy === true}
-                    title={
-                      busy === true
-                        ? 'Compaction indisponible : un tour est déjà en cours'
-                        : 'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé'
-                    }
-                    onClick={() => {
-                      setOpen(false)
-                      onCompact()
-                    }}
-                  >
-                    Compacter
-                  </button>
-                )}
-              </div>
-            </article>
-          </div>
-        </section>
+        />
       )}
     </div>
+  )
+}
+
+/**
+ * LE DETAIL DU CONTEXTE, SANS SON DECLENCHEUR.
+ *
+ * Extrait pour etre montre par DEUX endroits : la barre de l en-tete, et le filet colore
+ * au-dessus du champ de saisie (demande utilisateur du 2026-09-08). Deux affichages de la MEME
+ * donnee devaient offrir le meme detail ; le dupliquer les aurait fait diverger.
+ *
+ * Le placement n appartient pas a ce composant : chaque appelant passe son propre `style`.
+ */
+export function ContextGaugeDetail({
+  gauge,
+  onCompact,
+  busy,
+  style,
+  fermer
+}: {
+  gauge: ContextGauge
+  onCompact?: () => void
+  busy?: boolean
+  style?: React.CSSProperties
+  /** Appele quand une action du panneau doit le refermer. */
+  fermer?: () => void
+}): React.JSX.Element {
+  const pourcent = Math.round(gauge.ratio * 100)
+  const titre =
+    `Contexte : ${gauge.used.toLocaleString('fr-FR')} tokens sur ` +
+    `${gauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
+    `${gauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+  return (
+      <section
+        className="model-quota-popover"
+        data-testid="chat-context-popover"
+        aria-label="Contexte de cette conversation"
+        style={style}
+      >
+        <header>
+          <div>
+            <strong>Contexte de cette conversation</strong>
+            <small>fenêtre du modèle servi</small>
+          </div>
+        </header>
+        <div className="model-quota-list">
+          <article
+            className={`model-quota-row quota-context-gauge is-${gauge.level}`}
+            data-testid="quota-context-gauge"
+            aria-label={titre}
+            title={titre}
+          >
+            <div className="model-quota-name">
+              <span>
+                <strong>Occupation du fil</strong>
+                <small>
+                  {gauge.used.toLocaleString('fr-FR')} / {gauge.limit.toLocaleString('fr-FR')}{' '}
+                  tokens · {gauge.cacheRead.toLocaleString('fr-FR')} relus du cache
+                </small>
+              </span>
+            </div>
+            <div className="model-quota-window">
+              <div className="quota-context-gauge-track" aria-hidden="true">
+                <i className="quota-context-gauge-fill" style={{ width: `${pourcent}%` }} />
+              </div>
+              <strong className="model-quota-values">
+                <span>{pourcent} % occupé</span>
+                <small>{gauge.fresh.toLocaleString('fr-FR')} tokens frais</small>
+              </strong>
+              {onCompact && (
+                <button
+                  type="button"
+                  className="quota-context-compact"
+                  data-testid="quota-context-compact"
+                  disabled={busy === true}
+                  title={
+                    busy === true
+                      ? 'Compaction indisponible : un tour est déjà en cours'
+                      : 'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé'
+                  }
+                  onClick={() => {
+                    fermer?.()
+                    onCompact()
+                  }}
+                >
+                  Compacter
+                </button>
+              )}
+            </div>
+          </article>
+        </div>
+      </section>
   )
 }

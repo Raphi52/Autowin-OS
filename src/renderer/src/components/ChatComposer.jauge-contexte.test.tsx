@@ -61,6 +61,37 @@ describe('ChatComposer — le separateur porte la jauge de contexte', () => {
     expect((bulle as HTMLElement).textContent).toContain('Contexte')
   })
 
+  it('montre le PANNEAU de detail au survol du filet, et le retire en sortant', () => {
+    /*
+     Le filet ne portait qu une bulle de texte, alors que la barre de l en-tete ouvrait un panneau
+     complet : deux vues de la MEME donnee repondaient differemment au meme geste (demande du
+     2026-09-08). Le panneau est fabrique par le parent ; ici on prouve le GESTE, pas son contenu.
+    */
+    const filet = monter(
+      proprietes({
+        contextRatio: 0.03,
+        contextLevel: 'ok',
+        contextTitle: 'Contexte : 30 439',
+        contextPanelNode: <p data-testid="panneau-essai">detail</p>
+      })
+    )
+    const zone = filet.querySelector('[data-testid="composer-context-tip"]') as HTMLElement
+    expect(zone.querySelector('[data-testid="panneau-essai"]')).toBeNull()
+
+    // React derive enter/leave des evenements DELEGUES pointerover/pointerout.
+    act(() => {
+      zone.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
+    })
+    expect(zone.querySelector('[data-testid="panneau-essai"]')).not.toBeNull()
+    // L infobulle du navigateur s efface : le panneau dit deja tout, en double ce serait du bruit.
+    expect(zone.title).toBe('')
+
+    act(() => {
+      zone.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }))
+    })
+    expect(zone.querySelector('[data-testid="panneau-essai"]')).toBeNull()
+  })
+
   it('laisse le filet GRIS quand l occupation est inconnue — jamais 0 %', () => {
     const filet = monter(proprietes({ contextRatio: undefined }))
 

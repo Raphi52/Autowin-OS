@@ -125,7 +125,7 @@ import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
-import { ContextGaugeIndicator } from './ContextGaugeIndicator'
+import { ContextGaugeDetail, ContextGaugeIndicator } from './ContextGaugeIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
@@ -687,6 +687,17 @@ export function ChatView({
     model?: string
     reasoningEffort?: string
   } | null>(null)
+  /**
+   * LA JAUGE DU FIL COURANT — mesuree si un tour l a etablie, sinon le repli a 0 %.
+   *
+   * UNE seule source pour les DEUX vues : la barre de l en-tete et le filet colore au-dessus du
+   * champ. Le filet la calculait a part et restait gris tant qu aucun tour n avait ete mesure : sur
+   * un fil vierge il n y avait donc rien a survoler, ni bulle ni panneau (signale le 2026-09-08).
+   * Le repli ne depend pas d une conversation active : « Nouveau fil » met l id a null.
+   */
+  const jaugeCourante =
+    (activeId != null ? contextGauges[activeId] : undefined) ??
+    jaugeVide(orchestratorBinding?.model, orchestratorBinding?.provider)
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
   const [modelChangePending, setModelChangePending] = useState(false)
   const [modelChangeError, setModelChangeError] = useState<string | null>(null)
@@ -5130,11 +5141,7 @@ Cliquer pour changer le dossier de travail.`}
                     qu'on ne SAIT pas : afficher 0 % dirait « ce fil est vide » la ou la verite est
                     « on l'ignore ».
                   */
-                    const mesuree = activeId != null ? contextGauges[activeId] : undefined
-                    // Fil neuf (aucun tour mesure) : on affiche 0 % plutot que rien — un fil sans
-                    // tour porte REELLEMENT zero token, ce n'est pas une ignorance.
-                    const jauge =
-                      mesuree ?? jaugeVide(orchestratorBinding?.model, orchestratorBinding?.provider)
+                    const jauge = jaugeCourante
                     return (
                       <ContextGaugeIndicator
                         gauge={jauge}
@@ -5595,10 +5602,23 @@ Cliquer pour choisir une autre branche.`}
             placeholderPendantTour={busy && activeId !== null}
             /* Le filet au-dessus du champ porte l'occupation de la fenetre du modele. Meme source
                que la jauge de l'en-tete : `contextGauges`, jamais un calcul refait ici. */
-            contextRatio={activeId != null ? contextGauges[activeId]?.ratio : undefined}
-            contextLevel={activeId != null ? contextGauges[activeId]?.level : undefined}
+            /* Le filet montre le MEME panneau que la barre de l en-tete au survol : deux vues
+               de la meme donnee doivent repondre pareil au meme geste. */
+            contextPanelNode={(() => {
+              const j = jaugeCourante
+              if (!j) return undefined
+              return (
+                <ContextGaugeDetail
+                  gauge={j}
+                  busy={busy}
+                  onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
+                />
+              )
+            })()}
+            contextRatio={jaugeCourante?.ratio}
+            contextLevel={jaugeCourante?.level}
             contextTitle={(() => {
-              const j = activeId != null ? contextGauges[activeId] : undefined
+              const j = jaugeCourante
               if (!j) return undefined
               return (
                 `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +

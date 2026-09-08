@@ -205,6 +205,15 @@ export interface ChatComposerProps {
   contextLevel?: 'ok' | 'tendu' | 'critique'
   /** Libelle de survol, ecrit par le parent qui detient les nombres. */
   contextTitle?: string
+
+  /**
+   * LE PANNEAU DE DETAIL, montre au SURVOL du filet (demande utilisateur du 2026-09-08).
+   *
+   * Le filet portait une simple bulle de texte ; l en-tete, lui, ouvrait un panneau complet.
+   * Deux affichages de la MEME donnee repondaient differemment au meme geste. Le noeud est
+   * fabrique par le parent, seul detenteur des nombres et de l action Compacter.
+   */
+  contextPanelNode?: ReactNode
   leadingNode?: ReactNode
   stopNode?: ReactNode
   metaNode?: ReactNode
@@ -218,6 +227,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [mentionIndex, setMentionIndex] = useState(0)
     const [mentionDismissed, setMentionDismissed] = useState(false)
     const inputRef = useRef<HTMLTextAreaElement>(null)
+    /** Survol du filet : ouvre le panneau de detail, comme la barre de l en-tete. */
+    const [filetSurvole, setFiletSurvole] = useState(false)
 
     useImperativeHandle(ref, () => ({
       setInput: (value: string) => setInput(value),
@@ -419,11 +430,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
           <div
             className="composer-context-tip"
             data-testid="composer-context-tip"
-            title={props.contextTitle}
+            title={props.contextPanelNode ? undefined : props.contextTitle}
+            onPointerEnter={() => setFiletSurvole(true)}
+            onPointerLeave={() => setFiletSurvole(false)}
           >
-            <span className="composer-context-tip-bulle" role="tooltip">
-              {props.contextTitle}
-            </span>
+            {props.contextPanelNode && filetSurvole ? (
+              props.contextPanelNode
+            ) : props.contextPanelNode ? null : (
+              <span className="composer-context-tip-bulle" role="tooltip">
+                {props.contextTitle}
+              </span>
+            )}
           </div>
         ) : null}
         <div className="composer-field">
