@@ -1130,8 +1130,7 @@ export function GraphView({
   }, [syncThemeClusterLabels])
 
   useEffect(() => {
-    // SONDE-ISOLEMENT : boucle d'etiquettes neutralisee le temps du diagnostic.
-    if (true || !active || !showThemeClusterLabels) return
+    if (!active || !showThemeClusterLabels) return
     let frame = 0
     const followCamera = (): void => {
       /*
