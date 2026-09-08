@@ -83,6 +83,33 @@ describe('surveillerFenetreInjoignable', () => {
     expect(ecrits).toEqual([])
     expect(fenetre.listenerCount('unresponsive')).toBe(0)
   })
+
+  /**
+   * Mesure du 2026-09-08 15:09 : 5,6 s d'interface injoignable, puis un processus d'affichage NEUF.
+   * Sans cette ligne, le journal ne garde qu'un `fenetre-revenue` trompeur et un manque de memoire
+   * ressemble exactement a une boucle sans fin.
+   */
+  it('journalise la MORT du processus d affichage, avec son motif et la duree deja vecue', () => {
+    const ecrits: Gel[] = []
+    const contenu = new EventEmitter()
+    const fenetre = Object.assign(fenetreFactice(), { webContents: contenu })
+    const horloge = [1_000, 6_600]
+    surveillerFenetreInjoignable(
+      fenetre,
+      (gel) => ecrits.push(gel),
+      () => horloge.shift() ?? 6_600
+    )
+
+    fenetre.emit('unresponsive')
+    contenu.emit('render-process-gone', {}, { reason: 'oom', exitCode: 9 })
+
+    expect(ecrits.at(-1)).toEqual({
+      ts: new Date(6_600).toISOString(),
+      blocageMs: 5_600,
+      operation: 'renderer:processus-disparu:oom',
+      cause: 'boucle-tenue'
+    })
+  })
 })
 
 /**
