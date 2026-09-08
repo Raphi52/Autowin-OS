@@ -35,3 +35,24 @@ describe('la boucle d etiquettes du graphe est mesuree', () => {
     expect(corps).not.toMatch(/^\s*syncThemeClusterLabels\(\)\s*$/mu)
   })
 })
+
+/**
+ * GARDE-FOU DE CADENCE (2026-09-08) — mesure sur le Brain reel (952 noeuds, 30 themes) : la fenetre
+ * de Memory mourait a l'infini (100 % de processeur, memoire +25 Mo/4 s) et le dernier bloc ENTRE
+ * avant la mort etait toujours `graph:etiquettes`, rejoue 2 894 fois. La boucle par image doit donc
+ * rester CONDITIONNELLE : sans pose nouvelle, aucun placement, donc aucune lecture de geometrie.
+ */
+describe('la boucle d etiquettes ne travaille que si la pose a change', () => {
+  const source = readFileSync(join(__dirname, 'GraphView.tsx'), 'utf8')
+  const boucle = source.slice(source.indexOf('const followCamera'))
+  const corps = boucle.slice(0, boucle.indexOf('frame = requestAnimationFrame(followCamera)'))
+
+  it('le rappel par image est garde par la signature de pose', () => {
+    expect(corps).toMatch(/doitResynchroniser\(/u)
+    expect(corps).toMatch(/signatureCamera\(/u)
+  })
+
+  it('la mesure des etiquettes est conservee au lieu d etre relue a chaque image', () => {
+    expect(source).toMatch(/taillesEtiquettesRef\.current\.get\(/u)
+  })
+})

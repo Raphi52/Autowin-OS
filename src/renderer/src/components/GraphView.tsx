@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import type { BrainGraphRef } from '../../../main/viz/fs-brains'
 import { brainSubjectOf } from './graph-brain-categories'
+import { doitResynchroniser, signatureCamera } from './graph-etiquettes-cadence'
 import { mesurerBlocGraphe } from './graph-perf'
 import { tailleSuivante } from './graph-taille-observee'
 import { degre as degreDuNoeud, deuxiemeSaut } from './graph-neighborhood'
@@ -221,6 +222,18 @@ export function GraphView({
   const dynamicGraphKeyRef = useRef('')
   const previousNodeSpacingRef = useRef(settings.nodeSpacing)
   const themeLabelsRef = useRef<HTMLDivElement>(null)
+  /**
+   * LES TAILLES D'ETIQUETTES, MESUREES UNE FOIS PUIS CONSERVEES.
+   *
+   * `offsetWidth`/`offsetHeight` ne sont pas des lectures anodines : chacune FORCE le navigateur a
+   * recalculer la mise en page, et le prix ne depend pas des etiquettes mais de TOUT le document --
+   * d'ou la fenetre morte des qu'une fiche volumineuse est ouverte a cote. La boucle les relisait
+   * etiquette par etiquette, soixante fois par seconde. Une etiquette ne change de taille que quand
+   * son TEXTE change : on la mesure donc une fois, et le cache est vide des que les themes bougent.
+   */
+  const taillesEtiquettesRef = useRef<Map<string, { width: number; height: number }>>(new Map())
+  /** Signature de la derniere pose reellement placee — `null` tant qu'aucun placement n'a eu lieu. */
+  const posePlaceeRef = useRef<string | null>(null)
   const initialFitTimeoutRef = useRef<number | null>(null)
   const [initialFitRequest, setInitialFitRequest] = useState(0)
   const fileRequestRef = useRef(0)
@@ -1081,8 +1094,15 @@ export function GraphView({
         label.style.display = 'none'
         continue
       }
-      const width = label.offsetWidth
-      const height = label.offsetHeight
+      /*
+       * MESURE CONSERVEE. Relire ici forcait un recalcul de mise en page par etiquette et par
+       * image ; la taille, elle, ne bouge que si le TEXTE de l'etiquette change -- et le cache est
+       * alors vide en amont. On ne paie donc la mesure qu'au premier passage.
+       */
+      const connue = taillesEtiquettesRef.current.get(anchor.id)
+      const width = connue ? connue.width : label.offsetWidth
+      const height = connue ? connue.height : label.offsetHeight
+      if (!connue) taillesEtiquettesRef.current.set(anchor.id, { width, height })
       const baseLeft = screen.x - width / 2
       const baseTop = screen.y - height - 7
       let position: { left: number; top: number } | undefined
@@ -1125,6 +1145,14 @@ export function GraphView({
   }, [renderedGraph.nodes, showThemeClusterLabels, themeSummaries])
 
   useEffect(() => {
+    /*
+     * LE CACHE DE TAILLES EST VIDE ICI, et c'est le seul endroit correct : cet effet se rejoue
+     * quand `syncThemeClusterLabels` change, donc quand les noeuds ou les resumes de themes ont
+     * bouge -- exactement les cas ou le TEXTE d'une etiquette peut avoir change. Garder une taille
+     * perimee decalerait le placement sans jamais se corriger.
+     */
+    taillesEtiquettesRef.current.clear()
+    posePlaceeRef.current = null
     const frame = requestAnimationFrame(syncThemeClusterLabels)
     return () => cancelAnimationFrame(frame)
   }, [syncThemeClusterLabels])
@@ -1146,7 +1174,30 @@ export function GraphView({
        * tache longue survenant pendant cette boucle ressort donc sous `graph:etiquettes` au lieu
        * de `renderer:longtask`, le nom qui portait 368 s de fenetre morte sans accuser personne.
        */
-      mesurerBlocGraphe('graph:etiquettes', syncThemeClusterLabels)
+      /*
+       * LA GARDE DE CADENCE. Mesure du 2026-09-08 sur le Brain reel (952 noeuds, 30 themes) : la
+       * fenetre mourait a l'infini et le dernier bloc ENTRE avant la mort etait toujours
+       * `graph:etiquettes`, deja rejoue 2 894 fois. Camera immobile, il n'y a RIEN a replacer --
+       * donc rien a lire ni a ecrire. On compare une signature de pose plutot que de refaire le
+       * travail pour aboutir au meme placement.
+       */
+      const couche = themeLabelsRef.current
+      const graphApi = graphRef.current
+      const camera = graphApi
+        ? (
+            graphApi as unknown as { cameraPosition(): { x: number; y: number; z: number } }
+          ).cameraPosition()
+        : null
+      const signature = signatureCamera(
+        camera,
+        couche?.clientWidth ?? 0,
+        couche?.clientHeight ?? 0,
+        couche?.querySelectorAll('[data-theme-id]').length ?? 0
+      )
+      if (doitResynchroniser(signature, posePlaceeRef.current)) {
+        posePlaceeRef.current = signature
+        mesurerBlocGraphe('graph:etiquettes', syncThemeClusterLabels)
+      }
       frame = requestAnimationFrame(followCamera)
     }
     frame = requestAnimationFrame(followCamera)
