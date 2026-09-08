@@ -92,8 +92,16 @@ export function DecorDeFond(): React.JSX.Element {
      * `renderer.setSize` realloue le tampon de dessin : redimensionner repositionnait donc
      * correctement tous les elements sur un tampon que plus personne ne remplissait.
      */
+    let derniereTaille: { w: number; h: number } | null = null
     const fit = (): void => {
-      scene.resize(host.clientWidth, host.clientHeight)
+      const w = host.clientWidth
+      const h = host.clientHeight
+      // L'observateur notifie a la moindre secousse de mise en page, taille identique comprise. Or
+      // `resize` realloue toute la chaine de post-traitement : le payer pour rien figeait la
+      // fenetre (5,6 s et 6,3 s mesurees le 2026-09-08, sans tache longue JavaScript associee).
+      if (!doitRedimensionner(derniereTaille, w, h)) return
+      derniereTaille = { w, h }
+      scene.resize(w, h)
       scene.render(tempsDecor(performance.now() / 1000, reduceMotion), { x: 0, y: 0 })
     }
     fit()
