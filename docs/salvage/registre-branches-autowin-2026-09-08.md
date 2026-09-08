@@ -3,9 +3,11 @@
 Consigné AVANT toute suppression, conformément à travail-non-publie.ts (« ne supprime aucune branche autowin/recovery/* sans avoir consigné son SHA »).
 Dépôt : dev.azure.com/AmitelGTC/AutoWinOS. 89 branches relevées. Restauration : `git branch <nom> <sha>` puis `git push origin <nom>`.
 
-## Supprimées le 2026-09-08 (12) — aucune perte de contenu
+## Supprimées le 2026-09-08 (11) — aucune perte de contenu
 
-9 doublons d'arbre exacts (un exemplaire identique conservé) + 3 sans contenu de code.
+9 doublons d'arbre exacts (un exemplaire identique conservé) + 2 branches de notes git sans code.
+
+`autowin/secours/pc-20260901/main-ahead-11` (SHA ci-dessous) était le 12e candidat : suppression REFUSÉE par Azure (permission ForcePush manquante sur ce compte). Elle reste en place.
 
 | SHA | branche |
 |---|---|
