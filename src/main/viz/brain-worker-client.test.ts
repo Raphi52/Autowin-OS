@@ -107,7 +107,7 @@ describe('BrainWorkerClient lifecycle', () => {
     const client = new BrainWorkerClient('brain-worker.js', () => worker, 50, 1)
 
     const blocked = client.request('listBrains')
-    const timedOut = expect(blocked).rejects.toThrow(/sans reponse/)
+    const timedOut = expect(blocked).rejects.toThrow(/muet depuis/)
     await expect(client.request('loadPreview', 'brain')).rejects.toThrow(/sature/)
     await vi.advanceTimersByTimeAsync(51)
     await timedOut
@@ -122,7 +122,7 @@ describe('BrainWorkerClient lifecycle', () => {
     const client = new BrainWorkerClient('brain-worker.js', createWorker, 50)
 
     const blocked = client.request('listBrains')
-    const timedOut = expect(blocked).rejects.toThrow(/sans reponse/)
+    const timedOut = expect(blocked).rejects.toThrow(/muet depuis/)
     await vi.advanceTimersByTimeAsync(51)
     await timedOut
 
@@ -145,7 +145,7 @@ describe('BrainWorkerClient lifecycle', () => {
 
     const graph = graphClient.request('loadGraph', 'brain')
     const blockedSearch = searchClient.requestWithTimeout(50, 'searchBrain', 'brain', 'query')
-    const timedOut = expect(blockedSearch).rejects.toThrow(/sans reponse/)
+    const timedOut = expect(blockedSearch).rejects.toThrow(/muet depuis/)
     await vi.advanceTimersByTimeAsync(51)
     await timedOut
 
@@ -274,8 +274,45 @@ describe('BrainWorkerClient lifecycle', () => {
     )
 
     const startedAt = Date.now()
-    await expect(client.requestWithTimeout(100, 'listBrains')).rejects.toThrow(/sans reponse/)
+    await expect(client.requestWithTimeout(100, 'listBrains')).rejects.toThrow(/muet depuis/)
     expect(Date.now() - startedAt).toBeLessThan(1_000)
     await expect(client.request('listBrains')).resolves.toBe('fresh')
+  })
+})
+
+/**
+ * LE TRAITEMENT LONG N'EST PLUS UNE FAUTE (2026-09-08, conv-353) — la premiere lecture du Brain sur
+ * un partage RESEAU depasse le delai fixe. Le tuer perdait son cache, donc l'essai suivant repartait
+ * de zero et echouait pareil : la vue Memory ne pouvait plus JAMAIS charger. Un worker qui donne
+ * signe de vie doit desormais etre attendu.
+ */
+describe('un worker qui donne signe de vie est attendu', () => {
+  it('ne tue pas un worker qui bat, meme au-dela du delai de silence', async () => {
+    const envoyes: unknown[] = []
+    let recevoir: ((message: unknown) => void) | undefined
+    const worker = {
+      on(evenement: string, ecouteur: (valeur: never) => void) {
+        if (evenement === 'message') recevoir = ecouteur as (message: unknown) => void
+      },
+      postMessage(message: unknown) {
+        envoyes.push(message)
+      },
+      terminate() {
+        throw new Error('le worker vivant ne doit PAS etre tue')
+      }
+    }
+    const client = new BrainWorkerClient('inutile', () => worker as never, 60)
+    const appel = client.request('listBrains')
+    const id = (envoyes[0] as { id: number }).id
+
+    // Trois battements espaces au-dela du delai : le total depasse largement 60 ms.
+    for (let tour = 0; tour < 3; tour++) {
+      await new Promise((res) => setTimeout(res, 40))
+      recevoir?.({ id, vivant: true })
+    }
+    await new Promise((res) => setTimeout(res, 20))
+    recevoir?.({ id, ok: true, value: ['brain'] })
+
+    await expect(appel).resolves.toEqual(['brain'])
   })
 })

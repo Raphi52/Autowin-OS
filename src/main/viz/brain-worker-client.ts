@@ -5,8 +5,17 @@ type PendingCall = {
   resolve(value: unknown): void
   reject(error: Error): void
   timeout: ReturnType<typeof setTimeout>
+  /** Repart pour un tour de silence tolere — appele a chaque signe de vie du worker. */
+  rearmer(): ReturnType<typeof setTimeout>
 }
-type BrainWorkerResponse = { id: number; ok: boolean; value?: unknown; error?: string }
+type BrainWorkerResponse = {
+  id: number
+  ok?: boolean
+  value?: unknown
+  error?: string
+  /** Signe de vie emis pendant un traitement long : ce n'est PAS une reponse. */
+  vivant?: boolean
+}
 
 export interface BrainWorkerLike {
   on(event: 'message', listener: (message: BrainWorkerResponse) => void): unknown
@@ -50,6 +59,18 @@ export class BrainWorkerClient {
       if (this.worker !== worker) return
       const call = this.pending.get(message.id)
       if (!call) return
+      /*
+       * SIGNE DE VIE — mesure du 2026-09-08 : la premiere lecture du Brain sur un partage RESEAU
+       * depasse 30 s (17 220 ms rien que pour les themes, puis 40 ms au rappel grace au cache). Le
+       * delai tuait alors le worker AVEC son cache, donc l'essai suivant repartait de zero et
+       * echouait pareil. On ne sanctionne plus la DUREE du travail, mais le SILENCE : tant que le
+       * worker parle, on rearme.
+       */
+      if (message.vivant) {
+        clearTimeout(call.timeout)
+        call.timeout = call.rearmer()
+        return
+      }
       this.pending.delete(message.id)
       clearTimeout(call.timeout)
       if (message.ok) call.resolve(message.value)
@@ -103,16 +124,20 @@ export class BrainWorkerClient {
       return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
     return new Promise<BrainWorkerResult<M>>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        if (!this.pending.has(id)) return
-        const error = new Error(`Worker Brain sans reponse apres ${boundedTimeoutMs} ms`)
-        this.retireWorker(worker, error)
-      }, boundedTimeoutMs)
-      timeout.unref?.()
+      const armer = (): ReturnType<typeof setTimeout> => {
+        const jeton = setTimeout(() => {
+          if (!this.pending.has(id)) return
+          const error = new Error(`Worker Brain muet depuis ${boundedTimeoutMs} ms`)
+          this.retireWorker(worker, error)
+        }, boundedTimeoutMs)
+        jeton.unref?.()
+        return jeton
+      }
       this.pending.set(id, {
         resolve: (value) => resolve(value as BrainWorkerResult<M>),
         reject,
-        timeout
+        timeout: armer(),
+        rearmer: armer
       })
       try {
         worker.postMessage({ id, method, args })

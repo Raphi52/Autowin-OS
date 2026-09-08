@@ -22,7 +22,19 @@ if (!parentPort) throw new Error('brain-worker doit être exécuté dans un Work
 const graphCache = new Map<string, ReturnType<typeof loadBrainGraph>>()
 const neighborhoodCache = new Map<string, ReturnType<typeof loadBrainNeighborhood>>()
 
+/*
+ * BATTEMENT DU WORKER — mesure du 2026-09-08 : la premiere lecture du Brain sur un partage RESEAU
+ * depasse le delai fixe du client, qui tuait alors le worker AVEC son cache. L'essai suivant
+ * repartait de zero et echouait pareil : un echec garanti. Le worker dit donc « je travaille »
+ * pendant le traitement ; le client n'abandonne plus que sur un SILENCE.
+ */
+const BATTEMENT_WORKER_MS = 2_000
+
 parentPort.on('message', async (request: BrainWorkerRequest) => {
+  const battement = setInterval(() => {
+    parentPort?.postMessage({ id: request.id, vivant: true })
+  }, BATTEMENT_WORKER_MS)
+  battement.unref?.()
   try {
     let value: unknown
     switch (request.method) {
@@ -101,5 +113,7 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
       ok: false,
       error: error instanceof Error ? error.message : String(error)
     })
+  } finally {
+    clearInterval(battement)
   }
 })
