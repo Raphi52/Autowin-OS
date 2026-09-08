@@ -314,6 +314,8 @@ import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
 import { journaliserSaisie } from './store/journal-saisie'
 import { defaultProcessIdentity } from './store/worktree-manager'
+import { planifierBalayage } from './store/balayage-retention'
+import { chargerShaConsignes } from './store/registres-consignes'
 import {
   appendExecutionEvidenceFileTrace,
   readConversationFileTraces,
@@ -2732,6 +2734,40 @@ Le fil reprend ensuite normalement.`
     60 * 60 * 1_000
   )
   balayagePeriodiqueTimer.unref()
+
+  /**
+   * LE BALAYAGE DE RETENTION — il SIGNALE, il ne supprime RIEN. Volontairement.
+   *
+   * Le stock de sauvegardes n'avait aucune politique : 89 branches `autowin/*` accumulees en 22
+   * jours et 208 refs `refs/autowin/*` invisibles de `git branch`, releve du 2026-09-08. Le tri
+   * dependait d'une journee entiere passee a la main.
+   *
+   * POURQUOI AUCUNE SUPPRESSION N'EST BRANCHEE ICI, et c'est un choix, pas un oubli : un balayage
+   * automatique a DEJA fait des degats sur ce depot. Le 2026-08-24, la reprise automatique a tourne
+   * sans plafond et RECREE 682 Mo en rejouant vingt-et-une copies impubliables. On observe donc un
+   * passage reel avant d'autoriser le moindre geste — le plan est journalise, l'humain decide.
+   *
+   * Meme minuteur horaire que le balayage voisin : le stock bouge a l'echelle du jour, pas de la
+   * minute, et un second minuteur n'ajouterait qu'un reveil.
+   */
+  const balayageRetentionTimer = setInterval(
+    () => {
+      void pendantOperation('timer:balayage:retention', async () => {
+        const worktrees = os.worktrees
+        if (!worktrees) return
+        const consignes = chargerShaConsignes(app.getAppPath())
+        const plan = planifierBalayage(worktrees.recenserRetention((sha) => consignes.has(sha)))
+        if (plan.aSupprimer.length === 0 && plan.aSignaler.length === 0) return
+        console.info(
+          `[retention] ${plan.aSupprimer.length} sans perte, ${plan.aSignaler.length} perimes a trancher` +
+            (plan.reportees > 0 ? `, ${plan.reportees} reportes` : '') +
+            ' — AUCUNE suppression automatique.'
+        )
+      })
+    },
+    60 * 60 * 1_000
+  )
+  balayageRetentionTimer.unref()
 
   /**
    * Le dossier de travail est GLOBAL et fige au demarrage : une conversation rangee dans un autre

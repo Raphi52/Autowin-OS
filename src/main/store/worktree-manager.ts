@@ -1,6 +1,7 @@
 import { causeGit, sortieGit } from './cause-git'
 import { execFile, execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
+import type { EntreeBalayage } from './balayage-retention'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
 import { verdictDeBureau, type VerdictBureau } from './verdict-bureau'
 import type { Dirent } from 'node:fs'
@@ -51,6 +52,7 @@ import {
  * fait dans la copie est atteignable par SHA depuis la base, qui peut alors le merger.
  */
 
+const SEPARATEUR_LIGNES = /\r?\n/
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
 
 /** Un SHA git tel que `rev-parse` le rend : c'est ce qu'on accepte comme adresse de travail. */
@@ -1597,6 +1599,52 @@ export class WorktreeManager {
   }): 'garder' | 'supprimable-sans-perte' | 'supprimable-perime' {
     if (entree.famille === 'trie') return 'garder'
     return WorktreeManager.decisionRetentionBranche(entree)
+  }
+
+  /**
+   * RECENSE l'etat de retention du depot -- LECTURE SEULE, aucune suppression, aucun ref touche.
+   *
+   * Alimente `planifierBalayage` avec ce que git sait vraiment :
+   *  - les branches `autowin/*` et les refs `refs/autowin/*` ;
+   *  - `apporteQuelqueChose` par EMPREINTE DE CORRECTIF (`git cherry`), jamais par ascendance : une
+   *    publication par cherry-pick recree le commit sous un autre SHA, et l'ascendance seule
+   *    signalait donc pour toujours un travail deja en base (cause tranchee le 2026-08-24) ;
+   *  - `shaConsigne` par la presence du SHA dans les registres verses au depot.
+   *
+   * Les marqueurs `trie/` ne sont PAS interroges par `git cherry` : ils annotent un travail, ils
+   * n'en portent pas. Les questionner couterait un appel git par marqueur -- 152 sur ce depot le
+   * 2026-09-08 -- pour une reponse que la regle ignore de toute facon.
+   */
+  recenserRetention(consigne: (sha: string) => boolean): EntreeBalayage[] {
+    const maintenant = Date.now()
+    const entrees: EntreeBalayage[] = []
+    const lignes = this.tryGitFn(this.baseRepo, [
+      'for-each-ref',
+      '--format=%(refname) %(objectname) %(committerdate:unix)',
+      'refs/heads/autowin/',
+      'refs/autowin/'
+    ])
+    if (lignes.code !== 0) return entrees
+    for (const ligne of lignes.stdout.split(SEPARATEUR_LIGNES)) {
+      const [refname, sha, ts] = ligne.trim().split(' ')
+      if (!refname || !sha) continue
+      const estBranche = refname.startsWith('refs/heads/autowin/')
+      const famille = estBranche ? 'branche' : (WorktreeManager.familleDeRefAutowin(refname) ?? '')
+      if (!famille) continue
+      const apporteQuelqueChose =
+        famille === 'trie'
+          ? false
+          : this.tryGitFn(this.baseRepo, ['cherry', 'HEAD', refname]).stdout.includes('+')
+      const secondes = Number(ts)
+      entrees.push({
+        nom: refname,
+        famille,
+        apporteQuelqueChose,
+        shaConsigne: consigne(sha),
+        ...(Number.isFinite(secondes) ? { ageMs: maintenant - secondes * 1_000 } : {})
+      })
+    }
+    return entrees
   }
 
   /** La famille d'une ref `refs/autowin/<famille>/<id>`, ou `undefined` si la forme n'est pas celle-la. */
