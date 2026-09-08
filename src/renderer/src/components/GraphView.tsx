@@ -3,6 +3,7 @@ import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import type { BrainGraphRef } from '../../../main/viz/fs-brains'
 import { brainSubjectOf } from './graph-brain-categories'
 import { mesurerBlocGraphe } from './graph-perf'
+import { tailleSuivante } from './graph-taille-observee'
 import { degre as degreDuNoeud, deuxiemeSaut } from './graph-neighborhood'
 import {
   layoutTree,
