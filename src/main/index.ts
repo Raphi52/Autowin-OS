@@ -2755,7 +2755,15 @@ Le fil reprend ensuite normalement.`
       const worktrees = os.worktreeManager
       if (!worktrees) return
       const consignes = chargerShaConsignes(app.getAppPath())
-      const plan = planifierBalayage(worktrees.recenserRetention((sha) => consignes.has(sha)))
+      /*
+       * ASYNCHRONE, et ce n'est pas un detail de style. La version synchrone lance un `git cherry`
+       * par ref de secours -- 97 ce 2026-09-08 -- en `execFileSync` : 11 720 ms de fenetre figee
+       * pendant la construction de la fenetre, journalises dans `gels.jsonl`. Meme prix, meme
+       * verdict, mais paye sans tenir la boucle d'evenements.
+       */
+      const plan = planifierBalayage(
+        await worktrees.recenserRetentionAsync((sha) => consignes.has(sha))
+      )
       if (plan.aSupprimer.length === 0 && plan.aSignaler.length === 0) return
       console.info(
         `[retention] ${plan.aSupprimer.length} sans perte, ${plan.aSignaler.length} perimes a trancher` +
