@@ -834,7 +834,7 @@ function EcranNouveau({
 
   return (
     <div
-      className={`home-chat__repondre${survol ? ' is-depot' : ''}`}
+      className={`home-chat__repondre home-chat__nouveau${survol ? ' is-depot' : ''}`}
       data-testid="home-inter-nouveau-depot"
       onPointerDown={(event) => event.stopPropagation()}
       onDragEnter={(event) => {

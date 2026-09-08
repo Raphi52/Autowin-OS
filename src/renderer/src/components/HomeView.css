@@ -2134,6 +2134,18 @@
 /* La zone de réponse devient la zone de dépôt : c'est là que le fichier tombe, donc c'est là que
    l'accusé de réception doit s'afficher. Le `position: sticky` du bloc suffit à porter le calque
    absolu ci-dessous — le repasser en `relative` ici décollerait la zone du bas de la tuile. */
+/*
+ * L'ecran « nouveau message » n'a QUE ce formulaire sous son en-tete. Colle en bas
+ * (`position: sticky`), il ne couvre que la hauteur de ses champs : un fichier lache deux
+ * centimetres plus haut retombe dans le vide, et l'utilisateur revit le defaut qu'il a signale le
+ * 2026-09-08 — « il ne se passe rien quand je le lache ». La cible du glisser GRANDIT donc pour
+ * occuper toute la tuile.
+ */
+.home-chat__nouveau {
+  position: static;
+  flex: 1;
+}
+
 .home-chat__repondre.is-depot {
   border-top-color: var(--cyan);
 }
