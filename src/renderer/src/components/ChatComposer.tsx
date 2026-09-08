@@ -229,6 +229,28 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const inputRef = useRef<HTMLTextAreaElement>(null)
     /** Survol du filet : ouvre le panneau de detail, comme la barre de l en-tete. */
     const [filetSurvole, setFiletSurvole] = useState(false)
+    /*
+     CLIC = OUVERTURE FIGEE (signale le 2026-09-08 : « je peux pas cliquer sur Compacter »).
+     Le survol seul ne suffit pas : viser un bouton DANS un panneau qui se ferme des qu on quitte
+     sa zone est un piege. Le clic sur le filet fige donc l ouverture jusqu au clic ailleurs.
+    */
+    const [filetFige, setFiletFige] = useState(false)
+    const zoneFiletRef = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+      if (!filetFige) return
+      const fermer = (event: PointerEvent): void => {
+        if (!zoneFiletRef.current?.contains(event.target as Node)) setFiletFige(false)
+      }
+      const echap = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape') setFiletFige(false)
+      }
+      document.addEventListener('pointerdown', fermer)
+      document.addEventListener('keydown', echap)
+      return () => {
+        document.removeEventListener('pointerdown', fermer)
+        document.removeEventListener('keydown', echap)
+      }
+    }, [filetFige])
 
     useImperativeHandle(ref, () => ({
       setInput: (value: string) => setInput(value),
@@ -428,13 +450,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
            declenche qu'au-dessus de la jauge, pas partout dans la zone de saisie. */}
         {props.contextRatio != null && props.contextTitle ? (
           <div
+            ref={zoneFiletRef}
             className="composer-context-tip"
             data-testid="composer-context-tip"
             title={props.contextPanelNode ? undefined : props.contextTitle}
             onPointerEnter={() => setFiletSurvole(true)}
             onPointerLeave={() => setFiletSurvole(false)}
+            onClick={() => setFiletFige((fige) => !fige)}
           >
-            {props.contextPanelNode && filetSurvole ? (
+            {props.contextPanelNode && (filetSurvole || filetFige) ? (
               props.contextPanelNode
             ) : props.contextPanelNode ? null : (
               <span className="composer-context-tip-bulle" role="tooltip">

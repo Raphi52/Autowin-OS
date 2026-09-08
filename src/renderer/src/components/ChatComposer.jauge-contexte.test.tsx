@@ -92,6 +92,37 @@ describe('ChatComposer — le separateur porte la jauge de contexte', () => {
     expect(zone.querySelector('[data-testid="panneau-essai"]')).toBeNull()
   })
 
+  it('garde le panneau OUVERT apres un clic, pour pouvoir viser Compacter', () => {
+    /*
+     Signale le 2026-09-08 : « je peux pas cliquer sur Compacter car la popup disparait des que je
+     sors du hover ». Un bouton dans un panneau qui se ferme quand on le quitte est inatteignable.
+    */
+    const filet = monter(
+      proprietes({
+        contextRatio: 0.03,
+        contextLevel: 'ok',
+        contextTitle: 'Contexte : 30 439',
+        contextPanelNode: <p data-testid="panneau-essai">detail</p>
+      })
+    )
+    const zone = filet.querySelector('[data-testid="composer-context-tip"]') as HTMLElement
+    act(() => {
+      zone.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
+      zone.click()
+    })
+    // La souris s en va : le panneau doit RESTER, sinon le bouton n est jamais atteignable.
+    act(() => {
+      zone.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }))
+    })
+    expect(zone.querySelector('[data-testid="panneau-essai"]')).not.toBeNull()
+
+    // Un clic AILLEURS le referme.
+    act(() => {
+      document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    })
+    expect(zone.querySelector('[data-testid="panneau-essai"]')).toBeNull()
+  })
+
   it('laisse le filet GRIS quand l occupation est inconnue — jamais 0 %', () => {
     const filet = monter(proprietes({ contextRatio: undefined }))
 

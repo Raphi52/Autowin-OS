@@ -4330,6 +4330,22 @@ button.chat-project-dot:disabled {
 /* LE PANNEAU DE DETAIL POSE SUR LE FILET (demande du 2026-09-08) : meme contenu que celui de la
    barre de l en-tete. Il s ancre AU-DESSUS du filet et reprend les evenements de pointeur, que la
    bande de survol neutralise pour la bulle — sinon le bouton Compacter serait inatteignable. */
+/* LE PONT — sans lui, le panneau est INATTEIGNABLE (signale le 2026-09-08).
+   Le panneau est decale de quelques pixels au-dessus de sa barre : en montant vers lui, le pointeur
+   traverse ce vide, qui n appartient a personne. La sortie se declenche, le panneau se ferme, et le
+   bouton Compacter ne peut JAMAIS etre clique. Une zone transparente comble l ecart : le trajet
+   reste a l interieur, sans rien changer a l apparence. */
+.chat-context-gauge-root .model-quota-popover::before,
+.composer-context-tip .model-quota-popover::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -12px;
+  bottom: -12px;
+  z-index: -1;
+}
+
 .composer-context-tip .model-quota-popover {
   position: absolute;
   bottom: 16px;
