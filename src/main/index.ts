@@ -2588,7 +2588,7 @@ Le fil reprend ensuite normalement.`
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
   // Le corps du tour vit dans src/main/chat/run-pilot-chat.ts : il ne capturait rien d'autre que
   // les valeurs listees ici, qui lui sont desormais passees explicitement.
-  const runPilotChat = createRunPilotChat({
+  const lancerTour = createRunPilotChat({
     os,
     pilot,
     bus,
@@ -2605,6 +2605,44 @@ Le fil reprend ensuite normalement.`
     notifyWatchdogWorkflowIncident,
     watchdogEngine: () => watchdogEngine
   })
+  /**
+   * SILENCE INTERDIT : un rangement qui ne pilote PAS le dossier de travail doit le DIRE.
+   *
+   * Un libelle de classement (« Clients/Amitel ») ou un dossier disparu laissait le modele
+   * travailler dans le depot d'Autowin sans un mot — l'utilisateur croyait etre dans son projet,
+   * et c'est l'AGENTS.md d'Autowin qui etait lu. On ecrit donc l'avertissement dans le fil, UNE
+   * seule fois par conversation et par motif : le repeter a chaque message serait du bruit.
+   */
+  const dossiersDejaAvertis = new Map<string, string>()
+  const avertirDossierSansEffet = (
+    conversationId: string,
+    projectPath: string | undefined | null
+  ): void => {
+    const motif = diagnostiqueDossierConversation(projectPath, os.executionWorkspace)
+    const texte = avertissementDossierConversation(motif, projectPath, os.executionWorkspace)
+    if (!texte) return
+    const empreinte = `${motif}|${projectPath?.trim() ?? ''}|${os.executionWorkspace}`
+    if (dossiersDejaAvertis.get(conversationId) === empreinte) return
+    dossiersDejaAvertis.set(conversationId, empreinte)
+    try {
+      os.conversations.append(conversationId, { role: 'assistant', content: texte })
+      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+    } catch {
+      // Un avertissement manque ne doit JAMAIS empecher le tour de partir.
+    }
+  }
+
+  /**
+   * TOUS les tours passent ICI. L avertissement etait accroche au seul IPC de la frappe
+   * utilisateur : un tour lance autrement (outil `chat_send`, tache planifiee, reprise) restait
+   * muet alors que le dossier range ne pilotait rien. Mesure du 2026-09-08.
+   */
+  const runPilotChat: typeof lancerTour = (...args) => {
+    const conversationId = args[2]
+    if (typeof conversationId === 'string' && conversationId.trim())
+      avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
+    return lancerTour(...args)
+  }
   /**
    * Reprend les appels de chat dont le CLI a survécu au main. La réservation locale empêche un
    * nouveau message d'entrer dans la même conversation pendant qu'on attend la preuve `.exit.json`.
@@ -2798,33 +2836,6 @@ Le fil reprend ensuite normalement.`
   balayageRetentionTimer.unref()
 
   /**
-   * SILENCE INTERDIT : un rangement qui ne pilote PAS le dossier de travail doit le DIRE.
-   *
-   * Un libelle de classement (« Clients/Amitel ») ou un dossier disparu laissait le modele
-   * travailler dans le depot d'Autowin sans un mot — l'utilisateur croyait etre dans son projet,
-   * et c'est l'AGENTS.md d'Autowin qui etait lu. On ecrit donc l'avertissement dans le fil, UNE
-   * seule fois par conversation et par motif : le repeter a chaque message serait du bruit.
-   */
-  const dossiersDejaAvertis = new Map<string, string>()
-  const avertirDossierSansEffet = (
-    conversationId: string,
-    projectPath: string | undefined | null
-  ): void => {
-    const motif = diagnostiqueDossierConversation(projectPath, os.executionWorkspace)
-    const texte = avertissementDossierConversation(motif, projectPath, os.executionWorkspace)
-    if (!texte) return
-    const empreinte = `${motif}|${projectPath?.trim() ?? ''}|${os.executionWorkspace}`
-    if (dossiersDejaAvertis.get(conversationId) === empreinte) return
-    dossiersDejaAvertis.set(conversationId, empreinte)
-    try {
-      os.conversations.append(conversationId, { role: 'assistant', content: texte })
-      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
-    } catch {
-      // Un avertissement manque ne doit JAMAIS empecher le tour de partir.
-    }
-  }
-
-  /**
    * Le dossier de travail est GLOBAL et fige au demarrage : une conversation rangee dans un autre
    * depot faisait quand meme travailler le modele dans celui d'Autowin (defaut du 2026-09-05).
    * On bascule donc AVANT de lancer le tour : preference ecrite, tache mise de cote, relance. La
@@ -2839,10 +2850,7 @@ Le fil reprend ensuite normalement.`
     if (typeof conversationId !== 'string' || !conversationId.trim()) return false
     const conversation = os.conversations.get(conversationId)
     const cible = basculeDeDossierRequise(conversation?.projectPath, os.executionWorkspace)
-    if (!cible) {
-      avertirDossierSansEffet(conversationId, conversation?.projectPath)
-      return false
-    }
+    if (!cible) return false
     const consigne = demande.trim()
     // Sans demande a rejouer, un redemarrage PERDRAIT la tache : mieux vaut le mauvais dossier
     // qu'un tour evapore. On laisse alors partir le tour normalement.
