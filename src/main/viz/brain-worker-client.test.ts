@@ -308,11 +308,49 @@ describe('un worker qui donne signe de vie est attendu', () => {
     // Trois battements espaces au-dela du delai : le total depasse largement 60 ms.
     for (let tour = 0; tour < 3; tour++) {
       await new Promise((res) => setTimeout(res, 40))
-      recevoir?.({ id, vivant: true })
+      recevoir?.({ vivant: true })
     }
     await new Promise((res) => setTimeout(res, 20))
     recevoir?.({ id, ok: true, value: ['brain'] })
 
     await expect(appel).resolves.toEqual(['brain'])
+  })
+})
+
+
+/**
+ * LES APPELS EN FILE D'ATTENTE AUSSI (2026-09-08) — le worker traite en SERIE. Pendant une lecture
+ * reseau de 22 898 ms, les appels suivants attendent dans sa file sans rien recevoir : un battement
+ * adresse a la seule requete en cours les laissait tous mourir a 30 s, et la vue Memory restait
+ * vide en repetant « Impossible de charger le graphe de connaissances ».
+ */
+describe('le signe de vie protege TOUS les appels en attente', () => {
+  it('ne tue pas un second appel pendant qu un premier travaille', async () => {
+    const envoyes: Array<{ id: number }> = []
+    let recevoir: ((message: unknown) => void) | undefined
+    const worker = {
+      on(evenement: string, ecouteur: (valeur: never) => void) {
+        if (evenement === 'message') recevoir = ecouteur as (message: unknown) => void
+      },
+      postMessage(message: unknown) {
+        envoyes.push(message as { id: number })
+      },
+      terminate() {
+        throw new Error('aucun appel ne doit etre abandonne tant que le worker parle')
+      }
+    }
+    const client = new BrainWorkerClient('inutile', () => worker as never, 60)
+    const premier = client.request('listBrains')
+    const second = client.request('listBrains')
+
+    for (let tour = 0; tour < 3; tour++) {
+      await new Promise((res) => setTimeout(res, 40))
+      recevoir?.({ vivant: true })
+    }
+    recevoir?.({ id: envoyes[0].id, ok: true, value: ['un'] })
+    recevoir?.({ id: envoyes[1].id, ok: true, value: ['deux'] })
+
+    await expect(premier).resolves.toEqual(['un'])
+    await expect(second).resolves.toEqual(['deux'])
   })
 })

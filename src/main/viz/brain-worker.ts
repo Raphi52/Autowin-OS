@@ -31,8 +31,12 @@ const neighborhoodCache = new Map<string, ReturnType<typeof loadBrainNeighborhoo
 const BATTEMENT_WORKER_MS = 2_000
 
 parentPort.on('message', async (request: BrainWorkerRequest) => {
+  // Le signe de vie n'a PAS d'id : le worker traite en SERIE, donc pendant qu'il travaille sur une
+  // requete, toutes les autres attendent dans sa file sans recevoir quoi que ce soit. Un battement
+  // adresse a la seule requete en cours laissait donc expirer toutes les suivantes (mesure du
+  // 2026-09-08 : premiere lecture reseau de 22 898 ms, les appels concurrents mouraient a 30 s).
   const battement = setInterval(() => {
-    parentPort?.postMessage({ id: request.id, vivant: true })
+    parentPort?.postMessage({ vivant: true })
   }, BATTEMENT_WORKER_MS)
   battement.unref?.()
   try {

@@ -9,7 +9,7 @@ type PendingCall = {
   rearmer(): ReturnType<typeof setTimeout>
 }
 type BrainWorkerResponse = {
-  id: number
+  id?: number
   ok?: boolean
   value?: unknown
   error?: string
@@ -57,6 +57,19 @@ export class BrainWorkerClient {
       // Une ancienne génération peut encore vider sa file de messages après `error`. Elle ne doit
       // jamais résoudre un appel appartenant au worker de remplacement.
       if (this.worker !== worker) return
+      /*
+       * SIGNE DE VIE GLOBAL — le worker traite en SERIE : pendant une lecture longue, les autres
+       * appels attendent dans sa file sans rien recevoir. Un battement adresse a la seule requete en
+       * cours les laissait donc mourir. Tant que le worker parle, AUCUN de ses appels n'est perdu.
+       */
+      if (message.vivant) {
+        for (const attente of this.pending.values()) {
+          clearTimeout(attente.timeout)
+          attente.timeout = attente.rearmer()
+        }
+        return
+      }
+      if (message.id === undefined) return
       const call = this.pending.get(message.id)
       if (!call) return
       /*
@@ -66,11 +79,6 @@ export class BrainWorkerClient {
        * echouait pareil. On ne sanctionne plus la DUREE du travail, mais le SILENCE : tant que le
        * worker parle, on rearme.
        */
-      if (message.vivant) {
-        clearTimeout(call.timeout)
-        call.timeout = call.rearmer()
-        return
-      }
       this.pending.delete(message.id)
       clearTimeout(call.timeout)
       if (message.ok) call.resolve(message.value)
