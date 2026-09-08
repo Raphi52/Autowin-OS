@@ -923,6 +923,20 @@ export class AutowinOS {
     quote.limits.maxConcurrency = 1
     quote.limits.maxRecoveries = 0
     quote.limits.maxFreshTokens = Math.min(quote.limits.maxFreshTokens, maxTotalTokens)
+    /*
+     * LE PLAFOND D'APPELS DU TOUR EST CELUI DU REGLAGE, PAS CELUI DU REGIME.
+     *
+     * Mesure du 2026-09-08 (conv-347, conv-241, conv-233) : trois tours morts sur « Budget d'appels
+     * provider atteint : 10 appels » alors que le reglage en autorise 50. Cause : `compileExecutionQuote`
+     * classe un tour de chat en regime `trivial`, dont le PREREGLAGE vaut 10 appels, et `stricter`
+     * garde le plus petit des deux. Le plafond effectif ne venait donc ni du reglage ni d'un cap pose
+     * par l'utilisateur, mais d'un prereglage de regime concu pour les RUN.
+     *
+     * Ce compteur compte des ETAPES (lire, editer, verifier), pas de la depense : le laisser tuer un
+     * tour agentique en plein travail rend la pire issue possible — paye, et rien de fini. On lui
+     * rend donc la valeur decidee plus haut, qu'un cap d'environnement continue de RESSERRER.
+     */
+    quote.limits.maxProviderCalls = maxProviderCalls
     return this.executionSupervisor.run(quote, signal, execute, undefined, onUsageSettlement)
   }
 
