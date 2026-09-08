@@ -20,10 +20,24 @@ import type { Gel } from '../shared/gel-detector'
 export interface FenetreSurveillee {
   on(evenement: 'unresponsive' | 'responsive', ecouteur: () => void): unknown
   off?(evenement: 'unresponsive' | 'responsive', ecouteur: () => void): unknown
+  /** Optionnel : le contenu de la fenetre, seul emetteur de la disparition de son processus. */
+  webContents?: {
+    on(evenement: 'render-process-gone', ecouteur: (...args: unknown[]) => void): unknown
+    off?(evenement: 'render-process-gone', ecouteur: (...args: unknown[]) => void): unknown
+  }
 }
 
 export const OPERATION_ENTREE_EN_GEL = 'renderer:fenetre-injoignable'
 export const OPERATION_SORTIE_DE_GEL = 'renderer:fenetre-revenue'
+/**
+ * TROISIEME ANGLE MORT — la fenetre ne revient pas : son PROCESSUS DISPARAIT.
+ *
+ * Mesure du 2026-09-08 15:09 : 5,6 s d'interface injoignable, puis un processus d'affichage NEUF
+ * 15 s plus tard. Vu de l'utilisateur c'est un gel ; vu du journal, il ne restait qu'une ligne
+ * `fenetre-revenue` trompeuse, parce que rien n'ecoutait la mort du processus. Sans ce motif, un
+ * manque de memoire et une boucle sans fin laissent exactement la meme trace.
+ */
+export const OPERATION_PROCESSUS_DISPARU = 'renderer:processus-disparu'
 
 /**
  * Branche l'ecoute et rend la fonction qui la retire.
