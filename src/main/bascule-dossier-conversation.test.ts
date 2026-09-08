@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { basculeDeDossierRequise } from './bascule-dossier-conversation'
+import {
+  avertissementDossierConversation,
+  basculeDeDossierRequise,
+  diagnostiqueDossierConversation
+} from './bascule-dossier-conversation'
 
 describe('basculeDeDossierRequise', () => {
   const existe = (): boolean => true
@@ -32,5 +36,47 @@ describe('basculeDeDossierRequise', () => {
 
   it('ne bascule pas vers un dossier qui n existe plus sur le disque', () => {
     expect(basculeDeDossierRequise('D:\\Disparu', AUTOWIN, () => false)).toBeNull()
+  })
+})
+
+describe('avertissement quand le rangement ne pilote pas le dossier de travail', () => {
+  const existe = (): boolean => true
+  const AUTOWIN = 'D:\\AutoWinOS'
+  const avertir = (projectPath: string | undefined, existeF = existe): string | null =>
+    avertissementDossierConversation(
+      diagnostiqueDossierConversation(projectPath, AUTOWIN, existeF),
+      projectPath,
+      AUTOWIN
+    )
+
+  it('nomme le motif de chaque cas', () => {
+    expect(diagnostiqueDossierConversation('D:\\RIGApplication', AUTOWIN, existe)).toBe(
+      'bascule-requise'
+    )
+    expect(diagnostiqueDossierConversation(AUTOWIN, AUTOWIN, existe)).toBe('deja-aligne')
+    expect(diagnostiqueDossierConversation(undefined, AUTOWIN, existe)).toBe('non-range')
+    expect(diagnostiqueDossierConversation('Clients/Amitel', AUTOWIN, existe)).toBe(
+      'libelle-non-absolu'
+    )
+    expect(diagnostiqueDossierConversation('D:\\Disparu', AUTOWIN, () => false)).toBe(
+      'dossier-absent'
+    )
+  })
+
+  /** LE defaut a rendre visible : un libelle laisse le modele dans le depot d'Autowin, en silence. */
+  it('avertit sur un libelle de rangement, en citant le dossier reellement utilise', () => {
+    const texte = avertir('Clients/Amitel')
+    expect(texte).toContain('Clients/Amitel')
+    expect(texte).toContain(AUTOWIN)
+  })
+
+  it('avertit sur un dossier disparu du poste', () => {
+    expect(avertir('D:\\Disparu', () => false)).toContain('introuvable')
+  })
+
+  it('se tait quand le dossier pilote vraiment le travail', () => {
+    expect(avertir('D:\\RIGApplication')).toBeNull()
+    expect(avertir(AUTOWIN)).toBeNull()
+    expect(avertir(undefined)).toBeNull()
   })
 })

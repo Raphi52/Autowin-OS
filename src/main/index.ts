@@ -286,7 +286,11 @@ import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
 import { consommerReprise, poserReprise } from './redemarrage-reprise'
-import { basculeDeDossierRequise } from './bascule-dossier-conversation'
+import {
+  avertissementDossierConversation,
+  basculeDeDossierRequise,
+  diagnostiqueDossierConversation
+} from './bascule-dossier-conversation'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -2794,6 +2798,33 @@ Le fil reprend ensuite normalement.`
   balayageRetentionTimer.unref()
 
   /**
+   * SILENCE INTERDIT : un rangement qui ne pilote PAS le dossier de travail doit le DIRE.
+   *
+   * Un libelle de classement (« Clients/Amitel ») ou un dossier disparu laissait le modele
+   * travailler dans le depot d'Autowin sans un mot — l'utilisateur croyait etre dans son projet,
+   * et c'est l'AGENTS.md d'Autowin qui etait lu. On ecrit donc l'avertissement dans le fil, UNE
+   * seule fois par conversation et par motif : le repeter a chaque message serait du bruit.
+   */
+  const dossiersDejaAvertis = new Map<string, string>()
+  const avertirDossierSansEffet = (
+    conversationId: string,
+    projectPath: string | undefined | null
+  ): void => {
+    const motif = diagnostiqueDossierConversation(projectPath, os.executionWorkspace)
+    const texte = avertissementDossierConversation(motif, projectPath, os.executionWorkspace)
+    if (!texte) return
+    const empreinte = `${motif}|${projectPath?.trim() ?? ''}|${os.executionWorkspace}`
+    if (dossiersDejaAvertis.get(conversationId) === empreinte) return
+    dossiersDejaAvertis.set(conversationId, empreinte)
+    try {
+      os.conversations.append(conversationId, { role: 'assistant', content: texte })
+      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+    } catch {
+      // Un avertissement manque ne doit JAMAIS empecher le tour de partir.
+    }
+  }
+
+  /**
    * Le dossier de travail est GLOBAL et fige au demarrage : une conversation rangee dans un autre
    * depot faisait quand meme travailler le modele dans celui d'Autowin (defaut du 2026-09-05).
    * On bascule donc AVANT de lancer le tour : preference ecrite, tache mise de cote, relance. La
@@ -2808,7 +2839,10 @@ Le fil reprend ensuite normalement.`
     if (typeof conversationId !== 'string' || !conversationId.trim()) return false
     const conversation = os.conversations.get(conversationId)
     const cible = basculeDeDossierRequise(conversation?.projectPath, os.executionWorkspace)
-    if (!cible) return false
+    if (!cible) {
+      avertirDossierSansEffet(conversationId, conversation?.projectPath)
+      return false
+    }
     const consigne = demande.trim()
     // Sans demande a rejouer, un redemarrage PERDRAIT la tache : mieux vaut le mauvais dossier
     // qu'un tour evapore. On laisse alors partir le tour normalement.

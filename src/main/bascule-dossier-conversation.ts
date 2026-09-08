@@ -37,3 +37,51 @@ function memeDossier(a: string, b: string): boolean {
       .toLowerCase()
   return normaliser(a) === normaliser(b)
 }
+
+/**
+ * POURQUOI un rangement ne pilote PAS le dossier de travail (regle du 2026-09-08).
+ *
+ * `basculeDeDossierRequise` rend `null` pour SIX raisons differentes, dont deux sont des DEFAUTS
+ * silencieux : un libelle pris pour un chemin, et un dossier disparu. Dans ces deux cas le modele
+ * travaillait dans le depot d'Autowin sans que rien ne le dise. Ce diagnostic nomme le motif pour
+ * que le fil puisse l'AFFICHER, au lieu du silence.
+ *
+ * Regle posee par l'utilisateur : le dossier range sur la conversation et le dossier de travail ne
+ * doivent JAMAIS differer — toute divergence est un defaut, pas un cas a rattraper.
+ */
+export type MotifDossierConversation =
+  | 'bascule-requise'
+  | 'deja-aligne'
+  | 'non-range'
+  | 'libelle-non-absolu'
+  | 'dossier-absent'
+
+export function diagnostiqueDossierConversation(
+  projectPath: string | undefined | null,
+  workspaceActif: string,
+  dossierExiste: (chemin: string) => boolean = existsSync
+): MotifDossierConversation {
+  const range = projectPath?.trim()
+  if (!range) return 'non-range'
+  if (!isAbsolute(range)) return 'libelle-non-absolu'
+  const cible = resolve(range)
+  if (!dossierExiste(cible)) return 'dossier-absent'
+  if (memeDossier(cible, workspaceActif)) return 'deja-aligne'
+  return 'bascule-requise'
+}
+
+/** Les DEUX motifs qui font travailler le modele ailleurs que la ou l'utilisateur croit. */
+export function avertissementDossierConversation(
+  motif: MotifDossierConversation,
+  projectPath: string | undefined | null,
+  workspaceActif: string
+): string | null {
+  const range = projectPath?.trim() ?? ''
+  if (motif === 'libelle-non-absolu') {
+    return `⚠️ Le dossier de cette conversation (« ${range} ») n'est pas un chemin de dossier, juste un libellé de rangement : il ne pilote donc pas le dossier de travail. Je travaille dans ${workspaceActif}, et c'est son AGENTS.md qui est lu. Mets le chemin complet du projet pour y basculer.`
+  }
+  if (motif === 'dossier-absent') {
+    return `⚠️ Le dossier de cette conversation (${range}) est introuvable sur ce poste : il ne pilote donc pas le dossier de travail. Je travaille dans ${workspaceActif}, et c'est son AGENTS.md qui est lu.`
+  }
+  return null
+}
