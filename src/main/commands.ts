@@ -324,6 +324,16 @@ export interface AppSnapshot {
     category: string
     updatedAt: number
     lastUserMessageAt?: number
+    /**
+     * Un tour de chat est-il EN VOL dans cette conversation, à l'instant de la lecture ? Présent
+     * seulement quand c'est vrai — absent = au repos.
+     *
+     * Ajouté 2026-09-08 (conv-346). Sans ce champ, « est-ce que ça tourne encore ? » n'avait aucune
+     * réponse dans cet état : les journaux `activity/` et `causal-trace/` ne s'écrivent qu'en FIN de
+     * tour, donc les lire pendant un tour vivant fait conclure à sa mort. Le main le sait déjà —
+     * c'est la même vérité que la sonde `os:pilotChat:active` du renderer.
+     */
+    tourEnCours?: boolean
   }>
   runs: Array<{ subject: string; status: string; blocked: boolean }>
   /**
@@ -1622,6 +1632,14 @@ export class AppCommandBus {
   /** Existence REELLE d'une conversation, cablee depuis index.ts. */
   conversationExiste?: (conversationId: string) => boolean
 
+  /**
+   * Un tour de chat tourne-t-il REELLEMENT dans cette conversation ? Cable tardivement depuis
+   * index.ts sur `activeChatTurns`, la meme autorite que la sonde du renderer. Absent -> aucune
+   * conversation n'est declaree en vol (fail-closed : on ne PROMET pas une vie qu'on ne sait pas
+   * verifier).
+   */
+  tourDeChatActif?: (conversationId: string) => boolean
+
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,
@@ -1748,7 +1766,8 @@ export class AppCommandBus {
             title: c.title,
             category: c.provider,
             updatedAt: c.updatedAt,
-            ...(userAt !== undefined ? { lastUserMessageAt: userAt } : {})
+            ...(userAt !== undefined ? { lastUserMessageAt: userAt } : {}),
+            ...(this.tourDeChatActif?.(c.id) ? { tourEnCours: true } : {})
           }
         }),
       runs: runs
