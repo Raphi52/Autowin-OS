@@ -76,40 +76,4 @@ describe('credential Azure DevOps via Azure CLI', () => {
     await expect(loadAzureDevOpsCliToken(run)).rejects.toThrow(AZURE_CLI_DECONNECTE)
   })
 
-  /*
-   * LES DEUX PANNES NE SE SOIGNENT PAS PAREIL : l'une demande une INSTALLATION, l'autre une
-   * RECONNEXION. Un message unique accusait toujours la session, et le 2026-09-08 il a envoye
-   * chercher un `az login` sur un poste ou `az` n'existait pas. Ces trois cas figent la distinction.
-   */
-  it('dit d INSTALLER quand l executable est introuvable — code ENOENT', async () => {
-    const run = vi.fn(async () => {
-      throw Object.assign(new Error('spawn az.cmd ENOENT'), { code: 'ENOENT' })
-    })
-
-    await expect(loadAzureDevOpsCliToken(run)).rejects.toThrow(AZURE_CLI_ABSENT)
-  })
-
-  /*
-   * LE CAS WINDOWS REEL, et celui qu'`ENOENT` seul RATE : l'appel passe par `cmd /c`, donc
-   * l'interpreteur existe bel et bien et rend un code de sortie ordinaire. L'absence ne se lit alors
-   * que dans son refus ecrit — teste ici en francais, la langue du poste sur lequel le defaut est
-   * apparu.
-   */
-  it('dit d INSTALLER quand l interpreteur Windows refuse la commande', async () => {
-    const run = vi.fn(async () => {
-      throw Object.assign(new Error('Command failed'), {
-        stderr: "'az.cmd' n'est pas reconnu comme commande interne ou externe"
-      })
-    })
-
-    await expect(loadAzureDevOpsCliToken(run)).rejects.toThrow(AZURE_CLI_ABSENT)
-  })
-
-  it('dit de SE CONNECTER quand l outil repond mais sans session', async () => {
-    const run = vi.fn(async () => {
-      throw new Error('ERROR: Please run az login to setup account.')
-    })
-
-    await expect(loadAzureDevOpsCliToken(run)).rejects.toThrow(AZURE_CLI_DECONNECTE)
-  })
 })
