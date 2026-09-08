@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TravauxNonPublies } from './TravauxNonPublies'
+import { TravauxNonPublies, INTERVALLE_ATTENTE_RAPPORT_MS } from './TravauxNonPublies'
 import type { RapportRetention } from '../../../shared/rapport-retention'
 
 /**
@@ -98,5 +98,75 @@ describe('le rapport du balayage de rétention est VISIBLE dans le panneau', () 
     await monter(undefined)
     expect(container.querySelector('[data-testid="tnp-retention-jamais"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="tnp-retention-resume"]')).toBeNull()
+  })
+
+  /**
+   * LE CAS QUI FAISAIT DISPARAITRE LE RAPPORT POUR DE BON.
+   *
+   * La passe du demarrage arrive EN DIFFERE : un `git cherry` par sauvegarde, 97 appels enchaines
+   * sur ce depot, 11 720 ms mesures. Le panneau ouvert avant la fin lisait une seule fois, affichait
+   * « pas encore balayees », et n'en bougeait plus : le rapport existait, personne ne le voyait sans
+   * fermer et rouvrir. Ce test echoue si la lecture redevient unique.
+   */
+  it('affiche le rapport qui arrive APRES l’ouverture du panneau', async () => {
+    vi.useFakeTimers()
+    try {
+      let pose: RapportRetention | undefined
+      const connu: Record<string, unknown> = {
+        getTravauxNonPublies: vi.fn().mockResolvedValue([]),
+        getRapportRetention: vi.fn(async () => pose)
+      }
+      Object.defineProperty(window, 'api', { configurable: true, value: connu })
+
+      await act(async () => {
+        root.render(createElement(TravauxNonPublies, { onFermer: () => undefined }))
+      })
+      // Au montage la passe n'a pas fini : l'attente s'affiche, et c'est correct.
+      expect(container.querySelector('[data-testid="tnp-retention-jamais"]')).not.toBeNull()
+
+      // La passe se termine et dépose son rapport, sans que l'utilisateur touche à rien.
+      pose = { faitLe: 'x', examines: 249, sansPerte: ['a'], aTrancher: [], reportees: 0 }
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(INTERVALLE_ATTENTE_RAPPORT_MS + 10)
+      })
+
+      expect(container.querySelector('[data-testid="tnp-retention-resume"]')?.textContent).toContain(
+        '249'
+      )
+      expect(container.querySelector('[data-testid="tnp-retention-jamais"]')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  /**
+   * L'attente doit se TERMINER. Relire indefiniment un rapport deja obtenu ferait travailler le
+   * processus principal toutes les trois secondes pour rien, panneau ouvert.
+   */
+  it('CESSE de relire dès que le rapport est là', async () => {
+    vi.useFakeTimers()
+    try {
+      const lecture = vi.fn().mockResolvedValue({
+        faitLe: 'x',
+        examines: 5,
+        sansPerte: [],
+        aTrancher: [],
+        reportees: 0
+      })
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { getTravauxNonPublies: vi.fn().mockResolvedValue([]), getRapportRetention: lecture }
+      })
+      await act(async () => {
+        root.render(createElement(TravauxNonPublies, { onFermer: () => undefined }))
+      })
+      const apresMontage = lecture.mock.calls.length
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(INTERVALLE_ATTENTE_RAPPORT_MS * 5)
+      })
+      expect(lecture.mock.calls.length).toBe(apresMontage)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
