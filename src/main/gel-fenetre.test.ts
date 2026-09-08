@@ -196,3 +196,25 @@ describe('reanimation automatique de la fenetre', () => {
     expect(recharges).toBe(0)
   })
 })
+
+describe('remise en route apres la mort du processus d affichage', () => {
+  it('recharge la fenetre quand son processus disparait', () => {
+    let disparition: ((...args: unknown[]) => void) | undefined
+    let rechargements = 0
+    const fenetre = {
+      on() {},
+      webContents: {
+        on(evenement: string, ecouteur: (...args: unknown[]) => void) {
+          if (evenement === 'render-process-gone') disparition = ecouteur
+        },
+        reload() {
+          rechargements += 1
+        }
+      }
+    }
+    surveillerFenetreInjoignable(fenetre as never, () => {}, () => 1_000)
+    disparition?.({}, { reason: 'crashed' })
+
+    expect(rechargements).toBe(1)
+  })
+})

@@ -32,6 +32,8 @@ export interface FenetreSurveillee {
     off?(evenement: 'render-process-gone', ecouteur: (...args: unknown[]) => void): unknown
     /** Recharge le contenu : tue le processus d'affichage bloque et en repart un neuf. */
     reloadIgnoringCache?(): void
+    /** Recharge apres la mort du processus d'affichage — sans ca, la fenetre reste vide. */
+    reload?(): void
   }
 }
 
@@ -122,6 +124,13 @@ export function surveillerFenetreInjoignable(
       cause: 'boucle-tenue'
     })
     debut = undefined
+    /*
+     * REMETTRE EN ROUTE. Mesure du 2026-09-08 17:13 : l'escalade a bien tue le processus d'affichage
+     * (ligne `processus-disparu:crashed`) et la fenetre est restee MORTE — Electron ne recree pas
+     * l'affichage tout seul. Tuer sans relancer laisse donc l'utilisateur devant une fenetre vide,
+     * ce qui est PIRE que le gel. Le rechargement est le geste qui repart sur un processus neuf.
+     */
+    fenetre.webContents?.reload?.()
   }
 
   fenetre.on('unresponsive', surInjoignable)
