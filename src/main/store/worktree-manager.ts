@@ -1522,6 +1522,53 @@ export class WorktreeManager {
   private static readonly EDITION_OUTIL = /^command-(edit|verify|graphify)-/
 
   /**
+   * COMBIEN DE TEMPS UNE BRANCHE `autowin/*` MERITE-T-ELLE D'ETRE GARDEE — quatorze jours.
+   *
+   * Ce n'est PAS un delai de securite technique : mesure le 2026-09-08 sur le depot reel, la
+   * branche de secours la MOINS eloignee accusait deja 432 commits de retard sur `main`, et celles
+   * de moins de sept jours affichaient le meme ecart que les vieilles (jusqu'a 2285). Une
+   * sauvegarde n'est donc pas refusionnable au bout d'un mois puis perdue : elle l'est en heures,
+   * parce que `main` avance de 73 commits par jour, concentres sur une poignee de fichiers
+   * (ChatView.tsx 196 fois en 30 jours, index.ts 157, commands.ts 126).
+   *
+   * Quatorze jours est un delai HUMAIN : le temps qu'un travail oublie puisse encore etre reclame.
+   * Le prolonger ne sauve rien de plus, il accumule -- 89 branches en 22 jours, dont le tri complet
+   * du 2026-09-08 n'a rien rendu de recuperable.
+   */
+  static readonly RETENTION_BRANCHE_MS = 14 * 24 * 60 * 60 * 1_000
+
+  /**
+   * FAUT-IL GARDER CETTE BRANCHE DE SECOURS ? -- decision PURE, qui ne supprime rien.
+   *
+   * Trois verdicts, dans cet ordre, parce que l'ordre porte la prudence :
+   *  - `garder` des que le SHA n'a PAS ete consigne. La regle existait en prose dans
+   *    `travail-non-publie.ts` (« ne supprime AUCUNE branche sans avoir consigne son SHA : c'est le
+   *    seul endroit ou ce travail existe encore ») ; une phrase ne bloque personne, cette condition
+   *    si. Elle prime sur tout le reste, age compris.
+   *  - `supprimable-sans-perte` quand la branche n'apporte RIEN (contenu deja en base, juge par
+   *    empreinte de correctif en amont) : inutile d'attendre quatorze jours pour un doublon. Sur
+   *    les 89 branches du 2026-09-08, ce seul critere en designait onze.
+   *  - `supprimable-perime` quand elle apporte quelque chose mais depasse la retention.
+   *  - `garder` sinon.
+   *
+   * FAIL-CLOSED : un age inconnu (`undefined`, NaN, date future) ne PERIME jamais. On ne detruit
+   * pas sur une donnee qu'on ne sait pas lire.
+   */
+  static decisionRetentionBranche(entree: {
+    apporteQuelqueChose: boolean
+    shaConsigne: boolean
+    ageMs?: number
+    maintenant?: number
+  }): 'garder' | 'supprimable-sans-perte' | 'supprimable-perime' {
+    if (!entree.shaConsigne) return 'garder'
+    if (!entree.apporteQuelqueChose) return 'supprimable-sans-perte'
+    const age = entree.ageMs
+    if (typeof age !== 'number' || !Number.isFinite(age) || age < 0) return 'garder'
+    return age > WorktreeManager.RETENTION_BRANCHE_MS ? 'supprimable-perime' : 'garder'
+  }
+
+
+  /**
    * CE BUREAU PRECIS PEUT-IL PORTER DU TRAVAIL ? — question a UN bureau, prix d'UN bureau.
    *
    * DEFAUT MESURE le 2026-09-04 (conv-233) : `edit_file` commence par demander la liste COMPLETE
