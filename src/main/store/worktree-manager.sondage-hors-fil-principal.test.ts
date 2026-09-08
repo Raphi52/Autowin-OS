@@ -39,8 +39,12 @@ vi.mock('node:child_process', async (original) => {
   }
 })
 
-const { prechargerEmpreintesProcessus, empreinteConnue, oublierEmpreintesProcessus } =
-  await import('./worktree-manager')
+const {
+  prechargerEmpreintesProcessus,
+  empreinteConnue,
+  oublierEmpreintesProcessus,
+  defaultProcessIdentity
+} = await import('./worktree-manager')
 
 describe('sondage d’empreinte — hors du fil principal', () => {
   beforeEach(() => {
@@ -63,6 +67,27 @@ describe('sondage d’empreinte — hors du fil principal', () => {
 
   it('le recensement lit l’empreinte sans bloquer : rien de connu, aucun appel synchrone', () => {
     expect(empreinteConnue(process.pid)).toBeNull()
+    expect(appelsSync).toEqual([])
+  })
+
+  /**
+   * LA PORTE RESTEE OUVERTE. Mesure du 2026-09-08 (gels.jsonl) : blocages de 1,2 s a 7,1 s sur
+   * `execFileSync powershell.exe` depuis `worktree-manager`, pendant une session VIVANTE
+   * (`ipc:os:conversations`, `ipc:git:read`) — alors que le contrat ci-dessus etait deja verrouille.
+   * La garde protegeait `prechargerEmpreintesProcessus` et `empreinteConnue`, mais PAS
+   * `defaultProcessIdentity`, qui est precisement celle que le fil principal cable (index.ts).
+   * Une empreinte inconnue vaut `null` = « existe peut-etre, non lue » : le rattachement traite
+   * alors l'agent comme incertain et RATTACHE, il ne relance jamais un agent vivant.
+   */
+  it('defaultProcessIdentity ne lance AUCUN processus synchrone sur le fil principal', () => {
+    expect(defaultProcessIdentity(process.pid)).toBeNull()
+    expect(appelsSync).toEqual([])
+  })
+
+  it('… et elle fait tout de meme lire l’empreinte, par la voie asynchrone', async () => {
+    defaultProcessIdentity(process.pid)
+    await new Promise((r) => setTimeout(r, 10))
+    expect(appelsAsync.length).toBeGreaterThan(0)
     expect(appelsSync).toEqual([])
   })
 

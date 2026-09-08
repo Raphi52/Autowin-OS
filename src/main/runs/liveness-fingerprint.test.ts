@@ -62,7 +62,12 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
   it.runIf(process.platform === 'win32')(
     'une panne de la sonde PowerShell reste inconnue, jamais confondue avec un PID mort',
     () => {
-      const identity = defaultProcessIdentity(process.pid)
+      // L'empreinte de depart est un PREALABLE, pas l'objet de ce test. Depuis le 2026-09-08,
+      // `defaultProcessIdentity` ne lance plus de sondage bloquant sur le fil principal (il coutait
+      // jusqu'a 7,1 s de fenetre tenue) : on la lui fournit donc par le seam de sonde, comme la
+      // panne juste en dessous. L'assertion qui compte — une panne reste « inconnu » et jamais
+      // « mort » — est intacte.
+      const identity = defaultProcessIdentity(process.pid, () => 'notre-empreinte')
       expect(identity).toEqual(expect.any(String))
       // L'empreinte d'un PID vivant est gardee quelques secondes (elle coutait 87,5 s de fenetre
       // figee en rafale, cf. process-identity-cache.test.ts). Cette memoire repondrait ici a la

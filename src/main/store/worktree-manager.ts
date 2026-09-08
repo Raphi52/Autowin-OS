@@ -769,6 +769,22 @@ export function empreinteConnue(
   return defaultProcessIdentity(pid, sondeIdentiteSysteme, maintenant)
 }
 
+/**
+ * L'empreinte pour le RATTACHEMENT d'un run — et, sur le fil principal, SANS bloquer.
+ *
+ * Mesure du 2026-09-08 (`gels.jsonl`) : blocages de 1,2 s a 7,1 s sur `execFileSync powershell.exe`
+ * depuis ce module, en pleine session (`ipc:os:conversations`, `ipc:git:read`). Le contrat « pas de
+ * sondage bloquant sur le fil principal » etait pourtant deja pose — mais il ne couvrait que
+ * `prechargerEmpreintesProcessus` et `empreinteConnue`, alors que c'est CETTE fonction que le fil
+ * principal cable (`index.ts`). La porte est refermee ici, au meme endroit que la garde.
+ *
+ * Ce que l'on perd, et pourquoi c'est sans danger : une empreinte encore non lue vaut `null`, soit
+ * « existe peut-etre » — le rattachement la traite comme un agent INCERTAIN et RATTACHE, il ne
+ * relance donc jamais un agent bien vivant. La mort d'un PID, elle, reste prouvee localement et
+ * gratuitement (`process.kill(pid, 0)` -> `ESRCH` -> `undefined`) : la distinction qui compte le
+ * plus garde toute sa precision. Le sondage part en fond, et le passage suivant tranche le PID
+ * recycle.
+ */
 export function defaultProcessIdentity(
   pid: number,
   sonde: (pid: number) => string | null = sondeIdentiteSysteme,
@@ -797,6 +813,10 @@ export function defaultProcessIdentity(
   const memo = identitesMemoisees.get(pid)
   const t = maintenant()
   if (memo && t - memo.a < IDENTITE_MEMOIRE_MS) return memo.identite
+  if (sondageSynchroneInterdit(sonde, sondeIdentiteSysteme)) {
+    planifierSondageAsynchrone([pid], maintenant)
+    return null
+  }
   const identity = sonde(pid)
   /*
    * L'ECHEC EST MEMOISE COMME LE SUCCES. Mesure du 2026-09-04 (gels.jsonl) : 39,3 s de fil
