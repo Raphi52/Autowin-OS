@@ -50,11 +50,7 @@ function memeDossier(a: string, b: string): boolean {
  * doivent JAMAIS differer — toute divergence est un defaut, pas un cas a rattraper.
  */
 export type MotifDossierConversation =
-  | 'bascule-requise'
-  | 'deja-aligne'
-  | 'non-range'
-  | 'libelle-non-absolu'
-  | 'dossier-absent'
+  'bascule-requise' | 'deja-aligne' | 'non-range' | 'libelle-non-absolu' | 'dossier-absent'
 
 export function diagnostiqueDossierConversation(
   projectPath: string | undefined | null,
@@ -84,4 +80,26 @@ export function avertissementDossierConversation(
     return `⚠️ Le dossier de cette conversation (${range}) est introuvable sur ce poste : il ne pilote donc pas le dossier de travail. Je travaille dans ${workspaceActif}, et c'est son AGENTS.md qui est lu.`
   }
   return null
+}
+
+/**
+ * LE DOSSIER DE TRAVAIL DU TOUR — resolu a CHAQUE tour depuis la conversation courante.
+ *
+ * Le dossier de travail etait GLOBAL et fige au demarrage (`os.ts`, `executionWorkspace`) : deux
+ * conversations rangees dans deux projets differents travaillaient dans le MEME dossier, et le seul
+ * moyen d'aligner etait un redemarrage de l'app (qui coupe le tour en cours). Cette fonction rend le
+ * dossier a utiliser POUR CE TOUR : le rangement de la conversation quand il designe un dossier reel,
+ * sinon le repli global. Elle ne mute rien — la valeur est PASSEE en argument, jamais posee dans
+ * `process.env` : plusieurs tours tournent en parallele et se voleraient le dossier.
+ */
+export function dossierDeTravailDuTour(
+  projectPath: string | undefined | null,
+  repli: string,
+  dossierExiste: (chemin: string) => boolean = existsSync
+): string {
+  const range = projectPath?.trim()
+  if (!range) return repli
+  if (!isAbsolute(range)) return repli
+  const cible = resolve(range)
+  return dossierExiste(cible) ? cible : repli
 }

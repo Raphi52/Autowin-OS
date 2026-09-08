@@ -1,8 +1,10 @@
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   avertissementDossierConversation,
   basculeDeDossierRequise,
-  diagnostiqueDossierConversation
+  diagnostiqueDossierConversation,
+  dossierDeTravailDuTour
 } from './bascule-dossier-conversation'
 
 describe('basculeDeDossierRequise', () => {
@@ -78,5 +80,29 @@ describe('avertissement quand le rangement ne pilote pas le dossier de travail',
     expect(avertir('D:\\RIGApplication')).toBeNull()
     expect(avertir(AUTOWIN)).toBeNull()
     expect(avertir(undefined)).toBeNull()
+  })
+})
+
+describe('dossierDeTravailDuTour', () => {
+  const existe = (chemin: string): boolean => chemin.toLowerCase().includes('projet')
+  const REPLI = resolve('/depot/autowin')
+
+  it('rend le dossier range sur la conversation quand il existe', () => {
+    expect(dossierDeTravailDuTour(resolve('/projet/rig'), REPLI, existe)).toBe(
+      resolve('/projet/rig')
+    )
+  })
+
+  it('retombe sur le repli pour un libelle non absolu', () => {
+    expect(dossierDeTravailDuTour('Clients/Amitel', REPLI, existe)).toBe(REPLI)
+  })
+
+  it('retombe sur le repli quand le dossier range a disparu', () => {
+    expect(dossierDeTravailDuTour(resolve('/disparu'), REPLI, existe)).toBe(REPLI)
+  })
+
+  it('retombe sur le repli quand la conversation n est pas rangee', () => {
+    expect(dossierDeTravailDuTour(undefined, REPLI, existe)).toBe(REPLI)
+    expect(dossierDeTravailDuTour('   ', REPLI, existe)).toBe(REPLI)
   })
 })

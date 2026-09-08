@@ -991,7 +991,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        * `rm`, `git`…). `--tools` restreint ce qui est CHARGE, `--allowedTools` ce qui est AUTORISE :
        * les deux, sinon on paie 34 definitions pour 3 outils utiles.
        */
-      const readOnlyWorkspace = process.env[AUTOWIN_WORKSPACE_ENV]
+      // DOSSIER DU TOUR : la valeur PASSEE par le controleur prime sur la variable de process.
+      // Celle-ci est globale et figee au demarrage ; deux tours paralleles ranges dans deux projets
+      // differents doivent travailler chacun dans le sien.
+      const readOnlyWorkspace = opts.workspaceCwd ?? process.env[AUTOWIN_WORKSPACE_ENV]
       if (readOnlyWorkspace && existsSync(readOnlyWorkspace)) {
         readOnlyCwd = readOnlyWorkspace
         if (opts.toolProfile === 'watchdog-read-only') {

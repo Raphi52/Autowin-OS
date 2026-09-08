@@ -289,7 +289,8 @@ import { consommerReprise, poserReprise } from './redemarrage-reprise'
 import {
   avertissementDossierConversation,
   basculeDeDossierRequise,
-  diagnostiqueDossierConversation
+  diagnostiqueDossierConversation,
+  dossierDeTravailDuTour
 } from './bascule-dossier-conversation'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
@@ -921,6 +922,19 @@ seedRegistrySnapshot({
     source: 'app-command-bus'
   }))
 })
+/**
+ * LE DOSSIER DE TRAVAIL N'EST PLUS GLOBAL — il est resolu a CHAQUE tour depuis la conversation.
+ *
+ * `os.executionWorkspace` est fige au demarrage : il ne sert plus que de REPLI quand la conversation
+ * n'est pas rangee sur un dossier reel. La valeur est PASSEE en argument (cwd du CLI, cle de session,
+ * AGENTS.md, faits provisoires) et jamais posee dans `process.env` : des tours paralleles ranges dans
+ * deux projets differents se voleraient le dossier.
+ */
+const dossierDuTour = (conversationId?: string): string =>
+  dossierDeTravailDuTour(
+    conversationId ? os.conversations.get(conversationId)?.projectPath : undefined,
+    os.executionWorkspace
+  )
 const pilot = new AgentPilot(
   os.registry,
   os.roles,
@@ -947,8 +961,9 @@ const pilot = new AgentPilot(
     }
   }),
   // MÊME source de contexte projet que les phases orchestrées (fold du CLAUDE.md/AGENTS.md du workspace).
-  () => projectContextBlock(os.executionWorkspace),
-  () => os.executionWorkspace
+  // RESOLU PAR TOUR : c'est l'AGENTS.md du dossier RANGE sur la conversation qui doit être lu.
+  (conversationId?: string) => projectContextBlock(dossierDuTour(conversationId)),
+  (conversationId?: string) => dossierDuTour(conversationId)
 )
 const conversationRouteCoordinator = new ConversationRouteCoordinator(
   os.conversations,
