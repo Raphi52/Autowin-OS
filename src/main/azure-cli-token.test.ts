@@ -18,13 +18,21 @@ describe('credential Azure DevOps via Azure CLI', () => {
     ])
   })
 
+  /*
+   * CE QUE CE TEST PROTEGE, et il ne faut pas le perdre de vue en le lisant : la sortie de l'outil
+   * peut porter le JETON lui-meme. Le message d'erreur ne doit donc JAMAIS la recopier. L'assertion
+   * porte volontairement sur un fragment STABLE du message, pas sur sa ponctuation finale : figer le
+   * texte au point pres transforme toute amelioration de libelle en echec, sans rien prouver de plus.
+   */
   it('échoue sans recopier une sortie CLI sensible', async () => {
     const run = vi.fn(async () => {
       throw new Error('token-secret')
     })
 
     await expect(loadAzureDevOpsCliToken(run)).rejects.toThrow(
-      'Session Azure CLI indisponible.'
+      'Session Azure CLI indisponible'
     )
+    // La garde qui compte VRAIMENT : le secret ne fuit pas dans le message rendu.
+    await expect(loadAzureDevOpsCliToken(run)).rejects.not.toThrow('token-secret')
   })
 })
