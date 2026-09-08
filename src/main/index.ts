@@ -285,11 +285,11 @@ import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
 import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
-import { consommerReprise, poserReprise } from './redemarrage-reprise'
+import { consommerReprise } from './redemarrage-reprise'
 import {
   avertissementDossierConversation,
-  basculeDeDossierRequise,
-  diagnostiqueDossierConversation
+  diagnostiqueDossierConversation,
+  dossierDeTravailDuTour
 } from './bascule-dossier-conversation'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
@@ -921,6 +921,19 @@ seedRegistrySnapshot({
     source: 'app-command-bus'
   }))
 })
+/**
+ * LE DOSSIER DE TRAVAIL N'EST PLUS GLOBAL — il est resolu a CHAQUE tour depuis la conversation.
+ *
+ * `os.executionWorkspace` est fige au demarrage : il ne sert plus que de REPLI quand la conversation
+ * n'est pas rangee sur un dossier reel. La valeur est PASSEE en argument (cwd du CLI, cle de session,
+ * AGENTS.md, faits provisoires) et jamais posee dans `process.env` : des tours paralleles ranges dans
+ * deux projets differents se voleraient le dossier.
+ */
+const dossierDuTour = (conversationId?: string): string =>
+  dossierDeTravailDuTour(
+    conversationId ? os.conversations.get(conversationId)?.projectPath : undefined,
+    os.executionWorkspace
+  )
 const pilot = new AgentPilot(
   os.registry,
   os.roles,
@@ -947,8 +960,9 @@ const pilot = new AgentPilot(
     }
   }),
   // MÊME source de contexte projet que les phases orchestrées (fold du CLAUDE.md/AGENTS.md du workspace).
-  () => projectContextBlock(os.executionWorkspace),
-  () => os.executionWorkspace
+  // RESOLU PAR TOUR : c'est l'AGENTS.md du dossier RANGE sur la conversation qui doit être lu.
+  (conversationId?: string) => projectContextBlock(dossierDuTour(conversationId)),
+  (conversationId?: string) => dossierDuTour(conversationId)
 )
 const conversationRouteCoordinator = new ConversationRouteCoordinator(
   os.conversations,
@@ -2835,57 +2849,8 @@ Le fil reprend ensuite normalement.`
   const balayageRetentionTimer = setInterval(passeDeRetention, 60 * 60 * 1_000)
   balayageRetentionTimer.unref()
 
-  /**
-   * Le dossier de travail est GLOBAL et fige au demarrage : une conversation rangee dans un autre
-   * depot faisait quand meme travailler le modele dans celui d'Autowin (defaut du 2026-09-05).
-   * On bascule donc AVANT de lancer le tour : preference ecrite, tache mise de cote, relance. La
-   * consigne est rejouee toute seule au retour, l'utilisateur n'a rien a retaper.
-   *
-   * Rend `true` quand la bascule part — l'appelant ne doit alors PAS lancer le tour ici.
-   */
-  const basculerVersLeDossierDeLaConversation = (
-    conversationId: unknown,
-    demande: string
-  ): boolean => {
-    if (typeof conversationId !== 'string' || !conversationId.trim()) return false
-    const conversation = os.conversations.get(conversationId)
-    const cible = basculeDeDossierRequise(conversation?.projectPath, os.executionWorkspace)
-    if (!cible) return false
-    const consigne = demande.trim()
-    // Sans demande a rejouer, un redemarrage PERDRAIT la tache : mieux vaut le mauvais dossier
-    // qu'un tour evapore. On laisse alors partir le tour normalement.
-    if (!consigne) return false
-    if (!bus.redemarrerApp) return false
-    writeExecutionWorkspacePreference(cible)
-    poserReprise(ensureAutowinAppData(appDataRoot), {
-      conversationId,
-      consigne,
-      raison: `bascule vers le dossier de la conversation (${cible})`
-    })
-    annoncerFermeture(`bascule de dossier (${conversationId}) — ${cible}`)
-    const relancer = bus.redemarrerApp
-    // Le quit part APRES la reponse, sinon l'utilisateur ne voit jamais l'accuse de bascule.
-    setTimeout(() => relancer(), 1200)
-    return true
-  }
-
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')
-    const dernier = Array.isArray(messages)
-      ? [...messages].reverse().find((m) => (m as { role?: string })?.role === 'user')
-      : undefined
-    const demande =
-      typeof (dernier as { content?: unknown })?.content === 'string'
-        ? (dernier as { content: string }).content
-        : ''
-    if (basculerVersLeDossierDeLaConversation(conversationId, demande)) {
-      return {
-        ok: true,
-        bascule: true,
-        detail:
-          'Autowin bascule sur le dossier de cette conversation et se relance — ta demande repart toute seule.'
-      }
-    }
     return runPilotChat(event.sender, messages, conversationId)
   })
   ipcMain.handle('os:pilotChat:resume', (event, rawConversationId: unknown) => {

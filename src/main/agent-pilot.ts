@@ -681,9 +681,12 @@ export class AgentPilot {
      * Contexte projet plié (CLAUDE.md/AGENTS.md du workspace), MÊME source que les phases
      * orchestrées (context-files). Défaut vide → le chat reste fonctionnel sans workspace.
      */
-    private readonly projectContext: () => string = () => '',
-    /** Workspace actif, pour ne jamais relire dans un dépôt un fait provisoire appris dans un autre. */
-    private readonly executionWorkspace: () => string = () => ''
+    private readonly projectContext: (conversationId?: string) => string = () => '',
+    /**
+     * Dossier de travail DU TOUR, resolu depuis la conversation courante (plus de dossier global fige
+     * au demarrage). Sert au cwd du CLI, a la cle de session et au filtrage des faits provisoires.
+     */
+    private readonly executionWorkspace: (conversationId?: string) => string = () => ''
   ) {}
 
   /**
@@ -1107,9 +1110,15 @@ export class AgentPilot {
     // des écritures automatiques — hors du périmètre demandé, et son pilote refuse l'exec de toute façon.
     const directReadOnly = false
     const commandFreeReadOnly = watchdogReadOnly || directReadOnly
-    const providerLimits: Pick<SendOptions, 'maxBudgetUsd' | 'toolProfile'> = {
+    // Le dossier du tour est RESOLU depuis la conversation (le dossier global fige au demarrage n'est
+    // plus qu'un repli, cf. `dossierDeTravailDuTour`). Meme valeur que le cwd envoye au CLI, sinon la
+    // session est reclamee depuis un autre dossier et le tour meurt a 0 message (conv-48, 2026-09-06).
+    const workspaceDuTour =
+      this.executionWorkspace(conversationId).trim() || (process.env[AUTOWIN_WORKSPACE_ENV] ?? '')
+    const providerLimits: Pick<SendOptions, 'maxBudgetUsd' | 'toolProfile' | 'workspaceCwd'> = {
       ...(sendLimits?.maxBudgetUsd ? { maxBudgetUsd: sendLimits.maxBudgetUsd } : {}),
-      ...(commandFreeReadOnly ? { toolProfile: 'watchdog-read-only' as const } : {})
+      ...(commandFreeReadOnly ? { toolProfile: 'watchdog-read-only' as const } : {}),
+      ...(workspaceDuTour ? { workspaceCwd: workspaceDuTour } : {})
     }
     /**
      * Un tour LECTURE SEULE n'est plus SANS COMMANDES : il garde les commandes `readOnlyHint`.
@@ -1182,7 +1191,7 @@ export class AgentPilot {
             { name: 'constitution', text: CONSTITUTION },
             { name: 'pilotage', text: pilotage },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            { name: 'projectContext', text: this.projectContext() }
+            { name: 'projectContext', text: this.projectContext(conversationId) }
           ]
     const system = systemParts.map((p) => p.text).join('')
     const systemBlocks = systemParts
@@ -1214,7 +1223,7 @@ export class AgentPilot {
      * `error_during_execution` pour 0 token et 0 USD. La session etait INTACTE (355 lignes, 141
      * messages assistant) : elle etait simplement reclamee depuis le mauvais dossier.
      */
-    const workspaceDeSession = process.env[AUTOWIN_WORKSPACE_ENV] ?? ''
+    const workspaceDeSession = workspaceDuTour
     /**
      * LA COMPACTION FAIT PARTIE DE L IDENTITE DE LA SESSION — mesure du 2026-09-08 (conv-342).
      *
@@ -1270,7 +1279,7 @@ export class AgentPilot {
     // dans CE fil lui est remis. Ici et non dans le system, pour la même raison que le contexte Brain :
     // un contenu variable dans le préfixe tue le cache. Plafonné à ~1 500 car. — la lecture automatique
     // des fiches avait été coupée parce qu'elle pesait 552 Ko par appel.
-    const executionWorkspace = this.executionWorkspace().trim()
+    const executionWorkspace = workspaceDuTour.trim()
     const memoryEcho = sessionMemoryBlock(
       rememberedFacts(conversationId, executionWorkspace || undefined),
       undefined,

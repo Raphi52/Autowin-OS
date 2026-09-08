@@ -37,6 +37,12 @@ export interface SendOptions {
   /** Surface d'outils imposee par le controleur pour les tours automatiques sensibles. */
   toolProfile?: 'watchdog-read-only'
   /**
+   * Dossier de travail de CE tour, resolu depuis la conversation courante (`dossierDeTravailDuTour`).
+   * Passe en argument et jamais lu dans `process.env` : la variable globale est figee au demarrage et
+   * serait partagee par les tours paralleles.
+   */
+  workspaceCwd?: string
+  /**
    * Outils Brain d'un nœud SKILL, à poser sur le canal NATIF de l'adaptateur.
    *
    * INTENTION EXPLICITE, jamais déduite. La présence d'un bloc `execution` ne dit PAS qu'on sert un
