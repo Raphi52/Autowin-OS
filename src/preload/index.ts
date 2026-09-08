@@ -654,9 +654,10 @@ const api = {
   outlookNouveauMessage: (
     adresse: string,
     objet: string,
-    corps: string
+    corps: string,
+    pieces?: ReadonlyArray<{ nom: string; taille: number; contenuBase64: string }>
   ): Promise<{ ok: boolean; erreur?: string }> =>
-    ipcRenderer.invoke('outlook:nouveau-message', adresse, objet, corps),
+    ipcRenderer.invoke('outlook:nouveau-message', adresse, objet, corps, pieces ?? []),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:create', task),
   taskManagerUpdate: (id: string, task: unknown): Promise<ScheduledTask> =>

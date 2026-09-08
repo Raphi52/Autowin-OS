@@ -570,10 +570,13 @@ describe('la vue agit : ouvrir une conversation qui n existe pas encore', () => 
         mails.querySelector('[data-testid="home-inter-nouveau-confirmer"]') as HTMLButtonElement
       ).click()
     )
+    // Le quatrieme argument porte les PIECES JOINTES, vide ici : depuis le 2026-09-08 un fichier
+    // peut etre glisse dans cet ecran (InterlocuteursWidget.pieces.test.tsx).
     expect(api().outlookNouveauMessage).toHaveBeenCalledWith(
       'collegue@amitel.fr',
       'Bon de commande 2027',
-      'Bonjour, pouvez-vous me le confirmer ?'
+      'Bonjour, pouvez-vous me le confirmer ?',
+      []
     )
     // Le message part dans les elements envoyes : sans relecture forcee, la conversation neuve
     // n'apparaitrait qu'au cycle suivant et le clic paraitrait sans effet.

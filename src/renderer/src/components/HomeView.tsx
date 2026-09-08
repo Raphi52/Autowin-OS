@@ -55,6 +55,7 @@ import { autowinStorageKey } from '../storage-keys'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
 import { InterlocuteursWidget } from './InterlocuteursWidget'
+import type { PieceJointeMessage } from './interlocuteurs-pieces'
 import './HomeView.css'
 import { Spinner } from './Spinner'
 
@@ -759,7 +760,8 @@ export function HomeView({
     async (
       adresse: string,
       objet: string,
-      corps: string
+      corps: string,
+      pieces: readonly PieceJointeMessage[] = []
     ): Promise<{ ok: boolean; erreur?: string }> => {
       const api = (
         window as unknown as {
@@ -767,7 +769,8 @@ export function HomeView({
             outlookNouveauMessage?: (
               adresse: string,
               objet: string,
-              corps: string
+              corps: string,
+              pieces?: readonly PieceJointeMessage[]
             ) => Promise<{ ok: boolean; erreur?: string }>
           }
         }
@@ -779,7 +782,7 @@ export function HomeView({
         }
       }
       try {
-        const resultat = await api.outlookNouveauMessage(adresse, objet, corps)
+        const resultat = await api.outlookNouveauMessage(adresse, objet, corps, pieces)
         if (resultat.ok) await readOutlook(true)
         return resultat
       } catch (error) {

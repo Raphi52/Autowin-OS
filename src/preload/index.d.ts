@@ -490,11 +490,18 @@ interface ChatApi {
   outlookRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
   /** Marque des messages Outlook comme lus. Ecrit dans la boite : reserve a un geste utilisateur. */
   outlookMarquerLu: (ids: readonly string[]) => Promise<{ ok: boolean; erreur?: string }>
-  /** Envoie un message NEUF (adresse + objet + corps). Irréversible : à confirmer avant l'appel. */
+  /**
+   * Envoie un message NEUF (adresse + objet + corps, et ses pièces jointes éventuelles).
+   * Irréversible : à confirmer avant l'appel.
+   *
+   * Les pièces voyagent en CONTENU (base64), pas en chemin : un fichier glissé depuis Outlook
+   * n'existe pas sur le disque, et Electron ne rend plus `File.path`.
+   */
   outlookNouveauMessage: (
     adresse: string,
     objet: string,
-    corps: string
+    corps: string,
+    pieces?: ReadonlyArray<{ nom: string; taille: number; contenuBase64: string }>
   ) => Promise<{ ok: boolean; erreur?: string }>
   taskManagerCreate: (task: unknown) => Promise<ScheduledTask>
   taskManagerUpdate: (id: string, task: unknown) => Promise<ScheduledTask>

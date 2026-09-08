@@ -3556,11 +3556,14 @@ Le fil reprend ensuite normalement.`
   // existant -- l'adresse vient d'une saisie. Elle est donc contrainte a un motif ASCII cote main
   // AVANT de partir dans un appel COM, et l'objet comme le corps voyagent par des fichiers
   // temporaires : jamais concatenes dans une ligne de commande.
+  // Les PIECES JOINTES arrivent en contenu (base64) et non en chemin : un fichier glisse depuis
+  // Outlook n'existe pas sur le disque. Elles sont donc revalidees par la passerelle -- nom, forme
+  // du base64, taille -- avant de redevenir des fichiers dans un dossier temporaire.
   ipcMain.handle(
     'outlook:nouveau-message',
-    async (event, adresse: unknown, objet: unknown, corps: unknown) => {
+    async (event, adresse: unknown, objet: unknown, corps: unknown, pieces: unknown) => {
       assertTrustedRendererSender(event, 'Outlook')
-      return outlookGateway.sendNew(adresse, objet, corps)
+      return outlookGateway.sendNew(adresse, objet, corps, pieces)
     }
   )
 

@@ -303,10 +303,13 @@ describe('InterlocuteursWidget — ouvrir une conversation qui n existe pas enco
     expect(onNouvelleConversation).not.toHaveBeenCalled()
 
     await cliquer('home-inter-nouveau-confirmer')
+    // Le quatrieme argument est la liste des pieces jointes, vide ici : depuis le 2026-09-08 un
+    // fichier peut etre glisse dans cet ecran (voir InterlocuteursWidget.pieces.test.tsx).
     expect(onNouvelleConversation).toHaveBeenCalledWith(
       'zoe@ex.fr',
       'Devis 2027',
-      'Bonjour Zoé, pouvez-vous me le renvoyer ?'
+      'Bonjour Zoé, pouvez-vous me le renvoyer ?',
+      []
     )
     expect(container.querySelector('[role="status"]')?.textContent).toContain('envoyé')
   })

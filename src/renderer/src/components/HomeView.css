@@ -2130,6 +2130,95 @@
   gap: 5px;
 }
 
+/* ─── Glisser-déposer une pièce jointe (nouveau message) ─────────────────────────────────────── */
+/* La zone de réponse devient la zone de dépôt : c'est là que le fichier tombe, donc c'est là que
+   l'accusé de réception doit s'afficher. Le `position: sticky` du bloc suffit à porter le calque
+   absolu ci-dessous — le repasser en `relative` ici décollerait la zone du bas de la tuile. */
+.home-chat__repondre.is-depot {
+  border-top-color: var(--cyan);
+}
+
+.home-chat__depot-calque {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  /* Le calque ne doit pas AVALER le lâcher : sans cela, il devient la cible et le dépôt échoue. */
+  pointer-events: none;
+  border: 2px dashed var(--cyan);
+  border-radius: var(--r1, 8px);
+  background: rgba(3, 10, 16, 0.92);
+  color: var(--text);
+}
+
+.home-chat__depot-calque strong {
+  font-size: 12px;
+}
+
+.home-chat__depot-calque span {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.home-chat__depot-invite {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Ce qui va PARTIR, lisible avant le premier clic : un envoi ne se rattrape pas. */
+.home-chat__pieces {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-chat__pieces li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--r1, 8px);
+}
+
+.home-chat__piece-nom {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-chat__pieces em {
+  flex: none;
+  font-style: normal;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+.home-chat__piece-retirer {
+  flex: none;
+  padding: 0 4px;
+  color: var(--text-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.home-chat__piece-retirer:hover {
+  color: var(--rose);
+}
+
 /* L'envoi est l'action PRINCIPALE et la seule qui part chez quelqu'un : il porte la couleur, les
    autres restent en retrait. */
 .home-chat__envoyer,
