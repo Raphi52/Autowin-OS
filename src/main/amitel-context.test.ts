@@ -441,7 +441,7 @@ describe('portee du dossier de travail', () => {
     const provider = createAmitelContextProvider({
       workspace: (conversationId?: string) => {
         vus.push(conversationId)
-        return 'C:\Amitel\Autowin OS'
+        return 'C:\\Amitel\\Autowin OS'
       },
       sources: ['graph'],
       fetchFn: vi.fn() as never,
