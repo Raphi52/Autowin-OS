@@ -67,7 +67,7 @@ type AmitelContextOptions = {
    * Workspace courant : sert a DERIVER le corpus Brain autorise (option O3 du cadrage
    * `rag-brain-pertinence`). Absent, ou workspace sans corpus declare -> aucun acces Brain.
    */
-  workspace?: () => string | undefined
+  workspace?: (conversationId?: string) => string | undefined
   /** Journalise le filtrage : couper des sources en silence est indefendable. */
   onScope?: (info: { kept: number; dropped: number; corpus: readonly string[] }) => void
   /**
@@ -245,8 +245,8 @@ export function createAmitelContextProvider(
   let graphLoad:
     Promise<{ raw: string; sourcePath: string; sha256: string; expiresAt: number }> | undefined
 
-  const retrieveBrain = async (query: string): Promise<BrainRetrievalResult> => {
-    const corpus = brainCorpusForWorkspace(options.workspace?.())
+  const retrieveBrain = async (query: string, conversationId?: string): Promise<BrainRetrievalResult> => {
+    const corpus = brainCorpusForWorkspace(options.workspace?.(conversationId))
     if (corpus?.length === 0) return { context: '', status: 'empty' }
     const token = (await readText(tokenPath)).trim()
     if (token.length < 32) throw new Error('Jeton Amitel Brain invalide')
@@ -308,7 +308,7 @@ export function createAmitelContextProvider(
     const pushBrain = sources.includes('brain')
     const [brain, graph] = await Promise.allSettled([
       pushBrain
-        ? retrieveBrain(boundedQuery)
+        ? retrieveBrain(boundedQuery, meta?.conversationId)
         : Promise.resolve({ context: '', status: 'empty' } as BrainRetrievalResult),
       retrieveGraph(boundedQuery)
     ])
@@ -316,7 +316,7 @@ export function createAmitelContextProvider(
     // Autowin ramène majoritairement des sources d'un AUTRE projet. On restreint au corpus du
     // workspace ; un workspace sans identité déclarée est fail-closed. Le graphe de code, lui, est
     // déjà scopé : il n'est jamais filtré ici.
-    const corpus = brainCorpusForWorkspace(options.workspace?.())
+    const corpus = brainCorpusForWorkspace(options.workspace?.(meta?.conversationId))
     const rawBrain =
       brain.status === 'fulfilled'
         ? brain.value

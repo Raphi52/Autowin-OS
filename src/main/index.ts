@@ -950,7 +950,8 @@ const pilot = new AgentPilot(
     // commande `brain_query` que le prompt recommande deja — on passe d'un contexte pousse a une
     // capacite disponible.
     sources: ['graph'],
-    workspace: () => os.executionWorkspace,
+    // RESOLU PAR TOUR : le corpus autorise derive du dossier RANGE sur la conversation, pas d'un global fige.
+    workspace: (conversationId?: string) => dossierDuTour(conversationId),
     onScope: ({ kept, dropped, corpus }) => {
       if (dropped > 0) {
         console.info(

@@ -434,3 +434,31 @@ describe('trace de la voie poussée', () => {
     expect(traces).toEqual([])
   })
 })
+
+describe('portee du dossier de travail', () => {
+  it('resout le dossier avec la conversation du tour, pas un dossier global fige', async () => {
+    const vus: (string | undefined)[] = []
+    const provider = createAmitelContextProvider({
+      workspace: (conversationId?: string) => {
+        vus.push(conversationId)
+        return 'C:\Amitel\Autowin OS'
+      },
+      sources: ['graph'],
+      fetchFn: vi.fn() as never,
+      readText: vi.fn().mockResolvedValue(graph),
+      tokenPath: 'C:/token/service-token',
+      graphPath: 'C:/brain/projects/autowin-os/graphify-out/graph.json',
+      graphLoader: vi.fn().mockResolvedValue({
+        raw: graph,
+        sourcePath: 'C:/brain/projects/autowin-os/graphify-out/graph.json',
+        sha256: 'graph-sha'
+      }),
+      graphEvidence: resolveGraphEvidence
+    })
+
+    await provider('Comment fonctionne AgentPilot chat ?', { conversationId: 'conv-358' })
+
+    expect(vus.length).toBeGreaterThan(0)
+    expect(vus.every((v) => v === 'conv-358')).toBe(true)
+  })
+})
