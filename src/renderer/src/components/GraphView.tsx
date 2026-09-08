@@ -1125,7 +1125,8 @@ export function GraphView({
   }, [syncThemeClusterLabels])
 
   useEffect(() => {
-    if (!active || !showThemeClusterLabels) return
+    // SONDE-ISOLEMENT : boucle d'etiquettes neutralisee le temps du diagnostic.
+    if (true || !active || !showThemeClusterLabels) return
     let frame = 0
     const followCamera = (): void => {
       /*
@@ -1173,7 +1174,8 @@ export function GraphView({
     }
     reconcileWidths()
     const observer = new ResizeObserver(reconcileWidths)
-    observer.observe(layout)
+    // SONDE-ISOLEMENT
+    void observer
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
