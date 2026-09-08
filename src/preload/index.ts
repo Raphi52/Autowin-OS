@@ -14,6 +14,7 @@ import type {
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { RapportRetention } from '../shared/rapport-retention'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
 import type {
@@ -217,6 +218,9 @@ const api = {
       verdict?: 'a-reprendre' | 'trie' | 'sans-valeur' | 'inconnu'
     }>
   > => ipcRenderer.invoke('worktree:travaux-non-publies'),
+  /** Dernier rapport du balayage de retention — lecture seule, ne declenche aucune passe. */
+  getRapportRetention: (): Promise<RapportRetention | undefined> =>
+    ipcRenderer.invoke('worktree:rapport-retention'),
   getPatchTravailNonPublie: (agentId: string): Promise<{ patch: string; tronque: boolean }> =>
     ipcRenderer.invoke('worktree:patch-non-publie', agentId),
   getWorktreeStatus: (): Promise<WorktreeRuntimeStatus> => ipcRenderer.invoke('worktree:status'),

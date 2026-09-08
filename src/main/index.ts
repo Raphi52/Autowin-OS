@@ -2761,9 +2761,20 @@ Le fil reprend ensuite normalement.`
        * pendant la construction de la fenetre, journalises dans `gels.jsonl`. Meme prix, meme
        * verdict, mais paye sans tenir la boucle d'evenements.
        */
-      const plan = planifierBalayage(
-        await worktrees.recenserRetentionAsync((sha) => consignes.has(sha))
-      )
+      const entrees = await worktrees.recenserRetentionAsync((sha) => consignes.has(sha))
+      const plan = planifierBalayage(entrees)
+      /*
+       * ON DEPOSE LE RAPPORT AVANT DE SORTIR, y compris quand il est VIDE. Un plan vide n'est pas
+       * un non-evenement : il affirme que le stock est sain, ce que « rien affiche » ne dit pas.
+       * L'interface distingue « jamais balaye » de « balaye, rien a signaler ».
+       */
+      os.poserRapportRetention({
+        faitLe: new Date().toISOString(),
+        examines: entrees.length,
+        sansPerte: plan.aSupprimer.map((e) => e.nom),
+        aTrancher: plan.aSignaler.map((e) => e.nom),
+        reportees: plan.reportees
+      })
       if (plan.aSupprimer.length === 0 && plan.aSignaler.length === 0) return
       console.info(
         `[retention] ${plan.aSupprimer.length} sans perte, ${plan.aSignaler.length} perimes a trancher` +

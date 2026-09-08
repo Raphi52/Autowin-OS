@@ -1,3 +1,4 @@
+import type { RapportRetention } from '../shared/rapport-retention'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
   WorktreeAgentActivity,
@@ -222,6 +223,8 @@ interface ChatApi {
   getWorktreeActivity: (conversationId?: string) => Promise<WorktreeAgentActivity[]>
   /** Travaux terminés mais jamais publiés — lecture seule, sur geste explicite. */
   getTravauxNonPublies?: () => Promise<Array<{ agentId: string; date: string; fichiers: string[] }>>
+  /** Dernier rapport du balayage de retention. `undefined` = aucune passe encore faite. */
+  getRapportRetention?: () => Promise<RapportRetention | undefined>
   getPatchTravailNonPublie?: (agentId: string) => Promise<{ patch: string; tronque: boolean }>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   getWorktreeConflictDiff: (agentId: string) => Promise<WorktreeConflictDiffResult>
