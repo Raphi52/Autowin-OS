@@ -365,7 +365,6 @@ export const ChatMessageRow = memo(
       <div className="msg assistant fade-in">
         <div className="msg-meta">
           <span className="msg-role">Agent</span>
-          {!message.done && <Spinner />}
         </div>
         {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense.
             L'attente AVANT le premier fragment de pensée passe par le MÊME bloc (corps vide) :
