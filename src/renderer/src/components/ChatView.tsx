@@ -5134,10 +5134,7 @@ Cliquer pour changer le dossier de travail.`}
                     // Fil neuf (aucun tour mesure) : on affiche 0 % plutot que rien — un fil sans
                     // tour porte REELLEMENT zero token, ce n'est pas une ignorance.
                     const jauge =
-                      mesuree ??
-                      (activeId != null
-                        ? jaugeVide(orchestratorBinding?.model, orchestratorBinding?.provider)
-                        : undefined)
+                      mesuree ?? jaugeVide(orchestratorBinding?.model, orchestratorBinding?.provider)
                     return (
                       <ContextGaugeIndicator
                         gauge={jauge}
