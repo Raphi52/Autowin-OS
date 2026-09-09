@@ -17,6 +17,7 @@ describe('mode d’affichage sombre / clair', () => {
   beforeEach(() => {
     localStorage.clear()
     document.documentElement.removeAttribute('data-theme')
+    document.documentElement.removeAttribute('data-base')
   })
 
   it('démarre en sombre quand rien n’est mémorisé', () => {
@@ -42,6 +43,26 @@ describe('mode d’affichage sombre / clair', () => {
     expect(lireThemeMode()).toBe('sombre')
   })
 
+  /*
+   * LA BASE, pas seulement le nom. Toutes les surcharges claires visent data-base=clair : si
+   * appliquerThemeMode cesse de poser cet attribut, Ardoise, Parchemin et Rose poudre heritent du
+   * fond clair SANS les corrections de texte -- gris pale sur blanc, defaut mesure le 2026-09-07.
+   * Rien ne le verrouillait jusqu ici : retirer ces trois lignes laissait la suite VERTE.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CES DEUX CAS : ne plus poser data-base, ou le poser pour tous.
+   */
+  it('pose la BASE du theme a cote de son nom, pour un theme clair NOMME', function () {
+    ecrireThemeMode('ardoise')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('ardoise')
+    expect(document.documentElement.getAttribute('data-base')).toBe('clair')
+  })
+
+  it('ne laisse AUCUNE base derriere lui quand on repasse a un theme sombre', function () {
+    ecrireThemeMode('ardoise')
+    ecrireThemeMode('obsidian-nebula')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('obsidian-nebula')
+    expect(document.documentElement.hasAttribute('data-base')).toBe(false)
+  })
   it('ne casse pas si le document est absent', () => {
     expect(() => appliquerThemeMode('clair')).not.toThrow()
   })
