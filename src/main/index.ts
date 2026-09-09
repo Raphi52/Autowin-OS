@@ -1799,7 +1799,7 @@ Le fil reprend ensuite normalement.`
             ...artifactsFromExecutionEvidence(step.evidence ?? [], {
               provider: step.provider ?? 'orchestrator',
               model: step.model,
-              workspaceRoot: os.executionWorkspace
+              workspaceRoot: dossierDuTour(conversationId)
             })
           ]
           for (const artifact of stepArtifacts) {
@@ -1901,7 +1901,7 @@ Le fil reprend ensuite normalement.`
         appendExecutionEvidenceFileTrace(pendingExecutionEvidence, {
           conversationId,
           turnId,
-          workspaceRoot: os.executionWorkspace,
+          workspaceRoot: dossierDuTour(conversationId),
           published: true
         })
       }
