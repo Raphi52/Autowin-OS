@@ -36,7 +36,9 @@ describe('bouton mode auto du composer — rond, petit, dore', () => {
 
   it('allume, il est DORE et non rose', () => {
     expect(actif).not.toBe('')
-    expect(actif).toMatch(/#e3ba55/i)
+    // Le dore est rattache au jeton --gold-clair (#e3ba55 en sombre) depuis le chantier
+    // jetons de theme (2026-09-09) : on verrouille le jeton, plus le hex fige.
+    expect(actif).toMatch(/var\(--gold-clair\)/)
     expect(actif).toMatch(/rgba\(212, 169, 79/)
     expect(actif).not.toMatch(/239, 63, 145/)
   })
