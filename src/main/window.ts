@@ -17,7 +17,8 @@ import { cloreDemarrage, pendantOperation } from './gel-main'
 import { surveillerFenetreInjoignable } from './gel-fenetre'
 import { surveillerParBattement } from './gel-battement-fenetre'
 import { journaliserGel } from './gel-main'
-import { app, shell, BrowserWindow, Menu, Tray } from 'electron'
+import { app, shell, BrowserWindow, Menu, Tray, desktopCapturer } from 'electron'
+import { installerCaptureSonSysteme } from './audio-loopback'
 import { join } from 'path'
 import { writeFileSync } from 'node:fs'
 import { is } from '@electron-toolkit/utils'
@@ -228,6 +229,22 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       }
       if (items.length === 0) return
       Menu.buildFromTemplate(items).popup({ window: mainWindow })
+    })
+
+    /**
+     * LE SON QUE LA MACHINE JOUE, pour le mode conversation telephonique du widget
+     * Enregistrements : transcrire l'interlocuteur (Teams, Meet, un telephone en haut-parleur)
+     * exige la sortie audio du systeme, que Chromium n'ouvre qu'a travers `getDisplayMedia`. Sans
+     * ce gestionnaire, la demande du renderer est rejetee sans explication. La regle et son refus
+     * hors Windows vivent dans `audio-loopback.ts`.
+     */
+    installerCaptureSonSysteme(mainWindow.webContents.session, {
+      sources: async () =>
+        (await desktopCapturer.getSources({ types: ['screen'] })).map((s) => ({
+          id: s.id,
+          name: s.name
+        })),
+      plateforme: process.platform
     })
 
     mainWindow.webContents.setWindowOpenHandler((details) => {
