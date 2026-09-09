@@ -12,15 +12,23 @@
 # Ecrit en ASCII et avec BOM : Windows PowerShell 5.1 relit un .ps1 sans BOM en ANSI, et un accent y
 # devient un jeton invalide.
 #
-# Codes de sortie -- ils portent la CAUSE, que l'appelant traduit en phrase :
-#   0 envoye | 1 echec Outlook | 2 identifiant invalide | 3 element introuvable
-#   4 corps vide | 5 aucun destinataire trouve
+# Les PIECES JOINTES arrivent par un fichier qui LISTE leurs chemins, un par ligne, en UTF-8.
+# Demande de l'utilisateur du 2026-09-09 : "ca marche bien pour les nouveaux fils de message, il
+# faudrait aussi que ca marche pour les messages de reponse". `Attachments.Add` prend le nom du
+# fichier pour nom de piece, donc l'appelant ecrit chaque piece dans son propre sous-dossier sous
+# son vrai nom -- ce script ne renomme rien. Le parametre est OPTIONNEL : une reponse sans piece
+# part exactement comme avant.
 #
-#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/outlook-local-reply.ps1 -Id <EntryID> -CorpsFichier <fichier>
+# Codes de sortie -- ils portent la CAUSE, que l'appelant traduit en phrase :
+#   0 envoye | 1 echec Outlook | 2 identifiant invalide | 3 element ou fichier introuvable
+#   4 corps vide | 5 aucun destinataire trouve | 7 piece jointe refusee par Outlook
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/outlook-local-reply.ps1 -Id <EntryID> -CorpsFichier <fichier> [-PiecesFichier <fichier>]
 
 param(
   [Parameter(Mandatory = $true)][string]$Id,
-  [Parameter(Mandatory = $true)][string]$CorpsFichier
+  [Parameter(Mandatory = $true)][string]$CorpsFichier,
+  [Parameter(Mandatory = $false)][string]$PiecesFichier
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,10 +47,30 @@ if (-not (Test-Path -LiteralPath $CorpsFichier)) {
 
 # Lu en UTF-8 EXPLICITEMENT : c'est l'encodage que Node ecrit, et le defaut de la machine ne doit
 # pas s'en meler -- sinon la reponse partirait avec des accents casses.
-$corps = [System.IO.File]::ReadAllText($CorpsFichier, (New-Object System.Text.UTF8Encoding($false)))
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+$corps = [System.IO.File]::ReadAllText($CorpsFichier, $utf8)
 if ([string]::IsNullOrWhiteSpace($corps)) {
   Write-Host 'ECHEC - corps vide'
   exit 4
+}
+
+# Les chemins des pieces jointes, lus AVANT d'ouvrir Outlook : un chemin manquant doit se dire sans
+# avoir cree un brouillon de reponse. Chaque ligne est un chemin absolu ecrit par l'appelant.
+$pieces = @()
+if (-not [string]::IsNullOrWhiteSpace($PiecesFichier)) {
+  if (-not (Test-Path -LiteralPath $PiecesFichier)) {
+    Write-Host 'ECHEC - fichier introuvable'
+    exit 3
+  }
+  foreach ($ligne in [System.IO.File]::ReadAllLines($PiecesFichier, $utf8)) {
+    $chemin = $ligne.Trim()
+    if ([string]::IsNullOrWhiteSpace($chemin)) { continue }
+    if (-not (Test-Path -LiteralPath $chemin)) {
+      Write-Host ('ECHEC - fichier introuvable : ' + $chemin)
+      exit 3
+    }
+    $pieces += $chemin
+  }
 }
 
 try {
@@ -70,6 +98,17 @@ try {
   if ($destinataires -lt 1) {
     Write-Host 'ECHEC - aucun destinataire'
     exit 5
+  }
+
+  # Les PIECES JOINTES avant tout envoi : une piece ajoutee apres `.Send()` n'arriverait jamais, et
+  # un refus doit porter sa propre cause -- "Outlook n'a pas pu envoyer cette reponse" ferait
+  # chercher l'erreur du cote du texte.
+  foreach ($chemin in $pieces) {
+    try { [void]$reponse.Attachments.Add($chemin) }
+    catch {
+      Write-Host ('ECHEC - piece jointe refusee : ' + $chemin)
+      exit 7
+    }
   }
 
   # Le texte de l'utilisateur AU-DESSUS, l'historique cite d'Outlook en dessous : c'est la convention

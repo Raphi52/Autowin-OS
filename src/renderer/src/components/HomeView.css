@@ -2150,6 +2150,31 @@
   border-top-color: var(--cyan);
 }
 
+/*
+ * L'ecran de REPONSE : la cible du glisser couvre la conversation, pas seulement la barre du bas.
+ *
+ * Meme raison que `.home-chat__nouveau` juste au-dessus, mesuree sur une capture de l'ecran reel le
+ * 2026-09-09 : la barre de reponse est collee en bas et ne fait que la hauteur de ses champs —
+ * environ 70 pixels sur les 520 de la tuile. Un fichier lache sur les messages retomberait dans le
+ * vide. Cette zone enveloppe donc la liste ET la barre.
+ *
+ * `flex: 1` + `min-height: 0` reprennent exactement ce que faisait la liste quand elle etait fille
+ * directe de `.home-inter` : sans `min-height: 0`, un fil long deborderait au lieu de defiler.
+ * `position: relative` porte le calque de survol, qui est en `position: absolute; inset: 0`.
+ */
+.home-chat__zone {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.home-chat__zone.is-depot .home-chat__repondre {
+  border-top-color: var(--cyan);
+}
+
 .home-chat__depot-calque {
   position: absolute;
   inset: 0;

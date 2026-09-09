@@ -107,8 +107,16 @@ export interface OutlookGatewayOptions {
   runner?: (scriptPath: string, outPath: string) => Promise<void>
   /** Idem pour l'ouverture d'un élément. Rend le code de sortie du script. */
   opener?: (scriptPath: string, id: string) => Promise<number>
-  /** Idem pour la RÉPONSE. Le corps est passé par un fichier, pas en argument. */
-  replier?: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
+  /**
+   * Idem pour la RÉPONSE. Le corps est passé par un fichier, pas en argument. La LISTE des pièces
+   * jointes aussi, et `piecesPath` est absent quand la réponse n'en a aucune.
+   */
+  replier?: (
+    scriptPath: string,
+    id: string,
+    corpsPath: string,
+    piecesPath?: string
+  ) => Promise<number>
   /** Idem pour le MARQUAGE LU. Les identifiants passent par un fichier, un par ligne. */
   marqueur?: (scriptPath: string, idsPath: string) => Promise<number>
   /**
@@ -179,7 +187,8 @@ const REPLY_FAILURES: Readonly<Record<number, string>> = {
   1: "Outlook n'a pas pu envoyer cette réponse.",
   2: "Cet identifiant n'a pas la forme d'un élément Outlook.",
   3: 'Ce message n’existe plus dans Outlook — il a peut-être été supprimé ou déplacé.',
-  4: 'La réponse est vide : rien n’a été envoyé.'
+  4: 'La réponse est vide : rien n’a été envoyé.',
+  7: 'Outlook a refusé une pièce jointe : la réponse n’est pas partie.'
 }
 
 /**
@@ -315,7 +324,12 @@ function defaultMarqueur(scriptPath: string, idsPath: string): Promise<number> {
   })
 }
 
-function defaultReplier(scriptPath: string, id: string, corpsPath: string): Promise<number> {
+function defaultReplier(
+  scriptPath: string,
+  id: string,
+  corpsPath: string,
+  piecesPath?: string
+): Promise<number> {
   return new Promise((resolve) => {
     execFile(
       'powershell',
@@ -328,7 +342,10 @@ function defaultReplier(scriptPath: string, id: string, corpsPath: string): Prom
         '-Id',
         id,
         '-CorpsFichier',
-        corpsPath
+        corpsPath,
+        // Le paramètre n'est POSÉ que s'il y a des pièces : une réponse sans pièce part exactement
+        // comme avant, et le script n'a pas de fichier vide à interpréter.
+        ...(piecesPath ? ['-PiecesFichier', piecesPath] : [])
       ],
       { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 256 * 1024 },
       (error) => {
@@ -359,7 +376,12 @@ export class OutlookLocalGateway {
   private readonly ttlMs: number
   private readonly runner: (scriptPath: string, outPath: string) => Promise<void>
   private readonly opener: (scriptPath: string, id: string) => Promise<number>
-  private readonly replier: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
+  private readonly replier: (
+    scriptPath: string,
+    id: string,
+    corpsPath: string,
+    piecesPath?: string
+  ) => Promise<number>
   private readonly marqueur: (scriptPath: string, idsPath: string) => Promise<number>
   private readonly redacteur: (
     scriptPath: string,
@@ -458,8 +480,16 @@ export class OutlookLocalGateway {
    * ce poste : l'encodage de la console est cp1252, donc un accent en argument arrive abîmé ; et un
    * texte libre concaténé dans une ligne de commande est une porte ouverte, alors qu'un fichier n'est
    * jamais interprété.
+   *
+   * Et depuis le 2026-09-09, sur demande de l'utilisateur (« ça marche bien pour les nouveaux fils
+   * de message, il faudrait aussi que ça marche pour les messages de réponse »), ce chemin porte
+   * aussi des PIÈCES JOINTES — exactement comme `sendNew` depuis la veille, et par le même
+   * mécanisme : elles arrivent en CONTENU et non en chemin (un fichier glissé depuis Outlook
+   * n'existe pas sur le disque, et Electron ne rend plus `File.path`), les octets redeviennent des
+   * fichiers ici, chacun dans son propre sous-dossier pour que son NOM reste celui que verra le
+   * destinataire, et la LISTE des chemins voyage par un fichier UTF-8 comme le corps.
    */
-  async replyToItem(id: unknown, corps: unknown): Promise<OutlookReplyResult> {
+  async replyToItem(id: unknown, corps: unknown, pieces?: unknown): Promise<OutlookReplyResult> {
     if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
       return { ok: false, erreur: REPLY_FAILURES[2] }
     }
@@ -469,12 +499,22 @@ export class OutlookLocalGateway {
     if (texte.length > MAX_CORPS) {
       return { ok: false, erreur: `La réponse dépasse ${MAX_CORPS} caractères.` }
     }
+    // Les pièces jointes sont vérifiées AVANT d'ouvrir un dossier temporaire : un refus ne doit pas
+    // laisser d'octets derrière lui, et il annule l'envoi entier.
+    const verifiees = verifierPieces(pieces)
+    if ('erreur' in verifiees) return { ok: false, erreur: verifiees.erreur }
     let dossier: string | null = null
     try {
       dossier = await mkdtemp(join(tmpdir(), 'autowin-outlook-reply-'))
       const corpsPath = join(dossier, 'corps.txt')
       await writeFile(corpsPath, texte, 'utf8')
-      const code = await this.replier(this.scriptVoisin('outlook-local-reply.ps1'), id, corpsPath)
+      const piecesPath = await this.ecrirePieces(dossier, verifiees.pieces)
+      const code = await this.replier(
+        this.scriptVoisin('outlook-local-reply.ps1'),
+        id,
+        corpsPath,
+        piecesPath
+      )
       if (code === 0) return { ok: true }
       return { ok: false, erreur: REPLY_FAILURES[code] ?? REPLY_FAILURES[1] }
     } catch (error) {

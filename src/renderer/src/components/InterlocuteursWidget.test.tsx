@@ -204,7 +204,9 @@ describe('InterlocuteursWidget', () => {
 
     await cliquer('home-inter-confirmer')
     // `m1`, le dernier message RECU — pas `m2`, qui est mon propre envoi.
-    expect(onRepondre).toHaveBeenCalledWith('m1', 'Le voici')
+    // Le troisieme argument est la liste des pieces jointes, vide ici : depuis le 2026-09-09 un
+    // fichier peut etre glisse dans cet ecran (voir InterlocuteursWidget.reponse-pieces.test.tsx).
+    expect(onRepondre).toHaveBeenCalledWith('m1', 'Le voici', [])
     expect(container.querySelector('[role="status"]')?.textContent).toContain('envoyée')
   })
 

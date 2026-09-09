@@ -721,13 +721,18 @@ export function HomeView({
    * l'utilisateur vient de cliquer.
    */
   const repondreDansOutlook = useCallback(
-    async (id: string, corps: string): Promise<{ ok: boolean; erreur?: string }> => {
+    async (
+      id: string,
+      corps: string,
+      pieces: readonly PieceJointeMessage[] = []
+    ): Promise<{ ok: boolean; erreur?: string }> => {
       const api = (
         window as unknown as {
           api?: {
             outlookRepondre?: (
               id: string,
-              corps: string
+              corps: string,
+              pieces?: readonly PieceJointeMessage[]
             ) => Promise<{ ok: boolean; erreur?: string }>
           }
         }
@@ -736,7 +741,7 @@ export function HomeView({
         return { ok: false, erreur: 'Cette version ne sait pas encore répondre depuis Outlook.' }
       }
       try {
-        return await api.outlookRepondre(id, corps)
+        return await api.outlookRepondre(id, corps, pieces)
       } catch (error) {
         return { ok: false, erreur: error instanceof Error ? error.message : String(error) }
       }
@@ -1159,7 +1164,18 @@ function WidgetBody({
   enAttente: readonly ConversationEnAttente[]
   onOuvrirConversation: (id: string) => void
   onOuvrir: (id: string) => Promise<void>
-  onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  /**
+   * RÉPOND à un message, avec ses pièces jointes éventuelles.
+   *
+   * Le troisième paramètre est déclaré ICI et pas seulement au bout de la chaîne : ce type est le
+   * maillon du milieu, et un maillon qui ignore les pièces les ferait disparaître au premier
+   * appelant qui s'y fie — alors que le fichier serait bien affiché à l'écran comme joint.
+   */
+  onRepondre: (
+    id: string,
+    corps: string,
+    pieces: readonly PieceJointeMessage[]
+  ) => Promise<{ ok: boolean; erreur?: string }>
   onNouvelleConversation: (
     adresse: string,
     objet: string,

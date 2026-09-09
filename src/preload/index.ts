@@ -638,8 +638,12 @@ const api = {
    * REPOND a un message et ENVOIE la reponse. Irreversible : l'appelant doit avoir fait confirmer.
    * Canal distinct de la lecture et de l'ouverture, parce que c'est le seul qui ecrit.
    */
-  outlookRepondre: (id: string, corps: string): Promise<{ ok: boolean; erreur?: string }> =>
-    ipcRenderer.invoke('outlook:repondre', id, corps),
+  outlookRepondre: (
+    id: string,
+    corps: string,
+    pieces?: ReadonlyArray<{ nom: string; taille: number; contenuBase64: string }>
+  ): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('outlook:repondre', id, corps, pieces ?? []),
   /**
    * MARQUE des messages comme lus dans Outlook. Ecrit dans la boite, et c'est voulu : sans cela la
    * pastille de non-lus reste apres lecture dans le widget.

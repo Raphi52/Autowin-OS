@@ -486,8 +486,18 @@ interface ChatApi {
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   outlookSnapshot: (force?: boolean) => Promise<unknown>
   outlookOuvrir: (id: string) => Promise<{ ok: boolean; erreur?: string }>
-  /** Envoie une réponse à un message Outlook. Irréversible : à confirmer avant l'appel. */
-  outlookRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  /**
+   * Envoie une réponse à un message Outlook, et ses pièces jointes éventuelles.
+   * Irréversible : à confirmer avant l'appel.
+   *
+   * Les pièces voyagent en CONTENU (base64), pas en chemin : un fichier glissé depuis Outlook
+   * n'existe pas sur le disque, et Electron ne rend plus `File.path`.
+   */
+  outlookRepondre: (
+    id: string,
+    corps: string,
+    pieces?: ReadonlyArray<{ nom: string; taille: number; contenuBase64: string }>
+  ) => Promise<{ ok: boolean; erreur?: string }>
   /** Marque des messages Outlook comme lus. Ecrit dans la boite : reserve a un geste utilisateur. */
   outlookMarquerLu: (ids: readonly string[]) => Promise<{ ok: boolean; erreur?: string }>
   /**
