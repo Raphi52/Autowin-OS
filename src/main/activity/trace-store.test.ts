@@ -122,23 +122,61 @@ describe('TraceStore append-only', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-trace-volume-'))
     const store = new TraceStore(root)
     const durations: number[] = []
-
-    for (let index = 0; index < 1_000; index += 1) {
-      const startedAt = performance.now()
-      store.append(event(`evt-${index}`, index, `payload-${index}`))
-      durations.push(performance.now() - startedAt)
+    const ecrireLot = (depuis: number, jusqua: number): void => {
+      for (let index = depuis; index < jusqua; index += 1) {
+        const startedAt = performance.now()
+        store.append(event(`evt-${index}`, index, `payload-${index}`))
+        durations.push(performance.now() - startedAt)
+      }
+    }
+    const p95De = (echantillon: number[]): number =>
+      [...echantillon].sort((a, b) => a - b)[Math.floor(echantillon.length * 0.95)]
+    const somme = (echantillon: number[]): number => echantillon.reduce((t, v) => t + v, 0)
+    const chronometrerLecture = (): { evenements: number; ms: number } => {
+      const depart = performance.now()
+      const relus = new TraceStore(root).readConversation('conv-1')
+      return { evenements: relus.length, ms: performance.now() - depart }
     }
 
-    durations.sort((a, b) => a - b)
-    const p95 = durations[Math.floor(durations.length * 0.95)]
-    const readStartedAt = performance.now()
+    ecrireLot(0, 1_000)
+    const lectureA = chronometrerLecture()
     const reloaded = new TraceStore(root).readConversation('conv-1')
-    const readDuration = performance.now() - readStartedAt
+    ecrireLot(1_000, 2_000)
+    const lectureB = chronometrerLecture()
 
     expect(reloaded).toHaveLength(1_000)
     expect(reloaded[999].payloads[0].content).toBe('payload-999')
-    expect(p95).toBeLessThan(50)
-    expect(readDuration).toBeLessThan(100)
+    expect(lectureA.evenements).toBe(1_000)
+    expect(lectureB.evenements).toBe(2_000)
+    /*
+     * DEUX RAPPORTS, PLUS AUCUNE DUREE ABSOLUE — meme remede que `brain-inbox.test.ts` (6ba3df35).
+     *
+     * Ici le defaut n'etait pas la fragilite mais l'INUTILITE. Mesure du 2026-09-09 par une sonde
+     * temporaire posee dans ce test : `p95` valait 0,106 ms contre un budget de 50 ms (marge 470x)
+     * et la lecture 8,3 ms contre 100 ms (marge 12x). Une assertion a 470x de marge ne tombe que
+     * sur une catastrophe : elle donnait une garantie qu'elle ne tenait pas, et elle mesurait la
+     * machine plutot que le code.
+     *
+     * 1. LE COUT PAR EVENEMENT NE CROIT PAS avec la taille du fichier. C'est LA propriete d'un
+     *    journal qui ne fait qu'ajouter : un jour ou `append` reecrirait le fichier entier, le
+     *    second demi-lot couterait bien plus que le premier. Rapport mesure 43,3 / 28,4 = 1,53.
+     * 2. LA LECTURE CROIT LINEAIREMENT avec le nombre d'evenements : 2 000 relus doivent couter
+     *    ~2x 1 000, jamais ~4x.
+     *
+     * `p95` reste calcule et compare a la MEDIANE du meme run, pas a un nombre de millisecondes :
+     * « sans bloquer une interaction » veut dire qu'aucun ajout ne coute bien plus que l'ajout
+     * typique. Rapport mesure 0,106 / 0,061 = 1,74. Un centile 95 sur 1 000 echantillons ne bouge
+     * pas pour une pause isolee du ramasse-miettes — c'est ce qui le rend utilisable sous charge.
+     *
+     * ENTREE QUI DOIT LES FAIRE ECHOUER : rendre `append` quadratique (relire-reecrire le fichier
+     * a chaque evenement) fait exploser le rapport 1, et une lecture quadratique le rapport 2.
+     */
+    const mediane = [...durations].sort((a, b) => a - b)[Math.floor(durations.length / 2)]
+    expect(
+      somme(durations.slice(1_000)) / Math.max(somme(durations.slice(0, 1_000)), 1)
+    ).toBeLessThan(3)
+    expect(lectureB.ms / Math.max(lectureA.ms, 1)).toBeLessThan(4)
+    expect(p95De(durations) / Math.max(mediane, 0.001)).toBeLessThan(20)
   })
 
   it('conserve un payload exact de 10 Mo', () => {
