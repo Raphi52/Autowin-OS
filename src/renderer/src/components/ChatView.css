@@ -2685,6 +2685,12 @@ button.chat-project-dot:hover:not(:disabled),
 .chat-git-branch-btn:hover {
   background: var(--surface-hover, rgba(var(--voile-rgb), 0.08));
 }
+/* Zone cliquable ELARGIE : la pastille dossier est une CIBLE de pointeur, pas une etiquette.
+   Marge interieure + hauteur minimale pour la viser sans precision au pixel. */
+button.chat-project-dot {
+  padding: 4px 8px;
+  min-height: 24px;
+}
 button.chat-project-dot:disabled {
   cursor: default;
   opacity: 0.7;
