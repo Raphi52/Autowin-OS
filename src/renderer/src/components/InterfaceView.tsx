@@ -65,22 +65,6 @@ export function InterfaceView(): React.JSX.Element {
             redémarrage.
           </p>
         </div>
-        <label className="interface-theme-choix">
-          <span className="interface-theme-label">Thème</span>
-          <select
-            className="interface-theme-select"
-            value={theme}
-            aria-label="Thème"
-            data-testid="interface-theme"
-            onChange={(e) => setTheme(e.target.value)}
-          >
-            {THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.libelle}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       {GROUPES.map((groupe) => (
         <fieldset key={groupe.base} className="interface-theme-groupe">
