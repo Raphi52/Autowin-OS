@@ -125,7 +125,7 @@ import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
-import { ContextGaugeDetail, ContextGaugeIndicator } from './ContextGaugeIndicator'
+import { ContextGaugeDetail } from './ContextGaugeIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
@@ -5276,22 +5276,6 @@ Cliquer pour changer le dossier de travail.`}
                       >
                         📁 {labelDossier}
                       </button>
-                    )
-                  })()}
-                  {(() => {
-                    /*
-                    LA JAUGE DE CONTEXTE — cliquable, elle ouvre son propre panneau de detail
-                    (`ContextGaugeIndicator`), comme la barre de quotas. Elle ne rend rien tant
-                    qu'on ne SAIT pas : afficher 0 % dirait « ce fil est vide » la ou la verite est
-                    « on l'ignore ».
-                  */
-                    const jauge = jaugeCourante
-                    return (
-                      <ContextGaugeIndicator
-                        gauge={jauge}
-                        busy={busy}
-                        onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
-                      />
                     )
                   })()}
                   {gitBranch && (

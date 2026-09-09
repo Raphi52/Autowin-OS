@@ -498,7 +498,12 @@ function inline(line: string): React.ReactNode[] {
   const re =
     // L'italique exige un contenu COLLE a ses etoiles (`*mot*`), jamais espace : sans cette regle
     // de flanquement, une multiplication ecrite `2 * 3 * 4` devenait de l'italique.
-    /\[([^\]]+)\]\(([^\s)]+)\)|(https?:\/\/[^\s)]+)|`([^`]+)`|\*\*([^*]+)\*\*|~~([^~]+)~~|(?<![\w*])\*(?![\s*])([^*\n]*[^\s*])\*(?!\*)/g
+    // Un auto-lien s'arrete AVANT la ponctuation qui termine la phrase : `[^\s)]+` avalait la
+    // virgule de « accessible sur http://localhost:3000, pret a… », et Windows refuse d'ouvrir
+    // l'adresse ainsi salie (« ne peut trouver le fichier ») — donc le clic n'ouvrait AUCUN
+    // navigateur, sans message. Le dernier caractere doit donc etre utile a l'adresse ; `/`, `=`
+    // et un chiffre le restent, `. , ; : ! ?` et les guillemets ne le sont jamais.
+    /\[([^\]]+)\]\(([^\s)]+)\)|(https?:\/\/[^\s)]*[^\s).,;:!?'"«»])|`([^`]+)`|\*\*([^*]+)\*\*|~~([^~]+)~~|(?<![\w*])\*(?![\s*])([^*\n]*[^\s*])\*(?!\*)/g
   let last = 0
   let m: RegExpExecArray | null
   let k = 0
