@@ -37,6 +37,9 @@ const GROUPES: readonly { base: ThemeBase; titre: string }[] = [
  */
 export function InterfaceView(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => lireThemeMode())
+  // Mesure UNE FOIS a l'ouverture : les couleurs d'un theme ne bougent pas pendant la session, et
+  // relire a chaque rendu ferait clignoter l'application a chaque frappe.
+  const [apercus] = useState(() => lireApercusDesThemes())
 
   // Le thème mémorisé est appliqué à l'ouverture aussi : si une autre fenêtre l'a changé,
   // l'écran affiché reste d'accord avec la liste.
