@@ -256,10 +256,18 @@ export class ExecutionSupervisor {
        * suivi). Le refus etait pourtant temporaire : la MEME demande a demarre 2 minutes plus tard
        * (run-70137bee6f8d-1). Le refus reste inchange — il protege le budget ; c'est son TEXTE qui
        * doit dire ce qu'il est et ce qui repare, pour l'agent comme pour l'utilisateur.
+       *
+       * DEUXIEME MESURE, conv-384 du 2026-09-09 : le texte disait « aucun fichier touche » SANS
+       * borner cette portee. L'agent l'a recopie tel quel dans sa cloture alors que le run encore
+       * ACTIF (run-acf5e917a4ac-1) avait deja ecrit 8 fichiers + 1 test dans sa copie de travail
+       * isolee. L'utilisateur a donc lu l'inverse de la realite. La phrase dit desormais DE QUOI
+       * elle parle : la tentative refusee, pas le run en cours.
        */
       runtime.stoppedReason =
         `Reprise refusee : ${prior.activeCalls} appel(s) provider encore actif(s). ` +
-        `Refus transitoire, aucun fichier touche : l'appel en cours se regle seul. ` +
+        `Refus transitoire : l'appel en cours se regle seul. Cette TENTATIVE-CI n'a rien ecrit, ` +
+        `mais le run encore actif peut deja avoir ecrit dans sa copie de travail isolee — ` +
+        `ne declare donc pas « aucun fichier touche » sans avoir regarde son worktree. ` +
         `La suite correcte est de relancer la MEME demande d'orchestration ; ` +
         `ecrire la mutation a la main hors du pipeline n'en est pas une.`
       controller.abort(runtime.stoppedReason)

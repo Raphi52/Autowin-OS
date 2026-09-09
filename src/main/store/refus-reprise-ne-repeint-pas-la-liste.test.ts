@@ -28,7 +28,7 @@ import {
 
 const REFUS_REEL =
   'Reprise refusee : 1 appel(s) provider encore actif(s). ' +
-  'Refus transitoire, aucun fichier touche : l’appel en cours se regle seul.'
+  'Refus transitoire : l’appel en cours se regle seul. Cette TENTATIVE-CI n’a rien ecrit.'
 
 function clock(start = 1000): () => number {
   let t = start
