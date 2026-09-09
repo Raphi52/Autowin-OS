@@ -3838,6 +3838,14 @@ export function ChatView({
    */
   const [repriseQuotaProgres, setRepriseQuotaProgres] = useState<string | null>(null)
   const [repriseQuotaNotice, setRepriseQuotaNotice] = useState<string | null>(null)
+  // Le compte-rendu de reprise est une information de l'INSTANT : lu, il n'a plus de raison
+  // d'occuper la barre. Sans cette expiration, « 2 conversations reprises. » restait affiche
+  // indefiniment alors qu'il n'y avait plus rien a reprendre.
+  useEffect(() => {
+    if (!repriseQuotaNotice) return
+    const t = setTimeout(() => setRepriseQuotaNotice(null), 10_000)
+    return () => clearTimeout(t)
+  }, [repriseQuotaNotice])
   async function reprendreConversationsCoupeesParQuota(): Promise<void> {
     if (repriseQuotaEnCours) return
     const cibles = convsCoupeesParQuota.map((c) => c.id)
@@ -4532,23 +4540,28 @@ export function ChatView({
             alors que les deux autres attendaient leur tour, invisibles. */}
         {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) && (
           <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
-            <button
-              type="button"
-              className="conv-date-sort"
-              data-testid="conv-reprise-quota-bouton"
-              disabled={repriseQuotaEnCours}
-              onClick={() => void reprendreConversationsCoupeesParQuota()}
-              title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
-            >
-              {repriseQuotaEnCours ? (
-                <>
-                  <Spinner size={12} label="Reprise des conversations en cours" />
-                  {repriseQuotaProgres ?? 'Reprise en cours…'}
-                </>
-              ) : (
-                `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
-              )}
-            </button>
+            {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
+                reprise, la notice reste seule quelques secondes, sans un « (0) » qui n'offre
+                rien a cliquer. */}
+            {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
+              <button
+                type="button"
+                className="conv-date-sort"
+                data-testid="conv-reprise-quota-bouton"
+                disabled={repriseQuotaEnCours}
+                onClick={() => void reprendreConversationsCoupeesParQuota()}
+                title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
+              >
+                {repriseQuotaEnCours ? (
+                  <>
+                    <Spinner size={12} label="Reprise des conversations en cours" />
+                    {repriseQuotaProgres ?? 'Reprise en cours…'}
+                  </>
+                ) : (
+                  `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
+                )}
+              </button>
+            ) : null}
             {repriseQuotaNotice ? (
               <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
                 {repriseQuotaNotice}
