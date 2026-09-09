@@ -84,6 +84,19 @@ interface DiscoveryResult {
   cacheable?: ImportedModel[]
 }
 
+/**
+ * Libelle d'un ALIAS de famille. DISTINCT du libelle du modele NOMME correspondant : sans cela, la
+ * liste de choix affichait DEUX entrees portant exactement « Claude Fable 5 · CLI » (l'alias `fable`
+ * et l'id `claude-fable-5`), impossibles a distinguer. L'alias dit ce qu'il EST : un pointeur qui suit
+ * les publications, avec entre parentheses la version vers laquelle il pointe aujourd'hui.
+ */
+function labelClaudeAlias(family: string, latestModelId: string): string {
+  const name = family.charAt(0).toUpperCase() + family.slice(1)
+  const version = latestModelId ? parseClaudeVersion(latestModelId) : null
+  if (!version) return `Claude ${name} · dernier`
+  return `Claude ${name} · dernier (${version.major}${version.minor ? `.${version.minor}` : ''})`
+}
+
 function labelClaudeModel(id: string): string {
   const version = parseClaudeVersion(id)
   if (!version) return `${id} · CLI`
@@ -97,6 +110,19 @@ function uniqueModels(discovered: ImportedModel[]): ImportedModel[] {
   return discovered.filter((model) => {
     if (seen.has(model.model)) return false
     seen.add(model.model)
+    return true
+  })
+}
+
+/**
+ * Deuxieme filet de la liste de choix : DEUX entrees au meme libelle sont indistinguables a l'ecran,
+ * meme si leurs ids diffèrent. On garde la PREMIERE (les alias passent avant les ids nommes).
+ */
+function uniqueLabels(models: ImportedModel[]): ImportedModel[] {
+  const seen = new Set<string>()
+  return models.filter((model) => {
+    if (seen.has(model.label)) return false
+    seen.add(model.label)
     return true
   })
 }
@@ -121,7 +147,7 @@ function uniqueModels(discovered: ImportedModel[]): ImportedModel[] {
 const CLAUDE_CLI_ALIASES = ['opus', 'sonnet', 'haiku', 'fable'] as const
 
 function claudeAliasModels(candidates: ImportedModel[]): ImportedModel[] {
-  return CLAUDE_CLI_ALIASES.map((family) => ({
+  return CLAUDE_CLI_ALIASES.map<ImportedModel>((family) => ({
     id: `claude/${family}`,
     provider: 'claude',
     model: family,
@@ -134,10 +160,10 @@ function claudeAliasModels(candidates: ImportedModel[]): ImportedModel[] {
         return latestVersion && compareClaudeVersions(version, latestVersion) <= 0
           ? latest
           : candidate
-      }, undefined)?.label ?? `Claude ${family.charAt(0).toUpperCase()}${family.slice(1)} · CLI`,
+      }, undefined)?.model ?? '',
     reasoningEfforts: [...CLAUDE_EFFORTS],
     defaultReasoningEffort: family === 'haiku' ? 'medium' : 'high'
-  }))
+  })).map((alias) => ({ ...alias, label: labelClaudeAlias(alias.model, alias.label) }))
 }
 
 function resolveClaudeAliasLabels(models: ImportedModel[]): ImportedModel[] {
@@ -356,8 +382,34 @@ export async function discoverImportedModels(
   // FILTRE DE SORTIE — le catalogue ne propose que des moteurs RÉELLEMENT routés. Gardé même si
   // plus aucune voie retirée n'est sondée : `DEFAULT_IMPORTED_MODELS` ou un futur ajout pourraient
   // réintroduire un moteur mort, et c'est ce filtre qui l'arrête.
-  return [...resolvedClaudeModels, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
-    ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
+  return uniqueLabels(
+    dropRedundantClaudeAliases([...resolvedClaudeModels, ...DEFAULT_IMPORTED_MODELS]).filter((model) =>
+      ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
+    )
+  )
+}
+
+/**
+ * Retire les ALIAS de famille (`claude/opus`, `claude/fable`…) des qu'une VERSION NOMMEE de la meme
+ * famille est presente : la liste de choix ne doit proposer que des modeles precis, l'app prenant
+ * de toute facon la derniere version quand on ne l'epingle pas (demande utilisateur du 2026-09-09,
+ * « enleve ceux avec ecrit (dernier), on met tout le temps les derniers »). L'alias SURVIT quand sa
+ * famille n'a aucune version connue : c'est le filet du poste sans service ni ids lisibles.
+ */
+function dropRedundantClaudeAliases(models: ImportedModel[]): ImportedModel[] {
+  const familiesWithVersion = new Set(
+    models
+      .map((model) => (model.provider === 'claude' ? parseClaudeVersion(model.model) : null))
+      .filter((version): version is NonNullable<typeof version> => Boolean(version))
+      .map((version) => version.family)
+  )
+  return models.filter(
+    (model) =>
+      !(
+        model.provider === 'claude' &&
+        (CLAUDE_CLI_ALIASES as readonly string[]).includes(model.model) &&
+        familiesWithVersion.has(model.model)
+      )
   )
 }
 
@@ -371,6 +423,12 @@ export function findModel(models: ImportedModel[], id: string): ImportedModel | 
   const exact = models.find((m) => m.id === id)
   if (exact) return exact
   if (isKnownAlias(id)) return resolveAlias(id, models)
+  // Un binding pose sur l'ALIAS BRUT du CLI (`claude/opus`) doit continuer a resoudre meme quand
+  // l'alias ne figure plus dans la liste de choix : il pointe vers la derniere version de sa famille.
+  const rawAlias = /^claude\/([a-z]+)$/.exec(id)
+  if (rawAlias && (CLAUDE_CLI_ALIASES as readonly string[]).includes(rawAlias[1])) {
+    return resolveAlias(`claude/${rawAlias[1]}-latest`, models)
+  }
   return undefined
 }
 

@@ -222,6 +222,7 @@ import {
 } from './ipc-senders'
 import { createWindowing } from './window'
 import { ModelQuestionHub, type ModelQuestion } from './model-questions'
+import { maybeUpdateClaudeCli } from './claude-cli-update'
 import {
   discoverImportedModels,
   findModel,
@@ -1149,6 +1150,20 @@ const modelCatalog = new ModelCatalogRefresher(
 // topologie AVANT le refresh empêche un ancien roles.json de survivre à tout le démarrage.
 syncRuntimeTopology(agentTopology)
 const agentModelsReady = modelCatalog.refresh(true)
+// MISE A JOUR DU CLI CLAUDE, en tache de fond, au plus une fois par 12 h. C'est LUI qui porte la
+// liste de modeles : mesure du 2026-09-09, `claude-fable-5-1` n'existait dans aucune source tant que
+// le binaire installe restait en 2.1.251. On ne bloque PAS le demarrage dessus ; quand la mise a jour
+// aboutit, la taille/date du binaire changent, donc le rafraichissement suivant du catalogue rescanne
+// et les nouveaux modeles apparaissent sans redemarrer l'app.
+void maybeUpdateClaudeCli(join(app.getPath('userData'), 'claude-cli-update.json'))
+  .then((resultat) => {
+    if (resultat.outcome === 'skipped') return
+    console.log(`[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`)
+    if (resultat.outcome === 'updated') void modelCatalog.refresh(true)
+  })
+  .catch(() => {
+    // Deja neutralise dans le module : rien a faire ici.
+  })
 const fabricNodesReady = agentModelsReady.then(() => refreshFabricNodes())
 os.setTaskReadiness(
   Promise.all([agentModelsReady, fabricNodesReady]).then(() =>
