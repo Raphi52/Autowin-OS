@@ -106,15 +106,28 @@ describe('conv-1407 : une demande de quatre mots retrouve son sens', () => {
     expect(message).toContain('code couleur')
   })
 
-  it('mais se tait quand la demande se suffit a elle-meme', () => {
-    const { conversations, bus } = corpusDeConv1407()
-    const courante = conversations.list()[0]
+  /**
+   * CE CAS A CHANGE DE REGLE le 2026-09-09, il n'a pas ete affaibli.
+   *
+   * Il exigeait auparavant le silence sur une demande LONGUE, au nom du seuil
+   * `LONGUEUR_QUI_SE_SUFFIT = 160`. Ce seuil a ete SUPPRIME apres mesure sur 1246 tours reels
+   * (cf. `rappel-conversations.ts`, l.23-72) : la longueur d'une demande ne dit rien de sa
+   * probabilite d'etre une redite -- l'ancien critere ratait un tiers des redites, et coupait
+   * legerement du mauvais cote (une trace d'erreur recollee est longue ET depourvue de contexte).
+   * Couverture 67,8 % -> 100 %, precision 13,4 % -> 16,0 %.
+   *
+   * Une demande longue REÇOIT donc desormais un rappel, et c'est voulu. Ce qui borne le rappel
+   * n'est plus la forme de la demande mais le CLOISONNEMENT : une conversation courante inconnue
+   * ne peut rien rappeler, puisque le fournisseur qui borne le rappel est introuvable.
+   */
+  it('se tait quand la conversation courante est inconnue', () => {
+    const { bus } = corpusDeConv1407()
     const explicite =
       'Dans src/renderer/src/components/ChatView.parts.tsx, rends le bouton de depliage des ' +
       'pastilles conditionnel a la longueur du texte, et couvre la decision par un test dedie ' +
       'qui exerce le cas court et le cas long, sans toucher au reste du composant.'
 
-    expect(bus.rappelPourDemande(explicite, courante.id)).toBe('')
+    expect(bus.rappelPourDemande(explicite, 'conv-qui-n-existe-pas')).toBe('')
   })
 
   it('la connaissance injectee ne remplit plus sa place de bruit', async () => {
