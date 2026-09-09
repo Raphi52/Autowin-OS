@@ -115,6 +115,7 @@ describe('discipline de pipeline canonique', () => {
     // Et il doit dire POURQUOI, sinon il sera lu comme une option decorative.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/capture fixe ne (?:peut|prouve)/i)
   })
+
   /**
    * LA LISTE DES VUES ANNONCEE DOIT ETRE CELLE QUE LE HARNAIS ACCEPTE.
    *

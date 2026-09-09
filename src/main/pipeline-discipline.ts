@@ -7,8 +7,8 @@
  * (`scripts/ui-capture.mjs`) : elle a déjà dérivé une fois (8 vues annoncées pour 10 acceptées,
  * `accueil` et `tests` absents). Un agent ne demande jamais une vue que son prompt ne nomme pas,
  * et le gate `visual-proof-missing` refuse un run touchant le rendu sans capture : une vue tue de
- * la liste tue le run. `pipeline-discipline.test.ts` croise donc le texte avec `VUES_CONNUES` —
- * toute vue ajoutée au harnais sans être annoncée ici rend ce test rouge.
+ * la liste passée sous silence tue le run. `pipeline-discipline.test.ts` croise donc le texte
+ * avec `VUES_CONNUES` — toute vue ajoutée au harnais sans être annoncée ici rend ce test rouge.
  */
 export const PIPELINE_DISCIPLINE_INSTRUCTION = `
 Suis la discipline de pipeline canonique, proportionnée au régime (une tâche triviale peut rester directe) :
