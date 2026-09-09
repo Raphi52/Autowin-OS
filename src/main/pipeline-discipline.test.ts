@@ -1,4 +1,5 @@
-// fix-ok: cause mesurée — la même règle vivait en double (constitution + consignes d'étape/style), redites relevées dans le prompt injecté ; fusion vers la constitution, tests rouges→verts dans phase-briefs/pipeline-discipline/response-style.test.ts
+// fix-ok: cause mesurée — la même règle vivait en double (constitution + consignes d'étape/style), redites relevées dans le prompt injecté ; fusion vers la constitution
+import { readFileSync } from 'node:fs'
 import { CONSTITUTION } from './constitution'
 import { describe, expect, it } from 'vitest'
 import { VUES_CONNUES } from '../../scripts/ui-capture.mjs'
@@ -145,6 +146,45 @@ describe('discipline de pipeline canonique', () => {
     // Egalite d'ENSEMBLE : ni vue manquante (preuve declaree hors de portee), ni vue inventee
     // (l'agent la demanderait et le harnais la refuserait).
     expect([...annoncees].sort()).toEqual([...VUES_CONNUES].sort())
+  })
+  /**
+   * MEME CAUSE, AUTRE SYMPTOME : les OPTIONS du harnais aussi doivent etre annoncees.
+   *
+   * Le correctif des vues ne traitait qu'une moitie de la duplication. Mesure du 2026-09-09 :
+   * `scripts/ui-capture.mjs` lit DIX options et la consigne n'en nommait que TROIS (`--view`,
+   * `--out`, `--motion`). Manquaient `--click` (l.503), `--state` (l.476) et `--css` (l.390) :
+   * trois preuves qu'AUCUNE navigation ne donne, rendues invisibles a tous les agents.
+   *
+   * Le cout est deja paye et trace : `phase-briefs.instrument-de-preuve.test.ts` documente un
+   * producteur qui, faute de savoir `--click` disponible, a RECOMMANDE a quelqu'un d'autre
+   * « d'etendre scripts/ui-capture.mjs d'un --click » — l'option existait deja.
+   *
+   * Le classement ci-dessous est EXHAUSTIF par construction : l'union des deux ensembles doit
+   * egaler ce que le source lit. Une option ajoutee au harnais n'appartient donc a aucun des
+   * deux et rend ce test rouge — c'est le seul moyen d'empecher la liste de rederiver.
+   */
+  it('annonce les options de PREUVE du harnais, et classe toutes les autres', () => {
+    const source = readFileSync(new URL('../../scripts/ui-capture.mjs', import.meta.url), 'utf8')
+    const optionsLues = [
+      ...new Set([...source.matchAll(/argument\((?:'|")(--[a-z-]+)(?:'|")/g)].map((m) => m[1]))
+    ].sort()
+
+    // Ouvrent une preuve que rien d'autre ne donne : doivent etre NOMMEES dans la consigne, sinon
+    // l'agent ne les appellera jamais.
+    const CONTRAT_DE_PREUVE = ['--click', '--css', '--motion', '--out', '--state', '--view']
+    // Reglages a valeur par defaut suffisante : ils affinent une preuve deja accessible, ils n'en
+    // ouvrent aucune. Les annoncer allongerait une consigne injectee a chaque appel pour rien.
+    const REGLAGES = ['--frames', '--interval', '--port', '--state-selector']
+
+    // Sans cette borne, la disparition du motif de lecture ferait passer le test a vide.
+    expect(optionsLues.length).toBeGreaterThanOrEqual(6)
+    // Classement exhaustif : aucune option lue n'echappe au verdict.
+    expect(optionsLues).toEqual([...CONTRAT_DE_PREUVE, ...REGLAGES].sort())
+
+    const nonAnnoncees = CONTRAT_DE_PREUVE.filter(
+      (option) => !PIPELINE_DISCIPLINE_INSTRUCTION.includes(option)
+    )
+    expect(nonAnnoncees).toEqual([])
   })
 })
 
