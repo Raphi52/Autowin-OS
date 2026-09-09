@@ -352,4 +352,15 @@ describe('decideVerifyScript — prouver AUTREMENT que par les tests', () => {
     expect([...ALLOWED_SCRIPT_COMMANDS].sort()).toEqual(['npm run lint', 'npm run typecheck'])
     expect(TYPES_DE_VERIFICATION).toEqual(['test', 'lint', 'typecheck'])
   })
+
+  /*
+   * SCRIPT DECLARE MAIS VIDE — le seul cas que la cle PRESENTE ne suffit pas a trancher.
+   * `typeof scripts[type] === 'string'` est vrai pour une chaine blanche : sans ce cas, `verify`
+   * lancerait `npm run lint` sur un script qui n'execute rien et rendrait un exit code 0, c'est-a-dire
+   * un VERT qui ne prouve rien. C'est la definition du faux vert que ce module existe pour refuser.
+   */
+  it('script declare mais VIDE ⇒ refus : une chaine blanche ne prouve rien', () => {
+    expect(decideVerifyScript('lint', '/repo', () => ({ lint: '   ' })).allowed).toBe(false)
+    expect(decideVerifyScript('typecheck', '/repo', () => ({ typecheck: '' })).allowed).toBe(false)
+  })
 })
