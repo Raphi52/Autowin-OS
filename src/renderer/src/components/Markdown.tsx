@@ -134,7 +134,31 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
     }
     if (block.kind === 'code')
       return (
+        // Bloc de code du fil, avec un bouton de copie en haut a droite.
+        //
+        // Pourquoi : le texte propose par le modele (requete SQL, message de commit, extrait de
+        // code) est fait pour etre REPRIS ailleurs. Le selectionner a la souris dans un bloc qui
+        // scrolle est penible et perd souvent la derniere ligne.
+        //
+        // Pourquoi sans etat React : ce module n'importe que `memo`, et le retour visuel de la
+        // copie tient dans un attribut lu par la feuille de style (`.md-code__copie`). Un hook
+        // aurait impose un import supplementaire pour un simple accuse de reception.
         <pre key={`${keyPrefix}-code-${index}`} className="md-code">
+          <button
+            type="button"
+            className="md-code__copie"
+            data-testid="md-code-copie"
+            title="Copier"
+            aria-label="Copier"
+            onClick={(evenement) => {
+              void navigator.clipboard?.writeText(block.content)
+              const bouton = evenement.currentTarget
+              bouton.dataset.copie = 'oui'
+              window.setTimeout(() => {
+                bouton.dataset.copie = ''
+              }, 1500)
+            }}
+          />
           <code>{block.content}</code>
         </pre>
       )
