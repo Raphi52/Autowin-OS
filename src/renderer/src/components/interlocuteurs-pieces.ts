@@ -13,6 +13,17 @@
  *
  * Les plafonds sont ceux du chat (`ChatView.addFiles`) : mêmes ordres de grandeur, mêmes phrases,
  * pour que l'utilisateur n'ait pas deux règles à retenir selon l'endroit où il lâche son fichier.
+ *
+ * CE FICHIER SERT DEUX ÉCRANS, PAS UN. Il a été écrit pour le seul « nouveau message », mais la
+ * livraison du 2026-09-09 (`1f96f542`) l'a branché aussi sur la RÉPONSE à un fil existant :
+ * `preparerPiecesLachees` a désormais deux sites d'appel dans `InterlocuteursWidget.tsx`, un dans
+ * `EcranConversation` (réponse) et un dans `EcranNouveau` (message neuf). D'où l'avertissement, et
+ * c'est la raison d'être de cet en-tête : déplacer un plafond ou réécrire le texte d'un refus ici
+ * change le comportement des DEUX écrans à la fois. Le partage était voulu — l'utilisateur avait
+ * demandé « la même chose » sur la réponse —, mais il est invisible depuis ce fichier, qui ne
+ * mentionne aucun des deux appelants. Avant de toucher une valeur ci-dessous, ouvrir les deux
+ * gardes qui la tiennent : `InterlocuteursWidget.pieces.test.tsx` et
+ * `InterlocuteursWidget.reponse-pieces.test.tsx`.
  */
 import { bytesToBase64, formatFileSize } from './chat-attachments'
 
