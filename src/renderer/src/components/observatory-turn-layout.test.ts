@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { layoutTurnEvents, normalizeResponse, type MinimalEvent } from './observatory-turn-layout'
+import {
+  isReasoningEvent,
+  layoutTurnEvents,
+  normalizeResponse,
+  type MinimalEvent
+} from './observatory-turn-layout'
 
 const ev = (kind: string, content = ''): MinimalEvent => ({ kind, content })
 
@@ -94,5 +99,43 @@ describe('artefact — zone « réponse »', () => {
     ])
     const group = items[0] as { type: 'group'; events: Array<{ event: { kind: string } }> }
     expect(group.events.map((entry) => entry.event.kind)).toContain('artifact')
+  })
+})
+
+describe('raisonnement du modèle', () => {
+  const reasoning = (content: string): MinimalEvent => ({
+    kind: 'decision',
+    content,
+    payloads: [{ kind: 'reasoning', content }]
+  })
+
+  it('est reconnu par son bloc `reasoning`, pas par son genre', () => {
+    expect(isReasoningEvent(reasoning('je pèse A contre B'))).toBe(true)
+    expect(isReasoningEvent({ kind: 'decision', content: 'gate ouvert' })).toBe(false)
+    expect(isReasoningEvent(ev('model-response', 'la réponse'))).toBe(false)
+  })
+
+  it('est rattaché à la réponse au lieu d’être rendu isolé', () => {
+    const items = layoutTurnEvents([
+      ev('message', 'salut'),
+      reasoning('je pèse A contre B'),
+      ev('model-response', 'la réponse')
+    ])
+    expect(items.map((i) => (i.type === 'group' ? i.zone : `isolé:${i.event.kind}`))).toEqual([
+      'sortant',
+      'reponse'
+    ])
+    const group = items[1]
+    if (group.type !== 'group') throw new Error('attendu group')
+    expect(group.events.map((e) => e.event.kind)).toEqual(['decision', 'model-response'])
+  })
+
+  it('une décision SANS raisonnement reste isolée (aucune décision de contrôle déplacée)', () => {
+    const items = layoutTurnEvents([
+      { kind: 'decision', content: 'gate ouvert' },
+      ev('model-response', 'la réponse')
+    ])
+    expect(items[0]).toMatchObject({ type: 'event' })
+    expect(items[1]).toMatchObject({ type: 'group', zone: 'reponse' })
   })
 })

@@ -1601,7 +1601,13 @@ export class ConversationStore {
       return {
         ...summary,
         messageCount: messages.length,
-        lastMessageRole: messages.at(-1)?.role,
+        // UNE CONSIGNE ÉCRITE PENDANT UN TOUR N'EST PAS UN TOUR EN ATTENTE (conv-61, 2026-09-09).
+        // Défaut vécu : « il m'indique un statut sans réponse alors qu'il a bien pris en compte mon
+        // message ». Le texte injecté pendant qu'un tour tourne est ajouté en FIN de fil avec
+        // `orientation: true` — le dernier message devenait donc `user`, et la pastille annonçait
+        // « Sans réponse » alors que la réponse était là, juste au-dessus. On ignore ces messages
+        // pour décider du rôle qui porte l'attente.
+        lastMessageRole: [...messages].reverse().find((m) => m.orientation !== true)?.role,
         lastAssistantStatus: dernierAssistant?.status,
         // Le MOTIF de l'échec, pas seulement le fait qu'il y en ait un : la liste ne peut pas
         // distinguer un fil coupé par le quota (qui se relance tel quel) d'un fil tombé sur une

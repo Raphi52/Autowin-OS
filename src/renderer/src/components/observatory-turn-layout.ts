@@ -31,6 +31,17 @@ const ZONE_OF: Record<string, TurnZone> = {
 export interface MinimalEvent {
   kind: string
   content: string
+  payloads?: Array<{ kind: string; content?: string }>
+}
+
+/**
+ * Le raisonnement du modele arrive avec le genre `decision` (reasoning-trace.ts : une deliberation
+ * n'est pas une reponse remise). Il ne se reconnait donc PAS a son genre, mais a son bloc
+ * `reasoning` — c'est le seul marqueur fiable, et il evite de deplacer les decisions de controle
+ * qui portent le meme genre.
+ */
+export function isReasoningEvent(event: MinimalEvent): boolean {
+  return event.kind === 'decision' && (event.payloads ?? []).some((p) => p.kind === 'reasoning')
 }
 
 export interface GroupedEvent<E extends MinimalEvent> {
@@ -61,7 +72,9 @@ export function layoutTurnEvents<E extends MinimalEvent>(events: E[]): TurnRende
     buffer = null
   }
   for (const event of events) {
-    const zone = ZONE_OF[event.kind]
+    // Rattache la deliberation a la reponse qu'elle a produite : isolee, elle se lisait comme une
+    // decision de controle sans lien avec ce que le modele a fini par dire.
+    const zone = isReasoningEvent(event) ? 'reponse' : ZONE_OF[event.kind]
     if (!zone) {
       flush()
       items.push({ type: 'event', event })
