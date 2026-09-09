@@ -1583,43 +1583,38 @@
   font-family: var(--mono);
   font-size: 12px;
 }
-/* Bouton de copie du bloc de code : discret au repos, lisible au survol du bloc.
+/* Bouton de copie du bloc de code : un VRAI bouton visible au repos (bordure + fond),
+   pas un glyphe estompe — juge « peu visible » a l'oeil en theme nuit le 2026-09-09 :
+   transparent + opacite 0.55 + --text-faint cumulaient trois facteurs d'effacement.
    Le glyphe vient du style et non du JSX pour qu'une selection a la souris dans le
    bloc n'embarque pas le caractere du bouton dans le texte copie a la main. */
 .md-code__copie {
   position: absolute;
   top: 4px;
   right: 4px;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
   border-radius: var(--r2);
-  background: transparent;
-  color: var(--text-faint);
+  /* Meme fond que le bloc : la bordure decoupe le bouton, et il masque le code qui
+     defile dessous au lieu de le laisser transparaitre. */
+  background: var(--bg-inset);
+  color: var(--text-dim);
   cursor: pointer;
-  /* Visible au repos, sinon la fonction est indecouvrable : personne ne survole un bloc
-     de code pour y chercher un bouton dont il ignore l'existence.
-     0.55 et non 0.4 : en theme nuit le texte estompe (#747d8c) se pose sur un fond de bloc
-     quasi noir, et a 0.4 le glyphe se confondait avec le fond. */
-  opacity: 0.55;
   transition:
-    opacity 0.12s ease,
-    color 0.12s ease;
+    color 0.12s ease,
+    border-color 0.12s ease;
 }
 .md-code__copie::before {
   content: '⧉';
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1;
   user-select: none;
 }
-.md-code:hover .md-code__copie,
+.md-code__copie:hover,
 .md-code__copie:focus-visible {
-  opacity: 1;
-}
-.md-code__copie:hover {
-  border-color: var(--line);
-  background: var(--bg-inset);
+  border-color: var(--text-faint);
   color: var(--text);
 }
 .md-code__copie[data-copie='oui'] {
