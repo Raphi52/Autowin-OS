@@ -295,6 +295,17 @@
   background: var(--accent-soft);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+/* Repere pose a la MAIN pour retrouver une conversation. Meme or que la recherche
+   (`.conv-highlight`), mais en LISERE a gauche : un fond plein entrerait en conflit avec
+   `.conv-item.active`, et on doit pouvoir voir les deux etats en meme temps. */
+.conv-item.surlignee {
+  background: rgba(212, 169, 79, 0.12);
+  box-shadow: inset 3px 0 0 var(--gold, #d4a94f);
+}
+.conv-item.surlignee.active {
+  background: var(--accent-soft);
+}
+
 .conv-pick {
   display: flex;
   align-items: center;

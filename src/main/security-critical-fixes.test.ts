@@ -375,7 +375,19 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     acceptee que sous la forme d'un hexadecimal strict (`^#[0-9a-fA-F]{6}$`), et la fenetre
     //     visee est celle de l'emetteur, jamais un identifiant fourni par le renderer.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(175)
+    // MISE A JOUR 2026-09-09 - 175 -> 176. UN canal ajoute, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Conversations')` :
+    //   `os:conversations:setHighlight` - pose ou retire le repere visuel d'une conversation dans la
+    //     liste. N'ecrit qu'un BOOLEEN sur une conversation deja connue : l'id passe par
+    //     `guardString`, l'etat est normalise par `rawOn === true` (aucune autre valeur ne peut
+    //     entrer), et un id inconnu rend `false` sans rien creer. Aucun acces disque arbitraire,
+    //     contrairement a `os:conversations:setProject` qui ouvre un selecteur.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    // MISE A JOUR 2026-09-09 - 176 -> 177. Le compte etait DEJA en retard d'un cran avant ce
+    //   changement : le commit 35d1f351 (08/09) a ajoute `worktree:rapport-retention` sans le
+    //   declarer ici, donc ce test etait rouge en arrivant. Les DEUX canaux sont gardes des leur
+    //   premiere ligne par `assertTrustedRendererSender`, `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(177)
     expect(unguarded).toEqual([])
   })
 

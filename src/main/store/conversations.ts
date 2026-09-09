@@ -110,6 +110,13 @@ export interface Conversation {
    * continuer à se relire. Absent → la conversation vit dans « Divers ».
    */
   projectPath?: string
+  /**
+   * Repère VISUEL posé à la main pour retrouver cette conversation dans la liste.
+   *
+   * OPTIONNEL, et il le reste : absent → aucun surlignage. Retirer le repère EFFACE le champ
+   * plutôt que d'y écrire `false`, pour qu'un `conversations.json` relu n'en garde aucune trace.
+   */
+  surlignee?: boolean
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
   createdAt: number
@@ -1651,6 +1658,23 @@ export class ConversationStore {
     const propre = canonicalProjectPath(projectPath)
     if (propre) conversation.projectPath = propre
     else delete conversation.projectPath
+    this.changed(id)
+    return conversation
+  }
+
+  /**
+   * Pose ou retire le repère visuel d'une conversation. Rend la conversation, ou `undefined` si
+   * l'id est inconnu (même contrat que `rangerDansDossier` : un menu ouvert sur une conversation
+   * supprimée entre-temps ne doit pas faire tomber l'application).
+   *
+   * Ne touche PAS `updatedAt` : marquer n'est pas travailler, et la liste est triée par
+   * `updatedAt` — un simple repère la ferait remonter en tête comme si elle venait de servir.
+   */
+  surligner(id: string, surlignee: boolean): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    if (!conversation) return undefined
+    if (surlignee) conversation.surlignee = true
+    else delete conversation.surlignee
     this.changed(id)
     return conversation
   }

@@ -493,6 +493,9 @@ const api = {
    */
   conversationsSetProject: (id: string, path?: string | null): Promise<string | null> =>
     ipcRenderer.invoke('os:conversations:setProject', id, path),
+  /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. Rend l'état retenu. */
+  conversationsSetHighlight: (id: string, on: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('os:conversations:setHighlight', id, on),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>

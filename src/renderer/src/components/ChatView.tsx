@@ -4288,6 +4288,46 @@ export function ChatView({
     [refreshConvs, memoriserDossier]
   )
   /**
+   * Pose ou retire le repère visuel d'une conversation, puis relit la liste : c'est cette relecture
+   * qui fait apparaître la couleur, l'état vit sur le disque et non dans le composant.
+   *
+   * L'appel n'est PAS écrit `window.api.conversationsSetHighlight?.(…)`. Mesure du 2026-09-09
+   * (conv-384) : l'affichage se recharge à chaud, le processus principal NON — l'entrée de menu
+   * existait donc avant le canal qui la sert. L'appel « si ça existe » ne faisait alors rien du
+   * tout, sans message ni erreur : l'utilisateur a cliqué sur un bouton mort et n'avait aucun moyen
+   * de le savoir. Un pont absent est un ÉTAT DE L'APPLICATION, pas un cas à ignorer : il se dit, et
+   * il dit ce qui répare.
+   */
+  const surligner = useCallback(
+    async (conversationId: string, on: boolean): Promise<void> => {
+      const poser = window.api.conversationsSetHighlight
+      if (!poser) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text:
+              'Surlignage indisponible : cette version de l’application n’expose pas encore ' +
+              'l’enregistrement du repère. Redémarre Autowin OS pour l’activer.'
+          })
+        )
+        return
+      }
+      try {
+        await poser(conversationId, on)
+      } catch (erreur) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: `Le surlignage n’a pas pu être enregistré : ${
+              erreur instanceof Error ? erreur.message : String(erreur)
+            }`
+          })
+        )
+        return
+      }
+      await refreshConvs()
+    },
+    [refreshConvs]
+  )
+  /**
    * AMORCAGE unique : au tout premier chargement, la memoire est vide alors que des conversations
    * sont deja rangees. On l'amorce avec ces dossiers-la. Ensuite la memoire fait autorite -- sinon
    * un dossier retire par la croix reviendrait tant qu'une conversation le porte encore.
@@ -4657,7 +4697,9 @@ export function ChatView({
                     return (
                       <div
                         key={c.id}
-                        className={`conv-item${c.id === activeId ? ' active' : ''}`}
+                        className={`conv-item${c.id === activeId ? ' active' : ''}${
+                          c.surlignee ? ' surlignee' : ''
+                        }`}
                         style={{ marginLeft: groupe.depth * 14 }}
                         // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
                         // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
@@ -4839,6 +4881,24 @@ export function ChatView({
                   Sortir du dossier
                 </button>
               )}
+              {/*
+                Le repère visuel : la MEME entree pose et retire, comme une bascule. Deux entrees
+                distinctes auraient allonge le menu pour un etat qui n'en a que deux.
+              */}
+              <button
+                role="menuitem"
+                data-testid="conv-menu-highlight"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  void surligner(conv.id, !conv.surlignee)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  ★
+                </span>
+                {convMenu.conv.surlignee ? 'Retirer le surlignage' : 'Surligner'}
+              </button>
               {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
                 coutait un item d'interface visible toute la journee pour un geste rare.
