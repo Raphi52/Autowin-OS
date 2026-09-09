@@ -141,27 +141,73 @@ describe('Task Manager — ordonnanceur durable', () => {
 
   it('agrège 24 heures de retards à la minute en une seule occurrence', async () => {
     const firstDue = Date.parse('2026-08-03T07:30:00.000Z')
-    const h = harness(firstDue - 60_000)
-    const task = h.store.create(
-      input('active-only', {
-        schedule: {
-          ...input('active-only').schedule!,
-          recurrence: { unit: 'minute', interval: 1 }
-        }
-      })
-    )
-    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+    const scenario = async (
+      heures: number
+    ): Promise<{ h: ReturnType<typeof harness>; task: { id: string }; ms: number }> => {
+      const h = harness(firstDue - 60_000)
+      const task = h.store.create(
+        input('active-only', {
+          schedule: {
+            ...input('active-only').schedule!,
+            recurrence: { unit: 'minute', interval: 1 }
+          }
+        })
+      )
+      const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+      await h.advanceTo(firstDue + heures * 60 * 60_000)
+      const depart = performance.now()
+      await scheduler.start()
+      return { h, task, ms: performance.now() - depart }
+    }
+    /*
+     * REPETE POUR SORTIR DU BRUIT D'HORLOGE. Un seul rattrapage coute ~0,1 ms — sous cette barre,
+     * `performance.now()` mesure surtout sa propre resolution, et un rapport sur une mesure unique
+     * varierait au hasard. On cumule donc 30 scenarios NEUFS par horizon : le total passe au-dessus
+     * de la milliseconde, la ou le rapport redevient interpretable. Le banc d'essai est purement en
+     * memoire, donc repeter est quasi gratuit.
+     */
+    const REPETITIONS = 30
+    const cumuler = async (heures: number): Promise<number> => {
+      let total = 0
+      for (let essai = 0; essai < REPETITIONS; essai += 1) total += (await scenario(heures)).ms
+      return total
+    }
+    /*
+     * CHAUFFE AVANT DE COMPARER. Mesure du 2026-09-09 : sans elle, le premier horizon paie la
+     * compilation a chaud et le rapport tombait a 0,6-0,74 — un 24 h APPAREMMENT moins cher qu'un
+     * 12 h. Flatteur, et dangereux : ce credit d'environ 0,65 se multiplierait au rapport d'une
+     * vraie regression quadratique (~4x) pour la ramener a ~2,6, sous le plafond de 3. Le biais
+     * aurait donc masque exactement le defaut surveille.
+     */
+    await cumuler(12)
+    await cumuler(24)
+    const douzeHeures = await cumuler(12)
+    const vingtQuatreHeures = await cumuler(24)
+    const { h, task } = await scenario(24)
 
-    await h.advanceTo(firstDue + 24 * 60 * 60_000)
-    const startedAt = performance.now()
-    await scheduler.start()
-
-    expect(performance.now() - startedAt).toBeLessThan(250)
     expect(h.store.listOccurrences(task.id)).toEqual([
       expect.objectContaining({ missedCount: 1_441, lastMissedFor: firstDue + 24 * 60 * 60_000 })
     ])
     expect(h.store.listAlerts()).toHaveLength(1)
     expect(h.store.getTask(task.id)?.nextRunAt).toBe(firstDue + 24 * 60 * 60_000 + 60_000)
+    /*
+     * LE RATTRAPAGE NE DOIT PAS COUTER PLUS CHER PARCE QU'IL Y A PLUS DE RETARDS.
+     *
+     * Cette assertion etait `< 250 ms`. Marge reelle mesuree le 2026-09-09 : 0,101 ms, soit 2478x.
+     * A ce point elle n'attrapait RIEN — une regression rendant le rattrapage quadratique tiendrait
+     * encore sous 250 ms pour 1 441 occurrences tres legeres, et le defaut n'apparaitrait qu'en
+     * vrai, sur une semaine de retards. Un budget en millisecondes mesurait la machine, pas le code.
+     *
+     * Ce qui compte est l'ECHELLE : 12 h de retards a la minute font 721 occurrences, 24 h en font
+     * 1 441 — deux fois plus. Le scheduler les AGREGE (une seule occurrence rendue, `missedCount`
+     * arithmetique) : son cout doit donc rester quasi PLAT, pas doubler. Un plafond a 3 laisse
+     * passer un doublement franc et le bruit residuel, mais une quadratique (~4x pour 2x l'entree,
+     * et bien pire au-dela) le franchit.
+     *
+     * ENTREE QUI DOIT LE FAIRE ECHOUER : remplacer l'agregation par une boucle qui cree une
+     * occurrence par minute manquee.
+     */
+    expect(vingtQuatreHeures / Math.max(douzeHeures, 0.5)).toBeLessThan(3)
   })
 
   it("ne rattrape pas les échéances d'une tâche réactivée après plusieurs jours", async () => {
