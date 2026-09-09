@@ -79,7 +79,10 @@ const partCacheLu = usageIn ? (usageRead / usageIn) * 100 : 0
 const constats = [
   {
     nom: 'le routeur tourne sur opus-5 à cause du fichier de réglages, pas du défaut du code',
-    ok: roles.orchestrator?.model === 'claude-opus-5' && defautCode !== null && defautCode !== 'claude-opus-5',
+    ok:
+      roles.orchestrator?.model === 'claude-opus-5' &&
+      defautCode !== null &&
+      defautCode !== 'claude-opus-5',
     vu: `roles.json=${roles.orchestrator?.model} / défaut src/main/roles.ts=${defautCode}`
   },
   {
@@ -109,5 +112,7 @@ for (const c of constats) {
   console.log(`${c.ok ? 'OK  ' : 'ROUGE'} ${c.nom}\n      mesuré : ${c.vu}`)
   if (!c.ok) rouge += 1
 }
-console.log(rouge === 0 ? 'TOUS LES CHIFFRES DU RAPPORT SONT REMESURÉS' : `${rouge} constat(s) faux`)
+console.log(
+  rouge === 0 ? 'TOUS LES CHIFFRES DU RAPPORT SONT REMESURÉS' : `${rouge} constat(s) faux`
+)
 process.exit(rouge === 0 ? 0 : 1)
