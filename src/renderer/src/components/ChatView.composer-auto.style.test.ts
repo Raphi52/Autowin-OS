@@ -36,7 +36,11 @@ describe('bouton mode auto du composer — rond, petit, dore', () => {
 
   it('allume, il est DORE et non rose', () => {
     expect(actif).not.toBe('')
-    expect(actif).toMatch(/#e3ba55/i)
+    // La teinte est DOREE, mais plus jamais ecrite en dur : le jeton or suit les huit themes,
+    // alors que `#e3ba55` restait fige en clair sur un fond clair. Le test verrouille donc le
+    // JETON — sans lui, un retour au rose passerait a nouveau inapercu.
+    expect(actif).toMatch(/color:\s*var\(--gold-clair\)/)
+    expect(actif).not.toMatch(/#e3ba55/i)
     expect(actif).toMatch(/rgba\(212, 169, 79/)
     expect(actif).not.toMatch(/239, 63, 145/)
   })
