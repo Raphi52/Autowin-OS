@@ -1806,6 +1806,18 @@ export class AppCommandBus {
   ) {}
 
   /**
+   * Le signal d'arret du TOUR DE CHAT en cours sur une conversation, cable depuis `index.ts`.
+   *
+   * Propriete assignable plutot que parametre du constructeur : celui-ci est POSITIONNEL, et son
+   * propre commentaire (cf. `sqlcmdPath`) rappelle qu'y inserer un argument decale silencieusement
+   * tous les sites d'appel de l'amont.
+   *
+   * Non cable -> `undefined` -> comportement d'avant, a l'identique : la commande n'est bornee que
+   * par son horloge. C'est ce qui rend ce branchement sur : il ne peut rien casser par son absence.
+   */
+  signalDuTour?: (conversationId: string) => AbortSignal | undefined
+
+  /**
    * Chemin de `sqlcmd`, choisi AU MOMENT DE L'APPEL et non au demarrage.
    *
    * DEFAUT VECU (conv-152, 2026-09-02) : `sqlcmd` etait absent du poste, donc `sql_query` repondait
@@ -3148,7 +3160,16 @@ export class AppCommandBus {
         if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
         // Les guillemets GROUPENT : `decouperArguments` respecte `-m "trois mots"` là où un
         // `split(/\s+/)` en faisait trois arguments et laissait les guillemets dans le texte.
-        const issue = await this.spawnVerify(decouperArguments(ligne), cwd, ligne, onProgress)
+        // Le Stop de l'utilisateur doit atteindre CE process : une commande qui ne rend jamais la
+        // main (application a fenetre, serveur) bloquait sinon le tour jusqu'au plafond, bouton
+        // d'arret compris (conv-384, 2026-09-09).
+        const issue = await this.spawnVerify(
+          decouperArguments(ligne),
+          cwd,
+          ligne,
+          onProgress,
+          conversationId ? this.signalDuTour?.(conversationId) : undefined
+        )
         return {
           lance: true,
           commande: ligne,
@@ -4775,11 +4796,23 @@ export class AppCommandBus {
     return await this.spawnVerify(decision.argv, decision.cwd, decision.command)
   }
 
+  /**
+   * ANNULATION -- `signal` est le SECOND declencheur de mise a mort, a cote de l'horloge.
+   *
+   * Defaut mesure le 2026-09-09 (conv-384) : un `dotnet run` sur une application a fenetre ne rend
+   * JAMAIS la main. Le tour restait bloque ici jusqu'au plafond, et le bouton Stop -- qui passe par
+   * `abortOrchestration` ou `activeChatTurns` -- n'avait AUCUNE prise sur l'enfant lance par `run`.
+   * L'utilisateur voyait un bouton sans effet, et le message qu'il envoyait ensuite n'etait pas lu.
+   *
+   * La mecanique de mise a mort existait deja (`tuerArbre`, utilisee par l'horloge plus bas) : il
+   * manquait un declencheur autre que l'expiration du delai.
+   */
   private async spawnVerify(
     argv: string[],
     cwd: string,
     label: string,
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    signal?: AbortSignal
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const [file, ...rest] = argv
     const sharedBin = this.os.executionWorkspace
@@ -4856,6 +4889,36 @@ export class AppCommandBus {
         resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond, output) })
       }, plafond)
       horloge.unref?.()
+      /*
+       * STOP -- le meme geste que l'horloge, declenche par l'utilisateur au lieu du temps.
+       *
+       * `expire` est REUTILISE comme drapeau « verdict deja rendu » : les handlers `error` et
+       * `close` le testent en premier, donc l'enfant qui meurt sous nos pieds ne resout pas une
+       * seconde fois. Le drapeau est pose AVANT de tuer, sans quoi `close` gagnerait la course.
+       */
+      const surAnnulation = (): void => {
+        if (expire) return
+        expire = true
+        clearTimeout(horloge)
+        clearInterval(battement)
+        oublierLArbre()
+        if (child.pid) tuerArbre(child.pid)
+        else child.kill('SIGKILL')
+        // La sortie deja collectee part AVEC le verdict : l'arret borne l'attente, il n'efface pas
+        // ce que la commande avait produit avant d'etre coupee.
+        resolve({
+          allowed: true,
+          ok: false,
+          exitCode: null,
+          command: label,
+          output: capVerifyOutput(
+            `${output}
+[arret demande] ${label} — interrompu par l'utilisateur (Stop).`
+          )
+        })
+      }
+      if (signal?.aborted) surAnnulation()
+      else signal?.addEventListener('abort', surAnnulation, { once: true })
       child.on(
         'error',
         (error) =>
