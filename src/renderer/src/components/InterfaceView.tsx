@@ -82,6 +82,40 @@ export function InterfaceView(): React.JSX.Element {
           </select>
         </label>
       </div>
+      {GROUPES.map((groupe) => (
+        <fieldset key={groupe.base} className="interface-theme-groupe">
+          <legend>{groupe.titre}</legend>
+          {THEMES.filter((t) => t.base === groupe.base).map((t) => {
+            const apercu = apercus.find((a) => a.id === t.id)
+            return (
+              <label
+                key={t.id}
+                className="interface-theme-bande"
+                data-choisi={t.id === theme ? 'oui' : undefined}
+              >
+                <input
+                  type="radio"
+                  name="interface-theme"
+                  value={t.id}
+                  checked={t.id === theme}
+                  data-testid={`interface-theme-${t.id}`}
+                  onChange={() => setTheme(t.id)}
+                />
+                <span className="interface-theme-nom">{t.libelle}</span>
+                {apercu ? (
+                  <span className="interface-theme-aplats" aria-hidden="true">
+                    <i style={{ background: apercu.fond }} />
+                    <i style={{ background: apercu.texte }} />
+                    <i style={{ background: apercu.or }} />
+                    <i style={{ background: apercu.rose }} />
+                    <i style={{ background: apercu.filet }} />
+                  </span>
+                ) : null}
+              </label>
+            )
+          })}
+        </fieldset>
+      ))}
       <p className="interface-reserve">
         <strong>Ce qui ne suit pas encore.</strong> Le thème choisi s’applique à presque tout
         l’écran : le menu, les panneaux, les textes, les champs, et les pages <strong>Chat</strong>,{' '}
