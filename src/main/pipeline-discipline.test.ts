@@ -1,6 +1,7 @@
 // fix-ok: cause mesurée — la même règle vivait en double (constitution + consignes d'étape/style), redites relevées dans le prompt injecté ; fusion vers la constitution, tests rouges→verts dans phase-briefs/pipeline-discipline/response-style.test.ts
 import { CONSTITUTION } from './constitution'
 import { describe, expect, it } from 'vitest'
+import { VUES_CONNUES } from '../../scripts/ui-capture.mjs'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 
 describe('discipline de pipeline canonique', () => {
@@ -113,6 +114,36 @@ describe('discipline de pipeline canonique', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('--motion')
     // Et il doit dire POURQUOI, sinon il sera lu comme une option decorative.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/capture fixe ne (?:peut|prouve)/i)
+  })
+  /**
+   * LA LISTE DES VUES ANNONCEE DOIT ETRE CELLE QUE LE HARNAIS ACCEPTE.
+   *
+   * Defaut mesure le 2026-09-09 : la consigne annoncait 8 vues (`chat, agent-studio, knowledge,
+   * observatory, task-manager, worktree, tickets, settings`) la ou `scripts/ui-capture.mjs` en
+   * accepte 10 — `accueil` et `tests` manquaient. Consequence directe et non theorique : le gate
+   * `visual-proof-missing` (src/main/gates/hooks.ts) TUE un run qui touche `src/renderer/**` sans
+   * capture lue, et un agent ne demande jamais une vue que son prompt ne nomme pas. Un run sur
+   * l'Accueil etait donc condamne a un refus pour une preuve declaree hors de portee alors qu'elle
+   * etait a portee — c'est exactement le reproche emis par le controle final de conv-46
+   * (« aucune preuve visuelle, alors qu'elle etait possible »).
+   *
+   * La cause n'est pas « l'agent n'y a pas pense » : c'est une liste DUPLIQUEE en prose, qui a
+   * deja derive une fois (cf. le commentaire de `VUES_CONNUES`, ligne 52 du harnais). Ce test est
+   * le garde-fou : il croise le TEXTE injecte avec la source de verite executable, donc toute
+   * vue ajoutee au harnais sans etre annoncee rend ce test rouge.
+   */
+  it('annonce EXACTEMENT les vues que le harnais de capture accepte', () => {
+    const enumeration = PIPELINE_DISCIPLINE_INSTRUCTION.match(/vues\s*:\s*([^.]+)\./)
+    expect(enumeration, 'la consigne doit enumerer les vues capturables').not.toBeNull()
+
+    const annoncees = String(enumeration?.[1] ?? '')
+      .split(',')
+      .map((vue) => vue.trim())
+      .filter(Boolean)
+
+    // Egalite d'ENSEMBLE : ni vue manquante (preuve declaree hors de portee), ni vue inventee
+    // (l'agent la demanderait et le harnais la refuserait).
+    expect([...annoncees].sort()).toEqual([...VUES_CONNUES].sort())
   })
 })
 
