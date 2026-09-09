@@ -113,6 +113,8 @@ export type Conv = {
    * pastille `asking` ne pouvait jamais s'allumer dans la liste.
    */
   lastAssistantAsksUser?: boolean
+  /** Repère visuel posé à la main sur cette conversation (voir `Conversation.surlignee`). */
+  surlignee?: boolean
   /**
    * Motif de l'echec du DERNIER tour, servi par la projection IPC. Il distingue, parmi toutes les
    * pastilles ROUGES, celles coupees par le mur de QUOTA — les seules qui se relancent telles

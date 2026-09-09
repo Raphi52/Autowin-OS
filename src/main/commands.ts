@@ -5,6 +5,12 @@ import {
   editDiff,
   refusRacineSysteme
 } from './edit-file-command'
+import {
+  decideCreateFile,
+  decideDeleteFile,
+  decideMoveFile,
+  identifiantDeBureauValide
+} from './file-ops-command'
 import { encodeFile, readFileText, unrepresentableCharacters } from './file-encoding'
 import {
   conversationRecenteEquivalente,
@@ -33,6 +39,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
@@ -48,6 +55,8 @@ import {
   decideRelatedVerify,
   cibleDeVerification,
   decideVerifyCommand,
+  decideVerifyScript,
+  TYPES_DE_VERIFICATION,
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
   VERIFY_STYLE_ANGLE_MORT,
@@ -954,10 +963,11 @@ const CATALOG: CommandSpec[] = [
      * binaire, `--allowedTools "Bash(npm test)"` ne restreint RIEN.
      */
     description:
-      'Rejouer la vérification déclarée par le projet (script « test ») et rendre son exit code — la seule façon de prouver « vert ». Une CIBLE optionnelle (un fichier de test du dépôt) restreint la vérification à ce seul fichier : quelques secondes au lieu de la suite entière',
+      'Rejouer une vérification déclarée par le projet et rendre son exit code — la seule façon de prouver « vert ». `type: test` (défaut) rejoue les tests ; `type: typecheck` rejoue le typage et `type: lint` le lint, deux preuves rapides que la suite de tests ne donne PAS. Une CIBLE optionnelle (un fichier de test du dépôt) restreint les TESTS à ce seul fichier : quelques secondes au lieu de la suite entière',
     args: {
+      type: 'facultatif — `test` (défaut), `typecheck` ou `lint`. Un typage rouge se voit en quelques dizaines de secondes, sans jouer un seul test',
       cible:
-        'facultatif — UN fichier de test du dépôt (chemin relatif, ex. `src/main/x.test.ts`). Absent = suite complète'
+        'facultatif — UN fichier de test du dépôt (chemin relatif, ex. `src/main/x.test.ts`). Absent = suite complète. Ignoré si `type` n’est pas `test`'
     },
     annotations: {
       readOnlyHint: false,
@@ -1218,6 +1228,81 @@ const CATALOG: CommandSpec[] = [
       idempotentHint: false,
       openWorldHint: false
     }
+  },
+  {
+    /*
+     * CREER un fichier — la capacite qui manquait, et son absence etait CONTOURNABLE.
+     *
+     * `edit_file` ne remplace qu'un extrait UNIQUE et EXISTANT (`edit-file-command.ts` :
+     * « fichier inexistant (cette commande ne cree pas de fichier) »). Aucune autre entree du
+     * catalogue n'ecrit, et `run` refuse tout operateur shell — il restait donc `run node -e "..."`,
+     * c'est-a-dire une ecriture qui echappe A TOUTES les bornes de `decideCreateFile`. Ouvrir la
+     * porte gardee vaut mieux que de laisser la porte derobee.
+     */
+    name: 'create_file',
+    description:
+      'Créer un fichier NEUF (contenu complet). N’écrase jamais un fichier existant — pour modifier, utilise edit_file. Prouve ensuite avec `verify`',
+    args: {
+      path: 'chemin du fichier à créer, relatif au workspace (ou absolu pour un autre dépôt)',
+      content: 'contenu complet du fichier'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'move_file',
+    description:
+      'Déplacer ou renommer un fichier. N’écrase jamais la destination. Prouve ensuite avec `verify`',
+    args: {
+      from: 'chemin actuel du fichier',
+      to: 'nouveau chemin (dossiers créés au besoin)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'delete_file',
+    description:
+      'Supprimer UN fichier (jamais un dossier). Geste destructif : n’y recours que si la suppression est explicitement demandée ou prouvée nécessaire. Prouve ensuite avec `verify`',
+    args: { path: 'chemin du fichier à supprimer' },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    /*
+     * L'ETAT D'UNE COPIE DE TRAVAIL BLOQUEE — en LECTURE seule.
+     *
+     * Les dix canaux `worktree:*` (src/main/ipc/worktree.ts) n'etaient atteignables que depuis
+     * l'interface : un agent voyait `runs[].blocked` dans `get_state` sans pouvoir apprendre POURQUOI.
+     * Ce premier pas rend l'etat et, si un identifiant de copie est donne, le detail du conflit —
+     * donc le NOM du fichier en conflit, sans capture d'ecran. Les gestes qui MODIFIENT (resoudre,
+     * relancer, preserver, jeter) restent a l'interface : ils sont irreversibles cote depot.
+     */
+    name: 'run_status',
+    description:
+      'Lire l’état des copies de travail (worktrees) et, si un identifiant est donné, le détail du conflit qui bloque cette copie — le nom des fichiers en conflit. Lecture seule',
+    args: {
+      agentId:
+        'facultatif — identifiant de la copie de travail (lettres, chiffres, _ et - seulement). Absent = état global'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   }
 ]
 
@@ -1246,6 +1331,40 @@ function actionFingerprint(
   return createHash('sha256')
     .update(JSON.stringify(canonicalValue({ name, args, scope })), 'utf8')
     .digest('hex')
+}
+
+/** Ce que le registre du tour retient d'un appel déjà émis. */
+interface RejeuConnu {
+  /** Nombre de fois que cette empreinte exacte a été émise dans le tour, rejeu compris. */
+  occurrences: number
+  /** L'appel précédent s'est-il soldé par un refus ? Seul ce cas fait refuser une ré-émission. */
+  refuse: boolean
+}
+
+/**
+ * Outils dont un rejeu APRÈS REFUS est refusé sèchement : réémettre la même écriture qui vient
+ * d'être rejetée ne peut produire que le même rejet. Les lectures et les observations, elles, ne
+ * sont jamais bloquées — voir `registreDuTour`.
+ */
+const OUTILS_REFUSES_SI_REJEU_APRES_ECHEC = new Set(['edit_file'])
+
+/**
+ * Attache au résultat la note qui dit au modèle qu'il vient de REJOUER un appel identique.
+ *
+ * On ne remplace ni n'enveloppe le résultat : on AJOUTE une clé. Envelopper aurait changé la forme
+ * de `data` pour tous les consommateurs existants — un correctif d'observabilité n'a pas à casser
+ * les lecteurs de champs. Conséquence assumée : un résultat qui n'est pas un objet simple (chaîne,
+ * tableau, nombre) ne peut pas porter la note et repart tel quel.
+ */
+function avecNoteDeRejeu(data: unknown, dejaVu: RejeuConnu | undefined, name: string): unknown {
+  if (!dejaVu || !data || typeof data !== 'object' || Array.isArray(data)) return data
+  return {
+    ...(data as Record<string, unknown>),
+    avertissementRejeu:
+      `Tu as déjà émis ce même \`${name}\` avec des arguments identiques dans ce tour ` +
+      `(${dejaVu.occurrences}e fois). Si tu attendais un résultat différent, c'est que rien ne l'a ` +
+      "fait changer entre-temps : agis sur la cause au lieu de relire."
+  }
 }
 
 function redactedArgs(name: string, args: Record<string, unknown>): Record<string, unknown> {
@@ -1877,6 +1996,48 @@ export class AppCommandBus {
     }
   }
 
+  /**
+   * REGISTRE DES APPELS DU TOUR — contre le rejeu à l'identique.
+   *
+   * Mesure du 2026-09-09 sur les 331 fichiers de `causal-trace` : 761 appels d'outils ont été
+   * ré-émis avec des arguments STRICTEMENT identiques dans la même conversation, sur 112
+   * conversations (une sur trois). Écart médian entre l'appel et son rejeu : 1 à 2 appels — donc
+   * du rejeu immédiat, pas de l'oubli lointain. La constitution l'interdit déjà en prose
+   * (« ne jamais re-tenter à l'identique en aveugle ») ; la prose n'a pas suffi, d'où ce registre.
+   *
+   * Il ne BLOQUE pas par défaut, et c'est délibéré : `desktop_observe` réémis après une édition est
+   * LÉGITIME (l'écran a changé), et un cache aveugle casserait la boucle « j'édite → je regarde ».
+   * On se contente donc de faire SAVOIR au modèle qu'il rejoue. Une seule famille est refusée :
+   * l'édition déjà REFUSÉE puis renvoyée telle quelle — là le rejeu ne peut rien produire d'autre
+   * que le même refus (38 rejeux d'`Edit` et 22 d'`edit_file` mesurés, écart médian 1, 100 % dans
+   * le même tour).
+   *
+   * La portée est le TOUR, pas la conversation : au tour suivant l'utilisateur a parlé, le monde a
+   * pu changer, et refaire le même appel redevient légitime.
+   */
+  private registreDuTour?: { turnId: string; appels: Map<string, RejeuConnu> }
+
+  /** Enregistre l'appel et rend ce qu'on savait déjà de lui, ou `undefined` si c'est un premier. */
+  private noterAppelDuTour(turnId: string, empreinte: string): RejeuConnu | undefined {
+    if (this.registreDuTour?.turnId !== turnId) {
+      this.registreDuTour = { turnId, appels: new Map() }
+    }
+    const connu = this.registreDuTour.appels.get(empreinte)
+    if (connu) {
+      connu.occurrences += 1
+      return connu
+    }
+    this.registreDuTour.appels.set(empreinte, { occurrences: 1, refuse: false })
+    return undefined
+  }
+
+  /** Referme l'appel : c'est l'issue qui décide si un rejeu ultérieur sera refusé. */
+  private cloreAppelDuTour(turnId: string, empreinte: string, ok: boolean): void {
+    if (this.registreDuTour?.turnId !== turnId) return
+    const connu = this.registreDuTour.appels.get(empreinte)
+    if (connu) connu.refuse = !ok
+  }
+
   /** Exécute une commande nommée, mute l'app, diffuse le changement. */
   async exec(
     name: string,
@@ -1887,6 +2048,23 @@ export class AppCommandBus {
     /** Signe de vie d'une commande LONGUE, relaye tel quel au fil (voir `verify-battement`). */
     onProgress?: (text: string) => void
   ): Promise<CommandResult> {
+    // Voir `registreDuTour` : l'empreinte porte le TOUR, pas la conversation — au tour suivant
+    // l'utilisateur a parlé et le même appel redevient légitime. Sans `turnId`, pas de registre :
+    // on ne sait pas de quel tour relève l'appel, et deviner reviendrait à bloquer au hasard.
+    const empreinteDuTour = turnId ? actionFingerprint(name, args, { conversationId: turnId }) : undefined
+    const dejaVu =
+      empreinteDuTour && turnId ? this.noterAppelDuTour(turnId, empreinteDuTour) : undefined
+    if (dejaVu?.refuse && OUTILS_REFUSES_SI_REJEU_APRES_ECHEC.has(name)) {
+      const refus =
+        `Appel REFUSÉ : tu viens d'émettre exactement ce même \`${name}\` dans ce tour et il a ` +
+        'échoué. Le renvoyer à l’identique produira le même échec. Relis le fichier — son contenu ' +
+        'a peut-être changé — puis change d’approche au lieu de rejouer.'
+      this.trace?.(name, redactedArgs(name, args), false)
+      return { ok: false, error: refus }
+    }
+    const noterIssue = (ok: boolean): void => {
+      if (empreinteDuTour && turnId) this.cloreAppelDuTour(turnId, empreinteDuTour, ok)
+    }
     try {
       const specification = CATALOG.find((command) => command.name === name)
       if (!specification) throw new Error(refusAvecIssue('commande-inconnue', name))
@@ -1895,13 +2073,20 @@ export class AppCommandBus {
         if (!this.desktop) throw new Error('Controle desktop indisponible')
         const observed = await this.desktop.observe({ display: parseDisplayArg(args.display) })
         this.trace?.(name, redactedArgs(name, args), true)
-        return { ok: true, data: observed.data, attachments: [observed.attachment] }
+        noterIssue(true)
+        return {
+          ok: true,
+          data: avecNoteDeRejeu(observed.data, dejaVu, name),
+          attachments: [observed.attachment]
+        }
       }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)
       this.trace?.(name, redactedArgs(name, args), true)
-      return { ok: true, data }
+      noterIssue(true)
+      return { ok: true, data: avecNoteDeRejeu(data, dejaVu, name) }
     } catch (e) {
       this.trace?.(name, redactedArgs(name, args), false)
+      noterIssue(false)
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
   }
@@ -3021,7 +3206,8 @@ export class AppCommandBus {
         return await this.runVerify(
           onProgress,
           typeof a.cible === 'string' ? a.cible : undefined,
-          conversationId
+          conversationId,
+          typeof a.type === 'string' ? a.type : undefined
         )
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
@@ -3345,6 +3531,14 @@ export class AppCommandBus {
           turnId
         )
       }
+      case 'create_file':
+        return this.runCreateFile({ path: a.path, content: a.content })
+      case 'move_file':
+        return this.runMoveFile({ from: a.from, to: a.to })
+      case 'delete_file':
+        return this.runDeleteFile({ path: a.path })
+      case 'run_status':
+        return await this.runWorktreeStatus(a.agentId)
       default:
         throw new Error(`commande inconnue: ${name}`)
     }
@@ -4095,6 +4289,76 @@ export class AppCommandBus {
     }
   }
 
+  /**
+   * CREER / DEPLACER / SUPPRIMER — ecriture DIRECTE dans l'espace de travail, bornes de `edit_file`.
+   *
+   * Pas de bureau isole ici, et c'est un CHOIX assume, pas un oubli : la machinerie
+   * `withIsolatedMutation` existe pour publier une edition SEULEMENT si la suite reste verte, or
+   * elle raisonne sur la portee d'un fichier EDITE (`porteeDUneEdition`) — un fichier qui n'existe
+   * pas encore, ou qui vient de disparaitre, n'a pas de portee derivable. Le garde-fou reste donc
+   * celui qui compte : les bornes pures de `file-ops-command.ts`, plus `verify` que l'agent doit
+   * lancer ensuite (la description de chaque commande le dit).
+   */
+  private runCreateFile(input: { path: unknown; content: unknown }): {
+    allowed: boolean
+    reason?: string
+    path?: string
+    octets?: number
+  } {
+    const decision = decideCreateFile(input, this.os.executionWorkspace, existsSync)
+    if (!decision.allowed) return { allowed: false, reason: decision.reason }
+    mkdirSync(dirname(decision.absolutePath), { recursive: true })
+    writeFileSync(decision.absolutePath, decision.content, 'utf8')
+    return {
+      allowed: true,
+      path: decision.relativePath,
+      octets: Buffer.byteLength(decision.content, 'utf8')
+    }
+  }
+
+  private runMoveFile(input: { from: unknown; to: unknown }): {
+    allowed: boolean
+    reason?: string
+    from?: string
+    to?: string
+  } {
+    const decision = decideMoveFile(input, this.os.executionWorkspace, existsSync)
+    if (!decision.allowed) return { allowed: false, reason: decision.reason }
+    mkdirSync(dirname(decision.cibleAbsolue), { recursive: true })
+    renameSync(decision.sourceAbsolue, decision.cibleAbsolue)
+    return { allowed: true, from: decision.sourceRelative, to: decision.cibleRelative }
+  }
+
+  private runDeleteFile(input: { path: unknown }): {
+    allowed: boolean
+    reason?: string
+    path?: string
+  } {
+    const decision = decideDeleteFile(input, this.os.executionWorkspace, existsSync)
+    if (!decision.allowed) return { allowed: false, reason: decision.reason }
+    // `recursive: false` : cette commande supprime UN fichier, jamais une arborescence.
+    rmSync(decision.absolutePath, { recursive: false })
+    return { allowed: true, path: decision.relativePath }
+  }
+
+  /**
+   * ETAT DES COPIES DE TRAVAIL, en lecture. La validation d'identifiant est REPRISE ici parce que le
+   * bus ne passe pas par `assertTrustedRendererSender` : c'est elle, et non le canal, qui empeche un
+   * identifiant fabrique d'atteindre le disque.
+   */
+  private async runWorktreeStatus(
+    agentId: unknown
+  ): Promise<{ allowed: boolean; reason?: string; status?: unknown; conflit?: unknown }> {
+    const status = this.os.getWorktreeRuntimeStatus()
+    if (agentId === undefined || agentId === null || agentId === '') {
+      return { allowed: true, status }
+    }
+    if (!identifiantDeBureauValide(agentId)) {
+      return { allowed: false, reason: 'Identifiant de bureau invalide' }
+    }
+    return { allowed: true, status, conflit: await this.os.getWorktreeConflictDiff(agentId) }
+  }
+
   private async runTracedEditFile(
     input: { path: unknown; oldText: unknown; newText: unknown },
     conversationId?: string,
@@ -4265,8 +4529,55 @@ export class AppCommandBus {
   private async runVerify(
     onProgress?: (text: string) => void,
     cible?: string,
-    conversationId?: string
+    conversationId?: string,
+    type?: string
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
+    /*
+     * TROIS PREUVES, UN SEUL POINT D'ENTREE. `lint` et `typecheck` ne passent PAS par la machinerie
+     * de portee : `vitest related` n'a aucun sens pour eux, et un lint restreint ne prouve rien de
+     * plus vite. On rejoue le script DECLARE par le projet, dans la meme copie isolee, et on rend
+     * son code de sortie.
+     *
+     * PROVENANCE : recupere le 2026-09-09 d'une copie de travail isolee jamais publiee
+     * (`agent__run-7ea9ff7647f9-1`).
+     */
+    if (type !== undefined && type !== '' && type !== 'test') {
+      if (type !== 'lint' && type !== 'typecheck') {
+        return {
+          allowed: false,
+          reason: `type de vérification inconnu : ${type} — valeurs acceptées : ${TYPES_DE_VERIFICATION.join(', ')}`,
+          ok: false,
+          exitCode: null,
+          command: '',
+          output: ''
+        }
+      }
+      const bureauScript = await this.bureauDeVerification(conversationId, onProgress)
+      const cwd = bureauScript ?? this.os.executionWorkspace
+      const decision = decideVerifyScript(type, cwd)
+      if (!decision.allowed) {
+        return {
+          allowed: false,
+          reason: decision.reason,
+          ok: false,
+          exitCode: null,
+          command: '',
+          output: ''
+        }
+      }
+      const resultatScript = await this.spawnVerify(
+        decision.command.split(' '),
+        decision.cwd,
+        decision.command,
+        onProgress
+      )
+      return bureauScript
+        ? resultatScript
+        : {
+            ...resultatScript,
+            output: `${VERIFY_SANS_ISOLATION}${SAUT_PORTEE}${resultatScript.output}`
+          }
+    }
     const bureau = await this.bureauDeVerification(conversationId, onProgress)
     if (bureau) return this.runVerifyAt(bureau, onProgress, cible)
     const resultat = await this.runVerifyAt(this.os.executionWorkspace, onProgress, cible)

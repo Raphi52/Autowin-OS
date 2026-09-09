@@ -34,10 +34,26 @@ export function closingTurnDelivery(
   turnId: string,
   closingText: string | undefined,
   durableResponseTextSeen: boolean,
-  outcome: Record<string, unknown> | undefined
+  outcome: Record<string, unknown> | undefined,
+  texteDejaStreame?: string
 ): { durable: { kind: 'delta'; streamId: string; text: string }; live: { kind: 'delta'; streamId: string; text: string } } | undefined {
   const closing = closingText?.trim()
   if (!closing || !shouldPersistClosingText(durableResponseTextSeen, outcome)) return undefined
-  const delta = { kind: 'delta' as const, streamId: closingStreamId(turnId), text: closing }
+  /*
+   * ON NE REPUBLIE QUE CE QUI N'A PAS DEJA ETE DIT.
+   *
+   * Regle historique : une cloture porteuse d'un `outcome` etait TOUJOURS republiee, parce qu'a
+   * l'epoque le compte-rendu d'orchestration n'existait que dans le `done` — rien n'etait streame.
+   * Depuis que le modele reprend la parole apres `orchestrate` (agent-pilot, 2026-08-27), il ECRIT
+   * lui-meme ce compte-rendu en direct ; le `done` reprend alors le meme texte et le fil l'affichait
+   * DEUX FOIS (signale par l'utilisateur le 2026-09-09 sur un rendu de scout).
+   *
+   * On retranche donc le prefixe deja streame et on ne persiste que le reste (typiquement le pied de
+   * cloture ajoute par `texteDeCloture`). Rien de neuf a dire => aucune livraison.
+   */
+  const deja = texteDejaStreame?.trim() ?? ''
+  const reste = deja && closing.startsWith(deja) ? closing.slice(deja.length).trim() : closing
+  if (!reste) return undefined
+  const delta = { kind: 'delta' as const, streamId: closingStreamId(turnId), text: reste }
   return { durable: delta, live: { ...delta } }
 }

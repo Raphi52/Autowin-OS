@@ -287,6 +287,9 @@
   flex: none;
   align-items: center;
   border-radius: var(--r1);
+  /* Ancre du lisere de surlignage (`.conv-item.surlignee::after`), qui est positionne. Le theme
+     cosmic le posait deja de son cote ; sans lui ici, le repere se calait sur un autre parent. */
+  position: relative;
 }
 .conv-item:hover {
   background: var(--bg-2);
@@ -295,6 +298,31 @@
   background: var(--accent-soft);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+/* Repere pose a la MAIN pour retrouver une conversation, en LISERE or a gauche.
+
+   Le lisere passe par un PSEUDO-ELEMENT, et non par `box-shadow: inset` comme la premiere version.
+   Defaut vecu le 2026-09-09 (conv-384) : le repere etait ecrit pour le seul theme par defaut, et
+   chaque theme repeint `.conv-item.active` avec sa propre `background` ET sa propre `box-shadow`, a
+   specificite egale mais PLUS BAS dans le fichier (`.cosmic-outline .conv-item.active`, ligne
+   ~1950). Sur la conversation ouverte — precisement celle qu'on surligne le plus souvent — les deux
+   proprietes etaient donc ecrasees et le clic paraissait sans effet. Un pseudo-element n'entre en
+   collision avec aucune des deux : le repere survit a tous les themes, presents et futurs. */
+.conv-item.surlignee::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  border-radius: var(--r1) 0 0 var(--r1);
+  background: linear-gradient(180deg, #e3ba55, #d4a94f);
+  /* Le lisere est un REPERE, pas une cible : il ne doit jamais intercepter le clic de la ligne. */
+  pointer-events: none;
+}
+.conv-item.surlignee .conv-label {
+  color: #e3ba55;
+}
+
 .conv-pick {
   display: flex;
   align-items: center;
@@ -2720,7 +2748,10 @@ button.chat-project-dot,
   gap: 5px;
   background: none;
   border: 0;
-  padding: 0 2px;
+  /* Zone cliquable ELARGIE, comme la pastille dossier voisine : `padding: 0 2px` donnait une
+     cible de 2px de marge, a viser au pixel. Marge interieure + hauteur minimale. */
+  padding: 4px 8px;
+  min-height: 24px;
   margin: 0;
   font: inherit;
   color: inherit;

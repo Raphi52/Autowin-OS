@@ -150,6 +150,31 @@ describe('Autowin UI contract', () => {
     expect(fond).toBe('#000')
   })
 
+  // Defaut vecu le 2026-09-09 (conv-384) : le repere de surlignage etait pose en
+  // `background` + `box-shadow: inset` sur `.conv-item.surlignee`. Chaque theme repeint CES DEUX
+  // proprietes sur `.conv-item.active` a specificite egale mais plus bas dans le fichier
+  // (`.cosmic-outline .conv-item.active`) : sur la conversation ouverte, le repere disparaissait
+  // et le clic paraissait sans effet. L'utilisateur a signale deux fois « ca n'a rien donne ».
+  // Aucun test de RENDU ne peut voir ca (la cascade CSS n'existe pas en happy-dom) : on epingle
+  // donc la FORME de la regle.
+  it('le surlignage d’une conversation resiste aux themes (pseudo-element, pas box-shadow)', () => {
+    const chatCss = component('ChatView.css')
+
+    const lisere = /\.conv-item\.surlignee::after\s*\{([^}]*)\}/.exec(chatCss)?.[1] ?? ''
+    expect(lisere, 'le lisere de surlignage n’est plus pose par un pseudo-element').toBeTruthy()
+    expect(lisere, 'un lisere positionne exige position: absolute').toMatch(/position:\s*absolute/)
+
+    // La regle simple ne doit PAS retomber sur box-shadow : c'est exactement ce qui etait ecrase.
+    const regleSimple = /\.conv-item\.surlignee\s*\{([^}]*)\}/.exec(chatCss)?.[1] ?? ''
+    expect(regleSimple, '`box-shadow` sur .conv-item.surlignee est ecrase par les themes').not.toMatch(
+      /box-shadow/
+    )
+
+    // Sans ancre positionnee sur la ligne, le lisere se calerait sur un autre parent.
+    const ligne = /\.conv-item\s*\{([^}]*)\}/.exec(chatCss)?.[1] ?? ''
+    expect(ligne, '.conv-item doit rester l’ancre du lisere').toMatch(/position:\s*relative/)
+  })
+
   it('aucune règle de thème ne réécrit le cadre de page', () => {
     // Defaut vecu : `.theme-serious .observatory-view { background: var(--surface-panel) }` etait
     // PLUS SPECIFIQUE que `.view-page` et remplacait donc le degrade — dont le lisere rose->dore du

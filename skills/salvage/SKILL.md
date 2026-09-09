@@ -112,9 +112,15 @@ assertion lives.
   `git diff <base>..<sha> > /tmp/p.patch && git apply --3way /tmp/p.patch`.
   **Never `git checkout <ref> -- <file>`** when the base has moved: it replaces the whole file and
   silently deletes everything committed since.
-- **On a shared or dirty tree**, work in an isolated worktree — `git worktree add <tmp> <base>` —
-  apply and commit there, then merge. A shared index mixes your change with whatever else is staged,
-  and someone else's conflict blocks your commit.
+- **On a shared or dirty tree**, work in an isolated worktree — apply and commit there, then merge.
+  A shared index mixes your change with whatever else is staged, and someone else's conflict blocks
+  your commit. **Put that worktree OUTSIDE the repository**: `git worktree add ../<name> <base>`,
+  never a relative path that lands inside the checkout.
+  MEASURED 2026-09-09: this line said `git worktree add <tmp> <base>` without saying WHERE, and a
+  run resolved `<tmp>` to `.verif` at the repo root — a 200 MB nested checkout, unignored, that a
+  single `git add .` would have committed. An unconstrained path is not a detail: a relative one
+  lands inside the very tree you were trying not to disturb. Remove the worktree when done
+  (`git worktree remove --force <path>`), and leave no carrier that step 5 did not account for.
 - **Resolve conflicts deliberately, and record why**: which side won, and what the loser contributed.
   Six months later that note is the only trace of the decision.
 - **Verify after applying.** A clean 3-way apply proves the text merged, never that the result is

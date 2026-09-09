@@ -475,6 +475,23 @@ describe('ExecutionSupervisor', () => {
       )
     ).rejects.toThrow(/transitoire[\s\S]*relanc/i)
 
+    /*
+     * LE REFUS DOIT BORNER SA PORTEE.
+     *
+     * conv-384 du 2026-09-09 : le texte disait « aucun fichier touche » sans dire DE QUOI il
+     * parlait. L'agent l'a recopie en cloture alors que le run encore actif avait deja ecrit
+     * 8 fichiers dans sa copie de travail isolee — l'utilisateur a lu l'inverse du reel. On
+     * epingle donc la borne (« cette tentative-ci ») ET le renvoi vers le worktree du run actif.
+     */
+    await expect(
+      supervisor.run(
+        quote,
+        undefined,
+        () => registry.send('counted', [{ role: 'user', content: 'reprise concurrente' }]),
+        prior
+      )
+    ).rejects.toThrow(/TENTATIVE-CI[\s\S]*worktree/i)
+
     expect(provider.calls).toBe(0)
     expect(supervisor.lastSnapshot()).toMatchObject({ activeCalls: 1, startedCalls: 1 })
   })

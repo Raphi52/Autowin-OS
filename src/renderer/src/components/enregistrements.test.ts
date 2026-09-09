@@ -5,6 +5,7 @@ import {
   formaterDuree,
   formaterQuand,
   formaterTaille,
+  ligneAttribuee,
   titreEnregistrement
 } from './enregistrements'
 
@@ -33,9 +34,7 @@ describe('affichage des enregistrements', () => {
   })
 
   it('lit la date dans le nom du fichier, et rend un nom inconnu tel quel', () => {
-    expect(titreEnregistrement('enregistrement-2026-09-01_14-32-05.txt')).toBe(
-      '01/09/2026 à 14:32'
-    )
+    expect(titreEnregistrement('enregistrement-2026-09-01_14-32-05.txt')).toBe('01/09/2026 à 14:32')
     expect(titreEnregistrement('notes.txt')).toBe('notes.txt')
   })
 
@@ -52,5 +51,18 @@ describe('affichage des enregistrements', () => {
     }
     expect(lignes).toHaveLength(MAX_LIGNES_AFFICHEES)
     expect(lignes[0]).toBe(`phrase ${MAX_LIGNES_AFFICHEES + 39}`)
+  })
+})
+
+describe('attribution des voix (mode conversation)', () => {
+  it('PREFIXE chaque ligne par qui parle : un transcript relu n a plus l ecran', () => {
+    expect(ligneAttribuee('moi', '  bonjour  ')).toBe('Moi : bonjour')
+    expect(ligneAttribuee('interlocuteur', 'je vous entends')).toBe(
+      'Interlocuteur : je vous entends'
+    )
+  })
+
+  it('ne fabrique aucune ligne pour du vide', () => {
+    expect(ligneAttribuee('moi', '   ')).toBe('')
   })
 })

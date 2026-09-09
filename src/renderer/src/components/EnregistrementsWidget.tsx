@@ -8,9 +8,12 @@ import {
   formaterDuree,
   formaterQuand,
   formaterTaille,
+  ligneAttribuee,
   titreEnregistrement,
-  type FichierEnregistre
+  type FichierEnregistre,
+  type Voix
 } from './enregistrements'
+import { listerMicros, type MicroDisponible } from './micro-peripheriques'
 
 /**
  * ENREGISTRER LA PAROLE, et voir où elle a atterri.
@@ -26,6 +29,17 @@ import {
  *
  * Jarvis n'est jamais appelé ici : le mot « Jarvis » prononcé pendant une réunion ne déclenche
  * aucun tour. C'est le sens même d'un widget à part.
+ *
+ * DEUX AJOUTS DEMANDÉS LE 2026-09-09, et ce qu'ils changent :
+ *  - LE CHOIX DU MICRO, comme dans le widget Jarvis. Le micro par défaut de Windows est souvent
+ *    celui d'une webcam : niveau trop bas, transcription en charabia. Le choix s'applique à la
+ *    PROCHAINE mise en marche, jamais au flux déjà ouvert.
+ *  - LE MODE CONVERSATION TÉLÉPHONIQUE : deux flux transcrits en parallèle dans le MÊME fichier,
+ *    le micro (moi) et le son que la machine joue (l'interlocuteur, via Teams ou autre). Deux
+ *    contraintes portent tout : chaque ligne dit QUI parle, sinon le fichier est illisible relu ;
+ *    et le son du système exige la reconnaissance hors ligne (le moteur du navigateur n'accepte
+ *    aucun flux qu'il n'a pas ouvert lui-même), donc ce mode se REFUSE tant qu'elle n'est pas
+ *    installée plutôt que de transcrire deux fois le micro.
  */
 
 interface ApiEnregistrements {
@@ -45,6 +59,12 @@ const MAX_FICHIERS = 8
 /** Le pas de l'horloge d'enregistrement affichée. */
 const TIC_MS = 1_000
 
+/** Ce qu'on enregistre : sa propre parole, ou un appel à deux voix. */
+type ModeEnregistrement = 'dictee' | 'appel'
+
+/** Les deux flux du mode appel, dans l'ordre d'affichage. */
+const VOIX_APPEL: readonly Voix[] = ['moi', 'interlocuteur']
+
 export function EnregistrementsWidget(): React.JSX.Element {
   const [enregistre, setEnregistre] = useState(false)
   const [lignes, setLignes] = useState<string[]>([])
@@ -55,11 +75,19 @@ export function EnregistrementsWidget(): React.JSX.Element {
   const [depuis, setDepuis] = useState<number | null>(null)
   const [maintenant, setMaintenant] = useState(() => Date.now())
   const [fichierEnCours, setFichierEnCours] = useState<string | null>(null)
+  const [mode, setMode] = useState<ModeEnregistrement>('dictee')
+  const [micros, setMicros] = useState<MicroDisponible[]>([])
+  const [micro, setMicro] = useState('')
+  const [whisperInstalle, setWhisperInstalle] = useState(false)
 
-  const moteurRef = useRef<MoteurVocal | null>(null)
+  /** Un moteur PAR VOIX : le micro et le son du système sont deux flux distincts, ouverts et
+   * arrêtés séparément. Une seule référence forcerait à en fermer un pour ouvrir l'autre. */
+  const moteursRef = useRef<Partial<Record<Voix, MoteurVocal>>>({})
   const actifRef = useRef(false)
   const sessionRef = useRef<string | null>(null)
   const whisperRef = useRef<boolean>(false)
+  const microRef = useRef('')
+  const monteRef = useRef(true)
 
   const rafraichirListe = useCallback(async () => {
     const pont = api()
@@ -76,8 +104,8 @@ export function EnregistrementsWidget(): React.JSX.Element {
   /** Coupe le micro et referme la session. Appelé par le bouton ET par une panne d'écriture. */
   const arreter = useCallback(async () => {
     actifRef.current = false
-    moteurRef.current?.stop()
-    moteurRef.current = null
+    for (const m of Object.values(moteursRef.current)) m?.stop()
+    moteursRef.current = {}
     setEnregistre(false)
     setPartiel('')
     setDepuis(null)
@@ -96,8 +124,9 @@ export function EnregistrementsWidget(): React.JSX.Element {
 
   /** Une phrase FIGÉE : elle s'affiche ET part sur le disque, dans cet ordre, sans attendre. */
   const noter = useCallback(
-    async (texte: string) => {
-      const propre = texte.trim()
+    async (voix: Voix, texte: string, attribuer: boolean) => {
+      // L'ATTRIBUTION EST ÉCRITE, pas seulement affichée : le fichier doit rester lisible seul.
+      const propre = attribuer ? ligneAttribuee(voix, texte) : texte.trim()
       if (propre === '') return
       setLignes((precedent) => ajouterLigneAffichee(precedent, propre))
       const pont = api()
@@ -119,23 +148,66 @@ export function EnregistrementsWidget(): React.JSX.Element {
   )
 
   const auResultat = useCallback(
-    (evenement: unknown) => {
-      const e = evenement as {
-        resultIndex?: number
-        results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }>
-      }
-      for (let i = e.resultIndex ?? 0; i < e.results.length; i += 1) {
-        const resultat = e.results[i]
-        const texte = resultat?.[0]?.transcript ?? ''
-        if (resultat?.isFinal === true) {
-          setPartiel('')
-          void noter(texte)
-        } else {
-          setPartiel(texte.trim())
+    (voix: Voix, attribuer: boolean) =>
+      (evenement: unknown): void => {
+        const e = evenement as {
+          resultIndex?: number
+          results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }>
         }
-      }
-    },
+        for (let i = e.resultIndex ?? 0; i < e.results.length; i += 1) {
+          const resultat = e.results[i]
+          const texte = resultat?.[0]?.transcript ?? ''
+          if (resultat?.isFinal === true) {
+            setPartiel('')
+            void noter(voix, texte, attribuer)
+          } else {
+            setPartiel(texte.trim())
+          }
+        }
+      },
     [noter]
+  )
+
+  /**
+   * OUVRE UN FLUX ET LE TIENT OUVERT. Un appel par voix : la seule différence est la SOURCE du son
+   * (`micro` ou `haut-parleurs`) et l'étiquette écrite devant chaque phrase.
+   */
+  const ouvrirFlux = useCallback(
+    (voix: Voix, attribuer: boolean): boolean => {
+      const Fabrique = fabriqueMoteur(
+        whisperRef.current,
+        microRef.current || undefined,
+        voix === 'interlocuteur' ? 'haut-parleurs' : 'micro'
+      )
+      if (!Fabrique) return false
+      const moteur = new Fabrique()
+      moteur.continuous = true
+      moteur.interimResults = true
+      moteur.lang = 'fr-FR'
+      moteur.onresult = auResultat(voix, attribuer)
+      moteur.onerror = (evenement) => {
+        const code = String((evenement as { error?: unknown } | null)?.error ?? 'inconnue')
+        // `no-speech` / `aborted` : un micro qui attend, pas une panne — `onend` relance.
+        if (code === 'no-speech' || code === 'aborted') return
+        // UN APPEL AMPUTÉ D'UNE VOIX EST UN FAUX TRANSCRIPT : on arrête tout et on le dit, plutôt
+        // que de continuer à écrire un côté de la conversation en laissant croire qu'on a les deux.
+        setErreur(
+          voix === 'interlocuteur'
+            ? `Le son du système s’est interrompu (${code}) — enregistrement arrêté`
+            : messageErreurMoteur(code)
+        )
+        void arreter()
+      }
+      // La relance est GARDÉE par l'interrupteur : un moteur qui repart après l'arrêt laisserait le
+      // micro ouvert à l'insu de l'utilisateur — et écrirait dans un fichier qu'il croit fermé.
+      moteur.onend = () => {
+        if (actifRef.current && moteursRef.current[voix] === moteur) moteur.start()
+      }
+      moteursRef.current[voix] = moteur
+      moteur.start()
+      return true
+    },
+    [arreter, auResultat]
   )
 
   const demarrer = useCallback(async () => {
@@ -144,8 +216,16 @@ export function EnregistrementsWidget(): React.JSX.Element {
       setErreur('Passerelle d’enregistrement indisponible')
       return
     }
-    const Fabrique = fabriqueMoteur(whisperRef.current)
-    if (!Fabrique) {
+    const appel = mode === 'appel'
+    // LE REFUS ARRIVE AVANT LE FICHIER. Ouvrir une session pour découvrir ensuite qu'une voix est
+    // impossible laisserait un fichier vide daté sur le disque.
+    if (appel && !whisperRef.current) {
+      setErreur(
+        'Le mode conversation exige la reconnaissance hors ligne : installez-la depuis le widget Jarvis.'
+      )
+      return
+    }
+    if (!fabriqueMoteur(whisperRef.current, microRef.current || undefined)) {
       setErreur(
         'Aucun moteur de reconnaissance disponible : installez l’écoute hors ligne depuis le widget Jarvis.'
       )
@@ -168,27 +248,19 @@ export function EnregistrementsWidget(): React.JSX.Element {
     setEnregistre(true)
     actifRef.current = true
 
-    const moteur = new Fabrique()
-    moteur.continuous = true
-    moteur.interimResults = true
-    moteur.lang = 'fr-FR'
-    moteur.onresult = auResultat
-    moteur.onerror = (evenement) => {
-      const code = String((evenement as { error?: unknown } | null)?.error ?? 'inconnue')
-      // `no-speech` / `aborted` : un micro qui attend, pas une panne — `onend` relance.
-      if (code === 'no-speech' || code === 'aborted') return
-      setErreur(messageErreurMoteur(code))
-      void arreter()
+    for (const voix of appel ? VOIX_APPEL : (['moi'] as const)) {
+      if (!ouvrirFlux(voix, appel)) {
+        setErreur(
+          voix === 'interlocuteur'
+            ? 'Le son du système n’a pas pu être capté — enregistrement arrêté'
+            : 'Aucun moteur de reconnaissance disponible — enregistrement arrêté'
+        )
+        void arreter()
+        return
+      }
     }
-    // La relance est GARDÉE par l'interrupteur : un moteur qui repart après l'arrêt laisserait le
-    // micro ouvert à l'insu de l'utilisateur — et écrirait dans un fichier qu'il croit fermé.
-    moteur.onend = () => {
-      if (actifRef.current && moteurRef.current === moteur) moteur.start()
-    }
-    moteurRef.current = moteur
-    moteur.start()
     await rafraichirListe()
-  }, [arreter, auResultat, rafraichirListe])
+  }, [arreter, mode, ouvrirFlux, rafraichirListe])
 
   const basculer = useCallback(() => {
     if (actifRef.current) void arreter()
@@ -201,7 +273,10 @@ export function EnregistrementsWidget(): React.JSX.Element {
     const lire = async (): Promise<void> => {
       try {
         const etat = await api()?.whisperEtat?.()
-        if (vivant && etat) whisperRef.current = etat.installe === true
+        if (vivant && etat) {
+          whisperRef.current = etat.installe === true
+          setWhisperInstalle(etat.installe === true)
+        }
       } catch {
         // Sans réponse, on retombe sur le moteur du navigateur : c'est déjà le comportement de Jarvis.
       }
@@ -225,12 +300,32 @@ export function EnregistrementsWidget(): React.JSX.Element {
   // Le micro ne survit pas au démontage de la vue.
   useEffect(
     () => () => {
+      monteRef.current = false
       actifRef.current = false
-      moteurRef.current?.stop()
-      moteurRef.current = null
+      for (const m of Object.values(moteursRef.current)) m?.stop()
+      moteursRef.current = {}
     },
     []
   )
+
+  useEffect(() => {
+    microRef.current = micro
+  }, [micro])
+
+  /** La liste des micros RÉELS, relue à chaque branchement : un casque branché en cours de séance
+   * doit apparaître sans recharger la vue. */
+  useEffect(() => {
+    const lire = (): void => {
+      void listerMicros().then((liste) => {
+        if (monteRef.current) setMicros(liste)
+      })
+    }
+    lire()
+    navigator.mediaDevices?.addEventListener?.('devicechange', lire)
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', lire)
+    }
+  }, [])
 
   return (
     <div className="enregistrements" data-enregistre={enregistre ? 'true' : undefined}>
@@ -250,6 +345,50 @@ export function EnregistrementsWidget(): React.JSX.Element {
             : 'Micro coupé — rien n’est écrit'}
         </span>
       </div>
+
+      {/* LE MODE SE CHOISIT MICRO COUPÉ. Le changer en cours de séance devrait rouvrir les flux au
+          milieu du fichier : la moitié des lignes serait attribuée, l'autre non. */}
+      <label className="enregistrements__champ">
+        <span>Mode</span>
+        <select
+          data-testid="enregistrements-mode"
+          value={mode}
+          disabled={enregistre}
+          onChange={(e) => setMode(e.target.value as ModeEnregistrement)}
+        >
+          <option value="dictee">Dictée — ce que je dis</option>
+          <option value="appel">Conversation — ce que je dis et ce que j’entends</option>
+        </select>
+      </label>
+      {mode === 'appel' ? (
+        <span className="enregistrements__aide" data-testid="enregistrements-aide-appel">
+          {whisperInstalle
+            ? 'Le son de Teams, Meet ou du navigateur est transcrit à part, sous « Interlocuteur ». Windows uniquement.'
+            : 'Indisponible : ce mode exige la reconnaissance hors ligne, à installer depuis le widget Jarvis.'}
+        </span>
+      ) : null}
+
+      <details className="enregistrements__audio" data-testid="enregistrements-audio">
+        <summary>Paramètres audio</summary>
+        <label className="enregistrements__champ">
+          <span>Micro</span>
+          <select
+            data-testid="enregistrements-peripherique"
+            value={micro}
+            onChange={(e) => setMicro(e.target.value)}
+          >
+            <option value="">Micro par défaut du système</option>
+            {micros.map((entree) => (
+              <option key={entree.id} value={entree.id}>
+                {entree.nom}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="enregistrements__aide">
+          Un changement de micro s’applique au prochain enregistrement.
+        </span>
+      </details>
 
       {erreur ? (
         <p className="home-error" data-testid="enregistrements-erreur">

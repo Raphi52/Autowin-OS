@@ -116,6 +116,7 @@ import {
 import {
   canoniserReplis,
   estReplie,
+  groupeRecent,
   groupesVisibles,
   grouperConversations,
   nomDeDossier,
@@ -125,7 +126,7 @@ import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
-import { ContextGaugeDetail, ContextGaugeIndicator } from './ContextGaugeIndicator'
+import { ContextGaugeDetail } from './ContextGaugeIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
@@ -177,6 +178,8 @@ const CLE_JAUGES = 'autowin.context-gauges.v1'
 const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
 /** Fils armes en mode auto (reglage PAR conversation ; `*` = ancien reglage global migre). */
 const CLE_MODE_AUTO_CONVS = 'autowin.chat.modeAuto.convs'
+/** Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions. */
+const CLE_DOSSIER_NOUVEAU_FIL = 'autowin.chat.dossierNouveauFil'
 
 function lireJaugesMemorisees(): Record<string, ContextGauge> {
   try {
@@ -391,6 +394,26 @@ export function ChatView({
   const [autoNouveauFil, setAutoNouveauFil] = useState(false)
   const autoNouveauFilRef = useRef(false)
   autoNouveauFilRef.current = autoNouveauFil
+  /**
+   * DOSSIER DE TRAVAIL ARME SUR UN FIL PAS ENCORE CREE. Meme defaut que le mode auto : le dossier
+   * ne se choisissait que sur une conversation EXISTANTE (menu ⋮), donc le premier tour d'un fil
+   * neuf tournait toujours dans le depot de repli. L'intention est gardee ici, puis posee sur la
+   * conversation des sa creation — `dossierDeTravailDuTour` la lit alors des le premier tour.
+   */
+  const [dossierNouveauFil, setDossierNouveauFil] = useState<string | null>(() => {
+    try {
+      const lu = window.localStorage.getItem(CLE_DOSSIER_NOUVEAU_FIL)
+      return lu && lu.trim() ? lu : null
+    } catch {
+      return null
+    }
+  })
+  const dossierNouveauFilRef = useRef<string | null>(null)
+  dossierNouveauFilRef.current = dossierNouveauFil
+  useEffect(() => {
+    if (dossierNouveauFil) window.localStorage.setItem(CLE_DOSSIER_NOUVEAU_FIL, dossierNouveauFil)
+    else window.localStorage.removeItem(CLE_DOSSIER_NOUVEAU_FIL)
+  }, [dossierNouveauFil])
   /** Desarme un fil precis (le joker `*` disparait : eteindre ici eteint le reglage herite). */
   const desarmerAuto = useCallback((id: string | null | undefined): void => {
     setAutoConvs((precedent) => {
@@ -634,8 +657,13 @@ export function ChatView({
   )
   // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
+  /*
+    Menu de choix du dossier de travail. `conv: null` = la cible est le PROCHAIN fil, pas une
+    conversation existante : la pastille de la barre du haut s'ouvre aussi quand aucun fil n'est
+    ouvert, et le dossier choisi est alors garde puis pose sur la conversation des sa creation.
+  */
   const [convFolderMenu, setConvFolderMenu] = useState<{
-    conv: Conv
+    conv: Conv | null
     top: number
     left: number
   } | null>(null)
@@ -2284,10 +2312,21 @@ export function ChatView({
       category: identity.provider,
       provider: identity.provider
     })
+    // Le dossier de travail choisi pour un fil neuf se pose AVANT le premier tour.
+    const dossierArme = dossierNouveauFilRef.current
+    if (dossierArme) await window.api.conversationsSetProject?.(creee.id, dossierArme)
     setConvs((courant) =>
       courant.some((c) => c.id === creee.id)
         ? courant
-        : [{ ...creee, updatedAt: Date.now(), messages: [] } as unknown as Conv, ...courant]
+        : [
+            {
+              ...creee,
+              ...(dossierArme ? { projectPath: dossierArme } : {}),
+              updatedAt: Date.now(),
+              messages: []
+            } as unknown as Conv,
+            ...courant
+          ]
     )
     liveMessagesRef.current.set(creee.id, [])
     await ouvrirDansMosaique(creee.id)
@@ -3603,6 +3642,11 @@ export function ChatView({
           provider: identity.provider
         })
         convId = c.id
+        // Le dossier arme dans « Nouveau fil » devient le dossier de travail DES le premier tour :
+        // `dossierDeTravailDuTour` lit le rangement de la conversation, il doit donc etre pose avant.
+        if (dossierNouveauFilRef.current) {
+          await window.api.conversationsSetProject?.(c.id, dossierNouveauFilRef.current)
+        }
         const shouldAdoptCreatedConversation =
           activeRef.current === null &&
           composerDraftKeyRef.current === sendDraftKey &&
@@ -3838,6 +3882,14 @@ export function ChatView({
    */
   const [repriseQuotaProgres, setRepriseQuotaProgres] = useState<string | null>(null)
   const [repriseQuotaNotice, setRepriseQuotaNotice] = useState<string | null>(null)
+  // Le compte-rendu de reprise est une information de l'INSTANT : lu, il n'a plus de raison
+  // d'occuper la barre. Sans cette expiration, « 2 conversations reprises. » restait affiche
+  // indefiniment alors qu'il n'y avait plus rien a reprendre.
+  useEffect(() => {
+    if (!repriseQuotaNotice) return
+    const t = setTimeout(() => setRepriseQuotaNotice(null), 10_000)
+    return () => clearTimeout(t)
+  }, [repriseQuotaNotice])
   async function reprendreConversationsCoupeesParQuota(): Promise<void> {
     if (repriseQuotaEnCours) return
     const cibles = convsCoupeesParQuota.map((c) => c.id)
@@ -4280,6 +4332,62 @@ export function ChatView({
     [refreshConvs, memoriserDossier]
   )
   /**
+   * Pose ou retire le repère visuel d'une conversation, puis relit la liste : c'est cette relecture
+   * qui fait apparaître la couleur, l'état vit sur le disque et non dans le composant.
+   *
+   * L'appel n'est PAS écrit `window.api.conversationsSetHighlight?.(…)`. Mesure du 2026-09-09
+   * (conv-384) : l'affichage se recharge à chaud, le processus principal NON — l'entrée de menu
+   * existait donc avant le canal qui la sert. L'appel « si ça existe » ne faisait alors rien du
+   * tout, sans message ni erreur : l'utilisateur a cliqué sur un bouton mort et n'avait aucun moyen
+   * de le savoir. Un pont absent est un ÉTAT DE L'APPLICATION, pas un cas à ignorer : il se dit, et
+   * il dit ce qui répare.
+   */
+  const surligner = useCallback(
+    async (conversationId: string, on: boolean): Promise<void> => {
+      const poser = window.api.conversationsSetHighlight
+      if (!poser) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text:
+              'Surlignage indisponible : cette version de l’application n’expose pas encore ' +
+              'l’enregistrement du repère. Redémarre Autowin OS pour l’activer.'
+          })
+        )
+        return
+      }
+      try {
+        await poser(conversationId, on)
+      } catch (erreur) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: `Le surlignage n’a pas pu être enregistré : ${
+              erreur instanceof Error ? erreur.message : String(erreur)
+            }`
+          })
+        )
+        return
+      }
+      await refreshConvs()
+    },
+    [refreshConvs]
+  )
+  /**
+   * LE MEME menu sert deux cibles : une conversation existante (on la range tout de suite) et le
+   * PROCHAIN fil, quand aucune conversation n'est ouverte (on garde l'intention, elle sera posee a
+   * la creation). Un seul aiguillage, sinon les deux chemins divergent.
+   */
+  const choisirDossier = useCallback(
+    (cible: Conv | null, chemin: string | null): void => {
+      if (cible) {
+        void rangerDans(cible.id, chemin)
+        return
+      }
+      if (chemin) memoriserDossier(chemin)
+      setDossierNouveauFil(chemin)
+    },
+    [rangerDans, memoriserDossier]
+  )
+  /**
    * AMORCAGE unique : au tout premier chargement, la memoire est vide alors que des conversations
    * sont deja rangees. On l'amorce avec ces dossiers-la. Ensuite la memoire fait autorite -- sinon
    * un dossier retire par la croix reviendrait tant qu'une conversation le porte encore.
@@ -4306,18 +4414,24 @@ export function ChatView({
    * d'aplatir la conversation dedans : l'aplatissement faisait collisionner des champs homonymes et
    * rendait impossible de savoir, à la lecture, d'où venait chaque valeur.
    */
-  const groupes = useMemo(
-    () =>
-      ordonnerGroupes(
+  const groupes = useMemo(() => {
+    const entrees = conversationHits.map((hit) => ({
+      id: hit.conversation.id,
+      projectPath: hit.conversation.projectPath,
+      autoKaizen: hit.conversation.autoKaizen,
+      hit
+    }))
+    /**
+     * « Récent » est un RACCOURCI, pas une catégorie : il duplique les fils déjà rangés ailleurs et
+     * reste TOUJOURS en tête, hors du tri par date entre groupes (le trier n'aurait aucun sens : il
+     * contient par construction la conversation la plus récente).
+     */
+    const recent = groupeRecent(entrees, (entree) => recenceUtilisateur(entree.hit.conversation))
+    return [
+      ...(recent ? [recent] : []),
+      ...ordonnerGroupes(
         groupesVisibles(
-          grouperConversations(
-            conversationHits.map((hit) => ({
-              id: hit.conversation.id,
-              projectPath: hit.conversation.projectPath,
-              autoKaizen: hit.conversation.autoKaizen,
-              hit
-            }))
-          ),
+          grouperConversations(entrees),
           // Pendant une recherche, aucun repli ne masque un resultat : chercher, c'est vouloir voir.
           convQuery.trim() ? {} : groupesReplies
         ),
@@ -4330,9 +4444,9 @@ export function ChatView({
         // suivait pas l'ordre calcule juste au-dessus. Deux tris, une seule verite.
         (groupe) => recenceUtilisateur(groupe.items[0].hit.conversation),
         conversationDateOrder
-      ),
-    [conversationHits, groupesReplies, conversationDateOrder, convQuery]
-  )
+      )
+    ]
+  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery])
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
@@ -4532,23 +4646,28 @@ export function ChatView({
             alors que les deux autres attendaient leur tour, invisibles. */}
         {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) && (
           <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
-            <button
-              type="button"
-              className="conv-date-sort"
-              data-testid="conv-reprise-quota-bouton"
-              disabled={repriseQuotaEnCours}
-              onClick={() => void reprendreConversationsCoupeesParQuota()}
-              title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
-            >
-              {repriseQuotaEnCours ? (
-                <>
-                  <Spinner size={12} label="Reprise des conversations en cours" />
-                  {repriseQuotaProgres ?? 'Reprise en cours…'}
-                </>
-              ) : (
-                `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
-              )}
-            </button>
+            {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
+                reprise, la notice reste seule quelques secondes, sans un « (0) » qui n'offre
+                rien a cliquer. */}
+            {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
+              <button
+                type="button"
+                className="conv-date-sort"
+                data-testid="conv-reprise-quota-bouton"
+                disabled={repriseQuotaEnCours}
+                onClick={() => void reprendreConversationsCoupeesParQuota()}
+                title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
+              >
+                {repriseQuotaEnCours ? (
+                  <>
+                    <Spinner size={12} label="Reprise des conversations en cours" />
+                    {repriseQuotaProgres ?? 'Reprise en cours…'}
+                  </>
+                ) : (
+                  `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
+                )}
+              </button>
+            ) : null}
             {repriseQuotaNotice ? (
               <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
                 {repriseQuotaNotice}
@@ -4648,7 +4767,9 @@ export function ChatView({
                     return (
                       <div
                         key={c.id}
-                        className={`conv-item${c.id === activeId ? ' active' : ''}`}
+                        className={`conv-item${c.id === activeId ? ' active' : ''}${
+                          c.surlignee ? ' surlignee' : ''
+                        }`}
                         style={{ marginLeft: groupe.depth * 14 }}
                         // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
                         // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
@@ -4831,6 +4952,24 @@ export function ChatView({
                 </button>
               )}
               {/*
+                Le repère visuel : la MEME entree pose et retire, comme une bascule. Deux entrees
+                distinctes auraient allonge le menu pour un etat qui n'en a que deux.
+              */}
+              <button
+                role="menuitem"
+                data-testid="conv-menu-highlight"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  void surligner(conv.id, !conv.surlignee)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  ★
+                </span>
+                {convMenu.conv.surlignee ? 'Retirer le surlignage' : 'Surligner'}
+              </button>
+              {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
                 coutait un item d'interface visible toute la journee pour un geste rare.
               */}
@@ -4966,7 +5105,7 @@ export function ChatView({
                       onClick={() => {
                         const conv = convFolderMenu.conv
                         setConvFolderMenu(null)
-                        void rangerDans(conv.id, chemin)
+                        choisirDossier(conv, chemin)
                       }}
                     >
                       <span className="conv-menu-ic" aria-hidden="true">
@@ -4998,7 +5137,7 @@ export function ChatView({
                   const conv = convFolderMenu.conv
                   setConvFolderMenu(null)
                   void window.api.pickGitRepo?.().then((chemin) => {
-                    if (chemin) void rangerDans(conv.id, chemin)
+                    if (chemin) choisirDossier(conv, chemin)
                   })
                 }}
               >
@@ -5111,13 +5250,23 @@ export function ChatView({
                     {busy && ' · en cours'}
                   </span>
                   {(() => {
-                    const dossierProjet = active?.projectPath?.trim()
+                    /*
+                      SANS conversation ouverte, la pastille parle du PROCHAIN fil. Elle etait
+                      `disabled` dans ce cas : le dossier de travail ne pouvait se choisir qu'apres
+                      le premier tour, donc ce premier tour partait toujours dans le depot de repli
+                      (« je dois pouvoir choisir mon CWD dans un nouveau fil », 2026-09-09).
+                    */
+                    const dossierProjet = active
+                      ? active.projectPath?.trim()
+                      : (dossierNouveauFil ?? undefined)
                     const cheminEffectif = dossierProjet || defaultWorkspace
                     const labelDossier = cheminEffectif
                       ? nomDeDossier(cheminEffectif)
                       : 'Autowin OS'
                     const titreDossier = dossierProjet
-                      ? `Dossier de travail assigné à cette conversation : ${dossierProjet}`
+                      ? active
+                        ? `Dossier de travail assigné à cette conversation : ${dossierProjet}`
+                        : `Dossier de travail du prochain fil : ${dossierProjet}`
                       : `Dossier racine par défaut de l’agent : ${cheminEffectif ?? 'racine du dépôt'}`
                     return (
                       <button
@@ -5127,31 +5276,17 @@ export function ChatView({
 Cliquer pour changer le dossier de travail.`}
                         aria-label={titreDossier}
                         data-testid="chat-project-dot"
-                        disabled={!active}
                         onClick={(event) => {
-                          if (!active) return
                           const r = event.currentTarget.getBoundingClientRect()
-                          setConvFolderMenu({ conv: active, top: r.bottom + 4, left: r.left })
+                          setConvFolderMenu({
+                            conv: active ?? null,
+                            top: r.bottom + 4,
+                            left: r.left
+                          })
                         }}
                       >
                         📁 {labelDossier}
                       </button>
-                    )
-                  })()}
-                  {(() => {
-                    /*
-                    LA JAUGE DE CONTEXTE — cliquable, elle ouvre son propre panneau de detail
-                    (`ContextGaugeIndicator`), comme la barre de quotas. Elle ne rend rien tant
-                    qu'on ne SAIT pas : afficher 0 % dirait « ce fil est vide » la ou la verite est
-                    « on l'ignore ».
-                  */
-                    const jauge = jaugeCourante
-                    return (
-                      <ContextGaugeIndicator
-                        gauge={jauge}
-                        busy={busy}
-                        onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
-                      />
                     )
                   })()}
                   {gitBranch && (

@@ -186,6 +186,17 @@ export function registerConversationsIpc({
       return updated?.projectPath ?? null
     }
   )
+  /**
+   * Poser ou retirer le repère visuel d'une conversation. Rend l'état retenu (`true`/`false`),
+   * jamais `undefined` : le renderer n'a pas à distinguer « id inconnu » de « non surligné ».
+   */
+  ipcMain.handle('os:conversations:setHighlight', (event, rawId: string, rawOn: unknown) => {
+    assertTrustedRendererSender(event, 'Conversations')
+    const id = guardString(rawId, 'id')
+    const updated = os.conversations.surligner(id, rawOn === true)
+    if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
+    return updated?.surlignee === true
+  })
   ipcMain.handle('os:conversations:fork', (event, rawId: string, rawMessageId: string) => {
     assertTrustedRendererSender(event, 'Conversation fork')
     return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))

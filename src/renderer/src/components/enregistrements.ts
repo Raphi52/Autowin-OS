@@ -73,3 +73,25 @@ export function ajouterLigneAffichee(lignes: readonly string[], texte: string): 
   if (propre === '') return lignes as string[]
   return [propre, ...lignes].slice(0, MAX_LIGNES_AFFICHEES)
 }
+
+/**
+ * QUI PARLE, dans un transcript à deux voix.
+ *
+ * Le mode conversation téléphonique écrit dans UN SEUL fichier deux flux distincts : le micro (moi)
+ * et le son du système (l'interlocuteur). Sans attribution, le fichier devient illisible dès la
+ * première relance — on ne sait plus qui a dit quoi, ce qui est justement l'information qu'on
+ * cherchait en enregistrant un appel. Le préfixe est donc écrit sur le DISQUE, pas seulement à
+ * l'écran : un transcript relu dans six mois n'a plus l'écran.
+ */
+export type Voix = 'moi' | 'interlocuteur'
+
+export const ETIQUETTE_VOIX: Record<Voix, string> = {
+  moi: 'Moi',
+  interlocuteur: 'Interlocuteur'
+}
+
+export function ligneAttribuee(voix: Voix, texte: string): string {
+  const propre = texte.trim()
+  if (propre === '') return ''
+  return `${ETIQUETTE_VOIX[voix]} : ${propre}`
+}

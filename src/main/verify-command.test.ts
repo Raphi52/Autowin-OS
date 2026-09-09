@@ -4,6 +4,9 @@ import {
   decideRelatedVerify,
   capVerifyOutput,
   decideVerifyCommand,
+  decideVerifyScript,
+  ALLOWED_SCRIPT_COMMANDS,
+  TYPES_DE_VERIFICATION,
   VERIFY_OUTPUT_CAP
 } from './verify-command'
 
@@ -315,5 +318,49 @@ describe('decideRelatedVerify — la portée s’ajoute sans ouvrir la commande'
   it('sans workspace, rien à vérifier', () => {
     expect(decideRelatedVerify(undefined, ['src/a.ts'], vitest).allowed).toBe(false)
     expect(decideRelatedVerify('/repo', [], vitest).allowed).toBe(false)
+  })
+})
+
+describe('decideVerifyScript — prouver AUTREMENT que par les tests', () => {
+  const scripts = { test: 'vitest run', lint: 'eslint .', typecheck: 'tsc --noEmit' }
+
+  it('rend la commande npm du script declare, pour lint comme pour typecheck', () => {
+    expect(decideVerifyScript('typecheck', '/repo', () => scripts)).toEqual({
+      allowed: true,
+      command: 'npm run typecheck',
+      cwd: '/repo'
+    })
+    expect(decideVerifyScript('lint', '/repo', () => scripts)).toMatchObject({
+      allowed: true,
+      command: 'npm run lint'
+    })
+  })
+
+  it('script absent ⇒ refus explicite plutot qu un faux vert', () => {
+    expect(decideVerifyScript('lint', '/repo', () => ({ test: 'vitest run' }))).toMatchObject({
+      allowed: false
+    })
+    expect(decideVerifyScript('typecheck', '/repo', () => null).allowed).toBe(false)
+  })
+
+  it('sans workspace, rien a rejouer', () => {
+    expect(decideVerifyScript('typecheck', undefined, () => scripts).allowed).toBe(false)
+    expect(decideVerifyScript('typecheck', '   ', () => scripts).allowed).toBe(false)
+  })
+
+  it('seules les deux commandes de la liste blanche peuvent sortir', () => {
+    expect([...ALLOWED_SCRIPT_COMMANDS].sort()).toEqual(['npm run lint', 'npm run typecheck'])
+    expect(TYPES_DE_VERIFICATION).toEqual(['test', 'lint', 'typecheck'])
+  })
+
+  /*
+   * SCRIPT DECLARE MAIS VIDE — le seul cas que la cle PRESENTE ne suffit pas a trancher.
+   * `typeof scripts[type] === 'string'` est vrai pour une chaine blanche : sans ce cas, `verify`
+   * lancerait `npm run lint` sur un script qui n'execute rien et rendrait un exit code 0, c'est-a-dire
+   * un VERT qui ne prouve rien. C'est la definition du faux vert que ce module existe pour refuser.
+   */
+  it('script declare mais VIDE ⇒ refus : une chaine blanche ne prouve rien', () => {
+    expect(decideVerifyScript('lint', '/repo', () => ({ lint: '   ' })).allowed).toBe(false)
+    expect(decideVerifyScript('typecheck', '/repo', () => ({ typecheck: '' })).allowed).toBe(false)
   })
 })

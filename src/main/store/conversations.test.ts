@@ -570,3 +570,45 @@ describe('résumé IPC — motif de l’échec du dernier tour', () => {
     expect(resumes.find((s) => s.id === ok)!.lastAssistantError).toBeUndefined()
   })
 })
+
+/**
+ * Surligner une conversation — un repère VISUEL posé à la main pour la retrouver dans la liste.
+ * Le champ est optionnel et EFFACÉ quand on retire le repère : un `conversations.json` relu ne
+ * doit garder aucune trace d'un surlignage annulé.
+ */
+describe('ConversationStore — le surlignage manuel', () => {
+  const neuve = (store: ConversationStore): string =>
+    store.create({ title: 'T', provider: 'anthropic' }).id
+
+  it('une conversation naît SANS surlignage', () => {
+    const store = new ConversationStore(makeClock())
+    expect(store.get(neuve(store))?.surlignee).toBeUndefined()
+  })
+
+  it('surligner puis retirer efface le champ, sans laisser `false` sur disque', () => {
+    const store = new ConversationStore(makeClock())
+    const id = neuve(store)
+    store.surligner(id, true)
+    expect(store.get(id)?.surlignee).toBe(true)
+    store.surligner(id, false)
+    expect(store.get(id)?.surlignee).toBeUndefined()
+  })
+
+  /**
+   * Surligner n'est pas TRAVAILLER : la liste est triée par `updatedAt`, un simple repère ne doit
+   * pas faire remonter la conversation en tête comme si elle venait de servir (même règle que
+   * `rangerDansDossier`).
+   */
+  it('ne touche PAS updatedAt', () => {
+    const store = new ConversationStore(makeClock())
+    const id = neuve(store)
+    const avant = store.get(id)!.updatedAt
+    store.surligner(id, true)
+    expect(store.get(id)?.updatedAt).toBe(avant)
+  })
+
+  it('rend undefined sur un id inconnu, sans jeter', () => {
+    const store = new ConversationStore(makeClock())
+    expect(store.surligner('inconnu', true)).toBeUndefined()
+  })
+})
