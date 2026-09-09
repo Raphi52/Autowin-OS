@@ -2685,7 +2685,10 @@ button.chat-project-dot,
   gap: 5px;
   background: none;
   border: 0;
-  padding: 0 2px;
+  /* Zone cliquable ELARGIE, comme la pastille dossier voisine : `padding: 0 2px` donnait une
+     cible de 2px de marge, a viser au pixel. Marge interieure + hauteur minimale. */
+  padding: 4px 8px;
+  min-height: 24px;
   margin: 0;
   font: inherit;
   color: inherit;
