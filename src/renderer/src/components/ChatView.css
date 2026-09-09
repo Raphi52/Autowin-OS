@@ -454,12 +454,12 @@
     background 120ms ease;
 }
 .conv-mosaic-toggle.is-open {
-  background: color-mix(in srgb, var(--accent, #4c8dff) 35%, transparent);
-  border-color: var(--accent, #4c8dff);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
 }
 .conv-mosaic-toggle.is-open .conv-mosaic-toggle-knob {
   transform: translateX(11px);
-  background: var(--accent, #4c8dff);
+  background: var(--accent);
 }
 /* Menu ⋮ d'une conversation : déclencheur discret + menu en position FIXE (déborde du
    conteneur scrollable, sinon clippé). */
@@ -559,7 +559,7 @@
 }
 .conv-menu-pop .conv-menu-oubli:hover {
   background: rgba(239, 63, 63, 0.14);
-  color: var(--c-err, #ef3f3f);
+  color: var(--c-err);
 }
 .conv-menu-empty {
   padding: 8px 10px;
@@ -753,7 +753,7 @@
   padding: var(--s2);
   border: 1px solid var(--line);
   border-radius: var(--r2);
-  background: var(--bg-inset, #000);
+  background: var(--bg-inset);
   color: var(--text-dim);
   font-family: var(--mono);
   font-size: 11px;
@@ -826,7 +826,7 @@
 /* Lecture impossible d'un RUN.md : dit comme une erreur, jamais comme le contenu du run. */
 .run-detail-error {
   font-size: 12px;
-  color: var(--err, #e5534b);
+  color: var(--err);
   padding: var(--s2);
   white-space: pre-wrap;
 }
@@ -2739,7 +2739,7 @@ button.chat-project-dot:disabled {
 }
 
 .status-dot.st-neutral {
-  background: var(--text-faint, #7c869b);
+  background: var(--text-faint);
   opacity: 0.6;
 }
 
@@ -2926,7 +2926,7 @@ button.chat-project-dot:disabled {
 }
 .directive-queue-remove:hover {
   background: rgba(239, 63, 63, 0.16);
-  color: var(--err, #ef5c5c);
+  color: var(--err);
 }
 
 /* PANNEAU « Réflexion » : le raisonnement du modèle, colonne dédiée à droite du fil.
@@ -2949,17 +2949,17 @@ button.chat-project-dot:disabled {
    au moment ou elle compte. Le vert informe deja par le fond et le liseré ; le texte, lui, doit
    d abord se LIRE. */
 .activity-outcome.st-ok {
-  background: color-mix(in srgb, var(--ok, #4ec9a5) 12%, transparent);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
   color: var(--text);
-  border-color: color-mix(in srgb, var(--ok, #4ec9a5) 35%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
 }
 .activity-outcome.st-failed {
-  color: var(--err, #ef6b6b);
-  border-color: color-mix(in srgb, var(--err, #ef6b6b) 45%, transparent);
+  color: var(--err);
+  border-color: color-mix(in srgb, var(--err) 45%, transparent);
 }
 .activity-outcome.st-refused {
-  color: var(--warn, #e8a33d);
-  border-color: color-mix(in srgb, var(--warn, #e8a33d) 40%, transparent);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
 }
 
 /* Détail d'une action LOCALE (edit_file/verify/brain_query) : ces commandes ne créent aucun run,
@@ -2977,7 +2977,7 @@ button.chat-project-dot:disabled {
   gap: 6px;
   cursor: pointer;
   font-size: 11.5px;
-  color: var(--muted, #9aa4b2);
+  color: var(--muted);
 }
 .activity-local-details pre {
   margin: 4px 0 0;
@@ -2988,12 +2988,12 @@ button.chat-project-dot:disabled {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--surface2, #191d23);
-  border: 1px solid var(--line2, #31373f);
+  background: var(--surface2);
+  border: 1px solid var(--line2);
   border-radius: 7px;
 }
 .activity-local-details details.failed pre {
-  border-color: var(--err, #e5484d);
+  border-color: var(--err);
 }
 /* Le bloc n'ouvre rien quand il n'y a pas de run : le curseur ne doit pas promettre un clic utile. */
 /* B3-γ — la carte d'activite porte la teinte de son statut (bord gauche + fond).
@@ -3003,39 +3003,39 @@ button.chat-project-dot:disabled {
    uniforme rendait la carte plate et faisait disparaître le liseré dans la masse — grief direct de
    l'utilisateur (« l'actuel n'a pas les dégradés que tu m'avais montré »). */
 .activity-group {
-  border-left: 2px solid color-mix(in srgb, var(--ok, #4ec9a5) 70%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--ok) 70%, transparent);
   border-radius: 8px;
   background: linear-gradient(
     100deg,
-    color-mix(in srgb, var(--ok, #4ec9a5) 16%, transparent) 0%,
-    color-mix(in srgb, var(--ok, #4ec9a5) 4%, transparent) 45%,
+    color-mix(in srgb, var(--ok) 16%, transparent) 0%,
+    color-mix(in srgb, var(--ok) 4%, transparent) 45%,
     transparent 85%
   );
 }
 .activity-group[data-state='failed'] {
-  border-left-color: var(--err, #ef6b6b);
+  border-left-color: var(--err);
   background: linear-gradient(
     100deg,
-    color-mix(in srgb, var(--err, #ef6b6b) 22%, transparent) 0%,
-    color-mix(in srgb, var(--err, #ef6b6b) 6%, transparent) 45%,
+    color-mix(in srgb, var(--err) 22%, transparent) 0%,
+    color-mix(in srgb, var(--err) 6%, transparent) 45%,
     transparent 85%
   );
 }
 .activity-group[data-state='running'] {
-  border-left-color: var(--accent, #5b8cff);
+  border-left-color: var(--accent);
   background: linear-gradient(
     100deg,
-    color-mix(in srgb, var(--accent, #5b8cff) 20%, transparent) 0%,
-    color-mix(in srgb, var(--accent, #5b8cff) 6%, transparent) 45%,
+    color-mix(in srgb, var(--accent) 20%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 6%, transparent) 45%,
     transparent 85%
   );
 }
 .activity-group[data-state='interrupted'] {
-  border-left-color: var(--warn, #e8a33d);
+  border-left-color: var(--warn);
   background: linear-gradient(
     100deg,
-    color-mix(in srgb, var(--warn, #e8a33d) 20%, transparent) 0%,
-    color-mix(in srgb, var(--warn, #e8a33d) 6%, transparent) 45%,
+    color-mix(in srgb, var(--warn) 20%, transparent) 0%,
+    color-mix(in srgb, var(--warn) 6%, transparent) 45%,
     transparent 85%
   );
 }
@@ -3047,7 +3047,7 @@ button.chat-project-dot:disabled {
 /* L'état d'authentification du provider, à l'endroit même du choix : choisir un provider expiré
    comme modèle par défaut échouait au premier prompt, sans aucun signal au moment du clic. */
 .model-option-status {
-  color: var(--err, #d3455b);
+  color: var(--err);
 }
 
 [role='option'][aria-disabled='true'] {
@@ -3062,9 +3062,9 @@ button.chat-project-dot:disabled {
   gap: 12px;
   margin: 8px 14px 0;
   padding: 9px 11px;
-  color: var(--warn, #e8a33d);
-  background: color-mix(in srgb, var(--warn, #e8a33d) 10%, var(--surface, #11151b));
-  border: 1px solid color-mix(in srgb, var(--warn, #e8a33d) 38%, transparent);
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warn) 38%, transparent);
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.4;
@@ -3596,12 +3596,12 @@ button.chat-project-dot:disabled {
   padding: 0 var(--s2) 4px;
 }
 .conv-bulk-bar .conv-date-sort[aria-pressed='true'] {
-  color: var(--danger, #e06c6c);
+  color: var(--danger);
 }
 .conv-select-box {
   margin: 0 4px 0 6px;
   flex: 0 0 auto;
-  accent-color: var(--danger, #e06c6c);
+  accent-color: var(--danger);
 }
 
 /* Bouton d'ouverture du panneau « Réflexion ». Classe DISTINCTE de `.workflow-toggle` :
@@ -3617,7 +3617,7 @@ button.chat-project-dot:disabled {
   list-style: none;
   margin: 2px 0 6px 12px;
   padding: 0 0 0 10px;
-  border-left: 1px dashed var(--line2, #31373f);
+  border-left: 1px dashed var(--line2);
   max-height: 180px;
   overflow-y: auto;
   display: flex;
@@ -3631,12 +3631,12 @@ button.chat-project-dot:disabled {
   flex-direction: column;
   gap: 2px;
   padding: 5px 8px;
-  border: 1px solid var(--line2, #31373f);
+  border: 1px solid var(--line2);
   border-left-width: 2px;
   border-radius: 6px;
   background: rgb(255 255 255 / 2.5%);
   font-size: 11.5px;
-  color: var(--muted, #9aa4b2);
+  color: var(--muted);
 }
 /* La ligne cliquable de l'etage : pastille, libelle, CIBLE, puis le chevron pousse a droite. */
 .activity-step-head {
@@ -3668,13 +3668,13 @@ button.chat-project-dot:disabled {
 }
 .activity-step-target.is-clickable {
   cursor: pointer;
-  border-color: var(--line2, #31373f);
+  border-color: var(--line2);
   background: rgb(0 0 0 / 18%);
 }
 .activity-step-target.is-clickable:hover {
   opacity: 1;
-  border-color: var(--accent, #5b8cff);
-  color: var(--accent, #5b8cff);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .activity-step-target.is-clickable::before {
   content: '▸ ';
@@ -3688,7 +3688,7 @@ button.chat-project-dot:disabled {
   flex: none;
   margin-left: auto;
   padding: 0 5px;
-  border: 1px solid var(--line2, #31373f);
+  border: 1px solid var(--line2);
   border-radius: 5px;
   background: transparent;
   color: inherit;
@@ -3706,8 +3706,8 @@ button.chat-project-dot:disabled {
   text-align: center;
 }
 .activity-step-toggle:hover {
-  border-color: var(--accent, #5b8cff);
-  color: var(--accent, #5b8cff);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 /* Detail d'UNE etape, plafonne comme le reste du fil : au-dela, on noie la reponse. */
 .activity-step-detail {
@@ -3715,10 +3715,10 @@ button.chat-project-dot:disabled {
   padding: 6px 8px;
   max-height: 180px;
   overflow: auto;
-  border-left: 2px solid var(--line2, #31373f);
+  border-left: 2px solid var(--line2);
   border-radius: 0 5px 5px 0;
   background: rgb(0 0 0 / 22%);
-  color: var(--muted, #9aa4b2);
+  color: var(--muted);
   white-space: pre-wrap;
   font-size: 10.5px;
 }
@@ -3728,7 +3728,7 @@ button.chat-project-dot:disabled {
   margin: 0 0 4px 22px;
   padding: 4px 8px;
   list-style: none;
-  border-left: 2px solid var(--line2, #31373f);
+  border-left: 2px solid var(--line2);
   border-radius: 0 5px 5px 0;
   background: rgb(0 0 0 / 22%);
   font-size: 10.5px;
@@ -3741,7 +3741,7 @@ button.chat-project-dot:disabled {
   min-width: 0;
   margin: 4px 0;
   padding: 5px 7px;
-  border: 1px solid var(--line2, #31373f);
+  border: 1px solid var(--line2);
   border-radius: 6px;
   background: rgb(255 255 255 / 3%);
 }
@@ -3760,7 +3760,7 @@ button.chat-project-dot:disabled {
 }
 .activity-pipeline-vide {
   margin: 4px 0 0 27px;
-  color: var(--muted, #9aa4b2);
+  color: var(--muted);
   font-size: 10px;
 }
 .activity-step-pipeline-head {
@@ -3778,21 +3778,21 @@ button.chat-project-dot:disabled {
 }
 .activity-pipeline-titre {
   margin: 3px 0 1px;
-  color: var(--muted, #9aa4b2);
+  color: var(--muted);
   font-size: 9.5px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .activity-step-phase {
-  color: var(--accent, #5b8cff);
+  color: var(--accent);
   font-weight: 600;
 }
 .activity-step-role {
-  color: var(--muted, #9aa4b2);
+  color: var(--muted);
 }
 .activity-step-agent {
   overflow: hidden;
-  color: var(--muted, #9aa4b2);
+  color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0.85;
@@ -3820,21 +3820,21 @@ button.chat-project-dot:disabled {
   color: var(--accent);
 }
 .activity-step-detail.failed {
-  border-left-color: var(--err, #ef6b6b);
+  border-left-color: var(--err);
 }
 .activity-step[data-state='ko'] {
-  color: var(--err, #ef6b6b);
-  border-left-color: var(--err, #ef6b6b);
+  color: var(--err);
+  border-left-color: var(--err);
 }
 .activity-step[data-state='interrupted'] {
-  color: var(--warn, #e8a33d);
-  border-left-color: var(--warn, #e8a33d);
+  color: var(--warn);
+  border-left-color: var(--warn);
 }
 .activity-step[data-state='ok'] {
-  border-left-color: color-mix(in srgb, var(--ok, #4ea36b) 55%, transparent);
+  border-left-color: color-mix(in srgb, var(--ok) 55%, transparent);
 }
 .activity-step[data-state='running'] {
-  border-left-color: var(--accent, #5b8cff);
+  border-left-color: var(--accent);
 }
 /* Pastille de FAMILLE : ronde, neutre — le statut reste porte par la carte et la couleur du texte. */
 .activity-step-icon {
@@ -3845,7 +3845,7 @@ button.chat-project-dot:disabled {
   height: 16px;
   border-radius: 50%;
   font-size: 10px;
-  background: color-mix(in srgb, var(--line2, #31373f) 60%, transparent);
+  background: color-mix(in srgb, var(--line2) 60%, transparent);
 }
 /* L4 : l'etiquette NOMME la raison de l'enchainement, posee avant l'etage qu'elle explique. */
 .activity-step-link {
@@ -3854,8 +3854,8 @@ button.chat-project-dot:disabled {
   text-transform: uppercase;
   padding: 0 5px;
   border-radius: 999px;
-  border: 1px dashed var(--line2, #31373f);
-  color: var(--muted, #9aa4b2);
+  border: 1px dashed var(--line2);
+  color: var(--muted);
 }
 /* Le POURQUOI deplie est plafonne comme les etages : meme regle de lecture. */
 .activity-why {
@@ -3884,7 +3884,7 @@ button.chat-project-dot:disabled {
   cursor: pointer;
   list-style: none;
   font-size: 12px;
-  color: var(--text-faint, #a9b2c4);
+  color: var(--text-faint);
   user-select: none;
   padding: 2px 0;
   overflow: visible;
@@ -3928,7 +3928,7 @@ button.chat-project-dot:disabled {
    il ne doit jamais concurrencer ni la reponse ni la pensee. */
 .thinking-block > summary .thinking-status {
   margin-left: 6px;
-  color: var(--text-dim, #a9b2c4);
+  color: var(--text-dim);
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 10px;
   opacity: 0.7;
@@ -3951,7 +3951,7 @@ button.chat-project-dot:disabled {
   font-family: inherit;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--text-dim, #a9b2c4);
+  color: var(--text-dim);
 }
 
 /* Interrupteur de vue liste <-> mosaique — deplace depuis ui-system.css, qui ne porte que
