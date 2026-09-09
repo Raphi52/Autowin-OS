@@ -11,7 +11,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { ConversationStore } from './conversations'
-import { loadConversations, persistConversations, saveConversations } from './conversations-disk'
+import {
+  attendreEcrituresConversations,
+  loadConversations,
+  persistConversations,
+  saveConversations
+} from './conversations-disk'
 
 const dir = mkdtempSync(join(tmpdir(), 'aos-convs-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
@@ -126,7 +131,12 @@ describe('conversations-disk structured restart', () => {
     expect(loadConversations(p).map(({ title }) => title)).toContain('Retenue')
   })
 
-  it('persiste un delta sans reserialiser les conversations non liees', () => {
+  /*
+   * ATTENTE EXPLICITE — l'ecriture des deltas ne bloque plus le fil principal (correctif du gel du
+   * 2026-09-09). Le contenu doit toujours atteindre le disque : c'est le MOMENT de la constatation
+   * qui change, jamais l'exigence. Aucune assertion n'est relachee ici.
+   */
+  it('persiste un delta sans reserialiser les conversations non liees', async () => {
     vi.useFakeTimers()
     const p = join(dir, 'incremental.json')
     const seed = new ConversationStore(() => 1000)
@@ -153,6 +163,7 @@ describe('conversations-disk structured restart', () => {
       text: 'petit fragment'
     })
     vi.advanceTimersByTime(150)
+    await attendreEcrituresConversations()
 
     const writtenForDelta = statSync(journal).size - beforeDelta
     expect(writtenForDelta).toBeLessThan(5_000)
@@ -163,7 +174,7 @@ describe('conversations-disk structured restart', () => {
     ).toBe('petit fragment')
   })
 
-  it('journalise les evenements du tour plutot que la conversation geante active', () => {
+  it('journalise les evenements du tour plutot que la conversation geante active', async () => {
     vi.useFakeTimers()
     const p = join(dir, 'active-large.json')
     const seed = new ConversationStore(() => 1000)
@@ -183,15 +194,18 @@ describe('conversations-disk structured restart', () => {
         text: `fragment-${index}`
       })
       vi.advanceTimersByTime(150)
+      await attendreEcrituresConversations()
     }
 
     expect(statSync(journal).size - before).toBeLessThan(20_000)
-    expect(loadConversations(p).find(({ id }) => id === target.id)?.messages.at(-1)?.content).toContain(
-      'fragment-9'
-    )
+    expect(
+      loadConversations(p)
+        .find(({ id }) => id === target.id)
+        ?.messages.at(-1)?.content
+    ).toContain('fragment-9')
   })
 
-  it('groups streaming checkpoints but flushes terminal state immediately', () => {
+  it('groups streaming checkpoints but flushes terminal state immediately', async () => {
     vi.useFakeTimers()
     const p = join(dir, 'debounced.json')
     const store = new ConversationStore(() => 1000)
@@ -208,7 +222,9 @@ describe('conversations-disk structured restart', () => {
     expect(readFileSync(p, 'utf8')).toBe(beforeDelta)
 
     vi.advanceTimersByTime(150)
+    await attendreEcrituresConversations()
     expect(loadConversations(p)[0].messages.at(-1)?.content).toBe('partiel')
+    // Le terminal, lui, reste ECRIT SUR PLACE : aucune attente avant de le constater.
     store.applyTurnEvent(c.id, 'turn-debounce', { kind: 'done' })
     expect(loadConversations(p)[0].messages.at(-1)?.status).toBe('completed')
   })
