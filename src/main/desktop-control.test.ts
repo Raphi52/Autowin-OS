@@ -161,6 +161,52 @@ describe('WindowsDesktopController', () => {
     })
   })
 
+  it('LAISSE LE DEPLACEMENT ETRE DIGERE avant d appuyer, sinon le clic atterrit ou la souris trainait', async () => {
+    /**
+     * VECU le 2026-09-09 (conv-363) : trois clics vises sur « Parametres audio » ont ouvert des
+     * conversations de la liste voisine — la ou l'utilisateur avait laisse sa souris. Les
+     * coordonnees etaient JUSTES (la conversion 0-1000 est testee plus haut) : c'est l'appui qui
+     * partait dans le meme lot d'entrees que le mouvement, donc Chromium testait la cible sur la
+     * position PRECEDENTE du curseur. Le geste a repondu du premier coup des qu'une pause separait
+     * les deux. Le test verifie l'ORDRE, pas seulement la presence : une pause posee apres l'appui
+     * ne corrigerait rien.
+     */
+    const run = vi.fn().mockResolvedValueOnce(JSON.stringify({ executed: 1 }))
+    const capture = vi.fn().mockResolvedValue({
+      data: {
+        width: 1920,
+        height: 1080,
+        sourceWidth: 1920,
+        sourceHeight: 1080,
+        originX: 0,
+        originY: 0,
+        mimeType: 'image/jpeg',
+        scope: 'desktop'
+      },
+      attachment: {
+        name: 'source.jpg',
+        mimeType: 'image/jpeg',
+        size: 3,
+        kind: 'image',
+        content: 'YWJj'
+      }
+    })
+    const controller = new WindowsDesktopController({ platform: 'win32', run, capture })
+
+    await controller.observe()
+    await controller.act([{ type: 'click', x: 457, y: 481 }])
+
+    const script = Buffer.from(run.mock.calls[0][0] as string, 'base64').toString('utf16le')
+    const branche = script.slice(script.indexOf("'click' {"), script.indexOf("'scroll' {"))
+    const deplacement = branche.indexOf('::Move(')
+    const pause = branche.indexOf('Start-Sleep')
+    const appui = branche.indexOf('::Click(')
+
+    expect(deplacement).toBeGreaterThanOrEqual(0)
+    expect(pause).toBeGreaterThan(deplacement)
+    expect(appui).toBeGreaterThan(pause)
+  })
+
   it('refuse un faux succes partiel et les plateformes non Windows', async () => {
     const partial = new WindowsDesktopController({
       platform: 'win32',
