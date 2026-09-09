@@ -116,6 +116,7 @@ import {
 import {
   canoniserReplis,
   estReplie,
+  groupeRecent,
   groupesVisibles,
   grouperConversations,
   nomDeDossier,
@@ -4413,18 +4414,24 @@ export function ChatView({
    * d'aplatir la conversation dedans : l'aplatissement faisait collisionner des champs homonymes et
    * rendait impossible de savoir, à la lecture, d'où venait chaque valeur.
    */
-  const groupes = useMemo(
-    () =>
-      ordonnerGroupes(
+  const groupes = useMemo(() => {
+    const entrees = conversationHits.map((hit) => ({
+      id: hit.conversation.id,
+      projectPath: hit.conversation.projectPath,
+      autoKaizen: hit.conversation.autoKaizen,
+      hit
+    }))
+    /**
+     * « Récent » est un RACCOURCI, pas une catégorie : il duplique les fils déjà rangés ailleurs et
+     * reste TOUJOURS en tête, hors du tri par date entre groupes (le trier n'aurait aucun sens : il
+     * contient par construction la conversation la plus récente).
+     */
+    const recent = groupeRecent(entrees, (entree) => recenceUtilisateur(entree.hit.conversation))
+    return [
+      ...(recent ? [recent] : []),
+      ...ordonnerGroupes(
         groupesVisibles(
-          grouperConversations(
-            conversationHits.map((hit) => ({
-              id: hit.conversation.id,
-              projectPath: hit.conversation.projectPath,
-              autoKaizen: hit.conversation.autoKaizen,
-              hit
-            }))
-          ),
+          grouperConversations(entrees),
           // Pendant une recherche, aucun repli ne masque un resultat : chercher, c'est vouloir voir.
           convQuery.trim() ? {} : groupesReplies
         ),
@@ -4437,9 +4444,9 @@ export function ChatView({
         // suivait pas l'ordre calcule juste au-dessus. Deux tris, une seule verite.
         (groupe) => recenceUtilisateur(groupe.items[0].hit.conversation),
         conversationDateOrder
-      ),
-    [conversationHits, groupesReplies, conversationDateOrder, convQuery]
-  )
+      )
+    ]
+  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery])
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length

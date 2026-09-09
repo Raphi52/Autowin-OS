@@ -18,6 +18,16 @@ import { canonicalProjectPath } from '../../../shared/project-path'
 export const GROUPE_KAIZEN = 'auto-kaizen'
 /** Le groupe de ce qui n'a pas de dossier. Jamais deviné : l'absence est une réponse. */
 export const GROUPE_DIVERS = 'divers'
+/**
+ * Le raccourci « Récent » : les dernières conversations touchées, en HAUT, quel que soit leur
+ * dossier. Il DUPLIQUE volontairement — chaque conversation reste aussi dans sa catégorie. Une
+ * première version avait été retirée au profit d'un tri par date entre groupes ; le tri ne remplace
+ * pas le raccourci, car retrouver le fil d'hier obligeait encore à savoir dans QUEL dossier il est
+ * (demande utilisateur du 2026-09-09 : « une catégorie récent avec 10 éléments qui duplique »).
+ */
+export const GROUPE_RECENT = 'recent'
+/** Combien de conversations le raccourci « Récent » montre. Au-delà, ce n'est plus un raccourci. */
+export const TAILLE_RECENT = 10
 
 /** Le strict nécessaire au groupement — pas le type complet, pour que ce module reste testable seul. */
 export interface ConversationLike {
@@ -30,7 +40,7 @@ export interface ConversationGroup<T extends ConversationLike> {
   /** Clé stable : sert d'identité au repli persisté. Un libellé changerait avec l'affichage. */
   key: string
   label: string
-  kind: 'kaizen' | 'dossier' | 'divers'
+  kind: 'kaizen' | 'dossier' | 'divers' | 'recent'
   /** Niveau visuel dans l'arborescence des dossiers réellement présents. */
   depth: number
   /** Dossier parent le plus proche parmi les dossiers réellement présents. */
@@ -183,6 +193,33 @@ export function ordonnerGroupes<T extends ConversationLike>(
     emettre(racine)
   }
   return sortie
+}
+
+/**
+ * Le groupe « Récent » : les `limite` conversations les plus récemment touchées, toutes catégories
+ * confondues.
+ *
+ * Séparé de `grouperConversations` à dessein : ce module ne sait pas ce qui DATE une conversation
+ * (`dateDe` appartient à l'appelant), et surtout un groupe qui duplique n'a pas sa place dans une
+ * fonction dont l'invariant est qu'une conversation appartient à UN groupe.
+ *
+ * Les analyses automatiques (Auto-kaizen) en sont exclues : c'est du bruit, il descend, il ne
+ * remonte pas dans un raccourci. Rend `null` quand il n'y a rien à montrer, pour qu'un en-tête vide
+ * ne s'affiche jamais.
+ */
+export function groupeRecent<T extends ConversationLike>(
+  conversations: readonly T[],
+  dateDe: (conversation: T) => number,
+  limite: number = TAILLE_RECENT
+): ConversationGroup<T> | null {
+  const items = conversations
+    .filter((conversation) => !conversation.autoKaizen)
+    .map((conversation) => ({ conversation, date: dateDe(conversation) }))
+    .sort((a, b) => b.date - a.date || a.conversation.id.localeCompare(b.conversation.id, 'fr'))
+    .slice(0, Math.max(0, limite))
+    .map((entree) => entree.conversation)
+  if (items.length === 0) return null
+  return { key: GROUPE_RECENT, label: 'Récent', kind: 'recent', depth: 0, items }
 }
 
 /**

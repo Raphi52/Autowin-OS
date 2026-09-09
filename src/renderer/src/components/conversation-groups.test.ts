@@ -4,7 +4,9 @@ import {
   estReplie,
   GROUPE_DIVERS,
   GROUPE_KAIZEN,
+  GROUPE_RECENT,
   groupeDe,
+  groupeRecent,
   groupesVisibles,
   grouperConversations,
   nomDeDossier,
@@ -260,5 +262,34 @@ describe('ordre des groupes quand la date entre en jeu', () => {
     // son parent, le perdre serait pire que le rendre a plat.
     const orphelin = grouperConversations([conv('enfant', { projectPath: ENFANT })])
     expect(ordonnerGroupes(orphelin, dateDe, 'desc').map((g) => g.key)).toEqual([ENFANT])
+  })
+})
+
+describe('groupeRecent — le raccourci « Récent »', () => {
+  const conv = (id: string, projectPath?: string, autoKaizen?: boolean) => ({
+    id,
+    ...(projectPath ? { projectPath } : {}),
+    ...(autoKaizen ? { autoKaizen: true } : {})
+  })
+
+  it('rend les 10 plus récentes, toutes catégories confondues, sans retirer leur catégorie', () => {
+    const conversations = Array.from({ length: 14 }, (_, i) => conv(`c${i}`, 'C:\P'))
+    const dates = new Map(conversations.map((c, i) => [c.id, i]))
+    const recent = groupeRecent(conversations, (c) => dates.get(c.id) ?? 0)
+    expect(recent?.items).toHaveLength(10)
+    expect(recent?.items[0].id).toBe('c13')
+    expect(recent?.key).toBe(GROUPE_RECENT)
+    // La duplication est VOULUE : la conversation reste aussi dans son dossier.
+    const dossier = grouperConversations(conversations).find((g) => g.kind === 'dossier')
+    expect(dossier?.items).toHaveLength(14)
+  })
+
+  it('exclut les analyses automatiques et rend null quand il n’y a rien à montrer', () => {
+    const recent = groupeRecent([conv('k', undefined, true)], () => 1)
+    expect(recent).toBeNull()
+  })
+
+  it('est ouvert par défaut', () => {
+    expect(estReplie(GROUPE_RECENT, {})).toBe(false)
   })
 })
