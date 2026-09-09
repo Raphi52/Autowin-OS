@@ -63,3 +63,34 @@ describe('livraison du texte de clôture', () => {
     expect(bloc).toContain('emitToLiveWindows')
   })
 })
+
+/**
+ * REGRESSION 2026-09-09 : « le resultat de scout m'a ete rendu 2 fois ».
+ *
+ * Le modele ecrit lui-meme le compte-rendu d'orchestration en direct (agent-pilot rend la parole au
+ * modele apres `orchestrate`), puis le `done` reprend ce meme texte. Avec un `outcome` non vide, la
+ * clôture etait republiee telle quelle : le fil affichait deux fois le tableau du scout.
+ */
+describe('clôture d’orchestration déjà streamée', () => {
+  it('ne republie rien quand le texte de clôture est exactement celui déjà streamé', () => {
+    const texte = '✅ Workflow terminé · statut succeeded\n\n| # | Score |\n|---|---|\n| 1 | 78 |'
+    expect(closingTurnDelivery('turn-1', texte, true, { status: 'succeeded' }, texte)).toBeUndefined()
+  })
+
+  it('ne republie QUE le reste quand la clôture prolonge le texte streamé', () => {
+    const streame = '✅ Workflow terminé · statut succeeded'
+    const livraison = closingTurnDelivery(
+      'turn-2',
+      `${streame}\n\n✅ Fait\n1. Le résultat demandé a été produit.`,
+      true,
+      { status: 'succeeded' },
+      streame
+    )
+    expect(livraison?.durable.text).toBe('✅ Fait\n1. Le résultat demandé a été produit.')
+  })
+
+  it('publie tout quand rien n’a été streamé (tour muet après orchestration)', () => {
+    const livraison = closingTurnDelivery('turn-3', 'compte-rendu', false, { status: 'succeeded' }, '')
+    expect(livraison?.durable.text).toBe('compte-rendu')
+  })
+})
