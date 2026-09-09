@@ -1598,7 +1598,9 @@
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  opacity: 0;
+  /* Visible au repos, sinon la fonction est indecouvrable : personne ne survole un bloc
+     de code pour y chercher un bouton dont il ignore l'existence. */
+  opacity: 0.4;
   transition:
     opacity 0.12s ease,
     color 0.12s ease;
