@@ -280,18 +280,40 @@ describe('doublon proche à l’écriture (item 6) — inbox/ n’est pas dédou
         { length: 20 },
         (_, token) => `${zone}${index.toString(36)}x${token.toString(36)}`
       ).join(' ')
-    for (let index = 0; index < 300; index += 1) {
-      note(`inbox/${index}.md`, `# inbox${index}\n\n${uniqueBody('i', index)}\n`)
-      note(`knowledge/${index}.md`, `# knowledge${index}\n\n${uniqueBody('k', index)}\n`)
+    const ecrireLot = (depuis: number, jusqua: number): void => {
+      for (let index = depuis; index < jusqua; index += 1) {
+        note(`inbox/${index}.md`, `# inbox${index}\n\n${uniqueBody('i', index)}\n`)
+        note(`knowledge/${index}.md`, `# knowledge${index}\n\n${uniqueBody('k', index)}\n`)
+      }
+    }
+    const chronometrer = (): { candidates: ReturnType<typeof listInboxCandidates>; ms: number } => {
+      const depart = performance.now()
+      const candidates = listInboxCandidates(root)
+      return { candidates, ms: performance.now() - depart }
     }
 
-    const startedAt = performance.now()
-    const candidates = listInboxCandidates(root)
-    const elapsedMs = performance.now() - startedAt
+    ecrireLot(0, 75)
+    const quart = chronometrer()
+    ecrireLot(75, 300)
+    const complet = chronometrer()
+    const candidates = complet.candidates
 
     expect(candidates).toHaveLength(300)
     expect(candidates.every((candidate) => candidate.nearDuplicates.length === 0)).toBe(true)
-    expect(elapsedMs).toBeLessThan(4_000)
+    /*
+     * MEME REMEDE QUE LE TEST DEUX PLUS HAUT, meme raison : `elapsedMs < 4000` mesurait la machine
+     * du moment, pas la tokenisation. Le raisonnement complet et l'incident du 2026-09-09 sont
+     * ecrits une seule fois, sur l'assertion de `frontiere worker` — ils ne sont pas recopies ici,
+     * deux copies d'une justification derivent.
+     *
+     * La difference avec le voisin : la, les fiches frolent la limite de 256 Ko et c'est la
+     * COMPARAISON de doublons qui pourrait exploser ; ici les fiches sont minuscules (20 jetons) et
+     * nombreuses, donc c'est la TOKENISATION qui est sur le banc — d'ou un test distinct.
+     *
+     * Rapport MESURE (plafond temporairement abaisse pour lire la valeur reelle) : voir le commit.
+     * Lineaire ~4x pour un corpus multiplie par 4, quadratique ~16x, plafond a 8x.
+     */
+    expect(complet.ms / Math.max(quart.ms, 1)).toBeLessThan(8)
   })
 
   it('borne le payload quand les 300 + 300 fiches sont toutes quasi-identiques', () => {
