@@ -74,7 +74,7 @@ function warnInvalidCorpusOverride(): void {
  * cap produit ; seul `autowinos` échoue. Le slug reste bon pour NOMMER, jamais pour INTERROGER.
  */
 export function workspaceLabel(workspacePath: string): string {
-  return basename(workspacePath.replace(/[\/]+$/, '')).trim()
+  return basename(workspacePath.replace(/[\\/]+$/, '')).trim()
 }
 
 export function workspaceSlug(workspacePath: string): string {
