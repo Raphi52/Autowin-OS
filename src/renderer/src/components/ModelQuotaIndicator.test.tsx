@@ -105,6 +105,56 @@ describe('indicateur de quotas modèles', () => {
     await act(async () => root.unmount())
   })
 
+  it("dit dans l'infobulle QUAND le quota se recharge, et le signale sinon", async () => {
+    const fenetre = (resetsAt?: string): Record<string, unknown> => ({
+      observedAt: '2026-07-24T01:00:00.000Z',
+      models: [
+        {
+          modelId: 'claude/opus',
+          model: 'opus',
+          label: 'Claude Opus',
+          provider: 'claude',
+          shared: true,
+          status: 'fresh',
+          source: 'Claude /usage',
+          observedAt: '2026-07-24T01:00:00.000Z',
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 37,
+              remainingPercent: 63,
+              ...(resetsAt ? { resetsAt } : {})
+            }
+          ]
+        }
+      ]
+    })
+    const rendre = async (resetsAt?: string): Promise<string> => {
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { modelQuotas: vi.fn(async () => fenetre(resetsAt)) }
+      })
+      const container = document.createElement('div')
+      document.body.append(container)
+      const root = createRoot(container)
+      await act(async () => {
+        root.render(createElement(ModelQuotaIndicator))
+        await Promise.resolve()
+      })
+      const texte =
+        container.querySelector('.model-quota-tip-hint')?.textContent ?? '(aucune ligne)'
+      await act(async () => root.unmount())
+      return texte
+    }
+
+    const heure = new Date(Date.now() + 90 * 60 * 1000)
+    const attendue = heure.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    expect(await rendre(heure.toISOString())).toBe(`Recharge à ${attendue}`)
+    // Sans date exposée, on ne fabrique rien : on le DIT.
+    expect(await rendre()).toBe('Heure de reset non exposée')
+  })
+
   it('affiche une seule ligne par fournisseur lorsque plusieurs modèles partagent le quota', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const modelQuotas = vi.fn(async () => ({
