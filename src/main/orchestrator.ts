@@ -65,7 +65,6 @@ import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { loadTrustedLearningOracles } from './providers/learning-oracle-manifest'
-import { workspaceSlug } from './brain-corpus-scope'
 import {
   porteeDeLecon,
   createIndependentLearningAttestation,
@@ -367,7 +366,7 @@ import { messageEmpreinteBrain } from './brain-empreinte-message'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
 import type { BrainTrace } from './activity/brain-trace-spool'
-import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
+import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceLabel } from './brain-corpus-scope'
 import {
   ECHO_MAX_BLOCK_CHARS,
   evictedCount,
@@ -3545,7 +3544,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * ou la requête invalide, et l'échec doit rester visible plutôt que de se confondre avec un
        * « rien trouvé ».
        */
-      const empreinteQuery = `empreinte du dépôt ${workspaceSlug(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`
+      const empreinteQuery = `empreinte du dépôt ${workspaceLabel(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`
       let empreinteStatut: BrainRetrievalEvent['status'] = 'unavailable'
       let empreinteNavigation: BrainNavigation | undefined
       try {

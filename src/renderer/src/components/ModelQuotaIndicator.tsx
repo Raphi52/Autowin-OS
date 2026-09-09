@@ -119,6 +119,8 @@ export interface QuotaWheelSummary {
   windowLabel: string
   /** Renseignée seulement si une AUTRE fenêtre est plus sévère que celle affichée. */
   statusWindowLabel?: string
+  /** Date ISO de rechargement de la fenêtre RETENUE, quand le fournisseur l'expose. */
+  resetsAt?: string
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec cet indicateur
@@ -176,7 +178,8 @@ export function summaryForProvider(
     windowLabel,
     ...(severest.id !== retained.id && levelOf(severest.remainingPercent) !== levelOf(minimum)
       ? { statusWindowLabel: windowIdLabel(severest.id) }
-      : {})
+      : {}),
+    ...(retained.resetsAt ? { resetsAt: retained.resetsAt } : {})
   }
 }
 
@@ -190,6 +193,21 @@ function resetLabel(window: ModelQuotaWindow): string {
     hour: '2-digit',
     minute: '2-digit'
   })}`
+}
+
+/**
+ * Derniere ligne de l'infobulle (demande utilisateur du 2026-09-09) : elle disait « Clic : detail
+ * par modele », une redite du geste deja fait. Ce qui manque au lecteur, c'est QUAND le quota se
+ * recharge — donc l'heure de reset de la fenetre RETENUE, jamais une date fabriquee.
+ */
+function tipResetLabel(resetsAt: string | undefined): string {
+  if (!resetsAt) return 'Heure de reset non exposée'
+  const date = new Date(resetsAt)
+  if (!Number.isFinite(date.valueOf())) return 'Heure de reset non exposée'
+  const memeJour = date.toDateString() === new Date().toDateString()
+  const heure = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  if (memeJour) return `Recharge à ${heure}`
+  return `Recharge le ${date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à ${heure}`
 }
 
 function observedLabel(observedAt: string | undefined, stale: boolean): string {
@@ -391,7 +409,7 @@ export function ModelQuotaIndicator({ provider }: { provider?: string }): React.
               : `${Math.round(remaining)} % restant sur ${windowLabel}`}
             {alert}
           </span>
-          <span className="model-quota-tip-hint">Clic : detail par modele</span>
+          <span className="model-quota-tip-hint">{tipResetLabel(summary?.resetsAt)}</span>
         </span>
       </button>
       {open && (

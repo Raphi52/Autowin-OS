@@ -226,7 +226,7 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
           <b>Sauvegardes automatiques</b>
           {rapport === null ? (
             <p className="tnp-vide" data-testid="tnp-retention-jamais">
-              Balayage en cours… le premier examen prend une dizaine de secondes.
+              <Spinner /> Balayage en cours… le premier examen prend une dizaine de secondes.
             </p>
           ) : (
             <>
