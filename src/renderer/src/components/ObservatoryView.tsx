@@ -34,7 +34,7 @@ import { LatestRequestGate, settleObservatorySources } from './observatory-relia
 import { buildObservatoryExport } from './observatory-export-model'
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
-import { layoutTurnEvents } from './observatory-turn-layout'
+import { isReasoningEvent, layoutTurnEvents } from './observatory-turn-layout'
 import { Spinner } from './Spinner'
 
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
@@ -676,7 +676,7 @@ export function ObservatoryView({
       >
         <i>{index + 1}</i>
         <span>
-          <b>{LABEL[event.kind]}</b>
+          <b>{isReasoningEvent(event) ? 'Raisonnement du modèle' : LABEL[event.kind]}</b>
           {diverges && <em className="observatory-diverge-badge">divergeant</em>}
           <small>{event.actor}</small>
         </span>
