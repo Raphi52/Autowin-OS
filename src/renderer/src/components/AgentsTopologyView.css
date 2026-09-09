@@ -488,6 +488,10 @@
 }
 
 .topology-unresolved-banner {
+  /* Enfant direct de la grille 2 colonnes de .agents-topology : sans cette etendue,
+     le bandeau prenait la case de 280 px et decalait bibliotheque et plateau d'une
+     colonne — page entiere ecrasee des qu'un slot etait irresolu (constat 2026-09-09). */
+  grid-column: 1 / -1;
   margin: 0 0 10px;
   padding: 7px 11px;
   border: 1px solid #8a3a3a;
