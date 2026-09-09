@@ -18,13 +18,66 @@ import type { ConversationStore } from './store/conversations'
  */
 
 /**
- * Au-dela de cette longueur, la demande se suffit a elle-meme.
+ * Ressemblance minimale exigee d'une conversation pour etre rappelee.
  *
- * Ce qui declenche le besoin n'est pas le sujet mais la BRIEVETE : une demande courte est courte
- * parce qu'elle s'appuie sur un contexte partage. « remake les pastilles de couleurs » fait 31
- * caracteres ; une demande qui nomme ses fichiers et son critere n'a besoin de rien.
+ * REMPLACE le seuil de longueur `LONGUEUR_QUI_SE_SUFFIT = 160` (2026-09-09). Celui-ci postulait que
+ * « ce qui declenche le besoin n'est pas le sujet mais la BRIEVETE ». Mesure sur le corpus reel
+ * (1246 tours utilisateur humains, apres retrait des 583 messages generes par l'app elle-meme --
+ * relances du mode auto, gabarits `/salvage`, bancs `/arena` -- dont 199 re-posent une demande deja
+ * faite dans un AUTRE fil) : ce postulat est faux.
+ *
+ *   seuil de longueur | se declenche sur | couverture | precision
+ *   160 (l'ancien)    |      80,6 %      |   67,8 %   |   13,4 %
+ *   250               |      87,9 %      |   76,9 %   |   14,0 %
+ *   400               |      89,5 %      |   78,4 %   |   14,0 %
+ *   600               |      91,7 %      |   80,4 %   |   14,0 %
+ *   1000              |      94,2 %      |   83,9 %   |   14,2 %
+ *   aucun             |     100,0 %      |  100,0 %   |   16,0 %
+ *
+ * La precision est PLATE a 14 % de 250 a 1000, et MONTE quand on retire le seuil : la longueur d'une
+ * demande ne dit rien de sa probabilite d'etre une redite. Aucun reglage ne pouvait donc sauver ce
+ * critere -- il coupait au hasard, et legerement du mauvais cote, les messages longs etant un peu
+ * plus souvent des redites (une trace d'erreur recollee est longue ET depourvue de contexte : le cas
+ * meme qu'on voulait servir, et que 160 excluait). Il ratait un tiers des redites.
+ *
+ * Le discriminant retenu est la ressemblance elle-meme, calibree sur le meme corpus :
+ *
+ *   plancher | se declenche sur | couverture | precision
+ *   0,10     |     100 %        |   100,0 %  |   16,0 %
+ *   0,15     |      83 %        |    99,5 %  |   19,1 %   <- retenu
+ *   0,20     |      82 %        |    97,0 %  |   18,9 %
+ *   0,30     |      71 %        |    88,9 %  |   20,0 %
+ *   0,50     |      26 %        |    31,7 %  |   19,4 %
+ *
+ * 0,15 semblait DOMINER l'ancien seuil sur les deux axes (+31,7 points de couverture, +5,7 de
+ * precision). IL N'A PAS ETE RETENU, et la raison importe plus que les chiffres.
+ *
+ * POURQUOI AUCUN PLANCHER ABSOLU N'EST POSABLE ICI. Le score est une densite de mots RARES, et la
+ * rarete se calcule sur le corpus present. Il n'est donc pas comparable d'un historique a l'autre.
+ * Mesure directe, meme recherche et meme message :
+ *
+ *   corpus de  1 conversation  -> score 0,0009
+ *   corpus de 41 conversations -> score 0,349      (facteur ~400)
+ *
+ * Un plancher de 0,15 calibre sur 336 conversations n'aurait donc rien filtre du tout chez un
+ * utilisateur installe, et aurait ETEINT le rappel chez un utilisateur neuf -- c'est-a-dire chez
+ * celui qui en a le plus besoin, et qui n'aurait vu aucune erreur, juste une fonctionnalite muette.
+ * Trois tests l'ont attrape (`rappel-securite`, `rappel-cloisonnement`) : leurs corpus de fixture
+ * scorent 0,0009. Les faire passer en baissant le plancher aurait desactive le filtre ; les ajuster
+ * aurait cache le defaut. Le defaut est le plancher lui-meme.
+ *
+ * CE QUI RESTE, et qui ne depend d'aucun corpus : la SUPPRESSION du seuil de longueur. Elle est
+ * gratuite et strictement gagnante (derniere ligne du tableau) -- couverture 67,8 % -> 100 %,
+ * precision 13,4 % -> 16,0 %. Le rappel se declenche donc desormais sur toute demande non vide, et
+ * c'est `search` qui decide seul, par la ressemblance, ce qui remonte.
+ *
+ * CE QUI RESTE OUVERT, a ne pas maquiller : le rappel vise juste ~16 % du temps. Cinq rappels sur
+ * six restent inutiles. Le cout est borne (60 ms, 3 000 caracteres) et la place de prompt est le
+ * vrai prix. Un filtre RELATIF (garder les resultats proches du meilleur de la recherche courante)
+ * serait la piste suivante ; elle n'est pas livree parce que l'oracle utilise ici -- « ce tour
+ * re-pose-t-il une demande deja faite ? » -- ne sait pas mesurer la qualite du 2e et du 3e extrait,
+ * qui est precisement ce qu'un filtre relatif ameliorerait. Mesurer d'abord l'oracle qu'il faut.
  */
-const LONGUEUR_QUI_SE_SUFFIT = 160
 
 /** Plafond du bloc : un rappel qui noie le tour vaut le bruit qu'il remplace. */
 const PLAFOND = 3_000
@@ -103,7 +156,7 @@ export function rappelDesEchangesPasses(
 ): string {
   const projetVoulu = canonicalProjectPath(projetCourant)
   const terme = (demande ?? '').trim()
-  if (!terme || terme.length > LONGUEUR_QUI_SE_SUFFIT) return ''
+  if (!terme) return ''
   if (!fournisseurCourant) return ''
 
   const trouvees = conversations
