@@ -10,6 +10,7 @@ import {
   rmSync,
   statSync
 } from 'node:fs'
+import { appendFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 /**
@@ -87,6 +88,31 @@ const ensuredDirs = new Set<string>()
 const pending = new Map<string, string[]>()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
+/**
+ * HORS DU FIL PRINCIPAL — pourquoi l'écriture courante est ASYNCHRONE.
+ *
+ * Mesure du 2026-09-09 (`gels.jsonl`, 15:38:48 → 15:39:14) : TROIS `appendFileSync` de journal ont
+ * bloqué 10 003, 10 007 et 10 004 ms d'affilée sur des fichiers de quelques Ko. Le volume n'y était
+ * pour rien — le disque a calé, et comme l'écriture vivait sur le fil qui dessine l'interface,
+ * l'app est restée figée ~26 s, jusqu'à la fermeture forcée. Un ralentissement disque ne doit pas
+ * pouvoir geler l'interface : l'écriture courante part donc sur le pool d'I/O de Node.
+ *
+ * Ce qui reste SYNCHRONE, et pourquoi — la garantie « jamais la clôture » ne se négocie pas :
+ *  - un événement TERMINAL (`done`/`error`/`cancelled`/`failed`) : un par tour, écrit quand le tour
+ *    est déjà fini (aucun streaming à figer). S'il partait en asynchrone et que le process mourait
+ *    avant, le tour repasserait « inachevé » et la reprise le rejouerait — un tour ZOMBIE ;
+ *  - l'arrêt de l'app (`flushAllTurnJournals`, appelé dans `before-quit`, qui est synchrone).
+ *
+ * ORDRE et COMPLÉTUDE : une seule écriture est en vol par journal (`chaines`), et les lignes soumises
+ * restent lisibles en mémoire (`enVol`) tant qu'elles ne sont pas sur le disque — `readTurnJournal`
+ * recolle disque + en vol + tampon, donc une relecture ne rend jamais un tour tronqué.
+ *
+ * Le prix assumé, inchangé : une mort BRUTALE du process peut perdre les derniers deltas d'un tour
+ * INACHEVÉ — jamais sa clôture, jamais un tour terminé.
+ */
+const enVol = new Map<string, string[]>()
+const chaines = new Map<string, Promise<void>>()
+
 function ensureDir(dir: string): void {
   // Un dossier effacé sous nos pieds (GC, test) doit être recréé : la mémoire n'est pas une preuve.
   if (ensuredDirs.has(dir) && existsSync(dir)) return
@@ -94,27 +120,91 @@ function ensureDir(dir: string): void {
   ensuredDirs.add(dir)
 }
 
-function flushPath(path: string): void {
+/** Retire le délai de vidage armé sur ce journal (rien à faire s'il n'y en a pas). */
+function annulerDelai(path: string): void {
   const timer = timers.get(path)
   if (timer !== undefined) {
     clearTimeout(timer)
     timers.delete(path)
   }
+}
+
+/** Sort le tampon du journal (rend [] s'il est vide) — le délai armé est annulé. */
+function prendreTampon(path: string): string[] {
+  annulerDelai(path)
   const lines = pending.get(path)
-  if (!lines || lines.length === 0) return
+  if (!lines || lines.length === 0) return []
   pending.delete(path)
+  return lines
+}
+
+function retirerEnVol(path: string, combien: number): void {
+  const reste = (enVol.get(path) ?? []).slice(combien)
+  if (reste.length === 0) enVol.delete(path)
+  else enVol.set(path, reste)
+}
+
+/**
+ * Écrit le tampon SANS bloquer le fil principal. Les lignes passent en `enVol` (donc toujours
+ * relisibles) et n'en sortent qu'une fois posées sur le disque.
+ */
+function flushPathAsync(path: string): void {
+  const lines = prendreTampon(path)
+  if (lines.length === 0) return
+  const payload = lines.join('')
+  enVol.set(path, [...(enVol.get(path) ?? []), ...lines])
+  const precedent = chaines.get(path) ?? Promise.resolve()
+  const suite: Promise<void> = precedent
+    .then(async () => {
+      ensureDir(dirname(path))
+      await appendFile(path, payload, 'utf8')
+    })
+    .then(
+      () => {
+        retirerEnVol(path, lines.length)
+      },
+      () => {
+        // Échec d'écriture : les lignes RESTENT en `enVol` pour que la relecture du tour courant les
+        // voie encore, et l'arrêt de l'app les reprendra en synchrone. Se taire, jamais perdre.
+      }
+    )
+    .finally(() => {
+      if (chaines.get(path) === suite) chaines.delete(path)
+    })
+  chaines.set(path, suite)
+}
+
+/** Écrit le tampon TOUT DE SUITE, en bloquant — réservé à la clôture d'un tour et à l'arrêt. */
+function flushPathSync(path: string): void {
+  const restant = enVol.get(path) ?? []
+  const lines = [...restant, ...prendreTampon(path)]
+  if (lines.length === 0) return
+  enVol.delete(path)
   ensureDir(dirname(path))
   appendFileSync(path, lines.join(''), 'utf8')
 }
 
-/** Vide le tampon d'un journal sur disque (rien à faire s'il est vide). */
+/**
+ * Vide le tampon d'un journal sur disque, en bloquant (rien à faire s'il est vide).
+ * Appelé sur les chemins qui EXIGENT le disque : clôture de tour, arrêt de l'app.
+ */
 export function flushTurnJournal(root: string, conversationId: string, turnId: string): void {
-  flushPath(turnJournalPath(root, conversationId, turnId))
+  flushPathSync(turnJournalPath(root, conversationId, turnId))
 }
 
 /** Vide TOUS les tampons (arrêt de l'app : rien ne doit rester en mémoire). */
 export function flushAllTurnJournals(): void {
-  for (const path of [...pending.keys()]) flushPath(path)
+  const chemins = new Set([...pending.keys(), ...enVol.keys()])
+  for (const path of chemins) flushPathSync(path)
+}
+
+/**
+ * Attend que les écritures en vol soient posées sur le disque.
+ * Sert aux TESTS et à tout appelant qui doit constater le fichier — pas au chemin de production,
+ * dont tout l'intérêt est justement de ne pas attendre.
+ */
+export async function attendreEcrituresJournal(): Promise<void> {
+  while (chaines.size > 0) await Promise.all([...chaines.values()])
 }
 
 /** Append d'un événement (crée l'arborescence au besoin, écrit par LOTS). */
@@ -128,12 +218,17 @@ export function appendTurnEvent(
   const lines = pending.get(path) ?? []
   lines.push(`${JSON.stringify(event)}\n`)
   pending.set(path, lines)
-  if (TERMINAL_KINDS.has(event.kind) || lines.length >= FLUSH_EVERY) {
-    flushPath(path)
+  if (TERMINAL_KINDS.has(event.kind)) {
+    // Clôture du tour : le disque AVANT de rendre la main, sinon le tour repasse « inachevé ».
+    flushPathSync(path)
+    return
+  }
+  if (lines.length >= FLUSH_EVERY) {
+    flushPathAsync(path)
     return
   }
   if (!timers.has(path)) {
-    const timer = setTimeout(() => flushPath(path), FLUSH_DELAY_MS)
+    const timer = setTimeout(() => flushPathAsync(path), FLUSH_DELAY_MS)
     timer.unref?.()
     timers.set(path, timer)
   }
@@ -146,12 +241,14 @@ export function readTurnJournal(
   turnId: string
 ): TurnJournalEvent[] {
   const path = turnJournalPath(root, conversationId, turnId)
-  // Un tampon non encore vidé fait PARTIE du journal : le relire sans le vider rendrait un tour
-  // tronqué à la reprise — le seul coût que le lotissement n'a pas le droit d'avoir.
-  flushPath(path)
-  if (!existsSync(path)) return []
+  // Un tampon non encore vidé, et une ligne encore EN VOL vers le disque, font PARTIE du journal :
+  // les omettre rendrait un tour tronqué à la reprise — le seul coût que le lotissement n'a pas le
+  // droit d'avoir. On recolle donc disque + en vol + tampon, sans forcer d'écriture bloquante.
+  const memoire = [...(enVol.get(path) ?? []), ...(pending.get(path) ?? [])]
+  const surDisque = existsSync(path) ? readFileSync(path, 'utf8') : ''
+  if (!surDisque && memoire.length === 0) return []
   const out: TurnJournalEvent[] = []
-  for (const line of readFileSync(path, 'utf8').split('\n')) {
+  for (const line of [...surDisque.split('\n'), ...memoire]) {
     const trimmed = line.trim()
     if (!trimmed) continue
     try {
