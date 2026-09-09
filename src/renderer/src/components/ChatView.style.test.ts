@@ -60,7 +60,11 @@ describe('workflow sidebar header', () => {
     expect(css).not.toMatch(/\.workflow-panel-title/)
     expect(css).toMatch(/\.workflow-panel-actions\s*{[^}]*width:\s*56px;[^}]*flex:\s*none/s)
     // Les onglets, eux, ont bien leur traitement : souligne actif, aucun fond opaque.
-    expect(css).toMatch(/\.workflow-section-tab\.is-active\s*{[^}]*border-bottom-color:\s*#d4a94f/s)
+    // Le souligne actif est rattache au jeton or (plus jamais #d4a94f en dur) :
+    // il suit ainsi les huit themes au lieu de rester fige en sombre.
+    expect(css).toMatch(
+      /\.workflow-section-tab\.is-active\s*{[^}]*border-bottom-color:\s*var\(--gold-doux\)/s
+    )
     expect(css).toMatch(/\.workflow-section-tabs\s*{[^}]*display:\s*flex/s)
   })
 })

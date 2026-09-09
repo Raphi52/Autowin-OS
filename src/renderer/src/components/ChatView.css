@@ -867,8 +867,8 @@
   color: #c3cbda;
 }
 .workflow-section-tab.is-active {
-  color: #e3ba55;
-  border-bottom-color: #d4a94f;
+  color: var(--gold-clair);
+  border-bottom-color: var(--gold-doux);
 }
 
 /* Detail VIDE : il ne dispute plus la hauteur au graphe (voir WorkflowsPanel.tsx). */
@@ -1619,7 +1619,7 @@
 }
 .md-code__copie[data-copie='oui'] {
   opacity: 1;
-  color: var(--accent, #d4a94f);
+  color: var(--accent);
 }
 .md-code__copie[data-copie='oui']::before {
   content: '✓';
@@ -2771,7 +2771,7 @@ button.chat-project-dot:disabled {
   min-height: 34px;
   padding: 6px 9px;
   border: 0;
-  border-left: 2px solid #d4a94f;
+  border-left: 2px solid var(--gold-doux);
   border-radius: 0 6px 6px 0;
   background: rgba(var(--voile-rgb), 0.045);
   color: var(--text);
@@ -2783,7 +2783,7 @@ button.chat-project-dot:disabled {
     border-left-color 140ms ease;
 }
 .conv-new-row:hover {
-  border-left-color: #e3ba55;
+  border-left-color: var(--gold-clair);
   background: rgba(var(--voile-rgb), 0.08);
 }
 .conv-new-row:focus-visible {
@@ -2791,7 +2791,7 @@ button.chat-project-dot:disabled {
   outline-offset: 2px;
 }
 .conv-new-row.active {
-  border-left-color: #e3ba55;
+  border-left-color: var(--gold-clair);
   background: rgba(212, 169, 79, 0.12);
 }
 .conv-new-icon {
@@ -2800,7 +2800,7 @@ button.chat-project-dot:disabled {
   flex: none;
   width: 16px;
   height: 16px;
-  color: #d4a94f;
+  color: var(--gold-doux);
 }
 .conv-new-icon svg {
   width: 14px;
@@ -2829,7 +2829,7 @@ button.chat-project-dot:disabled {
   margin: 0 var(--s3) 6px;
   padding: 8px 10px;
   border: 1px solid rgba(233, 189, 78, 0.4);
-  border-left: 2px solid var(--warn, #e9bd4e);
+  border-left: 2px solid var(--warn);
   border-radius: var(--r2);
   background: rgba(233, 189, 78, 0.06);
 }
@@ -2847,7 +2847,7 @@ button.chat-project-dot:disabled {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--gold-bright, #ffdc73);
+  color: var(--gold-bright);
 }
 .directive-queue-hint {
   font-size: 10px;
@@ -2869,7 +2869,7 @@ button.chat-project-dot:disabled {
   height: 18px;
   border-radius: 50%;
   background: rgba(233, 189, 78, 0.18);
-  color: var(--gold-bright, #ffdc73);
+  color: var(--gold-bright);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
@@ -3466,7 +3466,7 @@ button.chat-project-dot:disabled {
   /* TEINTE DOREE, SANS BORDURE (choix utilisateur du 2026-09-04). L'accent global du theme est
      rose ; on le REDEFINIT localement en or, ce qui reteinte d'un coup le fond, le survol, la
      selection, les intitules et la barre de defilement — sans toucher au reste de l'app. */
-  --accent: #d4a94f;
+  --accent: var(--gold-doux);
   --accent-soft: rgba(212, 169, 79, 0.16);
   padding: 8px;
   border: 0;
@@ -3910,8 +3910,8 @@ button.chat-project-dot:disabled {
   width: 6px;
   height: 6px;
   margin: 0 1px 2px 2px;
-  border-right: 1.25px solid #d4a94f;
-  border-bottom: 1.25px solid #d4a94f;
+  border-right: 1.25px solid var(--gold-doux);
+  border-bottom: 1.25px solid var(--gold-doux);
   opacity: 0.9;
   transform: rotate(-45deg);
   transform-origin: center;
@@ -3921,7 +3921,7 @@ button.chat-project-dot:disabled {
   transform: rotate(-135deg);
 }
 .thinking-block.is-live > summary .thinking-label {
-  color: #d4a94f;
+  color: var(--gold-doux);
 }
 /* Signe de vie technique du provider, DANS l'en-tete du bloc Reflexion : il vivait a cote du
    texte de l'agent (« a cote du texte agent au lieu de dans son bloc », 2026-09-01). Discret,
@@ -4168,7 +4168,7 @@ button.chat-project-dot:disabled {
 }
 .msg-orientation-tag {
   margin-left: 8px;
-  color: #d4a94f;
+  color: var(--gold-doux);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   letter-spacing: 0.08em;
@@ -4527,7 +4527,7 @@ button.chat-project-dot:disabled {
 /* ALLUME = DORE (choix utilisateur du 2026-09-07), pas le rose d'accent. */
 .composer-auto.actif {
   opacity: 1;
-  color: #e3ba55;
+  color: var(--gold-clair);
   border-color: rgba(212, 169, 79, 0.75);
   background: rgba(212, 169, 79, 0.16);
 }
