@@ -194,6 +194,9 @@ describe('allocateExecutionTopology — un fan-out lance un agent PAR MEMBRE', (
       startedAgents: 0,
       startedCalls: 0,
       mutation: true,
+      // Pas de decomposeur ici : c'est le provisionnement des TETES de fan-out qui est mesure, et
+      // un decomposeur consommerait des places optionnelles sans rien prouver sur ce defaut.
+      hasDecomposer: false,
       phaseFanOut: { frame: 1, build: 3 },
       judgeFanOut: 1
     })
