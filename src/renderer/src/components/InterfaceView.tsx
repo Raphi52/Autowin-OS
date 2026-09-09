@@ -1,6 +1,23 @@
 import { useEffect, useState } from 'react'
-import { THEMES, ecrireThemeMode, lireThemeMode, type ThemeId } from '../theme-mode'
+import {
+  THEMES,
+  ecrireThemeMode,
+  lireApercusDesThemes,
+  lireThemeMode,
+  type ThemeBase,
+  type ThemeId
+} from '../theme-mode'
 import './InterfaceView.css'
+
+/**
+ * DEUX FAMILLES, PAS UNE LISTE A PLAT. Les huit themes vont par paires (Ardoise repond a Obsidian
+ * Nebula, Parchemin a Black Versailles...) et la seule question qu'on se pose vraiment en ouvrant
+ * ce reglage est « clair ou sombre ». La base est deja declaree dans le registre : on s'en sert.
+ */
+const GROUPES: readonly { base: ThemeBase; titre: string }[] = [
+  { base: 'sombre', titre: 'Sombres' },
+  { base: 'clair', titre: 'Clairs' }
+]
 
 /**
  * Settings · Interface — l'apparence de l'application, et rien d'autre.
