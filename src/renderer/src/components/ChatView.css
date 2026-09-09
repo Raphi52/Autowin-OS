@@ -1599,8 +1599,10 @@
   color: var(--text-faint);
   cursor: pointer;
   /* Visible au repos, sinon la fonction est indecouvrable : personne ne survole un bloc
-     de code pour y chercher un bouton dont il ignore l'existence. */
-  opacity: 0.4;
+     de code pour y chercher un bouton dont il ignore l'existence.
+     0.55 et non 0.4 : en theme nuit le texte estompe (#747d8c) se pose sur un fond de bloc
+     quasi noir, et a 0.4 le glyphe se confondait avec le fond. */
+  opacity: 0.55;
   transition:
     opacity 0.12s ease,
     color 0.12s ease;
