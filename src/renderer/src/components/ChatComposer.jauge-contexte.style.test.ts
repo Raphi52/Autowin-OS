@@ -48,9 +48,14 @@ describe('jauge de contexte du composer — degrade progressif', () => {
     for (let k = 1; k < alphas.length; k += 1) {
       expect(alphas[k], `palier ${k} doit etre plus clair que le precedent`).toBeGreaterThan(alphas[k - 1])
     }
-    // Le dernier palier est le blanc PUR, et il est bien EN FIN de degrade.
-    expect(degrade).toMatch(/#ffffff 100%/)
-    expect(degrade.indexOf('#ffffff')).toBeGreaterThan(degrade.lastIndexOf('rgba('))
+    /*
+     * Le dernier palier est le voile A PLEINE PUISSANCE (alpha 1) : blanc pur en sombre,
+     * et il s'inverse avec le reste du filet sur les themes clairs (2026-09-09) — un #ffffff
+     * ecrit en dur laissait une pointe blanche invisible sur fond pale, seul morceau du
+     * degrade a ne pas suivre le theme.
+     */
+    expect(degrade).toMatch(/rgba\(var\(--voile-rgb\), 1\) 100%/)
+    expect(alphas[alphas.length - 1]).toBe(1)
   })
 
   it('ne reintroduit aucune couleur de palier sur le filet', () => {

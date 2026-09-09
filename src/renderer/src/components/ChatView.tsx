@@ -4752,7 +4752,11 @@ export function ChatView({
                     const conversationState = deriveConversationState({
                       busy: busyConversations.has(c.id),
                       messageCount: c.messageCount ?? c.messages?.length ?? 0,
-                      lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
+                      lastMessageRole:
+                        c.lastMessageRole ??
+                        // Même règle que la projection du store : une consigne écrite pendant un
+                        // tour (`orientation`) ne porte pas d'attente de réponse (conv-61).
+                        [...(c.messages ?? [])].reverse().find((m) => m.orientation !== true)?.role,
                       lastAssistantStatus: c.lastAssistantStatus,
                       asksUser: c.lastAssistantAsksUser === true,
                       // La conversation OUVERTE est lue par definition : elle ne doit jamais

@@ -609,22 +609,13 @@
     ),
     radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
 }
-:root[data-base='clair'] .cosmic-outline .activity-group-tools {
-  color: var(--text-dim);
-}
-:root[data-base='clair'] .cosmic-outline .activity-group[data-state='done'] {
-  background: linear-gradient(100deg, rgba(78, 201, 165, 0.22) 0%, rgba(78, 201, 165, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
-}
-:root[data-base='clair'] .cosmic-outline .activity-group[data-state='running'] {
-  background: linear-gradient(100deg, rgba(35, 150, 195, 0.22) 0%, rgba(35, 150, 195, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
-}
-:root[data-base='clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
-  background: linear-gradient(100deg, rgba(196, 132, 30, 0.22) 0%, rgba(196, 132, 30, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
-}
-:root[data-base='clair'] .cosmic-outline .activity-group.failed,
-:root[data-base='clair'] .cosmic-outline .activity-group[data-state='failed'] {
-  background: linear-gradient(100deg, rgba(210, 60, 100, 0.2) 0%, rgba(210, 60, 100, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
-}
+
+/* RETIRE le 2026-09-09 : un second jeu des quatre etats colores vivait ICI, en double des
+   regles l.454-486. Meme specificite, ecrit APRES : c est donc LUI qui gagnait, et la correction
+   du 2026-09-08 (teinte remontee a 30 %, queue noire remplacee par du transparent) n avait AUCUN
+   effet a l ecran. Le doublon de .activity-group-tools partait avec.
+   ENTREE QUI DOIT FAIRE ECHOUER : redefinir activity-group[data-state=...] plus bas dans ce
+   fichier -- la correction redeviendrait morte en silence. */
 :root[data-base='clair'] .cosmic-outline .activity-group:hover {
   background: rgba(15, 20, 35, 0.05);
   border-color: var(--line-strong);
