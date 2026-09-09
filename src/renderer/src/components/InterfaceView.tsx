@@ -1,23 +1,6 @@
 import { useEffect, useState } from 'react'
-import {
-  THEMES,
-  ecrireThemeMode,
-  lireApercusDesThemes,
-  lireThemeMode,
-  type ThemeBase,
-  type ThemeId
-} from '../theme-mode'
+import { THEMES, ecrireThemeMode, lireThemeMode, type ThemeId } from '../theme-mode'
 import './InterfaceView.css'
-
-/**
- * DEUX FAMILLES, PAS UNE LISTE A PLAT. Les huit themes vont par paires (Ardoise repond a Obsidian
- * Nebula, Parchemin a Black Versailles...) et la seule question qu'on se pose vraiment en ouvrant
- * ce reglage est « clair ou sombre ». La base est deja declaree dans le registre : on s'en sert.
- */
-const GROUPES: readonly { base: ThemeBase; titre: string }[] = [
-  { base: 'sombre', titre: 'Sombres' },
-  { base: 'clair', titre: 'Clairs' }
-]
 
 /**
  * Settings · Interface — l'apparence de l'application, et rien d'autre.
@@ -37,9 +20,6 @@ const GROUPES: readonly { base: ThemeBase; titre: string }[] = [
  */
 export function InterfaceView(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => lireThemeMode())
-  // Mesure UNE FOIS a l'ouverture : les couleurs d'un theme ne bougent pas pendant la session, et
-  // relire a chaque rendu ferait clignoter l'application a chaque frappe.
-  const [apercus] = useState(() => lireApercusDesThemes())
 
   // Le thème mémorisé est appliqué à l'ouverture aussi : si une autre fenêtre l'a changé,
   // l'écran affiché reste d'accord avec la liste.
@@ -65,41 +45,23 @@ export function InterfaceView(): React.JSX.Element {
             redémarrage.
           </p>
         </div>
+        <label className="interface-theme-choix">
+          <span className="interface-theme-label">Thème</span>
+          <select
+            className="interface-theme-select"
+            value={theme}
+            aria-label="Thème"
+            data-testid="interface-theme"
+            onChange={(e) => setTheme(e.target.value)}
+          >
+            {THEMES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.libelle}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-      {GROUPES.map((groupe) => (
-        <fieldset key={groupe.base} className="interface-theme-groupe">
-          <legend>{groupe.titre}</legend>
-          {THEMES.filter((t) => t.base === groupe.base).map((t) => {
-            const apercu = apercus.find((a) => a.id === t.id)
-            return (
-              <label
-                key={t.id}
-                className="interface-theme-bande"
-                data-choisi={t.id === theme ? 'oui' : undefined}
-              >
-                <input
-                  type="radio"
-                  name="interface-theme"
-                  value={t.id}
-                  checked={t.id === theme}
-                  data-testid={`interface-theme-${t.id}`}
-                  onChange={() => setTheme(t.id)}
-                />
-                <span className="interface-theme-nom">{t.libelle}</span>
-                {apercu ? (
-                  <span className="interface-theme-aplats" aria-hidden="true">
-                    <i style={{ background: apercu.fond }} />
-                    <i style={{ background: apercu.texte }} />
-                    <i style={{ background: apercu.or }} />
-                    <i style={{ background: apercu.rose }} />
-                    <i style={{ background: apercu.filet }} />
-                  </span>
-                ) : null}
-              </label>
-            )
-          })}
-        </fieldset>
-      ))}
       <p className="interface-reserve">
         <strong>Ce qui ne suit pas encore.</strong> Le thème choisi s’applique à presque tout
         l’écran : le menu, les panneaux, les textes, les champs, et les pages <strong>Chat</strong>,{' '}

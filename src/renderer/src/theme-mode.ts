@@ -162,59 +162,6 @@ export function enHexadecimal(valeur: string): string | null {
   return `#${canal(rgb[1])}${canal(rgb[2])}${canal(rgb[3])}`
 }
 
-/** Les cinq couleurs qui resument un theme, telles que le navigateur les calcule. */
-export type ApercuTheme = {
-  readonly id: ThemeId
-  readonly fond: string
-  readonly texte: string
-  readonly or: string
-  readonly rose: string
-  readonly filet: string
-}
-
-/**
- * LES COULEURS NE SONT PAS RECOPIEES, ELLES SONT MESUREES — et c'est tout l'interet.
- *
- * L'ecran de reglage doit MONTRER chaque theme, pas seulement le nommer : huit palettes choisies
- * par leur nom obligeaient a les essayer une par une (constat du 2026-09-09). Mais recopier leurs
- * couleurs dans le composant creerait une seconde source de verite qui divergerait au premier
- * ajustement -- exactement la dette que ce chantier passe sa journee a payer ailleurs.
- *
- * On applique donc chaque theme a la racine, on lit les jetons CALCULES, et on restaure l'etat de
- * depart. Tout se passe dans le meme tour de boucle, avant que le navigateur ne repeigne : aucun
- * clignotement possible. Un theme qui change une couleur voit son apercu changer tout seul.
- */
-export function lireApercusDesThemes(): readonly ApercuTheme[] {
-  const racine = globalThis.document?.documentElement
-  const calculer = globalThis.getComputedStyle
-  if (!racine || !calculer) return []
-  const themeAvant = racine.getAttribute('data-theme')
-  const baseAvant = racine.getAttribute('data-base')
-  const jeton = function (nom: string): string {
-    return calculer(racine).getPropertyValue(nom).trim()
-  }
-  try {
-    return THEMES.map(function (t) {
-      appliquerThemeMode(t.id)
-      return {
-        id: t.id,
-        fond: jeton('--bg-0'),
-        texte: jeton('--text'),
-        or: jeton('--gold'),
-        rose: jeton('--rose'),
-        filet: jeton('--line-strong')
-      }
-    })
-  } finally {
-    // RESTAURATION INCONDITIONNELLE : une lecture qui laisserait le dernier theme de la liste
-    // applique changerait l'apparence de l'application juste en ouvrant ce reglage.
-    if (themeAvant) racine.setAttribute('data-theme', themeAvant)
-    else racine.removeAttribute('data-theme')
-    if (baseAvant) racine.setAttribute('data-base', baseAvant)
-    else racine.removeAttribute('data-base')
-  }
-}
-
 /** Mémorise ET applique. C'est ce qu'appelle l'interrupteur de Settings · Interface. */
 export function ecrireThemeMode(mode: ThemeMode): void {
   try {

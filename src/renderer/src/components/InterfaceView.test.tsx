@@ -56,50 +56,29 @@ describe('Settings · Interface', () => {
     expect(onglets).toContain('Interface')
   })
 
-  it('propose une BANDE par thème du REGISTRE, groupée par famille', async () => {
-    // Le cas qui rend le plafond de deux thèmes impossible à réintroduire : l'écran doit offrir
+  it('peuple la liste depuis le REGISTRE, pas à la main', async () => {
+    // Le cas qui rend le plafond de deux thèmes impossible à réintroduire : la liste doit offrir
     // exactement ce que `THEMES` déclare. Ajouter un thème au registre suffit donc à le proposer.
     const container = await monter()
-    const bandes = [...container.querySelectorAll<HTMLInputElement>('.interface-theme-bande input')]
-    // L'ordre à l'écran est celui des FAMILLES (sombres puis clairs), pas celui du registre :
-    // c'est le regroupement qui rend les huit thèmes lisibles d'un coup d'œil. On compare donc à
-    // l'attendu groupé, et le compte doit rester celui du registre — aucun thème perdu en route.
-    const attendu = [
-      ...THEMES.filter((t) => t.base === 'sombre'),
-      ...THEMES.filter((t) => t.base === 'clair')
-    ]
-    expect(bandes.map((b) => b.value)).toEqual(attendu.map((t) => t.id))
-    expect(bandes).toHaveLength(THEMES.length)
-    // Et le libellé lu par l'utilisateur vient du registre lui aussi.
-    const noms = [...container.querySelectorAll('.interface-theme-nom')].map((n) => n.textContent)
-    expect(noms).toEqual(attendu.map((t) => t.libelle))
-    const familles = [...container.querySelectorAll('.interface-theme-groupe legend')]
-    expect(familles.map((f) => f.textContent)).toEqual(['Sombres', 'Clairs'])
-  })
+    const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-theme"]')
+    expect(liste).not.toBeNull()
 
-  /**
-   * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE CAS : une lecture des aperçus qui oublie de restaurer.
-   * Les couleurs des bandes ne sont pas recopiées mais MESURÉES — on applique chaque thème puis
-   * on relit ses jetons. Sans restauration, ouvrir ce réglage changerait l'apparence de
-   * l'application pour le dernier thème de la liste.
-   */
-  it('n’altère pas le thème courant en mesurant les aperçus', async () => {
-    localStorage.setItem(THEME_MODE_STORAGE_KEY, 'clair')
-    await monter()
-    expect(document.documentElement.getAttribute('data-theme')).toBe('clair')
-    expect(document.documentElement.getAttribute('data-base')).toBe('clair')
+    const proposes = [...liste!.options].map((o) => o.value)
+    expect(proposes).toEqual(THEMES.map((t) => t.id))
+    // Et le libellé lu par l'utilisateur vient du registre lui aussi.
+    expect([...liste!.options].map((o) => o.textContent)).toEqual(THEMES.map((t) => t.libelle))
   })
 
   it('choisit le clair, le mémorise et le pose sur la racine du document', async () => {
     const container = await monter()
-    expect(
-      container.querySelector<HTMLInputElement>('.interface-theme-bande input:checked')?.value
-    ).toBe('sombre')
+    const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-theme"]')!
+    expect(liste.value).toBe('sombre')
 
-    // `click()` NATIF, et non un `Event` fabriqué : sur un bouton radio, seul le premier coche
-    // réellement la case et émet le `change` que React écoute. Mesuré ici même.
+    // Une liste native ne réagit pas à `click()` : on pose la valeur puis on émet `change`,
+    // ce que React écoute réellement.
     await act(async () => {
-      container.querySelector<HTMLInputElement>('[data-testid="interface-theme-clair"]')!.click()
+      liste.value = 'clair'
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
     expect(localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('clair')
@@ -109,13 +88,13 @@ describe('Settings · Interface', () => {
   it('revient au sombre en RETIRANT l’attribut, sans laisser d’état bâtard', async () => {
     localStorage.setItem(THEME_MODE_STORAGE_KEY, 'clair')
     const container = await monter()
-    expect(
-      container.querySelector<HTMLInputElement>('.interface-theme-bande input:checked')?.value
-    ).toBe('clair')
+    const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-theme"]')!
+    expect(liste.value).toBe('clair')
     expect(document.documentElement.getAttribute('data-theme')).toBe('clair')
 
     await act(async () => {
-      container.querySelector<HTMLInputElement>('[data-testid="interface-theme-sombre"]')!.click()
+      liste.value = 'sombre'
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
     expect(localStorage.getItem(THEME_MODE_STORAGE_KEY)).toBe('sombre')
