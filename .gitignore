@@ -35,3 +35,16 @@ AGENTS.md
 
 # Etat local de Visual Studio : jamais partage, et un arbre sale fait echouer la publication.
 .vs/
+
+# Brouillons ecrits A LA RACINE par des runs, et jamais du code partage.
+#
+# Constate le 2026-09-09 : un run avait cree sa copie de verification DANS le depot
+# (`.verif/`, 200 Mo, un checkout git complet) au lieu de `.autowin-data/worktrees/`, plus un
+# dossier de messages de commit (`.msg/`). Aucun des deux n'etait ignore : un `git add .` aurait
+# committe 200 Mo et un depot imbrique. Le run a nettoye derriere lui, mais rien ne l'y obligeait
+# — d'ou ces regles, comme pour les captures de 2026-08-18 juste au-dessus.
+#
+# NON ajoutes volontairement : `*.diff` (un correctif peut legitimement etre partage) et
+# `stage2.py` (un nom d'un seul usage, qui ne se reproduira pas sous cette forme).
+/.verif/
+/.msg/
