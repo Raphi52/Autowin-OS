@@ -344,6 +344,18 @@ export function codexExecSpec(
     '--model',
     model,
     ...(suppressProjectDoc ? ['-c', 'project_doc_max_bytes=0'] : []),
+    /*
+     * RECHERCHE WEB VIVE — la consigne injectee dans CHAQUE phase promet WebFetch/WebSearch « sur
+     * toutes les branches ». Cote Codex, c'etait faux : rien n'activait l'outil, donc une branche
+     * Codex devinait la ou une branche Claude allait lire.
+     *
+     * Mesure du 2026-09-09 sur le binaire installe (codex-cli 0.151.0) : `--search` — la voie
+     * suggeree par le reperage — est REFUSEE par ce sous-programme (« unexpected argument '--search'
+     * found ») ; c'est une option de `codex`, pas de `codex exec`. La cle de configuration, elle,
+     * est acceptee. On passe donc par elle.
+     */
+    '-c',
+    'tools.web_search=true',
     ...(reasoningEffort ? ['-c', `model_reasoning_effort="${reasoningEffort}"`] : []),
     '-'
   ]
