@@ -451,6 +451,24 @@ describe('réconciliation au chargement des tours interrompus', () => {
     expect(resume.updatedAt).toBeGreaterThan(dateUser!)
   })
 
+  /**
+   * Defaut mesure conv-58 (2026-09-09) : un collage ecrit PENDANT un tour est range en fin de fil
+   * avec `orientation: true`. La pastille annoncait « Sans réponse » alors que la reponse etait la,
+   * juste au-dessus : le statut ne regardait que le role du DERNIER message, sans egard pour les
+   * consignes d'orientation qui ne reclament pas de reponse propre.
+   */
+  it("un dernier message d'orientation ne donne pas « Sans réponse »", () => {
+    const store = new ConversationStore(makeClock())
+    const id = store.create({ title: 'A', provider: 'claude' }).id
+    store.append(id, { role: 'user', content: 'ma question' })
+    store.append(id, { role: 'assistant', content: 'ma reponse' })
+    store.append(id, { role: 'user', content: 'collage pendant le tour', orientation: true })
+    const resume = store.listSummaries().find((s) => s.id === id)!
+
+    // L'attente est portee par la reponse deja donnee, pas par la consigne glissee pendant le tour.
+    expect(resume.lastMessageRole).toBe('assistant')
+  })
+
   it("une ecriture NON-utilisateur bouge updatedAt sans bouger le dernier tour de l'utilisateur", () => {
     const store = new ConversationStore(makeClock())
     const id = store.create({ title: 'A', provider: 'claude' }).id

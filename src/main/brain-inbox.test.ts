@@ -229,21 +229,50 @@ describe('doublon proche à l’écriture (item 6) — inbox/ n’est pas dédou
       }
       return tokens.join(' ')
     }
-    for (let index = 0; index < 300; index += 1) {
-      const suffix = index.toString(36)
-      note(`inbox/large-${index}.md`, `# i${suffix}\n\n${nearLimitBody(`i${suffix}z`)}\n`)
-      note(`knowledge/large-${index}.md`, `# k${suffix}\n\n${nearLimitBody(`k${suffix}z`)}\n`)
+    const ecrireLot = (depuis: number, jusqua: number): void => {
+      for (let index = depuis; index < jusqua; index += 1) {
+        const suffix = index.toString(36)
+        note(`inbox/large-${index}.md`, `# i${suffix}\n\n${nearLimitBody(`i${suffix}z`)}\n`)
+        note(`knowledge/large-${index}.md`, `# k${suffix}\n\n${nearLimitBody(`k${suffix}z`)}\n`)
+      }
+    }
+    const chronometrer = (): { candidates: ReturnType<typeof listInboxCandidates>; ms: number } => {
+      const depart = performance.now()
+      const candidates = listInboxCandidates(root)
+      return { candidates, ms: performance.now() - depart }
     }
 
-    const startedAt = performance.now()
-    const candidates = listInboxCandidates(root)
-    const elapsedMs = performance.now() - startedAt
+    ecrireLot(0, 75)
+    const quart = chronometrer()
+    ecrireLot(75, 300)
+    const complet = chronometrer()
+    const candidates = complet.candidates
 
     expect(candidates).toHaveLength(300)
     expect(candidates.every((candidate) => candidate.nearDuplicates.length === 0)).toBe(true)
     expect(Buffer.byteLength(JSON.stringify(candidates), 'utf8')).toBeLessThan(2 * 1024 * 1024)
-    expect(elapsedMs).toBeLessThan(5_000)
-  }, 30_000)
+    /*
+     * LA CROISSANCE, PAS LA DUREE.
+     *
+     * Cette assertion etait `elapsedMs < 5000` : un budget en millisecondes de MACHINE. Mesure du
+     * 2026-09-09 — sous la charge de plusieurs runs paralleles elle a rendu 5579 ms et REFUSE une
+     * edition de simple texte dans un fichier de consigne, sans aucun rapport avec ce code. Un
+     * budget absolu ne mesure pas le code, il mesure la machine du moment, et se trompe dans les
+     * DEUX sens : faux rouge sous charge, faux vert sur une machine plus rapide qui masquerait une
+     * vraie regression.
+     *
+     * Ce qui est REELLEMENT protege ici — et que le test voisin nomme — c'est l'absence d'explosion
+     * QUADRATIQUE de la comparaison de doublons quand les fiches frolent la taille limite. On
+     * compare donc deux mesures prises sur la MEME machine a la MEME seconde, pour un corpus
+     * multiplie par 4 : une croissance lineaire donne ~4x, une quadratique ~16x. Le plafond a 8x
+     * laisse la place au bruit et aux couts fixes tout en attrapant le defaut. Un RAPPORT annule la
+     * vitesse de la machine : c'est ce qui le rend fiable sous charge, sans rien desserrer.
+     *
+     * ENTREE QUI DOIT LE FAIRE ECHOUER : rendre la comparaison quadratique (comparer chaque fiche a
+     * toutes les autres sans index inverse) fait bondir le rapport bien au-dela de 8.
+     */
+    expect(complet.ms / Math.max(quart.ms, 1)).toBeLessThan(8)
+  }, 60_000)
 
   it('traite la capacité maximale 300 inbox + 300 knowledge sans explosion quadratique de tokenisation', () => {
     const uniqueBody = (zone: string, index: number): string =>

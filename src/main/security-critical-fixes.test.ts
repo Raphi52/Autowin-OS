@@ -375,18 +375,20 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     acceptee que sous la forme d'un hexadecimal strict (`^#[0-9a-fA-F]{6}$`), et la fenetre
     //     visee est celle de l'emetteur, jamais un identifiant fourni par le renderer.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    // MISE A JOUR 2026-09-09 - 175 -> 176. UN canal ajoute, garde des sa PREMIERE ligne par
-    //   `assertTrustedRendererSender(event, 'Conversations')` :
-    //   `os:conversations:setHighlight` - pose ou retire le repere visuel d'une conversation dans la
-    //     liste. N'ecrit qu'un BOOLEEN sur une conversation deja connue : l'id passe par
-    //     `guardString`, l'etat est normalise par `rawOn === true` (aucune autre valeur ne peut
-    //     entrer), et un id inconnu rend `false` sans rien creer. Aucun acces disque arbitraire,
-    //     contrairement a `os:conversations:setProject` qui ouvre un selecteur.
+    // MISE A JOUR 2026-09-09 - 175 -> 177. DEUX canaux, mesures un par un en rejouant la MEME
+    //   detection sur les revisions concernees (175 au commit 2c58539d qui a pose le litteral, 176
+    //   avant le surlignage, 177 apres) : le fil-piege etait donc DEJA rouge a 176 avant ce
+    //   changement, pour un canal qui n'avait pas ete inscrit. Les deux sont gardes des leur
+    //   PREMIERE ligne :
+    //   `worktree:rapport-retention` (commit 35d1f351, `src/main/ipc/worktree.ts:59`,
+    //     `assertTrustedRendererSender(event, 'RapportRetention')`) - LIT le rapport du balayage de
+    //     retention pour l'afficher. Aucune ecriture, aucun parametre recu.
+    //   `os:conversations:setHighlight` (`src/main/ipc/conversations.ts:194`,
+    //     `assertTrustedRendererSender(event, 'Conversations')`) - pose ou retire le repere visuel
+    //     d'une conversation. Il ECRIT, mais rien ne SORT du poste : l'identifiant passe par
+    //     `guardString`, et l'etat est ramene a un booleen strict (`rawOn === true`) - aucune valeur
+    //     du renderer n'atteint le disque telle quelle, aucun chemin n'est construit depuis l'appel.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    // MISE A JOUR 2026-09-09 - 176 -> 177. Le compte etait DEJA en retard d'un cran avant ce
-    //   changement : le commit 35d1f351 (08/09) a ajoute `worktree:rapport-retention` sans le
-    //   declarer ici, donc ce test etait rouge en arrivant. Les DEUX canaux sont gardes des leur
-    //   premiere ligne par `assertTrustedRendererSender`, `unguarded` reste VIDE.
     expect(handlers).toHaveLength(177)
     expect(unguarded).toEqual([])
   })
