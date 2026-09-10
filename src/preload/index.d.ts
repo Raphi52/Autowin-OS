@@ -299,8 +299,9 @@ interface ChatApi {
   saveProfile: (profile: unknown) => Promise<AutowinProfile[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
   providerLogin: (provider: string) => Promise<{ ok: true }>
-  /** Comptes Claude multiples : un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
+  /** Compte Claude propre a une conversation (`null` = compte de l'application). */
   conversationSetClaudeAccount: (id: string, accountId: string | null) => Promise<string | null>
+  /** Comptes Claude multiples : un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
   claudeAccounts: () => Promise<ClaudeAccountsPayload>
   claudeAccountAdd: (label?: string) => Promise<ClaudeAccountsPayload>
   claudeAccountSwitch: (id: string) => Promise<ClaudeAccountsPayload>

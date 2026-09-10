@@ -16,6 +16,11 @@ import { Spinner } from './Spinner'
  * Il manquait ici : choisir un modèle par défaut sur un provider expiré, absent ou en standby
  * produisait un échec au PREMIER prompt, sans aucun signal au moment du choix.
  */
+export interface OrchestratorProviderStatus {
+  provider: string
+  status: string
+}
+
 /**
  * Le choix de COMPTE Claude, a l'echelle de la conversation ouverte.
  *
@@ -33,11 +38,6 @@ export interface OrchestratorAccounts {
   busy: boolean
   error: string | null
   onSelect: (accountId: string) => void
-}
-
-export interface OrchestratorProviderStatus {
-  provider: string
-  status: string
 }
 
 const STATUT_LABEL: Record<string, string> = {
@@ -292,7 +292,7 @@ export function OrchestratorModelSelector({
             )
           })}
           {comptes && comptes.accounts.length > 0 && (
-            <div className="router-accounts model-select-accounts" data-testid="conv-claude-accounts">
+            <div className="router-accounts" data-testid="conv-claude-accounts">
               <span className="router-accounts-title">Compte de cette conversation</span>
               <div className="router-accounts-list">
                 {comptes.accounts.map((account) => {
@@ -318,7 +318,11 @@ export function OrchestratorModelSelector({
                 })}
               </div>
               {comptes.error && (
-                <p className="router-account-error" role="alert" data-testid="conv-claude-account-error">
+                <p
+                  className="router-account-error"
+                  role="alert"
+                  data-testid="conv-claude-account-error"
+                >
                   Action impossible : {comptes.error}
                 </p>
               )}
