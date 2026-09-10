@@ -534,7 +534,10 @@ describe('assertBrainVaultRoot — un canal IPC accepte n’importe quelle chaî
     symlinkSync(vault, alias, process.platform === 'win32' ? 'junction' : 'dir')
 
     const authorized = assertBrainVaultRoot(alias, vault)
-    rmSync(alias, { force: true })
+    // `recursive` requis depuis Node 24 : sans lui, rmSync refuse une junction Windows
+    // (« Path is a directory », ERR_FS_EISDIR). Il retire le LIEN seul — la cible reste intacte
+    // (sonde locale du 2026-09-10, Node v24.12.0).
+    rmSync(alias, { recursive: true, force: true })
     symlinkSync(outside, alias, process.platform === 'win32' ? 'junction' : 'dir')
 
     expect(authorized).toBe(realpathSync.native(vault))
