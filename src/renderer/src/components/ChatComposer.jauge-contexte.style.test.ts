@@ -48,9 +48,17 @@ describe('jauge de contexte du composer — degrade progressif', () => {
     for (let k = 1; k < alphas.length; k += 1) {
       expect(alphas[k], `palier ${k} doit etre plus clair que le precedent`).toBeGreaterThan(alphas[k - 1])
     }
-    // Le dernier palier est le blanc PUR, et il est bien EN FIN de degrade.
-    expect(degrade).toMatch(/#ffffff 100%/)
-    expect(degrade.indexOf('#ffffff')).toBeGreaterThan(degrade.lastIndexOf('rgba('))
+    /*
+     * LE BOUT PLEIN PASSE PAR UN JETON. Suite de la meme correction : `#ffffff` etait fige ici,
+     * donc le bout de la jauge restait BLANC sur une page claire -- invisible, alors que les deux
+     * paliers d'avant, eux, s'inversaient bien avec `--voile-rgb`. Le jeton `--chat-jauge-plein`
+     * vaut exactement `#ffffff` en nuit (verifie ci-dessous) et devient sombre en mode clair.
+     * La propriete exigee est la meme : arrivee au blanc PUR, en FIN de degrade.
+     */
+    expect(degrade).toMatch(/var\(--chat-jauge-plein\) 100%/)
+    expect(degrade.indexOf('--chat-jauge-plein')).toBeGreaterThan(degrade.lastIndexOf('rgba('))
+    const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
+    expect(theme).toMatch(/--chat-jauge-plein:\s*#ffffff;/)
   })
 
   it('ne reintroduit aucune couleur de palier sur le filet', () => {

@@ -79,9 +79,28 @@ describe('workflow header toggle', () => {
     expect(css).toMatch(
       /\.workflow-toggle\s*{[^}]*position:\s*relative;[^}]*border:\s*0;[^}]*background:\s*transparent/s
     )
+    /*
+     * LE DEGRADE ROSE -> OR PASSE PAR DEUX JETONS, PLUS PAR DEUX HEX EN DUR.
+     *
+     * `#ff3cac` et `#ffd45a` etaient figes ici : le soulignement gardait donc les teintes de NUIT
+     * sur une page claire. Ce test verrouillait ces deux hex, ce qui EMPECHAIT la reparation.
+     *
+     * Ce qui compte n'a jamais ete « ces deux codes-la », c'est « du rose vers l'or, dans cet
+     * ordre ». On l'exige donc en deux temps, sans rien relacher : le degrade appelle les deux
+     * jetons dans le bon ordre, ET theme.css leur donne bien la teinte de nuit d'origine. Entree
+     * qui doit faire echouer : inverser les deux, ou changer une valeur dans theme.css.
+     */
     expect(css).toMatch(
-      /\.workflow-toggle\.is-active::after\s*{[^}]*height:\s*2px;[^}]*linear-gradient\(90deg,\s*#ff3cac,\s*#ffd45a\)/s
+      /\.workflow-toggle\.is-active::after\s*{[^}]*height:\s*2px;[^}]*linear-gradient\(\s*90deg,\s*var\(--chat-wf-trait-rose\),\s*var\(--chat-wf-trait-or\)\s*\)/s
     )
+    const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
+    expect(theme).toMatch(/--chat-wf-trait-rose:\s*#ff3cac;/)
+    expect(theme).toMatch(/--chat-wf-trait-or:\s*#ffd45a;/)
+    // OR ET ROSE RATTACHES, JAMAIS ALTERES (decision produit du 2026-09-06) : en theme clair les
+    // deux bouts partent vers la famille rose et la famille or, jamais vers un gris.
+    const modes = readFileSync(new URL('../assets/theme-modes.css', import.meta.url), 'utf8')
+    expect(modes).toMatch(/--chat-wf-trait-rose:\s*var\(--rose\w*\);/)
+    expect(modes).toMatch(/--chat-wf-trait-or:\s*var\(--gold[\w-]*\);/)
   })
 })
 
@@ -89,9 +108,17 @@ describe('minimal conversation status lights', () => {
   it('keeps the Native-style dot compact and reserves animation for running work', () => {
     const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    /*
+     * LA TEINTE DE LA PASTILLE PASSE PAR UN JETON. Les cinq couleurs de `.conversation-state`
+     * etaient ecrites en dur : les pastilles restaient donc en teintes de nuit sur une page
+     * claire. Ce test verrouillait ces hex, ce qui empechait la reparation. On verrouille
+     * desormais le JETON dans la regle, et sa valeur de nuit dans theme.css -- la geometrie et
+     * le `currentColor`, eux, sont exiges exactement comme avant.
+     */
     expect(css).toMatch(
-      /\.conversation-state\s*{[^}]*width:\s*7px;[^}]*height:\s*7px;[^}]*background:\s*currentColor;[^}]*color:\s*#38bdf8;[^}]*box-shadow:/s
+      /\.conversation-state\s*{[^}]*width:\s*7px;[^}]*height:\s*7px;[^}]*background:\s*currentColor;[^}]*color:\s*var\(--chat-etat-defaut\);[^}]*box-shadow:/s
     )
+    expect(theme).toMatch(/--chat-etat-defaut:\s*#38bdf8;/)
     // L'etat EN COURS n'est plus un pseudo-element anime : il rend le composant <Spinner/>
     // (.aw-atom), le MEME atome que partout ailleurs dans l'app. La pastille etait le dernier
     // endroit a recopier un atome CSS a bordures, d'ou un indicateur qui ne ressemblait a aucun
@@ -99,11 +126,18 @@ describe('minimal conversation status lights', () => {
     const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
     expect(tsx).toMatch(/conversationState\.key === 'running' \? \(\s*<Spinner/s)
     expect(theme).toMatch(/\.aw-atom__rot\s*\{[^}]*animation:\s*aw-atom-spin/s)
-    expect(css).toMatch(/\.conversation-state\.is-failed\s*{[^}]*color:\s*#ff4057/s)
-    expect(css).toMatch(/\.conversation-state\.is-interrupted\s*{[^}]*color:\s*#ffb020/s)
+    expect(css).toMatch(/\.conversation-state\.is-failed\s*{[^}]*color:\s*var\(--chat-etat-echec\)/s)
+    expect(css).toMatch(
+      /\.conversation-state\.is-interrupted\s*{[^}]*color:\s*var\(--chat-etat-interrompu\)/s
+    )
+    expect(theme).toMatch(/--chat-etat-echec:\s*#ff4057;/)
+    expect(theme).toMatch(/--chat-etat-interrompu:\s*#ffb020;/)
     // La question en attente porte un JAUNE qui lui est propre : la confondre avec l'ambre des
     // tours interrompus reviendrait a ne rien signaler de nouveau.
-    expect(css).toMatch(/\.conversation-state\.is-asking\s*{[^}]*color:\s*#facc15/s)
+    expect(css).toMatch(
+      /\.conversation-state\.is-asking\s*{[^}]*color:\s*var\(--chat-etat-question\)/s
+    )
+    expect(theme).toMatch(/--chat-etat-question:\s*#facc15;/)
     // PLUS DE reduced-motion SUR LE SPINNER — decision du 2026-08-28, verrouillee par
     // assets/spinner-motion.test.ts : le spinner est un indicateur d'ETAT, pas un effet
     // decoratif. Fige, il affirme faussement que rien ne tourne. Reintroduire l'assertion

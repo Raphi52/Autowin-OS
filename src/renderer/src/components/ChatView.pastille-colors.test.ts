@@ -12,6 +12,21 @@ const css = () => readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8
  */
 const theme = () => readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
 
+/**
+ * LA COULEUR PASSE PAR UN JETON, ELLE N'EST PLUS ECRITE EN DUR. ChatView.css appelle desormais
+ * `var(--chat-etat-*)` et c'est theme.css qui porte la valeur -- c'est ce qui permet aux themes
+ * clairs de reteinter les pastilles. On resout donc l'appel jusqu'a sa valeur finale. L'exigence
+ * verifiee est la meme : six etats, six couleurs DISTINCTES. Sans cette resolution, le test
+ * conclurait « etat sans couleur propre » alors que la couleur existe, un cran plus loin.
+ */
+const resoudreJeton = (valeur: string): string => {
+  const brut = valeur.trim()
+  const appel = /^var\((--[a-z0-9-]+)\)$/.exec(brut)
+  if (!appel) return brut.toLowerCase()
+  const definition = new RegExp(`^\\s*${appel[1]}:\\s*([^;]+);`, 'm').exec(theme())
+  return definition ? resoudreJeton(definition[1]) : brut.toLowerCase()
+}
+
 const colorOf = (state: string): string | undefined => {
   const motif = new RegExp(
     String.raw`\.conversation-state\.is-` + state + String.raw`\b[^{]*\{([^}]*)\}`,
@@ -19,8 +34,10 @@ const colorOf = (state: string): string | undefined => {
   )
   for (const source of [css(), theme()]) {
     for (const bloc of source.matchAll(motif)) {
-      const teinte = bloc[1].match(/(?:^|[\s;])(?:border-top-)?color:\s*(#[0-9a-fA-F]{3,8})/)
-      if (teinte) return teinte[1].toLowerCase()
+      const teinte = bloc[1].match(
+        /(?:^|[\s;])(?:border-top-)?color:\s*(#[0-9a-fA-F]{3,8}|var\(--[a-z0-9-]+\))/
+      )
+      if (teinte) return resoudreJeton(teinte[1])
     }
   }
   /*
