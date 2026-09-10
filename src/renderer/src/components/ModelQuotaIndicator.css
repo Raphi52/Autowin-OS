@@ -26,6 +26,9 @@
   min-width: 0;
   height: 3px;
   flex: 1 1 auto;
+  /* Place reservee A DROITE pour la pastille : la ligne s'arrete AVANT elle au lieu de passer
+     dessous (demande utilisateur du 2026-09-10 : « le rond vert doit etre au bout de la ligne »). */
+  margin-right: 22px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
 }
@@ -69,7 +72,7 @@
 .model-quota-bar-value {
   position: absolute;
   top: 50%;
-  left: min(var(--quota-fill, 0%), calc(100% - 11px));
+  left: calc(var(--quota-ratio, 0) * (100% - 22px));
   /* Aucun ecart : la pastille TOUCHE le bout de la portion coloree (demande utilisateur).
      RETRAIT PROPORTIONNEL (`--quota-ratio`, de 0 a 1) au lieu d'un plafond a 100% - 22px : ce
      plafond figeait la pastille 22 px AVANT la fin (defaut du 2026-09-04). Le retrait
@@ -77,8 +80,10 @@
      donc elle paraissait trop a GAUCHE (defaut signale le 2026-09-08). Desormais elle est CENTREE
      sur la fin du remplissage (retrait = demi-pastille), et `left` est retenu a `100% - 11px` pour
      qu'a 100 % son bord droit tombe pile au bout de la barre sans deborder. */
-  margin-left: -1px;
-  --quota-retrait: 11px;
+  margin-left: 0;
+  /* Aucun retrait : le bord GAUCHE de la pastille se pose sur la fin du remplissage, donc la
+     pastille suit la ligne au lieu de la recouvrir. */
+  --quota-retrait: 0px;
   /* VRAI ROND : cercle a diametre fixe, chiffre centre — pas une pilule etiree par le padding. */
   display: inline-flex;
   width: 20px;
