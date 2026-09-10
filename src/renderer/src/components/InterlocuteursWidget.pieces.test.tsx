@@ -51,7 +51,9 @@ const zoe: Interlocuteur = {
       nonLu: false,
       deMoi: false,
       auteur: 'Zoé Martin',
-      fil: 'devis'
+      fil: 'devis',
+      // Ce fil teste l'ENVOI : aucune piece RECUE. Le champ reste un tableau, jamais absent.
+      pieces: []
     }
   ]
 }
