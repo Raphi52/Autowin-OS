@@ -65,7 +65,7 @@ export function buildChatPilotagePrompt(
     // ce qui l'oblige a retaper sa reponse. Les options doivent etre DECLAREES : une lecture du
     // texte proposait comme reponses des resultats de tests et des chemins de fichiers.
     `QUESTION A L'UTILISATEUR : quand une decision lui appartient vraiment — un choix entre ` +
-    `approches, une autorisation — appelle la commande \`ask\` avec ta question et 2 a 4 reponses, ` +
+    `approches, une autorisation — appelle la commande \`ask\` avec ta question et 2 a 10 reponses, ` +
     `la premiere etant celle que tu recommandes. Elles s'affichent en boutons cliquables. Ne ` +
     `termine pas par une question en prose quand tu peux offrir le choix : cela oblige ` +
     `l'utilisateur a retaper ce que tu viens d'enumerer. N'appelle pas \`ask\` pour une question ` +

@@ -292,7 +292,7 @@ const MESSAGES_ARRET: Record<string, string> = {
  * fixe, un second passage tombe sur `prompt-identique` et la boucle patiente au lieu de repartir.
  */
 export const PROMPT_NOUVELLE_CIBLE =
-  'La chaîne de ce fil est terminée. Ne lance aucun chantier : propose-moi avec `ask` 2 à 4 ' +
+  'La chaîne de ce fil est terminée. Ne lance aucun chantier : propose-moi avec `ask` 2 à 10 ' +
   'nouvelles cibles concrètes issues de ce qui vient d’être fait, et attends mon choix.'
 
 /**

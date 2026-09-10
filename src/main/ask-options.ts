@@ -26,7 +26,7 @@ export interface ReponseAsk {
 
 const PLAFOND_LIBELLE = 200
 const PLAFOND_LIGNE = 400
-const PLAFOND_REPONSES = 4
+const PLAFOND_REPONSES = 10
 
 function borne(valeur: unknown, plafond: number): string | undefined {
   if (typeof valeur !== 'string') return undefined
@@ -67,7 +67,8 @@ function reponse(valeur: unknown): ReponseAsk | null {
 }
 
 /**
- * Les reponses exploitables, plafonnees a quatre. Deux « recommande » ne recommandent rien : la
+ * Les reponses exploitables, plafonnees a dix (releve de 4 a 10 le 2026-09-10 : une galerie
+ * `draft` propose 6 directions par tour, le plafond a quatre en tronquait deux en silence). Deux « recommande » ne recommandent rien : la
  * premiere garde la marque, les suivantes la perdent — l'option reste, seule la marque tombe.
  */
 /**
