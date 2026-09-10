@@ -936,9 +936,16 @@ export class AutowinOS {
     const maxTotalTokens =
       Number.isSafeInteger(envTokens) && envTokens > 0
         ? Math.min(settings.maxTotalTokens, envTokens)
-        : Math.min(settings.maxTotalTokens, 1_500_000)
-    const defaultUsd = Number.isFinite(envUsd) && envUsd > 0 ? envUsd : 2
-    const maxUsd = settings.maxUsd === null ? defaultUsd : Math.min(settings.maxUsd, defaultUsd)
+        : settings.maxTotalTokens
+    // `maxUsd: null` dans le reglage veut dire « pas de plafond de depense » : un 2 $ cable ici le
+    // contredisait en silence. Seul un cap d'environnement pose par l'utilisateur reserre encore.
+    const envUsdCap = Number.isFinite(envUsd) && envUsd > 0 ? envUsd : null
+    const maxUsd =
+      settings.maxUsd === null
+        ? envUsdCap
+        : envUsdCap === null
+          ? settings.maxUsd
+          : Math.min(settings.maxUsd, envUsdCap)
     const quote = compileExecutionQuote(task || 'chat', {
       maxProviderCalls,
       maxTotalTokens,

@@ -25,7 +25,7 @@ export interface OrchestrationBudgetSettings {
 export const DEFAULT_ORCHESTRATION_BUDGET: OrchestrationBudgetSettings = {
   maxUsd: null,
   maxProviderCalls: 24,
-  maxChatProviderCalls: 50,
+  maxChatProviderCalls: 400,
   maxTotalTokens: 15_000_000
 }
 

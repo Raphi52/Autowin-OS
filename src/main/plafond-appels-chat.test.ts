@@ -22,7 +22,7 @@ import {
 
 describe('plafond d’appels d’un tour de chat', () => {
   it('vaut 50 par défaut — assez large pour qu’un tour ne meure pas sur un compteur d’étapes', () => {
-    expect(DEFAULT_ORCHESTRATION_BUDGET.maxChatProviderCalls).toBe(50)
+    expect(DEFAULT_ORCHESTRATION_BUDGET.maxChatProviderCalls).toBe(400)
   })
 
   it('reste très au-dessus du 6 qui coupait les tours', () => {
