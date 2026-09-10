@@ -13,7 +13,7 @@
  * `index.ts` à partir de l'état des fournisseurs, et elle doit être lue AU MOMENT de l'appel, pas
  * figée au démarrage — d'où une fonction et non une valeur.
  */
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { appPreflightProbes, getLastAppPreflightResult, runAppPreflight } from '../preflight-probes'
 import { repairPreflightCheck } from '../preflight-repair'
 import { assertTrustedRendererSender } from '../ipc-senders'
@@ -35,9 +35,19 @@ export function registerPreflightIpc({ preflightProviderOptions }: PreflightIpcD
     }
     return repairPreflightCheck(checkId, { pingBrain: () => appPreflightProbes().pingBrain() })
   })
-  ipcMain.handle('preflight:recheck', (event, force?: boolean) => {
+  ipcMain.handle('preflight:recheck', async (event, force?: boolean) => {
     assertTrustedRendererSender(event, 'Preflight')
-    return runAppPreflight(force === true, preflightProviderOptions())
+    const result = await runAppPreflight(force === true, preflightProviderOptions())
+    /*
+     * UN DIAGNOSTIC RELANCÉ VAUT POUR TOUTE L'APP, PAS POUR LA SEULE PAGE QUI L'A DEMANDÉ.
+     * Mesure 2026-09-10 : au démarrage un prérequis rouge allume la pastille de l'onglet Settings
+     * (App.tsx) ; la surveillance de démarrage s'arrête dès que le rouge n'est pas `brain`. Quand
+     * l'utilisateur répare puis relance le diagnostic, la page passait au vert mais la pastille
+     * restait allumée — seul `preflight:result` l'éteint, et personne ne l'émettait plus. On
+     * rediffuse donc le résultat du re-diagnostic : une seule source de vérité pour tout l'écran.
+     */
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
+    return result
   })
   ipcMain.handle('preflight:current', (event) => {
     assertTrustedRendererSender(event, 'Preflight')
