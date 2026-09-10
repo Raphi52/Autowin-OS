@@ -875,6 +875,16 @@ const bus = new AppCommandBus(
   outcomeLearning
 )
 /**
+ * Le bouton Stop atteint desormais les programmes lances par la commande `run`.
+ *
+ * Le bus ne connait pas `activeChatTurns` -- et n'a pas a le connaitre : on lui remet une simple
+ * question, « quel est le signal d'arret de cette conversation ». Sans cette ligne, `run` n'etait
+ * borne que par son horloge, et un programme qui ne rend jamais la main (application a fenetre,
+ * serveur) bloquait le tour jusqu'au plafond, Stop compris (conv-384, 2026-09-09).
+ */
+bus.signalDuTour = (conversationId) =>
+  activeChatTurns.get(conversationId)?.controller.signal
+/**
  * Les outils Brain des noeuds SKILL d'un workflow.
  *
  * Liaison TARDIVE assumee : `os` est construit bien avant `bus` dans ce module, et l'orchestrateur
