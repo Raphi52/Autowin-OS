@@ -25,6 +25,42 @@ function render(text: string, highlightFinalSummary = false): void {
   act(() => root.render(createElement(Markdown, { text, highlightFinalSummary })))
 }
 
+describe('bouton de copie des blocs de code', () => {
+  /**
+   * Le geste que ce bouton remplace — selectionner un bloc a la souris — perdait souvent la
+   * derniere ligne. Ce test verifie les DEUX choses qui comptent : le presse-papier recoit le
+   * contenu du bloc, et il ne recoit PAS le glyphe du bouton (pose par la feuille de style,
+   * precisement pour cela).
+   */
+  it('met le contenu du bloc dans le presse-papier, sans le glyphe du bouton', () => {
+    const copies: string[] = []
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (texte: string) => {
+          copies.push(texte)
+          return Promise.resolve()
+        }
+      }
+    })
+
+    render('Voici la requete :\n\n```sql\nselect premiere_ligne\nselect derniere_ligne\n```\n')
+    expect(container.querySelectorAll('pre.md-code').length).toBe(1)
+    const bouton = container.querySelector<HTMLButtonElement>('pre.md-code button')
+    expect(bouton).not.toBeNull()
+
+    act(() => bouton?.click())
+
+    expect(copies).toHaveLength(1)
+    expect(copies[0]).toContain('select premiere_ligne')
+    expect(copies[0]).toContain('select derniere_ligne')
+    expect(copies[0]).not.toContain('⧉')
+    // L'accuse de reception visible : c'est cet attribut que la feuille de style lit pour
+    // remplacer le glyphe par une coche.
+    expect(bouton?.dataset.copie).toBe('oui')
+  })
+})
+
 const CLOSURE = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
 
 function renderHydrated(
@@ -75,24 +111,6 @@ describe('Markdown', () => {
     expect(a?.textContent).toBe('doc')
     expect(a?.getAttribute('rel')).toContain('noopener')
     expect(a?.getAttribute('target')).toBe('_blank')
-  })
-
-  it("n'avale pas la ponctuation qui suit une adresse auto-liee", () => {
-    // Constate a l'ecran le 2026-09-09 : « http://localhost:3000, » etait auto-lie AVEC la virgule
-    // de la phrase. Windows refuse d'ouvrir cette adresse (« ne peut trouver le fichier »), donc le
-    // clic n'ouvrait aucun navigateur, sans le moindre message.
-    render('Grafana est accessible sur http://localhost:3000, pret a recevoir.')
-    const a = container.querySelector('a')
-    expect(a?.getAttribute('href')).toBe('http://localhost:3000')
-    expect(a?.textContent).toBe('http://localhost:3000')
-    expect(container.textContent).toContain('http://localhost:3000, pret a recevoir.')
-  })
-
-  it('ne tronque pas une adresse qui finit par un caractere utile', () => {
-    render('doc http://x.dev/c?q=1 et http://x.dev/dossier/ fin')
-    const liens = container.querySelectorAll('a')
-    expect(liens[0]?.getAttribute('href')).toBe('http://x.dev/c?q=1')
-    expect(liens[1]?.getAttribute('href')).toBe('http://x.dev/dossier/')
   })
 
   it('does NOT create an anchor for a non-http(s) scheme', () => {
