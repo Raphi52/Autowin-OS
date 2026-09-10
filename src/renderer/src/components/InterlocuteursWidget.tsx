@@ -10,6 +10,9 @@ import {
   type Interlocuteur,
   type MessageInterlocuteur
 } from './outlook-model'
+// Le MEME formateur de taille que les pièces jointes ENVOYÉES (le chat et l'écran de réponse
+// passent par lui) : une pièce ne doit pas changer d'unité selon le sens où elle a voyagé.
+import { formatFileSize } from './chat-attachments'
 import { Spinner } from './Spinner'
 import {
   basculerAlerte,
@@ -855,6 +858,28 @@ function Bulle({
           <i className="home-chat__sans-corps">{message.sujet}</i>
         )}
       </span>
+      {/*
+        Les pièces REÇUES, HORS de la bulle et rendues seulement s'il y en a.
+        Dehors, parce qu'une pièce n'est pas du texte : dans la bulle, elle se lirait comme une
+        ligne du message. Et rien du tout quand la liste est vide — relevé du 2026-09-10 sur la
+        vraie boîte, 150 des 153 messages reçus n'ont aucune pièce, et un cadre vide sur chacun
+        serait un bruit permanent.
+        Nom et taille seulement : le contenu ne traverse pas l'instantané. Pour ouvrir le fichier,
+        le bouton « Ouvrir dans Outlook » du fil est déjà là.
+      */}
+      {message.pieces.length > 0 ? (
+        <ul className="home-chat__pieces" data-testid={`home-chat-pieces-${message.id}`}>
+          {message.pieces.map((piece, rang) => (
+            // Le nom seul ne fait pas une clé : deux pièces d'un même message peuvent le partager.
+            <li className="home-chat__piece" key={`${rang}-${piece.nom}`}>
+              <span className="home-chat__piece-nom" title={piece.nom}>
+                {piece.nom}
+              </span>
+              <em className="home-chat__piece-taille">{formatFileSize(piece.taille)}</em>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </li>
   )
 }

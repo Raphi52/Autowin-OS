@@ -30,6 +30,9 @@ function message(part: Partial<MessageInterlocuteur> & { id: string }): MessageI
     nonLu: false,
     deMoi: false,
     auteur: 'Zoé Martin',
+    // Aucune pièce jointe par défaut : c'est le cas de 150 des 153 messages reçus de la vraie boîte
+    // (relevé du 2026-09-10). Les pièces reçues ont leur propre fichier de tests.
+    pieces: [],
     fil: 'devis',
     ...part
   }

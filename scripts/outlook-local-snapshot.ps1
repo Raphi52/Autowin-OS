@@ -35,7 +35,11 @@ param(
   # transport, et un fil de discussion se lit sur les premiers milliers de caracteres.
   # Ramene de 2000 a 800 le 2026-09-22 : lire `.Body` est l'appel le PLUS couteux du parcours, et il
   # est paye une fois par message. Un apercu de fil se lit sur les premieres centaines de caracteres.
-  [ValidateRange(0, 20000)][int]$MaxCorps = 800
+  [ValidateRange(0, 20000)][int]$MaxCorps = 800,
+  # Plafond de pieces jointes LUES par message. Chaque piece coute deux allers-retours COM (son nom
+  # et son Content-ID) ; sans plafond, 300 messages porteurs de pieces feraient durer l'appel bien
+  # au-dela du budget de la tuile. Dix suffit largement : un message reel en porte 1 a 3.
+  [ValidateRange(0, 50)][int]$MaxPieces = 10
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,6 +58,53 @@ function Get-Corps($item, [int]$max) {
   $texte = $texte.Trim()
   if ($texte.Length -gt $max) { return $texte.Substring(0, $max) }
   return $texte
+}
+
+# Le proptag MAPI du Content-ID d'une piece jointe (PR_ATTACH_CONTENT_ID).
+$PROPTAG_CONTENT_ID = 'http://schemas.microsoft.com/mapi/proptag/0x3712001F'
+
+# Les pieces REELLEMENT jointes a un message, sans les images de mise en page.
+#
+# Le filtre porte sur le Content-ID, et c'est une mesure, pas une intuition. Sonde du 2026-09-10 sur
+# la vraie boite, 40 messages lus, 25 pieces vues : les 22 images de signature (image001.png,
+# image002.png) portent TOUTES un Content-ID non vide -- c'est ce qui les rattache a un <img> du
+# corps HTML -- et les 3 vraies pieces (un PDF de convocation de 859335 octets, son .ics, un PV de
+# reunion) ont TOUTES un Content-ID vide. Sans ce filtre, presque chaque message du fil annoncerait
+# une piece jointe qu'il n'a pas, et l'information ne voudrait plus rien dire.
+#
+# Le drapeau PR_ATTACHMENT_HIDDEN (0x7FFE000B) est la reponse qu'on trouve en premier, et elle ne
+# marche PAS ici : la meme sonde a rendu une erreur de lecture sur les 25 pieces. Un filtre bati sur
+# lui laisserait donc tout passer.
+#
+# Tout est sous try/catch : `Attachments` leve pour un element distant non telecharge ou bloque par
+# l'antivirus, et une exception ici ferait perdre l'instantane ENTIER -- donc la tuile -- pour une
+# seule piece illisible.
+function Get-Pieces($item, [int]$max) {
+  $lues = New-Object System.Collections.ArrayList
+  if ($max -le 0) { return @() }
+  try {
+    $pieces = $item.Attachments
+    $total = [int]$pieces.Count
+    if ($total -gt $max) { $total = $max }
+    for ($rang = 1; $rang -le $total; $rang++) {
+      try {
+        $piece = $pieces.Item($rang)
+        $cid = ''
+        try { $cid = [string]$piece.PropertyAccessor.GetProperty($PROPTAG_CONTENT_ID) } catch { $cid = '' }
+        # Une image integree au corps : elle est deja affichee dans le texte, pas jointe au message.
+        if ($cid.Trim() -ne '') { continue }
+        $nom = ''
+        try { $nom = [string]$piece.FileName } catch { $nom = '' }
+        if ($nom.Trim() -eq '') { continue }
+        $taille = 0
+        try { $taille = [int]$piece.Size } catch { $taille = 0 }
+        [void]$lues.Add([pscustomobject]@{ nom = $nom; taille = $taille })
+      } catch { continue }
+    }
+  } catch { return @() }
+  # `,` force le tableau : sans lui, ConvertTo-Json rend un OBJET pour une liste d'un seul element,
+  # et le cote application recevrait autre chose qu'un tableau selon le nombre de pieces.
+  return ,[object[]]$lues.ToArray()
 }
 
 # L'adresse SMTP d'un destinataire, et non son chemin interne Exchange.
@@ -165,6 +216,10 @@ try {
       # sans lui, aucun fil ne se regroupe sur ce profil.
       sujetConversation = [string]$item.ConversationTopic
       corps = (Get-Corps $item $MaxCorps)
+      # Ce que le correspondant a REELLEMENT joint. Nom et taille seulement : le contenu ne traverse
+      # pas: l'instantane est lu a chaque rafraichissement, et un PDF de 3,5 Mo par message le
+      # rendrait inutilisable. Pour ouvrir la piece, l'application renvoie au message dans Outlook.
+      pieces = (Get-Pieces $item $MaxPieces)
       deMoi = $false
     })
   }
