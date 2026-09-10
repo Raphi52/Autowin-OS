@@ -22,6 +22,7 @@ import type { ChatPart } from './chat-view-model'
 import {
   extrairePromptSuivant,
   estPromptDePublication,
+  publicationJamaisDemandee,
   PROMPT_SALVAGE
 } from '../../../shared/prompt-suivant'
 import { extractRecommendation } from './markdown-recommandation'
@@ -379,7 +380,12 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   const demandeDuTour = texteDerniereDemande(entree.fil) ?? undefined
   const brut =
     extrairePromptSuivant(texteReponse, demandeDuTour) ?? extractRecommendation(texteReponse)
-  const suite = brut && estPromptDePublication(brut, demandeDuTour) ? PROMPT_SALVAGE : brut
+  const suite =
+    brut && publicationJamaisDemandee(brut, demandeDuTour)
+      ? null
+      : brut && estPromptDePublication(brut, demandeDuTour)
+        ? PROMPT_SALVAGE
+        : brut
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
   if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
   /*

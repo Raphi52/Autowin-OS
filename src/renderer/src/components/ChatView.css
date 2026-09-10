@@ -402,6 +402,16 @@
    s'est arrete, « ta reponse attendue » dit que la machine rend la main. Deux sens, deux couleurs. */
 .conversation-state.is-asking {
   color: #facc15;
+  /* DEMANDE DU 2026-09-10 : une question qui attend une reponse ne se distingue pas assez d'un
+     point jaune parmi d'autres jaunes (`is-unread`). Elle porte donc un TRIANGLE D'ALERTE, pas un
+     disque : la FORME se lit sans comparer des teintes. On annule ici la geometrie de pastille
+     (disque + halo) et on dessine l'icone en fond, embarquee (aucune URL reseau). */
+  width: 13px;
+  height: 13px;
+  border-radius: 0;
+  box-shadow: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f0a12e' d='M12 2.4c.5 0 .9.3 1.1.7l10.2 17.4c.4.7-.1 1.5-.9 1.5H1.6c-.8 0-1.3-.8-.9-1.5L10.9 3.1c.2-.4.6-.7 1.1-.7z'/%3E%3Cpath fill='%23231a05' d='M11 8.2h2v6h-2zM11 15.6h2v2.2h-2z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 /* Meme famille JAUNE que la question ouverte — les deux disent « c'est a toi » — mais une teinte
    propre : « on te demande quelque chose » et « c'est fini, tu ne l'as pas encore lu » n'appellent

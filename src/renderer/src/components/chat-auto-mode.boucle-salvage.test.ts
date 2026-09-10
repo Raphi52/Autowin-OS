@@ -44,10 +44,24 @@ describe('mode auto — le tri deja joue ne se rejoue pas', () => {
     )
   })
 
-  it('sans tri dans le tour, le garde-fou mord toujours', () => {
+  /*
+   * REVISION DU 2026-09-10 (conv-410). Avant, ce cas renvoyait `/salvage` : l'utilisateur demandait
+   * une correction, l'agent inventait une publication, et le mode auto lancait un tri que personne
+   * n'avait demande (« j'ai pas de git arrete de me casser les couilles pour publier »). Une
+   * publication que la demande du tour n'evoque nulle part ne produit plus AUCUNE suite.
+   */
+  it('publication jamais demandee : ni publication, ni tri, aucune suite', () => {
     const decision = deciderRelanceAuto({
       ...base,
       fil: [humain('corrige le bouton stop'), agent(REPONSE_PUBLIER)]
+    })
+    expect(decision.action).not.toBe('envoyer')
+  })
+
+  it('publication demandee par l utilisateur : le tri passe toujours avant', () => {
+    const decision = deciderRelanceAuto({
+      ...base,
+      fil: [humain('corrige le bouton stop puis pousse tout'), agent(REPONSE_PUBLIER)]
     })
     expect(decision.action === 'envoyer' && decision.texte.split(SAUT)[0]).toBe(PROMPT_SALVAGE)
   })
