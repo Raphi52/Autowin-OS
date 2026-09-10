@@ -389,7 +389,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     `guardString`, et l'etat est ramene a un booleen strict (`rawOn === true`) - aucune valeur
     //     du renderer n'atteint le disque telle quelle, aucun chemin n'est construit depuis l'appel.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(177)
+    // MISE A JOUR 2026-09-10 - 177 -> 178. UN canal, garde des sa premiere ligne :
+    //   `os:conversations:setClaudeAccount` (`src/main/ipc/conversations.ts`,
+    //     `assertTrustedRendererSender(event, 'Conversations')`) - memorise le compte Claude
+    //     d'UNE conversation. Il ECRIT, mais rien ne SORT du poste : l'identifiant et l'id de
+    //     compte passent par `guardString`, `null` est le seul autre cas accepte, et aucun
+    //     chemin n'est construit depuis l'appel (le dossier du compte est derive cote store).
+    expect(handlers).toHaveLength(178)
     expect(unguarded).toEqual([])
   })
 

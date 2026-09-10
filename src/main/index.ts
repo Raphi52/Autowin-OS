@@ -99,6 +99,7 @@ import {
   supersedeKnowledgeCandidate
 } from './brain-inbox'
 import { installCrashHandlers } from './crash-handlers'
+import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
 import { type ReasoningEffort, type Role } from './roles'
@@ -1726,6 +1727,7 @@ Le fil reprend ensuite normalement.`
     // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
     // `os:orchestrate:cancel` → `abortOrchestration(conversationId, motif)` le coupe réellement
     // (sinon no-op), et le MOTIF traverse jusqu'au message que l'utilisateur lit.
+    appliquerCompteDeConversation(conversationId)
     const controller = bus.registerOrchestration(conversationId)
     const turnId = randomUUID()
     // FRONTIÈRE DE PERSISTANCE : le run direct n'écrivait que le ledger et `orchestrate:step` (canal
@@ -2677,10 +2679,30 @@ Le fil reprend ensuite normalement.`
    * utilisateur : un tour lance autrement (outil `chat_send`, tache planifiee, reprise) restait
    * muet alors que le dossier range ne pilotait rien. Mesure du 2026-09-08.
    */
+  /**
+   * LE COMPTE CLAUDE DE LA CONVERSATION, applique juste AVANT le lancement.
+   *
+   * Le fournisseur d'env est global et sans argument (`configureClaudeAccountEnv` plus haut) : tout
+   * spawn du CLI lit le compte ACTIF au moment de l'appel. Le choix par conversation se realise
+   * donc en rendant actif le compte memorise sur la conversation, a l'instant ou son tour part.
+   * Aucun choix memorise -> rien ne change (comportement d'avant).
+   */
+  const appliquerCompteDeConversation = (conversationId: string): void => {
+    const voulu = os.conversations.get(conversationId)?.claudeAccountId
+    if (!voulu) return
+    if (claudeAccounts.active().id === voulu) return
+    if (!claudeAccounts.find(voulu)) return // compte retire entre-temps : on ne casse pas le tour
+    claudeAccounts.switchTo(voulu)
+    // Le quota appartient a l'ABONNEMENT : changer de compte rend le snapshot memorise caduc.
+    invalidateModelQuotaCache()
+  }
+
   const runPilotChat: typeof lancerTour = (...args) => {
     const conversationId = args[2]
-    if (typeof conversationId === 'string' && conversationId.trim())
+    if (typeof conversationId === 'string' && conversationId.trim()) {
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
+      appliquerCompteDeConversation(conversationId)
+    }
     return lancerTour(...args)
   }
   /**

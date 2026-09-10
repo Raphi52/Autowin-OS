@@ -300,6 +300,7 @@ interface ChatApi {
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
   providerLogin: (provider: string) => Promise<{ ok: true }>
   /** Comptes Claude multiples : un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
+  conversationSetClaudeAccount: (id: string, accountId: string | null) => Promise<string | null>
   claudeAccounts: () => Promise<ClaudeAccountsPayload>
   claudeAccountAdd: (label?: string) => Promise<ClaudeAccountsPayload>
   claudeAccountSwitch: (id: string) => Promise<ClaudeAccountsPayload>

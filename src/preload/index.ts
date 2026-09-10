@@ -342,6 +342,9 @@ const api = {
   providerLogin: (provider: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke('os:providerLogin', provider),
   /** Comptes Claude multiples — un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
+  /** Compte Claude propre a une conversation (`null` = compte de l'application). */
+  conversationSetClaudeAccount: (id: string, accountId: string | null): Promise<string | null> =>
+    ipcRenderer.invoke('os:conversations:setClaudeAccount', id, accountId),
   claudeAccounts: (): Promise<ClaudeAccountsPayload> =>
     ipcRenderer.invoke('os:claudeAccounts:list'),
   claudeAccountAdd: (label?: string): Promise<ClaudeAccountsPayload> =>

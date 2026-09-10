@@ -321,6 +321,13 @@ export function ChatView({
   onInspectTurn?: (target: InspectTurnTarget) => void
 }): React.JSX.Element {
   const [convs, setConvs] = useState<Conv[]>([])
+  /** Comptes Claude connus (liste + compte actif de l'application), pour la pop-up de modele. */
+  const [comptesClaude, setComptesClaude] = useState<{
+    activeId: string
+    accounts: Array<{ id: string; displayName: string; tier?: string; email?: string }>
+  } | null>(null)
+  const [compteBusy, setCompteBusy] = useState(false)
+  const [compteError, setCompteError] = useState<string | null>(null)
   /** Miroir stable de `convs` pour les écouteurs d'événements (pas de re-abonnement à chaque render). */
   const convsRef = useRef<Conv[]>([])
   convsRef.current = convs
@@ -1104,6 +1111,44 @@ export function ChatView({
       setRuntimeIdentity(resolved)
     }
     return resolved
+  }
+
+  useEffect(() => {
+    // Differe d'une micro-tache et appel OPTIONNEL, comme dans Routage : un preload plus ancien
+    // que le renderer ne doit pas produire de rejet non gere, et un `setState` atteint
+    // synchronement depuis un effet declenche des rendus en cascade.
+    void Promise.resolve().then(async () => {
+      const payload = await window.api.claudeAccounts?.().catch(() => null)
+      if (payload) setComptesClaude(payload)
+    })
+  }, [])
+
+  /**
+   * LE COMPTE CLAUDE, A L'ECHELLE DE LA CONVERSATION.
+   *
+   * Le choix est memorise sur la conversation ouverte (`conversationSetClaudeAccount`) ET rendu
+   * actif tout de suite, pour que la barre de quota et le badge d'auth parlent du bon compte. Le
+   * main le re-applique de toute facon au depart de chaque tour : c'est lui qui tient la verite.
+   */
+  const choisirCompteDeConversation = async (accountId: string): Promise<void> => {
+    if (!activeId || compteBusy) return
+    setCompteBusy(true)
+    setCompteError(null)
+    try {
+      await window.api.conversationSetClaudeAccount?.(activeId, accountId)
+      const payload = await window.api.claudeAccountSwitch?.(accountId)
+      if (payload) setComptesClaude(payload)
+      setConvs((courant) =>
+        courant.map((conv) =>
+          conv.id === activeId ? { ...conv, claudeAccountId: accountId } : conv
+        )
+      )
+      window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
+    } catch (error) {
+      setCompteError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCompteBusy(false)
+    }
   }
 
   async function changeOrchestratorModel(option: OrchestratorModelOption): Promise<void> {
@@ -5968,6 +6013,18 @@ Cliquer pour choisir une autre branche.`}
                     pending={modelChangePending}
                     error={modelChangeError}
                     onSelect={(option) => void changeOrchestratorModel(option)}
+                    comptes={
+                      comptesClaude && activeId
+                        ? {
+                            accounts: comptesClaude.accounts,
+                            selectedId: convs.find((conv) => conv.id === activeId)?.claudeAccountId,
+                            activeId: comptesClaude.activeId,
+                            busy: compteBusy || busy,
+                            error: compteError,
+                            onSelect: (accountId) => void choisirCompteDeConversation(accountId)
+                          }
+                        : undefined
+                    }
                   />
                 </div>
               </div>

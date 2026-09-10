@@ -197,6 +197,21 @@ export function registerConversationsIpc({
     if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
     return updated?.surlignee === true
   })
+  /**
+   * Choisir le compte Claude d'UNE conversation. Rend l'id retenu, ou null si aucun choix propre
+   * (id inconnu, ou retour au compte de l'application) : le renderer n'a pas a distinguer les deux.
+   */
+  ipcMain.handle(
+    'os:conversations:setClaudeAccount',
+    (event, rawId: string, rawAccount: unknown) => {
+      assertTrustedRendererSender(event, 'Conversations')
+      const id = guardString(rawId, 'id')
+      const accountId = rawAccount === null ? null : guardString(rawAccount, 'accountId')
+      const updated = os.conversations.choisirCompteClaude(id, accountId)
+      if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
+      return updated?.claudeAccountId ?? null
+    }
+  )
   ipcMain.handle('os:conversations:fork', (event, rawId: string, rawMessageId: string) => {
     assertTrustedRendererSender(event, 'Conversation fork')
     return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))

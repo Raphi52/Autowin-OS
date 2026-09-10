@@ -98,6 +98,13 @@ export type Conv = {
     runtime?: TurnRuntimeIdentity
     parts?: Part[]
     error?: string
+    /**
+     * Message ECRIT PENDANT un tour (orientation injectee) : il precise, il ne REPOND pas. Present
+     * sur `Msg` cote store mais absent d'ICI, alors que la liste des conversations le lit deja
+     * (ChatView : `find((m) => m.orientation !== true)`) — le controle de types etait rouge sur ce
+     * point AVANT ce travail, dans le depot comme ici.
+     */
+    orientation?: boolean
   }>
   messageCount?: number
   /**
@@ -115,6 +122,8 @@ export type Conv = {
   lastAssistantAsksUser?: boolean
   /** Repère visuel posé à la main sur cette conversation (voir `Conversation.surlignee`). */
   surlignee?: boolean
+  /** Compte Claude retenu pour CETTE conversation (voir `Conversation.claudeAccountId`). */
+  claudeAccountId?: string
   /**
    * Motif de l'echec du DERNIER tour, servi par la projection IPC. Il distingue, parmi toutes les
    * pastilles ROUGES, celles coupees par le mur de QUOTA — les seules qui se relancent telles

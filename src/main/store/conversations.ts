@@ -117,6 +117,15 @@ export interface Conversation {
    * plutôt que d'y écrire `false`, pour qu'un `conversations.json` relu n'en garde aucune trace.
    */
   surlignee?: boolean
+  /**
+   * Le compte Claude que CETTE conversation doit utiliser (id du store de comptes).
+   *
+   * OPTIONNEL, et il le reste : un `conversations.json` ecrit par une version anterieure doit
+   * continuer a se relire. Absent -> la conversation part sur le compte actif de l'application,
+   * exactement comme avant. Retirer le choix EFFACE le champ plutot que d'y ecrire une chaine
+   * vide, pour qu'un fichier relu n'en garde aucune trace.
+   */
+  claudeAccountId?: string
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
   createdAt: number
@@ -1706,6 +1715,23 @@ export class ConversationStore {
     if (!conversation) return undefined
     if (surlignee) conversation.surlignee = true
     else delete conversation.surlignee
+    this.changed(id)
+    return conversation
+  }
+
+  /**
+   * Choisit le compte Claude de CETTE conversation (`null` = revenir au compte de l'application).
+   * Rend la conversation, ou `undefined` si l'id est inconnu — meme contrat que `surligner`.
+   *
+   * Ne touche PAS `updatedAt` : choisir un compte n'est pas travailler, et la liste est triee par
+   * `updatedAt`.
+   */
+  choisirCompteClaude(id: string, accountId: string | null): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    if (!conversation) return undefined
+    const propre = accountId?.trim()
+    if (propre) conversation.claudeAccountId = propre
+    else delete conversation.claudeAccountId
     this.changed(id)
     return conversation
   }

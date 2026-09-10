@@ -16,6 +16,25 @@ import { Spinner } from './Spinner'
  * Il manquait ici : choisir un modèle par défaut sur un provider expiré, absent ou en standby
  * produisait un échec au PREMIER prompt, sans aucun signal au moment du choix.
  */
+/**
+ * Le choix de COMPTE Claude, a l'echelle de la conversation ouverte.
+ *
+ * Meme matiere que le bloc « Comptes » de Routage (memes classes, memes puces), mais le clic ne
+ * pilote plus seulement le compte de l'application : il est MEMORISE sur la conversation, qui
+ * repartira dessus a chaque tour. Bloc OPTIONNEL : sans cette prop, la pop-up est celle d'avant —
+ * c'est ce qui laisse Routage inchange.
+ */
+export interface OrchestratorAccounts {
+  accounts: Array<{ id: string; displayName: string; tier?: string; email?: string }>
+  /** Le compte retenu POUR CETTE CONVERSATION, ou undefined = celui de l'application. */
+  selectedId?: string
+  /** Le compte actif de l'application — sert de repli visuel quand la conversation n'en fixe aucun. */
+  activeId?: string
+  busy: boolean
+  error: string | null
+  onSelect: (accountId: string) => void
+}
+
 export interface OrchestratorProviderStatus {
   provider: string
   status: string
@@ -41,7 +60,8 @@ export function OrchestratorModelSelector({
   binding,
   pending,
   error,
-  onSelect
+  onSelect,
+  comptes
 }: {
   busy: boolean
   catalogLoaded: boolean
@@ -52,6 +72,8 @@ export function OrchestratorModelSelector({
   pending: boolean
   error: string | null
   onSelect: (option: OrchestratorModelOption) => void
+  /** Absent = aucun bloc « Compte » (cas de Routage : rien ne change pour lui). */
+  comptes?: OrchestratorAccounts
 }): React.JSX.Element {
   const statutDe = (provider: string): string | undefined =>
     statuses?.find((s) => s.provider === provider)?.status
@@ -269,6 +291,42 @@ export function OrchestratorModelSelector({
               </section>
             )
           })}
+          {comptes && comptes.accounts.length > 0 && (
+            <div className="router-accounts model-select-accounts" data-testid="conv-claude-accounts">
+              <span className="router-accounts-title">Compte de cette conversation</span>
+              <div className="router-accounts-list">
+                {comptes.accounts.map((account) => {
+                  const choisi =
+                    comptes.selectedId === undefined
+                      ? account.id === comptes.activeId
+                      : comptes.selectedId === account.id
+                  return (
+                    <button
+                      key={account.id}
+                      type="button"
+                      className={`router-account-chip${choisi ? ' is-active' : ''}`}
+                      data-testid={`conv-claude-account-${account.id}`}
+                      aria-pressed={choisi}
+                      disabled={comptes.busy}
+                      title={account.email ?? account.displayName}
+                      onClick={() => comptes.onSelect(account.id)}
+                    >
+                      {account.displayName}
+                      {account.tier && <em className="router-account-tier">{account.tier}</em>}
+                    </button>
+                  )
+                })}
+              </div>
+              {comptes.error && (
+                <p className="router-account-error" role="alert" data-testid="conv-claude-account-error">
+                  Action impossible : {comptes.error}
+                </p>
+              )}
+              <p className="router-hint">
+                Ce compte est retenu pour cette conversation : chacun de ses tours repart dessus.
+              </p>
+            </div>
+          )}
         </div>
       </details>
       <span id="chat-orchestrator-model-help" className="model-select-help">
