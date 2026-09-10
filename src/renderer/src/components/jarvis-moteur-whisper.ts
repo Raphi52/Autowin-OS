@@ -331,22 +331,58 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
 }
 
 /** Les dépendances RÉELLES du navigateur : ce câblage n'est pas testable hors fenêtre, il reste nu. */
+/**
+ * D'OÙ VIENT LE SON : le micro, ou ce que la machine JOUE.
+ *
+ * `haut-parleurs` sert au mode conversation téléphonique : pour transcrire l'INTERLOCUTEUR (Teams,
+ * Meet, un téléphone en haut-parleur), il faut capter la sortie audio du système, pas le micro. Sous
+ * Windows, Electron le rend via `getDisplayMedia` : le processus principal répond à la demande avec
+ * `audio: 'loopback'` (voir `src/main/audio-loopback.ts`). La piste VIDÉO qui accompagne la réponse
+ * est coupée immédiatement — on ne filme pas l'écran, on n'en veut que le son.
+ */
+export type SourceAudio = 'micro' | 'haut-parleurs'
+
+/** La piste vidéo imposée par la capture d'écran : ouverte par Chromium, inutile ici, et coûteuse
+ * si on la laisse tourner (une image d'écran encodée en continu). */
+async function fluxSonSysteme(): Promise<FluxAudio> {
+  const media = navigator.mediaDevices as unknown as {
+    getDisplayMedia?: (c: unknown) => Promise<MediaStream>
+  }
+  if (!media.getDisplayMedia)
+    throw Object.assign(new Error('capture du son système indisponible'), {
+      name: 'NotFoundError'
+    })
+  const flux = await media.getDisplayMedia({ audio: true, video: true })
+  for (const piste of flux.getVideoTracks?.() ?? []) {
+    piste.stop()
+    flux.removeTrack?.(piste)
+  }
+  if ((flux.getAudioTracks?.() ?? []).length === 0) {
+    for (const piste of flux.getTracks()) piste.stop()
+    throw Object.assign(new Error('aucun son système capté'), { name: 'NotReadableError' })
+  }
+  return flux as unknown as FluxAudio
+}
+
 export function dependancesNavigateur(
   transcrire: (wav: Uint8Array) => Promise<string>,
-  peripherique?: string
+  peripherique?: string,
+  source: SourceAudio = 'micro'
 ): DependancesWhisper {
   return {
     micro: () =>
-      navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          channelCount: 1,
-          // Sans `deviceId`, Windows impose SON micro par défaut — souvent celui d'une webcam,
-          // c'est-à-dire le niveau trop bas mesuré comme cause du charabia.
-          ...(peripherique ? { deviceId: { exact: peripherique } } : {})
-        }
-      }) as unknown as Promise<FluxAudio>,
+      source === 'haut-parleurs'
+        ? fluxSonSysteme()
+        : (navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              channelCount: 1,
+              // Sans `deviceId`, Windows impose SON micro par défaut — souvent celui d'une webcam,
+              // c'est-à-dire le niveau trop bas mesuré comme cause du charabia.
+              ...(peripherique ? { deviceId: { exact: peripherique } } : {})
+            }
+          }) as unknown as Promise<FluxAudio>),
     contexte: () =>
       new (window as unknown as { AudioContext: new (o?: unknown) => ContexteAudio }).AudioContext({
         sampleRate: TAUX_WHISPER

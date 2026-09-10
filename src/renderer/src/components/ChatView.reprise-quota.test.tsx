@@ -8,6 +8,7 @@
  *  1. il ne s'affiche PAS quand aucune conversation n'est coupée par le quota ;
  *  2. il ne relance QUE celles-là — une pastille rouge tombée sur une vraie erreur ne bouge pas.
  */
+import { act } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { chatApi, conversation, installRafShim, mountChat } from './ChatView.harness'
 
@@ -93,4 +94,43 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
     await vue.unmount()
   })
 
+  /**
+   * DEFAUT VECU le 2026-09-09 (capture utilisateur) : « quand ya 0 convers a reprendre faut pas
+   * afficher le msg ». Le compte-rendu de reprise gardait le bloc ouvert, et avec lui un bouton
+   * « (0) » qui n'offrait plus rien a cliquer.
+   */
+  it("ne montre plus le bouton « (0) » quand la file est vidée", async () => {
+    // La conversation reprise cesse d'etre coupee : c'est l'etat de la capture — file vide, mais
+    // compte-rendu encore affiche.
+    let reprise = false
+    const resumePilotChat = vi.fn().mockImplementation(async () => {
+      reprise = true
+      return { ok: true, cancelled: false, turnId: 't' }
+    })
+    let emettre: ((e: Record<string, unknown>) => void) | null = null
+    const vue = await mountChat(
+      chatApi({
+        conversations: vi
+          .fn()
+          .mockImplementation(async () => [
+            reprise ? conversation('B') : coupee('B', 'insufficient_quota')
+          ]),
+        onAppEvent: vi.fn((cb: (e: Record<string, unknown>) => void) => {
+          emettre = cb
+          return vi.fn()
+        }),
+        resumePilotChat
+      })
+    )
+    await vue.click('[data-testid="conv-reprise-quota-bouton"]')
+    await vi.waitFor(() =>
+      expect(
+        vue.container.querySelector('[data-testid="conv-reprise-quota-notice"]')?.textContent
+      ).toContain('reprise')
+    )
+    // La liste se rafraichit comme en vrai : B n'est plus coupee.
+    await act(async () => emettre?.({ type: 'refresh', scope: 'conversations' }))
+    await vi.waitFor(() => expect(bouton(vue.container)).toBeNull())
+    await vue.unmount()
+  })
 })

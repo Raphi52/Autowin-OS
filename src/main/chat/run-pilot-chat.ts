@@ -636,7 +636,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             turnId,
             pilotEvent.text,
             durableResponseTextSeen,
-            pilotEvent.outcome
+            pilotEvent.outcome,
+            streamedSpoken
           )
           if (livraison) {
             os.conversations.applyTurnEvent(conversationId, turnId, livraison.durable)

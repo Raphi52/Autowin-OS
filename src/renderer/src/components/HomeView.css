@@ -1141,15 +1141,6 @@
    capitales monospace. Le SEUL etat qui vire au rouge est l'enregistrement en cours : il doit se
    voir de l'autre bout de la piece.
    ------------------------------------------------------------------------------------------------ */
-.jarvis__anneau {
-    align-self: center;
-  }
-
-  .jarvis__audio-champ > span {
-    flex-basis: 100%;
-  }
-}
-
 .jarvis__paroles li {
   color: var(--text-dim);
   font-size: 11px;
@@ -1275,7 +1266,14 @@
   gap: 7px;
   height: 100%;
   padding: 12px 14px;
-  overflow: hidden;
+  /* LE CONTENU DEFILE, il n'est plus COUPE. Constate a l'ecran le 2026-09-09 : la tuile fait deux
+     rangees de la grille, et depuis l'ajout du choix « Mode » et du bloc « Parametres audio », le
+     choix du micro tombait sous le bord et devenait INATTEIGNABLE — `overflow: hidden` cachait la
+     moitie basse du widget sans le dire. La hauteur de la tuile appartient a l'utilisateur (il la
+     redimensionne) : c'est donc au contenu de defiler, pas a la tuile de grandir toute seule.
+     `overflow-x` reste cache : rien ne doit deborder lateralement d'un viseur a angles coupes. */
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid rgba(var(--hud), 0.3);
   border-radius: 4px;
   font-size: 12px;
@@ -1426,6 +1424,60 @@
   min-height: 14px;
   padding-left: 8px;
   border-left: 2px solid rgba(var(--hud), 0.55);
+}
+
+/*
+  LE CHOIX DU MODE ET DU MICRO. Même dessin que les paramètres audio de Jarvis, classes propres au
+  widget : partager les classes `jarvis__*` ferait dépendre l'apparence d'un widget de l'autre.
+  Le fond du menu est OPAQUE — la même cause que pour Jarvis : un voile translucide laisse passer le
+  blanc du thème natif de Chromium, et la liste se lit alors blanc sur blanc.
+*/
+.enregistrements__champ {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.enregistrements__champ > span {
+  flex: 0 1 auto;
+  min-width: min(130px, 45cqi);
+  color: #a9b2c4;
+}
+
+.enregistrements__champ select {
+  flex: 1;
+  min-width: 0;
+  background: #14120d;
+  border: 1px solid rgba(212, 169, 79, 0.22);
+  border-radius: 3px;
+  color: #dde3ee;
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.enregistrements__audio {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.enregistrements__audio > summary {
+  cursor: pointer;
+  color: #d4a94f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.enregistrements__aide {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: #a9b2c4;
 }
 
 .enregistrements__titre {

@@ -169,6 +169,65 @@ function scriptsDeclares(dir: string): Record<string, string> | null {
 }
 
 /**
+ * PREUVE AUTRE QUE LES TESTS — `lint` et `typecheck`.
+ *
+ * `verify` ne savait rejouer QUE la suite de tests. Les scripts `lint` et `typecheck` existent dans
+ * `package.json` depuis toujours, mais rien au catalogue ne l'indiquait : la seule voie etait
+ * `run npm run typecheck`, donc une capacite PRESENTE et INDECOUVRABLE. Un typage rouge se
+ * decouvrait alors a la publication, apres coup.
+ *
+ * MEME PROPRIETE DE SURETE que les tests : le modele ne transmet pas une commande, il transmet un
+ * TYPE parmi trois valeurs fermees. La commande est construite ICI, depuis une liste blanche, et
+ * seulement si le projet DECLARE le script — sinon on refuse en le disant, plutot que d'inventer un
+ * vert.
+ *
+ * PROVENANCE : recupere le 2026-09-09 d'une copie de travail isolee jamais publiee
+ * (`agent__run-7ea9ff7647f9-1`), ou ce code etait vert mais invisible de la base. La lecture de
+ * `package.json` REUTILISE `scriptsDeclares` ci-dessus au lieu de la seconde definition qu'y
+ * portait la copie : une deuxieme lecture aurait pu deriver de la premiere.
+ */
+export type TypeDeVerification = 'test' | 'lint' | 'typecheck'
+
+/** Le script attendu dans `package.json` pour chaque type, et la commande npm correspondante. */
+const SCRIPTS_DE_PREUVE: Readonly<Record<'lint' | 'typecheck', string>> = {
+  lint: 'npm run lint',
+  typecheck: 'npm run typecheck'
+}
+
+/** Types acceptes, rendus a l'appelant pour composer un refus qui ENSEIGNE. */
+export const TYPES_DE_VERIFICATION: readonly TypeDeVerification[] = ['test', 'lint', 'typecheck']
+
+/** Liste blanche EXHAUSTIVE des commandes de preuve NON-test. Volontairement minuscule. */
+export const ALLOWED_SCRIPT_COMMANDS: ReadonlySet<string> = new Set([
+  'npm run lint',
+  'npm run typecheck'
+])
+
+export function decideVerifyScript(
+  type: 'lint' | 'typecheck',
+  cwd: string | undefined,
+  lireScripts: (dir: string) => Record<string, unknown> | null = scriptsDeclares
+): VerifyDecision {
+  if (!cwd || !cwd.trim()) {
+    return { allowed: false, reason: 'aucun workspace résolu — rien à vérifier' }
+  }
+  const command = SCRIPTS_DE_PREUVE[type]
+  if (!command) return { allowed: false, reason: `type de vérification inconnu : ${type}` }
+  const scripts = lireScripts(cwd)
+  if (!scripts || typeof scripts[type] !== 'string' || !(scripts[type] as string).trim()) {
+    return {
+      allowed: false,
+      reason: `le projet ne déclare aucun script « ${type} » — rien à rejouer (pas de faux vert)`
+    }
+  }
+  // Ceinture ET bretelles, comme pour les tests : seule une commande de la liste blanche sort d'ici.
+  if (!ALLOWED_SCRIPT_COMMANDS.has(command)) {
+    return { allowed: false, reason: `commande non autorisée : ${command}` }
+  }
+  return { allowed: true, command, cwd }
+}
+
+/**
  * LE SCRIPT DE TEST EST-IL UN LANCEMENT VITEST *UNIQUE* ? — la seule forme qui accepte des drapeaux.
  *
  * `related` et `--reporter=json` sont des notions de VITEST. Deux defauts successifs, tous deux

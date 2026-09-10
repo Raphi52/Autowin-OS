@@ -1,7 +1,8 @@
 import {
   dependancesNavigateur,
   fabriqueWhisper,
-  type FabriqueMoteur
+  type FabriqueMoteur,
+  type SourceAudio
 } from './jarvis-moteur-whisper'
 
 interface ApiTranscription {
@@ -20,13 +21,19 @@ const apiJarvis = (): ApiTranscription | undefined =>
  */
 export function fabriqueMoteur(
   whisperInstalle: boolean,
-  peripherique?: string
+  peripherique?: string,
+  source: SourceAudio = 'micro'
 ): FabriqueMoteur | null {
   const api = apiJarvis()
   if (whisperInstalle && api?.whisperTranscrire) {
     const transcrire = api.whisperTranscrire.bind(api)
-    return fabriqueWhisper(dependancesNavigateur((wav) => transcrire(wav), peripherique))
+    return fabriqueWhisper(dependancesNavigateur((wav) => transcrire(wav), peripherique, source))
   }
+  // LE SON DU SYSTEME N'A PAS DE SECOURS. Le moteur du navigateur ouvre le micro lui-meme et
+  // n'accepte aucun flux : sans reconnaissance hors ligne installee, « ce que j'entends » ne peut
+  // pas etre transcrit. Rendre le moteur du navigateur ici transcrirait le MICRO en le faisant
+  // passer pour l'interlocuteur — deux fois la meme voix, attribuee a tort.
+  if (source === 'haut-parleurs') return null
   const w = window as unknown as {
     SpeechRecognition?: FabriqueMoteur
     webkitSpeechRecognition?: FabriqueMoteur

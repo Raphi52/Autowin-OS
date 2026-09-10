@@ -181,6 +181,25 @@ export interface ConversationRecherche {
   updatedAt: number
   messageCount: number
   extraits: ConversationExtrait[]
+  /**
+   * Densité de pertinence du meilleur message de la conversation (voir `search`).
+   *
+   * EXPOSE le 2026-09-09. Il etait calcule, servait au tri, puis etait JETE au retour
+   * (`{ score: _score, ...reste }`). Un appelant ne pouvait donc pas distinguer « la meilleure
+   * correspondance du corpus » d'une correspondance FORTE : `search` rend toujours ses trois
+   * premieres, meme quand elles ne ressemblent a rien.
+   *
+   * Mesure qui l'a impose : le rappel injecte se declenchait sur 80,6 % des tours pour une
+   * precision de 13,4 %, parce qu'il filtrait sur la LONGUEUR de la demande -- un indice sans
+   * rapport avec la ressemblance. La precision etait PLATE (14 %) de 250 a 1000 caracteres, donc
+   * aucun reglage de ce seuil ne pouvait aider. Le seul discriminant disponible etait ce score,
+   * et il n'etait pas visible.
+   *
+   * Echelle : ce n'est pas une probabilite. C'est un poids de mots rares divise par la racine de
+   * la longueur du message (plafonnee a 564). Il ne se compare qu'a lui-meme, d'ou la necessite de
+   * calibrer tout plancher sur le corpus reel plutot que de choisir un chiffre rond.
+   */
+  score: number
 }
 
 /**
@@ -1042,7 +1061,13 @@ export class ConversationStore {
         ...(conversation.projectPath ? { projectPath: conversation.projectPath } : {}),
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messages.length,
-        extraits
+        extraits,
+        /**
+         * La recherche LITTERALE ne pondere pas : le terme est present ou absent. Le score vaut donc
+         * 1, une CERTITUDE de correspondance exacte, et non un zero qui ferait passer ce chemin pour
+         * le plus mauvais resultat possible aupres d'un appelant qui filtre sur un plancher.
+         */
+        score: 1
       })
       if (trouvees.length >= limite) break
     }
@@ -1589,7 +1614,7 @@ export class ConversationStore {
     }
     const marques = candidats.map((c) => ({ c, porte: porte(c.id) }))
     marques.sort((a, b) => b.porte - a.porte)
-    return marques.slice(0, limite).map(({ c: { score: _score, ...reste } }) => reste)
+    return marques.slice(0, limite).map(({ c }) => c)
   }
 
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */

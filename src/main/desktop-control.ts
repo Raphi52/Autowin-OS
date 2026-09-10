@@ -381,6 +381,14 @@ foreach ($action in $actions) {
     'move' { [AutowinDesktopNative]::Move([int]$action.x, [int]$action.y, [int]$action.desktopLeft, [int]$action.desktopTop, [int]$action.desktopWidth, [int]$action.desktopHeight) }
     'click' {
       [AutowinDesktopNative]::Move([int]$action.x, [int]$action.y, [int]$action.desktopLeft, [int]$action.desktopTop, [int]$action.desktopWidth, [int]$action.desktopHeight)
+      # LE DEPLACEMENT DOIT ETRE DIGERE AVANT L'APPUI. Move puis Click sans pause envoie le bouton
+      # dans le meme lot d'entrees que le mouvement : Chromium teste alors la cible sur la POSITION
+      # PRECEDENTE du curseur, et le clic atterrit la ou la souris tra1nait avant. Mesure du
+      # 2026-09-09 (conv-363) : trois clics sur « Parametres audio » ont ouvert des conversations
+      # de la liste voisine, ou l'utilisateur avait laisse sa souris ; la meme cible a repondu du
+      # premier coup des qu'un mouvement separe precedait le clic. Ce n'est pas un delai de confort,
+      # c'est le temps que la fenetre visee traite le WM_MOUSEMOVE.
+      Start-Sleep -Milliseconds 40
       [AutowinDesktopNative]::Click([string]$action.button, [int]$action.clicks)
     }
     'scroll' {
