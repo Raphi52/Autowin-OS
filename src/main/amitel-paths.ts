@@ -36,7 +36,33 @@ export const DEFAULT_AMITEL_WORKSPACES: readonly string[] = ['C:\\Amitel', 'C:\\
 
 export function amitelBrainRoot(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.AMITEL_BRAIN_ROOT?.trim()
-  return configured ? configured : DEFAULT_BRAIN_ROOT
+  if (configured) return configured
+  return racineDepuisInstallation(env) ?? DEFAULT_BRAIN_ROOT
+}
+
+/**
+ * Racine lue dans la CONFIGURATION POSEE PAR L'INSTALLATION (`config.json`, cle `brain_root`),
+ * quand l'environnement est muet — meme logique que `origineDepuisInstallation` plus bas.
+ *
+ * DEFAUT VECU (conv-2, 2026-09-10) : le moteur de requete (`resolveBrainRuntime`) lisait deja
+ * `config.json` et repondait depuis le brain local, pendant que la vue Knowledge
+ * (`listBrains` → `scanBrainGraphs`) ne lisait QUE l'environnement et retombait sur le partage
+ * \\ged2 — inexistant hors VPN, donc AUCUN coffre de savoir affiche alors que les requetes,
+ * elles, marchaient. Deux resolutions pour la meme racine = deux verites ; ce repli realigne les
+ * deux sur le fichier d'installation.
+ */
+function racineDepuisInstallation(env: NodeJS.ProcessEnv): string | undefined {
+  const stateRoot = amitelBrainStateRoot(env)
+  if (!stateRoot) return undefined
+  let config: { brain_root?: unknown }
+  try {
+    config = JSON.parse(readFileSync(join(stateRoot, 'config.json'), 'utf8')) as typeof config
+  } catch {
+    // Installation absente ou inachevee : le defaut reste valide, on ne fait pas echouer la lecture.
+    return undefined
+  }
+  const brainRoot = typeof config.brain_root === 'string' ? config.brain_root.trim() : ''
+  return brainRoot || undefined
 }
 
 export function requireLoopbackBrainOrigin(value: string): string {
