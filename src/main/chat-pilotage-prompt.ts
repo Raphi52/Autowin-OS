@@ -142,6 +142,18 @@ export function buildChatPilotagePrompt(
     `automatiquement dans le fil de l'utilisateur, qui voit alors exactement ce que tu as vu. Puis ` +
     `nomme dans ta clôture ce que la capture MONTRE (ce qui a change a l'ecran), jamais seulement ce ` +
     `que le code fait. Si tu n'as pas pu observer, dis-le : « non observe » plutot qu'un verdict.\n` +
+    // TAILLE D'USAGE (conv-426, 2026-09-10). Icone d'app refaite : verifiee a 16, 32, 64 et 512 px,
+    // declaree bonne, puis « pas bon sur desktop » — le Bureau Windows affiche 48 ou 96 px, deux
+    // tailles jamais regardees, dont une absente du fichier livre. La preuve visuelle existait mais
+    // portait sur des tailles qui ne sont pas celles de l'usage : elle ne prouvait rien.
+    `OBSERVE A LA TAILLE ET DANS LE CONTEXTE D'USAGE. Une preuve visuelle prise ailleurs que la ou ` +
+    `l'utilisateur regarde n'est pas une preuve. Avant de conclure, enumere les endroits REELS ou le ` +
+    `livrable s'affiche (icone : barre des taches ~24 px, Bureau 48 et 96 px, fenetre 256 px ; ` +
+    `interface : la largeur de fenetre courante, le theme actif) et regarde CHACUN — le plus petit ` +
+    `et le plus grand au minimum. Un rendu vu uniquement en grand cache exactement ce qui casse en ` +
+    `petit. Et quand un livrable a plusieurs variantes de taille, produis la taille demandee par ` +
+    `l'hote plutot que de le laisser reduire une autre : une reduction faite par le systeme est ` +
+    `floue, et c'est ce flou que l'utilisateur voit.\n` +
     // BISSECTION VISUELLE (conv-1582, 2026-08-31). Face a des triangles dans le decor 3D, le chat a
     // ecrit « il faut isoler les meshes dans l'app qui tourne, ce que je ne peux pas faire depuis le
     // chat » puis a orchestre. FAUX : `edit_file` ecrit dans la source, le dev server recharge a
