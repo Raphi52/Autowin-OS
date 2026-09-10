@@ -2064,17 +2064,19 @@ tags: [${theme}]
       symlinkSync(allowed, alias, linkType)
 
       const previewPending = isolated.loadBrainGraphPreviewAsync(alias, 100)
-      rmSync(alias, { force: true })
+      // `recursive` requis depuis Node 24 : rmSync sans lui refuse une junction Windows (EISDIR).
+      // Il retire le LIEN seul — la cible et ses fichiers restent intacts (sonde du 2026-09-10).
+      rmSync(alias, { recursive: true, force: true })
       symlinkSync(outside, alias, linkType)
       const preview = await previewPending
 
       expect(preview.nodes).toHaveLength(100)
       expect(preview.nodes.every(({ label }) => label.startsWith('INSIDE-'))).toBe(true)
 
-      rmSync(alias, { force: true })
+      rmSync(alias, { recursive: true, force: true })
       symlinkSync(allowed, alias, linkType)
       const graphPending = isolated.loadBrainGraphAsync(alias, 100)
-      rmSync(alias, { force: true })
+      rmSync(alias, { recursive: true, force: true })
       symlinkSync(outside, alias, linkType)
       const graph = await graphPending
 
