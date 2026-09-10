@@ -116,6 +116,12 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   'theme-clair': { destination: 'settings', section: 'interface' },
   behaviour: { destination: 'settings', section: 'behaviour' },
   behavior: { destination: 'settings', section: 'behaviour' },
+  // Le Diagnostic de démarrage n'avait AUCUN nom : « diagnostic » retombait sur le chat, donc la
+  // seule section qui porte une alerte n'était atteignable qu'à la souris (constat du 2026-09-10).
+  diagnostic: { destination: 'settings', section: 'preflight' },
+  preflight: { destination: 'settings', section: 'preflight' },
+  prerequis: { destination: 'settings', section: 'preflight' },
+  prérequis: { destination: 'settings', section: 'preflight' },
   // Un agent pilote l'app par des NOMS : sans ces entrées, la séparation Watchdog/Planification ne
   // serait atteignable qu'à la souris, et « va sur le watchdog » atterrirait sur la mauvaise section.
   watchdog: { destination: 'task-manager', section: 'watchdog' },
