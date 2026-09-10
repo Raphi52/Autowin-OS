@@ -63,6 +63,21 @@ function warnInvalidCorpusOverride(): void {
 }
 
 /** Slug comparable d'un chemin de workspace : dernier segment, minuscules, espaces en tirets. */
+/**
+ * NOM DU DÉPÔT TEL QU'IL S'ÉCRIT — pour PARLER au Brain, pas pour l'indexer.
+ *
+ * MESURE 2026-09-09 : la requête d'empreinte de `think` partait avec le slug aplati `autowinos`
+ * (dossier `D:\AutoWinOS`). Ce mot n'existe dans AUCUNE note — les notes écrivent « Autowin OS » /
+ * « autowin-os » — donc la recherche dense ne trouvait aucun candidat au-dessus du seuil et
+ * l'empreinte revenait VIDE : 60 empreintes vides sur 195, et plus une seule trouvée après le
+ * 05/09. Rejoué à l'identique, `AutoWinOS` et `autowin-os` remontent tous deux la note de cap
+ * produit ; seul `autowinos` échoue. Le slug reste juste pour NOMMER un fichier, jamais pour
+ * INTERROGER.
+ */
+export function workspaceLabel(workspacePath: string): string {
+  return basename(workspacePath.replace(/[\\/]+$/, '')).trim()
+}
+
 export function workspaceSlug(workspacePath: string): string {
   const name = basename(workspacePath.replace(/[\\/]+$/, ''))
   return name
