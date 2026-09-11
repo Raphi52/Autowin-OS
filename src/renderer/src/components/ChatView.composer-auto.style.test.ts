@@ -39,6 +39,10 @@ describe('bouton mode auto du composer — rond, petit, dore', () => {
     // Le dore est rattache au jeton --gold-clair (#e3ba55 en sombre) depuis le chantier
     // jetons de theme (2026-09-09) : on verrouille le jeton, plus le hex fige.
     expect(actif).toMatch(/var\(--gold-clair\)/)
+    // Greffe du chantier jetons (branche run-2e9d0a027dc3-1, 2026-09-10) : le hex figé est
+    // interdit explicitement. Sans ce garde, un retour au `#e3ba55` en dur repasserait
+    // inaperçu — il reste doré en sombre, mais ne suit plus les thèmes clairs.
+    expect(actif).not.toMatch(/#e3ba55/i)
     expect(actif).toMatch(/rgba\(212, 169, 79/)
     expect(actif).not.toMatch(/239, 63, 145/)
   })
