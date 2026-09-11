@@ -47,12 +47,13 @@ describe('barre de quota cliquable', () => {
    */
   it('centre la pastille sur la fin du remplissage sans deborder a 100 %', () => {
     expect(component).toContain("'--quota-ratio': `${(remaining ?? 0) / 100}`")
+    // La pastille se pose AU BOUT de la ligne : la barre reserve 22 px a sa droite et le bord
+    // GAUCHE de la pastille tombe sur la fin du remplissage (aucun retrait).
     expect(styles).toMatch(
-      /\.model-quota-bar-value\s*{[^}]*left:\s*min\(var\(--quota-fill, 0%\), calc\(100% - 11px\)\);/s
+      /\.model-quota-bar-value\s*{[^}]*left:\s*calc\(var\(--quota-ratio, 0\) \* \(100% - 22px\)\);/s
     )
-    expect(styles).toMatch(
-      /\.model-quota-bar-value\s*{[^}]*--quota-retrait:\s*11px;/s
-    )
+    expect(styles).toMatch(/\.model-quota-bar-value\s*{[^}]*--quota-retrait:\s*0px;/s)
+    expect(styles).toMatch(/\.model-quota-bar\s*{[^}]*margin-right:\s*22px;/s)
     expect(styles).toMatch(
       /\.model-quota-bar-value\s*{[^}]*transform:\s*translate\(calc\(-1 \* var\(--quota-retrait, 0px\)\), -50%\);/s
     )

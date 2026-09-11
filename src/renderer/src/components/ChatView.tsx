@@ -7,6 +7,7 @@ import { completerAvecHistorique, filAffichable } from './fil-affichable'
 import {
   extrairePromptSuivant,
   estPromptDePublication,
+  publicationJamaisDemandee,
   PROMPT_SALVAGE
 } from '../../../shared/prompt-suivant'
 import {
@@ -242,8 +243,11 @@ function ghostDuFil(fil: Msg[]): string | null {
     .reverse()
     .find((m): m is UserMsg & { messageId?: string } => m.role === 'user')?.content
   const suite = extrairePromptSuivant(text, demandeDuTour) ?? extractRecommendation(text)
-  // Le repli sur la rubrique « Recommandé » obéit à la même règle : publier passe par /salvage.
-  return suite && estPromptDePublication(suite, demandeDuTour) ? PROMPT_SALVAGE : suite
+  // Le repli sur la rubrique « Recommandé » obéit à la même règle : publier passe par /salvage —
+  // et une publication que personne n'a demandée ne propose RIEN du tout.
+  if (!suite) return suite
+  if (publicationJamaisDemandee(suite, demandeDuTour)) return null
+  return estPromptDePublication(suite, demandeDuTour) ? PROMPT_SALVAGE : suite
 }
 
 // Les suggestions d'accueil ne sont plus figées : elles se DÉRIVENT de l'état réel
@@ -3461,6 +3465,16 @@ export function ChatView({
     []
   )
 
+  /**
+   * SESSION EXPIREE — ouvre le login officiel du provider (meme canal que « Se reconnecter » de la
+   * page Routeur). Offert a la place de « Renvoyer » : renvoyer le prompt echouerait a l'identique.
+   */
+  const ouvrirLogin = useCallback(() => {
+    void window.api.providerLogin('claude').catch((raison: unknown) => {
+      console.error('providerLogin claude', raison)
+    })
+  }, [])
+
   /* --- envoi --- */
 
   function flatten(
@@ -4578,6 +4592,7 @@ export function ChatView({
             }
             onResend={pickSuggestion}
             onRefineResume={refineResumeDraft}
+            onLogin={ouvrirLogin}
             directiveReceipts={
               message.role === 'assistant' ? activeDirectiveReceiptsByMessage.get(index) : undefined
             }
@@ -4598,7 +4613,8 @@ export function ChatView({
       onInspectTurn,
       handleFork,
       revealLiveAction,
-      refineResumeDraft
+      refineResumeDraft,
+      ouvrirLogin
     ]
   )
 

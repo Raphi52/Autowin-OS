@@ -58,6 +58,8 @@ export function extrairePromptSuivant(
     if (!/[\p{L}\p{N}]/u.test(brut)) continue
     trouve = brut.length > LONGUEUR_MAX ? brut.slice(0, LONGUEUR_MAX).trimEnd() : brut
   }
+  // Publication que PERSONNE n'a demandée : pas de suite du tout (voir plus bas).
+  if (trouve && publicationJamaisDemandee(trouve, demandeDuTour)) return null
   if (trouve && estPromptDePublication(trouve, demandeDuTour)) return PROMPT_SALVAGE
   return trouve
 }
@@ -145,6 +147,32 @@ const CHARNIERE_DE_SUITE = /\b(puis|ensuite|apr[eè]s (?:quoi|avoir)|et enfin)\b
  */
 export function ordreDeTriDejaJoue(demandeDuTour: string | undefined): boolean {
   return demandeDuTour !== undefined && ORDRE_DE_TRI.test(demandeDuTour)
+}
+
+/*
+ * QUATRIEME EXCEPTION, LA PLUS LARGE : LA PUBLICATION N'A JAMAIS ETE DEMANDEE.
+ *
+ * VECU LE 2026-09-10 (conv-410). L'utilisateur demande « enleve le bouton historique vged » sur un
+ * projet tiers. Le tour ne touche qu'un fichier, rien ne parle de publier — mais la cloture doit
+ * proposer une suite, l'agent invente « committer », et l'application reecrit cette invention en
+ * `/salvage`. Reponse de l'utilisateur : « j'ai pas de git arrete de me casser les couilles pour
+ * publier ». Il n'a jamais demande a publier ; on lui repond quand meme par un ordre de tri.
+ *
+ * La decision du 2026-09-02 disait : « ne publie pas sans trier d'abord ». Elle NE disait pas :
+ * « propose de trier quand personne ne veut publier ». Quand la demande ENTRANTE ne parle ni de
+ * publier ni de trier, la bonne suite n'est ni la publication ni le tri : c'est AUCUNE suite. Rien
+ * n'est publie a l'aveugle — l'esprit du garde-fou est intact — et le tri cesse d'etre propose a un
+ * utilisateur qui ne demandait rien de tel.
+ *
+ * Le garde-fou garde tout son mordant sur le cas qu'il vise vraiment : l'utilisateur veut publier,
+ * on trie d'abord.
+ */
+export function publicationJamaisDemandee(prompt: string, demandeDuTour?: string): boolean {
+  // Sans demande connue, on ne sait RIEN : on garde l'ancien garde-fou plutot que de supprimer une
+  // suite peut-etre legitime. La suppression n'a lieu que sur une demande LUE qui ne publie pas.
+  if (!demandeDuTour?.trim()) return false
+  if (!estPromptDePublication(prompt, demandeDuTour)) return false
+  return !ACTES_DE_PUBLICATION.test(demandeDuTour)
 }
 
 export function estPromptDePublication(prompt: string, demandeDuTour?: string): boolean {

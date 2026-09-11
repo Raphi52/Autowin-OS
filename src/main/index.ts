@@ -70,7 +70,7 @@ import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import type { ExecutionEvidence, ProviderAdapter } from './providers/types'
+import type { ExecutionEvidence, Message, ProviderAdapter } from './providers/types'
 import { guardBrokenProcessPipes } from './process-stream-guards'
 import { AutowinOS } from './os'
 import {
@@ -293,6 +293,7 @@ import {
   diagnostiqueDossierConversation,
   dossierDeTravailDuTour
 } from './bascule-dossier-conversation'
+import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -2697,9 +2698,40 @@ Le fil reprend ensuite normalement.`
     invalidateModelQuotaCache()
   }
 
+  /**
+   * BASCULE AUTOMATIQUE quand la demande NOMME un autre depot que celui du tour.
+   *
+   * L'oubli de ranger la conversation faisait partir le tour dans le depot d'Autowin alors que
+   * l'utilisateur avait ecrit noir sur blanc le chemin d'un autre projet. On aligne AVANT que le
+   * tour parte (donc avant que `dossierDuTour` soit lu pour le cwd du CLI), et on l'ECRIT dans le
+   * fil : une bascule silencieuse serait pire que pas de bascule. Aucun redemarrage — le dossier
+   * est resolu a chaque tour depuis la conversation (`dossierDeTravailDuTour`).
+   */
+  const alignerDossierSurLaDemande = (conversationId: string, messages: Message[]): void => {
+    const dernier = [...messages].reverse().find((m) => m.role === 'user')?.content
+    if (typeof dernier !== 'string') return
+    const actif = dossierDuTour(conversationId)
+    const cite = depotCiteDansLeMessage(dernier, actif)
+    if (!cite) return
+    try {
+      os.conversations.rangerDansDossier(conversationId, cite)
+      os.conversations.append(conversationId, {
+        role: 'assistant',
+        content:
+          `📂 Ta demande nomme ${cite}, qui n'était pas le dossier de travail de cette ` +
+          `conversation (${actif}). J'y bascule avant de traiter — c'est son AGENTS.md qui sera lu.`
+      })
+      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+      broadcast({ type: 'refresh', scope: 'conversations' })
+    } catch {
+      // Une bascule ratee ne doit JAMAIS empecher le tour de partir : on reste sur le dossier d'avant.
+    }
+  }
+
   const runPilotChat: typeof lancerTour = (...args) => {
     const conversationId = args[2]
     if (typeof conversationId === 'string' && conversationId.trim()) {
+      alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
       appliquerCompteDeConversation(conversationId)
     }

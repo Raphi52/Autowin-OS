@@ -113,6 +113,24 @@ describe('Markdown', () => {
     expect(a?.getAttribute('target')).toBe('_blank')
   })
 
+  it("n'avale pas la ponctuation qui suit une adresse auto-liee", () => {
+    // Constate a l'ecran le 2026-09-09 : « http://localhost:3000, » etait auto-lie AVEC la virgule
+    // de la phrase. Windows refuse d'ouvrir cette adresse (« ne peut trouver le fichier »), donc le
+    // clic n'ouvrait aucun navigateur, sans le moindre message.
+    render('Grafana est accessible sur http://localhost:3000, pret a recevoir.')
+    const a = container.querySelector('a')
+    expect(a?.getAttribute('href')).toBe('http://localhost:3000')
+    expect(a?.textContent).toBe('http://localhost:3000')
+    expect(container.textContent).toContain('http://localhost:3000, pret a recevoir.')
+  })
+
+  it('ne tronque pas une adresse qui finit par un caractere utile', () => {
+    render('doc http://x.dev/c?q=1 et http://x.dev/dossier/ fin')
+    const liens = container.querySelectorAll('a')
+    expect(liens[0]?.getAttribute('href')).toBe('http://x.dev/c?q=1')
+    expect(liens[1]?.getAttribute('href')).toBe('http://x.dev/dossier/')
+  })
+
   it('does NOT create an anchor for a non-http(s) scheme', () => {
     render('[x](javascript:alert(1))')
     expect(container.querySelector('a')).toBeNull()

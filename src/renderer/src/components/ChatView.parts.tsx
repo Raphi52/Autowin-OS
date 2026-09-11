@@ -644,7 +644,10 @@ export function AssistantActivityGroup({
               {outcome.label}
             </span>
           )}
-          {running && <Spinner />}
+          {/* DEMANDE (2026-09-10) : un seul tourniquet a l'ecran. Quand les etapes sont visibles,
+              celle qui tourne porte deja le sien (« Orchestration ») — deux animations cote a cote
+              pour le meme fait. Le groupe ne garde le sien que replie, sinon il redevient muet. */}
+          {running && !etapesOuvertes && <Spinner />}
           {why.length ? (
             <span className="activity-group-go" aria-hidden="true">
               {whyOpen ? '▾' : '▸'}

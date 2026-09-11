@@ -18,6 +18,7 @@ import { ForkIcon, InspectIcon } from './chat-view-icons'
 import { formatFileSize } from './chat-attachments'
 import { groupAssistantActivity, type ChatErrorPart, type ChatPart } from './chat-view-model'
 import { bilanDuTour, formaterBilan } from './bilan-tour'
+import { estErreurAuthExpiree } from './erreur-auth'
 import type { TerminalStatus } from './chat-resume-refine'
 import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
@@ -70,7 +71,8 @@ export function ChatErrorBlock({
   retryPrompt,
   bilan,
   onResend,
-  onRefineResume
+  onRefineResume,
+  onLogin
 }: {
   part: ChatErrorPart
   retryPrompt?: string
@@ -82,7 +84,11 @@ export function ChatErrorBlock({
   bilan?: string
   onResend?: (prompt: string) => void
   onRefineResume?: (prompt: string, status: TerminalStatus, reason?: string | null) => void
+  /** Ouvre le login du provider. Seul levier utile quand la session a expire. */
+  onLogin?: () => void
 }): React.JSX.Element {
+  // SESSION EXPIREE : renvoyer ou reprendre echouerait a l'identique. On n'offre que le login.
+  const authExpiree = estErreurAuthExpiree(part.message)
   return (
     <div className="msg-error" role="alert" data-cause={part.cause}>
       <span className="msg-error-cause">⚠️ {ERROR_CAUSE_LABEL[part.cause]}</span>
@@ -92,7 +98,21 @@ export function ChatErrorBlock({
           {bilan}
         </span>
       )}
-      {retryPrompt && (onResend || onRefineResume) && (
+      {authExpiree && onLogin ? (
+        <span className="msg-error-actions">
+          <button
+            type="button"
+            className="msg-error-action"
+            data-testid="error-login"
+            title="Ouvrir la reconnexion Claude — la session a expiré"
+            onClick={onLogin}
+          >
+            🔑 Se reconnecter
+          </button>
+        </span>
+      ) : (
+        retryPrompt &&
+        (onResend || onRefineResume) && (
         <span className="msg-error-actions">
           {onResend && (
             <button
@@ -115,7 +135,8 @@ export function ChatErrorBlock({
               ✎ Reprendre en précisant…
             </button>
           )}
-        </span>
+          </span>
+        )
       )}
     </div>
   )
@@ -259,6 +280,7 @@ export const ChatMessageRow = memo(
     retryPrompt,
     onResend,
     onRefineResume,
+    onLogin,
     askRepondu,
     autoLancerCandidats,
     onAnswerAsk
@@ -270,6 +292,8 @@ export const ChatMessageRow = memo(
     onResend?: (prompt: string) => void
     /** Pré-remplit le composer avec le prompt d'origine + le motif d'échec. N'ENVOIE RIEN. */
     onRefineResume?: (prompt: string, status: TerminalStatus, reason?: string | null) => void
+    /** Reconnexion du provider, offerte a la place du renvoi quand la session a expire. */
+    onLogin?: () => void
     onInspectTurn?: (target: InspectTurnTarget) => void
     onFork?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
@@ -440,6 +464,7 @@ export const ChatMessageRow = memo(
                         retryPrompt={retryPrompt?.trim()}
                         onResend={onResend}
                         onRefineResume={onRefineResume}
+                        onLogin={onLogin}
                       />
                     ) : part.kind === 'artifact' ? (
                       <ArtifactPreview
