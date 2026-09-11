@@ -26,6 +26,11 @@ import {
   PROMPT_SALVAGE
 } from '../../../shared/prompt-suivant'
 import { extractRecommendation } from './markdown-recommandation'
+import {
+  CIBLE_DESTRUCTRICE,
+  lireDecisionScout,
+  normaliserPisteCible
+} from '../../../shared/scout-cible-lecture'
 
 /** Texte brut (avec la ligne technique du prompt) du DERNIER message de l'agent. */
 export function texteDernierAssistant(fil: readonly Msg[]): string | null {
@@ -59,8 +64,7 @@ export function dernierTourEstUnScout(fil: readonly Msg[]): boolean {
 /** La DERNIERE demande de l'utilisateur — ce a quoi le tour courant repond. */
 export function texteDerniereDemande(fil: readonly Msg[]): string | null {
   const dernier = [...fil].reverse().find((m) => m.role === 'user') as
-    | Extract<Msg, { role: 'user' }>
-    | undefined
+    Extract<Msg, { role: 'user' }> | undefined
   return dernier?.content ?? null
 }
 
@@ -337,7 +341,9 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * disent « pas maintenant », elles ne disent rien du contenu, et les inverser volerait son tour a
    * l'utilisateur en train d'ecrire.
    */
-  const choixMulti = entree.tourEstUnScout ? lireCiblesScout(texteReponse) : { statut: 'absente' as const }
+  const choixMulti = entree.tourEstUnScout
+    ? lireCiblesScout(texteReponse)
+    : { statut: 'absente' as const }
   if (choixMulti.statut === 'cible-destructrice' || choixMulti.statut === 'cibles-non-nommees') {
     const raison: RaisonArret = choixMulti.statut
     return { action: 'arreter', raison, message: MESSAGES_ARRET[raison] }
@@ -425,40 +431,14 @@ ${suite}`
  * La porte lit la FORME (une cible nommee existe), jamais la qualite du choix : producteur et juge
  * sont le meme modele.
  */
-export type DecisionScout =
-  | { statut: 'cible'; cible: string }
-  | { statut: 'aucune-cible' }
-  | { statut: 'cible-destructrice'; cible: string }
+export type { DecisionScout } from '../../../shared/scout-cible-lecture'
 
-/** Formulations dont le cout est IRREVERSIBLE : elles exigent l'accord de l'utilisateur. */
-const CIBLE_DESTRUCTRICE =
-  /\b(supprim\w*|effac\w*|ecras\w*|purg\w*|detrui\w*|delete|drop\s+(table|database)|truncate|rm\s+-[a-z]*[rf]|reset\s+--hard|force[- ]push|push\s+--force|clean\s+-[a-z]*f)\b/u
-
-const LIGNE_CIBLE = /^\s*[>*_`\s]*cible\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu
-
-export function lireCibleScout(texteScout: string): DecisionScout {
-  for (const ligne of (texteScout ?? '').split(SAUT_ANCRAGE)) {
-    const trouve = ligne.match(LIGNE_CIBLE)
-    if (!trouve) continue
-    // La JUSTIFICATION (`— parce que ...`) n'appartient pas a la cible : sans ce retrait,
-    // `CIBLE: aucune — raison` se lirait comme une vraie piste et lancerait un tour payant.
-    const cible = trouve[1]
-      .replace(/^[\s*_`]+/u, '')
-      .split(/\s+[—–-]\s+|\s+parce\s+que\s+/iu)[0]
-      .trim()
-    // La PREMIERE ligne `CIBLE:` fait foi : une seconde serait un choix de plus, pas un choix.
-    if (!cible) return { statut: 'aucune-cible' }
-    const nu = cible
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-    if (nu === 'aucune' || nu === 'rien' || nu === 'aucune cible')
-      return { statut: 'aucune-cible' }
-    if (CIBLE_DESTRUCTRICE.test(nu)) return { statut: 'cible-destructrice', cible }
-    return { statut: 'cible', cible }
-  }
-  return { statut: 'aucune-cible' }
-}
+/**
+ * LECTURE PARTAGEE — la grammaire de la ligne `CIBLE:` vit desormais dans
+ * `shared/scout-cible-lecture.ts`, lue AUSSI par la garde de phase du pipeline (`main/scout-cible.ts`).
+ * Elle etait ecrite deux fois, avec deux conclusions differentes sur `CIBLE: aucune`.
+ */
+export const lireCibleScout = lireDecisionScout
 
 /**
  * MULTI-PISTES — la ligne `CIBLES:` d'un scout, quand plusieurs pistes se traitent ENSEMBLE.
@@ -510,16 +490,12 @@ export function lireCiblesScout(texteScout: string): DecisionScoutMulti {
     if (pistes.length === 0) return { statut: 'aucune-cible' }
     const destructrice = pistes.find((piste) => CIBLE_DESTRUCTRICE.test(normaliserPiste(piste)))
     if (destructrice) return { statut: 'cible-destructrice', cible: destructrice }
-    if (pistes.every((piste) => PISTE_NUMERIQUE.test(piste))) return { statut: 'cibles-non-nommees' }
+    if (pistes.every((piste) => PISTE_NUMERIQUE.test(piste)))
+      return { statut: 'cibles-non-nommees' }
     return { statut: 'cibles', cibles: pistes }
   }
   return { statut: 'absente' }
 }
 
-function normaliserPiste(texte: string): string {
-  return texte
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/gu, '')
-    .toLowerCase()
-    .trim()
-}
+/** Meme normalisation que la lecture partagee de `CIBLE:`. */
+const normaliserPiste = normaliserPisteCible

@@ -22,6 +22,8 @@
  * PUR : pas d'horloge, pas de provider, aucune E/S.
  */
 
+import { decisionDepuisPiste, type DecisionScout } from '../shared/scout-cible-lecture'
+
 /** Le titre de section attendu, sans accent ni casse. Aligné sur `normaliserTitre` de phase-carry. */
 const TITRE_CIBLE = 'cible'
 
@@ -35,20 +37,22 @@ function normaliser(titre: string): string {
 }
 
 /**
- * La cible déclarée par un scout, ou `undefined` s'il n'en déclare aucune.
+ * La DÉCISION portée par une sortie de scout, avec la MÊME grammaire que le mode auto du chat
+ * (`shared/scout-cible-lecture.ts`) : la justification après un tiret ne fait pas partie de la
+ * cible, `aucune`/`rien` ferme la chaîne, et une formulation destructrice demande un accord.
  *
- * Deux formes acceptées, parce que les deux disent la même chose et qu'en refuser une ne rendrait
- * le run ni plus sûr ni plus lisible : une section `## Cible` non vide, ou une ligne `CIBLE: …`.
+ * Deux formes acceptées, parce que les deux disent la même chose : une section `## Cible` non
+ * vide, ou une ligne `CIBLE: …`.
  */
-export function lireCibleScout(texte: string): string | undefined {
+export function lireDecisionScoutTexte(texte: string): DecisionScout {
   const lignes = (texte ?? '').split('\n')
   for (let i = 0; i < lignes.length; i++) {
     const ligne = lignes[i]!
     const enLigne = /^\s*CIBLE\s*:(.*)$/i.exec(ligne)
     if (enLigne) {
       const valeur = enLigne[1]!.trim()
-      if (valeur) return valeur
-      continue
+      if (!valeur) continue
+      return decisionDepuisPiste(valeur)
     }
     const titre = /^\s{0,3}#{1,6}\s+(.+?)\s*$/.exec(ligne)
     if (!titre || normaliser(titre[1]!) !== TITRE_CIBLE) continue
@@ -59,9 +63,22 @@ export function lireCibleScout(texte: string): string | undefined {
       corps.push(lignes[j]!)
     }
     const valeur = corps.join('\n').trim()
-    if (valeur) return valeur
+    if (!valeur) continue
+    // La décision se lit sur la PREMIÈRE ligne du corps : le reste est la justification.
+    const decision = decisionDepuisPiste(valeur.split('\n')[0]!)
+    if (decision.statut === 'cible') return { statut: 'cible', cible: valeur }
+    return decision
   }
-  return undefined
+  return { statut: 'aucune-cible' }
+}
+
+/**
+ * La cible déclarée par un scout, ou `undefined` s'il n'en déclare AUCUNE — « aucune », « rien »
+ * et une ligne vide comptent désormais comme aucune cible, exactement comme dans le chat.
+ */
+export function lireCibleScout(texte: string): string | undefined {
+  const decision = lireDecisionScoutTexte(texte)
+  return decision.statut === 'aucune-cible' ? undefined : decision.cible
 }
 
 /**
@@ -75,7 +92,16 @@ export function lireCibleScout(texte: string): string | undefined {
  * dissoudre en silence dans le tableau porté à la phase suivante.
  */
 export function enteteCibleManquante(texte: string): string | undefined {
-  if (lireCibleScout(texte)) return undefined
+  const decision = lireDecisionScoutTexte(texte)
+  if (decision.statut === 'cible') return undefined
+  if (decision.statut === 'cible-destructrice')
+    return (
+      '## Cible\n' +
+      `⚠️ La cible engagée est IRRÉVERSIBLE (« ${decision.cible} »). Une suppression, un écrasement ` +
+      "ou un push forcé ne s'exécute pas sans l'accord explicite de l'utilisateur : ne la joue PAS. " +
+      'Choisis une autre piste du tableau et écris-la sous la forme `CIBLE: <la piste> — POURQUOI: ' +
+      "<la raison>`, ou termine le run par `SUITE: fin` en demandant l'accord."
+    )
   return (
     '## Cible\n' +
     "⚠️ Le scout n'a engagé aucune piste (aucune section `## Cible`, aucune ligne `CIBLE:`). " +
