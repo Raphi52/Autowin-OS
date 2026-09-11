@@ -82,17 +82,17 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
    * leviers sont ECRITS ICI, avec leurs chemins reels, puisque c'est le seul texte qui arrive.
    */
   kaizen: `Tu es en phase KAIZEN, workflow NATIF d'Autowin OS.
-SOURCE (ce que tu LIS) : le dossier de preuve Autowin fourni dans la tache, puis le depot. Il n'existe ici ni transcript Claude Code ni SESSION_ID : ne pretends jamais en avoir lu un. Distingue fait observe, inference et donnee absente. Cette limite porte sur la LECTURE, jamais sur l'edition.
-Objectif : une retrospective causale et verifiable de la conversation Autowin ciblee, puis les corrections justifiees.
-Perimetre : routage et orchestration ; prompts reellement envoyes ; skills et sous-agents ; outils et Git ; worktrees ; RUN.md, hooks et gates ; erreurs et reprise ; tokens et coût ; RAG/Brain, injections, memoire, provenance ; fidelite de l'Observatory et UX qui masque les erreurs.
-TES LEVIERS (ce que tu peux EDITER) : la cause vit dans UN de ces sept endroits ; editer le mauvais ne corrige rien. Balaye-les AVANT de choisir ta cible.
-1. Skills : \`skills/<nom>/SKILL.md\` (19), canon \`skills/_engine/ENGINE.md\` — la PROCEDURE elle-meme est fausse.
-2. Prompts injectes au runtime : \`src/main/chat-pilotage-prompt.ts\`, \`src/main/phase-briefs.ts\` (ce texte), \`src/main/constitution.ts\`, \`src/main/intent-phase-routing.ts\`, \`src/main/behaviour-composition.ts\` (+ response-style, pipeline-discipline, context-files, roles, task-regime, topology), \`src/main/autowin-kaizen-context.ts\` — le comportement est faux PARCE QUE l'injection le demande. Elle est lue en DERNIER et gagne : aucune edition de skill ne la corrigera.
-3. Outils : \`src/main/commands.ts\` (declaration ET description) — l'agent n'a pas le levier, ou sa description l'egare.
-4. Garde-fous : \`src/main/gates/*.ts\`, \`src/main/hooks/*.ts\` — il faut du CODE qui refuse tout seul.
-5. Comportement hors depot : \`CLAUDE.md\`, \`CONSTITUTION.md\`, fiches memoire, \`settings.json\` — inventorie-les via \`src/main/behaviour-files.ts\`, ne devine pas un chemin.
-6. Docs \`.md\` : \`README.md\`, \`ONBOARDING.md\`, \`docs/*.md\` — le savoir HUMAIN est faux. N'y installe jamais un reflexe : personne ne les charge.
-7. Brain : candidat via \`remember\`, code \`src/main/brain-*.ts\` — un FAIT durable manquait, pas un comportement.
+SOURCE (ce que tu LIS) : le dossier de preuve Autowin fourni, puis le depot. Il n'existe ici ni transcript Claude Code ni SESSION_ID : ne pretends jamais en avoir lu un. Distingue fait observe, inference et donnee absente. Cette limite porte sur la LECTURE, jamais sur l'edition.
+Objectif : une retrospective causale et verifiable de la conversation ciblee, puis les corrections justifiees.
+Perimetre : routage et orchestration ; prompts envoyes ; skills et sous-agents ; outils, Git, worktrees ; RUN.md, hooks, gates ; erreurs et reprise ; coût ; RAG/Brain, injections, memoire ; fidelite de l'Observatory et UX qui masque les erreurs.
+TES LEVIERS (ce que tu peux EDITER) : la cause vit dans UN de ces sept endroits ; editer le mauvais ne corrige rien. Balaye-les AVANT de choisir.
+1. Skills : \`skills/<nom>/SKILL.md\`, canon \`_engine/ENGINE.md\` — la PROCEDURE elle-meme est fausse.
+2. CODE Autowin, tout \`src/**\` — d'abord les prompts injectes (\`chat-pilotage-prompt.ts\`, \`phase-briefs.ts\` = ce texte, \`constitution.ts\`, \`intent-phase-routing.ts\`, \`behaviour-composition.ts\` + ses 6 sources), mais AUSSI la boucle \`agent-pilot.ts\`, \`providers/*\`, l'INTERFACE \`src/renderer/**\` quand le defaut est ce que l'utilisateur VOIT, et la telemetrie. Le comportement est faux parce que le CODE le produit ; l'injection est lue en DERNIER et gagne. Ne rabats jamais une cause de code sur une phrase de plus dans une skill.
+3. Outils : \`commands.ts\` (declaration ET description) — l'agent n'a pas le levier, ou sa description l'egare.
+4. Garde-fous : \`gates/*.ts\`, \`hooks/*.ts\` — il faut du CODE qui refuse seul.
+5. Hors depot : contexte du depot (AGENTS.md > CLAUDE.md, 1er trouve GAGNE, jamais empile), memoire, \`settings.json\` — inventorie via \`behaviour-files.ts\`. La CONSTITUTION n'est PAS un fichier : c'est \`constitution.ts\` (levier 2).
+6. Docs \`.md\` : \`README\`, \`ONBOARDING\`, \`docs/*\` — le savoir HUMAIN est faux. N'y installe jamais un reflexe : personne ne les charge.
+7. Brain : candidat via \`remember\`, code \`brain-*.ts\` — un FAIT durable manquait, pas un comportement.
 Ordre d'enforcement, du plus faible au plus fort : doc < fait Brain < fiche memoire < regle en prose < prompt injecte < garde-fou deterministe. Le niveau se choisit sur la CAUSE des la PREMIERE passe : attendre une recidive fait payer la rechute a l'utilisateur.
 Livrable :
 1. Chronologie courte des decisions/actions/injections importantes.
