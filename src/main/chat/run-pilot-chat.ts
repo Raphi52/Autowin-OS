@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto'
 import type { Message, ProviderAdapter, SendResult, StreamChunk } from '../providers/types'
 import { ProviderRegistry } from '../providers/registry'
 import { CostCircuitBreaker } from '../cost-circuit-breaker'
+import { ChatTurnCostRecorder } from './chat-cost-recording'
 import { chatTurnBudget, estCoupureBudget, CHAT_BUDGET_ABORT_PREFIX } from '../chat-turn-budget'
 import { motifInactivite, terminalDuTour } from '../chat-turn-arret'
 import { RoleModelConfig, type RoleBinding } from '../roles'
@@ -295,6 +296,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     let supervisedUsage: ExecutionUsageSnapshot | undefined
     let persistedSupervisedUsage: ExecutionUsageSnapshot | undefined
     let usagePersistenceReady = false
+    /**
+     * Le cout du tour de chat entre dans le MEME collecteur que l'orchestration : sans lui, le
+     * plafond et l'alerte a 80 % ne voyaient que la depense des RUN (mesure du 2026-09-11 :
+     * 644 USD comptes pour 3 075 USD reellement depenses).
+     */
+    const chatCostRecorder = new ChatTurnCostRecorder(os.cost)
     const persistSupervisedChatUsage = (usage: ExecutionUsageSnapshot): void => {
       if (!conversationId) return
       if (sameExecutionUsage(persistedSupervisedUsage, usage)) return
@@ -319,6 +326,21 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           undefined,
         traceStore: causalTrace
       })
+      chatCostRecorder.record(
+        {
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          cacheReadTokens: usage.cacheReadTokens,
+          cacheCreationTokens: usage.cacheCreationTokens,
+          costUsd: usage.knownCostUsd
+        },
+        {
+          provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
+          model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+          conversationId,
+          turnId
+        }
+      )
       broadcast({ type: 'refresh', scope: 'workflows' })
     }
     const onSupervisedUsageSettlement = (usage: ExecutionUsageSnapshot): void => {
@@ -1467,6 +1489,20 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             durationMs: turnDurationMs,
             text: (streamedSpoken || spoken.join('\n') || etiquettesAction.join('\n')).slice(0, 600)
           })
+          if (turnUsage)
+            chatCostRecorder.record(
+              {
+                inputTokens: turnUsage.inputTokens,
+                outputTokens: turnUsage.outputTokens,
+                costUsd: turnUsage.costUsd
+              },
+              {
+                provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
+                model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+                conversationId,
+                turnId
+              }
+            )
         }
       }
       usagePersistenceReady = true
