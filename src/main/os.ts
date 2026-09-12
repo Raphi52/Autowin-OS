@@ -32,7 +32,12 @@ import { CostAggregator } from './dashboards/cost'
 import { isBlocked } from './dashboards/runs'
 import { recurrentPatterns, parseJsonl } from './dashboards/kaizen'
 import { loadBrainGraph, scanBrainGraphs, type BrainGraphRef } from './viz/fs-brains'
-import { scanRuns, scanRunsPourSnapshot, type RunEntry } from './dashboards/runs-scan'
+import {
+  attachConversationIds,
+  scanRuns,
+  scanRunsPourSnapshot,
+  type RunEntry
+} from './dashboards/runs-scan'
 import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
 import {
@@ -1340,7 +1345,7 @@ export class AutowinOS {
     this.brainGraphCache.set(key, graph)
     return graph
   }
-  listRuns(): Promise<RunEntry[]> {
-    return scanRuns()
+  async listRuns(): Promise<RunEntry[]> {
+    return attachConversationIds(await scanRuns(), this.conversations.list())
   }
 }

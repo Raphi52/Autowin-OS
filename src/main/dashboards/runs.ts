@@ -122,7 +122,7 @@ export function parseRun(md: string, subject?: string): RunSummary {
  * Une DoD incomplète bloque quel que soit le statut : c'est la règle, sans exception par statut.
  * Un statut illisible (`unknown`) bloque également : un RUN.md corrompu doit rester visible.
  */
-export function isBlocked(s: RunSummary): boolean {
+export function isBlocked(s: { status: string; dodTotal: number; dodChecked: number }): boolean {
   return (
     ['pending', 'running', 'open', 'failed', 'red', 'unknown'].includes(s.status) ||
     s.dodChecked < s.dodTotal

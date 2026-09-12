@@ -1,3 +1,4 @@
+import { isBlocked } from '../../../main/dashboards/runs'
 import { lastUserMessagePreview } from './observatory-event-preview'
 import type { ObservatoryPrioritySignal } from './observatory-priority-signals'
 import type {
@@ -40,6 +41,7 @@ export function ObservatoryRail({
   runs,
   runsLoading,
   onOpenRun,
+  onOpenRunConversation,
   prioritySignals,
   onOpenSignal
 }: {
@@ -67,6 +69,8 @@ export function ObservatoryRail({
   runs: ObservatoryRunEntry[]
   runsLoading: boolean
   onOpenRun: (path: string) => void
+  /** Sélectionne la conversation qui a produit ce run, quand elle est connue. */
+  onOpenRunConversation?: (conversationId: string) => void
   prioritySignals: ObservatoryPrioritySignal[]
   onOpenSignal: (eventId: string) => void
 }): React.JSX.Element {
@@ -79,9 +83,10 @@ export function ObservatoryRail({
       <section className="observatory-diagnostics observatory-runs" aria-busy={runsLoading}>
         <span className="observatory-panel-title">
           WORKFLOWS · TOUS
-          {runs.length > 0
-            ? ` · ${runs.filter((r) => r.summary.status === 'open').length} open`
-            : ''}
+          {/* BLOQUÉ, pas « open » : un run `green` dont la DoD est incomplète, ou figé sur un
+              statut fossile, est resté sans issue. Ne compter que `open` le rendait INVISIBLE.
+              La règle est celle du dashboard (`isBlocked`), pas une seconde définition locale. */}
+          {runs.length > 0 ? ` · ${runs.filter((r) => isBlocked(r.summary)).length} bloqué(s)` : ''}
         </span>
         {runs.length === 0 ? (
           <p>
@@ -95,22 +100,38 @@ export function ObservatoryRail({
           </p>
         ) : (
           runs.slice(0, 12).map((run) => (
-            <button
-              key={run.path}
-              data-run-status={run.summary.status}
-              data-testid="observatory-run"
-              onClick={() => onOpenRun(run.path)}
-            >
-              <strong>
-                {run.summary.status} · {run.subject}
-              </strong>
-              <span>
-                {run.session}
-                {run.summary.dodTotal > 0
-                  ? ` · DoD ${run.summary.dodChecked}/${run.summary.dodTotal}`
-                  : ''}
-              </span>
-            </button>
+            <div key={run.path} className="observatory-run-line">
+              <button
+                data-run-status={run.summary.status}
+                data-run-blocked={isBlocked(run.summary) ? 'true' : 'false'}
+                data-testid="observatory-run"
+                onClick={() => onOpenRun(run.path)}
+              >
+                <strong>
+                  {run.summary.status}
+                  {isBlocked(run.summary) ? ' · bloqué' : ''} · {run.subject}
+                </strong>
+                <span>
+                  {run.session}
+                  {run.summary.dodTotal > 0
+                    ? ` · DoD ${run.summary.dodChecked}/${run.summary.dodTotal}`
+                    : ''}
+                </span>
+              </button>
+              {/* Le rail listait des RUN.md sans jamais dire de QUELLE conversation ils venaient :
+                  chaque ligne était un cul-de-sac. Bouton SÉPARÉ, parce que le clic principal
+                  révèle le fichier — les deux gestes ne se confondent pas. */}
+              {run.conversationId && onOpenRunConversation ? (
+                <button
+                  className="observatory-run-jump"
+                  data-testid="observatory-run-conversation"
+                  data-conversation-id={run.conversationId}
+                  onClick={() => onOpenRunConversation(run.conversationId as string)}
+                >
+                  voir la trace
+                </button>
+              ) : null}
+            </div>
           ))
         )}
       </section>

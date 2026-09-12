@@ -758,6 +758,7 @@ const api = {
       session: string
       path: string
       mtime: number
+      conversationId?: string
       summary: {
         status: string
         regime?: string

@@ -32,6 +32,7 @@ import type { BrainInjectionInventory as BrainInjectionInventoryView } from '../
 import { summarizeRagTrace } from './rag-trace-model'
 import { LatestRequestGate, settleObservatorySources } from './observatory-reliability'
 import { buildObservatoryExport } from './observatory-export-model'
+import { computeObservatoryTotals, formatObservatoryDuration } from './observatory-totals'
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
 import { isReasoningEvent, layoutTurnEvents } from './observatory-turn-layout'
@@ -411,19 +412,7 @@ export function ObservatoryView({
         : conversationCalls,
     [conversationCalls, focusUnavailable, turnFocus]
   )
-  const observed = useMemo(
-    () =>
-      currentCalls.reduce(
-        (sum, call) => ({
-          input: sum.input + (call.usage?.inputTokens ?? 0),
-          output: sum.output + (call.usage?.outputTokens ?? 0),
-          cache: sum.cache + (call.usage?.cacheReadTokens ?? 0),
-          cost: sum.cost + (call.usage?.costUsd ?? 0)
-        }),
-        { input: 0, output: 0, cache: 0, cost: 0 }
-      ),
-    [currentCalls]
-  )
+  const observed = useMemo(() => computeObservatoryTotals(currentCalls), [currentCalls])
   const semanticComparison = useMemo(
     () => (compare.length === 2 ? compareObservatoryEvents(compare[0], compare[1]) : null),
     [compare]
@@ -790,6 +779,29 @@ export function ObservatoryView({
               <small>coût</small>
             </strong>
           )}
+          <strong data-metric="output">
+            {observed.output.toLocaleString('fr-FR')}
+            <small>tokens out</small>
+          </strong>
+          {/* DURÉE : 0 avec des appels ne veut pas dire « instantané » — le fournisseur peut ne pas
+              l'exposer. Même traitement que le coût : on le DIT au lieu d'afficher un faux zéro. */}
+          <strong data-metric="duration" title="Somme des durées mesurées des appels">
+            {observed.durationMs > 0 ? (
+              <>
+                {formatObservatoryDuration(observed.durationMs)}
+                <small>durée cumulée</small>
+              </>
+            ) : (
+              <>
+                non exposé
+                <small>durée inconnue</small>
+              </>
+            )}
+          </strong>
+          <strong data-metric="errors" title="Appels modèle terminés en échec">
+            {observed.errors.toLocaleString('fr-FR')}
+            <small>erreurs</small>
+          </strong>
           <strong
             data-metric="actions"
             title="Actions réelles exécutées par les sous-agents (commandes shell, patchs fichiers)"
@@ -1204,6 +1216,7 @@ export function ObservatoryView({
           // Révéler le fichier plutôt qu'en afficher un aperçu : un RUN.md se lit et s'ÉDITE, et
           // Observatory n'est pas un éditeur. `showItemInFolder` côté main fait le reste.
           onOpenRun={(path) => void window.api.openFolder?.(path)}
+          onOpenRunConversation={(id) => setConversationId(id)}
           prioritySignals={prioritySignals}
           onOpenSignal={openEvent}
         />

@@ -1681,3 +1681,24 @@
     min-height: 300px;
   }
 }
+
+/* LIGNE DE RUN : le clic principal révèle le RUN.md, le second saute à la conversation qui l'a
+   produit. Deux boutons côte à côte — imbriquer le second dans le premier serait du HTML invalide. */
+.observatory-run-line {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.observatory-run-line > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.observatory-run-jump {
+  flex: 0 0 auto;
+  font-size: 10px;
+  white-space: nowrap;
+}
+/* BLOQUÉ : un run sans issue se voit sans lire son statut — liseré rouge, pas une nuance de doré. */
+.observatory-runs [data-run-blocked='true'] {
+  border-left: 2px solid #e06c5a;
+}

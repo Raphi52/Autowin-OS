@@ -38,6 +38,13 @@ export interface PromptCall {
   options: Record<string, unknown>
   response: string
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; costUsd?: number }
+  /**
+   * Durée mesurée de l'appel et issue de l'appel : présentes sur `PromptCallRecord` côté main
+   * (`prompt-observability.ts`), ce type recopié à la main les OMETTAIT — c'est pourquoi le bandeau
+   * ne pouvait afficher ni durée ni erreur alors que la donnée arrivait déjà par l'IPC.
+   */
+  durationMs?: number
+  status?: 'completed' | 'failed'
 }
 
 /**
