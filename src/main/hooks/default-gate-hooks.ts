@@ -1,7 +1,8 @@
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { HookBus, type HookContext, type HookResult } from './hook-bus'
 import { createVerifyReplayHook, type VerifyRunner } from './verify-replay-hook'
-import { runHooks } from '../gates/hooks'
+import { runHooks, requireVisualProofForFrontDiff } from '../gates/hooks'
+import type { HookHandler } from './hook-bus'
 import { exigenceAppuiSourcesNeuves } from '../autowin-kaizen-context'
 
 /**
@@ -40,6 +41,62 @@ export function appuiSourcesNeuvesHandler(ctx: HookContext): HookResult {
     : { block: false }
 }
 
+/**
+ * PREUVE VISUELLE — le hook existait, personne ne l'allumait.
+ *
+ * `requireVisualProofForFrontDiff` (gates/hooks.ts) refuse un vert quand le RENDU est modifié sans
+ * capture réellement lue. Il était écrit, testé... et passé par AUCUN site de production : `grep -rn
+ * requireVisualProof src/main` ne rendait que sa propre définition. L'exigence ne vivait donc qu'en
+ * PROSE (pipeline-discipline.ts), et une prose ne refuse rien.
+ *
+ * Mesure (conv-512, tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`) : un run modifie
+ * `ModelActivityLogPane.tsx` + `.css`, se clôture VERT, et l'agent écrit lui-même « je ne l'ai pas
+ * observé à l'écran — aucune capture, aucun verdict visuel de ma part ».
+ *
+ * Le diff n'est pas transporté jusqu'ici : on reconstruit la liste des fichiers TOUCHÉS depuis le
+ * dépôt de travail (état non enregistré + écart avec HEAD), au format `+++ b/<chemin>` que le hook
+ * sait lire. Injectable pour les tests ; en cas d'échec git, on rend une liste vide — un garde-fou
+ * ne doit pas inventer un refus sur un dépôt qu'il n'a pas su lire.
+ */
+export function fichiersTouchesGit(cwd: string): readonly string[] {
+  const lire = (args: string[]): string[] => {
+    try {
+      return execFileSync('git', args, { cwd, encoding: 'utf-8', windowsHide: true })
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+  const porcelain = lire(['status', '--porcelain'])
+    .map((l) => l.slice(3).trim())
+    .map((l) => (l.includes(' -> ') ? l.split(' -> ')[1] : l))
+  return [...new Set([...porcelain, ...lire(['diff', '--name-only', 'HEAD'])])]
+}
+
+/** Une capture est une preuve VISUELLE seulement si elle a réellement été exécutée et rendue ok. */
+function capturesLues(evidence: HookContext['evidence']): number {
+  return (evidence ?? []).filter((e) => e.ok && /ui-capture/.test(e.command ?? '')).length
+}
+
+export function creerPreuveVisuelleHandler(
+  listerFichiersTouches: (cwd: string) => readonly string[] = fichiersTouchesGit
+): HookHandler {
+  return (ctx: HookContext): HookResult => {
+    // `requireProof` marque déjà les tâches MUTANTES : hors de là, aucun rendu n'est en jeu.
+    if (!ctx.requireProof || !ctx.cwd) return { block: false }
+    const diff = listerFichiersTouches(ctx.cwd)
+      .map((f) => `+++ b/${f.replace(/\\/g, '/')}`)
+      .join('\n')
+    if (!diff) return { block: false }
+    const violations = requireVisualProofForFrontDiff(diff, capturesLues(ctx.evidence))
+    return violations.length
+      ? { block: true, reason: violations.map((h) => `hook ${h.hook}: ${h.detail}`).join('; ') }
+      : { block: false }
+  }
+}
+
 /** Cap du re-jeu de vérification (comme le stop-gate CC) : au-delà → kill → bloque. */
 const VERIFY_TIMEOUT_MS = 120_000
 
@@ -72,5 +129,6 @@ export function createDefaultHookBus(verifyRunner: VerifyRunner = defaultVerifyR
   return new HookBus()
     .register('pre-green', syncGateHooksHandler)
     .register('pre-green', appuiSourcesNeuvesHandler)
+    .register('pre-green', creerPreuveVisuelleHandler())
     .register('pre-green', createVerifyReplayHook(verifyRunner))
 }
