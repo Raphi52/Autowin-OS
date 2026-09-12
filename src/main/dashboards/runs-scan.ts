@@ -1,6 +1,7 @@
 import { readdir, readFile, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { parseRun, type RunSummary } from './runs'
+import { publicationEnClair } from '../runs/run-interruption'
 
 /**
  * Scanne les RUN.md vivants du kit autowin (~/.claude/runs/<session>/<sujet>-workspace/RUN.md)
@@ -20,6 +21,45 @@ export interface RunEntry {
    * demander pourquoi.
    */
   conversationId?: string
+  /**
+   * État de PUBLICATION du travail de cette conversation, quand il est sans ambiguïté
+   * (`held` = retenu, `blocked` = bloqué). Distinct du statut du RUN.md : un run peut être `green`
+   * avec sa DoD complète ET son intégration retenue — c'est ce cas qui était invisible.
+   */
+  publication?: string
+  /** Le même état en clair, dans le vocabulaire de `run-interruption` (une seule source). */
+  publicationLabel?: string
+}
+
+/** États de publication qui réclament une attention : les seuls que le rail a besoin de nommer. */
+const PUBLICATIONS_EN_ATTENTE = new Set(['held', 'blocked'])
+
+/**
+ * Rattache à chaque run l'état de publication de sa conversation, SANS jamais le deviner.
+ *
+ * Un RUN.md ne porte ni `runId` ni état de publication : le seul lien disponible est la
+ * conversation. On n'attache donc l'état que si la conversation a EXACTEMENT UN travail en attente
+ * (`held`/`blocked`) — au-delà, on ne saurait pas dire lequel des runs est concerné, et on préfère
+ * ne rien afficher plutôt qu'attribuer un blocage au mauvais run.
+ */
+export function attachPublicationStates(
+  entries: RunEntry[],
+  records: readonly { conversationId?: string; publication: string }[]
+): RunEntry[] {
+  const enAttente = new Map<string, string[]>()
+  for (const record of records) {
+    if (!record.conversationId || !PUBLICATIONS_EN_ATTENTE.has(record.publication)) continue
+    const deja = enAttente.get(record.conversationId) ?? []
+    deja.push(record.publication)
+    enAttente.set(record.conversationId, deja)
+  }
+  if (enAttente.size === 0) return entries
+  return entries.map((entry) => {
+    const cle = entry.conversationId ?? entry.session
+    const etats = enAttente.get(cle)
+    if (!etats || etats.length !== 1) return entry
+    return { ...entry, publication: etats[0], publicationLabel: publicationEnClair(etats[0]) }
+  })
 }
 
 /**

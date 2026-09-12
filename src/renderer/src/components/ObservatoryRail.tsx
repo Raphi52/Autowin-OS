@@ -1,4 +1,4 @@
-import { isBlocked } from '../../../main/dashboards/runs'
+import { isBlocked } from '../../../shared/run-blocked'
 import { lastUserMessagePreview } from './observatory-event-preview'
 import type { ObservatoryPrioritySignal } from './observatory-priority-signals'
 import type {
@@ -87,6 +87,11 @@ export function ObservatoryRail({
               statut fossile, est resté sans issue. Ne compter que `open` le rendait INVISIBLE.
               La règle est celle du dashboard (`isBlocked`), pas une seconde définition locale. */}
           {runs.length > 0 ? ` · ${runs.filter((r) => isBlocked(r.summary)).length} bloqué(s)` : ''}
+          {/* NON INTÉGRÉ ≠ bloqué : un run vert, DoD complète, peut avoir son travail retenu ou
+              bloqué à la publication. Le compte ci-dessus, fondé sur le RUN.md, ne le voit pas. */}
+          {runs.some((r) => r.publication)
+            ? ` · ${runs.filter((r) => r.publication).length} non intégré(s)`
+            : ''}
         </span>
         {runs.length === 0 ? (
           <p>
@@ -104,12 +109,15 @@ export function ObservatoryRail({
               <button
                 data-run-status={run.summary.status}
                 data-run-blocked={isBlocked(run.summary) ? 'true' : 'false'}
+                {...(run.publication ? { 'data-run-publication': run.publication } : {})}
                 data-testid="observatory-run"
                 onClick={() => onOpenRun(run.path)}
               >
                 <strong>
                   {run.summary.status}
-                  {isBlocked(run.summary) ? ' · bloqué' : ''} · {run.subject}
+                  {isBlocked(run.summary) ? ' · bloqué' : ''}
+                  {run.publicationLabel ? ` · travail ${run.publicationLabel}` : ''} ·{' '}
+                  {run.subject}
                 </strong>
                 <span>
                   {run.session}

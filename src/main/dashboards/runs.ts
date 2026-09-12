@@ -111,20 +111,6 @@ export function parseRun(md: string, subject?: string): RunSummary {
   return { status, regime, dodTotal, dodChecked, journalEvents, defauts, subject }
 }
 
-/**
- * True si le run est BLOQUÉ, c'est-à-dire ni clos ni concluant.
- *
- * Bloquent : `open`, `red`, et le vocabulaire FOSSILE `pending`/`running`/`failed` — plus aucun
- * code ne les écrit, mais 109 RUN.md historiques les portent (mesuré le 2026-08-18) et un run figé
- * sur `running` depuis des semaines n'est pas « en cours », c'est un abandon.
- * Ne bloquent pas, à DoD complète : `green`, `degraded-closed` et `succeeded` — ce dernier est un
- * fossile de SUCCÈS, il hérite donc du traitement de `green`, condition de DoD comprise.
- * Une DoD incomplète bloque quel que soit le statut : c'est la règle, sans exception par statut.
- * Un statut illisible (`unknown`) bloque également : un RUN.md corrompu doit rester visible.
- */
-export function isBlocked(s: { status: string; dodTotal: number; dodChecked: number }): boolean {
-  return (
-    ['pending', 'running', 'open', 'failed', 'red', 'unknown'].includes(s.status) ||
-    s.dodChecked < s.dodTotal
-  )
-}
+// La règle du « bloqué » vit dans `src/shared/run-blocked.ts` : l'interface en a besoin aussi,
+// et elle n'a pas à importer du code du processus principal pour l'obtenir.
+export { isBlocked } from '../../shared/run-blocked'
