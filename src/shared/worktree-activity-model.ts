@@ -225,9 +225,9 @@ export function conflictDiffMessage(
 ): string {
   const messages: Record<typeof reason, string> = {
     'invalid-agent':
-      'Comparaison indisponible : ce bureau n’est plus connu d’Autowin. Rafraîchis le Hub ; le dossier du bureau reste conservé.',
+      'Comparaison indisponible : ce bureau n’est plus connu d’Autowin. Actualise la liste des bureaux ; le dossier du bureau reste conservé.',
     'not-conflict':
-      'Comparaison indisponible : ce bureau n’est plus en conflit. Son état a changé — rafraîchis le Hub pour voir où il en est.',
+      'Comparaison indisponible : ce bureau n’est plus en conflit. Son état a changé — actualise la liste des bureaux pour voir où il en est.',
     'ownership-unproven':
       'Comparaison indisponible : le dossier du bureau n’appartient plus à ce workspace. Ouvre le bureau protégé pour vérifier son contenu avant toute décision.',
     'invalid-path':

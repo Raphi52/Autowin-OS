@@ -496,3 +496,18 @@
   font-size: 12px;
   color: var(--text-faint, rgba(245, 247, 251, 0.45));
 }
+
+/* Section « Conflits à trancher » : les fiches de bureau réutilisées telles quelles. */
+.wt-conflits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.wt-conflits > h3 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

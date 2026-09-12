@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GitGraphSnapshot } from '../../../shared/git-graph'
 import { BureauxConserves } from './BureauxConserves'
+import { AgentOffice } from './WorktreeActivityView'
+import { ConflitBureauPanneau } from './ConflitBureau'
+import { useConflitBureau } from './useConflitBureau'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
 import { ViewTopBar } from './ViewTopBar'
 import { layoutGitGraph, projectGitGraphAxes, type GitGraphLayout } from './GitGraphLayout'
@@ -13,6 +16,7 @@ import {
   type Chantier
 } from './worktree-chef-de-projet'
 import './ViewPage.css'
+import './WorktreeActivityView.css'
 import './WorktreeView.css'
 import { Spinner } from './Spinner'
 
@@ -255,6 +259,8 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   const grapheRef = useRef<HTMLDivElement>(null)
   // Voir `recuEvenement` : distingue « pas encore de donnée » de « zéro chantier ».
   const [recuEvenement, setRecuEvenement] = useState(false)
+  // La résolution de conflit vit ICI depuis qu'elle a quitté le panneau de droite du chat.
+  const conflit = useConflitBureau()
 
   const load = useCallback(async (): Promise<void> => {
     const id = ++requestId.current
@@ -334,6 +340,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   const activeAgents = agents.filter(
     (agent) => agent.state === 'working' || agent.state === 'isolated'
   )
+  const agentsEnConflit = agents.filter((agent) => agent.state === 'conflict')
 
   const pickRepo = async (): Promise<void> => {
     const chosen = await window.api.pickGitRepo?.()
@@ -376,6 +383,26 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               explicitement a cette vue. Un renvoi vers une section invisible vaut un renvoi vers
               rien. */}
           <BureauxConserves runsInterrompus={runsInterrompus} />
+
+          {/* Les conflits, et EUX SEULS : c'est la seule décision que cette vue ne montrait nulle
+              part, et la section reste invisible quand il n'y a rien à trancher. Aucun appel Git
+              supplémentaire — ces bureaux viennent de l'activité déjà chargée. */}
+          {agentsEnConflit.length > 0 && (
+            <section className="wt-conflits" data-testid="worktree-conflicts">
+              <h3>Conflits à trancher · {agentsEnConflit.length}</h3>
+              <div className="wt-offices" aria-label="Bureaux en conflit">
+                {agentsEnConflit.map((agent) => (
+                  <AgentOffice
+                    key={agent.agentId}
+                    agent={agent}
+                    onResolveConflict={conflit.openConflictDiff}
+                    onResolveConflictChoice={conflit.resolveConflictChoice}
+                  />
+                ))}
+              </div>
+              <ConflitBureauPanneau conflit={conflit} />
+            </section>
+          )}
           <section className={`project-strip is-${health.state}`} aria-label="Santé du projet">
             <div>
               <span>Santé du projet</span>

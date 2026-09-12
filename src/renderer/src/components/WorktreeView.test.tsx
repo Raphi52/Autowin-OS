@@ -428,3 +428,120 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(api.readNodeFile).not.toHaveBeenCalled()
   })
 })
+
+describe('WorktreeView — la résolution de conflit se tranche ICI', () => {
+  const DIFF = {
+    available: true as const,
+    agentId: 'judge',
+    paths: ['src/shared/state.ts'],
+    diff: '@@ -1 +1 @@\n-version principale\n+version du bureau'
+  }
+
+  async function ouvrirComparaison(): Promise<void> {
+    await act(async () => {
+      ;(
+        container?.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement
+      ).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  it('la résolution de conflit est ATTEIGNABLE depuis cette vue', async () => {
+    installApi()
+    await renderView()
+
+    // Le point du déplacement : ces boutons n'existaient que dans le panneau de droite du chat.
+    expect(container?.querySelector('[data-testid="worktree-conflicts"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="wt-resolve-conflict"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="wt-keep-agent"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="wt-keep-mine"]')).not.toBeNull()
+    // Seuls les bureaux EN CONFLIT : la section ne réinstalle pas le Hub entier.
+    expect(
+      container?.querySelectorAll(
+        '[data-testid="worktree-conflicts"] [data-testid="wt-agent-office"]'
+      )
+    ).toHaveLength(1)
+    expect(container?.querySelector('[data-testid="wt-main-office"]')).toBeNull()
+  })
+
+  it('aucune section conflit quand aucun bureau n’est en conflit', async () => {
+    installApi({ getWorktreeActivity: vi.fn(async () => [activity[0]]) })
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-conflicts"]')).toBeNull()
+  })
+
+  it('ouvre la comparaison lecture seule puis la referme', async () => {
+    const api = installApi({ getWorktreeConflictDiff: vi.fn(async () => DIFF) })
+    await renderView()
+    await ouvrirComparaison()
+
+    expect(api.getWorktreeConflictDiff).toHaveBeenCalledWith('judge')
+    expect(container?.querySelector('[data-testid="wt-conflict-diff"]')).not.toBeNull()
+    expect(container?.textContent).toContain('version du bureau')
+
+    await act(async () => {
+      ;(container?.querySelector('[data-testid="wt-conflict-close"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+    expect(container?.querySelector('[data-testid="wt-conflict-diff"]')).toBeNull()
+  })
+
+  it('nomme l’échec de comparaison au lieu de rester en préparation', async () => {
+    installApi({
+      getWorktreeConflictDiff: vi.fn(() => Promise.reject(new Error('bureau illisible')))
+    })
+    await renderView()
+    await ouvrirComparaison()
+
+    expect(
+      container?.querySelector('[data-testid="wt-conflict-diff-error"]')?.textContent
+    ).toContain('a échoué')
+    expect(container?.textContent).not.toContain('Préparation des deux versions')
+  })
+
+  it('envoie le choix au processus principal puis referme la comparaison', async () => {
+    const resolveWorktreeConflict = vi.fn(async () => ({
+      resolved: true as const,
+      agentId: 'judge',
+      outcome: 'merged' as const
+    }))
+    installApi({ getWorktreeConflictDiff: vi.fn(async () => DIFF), resolveWorktreeConflict })
+    await renderView()
+    await ouvrirComparaison()
+
+    await act(async () => {
+      ;(container?.querySelector('[data-testid="wt-keep-agent"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(resolveWorktreeConflict).toHaveBeenCalledWith('judge', 'agent')
+    expect(container?.querySelector('[data-testid="wt-conflict-diff"]')).toBeNull()
+    expect(
+      container?.querySelector('[data-testid="wt-conflict-resolution"]')?.textContent
+    ).toContain('Version de l’agent appliquée')
+  })
+
+  it('un refus du processus principal est affiché sans prétendre avoir résolu', async () => {
+    installApi({
+      resolveWorktreeConflict: vi.fn(async () => ({
+        resolved: false as const,
+        reason: 'blocked' as const
+      }))
+    })
+    await renderView()
+
+    await act(async () => {
+      ;(container?.querySelector('[data-testid="wt-keep-mine"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container?.querySelector('[data-testid="wt-office-error"]')?.textContent).toContain(
+      'Résolution refusée'
+    )
+    expect(container?.querySelector('[data-testid="wt-conflict-resolution"]')).toBeNull()
+  })
+})

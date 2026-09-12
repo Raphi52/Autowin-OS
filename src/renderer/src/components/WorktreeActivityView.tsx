@@ -238,7 +238,8 @@ function useOfficeAction(): {
   return { pending, error, run }
 }
 
-function AgentOffice({
+/** Exporté pour la vue Worktrees : elle rend ces mêmes fiches pour les seuls bureaux en conflit. */
+export function AgentOffice({
   agent,
   nowMs,
   onResolveConflict,

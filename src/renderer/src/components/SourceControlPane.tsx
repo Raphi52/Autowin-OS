@@ -1,15 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ProjectPane } from './ProjectPane'
-import { WorktreeActivityView } from './WorktreeActivityView'
 import { DiffView } from './DiffView'
-import {
-  conflictDiffMessage,
-  requiresAttention,
-  type WorktreeAgentActivity,
-  type WorktreeConflictDiffResult,
-  type WorktreeConflictResolutionChoice,
-  type WorktreeRuntimeStatus
-} from '../../../shared/worktree-activity-model'
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
 import './SourceControlPane.css'
@@ -78,20 +69,10 @@ export function SourceControlPane({
   const [git, setGit] = useState<GitReadResult | null>(null)
   const [brainTraces, setBrainTraces] = useState<BrainTrace[]>([])
   const [brainUnavailable, setBrainUnavailable] = useState(false)
-  const [worktrees, setWorktrees] = useState<WorktreeAgentActivity[]>([])
-  const [worktreeStatus, setWorktreeStatus] = useState<WorktreeRuntimeStatus | null>(null)
-  const [worktreeError, setWorktreeError] = useState<string | undefined>(undefined)
-  const [worktreeTick, setWorktreeTick] = useState(0)
-  // Horloge figée par rafraîchissement : appeler Date.now() pendant le rendu rendrait la vue impure.
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  const [conflictResolution, setConflictResolution] = useState<string | undefined>(undefined)
   const [openFile, setOpenFile] = useState<string | null>(null)
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
   const diffRequestRef = useRef(0)
   const dataRequestRef = useRef(0)
-  const [conflictAgentId, setConflictAgentId] = useState<string | null>(null)
-  const [conflictDiff, setConflictDiff] = useState<WorktreeConflictDiffResult | null>(null)
-  const conflictRequestRef = useRef(0)
   const [repoPath] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')
   const [refreshTick, setRefreshTick] = useState(0)
   const [view, setView] = useState<PaneView>('project')
@@ -99,44 +80,15 @@ export function SourceControlPane({
   const [loadedScope, setLoadedScope] = useState('')
 
   useEffect(() => {
-    let alive = true
-    const loadActivity = (): void => {
-      void window.api
-        .getWorktreeActivity?.(conversationId)
-        .then((activity) => {
-          if (alive) {
-            setWorktrees(activity)
-            setWorktreeError(undefined)
-          }
-        })
-        .catch(() => {
-          if (alive) setWorktreeError('Lecture des bureaux agents indisponible.')
-        })
-    }
-    // fix-ok: un rejet laissait la vue sur « Aucun bureau agent ouvert », impossible à distinguer
-    // d'un vrai vide ; l'échec de lecture est désormais nommé et rejouable.
-    loadActivity()
-    void window.api
-      .getWorktreeStatus?.()
-      .then((status) => {
-        if (alive) setWorktreeStatus(status)
-      })
-      .catch(() => {
-        if (alive) setWorktreeError('Lecture des bureaux agents indisponible.')
-      })
+    // L'activité des bureaux vit dans l'onglet Worktrees ; ici, l'événement sert seulement à relire
+    // le résultat de clôture auto, qui peut se terminer APRÈS le retour du run.
     const off = window.api.onWorktreeActivity?.(() => {
-      // L'Ã©vÃ©nement est global ; relire via l'IPC conserve le scope de CETTE conversation.
-      loadActivity()
-      setNowMs(Date.now())
-      // Une publication peut se terminer après le retour du run : son résultat auto-close
-      // doit apparaître sans attendre un autre événement de chat ni un rafraîchissement manuel.
       setRefreshTick((tick) => tick + 1)
     })
     return () => {
-      alive = false
       off?.()
     }
-  }, [conversationId, worktreeTick])
+  }, [conversationId])
 
   useEffect(() => {
     const requestId = ++dataRequestRef.current
@@ -292,71 +244,6 @@ export function SourceControlPane({
             // « Projet de la conversation » se contredirait à l'écran.
             'Fichiers de la conversation'
           : 'Dépôt courant'
-  const openConflictDiff = (agentId: string): void => {
-    const requestId = ++conflictRequestRef.current
-    setConflictAgentId(agentId)
-    setConflictDiff(null)
-    const request = window.api.getWorktreeConflictDiff?.(agentId)
-    if (!request) {
-      setConflictDiff({ available: false, reason: 'read-failed' })
-      return
-    }
-    void request
-      .then((result) => {
-        if (conflictRequestRef.current === requestId) {
-          setConflictDiff(result as WorktreeConflictDiffResult)
-        }
-      })
-      .catch(() => {
-        if (conflictRequestRef.current === requestId) {
-          setConflictDiff({ available: false, reason: 'read-failed' })
-        }
-      })
-  }
-
-  const closeConflictDiff = (): void => {
-    conflictRequestRef.current += 1
-    setConflictAgentId(null)
-    setConflictDiff(null)
-  }
-
-  /** P2-11 : toutes les API worktree sont optionnelles ; un preload partiel ne doit pas crasher. */
-  const retryOffice = (agentId: string): Promise<unknown> => {
-    const request = window.api.retryWorktreeRecovery?.(agentId)
-    if (!request) throw new Error('Nouvel essai indisponible depuis cette fenêtre.')
-    return request
-  }
-
-  const resolveConflictChoice = async (
-    agentId: string,
-    choice: WorktreeConflictResolutionChoice
-  ): Promise<void> => {
-    setConflictResolution(undefined)
-    const request = window.api.resolveWorktreeConflict?.(agentId, choice)
-    if (!request) throw new Error('Résolution indisponible depuis cette fenêtre.')
-    const result = await request
-    if (result.resolved) {
-      closeConflictDiff()
-      setConflictResolution(
-        choice === 'agent'
-          ? 'Version de l’agent appliquée : les changements sont dans ton workspace.'
-          : 'Ta version est conservée : le bureau agent n’a rien écrasé.'
-      )
-      return
-    }
-    const reasons: Record<typeof result.reason, string> = {
-      'invalid-agent': 'Ce bureau n’est plus connu d’Autowin.',
-      'not-conflict': 'Ce bureau n’est plus en conflit ; rafraîchis le Hub.',
-      unsupported: 'La résolution n’est pas disponible sur cette installation.',
-      'still-conflicting': 'Le conflit persiste : ouvre le bureau protégé pour trancher à la main.',
-      blocked: 'Résolution refusée pour protéger ton workspace.'
-    }
-    throw new Error(
-      `${reasons[result.reason]}${result.detail ? ` ${result.detail}` : ''} Rien n’a été écrasé.`
-    )
-  }
-
-  const attentionCount = worktrees.filter(requiresAttention).length
 
   return (
     <div className="sc-pane" data-testid="source-control-pane">
@@ -405,15 +292,6 @@ export function SourceControlPane({
             onClick={() => selectView('workspace')}
           >
             Workspace
-            {attentionCount > 0 && (
-              <span
-                className="sc-tab-badge"
-                data-testid="sc-workspace-badge"
-                title={`${attentionCount} bureau${attentionCount > 1 ? 'x' : ''} attendent ta décision`}
-              >
-                {attentionCount}
-              </span>
-            )}
           </button>
         </div>
 
@@ -608,77 +486,6 @@ export function SourceControlPane({
                 <strong>Dernière clôture · {autoClose.last.runId}</strong>
                 <span>{autoCloseResultLabel('Projet', autoClose.last.project)}</span>
                 <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
-              </div>
-            )}
-          </section>
-        )}
-
-        {view === 'workspace' && (
-          <section className="sc-sect">
-            <header className="sc-h">
-              Hub des bureaux{worktrees.length ? ` · ${worktrees.length}` : ''}
-            </header>
-            {worktreeError && (
-              <div className="sc-clean" data-testid="wt-load-error" role="alert">
-                {worktreeError}
-                <button
-                  className="sc-btn"
-                  data-testid="wt-load-retry"
-                  onClick={() => {
-                    setWorktreeError(undefined)
-                    setNowMs(Date.now())
-                    setWorktreeTick((tick) => tick + 1)
-                  }}
-                >
-                  Réessayer
-                </button>
-              </div>
-            )}
-            <WorktreeActivityView
-              agents={worktrees}
-              status={worktreeStatus}
-              nowMs={nowMs}
-              onResolveConflict={openConflictDiff}
-              onResolveConflictChoice={resolveConflictChoice}
-              onOpenOffice={(path) => window.api.openFolder(path)}
-              onRetryOffice={(agentId) => retryOffice(agentId)}
-            />
-            {conflictResolution && (
-              <div className="sc-clean" data-testid="wt-conflict-resolution" role="status">
-                {conflictResolution}
-              </div>
-            )}
-            {conflictAgentId && (
-              <div className="sc-diff-wrap" data-testid="wt-conflict-diff">
-                <div className="sc-diff-card">
-                  <div className="sc-diff-head">
-                    <span className="sc-diff-title">
-                      {conflictDiff?.available
-                        ? conflictDiff.paths.join(', ')
-                        : 'Comparaison du bureau'}
-                    </span>
-                    <span className="sc-diff-wrap-mode">Lecture seule</span>
-                    <button
-                      className="sc-btn"
-                      data-testid="wt-conflict-close"
-                      title="Fermer la comparaison"
-                      onClick={closeConflictDiff}
-                    >
-                      Fermer
-                    </button>
-                  </div>
-                  <div className="sc-diff-content">
-                    {conflictDiff === null ? (
-                      <div className="sc-clean">Préparation des deux versions…</div>
-                    ) : conflictDiff.available ? (
-                      <DiffView diff={conflictDiff.diff} />
-                    ) : (
-                      <div className="sc-clean" data-testid="wt-conflict-diff-error">
-                        {conflictDiffMessage(conflictDiff.reason)}
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
             )}
           </section>
