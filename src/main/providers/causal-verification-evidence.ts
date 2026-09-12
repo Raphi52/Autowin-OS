@@ -73,17 +73,34 @@ function couvreSesArguments(
   return mutationPaths.every((path) => arguments_.has(normalized(path)))
 }
 
-export function attestIsolatedVerificationEvidence(
-  evidence: ExecutionEvidence[],
-  causallyIsolated: boolean,
-  trustedOracles: readonly TrustedLearningOracle[] = []
-): ExecutionEvidence[] {
-  if (!causallyIsolated || trustedOracles.length === 0) return evidence
-  const successfulMutations = evidence.filter((item) => item.kind === 'mutation' && item.ok)
-  // Le classement lexical d'une commande ne prouve jamais qu'elle n'écrit pas (`python -c`,
+/**
+ * LA FENETRE CAUSALE, et pourquoi le veto ne porte plus sur le run entier.
+ *
+ * MESURE du 2026-09-12 sur `outcome-learning/events-v1.jsonl` : 1 820 verifications enregistrees,
+ * ZERO `oracleAttestation`, et 51 decisions renvoyees en file d'attente avec le motif
+ * `causality-not-proven`. La cause n'est pas qu'un agent trichait : une SEULE commande sans chemin
+ * et hors allowlist stricte, n'importe OU dans le run, fermait le gate pour TOUT le run -- or
+ * l'exploration qui PRECEDE le rouge (un `rg` avec un tube, un `git log | head`) en produit
+ * toujours. La route `publish` etait donc structurellement morte.
+ *
+ * CE QUI EST RESTREINT, ET CE QUI NE L'EST PAS. Une commande qui s'execute AVANT le rouge ne peut
+ * pas fabriquer le vert : si elle avait neutralise l'oracle, le rouge n'aurait pas echoue. C'est le
+ * ROUGE lui-meme qui atteste l'etat sain de l'oracle a cet instant. Une commande post-verte, elle,
+ * ne peut pas non plus fabriquer un vert deja observe. Tout ce qui vit ENTRE les deux reste
+ * suspect, y compris avant la mutation : une alteration glissee entre le rouge et la mutation
+ * fabrique bel et bien le vert, et ce cas reste refuse.
+ *
+ * SANS ROUGE NI VERT, AUCUNE RESTRICTION : un run qui n'a pas observe d'echec puis de succes n'a
+ * aucun point d'ancrage temporel ; le veto porte alors sur le run entier, comme avant.
+ */
+function contientCommandeNonAttribuee(
+  items: readonly ExecutionEvidence[],
+  trustedOracles: readonly TrustedLearningOracle[]
+): boolean {
+  // Le classement lexical d'une commande ne prouve jamais qu'elle n'ecrit pas (`python -c`,
   // `node -e`, script maison). Toute commande sans chemin ferme donc le gate, sauf oracle exact ou
-  // lecture appartenant à l'allowlist stricte. Le statut ne suffit pas : un exit non nul peut écrire.
-  const hasUntrustedUnattributedCommand = evidence.some(
+  // lecture appartenant a l'allowlist stricte. Le statut ne suffit pas : un exit non nul peut ecrire.
+  return items.some(
     (item) =>
       Boolean(item.command) &&
       attributedPaths(item).length === 0 &&
@@ -97,7 +114,27 @@ export function attestIsolatedVerificationEvidence(
       ) &&
       !isStrictlyReadOnlyCommand(item.command)
   )
-  if (hasUntrustedUnattributedCommand) return evidence
+}
+
+export function attestIsolatedVerificationEvidence(
+  evidence: ExecutionEvidence[],
+  causallyIsolated: boolean,
+  trustedOracles: readonly TrustedLearningOracle[] = []
+): ExecutionEvidence[] {
+  if (!causallyIsolated || trustedOracles.length === 0) return evidence
+  const successfulMutations = evidence.filter((item) => item.kind === 'mutation' && item.ok)
+  const rouge = evidence.findIndex(
+    (item) => item.kind === 'verification' && !item.ok && Boolean(item.command)
+  )
+  const dernierVert = evidence.findLastIndex(
+    (item) => item.kind === 'verification' && item.ok && Boolean(item.command)
+  )
+  // La FENETRE CAUSALE : du rouge qui ouvre la chaine au dernier vert qui la ferme. Hors de ces
+  // bornes, aucune commande ne peut avoir fabrique le vert observe. Sans ces deux bornes, on
+  // retombe sur le run entier.
+  const fenetre =
+    rouge >= 0 && dernierVert > rouge ? evidence.slice(rouge, dernierVert + 1) : evidence
+  if (contientCommandeNonAttribuee(fenetre, trustedOracles)) return evidence
   const mutationPaths = [...new Set(successfulMutations.flatMap(attributedPaths))].sort()
   if (mutationPaths.length === 0) return evidence
 

@@ -6,6 +6,8 @@ import {
   type ResumeSondeRenderer
 } from '../../../shared/perf-lag'
 import { SEUIL_GEL_MS, type ResumeGels } from '../../../shared/gel-detector'
+import type { InventaireDisque } from '../../../main/store/inventaire-disque'
+import { formaterOctets } from './formater-octets'
 
 /**
  * Onglet LATENCE de la vue Tests — « ou passe le temps ? », repondu par des faits.
@@ -30,6 +32,7 @@ interface RapportGels extends ResumeGels {
 type ApiPerf = {
   perfTurnLatency?: (derniers?: number) => Promise<RapportTours>
   perfGels?: (derniers?: number) => Promise<RapportGels>
+  osDiskUsage?: () => Promise<InventaireDisque>
 }
 
 const DUREE_SONDE_MS = 4000
@@ -65,6 +68,7 @@ export function PerfLagPanel(): React.JSX.Element {
   const [sonde, setSonde] = useState<ResumeSondeRenderer | undefined>()
   const [sondeEnCours, setSondeEnCours] = useState(false)
   const [gels, setGels] = useState<RapportGels | undefined>()
+  const [disque, setDisque] = useState<InventaireDisque | undefined>()
 
   const charger = useCallback(async () => {
     const api = (window as unknown as { api?: ApiPerf }).api
@@ -76,6 +80,9 @@ export function PerfLagPanel(): React.JSX.Element {
       setRapport(await api.perfTurnLatency(200))
       // Les gels sont un instrument DISTINCT : leur absence ne doit pas masquer les jalons.
       if (typeof api.perfGels === 'function') setGels(await api.perfGels(200))
+      // L'espace disque est un TROISIEME instrument, independant : son absence ne doit masquer ni
+      // les jalons ni les gels.
+      if (typeof api.osDiskUsage === 'function') setDisque(await api.osDiskUsage())
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e))
     }
@@ -226,6 +233,51 @@ export function PerfLagPanel(): React.JSX.Element {
             <p className="tests-invalid">⚠ {rapport.lignesIllisibles} ligne(s) illisible(s)</p>
           )}
         </>
+      )}
+
+      {disque && (
+        <section className="perf-disque" data-testid="perf-disque">
+          <h3>
+            Espace disque — {formaterOctets(disque.octets)}
+            {disque.partiel ? ' (au moins)' : ''}
+          </h3>
+          <table className="perf-table">
+            <thead>
+              <tr>
+                <th>Famille</th>
+                <th>Poids</th>
+                <th>Fichiers</th>
+                <th>Ménage au démarrage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {disque.familles.map((famille) => {
+                const menage = disque.menage.find((passe) => passe.famille === famille.nom)
+                return (
+                  <tr key={famille.nom} data-testid="perf-disque-famille">
+                    <td>{famille.nom}</td>
+                    <td>
+                      {formaterOctets(famille.octets)}
+                      {famille.partiel ? ' (au moins)' : ''}
+                    </td>
+                    <td>{famille.fichiers}</td>
+                    <td>
+                      {menage
+                        ? `${menage.supprimes} supprimé(s), ${formaterOctets(menage.octetsLiberes)} libéré(s)` +
+                          (menage.restants === undefined ? '' : ` · reste ${menage.restants}`)
+                        : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <p className="perf-disque-note">
+            Rien n’est supprimé par cet écran : il MONTRE ce que le ménage du démarrage a déjà fait.
+            Un poids marqué « au moins » a été arrêté par le plafond de comptage — un plancher, pas
+            un total.
+          </p>
+        </section>
       )}
 
       {sonde && (

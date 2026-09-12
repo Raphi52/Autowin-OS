@@ -72,6 +72,7 @@ import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
+import { rejouerOrientations } from './orientations-rejouees'
 import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import {
@@ -234,7 +235,12 @@ function TexteSurligne({ texte, terme }: { texte: string; terme: string }): Reac
   )
 }
 
-function ghostDuFil(fil: Msg[]): string | null {
+/**
+ * `depotPresent` : le dossier de travail est-il un depot git ? Sans depot, `/salvage` n'a ni
+ * branche ni remise de cote a trier -- la reecriture de la suite en ordre de tri est donc
+ * desactivee (trois relances utilisateur des 09 et 10/09/2026 sur un dossier sans `.git`).
+ */
+function ghostDuFil(fil: Msg[], depotPresent: boolean): string | null {
   const lastAssistant = [...fil].reverse().find((m) => m.role === 'assistant') as
     AsstMsg | undefined
   if (!lastAssistant) return null
@@ -252,7 +258,7 @@ function ghostDuFil(fil: Msg[]): string | null {
   // et une publication que personne n'a demandée ne propose RIEN du tout.
   if (!suite) return suite
   if (publicationJamaisDemandee(suite, demandeDuTour)) return null
-  return estPromptDePublication(suite, demandeDuTour) ? PROMPT_SALVAGE : suite
+  return estPromptDePublication(suite, demandeDuTour, depotPresent) ? PROMPT_SALVAGE : suite
 }
 
 // Les suggestions d'accueil ne sont plus figées : elles se DÉRIVENT de l'état réel
@@ -510,7 +516,33 @@ export function ChatView({
    * adressé au lecteur (« passer en terrain »), donc la recopier ici donnait une phrase qu'il fallait
    * réécrire avant de l'envoyer. Le repli garantit qu'un tour sans prompt garde l'ancien comportement.
    */
-  const ghostRecommendation = useMemo(() => ghostDuFil(messages), [messages])
+  /*
+   * LE DOSSIER DE TRAVAIL EST-IL UN DEPOT GIT ? Lu une fois : le dossier actif est fige au
+   * demarrage cote main. `true` par defaut tant que la reponse n'est pas arrivee, pour ne jamais
+   * relacher le garde-fou de publication sur une simple latence de lecture.
+   */
+  const [depotPresent, setDepotPresent] = useState(true)
+  useEffect(() => {
+    // Canal ABSENT : on garde `true`, donc l'ancien comportement — jamais un relachement du
+    // garde-fou de publication sur une simple indisponibilite de lecture.
+    if (typeof window.api?.executionWorkspace !== 'function') return
+    let vivant = true
+    void window.api
+      .executionWorkspace()
+      .then((etat) => {
+        if (vivant) setDepotPresent(etat.isGitRepo)
+      })
+      .catch(() => {
+        /* Lecture impossible : on garde le comportement d'avant, jamais un relachement. */
+      })
+    return () => {
+      vivant = false
+    }
+  }, [])
+  const ghostRecommendation = useMemo(
+    () => ghostDuFil(messages, depotPresent),
+    [messages, depotPresent]
+  )
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [appNotice, setAppNotice] = useState<AppNotice | null>(null)
@@ -717,6 +749,40 @@ export function ChatView({
   const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
   const [steeringDirectives, setSteeringDirectives] = useState<Set<number>>(() => new Set())
   const [directiveReceipts, setDirectiveReceipts] = useState<Record<string, DirectiveReceipt[]>>({})
+  /*
+   * REJOUER LES CONSIGNES DU TOUR A L'OUVERTURE D'UNE CONVERSATION.
+   *
+   * Sans cela, une consigne tapee pendant un run disparaissait au premier changement de
+   * conversation : elle ne vivait que dans `directiveReceipts`, jamais relue du journal.
+   * On n'ECRASE JAMAIS des recus deja presents -- ceux du direct sont plus riches (ancre fine
+   * dans le flux, statut reel) ; on ne remplit que les fils encore vides.
+   */
+  useEffect(() => {
+    if (!activeId) return
+    // Canal ABSENT (preload plus ancien, ou harnais de test) : on ne rejoue rien plutot que de
+    // faire tomber tout le fil. Meme motif defensif que `PerfLagPanel` sur `perfGels`.
+    if (typeof window.api?.orientationsDeConversation !== 'function') return
+    let vivant = true
+    void window.api
+      .orientationsDeConversation(activeId)
+      .then((orientations) => {
+        if (!vivant || orientations.length === 0) return
+        setDirectiveReceipts((current) => {
+          if (current[activeId]?.length) return current
+          const rejoues = rejouerOrientations(orientations, messages)
+          return rejoues.length ? { ...current, [activeId]: rejoues } : current
+        })
+      })
+      .catch(() => {
+        /* Le journal est une trace de dernier recours : ne pas le lire n'est jamais une panne. */
+      })
+    return () => {
+      vivant = false
+    }
+    // `messages` volontairement hors dependances : la relecture se fait a l'OUVERTURE du fil, pas a
+    // chaque delta de flux -- sinon elle rejouerait a chaque token recu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
   const activeDirectiveReceipts = useMemo(
     () => (activeId ? (directiveReceipts[activeId] ?? []) : []),
     [activeId, directiveReceipts]
@@ -3303,6 +3369,7 @@ export function ChatView({
       if (!allumageManuel) return
     }
     const decision = deciderRelanceAuto({
+      depotPresent,
       actif: true,
       occupe: busy,
       fil: messages,
@@ -3355,6 +3422,7 @@ export function ChatView({
       if (id === activeId) continue
       const etat = autoEtat(id)
       const decision = deciderRelanceAuto({
+      depotPresent,
         actif: true,
         occupe: false,
         fil: liveMessagesRef.current.get(id) ?? [],
@@ -4315,7 +4383,7 @@ export function ChatView({
         attachmentCount={fichiers.length}
         mentionSources={mentionSources}
         skillCommands={skillCommands}
-        ghostRecommendation={ghostDuFil(mosaicFils[id] ?? [])}
+        ghostRecommendation={ghostDuFil(mosaicFils[id] ?? [], depotPresent)}
         placeholderPendantTour={occupe}
         onDraftInput={(value) => setDraftInput(id, value)}
         onDraftPresence={() => {}}

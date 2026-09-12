@@ -182,3 +182,21 @@ describe('frontieres de mots — un accent ne coupe pas un mot', () => {
     expect(estPromptDePublication('ouvre une pull request')).toBe(true)
   })
 })
+
+describe('dossier de travail sans depot git', () => {
+  // Mesure des saisies des 09 et 10/09/2026 : trois relances de l'utilisateur pour le meme motif
+  // (« j'ai pas de git arrete de me casser les couilles pour publier ») sur un dossier sans `.git`.
+  it('ne reecrit plus une suite de publication en ordre de tri quand il n’y a aucun depot', () => {
+    expect(estPromptDePublication('Commit et push la correction sur main', undefined, false)).toBe(
+      false
+    )
+    expect(estPromptDePublication('Ouvre une pull request', 'corrige le bouton', false)).toBe(false)
+  })
+
+  it('garde le garde-fou quand le depot existe, et quand l’appelant ne sait pas', () => {
+    expect(estPromptDePublication('Commit et push la correction sur main', undefined, true)).toBe(
+      true
+    )
+    expect(estPromptDePublication('Commit et push la correction sur main')).toBe(true)
+  })
+})

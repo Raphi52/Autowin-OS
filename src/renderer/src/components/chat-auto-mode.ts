@@ -313,6 +313,12 @@ export interface EntreeDecisionAuto {
    * personne dans `deciderRelanceAuto` — c'est exactement ce que les tests rouges reclament.
    */
   tourEstUnScout?: boolean
+  /**
+   * LE DOSSIER DE TRAVAIL EST-IL UN DEPOT GIT ? Sans depot, aucune branche ni remise de cote a
+   * trier : la suite n'est jamais reecrite en ordre de tri. Absent = `true`, l'ancien
+   * comportement, pour ne jamais relacher le garde-fou par simple oubli d'appelant.
+   */
+  depotPresent?: boolean
 }
 
 export type DecisionAuto =
@@ -441,7 +447,7 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   const suite =
     brut && publicationJamaisDemandee(brut, demandeDuTour)
       ? null
-      : brut && estPromptDePublication(brut, demandeDuTour)
+      : brut && estPromptDePublication(brut, demandeDuTour, entree.depotPresent ?? true)
         ? PROMPT_SALVAGE
         : brut
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.

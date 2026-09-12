@@ -481,7 +481,7 @@ export function buildChatPilotagePrompt(
     `que tu t'en souviendras ICI — sauf si le compte-rendu signale un refus, car alors rien n'a été ` +
     `retenu. POUR LES AUTRES : le fait part comme CANDIDAT, un humain le promeut, et il ne devient ` +
     `trouvable par \`brain_query\` qu'après réindexation ; ne promets donc jamais une mémoire partagée ` +
-    `immédiate. Trois limites à ne pas cacher : l'écho est local et disparaît si l'application redémarre ; ` +
+    `immédiate. Trois limites à ne pas cacher : l'écho est local à ce poste et il SURVIT au redémarrage (il est relu sur disque au démarrage), mais il retombe à zéro si son fichier devient illisible ou dépasse sa taille maximale ; ` +
     `il ne garde que la douzaine de faits les plus récents du fil (au-delà, il te dit combien il a écarté) ; ` +
     `et un fait marqué « non déposé au Brain » n'existe QUE dans ce fil — redis-le plus tard si ça compte.\n` +
     `PHASE : quand tu lances \`orchestrate\`, tu peux passer \`phase\` pour ne jouer QUE celle-là — ` +

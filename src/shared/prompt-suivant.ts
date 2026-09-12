@@ -201,7 +201,28 @@ export function publicationJamaisDemandee(prompt: string, demandeDuTour?: string
   return !mentionneUnActeDePublication(demandeDuTour)
 }
 
-export function estPromptDePublication(prompt: string, demandeDuTour?: string): boolean {
+/**
+ * LE DOSSIER SANS DEPOT GIT NE PEUT RIEN AVOIR A TRIER.
+ *
+ * Mesure des saisies des 09 et 10/09/2026 sur `D:\RigV3Desktop` : « comment ca commiter? ya pas de
+ * repo », puis « j1i jamais fait de repo tas mis ca sur quel git? », puis « j'ai pas de git arrete
+ * de me casser les couilles pour publier ». Trois fois la meme reponse, parce que cette fonction ne
+ * connaissait que le TEXTE du prompt : ses trois exceptions (ordre de tri deja joue, charniere de
+ * suite, publication jamais demandee) ne regardent jamais l'etat REEL du dossier de travail.
+ *
+ * Or `/salvage` trie des branches, des remises de cote et des copies de travail non fusionnees.
+ * Sans `.git`, aucun de ces objets n'existe : la reecriture propose un tri VIDE, et elle le
+ * repropose a chaque tour. `depotPresent === false` la desactive donc entierement.
+ *
+ * Par DEFAUT le drapeau vaut `true` : un appelant qui ne sait pas garde l'ancien comportement,
+ * jamais un relachement silencieux du garde-fou.
+ */
+export function estPromptDePublication(
+  prompt: string,
+  demandeDuTour?: string,
+  depotPresent = true
+): boolean {
+  if (!depotPresent) return false
   if (ordreDeTriDejaJoue(demandeDuTour)) return false
   if (ORDRE_DE_TRI.test(prompt)) return false
   const charniere = prompt.search(CHARNIERE_DE_SUITE)

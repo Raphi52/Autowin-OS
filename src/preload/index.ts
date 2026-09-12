@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { GitGraphSnapshot } from '../shared/git-graph'
 import type {
   ChatAttachment,
@@ -151,6 +152,8 @@ const api = {
   // Onglet Latence : rapport LU du journal de jalons de tour (lecture seule, cote main).
   perfTurnLatency: (derniers?: number) => ipcRenderer.invoke('perf:turnLatency', derniers),
   perfGels: (derniers?: number) => ipcRenderer.invoke('perf:gels', derniers),
+  /** Ce qu'Autowin occupe sur le disque, par famille, plus le menage deja fait au demarrage. */
+  osDiskUsage: (): Promise<InventaireDisque> => ipcRenderer.invoke('os:disk-usage'),
   // Mesures d'arene deja journalisees, agregees par workflow (lecture seule, aucun rejeu).
   arenaDuelsParWorkflow: (derniers?: number) =>
     ipcRenderer.invoke('arena:duelsParWorkflow', derniers),
@@ -430,6 +433,11 @@ const api = {
     ipcRenderer.invoke('os:capabilities:tools:set', name, enabled),
   chooseBehaviourWorkspace: (): Promise<string | null> =>
     ipcRenderer.invoke('os:behaviour:choose-workspace'),
+  /** Les consignes tapees PENDANT un tour, avec le tour qu'elles ont inflechi. Lecture seule. */
+  orientationsDeConversation: (
+    conversationId: string
+  ): Promise<Array<{ ts: number; texte: string; turnId?: string }>> =>
+    ipcRenderer.invoke('chat:orientations', conversationId),
   executionWorkspace: (): Promise<ExecutionWorkspaceState> =>
     ipcRenderer.invoke('os:execution-workspace'),
   chooseExecutionWorkspace: (): Promise<ExecutionWorkspaceState> =>

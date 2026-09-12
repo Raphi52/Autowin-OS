@@ -323,7 +323,12 @@ import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import type { FinishedRunOutcome } from './runs/run-interruption'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
-import { journaliserSaisie } from './store/journal-saisie'
+import { journaliserSaisie, lireOrientationsRattachees } from './store/journal-saisie'
+import {
+  inventorierDisque,
+  menageDemarrage,
+  retenirMenageDemarrage
+} from './store/inventaire-disque'
 import { defaultProcessIdentity } from './store/worktree-manager'
 import { planifierBalayage } from './store/balayage-retention'
 import { chargerShaConsignes } from './store/registres-consignes'
@@ -1306,6 +1311,13 @@ try {
   const collected = collectStdoutJournals(process.env.AUTOWIN_RUN_JOURNAL_ROOT, {
     protectedPaths: journauxAttendus
   })
+  // Ces chiffres n'existaient que le temps d'un `console.log` de demarrage : on les RETIENT pour
+  // que l'interface puisse enfin montrer ce que le menage a libere.
+  retenirMenageDemarrage({
+    famille: 'run-stdout',
+    supprimes: collected.removed,
+    octetsLiberes: collected.freedBytes
+  })
   if (collected.removed > 0) {
     console.log(
       `[run-stdout] ${collected.removed} journaux purges (${Math.round(collected.freedBytes / 1024)} Ko)`
@@ -1320,6 +1332,12 @@ try {
 // journaux de tour. Best-effort : un échec de ménage ne retarde jamais le démarrage.
 try {
   const tracesPurgees = collectCausalTraces(join(app.getPath('userData'), 'causal-trace'))
+  retenirMenageDemarrage({
+    famille: 'causal-trace',
+    supprimes: tracesPurgees.removed,
+    octetsLiberes: tracesPurgees.freedBytes,
+    restants: tracesPurgees.remaining
+  })
   if (tracesPurgees.removed > 0) {
     console.log(
       `[causal-trace] ${tracesPurgees.removed} traces purgees (${Math.round(tracesPurgees.freedBytes / 1048576)} Mo), reste ${tracesPurgees.remaining}`
@@ -2409,6 +2427,44 @@ Le fil reprend ensuite normalement.`
       restartRequired: chosen !== null && chosen !== os.executionWorkspace
     }
   }
+
+  /*
+   * LES CONSIGNES DONNEES PENDANT UN TOUR, RENDUES AU FIL.
+   *
+   * Elles etaient ecrites dans `saisies-utilisateur.jsonl` (101 le 2026-09-12) mais ne vivaient a
+   * l'ecran que dans un etat React : un changement de conversation les effaçait. Lecture seule,
+   * bornee, et jamais bloquante -- une defaillance rend une liste vide.
+   */
+  /*
+   * CE QU'AUTOWIN OCCUPE SUR LE DISQUE. La question a du etre POSEE par l'utilisateur le
+   * 2026-09-11 (« est-ce qu'autowin OS accumule des Go en l'utilisant ? ») : aucune vue ne le
+   * disait. Familles NOMMEES uniquement -- la racine porte aussi les caches de Chromium, qui ne
+   * sont pas de l'accumulation d'Autowin.
+   */
+  const FAMILLES_DISQUE = [
+    'worktrees',
+    'prompt-observability',
+    'causal-trace',
+    'turn-journals',
+    'run-stdout',
+    'runs',
+    'chat-artifacts',
+    'transcripts',
+    'activity',
+    'trace',
+    'semantic-timeline'
+  ]
+
+  ipcMain.handle('os:disk-usage', (event) => {
+    assertTrustedRendererSender(event, 'Espace disque')
+    return inventorierDisque(app.getPath('userData'), FAMILLES_DISQUE, menageDemarrage())
+  })
+
+  ipcMain.handle('chat:orientations', (event, conversationId: unknown) => {
+    assertTrustedRendererSender(event, 'Consignes du tour')
+    if (typeof conversationId !== 'string' || !conversationId.trim()) return []
+    return lireOrientationsRattachees(conversationId)
+  })
 
   ipcMain.handle('os:execution-workspace', (event) => {
     assertTrustedRendererSender(event, 'Dossier de travail')

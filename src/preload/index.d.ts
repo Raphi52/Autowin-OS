@@ -1,3 +1,4 @@
+import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
@@ -137,12 +138,8 @@ interface ChatApi {
   pickGitRepo: () => Promise<string | null>
   /** Onglet « Projet » : racine du projet, arborescence par dossier, lecture/ecriture d'un fichier. */
   projectRoot: () => Promise<string>
-  listProjectDir: (
-    path?: string
-  ) => Promise<import('../main/project-files').ProjectListResult>
-  readProjectFile: (
-    path: string
-  ) => Promise<import('../main/project-files').ProjectReadResult>
+  listProjectDir: (path?: string) => Promise<import('../main/project-files').ProjectListResult>
+  readProjectFile: (path: string) => Promise<import('../main/project-files').ProjectReadResult>
   writeProjectFile: (
     path: string,
     content: string
@@ -176,6 +173,8 @@ interface ChatApi {
   ) => Promise<
     import('../shared/perf-lag').RapportLatence & { disponible: boolean; source: string }
   >
+  /** Ce qu'Autowin occupe sur le disque, par famille, plus le menage deja fait au demarrage. */
+  osDiskUsage: () => Promise<InventaireDisque>
   perfGels: (
     derniers?: number
   ) => Promise<
@@ -367,6 +366,10 @@ interface ChatApi {
     enabled: boolean
   ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
   chooseBehaviourWorkspace: () => Promise<string | null>
+  /** Les consignes tapees PENDANT un tour, avec le tour qu'elles ont inflechi. Lecture seule. */
+  orientationsDeConversation: (
+    conversationId: string
+  ) => Promise<Array<{ ts: number; texte: string; turnId?: string }>>
   executionWorkspace: () => Promise<ExecutionWorkspaceState>
   chooseExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
   resetExecutionWorkspace: () => Promise<ExecutionWorkspaceState>

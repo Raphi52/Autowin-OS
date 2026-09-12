@@ -378,7 +378,13 @@ describe('câblage — l’écho est réellement alimenté et réellement relu',
     const prompt = buildChatPilotagePrompt([])
     expect(prompt).toMatch(/DANS CETTE CONVERSATION/)
     expect(prompt).toMatch(/CANDIDAT/)
-    // L'honnetete qui manquait : l'echo est local et volatile.
-    expect(prompt).toMatch(/redémarre/i)
+    // L'honnetete qui manquait : la PORTEE de l'echo. Il est local a ce poste -- mais il SURVIT au
+    // redemarrage, car `configureSessionMemoryEcho` relit `session-memory.json` au demarrage
+    // (src/main/index.ts). Le prompt annonçait l'inverse et poussait l'utilisateur a redire des
+    // faits deja gardes ; la preuve de la relecture vit dans
+    // `chat-pilotage-prompt.memoire-survit-au-redemarrage.test.ts`.
+    expect(prompt).toMatch(/local à ce poste/i)
+    expect(prompt).toMatch(/SURVIT au redémarrage/)
+    expect(prompt).not.toMatch(/disparaît si l'application redémarre/)
   })
 })
