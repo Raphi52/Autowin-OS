@@ -88,3 +88,36 @@ describe('observatory export model', () => {
     ).toThrow(/exact-redacted/)
   })
 })
+
+describe('totaux exportés', () => {
+  it('embarque les agrégats de la même liste d’appels que promptCalls', () => {
+    const exported = buildObservatoryExport({
+      scope: 'view',
+      exportedAt: '2026-09-12T10:00:00.000Z',
+      conversationId: 'conv-1',
+      filters: { query: '', type: 'all', provider: 'all' },
+      view: { mode: 'timeline', quickFilter: 'all', causalScope: 'all' },
+      limitations: [],
+      timeline: {},
+      causalNodes: [],
+      promptCalls: [
+        {
+          usage: { inputTokens: 10, outputTokens: 4, cacheReadTokens: 2, costUsd: 0.25 },
+          durationMs: 1500,
+          status: 'completed'
+        },
+        { usage: { inputTokens: 1, outputTokens: 1 }, durationMs: 500, status: 'failed' }
+      ],
+      nativeTraces: []
+    })
+    expect(exported.totaux).toEqual({
+      calls: 2,
+      input: 11,
+      output: 5,
+      cache: 2,
+      cost: 0.25,
+      durationMs: 2000,
+      errors: 1
+    })
+  })
+})

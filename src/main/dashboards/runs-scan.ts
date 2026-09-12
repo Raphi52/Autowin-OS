@@ -13,6 +13,34 @@ export interface RunEntry {
   path: string
   mtime: number
   summary: RunSummary
+  /**
+   * Conversation qui a produit ce run, quand elle est connue. La racine des runs ne la porte pas
+   * (`<session>` y est un identifiant de session CLI) : le lien vit côté conversations, dans
+   * `runPaths`. Sans lui, une ligne de run est un cul-de-sac — on voit « red · sujet » sans pouvoir
+   * demander pourquoi.
+   */
+  conversationId?: string
+}
+
+/**
+ * Rattache chaque run à la conversation dont les `runPaths` le citent. Comparaison sur chemin
+ * NORMALISÉ (casse ignorée sous Windows), comme `deleteListedRun`.
+ */
+export function attachConversationIds(
+  entries: RunEntry[],
+  conversations: readonly { id: string; runPaths?: string[] }[]
+): RunEntry[] {
+  const parConversation = new Map<string, string>()
+  for (const conversation of conversations) {
+    for (const runPath of conversation.runPaths ?? []) {
+      parConversation.set(comparablePath(runPath), conversation.id)
+    }
+  }
+  if (parConversation.size === 0) return entries
+  return entries.map((entry) => {
+    const conversationId = parConversation.get(comparablePath(entry.path))
+    return conversationId ? { ...entry, conversationId } : entry
+  })
 }
 
 /** Racine des runs (override possible via AUTOWIN_RUN_ROOT). */

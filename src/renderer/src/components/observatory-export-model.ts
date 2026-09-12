@@ -1,4 +1,9 @@
 import { summarizeRagTrace, type RagTraceSummary } from './rag-trace-model'
+import {
+  computeObservatoryTotals,
+  type ObservatoryTotals,
+  type ObservatoryTotalsCall
+} from './observatory-totals'
 
 export interface ObservatoryExportFilters {
   query: string
@@ -53,6 +58,12 @@ export interface ObservatoryExportV1 {
   causalNodes: unknown[]
   promptCalls: unknown[]
   nativeRag: ObservatoryExportNativeRag[]
+  /**
+   * Agrégats de la MÊME liste d'appels que `promptCalls`, calculés par le réducteur du bandeau
+   * (`observatory-totals`). Sans eux, relire un export hors de l'app obligeait à re-dériver à la
+   * main ce que la vue affichait déjà.
+   */
+  totaux: ObservatoryTotals
 }
 
 const SECRET_VALUE =
@@ -115,6 +126,7 @@ export function buildObservatoryExport(input: ObservatoryExportInput): Observato
     timeline: redact(input.timeline),
     causalNodes: redact(input.causalNodes) as unknown[],
     promptCalls: redact(input.promptCalls) as unknown[],
-    nativeRag
+    nativeRag,
+    totaux: computeObservatoryTotals(input.promptCalls as ObservatoryTotalsCall[])
   }
 }

@@ -27,6 +27,8 @@ export interface ObservatoryRunEntry {
   session: string
   path: string
   mtime: number
+  /** Conversation d'origine quand elle est connue (rattachement fait côté main). */
+  conversationId?: string
   summary: { status: string; dodTotal: number; dodChecked: number; defauts: number }
 }
 
