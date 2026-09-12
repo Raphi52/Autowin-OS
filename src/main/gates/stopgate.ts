@@ -135,6 +135,32 @@ export function plafondDurReparations(reparationsAccordees: number): number {
  *  - le plafond DUR reste, parce que le budget ne bloque pas par défaut : sans lui, plus rien
  *    n'arrêterait un run qui reformule indéfiniment son refus.
  */
+/**
+ * Au bout de combien de refus IDENTIQUES d'affilée un refus est-il tenu pour figé ?
+ *
+ * Deux : le premier retour à l'identique peut encore venir d'une preuve indisponible sur le coup, le
+ * second montre que rien ne bouge. Mesuré sur conv-470 (tour 52fbe05f-0086-4806-8f07-c8762e8caa35) :
+ * 4 réparations, 4 refus identiques, donc 2 passages économisés par cette borne.
+ */
+const REFUS_FIGE_SEUIL = 2
+
+/**
+ * Ce refus est-il le MEME que le precedent, mot pour mot ?
+ *
+ * Exportee parce que la boucle de reparation en a besoin pour compter les repetitions : recopier la
+ * comparaison dans l'orchestrateur en ferait un MIROIR, que ce depot a deja paye une fois.
+ */
+export function memeRefus(
+  motifsCourants: readonly string[],
+  motifsPrecedents: readonly string[]
+): boolean {
+  if (motifsPrecedents.length === 0) return false
+  return (
+    motifsCourants.length === motifsPrecedents.length &&
+    motifsCourants.every((motif, index) => motif === motifsPrecedents[index])
+  )
+}
+
 export function arretDeLaReparation(entree: {
   /** Nombre de réparations DÉJÀ tentées. */
   tentative: number
@@ -144,9 +170,25 @@ export function arretDeLaReparation(entree: {
   plafondDur: number
   motifsCourants: readonly string[]
   motifsPrecedents: readonly string[]
+  /**
+   * Combien de fois DE SUITE ce refus est-il revenu mot pour mot, celui-ci compris ?
+   *
+   * Défaut vécu conv-470, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` : quatre passages de
+   * réparation pour un refus MIXTE strictement identique (échec amont + une promesse portant sur un
+   * fichier que la demande ne nommait pas). `doitArreterLaReparation` ne mord pas sur un refus mixte,
+   * à raison au premier constat ; mais un refus qui se répète à l'identique a fait la preuve qu'il est
+   * FIGÉ, et chaque tour de boucle paie un build complet et un panel de juge.
+   *
+   * Absent (ancien appelant) = aucune répétition connue : comportement inchangé.
+   */
+  refusIdentiquesConsecutifs?: number
 }): string | undefined {
   if (entree.tentative >= entree.plafondDur) {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
+  }
+  const repetitions = entree.refusIdentiquesConsecutifs ?? 0
+  if (repetitions >= REFUS_FIGE_SEUIL) {
+    return `Réparation interrompue : le même refus est revenu ${repetitions} fois de suite, rejouer ne le fait plus bouger.`
   }
   if (doitArreterLaReparation(entree.motifsCourants, entree.motifsPrecedents)) {
     return 'Réparation interrompue : refus identique et hors de portée de build, rejouer ne peut rien changer.'
@@ -200,7 +242,8 @@ export function reparationsAutorisees(entree: {
   if (source === undefined) {
     return {
       reparations: 0,
-      motif: "aucune réparation : ni le graphe ni le plan d'exécution ne déclarent de retour possible"
+      motif:
+        "aucune réparation : ni le graphe ni le plan d'exécution ne déclarent de retour possible"
     }
   }
   const reparations = Math.max(0, Math.floor(source))

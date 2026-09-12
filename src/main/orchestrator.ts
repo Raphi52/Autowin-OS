@@ -57,6 +57,7 @@ import { withCostContext, type CostAggregator, type CostSink } from './dashboard
 import type { TrustLedger } from './trust/ledger'
 import {
   arretDeLaReparation,
+  memeRefus,
   evaluateClosure,
   plafondDurReparations,
   reparationsAutorisees
@@ -5237,6 +5238,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     let learningAttestations: IndependentLearningAttestation[] = []
     /** Motifs du refus precedent : sert a reconnaitre un refus qu'un rejeu ne peut pas faire evoluer. */
     let motifsPrecedents: string[] = []
+    /** Combien de fois DE SUITE le refus est revenu mot pour mot (conv-470, tour 52fbe05f : 4). */
+    let refusIdentiquesConsecutifs = 0
     for (let attempt = 0; attempt <= PLAFOND_DUR; attempt++) {
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
@@ -5319,7 +5322,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         reparationsAccordees: politique.reparations,
         plafondDur: PLAFOND_DUR,
         motifsCourants: gate.reasons,
-        motifsPrecedents
+        motifsPrecedents,
+        refusIdentiquesConsecutifs
       })
       if (arret) {
         gate.reasons.push(arret)
@@ -5334,6 +5338,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         push({ step: 'gate', role: 'gate', detail: arret })
         break
       }
+      refusIdentiquesConsecutifs = memeRefus(gate.reasons, motifsPrecedents)
+        ? refusIdentiquesConsecutifs + 1
+        : 0
       motifsPrecedents = [...gate.reasons]
     }
     if (gate.blocked) {
