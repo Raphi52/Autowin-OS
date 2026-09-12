@@ -85,7 +85,30 @@ export function surveillerParBattement(
   let silenceAuRechargement: number | undefined
   let dejaEscalade = false
 
-  const jeton = planifier(() => {
+  let jeton: unknown
+  /*
+   * LA FENETRE FERMEE ARRETE LE BATTEMENT ELLE-MEME.
+   *
+   * Mesure du 2026-09-12 (.autowin-data/dev-app-stdout.log) : apres destruction de la fenetre, ce
+   * callback relevait `TypeError: Object has been destroyed` TOUTES LES 5 SECONDES. Le throw part du
+   * timer, donc hors de toute promesse : il remonte en `uncaughtException`, et le filet de crash
+   * global (src/main/index.ts, `onFatal`) repond en coupant TOUTES les orchestrations en vol. Un
+   * battement orphelin tuait donc en boucle des runs parfaitement sains.
+   */
+  const fenetreMorte = (): boolean => {
+    try {
+      return fenetre.isDestroyed?.() === true
+    } catch {
+      // Un objet si mort que meme cette question echoue : il n'y a plus rien a surveiller.
+      return true
+    }
+  }
+
+  jeton = planifier(() => {
+    if (fenetreMorte()) {
+      annuler(jeton)
+      return
+    }
     let repondu = false
     void fenetre.webContents
       ?.executeJavaScript?.('1')
