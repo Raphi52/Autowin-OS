@@ -24,6 +24,10 @@
  *                                    celle du depot : sans elle, un agent en worktree ne peut rien
  *                                    prouver visuellement (l'app sert le depot, pas sa copie). Le
  *                                    JSON porte alors `cssInjecte` — la capture le DIT.
+ *         [--instance-dediee] [--instance-id <id>] PREND LA PREUVE SANS TOUCHER A L'ECRAN : la
+ *                                    capture se fait sur une instance cachee demarree puis arretee
+ *                                    pour l'occasion (scripts/avec-instance-headless.mjs), profil
+ *                                    dedie, aucun vol de focus, aucun reste ouvert derriere.
  *         [--click <selecteur CSS>]  ouvre ce que la vue seule ne montre pas (popover, menu,
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
@@ -41,6 +45,7 @@
  *                                    sous-pixel et rendrait « ca bouge » sur un ecran ou l'humain
  *                                    ne voit rien.
  */
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, parse, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -185,6 +190,28 @@ export const mediaMouvementEmulee = (argv) => {
   return undefined
 }
 
+/**
+ * PREUVE SANS TOUCHER A L'ECRAN DE L'UTILISATEUR (`--instance-dediee`).
+ *
+ * Par defaut ce harnais pilote la fenetre REELLE du poste : il clique le vrai bouton de navigation
+ * (mesure du 2026-09-02 : l'utilisateur a ete deplace deux fois sur Knowledge pendant qu'il
+ * travaillait). Avec `--instance-dediee`, la capture est prise sur une instance cachee demarree puis
+ * ARRETEE pour l'occasion, via `scripts/avec-instance-headless.mjs` : rien ne bouge a l'ecran et
+ * rien ne reste ouvert derriere.
+ *
+ * Rend les arguments de la re-execution : on RETIRE le drapeau (sinon la relance boucle a l'infini)
+ * et on laisse l'enrobage imposer le port de l'instance qu'il vient d'ouvrir. Pure.
+ */
+export const argumentsInstanceDediee = (argv, { enrobage, script, instanceId }) => [
+  enrobage,
+  '--instance-id',
+  instanceId,
+  '--',
+  'node',
+  script,
+  ...argv.filter((a) => a !== '--instance-dediee')
+]
+
 export const ETATS_CONNUS = ['attention', 'occupe']
 
 export const resoudreEtat = (valeur) => {
@@ -274,6 +301,26 @@ const decouvrirCible = async (port, portImpose) => {
 }
 
 const main = async () => {
+  // `--instance-dediee` : on se relance a l'identique DERRIERE l'enrobage, qui ouvre une instance
+  // cachee, nous passe son port, puis l'arrete quoi qu'il arrive. Le code de sortie est le notre.
+  if (process.argv.includes('--instance-dediee')) {
+    const dossierScripts = dirname(fileURLToPath(import.meta.url))
+    const { status, error } = spawnSync(
+      process.execPath,
+      argumentsInstanceDediee(process.argv.slice(2), {
+        enrobage: resolve(dossierScripts, 'avec-instance-headless.mjs'),
+        script: resolve(dossierScripts, 'ui-capture.mjs'),
+        instanceId: argument('--instance-id', 'ui-capture')
+      }),
+      { stdio: 'inherit', windowsHide: true }
+    )
+    if (error) {
+      console.error(`[ui-capture] instance dediee illancable : ${error.message}`)
+      process.exit(9)
+    }
+    process.exit(status ?? 1)
+  }
+
   const vue = resoudreVue(argument('--view'))
   const sortie = resolve(argument('--out', `artifacts/ui-capture-${vue ?? 'inconnue'}.png`))
   const portImpose = process.argv.includes('--port')
