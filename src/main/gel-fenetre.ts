@@ -129,17 +129,22 @@ export function surveillerFenetreInjoignable(
      * 14 entrees `fenetre-injoignable` pour ZERO `fenetre-reanimee`. C'est aussi ce qui a produit
      * la duree aberrante de 5 933 781 ms journalisee comme un gel unique.
      */
-    const premiereAlerte = debut === undefined
-    if (premiereAlerte) debut = maintenant()
-    if (!minuteurArme) {
+    const armerSiBesoin = (): void => {
+      if (minuteurArme) return
       minuteurArme = true
       planifier(tenterReanimation, reglages.seuilMs)
     }
     // Les cris suivants du MEME episode ne sont pas des entrees en gel : les journaliser une
     // seconde fois gonflerait le compte des gels sans qu'aucun gel de plus ait eu lieu.
-    if (!premiereAlerte) return
+    if (debut !== undefined) {
+      armerSiBesoin()
+      return
+    }
+    const entree = maintenant()
+    debut = entree
+    armerSiBesoin()
     journaliser({
-      ts: new Date(debut as number).toISOString(),
+      ts: new Date(entree).toISOString(),
       // La duree n'est pas encore connue : Electron signale l'ENTREE dans le gel. Mentir ici
       // (inventer un seuil) polluerait les statistiques ; 0 dit exactement « pas encore mesuree ».
       blocageMs: 0,

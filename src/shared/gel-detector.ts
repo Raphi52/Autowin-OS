@@ -329,12 +329,6 @@ export function cleDeCumul(api: string, args: readonly unknown[]): string {
 }
 
 /**
- * LES FRAMES APPLICATIVES d'une pile, condensees en une ligne — jamais le bruit de node.
- *
- * On garde `fichier:ligne` des trois premieres frames hors `node:` et hors le detecteur lui-meme :
- * c'est ce qui nomme un appelant sans faire exploser la taille d'une ligne de journal.
- */
-/**
  * UN CHEMIN QU'ON PEUT OUVRIR — mesure du 2026-09-12.
  *
  * Sur 60 blocages non attribues, 46 portaient un `appelant` en coordonnees de BUILD :
@@ -348,7 +342,7 @@ export function cleDeCumul(api: string, args: readonly unknown[]): string {
  * de racine de depot, et inventer un chemin plausible serait pire que d'en rendre un court.
  */
 export function cheminLisibleDeFrame(emplacement: string): string {
-  const segments = emplacement.split(String.fromCharCode(92)).join('/').split('/')
+  const segments = emplacement.split(/[\\/]/)
   const fichier = segments[segments.length - 1] ?? ''
   const dependance = segments.includes('node_modules')
   const source = /[.](ts|tsx|mts|cts)(:[0-9]+){0,2}$/.test(fichier)
@@ -359,6 +353,12 @@ export function cheminLisibleDeFrame(emplacement: string): string {
   return segments.slice(-2).join('/')
 }
 
+/**
+ * LES FRAMES APPLICATIVES d'une pile, condensees en une ligne — jamais le bruit de node.
+ *
+ * On garde `fichier:ligne` des trois premieres frames hors `node:` et hors le detecteur lui-meme :
+ * c'est ce qui nomme un appelant sans faire exploser la taille d'une ligne de journal.
+ */
 export function appelantApplicatif(pile: string | undefined, maxFrames = 3): string | undefined {
   if (!pile) return undefined
   const frames = pile
