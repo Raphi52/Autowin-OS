@@ -181,16 +181,30 @@ const TACHE_ANCRAGE_MAX = 240
  * Un message d'ORIENTATION est ecarte : il est tape PENDANT un tour et ne fonde pas la demande.
  */
 export function tacheInitiale(fil: readonly Msg[]): string | null {
+  let premier: string | null = null
   for (const m of fil) {
     if (m.role !== 'user') continue
     const user = m as Extract<Msg, { role: 'user' }>
     if (user.orientation) continue
     const nu = (user.content ?? '').trim()
     if (!nu) continue
-    return nu.length > TACHE_ANCRAGE_MAX ? `${nu.slice(0, TACHE_ANCRAGE_MAX).trimEnd()}…` : nu
+    /*
+     * L'ANCRE DEJA ECRITE PRIME SUR LE HAUT DE LA FENETRE. Mesure conv-470 (saisie ts=1789159231523) :
+     * la chaine a envoye « Applique la piece 3 » ancre sur « Applique la piece 2 », alors que les
+     * cinq autres envois du meme fil citaient « Voici un besoin observe... ». Cause : la tache se
+     * lisait sur la liste de messages CHARGEE ; des qu'elle ne commence pas au premier message du
+     * fil, l'ancre devient un maillon intermediaire et la derive qu'elle devait bloquer est actee.
+     * Une ancre deja portee par un message a ete calculee sur une fenetre plus large : on la relit.
+     */
+    const relue = ANCRE_DEJA_ECRITE.exec(nu)?.[1]?.trim()
+    if (relue) return relue
+    premier ??= nu.length > TACHE_ANCRAGE_MAX ? `${nu.slice(0, TACHE_ANCRAGE_MAX).trimEnd()}…` : nu
   }
-  return null
+  return premier
 }
+
+/** Relit la tache citee par un ancrage precedent. Doit rester le miroir de `ancrerSurLaTacheInitiale`. */
+const ANCRE_DEJA_ECRITE = /\(Mode auto — tâche initiale de ce fil : « ([\s\S]*?) »\./
 
 /**
  * ANCRAGE ANTI-DERIVE — demande utilisateur du 2026-09-02 : « le mode auto doit pas trop trop
