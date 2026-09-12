@@ -1,7 +1,11 @@
 import { execFile, execFileSync } from 'node:child_process'
 import { HookBus, type HookContext, type HookResult } from './hook-bus'
 import { createVerifyReplayHook, type VerifyRunner } from './verify-replay-hook'
-import { runHooks, requireVisualProofForFrontDiff } from '../gates/hooks'
+import {
+  runHooks,
+  requireVisualProofForFrontDiff,
+  requireMotionProofForAnimationDiff
+} from '../gates/hooks'
 import type { HookHandler } from './hook-bus'
 import { exigenceAppuiSourcesNeuves } from '../autowin-kaizen-context'
 
@@ -97,6 +101,45 @@ export function creerPreuveVisuelleHandler(
   }
 }
 
+/**
+ * PREUVE DE MOUVEMENT — meme trou que la preuve visuelle, autre hook.
+ *
+ * `requireMotionProofForAnimationDiff` n'etait lui non plus passe par AUCUN appelant de production.
+ * Une capture FIXE satisfait la preuve visuelle tout en etant aveugle a la seule chose qu'un diff
+ * d'animation modifie : le mouvement. On lui donne donc le VRAI diff du depot de travail (`git diff
+ * HEAD`), seul texte ou les lignes ajoutees `animation:` / `@keyframes` sont lisibles. Diff illisible
+ * ou vide => aucun refus invente.
+ */
+export function diffGit(cwd: string): string {
+  try {
+    return execFileSync('git', ['diff', 'HEAD'], {
+      cwd,
+      encoding: 'utf-8',
+      windowsHide: true,
+      maxBuffer: 32 * 1024 * 1024
+    })
+  } catch {
+    return ''
+  }
+}
+
+export function creerPreuveMouvementHandler(
+  lireDiff: (cwd: string) => string = diffGit
+): HookHandler {
+  return (ctx: HookContext): HookResult => {
+    if (!ctx.requireProof || !ctx.cwd) return { block: false }
+    const diff = lireDiff(ctx.cwd)
+    if (!diff) return { block: false }
+    const mesures = (ctx.evidence ?? []).filter(
+      (e) => e.ok && /ui-capture/.test(e.command ?? '') && /--motion/.test(e.command ?? '')
+    ).length
+    const violations = requireMotionProofForAnimationDiff(diff, mesures)
+    return violations.length
+      ? { block: true, reason: violations.map((h) => `hook ${h.hook}: ${h.detail}`).join('; ') }
+      : { block: false }
+  }
+}
+
 /** Cap du re-jeu de vérification (comme le stop-gate CC) : au-delà → kill → bloque. */
 const VERIFY_TIMEOUT_MS = 120_000
 
@@ -130,5 +173,6 @@ export function createDefaultHookBus(verifyRunner: VerifyRunner = defaultVerifyR
     .register('pre-green', syncGateHooksHandler)
     .register('pre-green', appuiSourcesNeuvesHandler)
     .register('pre-green', creerPreuveVisuelleHandler())
+    .register('pre-green', creerPreuveMouvementHandler())
     .register('pre-green', createVerifyReplayHook(verifyRunner))
 }
