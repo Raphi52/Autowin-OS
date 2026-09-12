@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ProjectPane } from './ProjectPane'
 import { WorktreeActivityView } from './WorktreeActivityView'
 import { DiffView } from './DiffView'
 import {
@@ -22,7 +23,12 @@ const markGlyph: Record<GitChange['status'], string> = {
   untracked: '?'
 }
 
-type PaneView = 'project' | 'brain' | 'workspace'
+/**
+ * Les vues du panneau. `tree` = arborescence editable du depot : demande de l'utilisateur le
+ * 2026-09-12, l'arborescence doit etre un SOUS-ONGLET a cote de Fichiers/Brain/Workspace, et non
+ * un bloc empile au-dessus d'eux.
+ */
+type PaneView = 'project' | 'brain' | 'workspace' | 'tree'
 
 const EMPTY_GIT: GitReadResult = {
   available: true,
@@ -154,7 +160,10 @@ export function SourceControlPane({
       setLoadedScope(scope)
     }
 
-    if (view === 'project') {
+    if (view === 'tree') {
+      // L'arborescence charge elle-meme par ses propres canaux : aucune lecture git a faire ici.
+      finishGit(EMPTY_GIT)
+    } else if (view === 'project') {
       if (!conversationId) finishGit(EMPTY_GIT)
       else {
         void window.api
@@ -272,7 +281,9 @@ export function SourceControlPane({
   const visibleBrainTraces = scopeLoaded ? brainTraces : []
   const changes = visibleGit?.state?.changes ?? []
   const paneLabel =
-    view === 'brain'
+    view === 'tree'
+      ? 'Arborescence du projet'
+      : view === 'brain'
       ? 'Appels Brain de la conversation'
       : view === 'workspace' && repoPath
         ? repoPath.replace(/^.*[\\/]/, '')
@@ -372,6 +383,14 @@ export function SourceControlPane({
             Fichiers
           </button>
           <button
+            className={`sc-btn sc-repo-btn${view === 'tree' ? ' is-active' : ''}`}
+            data-testid="sc-view-tree"
+            title="Arborescence du projet et editeur de fichier"
+            onClick={() => selectView('tree')}
+          >
+            Projet
+          </button>
+          <button
             className={`sc-btn sc-repo-btn${view === 'brain' ? ' is-active' : ''}`}
             data-testid="sc-repo-brain"
             title="Appels au Brain effectués depuis cette conversation"
@@ -398,7 +417,9 @@ export function SourceControlPane({
           </button>
         </div>
 
-        {view !== 'brain' && visibleGit && !visibleGit.available && (
+        {view === 'tree' && <ProjectPane />}
+
+        {view !== 'brain' && view !== 'tree' && visibleGit && !visibleGit.available && (
           <div className="sc-empty">Dépôt Git introuvable ici (lecture indisponible).</div>
         )}
 

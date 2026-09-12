@@ -18,6 +18,11 @@ import type { RapportRetention } from '../shared/rapport-retention'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
 import type {
+  ProjectListResult,
+  ProjectReadResult,
+  ProjectWriteResult
+} from '../main/project-files'
+import type {
   TicketItem,
   TicketSourceSummary,
   TicketSourceProfile,
@@ -27,6 +32,7 @@ import type {
 import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { EtatWhisper } from '../main/whisper-local'
+import type { EtatDiarisation } from '../main/diarisation'
 import type { EtatPiper } from '../main/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
@@ -128,6 +134,14 @@ const api = {
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
+  // Onglet « Projet » : arborescence + editeur. Chemins RELATIFS ; la racine vit cote principal.
+  projectRoot: (): Promise<string> => ipcRenderer.invoke('project:root'),
+  listProjectDir: (path?: string): Promise<ProjectListResult> =>
+    ipcRenderer.invoke('project:list', path ?? ''),
+  readProjectFile: (path: string): Promise<ProjectReadResult> =>
+    ipcRenderer.invoke('project:read', path),
+  writeProjectFile: (path: string, content: string): Promise<ProjectWriteResult> =>
+    ipcRenderer.invoke('project:write', path, content),
   // Vue Tests (multi-projets) : registre de racines + execution du harnais du projet demande.
   testProjects: () => ipcRenderer.invoke('tests:projects'),
   saveTestProjects: (projects: Array<{ root: string; label?: string }>) =>
@@ -439,6 +453,10 @@ const api = {
   whisperInstaller: (): Promise<EtatWhisper> => ipcRenderer.invoke('os:whisper:installer'),
   whisperTranscrire: (wav: Uint8Array): Promise<string> =>
     ipcRenderer.invoke('os:whisper:transcrire', wav),
+  // Séparation des voix d'un fichier DÉJÀ enregistré (pyannote) : posée sur clic, ~2,5 Go.
+  diarisationEtat: (): Promise<EtatDiarisation> => ipcRenderer.invoke('os:diarisation:etat'),
+  diarisationInstaller: (): Promise<EtatDiarisation> =>
+    ipcRenderer.invoke('os:diarisation:installer'),
   // Voix NEURONALE locale (Piper) : téléchargée sur clic, prononcée hors ligne ensuite.
   piperEtat: (): Promise<EtatPiper> => ipcRenderer.invoke('os:piper:etat'),
   piperInstaller: (): Promise<EtatPiper> => ipcRenderer.invoke('os:piper:installer'),
@@ -681,6 +699,8 @@ const api = {
       delta?: string
       /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
+      /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */
+      textes?: string[]
     }) => void
   ): (() => void) => {
     const h = (_e: unknown, ev: Parameters<typeof cb>[0]): void => cb(ev)

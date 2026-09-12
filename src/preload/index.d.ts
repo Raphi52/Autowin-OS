@@ -18,6 +18,7 @@ import type {
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { EtatWhisper } from '../main/whisper-local'
+import type { EtatDiarisation } from '../main/diarisation'
 import type { EtatPiper } from '../main/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
@@ -134,6 +135,18 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  /** Onglet « Projet » : racine du projet, arborescence par dossier, lecture/ecriture d'un fichier. */
+  projectRoot: () => Promise<string>
+  listProjectDir: (
+    path?: string
+  ) => Promise<import('../main/project-files').ProjectListResult>
+  readProjectFile: (
+    path: string
+  ) => Promise<import('../main/project-files').ProjectReadResult>
+  writeProjectFile: (
+    path: string,
+    content: string
+  ) => Promise<import('../main/project-files').ProjectWriteResult>
   testProjects: () => Promise<
     Array<
       import('../shared/test-projects').TestProject & {
@@ -525,6 +538,8 @@ interface ChatApi {
       note?: string
       /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
+      /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */
+      textes?: string[]
     }) => void
   ) => () => void
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>

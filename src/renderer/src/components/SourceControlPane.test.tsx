@@ -76,7 +76,11 @@ function mockApi(
     onWorktreeActivity: () => () => {},
     onPilotEvent: () => () => {},
     onAppEvent: () => () => {},
-    retryWorktreeRecovery: () => Promise.resolve(undefined)
+    retryWorktreeRecovery: () => Promise.resolve(undefined),
+    listProjectDir: () =>
+      Promise.resolve({ ok: true, entries: [{ name: 'README.md', path: 'README.md', dir: false }] }),
+    readProjectFile: () => Promise.resolve({ ok: true, content: '# titre' }),
+    writeProjectFile: () => Promise.resolve({ ok: true })
   }
 }
 
@@ -111,6 +115,30 @@ describe('SourceControlPane (prompt-first)', () => {
       await Promise.resolve()
     })
   }
+
+  /**
+   * SOUS-ONGLET « PROJET ». Demande de l'utilisateur le 2026-09-12 : l'arborescence editable doit
+   * etre une vue du panneau, au MEME rang que Fichiers / Brain / Workspace — et non un bloc
+   * empile au-dessus d'eux dans l'onglet Files.
+   */
+  it('vue Projet : quatrieme sous-onglet, monte l’arborescence editable', async () => {
+    mockApi(GIT)
+    await render()
+    const onglets = Array.from(container.querySelectorAll('.sc-repo-btn')).map((b) =>
+      b.textContent?.trim().replace(/\d+$/, '')
+    )
+    expect(onglets).toEqual(['Fichiers', 'Projet', 'Brain', 'Workspace'])
+    expect(container.querySelector('[data-testid="project-pane"]')).toBeNull()
+
+    const tab = container.querySelector('[data-testid="sc-view-tree"]') as HTMLButtonElement
+    await act(async () => {
+      tab.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="project-pane"]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
+  })
 
   it('vue par défaut : UNIQUEMENT les changements (ni branche ni historique)', async () => {
     mockApi(GIT)

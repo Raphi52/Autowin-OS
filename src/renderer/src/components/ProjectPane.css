@@ -1,0 +1,132 @@
+/* Onglet « Projet » : l'arborescence occupe tout le panneau, l'éditeur s'insère DANS l'arbre,
+   juste sous la ligne du fichier ouvert. */
+.project-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: var(--s2, 8px);
+}
+
+.project-pane .pp-arbre {
+  flex: 1 1 auto;
+  min-height: 80px;
+  overflow: auto;
+  border: 1px solid var(--bord, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 4px 0;
+}
+
+.project-pane .pp-noeud {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.project-pane .pp-noeud:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.project-pane .pp-noeud.is-active {
+  background: rgba(212, 169, 79, 0.16);
+}
+.project-pane .pp-glyphe {
+  width: 10px;
+  opacity: 0.7;
+}
+.project-pane .pp-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-pane .pp-editeur {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 4px;
+  margin: 4px 6px 8px 0;
+  padding: 6px;
+  border: 1px solid var(--bord, rgba(255, 255, 255, 0.12));
+  border-left: 2px solid rgba(212, 169, 79, 0.55);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.project-pane .pp-fermer {
+  background: none;
+  border: 0;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.project-pane .pp-fermer:hover {
+  opacity: 1;
+}
+.project-pane .pp-editeur-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+.project-pane .pp-chemin {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+}
+.project-pane .pp-enregistrer {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--bord, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  cursor: pointer;
+}
+.project-pane .pp-enregistrer:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.project-pane .pp-zone {
+  /* Hauteur FIXE : l'editeur vit dans le flux de l'arbre, il ne peut pas s'etirer sur un parent
+     sans hauteur propre — sinon il se reduit a une ligne. */
+  height: 260px;
+  min-height: 120px;
+  resize: none;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  tab-size: 2;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--bord, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 8px;
+}
+.project-pane .pp-vide {
+  font-size: 12px;
+  padding: var(--s2, 8px);
+}
+.project-pane .pp-etat {
+  font-size: 11px;
+  opacity: 0.8;
+}
+.project-pane .pp-erreur {
+  font-size: 11px;
+  color: #ff8a8a;
+}
