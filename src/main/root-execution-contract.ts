@@ -266,8 +266,19 @@ const CIBLE_ANCREE = new RegExp(
 const HORS_PERIMETRE =
   /\b(?:perimetre\s+out|out\s+of\s+scope|hors\s+perimetre|reste\s+intacts?|touche\w*\s+pas|sans\s+toucher|pas\s+toucher|ne\s+pas\s+modifier|exclu\w*)\b/i
 
+/**
+ * Le dossier de preuve joint est une DONNEE rapportee, jamais une demande.
+ *
+ * Defaut vecu (conv-470, tour 52fbe05f-0086-4806-8f07-c8762e8caa35) : la demande `/kaizen j'ai
+ * rien en preprompt` ne nommait aucun fichier, mais le dossier joint recopiait un message anterieur
+ * portant « Ancrage : src/main/model-quotas.ts:62 ». Le gate a exige la mutation de ce fichier et a
+ * refuse un travail juste — exactement le faux positif que ce garde s'interdit.
+ */
+const MARQUEUR_DOSSIER_JOINT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
+
 export function ciblesNommees(task: string): string[] {
-  const texte = task.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  const demande = task.split(MARQUEUR_DOSSIER_JOINT)[0]
+  const texte = demande.normalize('NFD').replace(/\p{Diacritic}/gu, '')
   const cibles: string[] = []
   for (const match of texte.matchAll(CIBLE_ANCREE)) {
     const index = match.index ?? 0
