@@ -202,6 +202,66 @@ describe('ModelActivityLogPane — les quatre sources jusqu’à l’écran', ()
       expect(options).toContain(source)
   })
 
+  it('donne à chaque source une VOIE à position fixe, la même sur toutes ses lignes', async () => {
+    brancher()
+    await monter()
+    const voies = [...host.querySelectorAll('[data-voie-source]')].map((n) => [
+      n.getAttribute('data-voie-source'),
+      n.getAttribute('data-voie-index')
+    ])
+    // Une voie par source PRÉSENTE, pas une de plus : aucune piste vide.
+    expect(new Set(voies.map(([source]) => source))).toEqual(
+      new Set(['thread', 'journal', 'parts', 'causal', 'activity'])
+    )
+    const indexVoie = Object.fromEntries(voies)
+    const rails = [...host.querySelectorAll('[data-piste-source]')]
+    expect(rails.length).toBeGreaterThan(0)
+    for (const rail of rails) {
+      const source = rail.getAttribute('data-piste-source') as string
+      // La ligne est SUR la voie de sa source, et l'index est aussi porté en variable CSS.
+      expect(rail.getAttribute('data-piste-index')).toBe(indexVoie[source])
+      expect((rail as HTMLElement).style.getPropertyValue('--piste')).toBe(indexVoie[source])
+    }
+  })
+
+  it('un clic sur une voie isole sa source, un second la relâche', async () => {
+    brancher()
+    await monter()
+    const voie = host.querySelector('[data-voie-source="journal"]') as HTMLButtonElement
+    await act(async () => voie.click())
+    let sources = [...host.querySelectorAll('.model-log-row [data-log-source]')].map((n) =>
+      n.getAttribute('data-log-source')
+    )
+    expect(new Set(sources)).toEqual(new Set(['journal']))
+    expect(
+      (host.querySelector('[data-voie-source="journal"]') as HTMLElement).getAttribute(
+        'aria-pressed'
+      )
+    ).toBe('true')
+    await act(async () =>
+      (host.querySelector('[data-voie-source="journal"]') as HTMLButtonElement).click()
+    )
+    sources = [...host.querySelectorAll('.model-log-row [data-log-source]')].map((n) =>
+      n.getAttribute('data-log-source')
+    )
+    expect(new Set(sources).size).toBeGreaterThan(1)
+  })
+
+  it('le bouton Pistes replie le rail et rend ses pixels au texte', async () => {
+    brancher()
+    await monter()
+    expect(host.querySelectorAll('[data-piste-source]').length).toBeGreaterThan(0)
+    const bouton = host.querySelector('[data-testid="model-log-pistes"]') as HTMLButtonElement
+    await act(async () => bouton.click())
+    expect(host.querySelectorAll('[data-piste-source]').length).toBe(0)
+    expect(host.querySelector('[data-testid="model-log-voies"]')).toBeNull()
+    expect(
+      host.querySelector('[data-testid="model-activity-log"]')?.getAttribute('data-pistes')
+    ).toBe('false')
+    // Le flux lui-même est intact : replier la vue ne filtre rien.
+    expect(host.textContent).toContain('je réfléchis')
+  })
+
   it('une source illisible n’efface pas les autres', async () => {
     brancher(true)
     await monter()

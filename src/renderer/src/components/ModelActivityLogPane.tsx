@@ -58,6 +58,23 @@ const SOURCE_LABEL: Record<ModelActivitySource, string> = {
   fichiers: 'trace fichiers'
 }
 
+/**
+ * ORDRE DES PISTES — une source = une voie, toujours à la MÊME position horizontale. C'est ce qui
+ * rend la lecture « parallèle » possible dans 300 px : l'origine se lit à la POSITION du trait, pas
+ * à un texte. Seules les sources réellement présentes prennent une voie (aucune voie vide).
+ */
+const SOURCE_ORDRE: readonly ModelActivitySource[] = [
+  'thread',
+  'prompts',
+  'journal',
+  'parts',
+  'causal',
+  'activity',
+  'brain',
+  'bureaux',
+  'fichiers'
+]
+
 /** Heure locale HH:MM:SS — le journal n'écrit qu'un epoch, et parfois rien du tout. */
 function heure(at?: number): string | null {
   if (typeof at !== 'number' || !Number.isFinite(at)) return null
@@ -94,6 +111,9 @@ export function ModelActivityLogPane({
   const [kindMasque, setKindMasque] = useState<ModelActivityKind | ''>('')
   const [sourceMasquee, setSourceMasquee] = useState<ModelActivitySource | ''>('')
   const [erreursSeules, setErreursSeules] = useState(false)
+  // Vue PISTES : chaque source occupe une voie fixe à gauche de l'heure. Repliable — un panneau
+  // très étroit peut vouloir récupérer ces pixels.
+  const [pistes, setPistes] = useState(true)
   // La SIXIEME source, et la seule qui disait ce que le modele avait LU avant de repondre : les
   // recuperations Brain et les faits deposes. Elle n'atteignait que l'Observatory.
   const [brain, setBrain] = useState<ReadonlyArray<Record<string, unknown>>>([])
@@ -239,6 +259,14 @@ export function ModelActivityLogPane({
   // Les listes de filtres viennent des lignes REELLEMENT presentes : jamais une categorie vide.
   const kindsPresents = [...new Set(entries.map((entry) => entry.kind))]
   const sourcesPresentes = [...new Set(entries.map((entry) => entry.source))]
+  // Les VOIES : sources présentes, rangées dans l'ordre stable ci-dessus, avec leur poids réel.
+  const voies = SOURCE_ORDRE.filter((source) => sourcesPresentes.includes(source)).concat(
+    sourcesPresentes.filter((source) => !SOURCE_ORDRE.includes(source))
+  )
+  const compteParSource = new Map<ModelActivitySource, number>()
+  for (const entry of entries)
+    compteParSource.set(entry.source, (compteParSource.get(entry.source) ?? 0) + 1)
+  const voieDe = new Map(voies.map((source, index) => [source, index] as const))
 
   // Le journal se lit par la FIN : l'activité récente est en bas, comme le fil.
   useEffect(() => {
@@ -297,6 +325,16 @@ export function ModelActivityLogPane({
         </button>
         <button
           type="button"
+          className={`btn ghost model-log-toggle${pistes ? ' is-piste' : ''}`}
+          aria-pressed={pistes}
+          data-testid="model-log-pistes"
+          onClick={() => setPistes((prev) => !prev)}
+          title="Afficher une voie par source, à position fixe"
+        >
+          Pistes
+        </button>
+        <button
+          type="button"
           className="btn ghost model-log-toggle"
           data-testid="model-log-export"
           onClick={() => void navigator.clipboard?.writeText(JSON.stringify(visibles, null, 2))}
@@ -312,11 +350,37 @@ export function ModelActivityLogPane({
           </span>
         )}
       </div>
+      {pistes && voies.length > 0 && (
+        <div
+          className="model-log-voies"
+          data-testid="model-log-voies"
+          style={{ ['--piste-total' as string]: String(voies.length) }}
+        >
+          {voies.map((source, index) => (
+            <button
+              key={source}
+              type="button"
+              className={`model-log-voie${sourceMasquee === source ? ' is-seule' : ''}`}
+              data-voie-source={source}
+              data-voie-index={index}
+              aria-pressed={sourceMasquee === source}
+              style={{ ['--piste' as string]: String(index) }}
+              onClick={() => setSourceMasquee((prev) => (prev === source ? '' : source))}
+              title={`${SOURCE_LABEL[source]} — ${compteParSource.get(source) ?? 0} gestes`}
+            >
+              <span className="model-log-voie__trait" aria-hidden="true" />
+              <span className="model-log-voie__nom">{SOURCE_LABEL[source]}</span>
+              <span className="model-log-voie__compte">{compteParSource.get(source) ?? 0}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div
         ref={listRef}
         className="scroll-y col grow model-log-list"
         data-testid="model-activity-log"
-        style={{ minHeight: 0 }}
+        data-pistes={pistes ? 'true' : 'false'}
+        style={{ minHeight: 0, ['--piste-total' as string]: String(voies.length) }}
       >
         {visibles.length === 0 && (
           <div className="model-log-empty">
@@ -355,12 +419,16 @@ export function ModelActivityLogPane({
                 {tour.erreur && <span className="model-log-tour__ko">échec</span>}
               </summary>
               {tour.entries.map((entry) => (
-                <LogRow key={entry.id} entry={entry} tour={tour} />
+                <LogRow
+                  key={entry.id}
+                  entry={entry}
+                  tour={tour}
+                  voie={pistes ? voieDe.get(entry.source) : undefined}
+                />
               ))}
             </details>
           </section>
         ))}
-
       </div>
     </div>
   )
@@ -368,10 +436,13 @@ export function ModelActivityLogPane({
 
 function LogRow({
   entry,
-  tour
+  tour,
+  voie
 }: {
   entry: ModelActivityEntry
   tour?: ModelActivityTour
+  /** Index de la voie de la source, ou `undefined` quand la vue pistes est repliée. */
+  voie?: number
 }): React.JSX.Element {
   // Ecart depuis le debut du tour : l'heure absolue ne dit pas ou le temps est parti.
   const ecart = tour ? deltaMs(entry, tour) : undefined
@@ -394,6 +465,15 @@ function LogRow({
       data-log-ok={entry.ok === undefined ? undefined : String(entry.ok)}
       title={entry.turnId ? `tour ${entry.turnId}` : undefined}
     >
+      {typeof voie === 'number' && (
+        <span
+          className="model-log-piste"
+          data-piste-source={entry.source}
+          data-piste-index={voie}
+          style={{ ['--piste' as string]: String(voie) }}
+          aria-hidden="true"
+        />
+      )}
       <time className="model-log-time">
         {heure(entry.at) ?? '—'}
         {typeof ecart === 'number' && ecart > 0 && (
@@ -432,9 +512,7 @@ function LogRow({
                   Copier
                 </button>
               </div>
-              {entry.fields ? (
-                <HumanJson className="model-log-json" value={entry.fields} />
-              ) : null}
+              {entry.fields ? <HumanJson className="model-log-json" value={entry.fields} /> : null}
             </div>
             <span className="model-log-more" aria-hidden="true" />
           </details>
