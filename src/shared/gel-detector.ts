@@ -334,6 +334,31 @@ export function cleDeCumul(api: string, args: readonly unknown[]): string {
  * On garde `fichier:ligne` des trois premieres frames hors `node:` et hors le detecteur lui-meme :
  * c'est ce qui nomme un appelant sans faire exploser la taille d'une ligne de journal.
  */
+/**
+ * UN CHEMIN QU'ON PEUT OUVRIR — mesure du 2026-09-12.
+ *
+ * Sur 60 blocages non attribues, 46 portaient un `appelant` en coordonnees de BUILD :
+ * `main/index.js:8955:118 < chunks/worktree-manager-C3-Z8-U7.js:494:39`. Aucune de ces lignes
+ * n'existe dans le depot : nommer l'appelant ne servait donc a rien, chaque diagnostic repartait
+ * en fouille. Les cartes de sources ramenent la pile en `.ts` ; encore faut-il ne pas TRONQUER ce
+ * chemin retrouve. Pour une frame de source du depot, on rend le chemin depuis sa racine
+ * (`src/main/store/worktree-manager.ts:494:39`), directement ouvrable dans l'editeur.
+ *
+ * Tout le reste garde la troncature a deux segments : une dependance ou un fichier compile n'a pas
+ * de racine de depot, et inventer un chemin plausible serait pire que d'en rendre un court.
+ */
+export function cheminLisibleDeFrame(emplacement: string): string {
+  const segments = emplacement.split(String.fromCharCode(92)).join('/').split('/')
+  const fichier = segments[segments.length - 1] ?? ''
+  const dependance = segments.includes('node_modules')
+  const source = /[.](ts|tsx|mts|cts)(:[0-9]+){0,2}$/.test(fichier)
+  if (!dependance && source) {
+    const racine = segments.lastIndexOf('src')
+    if (racine > 0) return segments.slice(racine).join('/')
+  }
+  return segments.slice(-2).join('/')
+}
+
 export function appelantApplicatif(pile: string | undefined, maxFrames = 3): string | undefined {
   if (!pile) return undefined
   const frames = pile
@@ -346,7 +371,7 @@ export function appelantApplicatif(pile: string | undefined, maxFrames = 3): str
     .map((ligne) => {
       const emplacement = /\(?([^()\s]+:\d+:\d+)\)?$/.exec(ligne)?.[1]
       if (!emplacement) return undefined
-      return emplacement.split(/[\\/]/).slice(-2).join('/')
+      return cheminLisibleDeFrame(emplacement)
     })
     .filter((frame): frame is string => frame !== undefined)
   return frames.length ? frames.slice(0, maxFrames).join(' < ') : undefined
