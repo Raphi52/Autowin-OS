@@ -622,3 +622,49 @@ describe('une sous-tache reparee sort du registre et laisse la cloture se faire'
     expect(result.gateBlocked).toBe(false)
   })
 })
+
+/**
+ * UN REFUS QUI NE BOUGE PLUS ARRETE LA BOUCLE — au SITE D'APPEL, pas seulement dans la regle pure.
+ *
+ * Defaut vecu conv-470, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` (saisie `ts=1789192601300`) :
+ * quatre passages `[REPARATION 1..4]` pour le MEME refus mot pour mot. La regle existait mais ne
+ * mordait que sur un refus entierement hors de portee de build ; un refus MIXTE fige rejouait
+ * jusqu'au plafond dur, chaque tour payant un build complet et un panel de juge.
+ */
+class ProviderQuiEchoueToujours extends GreedyProvider {
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const contenu = String(messages[messages.length - 1]?.content ?? '')
+    if (/\[sous-tâche A\]/.test(contenu)) {
+      this.contents.push(contenu)
+      throw new Error('sous-agent en échec (simulé, toujours)')
+    }
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => {
+  it('ne rejoue pas indefiniment et DIT pourquoi il s’arrete', async () => {
+    const provider = new ProviderQuiEchoueToujours()
+    const result = await makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['frame', 'build']
+    ).run('analyse le projet en plusieurs volets')
+
+    expect(result.gateBlocked).toBe(true)
+    const passages = provider.contents.filter((c) => /\[sous-tâche A\]/.test(c)).length
+    // Sans la garde, la boucle va jusqu'au plafond dur (24 passages).
+    expect(passages).toBeLessThanOrEqual(4)
+    const dit = [
+      ...(result.gateReasons ?? []),
+      ...result.trace.map((s) => s.detail ?? '')
+    ].join(' ')
+    expect(dit).toMatch(/même refus est revenu \d+ fois de suite/)
+  })
+})
