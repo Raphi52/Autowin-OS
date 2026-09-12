@@ -123,6 +123,12 @@ export function surveillerParBattement(
     // L'echo est juge au tour SUIVANT : s'il n'est pas revenu d'ici la, il est manque.
     setTimeout(() => {
       if (repondu) return
+      // La fenetre peut mourir ENTRE la demande d'echo et son verdict : sans cette garde, le
+      // rechargement plus bas toucherait un objet detruit et relancerait le meme crash.
+      if (fenetreMorte()) {
+        annuler(jeton)
+        return
+      }
       echosManques += 1
       const silenceMs = echosManques * intervalleMs
       if (!fenetreSilencieuse({ echosManques, intervalleMs }, silenceAvantGelMs)) return
