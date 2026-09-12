@@ -37,6 +37,12 @@ export function fenetreSilencieuse(
 
 /** Le minimum vital d'une fenetre pour ce battement — pas besoin d'un vrai Electron en test. */
 export interface FenetreBattante {
+  /**
+   * Fenetre DETRUITE. Seul membre encore interrogeable apres destruction : sur un BrowserWindow
+   * detruit, le simple ACCES a `webContents` leve `TypeError: Object has been destroyed` — un throw
+   * SYNCHRONE, que ni `?.` ni un `.catch()` n'attrapent.
+   */
+  isDestroyed?(): boolean
   webContents?: {
     executeJavaScript?(code: string): Promise<unknown>
     reloadIgnoringCache?(): void
