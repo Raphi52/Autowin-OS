@@ -661,10 +661,9 @@ describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => 
     const passages = provider.contents.filter((c) => /\[sous-tâche A\]/.test(c)).length
     // Sans la garde, la boucle va jusqu'au plafond dur (24 passages).
     expect(passages).toBeLessThanOrEqual(4)
-    const dit = [
-      ...(result.gateReasons ?? []),
-      ...result.trace.map((s) => s.detail ?? '')
-    ].join(' ')
+    const dit = [...(result.gateReasons ?? []), ...result.trace.map((s) => s.detail ?? '')].join(
+      ' '
+    )
     expect(dit).toMatch(/même refus est revenu \d+ fois de suite/)
   })
 })
