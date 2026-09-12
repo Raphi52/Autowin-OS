@@ -840,6 +840,31 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'confirmer_verdict_juge',
+    /*
+     * LA VERITE HUMAINE, SEULE MESURE POSSIBLE DES FAUX-VERTS.
+     *
+     * trust.jsonl portait 186 verdicts tous de la forme {judgeModel, verdict} : aucun horodatage,
+     * aucun rattachement, aucune confirmation. `calibration()` ignorant tout verdict sans
+     * `humanTruth`, le taux de faux-verts etait structurellement incalculable. Ce geste est le
+     * seul point d'entree de cette verite : il n'invente rien, il enregistre ce que l'humain dit.
+     */
+    description:
+      'Enregistrer la VERITE HUMAINE sur les verdicts de juge d’un run : « c’était bon » (green) ' +
+      'ou « c’était faux » (red). N’à appeler que sur demande EXPLICITE de l’utilisateur — c’est ' +
+      'sa parole, jamais une auto-évaluation du modèle. Rend le nombre de verdicts ré-étiquetés.',
+    args: {
+      runId: 'identifiant du run jugé',
+      verite: '"green" (le verdict était juste) ou "red" (le verdict était faux)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'marquer_travail_trie',
     /*
      * LE GESTE QUI MANQUAIT AU BOUT DU SALVAGE.
@@ -860,6 +885,29 @@ const CATALOG: CommandSpec[] = [
       agentId: 'identifiant du travail, tel que `get_state.travauxNonPublies` le nomme',
       oublier: 'true pour RETIRER le marquage et faire ressortir le travail (optionnel)'
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'marquer_travaux_tries',
+    /*
+     * LE MEME GESTE, MAIS PAR LOT.
+     *
+     * Trace causale au 2026-09-12 : 225 appels a `marquer_travail_trie` sur 94 tours, dont un tour
+     * a 23 appels. Chaque appel etait un aller-retour modele complet pour une ecriture d'une ligne.
+     * Le lot suit `remove_conversations` : ids inconnus IGNORES (et rendus), doublons dedupliques,
+     * compte rendu par identifiant — sans quoi un seul id perime annulerait tout le reste.
+     */
+    description:
+      'Enregistrer par LOT que des travaux non publiés ont été TRIÉS (max 200). NE SUPPRIME RIEN — ' +
+      'les branches de secours restent. Ids inconnus ignorés et rendus dans `introuvables`, ' +
+      'doublons dédupliqués. À n’appeler qu’APRÈS un diagnostic par contenu de CHAQUE travail, ' +
+      'jamais pour faire taire une liste qu’on n’a pas lue.',
+    args: { ids: 'liste d identifiants, ex. ["agent-a","agent-b"]' },
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -1374,7 +1422,7 @@ function avecNoteDeRejeu(data: unknown, dejaVu: RejeuConnu | undefined, name: st
     avertissementRejeu:
       `Tu as déjà émis ce même \`${name}\` avec des arguments identiques dans ce tour ` +
       `(${dejaVu.occurrences}e fois). Si tu attendais un résultat différent, c'est que rien ne l'a ` +
-      "fait changer entre-temps : agis sur la cause au lieu de relire."
+      'fait changer entre-temps : agis sur la cause au lieu de relire.'
   }
 }
 
@@ -2074,7 +2122,9 @@ export class AppCommandBus {
     // Voir `registreDuTour` : l'empreinte porte le TOUR, pas la conversation — au tour suivant
     // l'utilisateur a parlé et le même appel redevient légitime. Sans `turnId`, pas de registre :
     // on ne sait pas de quel tour relève l'appel, et deviner reviendrait à bloquer au hasard.
-    const empreinteDuTour = turnId ? actionFingerprint(name, args, { conversationId: turnId }) : undefined
+    const empreinteDuTour = turnId
+      ? actionFingerprint(name, args, { conversationId: turnId })
+      : undefined
     const dejaVu =
       empreinteDuTour && turnId ? this.noterAppelDuTour(turnId, empreinteDuTour) : undefined
     if (dejaVu?.refuse && OUTILS_REFUSES_SI_REJEU_APRES_ECHEC.has(name)) {
@@ -3129,6 +3179,44 @@ export class AppCommandBus {
           )
         }
         return { agentId, trie: true, sha: worktrees.shaTravailTrie?.(agentId) }
+      }
+      case 'confirmer_verdict_juge': {
+        const runId = String(a.runId ?? '').trim()
+        if (!runId) throw new Error('confirmer_verdict_juge : runId manquant')
+        const verite = String(a.verite ?? '').trim()
+        if (verite !== 'green' && verite !== 'red') {
+          throw new Error('confirmer_verdict_juge : verite doit valoir "green" ou "red"')
+        }
+        // Un runId inconnu n'est PAS une erreur : on rend 0 et on le dit, comme le lot de tri.
+        const reetiquetes = this.os.confirmerVerdictJuge(runId, verite)
+        return { runId, verite, reetiquetes, connu: reetiquetes > 0 }
+      }
+      case 'marquer_travaux_tries': {
+        const brut = a.ids
+        if (!Array.isArray(brut)) throw new Error('marquer_travaux_tries : ids doit etre une liste')
+        // Plafond aligne sur `remove_conversations` : refuse AVANT d'ecrire quoi que ce soit.
+        if (brut.length > 200)
+          throw new Error(`marquer_travaux_tries : ${brut.length} ids demandés, 200 au maximum.`)
+        const worktrees = this.os.worktrees
+        if (!worktrees?.marquerTravailTrie) {
+          throw new Error('Le recensement des travaux non publiés est indisponible.')
+        }
+        const demandes = [...new Set(brut.map((v) => String(v).trim()).filter(Boolean))]
+        const marques: string[] = []
+        const introuvables: string[] = []
+        const shas: Record<string, string> = {}
+        for (const agentId of demandes) {
+          // On AGREGE au lieu de lever : un identifiant perime ne doit pas annuler le tri des
+          // autres, sinon le lot est plus fragile que les appels un par un qu'il remplace.
+          if (worktrees.marquerTravailTrie(agentId)) {
+            marques.push(agentId)
+            const sha = worktrees.shaTravailTrie?.(agentId)
+            if (sha) shas[agentId] = sha
+          } else {
+            introuvables.push(agentId)
+          }
+        }
+        return { marques, introuvables, shas, count: marques.length }
       }
       case 'get_state':
         return await this.snapshot()

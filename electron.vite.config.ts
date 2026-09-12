@@ -33,6 +33,15 @@ const build = identiteBuild()
 export default defineConfig({
   main: {
     build: {
+      /*
+       * LES CARTES DE SOURCES, POUR QUE LE JOURNAL DES GELS NOMME UN FICHIER QUI EXISTE.
+       *
+       * Mesure du 2026-09-12 : 46 des 60 blocages non attribues portaient bien leur appelant, mais
+       * en coordonnees de build (`chunks/worktree-manager-C3-Z8-U7.js:494:39`) — une ligne qu'aucun
+       * fichier du depot ne contient. Sans carte, la capture de l'appelant ne fait economiser
+       * aucune fouille. Les `.map` restent a cote du bundle et ne changent rien a l'execution.
+       */
+      sourcemap: true,
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),

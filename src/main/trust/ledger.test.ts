@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TrustLedger } from './ledger'
 
@@ -105,5 +108,56 @@ describe('TrustLedger — persistance (F1)', () => {
     expect(cal.total).toBe(2)
     expect(cal.confirmed).toBe(2)
     expect(cal.falseRed).toBe(1)
+  })
+})
+
+/*
+ * CANDIDAT 3 — sans horodatage ni rattachement au run, aucun verdict passe n'est re-etiquetable :
+ * trust.jsonl portait 186 lignes {judgeModel, verdict} et calibration() rendait donc
+ * structurellement confirmed:0 / accuracy:null. Ces tests fixent la chaine : estampille a
+ * l'ecriture, confirmation humaine APRES COUP par runId, et survie de la confirmation au rechargement.
+ */
+describe('TrustLedger — confirmation humaine apres coup', () => {
+  it('estampille chaque verdict enregistre (ts) et garde le rattachement au run', () => {
+    const ledger = new TrustLedger()
+    ledger.record({ judgeModel: 'claude', verdict: 'green', runId: 'r1', conversationId: 'conv-1' })
+
+    const [v] = ledger.verdictsPour('r1')
+    expect(v.conversationId).toBe('conv-1')
+    expect(typeof v.ts).toBe('string')
+    expect(Number.isNaN(Date.parse(v.ts as string))).toBe(false)
+  })
+
+  it('confirmer() applique la verite humaine au verdict du run et rend accuracy calculable', () => {
+    const ledger = new TrustLedger()
+    ledger.record({ judgeModel: 'claude', verdict: 'green', runId: 'r1' })
+    expect(ledger.calibration('claude').accuracy).toBeNull()
+
+    expect(ledger.confirmer('r1', 'red')).toBe(1)
+
+    const c = ledger.calibration('claude')
+    expect(c.confirmed).toBe(1)
+    expect(c.falseGreen).toBe(1)
+    expect(c.accuracy).toBe(0)
+  })
+
+  it('confirmer() sur un run inconnu ne touche rien et rend 0', () => {
+    const ledger = new TrustLedger()
+    ledger.record({ judgeModel: 'claude', verdict: 'green', runId: 'r1' })
+    expect(ledger.confirmer('r-inconnu', 'red')).toBe(0)
+    expect(ledger.calibration('claude').confirmed).toBe(0)
+  })
+
+  it('la confirmation survit au rechargement du journal', () => {
+    const fichier = join(mkdtempSync(join(tmpdir(), 'trust-')), 'trust.jsonl')
+    const ledger = new TrustLedger(fichier)
+    ledger.record({ judgeModel: 'claude', verdict: 'green', runId: 'r1' })
+    ledger.confirmer('r1', 'red')
+
+    const relu = new TrustLedger(fichier)
+    const c = relu.calibration('claude')
+    expect(c.total).toBe(1)
+    expect(c.confirmed).toBe(1)
+    expect(c.falseGreen).toBe(1)
   })
 })

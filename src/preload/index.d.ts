@@ -181,6 +181,10 @@ interface ChatApi {
   ) => Promise<
     import('../shared/gel-detector').ResumeGels & { disponible: boolean; source: string }
   >
+  /** Duels d'arene deja mesures, agreges par nom de workflow. Aucun duel n'est rejoue. */
+  arenaDuelsParWorkflow: (
+    derniers?: number
+  ) => Promise<Record<string, import('../main/arena-duels').AgregatDuels>>
   getAutoClose: () => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   unfinishedTurns: () => Promise<

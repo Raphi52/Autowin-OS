@@ -2,9 +2,11 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
 import {
   OPERATION_ENTREE_EN_GEL,
+  OPERATION_REANIMATION_REFUSEE,
   OPERATION_SORTIE_DE_GEL,
   surveillerFenetreInjoignable
 } from './gel-fenetre'
+import { OPERATION_REANIMATION } from './gel-reanimation'
 import type { Gel } from '../shared/gel-detector'
 
 function fenetreFactice(): EventEmitter {
@@ -212,9 +214,134 @@ describe('remise en route apres la mort du processus d affichage', () => {
         }
       }
     }
-    surveillerFenetreInjoignable(fenetre as never, () => {}, () => 1_000)
+    surveillerFenetreInjoignable(
+      fenetre as never,
+      () => {},
+      () => 1_000
+    )
     disparition?.({}, { reason: 'crashed' })
 
     expect(rechargements).toBe(1)
+  })
+})
+
+/**
+ * LE DEFAUT QUI ANNULAIT TOUTE LA REANIMATION — mesure du 2026-09-08.
+ *
+ * Electron ne signale pas le gel UNE fois : il RE-EMET `unresponsive` tant que la fenetre ne
+ * repond pas (10:40:43, 10:41:01, 10:41:19, 10:41:36 — 17 a 19 s d'intervalle). Chaque re-emission
+ * repassait par `surInjoignable`, qui reposait `debut` a l'instant courant : la duree de gel
+ * repartait de zero, ne franchissait jamais les 20 s du seuil, et `gels.jsonl` portait 14 entrees
+ * `fenetre-injoignable` pour ZERO `fenetre-reanimee`. Le chrono doit demarrer a la PREMIERE alerte.
+ */
+describe('le chrono du gel ne repart pas a chaque re-emission de l alerte', () => {
+  function bancDEssai(): {
+    injoignable: () => void
+    revenue: () => void
+    horloge: (t: number) => void
+    tirerMinuteur: () => void
+    gels: Array<{ operation: string; blocageMs: number }>
+    recharges: () => number
+  } {
+    let injoignable: (() => void) | undefined
+    let revenue: (() => void) | undefined
+    let recharges = 0
+    const planifiees: Array<() => void> = []
+    const gels: Array<{ operation: string; blocageMs: number }> = []
+    let instant = 0
+    const fenetre = {
+      on(evenement: string, ecouteur: () => void) {
+        if (evenement === 'unresponsive') injoignable = ecouteur
+        if (evenement === 'responsive') revenue = ecouteur
+      },
+      webContents: {
+        on() {
+          /* le banc ne branche que `unresponsive` et `responsive` */
+        },
+        reloadIgnoringCache() {
+          recharges += 1
+        }
+      }
+    }
+    surveillerFenetreInjoignable(
+      fenetre as never,
+      (gel) => gels.push({ operation: gel.operation, blocageMs: gel.blocageMs }),
+      () => instant,
+      { seuilMs: 20_000, delaiEntreDeuxMs: 120_000 },
+      (action) => {
+        planifiees.push(action)
+      }
+    )
+    return {
+      injoignable: () => injoignable?.(),
+      revenue: () => revenue?.(),
+      horloge: (t) => {
+        instant = t
+      },
+      tirerMinuteur: () => planifiees.shift()?.(),
+      gels,
+      recharges: () => recharges
+    }
+  }
+
+  it('trois alertes espacees de 18 s finissent par declencher UNE reanimation', () => {
+    const banc = bancDEssai()
+    banc.horloge(0)
+    banc.injoignable()
+    banc.horloge(18_000)
+    banc.injoignable()
+    banc.horloge(20_000)
+    banc.tirerMinuteur()
+
+    expect(banc.recharges()).toBe(1)
+    expect(banc.gels.map((gel) => gel.operation)).toContain(OPERATION_REANIMATION)
+    // Duree comptee depuis la PREMIERE alerte, pas depuis la derniere.
+    expect(banc.gels.at(-1)?.blocageMs).toBe(20_000)
+  })
+
+  it('n arme qu UN seul minuteur par episode de gel', () => {
+    const banc = bancDEssai()
+    banc.horloge(0)
+    banc.injoignable()
+    banc.horloge(18_000)
+    banc.injoignable()
+    banc.horloge(36_000)
+    banc.injoignable()
+    banc.horloge(40_000)
+    banc.tirerMinuteur()
+    // Les minuteurs surnumeraires, s'il y en avait, rechargeraient une seconde fois.
+    banc.tirerMinuteur()
+    banc.tirerMinuteur()
+
+    expect(banc.recharges()).toBe(1)
+  })
+
+  it('repart proprement sur un NOUVEL episode apres le retour de la fenetre', () => {
+    const banc = bancDEssai()
+    banc.horloge(0)
+    banc.injoignable()
+    banc.horloge(5_000)
+    banc.revenue()
+    banc.horloge(100_000)
+    banc.injoignable()
+    banc.horloge(105_000)
+    banc.tirerMinuteur()
+
+    // 5 s de gel dans le second episode : sous le seuil, donc aucune recharge.
+    expect(banc.recharges()).toBe(0)
+    expect(banc.gels.at(-1)?.operation).toBe(`${OPERATION_REANIMATION_REFUSEE}:sous-le-seuil`)
+  })
+
+  it('dit POURQUOI il a refuse de reanimer, au lieu de sortir en silence', () => {
+    const banc = bancDEssai()
+    banc.horloge(0)
+    banc.injoignable()
+    banc.horloge(4_000)
+    banc.tirerMinuteur()
+
+    expect(banc.gels.map((gel) => gel.operation)).toContain(
+      `${OPERATION_REANIMATION_REFUSEE}:sous-le-seuil`
+    )
+    expect(banc.recharges()).toBe(0)
   })
 })

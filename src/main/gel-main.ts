@@ -624,6 +624,16 @@ export function instrumenterEntreesSortiesDuMain(
   seuilMs = SEUIL_GEL_MS,
   ecrire: (gel: Gel) => void = journaliserGel
 ): () => void {
+  /*
+   * APPLIQUER LES CARTES DE SOURCES AUX PILES CAPTUREES.
+   *
+   * Le build emet les `.map` (cible `main` de electron.vite.config.ts) ; c'est cet appel qui fait
+   * que `new Error().stack` rend `src/main/store/worktree-manager.ts:494` au lieu de
+   * `chunks/worktree-manager-C3-Z8-U7.js:494`. Sans lui, 46 appelants sur 60 nommaient une ligne
+   * introuvable dans le depot (mesure du 2026-09-12). Le cout ne se paie qu'a la construction
+   * d'une pile, et ce module n'en construit que sur un appel DEJA au-dela du seuil.
+   */
+  process.setSourceMapsEnabled?.(true)
   const requiert = createRequire(import.meta.url)
   const defaires: Array<() => void> = []
   const cibles: Array<[string, readonly string[]]> = [
