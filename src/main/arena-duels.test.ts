@@ -73,4 +73,9 @@ describe('lireDuelsParWorkflow', () => {
     const racine = mkdtempSync(join(tmpdir(), 'arena-vide-'))
     expect(lireDuelsParWorkflow(racine)).toEqual({})
   })
+
+  it('ne compte pas une ligne nue (workflow seul, aucune mesure) comme un duel', () => {
+    const racine = ecrire([{ workflow: 'A' }, duel('A', 10, 1)])
+    expect(lireDuelsParWorkflow(racine).A.duels).toBe(1)
+  })
 })

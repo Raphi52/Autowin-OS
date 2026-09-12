@@ -60,7 +60,13 @@ export function lireDuelsParWorkflow(
   const lignes = brut.split(/\r?\n/).filter(Boolean).slice(-Math.max(1, derniers))
   const parWorkflow = new Map<
     string,
-    { durees: number[]; couts: number[]; verdicts: Record<string, number>; dernierTs?: string }
+    {
+      lignes: number
+      durees: number[]
+      couts: number[]
+      verdicts: Record<string, number>
+      dernierTs?: string
+    }
   >()
 
   for (const ligne of lignes) {
@@ -73,7 +79,14 @@ export function lireDuelsParWorkflow(
     const workflow = typeof parsed.workflow === 'string' ? parsed.workflow.trim() : ''
     if (!workflow) continue
 
-    const entree = parWorkflow.get(workflow) ?? { durees: [], couts: [], verdicts: {} }
+    const entree = parWorkflow.get(workflow) ?? { lignes: 0, durees: [], couts: [], verdicts: {} }
+    // On ne compte que les lignes qui portent une MESURE : une ligne nue afficherait sinon
+    // « 1 duel · 0 s · 0,00 $ », soit exactement le zero trompeur qu'on refuse.
+    const mesuree =
+      typeof parsed.dureeMs === 'number' ||
+      typeof parsed.coutUsd === 'number' ||
+      typeof parsed.verdict === 'string'
+    if (mesuree) entree.lignes += 1
     if (typeof parsed.dureeMs === 'number' && Number.isFinite(parsed.dureeMs)) {
       entree.durees.push(parsed.dureeMs)
     }
@@ -92,11 +105,7 @@ export function lireDuelsParWorkflow(
   const sortie: Record<string, AgregatDuels> = {}
   for (const [workflow, e] of parWorkflow) {
     sortie[workflow] = {
-      duels: Math.max(
-        e.durees.length,
-        e.couts.length,
-        Object.values(e.verdicts).reduce((a, b) => a + b, 0)
-      ),
+      duels: e.lignes,
       dureeMedianeMs: mediane(e.durees),
       coutMedianUsd: mediane(e.couts),
       verdicts: e.verdicts,

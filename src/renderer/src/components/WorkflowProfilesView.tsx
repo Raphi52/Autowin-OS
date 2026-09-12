@@ -233,6 +233,21 @@ function coutLisible(usd: number): string {
   return `${usd.toFixed(2).replace('.', ',')} $`
 }
 
+/** La ligne affichee sous le nom du workflow. Une phrase pure, donc lisible et testable. */
+function phraseMesures(nom: string, duels: Record<string, AgregatDuels>): string {
+  const m = mesuresPour(nom, duels)
+  if (!m || m.duels === 0) return 'Arène : aucune mesure enregistrée'
+  const verdicts = Object.entries(m.verdicts)
+    .map(([verdict, n]) => `${n} ${verdict}`)
+    .join(', ')
+  const duree = dureeLisible(m.dureeMedianeMs)
+  const cout = coutLisible(m.coutMedianUsd)
+  const pluriel = m.duels > 1 ? 's' : ''
+  return `Arène : ${m.duels} duel${pluriel} · ${duree} médian · ${cout} médian${
+    verdicts ? ` · ${verdicts}` : ''
+  }`
+}
+
 export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX.Element {
   const [file, setFile] = useState<ProfilesFile>({ profiles: [], activeId: null })
   /** Duels deja mesures, par nom de workflow. Lecture seule : rien n'est rejoue ici. */
@@ -542,18 +557,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                   className="workflow-profile-mesures"
                   data-testid={`workflow-mesures-${profile.id}`}
                 >
-                  {(() => {
-                    const m = mesuresPour(nom, duels)
-                    if (!m || m.duels === 0) return 'Arène : aucune mesure enregistrée'
-                    const verdicts = Object.entries(m.verdicts)
-                      .map(([v, n]) => `${n} ${v}`)
-                      .join(', ')
-                    return `Arène : ${m.duels} duel${m.duels > 1 ? 's' : ''} · ${dureeLisible(
-                      m.dureeMedianeMs
-                    )} médian · ${coutLisible(m.coutMedianUsd)} médian${
-                      verdicts ? ` · ${verdicts}` : ''
-                    }`
-                  })()}
+                  {phraseMesures(nom, duels)}
                 </p>
                 {/* En-tête sur UNE ligne, puis portée et éditeur PLEINE LARGEUR dessous. Sans cette
                     séparation, la ligne étant un flex horizontal, l'éditeur se retrouvait comprimé
