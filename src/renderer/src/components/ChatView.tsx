@@ -1796,6 +1796,21 @@ export function ChatView({
       } else if (e.type === 'orchestrate-end' && e.convId) {
         const convId = e.convId
         const runPath = e.runPath
+        /*
+         * LES SUPPOSITIONS MEURENT AVEC LE RUN QUI LES PORTAIT.
+         *
+         * Leur pied dit « Le run continue — rien n'attend ta réponse ». Tant que rien ne les
+         * effaçait, cette phrase survivait à la fin du run : sur conv-512, le run se termine à
+         * 16:31:43 (tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`) et la capture jointe à la saisie
+         * `ts` 1789233975928 (55 min plus tard) montre encore le bloc. L'utilisateur lisait donc
+         * « ça continue » devant une application à l'arrêt.
+         */
+        setHypothesesCadrage((current) => {
+          if (!current[convId]) return current
+          const suivant = { ...current }
+          delete suivant[convId]
+          return suivant
+        })
         setLiveRuns((current) =>
           reduceScopedLiveRuns(current, {
             type: 'end',
@@ -2097,6 +2112,7 @@ export function ChatView({
       )
       return
     }
+    console.log('[SONDE2] effet', 'followTail=' + followTailRef.current, 'restaurer=' + !!aRestaurer, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
     if (!followTailRef.current) {
       basculeConvRef.current = false
       setHasNewActivity(true)
@@ -2120,6 +2136,7 @@ export function ChatView({
         requestAnimationFrame,
         40,
         (landed) => {
+          console.log('[SONDE2] settled', 'landed=' + landed, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
           descenteEnVolRef.current = false
           basculeConvRef.current = false
           if (!landed) setHasNewActivity(true)
@@ -2169,6 +2186,7 @@ export function ChatView({
       requestAnimationFrame,
       120,
       (landed) => {
+          console.log('[SONDE2] settled', 'landed=' + landed, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
         descenteEnVolRef.current = false
         if (!landed) setHasNewActivity(true)
       },
@@ -2208,6 +2226,7 @@ export function ChatView({
           requestAnimationFrame,
           120,
           (landed) => {
+          console.log('[SONDE2] settled', 'landed=' + landed, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
             descenteEnVolRef.current = false
             if (!landed) setHasNewActivity(true)
           },
@@ -3734,6 +3753,7 @@ export function ChatView({
        */
       positionARestaurerRef.current = null
       setAtterrissageDemande((tour) => tour + 1)
+      console.log('[SONDE2] send', 'followTail=' + followTailRef.current, 'top=' + scrollRef.current.scrollTop, 'h=' + scrollRef.current.scrollHeight)
     }
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
 
@@ -5908,6 +5928,7 @@ Cliquer pour choisir une autre branche.`}
                     })
                   : nearBottom
               dernierScrollTopRef.current = conteneur.scrollTop
+              console.log('[SONDE2] scroll', 'suit=' + suit, 'geste=' + gesteLecteurRef.current, 'envol=' + descenteEnVolRef.current, 'prec=' + dernierScrollTopRef.current, 'top=' + conteneur.scrollTop, 'near=' + nearBottom)
               followTailRef.current = suit
               setScrolledAwayFromTail(!suit)
               if (suit) setHasNewActivity(false)

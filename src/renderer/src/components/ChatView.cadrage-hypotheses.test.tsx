@@ -61,6 +61,35 @@ describe('ChatView — les suppositions du cadrage arrivent dans le fil', () => 
     expect(composer.value).toMatch(/En réalité\s*:\s*$/u)
   })
 
+  /**
+   * LE BLOC EST VIVANT, PAS PERSISTANT — defaut vecu sur conv-512.
+   *
+   * Le run s'est termine a 16:31:43 (tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`, evenement de
+   * cloture `status: succeeded`). La capture jointe par l'utilisateur a la saisie `ts`
+   * 1789233975928 (17:26:15, 55 minutes plus tard) montre encore le bloc et son pied « Le run
+   * continue — rien n'attend ta reponse » : l'application affirmait qu'un travail etait en cours
+   * alors que plus rien ne tournait. `orchestrate-end` ne purgeait pas les suppositions.
+   */
+  it('la fin du run fait disparaitre le bloc de la conversation concernee', async () => {
+    const emit = await monter()
+    await act(async () => emit(evenement('A')))
+    expect(harness!.container.querySelector('[data-testid="cadrage-hypotheses"]')).not.toBeNull()
+
+    await act(async () =>
+      emit({ type: 'orchestrate-end', convId: 'A', runPath: 'RUN.md', status: 'green' })
+    )
+    expect(harness!.container.querySelector('[data-testid="cadrage-hypotheses"]')).toBeNull()
+  })
+
+  it('la fin du run d une AUTRE conversation laisse le bloc en place', async () => {
+    const emit = await monter()
+    await act(async () => emit(evenement('A')))
+    await act(async () =>
+      emit({ type: 'orchestrate-end', convId: 'conv-etrangere', runPath: 'RUN.md', status: 'green' })
+    )
+    expect(harness!.container.querySelector('[data-testid="cadrage-hypotheses"]')).not.toBeNull()
+  })
+
   it('un evenement sans supposition ne fait apparaitre aucun bloc', async () => {
     const emit = await monter()
     await act(async () => emit({ type: 'orchestrate-hypotheses', convId: 'A', hypotheses: [] }))
