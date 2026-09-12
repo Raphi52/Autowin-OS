@@ -529,6 +529,12 @@ export interface OrchestrationPhase {
   reasoningEffort?: string
   /** A4 — phase du pipeline en cours (scout/frame/…) pour un libellé live précis (pas « sous-agent »). */
   phase?: NodePhase
+  /**
+   * Le prompt REELLEMENT envoye a cette phase, disponible DES le demarrage — l'enveloppe est
+   * construite juste avant cet evenement. Sans lui, la ligne de pipeline ne montrait le prompt
+   * qu'a la FIN de la phase (le step termine), donc « rien en preprompt » pendant tout l'appel.
+   */
+  prompt?: PromptEnvelope
   execution?: OrchestrationStep['execution']
 }
 
@@ -4368,6 +4374,7 @@ ${empreinteDepot}`
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
         phase,
+        prompt: execPrompt,
         execution
       })
       const phaseStartedAt = performance.now()

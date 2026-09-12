@@ -305,6 +305,13 @@ export function noterChoixDePipeline(parts: ChatPart[], choix: PipelineChoice): 
     ...(choix.model ? { model: choix.model } : {})
   }
   if (Object.keys(propre).length === 0) return parts
+  /*
+   * LE PROMPT DES LE DEMARRAGE. Il n'arrivait qu'avec le step TERMINE (`completerChoixDePipeline`),
+   * alors qu'il est deja construit quand la phase demarre. Pendant toute la phase — 10 min sur un
+   * kaizen — le deplie « prompt envoye » restait vide (« j'ai rien en preprompt », 2026-09-12).
+   * Ajoute APRES le test de vacuite : un prompt seul, sans phase ni agent, ne fabrique pas de ligne.
+   */
+  if (choix.prompt) propre.prompt = choix.prompt
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i]
     if (part.kind !== 'action' || part.name !== 'orchestrate') continue

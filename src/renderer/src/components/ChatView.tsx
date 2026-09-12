@@ -58,7 +58,8 @@ import {
   type StoredAssistantMessage,
   settleOrchestrationOnRunEnd,
   noterChoixDePipeline,
-  completerChoixDePipeline
+  completerChoixDePipeline,
+  texteDuPrompt
 } from './chat-view-model'
 import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
@@ -1686,13 +1687,16 @@ export function ChatView({
           model?: string
           phase?: string
           step?: string
+          prompt?: OrchStep['prompt']
         }
         patchLast(e.convId, (m) => {
           m.parts = noterChoixDePipeline(m.parts, {
             phase: choix.phase ?? choix.step,
             role: choix.role,
             provider: choix.provider,
-            model: choix.model
+            model: choix.model,
+            // Le prompt voyage AVEC le démarrage de phase : la ligne ne l'attend plus jusqu'à la fin.
+            prompt: texteDuPrompt(choix.prompt)
           }) as typeof m.parts
         })
       } else if (
