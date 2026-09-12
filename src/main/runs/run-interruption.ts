@@ -61,6 +61,17 @@ const PUBLICATION_EN_CLAIR: Record<string, string> = {
   'not-requested': 'non publié'
 }
 
+/**
+ * Le même vocabulaire, disponible AILLEURS que dans l'avis de fin de run.
+ *
+ * Observatory affichait « bloqué » sur une règle de DoD, jamais sur l'état de PUBLICATION d'un
+ * travail (`held` = retenu, `blocked` = bloqué) : un run vert dont l'intégration est retenue
+ * ressemblait à un run vert ordinaire. Un seul dictionnaire, celui-ci, pour les deux surfaces.
+ */
+export function publicationEnClair(publication: string): string {
+  return PUBLICATION_EN_CLAIR[publication] ?? publication
+}
+
 /** Restitution rendue dans la conversation d'origine, une seule fois par tour. */
 export function finishedRunNotice(outcome: FinishedRunOutcome): string {
   const morceaux = [

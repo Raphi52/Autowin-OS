@@ -759,6 +759,9 @@ const api = {
       path: string
       mtime: number
       conversationId?: string
+      /** État de publication du travail (retenu/bloqué) quand il est sans ambiguïté. */
+      publication?: string
+      publicationLabel?: string
       summary: {
         status: string
         regime?: string

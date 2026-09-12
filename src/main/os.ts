@@ -34,6 +34,7 @@ import { recurrentPatterns, parseJsonl } from './dashboards/kaizen'
 import { loadBrainGraph, scanBrainGraphs, type BrainGraphRef } from './viz/fs-brains'
 import {
   attachConversationIds,
+  attachPublicationStates,
   scanRuns,
   scanRunsPourSnapshot,
   type RunEntry
@@ -1345,7 +1346,13 @@ export class AutowinOS {
     this.brainGraphCache.set(key, graph)
     return graph
   }
+  /**
+   * Runs du dépôt, enrichis de ce que le RUN.md ne dit pas : la conversation d'origine et l'état de
+   * PUBLICATION du travail (retenu/bloqué). Sans ce second champ, un run vert dont l'intégration
+   * n'est jamais passée s'affichait comme un run vert ordinaire.
+   */
   async listRuns(): Promise<RunEntry[]> {
-    return attachConversationIds(await scanRuns(), this.conversations.list())
+    const avecConversation = attachConversationIds(await scanRuns(), this.conversations.list())
+    return attachPublicationStates(avecConversation, this.worktrees?.runRecords() ?? [])
   }
 }
