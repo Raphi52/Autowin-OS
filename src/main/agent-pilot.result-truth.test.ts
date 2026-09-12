@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot, commandResultSucceeded, type PilotEvent } from './agent-pilot'
 import type { PromptSnapshot } from './commands'
-import { shouldPersistClosingText } from './runs/turn-closing'
+import { resteADire } from './runs/turn-closing'
 
 const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   tab: 'chat',
@@ -91,8 +91,9 @@ describe('verite visible des actions', () => {
       outcome: { status: 'failed', error: 'transport indisponible' }
     })
     expect(done?.text).toContain('transport indisponible')
-    expect(shouldPersistClosingText(true, done?.kind === 'done' ? done.outcome : undefined)).toBe(
-      true
+    // Cette cloture doit atteindre le fil meme apres un preambule deja diffuse : son texte est NEUF.
+    expect(resteADire(done?.kind === 'done' ? (done.text ?? '') : '', 'preambule deja diffuse')).toContain(
+      'transport indisponible'
     )
   })
 })

@@ -10,42 +10,48 @@ import { CostAggregator, withCostContext } from './cost'
  * a un tour : il ne restait qu'un provider et des tokens hors du temps.
  */
 describe('cost.jsonl — tracabilite temporelle et conversationnelle', () => {
-  it('horodate chaque tour persiste, meme quand l appelant ne fournit pas de date', () => {
+  // L'écriture de `cost.jsonl` est DIFFÉRÉE depuis le 2026-09-12 (elle figeait l'interface
+  // 9,4 s) : chaque test attend la vidange avant de relire le fichier.
+  it('horodate chaque tour persiste, meme quand l appelant ne fournit pas de date', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'cost-trace-')), 'cost.jsonl')
     const agg = new CostAggregator(undefined, path)
     agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 2, costUsd: 0.5 })
+    await agg.flushPersist()
     const ligne = JSON.parse(readFileSync(path, 'utf8').trim())
     expect(typeof ligne.ts).toBe('string')
     expect(Number.isFinite(Date.parse(ligne.ts))).toBe(true)
   })
 
-  it('conserve la date fournie par l appelant', () => {
+  it('conserve la date fournie par l appelant', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'cost-trace-')), 'cost.jsonl')
     const agg = new CostAggregator(undefined, path)
     agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 2, ts: '2026-01-02T03:04:05.000Z' })
+    await agg.flushPersist()
     expect(JSON.parse(readFileSync(path, 'utf8').trim()).ts).toBe('2026-01-02T03:04:05.000Z')
   })
 
-  it('attache conversation et tour quand le contexte est connu', () => {
+  it('attache conversation et tour quand le contexte est connu', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'cost-trace-')), 'cost.jsonl')
     const agg = new CostAggregator(undefined, path)
     const scoped = withCostContext(agg, { conversationId: 'conv-71', turnId: 'turn-9' })
     scoped.add({ provider: 'codex', inputTokens: 3, outputTokens: 4 })
+    await agg.flushPersist()
     const ligne = JSON.parse(readFileSync(path, 'utf8').trim())
     expect(ligne.conversationId).toBe('conv-71')
     expect(ligne.turnId).toBe('turn-9')
   })
 
-  it('ne fabrique jamais de conversation quand elle est inconnue', () => {
+  it('ne fabrique jamais de conversation quand elle est inconnue', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'cost-trace-')), 'cost.jsonl')
     const agg = new CostAggregator(undefined, path)
     withCostContext(agg, {}).add({ provider: 'codex', inputTokens: 1, outputTokens: 1 })
+    await agg.flushPersist()
     const ligne = JSON.parse(readFileSync(path, 'utf8').trim())
     expect(ligne.conversationId).toBeUndefined()
     expect(ligne.turnId).toBeUndefined()
   })
 
-  it('n ecrase pas un contexte deja porte par l appelant', () => {
+  it('n ecrase pas un contexte deja porte par l appelant', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'cost-trace-')), 'cost.jsonl')
     const agg = new CostAggregator(undefined, path)
     withCostContext(agg, { conversationId: 'conv-1' }).add({
@@ -54,6 +60,7 @@ describe('cost.jsonl — tracabilite temporelle et conversationnelle', () => {
       outputTokens: 1,
       conversationId: 'conv-2'
     })
+    await agg.flushPersist()
     expect(JSON.parse(readFileSync(path, 'utf8').trim()).conversationId).toBe('conv-2')
   })
 })

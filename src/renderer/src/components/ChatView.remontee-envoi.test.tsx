@@ -37,10 +37,22 @@ describe('ChatView — ecrire remonte la conversation en tete', () => {
       })
     )
 
-    const titres = (): string[] =>
-      Array.from(harness!.container.querySelectorAll('.conv-label')).map(
-        (element) => element.textContent ?? ''
+    /**
+     * ORDRE DES TITRES DISTINCTS, dans leur première apparition. Le groupe « Récent » de la barre
+     * latérale DUPLIQUE volontairement les fils déjà rangés ailleurs (`groupeRecent` dans
+     * `conversation-groups.ts`) : la liste à plat rendait donc `[fraiche, vieille, fraiche,
+     * vieille]` et ce test échouait sur un comportement VOULU.
+     *
+     * La déduplication ne desserre rien : ce test porte sur l'ORDRE (qui est en tête), et « Récent »
+     * est justement trié sur la même récence — inverser cet ordre le fait toujours échouer.
+     */
+    const titres = (): string[] => [
+      ...new Set(
+        Array.from(harness!.container.querySelectorAll('.conv-label')).map(
+          (element) => element.textContent ?? ''
+        )
       )
+    ]
 
     // Etat de depart : la plus recente ouvre la liste, la vieille est derriere.
     expect(titres()).toEqual(['Conversation fraiche', 'Conversation vieille'])

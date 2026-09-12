@@ -1,20 +1,71 @@
 /**
- * Bloc « Réflexion » du fil : le raisonnement LIVE du modèle, repliable, écrit EN TEMPS RÉEL.
+ * Blocs « Raisonnement » et « Actions » du fil — DEUX blocs repliables EMPILÉS, écrits en direct.
  *
- * Le raisonnement était accumulé par `chat-view-model` (`message.reasoning`) mais n'était rendu
- * NULLE PART depuis le retrait du panneau latéral : la pensée existait et restait invisible.
- * Il revient ici, dans la bulle, au-dessus de la réponse — comme chez Kimi.
+ * Avant le 2026-09-12 un seul bloc « Réflexion » portait les deux : la pensée du modèle ET les
+ * lignes de signe de vie (outil en cours, tâche de fond, nouvelle tentative API). Sur les modèles
+ * dont la pensée arrive chiffrée (opus-5), le bloc ne montrait donc QUE des actions sous un titre
+ * qui promettait de la réflexion. Demande de l'utilisateur : « un bloc raisonnement et un bloc
+ * action l'un au dessus de l'autre ».
  *
- * Ouverture : PLIÉ par défaut, en cours comme terminé (demande du 2026-09-01, dans la foulée du
- * pli des blocs d'actions : « pareil pour reflexion » — c'est l'utilisateur qui déplie s'il veut
- * lire). L'en-tête continue de dire que ça pense (spinner + « Réflexion… »), donc rien n'est perdu :
- * seul le PAVÉ de pensée cesse de pousser la réponse hors de l'écran. Un clic de l'utilisateur
- * reprend TOUJOURS la main (l'état manuel gagne sur le défaut).
+ * Ouverture : PLIÉS par défaut, en cours comme terminés (demande du 2026-09-01) — l'en-tête dit
+ * déjà ce qui se passe. Un clic de l'utilisateur reprend TOUJOURS la main.
  */
 import React, { useEffect, useRef, useState } from 'react'
 import { Spinner } from './Spinner'
-import { corpsDuBloc } from './thinking-block-corps'
+import {
+  corpsDesActions,
+  corpsDuBloc,
+  derniereLigneDuRaisonnement
+} from './thinking-block-corps'
 
+function BlocRepliable({
+  testid,
+  classe,
+  libelle,
+  live,
+  entete,
+  corps,
+  dependances
+}: {
+  testid: string
+  classe: string
+  libelle: string
+  live: boolean
+  entete?: string
+  corps: string
+  dependances: unknown[]
+}): React.JSX.Element {
+  const [manuel, setManuel] = useState<boolean | null>(null)
+  const ouvert = manuel ?? false
+  const ref = useRef<HTMLPreElement | null>(null)
+  // Le flux s'écrit vers le BAS : sans cela, le contenu défile hors du cadre et on regarde le début.
+  useEffect(() => {
+    const el = ref.current
+    if (el && ouvert) el.scrollTop = el.scrollHeight
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...dependances, ouvert])
+  return (
+    <details
+      className={`thinking-block ${classe}${live ? ' is-live' : ' is-done'}`}
+      data-testid={testid}
+      open={ouvert}
+      onToggle={(event) => setManuel(event.currentTarget.open)}
+    >
+      <summary>
+        {live ? <Spinner /> : <span aria-hidden="true">✻</span>}
+        <span className="thinking-label">{libelle}</span>
+        {entete && (
+          <span className="thinking-status" data-testid={`${testid}-status`} title={entete}>
+            {entete}
+          </span>
+        )}
+      </summary>
+      <pre className="thinking-body" ref={ref} data-testid={`${testid}-body`}>
+        {corps}
+      </pre>
+    </details>
+  )
+}
 
 export function ThinkingBlock({
   text,
@@ -24,50 +75,38 @@ export function ThinkingBlock({
 }: {
   text: string
   done: boolean
-  /**
-   * SIGNE DE VIE DU FOURNISSEUR (outil en cours, tache de fond, nouvelle tentative API).
-   *
-   * Il s'affichait A COTE du texte de l'agent, dans la ligne d'en-tete du message — constat
-   * utilisateur du 2026-09-01 : « ca ecrit tout mais a cote du texte agent au lieu de dans son
-   * bloc ». Sa place est ICI : c'est le meme moment d'attente que la reflexion, et sur les modeles
-   * dont la pensee arrive chiffree (opus-5 : 3 029 fragments mesures, tous vides) c'est meme le
-   * SEUL signal reel que ce bloc puisse porter.
-   */
+  /** Signe de vie COURANT du fournisseur : outil en cours, tâche de fond, nouvelle tentative API. */
   status?: string
-  /**
-   * TOUTES les lignes de signe de vie du tour, dans l'ordre. L'en-tete n'en montre qu'UNE (la
-   * derniere) ; le corps deplie les montre TOUTES — sinon deplier ne donne rien de plus que la
-   * ligne repliee (« ca doit m'ecrire toutes les lignes », 2026-09-01).
-   */
+  /** TOUTES les lignes de signe de vie du tour, dans l'ordre — le corps du bloc « Actions ». */
   statusLog?: string[]
 }): React.JSX.Element {
-  const [manuel, setManuel] = useState<boolean | null>(null)
-  const ouvert = manuel ?? false
-  const corps = useRef<HTMLPreElement | null>(null)
-  // Le flux s'écrit vers le BAS : sans cela, la pensée défile hors du cadre et on regarde le début.
-  useEffect(() => {
-    const el = corps.current
-    if (el && ouvert) el.scrollTop = el.scrollHeight
-  }, [text, status, statusLog, ouvert])
+  const pensee = corpsDuBloc(text)
+  const actions = corpsDesActions(statusLog, status)
+  // Plie, le bloc doit quand meme dire OU en est la pensee : sa derniere ligne, en gris, comme le
+  // bloc Actions montre l'action courante (demande de l'utilisateur, 2026-09-12).
+  const dernierePensee = done ? '' : derniereLigneDuRaisonnement(pensee)
   return (
-    <details
-      className={`thinking-block${done ? ' is-done' : ' is-live'}`}
-      data-testid="thinking-block"
-      open={ouvert}
-      onToggle={(event) => setManuel(event.currentTarget.open)}
-    >
-      <summary>
-        {done ? <span aria-hidden="true">✻</span> : <Spinner />}
-        <span className="thinking-label">{done ? 'Réflexion terminée' : 'Réflexion…'}</span>
-        {!done && status && (
-          <span className="thinking-status" data-testid="thinking-status" title={status}>
-            {status}
-          </span>
-        )}
-      </summary>
-      <pre className="thinking-body" ref={corps} data-testid="thinking-body">
-        {corpsDuBloc(text, statusLog, status, done)}
-      </pre>
-    </details>
+    <>
+      <BlocRepliable
+        testid="thinking-block"
+        classe="thinking-block--raisonnement"
+        libelle={done ? 'Raisonnement terminé' : 'Raisonnement…'}
+        live={!done}
+        {...(dernierePensee ? { entete: dernierePensee } : {})}
+        corps={pensee}
+        dependances={[text]}
+      />
+      {actions && (
+        <BlocRepliable
+          testid="action-block"
+          classe="thinking-block--actions"
+          libelle={done ? 'Actions' : 'Actions…'}
+          live={!done}
+          {...(!done && status ? { entete: status } : {})}
+          corps={actions}
+          dependances={[actions]}
+        />
+      )}
+    </>
   )
 }

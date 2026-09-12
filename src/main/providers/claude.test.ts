@@ -274,6 +274,67 @@ describe('ClaudeCliAdapter — sorties artefact stream-json', () => {
     expect(step.value.artifacts).toBeUndefined()
   })
 
+  it('diffuse une image lue par un outil AVANT le texte qui suit, pas apres la fin du tour', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-test',
+          content: [
+            { type: 'tool_use', id: 'lecture-1', name: 'Read', input: { file_path: 'capture.png' } }
+          ]
+        }
+      },
+      {
+        type: 'user',
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'lecture-1',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: 'image/png', data: 'ZGVm' }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-test',
+          content: [{ type: 'text', text: '✅ Fait — capture lue.' }]
+        }
+      },
+      {
+        type: 'result',
+        result: '✅ Fait — capture lue.',
+        session_id: 'artifact-session',
+        is_error: false
+      }
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([
+      { role: 'user', content: 'Regarde capture.png' }
+    ])
+    const ordre: string[] = []
+    let step = await gen.next()
+    while (!step.done) {
+      if (step.value.artifacts?.length) ordre.push('artefact')
+      if (step.value.delta) ordre.push(`texte:${step.value.delta}`)
+      step = await gen.next()
+    }
+
+    expect(ordre).toEqual(['artefact', 'texte:✅ Fait — capture lue.'])
+    // Le resultat final porte toujours l'artefact : le consommateur dedoublonne sur l'identifiant.
+    expect(step.value.artifacts).toEqual([
+      expect.objectContaining({ kind: 'image', content: 'ZGVm' })
+    ])
+  })
+
   it('conserve une image Claude différente même si le tour contient une image utilisateur', async () => {
     spawnCapture.stdoutEvents = [
       {

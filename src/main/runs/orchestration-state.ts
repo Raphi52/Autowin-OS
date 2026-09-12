@@ -563,8 +563,36 @@ function statePath(root: string, runId: string): string {
   return join(root, `${safeRunId(runId)}.json`)
 }
 
+/**
+ * RUNS DEFINITIVEMENT OUBLIES (pierres tombales) — `runId` -> instant de l'oubli.
+ *
+ * `clearOrchestrationState` promet « ce run ne sera plus rejoue ». Sans trace de cette promesse,
+ * une ecriture encore EN VOL (ou une derniere sauvegarde de fin de phase partie avant l'echec)
+ * renommait son `.tmp` par-dessus le fichier qu'on venait d'effacer : le checkpoint RESSUSCITAIT
+ * et le meme run rejouait sa reprise a chaque demarrage. Mesure du 2026-09-12 :
+ * `run-1ede1d229c1e-1` et `run-91389273e2a2-1` etaient encore sur le disque apres leur refus
+ * « definitif », avec 92 evenements `failed` dans UN SEUL journal de tour.
+ *
+ * Un `runId` reellement NEUF (demarre APRES l'oubli) leve sa propre pierre tombale : on ne bloque
+ * que les ecritures du run qui a ete conclu.
+ */
+const oublies = new Map<string, number>()
+
+/** Vrai si cette ecriture appartient a un run deja conclu — auquel cas elle ne doit PAS toucher le disque. */
+function checkpointOublie(root: string, state: OrchestrationRunState): boolean {
+  const cle = statePath(root, state.runId)
+  const oublieA = oublies.get(cle)
+  if (oublieA === undefined) return false
+  if (state.startedAt > oublieA) {
+    oublies.delete(cle)
+    return false
+  }
+  return true
+}
+
 export function saveOrchestrationState(root: string, state: OrchestrationRunState): void {
   safeRunId(state.runId)
+  if (checkpointOublie(root, state)) return
   if (!isOrchestrationRunState(state)) {
     // Le refus NOMME ce qu'il refuse : sans cela, la panne se paie en enquete a chaque fois.
     throw new Error(
@@ -640,6 +668,8 @@ export function saveOrchestrationAgentCheckpoint(
 export function clearOrchestrationState(root: string, runId: string): void {
   etatsEnVol.delete(runId)
   try {
+    // Pierre tombale AVANT la suppression : toute ecriture encore en vol sera refusee au rename.
+    oublies.set(statePath(root, runId), Date.now())
     rmSync(statePath(root, runId), { force: true })
   } catch {
     /* déjà supprimé / dossier absent : rien à faire */
@@ -674,12 +704,16 @@ export function saveOrchestrationStateAsync(
       `checkpoint orchestration causalement invalide : ${raisonsCheckpointInvalide(state).join(' ; ')}`
     )
   }
+  if (checkpointOublie(root, state)) return Promise.resolve()
   etatsEnVol.set(state.runId, state)
   const charge = JSON.stringify(withLegacyAllocationMirror(state))
   const target = statePath(root, state.runId)
   const precedente = ecrituresEnCours.get(state.runId) ?? Promise.resolve()
   const suite: Promise<void> = precedente
     .then(async () => {
+      // L'oubli a pu tomber PENDANT que cette ecriture attendait son tour : re-verifier ici est
+      // le seul point ou la course se referme (sinon le rename ressuscite le checkpoint efface).
+      if (checkpointOublie(root, state)) return
       await mkdirAsync(root, { recursive: true })
       await writeFileAsync(`${target}.tmp`, charge, 'utf8')
       await renameAsync(`${target}.tmp`, target)

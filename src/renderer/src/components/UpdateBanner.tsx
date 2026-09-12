@@ -267,9 +267,14 @@ export function UpdateBanner({
         }
         return
       }
+      // ÉCHEC → le bouton REND la main aux sondes. Ce relâchement manquait ici et dans le `catch` :
+      // le verrou posé au début d'`apply` restait pris à vie, donc `check()` (cycle de 3 minutes ET
+      // retour de focus) jetait tous ses résultats et le bouton figeait le dernier compte connu.
+      applyOwnsBanner.current = false
       setApplyError(r?.error ?? 'Échec de la mise à jour.')
       setApplying(null)
     } catch (reason) {
+      applyOwnsBanner.current = false
       setApplyError(errorMessage(reason, 'Échec de la mise à jour.'))
       setApplying(null)
     }

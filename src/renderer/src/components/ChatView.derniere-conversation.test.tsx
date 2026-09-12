@@ -43,10 +43,23 @@ describe('ChatView — reprise sur la derniere conversation ouverte', () => {
       conversation: async (id: string) => conversations.find((c) => c.id === id) ?? null
     })
 
-  const actives = (): string[] =>
-    Array.from(harness!.container.querySelectorAll('.conv-item.active')).map(
-      (element) => element.querySelector('.conv-label')?.textContent ?? ''
+  /**
+   * TITRES DISTINCTS, pas lignes affichées. Le groupe « Récent » de la barre latérale est un
+   * RACCOURCI qui DUPLIQUE volontairement les fils déjà rangés ailleurs (`groupeRecent` dans
+   * `conversation-groups.ts`) : la conversation ouverte y apparaît donc deux fois, une fois sous
+   * « Récent » et une fois dans son groupe. Compter les lignes faisait échouer ces trois tests sur
+   * un comportement VOULU.
+   *
+   * Ce que le test prouve reste INTACT : il vérifie QUELLE conversation est active, et il échoue
+   * toujours si une AUTRE l'est aussi — deux titres distincts ne se dédupliquent pas.
+   */
+  const actives = (): string[] => [
+    ...new Set(
+      Array.from(harness!.container.querySelectorAll('.conv-item.active')).map(
+        (element) => element.querySelector('.conv-label')?.textContent ?? ''
+      )
     )
+  ]
 
   it('rouvre celle ou l utilisateur etait, meme si ce n est pas la plus recente', async () => {
     localStorage.setItem(CLE_DERNIERE_CONVERSATION, 'milieu')

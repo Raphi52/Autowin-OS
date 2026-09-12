@@ -465,6 +465,16 @@ export type AppEvent =
     }
   | { type: 'orchestrate-usage'; convId?: string; runPath?: string }
   /**
+   * ORIENTATIONS ARRIVEES TROP TARD — rendues a l'ecran au lieu d'etre jetees.
+   *
+   * Une directive acceptee pendant un tour n'est lue qu'aux points d'iteration de la boucle pilote.
+   * Si le tour se termine avant d'en atteindre un, elle restait dans `pendingDirectives` et le
+   * `finally` la SUPPRIMAIT en silence : le texte s'affichait dans le fil, mais le modele ne l'avait
+   * jamais vu — « quand j'oriente ca oublie parfois » (2026-09-11). Le tour les renvoie desormais a
+   * l'ecran, qui les remet en file : elles repartent comme un tour normal, et le fil le dit.
+   */
+  | { type: 'directives-orphelines'; convId: string; textes: string[] }
+  /**
    * Le CADRAGE remonte les affirmations sur lesquelles il repose SANS les avoir verifiees, au moment
    * ou la phase se termine — pas a la fin du run. Le run ne s'arrete pas : ce qui change, c'est que
    * l'hypothese devient contestable AVANT que tout soit construit dessus.
@@ -564,7 +574,8 @@ const CATALOG: CommandSpec[] = [
       "Agir sur le PC Windows apres desktop_observe. Les coordonnees x/y vont de 0 a 1000 dans l'image capturee. Envoyer une courte sequence puis observer de nouveau.",
     args: {
       actions:
-        "tableau JSON (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}. " +
+        "tableau JSON (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'double_click',x,y}, {type:'drag',x,y,toX,toY,button?,steps?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}. " +
+        '`drag` glisse du point de depart (x,y) au point d arrivee (toX,toY) — deplacer une fenetre, redimensionner, selectionner : appui, deplacement par paliers, relachement. ' +
         "`keys` est un TABLEAU de touches, jamais une chaine : ['CTRL','A'] et non 'CTRL+A'. `ms` est borne a 5000 (au-dela = refus, enchainer deux waits). " +
         'Exemple complet : [{"type":"click","x":500,"y":320},{"type":"wait","ms":800},{"type":"key","keys":["CTRL","A"]},{"type":"type","text":"bonjour"}]'
     },

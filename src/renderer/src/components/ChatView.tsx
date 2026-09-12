@@ -2115,11 +2115,19 @@ export function ChatView({
       gesteLecteurRef.current = false
       descenteEnVolRef.current = true
       dernierScrollTopRef.current = scroll.scrollTop
-      annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 40, (landed) => {
-        descenteEnVolRef.current = false
-        basculeConvRef.current = false
-        if (!landed) setHasNewActivity(true)
-      })
+      annulerDescente = scrollChatToBottom(
+        scroll,
+        requestAnimationFrame,
+        40,
+        (landed) => {
+          descenteEnVolRef.current = false
+          basculeConvRef.current = false
+          if (!landed) setHasNewActivity(true)
+        },
+        // Un recul SANS geste vient d'un re-rendu, pas du lecteur : la descente ne doit pas
+        // abandonner (defaut du 2026-09-12 en mode auto, bouton « derniere reponse » allume).
+        () => gesteLecteurRef.current
+      )
       setHasNewActivity(false)
       setScrolledAwayFromTail(false)
     })
@@ -2156,10 +2164,16 @@ export function ChatView({
     gesteLecteurRef.current = false
     descenteEnVolRef.current = true
     dernierScrollTopRef.current = scroll.scrollTop
-    const annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
-      descenteEnVolRef.current = false
-      if (!landed) setHasNewActivity(true)
-    })
+    const annulerDescente = scrollChatToBottom(
+      scroll,
+      requestAnimationFrame,
+      120,
+      (landed) => {
+        descenteEnVolRef.current = false
+        if (!landed) setHasNewActivity(true)
+      },
+      () => gesteLecteurRef.current
+    )
     return () => {
       descenteEnVolRef.current = false
       annulerDescente()
@@ -2189,10 +2203,16 @@ export function ChatView({
         gesteLecteurRef.current = false
         descenteEnVolRef.current = true
         dernierScrollTopRef.current = scroll.scrollTop
-        scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
-          descenteEnVolRef.current = false
-          if (!landed) setHasNewActivity(true)
-        })
+        scrollChatToBottom(
+          scroll,
+          requestAnimationFrame,
+          120,
+          (landed) => {
+            descenteEnVolRef.current = false
+            if (!landed) setHasNewActivity(true)
+          },
+          () => gesteLecteurRef.current
+        )
         return
       }
       const cible = compenserRetrecissementDuFil({

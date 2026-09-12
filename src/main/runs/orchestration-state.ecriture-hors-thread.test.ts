@@ -68,3 +68,41 @@ describe('checkpoint de run — ecriture hors du thread principal', () => {
     await promesse
   })
 })
+
+/*
+ * DEFAUT MESURE LE 2026-09-12 : le refus de reprise annonce « definitivement impossible —
+ * checkpoint retire, ce run ne sera plus rejoue » (relaunch-resumable-run.ts) laissait le fichier
+ * `run-state/<runId>.json` sur le disque, parce qu'une ecriture encore EN VOL renommait son `.tmp`
+ * APRES le `rmSync`. Consequence reelle : `run-1ede1d229c1e-1` et `run-91389273e2a2-1` revenaient a
+ * chaque demarrage et empilaient 92 evenements `failed` dans UN SEUL journal de tour.
+ */
+describe('checkpoint oublie — la promesse « ne sera plus rejoue » tient', () => {
+  it('une ecriture en vol ne ressuscite pas un checkpoint efface', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'runstate-oubli-'))
+    dossiers.push(root)
+    const enVol = saveOrchestrationStateAsync(root, etat('run-aaaaaaaaaaaa-1', 1_000))
+    clearOrchestrationState(root, 'run-aaaaaaaaaaaa-1')
+    await enVol
+    expect(existsSync(join(root, 'run-aaaaaaaaaaaa-1.json'))).toBe(false)
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
+  it('une sauvegarde tardive du meme run est refusee apres l’oubli', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'runstate-oubli2-'))
+    dossiers.push(root)
+    await saveOrchestrationStateAsync(root, etat('run-bbbbbbbbbbbb-1', 1_000))
+    clearOrchestrationState(root, 'run-bbbbbbbbbbbb-1')
+    await saveOrchestrationStateAsync(root, etat('run-bbbbbbbbbbbb-1', 2_000))
+    expect(existsSync(join(root, 'run-bbbbbbbbbbbb-1.json'))).toBe(false)
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
+  it('un run NEUF portant le meme identifiant reste ecrivable', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'runstate-oubli3-'))
+    dossiers.push(root)
+    clearOrchestrationState(root, 'run-cccccccccccc-1')
+    const neuf = etat('run-cccccccccccc-1', Date.now() + 10_000)
+    await saveOrchestrationStateAsync(root, neuf)
+    expect(loadOrchestrationStates(root).map((s) => s.runId)).toEqual(['run-cccccccccccc-1'])
+  })
+})

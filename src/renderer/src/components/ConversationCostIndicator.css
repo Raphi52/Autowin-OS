@@ -108,3 +108,10 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+
+/* Composition du prompt : meme grille que les couts, separee par un filet. */
+.conv-cost-composition {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}

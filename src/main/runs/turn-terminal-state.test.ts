@@ -4,7 +4,7 @@ import { terminalDuTour } from '../chat-turn-arret'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { shouldPersistClosingText } from './turn-closing'
+import { resteADire } from './turn-closing'
 import { appendTurnEvent, listUnfinishedTurns } from './turn-journal'
 
 /**
@@ -138,13 +138,19 @@ describe('cablage — le texte du `done` atterrit dans le message', () => {
     expect(branch).toContain('applyTurnEvent(conversationId, turnId, livraison.durable)')
   })
 
+  /*
+   * L'ANCIEN VETO EST PARTI, et c'est le fond du correctif du 2026-09-11 (conv-471).
+   * `shouldPersistClosingText` refusait tout texte final des qu'un delta avait ete vu dans le tour.
+   * Un tour qui parle ENTRE ses appels d'outils perdait donc son compte-rendu. La decision se prend
+   * desormais sur le CONTENU : on publie ce qui n'a pas encore ete dit, et rien d'autre.
+   */
   it('conserve une cloture structuree meme apres un preambule deja diffuse', () => {
-    expect(shouldPersistClosingText(true, { status: 'succeeded', valid: true })).toBe(true)
+    expect(resteADire('preambule\n\nverdict final', 'preambule')).toBe('verdict final')
   })
 
   it('ne duplique pas le done conversationnel ordinaire deja diffuse', () => {
-    expect(shouldPersistClosingText(true, undefined)).toBe(false)
-    expect(shouldPersistClosingText(false, undefined)).toBe(true)
+    expect(resteADire('deja dit', 'deja dit')).toBe('')
+    expect(resteADire('texte neuf', '')).toBe('texte neuf')
   })
 
   it('ecrit aussi au journal du tour (une reprise doit retrouver la conclusion)', () => {

@@ -202,7 +202,14 @@ describe('ModelEffortMatrix', () => {
     // La matrice est EN LIGNE dans la popup : plus de bouton d'ouverture, plus de modale.
     expect(view.querySelector('.model-select-matrix-open')).toBeNull()
     expect(view.querySelector('.effort-matrix-overlay')).toBeNull()
-    const matrice = view.querySelector(
+    // Le menu est desormais peint dans `document.body` (au-dessus de toute l'app) et n'est
+    // monte qu'a l'ouverture : on ouvre le details, puis on le cherche dans le document.
+    const hote = view.querySelector('details') as HTMLDetailsElement
+    await act(async () => {
+      hote.open = true
+      hote.dispatchEvent(new Event('toggle'))
+    })
+    const matrice = document.querySelector(
       '.model-select-menu [data-testid="effort-matrix"]'
     ) as HTMLElement
     expect(matrice).not.toBeNull()

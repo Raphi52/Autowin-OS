@@ -395,7 +395,24 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     d'UNE conversation. Il ECRIT, mais rien ne SORT du poste : l'identifiant et l'id de
     //     compte passent par `guardString`, `null` est le seul autre cas accepte, et aucun
     //     chemin n'est construit depuis l'appel (le dossier du compte est derive cote store).
-    expect(handlers).toHaveLength(178)
+    // MISE A JOUR 2026-09-12 - 178 -> 184. SIX canaux ajoutes, relus un par un AVANT de toucher le
+    //   compte. Le fil-piege etait DEJA rouge avant ce tour : les six existaient sans que ce
+    //   compteur soit repris. Tous portent `assertTrustedRendererSender` des leur PREMIERE ligne.
+    //   QUATRE viennent de l'onglet « Files » du panneau de droite (`src/main/ipc/project-files.ts`) :
+    //   `project:root` - rend la racine du projet courant. Aucune ecriture, aucun parametre recu.
+    //   `project:list` - liste UN dossier. Le renderer n'envoie qu'un chemin RELATIF ; la racine
+    //     vient du processus principal, jamais de l'appel.
+    //   `project:read` - lit UN fichier texte sous cette racine (`guardString` sur le chemin).
+    //   `project:write` - REMPLACE le contenu d'un fichier EXISTANT sous cette racine. Il ECRIT,
+    //     mais rien ne SORT du poste : chemin et contenu passent par `guardString`, le chemin est
+    //     resolu puis verifie sous la racine (un `..`, un chemin absolu ou un lien qui sort est
+    //     refuse), et aucun fichier n'est cree.
+    //   DEUX viennent de la diarisation locale (`src/main/ipc/diarisation.ts`) :
+    //   `os:diarisation:etat` - LECTURE SEULE de la presence du modele. Aucun argument du renderer.
+    //   `os:diarisation:installer` - telechargement EXPLICITE vers des URL CONSTANTES du module :
+    //     le renderer ne fournit ni URL, ni chemin, ni nom de fichier.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(184)
     expect(unguarded).toEqual([])
   })
 

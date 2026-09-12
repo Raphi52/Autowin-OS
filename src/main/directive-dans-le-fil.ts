@@ -42,16 +42,28 @@ export function enregistrerDirectiveDansLeFil(params: {
       // le clic de l'utilisateur ne part plus. Le verrou anti-double-envoi, lui, reste entier.
       orientation: true,
       /*
-       * ORDRE CHRONOLOGIQUE — la consigne se pose APRÈS ce qui était déjà affiché (2026-09-04).
+       * LA CONSIGNE SE POSE AVANT LA RÉPONSE QUI LA TRAITE (mesure du 2026-09-11, conv-439).
        *
-       * Le remonter AVANT le brouillon de réponse était un choix du 2026-09-01 (conv-46) : la
-       * consigne s'écrivait sous une réponse qui la traitait déjà. Mais ce remontage produit le
-       * défaut INVERSE, rapporté par l'utilisateur le 2026-09-04 : « quand j'écris et qu'il y a un
-       * bloc action en cours, mon message part au-dessus de l'agent ». Il ne retrouve plus sa
-       * phrase là où il l'a tapée. Entre les deux, on garde l'ordre RÉEL des événements : ce que
-       * l'utilisateur vient d'écrire arrive en bas, comme dans n'importe quelle conversation.
+       * Trois tours d'aller-retour sur cette ligne, parce qu'on la croyait arbitrable entre deux
+       * défauts opposés. Elle ne l'est pas, pour une raison mécanique : le brouillon assistant posé
+       * par `beginTurn` est VIDE au moment de l'injection — son texte n'est écrit qu'à la CLÔTURE du
+       * tour. Poser la consigne « après » la pose donc sous un message qui recevra ensuite TOUT le
+       * texte du tour, bloc de clôture compris. L'utilisateur relit alors sa directive sous une
+       * réponse qui la traite déjà et conclut qu'elle a été ignorée : « le message vient de
+       * s'afficher après ton bloc fait, comme un cheveu sur la soupe » (2026-09-11).
+       *
+       * Le défaut inverse (2026-09-03/04 : « mon message part au-dessus de l'agent ») était un
+       * défaut d'AFFICHAGE PENDANT LE TOUR, et il a reçu sa propre solution côté écran : le reçu
+       * (`.directive-receipt`) SCINDE la réponse en vol — texte déjà vu au-dessus, consigne, puis la
+       * suite en dessous (ChatView.behavior.test.tsx, « place le reçu entre la réponse déjà vue et
+       * la continuation »). La position PERSISTÉE n'a donc plus à compenser ce défaut-là.
+       *
+       * LIMITE ASSUMÉE : après rechargement, le texte du tour est UN seul message, donc la part
+       * déjà lue avant l'injection se relit sous la consigne. Fix complet = scinder le message
+       * assistant au point d'injection (clore sur le texte courant, puis `beginContinuationTurn`) ;
+       * non fait ici, cela touche le routage des deltas par `turnId`.
        */
-      avantLaReponseEnCours: false
+      avantLaReponseEnCours: true
     })
     // On retrouve la consigne par son CONTENU en repartant de la fin (et non par « le dernier
     // message »)  : l'ordre du fil est décidé par le store, pas ici — un jour où l'insertion

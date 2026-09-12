@@ -8,6 +8,7 @@ import {
   type StreamChunk
 } from './types'
 import { resolveProviderTimeoutMs, withHardDeadline } from './watchdog'
+import { estMurDeQuota } from '../../shared/reprise-quota'
 import type { ExecutionSupervisor } from '../execution-supervisor'
 
 /**
@@ -38,15 +39,19 @@ const COORDINATION_DRAIN_GRACE_MS = ((): number => {
  *
  * Deux sources acceptées : la signature structurée posée par un adaptateur, et le texte brut — pour
  * qu'un provider qui n'a pas (encore) de signature soit couvert quand même.
+ *
+ * Le VOCABULAIRE vient de `estMurDeQuota` (src/shared/reprise-quota.ts), source unique partagée avec
+ * la liste des conversations. Une copie privée vivait ici jusqu'au 2026-09-11 : elle ignorait
+ * « session limit » — le texte que Claude écrit VRAIMENT quand l'abonnement est épuisé — donc la
+ * rotation d'abonnement ne partait pas sur le refus le plus fréquent. Deux vocabulaires pour un même
+ * mur, c'est un mur qui ne se voit qu'à moitié.
  */
 function quotaWallReason(error: unknown): string | undefined {
   const signature = (error as { signature?: unknown } | null)?.signature
   const texte = error instanceof Error ? error.message : String(error ?? '')
   if (/retry after|try again in|rate limit exceeded/i.test(texte)) return undefined
   if (signature === 'usage-limit-reached') return texte
-  return /usage[_ ]limit|purchase more credits|hit your usage|insufficient_quota/i.test(texte)
-    ? texte
-    : undefined
+  return estMurDeQuota(texte) ? texte : undefined
 }
 
 /**

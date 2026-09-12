@@ -36,6 +36,26 @@ describe('desktop control validation', () => {
     ])
   })
 
+  it('accepte les noms usuels de touches en les ramenant a la table', () => {
+    expect(
+      parseDesktopActions([
+        { type: 'key', keys: ['Escape'] },
+        { type: 'key', keys: ['Control', 'Return'] },
+        { type: 'key', keys: ['ArrowLeft', 'PgDn'] }
+      ])
+    ).toEqual([
+      { type: 'key', keys: ['ESC'] },
+      { type: 'key', keys: ['CTRL', 'ENTER'] },
+      { type: 'key', keys: ['LEFT', 'PAGEDOWN'] }
+    ])
+  })
+
+  it('nomme les touches les plus proches quand le nom reste inconnu', () => {
+    expect(() => parseDesktopActions([{ type: 'key', keys: ['ESCAPPE'] }])).toThrow(
+      /Touche desktop inconnue: ESCAPPE\. Touches les plus proches : .*ESC/
+    )
+  })
+
   it.each([
     null,
     [],

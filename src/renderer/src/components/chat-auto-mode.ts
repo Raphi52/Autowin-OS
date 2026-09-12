@@ -156,16 +156,54 @@ function resteAFaireDitRien(texte: string): boolean {
   return ligneNueDitRien(lignesDeRubrique(texte, 'Reste à faire'))
 }
 
+/**
+ * LES FORMULATIONS EQUIVALENTES A « rien ».
+ *
+ * Demande utilisateur du 2026-09-11 (conv-468) : le modele avait cloture par « Aucune suite
+ * necessaire. » — une fin de chaine explicite — et le mode auto avait continue, parce que seul le
+ * mot `rien` nu etait reconnu. Le signal d'arret est le SENS de la ligne, pas un mot unique ;
+ * l'exigence de ligne ENTIERE, elle, ne bouge pas (« aucune piste ne bloque » reste une suite).
+ */
+const LIGNES_DE_FIN = new Set([
+  'rien',
+  'rien a signaler',
+  'rien a faire',
+  'rien de plus',
+  // Forme reellement ecrite le 2026-09-12, et qui a relance la chaine pour rien : « rien d'autre ».
+  // Elle n'entre ici que NUE — « rien d'autre : envoie-moi X » reste une suite, comme
+  // « rien a faire de plus sur X — enchaine sur Y » : une phrase qui propose quelque chose
+  // n'est pas une fin, et c'est ce qui distingue cette porte d'une simple recherche de mot.
+  "rien d'autre",
+  'plus rien',
+  'plus rien a faire',
+  'aucune',
+  'aucun',
+  'aucune suite',
+  'aucune suite necessaire',
+  'aucune suite requise',
+  'aucune action',
+  'aucune action necessaire',
+  'aucune action requise',
+  'aucune suite prevue',
+  'neant',
+  'n/a',
+  'terminé'.normalize('NFD').replace(/[̀-ͯ]/g, '')
+])
+
 function ligneNueDitRien(lignes: readonly string[]): boolean {
   return lignes.some((ligne) => {
     const nu = ligne
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')
       .toLowerCase()
+      // L'apostrophe COURBE et l'apostrophe droite sont deux caracteres differents : sans cette
+      // mise au meme format, « rien d’autre » et « rien d'autre » ne sont pas le meme texte, et
+      // seule la moitie des fins ecrites serait reconnue (mesure du 2026-09-12).
+      .replace(/[’ʼ]/gu, "'")
       .replace(/^[\s>*•\-–—]+/u, '')
       .replace(/[\s.;:!*`]+$/u, '')
       .trim()
-    return nu === 'rien' || nu === 'rien a signaler' || nu === 'rien a faire'
+    return LIGNES_DE_FIN.has(nu)
   })
 }
 

@@ -18,6 +18,22 @@ describe('scout interne — candidats d’ajout nés de l’app', () => {
     expect(prompt).toContain('MÉTHODE OBLIGATOIRE')
     expect(prompt).toContain('un [] sans lecture citée est un refus de travail')
   })
+
+  /*
+   * MESURE DU 2026-09-12 : le scout a rendu « le refus annoncé définitif se réécrit 92 fois » ancré
+   * sur `relaunch-resumable-run.ts:416` — la ligne du MESSAGE. La cause vivait dans
+   * `orchestration-state.ts` (une écriture de checkpoint encore en vol ressuscitait le fichier
+   * effacé). Corriger la ligne citée n'aurait rien réparé : le prompt doit donc exiger l'ancrage de
+   * la CAUSE, et autoriser « cause non localisée » plutôt qu'un faux ancrage.
+   */
+  it('exige d’ancrer la CAUSE et non la ligne qui affiche le défaut', () => {
+    const prompt = construirePromptScoutInterne(params)
+    expect(prompt).toContain('ANCRE LA CAUSE, PAS LE SYMPTÔME')
+    expect(prompt).toContain('jamais la ligne qui l’AFFICHE')
+    expect(prompt).toContain('cause non localisée')
+    expect(prompt).toContain('qui RECRÉE sa condition')
+    expect(prompt).toContain('pas un garde ajouté autour du symptôme')
+  })
 })
 
 describe('passe interne — le chemin du bouton « En générer plus »', () => {

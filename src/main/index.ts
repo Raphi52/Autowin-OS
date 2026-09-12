@@ -10,6 +10,7 @@ import { registerConversationsIpc } from './ipc/conversations'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
 import { registerGitIpc } from './ipc/git'
+import { registerProjectFilesIpc } from './ipc/project-files'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
@@ -25,6 +26,7 @@ import { registerWorkflowProfilesIpc } from './ipc/workflow-profiles'
 import { registerChatArtifactsIpc } from './ipc/chat-artifacts'
 import { registerSkillsIpc } from './ipc/skills'
 import { registerWhisperIpc } from './ipc/whisper'
+import { registerDiarisationIpc } from './ipc/diarisation'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -128,6 +130,7 @@ import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
 import { ecarterStoreIllisible, persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals, journauxReferencesParUneReservation } from './runs/journal-gc'
+import { collectCausalTraces } from './activity/causal-trace-gc'
 import { loadOrchestrationStates } from './runs/orchestration-state'
 import { collectRunWorkspaces } from './runs/workspace-gc'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
@@ -176,6 +179,7 @@ import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
 import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 import {
   deletePromptCalls,
+  flushAllPromptCalls,
   loadAllPromptCalls,
   loadPromptCalls,
   applyRecoveredUsage,
@@ -1310,6 +1314,20 @@ try {
 } catch {
   /* menage best-effort : jamais bloquant au demarrage */
 }
+// Traces causales : rien ne bornait cet arbre — 441 fichiers / 668 Mo en 12 jours mesurés le
+// 2026-09-12, premier poste de volume de `.autowin-data` et cause dominante des gels (83 des
+// 117 gels du jour sont des entrées-sorties disque synchrones). Même fenêtre de 7 jours que les
+// journaux de tour. Best-effort : un échec de ménage ne retarde jamais le démarrage.
+try {
+  const tracesPurgees = collectCausalTraces(join(app.getPath('userData'), 'causal-trace'))
+  if (tracesPurgees.removed > 0) {
+    console.log(
+      `[causal-trace] ${tracesPurgees.removed} traces purgees (${Math.round(tracesPurgees.freedBytes / 1048576)} Mo), reste ${tracesPurgees.remaining}`
+    )
+  }
+} catch {
+  /* menage best-effort : jamais bloquant au demarrage */
+}
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
 const shadowRoutingObservationsPath = join(
@@ -2037,6 +2055,8 @@ Le fil reprend ensuite normalement.`
   registerPreflightIpc({ preflightProviderOptions })
   // Les canaux git (lecture seule) vivent dans src/main/ipc/git.ts.
   registerGitIpc({ os, pickDirectory })
+  // Les canaux « Projet » (arborescence + éditeur) vivent dans src/main/ipc/project-files.ts.
+  registerProjectFilesIpc({ os })
   // Les canaux de la vue Tests vivent dans src/main/ipc/tests-view.ts.
   registerTestsViewIpc({ os, pickDirectory })
   // Les canaux de l'onglet Latence vivent dans src/main/ipc/perf.ts.
@@ -3577,6 +3597,8 @@ Le fil reprend ensuite normalement.`
   // Les canaux de la reconnaissance vocale locale vivent dans src/main/ipc/whisper.ts : ils ne
   // prenaient ici que leur service, construit paresseusement.
   registerWhisperIpc({ serviceWhisper })
+  // Séparation des voix d'un fichier déjà enregistré (pyannote) : état lu, brique posée sur clic.
+  registerDiarisationIpc()
 
   /**
    * OUVRIR LA PAGE MICRO DE WINDOWS. DEMANDE DE L'UTILISATEUR (2026-09-03) : le message « autorisez
@@ -4184,6 +4206,12 @@ app.on('before-quit', (event) => {
   // Le journal de tour ecrit par LOTS : ce qui dort en tampon doit atteindre le disque avant
   // l'arret, sinon la reprise d'un tour en vol perdrait ses derniers deltas.
   flushAllTurnJournals()
+  // Les appels modele s'ecrivent hors du fil principal : ce qui est encore en vol doit atteindre
+  // le disque avant l'arret, sinon l'Observatory perdrait les derniers appels de la session.
+  flushAllPromptCalls()
+  // Le cout des tours s'ecrit desormais en DIFFERE (appendFileSync figeait l'interface 9,4 s,
+  // mesure du 2026-09-12) : ce qui reste en tampon doit atteindre le disque avant l'arret.
+  os.cost.flushPersistSync()
   preflightWatchHandle?.stop() // couper la boucle de re-probe démarrage (pas de timer résiduel)
   preflightWatchHandle = null
   brainSupervisionHandle?.stop() // couper le battement de surveillance du brain_server

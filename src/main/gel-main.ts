@@ -6,6 +6,7 @@ import { Worker } from 'node:worker_threads'
 import {
   classerGel,
   nommerAccumulation,
+  nommerOperationDuGel,
   resumerGels,
   cleDeCumul,
   nommerAccesBloquant,
@@ -352,16 +353,27 @@ export function demarrerDetecteurDeGel(
     // a un gel des appels qui l'ont precede — l'erreur d'alibi, deja payee sur `indice`.
     const cumules = preleverAccesCumules()
     if (blocageMs > 0) {
-      const operation = operationDeclaree()
+      const operationBrute = operationDeclaree()
       /*
        * L'indice n'est servi QUE faute de mieux, et QUE si l'operation s'est refermee dans la
        * fenetre figee : hors de cette fenetre, c'est un alibi, pas un suspect.
        */
       const indice =
-        operation === 'inconnu' && dernierFerme && dernierFerme.a >= debutFenetre
+        operationBrute === 'inconnu' && dernierFerme && dernierFerme.a >= debutFenetre
           ? dernierFerme.nom
           : undefined
       const accumulation = nommerAccumulation(cumules, blocageMs)
+      /*
+       * ET LE NOM DE L'OPERATION AVEC LUI — meme raison, meme source, meme prudence.
+       *
+       * Mesure du 2026-09-12 : depuis le 2026-09-09, 61 gels sortent en `operation:'inconnu'` pour
+       * 275 s de fenetre figee, pic a 53 594 ms — la plus grosse famille et la seule anonyme, alors
+       * que `accumulation[0].operation` porte deja « execFileSync git config », « appendFileSync »
+       * ou « openSync ». `PerfLagPanel` groupant par `operation`, le poste le plus cher etait le
+       * seul illisible de la vue. Le champ `indice` et l'appelant continuent de se lire sur
+       * l'operation DECLAREE (`operationBrute`) : eux disent « faute de mieux », pas « au lieu de ».
+       */
+      const operation = nommerOperationDuGel(operationBrute, accumulation)
       /*
        * L'APPELANT REMONTE AU PREMIER PLAN QUAND RIEN N'EST DECLARE.
        *
@@ -374,7 +386,7 @@ export function demarrerDetecteurDeGel(
        * gel deja nomme, ce serait une seconde accusation sans preuve.
        */
       const appelant =
-        operation === 'inconnu'
+        operationBrute === 'inconnu'
           ? accumulation?.find((contributeur) => contributeur.appelant)?.appelant
           : undefined
       ecrire({

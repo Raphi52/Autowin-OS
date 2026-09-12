@@ -166,7 +166,7 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
   })
 }
 
-function splitFinalSummary(text: string): FinalSummaryParts | null {
+export function splitFinalSummary(text: string): FinalSummaryParts | null {
   const lines = text.split('\n')
   const protectedLines = markdownCodeLineProtection([text])[0]
   let markerIndex = -1

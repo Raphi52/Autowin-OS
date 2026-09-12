@@ -230,7 +230,7 @@ export function buildChatPilotagePrompt(
     // depuis cette session (workspace limité à E:\GIT\Autowin-OS) » ; le 10/08, lecture SANS difficulté
     // de D:\GIT\RigApplication\greffe_map.txt (26 lignes + 1re ligne exacte). L'argv journalisé des deux
     // tours est IDENTIQUE (`--add-dir E:\GIT\Autowin-OS`, aucun autre dossier) : il n'y avait donc aucun
-    // blocage, seulement une auto-limitation. Le réflexe 10 de la constitution (clôture NÉGATIVE) ne
+    // blocage, seulement une auto-limitation. Le réflexe 8 de la constitution (clôture NÉGATIVE) ne
     // suffisait pas — il est générique ; cette ligne nomme le cas.
     `PÉRIMÈTRE DE LECTURE — tu peux LIRE un chemin ABSOLU hors du workspace (Read/Grep/Glob), y compris sur un autre disque. Ne déclare JAMAIS un dépôt ou un fichier « non accessible depuis cette session » sans avoir TENTÉ la lecture. Si elle échoue réellement, cite l'erreur exacte au lieu de conclure à l'inaccessibilité — et n'annonce jamais « reste à confirmer sur le code » avant d'avoir essayé de lire ce code.\n` +
     // LE WEB EST UNE SOURCE, PAS UN RECOURS (mesure 2026-09-05, conv-267 puis conv-292 puis conv-297).

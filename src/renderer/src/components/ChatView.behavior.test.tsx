@@ -12,7 +12,12 @@ vi.mock('../../../shared/reprise-surcharge', async (importOriginal) => ({
 }))
 
 const markdownRenderCount = vi.hoisted(() => ({ value: 0 }))
-vi.mock('./Markdown', () => ({
+// 2026-09-12 : ce mock REMPLACAIT tout le module, donc splitFinalSummary disparaissait,
+// et cloture-en-dernier.ts -- qui l'importe d'ici -- plantait a l'appel, faisant tomber
+// 11 tests sans aucun rapport. On part desormais du module REEL et on ne remplace QUE
+// les deux exports que ce fichier veut controler.
+vi.mock('./Markdown', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   Markdown: ({ text }: { text: string }) => {
     markdownRenderCount.value += 1
     return createElement('span', null, text)
@@ -1887,7 +1892,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
    * seule navigation, et elle aurait bloque la separation demandee. Ce qui reste verifie : les
    * QUATRE anciennes projections ne reviennent pas, et le graphe est toujours l'accueil.
    */
-  it('expose trois onglets dans le panneau — Graph, Runs, Logs — et ouvre sur le graphe', async () => {
+  it('expose quatre onglets dans le panneau — Graph, Runs, Logs, Files — et ouvre sur le graphe', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1898,7 +1903,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(pane!.querySelector('[role="tablist"]')).toBeTruthy()
     expect(
       Array.from(pane!.querySelectorAll('button[role="tab"]')).map((b) => b.textContent?.trim())
-    ).toEqual(['Graph', 'Runs', 'Logs'])
+    // 2026-09-12 : l'onglet « Files » (diff des fichiers modifies + arborescence editable) rejoint
+    // les trois historiques. Le fil etait rouge ici depuis son arrivee dans `WorkflowsPanel`.
+    ).toEqual(['Graph', 'Runs', 'Logs', 'Files', 'Trace'])
     // Le graphe est monté d'emblée, et son détail de sélection reste sous lui.
     expect(pane!.querySelector('.workflow-execution-graph')).toBeTruthy()
     expect(pane!.querySelector('[data-workflow-detail]')).toBeTruthy()
@@ -2102,8 +2109,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
         name: 'orchestrate'
       })
     })
-    // On repart panneau FERMÉ : seul le clic sur l'indicateur doit le rouvrir.
-    await click('.runs-pane .workflow-panel-close')
+    // Le panneau ne s'ouvre PLUS tout seul au demarrage d'une orchestration : il est deja FERME,
+    // seul le clic sur l'indicateur doit l'ouvrir.
+    expect(container!.querySelector('.runs-pane')).toBeNull()
     expect(container!.querySelector('.live-run')).toBeNull()
 
     // Depuis le 2026-08-31, le chevron de l'en-tete REPLIE les etapes ; l'acces a Workflows garde
@@ -2879,7 +2887,11 @@ describe('ChatView behavior under concurrent UI actions', () => {
       onInspectTurn: inspect
     })
     await click('.conv-pick')
-    const loupe = container!.querySelector('.msg-turn-icon') as HTMLButtonElement
+    // Le selecteur vise l'ETIQUETTE, pas la classe : depuis l'arrivee du bouton « Copier »
+    // (2026-09-12) trois boutons partagent `.msg-turn-icon`, et le premier du DOM est la copie.
+    const loupe = container!.querySelector(
+      '.msg-turn-icon[aria-label="Inspecter ce tour"]'
+    ) as HTMLButtonElement
     expect(loupe).toBeTruthy()
     await act(async () => loupe.click())
 

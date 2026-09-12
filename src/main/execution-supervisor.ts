@@ -4,6 +4,7 @@ import type { Usage } from './providers/types'
 import type { ExecutionQuote } from './execution-quote'
 import { splitInputTokens } from '../shared/cost-estimate'
 import { refusAvecIssue } from './issue-de-refus'
+import { attendreLeReglageDesAppels, type OptionsAttenteDeReglage } from './attente-de-reglage'
 
 export type TokenCoverage = 'complete' | 'partial'
 
@@ -180,9 +181,26 @@ export class ExecutionSupervisor {
     quote: ExecutionQuote,
     outerSignal: AbortSignal | undefined,
     execute: () => Promise<T>,
-    prior?: ExecutionUsageSnapshot,
-    onLateSettlement?: (usage: ExecutionUsageSnapshot) => void
+    priorInitial?: ExecutionUsageSnapshot,
+    onLateSettlement?: (usage: ExecutionUsageSnapshot) => void,
+    /**
+     * De quoi PATIENTER au lieu de refuser quand un appel du run precedent est encore en vol.
+     * Sans `relire`, rien ne change : l'attente est nulle et le refus part comme avant.
+     */
+    attente: OptionsAttenteDeReglage = {}
   ): Promise<T> {
+    /*
+     * LE REFUS TRANSITOIRE SE LAISSE UNE CHANCE DE NE PAS EXISTER (mesure du 2026-09-12).
+     *
+     * « Reprise refusee : N appel(s) provider encore actif(s) » est la famille d'echec
+     * d'orchestration la plus frequente des journaux de tours — 17 sur 75 lancements. Son propre
+     * texte dit « l'appel en cours se regle seul » : on lui donne donc le temps de se regler, en
+     * relisant les compteurs persistes, avant de decider. Le refus lui-meme n'a pas bouge d'un mot.
+     */
+    const prior = await attendreLeReglageDesAppels(priorInitial, {
+      ...attente,
+      signal: attente.signal ?? outerSignal
+    })
     const controller = new AbortController()
     /*
      * L'échéance court depuis le DÉBUT DE CETTE EXÉCUTION, pas depuis la création du devis.
@@ -231,7 +249,9 @@ export class ExecutionSupervisor {
       onLateSettlement
     }
     if (prior && prior.quoteId !== quote.id) {
-      throw new Error("Reprise refusee : le plan d'execution ne correspond pas aux compteurs persistants.")
+      throw new Error(
+        "Reprise refusee : le plan d'execution ne correspond pas aux compteurs persistants."
+      )
     }
     const publishTerminalSnapshot = (): ExecutionUsageSnapshot => {
       runtime.finished = true

@@ -62,7 +62,7 @@ describe('phase-briefs (consignes courtes in-app)', () => {
    * deux sources ont RETRECI (brief 1528 -> 1252, kit 1772 -> 1422) en gagnant une exigence.
    *
    * Aucune des quatre n'est inventee : (1) vivait deja dans le brief sans etre dans le kit, (2) est le
-   * reflexe 10 de la constitution raccorde au Why, (4) elargit le plafonnement que le kit appliquait
+   * reflexe 8 de la constitution raccorde au Why, (4) elargit le plafonnement que le kit appliquait
    * deja au seul candidat web. Ce test garde le RACCORD dans les deux sources, jamais l'obeissance.
    */
   it('la preuve avant la liste existe DANS LES DEUX sources, dans les deux sens', () => {
@@ -73,7 +73,7 @@ describe('phase-briefs (consignes courtes in-app)', () => {
       // Le fait : rouvrir l'ancrage, et le piege du commentaire qui raconte une cause passee.
       expect(source).toMatch(/ANCRAGE ROUVERT|ANCHOR REOPENED/u)
       expect(source).toMatch(/COMMENTAIRE|COMMENT/u)
-      // La deduction : les mots du reflexe 10, et les TROIS couches.
+      // La deduction : les mots du reflexe 8, et les TROIS couches.
       expect(source).toMatch(/ENUMERE|ENUMERATE/u)
       expect(source).toMatch(/BALAYE|SWEEP/u)
       expect(source).toMatch(/chemins FERMES|CLOSED paths/u)
@@ -168,6 +168,27 @@ describe('phase-briefs (consignes courtes in-app)', () => {
    * garde-fous qui la rendent vraie, plus stricts qu'un simple mot-cle de lecture seule. Desserrer
    * ici sans les exiger aurait fait de ce test une coquille.
    */
+  /**
+   * PLAFOND KAIZEN — le brief avait depasse 3000 en prefixant 14 chemins de `src/main/`. Le
+   * prefixe est desormais DIT une fois ; ce test garde les SEPT leviers ET la marge, pour qu'un
+   * futur enrichissement ne reprenne pas le depassement par le meme chemin. Conv-475.
+   */
+  it('garde ses SEPT leviers sous le plafond, sans re-prefixer chaque chemin', () => {
+    const b = PHASE_BRIEFS.kaizen
+
+    for (const n of [1, 2, 3, 4, 5, 6, 7]) expect(b, `levier ${n}`).toContain(`
+${n}. `)
+    expect(b).not.toMatch(/^8\. /mu)
+    // Les sept cibles restent NOMMEES : un levier sans son chemin n'oriente plus personne.
+    for (const cible of ['SKILL.md', 'constitution.ts', 'commands.ts', 'gates/', 'settings.json', 'docs/', 'brain-'])
+      expect(b, cible).toContain(cible)
+    // Le prefixe est dit UNE fois, et n'est plus recopie sur chaque chemin.
+    expect(b).toContain('Chemin nu = sous')
+    expect(b.match(/src\/main\//gu) ?? []).toHaveLength(1)
+    // Marge REELLE sous le plafond du test de taille, pas juste un passage de justesse.
+    expect(b.length).toBeLessThan(2980)
+  })
+
   it('kaizen couvre les mécanismes Autowin et garde ses éditions RÉVERSIBLES', () => {
     const brief = phaseBrief('kaizen')
     expect(brief).toContain('conversation')

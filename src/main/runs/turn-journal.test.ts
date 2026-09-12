@@ -116,3 +116,51 @@ describe('pruneFinishedTurnJournals — âge avant lecture', () => {
     rmSync(root, { recursive: true, force: true })
   })
 })
+
+describe('turn-journal — horodatage systématique', () => {
+  it('pose `at` quand l’émetteur ne le fournit pas (failed / resumed indatables)', () => {
+    const avant = Date.now()
+    appendTurnEvent(root, 'conv-at', 'turn-1', { kind: 'resumed' })
+    appendTurnEvent(root, 'conv-at', 'turn-1', { kind: 'failed', error: 'boum' })
+    const events = readTurnJournal(root, 'conv-at', 'turn-1')
+    expect(events).toHaveLength(2)
+    for (const event of events) {
+      expect(typeof event.at).toBe('number')
+      expect(event.at as number).toBeGreaterThanOrEqual(avant)
+    }
+  })
+
+  it('respecte le `at` déjà posé par l’émetteur', () => {
+    appendTurnEvent(root, 'conv-at2', 'turn-1', { kind: 'done', at: 42 })
+    expect(readTurnJournal(root, 'conv-at2', 'turn-1')[0].at).toBe(42)
+  })
+})
+
+/*
+ * CONTRAT EN TETE DE turn-journal.ts : « un evenement TERMINAL, un par tour ». Mesure du
+ * 2026-09-12 : le refus de reprise annonce DEFINITIF revenait a chaque demarrage et reecrivait le
+ * MEME `failed` — 92 occurrences dans un seul journal (conv-226, conv-246), 924 lignes « copie
+ * durable absente » au total. Une cloture identique n'apporte rien : elle est refusee, bruyamment
+ * en test pour que la source soit corrigee plutot que masquee.
+ */
+describe('turn-journal — cloture idempotente', () => {
+  it('refuse bruyamment une seconde cloture identique et n’ecrit qu’une ligne', () => {
+    appendTurnEvent(root, 'conv-9', 'turn-9', { kind: 'failed', error: 'copie durable absente' })
+    expect(() =>
+      appendTurnEvent(root, 'conv-9', 'turn-9', { kind: 'failed', error: 'copie durable absente' })
+    ).toThrow(/déjà écrite/)
+    const events = readTurnJournal(root, 'conv-9', 'turn-9')
+    expect(events.filter((e) => e.kind === 'failed')).toHaveLength(1)
+  })
+
+  it('laisse passer une cloture DIFFERENTE (autre erreur, autre type)', () => {
+    appendTurnEvent(root, 'conv-10', 'turn-10', { kind: 'failed', error: 'premiere cause' })
+    appendTurnEvent(root, 'conv-10', 'turn-10', { kind: 'failed', error: 'autre cause' })
+    appendTurnEvent(root, 'conv-10', 'turn-10', { kind: 'done', result: 'ok' })
+    expect(readTurnJournal(root, 'conv-10', 'turn-10').map((e) => e.kind)).toEqual([
+      'failed',
+      'failed',
+      'done'
+    ])
+  })
+})

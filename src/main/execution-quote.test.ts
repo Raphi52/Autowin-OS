@@ -11,13 +11,15 @@ describe('ExecutionQuote', () => {
       phases: ['frame', 'build'],
       decomposition: { mode: 'disabled', maxNodes: 1 },
       limits: {
-        maxProviderCalls: 40,
-        maxFreshTokens: 750_000,
-        maxTotalTokens: 6_000_000,
-        // frame + build + juge, puis une reparation et son re-jugement autorises par maxRecoveries=1.
-        maxAgents: 5,
-        maxConcurrency: 3,
-        maxRecoveries: 1,
+        // Compteurs de COUPS desactives de fait le 2026-09-12 (demande utilisateur) : ils tuaient
+        // des runs a mi-chemin. Ce qui est verrouille ici, c'est qu'un regime standard reste
+        // provisionne LARGEMENT — pas la valeur exacte, qui n'a plus de sens comme frein.
+        maxProviderCalls: 5_000,
+        maxFreshTokens: 50_000_000,
+        maxTotalTokens: 250_000_000,
+        maxAgents: 500,
+        maxConcurrency: 4,
+        maxRecoveries: 10,
         spendEnforcement: 'metering-only'
       }
     })
@@ -30,13 +32,13 @@ describe('ExecutionQuote', () => {
 
     expect(quote.regime).toBe('critical')
     expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean'])
-    expect(quote.decomposition).toEqual({ mode: 'build-only', maxNodes: 5 })
+    expect(quote.decomposition).toEqual({ mode: 'build-only', maxNodes: 20 })
     expect(quote.limits).toMatchObject({
-      maxProviderCalls: 80,
-      maxFreshTokens: 2_000_000,
-      maxTotalTokens: 15_000_000,
-      maxConcurrency: 4,
-      maxRecoveries: 1,
+      maxProviderCalls: 20_000,
+      maxFreshTokens: 200_000_000,
+      maxTotalTokens: 1_000_000_000,
+      maxConcurrency: 8,
+      maxRecoveries: 20,
       spendEnforcement: 'metering-only'
     })
   })
@@ -59,7 +61,13 @@ describe('ExecutionQuote', () => {
     expect({ ...a, id: '', createdAt: '' }).toEqual({ ...b, id: '', createdAt: '' })
   })
 
-  it('réserve la clôture et la récupération avant de réduire un fan-out standard', () => {
+  /*
+   * DEPUIS LE 2026-09-12, un fan-out demandé n'est plus RABOTÉ pour tenir dans un compteur.
+   * Avant, `frame: 3` repartait servi à 1 : la topologie était silencieusement réduite, et le run
+   * travaillait à un tiers de ce qui avait été décidé. Ce que ce test verrouille désormais, c'est
+   * que la demande est SERVIE EN ENTIER — la clôture et la réparation restant provisionnées.
+   */
+  it('sert le fan-out demandé EN ENTIER, clôture et réparation comprises', () => {
     const quote = compileExecutionQuote('ajoute une page de réglages')
 
     const allocation = allocateExecutionTopology(quote, {
@@ -74,11 +82,11 @@ describe('ExecutionQuote', () => {
     })
 
     expect(allocation).toMatchObject({
-      phaseMembers: { frame: 1 },
-      judgeMembers: 1,
+      phaseMembers: { frame: 3 },
+      judgeMembers: 3,
       maxGreedyNodes: 1,
-      reservedMandatoryAgents: 5,
-      plannedMaxAgents: 5
+      reservedMandatoryAgents: 23,
+      plannedMaxAgents: 48
     })
   })
 
@@ -97,11 +105,11 @@ describe('ExecutionQuote', () => {
     })
 
     expect(allocation).toMatchObject({
-      phaseMembers: { scout: 1, frame: 1, terrain: 1 },
-      judgeMembers: 1,
-      maxGreedyNodes: 2,
-      reservedMandatoryAgents: 8,
-      plannedMaxAgents: 10
+      phaseMembers: { scout: 4, frame: 4, terrain: 4 },
+      judgeMembers: 4,
+      maxGreedyNodes: 20,
+      reservedMandatoryAgents: 46,
+      plannedMaxAgents: 141
     })
   })
 

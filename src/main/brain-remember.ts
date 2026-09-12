@@ -24,6 +24,7 @@ import { SECRET_SHAPES_SOURCE } from './activity/trace-redact'
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
 import { amitelBrainOrigin } from './amitel-paths'
 import { memoryWorkspaceIdentity } from './session-memory-echo'
@@ -215,6 +216,75 @@ const LOCATOR_RULES: Array<{
       'file:<chemin ABSOLU existant côté serveur> — pour un fichier de dépôt, préférer git:<chemin>@<sha>'
   }
 ]
+
+/**
+ * UNE RÉVISION SYMBOLIQUE N'EST PAS UNE SOURCE ABSENTE — elle se RÉSOUT.
+ *
+ * Mesuré le 2026-09-11 (traces causales, 150 appels `remember`) : 19 refus « locator non vérifiable »
+ * sur 35 échecs, et 18 d'entre eux portaient un `git:` PARFAITEMENT désigné dont seule la révision
+ * manquait ou était symbolique — `@HEAD` (13 fois), `@working`, `@working-tree`, ou aucun `@` du tout.
+ * Le fait était bon, le fichier existait, et rien n'a été retenu.
+ *
+ * Le sha du dépôt est une source TRACÉE que l'app tient déjà (même raisonnement que
+ * `projectScopeFromWorkspace` pour la portée) : on le COPIE au lieu de demander au modèle de le deviner.
+ * On ne répare QUE la révision : un chemin absent reste un refus, car deviner le fichier serait inventer.
+ */
+const REVISIONS_SYMBOLIQUES = new Set([
+  'head',
+  'working',
+  'working-tree',
+  'worktree',
+  'workdir',
+  'current',
+  'local',
+  'dirty',
+  'main',
+  'master'
+])
+
+/** Sha réel du dépôt, ou chaîne vide si le dossier n'est pas un dépôt git lisible. */
+export function headShaOfWorkspace(workspace?: string): string {
+  const root = workspace?.trim()
+  if (!root) return ''
+  try {
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim()
+    return /^[0-9a-fA-F]{7,64}$/.test(sha) ? sha : ''
+  } catch {
+    // Pas un dépôt, git absent, dossier disparu : on ne répare pas, le refus d'origine tient.
+    return ''
+  }
+}
+
+/**
+ * Complète un `git:<chemin>` dont la révision manque ou est symbolique, avec le sha du workspace.
+ * Rend la source INCHANGÉE dans tous les autres cas — y compris quand aucun sha n'est disponible.
+ */
+export function repairSourceLocator(
+  source: string,
+  workspace?: string,
+  resolveHead: (workspace?: string) => string = headShaOfWorkspace
+): string {
+  const given = source.trim()
+  if (!/^git:/i.test(given)) return source
+  if (!sourceLocatorProblem(given)) return source
+  const locator = given.slice(given.indexOf(':') + 1).trim()
+  if (!locator) return source
+  const at = locator.lastIndexOf('@')
+  const path = at > 0 ? locator.slice(0, at) : locator
+  const revision = at > 0 ? locator.slice(at + 1).trim() : ''
+  // Une révision déjà concrète mais MAL formée (sha tronqué à 4 signes) n'est pas symbolique : la
+  // remplacer masquerait une source fausse. On ne complète que l'absence et le symbolique.
+  if (revision && !REVISIONS_SYMBOLIQUES.has(revision.toLowerCase())) return source
+  if (!path.trim()) return source
+  const sha = resolveHead(workspace)
+  if (!sha) return source
+  const repaired = `git:${path.trim()}@${sha}`
+  return sourceLocatorProblem(repaired) ? source : repaired
+}
 
 /** Décrit le problème du locator, ou `undefined` s'il est conforme. */
 export function sourceLocatorProblem(source: string): string | undefined {
@@ -592,8 +662,13 @@ export async function rememberFact(
 ): Promise<RememberOutcome & { allowed: boolean; reason?: string }> {
   // La portée absente est REMPLIE depuis le projet, pas refusée : voir `projectScopeFromWorkspace`.
   const scopeGiven = typeof args.scope === 'string' && args.scope.trim().length > 0
+  const scoped = scopeGiven ? args : { ...args, scope: projectScopeFromWorkspace(deps.workspace) }
+  // Même principe pour la RÉVISION d'un `git:` : résolue depuis le dépôt, pas refusée — voir
+  // `repairSourceLocator`. Le chemin, lui, reste au modèle : il désigne le fait.
+  const givenSource = typeof scoped.source === 'string' ? scoped.source : ''
+  const repairedSource = repairSourceLocator(givenSource, deps.workspace)
   const decision = decideRemember(
-    scopeGiven ? args : { ...args, scope: projectScopeFromWorkspace(deps.workspace) }
+    repairedSource === givenSource ? scoped : { ...scoped, source: repairedSource }
   )
   if (!decision.allowed) {
     /*

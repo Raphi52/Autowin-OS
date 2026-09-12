@@ -304,7 +304,10 @@ describe('un graphe pilote le run', () => {
       makeOrchestrator(
         new Recorder(),
         { graph: boucle },
-        compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
+        compileExecutionQuote('corrige le bug', {
+          spendEnforcement: 'blocking',
+          maxProviderCalls: 2
+        })
       ).run('corrige le bug')
     ).rejects.toThrow("Plan d’exécution impossible")
     const mesure = compileExecutionQuote('corrige le bug')
@@ -380,8 +383,10 @@ describe('un graphe pilote le run', () => {
       ).run('corrige le sommaire du README')
     ).resolves.toBeDefined()
 
-    // Le panel de 3 doit AGRANDIR le devis : sinon le fan-out se refuse lui-meme.
-    expect(quote.limits.maxAgents).toBeGreaterThan(avant)
+    // Le panel de 3 doit TENIR dans le devis : sinon le fan-out se refuse lui-meme. Depuis le
+    // 2026-09-12 le prereglage est deja large, donc le devis n'a plus besoin de s'agrandir — ce
+    // qui compte est qu'il ne RETRECISSE jamais sous le besoin du panel.
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(avant)
     expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(3)
   })
 

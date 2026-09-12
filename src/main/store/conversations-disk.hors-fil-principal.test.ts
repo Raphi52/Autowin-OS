@@ -139,16 +139,18 @@ describe('journal des conversations — écriture hors du fil principal', () => 
 
   it("préserve l'ORDRE du journal quand un vidage forcé tombe pendant une écriture en vol", async () => {
     retardMs = 60
-    const { p, store, id, flush } = storeEnTour('ordre.json')
+    const { p, store, id } = storeEnTour('ordre.json')
 
     // Un lot de deltas part en vol…
     store.applyTurnEvent(id, 't', { kind: 'delta', streamId: '0:0', text: 'un-' })
     await new Promise((resolve) => setTimeout(resolve, 130))
-    // …et un vidage forcé (chemin before-quit) tombe pendant que le disque n'a pas encore rendu.
+    // …et des vidages FORCÉS de session (mutations `immediate`, ici la clôture d'un tour) tombent
+    // pendant que le disque n'a pas encore rendu. Depuis le 2026-09-12, le vidage de FERMETURE est
+    // un chemin distinct (il pose un snapshot complet) : celui qu'on teste ici est bien celui de
+    // la session, le seul qui doit respecter l'ordre du journal.
     store.applyTurnEvent(id, 't', { kind: 'delta', streamId: '0:0', text: 'deux-' })
-    flush()
     store.applyTurnEvent(id, 't', { kind: 'delta', streamId: '0:0', text: 'trois' })
-    flush()
+    store.applyTurnEvent(id, 't', { kind: 'done' })
 
     retardMs = 0
     await attendreEcrituresConversations()

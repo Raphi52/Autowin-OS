@@ -32,11 +32,23 @@ describe('plafond d’appels — une séquence agentique réaliste tient dans le
     expect(quote.limits.maxProviderCalls).toBeGreaterThanOrEqual(8)
   })
 
-  it('les freins de DÉPENSE ne sont pas touchés — seul le compteur de coups est relâché', () => {
+  /*
+   * 2026-09-12 — DECISION UTILISATEUR : les plafonds PAR DEFAUT ne coupent plus rien, tokens
+   * compris. Un compteur de tokens tue un run aussi surement qu'un compteur d'appels, et de la
+   * meme facon : a mi-chemin, apres avoir paye. Ce test ne garde donc plus des VALEURS, il garde
+   * ce qui reste vrai — les prereglages sont hors d'atteinte d'un run reel, et le SEUL frein qui
+   * coupe encore est celui que l'utilisateur pose lui-meme.
+   */
+  it('les préréglages sont hors d’atteinte — seul un cap posé À LA MAIN freine encore', () => {
     const quote = compileExecutionQuote('corrige le bug du panneau')
 
-    expect(quote.limits.maxFreshTokens).toBe(750_000)
-    expect(quote.limits.maxTotalTokens).toBe(6_000_000)
+    expect(quote.limits.maxFreshTokens).toBeGreaterThanOrEqual(50_000_000)
+    expect(quote.limits.maxTotalTokens).toBeGreaterThanOrEqual(250_000_000)
+    // Aucun plafond de dépense par défaut : c'est l'utilisateur qui décide d'en poser un.
+    expect(quote.limits.maxUsd).toBeNull()
+
+    const borne = compileExecutionQuote('corrige le bug du panneau', { maxUsd: 5 })
+    expect(borne.limits.maxUsd).toBe(5)
   })
 
   it('un cap explicite RESSERRE toujours : relever le préréglage n’ouvre aucune porte', () => {

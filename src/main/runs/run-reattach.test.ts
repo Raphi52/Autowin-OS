@@ -2489,14 +2489,14 @@ describe('réconciliation persistée avant relance', () => {
     const reconciled = preparePersistedRunForRelaunch(root, 'run-supervisor-retry', () => undefined)
     // Reservation d'un appel ORPHELIN : une PART du budget, `cap / appels restants`. Elle suit donc
     // le prereglage du regime, et ces litteraux en sont l'arithmetique exacte :
-    //   6 000 000 / 40 = 150 000  ·  750 000 / 40 = 18 750   (`maxProviderCalls` standard, 40).
-    // Ils valaient 500 000 / 62 500 quand ce prereglage etait a 12, releve le 2026-08-25 apres deux
-    // tours tues sur un compteur d'ETAPES. Les budgets EUX-MEMES (6 M / 750 k) n'ont pas bouge : la
-    // part est plus petite parce qu'il y a plus de parts, pas parce que la garde s'est relachee.
+    //   250 000 000 / 5 000 = 50 000  ·  50 000 000 / 5 000 = 10 000  (`maxProviderCalls`, 5 000).
+    // Ils valaient 150 000 / 18 750 avant le 2026-09-12, date a laquelle les prereglages ont ete
+    // portes hors d'atteinte sur demande de l'utilisateur : un plafond par defaut ne doit plus
+    // couper un travail en cours. La part est plus petite parce qu'il y a plus de parts.
     // Si un prereglage rebouge, ce test doit redevenir ROUGE — c'est sa raison d'etre.
     expect(reconciled?.usage).toMatchObject({
-      totalTokens: 150_000,
-      freshTokens: 18_750,
+      totalTokens: 50_000,
+      freshTokens: 10_000,
       unpricedCalls: 1,
       unmeteredCalls: 1
     })

@@ -13,6 +13,9 @@ import type { OrchStep, ScopedLiveRun } from './chat-view-model'
 vi.mock('./SourceControlPane', () => ({
   SourceControlPane: () => <div data-testid="source-control-stub" />
 }))
+vi.mock('./ProjectPane', () => ({
+  ProjectPane: () => <div data-testid="project-pane-stub" />
+}))
 // Le stub PUBLIE une sélection, comme le vrai graphe : c'est par là que le panneau est piloté
 // depuis que les onglets ont disparu. Sans ce levier, aucun test ne pourrait descendre dans le
 // détail contextuel.
@@ -115,19 +118,40 @@ describe('WorkflowsPanel', () => {
   }
 
   /**
-   * TROIS ONGLETS, PAS QUATRE, ET LE GRAPHE RESTE LA NAVIGATION DU DETAIL.
+   * CINQ ONGLETS, ET LE GRAPHE RESTE LA NAVIGATION DU DETAIL.
    *
    * Ce test remplace celui qui INTERDISAIT toute barre d'onglets. L'interdiction datait de la
    * substitution des quatre projections par le graphe ; l'utilisateur a redemande une separation
-   * le 2026-09-01, mais SEULEMENT entre les trois objets empiles (graphe, RUN.md, trace). Le
+   * le 2026-09-01 entre les trois objets empiles (graphe, RUN.md, trace), puis le 2026-09-12 deux
+   * objets de code : « Code » (fichiers modifies, diff colore) et « Projet » (arborescence +
+   * editeur). L'ordre et le libelle des onglets sont figes ici : c'est la barre que l'oeil lit. Le
    * drill-down du graphe n'est pas defait : il est verifie par les tests de selection plus bas.
    */
-  it('expose exactement trois onglets — Graph, Runs, Logs — et monte le graphe par defaut', () => {
+  /**
+   * L'ONGLET FILES. Demande de l'utilisateur le 2026-09-12 : un SEUL onglet de code, nomme
+   * « Files », qui porte a la fois l'arborescence editable et les fichiers modifies (diff
+   * colore). L'onglet « Projet » separe est supprime — d'ou l'absence de son libelle ici.
+   */
+  it('ouvre « Files » sur le panneau de code (arborescence en sous-onglet)', () => {
+    render(baseProps())
+    const onglet = (libelle: string): HTMLButtonElement =>
+      Array.from(container.querySelectorAll('button[role="tab"]')).find(
+        (b) => b.textContent?.trim() === libelle
+      ) as HTMLButtonElement
+
+    expect(onglet('Projet')).toBeUndefined()
+
+    act(() => onglet('Files').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelector('[data-testid="source-control-stub"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="graph-stub"]')).toBeNull()
+  })
+
+  it('expose exactement cinq onglets — Graph, Runs, Logs, Files, Trace — et monte le graphe par defaut', () => {
     render(baseProps())
     const onglets = Array.from(container.querySelectorAll('button[role="tab"]')).map((b) =>
       b.textContent?.trim()
     )
-    expect(onglets).toEqual(['Graph', 'Runs', 'Logs'])
+    expect(onglets).toEqual(['Graph', 'Runs', 'Logs', 'Files', 'Trace'])
     expect(container.querySelector('[role="tablist"]')).not.toBeNull()
     // Le graphe est l'onglet d'accueil : le panneau s'ouvre sur l'execution, pas sur une liste.
     expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()

@@ -83,7 +83,7 @@ describe('decisionDeCommande — plus aucune autorisation a retaper', () => {
    * DECISION DU 2026-08-28 : « je ne veux plus qu'Autowin me demande de dire autorise nanani
    * pour me debloquer ». Le refus par defaut a ete leve (`AUTORISATION_GENERALE_PAR_DEFAUT`).
    * Ce qui RESTE verrouille est la propriete 3 — aucun enchainement shell —, testee plus bas :
-   * c'est elle, et non la liste nominale, qui empeche `git status && rm -rf /`.
+   * elle refuse une ligne dont les operateurs seraient inertes, et rien de plus.
    */
   it('un binaire jamais nomme part quand meme, sur un fil VIERGE', () => {
     expect(decisionDeCommande('curl https://exemple.fr', sansRien).autorise).toBe(true)
@@ -124,7 +124,8 @@ describe('decisionDeCommande — plus aucune autorisation a retaper', () => {
     }
   })
 
-  /* La garde reste entiere HORS guillemets : c'est elle qui empeche `git status && rm -rf /`. */
+  /* La garde reste entiere HORS guillemets : une ligne trompeuse est refusee. Ce n'est PAS une
+     protection contre le geste lui-meme — voir le test « la garde n'est pas un garde-fou ». */
   it('refuse toujours un enchaînement réel quand la ligne porte aussi des guillemets', () => {
     expect(decisionDeCommande('git commit -m "ok" && rm -rf /', []).autorise).toBe(false)
   })
@@ -141,5 +142,33 @@ describe('decisionDeCommande — plus aucune autorisation a retaper', () => {
     expect(decisionDeCommande('npm run build', ['autorise toutes les commandes']).autorise).toBe(
       true
     )
+  })
+})
+
+/**
+ * CE QUE LA GARDE ANTI-ENCHAINEMENT NE FAIT PAS — et qu'on lui a prete trois fois dans ce depot.
+ *
+ * Le candidat du scout interne du 2026-09-12 proposait de resserrer la garde pour qu'elle regarde
+ * DANS l'argument d'un shell : « 11 commandes refusees, 99 qui enchainent quand meme via
+ * powershell -Command ». La mesure est exacte, la conclusion ne l'etait pas — et ces assertions
+ * disent pourquoi. L'autorisation generale etant ouverte par defaut depuis le 2026-08-28, un geste
+ * destructeur passe DEJA sans le moindre enchainement. Resserrer aurait refuse 99 commandes
+ * legitimes (qui font exactement ce qu'elles ont l'air de faire) pour zero securite gagnee.
+ */
+describe("la garde d'enchainement n'est pas un garde-fou de securite", () => {
+  it('laisse passer un geste destructeur ECRIT SIMPLEMENT — donc elle ne protege pas de lui', () => {
+    expect(decisionDeCommande('rm -rf /', []).autorise).toBe(true)
+  })
+
+  it("laisse passer le meme geste dans un script powershell — l'argument guillemete est INTERPRETE", () => {
+    expect(
+      decisionDeCommande('powershell -NoProfile -Command "git status; rm -rf /"', []).autorise
+    ).toBe(true)
+  })
+
+  it('refuse en revanche la ligne TROMPEUSE : les operateurs y partiraient en arguments inertes', () => {
+    const refus = decisionDeCommande('git status && rm -rf /', [])
+    expect(refus.autorise).toBe(false)
+    expect(refus.motif).toContain('enchaînement shell refusé')
   })
 })

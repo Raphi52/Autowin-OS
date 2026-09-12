@@ -544,6 +544,10 @@
      lue en CDP sur le rendu vivant le 2026-08-18, c'est le « gris-bleu hors theme » signale. */
   background: #000;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  /* Un menu plus haut que la fenetre defile au lieu d'etre tronque hors ecran. */
+  max-height: calc(100vh - 16px);
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
 }
 .conv-menu-pop button {
   display: flex;
@@ -1497,21 +1501,12 @@
   width: min(470px, 100%);
   overflow: hidden;
   padding: 30px;
-  border: 1px solid rgba(255, 104, 142, 0.72);
+  /* Meme peau que les autres surfaces de l'app : noir + filet blanc discret.
+     La couleur destructive ne vit que sur le bouton et le surtitre. */
+  border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(145deg, rgba(24, 10, 24, 0.94), rgba(7, 10, 21, 0.9));
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-}
-.delete-confirm-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.34;
-  background-image:
-    radial-gradient(circle at 12% 18%, #ff6f9b 0 1px, transparent 1.7px),
-    radial-gradient(circle at 86% 15%, #75d4ff 0 1px, transparent 1.7px),
-    radial-gradient(circle at 76% 78%, #f4c868 0 1px, transparent 1.7px);
+  background: var(--bg-0);
+  box-shadow: 0 24px 80px rgba(var(--ombre-rgb), 0.5);
 }
 .delete-confirm-card > * {
   position: relative;
@@ -1522,7 +1517,7 @@
   height: 44px;
   margin-bottom: 16px;
   place-items: center;
-  border: 1px solid rgba(255, 119, 154, 0.75);
+  border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--chat-suppr-orbite);
   font-size: 20px;
@@ -1573,8 +1568,8 @@
   background: rgba(var(--voile-rgb), 0.06);
 }
 .delete-confirm-danger {
-  /* Fond PEINT volontaire (rouge-rose destructif) : opaque, donc lisible sur tous les thèmes. */
-  border-color: rgba(255, 103, 141, 0.82);
+  /* Fond PEINT volontaire (rouge destructif) : opaque, donc lisible sur tous les thèmes. */
+  border-color: var(--chat-suppr-bouton);
   background: var(--chat-suppr-bouton);
   color: var(--on-accent);
 }
@@ -3985,6 +3980,16 @@ button.chat-project-dot:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* DEUX blocs empiles (2026-09-12) : « Raisonnement » puis « Actions ». Le second est distingue
+   par un filet plus froid, pour qu'on voie d'un coup d'oeil lequel porte la pensee. */
+.thinking-block--actions {
+  margin-top: -4px;
+  border-left-color: rgba(169, 178, 196, 0.35);
+}
+.thinking-block--actions .thinking-body {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+}
 .thinking-block .thinking-body {
   margin: 6px 0 0;
   padding: 0;
@@ -4531,10 +4536,26 @@ button.chat-project-dot:disabled {
    joindre/micro). Ancrée à droite (`right: 0`), la popup partait vers la gauche et sortait
    de l'écran : on n'en voyait plus la moitié. Dans la barre de saisie, elle s'ancre donc à
    GAUCHE du bouton et se borne à la largeur de la fenêtre. */
+/* PEINT AU-DESSUS DE TOUTE L'APP (2026-09-12) : le menu est rendu dans `document.body`, donc
+   plus aucun panneau ne le rogne ni ne le recouvre. Le z-index passe devant le panneau des runs
+   et les surcouches du fil ; il reste SOUS la visionneuse d'image (10000). */
+.model-select-menu.is-flottant {
+  position: fixed;
+  z-index: 9000;
+  right: auto;
+  top: auto;
+  width: min(600px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+}
+
 .composer-meta-actions .model-select-menu {
   right: auto;
   left: 0;
+  /* La matrice fait 600px : dans une fenetre etroite, la colonne de droite sortait de
+     l'ecran (constate le 2026-09-12). On borne sur la largeur reellement visible, et le
+     recadrage JS (useClampDansFenetre) ramene le reste dans le cadre. */
   max-width: calc(100vw - 24px);
+  width: min(600px, calc(100vw - 24px));
 }
 
 /* MODE AUTO DU FIL — bouton de la barre de saisie, distinct du réglage global de la liste.

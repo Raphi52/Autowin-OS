@@ -104,6 +104,9 @@ describe('CostAggregator — persistance (F1)', () => {
     const first = new CostAggregator(undefined, path)
     first.add({ provider: 'codex', inputTokens: 100, outputTokens: 50, costUsd: 0.4 })
     first.add({ provider: 'claude', inputTokens: 200, outputTokens: 80, costUsd: 0.6 })
+    // L'écriture est DIFFÉRÉE depuis le 2026-09-12 (elle figeait l'interface 9,4 s) : on attend
+    // qu'elle ait touché le disque avant de simuler le redémarrage.
+    await first.flushPersist()
     // Nouvelle instance (= redémarrage app) : le coût doit persister.
     const reloaded = new CostAggregator(undefined, path)
     expect(reloaded.totalUsd()).toBeCloseTo(1.0)

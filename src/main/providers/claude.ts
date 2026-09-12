@@ -847,6 +847,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // remplissait d'un coup, apres coup. Avec `--include-partial-messages`, les `thinking_delta`
       // arrivent au fil de l'eau et le bloc s'ecrit EN TEMPS REEL (comme kimi).
       '--include-partial-messages',
+      /*
+       * PENSEE EN CLAIR, sinon le bloc « Raisonnement » reste VIDE (constat utilisateur 2026-09-12).
+       *
+       * Mesure hors-modele du 2026-09-12 sur le CLI 2.1.269, modele opus-5 : sans ce drapeau le flux
+       * porte `content_block_start {type:'thinking', thinking:''}`, UN `thinking_delta` vide puis un
+       * `signature_delta` (l'enveloppe chiffree). Le texte n'est jamais transmis — il n'y avait donc
+       * rien a « recuperer » cote rendu. Avec `--thinking-display summarized` : 14 `thinking_delta`
+       * NON vides sur la meme question. Cause amont : depuis Opus 4.7 l'API met `thinking.display`
+       * a `omitted` par defaut.
+       * Source : https://github.com/anthropics/claude-code/issues/31326
+       */
+      '--thinking-display',
+      'summarized',
       // Retiré UNIQUEMENT pour un nœud skill en héritage : voir `argumentsMcpNoeudSkill`.
       ...argsMcp.strict,
       '--setting-sources',
@@ -1253,15 +1266,34 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         .map((attachment) => base64Fingerprint(attachment.content))
     )
     const collectArtifacts = (content: unknown, tool?: string): void => {
-      artifactCandidates.push(
-        ...claudeContentArtifacts(content, tool).filter(
-          (artifact) =>
-            !artifact.mimeType?.startsWith('image/') ||
-            artifact.encoding !== 'base64' ||
-            artifact.content === undefined ||
-            !inputImageFingerprints.has(base64Fingerprint(artifact.content))
-        )
+      const nouveaux = claudeContentArtifacts(content, tool).filter(
+        (artifact) =>
+          !artifact.mimeType?.startsWith('image/') ||
+          artifact.encoding !== 'base64' ||
+          artifact.content === undefined ||
+          !inputImageFingerprints.has(base64Fingerprint(artifact.content))
       )
+      if (!nouveaux.length) return
+      artifactCandidates.push(...nouveaux)
+      /**
+       * UNE IMAGE SE VOIT LA OU ELLE A ETE LUE, pas apres la conclusion du tour.
+       *
+       * Mesure du 2026-09-10 (conv-426) : les artefacts n'etaient rendus qu'avec le `SendResult`,
+       * donc APRES tout le texte deja diffuse en direct — les captures et les fichiers lus par
+       * `Read` s'empilaient sous le bloc de cloture (« ✅ Fait »), a l'envers de l'ordre reel du
+       * raisonnement. Le canal existait deja (`StreamChunk.artifacts`) mais personne ne l'emettait.
+       * On le pousse donc DES la lecture : l'ordre du fil redevient l'ordre des faits. Les memes
+       * artefacts restent dans le resultat final (identifiant deterministe), le consommateur
+       * dedoublonne dessus.
+       */
+      const streamed = normalizeProviderArtifacts(nouveaux, {
+        provider: this.id,
+        model: resolvedModel,
+        workspaceRoot: execution?.cwd
+      })
+      if (!streamed.length) return
+      queue.push({ delta: '', artifacts: streamed })
+      wake()
     }
     const pendingTools = new Map<
       string,

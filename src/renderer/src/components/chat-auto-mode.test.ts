@@ -37,12 +37,17 @@ describe('recommandationDitRien — la condition d’arrêt demandée', () => {
     expect(recommandationDitRien('rien')).toBe(true)
     expect(recommandationDitRien('Rien.')).toBe(true)
     expect(recommandationDitRien('- rien à signaler')).toBe(true)
+    expect(recommandationDitRien("rien d'autre")).toBe(true)
+    expect(recommandationDitRien("Rien d’autre.")).toBe(true)
   })
   it('n’arrête PAS quand une suite est proposée dans la même phrase', () => {
     // Le défaut « le mode auto se désactive tout seul » : ces trois lignes RECOMMANDENT un tour.
     expect(recommandationDitRien('rien ne bloque, lance le judge')).toBe(false)
     expect(recommandationDitRien('plus rien à vérifier ici, passe au build')).toBe(false)
     expect(recommandationDitRien('Rien à faire de plus sur X — enchaîne sur Y')).toBe(false)
+    // La forme EXACTE qui a relance la chaine pour rien le 2026-09-12 : une fin annoncee, suivie
+    // d'une offre. L'offre en fait une suite — c'est la rubrique qui etait mal ecrite, pas la regle.
+    expect(recommandationDitRien("rien d'autre : tu peux m'envoyer un nom d'instance")).toBe(false)
   })
   it('n’arrête pas sur un mot qui contient les mêmes lettres', () => {
     expect(recommandationDitRien('terrain sur X')).toBe(false)
@@ -116,6 +121,25 @@ describe('fin de chaîne — proposer une cible au lieu d’éteindre (conv-307)
 })
 
 describe('deciderRelanceAuto — arrêts', () => {
+  it('ARRÊTE sur « Aucune suite nécessaire » : c’est le même sens que « rien » (conv-468)', () => {
+    const fil = [
+      agent(
+        '✅ Fait\n- corrigé\n\n⏳ Reste à faire\n- aucune limite connue\n\n👉 Recommandé\nAucune suite nécessaire.\nAUTOWIN_PROMPT_V1: continue'
+      )
+    ]
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({
+      action: 'arreter',
+      raison: 'recommandation-rien'
+    })
+  })
+  it('ne confond pas avec une vraie suite qui contient « aucune »', () => {
+    const fil = [
+      agent(
+        '✅ Fait\n- corrigé\n\n👉 Recommandé\n- aucune régression détectée, lance le judge\nAUTOWIN_PROMPT_V1: lance le judge'
+      )
+    ]
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({ action: 'envoyer' })
+  })
   it('ARRÊTE sur « rien », même si le modèle a quand même écrit un prompt', () => {
     const fil = [agent(`${REPONSE_RIEN}\nAUTOWIN_PROMPT_V1: continue encore`)]
     expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({

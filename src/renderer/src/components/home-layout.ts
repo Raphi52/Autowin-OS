@@ -47,7 +47,7 @@ export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   notifications: 'Remontées des agents',
   conversations: 'Conversations',
   jarvis: 'Jarvis',
-  enregistrements: 'Enregistrements'
+  enregistrements: 'Transcription'
 }
 
 /**

@@ -20,9 +20,20 @@
  *   1. REFUS PAR DÉFAUT. Sans autorisation écrite, rien ne part.
  *   2. PAR BINAIRE. Autoriser `git` n'ouvre pas `curl` : une autorisation donnée pour une tâche ne
  *      devient pas un blanc-seing.
- *   3. AUCUN ENCHAÎNEMENT. `git status && rm -rf /` est refusé. Avec `shell: false` ces opérateurs
- *      ne seraient pas interprétés — ils partiraient comme ARGUMENTS, donc silencieusement inertes.
- *      Un refus explicite vaut mieux qu'une commande qui ne fait pas ce qu'elle a l'air de faire.
+ *   3. AUCUN ENCHAÎNEMENT SILENCIEUSEMENT INERTE. `git status && rm -rf /` est refusé — non parce
+ *      qu'il serait dangereux, mais parce qu'avec `shell: false` ces opérateurs ne sont PAS
+ *      interprétés : ils partiraient comme ARGUMENTS, et la ligne ne ferait pas ce qu'elle a l'air
+ *      de faire. Un refus explicite vaut mieux qu'une commande trompeuse.
+ *
+ *      CE QUE CETTE PROPRIÉTÉ N'EST PAS, et le dire ici évite de s'y fier à tort : ce n'est PAS un
+ *      garde-fou de sécurité. Mesuré le 2026-09-12 — `decisionDeCommande('rm -rf /', [])` rend
+ *      `autorise: true`, parce que l'autorisation générale est ouverte par défaut depuis le
+ *      2026-08-28. Un geste destructeur n'a donc aucun besoin d'un enchaînement pour passer, et
+ *      `powershell -Command "git status; rm -rf /"` passe tout autant : l'argument entre
+ *      guillemets est un SCRIPT, interprété par le shell appelé, donc parfaitement conforme à la
+ *      propriété (il fait exactement ce qu'il a l'air de faire). Ce qui retient réellement un
+ *      geste irréversible est ailleurs — la limite destructive de la constitution et les gardes
+ *      d'écriture —, jamais cette expression régulière.
  */
 
 /** Ce qui sera réellement exécuté : le premier mot, sans son chemin ni son extension. */
@@ -128,8 +139,9 @@ export interface AutorisationsLues {
 /**
  * AUTORISE D'OFFICE — decision utilisateur du 2026-08-28 : « arrete de me demander de t'autoriser
  * git, fais-le ». Redemander un droit deja donne a chaque conversation etait le vrai cout. `git`
- * seul est grave : la liste reste nominale (propriete 2), les enchainements restent refuses
- * (propriete 3), et tout autre binaire garde le refus par defaut (propriete 1).
+ * seul est grave : la liste reste nominale (propriete 2), les enchainements trompeurs restent
+ * refuses (propriete 3), et tout autre binaire garde le refus par defaut (propriete 1) — tant
+ * que l autorisation generale, elle, reste fermee.
  */
 const AUTORISATIONS_PAR_DEFAUT: readonly string[] = ['git']
 
@@ -137,7 +149,9 @@ const AUTORISATIONS_PAR_DEFAUT: readonly string[] = ['git']
  * AUTORISATION GENERALE PAR DEFAUT — decision utilisateur du 2026-08-28 : « je ne veux plus
  * qu Autowin me demande de dire "autorise ..." pour me debloquer ». Le droit d executer un binaire
  * n est plus une phrase a retaper : il est acquis. La propriete 3 (aucun enchainement shell) reste
- * entiere — c est elle qui empeche `git status && rm -rf /`, pas la liste nominale.
+ * entiere, mais il ne faut RIEN lui demander de plus : elle refuse une ligne trompeuse, elle ne
+ * protege d aucun geste destructeur. Avec ce drapeau a `true`, `rm -rf /` seul est autorise
+ * (verifie le 2026-09-12) — la retenue vit dans la limite destructive, pas ici.
  */
 export const AUTORISATION_GENERALE_PAR_DEFAUT = true
 

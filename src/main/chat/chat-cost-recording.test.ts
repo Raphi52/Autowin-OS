@@ -46,13 +46,15 @@ describe('cout des tours de chat — le budget voit enfin la depense du supervis
     expect(source.match(/chatCostRecorder\.record\(/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
   })
 
-  it("le role 'supervisor' apparait dans le journal de cout persiste", () => {
+  it("le role 'supervisor' apparait dans le journal de cout persiste", async () => {
     const path = join(process.env.TEMP ?? '/tmp', `cost-chat-${Date.now()}.jsonl`)
     const cost = new CostAggregator(undefined, path)
     new ChatTurnCostRecorder(cost).record(
       { inputTokens: 10, outputTokens: 5, costUsd: 0.02 },
       { provider: 'claude' }
     )
+    // Écriture DIFFÉRÉE depuis le 2026-09-12 (l'ancienne version figeait l'interface 9,4 s).
+    await cost.flushPersist()
     expect(readFileSync(path, 'utf8')).toContain('"role":"supervisor"')
   })
 })

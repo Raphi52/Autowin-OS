@@ -131,15 +131,28 @@ export interface ChatTurnState {
    * Borné à la FIN (c'est la partie qui conclut) pour ne pas gonfler `conversations.json`.
    */
   reasoning?: string
+  /**
+   * JOURNAL DES ACTIONS du tour — une ligne par signe de vie du fournisseur (`Read · src/a.ts`,
+   * `Bash · npm test`…), dans l'ordre. Conservé avec le tour pour la MÊME raison que `reasoning` :
+   * sans lui, le bloc « Actions » du fil se vidait dès qu'on rechargeait la conversation, alors que
+   * c'est la seule trace lisible de ce que l'agent a fait quand la pensée du modèle arrive chiffrée.
+   */
+  actionsLog?: string[]
 }
 
 /** Plafond du raisonnement conservé par tour — aligné sur ce que le fil affiche en direct. */
 export const REASONING_MAX = 4_000
 
+/** Plafonds du journal d'actions — alignés sur ce que le fil garde en direct (`STATUTS_MAX`). */
+export const ACTIONS_LOG_MAX = 500
+export const ACTIONS_LINE_MAX = 300
+
 export type ChatTurnEvent =
   | { kind: 'delta'; streamId: string; text: string }
   /** Raisonnement du modèle : s'accumule dans le tour, n'entre JAMAIS dans la réponse (`parts`). */
   | { kind: 'reasoning'; text: string }
+  /** Journal des actions du tour, écrit EN UNE FOIS à la clôture (comme `reasoning`). */
+  | { kind: 'actions-log'; lines: string[] }
   | { kind: 'stream-reset'; streamId: string }
   | { kind: 'resumed' }
   | {
@@ -251,6 +264,16 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
     // Le statut est INCHANGÉ : penser n'est ni parler ni terminer. Un tour déjà clos qui reçoit son
     // raisonnement (émis à la clôture) doit rester clos.
     return { ...state, reasoning: `${state.reasoning ?? ''}${event.text}`.slice(-REASONING_MAX) }
+  }
+
+  if (event.kind === 'actions-log') {
+    // Statut INCHANGÉ, comme pour `reasoning` : agir n'est ni parler ni terminer, et ce journal
+    // arrive à la clôture — un tour déjà clos qui le reçoit doit rester clos.
+    const lignes = event.lines
+      .map((ligne) => ligne.trim().slice(0, ACTIONS_LINE_MAX))
+      .filter((ligne) => ligne !== '')
+    if (lignes.length === 0) return state
+    return { ...state, actionsLog: lignes.slice(-ACTIONS_LOG_MAX) }
   }
 
   if (event.kind === 'delta') {

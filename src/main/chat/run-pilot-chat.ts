@@ -274,6 +274,15 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      */
     let streamedReasoning = ''
     /**
+     * JOURNAL DES ACTIONS du tour — mêmes lignes que le bloc « Actions » du fil, accumulées ici pour
+     * être écrites UNE FOIS à la clôture (même patron que `streamedReasoning`). Sans cette copie,
+     * ces lignes ne vivaient que le temps du stream : le bloc se vidait au rechargement de la
+     * conversation, alors qu'elles sont la seule trace lisible du travail quand la pensée du modèle
+     * arrive chiffrée. Une ligne répétée à l'identique n'est pas dupliquée (même règle que le fil
+     * vivant, `chat-view-model.ts`).
+     */
+    const streamedActions: string[] = []
+    /**
      * Memoire du prompt SYSTEME deja journalise pour ce tour : il ne se reecrit que s'il CHANGE
      * (cf. `turn-journal-enrich.ts`), sinon chaque iteration recopierait le meme socle.
      */
@@ -654,13 +663,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
            * fil vivant. Meme patron que la carte de livraison jetee ci-dessus, un cran plus loin — non
            * plus a la frontiere de persistance, mais a celle de l'AFFICHAGE.
            */
-          const livraison = closingTurnDelivery(
-            turnId,
-            pilotEvent.text,
-            durableResponseTextSeen,
-            pilotEvent.outcome,
-            streamedSpoken
-          )
+          const livraison = closingTurnDelivery(turnId, pilotEvent.text, streamedSpoken)
           if (livraison) {
             os.conversations.applyTurnEvent(conversationId, turnId, livraison.durable)
             emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
@@ -687,6 +690,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             os.conversations.applyTurnEvent(conversationId, turnId, {
               kind: 'reasoning',
               text: raisonnement
+            })
+          // ... et le JOURNAL DES ACTIONS avec lui, pour la même raison exactement : une seule
+          // écriture à la clôture, la vue ayant déjà son direct.
+          if (conversationId && streamedActions.length > 0)
+            os.conversations.applyTurnEvent(conversationId, turnId, {
+              kind: 'actions-log',
+              lines: streamedActions
             })
           if (conversationId && raisonnement) {
             try {
@@ -886,6 +896,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           durableResponseTextSeen = true
         }
         if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text
+        if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
+          if (streamedActions.at(-1) !== pilotEvent.text) streamedActions.push(pilotEvent.text)
+        }
         if (pilotEvent.kind === 'think' && pilotEvent.text) {
           spoken.push(pilotEvent.text)
           durableResponseTextSeen = true
@@ -1605,9 +1618,24 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       if (conversationId) {
         activeChatTurns.delete(conversationId, controller)
         broadcast({ type: 'refresh', scope: 'conversations' })
+        /*
+         * ORIENTATIONS NON CONSOMMEES : rendues, jamais jetees.
+         *
+         * Avant, ce bloc les SUPPRIMAIT en qualifiant d'« obsoletes » des phrases que l'utilisateur
+         * venait d'ecrire. Une directive n'est lue qu'aux points d'iteration de la boucle pilote
+         * (`agent-pilot.ts`) : celle qui arrive pendant la redaction de la reponse finale n'en
+         * rencontre aucun. Elle disparaissait alors sans un mot, alors que son texte etait bien
+         * visible dans le fil — d'ou « quand j'oriente ca oublie parfois ».
+         *
+         * On les remonte a l'ecran, qui les remet en file : elles repartent comme un tour normal,
+         * exactement comme le chemin `/skill` annonce deja sa directive tardive au lieu de la taire.
+         */
+        const orphelines = pendingDirectives.get(conversationId) ?? []
         if (pendingDirectives.delete(conversationId)) {
-          // directives non consommées = obsolètes
           broadcast({ type: 'refresh', scope: 'directives' })
+        }
+        if (orphelines.length) {
+          broadcast({ type: 'directives-orphelines', convId: conversationId, textes: orphelines })
         }
       }
       resolveCompletion()

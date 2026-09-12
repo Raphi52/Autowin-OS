@@ -104,8 +104,34 @@ export function retirerLignePromptSuivant(texte: string): string {
  * leur CONTENU avant toute publication. C'est un garde-fou déterministe, pas une consigne de prose :
  * la règle ne dépend pas de ce que le modèle a pensé à écrire.
  */
-const ACTES_DE_PUBLICATION =
-  /\b(commit\w*|push\w*|pousse[rz]?|pull request|\bPR\b|merge\w*|fusionn\w*|publi\w*|livre[rz]?|livraison|d[ée]ploi\w*|d[ée]ploy\w*|release|mets? en ligne|mise en ligne)\b/i
+/*
+ * FRONTIERES UNICODE, PAS `\b`.
+ *
+ * VECU LE 2026-09-11 (conv-467) : un prompt terminant par « les lignes deja PRESENTES » a ete
+ * classe « pull request », donc SUPPRIME — l'utilisateur n'a eu aucun prompt dans son champ.
+ * Cause : en JavaScript `\b` est une frontiere ASCII, et une lettre accentuee n'est PAS un
+ * caractere de mot. Le « pr » de « présentes » se retrouvait encadre de deux frontieres et
+ * satisfaisait `\bPR\b`. Le francais est plein de ce piege : présentes, prépare, prévois.
+ *
+ * Les bords sont donc poses sur les LETTRES au sens Unicode. Et le sigle « PR » sort de
+ * l'alternative insensible a la casse : deux lettres aussi courtes ne se reconnaissent qu'en
+ * MAJUSCULES, sinon n'importe quel « pr » isole redeviendrait une pull request.
+ */
+const BORD_GAUCHE = '(?<![\\p{L}\\p{N}_])'
+const BORD_DROIT = '(?![\\p{L}\\p{N}_])'
+
+const ACTES_DE_PUBLICATION = new RegExp(
+  `${BORD_GAUCHE}(?:commit\\p{L}*|push\\p{L}*|pousse[rz]?|pull request|merge\\p{L}*|fusionn\\p{L}*|publi\\p{L}*|livre[rz]?|livraison|d[ée]ploi\\p{L}*|d[ée]ploy\\p{L}*|release|mets? en ligne|mise en ligne)${BORD_DROIT}`,
+  'iu'
+)
+
+/** Le sigle seul, en MAJUSCULES uniquement : « pr » minuscule est trop court pour etre sur. */
+const SIGLE_PULL_REQUEST = new RegExp(`${BORD_GAUCHE}PR${BORD_DROIT}`, 'u')
+
+/** Un texte parle-t-il de PUBLIER ? Point d'entree unique : les deux motifs se lisent ensemble. */
+function mentionneUnActeDePublication(texte: string): boolean {
+  return ACTES_DE_PUBLICATION.test(texte) || SIGLE_PULL_REQUEST.test(texte)
+}
 
 export const PROMPT_SALVAGE =
   "Lance /salvage : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées) avant qu'on publie quoi que ce soit."
@@ -172,13 +198,13 @@ export function publicationJamaisDemandee(prompt: string, demandeDuTour?: string
   // suite peut-etre legitime. La suppression n'a lieu que sur une demande LUE qui ne publie pas.
   if (!demandeDuTour?.trim()) return false
   if (!estPromptDePublication(prompt, demandeDuTour)) return false
-  return !ACTES_DE_PUBLICATION.test(demandeDuTour)
+  return !mentionneUnActeDePublication(demandeDuTour)
 }
 
 export function estPromptDePublication(prompt: string, demandeDuTour?: string): boolean {
   if (ordreDeTriDejaJoue(demandeDuTour)) return false
   if (ORDRE_DE_TRI.test(prompt)) return false
   const charniere = prompt.search(CHARNIERE_DE_SUITE)
-  if (charniere > 0 && !ACTES_DE_PUBLICATION.test(prompt.slice(0, charniere))) return false
-  return ACTES_DE_PUBLICATION.test(prompt)
+  if (charniere > 0 && !mentionneUnActeDePublication(prompt.slice(0, charniere))) return false
+  return mentionneUnActeDePublication(prompt)
 }

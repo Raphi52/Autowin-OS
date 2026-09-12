@@ -27,14 +27,25 @@ afterEach(() => {
   host = null
 })
 
-describe('bloc Réflexion', () => {
+describe('bloc Raisonnement', () => {
   // 2026-09-01 : le pave de pensee arrive PLIE, meme en cours — seul l'en-tete dit que ca pense.
   it('est PLIÉ mais étiqueté « en cours » tant que le tour stream', () => {
     const el = render({ text: 'je pèse les options', done: false })
     const details = el.querySelector<HTMLDetailsElement>('[data-testid="thinking-block"]')!
     expect(details.open).toBe(false)
-    expect(details.textContent).toContain('Réflexion…')
-    expect(el.querySelector('[data-testid="thinking-body"]')!.textContent).toBe(
+    expect(details.textContent).toContain('Raisonnement…')
+    expect(el.querySelector('[data-testid="thinking-block-body"]')!.textContent).toBe(
+      'je pèse les options'
+    )
+  })
+
+  // 2026-09-12 : « a la meme maniere que Actions le bloc raisonnement meme plie doit afficher la
+  // derniere ligne ecrite en gris ».
+  it('affiche, plié, la DERNIÈRE ligne de la pensée en en-tête', () => {
+    const el = render({ text: 'premier jet\nje pèse les options\n', done: false })
+    const details = el.querySelector<HTMLDetailsElement>('[data-testid="thinking-block"]')!
+    expect(details.open).toBe(false)
+    expect(el.querySelector('[data-testid="thinking-block-status"]')!.textContent).toBe(
       'je pèse les options'
     )
   })
@@ -43,7 +54,7 @@ describe('bloc Réflexion', () => {
     const el = render({ text: 'fini', done: true })
     const details = el.querySelector<HTMLDetailsElement>('[data-testid="thinking-block"]')!
     expect(details.open).toBe(false)
-    expect(details.textContent).toContain('Réflexion terminée')
+    expect(details.textContent).toContain('Raisonnement terminé')
   })
 
   it("laisse l'utilisateur ouvrir le bloc, terminé comme en cours", () => {

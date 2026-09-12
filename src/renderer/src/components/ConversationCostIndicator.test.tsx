@@ -24,6 +24,7 @@ afterEach(() => {
 
 interface Api {
   costBreakdown?: (dimension: string, conversationId?: string) => Promise<unknown>
+  promptCalls?: (conversationId: string) => Promise<unknown>
 }
 
 function setApi(api: Api): { calls: Array<[string, string | undefined]> } {
@@ -32,7 +33,9 @@ function setApi(api: Api): { calls: Array<[string, string | undefined]> } {
     costBreakdown: async (dimension: string, conversationId?: string) => {
       calls.push([dimension, conversationId])
       return api.costBreakdown ? await api.costBreakdown(dimension, conversationId) : []
-    }
+    },
+    promptCalls: async (conversationId: string) =>
+      api.promptCalls ? await api.promptCalls(conversationId) : []
   }
   return { calls }
 }
@@ -220,5 +223,46 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
     expect(total).not.toContain('non exposé')
     expect(ligne).not.toContain('non exposé')
     expect(ligne).not.toContain('inconnu')
+  })
+})
+
+describe('composition du prompt', () => {
+  it('additionne les blocs injectés sous le tableau des coûts', async () => {
+    setApi({
+      costBreakdown: async () => rows,
+      promptCalls: async () => [
+        {
+          system: 'x'.repeat(1000),
+          systemBlocks: [{ name: 'pilotage', chars: 600 }],
+          contextBlocks: [{ name: 'echangeIntraTour', chars: 200 }]
+        },
+        {
+          system: 'x'.repeat(1000),
+          systemBlocks: [{ name: 'pilotage', chars: 600 }]
+        }
+      ]
+    })
+    await render({ conversationId: 'conv-1' })
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="conversation-cost-total"]')?.click()
+    })
+    await flush()
+    const section = container.querySelector('[data-testid="conversation-composition"]')
+    expect(section).not.toBeNull()
+    expect(
+      section?.querySelector('[data-testid="conversation-composition-row-pilotage"]')?.textContent
+    ).toContain('0.6 kcar/appel')
+    // Le reste du system que nul bloc ne déclare est MONTRÉ, pas fondu dans le total.
+    expect(section?.textContent).toContain('non attribué')
+  })
+
+  it("n'affiche aucune section quand aucun appel n'est lisible", async () => {
+    setApi({ costBreakdown: async () => rows, promptCalls: async () => [] })
+    await render({ conversationId: 'conv-1' })
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="conversation-cost-total"]')?.click()
+    })
+    await flush()
+    expect(container.querySelector('[data-testid="conversation-composition"]')).toBeNull()
   })
 })

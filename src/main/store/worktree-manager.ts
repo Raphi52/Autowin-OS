@@ -3,6 +3,7 @@ import { execFile, execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import type { EntreeBalayage } from './balayage-retention'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
+import { copiesVivantes, supprimerHistoriqueCli } from './historique-cli-copie'
 import { verdictDeBureau, type VerdictBureau } from './verdict-bureau'
 import type { Dirent } from 'node:fs'
 import {
@@ -2817,6 +2818,18 @@ export class WorktreeManager {
     }
 
     const cleanup = this.cleanupWorktree(quarantinePath, false)
+    if (cleanup.ok) {
+      /*
+       * L'historique CLI se purge sur le chemin D'ORIGINE, jamais sur celui de la quarantaine.
+       *
+       * La copie est DEPLACEE avant d'etre liberee : le nettoyage ci-dessus ne voit donc que
+       * `.quarantine/<agent>__<uuid>`, un chemin qui n'a jamais servi de repertoire courant au CLI
+       * et auquel aucun dossier d'historique ne correspond. C'est exactement ce que le test de bout
+       * en bout a revele le 2026-09-12 : la purge branchee dans `cleanupWorktree` ne ramassait rien
+       * par cette voie, qui est pourtant la voie NORMALE de `remove()`.
+       */
+      supprimerHistoriqueCli(path, copiesVivantes(path))
+    }
     if (!cleanup.ok) {
       restore()
       return {
@@ -4959,6 +4972,11 @@ exit 0
 
   private cleanupWorktree(path: string, force = true): { ok: boolean; detail?: string } {
     /*
+     * Les copies encore presentes sont relevees AVANT toute suppression : elles servent a proteger
+     * leur propre historique CLI, et apres coup la copie visee aurait deja disparu de la liste.
+     */
+    const voisines = copiesVivantes(path)
+    /*
      * On retire D'ABORD ce que NOUS avons ajouté : le lien vers les dépendances.
      *
      * Mesuré le 2026-08-25 : `git worktree remove --force` rend 0 mais ne touche pas au
@@ -5002,6 +5020,7 @@ exit 0
              reussie pour un dossier vide qu'on n'a pas pu retirer maintenant. */
         }
       }
+      supprimerHistoriqueCli(path, voisines)
       return { ok: true }
     }
     if (!force) {
@@ -5015,7 +5034,10 @@ exit 0
       filesystemDetail = error instanceof Error ? error.message : String(error)
     }
     const prune = this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
-    if (!existsSync(path) && prune.code === 0) return { ok: true }
+    if (!existsSync(path) && prune.code === 0) {
+      supprimerHistoriqueCli(path, voisines)
+      return { ok: true }
+    }
 
     return {
       ok: false,

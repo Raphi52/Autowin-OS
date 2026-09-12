@@ -40,6 +40,42 @@ function ageLabel(candidate: InboxCandidateView): string {
   return `déposé il y a ${candidate.ageDays} jour${candidate.ageDays === 1 ? '' : 's'}`
 }
 
+/**
+ * « Trier avec /curate » : la revue des candidats est une SKILL (`curate`), pas un geste d'écran —
+ * elle vide la file jusqu'à zéro en tranchant chaque fiche. Le bouton ouvre une conversation dédiée
+ * et y ENVOIE la commande tout de suite (`send: true`) : le clic EST la validation, comme « Faire
+ * réparer » de la mise à jour. Même chemin d'envoi existant (`autowin:prefill-conversation`).
+ * Provider résolu depuis les RÔLES, jamais un défaut inventé ; sans provider on n'ouvre rien.
+ */
+async function promptCurate(pending: number): Promise<void> {
+  const roleMap = await window.api.roles?.()
+  const provider =
+    roleMap?.orchestrator?.provider ??
+    roleMap?.subagent?.provider ??
+    (roleMap ? Object.values(roleMap)[0]?.provider : undefined)
+  if (!provider) return
+  const conversation = await window.api.conversationsCreate?.({
+    title: 'Trier les candidats du savoir',
+    category: provider,
+    provider
+  })
+  if (!conversation?.id) return
+  try {
+    await window.api.appCommand?.('navigate', { tab: 'chat' })
+  } catch {
+    /* navigation refusée : le prompt reste préparé dans la conversation */
+  }
+  const prompt =
+    pending > 0
+      ? `/curate — vide la file d'attente du savoir (${pending} candidat${pending === 1 ? '' : 's'} en attente).`
+      : `/curate — passe la file d'attente du savoir en revue.`
+  window.dispatchEvent(
+    new CustomEvent('autowin:prefill-conversation', {
+      detail: { conversationId: conversation.id, prompt, send: true }
+    })
+  )
+}
+
 export function KnowledgeInboxPanel({
   brainPath,
   onIndexChangeStarted,
@@ -227,6 +263,13 @@ export function KnowledgeInboxPanel({
         <strong>
           {candidates.length} candidat{candidates.length === 1 ? '' : 's'}
         </strong>
+        <button
+          type="button"
+          onClick={() => void promptCurate(candidates.length)}
+          title="Ouvre une conversation et lance la skill curate sur la file d’attente"
+        >
+          Trier avec /curate
+        </button>
         <button onClick={reload} disabled={!brainPath || loading}>
           {loading ? 'lecture…' : 'Actualiser'}
         </button>

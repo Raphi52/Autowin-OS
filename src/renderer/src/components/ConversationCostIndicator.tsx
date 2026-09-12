@@ -9,6 +9,7 @@ import {
   timeSharePercent,
   type CostRow
 } from './conversation-cost'
+import { aggregatePromptComposition, type CompositionCallInput } from './prompt-composition'
 import './ConversationCostIndicator.css'
 
 /**
@@ -56,6 +57,12 @@ export function ConversationCostIndicator({
    * explicite qui échoue sans rien afficher faisait croire à un total à jour alors qu'il est périmé.
    */
   const [manualError, setManualError] = useState(false)
+  /**
+   * COMPOSITION DU PROMPT — la taille de chaque bloc injecté est déjà écrite à chaque appel, mais
+   * rien ne l'additionnait : c'est le seul levier mesurable sur la facture. Lu à part du coût
+   * (autre journal), et un échec reste silencieux : la section disparaît, le coût reste affiché.
+   */
+  const [promptCalls, setPromptCalls] = useState<CompositionCallInput[]>([])
 
   const refresh = useCallback(
     async (manual = false) => {
@@ -67,6 +74,12 @@ export function ConversationCostIndicator({
           CostRow[] | undefined
         setRows(Array.isArray(result) ? result : [])
         setManualError(false)
+        try {
+          const calls = await window.api?.promptCalls?.(conversationId)
+          setPromptCalls(Array.isArray(calls) ? (calls as CompositionCallInput[]) : [])
+        } catch {
+          setPromptCalls([])
+        }
       } catch {
         // Un journal illisible ne doit pas casser le composeur : on garde le dernier total connu.
         if (manual) setManualError(true)
@@ -92,6 +105,7 @@ export function ConversationCostIndicator({
   // qu'un journal vide.
   if (summary.calls <= 0) return null
   const detail = spendingRows(rows)
+  const composition = aggregatePromptComposition(promptCalls)
   const totalDuration = formatDuration(summary.durationMs)
 
   return (
@@ -159,6 +173,42 @@ export function ConversationCostIndicator({
               </li>
             ))}
           </ul>
+          {composition.rows.length > 0 && (
+            <div className="conv-cost-composition" data-testid="conversation-composition">
+              <div className="conv-cost-head">
+                <span>
+                  Composition du prompt · {callsLabel(composition.calls)} ·{' '}
+                  {Math.round(composition.totalChars / 1000)} kcar injectés
+                </span>
+              </div>
+              <ul className="conv-cost-rows">
+                {composition.rows.map((row) => (
+                  <li
+                    key={`${row.channel}:${row.name}`}
+                    data-testid={`conversation-composition-row-${row.name}`}
+                  >
+                    <span className="conv-cost-key">
+                      {row.name}
+                      {row.channel === 'context' ? ' (contexte)' : ''}
+                    </span>
+                    <span className="conv-cost-bar" aria-hidden="true">
+                      <span style={{ width: `${row.share}%` }} />
+                    </span>
+                    <span className="conv-cost-amount">
+                      {row.kcharsPerCall} kcar/appel · {row.share} %
+                    </span>
+                    <span className="conv-cost-time">{callsLabel(row.calls)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="conv-cost-note">
+                Taille RÉELLE de chaque bloc injecté, additionnée sur les appels. « non attribué » =
+                des caractères partis dans le prompt système qu’aucun bloc ne déclare. Pas de prix
+                ici : le coût d’un bloc dépend du cache, il ne se déduit pas d’un nombre de
+                caractères.
+              </p>
+            </div>
+          )}
           <p className="conv-cost-note">
             Mesuré sur les journaux d’appels de cette conversation, sous-agents inclus. « — » =
             durée non enregistrée par la source, pas une opération instantanée.

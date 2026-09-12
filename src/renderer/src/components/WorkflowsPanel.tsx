@@ -4,14 +4,20 @@ import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat
 import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
 import { StepThread } from './ChatView.parts'
 import { RunInspector } from './RunInspector'
+import { TraceRetrospectivePane } from './TraceRetrospectivePane'
 
-/** Les trois objets du panneau, chacun sur son onglet : le graphe, les RUN.md, la trace. */
-export type PanelTab = 'graph' | 'runs' | 'logs'
+/**
+ * Les objets du panneau, chacun sur son onglet : le graphe, les RUN.md, la trace, les fichiers
+ * modifies ET l'arborescence editable, reunis sur un seul onglet (« Files »).
+ */
+export type PanelTab = 'graph' | 'runs' | 'logs' | 'code' | 'trace'
 
 const PANEL_TABS: ReadonlyArray<readonly [PanelTab, string]> = [
   ['graph', 'Graph'],
   ['runs', 'Runs'],
-  ['logs', 'Logs']
+  ['logs', 'Logs'],
+  ['code', 'Files'],
+  ['trace', 'Trace']
 ]
 
 /** Onglets du détail d'un RUN. `trace` = fil des sous-agents, `runmd` = fichier produit. */
@@ -284,6 +290,16 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           </div>
           </>
         )}
+        {/* ONGLET FILES : arborescence editable du projet + fichiers modifies (diff colore). */}
+        {panelTab === 'code' && (
+          <div
+            className="col grow workflow-panel-detail"
+            data-workflow-detail="source-control"
+            style={{ gap: 'var(--s2)', minHeight: 0 }}
+          >
+            <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
+          </div>
+        )}
         {panelTab === 'runs' && (
           <div
             className="scroll-y col grow workflow-panel-detail"
@@ -530,6 +546,13 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               )
             })}
         </div>
+        )}
+        {/* ONGLET TRACE : le raisonnement et les actions DEJA enregistres sur le disque, rendus
+            consultables — le bloc « Actions » du fil n'en garde qu'un resume. */}
+        {panelTab === 'trace' && (
+          <div className="col grow" style={{ minHeight: 0 }} data-workflow-detail="trace">
+            <TraceRetrospectivePane conversationId={activeId ?? undefined} />
+          </div>
         )}
         {panelTab === 'logs' && (
           <div className="col grow" style={{ minHeight: 0 }}>

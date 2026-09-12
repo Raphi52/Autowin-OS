@@ -50,6 +50,15 @@ const DESCRIPTEURS_MAX = 32
 const CACHE_RELECTURE_MAX = 32
 
 /**
+ * Fenêtre de QUEUE lue pour retrouver le dernier numéro d'événement (voir `warmSequenceCursor`).
+ *
+ * 64 Ko : trois ordres de grandeur au-dessus d'une ligne d'événement typique (quelques centaines
+ * d'octets), donc la fenêtre contient toujours plusieurs lignes complètes, et quatre ordres de
+ * grandeur sous les 18 Mo qu'on lisait avant.
+ */
+const TAILLE_FENETRE_QUEUE = 64 * 1024
+
+/**
  * Gele un evenement rendu par la relecture en cache.
  *
  * `[...events]` copie la LISTE, pas les evenements : sans ce gel, un appelant qui touche un champ
@@ -435,17 +444,65 @@ export class TraceStore {
     return this.scannedSequenceBytes
   }
 
+  /**
+   * QUEUE DE FICHIER LUE, PAS LE FICHIER ENTIER.
+   *
+   * Le défaut, mesuré le 2026-09-12 : cette fonction faisait `readFileSync` sur la trace COMPLÈTE
+   * au tout premier événement d'une conversation — 18 Mo pour conv-439, et 3,2 s pour 83 lectures
+   * à l'ouverture d'une trace, sur le fil qui dessine l'interface. Or elle ne cherche qu'UNE
+   * chose : le plus grand numéro d'événement déjà écrit.
+   *
+   * Pourquoi la queue SUFFIT : `append` refuse tout événement dont le numéro n'est pas strictement
+   * supérieur au précédent (« sequence non monotone »). Le plus grand numéro est donc sur la
+   * DERNIÈRE ligne complète du fichier — inutile de relire le début.
+   *
+   * Et si la fenêtre ne contient aucune ligne complète (un seul événement plus gros qu'elle), on
+   * l'ÉLARGIT jusqu'à en trouver une, au pire jusqu'au fichier entier : on préfère relire beaucoup
+   * une fois plutôt que rendre un numéro faux — un numéro faux casserait la trace.
+   */
   private warmSequenceCursor(conversationId: string, path: string, mtimeMs: number): number {
-    const content = readFileSync(path)
-    this.scannedSequenceBytes += content.length
-    const completeBytes = content.lastIndexOf(0x0a) + 1
-    const lastSequence = this.scanSequenceLines(
-      conversationId,
-      content.subarray(0, completeBytes),
-      -1
-    )
+    const taille = statSync(path).size
+    let fenetre = TAILLE_FENETRE_QUEUE
+    let debut = 0
+    let tampon = Buffer.alloc(0)
+    let dernierSaut = -1
+
+    let completes = Buffer.alloc(0)
+    const descriptor = openSync(path, 'r')
+    try {
+      for (;;) {
+        debut = Math.max(0, taille - fenetre)
+        const longueur = taille - debut
+        const lu = Buffer.allocUnsafe(longueur)
+        let lus = 0
+        while (lus < longueur) {
+          const read = readSync(descriptor, lu, lus, longueur - lus, debut + lus)
+          if (read === 0) break
+          lus += read
+        }
+        this.scannedSequenceBytes += lus
+        tampon = lu.subarray(0, lus)
+        dernierSaut = tampon.lastIndexOf(0x0a)
+        // Une fenêtre qui ne commence pas au début du fichier coupe une ligne en deux : on repart
+        // après le premier saut de ligne, sinon on lirait un demi-JSON.
+        const premiereLigne = debut === 0 ? 0 : tampon.indexOf(0x0a) + 1
+        completes =
+          dernierSaut >= premiereLigne && premiereLigne >= 0
+            ? tampon.subarray(premiereLigne, dernierSaut + 1)
+            : Buffer.alloc(0)
+        // AUCUNE ligne complète dans la fenêtre : elle tombe au milieu d'un événement géant. On
+        // élargit — un numéro faux serait bien plus cher qu'une lecture de plus.
+        if (completes.length > 0 || debut === 0) break
+        fenetre *= 8
+      }
+    } finally {
+      closeSync(descriptor)
+    }
+    const lastSequence = this.scanSequenceLines(conversationId, completes, -1)
     this.sequenceCursors.set(conversationId, {
-      offset: completeBytes,
+      // Décalage compté depuis le DÉBUT du fichier : c'est lui qui rend les lectures suivantes
+      // incrémentales, la fenêtre ne change rien à son sens.
+      offset: dernierSaut >= 0 ? debut + dernierSaut + 1 : 0,
       mtimeMs,
       lastSequence
     })

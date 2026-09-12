@@ -111,41 +111,51 @@ interface RegimePreset {
  * un PAR ETAPE — lire, editer, verifier, corriger — donc le compteur mesurait des COUPS, un mauvais
  * proxy de la depense.
  *
- * LES FREINS REELS N'ONT PAS BOUGE : `maxFreshTokens`, `maxTotalTokens` et `maxUsd` bornent toujours
- * exactement ce qu'ils bornaient. Et `stricter` continue de faire gagner tout cap pose a la main :
- * relever un prereglage n'ouvre aucune porte a un budget explicite.
+ * DECISION UTILISATEUR DU 2026-09-12 : ces compteurs de COUPS sont DESACTIVES de fait. Demande
+ * explicite apres un enieme run tue — un fan-out build coupe sur « Budget d'agents atteint (10) »
+ * alors que le travail etait en cours. Un plafond qui interrompt un run A MI-CHEMIN rend la pire
+ * issue possible : paye, et rien de fini. Les valeurs ci-dessous sont si hautes qu'aucun run reel
+ * ne les atteint ; elles restent des NOMBRES (et non `Infinity`) pour que la telemetrie, les
+ * allocations et l'arithmetique de `stricter` continuent de fonctionner sans cas particulier.
+ *
+ * CE QUI FREINE ENCORE LA DEPENSE, et c'est voulu : `maxUsd` (pose a la main, `null` par defaut) et
+ * les compteurs de tokens, eux aussi tres larges. `stricter` fait toujours gagner tout cap pose
+ * explicitement : relever un prereglage n'ouvre aucune porte a un budget que l'utilisateur a fixe.
  */
 const PRESETS: Record<TaskRegime, RegimePreset> = {
   trivial: {
-    maxProviderCalls: 10,
-    maxFreshTokens: 250_000,
-    maxTotalTokens: 2_000_000,
-    maxAgents: 2,
-    maxConcurrency: 1,
-    maxDurationMs: 15 * 60_000,
-    maxRecoveries: 0,
+    maxProviderCalls: 1_000,
+    maxFreshTokens: 20_000_000,
+    maxTotalTokens: 100_000_000,
+    maxAgents: 100,
+    // La CONCURRENCE n'est pas un plafond de budget : c'est le nombre de fronts menes en meme
+    // temps. Elle reste modeste par regime, sinon un fan-out large sature le fournisseur et se
+    // fait refuser — ce serait remplacer un mur par un autre.
+    maxConcurrency: 2,
+    maxDurationMs: 4 * 60 * 60_000,
+    maxRecoveries: 5,
     decomposition: { mode: 'disabled', maxNodes: 1 }
   },
   standard: {
-    maxProviderCalls: 40,
-    maxFreshTokens: 750_000,
-    maxTotalTokens: 6_000_000,
-    maxAgents: 5,
-    maxConcurrency: 3,
-    maxDurationMs: 45 * 60_000,
+    maxProviderCalls: 5_000,
+    maxFreshTokens: 50_000_000,
+    maxTotalTokens: 250_000_000,
+    maxAgents: 500,
+    maxConcurrency: 4,
+    maxDurationMs: 12 * 60 * 60_000,
     // La réparation promise après un juge rouge : la retirer casse « 1 prompt = 1 réussite ».
-    maxRecoveries: 1,
+    maxRecoveries: 10,
     decomposition: { mode: 'disabled', maxNodes: 1 }
   },
   critical: {
-    maxProviderCalls: 80,
-    maxFreshTokens: 2_000_000,
-    maxTotalTokens: 15_000_000,
-    maxAgents: 10,
-    maxConcurrency: 4,
-    maxDurationMs: 120 * 60_000,
-    maxRecoveries: 1,
-    decomposition: { mode: 'build-only', maxNodes: 5 }
+    maxProviderCalls: 20_000,
+    maxFreshTokens: 200_000_000,
+    maxTotalTokens: 1_000_000_000,
+    maxAgents: 2_000,
+    maxConcurrency: 8,
+    maxDurationMs: 24 * 60 * 60_000,
+    maxRecoveries: 20,
+    decomposition: { mode: 'build-only', maxNodes: 20 }
   }
 }
 

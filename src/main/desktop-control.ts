@@ -9,6 +9,26 @@ export type DesktopAction =
       button: 'left' | 'right' | 'middle'
       clicks: 1 | 2
     }
+  /**
+   * GLISSER-DEPOSER — appui, deplacement interpole, relachement, en un seul geste.
+   *
+   * Mesure du 2026-09-11 sur `causal-trace` : « Type d'action desktop inconnu: drag » revient 13
+   * fois. L'agent tente ce geste de lui-meme parce que l'usage le reclame (deplacer une fenetre,
+   * redimensionner, selectionner du texte) ; le refus le renvoyait cliquer a l'aveugle — meme
+   * enchainement deja constate pour `double_click`.
+   *
+   * L'interpolation n'est pas du confort : un appui suivi d'un saut direct a l'arrivee n'est pas vu
+   * comme un glissement par la plupart des fenetres, qui attendent des WM_MOUSEMOVE intermediaires.
+   */
+  | {
+      type: 'drag'
+      x: number
+      y: number
+      toX: number
+      toY: number
+      button: 'left' | 'right' | 'middle'
+      steps: number
+    }
   | { type: 'scroll'; delta: number; x?: number; y?: number }
   | { type: 'type'; text: string }
   | { type: 'key'; keys: string[] }
@@ -109,14 +129,68 @@ function normalizedCoordinate(value: unknown, label: string): number {
   return finiteInteger(value, `${label} normalise`, 0, 1000)
 }
 
+/**
+ * ALIAS de touches — meme principe que `double_click` : le geste existait deja,
+ * seul le NOM le plus naturel manquait. Un agent qui ecrit « Escape », « Return »
+ * ou « ArrowLeft » visait une touche presente dans KEY_CODES.
+ */
+const KEY_ALIASES: Record<string, string> = {
+  ESCAPE: 'ESC',
+  RETURN: 'ENTER',
+  CONTROL: 'CTRL',
+  CMD: 'WIN',
+  COMMAND: 'WIN',
+  META: 'WIN',
+  SUPER: 'WIN',
+  WINDOWS: 'WIN',
+  OPTION: 'ALT',
+  DEL: 'DELETE',
+  BACK: 'BACKSPACE',
+  BKSP: 'BACKSPACE',
+  SPACEBAR: 'SPACE',
+  PGUP: 'PAGEUP',
+  PGDN: 'PAGEDOWN',
+  PAGEDN: 'PAGEDOWN',
+  'PAGE UP': 'PAGEUP',
+  'PAGE DOWN': 'PAGEDOWN',
+  ARROWLEFT: 'LEFT',
+  ARROWRIGHT: 'RIGHT',
+  ARROWUP: 'UP',
+  ARROWDOWN: 'DOWN'
+}
+
+function closestKeys(key: string): string[] {
+  const candidates = Object.keys(KEY_CODES).concat(Object.keys(KEY_ALIASES))
+  const scored = candidates
+    .map((candidate) => {
+      let score = 0
+      if (candidate === key) score = 100
+      else if (candidate.startsWith(key) || key.startsWith(candidate)) score = 50
+      else if (candidate.includes(key) || key.includes(candidate)) score = 30
+      else if (candidate[0] === key[0]) score = 5
+      return { candidate, score }
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.candidate.localeCompare(b.candidate))
+  return scored.slice(0, 5).map((entry) => entry.candidate)
+}
+
 function normalizedKeys(value: unknown): string[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > 8) {
     throw new Error('keys doit contenir entre 1 et 8 touches')
   }
   return value.map((raw) => {
     if (typeof raw !== 'string') throw new Error('Chaque touche doit etre une chaine')
-    const key = raw.trim().toUpperCase()
-    if (!(key in KEY_CODES)) throw new Error(`Touche desktop inconnue: ${raw}`)
+    const typed = raw.trim().toUpperCase()
+    const key = KEY_ALIASES[typed] ?? typed
+    if (!(key in KEY_CODES)) {
+      const proches = closestKeys(typed)
+      throw new Error(
+        proches.length > 0
+          ? `Touche desktop inconnue: ${raw}. Touches les plus proches : ${proches.join(', ')}`
+          : `Touche desktop inconnue: ${raw}`
+      )
+    }
     return key
   })
 }
@@ -147,6 +221,29 @@ export function parseDesktopActions(input: unknown): DesktopAction[] {
        * Refuser un synonyme evident ne protege rien : cela transforme une action realisable en echec,
        * et l'agent part alors cliquer a l'aveugle ailleurs — ce qui a ete observe.
        */
+      case 'drag':
+      case 'dragTo':
+      case 'drag_and_drop': {
+        const button = action.button ?? 'left'
+        if (button !== 'left' && button !== 'right' && button !== 'middle') {
+          throw new Error(`actions[${index}].button est invalide`)
+        }
+        // `to`/`from` en objet, ou `toX`/`toY` a plat : les deux ecritures viennent naturellement.
+        const to = action.to && typeof action.to === 'object' ? record(action.to) : {}
+        const from = action.from && typeof action.from === 'object' ? record(action.from) : {}
+        return {
+          type: 'drag' as const,
+          x: normalizedCoordinate(action.x ?? from.x, `actions[${index}].x`),
+          y: normalizedCoordinate(action.y ?? from.y, `actions[${index}].y`),
+          toX: normalizedCoordinate(action.toX ?? to.x, `actions[${index}].toX`),
+          toY: normalizedCoordinate(action.toY ?? to.y, `actions[${index}].toY`),
+          button,
+          steps: finiteInteger(action.steps ?? 20, `actions[${index}].steps`, 2, 100)
+        }
+      }
+      // `doubleClick` / `doubleclick` : memes refus mesures que `double_click`, meme geste.
+      case 'doubleClick':
+      case 'doubleclick':
       case 'double_click':
       case 'click': {
         const button = action.button ?? 'left'
@@ -154,7 +251,7 @@ export function parseDesktopActions(input: unknown): DesktopAction[] {
           throw new Error(`actions[${index}].button est invalide`)
         }
         const clicks = (
-          type === 'double_click'
+          type !== 'click'
             ? 2
             : finiteInteger(action.clicks ?? 1, `actions[${index}].clicks`, 1, 2)
         ) as 1 | 2
@@ -293,6 +390,12 @@ public static class AutowinDesktopNative {
     uint up = button == "right" ? MOUSEEVENTF_RIGHTUP : button == "middle" ? MOUSEEVENTF_MIDDLEUP : MOUSEEVENTF_LEFTUP;
     for (int i = 0; i < clicks; i++) { Send(Mouse(down)); Send(Mouse(up)); }
   }
+  public static void ButtonDown(string button) {
+    Send(Mouse(button == "right" ? MOUSEEVENTF_RIGHTDOWN : button == "middle" ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_LEFTDOWN));
+  }
+  public static void ButtonUp(string button) {
+    Send(Mouse(button == "right" ? MOUSEEVENTF_RIGHTUP : button == "middle" ? MOUSEEVENTF_MIDDLEUP : MOUSEEVENTF_LEFTUP));
+  }
   public static void Scroll(int delta) { Send(Mouse(MOUSEEVENTF_WHEEL, unchecked((uint)delta))); }
   public static void TypeText(string text) {
     foreach (char ch in text) { Send(Key(0, ch, KEYEVENTF_UNICODE)); Send(Key(0, ch, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP)); }
@@ -308,6 +411,37 @@ function encodePowerShell(script: string): string {
   return Buffer.from(script, 'utf16le').toString('base64')
 }
 
+/**
+ * LA VRAIE ERREUR, PAS LE FLUX DE PROGRESSION.
+ *
+ * powershell.exe serialise son flux de progression sur stderr au format CLIXML
+ * ('#< CLIXML' puis un <Objs>...). Prendre stderr tel quel rendait des kilo-octets de XML a la
+ * place du motif : mesure sur les journaux, 16 des 46 echecs de desktop_act commencaient par
+ * '#< CLIXML'. On retire ces lignes ; s il ne reste rien, le message du processus fait foi, et le
+ * delai depasse est NOMME (execFile tue le process et pose `killed`).
+ */
+export function describePowerShellFailure(
+  error: { message?: string; killed?: boolean },
+  stderr: unknown
+): string {
+  const real = String(stderr ?? '')
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim()
+      if (!trimmed) return false
+      if (trimmed.startsWith('#< CLIXML')) return false
+      if (trimmed.startsWith('<Objs') || trimmed.startsWith('</Objs')) return false
+      return true
+    })
+    .join('\n')
+    .trim()
+  if (error.killed) {
+    const motif = 'Delai de 20 s depasse pour le pilotage Windows'
+    return real ? `${motif} — ${real}` : motif
+  }
+  return real || String(error.message ?? '').trim() || 'Echec PowerShell sans message'
+}
+
 function defaultPowerShellRunner(encodedCommand: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -316,7 +450,7 @@ function defaultPowerShellRunner(encodedCommand: string): Promise<string> {
       { encoding: 'utf8', windowsHide: true, timeout: 20_000, maxBuffer: 12 * 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
-          reject(new Error(String(stderr || error.message).trim()))
+          reject(new Error(describePowerShellFailure(error, stderr)))
           return
         }
         resolve(String(stdout).trim())
@@ -343,7 +477,12 @@ function outputInteger(value: unknown, label: string): number {
 
 function inputScript(actions: DesktopAction[], geometry?: DesktopObservation['data']): string {
   const prepared = actions.map((action) => {
-    if (action.type !== 'move' && action.type !== 'click' && action.type !== 'scroll') {
+    if (
+      action.type !== 'move' &&
+      action.type !== 'click' &&
+      action.type !== 'scroll' &&
+      action.type !== 'drag'
+    ) {
       if (action.type === 'key') {
         return { ...action, codes: action.keys.map((key) => KEY_CODES[key]), keys: undefined }
       }
@@ -361,6 +500,9 @@ function inputScript(actions: DesktopAction[], geometry?: DesktopObservation['da
       ...action,
       x: mapX(action.x!),
       y: mapY(action.y!),
+      // Le point d'arrivee subit EXACTEMENT la meme conversion que le depart : un glissement calcule
+      // dans deux reperes differents finirait ailleurs que la ou l'agent a vise.
+      ...(action.type === 'drag' ? { toX: mapX(action.toX), toY: mapY(action.toY) } : {}),
       desktopLeft: geometry.originX,
       desktopTop: geometry.originY,
       desktopWidth: geometry.sourceWidth,
@@ -390,6 +532,23 @@ foreach ($action in $actions) {
       # c'est le temps que la fenetre visee traite le WM_MOUSEMOVE.
       Start-Sleep -Milliseconds 40
       [AutowinDesktopNative]::Click([string]$action.button, [int]$action.clicks)
+    }
+    'drag' {
+      [AutowinDesktopNative]::Move([int]$action.x, [int]$action.y, [int]$action.desktopLeft, [int]$action.desktopTop, [int]$action.desktopWidth, [int]$action.desktopHeight)
+      Start-Sleep -Milliseconds 40
+      [AutowinDesktopNative]::ButtonDown([string]$action.button)
+      Start-Sleep -Milliseconds 40
+      $steps = [int]$action.steps
+      for ($i = 1; $i -le $steps; $i++) {
+        $px = [int][Math]::Round([int]$action.x + (([int]$action.toX - [int]$action.x) * $i / $steps))
+        $py = [int][Math]::Round([int]$action.y + (([int]$action.toY - [int]$action.y) * $i / $steps))
+        [AutowinDesktopNative]::Move($px, $py, [int]$action.desktopLeft, [int]$action.desktopTop, [int]$action.desktopWidth, [int]$action.desktopHeight)
+        Start-Sleep -Milliseconds 12
+      }
+      # Meme raison que pour le clic : le relachement doit arriver APRES que la fenetre ait digere
+      # le dernier mouvement, sinon le depot est enregistre sur la position precedente.
+      Start-Sleep -Milliseconds 60
+      [AutowinDesktopNative]::ButtonUp([string]$action.button)
     }
     'scroll' {
       if ($null -ne $action.x) { [AutowinDesktopNative]::Move([int]$action.x, [int]$action.y, [int]$action.desktopLeft, [int]$action.desktopTop, [int]$action.desktopWidth, [int]$action.desktopHeight) }

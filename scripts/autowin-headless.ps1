@@ -1,4 +1,4 @@
-param(
+﻿param(
   [ValidateSet('Start', 'Status', 'Stop')][string]$Action = 'Start',
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
   [ValidateRange(1024, 65535)][int]$Port = 9240,
@@ -19,6 +19,48 @@ trap {
   [Console]::Error.WriteLine($_.Exception.Message)
   exit 1
 }
+<#
+  BUREAU WINDOWS ISOLE (HDESK). L'instance de test naissait sur le bureau interactif de
+  l'utilisateur, seulement CACHEE : un show(), une boite de dialogue systeme ou un vol de focus
+  restaient visibles, et il n'y avait aucun bureau a nettoyer. Elle nait desormais dans un objet
+  bureau nomme d'apres l'InstanceId, invisible et non interactif. Modele :
+  D:\RigTestViewer\Rig.Wpf.Kbis.SmokeRunner\RigDesktop.cs.
+
+  Mesure du 2026-09-12 (scripts/hdesk-capture-proof.ps1 + .mjs, preuves dans Audit/hdesk-proof) :
+  - la capture CDP RESTE VALIDE dans ce bureau non affiche, y compris `fromSurface: true`
+    (401 Ko, 256 valeurs distinctes) : aucun script cdp-*.mjs n'a besoin de changer ;
+  - le bureau DISPARAIT tout seul quand plus aucun handle ni process ne l'habite : le nettoyage
+    est donc porte par l'arret des process, pas par un geste separe. Un bureau peut survivre a un
+    process tue brutalement ; le nom, stable et derive de l'InstanceId, est alors REOUVERT par
+    CreateDesktop au lieu d'echouer — verifie en reutilisation reelle.
+#>
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class AutowinHdesk {
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  public struct STARTUPINFO {
+    public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+    public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute;
+    public uint dwFlags; public short wShowWindow; public short cbReserved2;
+    public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+  }
+  [StructLayout(LayoutKind.Sequential)]
+  public struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+  [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+  public static extern IntPtr CreateDesktop(string name, IntPtr dev, IntPtr devmode, uint flags, uint access, IntPtr sa);
+  [DllImport("user32.dll", SetLastError = true)] public static extern bool CloseDesktop(IntPtr h);
+  [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+  public static extern bool CreateProcess(string app, StringBuilder cmd, IntPtr pa, IntPtr ta,
+    bool inherit, uint flags, IntPtr env, string cwd, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+  [DllImport("kernel32.dll", SetLastError = true)] public static extern bool CloseHandle(IntPtr h);
+  public const uint GENERIC_ALL = 0x10000000;
+  public const uint STARTF_USESHOWWINDOW = 0x00000001;
+  public const short SW_SHOW = 5;
+}
+'@
+
 # $PSScriptRoot n'est PAS encore lie quand PowerShell evalue les valeurs par defaut d'un bloc param
 # contenant un parametre Mandatory : la racine se resout donc APRES le bloc, jamais dedans.
 $racineDepot = Split-Path -Parent $PSScriptRoot
@@ -28,6 +70,7 @@ $instanceRoot = Join-Path $InstancesRoot $InstanceId
 $userData = Join-Path $instanceRoot 'user-data'
 $appData = Join-Path $instanceRoot 'appdata'
 $stateFile = Join-Path $instanceRoot 'instance.json'
+$nomBureau = "AutowinTest_$InstanceId"
 
 function Read-ExecutableIdentity {
   if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) {
@@ -72,9 +115,18 @@ function Read-InstanceState {
 
 if ($Action -eq 'Stop') {
   $owned = Read-OwnedProcess
-  if ($null -ne $owned) { Stop-Process -Id $owned.ProcessId -Force }
+  if ($null -ne $owned) {
+    # ARRETER LE PARENT NE SUFFIT PAS. Mesure du 2026-09-12 : apres Stop-Process sur le seul PID
+    # principal, les 5 process ENFANTS d'Electron (GPU, renderers, utilitaires) restaient vivants
+    # et continuaient d'habiter le bureau isole. On arrete donc les enfants DIRECTS de ce PID —
+    # eux seuls, jamais un binaire entier par son nom, qui emporterait l'app de l'utilisateur.
+    Get-CimInstance Win32_Process -Filter "ParentProcessId = $($owned.ProcessId)" -ErrorAction SilentlyContinue |
+      Where-Object { $_.ExecutablePath -eq $identity.executable } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Stop-Process -Id $owned.ProcessId -Force
+  }
   if (Test-Path -LiteralPath $stateFile) { Remove-Item -LiteralPath $stateFile -Force }
-  [pscustomobject]@{ instanceId = $InstanceId; status = 'stopped'; port = $Port; executable = $identity.executable; executableSha256 = $identity.executableSha256; executableVersion = $identity.executableVersion } | ConvertTo-Json -Compress
+  [pscustomobject]@{ instanceId = $InstanceId; status = 'stopped'; desktop = $nomBureau; port = $Port; executable = $identity.executable; executableSha256 = $identity.executableSha256; executableVersion = $identity.executableVersion } | ConvertTo-Json -Compress
   exit 0
 }
 
@@ -87,7 +139,7 @@ if ($Action -eq 'Status') {
   $executableMissing = $null -ne $state -and -not (Test-Path -LiteralPath $identity.executable -PathType Leaf)
   $executableDrift = if ($executableMissing) { $true } elseif ($launchSha256 -and $identity.executableSha256) { $launchSha256 -ne $identity.executableSha256 } else { $null }
   $executableDriftReason = if ($executableMissing) { 'missing' } elseif ($executableDrift) { 'sha256-mismatch' } else { $null }
-  [pscustomobject]@{ instanceId = $InstanceId; running = $null -ne $owned; cdpReady = $null -ne $pages; pid = if ($owned) { $owned.ProcessId } else { $null }; port = $Port; executable = if ($state) { $state.executable } else { $identity.executable }; executableSha256 = $launchSha256; executableVersion = $launchVersion; executableOnDiskSha256 = $identity.executableSha256; executableOnDiskVersion = $identity.executableVersion; executableDrift = $executableDrift; executableDriftReason = $executableDriftReason } | ConvertTo-Json -Compress
+  [pscustomobject]@{ instanceId = $InstanceId; desktop = $nomBureau; running = $null -ne $owned; cdpReady = $null -ne $pages; pid = if ($owned) { $owned.ProcessId } else { $null }; port = $Port; executable = if ($state) { $state.executable } else { $identity.executable }; executableSha256 = $launchSha256; executableVersion = $launchVersion; executableOnDiskSha256 = $identity.executableSha256; executableOnDiskVersion = $identity.executableVersion; executableDrift = $executableDrift; executableDriftReason = $executableDriftReason } | ConvertTo-Json -Compress
   exit $(if ($owned -and $pages) { 0 } else { 1 })
 }
 
@@ -111,12 +163,36 @@ if (-not (Test-Path -LiteralPath $cacheModeles)) {
   Copy-Item -LiteralPath $semence -Destination $cacheModeles -Force
 }
 $env:APPDATA = $appData
-$process = Start-Process -FilePath $identity.executable -ArgumentList @(
-  "--remote-debugging-port=$Port",
-  "`"--user-data-dir=$userData`"",
-  '--isolated-test-instance',
-  '--headless-test-instance'
-) -WorkingDirectory (Split-Path -Parent $identity.executable) -WindowStyle Hidden -PassThru
+# `Start-Process` n'expose PAS STARTUPINFO.lpDesktop : c'est le seul champ qui fasse naitre le
+# process dans un autre bureau. On passe donc par CreateProcess. Le PID vient de
+# PROCESS_INFORMATION, donc tous les controles d'identite en aval (Read-OwnedProcess, Stop)
+# restent inchanges.
+$hBureau = [AutowinHdesk]::CreateDesktop($nomBureau, [IntPtr]::Zero, [IntPtr]::Zero, 0, [AutowinHdesk]::GENERIC_ALL, [IntPtr]::Zero)
+if ($hBureau -eq [IntPtr]::Zero) { throw "CreateDesktop('$nomBureau') a echoue (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))." }
+$ligneCommande = New-Object System.Text.StringBuilder
+[void]$ligneCommande.Append('"').Append($identity.executable).Append('"')
+foreach ($argument in @("--remote-debugging-port=$Port", "--user-data-dir=$userData", '--isolated-test-instance', '--headless-test-instance')) {
+  [void]$ligneCommande.Append(' "').Append($argument).Append('"')
+}
+$infoDemarrage = New-Object AutowinHdesk+STARTUPINFO
+$infoDemarrage.cb = [Runtime.InteropServices.Marshal]::SizeOf([type][AutowinHdesk+STARTUPINFO])
+$infoDemarrage.lpDesktop = $nomBureau
+$infoDemarrage.dwFlags = [AutowinHdesk]::STARTF_USESHOWWINDOW
+$infoDemarrage.wShowWindow = [AutowinHdesk]::SW_SHOW
+$infoProcessus = New-Object AutowinHdesk+PROCESS_INFORMATION
+$lance = [AutowinHdesk]::CreateProcess($identity.executable, $ligneCommande, [IntPtr]::Zero, [IntPtr]::Zero, $false, 0, [IntPtr]::Zero, (Split-Path -Parent $identity.executable), [ref]$infoDemarrage, [ref]$infoProcessus)
+if (-not $lance) {
+  [void][AutowinHdesk]::CloseDesktop($hBureau)
+  throw "CreateProcess sur le bureau '$nomBureau' a echoue (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+}
+[void][AutowinHdesk]::CloseHandle($infoProcessus.hThread)
+[void][AutowinHdesk]::CloseHandle($infoProcessus.hProcess)
+# LE HANDLE DU BUREAU RESTE OUVERT JUSQU'A CE QUE CDP REPONDE. Mesure du 2026-09-12 : ferme juste
+# apres CreateProcess, le process mourait en une fraction de seconde, sans code de sortie lisible
+# et sans rien ecrire dans son profil. Entre la naissance du process et sa premiere fenetre,
+# NOTRE handle est le seul titulaire du bureau : le lacher a cet instant detruit le bureau sous
+# les pieds du process. C'est aussi ce que fait RigDesktop, qui ne ferme qu'au Dispose.
+$process = Get-Process -Id $infoProcessus.dwProcessId
 try {
   $launchedIdentity = Read-ExecutableIdentity
   if ($launchedIdentity.executable -ne $identity.executable -or $launchedIdentity.executableSha256 -ne $identity.executableSha256 -or $launchedIdentity.executableVersion -ne $identity.executableVersion) {
@@ -126,18 +202,28 @@ try {
   Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
   throw
 }
-@{ pid = $process.Id; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion; port = $Port; userData = $userData } | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding utf8
+@{ pid = $process.Id; desktop = $nomBureau; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion; port = $Port; userData = $userData } | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding utf8
 
 $deadline = (Get-Date).AddSeconds(20)
 do {
-  if ($process.HasExited) { throw "Autowin OS s'est arrêté avant que CDP soit prêt (exit $($process.ExitCode))." }
+  # `HasExited` n'est FIABLE que sur un objet issu de `Start-Process -PassThru`, qui conserve le
+  # handle du process. Depuis que le lancement passe par CreateProcess, l'objet vient de
+  # `Get-Process` : sans handle, .NET rendait HasExited VRAI sur un process bien vivant (et un
+  # ExitCode VIDE, signature de l'incoherence). On interroge donc l'OS directement.
+  if ($null -eq (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+    [void][AutowinHdesk]::CloseDesktop($hBureau)
+    throw "Autowin OS s'est arrêté avant que CDP soit prêt (bureau '$nomBureau', PID $($process.Id))."
+  }
   try { $pages = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/json" -TimeoutSec 1 } catch { $pages = $null }
   if ($pages) {
     $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq $process.Id }
     if (-not $listener) { throw "Le endpoint CDP $Port n'appartient pas au PID $($process.Id)." }
-    [pscustomobject]@{ instanceId = $InstanceId; status = 'ready'; pid = $process.Id; port = $Port; userData = $userData; webSocketDebuggerUrl = $pages[0].webSocketDebuggerUrl; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion } | ConvertTo-Json -Compress
+    # Le process tient desormais le bureau par ses propres fenetres : notre handle peut partir.
+    [void][AutowinHdesk]::CloseDesktop($hBureau)
+    [pscustomobject]@{ instanceId = $InstanceId; status = 'ready'; desktop = $nomBureau; pid = $process.Id; port = $Port; userData = $userData; webSocketDebuggerUrl = $pages[0].webSocketDebuggerUrl; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion } | ConvertTo-Json -Compress
     exit 0
   }
   Start-Sleep -Milliseconds 100
 } while ((Get-Date) -lt $deadline)
+[void][AutowinHdesk]::CloseDesktop($hBureau)
 throw "CDP indisponible sur le port $Port après 20 secondes."

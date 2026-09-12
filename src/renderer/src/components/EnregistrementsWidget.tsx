@@ -44,6 +44,8 @@ import { listerMicros, type MicroDisponible } from './micro-peripheriques'
 
 interface ApiEnregistrements {
   whisperEtat?: () => Promise<EtatWhisper>
+  diarisationEtat?: () => Promise<EtatDiarisationVue>
+  diarisationInstaller?: () => Promise<EtatDiarisationVue>
   transcriptDemarrer?: () => Promise<{ id: string; nom: string; chemin: string }>
   transcriptAjouter?: (id: string, texte: string) => Promise<{ octets: number }>
   transcriptTerminer?: (id: string) => Promise<{ chemin: string } | null>
@@ -60,7 +62,33 @@ const MAX_FICHIERS = 8
 const TIC_MS = 1_000
 
 /** Ce qu'on enregistre : sa propre parole, ou un appel à deux voix. */
-type ModeEnregistrement = 'dictee' | 'appel'
+/**
+ * MODE `fichier` — isoler les interlocuteurs d'un mp3 DÉJÀ enregistré.
+ *
+ * Les deux autres modes séparent les voix par la SOURCE du son (micro d'un côté, sortie système de
+ * l'autre) : c'est exact, sans rien deviner. Un mp3 unique a tout mélangé, il faut donc deviner à
+ * l'oreille — c'est la diarisation, et elle exige `pyannote` (Python + modèle), qui n'est PAS livré
+ * avec l'app. Le whisper local embarqué ne sait le faire qu'en anglais (`tinydiarize`), ce qui ne
+ * couvre pas les réunions visées.
+ *
+ * Donc ce mode se REFUSE tant que la brique manque, exactement comme le mode `appel` se refuse sans
+ * reconnaissance hors ligne. Afficher une option qui démarrerait une dictée micro serait pire que
+ * l'absence : on croirait traiter son fichier, on enregistrerait sa propre voix.
+ */
+type ModeEnregistrement = 'dictee' | 'appel' | 'fichier'
+
+/**
+ * Ce que le processus principal sait de la brique de séparation des voix.
+ * `null` = pas encore interrogé : on n'affiche alors NI offre d'installation NI refus, sinon le
+ * widget promet ou refuse une chose dont il ne sait rien pendant sa première fraction de seconde.
+ */
+type EtatDiarisationVue = {
+  installe: boolean
+  pythonPresent: boolean
+  jetonPresent: boolean
+  megaoctets: number
+  erreur: string | null
+}
 
 /** Les deux flux du mode appel, dans l'ordre d'affichage. */
 const VOIX_APPEL: readonly Voix[] = ['moi', 'interlocuteur']
@@ -79,6 +107,8 @@ export function EnregistrementsWidget(): React.JSX.Element {
   const [micros, setMicros] = useState<MicroDisponible[]>([])
   const [micro, setMicro] = useState('')
   const [whisperInstalle, setWhisperInstalle] = useState(false)
+  const [diarisation, setDiarisation] = useState<EtatDiarisationVue | null>(null)
+  const [poseEnCours, setPoseEnCours] = useState(false)
 
   /** Un moteur PAR VOIX : le micro et le son du système sont deux flux distincts, ouverts et
    * arrêtés séparément. Une seule référence forcerait à en fermer un pour ouvrir l'autre. */
@@ -267,6 +297,29 @@ export function EnregistrementsWidget(): React.JSX.Element {
     else void demarrer()
   }, [arreter, demarrer])
 
+  /**
+   * POSER LA BRIQUE, sur clic explicite et une seule fois.
+   *
+   * ~2,5 Go descendent : rien ne part sans ce clic. Le résultat REMPLACE l'état affiché — y compris
+   * quand il porte un échec, car c'est précisément le message de pip qui dit pourquoi (proxy,
+   * réseau coupé, compilateur absent). Le masquer laisserait un bouton qui « ne fait rien ».
+   */
+  const installerDiarisation = useCallback(async () => {
+    const pont = api()?.diarisationInstaller
+    if (!pont || poseEnCours) return
+    setPoseEnCours(true)
+    try {
+      const etat = await pont()
+      setDiarisation(etat)
+    } catch (e) {
+      setDiarisation((avant) =>
+        avant ? { ...avant, installe: false, erreur: String(e) } : avant
+      )
+    } finally {
+      setPoseEnCours(false)
+    }
+  }, [poseEnCours])
+
   // L'état de l'écoute locale : elle décide seulement QUEL moteur ouvre le micro.
   useEffect(() => {
     let vivant = true
@@ -279,6 +332,12 @@ export function EnregistrementsWidget(): React.JSX.Element {
         }
       } catch {
         // Sans réponse, on retombe sur le moteur du navigateur : c'est déjà le comportement de Jarvis.
+      }
+      try {
+        const brique = await api()?.diarisationEtat?.()
+        if (vivant && brique) setDiarisation(brique)
+      } catch {
+        // Sans réponse, l'état reste `null` : le mode fichier n'offre alors ni promesse ni refus.
       }
       // La liste des fichiers se lit APRES le premier rendu, jamais pendant : la tuile s'affiche
       // sans attendre le disque.
@@ -335,6 +394,9 @@ export function EnregistrementsWidget(): React.JSX.Element {
           data-testid="enregistrements-bascule"
           className="enregistrements__bouton"
           aria-pressed={enregistre}
+          // Le mode fichier ne capte AUCUN flux : laisser le bouton actif ouvrirait le micro et
+          // enregistrerait la voix de l'utilisateur au lieu de traiter son mp3.
+          disabled={mode === 'fichier' && diarisation?.installe !== true}
           onClick={basculer}
         >
           {enregistre ? '■ Arrêter' : '⏺ Enregistrer'}
@@ -358,8 +420,45 @@ export function EnregistrementsWidget(): React.JSX.Element {
         >
           <option value="dictee">Dictée — ce que je dis</option>
           <option value="appel">Conversation — ce que je dis et ce que j’entends</option>
+          <option value="fichier">Fichier audio — isoler les interlocuteurs d’un mp3</option>
         </select>
       </label>
+      {mode === 'fichier' && diarisation !== null ? (
+        <span className="enregistrements__aide" data-testid="enregistrements-aide-fichier">
+          {diarisation.installe
+            ? diarisation.jetonPresent
+              ? 'Prêt : chaque passage sera attribué à « Locuteur 1 », « Locuteur 2 »… à l’oreille.'
+              : 'Brique posée, mais il manque le jeton Hugging Face (gratuit) : sans lui, le modèle ne se télécharge pas. Renseignez HF_TOKEN dans vos variables d’environnement.'
+            : diarisation.pythonPresent
+              ? `Séparer les voix d’un seul fichier exige pyannote (≈ ${diarisation.megaoctets} Mo, une seule fois).`
+              : 'Python est introuvable sur ce poste : la séparation des voix ne peut pas être posée ici.'}
+        </span>
+      ) : null}
+      {/* L'OFFRE D'INSTALLATION n'apparaît QUE là où elle a un sens : mode fichier, Python présent,
+          brique absente. Un bouton de 2,5 Go affiché en permanence finit par être cliqué par
+          accident. */}
+      {mode === 'fichier' &&
+      diarisation !== null &&
+      !diarisation.installe &&
+      diarisation.pythonPresent &&
+      api()?.diarisationInstaller ? (
+        <button
+          type="button"
+          data-testid="enregistrements-installer-diarisation"
+          className="enregistrements__bouton"
+          disabled={poseEnCours}
+          onClick={() => void installerDiarisation()}
+        >
+          {poseEnCours
+            ? 'Installation en cours… (plusieurs minutes)'
+            : `Installer la séparation des voix (≈ ${diarisation.megaoctets} Mo, une seule fois)`}
+        </button>
+      ) : null}
+      {mode === 'fichier' && diarisation?.erreur ? (
+        <span className="enregistrements__aide" data-testid="enregistrements-erreur-diarisation">
+          Échec : {diarisation.erreur}
+        </span>
+      ) : null}
       {mode === 'appel' ? (
         <span className="enregistrements__aide" data-testid="enregistrements-aide-appel">
           {whisperInstalle

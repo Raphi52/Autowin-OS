@@ -88,3 +88,32 @@ describe('lecture d’un fichier non UTF-8 — la substitution silencieuse est N
     expect(data.fichiersNonUtf8).toEqual(['legacy.ts'])
   })
 })
+
+/**
+ * MEME BLOC, CAUSE DIFFERENTE : un fichier BINAIRE (bytecode `.pyc`, image) contient de l'ASCII.
+ * Le motif y matchait donc POUR DE VRAI, et `find_in_files` rendait des lignes de `�` illisibles
+ * et incitables — constate le 2026-09-10 sur `scripts/__pycache__/*.pyc`. Le NUL discrimine le
+ * binaire du texte mal encode : le premier est ecarte, le second reste cherche ET signale.
+ */
+describe('recherche dans un fichier BINAIRE — ecarte, sans toucher au texte mal encode', () => {
+  it('n’en cite aucune ligne, et cite toujours le cp1252', async () => {
+    const { racine, bus } = bureau()
+    writeFileSync(
+      join(racine, 'compile.pyc'),
+      Buffer.concat([
+        Buffer.from([0xcb, 0x0d, 0x0d, 0x0a, 0x00, 0x00, 0x00, 0x00]),
+        Buffer.from('fichier lancement', 'latin1'),
+        Buffer.from([0x00, 0x53, 0x00])
+      ])
+    )
+
+    const result = await bus.exec('find_in_files', { pattern: 'fichier' })
+
+    const data = (result.data ?? {}) as { correspondances?: string[]; fichiersNonUtf8?: string[] }
+    const cites = (data.correspondances ?? []).join('|')
+    expect(cites).not.toContain('compile.pyc')
+    // Le texte mal encode, lui, n'est PAS collateral : il reste cherche et signale.
+    expect(cites).toContain('legacy.ts')
+    expect(data.fichiersNonUtf8).toEqual(['legacy.ts'])
+  })
+})

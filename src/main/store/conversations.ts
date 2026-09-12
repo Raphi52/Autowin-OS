@@ -59,6 +59,8 @@ export interface Msg {
   error?: string
   /** Raisonnement conservé du tour — alimente le bloc « Réflexion » après un rechargement. */
   reasoning?: string
+  /** Journal des actions conservé du tour — alimente le bloc « Actions » après un rechargement. */
+  actionsLog?: string[]
   /**
    * Message utilisateur ÉCRIT PENDANT un tour (orientation injectée) : il précise, il ne REPOND pas.
    *
@@ -447,7 +449,8 @@ export function applyTurnEventToMessages(
       parts: message.parts ?? [],
       ...(message.runtime ? { runtime: message.runtime } : {}),
       ...(message.error ? { error: message.error } : {}),
-      ...(message.reasoning ? { reasoning: message.reasoning } : {})
+      ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+      ...(message.actionsLog?.length ? { actionsLog: message.actionsLog } : {})
     },
     event
   )
@@ -457,6 +460,7 @@ export function applyTurnEventToMessages(
   message.runtime = next.runtime
   message.error = next.error
   message.reasoning = next.reasoning
+  message.actionsLog = next.actionsLog
   return message
 }
 

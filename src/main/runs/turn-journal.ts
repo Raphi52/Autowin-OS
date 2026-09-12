@@ -207,6 +207,35 @@ export async function attendreEcrituresJournal(): Promise<void> {
   while (chaines.size > 0) await Promise.all([...chaines.values()])
 }
 
+/**
+ * Signature d'une clôture : ce qui la rend DISCERNABLE d'une autre (l'horodatage, lui, change à
+ * chaque tentative et ne doit pas servir à distinguer deux fois le même refus).
+ */
+function signatureCloture(event: TurnJournalEvent): string {
+  const { at: _at, ...reste } = event
+  return JSON.stringify(reste)
+}
+
+/** Vrai si ce tour porte DÉJÀ une clôture identique (même type, même erreur). */
+function clotureDejaEcrite(path: string, event: TurnJournalEvent): boolean {
+  const signature = signatureCloture(event)
+  const memoire = [...(enVol.get(path) ?? []), ...(pending.get(path) ?? [])].slice(0, -1)
+  const surDisque = existsSync(path) ? readFileSync(path, 'utf8').split('\n') : []
+  for (const ligne of [...surDisque, ...memoire]) {
+    const trimmed = ligne.trim()
+    if (!trimmed) continue
+    try {
+      const parsed = JSON.parse(trimmed) as TurnJournalEvent
+      if (!parsed || typeof parsed.kind !== 'string') continue
+      if (!TERMINAL_KINDS.has(parsed.kind)) continue
+      if (signatureCloture(parsed) === signature) return true
+    } catch {
+      /* ligne tronquée : elle ne prouve aucune clôture */
+    }
+  }
+  return false
+}
+
 /** Append d'un événement (crée l'arborescence au besoin, écrit par LOTS). */
 export function appendTurnEvent(
   root: string,
@@ -216,9 +245,30 @@ export function appendTurnEvent(
 ): void {
   const path = turnJournalPath(root, conversationId, turnId)
   const lines = pending.get(path) ?? []
-  lines.push(`${JSON.stringify(event)}\n`)
+  /*
+   * HORODATAGE AU POINT DE PASSAGE UNIQUE. Les émetteurs de fin de tour (`failed`, `resumed`
+   * via orchestrate-turn-persistence / run-pilot-chat) ne posent pas `at` : mesuré le 2026-09-12
+   * sur 1 381 journaux, 1 036 `failed` sur 1 099 et 1 094 `resumed` sur 1 223 étaient indatables,
+   * donc impossibles à replacer dans la chronologie du fil. On complète ici plutôt que chez chaque
+   * appelant ; un `at` déjà fourni (tests, rejeu) est respecté tel quel.
+   */
+  const horodate = typeof event.at === 'number' ? event : { ...event, at: Date.now() }
+  lines.push(`${JSON.stringify(horodate)}\n`)
   pending.set(path, lines)
   if (TERMINAL_KINDS.has(event.kind)) {
+    // CLÔTURE IDEMPOTENTE. Le contrat en tête de ce fichier dit « un événement terminal par tour » ;
+    // dans les faits un refus de reprise annoncé DÉFINITIF revenait à chaque démarrage et réécrivait
+    // le MÊME `failed` (92 fois dans un seul journal, mesuré le 2026-09-12). Une clôture identique
+    // déjà présente n'apporte aucune information : on la refuse au lieu de l'empiler.
+    if (clotureDejaEcrite(path, horodate)) {
+      pending.set(path, lines.slice(0, -1))
+      if (process.env.VITEST || process.env.NODE_ENV === 'test') {
+        throw new Error(
+          `journal de tour : clôture « ${event.kind} » déjà écrite pour ce tour, seconde écriture refusée`
+        )
+      }
+      return
+    }
     // Clôture du tour : le disque AVANT de rendre la main, sinon le tour repasse « inachevé ».
     flushPathSync(path)
     return

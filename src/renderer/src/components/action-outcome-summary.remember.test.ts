@@ -57,3 +57,66 @@ describe('un dépôt Brain refusé ne se lit pas comme une action terminée', ()
     expect(resume?.state).toBe('refused')
   })
 })
+
+/**
+ * UN DÉPÔT QUI ÉCHOUE APRÈS VALIDATION EST AUSSI UN FAIT PERDU.
+ *
+ * Mesuré le 2026-09-11 sur les traces causales : parmi les 35 échecs de `remember`, plusieurs
+ * passaient la validation locale (`allowed: true`) et mouraient au dépôt — « Brain injoignable »,
+ * « délai dépassé », « jeton du Brain absent », « refusé par le Brain : likely personal data ».
+ * Aucun résumé n'était produit : l'en-tête affichait « terminée » au-dessus d'un fait perdu.
+ */
+describe('un dépôt validé mais NON écrit est dit, avec son motif', () => {
+  it.each([
+    'Brain injoignable : fetch failed',
+    'jeton du Brain absent — rien n’a été écrit (définir AMITEL_BRAIN_TOKEN)',
+    'refusé par le Brain : likely personal data detected; candidate rejected'
+  ])('signale l’échec « %s »', (detail) => {
+    const resume = groupOutcomeSummary([
+      { name: 'remember', ok: true, data: { allowed: true, stored: false, detail } }
+    ])
+
+    expect(resume?.state).toBe('failed')
+    expect(resume?.label).toContain(detail)
+    expect(resume?.why).toEqual([detail])
+  })
+
+  it('distingue l’état INCONNU d’un échec — le confondre pousserait à retenter et à doublonner', () => {
+    const detail = 'délai dépassé (2000 ms) — état du dépôt INCONNU, le Brain a peut-être écrit'
+    const resume = groupOutcomeSummary([
+      {
+        name: 'remember',
+        ok: true,
+        data: { allowed: true, stored: false, unknown: true, detail }
+      }
+    ])
+
+    expect(resume?.state).toBe('refused')
+    expect(resume?.label).toContain('inconnu')
+  })
+
+  it('un dépôt réellement écrit ne produit aucun avertissement', () => {
+    const resume = groupOutcomeSummary([
+      {
+        name: 'remember',
+        ok: true,
+        data: { allowed: true, stored: true, detail: 'candidat déposé' }
+      }
+    ])
+
+    expect(resume).toBeUndefined()
+  })
+
+  it('un échec de dépôt passe DEVANT un dépôt réussi du même tour', () => {
+    const resume = groupOutcomeSummary([
+      { name: 'remember', ok: true, data: { allowed: true, stored: true } },
+      {
+        name: 'remember',
+        ok: true,
+        data: { allowed: true, stored: false, detail: 'Brain injoignable : fetch failed' }
+      }
+    ])
+
+    expect(resume?.state).toBe('failed')
+  })
+})

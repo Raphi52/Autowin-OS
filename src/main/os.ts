@@ -1131,7 +1131,22 @@ export class AutowinOS {
         return result
       },
       resumeControl?.usage,
-      onLateUsageSettlement
+      onLateUsageSettlement,
+      {
+        /*
+         * PATIENTER PLUTOT QUE REFUSER (mesure du 2026-09-12 : 17 refus « appel(s) provider encore
+         * actif(s) » sur 75 lancements, la famille d'echec la plus frequente). Le compteur qui
+         * bloque est PERSISTE : l'appel en vol le remet a zero en se reglant, dans ce meme process.
+         * On relit donc le checkpoint du run repris jusqu'a ce qu'il retombe, au lieu de renvoyer
+         * l'utilisateur retaper sa demande au tour suivant.
+         */
+        relire: () =>
+          resumeControl?.runId
+            ? loadOrchestrationStates(this.orchestrationStateRoot).find(
+                (etat) => etat.runId === resumeControl.runId
+              )?.usage
+            : undefined
+      }
     )
   }
 

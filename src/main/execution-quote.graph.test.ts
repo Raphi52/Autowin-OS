@@ -46,7 +46,7 @@ describe('provisionner un graphe à boucles', () => {
      *   2 phases + (1 + 1) passes de juge + 1 build de réparation = 5.
      */
     const quote = compileExecutionQuote('corrige le bug')
-    expect(quote.limits.maxRecoveries).toBe(1) // la source du chiffre, pas une constante magique
+    expect(quote.limits.maxRecoveries).toBe(10) // la source du chiffre, pas une constante magique
     const alloc = allocateExecutionTopology(quote, requete())
     expect(alloc.reservedMandatoryAgents).toBe(
       2 + (1 + quote.limits.maxRecoveries) + quote.limits.maxRecoveries
@@ -72,12 +72,12 @@ describe('provisionner un graphe à boucles', () => {
     const bloquant = compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
     expect(() => allocateExecutionTopology(bloquant, requete())).not.toThrow()
     expect(() =>
-      allocateExecutionTopology(bloquant, requete({ worstCaseNodeExecutions: 40 }))
+      allocateExecutionTopology(bloquant, requete({ worstCaseNodeExecutions: 100_000 }))
     ).toThrow("Plan d’exécution impossible")
     const mesure = compileExecutionQuote('corrige le bug')
-    const alloc = allocateExecutionTopology(mesure, requete({ worstCaseNodeExecutions: 40 }))
-    expect(alloc.reservedMandatoryAgents).toBe(40)
-    expect(mesure.limits.maxProviderCalls).toBeGreaterThanOrEqual(40)
+    const alloc = allocateExecutionTopology(mesure, requete({ worstCaseNodeExecutions: 100_000 }))
+    expect(alloc.reservedMandatoryAgents).toBe(100_000)
+    expect(mesure.limits.maxProviderCalls).toBeGreaterThanOrEqual(100_000)
   })
 
   it('le pire cas ne peut pas SOUS-provisionner la liste de phases', () => {

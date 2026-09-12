@@ -24,6 +24,9 @@ import { promptDeLOption, promptDesOptions, type AskDecision, type AskOption } f
  * donc l'action reelle emprunte le chemin normal et ses autorisations.
  */
 
+/** Fenetre d'attente d'un second chiffre, quand le prefixe tape peut encore grandir. */
+const ATTENTE_SECOND_CHIFFRE = 600
+
 function Detail({ detail }: { detail: NonNullable<AskOption['detail']> }): React.JSX.Element {
   return (
     <div className="askd-detail">
@@ -134,6 +137,28 @@ export function AskDecisionBlock({
   }
 
   /*
+   * L'AMBIGUITE DE `1` DEPUIS QUE LE PLAFOND EST A DIX REPONSES (2026-09-10, commit 87346be0).
+   *
+   * Le plafond de reponses est passe de 4 a 10 sans que ce raccourci suive : `Number(event.key)`
+   * tranchait des le PREMIER chiffre. Sur une question a dix lignes, taper `10` envoyait la ligne
+   * `1`, et le bloc se verrouillait aussitot sur une reponse que personne n'avait choisie
+   * (« les choix sont grises alors que j'ai pas repondu »). La dixieme etait injoignable au clavier.
+   *
+   * On accumule donc les chiffres tant que le prefixe peut encore grandir (`1` alors qu'une ligne
+   * 10 existe) et on tranche apres une courte fenetre. Les questions de moins de dix lignes ne
+   * changent pas d'un poil : aucun prefixe n'y est ambigu, la reponse part immediatement.
+   */
+  const tampon = useRef('')
+  const minuterie = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const choisirRang = (rang: number): void => {
+    const option = decision.options[rang - 1]
+    if (!option) return
+    // Choix multiple : le chiffre COCHE, il n'envoie pas — l'envoi reste un geste explicite.
+    if (decision.choixMultiple) cocher(rang - 1)
+    else repondre(promptDeLOption(option))
+  }
+
+  /*
    * LES TOUCHES 1..N REPONDENT VRAIMENT.
    *
    * Le bloc AFFICHAIT deja `1`, `2`, `3` a droite de chaque ligne — sans aucun gestionnaire
@@ -151,19 +176,39 @@ export function AskDecisionBlock({
       const balise = cible?.tagName
       if (balise === 'INPUT' || balise === 'TEXTAREA' || balise === 'SELECT') return
       /*
-       * UNE SEULE question ecoute : la DERNIERE encore ouverte. Deux blocs `ask` dans le fil
-       * auraient sinon repondu tous les deux au meme chiffre, envoyant deux messages pour une
-       * frappe. Le fil place deja la decision courante en dernier ; on s'aligne dessus.
+       * LE CHIFFRE N'EST ECOUTE QUE PAR LE BLOC QUI A LE FOCUS (demande du 2026-09-11 : « le chiffre
+       * ne doit repondre que si le bloc de questions a le focus, pas quand je tape n'importe ou »).
+       *
+       * L'ancienne garde visait le DERNIER bloc encore ouvert du fil, ou que soit le curseur. Une
+       * frappe egaree — un chiffre tape alors que le champ de saisie n'avait pas le focus — partait
+       * donc comme une REPONSE, et la question se verrouillait sur un choix que personne n'avait
+       * fait. Exiger le focus regle du meme coup le cas de deux blocs ouverts : un seul l'a.
        */
-      const ouverts = document.querySelectorAll('[data-testid="ask-decision"]:not([data-repondu])')
-      if (ouverts.length && ouverts[ouverts.length - 1] !== hote.current) return
-      const rang = Number(event.key)
-      if (!Number.isInteger(rang) || rang < 1 || rang > decision.options.length) return
+      const actif = document.activeElement
+      if (!hote.current || !actif || !hote.current.contains(actif)) return
+      if (!/^[0-9]$/u.test(event.key)) return
+      const candidat = `${tampon.current}${event.key}`
+      const rang = Number(candidat)
+      // Un chiffre qui ne mene a aucune ligne remet le compteur a zero plutot que de deriver.
+      if (!Number.isInteger(rang) || rang < 1 || rang > decision.options.length) {
+        tampon.current = ''
+        if (minuterie.current) clearTimeout(minuterie.current)
+        return
+      }
       event.preventDefault()
-      const option = decision.options[rang - 1]
-      // Choix multiple : le chiffre COCHE, il n'envoie pas — l'envoi reste un geste explicite.
-      if (decision.choixMultiple) cocher(rang - 1)
-      else repondre(promptDeLOption(option))
+      // PREFIXE ENCORE OUVERT (`1` quand une ligne 10 existe) : on attend le second chiffre.
+      if (decision.options.length >= rang * 10) {
+        tampon.current = candidat
+        if (minuterie.current) clearTimeout(minuterie.current)
+        minuterie.current = setTimeout(() => {
+          tampon.current = ''
+          choisirRang(rang)
+        }, ATTENTE_SECOND_CHIFFRE)
+        return
+      }
+      tampon.current = ''
+      if (minuterie.current) clearTimeout(minuterie.current)
+      choisirRang(rang)
     }
     document.addEventListener('keydown', auClavier)
     return () => document.removeEventListener('keydown', auClavier)

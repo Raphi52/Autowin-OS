@@ -48,3 +48,8 @@ AGENTS.md
 # `stage2.py` (un nom d'un seul usage, qui ne se reproduira pas sous cette forme).
 /.verif/
 /.msg/
+# Meme famille, autre nom, revu le 2026-09-12 : `.verif-index/` — 42 Mo, une copie COMPLETE du
+# depot avec ses 1322 fichiers de test. Non ignoree, elle etait aussi COLLECTEE par vitest
+# (11 286 tests fantomes) et rejouait des versions perimees a cote des vraies. L'exclusion cote
+# tests vit dans `vitest.config.ts` ; celle-ci empeche seulement de la committer.
+/.verif-index/

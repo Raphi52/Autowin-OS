@@ -22,6 +22,8 @@ export const RANGE_MAX = 400
 export const CORRESPONDANCES_MAX = 80
 /** Un fichier plus lourd n'est jamais lu d'un bloc : traces jsonl de plusieurs Mo. */
 const OCTETS_MAX_FICHIER = 4_000_000
+/** Octet NUL, ecrit par code point pour ne jamais deposer un vrai NUL dans ce source. */
+const NUL = String.fromCharCode(0)
 
 export type ReadDecision =
   | { allowed: true; absolutePath: string; relativePath: string; from: number; count: number }
@@ -113,6 +115,14 @@ export function rechercherDansFichiers(
     if (isForbidden(chemin)) continue
     const contenu = lire(chemin)
     if (contenu === null || contenu.length > OCTETS_MAX_FICHIER) continue
+    /*
+      CONTENU BINAIRE ECARTE, mais SEULEMENT lui. Un fichier de bytecode ou une image contient de
+      l'ASCII : le motif y matche pour de vrai, et la ligne rendue est une bouillie de `�` que
+      l'agent ne peut ni lire ni citer. L'octet NUL est le discriminant retenu (c'est celui de
+      `git diff`) : il n'apparait pas dans du texte, meme mal encode — un fichier cp1252 reste
+      donc cherche et signale par `fichiersNonUtf8`, comportement voulu et couvert par test.
+    */
+    if (contenu.includes(NUL)) continue
     const lignes = contenu.split(/\r?\n/)
     for (let i = 0; i < lignes.length; i += 1) {
       if (!regex.test(lignes[i])) continue

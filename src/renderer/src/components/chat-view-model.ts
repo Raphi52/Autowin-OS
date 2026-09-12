@@ -115,6 +115,8 @@ export interface StoredAssistantMessage {
   error?: string
   /** Raisonnement conservé par le tour : c'est lui qui rend le bloc « Réflexion » relisible. */
   reasoning?: string
+  /** Journal des actions conservé par le tour : c'est lui qui rend le bloc « Actions » relisible. */
+  actionsLog?: string[]
 }
 
 export type ConversationStateKey =
@@ -662,7 +664,13 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     ...(message.error ? { error: message.error } : {}),
     // Le raisonnement SURVIT au rechargement : sans cette ligne, le bloc « Réflexion » d'un tour
     // relu reste vide alors que le tour l'a bien conservé.
-    ...(message.reasoning ? { reasoning: message.reasoning } : {})
+    ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+    // Le JOURNAL DES ACTIONS survit de la même façon : sans cette ligne, le bloc « Actions » d'un
+    // tour relu est vide alors que le tour l'a bien conservé. `providerStatus` (l'en-tête repliée)
+    // reprend la DERNIÈRE ligne, exactement ce que montrait le direct à la fin du tour.
+    ...(message.actionsLog?.length
+      ? { providerStatusLog: message.actionsLog, providerStatus: message.actionsLog.at(-1)! }
+      : {})
   }
 }
 
@@ -1658,7 +1666,19 @@ export function scrollChatToBottom(
    * donc il n'armait pas le bouton « ↓ Dernière réponse », et rien ne signalait les 1688 px non lus
    * mesurés le 2026-08-17. Un défaut résiduel doit rester VISIBLE, pas se taire.
    */
-  onSettled?: (landed: boolean) => void
+  onSettled?: (landed: boolean) => void,
+  /**
+   * LE LECTEUR A-T-IL PRIS LA MAIN ? Sonde optionnelle, fournie par la vue, qui dit si un GESTE
+   * (molette, doigt, clavier, barre de defilement) a eu lieu.
+   *
+   * Defaut vecu le 2026-09-12 : « quand je clique sur mode auto ca envoie le message mais ca ne
+   * scrolle pas ». Pendant la descente, un re-rendu repose le fil quelques pixels plus haut SANS
+   * que la hauteur change — le message qui part remplace la carte du tour precedent. Ce recul etait
+   * lu comme un geste de lecture : la descente rendait la main en plein vol et allumait le bouton
+   * « derniere reponse ». Sans geste declare, un recul vient donc de L'APP, et on re-vise le bas.
+   * Sonde absente = comportement d'avant (tout recul rend la main).
+   */
+  lecteurAPrisLaMain?: () => boolean
   /**
    * REND UN ANNULEUR. Sans lui, l'effet appelant relançait une descente à CHAQUE delta de streaming
    * sans arrêter la précédente : plusieurs boucles vivaient sur le même conteneur, chacune avec son
@@ -1686,10 +1706,14 @@ export function scrollChatToBottom(
     const heightMoved = height !== lastHeight
     const reculBrutalEnHaut = element.scrollTop <= 4 && lastTop > element.clientHeight
     if (element.scrollTop < lastTop - 4 && !heightMoved) {
-      if (!reculBrutalEnHaut || !retourEnHautTolere) {
+      // AUCUN GESTE DECLARE = ce recul vient de l'app (re-rendu), pas du lecteur : on re-vise le
+      // bas au lieu de rendre la main en plein vol. Voir `lecteurAPrisLaMain`.
+      const reculDeLApp = lecteurAPrisLaMain !== undefined && !lecteurAPrisLaMain()
+      if (!reculDeLApp && (!reculBrutalEnHaut || !retourEnHautTolere)) {
         onSettled?.(isChatNearBottom(element))
         return
       }
+      if (reculDeLApp) element.scrollTo({ top: height, behavior: 'auto' })
       retourEnHautTolere = false
       element.scrollTo({ top: height, behavior: 'auto' })
     }

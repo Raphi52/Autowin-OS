@@ -641,3 +641,54 @@ describe('rail replié : les alternatives tiennent dans la largeur d’une icôn
     ).toContain('Rebaser sur origin/main')
   })
 })
+
+describe('apres un echec, le bouton se rafraichit encore', () => {
+  it('reprend le compte des sondes suivantes apres un echec de applyUpdate', async () => {
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({ available: true, behind: 5, branch: 'main' })
+      .mockResolvedValueOnce({ available: true, behind: 5, branch: 'main' })
+      .mockResolvedValue({ available: true, behind: 9, branch: 'main' })
+    api({
+      checkUpdate,
+      applyUpdate: vi.fn().mockResolvedValue({ ok: false, error: 'pull refusé' })
+    })
+    await render()
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+    )
+    expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
+      'pull refusé'
+    )
+
+    // Le retour de focus doit re-sonder ET etre pris en compte : sinon le bouton fige +5 a vie.
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="update-apply"]')!.textContent).toContain('+9')
+  })
+
+  it('reprend le compte apres un rejet de applyUpdate', async () => {
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({ available: true, behind: 5, branch: 'main' })
+      .mockResolvedValueOnce({ available: true, behind: 5, branch: 'main' })
+      .mockResolvedValue({ available: true, behind: 12, branch: 'main' })
+    api({ checkUpdate, applyUpdate: vi.fn().mockRejectedValue(new Error('bridge coupe')) })
+    await render()
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+    )
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="update-apply"]')!.textContent).toContain('+12')
+  })
+})

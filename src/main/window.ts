@@ -68,6 +68,17 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
 
   const questionWindows = new Map<string, BrowserWindow>()
   /**
+   * LA fenêtre principale vivante, ou null. Tenue ICI et pas déduite de
+   * `BrowserWindow.getAllWindows()` : cette liste contient AUSSI les fenêtres de question, donc elle
+   * ne dit pas si la fenêtre principale existe déjà.
+   *
+   * CE QU'ELLE EMPÊCHE (constaté à l'écran le 2026-09-12) : une SECONDE fenêtre principale
+   * construite alors que la première vivait. La nouvelle charge l'écran d'attente
+   * (« Préparation de l'interface… ») puis s'affiche MAXIMISÉE par-dessus — l'application, elle,
+   * continuait de répondre derrière. On voyait donc un démarrage sans fin sur une app en marche.
+   */
+  let mainWindowVivante: BrowserWindow | null = null
+  /**
    * Relayout forcé de la fenêtre principale (correctif desync fenêtre↔viewport, cf. createWindow).
    * Exposé au niveau module pour être rejoué depuis les chemins déclenchés PAR LE MODÈLE (fermeture
    * d'une fenêtre de question `alwaysOnTop` enfant), pas seulement sur les transitions utilisateur.
@@ -164,6 +175,15 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     }
   }
   function createWindow(): void {
+    // UNE SEULE fenêtre principale. Un second appel réveille celle qui existe au lieu d'en empiler
+    // une deuxième sur l'écran d'attente : la voie qui déclenche ce second appel peut varier (tray,
+    // `activate`, second lancement), le résultat à l'écran, lui, est toujours le même défaut.
+    if (mainWindowVivante && !mainWindowVivante.isDestroyed()) {
+      if (mainWindowVivante.isMinimized()) mainWindowVivante.restore()
+      mainWindowVivante.show()
+      mainWindowVivante.focus()
+      return
+    }
     // Create the browser window.
     jalonDemarrage('construction de la fenêtre')
     const mainWindow = new BrowserWindow({
@@ -196,6 +216,14 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
         contextIsolation: true,
         sandbox: false
       }
+    })
+
+    // La référence est posée TOUT DE SUITE et relâchée à la fermeture : relâchée trop tard, un
+    // second appel arrivé pendant le chargement rouvrirait une fenêtre ; jamais relâchée, refermer
+    // puis rouvrir depuis la barre d'état ne donnerait plus rien.
+    mainWindowVivante = mainWindow
+    mainWindow.on('closed', () => {
+      if (mainWindowVivante === mainWindow) mainWindowVivante = null
     })
 
     // Clic droit dans un champ de saisie : Electron SOULIGNE les fautes tout seul, mais n'affiche

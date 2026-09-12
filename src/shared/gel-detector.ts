@@ -178,6 +178,29 @@ export function nommerAccumulation(
     .slice(0, CONTRIBUTEURS_REPORTES)
 }
 
+/**
+ * LE NOM DE L'OPERATION BLOQUANTE — pris dans l'accumulation quand rien n'a ete declare.
+ *
+ * Mesure du 2026-09-12 (`gels.jsonl`) : depuis le 2026-09-09, 61 gels sortent en
+ * `operation: 'inconnu'` pour 275 s de fenetre figee, pic a 53 594 ms — la plus grosse famille, et
+ * la seule anonyme. Or ces MEMES lignes portent deja le vrai nom dans `accumulation[0].operation`
+ * (« execFileSync git config », « appendFileSync », « openSync »). `PerfLagPanel` groupe par
+ * `operation` : le poste le plus cher etait donc le seul illisible dans la vue de performance.
+ *
+ * C'est exactement la promotion deja faite pour `appelant` — la liste est triee par cumul
+ * decroissant, on prend donc le contributeur le PLUS COUTEUX. Et SEULEMENT faute d'operation
+ * declaree : sur un gel deja nomme, ecraser le nom serait une seconde accusation sans preuve.
+ */
+export function nommerOperationDuGel(
+  operationDeclaree: string,
+  accumulation: readonly AccesCumule[] | undefined,
+  nomInconnu = 'inconnu'
+): string {
+  if (operationDeclaree !== nomInconnu) return operationDeclaree
+  const principal = accumulation?.find((contributeur) => contributeur.operation.trim())
+  return principal ? principal.operation : nomInconnu
+}
+
 export function classerGel(
   ecouleMs: number,
   cpuMsConsomme: number,

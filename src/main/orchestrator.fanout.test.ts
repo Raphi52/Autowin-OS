@@ -89,7 +89,11 @@ function makeOrchestrator(
 }
 
 describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
-  it('réduit la topologie avant tout appel pour préserver build, juge et récupération', async () => {
+  /*
+   * 2026-09-12 — les compteurs de coups ne rabotent plus la topologie (demande utilisateur : un
+   * plafond ne doit plus amputer un travail decide). Les 3 modeles de frame partent donc TOUS.
+   */
+  it('sert la topologie demandée EN ENTIER, build et juge compris', async () => {
     const provider = new RecordingProvider()
     const supervisor = new ExecutionSupervisor()
     const quote = compileExecutionQuote('ajoute une page de réglages')
@@ -117,16 +121,23 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
 
     await supervisor.run(quote, undefined, () => orch.run('ajoute une page de réglages'))
 
-    expect(provider.calls.map((call) => call.model)).toEqual(['m1', 'worker', 'judge'])
+    expect(provider.calls.map((call) => call.model)).toEqual([
+      'm1',
+      'm2',
+      'm3',
+      'orch',
+      'worker',
+      'judge'
+    ])
     expect(supervisor.lastSnapshot()).toMatchObject({
-      startedAgents: 3,
-      completedCalls: 3,
+      startedAgents: 6,
+      completedCalls: 6,
       activeCalls: 0
     })
     expect(quote.allocation).toMatchObject({
-      phaseMembers: { frame: 1 },
-      reservedMandatoryAgents: 5,
-      plannedMaxAgents: 5
+      phaseMembers: { frame: 3 },
+      reservedMandatoryAgents: 23,
+      plannedMaxAgents: 26
     })
   })
 

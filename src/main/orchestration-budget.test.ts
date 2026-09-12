@@ -20,9 +20,9 @@ describe('orchestration budget settings', () => {
     const settings = loadOrchestrationBudget(path)
     expect(settings).toEqual({
       maxUsd: null,
-      maxProviderCalls: 24,
-      maxChatProviderCalls: 400,
-      maxTotalTokens: 15_000_000
+      maxProviderCalls: 20_000,
+      maxChatProviderCalls: 50_000,
+      maxTotalTokens: 1_000_000_000
     })
   })
 
@@ -30,9 +30,9 @@ describe('orchestration budget settings', () => {
     const path = settingPath()
     expect(saveOrchestrationBudget(path, { maxUsd: 1.5 })).toEqual({
       maxUsd: 1.5,
-      maxProviderCalls: 24,
-      maxChatProviderCalls: 400,
-      maxTotalTokens: 15_000_000
+      maxProviderCalls: 20_000,
+      maxChatProviderCalls: 50_000,
+      maxTotalTokens: 1_000_000_000
     })
     expect(loadOrchestrationBudget(path).maxUsd).toBe(1.5)
   })
@@ -59,7 +59,7 @@ describe('orchestration budget settings', () => {
     const path = settingPath()
     saveOrchestrationBudget(path, { maxUsd: 1.5 })
     saveOrchestrationBudget(path, { maxUsd: 1.5 })
-    writeFileSync(path, JSON.stringify({ maxProviderCalls: 24, maxTotalTokens: 15_000_000 }))
+    writeFileSync(path, JSON.stringify({ maxProviderCalls: 20_000, maxTotalTokens: 1_000_000_000 }))
 
     const recovered = loadOrchestrationBudget(path)
     expect(recovered.maxUsd).toBe(1.5)

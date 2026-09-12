@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ThinkingBlock } from './ThinkingBlock'
-import { corpsDuBloc } from './thinking-block-corps'
+import { corpsDesActions } from './thinking-block-corps'
 import { reduceAssistantPilotEvent } from './chat-view-model'
 
 const base = { turnId: 't1', parts: [], done: false } as unknown as Parameters<
@@ -40,10 +40,8 @@ describe('bloc Réflexion — historique des lignes', () => {
     expect(etat.providerStatus).toBe('tache de fond terminee')
   })
 
-  it('écrit toutes les lignes dans le corps du bloc, la pensée en tête', () => {
-    expect(corpsDuBloc('je pense', ['une', 'deux', 'trois'], 'trois', false)).toBe(
-      'je pense\nune\ndeux\ntrois'
-    )
+  it('écrit toutes les lignes dans le corps du bloc Actions', () => {
+    expect(corpsDesActions(['une', 'deux', 'trois'], 'trois')).toBe('une\ndeux\ntrois')
   })
 
   it('rend les lignes dans le corps du bloc affiché', async () => {
@@ -60,11 +58,11 @@ describe('bloc Réflexion — historique des lignes', () => {
         })
       )
     })
-    expect(host.querySelector('[data-testid="thinking-body"]')?.textContent).toBe(
+    expect(host.querySelector('[data-testid="action-block-body"]')?.textContent).toBe(
       'une\ndeux\ntrois'
     )
     // Repliée, l'en-tête reste sur une seule ligne : la dernière.
-    expect(host.querySelector('[data-testid="thinking-status"]')?.textContent).toBe('trois')
+    expect(host.querySelector('[data-testid="action-block-status"]')?.textContent).toBe('trois')
     await act(async () => root.unmount())
     host.remove()
   })

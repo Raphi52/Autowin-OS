@@ -1,4 +1,6 @@
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
+import { deciderRejeuDeChat, dormirAnnulable } from './chat-rejeu-surcharge'
+import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from './runs/resume-refusal'
 import { chargerMurs, enregistrerMur } from './runs/murs-store'
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleBinding, RoleModelConfig } from './roles'
@@ -1487,6 +1489,14 @@ export class AgentPilot {
     /** Une LECTURE a-t-elle eu lieu ? Un chiffre sans lecture est une supposition, pas une reponse. */
     let anyReadExecuted = false
     /**
+     * Artefacts DEJA publies dans le fil pendant ce tour, par identifiant.
+     *
+     * Un artefact arrive deux fois : une premiere en direct (flux du provider, a sa place
+     * chronologique) puis une seconde dans le resultat final du meme appel. L'identifiant est
+     * deterministe (empreinte du contenu), donc cet ensemble suffit a n'en afficher qu'un.
+     */
+    const artefactsDejaEmis = new Set<string>()
+    /**
      * Une QUESTION a-t-elle ete posee ce tour ? Mesure du 2026-08-25 (conv-1399) : une question a
      * quatre options posee sans avoir lu un seul fichier, dont une option DEJA implementee et
      * committee. L'utilisateur a attendu pour une reponse qui etait a portee de lecture.
@@ -1816,6 +1826,23 @@ export class AgentPilot {
           timer.mark(`send${i}:start`)
           let sawFirstChunk = false
           res = await this.registry.send(provider, messages, options, (chunk) => {
+            /**
+             * ARTEFACTS EN DIRECT — a leur place dans le fil.
+             *
+             * Une image lue par `Read` ou une capture d'ecran arrive au MILIEU du tour. Attendre le
+             * `SendResult` pour l'afficher la faisait tomber sous le bloc de cloture (mesure du
+             * 2026-09-10, conv-426 : « les blocs image read apparaissent apres le bloc Fait »). On
+             * l'emet donc au moment ou le provider la voit, et on retient son identifiant pour ne
+             * pas la republier a la fin du tour.
+             */
+            if (chunk.artifacts?.length) {
+              for (const artifact of chunk.artifacts) {
+                if (artefactsDejaEmis.has(artifact.id)) continue
+                artefactsDejaEmis.add(artifact.id)
+                emit({ kind: 'artifact', artifact, iteration: i })
+              }
+              if (!chunk.delta) return
+            }
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
             if (chunk.status) {
               /*
@@ -1926,16 +1953,35 @@ export class AgentPilot {
             continue
           }
           if (error instanceof ProviderCallError && !error.retryable) throw error
-          if (attempt >= 1) throw error
+          /*
+           * UNE PANNE SERVEUR TEMPORAIRE NE DOIT PAS TUER LE TOUR (mesure du 2026-09-12).
+           *
+           * Sur 2 577 messages utilisateur, « reprend » est retape 61 fois ; le message qui le
+           * precede est 11 fois « API Error: 529 Overloaded » et 13 fois « API Error: 500 Internal
+           * server error. This is a server-side issue, usually temporary ». L'ancien plafond nu
+           * (`attempt >= 1`) rejouait UNE fois, IMMEDIATEMENT : le second appel partait dans la
+           * seconde, retombait sur la meme surcharge, et le backoff etait fait a la main par
+           * l'utilisateur. La politique vit desormais dans un module pur teste — l'orchestrateur
+           * avait deja la sienne (`transient-overload.ts`), le chat n'en avait aucune.
+           *
+           * Toute erreur qui n'est PAS une surcharge garde EXACTEMENT l'ancien comportement.
+           */
+          const rejeu = deciderRejeuDeChat(message, attempt)
+          if (!rejeu.rejouer) throw error
           if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
           attempt += 1
           emit({
             kind: 'retry',
             iteration: i,
             name: provider,
-            text: message,
-            data: { attempt, maxAttempts: 2 }
+            text: rejeu.delaiMs
+              ? `${message} — panne serveur temporaire, nouvel essai dans ${Math.round(rejeu.delaiMs / 1000)} s`
+              : message,
+            data: { attempt, maxAttempts: rejeu.maxAttempts }
           })
+          // Attente ANNULABLE : un Stop pendant le backoff rend la main tout de suite.
+          await dormirAnnulable(rejeu.delaiMs, signal)
+          signal?.throwIfAborted()
         }
       }
       emit({
@@ -2025,6 +2071,9 @@ export class AgentPilot {
         reponseTardiveAUneQuestion = lateDirectives.join(' / ')
       }
       for (const artifact of res.artifacts ?? []) {
+        // Deja affiche en direct a sa place chronologique : ne pas le doubler en fin de tour.
+        if (artefactsDejaEmis.has(artifact.id)) continue
+        artefactsDejaEmis.add(artifact.id)
         emit({ kind: 'artifact', artifact, iteration: i })
       }
       /**
@@ -2634,6 +2683,25 @@ export class AgentPilot {
             ? (r.data as OrchestrationOutcome | undefined)
             : failedOrchestrationOutcome(r.error)
           const deliveryClosed = r.ok && isDeliveredOrchestrationOutcome(outcome ?? {})
+          /*
+           * UN REFUS TRANSITOIRE NE CONSOMME PAS LE VERROU DU TOUR (mesure conv-489, 2026-09-12).
+           *
+           * `orchestrationIssued` est pose AVANT l'execution, inconditionnellement : il protege
+           * d'une SECONDE orchestration payante dans le meme tour. Mais « Reprise refusee : N
+           * appel(s) provider encore actif(s) » est jete AVANT tout appel provider — rien n'a
+           * demarre, rien n'a coute. Le verrou restait pourtant pose : l'agent lisait « je ne peux
+           * pas relancer dans ce tour », rendait la main sans rien livrer, et l'utilisateur payait
+           * un tour entier pour zero ligne de code puis devait relancer a la main. Le refus dit
+           * lui-meme « la suite correcte est de relancer la MEME demande » : on lui en rend le
+           * droit, dans ce tour-ci. Le garde-fou anti-double-depense reste intact pour tous les
+           * autres cas, y compris les echecs definitifs.
+           */
+          if (
+            !r.ok &&
+            refusDeRepriseEstTransitoire(classifierRefusDeReprise(String(r.error ?? '')))
+          ) {
+            orchestrationIssued = false
+          }
           /*
            * LA COMPTABILITE D'ECHEC EST TENUE MEME ICI, avant le retour anticipe.
            *

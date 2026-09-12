@@ -83,6 +83,15 @@ const EXCLUSIONS = [
   // depart faussee de cette facon aurait fait accuser les mauvais bras.
   'bench/runs/**',
   '**/bench/runs/**',
+  // COPIE COMPLETE DU DEPOT a la racine : `.verif-index/` (42 Mo, 1322 fichiers de test).
+  // Meme panne que `.autowin-data/tmp-fusion-main/` decrite plus haut, par un chemin de plus, et
+  // aucun code du depot ne la cree — c'est un residu depose a la main. MESURE du 2026-09-12 :
+  // `npx vitest list` collectait 11 286 tests venus de cette copie, et cibler UN fichier
+  // (`ChatView.derniere-conversation.test.tsx`) en rejouait la version PERIMEE en plus de la
+  // vraie. Consequence vecue : quatre tests rouges attribues au code alors que les vrais fichiers
+  // etaient verts — on corrigeait un defaut qui n'existait plus que dans la copie.
+  '.verif-index/**',
+  '**/.verif-index/**',
   // Harnais Node autonome, couvert par cdp-verdict-collection.test.mjs.
   'scripts/cdp-verdict.test.mjs',
   /**

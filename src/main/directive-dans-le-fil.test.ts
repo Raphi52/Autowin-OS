@@ -18,11 +18,16 @@ import { ConversationStore } from './store/conversations'
  */
 describe('une réponse injectée pendant un tour devient un VRAI message du fil', () => {
   /**
-   * CHOIX UTILISATEUR DU 2026-09-03 : « quand j'écris pendant que tu bosses, ça l'écrit au-dessus
-   * au lieu d'en dessous ». Le message tapé pendant un tour doit rester le DERNIER du fil, à sa
-   * place chronologique. Ce test remplace l'ordre inverse posé en conv-46.
+   * MESURE DU 2026-09-11 (conv-439) : « le message vient de s'afficher APRÈS ton bloc fait, comme un
+   * cheveu sur la soupe ». Le brouillon assistant est VIDE à l'injection : son texte n'arrive qu'à
+   * la clôture. Poser la consigne après lui la met donc sous la réponse qui la traite — l'utilisateur
+   * croit qu'elle a été ignorée. Elle se pose AVANT le brouillon encore en cours.
+   *
+   * Le défaut inverse (2026-09-03, « ça l'écrit au-dessus ») concernait l'affichage PENDANT le tour
+   * et il est traité côté écran par le reçu qui scinde la réponse en vol : cette position persistée
+   * n'a plus à le compenser.
    */
-  it('se place APRÈS la réponse en cours — à l’endroit où elle a été tapée', () => {
+  it('se place AVANT la réponse en cours — pas sous le bloc qui la traite', () => {
     let horloge = 1
     const store = new ConversationStore(() => horloge++)
     const conv = store.create({ title: 'A', provider: 'claude' })
@@ -38,15 +43,15 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
     const messages = store.get(conv.id)!.messages
     expect(messages.map((message) => message.content)).toEqual([
       'commite le chantier',
-      '',
-      'ensuite push sur azure sur main'
+      'ensuite push sur azure sur main',
+      ''
     ])
     const rangConsigne = messages.findIndex((message) => message.messageId === messageId)
     const rangReponse = messages.findIndex(
       (message) => message.role === 'assistant' && message.turnId === 't1'
     )
     expect(rangConsigne).toBeGreaterThanOrEqual(0)
-    expect(rangConsigne).toBeGreaterThan(rangReponse)
+    expect(rangConsigne).toBeLessThan(rangReponse)
   })
 
   it('écrit un message utilisateur PERSISTÉ et prévient l’écran', () => {
