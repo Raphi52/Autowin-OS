@@ -1305,6 +1305,16 @@ export class AutowinOS {
     return this.trust.ranking()
   }
   /**
+   * L'HUMAIN TRANCHE : « c'etait bon » / « c'etait faux » sur les verdicts d'un run.
+   *
+   * Sans ce geste, trust.jsonl n'accumulait que des verdicts non confirmes et `calibration()`
+   * rendait structurellement accuracy:null — un classement de juges sans aucune mesure.
+   * Rend le nombre de verdicts re-etiquetes (0 si le run est inconnu du registre).
+   */
+  confirmerVerdictJuge(runId: string, humanTruth: 'green' | 'red'): number {
+    return this.trust.confirmer(runId, humanTruth)
+  }
+  /**
    * Gate déterministe évalué sur les VRAIS runs vivants (plus de démo hardcodée).
    *
    * BORNÉ : ce chemin est appelé par `snapshot()`, donc à CHAQUE tour de chat. La variante sans

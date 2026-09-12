@@ -137,6 +137,9 @@ const api = {
   // Onglet Latence : rapport LU du journal de jalons de tour (lecture seule, cote main).
   perfTurnLatency: (derniers?: number) => ipcRenderer.invoke('perf:turnLatency', derniers),
   perfGels: (derniers?: number) => ipcRenderer.invoke('perf:gels', derniers),
+  // Mesures d'arene deja journalisees, agregees par workflow (lecture seule, aucun rejeu).
+  arenaDuelsParWorkflow: (derniers?: number) =>
+    ipcRenderer.invoke('arena:duelsParWorkflow', derniers),
   // Depose une tache longue du thread d'interface dans le journal de gels commun.
   signalerGelRenderer: (dureeMs: number, etiquette?: string) =>
     ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette),

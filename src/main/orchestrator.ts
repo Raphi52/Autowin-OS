@@ -2555,7 +2555,14 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     // UN SEUL lecteur : ce site testait `/^\s*valide/i` et jetait donc l'approbation d'un juge qui
     // n'ouvrait pas sa phrase par le mot. Cf. `lireVerdictJuge`.
     const ok = lireVerdictJuge(verdictText)
-    trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
+    // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
+    // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
+    trust.record({
+      judgeModel: judgeProvider,
+      verdict: ok ? 'green' : 'red',
+      runId,
+      conversationId: this.costContextByRun.get(runId)?.conversationId
+    })
     push({
       step: 'judge',
       provider: res.provider ?? judgeProvider,
@@ -4799,7 +4806,14 @@ ${empreinteDepot}`
       if (resumedJudgeText !== undefined) {
         const ok = evidenceOk && lireVerdictJuge(resumedJudgeText)
         lastJudgeText = resumedJudgeText.trim()
-        trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
+        // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
+        // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
+        trust.record({
+          judgeModel: judgeProvider,
+          verdict: ok ? 'green' : 'red',
+          runId,
+          conversationId: conversationId
+        })
         push({
           step: 'judge',
           provider: judgeProvider,
@@ -5136,7 +5150,14 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        */
       const ok = evidenceOk && lireVerdictJuge(verdict.text)
       lastJudgeText = verdict.text.trim()
-      trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
+      // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
+      // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
+      trust.record({
+        judgeModel: judgeProvider,
+        verdict: ok ? 'green' : 'red',
+        runId,
+        conversationId: conversationId
+      })
       push({
         step: 'judge',
         provider: judgeMembers.length >= 2 ? undefined : (verdict.provider ?? judgeProvider),

@@ -198,8 +198,45 @@ function raison(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
 }
 
+/**
+ * MESURES D'ARENE DEJA PAYEES.
+ *
+ * Les bancs ecrivent `arena-duels.jsonl` (82 duels au 2026-09-09 : duree, cout, verdict par
+ * workflow). Cette vue promettait de « comparer » en REJOUANT l'objectif — donc en repayant 2,1 a
+ * 16 min et 0,55 a 5,51 $ par bras. On lit la mesure au lieu de la refaire ; quand aucun duel ne
+ * porte le workflow, on le DIT plutot que d'afficher un zero qui passerait pour une mesure.
+ */
+interface AgregatDuels {
+  duels: number
+  dureeMedianeMs: number
+  coutMedianUsd: number
+  verdicts: Record<string, number>
+  dernierTs?: string
+}
+
+/** Le journal nomme les workflows a sa facon (« A pipeline complet ») : rapprochement souple. */
+function mesuresPour(nom: string, duels: Record<string, AgregatDuels>): AgregatDuels | undefined {
+  const cible = nom.trim().toLowerCase()
+  if (!cible) return undefined
+  const exact = Object.entries(duels).find(([k]) => k.trim().toLowerCase() === cible)
+  if (exact) return exact[1]
+  const approche = Object.entries(duels).find(([k]) => k.toLowerCase().includes(cible))
+  return approche?.[1]
+}
+
+function dureeLisible(ms: number): string {
+  if (ms >= 60_000) return `${Math.round(ms / 60_000)} min`
+  return `${Math.round(ms / 1000)} s`
+}
+
+function coutLisible(usd: number): string {
+  return `${usd.toFixed(2).replace('.', ',')} $`
+}
+
 export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX.Element {
   const [file, setFile] = useState<ProfilesFile>({ profiles: [], activeId: null })
+  /** Duels deja mesures, par nom de workflow. Lecture seule : rien n'est rejoue ici. */
+  const [duels, setDuels] = useState<Record<string, AgregatDuels>>({})
   /**
    * Un noeud peut porter une SKILL du disque et non une phase du pipeline. Sans cet inventaire, la
    * vue declarait « phase inconnue » une brique que sa propre palette propose, et bloquait son
@@ -222,6 +259,22 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
   /** Renommages saisis mais pas encore écrits, à flusher si la vue disparaît avant la retombée. */
   const pendingRenamesRef = useRef<Record<string, WorkflowProfile>>({})
   const persistVersionRef = useRef(0)
+
+  useEffect(() => {
+    if (!active) return
+    let annule = false
+    // Les mesures d'arene sont un BONUS : leur absence ne doit ni retarder ni casser la liste.
+    void Promise.resolve(window.api.arenaDuelsParWorkflow?.())
+      .then((agr) => {
+        if (!annule && agr) setDuels(agr as Record<string, AgregatDuels>)
+      })
+      .catch(() => {
+        /* journal absent ou illisible : la liste s'affiche sans mesure */
+      })
+    return () => {
+      annule = true
+    }
+  }, [active])
 
   useEffect(() => {
     if (!active) return
@@ -483,6 +536,25 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                 className={`workflow-profile${actif ? ' is-active' : ''}${issues.length ? ' is-unrunnable' : ''}`}
                 data-testid={`workflow-profile-${profile.id}`}
               >
+                {/* Ce que ce workflow a DEJA coute et dure, lu du journal des duels : la
+                    comparaison n'exige plus de repayer un rejeu. */}
+                <p
+                  className="workflow-profile-mesures"
+                  data-testid={`workflow-mesures-${profile.id}`}
+                >
+                  {(() => {
+                    const m = mesuresPour(nom, duels)
+                    if (!m || m.duels === 0) return 'Arène : aucune mesure enregistrée'
+                    const verdicts = Object.entries(m.verdicts)
+                      .map(([v, n]) => `${n} ${v}`)
+                      .join(', ')
+                    return `Arène : ${m.duels} duel${m.duels > 1 ? 's' : ''} · ${dureeLisible(
+                      m.dureeMedianeMs
+                    )} médian · ${coutLisible(m.coutMedianUsd)} médian${
+                      verdicts ? ` · ${verdicts}` : ''
+                    }`
+                  })()}
+                </p>
                 {/* En-tête sur UNE ligne, puis portée et éditeur PLEINE LARGEUR dessous. Sans cette
                     séparation, la ligne étant un flex horizontal, l'éditeur se retrouvait comprimé
                     dans une colonne entre le bouton de sélection et la croix de suppression. */}

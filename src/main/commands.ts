@@ -829,6 +829,31 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'confirmer_verdict_juge',
+    /*
+     * LA VERITE HUMAINE, SEULE MESURE POSSIBLE DES FAUX-VERTS.
+     *
+     * trust.jsonl portait 186 verdicts tous de la forme {judgeModel, verdict} : aucun horodatage,
+     * aucun rattachement, aucune confirmation. `calibration()` ignorant tout verdict sans
+     * `humanTruth`, le taux de faux-verts etait structurellement incalculable. Ce geste est le
+     * seul point d'entree de cette verite : il n'invente rien, il enregistre ce que l'humain dit.
+     */
+    description:
+      'Enregistrer la VERITE HUMAINE sur les verdicts de juge d’un run : « c’était bon » (green) ' +
+      'ou « c’était faux » (red). N’à appeler que sur demande EXPLICITE de l’utilisateur — c’est ' +
+      'sa parole, jamais une auto-évaluation du modèle. Rend le nombre de verdicts ré-étiquetés.',
+    args: {
+      runId: 'identifiant du run jugé',
+      verite: '"green" (le verdict était juste) ou "red" (le verdict était faux)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'marquer_travail_trie',
     /*
      * LE GESTE QUI MANQUAIT AU BOUT DU SALVAGE.
@@ -3143,6 +3168,17 @@ export class AppCommandBus {
           )
         }
         return { agentId, trie: true, sha: worktrees.shaTravailTrie?.(agentId) }
+      }
+      case 'confirmer_verdict_juge': {
+        const runId = String(a.runId ?? '').trim()
+        if (!runId) throw new Error('confirmer_verdict_juge : runId manquant')
+        const verite = String(a.verite ?? '').trim()
+        if (verite !== 'green' && verite !== 'red') {
+          throw new Error('confirmer_verdict_juge : verite doit valoir "green" ou "red"')
+        }
+        // Un runId inconnu n'est PAS une erreur : on rend 0 et on le dit, comme le lot de tri.
+        const reetiquetes = this.os.confirmerVerdictJuge(runId, verite)
+        return { runId, verite, reetiquetes, connu: reetiquetes > 0 }
       }
       case 'marquer_travaux_tries': {
         const brut = a.ids

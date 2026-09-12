@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { tacheInitiale } from './chat-auto-mode'
-import type { Msg } from './chat-view-model'
+import type { Msg } from './chat-view-types'
 
 /**
  * DEFAUT MESURE (conv-470, saisie ts=1789159231523).
