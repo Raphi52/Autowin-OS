@@ -15,13 +15,19 @@
  * issues de la promesse, succes comme echec : une passe qui echoue et ne rearmerait pas condamnerait
  * la veille au silence definitif jusqu'au redemarrage.
  */
-export function unePasseALaFois<T>(executer: () => Promise<T>): () => Promise<T> {
+export function unePasseALaFois<A extends unknown[], T>(
+  executer: (...args: A) => Promise<T>
+): (...args: A) => Promise<T> {
   let enCours: Promise<T> | undefined
-  return () => {
+  return (...args: A) => {
     if (enCours) return enCours
     // `Promise.resolve().then` et non un appel direct : un `executer` qui jette SYNCHRONEMENT laisserait
     // sinon `enCours` non affecte et l'exception traverserait sans jamais rearmer.
-    const passe = Promise.resolve().then(executer)
+    // Les ARGUMENTS du premier appelant sont transmis : la garde precedente etait typee `() => Promise<T>`
+    // et les avalait TOUS, meme sans passe concurrente. Le `conversationId` cree et ouvert par le bouton
+    // « En generer plus » n'atteignait donc jamais le scout, qui s'en creait une seconde — la premiere
+    // restait VIDE dans la barre laterale (conv-465 et conv-466, creees a 5 ms d'ecart le 11/09/2026).
+    const passe = Promise.resolve().then(() => executer(...args))
     enCours = passe
     void passe.then(
       () => {
