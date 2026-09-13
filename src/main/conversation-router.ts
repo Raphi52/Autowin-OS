@@ -31,7 +31,7 @@ Réponds uniquement avec un objet JSON :
 Règles :
 - current par défaut, notamment pour une correction, un détail, un pronom, un suivi court ou une ambiguïté ;
 - new uniquement si le message ouvre clairement un autre sujet ou livrable sans dépendre du contexte actuel ;
-- confidence >= 0.90 uniquement quand la rupture de sujet est nette ;
+- confidence >= 0.97 uniquement quand la rupture de sujet est nette et que rien dans le message ne dépend du contexte actuel ; réserve 0.90-0.96 aux ruptures probables mais discutables, qui doivent rester dans le fil courant ;
 - title : titre bref du nouveau sujet, sans donnée sensible, uniquement pour route=new.`
 
 export type ConversationRouteReason =
