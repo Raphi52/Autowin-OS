@@ -104,6 +104,17 @@ export function buildChatPilotagePrompt(
     `l'executer au tour suivant sans son accord explicite, et une relance vague (« il se passe quoi ` +
     `la », « ok ») n'est PAS cet accord — c'est le moment d'utiliser \`ask\`.
 ` +
+    // SANS CE PARAGRAPHE, LA CAPACITE RESTE MORTE : un agent n'appelle jamais un format que son
+    // prompt ne nomme pas. Le rendu de la fence ```mermaid a ete branche dans le chat le 2026-09-13
+    // (Markdown.tsx -> ArtifactDiagramPreview) ; c'est ici qu'on le lui apprend.
+    `DIAGRAMMES : pour un ORGANIGRAMME, un enchainement d'etapes, une sequence d'echanges, un ` +
+    `arbre ou une machine a etats, ecris un bloc ferme \`\`\`mermaid — il est RENDU en diagramme ` +
+    `dans le fil (flowchart, sequenceDiagram, stateDiagram, classDiagram, erDiagram, pie, gantt). ` +
+    `C'est bien plus court et plus lisible qu'un SVG dessine a la main. Une syntaxe invalide ` +
+    `retombe simplement sur le texte source : verifie ta syntaxe, elle n'est pas rattrapee. Garde ` +
+    `\`\`\`html-render pour la mise en page riche (tableaux, chiffres, comparaisons) et \`\`\`mermaid ` +
+    `pour les schemas de relations.
+` +
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +

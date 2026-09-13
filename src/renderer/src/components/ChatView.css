@@ -1795,6 +1795,20 @@ ol.md-list li {
    aucun cadre : c'est le contenu du modèle qui doit se voir, pas une boîte autour de lui.
    `contain` et `max-width` sont ici la ceinture de mise en page — le sanitizer ayant déjà retiré
    tout positionnement, ceci empêche seulement un contenu large de pousser la bulle. */
+/* Bloc ```mermaid``` rendu en diagramme dans le fil (2026-09-13). Meme principe que `.md-html` :
+   aucun cadre, le dessin se pose sur le fond de la bulle. Le SVG de mermaid porte une largeur
+   intrinseque qui peut depasser la bulle : on le ramene a la largeur disponible. */
+.md-mermaid {
+  min-width: 0;
+  max-width: 100%;
+  margin: var(--s1) 0;
+  overflow-x: auto;
+}
+.md-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .md-html {
   min-width: 0;
   max-width: 100%;
