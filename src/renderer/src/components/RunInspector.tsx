@@ -1,6 +1,9 @@
 import { useRef } from 'react'
 import { BrainMarkdown } from './BrainMarkdown'
 import { apercuDuRun } from './run-inspector-apercu'
+import { RunBilanCard } from './RunBilanCard'
+import { bilanDepuisResume } from './run-bilan'
+import './RunBilanCard.css'
 import './RunInspector.css'
 
 type RunInspectorSummary = {
@@ -50,6 +53,7 @@ export function RunInspector({
         <span>Journal {summary.journalEvents}</span>
         <span>Défauts {summary.defauts}</span>
       </div>
+      <RunBilanCard bilan={bilanDepuisResume(summary, apercu.besoin)} />
       {(apercu.besoin || apercu.dodRestants.length > 0 || apercu.defauts.length > 0) && (
         <div className="run-inspector__apercu" data-testid="run-apercu">
           {apercu.besoin && <p className="run-inspector__besoin">{apercu.besoin}</p>}
