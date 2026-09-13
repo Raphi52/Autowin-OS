@@ -155,7 +155,9 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     )
 
     expect(decompose).not.toHaveBeenCalled()
-    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['scout'])
+    // `learn` en queue : la capitalisation survit a une phase nommee (2026-09-13). Ce qui est
+    // garanti ici reste qu'AUCUNE autre phase d'execution n'est jouee, et qu'on ne decompose pas.
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['scout', 'learn'])
   })
 
   it('/judge lance uniquement le juge de closure', async () => {
@@ -183,7 +185,7 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     )
 
     expect(decompose).not.toHaveBeenCalled()
-    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['build'])
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['build', 'learn'])
   })
 
   it('conserve les phases standard autour de la frontière build parallélisée', async () => {
