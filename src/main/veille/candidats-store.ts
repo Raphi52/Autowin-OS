@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
-import { cleDedup, type CandidatVeille } from './candidats'
+import { clesCandidat, type CandidatVeille } from './candidats'
 
 /**
  * Le stock des candidats de veille, sur le disque LOCAL.
@@ -74,7 +74,9 @@ export function ecrireStockVeille(stock: StockVeille, chemin = cheminStockVeille
 
 /** Les clés déjà connues, pour que la déduplication porte sur TOUT l'historique. */
 export function clesConnues(stock: StockVeille): Set<string> {
-  return new Set(stock.candidats.map((candidat) => cleDedup(candidat)))
+  // Les cles sont RECALCULEES depuis les champs, jamais lues dans `id` : un stock ancien, dont les
+  // `id` portent encore le numero de ligne, est donc reconnu sous la nouvelle forme sans etre reecrit.
+  return new Set(stock.candidats.flatMap((candidat) => clesCandidat(candidat)))
 }
 
 /**
@@ -88,7 +90,9 @@ export function fusionnerPasse(
   passe: { retenus: readonly CandidatVeille[]; echecs: readonly EchecSource[]; maintenant: string }
 ): StockVeille {
   const connues = clesConnues(stock)
-  const ajouts = passe.retenus.filter((candidat) => !connues.has(cleDedup(candidat)))
+  const ajouts = passe.retenus.filter(
+    (candidat) => !clesCandidat(candidat).some((cle) => connues.has(cle))
+  )
   return {
     candidats: [...stock.candidats, ...ajouts],
     echecs: [...passe.echecs],
