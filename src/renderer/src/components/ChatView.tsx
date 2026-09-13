@@ -4338,10 +4338,18 @@ export function ChatView({
     .reverse()
     .find((message): message is AsstMsg => message.role === 'assistant')
   // Le composer y ajoute « et rien n'est tapé, aucune pièce jointe » : ces deux-là sont chez lui.
+  /**
+   * `failed` EST un cas de reprise — mesure du 2026-09-13 : 205 tours en echec contre 119 annules,
+   * et « reprend » retape a la main 78 fois, dont 63 juste apres un echec. Le seul geste offert sur
+   * un echec (« ↻ Renvoyer ») rejoue le prompt depuis zero et jette le travail partiel ; ce
+   * bouton-ci POURSUIT la session (`resumePilotChat`), ce qui est exactement le geste contourne.
+   */
   const resumeAvailable =
     !busy &&
     Boolean(activeId) &&
-    (latestAssistant?.status === 'cancelled' || latestAssistant?.status === 'interrupted')
+    (latestAssistant?.status === 'cancelled' ||
+      latestAssistant?.status === 'interrupted' ||
+      latestAssistant?.status === 'failed')
   // « Plus récentes » = là où L'UTILISATEUR a parlé en dernier, pas la dernière touche : ranger une
   // conversation dans un dossier bougeait `updatedAt` et la propulsait en tête (2026-08-18).
   /** Handles des composers de la mosaique — un par fenetre, pour vider le champ apres envoi. */
