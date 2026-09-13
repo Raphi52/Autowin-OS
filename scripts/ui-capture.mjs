@@ -223,7 +223,7 @@ export const argumentsInstanceDediee = (argv, { enrobage, script, instanceId }) 
  * `--port` explicite (c'est aussi ce que recoit la re-execution derriere l'enrobage : pas de boucle).
  * Pure.
  */
-// fix-ok: main() ne passait par l'instance cachee que si argv contenait --instance-dediee (opt-in) — conv-526 turnId c14c2d28-f864-4ca5-ba3f-3dfe24e41d47 a pilote l'ecran reel
+// fix-ok: main() ne passait par l'instance cachee que si argv contenait --instance-dediee (opt-in) — conv-526 turnId c14c2d28-f864-4ca5-ba3f-3dfe24e41d47 a pilote l'ecran reel ; defaut desormais = instance cachee, ecran reel seulement via --fenetre-reelle ou --port
 export const doitPasserParInstanceCachee = (argv) =>
   !argv.includes('--fenetre-reelle') && !argv.includes('--port')
 
