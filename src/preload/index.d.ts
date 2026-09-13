@@ -198,6 +198,11 @@ interface ChatApi {
     poseeA: number
   } | null>
   /** Couleur des boutons réduire / agrandir / fermer, que Windows peint hors de la page. */
+  signalerRunsVivants: (etat: {
+    runsActifs: number
+    etapesFaites: number
+    etapesTotales: number
+  }) => Promise<boolean>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   checkUpdate: () => Promise<{
     available: boolean

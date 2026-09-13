@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBrancheCourante } from './branche-courante'
+import { presenceDepuisRunsVivants } from './run-presence'
 import { useClampDansFenetre } from './useClampDansFenetre'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './markdown-recommandation'
@@ -4838,6 +4839,25 @@ export function ChatView({
       alive = false
     }
   }, [isActive, activeId, showRuns, liveRuns, active])
+
+  /**
+   * PRÉSENCE SYSTÈME : la fenêtre est le seul endroit qui sait quels runs tournent — elle le dit au
+   * process principal, qui pose la jauge de barre des tâches et le texte de l'icône de notification.
+   * Envoi best-effort : un pont absent (tests, fenêtre de question) ne doit rien casser.
+   */
+  useEffect(() => {
+    const pont = (
+      globalThis as {
+        api?: { signalerRunsVivants?: (e: ReturnType<typeof presenceDepuisRunsVivants>) => unknown }
+      }
+    ).api
+    if (!pont?.signalerRunsVivants) return
+    try {
+      void pont.signalerRunsVivants(presenceDepuisRunsVivants(liveRuns))
+    } catch (error) {
+      traceSilentFailure('presence-systeme', error)
+    }
+  }, [liveRuns])
 
   const visibleLiveRuns = mergeLiveAndPersisted<OrchStep>(
     visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, 'conv'),

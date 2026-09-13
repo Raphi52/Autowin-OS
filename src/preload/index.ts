@@ -186,6 +186,15 @@ const api = {
    * thème courant. Rend `false` sur une plateforme sans overlay de barre de titre : ce n'est pas
    * une panne, et l'appelant n'a rien à en faire.
    */
+  /**
+   * Ce que l'OS montre des runs en cours (jauge de barre des tâches, texte de l'icône de
+   * notification). Le renderer est le seul à tenir la liste des runs vivants.
+   */
+  signalerRunsVivants: (etat: {
+    runsActifs: number
+    etapesFaites: number
+    etapesTotales: number
+  }): Promise<boolean> => ipcRenderer.invoke('os:presence', etat),
   setTitlebarSymbolColor: (couleur: string): Promise<boolean> =>
     ipcRenderer.invoke('app:titlebar-symbol-color', couleur),
   // Auto-update git au démarrage.

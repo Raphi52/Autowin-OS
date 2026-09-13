@@ -412,7 +412,23 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:diarisation:installer` - telechargement EXPLICITE vers des URL CONSTANTES du module :
     //     le renderer ne fournit ni URL, ni chemin, ni nom de fichier.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(184)
+    // MISE A JOUR 2026-09-13 - 184 -> 188. Le compteur etait DEJA perime avant ce tour : 187
+    //   canaux existaient a HEAD pour 184 attendus (mesure par comparaison avec ceef36f8, le
+    //   commit qui a pose 184). TROIS canaux etaient arrives sans etre inscrits, tous en LECTURE
+    //   SEULE et gardes des leur premiere ligne :
+    //   `os:disk-usage` (`index.ts:2484`) - inventaire de l'espace occupe, aucun parametre recu.
+    //   `chat:orientations` (`index.ts:2489`) - lit les consignes rattachees a UNE conversation ;
+    //     l'identifiant est refuse s'il n'est pas une chaine non vide, aucun chemin n'en derive.
+    //   `arena:duelsParWorkflow` (`ipc/perf.ts:47`) - agrege des mesures deja journalisees ; le
+    //     seul argument est un entier borne.
+    //   LE QUATRIEME est ajoute par ce tour :
+    //   `os:presence` (`index.ts`, `assertTrustedRendererSender(event, 'Présence système des
+    //     runs')`) - la fenetre dit combien de runs tournent, pour la jauge de barre des taches et
+    //     le texte de l'icone de notification. Rien ne SORT du poste : les trois champs recus sont
+    //     ramenes a des NOMBRES (tout le reste devient 0), aucun texte du renderer n'atteint l'OS,
+    //     aucun chemin n'est construit depuis l'appel.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(188)
     expect(unguarded).toEqual([])
   })
 
