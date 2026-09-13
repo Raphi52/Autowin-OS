@@ -28,7 +28,7 @@ import { Spinner } from './Spinner'
 import { ThinkingBlock } from './ThinkingBlock'
 
 /** Le texte COPIABLE d'un message : la bulle utilisateur, ou tout le texte rendu par l'agent. */
-export function texteCopiable(message: Msg): string {
+function texteCopiable(message: Msg): string {
   if (message.role === 'user') return message.content ?? ''
   return message.parts
     .filter((part): part is Extract<ChatPart, { kind: 'text' }> => part.kind === 'text')
@@ -429,6 +429,9 @@ export const ChatMessageRow = memo(
       <div className="msg assistant fade-in">
         <div className="msg-meta">
           <span className="msg-role">Agent</span>
+          {/* LE seul spinner du tour : une attente = un indicateur, ici et nulle part ailleurs
+              (demande du 2026-09-12 « met qu'un spinner sur la ligne agent »). */}
+          {!message.done && <Spinner size={14} label="Tour en cours" />}
         </div>
         {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense.
             L'attente AVANT le premier fragment de pensée passe par le MÊME bloc (corps vide) :

@@ -11,7 +11,6 @@
  * déjà ce qui se passe. Un clic de l'utilisateur reprend TOUJOURS la main.
  */
 import React, { useEffect, useRef, useState } from 'react'
-import { Spinner } from './Spinner'
 import {
   corpsDesActions,
   corpsDuBloc,
@@ -52,7 +51,10 @@ function BlocRepliable({
       onToggle={(event) => setManuel(event.currentTarget.open)}
     >
       <summary>
-        {live ? <Spinner /> : <span aria-hidden="true">✻</span>}
+        {/* AUCUN spinner ici : un seul tourne pour tout le tour, sur la ligne « Agent »
+            (demande du 2026-09-12 « met qu'un spinner sur la ligne agent »). Deux blocs
+            empiles donnaient deux spinners cote a cote pour une seule attente. */}
+        <span aria-hidden="true">✻</span>
         <span className="thinking-label">{libelle}</span>
         {entete && (
           <span className="thinking-status" data-testid={`${testid}-status`} title={entete}>
