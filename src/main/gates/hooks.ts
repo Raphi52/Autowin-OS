@@ -62,14 +62,30 @@ export function detectBlindFixLoop(
   causeTokensByFile: Record<string, boolean> = {},
   threshold = 3
 ): HookViolation[] {
-  return Object.entries(editsByFile)
-    .filter(([file, count]) => count >= threshold && !causeTokensByFile[file])
+  // fix-ok: un MEME fichier remonte tantot avec des anti-slash (chemin Windows), tantot en
+  // `src/main/x.ts` (chemin git) ; comptes et jetons de cause etaient alors classes sous deux
+  // cles distinctes, donc le seuil n'etait jamais atteint et un jeton n'en dedouanait qu'une.
+  const comptes: Record<string, number> = {}
+  for (const [file, count] of Object.entries(editsByFile)) {
+    const cle = normaliseCheminHook(file)
+    comptes[cle] = (comptes[cle] ?? 0) + count
+  }
+  const causes: Record<string, boolean> = {}
+  for (const [file, ok] of Object.entries(causeTokensByFile))
+    if (ok) causes[normaliseCheminHook(file)] = true
+  return Object.entries(comptes)
+    .filter(([file, count]) => count >= threshold && !causes[file])
     .map(([file, count]) => ({
       hook: 'fix-gate' as const,
       // Le refus doit porter son geste de sortie : conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb,
       // la reparation l'a recu 2 fois sans deposer le jeton et la boucle s'est figee en rouge.
       detail: `${count} édits de ${file} sans cause vérifiée (CausalHypothesis/fix-ok/check:) — pour lever ce refus, dépose dans ${file} un commentaire \`fix-ok: <cause mesurée>\``
     }))
+}
+
+/** Un chemin de fichier, quel que soit son separateur, designe le meme fichier. */
+function normaliseCheminHook(chemin: string): string {
+  return chemin.split(String.fromCharCode(92)).join('/')
 }
 
 /**

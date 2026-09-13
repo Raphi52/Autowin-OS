@@ -209,3 +209,25 @@ describe('motion-proof : un diff d ANIMATION exige une preuve de MOUVEMENT', () 
     ).toEqual([])
   })
 })
+
+// Chemin « style Windows » construit a l'execution : evite toute ambiguite d'echappement.
+const win = (p: string): string => p.split('/').join(String.fromCharCode(92))
+
+describe('fix-gate : les chemins Windows et POSIX designent le MEME fichier', () => {
+  it('agrege les variantes de separateur avant de compter le seuil', () => {
+    const violations = detectBlindFixLoop({
+      [win('src/main/x.ts')]: 2,
+      'src/main/x.ts': 1
+    })
+    expect(violations).toHaveLength(1)
+    expect(violations[0].detail).toContain('src/main/x.ts')
+  })
+
+  it('un jeton de cause depose sous une variante de chemin dedouane le fichier', () => {
+    expect(detectBlindFixLoop({ [win('src/main/x.ts')]: 3 }, { 'src/main/x.ts': true })).toEqual([])
+  })
+
+  it('runHooks : meme agregation vue depuis l entree publique', () => {
+    expect(runHooks({ editsByFile: { [win('a/b.ts')]: 2, 'a/b.ts': 1 } })).toHaveLength(1)
+  })
+})
