@@ -550,3 +550,40 @@ describe('amortissement du compteur de sequence', () => {
     )
   })
 })
+
+/*
+ * COUT DU COMPTEUR DE SEQUENCE (gels du 2026-09-12).
+ *
+ * 62 gels nommant un fichier `.conv-N.sequence`, 198 s cumulees, jusqu'a 3,5 s pour LIRE quelques
+ * octets. Chaque evenement relisait ce compteur alors que le dernier a l'avoir ecrit etait, presque
+ * toujours, CE store une ligne plus haut. Ce test borne le nombre de lectures REELLES ; le verrou
+ * entre processus, lui, reste exerce par les deux tests de reservation ci-dessus.
+ */
+describe('compteur de sequence — lectures disque', () => {
+  it('ne relit pas le compteur quand personne d’autre ne l’a touche', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-compteur-'))
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0))
+    const depart = store.counterReads
+
+    for (let i = 1; i <= 20; i += 1) {
+      const sequence = store.nextSequence('conv-1')
+      store.append({ ...event(`evt-${i}`, sequence), parentId: `evt-${i - 1}` })
+    }
+
+    expect(store.counterReads - depart).toBe(0)
+    expect(store.readConversation('conv-1').map((e) => e.sequence)).toEqual(
+      Array.from({ length: 21 }, (_, i) => i)
+    )
+  })
+
+  /*
+   * RETIRE A LA FUSION DU 2026-09-13 (branche autowin/recovery/run-315e68922bd7-1).
+   * Ce test attendait une RELECTURE immediate du compteur des qu'un autre ecrivain l'avance. Il
+   * decrit l'ancienne conception « une lecture par evenement ». La conception retenue dans le tronc
+   * reserve une PLAGE d'avance, dont la borne HAUTE est ecrite sur disque AVANT d'etre distribuee :
+   * un ecrivain concurrent qui respecte le verrou lit donc cette borne et passe apres. Le scenario
+   * du test ecrase le fichier en ignorant le verrou, cas que la nouvelle conception ne promet pas.
+   * L'invariant inter-processus reste couvert : « conserve le verrou-fichier » ci-dessus.
+   */
+})

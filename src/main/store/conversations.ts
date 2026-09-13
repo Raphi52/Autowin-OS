@@ -1828,6 +1828,60 @@ export class ConversationStore {
     return forked
   }
 
+  /**
+   * SCINDE depuis un message : DEPLACE la suite du fil dans une conversation neuve et la RETIRE
+   * de la source. C'est l'inverse exact de `fork`, qui COPIE le debut et n'allege rien.
+   *
+   * Pourquoi ce geste existe (mesure du 2026-09-13, cost.jsonl) : 1 952 tours de chat depassent
+   * 400 000 jetons d'entree et totalisent 2 563 $, soit 62 % des 4 133 $ depenses. Quand un fil
+   * change de sujet, la seule sortie offerte etait `fork` — qui DOUBLE le passe lourd au lieu de le
+   * decharger. Scinder rend a la source son poids d'avant la rupture.
+   *
+   * Le message vise OUVRE le nouveau fil (il part avec la suite). Scinder au tout premier message
+   * vide la source : c'est un renommage deguise, pas une scission — refuse.
+   */
+  split(id: string, fromMessageId: string): { source: Conversation; cible: Conversation } {
+    const source = this.conversations.get(id)
+    if (!source) throw new Error(`Conversation inconnue: ${id}`)
+    if (!fromMessageId) throw new Error('fromMessageId requis')
+    const cut = source.messages.findIndex((m) => m.messageId === fromMessageId)
+    if (cut < 0) throw new Error(`Message inconnu: ${fromMessageId}`)
+    if (cut === 0) throw new Error('scission impossible : la conversation source resterait vide')
+
+    const cible = this.create({ title: forkTitle(source.title), provider: source.provider })
+    const deplaces = source.messages.slice(cut)
+    // Identifiants regeneres, comme pour un fork : deux conversations ne doivent jamais partager un
+    // messageId, sinon un geste vise sur l'une toucherait l'autre.
+    const messageIds = new Map<string, string>()
+    const allocatedIds = this.allMessageIds()
+    const generatedIds = deplaces.map((message) => {
+      const generatedId = this.nextUniqueForkMessageId(allocatedIds)
+      allocatedIds.add(generatedId)
+      if (message.messageId) messageIds.set(message.messageId, generatedId)
+      return generatedId
+    })
+    cible.messages = deplaces.map((message, index) => ({
+      ...message,
+      messageId: generatedIds[index],
+      // Le parent RESTE dans la source pour le premier message deplace : sa chaine causale est
+      // coupee par la scission elle-meme, elle ne doit pas pointer un message d'un autre fil.
+      parentMessageId: message.parentMessageId
+        ? messageIds.get(message.parentMessageId)
+        : undefined,
+      // Le journal d'un tour est range PAR CONVERSATION : il reste sous la source. On note QUI le
+      // possede pour que la loupe aille le lire au bon endroit.
+      ...(message.turnId ? { turnConversationId: message.turnConversationId ?? source.id } : {})
+    }))
+    cible.forkedFrom = { conversationId: source.id, messageId: fromMessageId }
+    cible.updatedAt = this.now()
+
+    source.messages = source.messages.slice(0, cut)
+    source.updatedAt = this.now()
+    this.changed(source.id)
+    this.changed(cible.id)
+    return { source, cible }
+  }
+
   /** Tous les messageId du corpus, en UN balayage. Jetable : ne jamais le conserver entre appels. */
   private allMessageIds(): Set<string> {
     const ids = new Set<string>()

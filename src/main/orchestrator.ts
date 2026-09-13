@@ -127,6 +127,7 @@ import {
   type ModelChoice,
   type NodeVerdict
 } from './workflow-walk'
+import { phasesApresJugeHorsGraphe } from './task-regime'
 
 /**
  * Ce qui fait d'une sortie de phase un ROUGE. Marqueur en TÊTE uniquement : un compte rendu qui
@@ -5331,7 +5332,12 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          *     faire echouer un travail valide parce que le Brain a hoquete serait un faux rouge.
          *     `valid` et `gate` ne sont plus touches apres ce point.
          */
-        const apresGate = graphePilote ? noeudsApresJuge(graphePilote) : []
+        // Sans graphe (run mono-phase) : cf. `phasesApresJugeHorsGraphe` (task-regime.ts).
+        const apresGate: NodePhase[] = graphePilote
+          ? noeudsApresJuge(graphePilote)
+              .map((id) => graphePilote.nodes.find((n) => n.id === id)?.phase)
+              .filter((phase): phase is NodePhase => phase !== undefined)
+          : phasesApresJugeHorsGraphe(task)
         // Un silence n'est pas une explication : quand la chaine ne se joue pas, la trace DIT laquelle
         // des deux causes a mordu (verdict non vert / aucun noeud learn declare).
         const motifSansChaine = motifChaineApresJugeNonJouee({
@@ -5339,16 +5345,14 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           gateBloque: false
         })
         if (motifSansChaine) push({ step: 'gate', role: 'gate', detail: motifSansChaine })
-        for (const idNoeud of apresGate) {
-          const noeud = graphePilote?.nodes.find((n) => n.id === idNoeud)
-          if (!noeud) continue
+        for (const phaseApresGate of apresGate) {
           try {
-            await executePipelinePhase(noeud.phase)
+            await executePipelinePhase(phaseApresGate)
           } catch (erreur) {
             push({
               step: 'exec',
               role: 'subagent',
-              detail: `${noeud.phase} impossible (${
+              detail: `${phaseApresGate} impossible (${
                 erreur instanceof Error ? erreur.message : String(erreur)
               }) — le verdict du run n'en est pas affecte`
             })

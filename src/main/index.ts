@@ -1490,7 +1490,8 @@ function registerStorageMigrationIpc(lecture: Promise<LectureHistorique>): void 
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
-  // pleine exécution) pour les rejouer/afficher. GC des journaux terminés au passage.
+  // pleine exécution) pour les rejouer/afficher. Le ménage des journaux terminés suit la réponse
+  // (25 gels, 69 s cumulées, quand il la PRÉCÉDAIT) — cf. runs/inventaire-tours.ts.
   ipcMain.handle('runs:unfinishedTurns', (event) => {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
     // La LISTE part tout de suite (tampons vides d'abord, sinon un tour en vol serait invisible) ;

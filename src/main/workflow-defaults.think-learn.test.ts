@@ -145,9 +145,12 @@ describe('ce qui ne doit PAS changer', () => {
      */
     const orchestrateur = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
     expect(orchestrateur).toContain('noeudsApresJuge(graphePilote)')
+    // La boucle d'apres-gate parcourt des PHASES depuis le 2026-09-13 : sans graphe (run mono-phase),
+    // la chaine vient de `phasesApresJugeHorsGraphe`, qui ne peut pas rendre d'identifiant de noeud.
+    expect(orchestrateur).toContain('phasesApresJugeHorsGraphe(task)')
     // Joué SEULEMENT sur gate non bloqué, et une panne n'y rougit pas le run.
     expect(orchestrateur).toMatch(
-      /if \(!gate\.blocked\) \{[\s\S]{0,2200}?executePipelinePhase\(noeud\.phase\)/
+      /if \(!gate\.blocked\) \{[\s\S]{0,2200}?executePipelinePhase\(phaseApresGate\)/
     )
     expect(orchestrateur).toContain("le verdict du run n'en est pas affecte")
   })

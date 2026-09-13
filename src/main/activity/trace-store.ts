@@ -163,6 +163,16 @@ export class TraceStore {
     { offset: number; mtimeMs: number; lastSequence: number }
   >()
   private scannedSequenceBytes = 0
+  /**
+   * Ce que CE store a ecrit en dernier dans le compteur de chaque conversation, avec l'empreinte du
+   * fichier juste apres. Tant que l'empreinte tient, relire le fichier rendrait exactement `value`.
+   */
+  private readonly counterFingerprints = new Map<
+    string,
+    { size: bigint; mtimeNs: bigint; value: number }
+  >()
+  /** Nombre de lectures REELLES du compteur — sonde de cout, lue par les tests. */
+  counterReads = 0
   private readonly readCursorsStrict = new Map<
     string,
     { offset: number; mtimeMs: number; ligne: number; events: TraceEventV1[] }
@@ -184,6 +194,21 @@ export class TraceStore {
     return `${resolve(this.root)}\0${conversationId}`
   }
 
+  /**
+   * LA LECTURE DU COMPTEUR EST LE COUT, pas le verrou — mesure dans gels.jsonl (2026-09-12) :
+   * 62 gels nommant un fichier `.conv-N.sequence`, 198 s cumulees, jusqu'a 3,5 s pour LIRE quelques
+   * octets (.conv-489.sequence : 15 gels, 52 s). Chaque evenement trace relisait ce fichier alors
+   * que, neuf fois sur dix, le dernier a l'avoir ecrit etait CE processus, une ligne plus haut.
+   *
+   * On ne relit donc que si le fichier a BOUGE depuis notre propre ecriture (taille + date de
+   * modification, une empreinte que `statSync` rend sans lire le contenu). Le verrou, lui, est
+   * conserve INTACT : il reste la seule garantie entre PROCESSUS, et c'est sous sa protection que
+   * cette comparaison est faite — un autre processus ne peut pas ecrire entre le stat et le notre.
+   *
+   * Ce qui n'est PAS fait, et pourquoi : reserver un BLOC de numeros en memoire. `append` refuse une
+   * sequence non monotone (`sequence non monotone: x <= y`) ; deux processus qui consommeraient
+   * chacun leur bloc en parallele s'ecriraient donc mutuellement en faute des le premier entrelacement.
+   */
   private reserveSequence(conversationId: string, candidate: number): number {
     const key = this.sequenceKey(conversationId)
     const counterPath = join(this.root, `.${conversationId}.sequence`)
@@ -195,9 +220,28 @@ export class TraceStore {
     }
     return withSequenceLock(this.root, conversationId, () => {
       let persisted = -1
-      if (existsSync(counterPath)) {
-        const parsed = Number.parseInt(readFileSync(counterPath, 'utf8').trim(), 10)
-        if (Number.isSafeInteger(parsed) && parsed >= 0) persisted = parsed
+      try {
+        // Empreinte en NANOsecondes (`bigint: true`) : en millisecondes, une ecriture etrangere
+        // tombant dans la meme milliseconde que la notre, avec le meme nombre de chiffres, serait
+        // prise pour la notre — et deux processus recevraient le meme numero.
+        const stats = statSync(counterPath, { bigint: true })
+        const connu = this.counterFingerprints.get(conversationId)
+        if (
+          connu &&
+          connu.size === stats.size &&
+          connu.mtimeNs === stats.mtimeNs &&
+          connu.value >= 0
+        ) {
+          persisted = connu.value
+        } else {
+          this.counterReads += 1
+          const parsed = Number.parseInt(readFileSync(counterPath, 'utf8').trim(), 10)
+          if (Number.isSafeInteger(parsed) && parsed >= 0) persisted = parsed
+        }
+      } catch (error) {
+        // Compteur absent = premiere allocation. Toute autre panne remonte.
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        this.counterFingerprints.delete(conversationId)
       }
       const sequence = Math.max(voulue, persisted + 1, (allocatedSequences.get(key) ?? -1) + 1)
       const borneHaute = sequence + SEQUENCE_RESERVATION_LOT - 1
@@ -207,6 +251,18 @@ export class TraceStore {
       compteurEcrituresSequence += 1
       reservedSequences.set(key, borneHaute)
       allocatedSequences.set(key, sequence)
+      try {
+        const apres = statSync(counterPath, { bigint: true })
+        this.counterFingerprints.set(conversationId, {
+          size: apres.size,
+          mtimeNs: apres.mtimeNs,
+          value: sequence
+        })
+      } catch {
+        // Sans empreinte, la prochaine allocation relira le compteur : on perd l'optimisation,
+        // jamais la justesse.
+        this.counterFingerprints.delete(conversationId)
+      }
       return sequence
     })
   }
