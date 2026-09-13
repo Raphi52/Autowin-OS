@@ -85,7 +85,7 @@ export function detectBlindFixLoop(
 
 /** Un chemin de fichier, quel que soit son separateur, designe le meme fichier. */
 function normaliseCheminHook(chemin: string): string {
-  return chemin.split(String.fromCharCode(92)).join('/')
+  return chemin.replace(/\\/g, '/')
 }
 
 /**
