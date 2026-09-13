@@ -425,6 +425,11 @@ interface ChatApi {
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. */
   conversationsSetHighlight: (id: string, on: boolean) => Promise<boolean>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
+  /** Scinde : DEPLACE la suite du fil (message visé inclus) dans une conversation neuve. */
+  conversationsSplit: (
+    id: string,
+    messageId: string
+  ) => Promise<{ source: Conversation; cible: Conversation }>
   conversationsRemove: (id: string) => Promise<boolean>
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
   conversationsRemoveMany: (ids: readonly string[]) => Promise<string[]>

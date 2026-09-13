@@ -125,7 +125,9 @@ describe('ConversationRouter', () => {
       message('assistant', 'Le graphe est prêt.', 2)
     ])
 
-    await expect(router.decide(current, 'Décale aussi son icône de 3px vers la gauche, comme convenu')).resolves.toMatchObject({
+    await expect(
+      router.decide(current, 'Décale aussi son icône de 3px vers la gauche, comme convenu')
+    ).resolves.toMatchObject({
       route: 'current',
       confidence: 0.99,
       reason: 'follow-up'
@@ -160,7 +162,9 @@ describe('ConversationRouter', () => {
     )
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Sujet clairement distinct du contexte actuel, sans aucun lien')).resolves.toMatchObject({
+    await expect(
+      router.decide(current, 'Sujet clairement distinct du contexte actuel, sans aucun lien')
+    ).resolves.toMatchObject({
       route
     })
   })
@@ -173,7 +177,9 @@ describe('ConversationRouter', () => {
     const { router } = harness(response)
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Peut-être autre chose, mais je ne suis vraiment pas certain du tout')).resolves.toMatchObject({
+    await expect(
+      router.decide(current, 'Peut-être autre chose, mais je ne suis vraiment pas certain du tout')
+    ).resolves.toMatchObject({
       route: 'current'
     })
   })
@@ -200,7 +206,9 @@ describe('ConversationRouter', () => {
     vi.spyOn(supervisor, 'currentQuote').mockReturnValue({} as never)
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Un sujet vraiment différent qui ouvre un autre livrable complet')).resolves.toMatchObject({
+    await expect(
+      router.decide(current, 'Un sujet vraiment différent qui ouvre un autre livrable complet')
+    ).resolves.toMatchObject({
       route: 'current',
       reason: 'fallback'
     })
@@ -362,7 +370,7 @@ describe('ConversationRouteCoordinator', () => {
     })
     expect(store.list()).toHaveLength(1)
   })
-it('force route=current sous 40 caractères, sans dépenser d’appel modèle', async () => {
+  it('force route=current sous 40 caractères, sans dépenser d’appel modèle', async () => {
     const { router, registry } = harness(
       '{"route":"new","confidence":1,"reason":"new-topic","title":"Jamais"}'
     )

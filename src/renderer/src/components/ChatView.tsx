@@ -2883,6 +2883,37 @@ export function ChatView({
     void loadConv(target)
   }
   /**
+   * SCINDER ICI — la suite du fil PART dans une conversation neuve et quitte celle-ci.
+   *
+   * Forker copie le debut et n'allege rien : le passe lourd est alors paye DEUX fois. Scinder
+   * decharge (mesure du 2026-09-13 : 1 952 tours au-dela de 400 000 jetons d'entree, 62 % de la
+   * depense). Un tour EN COURS interdit le geste : les messages qu'il ecrit partiraient sous lui.
+   */
+  async function splitFromMessage(messageId: string): Promise<void> {
+    if (!activeId) return
+    if (busyConversationsRef.current.has(activeId)) {
+      setAppNotice((current) =>
+        newestNotice(current, {
+          text: 'Un tour est en cours dans ce fil : scinde une fois qu’il est terminé.'
+        })
+      )
+      return
+    }
+    const scinde = (await window.api.conversationsSplit(activeId, messageId)) as
+      | { cible?: Conv }
+      | undefined
+    const fresh = (await window.api.conversations()) as Conv[]
+    setConvs(fresh)
+    const target = (scinde?.cible?.id && fresh.find((c) => c.id === scinde.cible!.id)) || undefined
+    // La SOURCE a change dans tous les cas : la relire evite d'afficher les messages partis.
+    await reloadActiveFromStore(activeId)
+    if (!target) return
+    void loadConv(target)
+  }
+  const splitRef = useRef(splitFromMessage)
+  splitRef.current = splitFromMessage
+  const handleSplit = useCallback((messageId: string) => void splitRef.current(messageId), [])
+  /**
    * REPRISE APRÈS SURCHARGE DU MODÈLE (529) — demande utilisateur du 2026-09-03 : « quand le modèle
    * renvoie une erreur 529, forke la conversation et reprends (max 3 tentatives) ».
    *
@@ -4864,6 +4895,7 @@ export function ChatView({
             conversationId={activeId}
             onInspectTurn={onInspectTurn}
             onFork={handleFork}
+            onSplit={handleSplit}
             onOpenImage={setOpenImage}
             onOpenLiveAction={revealLiveAction}
             retryPrompt={

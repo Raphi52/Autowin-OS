@@ -530,6 +530,12 @@ const api = {
     ipcRenderer.invoke('os:conversations:setHighlight', id, on),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
+  /** Scinde : DEPLACE la suite du fil (message vise inclus) dans une conversation neuve. */
+  conversationsSplit: (
+    id: string,
+    messageId: string
+  ): Promise<{ source: Conversation; cible: Conversation }> =>
+    ipcRenderer.invoke('os:conversations:split', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
