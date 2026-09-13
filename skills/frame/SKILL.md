@@ -1,59 +1,58 @@
 ---
 name: frame
 description: >-
-  Step 1 of the pipeline (frame → terrain → build → clean → judge). FRAMES a need in depth AND, if the framed need
-  leaves an open choice of approach, EXPLORES the options — two passes inside ONE skill. Trigger on TWO trigger
-  families. (a) FRAMING — whenever a request is phrased as a SOLUTION ("create X", "add Y", "make the script Z", "set up..." — but setting up the autonomous LOOP/harness for an already-framed need → `terrain`), when a need is
-  vague (vague about a CHOSEN task → frame; vague about WHICH task to pick → `scout` first), or on "define/frame the need". EXPLICITLY includes creating a
-  doc/README/CLAUDE.md/config: trigger to CHECK it doesn't already exist and to frame its content — creating a
-  file that already exists (or that misses its real content) is a classic expensive trap. This is THE default
-  entry point on any substantial work — trigger YOURSELF on a solution-shaped request, without waiting for the
-  word "frame". EXCEPT (CLAUDE.md hard-gates): a pure ADVISORY question ("which is best / is it better to / what is / why", expecting a direct answer) → answer directly, NO frame; a still-OPEN form/premise ("not sure if X or just Y?", a question mark on the FORM itself) → stay conversational and converge the form FIRST, never route or fire a QCM presupposing a chosen form. (b) APPROACH CHOICE — the HOW for an ALREADY-chosen task (choosing WHICH task to pick → `scout`) — "which approach / architecture / library to choose for X", "explore the options" (of the already-chosen approach), "compare the
-  approaches", "generate lots of solutions and have them vote", "help me decide between several designs". DO NOT use to: prepare the HOW of autonomous execution (→ `terrain`); judge the quality of a
-  finished deliverable (→ `judge`); find WHAT to do on a target when no task is chosen yet (→ `scout`); run the
-  heavy protocol on an obviously trivial, disposable AND already-precise one-shot (say it's oversized, offer
-  direct implementation); nor throw 2-3 ideas around with no scoring process.
+  Étape 1 du pipeline (frame → terrain → build → clean → judge). CADRE un besoin en profondeur ET,
+  si le besoin cadré laisse un choix d'approche ouvert, EXPLORE les options. Point d'entrée par
+  défaut du travail substantiel : déclenche-toi SANS attendre le mot « frame », (a) dès qu'une
+  demande est formulée en SOLUTION (« crée X », « ajoute Y », « mets en place Z ») ou qu'un besoin est vague sur une tâche
+  DÉJÀ choisie, et (b) sur le COMMENT de cette tâche — « quelle approche / architecture /
+  bibliothèque », « compare les approches ». Deux hard-gates PRIMENT (§ Quand la déclencher) : une
+  question CONSULTATIVE reçoit une réponse DIRECTE, une forme encore OUVERTE reste
+  conversationnelle. NE PAS utiliser pour préparer l'exécution autonome (→ `terrain`), juger un
+  livrable fini (→ `judge`), trouver QUOI faire quand aucune tâche n'est choisie (→ `scout`), ni
+  jouer le protocole lourd sur un one-shot trivial déjà précis.
 ---
 
-# frame — two passes, one skill: frame the need, then (if open) explore the options
+# frame — deux passes, une skill : cadrer le besoin, puis (si ouvert) explorer les options
 
-## Purpose
-**Understand the need at 100% — including what the user did NOT write.** Frame the real PROBLEM (not the
-requested solution) and actively surface the **unstated**: implicit constraints, hidden presuppositions, and
-the **blind spots the user never articulated** — so nothing un-asked sinks the work downstream. Everything
-below is HOW that happens: the archetype questions pull the implicit out, the blind-spot sweep hunts what no
-question touched, the board-gate auto-answers the evident and surfaces to the human only what genuinely needs them.
+## À quoi ça sert
+**Comprendre le besoin à 100 % — y compris ce que l'utilisateur n'a PAS écrit.** Cadrer le vrai PROBLÈME (pas la solution demandée) et faire remonter activement l'**implicite** : contraintes tacites, présupposés cachés, et les **angles morts que l'utilisateur n'a jamais formulés** — pour que rien de non-demandé ne coule le travail en aval. Tout ce qui suit est le COMMENT : les questions-archétypes tirent l'implicite dehors, le balayage d'angles morts chasse ce qu'aucune question n'a touché, le filtre de remontée répond tout seul à l'évident et ne remonte à l'humain que ce qui l'exige vraiment.
 
-**Frame under anticipated audit (a lever)**: the Faithful `judge` WILL trace every need-claim back to a criterion (a stale/contradicted need = a defect it can flag) — producing for that falsifiable scrutiny tightens the need; it sharpens the framer, never the judge.
+**Cadrer sous audit anticipé (un levier)** : le `judge` Fidèle REMONTERA chaque affirmation du besoin à un critère (un besoin périmé ou contredit = un défaut qu'il peut signaler) — produire pour cette inspection falsifiable resserre le besoin ; ça aiguise le cadreur, jamais le juge.
 
-## Procedure
+## Quand la déclencher — et quand NON
+**(a) CADRAGE** : demande formulée en SOLUTION (« crée X », « ajoute Y », « fais le script Z », « mets en place… » — mais préparer la BOUCLE autonome d'un besoin déjà cadré → `terrain`) · besoin vague **sur une tâche déjà choisie** (vague sur QUELLE tâche prendre → `scout` d'abord) · « définis / cadre le besoin ». Inclut EXPLICITEMENT la création d'un doc/README/`AGENTS.md`/config : on déclenche pour VÉRIFIER qu'il n'existe pas déjà et pour cadrer son contenu — créer un fichier qui existe déjà (ou qui rate son vrai contenu) est le piège coûteux classique.
+**(b) CHOIX D'APPROCHE** : le COMMENT d'une tâche DÉJÀ choisie — « quelle approche / architecture / bibliothèque pour X », « explore les options », « compare les approches », « génère plein de solutions et fais-les voter », « aide-moi à choisir entre plusieurs designs ».
+**DEUX HARD-GATES de la constitution (`src/main/constitution.ts`), prioritaires sur tout ce qui précède** : une question purement CONSULTATIVE (« quelle est la meilleure X / vaut-il mieux / pourquoi », qui attend une réponse directe) → répondre DIRECTEMENT, AUCUN cadrage · une forme/prémisse encore OUVERTE (« je sais pas si X ou juste Y ? », un doute sur la FORME elle-même) → rester conversationnel et converger la forme D'ABORD, sans router ni sortir un QCM qui présuppose une forme choisie.
 
-### 0. RUN file
-Open or complete the **one** living `RUN.md`: `~\.claude\runs\<session_id>\<subject>-workspace\RUN.md` (kebab-case slug; `session:` header; session-scoping + legacy fallback → **ENGINE Ch.3 (RUN details) + foundation §1**). Set `regime:` (disposable | standard | critical) on entry. A `disposable` one-shot may need no RUN file (proportionality). Write `## Besoin`, `## Contraintes`, and (if reached) `## Options` here — never in separate files.
+## Procédure
 
-### Pass A — the need (always)
+### 0. Fichier RUN
+Ouvre ou complète l'**unique** `RUN.md` vivant : `~\.claude\runs\<session_id>\<subject>-workspace\RUN.md` (slug en kebab-case ; en-tête `session:` ; portée de session + repli historique → **ENGINE ch.3 (détails RUN) + fondation §1**). Pose `regime:` (disposable | standard | critical) dès l'entrée. Un one-shot `disposable` peut se passer de fichier RUN (proportionnalité). Écris `## Besoin`, `## Contraintes` et (s'il est atteint) `## Options` ICI — jamais dans des fichiers séparés.
 
-**0. Mirror the ask — ANCHOR, never REPLACE** (opening move; A/B-validated 2026-06-30). The user's message stays the SOURCE OF TRUTH — never rewrite it into a generated prompt the rest of the work then runs on (that silently buries YOUR interpretation as if it were theirs). Open by restating the understood intent in your words **+ what you'd assume — but every assumption stays a QUESTION** ("⚠️ I read this as X — correct me"), NEVER a deduced cause / direction / scope ASSERTED as fact.
-- **The trap (A/B cas C3, the counter-intuitive one)**: a "reformulation" that says *"probably it's a missing margin:auto"* on a bug you haven't reproduced is WORSE than staying agnostic — it commits the work to a false lead with an authoritative tone. So a CAUSE (bug) = a hypothesis to **MEASURE** (reproduce/read first), never injected as established context; a SCOPE (permissions/security/rights) = **surfaced for validation**, never baked in silently.
-- **OPEN goal** (design / "magnifique" / "améliore" / "nouvelle vision" / any aesthetic or direction-shaped ask) → do NOT frame a spec. Force **DIVERGENCE first** — 2-3 distinct options the user picks from (visual → `draft`; otherwise Pass B), because imposing a full invented spec on an open goal is the worst drift (A/B cas C1). This composes with the CLAUDE.md still-OPEN-form hard-gate (converge the form before routing).
+### Passe A — le besoin (toujours)
 
-**1. Pre-checks — before any question:**
-- **Solution in disguise** — "create/add/make X" is an answer, not a problem. Trace back to the underlying problem; impact of skipping ≥80 → surface it. Never frame the artifact before the problem is named.
-- **Check EXISTING first** — single recon fan-out (ENGINE ch.1 generate, parallel) before framing anything, especially for a doc/README/config: does it exist, what does it cover. Cite facts.
-- **Impact surface (blast-radius)** — MAP what the need will AFFECT: files/modules/configs/callers/docs/tests it touches, breaks, or must stay coherent with, plus what CONSTRAINS it (upstream deps, platform limits, policies). Single recon fan-out, parallel; cite `file:line`. Feeds scope-out (what stays INTACT) + success criterion; an empty map is a finding (isolated change). **Re-run (overwriting) if anything before `## Besoin` shifts the need** — new actor/output, overturned constraint, or changed delivery medium.
-- **Trivial off-ramp** — obviously trivial + disposable + already-precise → say framing is oversized, offer direct implementation. Do not run the heavy protocol.
+**0. Refléter la demande — ANCRER, jamais REMPLACER** (premier geste ; validé en A/B le 2026-06-30). Le message de l'utilisateur reste la SOURCE DE VÉRITÉ — ne le réécris jamais en un prompt généré sur lequel tout le reste du travail tournerait ensuite (cela enterre silencieusement TON interprétation comme si c'était la sienne). Ouvre en redisant l'intention comprise avec tes mots **+ ce que tu supposerais — mais chaque supposition reste une QUESTION** (« ⚠️ je lis ça comme X — corrige-moi »), JAMAIS une cause / direction / portée déduite AFFIRMÉE comme un fait.
+- **Le piège (A/B cas C3, le contre-intuitif)** : une « reformulation » qui dit *« c'est probablement un margin:auto manquant »* sur un bug que tu n'as pas reproduit est PIRE que de rester agnostique — elle engage le travail sur une fausse piste avec un ton d'autorité. Donc une CAUSE (bug) = une hypothèse à **MESURER** (reproduire/lire d'abord), jamais injectée comme contexte établi ; une PORTÉE (permissions/sécurité/droits) = **remontée pour validation**, jamais intégrée en silence.
+- **Objectif OUVERT** (design / « magnifique » / « améliore » / « nouvelle vision » / toute demande esthétique ou de direction) → ne cadre PAS une spec. Force la **DIVERGENCE d'abord** — 2-3 options distinctes parmi lesquelles l'utilisateur choisit (visuel → `draft` ; sinon passe B), parce qu'imposer une spec entière inventée sur un objectif ouvert est la pire dérive (A/B cas C1). Cela se compose avec le hard-gate de forme encore OUVERTE de la constitution (converger la forme avant de router).
 
-**2. EXTRACTION vs ANALYSIS** — two question kinds, never confused. EXTRACTION pulls what the user already holds (intent, constraints, taste) → ask them. ANALYSIS settles what only investigation can (what exists, what's feasible, what costs) → you go find out, never outsource it. Never dress an analysis question as a faux-QCM the user can't actually answer.
+**1. Pré-contrôles — avant toute question :**
+- **Solution déguisée** — « crée/ajoute/fais X » est une réponse, pas un problème. Remonte au problème sous-jacent ; impact d'un saut ≥ 80 → remonte-le. Ne cadre jamais l'artefact avant que le problème soit nommé.
+- **Vérifier l'EXISTANT d'abord** — une seule salve de reconnaissance en parallèle (ENGINE ch.1 generate) avant de cadrer quoi que ce soit, surtout pour un doc/README/config : existe-t-il, que couvre-t-il. Cite des faits.
+- **Surface d'impact (rayon de souffle)** — CARTOGRAPHIE ce que le besoin va TOUCHER : fichiers/modules/configs/appelants/docs/tests qu'il touche, casse ou avec lesquels il doit rester cohérent, plus ce qui le CONTRAINT (dépendances amont, limites de plateforme, politiques). Une seule salve de reconnaissance, en parallèle ; cite `file:line`. Alimente le hors-périmètre (ce qui reste INTACT) + le critère de succès ; une carte vide est un constat (changement isolé). **Rejoue-la (en écrasant) si quoi que ce soit avant `## Besoin` déplace le besoin** — nouvel acteur/sortie, contrainte renversée, ou support de livraison changé.
+- **Sortie de secours triviale** — manifestement trivial + jetable + déjà précis → dis que le cadrage est surdimensionné, propose l'implémentation directe. Ne joue pas le protocole lourd.
 
-**3. Question phase** — pool of archetype generators via ENGINE ch.1 (Naive · Breaker · Contradictor · Perfectionist · Diplomat · Explorer · Pragmatist · Emotional), generated in parallel (one message). **Naive opens** (decompose every term, surface every presupposition); questions scored on merit (impact × autonomy-confidence). **Board-gate** auto-answers the self-evident as stated assumptions ("I'm assuming X, based on <fact> — correct me", never silently), surfaces to the human ONLY strictly-private / high-impact / genuinely uncertain. **High-impact override**: impact ≥80 → surface regardless of confidence (sole carve-out: a "why" they already stated). Stop when best raw impact <30, gate exhaustion, or round cap.
+**2. EXTRACTION vs ANALYSE** — deux natures de questions, jamais confondues. L'EXTRACTION tire ce que l'utilisateur détient déjà (intention, contraintes, goût) → demande-lui. L'ANALYSE tranche ce que seule l'investigation peut trancher (ce qui existe, ce qui est faisable, ce que ça coûte) → tu vas le chercher, tu ne le sous-traites jamais. Ne déguise jamais une question d'analyse en faux-QCM auquel l'utilisateur ne peut pas répondre.
 
-**Discipline (non-negotiable):**
-- QCM-first — concrete choices before open prose; **one question at a time**, never a wall. QCM only when intent space is BOUNDED (by an artifact: log / diff / repro / stated constraint). Space still OPEN → open question, never a QCM — a QCM there locks the user into YOUR categories. **The moment the user rejects or redirects a QCM = your categories are wrong**: drop the options, go back to the open question; do NOT re-offer the same choices reworded. **Categories must SPAN the space BEFORE you emit (kaizen)**: when an existing artifact is in scope, the option set MUST include a "replace / refonte / start-fresh" branch (not only additive ones), and any load-bearing PREMISE of an option (a system state, a file's existence/value) must be verified with a cited check BEFORE emitting — board-gate the QCM's own premise (reflex 1).
-- Refuse the vague — "three-nothings" (no nothing / no idea / whatever in a row) → reframe, never accept fog.
-- **No solution during framing** — proposing a HOW is forbidden. The instant a solution is on the table you've flipped from PRODUCTION (you drive) to REACTION (you defend an artifact) — pull back to the problem.
-- Anti-drift on opening: decompose each term and its presuppositions rather than widening scope.
+**3. Phase de questions** — réservoir de générateurs-archétypes via ENGINE ch.1 (Naïf · Casseur · Contradicteur · Perfectionniste · Diplomate · Explorateur · Pragmatique · Émotionnel), générés en parallèle (un seul message). **Le Naïf ouvre** (décompose chaque terme, fait remonter chaque présupposé) ; les questions sont notées au mérite (impact × confiance-en-autonomie). **Le filtre de remontée** répond tout seul à l'évident sous forme d'hypothèses énoncées (« je suppose X, d'après <fait> — corrige-moi », jamais en silence), et ne remonte à l'humain QUE le strictement privé / à fort impact / vraiment incertain. **Priorité fort impact** : impact ≥ 80 → remonte quelle que soit la confiance (seule exception : un « pourquoi » qu'il a déjà énoncé). Arrête quand le meilleur impact brut passe sous 30, quand le filtre est épuisé, ou au plafond de tours.
 
-**4. Blind-spot sweep** (Fusion-inspired — *what no question touched*) — before writing the need: which facet did NO archetype/question probe **and no board-gate stated-assumption already cover**? These are the **UNASKED** (unknown-unknowns), DISTINCT from open questions (known-unknowns deferred to `terrain`). **Loop, don't one-shot** — re-sweep, each round using a DIFFERENT archetype as a coverage lens (Breaker = unprobed failure mode; Naive = unexamined presupposition — its analysis use, not question-generation). Stop when a round finds nothing new (no facet with impact ≥30 not already listed). **Regime cap**: disposable = 1 pass · standard = max 2 rounds · critical = until 2 dry rounds, max 3. Name blind spots so they surface; high-impact one → ask it now rather than defer.
+**Discipline (non négociable) :**
+- QCM d'abord — des choix concrets avant de la prose ouverte ; **une question à la fois**, jamais un mur. Un QCM SEULEMENT quand l'espace d'intention est BORNÉ (par un artefact : log / diff / reproduction / contrainte énoncée). Espace encore OUVERT → question ouverte, jamais un QCM — un QCM enferme alors l'utilisateur dans TES catégories. **Au moment où l'utilisateur rejette ou détourne un QCM = tes catégories sont fausses** : abandonne les options, reviens à la question ouverte ; ne repropose PAS les mêmes choix reformulés. **Les catégories doivent COUVRIR l'espace AVANT émission (kaizen)** : quand un artefact existant est dans le périmètre, le jeu d'options DOIT contenir une branche « remplacer / refonte / repartir de zéro » (pas seulement des branches additives), et toute PRÉMISSE porteuse d'une option (un état du système, l'existence ou la valeur d'un fichier) se vérifie par un contrôle cité AVANT émission — passe la prémisse du QCM au filtre de remontée (réflexe 1).
+- Refuse le vague — « trois-riens » (rien / aucune idée / peu importe à la suite) → recadre, n'accepte jamais le brouillard.
+- **Aucune solution pendant le cadrage** — proposer un COMMENT est interdit. À l'instant où une solution est sur la table, tu es passé de la PRODUCTION (tu mènes) à la RÉACTION (tu défends un artefact) — reviens au problème.
+- Anti-dérive à l'ouverture : décompose chaque terme et ses présupposés plutôt que d'élargir le périmètre.
+
+**4. Balayage d'angles morts** (inspiré de Fusion — *ce qu'aucune question n'a touché*) — avant d'écrire le besoin : quelle facette n'a été sondée par AUCUN archétype ni AUCUNE question **et n'est déjà couverte par aucune hypothèse énoncée du filtre** ? Ce sont les **NON-DEMANDÉS** (inconnues inconnues), DISTINCTS des questions ouvertes (inconnues connues reportées à `terrain`). **Boucle, ne fais pas un seul passage** — rebalaye, chaque tour utilisant un archétype DIFFÉRENT comme lentille de couverture (Casseur = mode de panne non sondé ; Naïf = présupposé non examiné — son usage d'analyse, pas de génération de questions). Arrête quand un tour ne trouve rien de neuf (aucune facette d'impact ≥ 30 non déjà listée). **Plafond par régime** : disposable = 1 passe · standard = 2 tours max · critical = jusqu'à 2 tours à vide, 3 max. Nomme les angles morts pour qu'ils remontent ; un angle mort à fort impact → pose-le maintenant plutôt que de le reporter.
 
 **4 bis. Cas limites d'entree — ENUMERE-LES DANS L'ENONCE, ne les laisse pas a l'executant.**
 Des que le besoin touche une entree (drapeau CLI, argument, option, champ de formulaire, requete,
@@ -70,72 +69,72 @@ la liste = **3 verts sur 3**. Separation parfaite (p = 0,10, plancher a n=3).
 **Garde-fou deterministe** : `node scripts/frame-cas-limites-check.mjs <RUN.md>` — exit 1 tant que le
 besoin decrit une entree sans enumerer ses cas limites. Passe-le AVANT de rendre la main a `terrain`.
 
-**5. Risk pass** — before writing the need, list **threats to the success criterion**: what could make this FAIL (dependency not ready, perf/scale ceiling, data loss / irreversibility, a stated assumption turning false, external blocker, scope creep). Each = **severity** (likelihood × impact) + one-line **mitigation/watch**. DISTINCT from blind spots (unprobed facets) and impact surface (existing affected): a risk is a KNOWN threat you can already name. High-severity risk with no mitigation → surface it (a need isn't fully framed while a fatal risk is unowned).
+**5. Passe risques** — avant d'écrire le besoin, liste les **menaces sur le critère de succès** : ce qui pourrait le faire ÉCHOUER (dépendance pas prête, plafond de perf/échelle, perte de données / irréversibilité, une hypothèse énoncée qui se révèle fausse, blocage externe, dérive de périmètre). Chacune = **gravité** (probabilité × impact) + une ligne de **mitigation/surveillance**. DISTINCT des angles morts (facettes non sondées) et de la surface d'impact (existant affecté) : un risque est une menace CONNUE que tu peux déjà nommer. Risque à forte gravité sans mitigation → remonte-le (un besoin n'est pas cadré tant qu'un risque fatal n'a pas de propriétaire).
 
-**6. Write `## Besoin` + `## Contraintes`** (plain words the user reads — no internal labels): `## Besoin` holds the real problem (not the requested solution) · scope in/out · a **verifiable success criterion as a cochable DoD checklist** (`- [ ]` exit conditions, each naming a PROOF — **format + rules: see `RUN-template.md`, the single source**; `disposable` may keep a one-line criterion — proportionality) · deliberate decisions · stated assumptions · **impact surface** (existing affected, cited) · **risks** (threats to success: severity + mitigation) · **blind spots** (Pass-A sweep's unknown-unknowns) · open questions left for `terrain`. `## Contraintes` holds only solution bounds, each classified `HARD` or `SOFT` with source and consequence of violation; do not duplicate `Scope OUT`. **Short retro**: what signals showed up this run → patch thresholds so next time bites earlier.
+**6. Écris `## Besoin` + `## Contraintes`** (en mots simples que l'utilisateur lit — aucun label interne) : `## Besoin` porte le vrai problème (pas la solution demandée) · périmètre dedans/dehors · un **critère de succès vérifiable sous forme de liste cochable** (conditions de sortie `- [ ]`, chacune nommant une PREUVE — **format + règles : voir `RUN-template.md`, la source unique** ; `disposable` peut garder un critère d'une ligne — proportionnalité) · décisions délibérées · hypothèses énoncées · **surface d'impact** (existant affecté, cité) · **risques** (menaces sur le succès : gravité + mitigation) · **angles morts** (les inconnues inconnues du balayage de passe A) · questions ouvertes laissées à `terrain`. `## Contraintes` ne porte que les bornes de solution, chacune classée `HARD` ou `SOFT` avec sa source et la conséquence d'une violation ; ne duplique pas le `Scope OUT` du gabarit. **Petite rétro** : quels signaux sont apparus ce run → ajuste les seuils pour que la prochaine fois morde plus tôt.
 
-**7. Confidence ledger — nothing load-bearing leaves this skill unverified** (anti-hallucination gate; the LAST move of Pass A, after `## Besoin` is written). List every claim the framed need **RESTS ON**: what exists, what a file / API / flag / table is called, how something currently behaves, what a constraint actually says. Mark each exactly one of:
-- **VERIFIED** — NAME the out-of-model artifact that establishes it, opened or run **this session**: `file:line` you actually read, a command + its exit code, a query result. A path you cite without having opened it is not verified.
-- **FROM THE USER** — they stated it. It carries their authority, not yours; if it turns out false, that's a surfaced correction, not a silent one.
-- **UNVERIFIED** — inferred, recalled, or assumed. Includes anything a memory note or a past run told you (dated evidence proves what was true AT ITS DATE).
+**7. Registre de confiance — rien de porteur ne sort de cette skill sans vérification** (garde anti-hallucination ; DERNIER geste de la passe A, après que `## Besoin` est écrit). Liste chaque affirmation sur laquelle le besoin cadré **REPOSE** : ce qui existe, le nom d'un fichier / d'une API / d'un drapeau / d'une table, le comportement actuel de quelque chose, ce qu'une contrainte dit vraiment. Marque chacune avec exactement une valeur :
+- **VÉRIFIÉE** — NOMME l'artefact hors-modèle qui l'établit, ouvert ou exécuté **cette session** : un `file:line` que tu as réellement lu, une commande + son code de sortie, un résultat de requête. Un chemin cité sans l'avoir ouvert n'est pas vérifié.
+- **DE L'UTILISATEUR** — il l'a énoncée. Elle porte son autorité, pas la tienne ; si elle se révèle fausse, c'est une correction visible, pas une correction silencieuse.
+- **NON VÉRIFIÉE** — déduite, remémorée ou supposée. Inclut tout ce qu'une note de mémoire ou un run passé t'a dit (une preuve datée prouve ce qui était vrai À SA DATE).
 
-Then **resolve, don't annotate**: every UNVERIFIED claim the downstream work would DEPEND on gets settled BEFORE handoff — read the file, run the probe, grep the caller. Not "think harder about it": an actual check. Only if it cannot be settled without the user (their intent, private context) does it become ONE surfaced question; only if it cannot be settled at all does it become a **stated assumption in `## Besoin` + a risk with its mitigation** — never a silent given. Write the result in RUN.md as `## Confiance`.
+Ensuite **résous, n'annote pas** : chaque affirmation NON VÉRIFIÉE dont le travail en aval DÉPENDRAIT est tranchée AVANT la passation — lis le fichier, lance la sonde, grep l'appelant. Pas « réfléchis-y plus fort » : un vrai contrôle. Seulement si elle ne peut pas être tranchée sans l'utilisateur (son intention, un contexte privé) elle devient UNE question remontée ; seulement si elle ne peut pas être tranchée du tout elle devient une **hypothèse énoncée dans `## Besoin` + un risque avec sa mitigation** — jamais un acquis silencieux. Écris le résultat dans RUN.md sous `## Confiance`.
 
-**Why this is NOT "rate your confidence"**: self-reported certainty is the one signal a hallucination leaves undisturbed — an invented API name feels exactly as solid as a real one, so introspection cannot separate them. What separates them is not the feeling, it's the **receipt**. So the question is never "am I sure?" but "**which artifact says so, and did I open it?**" A claim with no receipt is unverified by definition, however obvious it feels — and "it feels obvious" is a reason to check it, not to skip it.
+**Pourquoi ce n'est PAS « note ta confiance »** : la certitude auto-déclarée est le seul signal qu'une hallucination laisse intact — un nom d'API inventé paraît exactement aussi solide qu'un vrai, donc l'introspection ne peut pas les séparer. Ce qui les sépare n'est pas le ressenti, c'est le **reçu**. La question n'est donc jamais « est-ce que j'en suis sûr ? » mais « **quel artefact le dit, et est-ce que je l'ai ouvert ?** ». Une affirmation sans reçu est non vérifiée par définition, si évidente soit-elle — et « ça paraît évident » est une raison de vérifier, pas de sauter le contrôle.
 
-**The claims most likely to be invented are the most mundane ones**: a flag or option name, a file path, a function signature, a column name, a default value, a version, "the tests already cover that". Grand architectural claims get scrutiny; small factual ones ride through — and one wrong path name is enough to send a whole build down a road that does not exist.
+**Les affirmations les plus susceptibles d'être inventées sont les plus banales** : un nom de drapeau ou d'option, un chemin de fichier, une signature de fonction, un nom de colonne, une valeur par défaut, une version, « les tests couvrent déjà ça ». Les grandes affirmations d'architecture sont scrutées ; les petits faits passent au travers — et un seul nom de chemin faux suffit à lancer tout un build sur une route qui n'existe pas.
 
-**Repetition is not verification.** Once an invented fact is written into the RUN, every later step reads it back as established, and the frame becomes its own source. The ledger is built against ARTIFACTS, never against your own earlier prose.
+**Répéter n'est pas vérifier.** Une fois qu'un fait inventé est écrit dans le RUN, chaque étape suivante le relit comme établi, et le cadrage devient sa propre source. Le registre se construit contre des ARTEFACTS, jamais contre ta propre prose antérieure.
 
-**Regime cap**: `disposable` = the load-bearing claims only · `standard` = every claim in `## Besoin` · `critical` = all of them, plus one adversarial re-read asking "which of these could I NOT prove to someone who doubts me?".
-
----
-
-### Between passes — forced path or open choice?
-
-After `## Besoin` is written, decide: does the framed need leave a real, unsettled choice of HOW (which architecture / library / pattern), or does a single obvious path fall out of the constraints?
-
-- **Forced path**, OR trigger family (a) only with no design question → **skip Pass B**, hand straight to `terrain`.
-- **Genuine fork** (open choice remains), OR trigger family (b) ("which approach", "compare", "explore options") → **run Pass B**.
+**Plafond par régime** : `disposable` = les seules affirmations porteuses · `standard` = chaque affirmation de `## Besoin` · `critical` = toutes, plus une relecture adversariale demandant « laquelle de celles-ci NE pourrais-je PAS prouver à quelqu'un qui doute de moi ? ».
 
 ---
 
-### Pass B — options (ONLY if an open choice of approach remains; else skip)
+### Entre les passes — chemin forcé ou choix ouvert ?
 
-**1. Generate** by approach-lenses (ENGINE ch.1: MVP · robust · perf · lean · reuse-existing · creative · cost-first · UX-first · convention · contrarian), loop-until-dry, **dedup by core idea**.
+Une fois `## Besoin` écrit, tranche : le besoin cadré laisse-t-il un vrai choix de COMMENT encore ouvert (quelle architecture / bibliothèque / motif), ou un seul chemin évident tombe-t-il des contraintes ?
 
-**2. Score** in RANKING mode (ENGINE ch.2): typed criteria, fidelity as the eliminatory veto (~0 disqualifies), weighted sum post-veto; 2 decorrelated draws on subjective dims, median-then-MIN. (This weighted sum is the INTERNAL compute of the order — NOT what's shown: the DISPLAY to the human surfaces Impact ⊥ Effort as separate axes, never a single collapsed score — ENGINE Ch.1 display rule, see step 5.)
-
-**2b. Adaptive deepen-vs-widen** *(AB-MCTS-inspired pilot — a score-driven DECISION over the EXISTING actions of steps 1 & 3; reuses step 2's `gg-1` scores, NO new scorer; **`disposable` → skip this step**)*: AFTER step 2 is complete, read the score distribution and make ONE routing decision before finalizing — **clear dominant top → STOP** (the net-new bit: early-exit straight to step 3, no extra round) · **top promising but rough → DEEPEN**: route through step 3's grafts (don't shortcut to finalize) · **scores low / clustered, no winner → WIDEN**: re-enter step 1's loop-until-dry with MORE divergent lenses (its ~12-candidate / 2-dry-round caps still bind). DEEPEN/WIDEN add NO new action — they route into steps 3/1; only the STOP early-exit is new. **Cap ≤1 extra round** — step 1 (WIDEN) OR step 3 (DEEPEN), not chained. *(worked example: scores 88/52/49 → dominant top → STOP · 70/66/61 → clustered, no winner → WIDEN · 84/80/55 → top rough vs strong runner-up → DEEPEN.)* Thresholds (dominant / clustered) = judgment — the score guides, it doesn't gate. *Caveat: superiority over plain one-shot is a HYPOTHESIS, unproven (a loop-policy's value is hard to measure out-of-model).*
-
-**3. Top-K (3–5)** with trade-offs + grafts of discarded options' best parts.
-
-**4. Blind-spot check across options** — a need-case that NONE of the top-K covers = a coverage gap, not a ranking detail. Note it in `## Options` (label `Uncovered case`); if it implies a genuinely distinct option, add it before finalizing the ranking — don't let the leaderboard hide it.
-
-**5. Human decides.** Present the ranked top **with Impact ⊥ Effort surfaced as two separate axes** (ENGINE Ch.1 display rule — never a single collapsed score; a high-impact option stays visible even when costly) and let them pick. Only on an explicit "decide for me" do you pick the top-ranked and state why.
-
-**6. Write `## Options`** — ≥3 scored, genuinely distinct options (the stop-gate's ⚓ ANTI-FIXATION will verify this before any engaged decision; straw options are a defect) + a `Décision:` line.
+- **Chemin forcé**, OU famille de déclencheurs (a) seule, sans question de conception → **saute la passe B**, passe directement à `terrain`.
+- **Vraie bifurcation** (un choix ouvert demeure), OU famille de déclencheurs (b) (« quelle approche », « compare », « explore les options ») → **joue la passe B**.
 
 ---
 
-### Done
-Hand off to `terrain` (regime propagated through the RUN header). **Never report "done"** until `## Besoin` + `## Contraintes` + `## Confiance` (and, when Pass B ran, `## Options` + `Décision:`) are actually written in RUN.md. **A frame with an unresolved load-bearing UNVERIFIED claim is not done** — handing it off launches the whole pipeline on a maybe.
+### Passe B — les options (SEULEMENT s'il reste un choix d'approche ouvert ; sinon saute)
 
-## Output
+**1. Génère** par lentilles d'approche (ENGINE ch.1 : MVP · robuste · perf · frugal · réutiliser-l'existant · créatif · coût-d'abord · UX-d'abord · convention · contrarien), boucle jusqu'à épuisement, **déduplique par idée centrale**.
 
-`## Besoin` + `## Contraintes` + `## Confiance` sections in RUN.md — always. Quand le besoin touche une entree utilisateur, `## Besoin` porte en plus `### Cas limites d'entree` (>= 3 cas) ou une dispense motivee — verifie par `scripts/frame-cas-limites-check.mjs` (exit 0 exige). `## Options` + `Décision:` line in RUN.md — only when Pass B ran. All written in the one living RUN file; never separate need/options/ledger files.
+**2. Note** en mode CLASSEMENT (ENGINE ch.2) : critères typés, la fidélité en veto éliminatoire (~0 disqualifie), somme pondérée après veto ; 2 tirages décorrélés sur les dimensions subjectives, médiane puis MIN. (Cette somme pondérée est le calcul INTERNE de l'ordre — PAS ce qui est montré : l'AFFICHAGE à l'humain expose Impact ⊥ Effort en axes séparés, jamais une note unique effondrée — règle d'affichage ENGINE ch.1, voir étape 5.)
 
-## Don't
-- **Propose a HOW** during Pass A framing — that flips you from production to reaction.
-- **Outsource analysis questions** as faux-QCMs — go find out yourself.
-- **Run the heavy protocol** on an obviously trivial + disposable + already-precise one-shot — say so, offer direct implementation.
-- **Claim "done"** before `## Besoin` (and `## Options` + `Décision:` if Pass B ran) are written in RUN.md.
-- **Hand off a need that describes an INPUT without enumerating its limit cases** — mesure hors modele : 0 vert sur 3 contre 3 sur 3. Run `node scripts/frame-cas-limites-check.mjs <RUN.md>`; exit 1 = the frame is not done.
-- **Accept vague fog** — three-nothings in a row → reframe.
-- **Hand off a frame carrying an unresolved load-bearing UNVERIFIED claim** — the pipeline then builds on a maybe. Verify it, surface it, or write it as a stated assumption + risk. Never leave it looking like a fact.
-- **Report a confidence FEELING** ("I'm fairly sure X exists") in place of a receipt — name the artifact you opened, or mark it unverified.
-- **Use to**: prepare HOW of autonomous execution (→ `terrain`) · judge a deliverable (→ `judge`) · find WHAT to do when no task is chosen (→ `scout`).
+**2b. Approfondir ou élargir, de façon adaptative** *(pilote inspiré d'AB-MCTS — une DÉCISION guidée par les notes, portant sur les actions EXISTANTES des étapes 1 et 3 ; réutilise les notes `gg-1` de l'étape 2, AUCUN nouveau notateur ; **`disposable` → saute cette étape**)* : APRÈS l'étape 2, lis la distribution des notes et prends UNE décision d'aiguillage avant de finaliser — **tête nettement dominante → STOP** (la vraie nouveauté : sortie anticipée directement vers l'étape 3, aucun tour supplémentaire) · **tête prometteuse mais brute → APPROFONDIR** : passe par les greffes de l'étape 3 (ne coupe pas vers la finalisation) · **notes basses / groupées, aucun gagnant → ÉLARGIR** : rentre à nouveau dans la boucle de l'étape 1 avec des lentilles PLUS divergentes (ses plafonds ~12 candidats / 2 tours à vide tiennent toujours). APPROFONDIR/ÉLARGIR n'ajoutent AUCUNE action nouvelle — ils aiguillent vers les étapes 3/1 ; seule la sortie anticipée STOP est nouvelle. **Plafond ≤ 1 tour supplémentaire** — étape 1 (ÉLARGIR) OU étape 3 (APPROFONDIR), jamais enchaînés. *(exemple travaillé : notes 88/52/49 → tête dominante → STOP · 70/66/61 → groupées, aucun gagnant → ÉLARGIR · 84/80/55 → tête brute contre un second solide → APPROFONDIR.)* Les seuils (dominante / groupées) relèvent du jugement — la note guide, elle ne verrouille pas. *Réserve : la supériorité sur un simple coup unique est une HYPOTHÈSE, non prouvée (la valeur d'une politique de boucle est difficile à mesurer hors modèle).*
 
-## Engine & reflexes
-- Shared pool mechanics — **parallel fan-out, loop-until-dry, dedup-by-core-idea, the two /100 scales (impact ⟂ autonomy-confidence), the auto-resolve-vs-surface gate, schema `gg-1`** — are CANONICAL in `_engine/ENGINE.md` **Ch.1 GENERATE & GATE** (question generation) and **Ch.2 JUDGE** (its scoring & ranking mechanics, reused for Pass B). On divergence, the engine wins.
-- Reflex anchor: **solution in disguise = trap #1** — trace "create/add/make X" back to the real problem before framing anything. And **check what EXISTS before framing** (especially docs/configs): creating a duplicate is the classic expensive trap.
+**3. Top-K (3–5)** avec compromis + greffes des meilleures parties des options écartées.
+
+**4. Contrôle d'angles morts entre options** — un cas du besoin que AUCUNE option du top-K ne couvre est un trou de couverture, pas un détail de classement. Note-le dans `## Options` (libellé `Cas non couvert`) ; s'il implique une option réellement distincte, ajoute-la avant de finaliser le classement — ne laisse pas le tableau la masquer.
+
+**5. L'humain tranche.** Présente le classement **avec Impact ⊥ Effort exposés en deux axes séparés** (règle d'affichage ENGINE ch.1 — jamais une note unique effondrée ; une option à fort impact reste visible même si elle coûte cher) et laisse-le choisir. Seulement sur un « décide pour moi » explicite, tu prends la mieux classée et tu dis pourquoi.
+
+**6. Écris `## Options`** — ≥ 3 options notées et réellement distinctes (le contrôle d'arrêt ⚓ ANTI-FIXATION le vérifiera avant toute décision engagée ; des options de paille sont un défaut) + une ligne `Décision:`.
+
+---
+
+### Fini
+Passe la main à `terrain` (le régime se propage par l'en-tête du RUN). **Ne rapporte JAMAIS « fini »** tant que `## Besoin` + `## Contraintes` + `## Confiance` (et, si la passe B a tourné, `## Options` + `Décision:`) ne sont pas réellement écrits dans RUN.md. **Un cadrage portant une affirmation porteuse NON VÉRIFIÉE et non résolue n'est pas fini** — le passer lance tout le pipeline sur un peut-être.
+
+## Ce que ça produit
+
+Les sections `## Besoin` + `## Contraintes` + `## Confiance` dans RUN.md — toujours. Quand le besoin touche une entree utilisateur, `## Besoin` porte en plus `### Cas limites d'entree` (>= 3 cas) ou une dispense motivee — verifie par `scripts/frame-cas-limites-check.mjs` (exit 0 exige). La section `## Options` + la ligne `Décision:` dans RUN.md — seulement si la passe B a tourné. Le tout écrit dans l'unique fichier RUN vivant ; jamais dans des fichiers besoin/options/registre séparés.
+
+## À ne pas faire
+- **Proposer un COMMENT** pendant le cadrage de la passe A — cela te fait basculer de la production à la réaction.
+- **Sous-traiter les questions d'analyse** en faux-QCM — va chercher toi-même.
+- **Jouer le protocole lourd** sur un one-shot manifestement trivial + jetable + déjà précis — dis-le, propose l'implémentation directe.
+- **Prétendre « fini »** avant que `## Besoin` (et `## Options` + `Décision:` si la passe B a tourné) soient écrits dans RUN.md.
+- **Passer un besoin qui décrit une ENTRÉE sans énumérer ses cas limites** — mesure hors modele : 0 vert sur 3 contre 3 sur 3. Lance `node scripts/frame-cas-limites-check.mjs <RUN.md>` ; exit 1 = le cadrage n'est pas fini.
+- **Accepter le brouillard** — trois-riens à la suite → recadre.
+- **Passer un cadrage portant une affirmation porteuse NON VÉRIFIÉE non résolue** — le pipeline construit alors sur un peut-être. Vérifie-la, remonte-la, ou écris-la en hypothèse énoncée + risque. Ne la laisse jamais ressembler à un fait.
+- **Rapporter un RESSENTI de confiance** (« je suis assez sûr que X existe ») à la place d'un reçu — nomme l'artefact que tu as ouvert, ou marque-la non vérifiée.
+- **Utiliser pour** : préparer le COMMENT de l'exécution autonome (→ `terrain`) · juger un livrable (→ `judge`) · trouver QUOI faire quand aucune tâche n'est choisie (→ `scout`).
+
+## Moteur et réflexes
+- La mécanique partagée du réservoir — **salve parallèle, boucle jusqu'à épuisement, déduplication par idée centrale, les deux échelles /100 (impact ⟂ confiance-en-autonomie), le filtre auto-répondre-ou-remonter, le schéma `gg-1`** — est CANONIQUE dans `_engine/ENGINE.md` **ch.1 GENERATE & GATE** (génération de questions) et **ch.2 JUDGE** (sa mécanique de notation et de classement, réutilisée pour la passe B). En cas de divergence, le moteur gagne.
+- Ancrage de réflexe : **la solution déguisée = piège n° 1** — remonte de « crée/ajoute/fais X » au vrai problème avant de cadrer quoi que ce soit. Et **vérifie ce qui EXISTE avant de cadrer** (surtout docs/configs) : créer un doublon est le piège coûteux classique.

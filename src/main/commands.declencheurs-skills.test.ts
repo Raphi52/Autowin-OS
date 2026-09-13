@@ -15,7 +15,7 @@ describe('skillsInvocables — declencheur remis au modele', () => {
     const forge = lignes.find((l) => l.startsWith('forge'))
     expect(forge, 'skill forge absente du disque').toBeDefined()
     expect(forge).toContain(' — ')
-    expect(forge!.toLowerCase()).toContain('tool')
+    expect(forge!.toLowerCase()).toContain('outil')
   })
 
   it('borne chaque ligne : le declencheur, jamais le contrat entier', () => {

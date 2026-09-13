@@ -1,28 +1,16 @@
 ---
 name: arena
 description: >-
-  Prend UNE tâche et cherche le MEILLEUR WORKFLOW pour la faire — en le mesurant, pas en l'estimant.
-  Trois temps : (1) SCOUT lecture seule de candidats de workflow qui amélioreraient le RENDEMENT de
-  cette tâche (le chemin demande → livrable accepté : moins de tours, moins de $, moins de minutes,
-  zéro reprise), ancré sur la sonde `npm run scout:rendement` et sur les journaux
-  `.autowin-data/<profil>/activity/conv-N.jsonl` ; (2) EXPÉRIENCE A/B/C/X — la MÊME tâche exécutée par
-  QUATRE bras LANCÉS EN PARALLÈLE dans un SEUL message, chacun dans sa copie de travail isolée :
-  A = workflow actuel (témoin, obligatoire), B et C = les deux meilleurs candidats scoutés,
-  X = variante qui CASSE une prémisse (chemin court, phase sautée, outil différent) ; AU MOINS UN bras
-  (B ou C) ne diffère QUE par le TEXTE d'une skill utilisée par la tâche — même tâche, même modèle,
-  formulation réécrite —, et X est TOUJOURS l'APPEL NU : la même tâche sans aucune skill, sans
-  pipeline, sans consigne de phase, pour prouver que l'outillage vaut mieux que rien ; (3) JUGE externe
-  et adversarial qui compare les quatre livrables sur la MÊME grille des QUATRE dimensions — qualité
-  d'abord, puis coût $, temps, et efficacité (tours et appels d'outils dépensés pour atteindre le
-  critère) —, tous lus dans les journaux et jamais estimés, et rend UN workflow gagnant avec sa
-  preuve, puis l'installe au point qui le déclenche. Déclencher sur `/arena <tâche>`,
-  `/arena /<skill> <cible>` (ex. `/arena /heal autowin os` : c'est alors la SKILL nommée qui est au
-  banc, A = son texte actuel), « quel est le meilleur
-  workflow pour X », « teste plusieurs façons de faire X », « A/B teste cette tâche »,
-  « optimise la manière dont on fait X », « teste des formulations de cette skill ». N'UTILISE PAS pour : exécuter simplement la tâche (→ `build`),
-  analyser le corpus passé sans rien exécuter (→ `rendement`), auditer un livrable unique (→ `judge`),
-  chercher quoi faire sur une codebase (→ `scout`). Ici le livrable est un WORKFLOW GAGNANT PROUVÉ,
-  et la tâche n'est que le banc d'essai — mais son meilleur résultat est livré pour de vrai.
+  Prend UNE tâche et cherche le MEILLEUR WORKFLOW — en le MESURANT, pas en l'estimant.
+  Trois temps : (1) SCOUT en lecture seule de candidats qui amélioreraient le RENDEMENT (moins de
+  tours, de $, de minutes) ; (2) EXPÉRIENCE A/B/C/X — la MÊME tâche par QUATRE bras isolés lancés EN
+  PARALLÈLE : A = workflow actuel (témoin), B et C = les meilleurs candidats, X = l'APPEL NU (aucune
+  skill, aucun pipeline) ; (3) JUGE externe sur une grille unique (qualité, $, temps, efficacité)
+  qui rend UN workflow gagnant prouvé, puis l'installe à son point de déclenchement (§ Procédure).
+  Déclencher sur `/arena <tâche>`, `/arena /<skill> <cible>` (la skill nommée est au banc), « quel
+  est le meilleur workflow pour X », « teste plusieurs façons de faire X », « A/B teste cette tâche
+  ». PAS pour : exécuter la tâche (→ `build`), analyser le corpus passé (→ `rendement`), auditer un
+  livrable (→ `judge`), chercher quoi faire sur une codebase (→ `scout`).
 ---
 
 # arena — trouver le meilleur workflow d'une tâche par expérience A/B/C/X
@@ -30,6 +18,11 @@ description: >-
 Tu es l'**ORCHESTRATEUR**. Tu ne juges pas toi-même et tu n'exécutes pas les bras à la main : tu
 prépares le banc, tu lances les quatre bras EN PARALLÈLE, tu fais juger de l'extérieur, tu installes
 le gagnant.
+
+## Quand la déclencher — et quand NON
+**Déclencheurs** : `/arena <tâche>` · `/arena /<skill> <cible>` (ex. `/arena /heal autowin os` : c'est alors la SKILL nommée qui est au banc, A = son texte actuel) · « quel est le meilleur workflow pour X » · « teste plusieurs façons de faire X » · « A/B teste cette tâche » · « optimise la manière dont on fait X » · « teste des formulations de cette skill ».
+**PAS pour** : exécuter simplement la tâche → `build` · analyser le corpus passé sans rien exécuter → `rendement` · auditer un livrable unique → `judge` · chercher quoi faire sur une codebase → `scout`. Ici le livrable est un WORKFLOW GAGNANT PROUVÉ : la tâche n'est que le banc d'essai — mais son meilleur résultat est livré pour de vrai.
+**Chiffres** : tous LUS dans `.autowin-data/<profil>/activity/conv-N.jsonl` et la sonde `npm run scout:rendement`, JAMAIS estimés (§ Les QUATRE dimensions).
 
 ## Ce que la skill produit
 Deux artefacts, jamais un seul :
