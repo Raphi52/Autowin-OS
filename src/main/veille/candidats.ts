@@ -194,7 +194,7 @@ export function clesCandidat(
 ): string[] {
   return [
     cleDedup(candidat),
-    `titre ${(candidat.concurrent ?? '').trim().toLocaleLowerCase('fr')}|${normaliserTitre(
+    `titre::${(candidat.concurrent ?? '').trim().toLocaleLowerCase('fr')}|${normaliserTitre(
       candidat.titre ?? ''
     )}`
   ]
