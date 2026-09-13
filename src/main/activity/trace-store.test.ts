@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { describe, expect, it } from 'vitest'
-import { installTraceEventSink, rebaseTraceSequence, TraceStore } from './trace-store'
+import {
+  ecrituresCompteurSequence,
+  installTraceEventSink,
+  rebaseTraceSequence,
+  TraceStore
+} from './trace-store'
 import type { TraceEventV1 } from './trace-event'
 
 function event(id: string, sequence: number, content = id): TraceEventV1 {
@@ -255,7 +260,15 @@ describe('TraceStore append-only', () => {
     const first = reserve()
     const second = reserve()
     writeFileSync(barrier, 'go', 'utf8')
-    expect((await Promise.all([first, second])).sort((a, b) => a - b)).toEqual([1, 2])
+    const obtenues = (await Promise.all([first, second])).sort((a, b) => a - b)
+    /*
+     * Ce test assertait [1, 2] : il exigeait des numeros CONTIGUS. La contiguite n'a jamais ete
+     * l'invariant — c'etait un effet de bord d'une ecriture disque par evenement, la cause meme des
+     * 198 s de gel. L'intention reelle du test, elle, est intacte et reste verifiee ici : deux
+     * processus ne se partagent JAMAIS un numero, et chacun repart apres ce que l'autre a reserve.
+     */
+    expect(obtenues[0]).toBeGreaterThanOrEqual(1)
+    expect(obtenues[1]).toBeGreaterThan(obtenues[0])
   })
 
   /*
@@ -477,5 +490,63 @@ describe('cache de relecture borne et non partage', () => {
     expect(seconds[0].payloads[0].content).toBe('evt-0')
     expect(seconds[0].type).toBe('message')
     expect(store.readConversationBestEffort('conv-1')[0].payloads[0].content).toBe('evt-0')
+  })
+})
+
+/*
+ * GEL DU COMPTEUR DE SEQUENCE — 62 gels nommes « .conv-N.sequence », 198 s de fenetre figee.
+ *
+ * Chaque evenement trace prenait un verrou-fichier puis lisait ET reecrivait le compteur, en
+ * synchrone sur le main. La correction reserve une PLAGE d'avance : le disque n'est retouche qu'une
+ * fois par lot. Ces tests fixent les trois invariants que l'amortissement ne doit pas casser.
+ */
+describe('amortissement du compteur de sequence', () => {
+  it('chute le nombre d’ecritures disque sur 300 allocations d’affilee', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-amorti-'))
+    const store = new TraceStore(root)
+    const depart = ecrituresCompteurSequence()
+    const sequences: number[] = []
+    for (let index = 0; index < 300; index += 1) {
+      const suivante = store.nextSequence('conv-1')
+      sequences.push(suivante)
+      store.append({ ...event(`evt-${index}`, suivante), parentId: index ? `evt-${index - 1}` : undefined })
+    }
+    const ecritures = ecrituresCompteurSequence() - depart
+    // (a) MONOTONIE stricte dans le processus.
+    expect(sequences).toEqual(sequences.map((_, i) => i))
+    // Le defaut ecrivait 300 fois : une par evenement.
+    expect(ecritures).toBeLessThan(30)
+    expect(ecritures).toBeGreaterThan(0)
+  })
+
+  it('ecrit la plage AVANT de la distribuer : le fichier reste une borne basse apres arret brutal', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-borne-'))
+    const store = new TraceStore(root)
+    const premiere = store.nextSequence('conv-1')
+    const surDisque = Number.parseInt(readFileSync(join(root, '.conv-1.sequence'), 'utf8').trim(), 10)
+    // (b) le disque porte deja la borne HAUTE de la plage reservee, pas le numero servi.
+    expect(surDisque).toBeGreaterThanOrEqual(premiere)
+    const servies = [premiere]
+    for (let index = 0; index < 5; index += 1) servies.push(store.nextSequence('conv-1'))
+    expect(Math.max(...servies)).toBeLessThanOrEqual(surDisque)
+    // Un processus qui redemarre (aucune memoire de processus) repart APRES la plage deja reservee.
+    const apresRedemarrage = new TraceStore(root).nextSequence('conv-1')
+    expect(apresRedemarrage).toBeGreaterThan(Math.max(...servies))
+  })
+
+  it('conserve le verrou-fichier : un compteur laisse par un autre processus est respecte', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-interprocessus-'))
+    // (c) une autre instance a pousse le compteur tres haut avant nous : on doit passer APRES.
+    writeFileSync(join(root, '.conv-2.sequence'), '5000', 'utf8')
+    expect(new TraceStore(root).nextSequence('conv-2')).toBeGreaterThan(5_000)
+  })
+
+  it('leve toujours sur une sequence non monotone', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-monotone-'))
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0)).append(event('evt-1', 1))
+    expect(() => store.append({ ...event('evt-2', 1), parentId: 'evt-1' })).toThrow(
+      /sequence non monotone/
+    )
   })
 })
