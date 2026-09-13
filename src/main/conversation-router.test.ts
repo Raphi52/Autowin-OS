@@ -147,8 +147,9 @@ describe('ConversationRouter', () => {
   })
 
   it.each([
-    [0.96, 'current'],
-    [0.97, 'new']
+    [0.89, 'current'],
+    [0.9, 'new'],
+    [0.96, 'new']
   ] as const)('applies the conservative threshold at confidence %s', async (confidence, route) => {
     const { router } = harness(
       JSON.stringify({ route: 'new', confidence, reason: 'new-topic', title: 'Autre sujet' })
