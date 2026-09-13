@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CITATION_MINIMUM,
   cleDedup,
+  clesCandidat,
   normaliserTitre,
   trierCandidats,
   bornerPertinence,
@@ -187,5 +188,56 @@ describe('pertinence — la note du scout, bornee et jamais inventee', () => {
   it('un candidat sans pertinence n’en gagne pas une par defaut', () => {
     const { retenus } = trierCandidats([brut()], new Set(), contexte)
     expect(retenus[0].pertinence).toBeUndefined()
+  })
+})
+
+/**
+ * LA MÉMOIRE DES REFUS NE DOIT PAS SE CONTOURNER — état constaté le 2026-09-12 :
+ * 28 candidats en stock, tous « écartés ». La clé portait le numéro de ligne de l'ancrage, donc la
+ * même idée ré-ancrée une ligne plus loin, ou reformulée, revenait comme neuve.
+ */
+describe('déduplication : ni la ligne citée ni l’adresse ne suffisent à faire revenir une idée', () => {
+  const interne = (partiel: Partial<CandidatBrut> = {}): CandidatBrut =>
+    brut({ concurrent: 'autowin', url: 'src/main/veille/candidats.ts:168', ...partiel })
+
+  it('le numéro de ligne ne fait pas partie de la clé', () => {
+    expect(cleDedup(interne())).toBe(cleDedup(interne({ url: 'src/main/veille/candidats.ts:203' })))
+  })
+
+  it('une URL publique garde son adresse entière', () => {
+    expect(cleDedup(brut({ url: 'https://x.dev/notes' }))).not.toBe(
+      cleDedup(brut({ url: 'https://x.dev/autre' }))
+    )
+  })
+
+  it('un candidat ré-ancré ailleurs dans le même fichier est refusé « deja connu »', () => {
+    const { retenus } = trierCandidats([interne()], new Set(), contexte)
+    const connues = new Set(retenus.flatMap((c) => clesCandidat(c)))
+    const { refuses } = trierCandidats(
+      [interne({ url: 'src/main/veille/candidats.ts:204' })],
+      connues,
+      contexte
+    )
+    expect(refuses.map((r) => r.raison)).toEqual(['deja connu'])
+  })
+
+  it('le même titre ré-ancré dans un AUTRE fichier est refusé aussi', () => {
+    const { retenus } = trierCandidats([interne()], new Set(), contexte)
+    const connues = new Set(retenus.flatMap((c) => clesCandidat(c)))
+    const { refuses } = trierCandidats(
+      [interne({ url: 'src/main/veille/candidats-store.ts:91' })],
+      connues,
+      contexte
+    )
+    expect(refuses.map((r) => r.raison)).toEqual(['deja connu'])
+  })
+
+  it('deux CONCURRENTS différents avec le même titre restent deux candidats', () => {
+    const { retenus } = trierCandidats(
+      [brut({ concurrent: 'Codex' }), brut({ concurrent: 'Cursor' })],
+      new Set(),
+      contexte
+    )
+    expect(retenus).toHaveLength(2)
   })
 })

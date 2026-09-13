@@ -165,9 +165,39 @@ export function normaliserTitre(titre: string): string {
 export function cleDedup(candidat: Pick<CandidatBrut, 'concurrent' | 'url' | 'titre'>): string {
   return [
     (candidat.concurrent ?? '').trim().toLocaleLowerCase('fr'),
-    (candidat.url ?? '').trim(),
+    adresseSansLigne((candidat.url ?? '').trim()),
     normaliserTitre(candidat.titre ?? '')
   ].join('|')
+}
+
+/**
+ * L'ancrage interne SANS son numéro de ligne : `src/main/x.ts:168` -> `src/main/x.ts`.
+ *
+ * Le numéro de ligne bougeait à chaque édition du fichier, si bien que la MÊME idée ré-ancrée une
+ * ligne plus loin produisait une clé neuve et revenait comme « nouvelle » alors qu'elle avait déjà
+ * été écartée à la main. Une URL publique n'est pas touchée : son `:` n'est jamais un numéro de ligne.
+ */
+function adresseSansLigne(url: string): string {
+  return ancrageInterne(url) ? url.replace(/:\d+$/, '') : url
+}
+
+/**
+ * LES DEUX clés d'un candidat. Un candidat déjà connu par l'UNE d'elles est un doublon.
+ *
+ * La première (cleDedup) tolère qu'un concurrent reformule un titre sur la même page ; la seconde
+ * ferme la porte laissée ouverte par la première — changer l'adresse citée ne suffit plus à faire
+ * repasser une idée déjà refusée. Le couple concurrent+titre est conservé plutôt que le titre seul :
+ * deux concurrents peuvent sortir « support MCP » la même semaine, ce sont bien deux candidats.
+ */
+export function clesCandidat(
+  candidat: Pick<CandidatBrut, 'concurrent' | 'url' | 'titre'>
+): string[] {
+  return [
+    cleDedup(candidat),
+    `titre ${(candidat.concurrent ?? '').trim().toLocaleLowerCase('fr')}|${normaliserTitre(
+      candidat.titre ?? ''
+    )}`
+  ]
 }
 
 function urlAcceptable(url: string): boolean {
@@ -246,12 +276,13 @@ export function trierCandidats(
       refuses.push({ raison, brut })
       continue
     }
-    const cle = cleDedup(brut)
-    if (vues.has(cle)) {
+    const cles = clesCandidat(brut)
+    if (cles.some((cle) => vues.has(cle))) {
       refuses.push({ raison: 'deja connu', brut })
       continue
     }
-    vues.add(cle)
+    for (const cle of cles) vues.add(cle)
+    const cle = cles[0]!
     retenus.push({
       id: cle,
       concurrent: brut.concurrent!.trim(),

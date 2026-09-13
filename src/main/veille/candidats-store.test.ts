@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { CandidatVeille } from './candidats'
+import { clesCandidat, type CandidatVeille } from './candidats'
 import {
   clesConnues,
   ecrireStockVeille,
@@ -142,6 +142,11 @@ describe('fusion d’une passe', () => {
       candidats: [candidat(), candidat({ id: 'z', titre: 'Autre' })],
       echecs: []
     }
-    expect(clesConnues(stock).size).toBe(2)
+    // Deux clés par candidat depuis le 2026-09-13 (adresse sans numéro de ligne + concurrent/titre) :
+    // ce qui compte est que CHAQUE candidat de l'historique soit couvert, pas le compte de clés.
+    const connues = clesConnues(stock)
+    for (const c of stock.candidats) {
+      expect(clesCandidat(c).some((cle) => connues.has(cle))).toBe(true)
+    }
   })
 })
