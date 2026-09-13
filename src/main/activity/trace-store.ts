@@ -20,6 +20,24 @@ let installedTraceEventSink: TraceEventSink | undefined
 // Tous les producteurs de trace d'Autowin vivent dans le meme main Electron. Ce registre partage
 // l'allocation entre instances de TraceStore ; le journal disque reste l'autorite au redemarrage.
 const allocatedSequences = new Map<string, number>()
+/*
+ * PLAGE RESERVEE SUR DISQUE, par conversation (meme cle que `allocatedSequences`).
+ *
+ * fix-ok: 62 gels « .conv-N.sequence » / 198 s de fenetre figee — la cause mesuree est une prise de
+ * verrou + lecture + ecriture SYNCHRONES du compteur par EVENEMENT trace. Le compteur n'est plus
+ * retouche qu'une fois par lot : on ecrit d'abord la BORNE HAUTE de la plage, puis on distribue les
+ * numeros de cette plage en memoire. L'ecriture precede toujours la distribution, donc un arret
+ * brutal fait repartir APRES la plage : le fichier reste une borne basse fiable, jamais un numero
+ * deja servi ne peut etre rejoue.
+ */
+const reservedSequences = new Map<string, number>()
+const SEQUENCE_RESERVATION_LOT = 64
+let compteurEcrituresSequence = 0
+
+/** Ecritures reelles du fichier compteur, exposees pour la garde de complexite (comme sequenceScanBytes). */
+export function ecrituresCompteurSequence(): number {
+  return compteurEcrituresSequence
+}
 const sequenceLockWaitBuffer = new Int32Array(new SharedArrayBuffer(4))
 const SEQUENCE_LOCK_TIMEOUT_MS = 2_000
 /*
@@ -169,14 +187,25 @@ export class TraceStore {
   private reserveSequence(conversationId: string, candidate: number): number {
     const key = this.sequenceKey(conversationId)
     const counterPath = join(this.root, `.${conversationId}.sequence`)
+    const voulue = Math.max(candidate, (allocatedSequences.get(key) ?? -1) + 1)
+    // Chemin CHAUD : le numero tient dans la plage deja reservee sur disque — aucun verrou, aucun fs.
+    if (voulue <= (reservedSequences.get(key) ?? -1)) {
+      allocatedSequences.set(key, voulue)
+      return voulue
+    }
     return withSequenceLock(this.root, conversationId, () => {
       let persisted = -1
       if (existsSync(counterPath)) {
         const parsed = Number.parseInt(readFileSync(counterPath, 'utf8').trim(), 10)
         if (Number.isSafeInteger(parsed) && parsed >= 0) persisted = parsed
       }
-      const sequence = Math.max(candidate, persisted + 1, (allocatedSequences.get(key) ?? -1) + 1)
-      writeFileSync(counterPath, String(sequence), 'utf8')
+      const sequence = Math.max(voulue, persisted + 1, (allocatedSequences.get(key) ?? -1) + 1)
+      const borneHaute = sequence + SEQUENCE_RESERVATION_LOT - 1
+      // ECRITE AVANT d'etre distribuee : un autre processus, ou ce processus apres un crash, lira
+      // cette borne et repartira au-dela. L'inverse rejouerait des numeros deja servis.
+      writeFileSync(counterPath, String(borneHaute), 'utf8')
+      compteurEcrituresSequence += 1
+      reservedSequences.set(key, borneHaute)
       allocatedSequences.set(key, sequence)
       return sequence
     })
@@ -552,6 +581,7 @@ export class TraceStore {
     this.readCursorsStrict.delete(conversationId)
     this.readCursorsVue.delete(conversationId)
     allocatedSequences.delete(this.sequenceKey(conversationId))
+    reservedSequences.delete(this.sequenceKey(conversationId))
     rmSync(join(this.root, `.${conversationId}.sequence`), { force: true })
     return true
   }
