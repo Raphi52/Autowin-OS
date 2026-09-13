@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   SEUILS,
   VUES_CONNUES,
+  doitPasserParInstanceCachee,
   resoudreVue,
   verdictCapture,
   verdictMouvement
@@ -18,6 +19,18 @@ import {
  * Ces tests verrouillent le verdict PUR : chaque façon d'obtenir une capture creuse (mauvaise vue,
  * navigation non appliquée, page blanche, PNG vide) doit être NOMMÉE, pas seulement rejetée.
  */
+describe('non invasif par défaut (conv-526, 2026-09-13)', () => {
+  it('sans drapeau, la capture passe par une instance cachée', () => {
+    expect(doitPasserParInstanceCachee(['--view', 'chat', '--out', 'x.png'])).toBe(true)
+    expect(doitPasserParInstanceCachee(['--view', 'chat', '--instance-dediee'])).toBe(true)
+  })
+  it('la fenêtre réelle ne se pilote que sur demande nommée', () => {
+    expect(doitPasserParInstanceCachee(['--view', 'chat', '--fenetre-reelle'])).toBe(false)
+    // la re-exécution derrière l'enrobage reçoit --port : elle ne doit pas se relancer en boucle
+    expect(doitPasserParInstanceCachee(['--view', 'chat', '--port', '9240'])).toBe(false)
+  })
+})
+
 describe('verdict du harnais de capture', () => {
   const bon = {
     vue: 'worktree',
