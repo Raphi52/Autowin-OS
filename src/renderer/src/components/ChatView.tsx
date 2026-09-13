@@ -2270,7 +2270,6 @@ export function ChatView({
       requestAnimationFrame,
       120,
       (landed) => {
-          console.log('[SONDE2] settled', 'landed=' + landed, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
         descenteEnVolRef.current = false
         if (!landed) setHasNewActivity(true)
       },
