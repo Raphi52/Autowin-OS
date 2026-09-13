@@ -1200,10 +1200,26 @@ export function ChatView({
     // Differe d'une micro-tache et appel OPTIONNEL, comme dans Routage : un preload plus ancien
     // que le renderer ne doit pas produire de rejet non gere, et un `setState` atteint
     // synchronement depuis un effet declenche des rendus en cascade.
-    void Promise.resolve().then(async () => {
+    // UN SEUL ESSAI NE SUFFIT PAS. Vecu le 2026-09-12 : quand cet appel echoue au demarrage (main
+    // pas encore pret, preload plus ancien qu'un renderer recharge a chaud), la liste restait nulle
+    // POUR TOUTE LA SESSION et le bloc « Compte » disparaissait de la pop-up, sans aucun message.
+    let annule = false
+    let essais = 0
+    const charger = async (): Promise<void> => {
+      if (annule) return
       const payload = await window.api.claudeAccounts?.().catch(() => null)
-      if (payload) setComptesClaude(payload)
-    })
+      if (annule) return
+      if (payload && payload.accounts.length > 0) {
+        setComptesClaude(payload)
+        return
+      }
+      essais += 1
+      if (essais < 5) setTimeout(() => void charger(), 1000 * essais)
+    }
+    void Promise.resolve().then(charger)
+    return () => {
+      annule = true
+    }
   }, [])
 
   /**
@@ -1214,18 +1230,21 @@ export function ChatView({
    * main le re-applique de toute facon au depart de chaque tour : c'est lui qui tient la verite.
    */
   const choisirCompteDeConversation = async (accountId: string): Promise<void> => {
-    if (!activeId || compteBusy) return
+    if (compteBusy) return
     setCompteBusy(true)
     setCompteError(null)
     try {
-      await window.api.conversationSetClaudeAccount?.(activeId, accountId)
+      // Sans conversation ouverte, on bascule seulement le compte de l'application : il n'y a
+      // encore aucun fil sur lequel memoriser le choix.
+      if (activeId) await window.api.conversationSetClaudeAccount?.(activeId, accountId)
       const payload = await window.api.claudeAccountSwitch?.(accountId)
       if (payload) setComptesClaude(payload)
-      setConvs((courant) =>
-        courant.map((conv) =>
-          conv.id === activeId ? { ...conv, claudeAccountId: accountId } : conv
+      if (activeId)
+        setConvs((courant) =>
+          courant.map((conv) =>
+            conv.id === activeId ? { ...conv, claudeAccountId: accountId } : conv
+          )
         )
-      )
       window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
     } catch (error) {
       setCompteError(error instanceof Error ? error.message : String(error))
@@ -6323,10 +6342,15 @@ Cliquer pour choisir une autre branche.`}
                     error={modelChangeError}
                     onSelect={(option) => void changeOrchestratorModel(option)}
                     comptes={
-                      comptesClaude && activeId
+                      // Sans conversation ouverte (fil neuf pas encore cree), le bloc reste
+                      // AFFICHE et se replie sur le compte actif de l'application : le faire
+                      // disparaitre donnait l'impression que la fonctionnalite avait ete retiree.
+                      comptesClaude
                         ? {
                             accounts: comptesClaude.accounts,
-                            selectedId: convs.find((conv) => conv.id === activeId)?.claudeAccountId,
+                            selectedId: activeId
+                              ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
+                              : undefined,
                             activeId: comptesClaude.activeId,
                             busy: compteBusy || busy,
                             error: compteError,
