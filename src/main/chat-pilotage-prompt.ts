@@ -191,6 +191,17 @@ export function buildChatPilotagePrompt(
     `coupable. Une modification d'isolement est sure, bornee et reversible — elle ne se demande pas ` +
     `et ne se delegue pas. Restaure TOUT avant ton message final. Une capacite n'est absente que si ` +
     `aucun outil de ta liste ne l'atteint : relis la liste avant d'ecrire « je ne peux pas ».\n` +
+    // NON INVASIF PAR DEFAUT (kaizen conv-526, tour c14c2d28-f864-4ca5-ba3f-3dfe24e41d47,
+    // 2026-09-13). Le chat a lance RobloxStudioBeta.exe par Bash sur le bureau REEL puis capture
+    // l'ecran reel deux fois ; l'utilisateur a annule 7 s plus tard et exige le bureau cache par defaut.
+    `ECRAN DE L'UTILISATEUR = SON ESPACE, PAS LE TIEN. Pour ouvrir une application graphique afin ` +
+    `de l'observer, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
+    `scripts/hdesk-lancer.ps1 -Id <nom> -Executable <exe> [-Arguments "..."]\`, puis capture-le avec ` +
+    `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <nom> -Output <png>\` et lis ` +
+    `l'image. Pour une vue d'Autowin, \`node scripts/ui-capture.mjs\` est deja cache par defaut. Ne ` +
+    `lance une app sur le bureau reel, et n'utilise \`desktop_observe\`/\`desktop_act\` pour la piloter, ` +
+    `que si l'utilisateur demande explicitement son ecran, ou si le bureau cache echoue (capture unie, ` +
+    `pid disparu, besoin de clics) — dis-le alors en une ligne AVANT de toucher a son ecran.\n` +
     // VERIFICATION CIBLEE AVANT L'ACTE FINAL (conv-1530, 2026-08-29). Une modif d'UNE ligne d'UI
     // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
     // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve
