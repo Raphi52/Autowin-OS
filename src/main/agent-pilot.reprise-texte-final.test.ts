@@ -107,6 +107,6 @@ describe('reprise de tour — le texte final survit au redemarrage', () => {
       result: { text: DEJA_DIFFUSE + CLOTURE, provider: 'fixture', systemInjected: true }
     })
     const done = events.find((event) => event.kind === 'done')
-    expect((done && 'text' in done ? done.text : '').trim()).not.toBe('')
+    expect(((done && 'text' in done ? done.text : '') ?? '').trim()).not.toBe('')
   })
 })

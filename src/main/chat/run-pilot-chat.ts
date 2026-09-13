@@ -261,7 +261,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      */
     const etiquettesAction: string[] = []
     let streamedSpoken = recovery?.providerCall.streamedPrefix ?? ''
-    let durableResponseTextSeen = Boolean(streamedSpoken.trim())
     // Frontiere d'iteration : sert a savoir si le delta poursuit le MEME message ou en ouvre un
     // nouveau (cf. coller-texte-parle.ts). -1 = aucun delta recu encore.
     let iterationDuDernierDelta: number | undefined = -1
@@ -893,7 +892,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             iterationDuDernierDelta === pilotEvent.iteration
           )
           iterationDuDernierDelta = pilotEvent.iteration
-          durableResponseTextSeen = true
         }
         if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text
         if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
@@ -901,7 +899,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
         if (pilotEvent.kind === 'think' && pilotEvent.text) {
           spoken.push(pilotEvent.text)
-          durableResponseTextSeen = true
         }
         if (pilotEvent.kind === 'command' && pilotEvent.name)
           etiquettesAction.push(`[a exécuté ${pilotEvent.name}]`)
