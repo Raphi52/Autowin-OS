@@ -2198,7 +2198,6 @@ export function ChatView({
       )
       return
     }
-    console.log('[SONDE2] effet', 'followTail=' + followTailRef.current, 'restaurer=' + !!aRestaurer, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
     if (!followTailRef.current) {
       basculeConvRef.current = false
       setHasNewActivity(true)
