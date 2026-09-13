@@ -894,8 +894,7 @@ const bus = new AppCommandBus(
  * borne que par son horloge, et un programme qui ne rend jamais la main (application a fenetre,
  * serveur) bloquait le tour jusqu'au plafond, Stop compris (conv-384, 2026-09-09).
  */
-bus.signalDuTour = (conversationId) =>
-  activeChatTurns.get(conversationId)?.controller.signal
+bus.signalDuTour = (conversationId) => activeChatTurns.get(conversationId)?.controller.signal
 /**
  * Les outils Brain des noeuds SKILL d'un workflow.
  *
@@ -1190,7 +1189,9 @@ const agentModelsReady = modelCatalog.refresh(true)
 void maybeUpdateClaudeCli(join(app.getPath('userData'), 'claude-cli-update.json'))
   .then((resultat) => {
     if (resultat.outcome === 'skipped') return
-    console.log(`[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`)
+    console.log(
+      `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
+    )
     if (resultat.outcome === 'updated') void modelCatalog.refresh(true)
   })
   .catch(() => {
@@ -1547,7 +1548,8 @@ function registerChatIpc(): void {
   ipcMain.handle('os:presence', (event, etat: unknown) => {
     assertTrustedRendererSender(event, 'Présence système des runs')
     const brut = (etat ?? {}) as Record<string, unknown>
-    const nombre = (cle: string): number => (typeof brut[cle] === 'number' ? (brut[cle] as number) : 0)
+    const nombre = (cle: string): number =>
+      typeof brut[cle] === 'number' ? (brut[cle] as number) : 0
     refleterRunsVivants({
       runsActifs: nombre('runsActifs'),
       etapesFaites: nombre('etapesFaites'),

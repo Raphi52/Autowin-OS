@@ -18,7 +18,9 @@ const argument = (name, fallback) => {
   return index >= 0 ? process.argv[index + 1] : fallback
 }
 const port = portCdp()
-const output = resolve(argument('--out', 'Audit/headless-instances/chat-mermaid/proof/chat-mermaid.png'))
+const output = resolve(
+  argument('--out', 'Audit/headless-instances/chat-mermaid/proof/chat-mermaid.png')
+)
 mkdirSync(dirname(output), { recursive: true })
 
 const cibles = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
@@ -64,7 +66,11 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id, method, params }))
   })
 const evaluate = async (expression) => {
-  const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+  const result = await send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true
+  })
   if (result.exceptionDetails)
     throw new Error(`Erreur renderer: ${JSON.stringify(result.exceptionDetails).slice(0, 800)}`)
   return result.result?.value
@@ -83,7 +89,10 @@ const waitFor = async (expression, label, timeoutMs = 25_000) => {
 await send('Runtime.enable')
 await send('Page.enable')
 await evaluate(`document.querySelector('[data-testid="first-run-wizard"] .frw-primary')?.click()`)
-await waitFor(`!document.querySelector('[data-testid="first-run-wizard"]')`, 'fermeture du first-run')
+await waitFor(
+  `!document.querySelector('[data-testid="first-run-wizard"]')`,
+  'fermeture du first-run'
+)
 
 const seeded = await evaluate(`window.api.seedArtifactPreviewsTest(true)`)
 await send('Page.reload', { ignoreCache: true })
@@ -148,9 +157,15 @@ const preuve = await evaluate(`(() => {
 // CAPTURE PAR LA PAGE QUE L'ON VIENT D'INTERROGER. `captureTestPage` passe par la fenetre du
 // processus principal et a rendu l'ecran de demarrage alors que le DOM sonde portait deja le
 // diagramme : une preuve d'image doit venir de la MEME page que la preuve de DOM.
-const screenshot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+const screenshot = await send('Page.captureScreenshot', {
+  format: 'png',
+  captureBeyondViewport: false
+})
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
-writeFileSync(output.replace(/\.png$/i, '.json'), JSON.stringify({ seeded, preuve, runtimeErrors }, null, 2))
+writeFileSync(
+  output.replace(/\.png$/i, '.json'),
+  JSON.stringify({ seeded, preuve, runtimeErrors }, null, 2)
+)
 console.log(JSON.stringify(preuve, null, 2))
 console.log(`capture: ${output}`)
 
@@ -159,12 +174,14 @@ if (!seeded) echecs.push('la fixture ne s est pas semee')
 if (preuve.blocs < 2) echecs.push(`${preuve.blocs} bloc(s) mermaid dans le fil au lieu de 2`)
 if (preuve.svgLargeur < 80 || preuve.svgHauteur < 40)
   echecs.push(`le diagramme est vide ou minuscule (${preuve.svgLargeur}x${preuve.svgHauteur})`)
-if (preuve.noeuds < 4) echecs.push(`${preuve.noeuds} element(s) dans le SVG — le diagramme n est pas dessine`)
+if (preuve.noeuds < 4)
+  echecs.push(`${preuve.noeuds} element(s) dans le SVG — le diagramme n est pas dessine`)
 if (!preuve.textes.some((texte) => texte.includes('Message')))
   echecs.push(`les libelles du diagramme sont absents : ${JSON.stringify(preuve.textes)}`)
 if (preuve.scripts) echecs.push(`${preuve.scripts} script(s) dans le SVG rendu`)
 if (!preuve.replieSansSvg) echecs.push('le diagramme invalide n a pas de repli visible')
-if (!preuve.replieMontreLaSource) echecs.push('le repli ne montre pas la source du diagramme invalide')
+if (!preuve.replieMontreLaSource)
+  echecs.push('le repli ne montre pas la source du diagramme invalide')
 /*
  * DEBORDEMENT : mesure valable SEULEMENT si le conteneur a une largeur reelle. L'instance cachee
  * peut naitre avec un fil de 27 px (mesure du 2026-09-13) ; comparer un dessin de 544 px a une
@@ -176,11 +193,14 @@ else if (!(preuve.largeurConteneur > 200))
   console.log(
     `NOTE — debordement non mesure : conteneur de ${preuve.largeurConteneur}px dans une fenetre cachee de ${preuve.largeurFil}px.`
   )
-if (runtimeErrors.length) echecs.push(`${runtimeErrors.length} erreur(s) JavaScript pendant le rendu`)
+if (runtimeErrors.length)
+  echecs.push(`${runtimeErrors.length} erreur(s) JavaScript pendant le rendu`)
 
 if (echecs.length) {
   console.error('\nECHEC :')
   for (const echec of echecs) console.error(`- ${echec}`)
   process.exit(1)
 }
-console.log('\nOK — le diagramme mermaid est REELLEMENT dessine dans le fil, et une source invalide retombe sur son texte.')
+console.log(
+  '\nOK — le diagramme mermaid est REELLEMENT dessine dans le fil, et une source invalide retombe sur son texte.'
+)
