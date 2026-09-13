@@ -54,13 +54,17 @@ const ALLOWED_TAGS = new Set([
   'hr',
   'i',
   'img',
+  'input',
   'ins',
   'kbd',
+  'label',
   'li',
   'mark',
+  'meter',
   'ol',
   'p',
   'pre',
+  'progress',
   's',
   'samp',
   'section',
@@ -185,10 +189,21 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 const ALLOWED_ATTRS = new Set([
   'align',
   'alt',
+  'checked',
   'class',
   'colspan',
   'datetime',
+  'disabled',
+  'for',
   'height',
+  'high',
+  'id',
+  'low',
+  'max',
+  'min',
+  'name',
+  'open',
+  'optimum',
   'rowspan',
   'span',
   'start',
@@ -197,6 +212,17 @@ const ALLOWED_ATTRS = new Set([
   'value',
   'width'
 ])
+
+/**
+ * INTERACTIVITE SANS JAVASCRIPT : les seuls champs acceptes.
+ *
+ * `checkbox` et `radio` ne portent aucune saisie et n'emportent rien — associes a un `<label>` et a
+ * `:checked` en CSS, ils suffisent aux onglets, aux accordeons et aux filtres. Tout autre `type`
+ * est refuse et l'element entier disparait : un `text` ou un `password` au milieu d'une reponse
+ * ressemblerait a un formulaire de l'application alors qu'il ne mene nulle part, et `file`, `image`
+ * ou `submit` ouvrent des chemins (fichier local, requete sortante) qui n'ont rien a faire ici.
+ */
+const ALLOWED_INPUT_TYPES = new Set(['checkbox', 'radio'])
 
 /** Proprietes CSS inline autorisees : mise en forme dans le flux, jamais de positionnement. */
 const ALLOWED_STYLE_PROPS = new Set([
@@ -311,8 +337,7 @@ export function clampVerticalRhythm(property: string, value: string): string {
     return value
   }
 
-  if (VERTICAL_SPACE_PROPS.has(property))
-    return raw.split(/\s+/).map(clampLength).join(' ')
+  if (VERTICAL_SPACE_PROPS.has(property)) return raw.split(/\s+/).map(clampLength).join(' ')
 
   if (BOX_SHORTHAND_PROPS.has(property)) {
     const parts = raw.split(/\s+/)
@@ -397,6 +422,24 @@ function scopeToken(source: string): string {
 /** `html`, `body` et `:root` designent, dans le fil, le conteneur du bloc — pas la page de l'app. */
 const ROOT_SELECTORS = /^(?:html|body|:root)$/i
 
+/**
+ * LE PREFIXE DES IDENTIFIANTS DU BLOC.
+ *
+ * Un `id` du modele ne doit jamais repondre a un `getElementById` de l'application, ni entrer en
+ * collision avec un `id` d'une AUTRE reponse du meme fil (deux blocs d'onglets se voleraient leurs
+ * cases cochees). Le meme prefixe est applique au HTML (`id`, `for`, `name`) et aux selecteurs
+ * `#...` de la feuille du bloc : sans cette symetrie, le CSS ne designerait plus rien et les
+ * onglets resteraient inertes.
+ */
+export function prefixeIdentifiantsDuBloc(scope: string): string {
+  return `htm-${/data-html-scope="([^"]+)"/.exec(scope)?.[1] ?? 'bloc'}-`
+}
+
+/** Reecrit les `#identifiant` d'un selecteur avec le prefixe du bloc. */
+function prefixerIdentifiantsCss(selector: string, prefixe: string): string {
+  return selector.replace(/#(-?[_a-zA-Z][\w-]*)/g, (_all, nom: string) => `#${prefixe}${nom}`)
+}
+
 function scopeSelector(selector: string, scope: string): string {
   return selector
     .split(',')
@@ -404,9 +447,11 @@ function scopeSelector(selector: string, scope: string): string {
       const trimmed = part.trim()
       if (!trimmed) return ''
       // Un selecteur de la feuille du modele ne doit JAMAIS pouvoir designer un noeud de l'app.
+      const prefixe = prefixeIdentifiantsDuBloc(scope)
       const [head, ...rest] = trimmed.split(/\s+/)
-      if (ROOT_SELECTORS.test(head)) return rest.length ? `${scope} ${rest.join(' ')}` : scope
-      return `${scope} ${trimmed}`
+      if (ROOT_SELECTORS.test(head))
+        return rest.length ? `${scope} ${prefixerIdentifiantsCss(rest.join(' '), prefixe)}` : scope
+      return `${scope} ${prefixerIdentifiantsCss(trimmed, prefixe)}`
     })
     .filter(Boolean)
     .join(', ')
@@ -547,6 +592,7 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
 
   // Domaine du bloc, reutilise pour prefixer les `id` du dessin (degrades, masques, decoupes).
   const prefixeId = `svg-${/data-html-scope="([^"]+)"/.exec(scopeSelector_)?.[1] ?? 'bloc'}-`
+  const prefixeHtml = prefixeIdentifiantsDuBloc(scopeSelector_)
 
   const walk = (node: Element): void => {
     for (const child of Array.from(node.children)) walk(child)
@@ -581,6 +627,16 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
       return
     }
 
+    // Un champ qui n'est ni une case a cocher ni un bouton radio part ENTIEREMENT : il n'a pas de
+    // contenu a preserver, et le deplier laisserait un element inerte que rien ne pilote.
+    if (
+      tag === 'input' &&
+      !ALLOWED_INPUT_TYPES.has((node.getAttribute('type') ?? '').toLowerCase())
+    ) {
+      node.remove()
+      return
+    }
+
     for (const attribute of Array.from(node.attributes)) {
       const name = attribute.name.toLowerCase()
 
@@ -607,6 +663,14 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
         const src = sanitizeImageSource(attribute.value)
         if (src) node.setAttribute('src', src)
         else node.remove()
+        continue
+      }
+
+      // Les identifiants sont CONFINES au bloc, comme ceux du dessin SVG : meme prefixe des deux
+      // cotes (ici et dans les selecteurs `#...` de la feuille), sinon le lien entre une case et
+      // son libelle — donc l'onglet — cesserait de fonctionner.
+      if (name === 'id' || name === 'for' || name === 'name') {
+        if (attribute.value) node.setAttribute(name, `${prefixeHtml}${attribute.value}`)
         continue
       }
 

@@ -552,13 +552,29 @@ const main = async () => {
   let elementsAvantClic
   if (declencheur) {
     elementsAvantClic = mesuresDom.elements
-    declencheurTrouve = await evaluer(`(() => {
-      const cible = document.querySelector(${JSON.stringify(declencheur)})
-      cible?.click()
-      return Boolean(cible)
-    })()`)
-    if (declencheurTrouve) {
+    // CHAINE de clics : certaines vues ne s'atteignent pas en UN geste (ouvrir l'onglet, puis la
+    // ligne, puis le sous-onglet). Les selecteurs sont separes par ` >> ` et joues DANS L'ORDRE,
+    // avec une pause entre chacun — le suivant n'existe qu'apres le rendu du precedent.
+    // UN SEUL selecteur introuvable fait echouer toute la chaine : sans cela, une capture serait
+    // prise sur une vue a mi-chemin en pretendant montrer la destination.
+    const etapes = declencheur
+      .split('>>')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    declencheurTrouve = true
+    for (const etape of etapes) {
+      const trouve = await evaluer(`(() => {
+        const cible = document.querySelector(${JSON.stringify(etape)})
+        cible?.click()
+        return Boolean(cible)
+      })()`)
+      if (!trouve) {
+        declencheurTrouve = false
+        break
+      }
       await new Promise((r) => setTimeout(r, 600))
+    }
+    if (declencheurTrouve) {
       mesuresDom = await mesurerDom()
     }
   }

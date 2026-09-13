@@ -56,7 +56,7 @@ describe('bilan de run', () => {
 })
 
 describe('bilan depuis le résumé d’un RUN.md', () => {
-  const base = { status: 'succeeded', dodChecked: 3, dodTotal: 4, journalEvents: 12, defauts: 0 }
+  const base = { status: 'green', dodChecked: 3, dodTotal: 4, journalEvents: 12, defauts: 0 }
 
   it('rend les 3 repères du RUN.md et conclut vert', () => {
     const b = bilanDepuisResume(base, 'mon run')
@@ -67,10 +67,14 @@ describe('bilan depuis le résumé d’un RUN.md', () => {
 
   it('ne peint jamais en vert un run porteur d’un défaut', () => {
     expect(bilanDepuisResume({ ...base, defauts: 2 }).verdict).toBe('rouge')
-    expect(bilanDepuisResume({ ...base, status: 'failed' }).verdict).toBe('rouge')
+    expect(bilanDepuisResume({ ...base, status: 'red' }).verdict).toBe('rouge')
+    expect(bilanDepuisResume({ ...base, status: 'degraded-closed' }).verdict).toBe('rouge')
+    // Statut inconnu : on ne verdit PAS par défaut.
+    expect(bilanDepuisResume({ ...base, status: 'succeeded' }).verdict).toBe('rouge')
   })
 
   it('reste « en cours » tant que le statut le dit', () => {
     expect(bilanDepuisResume({ ...base, status: 'running' }).verdict).toBe('en cours')
+    expect(bilanDepuisResume({ ...base, status: 'open' }).verdict).toBe('en cours')
   })
 })

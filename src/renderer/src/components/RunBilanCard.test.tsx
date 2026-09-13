@@ -36,14 +36,14 @@ function monter(verdictSource: { status: string; defauts: number }): HTMLElement
 
 describe('carte bilan de run', () => {
   it('affiche le titre, le verdict et une ligne par repère', () => {
-    const el = monter({ status: 'succeeded', defauts: 0 })
+    const el = monter({ status: 'green', defauts: 0 })
     expect(el.textContent).toContain('poser la jauge')
     expect(el.querySelector('[data-testid="run-bilan-verdict"]')?.textContent).toBe('vert')
     expect(el.querySelectorAll('[data-testid="run-bilan-ligne"]').length).toBe(3)
   })
 
   it('porte le verdict rouge sur la carte elle-même, pour le style', () => {
-    const el = monter({ status: 'failed', defauts: 1 })
+    const el = monter({ status: 'red', defauts: 1 })
     expect(el.querySelector('[data-testid="run-bilan"]')?.getAttribute('data-verdict')).toBe(
       'rouge'
     )
@@ -53,7 +53,7 @@ describe('carte bilan de run', () => {
     // happy-dom n'a ni canvas peint ni presse-papiers image : c'est exactement le cas « refusé ».
     const ok = await copierBilanEnImage(
       bilanDepuisResume({
-        status: 'succeeded',
+        status: 'green',
         dodChecked: 1,
         dodTotal: 1,
         journalEvents: 0,
@@ -64,7 +64,7 @@ describe('carte bilan de run', () => {
   })
 
   it('le bouton bascule sur « Copie refusée » quand le presse-papiers refuse', async () => {
-    const el = monter({ status: 'succeeded', defauts: 0 })
+    const el = monter({ status: 'green', defauts: 0 })
     const bouton = el.querySelector('[data-testid="run-bilan-copier"]') as HTMLButtonElement
     expect(bouton.textContent).toBe("Copier l'image")
     act(() => bouton.click())

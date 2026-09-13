@@ -112,8 +112,13 @@ export function bilanDepuisResume(resume: RunResume, titre?: string): RunBilan {
     { label: 'Défauts', valeur: String(resume.defauts) }
   ]
   if (resume.regime) lignes.push({ label: 'Régime', valeur: resume.regime })
-  const enCours = /running|en cours/i.test(resume.status)
-  const rouge = resume.defauts > 0 || /fail|abandon|error/i.test(resume.status)
+  // VOCABULAIRE REEL des RUN.md (WorkflowsPanel.tsx:42) : `green`, `red`, `open`,
+  // `degraded-closed`. Chercher « fail » ou « error » ratait donc `red` et `degraded-closed` —
+  // constate a l'ecran le 2026-09-13 : un run badge « red » s'affichait VERT sur la carte.
+  // Seul `green` autorise le vert ; tout statut inconnu reste prudent et ne verdit pas.
+  const enCours = /^(running|open)$/i.test(resume.status.trim())
+  const vert = /^green$/i.test(resume.status.trim()) && resume.defauts === 0
+  const rouge = !enCours && !vert
   return {
     titre: titre && titre.trim().length > 0 ? titre.trim() : 'Run sans sujet',
     verdict: enCours ? 'en cours' : rouge ? 'rouge' : 'vert',
