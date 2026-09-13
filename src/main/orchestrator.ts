@@ -5304,11 +5304,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          *     faire echouer un travail valide parce que le Brain a hoquete serait un faux rouge.
          *     `valid` et `gate` ne sont plus touches apres ce point.
          */
-        /*
-         * SANS GRAPHE (run mono-phase, `/build ...`), la chaine etait vide et 40 % des runs verts
-         * n'ecrivaient aucune lecon. Reduire le travail a une phase nommee ne doit pas supprimer la
-         * capitalisation : `phasesApresJugeHorsGraphe` rend alors `learn`, et lui seul.
-         */
+        // Sans graphe (run mono-phase) : cf. `phasesApresJugeHorsGraphe` (task-regime.ts).
         const apresGate: NodePhase[] = graphePilote
           ? noeudsApresJuge(graphePilote)
               .map((id) => graphePilote.nodes.find((n) => n.id === id)?.phase)
