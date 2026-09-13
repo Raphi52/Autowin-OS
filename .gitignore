@@ -53,3 +53,7 @@ AGENTS.md
 # (11 286 tests fantomes) et rejouait des versions perimees a cote des vraies. L'exclusion cote
 # tests vit dans `vitest.config.ts` ; celle-ci empeche seulement de la committer.
 /.verif-index/
+# Mise de cote MANUELLE, ajoutee le 2026-09-12 : `.corbeille/` recueille les brouillons sortis
+# de la racine (13 fichiers, 87 Ko) plutot que de les supprimer. Elle est volontairement
+# RECUPERABLE — l un des treize etait une copie de travail de 517 lignes, pas un dechet.
+/.corbeille/

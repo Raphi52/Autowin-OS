@@ -412,7 +412,24 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:diarisation:installer` - telechargement EXPLICITE vers des URL CONSTANTES du module :
     //     le renderer ne fournit ni URL, ni chemin, ni nom de fichier.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(184)
+    // MISE A JOUR 2026-09-12 - 184 -> 185. UN canal ajoute par le commit 2d0bd9ca, relu AVANT de
+    //   toucher le compte, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'ArenaDuelsParWorkflow')` :
+    //   `arena:duelsParWorkflow` (`src/main/ipc/perf.ts`) - LECTURE SEULE des mesures de duels
+    //     deja ecrites dans les donnees de l'application. Aucune ecriture, et rien ne sort du
+    //     poste. Le renderer ne fournit AUCUN chemin ni chaine : son unique argument est un
+    //     nombre, ramene a un entier strictement positif (`Math.floor`), 500 par defaut des qu'il
+    //     n'est pas un nombre. La racine des donnees vient du processus principal.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    // MISE A JOUR 2026-09-13 - 185 -> 187. DEUX canaux ajoutes par le commit c1faa566, relus AVANT
+    //   de toucher le compte, gardes des leur PREMIERE ligne par `assertTrustedRendererSender` :
+    //   `os:disk-usage` (index.ts) - LECTURE SEULE de l'inventaire du dossier de donnees deja
+    //     calcule au demarrage. Aucun argument venant du renderer, aucune ecriture, rien ne sort
+    //     du poste ; la racine des donnees vient du processus principal.
+    //   `chat:orientations` (index.ts) - LECTURE SEULE des consignes deja journalisees pour UNE
+    //     conversation. Son unique argument est rejete s'il n'est pas une chaine non vide.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(187)
     expect(unguarded).toEqual([])
   })
 

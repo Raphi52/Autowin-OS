@@ -1639,6 +1639,22 @@ function registerChatIpc(): void {
 </html>
 \`\`\`
 
+Et le meme fil porte un DIAGRAMME, rendu par mermaid :
+
+\`\`\`mermaid
+flowchart LR
+  A[Message] --> B{Fence fermee ?}
+  B -- oui --> C[Diagramme rendu]
+  B -- non --> D[Bloc de code]
+\`\`\`
+
+Un diagramme dont la syntaxe est fausse doit retomber sur sa source, sans casser le fil :
+
+\`\`\`mermaid
+flowchart LR
+  A --> ((((  cette ligne n'est pas du mermaid
+\`\`\`
+
 Le fil reprend ensuite normalement.`
     })
     const fixtureArtifacts = [
