@@ -6070,7 +6070,6 @@ Cliquer pour choisir une autre branche.`}
                     })
                   : nearBottom
               dernierScrollTopRef.current = conteneur.scrollTop
-              console.log('[SONDE2] scroll', 'suit=' + suit, 'geste=' + gesteLecteurRef.current, 'envol=' + descenteEnVolRef.current, 'prec=' + dernierScrollTopRef.current, 'top=' + conteneur.scrollTop, 'near=' + nearBottom)
               followTailRef.current = suit
               setScrolledAwayFromTail(!suit)
               if (suit) setHasNewActivity(false)
