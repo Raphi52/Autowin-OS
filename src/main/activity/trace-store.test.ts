@@ -479,3 +479,44 @@ describe('cache de relecture borne et non partage', () => {
     expect(store.readConversationBestEffort('conv-1')[0].payloads[0].content).toBe('evt-0')
   })
 })
+
+/*
+ * COUT DU COMPTEUR DE SEQUENCE (gels du 2026-09-12).
+ *
+ * 62 gels nommant un fichier `.conv-N.sequence`, 198 s cumulees, jusqu'a 3,5 s pour LIRE quelques
+ * octets. Chaque evenement relisait ce compteur alors que le dernier a l'avoir ecrit etait, presque
+ * toujours, CE store une ligne plus haut. Ce test borne le nombre de lectures REELLES ; le verrou
+ * entre processus, lui, reste exerce par les deux tests de reservation ci-dessus.
+ */
+describe('compteur de sequence — lectures disque', () => {
+  it('ne relit pas le compteur quand personne d’autre ne l’a touche', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-compteur-'))
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0))
+    const depart = store.counterReads
+
+    for (let i = 1; i <= 20; i += 1) {
+      const sequence = store.nextSequence('conv-1')
+      store.append({ ...event(`evt-${i}`, sequence), parentId: `evt-${i - 1}` })
+    }
+
+    expect(store.counterReads - depart).toBe(0)
+    expect(store.readConversation('conv-1').map((e) => e.sequence)).toEqual(
+      Array.from({ length: 21 }, (_, i) => i)
+    )
+  })
+
+  it('relit le compteur des qu’un AUTRE ecrivain l’a avance', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-compteur-etranger-'))
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0))
+    store.nextSequence('conv-1')
+    const depart = store.counterReads
+
+    // Un autre PROCESSUS avance le compteur : l'empreinte ne tient plus, la lecture doit revenir.
+    writeFileSync(join(root, '.conv-1.sequence'), '41', 'utf8')
+
+    expect(store.nextSequence('conv-1')).toBe(42)
+    expect(store.counterReads - depart).toBe(1)
+  })
+})
