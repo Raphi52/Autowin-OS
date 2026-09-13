@@ -429,7 +429,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `chat:orientations` (index.ts) - LECTURE SEULE des consignes deja journalisees pour UNE
     //     conversation. Son unique argument est rejete s'il n'est pas une chaine non vide.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(187)
+    // MISE A JOUR 2026-09-13 - 187 -> 188. UN canal ajoute par ce tour, garde des sa PREMIERE
+    //   ligne par `assertTrustedRendererSender(event, 'Presence systeme des runs')` :
+    //   `os:presence` (index.ts) - la fenetre dit combien de runs tournent, pour la jauge de la
+    //     barre des taches et le texte de l'icone de notification. Rien ne SORT du poste : les
+    //     trois champs recus sont ramenes a des NOMBRES (tout le reste devient 0), aucun texte du
+    //     renderer n'atteint l'OS, aucun chemin n'est construit depuis l'appel.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(188)
     expect(unguarded).toEqual([])
   })
 

@@ -67,7 +67,8 @@ import {
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation
 } from './claude-accounts'
-import { app, shell, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron'
+import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
@@ -1010,7 +1011,17 @@ const fenetres = createWindowing({
   headlessTestInstance,
   modelQuestions
 })
-const { createWindow, setupTray, openQuestionWindow, rendererLocation, questionWindows } = fenetres
+const {
+  createWindow,
+  setupTray,
+  showMainWindow,
+  openQuestionWindow,
+  rendererLocation,
+  questionWindows,
+  refleterRunsVivants
+} = fenetres
+/** Raccourci clavier global : posé au démarrage, libéré à la fermeture (sinon il reste capté). */
+let raccourciCapture: RaccourciInstalle | null = null
 const diagnosticCapabilities = new DiagnosticCapabilities()
 /** Boucle de re-probe du diagnostic de démarrage (#4) — arrêtée à la fermeture pour ne pas fuir de timer. */
 let preflightWatchHandle: { stop: () => void } | null = null
@@ -1528,6 +1539,21 @@ function registerChatIpc(): void {
    * ENTREE QUI DOIT FAIRE ECHOUER LE GARDE : retirer cet appel, ou remettre une couleur en dur
    * dans `window.ts` sans point de mise a jour — le defaut reviendrait en silence.
    */
+  /**
+   * PRÉSENCE SYSTÈME des runs. Le renderer est le seul à tenir la liste des runs vivants ; il
+   * l'envoie ici comme il envoie déjà la couleur des boutons de fenêtre juste en dessous.
+   */
+  ipcMain.handle('os:presence', (event, etat: unknown) => {
+    assertTrustedRendererSender(event, 'Présence système des runs')
+    const brut = (etat ?? {}) as Record<string, unknown>
+    const nombre = (cle: string): number => (typeof brut[cle] === 'number' ? (brut[cle] as number) : 0)
+    refleterRunsVivants({
+      runsActifs: nombre('runsActifs'),
+      etapesFaites: nombre('etapesFaites'),
+      etapesTotales: nombre('etapesTotales')
+    })
+    return true
+  })
   ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
     assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
     // On n'accepte qu'un hexadecimal : cette valeur part vers une API natice de Windows.
@@ -3800,6 +3826,9 @@ app.whenReady().then(async () => {
   jalonDemarrage('avant createWindow')
   createWindow()
   setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
+  // Ramener Autowin sans aller chercher sa fenêtre : les autres raccourcis sont tous locaux au
+  // renderer, donc inertes quand l'app est en arrière-plan.
+  raccourciCapture = installerRaccourciCapture(globalShortcut, () => showMainWindow())
 
   // RÉCONCILIATION DES RUNS ABANDONNÉS. Un run dont l'app est morte en cours gardait `status: open`
   // à vie : mesuré le 2026-08-05, 141 runs ouverts depuis plus de 24 h, ni succès ni échec, alors
@@ -4273,6 +4302,9 @@ app.whenReady().then(async () => {
 // resté dans la fenêtre de debounce de 120 ms de la persistance.
 let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
+  // Un raccourci global laissé posé continue de capter la combinaison pour toute la session.
+  raccourciCapture?.desinstaller()
+  raccourciCapture = null
   flushConversations()
   flushScheduledTasks()
   // Le journal de tour ecrit par LOTS : ce qui dort en tampon doit atteindre le disque avant
