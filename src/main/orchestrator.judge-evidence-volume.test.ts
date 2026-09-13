@@ -50,6 +50,25 @@ const preuvesVolumineuses = (): ExecutionEvidence[] => [
     command: 'npx vitest run src/renderer/src/components/SourceControlPane.test.tsx',
     exitCode: 0,
     stdout: `${'bruit de sortie sans valeur de verdict\n'.repeat(3_000)}Tests  103 passed (103)`
+  },
+  /*
+   * CAPTURE LUE — ajoutee le 2026-09-12, et ce n'est pas un desserrage de la regle.
+   *
+   * Ce scenario MUTE un composant de rendu (`SourceControlPane.tsx`). Depuis que les garde-fous
+   * de preuve derivent le perimetre du run de ses PROPRES preuves au lieu de le deviner sur
+   * `git status`, ils voient enfin cette mutation — et refusent le vert sans capture, ce qui est
+   * exactement leur role. Le run n atteignait donc plus le juge, or ce test mesure le VOLUME du
+   * prompt de juge : il lui faut un scenario LEGAL, pas une regle assouplie.
+   */
+  {
+    type: 'command_execution',
+    kind: 'verification',
+    status: 'completed',
+    ok: true,
+    summary: 'capture du rendu lue',
+    command: 'node scripts/ui-capture.mjs --route worktrees',
+    exitCode: 0,
+    stdout: 'capture ecrite puis lue'
   }
 ]
 

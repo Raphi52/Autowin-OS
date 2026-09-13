@@ -7,6 +7,7 @@ import {
   requireMotionProofForAnimationDiff
 } from '../gates/hooks'
 import type { HookHandler } from './hook-bus'
+import type { ExecutionEvidence } from '../providers/types'
 import { exigenceAppuiSourcesNeuves } from '../autowin-kaizen-context'
 
 /**
@@ -19,8 +20,17 @@ function syncGateHooksHandler(ctx: HookContext): HookResult {
     requireProof: ctx.requireProof,
     evidenceOkCount: ctx.evidenceOkCount,
     producedDiff: ctx.producedDiff,
+    /*
+     * FIX-GATE ARME (2026-09-12). Il exige un jeton de cause des `3` editions du meme fichier.
+     * Sa porte de sortie existe enfin : `jetonsDeCauseParFichier` collecte les `CausalHypothesis`
+     * / `fix-ok:` / `check:` deposes dans le fichier corrige ou nommes dans le texte du run. Un
+     * run qui itere en nommant sa cause passe ; un run qui itere en aveugle est refuse — c est
+     * exactement ce que le hook a toujours dit faire, et qu il ne faisait pas.
+     */
     editsByFile: ctx.editsByFile,
-    causeTokensByFile: ctx.causeTokensByFile
+    causeTokensByFile:
+      ctx.causeTokensByFile ??
+      jetonsDeCauseParFichier(ctx.output, ctx.evidence, Object.keys(ctx.editsByFile ?? {}))
   })
   return violations.length
     ? { block: true, reason: violations.map((h) => `hook ${h.hook}: ${h.detail}`).join('; ') }
@@ -46,6 +56,129 @@ export function appuiSourcesNeuvesHandler(ctx: HookContext): HookResult {
 }
 
 /**
+ * Les fichiers que le RUN a REELLEMENT edites, derives de ses propres preuves d execution.
+ *
+ * Une `ExecutionEvidence` de `kind: 'mutation'` nomme ses chemins (`paths`, `path`, ou les cles
+ * de `pathFingerprints`). Cette information existait deja dans le contexte des hooks ; personne
+ * ne la lisait, et `editsByFile` restait vide en production — le fix-gate etait donc muet, et les
+ * garde-fous de preuve devaient DEVINER le perimetre du run par soustraction sur `git status`.
+ *
+ * Une lecture ou une verification n'est PAS une edition : seules les mutations comptent.
+ */
+export function fichiersEditesParLeRun(
+  evidence: readonly ExecutionEvidence[] | undefined
+): Record<string, number> {
+  const compte: Record<string, number> = {}
+  for (const item of evidence ?? []) {
+    if (item.kind !== 'mutation') continue
+    const chemins = [
+      ...(item.paths ?? []),
+      ...(item.path ? [item.path] : []),
+      ...Object.keys(item.pathFingerprints ?? {})
+    ]
+    for (const brut of new Set(chemins)) {
+      const chemin = brut.replace(/\\/g, "/").trim()
+      if (!chemin) continue
+      compte[chemin] = (compte[chemin] ?? 0) + 1
+    }
+  }
+  return compte
+}
+
+/**
+ * LE PRODUCTEUR DE JETONS DE CAUSE — ce qui manquait pour armer le fix-gate.
+ *
+ * `detectBlindFixLoop` refuse un vert des `3` editions du MEME fichier sans jeton de cause, et
+ * nomme lui-meme les trois jetons attendus : `CausalHypothesis`, `fix-ok:`, `check:`. Personne ne
+ * les collectait — le hook ne pouvait donc qu etre desarme, ou etre un piege sans porte de sortie.
+ *
+ * Deux sources REELLES, toutes deux deja pratiquees dans ce depot :
+ *  - le commentaire depose dans le fichier corrige (`// fix-ok: ...`), lisible dans le diff de la
+ *    preuve de mutation — la forme majoritaire ici ;
+ *  - le texte du run, quand la ligne du jeton NOMME le fichier.
+ *
+ * Attribution deliberement ETROITE : un jeton ne desarme que les fichiers qu il NOMME, sur SA
+ * ligne. Un `check:` isole ne vaut pas laissez-passer global, sinon le garde-fou ne mord jamais.
+ * Un nom de fichier seul (sans dossier) n est resolu que s il designe UN SEUL fichier edite :
+ * deviner entre deux `index.ts` reviendrait a desarmer le mauvais.
+ */
+const JETON_DE_CAUSE = /\b(?:CausalHypothesis|fix-ok|check)\s*:/
+
+export function jetonsDeCauseParFichier(
+  texteDuRun: string | undefined,
+  evidence: readonly ExecutionEvidence[] | undefined,
+  fichiersEdites: readonly string[]
+): Record<string, boolean> {
+  const jetons: Record<string, boolean> = {}
+  const norm = (f: string): string => f.replace(/\\/g, '/').trim()
+
+  // Source 1 — le jeton depose DANS le fichier, vu par le diff (ou resume) de sa mutation.
+  for (const item of evidence ?? []) {
+    if (item.kind !== 'mutation') continue
+    if (!JETON_DE_CAUSE.test(`${item.diff ?? ''}\n${item.summary ?? ''}`)) continue
+    const chemins = [
+      ...(item.paths ?? []),
+      ...(item.path ? [item.path] : []),
+      ...Object.keys(item.pathFingerprints ?? {})
+    ]
+    for (const c of chemins) if (norm(c)) jetons[norm(c)] = true
+  }
+
+  // Source 2 — le jeton ecrit dans le texte du run, sur une ligne qui nomme un fichier edite.
+  const connus = fichiersEdites.map(norm).filter(Boolean)
+  const parBase = new Map<string, string[]>()
+  for (const f of connus) {
+    const base = f.split('/').pop() as string
+    parBase.set(base, [...(parBase.get(base) ?? []), f])
+  }
+  for (const ligne of (texteDuRun ?? '').split(/\r?\n/)) {
+    if (!JETON_DE_CAUSE.test(ligne)) continue
+    const candidats = ligne.match(/[\w./\\-]+\.[A-Za-z]{1,5}\b/g) ?? []
+    for (const brut of candidats) {
+      const c = norm(brut)
+      if (connus.includes(c)) {
+        jetons[c] = true
+        continue
+      }
+      const homonymes = parBase.get(c.split('/').pop() as string)
+      if (c.includes('/') || !homonymes || homonymes.length !== 1) continue
+      jetons[homonymes[0]] = true
+    }
+  }
+  return jetons
+}
+
+/**
+ * Le CHEMIN porte par une ligne de `git status --porcelain`, prefixe d etat retire.
+ *
+ * DEFAUT MESURE le 2026-09-12 : la lecture faisait `.trim()` sur la ligne AVANT de couper 3
+ * caracteres. Or le porcelain ecrit DEUX colonnes d etat + un espace, et une modification non
+ * indexee commence par un ESPACE (« _M_chemin ») : le trim mangeait cet espace, et la coupe
+ * emportait alors la premiere lettre du chemin — `src/renderer/...` devenait `rc/renderer/...`.
+ * On coupe donc sur la ligne BRUTE, et on garde la CIBLE d un renommage.
+ */
+export function cheminPorcelain(ligneBrute: string): string {
+  const sansPrefixe = /^[ MADRCU?!]{2} /.test(ligneBrute) ? ligneBrute.slice(3) : ligneBrute
+  const chemin = sansPrefixe.includes(' -> ') ? sansPrefixe.split(' -> ')[1] : sansPrefixe
+  return chemin.trim()
+}
+
+/**
+ * Ce que le RUN a touche : l etat courant MOINS ce qui etait deja sale a son demarrage.
+ *
+ * Sans etat de depart connu (`undefined`), on ne soustrait rien : un garde-fou prefere refuser a
+ * tort que laisser passer un faux vert. Avec une liste VIDE, le run est seul responsable.
+ */
+export function attribuablesAuRun(
+  touchesMaintenant: readonly string[],
+  avantLeRun: readonly string[] | undefined
+): readonly string[] {
+  if (!avantLeRun) return touchesMaintenant
+  const deja = new Set(avantLeRun.map((f) => f.replace(/\\/g, "/")))
+  return touchesMaintenant.filter((f) => !deja.has(f.replace(/\\/g, "/")))
+}
+
+/**
  * PREUVE VISUELLE — le hook existait, personne ne l'allumait.
  *
  * `requireVisualProofForFrontDiff` (gates/hooks.ts) refuse un vert quand le RENDU est modifié sans
@@ -63,19 +196,17 @@ export function appuiSourcesNeuvesHandler(ctx: HookContext): HookResult {
  * ne doit pas inventer un refus sur un dépôt qu'il n'a pas su lire.
  */
 export function fichiersTouchesGit(cwd: string): readonly string[] {
-  const lire = (args: string[]): string[] => {
+  const lire = (args: string[], brut = false): string[] => {
     try {
       return execFileSync('git', args, { cwd, encoding: 'utf-8', windowsHide: true })
         .split(/\r?\n/)
-        .map((l) => l.trim())
+        .map((l) => (brut ? l : l.trim()))
         .filter(Boolean)
     } catch {
       return []
     }
   }
-  const porcelain = lire(['status', '--porcelain'])
-    .map((l) => l.slice(3).trim())
-    .map((l) => (l.includes(' -> ') ? l.split(' -> ')[1] : l))
+  const porcelain = lire(['status', '--porcelain'], true).map(cheminPorcelain).filter(Boolean)
   return [...new Set([...porcelain, ...lire(['diff', '--name-only', 'HEAD'])])]
 }
 
@@ -90,7 +221,12 @@ export function creerPreuveVisuelleHandler(
   return (ctx: HookContext): HookResult => {
     // `requireProof` marque déjà les tâches MUTANTES : hors de là, aucun rendu n'est en jeu.
     if (!ctx.requireProof || !ctx.cwd) return { block: false }
-    const diff = listerFichiersTouches(ctx.cwd)
+    // Le diff du RUN fait foi quand il existe ; sinon seulement, on deduit par soustraction.
+    const mutes = Object.keys(ctx.editsByFile ?? fichiersEditesParLeRun(ctx.evidence))
+    const perimetre = mutes.length
+      ? mutes
+      : attribuablesAuRun(listerFichiersTouches(ctx.cwd), ctx.fichiersTouchesAvantLeRun)
+    const diff = perimetre
       .map((f) => `+++ b/${f.replace(/\\/g, '/')}`)
       .join('\n')
     if (!diff) return { block: false }
@@ -99,6 +235,42 @@ export function creerPreuveVisuelleHandler(
       ? { block: true, reason: violations.map((h) => `hook ${h.hook}: ${h.detail}`).join('; ') }
       : { block: false }
   }
+}
+
+/**
+ * Le DIFF reduit aux fichiers attribuables au run : on retire les sections `diff --git` des
+ * fichiers deja sales au demarrage. Un diff unifie se decoupe sur ses en-tetes `diff --git`.
+ */
+export function diffAttribuable(
+  diff: string,
+  avantLeRun: readonly string[] | undefined
+): string {
+  if (!avantLeRun || !diff) return diff
+  const deja = new Set(avantLeRun.map((f) => f.replace(/\\/g, "/")))
+  const sections = diff.split(/^(?=diff --git )/m).filter(Boolean)
+  return sections
+    .filter((section) => {
+      const m = /^\+\+\+ b\/(.+)$/m.exec(section)
+      return !m || !deja.has(m[1].trim())
+    })
+    .join('')
+}
+
+/**
+ * Le DIFF reduit aux seuls fichiers NOMMES (perimetre du run). Complement exact de
+ * `diffAttribuable`, qui lui RETIRE une liste : ici on ne GARDE que ce que le run a mute.
+ */
+export function diffLimiteAux(diff: string, fichiers: readonly string[]): string {
+  if (!diff || !fichiers.length) return diff
+  const garder = new Set(fichiers.map((f) => f.replace(/\\/g, "/")))
+  return diff
+    .split(/^(?=diff --git )/m)
+    .filter(Boolean)
+    .filter((section) => {
+      const m = /^\+\+\+ b\/(.+)$/m.exec(section)
+      return m ? garder.has(m[1].trim()) : false
+    })
+    .join('')
 }
 
 /**
@@ -128,7 +300,12 @@ export function creerPreuveMouvementHandler(
 ): HookHandler {
   return (ctx: HookContext): HookResult => {
     if (!ctx.requireProof || !ctx.cwd) return { block: false }
-    const diff = lireDiff(ctx.cwd)
+    // Un diff d animation ne se lit que dans le TEXTE du diff : on garde la lecture git, mais
+    // bornee au perimetre du run quand il est connu.
+    const mutes = Object.keys(ctx.editsByFile ?? fichiersEditesParLeRun(ctx.evidence))
+    const diff = mutes.length
+      ? diffLimiteAux(lireDiff(ctx.cwd), mutes)
+      : diffAttribuable(lireDiff(ctx.cwd), ctx.fichiersTouchesAvantLeRun)
     if (!diff) return { block: false }
     const mesures = (ctx.evidence ?? []).filter(
       (e) => e.ok && /ui-capture/.test(e.command ?? '') && /--motion/.test(e.command ?? '')

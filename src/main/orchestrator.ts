@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
+import { verdictAvecObjectionsPortees } from './objections-juge'
 
 /**
  * Le juge doit juger contre le contrat que le PRODUCTEUR a reçu.
@@ -64,6 +65,7 @@ import {
 } from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
+import { fichiersTouchesGit, fichiersEditesParLeRun } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { loadTrustedLearningOracles } from './providers/learning-oracle-manifest'
 import {
@@ -1474,6 +1476,15 @@ export class Orchestrator {
   }
 
   /** Commande de vérif à rejouer (verify-replay) : explicite > convention workspace > aucune (dormant). */
+  /**
+   * Les fichiers DEJA modifies dans le depot quand `run()` a demarre.
+   *
+   * Les garde-fous de preuve visuelle et de mouvement n'ont pas le diff du run : ils relisent
+   * `git status`. Sur un arbre partage deja sale, ils attribuaient au run le travail des autres
+   * sessions et refusaient un vert merite (mesure du 2026-09-12, conv-512 : 217 fichiers, dont
+   * 55 de rendu). Fige une fois par run, soustrait par les handlers.
+   */
+  private fichiersSalesAuDemarrage: readonly string[] = []
   private resolveVerifyCmd(cwd = this.deps.executionWorkspace): string | undefined {
     if (this.deps.verifyCmd) return this.deps.verifyCmd
     return this.deps.autoVerify ? resolveVerifyCmd(cwd) : undefined
@@ -1595,6 +1606,16 @@ export class Orchestrator {
      * ils faisaient remonter ce jet jusqu'ici et tuaient un run par ailleurs sain. On les protege
      * UNE fois, a leur entree dans le pipeline : meme contrat que `emitLifecycle` juste dessous.
      */
+    /*
+     * ETAT DE DEPART DU DEPOT — ce qui etait DEJA modifie avant que ce run commence.
+     *
+     * Mesure du 2026-09-12 (conv-512) : les garde-fous de preuve visuelle et de mouvement
+     * reconstruisent leur diff depuis `git status` du depot, faute de recevoir celui du run.
+     * Sur un arbre partage deja sale — 217 fichiers, dont 55 de rendu, laisses par d'autres
+     * sessions — ils attribuaient tout au run courant et refusaient un vert merite. On fige
+     * donc la saleté PREEXISTANTE ici, une fois, pour que les hooks la soustraient.
+     */
+    this.fichiersSalesAuDemarrage = fichiersTouchesGit(this.deps.executionWorkspace)
     onStep = protegerRappel('onStep', onStep)
     onPhase = protegerRappel('onPhase', onPhase)
     onDelta = protegerRappel('onDelta', onDelta)
@@ -2434,7 +2455,9 @@ export class Orchestrator {
       requireProof: isMutationTask(task),
       evidenceOkCount: evidence.filter((item) => item.ok).length,
       evidence,
-      output: aggregate
+      output: aggregate,
+      editsByFile: fichiersEditesParLeRun(evidence),
+      fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
     })
     const preGate = evaluateClosure({
       status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
@@ -2554,7 +2577,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     // Les preuves ont déjà passé le pré-gate : le juge tranche maintenant la substance.
     // UN SEUL lecteur : ce site testait `/^\s*valide/i` et jetait donc l'approbation d'un juge qui
     // n'ouvrait pas sa phrase par le mot. Cf. `lireVerdictJuge`.
-    const ok = lireVerdictJuge(verdictText)
+    // Un VALIDE porteur d'objections concrètes n'est pas une clôture : il repart en réparation.
+    const ok = lireVerdictJuge(verdictAvecObjectionsPortees(verdictText))
     // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
     // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
     trust.record({
@@ -4768,7 +4792,9 @@ ${empreinteDepot}`
         requireProof: isMutationTask(task),
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
         evidence: exec.executionEvidence,
-        output: exec.text
+        output: exec.text,
+        editsByFile: fichiersEditesParLeRun(exec.executionEvidence),
+        fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
       })
       // UN SEUL endroit calcule l'etat de cloture (`root-execution-contract.ts`) : cette decision
       // vivait ici en ligne, donc hors de portee des tests — une mutation de sa garde ne faisait
@@ -4804,7 +4830,7 @@ ${empreinteDepot}`
       // Consommer ici l'occurrence restante évite de payer/rejouer exactement le même verdict.
       const resumedJudgeText = takePaidPhase('judge')
       if (resumedJudgeText !== undefined) {
-        const ok = evidenceOk && lireVerdictJuge(resumedJudgeText)
+        const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
         lastJudgeText = resumedJudgeText.trim()
         // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
         // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
@@ -5032,7 +5058,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                   costUsd: r.usage.costUsd
                 })
               }
-              const votesValide = lireVerdictJuge(r.text)
+              // Un membre qui valide EN LISTANT des écarts vote DEFAUT : ses objections rejoignent
+              // alors le verdict agrégé, donc le feedback de la réparation.
+              const votesValide = lireVerdictJuge(verdictAvecObjectionsPortees(r.text))
               push({
                 step: 'judge',
                 provider: r.provider ?? member.provider,
@@ -5148,7 +5176,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * (ligne 2522) l'utilisait deja ; les trois chemins du pipeline principal, non — le doublon
        * annonce comme resorbe ne l'etait que sur une lignee.
        */
-      const ok = evidenceOk && lireVerdictJuge(verdict.text)
+      const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(verdict.text))
       lastJudgeText = verdict.text.trim()
       // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
       // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
