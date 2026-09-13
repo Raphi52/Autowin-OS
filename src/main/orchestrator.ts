@@ -36,8 +36,8 @@ import { verdictAvecObjectionsPortees } from './objections-juge'
 const JUDGE_TOOLSET_CONTRACT =
   `OUTILLAGE DU PRODUCTEUR : in-app, il dispose de Read/Grep/Glob, et en phase de mutation de ` +
   `Bash/Edit/Write bornés au dossier de travail. Pas d'accès web, pas de sous-agents. Pour une ` +
-  `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui navigue ` +
-  `par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
+  `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui, par défaut, ` +
+  `ouvre une instance CACHÉE (écran de l'utilisateur intact), navigue par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
   `Une capture citée avec son exit-code 0 et son chemin EST une preuve recevable. ` +
   `Ne réclame aucun mécanisme absent de cet outillage — binaire packagé, relais planifié, outil ` +
   `tiers : leur absence n'est jamais un défaut du livrable. En revanche exige ce qui EST à portée ` +

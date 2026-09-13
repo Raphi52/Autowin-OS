@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 
 describe('discipline de pipeline canonique', () => {
+  it('annonce la preuve UI dans une instance cachée par défaut (conv-526)', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain("PAR DÉFAUT il travaille dans une instance CACHÉE")
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('--fenetre-reelle')
+  })
+
   it('nomme les six phases dans l ordre et reste autonome', () => {
     const phases = ['SCOUT', 'FRAME', 'TERRAIN', 'BUILD', 'CLEAN', 'JUDGE']
     const positions = phases.map((phase) => PIPELINE_DISCIPLINE_INSTRUCTION.indexOf(phase))
