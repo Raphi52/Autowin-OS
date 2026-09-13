@@ -595,7 +595,14 @@ export function JarvisWidget(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    void relirePiper()
+    // Meme forme que la relecture Whisper juste au-dessus : la lecture disque passe par une
+    // fonction async DECLAREE dans l'effet. Appeler `relirePiper()` nu faisait lire a l'analyse
+    // un `setPiper` synchrone dans le corps de l'effet (`react-hooks/set-state-in-effect`),
+    // alors qu'il n'a lieu qu'apres l'attente.
+    async function lireEtatPiper(): Promise<void> {
+      await relirePiper()
+    }
+    void lireEtatPiper()
   }, [relirePiper])
 
   /**

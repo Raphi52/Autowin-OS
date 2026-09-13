@@ -1054,6 +1054,21 @@ export function GraphView({
       })
   }, [activeThemes, graphReload, selected, themeNodesReload])
 
+  /*
+   * DECLAREE AVANT SES DEUX APPELANTS (la poignee de pilotage juste dessous, et `onNodeClick`).
+   * Elle vivait 480 lignes plus bas : les declarations de fonction sont remontees par JavaScript,
+   * donc cela marchait, mais l'analyse React le signale comme un acces avant declaration
+   * (`react-hooks/immutability`). La lire avant ses appels est aussi plus simple a suivre.
+   */
+  function activateGraphNode(nextNode: GraphNode): void {
+    if (layoutMode === 'tree' && nextNode.treeNodeId) {
+      toggleTreeBranch(nextNode.treeNodeId)
+      setHoveredNode(null)
+      return
+    }
+    void openNode(nextNode)
+  }
+
   // POIGNEE DE PILOTAGE (developpement seulement) : rend observables les noeuds rendus et leur
   // position ecran, pour reproduire un clic 3D sans balayer le canvas point par point.
   useEffect(() => {
@@ -1552,15 +1567,6 @@ export function GraphView({
     } catch (error) {
       setFileErr(brainBusinessError('Impossible de remplacer cette fiche.', error))
     }
-  }
-
-  function activateGraphNode(nextNode: GraphNode): void {
-    if (layoutMode === 'tree' && nextNode.treeNodeId) {
-      toggleTreeBranch(nextNode.treeNodeId)
-      setHoveredNode(null)
-      return
-    }
-    void openNode(nextNode)
   }
 
   function toggleTreeBranch(treeNodeId: string): void {

@@ -1,4 +1,4 @@
-import { splitFinalSummary } from './Markdown'
+import { splitFinalSummary } from './markdown-cloture'
 
 /**
  * LE BLOC DE CLOTURE SE LIT EN DERNIER.

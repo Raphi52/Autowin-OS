@@ -85,7 +85,6 @@ export function surveillerParBattement(
   let silenceAuRechargement: number | undefined
   let dejaEscalade = false
 
-  let jeton: unknown
   /*
    * LA FENETRE FERMEE ARRETE LE BATTEMENT ELLE-MEME.
    *
@@ -104,7 +103,7 @@ export function surveillerParBattement(
     }
   }
 
-  jeton = planifier(() => {
+  const jeton: unknown = planifier(() => {
     if (fenetreMorte()) {
       annuler(jeton)
       return

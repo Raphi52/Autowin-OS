@@ -83,20 +83,36 @@ function FenetreChatBrut({
    * mosaique, ou intervenir. Le marqueur retombe des qu il touche la fenetre (clic ou focus).
    */
   const [attention, setAttention] = useState(false)
-  const busyPrecedent = useRef(fenetre.busy)
+  /*
+   * LE PASSAGE d'occupe a libre, detecte PENDANT LE RENDU.
+   *
+   * Il vivait dans un effet, qui appelait `setAttention` de facon synchrone
+   * (`react-hooks/set-state-in-effect`) : la bordure doree apparaissait donc un rendu en retard.
+   * Comparer la valeur precedente pendant le rendu est le patron prevu par React pour ce cas ; le
+   * rendu en cours est relance avant tout affichage.
+   *
+   * La PUBLICATION vers l'accueil, elle, reste dans un effet : c'est une ecriture vers l'exterieur
+   * du composant, et elle n'a rien a faire dans un rendu.
+   */
+  const [busyPrecedent, setBusyPrecedent] = useState(fenetre.busy)
+  if (busyPrecedent !== fenetre.busy) {
+    setBusyPrecedent(fenetre.busy)
+    setAttention(busyPrecedent && !fenetre.busy)
+  }
+  /*
+   * L'etat est aussi PUBLIE : l'accueil affiche la meme liste que ces bordures dorees. Sans cette
+   * publication, l'information restait prisonniere de ce composant.
+   *
+   * On ne publie QUE sur un CHANGEMENT. Publier a chaque montage ferait retirer de la liste, au
+   * simple affichage d'une tuile, une attente deposee par quelqu'un d'autre.
+   */
+  const attentionPubliee = useRef(attention)
   useEffect(() => {
-    // L'etat est aussi PUBLIE : l'accueil affiche la meme liste que ces bordures dorees. Sans cette
-    // publication, l'information restait prisonniere de ce composant.
-    if (busyPrecedent.current && !fenetre.busy) {
-      setAttention(true)
-      marquerConversationEnAttente(fenetre.id, fenetre.title)
-    }
-    if (fenetre.busy) {
-      setAttention(false)
-      retirerConversationEnAttente(fenetre.id)
-    }
-    busyPrecedent.current = fenetre.busy
-  }, [fenetre.busy, fenetre.id, fenetre.title])
+    if (attentionPubliee.current === attention) return
+    attentionPubliee.current = attention
+    if (attention) marquerConversationEnAttente(fenetre.id, fenetre.title)
+    else retirerConversationEnAttente(fenetre.id)
+  }, [attention, fenetre.id, fenetre.title])
   const repris = (): void => {
     setAttention(false)
     retirerConversationEnAttente(fenetre.id)

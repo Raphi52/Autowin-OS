@@ -390,10 +390,19 @@ export function HomeView({
     [arrangement, surface, poseALaMain]
   )
 
-  // Une nouvelle surface annule cette autorite : la disposition doit y etre re-jugee.
-  useEffect(() => {
+  /*
+   * Une nouvelle surface annule cette autorite : la disposition doit y etre re-jugee.
+   *
+   * AJUSTE PENDANT LE RENDU, pas dans un effet (`react-hooks/set-state-in-effect`) : remettre un
+   * etat a zero depuis un effet fait rendre une fois avec l'ANCIENNE valeur, puis une seconde fois
+   * apres correction. React traite ce cas a part -- le rendu en cours est abandonne et relance
+   * avant tout affichage, donc l'utilisateur ne voit jamais l'etat perime.
+   */
+  const [surfaceJugee, setSurfaceJugee] = useState(surface)
+  if (surfaceJugee !== surface) {
+    setSurfaceJugee(surface)
     setPoseALaMain(false)
-  }, [surface])
+  }
 
   /* ---------------------------------------------------------------- *
    * LE DECOR A DEMENAGE : il est desormais le fond de TOUTE l'application, monte a la racine de la
