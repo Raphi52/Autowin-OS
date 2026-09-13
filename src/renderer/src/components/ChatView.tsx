@@ -2221,7 +2221,6 @@ export function ChatView({
         requestAnimationFrame,
         40,
         (landed) => {
-          console.log('[SONDE2] settled', 'landed=' + landed, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
           descenteEnVolRef.current = false
           basculeConvRef.current = false
           if (!landed) setHasNewActivity(true)
