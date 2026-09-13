@@ -134,6 +134,7 @@ import { collectCausalTraces } from './activity/causal-trace-gc'
 import { loadOrchestrationStates } from './runs/orchestration-state'
 import { collectRunWorkspaces } from './runs/workspace-gc'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
+import { inventaireToursInacheves } from './runs/inventaire-tours'
 import {
   closeConvRun,
   convRunsRoot,
@@ -1478,16 +1479,17 @@ function registerStorageMigrationIpc(lecture: Promise<LectureHistorique>): void 
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
-  // pleine exécution) pour les rejouer/afficher. GC des journaux terminés au passage.
+  // pleine exécution) pour les rejouer/afficher. Le ménage des journaux terminés suit la réponse
+  // (25 gels, 69 s cumulées, quand il la PRÉCÉDAIT) — cf. runs/inventaire-tours.ts.
   ipcMain.handle('runs:unfinishedTurns', (event) => {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
-    try {
-      pruneFinishedTurnJournals(turnJournalRoot)
-      pruneLegacyContextValues()
-    } catch {
-      /* GC best-effort */
-    }
-    return listUnfinishedTurns(turnJournalRoot)
+    return inventaireToursInacheves({
+      lister: () => listUnfinishedTurns(turnJournalRoot),
+      menage: () => {
+        pruneFinishedTurnJournals(turnJournalRoot)
+        pruneLegacyContextValues()
+      }
+    })
   })
   ipcMain.handle('runs:turnJournal', (event, conversationId: string, turnId: string) => {
     assertTrustedRendererSender(event, 'TurnJournal')
