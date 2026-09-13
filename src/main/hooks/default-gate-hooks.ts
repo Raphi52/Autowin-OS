@@ -133,7 +133,8 @@ export function jetonsDeCauseParFichier(
   }
   for (const ligne of (texteDuRun ?? '').split(/\r?\n/)) {
     if (!JETON_DE_CAUSE.test(ligne)) continue
-    const candidats = ligne.match(/[\w./\\-]+\.[A-Za-z]{1,5}\b/g) ?? []
+    // fix-ok: la classe excluait « : » — un chemin absolu Windows (D:/...) perdait sa lettre de lecteur et ne pouvait jamais desarmer le fichier (conv-526, refus « 5 edits de D:/AutoWinOS/scripts/ui-capture.mjs »)
+    const candidats = ligne.match(/(?:\b[A-Za-z]:)?[\w./\\-]+\.[A-Za-z]{1,5}\b/g) ?? []
     for (const brut of candidats) {
       const c = norm(brut)
       if (connus.includes(c)) {

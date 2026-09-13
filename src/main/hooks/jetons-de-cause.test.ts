@@ -60,6 +60,13 @@ describe('jetonsDeCauseParFichier — la cause se DECLARE, elle ne se suppose pa
     })
   })
 
+  it('lit un jeton qui nomme un chemin Windows ABSOLU (lettre de lecteur)', () => {
+    const texte = 'CausalHypothesis: D:/AutoWinOS/scripts/ui-capture.mjs — opt-in --instance-dediee.'
+    expect(jetonsDeCauseParFichier(texte, [], ['D:/AutoWinOS/scripts/ui-capture.mjs'])).toEqual({
+      'D:/AutoWinOS/scripts/ui-capture.mjs': true
+    })
+  })
+
   it('resout un nom de fichier SEUL quand un seul fichier edite le porte', () => {
     const texte = 'fix-ok: boucle.ts — cause prouvee par le test rouge d abord.'
     expect(jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({
