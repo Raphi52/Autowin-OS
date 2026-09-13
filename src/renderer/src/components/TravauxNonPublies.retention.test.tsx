@@ -111,10 +111,12 @@ describe('le rapport du balayage de rétention est VISIBLE dans le panneau', () 
   it('affiche le rapport qui arrive APRES l’ouverture du panneau', async () => {
     vi.useFakeTimers()
     try {
-      let pose: RapportRetention | undefined
+      // Boite MUTABLE plutot qu'un `let` reaffecte : le rapport doit APPARAITRE en cours de
+      // test (absent au montage, present apres la passe), ce qu'un `const` simple interdit.
+      const pose: { valeur?: RapportRetention } = {}
       const connu: Record<string, unknown> = {
         getTravauxNonPublies: vi.fn().mockResolvedValue([]),
-        getRapportRetention: vi.fn(async () => pose)
+        getRapportRetention: vi.fn(async () => pose.valeur)
       }
       Object.defineProperty(window, 'api', { configurable: true, value: connu })
 
@@ -125,7 +127,7 @@ describe('le rapport du balayage de rétention est VISIBLE dans le panneau', () 
       expect(container.querySelector('[data-testid="tnp-retention-jamais"]')).not.toBeNull()
 
       // La passe se termine et dépose son rapport, sans que l'utilisateur touche à rien.
-      pose = { faitLe: 'x', examines: 249, sansPerte: ['a'], aTrancher: [], reportees: 0 }
+      pose.valeur = { faitLe: 'x', examines: 249, sansPerte: ['a'], aTrancher: [], reportees: 0 }
       await act(async () => {
         await vi.advanceTimersByTimeAsync(INTERVALLE_ATTENTE_RAPPORT_MS + 10)
       })
