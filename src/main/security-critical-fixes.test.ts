@@ -412,7 +412,18 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:diarisation:installer` - telechargement EXPLICITE vers des URL CONSTANTES du module :
     //     le renderer ne fournit ni URL, ni chemin, ni nom de fichier.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(184)
+    // MISE A JOUR 2026-09-13 - 187 -> 188. UN canal imputable a ce changement, garde des sa
+    //   premiere ligne : `os:conversations:split` (`src/main/ipc/conversations.ts`,
+    //   `assertTrustedRendererSender(event, 'Conversation split')`) - DEPLACE la suite d'un fil vers
+    //   une conversation neuve. Il ECRIT, mais rien ne SORT du poste : les deux identifiants passent
+    //   par `guardString`, aucun chemin n'est construit depuis l'appel.
+    // ATTRIBUTION DE L'ECART, mesuree avant de toucher le chiffre (methode de la lecon Brain :
+    //   rejouer la MEME regex sur une revision archivee) : `git archive c1faa566 src`, puis
+    //   `creerLecteurSource('<archive>/src/main')` rend 187 canaux AVANT ce travail, 188 apres. Le
+    //   compteur etait donc deja perime de TROIS canaux a la revision c1faa566 - trois canaux
+    //   ajoutes sans etre inscrits ici, qui ne viennent pas de ce changement.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(188)
     expect(unguarded).toEqual([])
   })
 
