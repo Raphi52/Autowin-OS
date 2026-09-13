@@ -14,7 +14,7 @@ import { CONTEXT_MESSAGE_CHARS, CONTEXT_MESSAGE_LIMIT, clip } from './conversati
  * l'utilisateur, alors qu'un maintien à tort se corrige d'un simple déplacement. Le coût
  * étant asymétrique, on n'accepte la rupture de sujet que sur une quasi-certitude.
  */
-const ROUTE_CONFIDENCE_THRESHOLD = 0.97
+export const ROUTE_CONFIDENCE_THRESHOLD = 0.97
 /**
  * En dessous de cette longueur, un message est traité comme un suivi local : trop court pour
  * porter à lui seul la preuve d'une rupture de sujet nette. Garde déterministe, évaluée avant
@@ -23,7 +23,7 @@ const ROUTE_CONFIDENCE_THRESHOLD = 0.97
 const MIN_NEW_TOPIC_CHARS = 40
 const TITLE_CHARS = 60
 
-const ROUTER_SYSTEM = `Tu es le routeur de conversations d’Autowin OS.
+export const ROUTER_SYSTEM = `Tu es le routeur de conversations d’Autowin OS.
 Décide si le NOUVEAU message poursuit le même objectif que le CONTEXTE ACTUEL.
 Réponds uniquement avec un objet JSON :
 {"route":"current|new","confidence":0.0,"reason":"related|follow-up|new-topic|uncertain","title":""}
@@ -31,7 +31,7 @@ Réponds uniquement avec un objet JSON :
 Règles :
 - current par défaut, notamment pour une correction, un détail, un pronom, un suivi court ou une ambiguïté ;
 - new uniquement si le message ouvre clairement un autre sujet ou livrable sans dépendre du contexte actuel ;
-- confidence >= 0.90 uniquement quand la rupture de sujet est nette ;
+- confidence >= ${ROUTE_CONFIDENCE_THRESHOLD} uniquement quand la rupture de sujet est nette et que tu n'as aucun doute ; reste en dessous de ${ROUTE_CONFIDENCE_THRESHOLD} au moindre doute ;
 - title : titre bref du nouveau sujet, sans donnée sensible, uniquement pour route=new.`
 
 export type ConversationRouteReason =

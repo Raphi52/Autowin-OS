@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
+import {
+  ConversationRouteCoordinator,
+  ConversationRouter,
+  ROUTER_SYSTEM,
+  ROUTE_CONFIDENCE_THRESHOLD
+} from './conversation-router'
 import { ExecutionSupervisor } from './execution-supervisor'
 import { ProviderRegistry } from './providers/registry'
 import type {
@@ -383,5 +388,21 @@ it('force route=current sous 40 caractères, sans dépenser d’appel modèle', 
 
     await expect(router.decide(current, long)).resolves.toMatchObject({ route: 'new' })
     expect(registry.send).toHaveBeenCalled()
+  })
+})
+
+/**
+ * MÊME ÉCHELLE DES DEUX CÔTÉS — mesuré le 2026-09-12 : 1 935 décisions de routage, zéro 'new'.
+ * Le prompt enseignait « confidence >= 0.90 » alors que le code exigeait 0.97 : le modèle plafonnait
+ * à 0.94 et la branche 'new' était morte par construction. La consigne doit donc citer le seuil réel.
+ */
+describe('cohérence du barème de confiance du routeur', () => {
+  it('la consigne système enseigne EXACTEMENT le seuil exigé par le code', () => {
+    expect(ROUTER_SYSTEM).toContain(`confidence >= ${ROUTE_CONFIDENCE_THRESHOLD}`)
+  })
+
+  it("aucun autre seuil numérique n'est enseigné pour confidence", () => {
+    const seuils = [...ROUTER_SYSTEM.matchAll(/confidence >= ([\d.]+)/g)].map((m) => m[1])
+    expect(seuils).toEqual([String(ROUTE_CONFIDENCE_THRESHOLD)])
   })
 })
