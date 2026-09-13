@@ -11,7 +11,7 @@ import {
   statSync
 } from 'node:fs'
 import { appendFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 /**
  * Journal de TOUR (append-only, une ligne JSON par événement) — socle de la survie niveau 2 :
@@ -417,21 +417,57 @@ export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
  * GC : supprime les journaux TERMINÉS plus vieux que `maxAgeMs` (défaut 7 j). Ne touche jamais un
  * tour inachevé (c'est précisément ce qu'on veut pouvoir reprendre). Renvoie le nombre supprimé.
  */
-export function pruneFinishedTurnJournals(root: string, maxAgeMs = JOURNAL_RETENTION_MS, now = Date.now()): number {
+/*
+ * REPRISE DU MENAGE, par racine de journaux.
+ *
+ * fix-ok: 25 gels « ipc:runs:unfinishedTurns (sync) » / 69 s — la cause mesuree est un scan complet
+ * (462 dossiers, 1 376 fichiers, 141 Mo) execute en entier, en synchrone, a chaque ouverture. La
+ * passe est desormais BORNEE ; sans curseur, une passe bornee repasserait indefiniment sur les memes
+ * fichiers et ne solderait jamais l'arriere. La position est la derniere entree traitee, en ordre
+ * stable ; une passe qui va au bout remet le curseur a zero.
+ */
+const curseursMenage = new Map<string, string>()
+
+/** Bornes d'une passe de menage : au-dela, la passe s'arrete et reprendra la ou elle en etait. */
+export interface BornesMenage {
+  maxSuppressions?: number
+  budgetMs?: number
+}
+
+export function pruneFinishedTurnJournals(
+  root: string,
+  maxAgeMs = JOURNAL_RETENTION_MS,
+  now = Date.now(),
+  bornes: BornesMenage = {}
+): number {
   // Un SCAN de l'arborescence décide de ce qui est inachevé ou obsolète : les tampons encore en
   // mémoire doivent être sur disque AVANT, sinon un tour en vol serait invisible (donc jamais repris).
   flushAllTurnJournals()
   if (!existsSync(root)) return 0
+  const maxSuppressions = bornes.maxSuppressions ?? 200
+  const echeance = Date.now() + (bornes.budgetMs ?? 150)
+  const cleRacine = resolve(root)
+  const reprise = curseursMenage.get(cleRacine) ?? ''
   let removed = 0
-  for (const conversationId of readdirSync(root)) {
+  let derniereEntree = ''
+  let interrompue = false
+  for (const conversationId of readdirSync(root).sort()) {
+    if (interrompue) break
     const dir = join(root, conversationId)
     try {
       if (!statSync(dir).isDirectory()) continue
     } catch {
       continue
     }
-    for (const file of readdirSync(dir)) {
+    for (const file of readdirSync(dir).sort()) {
       if (!file.endsWith('.jsonl')) continue
+      const position = `${conversationId}/${file}`
+      if (position <= reprise) continue
+      if (removed >= maxSuppressions || Date.now() > echeance) {
+        interrompue = true
+        break
+      }
+      derniereEntree = position
       const path = join(dir, file)
       const turnId = file.slice(0, -'.jsonl'.length)
       // L'ÂGE d'abord : c'est un statSync, alors que la lecture (flush + readFileSync + JSON.parse
@@ -451,7 +487,37 @@ export function pruneFinishedTurnJournals(root: string, maxAgeMs = JOURNAL_RETEN
       }
     }
   }
+  curseursMenage.set(cleRacine, interrompue ? derniereEntree : '')
   return removed
+}
+
+/**
+ * Rend les tours INACHEVES tout de suite, et ne differe QUE le menage.
+ *
+ * Le canal `runs:unfinishedTurns` faisait le contraire : ~2,8 s de fenetre figee par ouverture, 69 s
+ * cumulees sur 25 gels. Ce qui ne se differe PAS, c'est le flush des tampons : un tour en vol pas
+ * encore sur disque serait invisible, donc jamais repris. La verite rendue prime, le GC attend.
+ * Le menage differe ne doit jamais jeter : hors du handler, un throw ne serait plus capture.
+ */
+export function listUnfinishedTurnsPuisMenage(
+  root: string,
+  options: {
+    menage?: () => void
+    planifier?: (tache: () => void) => void
+  } = {}
+): UnfinishedTurn[] {
+  flushAllTurnJournals()
+  const liste = listUnfinishedTurns(root)
+  const menage = options.menage ?? ((): void => void pruneFinishedTurnJournals(root))
+  const planifier = options.planifier ?? ((tache: () => void): void => void setImmediate(tache))
+  planifier(() => {
+    try {
+      menage()
+    } catch {
+      /* GC best-effort : jamais au prix du demarrage */
+    }
+  })
+  return liste
 }
 
 /**

@@ -164,7 +164,7 @@ import {
   appendTurnEvent,
   flushAllTurnJournals,
   isTurnFinished,
-  listUnfinishedTurns,
+  listUnfinishedTurnsPuisMenage,
   pruneFinishedTurnJournals,
   removeConversationTurnJournals,
   readTurnJournal
@@ -1481,13 +1481,14 @@ function registerChatIpc(): void {
   // pleine exécution) pour les rejouer/afficher. GC des journaux terminés au passage.
   ipcMain.handle('runs:unfinishedTurns', (event) => {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
-    try {
-      pruneFinishedTurnJournals(turnJournalRoot)
-      pruneLegacyContextValues()
-    } catch {
-      /* GC best-effort */
-    }
-    return listUnfinishedTurns(turnJournalRoot)
+    // La LISTE part tout de suite (tampons vides d'abord, sinon un tour en vol serait invisible) ;
+    // scan et suppressions passent apres le premier rendu. 25 gels, 69 s, ~2,8 s par ouverture.
+    return listUnfinishedTurnsPuisMenage(turnJournalRoot, {
+      menage: () => {
+        pruneFinishedTurnJournals(turnJournalRoot)
+        pruneLegacyContextValues()
+      }
+    })
   })
   ipcMain.handle('runs:turnJournal', (event, conversationId: string, turnId: string) => {
     assertTrustedRendererSender(event, 'TurnJournal')
