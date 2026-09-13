@@ -158,7 +158,9 @@ describe('un workflow impose ses phases', () => {
     expect(provider.prompts.some((prompt) => prompt.includes('SKILL frame'))).toBe(false)
     expect(provider.prompts.some((prompt) => prompt.includes('SKILL terrain'))).toBe(false)
     expect(provider.prompts.filter((prompt) => prompt.includes('SKILL build'))).toHaveLength(1)
-    expect(provider.execCount).toBe(1)
+    // +1 depuis le 2026-09-13 : la capitalisation (`learn`) survit a une phase nommee — elle ne
+    // rejoue AUCUNE phase du profil ecarte, ce que les assertions ci-dessus verifient.
+    expect(provider.execCount).toBe(2)
   })
 
   it('une phase explicite ne réserve pas non plus le pire cas du graphe écarté', async () => {
@@ -190,7 +192,9 @@ describe('un workflow impose ses phases', () => {
       ).run('/build corrige le bug')
     ).resolves.toBeDefined()
     expect(quote.phases).toEqual(['build'])
-    expect(provider.execCount).toBe(1)
+    // +1 depuis le 2026-09-13 : la capitalisation (`learn`) survit a une phase nommee — elle ne
+    // rejoue AUCUNE phase du profil ecarte, ce que les assertions ci-dessus verifient.
+    expect(provider.execCount).toBe(2)
   })
 })
 

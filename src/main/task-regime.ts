@@ -105,6 +105,27 @@ export function matchExplicitPhase(task: string): PipelinePhase | null {
  * Sous-ensemble de phases pour une tâche. Une phase NOMMÉE en tête court-circuite le régime
  * (consultée AVANT `classifyRegime`) ; sinon on retombe sur l'heuristique de proportionnalité.
  */
+/**
+ * LA CAPITALISATION SURVIT A UNE PHASE NOMMEE — defaut mesure le 2026-09-12 :
+ * sur 84 cloturees vertes, 34 portaient « aucun noeud learn declare par le profil (run mono-phase) »,
+ * soit 40 % des runs verts qui n'ecrivent AUCUNE lecon.
+ *
+ * Cause : une phase nommee (`/build ...`) court-circuite le graphe du profil — c'est voulu, elle ne
+ * doit pas rejouer les autres phases — mais elle emportait avec elle le noeud `learn` de l'apres-gate,
+ * qui n'est pas une phase d'execution. Reduire le TRAVAIL ne doit pas supprimer la MEMOIRE.
+ *
+ * `learn` n'est pas une `PipelinePhase` (type ferme, cf. shared/pipeline-phases.ts) : c'est un noeud
+ * d'apres-gate. Il ne peut donc pas etre rendu par `regimePhases` — d'ou cette fonction separee, lue
+ * par l'orchestrateur quand AUCUN graphe ne pilote le run.
+ *
+ * `/judge` reste vide : il ne joue aucune phase, il n'y a rien a capitaliser.
+ */
+export function phasesApresJugeHorsGraphe(task: string): string[] {
+  const explicitSlashPhase = routeSkillRequest(task)?.explicitPhase
+  if (!explicitSlashPhase || explicitSlashPhase === 'judge') return []
+  return ['learn']
+}
+
 export function regimePhases(task: string): PipelinePhase[] {
   // Ordre : une phase NOMMEE prime (autorite maximale), puis l'INTENTION en langage naturel. Cette
   // derniere ne fait que RESTREINDRE les phases d'une tache deja partie en orchestration — elle ne

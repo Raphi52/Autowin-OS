@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   classifyRegime,
+  phasesApresJugeHorsGraphe,
   regimePhases,
   phasesForRegime,
   matchExplicitPhase
@@ -178,5 +179,20 @@ describe('classifyRegime — retouches d\'apparence (conv-210)', () => {
     expect(
       classifyRegime('enleve la pastille verte ; ensuite met le nom de la conv en gris')
     ).toBe('standard')
+  })
+})
+
+describe('phasesApresJugeHorsGraphe', () => {
+  it('une phase nommée garde la capitalisation', () => {
+    expect(phasesApresJugeHorsGraphe('/build corrige le bug')).toEqual(['learn'])
+    expect(phasesApresJugeHorsGraphe('/clean enlève les résidus')).toEqual(['learn'])
+  })
+
+  it('`/judge` ne capitalise rien : il ne joue aucune phase', () => {
+    expect(phasesApresJugeHorsGraphe('/judge le livrable')).toEqual([])
+  })
+
+  it('sans phase nommée, la chaîne vient du graphe du profil, pas d’ici', () => {
+    expect(phasesApresJugeHorsGraphe('corrige le bug')).toEqual([])
   })
 })
