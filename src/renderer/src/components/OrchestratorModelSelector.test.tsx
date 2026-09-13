@@ -4,6 +4,23 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 
+/*
+ * OUVRIR LE MENU, puis le chercher DANS LA PAGE.
+ *
+ * Le menu est passe en fenetre flottante (portail vers `document.body`) et n'est monte qu'APRES
+ * l'evenement `toggle`, qui mesure sa position. Poser `details.open = true` ne suffit donc plus :
+ * sans l'evenement, rien n'est rendu ; et chercher dans l'hote ne trouve rien, le menu n'y est
+ * plus. Ces trois tests interrogeaient l'ancien montage.
+ */
+async function ouvrirMenu(racine: HTMLElement): Promise<HTMLElement> {
+  const details = racine.querySelector('details') as HTMLDetailsElement
+  await act(async () => {
+    details.open = true
+    details.dispatchEvent(new Event('toggle'))
+  })
+  return document.body
+}
+
 describe('OrchestratorModelSelector', () => {
   beforeAll(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -50,8 +67,8 @@ describe('OrchestratorModelSelector', () => {
     })
 
     const details = host.querySelector('details') as HTMLDetailsElement
-    details.open = true
-    expect(host.querySelector('.model-select-menu [data-testid="effort-matrix"]')).not.toBeNull()
+    const page = await ouvrirMenu(host)
+    expect(page.querySelector('.model-select-menu [data-testid="effort-matrix"]')).not.toBeNull()
 
     await act(async () => {
       outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
@@ -95,7 +112,7 @@ describe('OrchestratorModelSelector', () => {
       )
     })
 
-    const option = host.querySelector('[role="option"]') as HTMLButtonElement
+    const option = (await ouvrirMenu(host)).querySelector('[role="option"]') as HTMLButtonElement
     expect(option.textContent).toContain('Expiré')
     expect(option.getAttribute('aria-disabled')).toBe('true')
     await act(async () => option.click())
@@ -132,7 +149,7 @@ describe('OrchestratorModelSelector', () => {
       )
     })
 
-    const option = host.querySelector('[role="option"]') as HTMLButtonElement
+    const option = (await ouvrirMenu(host)).querySelector('[role="option"]') as HTMLButtonElement
     expect(option.getAttribute('aria-disabled')).not.toBe('true')
     await act(async () => option.click())
     expect(onSelect).toHaveBeenCalled()

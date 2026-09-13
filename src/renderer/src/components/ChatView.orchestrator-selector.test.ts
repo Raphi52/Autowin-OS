@@ -29,7 +29,8 @@ describe('selecteur orchestrateur Chat', () => {
 
   async function renderSelector(
     props: Partial<ComponentProps<typeof OrchestratorModelSelector>> = {}
-  ): Promise<HTMLDivElement> {
+    // Rend la PAGE (`document.body`) et non plus le conteneur : le menu part dans un portail.
+  ): Promise<HTMLElement> {
     container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
@@ -47,7 +48,18 @@ describe('selecteur orchestrateur Chat', () => {
         })
       )
     })
-    return container
+    /*
+     * Le menu du selecteur est devenu une fenetre FLOTTANTE : il est rendu dans `document.body`
+     * par un portail, et seulement apres l'evenement `toggle` qui mesure sa position. Ces tests
+     * cherchaient les options dans le conteneur, ou elles ne sont plus.
+     */
+    const details = container.querySelector('details') as HTMLDetailsElement | null
+    if (details)
+      await act(async () => {
+        details.open = true
+        details.dispatchEvent(new Event('toggle'))
+      })
+    return document.body
   }
 
   it('rend honnêtement un catalogue models() vide sans option inventée ni faux succès', async () => {
@@ -125,10 +137,14 @@ describe('selecteur orchestrateur Chat', () => {
     const selector = dom.querySelector<HTMLDetailsElement>(
       '[data-testid="chat-orchestrator-model"]'
     )!
-    selector.setAttribute('open', '')
+    await act(async () => {
+      selector.setAttribute('open', '')
+      selector.dispatchEvent(new Event('toggle'))
+    })
 
     expect(selector.open).toBe(true)
-    expect(selector.querySelector('[data-testid="effort-matrix"]')).not.toBeNull()
+    // La matrice vit dans le portail du menu flottant, plus DANS le `details`.
+    expect(document.body.querySelector('[data-testid="effort-matrix"]')).not.toBeNull()
 
     await act(async () => {
       document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -192,7 +208,14 @@ describe('selecteur orchestrateur Chat', () => {
     document.body.append(container)
     const root = createRoot(container)
     await act(async () => root.render(createElement(RejectionHarness)))
-    const dom = container
+    // Menu flottant : on l'ouvre, puis on cherche dans la PAGE (le portail y depose le menu).
+    const detailsRejet = container.querySelector('details') as HTMLDetailsElement | null
+    if (detailsRejet)
+      await act(async () => {
+        detailsRejet.open = true
+        detailsRejet.dispatchEvent(new Event('toggle'))
+      })
+    const dom = document.body
     const llama = [...dom.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
       (option) => option.querySelector('strong')?.textContent === 'Llama'
     )
@@ -340,7 +363,14 @@ describe('selecteur orchestrateur Chat', () => {
     // plus par la popup des quotas.
     expect(source).toMatch(/<ModelQuotaIndicator\s+provider=\{runtimeIdentity\?\.provider\}/)
     expect(source).not.toContain('contextGauge={activeId != null ? contextGauges[activeId]')
-    expect(source).toMatch(/<ContextGaugeIndicator\s+gauge=\{jauge\}/)
+    /*
+     * La jauge de contexte est passee dans un PANNEAU (`contextPanelNode`) rendu par
+     * `ContextGaugeDetail`, alimente par la seule jauge courante. Ce qui est verifie reste le
+     * meme : UN objet jauge deja calcule, jamais une recherche par conversation dans la vue
+     * (garde par l'assertion negative juste au-dessus).
+     */
+    expect(source).toMatch(/<ContextGaugeDetail\s+gauge=\{j\}/)
+    expect(source).toContain('const j = jaugeCourante')
     // AUCUN REPLI SUR LE CUMUL DANS LA VUE. `inputTokens` est le cumul du tour, un MAJORANT :
     // l'afficher comme une occupation rejouait la jauge fausse que le moteur refuse d'ecrire
     // (`chat/run-pilot-chat.ts`). La vue passe par `occupationDeFenetre` et n'affiche rien quand
@@ -354,7 +384,10 @@ describe('selecteur orchestrateur Chat', () => {
     expect(source).toContain('send(COMPACT_REQUEST, { targetConversationId: conversationId })')
     // Rendu du sélecteur : extrait dans OrchestratorModelSelector.
     expect(selectorSource).toContain('const disabled = busy || pending || models.length === 0')
-    expect(selectorSource).toContain('className="model-select-menu"')
+    // Menu devenu FLOTTANT : il porte `is-flottant` en plus et part dans un portail. Ce qui est
+    // verifie reste qu'il existe UNE seule classe de menu, portee par le composant extrait.
+    expect(selectorSource).toContain('className="model-select-menu is-flottant"')
+    expect(selectorSource).toContain('createPortal(')
     expect(selectorSource).toContain('Le changement s’appliquera au prochain tour')
     expect(selectorSource).not.toMatch(
       /model-select[\s\S]{0,800}(navigate|newConv|location\.reload)/
