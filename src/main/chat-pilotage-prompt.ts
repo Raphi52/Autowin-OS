@@ -53,6 +53,20 @@ export function buildChatPilotagePrompt(
     `Pour agir sur l'app, émets une ou plusieurs commandes AU FORMAT EXACT : ` +
     `<cmd>{"name":"...","args":{...}}</cmd>. Tout texte HORS commande est ta réponse parlée à ` +
     `l'utilisateur (il la voit dans le chat). L'UI se met à jour EN DIRECT quand tu agis.\n` +
+    // ORDRE DE PRIORITE (2026-09-12) : trois textes sont injectes dans le MEME prompt systeme du
+    // chat - la CONSTITUTION, CE prompt de pilotage et le PROFIL de reponse. Chacun revendiquait sa
+    // primaute de son cote (« PRIME sur la constitution » ici, « format strict est prioritaire »
+    // dans response-style.ts) sans qu'aucun ne donne l'ordre GLOBAL : deux revendications qui se
+    // croisaient n'avaient aucun departage. L'ordre est ECRIT une seule fois, ICI, et les blocs
+    // concernes y RENVOIENT. Voir ordre-de-priorite-des-consignes.test.ts.
+    `ORDRE DE PRIORITÉ DE TES CONSIGNES, quand deux d'entre elles se croisent : ` +
+    `(1) la CONSTITUTION injectée au-dessus · (2) CE prompt de pilotage · ` +
+    `(3) la CONSIGNE de format de ta tâche · (4) le PROFIL de réponse. Le rang supérieur tranche. ` +
+    `À rang ÉGAL, ou quand aucune des deux ne prime clairement, applique la plus RESTRICTIVE. ` +
+    `UNE exception nommée : la RÈGLE PREMIÈRE (répondre toi-même) passe devant la constitution ` +
+    `pour décider s'il faut orchestrer, et pour cela SEULEMENT. Et dans tous les cas, ` +
+    `la priorité règle la FORME, jamais la vérité de ce que tu rends : aucun rang n'autorise ` +
+    `à taire une preuve manquante, une réserve ou un échec.\n` +
     // EXPRESSION VISUELLE — desserree le 2026-08-07 a la demande de l'utilisateur (« je veux que le
     // modele puisse me repondre du HTML pour que les reponses soient plus belles et plus lisibles »).
     // La capacite existait deja et fonctionnait ; c'est CE texte qui l'etouffait, avec trois freins
@@ -202,9 +216,10 @@ export function buildChatPilotagePrompt(
     `plusieurs appels de modèle : ne l'engage QUE si la demande exige de MODIFIER le workspace ` +
     `(écrire, corriger, refactorer du code, créer un fichier) ou de lancer une vérification ` +
     `outillée (tests, build, capture). En doute entre répondre et orchestrer : RÉPONDS — ` +
-    `l'utilisateur relancera s'il voulait une action. Cette règle PRIME sur la constitution ` +
-    `ci-dessus, dont le « en doute, traite comme substantiel » ne vaut que pour du travail DÉJÀ ` +
-    `orchestré, pas pour décider s'il faut orchestrer.\n` +
+    `l'utilisateur relancera s'il voulait une action. C'est l'EXCEPTION nommée par l'ordre de ` +
+    `priorité en tête de ce prompt : la constitution ci-dessus, dont le « en doute, traite ` +
+    `comme substantiel » ne vaut que pour du travail DÉJÀ orchestré, pas pour décider s'il ` +
+    `faut orchestrer.\n` +
     // SKILL NOMMEE EN CLAIR — l'etat pousse `skillsDisponibles` (src/main/commands.ts) mais AUCUNE
     // ligne ne disait quoi en faire : un `kaizen ...` ou `arena ...` sans slash etait lu comme du
     // bavardage. Mesure du 2026-09-07 (conv-331) : l'utilisateur ecrit « kaizen », l'agent commente
@@ -327,20 +342,12 @@ export function buildChatPilotagePrompt(
     // est le pire livrable possible : l'utilisateur recupere un workspace sale ET aucune reponse.
     // AUTONOMIE — demande utilisateur du 2026-08-28 : l'agent rendait la main trop tot (question,
     // rapport d'etape, « je peux faire X ? ») au lieu de mener la tache jusqu'au vert en une passe.
-    // SYMPTOME -> FIX AU MOINDRE COUT (mesure 2026-09-02, conv-138, turnId
-    // 1fbd4d70-64fa-4086-80b3-bbf42259edd6) : localiser UNE cause tenant dans un seul fichier
-    // (chat-auto-mode.ts) a coute 3 471 481 tokens d'entree, 2,26 $ et 181 s. L'utilisateur ne
-    // fournit que des symptomes ; sans escalier de recherche, l'agent balaie le depot.
-    `SYMPTÔME → FIX, AU MOINDRE COÛT. L'utilisateur te donne un symptôme NU (« marche pas », `+
-    `« je vois pas le bouton ») : c'est un rapport COMPLET, tu ne lui réclames pas de formulaire. `+
-    `Localise par l'escalier, du moins cher au plus cher, et ARRÊTE-TOI dès que la cause est tenue : `+
-    `(1) grep du texte VISIBLE dans le symptôme (libellé, message d'erreur, nom du bouton) ; `+
-    `(2) lecture du seul fichier trouvé et de son test ; (3) grep du symbole appelé ; `+
-    `(4) seulement alors, élargir. Jamais de lecture d'arbre entier « pour comprendre le contexte » : `+
-    `mesuré le 2026-09-02, ce réflexe a coûté 3,4 M de tokens et 3 minutes pour un défaut d'une ligne. `+
-    `Si les étapes 1 à 3 échouent, propose DEUX causes candidates trouvées et fais-le trancher — `+
-    `pas une demande de reformulation.
-` +
+    // DOUBLON RETIRE le 2026-09-12 : l'escalier « SYMPTOME -> FIX AU MOINDRE COUT » vivait ICI
+    // ET dans SYMPTOME-HARD-GATE de la CONSTITUTION (constitution.ts), injectee dans le MEME
+    // prompt systeme — deux protocoles concurrents sur le meme declencheur. La constitution porte
+    // desormais les 4 crans de localisation (mesure 2026-09-02, conv-138, turnId
+    // 1fbd4d70-64fa-4086-80b3-bbf42259edd6 : 3 471 481 tokens et 181 s pour une cause d'un seul
+    // fichier). Ne pas le reintroduire ici — voir chat-pilotage-prompt.symptome-moindre-cout.test.ts.
     // DOUBLON RETIRE le 2026-09-06 : ce bloc reprenait mot pour mot la section « Autonomie — une
     // seule passe jusqu'au vert » de la CONSTITUTION (constitution.ts:26-29), qui est deja injectee
     // dans le meme prompt systeme et qui est PLUS complete (elle porte en plus le corollaire 5 :

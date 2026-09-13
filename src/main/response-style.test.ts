@@ -19,7 +19,9 @@ describe('concise structured response policy', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
       /(?:sans|absence de|supprime).*(?:répétition|répéter)/iu
     )
-    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(/format strict.*prioritaire/iu)
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /format imposée par ta tâche passe devant ce profil.*rang 3 contre rang 4/iu
+    )
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).not.toMatch(/rubrique vide.*masqu/iu)
   })
 
