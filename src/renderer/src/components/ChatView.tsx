@@ -3868,7 +3868,6 @@ export function ChatView({
        */
       positionARestaurerRef.current = null
       setAtterrissageDemande((tour) => tour + 1)
-      console.log('[SONDE2] send', 'followTail=' + followTailRef.current, 'top=' + scrollRef.current.scrollTop, 'h=' + scrollRef.current.scrollHeight)
     }
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
 
