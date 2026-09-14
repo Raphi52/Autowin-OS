@@ -72,6 +72,12 @@ export interface TicketUpdateRequest {
   comment?: string
   state?: string
   assignee?: string
+  /**
+   * Champs libres à écrire, indexés par leur NOM DE RÉFÉRENCE côté fournisseur
+   * (ex. `Custom.DLL`). Ouvre les onglets métier — « À livrer », « Recette » — que
+   * `state` et `assignee` n'atteignent pas. Le nom n'est jamais deviné : il vient de l'appelant.
+   */
+  fields?: Readonly<Record<string, string>>
 }
 
 export interface TicketProviderAdapter {

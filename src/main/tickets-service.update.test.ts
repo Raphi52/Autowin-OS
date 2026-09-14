@@ -44,6 +44,31 @@ describe('TicketService.update', () => {
     )
   })
 
+  it('relaie les champs métier bornés, seuls ou avec un commentaire', async () => {
+    const deps = fixture()
+    const service = new TicketService(deps)
+    await service.update({
+      source: DEFAULT_TICKET_SOURCE,
+      id: '1602',
+      fields: {
+        'Custom.DLL': '  ULT_CDESSALLES.dll  ',
+        'Custom.SQL': 'Aucun script',
+        'Custom.Vide': '   ',
+        sansPrefixe: 'ignoré',
+        'Custom.Geant': 'x'.repeat(20_001)
+      } as never
+    })
+
+    expect(deps.registry.update).toHaveBeenCalledWith(
+      {
+        source: DEFAULT_TICKET_SOURCE,
+        id: '1602',
+        fields: { 'Custom.DLL': 'ULT_CDESSALLES.dll', 'Custom.SQL': 'Aucun script' }
+      },
+      { token: '', authScheme: 'bearer' }
+    )
+  })
+
   it('refuse profil forgé, id invalide, écriture vide et commentaire géant', async () => {
     const deps = fixture()
     const service = new TicketService(deps)
