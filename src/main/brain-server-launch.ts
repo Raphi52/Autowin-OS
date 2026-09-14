@@ -59,6 +59,54 @@ export function windowlessPython(python: string, exists: (p: string) => boolean 
   return gui !== python && exists(gui) ? gui : python
 }
 
+/** L'interpréteur à lancer, et ce qu'il faut lui donner pour retrouver les paquets du venv. */
+export interface WindowlessInterpreter {
+  bin: string
+  /** site-packages du venv — à passer en PYTHONPATH quand on court-circuite le relais uv. */
+  venvSitePackages?: string
+}
+
+/**
+ * UV NE RESPECTE PAS LE CONTRAT DE `pythonw.exe` — mesure du 2026-09-14, console constatée à l'écran.
+ *
+ * Dans un venv créé par uv, `Scripts/python.exe` et `Scripts/pythonw.exe` sont deux copies OCTET POUR
+ * OCTET du même relais, compilé en sous-système CONSOLE ; ce relais lance ensuite le `python.exe`
+ * (console lui aussi) de l'interpréteur de base. Windows alloue donc une fenêtre, malgré `pythonw`,
+ * `windowsHide` et `start /b`. Défaut public : https://github.com/astral-sh/uv/issues/19226 —
+ * observé ici en direct : pythonw.exe du venv (PID parent) avec un python.exe enfant portant le même
+ * script.
+ *
+ * On court-circuite donc le relais : on lit `pyvenv.cfg`, et si le venv est marqué `uv = …` on vise
+ * le VRAI `pythonw.exe` de l'interpréteur de base (`home`). Cet interpréteur n'active pas le venv
+ * tout seul, d'où le site-packages rendu à côté : c'est la seule façon de garder les paquets.
+ *
+ * Hors venv uv, rien ne change : on garde `windowlessPython`, qui suffit à un venv standard.
+ */
+export function resolveWindowlessInterpreter(
+  python: string,
+  deps: { exists?: (p: string) => boolean; read?: (p: string) => string } = {}
+): WindowlessInterpreter {
+  const exists = deps.exists ?? existsSync
+  const read = deps.read ?? ((p: string): string => readFileSync(p, 'utf8'))
+  const gui = windowlessPython(python, exists)
+  const venv = dirname(dirname(python))
+  const cfg = join(venv, 'pyvenv.cfg')
+  if (!exists(cfg)) return { bin: gui }
+  let contenu: string
+  try {
+    contenu = read(cfg)
+  } catch {
+    return { bin: gui }
+  }
+  // Marqueur écrit par uv lui-même dans pyvenv.cfg : c'est LUI qui signe des relais console.
+  if (!/^[ \t]*uv[ \t]*=/m.test(contenu)) return { bin: gui }
+  const home = /^[ \t]*home[ \t]*=[ \t]*(.+?)[ \t]*$/m.exec(contenu)?.[1]
+  if (!home) return { bin: gui }
+  const baseGui = join(home, 'pythonw.exe')
+  if (!exists(baseGui)) return { bin: gui }
+  return { bin: baseGui, venvSitePackages: join(venv, 'Lib', 'site-packages') }
+}
+
 /**
  * Construit la commande de lancement, ou rend `null` si elle ne peut pas être construite SANS
  * risque d'injection (fail-closed : mieux vaut un brain absent qu'une ligne shell attaquable).
