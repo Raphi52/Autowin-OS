@@ -1169,6 +1169,8 @@ const CATALOG: CommandSpec[] = [
       comment: 'facultatif — preuves, changements et vérifications réellement effectués',
       state: 'facultatif — état final exact accepté par le fournisseur',
       assignee: 'facultatif — personne à assigner',
+      fields:
+        'facultatif — champs libres à écrire, indexés par leur nom de référence exact chez le fournisseur, ex. { "Custom.DLL": "MaLib.dll" } ; c’est la seule façon d’atteindre les onglets métier (À livrer, Recette)',
       sourceId: 'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs'
     },
     annotations: {
