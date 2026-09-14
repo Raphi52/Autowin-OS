@@ -1340,6 +1340,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       queue.push({ delta: '', artifacts: streamed })
       wake()
     }
+    /** Taches de fond lancees et pas terminees (id -> commande lisible). Voir `task_started`. */
+    const tachesDeFond = new Map<string, string>()
     const pendingTools = new Map<
       string,
       { name: string; command: string; filePath: string; writtenLineFingerprints: string[] }
@@ -1483,6 +1485,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const demarre = o['subtype'] === 'task_started'
         const brut = String((demarre ? o['description'] : o['summary']) ?? '').trim()
         const commande = resumerCommandeDeFond(brut)
+        // fix-ok: conv-528 turnId 6dbf5a57 — le CLI -p ARRETE les taches de fond a la fin du tour
+        // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
+        // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
+        const idTache = String(o['task_id'] ?? commande ?? '')
+        if (demarre) tachesDeFond.set(idTache, commande || 'commande sans description')
+        else {
+          const st = String(o['status'] ?? '').toLowerCase()
+          if (st === 'completed' || st === 'failed') tachesDeFond.delete(idTache)
+          else tachesDeFond.set(idTache, commande || tachesDeFond.get(idTache) || 'commande sans description')
+        }
         if (demarre) {
           queue.push({
             delta: '',
@@ -1650,6 +1662,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
+        if (tachesDeFond.size > 0) {
+          const liste = [...tachesDeFond.values()].map((c) => `\`${c}\``).join(', ')
+          const avis = `\n\n⚠️ Tâche de fond arrêtée à la fin de ce tour : ${liste}. Son résultat ne reviendra pas tout seul — relance la demande pour la refaire.`
+          tachesDeFond.clear()
+          text += avis
+          queue.push({ delta: avis })
+        }
         if (typeof o['session_id'] === 'string') sessionId = o['session_id'] as string
         // Tokens/coût RÉELS du tour (le result event du CLI les porte).
         const hasReportedCost = Object.prototype.hasOwnProperty.call(o, 'total_cost_usd')
