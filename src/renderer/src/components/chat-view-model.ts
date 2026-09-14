@@ -1718,6 +1718,12 @@ export function scrollChatToBottom(
     const height = element.scrollHeight
     const heightMoved = height !== lastHeight
     const reculBrutalEnHaut = element.scrollTop <= 4 && lastTop > element.clientHeight
+    // Un recul accompagne d'un GESTE DECLARE appartient au lecteur, meme si le fil grandit encore
+    // (streaming) : sans cela la descente re-visait le bas par-dessus sa molette (conv-518, 2026-09-13).
+    if (element.scrollTop < lastTop - 4 && heightMoved && lecteurAPrisLaMain?.() === true) {
+      onSettled?.(isChatNearBottom(element))
+      return
+    }
     if (element.scrollTop < lastTop - 4 && !heightMoved) {
       // AUCUN GESTE DECLARE = ce recul vient de l'app (re-rendu), pas du lecteur : on re-vise le
       // bas au lieu de rendre la main en plein vol. Voir `lecteurAPrisLaMain`.

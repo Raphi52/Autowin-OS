@@ -87,6 +87,13 @@ describe('jetonsDeCauseParFichier — la cause se DECLARE, elle ne se suppose pa
     expect(jetonsDeCauseParFichier(texte, [], edites)).toEqual({})
   })
 
+  it('reconnait un DOSSIER edite (cle porcelain sans extension) nomme sur la ligne', () => {
+    const texte = 'CausalHypothesis: .autowin-preuve/ — captures de preuve, pas un correctif.'
+    expect(jetonsDeCauseParFichier(texte, [], ['.autowin-preuve/', 'src/main/b.ts'])).toEqual({
+      '.autowin-preuve/': true
+    })
+  })
+
   it('un jeton qui ne nomme AUCUN fichier ne desarme rien', () => {
     const texte = 'check: npm test\nTout est vert, je cloture.'
     expect(jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({})

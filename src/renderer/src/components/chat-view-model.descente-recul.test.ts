@@ -78,4 +78,38 @@ describe('scrollChatToBottom — un recul sans geste de lecture ne coupe pas la 
     expect(atterri).toBe(false)
     expect(element.scrollTop).toBe(1200)
   })
+
+  /**
+   * DEFAUT VECU le 2026-09-13 (conv-518) : remonter a la molette PENDANT qu'une reponse s'ecrit
+   * ramenait le fil en bas. Le fil grandit a chaque frame : le recul du lecteur tombait dans la
+   * branche « hauteur qui bouge » et la descente re-visait le bas par-dessus son geste.
+   */
+  it('rend la main a un vrai geste du lecteur meme quand le fil grandit encore', () => {
+    const element = filDe(5000)
+    let atterri: boolean | null = null
+    let geste = false
+    const files: (() => void)[] = []
+    scrollChatToBottom(
+      element,
+      (cb) => files.push(cb),
+      40,
+      (landed) => {
+        atterri = landed
+      },
+      () => geste
+    )
+    let images = 0
+    while (files.length > 0 && images < 200) {
+      const suivante = files.shift()!
+      images += 1
+      element.scrollHeight += 50 // streaming : la hauteur bouge a chaque frame
+      if (images === 3) {
+        geste = true
+        element.scrollTop = 1200
+      }
+      suivante()
+    }
+    expect(atterri).toBe(false)
+    expect(element.scrollTop).toBe(1200)
+  })
 })
