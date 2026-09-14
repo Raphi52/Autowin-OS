@@ -257,8 +257,13 @@ export async function ensureBrainServerStarted(
     return { status: 'unavailable', detail: `brain_server.py introuvable (${script})` }
   }
   // ⚠️ PYTHONPATH retiré : sinon un PYTHONPATH hérité (Hermes) shadow les deps du venv isolé (cf. README).
+  const interpreter = resolveWindowlessInterpreter(python)
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
+  // Seule exception au retrait ci-dessus, et elle est MAÎTRISÉE (pas un héritage) : quand on
+  // court-circuite le relais uv, l'interpréteur de base ignore le venv — sans ce chemin, aucune
+  // dépendance du Brain ne serait trouvée.
+  if (interpreter.venvSitePackages) childEnv.PYTHONPATH = interpreter.venvSitePackages
   childEnv.AMITEL_BRAIN_ROOT = runtime.brainRoot
   childEnv.AMITEL_BRAIN_CODE_ROOT = runtime.tooling
   childEnv.AMITEL_BRAIN_PYTHON = runtime.python
