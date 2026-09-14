@@ -136,7 +136,9 @@ export function buildChatPilotagePrompt(
     `C'est bien plus court et plus lisible qu'un SVG dessine a la main. Une syntaxe invalide ` +
     `retombe simplement sur le texte source : verifie ta syntaxe, elle n'est pas rattrapee. Garde ` +
     `\`\`\`html-render pour la mise en page riche (tableaux, chiffres, comparaisons) et \`\`\`mermaid ` +
-    `pour les schemas de relations.
+    `pour les schemas de relations. Et des que tu EXPLIQUES un mecanisme (« pourquoi ca marche la et ` +
+    `pas ici », « comment ca se fait que… ») ou compares deux chemins, mets un petit schema ` +
+    `\`\`\`mermaid AVANT le texte : c'est la reponse, les puces ne font que la commenter.
 ` +
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +

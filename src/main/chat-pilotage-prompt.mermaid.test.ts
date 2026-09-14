@@ -19,4 +19,13 @@ describe('contrat des diagrammes dans le chat', () => {
     expect(prompt).toContain('```html-render')
     expect(prompt).toContain('pour les schemas de relations')
   })
+
+  // kaizen conv-526, tour c7710deb-b58c-4732-90e6-6d0d7903a5e6 (saisie ts 1789378608553) :
+  // « pourquoi RIG reste invisible et Studio clignote » a recu deux listes a puces ; l'utilisateur
+  // voulait un schema. Une EXPLICATION de mecanisme comparant deux chemins n'etait pas un declencheur.
+  it('declenche un schema pour expliquer un mecanisme ou comparer deux chemins', () => {
+    const prompt = buildChatPilotagePrompt([])
+    expect(prompt).toMatch(/EXPLIQUES un mecanisme/u)
+    expect(prompt).toMatch(/deux chemins/u)
+  })
 })
