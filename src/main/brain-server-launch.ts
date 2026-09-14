@@ -291,7 +291,7 @@ export async function ensureBrainServerStarted(
   // `stdio:'ignore'` + `windowsHide` étaient DÉJÀ posés quand le port 9223 a été séquestré : le
   // lanceur reste donc obligatoire — mais il est fail-closed (cf. buildBrainLaunchCommand).
   // pythonw.exe quand il existe : aucune console ne peut apparaître (cf. windowlessPython).
-  const command = buildBrainLaunchCommand(tooling, windowlessPython(python), script)
+  const command = buildBrainLaunchCommand(tooling, interpreter.bin, script)
   if (!command) {
     return {
       status: 'unavailable',
