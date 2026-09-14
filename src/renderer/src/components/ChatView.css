@@ -1839,9 +1839,17 @@ ol.md-list li {
    intrinseque qui peut depasser la bulle : on le ramene a la largeur disponible. */
 .md-mermaid {
   min-width: 0;
+  min-height: 0;
   max-width: 100%;
   margin: var(--s1) 0;
   overflow-x: auto;
+}
+/* Le conteneur vient du panneau d'artefacts (`.artifact-diagram`), ou il reserve une grande
+   surface. Dans le fil, ce plancher de 180 px et ce rembourrage de 18 px ajoutent du vide
+   autour d'un petit schema. */
+.md-mermaid .artifact-diagram {
+  min-height: 0;
+  padding: 0;
 }
 .md-mermaid svg {
   /* `!important` A SA RAISON : mermaid ECRIT lui-meme un `style="max-width: <largeur du dessin>px"`
@@ -1850,7 +1858,17 @@ ol.md-list li {
      dans le vrai renderer. Ce n'est pas une rustine : c'est la seule facon de reprendre la main sur
      une largeur posee en ligne par la bibliotheque. */
   max-width: 100% !important;
+  /* BORNE DE HAUTEUR (2026-09-14). Un SVG a ratio intrinseque contraint seulement en largeur
+     s'etire autant que son viewBox le demande : un flowchart a deux `subgraph` demandait
+     plusieurs ecrans de defilement dans le fil. `width: auto` avec `max-height` laisse le
+     navigateur retrecir les DEUX cotes en gardant les proportions, au lieu de laisser des
+     marges laterales vides. Le panneau d'artefacts garde, lui, un diagramme plein format. */
+  width: auto;
   height: auto;
+  max-height: min(60vh, 420px);
+  /* Le plancher de `.artifact-diagram svg` (160 px) vient du panneau d'artefacts et se battrait
+     avec la borne ci-dessus sur un petit schema. */
+  min-height: 0;
 }
 
 .md-html {
