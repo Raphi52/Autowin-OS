@@ -23,6 +23,7 @@ import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
+import { scriptHookGardeGraphique } from '../../shared/garde-lancement-graphique'
 import { join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
@@ -240,6 +241,18 @@ export function normalizeClaudeUsage(
  * le CLI interprète ses règles de permission — c'est ce qui les rend fiables ici, là où un
  * périmètre par préfixe ne borne que le verbe.
  */
+/**
+ * Environnement du processus agent : base, puis variables du run (`execution.agentEnv`, ex. le fil
+ * AUTOWIN_CONVERSATION_ID), puis NON_INTERACTIVE_ENV EN DERNIER — une variable du run ne peut pas
+ * rouvrir un pager ou une invite d'identifiants.
+ */
+export function environnementAgent(
+  base: NodeJS.ProcessEnv,
+  agentEnv?: Record<string, string>
+): NodeJS.ProcessEnv {
+  return { ...base, ...(agentEnv ?? {}), ...NON_INTERACTIVE_ENV }
+}
+
 export const NON_INTERACTIVE_ENV: Record<string, string> = {
   GIT_PAGER: 'cat',
   PAGER: 'cat',
@@ -659,6 +672,30 @@ export function claudeTransportEnvelope(
  * `send` l'appelle et ne decide rien d'autre : c'est ce qui fait du test une preuve sur le chemin de
  * production plutot que sur une reconstitution.
  */
+/**
+ * Reglages PROPRES a Autowin passes au CLI par `--settings` : memoire ramenee au projet courant,
+ * et hook PreToolUse(Bash|PowerShell) du garde de lancement graphique.
+ *
+ * La commande du hook COMMENCE par le nom nu `node`. Mesure 2026-09-13 (CLI 2.1.270, Windows) :
+ * `"C:/.../node.exe" "script"` ne s'executait jamais — le shell du hook lit une chaine entre
+ * guillemets en tete comme une valeur, pas comme un programme — et le garde restait muet. Et
+ * l'outil shell du CLI s'appelle `PowerShell` sur ce poste, pas `Bash` : le matcher couvre les deux.
+ */
+export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
+  const q = (v: string) => `"${v.split('\\').join('/')}"`
+  return {
+    autoMemoryDirectory: '',
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash|PowerShell',
+          hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
+        }
+      ]
+    }
+  }
+}
+
 export function argumentsMcpNoeudSkill(opts: SendOptions): {
   /** `--strict-mcp-config`, ou rien s'il est retire pour cet appel. */
   strict: string[]
@@ -1092,7 +1129,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     try {
       settingsDir = mkdtempSync(join(tmpdir(), 'autowin-os-settings-'))
       const settingsFile = join(settingsDir, 'settings.json')
-      writeFileSync(settingsFile, JSON.stringify({ autoMemoryDirectory: '' }), 'utf8')
+      // GARDE LANCEMENT GRAPHIQUE (conv-526) : un hook PreToolUse sur Bash refuse d'ouvrir une
+      // application graphique au premier plan et impose le bureau cache (hdesk-lancer.ps1).
+      // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
+      const hookGarde = join(settingsDir, 'garde-lancement-graphique.mjs')
+      writeFileSync(hookGarde, scriptHookGardeGraphique(), 'utf8')
+      writeFileSync(
+        settingsFile,
+        JSON.stringify(reglagesCliAutowin(hookGarde)),
+        'utf8'
+      )
       args.push('--settings', settingsFile)
     } catch {
       settingsDir = undefined // impossible d'ecrire : on garde le comportement d'origine
@@ -1211,11 +1257,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // compte par defaut : sans ce retrait, un dir herite du processus ferait tourner le run
       // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
       // explicitement une variable garde le dernier mot.
-      env: {
-        ...withClaudeAccountEnv(process.env),
-        ...(invocation.env ?? {}),
-        ...NON_INTERACTIVE_ENV
-      },
+      env: environnementAgent(
+        { ...withClaudeAccountEnv(process.env), ...(invocation.env ?? {}) },
+        execution?.agentEnv
+      ),
       ...(journal
         ? {
             detached: true,

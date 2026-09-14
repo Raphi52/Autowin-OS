@@ -134,7 +134,8 @@ export function jetonsDeCauseParFichier(
   for (const ligne of (texteDuRun ?? '').split(/\r?\n/)) {
     if (!JETON_DE_CAUSE.test(ligne)) continue
     // fix-ok: la classe excluait « : » — un chemin absolu Windows (D:/...) perdait sa lettre de lecteur et ne pouvait jamais desarmer le fichier (conv-526, refus « 5 edits de D:/AutoWinOS/scripts/ui-capture.mjs »)
-    const candidats = ligne.match(/(?:\b[A-Za-z]:)?[\w./\\-]+\.[A-Za-z]{1,5}\b/g) ?? []
+    // fix-ok: l'extension exigeait des lettres seules — un « .ps1 » ne pouvait jamais desarmer son fichier (conv-528, refus « 7 edits de resources/hdesk-tv.ps1 » malgre le jeton ; recupere de run-0e76c99a3021-1)
+    const candidats = ligne.match(/(?:\b[A-Za-z]:)?[\w./\\-]+\.[A-Za-z][A-Za-z0-9]{0,4}\b/g) ?? []
     for (const brut of candidats) {
       const c = norm(brut)
       if (connus.includes(c)) {

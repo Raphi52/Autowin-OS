@@ -35,6 +35,13 @@ export function premierPortLibre(depart, occupes, fenetre = 20) {
   return undefined
 }
 
+/** Les ports en ecoute sur le systeme ; ensemble vide si netstat est indisponible. */
+export function portsEnEcouteSysteme() {
+  const netstat = spawnSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true })
+  if (netstat.status !== 0 || !netstat.stdout) return new Set()
+  return portsEnEcoute(netstat.stdout)
+}
+
 /** Le premier port libre reel, en interrogeant le systeme. */
 export function choisirPortLibre(depart, fenetre = 20) {
   const netstat = spawnSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true })

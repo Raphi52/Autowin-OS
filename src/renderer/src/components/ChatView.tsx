@@ -38,6 +38,7 @@ import {
   hydrateStoredAssistant,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  suiviDuBasApresEnvoi,
   doitSuivreLeRoutage,
   compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
@@ -71,6 +72,7 @@ import { deciderRepriseProgrammee, libelleRepriseProgrammee } from './reprise-qu
 import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
 import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
+import { HdeskTv } from './HdeskTv'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
@@ -254,11 +256,12 @@ function ghostDuFil(fil: Msg[], depotPresent: boolean): string | null {
   const demandeDuTour = [...fil]
     .reverse()
     .find((m): m is UserMsg & { messageId?: string } => m.role === 'user')?.content
-  const suite = extrairePromptSuivant(text, demandeDuTour) ?? extractRecommendation(text)
+  const suite =
+    extrairePromptSuivant(text, demandeDuTour, depotPresent) ?? extractRecommendation(text)
   // Le repli sur la rubrique « Recommandé » obéit à la même règle : publier passe par /salvage —
   // et une publication que personne n'a demandée ne propose RIEN du tout.
   if (!suite) return suite
-  if (publicationJamaisDemandee(suite, demandeDuTour)) return null
+  if (publicationJamaisDemandee(suite, demandeDuTour, depotPresent)) return null
   return estPromptDePublication(suite, demandeDuTour, depotPresent) ? PROMPT_SALVAGE : suite
 }
 
@@ -1750,7 +1753,11 @@ export function ChatView({
               setConversationQueue(convId, suite)
               // `targetConversationId` EXPLICITE : ce handler est monte une fois et capture un
               // `activeId` qui peut valoir null, alors que le fil vise bien cette conversation.
-              void send(tete.text, { keepComposerDraft: true, targetConversationId: convId })
+              void send(tete.text, {
+                keepComposerDraft: true,
+                automatique: true,
+                targetConversationId: convId
+              })
             }
           }
           const text = `⚠️ ${textes.length} orientation(s) arrivée(s) après la fin du tour : ${
@@ -2916,8 +2923,7 @@ export function ChatView({
       return
     }
     const scinde = (await window.api.conversationsSplit(activeId, messageId)) as
-      | { cible?: Conv }
-      | undefined
+      { cible?: Conv } | undefined
     const fresh = (await window.api.conversations()) as Conv[]
     setConvs(fresh)
     const target = (scinde?.cible?.id && fresh.find((c) => c.id === scinde.cible!.id)) || undefined
@@ -2967,6 +2973,7 @@ export function ChatView({
     await send(texte, {
       targetConversationId: cible,
       keepComposerDraft: true,
+      automatique: true,
       piecesJointesImposees: pieces,
       repriseSurcharge: reprise.tentative
     })
@@ -3356,6 +3363,7 @@ export function ChatView({
     // Le drain n'est PAS un geste de l'utilisateur : il ne doit rien prendre au composer.
     void send(nextMessage.text, {
       keepComposerDraft: true,
+      automatique: true,
       ...(nextMessage.attachments?.length ? { piecesJointesImposees: nextMessage.attachments } : {})
     })
     // `activeId` AUTANT que `busy` : une file remplie pendant le tour de A survit à un aller-retour
@@ -3439,7 +3447,7 @@ export function ChatView({
     etat.tour = decision.signature
     etat.prompt = decision.texte
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
-    void send(decision.texte, { keepComposerDraft: true })
+    void send(decision.texte, { keepComposerDraft: true, automatique: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoActif, activeId, busy, messages, brouillonPresent])
 
@@ -3469,7 +3477,7 @@ export function ChatView({
       if (id === activeId) continue
       const etat = autoEtat(id)
       const decision = deciderRelanceAuto({
-      depotPresent,
+        depotPresent,
         actif: true,
         occupe: false,
         fil: liveMessagesRef.current.get(id) ?? [],
@@ -3509,7 +3517,11 @@ export function ChatView({
       autoEssaisRef.current.delete(id)
       etat.tour = decision.signature
       etat.prompt = decision.texte
-      void send(decision.texte, { keepComposerDraft: true, targetConversationId: id })
+      void send(decision.texte, {
+        keepComposerDraft: true,
+        automatique: true,
+        targetConversationId: id
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConvs, autoArmePour, activeId, busyConversations, autoTic])
@@ -3834,7 +3846,10 @@ export function ChatView({
       setDraftAttachments(sendDraftKey, () => [])
       setDraftError(sendDraftKey, null)
     }
-    followTailRef.current = true
+    followTailRef.current = suiviDuBasApresEnvoi({
+      suivaitLeBas: followTailRef.current,
+      envoiAutomatique: options?.automatique === true
+    })
     /*
      * ENVOYER remet a zero les signaux d'alerte du fil : le lecteur veut voir sa reponse, pas un
      * bouton « il y a du nouveau » herite d'avant l'envoi. La DESCENTE elle-meme reste pilotee par
@@ -3850,6 +3865,7 @@ export function ChatView({
      * `ChatView.descente-envoi.test.tsx`.
      */
     if (
+      followTailRef.current &&
       scrollRef.current &&
       (!sourceConversationId || sourceConversationId === activeRef.current)
     ) {
@@ -6126,6 +6142,11 @@ Cliquer pour choisir une autre branche.`}
               ))}
 
             {filRendu}
+
+            {/* Petite TV du bureau cache (conv-528) : un BLOC DEDIE du fil, apres le dernier message
+                (demande du 2026-09-14 « la TV doit etre dans le fil dans un bloc dedie »). Rien
+                n'est rendu sans bureau cache vivant relie a ce fil ; `key` la remet a zero par fil. */}
+            <HdeskTv key={activeId ?? 'aucune'} conversationId={activeId} />
           </div>
 
           {(hasNewActivity || scrolledAwayFromTail) && (

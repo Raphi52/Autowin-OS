@@ -56,6 +56,7 @@ import type { TraceEventV1 } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
+import type { BureauTv, ImageTv } from '../main/hdesk-tv'
 export interface ClaudeAccountEntry {
   id: string
   displayName: string
@@ -84,6 +85,9 @@ interface ChatApi {
   }>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
+  hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>
+  hdeskTvImage: (id: string) => Promise<ImageTv>
+  hdeskTvArreter: () => Promise<void>
   orchestrate: (
     task: string,
     conversationId?: string

@@ -64,6 +64,71 @@ describe('HTML du chat — interactivite sans JavaScript', () => {
     expect(idDe(premier.html)).not.toEqual(idDe(second.html))
   })
 
+
+  it('laisse cacher le panneau inactif SEULEMENT s il est revele par une interaction', () => {
+    const feuille =
+      '.panneau{display:none} #t1:checked ~ .p1{display:block} #t2:checked ~ .p2{display:block}'
+    const html =
+      '<style>' +
+      feuille +
+      '</style><input type="radio" id="t1" checked><input type="radio" id="t2">' +
+      '<div class="panneau p1">un</div><div class="panneau p2">deux</div>'
+    const rendu = sanitizeChatHtml(html, domaine)
+    expect(rendu).toContain('display:none')
+    expect(rendu).toContain('#htm-abc-t1:checked')
+  })
+
+  it('refuse toujours de cacher du texte que RIEN ne revient afficher', () => {
+    const rendu = sanitizeChatHtml(
+      '<style>.secret{display:none}</style><p class="secret">texte invisible mais copiable</p>',
+      domaine
+    )
+    expect(rendu).not.toContain('display:none')
+    // Le texte, lui, reste : on ne supprime pas le contenu, on refuse seulement de le cacher.
+    expect(rendu).toContain('texte invisible mais copiable')
+  })
+
+  it('laisse cacher une case a cocher ou un bouton radio QUI A un libelle associe', () => {
+    for (const declaration of ['opacity:0', 'display:none']) {
+      const rendu = sanitizeChatHtml(
+        `<style>input{${declaration}}</style>` +
+          '<input type="radio" id="t1" name="g"><label for="t1">Alpha</label>' +
+          '<input type="checkbox" id="t2"><label for="t2">Beta</label>',
+        domaine
+      )
+      expect(rendu).toContain(declaration)
+    }
+  })
+
+  it('refuse de cacher un champ SANS libelle, ou un paragraphe glisse dans le meme selecteur', () => {
+    const sansLibelle = sanitizeChatHtml(
+      '<style>input{opacity:0}</style><input type="radio" id="t1">',
+      domaine
+    )
+    expect(sansLibelle).not.toContain('opacity:0')
+
+    for (const declaration of ['opacity:0', 'display:none']) {
+      const paragraphe = sanitizeChatHtml(
+        `<style>p{${declaration}}</style><p>texte invisible mais copiable</p>`,
+        domaine
+      )
+      expect(paragraphe).not.toContain(declaration)
+      expect(paragraphe).toContain('texte invisible mais copiable')
+
+      const melange = sanitizeChatHtml(
+        `<style>input, p{${declaration}}</style>` +
+          '<input type="radio" id="t1"><label for="t1">A</label><p>cache</p>',
+        domaine
+      )
+      expect(melange).not.toContain(declaration)
+    }
+  })
+
+  it('prefixe aussi les selecteurs d attribut, sinon le libelle ne s allume jamais', () => {
+    const css = scopeChatStyleSheet('#t1:checked ~ .barre label[for=t1]{color:#000}', domaine)
+    expect(css).toContain('label[for="htm-abc-t1"]')
+  })
+
   it('ne laisse toujours passer ni script ni gestionnaire d evenement sur un champ', () => {
     const rendu = sanitizeChatHtml(
       '<input type="checkbox" id="a" onclick="alert(1)" onchange="alert(2)" formaction="http://x">',

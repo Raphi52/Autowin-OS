@@ -84,6 +84,7 @@ import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
+import type { BureauTv, ImageTv } from '../main/hdesk-tv'
 
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
@@ -96,6 +97,11 @@ const api = {
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>
     ipcRenderer.invoke('app:storage-migration-complete'),
+  // Petite TV du bureau cache (lecture seule)
+  hdeskTvBureaux: (conversationId?: string): Promise<BureauTv[]> =>
+    ipcRenderer.invoke('hdesk:tv:bureaux', conversationId),
+  hdeskTvImage: (id: string): Promise<ImageTv> => ipcRenderer.invoke('hdesk:tv:image', id),
+  hdeskTvArreter: (): Promise<void> => ipcRenderer.invoke('hdesk:tv:arreter'),
   // Orchestration disciplinée
   orchestrate: (
     task: string,

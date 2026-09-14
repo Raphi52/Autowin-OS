@@ -7,7 +7,7 @@
   lance RobloxStudioBeta.exe par Bash sur le bureau INTERACTIF puis capture l'ecran reel ; l'utilisateur
   a annule 7 s plus tard. Le bureau cache n'existait que pour Autowin (autowin-headless.ps1).
 
-  Usage : powershell -NoProfile -File scripts/hdesk-lancer.ps1 -Id roblox -Executable "C:\...\app.exe" [-Arguments "a b"] [-AttenteSecondes 30]
+  Usage : powershell -NoProfile -File scripts/hdesk-lancer.ps1 -Id roblox -Executable "C:\...\app.exe" -Travail "ce que je fais" -Conversation conv-526 [-Arguments "a b"] [-AttenteSecondes 30]
   Puis  : powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId roblox -Output capture.png
   Limites connues : pas de clic/clavier dans ce bureau (desktop_act vise l'ecran reel) ; une app
   rendue par GPU peut se capturer noire — la capture le dit (uni = true, exit 2). Une app a
@@ -18,10 +18,22 @@ param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$Id,
   [Parameter(Mandatory = $true)][string]$Executable,
   [string]$Arguments = '',
-  [int]$AttenteSecondes = 30
+  [int]$AttenteSecondes = 30,
+  # RELIE LE BUREAU A SON TRAVAIL : la petite TV de la conversation affiche ce libelle et filtre
+  # sur la conversation. Ecrit dans %LOCALAPPDATA%\autowin-hdesk\<id>.json — hors du depot : un agent lance depuis
+  # une copie de travail doit etre vu par l'app (voir src/main/hdesk-tv.ts).
+  # OBLIGATOIRES (2026-09-13) : optionnels, ils etaient oublies et la TV montrait des onglets
+  # « travail non relie ». Un bureau sans fil n'est plus lancable.
+  [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][string]$Travail,
+  # Le fil : -Conversation, sinon AUTOWIN_CONVERSATION_ID, posee par Autowin dans l'environnement
+  # de tout agent lance par une orchestration (2026-09-14) — l'agent n'a rien a recopier.
+  [string]$Conversation = ''
 )
 $ErrorActionPreference = 'Stop'
 trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+if ([string]::IsNullOrWhiteSpace($Conversation)) { $Conversation = [string]$env:AUTOWIN_CONVERSATION_ID }
+if ([string]::IsNullOrWhiteSpace($Conversation)) { throw "Fil absent : passe -Conversation <id> (ou lance depuis un agent Autowin, qui pose AUTOWIN_CONVERSATION_ID)." }
+if ($Conversation -notmatch '^[a-zA-Z0-9_-]+$') { throw "Identifiant de fil invalide : '$Conversation'." }
 if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw "Executable introuvable : $Executable" }
 
 Add-Type -TypeDefinition @'
@@ -83,6 +95,12 @@ do {
   Start-Sleep -Milliseconds 250
 } while ((Get-Date) -lt $fin)
 [void][AutowinHdeskLanceur]::CloseDesktop($hBureau)
+if ($fenetres -gt 0) {
+  $registre = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk'
+  New-Item -ItemType Directory -Path $registre -Force | Out-Null
+  $entree = [pscustomobject]@{ id = $Id; pid = $pi.dwProcessId; executable = $Executable; travail = $Travail; conversationId = $Conversation; lanceLe = (Get-Date).ToString('o') }
+  [IO.File]::WriteAllText((Join-Path $registre "$Id.json"), ($entree | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+}
 [pscustomobject]@{ id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = ($fenetres -gt 0) } | ConvertTo-Json -Compress
 if ($fenetres -le 0) { exit 3 }
 exit 0

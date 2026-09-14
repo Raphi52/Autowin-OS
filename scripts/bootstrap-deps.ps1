@@ -136,7 +136,7 @@ if (-not $SkipGraphify) {
     version = '0.9.11'
     wheelSha256 = $expectedHash.ToLowerInvariant()
     requirementsSha256 = $expectedRequirementsHash.ToLowerInvariant()
-  } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $cacheRoot 'installation.json') -Encoding UTF8
+  } | ConvertTo-Json | ForEach-Object { [IO.File]::WriteAllText((Join-Path $cacheRoot 'installation.json'), $_, (New-Object Text.UTF8Encoding $false)) }
   & $venvGraphify --version
   if ($LASTEXITCODE -ne 0) { throw 'installation Graphify locale inutilisable' }
   Ok "Graphify 0.9.11 installé hors ligne depuis le wheelhouse GED vérifié"

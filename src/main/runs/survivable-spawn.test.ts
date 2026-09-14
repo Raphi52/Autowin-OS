@@ -58,6 +58,31 @@ describe('lancement survivable — la sortie n’est pas perdue avec l’app', (
     expect(usesWindowsSurvivalRelay('linux')).toBe(false)
   })
 
+  it('transmet l’environnement demandé au VRAI processus, relais Windows compris (conv-528)', async () => {
+    // Le relais Windows repartait de process.env et jetait input.env : un agent Codex orchestré ne
+    // recevait donc jamais AUTOWIN_CONVERSATION_ID, et son bureau caché n'était relié à aucun fil.
+    const root = tempRoot()
+    const lecteur = join(root, 'lecteur.mjs')
+    writeFileSync(
+      lecteur,
+      `process.stdout.write(JSON.stringify({ fil: process.env.AUTOWIN_CONVERSATION_ID ?? null, relais: process.env.ELECTRON_RUN_AS_NODE ?? null }) + '\\n')\n`
+    )
+    const run = spawnSurvivable({
+      bin: process.execPath,
+      args: [lecteur],
+      journalRoot: root,
+      runId: 'run-env',
+      env: { ...process.env, AUTOWIN_CONVERSATION_ID: 'conv-88' }
+    })
+    const lines: string[] = []
+    await run.tail((line) => lines.push(line), {
+      isComplete: () => run.child.exitCode !== null,
+      pollMs: 20
+    })
+    run.release()
+    expect(JSON.parse(lines[0])).toMatchObject({ fil: 'conv-88' })
+  })
+
   it('écrit dans un journal fichier plutôt que dans un pipe', async () => {
     const root = tempRoot()
     const writer = slowWriter(root, 3, 10)

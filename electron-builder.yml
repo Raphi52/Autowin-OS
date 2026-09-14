@@ -28,6 +28,10 @@ asarUnpack:
   - scripts/outlook-local-reply.ps1
   - scripts/outlook-local-marquer-lu.ps1
   - scripts/outlook-local-nouveau.ps1
+  # Même contrainte pour la petite TV du bureau caché (src/main/hdesk-tv.ts).
+  - scripts/hdesk-tv.ps1
+  - scripts/hdesk-observe.ps1
+  - scripts/hdesk-shot.cs
 win:
   executableName: autowin-os
   icon: build/icon.ico

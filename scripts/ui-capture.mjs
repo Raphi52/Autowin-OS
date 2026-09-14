@@ -426,6 +426,17 @@ const main = async () => {
   await envoyer('Runtime.enable')
   await envoyer('Log.enable')
 
+  // fix-ok: scripts/ui-capture.mjs — une instance cachee neuve repond au debogueur AVANT que React
+  // ait rendu la navigation : le bouton etait cherche trop tot (code 4 bouton-nav-absent). On
+  // attend l'apparition des boutons (borne 30 s) ; absents apres ce delai, le code 4 reste du.
+  for (let essai = 0; essai < 60; essai++) {
+    const pret = await evaluer(`Boolean(document.querySelector('[data-testid^="nav-"]'))`).catch(
+      () => false
+    )
+    if (pret) break
+    await new Promise((r) => setTimeout(r, 500))
+  }
+
   // --reduced-motion : rejoue la condition reelle d'un poste ou les effets visuels systeme sont
   // desactives (Windows > Accessibilite). Sans cette emulation, une preuve de mouvement ne dit
   // RIEN du poste utilisateur : elle mesure un navigateur ou l'animation n'a jamais ete coupee.

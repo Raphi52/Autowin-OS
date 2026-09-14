@@ -1596,6 +1596,19 @@ export function isChatNearBottom(
  * Le discriminant est le SIGNE du deplacement : on ne quitte pas le bas en DESCENDANT. Tant que
  * `scrollTop` ne RECULE pas, un suivi deja actif se poursuit ; seul un recul rend la main au lecteur.
  */
+/**
+ * SUIVI DU BAS A L'ENVOI. Un envoi TAPE par l'utilisateur ramene toujours en bas : il veut voir sa
+ * reponse. Un envoi AUTOMATIQUE (mode auto, vidage de la file, reprise apres surcharge) n'est pas
+ * un geste : il garde la position choisie par le lecteur. Avant, `send()` forcait le suivi a chaque
+ * envoi, et le fil redescendait tout seul a chaque tour enchaine alors qu'on avait remonte.
+ */
+export function suiviDuBasApresEnvoi(input: {
+  suivaitLeBas: boolean
+  envoiAutomatique: boolean
+}): boolean {
+  return input.envoiAutomatique ? input.suivaitLeBas : true
+}
+
 export function doitSuivreLeBas(input: {
   suivaitLeBas: boolean
   precedentTop: number

@@ -71,3 +71,34 @@ describe('mode auto — le tri deja joue ne se rejoue pas', () => {
     expect(texteDerniereDemande([agent('x')])).toBeNull()
   })
 })
+
+/*
+ * DOSSIER SANS DEPOT GIT — le drapeau ne s'arretait pas a mi-chemin.
+ *
+ * `estPromptDePublication` recevait bien `depotPresent`, mais `publicationJamaisDemandee` non : sans
+ * depot, une suite de publication etait SUPPRIMEE au lieu d'etre laissee telle quelle. Or sans objets
+ * git il n'y a ni tri a proposer ni boucle a craindre — la suite de l'agent doit passer intacte.
+ * Releve le 2026-09-13 en triant la remise `wip-5-candidats`, qui portait deja ce cablage.
+ */
+describe('mode auto — sans depot git, la suite de publication passe intacte', () => {
+  it('une suite de publication non demandee n est plus supprimee quand il n y a pas de depot', () => {
+    const decision = deciderRelanceAuto({
+      ...base,
+      depotPresent: false,
+      fil: [humain('corrige le bouton stop'), agent(REPONSE_PUBLIER)]
+    })
+    expect(decision.action).toBe('envoyer')
+    expect(decision.action === 'envoyer' && decision.texte.split(SAUT)[0]).toBe(
+      'Pousse les 6 commits locaux sur le depot distant.'
+    )
+  })
+
+  it('avec un depot, le garde-fou mord exactement comme avant', () => {
+    const decision = deciderRelanceAuto({
+      ...base,
+      depotPresent: true,
+      fil: [humain('corrige le bouton stop'), agent(REPONSE_PUBLIER)]
+    })
+    expect(decision.action).not.toBe('envoyer')
+  })
+})

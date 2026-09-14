@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
-import { choisirPortLibre } from './port-libre.mjs'
+import { reserverInstance } from './avec-instance-headless.mjs'
 
 /**
  * PREUVE TERMINALE de la politique de relance, dans l'app REELLE.
@@ -47,11 +47,14 @@ if (!existsSync(binaire)) {
   process.exit(2)
 }
 
-const port = choisirPortLibre(Number(process.env.AUTOWIN_RELANCE_PORT || 9294))
-if (port === undefined) {
-  console.error('[relance] aucun port libre - machine saturee.')
-  process.exit(3)
-}
+// Nom ET port reserves par verrou : une sonde parallele ne prend plus le meme port, et un second
+// lancement de la meme sonde est refuse au lieu de fermer l'application du premier.
+const { port } = reserverInstance({
+  instanceId: instance,
+  portDemande: Number(process.env.AUTOWIN_RELANCE_PORT || 9294),
+  racine,
+  prefixe: '[relance]'
+})
 
 /*
  * LE DEPOT JETABLE, REFAIT A NEUF. Le distant nu permet au run de publier sans joindre le reseau ;

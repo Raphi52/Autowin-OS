@@ -106,7 +106,7 @@ $identity = Read-ExecutableIdentity
 
 function Read-InstanceState {
   if (-not (Test-Path -LiteralPath $stateFile)) { return $null }
-  $state = Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json
+  $state = Get-Content -LiteralPath $stateFile -Raw -Encoding UTF8 | ConvertFrom-Json
   if ($state.executable -ne $identity.executable -or $state.port -ne $Port -or $state.userData -ne $userData) {
     throw "L'identité persistée de '$InstanceId' ne correspond pas à la commande demandée."
   }
@@ -202,7 +202,7 @@ try {
   Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
   throw
 }
-@{ pid = $process.Id; desktop = $nomBureau; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion; port = $Port; userData = $userData } | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding utf8
+@{ pid = $process.Id; desktop = $nomBureau; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion; port = $Port; userData = $userData } | ConvertTo-Json | ForEach-Object { [IO.File]::WriteAllText($stateFile, $_, (New-Object Text.UTF8Encoding $false)) }
 
 $deadline = (Get-Date).AddSeconds(20)
 do {
@@ -215,12 +215,16 @@ do {
     throw "Autowin OS s'est arrêté avant que CDP soit prêt (bureau '$nomBureau', PID $($process.Id))."
   }
   try { $pages = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/json" -TimeoutSec 1 } catch { $pages = $null }
-  if ($pages) {
+  # PRET = la VRAIE interface, pas l'ecran d'attente `autowin-boot.html` : celui-ci n'a pas le droit
+  # d'appeler l'IPC, et une sonde qui s'y branchait echouait sur « Origine renderer non autorisee : null »
+  # des que deux demarrages simultanes ralentissaient le passage a l'interface (mesure du 2026-09-13).
+  $pagesUi = @($pages | Where-Object { $_.type -eq 'page' -and $_.url -notmatch 'autowin-boot.html' })
+  if ($pagesUi.Count -gt 0) {
     $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq $process.Id }
     if (-not $listener) { throw "Le endpoint CDP $Port n'appartient pas au PID $($process.Id)." }
     # Le process tient desormais le bureau par ses propres fenetres : notre handle peut partir.
     [void][AutowinHdesk]::CloseDesktop($hBureau)
-    [pscustomobject]@{ instanceId = $InstanceId; status = 'ready'; desktop = $nomBureau; pid = $process.Id; port = $Port; userData = $userData; webSocketDebuggerUrl = $pages[0].webSocketDebuggerUrl; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion } | ConvertTo-Json -Compress
+    [pscustomobject]@{ instanceId = $InstanceId; status = 'ready'; desktop = $nomBureau; pid = $process.Id; port = $Port; userData = $userData; webSocketDebuggerUrl = $pagesUi[0].webSocketDebuggerUrl; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion } | ConvertTo-Json -Compress
     exit 0
   }
   Start-Sleep -Milliseconds 100

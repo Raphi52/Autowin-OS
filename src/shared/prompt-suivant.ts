@@ -32,10 +32,15 @@ const estOuvertureDeBloc = (ligne: string): boolean => ligne.trimStart().startsW
 /**
  * Rend le DERNIER prompt émis, nettoyé de son markdown et borné. `null` s'il n'y en a pas —
  * l'appelant retombe alors sur la recommandation, donc rien ne régresse.
+ *
+ * `depotPresent` : sans dépôt git, il n'existe ni branche, ni remise de côté, ni copie isolée à
+ * trier — les deux gardes de publication n'ont donc plus d'objet et la suite passe INTACTE. Par
+ * défaut `true` : un appelant qui ne sait pas garde l'ancien comportement, jamais un relâchement.
  */
 export function extrairePromptSuivant(
   texte: string | undefined | null,
-  demandeDuTour?: string
+  demandeDuTour?: string,
+  depotPresent = true
 ): string | null {
   if (!texte) return null
   let trouve: string | null = null
@@ -59,8 +64,8 @@ export function extrairePromptSuivant(
     trouve = brut.length > LONGUEUR_MAX ? brut.slice(0, LONGUEUR_MAX).trimEnd() : brut
   }
   // Publication que PERSONNE n'a demandée : pas de suite du tout (voir plus bas).
-  if (trouve && publicationJamaisDemandee(trouve, demandeDuTour)) return null
-  if (trouve && estPromptDePublication(trouve, demandeDuTour)) return PROMPT_SALVAGE
+  if (trouve && publicationJamaisDemandee(trouve, demandeDuTour, depotPresent)) return null
+  if (trouve && estPromptDePublication(trouve, demandeDuTour, depotPresent)) return PROMPT_SALVAGE
   return trouve
 }
 
@@ -193,11 +198,17 @@ export function ordreDeTriDejaJoue(demandeDuTour: string | undefined): boolean {
  * Le garde-fou garde tout son mordant sur le cas qu'il vise vraiment : l'utilisateur veut publier,
  * on trie d'abord.
  */
-export function publicationJamaisDemandee(prompt: string, demandeDuTour?: string): boolean {
+export function publicationJamaisDemandee(
+  prompt: string,
+  demandeDuTour?: string,
+  depotPresent = true
+): boolean {
   // Sans demande connue, on ne sait RIEN : on garde l'ancien garde-fou plutot que de supprimer une
   // suite peut-etre legitime. La suppression n'a lieu que sur une demande LUE qui ne publie pas.
   if (!demandeDuTour?.trim()) return false
-  if (!estPromptDePublication(prompt, demandeDuTour)) return false
+  // Sans depot, `estPromptDePublication` rend deja `false` : aucune suite n'est supprimee, elle
+  // passe intacte. Le drapeau est passe explicitement pour que la regle vive a UN seul endroit.
+  if (!estPromptDePublication(prompt, demandeDuTour, depotPresent)) return false
   return !mentionneUnActeDePublication(demandeDuTour)
 }
 

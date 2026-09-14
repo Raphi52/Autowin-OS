@@ -35,6 +35,8 @@ export interface ComposerDraft {
 }
 export type SendOptions = {
   keepComposerDraft?: boolean
+  /** Envoi que l'utilisateur n'a PAS fait (mode auto, file, reprise) : garde sa position de lecture. */
+  automatique?: boolean
   targetConversationId?: string
   /**
    * Reprises DÉJÀ faites après une surcharge du modèle (529) — voir shared/reprise-surcharge.ts.

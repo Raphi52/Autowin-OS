@@ -67,6 +67,13 @@ describe('jetonsDeCauseParFichier — la cause se DECLARE, elle ne se suppose pa
     })
   })
 
+  it('lit un jeton qui nomme un fichier dont l extension contient un CHIFFRE (.ps1)', () => {
+    const texte = 'CausalHypothesis: resources/hdesk-tv.ps1 — delegue sans CharSet.Unicode.'
+    expect(jetonsDeCauseParFichier(texte, [], ['resources/hdesk-tv.ps1'])).toEqual({
+      'resources/hdesk-tv.ps1': true
+    })
+  })
+
   it('resout un nom de fichier SEUL quand un seul fichier edite le porte', () => {
     const texte = 'fix-ok: boucle.ts — cause prouvee par le test rouge d abord.'
     expect(jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({

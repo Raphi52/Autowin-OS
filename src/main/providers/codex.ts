@@ -321,6 +321,17 @@ export function codexNativeBinaryFromEntrypoint(
   return exists(bundled) ? bundled : undefined
 }
 
+/**
+ * Environnement du processus Codex : hérité, plus les variables du run (`execution.agentEnv`, ex. le
+ * fil AUTOWIN_CONVERSATION_ID). Sans variable de run, l'héritage reste strictement identique.
+ */
+export function environnementCodex(
+  base: NodeJS.ProcessEnv,
+  agentEnv?: Record<string, string>
+): NodeJS.ProcessEnv {
+  return agentEnv ? { ...base, ...agentEnv } : { ...base }
+}
+
 export function codexExecSpec(
   cwd: string,
   model: string,
@@ -389,7 +400,10 @@ export function codexExecSpec(
  * Note LISIBLE d'un item d'exécution Codex, pour le relais live. Rend `undefined` quand l'item
  * n'apprend rien d'affichable — mieux vaut le silence qu'une ligne vide dans le fil.
  */
-function noteDeProgression(item: { type?: string; command?: string }, ok: boolean): string | undefined {
+function noteDeProgression(
+  item: { type?: string; command?: string },
+  ok: boolean
+): string | undefined {
   const libelle = item.command?.trim() || item.type
   if (!libelle) return undefined
   return `${libelle} — ${ok ? 'terminé' : 'échec'}`
@@ -445,6 +459,8 @@ async function runCodexExec(
       cwd: spec.cwd,
       runId: spawnToken,
       stdin: prompt,
+      // Le fil du run (AUTOWIN_CONVERSATION_ID) : hdesk-lancer.ps1 le lit pour la petite TV.
+      env: environnementCodex(process.env, execution.agentEnv),
       onJournalPrepared:
         (execution.onJournal ?? opts.onJournal)
           ? (journalPath) => (execution.onJournal ?? opts.onJournal)?.(spawnToken, journalPath)

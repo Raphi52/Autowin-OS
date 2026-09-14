@@ -89,6 +89,7 @@ import {
   resolveRemoteDebuggingPort
 } from './cdp-port'
 import { execFileSync } from 'node:child_process'
+import { estDansUnDepotGit } from './depot-git'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
@@ -102,6 +103,7 @@ import {
   supersedeKnowledgeCandidate
 } from './brain-inbox'
 import { installCrashHandlers } from './crash-handlers'
+import { CapteurHdesk, racineScriptsHorsArchive } from './hdesk-tv'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
@@ -1487,6 +1489,20 @@ function registerStorageMigrationIpc(lecture: Promise<LectureHistorique>): void 
   })
 }
 
+/** Petite TV du bureau cache (conv-528) : lecture seule, processus de capture cree a la demande. */
+let capteurHdesk: CapteurHdesk | null = null
+function registerHdeskTvIpc(): void {
+  const capteur = (): CapteurHdesk =>
+    (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath())))
+  ipcMain.handle('hdesk:tv:bureaux', (_e, conversationId?: string) =>
+    process.platform === 'win32'
+      ? capteur().bureaux(typeof conversationId === 'string' ? conversationId : undefined)
+      : []
+  )
+  ipcMain.handle('hdesk:tv:image', (_e, id: string) => capteur().image(String(id)))
+  ipcMain.handle('hdesk:tv:arreter', () => capteurHdesk?.arreter())
+}
+
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
@@ -2468,7 +2484,7 @@ Le fil reprend ensuite normalement.`
     return {
       path: os.executionWorkspace,
       chosen,
-      isGitRepo: existsSync(join(os.executionWorkspace, '.git')),
+      isGitRepo: estDansUnDepotGit(os.executionWorkspace),
       // Le workspace est fige au demarrage : un choix different de l'actif exige un redemarrage.
       restartRequired: chosen !== null && chosen !== os.executionWorkspace
     }
@@ -3803,6 +3819,7 @@ app.whenReady().then(async () => {
         )
       : Promise.resolve({ values: {}, canWriteMarker: dejaMigre })
   registerStorageMigrationIpc(lectureHistorique)
+  registerHdeskTvIpc()
   registerChatIpc()
   registerTicketsIpc({
     ipc: ipcMain,
@@ -4306,6 +4323,8 @@ app.whenReady().then(async () => {
 // resté dans la fenêtre de debounce de 120 ms de la persistance.
 let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
+  capteurHdesk?.detruire()
+  capteurHdesk = null
   // Un raccourci global laissé posé continue de capter la combinaison pour toute la session.
   raccourciCapture?.desinstaller()
   raccourciCapture = null

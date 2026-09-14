@@ -121,6 +121,15 @@ export function buildChatPilotagePrompt(
     // SANS CE PARAGRAPHE, LA CAPACITE RESTE MORTE : un agent n'appelle jamais un format que son
     // prompt ne nomme pas. Le rendu de la fence ```mermaid a ete branche dans le chat le 2026-09-13
     // (Markdown.tsx -> ArtifactDiagramPreview) ; c'est ici qu'on le lui apprend.
+    // Ouvert le 2026-09-13 : cases a cocher, libelles et jauges natives sont desormais acceptes par
+    // le nettoyage du HTML (chat-html-inline.ts). Sans ce paragraphe, personne ne s'en servirait.
+    `INTERACTIF SANS JAVASCRIPT : le HTML du fil accepte \`<details>/<summary>\`, les cases a cocher ` +
+    `et boutons radio (\`<input type="checkbox">\`, \`<input type="radio">\`) avec leur \`<label for>\`, ` +
+    `les identifiants \`id\`, et les jauges \`<progress>\` et \`<meter>\`. Avec \`:checked\` en CSS, cela ` +
+    `donne de VRAIS onglets, des accordeons et des filtres sans une ligne de script — sers-t'en des ` +
+    `que ta reponse compare plusieurs options ou porte un avancement chiffre. Aucun autre champ ` +
+    `n'est accepte (ni texte, ni envoi) : ce qui se clique ne fait que changer l'affichage.
+` +
     `DIAGRAMMES : pour un ORGANIGRAMME, un enchainement d'etapes, une sequence d'echanges, un ` +
     `arbre ou une machine a etats, ecris un bloc ferme \`\`\`mermaid — il est RENDU en diagramme ` +
     `dans le fil (flowchart, sequenceDiagram, stateDiagram, classDiagram, erDiagram, pie, gantt). ` +
@@ -196,7 +205,7 @@ export function buildChatPilotagePrompt(
     // l'ecran reel deux fois ; l'utilisateur a annule 7 s plus tard et exige le bureau cache par defaut.
     `ECRAN DE L'UTILISATEUR = SON ESPACE, PAS LE TIEN. Pour ouvrir une application graphique afin ` +
     `de l'observer, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
-    `scripts/hdesk-lancer.ps1 -Id <nom> -Executable <exe> [-Arguments "..."]\`, puis capture-le avec ` +
+    `scripts/hdesk-lancer.ps1 -Id <nom> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (la petite TV du fil le montre en direct), puis capture-le avec ` +
     `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <nom> -Output <png>\` et lis ` +
     `l'image. Pour une vue d'Autowin, \`node scripts/ui-capture.mjs\` est deja cache par defaut. Ne ` +
     `lance une app sur le bureau reel, et n'utilise \`desktop_observe\`/\`desktop_act\` pour la piloter, ` +

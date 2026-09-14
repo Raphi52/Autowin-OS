@@ -1513,9 +1513,12 @@ export class Orchestrator {
       this.learningOraclesByRun.set(runId, learningOracles)
     }
     const providerTimeoutMs = this.deps.currentExecutionQuote?.()?.limits.maxDurationMs
+    const filDuRun = this.costContextByRun.get(runId)?.conversationId
     return {
       cwd,
       sandbox,
+      // Le fil du run, lisible par l'agent et ses scripts (hdesk-lancer.ps1 -> petite TV du fil).
+      ...(filDuRun ? { agentEnv: { AUTOWIN_CONVERSATION_ID: filDuRun } } : {}),
       // La phase, NOMMÉE pour qui doit la lire (voir `phaseAppelante` dans providers/types.ts).
       phaseAppelante: phase,
       ...(providerTimeoutMs ? { providerTimeoutMs } : {}),

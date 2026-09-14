@@ -405,13 +405,52 @@
   /* DEMANDE DU 2026-09-10 : une question qui attend une reponse ne se distingue pas assez d'un
      point jaune parmi d'autres jaunes (`is-unread`). Elle porte donc un TRIANGLE D'ALERTE, pas un
      disque : la FORME se lit sans comparer des teintes. On annule ici la geometrie de pastille
-     (disque + halo) et on dessine l'icone en fond, embarquee (aucune URL reseau). */
-  width: 13px;
-  height: 13px;
+     (disque + halo). DEMANDE DU 2026-09-13 : le triangle devient TROIS POINTS qui sautillent
+     (« ... ») — la forme dit « j'attends ta reponse ». Trois fonds radiaux, sans balise ajoutee. */
+  width: 15px;
+  height: 9px;
   border-radius: 0;
   box-shadow: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f0a12e' d='M12 2.4c.5 0 .9.3 1.1.7l10.2 17.4c.4.7-.1 1.5-.9 1.5H1.6c-.8 0-1.3-.8-.9-1.5L10.9 3.1c.2-.4.6-.7 1.1-.7z'/%3E%3Cpath fill='%23231a05' d='M11 8.2h2v6h-2zM11 15.6h2v2.2h-2z'/%3E%3C/svg%3E")
-    center / contain no-repeat;
+  background:
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 0 100% / 4px 4px no-repeat,
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 50% 100% / 4px 4px no-repeat,
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 100% 100% / 4px 4px no-repeat;
+  animation: conv-asking-dots 1.2s infinite ease-in-out;
+}
+@keyframes conv-asking-dots {
+  0%,
+  100% {
+    background-position: 0 100%, 50% 100%, 100% 100%;
+  }
+  20% {
+    background-position: 0 0, 50% 100%, 100% 100%;
+  }
+  40% {
+    background-position: 0 100%, 50% 0, 100% 100%;
+  }
+  60% {
+    background-position: 0 100%, 50% 100%, 100% 0;
+  }
+}
+/* DEMANDE DU 2026-09-13 (bis) : une conversation EN ATTENTE de reponse (message envoye, pas
+   encore de reponse) porte aussi les trois points — c'est le cas « la machine attend ». */
+.conversation-state.is-waiting {
+  width: 15px;
+  height: 9px;
+  border-radius: 0;
+  box-shadow: none;
+  background:
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 0 100% / 4px 4px no-repeat,
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 50% 100% / 4px 4px no-repeat,
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 100% 100% / 4px 4px no-repeat;
+  animation: conv-asking-dots 1.2s infinite ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .conversation-state.is-waiting,
+  .conversation-state.is-asking {
+    animation: none;
+    background-position: 0 50%, 50% 50%, 100% 50%;
+  }
 }
 /* Meme famille JAUNE que la question ouverte — les deux disent « c'est a toi » — mais une teinte
    propre : « on te demande quelque chose » et « c'est fini, tu ne l'as pas encore lu » n'appellent

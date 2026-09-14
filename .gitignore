@@ -57,3 +57,7 @@ AGENTS.md
 # de la racine (13 fichiers, 87 Ko) plutot que de les supprimer. Elle est volontairement
 # RECUPERABLE — l un des treize etait une copie de travail de 517 lignes, pas un dechet.
 /.corbeille/
+# Captures de PREUVE visuelle, ajoutee le 2026-09-13 : `.autowin-preuve/` recueille les copies
+# d ecran prises pour prouver un rendu (4 PNG a ce jour). Elles servent a REGARDER pendant un
+# tour, pas a vivre dans l historique : un `git add .` distrait les embarquait toutes.
+/.autowin-preuve/
