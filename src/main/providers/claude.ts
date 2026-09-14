@@ -1340,8 +1340,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       queue.push({ delta: '', artifacts: streamed })
       wake()
     }
-    /** Taches de fond lancees et pas terminees (id -> commande lisible). Voir `task_started`. */
-    const tachesDeFond = new Map<string, string>()
+    /** Taches de fond lancees et pas terminees (id -> commande lisible, vue arretee ?). Voir `task_started`. */
+    const tachesDeFond = new Map<string, { commande: string; arretee: boolean }>()
     const pendingTools = new Map<
       string,
       { name: string; command: string; filePath: string; writtenLineFingerprints: string[] }
@@ -1489,11 +1489,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
         // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
         const idTache = String(o['task_id'] ?? commande ?? '')
-        if (demarre) tachesDeFond.set(idTache, commande || 'commande sans description')
+        if (demarre) tachesDeFond.set(idTache, { commande: commande || 'commande sans description', arretee: false })
         else {
           const st = String(o['status'] ?? '').toLowerCase()
           if (st === 'completed' || st === 'failed') tachesDeFond.delete(idTache)
-          else tachesDeFond.set(idTache, commande || tachesDeFond.get(idTache) || 'commande sans description')
+          else
+            tachesDeFond.set(idTache, {
+              commande: commande || tachesDeFond.get(idTache)?.commande || 'commande sans description',
+              arretee: true
+            })
         }
         if (demarre) {
           queue.push({
@@ -1663,8 +1667,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
         if (tachesDeFond.size > 0) {
-          const liste = [...tachesDeFond.values()].map((c) => `\`${c}\``).join(', ')
-          const avis = `\n\n⚠️ Tâche de fond arrêtée à la fin de ce tour : ${liste}. Son résultat ne reviendra pas tout seul — relance la demande pour la refaire.`
+          // fix-ok: le message disait « arrêtée » meme pour une tache sans notification `stopped` (objection juge, conv-528 tour 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9)
+          const lister = (arretee: boolean): string =>
+            [...tachesDeFond.values()]
+              .filter((x) => x.arretee === arretee)
+              .map((x) => `\`${x.commande}\``)
+              .join(', ')
+          const arretees = lister(true)
+          const ouvertes = lister(false)
+          const parties = [
+            arretees ? `Tâche de fond arrêtée à la fin de ce tour : ${arretees}.` : '',
+            ouvertes ? `Tâche de fond pas terminée à la fin de ce tour : ${ouvertes}.` : ''
+          ].filter(Boolean)
+          const avis = `\n\n⚠️ ${parties.join('\n⚠️ ')} Son résultat ne reviendra pas tout seul — relance la demande pour la refaire.`
           tachesDeFond.clear()
           text += avis
           queue.push({ delta: avis })

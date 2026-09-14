@@ -297,6 +297,10 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
     expect(texte).toContain('node salvage.mjs')
     expect(texte).toContain('npx vitest run')
     expect(texte).toMatch(/ne reviendra pas/)
+    // k1 a recu `stopped`, k2 aucune notification : le message ne doit pas dire « arretee » pour k2.
+    expect(texte).toMatch(/arrêtée[^\n]*node salvage\.mjs/)
+    expect(texte).toMatch(/pas terminée[^\n]*npx vitest run/)
+    expect(texte).not.toMatch(/arrêtée[^\n]*npx vitest run/)
   })
 
   it('une tache de fond TERMINEE avant la fin du tour ne declenche aucun avertissement', async () => {
