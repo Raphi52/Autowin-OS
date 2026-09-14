@@ -1485,7 +1485,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const demarre = o['subtype'] === 'task_started'
         const brut = String((demarre ? o['description'] : o['summary']) ?? '').trim()
         const commande = resumerCommandeDeFond(brut)
-        // fix-ok: conv-528 turnId 6dbf5a57 — le CLI -p ARRETE les taches de fond a la fin du tour
+        // fix-ok: conv-528 turnId 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9 — le CLI -p ARRETE les taches de fond a la fin du tour
         // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
         // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
         const idTache = String(o['task_id'] ?? commande ?? '')
