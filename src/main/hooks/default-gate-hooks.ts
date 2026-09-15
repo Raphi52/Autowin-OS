@@ -66,9 +66,12 @@ export function appuiSourcesNeuvesHandler(ctx: HookContext): HookResult {
  * Une lecture ou une verification n'est PAS une edition : seules les mutations comptent.
  */
 export function fichiersEditesParLeRun(
-  evidence: readonly ExecutionEvidence[] | undefined
+  evidence: readonly ExecutionEvidence[] | undefined,
+  cwd?: string
 ): Record<string, number> {
   const compte: Record<string, number> = {}
+  // fix-ok: conv-539 tour 24e29815 — le meme fichier compte sous son chemin relatif ET absolu.
+  const racine = cwd ? cwd.replace(/\\/g, '/').replace(/\/+$/, '') + '/' : ''
   for (const item of evidence ?? []) {
     if (item.kind !== 'mutation') continue
     const chemins = [
@@ -77,7 +80,10 @@ export function fichiersEditesParLeRun(
       ...Object.keys(item.pathFingerprints ?? {})
     ]
     for (const brut of new Set(chemins)) {
-      const chemin = brut.replace(/\\/g, "/").trim()
+      let chemin = brut.replace(/\\/g, "/").trim()
+      if (racine && chemin.toLowerCase().startsWith(racine.toLowerCase())) {
+        chemin = chemin.slice(racine.length)
+      }
       if (!chemin) continue
       compte[chemin] = (compte[chemin] ?? 0) + 1
     }

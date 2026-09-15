@@ -102,3 +102,25 @@ describe('preuve visuelle — le diff du run PRIME sur la soustraction git', () 
     expect((await handler(ctx([], [RENDU]))).block).toBe(false)
   })
 })
+
+/**
+ * UN FICHIER, UNE CLE. conv-539, tour 24e29815 (reparation 1) : le fix-gate a refuse DEUX fois le
+ * meme fichier — « 4 edits de src/main/orchestrator.ts » ET « 4 edits de
+ * D:/AutoWinOS/src/main/orchestrator.ts ». Les mutations nomment le fichier tantot en relatif,
+ * tantot en absolu ; sans le dossier de travail, les deux formes devenaient deux cles, et un jeton
+ * de cause pose sur l'une laissait l'autre bloquee.
+ */
+describe('fichiersEditesParLeRun — chemin absolu et relatif du meme fichier', () => {
+  it('fusionne les deux formes sous le chemin relatif au dossier de travail', () => {
+    const edits = fichiersEditesParLeRun(
+      [mutation(['src/main/a.ts']), mutation(['D:\\AutoWinOS\\src\\main\\a.ts'])],
+      'D:\\AutoWinOS'
+    )
+    expect(edits).toEqual({ 'src/main/a.ts': 2 })
+  })
+  it('laisse intact un chemin hors du dossier de travail', () => {
+    expect(fichiersEditesParLeRun([mutation(['E:/autre/b.ts'])], 'D:/AutoWinOS')).toEqual({
+      'E:/autre/b.ts': 1
+    })
+  })
+})

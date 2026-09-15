@@ -2460,7 +2460,7 @@ export class Orchestrator {
       evidenceOkCount: evidence.filter((item) => item.ok).length,
       evidence,
       output: aggregate,
-      editsByFile: fichiersEditesParLeRun(evidence),
+      editsByFile: fichiersEditesParLeRun(evidence, workCwd),
       fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
     })
     const preGate = evaluateClosure({
@@ -4797,7 +4797,7 @@ ${empreinteDepot}`
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
         evidence: exec.executionEvidence,
         output: exec.text,
-        editsByFile: fichiersEditesParLeRun(exec.executionEvidence),
+        editsByFile: fichiersEditesParLeRun(exec.executionEvidence, workCwd),
         fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
       })
       // UN SEUL endroit calcule l'etat de cloture (`root-execution-contract.ts`) : cette decision
