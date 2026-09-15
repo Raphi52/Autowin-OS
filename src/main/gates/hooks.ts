@@ -66,7 +66,9 @@ export function detectBlindFixLoop(
     .filter(([file, count]) => count >= threshold && !causeTokensByFile[file])
     .map(([file, count]) => ({
       hook: 'fix-gate' as const,
-      detail: `${count} édits de ${file} sans cause vérifiée (CausalHypothesis/fix-ok/check:)`
+      // Le refus doit porter son geste de sortie : conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb,
+      // la reparation l'a recu 2 fois sans deposer le jeton et la boucle s'est figee en rouge.
+      detail: `${count} édits de ${file} sans cause vérifiée (CausalHypothesis/fix-ok/check:) — pour lever ce refus, dépose dans ${file} un commentaire \`fix-ok: <cause mesurée>\``
     }))
 }
 
