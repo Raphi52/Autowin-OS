@@ -102,9 +102,30 @@ export function dodDuVerdict(
   }))
 }
 
+/**
+ * Le juge a-t-il étiqueté AU MOINS UNE de ses puces (MAJEUR/MINEUR/OK) ?
+ *
+ * fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (réparations 17 à 19) — le juge rend
+ * « VALIDE / SCORE 72 » avec des puces NON étiquetées, dont de purs constats (« 284 tests, tous
+ * verts »). Règle « non étiqueté = MAJEUR » : son propre VALIDE était retourné en DEFAUT, donc un
+ * juge qui ignore le format ne pouvait JAMAIS clore, et le refus « Promis mais pas fait » recitait
+ * ses constats à chaque passage. Le brief le lui demande depuis d8e8986a et il ne s'y plie pas
+ * toujours : la consigne en prose ne suffit pas, il faut une règle déterministe.
+ *
+ * Elle reste étroite : dès que le juge étiquette UNE puce, il sait étiqueter, et une puce nue
+ * reste MAJEUR. Une puce MAJEUR ou un `DEFAUT:` bloquent toujours.
+ */
+const PUCE_ETIQUETEE = /^\s*(?:[-*•]|\d+[.)])\s+\**\s*(?:MAJEUR|MINEUR|OK)\s*\**\s*:/im
+
+function aucunePuceEtiquetee(text: string): boolean {
+  return objectionsDuJuge(text, true).length > 0 && !PUCE_ETIQUETEE.test(text ?? '')
+}
+
 export function verdictAvecObjectionsPortees(text: string): string {
   const objections = objectionsDuJuge(text)
   if (objections.length === 0) return text
   if (/\bDEFAUT\s*:/i.test(text)) return text
+  // Saisie ts 1789462078031 : le tour finit quand les juges n'ont plus de défaut MAJEUR.
+  if (/\bVALIDE\b/i.test(text) && aucunePuceEtiquetee(text)) return text
   return `DEFAUT: objections du juge non levées (${objections.length})\n${text}`
 }
