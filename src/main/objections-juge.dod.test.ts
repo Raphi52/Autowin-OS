@@ -17,7 +17,13 @@ describe('dodDuVerdict — les objections du juge entrent dans le refus', () => 
   it("des objections qui changent ne sont pas un refus figé", () => {
     const a = evaluateClosure({ status: 'red', dod: dodDuVerdict(false, juge70) }).reasons
     const b = evaluateClosure({ status: 'red', dod: dodDuVerdict(false, juge68) }).reasons
-    expect(memeRefus(b, a)).toBe(false)
+    // Arbitrage conv-539 (tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparation 16) : ce test
+    // exigeait memeRefus=false quand seules les objections citees changent. La decision terrain
+    // POSTERIEURE d89e950b (conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4) neutralise
+    // justement ces citations, sinon une boucle figee ne coupait jamais. Les deux regles ne peuvent
+    // pas coexister : la mesure terrain l'emporte. Ce qui compte ici reste vrai et reste teste :
+    // un refus dont les citations changent NE STOPPE PAS la reparation au 2e passage.
+    expect(memeRefus(b, a)).toBe(true)
     expect(
       arretDeLaReparation({
         tentative: 2,
