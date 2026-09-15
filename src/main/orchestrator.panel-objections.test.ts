@@ -42,6 +42,7 @@ import type { WorkflowGraph } from './workflow-graph'
  */
 const OBJECTION_A = 'les commits ne sont pas annulables un par un'
 const OBJECTION_B = 'rien n est mesure sur un vrai tour'
+const OBJECTION_C = 'le tour n est pas fini en reussite'
 
 class PanelProvider implements ProviderAdapter {
   readonly id = 'panel'
@@ -56,7 +57,15 @@ class PanelProvider implements ProviderAdapter {
     const membre = options.model ?? ''
     if (membre.startsWith('juge-')) {
       // Puces NON etiquetees : le membre vote VALIDE (aucune MAJEUR), comme les 3 juges du tour reel.
-      const puce = membre === 'juge-1' ? OBJECTION_A : membre === 'juge-2' ? OBJECTION_B : 'rien'
+      // juge-3 est le DISSIDENT du tour reel (promptCalls ts 09:55:17.497 : DEFAUT / SCORE 66).
+      if (membre === 'juge-3') {
+        return {
+          text: `DEFAUT: ${OBJECTION_C}\n\nSCORE: 66\n\nOBJECTIONS:\n- ${OBJECTION_C}`,
+          provider: this.id,
+          systemInjected: Boolean(options.system)
+        }
+      }
+      const puce = membre === 'juge-1' ? OBJECTION_A : OBJECTION_B
       return {
         text: `VALIDE\n\nSCORE: 72\n\nOBJECTIONS:\n- ${puce}`,
         provider: this.id,
@@ -125,5 +134,15 @@ describe('un panel de juges qui atteint le quorum garde les objections de ses me
     expect(texte).toMatch(/VALIDE/)
     expect(texte).toContain(OBJECTION_A)
     expect(texte).toContain(OBJECTION_B)
+  })
+
+  /**
+   * conv-539, tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e : le juge de 09:55:17.497 vote DEFAUT, les
+   * 3 autres VALIDE. Le quorum passe — mais la puce du dissident doit rester MAJEUR, sinon le tour
+   * se clot sur un DEFAUT explicite ignore (saisie ts 1789466353210).
+   */
+  it('la puce du juge DISSIDENT reste MAJEUR dans le verdict agrege', async () => {
+    const resultat = await harnais()()
+    expect(resultat.judgeText ?? '').toContain(`MAJEUR: ${OBJECTION_C}`)
   })
 })

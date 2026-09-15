@@ -5144,7 +5144,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           text: passes
             ? // Quorum atteint : les objections des membres RESTENT dans le verdict (conv-539,
               // tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e) au lieu d'etre reduites au mot VALIDE.
-              verdictPanelValide(responders.map((r) => r.text))
+              verdictPanelValide(responders.map((r) => ({ text: r.text, ok: r.ok })))
             : votingN === 0
               ? 'DEFAUT: aucun juge n’a répondu (tous en échec)'
               : `DEFAUT: quorum non atteint (${valideVotes}/${votingN} VALIDE, seuil ${threshold})${reasons.length ? ` — ${reasons.join(' | ')}` : ''}`,

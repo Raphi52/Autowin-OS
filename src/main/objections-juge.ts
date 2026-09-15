@@ -165,10 +165,31 @@ export function verdictAvecObjectionsPortees(text: string): string {
  * Les puces sont recopiées TELLES QUELLES, étiquette comprise : une MAJEUR rouvre le verdict via
  * `verdictAvecObjectionsPortees`, des puces non étiquetées restent un VALIDE (pas de boucle sans fin).
  */
-export function verdictPanelValide(textesDesMembres: string[]): string {
+export type MembreDuPanel = string | { text: string; ok: boolean }
+
+/**
+ * UN MEMBRE QUI VOTE `DEFAUT:` RESTE UN DEFAUT, MEME MINORITAIRE.
+ *
+ * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — sur les 4 appels juge, celui de
+ * promptCalls ts 09:55:17.497 rend « DEFAUT: le tour n'est pas fini en reussite / SCORE: 66 », les
+ * 3 autres « VALIDE ». Le quorum passait et les puces du dissident etaient recopiees NUES : non
+ * etiquetees = verdict clos (regle de PUCE_ETIQUETEE). Le tour se terminait donc sur un DEFAUT
+ * explicite ignore — saisie ts 1789466353210, « tu t'es arrete alors que 3/4 des juges ont des
+ * objections ». On etiquette MAJEUR les puces des seuls membres ayant vote DEFAUT : la reparation
+ * repart, et un panel sans dissident garde le comportement precedent (pas de boucle sans fin).
+ */
+function etiqueterSiDissident(puce: string, ok: boolean): string {
+  if (ok) return puce
+  return PUCE_ETIQUETEE.test(`- ${puce}`) ? puce : `MAJEUR: ${puce}`
+}
+
+export function verdictPanelValide(membresDuPanel: MembreDuPanel[]): string {
   const puces: string[] = []
-  for (const texte of textesDesMembres ?? []) {
-    for (const puce of objectionsBrutesDuJuge(texte)) {
+  for (const membre of membresDuPanel ?? []) {
+    const texte = typeof membre === 'string' ? membre : membre.text
+    const ok = typeof membre === 'string' ? true : membre.ok
+    for (const brute of objectionsBrutesDuJuge(texte)) {
+      const puce = etiqueterSiDissident(brute, ok)
       if (!puces.includes(puce)) puces.push(puce)
     }
   }
