@@ -5333,12 +5333,31 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
         // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
         prevSessionId = undefined
-        await executePipelinePhase('build')
-        // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
-        // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
-        // codé en dur build → judge.
-        for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
-          await executePipelinePhase(phase)
+        /**
+         * UNE REPARATION QUI NE PEUT PLUS S'EXECUTER ARRETE LA BOUCLE, ELLE N'ANNULE PAS LE TOUR.
+         *
+         * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — le build de reparation a leve
+         * « Budget d'appels provider atteint : 42 appels ». L'exception traversait toute la boucle :
+         * `orchestrate` rendait ok:false, et TOUT le travail deja juge (4 verdicts, objections
+         * comprises) disparaissait de la reponse. L'utilisateur ne voyait qu'« echec du workflow ».
+         * Desormais l'echec du passage de reparation est un MOTIF de refus nomme : le verdict et les
+         * objections du dernier juge restent dans le resultat du run.
+         */
+        try {
+          await executePipelinePhase('build')
+          // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
+          // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
+          // codé en dur build → judge.
+          for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
+            await executePipelinePhase(phase)
+          }
+        } catch (erreur) {
+          const motif = `Réparation ${attempt} interrompue (${
+            erreur instanceof Error ? erreur.message : String(erreur)
+          }) — le verdict et les objections du dernier passage restent ci-dessous.`
+          gate.reasons.push(motif)
+          push({ step: 'gate', role: 'gate', detail: motif })
+          break
         }
         exec = buildExec()
       }
