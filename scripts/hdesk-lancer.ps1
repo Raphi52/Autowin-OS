@@ -19,6 +19,8 @@ param(
   [Parameter(Mandatory = $true)][string]$Executable,
   [string]$Arguments = '',
   [int]$AttenteSecondes = 30,
+  # Duree de surveillance APRES la premiere fenetre (crash RigV3 mesure a ~4 s, conv-540).
+  [int]$SurvieSecondes = 6,
   # RELIE LE BUREAU A SON TRAVAIL : la petite TV de la conversation affiche ce libelle et filtre
   # sur la conversation. Ecrit dans %LOCALAPPDATA%\autowin-hdesk\<id>.json — hors du depot : un agent lance depuis
   # une copie de travail doit etre vu par l'app (voir src/main/hdesk-tv.ts).
@@ -60,6 +62,8 @@ public static class AutowinHdeskLanceur {
   public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lp);
   [DllImport("user32.dll")] public static extern bool EnumDesktopWindows(IntPtr hDesk, EnumWindowsProc cb, IntPtr lp);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+  [DllImport("kernel32.dll", SetLastError = true)] public static extern bool GetExitCodeProcess(IntPtr h, out uint code);
+  public const uint STILL_ACTIVE = 259;
   public static int CompterFenetres(IntPtr hDesk) {
     int n = 0;
     EnumDesktopWindows(hDesk, (h, lp) => { if (IsWindowVisible(h)) n++; return true; }, IntPtr.Zero);
@@ -84,7 +88,7 @@ if (-not [AutowinHdeskLanceur]::CreateProcess($Executable, $ligne, [IntPtr]::Zer
   throw "CreateProcess sur '$nomBureau' a echoue (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
 }
 [void][AutowinHdeskLanceur]::CloseHandle($pi.hThread)
-[void][AutowinHdeskLanceur]::CloseHandle($pi.hProcess)
+$lanceA = Get-Date
 # Meme regle que autowin-headless.ps1 : NOTRE handle tient le bureau tant que l'app n'y a pas pose
 # de fenetre ; le lacher plus tot detruit le bureau sous ses pieds.
 $fin = (Get-Date).AddSeconds($AttenteSecondes)
@@ -95,6 +99,37 @@ do {
   Start-Sleep -Milliseconds 250
 } while ((Get-Date) -lt $fin)
 [void][AutowinHdeskLanceur]::CloseDesktop($hBureau)
+# UNE FENETRE N'EST PAS UN DEMARRAGE REUSSI (kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2,
+# 2026-09-15) : RigV3 a pose sa fenetre puis s'est ferme ~4 s plus tard ; le lanceur avait deja rendu
+# pret=true / exit 0 et l'agent ne l'a appris que sur une capture ulterieure. On surveille donc le
+# processus $SurvieSecondes apres la fenetre : s'il meurt, exit 4 avec code de sortie et erreurs du
+# journal Windows — l'erreur arrive DANS le tour, a l'appel meme, et rien n'est inscrit pour la TV.
+$codeSortie = [uint32][AutowinHdeskLanceur]::STILL_ACTIVE
+if ($fenetres -gt 0) {
+  $finSurvie = (Get-Date).AddSeconds($SurvieSecondes)
+  do {
+    [void][AutowinHdeskLanceur]::GetExitCodeProcess($pi.hProcess, [ref]$codeSortie)
+    if ($codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) { break }
+    Start-Sleep -Milliseconds 250
+  } while ((Get-Date) -lt $finSurvie)
+}
+[void][AutowinHdeskLanceur]::CloseHandle($pi.hProcess)
+if ($fenetres -gt 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
+  $nomExe = [IO.Path]::GetFileName($Executable)
+  $journal = @()
+  try {
+    $journal = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = $lanceA.AddSeconds(-2) } -MaxEvents 30 -ErrorAction Stop |
+      Where-Object { $_.Message -like "*$nomExe*" } | Select-Object -First 3 |
+      ForEach-Object { "$($_.ProviderName): " + (($_.Message -split "`r?`n" | Where-Object { $_.Trim() }) | Select-Object -First 6) -join ' | ' })
+  } catch { }
+  [pscustomobject]@{
+    id = $Id; desktop = $nomBureau; pid = $pi.dwProcessId; fenetresVisibles = $fenetres; pret = $false
+    erreur = "L'application s'est fermee apres avoir ouvert sa fenetre (code de sortie $codeSortie). Corrige la cause avant de capturer ou de conclure."
+    codeSortie = $codeSortie; journalWindows = $journal
+  } | ConvertTo-Json -Compress
+  [Console]::Error.WriteLine("hdesk-lancer : $nomExe mort apres demarrage (code $codeSortie). " + ($journal -join ' || '))
+  exit 4
+}
 if ($fenetres -gt 0) {
   $registre = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk'
   New-Item -ItemType Directory -Path $registre -Force | Out-Null
