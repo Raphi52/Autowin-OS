@@ -63,6 +63,7 @@ import {
   plafondDurReparations,
   reparationsAutorisees
 } from './gates/stopgate'
+import { mesureBundlePerime } from './gates/bundle-perime'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { fichiersTouchesGit, fichiersEditesParLeRun } from './hooks/default-gate-hooks'
@@ -5407,7 +5408,12 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         plafondDur: PLAFOND_DUR,
         motifsCourants: gate.reasons,
         motifsPrecedents,
-        refusIdentiquesConsecutifs
+        refusIdentiquesConsecutifs,
+        // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — 14 reparations refusees
+        // parce que out/main/index.js (11:06) etait plus ancien que les correctifs commites
+        // (11:11-11:31) : le code qui jugeait n'etait pas celui qu'on reparait. La boucle le NOMME
+        // desormais au lieu de bruler un build et un panel de juge par passage.
+        bundlePerime: mesureBundlePerime(process.cwd())
       })
       if (arret) {
         gate.reasons.push(arret)

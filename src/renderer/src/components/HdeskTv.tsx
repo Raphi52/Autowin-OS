@@ -34,7 +34,8 @@ const BOUTON_TV = {
 export function HdeskTv({
   conversationId,
   api,
-  intervalleMs = 1500
+  // 500 ms (conv-540) : la boucle ne se chevauche pas, donc la cadence reelle = max(500, duree capture).
+  intervalleMs = 500
 }: Props): React.JSX.Element | null {
   const [bureaux, setBureaux] = useState<BureauTv[]>([])
   const [choisi, setChoisi] = useState<string | null>(null)

@@ -1694,6 +1694,15 @@ flowchart LR
   B -- non --> D[Bloc de code]
 \`\`\`
 
+Un diagramme TRES HAUT doit rester sous le plafond de hauteur du fil (300 px) :
+
+\`\`\`mermaid
+flowchart TD
+  H1[Etape 1] --> H2[Etape 2] --> H3[Etape 3] --> H4[Etape 4] --> H5[Etape 5]
+  H5 --> H6[Etape 6] --> H7[Etape 7] --> H8[Etape 8] --> H9[Etape 9] --> H10[Etape 10]
+  H10 --> H11[Etape 11] --> H12[Etape 12] --> H13[Etape 13] --> H14[Etape 14] --> H15[Etape 15]
+\`\`\`
+
 Un diagramme dont la syntaxe est fausse doit retomber sur sa source, sans casser le fil :
 
 \`\`\`mermaid

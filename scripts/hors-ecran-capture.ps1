@@ -7,7 +7,17 @@
   (PW_RENDERFULLCONTENT) la lit. Mesure : vue 3D de Roblox Studio 812x675 = 251 couleurs ici,
   1 couleur sur le bureau cache.
 
-  Deroule : lancement REDUIT -> chaque fenetre du processus est restauree directement a -30000,-30000
+  AUCUNE APPARITION SUR L'ECRAN (2026-09-14, conv-529). Deux defauts mesures, deux corrections :
+   1. Le processus etait lance par Start-Process, qui rend la main APRES la creation : une fenetre
+      pouvait naitre avant toute surveillance. Il est desormais cree SUSPENDU (CreateProcess,
+      CREATE_SUSPENDED) et n'est repris qu'une fois l'abonnement aux evenements en place.
+   2. Les fenetres A PROPRIETAIRE (popups et fenetres de chargement de Qt) etaient EXCLUES du
+      deplacement et restaient posees en 0,0 sur l'ecran : `ecranMs` = 32596 ms sur 35 s. Elles
+      n'ont pas de bouton de barre des taches, donc `barreDesTachesMs` (16 ms) ne les voyait pas.
+  Mesure du champ `ecranMs` (temps cumule ou une fenetre est visible et recoupe la zone d'ecran) :
+  32596 ms avant, 18 / 33 ms apres, avec vue 3D a 244-249 couleurs.
+
+  Deroule : lancement SUSPENDU (ou reduit) -> chaque fenetre du processus est restauree directement a -30000,-30000
   sans activation, et retiree de la barre des taches -> attente -> capture de la plus grande fenetre ->
   arret du SEUL processus lance.
 
@@ -20,7 +30,7 @@
   Limites : pas de clic ni de clavier ; tourne dans la
   session de l'utilisateur (memes fichiers, memes droits) — preferer hdesk-lancer.ps1 hors besoin 3D.
 
-  Usage : powershell -NoProfile -File scripts/hors-ecran-capture.ps1 -Executable "<app.exe>" [-Arguments "<args>"] [-AttenteSecondes 30] [-Output capture.png]
+  Usage : powershell -NoProfile -File scripts/hors-ecran-capture.ps1 -Executable "<app.exe>" [-Arguments "<args>"] [-AttenteSecondes 30] [-Output capture.png] [-Lancement Suspendu|Normal]
   Sortie JSON ; code 3 si la vue principale reste unie.
 #>
 param(
@@ -185,7 +195,12 @@ public static class HorsEcran {
     long ecranMs = 0; var surEcran = new Dictionary<string, long>();
     var exposees = new Dictionary<string, long>();
     rappelFenetre = SurEvenementFenetre; evenementsTraites = 0; fileFenetres.Clear();
-    IntPtr abonnement = SetWinEventHook(0x8002, 0x8002, IntPtr.Zero, rappelFenetre, (uint)pid, 0, 0x0002); // SHOW seul (des CREATE, Qt ne montrait jamais la fenetre : capture sans fenetre, 2026-09-14)
+    // SHOW SEUL, et c'est une CONTRAINTE, pas un choix. S'abonner a EVENT_OBJECT_CREATE casse Studio :
+    // mesure du 2026-09-14 (style applique a la creation) et RE-MESURE du meme jour (position seule,
+    // puis position limitee aux petites fenetres) — dans les trois cas la capture rend « aucune
+    // fenetre », meme quand la fenetre principale n'est pas touchee. C'est l'abonnement lui-meme qui
+    // perturbe Qt. Prix a payer : ~17 ms pendant lesquels la fenetre de chargement 600x300 est peinte.
+    IntPtr abonnement = SetWinEventHook(0x8002, 0x8002, IntPtr.Zero, rappelFenetre, (uint)pid, 0, 0x0002);
     if (reprendreApres) Reprendre();
     try {
     while (sw.ElapsedMilliseconds < millis) {
@@ -233,6 +248,11 @@ public static class HorsEcran {
             SetWindowPlacement(h, ref wpi);
           } else if (rr.L > -20000) {
             SetWindowPos(h, IntPtr.Zero, -30000, -30000, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNC);
+          } else if (larg >= 400 && haut >= 300 && larg < 1000) {
+            // TAILLE IMPOSEE. Studio REUTILISE la geometrie de sa derniere session : apres un essai
+            // ou sa fenetre avait ete retrecie, la capture sortait en 653x927 — portrait, et la vue
+            // 3D reduite a 640x707 (mesure 2026-09-14). On impose donc un format paysage.
+            SetWindowPos(h, IntPtr.Zero, -30000, -30000, 1600, 900, SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNC);
           }
           continue;
         }

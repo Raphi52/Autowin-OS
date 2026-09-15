@@ -16,8 +16,12 @@ export function refusLancementGraphique(commande: string): string | undefined {
   const c = String(commande ?? '')
   if (!c.trim()) return undefined
   // Voies approuvees : le lanceur de bureau cache et l'instance Autowin cachee.
-  // hors-ecran-capture.ps1 : voie 3D (rendu GPU illisible sur bureau cache, mesure conv-526).
-  if (/hdesk-lancer\.ps1|hors-ecran-capture\.ps1|autowin-headless\.ps1|avec-instance-headless\.mjs/i.test(c)) {
+  // `hors-ecran-capture.ps1` N'EST PLUS une exception (2026-09-14, conv-529). Elle avait ete posee
+  // quand ce script laissait apparaitre la fenetre sur l'ecran avant de la deplacer. Depuis, il
+  // cree le processus SUSPENDU et sort chaque fenetre de la zone d'ecran des son affichage :
+  // mesure sur Roblox Studio, ecranMs 32596 -> 18-33 ms, capture 3D a 244-249 couleurs. Il passe
+  // donc le controle comme n'importe quelle commande, sans passe-droit.
+  if (/hdesk-lancer\.ps1|autowin-headless\.ps1|avec-instance-headless\.mjs/i.test(c)) {
     return undefined
   }
 

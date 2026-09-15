@@ -20,6 +20,11 @@ describe('refusLancementGraphique', () => {
       'notepad.exe D:/a.txt',
       'cmd /c start "" D:/BrainRotRoyale/BrainRotRoyale.rbxlx',
       'Invoke-Item D:/x.rbxlx',
+      // PLUS DE PASSE-DROIT POUR LA VOIE 3D (2026-09-14, conv-529) : citer `hors-ecran-capture.ps1`
+      // ne desarme plus le controle. Le script lance desormais le processus suspendu et le garde
+      // hors de la zone d'ecran ; il n'a donc plus besoin d'exception, et une commande qui ouvrirait
+      // VRAIMENT une fenetre reste refusee meme en le nommant.
+      'Start-Process RobloxStudioBeta.exe # voie de scripts/hors-ecran-capture.ps1',
       'explorer.exe D:/BrainRotRoyale',
       '"C:\\Users\\me\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe" .',
       'code .',

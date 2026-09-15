@@ -314,7 +314,6 @@ export const ChatMessageRow = memo(
     conversationId,
     onInspectTurn,
     onFork,
-    onSplit,
     onOpenImage,
     onPickSuggestion,
     onOpenLiveAction,
@@ -338,8 +337,6 @@ export const ChatMessageRow = memo(
     onLogin?: () => void
     onInspectTurn?: (target: InspectTurnTarget) => void
     onFork?: (messageId: string) => void
-    /** Scinder ICI : la suite du fil part dans une conversation neuve et QUITTE celle-ci. */
-    onSplit?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
     onPickSuggestion?: (prompt: string) => void
     /** Mode auto : le panneau de candidats appuie lui-meme sur son bouton avec le choix du scout. */
@@ -422,18 +419,6 @@ export const ChatMessageRow = memo(
                 onClick={() => onFork(message.messageId!)}
               >
                 <ForkIcon />
-              </button>
-            )}
-            {message.messageId && onSplit && (
-              <button
-                type="button"
-                className="msg-turn-icon"
-                title="Scinder à partir de ce message : la suite part dans un nouveau fil"
-                aria-label="Scinder à partir de ce message"
-                data-testid="msg-split"
-                onClick={() => onSplit(message.messageId!)}
-              >
-                ⑂
               </button>
             )}
           </div>
@@ -658,18 +643,6 @@ export const ChatMessageRow = memo(
               onClick={() => onFork(message.messageId!)}
             >
               <ForkIcon />
-            </button>
-          )}
-          {message.messageId && onSplit && (
-            <button
-              type="button"
-              className="msg-turn-icon"
-              title="Scinder à partir de ce message : la suite part dans un nouveau fil"
-              aria-label="Scinder à partir de ce message"
-              data-testid="msg-split"
-              onClick={() => onSplit(message.messageId!)}
-            >
-              ⑂
             </button>
           )}
         </div>

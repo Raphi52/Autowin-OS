@@ -198,8 +198,12 @@
  * `cdp-chat-mermaid.mjs` dans le vrai renderer : svg de 544px dans un conteneur de 329px, soit
  * 233px qui debordaient du fil -- exactement ce qu'on voit dans une fenetre etroite.
  * `height: auto` garde les proportions quand la largeur est ramenee.
+ *
+ * `:not(.md-mermaid svg)` : dans le FIL, cette largeur forcee a 100 % ecrasait la largeur naturelle
+ * posee par mermaid et AGRANDISSAIT un schema etroit (138 px naturels rendus a 314 px, sonde du
+ * 2026-09-14). Le fil a sa propre regle dans ChatView.css.
  */
-.artifact-diagram svg {
+.artifact-diagram svg:not(.md-mermaid svg) {
   width: auto;
   max-width: 100% !important;
   height: auto;

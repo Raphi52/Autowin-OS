@@ -12,7 +12,7 @@
  *   fil quitte) et a la sortie de l'app.
  */
 import { spawn, execFile, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -114,28 +114,76 @@ export function interpreterCapture(
 
 type Reponse = Record<string, unknown> & { erreur?: string }
 
+export const PREFIXE_DOSSIER = 'autowin-hdesk-tv-'
+
+/**
+ * Une app tuee (arret du dev server) ne passe jamais par detruire() : son dossier temporaire reste.
+ * Mesure 2026-09-15 : 20 dossiers autowin-hdesk-tv-* orphelins dans %TEMP%. Purge au demarrage.
+ */
+export function purgerDossiersOrphelins(racine: string): number {
+  let n = 0
+  try {
+    for (const nom of readdirSync(racine)) {
+      if (!nom.startsWith(PREFIXE_DOSSIER)) continue
+      rmSync(join(racine, nom), { recursive: true, force: true })
+      n++
+    }
+  } catch {
+    // Dossier temporaire illisible : rien a purger.
+  }
+  return n
+}
+
+/**
+ * EFFACE LES RESTES D'UN BUREAU FERME : sa fiche `<id>.json` et son dossier `webview2/<id>` (pose par
+ * hdesk-lancer.ps1). Le lanceur rend la main avant la fermeture de l'app : seule la liste des bureaux
+ * VIVANTS sait qu'il est parti. Mesure 2026-09-15 : 39 fiches mortes dans %LOCALAPPDATA%/autowin-hdesk.
+ * N'appeler qu'avec une liste REELLEMENT obtenue : une liste vide par erreur effacerait tout.
+ */
+export function purgerBureauxFermes(dossier: string, vivants: readonly string[]): string[] {
+  const enVie = new Set(vivants)
+  const effaces: string[] = []
+  for (const e of lireRegistre(dossier)) {
+    if (enVie.has(e.id)) continue
+    try {
+      rmSync(join(dossier, 'webview2', e.id), { recursive: true, force: true })
+      rmSync(join(dossier, `${e.id}.json`), { force: true })
+      effaces.push(e.id)
+    } catch {
+      // Fichier encore tenu par un processus qui se termine : repris au prochain passage.
+    }
+  }
+  return effaces
+}
+
 export class CapteurHdesk {
   private proc: ChildProcessWithoutNullStreams | null = null
   private tampon = ''
   private attente: Array<(r: Reponse) => void> = []
   private file: Promise<unknown> = Promise.resolve()
   private minuterie: NodeJS.Timeout | null = null
-  private readonly dossierImages = mkdtempSync(join(tmpdir(), 'autowin-hdesk-tv-'))
+  private readonly dossierImages: string
 
   constructor(
     private readonly racine: string,
     private readonly registre = join(process.env.LOCALAPPDATA ?? tmpdir(), 'autowin-hdesk')
-  ) {}
+  ) {
+    purgerDossiersOrphelins(tmpdir())
+    this.dossierImages = mkdtempSync(join(tmpdir(), PREFIXE_DOSSIER))
+  }
 
   async bureaux(conversationId?: string): Promise<BureauTv[]> {
     const r = await this.demander('list')
     const vivants = Array.isArray(r.bureaux) ? (r.bureaux as string[]) : []
+    if (!r.erreur && Array.isArray(r.bureaux)) purgerBureauxFermes(this.registre, vivants)
     return fusionnerBureaux(vivants, lireRegistre(this.registre), conversationId)
   }
 
   async image(id: string): Promise<ImageTv> {
     if (!ID_BUREAU.test(id))
       return { statut: 'erreur', id, message: 'Identifiant de bureau invalide.' }
+    // Recree si une AUTRE instance d'Autowin l'a purge comme orphelin a son demarrage.
+    mkdirSync(this.dossierImages, { recursive: true })
     const png = join(this.dossierImages, `${id}.png`)
     let r: Reponse
     try {
@@ -147,6 +195,10 @@ export class CapteurHdesk {
       return interpreterCapture(id, r, () => readFileSync(png))
     } catch (e) {
       return { statut: 'erreur', id, message: e instanceof Error ? e.message : String(e) }
+    } finally {
+      // L'IMAGE PART EN MEMOIRE (dataUrl) : le fichier ne sert plus des la lecture. Demande conv-540
+      // (2026-09-15) : « les screenshots pris faut qu'ils soient nettoyes direct ».
+      rmSync(png, { force: true })
     }
   }
 

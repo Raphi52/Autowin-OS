@@ -9,10 +9,30 @@ import {
   fusionnerBureaux,
   interpreterCapture,
   lireRegistre,
+  purgerBureauxFermes,
+  purgerDossiersOrphelins,
   racineScriptsHorsArchive
 } from './hdesk-tv'
+import { existsSync, mkdirSync } from 'node:fs'
 
 const png = (): Buffer => Buffer.from('png')
+
+describe('bureau caché fermé — nettoyage disque', () => {
+  it('efface la fiche et le dossier WebView2 des bureaux fermés, garde les vivants', () => {
+    const d = mkdtempSync(join(tmpdir(), 'hdesk-purge-'))
+    for (const id of ['vivant', 'mort']) {
+      writeFileSync(join(d, `${id}.json`), JSON.stringify({ id }))
+      mkdirSync(join(d, 'webview2', id, 'EBWebView'), { recursive: true })
+      writeFileSync(join(d, 'webview2', id, 'EBWebView', 'x'), 'x')
+    }
+    expect(purgerBureauxFermes(d, ['vivant'])).toEqual(['mort'])
+    expect(existsSync(join(d, 'mort.json'))).toBe(false)
+    expect(existsSync(join(d, 'webview2', 'mort'))).toBe(false)
+    expect(existsSync(join(d, 'vivant.json'))).toBe(true)
+    expect(existsSync(join(d, 'webview2', 'vivant', 'EBWebView', 'x'))).toBe(true)
+    rmSync(d, { recursive: true, force: true })
+  })
+})
 
 describe('petite TV — application installée', () => {
   it('lit ses scripts hors de l’archive app.asar, que PowerShell ne sait pas ouvrir', () => {
@@ -168,3 +188,14 @@ describe.skipIf(process.platform !== 'win32')(
     }, 30000)
   }
 )
+
+describe('petite TV — disque propre', () => {
+  it('purge les dossiers de capture laissés par une app tuée, et seulement eux', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'tv-purge-'))
+    mkdtempSync(join(racine, 'autowin-hdesk-tv-'))
+    writeFileSync(join(racine, 'autre.txt'), 'x')
+    expect(purgerDossiersOrphelins(racine)).toBe(1)
+    expect(execFileSync('cmd', ['/c', 'dir', '/b', racine]).toString().trim()).toBe('autre.txt')
+    rmSync(racine, { recursive: true, force: true })
+  })
+})
