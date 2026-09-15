@@ -38,3 +38,15 @@ describe('dodDuVerdict — les objections du juge entrent dans le refus', () => 
     expect(dodDuVerdict(false, 'DEFAUT: rien ne compile')).toEqual([{ checked: false, hasContent: true }])
   })
 })
+
+describe('objectionsDuJuge — « Aucune capture … » est une objection, pas le vide', () => {
+  it('garde une objection qui commence par Aucune', async () => {
+    const { objectionsDuJuge } = await import('./objections-juge')
+    expect(objectionsDuJuge('VALIDE\nOBJECTIONS:\n- Aucune capture du mode sombre.')).toEqual([
+      'Aucune capture du mode sombre.'
+    ])
+    expect(objectionsDuJuge('VALIDE\nOBJECTIONS:\n- aucune')).toEqual([])
+    expect(objectionsDuJuge('VALIDE\nOBJECTIONS: aucune objection.')).toEqual([])
+    expect(objectionsDuJuge('VALIDE\nOBJECTIONS:\n- RAS')).toEqual([])
+  })
+})

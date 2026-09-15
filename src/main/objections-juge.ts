@@ -15,7 +15,9 @@ const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 const AUTRE_SECTION = /^\s*[A-ZÉÈÀ_ ]{3,}\s*:/
 const PUCE = /^\s*(?:[-*•]|\d+[.)])\s+/
 /** « aucune », « aucun », « rien à signaler », « n/a », « néant » — la forme contractuelle du vide. */
-const VIDE = /^(aucune?|rien(\s+a\s+signaler)?|neant|n\/?a|non|ras)\b/
+// Ligne ENTIÈRE seulement : « Aucune capture du mode sombre » est une objection (conv-539).
+const VIDE =
+  /^(aucune?(\s+(objections?|ecarts?|defauts?|reserves?))?|rien(\s+a\s+signaler)?|neant|n\/?a|non|ras)\s*[.!]?$/
 
 function normaliser(ligne: string): string {
   return ligne
