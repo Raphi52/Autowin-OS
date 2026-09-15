@@ -152,3 +152,52 @@ export function verdictAvecObjectionsPortees(text: string): string {
   if (/\bVALIDE\b/i.test(text) && aucunePuceEtiquetee(text)) return text
   return `DEFAUT: objections du juge non levées (${objections.length})\n${text}`
 }
+
+/**
+ * LE VERDICT AGRÉGÉ D'UN PANEL QUI PASSE NE JETTE PLUS LES OBJECTIONS DE SES MEMBRES.
+ *
+ * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — quatre passages de juge
+ * (promptCalls ts 09:47:42.375, 09:50:30.425, 09:55:17.497, 09:58:16.977) rendent des objections
+ * concrètes ; le chemin panel d'`orchestrator.ts` réduisait un quorum atteint au seul mot
+ * « VALIDE ». Les objections des membres n'arrivaient donc NI à la réparation NI à l'utilisateur :
+ * saisie ts 1789466353210 — « tu t'es arrêté alors que 3/4 des juges ont des objections ».
+ *
+ * Les puces sont recopiées TELLES QUELLES, étiquette comprise : une MAJEUR rouvre le verdict via
+ * `verdictAvecObjectionsPortees`, des puces non étiquetées restent un VALIDE (pas de boucle sans fin).
+ */
+export function verdictPanelValide(textesDesMembres: string[]): string {
+  const puces: string[] = []
+  for (const texte of textesDesMembres ?? []) {
+    for (const puce of objectionsBrutesDuJuge(texte)) {
+      if (!puces.includes(puce)) puces.push(puce)
+    }
+  }
+  if (puces.length === 0) return 'VALIDE'
+  return `VALIDE\n\nOBJECTIONS:\n${puces.map((p) => `- ${p}`).join('\n')}`
+}
+
+/** Les puces de la section OBJECTIONS, étiquette de gravité CONSERVÉE. */
+function objectionsBrutesDuJuge(text: string): string[] {
+  const lignes = (text ?? '').split(/\r?\n/)
+  const puces: string[] = []
+  let dansLaSection = false
+  for (const ligne of lignes) {
+    if (ENTETE_OBJECTIONS.test(ligne)) {
+      dansLaSection = true
+      const reste = ligne.replace(ENTETE_OBJECTIONS, '').trim()
+      if (reste && !VIDE.test(normaliser(reste))) puces.push(reste)
+      continue
+    }
+    if (!dansLaSection) continue
+    if (!ligne.trim()) continue
+    if (!PUCE.test(ligne) && AUTRE_SECTION.test(ligne)) {
+      dansLaSection = false
+      continue
+    }
+    if (!PUCE.test(ligne)) continue
+    const contenu = ligne.replace(PUCE, '').trim()
+    if (!contenu || VIDE.test(normaliser(contenu))) continue
+    puces.push(contenu)
+  }
+  return puces
+}
