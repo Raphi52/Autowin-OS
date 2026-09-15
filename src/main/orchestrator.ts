@@ -5222,6 +5222,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       onPhase?.({ step: 'gate' })
       const g = evaluateClosure({
         status: ok ? 'green' : 'red',
+        // fix-ok: conv-539 tour 24e29815 — une case DoD muette cachait les objections du juge a la reparation et figeait le refus
         dod: dodDuVerdict(ok, verdict.text),
         // Une sous-tache en echec ou sautee est du travail ANNONCE et non livre : elle bloque, et la
         // boucle de reparation ci-dessous s'en saisit comme de n'importe quel refus du gate.
