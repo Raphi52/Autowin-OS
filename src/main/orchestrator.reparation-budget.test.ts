@@ -1,8 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-// Le depot reel a toujours un `out/main/index.js` plus vieux que les sources modifiees : la mesure
-// « bundle perime » arreterait la boucle AVANT la reparation et ce test ne verrait jamais le cas.
-vi.mock('./gates/bundle-perime', () => ({ mesureBundlePerime: () => undefined }))
+/**
+ * LA MESURE « CODE COMPILE PERIME » RESTE ACTIVE — elle n'est PAS neutralisee.
+ * fix-ok: elle lisait `process.cwd()`, c'est-a-dire le depot reel, ou `out/main/index.js` est
+ * toujours plus vieux que les sources : la boucle s'arretait AVANT la reparation et ce test ne
+ * voyait jamais le cas. La cause n'etait pas la mesure mais la RACINE qu'on lui donne. On pointe
+ * donc la racine sur un dossier vide : la vraie fonction tourne et rend « pas de mesure ».
+ * Objection du juge, tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e : « le test ne passe que parce
+ * qu'une protection reelle a ete desactivee (vi.mock bundle-perime) ».
+ */
+const RACINE_SANS_BUNDLE = mkdtempSync(`${tmpdir()}/autowin-bundle-`)
+let cwdSpy: ReturnType<typeof vi.spyOn>
+beforeAll(() => {
+  cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(RACINE_SANS_BUNDLE)
+})
+afterAll(() => cwdSpy.mockRestore())
+
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
