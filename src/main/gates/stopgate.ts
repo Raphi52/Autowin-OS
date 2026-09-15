@@ -150,6 +150,20 @@ const REFUS_FIGE_SEUIL = 2
  * Exportee parce que la boucle de reparation en a besoin pour compter les repetitions : recopier la
  * comparaison dans l'orchestrateur en ferait un MIROIR, que ce depot a deja paye une fois.
  */
+/**
+ * fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 16 reparations payees parce que le
+ * motif « Promis mais pas fait » RECOPIE les objections du juge, reformulees a chaque passage : la
+ * comparaison mot pour mot ne voyait jamais deux refus identiques, le compteur de refus fige ne
+ * mordait jamais. On compare donc le motif SANS sa citation.
+ *
+ * Seule la partie entre guillemets francais est retiree : c'est la ou vit le texte recopie (extrait
+ * de verdict, nom de fichier cite). Le motif lui-meme — ce qui est reproche — reste compare en
+ * entier, donc un refus qui CHANGE reellement continue de relancer la reparation.
+ */
+function motifSansCitation(motif: string): string {
+  return motif.replace(/«[^»]*»/g, '«…»').trim()
+}
+
 export function memeRefus(
   motifsCourants: readonly string[],
   motifsPrecedents: readonly string[]
@@ -157,7 +171,9 @@ export function memeRefus(
   if (motifsPrecedents.length === 0) return false
   return (
     motifsCourants.length === motifsPrecedents.length &&
-    motifsCourants.every((motif, index) => motif === motifsPrecedents[index])
+    motifsCourants.every(
+      (motif, index) => motifSansCitation(motif) === motifSansCitation(motifsPrecedents[index])
+    )
   )
 }
 
