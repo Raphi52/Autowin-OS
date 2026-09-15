@@ -299,3 +299,13 @@ export function explainRoleFailure(
 → ${diagnosed.hint}`
     : head
 }
+
+/**
+ * Modèle de REPLI quand le filtre de sécurité d'un modèle Claude refuse un message (conv-540, tour
+ * 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4). Opus → Sonnet de la même génération : présent dans le CLI
+ * installé (mesuré 2026-07-30, voir claude-cli-catalog.ts). Rien d'autre n'est deviné.
+ */
+export function modeleDeRepliApresRefus(model: string | undefined): string | undefined {
+  const m = /^claude-opus-(\d+(?:-\d+)?)$/.exec(model ?? '')
+  return m ? `claude-sonnet-${m[1]}` : undefined
+}

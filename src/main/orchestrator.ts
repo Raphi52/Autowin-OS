@@ -393,7 +393,12 @@ import { STYLE_TON } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { evidenceDeLErreur } from './providers/evidence-portee-par-erreur'
-import { describeFanoutFailure, explainRoleFailure } from './provider-failure-diagnosis'
+import {
+  classifyProviderFailure,
+  describeFanoutFailure,
+  explainRoleFailure,
+  modeleDeRepliApresRefus
+} from './provider-failure-diagnosis'
 import { retryOnTransientOverload } from './transient-overload'
 import { alignReportWithDisk, dispositionPourIssue } from './worktree-path-rewrite'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
@@ -3866,8 +3871,7 @@ ${empreinteDepot}`
           .map((p) => ({ name: p.name, chars: p.text.length }))
         const fanSystem = parts.map((p) => p.text).join('')
         const sandbox = sandboxForPhase(task, phase)
-        const memberOutputs = await Promise.all(
-          fanMembers.map(async (member, rang) => {
+        const runMember = async (member: (typeof fanMembers)[number], rang: number) => {
             // L'identité prend la persona quand il y en a une, sinon le modèle. Le rang n'est ajouté
             // QUE s'il lève une ambiguïté réelle : trois membres sur le même modèle portaient
             // jusqu'ici le MÊME agentId et se télescopaient dans le suivi comme dans l'UI ; deux
@@ -3998,11 +4002,29 @@ ${empreinteDepot}`
                 cause: error instanceof Error ? error.message : String(error)
               }
             }
-          })
-        )
+          }
+        const memberOutputs = await Promise.all(fanMembers.map(runMember))
         // SYNTHÈSE par l'orchestrateur (le rôle le + capable) : union dédupliquée, PAS de re-décision.
         // Un modèle en échec (ok=false / texte vide) ne pollue pas la synthèse (filtré).
-        const good = memberOutputs.filter((o) => o.ok && o.text.trim())
+        let good = memberOutputs.filter((o) => o.ok && o.text.trim())
+        if (good.length === 0) {
+          // REPLI APRÈS REFUS (conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4) : le seul membre
+          // build a été refusé par le filtre de sécurité du modèle et le tour a fini rouge sans rien
+          // tenter. Relancer le MÊME modèle échoue pareil : on rejoue UNE fois sur le modèle voisin.
+          const refuse = memberOutputs.find(
+            (o) => !o.ok && classifyProviderFailure(o.cause ?? '') === 'refused'
+          )
+          const repli = refuse ? modeleDeRepliApresRefus(refuse.member.model) : undefined
+          if (refuse && repli && !fanMembers.some((m) => m.model === repli)) {
+            onDelta?.(
+              'exec',
+              `\n[repli] ${refuse.member.model} a refusé le message — nouvel essai sur ${repli}\n`
+            )
+            const rescue = await runMember({ ...refuse.member, model: repli }, fanMembers.length)
+            memberOutputs.push(rescue)
+            good = [rescue].filter((o) => o.ok && o.text.trim())
+          }
+        }
         if (good.length === 0) {
           // Tous les modèles du fan-out ont échoué → échec de phase EXPLICITE (jamais une synthèse
           // fantôme sur du vide qui se propagerait comme un résultat valide). Aligne le comportement
