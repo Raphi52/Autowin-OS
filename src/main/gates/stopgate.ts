@@ -170,6 +170,12 @@ function motifSansCitation(motif: string): string {
       // tour). La liste normalisee restait donc de longueur variable et le compteur de refus fige ne
       // mordait toujours pas. Une suite de citations compte pour une seule.
       .replace(/«…»(?:[\s,;]*«…»)+/g, '«…»')
+      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — le refus fix-gate NOMME le
+      // nombre d'editions du fichier (« 4 edits » a la reparation 2, « 6 edits » a la reparation 3),
+      // et ce nombre est incremente par la boucle de reparation ELLE-MEME a chaque passage. Le meme
+      // refus ne pouvait donc jamais etre reconnu comme identique. Le fichier reproche, lui, reste
+      // compare en entier : deux fichiers differents restent deux refus differents.
+      .replace(/\b\d+ [ée]dits?\b/g, 'N edits')
       .trim()
   )
 }
