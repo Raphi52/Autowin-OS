@@ -36,7 +36,7 @@ function normaliser(ligne: string): string {
  * Les objections CONCRÈTES d'un texte de verdict, section `OBJECTIONS:` seulement.
  * Rend `[]` quand il n'y a pas de section, qu'elle est vide, ou qu'elle dit « aucune ».
  */
-export function objectionsDuJuge(text: string): string[] {
+export function objectionsDuJuge(text: string, toutesGravites = false): string[] {
   const lignes = (text ?? '').split(/\r?\n/)
   const objections: string[] = []
   let dansLaSection = false
@@ -62,7 +62,8 @@ export function objectionsDuJuge(text: string): string[] {
     // etaient des constats (« 54 sur 54 passent ») ou des reserves mineures devenait « Promis mais pas fait ».
     // Saisie ts 1789462078031 : le tour finit quand il n'y a plus de defaut MAJEUR. Non etiquete = majeur.
     const etiquette = ETIQUETTE.exec(contenu)
-    if (etiquette && !/^majeur/i.test(etiquette[1])) continue
+    // Etiquette bornee au VALIDE : sur un refus, MINEUR/OK ne masquent pas les raisons (reparation 4).
+    if (etiquette && !toutesGravites && !/^majeur/i.test(etiquette[1])) continue
     objections.push(etiquette ? contenu.slice(etiquette[0].length).trim() : contenu)
   }
   return objections
@@ -87,7 +88,9 @@ export function dodDuVerdict(
   text: string
 ): Array<{ checked: boolean; hasContent: true; label?: string }> {
   if (ok) return [{ checked: true, hasContent: true }]
-  const objections = objectionsDuJuge(text).slice(0, 8)
+  const majeures = objectionsDuJuge(text)
+  // Refus sans puce MAJEUR : les MINEUR/OK deviennent les raisons, jamais une case muette (reparation 4).
+  const objections = (majeures.length ? majeures : objectionsDuJuge(text, true)).slice(0, 8)
   if (objections.length === 0) return [{ checked: false, hasContent: true }]
   return objections.map((o) => ({
     checked: false,
