@@ -181,6 +181,17 @@ const api = {
     repoPath?: string
   ): Promise<{ ok: true; branch: string } | { ok: false; reason: string }> =>
     ipcRenderer.invoke('git:checkout', branch, repoPath),
+  /*
+    Le glisser-deposer du graphe. Le renderer envoie un GESTE, jamais une commande : c'est le
+    processus principal qui construit la ligne git, apres liste blanche.
+  */
+  runGitAction: (
+    demande:
+      | { type: 'merge'; source: string; cible: string }
+      | { type: 'cherry-pick'; commit: string; cible: string },
+    repoPath?: string
+  ): Promise<{ ok: true; commande: string; sortie: string } | { ok: false; raison: string }> =>
+    ipcRenderer.invoke('git:action', demande, repoPath),
   conversationGitState: (conversationId: string): Promise<GitReadResult> =>
     ipcRenderer.invoke('git:conversationRead', conversationId),
   conversationGitDiff: (

@@ -5,8 +5,10 @@
  * commits, le diff d'un fichier, le sélecteur de dépôt, puis les deux lectures rattachées à une
  * conversation (l'état et le diff de SA copie de travail).
  *
- * Aucune ACTION git ici — pas de commit, pas de push, pas de checkout. C'est le contrat de ce
- * module, et le déplacement ne l'élargit pas.
+ * DEUX actions git seulement, et elles sont nommées : `git:checkout` (bascule de branche) et
+ * `git:action` (le glisser-déposer du graphe, liste blanche de deux gestes en AVANT). Pas de commit,
+ * pas de push, aucune réécriture d'histoire. C'est le contrat de ce module ; tout le reste y est en
+ * LECTURE SEULE.
  *
  * Déplacement MÉCANIQUE depuis `index.ts` : corps identiques, mêmes gardes d'expéditeur, mêmes
  * replis de `cwd`. Deux points que le déménagement n'a pas le droit de simplifier :
@@ -17,6 +19,7 @@ import { ipcMain } from 'electron'
 import { readGitGraph } from '../git-graph-main'
 import { readGitState, readGitDiff, readGitBranches } from '../git-read-main'
 import { checkoutBranch } from '../git-checkout-main'
+import { executerActionGit, type DemandeActionGit } from '../git-action-main'
 import {
   readConversationGitDiff,
   readConversationGitState
@@ -54,6 +57,34 @@ export function registerGitIpc({ os, pickDirectory }: GitIpcDeps): void {
       cwd && typeof cwd === 'string' ? cwd : process.cwd(),
       typeof branch === 'string' ? branch : ''
     )
+  })
+  /*
+    LA DEUXIEME action git de ce module, et la DERNIERE : le glisser-deposer du graphe (demande
+    utilisateur du 2026-09-15). Elle ne recoit PAS de ligne de commande — seulement un type de geste
+    et des noms, que `git-action-main` valide puis assemble. Deux gestes en liste blanche, tous deux
+    en AVANT (fusionner une branche, rapporter un commit) ; `rebase`, `reset`, `branch -f` et
+    `push --force` sont refuses la-bas, par construction et non par convention.
+  */
+  ipcMain.handle('git:action', (event, demande: unknown, cwd?: string) => {
+    assertTrustedRendererSender(event, 'GitAction')
+    const brut = (demande ?? {}) as Record<string, unknown>
+    const type = typeof brut.type === 'string' ? brut.type : ''
+    const cible = typeof brut.cible === 'string' ? brut.cible : ''
+    const depot = cwd && typeof cwd === 'string' ? cwd : process.cwd()
+    if (type === 'merge')
+      return executerActionGit(depot, {
+        type: 'merge',
+        source: typeof brut.source === 'string' ? brut.source : '',
+        cible
+      })
+    if (type === 'cherry-pick')
+      return executerActionGit(depot, {
+        type: 'cherry-pick',
+        commit: typeof brut.commit === 'string' ? brut.commit : '',
+        cible
+      })
+    // Un type inconnu ne descend pas plus bas : le refus est NOMME, jamais silencieux.
+    return executerActionGit(depot, { type } as unknown as DemandeActionGit)
   })
   // Historique git : la frise de commits de la vue Worktrees. Lecture seule, bornée côté main.
   ipcMain.handle('git:graph', (event, cwd?: string) => {

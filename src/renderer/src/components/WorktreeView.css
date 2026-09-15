@@ -231,19 +231,19 @@
 .wt-topologie .cockpit-detail__graph svg {
   display: block;
 }
+/*
+  AUCUNE COULEUR ICI. Le trait et le point prennent la couleur de leur BRANCHE, posee en attribut
+  `stroke` par le rendu (voir git-graph-couleurs.ts). Une regle `stroke:` dans cette feuille
+  l'emporterait sur l'attribut et repeindrait tout le graphe en trois couleurs — exactement ce que
+  ce changement retire. Ne restent ici que les EPAISSEURS, qui disent le role de la ligne.
+*/
 .wt-topologie-lien {
-  stroke-width: 1.5;
+  stroke-width: 2;
+  stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
-.wt-topologie-lien.is-closed {
-  stroke: var(--ok);
-}
 .wt-topologie-lien.is-main {
-  stroke: var(--rose-bright);
-  stroke-width: 4;
-}
-.wt-topologie-lien.is-open {
-  stroke: var(--cyan);
+  stroke-width: 3;
 }
 /*
   Un saut qui ENJAMBE une histoire non chargée. Il garde la couleur de sa ligne — c'est bien la même
@@ -261,18 +261,8 @@
   font-family: var(--font-mono, monospace);
   letter-spacing: 0.02em;
 }
-.wt-topologie-noeud circle {
-  fill: var(--surface-inset);
-  stroke-width: 1.5;
-}
-.wt-topologie-noeud.is-closed circle {
-  stroke: var(--ok);
-}
-.wt-topologie-noeud.is-main circle {
-  stroke: var(--rose-bright);
-}
-.wt-topologie-noeud.is-open circle {
-  stroke: var(--cyan);
+circle.wt-topologie-noeud {
+  stroke-width: 2;
 }
 .cockpit-detail__files {
   min-height: 0;
@@ -319,7 +309,12 @@
 }
 .wt-topologie-legende {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /*
+    `auto-fit` et non trois colonnes fixes : mesure du 2026-09-15 sur une fenetre de 900 px, les
+    libelles « Trait epais - ligne principale » et « Pointille - histoire non chargee » se
+    CHEVAUCHAIENT. Une legende illisible ne legende rien.
+  */
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 8px;
   align-items: center;
   padding: 8px 12px;
@@ -344,17 +339,30 @@
   background: currentColor;
   content: '';
 }
-.wt-topologie-legende .is-closed {
-  justify-self: start;
-  color: var(--ok);
+.wt-topologie-legende .is-couleur {
+  color: var(--text-dim);
+}
+/* L'echantillon de gauche montre plusieurs couleurs : c'est le propos de la ligne. */
+.wt-topologie-legende .is-couleur::before {
+  background: linear-gradient(
+    90deg,
+    hsl(20 72% 62%),
+    hsl(120 72% 62%),
+    hsl(200 72% 62%),
+    hsl(300 72% 62%)
+  );
 }
 .wt-topologie-legende .is-main {
-  justify-self: center;
-  color: var(--rose-bright);
+  color: var(--text-dim);
 }
-.wt-topologie-legende .is-open {
-  justify-self: end;
-  color: var(--cyan);
+.wt-topologie-legende .is-main::before {
+  height: 5px;
+}
+.wt-topologie-legende .is-elide {
+  color: var(--text-dim);
+}
+.wt-topologie-legende .is-elide::before {
+  background: repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 7px);
 }
 /* Une hauteur bornée garde le défilement dans le graphe au lieu d'étirer toute la page. */
 .wt-topologie-defilement {
@@ -497,7 +505,65 @@
   color: var(--text-faint, rgba(245, 247, 251, 0.45));
 }
 
-/* Section « Conflits à trancher » : les fiches de bureau réutilisées telles quelles. */
+/*
+  Section « Conflits à trancher » : UNE LIGNE PAR CONFLIT, et rien de plus.
+
+  La fiche de bureau complète vivait ici et coûtait ~300 px par conflit pour une décision binaire.
+  Elle reste dans le Hub des bureaux ; ici on garde le fichier en cause et les trois boutons.
+*/
+.wt-conflits-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wt-conflit-ligne {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.wt-conflit-quoi {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.wt-conflit-quoi strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wt-conflit-quoi span {
+  font-size: 11px;
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+  white-space: nowrap;
+}
+
+.wt-conflit-boutons {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.wt-conflit-erreur {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 11px;
+  color: var(--danger, #ff8a8a);
+}
+
 .wt-conflits {
   display: flex;
   flex-direction: column;
@@ -510,4 +576,192 @@
   font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+/*
+  LE TABLEAU DU GRAPHE, facon SourceTree (demande du 2026-09-15).
+
+  Une gouttiere etroite a gauche — largeur decidee par le calcul, passee en `--wt-st-gouttiere` —
+  puis trois colonnes de texte. Le SVG est pose en ABSOLU par-dessus la premiere colonne : les lignes
+  restent du HTML normal (selectionnable, survolable, saisissable a la souris), et le trace ne bloque
+  aucun clic (`pointer-events: none`).
+
+  L'alignement tient a une seule regle : chaque ligne fait exactement HAUTEUR_LIGNE (26 px), la meme
+  constante que le calcul utilise pour placer les points. Elle est imposee en `height` inline par le
+  rendu ; ne pas la contredire ici.
+*/
+.wt-st {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 12px;
+}
+.wt-st-entete,
+.wt-st-ligne {
+  display: grid;
+  grid-template-columns: var(--wt-st-gouttiere, 60px) minmax(0, 1fr) minmax(0, 130px) 104px;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+}
+.wt-st-entete {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-block: 6px;
+  border-bottom: 1px solid var(--container-border);
+  background: var(--surface-panel, #14161d);
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/*
+  L'en-tete de la gouttiere est COUPE a la largeur de sa colonne : sur un depot a deux voies elle ne
+  fait que 36 px, et « Graphique » ecrivait par-dessus « Description » (mesure du 2026-09-15).
+*/
+.wt-st-entete > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.wt-st-entete-graphe {
+  padding-left: 10px;
+}
+.wt-st-corps {
+  position: relative;
+  min-width: 0;
+}
+.wt-st-graphe {
+  position: absolute;
+  inset: 0 auto 0 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.wt-st-ligne {
+  min-width: 0;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.wt-st-ligne:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+/* La ligne principale est la seule mise en avant : tout surligner ne distingue plus rien. */
+.wt-st-ligne.is-main .wt-st-sujet {
+  color: var(--text);
+}
+.wt-st-desc {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  /*
+    `overflow: hidden` et non seulement `min-width: 0` : une etiquette de branche ne se comprime pas
+    (`flex: none`), donc sans coupe elle DEBORDE de sa colonne et fait apparaitre une barre de
+    defilement horizontale sur tout le tableau. Mesure du 2026-09-15 dans l'instance de test :
+    scrollWidth 605 pour un cadre de 538.
+  */
+  overflow: hidden;
+  min-width: 0;
+  grid-column: 2;
+}
+.wt-st-sujet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt-st-auteur,
+.wt-st-date {
+  overflow: hidden;
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.wt-st-date {
+  font-family: var(--mono, monospace);
+  text-align: right;
+}
+/*
+  L'ETIQUETTE DE BRANCHE, dans la couleur de SA branche (`--wt-ref-couleur`, posee par le rendu).
+  Fond teinte et non plein : sur vingt lignes, vingt pastilles pleines deviennent un sapin de Noel
+  et le sujet du commit — l'information principale — disparait derriere.
+*/
+.wt-st-ref {
+  flex: none;
+  max-width: 160px;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--wt-ref-couleur, var(--container-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wt-ref-couleur, #888) 18%, transparent);
+  color: var(--wt-ref-couleur, var(--text));
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+/* La tete courante : c'est la seule etiquette qu'on doit trouver sans la chercher. */
+.wt-st-ref.is-head {
+  box-shadow: 0 0 0 1px var(--wt-ref-couleur, var(--gold)) inset;
+}
+.wt-st-ref.is-remote {
+  opacity: 0.75;
+}
+.wt-st-ref.is-tag {
+  border-radius: 4px;
+}
+/* « 27 commits non charges » : une omission ASSUMEE, pas un trou. */
+.wt-st-elision {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px dashed var(--container-border-strong, rgba(255, 255, 255, 0.18));
+  border-radius: 999px;
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+  font-size: 10px;
+}
+
+/*
+  LE GESTE PROPOSE, avant d'etre lance. Il n'est pas discret : une commande git qui va s'executer
+  sur le depot de l'utilisateur ne se glisse pas dans un coin. Bord dore, commande en toutes lettres,
+  deux boutons — et rien ne part sans le clic.
+*/
+.wt-geste {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--gold, #d8b26a);
+  border-radius: 10px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.03));
+}
+.wt-geste code {
+  flex: 1 1 320px;
+  overflow: auto;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.wt-geste-refus,
+.wt-geste-resultat {
+  padding: 8px 12px;
+  border-left: 3px solid var(--container-border-strong, rgba(255, 255, 255, 0.18));
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.wt-geste-resultat.is-ok {
+  border-left-color: var(--ok, #6ec972);
+}
+.wt-geste-resultat.is-ko {
+  border-left-color: var(--rose-bright, #e4586d);
+}
+/* Une prise se voit : sans ce signe, personne ne devine qu'une etiquette se glisse. */
+.wt-st-ref.is-prise {
+  cursor: grab;
+}
+.wt-st-ligne {
+  cursor: grab;
 }

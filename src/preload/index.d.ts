@@ -160,6 +160,16 @@ interface ChatApi {
   ) => Promise<import('../shared/git-read').GitDiffResult>
   /** Historique git de la vue Worktrees — la frise de commits. Lecture seule. */
   getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
+  /**
+   * Le geste de glisser-deposer du graphe, traduit en commande git PAR le processus principal.
+   * Liste blanche de deux gestes en avant ; aucune reecriture d'histoire n'en sort.
+   */
+  runGitAction: (
+    demande:
+      | { type: 'merge'; source: string; cible: string }
+      | { type: 'cherry-pick'; commit: string; cible: string },
+    repoPath?: string
+  ) => Promise<{ ok: true; commande: string; sortie: string } | { ok: false; raison: string }>
   getGitDiff: (
     path: string,
     repoPath?: string

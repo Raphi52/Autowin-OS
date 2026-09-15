@@ -207,8 +207,14 @@ function FileList({ agent }: { agent: WorktreeAgentActivity }): React.JSX.Elemen
 
 type OfficeActionKey = 'open' | 'retry' | 'keep-agent' | 'keep-mine'
 
-/** Une action à la fois par bureau : pendant l'appel, le bouton dit ce qu'il fait et se verrouille. */
-function useOfficeAction(): {
+/**
+ * Une action à la fois par bureau : pendant l'appel, le bouton dit ce qu'il fait et se verrouille.
+ *
+ * EXPORTÉ pour la ligne de conflit compacte de la vue Worktrees : elle porte les MÊMES boutons
+ * « garder l'une ou l'autre version » et doit donc hériter du MÊME verrouillage. Le recopier là-bas
+ * ferait diverger deux mécaniques d'attente sur le même appel.
+ */
+export function useOfficeAction(): {
   pending: OfficeActionKey | null
   error?: string
   run: (key: OfficeActionKey, action: () => unknown) => void
