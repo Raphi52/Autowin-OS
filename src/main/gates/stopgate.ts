@@ -182,7 +182,21 @@ export function arretDeLaReparation(entree: {
    * Absent (ancien appelant) = aucune répétition connue : comportement inchangé.
    */
   refusIdentiquesConsecutifs?: number
+  /**
+   * Le code du gate REELLEMENT execute est-il plus vieux que sa source ?
+   *
+   * Defaut vecu conv-539, tour `82a4f5d1-d92f-4d73-9f6f-cac70db65ecb` : 14 reparations refusees
+   * d'affilee. L'application jugeait avec `out/main/index.js` date de 11:06 pendant que les
+   * correctifs etaient commites de 11:11 a 11:31. Aucune edition de la source ne pouvait faire
+   * bouger ce refus, et la boucle brulait un build + un panel de juge par passage sans jamais le
+   * dire. Absent = aucune mesure : comportement inchange.
+   */
+  bundlePerime?: { bundleMs: number; sourceMs: number; bundle: string }
 }): string | undefined {
+  const b = entree.bundlePerime
+  if (b && b.sourceMs > b.bundleMs) {
+    return `Réparation interrompue : le code exécuté est périmé — ${b.bundle} est plus ancien que la source du contrôle. Recompiler et relancer l'application avant de rejouer.`
+  }
   if (entree.tentative >= entree.plafondDur) {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
   }
