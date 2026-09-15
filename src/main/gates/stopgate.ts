@@ -160,16 +160,45 @@ const REFUS_FIGE_SEUIL = 2
  * de verdict, nom de fichier cite). Le motif lui-meme — ce qui est reproche — reste compare en
  * entier, donc un refus qui CHANGE reellement continue de relancer la reparation.
  */
+/**
+ * Replie chaque citation de PREMIER niveau en «…», en suivant la profondeur des guillemets.
+ *
+ * fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — le repli precedent allait du
+ * PREMIER « au DERNIER » (/«[\s\S]*»/), donc il avalait aussi le texte situe ENTRE deux
+ * citations : « Fichier « a.ts » manquant et regle « X » violee » et la meme phrase avec
+ * « present » devenaient identiques, et la boucle de reparation pouvait etre coupee sur un refus
+ * qui avait reellement change. On suit desormais la profondeur : ce qui est HORS citation reste
+ * compare en entier, ce qui est DEDANS (y compris ses guillemets imbriques) compte pour «…».
+ */
+function replierCitations(motif: string): string {
+  let sortie = ''
+  let profondeur = 0
+  for (const caractere of motif) {
+    if (caractere === '«') {
+      if (profondeur === 0) sortie += '«…»'
+      profondeur += 1
+      continue
+    }
+    if (caractere === '»') {
+      if (profondeur > 0) {
+        profondeur -= 1
+        continue
+      }
+    }
+    if (profondeur === 0) sortie += caractere
+  }
+  return sortie
+}
+
 function motifSansCitation(motif: string): string {
   return (
-    motif
+    replierCitations(motif)
       // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 20 reparations payees : les
       // objections du juge recopiees dans « Promis mais pas fait » contiennent ELLES-MEMES des
       // guillemets francais (« pas corrige » puis « corrige »). La paire la plus courte s'arretait
       // donc au premier » interieur, et tout le texte suivant restait compare mot pour mot alors
-      // qu'il est reformule a chaque passage. On replie du PREMIER « au DERNIER » ; le prefixe —
-      // ce qui est reproche — reste compare en entier.
-      .replace(/«[\s\S]*»/g, '«…»')
+      // qu'il est reformule a chaque passage. Le repli se fait desormais par profondeur
+      // (replierCitations) ; le texte HORS citation reste compare en entier.
       .replace(/«[^»]*»/g, '«…»')
       // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — neutraliser le TEXTE des
       // citations ne suffisait pas : « Promis mais pas fait » JOINT toutes les objections du juge,
