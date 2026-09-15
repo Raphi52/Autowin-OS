@@ -83,9 +83,22 @@ export function detectBlindFixLoop(
     }))
 }
 
-/** Un chemin de fichier, quel que soit son separateur, designe le meme fichier. */
-function normaliseCheminHook(chemin: string): string {
-  return chemin.replace(/\\/g, '/')
+/**
+ * Un chemin de fichier, quel que soit son separateur ET qu'il soit absolu ou relatif au depot,
+ * designe le meme fichier.
+ * fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — le refus comptait
+ * « D:/AutoWinOS/src/main/orchestrator.ts » (08:52:58) et « src/main/objections-juge.ts »
+ * (09:06:41) sous deux cles distinctes ; un jeton fix-ok depose sous le chemin court ne
+ * dedouanait donc pas le compte enregistre sous le chemin absolu.
+ */
+function normaliseCheminHook(chemin: string, racine = process.cwd()): string {
+  const sep = String.fromCharCode(92)
+  const plat = chemin.split(sep).join('/')
+  let base = racine.split(sep).join('/')
+  while (base.endsWith('/')) base = base.slice(0, -1)
+  if (base && plat.toLowerCase().startsWith(base.toLowerCase() + '/'))
+    return plat.slice(base.length + 1)
+  return plat
 }
 
 /**

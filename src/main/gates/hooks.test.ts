@@ -231,3 +231,19 @@ describe('fix-gate : les chemins Windows et POSIX designent le MEME fichier', ()
     expect(runHooks({ editsByFile: { [win('a/b.ts')]: 2, 'a/b.ts': 1 } })).toHaveLength(1)
   })
 })
+
+// conv-539, tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : le refus a compte le meme fichier sous
+// « D:/AutoWinOS/src/main/orchestrator.ts » (08:52:58) puis « src/main/objections-juge.ts »
+// (09:06:41) ; le jeton fix-ok depose sous le chemin court ne dedouanait pas le chemin absolu.
+describe('fix-gate : chemin absolu et chemin relatif au depot designent le MEME fichier', () => {
+  const abs = `${process.cwd().split(String.fromCharCode(92)).join('/')}/src/main/x.ts`
+
+  it('agrege le chemin absolu avec le chemin relatif avant de compter le seuil', () => {
+    const violations = detectBlindFixLoop({ [abs]: 2, 'src/main/x.ts': 1 })
+    expect(violations).toHaveLength(1)
+  })
+
+  it('un jeton depose sous le chemin relatif dedouane le compte du chemin absolu', () => {
+    expect(detectBlindFixLoop({ [abs]: 4 }, { 'src/main/x.ts': true })).toEqual([])
+  })
+})
