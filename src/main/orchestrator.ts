@@ -4885,7 +4885,8 @@ ${empreinteDepot}`
         })
         onPhase?.({ step: 'gate' })
         const recoveredGate = evaluateClosure({
-          status: ok ? 'green' : 'red',
+          // Le refus est porte par la DoD du verdict ; `red` y ajoutait un faux « Échec déjà déclaré ».
+          status: 'green',
           dod: dodDuVerdict(ok, resumedJudgeText),
           // Meme raison qu'au pre-gate : un verdict REPRIS ne rend pas livre ce qui n'a pas ete livre.
           travauxNonLivres: [...travauxNonLivres]
@@ -5244,7 +5245,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // déjà franchi le pré-gate local. Le juge est read-only, le signal local n'a donc pas changé.
       onPhase?.({ step: 'gate' })
       const g = evaluateClosure({
-        status: ok ? 'green' : 'red',
+        // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — pre-gate deja passe, donc `red` ne
+        // venait que du juge : il doublait chaque refus d'un faux « Échec déjà déclaré » (reparations 1-9).
+        // Le refus reste bloquant : dodDuVerdict(false) rend toujours au moins une case non cochee.
+        status: 'green',
         // fix-ok: conv-539 tour 24e29815 — une case DoD muette cachait les objections du juge a la reparation et figeait le refus
         dod: dodDuVerdict(ok, verdict.text),
         // Une sous-tache en echec ou sautee est du travail ANNONCE et non livre : elle bloque, et la
