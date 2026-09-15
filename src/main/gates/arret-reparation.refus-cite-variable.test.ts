@@ -33,3 +33,28 @@ describe('refus figé dont la citation varie', () => {
     expect(memeRefus(refus('x'), [])).toBe(false)
   })
 })
+
+/**
+ * MÊME REFUS, NOMBRE DE CITATIONS DIFFÉRENT.
+ *
+ * Défaut VÉCU, conv-540, tour `4dfe2821-f6da-4cd9-8cb8-7afba10d3df4` : le motif « Promis mais pas
+ * fait » JOINT toutes les objections du juge, et le juge n'en rend pas le même nombre à chaque
+ * passage (6 objections en `[RÉPARATION 1]`, 8 en `[RÉPARATION 7]`, 7 en `[RÉPARATION 10]`).
+ * Neutraliser le TEXTE de chaque citation ne suffit donc pas : la liste normalisée reste plus ou
+ * moins longue, et le compteur de refus figé ne mord toujours pas.
+ */
+describe('refus figé dont le NOMBRE de citations varie', () => {
+  const refus = (...citations: string[]): string[] => [
+    CLOSURE_UPSTREAM_REFUSAL,
+    `Promis mais pas fait : ${citations.map((c) => `« ${c} »`).join(', ')}.`
+  ]
+
+  it('compte comme le MÊME refus quand le juge rend 8 objections au lieu de 6', () => {
+    expect(
+      memeRefus(
+        refus('Objection du juge : a', 'Objection du juge : b', 'Objection du juge : c'),
+        refus('Objection du juge : d', 'Objection du juge : e')
+      )
+    ).toBe(true)
+  })
+})

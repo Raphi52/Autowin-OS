@@ -161,7 +161,17 @@ const REFUS_FIGE_SEUIL = 2
  * entier, donc un refus qui CHANGE reellement continue de relancer la reparation.
  */
 function motifSansCitation(motif: string): string {
-  return motif.replace(/«[^»]*»/g, '«…»').trim()
+  return (
+    motif
+      .replace(/«[^»]*»/g, '«…»')
+      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — neutraliser le TEXTE des
+      // citations ne suffisait pas : « Promis mais pas fait » JOINT toutes les objections du juge,
+      // et le juge n'en rend pas le meme NOMBRE d'un passage a l'autre (6, puis 8, puis 7 sur ce
+      // tour). La liste normalisee restait donc de longueur variable et le compteur de refus fige ne
+      // mordait toujours pas. Une suite de citations compte pour une seule.
+      .replace(/«…»(?:[\s,;]*«…»)+/g, '«…»')
+      .trim()
+  )
 }
 
 export function memeRefus(
