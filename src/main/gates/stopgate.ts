@@ -163,6 +163,13 @@ const REFUS_FIGE_SEUIL = 2
 function motifSansCitation(motif: string): string {
   return (
     motif
+      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 20 reparations payees : les
+      // objections du juge recopiees dans « Promis mais pas fait » contiennent ELLES-MEMES des
+      // guillemets francais (« pas corrige » puis « corrige »). La paire la plus courte s'arretait
+      // donc au premier » interieur, et tout le texte suivant restait compare mot pour mot alors
+      // qu'il est reformule a chaque passage. On replie du PREMIER « au DERNIER » ; le prefixe —
+      // ce qui est reproche — reste compare en entier.
+      .replace(/«[\s\S]*»/g, '«…»')
       .replace(/«[^»]*»/g, '«…»')
       // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — neutraliser le TEXTE des
       // citations ne suffisait pas : « Promis mais pas fait » JOINT toutes les objections du juge,
@@ -223,9 +230,16 @@ export function arretDeLaReparation(entree: {
    * bouger ce refus, et la boucle brulait un build + un panel de juge par passage sans jamais le
    * dire. Absent = aucune mesure : comportement inchange.
    */
-  bundlePerime?: { bundleMs: number; sourceMs: number; bundle: string }
+  bundlePerime?: { bundleMs: number; sourceMs: number; demarrageMs?: number; bundle: string }
 }): string | undefined {
   const b = entree.bundlePerime
+  // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — comparer le bundle a la seule
+  // SOURCE laissait un angle mort : recompile en cours de tour (11:46) il redevenait « a jour »
+  // alors que le processus, lance a 11:06, executait toujours l'ancien code en memoire. Le refus
+  // ne bougeait pas et la mesure se taisait (constat du juge, reparation 17).
+  if (b && b.demarrageMs !== undefined && b.bundleMs > b.demarrageMs) {
+    return `Réparation interrompue : ${b.bundle} a été recompilé après le démarrage — l'application exécute encore l'ancien code. Relancer l'application avant de rejouer.`
+  }
   if (b && b.sourceMs > b.bundleMs) {
     return `Réparation interrompue : le code exécuté est périmé — ${b.bundle} est plus ancien que la source du contrôle. Recompiler et relancer l'application avant de rejouer.`
   }

@@ -25,8 +25,9 @@ const BUNDLE = 'out/main/index.js'
  * mesure absente ne doit jamais inventer un blocage.
  */
 export function mesureBundlePerime(
-  racine: string
-): { bundleMs: number; sourceMs: number; bundle: string } | undefined {
+  racine: string,
+  demarrageMs: number = Date.now() - process.uptime() * 1000
+): { bundleMs: number; sourceMs: number; demarrageMs: number; bundle: string } | undefined {
   let bundleMs: number
   try {
     bundleMs = statSync(join(racine, BUNDLE)).mtimeMs
@@ -42,5 +43,5 @@ export function mesureBundlePerime(
     }
   }
   if (sourceMs === 0) return undefined
-  return { bundleMs, sourceMs, bundle: BUNDLE }
+  return { bundleMs, sourceMs, demarrageMs, bundle: BUNDLE }
 }
