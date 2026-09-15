@@ -4008,6 +4008,7 @@ ${empreinteDepot}`
         // Un modèle en échec (ok=false / texte vide) ne pollue pas la synthèse (filtré).
         let good = memberOutputs.filter((o) => o.ok && o.text.trim())
         if (good.length === 0) {
+          // fix-ok: conv-540 tour 4dfe2821 — refus « safeguards flagged » du seul membre claude-opus-5, fan-out sans repli -> tour rouge
           // REPLI APRÈS REFUS (conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4) : le seul membre
           // build a été refusé par le filtre de sécurité du modèle et le tour a fini rouge sans rien
           // tenter. Relancer le MÊME modèle échoue pareil : on rejoue UNE fois sur le modèle voisin.
