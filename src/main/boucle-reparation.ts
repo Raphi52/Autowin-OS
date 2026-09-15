@@ -42,7 +42,7 @@ export function deciderDuPassage(entree: {
   plafondDur: number
   motifsCourants: readonly string[]
   etat: EtatDeBoucleDeReparation
-  bundlePerime?: string
+  bundlePerime?: { bundleMs: number; sourceMs: number; demarrageMs?: number; bundle: string }
 }): PassageDeReparation {
   const { attempt, reparationsAccordees, plafondDur, motifsCourants, etat } = entree
   const arret = arretDeLaReparation({
