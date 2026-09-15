@@ -176,3 +176,20 @@ describe('fix-gate — ARME, et un run iteratif LEGITIME passe', () => {
     expect(verdict.reasons.join(' ')).not.toContain('fix-gate')
   })
 })
+
+// conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (turnEvents 5:gate) : le refus fix-gate est revenu 2 fois
+// et la reparation n'a pas su le lever. Boucle complete, sans modele : refus -> geste LU dans le refus -> jeton lu -> vert.
+describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () => {
+  it('appliquer a la lettre le geste nomme par le refus leve le refus', async () => {
+    const { detectBlindFixLoop } = await import('../gates/hooks')
+    const edits = { 'src/main/objections-juge.ts': 4 }
+    const [refus] = detectBlindFixLoop(edits, {})
+    expect(refus).toBeDefined()
+    const geste = /dépose dans (\S+) un commentaire `(fix-ok:)/.exec(refus.detail)
+    expect(geste, refus.detail).not.toBeNull()
+    const [, fichier, jeton] = geste!
+    const preuve = [mutation([fichier], { diff: `+  // ${jeton} cause mesuree par le test rouge\n` })]
+    const jetons = jetonsDeCauseParFichier(undefined, preuve, Object.keys(edits))
+    expect(detectBlindFixLoop(edits, jetons)).toEqual([])
+  })
+})
