@@ -21,4 +21,11 @@ describe('réparation — refus fix-gate répété', () => {
   it('coupe quand même au 3e : le passage supplémentaire reste borné', () => {
     expect(arretDeLaReparation({ ...base, tentative: 3, refusIdentiquesConsecutifs: 3 })).toMatch(/3 fois/)
   })
+
+  it('un refus MIXTE (fix-gate + motif non réparable) ne gagne pas de passage', () => {
+    const mixte = [...refus, 'Promis mais pas fait : 1 point(s) annoncé(s) au départ ne sont pas faits.']
+    expect(
+      arretDeLaReparation({ ...base, motifsCourants: mixte, motifsPrecedents: mixte, tentative: 2, refusIdentiquesConsecutifs: 2 })
+    ).toMatch(/2 fois/)
+  })
 })

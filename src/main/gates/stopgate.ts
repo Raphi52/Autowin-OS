@@ -189,7 +189,10 @@ export function arretDeLaReparation(entree: {
   const repetitions = entree.refusIdentiquesConsecutifs ?? 0
   // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : un refus fix-gate se lève par UNE ligne
   // `fix-ok:` que le build peut écrire ; il garde un passage de plus avant d'être déclaré figé.
-  const seuil = entree.motifsCourants.some((m) => m.includes('fix-gate'))
+  // Seulement si TOUS les motifs sont réparables ainsi (le relais d'échec amont excepté) : un refus
+  // mixte ne gagne pas de passage (objection du juge, réparation 2 du même tour).
+  const motifsPropres = entree.motifsCourants.filter((m) => m !== CLOSURE_UPSTREAM_REFUSAL)
+  const seuil = motifsPropres.length > 0 && motifsPropres.every((m) => m.includes('fix-gate'))
     ? REFUS_FIGE_SEUIL + 1
     : REFUS_FIGE_SEUIL
   if (repetitions >= seuil) {
