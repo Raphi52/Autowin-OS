@@ -36,6 +36,13 @@ describe('hooks déterministes in-app (repro kit)', () => {
     expect(v.some((x) => x.detail.includes('c.ts'))).toBe(false) // sous le seuil
   })
 
+  // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : le refus ne disait pas le geste qui le leve,
+  // la reparation l'a recu 2 fois sans agir. Le refus doit nommer le fichier ET le commentaire a y deposer.
+  it('fix-gate : le refus dit le geste de sortie (fichier + fix-ok)', () => {
+    const [v] = detectBlindFixLoop({ 'src/main/objections-juge.ts': 4 })
+    expect(v.detail).toMatch(/pour lever ce refus, dépose dans src\/main\/objections-juge\.ts un commentaire `fix-ok: /)
+  })
+
   it('done-without-proof : refuse le green sans preuve, passe avec ≥1 preuve', () => {
     expect(requireProofBeforeGreen(0)).toHaveLength(1)
     expect(requireProofBeforeGreen(2)).toHaveLength(0)
