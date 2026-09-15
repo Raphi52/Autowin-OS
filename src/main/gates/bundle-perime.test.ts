@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, utimesSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -29,5 +29,29 @@ describe('mesureBundlePerime', () => {
 
   it('rend undefined sans bundle plutot que d inventer un blocage', () => {
     expect(mesureBundlePerime(mkdtempSync(join(tmpdir(), 'aw-vide-')))).toBeUndefined()
+  })
+})
+
+/**
+ * LE BRANCHEMENT EST TESTE, PAS SEULEMENT LA FONCTION.
+ *
+ * Objection du juge, conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (reparation 15) :
+ * « Le branchement de la mesure de code perime (orchestrator.ts) n'est couvert par aucun test :
+ * seule la fonction mesureBundlePerime l'est. Rien ne garantit que l'appel reste en place. »
+ * Sans ce test, retirer la ligne `bundlePerime:` du seul site d'appel laisse la suite verte et
+ * la boucle de reparation redevient aveugle au code perime.
+ */
+describe('branchement au site d appel (orchestrator)', () => {
+  const source = readFileSync(
+    join(__dirname, '..', 'orchestrator.ts'),
+    'utf8'
+  )
+
+  it('passe la mesure a arretDeLaReparation', () => {
+    const debut = source.indexOf('arretDeLaReparation({')
+    expect(debut).toBeGreaterThan(-1)
+    const fin = source.indexOf('})', debut)
+    const appel = source.slice(debut, fin)
+    expect(appel).toContain('bundlePerime: mesureBundlePerime(')
   })
 })
