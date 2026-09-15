@@ -61,3 +61,14 @@ AGENTS.md
 # d ecran prises pour prouver un rendu (4 PNG a ce jour). Elles servent a REGARDER pendant un
 # tour, pas a vivre dans l historique : un `git add .` distrait les embarquait toutes.
 /.autowin-preuve/
+
+# Sorties de compilation TypeScript ECRITES A COTE DES SOURCES, ajoutees le 2026-09-15.
+# Constate sur conv-540 (tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f, objection du juge sur la
+# proprete du dossier) : `git status` affichait 838 lignes dont 275 `.js` et 273 `.d.ts` generes
+# dans `src/main/`, aucun suivi par git. Ils noyaient les vraies modifications et rendaient
+# illisible ce qu un commit changeait reellement. Un `git add .` les embarquerait tous.
+# Les deux seuls declarants ECRITS A LA MAIN sont re-autorises juste en dessous.
+src/**/*.js
+src/**/*.d.ts
+!src/preload/index.d.ts
+!src/renderer/src/env.d.ts
