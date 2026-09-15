@@ -2,7 +2,10 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, utimesSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { mesureBundlePerime } from './bundle-perime'
+import { bundleEstLeCodeExecute, mesureBundlePerime } from './bundle-perime'
+
+/** Le processus de test tourne depuis les sources : on simule un lancement par le bundle. */
+const ARGV_BUNDLE = ['node', '/depot/out/main/index.js']
 
 function depotFactice(bundleSec: number, sourceSec: number): string {
   const racine = mkdtempSync(join(tmpdir(), 'aw-bundle-'))
@@ -17,18 +20,18 @@ function depotFactice(bundleSec: number, sourceSec: number): string {
 
 describe('mesureBundlePerime', () => {
   it('voit la source plus recente que le bundle (cas conv-539 : bundle 11:06, correctifs 11:31)', () => {
-    const m = mesureBundlePerime(depotFactice(1_000_000, 2_000_000))
+    const m = mesureBundlePerime(depotFactice(1_000_000, 2_000_000), undefined, ARGV_BUNDLE)
     expect(m).toBeDefined()
     expect(m!.sourceMs).toBeGreaterThan(m!.bundleMs)
   })
 
   it('voit le bundle a jour', () => {
-    const m = mesureBundlePerime(depotFactice(2_000_000, 1_000_000))
+    const m = mesureBundlePerime(depotFactice(2_000_000, 1_000_000), undefined, ARGV_BUNDLE)
     expect(m!.sourceMs).toBeLessThan(m!.bundleMs)
   })
 
   it('rend undefined sans bundle plutot que d inventer un blocage', () => {
-    expect(mesureBundlePerime(mkdtempSync(join(tmpdir(), 'aw-vide-')))).toBeUndefined()
+    expect(mesureBundlePerime(mkdtempSync(join(tmpdir(), 'aw-vide-')), undefined, ARGV_BUNDLE)).toBeUndefined()
   })
 })
 
@@ -75,7 +78,7 @@ describe('sources surveillees du controle final', () => {
     utimesSync(bundle, new Date(1_000_000), new Date(1_000_000))
     utimesSync(hook, new Date(2_000_000), new Date(2_000_000))
 
-    const mesure = mesureBundlePerime(racine)
+    const mesure = mesureBundlePerime(racine, undefined, ARGV_BUNDLE)
 
     expect(mesure).toBeDefined()
     expect(mesure!.sourceMs).toBeGreaterThan(mesure!.bundleMs)
@@ -100,7 +103,7 @@ describe('sources du gate derivees, pas tenues a la main', () => {
     utimesSync(join(racine, 'out/main/index.js'), 2_000_000, 2_000_000)
     utimesSync(join(racine, 'src/main/gates/stopgate.ts'), 1_000_000, 1_000_000)
     utimesSync(join(racine, 'src/main/gates/tout-neuf.ts'), 3_000_000, 3_000_000)
-    const m = mesureBundlePerime(racine)
+    const m = mesureBundlePerime(racine, undefined, ARGV_BUNDLE)
     expect(m).toBeDefined()
     expect(m!.sourceMs).toBeGreaterThan(m!.bundleMs)
   })
@@ -115,7 +118,23 @@ describe('sources du gate derivees, pas tenues a la main', () => {
     utimesSync(join(racine, 'out/main/index.js'), 2_000_000, 2_000_000)
     utimesSync(join(racine, 'src/main/gates/stopgate.ts'), 1_000_000, 1_000_000)
     utimesSync(join(racine, 'src/main/gates/stopgate.test.ts'), 3_000_000, 3_000_000)
-    const m = mesureBundlePerime(racine)
+    const m = mesureBundlePerime(racine, undefined, ARGV_BUNDLE)
     expect(m!.sourceMs).toBeLessThan(m!.bundleMs)
+  })
+})
+
+/**
+ * conv-540, tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : 7 tests d'orchestrateur rouges parce que la
+ * mesure lisait le bundle du depot REEL alors que le processus tourne depuis les sources. Un bundle
+ * plus vieux que les sources arretait toute reprise — en test comme en `npm run dev`.
+ */
+describe('la mesure ne mord que si le bundle est le code execute', () => {
+  it('reste muette quand le processus tourne depuis les sources', () => {
+    expect(mesureBundlePerime(depotFactice(1_000_000, 2_000_000), undefined, ['node', 'vitest'])).toBeUndefined()
+  })
+
+  it('reconnait un lancement par le bundle, separateur Windows compris', () => {
+    expect(bundleEstLeCodeExecute(['electron', String.raw`D:\AutoWinOS\out\main\index.js`])).toBe(true)
+    expect(bundleEstLeCodeExecute(['node', '/x/node_modules/vitest/dist/cli.js'])).toBe(false)
   })
 })
