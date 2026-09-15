@@ -48,7 +48,7 @@ describe('branchement au site d appel (orchestrator)', () => {
   )
 
   it('passe la mesure a arretDeLaReparation', () => {
-    const debut = source.indexOf('arretDeLaReparation({')
+    const debut = source.indexOf('deciderDuPassage({')
     expect(debut).toBeGreaterThan(-1)
     const fin = source.indexOf('})', debut)
     const appel = source.slice(debut, fin)
