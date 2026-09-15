@@ -18,6 +18,8 @@ const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 const AUTRE_SECTION = /^\s*[A-ZÉÈÀ_ ]{3,}\s*:/
 const PUCE = /^\s*(?:[-*•]|\d+[.)])\s+/
 /** Gravité déclarée par le juge : seules MAJEUR (ou l'absence d'étiquette) bloquent. */
+/** Une puce explicitement etiquetee MAJEUR par le juge. */
+const PUCE_MAJEUR = /^\s*(?:[-*•]|\d+[.)])\s+\**\s*MAJEUR\s*\**\s*:/im
 const ETIQUETTE = /^\**\s*(MAJEUR|MINEUR|OK)\s*\**\s*:\s*\**\s*/i
 /** « aucune », « aucun », « rien à signaler », « n/a », « néant » — la forme contractuelle du vide. */
 // Ligne ENTIÈRE seulement : « Aucune capture du mode sombre » est une objection (conv-539).
@@ -37,6 +39,18 @@ function normaliser(ligne: string): string {
  * Rend `[]` quand il n'y a pas de section, qu'elle est vide, ou qu'elle dit « aucune ».
  */
 export function objectionsDuJuge(text: string, toutesGravites = false): string[] {
+  /*
+   * DANS UN VERDICT QUI PORTE DEJA UNE PUCE `MAJEUR:`, UNE PUCE NUE N'EST PAS UN DEFAUT MAJEUR.
+   *
+   * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f - verdict AGREGE d'un panel :
+   * `verdictPanelValide` etiquette MAJEUR les seules puces du membre qui vote DEFAUT, et laisse
+   * NUES celles des membres APPROBATEURS. La regle "non etiquete = majeur" retenait alors TOUT :
+   * le controle de 09:53:28.450 a recopie en "Promis mais pas fait" des verifications REUSSIES
+   * ("les 11 commits existent bien... 240 sur 240, code de sortie 0", "les 7 tests passent
+   * maintenant"), noyant le vrai motif. Des qu'un MAJEUR est present, le juge a etiquete ce qui
+   * bloque : les puces nues sont des constats.
+   */
+  const aUnMajeur = PUCE_MAJEUR.test(text ?? '')
   const lignes = (text ?? '').split(/\r?\n/)
   const objections: string[] = []
   let dansLaSection = false
@@ -64,6 +78,7 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
     const etiquette = ETIQUETTE.exec(contenu)
     // Etiquette bornee au VALIDE : sur un refus, MINEUR/OK ne masquent pas les raisons (reparation 4).
     if (etiquette && !toutesGravites && !/^majeur/i.test(etiquette[1])) continue
+    if (!etiquette && !toutesGravites && aUnMajeur) continue
     objections.push(etiquette ? contenu.slice(etiquette[0].length).trim() : contenu)
   }
   return objections
