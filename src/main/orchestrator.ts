@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
-import { verdictAvecObjectionsPortees } from './objections-juge'
+import { dodDuVerdict, verdictAvecObjectionsPortees } from './objections-juge'
 
 /**
  * Le juge doit juger contre le contrat que le PRODUCTEUR a reçu.
@@ -4863,7 +4863,7 @@ ${empreinteDepot}`
         onPhase?.({ step: 'gate' })
         const recoveredGate = evaluateClosure({
           status: ok ? 'green' : 'red',
-          dod: [{ checked: ok, hasContent: true }],
+          dod: dodDuVerdict(ok, resumedJudgeText),
           // Meme raison qu'au pre-gate : un verdict REPRIS ne rend pas livre ce qui n'a pas ete livre.
           travauxNonLivres: [...travauxNonLivres]
         })
@@ -5222,7 +5222,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       onPhase?.({ step: 'gate' })
       const g = evaluateClosure({
         status: ok ? 'green' : 'red',
-        dod: [{ checked: ok, hasContent: true }],
+        dod: dodDuVerdict(ok, verdict.text),
         // Une sous-tache en echec ou sautee est du travail ANNONCE et non livre : elle bloque, et la
         // boucle de reparation ci-dessous s'en saisit comme de n'importe quel refus du gate.
         travauxNonLivres: [...travauxNonLivres]

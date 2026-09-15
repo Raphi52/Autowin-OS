@@ -60,6 +60,30 @@ export function objectionsDuJuge(text: string): string[] {
  * Un verdict d'approbation QUI PORTE des objections n'est pas une clôture : il devient un refus
  * lisible, avec ses objections en raisons, pour que la réparation reparte dessus.
  */
+/**
+ * La DoD que le contrôle final reçoit d'un verdict : UNE case par objection, libellée.
+ *
+ * Mesuré conv-539, tour 24e29815-0cbd-4310-8cda-93207e237015 : le juge rendait « VALIDE / SCORE 70 /
+ * OBJECTIONS: … » (donc rouge), mais le contrôle recevait une case muette. Ses motifs restaient
+ * « Échec déjà déclaré ; Promis mais pas fait : 1 point(s) » : le build de réparation (08:45:37) a
+ * lu ces motifs comme « mes propres réserves » et n'a rien changé, puis l'arrêt « même refus 2 fois »
+ * a coupé alors que les objections, elles, avaient changé (score 70 → 68). Nommer chaque objection
+ * les met dans le refus : la réparation les voit, et un refus n'est « figé » que si elles le sont.
+ */
+export function dodDuVerdict(
+  ok: boolean,
+  text: string
+): Array<{ checked: boolean; hasContent: true; label?: string }> {
+  if (ok) return [{ checked: true, hasContent: true }]
+  const objections = objectionsDuJuge(text).slice(0, 8)
+  if (objections.length === 0) return [{ checked: false, hasContent: true }]
+  return objections.map((o) => ({
+    checked: false,
+    hasContent: true as const,
+    label: `Objection du juge : ${o.length > 300 ? `${o.slice(0, 300)}…` : o}`
+  }))
+}
+
 export function verdictAvecObjectionsPortees(text: string): string {
   const objections = objectionsDuJuge(text)
   if (objections.length === 0) return text
