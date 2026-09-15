@@ -32,6 +32,12 @@ export type ProviderFailureKind =
   | 'cancelled'
   /** Le CLI est mort anormalement (tué, crash, arrêt de session Windows) → relancer a du sens. */
   | 'crashed'
+  /**
+   * Le filtre de securite du MODELE a refuse le message (conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 :
+   * « Opus 5's safeguards flagged this message … [reasoning_extraction] »). Terminal pour CE prompt :
+   * relancer a l'identique echoue pareil — classe `other`, aucun conseil n'etait donne.
+   */
+  | 'refused'
   /** Autre chose (timeout, watchdog, refus du modèle…) : on ne devine pas. */
   | 'other'
 
@@ -158,6 +164,7 @@ export function classifyProviderFailure(message: string): ProviderFailureKind {
   // Testé APRÈS `budget` À DESSEIN : un arrêt imposé par le devis porte « [abort] … interrompu :
   // Budget USD depasse (…) » et se classe `budget`, pas `cancelled` — la cause est le plafond,
   // l'interruption n'en est que le moyen.
+  if (/safeguards flagged|usage policy|\/legal\/aup/.test(text)) return 'refused'
   if (/\[abort\]/.test(text)) return 'cancelled'
   if (
     /codex exec annul[ée]|claude cli annul[ée]|kimi code annul[ée]|envoi gemini annul[ée]/.test(text)
@@ -191,6 +198,12 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
     return (
       "Rien à réparer côté provider : l'appel a été coupé. Relance la phase — et vérifie qu'un " +
       "second lancement sur la même conversation n'a pas interrompu le premier."
+    )
+  }
+  if (kind === 'refused') {
+    return (
+      `Le filtre de sécurité de ${provider} a refusé ce message : le relancer à l'identique échouera pareil. ` +
+      'Change le modèle de ce rôle (Agent Studio) ou allège le prompt (dossier brut collé en entier).'
     )
   }
   if (kind === 'budget') {
