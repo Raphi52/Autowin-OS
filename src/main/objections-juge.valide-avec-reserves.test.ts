@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { dodDuVerdict } from './objections-juge'
-import { doitArreterLaReparation, evaluateClosure } from './gates/stopgate'
+import { arretDeLaReparation, doitArreterLaReparation, evaluateClosure } from './gates/stopgate'
 
 /*
  * conv-540, tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : les 4 appels du juge (ts 09:44:57.329,
@@ -40,6 +42,45 @@ describe('verdict VALIDE porteur de reserves', () => {
   it("un refus << echec amont + reserves d'un VALIDE >> ne se rejoue pas indefiniment", () => {
     const g = evaluateClosure({ status: 'red', dod: dodDuVerdict(false, VERDICT), travauxNonLivres: [] })
     expect(doitArreterLaReparation(g.reasons, g.reasons)).toBe(true)
+
+    /*
+     * Objection du juge (tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f) : comparer `g.reasons` avec
+     * lui-meme prouve la REGLE, pas son APPLICATION. La boucle de `orchestrator.ts` ne consulte pas
+     * `doitArreterLaReparation` : elle passe par `arretDeLaReparation`, qui rend un MOTIF. On rejoue
+     * donc la porte d'entree reelle, avec le meme cablage que la boucle (`motifsPrecedents` = les
+     * motifs du passage precedent), puis on verifie que le fichier appelant l'utilise bien ainsi.
+     */
+    const motif = arretDeLaReparation({
+      tentative: 1,
+      reparationsAccordees: 5,
+      plafondDur: 10,
+      motifsCourants: g.reasons,
+      motifsPrecedents: g.reasons
+    })
+    expect(motif, 'la boucle doit S ARRETER sur ce refus, pas seulement la regle').toContain(
+      'hors de portee'.replace('portee', 'portée')
+    )
+
+    const source = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    expect(source).toContain('arretDeLaReparation({')
+    expect(source).toContain('motifsPrecedents = [...gate.reasons]')
+  })
+
+  it('un refus reparable par build laisse la boucle continuer (meme porte d entree)', () => {
+    const g = evaluateClosure({
+      status: 'red',
+      dod: [{ checked: false, hasContent: true, label: 'Objection du juge : test non rejoue' }],
+      travauxNonLivres: []
+    })
+    expect(
+      arretDeLaReparation({
+        tentative: 1,
+        reparationsAccordees: 5,
+        plafondDur: 10,
+        motifsCourants: g.reasons,
+        motifsPrecedents: g.reasons
+      })
+    ).toBeUndefined()
   })
 
   it('un refus reparable par build continue de se rejouer', () => {
