@@ -17,4 +17,11 @@ describe('etiquette MINEUR bornee au verdict VALIDE', () => {
     const valide = 'VALIDE\nSCORE: 80\nOBJECTIONS:\n- MINEUR: libelle perfectible\n- OK: 12/12 tests'
     expect(verdictAvecObjectionsPortees(valide)).toBe(valide)
   })
+
+  // Tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparation 8 : juge « VALIDE SCORE 74 », puces toutes MINEUR/OK,
+  // mais rouge venu de la preuve (Échec déjà déclaré) → le refus listait les MINEUR/OK comme « Promis mais pas fait ».
+  it('un VALIDE rouge pour une AUTRE raison ne transforme pas ses MINEUR/OK en raisons de refus', () => {
+    const valide = "Je vérifie.\n\nVALIDE\nSCORE: 74\nOBJECTIONS:\n- MINEUR: seuil non mesure\n- OK: 261 tests"
+    expect(dodDuVerdict(false, valide)).toEqual([{ checked: false, hasContent: true }])
+  })
 })

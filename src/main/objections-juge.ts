@@ -90,7 +90,10 @@ export function dodDuVerdict(
   if (ok) return [{ checked: true, hasContent: true }]
   const majeures = objectionsDuJuge(text)
   // Refus sans puce MAJEUR : les MINEUR/OK deviennent les raisons, jamais une case muette (reparation 4).
-  const objections = (majeures.length ? majeures : objectionsDuJuge(text, true)).slice(0, 8)
+  // Fallback MINEUR/OK reserve au juge qui REFUSE : sur un VALIDE rouge pour une autre raison (preuve),
+  // ses reserves mineures masquaient la vraie cause (tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparation 8).
+  const jugeRefuse = /\bDEFAUT\s*:/i.test(text ?? '')
+  const objections = (majeures.length ? majeures : jugeRefuse ? objectionsDuJuge(text, true) : []).slice(0, 8)
   if (objections.length === 0) return [{ checked: false, hasContent: true }]
   return objections.map((o) => ({
     checked: false,
