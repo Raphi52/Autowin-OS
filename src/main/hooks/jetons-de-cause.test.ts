@@ -139,6 +139,37 @@ describe('fix-gate — ARME, et un run iteratif LEGITIME passe', () => {
     expect(verdict.reasons.join(' ')).not.toContain('fix-gate')
   })
 
+  /*
+   * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 (puis ses reparations) : la ligne
+   * `// fix-ok:` etait bien DANS src/main/orchestrator.ts, et le refus « 6 edits sans cause
+   * verifiee » revenait quand meme. La preuve de mutation reelle (workspace_delta) ne porte
+   * jamais `diff` : seulement les empreintes des lignes ecrites. Le jeton se lit donc sur le
+   * disque, et ne compte que si SA ligne fait partie des lignes ecrites par le run.
+   */
+  it('lit le `fix-ok:` ecrit par le run sur le DISQUE quand la preuve n a pas de diff', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { exactLineFingerprint } = await import('../exact-line-fingerprint')
+    const root = mkdtempSync(join(tmpdir(), 'autowin-jeton-disque-'))
+    mkdirSync(join(root, 'src/main'), { recursive: true })
+    const ancien = '// fix-ok: jeton d un AUTRE run, deja present'
+    const neuf = '  // fix-ok: le repli manquait apres un refus du filtre'
+    writeFileSync(join(root, 'src/main/boucle.ts'), `${ancien}\nconst x = 1\n${neuf}\n`)
+    const reel = (lignes: string[]): ExecutionEvidence[] => [
+      mutation(['src/main/boucle.ts'], {
+        type: 'workspace_delta',
+        workspaceRoot: root,
+        writtenLineFingerprintsByPath: { 'src/main/boucle.ts': lignes.map(exactLineFingerprint) }
+      })
+    ]
+    expect(jetonsDeCauseParFichier(undefined, reel([neuf]), [])).toEqual({
+      'src/main/boucle.ts': true
+    })
+    // Un jeton ancien, non ecrit par ce run, ne desarme rien.
+    expect(jetonsDeCauseParFichier(undefined, reel(['const x = 1']), [])).toEqual({})
+  })
+
   it('ne bloque PAS non plus quand la cause est nommee dans le texte du run', async () => {
     const texte = 'CausalHypothesis: src/main/boucle.ts — le listener remet le compteur a zero.'
     const verdict = await bus().run('pre-green', ctx([mutation(['src/main/boucle.ts'])], texte))

@@ -1,4 +1,7 @@
 import { execFile, execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { exactLineFingerprint } from '../exact-line-fingerprint'
 import { HookBus, type HookContext, type HookResult } from './hook-bus'
 import { createVerifyReplayHook, type VerifyRunner } from './verify-replay-hook'
 import {
@@ -121,6 +124,23 @@ export function jetonsDeCauseParFichier(
   // Source 1 — le jeton depose DANS le fichier, vu par le diff (ou resume) de sa mutation.
   for (const item of evidence ?? []) {
     if (item.kind !== 'mutation') continue
+    // fix-ok: conv-540 tour 4dfe2821 — la preuve reelle (workspace_delta) n a jamais de `diff`, seulement les empreintes des lignes ecrites : le jeton depose dans le fichier etait invisible et le refus revenait
+    for (const [chemin, empreintes] of Object.entries(item.writtenLineFingerprintsByPath ?? {})) {
+      if (!item.workspaceRoot || !norm(chemin) || !empreintes.length) continue
+      let contenu = ''
+      try {
+        contenu = readFileSync(resolve(item.workspaceRoot, chemin), 'utf8')
+      } catch {
+        continue
+      }
+      const ecrites = new Set(empreintes)
+      if (
+        contenu
+          .split(/\r?\n/)
+          .some((l) => JETON_DE_CAUSE.test(l) && ecrites.has(exactLineFingerprint(l)))
+      )
+        jetons[norm(chemin)] = true
+    }
     if (!JETON_DE_CAUSE.test(`${item.diff ?? ''}\n${item.summary ?? ''}`)) continue
     const chemins = [
       ...(item.paths ?? []),
