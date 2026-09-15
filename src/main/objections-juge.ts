@@ -9,6 +9,9 @@
  *
  * Ce lecteur extrait ces objections pour que la boucle de réparation B5 (déjà en place) s'en
  * saisisse comme de n'importe quel refus : corriger, puis rejuger.
+ *
+ * fix-ok: conv-539 tour 24e29815-0cbd-4310-8cda-93207e237015 — juge « VALIDE SCORE 68 » avec objections
+ * jamais remises a la reparation ; puis « Aucune capture... » jete comme liste vide (e8da1596, a1243dbe).
  */
 const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 /** Une section suivante du contrat du juge (SCORE:, VERDICT:, …) ferme la liste. */
