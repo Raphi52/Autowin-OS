@@ -193,9 +193,16 @@ export type MembreDuPanel = string | { text: string; ok: boolean }
  * objections ». On etiquette MAJEUR les puces des seuls membres ayant vote DEFAUT : la reparation
  * repart, et un panel sans dissident garde le comportement precedent (pas de boucle sans fin).
  */
-function etiqueterSiDissident(puce: string, ok: boolean): string {
-  if (ok) return puce
-  return PUCE_ETIQUETEE.test(`- ${puce}`) ? puce : `MAJEUR: ${puce}`
+/*
+ * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — les puces d'un membre APPROBATEUR
+ * restaient nues, et la regle « non etiquete = MAJEUR » les retenait comme defauts : le controle
+ * final recopiait en « Promis mais pas fait » des CONSTATS de verification reussie (reparation 2 :
+ * « Les deux corrections existent et tiennent… 6 verts, code 0 »). Le vote du membre est connu ici :
+ * un approbateur n'a declare aucun defaut, ses puces sont donc MINEUR, celles du dissident MAJEUR.
+ */
+function etiqueterSelonLeVote(puce: string, ok: boolean): string {
+  if (PUCE_ETIQUETEE.test(`- ${puce}`)) return puce
+  return ok ? `MINEUR: ${puce}` : `MAJEUR: ${puce}`
 }
 
 export function verdictPanelValide(membresDuPanel: MembreDuPanel[]): string {
@@ -204,7 +211,7 @@ export function verdictPanelValide(membresDuPanel: MembreDuPanel[]): string {
     const texte = typeof membre === 'string' ? membre : membre.text
     const ok = typeof membre === 'string' ? true : membre.ok
     for (const brute of objectionsBrutesDuJuge(texte)) {
-      const puce = etiqueterSiDissident(brute, ok)
+      const puce = etiqueterSelonLeVote(brute, ok)
       if (!puces.includes(puce)) puces.push(puce)
     }
   }
