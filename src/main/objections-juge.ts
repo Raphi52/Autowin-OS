@@ -95,6 +95,29 @@ export function dodDuVerdict(
   const jugeRefuse = /\bDEFAUT\s*:/i.test(text ?? '')
   const objections = (majeures.length ? majeures : jugeRefuse ? objectionsDuJuge(text, true) : []).slice(0, 8)
   if (objections.length === 0) return [{ checked: false, hasContent: true }]
+  /*
+   * Un juge qui a VALIDE n'a rien promis : ses puces sont des reserves, parfois meme des constats
+   * de verification REUSSIE. Les recopier une a une dans « Promis mais pas fait » accuse le travail
+   * de defauts que le juge n'a pas retenus, et noie le VRAI motif (ici : echec amont).
+   *
+   * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — les 4 appels du juge (ts 09:44:57.329,
+   * 09:48:05.122, 09:51:14.024, 09:53:28.437) rendent VALIDE 72-74, et le controle de 09:53:28.450
+   * affiche 6 « Objection du juge » en promesses non tenues, dont « les 11 commits existent bien…
+   * 240 sur 240, code de sortie 0 » et « les 7 tests passent maintenant ». Le blocage reste (une case
+   * non cochee), mais il est dit pour ce qu'il est : des reserves sur un verdict approbateur.
+   */
+  if (!jugeRefuse && /\bVALIDE\b/i.test(text ?? '') && verdictAvecObjectionsPortees(text) === text) {
+    const listees = objections.slice(0, 3).join(' | ')
+    return [
+      {
+        checked: false,
+        hasContent: true as const,
+        label: `Reserves du juge sur un verdict VALIDE (le blocage vient d'un autre motif) : ${
+          listees.length > 300 ? `${listees.slice(0, 300)}…` : listees
+        }`
+      }
+    ]
+  }
   return objections.map((o) => ({
     checked: false,
     hasContent: true as const,
