@@ -426,3 +426,17 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
 
   return { blocked: reasons.length > 0, reasons }
 }
+
+/**
+ * Le libelle d'un PASSAGE de reparation, pousse dans la trace du run a chaque rejeu.
+ *
+ * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — le tour est mort sur « Budget
+ * d'appels provider atteint : 42 appels » apres 4 verdicts de juge, et le dossier de preuve ne
+ * permettait PAS de dire combien de passages de reparation l'avaient consomme : la boucle ne
+ * poussait un motif que lorsqu'elle s'ARRETAIT. Un passage muet est un passage non mesurable ;
+ * c'est exactement ce que le juge a reproche au raisonnement « 4 passages -> plafond ».
+ */
+export function libelleDuPassageDeReparation(rang: number, plafond: number): string {
+  const suffixe = rang >= plafond ? ' (dernier autorise)' : ''
+  return `Réparation ${rang}/${plafond} — nouveau passage de build${suffixe}.`
+}
