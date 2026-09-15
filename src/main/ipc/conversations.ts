@@ -216,20 +216,6 @@ export function registerConversationsIpc({
     assertTrustedRendererSender(event, 'Conversation fork')
     return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))
   })
-  /**
-   * SCINDER : la suite du fil part dans une conversation neuve et QUITTE la source. Contrairement au
-   * fork, la source change — d'ou la diffusion d'un rafraichissement : la liste et le fil ouvert
-   * montrent tous deux un etat perime sans elle.
-   */
-  ipcMain.handle('os:conversations:split', (event, rawId: string, rawMessageId: string) => {
-    assertTrustedRendererSender(event, 'Conversation split')
-    const { source, cible } = os.conversations.split(
-      guardString(rawId, 'id'),
-      guardString(rawMessageId, 'messageId')
-    )
-    broadcast({ type: 'refresh', scope: 'conversations' })
-    return { source, cible }
-  })
   ipcMain.handle('os:conversations:remove', async (event, rawId: string) => {
     assertTrustedRendererSender(event, 'Conversations')
     const id = guardString(rawId, 'id')

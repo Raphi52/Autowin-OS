@@ -449,7 +449,22 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   travaux paralleles qui comptaient chacun 187 -> 188 : reunis, ils ajoutent DEUX canaux
     //   (`os:presence` et `os:conversations:split`), donc 189. Mesure relue apres fusion.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(189)
+    // MISE A JOUR 2026-09-15 - 189 -> 188. UN canal RETIRE, sur decision produit explicite de
+    //   l'utilisateur (« pas de bouton scinder ») : `os:conversations:split`
+    //   (`src/main/ipc/conversations.ts`) est supprime avec toute sa chaine - la methode `split`
+    //   de `ConversationStore`, l'API `conversationsSplit` du preload et ses tests. Le geste
+    //   n'avait AUCUN appelant dans le renderer : la chaine etait morte de bout en bout. Le `fork`
+    //   voisin, lui, reste branche (`ChatView.tsx`) et n'est pas touche.
+    //   La surface RETRECIT donc d'un canal : `unguarded` reste VIDE, aucune garantie ne faiblit.
+    // ATTRIBUTION DE L'ECART, mesuree et non supposee : le compteur inscrit ici disait 189, mais la
+    //   surface REELLE en comptait 192 avant ce tour - le commentaire du 2026-09-13 ci-dessus
+    //   signalait deja TROIS canaux ajoutes sans etre inscrits, et personne ne les a rattrapes.
+    //   Preuve du delta imputable a CE changement : `ipcMain.handle(` compte 242 occurrences sous
+    //   `src/main` a la revision publiee et 241 apres la suppression de `os:conversations:split`,
+    //   soit EXACTEMENT un canal en moins. 192 - 1 = 191. Le chiffre monte donc de 189 a 191 non
+    //   pas parce que la surface grandit, mais parce qu'on cesse de trainer un compteur perime ;
+    //   la garantie reelle reste `unguarded` VIDE, qui n'a jamais faibli.
+    expect(handlers).toHaveLength(191)
     expect(unguarded).toEqual([])
   })
 
