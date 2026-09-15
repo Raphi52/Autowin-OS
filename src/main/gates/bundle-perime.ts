@@ -9,7 +9,12 @@ const SOURCES_DU_GATE = [
   'src/main/gates/stopgate.ts',
   'src/main/gates/hooks.ts',
   'src/main/objections-juge.ts',
-  'src/main/orchestrator.ts'
+  'src/main/orchestrator.ts',
+  // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — une reparation de ce tour a corrige
+  // le controle final dans ce fichier (lecture de `fix-ok` sur le disque, commit a5d02ef8). Absent de
+  // cette liste, il laissait la mesure de peremption muette alors que le bundle execute ne contenait
+  // pas le correctif : la boucle repayait un build + un panel de juge par passage.
+  'src/main/hooks/default-gate-hooks.ts'
 ]
 
 const BUNDLE = 'out/main/index.js'

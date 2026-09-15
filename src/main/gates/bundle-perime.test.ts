@@ -55,3 +55,29 @@ describe('branchement au site d appel (orchestrator)', () => {
     expect(appel).toContain('bundlePerime: mesureBundlePerime(')
   })
 })
+
+/**
+ * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : une reparation de ce tour a corrige le
+ * controle final DANS `src/main/hooks/default-gate-hooks.ts` (lecture de la ligne `fix-ok` sur le
+ * disque, commit a5d02ef8). Ce fichier ne figurait pas dans les sources surveillees : une reparation
+ * qui ne touche que lui laissait la mesure de peremption MUETTE, alors que le bundle execute ne
+ * contenait pas le correctif. C'est la moitie manquante du garde-fou anti-boucle.
+ */
+describe('sources surveillees du controle final', () => {
+  it('compte les hooks du gate parmi les sources qui perimant le bundle', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'bundle-perime-hooks-'))
+    mkdirSync(join(racine, 'out', 'main'), { recursive: true })
+    mkdirSync(join(racine, 'src', 'main', 'hooks'), { recursive: true })
+    const bundle = join(racine, 'out', 'main', 'index.js')
+    writeFileSync(bundle, '// bundle')
+    const hook = join(racine, 'src', 'main', 'hooks', 'default-gate-hooks.ts')
+    writeFileSync(hook, '// correctif du controle final')
+    utimesSync(bundle, new Date(1_000_000), new Date(1_000_000))
+    utimesSync(hook, new Date(2_000_000), new Date(2_000_000))
+
+    const mesure = mesureBundlePerime(racine)
+
+    expect(mesure).toBeDefined()
+    expect(mesure!.sourceMs).toBeGreaterThan(mesure!.bundleMs)
+  })
+})
