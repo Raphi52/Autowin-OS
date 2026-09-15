@@ -83,6 +83,13 @@ $si = New-Object AutowinHdeskLanceur+STARTUPINFO
 $si.cb = [Runtime.InteropServices.Marshal]::SizeOf([type][AutowinHdeskLanceur+STARTUPINFO])
 $si.lpDesktop = $nomBureau
 $pi = New-Object AutowinHdeskLanceur+PROCESS_INFORMATION
+# DOSSIER WEBVIEW2 PROPRE AU BUREAU, herite par l'app (env = null -> copie du notre). Sans lui, une app
+# WebView2 deja ouverte sur l'ecran reel tient le dossier par defaut et l'instance cachee plante au
+# demarrage : COMException 0x800700AA « ressource en cours d'utilisation », fenetre noire puis fermeture
+# (mesure RigV3Desktop, conv-540, 2026-09-15). Un dossier impose par l'appelant est respecte.
+if ([string]::IsNullOrWhiteSpace($env:WEBVIEW2_USER_DATA_FOLDER)) {
+  $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "autowin-hdesk\webview2\$Id"
+}
 if (-not [AutowinHdeskLanceur]::CreateProcess($Executable, $ligne, [IntPtr]::Zero, [IntPtr]::Zero, $false, 0, [IntPtr]::Zero, (Split-Path -Parent $Executable), [ref]$si, [ref]$pi)) {
   [void][AutowinHdeskLanceur]::CloseDesktop($hBureau)
   throw "CreateProcess sur '$nomBureau' a echoue (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
