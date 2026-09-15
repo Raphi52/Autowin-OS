@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Spinner } from './Spinner'
 import { fabriqueMoteur } from './jarvis-moteur'
 import type { MoteurVocal } from './jarvis-moteur-whisper'
 import { messageErreurMoteur } from './jarvis-voice'
@@ -449,9 +450,13 @@ export function EnregistrementsWidget(): React.JSX.Element {
           disabled={poseEnCours}
           onClick={() => void installerDiarisation()}
         >
-          {poseEnCours
-            ? 'Installation en cours… (plusieurs minutes)'
-            : `Installer la séparation des voix (≈ ${diarisation.megaoctets} Mo, une seule fois)`}
+          {poseEnCours ? (
+            <>
+              <Spinner /> Installation en cours… (plusieurs minutes)
+            </>
+          ) : (
+            `Installer la séparation des voix (≈ ${diarisation.megaoctets} Mo, une seule fois)`
+          )}
         </button>
       ) : null}
       {mode === 'fichier' && diarisation?.erreur ? (

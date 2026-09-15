@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from './Spinner'
 import { construireRetrospective, type TraceTour } from './trace-retrospective-model'
 
 /**
@@ -12,32 +13,43 @@ export function TraceRetrospectivePane({
 }: {
   conversationId?: string | null
 }): React.JSX.Element {
-  const [tours, setTours] = useState<TraceTour[] | null>(null)
-  const [erreur, setErreur] = useState<string | null>(null)
+  /*
+   * UN SEUL etat, ETIQUETE par la conversation qu'il decrit.
+   *
+   * Deux `useState` remis a zero DANS l'effet declenchaient `react-hooks/set-state-in-effect`
+   * (erreur de lint) : un setState synchrone dans un effet provoque un second rendu en cascade.
+   * En portant l'etiquette `pour`, le « en cours de lecture » se DEDUIT — l'etat charge ne
+   * correspond pas a la conversation affichee — au lieu de s'ecrire. Rien n'est remis a zero.
+   */
+  const [charge, setCharge] = useState<{
+    pour: string
+    tours: TraceTour[] | null
+    erreur: string | null
+  } | null>(null)
 
   useEffect(() => {
     let vivant = true
-    if (!conversationId) {
-      setTours(null)
-      setErreur(null)
-      return
-    }
-    setTours(null)
-    setErreur(null)
+    if (!conversationId) return
     window.api
       .causalTrace(conversationId)
       .then((events) => {
-        if (vivant) setTours(construireRetrospective(events ?? []))
+        if (vivant)
+          setCharge({ pour: conversationId, tours: construireRetrospective(events ?? []), erreur: null })
       })
       .catch((e: unknown) => {
         // L'échec de LECTURE est dit, jamais confondu avec « aucune trace » : une trace absente et
         // une trace illisible n'appellent pas la même action de l'utilisateur.
-        if (vivant) setErreur(e instanceof Error ? e.message : String(e))
+        if (vivant)
+          setCharge({ pour: conversationId, tours: null, erreur: e instanceof Error ? e.message : String(e) })
       })
     return () => {
       vivant = false
     }
   }, [conversationId])
+
+  const pret = charge && charge.pour === conversationId ? charge : null
+  const tours = pret?.tours ?? null
+  const erreur = pret?.erreur ?? null
 
   if (!conversationId)
     return <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>Aucune conversation ouverte.</div>
@@ -52,7 +64,7 @@ export function TraceRetrospectivePane({
   if (tours === null)
     return (
       <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }} data-testid="trace-chargement">
-        Lecture de la trace…
+        <Spinner /> Lecture de la trace…
       </div>
     )
 

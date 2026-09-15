@@ -56,6 +56,7 @@ import type { TraceEventV1 } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
+import type { BureauTv, ImageTv } from '../main/hdesk-tv'
 export interface ClaudeAccountEntry {
   id: string
   displayName: string
@@ -84,6 +85,9 @@ interface ChatApi {
   }>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
+  hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>
+  hdeskTvImage: (id: string) => Promise<ImageTv>
+  hdeskTvArreter: () => Promise<void>
   orchestrate: (
     task: string,
     conversationId?: string
@@ -198,6 +202,11 @@ interface ChatApi {
     poseeA: number
   } | null>
   /** Couleur des boutons réduire / agrandir / fermer, que Windows peint hors de la page. */
+  signalerRunsVivants: (etat: {
+    runsActifs: number
+    etapesFaites: number
+    etapesTotales: number
+  }) => Promise<boolean>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   checkUpdate: () => Promise<{
     available: boolean
@@ -425,6 +434,11 @@ interface ChatApi {
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. */
   conversationsSetHighlight: (id: string, on: boolean) => Promise<boolean>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
+  /** Scinde : DEPLACE la suite du fil (message visé inclus) dans une conversation neuve. */
+  conversationsSplit: (
+    id: string,
+    messageId: string
+  ) => Promise<{ source: Conversation; cible: Conversation }>
   conversationsRemove: (id: string) => Promise<boolean>
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
   conversationsRemoveMany: (ids: readonly string[]) => Promise<string[]>

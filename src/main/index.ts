@@ -67,7 +67,8 @@ import {
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation
 } from './claude-accounts'
-import { app, shell, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron'
+import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
@@ -88,6 +89,7 @@ import {
   resolveRemoteDebuggingPort
 } from './cdp-port'
 import { execFileSync } from 'node:child_process'
+import { estDansUnDepotGit } from './depot-git'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
@@ -101,6 +103,7 @@ import {
   supersedeKnowledgeCandidate
 } from './brain-inbox'
 import { installCrashHandlers } from './crash-handlers'
+import { CapteurHdesk, racineScriptsHorsArchive } from './hdesk-tv'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
@@ -164,7 +167,7 @@ import {
   appendTurnEvent,
   flushAllTurnJournals,
   isTurnFinished,
-  listUnfinishedTurns,
+  listUnfinishedTurnsPuisMenage,
   pruneFinishedTurnJournals,
   removeConversationTurnJournals,
   readTurnJournal
@@ -893,8 +896,7 @@ const bus = new AppCommandBus(
  * borne que par son horloge, et un programme qui ne rend jamais la main (application a fenetre,
  * serveur) bloquait le tour jusqu'au plafond, Stop compris (conv-384, 2026-09-09).
  */
-bus.signalDuTour = (conversationId) =>
-  activeChatTurns.get(conversationId)?.controller.signal
+bus.signalDuTour = (conversationId) => activeChatTurns.get(conversationId)?.controller.signal
 /**
  * Les outils Brain des noeuds SKILL d'un workflow.
  *
@@ -1010,7 +1012,17 @@ const fenetres = createWindowing({
   headlessTestInstance,
   modelQuestions
 })
-const { createWindow, setupTray, openQuestionWindow, rendererLocation, questionWindows } = fenetres
+const {
+  createWindow,
+  setupTray,
+  showMainWindow,
+  openQuestionWindow,
+  rendererLocation,
+  questionWindows,
+  refleterRunsVivants
+} = fenetres
+/** Raccourci clavier global : posé au démarrage, libéré à la fermeture (sinon il reste capté). */
+let raccourciCapture: RaccourciInstalle | null = null
 const diagnosticCapabilities = new DiagnosticCapabilities()
 /** Boucle de re-probe du diagnostic de démarrage (#4) — arrêtée à la fermeture pour ne pas fuir de timer. */
 let preflightWatchHandle: { stop: () => void } | null = null
@@ -1179,7 +1191,9 @@ const agentModelsReady = modelCatalog.refresh(true)
 void maybeUpdateClaudeCli(join(app.getPath('userData'), 'claude-cli-update.json'))
   .then((resultat) => {
     if (resultat.outcome === 'skipped') return
-    console.log(`[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`)
+    console.log(
+      `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
+    )
     if (resultat.outcome === 'updated') void modelCatalog.refresh(true)
   })
   .catch(() => {
@@ -1475,19 +1489,35 @@ function registerStorageMigrationIpc(lecture: Promise<LectureHistorique>): void 
   })
 }
 
+/** Petite TV du bureau cache (conv-528) : lecture seule, processus de capture cree a la demande. */
+let capteurHdesk: CapteurHdesk | null = null
+function registerHdeskTvIpc(): void {
+  const capteur = (): CapteurHdesk =>
+    (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath())))
+  ipcMain.handle('hdesk:tv:bureaux', (_e, conversationId?: string) =>
+    process.platform === 'win32'
+      ? capteur().bureaux(typeof conversationId === 'string' ? conversationId : undefined)
+      : []
+  )
+  ipcMain.handle('hdesk:tv:image', (_e, id: string) => capteur().image(String(id)))
+  ipcMain.handle('hdesk:tv:arreter', () => capteurHdesk?.arreter())
+}
+
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
-  // pleine exécution) pour les rejouer/afficher. GC des journaux terminés au passage.
+  // pleine exécution) pour les rejouer/afficher. Le ménage des journaux terminés suit la réponse
+  // (25 gels, 69 s cumulées, quand il la PRÉCÉDAIT) — cf. runs/inventaire-tours.ts.
   ipcMain.handle('runs:unfinishedTurns', (event) => {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
-    try {
-      pruneFinishedTurnJournals(turnJournalRoot)
-      pruneLegacyContextValues()
-    } catch {
-      /* GC best-effort */
-    }
-    return listUnfinishedTurns(turnJournalRoot)
+    // La LISTE part tout de suite (tampons vides d'abord, sinon un tour en vol serait invisible) ;
+    // scan et suppressions passent apres le premier rendu. 25 gels, 69 s, ~2,8 s par ouverture.
+    return listUnfinishedTurnsPuisMenage(turnJournalRoot, {
+      menage: () => {
+        pruneFinishedTurnJournals(turnJournalRoot)
+        pruneLegacyContextValues()
+      }
+    })
   })
   ipcMain.handle('runs:turnJournal', (event, conversationId: string, turnId: string) => {
     assertTrustedRendererSender(event, 'TurnJournal')
@@ -1528,6 +1558,22 @@ function registerChatIpc(): void {
    * ENTREE QUI DOIT FAIRE ECHOUER LE GARDE : retirer cet appel, ou remettre une couleur en dur
    * dans `window.ts` sans point de mise a jour — le defaut reviendrait en silence.
    */
+  /**
+   * PRÉSENCE SYSTÈME des runs. Le renderer est le seul à tenir la liste des runs vivants ; il
+   * l'envoie ici comme il envoie déjà la couleur des boutons de fenêtre juste en dessous.
+   */
+  ipcMain.handle('os:presence', (event, etat: unknown) => {
+    assertTrustedRendererSender(event, 'Présence système des runs')
+    const brut = (etat ?? {}) as Record<string, unknown>
+    const nombre = (cle: string): number =>
+      typeof brut[cle] === 'number' ? (brut[cle] as number) : 0
+    refleterRunsVivants({
+      runsActifs: nombre('runsActifs'),
+      etapesFaites: nombre('etapesFaites'),
+      etapesTotales: nombre('etapesTotales')
+    })
+    return true
+  })
   ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
     assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
     // On n'accepte qu'un hexadecimal : cette valeur part vers une API natice de Windows.
@@ -1637,6 +1683,31 @@ function registerChatIpc(): void {
   <script>document.documentElement.dataset.forbiddenScript = 'executed';</script>
 </body>
 </html>
+\`\`\`
+
+Et le meme fil porte un DIAGRAMME, rendu par mermaid :
+
+\`\`\`mermaid
+flowchart LR
+  A[Message] --> B{Fence fermee ?}
+  B -- oui --> C[Diagramme rendu]
+  B -- non --> D[Bloc de code]
+\`\`\`
+
+Un diagramme TRES HAUT doit rester sous le plafond de hauteur du fil (300 px) :
+
+\`\`\`mermaid
+flowchart TD
+  H1[Etape 1] --> H2[Etape 2] --> H3[Etape 3] --> H4[Etape 4] --> H5[Etape 5]
+  H5 --> H6[Etape 6] --> H7[Etape 7] --> H8[Etape 8] --> H9[Etape 9] --> H10[Etape 10]
+  H10 --> H11[Etape 11] --> H12[Etape 12] --> H13[Etape 13] --> H14[Etape 14] --> H15[Etape 15]
+\`\`\`
+
+Un diagramme dont la syntaxe est fausse doit retomber sur sa source, sans casser le fil :
+
+\`\`\`mermaid
+flowchart LR
+  A --> ((((  cette ligne n'est pas du mermaid
 \`\`\`
 
 Le fil reprend ensuite normalement.`
@@ -2422,7 +2493,7 @@ Le fil reprend ensuite normalement.`
     return {
       path: os.executionWorkspace,
       chosen,
-      isGitRepo: existsSync(join(os.executionWorkspace, '.git')),
+      isGitRepo: estDansUnDepotGit(os.executionWorkspace),
       // Le workspace est fige au demarrage : un choix different de l'actif exige un redemarrage.
       restartRequired: chosen !== null && chosen !== os.executionWorkspace
     }
@@ -3757,6 +3828,7 @@ app.whenReady().then(async () => {
         )
       : Promise.resolve({ values: {}, canWriteMarker: dejaMigre })
   registerStorageMigrationIpc(lectureHistorique)
+  registerHdeskTvIpc()
   registerChatIpc()
   registerTicketsIpc({
     ipc: ipcMain,
@@ -3784,6 +3856,9 @@ app.whenReady().then(async () => {
   jalonDemarrage('avant createWindow')
   createWindow()
   setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
+  // Ramener Autowin sans aller chercher sa fenêtre : les autres raccourcis sont tous locaux au
+  // renderer, donc inertes quand l'app est en arrière-plan.
+  raccourciCapture = installerRaccourciCapture(globalShortcut, () => showMainWindow())
 
   // RÉCONCILIATION DES RUNS ABANDONNÉS. Un run dont l'app est morte en cours gardait `status: open`
   // à vie : mesuré le 2026-08-05, 141 runs ouverts depuis plus de 24 h, ni succès ni échec, alors
@@ -4257,6 +4332,11 @@ app.whenReady().then(async () => {
 // resté dans la fenêtre de debounce de 120 ms de la persistance.
 let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
+  capteurHdesk?.detruire()
+  capteurHdesk = null
+  // Un raccourci global laissé posé continue de capter la combinaison pour toute la session.
+  raccourciCapture?.desinstaller()
+  raccourciCapture = null
   flushConversations()
   flushScheduledTasks()
   // Le journal de tour ecrit par LOTS : ce qui dort en tampon doit atteindre le disque avant

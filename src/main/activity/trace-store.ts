@@ -20,6 +20,24 @@ let installedTraceEventSink: TraceEventSink | undefined
 // Tous les producteurs de trace d'Autowin vivent dans le meme main Electron. Ce registre partage
 // l'allocation entre instances de TraceStore ; le journal disque reste l'autorite au redemarrage.
 const allocatedSequences = new Map<string, number>()
+/*
+ * PLAGE RESERVEE SUR DISQUE, par conversation (meme cle que `allocatedSequences`).
+ *
+ * fix-ok: 62 gels « .conv-N.sequence » / 198 s de fenetre figee — la cause mesuree est une prise de
+ * verrou + lecture + ecriture SYNCHRONES du compteur par EVENEMENT trace. Le compteur n'est plus
+ * retouche qu'une fois par lot : on ecrit d'abord la BORNE HAUTE de la plage, puis on distribue les
+ * numeros de cette plage en memoire. L'ecriture precede toujours la distribution, donc un arret
+ * brutal fait repartir APRES la plage : le fichier reste une borne basse fiable, jamais un numero
+ * deja servi ne peut etre rejoue.
+ */
+const reservedSequences = new Map<string, number>()
+const SEQUENCE_RESERVATION_LOT = 64
+let compteurEcrituresSequence = 0
+
+/** Ecritures reelles du fichier compteur, exposees pour la garde de complexite (comme sequenceScanBytes). */
+export function ecrituresCompteurSequence(): number {
+  return compteurEcrituresSequence
+}
 const sequenceLockWaitBuffer = new Int32Array(new SharedArrayBuffer(4))
 const SEQUENCE_LOCK_TIMEOUT_MS = 2_000
 /*
@@ -145,6 +163,16 @@ export class TraceStore {
     { offset: number; mtimeMs: number; lastSequence: number }
   >()
   private scannedSequenceBytes = 0
+  /**
+   * Ce que CE store a ecrit en dernier dans le compteur de chaque conversation, avec l'empreinte du
+   * fichier juste apres. Tant que l'empreinte tient, relire le fichier rendrait exactement `value`.
+   */
+  private readonly counterFingerprints = new Map<
+    string,
+    { size: bigint; mtimeNs: bigint; value: number }
+  >()
+  /** Nombre de lectures REELLES du compteur — sonde de cout, lue par les tests. */
+  counterReads = 0
   private readonly readCursorsStrict = new Map<
     string,
     { offset: number; mtimeMs: number; ligne: number; events: TraceEventV1[] }
@@ -166,18 +194,75 @@ export class TraceStore {
     return `${resolve(this.root)}\0${conversationId}`
   }
 
+  /**
+   * LA LECTURE DU COMPTEUR EST LE COUT, pas le verrou — mesure dans gels.jsonl (2026-09-12) :
+   * 62 gels nommant un fichier `.conv-N.sequence`, 198 s cumulees, jusqu'a 3,5 s pour LIRE quelques
+   * octets (.conv-489.sequence : 15 gels, 52 s). Chaque evenement trace relisait ce fichier alors
+   * que, neuf fois sur dix, le dernier a l'avoir ecrit etait CE processus, une ligne plus haut.
+   *
+   * On ne relit donc que si le fichier a BOUGE depuis notre propre ecriture (taille + date de
+   * modification, une empreinte que `statSync` rend sans lire le contenu). Le verrou, lui, est
+   * conserve INTACT : il reste la seule garantie entre PROCESSUS, et c'est sous sa protection que
+   * cette comparaison est faite — un autre processus ne peut pas ecrire entre le stat et le notre.
+   *
+   * Ce qui n'est PAS fait, et pourquoi : reserver un BLOC de numeros en memoire. `append` refuse une
+   * sequence non monotone (`sequence non monotone: x <= y`) ; deux processus qui consommeraient
+   * chacun leur bloc en parallele s'ecriraient donc mutuellement en faute des le premier entrelacement.
+   */
   private reserveSequence(conversationId: string, candidate: number): number {
     const key = this.sequenceKey(conversationId)
     const counterPath = join(this.root, `.${conversationId}.sequence`)
+    const voulue = Math.max(candidate, (allocatedSequences.get(key) ?? -1) + 1)
+    // Chemin CHAUD : le numero tient dans la plage deja reservee sur disque — aucun verrou, aucun fs.
+    if (voulue <= (reservedSequences.get(key) ?? -1)) {
+      allocatedSequences.set(key, voulue)
+      return voulue
+    }
     return withSequenceLock(this.root, conversationId, () => {
       let persisted = -1
-      if (existsSync(counterPath)) {
-        const parsed = Number.parseInt(readFileSync(counterPath, 'utf8').trim(), 10)
-        if (Number.isSafeInteger(parsed) && parsed >= 0) persisted = parsed
+      try {
+        // Empreinte en NANOsecondes (`bigint: true`) : en millisecondes, une ecriture etrangere
+        // tombant dans la meme milliseconde que la notre, avec le meme nombre de chiffres, serait
+        // prise pour la notre — et deux processus recevraient le meme numero.
+        const stats = statSync(counterPath, { bigint: true })
+        const connu = this.counterFingerprints.get(conversationId)
+        if (
+          connu &&
+          connu.size === stats.size &&
+          connu.mtimeNs === stats.mtimeNs &&
+          connu.value >= 0
+        ) {
+          persisted = connu.value
+        } else {
+          this.counterReads += 1
+          const parsed = Number.parseInt(readFileSync(counterPath, 'utf8').trim(), 10)
+          if (Number.isSafeInteger(parsed) && parsed >= 0) persisted = parsed
+        }
+      } catch (error) {
+        // Compteur absent = premiere allocation. Toute autre panne remonte.
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        this.counterFingerprints.delete(conversationId)
       }
-      const sequence = Math.max(candidate, persisted + 1, (allocatedSequences.get(key) ?? -1) + 1)
-      writeFileSync(counterPath, String(sequence), 'utf8')
+      const sequence = Math.max(voulue, persisted + 1, (allocatedSequences.get(key) ?? -1) + 1)
+      const borneHaute = sequence + SEQUENCE_RESERVATION_LOT - 1
+      // ECRITE AVANT d'etre distribuee : un autre processus, ou ce processus apres un crash, lira
+      // cette borne et repartira au-dela. L'inverse rejouerait des numeros deja servis.
+      writeFileSync(counterPath, String(borneHaute), 'utf8')
+      compteurEcrituresSequence += 1
+      reservedSequences.set(key, borneHaute)
       allocatedSequences.set(key, sequence)
+      try {
+        const apres = statSync(counterPath, { bigint: true })
+        this.counterFingerprints.set(conversationId, {
+          size: apres.size,
+          mtimeNs: apres.mtimeNs,
+          value: sequence
+        })
+      } catch {
+        // Sans empreinte, la prochaine allocation relira le compteur : on perd l'optimisation,
+        // jamais la justesse.
+        this.counterFingerprints.delete(conversationId)
+      }
       return sequence
     })
   }
@@ -552,6 +637,7 @@ export class TraceStore {
     this.readCursorsStrict.delete(conversationId)
     this.readCursorsVue.delete(conversationId)
     allocatedSequences.delete(this.sequenceKey(conversationId))
+    reservedSequences.delete(this.sequenceKey(conversationId))
     rmSync(join(this.root, `.${conversationId}.sequence`), { force: true })
     return true
   }

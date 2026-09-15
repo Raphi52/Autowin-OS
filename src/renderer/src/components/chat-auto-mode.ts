@@ -443,9 +443,10 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // proposée passe telle quelle — sinon le mode auto renvoie `/salvage` en boucle, à ses frais.
   const demandeDuTour = texteDerniereDemande(entree.fil) ?? undefined
   const brut =
-    extrairePromptSuivant(texteReponse, demandeDuTour) ?? extractRecommendation(texteReponse)
+    extrairePromptSuivant(texteReponse, demandeDuTour, entree.depotPresent ?? true) ??
+    extractRecommendation(texteReponse)
   const suite =
-    brut && publicationJamaisDemandee(brut, demandeDuTour)
+    brut && publicationJamaisDemandee(brut, demandeDuTour, entree.depotPresent ?? true)
       ? null
       : brut && estPromptDePublication(brut, demandeDuTour, entree.depotPresent ?? true)
         ? PROMPT_SALVAGE

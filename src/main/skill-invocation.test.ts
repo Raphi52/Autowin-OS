@@ -26,8 +26,8 @@ describe('invocation d’une skill par son nom', () => {
 
   it('rend le corps d’une skill HORS-PHASE depuis le dépôt', () => {
     const body = skillInstruction('remake', [bundledSkillsRoot()!])
-    expect(body).toContain('FROZEN PERIMETER') // garde-fou distinctif de remake
-    expect(body).toContain('No signal, no remake')
+    expect(body).toContain('PÉRIMÈTRE GELÉ') // garde-fou distinctif de remake
+    expect(body).toContain('Pas de signal, pas de remake')
     expect(body).not.toContain('name: remake') // frontmatter retiré
   })
 
@@ -71,7 +71,7 @@ describe('le pilote injecte la skill invoquée', () => {
       'conv-remake'
     )
 
-    expect(captured[0]).toContain('FROZEN PERIMETER')
+    expect(captured[0]).toContain('PÉRIMÈTRE GELÉ')
   })
 
   it('un message ordinaire n’embarque AUCUN corps de skill (le coût reste payé à la demande)', async () => {
@@ -97,6 +97,6 @@ describe('le pilote injecte la skill invoquée', () => {
       'conv-normale'
     )
 
-    expect(captured[0]).not.toContain('FROZEN PERIMETER')
+    expect(captured[0]).not.toContain('PÉRIMÈTRE GELÉ')
   })
 })

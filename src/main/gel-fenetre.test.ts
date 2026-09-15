@@ -141,7 +141,9 @@ describe('reanimation automatique de la fenetre', () => {
         if (evenement === 'unresponsive') injoignable = ecouteur
       },
       webContents: {
-        on() {},
+        on() {
+          // Ce double ne s'abonne a rien : le test n'observe que les rechargements.
+        },
         reloadIgnoringCache() {
           recharges += 1
         }
@@ -175,7 +177,9 @@ describe('reanimation automatique de la fenetre', () => {
         if (evenement === 'unresponsive') injoignable = ecouteur
       },
       webContents: {
-        on() {},
+        on() {
+          // Ce double ne s'abonne a rien : le test n'observe que les rechargements.
+        },
         reloadIgnoringCache() {
           recharges += 1
         }
@@ -204,7 +208,9 @@ describe('remise en route apres la mort du processus d affichage', () => {
     let disparition: ((...args: unknown[]) => void) | undefined
     let rechargements = 0
     const fenetre = {
-      on() {},
+      on() {
+        // Fenetre doublee : aucun evenement n'est relaye dans ce scenario.
+      },
       webContents: {
         on(evenement: string, ecouteur: (...args: unknown[]) => void) {
           if (evenement === 'render-process-gone') disparition = ecouteur

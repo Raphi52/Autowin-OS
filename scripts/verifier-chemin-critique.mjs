@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
-import { choisirPortLibre } from './port-libre.mjs'
+import { reserverInstance } from './avec-instance-headless.mjs'
 
 /*
  * LA SONDE DU CHEMIN CRITIQUE, EN UN SEUL APPEL — et branchee automatiquement.
@@ -34,13 +34,14 @@ const portDemande = Number(process.env.AUTOWIN_CP_PORT || 9280)
  * automatique tombait a chaque construction pour une raison sans rapport avec le produit. Un
  * socket fantome ne se tue pas : on prend le suivant libre, et on le DIT.
  */
-const port = choisirPortLibre(portDemande)
-if (port === undefined) {
-  console.error(
-    `[chemin-critique] aucun port libre entre ${portDemande} et ${portDemande + 19} — machine saturee.`
-  )
-  process.exit(3)
-}
+// Nom ET port reserves par verrou : une sonde parallele ne prend plus le meme port, et un second
+// lancement de la meme sonde est refuse au lieu de fermer l'application du premier.
+const { port } = reserverInstance({
+  instanceId: instance,
+  portDemande: portDemande,
+  racine,
+  prefixe: '[chemin-critique]'
+})
 if (port !== portDemande)
   console.log(`[chemin-critique] port ${portDemande} occupe (socket orphelin) — repli sur ${port}`)
 

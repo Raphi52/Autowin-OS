@@ -158,7 +158,9 @@ describe('un workflow impose ses phases', () => {
     expect(provider.prompts.some((prompt) => prompt.includes('SKILL frame'))).toBe(false)
     expect(provider.prompts.some((prompt) => prompt.includes('SKILL terrain'))).toBe(false)
     expect(provider.prompts.filter((prompt) => prompt.includes('SKILL build'))).toHaveLength(1)
-    expect(provider.execCount).toBe(1)
+    // +1 depuis le 2026-09-13 : la capitalisation (`learn`) survit a une phase nommee — elle ne
+    // rejoue AUCUNE phase du profil ecarte, ce que les assertions ci-dessus verifient.
+    expect(provider.execCount).toBe(2)
   })
 
   it('une phase explicite ne réserve pas non plus le pire cas du graphe écarté', async () => {
@@ -190,7 +192,9 @@ describe('un workflow impose ses phases', () => {
       ).run('/build corrige le bug')
     ).resolves.toBeDefined()
     expect(quote.phases).toEqual(['build'])
-    expect(provider.execCount).toBe(1)
+    // +1 depuis le 2026-09-13 : la capitalisation (`learn`) survit a une phase nommee — elle ne
+    // rejoue AUCUNE phase du profil ecarte, ce que les assertions ci-dessus verifient.
+    expect(provider.execCount).toBe(2)
   })
 })
 
@@ -782,6 +786,20 @@ describe('mode bloquant : aucune reprise automatique sans nouveau tour humain', 
     expect(result.gateBlocked).toBe(true)
     expect(result.gateReasons.at(-1)).toMatch(/reprise automatique.*desactivee/i)
     expect(provider.phases).toEqual(['build', 'judge'])
+  })
+
+  // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparations 1 a 9 : chaque refus du juge
+  // arrivait a la reparation precede de « Échec déjà déclaré », faux (la preuve avait passe le pre-gate).
+  it('un refus du juge ne se double pas du motif « Échec déjà déclaré »', async () => {
+    const result = await makeOrchestrator(
+      new ToujoursRouge(),
+      { explicit: true, graph: grapheReprise },
+      compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
+    ).run('corrige le bug')
+
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons.join('\n')).not.toMatch(/Échec déjà déclaré/)
+    expect(result.gateReasons.join('\n')).toMatch(/Promis mais pas fait/)
   })
 })
 

@@ -57,7 +57,9 @@ class CapturingProvider implements ProviderAdapter {
                 status: 'completed',
                 ok: true,
                 summary: 'Écriture de la vue',
-                path: 'C:/base/src/renderer/src/components/Vue.tsx'
+                // Fichier NON rendu : depuis 9a79ce39 (chemins ramenes au dossier de travail), un .tsx de
+                // src/renderer exige une capture et le juge n'est jamais appele. Ce test vise le prompt du juge.
+                path: 'C:/base/src/main/vue-task-manager.ts'
               },
               {
                 type: 'command_execution',

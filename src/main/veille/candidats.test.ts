@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CITATION_MINIMUM,
   cleDedup,
+  clesCandidat,
   normaliserTitre,
   trierCandidats,
   bornerPertinence,
@@ -187,5 +188,68 @@ describe('pertinence — la note du scout, bornee et jamais inventee', () => {
   it('un candidat sans pertinence n’en gagne pas une par defaut', () => {
     const { retenus } = trierCandidats([brut()], new Set(), contexte)
     expect(retenus[0].pertinence).toBeUndefined()
+  })
+})
+
+
+/*
+ * LA MEMOIRE DE LA VEILLE SE CONTOURNAIT EN DEPLACANT L'ANCRAGE.
+ *
+ * Etat mesure : veille-candidats.json porte 28 candidats, TOUS 'ecarte' — et le meme defaut revenait
+ * « nouveau » des qu'il etait ancre une ligne plus loin, parce que la cle portait `fichier.ts:123`.
+ */
+describe('memoire de la veille : ancrage interne et titre', () => {
+  const interne = (partiel: Partial<CandidatBrut> = {}): CandidatBrut =>
+    brut({ url: 'src/main/truc.ts:123', citation: 'const maintenant = Date.now()', ...partiel })
+
+  it('reconnait le meme defaut re-ancre une ligne plus loin', () => {
+    const connu = new Set(clesCandidat(interne()))
+    const { retenus, refuses } = trierCandidats([interne({ url: 'src/main/truc.ts:124' })], connu, contexte)
+    expect(retenus).toHaveLength(0)
+    expect(refuses[0].raison).toBe('deja connu')
+  })
+
+  it('distingue toujours deux FICHIERS differents', () => {
+    const connu = new Set(clesCandidat(interne()))
+    const { retenus } = trierCandidats(
+      [interne({ url: 'src/main/autre.ts:12', titre: 'Autre defaut ailleurs' })],
+      connu,
+      contexte
+    )
+    expect(retenus).toHaveLength(1)
+  })
+
+  it('rattrape le meme titre re-formule ET re-ancre ailleurs, par la seconde cle', () => {
+    const connu = new Set(clesCandidat(interne()))
+    const { refuses } = trierCandidats(
+      [interne({ url: 'src/main/ailleurs.ts:9', titre: '  Support   MCP Distant. ' })],
+      connu,
+      contexte
+    )
+    expect(refuses[0].raison).toBe('deja connu')
+  })
+
+  it('ne touche PAS au comportement des URL web : deux entrees de la meme page restent distinctes', () => {
+    expect(cleDedup(brut())).toBe(
+      ['codex', 'https://github.com/openai/codex/releases', 'support mcp distant'].join('|')
+    )
+    const { retenus } = trierCandidats(
+      [brut(), brut({ titre: 'Reprise apres coupure' })],
+      new Set(),
+      contexte
+    )
+    expect(retenus).toHaveLength(2)
+  })
+
+  it('ne fond pas deux concurrents differents sur le meme titre', () => {
+    const connu = new Set(clesCandidat(brut()))
+    const { retenus } = trierCandidats(
+      [brut({ concurrent: 'OpenCode', url: 'https://github.com/sst/opencode/releases' })],
+      connu,
+      contexte
+    )
+    // La seconde cle porte le concurrent avec le titre : deux produits qui sortent la meme feature
+    // restent deux candidats (c'est l'invariant que le commentaire de cleDedup protege).
+    expect(retenus).toHaveLength(1)
   })
 })

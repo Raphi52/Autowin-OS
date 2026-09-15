@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildBehaviourComposition, type InfluencerField } from './behaviour-composition'
 import { RoleModelConfig } from './roles'
+import { CONSTITUTION } from './constitution'
 
 const build = (budgetUsd: number | null = null): ReturnType<typeof buildBehaviourComposition> =>
   buildBehaviourComposition(new RoleModelConfig(), {}, undefined, budgetUsd)
@@ -165,5 +166,18 @@ describe('buildBehaviourComposition — valeurs volatiles = RÈGLE, pas figées'
     const withCap = build(5)
     const cb = withCap.orchestrated.guardrails.find((f) => f.label === 'circuit-breaker coût')!
     expect(cb.value).toContain('5')
+  })
+})
+
+describe('buildBehaviourComposition — le libellé constitution cite le VRAI nombre de réflexes', () => {
+  it('le nombre annoncé est celui du titre de la CONSTITUTION (pas un chiffre figé qui dérive)', () => {
+    const attendu = /## Les (\d+) réflexes/.exec(CONSTITUTION)?.[1]
+    expect(attendu).toBeTruthy()
+    const libelles = allFields(build())
+      .filter((f) => f.label === 'constitution')
+      .map((f) => f.value)
+      .filter((v) => v.includes('réflexes'))
+    expect(libelles.length).toBeGreaterThan(0)
+    for (const v of libelles) expect(v).toContain(`${attendu} réflexes`)
   })
 })

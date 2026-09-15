@@ -8,6 +8,8 @@
  * 100 % pur (aucun React, aucun IPC) → testable directement. Calqué sur `matchSlashCommands`.
  */
 
+import { libelleRun } from './run-label'
+
 export type MentionKind = 'run' | 'file'
 
 export interface MentionCandidate {
@@ -117,7 +119,7 @@ export function buildMentionSources(input: {
   const runs: MentionCandidate[] = (input.runs ?? []).map((r) => ({
     kind: 'run',
     id: r.subject,
-    label: r.subject,
+    label: libelleRun(r.subject),
     hint: r.summary?.status
   }))
   const files: MentionCandidate[] = []

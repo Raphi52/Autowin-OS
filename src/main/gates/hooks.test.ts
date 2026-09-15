@@ -36,6 +36,13 @@ describe('hooks déterministes in-app (repro kit)', () => {
     expect(v.some((x) => x.detail.includes('c.ts'))).toBe(false) // sous le seuil
   })
 
+  // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : le refus ne disait pas le geste qui le leve,
+  // la reparation l'a recu 2 fois sans agir. Le refus doit nommer le fichier ET le commentaire a y deposer.
+  it('fix-gate : le refus dit le geste de sortie (fichier + fix-ok)', () => {
+    const [v] = detectBlindFixLoop({ 'src/main/objections-juge.ts': 4 })
+    expect(v.detail).toMatch(/pour lever ce refus, dépose dans src\/main\/objections-juge\.ts un commentaire `fix-ok: /)
+  })
+
   it('done-without-proof : refuse le green sans preuve, passe avec ≥1 preuve', () => {
     expect(requireProofBeforeGreen(0)).toHaveLength(1)
     expect(requireProofBeforeGreen(2)).toHaveLength(0)
@@ -200,5 +207,43 @@ describe('motion-proof : un diff d ANIMATION exige une preuve de MOUVEMENT', () 
     expect(
       runHooks({ producedDiff: diffAnimation, requireMotionProof: true, motionProofOkCount: 1 })
     ).toEqual([])
+  })
+})
+
+// Chemin « style Windows » construit a l'execution : evite toute ambiguite d'echappement.
+const win = (p: string): string => p.split('/').join(String.fromCharCode(92))
+
+describe('fix-gate : les chemins Windows et POSIX designent le MEME fichier', () => {
+  it('agrege les variantes de separateur avant de compter le seuil', () => {
+    const violations = detectBlindFixLoop({
+      [win('src/main/x.ts')]: 2,
+      'src/main/x.ts': 1
+    })
+    expect(violations).toHaveLength(1)
+    expect(violations[0].detail).toContain('src/main/x.ts')
+  })
+
+  it('un jeton de cause depose sous une variante de chemin dedouane le fichier', () => {
+    expect(detectBlindFixLoop({ [win('src/main/x.ts')]: 3 }, { 'src/main/x.ts': true })).toEqual([])
+  })
+
+  it('runHooks : meme agregation vue depuis l entree publique', () => {
+    expect(runHooks({ editsByFile: { [win('a/b.ts')]: 2, 'a/b.ts': 1 } })).toHaveLength(1)
+  })
+})
+
+// conv-539, tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : le refus a compte le meme fichier sous
+// « D:/AutoWinOS/src/main/orchestrator.ts » (08:52:58) puis « src/main/objections-juge.ts »
+// (09:06:41) ; le jeton fix-ok depose sous le chemin court ne dedouanait pas le chemin absolu.
+describe('fix-gate : chemin absolu et chemin relatif au depot designent le MEME fichier', () => {
+  const abs = `${process.cwd().split(String.fromCharCode(92)).join('/')}/src/main/x.ts`
+
+  it('agrege le chemin absolu avec le chemin relatif avant de compter le seuil', () => {
+    const violations = detectBlindFixLoop({ [abs]: 2, 'src/main/x.ts': 1 })
+    expect(violations).toHaveLength(1)
+  })
+
+  it('un jeton depose sous le chemin relatif dedouane le compte du chemin absolu', () => {
+    expect(detectBlindFixLoop({ [abs]: 4 }, { 'src/main/x.ts': true })).toEqual([])
   })
 })

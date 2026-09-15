@@ -84,6 +84,7 @@ import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
+import type { BureauTv, ImageTv } from '../main/hdesk-tv'
 
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
@@ -96,6 +97,11 @@ const api = {
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>
     ipcRenderer.invoke('app:storage-migration-complete'),
+  // Petite TV du bureau cache (lecture seule)
+  hdeskTvBureaux: (conversationId?: string): Promise<BureauTv[]> =>
+    ipcRenderer.invoke('hdesk:tv:bureaux', conversationId),
+  hdeskTvImage: (id: string): Promise<ImageTv> => ipcRenderer.invoke('hdesk:tv:image', id),
+  hdeskTvArreter: (): Promise<void> => ipcRenderer.invoke('hdesk:tv:arreter'),
   // Orchestration disciplinée
   orchestrate: (
     task: string,
@@ -186,6 +192,15 @@ const api = {
    * thème courant. Rend `false` sur une plateforme sans overlay de barre de titre : ce n'est pas
    * une panne, et l'appelant n'a rien à en faire.
    */
+  /**
+   * Ce que l'OS montre des runs en cours (jauge de barre des tâches, texte de l'icône de
+   * notification). Le renderer est le seul à tenir la liste des runs vivants.
+   */
+  signalerRunsVivants: (etat: {
+    runsActifs: number
+    etapesFaites: number
+    etapesTotales: number
+  }): Promise<boolean> => ipcRenderer.invoke('os:presence', etat),
   setTitlebarSymbolColor: (couleur: string): Promise<boolean> =>
     ipcRenderer.invoke('app:titlebar-symbol-color', couleur),
   // Auto-update git au démarrage.
@@ -530,6 +545,12 @@ const api = {
     ipcRenderer.invoke('os:conversations:setHighlight', id, on),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
+  /** Scinde : DEPLACE la suite du fil (message vise inclus) dans une conversation neuve. */
+  conversationsSplit: (
+    id: string,
+    messageId: string
+  ): Promise<{ source: Conversation; cible: Conversation }> =>
+    ipcRenderer.invoke('os:conversations:split', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */

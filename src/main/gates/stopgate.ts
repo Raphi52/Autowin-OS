@@ -77,7 +77,22 @@ export function doitArreterLaReparation(
     motifsCourants.length === motifsPrecedents.length &&
     motifsCourants.every((motif, index) => motif === motifsPrecedents[index])
   if (!identique) return false
-  return motifsCourants.every((motif) => motif === CLOSURE_UPSTREAM_REFUSAL)
+  return motifsCourants.every((motif) => motif === CLOSURE_UPSTREAM_REFUSAL || horsPorteeDeBuild(motif))
+}
+
+/**
+ * Le libelle que porte une case non cochee quand le juge a lui-meme VALIDE (voir
+ * `dodDuVerdict` dans `../objections-juge.ts`). Un nouveau passage de build ne peut pas le lever :
+ * le juge n'a rien refuse, le blocage vient d'ailleurs.
+ *
+ * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — 4 appels du juge (ts 09:44:57.329,
+ * 09:48:05.122, 09:51:14.024, 09:53:28.437) tous VALIDE 72-74, rejoues jusqu'au plafond de
+ * 42 appels provider ; le tour meurt sans rien rendre a l'utilisateur.
+ */
+export const MOTIF_RESERVES_VERDICT_VALIDE = 'Reserves du juge sur un verdict VALIDE'
+
+function horsPorteeDeBuild(motif: string): boolean {
+  return motif.includes(MOTIF_RESERVES_VERDICT_VALIDE)
 }
 
 /**
@@ -150,6 +165,72 @@ const REFUS_FIGE_SEUIL = 2
  * Exportee parce que la boucle de reparation en a besoin pour compter les repetitions : recopier la
  * comparaison dans l'orchestrateur en ferait un MIROIR, que ce depot a deja paye une fois.
  */
+/**
+ * fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 16 reparations payees parce que le
+ * motif « Promis mais pas fait » RECOPIE les objections du juge, reformulees a chaque passage : la
+ * comparaison mot pour mot ne voyait jamais deux refus identiques, le compteur de refus fige ne
+ * mordait jamais. On compare donc le motif SANS sa citation.
+ *
+ * Seule la partie entre guillemets francais est retiree : c'est la ou vit le texte recopie (extrait
+ * de verdict, nom de fichier cite). Le motif lui-meme — ce qui est reproche — reste compare en
+ * entier, donc un refus qui CHANGE reellement continue de relancer la reparation.
+ */
+/**
+ * Replie chaque citation de PREMIER niveau en «…», en suivant la profondeur des guillemets.
+ *
+ * fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — le repli precedent allait du
+ * PREMIER « au DERNIER » (/«[\s\S]*»/), donc il avalait aussi le texte situe ENTRE deux
+ * citations : « Fichier « a.ts » manquant et regle « X » violee » et la meme phrase avec
+ * « present » devenaient identiques, et la boucle de reparation pouvait etre coupee sur un refus
+ * qui avait reellement change. On suit desormais la profondeur : ce qui est HORS citation reste
+ * compare en entier, ce qui est DEDANS (y compris ses guillemets imbriques) compte pour «…».
+ */
+function replierCitations(motif: string): string {
+  let sortie = ''
+  let profondeur = 0
+  for (const caractere of motif) {
+    if (caractere === '«') {
+      if (profondeur === 0) sortie += '«…»'
+      profondeur += 1
+      continue
+    }
+    if (caractere === '»') {
+      if (profondeur > 0) {
+        profondeur -= 1
+        continue
+      }
+    }
+    if (profondeur === 0) sortie += caractere
+  }
+  return sortie
+}
+
+function motifSansCitation(motif: string): string {
+  return (
+    replierCitations(motif)
+      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 20 reparations payees : les
+      // objections du juge recopiees dans « Promis mais pas fait » contiennent ELLES-MEMES des
+      // guillemets francais (« pas corrige » puis « corrige »). La paire la plus courte s'arretait
+      // donc au premier » interieur, et tout le texte suivant restait compare mot pour mot alors
+      // qu'il est reformule a chaque passage. Le repli se fait desormais par profondeur
+      // (replierCitations) ; le texte HORS citation reste compare en entier.
+      .replace(/«[^»]*»/g, '«…»')
+      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — neutraliser le TEXTE des
+      // citations ne suffisait pas : « Promis mais pas fait » JOINT toutes les objections du juge,
+      // et le juge n'en rend pas le meme NOMBRE d'un passage a l'autre (6, puis 8, puis 7 sur ce
+      // tour). La liste normalisee restait donc de longueur variable et le compteur de refus fige ne
+      // mordait toujours pas. Une suite de citations compte pour une seule.
+      .replace(/«…»(?:[\s,;]*«…»)+/g, '«…»')
+      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — le refus fix-gate NOMME le
+      // nombre d'editions du fichier (« 4 edits » a la reparation 2, « 6 edits » a la reparation 3),
+      // et ce nombre est incremente par la boucle de reparation ELLE-MEME a chaque passage. Le meme
+      // refus ne pouvait donc jamais etre reconnu comme identique. Le fichier reproche, lui, reste
+      // compare en entier : deux fichiers differents restent deux refus differents.
+      .replace(/\b\d+ [ée]dits?\b/g, 'N edits')
+      .trim()
+  )
+}
+
 export function memeRefus(
   motifsCourants: readonly string[],
   motifsPrecedents: readonly string[]
@@ -157,7 +238,9 @@ export function memeRefus(
   if (motifsPrecedents.length === 0) return false
   return (
     motifsCourants.length === motifsPrecedents.length &&
-    motifsCourants.every((motif, index) => motif === motifsPrecedents[index])
+    motifsCourants.every(
+      (motif, index) => motifSansCitation(motif) === motifSansCitation(motifsPrecedents[index])
+    )
   )
 }
 
@@ -182,12 +265,41 @@ export function arretDeLaReparation(entree: {
    * Absent (ancien appelant) = aucune répétition connue : comportement inchangé.
    */
   refusIdentiquesConsecutifs?: number
+  /**
+   * Le code du gate REELLEMENT execute est-il plus vieux que sa source ?
+   *
+   * Defaut vecu conv-539, tour `82a4f5d1-d92f-4d73-9f6f-cac70db65ecb` : 14 reparations refusees
+   * d'affilee. L'application jugeait avec `out/main/index.js` date de 11:06 pendant que les
+   * correctifs etaient commites de 11:11 a 11:31. Aucune edition de la source ne pouvait faire
+   * bouger ce refus, et la boucle brulait un build + un panel de juge par passage sans jamais le
+   * dire. Absent = aucune mesure : comportement inchange.
+   */
+  bundlePerime?: { bundleMs: number; sourceMs: number; demarrageMs?: number; bundle: string }
 }): string | undefined {
+  const b = entree.bundlePerime
+  // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — comparer le bundle a la seule
+  // SOURCE laissait un angle mort : recompile en cours de tour (11:46) il redevenait « a jour »
+  // alors que le processus, lance a 11:06, executait toujours l'ancien code en memoire. Le refus
+  // ne bougeait pas et la mesure se taisait (constat du juge, reparation 17).
+  if (b && b.demarrageMs !== undefined && b.bundleMs > b.demarrageMs) {
+    return `Réparation interrompue : ${b.bundle} a été recompilé après le démarrage — l'application exécute encore l'ancien code. Relancer l'application avant de rejouer.`
+  }
+  if (b && b.sourceMs > b.bundleMs) {
+    return `Réparation interrompue : le code exécuté est périmé — ${b.bundle} est plus ancien que la source du contrôle. Recompiler et relancer l'application avant de rejouer.`
+  }
   if (entree.tentative >= entree.plafondDur) {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
   }
   const repetitions = entree.refusIdentiquesConsecutifs ?? 0
-  if (repetitions >= REFUS_FIGE_SEUIL) {
+  // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : un refus fix-gate se lève par UNE ligne
+  // `fix-ok:` que le build peut écrire ; il garde un passage de plus avant d'être déclaré figé.
+  // Seulement si TOUS les motifs sont réparables ainsi (le relais d'échec amont excepté) : un refus
+  // mixte ne gagne pas de passage (objection du juge, réparation 2 du même tour).
+  const motifsPropres = entree.motifsCourants.filter((m) => m !== CLOSURE_UPSTREAM_REFUSAL)
+  const seuil = motifsPropres.length > 0 && motifsPropres.every((m) => m.includes('fix-gate'))
+    ? REFUS_FIGE_SEUIL + 1
+    : REFUS_FIGE_SEUIL
+  if (repetitions >= seuil) {
     return `Réparation interrompue : le même refus est revenu ${repetitions} fois de suite, rejouer ne le fait plus bouger.`
   }
   if (doitArreterLaReparation(entree.motifsCourants, entree.motifsPrecedents)) {
@@ -313,4 +425,18 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
   }
 
   return { blocked: reasons.length > 0, reasons }
+}
+
+/**
+ * Le libelle d'un PASSAGE de reparation, pousse dans la trace du run a chaque rejeu.
+ *
+ * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — le tour est mort sur « Budget
+ * d'appels provider atteint : 42 appels » apres 4 verdicts de juge, et le dossier de preuve ne
+ * permettait PAS de dire combien de passages de reparation l'avaient consomme : la boucle ne
+ * poussait un motif que lorsqu'elle s'ARRETAIT. Un passage muet est un passage non mesurable ;
+ * c'est exactement ce que le juge a reproche au raisonnement « 4 passages -> plafond ».
+ */
+export function libelleDuPassageDeReparation(rang: number, plafond: number): string {
+  const suffixe = rang >= plafond ? ' (dernier autorise)' : ''
+  return `Réparation ${rang}/${plafond} — nouveau passage de build${suffixe}.`
 }

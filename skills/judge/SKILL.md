@@ -1,181 +1,183 @@
 ---
 name: judge
 description: >-
-  Step 5 — FINAL step of the pipeline (frame → terrain → build → clean → judge). ADVERSARIAL, EXTERNAL review of a
-  deliverable Claude produced, scored per dimension (surfaced as a verdict BAND, not false-precision digits) and
-  LOOPED to the regime threshold. A panel of independent specialist-judges — each an EXTERNAL subagent (separate
-  from the producer) but INFORMED of the need, the deliberate decisions, and the defect ledger — scores the work,
-  lists defects WITH PROOF, and SENDS them back to the producer to fix, in a loop. The judge NEVER repairs what it
-  audits. DIFFERS from code-review/verify/security-review (single-pass PR, one lens): judge is multi-dimension,
-  adversarial, LOOPED. Use when a SUBSTANTIAL deliverable (any non-trivial artifact meant to be used/shipped:
-  skill, script, code, doc, architecture, plan, spec — NOT a conversational reply) must be validated BEFORE it is
-  considered done, OR when you want an IMPARTIAL quality look. Trigger on "review/audit the QUALITY of X", "is
-  this work good?", "validate this deliverable", "is it really done?", "is it up to standard?", or right after a substantial deliverable
-  is produced. DISAMBIGUATE "audit": QUALITY of a DELIVERABLE → judge; WORKFLOW / behavior / habits /
-  skill set → `kaizen`, which carries the behavioral lenses (judge's ex-"Mode B", moved there on 2026-09-01
-  because judge may not write to the kit and improving a behavior means editing it). Do NOT use to: frame a need (→ `frame`), prepare the autonomous
-  loop/observability (→ `terrain`), run a single-pass code PR (→ code-review), nor to FIX — this skill JUDGES,
-  never repairs: fixing goes back to the producer = `build` (executor following ENGINE Ch.4 — BUILD).
+  Étape 5 — DERNIÈRE étape du pipeline (frame → terrain → build → clean → judge). Revue ADVERSARIALE
+  et EXTERNE d'un livrable produit par Claude, notée par dimension et BOUCLÉE jusqu'au seuil du
+  régime. Un panel de juges spécialistes indépendants — chacun EXTERNE au producteur mais INFORMÉ du
+  besoin, des décisions et des défauts déjà remontés — note le travail, liste les défauts AVEC
+  PREUVE, et les renvoie au producteur pour correction, en boucle. Le juge ne RÉPARE JAMAIS ce qu'il
+  audite. À utiliser sur un livrable SUBSTANTIEL (skill, script, doc, architecture, plan, spec — PAS
+  une réponse conversationnelle) avant qu'il compte comme fini (§ Quand la déclencher). « Audit »
+  est ambigu : la QUALITÉ d'un LIVRABLE → judge ; workflow / comportement / habitudes / kit →
+  `kaizen`. NE PAS utiliser pour cadrer un besoin (→ `frame`), préparer la boucle autonome (→
+  `terrain`), ni pour CORRIGER — les réparations retournent au producteur (→ `build`).
 ---
 
-# judge — ORCHESTRATOR, external adversarial review, looped to threshold (step 5)
+# judge — ORCHESTRATEUR, revue adversariale externe, bouclée jusqu'au seuil (étape 5)
 
-You are the **ORCHESTRATOR** (main session). Bring the deliverable to its regime threshold under adversarial angles, then **send defects back to the producer — never fix them yourself**. Sole excellence gate of the pipeline. Changing hats is allowed same-session: fix as producer (ENGINE Ch.4 — BUILD) between audits, then relaunch external judges — but a judge NEVER audits work it just produced. Judge audits the QUALITY of a deliverable; a behavioral/habit target goes to `kaizen`.
+Tu es l'**ORCHESTRATEUR** (session principale). Amène le livrable au seuil de son régime sous des angles adversariaux, puis **renvoie les défauts au producteur — ne les corrige jamais toi-même**. Seule barrière d'excellence du pipeline. Changer de casquette dans la même session est permis : corriger en tant que producteur (ENGINE ch.4 — BUILD) entre deux audits, puis relancer des juges externes — mais un juge n'audite JAMAIS un travail qu'il vient de produire. Judge audite la QUALITÉ d'un livrable ; une cible comportementale ou d'habitude va à `kaizen`.
 
-## Purpose
-**Be the EXTERNAL quality gate the producer cannot be for itself.** A model grading its own work is complacent; judge brings independent, adversarial specialists that hunt the REAL defects WITH PROOF, score by dimension, and send them back to the producer, looping to the regime threshold. It never repairs what it audits (that re-makes it the producer); closure stays out-of-model: producer=judge is never proof.
+## À quoi ça sert
+**Être la barrière de qualité EXTERNE que le producteur ne peut pas être pour lui-même.** Un modèle qui note son propre travail est complaisant ; judge amène des spécialistes indépendants et adversariaux qui chassent les VRAIS défauts AVEC PREUVE, notent par dimension, et les renvoient au producteur, en bouclant jusqu'au seuil du régime. Il ne répare jamais ce qu'il audite (cela le rendrait producteur) ; la clôture reste hors modèle : producteur = juge n'est jamais une preuve.
 
-## Autonomy mandate — ONE pass, verdict or named blocker
+## Mandat d'autonomie — UNE passe, un verdict ou un blocage nommé
 
-**An audit is carried to a VERDICT in THIS pass.** Handing back with "want me to look further?", a partial pass, or a plan of what you would review is a FAILURE. At the moment you are tempted to stop:
+**Un audit est mené jusqu'à un VERDICT dans CETTE passe.** Rendre la main avec « tu veux que je regarde plus loin ? », une passe partielle, ou un plan de ce que tu réviserais est un ÉCHEC. Au moment où tu es tenté de t'arrêter :
 
-- A missing artifact you can PRODUCE yourself read-only (run the test suite, read the diff, take the screenshot, run the query) is produced — you do not ask the user for it. Only a genuinely unobtainable one is a blocker, and then you NAME what you tried.
-- Do not answer "cannot verify" after ONE inadequate probe: enumerate and sweep the probes reachable without extra rights, and name which ones you tested (reflex 10).
-- Every dimension of the regime is scored in the pass, and every defect found is written with its proof — never "and probably others".
-- Loop to the regime threshold as specified below; stopping above the loop budget is reported as a budget stop, not as a verdict.
+- Un artefact manquant que tu peux PRODUIRE toi-même en lecture seule (lancer la suite de tests, lire le diff, prendre la capture, lancer la requête) se produit — tu ne le demandes pas à l'utilisateur. Seul un artefact réellement inatteignable est un blocage, et tu NOMMES alors ce que tu as tenté.
+- Ne réponds pas « non vérifiable » après UNE sonde inadéquate : énumère et balaie les sondes atteignables sans droits supplémentaires, et nomme celles que tu as testées (réflexe 8).
+- Chaque dimension du régime est notée dans la passe, et chaque défaut trouvé est écrit avec sa preuve — jamais « et probablement d'autres ».
+- Boucle jusqu'au seuil du régime comme spécifié ci-dessous ; s'arrêter au-dessus du budget de boucle se rapporte comme un arrêt budgétaire, pas comme un verdict.
 
-This relaxes NO independence: autonomy means completing the audit, never softening it. Judge still NEVER repairs what it audits, and a same-model panel is still not independent confirmation.
+Cela ne relâche AUCUNE indépendance : l'autonomie, c'est terminer l'audit, jamais l'adoucir. Judge ne répare toujours JAMAIS ce qu'il audite, et un panel du même modèle n'est toujours pas une confirmation indépendante.
 
-## Procedure
+## Quand la déclencher — et quand NON
+**Déclencheurs** : « review / audit the QUALITY of X » · « is this work good? » · « validate this deliverable » · « is it really done? » · « is it up to standard? » · « c'est bon ? » — ou juste après la production d'un livrable SUBSTANTIEL (tout artefact non trivial destiné à être utilisé ou livré : skill, script, code, doc, architecture, plan, spécification — PAS une réponse conversationnelle), AVANT de le considérer comme fini.
+**DÉSAMBIGUÏSER « audit »** : la QUALITÉ d'un LIVRABLE → judge · un WORKFLOW, un comportement, des habitudes, le jeu de skills → `kaizen`, qui porte les lentilles comportementales (l'ex-« Mode B » de judge, déplacé le 2026-09-01 : judge n'a pas le droit d'écrire dans le kit, et améliorer un comportement suppose de l'éditer).
+**DIFFÈRE de code-review / verify / security-review** (une seule passe sur une PR, une seule lentille) : judge est multi-dimensions, adversarial et BOUCLÉ jusqu'au seuil du régime.
+**PAS pour** : cadrer un besoin → `frame` · préparer la boucle autonome et l'observabilité → `terrain` · une PR en passe unique → code-review · CORRIGER — cette skill JUGE, ne répare jamais : la correction revient au producteur = `build` (exécutant suivant ENGINE ch.4 — BUILD).
 
-### Prelude (once per run)
+## Procédure
 
-**1. Deliverable.** Obtain its path/content. Missing → ask once.
+### Prélude (une fois par run)
 
-**2. The RUN.md** — the one file matching glob `*-workspace\RUN.md` under `~\.claude\runs\<session_id>\` (user-global default, OUT of any project tree; session folder injected by the UserPromptSubmit hook; Stop-gate v3.2 scopes enforcement to it). Override via env `AUTOWIN_RUN_ROOT`. Fallback: legacy `<cwd>\Audit\workspaces\<session_id>\` if present.
-  - `## Besoin` = **the fidelity reference**: deep-why, scope in/out, success criterion — a **cochable DoD checklist** (`- [ ]` items). **Walk each item against its proof; any unmet item = a MAJOR defect** (a legacy prose criterion with no `- [ ]` → verify holistically as one item). Enforcement split (rule in `RUN-template.md`): the **stop-gate** deterministically blocks green on an unchecked real-content box; the **proof behind a checked box** is judge + human. Faithful judge has the RIGHT to flag a **stale/contradicted need** as a MAJOR defect — never judge blindly against it.
-  - **Deliberate decisions** (in `## Besoin`/`## Options`) = voluntary choices → judges must NOT re-flag.
-  - `## Défauts` = **the ledger**, re-read cross-session (cycles consumed, global-min trajectory, resolutions). Create if absent (autonomous). Makes cap/stagnation/regression watertight.
-  - No RUN.md → ask once (Faithful cannot judge without the need).
-  - Require the latest product mutation to be followed by `CLEAN-VERIFIED` or `CLEAN-NOOP` in `## Journal`, with a fingerprint that still matches. Missing/stale evidence → send to `clean`. A returned defect goes `build → clean → re-audit`.
-  - **Evaluate the stop criteria BEFORE launching judges** — any already met → degraded mode now (engine).
+**1. Le livrable.** Obtiens son chemin / son contenu. Absent → demande une fois.
 
-**3. Bar = regime** (header `regime:`). disposable → 1 pass, zero-major (or skip at discretion). standard → zero-major, residual minors listed non-blocking, ROI-stop once zero-major. critical → full panel + doubled [S] draws + ≥1 out-of-model source; closure via engine stops (stagnation/cap/regression), not a self-awarded numeric ceiling.
+**2. Le RUN.md** — l'unique fichier correspondant au motif `*-workspace\RUN.md` sous `~\.claude\runs\<session_id>\` (défaut global utilisateur, HORS de tout arbre de projet ; dossier de session injecté par le hook UserPromptSubmit ; le contrôle d'arrêt v3.2 y limite son application). Surcharge par la variable `AUTOWIN_RUN_ROOT`. Repli : l'ancien `<cwd>\Audit\workspaces\<session_id>\` s'il existe.
+  - `## Besoin` = **la référence de fidélité** : le pourquoi profond, le périmètre dedans/dehors, le critère de succès — une **liste cochable de conditions de sortie** (items `- [ ]`). **Passe chaque item devant sa preuve ; tout item non satisfait = un défaut MAJEUR** (un critère hérité en prose sans `- [ ]` → vérifie-le globalement comme un seul item). Répartition de l'application (règle dans `RUN-template.md`) : le **contrôle d'arrêt** bloque de façon déterministe le vert sur une case de contenu réel non cochée ; la **preuve derrière une case cochée** relève du juge + de l'humain. Le juge Fidèle a le DROIT de signaler un **besoin périmé ou contredit** comme défaut MAJEUR — ne juge jamais aveuglément contre lui.
+  - Les **décisions délibérées** (dans `## Besoin`/`## Options`) = des choix volontaires → les juges ne doivent PAS les re-signaler.
+  - `## Défauts` = **le registre**, relu d'une session à l'autre (cycles consommés, trajectoire du minimum global, résolutions). Crée-le s'il est absent (autonome). Rend le plafond, la stagnation et la régression étanches.
+  - Pas de RUN.md → demande une fois (le Fidèle ne peut pas juger sans le besoin).
+  - Exige que la dernière mutation du produit soit suivie de `CLEAN-VERIFIED` ou `CLEAN-NOOP` dans `## Journal`, avec une empreinte qui correspond toujours. Preuve absente ou périmée → renvoie à `clean`. Un défaut renvoyé fait `build → clean → nouvel audit`.
+  - **Évalue les critères d'arrêt AVANT de lancer les juges** — si l'un est déjà atteint → mode dégradé tout de suite (moteur).
 
-> Then run the LOOP below. It draws its panel, proof rules, and injected prompt template from the quality-audit sub-procedure under `## Modes`. For a behavioral target, route to `kaizen`.
+**3. La barre = le régime** (en-tête `regime:`). disposable → 1 passe, zéro majeur (ou saut à discrétion). standard → zéro majeur, mineurs résiduels listés sans bloquer, arrêt au rendement une fois zéro majeur. critical → panel complet + tirages [S] doublés + ≥ 1 source hors modèle ; clôture par les arrêts du moteur (stagnation/plafond/régression), pas par un plafond chiffré auto-attribué.
 
-### The LOOP
+> Joue ensuite la BOUCLE ci-dessous. Elle tire son panel, ses règles de preuve et son modèle de prompt injecté de la sous-procédure d'audit qualité, sous `## Modes`. Pour une cible comportementale, route vers `kaizen`.
 
-**[1] AUDIT** — launch judges in parallel with `## Défauts` ledger + decisions injected (stable summary + last-cycle delta only, never verbatim history — bounds per-cycle cost). (Panel selection, decorrelation, injected prompt template = the quality-audit sub-procedure.)
+### La BOUCLE
 
-**[1b] COUNT & VALIDATE** — N dispatched ⇒ N schema-valid `je-1` replies before aggregating; missing/invalid → 1 retry → else that dimension is **INVALID** (caps the global, blocks the verdict — never silent 100).
+**[1] AUDIT** — lance les juges en parallèle avec le registre `## Défauts` + les décisions injectés (résumé stable + le seul delta du dernier cycle, jamais l'historique mot pour mot — cela borne le coût par cycle). (Sélection du panel, décorrélation, modèle de prompt injecté = la sous-procédure d'audit qualité.)
 
-**[2] AGGREGATE** — each [S] = median-then-MIN of its 2 decorrelated draws (gap >20 → 3rd draw MIN; spread of 3 still >15 → INDETERMINATE + stop-ask); each [F] = its single judge; global = **MIN of all dimensions** (engine) — EXCEPT a dimension whose blocking defect is `nature:intrinsic`, EXCLUDED from the MIN and carried as a visible RISK NOTE (never disguised green). Compile defects to `## Défauts`.
-**Early-out**: one consolidated, unambiguous MAJOR → send it back at once, don't wait for full aggregation.
+**[1b] COMPTER & VALIDER** — N juges envoyés ⇒ N réponses `je-1` valides selon le schéma avant toute agrégation ; manquante ou invalide → 1 relance → sinon cette dimension est **INVALIDE** (elle plafonne le global, bloque le verdict — jamais un 100 silencieux).
 
-**[2b] BLIND-SPOT SWEEP** (*what no reviewer covered*) — disjoint exclusion zones guarantee each lane is examined but risk an in-scope aspect that NO lane owns slipping through **unjudged**. **Runs before any verdict ships green (or ROI-stop / degraded-closes) — NOT on an early-out send-back** (there a major already returns; the sweep guards the final clean cycle). Cross-check the UNION of dispatched dimensions against `## Besoin` scope + success-criteria: any in-scope facet or need-criterion NO judge examined = a **blind spot** (coverage GAP, not a scored defect). Record in `## Défauts` under `### Angles morts`; a blind spot over a high-risk area → **add the owning dimension (panel table) and re-run from [1]** rather than ship over an unexamined gap. Empty after a real look → state "no blind spots detected" (silence ≠ full coverage).
+**[2] AGRÉGER** — chaque [S] = médiane puis MIN de ses 2 tirages décorrélés (écart > 20 → 3ᵉ tirage, MIN ; dispersion des 3 encore > 15 → INDÉTERMINÉ + arrêt-question) ; chaque [F] = son juge unique ; global = **MIN de toutes les dimensions** (moteur) — SAUF une dimension dont le défaut bloquant est `nature:intrinsic`, EXCLUE du MIN et portée en NOTE DE RISQUE visible (jamais un vert déguisé). Compile les défauts dans `## Défauts`.
+**Sortie anticipée** : un MAJEUR consolidé et sans ambiguïté → renvoie-le tout de suite, n'attends pas l'agrégation complète.
 
-**[3] VERDICT** by threshold. Met → in *critical* only, run global cross-dimension verification first; then confirm the clean fingerprint and keep/set RUN `status: green`. Not met → set/keep `status: open` and **send back** prioritized defects to `build`, followed by `clean` before re-audit: same session = switch hats, fix, update ledger, clean, re-run from [1] · other session/user = emit prioritized final report and END.
+**[2b] BALAYAGE D'ANGLES MORTS** (*ce qu'aucun relecteur n'a couvert*) — les zones d'exclusion disjointes garantissent que chaque couloir est examiné, mais font courir le risque qu'un aspect du périmètre dont AUCUN couloir n'est propriétaire passe **non jugé**. **Se joue avant qu'un verdict parte au vert (ou qu'un arrêt au rendement / une clôture dégradée survienne) — PAS sur un renvoi anticipé** (là, un majeur repart déjà ; le balayage garde le dernier cycle propre). Recoupe l'UNION des dimensions envoyées avec le périmètre de `## Besoin` + ses critères de succès : toute facette du périmètre ou tout critère du besoin qu'AUCUN juge n'a examiné = un **angle mort** (TROU de couverture, pas un défaut noté). Consigne-le dans `## Défauts` sous `### Angles morts` ; un angle mort sur une zone à risque élevé → **ajoute la dimension propriétaire (table du panel) et rejoue depuis [1]** plutôt que de livrer par-dessus un trou non examiné. Vide après un vrai examen → écris « aucun angle mort détecté » (le silence ≠ la couverture complète).
 
-**[4] RE-AUDIT** — evaluate stops FIRST, then degraded mode if any fires (engine, 1 line each): ROI-stop (zero-major reached → STOP, no cosmetic re-panels) · **intrinsic-early** (≥1 `nature:intrinsic` major at cycle 1 → degraded mode NOW, don't wait for cap — sending an unfixable major back = whack-a-mole) · **cost-cap** (cumulative audits ≥ ~15 AND global-min delta <5 over 2 transitions → forced ROI-stop even without zero-major) · cap (≈3 standard / 5 critical — a major alive at cap = under-classification, re-raise) · stagnation (global-min flat over 2 transitions) · rotating regression · design conflict. Degraded mode = **human hard-stop**: deliverable fate + 2-4 COSTED options + ship NOTHING without OK. Re-audit is **bounded to the diff**: re-judge a 100 dimension only if the diff touches its scope.
-(No subagents → judge sequentially yourself, one lens per pass, keep ledger+decisions; single-pass [S] = "degraded vote"; never producer self-assessment.) The orchestrator is the **single writer** of `## Défauts`.
+**[3] VERDICT** au seuil. Atteint → en *critical* seulement, joue d'abord une vérification globale inter-dimensions ; puis confirme l'empreinte de propreté et pose/garde `status: green` dans le RUN. Non atteint → pose/garde `status: open` et **renvoie** les défauts priorisés à `build`, suivi de `clean` avant le nouvel audit : même session = change de casquette, corrige, mets à jour le registre, nettoie, rejoue depuis [1] · autre session ou autre utilisateur = émets le rapport final priorisé et TERMINE.
 
-## Output
+**[4] NOUVEL AUDIT** — évalue les arrêts D'ABORD, puis le mode dégradé si l'un se déclenche (moteur, 1 ligne chacun) : arrêt au rendement (zéro majeur atteint → STOP, pas de nouveau panel cosmétique) · **intrinsèque-précoce** (≥ 1 majeur `nature:intrinsic` au cycle 1 → mode dégradé TOUT DE SUITE, n'attends pas le plafond — renvoyer un majeur non corrigeable, c'est jouer à la taupe) · **plafond de coût** (audits cumulés ≥ ~15 ET variation du minimum global < 5 sur 2 transitions → arrêt au rendement forcé, même sans zéro majeur) · plafond (≈ 3 en standard / 5 en critical — un majeur encore vivant au plafond = sous-classification, re-remonte-le) · stagnation (minimum global plat sur 2 transitions) · régression tournante · conflit de conception. Mode dégradé = **arrêt dur pour l'humain** : sort du livrable + 2 à 4 options CHIFFRÉES + on ne livre RIEN sans son accord. Le nouvel audit est **borné au diff** : ne rejuge une dimension à 100 que si le diff touche son périmètre.
+(Aucun sous-agent → juge toi-même en séquence, une lentille par passe, garde registre + décisions ; un [S] en passe unique = « vote dégradé » ; jamais d'auto-évaluation du producteur.) L'orchestrateur est le **seul rédacteur** de `## Défauts`.
 
-Final message to the user (the Report) — **in PLAIN words, NO internal jargon**. Never show raw labels (`[S]/[F]`, `artifact_based`, `je-1`, "out-of-model", "MIN", "ROI-stop", "verdict OBJECT") — translate them:
-- **Global result** + one line per dimension: a **coarse band** (keep / maybe / drop) + the defect (with proof) + **what to fix to pass** (not "to_reach_100"). **Never a bare 2-digit /100** as the surfaced verdict — same-model draws on one artifact spread >20 pts; surface the band (and the spread if you show numbers), not false-precise digits.
-- **Blind spots (what no reviewer examined)**, in plain words: the in-scope facets no lane covered (the `### Angles morts` sweep), or "no blind spots detected". Never silently drop an uncovered gap.
-- **Confidence caveats, said plainly** when they apply:
-  - same-AI panel (ALWAYS) → "all reviewers run on the same AI, and NOTHING empirically tests that this panel would catch a known defect (sensitivity check removed) — so correlated blind spots AND undetected rubber-stamping are both possible, not independently confirmed" (state on any same-model panel — silence ≠ safety; planned replacement = Roadmap's *Held-out anti-Goodhart*, ENGINE — NOT wired).
-  - one reviewer instead of two (judgment dimension) → "single pass — lower confidence".
-  - no execution proof → "code read only, behavior not observed" (was `artifact_based:false`).
-  - trigger test not run → "could not confirm the skill actually fires".
-- **Verdict + next step, plainly**: shipped / sent back to the producer with prioritized fixes / blocked — awaiting your decision before delivering. + cycles consumed.
+## Ce que ça produit
+
+Le message final à l'utilisateur (le Rapport) — **en mots SIMPLES, AUCUN jargon interne**. Ne montre jamais les libellés bruts (`[S]/[F]`, `artifact_based`, `je-1`, « hors modèle », « MIN », « arrêt au rendement », « objet de verdict ») — traduis-les :
+- **Résultat global** + une ligne par dimension : une **bande grossière** (on garde / peut-être / on jette) + le défaut (avec sa preuve) + **ce qu'il faut corriger pour passer** (pas « to_reach_100 »). **Jamais un /100 nu à deux chiffres** comme verdict affiché — des tirages du même modèle sur un seul artefact se dispersent de plus de 20 points ; expose la bande (et la dispersion si tu montres des chiffres), pas des chiffres faussement précis.
+- **Les angles morts (ce qu'aucun relecteur n'a examiné)**, en mots simples : les facettes du périmètre qu'aucun couloir n'a couvertes (le balayage `### Angles morts`), ou « aucun angle mort détecté ». Ne laisse jamais tomber un trou en silence.
+- **Les réserves de confiance, dites simplement**, quand elles s'appliquent :
+  - panel de la même IA (TOUJOURS) → « tous les relecteurs tournent sur la même IA, et RIEN ne teste empiriquement que ce panel attraperait un défaut connu (le contrôle de sensibilité a été retiré) — donc des angles morts corrélés ET un tamponnage non détecté sont tous deux possibles, sans confirmation indépendante » (à dire sur tout panel du même modèle — le silence ≠ la sécurité ; remplacement prévu = l'*anti-Goodhart en échantillon retenu* de la feuille de route, ENGINE — PAS câblé).
+  - un seul relecteur au lieu de deux (dimension de jugement) → « une seule passe — confiance moindre ».
+  - aucune preuve d'exécution → « code lu seulement, comportement non observé » (anciennement `artifact_based:false`).
+  - test de déclenchement non joué → « je n'ai pas pu confirmer que la skill se déclenche vraiment ».
+- **Verdict + suite, simplement** : livré / renvoyé au producteur avec des corrections priorisées / bloqué — j'attends ta décision avant de livrer. + les cycles consommés.
 
 ## Modes
 
-Target is a deliverable's quality? → the quality-audit sub-procedure below. Target is a behavior/habit/skill-set? → `kaizen`.
+La cible est la qualité d'un livrable ? → la sous-procédure d'audit qualité ci-dessous. La cible est un comportement / une habitude / le jeu de skills ? → `kaizen`.
 
-### Quality audit — the LOOP's sub-procedure
+### Audit qualité — la sous-procédure de la BOUCLE
 
-The LOOP runs this machinery: select the panel, confront the real, then launch judges with the injected prompt template.
+La BOUCLE joue cette mécanique : sélectionner le panel, confronter le réel, puis lancer les juges avec le modèle de prompt injecté.
 
-**Panel (selection by nature, size ∝ regime — engine)**
+**Panel (sélection par nature, taille ∝ régime — moteur)**
 
-| Judge | Dimension | Type |
+| Juge | Dimension | Type |
 |---|---|---|
-| 🎯 Faithful **(ALWAYS)** | truly answers the need? | [S] |
-| 🌍 Real-effect **(executable — MANDATORY)** | observed effect matches expected? | [F] |
-| 🐛 Corrector | correctness, edge cases | [F] |
-| 🔒 Guardian | security, sensitive data, abuse | [F] |
-| ⚡ Optimizer | performance, efficiency, cost | [F] |
-| 📐 Conformer | conventions, coherence with existing | [F] |
-| 📖 Readable | readability, 6-month maintainability | [S] |
-| 🧹 Lean | over-engineering, needless complexity | [S] |
+| 🎯 Fidèle **(TOUJOURS)** | répond-il vraiment au besoin ? | [S] |
+| 🌍 Effet réel **(exécutable — OBLIGATOIRE)** | l'effet observé correspond-il à l'attendu ? | [F] |
+| 🐛 Correcteur | justesse, cas limites | [F] |
+| 🔒 Gardien | sécurité, données sensibles, abus | [F] |
+| ⚡ Optimiseur | performance, efficacité, coût | [F] |
+| 📐 Conformiste | conventions, cohérence avec l'existant | [F] |
+| 📖 Lisible | lisibilité, maintenabilité à 6 mois | [S] |
+| 🧹 Sobre | sur-ingénierie, complexité inutile | [S] |
 
-**Exclusion zones (disjoint scopes — kill correlated triple-votes under MIN)**: each judge owns ONE lane and is told what it is NOT responsible for — Readable = clarity/naming ONLY (not complexity → Lean, not conventions → Conformer) · Lean = over-engineering/duplication ONLY (not style → Readable) · Conformer = conventions/coherence-with-existing ONLY (not subjective readability) · Corrector = correctness/edge-cases ONLY (not perf → Optimizer). Inject the "you are NOT responsible for X (→ Y)" line into each judge.
+**Zones d'exclusion (périmètres disjoints — elles tuent les triples votes corrélés sous le MIN)** : chaque juge possède UN couloir et on lui dit ce dont il n'est PAS responsable — Lisible = clarté/nommage SEULEMENT (pas la complexité → Sobre, pas les conventions → Conformiste) · Sobre = sur-ingénierie/duplication SEULEMENT (pas le style → Lisible) · Conformiste = conventions/cohérence-avec-l'existant SEULEMENT (pas la lisibilité subjective) · Correcteur = justesse/cas-limites SEULEMENT (pas la perf → Optimiseur). Injecte la ligne « tu n'es PAS responsable de X (→ Y) » dans chaque juge.
 
-**By nature**: code/script → +Corrector, Guardian, Optimizer, Conformer, Readable · doc/plan/arch/spec → +Readable, Lean, Conformer (+Corrector if logic is described) · executable/UI/runtime/skill → +Real-effect MANDATORY. In doubt at CRITICAL, include; at standard, **start lean and ESCALATE**. **Size ∝ regime** (engine): disposable = Faithful (+Real-effect if it executes), no [S] vote · **standard = ESCALATING — launch a CORE of 2 (Faithful + Real-effect) first; add a risk dim ONLY on a signal (a major surfaced, a pivot flags concern, or the diff touches that dim's scope); double only the SINGLE most decision-load-bearing [S] pivot, not every [S]** · critical = full panel upfront + systematic [S] doubling + ≥1 out-of-model source (no escalation — pay for full coverage where irreversible).
+**Par nature** : code/script → + Correcteur, Gardien, Optimiseur, Conformiste, Lisible · doc/plan/archi/spec → + Lisible, Sobre, Conformiste (+ Correcteur si une logique est décrite) · exécutable/UI/runtime/skill → + Effet réel OBLIGATOIRE. En doute au régime CRITICAL, inclus ; en standard, **pars sobre et ESCALADE**. **Taille ∝ régime** (moteur) : disposable = Fidèle (+ Effet réel s'il s'exécute), aucun vote [S] · **standard = ESCALADANT — lance d'abord un NOYAU de 2 (Fidèle + Effet réel) ; ajoute une dimension de risque SEULEMENT sur un signal (un majeur remonté, un pivot qui s'inquiète, ou un diff qui touche le périmètre de cette dimension) ; ne double que le SEUL pivot [S] le plus porteur pour la décision, pas tous les [S]** · critical = panel complet d'emblée + doublement [S] systématique + ≥ 1 source hors modèle (aucune escalade — on paie la couverture complète là où c'est irréversible).
 
-**Confront the real**
+**Confronter le réel**
 
-**100 on TEXT alone is FORBIDDEN for any executable.** Two proof classes (engine ch.2): **REPLAYABLE** (a CLI run/build/query with no side effects) → the proof is REPLAYED not believed — the closure gate replays `signal-cmd:` when whitelisted-idempotent, a cold Verifier agent for the expensive ones · **ATTESTABLE** (UI screenshot, human-read artifact) → must self-prove: fresh, non-vacuous (N>0, exit==0, clean stderr), run-stamp-targeted, negative control. The **observation artifact is provided by the producer**; absent → **send back immediately** (not a sterile low note).
+**Un 100 sur le TEXTE seul est INTERDIT pour tout exécutable.** Deux classes de preuve (moteur ch.2) : **REJOUABLE** (une commande / un build / une requête sans effet de bord) → la preuve se REJOUE, elle ne se croit pas — le contrôle de clôture rejoue `signal-cmd:` quand il est idempotent et sur liste blanche, un agent Vérificateur à froid pour les coûteuses · **ATTESTABLE** (capture d'écran d'UI, artefact lu par un humain) → doit se prouver elle-même : fraîche, non vide (N > 0, code de sortie 0, stderr propre), ciblée par une empreinte de run, avec contrôle négatif. L'**artefact d'observation est fourni par le producteur** ; absent → **renvoie immédiatement** (pas une note basse stérile).
 
-Recipes: **skill** → trigger test (router in blank context on should/should-not phrases) + 1 real run + **re-test after ANY edit** + cross-refs resolve · **script/code** → run on ≥1 input vs expected · **UI** → post-action screenshot READ · **doc/process** → walk it on 1 concrete case. Tooling unavailable → mark "triggering NON-VERIFIED" in the report; do not block 100 on an unavailable tool.
+Recettes : **skill** → test de déclenchement (routeur en contexte vierge sur des phrases qui doivent / ne doivent pas déclencher) + 1 run réel + **nouveau test après TOUTE édition** + les renvois croisés se résolvent · **script/code** → exécution sur ≥ 1 entrée contre l'attendu · **UI** → capture après action, LUE · **doc/processus** → déroule-le sur 1 cas concret. Outillage indisponible → marque « déclenchement NON VÉRIFIÉ » dans le rapport ; ne bloque pas un 100 sur un outil indisponible.
 
-**External-contract fields (integration/portage with an EXTERNAL consumer)**: fields whose meaning lives at the external consumer — schemaLocation / schema version, emitter/sender IDs, file naming, envelope/zip format — are exercised by NO local oracle (build compiles, XSD/schema validation checks structure/types not these values, real-effect replays only the INTERNAL observable). Each such field must be either **DIFFED against the reference/legacy emitted artifact** (the real proof), or explicitly marked **"verifiable only externally — NOT confirmed"** in the report and **EXCLUDED from a clean green**. Faithful/Real-effect must NOT fold to green a field no local validator exercises. (Proven false-green: an invented `noNamespaceSchemaLocation` passed build + XSD validation + a full judge panel; only the user, knowing the partner contract, caught it.)
+**Champs à contrat EXTERNE (intégration / portage vers un consommateur EXTERNE)** : les champs dont le sens vit chez le consommateur externe — emplacement / version de schéma, identifiants d'émetteur, nommage de fichier, format d'enveloppe ou de zip — ne sont exercés par AUCUN oracle local (le build compile, la validation de schéma vérifie la structure et les types, pas ces valeurs, et l'effet réel ne rejoue que l'observable INTERNE). Chaque champ de ce genre doit être soit **COMPARÉ à l'artefact de référence déjà émis** (la vraie preuve), soit explicitement marqué **« vérifiable seulement de l'extérieur — NON confirmé »** dans le rapport et **EXCLU d'un vert propre**. Le Fidèle et l'Effet réel ne doivent PAS passer au vert un champ qu'aucun validateur local n'exerce. (Faux-vert prouvé : un `noNamespaceSchemaLocation` inventé a passé le build, la validation XSD et un panel de juges complet ; seul l'utilisateur, qui connaissait le contrat du partenaire, l'a attrapé.)
 
-**Review the DIFF, not only the result** (engine): change surface ∝ the need, no out-of-scope files, no dead code/leftover debug, no secrets/credentials, no parasitic reformatting. Autonomous producers drift into opportunistic refactors — gate them here.
+**Revoir le DIFF, pas seulement le résultat** (moteur) : surface de changement ∝ le besoin, aucun fichier hors périmètre, aucun code mort ni débogage oublié, aucun secret ni identifiant, aucun reformatage parasite. Les producteurs autonomes dérivent vers des refactors opportunistes — c'est ici qu'on les arrête.
 
-**Launching judges**
+**Lancer les juges**
 
-Launch selected judges **IN PARALLEL** (one message, multiple subagent calls — never serial). **Model & temperature DIVERSITY (decorrelation, not just economy)**: [F] grunt dims (Corrector, Guardian, Optimizer, Conformer, Real-effect) → cheap model, but SPLIT across ≥2 models when ≥4 fire (two DISTINCT models/tiers on whatever provider drives the sub-agents — never a hardcoded model name, so this survives new model releases) so a single-model blind spot can't sink the whole [F] tier; [S] pivots (Faithful, Lean, Readable) → strong model, the 2 draws at DIFFERENT temperatures (e.g. 0.0 / 0.7) or checkpoints. Same-model+same-temperature judges are maximally correlated — vary deliberately. **[S] doubling**: 2 decorrelated draws via a NAMED ORTHOGONAL LENS each (draw A and B get DIFFERENT lenses — e.g. Faithful: A="trace every claim back to a need-criterion" / B="find a need-case the deliverable doesn't cover"; Lean: A="what's over-built" / B="what's duplicated"; Readable: A="newcomer at 6 months" / B="maintainer debugging at 2am" — NOT merely "different framing") for ALL [S] in critical, but only the SINGLE top pivot in standard. **Shared digest**: read the deliverable ONCE and inline it (or the relevant slice) into every judge's prompt — don't make N agents re-Read the same small files. Stable prefix (need + criteria + decisions) then the volatile last-cycle delta only.
+Lance les juges sélectionnés **EN PARALLÈLE** (un seul message, plusieurs appels de sous-agents — jamais en série). **DIVERSITÉ de modèle et de température (décorrélation, pas seulement économie)** : les dimensions [F] de main-d'œuvre (Correcteur, Gardien, Optimiseur, Conformiste, Effet réel) → modèle bon marché, mais RÉPARTIES sur ≥ 2 modèles dès que 4 ou plus se déclenchent (deux modèles/niveaux DISTINCTS chez le fournisseur qui porte les sous-agents — jamais un nom de modèle en dur, pour que la règle survive aux nouvelles sorties) afin qu'un angle mort propre à un modèle ne coule pas tout l'étage [F] ; les pivots [S] (Fidèle, Sobre, Lisible) → modèle fort, les 2 tirages à des températures DIFFÉRENTES (par ex. 0.0 / 0.7) ou sur des points de contrôle différents. Des juges au même modèle et à la même température sont au maximum corrélés — varie délibérément. **Doublement [S]** : 2 tirages décorrélés, chacun sous une LENTILLE ORTHOGONALE NOMMÉE (les tirages A et B reçoivent des lentilles DIFFÉRENTES — par ex. Fidèle : A = « remonte chaque affirmation à un critère du besoin » / B = « trouve un cas du besoin que le livrable ne couvre pas » ; Sobre : A = « ce qui est sur-construit » / B = « ce qui est dupliqué » ; Lisible : A = « un nouveau venu à 6 mois » / B = « un mainteneur qui débugue à 2 h du matin » — PAS simplement « une autre formulation ») pour TOUS les [S] en critical, mais seulement pour le SEUL pivot principal en standard. **Condensé partagé** : lis le livrable UNE fois et incorpore-le (ou sa tranche utile) dans le prompt de chaque juge — ne fais pas relire les mêmes petits fichiers par N agents. Préfixe stable (besoin + critères + décisions) puis le seul delta volatil du dernier cycle.
 
-**Prompt template (injected per judge — full operating copy):**
+**Modèle de prompt (injecté par juge — copie de travail complète) :**
 
-> *You are an **EXPERT SPECIALIST** of the dimension **\<DIMENSION\>**, and of NOTHING else. Focused posture — a generalist who dilutes attention misses the real defects; you look ONLY at \<DIMENSION\>. You are **EXTERNAL** (you did not produce this and defend none of its choices — that is what makes you incorruptible) and **INFORMED**, not amnesiac: your role is to make the note **CONVERGE**, not restart the debate.*
+> *Tu es un **SPÉCIALISTE EXPERT** de la dimension **\<DIMENSION\>**, et de RIEN d'autre. Posture focalisée — un généraliste qui dilue son attention rate les vrais défauts ; tu ne regardes QUE \<DIMENSION\>. Tu es **EXTERNE** (tu n'as pas produit ceci et ne défends aucun de ses choix — c'est ce qui te rend incorruptible) et **INFORMÉ**, pas amnésique : ton rôle est de faire **CONVERGER** la note, pas de rouvrir le débat.*
 >
-> *[**Posture** (assigned per draw — rotate the stance; a shared posture flattens the council into ONE blind spot): default = **adversarial expert** (hunt the defect); draw B = a **contrarian** (assume it is CORRECT, find the ONE scenario where it silently fails) OR a **naive reader** (no domain expertise — does it hold for someone who doesn't already know the answer?).]*
+> *[**Posture** (assignée par tirage — fais tourner la position ; une posture partagée aplatit le conseil en UN seul angle mort) : par défaut = **expert adversarial** (chasse le défaut) ; tirage B = un **contrarien** (suppose que c'est CORRECT, trouve le SEUL scénario où ça échoue en silence) OU un **lecteur naïf** (aucune expertise du domaine — est-ce que ça tient pour quelqu'un qui ne connaît pas déjà la réponse ?).]*
 >
-> *[**Exclusion zone** (injected per judge — keep scopes disjoint under MIN): you are NOT responsible for `<X>` (→ `<other judge>`); score ONLY your own lane, stay silent on the rest.]*
+> *[**Zone d'exclusion** (injectée par juge — garde les périmètres disjoints sous le MIN) : tu n'es PAS responsable de `<X>` (→ `<autre juge>`) ; note UNIQUEMENT ton couloir, reste silencieux sur le reste.]*
 >
-> *Read the deliverable: `<path/content>`.
-> [Faithful only: read the need (`## Besoin` of `<RUN.md path>`). You have the RIGHT to flag a stale/suspect/contradicted need as a MAJOR defect. **Walk the DoD checklist: each `- [ ]` item must hold against its proof — any unmet/unverifiable item = a MAJOR defect (need not met); a legacy prose criterion (no items) → verify holistically.**]
-> [Real-effect only: do NOT score on reading — confront ≥1 concrete case with the observation artifact PROVIDED BY THE PRODUCER; artifact ABSENT → SEND BACK (do not loop a low note).]
-> [Lean only: tag each over-build defect with ONE of — `delete` (dead/speculative → cut, no replacement) · `dup` (reimplements code/a dep ALREADY in this repo or an installed dependency → name the existing thing to reuse) · `stdlib` (hand-rolled → name the stdlib fn) · `native` (reimplements a platform/framework feature → name it) · `yagni` (single-impl abstraction / unused config / single-caller layer) · `shrink` (same logic, fewer lines → show the short form) — each as `<what to cut> → <replacement>`; end the note with an estimated `net: -N lines`. Judge-side echo of the producer Laziness ladder (ENGINE Ch.4) — `dup` covers its reuse-existing / installed-dep rungs.]*
+> *Lis le livrable : `<chemin/contenu>`.
+> [Fidèle seulement : lis le besoin (`## Besoin` de `<chemin du RUN.md>`). Tu as le DROIT de signaler un besoin périmé / suspect / contredit comme défaut MAJEUR. **Parcours la liste cochable : chaque item `- [ ]` doit tenir devant sa preuve — tout item non satisfait ou non vérifiable = un défaut MAJEUR (besoin non satisfait) ; un critère hérité en prose (sans items) → vérifie-le globalement.**]
+> [Effet réel seulement : ne note PAS sur lecture — confronte ≥ 1 cas concret à l'artefact d'observation FOURNI PAR LE PRODUCTEUR ; artefact ABSENT → RENVOIE (ne boucle pas sur une note basse).]
+> [Sobre seulement : étiquette chaque défaut de sur-construction avec UN de — `delete` (mort/spéculatif → on coupe, sans remplacement) · `dup` (réimplémente du code ou une dépendance DÉJÀ présente dans ce dépôt ou déjà installée → nomme la chose existante à réutiliser) · `stdlib` (fait main → nomme la fonction de la bibliothèque standard) · `native` (réimplémente une fonctionnalité de la plateforme ou du framework → nomme-la) · `yagni` (abstraction à une seule implémentation / config inutilisée / couche à un seul appelant) · `shrink` (même logique, moins de lignes → montre la forme courte) — chacun sous la forme `<ce qu'on coupe> → <remplacement>` ; termine la note par un `net: -N lignes` estimé. Écho côté juge de l'échelle de Paresse du producteur (ENGINE ch.4) — `dup` couvre ses barreaux réutiliser-l'existant / dépendance-installée.]*
 >
-> *You receive: (a) **need/intent**: `<Besoin>`; (b) **deliberate decisions + scope**: `<decisions + out-of-scope>` — voluntary, do NOT re-flag; (c) **ledger**: `<Défauts: defects raised + resolution>`.*
+> *Tu reçois : (a) le **besoin / l'intention** : `<Besoin>` ; (b) les **décisions délibérées + le périmètre** : `<décisions + hors-périmètre>` — volontaires, ne les re-signale PAS ; (c) le **registre** : `<Défauts : défauts remontés + résolution>`.*
 >
-> ***Investigate context** — repo conventions, neighboring files, the existing code/doc this deliverable must respect. Do NOT judge in a vacuum; open useful files. (Crucial for Conformer and Faithful.)*
+> ***Enquête sur le contexte** — conventions du dépôt, fichiers voisins, le code ou le doc existant que ce livrable doit respecter. Ne juge PAS dans le vide ; ouvre les fichiers utiles. (Crucial pour le Conformiste et le Fidèle.)*
 >
-> ***Convergence discipline.** Do NOT re-litigate settled or deliberate points. FIRST verify that prior ledger fixes HOLD (falsifiable re-check). THEN report ONLY: a real **NEW** defect, an **incomplete/wrong** prior fix, or a **REGRESSION**. "Already accepted" NEVER excuses a regression. PROVE every defect.*
+> ***Discipline de convergence.** Ne rouvre PAS un point tranché ou délibéré. D'ABORD, vérifie que les corrections déjà au registre TIENNENT (re-contrôle falsifiable). ENSUITE, ne rapporte QUE : un vrai défaut **NOUVEAU**, une correction précédente **incomplète ou fausse**, ou une **RÉGRESSION**. « Déjà accepté » n'excuse JAMAIS une régression. PROUVE chaque défaut.*
 >
-> *[F]: hunt a counter-example; found → note <100 with the case as proof; none after a serious search → 100. [S]: write the hardest hostile-expert attack FIRST, THEN score.*
+> *[F] : chasse un contre-exemple ; trouvé → note < 100 avec le cas en preuve ; aucun après une recherche sérieuse → 100. [S] : écris D'ABORD l'attaque la plus dure d'un expert hostile, PUIS note.*
 >
-> ***Calibration**: MAJOR (breaks/contradicts the need, blocking hole, regression) → **low note**; MINOR (friction) → **near 100**; 100 = no new/unresolved/regressed defect after a serious search. No note <100 without a named defect.*
+> ***Calibration** : MAJEUR (casse ou contredit le besoin, trou bloquant, régression) → **note basse** ; MINEUR (friction) → **proche de 100** ; 100 = aucun défaut nouveau, non résolu ou en régression après une recherche sérieuse. Aucune note < 100 sans un défaut nommé.*
 >
-> ***Few-shot** `defects[].description` — ✅ «ligne 42 : pas de null-guard sur `user.id` → TypeError sur appel anonyme» (lieu + déclencheur) · ❌ «le code est fragile» (rejeté : ni lieu ni déclencheur = non falsifiable).*
+> ***Exemples** pour `defects[].description` — ✅ « ligne 42 : pas de null-guard sur `user.id` → TypeError sur appel anonyme » (lieu + déclencheur) · ❌ « le code est fragile » (rejeté : ni lieu ni déclencheur = non falsifiable).*
 >
-> *Reply ONLY in JSON:
+> *Réponds UNIQUEMENT en JSON :
 > `{"schema_version":"je-1","dimension":"...","note":0-100,"interval":"...","unstable":bool,"unstable_reason":"...","artifact_based":bool,"defects":[{"severity":"major|minor","nature":"fixable|intrinsic|wont_fix","type":"new|incomplete_fix|regression","description":"...","to_reach_100":"..."}]}`
-> (`je-1` canonical in `_engine/ENGINE.md`. `artifact_based:false` = self-declared, unverified out-of-model. **`unstable_reason`**: non-empty when `unstable:true` — WHY (missing proof vs ill-defined criterion), so the consumer fixes the right thing. **If a fact you'd need is MISSING and would move your note >20 pts → say so and flag it, don't guess a digit.** **`nature`**: `fixable` (producer can correct) · `intrinsic` (design ceiling, NOT a bug — excluded from the global MIN, carried as a risk note) · `wont_fix` (deliberate). `to_reach_100` may be `""` for a minor in a ≤standard regime — do NOT manufacture a cosmetic path to 100.)*
+> (`je-1` est canonique dans `_engine/ENGINE.md`. `artifact_based:false` = auto-déclaré, non vérifié hors modèle. **`unstable_reason`** : non vide quand `unstable:true` — POURQUOI (preuve manquante contre critère mal défini), pour que le consommateur corrige la bonne chose. **Si un fait dont tu aurais besoin MANQUE et déplacerait ta note de plus de 20 points → dis-le et signale-le, ne devine pas un chiffre.** **`nature`** : `fixable` (le producteur peut corriger) · `intrinsic` (plafond de conception, PAS un bug — exclu du MIN global, porté en note de risque) · `wont_fix` (délibéré). `to_reach_100` peut être `""` pour un mineur dans un régime ≤ standard — ne fabrique PAS un chemin cosmétique vers 100.)*
 
-### Behavioral target? → `kaizen`, not judge
+### Cible comportementale ? → `kaizen`, pas judge
 
-"Find my blind spots", "what do I systematically miss", "audit my workflow/habits" is NOT a judge
-job. Judge grades a DELIVERABLE and is forbidden to write; improving a BEHAVIOR means editing the
-kit. This skill carried that audit as "Mode B" until 2026-09-01 — a doublon of `kaizen` with the
-opposite closing rule (judge proposed and never wrote, kaizen applies its edits). The lens list,
-the "already covered" preload, the 2-dry-rounds convergence and the same-model caveat now live in
-`kaizen` step 2. **Route there and stop** — do not re-derive them here.
+« Trouve mes angles morts », « qu'est-ce que je rate systématiquement », « audite mon workflow / mes
+habitudes » n'est PAS un travail de juge. Judge note un LIVRABLE et n'a pas le droit d'écrire ;
+améliorer un COMPORTEMENT suppose d'éditer le kit. Cette skill a porté cet audit sous le nom de
+« Mode B » jusqu'au 2026-09-01 — un doublon de `kaizen` avec la règle de clôture inverse (judge
+proposait et n'écrivait jamais, kaizen applique ses éditions). La liste des lentilles, le
+préchargement « déjà couvert », la convergence à 2 tours à vide et la réserve du même modèle vivent
+désormais à l'étape 2 de `kaizen`. **Route là-bas et arrête-toi** — ne les redérive pas ici.
 
-**DISAMBIGUATE "audit"**: QUALITY of a DELIVERABLE → judge (this skill). WORKFLOW / behavior /
-habits / skill set → `kaizen`.
+**DÉSAMBIGUÏSER « audit »** : la QUALITÉ d'un LIVRABLE → judge (cette skill). WORKFLOW / comportement
+/ habitudes / jeu de skills → `kaizen`.
 
-## Don't
+## À ne pas faire
 
-- **FIX what you audit** — judge JUDGES, never repairs: defects go back to the producer = `build` (or you switching hats same-session; a judge NEVER audits work it just produced).
-- **Ship 100 on TEXT alone for an executable** — absent observation artifact → send back, not a sterile low note.
-- **Show raw internal jargon** in the report (`[S]/[F]`, `artifact_based`, `je-1`, "MIN", "ROI-stop") — translate to plain words.
-- **Emit a bare 2-digit /100** as the surfaced verdict — report a band (keep/maybe/drop) + the spread; a self-awarded precision is a judgment, not a measurement (producer=judge).
-- **Disguise a degraded/INVALID state as green** — surface every false-green caveat; same-model panel is not independent confirmation.
-- **Audit a BEHAVIOR here** — judge may not write to the kit, and a behavioral finding is worthless unwritten: route to `kaizen`.
-- Frame a need (→ `frame`) · prepare the autonomous loop / observability (→ `terrain`) · run a single-pass code PR (→ code-review).
+- **CORRIGER ce que tu audites** — judge JUGE, ne répare jamais : les défauts retournent au producteur = `build` (ou à toi qui changes de casquette dans la même session ; un juge n'audite JAMAIS un travail qu'il vient de produire).
+- **Livrer un 100 sur le TEXTE seul pour un exécutable** — artefact d'observation absent → renvoi, pas une note basse stérile.
+- **Montrer du jargon interne brut** dans le rapport (`[S]/[F]`, `artifact_based`, `je-1`, « MIN », « arrêt au rendement ») — traduis en mots simples.
+- **Émettre un /100 nu à deux chiffres** comme verdict affiché — rapporte une bande (garde / peut-être / jette) + la dispersion ; une précision auto-attribuée est un jugement, pas une mesure (producteur = juge).
+- **Déguiser un état dégradé ou INVALIDE en vert** — expose chaque réserve de faux-vert ; un panel du même modèle n'est pas une confirmation indépendante.
+- **Auditer un COMPORTEMENT ici** — judge n'a pas le droit d'écrire dans le kit, et un constat comportemental non écrit ne vaut rien : route vers `kaizen`.
+- Cadrer un besoin (→ `frame`) · préparer la boucle autonome / l'observabilité (→ `terrain`) · faire une revue de PR en passe unique (→ code-review).
 
-## Engine & reflexes
+## Moteur et réflexes
 
-- Every scoring mechanic — proof classes (REPLAYABLE vs ATTESTABLE), `[F]`/`[S]` scoring with decorrelated draws, MIN aggregation, fail-closed `[1b]`, the `je-1` verdict OBJECT, the loop stops (ROI-stop / cap / stagnation / regression / conflict), degraded mode, fallback without subagents — is **CANONICAL in `~/.claude/skills/_engine/ENGINE.md` (Ch.2 JUDGE, Ch.3 RUN)**. Read it at the Prelude. On divergence the engine wins. (Judge's delta = the panel table + exclusion zones + the injected prompt template + the [2b] blind-spot sweep.)
-- **Exception — kept INLINE here as operating copy** (NOT in the engine): the full injected judge prompt template, the panel selection table, the exclusion zones, the [S]/[F] doubling rules, and the plain-words Report translation rules. The engine carries only the `je-1` schema.
+- Toute la mécanique de notation — classes de preuve (REJOUABLE contre ATTESTABLE), notation `[F]`/`[S]` avec tirages décorrélés, agrégation par MIN, `[1b]` qui échoue fermé, l'objet de verdict `je-1`, les arrêts de boucle (rendement / plafond / stagnation / régression / conflit), le mode dégradé, le repli sans sous-agents — est **CANONIQUE dans `~/.claude/skills/_engine/ENGINE.md` (ch.2 JUDGE, ch.3 RUN)**. Lis-le au Prélude. En cas de divergence, le moteur gagne. (Le delta propre à judge = la table du panel + les zones d'exclusion + le modèle de prompt injecté + le balayage d'angles morts [2b].)
+- **Exception — gardé EN LIGNE ici comme copie de travail** (PAS dans le moteur) : le modèle complet de prompt injecté, la table de sélection du panel, les zones d'exclusion, les règles de doublement [S]/[F], et les règles de traduction du Rapport en mots simples. Le moteur ne porte que le schéma `je-1`.
 
 ## Les LOGS de conversation — la source de première main
 

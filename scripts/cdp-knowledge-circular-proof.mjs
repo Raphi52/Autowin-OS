@@ -1,4 +1,5 @@
 import { racineDepot } from './racine-depot.mjs'
+import { reserverInstance } from './avec-instance-headless.mjs'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -8,7 +9,13 @@ const root = racineDepot()
 const helper = join(root, 'scripts', 'autowin-headless.ps1')
 const executable = join(root, 'dist', 'win-unpacked', 'autowin-os.exe')
 const instanceId = `knowledge-circular-${Date.now()}`
-const port = 9274
+// Port reserve par verrou a partir de 9274 : il etait en dur et croisait les travaux paralleles.
+const { port } = reserverInstance({
+  instanceId,
+  portDemande: 9274,
+  racine: root,
+  prefixe: '[knowledge-circular]'
+})
 const runStamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const artifactsRoot = join(
   root,

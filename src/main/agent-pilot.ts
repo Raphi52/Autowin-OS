@@ -669,6 +669,22 @@ function replierSurLaMiniature(piece: PieceJointeDuFil | undefined): PieceJointe
   }
 }
 
+/**
+ * L'identite du fil injectee au modele est celle du TOUR, jamais celle de l'onglet AFFICHE.
+ * `snapshotForPrompt()` porte `activeConversationId`, pose par le renderer au changement d'onglet.
+ * Un tour qui se joue dans conv-A pendant que l'utilisateur regarde conv-B faisait donc lire au
+ * modele l'id de conv-B : il se croyait dans un autre fil, declarait son historique vide, et pouvait
+ * partir chercher « le vrai fil » avec `conversation_search` — alors que l'historique, lui, etait
+ * correctement transmis. Mesure du 2026-09-14 (conv-526) : reponse « cet echange arrive dans un fil
+ * different (conv-533)… ce fil-ci est vide » rendue DANS conv-526.
+ */
+export function snapshotDuTour<T extends { activeConversationId?: string }>(
+  snapshot: T,
+  conversationId?: string
+): T {
+  return conversationId ? { ...snapshot, activeConversationId: conversationId } : snapshot
+}
+
 export class AgentPilot {
   constructor(
     private readonly registry: ProviderRegistry,
@@ -1019,7 +1035,10 @@ export class AgentPilot {
     const catalog = this.bus.catalog()
     // Sous-jalons : `snapshot` recouvre trois lectures (runs, bureaux, recensement git). Les
     // marquer sépare la cause de l'effet dans l'onglet Latence de la vue Tests.
-    const snapshot = await this.bus.snapshotForPrompt((nom) => timer.mark(nom))
+    const snapshot = snapshotDuTour(
+      await this.bus.snapshotForPrompt((nom) => timer.mark(nom)),
+      conversationId
+    )
     timer.mark('snapshot')
 
     const latestUserMessage = resolveLatestUserMessage(history, routingUserMessageOverride)
@@ -2946,7 +2965,7 @@ export class AgentPilot {
         return
       }
 
-      const state = await this.bus.snapshotForPrompt()
+      const state = snapshotDuTour(await this.bus.snapshotForPrompt(), conversationId)
       const bloc = blocEtatSuivant(dernierEtatEnvoye, state)
       dernierEtatEnvoye = state
       convo.push(`TU AS ÉMIS: ${text}`)

@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBrancheCourante } from './branche-courante'
+import { presenceDepuisRunsVivants } from './run-presence'
 import { useClampDansFenetre } from './useClampDansFenetre'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './markdown-recommandation'
@@ -37,6 +38,7 @@ import {
   hydrateStoredAssistant,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  suiviDuBasApresEnvoi,
   doitSuivreLeRoutage,
   compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
@@ -70,6 +72,7 @@ import { deciderRepriseProgrammee, libelleRepriseProgrammee } from './reprise-qu
 import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
 import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
+import { HdeskTv } from './HdeskTv'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
@@ -253,11 +256,12 @@ function ghostDuFil(fil: Msg[], depotPresent: boolean): string | null {
   const demandeDuTour = [...fil]
     .reverse()
     .find((m): m is UserMsg & { messageId?: string } => m.role === 'user')?.content
-  const suite = extrairePromptSuivant(text, demandeDuTour) ?? extractRecommendation(text)
+  const suite =
+    extrairePromptSuivant(text, demandeDuTour, depotPresent) ?? extractRecommendation(text)
   // Le repli sur la rubrique « Recommandé » obéit à la même règle : publier passe par /salvage —
   // et une publication que personne n'a demandée ne propose RIEN du tout.
   if (!suite) return suite
-  if (publicationJamaisDemandee(suite, demandeDuTour)) return null
+  if (publicationJamaisDemandee(suite, demandeDuTour, depotPresent)) return null
   return estPromptDePublication(suite, demandeDuTour, depotPresent) ? PROMPT_SALVAGE : suite
 }
 
@@ -1200,10 +1204,26 @@ export function ChatView({
     // Differe d'une micro-tache et appel OPTIONNEL, comme dans Routage : un preload plus ancien
     // que le renderer ne doit pas produire de rejet non gere, et un `setState` atteint
     // synchronement depuis un effet declenche des rendus en cascade.
-    void Promise.resolve().then(async () => {
+    // UN SEUL ESSAI NE SUFFIT PAS. Vecu le 2026-09-12 : quand cet appel echoue au demarrage (main
+    // pas encore pret, preload plus ancien qu'un renderer recharge a chaud), la liste restait nulle
+    // POUR TOUTE LA SESSION et le bloc « Compte » disparaissait de la pop-up, sans aucun message.
+    let annule = false
+    let essais = 0
+    const charger = async (): Promise<void> => {
+      if (annule) return
       const payload = await window.api.claudeAccounts?.().catch(() => null)
-      if (payload) setComptesClaude(payload)
-    })
+      if (annule) return
+      if (payload && payload.accounts.length > 0) {
+        setComptesClaude(payload)
+        return
+      }
+      essais += 1
+      if (essais < 5) setTimeout(() => void charger(), 1000 * essais)
+    }
+    void Promise.resolve().then(charger)
+    return () => {
+      annule = true
+    }
   }, [])
 
   /**
@@ -1214,18 +1234,21 @@ export function ChatView({
    * main le re-applique de toute facon au depart de chaque tour : c'est lui qui tient la verite.
    */
   const choisirCompteDeConversation = async (accountId: string): Promise<void> => {
-    if (!activeId || compteBusy) return
+    if (compteBusy) return
     setCompteBusy(true)
     setCompteError(null)
     try {
-      await window.api.conversationSetClaudeAccount?.(activeId, accountId)
+      // Sans conversation ouverte, on bascule seulement le compte de l'application : il n'y a
+      // encore aucun fil sur lequel memoriser le choix.
+      if (activeId) await window.api.conversationSetClaudeAccount?.(activeId, accountId)
       const payload = await window.api.claudeAccountSwitch?.(accountId)
       if (payload) setComptesClaude(payload)
-      setConvs((courant) =>
-        courant.map((conv) =>
-          conv.id === activeId ? { ...conv, claudeAccountId: accountId } : conv
+      if (activeId)
+        setConvs((courant) =>
+          courant.map((conv) =>
+            conv.id === activeId ? { ...conv, claudeAccountId: accountId } : conv
+          )
         )
-      )
       window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
     } catch (error) {
       setCompteError(error instanceof Error ? error.message : String(error))
@@ -1730,7 +1753,11 @@ export function ChatView({
               setConversationQueue(convId, suite)
               // `targetConversationId` EXPLICITE : ce handler est monte une fois et capture un
               // `activeId` qui peut valoir null, alors que le fil vise bien cette conversation.
-              void send(tete.text, { keepComposerDraft: true, targetConversationId: convId })
+              void send(tete.text, {
+                keepComposerDraft: true,
+                automatique: true,
+                targetConversationId: convId
+              })
             }
           }
           const text = `⚠️ ${textes.length} orientation(s) arrivée(s) après la fin du tour : ${
@@ -2178,7 +2205,6 @@ export function ChatView({
       )
       return
     }
-    console.log('[SONDE2] effet', 'followTail=' + followTailRef.current, 'restaurer=' + !!aRestaurer, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
     if (!followTailRef.current) {
       basculeConvRef.current = false
       setHasNewActivity(true)
@@ -2202,7 +2228,6 @@ export function ChatView({
         requestAnimationFrame,
         40,
         (landed) => {
-          console.log('[SONDE2] settled', 'landed=' + landed, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
           descenteEnVolRef.current = false
           basculeConvRef.current = false
           if (!landed) setHasNewActivity(true)
@@ -2252,7 +2277,6 @@ export function ChatView({
       requestAnimationFrame,
       120,
       (landed) => {
-          console.log('[SONDE2] settled', 'landed=' + landed, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
         descenteEnVolRef.current = false
         if (!landed) setHasNewActivity(true)
       },
@@ -2292,7 +2316,6 @@ export function ChatView({
           requestAnimationFrame,
           120,
           (landed) => {
-          console.log('[SONDE2] settled', 'landed=' + landed, 'top=' + scroll.scrollTop, 'h=' + scroll.scrollHeight)
             descenteEnVolRef.current = false
             if (!landed) setHasNewActivity(true)
           },
@@ -2920,6 +2943,7 @@ export function ChatView({
     await send(texte, {
       targetConversationId: cible,
       keepComposerDraft: true,
+      automatique: true,
       piecesJointesImposees: pieces,
       repriseSurcharge: reprise.tentative
     })
@@ -3309,6 +3333,7 @@ export function ChatView({
     // Le drain n'est PAS un geste de l'utilisateur : il ne doit rien prendre au composer.
     void send(nextMessage.text, {
       keepComposerDraft: true,
+      automatique: true,
       ...(nextMessage.attachments?.length ? { piecesJointesImposees: nextMessage.attachments } : {})
     })
     // `activeId` AUTANT que `busy` : une file remplie pendant le tour de A survit à un aller-retour
@@ -3392,7 +3417,7 @@ export function ChatView({
     etat.tour = decision.signature
     etat.prompt = decision.texte
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
-    void send(decision.texte, { keepComposerDraft: true })
+    void send(decision.texte, { keepComposerDraft: true, automatique: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoActif, activeId, busy, messages, brouillonPresent])
 
@@ -3422,7 +3447,7 @@ export function ChatView({
       if (id === activeId) continue
       const etat = autoEtat(id)
       const decision = deciderRelanceAuto({
-      depotPresent,
+        depotPresent,
         actif: true,
         occupe: false,
         fil: liveMessagesRef.current.get(id) ?? [],
@@ -3462,7 +3487,11 @@ export function ChatView({
       autoEssaisRef.current.delete(id)
       etat.tour = decision.signature
       etat.prompt = decision.texte
-      void send(decision.texte, { keepComposerDraft: true, targetConversationId: id })
+      void send(decision.texte, {
+        keepComposerDraft: true,
+        automatique: true,
+        targetConversationId: id
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConvs, autoArmePour, activeId, busyConversations, autoTic])
@@ -3787,7 +3816,10 @@ export function ChatView({
       setDraftAttachments(sendDraftKey, () => [])
       setDraftError(sendDraftKey, null)
     }
-    followTailRef.current = true
+    followTailRef.current = suiviDuBasApresEnvoi({
+      suivaitLeBas: followTailRef.current,
+      envoiAutomatique: options?.automatique === true
+    })
     /*
      * ENVOYER remet a zero les signaux d'alerte du fil : le lecteur veut voir sa reponse, pas un
      * bouton « il y a du nouveau » herite d'avant l'envoi. La DESCENTE elle-meme reste pilotee par
@@ -3803,6 +3835,7 @@ export function ChatView({
      * `ChatView.descente-envoi.test.tsx`.
      */
     if (
+      followTailRef.current &&
       scrollRef.current &&
       (!sourceConversationId || sourceConversationId === activeRef.current)
     ) {
@@ -3821,7 +3854,6 @@ export function ChatView({
        */
       positionARestaurerRef.current = null
       setAtterrissageDemande((tour) => tour + 1)
-      console.log('[SONDE2] send', 'followTail=' + followTailRef.current, 'top=' + scrollRef.current.scrollTop, 'h=' + scrollRef.current.scrollHeight)
     }
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
 
@@ -4338,10 +4370,18 @@ export function ChatView({
     .reverse()
     .find((message): message is AsstMsg => message.role === 'assistant')
   // Le composer y ajoute « et rien n'est tapé, aucune pièce jointe » : ces deux-là sont chez lui.
+  /**
+   * `failed` EST un cas de reprise — mesure du 2026-09-13 : 205 tours en echec contre 119 annules,
+   * et « reprend » retape a la main 78 fois, dont 63 juste apres un echec. Le seul geste offert sur
+   * un echec (« ↻ Renvoyer ») rejoue le prompt depuis zero et jette le travail partiel ; ce
+   * bouton-ci POURSUIT la session (`resumePilotChat`), ce qui est exactement le geste contourne.
+   */
   const resumeAvailable =
     !busy &&
     Boolean(activeId) &&
-    (latestAssistant?.status === 'cancelled' || latestAssistant?.status === 'interrupted')
+    (latestAssistant?.status === 'cancelled' ||
+      latestAssistant?.status === 'interrupted' ||
+      latestAssistant?.status === 'failed')
   // « Plus récentes » = là où L'UTILISATEUR a parlé en dernier, pas la dernière touche : ranger une
   // conversation dans un dossier bougeait `updatedAt` et la propulsait en tête (2026-08-18).
   /** Handles des composers de la mosaique — un par fenetre, pour vider le champ apres envoi. */
@@ -4819,6 +4859,25 @@ export function ChatView({
       alive = false
     }
   }, [isActive, activeId, showRuns, liveRuns, active])
+
+  /**
+   * PRÉSENCE SYSTÈME : la fenêtre est le seul endroit qui sait quels runs tournent — elle le dit au
+   * process principal, qui pose la jauge de barre des tâches et le texte de l'icône de notification.
+   * Envoi best-effort : un pont absent (tests, fenêtre de question) ne doit rien casser.
+   */
+  useEffect(() => {
+    const pont = (
+      globalThis as {
+        api?: { signalerRunsVivants?: (e: ReturnType<typeof presenceDepuisRunsVivants>) => unknown }
+      }
+    ).api
+    if (!pont?.signalerRunsVivants) return
+    try {
+      void pont.signalerRunsVivants(presenceDepuisRunsVivants(liveRuns))
+    } catch (error) {
+      traceSilentFailure('presence-systeme', error)
+    }
+  }, [liveRuns])
 
   const visibleLiveRuns = mergeLiveAndPersisted<OrchStep>(
     visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, 'conv'),
@@ -5996,7 +6055,6 @@ Cliquer pour choisir une autre branche.`}
                     })
                   : nearBottom
               dernierScrollTopRef.current = conteneur.scrollTop
-              console.log('[SONDE2] scroll', 'suit=' + suit, 'geste=' + gesteLecteurRef.current, 'envol=' + descenteEnVolRef.current, 'prec=' + dernierScrollTopRef.current, 'top=' + conteneur.scrollTop, 'near=' + nearBottom)
               followTailRef.current = suit
               setScrolledAwayFromTail(!suit)
               if (suit) setHasNewActivity(false)
@@ -6053,6 +6111,11 @@ Cliquer pour choisir une autre branche.`}
               ))}
 
             {filRendu}
+
+            {/* Petite TV du bureau cache (conv-528) : un BLOC DEDIE du fil, apres le dernier message
+                (demande du 2026-09-14 « la TV doit etre dans le fil dans un bloc dedie »). Rien
+                n'est rendu sans bureau cache vivant relie a ce fil ; `key` la remet a zero par fil. */}
+            <HdeskTv key={activeId ?? 'aucune'} conversationId={activeId} />
           </div>
 
           {(hasNewActivity || scrolledAwayFromTail) && (
@@ -6323,10 +6386,15 @@ Cliquer pour choisir une autre branche.`}
                     error={modelChangeError}
                     onSelect={(option) => void changeOrchestratorModel(option)}
                     comptes={
-                      comptesClaude && activeId
+                      // Sans conversation ouverte (fil neuf pas encore cree), le bloc reste
+                      // AFFICHE et se replie sur le compte actif de l'application : le faire
+                      // disparaitre donnait l'impression que la fonctionnalite avait ete retiree.
+                      comptesClaude
                         ? {
                             accounts: comptesClaude.accounts,
-                            selectedId: convs.find((conv) => conv.id === activeId)?.claudeAccountId,
+                            selectedId: activeId
+                              ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
+                              : undefined,
                             activeId: comptesClaude.activeId,
                             busy: compteBusy || busy,
                             error: compteError,

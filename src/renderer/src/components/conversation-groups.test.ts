@@ -273,7 +273,7 @@ describe('groupeRecent — le raccourci « Récent »', () => {
   })
 
   it('rend les 10 plus récentes, toutes catégories confondues, sans retirer leur catégorie', () => {
-    const conversations = Array.from({ length: 14 }, (_, i) => conv(`c${i}`, 'C:\P'))
+    const conversations = Array.from({ length: 14 }, (_, i) => conv(`c${i}`, 'C:\\P'))
     const dates = new Map(conversations.map((c, i) => [c.id, i]))
     const recent = groupeRecent(conversations, (c) => dates.get(c.id) ?? 0)
     expect(recent?.items).toHaveLength(10)

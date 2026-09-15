@@ -1,105 +1,120 @@
 ---
 name: heal
-description: Drive the FULL pipeline (scout → frame → terrain → build → clean → judge) against the SICKNESS of a codebase — slowness, bugs, under-optimised and unstructured code — until a vibe-coded project becomes a structured, measured, working one. Unlike `remake`, which spends design hindsight on a FINISHED deliverable, `heal` starts from SYMPTOMS: a measured latency, a reproduced bug, a hot path nobody profiled. Every candidate it retains must carry a FALSIFIABLE symptom before any phase runs — a number, a red test, a trace, OR, when nothing can be timed, a COUNTED static criterion (O(n2) scan, N+1 query, sync I/O on a hot path) with its `file:line`; no falsifiable symptom, no heal, but an unmeasurable perf defect is still healed (see step 0 bis). Trigger on `/heal`, "c'est lent", "ça rame", "optimise le projet", "répare le projet", "make it fast", "clean up this vibe-coded mess". Do NOT use to: pick a feature to build (→ `scout`), redesign a screen's look (→ `draft`), audit a finished deliverable (→ `judge`), or improve the kit's own rules (→ `kaizen`). heal SEQUENCES phases, it never re-implements one.
+description: >-
+  Pilote le pipeline COMPLET (scout → frame → terrain → build → clean → judge) contre la MALADIE
+  d'une codebase — lenteur, bugs, code sous-optimisé et non structuré — jusqu'à ce qu'un projet
+  bricolé devienne structuré, mesuré et fonctionnel. Contrairement à `remake`, qui dépense le recul
+  de conception sur un livrable FINI, `heal` part de SYMPTÔMES : une latence mesurée, un bug
+  reproduit, un chemin chaud que personne n'a profilé. Chaque candidat retenu porte un symptôme
+  FALSIFIABLE avant qu'aucune phase ne tourne — un chiffre, un test rouge, une trace, OU, si rien ne
+  peut être chronométré, un CRITÈRE STATIQUE COMPTÉ (O(n2), requête N+1, E/S synchrone) avec son
+  `file:line` ; pas de symptôme falsifiable, pas de heal, mais un défaut de perf non mesurable se
+  soigne quand même (§ 0 bis). Déclencher sur `/heal`, « c'est lent », « ça rame », « optimise /
+  répare le projet », « make it fast ». heal ENCHAÎNE les phases, sans en réimplémenter.
 ---
 
-# heal — from vibe-coded to structured, measured, fast
+# heal — du code bricolé au code structuré, mesuré, rapide
 
-## Purpose
+## À quoi ça sert
 
-A vibe-coded project is not broken everywhere; it is **slow and fragile in a few places nobody
-measured**. `heal` refuses the two usual failures: optimising what is already fast, and "fixing"
-a bug whose cause was never localised. It takes a target, produces a ranked list of **symptoms with
-numbers**, and drives each one through the whole pipeline to a verified end.
+Un projet bricolé n'est pas cassé partout ; il est **lent et fragile à quelques endroits que personne
+n'a mesurés**. `heal` refuse les deux échecs habituels : optimiser ce qui est déjà rapide, et « corriger »
+un bug dont la cause n'a jamais été localisée. Il prend une cible, produit une liste classée de **symptômes avec
+des chiffres**, et pilote chacun à travers tout le pipeline jusqu'à une fin vérifiée.
 
-**Anti-pansement is the spine of this skill.** Widening a timeout, swallowing a catch, adding a blind
-retry, loosening an assertion until it passes — all are REFUSED here by construction. A fix on an
-unlocalised cause is a maybe-fix on a maybe-bug.
+**L'anti-pansement est la colonne vertébrale de cette skill.** Élargir un timeout, avaler un catch, ajouter une reprise
+en aveugle, desserrer une assertion jusqu'à ce qu'elle passe — tout cela est REFUSÉ ici par construction. Un correctif sur une
+cause non localisée est un peut-être-correctif sur un peut-être-bug.
 
-## Procedure
+## Quand la déclencher — et quand NON
+**Déclencheurs** : `/heal` · « c'est lent » · « ça rame » · « optimise le projet » · « répare le projet » · « make it fast » · « clean up this vibe-coded mess ».
+**PAS pour** : choisir une fonctionnalité à construire → `scout` · refaire l'allure d'un écran → `draft` · auditer un livrable fini → `judge` · améliorer les règles du kit → `kaizen`.
+**Différence avec `remake`** : `remake` dépense le recul de conception sur un livrable FINI ; `heal` part de SYMPTÔMES — une latence mesurée, un bug reproduit, un chemin chaud que personne n'a profilé.
 
-### 0. BASELINE — measure before touching anything
+## Procédure
 
-No optimisation starts without a number that exists BEFORE the change.
+### 0. RÉFÉRENCE — mesurer avant de toucher à quoi que ce soit
 
-- Perf: the app's own measurements (view / traces / timings) if available; otherwise a reproducible
-  timing harness added under `terrain`.
-- Bugs: a RED test that reproduces, or an execution trace. A bug report is not a symptom.
-- Structure: a countable signal (duplicated implementations, file size, cyclomatic hot spots).
+Aucune optimisation ne démarre sans un chiffre qui existe AVANT le changement.
 
-Record every baseline value with its source. **A dated measurement is not the current state** — re-probe
-before using it as a target.
+- Perf : les mesures propres à l'app (vue / traces / temps) si elles existent ; sinon un harnais de
+  chronométrage reproductible ajouté sous `terrain`.
+- Bugs : un test ROUGE qui reproduit, ou une trace d'exécution. Un rapport de bug n'est pas un symptôme.
+- Structure : un signal dénombrable (implémentations dupliquées, taille de fichier, points chauds de complexité).
 
-### 0 bis. NO MEASUREMENT AVAILABLE — the static perf path
+Consigne chaque valeur de référence avec sa source. **Une mesure datée n'est pas l'état courant** — resonde
+avant de t'en servir comme cible.
 
-A perf defect whose cost cannot be TIMED is still a perf defect. The moment step 0 cannot produce a
-number (no profiler on this path, cold code, timing dominated by noise, measurement harness itself
-too expensive) → **do NOT drop the candidate and do NOT stop the heal**: switch it to a STATIC
-criterion, and say so.
+### 0 bis. AUCUNE MESURE POSSIBLE — le chemin de la perf statique
 
-A static criterion is COUNTED in the code, not timed at runtime, and it must be falsifiable by
-reading or by a test:
+Un défaut de perf dont le coût ne peut pas être CHRONOMÉTRÉ reste un défaut de perf. Au moment où l'étape 0 ne peut pas produire de
+chiffre (aucun profileur sur ce chemin, code froid, chronométrage noyé dans le bruit, harnais de mesure lui-même
+trop coûteux) → **n'abandonne PAS le candidat et n'arrête PAS le heal** : bascule-le sur un CRITÈRE
+STATIQUE, et dis-le.
 
-- **complexity** — a nested scan over the same collection (O(n²) where O(n) suffices): count the
-  scans, name the two loops with `file:line`;
-- **repetition** — the same read / query / parse executed N times where 1 suffices (per-item query
-  instead of one batch, file re-read per call, JSON re-parsed per render): count N;
-- **blocking** — synchronous I/O, `readFileSync`, or an `await` in a loop on a path that serves the
-  UI or a request;
-- **waste** — work produced then thrown away (full list built to take the first item, render without
-  memo on a stable input), missing index on a filtered column.
+Un critère statique se COMPTE dans le code, il ne se chronomètre pas à l'exécution, et il doit être falsifiable par
+la lecture ou par un test :
 
-Rules of this path, all mandatory:
-1. **The cause is LOCALISED** (`file:line`) before the fix — a static criterion never licenses a
-   guess. No localisation → the candidate is dropped, exactly as before.
-2. **The done-signal becomes countable, not chronometric**: `3 scans → 1`, `N+1 queries → 1 batch`,
-   `readFileSync in render → cached`. Where possible it is FROZEN by a test (call counter, spy,
-   assertion on the number of queries) so a regression comes back red.
-3. **The gain is reported as `gain non mesuré — cause localisée`**, never as a speed-up in ms. Writing
-   "3× faster" without a measurement is a false green (réflexe 2).
-4. **Behaviour is preserved and PROVEN**: the existing tests of the touched files go red→green or
-   stay green. An optimisation with no behavioural proof is not shipped.
-5. **No static candidate that only makes the code prettier.** If nothing countable changes, it is a
-   `🧱 structure` candidate, not a perf one — rank it as such instead of disguising it.
+- **complexité** — un balayage imbriqué sur la même collection (O(n²) là où O(n) suffit) : compte les
+  balayages, nomme les deux boucles avec leur `file:line` ;
+- **répétition** — la même lecture / requête / analyse exécutée N fois là où 1 suffit (requête par élément
+  au lieu d'un lot, fichier relu à chaque appel, JSON réanalysé à chaque rendu) : compte N ;
+- **blocage** — E/S synchrone, `readFileSync`, ou un `await` dans une boucle sur un chemin qui sert
+  l'interface ou une requête ;
+- **gaspillage** — du travail produit puis jeté (liste complète construite pour en prendre le premier élément, rendu sans
+  mémoïsation sur une entrée stable), index manquant sur une colonne filtrée.
 
-Mark these candidates `🐌 perf (statique)` in the table so the report never mixes a measured delta
-with a counted one.
+Règles de ce chemin, toutes obligatoires :
+1. **La cause est LOCALISÉE** (`file:line`) avant le correctif — un critère statique n'autorise jamais une
+   devinette. Pas de localisation → le candidat est abandonné, exactement comme avant.
+2. **Le signal de fin devient dénombrable, pas chronométrique** : `3 balayages → 1`, `N+1 requêtes → 1 lot`,
+   `readFileSync dans le rendu → mis en cache`. Quand c'est possible, il est FIGÉ par un test (compteur d'appels, espion,
+   assertion sur le nombre de requêtes) pour qu'une régression revienne rouge.
+3. **Le gain se rapporte en `gain non mesuré — cause localisée`**, jamais en accélération en ms. Écrire
+   « 3× plus rapide » sans mesure est un faux vert (réflexe 2).
+4. **Le comportement est préservé et PROUVÉ** : les tests existants des fichiers touchés passent de rouge à vert ou
+   restent verts. Une optimisation sans preuve comportementale ne part pas.
+5. **Aucun candidat statique qui ne fait qu'embellir le code.** Si rien de dénombrable ne change, c'est un
+   candidat `🧱 structure`, pas un candidat de perf — classe-le comme tel au lieu de le déguiser.
 
-### 1. SCOUT — surface the symptoms
+Marque ces candidats `🐌 perf (statique)` dans le tableau pour que le rapport ne mélange jamais un écart mesuré
+avec un écart compté.
 
-Run `scout` on the target with the heal bar: each candidate MUST carry
-`file:line` + a measured symptom + a measurable done-signal (e.g. `340 ms → < 80 ms`, `test rouge → vert`).
-Candidates with no number are dropped, not guessed.
+### 1. SCOUT — faire remonter les symptômes
 
-Present ONE ranked table: Type (🐌 perf · 🐛 bug · 🧱 structure) · Symptom (number) · Where · Cause hypothesis · Done-signal.
+Joue `scout` sur la cible avec la barre de heal : chaque candidat DOIT porter
+`file:line` + un symptôme mesuré + un signal de fin mesurable (par ex. `340 ms → < 80 ms`, `test rouge → vert`).
+Les candidats sans chiffre sont abandonnés, pas devinés.
 
-### 2. Per retained candidate — the full chain
+Présente UN tableau classé : Type (🐌 perf · 🐛 bug · 🧱 structure) · Symptôme (chiffre) · Où · Hypothèse de cause · Signal de fin.
 
-For each candidate the human retains, in order, one at a time:
+### 2. Par candidat retenu — la chaîne complète
 
-1. `frame` — WHAT and the approach, with the done-signal as acceptance criterion.
-2. `terrain` — the harness that makes the symptom OBSERVABLE and replayable (profiling probe,
-   reproduction test). Skipped only if step 0 already produced it.
-3. `build` — the fix, on the NAMED cause. Red → green is mandatory for a bug.
-4. `clean` — remove the probes and scaffolding that no longer serve.
-5. `judge` — verdict on the deliverable, plus **the after-measurement against the baseline**.
+Pour chaque candidat que l'humain retient, dans l'ordre, un à la fois :
 
-Never batch several candidates into one build: a mixed change makes the measurement unattributable.
+1. `frame` — le QUOI et l'approche, avec le signal de fin comme critère d'acceptation.
+2. `terrain` — le harnais qui rend le symptôme OBSERVABLE et rejouable (sonde de profilage,
+   test de reproduction). Sauté seulement si l'étape 0 l'a déjà produit.
+3. `build` — le correctif, sur la cause NOMMÉE. Le rouge → vert est obligatoire pour un bug.
+4. `clean` — retirer les sondes et les échafaudages qui ne servent plus.
+5. `judge` — verdict sur le livrable, plus **la mesure d'après contre la référence**.
 
-### 3. REPORT — before / after, per candidate
+Ne groupe jamais plusieurs candidats dans une seule construction : un changement mélangé rend la mesure inattribuable.
 
-Close with a table: candidate · baseline · after · delta · proof (exit code, test name, capture).
-Anything not re-measured is reported as **non vérifié**, never as an improvement.
+### 3. RAPPORTER — avant / après, par candidat
 
-## Don't
+Clos avec un tableau : candidat · référence · après · écart · preuve (code de sortie, nom du test, capture).
+Tout ce qui n'a pas été remesuré est rapporté comme **non vérifié**, jamais comme une amélioration.
 
-- **Don't optimise without a baseline OR a static criterion.** The most common heal failure is
-  speeding up cold code; the second is abandoning a localised waste because nothing could be timed
-  (see 0 bis). One of the two is required — never neither, never a vibe.
-- **Don't widen a timeout, swallow an error, or loosen an assertion** to make a symptom disappear.
-  If a stopgap is genuinely the right call, LABEL it ("rustine temporaire — cause réelle : X") and
-  dispatch the real cause.
-- **Don't touch what was not named.** Structural cleanup is a candidate like any other, ranked and
-  retained explicitly — never a "tant qu'on y est".
-- **Don't trust a self-declared green.** The closing authority is an artefact: exit code, red→green
-  test, a re-run measurement.
+## À ne pas faire
+
+- **N'optimise pas sans référence OU sans critère statique.** L'échec de heal le plus fréquent est
+  d'accélérer du code froid ; le deuxième est d'abandonner un gaspillage localisé parce que rien ne pouvait être chronométré
+  (voir 0 bis). L'un des deux est exigé — jamais aucun, jamais au feeling.
+- **N'élargis pas un timeout, n'avale pas une erreur, ne desserre pas une assertion** pour faire disparaître un symptôme.
+  Si une rustine est vraiment le bon choix, ÉTIQUETTE-la (« rustine temporaire — cause réelle : X ») et
+  dispatche la cause réelle.
+- **Ne touche pas à ce qui n'a pas été nommé.** Un nettoyage structurel est un candidat comme un autre, classé et
+  retenu explicitement — jamais un « tant qu'on y est ».
+- **Ne fais pas confiance à un vert auto-déclaré.** L'autorité de clôture est un artefact : code de sortie, test
+  rouge→vert, une mesure rejouée.

@@ -1596,6 +1596,19 @@ export function isChatNearBottom(
  * Le discriminant est le SIGNE du deplacement : on ne quitte pas le bas en DESCENDANT. Tant que
  * `scrollTop` ne RECULE pas, un suivi deja actif se poursuit ; seul un recul rend la main au lecteur.
  */
+/**
+ * SUIVI DU BAS A L'ENVOI. Un envoi TAPE par l'utilisateur ramene toujours en bas : il veut voir sa
+ * reponse. Un envoi AUTOMATIQUE (mode auto, vidage de la file, reprise apres surcharge) n'est pas
+ * un geste : il garde la position choisie par le lecteur. Avant, `send()` forcait le suivi a chaque
+ * envoi, et le fil redescendait tout seul a chaque tour enchaine alors qu'on avait remonte.
+ */
+export function suiviDuBasApresEnvoi(input: {
+  suivaitLeBas: boolean
+  envoiAutomatique: boolean
+}): boolean {
+  return input.envoiAutomatique ? input.suivaitLeBas : true
+}
+
 export function doitSuivreLeBas(input: {
   suivaitLeBas: boolean
   precedentTop: number
@@ -1705,6 +1718,12 @@ export function scrollChatToBottom(
     const height = element.scrollHeight
     const heightMoved = height !== lastHeight
     const reculBrutalEnHaut = element.scrollTop <= 4 && lastTop > element.clientHeight
+    // Un recul accompagne d'un GESTE DECLARE appartient au lecteur, meme si le fil grandit encore
+    // (streaming) : sans cela la descente re-visait le bas par-dessus sa molette (conv-518, 2026-09-13).
+    if (element.scrollTop < lastTop - 4 && heightMoved && lecteurAPrisLaMain?.() === true) {
+      onSettled?.(isChatNearBottom(element))
+      return
+    }
     if (element.scrollTop < lastTop - 4 && !heightMoved) {
       // AUCUN GESTE DECLARE = ce recul vient de l'app (re-rendu), pas du lecteur : on re-vise le
       // bas au lieu de rendre la main en plein vol. Voir `lecteurAPrisLaMain`.

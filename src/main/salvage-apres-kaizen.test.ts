@@ -148,8 +148,11 @@ describe('ce qui ne doit PAS changer', () => {
   it('chaque maillon apres-gate est REELLEMENT joue par l’orchestrateur', () => {
     const orchestrateur = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
     expect(orchestrateur).toContain('noeudsApresJuge(graphePilote)')
+    // La boucle d'apres-gate parcourt des PHASES depuis le 2026-09-13 : sans graphe (run mono-phase),
+    // la chaine vient de `phasesApresJugeHorsGraphe`, qui ne peut pas rendre d'identifiant de noeud.
+    expect(orchestrateur).toContain('phasesApresJugeHorsGraphe(task)')
     expect(orchestrateur).toMatch(
-      /if \(!gate\.blocked\) \{[\s\S]{0,2600}?executePipelinePhase\(noeud\.phase\)/
+      /if \(!gate\.blocked\) \{[\s\S]{0,2600}?executePipelinePhase\(phaseApresGate\)/
     )
     expect(orchestrateur).toContain("le verdict du run n'en est pas affecte")
   })

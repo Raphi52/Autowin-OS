@@ -3,27 +3,44 @@
  * Defaut vecu le 2026-09-12 : un menu ouvert pres du bas (ou une matrice de 600px dans une
  * fenetre etroite) sortait de la fenetre — la partie hors ecran etait INATTEIGNABLE.
  */
-import { act, createElement, useRef, type ReactElement } from 'react'
+import { act, useRef, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
 import { useClampDansFenetre } from './useClampDansFenetre'
 
-function Popup({ rect }: { rect: Partial<DOMRect> }): ReactElement {
+function Popup(): ReactElement {
   const ref = useRef<HTMLDivElement>(null)
-  const poser = (el: HTMLDivElement | null): void => {
-    ref.current = el
-    if (el) el.getBoundingClientRect = () => ({ ...rect }) as DOMRect
-  }
   useClampDansFenetre(ref, true)
-  return createElement('div', { ref: poser, 'data-testid': 'pop' }, 'menu')
+  // JSX, PAS `createElement` : passer `ref` en argument d'une fonction ordinaire est lu comme un
+  // acces au ref pendant le rendu (`react-hooks/refs`).
+  return (
+    <div ref={ref} data-testid="pop">
+      menu
+    </div>
+  )
 }
 
+/**
+ * Le rectangle simule est pose sur le PROTOTYPE, le temps du montage, et retire aussitot.
+ *
+ * Il passait avant par une fonction-ref qui ecrivait dans `ref.current` : React lit une telle
+ * fonction PENDANT le rendu, ce que `react-hooks/refs` refuse — et le composant de test ne
+ * ressemblait alors plus a un vrai appelant du hook, qui lui passe simplement `ref`.
+ */
 function monter(rect: Partial<DOMRect>): HTMLElement {
   const hote = document.createElement('div')
   document.body.appendChild(hote)
-  act(() => {
-    createRoot(hote).render(createElement(Popup, { rect }))
-  })
+  const origine = HTMLElement.prototype.getBoundingClientRect
+  HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
+    return { ...rect } as DOMRect
+  }
+  try {
+    act(() => {
+      createRoot(hote).render(<Popup />)
+    })
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = origine
+  }
   return hote.querySelector('[data-testid="pop"]') as HTMLElement
 }
 

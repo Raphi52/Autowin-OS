@@ -308,8 +308,12 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     // multi-comptes Claude) : on lit le BLOC entier, pas une ligne. Faire dépendre un garde de
     // sécurité du formatage le rendait rouge sur un simple retour à la ligne, sans qu'aucune
     // propriété n'ait bougé — et un garde qui crie à tort finit par ne plus être cru.
-    const start = source.indexOf('env: {')
+    // fix-ok: b389b5fe a deplace l'objet `env: {` du spawn dans `environnementAgent(` — le
+    // repere litteral n'existait plus (indexOf = -1). On lit l'APPEL reel et la fonction.
+    const start = source.indexOf('env: environnementAgent(')
     expect(start).toBeGreaterThan(-1)
+    // (b) porte par la fonction : NON_INTERACTIVE_ENV etale EN DERNIER dans son retour.
+    expect(source).toMatch(/return \{\s*\.\.\.base,\s*\.\.\.\(agentEnv \?\? \{\}\),\s*\.\.\.NON_INTERACTIVE_ENV\s*\}/)
     // Accolades COMPTÉES jusqu'à la fermeture correspondante. Une première version coupait au
     // premier `}` suivant NON_INTERACTIVE_ENV : elle amputait tout ce qui venait après, si bien
     // qu'un `...(invocation.env)` étalé APRÈS la constante — exactement la régression à empêcher —
@@ -338,11 +342,10 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     // La base reste `process.env` — eventuellement NORMALISEE par `withClaudeAccountEnv`, qui
     // pose ou RETIRE le seul CLAUDE_CONFIG_DIR (multi-comptes) et ne touche a rien d'autre.
     // Ce n'est pas un desserrage : tout autre point de depart que l'env herite reste refuse.
-    const base = /env: \{\s*\.\.\.\s*(process\.env|withClaudeAccountEnv\(process\.env\))/.exec(
+    const base = /env: environnementAgent\(\s*\{\s*\.\.\.\s*(process\.env|withClaudeAccountEnv\(process\.env\))/.exec(
       envBlock
     )
     expect(base?.[1]).toBeDefined()
-    expect(envBlock).toMatch(/\.\.\.\s*NON_INTERACTIVE_ENV\s*,?\s*\}$/)
   })
 })
 

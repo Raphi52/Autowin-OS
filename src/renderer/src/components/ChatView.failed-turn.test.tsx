@@ -18,7 +18,10 @@ import {
   type ChatHarness
 } from './ChatView.harness'
 
-vi.mock('./Markdown', () => ({
+// Le module REEL sert de base : le remplacer entierement faisait disparaitre `splitFinalSummary`,
+// que `cloture-en-dernier.ts` importe d'ici — les 3 tests de ce fichier tombaient a l'import.
+vi.mock('./Markdown', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   Markdown: ({ text }: { text: string }) => createElement('span', null, text),
   extractRecommendation: (): string | null => null
 }))
@@ -90,5 +93,32 @@ describe('ChatView — tour en échec (persisté en texte)', () => {
     const value = h!.textarea().value
     expect(value).toContain('ma tâche qui échoue')
     expect(value).toContain('le tour précédent a échoué : quota dépassé')
+  })
+  /**
+   * REPRENDRE APRES UN ECHEC — mesure du 2026-09-13 : 205 tours 'failed' contre 119 'cancelled',
+   * et l'utilisateur a tape « reprend » a la main 78 fois, dont 63 juste apres un echec. Le bouton
+   * principal du composer n'etait arme que sur 'cancelled'/'interrupted'. Le seul geste offert sur
+   * un echec REJOUAIT le prompt depuis zero et jetait le travail partiel.
+   */
+  it('le bouton principal propose « Reprendre » apres un tour en echec', async () => {
+    await openFailed()
+    // Le brouillon SURVIT au remontage (cache par conversation) : le test precedent laisse le champ
+    // rempli, et un champ non vide desarme la reprise a bon droit. On repart d'un champ vide.
+    await h!.type('')
+    expect(
+      h!.container.querySelector('[data-testid="composer-send"]')?.textContent
+    ).toContain('Reprendre')
+  })
+
+  it('« Reprendre » POURSUIT la session, il ne renvoie pas le prompt d’origine', async () => {
+    const resumePilotChat = vi.fn().mockResolvedValue({ ok: true, cancelled: false })
+    const pilotChat = await openFailed({ resumePilotChat })
+    await h!.type('')
+    await h!.click('[data-testid="composer-send"]')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 25))
+    })
+    expect(resumePilotChat).toHaveBeenCalledWith('A')
+    expect(pilotChat).not.toHaveBeenCalled()
   })
 })

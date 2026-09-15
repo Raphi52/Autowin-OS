@@ -1,35 +1,36 @@
 ---
 name: build
 description: >-
-  The PRODUCER's named loop (frame → terrain → build → clean → judge): resolve a DEFECT into a functionally VERIFIED state.
-  Invoked by `judge` (which sends prioritized defects back) AND by the user directly with a raw bug.
-  Trigger on "fix the bug / make it green / the test fails repair it / apply the judge's findings / it's still broken".
-  Do NOT use to: AUDIT a deliverable → `judge`; decide WHAT to build → `frame`; prepare the harness → `terrain`.
+  La boucle nommée du PRODUCTEUR (frame → terrain → build → clean → judge) : amener un DÉFAUT jusqu'à
+  un état fonctionnellement VÉRIFIÉ. Invoquée par `judge` (qui renvoie les défauts priorisés) ET
+  directement par l'utilisateur avec un bug brut.
+  Déclencher sur "fix the bug / make it green / the test fails repair it / apply the judge's findings / it's still broken".
+  NE PAS utiliser pour : AUDITER un livrable → `judge` ; décider QUOI construire → `frame` ; préparer le harnais → `terrain`.
 ---
 
-# build — seven reflexes, defect → verified green
+# build — sept réflexes, du défaut au vert vérifié
 
-1. **THE MOMENT a defect arrives → REPRODUCE IT RED FIRST.** Run the stated criterion (test, command,
-   exit code) before touching anything and paste its red output. A fix on an unreproduced bug repairs a
-   maybe-bug. No red → the defect is not localized yet, keep hunting; do not edit.
-2. **THE MOMENT the red is in hand → LOOK FOR THE PRECEDENT BEFORE WRITING ANYTHING.** Grep the repo
-   for a defect of the SAME FAMILY already solved, and COPY ITS SHAPE — its guards, its naming, its
-   test. Concrete example: a scope that must be derived for a new file family already exists for
-   stylesheets in `src/main/verify-command.ts` (`EXTENSIONS_DE_STYLE`, `porteeDUneEdition`, and the
-   blind-spot guard `VERIFY_STYLE_ANGLE_MORT`); re-inventing it produces a second, weaker mechanism.
-   No precedent found after two greps → say so in one line and continue.
-3. **THE MOMENT the precedent is in hand → LOCALIZE THE LINE THAT ACTUALLY RUNS.** Grep the visible symptom
-   (the string, the assertion message), open the ONE file it names, and stop reading there. Reading the
-   tree "for context" is the measured waste, not diligence.
-4. **THE MOMENT the cause is named → FIX THAT CAUSE, MINIMALLY.** Only the named cause. No opportunistic
-   refactor, no rename, no "while I'm here". A guard that routes AROUND the defect, a swallowed error, a
-   loosened assertion, a widened timeout = FALSE GREEN → refuse it, or label it "rustine — real cause: X".
-5. **THE MOMENT you would say "done" → RE-RUN THE SAME CRITERION and read its exit code.** Out-of-model
-   artifact or it did not happen: test red→green, exit code, screenshot READ, query. Never self-declared text.
-6. **THE MOMENT the re-run is still red → CHANGE APPROACH, do not repeat.** Two identical attempts are one
-   attempt. Exhaust 2-3 DISTINCT approaches per sub-goal before interrupting the human. A missing file,
-   fixture or tool is BUILT by you when it is safe, bounded and reversible — it is not requested.
-7. **THE MOMENT you are tempted to hand back early → DON'T.** A status report, "should I continue?", a plan
-   without execution costs the user a full turn and produces nothing (measured: 23.54 $ of 156.51 $ spent on
-   "reprend" turns, 2026-09-02). Carry it to verified green in THIS pass, or name the precise blocker. Then
-   loop back to `judge`: build fixes, build NEVER signs its own quality verdict.
+1. **AU MOMENT où un défaut arrive → REPRODUIS-LE EN ROUGE D'ABORD.** Joue le critère énoncé (test,
+   commande, code de sortie) avant de toucher quoi que ce soit, et colle sa sortie rouge. Un correctif sur un bug
+   non reproduit répare un peut-être-bug. Pas de rouge → le défaut n'est pas encore localisé, continue de chercher ; n'édite pas.
+2. **AU MOMENT où tu tiens le rouge → CHERCHE LE PRÉCÉDENT AVANT D'ÉCRIRE QUOI QUE CE SOIT.** Grep le dépôt
+   à la recherche d'un défaut de la MÊME FAMILLE déjà résolu, et COPIE SA FORME — ses gardes, son nommage, son
+   test. Exemple concret : une portée à dériver pour une nouvelle famille de fichiers existe déjà pour les
+   feuilles de style dans `src/main/verify-command.ts` (`EXTENSIONS_DE_STYLE`, `porteeDUneEdition`, et la
+   garde d'angle mort `VERIFY_STYLE_ANGLE_MORT`) ; la réinventer produit un second mécanisme, plus faible.
+   Aucun précédent trouvé après deux greps → dis-le en une ligne et continue.
+3. **AU MOMENT où tu tiens le précédent → LOCALISE LA LIGNE QUI S'EXÉCUTE VRAIMENT.** Grep le symptôme visible
+   (la chaîne de caractères, le message d'assertion), ouvre LE seul fichier qu'il nomme, et arrête ta lecture là. Lire
+   l'arbre « pour le contexte » est le gaspillage mesuré, pas de la rigueur.
+4. **AU MOMENT où la cause est nommée → CORRIGE CETTE CAUSE, AU MINIMUM.** Uniquement la cause nommée. Aucun
+   refactor opportuniste, aucun renommage, aucun « tant que j'y suis ». Une garde qui CONTOURNE le défaut, une erreur avalée, une
+   assertion desserrée, un timeout élargi = FAUX VERT → refuse-le, ou étiquette-le « rustine — cause réelle : X ».
+5. **AU MOMENT où tu dirais « fini » → REJOUE LE MÊME CRITÈRE et lis son code de sortie.** Un artefact
+   hors modèle, sinon ça n'a pas eu lieu : test rouge→vert, code de sortie, capture LUE, requête. Jamais un texte auto-déclaré.
+6. **AU MOMENT où le rejeu est encore rouge → CHANGE D'APPROCHE, ne répète pas.** Deux tentatives identiques n'en font
+   qu'une. Épuise 2 à 3 approches DISTINCTES par sous-objectif avant d'interrompre l'humain. Un fichier, une fixture
+   ou un outil manquant, c'est TOI qui le FABRIQUES quand c'est sûr, borné et réversible — ça ne se demande pas.
+7. **AU MOMENT où tu es tenté de rendre la main tôt → NE LE FAIS PAS.** Un rapport d'étape, « je continue ? », un plan
+   sans exécution coûtent un tour entier à l'utilisateur et ne produisent rien (mesuré : 23,54 $ sur 156,51 $ dépensés en
+   tours « reprend », 2026-09-02). Mène-le jusqu'au vert vérifié dans CETTE passe, ou nomme le blocage précis. Puis
+   reboucle vers `judge` : build corrige, build ne signe JAMAIS son propre verdict de qualité.

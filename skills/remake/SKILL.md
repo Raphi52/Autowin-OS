@@ -1,435 +1,450 @@
 ---
 name: remake
-description: Harvest the hindsight that only a FINISHED product reveals, then spend it by DRIVING THE WHOLE PIPELINE. Reads the completed deliverable as its own specification, then runs `scout` (with the regret bar) to surface the candidates, `frame` on every candidate retained after the cost is shown, and the full chain per framed need — `build` → `clean` → `judge` — before replaying the target's own signal. One gesture instead of a pipeline steered by hand. Unifies "si tu devais le refaire en analysant le produit fini, que ferais-tu différemment ?" followed by "fais-le". Trigger on `/remake`, "si tu devais le refaire", "que ferais-tu différemment", "refais-le mieux", "avec le recul, comment tu l'aurais construit", "remake this", "rebuild it knowing what you know now", or right after a deliverable is VERIFIED and you want the accumulated compromises paid down. The proof obligation is INVERTED versus build: there is no bug to reproduce, so every change must prove it breaks NOTHING — the target's existing signal is the net, and remake REFUSES to run without one it can actually replay. It sequences the phases and never re-implements one. Do NOT use to: audit whether a deliverable is correct or done (→ `judge`, whose bar is the DEFECT, not the design regret); pick what to work on when the deliverable is not FINISHED (→ `scout` alone); redesign the visual layout of a screen, where the question is what it should LOOK like (→ `draft`, even when the user says "refais") ; a bare "refais-le mieux" with no finished, verified target in view — ask WHICH deliverable before routing, since the same words fit a screen's look and a module's design; remove residue from failed attempts (→ `clean`); improve Claude's own behaviour or the kit's rules (→ `kaizen`). If the TARGET itself is the kit, the hooks, `CLAUDE.md` or memory, remake lists the regrets and STOPS — it never writes there autonomously.
+description: >-
+  Récolte le recul que seul un produit FINI révèle, puis le dépense en PILOTANT TOUT LE PIPELINE.
+  Lit le livrable achevé comme sa propre spécification, puis joue `scout` (avec la barre du REGRET,
+  pas celle du défaut), `frame` sur chaque candidat retenu une fois le coût montré, puis `build` →
+  `clean` → `judge` par besoin cadré, avant de rejouer le signal propre à la cible. Obligation de
+  preuve INVERSÉE par rapport à `build` : aucun bug à reproduire, donc chaque changement doit
+  prouver qu'il ne casse RIEN — remake REFUSE de tourner sans un signal qu'il peut rejouer.
+  Déclencher sur `/remake`, « si tu devais le refaire », « refais-le mieux » (§ Quand la
+  déclencher). PAS pour auditer si un livrable est correct (→ `judge`), travailler sur un livrable
+  INACHEVÉ (→ `scout`), refaire l'ALLURE d'un écran (→ `draft`), retirer des résidus (→ `clean`), ni
+  changer le comportement de Claude (→ `kaizen`).
 ---
 
-# Remake — the second system, built for real
+# Remake — le second système, construit pour de vrai
 
-## Purpose
+## À quoi ça sert
 
-A finished product reveals the shape it should have had. Decisions taken under uncertainty are now
-obviously wrong; an abstraction added out of caution turned out unnecessary; the structure grew by
-accretion. That lucidity exists **only once the thing is done**, and it evaporates. `remake` harvests
-it and spends it: it reads the finished deliverable as its own specification, asks what would be built
-differently starting today, and **drives the whole pipeline on the answer** — `scout` to surface the
-candidates, `frame` on each, then `build` → `clean` → `judge`. One gesture instead of a pipeline
-steered prompt after prompt.
+Un produit fini révèle la forme qu'il aurait dû avoir. Des décisions prises dans l'incertitude sont maintenant
+manifestement fausses ; une abstraction ajoutée par prudence s'est révélée inutile ; la structure a grandi par
+accumulation. Cette lucidité n'existe **qu'une fois la chose faite**, et elle s'évapore. `remake` la récolte
+et la dépense : il lit le livrable fini comme sa propre spécification, demande ce qui serait construit
+autrement en repartant d'aujourd'hui, et **pilote tout le pipeline sur la réponse** — `scout` pour faire remonter les
+candidats, `frame` sur chacun, puis `build` → `clean` → `judge`. Un seul geste au lieu d'un pipeline
+piloté prompt après prompt.
 
-**The bar is the design REGRET, not the defect.** `judge` finds what is *wrong*, provable against the
-need. `remake` finds what is *not wrong but would be written otherwise*. Confusing the two turns taste
-into obligation.
+**La barre est le REGRET de conception, pas le défaut.** `judge` trouve ce qui est *faux*, prouvable contre le
+besoin. `remake` trouve ce qui *n'est pas faux mais s'écrirait autrement*. Confondre les deux transforme le goût
+en obligation.
 
-**The proof obligation is INVERTED.** `build` proves a change FIXES something — there is a bug, so
-there is a red→green. `remake` has no bug to reproduce, so its changes must prove they break
-**nothing**: a harder guarantee, and the one a bare "fais-le" never provides. Everything in step 0
-exists to make that guarantee real — a signal that can fail and is actually verified, green before and
-after, and one atomic undo. No signal, no remake: autonomous execution whose only net does not exist is
-the single configuration where this skill is harmful. "Verified" has two legitimate shapes and no
-third: a `signal-cmd` the gate replays, or an attested signal under `regime: critical`, the only regime
-where the gate demands one.
+**L'obligation de preuve est INVERSÉE.** `build` prouve qu'un changement CORRIGE quelque chose — il y a un bug, donc
+il y a un rouge→vert. `remake` n'a aucun bug à reproduire, donc ses changements doivent prouver qu'ils ne cassent
+**rien** : une garantie plus dure, et celle qu'un simple « fais-le » ne fournit jamais. Tout ce qui est dans l'étape 0
+existe pour rendre cette garantie réelle — un signal qui peut échouer et qui est réellement vérifié, vert avant et
+après, et une seule annulation atomique. Pas de signal, pas de remake : une exécution autonome dont le seul filet n'existe pas est
+la seule configuration où cette skill est nuisible. « Vérifié » a deux formes légitimes et pas de
+troisième : un `signal-cmd` que le contrôle rejoue, ou un signal attesté sous `regime: critical`, le seul régime
+où le contrôle en exige un.
 
-## Procedure
+## Quand la déclencher — et quand NON
+**Déclencheurs** : `/remake` · « si tu devais le refaire » · « que ferais-tu différemment » · « refais-le mieux » · « avec le recul, comment tu l'aurais construit » · « remake this » · « rebuild it knowing what you know now » · ou juste après qu'un livrable est VÉRIFIÉ et qu'on veut solder les compromis accumulés. Unifie « si tu devais le refaire en analysant le produit fini, que ferais-tu différemment ? » suivi de « fais-le ».
+**REFUS — un « refais-le mieux » NU, sans cible finie et vérifiée en vue, ne se route PAS** : demande D'ABORD DE QUEL livrable il s'agit. Les mêmes mots désignent aussi bien l'allure d'un écran (→ `draft`) que la conception d'un module (→ ici).
+**PAS pour** : auditer si un livrable est correct ou fini → `judge` (sa barre est le DÉFAUT, pas le regret de conception) · choisir quoi faire quand le livrable n'est PAS fini → `scout` seul · refaire l'ALLURE visuelle d'un écran (→ `draft`), même si l'utilisateur dit « refais » · retirer les résidus de tentatives ratées → `clean` · améliorer le comportement de Claude ou les règles du kit → `kaizen`.
+**Si la CIBLE est le kit, les garde-fous de code, `src/main/constitution.ts` ou la mémoire** : remake liste les regrets et S'ARRÊTE — il n'y écrit jamais tout seul (périmètre gelé, § 0).
 
-### 0. Preconditions — and this step WRITES
+## Procédure
 
-Target = the deliverable of the current RUN, else an explicitly named file/module/folder. **Never the
-whole repository implicitly** — that yields a shallow sweep at ruinous cost. Too large to hold? Ask
-which slice; do not skim.
+### 0. Préconditions — et cette étape ÉCRIT
 
-**FROZEN PERIMETER — checked HERE, before spending anything.** Target = the kit (`~/.claude/skills`),
-the hooks, `CLAUDE.md`, or memory: produce the ranked list and **STOP**. No `frame`, no phase, no
-write. FIRST gate, before the `scout` fan-out, because the kit is the most likely `/remake` target:
-placed any later, the guard is falsified by the agents already paid for. A skill that rewrites its own
-rules autonomously is what `kaizen` forbids, and the prohibition does not lift because a different
-skill is asking. Human OK reopens it — for the named files only.
+Cible = le livrable du RUN courant, sinon un fichier/module/dossier explicitement nommé. **Jamais tout
+le dépôt implicitement** — cela donne un balayage superficiel à un coût ruineux. Trop grande à tenir ? Demande
+quelle tranche ; ne survole pas.
 
-**Step 0 is NOT read-only, and the order below is the safe one.** It creates a rollback point, it
-breaks a line on purpose, it may create a worktree and a junction. Steps 1-2 (scout, rank) are the
-read-only ones.
+**PÉRIMÈTRE GELÉ — contrôlé ICI, avant de dépenser quoi que ce soit.** Cible = le kit (`skills/**/SKILL.md`, `skills/_engine/ENGINE.md`),
+les garde-fous de code (`src/main/gates/*.ts`), la constitution injectée (`src/main/constitution.ts`), ou la mémoire : produis la liste classée et **ARRÊTE-TOI**. Aucun `frame`, aucune phase, aucune
+écriture. PREMIER contrôle, avant la salve de `scout`, parce que le kit est la cible `/remake` la plus probable :
+placé plus tard, le garde-fou est falsifié par les agents déjà payés. Une skill qui réécrit ses propres
+règles de façon autonome est ce que `kaizen` interdit, et l'interdiction ne se lève pas parce qu'une autre
+skill le demande. Un accord humain la rouvre — pour les seuls fichiers nommés.
 
-**0.a — Anchor the starting state FIRST.** Before any deliberate breakage, so nothing can be left
-broken without a way back. The **anchor** is a named gesture available even on a clean tree: record
-the starting HEAD hash. The rollback HANDLE — the enumerated list of your own commits — does not
-exist yet; it is constituted at step 4 and verified at step 5. Do not ask for it here.
-  - **Attribute the dirt PER FILE, and refuse the co-dirty one.** A dirty tree is not automatically
-    someone else's: `git status`, `git log -3`, `git stash list` and the session's own RUN tell you
-    whose each file is. Yours → commit it by name (never `git add -A`). But a file carrying YOUR edit
-    AND another session's uncommitted one is **co-dirty**: `git add <file>` stages its content as it
-    stands and swallows the neighbour's work into your commit — which then enters the rollback handle,
-    so a step-5 revert destroys it, attributed to you. A co-dirty file is never committed: isolate, or
-    ask. Probe too for a third-party operation IN PROGRESS (`.git/MERGE_HEAD`, `index.lock`, an
-    unfinished rebase or revert): acting inside one corrupts it for every session on the tree.
-  - Another session's dirt → **the ENTIRE remake moves into an isolated worktree**: steps 0-5 all run
-    there, signal included, and bringing the result back is a SEPARATE gesture the user asks for. A
-    rollback point in a worktree while the build happens in the main tree restores a state that never
-    existed. Neither clean nor isolable → STOP.
-  - **A shared tree goes dirty AFTER step 0 — the normal case, and it does not retroactively migrate
-    the work.** What moves is the **measuring instrument**: run the signal in a throwaway worktree on
-    your own committed HEAD (`node_modules` junctioned in — `cmd /c mklink /J <wt>\node_modules
-    <main>\node_modules`), keep committing in the main tree, file by file. That buys the ability to
-    prove a red belongs to someone else instead of assuming it.
-  - **The handle is a LIST OF HASHES, never a range**, and it is verified on **content as well as
-    authorship**: `git log --oneline --no-walk <list>` proves who authored them, not what they carry,
-    so `git show --stat <hash>` must also land inside the partition's file list.
-  - **Perimeter touching a PERSISTED format or an external contract → the rollback covers the DATA
-    too.** Reverting code does not un-migrate a rewritten file, and a field this build stopped writing
-    may be one the previous binary REQUIRED. Back the file up before the first migrated write, write
-    the restore procedure down — including any journal that would replay post-remake records over a
-    restored snapshot — and read step 5 for the guard that makes the restore itself safe. No data
-    rollback, no remake on that candidate.
-  - Not a git target (a doc, a folder) → the rollback point is an explicit copy, **scoped to the
-    candidate's perimeter and enumerating what it EXCLUDES** (at minimum the gitignored paths and any
-    live store: copying those yields an incoherent snapshot, costs gigabytes, and restoring it would
-    overwrite other agents' live state). One copy = one all-or-nothing undo, so the copies are made
-    **per partition, after step 2** — the partitions do not exist yet here.
+**L'étape 0 n'est PAS en lecture seule, et l'ordre ci-dessous est l'ordre sûr.** Elle crée un point de retour, elle
+casse une ligne exprès, elle peut créer une copie de travail et une jonction. Les étapes 1-2 (scout, classement) sont celles qui sont
+en lecture seule.
 
-**0.b — The signal must satisfy TWO independent constraints, not one.** This is where the whole
-guarantee lives, and where it is most easily hollow. `stop-gate.ps1` applies both, in this order:
-  1. **It must PROVE** — `Test-MeaningfulProof` requires a test/build runner or a script **at the head
-     of the command** (after stripping a leading `cmd /c`). Fail it and the gate appends
-     *"signal-cmd ne PROUVE rien"* and BLOCKS every green, whatever the tests say.
-  2. **It must be WHITELISTED** to be replayed at all — `dotnet test`, `dotnet build`, `cmd /c`,
-     `powershell [-NoProfile] -File`, `pwsh [-NoProfile] -File`. Outside that list the gate replays
-     nothing and stamps its verification anyway.
+**0.a — Ancre l'état de départ D'ABORD.** Avant toute cassure délibérée, pour que rien ne puisse rester
+cassé sans retour possible. L'**ancre** est un geste nommé, disponible même sur un arbre propre : consigner
+le hash du HEAD de départ. La POIGNÉE de retour arrière — la liste énumérée de tes propres commits — n'existe
+pas encore ; elle se constitue à l'étape 4 et se vérifie à l'étape 5. Ne la réclame pas ici.
+  - **Attribue la saleté PAR FICHIER, et refuse le fichier co-sale.** Un arbre sale n'appartient pas automatiquement
+    à quelqu'un d'autre : `git status`, `git log -3`, `git stash list` et le RUN de la session te disent
+    à qui est chaque fichier. Les tiens → commite-les par leur nom (jamais `git add -A`). Mais un fichier portant TON édition
+    ET celle, non commitée, d'une autre session est **co-sale** : `git add <fichier>` indexe son contenu tel
+    qu'il est et avale le travail du voisin dans ton commit — qui entre alors dans la poignée de retour arrière,
+    donc un revert à l'étape 5 le détruit, à ton nom. Un fichier co-sale ne se commite jamais : isole, ou
+    demande. Sonde aussi une opération tierce EN COURS (`.git/MERGE_HEAD`, `index.lock`, un
+    rebase ou un revert inachevé) : agir à l'intérieur la corrompt pour toutes les sessions sur l'arbre.
+  - La saleté d'une autre session → **le remake ENTIER déménage dans une copie de travail isolée** : les étapes 0-5 s'y jouent
+    toutes, signal compris, et ramener le résultat est un geste SÉPARÉ que l'utilisateur demande. Un
+    point de retour dans une copie pendant que la construction se fait dans l'arbre principal restaure un état qui n'a jamais
+    existé. Ni propre ni isolable → ARRÊT.
+  - **Un arbre partagé devient sale APRÈS l'étape 0 — c'est le cas normal, et cela ne fait pas migrer le
+    travail rétroactivement.** Ce qui déménage, c'est l'**instrument de mesure** : joue le signal dans une copie de travail jetable sur
+    ton propre HEAD commité (`node_modules` monté par jonction — `cmd /c mklink /J <wt>\node_modules
+    <main>\node_modules`), continue de commiter dans l'arbre principal, fichier par fichier. Cela achète la capacité
+    de prouver qu'un rouge appartient à quelqu'un d'autre au lieu de le supposer.
+  - **La poignée est une LISTE DE HASHES, jamais une plage**, et elle se vérifie sur le **contenu autant que sur
+    la paternité** : `git log --oneline --no-walk <liste>` prouve qui les a écrits, pas ce qu'ils portent,
+    donc `git show --stat <hash>` doit aussi tomber dans la liste de fichiers de la partition.
+  - **Périmètre touchant un format PERSISTÉ ou un contrat externe → le retour arrière couvre aussi les DONNÉES.**
+    Revenir sur du code ne dé-migre pas un fichier réécrit, et un champ que cette construction a cessé d'écrire
+    peut être un champ que le binaire précédent EXIGEAIT. Sauvegarde le fichier avant la première écriture migrée, écris
+    la procédure de restauration — y compris tout journal qui rejouerait des enregistrements post-remake par-dessus un
+    instantané restauré — et lis l'étape 5 pour le garde-fou qui rend la restauration elle-même sûre. Pas de retour arrière
+    sur les données, pas de remake sur ce candidat.
+  - Cible hors git (un doc, un dossier) → le point de retour est une copie explicite, **bornée au
+    périmètre du candidat et énumérant ce qu'elle EXCLUT** (au minimum les chemins ignorés par git et tout
+    stockage vivant : les copier donne un instantané incohérent, coûte des gigaoctets, et le restaurer écraserait
+    l'état vivant d'autres agents). Une copie = une annulation tout ou rien, donc les copies se font
+    **par partition, après l'étape 2** — les partitions n'existent pas encore ici.
 
-  Two constraints, two distinct failure modes, and a form can pass one while failing the other.
-  **Measured by running the gate's own function:** `cmd /c "cd /d <abs> && npm test"` proves NOTHING
-  (the `cd` sits at the head) → permanent BLOCK; `npm test` alone proves, but is never replayed. The
-  forms that satisfy BOTH: **`powershell -NoProfile -File <abs>\signal.ps1`** (the script does the
-  `cd`, runs the suite, propagates `$LASTEXITCODE`) — prefer this one — or
+**0.b — Le signal doit satisfaire DEUX contraintes indépendantes, pas une.** C'est là que vit toute la
+garantie, et là qu'elle est le plus facilement creuse. `stop-gate.ps1` applique les deux, dans cet ordre :
+  1. **Il doit PROUVER** — `Test-MeaningfulProof` exige un lanceur de tests/build ou un script **en tête
+     de la commande** (après avoir retiré un `cmd /c` initial). Échoue à ça et le contrôle ajoute
+     *« signal-cmd ne PROUVE rien »* et BLOQUE tout vert, quoi que disent les tests.
+  2. **Il doit être SUR LISTE BLANCHE** pour être rejoué tout court — `dotnet test`, `dotnet build`, `cmd /c`,
+     `powershell [-NoProfile] -File`, `pwsh [-NoProfile] -File`. Hors de cette liste, le contrôle ne rejoue
+     rien et tamponne quand même sa vérification.
+
+  Deux contraintes, deux modes d'échec distincts, et une forme peut passer l'une en échouant l'autre.
+  **Mesuré en jouant la fonction du contrôle elle-même :** `cmd /c "cd /d <abs> && npm test"` ne prouve RIEN
+  (le `cd` est en tête) → BLOCAGE permanent ; `npm test` seul prouve, mais n'est jamais rejoué.
+  Les formes qui satisfont les DEUX : **`powershell -NoProfile -File <abs>\signal.ps1`** (le script fait le
+  `cd`, joue la suite, propage `$LASTEXITCODE`) — préfère celle-ci — ou
   `cmd /c "npm test --prefix <abs>"`.
-  - **`signal-cmd:` is for the REPLAYABLE. Anything else goes in `signal-attestable:`** (ENGINE,
-    foundation §1 header) — a read capture, a query, a human-read artifact, with the attestation
-    contract `clean` defines (fresh artifact, run-stamped, non-vacuous, negative control). A visual
-    target is not a target without a signal; it is a target with the other kind. **And it forces
-    `regime: critical`**: critical is the ONLY regime where the gate DEMANDS an out-of-model proof, so
-    an attestable signal carried at `standard` is verified by nobody. Attestable but not critical → the
-    refusal applies, exactly as if there were no signal at all.
-  - **The 120 s cap is real.** The gate kills a replay at `GATE_REPLAY_TIMEOUT_MS` (default 120000) and
-    returns 124. Measured duration above the cap → the autonomous default is a replayable SUBSET under
-    the cap in `signal-cmd:`, the full suite carried as an attested `signal:`. Raising the variable is
-    NOT an autonomous option — it lives in `settings.json`, inside the frozen perimeter, so it takes a
-    human OK. Silence here becomes a phantom regression at step 5.
-  - **Time THE EXACT COMMAND**, not a subset of it: its duration feeds the cost line. Take the repo's
-    canonical command (`npm test` and what it chains) unless a narrower scope is justified in the RUN —
-    a vitest-only net misses a typing regression. Definition changes later (a candidate adds tests, the
-    scope widens) → **re-time and re-state the number**. Measured: a "3 s" quoted at step 0 was still
-    cited as "replaying is free" while every real run took 25 s.
-  - **Flaky signal → not a `signal-cmd:`.** The gate replays ONCE, no retry: a flaky suite makes the
-    parent's closure a coin toss. Wrap the double-run in the script and point `signal-cmd:` at that, or
-    carry it as attested. Then `degraded-closed` on "flaky, colour confirmed outside the gate" is
-    legitimate.
+  - **`signal-cmd:` est pour le REJOUABLE. Tout le reste va dans `signal-attestable:`** (moteur,
+    fondation §1, en-tête) — une capture lue, une requête, un artefact lu par un humain, avec le contrat
+    d'attestation que `clean` définit (artefact frais, empreinte de run, non vide, contrôle négatif). Une cible
+    visuelle n'est pas une cible sans signal ; c'est une cible avec l'autre espèce de signal. **Et cela force
+    `regime: critical`** : critical est le SEUL régime où le contrôle EXIGE une preuve hors modèle, donc
+    un signal attestable porté en `standard` n'est vérifié par personne. Attestable mais pas critical → le
+    refus s'applique, exactement comme s'il n'y avait aucun signal.
+  - **Le plafond de vérification est réel.** Autowin arrête une vérification à `AUTOWIN_VERIFY_TIMEOUT_MS` (défaut **600 000 ms**, soit 10 min — `src/main/verify-command.ts:75`) et rend alors
+    `exitCode: null` avec « vérification arrêtée après N s (plafond) » — PAS un code d'échec ordinaire. Durée mesurée au-dessus du plafond → le choix autonome par défaut est un SOUS-ENSEMBLE rejouable sous
+    le plafond dans `signal-cmd:`, la suite complète portée en `signal:` attesté. Relever la variable n'est
+    PAS une option autonome — c'est la variable d'environnement `AUTOWIN_VERIFY_TIMEOUT_MS`, persistée par l'UTILISATEUR
+    (`setx`) et relue seulement via `reload_env`, donc cela exige un accord humain. Le silence ici devient une régression fantôme à l'étape 5.
+  - **Chronomètre LA COMMANDE EXACTE**, pas un sous-ensemble : sa durée alimente la ligne de coût. Prends la commande
+    canonique du dépôt (`npm test` et ce qu'il enchaîne) sauf si un périmètre plus étroit est justifié dans le RUN —
+    un filet limité à vitest rate une régression de typage. La définition change ensuite (un candidat ajoute des tests, le
+    périmètre s'élargit) → **rechronomètre et redis le chiffre**. Mesuré : un « 3 s » annoncé à l'étape 0 était encore
+    cité comme « rejouer est gratuit » alors que chaque vrai run prenait 25 s.
+  - **Signal instable → ce n'est pas un `signal-cmd:`.** Le contrôle rejoue UNE fois, sans reprise : une suite instable fait de
+    la clôture du parent un pile ou face. Enveloppe le double run dans le script et pointe `signal-cmd:` dessus, ou
+    porte-le en attesté. Alors un `degraded-closed` sur « instable, couleur confirmée hors du contrôle » est
+    légitime.
 
-**0.c — PROVE the signal can go RED — and treat the breakage as the dangerous act it is.** A signal
-that cannot fail is not a net. But this sabotage lands in the one window the topology leaves untraced
-(no RUN exists yet, so no gate watches), on a tree other sessions write and a watcher may compile
-live. So, in order:
-  1. **Inventory the live writers** — watchers, the running app, concurrent sessions (the
-     session-inventory hook already reports them). Any of them, or a shared tree → **break the line in
-     the throwaway measuring worktree**, never in the tree they compile. A deliberately broken line
-     served to the user and to other sessions' measurements is contamination, and nobody is warned.
-  2. **Write the trace BEFORE the breakage** — absolute file path + its HEAD hash. It is the only
-     write worth making in this untraced window, and the only thing that allows a restore after a
-     crash, a context loss, or an interruption.
-  3. Break one line inside the perimeter, run the signal command **directly** (not through the gate —
-     no RUN exists yet), watch the red.
-  4. **Restore by command, never from memory**: `git checkout -- <file>` (or the copy, off git). Then
-     a **blocking checkpoint before anything else**: `git status --porcelain <file>` empty AND the
-     signal green again. Skip it and a residual sabotage becomes indistinguishable from a candidate's
-     edit — the red it causes is imputed to sound work, and step 5 reverts what was fine.
+**0.c — PROUVE que le signal peut passer au ROUGE — et traite la cassure comme l'acte dangereux qu'elle est.** Un signal
+qui ne peut pas échouer n'est pas un filet. Mais ce sabotage tombe dans la seule fenêtre que la topologie laisse sans trace
+(aucun RUN n'existe encore, donc aucun contrôle ne regarde), sur un arbre où d'autres sessions écrivent et qu'un surveillant peut compiler
+en direct. Donc, dans l'ordre :
+  1. **Inventorie les écrivains vivants** — surveillants, l'app en cours d'exécution, sessions concurrentes (le
+     hook d'inventaire de sessions les signale déjà). L'un d'eux, ou un arbre partagé → **casse la ligne dans
+     la copie de travail jetable de mesure**, jamais dans l'arbre qu'ils compilent. Une ligne délibérément cassée
+     servie à l'utilisateur et aux mesures d'autres sessions est une contamination, et personne n'est prévenu.
+  2. **Écris la trace AVANT la cassure** — chemin absolu du fichier + son hash de HEAD. C'est la seule
+     écriture qui vaille dans cette fenêtre sans trace, et la seule chose qui permette une restauration après un
+     plantage, une perte de contexte ou une interruption.
+  3. Casse une ligne dans le périmètre, joue la commande de signal **directement** (pas à travers le contrôle —
+     aucun RUN n'existe encore), regarde le rouge.
+  4. **Restaure par commande, jamais de mémoire** : `git checkout -- <file>` (ou la copie, hors git). Puis
+     un **point de contrôle bloquant avant toute autre chose** : `git status --porcelain <fichier>` vide ET le
+     signal de nouveau vert. Saute-le et un sabotage résiduel devient indiscernable de l'édition d'un candidat —
+     le rouge qu'il provoque est imputé à du travail sain, et l'étape 5 annule ce qui allait bien.
 
-  Measured: a `tsc --noEmit` that compiled nothing (`files: []`) sat in a DoD as the typing net — a
-  strictly empty green. Attestable signal → the red proof is the attestation's **negative control** (a
-  deliberately wrong artifact submitted to the same reading, traced in the RUN), not a CLI red.
+  Mesuré : un `tsc --noEmit` qui ne compilait rien (`files: []`) siégeait dans une liste de sortie comme filet de typage — un
+  vert strictement vide. Signal attestable → la preuve du rouge est le **contrôle négatif** de l'attestation (un
+  artefact délibérément faux soumis à la même lecture, tracé dans le RUN), pas un rouge en ligne de commande.
 
-**0.d — Green where the remake will actually run.** If 0.a moved into a worktree, the green measured
-elsewhere no longer counts: a worktree carries neither untracked nor ignored files (`node_modules`,
-build outputs, `.env`). Re-capture it there, and require green before continuing. Not runnable or not
-green there → STOP; never fall back silently to the main tree. **Write every `signal-cmd:` and
-`check:` as an ABSOLUTE path rooted in the worktree** — the gate replays them from the SESSION's cwd,
-so a relative command runs against the wrong code, and the failure mode that matters is the false
-GREEN on code the remake never touched.
+**0.d — Vert là où le remake tournera vraiment.** Si 0.a a déménagé dans une copie de travail, le vert mesuré
+ailleurs ne compte plus : une copie ne porte ni les fichiers non suivis ni les fichiers ignorés (`node_modules`,
+sorties de build, `.env`). Recapture-le là-bas, et exige le vert avant de continuer. Pas jouable ou pas
+vert là-bas → ARRÊT ; ne retombe jamais en silence sur l'arbre principal. **Écris chaque `signal-cmd:` et
+`check:` en chemin ABSOLU enraciné dans la copie** — le contrôle les rejoue depuis le cwd de la SESSION,
+donc une commande relative tourne contre le mauvais code, et le mode d'échec qui compte est le FAUX
+VERT sur du code que le remake n'a jamais touché.
 
-**RUN topology.** Path, header and closure conventions: ENGINE Ch.3 — not restated here. What is
-specific to remake:
-  - Steps 0-2 open **no RUN**: the parent is created at **step 3**, once the cost has been accepted.
-    Earlier, it would sit `open` across the step-2 human wait and the gate would block the very turn
-    that asks for the go. One consequence to hold: the proof that the gate really REPLAYS the signal
-    needs a RUN carrying it, so it cannot happen at step 0 — it happens at step 3, below, before any
-    phase runs. Step 0 proves the signal can go red; step 3 proves the gate is armed. Two proofs, two
-    moments, neither optional.
-  - **One child RUN per FILE-COLLISION PARTITION, not per candidate.** Design regrets concentrate on
-    the same files by construction — that is what makes them regrets. Measured: 10 of 12 candidates
-    touched the same two files. Group the colliding ones, name the partition, sequence inside it; only
-    genuinely disjoint candidates get their own RUN. Suffix `remake-<NN>-<slug>`, `NN` = rank in the
-    candidate table. A candidate dropped at step 2 opens no child RUN.
-  - **`regime: standard` MINIMUM on the parent and on every child, and `gate: off` forbidden on the
-    parent.** Both for the same reason: they are the only out-of-model authority over the remake.
-    `disposable` disarms the signal replay, the ≥3-scored-options rule AND the unchecked-DoD block all
-    at once — every guarantee this file claims as a fact evaporates without a word of warning.
+**Topologie du RUN.** Chemin, en-tête et conventions de clôture : moteur ch.3 — non redit ici. Ce qui est
+spécifique à remake :
+  - Les étapes 0-2 n'ouvrent **aucun RUN** : le parent est créé à l'**étape 3**, une fois le coût accepté.
+    Plus tôt, il resterait `open` pendant l'attente humaine de l'étape 2 et le contrôle bloquerait le tour même
+    qui demande le feu vert. Une conséquence à garder en tête : la preuve que le contrôle REJOUE vraiment le signal
+    exige un RUN qui le porte, elle ne peut donc pas avoir lieu à l'étape 0 — elle a lieu à l'étape 3, ci-dessous, avant toute
+    phase. L'étape 0 prouve que le signal peut passer au rouge ; l'étape 3 prouve que le contrôle est armé. Deux preuves, deux
+    moments, aucune optionnelle.
+  - **Un RUN enfant par PARTITION DE COLLISION DE FICHIERS, pas par candidat.** Les regrets de conception se concentrent sur
+    les mêmes fichiers par construction — c'est ce qui en fait des regrets. Mesuré : 10 candidats sur 12
+    touchaient les deux mêmes fichiers. Groupe ceux qui se percutent, nomme la partition, séquence à l'intérieur ; seuls les
+    candidats vraiment disjoints ont leur propre RUN. Suffixe `remake-<NN>-<slug>`, `NN` = rang dans le
+    tableau des candidats. Un candidat abandonné à l'étape 2 n'ouvre aucun RUN enfant.
+  - **`regime: standard` MINIMUM sur le parent et sur chaque enfant, et `gate: off` interdit sur le
+    parent.** Les deux pour la même raison : ce sont la seule autorité hors modèle sur le remake.
+    `disposable` désarme d'un coup le rejeu du signal, la règle des ≥ 3 options notées ET le blocage sur liste de sortie
+    non cochée — chaque garantie que ce fichier présente comme un fait s'évapore sans un mot d'avertissement.
 
-### 1. SCOUT — surface the candidates, with the regret bar
+### 1. SCOUT — faire remonter les candidats, avec la barre du regret
 
-Delegate the derivation to `scout`. `remake` supplies what `scout` cannot invent — **the bar is the
-design regret**, and the target already WORKS. Fan the lenses out in parallel (ENGINE Ch.1), dedup by
-core idea:
+Délègue la dérivation à `scout`. `remake` fournit ce que `scout` ne peut pas inventer — **la barre est le
+regret de conception**, et la cible MARCHE déjà. Lance les lentilles en parallèle (moteur ch.1), déduplique par
+idée centrale :
 
-- **Structure** — what would live elsewhere, be split, or be merged.
-- **Naming** — what a reader must decode instead of read; names that lie about what they hold.
-- **Unnecessary abstraction** — indirection for a case that never came: an interface with one
-  implementation, an alias for one caller, a hook nobody uses.
-- **Coupling** — what knows too much about what; the change that forces three unrelated edits.
-- **What would not be built at all** — the sharpest lens, and the one nobody runs.
-- **Today's skeleton** — sketch what you would write NOW from the need alone, then diff against the
-  real thing. Keep it a sketch: a full reconstruction invents a skeleton disconnected from the
-  constraints that shaped the code.
+- **Structure** — ce qui vivrait ailleurs, serait scindé, ou fusionné.
+- **Nommage** — ce qu'un lecteur doit décoder au lieu de lire ; les noms qui mentent sur ce qu'ils contiennent.
+- **Abstraction inutile** — de l'indirection pour un cas qui n'est jamais venu : une interface à une seule
+  implémentation, un alias pour un seul appelant, un hook que personne n'utilise.
+- **Couplage** — ce qui en sait trop sur quoi ; le changement qui force trois éditions sans rapport.
+- **Ce qui ne serait pas construit du tout** — la lentille la plus tranchante, et celle que personne ne joue.
+- **Le squelette d'aujourd'hui** — esquisse ce que tu écrirais MAINTENANT à partir du seul besoin, puis compare au
+  vrai. Garde-le à l'état d'esquisse : une reconstruction complète invente un squelette déconnecté des
+  contraintes qui ont façonné le code.
 
-Each finding names **the observation that would catch its regression** — without it, a later audit
-cannot tell the safe from the lucky.
+Chaque constat nomme **l'observation qui attraperait sa régression** — sans elle, un audit ultérieur
+ne peut pas distinguer le sûr du chanceux.
 
-**Two things must be said to `scout` explicitly, or the delegation returns the wrong table.**
+**Deux choses doivent être dites explicitement à `scout`, sinon la délégation rend le mauvais tableau.**
 
-**(a) Its survival gate is REPLACED, not extended.** `scout` keeps a candidate only as a 🔧 fix (a REAL
-defect with `file:line`) or a 🆕 new thing. A regret is neither — the code WORKS, so no defect; it
-EXISTS, so not new — and it dies at the gate. Either the table comes back empty and `remake` concludes
-"nothing to redo" when it only measured its own filter, or the regret is relabelled a defect, which
-this skill forbids. State the substitute: **♻️ regret — survives iff a real `file:line` + the one-line
-form it would take today + the observation that would catch its regression** — and ask for the Type
-column extended to ♻️, since a gate with no column to land in gets its regrets relabelled 🔧.
+**(a) Son filtre de survie est REMPLACÉ, pas étendu.** `scout` ne garde un candidat que comme 🔧 correctif (un VRAI
+défaut avec `file:line`) ou 🆕 nouveauté. Un regret n'est ni l'un ni l'autre — le code MARCHE, donc pas de défaut ; il
+EXISTE, donc pas de nouveauté — et il meurt au filtre. Soit le tableau revient vide et `remake` conclut
+« rien à refaire » alors qu'il n'a mesuré que son propre filtre, soit le regret est réétiqueté en défaut, ce que
+cette skill interdit. Énonce le remplaçant : **♻️ regret — survit si et seulement si un vrai `file:line` + la forme
+d'une ligne qu'il prendrait aujourd'hui + l'observation qui attraperait sa régression** — et demande que la colonne Type soit
+étendue à ♻️, car un filtre sans colonne où atterrir fait réétiqueter ses regrets en 🔧.
 
-**(b) Its mandatory arms are DISARMED, including the self-re-arming ones.** The bold/ambition quota
-injects greenfield features that are not regrets; the CLEAN-ROOM lens refuses to read the existing
-code and contradicts this skill's premise (the finished product IS the specification); the web
-prior-art arm answers a question nobody asked. Naming those three is not enough: `scout` re-lights the
-bold arm through its **WIDEN** step (no high-impact candidate survived — the nominal outcome when the
-target already WORKS) and its **self-gate** (every new candidate merely finishes the planned). Disarm
-those two by name too, with the substitute rule: *on a regret table, the absence of a high-impact
-candidate is an honest result, not a tepid harvest, and triggers no extra round.*
+**(b) Ses bras obligatoires sont DÉSARMÉS, y compris ceux qui se réarment seuls.** Le quota audacieux/ambitieux
+injecte des fonctionnalités neuves qui ne sont pas des regrets ; la lentille SALLE BLANCHE refuse de lire le code
+existant et contredit la prémisse de cette skill (le produit fini EST la spécification) ; le bras d'antériorité
+web répond à une question que personne n'a posée. Nommer ces trois-là ne suffit pas : `scout` rallume le
+bras audacieux par son étape **ÉLARGIR** (aucun candidat à fort impact n'a survécu — le résultat nominal quand la
+cible MARCHE déjà) et par son **auto-contrôle** (chaque nouveau candidat ne fait que finir le prévu). Désarme
+ces deux-là aussi, nommément, avec la règle de remplacement : *sur un tableau de regrets, l'absence d'un candidat
+à fort impact est un résultat honnête, pas une moisson tiède, et ne déclenche aucun tour supplémentaire.*
 
-An arm that fires anyway and yields something valuable leaves the regret table and is surfaced
-separately — it does NOT enter step 3, and it is not built under the banner of "what I'd do
-differently".
+Un bras qui se déclenche quand même et rend quelque chose de précieux sort du tableau de regrets et est remonté
+séparément — il n'entre PAS à l'étape 3, et il n'est pas construit sous la bannière « ce que je ferais
+autrement ».
 
-### 2. Rank, then SHOW THE COST before going further
+### 2. Classer, puis MONTRER LE COÛT avant d'aller plus loin
 
-Impact ⊥ effort, two axes, never one collapsed score (ENGINE Ch.1). Everything retained goes through
-`frame`, so **the list length IS the price**. Surface one line covering both costs before committing:
+Impact ⊥ effort, deux axes, jamais une note unique effondrée (moteur ch.1). Tout ce qui est retenu passe par
+`frame`, donc **la longueur de la liste EST le prix**. Expose une ligne couvrant les deux coûts avant de t'engager :
 
-- **The agents, from a NAMED tally** — N lenses + N frames + N chains + **N `terrain` if armed** (see
-  the dispatch contract: it is disarmed by default, and counted the moment it is not). Compare the
-  total to the regime's agent bracket (CLAUDE.md reflex 4) and to the session's cumulative count; any
-  overrun carries its line of justification.
-- **The signal replays × its measured duration** — once per build increment, once per `clean`, once at
-  the close, **plus one gate replay per RUN that transitions to green** (parent + N children) **and
-  each `check:` line**. On 6 partitions that is 7 uncounted replays; on a 20-minute suite it is the
-  whole budget.
+- **Les agents, depuis un décompte NOMMÉ** — N lentilles + N cadrages + N chaînes + **N `terrain` if armed** (voir
+  le contrat de dispatch : il est désarmé par défaut, et compté dès qu'il ne l'est plus). Compare le
+  total à la fourchette d'agents du régime (`skills/_engine/ENGINE.md`) et au cumul de la session ; tout
+  dépassement porte sa ligne de justification.
+- **Les rejeux du signal × sa durée mesurée** — un par incrément de construction, un par `clean`, un à
+  la clôture, **plus un rejeu du contrôle par RUN qui passe au vert** (parent + N enfants) **et
+  chaque ligne `check:`**. Sur 6 partitions, cela fait 7 rejeux non comptés ; sur une suite de 20 minutes, c'est
+  tout le budget.
 
-Three multiplicands are not yet decided at this point — the number of build increments, the
-judge→build iterations, and whether `terrain` is armed. Give them as a RANGE with its upper bound
-shown, and reserve "counted" for the terms actually known (lenses, frames, partitions, the measured
-signal duration). A fake precision on an undecidable term is not honesty, it is decoration.
+Trois multiplicandes ne sont pas encore décidées à ce stade — le nombre d'incréments de construction, les
+itérations judge→build, et le fait que `terrain` soit armé ou non. Donne-les en FOURCHETTE avec sa borne haute
+montrée, et réserve « compté » aux termes réellement connus (lentilles, cadrages, partitions, la durée
+mesurée du signal). Une fausse précision sur un terme indécidable n'est pas de l'honnêteté, c'est de la décoration.
 
-Both figures are **COUNTED, not guessed** where they can be: measured on the first real run, "~50 agents" meant about 15
-and "3 s" meant 25 — the user said yes to two wrong numbers. Reality diverging by more than ~2× while
-the remake runs → **say so again mid-course**. If the product exceeds what the target is worth, say so
-and propose replaying at milestones instead of every increment.
+Les deux chiffres sont **COMPTÉS, pas devinés** là où ils peuvent l'être : mesuré au premier vrai run, « ~50 agents » voulait dire environ 15
+et « 3 s » voulait dire 25 — l'utilisateur a dit oui à deux chiffres faux. La réalité qui diverge de plus de ~2× pendant
+que le remake tourne → **redis-le en cours de route**. Si le produit dépasse ce que vaut la cible, dis-le
+et propose de rejouer à des jalons plutôt qu'à chaque incrément.
 
-Then **STOP and wait for the go** if the count exceeds what the request implied, or if the cost line is
-not obviously acceptable; otherwise continue and say that you did. "One gesture" means the user does
-not steer each phase — not that the bill arrives afterwards.
+Puis **ARRÊTE-TOI et attends le feu vert** si le décompte dépasse ce que la demande impliquait, ou si la ligne de coût n'est
+pas manifestement acceptable ; sinon continue et dis que tu l'as fait. « Un seul geste » veut dire que l'utilisateur ne
+pilote pas chaque phase — pas que la facture arrive après coup.
 
-**A "no" here is a real outcome, and step 0 left things behind.** Undo it by NAMED, bounded gestures:
-the worktree by the absolute path recorded at 0.a and that one only — **never `git worktree prune`,
-never a remove on a path you did not create**: this repo carries other agents' LIVE worktrees, and a
-generic cleanup takes their work in flight. The junction by its own path. Confirm 0.c's deliberate
-breakage is back (`git status --porcelain` empty on that file). **The commit from 0.a stays** — it
-holds legitimate pre-existing work, so rewriting shared history to remove it would destroy commits
-other sessions may have layered on top. Say it remains; if it truly must go, that is `git revert` of
-the single enumerated hash, never a reset. Report the target untouched.
+**Un « non » ici est un vrai résultat, et l'étape 0 a laissé des choses derrière.** Défais-les par des gestes NOMMÉS et bornés :
+la copie de travail par le chemin absolu consigné en 0.a et celui-là seulement — **jamais `git worktree prune`,
+jamais un retrait sur un chemin que tu n'as pas créé** : ce dépôt porte les copies de travail VIVANTES d'autres agents, et un
+nettoyage générique emporte leur travail en vol. La jonction par son propre chemin. Confirme que la cassure délibérée de 0.c
+est réparée (`git status --porcelain` vide sur ce fichier). **Le commit de 0.a reste** — il
+porte du travail préexistant légitime, donc réécrire l'historique partagé pour le retirer détruirait des commits
+que d'autres sessions ont pu empiler dessus. Dis qu'il demeure ; s'il doit vraiment partir, c'est un `git revert` du
+hash unique énuméré, jamais un reset. Rapporte la cible intacte.
 
-**No candidate is an honest result too.** `scout` returning nothing means no regret worth paying for.
-Say it and stop; do not run steps 3-5 on an empty list. If you drop anything, say what and why — a
-quiet cut reads as "covered everything" when it did not.
+**Aucun candidat est aussi un résultat honnête.** Un `scout` qui ne rend rien veut dire aucun regret qui vaille son prix.
+Dis-le et arrête ; ne joue pas les étapes 3-5 sur une liste vide. Si tu abandonnes quelque chose, dis quoi et pourquoi — une
+coupe silencieuse se lit comme « tout était couvert » alors que non.
 
-### 3. FRAME every candidate retained — and write the parent's own need
+### 3. CADRER chaque candidat retenu — et écrire le besoin propre au parent
 
-A `scout` candidate is a lead, not a task. `frame` scopes the need, checks what already EXISTS (the
-duplicate trap), scores the approaches and states its assumptions. Skipping it hands `build` a vague
-wish and gets a vague change back.
+Un candidat de `scout` est une piste, pas une tâche. `frame` borne le besoin, vérifie ce qui EXISTE déjà (le
+piège du doublon), note les approches et énonce ses hypothèses. Le sauter donne à `build` un vœu vague
+et rend un changement vague.
 
-**PROVE THE GATE IS ARMED, now that a RUN exists to carry the signal.** Break a line inside the
-perimeter again, close the parent RUN, and read the gate's refusal: it must cite
-`REJEU signal-cmd ECHOUE (exit N)`. Any other BLOCK — typically *"signal-cmd ne PROUVE rien"* — means
-the form is wrong, not that the gate is watching, and treating it as proof of arming is the exact
-false-green this step exists to prevent. Then restore by command and re-check as in 0.c. Never
-observed a replay-refusal → the closure is labelled *self-declared, gate not armed*.
+**PROUVE QUE LE CONTRÔLE EST ARMÉ, maintenant qu'un RUN existe pour porter le signal.** Casse à nouveau une ligne dans le
+périmètre, clos le RUN parent, et lis le refus du contrôle : il doit citer
+`REJEU signal-cmd ECHOUE (exit N)`. Tout autre BLOCAGE — typiquement *« signal-cmd ne PROUVE rien »* — veut dire que
+la forme est mauvaise, pas que le contrôle surveille, et le prendre pour une preuve d'armement est exactement le
+faux-vert que cette étape existe pour empêcher. Puis restaure par commande et recontrôle comme en 0.c. Jamais
+observé de refus de rejeu → la clôture est étiquetée *auto-déclarée, contrôle non armé*.
 
-**Write the PARENT's `## Besoin` HERE, before any phase runs** — nobody else will, and step 5 has to
-tick its DoD item by item. It holds the object of the remake, the candidate table, the signal and the
-rollback handle, and a cochable DoD whose items are the closure contract itself: *original signal
-replayed green, unchanged* · *extended signal justified* · *candidate × phase matrix published* ·
-*rollback handle enumerated and verified*. Each item names its proof. Written at the close instead, a
-DoD gets tailored to the result — the defect `CLAUDE.md` names outright.
+**Écris le `## Besoin` du PARENT ICI, avant qu'aucune phase ne tourne** — personne d'autre ne le fera, et l'étape 5 doit
+cocher sa liste de sortie item par item. Il porte l'objet du remake, le tableau des candidats, le signal et la
+poignée de retour arrière, et une liste cochable dont les items SONT le contrat de clôture : *signal d'origine
+rejoué vert, inchangé* · *signal étendu justifié* · *matrice candidat × phase publiée* ·
+*poignée de retour arrière énumérée et vérifiée*. Chaque item nomme sa preuve. Écrite à la clôture à la place, une
+liste de sortie est taillée pour le résultat — le défaut que le réflexe de preuve de la constitution nomme sans détour.
 
-**A candidate may DIE here, and that is the framing succeeding.** Step 2 drops on cost; step 3 kills on
-evidence — the regret is wider than the code, the thing is already done, the fix costs more than it
-buys. Say so with the reason, remove it from the count, move on. Without this, the step-2 commitment
-pushes the framing to manufacture a regret that isn't there. 
+**Un candidat peut MOURIR ici, et c'est le cadrage qui réussit.** L'étape 2 abandonne sur le coût ; l'étape 3 tue sur
+la preuve — le regret est plus large que le code, la chose est déjà faite, le correctif coûte plus qu'il ne rapporte.
+Dis-le avec la raison, retire-le du décompte, passe à la suite. Sans cela, l'engagement de l'étape 2
+pousse le cadrage à fabriquer un regret qui n'existe pas.
 
-**A regret that turns out to be a real DEFECT is reclassified, not smuggled through.** The inverted
-proof obligation is calibrated for iso-behaviour changes. A genuine behavioural divergence takes
-`build`'s bar instead: reproduce it red first, then green. Measured on one run of 12: 3 died at
-framing, 2 were reclassified.
+**Un regret qui se révèle être un vrai DÉFAUT est reclassé, pas passé en fraude.** L'obligation de preuve
+inversée est calibrée pour des changements à comportement identique. Une vraie divergence de comportement prend
+la barre de `build` : reproduire en rouge d'abord, puis le vert. Mesuré sur un run de 12 : 3 sont morts au
+cadrage, 2 ont été reclassés.
 
-Independent candidates frame in PARALLEL; two touching the same code are NOT independent — frame them
-together or sequence them, so the second is framed against the first's result and not a stale reading.
+Les candidats indépendants se cadrent EN PARALLÈLE ; deux qui touchent le même code ne sont PAS indépendants — cadre-les
+ensemble ou séquence-les, pour que le second soit cadré contre le résultat du premier et non sur une lecture périmée.
 
-### The dispatch contract — stated to EVERY phase, EVERY time
+### Le contrat de dispatch — énoncé à CHAQUE phase, à CHAQUE fois
 
-The failure mode that keeps coming back in different clothes: a delegated phase does not see what
-`remake` decided. It resolves its own RUN, works in the session's cwd, follows its own arbitration
-rule, and obeys its own contract about what it must write before reporting done. So every dispatch —
-`frame`, `build`, `clean`, `judge` — carries all five:
+Le mode d'échec qui revient sans cesse sous d'autres habits : une phase déléguée ne voit pas ce que
+`remake` a décidé. Elle résout son propre RUN, travaille dans le cwd de la session, suit sa propre règle
+d'arbitrage, et obéit à son propre contrat sur ce qu'elle doit écrire avant de rapporter « fini ». Donc chaque dispatch —
+`frame`, `build`, `clean`, `judge` — porte les cinq :
 
-1. **The absolute child-RUN path.** Relative, a sub-agent writes into the target repo, outside what the
-   gate scans: an invisible RUN nothing enforces. It must stay directly under the session's run folder
-   — the gate does not recurse. **Never move `AUTOWIN_RUN_ROOT` per candidate** (the one documented
-   lever to steer `judge`'s singular glob): it relocates the child out of the scanned subtree and
-   recreates exactly that invisible RUN.
-2. **The working root** — the worktree, when 0.a moved there. "Steps 0-5 all run there" is a sentence
-   in this file, not a property of the environment; a phase that was not told works in the main tree.
-3. **The arbitration mandate.** `frame` hands a real fork back and waits unless told to decide. N
-   sub-frames after a single go, each meeting a fork, all stop at once — on a skill whose promise is
-   not steering by hand. So choose per candidate: **"decide for me"** (default, for an obvious form;
-   the decision then needs its ≥3 scored options — ENGINE Ch.1 anti-fixation — or no `Décision:` line
-   at all rather than two straw options), or **return the fork to the parent** BEFORE the child RUN is
-   opened (an `open` child across the human wait blocks the turn that asks the question). The parent
-   batches every returned fork into ONE question, then re-dispatches with the answer and a "decide for
-   me" mandate.
-4. **The perimeter, explicitly — and never "the recent diff".** It is GRADUATED, because at the first
-   dispatch none of the remake's commits exist yet: to `frame`, the perimeter is the FILE LIST plus the
-   anchor HEAD from 0.a; to `build`, `clean` and `judge`, it is the enumerated hashes that build
-   produced for THAT partition, plus its files. Never a range: on a shared tree another session's
-   commits sit interleaved with yours. Measured in both directions — a judge attributed a stranger's
-   commit to the remake, and a builder blamed "a concurrent session" for a red that was its own
-   uncommitted work.
-5. **Do NOT chain onto `terrain`, and the parent RUN is off-limits.** `frame`'s own contract ends with
-   an unconditional handoff to `terrain`: left alone, N sub-frames launch N unbudgeted `terrain`. Add
-   it deliberately before `build` when the work needs a harness that does not exist — and then count it
-   at step 2. And a phase touching the parent's status turns it green on candidate 2 of 6, which the
-   gate then validates as a statement about the whole remake.
+1. **Le chemin absolu du RUN enfant.** Relatif, un sous-agent écrit dans le dépôt cible, hors de ce que le
+   contrôle balaie : un RUN invisible que rien n'applique. Il doit rester directement sous le dossier de run de la session
+   — le contrôle ne descend pas récursivement. **Ne déplace JAMAIS `AUTOWIN_RUN_ROOT` par candidat** (le seul levier documenté
+   pour piloter le glob singulier de `judge`) : cela relocalise l'enfant hors du sous-arbre balayé et
+   recrée exactement ce RUN invisible.
+2. **La racine de travail** — la copie de travail, quand 0.a y a déménagé. « Les étapes 0-5 s'y jouent toutes » est une phrase
+   dans ce fichier, pas une propriété de l'environnement ; une phase à qui on ne l'a pas dit travaille dans l'arbre principal.
+3. **Le mandat d'arbitrage.** `frame` rend une vraie bifurcation et attend, sauf si on lui dit de trancher. N
+   sous-cadrages après un seul feu vert, chacun rencontrant une bifurcation, s'arrêtent tous en même temps — sur une skill dont la promesse est
+   de ne pas piloter à la main. Alors choisis par candidat : **« décide pour moi »** (le défaut, pour une forme évidente ;
+   la décision exige alors ses ≥ 3 options notées — anti-fixation du moteur ch.1 — ou pas de ligne `Décision:`
+   du tout plutôt que deux options de paille), ou **rends la bifurcation au parent** AVANT que le RUN enfant soit
+   ouvert (un enfant `open` pendant l'attente humaine bloque le tour qui pose la question). Le parent
+   regroupe toutes les bifurcations rendues en UNE question, puis redistribue avec la réponse et un mandat « décide pour
+   moi ».
+4. **Le périmètre, explicitement — et jamais « le diff récent ».** Il est GRADUÉ, parce qu'au premier
+   dispatch aucun commit du remake n'existe encore : pour `frame`, le périmètre est la LISTE DE FICHIERS plus le
+   HEAD d'ancrage de 0.a ; pour `build`, `clean` et `judge`, ce sont les hashes énumérés que la construction a
+   produits pour CETTE partition, plus ses fichiers. Jamais une plage : sur un arbre partagé, les commits d'une autre session
+   sont entrelacés avec les tiens. Mesuré dans les deux sens — un juge a attribué le commit d'un inconnu
+   au remake, et un constructeur a accusé « une session concurrente » d'un rouge qui venait de son propre travail non commité.
+5. **N'enchaîne PAS sur `terrain`, et le RUN parent est interdit.** Le contrat propre à `frame` se termine par
+   une passation inconditionnelle à `terrain` : laissé seul, N sous-cadrages lancent N `terrain` non budgétés. Ajoute-le
+   délibérément avant `build` quand le travail exige un harnais qui n'existe pas — et compte-le alors
+   à l'étape 2. Et une phase qui touche le statut du parent le passe au vert au candidat 2 sur 6, ce que le
+   contrôle valide ensuite comme une affirmation sur tout le remake.
 
-Do not, on the other hand, tell `frame` to "return without writing": it refuses to report done before
-`## Besoin`, `## Contraintes` and `## Confiance` (plus `## Options` + `Décision:` when it arbitrates)
-are in a RUN, and a contract forcing a phase to break its own is not a contract. Point it at a file of
-its own instead. What must NOT happen is N agents resolving the same default path and overwriting each
-other (single-writer, ENGINE Ch.3).
+En revanche, ne dis pas à `frame` de « rendre sans écrire » : il refuse de rapporter « fini » avant que
+`## Besoin`, `## Contraintes` et `## Confiance` (plus `## Options` + `Décision:` quand il arbitre)
+soient dans un RUN, et un contrat qui force une phase à rompre le sien n'est pas un contrat. Pointe-le vers un fichier à
+lui à la place. Ce qui NE doit PAS arriver, c'est N agents résolvant le même chemin par défaut et s'écrasant
+les uns les autres (rédacteur unique, moteur ch.3).
 
-**Whenever this file says a phase "does X", check that phase's own SKILL.md before believing it.**
-Where the two disagree the phase wins, and the fix belongs in the dispatch contract above — not in a
-stricter sentence here.
+**Chaque fois que ce fichier dit qu'une phase « fait X », vérifie le SKILL.md de cette phase avant d'y croire.**
+Là où les deux divergent, la phase gagne, et le correctif appartient au contrat de dispatch ci-dessus — pas à une
+phrase plus stricte ici.
 
-### 4. Run the pipeline to the end — build → clean → judge
+### 4. Jouer le pipeline jusqu'au bout — build → clean → judge
 
-Each framed need runs the real chain, in order: `build` (executes, red→green, anti-regression) →
-`clean` (post-build hygiene) → `judge` (adversarial audit). `judge` returns defects to `build`, not to
-`remake`: that loop belongs to the phases and runs to the regime threshold before control comes back.
+Chaque besoin cadré joue la vraie chaîne, dans l'ordre : `build` (exécute, rouge→vert, anti-régression) →
+`clean` (hygiène d'après-construction) → `judge` (audit adversarial). `judge` rend les défauts à `build`, pas à
+`remake` : cette boucle appartient aux phases et tourne jusqu'au seuil du régime avant que la main revienne.
 
-`remake` decides WHAT and drives the sequence; each phase owns its HOW. Do not grow a second execution
-engine, a second audit, or a second cleanup — a divergent copy of a phase is worse than no phase.
+`remake` décide QUOI et enchaîne la séquence ; chaque phase possède son COMMENT. Ne fais pas pousser un second moteur
+d'exécution, un second audit ou un second nettoyage — une copie divergente d'une phase est pire que pas de phase.
 
-Frozen perimeter: unchanged, and it has not lifted.
+Périmètre gelé : inchangé, et il ne s'est pas levé.
 
-### 5. Close
+### 5. Clore
 
-Replay the signal — **the target's own, from step 0**, not a phase's internal verdict. A green `judge`
-per candidate does not prove the target still works as a whole: each phase proved its own change,
-nobody proved their SUM.
+Rejoue le signal — **celui de la cible, depuis l'étape 0**, pas le verdict interne d'une phase. Un `judge` vert
+par candidat ne prouve pas que la cible marche encore dans son ensemble : chaque phase a prouvé son propre changement,
+personne n'a prouvé leur SOMME.
 
-**Report BOTH numbers.** Candidates add tests; extending the net is healthy, shrinking it never is. So
-state the ORIGINAL signal, unchanged, still green, AND the extended one, every change in the count
-justified. A single number that silently moved from 204 to 212 is not a replay of step 0's signal.
+**Rapporte les DEUX chiffres.** Les candidats ajoutent des tests ; étendre le filet est sain, le rétrécir ne l'est jamais. Donc
+énonce le signal D'ORIGINE, inchangé, toujours vert, ET l'étendu, chaque changement du décompte
+justifié. Un chiffre unique passé en silence de 204 à 212 n'est pas un rejeu du signal de l'étape 0.
 
-Attestable signal → the replay is a FRESH attestation: same reading perimeter as step 0, run-stamped,
-with its negative control, and "both numbers" becomes "the same reading checklist, any extension
-justified".
+Signal attestable → le rejeu est une attestation FRAÎCHE : même périmètre de lecture qu'à l'étape 0, avec son empreinte de run,
+avec son contrôle négatif, et « les deux chiffres » devient « la même liste de lecture, toute extension
+justifiée ».
 
-**Publish a candidate × phase matrix** — one row per candidate, one column per phase actually run. An
-empty cell is declared, not left silent: coverage by ricochet, where one partition's `clean` happens to
-span another's commits, reads as full coverage and is not. Measured: 2 candidates of 12 got neither
-`clean` nor `judge`, and nothing said so.
+**Publie une matrice candidat × phase** — une ligne par candidat, une colonne par phase réellement jouée. Une
+case vide est déclarée, pas laissée en silence : une couverture par ricochet, où le `clean` d'une partition couvre par hasard
+les commits d'une autre, se lit comme une couverture complète et n'en est pas une. Mesuré : 2 candidats sur 12 n'ont eu ni
+`clean` ni `judge`, et rien ne le disait.
 
-Not green → **identify what the red IS before destroying anything**:
+Pas vert → **identifie CE QU'EST le rouge avant de détruire quoi que ce soit** :
 
-1. **Is it even a red?** Exit 124 is the gate's 120 s cap, not a regression. A replay that timed out,
-   or a `signal-cmd` the gate never replayed at all, says nothing about the code — fix the signal's
-   form (0.b) and re-close. Reverting healthy work over a hook timeout is the expensive mistake here.
-2. **Replay once more.** A flaky signal red by bad luck would otherwise throw away sound work.
-3. **Re-probe the tree.** Step 0's cleanliness is a DATED fact and these trees move mid-session. Gone
-   dirty since → the revert is forbidden outright: hand back, saying what is at stake.
-4. **Bisect by PARTITION, do not carpet-bomb.** Partitions are the disjoint unit — candidates inside
-   one collide by construction, so reverting them "one at a time" produces conflicts or a state never
-   tested. Revert whole partitions, newest first, replaying between each. Bisection unavailable (a
-   non-git target with one copy) → say that the granularity is all-or-nothing and what it costs.
-   The revert itself is bounded, or it becomes the damage:
-   - **Check for foreign commits first.** `git log <hash>..HEAD -- <the partition's files>` returning
-     anything that is not yours FORBIDS the revert: hand back instead, saying what is at stake. The
-     handle proves the commits are yours; it says nothing about who touched those files since.
-   - **`git revert --no-commit <enumerated hashes>`**, never a range. First conflict →
-     `git revert --abort`, then report: a shared tree left in a conflicted revert blocks EVERY
-     session's commits, and the next third-party `git pull --autostash` on that state is how work
-     disappears.
-   - Shared tree → do the revert in an isolated worktree, consistent with how a push is handled there.
-5. **A DATA rollback obeys the same dated-fact rule as the tree.** Before restoring a snapshot, re-probe
-   the file (hash or mtime versus the snapshot): changed since → restoration is FORBIDDEN, hand back
-   and say what is at stake. Otherwise the restore silently destroys every write made since — user
-   data, the gravest class, and unrecoverable once overwritten. Back up the CURRENT state before
-   overwriting it, so the restore is itself reversible, and confirm no live writer holds the file.
-6. **Report the culprit either way.** A remake that leaves the target worse than it found it has
-   failed, and says so.
+1. **Est-ce seulement un rouge ?** Un `exitCode: null` avec « arrêtée au plafond » est le plafond de vérification, pas une régression. Un rejeu en dépassement,
+   ou un `signal-cmd` que le contrôle n'a jamais rejoué, ne dit rien sur le code — corrige la forme du signal
+   (0.b) et reclos. Annuler du travail sain à cause d'un dépassement de hook est l'erreur coûteuse ici.
+2. **Rejoue encore une fois.** Un signal instable rouge par malchance jetterait sinon du travail sain.
+3. **Resonde l'arbre.** La propreté de l'étape 0 est un fait DATÉ et ces arbres bougent en cours de session. Devenu
+   sale depuis → le revert est carrément interdit : rends la main en disant ce qui est en jeu.
+4. **Bissecte par PARTITION, ne bombarde pas.** Les partitions sont l'unité disjointe — les candidats à l'intérieur
+   d'une même partition se percutent par construction, donc les annuler « un par un » produit des conflits ou un état jamais
+   testé. Annule des partitions entières, la plus récente d'abord, en rejouant entre chacune. Bissection indisponible (une
+   cible hors git avec une seule copie) → dis que la granularité est du tout ou rien et ce que cela coûte.
+   Le revert lui-même est borné, sinon il devient le dégât :
+   - **Cherche d'abord les commits étrangers.** `git log <hash>..HEAD -- <les fichiers de la partition>` qui rend
+     quoi que ce soit qui n'est pas à toi INTERDIT le revert : rends la main à la place, en disant ce qui est en jeu.
+     La poignée prouve que les commits sont les tiens ; elle ne dit rien sur qui a touché ces fichiers depuis.
+   - **`git revert --no-commit <hashes énumérés>`**, jamais une plage. Premier conflit →
+     `git revert --abort`, puis rapporte : un arbre partagé laissé dans un revert en conflit bloque les commits de TOUTES
+     les sessions, et le prochain `git pull --autostash` d'un tiers sur cet état est la façon dont du travail
+     disparaît.
+   - Arbre partagé → fais le revert dans une copie de travail isolée, comme on traite une publication là-bas.
+5. **Un retour arrière sur les DONNÉES obéit à la même règle de fait daté que l'arbre.** Avant de restaurer un instantané, resonde
+   le fichier (hash ou date de modification contre l'instantané) : changé depuis → la restauration est INTERDITE, rends la main
+   et dis ce qui est en jeu. Sinon la restauration détruit en silence toutes les écritures faites depuis — des données
+   utilisateur, la classe la plus grave, et irrécupérables une fois écrasées. Sauvegarde l'état COURANT avant de
+   l'écraser, pour que la restauration soit elle-même réversible, et confirme qu'aucun écrivain vivant ne tient le fichier.
+6. **Rapporte le coupable dans les deux cas.** Un remake qui laisse la cible plus mal qu'il ne l'a trouvée a
+   échoué, et le dit.
 
-**Close the children, then the parent** (statuses and their proof: ENGINE Ch.3). The parent is the only
-RUN whose scope is the remake as a whole, so it closes with its gate armed and its DoD ticked item by
-item against the final replay. An item that cannot be honestly ticked makes the status
-`degraded-closed` — never `green` under an escape hatch. Measured: the first real run closed `green`
-with five unticked boxes and the gate off, and nobody but a later audit noticed.
+**Clos les enfants, puis le parent** (statuts et leur preuve : moteur ch.3). Le parent est le seul
+RUN dont le périmètre est le remake dans son ensemble, donc il se clôt avec son contrôle armé et sa liste de sortie cochée item par
+item contre le rejeu final. Un item qui ne peut pas être coché honnêtement rend le statut
+`degraded-closed` — jamais `green` par une porte de sortie. Mesuré : le premier vrai run s'est clos en `green`
+avec cinq cases non cochées et le contrôle désarmé, et personne sauf un audit ultérieur ne l'a remarqué.
 
-## Output
+## Ce que ça produit
 
-The ranked candidates (impact ⊥ effort, with what was dropped and the cost shown), what each was framed
-into, the phases actually run per candidate with their verdicts, the target's signal replayed green
-before and after, and the single rollback handle. Written in the living RUN.md.
+Les candidats classés (impact ⊥ effort, avec ce qui a été abandonné et le coût montré), ce en quoi chacun a été cadré,
+les phases réellement jouées par candidat avec leurs verdicts, le signal de la cible rejoué vert
+avant et après, et la poignée de retour arrière unique. Écrit dans le RUN.md vivant.
 
-## Don't
+## À ne pas faire
 
-- **Run without a signal the gate actually verifies** — the refusal is the feature. A `signal-cmd`
-  outside the whitelist is never replayed, one that fails the proof rule blocks every green, and an
-  attested signal below `critical` is checked by nobody. All three are "no signal".
-- **Rewrite the frozen perimeter** — kit, hooks, `CLAUDE.md`, memory: propose only.
-- **Present a regret as a defect** — that is `judge`'s bar, and borrowing it makes the skill lie.
-- **Leave `disposable` on a remake RUN, let a phase chain onto `terrain`, or let one touch the parent** —
-  three silent ways to lose the guarantees this file claims.
-- **Bisect before knowing the red is a red** — a 120 s timeout is not a regression.
-- **Reimplement a phase, or hand `build` an unframed candidate** — `remake` sequences and adds the
-  regret bar; it re-implements none of them, and a scout lead is not a task.
-- **Skim a target too large to hold, or hide the cost of what emerged** — ask for the slice; show the
-  count.
-- **Use to**: audit an existing deliverable (→ `judge`) · pick what to work on when the deliverable is
-  not finished (→ `scout`) · redesign what a screen should LOOK like (→ `draft`) · clear
-  failed-attempt residue (→ `clean`) · change Claude's own behaviour (→ `kaizen`).
+- **Tourner sans un signal que le contrôle vérifie vraiment** — le refus est la fonctionnalité. Un `signal-cmd`
+  hors liste blanche n'est jamais rejoué, un qui échoue à la règle de preuve bloque tout vert, et un
+  signal attesté sous `critical` n'est vérifié par personne. Les trois sont « pas de signal ».
+- **Réécrire le périmètre gelé** — kit, garde-fous de code, `src/main/constitution.ts`, mémoire : proposer seulement.
+- **Présenter un regret comme un défaut** — c'est la barre de `judge`, et l'emprunter fait mentir la skill.
+- **Laisser `disposable` sur un RUN de remake, laisser une phase enchaîner sur `terrain`, ou en laisser une toucher le parent** —
+  trois façons silencieuses de perdre les garanties que ce fichier revendique.
+- **Bissecter avant de savoir que le rouge est un rouge** — un dépassement du plafond de vérification n'est pas une régression.
+- **Réimplémenter une phase, ou donner à `build` un candidat non cadré** — `remake` enchaîne et ajoute la
+  barre du regret ; il n'en réimplémente aucune, et une piste de scout n'est pas une tâche.
+- **Survoler une cible trop grande à tenir, ou cacher le coût de ce qui a émergé** — demande la tranche ; montre le
+  décompte.
+- **Utiliser pour** : auditer un livrable existant (→ `judge`) · choisir sur quoi travailler quand le livrable n'est
+  pas fini (→ `scout`) · refaire l'ALLURE d'un écran (→ `draft`) · retirer les résidus de
+  tentatives ratées (→ `clean`) · changer le comportement de Claude (→ `kaizen`).
 
-## Engine & reflexes
+## Moteur et réflexes
 
-- Parallel fan-out, loop-until-dry, dedup-by-core-idea, impact ⊥ effort, anti-fixation: **ENGINE Ch.1**.
-  RUN path, header fields, closure discipline: **Ch.3**. Execution mechanics: **Ch.4**. On divergence,
-  the engine wins — this file adds the regret bar, the signal's replayable form, and the dispatch
-  contract, and restates none of the rest.
-- **This file is long ON PURPOSE, and it is not split.** It runs ~2.5x the biggest phase it sequences —
-  flagged, weighed, decided: the body costs ~6k tokens once per invocation, some 3% of a real remake,
-  while ONE unread safety rule costs another session's work or user data. The bulk is steps 0 and 5,
-  which are gestures, not documentation; putting them behind a "read this first" pointer would apply
-  here the very defect this file warns about. Cut decoration, never a rule or the measurement that
-  makes it unambiguous. `verify-remake.ps1` ratchets against silent growth.
-- Reflex anchor: **closure authority lives outside the model** (reflex 2). Here it is the target's own
-  signal — which is why a target without one is refused, and why a signal the gate does not actually
-  verify is treated as no signal at all.
+- Salve parallèle, boucle jusqu'à épuisement, déduplication par idée centrale, impact ⊥ effort, anti-fixation : **moteur ch.1**.
+  Chemin du RUN, champs d'en-tête, discipline de clôture : **ch.3**. Mécaniques d'exécution : **ch.4**. En cas de divergence,
+  le moteur gagne — ce fichier ajoute la barre du regret, la forme rejouable du signal et le contrat de
+  dispatch, et ne redit rien du reste.
+- **Ce fichier est long EXPRÈS, et il n'est pas scindé.** Il fait ~2,5× la plus grosse phase qu'il enchaîne —
+  signalé, pesé, tranché : le corps coûte ~6 k jetons une fois par invocation, soit environ 3 % d'un vrai remake,
+  alors qu'UNE seule règle de sûreté non lue coûte le travail d'une autre session ou des données utilisateur. Le gros est aux étapes 0 et 5,
+  qui sont des gestes, pas de la documentation ; les mettre derrière un renvoi « lis ça d'abord » appliquerait
+  ici le défaut même contre lequel ce fichier met en garde. Coupe de la décoration, jamais une règle ni la mesure qui
+  la rend sans ambiguïté. `verify-remake.ps1` sert de cliquet contre la croissance silencieuse.
+- Ancrage de réflexe : **l'autorité de clôture vit hors du modèle** (réflexe 2). Ici c'est le signal propre à la
+  cible — c'est pourquoi une cible sans signal est refusée, et pourquoi un signal que le contrôle ne vérifie pas
+  vraiment est traité comme aucun signal du tout.

@@ -17,7 +17,6 @@ import {
 } from './chat-view-model'
 import './ChatView.css'
 import './Evidence.css'
-import { Spinner } from './Spinner'
 import {
   failedTask,
   iconeFamille,
@@ -163,7 +162,8 @@ function EtageActivite({
         {/* PAS DE CIBLE ICI (2026-09-03) : elle etait ecrite une seconde fois plus bas, sous le meme
             `data-testid`, et l'ecran affichait donc la meme tache deux lignes de suite. Celle du bas
             est la seule qui porte le clic de depliage — c'est cette copie muette qui part. */}
-        {etape.ok === undefined && !etape.interrupted && <Spinner />}
+        {/* UN SEUL tourniquet par tour, sur la ligne « Agent » (demande du 2026-09-12). L'etape en
+            cours reste signalee par son icone et son libelle, sans animation propre. */}
         {depliable && (
           <button
             type="button"
@@ -647,7 +647,8 @@ export function AssistantActivityGroup({
           {/* DEMANDE (2026-09-10) : un seul tourniquet a l'ecran. Quand les etapes sont visibles,
               celle qui tourne porte deja le sien (« Orchestration ») — deux animations cote a cote
               pour le meme fait. Le groupe ne garde le sien que replie, sinon il redevient muet. */}
-          {running && !etapesOuvertes && <Spinner />}
+          {/* Plus de tourniquet ici non plus : le point de statut colore dit deja « en cours », et
+              le seul spinner du tour vit sur la ligne « Agent » (demande du 2026-09-12). */}
           {why.length ? (
             <span className="activity-group-go" aria-hidden="true">
               {whyOpen ? '▾' : '▸'}

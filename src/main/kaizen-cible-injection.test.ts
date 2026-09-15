@@ -43,7 +43,7 @@ describe('kaizen — la cible globale est la source RÉELLEMENT injectée', () =
     expect(SKILL).toMatch(/hors Autowin/i)
     // La target-map ne doit plus offrir CLAUDE.md comme cible NUE d'un réflexe déclenché.
     const targetMap = SKILL.split('\n').find((l) =>
-      l.includes('**a triggered reflex / hard rule**')
+      l.includes('**un réflexe déclenché / une règle dure**')
     )
     expect(targetMap).toBeDefined()
     expect(targetMap).toContain('src/main/constitution.ts')

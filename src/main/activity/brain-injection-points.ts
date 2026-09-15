@@ -107,7 +107,7 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     injecte: true,
     emission: 'spool',
     sites: [
-      { file: 'src/main/amitel-context.ts', anchor: '? retrieveBrain(boundedQuery)' },
+      { file: 'src/main/amitel-context.ts', anchor: '? retrieveBrain(boundedQuery, meta?.conversationId)' },
       { file: 'src/main/amitel-context.ts', anchor: '${origin}/query`' }
     ],
     trace: { file: 'src/main/amitel-context.ts', anchor: "kind: 'pousse'" },

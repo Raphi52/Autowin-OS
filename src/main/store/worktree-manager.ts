@@ -1326,7 +1326,21 @@ export class WorktreeManager {
    */
   marquerTravailTrie(agentId: string): boolean {
     if (!SAFE_ID.test(agentId)) return false
-    const candidats = [`refs/heads/autowin/recovery/${agentId}`, `refs/autowin/rescue/${agentId}`]
+    /*
+     * LE TROISIEME PORTEUR : l'adresse d'ATTENTE posee par `poserAttenteDIntegration`.
+     *
+     * Mesure du 2026-09-12 (conv-506) : un travail publie-refuse pour arbre sale vit sur
+     * `refs/autowin/integration/<agentId>` et NULLE PART ailleurs — ni branche de secours, ni
+     * sauvetage, ni bureau (la copie avait ete nettoyee). Le recensement le listait, ce marquage
+     * ne savait pas le resoudre : le bandeau criait un travail que rien ne pouvait refermer,
+     * exactement le defaut que cette methode existe pour supprimer. Un gisement recense doit etre
+     * un gisement marquable.
+     */
+    const candidats = [
+      `refs/heads/autowin/recovery/${agentId}`,
+      `refs/autowin/rescue/${agentId}`,
+      `refs/autowin/integration/${agentId}`
+    ]
     let sha: string | undefined
     for (const ref of candidats) {
       const sortie = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `${ref}^{commit}`])
@@ -1862,6 +1876,39 @@ export class WorktreeManager {
         .filter((agentId) => !branches.includes(agentId) && !detaches.includes(agentId))
         .filter((agentId) => this.apporteQuelqueChose(`refs/autowin/rescue/${agentId}`, baseRef))
       /*
+       * CINQUIEME GISEMENT : les travaux poses sur une ADRESSE D'ATTENTE.
+       *
+       * Quand la publication est refusee parce que l'arbre principal est SALE,
+       * `poserAttenteDIntegration` depose le commit sur `refs/autowin/integration/<agentId>`. Si la
+       * copie est ensuite nettoyee, cette adresse devient le SEUL porteur du travail : ni branche de
+       * secours, ni sauvetage, ni bureau. Aucun des quatre gisements ci-dessus ne la regarde.
+       *
+       * Mesure du 2026-09-12 (conv-506) : 26 adresses d'attente dormaient dans le depot, dont
+       * QUATRE portant du travail jamais applique — invisibles au bandeau, donc jamais triees. Le
+       * defaut est exactement celui du troisieme gisement, une porte plus loin : un travail que
+       * l'utilisateur finit par refaire parce que rien ne le lui montre.
+       *
+       * Meme filtre de CONTENU que les autres (`apporteQuelqueChose`, patch-id) : une adresse dont
+       * le travail est deja repris dans la base se tait.
+       */
+      const attentes = this.git(this.baseRepo, [
+        'for-each-ref',
+        '--format=%(refname:strip=3)',
+        'refs/autowin/integration/'
+      ])
+        .split(/\r?\n/)
+        .map((ligne) => ligne.trim())
+        .filter((agentId) => SAFE_ID.test(agentId))
+        .filter(
+          (agentId) =>
+            !branches.includes(agentId) &&
+            !detaches.includes(agentId) &&
+            !sauvetages.includes(agentId)
+        )
+        .filter((agentId) =>
+          this.apporteQuelqueChose(`refs/autowin/integration/${agentId}`, baseRef)
+        )
+      /*
        * QUATRIEME GISEMENT : le travail jamais committe. Un bureau simplement PROPRE reste tu — sinon
        * chaque bureau ouvert crierait, et c'est ainsi qu'on fabrique le bandeau qu'on n'ecoute plus.
        */
@@ -1907,6 +1954,9 @@ export class WorktreeManager {
           }),
           ...sauvetages.filter(
             (agentId) => !trie(agentId, shaDe(`refs/autowin/rescue/${agentId}`))
+          ),
+          ...attentes.filter(
+            (agentId) => !trie(agentId, shaDe(`refs/autowin/integration/${agentId}`))
           ),
           ...salis
         ])

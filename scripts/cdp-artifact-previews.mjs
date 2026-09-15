@@ -209,6 +209,10 @@ await waitFor(
         return false
       })
       if (manquante) {
+        // Le fil SUIT LE BAS tant qu'il ne voit aucun geste de lecteur (ChatView.tsx, onWheel ->
+        // gesteLecteurRef) : sans cette molette, le defilement programme etait ramene en bas et les
+        // cartes chargees « a l'approche » (image, markdown) ne se chargeaient jamais.
+        document.querySelector('.chat-scroll')?.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true }))
         manquante.scrollIntoView({ block: 'center', behavior: 'instant' })
         return false
       }
@@ -224,6 +228,7 @@ await evaluate(`(async () => {
   if (!scroll) return false
   await new Promise((resolve) => setTimeout(resolve, 500))
   for (const card of document.querySelectorAll('.artifact-preview')) {
+    scroll.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true }))
     card.scrollIntoView({ block: 'center', behavior: 'instant' })
     await new Promise((resolve) => setTimeout(resolve, 650))
   }
@@ -251,7 +256,14 @@ const proof = await waitFor(
       tableText: table.textContent,
       model3dCanvas: true,
       loadingCards: document.querySelectorAll('.artifact-preview [role="status"]').length,
-      blockedCards: document.querySelectorAll('.artifact-preview__blocked').length
+      // COMPTE BORNE AUX CARTES : le message de la fixture porte VOLONTAIREMENT un bloc mermaid
+      // invalide (commit 9ab24df5) dont le repli reutilise cette classe ; compte sur toute la
+      // page, il faisait echouer la galerie alors qu'aucune carte ne refusait.
+      blockedCards: document.querySelectorAll('.artifact-preview .artifact-preview__blocked').length,
+      // Un compte sans le motif oblige a rejouer la sonde pour savoir QUELLE carte refuse.
+      blockedTexts: [...document.querySelectorAll('.artifact-preview .artifact-preview__blocked')].map(
+        (n) => n.closest('.artifact-preview')?.dataset.artifactKind + ': ' + n.textContent.trim()
+      )
     }
   })()`,
   'rendus d’artefacts'

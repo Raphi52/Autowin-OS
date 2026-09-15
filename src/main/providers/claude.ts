@@ -23,6 +23,7 @@ import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
+import { scriptHookGardeGraphique } from '../../shared/garde-lancement-graphique'
 import { join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
@@ -240,6 +241,18 @@ export function normalizeClaudeUsage(
  * le CLI interprète ses règles de permission — c'est ce qui les rend fiables ici, là où un
  * périmètre par préfixe ne borne que le verbe.
  */
+/**
+ * Environnement du processus agent : base, puis variables du run (`execution.agentEnv`, ex. le fil
+ * AUTOWIN_CONVERSATION_ID), puis NON_INTERACTIVE_ENV EN DERNIER — une variable du run ne peut pas
+ * rouvrir un pager ou une invite d'identifiants.
+ */
+export function environnementAgent(
+  base: NodeJS.ProcessEnv,
+  agentEnv?: Record<string, string>
+): NodeJS.ProcessEnv {
+  return { ...base, ...(agentEnv ?? {}), ...NON_INTERACTIVE_ENV }
+}
+
 export const NON_INTERACTIVE_ENV: Record<string, string> = {
   GIT_PAGER: 'cat',
   PAGER: 'cat',
@@ -659,6 +672,30 @@ export function claudeTransportEnvelope(
  * `send` l'appelle et ne decide rien d'autre : c'est ce qui fait du test une preuve sur le chemin de
  * production plutot que sur une reconstitution.
  */
+/**
+ * Reglages PROPRES a Autowin passes au CLI par `--settings` : memoire ramenee au projet courant,
+ * et hook PreToolUse(Bash|PowerShell) du garde de lancement graphique.
+ *
+ * La commande du hook COMMENCE par le nom nu `node`. Mesure 2026-09-13 (CLI 2.1.270, Windows) :
+ * `"C:/.../node.exe" "script"` ne s'executait jamais — le shell du hook lit une chaine entre
+ * guillemets en tete comme une valeur, pas comme un programme — et le garde restait muet. Et
+ * l'outil shell du CLI s'appelle `PowerShell` sur ce poste, pas `Bash` : le matcher couvre les deux.
+ */
+export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
+  const q = (v: string) => `"${v.split('\\').join('/')}"`
+  return {
+    autoMemoryDirectory: '',
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash|PowerShell',
+          hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
+        }
+      ]
+    }
+  }
+}
+
 export function argumentsMcpNoeudSkill(opts: SendOptions): {
   /** `--strict-mcp-config`, ou rien s'il est retire pour cet appel. */
   strict: string[]
@@ -1092,7 +1129,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     try {
       settingsDir = mkdtempSync(join(tmpdir(), 'autowin-os-settings-'))
       const settingsFile = join(settingsDir, 'settings.json')
-      writeFileSync(settingsFile, JSON.stringify({ autoMemoryDirectory: '' }), 'utf8')
+      // GARDE LANCEMENT GRAPHIQUE (conv-526) : un hook PreToolUse sur Bash refuse d'ouvrir une
+      // application graphique au premier plan et impose le bureau cache (hdesk-lancer.ps1).
+      // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
+      const hookGarde = join(settingsDir, 'garde-lancement-graphique.mjs')
+      writeFileSync(hookGarde, scriptHookGardeGraphique(), 'utf8')
+      writeFileSync(
+        settingsFile,
+        JSON.stringify(reglagesCliAutowin(hookGarde)),
+        'utf8'
+      )
       args.push('--settings', settingsFile)
     } catch {
       settingsDir = undefined // impossible d'ecrire : on garde le comportement d'origine
@@ -1211,11 +1257,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // compte par defaut : sans ce retrait, un dir herite du processus ferait tourner le run
       // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
       // explicitement une variable garde le dernier mot.
-      env: {
-        ...withClaudeAccountEnv(process.env),
-        ...(invocation.env ?? {}),
-        ...NON_INTERACTIVE_ENV
-      },
+      env: environnementAgent(
+        { ...withClaudeAccountEnv(process.env), ...(invocation.env ?? {}) },
+        execution?.agentEnv
+      ),
       ...(journal
         ? {
             detached: true,
@@ -1295,6 +1340,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       queue.push({ delta: '', artifacts: streamed })
       wake()
     }
+    /** Taches de fond lancees et pas terminees (id -> commande lisible, vue arretee ?). Voir `task_started`. */
+    const tachesDeFond = new Map<string, { commande: string; arretee: boolean }>()
     const pendingTools = new Map<
       string,
       { name: string; command: string; filePath: string; writtenLineFingerprints: string[] }
@@ -1438,6 +1485,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const demarre = o['subtype'] === 'task_started'
         const brut = String((demarre ? o['description'] : o['summary']) ?? '').trim()
         const commande = resumerCommandeDeFond(brut)
+        // fix-ok: conv-528 turnId 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9 — le CLI -p ARRETE les taches de fond a la fin du tour
+        // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
+        // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
+        const idTache = String(o['task_id'] ?? commande ?? '')
+        if (demarre) tachesDeFond.set(idTache, { commande: commande || 'commande sans description', arretee: false })
+        else {
+          const st = String(o['status'] ?? '').toLowerCase()
+          if (st === 'completed' || st === 'failed') tachesDeFond.delete(idTache)
+          else
+            tachesDeFond.set(idTache, {
+              commande: commande || tachesDeFond.get(idTache)?.commande || 'commande sans description',
+              arretee: true
+            })
+        }
         if (demarre) {
           queue.push({
             delta: '',
@@ -1605,6 +1666,24 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
+        if (tachesDeFond.size > 0) {
+          // fix-ok: le message disait « arrêtée » meme pour une tache sans notification `stopped` (objection juge, conv-528 tour 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9)
+          const lister = (arretee: boolean): string =>
+            [...tachesDeFond.values()]
+              .filter((x) => x.arretee === arretee)
+              .map((x) => `\`${x.commande}\``)
+              .join(', ')
+          const arretees = lister(true)
+          const ouvertes = lister(false)
+          const parties = [
+            arretees ? `Tâche de fond arrêtée à la fin de ce tour : ${arretees}.` : '',
+            ouvertes ? `Tâche de fond pas terminée à la fin de ce tour : ${ouvertes}.` : ''
+          ].filter(Boolean)
+          const avis = `\n\n⚠️ ${parties.join('\n⚠️ ')} Son résultat ne reviendra pas tout seul — relance la demande pour la refaire.`
+          tachesDeFond.clear()
+          text += avis
+          queue.push({ delta: avis })
+        }
         if (typeof o['session_id'] === 'string') sessionId = o['session_id'] as string
         // Tokens/coût RÉELS du tour (le result event du CLI les porte).
         const hasReportedCost = Object.prototype.hasOwnProperty.call(o, 'total_cost_usd')

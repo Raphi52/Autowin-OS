@@ -29,6 +29,8 @@ import { behaviourRendererOptions } from './ipc-senders'
 import { type ModelQuestionHub, type PendingModelQuestion } from './model-questions'
 import { annoncerFermeture } from './journal-arrets'
 import { presentAutomationWindow } from './headless-instance'
+import { appliquerPresenceSysteme } from './os-presence-main'
+import type { EtatRunsVivants } from '../shared/os-presence'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
 
@@ -54,6 +56,12 @@ export type Fenetres = {
   estEnFermeture: () => boolean
   /** Les fenêtres de question ouvertes, par identifiant — un canal IPC de `index.ts` les ferme. */
   questionWindows: Map<string, BrowserWindow>
+  /**
+   * Jauge de barre des tâches + texte de l'icône de notification, d'après les runs vivants.
+   * Ici parce que `tray` et la fenêtre principale sont tenus DANS cette fermeture : rien d'autre
+   * ne les atteint. Le calcul, lui, est pur (`src/shared/os-presence.ts`).
+   */
+  refleterRunsVivants: (etat: EtatRunsVivants) => void
 }
 
 export function createWindowing(deps: WindowingDeps): Fenetres {
@@ -126,6 +134,12 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       // Tray best-effort : un échec (env sans zone de notification) ne doit pas casser le démarrage.
       tray = null
     }
+  }
+  function refleterRunsVivants(etat: EtatRunsVivants): void {
+    appliquerPresenceSysteme(
+      { fenetre: mainWindowVivante, icone: tray },
+      etat
+    )
   }
   function openQuestionWindow(parent: BrowserWindow | null, question: PendingModelQuestion): void {
     const win = new BrowserWindow({
@@ -459,6 +473,7 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     openQuestionWindow,
     rendererLocation,
     estEnFermeture: () => isQuitting,
-    questionWindows
+    questionWindows,
+    refleterRunsVivants
   }
 }

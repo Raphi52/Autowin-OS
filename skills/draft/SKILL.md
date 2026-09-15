@@ -1,89 +1,89 @@
 ---
 name: draft
-description: Use when the user wants to DESIGN or iterate a UI/layout and the visual intent is NOT yet settled — "fais-moi une interface / un écran / une page", "propose des layouts", "je sais pas quel design", "itère sur le design", "trouve le bon agencement", "refais le look de X". Drives a VISUAL ELICITATION LOOP: diverge ~6 distinct directions as rendered mockups → user keeps/kills/mixes → refine → converge to explicit approval → port to target tech. TECH-NEUTRAL (web / WinForms / WPF). Do NOT use when the user already DESCRIBES the layout structure or hands a finished spec — that is an implementation order, go to `frontend-design` directly; nor for back-end/logic work.
+description: À utiliser quand l'utilisateur veut CONCEVOIR ou itérer une interface / une mise en page et que l'intention visuelle n'est PAS encore arrêtée — "fais-moi une interface / un écran / une page", "propose des layouts", "je sais pas quel design", "itère sur le design", "trouve le bon agencement", "refais le look de X". Pilote une BOUCLE D'ÉLICITATION VISUELLE : diverger en ~6 directions distinctes rendues en maquettes → l'utilisateur garde/jette/mélange → affiner → converger vers une approbation explicite → porter vers la technique cible. NEUTRE côté technique (web / WinForms / WPF). NE PAS utiliser quand l'utilisateur DÉCRIT déjà la structure de la mise en page ou fournit une spec finie — c'est un ordre d'implémentation, va directement à `frontend-design` ; ni pour du travail back-end ou de logique.
 ---
 
-# draft — visual elicitation through iterative mockups
+# draft — faire émerger le visuel par maquettes successives
 
-## Purpose
-Surface the user's REAL visual intent by SHOWING it, not guessing it (words are lossy; the user recognizes what they want when they SEE it). DIVERGE into distinct directions → render as comparable mockups → capture the choice → NARROW → converge to explicit approval → materialize the winner in target tech. NOT "produce one good UI" (that is `frontend-design`, INVOKED per variant). The new thing is the **convergence loop** (invariant); the render+capture backend is PLUGGABLE.
+## À quoi ça sert
+Faire remonter la VRAIE intention visuelle de l'utilisateur en la MONTRANT, pas en la devinant (les mots perdent de l'information ; l'utilisateur reconnaît ce qu'il veut quand il le VOIT). DIVERGER en directions distinctes → rendre en maquettes comparables → capter le choix → RESSERRER → converger vers une approbation explicite → matérialiser le gagnant dans la technique cible. PAS « produire une bonne interface » (ça, c'est `frontend-design`, INVOQUÉ par variante). Ce qui est neuf ici, c'est la **boucle de convergence** (invariante) ; le moteur de rendu et de capture est INTERCHANGEABLE.
 
-## When NOT to use (boundary with frontend-design)
-- User already DESCRIBES the layout ("sidebar left, card grid, blue header") → spec → `frontend-design`.
-- A finished design/spec to implement → `frontend-design`.
-- Back-end / data / logic → not this skill.
-Use only while visual intent is OPEN and worth diverging on.
+## Quand NE PAS l'utiliser (frontière avec frontend-design)
+- L'utilisateur DÉCRIT déjà la mise en page (« barre latérale à gauche, grille de cartes, en-tête bleu ») → c'est une spec → `frontend-design`.
+- Un design ou une spec finie à implémenter → `frontend-design`.
+- Back-end / données / logique → pas cette skill.
+Ne l'utilise que tant que l'intention visuelle est OUVERTE et mérite qu'on diverge dessus.
 
-## The loop (procedure)
-1. **Frame the minimum** — which screen/surface, the REAL content, the TARGET TECH (web/WinForms/WPF — ASK if not obvious, never assume web), hard constraints (design system? responsive?). Do NOT over-frame the style — the loop discovers it.
-2. **Read the user's taste FIRST from memory — BLOCKING, before drawing anything** (`brain_query` on the user's visual preferences; if the host has no memory tool, say so; fiche `[[feedback_portail_design_lineaire]]`), don't hardcode it — so divergence stays within the taste + its anti-patterns, and current if taste evolves.
-3. **Diverge K=6 DISTINCT directions** (not cosmetic variants). Within taste guardrails, each MUST differ on **≥2 axes**: information density · typographic hierarchy · accent-color usage · spatial structure (grid/columns/cards) · motion/restraint. Invoke `frontend-design` for each direction's execution quality. Round 1 = broad divergence (layout + tone). **Shared vocabulary**: named directions/structures/details (Linéaire, editorial, dense, rail, hairline, status-stripe…) with rendered examples live in `design-glossary.html` (bundled) — use its terms; it marks the user's default direction + banned anti-patterns.
-4. **Render + CAPTURE + READ** each direction (backend per tech, below). **Self-check BEFORE showing**: not broken (non-empty render, glyphs OK, no dead binding/layout) + taste guardrails respected. A capture not READ has no value.
-5. **Present for CHOICE** (and ALWAYS with a fresh batch of 6 — see "Never stop proposing") — one side-by-side gallery artifact + ask **keep/kill/mix** (+ free comment). Prefer `AskUserQuestion` if available, else ask plainly. If user rejects all 6 → re-diverge differently, never re-offer the same set.
-6. **Narrow** — refine the kept direction + GRAFT liked parts of others. Later rounds = narrowing (style/density/detail), not broad divergence.
-7. **Converge → STOP at EXPLICIT user approval** (never auto-stop: aesthetics not auto-provable). Cap ~4-5 rounds; if no convergence → "lock the layout, iterate only style" or raise back to user.
-8. **Freeze + PORT** — produce a design spec (below), hand to `frontend-design`/`build` for implementation. This skill doesn't rewrite the implementation engine; it delivers the settled design and ports it.
+## La boucle (procédure)
+1. **Cadre le minimum** — quel écran/quelle surface, le VRAI contenu, la TECHNIQUE CIBLE (web/WinForms/WPF — DEMANDE si ce n'est pas évident, ne suppose jamais le web), les contraintes dures (un design system ? du responsive ?). Ne SUR-cadre pas le style — la boucle le découvre.
+2. **Lis D'ABORD le goût de l'utilisateur en mémoire — BLOQUANT, avant de dessiner quoi que ce soit** (`brain_query` sur ses préférences visuelles ; si l'hôte n'a aucun outil de mémoire, dis-le ; fiche `[[feedback_portail_design_lineaire]]`), ne le fige pas en dur — pour que la divergence reste dans le goût + ses anti-motifs, et reste à jour si le goût évolue.
+3. **Diverge en K = 6 directions DISTINCTES** (pas des variantes cosmétiques). Dans les garde-fous du goût, chacune DOIT différer sur **≥ 2 axes** : densité d'information · hiérarchie typographique · usage de la couleur d'accent · structure spatiale (grille/colonnes/cartes) · mouvement ou retenue. Invoque `frontend-design` pour la qualité d'exécution de chaque direction. Tour 1 = divergence large (mise en page + ton). **Vocabulaire partagé** : les directions, structures et détails nommés (Linéaire, éditorial, dense, rail, filet fin, bandeau de statut…) avec leurs exemples rendus vivent dans `design-glossary.html` (embarqué) — emploie ses termes ; il marque la direction par défaut de l'utilisateur + les anti-motifs bannis.
+4. **Rends + CAPTURE + LIS** chaque direction (moteur selon la technique, ci-dessous). **Auto-contrôle AVANT de montrer** : rien de cassé (rendu non vide, glyphes corrects, aucune liaison ni mise en page morte) + garde-fous du goût respectés. Une capture non LUE n'a aucune valeur.
+5. **Présente pour CHOIX** (et TOUJOURS avec une nouvelle fournée de 6 — voir « Ne jamais cesser de proposer ») — un seul artefact de galerie côte à côte + demande **garde/jette/mélange** (+ commentaire libre). Préfère `AskUserQuestion` s'il existe, sinon demande simplement. Si l'utilisateur rejette les 6 → rediverge autrement, ne repropose jamais le même lot.
+6. **Resserre** — affine la direction gardée + GREFFE les parties aimées des autres. Les tours suivants resserrent (style/densité/détail), ils ne divergent plus largement.
+7. **Converge → ARRÊTE-TOI à l'approbation EXPLICITE de l'utilisateur** (jamais d'arrêt automatique : l'esthétique ne se prouve pas toute seule). Plafond ~4-5 tours ; sans convergence → « on verrouille la mise en page, on n'itère plus que le style » ou remonte à l'utilisateur.
+8. **Fige + PORTE** — produis une spec de design (ci-dessous), passe-la à `frontend-design`/`build` pour l'implémentation. Cette skill ne réécrit pas le moteur d'implémentation ; elle livre le design arrêté et le porte.
 
-### Design-spec template (the freeze handed to the port)
+### Gabarit de spec de design (le gel remis au portage)
 ```
-TARGET TECH : web (React/Next…) | WinForms | WPF
-LAYOUT      : grid/structure (regions + placement)
-TOKENS      : colors (bg/surface/accent/text) · typography (display/body) · spacing scale · radius
-TONE        : chosen aesthetic direction in one line
-GUARDRAILS  : taste rules that must hold (from memory)
-KEPT/KILLED : elements grafted in, elements rejected
+TECHNIQUE CIBLE : web (React/Next…) | WinForms | WPF
+MISE EN PAGE    : grille/structure (régions + placement)
+JETONS          : couleurs (fond/surface/accent/texte) · typographie (titre/corps) · échelle d'espacement · rayon
+TON             : la direction esthétique choisie, en une ligne
+GARDE-FOUS      : les règles de goût qui doivent tenir (depuis la mémoire)
+GARDÉ/JETÉ      : éléments greffés, éléments rejetés
 ```
-**Porting notes per tech** (HTML mockup conveys layout + intent, not pixel-exact):
-- **web** → pass HTML Artifact + spec to `frontend-design` (closest target).
-- **WPF** → layout to `Grid`/`StackPanel`/`DockPanel`; tokens to `ResourceDictionary` (brushes, styles); drop web-only effects. **MANDATORY**: ≥1 real-render capture (build → `capture-window.ps1` → Read) before presenting — HTML can't faithfully represent native control layout.
-- **WinForms** → map to `TableLayoutPanel`/`FlowLayoutPanel`/`Panel`; ignore CSS; same MANDATORY real-render capture.
+**Notes de portage par technique** (une maquette HTML transmet la mise en page et l'intention, pas le pixel exact) :
+- **web** → passe l'artefact HTML + la spec à `frontend-design` (la cible la plus proche).
+- **WPF** → la mise en page vers `Grid`/`StackPanel`/`DockPanel` ; les jetons vers un `ResourceDictionary` (brosses, styles) ; abandonne les effets propres au web. **OBLIGATOIRE** : ≥ 1 capture du rendu réel (build → `capture-window.ps1` → Read) avant de présenter — le HTML ne peut pas représenter fidèlement la mise en page d'un contrôle natif.
+- **WinForms** → vers `TableLayoutPanel`/`FlowLayoutPanel`/`Panel` ; ignore le CSS ; même capture OBLIGATOIRE du rendu réel.
 
-## Render+capture backends (pluggable per tech)
-| Target | Render | Capture READ by Claude |
+## Moteurs de rendu et de capture (interchangeables selon la technique)
+| Cible | Rendu | Capture LUE par Claude |
 |---|---|---|
-| **web / HTML** | `Artifact` tool (self-contained page) | render locally with **Claude Preview** and screenshot. Deferred tools — load first: `ToolSearch "select:mcp__Claude_Preview__preview_start,mcp__Claude_Preview__preview_screenshot,mcp__Claude_Preview__preview_stop"`. Per-round cycle: `preview_start` → `preview_screenshot` → **Read** PNG → **`preview_stop`** (always stop before next round, else a stale preview blocks the next `preview_start`) |
-| **WPF / WinForms** | build + launch the project | `capture-window.ps1` (bundled): `-Exe <path>` / `-WindowTitle <substring>` / `-ProcId <pid>` → PrintWindow → PNG → **Read** |
-| any target | per-variant quality | invoke `frontend-design` (do NOT reimplement) |
-| **surface of a RUNNING app** (redesigning a part of a live app — chat bar, panel, toolbar) | inline render in the host chat | the live app IS the render target: **`desktop_observe`** the real screen, then draw at the REAL SCALE of that component (same width, same font sizes, same live colors read from its CSS/XAML). A thumbnail sketch 3x smaller than the real widget is NOT a mockup and misleads the user. |
-| **host WITHOUT `Artifact`/Claude Preview** (e.g. an embedded agent chat) | inline HTML block supported by the host | those deferred MCP tools do NOT exist here — do not pretend to capture. Substitute: `desktop_observe` on the real surface, else state plainly "not observed". |
+| **web / HTML** | outil `Artifact` (page autonome) | rends en local avec **Claude Preview** et prends une capture. Outils différés — charge-les d'abord : `ToolSearch "select:mcp__Claude_Preview__preview_start,mcp__Claude_Preview__preview_screenshot,mcp__Claude_Preview__preview_stop"`. Cycle par tour : `preview_start` → `preview_screenshot` → **Read** du PNG → **`preview_stop`** (arrête toujours avant le tour suivant, sinon un aperçu périmé bloque le `preview_start` suivant) |
+| **WPF / WinForms** | build + lancement du projet | `capture-window.ps1` (embarqué) : `-Exe <chemin>` / `-WindowTitle <fragment>` / `-ProcId <pid>` → PrintWindow → PNG → **Read** |
+| n'importe quelle cible | qualité par variante | invoque `frontend-design` (ne le réimplémente PAS) |
+| **surface d'une app EN COURS D'EXÉCUTION** (refonte d'une partie d'une app vivante — barre de chat, panneau, barre d'outils) | rendu en ligne dans le chat hôte | l'app vivante EST la cible de rendu : **`desktop_observe`** l'écran réel, puis dessine à l'ÉCHELLE RÉELLE de ce composant (même largeur, mêmes tailles de police, mêmes couleurs vivantes lues dans son CSS/XAML). Une vignette 3 fois plus petite que le vrai composant n'est PAS une maquette et trompe l'utilisateur. |
+| **hôte SANS `Artifact` ni Claude Preview** (par ex. un chat d'agent embarqué) | bloc HTML en ligne supporté par l'hôte | ces outils MCP différés N'EXISTENT PAS ici — ne fais pas semblant de capturer. Remplacement : `desktop_observe` sur la surface réelle, sinon dis clairement « non observé ». |
 
-### Inline mockup recipes (host chat, no Preview) — MANDATORY
-The inline renderer has NO emoji font and NO icon font. Every mockup icon/button MUST be built from these recipes, never from a pasted glyph:
-- **ALLOWED TAGS ONLY** — the host sanitizer (`src/renderer/src/components/chat-html-inline.ts`, `ALLOWED_TAGS`) DELETES `<button>`, `<svg>`, `<path>`, `<input>` and every unknown tag, keeping only their text. A mockup drawn with `<button>`/`<svg>` arrives EMPTY in the thread — measured 2026-09-04, conv-257: five button variants rendered as blank grid cells. Draw ONLY with `div`, `span`, `p`, `table`, `hr`, `b`, `code`, `details`.
-- **ALLOWED CSS ONLY** — `ALLOWED_STYLE_PROPS` in the same file. NO `box-shadow`, NO `position`, NO `transform`, NO `grid-template-rows`, NO `inset`. Available: `display`, `flex*`, `gap`, `grid-template-columns`, `align-items`, `justify-content`, `background`, `border*`, `border-radius`, `border-image`, `color`, `font*`, `opacity`, `padding*`, `margin*`, `width/height`, `text-*`. Vertical margins are CAPPED at 12px and `line-height` at 1.55 — do not fight it.
-- **NO CSS GRID for mockup boards** — `grid-column` / `grid-row` are NOT in `ALLOWED_STYLE_PROPS` (only `grid-template-columns` is). A separator written `grid-column:1/-1` LOSES that rule, occupies ONE cell instead of a full row, and shifts every following item by one column: the whole board renders scrambled (measured 2026-09-04, conv-257). Build boards as a STACK of `<div>` rows, each row a `display:flex` with the sample on the left and the caption on the right; separators are plain sibling `<div>`s between rows.
-- **Fake a button** with a `<span>`: `display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:...`. Relief without `box-shadow` = a 1px top border lighter than the bottom one.
-- **Icons**: no emoji (no emoji font in the host) and no `<svg>` (stripped). Use a lowercase monospace WORD (`envoyer`, `micro`) or a plain text arrow glyph inside the fake button (`→`, `↑`, `➤`) sized with `font-size`/`line-height:1`.
-- **Self-check before showing**: re-read your own HTML — every tag in ALLOWED_TAGS, every CSS prop in ALLOWED_STYLE_PROPS, zero emoji. A mockup whose control vanishes invalidates the WHOLE round: the user judges the drawing, not the intent.
+### Recettes de maquette en ligne (chat hôte, sans Preview) — OBLIGATOIRES
+Le moteur de rendu en ligne n'a AUCUNE police d'emoji et AUCUNE police d'icônes. Chaque icône ou bouton de maquette DOIT être construit avec ces recettes, jamais avec un glyphe collé :
+- **BALISES AUTORISÉES SEULEMENT** — le filtre de l'hôte (`src/renderer/src/components/chat-html-inline.ts`, `ALLOWED_TAGS`) SUPPRIME `<button>`, `<svg>`, `<path>`, `<input>` et toute balise inconnue, n'en gardant que le texte. Une maquette dessinée avec `<button>`/`<svg>` arrive VIDE dans le fil — mesuré le 2026-09-04, conv-257 : cinq variantes de bouton rendues en cases vides. Ne dessine qu'avec `div`, `span`, `p`, `table`, `hr`, `b`, `code`, `details`.
+- **CSS AUTORISÉ SEULEMENT** — `ALLOWED_STYLE_PROPS`, dans le même fichier. PAS de `box-shadow`, PAS de `position`, PAS de `transform`, PAS de `grid-template-rows`, PAS d'`inset`. Disponibles : `display`, `flex*`, `gap`, `grid-template-columns`, `align-items`, `justify-content`, `background`, `border*`, `border-radius`, `border-image`, `color`, `font*`, `opacity`, `padding*`, `margin*`, `width/height`, `text-*`. Les marges verticales sont PLAFONNÉES à 12px et le `line-height` à 1.55 — ne lutte pas contre.
+- **PAS DE GRILLE CSS pour les planches de maquettes** — `grid-column` / `grid-row` ne sont PAS dans `ALLOWED_STYLE_PROPS` (seul `grid-template-columns` y est). Un séparateur écrit `grid-column:1/-1` PERD cette règle, occupe UNE case au lieu d'une ligne entière, et décale d'une colonne tout ce qui suit : la planche entière se rend en désordre (mesuré le 2026-09-04, conv-257). Construis les planches en EMPILANT des lignes `<div>`, chaque ligne en `display:flex` avec l'échantillon à gauche et la légende à droite ; les séparateurs sont de simples `<div>` frères entre les lignes.
+- **Simule un bouton** avec un `<span>` : `display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:...`. Le relief sans `box-shadow` = une bordure haute de 1px plus claire que la bordure basse.
+- **Icônes** : pas d'emoji (aucune police d'emoji dans l'hôte) et pas de `<svg>` (retiré). Utilise un MOT en monospace minuscule (`envoyer`, `micro`) ou une flèche en texte simple dans le faux bouton (`→`, `↑`, `➤`), dimensionnée par `font-size`/`line-height:1`.
+- **Auto-contrôle avant de montrer** : relis ton propre HTML — chaque balise dans ALLOWED_TAGS, chaque propriété CSS dans ALLOWED_STYLE_PROPS, zéro emoji. Une maquette dont le contrôle disparaît invalide TOUT le tour : l'utilisateur juge le dessin, pas l'intention.
 
-Note: `visualize.show_widget` renders INLINE in chat (presenting to user) — no PNG on disk, NOT a substitute for the READ self-check; use Claude Preview for that.
+Note : `visualize.show_widget` rend EN LIGNE dans le chat (pour présenter à l'utilisateur) — aucun PNG sur le disque, ce n'est PAS un substitut à l'auto-contrôle par LECTURE ; pour ça, utilise Claude Preview.
 
-`capture-window.ps1` (bundled): generic (title/PID/exe), detects "exited early" crash + near-black renders. Ex: `powershell -NoProfile -File capture-window.ps1 -Exe "C:\proj\bin\Debug\App.exe" -KillFirst`.
+`capture-window.ps1` (embarqué) : générique (titre/PID/exe), détecte le plantage « sorti trop tôt » et les rendus quasi noirs. Ex. : `powershell -NoProfile -File capture-window.ps1 -Exe "C:\proj\bin\Debug\App.exe" -KillFirst`.
 
-## Taste guardrails
-Read from memory at runtime (`[[feedback_portail_design_lineaire]]`), don't bake values here (would go stale). The fiche is the single source of truth. Guardrails BOUND the divergence, don't cancel it (6 directions stay distinct on ≥2 axes). Always validate against the read capture.
+## Garde-fous du goût
+Lis-les en mémoire au moment de l'exécution (`[[feedback_portail_design_lineaire]]`), ne fige pas les valeurs ici (elles se périmeraient). La fiche est la source unique de vérité. Les garde-fous BORNENT la divergence, ils ne l'annulent pas (les 6 directions restent distinctes sur ≥ 2 axes). Valide toujours contre la capture lue.
 
-## Never stop proposing (conversation-wide invariant)
-The loop does NOT end when a round is presented. As long as the user has NOT explicitly ordered the IMPLEMENTATION of one solution ("implémente celle-là", "go sur la 2", "code-la", explicit approval to build), EVERY reply in the conversation ends with a NEW batch of **6** proposals. This holds for the WHOLE conversation, across rounds, including after feedback, mixes, rejections, off-topic detours or a partial "j'aime bien la 2" — a preference is NOT an implementation order; keep proposing 6 refinements of it.
-- Never reply with only comments, questions or an analysis: comment/ask AND propose 6.
-- Never re-offer an identical batch: each new batch of 6 must differ (round 1 = broad divergence, later rounds = narrowing on the kept direction).
-- The ONLY exit is the user's explicit go to implement (or an explicit "stop"). At that moment, freeze the spec and port (step 8).
+## Ne jamais cesser de proposer (invariant sur toute la conversation)
+La boucle ne s'arrête PAS quand un tour est présenté. Tant que l'utilisateur n'a PAS explicitement ordonné l'IMPLÉMENTATION d'une solution (« implémente celle-là », « go sur la 2 », « code-la », une approbation explicite de construire), CHAQUE réponse de la conversation se termine par une NOUVELLE fournée de **6** propositions. Cela vaut pour TOUTE la conversation, d'un tour à l'autre, y compris après un retour, un mélange, un rejet, une digression ou un « j'aime bien la 2 » partiel — une préférence n'est PAS un ordre d'implémentation ; continue d'en proposer 6 affinements.
+- Ne réponds jamais seulement par des commentaires, des questions ou une analyse : commente/demande ET propose 6.
+- Ne repropose jamais un lot identique : chaque nouvelle fournée de 6 doit différer (tour 1 = divergence large, tours suivants = resserrement sur la direction gardée).
+- La SEULE sortie est le feu vert explicite de l'utilisateur pour implémenter (ou un « stop » explicite). À ce moment, fige la spec et porte (étape 8).
 
-## Caps
-- K = **6** directions/round (the clickable question carries up to 10 options, so 6 fit — see `PLAFOND_REPONSES` in `src/main/ask-options.ts`), **every round, until the user orders implementation** · target ~**4-5 rounds** (soft: keep proposing if the user keeps iterating) · variants generated in parallel.
-- Closure = **explicit user approval** (attestable, not replayable — assumed honestly).
+## Plafonds
+- K = **6** directions par tour (la question cliquable porte jusqu'à 10 options, donc 6 tiennent — voir `PLAFOND_REPONSES` dans `src/main/ask-options.ts`), **à chaque tour, jusqu'à ce que l'utilisateur ordonne l'implémentation** · cible ~**4-5 tours** (souple : continue de proposer tant que l'utilisateur itère) · variantes générées en parallèle.
+- Clôture = **approbation explicite de l'utilisateur** (attestable, pas rejouable — prise honnêtement pour argent comptant).
 
-## Don't
-- Do NOT reimplement `frontend-design` (per-variant quality) nor the `Artifact` tool — ORCHESTRATE them.
-- Do NOT converge at random: respect the taste guardrails from memory.
-- Do NOT show a mockup not CAPTURED+READ (dead binding/layout is invisible otherwise).
-- Do NOT paste emoji or symbol characters as icons/buttons in an inline mockup — the host has no emoji font, they render as unreadable monochrome shapes or drift out of their circle (see Inline mockup recipes).
-- Do NOT sketch a live app's surface from imagination or at reduced scale: READ its real style file (colors, sizes, spacing) and `desktop_observe` it FIRST — mockups drawn blind are the #1 source of "propositions douteuses".
-- Do NOT declare "done" without explicit user approval.
-- Do NOT stop proposing batches of 6 while no implementation order has been given — a reply without 6 new proposals is a failure of this skill.
-- Do NOT assume the tech (web vs WinForms vs WPF) — ask.
-- Implementing an ALREADY-settled design → `frontend-design` directly (not this loop).
+## À ne pas faire
+- NE réimplémente PAS `frontend-design` (la qualité par variante) ni l'outil `Artifact` — ORCHESTRE-les.
+- NE converge PAS au hasard : respecte les garde-fous de goût lus en mémoire.
+- NE montre PAS une maquette qui n'a pas été CAPTURÉE + LUE (une liaison ou une mise en page morte est invisible autrement).
+- NE colle PAS d'emoji ni de caractères symboles comme icônes ou boutons dans une maquette en ligne — l'hôte n'a pas de police d'emoji, ils se rendent en formes monochromes illisibles ou débordent de leur cercle (voir les recettes de maquette en ligne).
+- N'esquisse PAS la surface d'une app vivante d'imagination ou à échelle réduite : LIS son vrai fichier de style (couleurs, tailles, espacements) et fais un `desktop_observe` D'ABORD — les maquettes dessinées en aveugle sont la source n° 1 des « propositions douteuses ».
+- NE déclare PAS « fini » sans approbation explicite de l'utilisateur.
+- NE cesse PAS de proposer des fournées de 6 tant qu'aucun ordre d'implémentation n'a été donné — une réponse sans 6 nouvelles propositions est un échec de cette skill.
+- NE suppose PAS la technique (web contre WinForms contre WPF) — demande.
+- Implémenter un design DÉJÀ arrêté → `frontend-design` directement (pas cette boucle).
 
-## Engine & reflexes
-- Parallel variant generation, loop-until-dry, dedup-by-core-idea → **ENGINE Ch.1 (GENERATE & GATE)**. Freeze→port handoff + code increments from the spec → **ENGINE Ch.4 (BUILD)**. On divergence, the engine wins.
-- Reflex: a capture not READ has no value; closure of aesthetics is the human eye, not a self-judged "looks good".
+## Moteur et réflexes
+- Génération de variantes en parallèle, boucle jusqu'à épuisement, déduplication par idée centrale → **moteur ch.1 (GENERATE & GATE)**. Passation gel→portage + incréments de code depuis la spec → **moteur ch.4 (BUILD)**. En cas de divergence, le moteur gagne.
+- Réflexe : une capture non LUE n'a aucune valeur ; la clôture de l'esthétique, c'est l'œil humain, pas un « ça rend bien » auto-jugé.

@@ -24,6 +24,8 @@
  *                                    celle du depot : sans elle, un agent en worktree ne peut rien
  *                                    prouver visuellement (l'app sert le depot, pas sa copie). Le
  *                                    JSON porte alors `cssInjecte` — la capture le DIT.
+ *         PAR DEFAUT (depuis le 2026-09-13) : instance cachee, ecran intact. `--instance-dediee` reste
+ *         accepte (sans effet). `--fenetre-reelle` ou `--port <n>` pilotent la fenetre ouverte.
  *         [--instance-dediee] [--instance-id <id>] PREND LA PREUVE SANS TOUCHER A L'ECRAN : la
  *                                    capture se fait sur une instance cachee demarree puis arretee
  *                                    pour l'occasion (scripts/avec-instance-headless.mjs), profil
@@ -209,8 +211,21 @@ export const argumentsInstanceDediee = (argv, { enrobage, script, instanceId }) 
   '--',
   'node',
   script,
-  ...argv.filter((a) => a !== '--instance-dediee')
+  ...argv.filter((a) => a !== '--instance-dediee' && a !== '--fenetre-reelle')
 ]
+
+/**
+ * LE BUREAU CACHE EST LE COMPORTEMENT PAR DEFAUT (demande utilisateur du 2026-09-13, conv-526 :
+ * « je t'ai code une feature pour que tu travailles en non invasif hdesk, ca doit etre ton
+ * comportement par defaut »). Le drapeau `--instance-dediee` existait mais restait OPT-IN : un
+ * agent qui suivait la consigne de preuve (« navigue par le vrai bouton ») pilotait donc la fenetre
+ * de l'utilisateur. Ne pilote la fenetre reelle QUE sur demande nommee : `--fenetre-reelle`, ou un
+ * `--port` explicite (c'est aussi ce que recoit la re-execution derriere l'enrobage : pas de boucle).
+ * Pure.
+ */
+// fix-ok: main() ne passait par l'instance cachee que si argv contenait --instance-dediee (opt-in) — conv-526 turnId c14c2d28-f864-4ca5-ba3f-3dfe24e41d47 a pilote l'ecran reel ; defaut desormais = instance cachee, ecran reel seulement via --fenetre-reelle ou --port
+export const doitPasserParInstanceCachee = (argv) =>
+  !argv.includes('--fenetre-reelle') && !argv.includes('--port')
 
 export const ETATS_CONNUS = ['attention', 'occupe']
 
@@ -303,7 +318,7 @@ const decouvrirCible = async (port, portImpose) => {
 const main = async () => {
   // `--instance-dediee` : on se relance a l'identique DERRIERE l'enrobage, qui ouvre une instance
   // cachee, nous passe son port, puis l'arrete quoi qu'il arrive. Le code de sortie est le notre.
-  if (process.argv.includes('--instance-dediee')) {
+  if (doitPasserParInstanceCachee(process.argv.slice(2))) {
     const dossierScripts = dirname(fileURLToPath(import.meta.url))
     const { status, error } = spawnSync(
       process.execPath,
@@ -410,6 +425,17 @@ const main = async () => {
 
   await envoyer('Runtime.enable')
   await envoyer('Log.enable')
+
+  // fix-ok: scripts/ui-capture.mjs — une instance cachee neuve repond au debogueur AVANT que React
+  // ait rendu la navigation : le bouton etait cherche trop tot (code 4 bouton-nav-absent). On
+  // attend l'apparition des boutons (borne 30 s) ; absents apres ce delai, le code 4 reste du.
+  for (let essai = 0; essai < 60; essai++) {
+    const pret = await evaluer(`Boolean(document.querySelector('[data-testid^="nav-"]'))`).catch(
+      () => false
+    )
+    if (pret) break
+    await new Promise((r) => setTimeout(r, 500))
+  }
 
   // --reduced-motion : rejoue la condition reelle d'un poste ou les effets visuels systeme sont
   // desactives (Windows > Accessibilite). Sans cette emulation, une preuve de mouvement ne dit
@@ -552,13 +578,29 @@ const main = async () => {
   let elementsAvantClic
   if (declencheur) {
     elementsAvantClic = mesuresDom.elements
-    declencheurTrouve = await evaluer(`(() => {
-      const cible = document.querySelector(${JSON.stringify(declencheur)})
-      cible?.click()
-      return Boolean(cible)
-    })()`)
-    if (declencheurTrouve) {
+    // CHAINE de clics : certaines vues ne s'atteignent pas en UN geste (ouvrir l'onglet, puis la
+    // ligne, puis le sous-onglet). Les selecteurs sont separes par ` >> ` et joues DANS L'ORDRE,
+    // avec une pause entre chacun — le suivant n'existe qu'apres le rendu du precedent.
+    // UN SEUL selecteur introuvable fait echouer toute la chaine : sans cela, une capture serait
+    // prise sur une vue a mi-chemin en pretendant montrer la destination.
+    const etapes = declencheur
+      .split('>>')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    declencheurTrouve = true
+    for (const etape of etapes) {
+      const trouve = await evaluer(`(() => {
+        const cible = document.querySelector(${JSON.stringify(etape)})
+        cible?.click()
+        return Boolean(cible)
+      })()`)
+      if (!trouve) {
+        declencheurTrouve = false
+        break
+      }
       await new Promise((r) => setTimeout(r, 600))
+    }
+    if (declencheurTrouve) {
       mesuresDom = await mesurerDom()
     }
   }

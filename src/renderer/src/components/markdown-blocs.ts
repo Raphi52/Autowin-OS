@@ -9,7 +9,13 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { authoritativeOrchestrationClosureSpan } from '../../../shared/orchestration-outcome'
 import { createBoundedCache } from './bounded-cache'
 
-export type MarkdownBlock = { kind: 'text' | 'code' | 'html-render'; content: string }
+export type MarkdownBlock = { kind: 'text' | 'code' | 'html-render' | 'mermaid'; content: string }
+
+/**
+ * Borne du diagramme rendu : au-dela, `mermaid` refuse lui-meme la source (`maxTextSize: 80_000`).
+ * On retombe alors sur le bloc de code, qui reste lisible et copiable.
+ */
+export const MAX_MERMAID_CHARS = 80_000
 
 type MarkdownAstNode = {
   type?: string
@@ -160,11 +166,19 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
     if (span.start < cursor) continue
     if (span.start > cursor) blocks.push({ kind: 'text', content: text.slice(cursor, span.start) })
     const ferme = hasClosingFence(span.source, span.content)
+    // Un diagramme ne devient un RENDU que si sa fence est close (pendant le streaming il reste du
+    // code), s'il porte vraiment quelque chose a dessiner, et s'il tient sous la borne de mermaid.
+    const mermaidRendu =
+      span.language === 'mermaid' &&
+      ferme &&
+      span.content.trim().length > 0 &&
+      span.content.length <= MAX_MERMAID_CHARS
     blocks.push({
-      kind:
-        span.language === 'html-render' &&
-        ferme &&
-        !authoritativeOrchestrationClosureSpan(span.content)
+      kind: mermaidRendu
+        ? 'mermaid'
+        : span.language === 'html-render' &&
+            ferme &&
+            !authoritativeOrchestrationClosureSpan(span.content)
           ? 'html-render'
           : 'code',
       content: span.content
