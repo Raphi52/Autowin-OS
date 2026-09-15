@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { dodDuVerdict } from './objections-juge'
-import { evaluateClosure } from './gates/stopgate'
+import { doitArreterLaReparation, evaluateClosure } from './gates/stopgate'
 
 /*
  * conv-540, tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : les 4 appels du juge (ts 09:44:57.329,
@@ -35,5 +35,19 @@ describe('verdict VALIDE porteur de reserves', () => {
     const dod = dodDuVerdict(false, refus)
     expect(dod).toHaveLength(2)
     expect(dod[0].label).toMatch(/^Objection du juge : /)
+  })
+
+  it("un refus << echec amont + reserves d'un VALIDE >> ne se rejoue pas indefiniment", () => {
+    const g = evaluateClosure({ status: 'red', dod: dodDuVerdict(false, VERDICT), travauxNonLivres: [] })
+    expect(doitArreterLaReparation(g.reasons, g.reasons)).toBe(true)
+  })
+
+  it('un refus reparable par build continue de se rejouer', () => {
+    const g = evaluateClosure({
+      status: 'red',
+      dod: [{ checked: false, hasContent: true, label: 'Objection du juge : test non rejoue' }],
+      travauxNonLivres: []
+    })
+    expect(doitArreterLaReparation(g.reasons, g.reasons)).toBe(false)
   })
 })

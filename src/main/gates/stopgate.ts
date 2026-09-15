@@ -77,7 +77,22 @@ export function doitArreterLaReparation(
     motifsCourants.length === motifsPrecedents.length &&
     motifsCourants.every((motif, index) => motif === motifsPrecedents[index])
   if (!identique) return false
-  return motifsCourants.every((motif) => motif === CLOSURE_UPSTREAM_REFUSAL)
+  return motifsCourants.every((motif) => motif === CLOSURE_UPSTREAM_REFUSAL || horsPorteeDeBuild(motif))
+}
+
+/**
+ * Le libelle que porte une case non cochee quand le juge a lui-meme VALIDE (voir
+ * `dodDuVerdict` dans `../objections-juge.ts`). Un nouveau passage de build ne peut pas le lever :
+ * le juge n'a rien refuse, le blocage vient d'ailleurs.
+ *
+ * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — 4 appels du juge (ts 09:44:57.329,
+ * 09:48:05.122, 09:51:14.024, 09:53:28.437) tous VALIDE 72-74, rejoues jusqu'au plafond de
+ * 42 appels provider ; le tour meurt sans rien rendre a l'utilisateur.
+ */
+export const MOTIF_RESERVES_VERDICT_VALIDE = 'Reserves du juge sur un verdict VALIDE'
+
+function horsPorteeDeBuild(motif: string): boolean {
+  return motif.includes(MOTIF_RESERVES_VERDICT_VALIDE)
 }
 
 /**
