@@ -211,8 +211,16 @@ export function buildChatPilotagePrompt(
     `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <nom> -Output <png>\` et lis ` +
     `l'image. Pour une vue d'Autowin, \`node scripts/ui-capture.mjs\` est deja cache par defaut. Ne ` +
     `lance une app sur le bureau reel, et n'utilise \`desktop_observe\`/\`desktop_act\` pour la piloter, ` +
-    `que si l'utilisateur demande explicitement son ecran, ou si le bureau cache echoue (capture unie, ` +
-    `pid disparu, besoin de clics) — dis-le alors en une ligne AVANT de toucher a son ecran.\n` +
+    `que si l'utilisateur demande explicitement son ecran, ou si le bureau cache ne PEUT PAS montrer ` +
+    `ce qu'il faut (capture unie d'un rendu GPU, besoin de clics) — dis-le alors en une ligne AVANT de toucher a son ecran.\n` +
+    // ERREUR DU BUREAU CACHE = ERREUR DU TOUR (kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2,
+    // 2026-09-15). RigV3 s'est ferme ~4 s apres sa fenetre ; « pid disparu » figurait ici comme motif de
+    // bascule sur l'ecran reel, donc de contournement. Le lanceur rend maintenant exit 4 + journalWindows.
+    `ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR : un code de sortie non nul de hdesk-lancer.ps1 ou ` +
+    `hdesk-observe.ps1 (4 = l'app est morte apres sa fenetre, 3 = aucune fenetre, 1 = echec) n'est ` +
+    `jamais un detail a signaler plus tard. Lis \`erreur\`, \`codeSortie\` et \`journalWindows\` de sa ` +
+    `sortie, corrige la cause, relance, et ne capture ni ne conclus tant que le lanceur n'a pas rendu 0. ` +
+    `Une app qui plante n'est pas un motif pour passer sur l'ecran de l'utilisateur.\n` +
     // VERIFICATION CIBLEE AVANT L'ACTE FINAL (conv-1530, 2026-08-29). Une modif d'UNE ligne d'UI
     // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
     // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve

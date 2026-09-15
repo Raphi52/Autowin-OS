@@ -16,4 +16,12 @@ describe('pilotage non invasif par defaut', () => {
     expect(existsSync('scripts/hdesk-lancer.ps1')).toBe(true)
     expect(existsSync('scripts/hdesk-observe.ps1')).toBe(true)
   })
+
+  // kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2 : un crash n'autorise plus la bascule.
+  it("traite un code non nul du bureau cache comme une erreur a corriger, pas un motif de bascule", () => {
+    const prompt = buildChatPilotagePrompt([])
+    expect(prompt).toContain('ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR')
+    expect(prompt).toContain('journalWindows')
+    expect(prompt).not.toContain('pid disparu')
+  })
 })
