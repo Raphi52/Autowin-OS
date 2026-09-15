@@ -17,6 +17,8 @@ const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 /** Une section suivante du contrat du juge (SCORE:, VERDICT:, …) ferme la liste. */
 const AUTRE_SECTION = /^\s*[A-ZÉÈÀ_ ]{3,}\s*:/
 const PUCE = /^\s*(?:[-*•]|\d+[.)])\s+/
+/** Gravité déclarée par le juge : seules MAJEUR (ou l'absence d'étiquette) bloquent. */
+const ETIQUETTE = /^\**\s*(MAJEUR|MINEUR|OK)\s*\**\s*:\s*\**\s*/i
 /** « aucune », « aucun », « rien à signaler », « n/a », « néant » — la forme contractuelle du vide. */
 // Ligne ENTIÈRE seulement : « Aucune capture du mode sombre » est une objection (conv-539).
 const VIDE =
@@ -56,7 +58,12 @@ export function objectionsDuJuge(text: string): string[] {
     const contenu = ligne.replace(PUCE, '').trim()
     if (!contenu) continue
     if (VIDE.test(normaliser(contenu))) continue
-    objections.push(contenu)
+    // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (reparation 3) — un VALIDE 74 dont les puces
+    // etaient des constats (« 54 sur 54 passent ») ou des reserves mineures devenait « Promis mais pas fait ».
+    // Saisie ts 1789462078031 : le tour finit quand il n'y a plus de defaut MAJEUR. Non etiquete = majeur.
+    const etiquette = ETIQUETTE.exec(contenu)
+    if (etiquette && !/^majeur/i.test(etiquette[1])) continue
+    objections.push(etiquette ? contenu.slice(etiquette[0].length).trim() : contenu)
   }
   return objections
 }

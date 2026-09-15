@@ -2522,7 +2522,7 @@ export class Orchestrator {
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 OBJECTIONS:
-- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
     const messages = [{ role: 'user' as const, content: judgePrompt }]
     const parts = [
@@ -4953,7 +4953,7 @@ ${empreinteDepot}`
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 OBJECTIONS:
-- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
         : `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
           `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
@@ -4970,7 +4970,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 OBJECTIONS:
-- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
