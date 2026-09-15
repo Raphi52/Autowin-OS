@@ -81,3 +81,41 @@ describe('sources surveillees du controle final', () => {
     expect(mesure!.sourceMs).toBeGreaterThan(mesure!.bundleMs)
   })
 })
+
+/**
+ * conv-539, tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (20 reparations refusees) : la liste des
+ * sources du gate etait tenue A LA MAIN. Un fichier du controle final absent de cette liste rendait
+ * la mesure MUETTE alors que le bundle execute ne contenait pas le correctif — c'est exactement le
+ * defaut deja paye une fois (commentaire fix-ok de conv-540 dans bundle-perime.ts). La liste est
+ * desormais DERIVEE des dossiers du controle final : un nouveau fichier y compte sans edition.
+ */
+describe('sources du gate derivees, pas tenues a la main', () => {
+  it('voit un fichier de gate qui ne figure dans aucune liste', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'aw-bundle-neuf-'))
+    mkdirSync(join(racine, 'out/main'), { recursive: true })
+    mkdirSync(join(racine, 'src/main/gates'), { recursive: true })
+    writeFileSync(join(racine, 'out/main/index.js'), '// bundle')
+    writeFileSync(join(racine, 'src/main/gates/stopgate.ts'), '// source')
+    writeFileSync(join(racine, 'src/main/gates/tout-neuf.ts'), '// gate ajoute apres coup')
+    utimesSync(join(racine, 'out/main/index.js'), 2_000_000, 2_000_000)
+    utimesSync(join(racine, 'src/main/gates/stopgate.ts'), 1_000_000, 1_000_000)
+    utimesSync(join(racine, 'src/main/gates/tout-neuf.ts'), 3_000_000, 3_000_000)
+    const m = mesureBundlePerime(racine)
+    expect(m).toBeDefined()
+    expect(m!.sourceMs).toBeGreaterThan(m!.bundleMs)
+  })
+
+  it('ignore les fichiers de test : les modifier ne perime pas le bundle', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'aw-bundle-test-'))
+    mkdirSync(join(racine, 'out/main'), { recursive: true })
+    mkdirSync(join(racine, 'src/main/gates'), { recursive: true })
+    writeFileSync(join(racine, 'out/main/index.js'), '// bundle')
+    writeFileSync(join(racine, 'src/main/gates/stopgate.ts'), '// source')
+    writeFileSync(join(racine, 'src/main/gates/stopgate.test.ts'), '// test')
+    utimesSync(join(racine, 'out/main/index.js'), 2_000_000, 2_000_000)
+    utimesSync(join(racine, 'src/main/gates/stopgate.ts'), 1_000_000, 1_000_000)
+    utimesSync(join(racine, 'src/main/gates/stopgate.test.ts'), 3_000_000, 3_000_000)
+    const m = mesureBundlePerime(racine)
+    expect(m!.sourceMs).toBeLessThan(m!.bundleMs)
+  })
+})
