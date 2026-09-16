@@ -374,8 +374,29 @@ export function populateConvRunSections(
       .map((p) => extractSection(p.text, 'Défauts'))
       .filter((c) => c && !c.startsWith('<!--'))
       .sort((a, b) => b.length - a.length)[0]
-    if (defauts) {
-      md = md.replace(/(\n##\s+Défauts\s*\n)[\s\S]*?(?=\n##\s)/, `$1${defauts}\n`)
+    /*
+     * UNE REPRISE (`salvage`) EST UN DÉFAUT DU RUN, MÊME QUAND LE RUN EST VERT — mesure du
+     * 2026-09-16, conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091.
+     *
+     * Déroulé lu dans le dossier de ce tour : le juge valide (12:33:59), la clôture est autorisée,
+     * puis `salvage` rend à 12:35:13 « J'ai trouvé le jeu. Ma conclusion précédente était trop
+     * courte » — la conclusion du run était FAUSSE. Le RUN.md, lui, est resté `status: green`,
+     * Journal « Juge: validé », `## Défauts` VIDE : le panneau Workflows montrait un run vert dont
+     * la conclusion avait été démentie 70 secondes plus tard, sans une ligne pour le dire.
+     *
+     * `salvage` n'écrit presque jamais de section `## Défauts` — son livrable est une prose de
+     * rattrapage — donc le filtre ci-dessus le laissait tomber. Sa seule EXISTENCE avec du texte
+     * suffit à qualifier le défaut : la phase ne se joue que pour rattraper ce que le run a raté.
+     * On l'inscrit donc telle quelle, repliée en une ligne, et de façon idempotente (le peuplement
+     * est rejoué à chaque phase).
+     */
+    const reprise = phaseOutputs
+      .filter((p) => p.phase === 'salvage' && p.text?.trim())
+      .map((p) => `- Reprise (salvage) : ${p.text.replace(/\s*\n\s*/g, ' · ').trim().slice(0, 600)}`)
+      .slice(-1)[0]
+    const contenuDefauts = [defauts, reprise].filter(Boolean).join('\n')
+    if (contenuDefauts) {
+      md = md.replace(/(\n##\s+Défauts\s*\n)[\s\S]*?(?=\n##\s)/, `$1${contenuDefauts}\n`)
     }
 
     const annexe = phaseOutputs
