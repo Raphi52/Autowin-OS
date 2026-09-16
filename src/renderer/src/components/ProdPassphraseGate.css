@@ -1,0 +1,112 @@
+/*
+ * Phrase de passe de production — meme grammaire visuelle que le bloc de decision `ask` :
+ * aucun panneau opaque, filets or degrades, accents sobres, aucun halo ni ombre decorative.
+ */
+.ppg {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  color: #dde3ee;
+  font-size: 14px;
+  line-height: 1.5;
+  border-top: 1px solid;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.55), rgba(212, 169, 79, 0.06)) 1;
+}
+
+.ppg-kicker {
+  font: 600 11px/1.4 ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d4a94f;
+}
+
+.ppg-cible {
+  margin: 0;
+}
+
+.ppg-chip {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 3px;
+  padding: 0 5px;
+}
+
+.ppg-raison,
+.ppg-note {
+  margin: 0;
+  color: #a9b2c4;
+  font-size: 13px;
+}
+
+.ppg-label {
+  color: #a9b2c4;
+  font-size: 13px;
+}
+
+.ppg-champ {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  color: #dde3ee;
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  padding: 7px 9px;
+}
+
+.ppg-champ:focus {
+  outline: none;
+  border-color: rgba(212, 169, 79, 0.65);
+}
+
+.ppg-message {
+  margin: 0;
+  color: #e3ba55;
+  font-size: 13px;
+}
+
+.ppg-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ppg-actions button {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  color: #dde3ee;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 5px 12px;
+}
+
+.ppg-valider {
+  border-color: rgba(212, 169, 79, 0.55);
+  color: #e3ba55;
+}
+
+.ppg-actions button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* L'hôte pose l'écran PAR-DESSUS l'application : un geste de production bloqué ne doit pas se perdre
+   derrière un panneau. Aucun fond opaque de page, seulement un voile sombre qui met l'écran devant. */
+.ppg-hote {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 9, 15, 0.72);
+}
+
+/* Mode CONFIRMATION : la question est la seule chose à lire, elle porte donc la taille. */
+.ppg-question {
+  margin: 10px 0 4px;
+  font-size: 15px;
+  color: #dde3ee;
+}
