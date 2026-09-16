@@ -205,6 +205,38 @@ pas à toi de la faire — la branche de quelqu'un d'autre, un distant que tu ne
 le travail en local en silence. Ne termine jamais un salvage en demandant à l'humain de pousser : cette demande est exactement
 la boucle que cette étape supprime (retour utilisateur, 2026-09-03 : « salvage doit push »).
 
+
+**Puis retire les porteurs devenus vides — un salvage qui laisse la flotte de branches derrière lui
+n'a pas fini.** Ce que l'utilisateur regarde après un salvage, ce n'est pas `git status`, c'est le
+sélecteur de branches : s'il y voit encore les branches de secours, de run et de chantier, le ménage
+n'a pas eu lieu pour lui. Mesuré le 2026-09-16 (conv-81, saisie `ts` 1789563993034, tour
+`c6746e12-5f10-4d65-99f4-9a18cd1b925f`, « /salvage tout sur main ») : le contenu des 5 branches
+locales était bien fusionné et poussé sur `origin/main`, mais les 5 branches sont restées, le `main`
+local était 191 commits en retard, et HEAD était encore sur `feat/themes-selecteur-et-voiles` —
+d'où la reprise en conv-84 : « il n'y aurait dû rester plus que la branche main ».
+
+```bash
+git fetch origin                                   # mesurer contre le distant, pas contre un main perime
+for b in $(git for-each-ref --format='%(refname:short)' refs/heads/); do
+  [ "$b" = main ] && continue
+  # deja contenu, OU meme patch sous un autre SHA : le porteur ne porte plus rien
+  if git merge-base --is-ancestor "$b" origin/main || ! git cherry origin/main "$b" | grep -q '^+'; then
+    echo "VIDE $b $(git rev-parse "$b")"           # le SHA est le recu : git branch <nom> <sha> le ramene
+  fi
+done
+git switch main && git merge --ff-only origin/main # revenir sur la branche d'integration, a jour
+git worktree list --porcelain                      # une copie de travail retient sa branche : la retirer d'abord
+```
+
+Règles :
+- **Un porteur VIDE (contenu déjà dans `origin/main`, par ancêtre ou par patch-id) se supprime**, son
+  SHA consigné dans le rapport. Un porteur qui porte encore un patch absent ne se supprime PAS : il se
+  nomme, avec ce qu'il porte.
+- **La suppression reste un geste destructeur** : liste les porteurs vides avec leur SHA et demande
+  un oui, une seule fois, pour le lot. Ne la fais jamais branche par branche, et jamais en silence.
+- **Finis sur la branche d'intégration, à jour.** Rester sur la branche de chantier après l'avoir
+  fusionnée fait repartir le tour suivant du mauvais endroit.
+
 ### 8. RAPPORTER
 
 Une ligne par élément : ce que c'est · où il vivait · le verdict **avec sa preuve** (quel fichier correspondait,
