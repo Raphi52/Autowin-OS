@@ -120,9 +120,6 @@ remplie d'une estimation.
   v5, la skill l'atteint **2/2** passages et l'appel nu **0/2** — c'est la seule chose que ce tournoi
   a établie. Écrit APRÈS le lancement, il ne mesure plus, il justifie le gagnant déjà connu : le
   contrôle le refuse pour cette raison (point P20, vérifié dès le pré-vol).
-  **Duel entre modèles : chaque bras se note avec `--joueur claude|codex`.** C'est le seul champ qui
-  dit QUI a joué ; sans lui, deux modèles sur le même bras du même banc sont indiscernables (et le
-  second était refusé comme doublon). Avec lui, ils cohabitent : la ligne reste unique par joueur.
   **Un critère binaire se lit lui aussi sur PLUSIEURS passages.** Le même critère, rejoué sur les
   **12 bras** des bancs `residus` v2 à v5 (relecture des livrables, 2026-09-06), donne : bras à skill
   **5/6**, appel nu **2/6** — donc le bras nu y arrive parfois, et le journal marque sa colonne

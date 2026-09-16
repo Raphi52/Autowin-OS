@@ -11,7 +11,7 @@
  * pas de score auto-attribue : les chiffres se LISENT dans `out-<bras>.json` / `activity/`.
  *
  * Usage :
- *   node scripts/arena-duel.mjs noter --tache "..." --workflow "..." --bras a [--joueur claude|codex] \
+ *   node scripts/arena-duel.mjs noter --tache "..." --workflow "..." --bras a \
  *        --duree-ms 123456 --cout-usd 0.63 --verdict gagnant [--banc <dossier>] [--note "..."] [--remplace]
  *        [--critere "trouve les scripts vivants mais casses" --atteint oui|non --preuve "commande qui le rejoue"]
  *   node scripts/arena-duel.mjs lire [--tache <filtre>] [--workflow <filtre>] [--limite 20] [--json] [--brut]
@@ -24,9 +24,6 @@ import path from 'node:path'
 
 export const VERDICTS = ['gagnant', 'perdant', 'nul', 'abandonne', 'casse']
 export const BRAS_VALIDES = ['a', 'b', 'c', 'x']
-// Qui a JOUE le bras. Liste fermee : un duel inter-joueurs n'est attribuable que si le nom du
-// modele est normalise (`Claude`/`claude` doivent etre LE meme joueur, sinon la cle les separe).
-export const JOUEURS_VALIDES = ['claude', 'codex']
 
 export function cheminJournal(racine = process.cwd(), profil = 'autowin-os') {
   return path.join(racine, '.autowin-data', profil, 'arena-duels.jsonl')
@@ -50,9 +47,6 @@ export function normaliserDuel(entree, maintenant = new Date()) {
   const bras = texte(entree.bras).toLowerCase()
   if (bras && !BRAS_VALIDES.includes(bras))
     throw new Error(`bras \`${bras}\` inconnu — attendu : ${BRAS_VALIDES.join(', ')}`)
-  const joueur = texte(entree.joueur).toLowerCase()
-  if (joueur && !JOUEURS_VALIDES.includes(joueur))
-    throw new Error(`joueur \`${joueur}\` inconnu — attendu : ${JOUEURS_VALIDES.join(', ')}`)
   const nombre = (v, nom) => {
     if (v === undefined || v === null || v === '') throw new Error(`champ \`${nom}\` manquant`)
     const n = Number(String(v).replace(',', '.'))
@@ -88,7 +82,6 @@ export function normaliserDuel(entree, maintenant = new Date()) {
     tache,
     workflow,
     ...(bras ? { bras } : {}),
-    ...(joueur ? { joueur } : {}),
     dureeMs: Math.round(nombre(entree.dureeMs, 'duree-ms')),
     coutUsd: nombre(entree.coutUsd, 'cout-usd'),
     verdict,
@@ -112,14 +105,7 @@ export function cleDuel(d) {
   // Dans un banc donne, un bras est UNIQUE : re-noter le bras `a` du meme banc corrige la ligne,
   // meme si son libelle de workflow a change entre-temps. Hors banc, le workflow fait la difference.
   const banc = t(d.banc)
-  // Un duel inter-joueurs, c'est le MEME bras du MEME banc joue par deux modeles : sans le joueur
-  // dans la cle, la seconde note serait rejetee comme doublon. Le joueur n'entre dans la cle que
-  // s'il est present, donc les lignes deja ecrites (sans joueur) gardent exactement leur cle.
-  const joueur = t(d.joueur)
-  const suffixe = joueur ? ` :: ${joueur}` : ''
-  return banc
-    ? `${banc} :: ${t(d.bras)}${suffixe}`
-    : ` :: ${t(d.bras)} :: ${t(d.workflow)}${suffixe}`
+  return banc ? `${banc} :: ${t(d.bras)}` : ` :: ${t(d.bras)} :: ${t(d.workflow)}`
 }
 
 export function noterDuel(entree, racine = process.cwd(), profil = 'autowin-os') {
@@ -314,12 +300,12 @@ function main(argv) {
       console.log(`aucun duel journalise (${fichier})`)
       return 0
     }
-    console.log('| date | tache | workflow | bras | joueur | duree | cout $ | verdict |')
-    console.log('|---|---|---|---|---|---|---|---|')
+    console.log('| date | tache | workflow | bras | duree | cout $ | verdict |')
+    console.log('|---|---|---|---|---|---|---|')
     for (const d of duels) {
       const min = (d.dureeMs / 60000).toFixed(1)
       console.log(
-        `| ${String(d.ts).slice(0, 16)} | ${d.tache} | ${d.workflow} | ${d.bras ?? '-'} | ${d.joueur ?? '-'} | ${min} min | ${Number(d.coutUsd).toFixed(4)} | ${d.verdict} |`
+        `| ${String(d.ts).slice(0, 16)} | ${d.tache} | ${d.workflow} | ${d.bras ?? '-'} | ${min} min | ${Number(d.coutUsd).toFixed(4)} | ${d.verdict} |`
       )
     }
     const { taches } = reproductibilite(o)
