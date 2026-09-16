@@ -17,6 +17,8 @@ import {
   titreDeConversationDemandee
 } from './conversation-demandee'
 import { decisionDeSynchronisation } from './synchronisation-cible-bureau'
+import { dossierDeTravailDuTour } from './bascule-dossier-conversation'
+import { avecDossierDuTour, dossierDuTourCourant } from './dossier-du-tour-courant'
 import { pendantOperation } from './gel-main'
 import { rechargerEnv } from './env-reload'
 import {
@@ -1675,7 +1677,7 @@ export class AppCommandBus {
             ...attestedProposal,
             // MEME definition que du cote attestation : c'est leur divergence qui vidait les 256
             // observations. Deux calculs de la meme valeur, c'est un defaut qui attend son heure.
-            scope: porteeDeLecon(attestedProposal.scope, this.os.executionWorkspace)
+            scope: porteeDeLecon(attestedProposal.scope, this.workspaceDuTour)
           }
         : undefined
       const proposalHash = trustedProposal
@@ -1708,12 +1710,12 @@ export class AppCommandBus {
               .digest('hex')
             const provenanceTags = [
               `run:${createHash('sha256').update(input.runId).digest('hex').slice(0, 16)}`,
-              `workspace:${createHash('sha256').update(this.os.executionWorkspace).digest('hex').slice(0, 16)}`,
+              `workspace:${createHash('sha256').update(this.workspaceDuTour).digest('hex').slice(0, 16)}`,
               `role:${(input.role ?? 'orchestrator').slice(0, 30)}`,
               `proposal:${proposalHash.slice(0, 16)}`,
               `proof:${proofHash.slice(0, 16)}`
             ]
-            const canonicalBody = `${trustedProposal.body}\n\nProvenance Autowin (v1):\n- run: ${input.runId}\n- workspace: ${this.os.executionWorkspace}\n- role: ${input.role ?? 'orchestrator'}\n- model: ${input.model ?? 'autowin'}\n- proposal-sha256: ${proposalHash}\n- proof-sha256: ${proofHash}`
+            const canonicalBody = `${trustedProposal.body}\n\nProvenance Autowin (v1):\n- run: ${input.runId}\n- workspace: ${this.workspaceDuTour}\n- role: ${input.role ?? 'orchestrator'}\n- model: ${input.model ?? 'autowin'}\n- proposal-sha256: ${proposalHash}\n- proof-sha256: ${proofHash}`
             const deposited = await rememberFact(
               {
                 title: trustedProposal.title,
@@ -1731,7 +1733,7 @@ export class AppCommandBus {
                 token: brainServiceToken(),
                 authorAgent: 'autowin-os',
                 model: input.model ?? 'autowin',
-                workspace: this.os.executionWorkspace
+                workspace: this.workspaceDuTour
               }
             )
             /**
@@ -1790,7 +1792,7 @@ export class AppCommandBus {
         conversationId: input.conversationId,
         turnId: input.turnId,
         runId: input.runId,
-        workspace: this.os.executionWorkspace,
+        workspace: this.workspaceDuTour,
         status: input.valid && !input.gateBlocked ? 'succeeded' : 'failed',
         terminalClass,
         valid: input.valid,
@@ -2151,6 +2153,33 @@ export class AppCommandBus {
   }
 
   /** Exécute une commande nommée, mute l'app, diffuse le changement. */
+  /**
+   * LE DOSSIER DE TRAVAIL DE CE TOUR — celui range sur la conversation, sinon le dossier global.
+   *
+   * Toutes les commandes qui touchent au disque passent par ici (`run`, `read_file`, `list_files`,
+   * `find_in_files`, `create_file`, `move_file`, `delete_file`, `edit_file`, `verify`, Brain...).
+   * Avant le 2026-09-16 elles lisaient `os.executionWorkspace`, fige au demarrage de l'app : une
+   * conversation rangee sur un projet voyait son chat partir dans le bon dossier (corrige le
+   * 2026-09-08) mais ses commandes agir dans un AUTRE — `delete_file` supprimait le fichier du
+   * mauvais depot. Hors de tout tour (appel IPC direct), le repli est le dossier global : le
+   * comportement d'avant, a l'identique.
+   */
+  private get workspaceDuTour(): string {
+    return dossierDuTourCourant() ?? this.os.executionWorkspace
+  }
+
+  /**
+   * Le dossier range sur la conversation quand il designe un dossier REEL, sinon le dossier global.
+   * Meme regle que le tour de chat (`dossierDeTravailDuTour`) : un libelle de categorie ou un
+   * dossier disparu ne pilote rien. Lecture defensive : plusieurs tests montent un `os` partiel.
+   */
+  private dossierRangeSur(conversationId?: string): string {
+    const range = conversationId
+      ? this.os.conversations?.get?.(conversationId)?.projectPath
+      : undefined
+    return dossierDeTravailDuTour(range, this.os.executionWorkspace)
+  }
+
   async exec(
     name: string,
     args: Record<string, unknown> = {},
@@ -2158,6 +2187,21 @@ export class AppCommandBus {
     bindingOverride?: RoleBinding,
     turnId?: string,
     /** Signe de vie d'une commande LONGUE, relaye tel quel au fil (voir `verify-battement`). */
+    onProgress?: (text: string) => void
+  ): Promise<CommandResult> {
+    // Le dossier est POSE pour la duree de cet appel (et de ses `await`), jamais dans un champ
+    // partage : deux tours paralleles ranges dans deux projets se voleraient le dossier.
+    return avecDossierDuTour(this.dossierRangeSur(conversationId), () =>
+      this.execDansLeDossierDuTour(name, args, conversationId, bindingOverride, turnId, onProgress)
+    )
+  }
+
+  private async execDansLeDossierDuTour(
+    name: string,
+    args: Record<string, unknown> = {},
+    conversationId?: string,
+    bindingOverride?: RoleBinding,
+    turnId?: string,
     onProgress?: (text: string) => void
   ): Promise<CommandResult> {
     // Voir `registreDuTour` : l'empreinte porte le TOUR, pas la conversation — au tour suivant
@@ -2426,7 +2470,7 @@ export class AppCommandBus {
         const task = isolateWatchdogPromptPaths(
           piecesJointes.suffixe ? `${rawTask}${piecesJointes.suffixe}` : rawTask,
           causalWatchPaths,
-          this.os.executionWorkspace
+          this.workspaceDuTour
         )
         const fingerprint = actionFingerprint('orchestrate', {
           convId,
@@ -2840,7 +2884,7 @@ export class AppCommandBus {
             appendExecutionEvidenceFileTrace(causalEvidence, {
               conversationId: convId,
               turnId: orchestrationTurnId,
-              workspaceRoot: this.os.executionWorkspace,
+              workspaceRoot: this.workspaceDuTour,
               published: true
             })
           }
@@ -3316,7 +3360,7 @@ export class AppCommandBus {
         // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
         const refusGit = refusGitDestructeur(ligne)
         if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
-        const cwd = this.os.executionWorkspace
+        const cwd = this.workspaceDuTour
         if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
         // Les guillemets GROUPENT : `decouperArguments` respecte `-m "trois mots"` là où un
         // `split(/\s+/)` en faisait trois arguments et laissait les guillemets dans le texte.
@@ -3466,7 +3510,7 @@ export class AppCommandBus {
             token: brainServiceToken(),
             authorAgent: 'autowin-os',
             model: this.os.roles.getBinding('orchestrator').model ?? 'autowin',
-            workspace: this.os.executionWorkspace
+            workspace: this.workspaceDuTour
           })
           if (outcome.fact && learningOutcome && convId && turnId && this.outcomeLearning) {
             try {
@@ -3542,7 +3586,7 @@ export class AppCommandBus {
             workspace:
               outcome.fact.scope.trim().toLowerCase() === 'global'
                 ? 'global'
-                : this.os.executionWorkspace,
+                : this.workspaceDuTour,
             note: outcome.note,
             state: outcome.stored ? 'depose' : outcome.unknown ? 'inconnu' : 'local'
           })
@@ -3560,7 +3604,7 @@ export class AppCommandBus {
       case 'read_file': {
         const decision = decideRead(
           { path: a.path, from: a.from, lines: a.lines },
-          this.os.executionWorkspace
+          this.workspaceDuTour
         )
         if (!decision.allowed) return { lu: false, detail: `lecture refusée : ${decision.reason}` }
         /*
@@ -3606,7 +3650,7 @@ export class AppCommandBus {
          * reproduirait l'approximation qu'on corrige ici. Le plafond est DIT quand il mord, pour
          * qu'un total partiel ne se présente jamais comme un total.
          */
-        const racine = resolve(this.os.executionWorkspace)
+        const racine = resolve(this.workspaceDuTour)
         const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
         const recursif = a.recursif === true || a.recursif === 'true'
         const cible = resolve(join(racine, sousDossier))
@@ -3676,7 +3720,7 @@ export class AppCommandBus {
       case 'find_in_files': {
         const motif = typeof a.pattern === 'string' ? a.pattern : ''
         if (!motif.trim()) return { trouve: 0, detail: 'motif manquant' }
-        const racine = resolve(this.os.executionWorkspace)
+        const racine = resolve(this.workspaceDuTour)
         const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
         const fichiers = enumererFichiersLisibles(racine, sousDossier)
         // MEME CAUSE QUE `read_file` : un fichier non-UTF-8 rend des lignes ou `�` a remplace
@@ -3852,6 +3896,9 @@ export class AppCommandBus {
     if (command === 'edit_file' && typeof cible === 'string' && cible.trim()) {
       const synchro = decisionDeSynchronisation(
         cible,
+        // DEPOT DE BASE de la copie isolee, PAS le dossier du tour : la synchronisation reporte le
+        // fichier du bureau isole vers le depot dont ce bureau est issu (`os.worktrees`, construit
+        // sur `executionWorkspace`). Y mettre le dossier du tour ecrirait dans un AUTRE projet.
         this.os.executionWorkspace,
         workspaceRoot,
         (chemin) => (existsSync(chemin) ? readFileSync(chemin) : undefined)
@@ -4253,6 +4300,7 @@ export class AppCommandBus {
     }
     if (!existsSync(source)) return result
     const repoKey = createHash('sha256')
+      // Cle du DEPOT DE BASE du bureau isole (meme raison qu'au-dessus), pas du dossier du tour.
       .update(resolve(this.os.executionWorkspace).toLowerCase())
       .digest('hex')
       .slice(0, 20)
@@ -4486,7 +4534,7 @@ export class AppCommandBus {
     path?: string
     octets?: number
   } {
-    const decision = decideCreateFile(input, this.os.executionWorkspace, existsSync)
+    const decision = decideCreateFile(input, this.workspaceDuTour, existsSync)
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
     mkdirSync(dirname(decision.absolutePath), { recursive: true })
     writeFileSync(decision.absolutePath, decision.content, 'utf8')
@@ -4503,7 +4551,7 @@ export class AppCommandBus {
     from?: string
     to?: string
   } {
-    const decision = decideMoveFile(input, this.os.executionWorkspace, existsSync)
+    const decision = decideMoveFile(input, this.workspaceDuTour, existsSync)
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
     mkdirSync(dirname(decision.cibleAbsolue), { recursive: true })
     renameSync(decision.sourceAbsolue, decision.cibleAbsolue)
@@ -4515,7 +4563,7 @@ export class AppCommandBus {
     reason?: string
     path?: string
   } {
-    const decision = decideDeleteFile(input, this.os.executionWorkspace, existsSync)
+    const decision = decideDeleteFile(input, this.workspaceDuTour, existsSync)
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
     // `recursive: false` : cette commande supprime UN fichier, jamais une arborescence.
     rmSync(decision.absolutePath, { recursive: false })
@@ -4553,7 +4601,7 @@ export class AppCommandBus {
     this.editFileTail = previous.then(() => current)
     await previous
     try {
-      const baseDecision = decideEdit(input, this.os.executionWorkspace, (absolutePath) =>
+      const baseDecision = decideEdit(input, this.workspaceDuTour, (absolutePath) =>
         existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
       )
       /*
@@ -4569,7 +4617,7 @@ export class AppCommandBus {
        * `decideEdit`, deja evaluees ci-dessus.
        */
       if (baseDecision.allowed && baseDecision.externe) {
-        return this.runEditFile(input, this.os.executionWorkspace)
+        return this.runEditFile(input, this.workspaceDuTour)
       }
       /*
        * UN REFUS DE RACINE SYSTEME SE REND TEL QUEL — il ne depend ni du contenu du fichier ni d'un
@@ -4584,7 +4632,7 @@ export class AppCommandBus {
       const baseContentBefore = baseDecision.allowed
         ? readFileSync(baseDecision.absolutePath, 'utf8')
         : undefined
-      const before = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
+      const before = await captureWorkspaceMutationSnapshot(this.workspaceDuTour)
       /*
        * Les octets d'AVANT sont CAPTURES, pas remis dans le resultat : le resultat part au modele, et
        * y coller le contenu entier d'un fichier inonderait son contexte pour rien.
@@ -4604,10 +4652,10 @@ export class AppCommandBus {
       )
       const path =
         outcome.allowed && outcome.path
-          ? normalizeWorkspaceTracePath(outcome.path, this.os.executionWorkspace)
+          ? normalizeWorkspaceTracePath(outcome.path, this.workspaceDuTour)
           : null
       if (conversationId && path) {
-        const after = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
+        const after = await captureWorkspaceMutationSnapshot(this.workspaceDuTour)
         const key = workspaceTracePathKey(path)
         const fingerprint = [...after].find(
           ([candidate]) => workspaceTracePathKey(candidate) === key
@@ -4619,17 +4667,17 @@ export class AppCommandBus {
           ([candidate]) => workspaceTracePathKey(candidate) === key
         )?.[1]
         const generationMarker = await captureWorkspacePathGenerationMarker(
-          this.os.executionWorkspace,
+          this.workspaceDuTour,
           path
         )
-        const baseContentAfter = existsSync(resolve(this.os.executionWorkspace, path))
-          ? readFileSync(resolve(this.os.executionWorkspace, path), 'utf8')
+        const baseContentAfter = existsSync(resolve(this.workspaceDuTour, path))
+          ? readFileSync(resolve(this.workspaceDuTour, path), 'utf8')
           : ''
         appendConversationFileTrace({
           timestamp: new Date().toISOString(),
           conversationId,
           ...(turnId ? { turnId } : {}),
-          workspaceRoot: this.os.executionWorkspace,
+          workspaceRoot: this.workspaceDuTour,
           source: 'edit_file',
           paths: [path],
           ...(fingerprint ? { pathFingerprints: { [path]: fingerprint } } : {}),
@@ -4667,7 +4715,7 @@ export class AppCommandBus {
         status: 'not-requested'
       }
     }
-    const corpus = brainCorpusForWorkspace(this.os.executionWorkspace)
+    const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
     const brain =
       corpus?.length === 0
         ? { context: '', status: 'empty' as const }
@@ -4734,7 +4782,7 @@ export class AppCommandBus {
         }
       }
       const bureauScript = await this.bureauDeVerification(conversationId, onProgress)
-      const cwd = bureauScript ?? this.os.executionWorkspace
+      const cwd = bureauScript ?? this.workspaceDuTour
       const decision = decideVerifyScript(type, cwd)
       if (!decision.allowed) {
         return {
@@ -4761,7 +4809,7 @@ export class AppCommandBus {
     }
     const bureau = await this.bureauDeVerification(conversationId, onProgress)
     if (bureau) return this.runVerifyAt(bureau, onProgress, cible)
-    const resultat = await this.runVerifyAt(this.os.executionWorkspace, onProgress, cible)
+    const resultat = await this.runVerifyAt(this.workspaceDuTour, onProgress, cible)
     return { ...resultat, output: `${VERIFY_SANS_ISOLATION}${SAUT_PORTEE}${resultat.output}` }
   }
 
@@ -4774,7 +4822,7 @@ export class AppCommandBus {
     conversationId?: string,
     onProgress?: (text: string) => void
   ): Promise<string | undefined> {
-    const workspace = this.os.executionWorkspace
+    const workspace = this.workspaceDuTour
     const worktrees = this.os.worktrees
     if (!workspace || !worktrees) return undefined
     const runId = cleDuBureauDeVerification(conversationId)
@@ -4975,8 +5023,8 @@ export class AppCommandBus {
     signal?: AbortSignal
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const [file, ...rest] = argv
-    const sharedBin = this.os.executionWorkspace
-      ? join(this.os.executionWorkspace, 'node_modules', '.bin')
+    const sharedBin = this.workspaceDuTour
+      ? join(this.workspaceDuTour, 'node_modules', '.bin')
       : undefined
     const env =
       sharedBin && existsSync(sharedBin)
