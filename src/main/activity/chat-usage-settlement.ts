@@ -94,6 +94,14 @@ export function persistChatUsageSettlement(
   const inputTokens = counterDelta(current.inputTokens, input.previous?.inputTokens)
   const outputTokens = counterDelta(current.outputTokens, input.previous?.outputTokens)
   const cacheReadTokens = counterDelta(current.cacheReadTokens, input.previous?.cacheReadTokens)
+  // Le PRIX du cache, pas seulement son benefice : `cacheCreationTokens` etait present dans le
+  // snapshot (et deja lu ci-dessous pour le libelle de cout) mais jamais ECRIT dans le journal.
+  // Consequence mesuree par `scripts/audit-cout-tokens.mjs` : cumul = 0 sur tout `.autowin-data`,
+  // donc aucun arbitrage « cache 1 h » verifiable.
+  const cacheCreationTokens = counterDelta(
+    current.cacheCreationTokens ?? 0,
+    input.previous?.cacheCreationTokens
+  )
   const costUsd =
     current.knownCostUsd === null
       ? undefined
@@ -129,6 +137,7 @@ export function persistChatUsageSettlement(
       inputTokens,
       outputTokens,
       cacheReadTokens,
+      cacheCreationTokens,
       // Non deltaises a dessein : ce sont des NIVEAUX (l'occupation au dernier appel), pas des
       // compteurs cumulatifs. Un delta les rendrait negatifs des que le contexte se compacte.
       derniereEntree: input.derniereEntree,

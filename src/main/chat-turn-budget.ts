@@ -18,7 +18,23 @@ export interface ChatTurnBudget {
   limits: CircuitBreakerLimits
   /** `blocking` uniquement sur cap explicite de l'utilisateur ; sinon mesure seule. */
   enforcement: 'blocking' | 'metering-only'
+  /**
+   * PLAFOND D'EMBALLEMENT — armé TOUJOURS, y compris sans cap explicite.
+   *
+   * La décision du 12/08 (« les plafonds mesurent, ils ne tuent plus ») visait un seuil câblé
+   * SERRÉ (2 $ / 1,5 M) qui tuait des tours légitimes. Elle ne dit pas qu'un tour peut partir sans
+   * aucune borne : mesuré le 2026-09-16 sur les 2 749 tours réels de `.autowin-data`
+   * (activity/chat-usage, in+out) — médiane 808 165, p90 4 242 762, p99 11 956 978,
+   * MAX 33 612 006 tokens ; coût max 18,02 $. Ce plafond est calibré 2× au-dessus du p99 : il
+   * laisse passer 99,75 % des tours observés (7 tours sur 2 749 au-dessus) et coupe l'emballement.
+   * Un cap explicite de l'utilisateur, plus fin, reprend la main.
+   */
+  emballement: CircuitBreakerLimits
 }
+
+/** Calibrage du plafond d'emballement (voir la mesure ci-dessus). */
+export const CHAT_EMBALLEMENT_TOKENS = 24_000_000
+export const CHAT_EMBALLEMENT_USD = 25
 
 const positif = (value: string | undefined): number | undefined => {
   const n = Number(value)
@@ -34,7 +50,12 @@ export function chatTurnBudget(env: Record<string, string | undefined>): ChatTur
     // Les défauts restent comme SEUILS D'OBSERVATION : un trip en mesure seule écrit une ligne de
     // ledger (le dépassement reste VISIBLE, réflexe « jamais silencieux ») sans rien couper.
     limits: { maxUsd: usd ?? 2, maxTokens: tokens ?? 1_500_000, maxCalls: calls ?? 6 },
-    enforcement: explicite ? 'blocking' : 'metering-only'
+    enforcement: explicite ? 'blocking' : 'metering-only',
+    emballement: {
+      maxUsd: usd ?? CHAT_EMBALLEMENT_USD,
+      maxTokens: tokens ?? CHAT_EMBALLEMENT_TOKENS,
+      ...(calls === undefined ? {} : { maxCalls: calls })
+    }
   }
 }
 

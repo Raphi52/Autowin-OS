@@ -76,3 +76,21 @@ describe('breaker — comportement sur des usages de CHAT reels', () => {
     expect(breaker.observe(step(0.5))).toBeNull()
   })
 })
+
+/**
+ * Le plafond d'EMBALLEMENT (conv-611, 2026-09-16) : la coupure conditionnee au cap explicite
+ * laissait passer un tour de 33,6 M tokens. Un second garde-fou, arme par defaut, doit couper.
+ */
+describe('tour de chat — plafond d’emballement cable', () => {
+  it('instancie un SECOND breaker sur budgetDuTour.emballement', () => {
+    expect(chatRunner).toContain('new CostCircuitBreaker(budgetDuTour.emballement)')
+  })
+
+  it('coupe le tour sur emballement sans dependre du cap explicite', () => {
+    const bloc = chatRunner.slice(chatRunner.indexOf('breakerEmballement.observe('))
+    expect(bloc).toContain('controller.abort(')
+    expect(bloc.slice(0, bloc.indexOf('controller.abort('))).not.toContain(
+      "enforcement === 'blocking'"
+    )
+  })
+})

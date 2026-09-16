@@ -246,6 +246,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     // de l'utilisateur, le trip OBSERVE (ledger) mais ne coupe plus.
     const budgetDuTour = chatTurnBudget(process.env)
     const chatBreaker = new CostCircuitBreaker(budgetDuTour.limits)
+    // Le breaker ci-dessus OBSERVE (seuils serrés, coupure armée par cap explicite seulement).
+    // Celui-ci COUPE toujours, au plafond d'emballement calibré sur les tours réels : sans lui, un
+    // tour de 33,6 M tokens passait sans que rien ne l'arrête (mesure du 2026-09-16).
+    const breakerEmballement = new CostCircuitBreaker(budgetDuTour.emballement)
     const spoken: string[] = []
     /**
      * Les etiquettes d'action, TENUES A PART du vrai texte — et c'est un COUPLE de garanties.
@@ -932,6 +936,20 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
                 : `seuil d'observation dépassé (mesure seule, aucun arrêt) — ${tripped.reason}`
             })
             if (coupe) controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : ${tripped.reason}`)
+          }
+          const emballe = breakerEmballement.observe({
+            step: 'exec',
+            detail: 'chat',
+            costUsd: pilotEvent.callUsage.costUsd,
+            tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
+          } as Parameters<typeof breakerEmballement.observe>[0])
+          if (emballe) {
+            ledger.append({
+              source: 'orchestrate',
+              name: 'chat-budget',
+              detail: `tour coupé — emballement — ${emballe.reason}`
+            })
+            controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : emballement — ${emballe.reason}`)
           }
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
