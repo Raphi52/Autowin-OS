@@ -365,7 +365,11 @@ import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-c
 import { convRunsRoot } from './runs/conv-runs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
-import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
+import {
+  retrieveBrainContext,
+  type BrainNavigation,
+  type BrainUnavailableReason
+} from './brain-retrieval'
 import { messageEmpreinteBrain } from './brain-empreinte-message'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
@@ -3597,6 +3601,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        */
       const empreinteQuery = `empreinte du dépôt ${workspaceLabel(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`
       let empreinteStatut: BrainRetrievalEvent['status'] = 'unavailable'
+      // La CAUSE de l'indisponibilité, telle que `retrieveBrainContext` l'a constatée : sans elle le
+      // message de `think` ne peut qu'énumérer des hypothèses (mesure conv-586, 2026-09-16).
+      let empreinteMotif: BrainUnavailableReason | undefined
       let empreinteNavigation: BrainNavigation | undefined
       try {
         const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)(empreinteQuery, {
@@ -3604,10 +3611,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         })
         const empreinteScopee = scopeBrainRetrieval(chargee, brainCorpus)
         empreinteStatut = empreinteScopee.status
+        empreinteMotif = empreinteScopee.unavailableReason
         empreinteNavigation = empreinteScopee.navigation
         empreinteDepot = empreinteScopee.context.slice(0, 6_000)
       } catch {
-        // Le load est un confort de départ, jamais une raison d'échouer.
+        // Le load est un confort de départ, jamais une raison d'échouer. Une exception ici est un
+        // échec de transport : c'est exactement le cas « réseau ».
+        empreinteMotif = 'network'
       }
       try {
         onBrainRetrieved?.({
@@ -3628,7 +3638,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * Le STATUT decide du message, pas la taille du texte. Un Brain injoignable rendait « aucune
        * empreinte » — une panne annoncee comme un resultat de recherche (mesure conv-9, 2026-08-31).
        */
-      const empreinteMessage = messageEmpreinteBrain(empreinteStatut, empreinteDepot.length)
+      const empreinteMessage = messageEmpreinteBrain(
+        empreinteStatut,
+        empreinteDepot.length,
+        empreinteMotif
+      )
       push({
         step: 'exec',
         role: 'think',
