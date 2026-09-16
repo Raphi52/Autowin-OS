@@ -49,6 +49,12 @@ export function refusLancementGraphique(commande: string): string | undefined {
     `puis capture avec scripts/hdesk-observe.ps1 -InstanceId <id> -Output <png>. ` +
     `Si l'app dessine en 3D (vue restée unie, code 3) : powershell -NoProfile -File scripts/hors-ecran-capture.ps1 -Executable "<chemin.exe>" -Arguments "<args>" -Output <png>.`
 
+  const motifIsole = (quoi: string): string =>
+    `Lancement de l'application au premier plan refusé (${quoi}) : il ouvrirait une fenêtre Autowin sur l'écran ` +
+    `de l'utilisateur, et deux travaux en parallèle se disputeraient la même instance et le même port. ` +
+    `Passe par l'instance isolée : node scripts/avec-instance-headless.mjs -- <ta commande>, ` +
+    `ou capture une vue avec node scripts/ui-capture.mjs --view <vue> --out <chemin.png> (déjà caché par défaut).`
+
   // 1. Start-Process / start / Invoke-Item : ouvrent une fenetre, sauf lancement explicitement cache.
   const startProcess = /\b(start-process|saps)\b/i.test(c)
   if (startProcess && !/-windowstyle\s+hidden|-nonewwindow/i.test(c)) return motif('Start-Process')
@@ -88,6 +94,24 @@ export function refusLancementGraphique(commande: string): string | undefined {
   }
   const refuse = programmeRefuse(c, 0)
   if (refuse) return motif(refuse)
+
+  /*
+   * L'APPLICATION ELLE-MEME. Mesure conv-611 (saisie 2026-09-16T13:49:06.312Z, turnId
+   * 6856bcec-e943-424c-8e9f-25a19ea2881a) : « mes travaux en parallele se parasitent car ils
+   * utilisent pas mon systeme de bureau virtuel ». Cause : ce garde refusait Roblox, Code, Chrome...
+   * mais laissait passer `npm run dev`, `npm start`, `electron .` — le lancement le plus probable
+   * DANS ce depot. Chaque copie de travail ouvrait donc une fenetre Autowin sur l'ecran reel, et
+   * toutes se disputaient le meme port de debogage (9223) : les sondes d'un travail pilotaient
+   * l'instance d'un autre. La voie isolee existe deja (instance + port + bureau cache reserves).
+   */
+  const lignes = c.split(/;|&&|\|\||\r?\n/)
+  for (const brut of lignes) {
+    const seg = brut.trim().replace(/^&\s*/, '')
+    if (/^(npm|pnpm|yarn|bun)(\.cmd)?\s+(run\s+)?(dev|start|preview|dev:\S*)\b/i.test(seg)) {
+      return motifIsole(seg.split(/\s+/).slice(0, 3).join(' '))
+    }
+    if (/^(npx\s+)?electron(\.exe|\.cmd)?(\s|$)/i.test(seg)) return motifIsole('electron')
+  }
   return undefined
 }
 
