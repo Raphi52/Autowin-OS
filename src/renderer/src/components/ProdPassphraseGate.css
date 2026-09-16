@@ -93,15 +93,15 @@
   opacity: 0.45;
 }
 
-/* L'hôte pose l'écran PAR-DESSUS l'application : un geste de production bloqué ne doit pas se perdre
-   derrière un panneau. Aucun fond opaque de page, seulement un voile sombre qui met l'écran devant. */
+/* L'hôte pose l'écran DANS LE FIL de la conversation, en bas, juste au-dessus de la zone de saisie
+   (demande utilisateur du 2026-09-16, conv-626 : « ça doit pas être une popup, ça doit être dans le
+   fil de la conv »). La version flottante en `position: fixed` couvrait tout l'écran d'un voile
+   translucide : sur capture, le fil ET la question devenaient illisibles l'un à travers l'autre.
+   Ici, aucun voile et aucun détachement — le bloc pousse le fil comme un message, reste à sa place
+   dans l'historique, et le reste de l'application demeure lisible pendant la décision. */
 .ppg-hote {
-  position: fixed;
-  inset: 0;
-  z-index: 9000;
-  display: grid;
-  place-items: center;
-  background: rgba(6, 9, 15, 0.72);
+  display: block;
+  margin: 8px 0 4px;
 }
 
 /* Mode CONFIRMATION : la question est la seule chose à lire, elle porte donc la taille. */
