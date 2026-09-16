@@ -6218,6 +6218,15 @@ Cliquer pour choisir une autre branche.`}
             </button>
           )}
 
+          {/*
+           * LA DEMANDE D'AUTORISATION DE PRODUCTION VIT ICI, DANS LE FIL — pas en fenêtre flottante.
+           * Elle se pose au bas de la conversation, juste au-dessus de la file d'attente et de la
+           * zone de saisie : l'utilisateur lit la cible et l'opération SANS perdre de vue ce que
+           * l'agent venait de dire, et le reste de l'application reste utilisable pendant qu'il
+           * décide. La version précédente couvrait tout l'écran d'un voile translucide et rendait le
+           * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
+           */}
+          <ProdAutorisationHote />
           <ChatQueuePanel
             pendingDirectives={pendingDirectives}
             busy={busy}
