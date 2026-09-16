@@ -26,6 +26,7 @@ import {
 } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import { refusLancementGraphique } from '../shared/garde-lancement-graphique'
+import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import {
   decideRead,
   enumererFichiersLisibles,
@@ -3312,6 +3313,9 @@ export class AppCommandBus {
         // Garde conv-526 : pas d'application graphique au premier plan, bureau cache impose.
         const refusGraphique = refusLancementGraphique(ligne)
         if (refusGraphique) return { lance: false, detail: `Commande refusée : ${refusGraphique}` }
+        // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
+        const refusGit = refusGitDestructeur(ligne)
+        if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
         const cwd = this.os.executionWorkspace
         if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
         // Les guillemets GROUPENT : `decouperArguments` respecte `-m "trois mots"` là où un
