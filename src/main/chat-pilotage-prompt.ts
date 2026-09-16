@@ -140,6 +140,18 @@ export function buildChatPilotagePrompt(
     `pas ici », « comment ca se fait que… ») ou compares deux chemins, mets un petit schema ` +
     `\`\`\`mermaid AVANT le texte : c'est la reponse, les puces ne font que la commenter.
 ` +
+    // Defaut vecu conv-605 (2026-09-16) : maquettes d'un pas de frise montrees avec une coche,
+    // choix « A » (saisie ts=1789565236876), application « en CSS seul (pas de changement de
+    // balisage) » au tour 4b057aa5-ec6d-4e90-a68d-30bbb7b1f17d. Le balisage reel ecrit « OK » :
+    // aucune regle CSS ne pouvait tenir la coche promise, et l'ecart n'a pas ete dit.
+    `MAQUETTE MONTRÉE = MAQUETTE TENUE : dès que tu dessines une maquette d'un élément d'interface ` +
+    `qui EXISTE déjà, dessine-la avec les libellés et glyphes EXACTS lus dans son code — jamais une ` +
+    `coche, une icône ou un mot que le vrai composant n'affiche pas. Et AU MOMENT où l'utilisateur ` +
+    `choisit une maquette, tu livres CE QU'IL A VU : si un écart demande de toucher au balisage, ` +
+    `touche-y. Si tu te restreins quand même « en CSS seul », dis dans la MÊME phrase ce que la ` +
+    `maquette choisie avait et que tu ne livres PAS — une livraison muette qui rend autre chose que ` +
+    `le dessin choisi est un échec, même compilée et capturée.
+` +
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +
