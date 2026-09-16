@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
+import type {
+  EtatPhraseProd,
+  ReponseAutorisation as ReponseAutorisationProd,
+  ReponseDefinition as ReponseDefinitionPhrase
+} from '../main/prod-passphrase-ipc'
+import type { EtatPorteProd, NiveauProtectionProd } from '../shared/prod-protection'
+import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
 import type { GitGraphSnapshot } from '../shared/git-graph'
 import type {
   ChatAttachment,
@@ -102,6 +109,48 @@ const api = {
     ipcRenderer.invoke('hdesk:tv:bureaux', conversationId),
   hdeskTvImage: (id: string): Promise<ImageTv> => ipcRenderer.invoke('hdesk:tv:image', id),
   hdeskTvArreter: (): Promise<void> => ipcRenderer.invoke('hdesk:tv:arreter'),
+  // Phrase de passe de production. Elle part de l'ecran vers le processus principal et n'en revient
+  // JAMAIS : aucune de ces trois fonctions ne rend la phrase, seulement un etat, un refus ou un
+  // jeton opaque borne a une cible, une operation et cinq minutes.
+  prodPassphraseEtat: (): Promise<EtatPhraseProd> => ipcRenderer.invoke('prod:passphrase:etat'),
+  // La phrase ACTUELLE n'est exigee que pour en CHANGER : sans elle, la protection se desactiverait
+  // en la reecrivant par-dessus. Elle part vers le processus principal et n'en revient jamais.
+  prodPassphraseDefinir: (
+    phrase: string,
+    phraseActuelle?: string
+  ): Promise<ReponseDefinitionPhrase> =>
+    ipcRenderer.invoke('prod:passphrase:definir', phrase, phraseActuelle),
+  // Etat et niveau de la protection : ce que l'ecran de reglages affiche, et le seul moyen de
+  // changer le niveau. Aucun secret ne transite par ces deux canaux.
+  prodPorteEtat: (): Promise<EtatPorteProd> => ipcRenderer.invoke('prod:porte:etat'),
+  prodPorteNiveau: (niveau: NiveauProtectionProd): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('prod:porte:niveau', niveau),
+  prodPassphraseAutoriser: (
+    phrase: string,
+    demande: { cible: string; operation: string }
+  ): Promise<ReponseAutorisationProd> =>
+    ipcRenderer.invoke('prod:passphrase:autoriser', phrase, demande),
+  // Autorisation de production : la demande ARRIVE du processus principal (un outil est bloque),
+  // l'ecran la presente, et seul un JETON opaque repart. La phrase, elle, ne passe jamais par ici.
+  onProdAutorisationDemandee: (cb: (demande: DemandeAutorisationProd) => void): (() => void) => {
+    const handler = (_e: unknown, demande: DemandeAutorisationProd): void => cb(demande)
+    ipcRenderer.on('prod:autorisation:demandee', handler)
+    return () => ipcRenderer.removeListener('prod:autorisation:demandee', handler)
+  },
+  onProdAutorisationClose: (cb: (id: string) => void): (() => void) => {
+    const handler = (_e: unknown, id: string): void => cb(id)
+    ipcRenderer.on('prod:autorisation:close', handler)
+    return () => ipcRenderer.removeListener('prod:autorisation:close', handler)
+  },
+  prodAutorisationDeposer: (id: string, jeton: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('prod:autorisation:deposer', id, jeton),
+  // Le clic « continuer » du niveau CONFIRMATION. Aucun secret : c'est le clic qui autorise.
+  prodAutorisationConfirmer: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('prod:autorisation:confirmer', id),
+  prodAutorisationAnnuler: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('prod:autorisation:annuler', id),
+  prodAutorisationEnAttente: (): Promise<DemandeAutorisationProd[]> =>
+    ipcRenderer.invoke('prod:autorisation:en-attente'),
   // Orchestration disciplinée
   orchestrate: (
     task: string,

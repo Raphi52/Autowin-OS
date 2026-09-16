@@ -1,4 +1,11 @@
 import type { InventaireDisque } from '../main/store/inventaire-disque'
+import type {
+  EtatPhraseProd,
+  ReponseAutorisation as ReponseAutorisationProd,
+  ReponseDefinition as ReponseDefinitionPhrase
+} from '../main/prod-passphrase-ipc'
+import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
+import type { EtatPorteProd, NiveauProtectionProd } from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
@@ -88,6 +95,23 @@ interface ChatApi {
   hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>
   hdeskTvImage: (id: string) => Promise<ImageTv>
   hdeskTvArreter: () => Promise<void>
+  prodPassphraseEtat: () => Promise<EtatPhraseProd>
+  prodPassphraseDefinir: (
+    phrase: string,
+    phraseActuelle?: string
+  ) => Promise<ReponseDefinitionPhrase>
+  prodPorteEtat: () => Promise<EtatPorteProd>
+  prodPorteNiveau: (niveau: NiveauProtectionProd) => Promise<{ ok: boolean; erreur?: string }>
+  prodAutorisationConfirmer: (id: string) => Promise<{ ok: boolean }>
+  prodPassphraseAutoriser: (
+    phrase: string,
+    demande: { cible: string; operation: string }
+  ) => Promise<ReponseAutorisationProd>
+  onProdAutorisationDemandee: (cb: (demande: DemandeAutorisationProd) => void) => () => void
+  onProdAutorisationClose: (cb: (id: string) => void) => () => void
+  prodAutorisationDeposer: (id: string, jeton: string) => Promise<{ ok: boolean }>
+  prodAutorisationAnnuler: (id: string) => Promise<{ ok: boolean }>
+  prodAutorisationEnAttente: () => Promise<DemandeAutorisationProd[]>
   orchestrate: (
     task: string,
     conversationId?: string
