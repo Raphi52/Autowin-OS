@@ -3475,6 +3475,9 @@ export class AppCommandBus {
             // La porte décide dans `runSqlRead`, pas ici : un garde posé sur le site d'appel se
             // contourne en ajoutant un second appelant. Aucun jeton n'est transmis par le modèle —
             // il ne peut donc pas s'autoriser en l'inventant dans ses arguments.
+            // Le fil d'où part le geste : l'écran d'autorisation vit DANS la conversation, il ne
+            // doit donc s'afficher que dans celle-ci (conv-626, 2026-09-16).
+            ...(conversationId ? { conversationId } : {}),
             ...(this.porteProd ? { porteProd: this.porteProd } : {}),
             // Le guichet ne contourne rien : il ouvre l'écran de saisie de l'utilisateur quand la
             // porte refuse, et c'est la porte qui tranche à nouveau avec le jeton obtenu.
