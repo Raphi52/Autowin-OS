@@ -19,9 +19,7 @@ import {} from 'path'
 import { randomUUID } from 'node:crypto'
 import type { Message, ProviderAdapter, SendResult, StreamChunk } from '../providers/types'
 import { ProviderRegistry } from '../providers/registry'
-import { CostCircuitBreaker } from '../cost-circuit-breaker'
 import { ChatTurnCostRecorder } from './chat-cost-recording'
-import { chatTurnBudget, estCoupureBudget, CHAT_BUDGET_ABORT_PREFIX } from '../chat-turn-budget'
 import { motifInactivite, terminalDuTour } from '../chat-turn-arret'
 import { RoleModelConfig, type RoleBinding } from '../roles'
 import { AppCommandBus } from '../commands'
@@ -234,23 +232,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     }
     // Correlation durable AVANT le spawn : apres un crash, le reglement peut retrouver l'occurrence.
     onLateTaskUsageSettlement?.({ conversationId, turnId })
-    /**
-     * Plafond d'un TOUR de chat. Réutilise le circuit-breaker déjà éprouvé sur l'orchestration
-     * (module pur, testé) avec un seuil PROPRE au chat : un tour conversationnel n'a pas le même
-     * ordre de grandeur qu'un run complet. Réglable via AUTOWIN_CHAT_USD_CAP ; défaut généreux
-     * (2 $) — assez haut pour ne jamais gêner un tour légitime, assez bas pour arrêter une boucle
-     * (le pire tour mesuré coûtait 2,109 $).
+    /*
+     * AUCUN BUDGET DE TOUR. Le plafond de tour de chat (`chat-turn-budget.ts`, ses deux
+     * coupe-circuits et les variables AUTOWIN_CHAT_*_CAP) a ete SUPPRIME le 2026-09-16 sur demande
+     * de l'utilisateur. Le cout reste mesure et ecrit (ledger, chat-usage, Observatory) ; plus rien
+     * n'arrete un tour sur un seuil de cout.
      */
-    // Politique extraite dans `chat-turn-budget.ts` : mesuré sur conv-1149 (13/08), le défaut
-    // câblé coupait une campagne légitime à 3 $ et la déguisait en `cancelled`. Sans cap explicite
-    // de l'utilisateur, le trip OBSERVE (ledger) mais ne coupe plus.
-    const budgetDuTour = chatTurnBudget(process.env)
-    const chatBreaker = new CostCircuitBreaker(budgetDuTour.limits)
-    // Les DEUX breakers observent ; AUCUN ne coupe sans cap explicite de l'utilisateur.
-    // Décision de l'utilisateur du 2026-09-16 (« non je veux aucun blocage ») : l'emballement
-    // coupait encore de lui-même à 25 $ / 24 M. Il ne coupe plus — il ÉCRIT le dépassement, et
-    // c'est `AUTOWIN_CHAT_USD_CAP` / `_TOKEN_CAP` / `_CALL_CAP` qui réarment la coupure.
-    const breakerEmballement = new CostCircuitBreaker(budgetDuTour.emballement)
     const spoken: string[] = []
     /**
      * Les etiquettes d'action, TENUES A PART du vrai texte — et c'est un COUPLE de garanties.
@@ -915,49 +902,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
         if (pilotEvent.kind === 'done' && pilotEvent.text?.trim())
           completedText = pilotEvent.text.trim()
-        // Budget du TOUR de chat : le circuit-breaker de coût ne protégeait que les runs
-        // orchestrés. Mesuré le 2026-07-28 : un seul tour a coûté 2,109 $ (40 itérations d'outils)
-        // sans qu'aucune borne n'existe côté chat. On compte chaque appel et on COUPE au seuil.
-        if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
-          const tripped = chatBreaker.observe({
-            step: 'exec',
-            detail: 'chat',
-            costUsd: pilotEvent.callUsage.costUsd,
-            tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
-          } as Parameters<typeof chatBreaker.observe>[0])
-          if (tripped) {
-            // Le dépassement reste TOUJOURS visible ; la coupure n'est armée que par un cap
-            // explicite (contrat utilisateur) — cf. chat-turn-budget.ts et conv-1149.
-            const coupe = budgetDuTour.enforcement === 'blocking'
-            ledger.append({
-              source: 'orchestrate',
-              name: 'chat-budget',
-              detail: coupe
-                ? `tour coupé — ${tripped.reason}`
-                : `seuil d'observation dépassé (mesure seule, aucun arrêt) — ${tripped.reason}`
-            })
-            if (coupe) controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : ${tripped.reason}`)
-          }
-          const emballe = breakerEmballement.observe({
-            step: 'exec',
-            detail: 'chat',
-            costUsd: pilotEvent.callUsage.costUsd,
-            tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
-          } as Parameters<typeof breakerEmballement.observe>[0])
-          if (emballe) {
-            const coupeEmballement = budgetDuTour.emballementBloquant
-            ledger.append({
-              source: 'orchestrate',
-              name: 'chat-budget',
-              detail: coupeEmballement
-                ? `tour coupé — emballement — ${emballe.reason}`
-                : `emballement dépassé (mesure seule, aucun arrêt) — ${emballe.reason}`
-            })
-            if (coupeEmballement) {
-              controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : emballement — ${emballe.reason}`)
-            }
-          }
-        }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
           // L'OCCUPATION N'EST PAS LE CUMUL. `callUsage.inputTokens` est l'usage AGREGE que le
           // `result` du CLI porte pour tout l'appel de pilote : le lire ici rejouait exactement le
@@ -1564,13 +1508,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
        * pilote apres 2 tentatives ; le journal du tour s'arretait sur ['delta','stream-reset',
        * 'delta'] sans aucun evenement terminal. Un tour qui echoue doit se CONCLURE, pas disparaitre.
        */
-      // Un abort BUDGET n'est pas un stop volontaire : le classer `cancelled` l'excluait de la
-      // relance automatique et faisait porter le renoncement à l'utilisateur (conv-1149, 13/08).
-      const coupureBudget = controller.signal.aborted && estCoupureBudget(controller.signal.reason)
       /*
        * TOUT ARRET QUI PORTE UNE CAUSE MACHINE EST UN ECHEC, pas une annulation.
        *
-       * Seul le budget etait requalifie ; la coupure du VEILLEUR d'inactivite tombait donc dans
+       * Seule la coupure du VEILLEUR d'inactivite porte encore une cause machine ; elle tombait dans
        * `cancelled`, et son motif — pourtant redige — etait jete. Mesure conv-136 (2026-09-02) : un
        * run de 25 min, tour coupe a 20, fil reduit a « [a execute orchestrate] », ni reponse ni
        * erreur. La decision vit maintenant dans `terminalDuTour`, pure et testee.
@@ -1578,8 +1519,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const terminal = terminalDuTour({
         aborted: controller.signal.aborted,
         reason: controller.signal.reason,
-        erreur: e,
-        motivee: coupureBudget
+        erreur: e
       })
       const coupureMotivee = terminal.kind === 'failed' && controller.signal.aborted
       if (conversationId && os.conversations.get(conversationId)) {
@@ -1598,7 +1538,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
       usagePersistenceReady = true
       broadcast({ type: 'refresh', scope: 'workflows' })
-      // `coupureMotivee` couvre le budget ET le veilleur : le motif remonte a l'appelant, qui
+      // `coupureMotivee` couvre le veilleur d'inactivite : le motif remonte a l'appelant, qui
       // l'affiche, au lieu de repartir en « annule » avec pour seul texte les etiquettes d'action.
       if (coupureMotivee)
         return {

@@ -87,8 +87,9 @@ import type { ChatArtifact } from '../shared/artifacts'
  * SUPPRIMÉ le 2026-09-04, demande explicite de l'utilisateur (conv-233, « ENLEVE CE PUTAIN DE
  * BLOQUAGE DE BUDGET ») : relever la borne ne faisait que déplacer la coupure. Ce compteur coupait
  * des tours ENGAGÉS alors qu'il ne mesure RIEN du coût réel — un tour de 41 appels bon marché était
- * tué, un tour de 5 appels ruineux passait. Le frein qui reste est le seul honnête : la dépense
- * réelle du tour (`AUTOWIN_CHAT_USD_CAP`, voir `chat-turn-budget.ts`), plus l'annulation manuelle.
+ * tué, un tour de 5 appels ruineux passait. Le seul frein qui reste est l'annulation manuelle : le
+ * budget du tour de chat a lui aussi été supprimé le 2026-09-16, sur demande de l'utilisateur
+ * (« aucun blocage ») ; le coût est désormais MESURÉ et écrit, jamais coupé.
  * Avec l'infini, les injections « budget du tour » et « dernière itération » ne se déclenchent plus :
  * leurs conditions comparent l'index à une borne finie.
  */
@@ -811,8 +812,8 @@ export class AgentPilot {
      * consomme 4 iterations en `edit_file` rates avant meme de pouvoir chercher une autre voie, puis
      * s'est arrete sur « cap atteint sans reponse finale » — en laissant des mutations partielles.
      * La regle anti-abandon lui demande desormais de CHERCHER, ESSAYER puis NETTOYER : il faut de quoi
-     * le faire. Le cout reste borne par le budget du tour (AUTOWIN_CHAT_USD_CAP), qui coupe sur la
-     * depense reelle plutot que sur un compteur aveugle.
+     * le faire. Le cout n'est plus borne du tout depuis la suppression du budget du tour
+     * (2026-09-16) : il est MESURE et ecrit, jamais coupe.
      */
     maxIter = CAP_ITERATIONS_TOUR,
     conversationId?: string,

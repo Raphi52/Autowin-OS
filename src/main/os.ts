@@ -921,37 +921,16 @@ export class AutowinOS {
     const settings = loadOrchestrationBudget(
       join(ensureAutowinAppData(), 'orchestration-budget.json')
     )
-    const envCalls = Number(process.env.AUTOWIN_CHAT_CALL_CAP)
-    const envTokens = Number(process.env.AUTOWIN_CHAT_TOKEN_CAP)
-    const envUsd = Number(process.env.AUTOWIN_CHAT_USD_CAP)
     /*
-     * Le plafond d'un tour de chat vient du REGLAGE (`maxChatProviderCalls`, 50 par defaut), plus
-     * d'un `6` cable ici.
+     * Le plafond d'un tour de chat vient UNIQUEMENT du REGLAGE (`maxChatProviderCalls`, 50 par
+     * defaut ; `maxTotalTokens` ; `maxUsd`).
      *
-     * Mesure le 2026-08-25 sur conv-1397 : le tour a ete coupe sur « Budget d'appels provider
-     * atteint (6) » APRES cinq editions reussies, juste avant sa verification. Le 6 datait de
-     * l'epoque ou un tour de chat valait UN appel provider ; un tour agentique en consomme un par
-     * ETAPE, donc ce plafond comptait des coups et tuait le travail en plein milieu.
-     *
-     * Le cap d'environnement continue de RESSERRER : un plafond pose explicitement reste un contrat.
+     * Les caps d'environnement AUTOWIN_CHAT_CALL_CAP / _TOKEN_CAP / _USD_CAP ont ete SUPPRIMES le
+     * 2026-09-16 avec le budget du tour de chat : plus aucun reglage cache ne resserre un tour.
      */
-    const maxProviderCalls =
-      Number.isSafeInteger(envCalls) && envCalls > 0
-        ? Math.min(settings.maxChatProviderCalls, envCalls)
-        : settings.maxChatProviderCalls
-    const maxTotalTokens =
-      Number.isSafeInteger(envTokens) && envTokens > 0
-        ? Math.min(settings.maxTotalTokens, envTokens)
-        : settings.maxTotalTokens
-    // `maxUsd: null` dans le reglage veut dire « pas de plafond de depense » : un 2 $ cable ici le
-    // contredisait en silence. Seul un cap d'environnement pose par l'utilisateur reserre encore.
-    const envUsdCap = Number.isFinite(envUsd) && envUsd > 0 ? envUsd : null
-    const maxUsd =
-      settings.maxUsd === null
-        ? envUsdCap
-        : envUsdCap === null
-          ? settings.maxUsd
-          : Math.min(settings.maxUsd, envUsdCap)
+    const maxProviderCalls = settings.maxChatProviderCalls
+    const maxTotalTokens = settings.maxTotalTokens
+    const maxUsd = settings.maxUsd
     const quote = compileExecutionQuote(task || 'chat', {
       maxProviderCalls,
       maxTotalTokens,
@@ -975,7 +954,8 @@ export class AutowinOS {
      *
      * Ce compteur compte des ETAPES (lire, editer, verifier), pas de la depense : le laisser tuer un
      * tour agentique en plein travail rend la pire issue possible — paye, et rien de fini. On lui
-     * rend donc la valeur decidee plus haut, qu'un cap d'environnement continue de RESSERRER.
+     * rend donc la valeur decidee plus haut, qui vient du SEUL reglage utilisateur (les caps
+     * d'environnement ont ete supprimes le 2026-09-16 : plus rien ne la resserre).
      */
     quote.limits.maxProviderCalls = maxProviderCalls
     return this.executionSupervisor.run(quote, signal, execute, undefined, onUsageSettlement)

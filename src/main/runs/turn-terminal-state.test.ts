@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { zoneDuTourDeChat } from '../source-process-principal.test-helpers'
-import { terminalDuTour } from '../chat-turn-arret'
+import { motifInactivite, terminalDuTour } from '../chat-turn-arret'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,7 +74,7 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
 
   it('écrit dans le store ET dans le journal fichier', () => {
     const source = main()
-    const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
+    const catchBlock = source.slice(source.indexOf('const terminal = terminalDuTour({'))
     expect(catchBlock).toContain(
       'os.conversations.applyTurnEvent(conversationId, turnId, terminal)'
     )
@@ -83,7 +83,7 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
 
   it('l’écriture de trace ne masque JAMAIS l’erreur d’origine', () => {
     const source = main()
-    const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
+    const catchBlock = source.slice(source.indexOf('const terminal = terminalDuTour({'))
     const journalWrite = catchBlock.slice(catchBlock.indexOf('appendTurnEvent'))
     expect(journalWrite).toContain('catch')
     // L'erreur d'origine doit toujours etre remontee a l'appelant. Les espaces sont NORMALISES :
@@ -97,15 +97,17 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
     // donc SUR SON COMPORTEMENT, ce qui vaut mieux qu'une lecture de texte, et on verifie que le
     // catch appelle bien ce juge au lieu de refaire la distinction dans son coin.
     const catchBlock = main().slice(
-      main().indexOf('const coupureBudget = controller.signal.aborted')
+      main().indexOf('const terminal = terminalDuTour({')
     )
     expect(catchBlock).toContain('terminalDuTour(')
     // Un stop VOULU par l'utilisateur reste une annulation.
     expect(terminalDuTour({ aborted: true, reason: 'user' })).toEqual({ kind: 'cancelled' })
     // Une coupure qui porte une cause machine est un ECHEC, et voyage AVEC son motif.
-    expect(terminalDuTour({ aborted: true, reason: 'budget', motivee: true })).toEqual({
+    // Depuis la suppression du plafond de cout du tour (2026-09-16), cette cause est le veilleur.
+    const motif = motifInactivite(1_200_000)
+    expect(terminalDuTour({ aborted: true, reason: motif })).toEqual({
       kind: 'failed',
-      error: 'budget'
+      error: motif
     })
     // Une erreur ordinaire (pas d'abort) est un echec qui porte son message.
     expect(terminalDuTour({ aborted: false, reason: undefined, erreur: new Error('boum') })).toEqual(

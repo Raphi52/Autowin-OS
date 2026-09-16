@@ -38,15 +38,15 @@ describe('arrêt d’un tour de chat — un motif machine n’est jamais une ann
     })
   })
 
-  it('la coupure BUDGET, déjà requalifiée par l’appelant, garde son motif', () => {
-    const terminal = terminalDuTour({
-      aborted: true,
-      reason: 'budget du tour dépassé : USD 2 dépassés',
-      motivee: true
+  it('un abort sans cause RECONNUE reste une annulation — plus de requalification budget', () => {
+    // Le plafond de coût du tour a été supprimé le 2026-09-16 : ce motif n'est plus produit,
+    // et rien ne doit le repêcher en échec. Seul le veilleur d'inactivité porte encore une cause.
+    expect(terminalDuTour({ aborted: true, reason: 'budget du tour dépassé' })).toEqual({
+      kind: 'cancelled'
     })
-    expect(terminal).toEqual({
+    expect(terminalDuTour({ aborted: true, reason: motifInactivite(1_200_000) })).toEqual({
       kind: 'failed',
-      error: 'budget du tour dépassé : USD 2 dépassés'
+      error: motifInactivite(1_200_000)
     })
   })
 

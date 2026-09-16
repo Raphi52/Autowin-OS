@@ -1070,9 +1070,8 @@ describe('AgentPilot turn contract', () => {
      * LE MOCK DOIT SAVOIR S'ARRETER — sinon c'est la MACHINE qui s'arrete.
      *
      * Il rendait la MEME commande a chaque appel. Or le cap d'iterations d'un tour vaut
-     * `Number.POSITIVE_INFINITY` : en production la borne est le BUDGET du tour
-     * (AUTOWIN_CHAT_USD_CAP), qui coupe sur la depense reelle. Un mock gratuit n'a pas de depense,
-     * donc rien ne l'arretait : la boucle tournait jusqu'a epuiser la memoire. Mesure du
+     * `Number.POSITIVE_INFINITY` : en production plus aucune borne de cout n'arrete un tour depuis
+     * la suppression du budget du tour (2026-09-16). Rien n'arretait donc ce mock : la boucle tournait jusqu'a epuiser la memoire. Mesure du
      * 2026-09-06 : ce seul test faisait tomber tout le fichier sur « JavaScript heap out of
      * memory » en 2,5 s, AVANT meme qu'aucun test n'ait pu rendre son verdict — les 27 autres
      * etaient emportes avec lui.
