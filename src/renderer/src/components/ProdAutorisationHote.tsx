@@ -71,7 +71,15 @@ export function ProdAutorisationHote({
     }
   }, [])
 
-  const courante = file[0]
+  /*
+   * LE FILTRE — une demande ne s'affiche que dans SON fil. Il porte sur la file entière et non sur la
+   * seule première demande : sinon, une demande venue d'ailleurs masquerait celle du fil courant en
+   * restant en tête de file sans jamais s'afficher, et l'utilisateur ne verrait plus rien du tout.
+   * Une demande sans origine connue reste visible partout (repli le plus sûr).
+   */
+  const courante = file.find(
+    (demande) => !demande.conversationId || !conversationId || demande.conversationId === conversationId
+  )
 
   const autoriser = useCallback(
     (jeton: string) => {
