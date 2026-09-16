@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resolve, sep } from 'node:path'
 import { jetonsDeCauseParFichier, createDefaultHookBus } from './default-gate-hooks'
 import type { HookContext } from './hook-bus'
 import type { ExecutionEvidence } from '../providers/types'
@@ -214,5 +215,9 @@ describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier e
   })
   it('ignore un fichier introuvable sans lever', () => {
     expect(jetonsDeCauseParFichier(undefined, [], ['src/main/neant-xyz.ts'])).toEqual({})
+  })
+  it('credite le MEME fichier nomme par son chemin ABSOLU Windows (conv-597)', () => {
+    const cible = resolve(process.cwd(), 'src/main/hooks/default-gate-hooks.ts').split(sep).join('/')
+    expect(jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
   })
 })

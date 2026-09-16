@@ -186,7 +186,10 @@ export function jetonsDeCauseParFichier(
   // AJOUTE par le dernier changement du fichier (non commite, ou dernier commit qui le touche)
   // compte — un vieux `fix-ok:` sans rapport ne vaut pas laissez-passer perpetuel.
   for (const f of connus) {
-    if (jetons[f] || !/^[\w./-]+$/.test(f)) continue
+    // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — le filtre excluait « : », donc
+    // un chemin absolu Windows (D:/AutoWinOS/src/main/x.ts), forme sous laquelle editsByFile
+    // remonte souvent, ne pouvait JAMAIS etre credite : meme refus fix-gate rejoue 3 fois.
+    if (jetons[f] || !/^(?:[A-Za-z]:)?[\w./-]+$/.test(f)) continue
     if (lignesAjouteesAuDernierChangement(f).some((l) => JETON_DE_CAUSE.test(l))) jetons[f] = true
   }
   return jetons
