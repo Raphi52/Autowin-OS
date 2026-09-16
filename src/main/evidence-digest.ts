@@ -40,6 +40,17 @@ const EVIDENCE_STDOUT_HEAD = 400
 const EVIDENCE_STDOUT_TAIL = 800
 const EVIDENCE_COMMAND_MAX = 300
 export const EVIDENCE_MAX_ITEMS = 60
+/**
+ * Plafond de VOLUME, distinct du plafond de NOMBRE.
+ *
+ * Mesure du 2026-09-16 sur 348 prompts de juge reels (prompt-observability) : message median
+ * 119 007 caracteres, dont 93 169 (78 %) de preuves, 15 533 de livrable, ~4 800 de blocs systeme.
+ * Le plafond par item ne bornait que le nombre : 60 preuves bornees chacune pesaient encore ~90 k
+ * caracteres, re-payes a CHAQUE appel juge (aucune ligne `judge` n'a de cacheCreationTokens, et
+ * l'uncached median mesure sur 273 appels vaut 62 102 tokens). On borne donc le total, en gardant
+ * les preuves les plus porteuses de verdict.
+ */
+export const EVIDENCE_TOTAL_CHARS = 40_000
 
 export interface JudgeEvidence {
   type: string
@@ -106,7 +117,22 @@ export const serializeEvidenceForJudge = (
     kept = [...items].sort((a, b) => rank(a) - rank(b)).slice(0, EVIDENCE_MAX_ITEMS)
     dropped = items.length - kept.length
   }
-  const payload = kept.map(evidenceForJudge)
-  const serialized = JSON.stringify(payload)
+  // Priorite de verdict : mutation, puis verification, puis inspection — la meme que la coupe en
+  // NOMBRE, appliquee ici a la coupe en VOLUME.
+  const rangVolume = (item: ExecutionEvidence): number =>
+    item.kind === 'mutation' ? 0 : item.kind === 'verification' ? 1 : 2
+  const retenues: JudgeEvidence[] = []
+  let volume = 2
+  for (const item of [...kept].sort((a, b) => rangVolume(a) - rangVolume(b))) {
+    const digest = evidenceForJudge(item)
+    const cout = JSON.stringify(digest).length + 1
+    if (retenues.length > 0 && volume + cout > EVIDENCE_TOTAL_CHARS) {
+      dropped += 1
+      continue
+    }
+    retenues.push(digest)
+    volume += cout
+  }
+  const serialized = JSON.stringify(retenues)
   return dropped > 0 ? `${serialized}\n[${dropped} preuves de moindre portée omises]` : serialized
 }
