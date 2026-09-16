@@ -1352,7 +1352,10 @@
   max-width: 100%;
   max-height: 100%;
   border-radius: 5px;
-  object-fit: contain;
+  /* REMPLIT le carre au lieu de s'y loger : choix de l'utilisateur du 2026-09-16,
+     « pour la vignette, d'etirer et tronquer l'image ». En `contain`, une capture large
+     ne laissait qu'un mince trait d'image entre deux bandes de fond. */
+  object-fit: cover;
   background: rgba(var(--voile-rgb), 0.04);
 }
 .attachment-chip .attachment-thumb-button {

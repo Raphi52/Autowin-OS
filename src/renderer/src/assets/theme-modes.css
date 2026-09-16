@@ -1108,3 +1108,33 @@
   --container-border-strong: rgba(120, 30, 70, 0.34);
   --container-shadow: none;
 }
+
+/* ÉTAGES D'ACTION — le nom de l'outil (« edit_file ») restait en #b9cbdd
+   (`cosmic-outline.css` l.834), un bleu-gris pensé pour le fond noir : sur la
+   carte bleutée d'une action en cours, il se lisait à peine. Signalé avec
+   capture le 2026-09-16 : « edit file est trop clair, gris sur fond bleu ».
+   Le liséré de statut et le fond de la carte ne bougent pas. */
+:root[data-base='clair'] .cosmic-outline .activity-step {
+  color: #14192a;
+}
+:root[data-base='clair'] .cosmic-outline .activity-step-icon {
+  background: rgba(15, 20, 35, 0.1);
+}
+:root[data-base='clair'] .cosmic-outline .activity-step-link {
+  border-color: rgba(18, 24, 40, 0.3);
+  color: var(--text-dim);
+}
+
+/* VIGNETTE DE PIÈCE JOINTE — `ChatView.css` l.1331 peint `.attachment-chip` en
+   `rgba(8, 19, 28, 0.94)` EN DUR, avec un contour cyan de nuit : une plaque
+   noire dans un champ de saisie blanc. Signalé avec capture le 2026-09-16 :
+   « lorsque je copie une image, le fond de la vignette est tout noir ».
+   L'aperçu de l'image garde un fond neutre pour ne pas fausser sa couleur. */
+:root[data-base='clair'] .attachment-chip {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+:root[data-base='clair'] .attachment-thumb {
+  background: rgba(15, 20, 35, 0.06);
+}

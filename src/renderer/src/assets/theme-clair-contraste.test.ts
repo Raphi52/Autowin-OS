@@ -63,3 +63,40 @@ describe('mode clair — contraste des couleurs sur le fond de page', () => {
     }
   )
 })
+
+/**
+ * LES ÉTAGES D'ACTION EN MODE CLAIR. Signalé à l'écran (capture du 2026-09-16) : le nom de
+ * l'outil (« edit_file ») s'affichait en gris pâle sur la carte bleutée d'une action en cours.
+ * Cause : `cosmic-outline.css` peint `.activity-step` en `#b9cbdd`, un bleu-gris prévu pour le
+ * fond noir, et aucune surcharge claire ne le reprenait.
+ *
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : retirer la surcharge claire de `.activity-step`.
+ */
+describe('mode clair — étages d’action (le nom de l’outil)', () => {
+  it('le texte des étages est repeint pour le fond clair et tient le seuil AA', () => {
+    const regle = /:root\[data-base='clair'\] \.cosmic-outline \.activity-step \{([^}]*)\}/.exec(
+      blocClair
+    )
+    expect(regle, 'surcharge claire de .activity-step absente').toBeTruthy()
+    const couleur = /color:\s*(#[0-9a-f]{6})/i.exec(regle![1])
+    expect(couleur, 'la surcharge doit fixer une couleur de texte').toBeTruthy()
+    expect(contraste(couleur![1], hex('--bg-0'))).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+/**
+ * VIGNETTE DE PIÈCE JOINTE. Signalé avec capture le 2026-09-16 : « lorsque je copie une image,
+ * le fond de la vignette est tout noir ». Cause : `ChatView.css` peint `.attachment-chip` en
+ * `rgba(8, 19, 28, 0.94)` EN DUR — une plaque noire posée dans un champ de saisie blanc.
+ *
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : retirer la surcharge claire de `.attachment-chip`.
+ */
+describe('mode clair — vignette de pièce jointe du champ de saisie', () => {
+  it('la pastille a un fond clair, et son texte y reste lisible', () => {
+    const regle = /:root\[data-base='clair'\] \.attachment-chip \{([^}]*)\}/.exec(blocClair)
+    expect(regle, 'surcharge claire de .attachment-chip absente').toBeTruthy()
+    const fond = /background:\s*(#[0-9a-f]{6})/i.exec(regle![1])
+    expect(fond, 'la surcharge doit fixer un fond opaque clair').toBeTruthy()
+    expect(contraste(hex('--text-dim'), fond![1])).toBeGreaterThanOrEqual(4.5)
+  })
+})

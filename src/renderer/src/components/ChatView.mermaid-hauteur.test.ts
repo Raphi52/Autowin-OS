@@ -12,15 +12,28 @@ import { describe, expect, it } from 'vitest'
  * La borne vit ici et pas dans `ArtifactPreview.css` : dans le panneau d'artefacts, le diagramme
  * occupe une vue dediee et doit pouvoir etre grand. Dans le FIL, il est un element de lecture
  * parmi d'autres et doit tenir sous les yeux.
+ *
+ * OU VIT LA BORNE — corrige le 2026-09-16. La premiere version bornait le SVG lui-meme, qui etait
+ * donc RETRECI : un flowchart de 15 etapes tombait a 27 px de large, libelles illisibles (capture
+ * de la sonde cdp-chat-mermaid). La borne a ete deplacee sur le CADRE `.md-mermaid`, qui fait
+ * DEFILER un schema trop haut au lieu de l'ecraser. L'exigence testee est la meme — un schema du
+ * fil tient sous les yeux — seul l'endroit qui la porte a change ; ce test citait l'ancien.
  */
 describe('hauteur des schemas mermaid dans le fil', () => {
   const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
 
-  it('plafonne la hauteur du SVG et le laisse retrecir en largeur', () => {
+  it('plafonne la hauteur par le CADRE, qui fait defiler au lieu d ecraser', () => {
+    const bloc = css.slice(css.indexOf('.md-mermaid {'))
+    const regle = bloc.slice(0, bloc.indexOf('}'))
+    expect(regle).toMatch(/max-height:\s*min\(45vh,\s*300px\)/)
+    expect(regle).toMatch(/overflow-y:\s*auto/)
+  })
+
+  it('laisse le SVG suivre la largeur du fil sans etre ecrase en hauteur', () => {
     const bloc = css.slice(css.indexOf('.md-mermaid svg'))
     const regle = bloc.slice(0, bloc.indexOf('}'))
-    expect(regle).toMatch(/max-height:\s*min\(60vh,\s*420px\)/)
-    expect(regle).toMatch(/width:\s*auto/)
+    expect(regle).toMatch(/width:\s*100%/)
+    expect(regle).toMatch(/height:\s*auto/)
   })
 
   it('neutralise la hauteur plancher heritee du panneau d artefacts', () => {
