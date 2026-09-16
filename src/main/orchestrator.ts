@@ -3026,7 +3026,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               { name: 'style', text: STYLE_TON },
               { name: 'projectContext', text: projectContext }
             ]
+            let synthEnvelope: PromptEnvelope | undefined
+            const synthSystemBlocks = synthNodeParts
+              .filter((p) => p.text)
+              .map((p) => ({ name: p.name, chars: p.text.length }))
             const synthOptions: SendOptions = {
+              observePrompt: (observed) => {
+                observed.systemBlocks = synthSystemBlocks
+                synthEnvelope = observed
+              },
               system: synthNodeParts.map((p) => p.text).join(''),
               systemBlocks: synthNodeParts
                 .filter((p) => p.text)
@@ -3054,6 +3062,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               dependencyIds: good.map((member) => member.agentId),
               attemptId: randomUUID()
             }
+            synthEnvelope = registry.describePrompt(
+              orchBinding.provider,
+              synthMessages,
+              synthOptions,
+              orchBinding.model
+            )
+            synthEnvelope.systemBlocks = synthSystemBlocks
             onPhase?.({
               step: 'exec',
               provider: orchBinding.provider,
@@ -3061,6 +3076,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               model: orchBinding.model,
               reasoningEffort: orchBinding.reasoningEffort,
               phase,
+              // Troisieme point d'annonce : la FUSION multi-modeles n'avait aucune enveloppe
+              // (meme recidive « rien en preprompt », conv-587, saisie ts=1789550244094).
+              prompt: synthEnvelope,
               execution: synthExecution
             })
             const synthStartedAt = performance.now()
@@ -4095,11 +4113,17 @@ ${empreinteDepot}`
           { name: 'style', text: STYLE_TON },
           { name: 'projectContext', text: projectContext }
         ]
+        let synthEnvelopePhase: PromptEnvelope | undefined
+        const synthPhaseBlocks = synthParts
+          .filter((p) => p.text)
+          .map((p) => ({ name: p.name, chars: p.text.length }))
         const synthOptions: SendOptions = {
+          observePrompt: (observed) => {
+            observed.systemBlocks = synthPhaseBlocks
+            synthEnvelopePhase = observed
+          },
           system: synthParts.map((p) => p.text).join(''),
-          systemBlocks: synthParts
-            .filter((p) => p.text)
-            .map((p) => ({ name: p.name, chars: p.text.length })),
+          systemBlocks: synthPhaseBlocks,
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
           execution: this.executionOptions(
@@ -4129,6 +4153,13 @@ ${empreinteDepot}`
           dependencyIds: good.map(({ member }) => `${phase}:${member.model ?? member.provider}`),
           attemptId: randomUUID()
         }
+        synthEnvelopePhase = registry.describePrompt(
+          orchBinding.provider,
+          synthMessages,
+          synthOptions,
+          orchBinding.model
+        )
+        synthEnvelopePhase.systemBlocks = synthPhaseBlocks
         onPhase?.({
           step: 'exec',
           provider: orchBinding.provider,
@@ -4136,6 +4167,9 @@ ${empreinteDepot}`
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
           phase,
+          // Fusion multi-modeles d'une phase : elle n'annoncait aucune enveloppe, le deplie
+          // « prompt envoye » restait vide (conv-587, saisie ts=1789550244094).
+          prompt: synthEnvelopePhase,
           execution: synthExecution
         })
         const synth = await this.sendWithRoleContext(

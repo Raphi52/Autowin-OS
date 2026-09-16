@@ -697,4 +697,28 @@ describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => 
     expect(prompts).toHaveLength(3)
     expect(prompts.filter((texte) => typeof texte === 'string' && texte.length > 0)).toHaveLength(3)
   })
+
+  /**
+   * TROISIEME point d'annonce, laisse de cote par le correctif precedent (meme recidive, conv-587,
+   * saisie ts=1789550244094) : quand PLUSIEURS modeles traitent la meme sous-tache, leurs sorties
+   * sont fusionnees par un appel supplementaire a l'orchestrateur. Ce site annoncait sa phase sans
+   * aucune enveloppe : le deplie « prompt envoye » restait vide pour la fusion.
+   */
+  it('greedy annonce aussi le prompt de la FUSION multi-modeles', async () => {
+    const provider = new GreedyProvider()
+    const prompts: Array<string | undefined> = []
+    await makeGreedy(provider, async () => [{ id: 'A', deps: [], prompt: 'volet A' }], () => ['build'], {
+      phaseFanOut: () => [
+        { provider: provider.id, model: 'worker-1' },
+        { provider: provider.id, model: 'worker-2' }
+      ]
+    }).run('audit a deux modeles', undefined, (event) => {
+      if (event.step === 'exec' && event.role === 'orchestrator') {
+        prompts.push(event.prompt?.messages?.[0]?.content)
+      }
+    })
+
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toContain('Fusionne leurs sorties')
+  })
 })
