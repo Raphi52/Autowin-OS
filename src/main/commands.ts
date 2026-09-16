@@ -557,10 +557,12 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail. Pour voir une application que tu viens de modifier, de compiler ou de lancer, le bureau CACHE est le reflexe premier : `scripts/hdesk-lancer.ps1` puis `scripts/hdesk-observe.ps1` (et `node scripts/ui-capture.mjs` pour une vue d'Autowin). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; dis-le alors en une ligne (defaut vecu conv-586, tour 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63 : capture de l'ecran reel, annulation utilisateur 17 s plus tard). Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
+      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail. Pour voir une application que tu viens de modifier, de compiler ou de lancer, le bureau CACHE est le reflexe premier : `scripts/hdesk-lancer.ps1` puis `scripts/hdesk-observe.ps1` (et `node scripts/ui-capture.mjs` pour une vue d'Autowin). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; dans ce cas passe `ecran_utilisateur: true` et dis-le en une ligne (defaut vecu conv-586, tour 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63 : capture de l'ecran reel, annulation utilisateur 17 s plus tard). Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
     args: {
       display:
-        'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans'
+        'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans',
+      ecran_utilisateur:
+        "booleen — mettre true pour assumer la capture de l'ecran REEL de l'utilisateur. Sans lui, le premier appel du tour est refuse et renvoie vers le bureau cache."
     },
     annotations: {
       readOnlyHint: true,
@@ -1412,6 +1414,29 @@ interface RejeuConnu {
 const OUTILS_REFUSES_SI_REJEU_APRES_ECHEC = new Set(['edit_file'])
 
 /**
+ * NON INVASIF PAR DEFAUT — garde-fou deterministe (kaizen conv-586, tour
+ * 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63, 2026-09-16). La prose l'exigeait deja deux fois
+ * (`chat-pilotage-prompt.ts`, kaizen conv-526 puis conv-540) et a echoue une troisieme fois : le
+ * modele a capture l'ecran reel pour verifier une modif qu'il venait de compiler, et l'utilisateur
+ * a annule le tour 17 s plus tard (saisie du 2026-09-16T08:44:46). La prose ne suffit donc pas ;
+ * le refus vit ici, au point de decision.
+ *
+ * Il ne ferme PAS la porte : le premier appel du tour est refuse, le message nomme le bureau cache,
+ * et `ecran_utilisateur: true` rouvre immediatement — une friction d'un appel, pas un blocage.
+ */
+const refusEcranReel =
+  "Appel REFUSE : `desktop_observe` regarde l'ECRAN REEL de l'utilisateur, ce n'est pas le defaut. " +
+  'Pour verifier une application que tu viens de modifier, de compiler ou de lancer, utilise le ' +
+  'bureau CACHE : `powershell -NoProfile -File scripts/hdesk-lancer.ps1 ...` puis ' +
+  "`scripts/hdesk-observe.ps1` (ou `node scripts/ui-capture.mjs` pour une vue d'Autowin). " +
+  "Si tu as vraiment besoin de son ecran, reemets l'appel avec `ecran_utilisateur: true` et dis-le " +
+  'en une ligne avant.'
+
+/** Vrai quand l'appel assume explicitement de regarder l'ecran de l'utilisateur. */
+const assumeEcranReel = (args: Record<string, unknown>): boolean =>
+  args.ecran_utilisateur === true || args.ecran_utilisateur === 'true'
+
+/**
  * Attache au résultat la note qui dit au modèle qu'il vient de REJOUER un appel identique.
  *
  * On ne remplace ni n'enveloppe le résultat : on AJOUTE une clé. Envelopper aurait changé la forme
@@ -2092,6 +2117,17 @@ export class AppCommandBus {
    */
   private registreDuTour?: { turnId: string; appels: Map<string, RejeuConnu> }
 
+  /** Tours dont la capture d'ecran reel a deja ete refusee une fois (voir `refusEcranReel`). */
+  private tourEcranReelRefuse?: string
+
+  /** Vrai si ce tour a deja recu le refus : on ne facture pas la friction deux fois. */
+  private ecranReelDejaRefuse(turnId?: string): boolean {
+    const cle = turnId ?? 'sans-tour'
+    if (this.tourEcranReelRefuse === cle) return true
+    this.tourEcranReelRefuse = cle
+    return false
+  }
+
   /** Enregistre l'appel et rend ce qu'on savait déjà de lui, ou `undefined` si c'est un premier. */
   private noterAppelDuTour(turnId: string, empreinte: string): RejeuConnu | undefined {
     if (this.registreDuTour?.turnId !== turnId) {
@@ -2147,6 +2183,12 @@ export class AppCommandBus {
       if (!specification) throw new Error(refusAvecIssue('commande-inconnue', name))
       if (!this.isCommandEnabled(name)) throw new Error(refusAvecIssue('capacite-desactivee', name))
       if (name === 'desktop_observe') {
+        // Voir `refusEcranReel` : refus du PREMIER appel du tour seulement, porte de sortie exposee.
+        if (!assumeEcranReel(args) && !this.ecranReelDejaRefuse(turnId)) {
+          this.trace?.(name, redactedArgs(name, args), false)
+          noterIssue(false)
+          return { ok: false, error: refusEcranReel }
+        }
         if (!this.desktop) throw new Error('Controle desktop indisponible')
         const observed = await this.desktop.observe({ display: parseDisplayArg(args.display) })
         this.trace?.(name, redactedArgs(name, args), true)
