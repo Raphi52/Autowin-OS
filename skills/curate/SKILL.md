@@ -6,6 +6,8 @@ description: >-
   ou dès qu'un état d'app signale des candidats en attente. Trois verdicts : `promote` (mécanique,
   appliqué par le script), `merge` (une note existante couvre le thème → la session IA écrit UNE
   note consolidée qui remplace les deux), `reject` (contrôle dur échoué → corriger ou supprimer).
+  Ne promeut QUE ce qui sert le travail (métier, code, décisions techniques, contraintes, préférences
+  de l'utilisateur) : un candidat hors de ce périmètre est rejeté même s'il est vrai.
   Se termine par réindexation + `brain_validate.py` vert + commit. Ne promeut jamais une fusion
   à l'aveugle et ne supprime jamais un candidat sans avoir lu son contenu.
 ---
@@ -28,6 +30,15 @@ description: >-
    vide — il rend alors `candidates: []` sans erreur, ce qui se lit à tort comme « file déjà vide »
    (mesuré le 2026-09-06 : 0 rapporté alors que 18 candidats attendaient).
    Redirige vers un fichier, le modèle d'embedding pollue stderr de barres de progression.
+2 bis. **Filtre de pertinence — AVANT toute promotion.** Le Brain ne garde que ce qui sert le
+   TRAVAIL : le métier (greffes, RIG, SQL, clients), le code et l'architecture des projets, les
+   décisions techniques et leurs motifs, les contraintes d'outillage et d'environnement, les
+   préférences de travail de l'utilisateur. Tout le reste est HORS SUJET, même vrai et même bien
+   sourcé : anecdote de conversation, état du moment (« le run X a échoué hier »), auto-évaluation
+   d'un agent, règle de comportement du modèle, vie privée. Lis CHAQUE candidat et pose la question :
+   « dans 3 mois, sur une tâche de travail, est-ce que ce fait change une décision ? » — non → `reject`
+   avec la raison « hors périmètre métier », et le candidat est retiré de `inbox/`. Ce tri se fait à la
+   main : le script ne juge que la forme (source, doublon), jamais la pertinence.
 3. Promotions mécaniques : `python tooling/brain_curate.py --brain <brainRoot> --apply --reviewer autowin-app-curation`.
    Le relecteur DOIT être d'une famille distincte de l'auteur, sinon la promotion est refusée.
 4. `merge` — un par un, jamais en lot : lire le candidat ET la note visée (`merge_with`), écrire UNE

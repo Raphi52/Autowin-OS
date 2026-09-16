@@ -58,7 +58,6 @@ import { defaultQuorumThreshold } from './quorum'
 import { withCostContext, type CostAggregator, type CostSink } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import {
-  memeRefus,
   evaluateClosure,
   plafondDurReparations,
   reparationsAutorisees

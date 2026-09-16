@@ -62,6 +62,20 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
     await vue.unmount()
   })
 
+  it('la croix masque le bloc', async () => {
+    const vue = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([coupee('B', 'insufficient_quota')])
+      })
+    )
+    expect(bouton(vue.container)).not.toBeNull()
+    await vue.click('[data-testid="conv-reprise-quota-fermer"]')
+    await vi.waitFor(() =>
+      expect(vue.container.querySelector('[data-testid="conv-reprise-quota"]')).toBeNull()
+    )
+    await vue.unmount()
+  })
+
   /**
    * DEFAUT VECU le 2026-09-05 : « j'ai cliqué, ça n'en a repris qu'une sur 3 ». Les trois etaient
    * bien en file, mais un fil repris passe OCCUPE et sort aussitot de la liste des coupes : le bloc
