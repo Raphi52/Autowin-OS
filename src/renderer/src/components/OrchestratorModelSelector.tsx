@@ -9,6 +9,8 @@ import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
 import { EFFORT_LABELS } from './model-effort-labels'
 import { shortModelLabel } from './model-display-label'
 import './ChatView.css'
+// Les puces de compte (.router-account-chip, .is-active = compte retenu encadré) sont stylées ici.
+import './RouterView.css'
 import { Spinner } from './Spinner'
 import { useClampDansFenetre } from './useClampDansFenetre'
 

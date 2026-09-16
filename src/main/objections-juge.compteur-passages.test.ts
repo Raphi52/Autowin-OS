@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { libelleDuPassageDeReparation } from './gates/stopgate'
+import { traceDuPassage } from './boucle-reparation'
 
 /**
  * POURQUOI CE TEST — objection du juge sur conv-540, tour
@@ -23,8 +23,13 @@ describe('compteur de passages de reparation', () => {
     )
   })
 
+  /*
+   * Objection du juge (tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f) : ce test LISAIT le texte de
+   * orchestrator.ts (`expect(source).toContain(...)`). Il ne prouvait aucune execution et cassait au
+   * moindre renommage. La boucle appelle desormais `traceDuPassage`, qu'on EXECUTE ici.
+   */
   it('est reellement pousse dans la trace par la boucle de reparation', () => {
-    const source = readFileSync(new URL('./orchestrator.ts', import.meta.url), 'utf8')
-    expect(source).toContain('libelleDuPassageDeReparation(attempt, PLAFOND_DUR)')
+    expect(traceDuPassage(0, 8), 'le premier build n est pas une reparation').toBeUndefined()
+    expect(traceDuPassage(3, 8)).toBe(libelleDuPassageDeReparation(3, 8))
   })
 })

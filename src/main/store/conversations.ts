@@ -778,10 +778,33 @@ export class ConversationStore {
     // le brouillon de réponse posé par `beginTurn` (dernier message, encore `streaming`) doit
     // RESTER en dessous, sinon la consigne se lit après la réponse qui la traite (conv-46).
     const dernier = conversation.messages.at(-1)
-    const rangReponseEnCours =
-      m.avantLaReponseEnCours === true &&
+    /*
+     * LA POSITION DEPEND DE CE QUE L'UTILISATEUR A DEJA LU, PAS D'UN CAMP CHOISI UNE FOIS.
+     *
+     * Deux defauts opposes ont fait osciller cette ligne, parce qu'on decidait SANS REGARDER le
+     * brouillon :
+     *  - brouillon encore VIDE (conv-439, 2026-09-11) : tout le texte du tour arrivera APRES, donc
+     *    poser la consigne sous lui la met sous une reponse qui la traite deja -- « comme un cheveu
+     *    sur la soupe ». Elle doit passer AVANT.
+     *  - brouillon DEJA ECRIT (conv-544, 2026-09-15) : l'utilisateur a lu la reponse en cours et
+     *    ecrit ensuite. La remonter au-dessus de ce qu'il vient de lire est un saut en arriere :
+     *    « il aurait du apparaitre tout en bas du fil ». Elle reste EN FIN de fil.
+     *
+     * Le texte en cours de tour vit dans `parts` (`content` n'est ecrit qu'a la cloture) : c'est
+     * donc `parts` qu'on interroge, jamais `content`.
+     *
+     * LIMITE ASSUMEE : le texte produit APRES l'injection rejoint le meme message assistant, donc
+     * il se relira au-dessus de la consigne. Fix complet = SCINDER le message au point d'injection
+     * (clore sur le texte courant, puis `beginContinuationTurn`) ; non fait ici, cela touche le
+     * routage des deltas par `turnId`.
+     */
+    const brouillonEnCoursEstVierge =
       dernier?.role === 'assistant' &&
-      dernier.status === 'streaming'
+      dernier.status === 'streaming' &&
+      !dernier.content?.trim() &&
+      !flattenChatParts(dernier.parts ?? []).trim()
+    const rangReponseEnCours =
+      m.avantLaReponseEnCours === true && brouillonEnCoursEstVierge
         ? conversation.messages.length - 1
         : -1
     const previous =
@@ -1826,60 +1849,6 @@ export class ConversationStore {
     forked.updatedAt = this.now()
     this.changed(forked.id)
     return forked
-  }
-
-  /**
-   * SCINDE depuis un message : DEPLACE la suite du fil dans une conversation neuve et la RETIRE
-   * de la source. C'est l'inverse exact de `fork`, qui COPIE le debut et n'allege rien.
-   *
-   * Pourquoi ce geste existe (mesure du 2026-09-13, cost.jsonl) : 1 952 tours de chat depassent
-   * 400 000 jetons d'entree et totalisent 2 563 $, soit 62 % des 4 133 $ depenses. Quand un fil
-   * change de sujet, la seule sortie offerte etait `fork` — qui DOUBLE le passe lourd au lieu de le
-   * decharger. Scinder rend a la source son poids d'avant la rupture.
-   *
-   * Le message vise OUVRE le nouveau fil (il part avec la suite). Scinder au tout premier message
-   * vide la source : c'est un renommage deguise, pas une scission — refuse.
-   */
-  split(id: string, fromMessageId: string): { source: Conversation; cible: Conversation } {
-    const source = this.conversations.get(id)
-    if (!source) throw new Error(`Conversation inconnue: ${id}`)
-    if (!fromMessageId) throw new Error('fromMessageId requis')
-    const cut = source.messages.findIndex((m) => m.messageId === fromMessageId)
-    if (cut < 0) throw new Error(`Message inconnu: ${fromMessageId}`)
-    if (cut === 0) throw new Error('scission impossible : la conversation source resterait vide')
-
-    const cible = this.create({ title: forkTitle(source.title), provider: source.provider })
-    const deplaces = source.messages.slice(cut)
-    // Identifiants regeneres, comme pour un fork : deux conversations ne doivent jamais partager un
-    // messageId, sinon un geste vise sur l'une toucherait l'autre.
-    const messageIds = new Map<string, string>()
-    const allocatedIds = this.allMessageIds()
-    const generatedIds = deplaces.map((message) => {
-      const generatedId = this.nextUniqueForkMessageId(allocatedIds)
-      allocatedIds.add(generatedId)
-      if (message.messageId) messageIds.set(message.messageId, generatedId)
-      return generatedId
-    })
-    cible.messages = deplaces.map((message, index) => ({
-      ...message,
-      messageId: generatedIds[index],
-      // Le parent RESTE dans la source pour le premier message deplace : sa chaine causale est
-      // coupee par la scission elle-meme, elle ne doit pas pointer un message d'un autre fil.
-      parentMessageId: message.parentMessageId
-        ? messageIds.get(message.parentMessageId)
-        : undefined,
-      // Le journal d'un tour est range PAR CONVERSATION : il reste sous la source. On note QUI le
-      // possede pour que la loupe aille le lire au bon endroit.
-      ...(message.turnId ? { turnConversationId: message.turnConversationId ?? source.id } : {})
-    }))
-    cible.forkedFrom = { conversationId: source.id, messageId: fromMessageId }
-    cible.updatedAt = this.now()
-
-    source.messages = source.messages.slice(0, cut)
-    source.updatedAt = this.now()
-    this.changed(source.id)
-    this.changed(cible.id)
-    return { source, cible }
   }
 
   /** Tous les messageId du corpus, en UN balayage. Jetable : ne jamais le conserver entre appels. */

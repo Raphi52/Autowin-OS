@@ -18,6 +18,8 @@ const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 const AUTRE_SECTION = /^\s*[A-ZÉÈÀ_ ]{3,}\s*:/
 const PUCE = /^\s*(?:[-*•]|\d+[.)])\s+/
 /** Gravité déclarée par le juge : seules MAJEUR (ou l'absence d'étiquette) bloquent. */
+/** Une puce explicitement etiquetee MAJEUR par le juge. */
+const PUCE_MAJEUR = /^\s*(?:[-*•]|\d+[.)])\s+\**\s*MAJEUR\s*\**\s*:/im
 const ETIQUETTE = /^\**\s*(MAJEUR|MINEUR|OK)\s*\**\s*:\s*\**\s*/i
 /** « aucune », « aucun », « rien à signaler », « n/a », « néant » — la forme contractuelle du vide. */
 // Ligne ENTIÈRE seulement : « Aucune capture du mode sombre » est une objection (conv-539).
@@ -37,6 +39,18 @@ function normaliser(ligne: string): string {
  * Rend `[]` quand il n'y a pas de section, qu'elle est vide, ou qu'elle dit « aucune ».
  */
 export function objectionsDuJuge(text: string, toutesGravites = false): string[] {
+  /*
+   * DANS UN VERDICT QUI PORTE DEJA UNE PUCE `MAJEUR:`, UNE PUCE NUE N'EST PAS UN DEFAUT MAJEUR.
+   *
+   * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f - verdict AGREGE d'un panel :
+   * `verdictPanelValide` etiquette MAJEUR les seules puces du membre qui vote DEFAUT, et laisse
+   * NUES celles des membres APPROBATEURS. La regle "non etiquete = majeur" retenait alors TOUT :
+   * le controle de 09:53:28.450 a recopie en "Promis mais pas fait" des verifications REUSSIES
+   * ("les 11 commits existent bien... 240 sur 240, code de sortie 0", "les 7 tests passent
+   * maintenant"), noyant le vrai motif. Des qu'un MAJEUR est present, le juge a etiquete ce qui
+   * bloque : les puces nues sont des constats.
+   */
+  const aUnMajeur = PUCE_MAJEUR.test(text ?? '')
   const lignes = (text ?? '').split(/\r?\n/)
   const objections: string[] = []
   let dansLaSection = false
@@ -64,6 +78,7 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
     const etiquette = ETIQUETTE.exec(contenu)
     // Etiquette bornee au VALIDE : sur un refus, MINEUR/OK ne masquent pas les raisons (reparation 4).
     if (etiquette && !toutesGravites && !/^majeur/i.test(etiquette[1])) continue
+    if (!etiquette && !toutesGravites && aUnMajeur) continue
     objections.push(etiquette ? contenu.slice(etiquette[0].length).trim() : contenu)
   }
   return objections
@@ -165,10 +180,38 @@ export function verdictAvecObjectionsPortees(text: string): string {
  * Les puces sont recopiées TELLES QUELLES, étiquette comprise : une MAJEUR rouvre le verdict via
  * `verdictAvecObjectionsPortees`, des puces non étiquetées restent un VALIDE (pas de boucle sans fin).
  */
-export function verdictPanelValide(textesDesMembres: string[]): string {
+export type MembreDuPanel = string | { text: string; ok: boolean }
+
+/**
+ * UN MEMBRE QUI VOTE `DEFAUT:` RESTE UN DEFAUT, MEME MINORITAIRE.
+ *
+ * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — sur les 4 appels juge, celui de
+ * promptCalls ts 09:55:17.497 rend « DEFAUT: le tour n'est pas fini en reussite / SCORE: 66 », les
+ * 3 autres « VALIDE ». Le quorum passait et les puces du dissident etaient recopiees NUES : non
+ * etiquetees = verdict clos (regle de PUCE_ETIQUETEE). Le tour se terminait donc sur un DEFAUT
+ * explicite ignore — saisie ts 1789466353210, « tu t'es arrete alors que 3/4 des juges ont des
+ * objections ». On etiquette MAJEUR les puces des seuls membres ayant vote DEFAUT : la reparation
+ * repart, et un panel sans dissident garde le comportement precedent (pas de boucle sans fin).
+ */
+/*
+ * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — les puces d'un membre APPROBATEUR
+ * restaient nues, et la regle « non etiquete = MAJEUR » les retenait comme defauts : le controle
+ * final recopiait en « Promis mais pas fait » des CONSTATS de verification reussie (reparation 2 :
+ * « Les deux corrections existent et tiennent… 6 verts, code 0 »). Le vote du membre est connu ici :
+ * un approbateur n'a declare aucun defaut, ses puces sont donc MINEUR, celles du dissident MAJEUR.
+ */
+function etiqueterSelonLeVote(puce: string, ok: boolean): string {
+  if (PUCE_ETIQUETEE.test(`- ${puce}`)) return puce
+  return ok ? `MINEUR: ${puce}` : `MAJEUR: ${puce}`
+}
+
+export function verdictPanelValide(membresDuPanel: MembreDuPanel[]): string {
   const puces: string[] = []
-  for (const texte of textesDesMembres ?? []) {
-    for (const puce of objectionsBrutesDuJuge(texte)) {
+  for (const membre of membresDuPanel ?? []) {
+    const texte = typeof membre === 'string' ? membre : membre.text
+    const ok = typeof membre === 'string' ? true : membre.ok
+    for (const brute of objectionsBrutesDuJuge(texte)) {
+      const puce = etiqueterSelonLeVote(brute, ok)
       if (!puces.includes(puce)) puces.push(puce)
     }
   }

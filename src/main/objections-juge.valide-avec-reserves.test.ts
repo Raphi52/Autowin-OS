@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { dodDuVerdict } from './objections-juge'
 import { arretDeLaReparation, doitArreterLaReparation, evaluateClosure } from './gates/stopgate'
+import { deciderDuPassage } from './boucle-reparation'
 
 /*
  * conv-540, tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : les 4 appels du juge (ts 09:44:57.329,
@@ -61,9 +60,19 @@ describe('verdict VALIDE porteur de reserves', () => {
       'hors de portee'.replace('portee', 'portée')
     )
 
-    const source = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
-    expect(source).toContain('arretDeLaReparation({')
-    expect(source).toContain('motifsPrecedents = [...gate.reasons]')
+    /*
+     * Et on rejoue la DECISION que la boucle execute reellement (`deciderDuPassage`, appelee par
+     * src/main/orchestrator.ts), au lieu de lire le texte du fichier appelant : un scan textuel ne
+     * prouve pas l'execution et casse au moindre renommage (objection du meme tour).
+     */
+    const passage = deciderDuPassage({
+      attempt: 1,
+      reparationsAccordees: 5,
+      plafondDur: 10,
+      motifsCourants: g.reasons,
+      etat: { motifsPrecedents: g.reasons, refusIdentiquesConsecutifs: 0 }
+    })
+    expect(passage.arret, 'la boucle reelle doit S ARRETER sur ce refus').toBe(motif)
   })
 
   it('un refus reparable par build laisse la boucle continuer (meme porte d entree)', () => {

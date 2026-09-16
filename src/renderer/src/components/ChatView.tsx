@@ -4190,6 +4190,11 @@ export function ChatView({
    */
   const [quotasSnapshot, setQuotasSnapshot] = useState<ModelQuotaSnapshot | null>(null)
   const [repriseAutoRefusee, setRepriseAutoRefusee] = useState(false)
+  /* Croix de fermeture (demande du 2026-09-15) : on retient la LISTE des fils coupes au moment du
+     clic. Le bloc revient de lui-meme si un nouveau fil est coupe — masquer pour toujours ferait
+     rater une coupure suivante. */
+  const [repriseQuotaMasqueePour, setRepriseQuotaMasqueePour] = useState<string | null>(null)
+  const cleRepriseQuota = convsCoupeesParQuota.map((c) => c.id).sort().join('|')
   const [repriseAutoPrevueA, setRepriseAutoPrevueA] = useState<string | null>(null)
   const repriseAutoDejaTentee = useRef<string | undefined>(undefined)
   const repriseQuotaRef = useRef<() => Promise<void>>(async () => undefined)
@@ -5035,8 +5040,21 @@ export function ChatView({
             coupes des qu'ils passent occupes, si bien que le bloc disparaissait au premier clic et
             emportait la progression avec lui — « ca n'en a repris qu'une sur 3 » (2026-09-05),
             alors que les deux autres attendaient leur tour, invisibles. */}
-        {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) && (
+        {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) &&
+          (repriseQuotaEnCours || repriseQuotaMasqueePour !== cleRepriseQuota) && (
           <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
+            {!repriseQuotaEnCours ? (
+              <button
+                type="button"
+                className="conv-reprise-quota-fermer"
+                data-testid="conv-reprise-quota-fermer"
+                aria-label="Masquer"
+                title="Masquer (réapparaît si une autre conversation est coupée)"
+                onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
+              >
+                ×
+              </button>
+            ) : null}
             {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
                 reprise, la notice reste seule quelques secondes, sans un « (0) » qui n'offre
                 rien a cliquer. */}

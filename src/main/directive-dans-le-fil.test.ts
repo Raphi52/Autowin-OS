@@ -54,6 +54,42 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
     expect(rangConsigne).toBeLessThan(rangReponse)
   })
 
+  /**
+   * MESURE DU 2026-09-15 (conv-544) : « enleve le widget reprendre meme en fait » a ete injecte
+   * alors que la reponse en cours AVAIT DEJA ecrit plusieurs lignes que l'utilisateur venait de
+   * lire. Remonte au-dessus de ce texte, son message se relisait AVANT ce qu'il venait de voir :
+   * « il aurait du apparaitre tout en bas du fil ».
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : un tour dont le brouillon
+   * porte deja du texte. Si la consigne repasse devant, elle se lit avant la reponse deja vue.
+   */
+  it('reste EN FIN de fil quand la reponse en cours a deja ecrit', () => {
+    let horloge = 1
+    const store = new ConversationStore(() => horloge++)
+    const conv = store.create({ title: 'A', provider: 'claude' })
+    store.beginTurn(conv.id, { content: 'enleve le bouton reprendre' }, { turnId: 't1' })
+    store.applyTurnEvent(conv.id, 't1', {
+      kind: 'delta',
+      streamId: 's1',
+      text: 'Bouton retire, je verifie la capture.'
+    })
+
+    const messageId = enregistrerDirectiveDansLeFil({
+      conversations: store,
+      conversationId: conv.id,
+      texte: 'enleve le widget reprendre meme en fait',
+      broadcast: vi.fn()
+    })
+
+    const messages = store.get(conv.id)!.messages
+    const rangConsigne = messages.findIndex((message) => message.messageId === messageId)
+    const rangReponse = messages.findIndex(
+      (message) => message.role === 'assistant' && message.turnId === 't1'
+    )
+    expect(rangConsigne).toBe(messages.length - 1)
+    expect(rangConsigne).toBeGreaterThan(rangReponse)
+  })
+
   it('écrit un message utilisateur PERSISTÉ et prévient l’écran', () => {
     let horloge = 1
     const store = new ConversationStore(() => horloge++)

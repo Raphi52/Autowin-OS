@@ -1,3 +1,4 @@
+import { deciderDuPassage, traceDuPassage } from './boucle-reparation'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -57,9 +58,6 @@ import { defaultQuorumThreshold } from './quorum'
 import { withCostContext, type CostAggregator, type CostSink } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import {
-  arretDeLaReparation,
-  libelleDuPassageDeReparation,
-  memeRefus,
   evaluateClosure,
   plafondDurReparations,
   reparationsAutorisees
@@ -5145,7 +5143,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           text: passes
             ? // Quorum atteint : les objections des membres RESTENT dans le verdict (conv-539,
               // tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e) au lieu d'etre reduites au mot VALIDE.
-              verdictPanelValide(responders.map((r) => r.text))
+              verdictPanelValide(responders.map((r) => ({ text: r.text, ok: r.ok })))
             : votingN === 0
               ? 'DEFAUT: aucun juge n’a répondu (tous en échec)'
               : `DEFAUT: quorum non atteint (${valideVotes}/${votingN} VALIDE, seuil ${threshold})${reasons.length ? ` — ${reasons.join(' | ')}` : ''}`,
@@ -5335,7 +5333,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         )
         // LE PASSAGE SE NOMME DANS LA TRACE : sans cette ligne, un run mort par epuisement ne
         // permet pas de compter ses rejeus apres coup (objection du juge, conv-540).
-        push({ step: 'gate', role: 'gate', detail: libelleDuPassageDeReparation(attempt, PLAFOND_DUR) })
+        const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR)
+        if (ligneDuPassage) push({ step: 'gate', role: 'gate', detail: ligneDuPassage })
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
         // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
         prevSessionId = undefined
@@ -5427,21 +5426,20 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * qu'un run rendait « bloque » sans qu'on sache s'il avait renonce faute de progres ou faute de
        * tours.
        */
-      const arret = arretDeLaReparation({
-        tentative: attempt + 1,
+      const passage = deciderDuPassage({
+        attempt,
         reparationsAccordees: politique.reparations,
         plafondDur: PLAFOND_DUR,
         motifsCourants: gate.reasons,
-        motifsPrecedents,
-        refusIdentiquesConsecutifs,
+        etat: { motifsPrecedents, refusIdentiquesConsecutifs },
         // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — 14 reparations refusees
         // parce que out/main/index.js (11:06) etait plus ancien que les correctifs commites
         // (11:11-11:31) : le code qui jugeait n'etait pas celui qu'on reparait. La boucle le NOMME
         // desormais au lieu de bruler un build et un panel de juge par passage.
         bundlePerime: mesureBundlePerime(process.cwd())
       })
-      if (arret) {
-        gate.reasons.push(arret)
+      if (passage.arret) {
+        gate.reasons.push(passage.arret)
         /**
          * LE MOTIF EST AUSSI POUSSE DANS LA TRACE, et pas seulement dans le resultat.
          *
@@ -5450,13 +5448,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          * du run mais JAMAIS la trace — la revendication « une borne qui mord doit se dire » n'etait
          * tenue qu'a moitie, et c'est precisement la moitie que l'on relit apres coup.
          */
-        push({ step: 'gate', role: 'gate', detail: arret })
+        push({ step: 'gate', role: 'gate', detail: passage.arret })
         break
       }
-      refusIdentiquesConsecutifs = memeRefus(gate.reasons, motifsPrecedents)
-        ? refusIdentiquesConsecutifs + 1
-        : 0
-      motifsPrecedents = [...gate.reasons]
+      refusIdentiquesConsecutifs = passage.etatSuivant.refusIdentiquesConsecutifs
+      motifsPrecedents = passage.etatSuivant.motifsPrecedents
     }
     if (gate.blocked) {
       const motifBloque = motifChaineApresJugeNonJouee({

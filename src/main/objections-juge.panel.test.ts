@@ -30,4 +30,30 @@ describe('panel qui atteint le quorum', () => {
     const texte = verdictPanelValide([avecObjections('constat : 284 tests verts')])
     expect(verdictAvecObjectionsPortees(texte)).toBe(texte)
   })
+
+  /**
+   * conv-539, tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e : sur les 4 appels juge, celui de
+   * 09:55:17.497 rend « DEFAUT: le tour n'est pas fini en réussite / SCORE: 66 » — les 3 autres
+   * VALIDE. Le quorum passe, et les puces du dissident étaient recopiées NUES : non étiquetées =
+   * verdict clos. D'où la saisie ts 1789466353210 : « tu t'es arrêté alors que 3/4 des juges ont
+   * des objections ». Un DEFAUT explicite d'un membre vaut MAJEUR, même minoritaire.
+   */
+  it('les objections d’un membre qui vote DEFAUT rouvrent le verdict agrégé', () => {
+    const texte = verdictPanelValide([
+      { text: avecObjections('un commit n’est pas annulable seul'), ok: true },
+      { text: avecObjections('rien n’est mesuré sur un vrai tour'), ok: true },
+      {
+        text: [
+          'DEFAUT: le tour n’est pas fini en réussite',
+          'SCORE: 66',
+          'OBJECTIONS:',
+          '- la demande n’est pas satisfaite'
+        ].join('\n\n'),
+        ok: false
+      }
+    ])
+    expect(texte).toContain('la demande n’est pas satisfaite')
+    expect(texte).toMatch(/MAJEUR\s*:\s*la demande n’est pas satisfaite/)
+    expect(verdictAvecObjectionsPortees(texte)).toMatch(/^DEFAUT:/)
+  })
 })

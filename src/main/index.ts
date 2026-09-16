@@ -1494,13 +1494,20 @@ let capteurHdesk: CapteurHdesk | null = null
 function registerHdeskTvIpc(): void {
   const capteur = (): CapteurHdesk =>
     (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath())))
-  ipcMain.handle('hdesk:tv:bureaux', (_e, conversationId?: string) =>
-    process.platform === 'win32'
+  ipcMain.handle('hdesk:tv:bureaux', (event, conversationId?: string) => {
+    assertTrustedRendererSender(event, 'Petite TV du bureau caché')
+    return process.platform === 'win32'
       ? capteur().bureaux(typeof conversationId === 'string' ? conversationId : undefined)
       : []
-  )
-  ipcMain.handle('hdesk:tv:image', (_e, id: string) => capteur().image(String(id)))
-  ipcMain.handle('hdesk:tv:arreter', () => capteurHdesk?.arreter())
+  })
+  ipcMain.handle('hdesk:tv:image', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Petite TV du bureau caché')
+    return capteur().image(String(id))
+  })
+  ipcMain.handle('hdesk:tv:arreter', (event) => {
+    assertTrustedRendererSender(event, 'Petite TV du bureau caché')
+    return capteurHdesk?.arreter()
+  })
 }
 
 /** IPC : chat, orchestration, dashboards et graphe. */
