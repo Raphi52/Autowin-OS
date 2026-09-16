@@ -106,6 +106,28 @@ describe('arena-duel — journal des duels', () => {
     expect(cleDuel({ bras: 'a', workflow: 'W1' })).not.toBe(cleDuel({ bras: 'a', workflow: 'W2' }))
   })
 
+  it('garde le joueur (modele qui a joue) et refuse un joueur inconnu', () => {
+    expect(normaliserDuel(duel({ joueur: ' Claude ' })).joueur).toBe('claude')
+    expect(normaliserDuel(duel()).joueur).toBeUndefined()
+    expect(() => normaliserDuel(duel({ joueur: 'gpt-4' }))).toThrow(/joueur/)
+  })
+
+  it('deux joueurs peuvent noter le MEME bras du MEME banc sans doublon', () => {
+    const r = racineTmp()
+    noterDuel(duel({ banc: 'duel-v1', joueur: 'claude' }), r)
+    noterDuel(duel({ banc: 'duel-v1', joueur: 'codex', verdict: 'perdant' }), r)
+    const v = lireDuels({}, r)
+    expect(v.duels).toHaveLength(2)
+    expect(v.remplacees).toBe(0)
+    expect(v.duels.map((d) => d.joueur).sort()).toEqual(['claude', 'codex'])
+    // le meme joueur qui re-note le meme bras reste, lui, une RE-NOTATION
+    expect(cleDuel({ banc: 'duel-v1', bras: 'a', joueur: 'Claude' })).toBe(
+      cleDuel({ banc: 'duel-v1', bras: 'a', joueur: 'claude' })
+    )
+    // sans joueur, la cle est EXACTEMENT celle d'avant : historique inchange
+    expect(cleDuel({ banc: 'b', bras: 'a' })).toBe('b :: a')
+  })
+
   it('journal absent = corpus vide, pas une erreur', () => {
     const v = lireDuels({}, racineTmp())
     expect(v.duels).toEqual([])
