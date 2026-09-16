@@ -1,5 +1,5 @@
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
-import { deciderRejeuDeChat, dormirAnnulable } from './chat-rejeu-surcharge'
+import { deciderRejeuDeChat, dormirAnnulable, estCrashDExecutionDuCli } from './chat-rejeu-surcharge'
 import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from './runs/resume-refusal'
 import { chargerMurs, enregistrerMur } from './runs/murs-store'
 import type { ProviderRegistry } from './providers/registry'
@@ -2029,6 +2029,37 @@ export class AgentPilot {
            *
            * Toute erreur qui n'est PAS une surcharge garde EXACTEMENT l'ancien comportement.
            */
+          /*
+           * fix-ok: un crash d'execution a 0 token rejoue AVEC la meme session refait le meme
+           * appel — la session reprise est justement ce qui casse.
+           *
+           * CRASH DU CLI A 0 TOKEN SUR UNE SESSION HERITEE — on LACHE la session avant de rejouer.
+           *
+           * Capture fournie par l'utilisateur sur conv-625 (tour `2fbc8f95-6a5d-4fd4-821c-7af5a197303a`,
+           * 2026-09-16) : un tour meurt sur « You've hit your session limit · resets 10:30pm », le
+           * meme prompt renvoye ensuite meurt en « error_during_execution · 0.0000 USD », et la
+           * barre de quotas affiche 94 % de restant sur le compte actif. Rien n'a ete consomme :
+           * ce n'est donc pas un refus de quota, c'est la session reclamee par `--resume` qui n'est
+           * plus ouvrable (laissee ouverte par le mur, ou rangee sous un autre dossier/compte).
+           * Le rejeu repartait avec le MEME `resumeSessionId` et remourait a l'identique.
+           *
+           * On ne lache que la session HERITEE d'un tour precedent (`sessionEnCours ===
+           * resumeSessionId`) : une session ouverte PAR ce tour porte les iterations deja payees,
+           * l'abandonner les perdrait. Meme mecanique que « Prompt is too long » ci-dessus, et le
+           * fil (borne) que ce tour porte deja fournit le contexte au nouvel appel.
+           */
+          const crashSansCout =
+            error instanceof ProviderCallError &&
+            error.retryable &&
+            estCrashDExecutionDuCli(message)
+          if (crashSansCout && sessionEnCours && sessionEnCours === resumeSessionId) {
+            sessionEnCours = undefined
+            delete options.resumeSessionId
+            if (conversationId) {
+              this.chatSessions.delete(conversationId)
+              this.forgetPersistedChatSession(conversationId)
+            }
+          }
           const rejeu = deciderRejeuDeChat(message, attempt)
           if (!rejeu.rejouer) throw error
           if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
