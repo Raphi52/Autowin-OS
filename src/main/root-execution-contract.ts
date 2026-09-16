@@ -36,6 +36,11 @@ const TEST_REQUEST =
  * borne a cette levee : tout le reste du motif est inchange. Sens d'erreur impose par ce fichier :
  * faux negatif tolere, faux positif JAMAIS.
  */
+// fix-ok: le motif COMMIT_REQUEST prenait le verbe « publier » d'une mise en vente sur boutique
+// (« online ready a etre publie sur le market », conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091)
+// pour une demande de commit git : la DoD exigeait alors un commit jamais demande, case laissee
+// `- [ ]` dans le RUN.md et run ferme `status: green` malgre tout. Cause mesuree, correctif borne
+// a la seule levee « publie + boutique dans les 3 mots suivants ».
 const COMMIT_REQUEST =
   /\b(?:publie\w*(?!(?:[\s-]+[\w'’]+){0,3}[\s-]+(?:markets?|marketplaces?|stores?|boutiques?|magasins?|plateformes?|steam|itch|roblox|epic|(?:app|play)\s*stores?)\b)(?:\s+(?:les?|un|une|ces|mes|nos|vos)\s+(?:changements?|commit|branche))?|push(?:e|er|ez|ons)?|(?:fais|fait|faire|cree|realise)\w*\s+(?:un\s+)?commit|(?:puis|ensuite|et)\s+commit(?:e|er|ez)?|commit(?:e|er|ez)?\s+(?:les?\s+)?(?:changements?|modifications?|code|branche))\b/i
 
