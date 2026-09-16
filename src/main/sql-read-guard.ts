@@ -431,6 +431,30 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
   const server = typeof args?.server === 'string' ? args.server.trim() : ''
   const database = typeof args?.database === 'string' ? args.database.trim() : ''
 
+  /**
+   * ABSENT n'est pas INVALIDE — le refus doit dire quoi ecrire.
+   *
+   * Mesure conv-599, tour `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : l'appel modele d'iteration 0
+   * (75 s, 0,51 USD) omet `database`. Le refus « Nom de base invalide : «  » » ne nomme pas
+   * l'argument manquant et ne liste aucune cible ; l'iteration suivante rejoue la meme requete en
+   * devinant la base. Le catalogue est pourtant ICI : on le rend.
+   */
+  if (!database) {
+    const connues = catalogue.databasesFor(server)
+    return {
+      allowed: false,
+      reason: connues.length
+        ? `Argument « database » manquant. Bases disponibles sur ${server} : ${connues.slice(0, 8).join(', ')}${connues.length > 8 ? `, … (${connues.length} au total)` : ''}.`
+        : `Argument « database » manquant, et aucune base connue sur « ${server} ». Serveurs disponibles : ${catalogue.servers().join(', ')}.`
+    }
+  }
+  if (!server) {
+    return {
+      allowed: false,
+      reason: `Argument « server » manquant. Serveurs disponibles : ${catalogue.servers().join(', ')}.`
+    }
+  }
+
   // Formes d'abord : le serveur et la base partent dans la ligne de commande de sqlcmd.
   if (!SERVER_PATTERN.test(server)) {
     return { allowed: false, reason: `Nom de serveur invalide : « ${server} ».` }
