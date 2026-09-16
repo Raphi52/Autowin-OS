@@ -6226,7 +6226,7 @@ Cliquer pour choisir une autre branche.`}
            * décide. La version précédente couvrait tout l'écran d'un voile translucide et rendait le
            * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
            */}
-          <ProdAutorisationHote />
+          <ProdAutorisationHote conversationId={activeId} />
           <ChatQueuePanel
             pendingDirectives={pendingDirectives}
             busy={busy}
