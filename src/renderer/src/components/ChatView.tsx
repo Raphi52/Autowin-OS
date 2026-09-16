@@ -5522,7 +5522,34 @@ export function ChatView({
               aria-label="Dossiers de conversations"
               style={{ top: convFolderMenu.top, left: convFolderMenu.left }}
             >
-              {dossiersConversations.length === 0 ? (
+              {/*
+                Le dossier de REPLI est ce que la pastille affiche quand aucun dossier n'est
+                assigne. Il n'entrait jamais dans la memoire des dossiers connus : l'utilisateur
+                lisait donc « RigApplication » sur l'en-tete sans le trouver dans ce menu
+                (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
+                choisissable comme les autres.
+              */}
+              {defaultWorkspace?.trim() &&
+                !dossiersConversations.includes(defaultWorkspace.trim()) && (
+                  <button
+                    role="menuitem"
+                    data-testid="conv-project-default"
+                    data-project-path={defaultWorkspace.trim()}
+                    title={defaultWorkspace.trim()}
+                    onClick={() => {
+                      const conv = convFolderMenu.conv
+                      const repli = defaultWorkspace.trim()
+                      setConvFolderMenu(null)
+                      choisirDossier(conv, repli)
+                    }}
+                  >
+                    <span className="conv-menu-ic" aria-hidden="true">
+                      🗂
+                    </span>
+                    {nomDeDossier(defaultWorkspace.trim())} · par défaut
+                  </button>
+                )}
+              {dossiersConversations.length === 0 && !defaultWorkspace?.trim() ? (
                 <span className="conv-menu-empty">Aucun dossier de conversations</span>
               ) : (
                 dossiersConversations.map((chemin) => (
