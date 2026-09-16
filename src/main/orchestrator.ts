@@ -365,7 +365,11 @@ import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-c
 import { convRunsRoot } from './runs/conv-runs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
-import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
+import {
+  retrieveBrainContext,
+  type BrainNavigation,
+  type BrainUnavailableReason
+} from './brain-retrieval'
 import { messageEmpreinteBrain } from './brain-empreinte-message'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
@@ -2562,6 +2566,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       provider: judgeProvider,
       role: 'judge',
       model: judgeBinding.model,
+      prompt: envelope,
       execution: judgeExecution
     })
     const startedAt = performance.now()
@@ -2830,6 +2835,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
                 phase,
+                // L'enveloppe est construite juste au-dessus : la ligne de pipeline montre le prompt
+                // DES le demarrage (recidive « rien en preprompt », conv-587 du 2026-09-16).
+                prompt: envelope,
                 execution
               })
               const startedAt = performance.now()
@@ -3018,7 +3026,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               { name: 'style', text: STYLE_TON },
               { name: 'projectContext', text: projectContext }
             ]
+            let synthEnvelope: PromptEnvelope | undefined
+            const synthSystemBlocks = synthNodeParts
+              .filter((p) => p.text)
+              .map((p) => ({ name: p.name, chars: p.text.length }))
             const synthOptions: SendOptions = {
+              observePrompt: (observed) => {
+                observed.systemBlocks = synthSystemBlocks
+                synthEnvelope = observed
+              },
               system: synthNodeParts.map((p) => p.text).join(''),
               systemBlocks: synthNodeParts
                 .filter((p) => p.text)
@@ -3046,6 +3062,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               dependencyIds: good.map((member) => member.agentId),
               attemptId: randomUUID()
             }
+            synthEnvelope = registry.describePrompt(
+              orchBinding.provider,
+              synthMessages,
+              synthOptions,
+              orchBinding.model
+            )
+            synthEnvelope.systemBlocks = synthSystemBlocks
             onPhase?.({
               step: 'exec',
               provider: orchBinding.provider,
@@ -3053,6 +3076,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               model: orchBinding.model,
               reasoningEffort: orchBinding.reasoningEffort,
               phase,
+              // Troisieme point d'annonce : la FUSION multi-modeles n'avait aucune enveloppe
+              // (meme recidive « rien en preprompt », conv-587, saisie ts=1789550244094).
+              prompt: synthEnvelope,
               execution: synthExecution
             })
             const synthStartedAt = performance.now()
@@ -3593,6 +3619,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        */
       const empreinteQuery = `empreinte du dépôt ${workspaceLabel(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`
       let empreinteStatut: BrainRetrievalEvent['status'] = 'unavailable'
+      // La CAUSE de l'indisponibilité, telle que `retrieveBrainContext` l'a constatée : sans elle le
+      // message de `think` ne peut qu'énumérer des hypothèses (mesure conv-586, 2026-09-16).
+      let empreinteMotif: BrainUnavailableReason | undefined
       let empreinteNavigation: BrainNavigation | undefined
       try {
         const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)(empreinteQuery, {
@@ -3600,10 +3629,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         })
         const empreinteScopee = scopeBrainRetrieval(chargee, brainCorpus)
         empreinteStatut = empreinteScopee.status
+        empreinteMotif = empreinteScopee.unavailableReason
         empreinteNavigation = empreinteScopee.navigation
         empreinteDepot = empreinteScopee.context.slice(0, 6_000)
       } catch {
-        // Le load est un confort de départ, jamais une raison d'échouer.
+        // Le load est un confort de départ, jamais une raison d'échouer. Une exception ici est un
+        // échec de transport : c'est exactement le cas « réseau ».
+        empreinteMotif = 'network'
       }
       try {
         onBrainRetrieved?.({
@@ -3624,7 +3656,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * Le STATUT decide du message, pas la taille du texte. Un Brain injoignable rendait « aucune
        * empreinte » — une panne annoncee comme un resultat de recherche (mesure conv-9, 2026-08-31).
        */
-      const empreinteMessage = messageEmpreinteBrain(empreinteStatut, empreinteDepot.length)
+      const empreinteMessage = messageEmpreinteBrain(
+        empreinteStatut,
+        empreinteDepot.length,
+        empreinteMotif
+      )
       push({
         step: 'exec',
         role: 'think',
@@ -4077,11 +4113,17 @@ ${empreinteDepot}`
           { name: 'style', text: STYLE_TON },
           { name: 'projectContext', text: projectContext }
         ]
+        let synthEnvelopePhase: PromptEnvelope | undefined
+        const synthPhaseBlocks = synthParts
+          .filter((p) => p.text)
+          .map((p) => ({ name: p.name, chars: p.text.length }))
         const synthOptions: SendOptions = {
+          observePrompt: (observed) => {
+            observed.systemBlocks = synthPhaseBlocks
+            synthEnvelopePhase = observed
+          },
           system: synthParts.map((p) => p.text).join(''),
-          systemBlocks: synthParts
-            .filter((p) => p.text)
-            .map((p) => ({ name: p.name, chars: p.text.length })),
+          systemBlocks: synthPhaseBlocks,
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
           execution: this.executionOptions(
@@ -4111,6 +4153,13 @@ ${empreinteDepot}`
           dependencyIds: good.map(({ member }) => `${phase}:${member.model ?? member.provider}`),
           attemptId: randomUUID()
         }
+        synthEnvelopePhase = registry.describePrompt(
+          orchBinding.provider,
+          synthMessages,
+          synthOptions,
+          orchBinding.model
+        )
+        synthEnvelopePhase.systemBlocks = synthPhaseBlocks
         onPhase?.({
           step: 'exec',
           provider: orchBinding.provider,
@@ -4118,6 +4167,9 @@ ${empreinteDepot}`
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
           phase,
+          // Fusion multi-modeles d'une phase : elle n'annoncait aucune enveloppe, le deplie
+          // « prompt envoye » restait vide (conv-587, saisie ts=1789550244094).
+          prompt: synthEnvelopePhase,
           execution: synthExecution
         })
         const synth = await this.sendWithRoleContext(

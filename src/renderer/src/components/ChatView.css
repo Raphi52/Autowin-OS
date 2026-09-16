@@ -1846,11 +1846,10 @@ ol.md-list li {
   max-width: 100%;
   margin: var(--s1) 0;
   overflow-x: auto;
-  /* BORNE DE HAUTEUR PAR LE CADRE (2026-09-14). Un schema tres haut defile DANS ce cadre au lieu
-     d'etre retreci : retreci sous 300 px, un flowchart de 15 etapes tombait a 27 px de large et
-     ses libelles devenaient illisibles (capture de la sonde cdp-chat-mermaid). */
-  max-height: min(45vh, 300px);
-  overflow-y: auto;
+  /* AUCUN DEFILEMENT VERTICAL ICI (2026-09-16, conv-590). Le cadre borne a 300 px faisait
+     apparaitre une barre de defilement pour quelques dizaines de pixels manquants : un schema qui
+     depasse a peine est RETRECI par la regle du dessin ci-dessous, jamais mis a derouler. */
+  overflow-y: visible;
 }
 /* Le conteneur vient du panneau d'artefacts (`.artifact-diagram`), ou il reserve une grande
    surface. Dans le fil, ce plancher de 180 px et ce rembourrage de 18 px ajoutent du vide
@@ -1865,9 +1864,12 @@ ol.md-list li {
      Aucun `!important` ici : il ecraserait justement ce plafond en ligne et agrandirait un schema
      etroit (sonde cdp-chat-mermaid du 2026-09-14 : 138 px naturels rendus a 314 px). Un schema
      plus large que le fil est donc retreci sans deborder, un schema etroit garde sa taille. */
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
-  /* La hauteur n'est PAS bornee ici : c'est le cadre `.md-mermaid` qui la borne et fait defiler. */
+  /* HAUTEUR PLAFONNEE ICI, pas par un cadre a derouler : un schema trop haut est mis a l'echelle,
+     ratio conserve, jusqu'a tenir sous les yeux. */
+  max-height: min(60vh, 420px);
   min-height: 0;
 }
 

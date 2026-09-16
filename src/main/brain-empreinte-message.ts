@@ -1,4 +1,8 @@
-import type { BrainRetrievalStatus } from './brain-retrieval'
+import {
+  BRAIN_UNAVAILABLE_REASON_LABEL,
+  type BrainRetrievalStatus,
+  type BrainUnavailableReason
+} from './brain-retrieval'
 
 /**
  * DIRE POURQUOI LE BRAIN EST MUET — « il ne sait rien » et « on n'a pas pu lui demander » ne se
@@ -17,21 +21,30 @@ import type { BrainRetrievalStatus } from './brain-retrieval'
  */
 export function messageEmpreinteBrain(
   statut: BrainRetrievalStatus | undefined,
-  caracteresInjectes: number
+  caracteresInjectes: number,
+  /**
+   * MESURE conv-586 (2026-09-16) : le message listait trois hypotheses (« serveur arrete, jeton
+   * absent ou reseau ») alors que `retrieveBrainContext` savait laquelle des quatre causes s'etait
+   * produite. Quatre sondes manuelles ont ete depensees pour retrouver ce que l'appel detenait.
+   * Absent (journal ancien, appelant qui ne le passe pas) → on retombe sur l'enumeration.
+   */
+  motif?: BrainUnavailableReason
 ): { text: string; detail: string } {
   if (caracteresInjectes > 0)
     return {
       text: `Empreinte du dépôt chargée (${caracteresInjectes} caractères) — injectée en tête de contexte des phases.`,
       detail: 'think : empreinte chargée'
     }
-  if (statut === 'unavailable')
+  if (statut === 'unavailable') {
+    const cause = motif ? BRAIN_UNAVAILABLE_REASON_LABEL[motif] : undefined
     return {
       text:
-        'Brain INJOIGNABLE — aucune empreinte n’a pu être demandée (serveur arrêté, jeton absent ou ' +
-        'réseau). Ce n’est PAS « la base ne sait rien » : rien n’a été interrogé, et un dépôt lancé ' +
-        'maintenant échouerait pour la même raison.',
-      detail: 'think : Brain injoignable'
+        `Brain INJOIGNABLE — ${cause ?? 'cause non instrumentée (serveur arrêté, jeton absent ou réseau)'}. ` +
+        'Aucune empreinte n’a pu être demandée. Ce n’est PAS « la base ne sait rien » : rien n’a été ' +
+        'interrogé, et un dépôt lancé maintenant échouerait pour la même raison.',
+      detail: cause ? `think : Brain injoignable (${motif})` : 'think : Brain injoignable'
     }
+  }
   if (statut === 'invalid')
     return {
       text:

@@ -1,3 +1,5 @@
+import { refusGitDestructeur } from './garde-git-destructeur'
+
 /**
  * GARDE : UNE APPLICATION GRAPHIQUE NE S'OUVRE PAS AU PREMIER PLAN.
  *
@@ -80,12 +82,13 @@ export function refusLancementGraphique(commande: string): string | undefined {
  */
 export function scriptHookGardeGraphique(): string {
   return `const refusLancementGraphique = ${refusLancementGraphique.toString()};
+const refusGitDestructeur = ${refusGitDestructeur.toString()};
 let d = '';
 process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
   let cmd = '';
   try { const j = JSON.parse(d); cmd = (j.tool_input && j.tool_input.command) || ''; } catch {}
-  const motif = refusLancementGraphique(cmd);
+  const motif = refusLancementGraphique(cmd) || refusGitDestructeur(cmd);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

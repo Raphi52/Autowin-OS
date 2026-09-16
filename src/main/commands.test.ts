@@ -1831,7 +1831,8 @@ describe('AppCommandBus command execution policy', () => {
     expect(bus.catalog().map(({ name }) => name)).toEqual(
       expect.arrayContaining(['desktop_observe', 'desktop_act'])
     )
-    await expect(bus.exec('desktop_observe')).resolves.toMatchObject({
+    // `ecran_utilisateur` : la garde non-invasive (conv-586) refuse sinon le premier appel du tour.
+    await expect(bus.exec('desktop_observe', { ecran_utilisateur: true })).resolves.toMatchObject({
       ok: true,
       data: { width: 1280, height: 720 },
       attachments: [image]
