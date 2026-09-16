@@ -45,6 +45,11 @@ export interface SqlReadCommandDeps extends CatalogDeps {
    * les quatre couches historiques s'appliquent seules. Présent, il décide AVANT la connexion si la
    * base ciblée exige une autorisation de l'utilisateur.
    */
+  /**
+   * La conversation d'où part le geste. Transmise telle quelle au guichet, pour que l'écran
+   * d'autorisation n'apparaisse QUE dans le fil concerné (conv-626, 2026-09-16).
+   */
+  conversationId?: string
   porteProd?: PorteProd
   /** Le jeton obtenu par l'écran de saisie, quand l'utilisateur vient d'autoriser ce geste. */
   jetonProd?: string
