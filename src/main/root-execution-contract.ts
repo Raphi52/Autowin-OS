@@ -19,8 +19,25 @@ export interface RootExecutionRequirements {
 const ANALYSIS_REQUEST = /\b(?:scout|audit|analys|inspect|cherche|trouve|repere|explore)\w*/i
 const TEST_REQUEST =
   /\b(?:tests?|test(?:e|er|ez|s)?|vitest|verification|verifi\w*|rouge\s*(?:vers|->|→)\s*vert|exit\s*0)\b/i
+/**
+ * « PUBLIER » TOUT SEUL N'EST PAS UN COMMIT — mesure du 2026-09-16, conv-597,
+ * turnId 4e502786-4887-4101-85b3-ea2dee304091.
+ *
+ * La demande etait « ... online ready a etre PUBLIE SUR LE MARKET » : une mise en vente sur une
+ * boutique (Roblox, Steam, itch.io, App Store). Le mot `publie\w*` seul suffisait pourtant a exiger
+ * « Commit demande publie avec une identite Git verifiable ». Lu dans le RUN.md de ce run : la case
+ * est restee `- [ ]` alors qu'aucun commit n'avait jamais ete demande, et le run a ferme
+ * `status: green` avec cette obligation non tenue — une DoD qui ment des deux cotes (elle reclame ce
+ * qui n'est pas demande, puis se laisse fermer quand meme).
+ *
+ * Le verbe garde sa valeur par defaut — « repare puis publie » reste un commit demande — mais il
+ * PERD cette valeur des que la phrase nomme une BOUTIQUE dans les trois mots qui suivent (market,
+ * store, boutique, Steam, itch, Roblox, magasin, plateforme). Le changement est volontairement
+ * borne a cette levee : tout le reste du motif est inchange. Sens d'erreur impose par ce fichier :
+ * faux negatif tolere, faux positif JAMAIS.
+ */
 const COMMIT_REQUEST =
-  /\b(?:publie\w*(?:\s+(?:les?|un|une|ces|mes|nos|vos)\s+(?:changements?|commit|branche))?|push(?:e|er|ez|ons)?|(?:fais|fait|faire|cree|realise)\w*\s+(?:un\s+)?commit|(?:puis|ensuite|et)\s+commit(?:e|er|ez)?|commit(?:e|er|ez)?\s+(?:les?\s+)?(?:changements?|modifications?|code|branche))\b/i
+  /\b(?:publie\w*(?!(?:[\s-]+[\w'’]+){0,3}[\s-]+(?:markets?|marketplaces?|stores?|boutiques?|magasins?|plateformes?|steam|itch|roblox|epic|(?:app|play)\s*stores?)\b)(?:\s+(?:les?|un|une|ces|mes|nos|vos)\s+(?:changements?|commit|branche))?|push(?:e|er|ez|ons)?|(?:fais|fait|faire|cree|realise)\w*\s+(?:un\s+)?commit|(?:puis|ensuite|et)\s+commit(?:e|er|ez)?|commit(?:e|er|ez)?\s+(?:les?\s+)?(?:changements?|modifications?|code|branche))\b/i
 
 const CLAUSE_BOUNDARY = /(?:[.;:!?,]|\b(?:mais|puis|ensuite|cependant|toutefois)\b)/gi
 const NEGATED_MENTION_PREFIX =
