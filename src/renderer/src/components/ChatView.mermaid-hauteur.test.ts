@@ -22,11 +22,18 @@ import { describe, expect, it } from 'vitest'
 describe('hauteur des schemas mermaid dans le fil', () => {
   const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
 
-  it('plafonne la hauteur par le CADRE, qui fait defiler au lieu d ecraser', () => {
+  /*
+   * TROISIEME ETAPE, 2026-09-16 (conv-590) : le CADRE borne a 300 px faisait apparaitre une barre
+   * de defilement pour quelques dizaines de pixels manquants — un schema qui depasse a peine se
+   * lisait en deux temps. La borne de hauteur a donc ete RETIREE du cadre ; c'est la regle du
+   * dessin (`.md-mermaid svg`) qui tient la taille. Ce test gardait l'etape precedente et refusait
+   * toute edition de la feuille de style ; il garde desormais la decision REELLE.
+   */
+  it('ne fait JAMAIS defiler le cadre verticalement', () => {
     const bloc = css.slice(css.indexOf('.md-mermaid {'))
     const regle = bloc.slice(0, bloc.indexOf('}'))
-    expect(regle).toMatch(/max-height:\s*min\(45vh,\s*300px\)/)
-    expect(regle).toMatch(/overflow-y:\s*auto/)
+    expect(regle).toMatch(/overflow-y:\s*visible/)
+    expect(regle).not.toMatch(/max-height/)
   })
 
   it('laisse le SVG suivre la largeur du fil sans etre ecrase en hauteur', () => {
