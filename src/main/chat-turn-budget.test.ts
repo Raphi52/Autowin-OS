@@ -17,6 +17,8 @@ describe('budget du tour de chat', () => {
     expect(chatTurnBudget({ AUTOWIN_CHAT_USD_CAP: '5' })).toEqual({
       limits: { maxUsd: 5, maxTokens: 1_500_000, maxCalls: 6 },
       enforcement: 'blocking',
+      // Un cap explicite est un contrat : il REARME la coupure, y compris sur l'emballement.
+      emballementBloquant: true,
       // Un cap USD explicite ne touche pas le plafond d'emballement en TOKENS : il reste au
       // calibrage mesuré (cf. chat-turn-budget.emballement.test.ts).
       emballement: { maxUsd: 5, maxTokens: 24_000_000 }

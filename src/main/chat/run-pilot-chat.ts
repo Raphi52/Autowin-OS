@@ -246,9 +246,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     // de l'utilisateur, le trip OBSERVE (ledger) mais ne coupe plus.
     const budgetDuTour = chatTurnBudget(process.env)
     const chatBreaker = new CostCircuitBreaker(budgetDuTour.limits)
-    // Le breaker ci-dessus OBSERVE (seuils serrés, coupure armée par cap explicite seulement).
-    // Celui-ci COUPE toujours, au plafond d'emballement calibré sur les tours réels : sans lui, un
-    // tour de 33,6 M tokens passait sans que rien ne l'arrête (mesure du 2026-09-16).
+    // Les DEUX breakers observent ; AUCUN ne coupe sans cap explicite de l'utilisateur.
+    // Décision de l'utilisateur du 2026-09-16 (« non je veux aucun blocage ») : l'emballement
+    // coupait encore de lui-même à 25 $ / 24 M. Il ne coupe plus — il ÉCRIT le dépassement, et
+    // c'est `AUTOWIN_CHAT_USD_CAP` / `_TOKEN_CAP` / `_CALL_CAP` qui réarment la coupure.
     const breakerEmballement = new CostCircuitBreaker(budgetDuTour.emballement)
     const spoken: string[] = []
     /**
@@ -944,12 +945,17 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
           } as Parameters<typeof breakerEmballement.observe>[0])
           if (emballe) {
+            const coupeEmballement = budgetDuTour.emballementBloquant
             ledger.append({
               source: 'orchestrate',
               name: 'chat-budget',
-              detail: `tour coupé — emballement — ${emballe.reason}`
+              detail: coupeEmballement
+                ? `tour coupé — emballement — ${emballe.reason}`
+                : `emballement dépassé (mesure seule, aucun arrêt) — ${emballe.reason}`
             })
-            controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : emballement — ${emballe.reason}`)
+            if (coupeEmballement) {
+              controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : emballement — ${emballe.reason}`)
+            }
           }
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
