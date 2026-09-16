@@ -15,7 +15,23 @@ import { refusGitDestructeur } from './garde-git-destructeur'
  * settings temporaire du CLI (cf. `scriptHookGardeGraphique`).
  */
 export function refusLancementGraphique(commande: string): string | undefined {
-  const c = String(commande ?? '')
+  /*
+   * LE CORPS D'UN HEREDOC EST DU TEXTE, PAS DES COMMANDES — faux positif MESURE le 2026-09-16
+   * pendant le kaizen de conv-597 (deux refus d'affilee, turnId 4e502786-4887-4101-85b3-ea2dee304091).
+   *
+   * Le geste etait `node /tmp/fix1.cjs` avec, dans le heredoc, le texte d'un motif regex contenant
+   * « ...|commits?|branche|code|travail|... ». Le controle decoupe la ligne sur `|` : le morceau
+   * « code » devenait le premier mot d'une commande, donc « lancement de VS Code », et l'edition
+   * etait refusee. Deux tours perdus pour ecrire un fichier.
+   *
+   * On retire donc le CORPS des documents en ligne avant l'analyse. La ligne qui les LANCE reste
+   * analysee entierement, et tout ce qui suit le marqueur de fin aussi : le garde ne perd rien de
+   * ce qui s'execute vraiment. Un heredoc non termine n'est pas coupe (aucune fin trouvee).
+   */
+  const c = String(commande ?? '').replace(
+    /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[\s\S]*?^\s*\2\s*$/gm,
+    '<<HEREDOC'
+  )
   if (!c.trim()) return undefined
   // Voies approuvees : le lanceur de bureau cache et l'instance Autowin cachee.
   // `hors-ecran-capture.ps1` N'EST PLUS une exception (2026-09-14, conv-529). Elle avait ete posee
