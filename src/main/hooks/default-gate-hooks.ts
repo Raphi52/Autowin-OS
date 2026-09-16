@@ -177,7 +177,42 @@ export function jetonsDeCauseParFichier(
       jetons[homonymes[0]] = true
     }
   }
+
+  // Source 3 — le jeton depose dans le fichier par un tour PRECEDENT de la meme session.
+  // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — le compte d'edits est cumule
+  // sur la session, mais la source 1 ne creditait le jeton que s'il figurait parmi les lignes
+  // ecrites par CE run : le `fix-ok:` depose a la reparation 1 (commit a9126f34) ne desarmait
+  // pas la reparation 2, et le meme refus revenait a l'identique. Portee etroite : seul un jeton
+  // AJOUTE par le dernier changement du fichier (non commite, ou dernier commit qui le touche)
+  // compte — un vieux `fix-ok:` sans rapport ne vaut pas laissez-passer perpetuel.
+  for (const f of connus) {
+    if (jetons[f] || !/^[\w./-]+$/.test(f)) continue
+    if (lignesAjouteesAuDernierChangement(f).some((l) => JETON_DE_CAUSE.test(l))) jetons[f] = true
+  }
   return jetons
+}
+
+/**
+ * Les lignes AJOUTEES par le dernier changement d'un fichier : d'abord ce qui n'est pas encore
+ * commite, sinon le dernier commit qui le touche. Sert a dater un jeton de cause.
+ */
+function lignesAjouteesAuDernierChangement(fichier: string): string[] {
+  const git = (args: string[]): string => {
+    try {
+      return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+    } catch {
+      return ''
+    }
+  }
+  const ajoutees = (diff: string): string[] =>
+    diff
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+      .map((l) => l.slice(1))
+  const enCours = ajoutees(git(['diff', 'HEAD', '--', fichier]))
+  if (enCours.length) return enCours
+  const sha = git(['log', '-1', '--format=%H', '--', fichier]).trim()
+  return sha ? ajoutees(git(['show', sha, '--format=', '--', fichier])) : []
 }
 
 /**

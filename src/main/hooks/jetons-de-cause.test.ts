@@ -193,3 +193,26 @@ describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () =
     expect(detectBlindFixLoop(edits, jetons)).toEqual([])
   })
 })
+
+/**
+ * SOURCE 3 — le jeton DEJA present dans le fichier edite.
+ *
+ * Mesure conv-597, tour 4e502786-4887-4101-85b3-ea2dee304091 : le refus fix-gate demandait
+ * « depose dans src/main/root-execution-contract.ts un commentaire `fix-ok:` ». Le jeton a ete
+ * depose (commit a9126f34), et le MEME refus est revenu au tour suivant : le compte d'edits est
+ * CUMULE sur la session, alors que la source 1 ne credite le jeton que s'il fait partie des
+ * lignes ecrites par CE run-ci. Un jeton depose a une reparation ne desarmait donc jamais la
+ * suivante — la porte de sortie promise par le message du refus etait murée.
+ */
+describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier edite', () => {
+  it('credite un fichier edite qui porte deja son jeton sur disque', () => {
+    const cible = 'src/main/hooks/default-gate-hooks.ts'
+    expect(jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
+  })
+  it('ne credite pas un fichier edite sans jeton', () => {
+    expect(jetonsDeCauseParFichier(undefined, [], ['package.json'])).toEqual({})
+  })
+  it('ignore un fichier introuvable sans lever', () => {
+    expect(jetonsDeCauseParFichier(undefined, [], ['src/main/neant-xyz.ts'])).toEqual({})
+  })
+})
