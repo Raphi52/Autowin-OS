@@ -40,7 +40,9 @@ describe('tour de chat — budget applique', () => {
     // Politique extraite dans chat-turn-budget.ts (conv-1149) : sans cap explicite les seuils
     // restent armes pour OBSERVER (ledger), et seule la coupure est desarmee.
     const budget = chatTurnBudget({})
-    expect(budget.limits).toEqual({ maxUsd: 2, maxTokens: 1_500_000, maxCalls: 6 })
+    expect(budget.limits).toEqual({ maxUsd: 2, // 8 M : calibrage MESURE le 2026-09-16 sur 7 356 tours reels (p99 = 7 622 971), pas un
+      // chiffre au doigt. Cette assertion RECOPIE la constante de prod : elle la suit, elle ne la borne pas.
+      maxTokens: 8_000_000, maxCalls: 6 })
     expect(budget.enforcement).toBe('metering-only')
   })
 
