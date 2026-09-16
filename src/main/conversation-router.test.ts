@@ -216,6 +216,36 @@ describe('ConversationRouter', () => {
     expect(registry.send).not.toHaveBeenCalled()
   })
 
+  /**
+   * Classer une conversation, c'est trancher « même sujet ou nouveau » sur quelques centaines de
+   * caractères. Mesuré le 2026-09-16 sur `.autowin-data/autowin-os/activity` : 1 901 classements
+   * sur claude-opus-5 pour 52,44 $, parce que le routeur empruntait le binding `orchestrator`.
+   * Il doit prendre le modèle LÉGER par défaut du provider, sans toucher aux rôles du pipeline.
+   */
+  it('classe sur le modèle LÉGER du provider, pas sur l’opus des rôles', async () => {
+    const registry = {
+      send: vi.fn(async (_p: string, _m: unknown, options: { model?: string }) => ({
+        text: '{"route":"current","confidence":0.99,"reason":"related","title":""}',
+        provider: 'claude',
+        model: options.model,
+        systemInjected: true
+      }))
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-opus-5', reasoningEffort: 'low' })
+    }
+    const router = new ConversationRouter(registry as never, roles as never, new ExecutionSupervisor())
+    await router.decide(
+      conversation([message('user', 'Sujet courant', 1)]),
+      'Suite substantielle du sujet courant, assez longue pour interroger le modèle'
+    )
+    expect(registry.send).toHaveBeenCalledWith(
+      'claude',
+      expect.any(Array),
+      expect.objectContaining({ model: 'claude-fable-5' })
+    )
+  })
+
   it('relit le binding après la readiness quand le catalogue revient pendant l’attente', async () => {
     const ready = deferred()
     let binding = {

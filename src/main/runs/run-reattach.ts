@@ -568,6 +568,8 @@ export interface RecoveredDetachedUsageSettlement {
   callId: string
   phase: OrchestrationRunState['phaseOutputs'][number]['phase']
   provider: string
+  /** Modèle de l'agent, quand le checkpoint le porte — jamais deviné. */
+  model?: string
   costUsd?: number
   inputTokens: number
   outputTokens: number
@@ -1027,6 +1029,9 @@ export function settleCompletedDetachedPhase(
       callId: `detached:${runId}:${attribution.agent.token}`,
       phase,
       provider: attribution.agent.provider,
+      // Le modèle vient du checkpoint de l'agent : sans lui la dépense réglée après coup est
+      // écrite « sans modèle » et sort de tout arbitrage (78 lignes, 131,69 $ au 2026-09-16).
+      ...(attribution.agent.model ? { model: attribution.agent.model } : {}),
       ...(success.costUsd === undefined ? {} : { costUsd: success.costUsd }),
       inputTokens: inputTokens - (prior.inputTokens ?? 0),
       outputTokens: outputTokens - (prior.outputTokens ?? 0),

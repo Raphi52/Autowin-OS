@@ -788,11 +788,19 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     await orch.run('modifie un fichier')
 
     expect(snapshots.slice(0, 2)).toEqual([
-      [{ token: 'tok-pending', provider: 'rec', phase: 'build', active: true, fanOut: false }],
+      [{
+        token: 'tok-pending',
+        provider: 'rec',
+        model: 'gros',
+        phase: 'build',
+        active: true,
+        fanOut: false
+      }],
       [
         {
           token: 'tok-pending',
           provider: 'rec',
+          model: 'gros',
           phase: 'build',
           active: true,
           fanOut: false,
@@ -834,7 +842,14 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
       await supervisor.run(quote, undefined, () => orch.run('modifie un fichier'))
       expect(checkpointAtIntent).toMatchObject({
         agents: [
-          { token: 'tok-pending', provider: 'rec', phase: 'build', active: true, fanOut: false }
+          {
+        token: 'tok-pending',
+        provider: 'rec',
+        model: 'gros',
+        phase: 'build',
+        active: true,
+        fanOut: false
+      }
         ],
         usage: {
           startedAgents: 1,
@@ -870,7 +885,14 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     await expect(orch.run('modifie un fichier')).rejects.toThrow(/annul.*processus/i)
 
     expect(snapshots.slice(0, 2)).toEqual([
-      [{ token: 'tok-failed', provider: 'rec', phase: 'build', active: true, fanOut: false }],
+      [{
+        token: 'tok-failed',
+        provider: 'rec',
+        model: 'gros',
+        phase: 'build',
+        active: true,
+        fanOut: false
+      }],
       []
     ])
   })
@@ -980,6 +1002,7 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
       {
         token: 'tok-1',
         provider: 'rec',
+        model: 'gros',
         phase: 'build',
         active: true,
         fanOut: false,
