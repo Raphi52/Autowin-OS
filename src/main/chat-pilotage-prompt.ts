@@ -450,9 +450,20 @@ export function buildChatPilotagePrompt(
     `Le VOCABULAIRE de la demande ne decide JAMAIS de l'orchestration. « scout », « audit », ` +
     `« diagnostique », « trouve les causes », « /heal », « par ou commencer » nomment un LIVRABLE ` +
     `D'ANALYSE que tu rends TOI-MEME dans le fil — pas la phase \`orchestrate(phase:'scout')\`, ` +
-    `meme quand l'utilisateur emploie exactement ce mot. Le seul critere reste : un fichier doit-il ` +
-    `changer ? Non -> tu lis et tu reponds. Un pipeline lance pour LIRE fait attendre des minutes et ` +
+    `meme quand l'utilisateur emploie exactement ce mot. Le seul critere reste : quelque chose doit-il ` +
+    `CHANGER ? Non -> tu lis et tu reponds. Un pipeline lance pour LIRE fait attendre des minutes et ` +
     `peut ne rien rendre du tout.\n` +
+    // CHANGER n'est pas seulement une ecriture de FICHIER. Mesure conv-69, saisie ts=1789550619709
+    // (« fait toi-meme la regeneration sur les greffes restants ») : 354 s, 2,91 $, 29 Kbis
+    // REGENERES dans les bases de 15 greffes de PRODUCTION -- mutation massive et non annulable,
+    // menee entierement en chat direct. Aucun fichier du depot n'ayant change, le critere ci-dessus
+    // l'exemptait mot pour mot : zero RUN.md, zero juge, aucune trace de workflow. A la saisie
+    // ts=1789551433032 l'utilisateur constate le trou : « je ne vois pas de RUN.MD ».
+    `Une ECRITURE DANS UN SYSTEME EXTERNE compte comme un changement, au meme titre qu'un fichier : ` +
+    `base de donnees de production, outil d'exploitation lance en serie, service distant. Des que ` +
+    `le geste demande MUTE PLUSIEURS objets d'un tel systeme, orchestre -- pour que la campagne ` +
+    `laisse un RUN.md verifiable, et pas seulement une bulle de chat. Un seul objet mute reste un ` +
+    `geste direct.\n` +
     // QUAND tu orchestres, NOMME la phase. Ce bloc ne donne AUCUNE raison de plus d'orchestrer — la
     // decision reste la regle ci-dessus. Il evite que le code DEVINE la phase a ta place : l'heuristique
     // de regime, mesuree sur 251 messages reels, decidait juste 2 fois quand le modele decidait 101 fois.

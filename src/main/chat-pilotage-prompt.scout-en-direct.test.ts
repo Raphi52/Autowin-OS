@@ -31,10 +31,22 @@ describe('chat-pilotage-prompt — le mot « scout » ne commande pas une orches
     }
   })
 
-  it('donne le critere de remplacement : un fichier doit-il changer ?', () => {
+  it('donne le critere de remplacement : quelque chose doit-il CHANGER ?', () => {
     // Interdire sans critere ne fait que deplacer l'hesitation : la regle doit rendre la decision.
     const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toMatch(/un fichier doit-il\s+changer/u)
+    expect(prompt).toMatch(/quelque chose doit-il\s+`?CHANGER/u)
+  })
+
+  /*
+    conv-69 (2026-09-16), saisie ts=1789550619709 : 29 Kbis regeneres dans les bases de 15 greffes de
+    production, en chat direct, sans qu'aucun fichier ne change -- donc zero RUN.md, et l'utilisateur
+    constate le trou a la saisie ts=1789551433032. Le critere doit nommer la mutation EXTERNE.
+  */
+  it('compte une mutation de systeme externe comme un changement', () => {
+    const prompt = buildChatPilotagePrompt([])
+    expect(prompt).toMatch(/ECRITURE DANS UN SYSTEME EXTERNE/u)
+    expect(prompt).toMatch(/base de donnees de production/u)
+    expect(prompt).toMatch(/MUTE PLUSIEURS objets/u)
   })
 
   it('porte le COUT mesure, pas seulement l’interdit', () => {
