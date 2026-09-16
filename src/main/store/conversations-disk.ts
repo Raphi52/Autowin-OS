@@ -250,6 +250,10 @@ function isConversation(value: unknown): value is Conversation {
   if (value.forkedFrom !== undefined && !isForkOrigin(value.forkedFrom)) return false
   if (value.autoKaizen !== undefined && !isAutoKaizenLink(value.autoKaizen)) return false
   if (!isOptionalString(value.projectPath)) return false
+  // Le libellé de classement, séparé du dossier de travail depuis conv-81 (2026-09-16). Optionnel :
+  // un fichier écrit avant la séparation n'en porte pas, et doit continuer à se relire.
+  if (!isOptionalString(value.categorie)) return false
+  // fix-ok: conv-81 — même cause : le libellé de catégorie sort de projectPath, la relecture doit donc accepter le champ categorie, sinon toute conversation classée par libellé serait rejetée au chargement.
   if (
     value.runPaths !== undefined &&
     (!Array.isArray(value.runPaths) || value.runPaths.some((entry) => typeof entry !== 'string'))

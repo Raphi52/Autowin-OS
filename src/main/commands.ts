@@ -771,10 +771,11 @@ const CATALOG: CommandSpec[] = [
      */
     name: 'classer_conversation',
     description:
-      'Classer une conversation dans une categorie (dossier) — la barre laterale groupe par dossier et indente les dossiers enfants en sous-categories. Chemin vide = retirer du classement.',
+      "Classer une conversation dans la barre laterale. Un CHEMIN de dossier (ex. D:/GIT/RigApplication) devient AUSSI le dossier de travail de la conversation, et le fil se range sous le nom de ce dossier ; les dossiers enfants s'indentent en sous-categories. Un LIBELLE libre (ex. « Perso ») ne cree qu'une categorie d'affichage et ne change PAS le dossier de travail. Vide = retirer du classement.",
     args: {
       id: 'identifiant de la conversation',
-      dossier: 'chemin du dossier (ex. C:/Clients ou C:/Clients/Amitel) ; vide pour declasser'
+      dossier:
+        'chemin du dossier de travail (ex. D:/GIT/RigApplication), OU libelle de categorie (ex. « Perso ») ; vide pour declasser'
     },
     annotations: {
       readOnlyHint: false,
@@ -2982,11 +2983,19 @@ export class AppCommandBus {
         return c
       }
       case 'classer_conversation': {
+        // fix-ok: conv-81 — la commande classer_conversation écrivait le libellé dans le dossier de travail ; elle route désormais sur la forme de la valeur et rend les DEUX champs.
         const dossier = typeof a.dossier === 'string' ? a.dossier.trim() : ''
         const c = this.os.conversations.rangerDansDossier(s('id'), dossier || null)
         if (!c) throw new Error(`conversation introuvable: ${s('id')}`)
         this.broadcast({ type: 'refresh', scope: 'conversations' })
-        return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }
+        // Les DEUX champs sont rendus : le magasin route sur la forme de la valeur, et un agent qui
+        // ne lirait que `dossier` conclurait « rien n'a ete range » apres avoir pose une categorie.
+        return {
+          id: c.id,
+          titre: c.title,
+          dossier: c.projectPath ?? null,
+          categorie: c.categorie ?? null
+        }
       }
       case 'retrospective': {
         const id = s('id')

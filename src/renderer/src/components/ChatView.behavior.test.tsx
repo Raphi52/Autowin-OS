@@ -235,9 +235,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
       )
     }
     const dossiersAffiches = (): string[] =>
-      [
-        ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
-      ].map((bouton) => bouton.dataset.projectPath!)
+      [...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')].map(
+        (bouton) => bouton.dataset.projectPath!
+      )
 
     await ouvrirMenuDossiers()
     expect(dossiersAffiches()).toContain('C:\\RIGApplication')
@@ -289,6 +289,83 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(document.querySelectorAll('[data-testid="conv-project-choice"]').length).toBe(0)
     // La croix RETIRE de la liste, elle ne RANGE pas : aucun classement ne doit partir.
     expect(conversationsSetProject).not.toHaveBeenCalled()
+  })
+
+  /**
+   * DES LIBELLES S'ETAIENT INSTALLES DANS LA LISTE DES DOSSIERS (conv-81, 2026-09-16).
+   *
+   * La liste memorise tout ce qui a servi a classer, et classer ecrivait dans le meme champ que le
+   * dossier de travail : « Perso » ou « Clients/Amitel » se retrouvaient donc proposes comme
+   * dossiers de travail. Les choisir renvoyait le tour dans le depot d'Autowin. Le nettoyage se
+   * fait a la LECTURE, pas par une migration : la liste vit dans le stockage local du navigateur, et
+   * un filtre au chargement vide l'existant ET refuse le suivant.
+   * fix-ok: conv-81 — ces tests fixent la cause mesurée : la liste des dossiers connus était amorcée depuis projectPath, qui contenait aussi des libellés de catégorie ; ils ne doivent plus y entrer, ni à la lecture ni à l'écriture.
+   */
+  it('retire de la liste des dossiers les libelles de categorie, et n’en reprend aucun', async () => {
+    window.localStorage.setItem(
+      'autowin.conv-folders.connus',
+      JSON.stringify(['C:\\Amitel\\Projet Alpha', 'Perso', 'Clients/Amitel', '\\\\srv\\part\\P'])
+    )
+    await mount(
+      api({
+        conversations: vi.fn().mockResolvedValue([{ ...conversation('A'), categorie: 'Factures' }])
+      })
+    )
+
+    const convA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find((b) =>
+      b.textContent?.includes('Conversation A')
+    )
+    await act(async () =>
+      convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
+    )
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-project"]')!.click()
+    )
+
+    const proposes = [
+      ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
+    ].map((bouton) => bouton.dataset.projectPath!)
+    expect(proposes).toEqual(['\\\\srv\\part\\P', 'C:\\Amitel\\Projet Alpha'])
+    // Le stockage est REECRIT propre : sinon les libelles reviendraient au prochain lancement.
+    expect(JSON.parse(window.localStorage.getItem('autowin.conv-folders.connus')!)).toEqual([
+      'C:\\Amitel\\Projet Alpha',
+      '\\\\srv\\part\\P'
+    ])
+    // La categorie de la conversation ne s'invite pas non plus dans la liste par l'amorcage.
+    expect(proposes).not.toContain('Factures')
+  })
+
+  /**
+   * LA PASTILLE DE LA BARRE DU HAUT DIT LE DOSSIER DE TRAVAIL, PAS LA CATEGORIE (conv-81).
+   *
+   * C'est le symptome que l'utilisateur voyait : « j'ai des CWD qui s'appellent comme des
+   * categories ». Classer un fil sous « Factures » ecrivait « Factures » dans le champ qui pilote
+   * le dossier de travail, et la pastille l'affichait comme tel — alors que le tour partait dans le
+   * depot d'Autowin.
+   */
+  it('affiche le dossier de travail reel dans la pastille, jamais le nom de la categorie', async () => {
+    window.localStorage.removeItem('autowin.conv-folders.connus')
+    await mount(
+      api({
+        conversations: vi.fn().mockResolvedValue([
+          {
+            ...conversation('A'),
+            categorie: 'Factures',
+            projectPath: 'D:\\GIT\\RigApplication'
+          }
+        ]),
+        defaultWorkspace: vi.fn().mockResolvedValue('C:\\Amitel\\Autowin OS')
+      })
+    )
+
+    const convA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find((b) =>
+      b.textContent?.includes('Conversation A')
+    )
+    await act(async () => convA!.click())
+
+    const pastille = container!.querySelector<HTMLButtonElement>('[data-testid="chat-project-dot"]')
+    expect(pastille?.textContent).toContain('RigApplication')
+    expect(pastille?.textContent).not.toContain('Factures')
   })
 
   it('fait basculer le controle principal de Stop a Reprendre sans rejouer le prompt', async () => {
@@ -1903,8 +1980,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(pane!.querySelector('[role="tablist"]')).toBeTruthy()
     expect(
       Array.from(pane!.querySelectorAll('button[role="tab"]')).map((b) => b.textContent?.trim())
-    // 2026-09-12 : l'onglet « Files » (diff des fichiers modifies + arborescence editable) rejoint
-    // les trois historiques. Le fil etait rouge ici depuis son arrivee dans `WorkflowsPanel`.
+      // 2026-09-12 : l'onglet « Files » (diff des fichiers modifies + arborescence editable) rejoint
+      // les trois historiques. Le fil etait rouge ici depuis son arrivee dans `WorkflowsPanel`.
     ).toEqual(['Graph', 'Runs', 'Logs', 'Files', 'Trace'])
     // Le graphe est monté d'emblée, et son détail de sélection reste sous lui.
     expect(pane!.querySelector('.workflow-execution-graph')).toBeTruthy()

@@ -293,3 +293,64 @@ describe('groupeRecent — le raccourci « Récent »', () => {
     expect(estReplie(GROUPE_RECENT, {})).toBe(false)
   })
 })
+
+/**
+ * UNE CATEGORIE N'EST PAS UN DOSSIER (conv-81, 2026-09-16).
+ *
+ * `projectPath` groupait la liste ET pilotait le dossier de travail de l'agent. Ranger un fil sous
+ * « Perso » ecrivait donc « Perso » comme dossier de travail. Le libelle vit maintenant dans
+ * `categorie`, et c'est LUI qui groupe quand il est la — le dossier de travail continue sa vie sans
+ * toucher a la barre laterale.
+ * fix-ok: conv-81 — test de la cause mesurée : groupeDe lisait projectPath, donc un libellé de classement devenait un dossier de travail.
+ */
+describe('une categorie de la liste n’est pas un dossier de travail', () => {
+  it('la categorie groupe, et son groupe n’est pas un dossier', () => {
+    expect(groupeDe(conv('a', { categorie: 'Perso' }))).toMatchObject({
+      key: 'Perso',
+      label: 'Perso',
+      kind: 'categorie'
+    })
+  })
+
+  it('la categorie l’emporte sur le dossier de travail : c’est toute la dissociation', () => {
+    // Le fil travaille dans RigApplication mais se range sous « Factures ». Sans cette priorite,
+    // choisir une categorie serait impossible des qu'un dossier de travail est assigne.
+    const c = conv('a', { projectPath: 'D:\\GIT\\RigApplication', categorie: 'Factures' })
+    expect(groupeDe(c)).toMatchObject({ key: 'Factures', kind: 'categorie' })
+  })
+
+  it('une analyse Auto-Kaizen reste chez les Auto-Kaizen, meme avec une categorie', () => {
+    const c = conv('a', { categorie: 'Perso', autoKaizen: { sourceId: 'x' } })
+    expect(groupeDe(c)).toMatchObject({ key: GROUPE_KAIZEN, kind: 'kaizen' })
+  })
+
+  it('une categorie vide ne cree pas un groupe fantome', () => {
+    expect(groupeDe(conv('a', { categorie: '   ' })).key).toBe(GROUPE_DIVERS)
+    expect(groupeDe(conv('b', { categorie: '', projectPath: 'C:\\P' })).key).toBe('C:\\P')
+  })
+
+  it('une categorie ne s’indente JAMAIS sous un dossier, meme si elle en porte la forme', () => {
+    // Un libelle avec un slash (« Clients/Amitel ») ressemble a un chemin : il ne doit pas pour
+    // autant se faire adopter par un groupe de dossier, ni descendre dans l'arborescence.
+    const groupes = grouperConversations([
+      conv('p', { projectPath: 'C:\\Clients' }),
+      conv('c', { categorie: 'Clients/Amitel' })
+    ])
+    const categorie = groupes.find((g) => g.kind === 'categorie')
+    expect(categorie?.parentKey).toBeUndefined()
+    expect(categorie?.depth).toBe(0)
+  })
+
+  it('categories et dossiers partagent le meme rang, par ordre alphabetique de libelle', () => {
+    // « Clients » avant « Perso » : une categorie ne se relegue pas en bas de liste, elle se range
+    // parmi les dossiers. Seuls « Divers » et Auto-kaizen restent dessous.
+    const groupes = grouperConversations([
+      conv('k', { autoKaizen: { sourceId: 'x' } }),
+      conv('d'),
+      conv('c', { categorie: 'Perso' }),
+      conv('p', { projectPath: 'C:\\Clients' })
+    ])
+    expect(groupes.map((g) => g.label)).toEqual(['Clients', 'Perso', 'Divers', 'Auto-kaizen'])
+    expect(groupes.map((g) => g.kind)).toEqual(['dossier', 'categorie', 'divers', 'kaizen'])
+  })
+})

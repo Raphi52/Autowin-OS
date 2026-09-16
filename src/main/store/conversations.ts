@@ -17,7 +17,7 @@ import {
 } from '../runs/run-interruption'
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
-import { canonicalProjectPath } from '../../shared/project-path'
+import { canonicalProjectPath, estCheminDeDossier } from '../../shared/project-path'
 import { motsDe, replier } from '../../shared/mots'
 import { parseAskDecision } from '../../renderer/src/components/ask-choices'
 import { memeFamille } from './synonymes'
@@ -103,7 +103,13 @@ export interface Conversation {
   /** Filiation durable d'une analyse/correction Auto-Kaizen avec la conversation source. */
   autoKaizen?: AutoKaizenConversationLink
   /**
-   * Le dossier de travail auquel cette conversation appartient — ce qui la GROUPE dans la liste.
+   * Le dossier de travail auquel cette conversation appartient — le répertoire où l'agent travaille.
+   *
+   * N'accepte QUE des chemins (`estCheminDeDossier`). Il a longtemps porté DEUX rôles à la fois —
+   * dossier de travail ET catégorie de la barre latérale — et c'était le défaut : classer sous
+   * « Perso » écrivait « Perso » comme dossier de travail, le tour partait quand même dans le dépôt
+   * d'Autowin, et le libellé allait grossir la liste des dossiers connus du menu « Ranger dans… »
+   * (conv-81, 2026-09-16). Les libellés vivent désormais dans `categorie`.
    *
    * Distinct de `provider`, qui porte le MOTEUR (`'claude' | 'codex' | ...`) : le détourner pour
    * y ranger un dossier casserait l'affichage et les recopies sans erreur visible.
@@ -112,6 +118,20 @@ export interface Conversation {
    * continuer à se relire. Absent → la conversation vit dans « Divers ».
    */
   projectPath?: string
+  /**
+   * La CATÉGORIE de la barre latérale, quand elle ne correspond à aucun dossier de travail.
+   *
+   * Un libellé libre (« Perso », « Clients/Amitel ») : il groupe la conversation dans la liste et
+   * ne pilote RIEN d'autre. Quand il est présent, il l'emporte sur `projectPath` pour le
+   * groupement — c'est ce qui permet à un fil de travailler dans `D:\GIT\RigApplication` tout en
+   * étant rangé sous « Factures ».
+   *
+   * OPTIONNEL, et il le reste. Un ancien fichier qui range un libellé dans `projectPath` le voit
+   * DÉPLACÉ ici à la relecture (`hydrate`) — déplacé, pas effacé : le rangement de l'utilisateur
+   * lui survit.
+   * fix-ok: conv-81 — cause mesurée : projectPath servait de dossier de travail ET de catégorie ; ce champ prend les libellés pour que le dossier de travail ne soit plus écrit par un simple classement.
+   */
+  categorie?: string
   /**
    * Repère VISUEL posé à la main pour retrouver cette conversation dans la liste.
    *
@@ -618,10 +638,32 @@ export class ConversationStore {
       const legacyCategory = rest.category
       delete rest.category
       const provider = legacy.provider as string
+      const ancienChemin = legacy.projectPath as string | undefined
+      /*
+       * UN LIBELLÉ ÉGARÉ DANS LE DOSSIER DE TRAVAIL EST DÉPLACÉ, PAS EFFACÉ (conv-81, 2026-09-16).
+       *
+       * `projectPath` a longtemps servi AUSSI de catégorie : les fichiers déjà écrits portent donc
+       * des « Perso » ou « Clients/Amitel » là où un chemin est attendu. Les effacer ferait perdre
+       * un rangement fait à la main ; les laisser ferait repartir le défaut à chaque lecture — ces
+       * libellés remplissaient la liste des dossiers connus et faisaient croire à un dossier de
+       * travail qui n'a jamais existé. On les déplace UNE fois, tels quels : la casse et les
+       * séparateurs d'un libellé sont ce que l'utilisateur a écrit, ils ne se canonisent pas.
+       *
+       * Une `categorie` déjà présente l'emporte : elle vient d'une écriture plus récente et
+       * délibérée, et fusionner deux libellés en un seul serait pire que d'en garder le bon.
+       */
+      const libelleEgare =
+        typeof ancienChemin === 'string' &&
+        ancienChemin.trim().length > 0 &&
+        !estCheminDeDossier(ancienChemin)
+      const categorieLue = typeof rest.categorie === 'string' ? rest.categorie.trim() : ''
+      const categorie = categorieLue || (libelleEgare ? (ancienChemin as string).trim() : '')
+      if (categorie) rest.categorie = categorie
+      else delete rest.categorie
       // Normalisation UNIQUE des chemins déjà écrits sous une forme non canonique : sans elle,
       // seules les écritures neuves seraient canoniques et l'ancien resterait dupliqué à vie.
-      const canonicalPath = canonicalProjectPath(legacy.projectPath as string | undefined)
-      const pathChanged = (legacy.projectPath as string | undefined) !== canonicalPath
+      const canonicalPath = libelleEgare ? undefined : canonicalProjectPath(ancienChemin)
+      const pathChanged = ancienChemin !== canonicalPath
       if (canonicalPath) rest.projectPath = canonicalPath
       else delete rest.projectPath
       const hydrated: Conversation = {
@@ -635,6 +677,9 @@ export class ConversationStore {
         hadWorkspaceId ||
         legacyCategory !== undefined ||
         pathChanged ||
+        // Le libellé a changé de champ (ou a seulement été détouré) : le fichier doit être réécrit,
+        // sinon la migration recommencerait à chaque démarrage sans jamais être enregistrée.
+        legacy.categorie !== (categorie || undefined) ||
         legacy.authorityMode !== undefined ||
         hadBranches
       ) {
@@ -1710,11 +1755,28 @@ export class ConversationStore {
   }
 
   /**
-   * Range la conversation dans un dossier de travail — c'est ce qui la groupe dans la liste.
+   * Range la conversation — dans un DOSSIER de travail, ou sous une CATÉGORIE de la liste.
    *
-   * `null` la SORT de son groupe (retour à « Divers ») : sans ce chemin, un rangement serait
-   * définitif et la seule façon d'en sortir serait de supprimer la conversation. Le champ est effacé
-   * plutôt que mis à la chaîne vide, pour qu'un `conversations.json` relu n'en garde aucune trace.
+   * Le routage se fait sur la FORME de la valeur reçue, et c'est le point unique qui empêche le
+   * défaut de revenir (conv-81, 2026-09-16) : un chemin (`D:\GIT\RigApplication`) devient le
+   * dossier de travail, tout le reste (« Perso », « Clients/Amitel ») devient une simple catégorie.
+   * Sans ce tri, classer sous un libellé écrivait ce libellé comme dossier de travail : le tour
+   * partait quand même dans le dépôt d'Autowin, et le libellé se retrouvait proposé comme dossier
+   * dans le menu « Ranger dans… ». Le tri est ICI et non chez les appelants — l'IPC, la commande
+   * `classer_conversation` et le glisser-déposer passent tous par cette méthode, et une règle posée
+   * dans trois appelants finit par diverger dans l'un des trois.
+   *
+   * Un libellé laisse le dossier de travail INTACT : c'est exactement ce que demande « dissocier le
+   * CWD du nom de la catégorie » — un fil peut travailler dans `D:\GIT\RigApplication` et être rangé
+   * sous « Factures ».
+   *
+   * Un vrai dossier, lui, EFFACE la catégorie : la conversation se regroupe alors sous le nom de son
+   * dépôt, ce qui est la contrepartie attendue de « renseigne le dossier et classe le fil dans la
+   * catégorie qui porte son nom ». Une catégorie survivante la cacherait ailleurs.
+   *
+   * `null` la SORT des deux (retour à « Divers ») : sans ce chemin, un rangement serait définitif et
+   * la seule façon d'en sortir serait de supprimer la conversation. Les champs sont effacés plutôt
+   * que mis à la chaîne vide, pour qu'un `conversations.json` relu n'en garde aucune trace.
    *
    * Ne touche PAS `updatedAt` : déplacer une conversation n'est pas y travailler, et la liste est
    * triée par `updatedAt` — un rangement la ferait remonter en tête comme si elle venait de servir.
@@ -1722,9 +1784,20 @@ export class ConversationStore {
   rangerDansDossier(id: string, projectPath: string | null): Conversation | undefined {
     const conversation = this.conversations.get(id)
     if (!conversation) return undefined
-    const propre = canonicalProjectPath(projectPath)
-    if (propre) conversation.projectPath = propre
-    else delete conversation.projectPath
+    const brut = projectPath?.trim() ?? ''
+    if (!brut) {
+      delete conversation.projectPath
+      delete conversation.categorie
+    } else if (estCheminDeDossier(brut)) {
+      const propre = canonicalProjectPath(brut)
+      if (propre) conversation.projectPath = propre
+      else delete conversation.projectPath
+      delete conversation.categorie
+    } else {
+      // Libellé : la casse et les séparateurs sont ceux que l'utilisateur a écrits, on ne les
+      // canonise pas — « Clients/Amitel » n'est pas un chemin et n'a pas à en prendre la forme.
+      conversation.categorie = brut
+    }
     this.changed(id)
     return conversation
   }

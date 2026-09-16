@@ -130,8 +130,10 @@ import {
   groupesVisibles,
   grouperConversations,
   nomDeDossier,
-  ordonnerGroupes
+  ordonnerGroupes,
+  type ConversationGroupKind
 } from './conversation-groups'
+import { estCheminDeDossier } from '../../../shared/project-path'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
@@ -190,6 +192,19 @@ const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
 const CLE_MODE_AUTO_CONVS = 'autowin.chat.modeAuto.convs'
 /** Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions. */
 const CLE_DOSSIER_NOUVEAU_FIL = 'autowin.chat.dossierNouveauFil'
+
+/**
+ * Peut-on DEPOSER une conversation sur l'en-tete de ce groupe ?
+ *
+ * Oui pour un rangement voulu par l'utilisateur — un dossier de travail, ou une categorie. Non pour
+ * un groupe DERIVE : « Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence de
+ * rangement, « Recent » est un raccourci qui duplique. Y trainer une conversation ne voudrait rien
+ * dire, et la cle du groupe n'est alors pas un rangement transmissible a `rangerDansDossier`.
+ * fix-ok: conv-81 — cause mesurée dans la vue : la clé du groupe servait de cible de dépôt, or un groupe dérivé (Divers, Récent, Auto-kaizen) n'a pas de rangement transmissible ; on ne laisse déposer que sur un dossier ou une catégorie.
+ */
+function deposable(kind: ConversationGroupKind): boolean {
+  return kind === 'dossier' || kind === 'categorie'
+}
 
 function lireJaugesMemorisees(): Record<string, ContextGauge> {
   try {
@@ -425,11 +440,15 @@ export function ChatView({
    * ne se choisissait que sur une conversation EXISTANTE (menu ⋮), donc le premier tour d'un fil
    * neuf tournait toujours dans le depot de repli. L'intention est gardee ici, puis posee sur la
    * conversation des sa creation — `dossierDeTravailDuTour` la lit alors des le premier tour.
+   *
+   * Un LIBELLE deja memorise ici est ignore (conv-81) : avant la separation, le menu proposait des
+   * categories parmi les dossiers, et en choisir une armait le prochain fil sur un dossier qui
+   * n'existe pas. La pastille du haut affichait alors ce libelle comme dossier de travail.
    */
   const [dossierNouveauFil, setDossierNouveauFil] = useState<string | null>(() => {
     try {
       const lu = window.localStorage.getItem(CLE_DOSSIER_NOUVEAU_FIL)
-      return lu && lu.trim() ? lu : null
+      return lu && estCheminDeDossier(lu) ? lu : null
     } catch {
       return null
     }
@@ -857,7 +876,6 @@ export function ChatView({
       if (mosaicFils[id]) continue
       void ouvrirDansMosaique(id)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mosaicIds, mosaicFils])
   const [convViewMode, setConvViewMode] = useState<'list' | 'mosaic'>(() =>
     window.localStorage.getItem('autowin.chat.conversationsViewMode') === 'mosaic'
@@ -4194,7 +4212,10 @@ export function ChatView({
      clic. Le bloc revient de lui-meme si un nouveau fil est coupe — masquer pour toujours ferait
      rater une coupure suivante. */
   const [repriseQuotaMasqueePour, setRepriseQuotaMasqueePour] = useState<string | null>(null)
-  const cleRepriseQuota = convsCoupeesParQuota.map((c) => c.id).sort().join('|')
+  const cleRepriseQuota = convsCoupeesParQuota
+    .map((c) => c.id)
+    .sort()
+    .join('|')
   const [repriseAutoPrevueA, setRepriseAutoPrevueA] = useState<string | null>(null)
   const repriseAutoDejaTentee = useRef<string | undefined>(undefined)
   const repriseQuotaRef = useRef<() => Promise<void>>(async () => undefined)
@@ -4674,13 +4695,20 @@ export function ChatView({
    * DISPARAITRE du menu -- il fallait re-parcourir le disque pour le retrouver. On persiste donc
    * les dossiers deja choisis, et on les retire seulement sur un geste EXPLICITE (la croix).
    * `localStorage` et non le store disque : c'est une preference d'affichage locale.
+   *
+   * SEULS DES CHEMINS Y ENTRENT (conv-81, 2026-09-16). La liste memorisait tout ce qui avait servi
+   * a classer, et classer ecrivait dans le meme champ que le dossier de travail : des libelles
+   * (« Perso », « Clients/Amitel ») se retrouvaient donc proposes comme dossiers de travail, et les
+   * choisir renvoyait le tour dans le depot d'Autowin. Le filtre est pose a la LECTURE autant qu'a
+   * l'ecriture : a la lecture il vide ce qui s'est deja installe (cette liste vit dans le stockage
+   * local, il n'y a pas de migration de fichier possible), a l'ecriture il empeche le retour.
    */
   const [dossiersMemorises, setDossiersMemorises] = useState<string[]>(() => {
     try {
       const brut = window.localStorage.getItem(CLE_DOSSIERS_CONNUS)
       const lu = brut ? (JSON.parse(brut) as unknown) : null
       if (Array.isArray(lu))
-        return lu.filter((x): x is string => typeof x === 'string' && !!x.trim())
+        return lu.filter((x): x is string => typeof x === 'string' && estCheminDeDossier(x))
     } catch {
       /* preference illisible : on repart des dossiers reellement utilises */
     }
@@ -4688,7 +4716,7 @@ export function ChatView({
   })
   const memoriserDossier = useCallback((chemin: string): void => {
     const propre = chemin.trim()
-    if (!propre) return
+    if (!estCheminDeDossier(propre)) return
     setDossiersMemorises((connus) => (connus.includes(propre) ? connus : [...connus, propre]))
   }, [])
   const oublierDossier = useCallback((chemin: string): void => {
@@ -4771,7 +4799,11 @@ export function ChatView({
   useEffect(() => {
     if (amorce.current || convs.length === 0) return
     amorce.current = true
-    const utilises = convs.map((conv) => conv.projectPath?.trim()).filter(Boolean) as string[]
+    // `projectPath` seulement, jamais `categorie` : un libellé de classement n'est pas un dossier
+    // de travail, et l'amorçage est justement par où ils entraient dans la liste (conv-81).
+    const utilises = convs
+      .map((conv) => conv.projectPath?.trim())
+      .filter((chemin): chemin is string => estCheminDeDossier(chemin))
     if (utilises.length > 0)
       setDossiersMemorises((connus) => [...new Set([...connus, ...utilises])])
   }, [convs])
@@ -4793,6 +4825,7 @@ export function ChatView({
     const entrees = conversationHits.map((hit) => ({
       id: hit.conversation.id,
       projectPath: hit.conversation.projectPath,
+      categorie: hit.conversation.categorie,
       autoKaizen: hit.conversation.autoKaizen,
       hit
     }))
@@ -5042,65 +5075,65 @@ export function ChatView({
             alors que les deux autres attendaient leur tour, invisibles. */}
         {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) &&
           (repriseQuotaEnCours || repriseQuotaMasqueePour !== cleRepriseQuota) && (
-          <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
-            {!repriseQuotaEnCours ? (
-              <button
-                type="button"
-                className="conv-reprise-quota-fermer"
-                data-testid="conv-reprise-quota-fermer"
-                aria-label="Masquer"
-                title="Masquer (réapparaît si une autre conversation est coupée)"
-                onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
-              >
-                ×
-              </button>
-            ) : null}
-            {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
+            <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
+              {!repriseQuotaEnCours ? (
+                <button
+                  type="button"
+                  className="conv-reprise-quota-fermer"
+                  data-testid="conv-reprise-quota-fermer"
+                  aria-label="Masquer"
+                  title="Masquer (réapparaît si une autre conversation est coupée)"
+                  onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
+                >
+                  ×
+                </button>
+              ) : null}
+              {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
                 reprise, la notice reste seule quelques secondes, sans un « (0) » qui n'offre
                 rien a cliquer. */}
-            {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
-              <button
-                type="button"
-                className="conv-date-sort"
-                data-testid="conv-reprise-quota-bouton"
-                disabled={repriseQuotaEnCours}
-                onClick={() => void reprendreConversationsCoupeesParQuota()}
-                title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
-              >
-                {repriseQuotaEnCours ? (
-                  <>
-                    <Spinner size={12} label="Reprise des conversations en cours" />
-                    {repriseQuotaProgres ?? 'Reprise en cours…'}
-                  </>
-                ) : (
-                  `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
-                )}
-              </button>
-            ) : null}
-            {repriseQuotaNotice ? (
-              <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
-                {repriseQuotaNotice}
-              </span>
-            ) : null}
-            {/* Rien ne part en silence : quand une reprise est armée, elle s'annonce avec son heure
-                et offre le moyen de l'annuler. Sans ce libelle, l'utilisateur verrait ses fils
-                repartir sans savoir pourquoi. */}
-            {repriseAutoPrevueA ? (
-              <span className="conv-auto-notice" data-testid="conv-reprise-quota-auto">
-                {libelleRepriseProgrammee(repriseAutoPrevueA, convsCoupeesParQuota.length)}
+              {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
                 <button
                   type="button"
                   className="conv-date-sort"
-                  data-testid="conv-reprise-quota-auto-annuler"
-                  onClick={() => setRepriseAutoRefusee(true)}
-                  title="Ne pas reprendre automatiquement au retour du quota"
+                  data-testid="conv-reprise-quota-bouton"
+                  disabled={repriseQuotaEnCours}
+                  onClick={() => void reprendreConversationsCoupeesParQuota()}
+                  title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
                 >
-                  ne pas reprendre
+                  {repriseQuotaEnCours ? (
+                    <>
+                      <Spinner size={12} label="Reprise des conversations en cours" />
+                      {repriseQuotaProgres ?? 'Reprise en cours…'}
+                    </>
+                  ) : (
+                    `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
+                  )}
                 </button>
-              </span>
-            ) : null}
-          </div>
-        )}
+              ) : null}
+              {repriseQuotaNotice ? (
+                <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
+                  {repriseQuotaNotice}
+                </span>
+              ) : null}
+              {/* Rien ne part en silence : quand une reprise est armée, elle s'annonce avec son heure
+                et offre le moyen de l'annuler. Sans ce libelle, l'utilisateur verrait ses fils
+                repartir sans savoir pourquoi. */}
+              {repriseAutoPrevueA ? (
+                <span className="conv-auto-notice" data-testid="conv-reprise-quota-auto">
+                  {libelleRepriseProgrammee(repriseAutoPrevueA, convsCoupeesParQuota.length)}
+                  <button
+                    type="button"
+                    className="conv-date-sort"
+                    data-testid="conv-reprise-quota-auto-annuler"
+                    onClick={() => setRepriseAutoRefusee(true)}
+                    title="Ne pas reprendre automatiquement au retour du quota"
+                  >
+                    ne pas reprendre
+                  </button>
+                </span>
+              ) : null}
+            </div>
+          )}
         <div className="conv-list scroll-y">
           <button
             className={`conv-new-row${convViewMode !== 'mosaic' && activeId === null ? ' active' : ''}`}
@@ -5147,7 +5180,7 @@ export function ChatView({
                   data-testid={`conv-group-${groupe.key}`}
                   data-depth={groupe.depth}
                   onDragOver={(e) => {
-                    if (groupe.kind !== 'dossier') return
+                    if (!deposable(groupe.kind)) return
                     e.preventDefault()
                     setSurvole(groupe.key)
                   }}
@@ -5156,14 +5189,14 @@ export function ChatView({
                     e.preventDefault()
                     setSurvole(null)
                     const id = e.dataTransfer.getData('text/autowin-conversation')
-                    if (id && groupe.kind === 'dossier') void rangerDans(id, groupe.key)
+                    if (id && deposable(groupe.kind)) void rangerDans(id, groupe.key)
                   }}
                 >
                   <button
                     className="conv-group-head"
                     onClick={() => basculerGroupe(groupe.key, replie)}
                     aria-expanded={!replie}
-                    title={groupe.kind === 'dossier' ? groupe.key : groupe.label}
+                    title={deposable(groupe.kind) ? groupe.key : groupe.label}
                     style={{ paddingLeft: 8 + groupe.depth * 14 }}
                   >
                     <span className="conv-group-chevron" aria-hidden="true">
@@ -5362,7 +5395,11 @@ export function ChatView({
                 </span>
                 Ranger dans un dossier…
               </button>
-              {convMenu.conv.projectPath && (
+              {/*
+                La categorie compte autant que le dossier : sans elle dans ce test, un fil range
+                sous un libelle n'avait plus AUCUN moyen d'en sortir depuis le menu (conv-81).
+              */}
+              {(convMenu.conv.projectPath || convMenu.conv.categorie) && (
                 <button
                   role="menuitem"
                   data-testid="conv-menu-clear-project"
