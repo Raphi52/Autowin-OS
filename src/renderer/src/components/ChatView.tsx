@@ -74,6 +74,9 @@ import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
 import { HdeskTv } from './HdeskTv'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
+// La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
+// de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
+import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
 import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
