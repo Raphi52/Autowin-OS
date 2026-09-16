@@ -1390,5 +1390,27 @@ export function formatOrchestrationOutcome(
     )
   if (closingNotice?.trim()) lines.push('', closingNotice.trim())
   if (delivered) lines.push('', ...deliveredClosingBlock(data))
+  /*
+   * UN ARRET REND LA MAIN, IL NE COUPE PAS LA CHAINE.
+   *
+   * Mesure conv-597, tour `ac411810-571a-4a7c-ae59-86be8c15e759` (saisie ts 1789564941442 :
+   * « yavais pas de preprompt le mode auto a pas pu continuer ») : sur `gateBlocked`, ce texte
+   * s'arretait au panneau d'arret, sans rubrique « Recommande ». Le mode auto lit exactement cette
+   * rubrique comme repli de suite (`deciderRelanceAuto`, chat-auto-mode.ts) : sans elle il rend
+   * `aucun-prompt` et s'eteint pile sur l'echec, apres 10,90 $ deja depenses. On ne fabrique AUCUN
+   * vert ici — le panneau d'arret et sa cause restent en tete — on nomme seulement la suite
+   * atteignable. Le garde-fou `prompt-identique` du mode auto borne la reprise a un seul essai.
+   */
+  else if (gateBlocked || invalid) {
+    const action = blocage.lecture?.action
+    lines.push(
+      '',
+      `👉 Recommandé : reprendre le travail arrêté — ${
+        action
+          ? `${action}, puis relancer la même demande`
+          : 'corriger la cause nommée ci-dessus, puis relancer la même demande'
+      }.`
+    )
+  }
   return lines.join('\n')
 }
