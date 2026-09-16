@@ -448,7 +448,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           {runs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               {activeId
-                ? 'Aucun RUN.md pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
+                ? "Aucun RUN.md pour cette conversation. C'est normal quand tout a été traité directement dans le chat : un tour de chat n'en crée pas, même long. Le déroulé de ces tours reste lisible dans l'onglet Graph ci-dessus et dans l'Observatory. Un RUN.md n'apparaît ici que si une tâche est orchestrée, ou si tu en attaches un."
                 : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'}
             </div>
           )}
