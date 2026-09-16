@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { REGLES_VISUELLES } from './chat-pilotage-prompt'
 
 /**
  * DEFAUT VECU (conv-1450) : l'utilisateur a demande de VOIR la capture qui sert a valider une modif
@@ -9,7 +9,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
  */
 describe('preuve visuelle des modifications front', () => {
   it('impose une capture LUE et MONTREE avant tout verdict sur une modification visible', () => {
-    const prompt = buildChatPilotagePrompt([])
+    const prompt = REGLES_VISUELLES
     expect(prompt).toContain('PREUVE VISUELLE FRONT')
     expect(prompt).toContain('desktop_observe')
     expect(prompt).toContain('avant de dire « fait »')

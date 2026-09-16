@@ -192,6 +192,8 @@ import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
 import { runSqlRead } from './sql-read-command'
+import type { PorteProd } from './prod-gate'
+import type { GuichetProd } from './prod-guichet'
 import type {
   TicketCreateRequest,
   TicketGetRequest,
@@ -556,11 +558,12 @@ export function circonstanceDePublication(finalized: Record<string, unknown>): s
   }
 }
 
-const CATALOG: CommandSpec[] = [
+/** Le catalogue BRUT, expose pour que les tests puissent en mesurer le poids dans le prompt. */
+export const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail. Pour voir une application que tu viens de modifier, de compiler ou de lancer, le bureau CACHE est le reflexe premier : `scripts/hdesk-lancer.ps1` puis `scripts/hdesk-observe.ps1` (et `node scripts/ui-capture.mjs` pour une vue d'Autowin). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; dans ce cas passe `ecran_utilisateur: true` et dis-le en une ligne (defaut vecu conv-586, tour 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63 : capture de l'ecran reel, annulation utilisateur 17 s plus tard). Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
+      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail : le bureau CACHE est le reflexe premier (voir REGLES_VISUELLES du prompt de pilotage). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
     args: {
       display:
         'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans',
@@ -1893,7 +1896,22 @@ export class AppCommandBus {
      */
     private readonly sqlcmdPath?: string,
     /** Ledger causal des leçons de run. Dernier paramètre pour préserver les appels positionnels. */
-    private readonly outcomeLearning?: OutcomeLearningSupervisor
+    private readonly outcomeLearning?: OutcomeLearningSupervisor,
+    /**
+     * LE POINT DE PASSAGE DE PRODUCTION (`prod-gate.ts`). Absent → rien ne change : les gardes
+     * historiques s'appliquent seules. Présent → il décide, AVANT toute connexion, si la cible exige
+     * une autorisation saisie par l'utilisateur.
+     *
+     * Ajouté en DERNIER, comme `sqlcmdPath` avant lui et pour la même raison : les paramètres de ce
+     * constructeur sont positionnels, l'insérer plus haut décalerait silencieusement les appels.
+     */
+    private readonly porteProd?: PorteProd,
+    /**
+     * LE GUICHET (`prod-guichet.ts`) : au refus de la porte, il ouvre l'écran de saisie chez
+     * l'utilisateur et attend le jeton, puis le geste est rejoué. Absent → le refus part tel quel.
+     * Positionnel lui aussi, donc ajouté APRÈS `porteProd`.
+     */
+    private readonly guichetProd?: GuichetProd
   ) {}
 
   /**
@@ -3452,7 +3470,16 @@ export class AppCommandBus {
             database: a.database,
             query: a.query
           },
-          { ...(this.cheminSqlcmd() ? { sqlcmdPath: this.cheminSqlcmd() } : {}) }
+          {
+            ...(this.cheminSqlcmd() ? { sqlcmdPath: this.cheminSqlcmd() } : {}),
+            // La porte décide dans `runSqlRead`, pas ici : un garde posé sur le site d'appel se
+            // contourne en ajoutant un second appelant. Aucun jeton n'est transmis par le modèle —
+            // il ne peut donc pas s'autoriser en l'inventant dans ses arguments.
+            ...(this.porteProd ? { porteProd: this.porteProd } : {}),
+            // Le guichet ne contourne rien : il ouvre l'écran de saisie de l'utilisateur quand la
+            // porte refuse, et c'est la porte qui tranche à nouveau avec le jeton obtenu.
+            ...(this.guichetProd ? { guichetProd: this.guichetProd } : {})
+          }
         )
       case 'ticket_get':
         return await getTicketFromCommand(a as TicketGetArgs, {

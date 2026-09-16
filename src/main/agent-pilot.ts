@@ -39,8 +39,13 @@ import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
+import { consigneBureauCacheChat } from './consigne-bureau-cache'
 import { routeSkillRequest } from './skill-routing'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import {
+  REGLES_VISUELLES,
+  buildChatPilotagePrompt,
+  tourTouchantAuVisuel
+} from './chat-pilotage-prompt'
 import {
   conversationPretendueInaccessible,
   correctionConversationLisible,
@@ -737,6 +742,16 @@ export class AgentPilot {
   private readonly comptesRendusNonVus = new Map<string, string>()
 
   /**
+   * DERNIER etat de l'app deja pousse dans chaque conversation.
+   *
+   * Sert a n'envoyer QUE le changement quand la session du modele est reprise : cet etat part
+   * cote MESSAGE, il change a chaque tour, donc il nest jamais mis en cache et se repaie PLEIN
+   * TARIF. Mesure du 2026-09-16 (conv-614) : 3 043 caracteres par tour, dont 2 821 pour la seule
+   * liste des skills, identique dun tour a lautre.
+   */
+  private readonly dernierEtatPousse = new Map<string, unknown>()
+
+  /**
    * L'index memoire ci-dessus est HYDRATE une fois depuis le disque, puis maintenu en miroir.
    *
    * Sans cela, le gain de la reprise de session s'evaporait a CHAQUE redemarrage de l'app : la `Map`
@@ -1212,7 +1227,23 @@ export class AgentPilot {
             { name: 'constitution', text: CONSTITUTION },
             { name: 'pilotage', text: pilotage },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            { name: 'projectContext', text: this.projectContext(conversationId) }
+            { name: 'projectContext', text: this.projectContext(conversationId) },
+            /**
+             * DERNIER bloc, et conditionnel : les regles de travail visuel (preuve a l'ecran,
+             * bureau cache, bissection, maquette tenue) pesent 3 966 caracteres (~1 000 tokens) sur les 16 982 tokens du
+             * prompt systeme (mesure 2026-09-16, conv-614). Elles ne servent qu'a un tour qui
+             * touche a l'interface ou capture un ecran.
+             *
+             * En DERNIER a dessein : le cache du provider vaut par son PREFIXE. Tout ce qui
+             * precede reste identique d'un tour a l'autre et donc relu depuis le cache ; seule
+             * cette queue apparait ou disparait.
+             */
+            {
+              name: 'visuel',
+              text: tourTouchantAuVisuel(latestUserMessage ?? '')
+                ? REGLES_VISUELLES + consigneBureauCacheChat(conversationId ?? '')
+                : ''
+            }
           ]
     const system = systemParts.map((p) => p.text).join('')
     const systemBlocks = systemParts
@@ -1369,8 +1400,11 @@ export class AgentPilot {
      * de decision. Une entree absente du registre n'est jamais devinee : elle ressort sous le nom
      * generique de l'echange intra-tour, qui est ce qu'elle est.
      */
+    const cleEtat = conversationId ?? ''
+    const snapshotPrecedent = this.dernierEtatPousse.get(cleEtat)
     const blocsDuTour = buildTurnMessageBlocks({
       snapshot,
+      ...(snapshotPrecedent !== undefined ? { snapshotPrecedent } : {}),
       brainContext,
       memoryEcho,
       rappelConversations,
@@ -1381,6 +1415,8 @@ export class AgentPilot {
       compteRenduNonVu,
       tourCoupePourCeMessage
     })
+    // Ce qui vient detre pousse devient la reference du prochain tour de CETTE conversation.
+    this.dernierEtatPousse.set(cleEtat, snapshot)
     const nomsDuTour = new Map(blocsDuTour.map((bloc) => [bloc.text, bloc.name]))
     const convo: string[] = blocsDuTour.map((bloc) => bloc.text)
     /** Decomposition NOMMEE de ce qui part cote user, relue a l'instant de l'envoi. */

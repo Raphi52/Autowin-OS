@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { REGLES_VISUELLES } from './chat-pilotage-prompt'
 
 /**
  * DEFAUT VECU (conv-1582, 2026-08-31) : apres cinq hypotheses fausses sur des triangles visibles
@@ -10,7 +10,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
  */
 describe('bissection visuelle depuis le chat', () => {
   it('interdit le faux blocage de capacite et impose la boucle isoler/observer/restaurer', () => {
-    const prompt = buildChatPilotagePrompt([])
+    const prompt = REGLES_VISUELLES
     expect(prompt).toContain('BISSECTION VISUELLE')
     expect(prompt).toContain('je ne peux pas isoler depuis le chat')
     expect(prompt).toContain("n'orchestre pas")

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { REGLES_VISUELLES } from './chat-pilotage-prompt'
 
 /**
  * DEFAUT VECU (conv-605, 2026-09-16) : le chat a propose trois maquettes d'un pas de frise dans un
@@ -12,7 +12,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
  */
 describe('maquette montree = maquette tenue', () => {
   it('impose le contenu reel dans la maquette et l ecart dit a la livraison', () => {
-    const prompt = buildChatPilotagePrompt([])
+    const prompt = REGLES_VISUELLES
     expect(prompt).toContain('MAQUETTE MONTRÉE = MAQUETTE TENUE')
     expect(prompt).toContain('libellés et glyphes EXACTS')
     expect(prompt).toContain('en CSS seul')

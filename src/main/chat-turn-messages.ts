@@ -12,10 +12,22 @@
  */
 
 import { COMPACT_REQUEST } from '../shared/context-gauge'
+import { type EtatPrompt, blocEtatSuivant } from './etat-diff'
 
 export interface TurnMessageParts {
   /** État courant de l'app, sérialisé. */
   snapshot: unknown
+  /**
+   * DERNIER état déjà poussé dans la session REPRISE, s'il y en a un.
+   *
+   * Fourni, le bloc d'état devient un DIFF : la session du provider porte deja l'état complet, le
+   * repousser entier le fait repayer PLEIN TARIF a chaque message (il change, donc il n'est jamais
+   * mis en cache). Mesure du 2026-09-16 (conv-614) : 3 043 caracteres d'état a chaque tour, dont
+   * 2 821 (93 %) pour la seule liste des skills, qui ne bouge jamais.
+   *
+   * `diffEtat` existait, teste, depuis le 2026-08-31 — mais n'etait appele NULLE PART.
+   */
+  snapshotPrecedent?: EtatPrompt
   /** Bloc de connaissance récupérée (Brain + graphe), déjà mis en forme. Peut être vide. */
   brainContext: string
   /** Écho des faits retenus dans ce fil. Peut être vide. */
@@ -225,9 +237,7 @@ function avecAvisDeCoupe<T extends MessageBorne>(retenus: T[], total: number): T
  * ABOUTIE veut dire : la demande a RECU sa reponse. Une demande sans resume ne perime rien, sinon
  * le tour qui doit ecrire le resume perdrait justement le fil a resumer.
  */
-export function compactionsAbouties(
-  history: readonly { role: string; content: string }[]
-): number {
+export function compactionsAbouties(history: readonly { role: string; content: string }[]): number {
   let total = 0
   for (let index = 1; index < history.length; index += 1) {
     const demande = history[index - 1]
@@ -394,9 +404,7 @@ export interface TurnMessageBlock {
  */
 const LONGUEUR_BESOIN_RAPPELE = 300
 
-export function besoinInitialDuFil(
-  history: TurnMessageParts['history']
-): string {
+export function besoinInitialDuFil(history: TurnMessageParts['history']): string {
   const demandes = history.filter((m) => m.role === 'user')
   // Un seul tour : le besoin initial EST le message courant, le rappeler serait du bruit.
   if (demandes.length < 2) return ''
@@ -418,9 +426,17 @@ export function besoinInitialDuFil(
 
 export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBlock[] {
   const nonVu = parts.compteRenduNonVu?.trim()
+  /**
+   * Session REPRISE + un etat deja pousse = on n'envoie que ce qui a CHANGE. Sinon, etat entier :
+   * une session neuve na aucun etat anterieur auquel appliquer un diff.
+   */
+  const blocEtat =
+    parts.resumeSessionId && parts.snapshotPrecedent !== undefined
+      ? blocEtatSuivant(parts.snapshotPrecedent, parts.snapshot as EtatPrompt)
+      : `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`
   const nommes: TurnMessageBlock[] = parts.resumeSessionId
     ? [
-        { name: 'etatDeLApp', text: `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}` },
+        { name: 'etatDeLApp', text: blocEtat },
         { name: 'brainContext', text: parts.brainContext },
         { name: 'memoryEcho', text: parts.memoryEcho },
         { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
@@ -855,7 +871,8 @@ export function questionPoseeSansAvoirLu(
  * lecture : la liste est fermee, pas heuristique.
  */
 const LECTEURS_NATIFS = /^(Read|Grep|Glob)\b/
-const BASH_LECTEUR = /^\s*(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|git\s+(log|show|diff|status))\b/
+const BASH_LECTEUR =
+  /^\s*(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|git\s+(log|show|diff|status))\b/
 
 export function statusEstUneLecture(status: string | undefined): boolean {
   const texte = (status ?? '').trim()
