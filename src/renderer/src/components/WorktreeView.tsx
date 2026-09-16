@@ -253,6 +253,12 @@ function EtiquettesRef({
               // Sans cela le glisse remonterait a la LIGNE, et on rapporterait un commit en croyant
               // fusionner une branche : deux gestes differents partant du meme pixel.
               evenement.stopPropagation()
+              // SANS CES DONNEES LE GLISSER N'EXISTE PAS : Chromium annule un `dragstart` qui
+              // laisse le `dataTransfer` vide, donc aucun `dragover`/`drop` ne suit. Les tests ne
+              // le voyaient pas — ils envoient un Event nu, sans `dataTransfer`. Mesure du
+              // 2026-09-15 : le geste etait injouable a la souris alors que la suite etait verte.
+              evenement.dataTransfer?.setData('text/plain', etiquette.libelle)
+              if (evenement.dataTransfer) evenement.dataTransfer.effectAllowed = 'move'
               geste.saisir({ genre: 'branche', nom: etiquette.libelle })
             }}
             onDragOver={(evenement) => {
@@ -451,7 +457,12 @@ function GitTopology({
               data-testid="git-commit-row"
               data-commit={node.commit.hash}
               draggable
-              onDragStart={() => geste.saisir({ genre: 'commit', hash: node.commit.hash })}
+              onDragStart={(evenement) => {
+                // Meme raison que sur les etiquettes : un `dataTransfer` vide = glisser annule.
+                evenement.dataTransfer?.setData('text/plain', node.commit.hash)
+                if (evenement.dataTransfer) evenement.dataTransfer.effectAllowed = 'copy'
+                geste.saisir({ genre: 'commit', hash: node.commit.hash })
+              }}
               style={{ height: HAUTEUR_LIGNE }}
               title={`${node.commit.shortHash} - ${node.commit.subject}`}
             >

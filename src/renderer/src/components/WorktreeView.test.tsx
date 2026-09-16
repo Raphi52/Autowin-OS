@@ -632,6 +632,36 @@ describe('WorktreeView — glisser-deposer dans le graphe', () => {
       (element) => element.textContent === libelle
     )!
 
+  it('le dragstart DEPOSE des donnees — sans elles Chromium annule le glisser', async () => {
+    /*
+      DEFAUT REEL (2026-09-15, rapporte par l'utilisateur : « j'ai essaye de drag and drop mais je
+      n'ai pas reussi »). Les handlers etaient justes, mais aucun n'ecrivait dans le `dataTransfer`.
+      Chromium ANNULE un `dragstart` qui laisse le presse-papier du glisser vide : ni `dragover` ni
+      `drop` ne suivent, la souris ne fait rien. Le `glisser()` ci-dessus ne l'attrapait pas parce
+      qu'il envoie un Event NU, sans `dataTransfer` — un glisser que le navigateur ne ferait jamais.
+      Ce test-ci porte donc un vrai `dataTransfer` et exige qu'on y ecrive.
+    */
+    installApi()
+    await renderView()
+
+    const dataTransfer = { data: new Map<string, string>(), effectAllowed: 'none' }
+    const evenement = Object.assign(new Event('dragstart', { bubbles: true }), {
+      dataTransfer: {
+        setData: (type: string, valeur: string) => void dataTransfer.data.set(type, valeur),
+        set effectAllowed(valeur: string) {
+          dataTransfer.effectAllowed = valeur
+        },
+        get effectAllowed() {
+          return dataTransfer.effectAllowed
+        }
+      }
+    })
+    act(() => void badge('feat/cockpit').dispatchEvent(evenement))
+
+    expect(dataTransfer.data.get('text/plain')).toBe('feat/cockpit')
+    expect(dataTransfer.effectAllowed).toBe('move')
+  })
+
   it('une branche deposee sur une autre PROPOSE la fusion et ne lance RIEN', async () => {
     const api = installApi()
     await renderView()
