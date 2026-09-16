@@ -221,3 +221,37 @@ describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier e
     expect(jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
   })
 })
+
+/**
+ * SOURCE 3 DEPUIS UNE COPIE DE TRAVAIL — conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091.
+ * Les runs s'executent dans un worktree en HEAD detache ANTERIEUR au commit qui depose le jeton :
+ * `git log -1 -- <fichier>` y renvoie l'ancien commit, le jeton reste invisible, et le meme refus
+ * fix-gate revient a l'identique (4 reparations de suite).
+ */
+describe('jetonsDeCauseParFichier — source 3 depuis un worktree en HEAD detache', () => {
+  it('credite un jeton depose par le dernier changement du depot, meme hors du HEAD local', () => {
+    const { mkdtempSync, writeFileSync: w, mkdirSync, realpathSync } = require('node:fs') as typeof import('node:fs')
+    const { execFileSync } = require('node:child_process') as typeof import('node:child_process')
+    const { tmpdir } = require('node:os') as typeof import('node:os')
+    const base = mkdtempSync(resolve(realpathSync.native(tmpdir()), 'jeton-'))
+    const repo = resolve(base, 'repo')
+    mkdirSync(repo)
+    const git = (...a: string[]): void => {
+      execFileSync('git', a, { cwd: repo, stdio: 'ignore' })
+    }
+    git('init', '-b', 'main')
+    git('config', 'user.email', 'a@b.c')
+    git('config', 'user.name', 'test')
+    w(resolve(repo, 'cible.ts'), 'export const x = 1\n')
+    git('add', '-A')
+    git('commit', '-m', 'avant')
+    const avant = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim()
+    w(resolve(repo, 'cible.ts'), '// fix-ok: cause mesuree\nexport const x = 1\n')
+    git('add', '-A')
+    git('commit', '-m', 'depose le jeton')
+    const wt = resolve(base, 'wt')
+    git('worktree', 'add', '--detach', wt, avant)
+    const cible = resolve(wt, 'cible.ts').split(sep).join('/')
+    expect(jetonsDeCauseParFichier('', [], [cible])).toEqual({ [cible]: true })
+  })
+})

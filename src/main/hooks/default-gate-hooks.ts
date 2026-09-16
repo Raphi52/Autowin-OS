@@ -1,6 +1,6 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { exactLineFingerprint } from '../exact-line-fingerprint'
 import { HookBus, type HookContext, type HookResult } from './hook-bus'
 import { createVerifyReplayHook, type VerifyRunner } from './verify-replay-hook'
@@ -200,9 +200,25 @@ export function jetonsDeCauseParFichier(
  * commite, sinon le dernier commit qui le touche. Sert a dater un jeton de cause.
  */
 function lignesAjouteesAuDernierChangement(fichier: string): string[] {
+  // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — un run s'execute dans un worktree
+  // en HEAD DETACHE anterieur au commit qui depose le jeton : `git log -1 -- <fichier>` y renvoie
+  // l'ancien commit et le jeton reste invisible (meme refus fix-gate rejoue 4 fois). On interroge
+  // donc le depot QUI CONTIENT le fichier (-C), et toutes les refs (--all), pas le seul HEAD local.
+  const surDisque = (() => {
+    try {
+      return existsSync(fichier) ? resolve(fichier) : ''
+    } catch {
+      return ''
+    }
+  })()
+  const dossier = surDisque ? dirname(surDisque) : process.cwd()
+  const cible = surDisque || fichier
   const git = (args: string[]): string => {
     try {
-      return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      return execFileSync('git', ['-C', dossier, ...args], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore']
+      })
     } catch {
       return ''
     }
@@ -212,10 +228,20 @@ function lignesAjouteesAuDernierChangement(fichier: string): string[] {
       .split(/\r?\n/)
       .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
       .map((l) => l.slice(1))
-  const enCours = ajoutees(git(['diff', 'HEAD', '--', fichier]))
+  const enCours = ajoutees(git(['diff', 'HEAD', '--', cible]))
   if (enCours.length) return enCours
-  const sha = git(['log', '-1', '--format=%H', '--', fichier]).trim()
-  return sha ? ajoutees(git(['show', sha, '--format=', '--', fichier])) : []
+  const shas = new Set(
+    ['log', 'log-all'].map((mode) =>
+      git(
+        mode === 'log-all'
+          ? ['log', '-1', '--all', '--format=%H', '--', cible]
+          : ['log', '-1', '--format=%H', '--', cible]
+      ).trim()
+    )
+  )
+  return [...shas]
+    .filter(Boolean)
+    .flatMap((sha) => ajoutees(git(['show', sha, '--format=', '--', cible])))
 }
 
 /**
