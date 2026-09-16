@@ -31,6 +31,16 @@ export interface DemandeProdPubliee {
    * passe (`phrase`). La fenêtre ne le devine pas — c'est le point de passage qui l'impose.
    */
   niveau: Exclude<NiveauProtectionProd, 'aucun'>
+  /**
+   * LA CONVERSATION QUI A DÉCLENCHÉ LE GESTE. L'écran vit dans le fil, et un fil n'est pas l'autre :
+   * sans cet identifiant, une demande ouverte depuis une conversation s'affichait au bas de TOUTES
+   * les autres (constaté le 2026-09-16, conv-626). L'utilisateur y lisait une question étrangère à
+   * ce qu'il était en train de lire — et pouvait l'autoriser sans en avoir le contexte.
+   *
+   * ABSENT = AFFICHÉ PARTOUT, à dessein : un geste de production bloqué ne doit jamais devenir
+   * invisible parce que son origine n'a pas été transmise. Le repli le plus sûr est de le montrer.
+   */
+  conversationId?: string
 }
 
 /**
