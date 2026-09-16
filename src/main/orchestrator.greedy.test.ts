@@ -668,4 +668,33 @@ describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => 
     )
     expect(dit).toMatch(/même refus est revenu \d+ fois de suite/)
   })
+
+  /**
+   * RECIDIVE MESUREE (conv-587, saisie du 2026-09-16 ts=1789550244094 : « tu m'as pas ecris de
+   * preprompt » ; premiere occurrence conv-470, 2026-09-12 « j'ai rien en preprompt »).
+   *
+   * Le correctif de 2026-09-12 n'a branche le prompt sur l'evenement de demarrage que du chemin
+   * SEQUENTIEL (orchestrator.ts, `prompt: execPrompt`). Le chemin GREEDY — celui que prend un
+   * kaizen decompose en volets — construisait pourtant son enveloppe juste avant `onPhase`, et ne
+   * la passait pas : le deplie « prompt envoye » restait vide pendant toute la phase.
+   */
+  it('greedy annonce le prompt DES le demarrage de chaque phase et du juge', async () => {
+    const provider = new GreedyProvider()
+    const prompts: Array<string | undefined> = []
+    await makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'volet A' },
+        { id: 'B', deps: [], prompt: 'volet B' }
+      ],
+      () => ['build']
+    ).run('audit en plusieurs volets', undefined, (event) => {
+      if (event.step === 'exec' || event.step === 'judge') {
+        prompts.push(event.prompt?.messages?.[0]?.content)
+      }
+    })
+
+    expect(prompts).toHaveLength(3)
+    expect(prompts.filter((texte) => typeof texte === 'string' && texte.length > 0)).toHaveLength(3)
+  })
 })

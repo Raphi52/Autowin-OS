@@ -2562,6 +2562,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       provider: judgeProvider,
       role: 'judge',
       model: judgeBinding.model,
+      prompt: envelope,
       execution: judgeExecution
     })
     const startedAt = performance.now()
@@ -2830,6 +2831,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
                 phase,
+                // L'enveloppe est construite juste au-dessus : la ligne de pipeline montre le prompt
+                // DES le demarrage (recidive « rien en preprompt », conv-587 du 2026-09-16).
+                prompt: envelope,
                 execution
               })
               const startedAt = performance.now()
