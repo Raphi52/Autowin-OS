@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +10,7 @@ import { ProdAutorisationHote } from './ProdAutorisationHote'
  * Defaut vecu le 2026-09-16 (conv-626) : l'ecran d'autorisation a ete sorti de sa fenetre flottante
  * pour vivre DANS la conversation. Monte dans `ChatView`, il s'est alors affiche au bas de TOUTES
  * les conversations — l'utilisateur lisait, sous une discussion sans rapport, une question portant
- * sur une base de production. Il pouvait l'autoriser sans en avoir le contexte.
+ * sur une base de production, et pouvait l'autoriser sans en avoir le contexte.
  *
  * CE QUI EST GARDE ICI : le fil d'origine voyage avec la demande, et seul ce fil l'affiche. Le repli
  * reste OUVERT a dessein — une demande sans origine connue s'affiche partout, car un geste de
@@ -26,6 +27,12 @@ interface DemandeTest {
 
 function poserApi(demandes: DemandeTest[]): void {
   ;(globalThis as unknown as { window: Record<string, unknown> }).window.api = {
+    /*
+     * L'ecran lit l'etat de la phrase au montage MEME en mode << confirmation >> : son effet n'est
+     * pas conditionne par le niveau. Sans cette fonction, le rendu jette avant d'afficher quoi que
+     * ce soit — et le test mesurerait une absence due a l'erreur, pas au filtre qu'il garde.
+     */
+    prodPassphraseEtat: () => Promise.resolve({ definie: true, longueurMinimale: 8 }),
     prodAutorisationEnAttente: () => Promise.resolve(demandes),
     onProdAutorisationDemandee: () => () => {},
     onProdAutorisationClose: () => () => {},
