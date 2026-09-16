@@ -34,7 +34,7 @@ import {
   exigeUneConclusion,
   compactionsAbouties
 } from './chat-turn-messages'
-import { invokedSkillId, skillInstruction } from './skill-pipeline'
+import { invokedSkillId, noteSkillInconnue, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
@@ -1316,7 +1316,15 @@ export class AgentPilot {
      * Générique par construction : toute skill du kit devient atteignable, sans nouvelle phase.
      */
     const invoked = invokedSkillId(lastUserMessage?.content ?? '')
-    const skillBody = invoked ? skillInstruction(invoked) : ''
+    /*
+     * UN `/nom` INCONNU NE DOIT PLUS DISPARAITRE EN SILENCE.
+     *
+     * `skillInstruction` rend '' pour une skill introuvable : le message repartait alors comme du
+     * texte ordinaire, sans que personne sache que la commande n'avait pas pris. Mesure du
+     * 2026-09-16 sur `conversations.json` : 12 invocations reellement tapees dans ce cas, dont
+     * `/design` SIX fois apres son retrait du kit. On injecte donc la note a la place du corps vide.
+     */
+    const skillBody = invoked ? skillInstruction(invoked) || (noteSkillInconnue(invoked) ?? '') : ''
     /**
      * Le compte-rendu d'un tour execute sans le modele est CONSOMME ici — une seule fois.
      *

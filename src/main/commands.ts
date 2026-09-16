@@ -1225,7 +1225,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'read_file',
     description:
-      'Lire un fichier du workspace (lignes numérotées, plage from/lines, max 400 lignes par appel) — traces .autowin-data comprises, secrets exclus',
+      'Lire un fichier : chemin relatif au dossier de travail, ou chemin ABSOLU dans un autre dépôt (même périmètre que edit_file). Lignes numérotées, plage from/lines, max 400 lignes par appel — traces .autowin-data comprises, secrets et racines système exclus',
     args: {
       path: 'chemin du fichier, relatif au workspace',
       from: 'première ligne à lire (défaut 1)',
@@ -1269,7 +1269,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'find_in_files',
     description:
-      'Chercher un motif (regex, insensible à la casse) dans les fichiers du workspace — rend chemin:ligne + extrait, max 80 correspondances',
+      'Chercher un motif (regex, insensible à la casse) dans les fichiers du dossier de travail, ou d’un autre dépôt en donnant son chemin ABSOLU dans `dir` — rend chemin:ligne + extrait, max 80 correspondances',
     args: {
       pattern: 'motif regex à chercher',
       dir: 'sous-dossier à fouiller (défaut : tout le workspace)'
@@ -3720,8 +3720,20 @@ export class AppCommandBus {
       case 'find_in_files': {
         const motif = typeof a.pattern === 'string' ? a.pattern : ''
         if (!motif.trim()) return { trouve: 0, detail: 'motif manquant' }
-        const racine = resolve(this.workspaceDuTour)
-        const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
+        /*
+         * MEME PERIMETRE QUE `read_file` ET `edit_file` : un `dir` ABSOLU vise un autre depot.
+         * Sans ca, `find_in_files` restait confine alors que la lecture et l'ecriture ne l'etaient
+         * plus — et l'agent retombait sur `Select-String` en PowerShell, hors de toute borne.
+         * Les zones interdites (`isForbidden`) restent appliquees par `rechercherDansFichiers`.
+         */
+        const dirDemande = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
+        const dirExterne = dirDemande !== '' && isAbsolute(dirDemande)
+        if (dirExterne) {
+          const refus = refusRacineSysteme(resolve(dirDemande)) ?? refusRacineSysteme(dirDemande)
+          if (refus) return { trouve: 0, detail: `recherche refusée : ${refus}` }
+        }
+        const racine = dirExterne ? resolve(dirDemande) : resolve(this.workspaceDuTour)
+        const sousDossier = dirExterne ? '' : dirDemande
         const fichiers = enumererFichiersLisibles(racine, sousDossier)
         // MEME CAUSE QUE `read_file` : un fichier non-UTF-8 rend des lignes ou `�` a remplace
         // des octets. On continue de le chercher (l'ASCII y est vrai) mais on le NOMME.
@@ -5121,7 +5133,9 @@ export class AppCommandBus {
           command: label,
           output: capVerifyOutput(
             `${output}
-[arret demande] ${label} — interrompu par l'utilisateur (Stop).`
+[arret demande] ${label} — interrompu par l'utilisateur (Stop).`,
+            undefined,
+            archiverSortie
           )
         })
       }
@@ -5154,9 +5168,33 @@ export class AppCommandBus {
             ok: code === 0,
             exitCode: code,
             command: label,
-            output: capVerifyOutput(output)
+            output: capVerifyOutput(output, undefined, archiverSortie)
           }))
       )
     })
+  }
+}
+
+/**
+ * ARCHIVE LA SORTIE COMPLETE d'une commande avant sa troncature, et rend son chemin.
+ *
+ * Mesure du 2026-09-16 : 2 434 771 caracteres de sorties de `run` ont ete jetes faute d'un endroit
+ * ou les poser, ce qui a fait REJOUER des commandes entieres juste pour relire leur fin. Le fichier
+ * atterrit dans la racine de donnees (jamais dans le depot de l'utilisateur) et reste lisible par
+ * `read_file`, qui le borne a son tour.
+ *
+ * Rend `undefined` en cas d'echec d'ecriture : une sortie tronquee sans archive vaut mieux qu'une
+ * commande qui parait avoir echoue parce que le disque est plein.
+ */
+function archiverSortie(texteComplet: string): string | undefined {
+  try {
+    const dossier = join(ensureAutowinAppData(), 'sorties')
+    mkdirSync(dossier, { recursive: true })
+    const horodatage = new Date().toISOString().replace(/[:.]/g, '-')
+    const chemin = join(dossier, `${horodatage}-${randomUUID().slice(0, 8)}.txt`)
+    writeFileSync(chemin, texteComplet, 'utf8')
+    return chemin
+  } catch {
+    return undefined
   }
 }

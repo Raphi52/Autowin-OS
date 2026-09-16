@@ -133,7 +133,6 @@ export function verifyTimeoutOutcome(
   }
 }
 
-
 /**
  * VERIFICATION DE PORTEE — ce que l'edition a REELLEMENT pu casser, et rien d'autre.
  *
@@ -537,7 +536,24 @@ function verdictDe(texte: string, budget: number): string {
  * Les lignes de verdict passent donc devant, la queue remplit le reste. Le marqueur est COMPTE dans
  * le plafond : la valeur rendue ne le depasse jamais.
  */
-export function capVerifyOutput(raw: string, cap: number = VERIFY_OUTPUT_CAP): string {
+/**
+ * CE QUI DEPASSE LE PLAFOND N'EST PLUS JETE — il est ARCHIVE, quand un archiviste est fourni.
+ *
+ * Mesure du 2026-09-16 sur `.autowin-data/autowin-os/causal-trace/*.jsonl` : 25 sorties de la
+ * commande `run` sur 546 sont tronquees ici, et 2 434 771 caracteres partent a la poubelle — dont
+ * 1 826 011 d'un seul coup. Rien ne permettait de les relire : ni fichier, ni decalage, ni second
+ * appel. La suite se voit dans les memes traces, sous forme de `Select-String` qui REJOUENT la
+ * commande pour retrouver ce qui venait d'etre coupe.
+ *
+ * L'archiviste est INJECTE : cette fonction reste pure et testable sans toucher au disque, et le
+ * plafond comme le choix des lignes de verdict ne bougent pas. Seule la partie omise devient
+ * recuperable — par `read_file`, qui la borne a son tour.
+ */
+export function capVerifyOutput(
+  raw: string,
+  cap: number = VERIFY_OUTPUT_CAP,
+  archiver?: (texteComplet: string) => string | undefined
+): string {
   /*
    * DEPOUILLER A L'ENTREE, une fois pour toutes.
    *
@@ -550,7 +566,19 @@ export function capVerifyOutput(raw: string, cap: number = VERIFY_OUTPUT_CAP): s
   const text = sansSequencesAnsi(raw).trim()
   if (text.length <= cap) return text
   const omitted = text.length - cap
-  const marker = `…[tronqué — ${omitted} caractères omis]` + SAUT
+  // L'archivage ne doit JAMAIS faire echouer un rendu de sortie : un disque plein rendrait la
+  // commande muette alors qu'elle a bien tourne. On retombe simplement sur l'ancien marqueur.
+  let archive: string | undefined
+  try {
+    archive = archiver?.(text)
+  } catch {
+    archive = undefined
+  }
+  const marker =
+    `…[tronqué — ${omitted} caractères omis` +
+    (archive ? ` — sortie complète : ${archive}` : '') +
+    `]` +
+    SAUT
   const restant = Math.max(0, cap - marker.length)
   const verdict = verdictDe(text, Math.floor(restant / 2))
   const queue = restant - (verdict ? verdict.length + 1 : 0)

@@ -8,7 +8,8 @@
  *
  * Mêmes bornes que l'écriture, dans le même esprit (décision PURE, testée, jamais déléguée aux
  * patterns d'un CLI) :
- *   1. confinement au workspace (traversée `..` et chemins absolus extérieurs refusés) ;
+ *   1. même périmètre que l'écriture (un chemin ABSOLU externe est lisible depuis le 2026-09-16 ;
+ *      seuls la traversée `..` d'un chemin relatif et les racines système restent refusées) ;
  *   2. zones interdites PARTAGÉES avec `edit_file` (`isForbidden` : .git, node_modules, secrets…) —
  *      lire un secret est aussi grave que l'écrire ;
  *   3. volume borné : une lecture rend au plus RANGE_MAX lignes, une recherche au plus
@@ -16,7 +17,7 @@
  */
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { readdirSync } from 'node:fs'
-import { isForbidden } from './edit-file-command'
+import { isForbidden, refusRacineSysteme } from './edit-file-command'
 
 export const RANGE_MAX = 400
 export const CORRESPONDANCES_MAX = 80
@@ -37,12 +38,40 @@ export function decideRead(
   if (typeof input.path !== 'string' || !input.path.trim()) {
     return { allowed: false, reason: 'chemin de fichier manquant' }
   }
-  const absolutePath = isAbsolute(input.path) ? resolve(input.path) : resolve(workspace, input.path)
+  /*
+   * LIRE OU L'ON PEUT DEJA ECRIRE.
+   *
+   * `edit_file` accepte un chemin ABSOLU hors du dossier Autowin depuis le 2026-09-02 : « l'asymetrie
+   * lire-partout / ecrire-ici n'etait pas une regle de securite, c'etait le confinement d'origine ».
+   * La LECTURE, elle, etait restee au confinement — donc on pouvait modifier un fichier d'un autre
+   * depot sans avoir le droit de le relire, et le prompt de pilotage promettait pourtant l'inverse a
+   * l'agent (« tu peux LIRE un chemin ABSOLU hors du workspace »).
+   *
+   * Mesure du 2026-09-16 (causal-trace) : quatre refus « chemin hors du workspace », les 10, 11 et
+   * encore le 16 a 13h48 sur `D:\RigV3Desktop\Components\Pages\Home.razor` — un fichier que la meme
+   * session EDITAIT. Le contournement est pire que l'ouverture : dix lectures de secours en
+   * PowerShell (`Get-Content`, `Select-String`), qui echappent a TOUTES les bornes de ce module.
+   *
+   * Ce qui protege reste EN PLACE et vaut pour l'exterieur aussi : racines systeme fermees, zones
+   * interdites IDENTIQUES (`isForbidden` : .git, secrets…), volume borne. Un chemin RELATIF reste
+   * resolu dans le dossier Autowin et sa traversee `..` reste refusee : `../x` est une ambiguite
+   * (relatif a quoi ?), pas une intention — pour viser un autre depot, on donne son chemin absolu.
+   */
+  const relatifDemande = !isAbsolute(input.path)
+  const absolutePath = relatifDemande ? resolve(workspace, input.path) : resolve(input.path)
   const relativePath = relative(resolve(workspace), absolutePath)
-  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+  const externe = !relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)
+  if (externe && relatifDemande) {
     return { allowed: false, reason: 'chemin hors du workspace' }
   }
-  const forbidden = isForbidden(relativePath)
+  if (externe) {
+    // Chemin RESOLU et chemin DEMANDE juges tous les deux : sous Windows `resolve('/etc/x')` rend
+    // `E:\etc\x` (ancre sur le disque courant), donc la racine POSIX ne survit qu'au brut.
+    const refusSysteme = refusRacineSysteme(absolutePath) ?? refusRacineSysteme(input.path)
+    if (refusSysteme) return { allowed: false, reason: refusSysteme }
+  }
+  // Zones interdites : les MEMES dedans et dehors.
+  const forbidden = isForbidden(externe ? absolutePath : relativePath)
   if (forbidden) return { allowed: false, reason: forbidden }
   const from =
     Number.isSafeInteger(input.from) && (input.from as number) > 0 ? (input.from as number) : 1
@@ -50,7 +79,15 @@ export function decideRead(
     Number.isSafeInteger(input.lines) && (input.lines as number) > 0
       ? (input.lines as number)
       : RANGE_MAX
-  return { allowed: true, absolutePath, relativePath, from, count: Math.min(wanted, RANGE_MAX) }
+  return {
+    allowed: true,
+    absolutePath,
+    // Un fichier EXTERIEUR se cite par son chemin ABSOLU : un `../../autre-depot/x.cs` serait un
+    // ancrage que personne — ni l'agent, ni l'utilisateur — ne peut rouvrir tel quel.
+    relativePath: externe ? absolutePath : relativePath,
+    from,
+    count: Math.min(wanted, RANGE_MAX)
+  }
 }
 
 export interface LectureFichier {

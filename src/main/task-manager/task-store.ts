@@ -235,6 +235,28 @@ export class TaskStore {
     return true
   }
 
+  /**
+   * UNE TACHE QUI NE SE DECLENCHERA PLUS JAMAIS N'EST PAS « ACTIVE ».
+   *
+   * Utilise par `advanceTask` quand le calendrier ne rend plus aucune occurrence : sans ca la tache
+   * garde `enabled: true` avec `nextRunAt: null`, et la vue l'affiche « Aucune échéance » avec un ON
+   * bien visible (`TaskManagerView.tsx`). Constat du 2026-09-16 dans `scheduled-tasks.json` : les 4
+   * taches enregistrees sont des reprises apres quota des 31/08 et 01/09, toutes deja jouees, toutes
+   * encore ON et sans echeance — seize jours plus tard.
+   *
+   * Geste separe de `setNextRunAt` a dessein : eteindre une tache est un changement d'ETAT que
+   * l'utilisateur lit, pas un detail de replanification.
+   */
+  setEnabled(taskId: string, enabled: boolean): ScheduledTask {
+    const task = this.tasks.get(taskId)
+    if (!task) throw new Error(`Tâche inconnue: ${taskId}`)
+    if (task.enabled === enabled) return structuredClone(task)
+    task.enabled = enabled
+    task.updatedAt = this.now()
+    this.changed()
+    return structuredClone(task)
+  }
+
   setNextRunAt(taskId: string, nextRunAt: number | null): ScheduledTask {
     const task = this.tasks.get(taskId)
     if (!task) throw new Error(`Tâche inconnue: ${taskId}`)

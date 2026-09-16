@@ -8,7 +8,7 @@ import {
   type StreamChunk
 } from './types'
 import { resolveProviderTimeoutMs, withHardDeadline } from './watchdog'
-import { estMurDeQuota } from '../../shared/reprise-quota'
+import { estMurDeQuota, instantDeRetourAnnonce } from '../../shared/reprise-quota'
 import type { ExecutionSupervisor } from '../execution-supervisor'
 
 /**
@@ -55,6 +55,27 @@ function quotaWallReason(error: unknown): string | undefined {
 }
 
 /**
+ * Un mur, c'est le refus ET l'heure à laquelle il expire — quand le fournisseur la donne.
+ *
+ * Jusqu'au 2026-09-16 on ne gardait que le refus, et le commentaire de `quotaWalls` assumait que
+ * seul un redémarrage rouvrait la porte. Mesuré sur `causal-trace/conv-539.jsonl` : deux appels ont
+ * été refusés à 15h31 (heure de Paris) sur un mur qui annonçait lui-même « resets 3:20pm » — soit
+ * onze minutes après son propre retour. Le geste de levée reste délibéré et gratuit : on ne sonde
+ * rien, on relit simplement ce que le refus avait déjà écrit.
+ */
+interface MurDeQuota {
+  /** Le refus LITTÉRAL du provider, tel qu'il sera cité à l'utilisateur. */
+  readonly raison: string
+  /** Instant de retour annoncé par ce refus, ou rien quand il n'en annonce aucun. */
+  readonly retourA?: number
+}
+
+function murDepuisRefus(raison: string, maintenant: Date = new Date()): MurDeQuota {
+  const retourA = instantDeRetourAnnonce(raison, maintenant)
+  return retourA === undefined ? { raison } : { raison, retourA }
+}
+
+/**
  * Routeur d'adaptateurs. Le seul point par lequel l'app envoie un tour :
  * choisit l'adaptateur par id, INJECTE le bloc système (kit condensé) de façon
  * uniforme, délègue le streaming à l'adaptateur, et centralise la traçabilité.
@@ -71,7 +92,24 @@ export class ProviderRegistry {
    *
    * D'où l'état en mémoire : ce n'est pas une limite subie, c'est le mécanisme de levée.
    */
-  private readonly quotaWalls = new Map<string, string>()
+  private readonly quotaWalls = new Map<string, MurDeQuota>()
+
+  /**
+   * LE MUR TOMBE TOUT SEUL À L'HEURE QU'IL A LUI-MÊME ANNONCÉE.
+   *
+   * Lecture unique du disjoncteur : elle rend le refus encore valable, et RETIRE au passage celui
+   * dont l'heure de retour est dépassée. Aucun minuteur, aucune sonde — donc toujours aucun quota
+   * dépensé pour vérifier : le retour se constate au moment où un appel se présente de toute façon.
+   */
+  private murEncoreDebout(cle: string, maintenant: number = Date.now()): string | undefined {
+    const mur = this.quotaWalls.get(cle)
+    if (!mur) return undefined
+    if (mur.retourA !== undefined && maintenant >= mur.retourA) {
+      this.quotaWalls.delete(cle)
+      return undefined
+    }
+    return mur.raison
+  }
   private readonly quotaSuccessors = new Map<string, string>()
   private readonly quotaRotationFlights = new Map<string, Promise<string | undefined>>()
 
@@ -265,7 +303,7 @@ export class ProviderRegistry {
     // une cause EXTERNE : un quota d'abonnement épuisé se rétablit des JOURS plus tard, jamais par une
     // relance. Dépouillement du 2026-08-06 : 852 runs rouges (70 % des échecs réels) n'avaient que cette
     // cause, dont 285 APRÈS le correctif qui se contentait de la NOMMER sans fermer la porte.
-    const mur = this.quotaWalls.get(wallKeyAtStart)
+    const mur = this.murEncoreDebout(wallKeyAtStart)
     if (mur) {
       if (
         mayRotate &&
@@ -279,9 +317,18 @@ export class ProviderRegistry {
           return this.sendPossiblyRotating(id, messages, opts, onChunk, true, visitedWalls)
         }
       }
+      // Le message ne promet plus le redémarrage comme SEULE levée : depuis le 2026-09-16, un refus
+      // qui annonce son heure de retour rouvre la porte tout seul à cette heure-là.
+      const retour = this.quotaWalls.get(wallKeyAtStart)?.retourA
       throw new Error(
         `Provider ${route.id} écarté : quota épuisé, plus aucun appel ne lui est envoyé. ` +
-          `Relancer l'app remet le compteur à zéro. Refus du provider : ${mur.slice(0, 300)}`
+          (retour === undefined
+            ? `Relancer l'app remet le compteur à zéro. `
+            : `La porte se rouvre d'elle-même à ${new Date(retour).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}. `) +
+          `Refus du provider : ${mur.slice(0, 300)}`
       )
     }
     // Admission AVANT l'adaptateur : un budget epuise ne doit jamais faire apparaitre une fenetre,
@@ -413,7 +460,7 @@ export class ProviderRegistry {
           // la PREUVE (le refus du provider), pas sur une supposition — `quotaWallReason` écarte
           // explicitement le rate-limit passager.
           const raison = quotaWallReason(error)
-          if (raison) this.quotaWalls.set(wallKeyAtStart, raison)
+          if (raison) this.quotaWalls.set(wallKeyAtStart, murDepuisRefus(raison))
           throw error
         }
       )
