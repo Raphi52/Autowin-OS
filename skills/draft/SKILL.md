@@ -78,6 +78,7 @@ La boucle ne s'arrête PAS quand un tour est présenté. Tant que l'utilisateur 
 - NE converge PAS au hasard : respecte les garde-fous de goût lus en mémoire.
 - NE montre PAS une maquette qui n'a pas été CAPTURÉE + LUE (une liaison ou une mise en page morte est invisible autrement).
 - NE colle PAS d'emoji ni de caractères symboles comme icônes ou boutons dans une maquette en ligne — l'hôte n'a pas de police d'emoji, ils se rendent en formes monochromes illisibles ou débordent de leur cercle (voir les recettes de maquette en ligne).
+- N'INVENTE PAS le contenu d'un composant existant : si le vrai balisage écrit le mot « OK », ta maquette écrit « OK » — pas une coche. Une maquette qui change un LIBELLÉ ou un GLYPHE promet un changement de balisage : dis-le sur la maquette, et au portage livre-le (ou nomme ce que tu ne livres pas). Mesuré conv-605 le 2026-09-16 : coche montrée, « OK » livré « en CSS seul », l'utilisateur a vu autre chose que son choix.
 - N'esquisse PAS la surface d'une app vivante d'imagination ou à échelle réduite : LIS son vrai fichier de style (couleurs, tailles, espacements) et fais un `desktop_observe` D'ABORD — les maquettes dessinées en aveugle sont la source n° 1 des « propositions douteuses ».
 - NE déclare PAS « fini » sans approbation explicite de l'utilisateur.
 - NE cesse PAS de proposer des fournées de 6 tant qu'aucun ordre d'implémentation n'a été donné — une réponse sans 6 nouvelles propositions est un échec de cette skill.
