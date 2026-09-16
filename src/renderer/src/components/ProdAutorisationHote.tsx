@@ -27,9 +27,23 @@ interface DemandeHote {
   operation: string
   raison: string
   niveau: 'confirmation' | 'phrase'
+  /** Le fil qui a déclenché le geste. Absent d'une demande ancienne ou non tracée. */
+  conversationId?: string
 }
 
-export function ProdAutorisationHote(): React.JSX.Element | null {
+export interface ProdAutorisationHoteProps {
+  /**
+   * LE FIL ACTUELLEMENT AFFICHÉ. Une demande qui nomme une AUTRE conversation n'est pas montrée ici :
+   * l'écran vit dans le fil, et une question posée ailleurs n'a pas à s'afficher sous une discussion
+   * qui n'a rien demandé (conv-626, 2026-09-16). Une demande SANS origine reste montrée partout —
+   * un geste de production bloqué ne doit pas devenir invisible faute d'étiquette.
+   */
+  conversationId?: string | null
+}
+
+export function ProdAutorisationHote({
+  conversationId
+}: ProdAutorisationHoteProps = {}): React.JSX.Element | null {
   const [file, setFile] = useState<DemandeHote[]>([])
 
   useEffect(() => {
