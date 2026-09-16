@@ -49,7 +49,14 @@ export function chatTurnBudget(env: Record<string, string | undefined>): ChatTur
   return {
     // Les défauts restent comme SEUILS D'OBSERVATION : un trip en mesure seule écrit une ligne de
     // ledger (le dépassement reste VISIBLE, réflexe « jamais silencieux ») sans rien couper.
-    limits: { maxUsd: usd ?? 2, maxTokens: tokens ?? 1_500_000, maxCalls: calls ?? 6 },
+    // SEUIL D'OBSERVATION RECALÉ SUR LA RÉALITÉ MESURÉE (2026-09-16, 7 356 tours réels de
+    // `.autowin-data/autowin-os/activity`) : médiane 223 622 tokens d'entrée, p99 7 622 971, max
+    // 33 579 973. Un seuil à 1 500 000 était franchi par bien plus que les cas anormaux : une
+    // alerte qui se déclenche en régime normal n'alerte plus, elle fait du bruit. 8 000 000 place
+    // le repère JUSTE AU-DESSUS du p99 — il ne parle donc que du 1 % de tours réellement hors norme.
+    // L'ARMEMENT ne change pas : sans cap explicite de l'utilisateur, ce seuil observe et ne coupe
+    // rien (décision du 12/08, conv-1149 — cf. en-tête).
+    limits: { maxUsd: usd ?? 2, maxTokens: tokens ?? 8_000_000, maxCalls: calls ?? 6 },
     enforcement: explicite ? 'blocking' : 'metering-only',
     emballement: {
       maxUsd: usd ?? CHAT_EMBALLEMENT_USD,

@@ -10,12 +10,12 @@ describe('budget du tour de chat', () => {
   it('sans cap explicite : mesure seule, les seuils ne servent qu’à OBSERVER', () => {
     const budget = chatTurnBudget({})
     expect(budget.enforcement).toBe('metering-only')
-    expect(budget.limits).toEqual({ maxUsd: 2, maxTokens: 1_500_000, maxCalls: 6 })
+    expect(budget.limits).toEqual({ maxUsd: 2, maxTokens: 8_000_000, maxCalls: 6 })
   })
 
   it('un cap posé par l’utilisateur est un contrat : coupure armée', () => {
     expect(chatTurnBudget({ AUTOWIN_CHAT_USD_CAP: '5' })).toEqual({
-      limits: { maxUsd: 5, maxTokens: 1_500_000, maxCalls: 6 },
+      limits: { maxUsd: 5, maxTokens: 8_000_000, maxCalls: 6 },
       enforcement: 'blocking',
       // Un cap USD explicite ne touche pas le plafond d'emballement en TOKENS : il reste au
       // calibrage mesuré (cf. chat-turn-budget.emballement.test.ts).
@@ -23,6 +23,13 @@ describe('budget du tour de chat', () => {
     })
     expect(chatTurnBudget({ AUTOWIN_CHAT_TOKEN_CAP: '900000' }).enforcement).toBe('blocking')
     expect(chatTurnBudget({ AUTOWIN_CHAT_CALL_CAP: '3' }).enforcement).toBe('blocking')
+  })
+
+  it('le seuil d’observation des tokens se tient AU-DESSUS du p99 mesuré', () => {
+    // 7 356 tours réels le 2026-09-16 : p99 = 7 622 971 tokens d'entrée. Un seuil sous cette valeur
+    // fait trébucher le régime NORMAL, et une alerte permanente ne se lit plus.
+    const P99_MESURE = 7_622_971
+    expect(chatTurnBudget({}).limits.maxTokens).toBeGreaterThan(P99_MESURE)
   })
 
   it('un cap invalide ne vaut pas contrat', () => {
