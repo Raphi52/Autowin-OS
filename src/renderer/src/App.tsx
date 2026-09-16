@@ -14,7 +14,6 @@ import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
 import { DecorDeFond } from './components/DecorDeFond'
 import { FirstRunWizard } from './components/FirstRunWizard'
-import { ProdAutorisationHote } from './components/ProdAutorisationHote'
 import { ObservatoryView } from './components/ObservatoryView'
 // L'onglet Worktrees porte la vue à FRISE D'HISTORIQUE GIT (`WorktreeView`), restaurée sur demande de
 // l'utilisateur. Elle avait été supprimée en deux commits — la vue elle-même, puis son socle
