@@ -120,8 +120,14 @@ export async function runSqlRead(
       // REJOUE le même geste. Sans ce rattrapage, l'utilisateur lit un refus sans aucun moyen
       // d'autoriser — et c'est au modèle qu'on demanderait de recommencer, alors qu'il est
       // justement la pièce qui n'a pas le droit de décider.
+      // L'IDENTIFIANT DE CONVERSATION VOYAGE AVEC LA DEMANDE : l'écran d'autorisation vit dans le
+      // fil, et sans lui la question s'affichait au bas de toutes les conversations (conv-626).
       const reponse = deps.guichetProd
-        ? await deps.guichetProd.demander({ ...verdict.demande, niveau: verdict.niveau })
+        ? await deps.guichetProd.demander({
+            ...verdict.demande,
+            niveau: verdict.niveau,
+            ...(deps.conversationId ? { conversationId: deps.conversationId } : {})
+          })
         : undefined
       if (!reponse) return { ok: false, reason: verdict.motif }
       // UNE seule reprise : un jeton refusé est déjà brûlé par le coffre, en redemander en boucle
