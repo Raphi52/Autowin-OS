@@ -213,6 +213,20 @@ import {
 import { createHash, randomUUID } from 'node:crypto'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
 import {
+  FENETRE_PRINCIPALE,
+  activerOnglet,
+  deplacerOnglet,
+  detacherOnglet,
+  fenetreDeLOnglet,
+  fermerOnglet,
+  layoutParDefaut,
+  ongletActif,
+  ouvrirOnglet,
+  rattacherFenetre,
+  type TabLayout,
+  type TabWindowBounds
+} from '../shared/tab-layout'
+import {
   executionCostCoverageFields,
   formatExecutionCostCoverage
 } from '../shared/orchestration-outcome'
@@ -438,7 +452,14 @@ export interface PromptSnapshot {
 }
 
 export type AppEvent =
-  | { type: 'navigate'; tab: string; origin?: string }
+  /**
+   * `window` DIT A QUI. Sans ce champ, l'evenement partait vers toutes les fenetres et la fenetre
+   * detachee sur le 2e ecran changeait de vue en meme temps que la principale. Absent = la fenetre
+   * principale (compatibilite : les anciens emetteurs ne le posent pas).
+   */
+  | { type: 'navigate'; tab: string; origin?: string; window?: string }
+  /** L'agencement des onglets a change : chaque fenetre relit le sien. */
+  | { type: 'tab-layout'; layout: TabLayout }
   | { type: 'refresh'; scope: string; convId?: string }
   | { type: 'toast'; text: string; noticeId?: number }
   // Orchestration LIVE (statut temps réel + fil des sous-agents), diffusée par étape.
@@ -1540,6 +1561,35 @@ export function restaurer(
   return false
 }
 
+/**
+ * LES GESTES D'INTERFACE (barre d'onglets) ne sont PAS dans le catalogue des agents.
+ *
+ * Ils passent par le meme canal que `navigate` — c'est la page qui les emet, a la souris — mais les
+ * inscrire au catalogue gonflerait la liste d'outils lue par chaque modele a chaque tour sans rien
+ * lui apporter : deplacer un onglet n'est pas une action d'agent. Ils restent donc executables,
+ * jamais proposes.
+ */
+const COMMANDES_INTERFACE = new Set([
+  'tab_layout',
+  'tab_open',
+  'tab_close',
+  'tab_move',
+  'tab_detach',
+  'tab_reattach',
+  'tab_bounds'
+])
+
+/** Position d'ecran fournie par la page au relachement du glisse. Toute forme douteuse -> absente. */
+function lireBoundsCommande(brut: unknown): TabWindowBounds | undefined {
+  if (!brut || typeof brut !== 'object') return undefined
+  const b = brut as Record<string, unknown>
+  const valeurs = ['x', 'y', 'width', 'height'].map((k) => b[k])
+  if (!valeurs.every((v) => typeof v === 'number' && Number.isFinite(v))) return undefined
+  const [x, y, width, height] = valeurs as number[]
+  if (width <= 0 || height <= 0) return undefined
+  return { x, y, width, height }
+}
+
 export class AppCommandBus {
   /**
    * La vue d'OUVERTURE, et elle doit etre la meme que celle du renderer.
@@ -1550,6 +1600,22 @@ export class AppCommandBus {
    * `autowin-cdp-proof.mjs --verify-navigation`, qui compare exactement ces deux valeurs.
    */
   private tab: AppDestination = 'accueil'
+  /**
+   * L'AGENCEMENT : fenetre -> onglets -> onglet actif. Il REMPLACE la vue unique comme autorite
+   * des-lors qu'il y a plus d'une fenetre. `this.tab` reste la vue de la fenetre PRINCIPALE : c'est
+   * le contrat que lisent les agents (`appState().tab`), il ne bouge pas.
+   */
+  private layout: TabLayout = layoutParDefaut('accueil')
+  /** Compteur de fenetres detachees : donne un identifiant stable et non devinable en double. */
+  private detachedSeq = 0
+  /** Cable depuis index.ts : ouvre/ferme les vraies fenetres. Absent -> l'agencement reste logique. */
+  gererFenetreOnglet?: (
+    action:
+      | { type: 'ouvrir'; windowId: string; tab: AppDestination; bounds?: TabWindowBounds }
+      | { type: 'fermer'; windowId: string }
+  ) => void
+  /** Cable depuis index.ts : persiste l'agencement (fichier). Absent -> rien n'est memorise. */
+  memoriserAgencement?: (layout: TabLayout) => void
   private traceStore?: TraceStore
   /** Hook de traçage (ledger) — chaque commande exécutée y laisse une ligne. */
   trace?: (name: string, args: Record<string, unknown>, ok: boolean) => void
@@ -1988,6 +2054,22 @@ export class AppCommandBus {
    * comme avant. Présent (chemin chaud du chat), il IMPUTE le temps à la lecture responsable —
    * `snapshot` seul disait « c'est lent » sans jamais dire OÙ.
    */
+  /** L'agencement courant (lecture seule pour l'exterieur). */
+  agencement(): TabLayout {
+    return this.layout
+  }
+
+  /** Restaure un agencement memorise au demarrage, sans rouvrir de fenetre ici. */
+  restaurerAgencement(layout: TabLayout): void {
+    this.layout = layout
+    this.tab = ongletActif(this.layout) ?? this.tab
+  }
+
+  private publierAgencement(): void {
+    this.memoriserAgencement?.(this.layout)
+    this.broadcast({ type: 'tab-layout', layout: this.layout })
+  }
+
   async snapshot(jalon?: (nom: string) => void): Promise<AppSnapshot> {
     const runs = await this.os.runsWithGate()
     jalon?.('snapshot:runs')
@@ -2242,7 +2324,9 @@ export class AppCommandBus {
     }
     try {
       const specification = CATALOG.find((command) => command.name === name)
-      if (!specification) throw new Error(refusAvecIssue('commande-inconnue', name))
+      if (!specification && !COMMANDES_INTERFACE.has(name)) {
+        throw new Error(refusAvecIssue('commande-inconnue', name))
+      }
       if (!this.isCommandEnabled(name)) throw new Error(refusAvecIssue('capacite-desactivee', name))
       if (name === 'desktop_observe') {
         // Voir `refusEcranReel` : refus du PREMIER appel du tour seulement, porte de sortie exposee.
@@ -2289,14 +2373,103 @@ export class AppCommandBus {
       case 'navigate': {
         const requestedTab = s('tab')
         const location = resolveAppLocation(requestedTab)
-        this.tab = location.destination
         const origin = typeof a.origin === 'string' ? a.origin : undefined
+        // A QUI s'adresse cette navigation : la fenetre qui la demande, sinon celle qui porte deja
+        // l'onglet vise, sinon la principale. Avant, tout partait a tout le monde.
+        const demandeur = typeof a.window === 'string' ? a.window : undefined
+        const cible =
+          demandeur ?? fenetreDeLOnglet(this.layout, location.destination) ?? FENETRE_PRINCIPALE
+        this.layout =
+          fenetreDeLOnglet(this.layout, location.destination) === cible
+            ? activerOnglet(this.layout, location.destination)
+            : ouvrirOnglet(this.layout, location.destination, cible)
+        // `this.tab` = la vue de la fenetre principale. Elle ne bouge PAS quand c'est une fenetre
+        // detachee qui navigue : sinon le 2e ecran repilotait l'ecran principal.
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        // `window` n'est POSE que pour une fenetre detachee : la forme de l'evenement pour la
+        // fenetre principale reste exactement celle d'avant (contrat des agents et des tests).
+        const adresse = cible === FENETRE_PRINCIPALE ? {} : { window: cible }
         this.broadcast({
           type: 'navigate',
           tab: requestedTab,
+          ...adresse,
           ...(origin ? { origin } : {})
         })
-        return { tab: location.destination, section: location.section }
+        return { tab: location.destination, section: location.section, ...adresse }
+      }
+      case 'tab_layout':
+        return { layout: this.layout }
+      case 'tab_open': {
+        const location = resolveAppLocation(s('tab'))
+        const cible = typeof a.window === 'string' ? a.window : FENETRE_PRINCIPALE
+        const index = typeof a.index === 'number' ? a.index : undefined
+        this.layout = ouvrirOnglet(this.layout, location.destination, cible, index)
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        return { layout: this.layout }
+      }
+      case 'tab_close': {
+        const location = resolveAppLocation(s('tab'))
+        const porteuse = fenetreDeLOnglet(this.layout, location.destination)
+        this.layout = fermerOnglet(this.layout, location.destination)
+        // Fermer le dernier onglet d'une fenetre detachee ferme la fenetre : sinon il resterait un
+        // cadre vide sur le 2e ecran.
+        if (
+          porteuse &&
+          porteuse !== FENETRE_PRINCIPALE &&
+          !this.layout.windows.some((w) => w.id === porteuse)
+        ) {
+          this.gererFenetreOnglet?.({ type: 'fermer', windowId: porteuse })
+        }
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        return { layout: this.layout }
+      }
+      case 'tab_move': {
+        const location = resolveAppLocation(s('tab'))
+        const cible = typeof a.window === 'string' ? a.window : FENETRE_PRINCIPALE
+        if (!this.layout.windows.some((w) => w.id === cible)) {
+          throw new Error(`Fenetre inconnue : ${cible}`)
+        }
+        const index = typeof a.index === 'number' ? a.index : undefined
+        this.layout = deplacerOnglet(this.layout, location.destination, cible, index)
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        return { layout: this.layout }
+      }
+      case 'tab_detach': {
+        const location = resolveAppLocation(s('tab'))
+        const bounds = lireBoundsCommande(a.bounds)
+        const windowId = `detached-${++this.detachedSeq}-${Date.now().toString(36)}`
+        this.layout = detacherOnglet(this.layout, location.destination, windowId, bounds)
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.gererFenetreOnglet?.({
+          type: 'ouvrir',
+          windowId,
+          tab: location.destination,
+          ...(bounds ? { bounds } : {})
+        })
+        this.publierAgencement()
+        return { layout: this.layout, window: windowId }
+      }
+      case 'tab_bounds': {
+        // La POSITION a l'ecran est memorisee ici : elle n'est connue que du processus principal,
+        // donc elle ne peut pas venir du stockage de la page.
+        const windowId = s('window')
+        const bounds = lireBoundsCommande(a.bounds)
+        const fenetre = this.layout.windows.find((w) => w.id === windowId)
+        if (!fenetre || !bounds) return { layout: this.layout }
+        fenetre.bounds = bounds
+        this.memoriserAgencement?.(this.layout)
+        return { layout: this.layout }
+      }
+      case 'tab_reattach': {
+        const windowId = s('window')
+        this.layout = rattacherFenetre(this.layout, windowId)
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        return { layout: this.layout }
       }
       case 'ask': {
         // Les options arrivent DECLAREES, jamais devinees a partir du texte de la reponse.
