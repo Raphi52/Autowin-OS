@@ -37,10 +37,22 @@ describe('ChatView — ecrire remonte la conversation en tete', () => {
       })
     )
 
-    const titres = (): string[] =>
-      Array.from(harness!.container.querySelectorAll('.conv-label')).map(
-        (element) => element.textContent ?? ''
+    /**
+     * L'ORDRE des fils, chacun compte UNE fois, dans son ordre de premiere apparition.
+     *
+     * Le groupe « Recent » ouvre la barre laterale et DUPLIQUE a dessein les fils deja ranges
+     * ailleurs (`groupeRecent`, `conversation-groups.ts`). Lire tous les `.conv-label` mesurait donc
+     * « Recent puis Divers », c'est-a-dire la mise en page, alors que ce test porte sur le TRI.
+     * Dedoublonner en gardant la premiere occurrence rend exactement l'ordre du groupe Recent, qui
+     * est celui que l'utilisateur voit en haut. Constate le 2026-09-17, rouge preexistant.
+     */
+    const titres = (): string[] => [
+      ...new Set(
+        Array.from(harness!.container.querySelectorAll('.conv-label')).map(
+          (element) => element.textContent ?? ''
+        )
       )
+    ]
 
     // Etat de depart : la plus recente ouvre la liste, la vieille est derriere.
     expect(titres()).toEqual(['Conversation fraiche', 'Conversation vieille'])

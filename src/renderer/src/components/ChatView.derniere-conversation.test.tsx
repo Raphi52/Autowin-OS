@@ -43,10 +43,23 @@ describe('ChatView — reprise sur la derniere conversation ouverte', () => {
       conversation: async (id: string) => conversations.find((c) => c.id === id) ?? null
     })
 
-  const actives = (): string[] =>
-    Array.from(harness!.container.querySelectorAll('.conv-item.active')).map(
-      (element) => element.querySelector('.conv-label')?.textContent ?? ''
+  /**
+   * La conversation ACTIVE, une seule fois — quelle que soit sa place dans la barre laterale.
+   *
+   * Le groupe « Recent » DUPLIQUE a dessein les fils deja ranges ailleurs (voir
+   * `groupeRecent` dans `conversation-groups.ts` : « un groupe qui duplique n'a pas sa place dans
+   * une fonction dont l'invariant est qu'une conversation appartient a UN groupe »). Un fil actif
+   * porte donc legitimement DEUX lignes `.conv-item.active`. Cette sonde demandait « qui est
+   * actif », pas « combien de lignes l'affichent » : elle dedoublonne par TITRE, sinon elle mesure
+   * la mise en page au lieu du comportement. Constate le 2026-09-17, rouge preexistant.
+   */
+  const actives = (): string[] => [
+    ...new Set(
+      Array.from(harness!.container.querySelectorAll('.conv-item.active')).map(
+        (element) => element.querySelector('.conv-label')?.textContent ?? ''
+      )
     )
+  ]
 
   it('rouvre celle ou l utilisateur etait, meme si ce n est pas la plus recente', async () => {
     localStorage.setItem(CLE_DERNIERE_CONVERSATION, 'milieu')

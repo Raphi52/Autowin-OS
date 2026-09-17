@@ -1,4 +1,4 @@
-status: degraded-closed
+status: closed
 CausalHypothesis: `ChatView.tsx` rend `openRun.content` dans un `<pre>` brut ; l'inspecteur doit réutiliser `BrainMarkdown` et exposer les sections et compteurs déjà disponibles.
 CausalHypothesis: `src/main/models.ts` réécrit un cache inchangé après indisponibilité ; la sauvegarde doit être conditionnée à une différence réelle.
 session: local-scout-2026-07-21
@@ -135,8 +135,21 @@ l'ecran par la meme capture.
     autorise » sur un RUN.md a la RACINE du depot — exactement le cas de CE fichier. Le depot de
     travail est desormais une racine de lecture ; test rouge puis vert dans
     `src/main/viz/fs-brains.test.ts` (55/55 dans ce fichier), le voisin hors depot reste refuse.
-  RESERVE : la preuve est une capture d'ecran relue, pas une assertion automatique ; le signal global
-  `npm test` n'a PAS ete rejoue en entier dans cette passe.
+  RESERVE : la preuve visuelle est une capture d'ecran RELUE, pas une assertion automatique.
+[2026-09-17] SIGNAL GLOBAL VERT — `npm test` : 837/837, 133 fichiers, exit code 0. Le statut passe
+donc de `degraded-closed` a `closed` : les trois DoD sont tenues ET le signal declare par le RUN
+sort a 0, ce qui manquait depuis le 2026-07-27 (`CLEAN-BLOCKED`).
+  Le rouge qui restait n'etait PAS une regression : 4 tests de la barre laterale
+  (`ChatView.derniere-conversation`, `ChatView.remontee-envoi`) lisaient TOUS les `.conv-label` du
+  panneau. Or le groupe « Recent » DUPLIQUE a dessein les fils deja ranges ailleurs — l'invariant est
+  ecrit dans `conversation-groups.ts` (`groupeRecent`) : « un groupe qui duplique n'a pas sa place
+  dans une fonction dont l'invariant est qu'une conversation appartient a UN groupe ». La SONDE
+  mesurait donc la mise en page au lieu du comportement, et echouait des l'etat de DEPART, avant
+  meme l'action testee. Corrigee en dedoublonnant par titre ; les assertions attendues sont
+  INCHANGEES. Sabotage verifie : ordre attendu inverse -> rouge, restaure -> vert, donc la sonde
+  discrimine toujours le tri qu'elle est censee prouver.
+  Preexistence etablie par mise de cote temporaire (`git stash push` des seuls fichiers edites) :
+  meme rouge sans mes modifications.
 
 ## Reprise
 
