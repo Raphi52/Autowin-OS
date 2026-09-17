@@ -546,6 +546,13 @@ export function ChatView({
    * relacher le garde-fou de publication sur une simple latence de lecture.
    */
   const [depotPresent, setDepotPresent] = useState(true)
+  /**
+   * Le depot selectionne dans la barre du haut : il sert d'EN-TETE de repli pour les fils qui n'ont
+   * aucun rangement propre. Sans lui ils tombaient tous dans « Divers », alors qu'ils travaillent
+   * dans ce depot-la (demande du 2026-09-17). Vide tant que la lecture n'a pas repondu -> « Divers »,
+   * exactement le comportement d'avant.
+   */
+  const [dossierParDefaut, setDossierParDefaut] = useState('')
   useEffect(() => {
     // Canal ABSENT : on garde `true`, donc l'ancien comportement — jamais un relachement du
     // garde-fou de publication sur une simple indisponibilite de lecture.
@@ -554,7 +561,9 @@ export function ChatView({
     void window.api
       .executionWorkspace()
       .then((etat) => {
-        if (vivant) setDepotPresent(etat.isGitRepo)
+        if (!vivant) return
+        setDepotPresent(etat.isGitRepo)
+        setDossierParDefaut(etat.path ?? '')
       })
       .catch(() => {
         /* Lecture impossible : on garde le comportement d'avant, jamais un relachement. */
@@ -4773,7 +4782,7 @@ export function ChatView({
       ...(recent ? [recent] : []),
       ...ordonnerGroupes(
         groupesVisibles(
-          grouperConversations(entrees),
+          grouperConversations(entrees, dossierParDefaut),
           // Pendant une recherche, aucun repli ne masque un resultat : chercher, c'est vouloir voir.
           convQuery.trim() ? {} : groupesReplies
         ),
@@ -4788,7 +4797,7 @@ export function ChatView({
         conversationDateOrder
       )
     ]
-  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery])
+  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery, dossierParDefaut])
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length

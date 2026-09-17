@@ -231,7 +231,19 @@ export class AutowinOS {
    * est realisee, et c'est le seul endroit qu'un harnais doit remplacer pour tester le chemin sans
    * lancer un vrai orchestrateur.
    */
-  protected orchestrateurPour(workflow?: WorkflowRunOverride, task = ''): Orchestrator {
+  protected orchestrateurPour(
+    workflow?: WorkflowRunOverride,
+    task = '',
+    workspace?: string
+  ): Orchestrator {
+    // LE DOSSIER DU RUN, et non celui du DEMARRAGE (2026-09-17).
+    // `orchestratorDeps.executionWorkspace` est fige a la construction de l'OS : il ne peut pas
+    // savoir qu'une conversation est rangee sur un autre depot. L'appelant le resout par tour et
+    // le passe ici ; un rangement absent ou inutilisable retombe sur le global, comme avant.
+    const deps = {
+      ...this.orchestratorDeps,
+      executionWorkspace: workspace ?? this.executionWorkspace
+    }
     /*
      * FIXTURE D'ORCHESTRATION — on remplace le FOURNISSEUR, jamais le pipeline.
      *
@@ -245,9 +257,10 @@ export class AutowinOS {
      */
     const scenario = scenarioDemande(task)
     if (scenario) {
-      assertDepotJetable(this.executionWorkspace)
+      // Le depot verifie est celui ou le run va REELLEMENT travailler, pas le global.
+      assertDepotJetable(deps.executionWorkspace)
       return new Orchestrator({
-        ...this.orchestratorDeps,
+        ...deps,
         registry: new ProviderRegistry().register(fournisseurFixtureOrchestration(scenario)),
         // Les QUATRE rôles avec : sans eux, le premier rôle oublié rappelle un vrai fournisseur.
         roles: rolesFixture(),
@@ -255,7 +268,7 @@ export class AutowinOS {
         currentWorkflow: () => workflow
       })
     }
-    return new Orchestrator({ ...this.orchestratorDeps, currentWorkflow: () => workflow })
+    return new Orchestrator({ ...deps, currentWorkflow: () => workflow })
   }
 
   private async poseConversationWorkflow(
@@ -1056,6 +1069,11 @@ export class AutowinOS {
       workflowOverride?: WorkflowRunOverride
       publication?: 'auto' | 'hold'
       sourceSnapshot?: { workspaceId: string; baseSha: string; contentHash: string }
+      /**
+       * Le dossier de travail DE CE RUN, resolu par l'appelant depuis la conversation.
+       * Absent -> `this.executionWorkspace`, le repli global : comportement d'avant, a l'identique.
+       */
+      workspace?: string
     } = {}
   ): Promise<OrchestrationResult> {
     await this.waitUntilReady()
@@ -1081,7 +1099,7 @@ export class AutowinOS {
         // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
         const workflowDuRun =
           runOptions.workflowOverride ?? (await this.poseConversationWorkflow(conversationId, task))
-        const orchestrator = this.orchestrateurPour(workflowDuRun, task)
+        const orchestrator = this.orchestrateurPour(workflowDuRun, task, runOptions.workspace)
         const result = await orchestrator.run(
           task,
           onStep,

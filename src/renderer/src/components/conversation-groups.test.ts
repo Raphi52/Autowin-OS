@@ -354,3 +354,38 @@ describe('une categorie de la liste n’est pas un dossier de travail', () => {
     expect(groupes.map((g) => g.kind)).toEqual(['dossier', 'categorie', 'divers', 'kaizen'])
   })
 })
+
+describe('repli sur le depot de la barre du haut (2026-09-17)', () => {
+  it('un fil SANS rangement se range sous le depot par defaut, pas dans « Divers »', () => {
+    expect(groupeDe(conv('a'), 'D:/RigV3Desktop')).toMatchObject({
+      key: 'D:/RigV3Desktop',
+      label: 'RigV3Desktop',
+      kind: 'dossier'
+    })
+  })
+
+  it('un dossier de travail EXPLICITE gagne contre le depot par defaut', () => {
+    expect(
+      groupeDe(conv('a', { projectPath: 'C:/Amitel/Autre' }), 'D:/RigV3Desktop')
+    ).toMatchObject({ key: 'C:/Amitel/Autre', kind: 'dossier' })
+  })
+
+  it('une CATEGORIE explicite gagne aussi : le classement reste cosmetique et libre', () => {
+    expect(groupeDe(conv('a', { categorie: 'Perso' }), 'D:/RigV3Desktop')).toMatchObject({
+      key: 'Perso',
+      kind: 'categorie'
+    })
+  })
+
+  it('sans depot par defaut connu → « Divers », comportement d avant inchange', () => {
+    expect(groupeDe(conv('a'), '').key).toBe(GROUPE_DIVERS)
+    expect(groupeDe(conv('a')).key).toBe(GROUPE_DIVERS)
+  })
+
+  it('grouperConversations rassemble les fils non ranges sous le depot par defaut', () => {
+    const groupes = grouperConversations([conv('a'), conv('b')], 'D:/RigV3Desktop')
+    expect(groupes).toHaveLength(1)
+    expect(groupes[0]).toMatchObject({ label: 'RigV3Desktop', kind: 'dossier' })
+    expect(groupes[0].items).toHaveLength(2)
+  })
+})

@@ -2892,7 +2892,14 @@ export class AppCommandBus {
             },
             runtimeSnapshot,
             causalWatchPaths,
-            onLateMutationClaims
+            onLateMutationClaims,
+            // LE DOSSIER DU TOUR SUIT JUSQU'AU PIPELINE (2026-09-17).
+            // La correction du 2026-09-16 n'avait rebranche que les commandes de fichier et
+            // `verify` : `orchestrate` laissait l'orchestrateur lire `deps.executionWorkspace`,
+            // fige au demarrage de l'app. Une conversation rangee sur un AUTRE depot lancait donc
+            // son run dans le depot d'Autowin. Mesure conv-649 : une demande visant
+            // D:/RigV3Desktop a produit un run analysant D:/AutoWinOS, 11,65 $ perdus.
+            { workspace: this.workspaceDuTour }
           )
           if (!r.gateBlocked) {
             const causalEvidence = causalWatchPaths.length

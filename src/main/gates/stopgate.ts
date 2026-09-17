@@ -227,6 +227,18 @@ function motifSansCitation(motif: string): string {
       // refus ne pouvait donc jamais etre reconnu comme identique. Le fichier reproche, lui, reste
       // compare en entier : deux fichiers differents restent deux refus differents.
       .replace(/\b\d+ [ée]dits?\b/g, 'N edits')
+      /**
+       * fix-ok: mesure du 2026-09-17 sur `activity/*.jsonl` (336 controles depuis le 13/09) — le
+       * motif « Promis mais pas fait » a DEUX formulations pour le meme blocage (voir `evaluateClosure` :
+       * les libelles cites quand ils existent, sinon le COMPTE « N point(s) »). La boucle de
+       * reparation fait osciller les deux d'un passage a l'autre, donc `memeRefus` ne reconnaissait
+       * pas un refus pourtant FIGE, et le seul frein restant etait le plafond dur de 24 passages.
+       * Sur les 188 paires de refus consecutifs mesurees, 88 seulement etaient reconnues ; en
+       * ramenant les deux formulations a une seule, 135 le sont. Le contenu etait DEJA neutralise
+       * par le repli des citations ci-dessus : cette ligne n'efface aucune distinction qui
+       * subsistait, elle aligne la forme « compte » sur la forme « libelles ».
+       */
+      .replace(/Promis mais pas fait :[^;]*/g, 'Promis mais pas fait')
       .trim()
   )
 }

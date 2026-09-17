@@ -80,8 +80,22 @@ export function nomDeDossier(chemin: string): string {
   return segments[segments.length - 1] || propre
 }
 
-/** À quel groupe appartient une conversation. L'ordre des tests EST la règle de priorité. */
-export function groupeDe(conversation: ConversationLike): {
+/**
+ * À quel groupe appartient une conversation. L'ordre des tests EST la règle de priorité.
+ *
+ * `dossierParDefaut` (le dépôt sélectionné dans la barre du haut) sert UNIQUEMENT de repli
+ * d'affichage : une conversation qui n'a ni catégorie ni dossier de travail tombait dans « Divers »,
+ * alors qu'elle travaille bel et bien dans le dépôt courant. Demande utilisateur du 2026-09-17 :
+ * « le dossier de repo sélectionné dans la barre du haut prime, les catégories à gauche c'est
+ * cosmétique — faut juste la ranger dans une catégorie qui correspond au cwd par défaut. »
+ *
+ * Ce repli ne RANGE rien : il n'écrit ni `projectPath` ni `categorie`, il place seulement le fil
+ * sous le bon en-tête. Un rangement explicite de l'utilisateur gagne toujours.
+ */
+export function groupeDe(
+  conversation: ConversationLike,
+  dossierParDefaut?: string
+): {
   key: string
   label: string
   kind: ConversationGroup<ConversationLike>['kind']
@@ -103,6 +117,11 @@ export function groupeDe(conversation: ConversationLike): {
     const key = chemin.replace(/[\\/]+$/, '') || chemin
     return { key, label: nomDeDossier(key), kind: 'dossier' }
   }
+  const defaut = dossierParDefaut?.trim()
+  if (defaut) {
+    const key = defaut.replace(/[\\/]+$/, '') || defaut
+    return { key, label: nomDeDossier(key), kind: 'dossier' }
+  }
   return { key: GROUPE_DIVERS, label: 'Divers', kind: 'divers' }
 }
 
@@ -115,11 +134,12 @@ export function groupeDe(conversation: ConversationLike): {
  * ce module groupe, il n'arbitre pas la pertinence.
  */
 export function grouperConversations<T extends ConversationLike>(
-  conversations: readonly T[]
+  conversations: readonly T[],
+  dossierParDefaut?: string
 ): ConversationGroup<T>[] {
   const par = new Map<string, ConversationGroup<T>>()
   for (const conversation of conversations) {
-    const { key, label, kind } = groupeDe(conversation)
+    const { key, label, kind } = groupeDe(conversation, dossierParDefaut)
     const existant = par.get(key)
     if (existant) existant.items.push(conversation)
     else par.set(key, { key, label, kind, depth: 0, items: [conversation] })
