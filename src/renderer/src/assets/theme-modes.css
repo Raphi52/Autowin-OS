@@ -185,8 +185,6 @@
   --chat-sur-vif-survol:            var(--on-accent);   /* texte pose sur le bouton d envoi vif, au survol */
   --chat-dictee:                    var(--rose);   /* barre et bouton de dictee en cours */
   --chat-erreur-douce:              var(--err);   /* message d erreur des travaux non publies */
-  --chat-file-envoi:                var(--gold-clair);   /* consigne en file : envoi */
-  --chat-file-orienter:             var(--info);   /* consigne en file : orientation */
 
 }
 

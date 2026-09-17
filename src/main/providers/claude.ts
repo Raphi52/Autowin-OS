@@ -23,7 +23,7 @@ import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
-import { scriptHookGardeGraphique } from '../../shared/garde-lancement-graphique'
+import { scriptHookGardes } from '../../shared/garde-git-destructeur'
 import { join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
@@ -1129,11 +1129,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     try {
       settingsDir = mkdtempSync(join(tmpdir(), 'autowin-os-settings-'))
       const settingsFile = join(settingsDir, 'settings.json')
-      // GARDE LANCEMENT GRAPHIQUE (conv-526) : un hook PreToolUse sur Bash refuse d'ouvrir une
-      // application graphique au premier plan et impose le bureau cache (hdesk-lancer.ps1).
+      // GARDE EFFACEMENT DE TRAVAIL (conv-587) : un hook PreToolUse sur Bash refuse les commandes
+      // qui detruisent l'arbre de travail entier (git reset --hard & co).
       // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
-      const hookGarde = join(settingsDir, 'garde-lancement-graphique.mjs')
-      writeFileSync(hookGarde, scriptHookGardeGraphique(), 'utf8')
+      const hookGarde = join(settingsDir, 'garde-git-destructeur.mjs')
+      writeFileSync(hookGarde, scriptHookGardes(), 'utf8')
       writeFileSync(
         settingsFile,
         JSON.stringify(reglagesCliAutowin(hookGarde)),

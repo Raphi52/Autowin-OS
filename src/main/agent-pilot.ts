@@ -14,6 +14,8 @@ import {
   type Usage
 } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
+import { coupesParPoids } from './chat-session-poids'
+import { loadConvActivity } from './activity/conv-activity'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import {
   buildTurnMessageBlocks,
@@ -1291,7 +1293,22 @@ export class AgentPilot {
      * cette fois avec le fil coupe au resume. C est le seul geste qui allege reellement.
      */
     const compactions = compactionsAbouties(history)
-    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}:c${compactions}`
+    /**
+     * LE POIDS DU FIL AUSSI — mesure du 2026-09-17 (conv-632).
+     *
+     * Autowin poussait 4 779 caracteres au CLI et l'appel etait facture 491 636 tokens d'entree :
+     * la reinjection reelle est le TRANSCRIPT du CLI (raisonnement + appels d'outils de tous les
+     * tours), qu'Autowin ne voit pas et ne borne pas. Mediane relevee sur 8 891 appels : 210 979
+     * tokens d'entree. Les bornes d'`chat-turn-messages.ts` (40 messages / 60 k tokens) ne
+     * s'appliquaient a RIEN tant que la session etait reprise.
+     *
+     * Franchir le seuil perime la session par le chemin deja ecrit pour la compaction : le tour
+     * suivant repart sur le fil aplati d'Autowin — bulles finales + resultats d'action resumes.
+     */
+    const coupesPoids = conversationId
+      ? coupesParPoids(loadConvActivity(conversationId))
+      : 0
+    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}:c${compactions}:w${coupesPoids}`
     // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
     // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.
     this.hydrateChatSessions()

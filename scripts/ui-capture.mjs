@@ -227,6 +227,21 @@ export const argumentsInstanceDediee = (argv, { enrobage, script, instanceId }) 
 export const doitPasserParInstanceCachee = (argv) =>
   !argv.includes('--fenetre-reelle') && !argv.includes('--port')
 
+/**
+ * L'IDENTIFIANT D'INSTANCE EST PROPRE A CHAQUE EXECUTION.
+ *
+ * Defaut mesure (conv-618, 2026-09-16) : « mes travaux en parallele se parasitent ». Le defaut
+ * valait la CONSTANTE 'ui-capture'. Deux travaux paralleles qui prenaient une preuve UI
+ * demandaient donc le MEME bureau cache et le MEME verrou d'instance : le second etait refuse,
+ * ou reprenait l'instance du premier. `avec-instance-headless.mjs` isole par identifiant — un
+ * identifiant partage annule cette isolation. Pure.
+ */
+export const instanceIdUiCapture = (argv, pid) => {
+  const i = argv.indexOf('--instance-id')
+  const explicite = i >= 0 ? argv[i + 1] : undefined
+  return explicite && !explicite.startsWith('--') ? explicite : `ui-capture-${pid}`
+}
+
 export const ETATS_CONNUS = ['attention', 'occupe']
 
 export const resoudreEtat = (valeur) => {
@@ -298,7 +313,11 @@ const decouvrirCible = async (port, portImpose) => {
     })
     return { cibles: await reponse.json(), portUtilise: String(p) }
   }
+  // AUCUN PORT DEVINE (conv-615) : sans `--port` ni AUTOWIN_CDP_PORT, on lit d'abord le
+  // DevToolsActivePort de CE depot. L'ancien defaut `9231` etait sonde EN PREMIER : quand un autre
+  // travail parallele ecoutait dessus, la capture venait de SON application, en rendant ok: true.
   try {
+    if (port === undefined) throw new Error('aucun port explicite')
     return await lire(port)
   } catch (erreur) {
     if (portImpose) throw erreur
@@ -325,7 +344,7 @@ const main = async () => {
       argumentsInstanceDediee(process.argv.slice(2), {
         enrobage: resolve(dossierScripts, 'avec-instance-headless.mjs'),
         script: resolve(dossierScripts, 'ui-capture.mjs'),
-        instanceId: argument('--instance-id', 'ui-capture')
+        instanceId: instanceIdUiCapture(process.argv.slice(2), process.pid)
       }),
       { stdio: 'inherit', windowsHide: true }
     )
@@ -339,7 +358,7 @@ const main = async () => {
   const vue = resoudreVue(argument('--view'))
   const sortie = resolve(argument('--out', `artifacts/ui-capture-${vue ?? 'inconnue'}.png`))
   const portImpose = process.argv.includes('--port')
-  const port = argument('--port', process.env.AUTOWIN_CDP_PORT || '9231')
+  const port = argument('--port', process.env.AUTOWIN_CDP_PORT)
 
   const rendre = (charge, code) => {
     console.log(JSON.stringify(charge, null, 2))
@@ -359,7 +378,7 @@ const main = async () => {
   }
 
   let cibles
-  let portUtilise = String(port)
+  let portUtilise = port === undefined ? '' : String(port)
   try {
     const trouve = await decouvrirCible(port, portImpose)
     cibles = trouve.cibles

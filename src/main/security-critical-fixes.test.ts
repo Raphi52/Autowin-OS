@@ -464,7 +464,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   soit EXACTEMENT un canal en moins. 192 - 1 = 191. Le chiffre monte donc de 189 a 191 non
     //   pas parce que la surface grandit, mais parce qu'on cesse de trainer un compteur perime ;
     //   la garantie reelle reste `unguarded` VIDE, qui n'a jamais faibli.
-    expect(handlers).toHaveLength(191)
+    expect(handlers).toHaveLength(197)
     expect(unguarded).toEqual([])
   })
 

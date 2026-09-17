@@ -11,9 +11,8 @@
  * backgroundImage`. Un aplat rend « none » -> exit 6. L'iframe est retiree ensuite : la page de
  * l'utilisateur n'est jamais repeinte.
  */
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { cheminDevToolsPort } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
 const ETATS = ['failed', 'running', 'interrupted', 'done']
 const rendre = (charge, code) => {
@@ -21,18 +20,19 @@ const rendre = (charge, code) => {
   process.exit(code)
 }
 
-const port = process.env.AUTOWIN_CDP_PORT || '9231'
+// Le port `9231` etait ecrit en dur AVANT la lecture du port reel : depuis une copie de travail,
+// la sonde tombait sur l'instance d'un AUTRE travail (conv-615). Resolveur commun uniquement.
 const lirePort = async (p) =>
   await (await fetch(`http://127.0.0.1:${p}/json`, { signal: AbortSignal.timeout(15_000) })).json()
-let cibles
-let portUtilise = String(port)
+let portUtilise
 try {
-  cibles = await lirePort(port)
-} catch {
-  const actif = readFileSync(cheminDevToolsPort(), 'utf8').trim().split(/\r?\n/)
-  portUtilise = actif[0]
-  cibles = await lirePort(actif[0])
+  portUtilise = String(portCdp())
+} catch (e) {
+  rendre({ ok: false, echecs: ['aucune-instance-a-piloter'], detail: String(e.message ?? e) }, 3)
 }
+const cibles = await lirePort(portUtilise).catch((e) =>
+  rendre({ ok: false, echecs: ['cdp-injoignable'], port: portUtilise, detail: String(e) }, 3)
+)
 const page = cibles.find((c) => c.type === 'page')
 if (!page) rendre({ ok: false, echecs: ['page-autowin-absente'] }, 3)
 

@@ -1,0 +1,22 @@
+RATE G0 le fichier scripts/banc-dispersion.mjs existe — scripts/banc-dispersion.mjs absent
+RATE G1 nominal : sortie JSON valide, code 0 — code 1 — node:internal/modules/cjs/loader:1520
+  throw err;
+  ^
+
+Error: Cannot find module 'D:\AutoWinOS\scripts\banc-dispersion.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:
+RATE G2 chiffres recomputables : moyenne et ecart intra du bras a — bras a absent
+RATE G3 cas limite : ecart inter < dispersion intra => departage false — comparaison absente
+RATE G4 nominal : ecart inter >> dispersion intra => departage true — sortie non JSON
+RATE G5 cas limite : une seule replique => ecartRelatif null et departage refuse — sortie non JSON
+RATE G6 cas limite : lignes illisibles ignorees et comptees — code 1 attendu 0 — node:internal/modules/cjs/loader:1520
+  throw err;
+  ^
+
+Error: Cannot find module 'D:\AutoWinOS\scripts\banc-dispersion.mjs'
+    at Module._resol
+RATE G7 cas limite : banc sans aucune ligne => code de sortie 2 — code 1 attendu 2
+
+score 0/8
+CRITERE NON ATTEINT
+exit=1

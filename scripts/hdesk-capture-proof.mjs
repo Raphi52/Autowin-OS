@@ -9,8 +9,12 @@
  * Usage : node scripts/hdesk-capture-proof.mjs <port>
  */
 import { writeFileSync } from 'node:fs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = Number(process.argv[2] ?? 9251)
+// Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+const port = Number(process.argv[2]) || portCdp()
 const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = pages.find((p) => p.type === 'page') ?? pages[0]
 if (!page) throw new Error(`Aucune page CDP sur le port ${port}`)

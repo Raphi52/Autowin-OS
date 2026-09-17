@@ -1,0 +1,107 @@
+Tu travailles dans le depot ouvert dans ton dossier courant. Mene la tache ci-dessous jusqu au vert.
+
+WORKFLOW IMPOSE (bras C) : aucune procedure, aucune skill a charger. Le contexte dont tu aurais eu
+besoin t est deja donne ci-dessous : le format exact du journal que tu dois lire, et l en-tete du
+script maison qui l ecrit (`scripts/arena-duel.mjs`), dont tu peux copier la forme et le style.
+
+--- FORMAT D UNE LIGNE DU JOURNAL (exemple reel) ---
+{"schema":"autowin.arena-duel/v1","ts":"2026-09-04T12:00:15.263Z","tache":"...","workflow":"A pipeline complet","bras":"a","dureeMs":188286,"coutUsd":0.8714605,"verdict":"perdant","note":"..."}
+--- EN-TETE DE scripts/arena-duel.mjs (le script voisin, meme famille) ---
+#!/usr/bin/env node
+/**
+ * arena-duel — JOURNAL DES DUELS de /arena : une ligne par BRAS mesure.
+ *
+ * Pourquoi : avant ce journal, un banc /arena ne laissait sur disque que les fichiers bruts
+ * d'UN essai (`.autowin-data/<profil>/arena-bench/`, ecrase au banc suivant) et rien de
+ * comparable d'un tournoi a l'autre. Chaque banc repartait donc de zero : impossible de dire
+ * si un workflow a DEJA gagne ou perdu sur une tache voisine (mesure du 2026-09-03, conv-175).
+ *
+ * Une ligne = un bras : tache, workflow, duree, cout, verdict. Rien d'autre — pas de prose,
+ * pas de score auto-attribue : les chiffres se LISENT dans `out-<bras>.json` / `activity/`.
+ *
+ * Usage :
+ *   node scripts/arena-duel.mjs noter --tache "..." --workflow "..." --bras a \
+ *        --duree-ms 123456 --cout-usd 0.63 --verdict gagnant [--banc <dossier>] [--note "..."] [--remplace]
+ *        [--critere "trouve les scripts vivants mais casses" --atteint oui|non --preuve "commande qui le rejoue"]
+ *   node scripts/arena-duel.mjs lire [--tache <filtre>] [--workflow <filtre>] [--limite 20] [--json] [--brut]
+ *
+ * Exit 0 = ecrit / lu · 1 = entree refusee (champ manquant ou absurde).
+ * Ecrit sous `.autowin-data/<profil>/arena-duels.jsonl` (append seul, jamais de reecriture).
+ */
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+
+export const VERDICTS = ['gagnant', 'perdant', 'nul', 'abandonne', 'casse']
+export const BRAS_VALIDES = ['a', 'b', 'c', 'x']
+
+export function cheminJournal(racine = process.cwd(), profil = 'autowin-os') {
+  return path.join(racine, '.autowin-data', profil, 'arena-duels.jsonl')
+}
+
+/**
+ * Valide une entree de duel et rend la ligne normalisee, ou leve avec le motif exact.
+ * Refuse ce qui rendrait le journal incomparable : tache vide, workflow vide, verdict inconnu,
+ * duree/cout non numeriques ou negatifs. Un cout a 0 est ACCEPTE (abonnement inclus) mais
+ * marque `coutUsd: 0` — il ne se devine pas.
+ */
+export function normaliserDuel(entree, maintenant = new Date()) {
+  const texte = (v) => (typeof v === 'string' ? v.trim() : '')
+  const tache = texte(entree.tache)
+--- FIN DU CONTEXTE ---
+
+TACHE (identique pour les quatre bras du banc) :
+
+Le depot n a AUCUN outil pour mesurer la DISPERSION d un banc de mesure A/B/C/X, alors que la procedure de banc du depot (section 4 de sa regle de mesure) l exige : « chaque bras part en 2 repliques identiques » et
+« un ecart INTER-bras plus petit que la dispersion INTRA-bras n est pas un resultat ».
+Aujourd hui ce calcul se fait a la main, donc il ne se fait pas.
+
+Ecris `scripts/banc-dispersion.mjs` : il lit un journal de duels au format JSON-Lines
+(le fichier `arena-duels.jsonl` du dossier de donnees, une ligne par bras : champs `banc`, `bras`,
+`dureeMs`, `coutUsd`, `verdict`), regroupe les lignes d un MEME banc par bras — plusieurs lignes
+d un meme bras = ses repliques — et rend la dispersion intra-bras, puis dit si l ecart entre les
+deux meilleurs bras DEPARTAGE quelque chose ou non.
+
+CONTRAT DE LIGNE DE COMMANDE (impose, aucune variante acceptee) :
+  node scripts/banc-dispersion.mjs --journal <chemin.jsonl> --banc <nom du banc> --json
+Sortie : UN objet JSON sur la sortie standard, exactement cette forme :
+{
+  "banc": "<nom>",
+  "bras": [
+    { "bras": "a", "repliques": 2,
+      "coutUsd":  { "moyenne": <nombre>, "ecartRelatif": <nombre|null> },
+      "dureeMs":  { "moyenne": <nombre>, "ecartRelatif": <nombre|null> } }
+  ],
+  "comparaison": {
+    "meilleur": "<bras|null>",
+    "ecartRelatifCout": <nombre|null>,
+    "ecartRelatifDuree": <nombre|null>,
+    "departage": <true|false>,
+    "motif": "<phrase courte>"
+  },
+  "lignesIgnorees": <entier>
+}
+REGLES DE CALCUL (elles sont le coeur de la tache) :
+ - `ecartRelatif` intra-bras = (max - min) / min sur les repliques de CE bras. Avec UNE SEULE
+   replique la dispersion est INCONNUE : `ecartRelatif` vaut `null` — jamais 0.
+ - `moyenne` = moyenne arithmetique des repliques du bras.
+ - `meilleur` = le bras au cout moyen le plus bas parmi ceux dont le verdict n est pas `casse`.
+   `ecartRelatifCout` / `ecartRelatifDuree` = ecart entre le meilleur et le deuxieme,
+   rapporte au meilleur : (second - meilleur) / meilleur.
+ - `departage` est `true` SEULEMENT si l ecart INTER-bras de cout est STRICTEMENT superieur a la
+   plus grande dispersion INTRA-bras connue parmi les deux bras compares. Sinon `false`, avec un
+   `motif` qui nomme le chiffre qui l empeche. Une dispersion intra inconnue (`null`) sur l un des
+   deux bras compares interdit le departage : `departage: false`, motif « dispersion intra non
+   mesuree ».
+ - Une ligne JSONL illisible ou sans `bras`/`coutUsd`/`dureeMs` est IGNOREE et comptee dans
+   `lignesIgnorees` — le programme ne plante pas.
+ - Journal absent, vide, ou banc sans aucune ligne : message explicite sur la sortie d erreur et
+   CODE DE SORTIE 2 (pas 0, pas 1).
+ - Aucune dependance nouvelle : Node pur, ESM, aucun paquet npm ajoute.
+
+CRITERE DE SUCCES — deterministe, aujourd hui ROUGE (le fichier n existe pas) :
+  node D:/AutoWinOS/bench/dispersion/check.mjs <racine de ta copie>
+doit afficher « CRITERE ATTEINT » avec le code de sortie 0. Il fabrique lui-meme ses journaux
+d essai dans un dossier temporaire : aucune valeur ne peut etre mise en dur pour le satisfaire.
+
+RENDS A LA FIN : le chemin du livrable, la sortie EXACTE du critere avec son code de sortie, la liste
+ordonnee de ce que tu as fait, et ce qui a echoue en route.

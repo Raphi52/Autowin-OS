@@ -396,6 +396,7 @@ import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
 import { STYLE_TON } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
+import { consigneBureauCache } from './consigne-bureau-cache'
 import { evidenceDeLErreur } from './providers/evidence-portee-par-erreur'
 import {
   classifyProviderFailure,
@@ -2788,6 +2789,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
             this.phasePrompt(phase, withFoundation),
             // VARIABLE par sandbox — le plus volatile, donc en dernier.
             // Vide quand le run tourne dans le dépôt de base : rien n'est payé en contexte.
+            // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+            { name: 'bureauCache', text: consigneBureauCache(runId) },
             {
               name: 'workspaceIsolation',
               text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -3897,6 +3900,8 @@ ${empreinteDepot}`
           // VARIABLE par phase — d'où sa place ici, et non en position 2.
           this.phasePrompt(phase, true),
           // VARIABLE par sandbox : le plus volatile, donc en dernier.
+          // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+          { name: 'bureauCache', text: consigneBureauCache(runId) },
           {
             name: 'workspaceIsolation',
             text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -4297,6 +4302,8 @@ ${empreinteDepot}`
             // VARIABLE par phase.
             this.phasePrompt(phase, false),
             // VARIABLE par sandbox.
+            // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+            { name: 'bureauCache', text: consigneBureauCache(runId) },
             {
               name: 'workspaceIsolation',
               text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -4315,6 +4322,8 @@ ${empreinteDepot}`
             // VARIABLE par phase.
             this.phasePrompt(phase, true),
             // VARIABLE par sandbox — le plus volatile, donc en dernier.
+            // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+            { name: 'bureauCache', text: consigneBureauCache(runId) },
             {
               name: 'workspaceIsolation',
               text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)

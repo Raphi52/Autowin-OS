@@ -26,6 +26,18 @@ export interface SkillInstallee {
  */
 export function useSkillsCatalog(): SkillInstallee[] | null {
   const [skills, setSkills] = useState<SkillInstallee[] | null>(null)
+  const [revision, setRevision] = useState(0)
+  /**
+   * Relecture au RETOUR de focus. Defaut vecu le 2026-09-16 : une skill supprimee sur disque
+   * restait proposee par la palette `/` jusqu'au redemarrage de l'app, parce que cet inventaire
+   * n'etait lu qu'AU MONTAGE. Le disque est la verite ; le focus est le moment le moins cher ou
+   * la reprendre (aucun sondage periodique, une lecture locale sans sous-processus).
+   */
+  useEffect(() => {
+    const rafraichir = (): void => setRevision((n) => n + 1)
+    window.addEventListener('focus', rafraichir)
+    return () => window.removeEventListener('focus', rafraichir)
+  }, [])
   useEffect(() => {
     let vivant = true
     void (async () => {
@@ -46,7 +58,7 @@ export function useSkillsCatalog(): SkillInstallee[] | null {
     return () => {
       vivant = false
     }
-  }, [])
+  }, [revision])
   return skills
 }
 

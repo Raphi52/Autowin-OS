@@ -249,8 +249,6 @@
   --chat-sur-vif-survol:            #001018;   /* texte pose sur le bouton d envoi vif, au survol */
   --chat-dictee:                    #ff8a96;   /* barre et bouton de dictee en cours */
   --chat-erreur-douce:              #e08b8b;   /* message d erreur des travaux non publies */
-  --chat-file-envoi:                #f4c58c;   /* consigne en file : envoi */
-  --chat-file-orienter:             #9cc4f4;   /* consigne en file : orientation */
   --chat-surlignage-texte:          #10121a;   /* texte de l occurrence trouvee, pose sur un aplat or FIXE : reste sombre dans les deux modes */
   --chat-depot-texte:               #e9f8ff;   /* texte du voile de depot de fichier, pose sur un fond sombre FIXE */
   --chat-depot-detail:              #7f9bad;   /* detail du voile de depot de fichier, pose sur un fond sombre FIXE */

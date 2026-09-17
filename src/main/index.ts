@@ -1,4 +1,12 @@
 import { observerLeMoteur } from './observer-les-sources'
+import { registerProdPassphraseIpc } from './prod-passphrase-ipc'
+import { PorteProd } from './prod-gate'
+import { GuichetProd } from './prod-guichet'
+import { chargerAutoriteProd, cheminAutoriteProd } from './store/prod-autorite-store'
+import { CoffreAutorisationProd, definirPhrase } from './prod-passphrase'
+import { ecrireEmpreinteProd, lireEmpreinteProd } from './store/prod-passphrase-store'
+import { ecrireNiveauProd, lireNiveauProd } from './store/prod-niveau-store'
+import { estNiveauProtection } from '../shared/prod-protection'
 import { spawn } from 'node:child_process'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
 import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local'
@@ -301,6 +309,7 @@ import {
   dossierDeTravailDuTour
 } from './bascule-dossier-conversation'
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
+import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -866,6 +875,49 @@ const curationRecoveryReady = reconcileCurationIntents(
   },
   invalidateBrainRuntime
 )
+/**
+ * LE POINT DE PASSAGE DE PRODUCTION, donne aux commandes.
+ *
+ * Il DORT tant qu'aucune phrase de passe n'est definie : sans cet interrupteur, le brancher
+ * rendrait `sql_query` inutilisable du jour au lendemain, puisqu'une liste de declaration absente
+ * rend TOUTE cible « inconnue », donc bloquante.
+ *
+ * LA LISTE EST RELUE A CHAQUE VERIFICATION, pas seulement au demarrage : corriger une declaration
+ * ne doit pas obliger a redemarrer l'application — surtout quand c'est une cible manquante qui
+ * bloque le travail en cours. La lecture est un petit fichier JSON local ; son cout est sans
+ * commune mesure avec une connexion SQL.
+ *
+ * LES ANOMALIES SONT DITES AU DEMARRAGE, une fois : un fichier absent ou fautif ferme la porte, et
+ * l'utilisateur doit savoir POURQUOI plutot que de decouvrir un refus incomprehensible.
+ */
+const autoriteProdAuDemarrage = chargerAutoriteProd(ensureAutowinAppData(appDataRoot))
+for (const anomalie of autoriteProdAuDemarrage.anomalies) {
+  console.warn(`[prod] liste de declaration : ${anomalie}`)
+}
+const porteProd = new PorteProd({
+  autorite: () => chargerAutoriteProd(ensureAutowinAppData(appDataRoot)).autorite,
+  coffre: () => coffreAutorisationProd(),
+  phraseDefinie: () => lireEmpreinteProd(ensureAutowinAppData(appDataRoot)) !== undefined,
+  // Le NIVEAU est relu a chaque verification, comme la liste : changer le reglage doit prendre effet
+  // tout de suite, sans redemarrer. Fichier absent -> « confirmation », jamais « aucun ».
+  niveau: () => lireNiveauProd(ensureAutowinAppData(appDataRoot))
+})
+
+/**
+ * LE GUICHET : il publie la demande d'autorisation vers la fenêtre et attend le jeton saisi. C'est
+ * lui qui transforme un refus en question posée à l'utilisateur, au lieu d'un texte rendu au modèle.
+ */
+const guichetProd = new GuichetProd({
+  notifier: (demande) => {
+    const fenetres = BrowserWindow.getAllWindows()
+    if (fenetres.length === 0) throw new Error('aucune fenêtre pour afficher la demande')
+    for (const w of fenetres) w.webContents.send('prod:autorisation:demandee', demande)
+  },
+  retirer: (id) => {
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('prod:autorisation:close', id)
+  }
+})
+
 const bus = new AppCommandBus(
   os,
   broadcast,
@@ -886,7 +938,9 @@ const bus = new AppCommandBus(
   // Absent -> `sql_query` annoncera l'indisponibilite plutot que de tenter un binaire inexistant.
   // L'ORDRE compte : ce parametre est le DERNIER du constructeur, apres desktop et updateTicket.
   resolveBinOnPath('sqlcmd') ?? undefined,
-  outcomeLearning
+  outcomeLearning,
+  porteProd,
+  guichetProd
 )
 /**
  * Le bouton Stop atteint desormais les programmes lances par la commande `run`.
@@ -1487,6 +1541,19 @@ function registerStorageMigrationIpc(lecture: Promise<LectureHistorique>): void 
     markRendererStorageMigrationComplete(canonicalAppDataRoot)
     return true
   })
+}
+
+/**
+ * LE COFFRE DES AUTORISATIONS DE PRODUCTION — cree a la premiere demande, JAMAIS persiste.
+ *
+ * Il vit en memoire parce qu'une autorisation qui survivrait a un redemarrage serait un droit que
+ * l'utilisateur ne sait plus avoir donne. Fermer l'app referme donc la production, et c'est voulu.
+ */
+let coffreProd: CoffreAutorisationProd | null = null
+function coffreAutorisationProd(): CoffreAutorisationProd {
+  return (coffreProd ??= new CoffreAutorisationProd(
+    lireEmpreinteProd(ensureAutowinAppData(appDataRoot))
+  ))
 }
 
 /** Petite TV du bureau cache (conv-528) : lecture seule, processus de capture cree a la demande. */
@@ -2882,9 +2949,86 @@ Le fil reprend ensuite normalement.`
     }
   }
 
-  const runPilotChat: typeof lancerTour = (...args) => {
+  /**
+   * RANGEMENT AUTOMATIQUE AU PREMIER MESSAGE, quand la demande NOMME un projet connu sans donner
+   * son chemin.
+   *
+   * Cas mesure (conv-611, 2026-09-16) : conversation ouverte dans D:\BrainRotRoyale, premier
+   * message sur les bureaux virtuels d'Autowin -> restee au mauvais endroit jusqu'a un deplacement
+   * a la main. `alignerDossierSurLaDemande` ne couvre que le chemin ECRIT ; ici l'utilisateur
+   * nomme seulement son projet. On ne choisit QUE parmi les dossiers deja utilises sur ce poste,
+   * jamais sur une conversation deja rangee, et seulement au PREMIER message : au-dela, le fil a
+   * un sujet etabli et un deplacement serait une surprise. Comme la bascule par chemin, la
+   * decision est ECRITE dans le fil et un echec ne doit pas empecher le tour de partir.
+   */
+  const rangerSurLePremierMessage = async (
+    conversationId: string,
+    messages: Message[]
+  ): Promise<void> => {
+    const conversation = os.conversations.get(conversationId)
+    if (!conversation) return
+    const dernierUtilisateur = [...messages].reverse().find((m) => m.role === 'user')?.content
+    const messagesConversation = conversation.messages.some((m) => m.role === 'user')
+      ? conversation.messages
+      : typeof dernierUtilisateur === 'string'
+        ? [{ role: 'user', content: dernierUtilisateur }]
+        : conversation.messages
+    const actif = dossierDuTour(conversationId)
+    const applique = await rangerConversationSurLePremierMessage({
+      conversation: { projectPath: conversation.projectPath, messages: messagesConversation },
+      categorie: conversation.categorie,
+      dossiersConnus: [
+        ...new Set(
+          os.conversations
+            .list()
+            .map((c) => c.projectPath?.trim())
+            .filter((chemin): chemin is string => Boolean(chemin))
+        )
+      ],
+      // Le « dossier » de la barre laterale est souvent une CATEGORIE, pas un chemin : conv-611
+      // portait `categorie = "Autowin OS"` et aucun projectPath (mesure du 2026-09-16). Sans cette
+      // liste, le cas fondateur ne pouvait pas etre range.
+      categoriesConnues: [
+        ...new Set(
+          os.conversations
+            .list()
+            .map((c) => c.categorie?.trim())
+            .filter((libelle): libelle is string => Boolean(libelle))
+        )
+      ],
+      dossierActif: actif,
+      // Un seul appel court, sur le PREMIER message : le nom du projet est souvent absent du
+      // message (cas conv-611), seul le SUJET le rattache. Une panne du modele rend null et le
+      // tour part comme avant.
+      demanderAuModele: async (systeme, charge) => {
+        await os.waitUntilReady()
+        const binding = os.roles.getBinding('orchestrator')
+        const reponse = await os.registry.send(
+          binding.provider,
+          [{ role: 'user', content: charge }],
+          {
+            system: systeme,
+            systemBlocks: [{ name: 'rangementPremierMessage', chars: systeme.length }],
+            model: binding.model,
+            reasoningEffort: binding.reasoningEffort,
+            requestId: randomUUID()
+          }
+        )
+        return reponse.text
+      },
+      ranger: (chemin) => os.conversations.rangerDansDossier(conversationId, chemin),
+      annoncer: (message) =>
+        os.conversations.append(conversationId, { role: 'assistant', content: message })
+    })
+    if (!applique) return
+    broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+    broadcast({ type: 'refresh', scope: 'conversations' })
+  }
+
+  const runPilotChat: typeof lancerTour = async (...args) => {
     const conversationId = args[2]
     if (typeof conversationId === 'string' && conversationId.trim()) {
+      await rangerSurLePremierMessage(conversationId, args[1])
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
       appliquerCompteDeConversation(conversationId)
@@ -3836,6 +3980,70 @@ app.whenReady().then(async () => {
       : Promise.resolve({ values: {}, canWriteMarker: dejaMigre })
   registerStorageMigrationIpc(lectureHistorique)
   registerHdeskTvIpc()
+  registerProdPassphraseIpc(ipcMain, {
+    lireEmpreinte: () => lireEmpreinteProd(ensureAutowinAppData(appDataRoot)),
+    // La phrase entre ici et n'en ressort pas : on la transforme aussitot en empreinte, on l'ecrit,
+    // et le coffre est REMPLACE — un jeton accorde sous l'ancienne phrase ne survit pas au changement.
+    enregistrerPhrase: (phrase) => {
+      const empreinte = definirPhrase(phrase)
+      ecrireEmpreinteProd(ensureAutowinAppData(appDataRoot), empreinte)
+      coffreProd = new CoffreAutorisationProd(empreinte)
+    },
+    coffre: () => coffreAutorisationProd(),
+    verifierExpediteur: (event, libelle) => assertTrustedRendererSender(event, libelle)
+  })
+  /**
+   * LE RETOUR DE L'ÉCRAN. Le jeton vient de la fenêtre, jamais du modèle ; l'expéditeur est donc
+   * vérifié comme pour la phrase elle-même. Aucune phrase ne transite ici, seulement un jeton opaque
+   * et l'identifiant de la demande qui l'a déclenché.
+   */
+  /**
+   * L'ÉTAT DE LA PROTECTION, EN CLAIR. Deux faits que l'écran de réglages doit pouvoir dire sans
+   * détour : la porte tourne-t-elle (une phrase est-elle définie), et que contient la liste de
+   * déclaration. Une protection qui DORT ne doit jamais avoir l'air active.
+   */
+  ipcMain.handle('prod:porte:etat', (event) => {
+    assertTrustedRendererSender(event, 'Protection de production')
+    const liste = chargerAutoriteProd(ensureAutowinAppData(appDataRoot))
+    return {
+      ...porteProd.etat(),
+      phraseDefinie: lireEmpreinteProd(ensureAutowinAppData(appDataRoot)) !== undefined,
+      declarees: liste.autorite.entrees.length,
+      anomalies: liste.anomalies,
+      chemin: cheminAutoriteProd(ensureAutowinAppData(appDataRoot))
+    }
+  })
+  /** Changer le niveau de protection (aucun / confirmation / phrase). Prend effet immediatement. */
+  ipcMain.handle('prod:porte:niveau', (event, niveau: unknown) => {
+    assertTrustedRendererSender(event, 'Protection de production')
+    if (!estNiveauProtection(niveau)) return { ok: false, erreur: 'Niveau inconnu.' }
+    // Exiger la phrase pour PASSER au niveau « phrase » n'aurait aucun sens : on la demande au
+    // contraire pour BAISSER la garde quand elle est deja en service.
+    if (porteProd.etat().niveau === 'phrase' && niveau !== 'phrase') {
+      const empreinte = lireEmpreinteProd(ensureAutowinAppData(appDataRoot))
+      if (empreinte)
+        return { ok: false, erreur: 'Saisis la phrase de passe pour baisser la garde.' }
+    }
+    ecrireNiveauProd(ensureAutowinAppData(appDataRoot), niveau)
+    return { ok: true }
+  })
+  ipcMain.handle('prod:autorisation:confirmer', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Autorisation de production')
+    return { ok: guichetProd.confirmer(guardString(id, 'prodAutorisation.id')) }
+  })
+  ipcMain.handle('prod:autorisation:deposer', (event, id: string, jeton: string) => {
+    assertTrustedRendererSender(event, 'Autorisation de production')
+    return { ok: guichetProd.deposer(guardString(id, 'prodAutorisation.id'), String(jeton ?? '')) }
+  })
+  ipcMain.handle('prod:autorisation:annuler', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Autorisation de production')
+    return { ok: guichetProd.annuler(guardString(id, 'prodAutorisation.id')) }
+  })
+  /** Les demandes encore ouvertes — pour une fenêtre qui se recharge pendant l'attente. */
+  ipcMain.handle('prod:autorisation:en-attente', (event) => {
+    assertTrustedRendererSender(event, 'Autorisation de production')
+    return guichetProd.enAttente()
+  })
   registerChatIpc()
   registerTicketsIpc({
     ipc: ipcMain,

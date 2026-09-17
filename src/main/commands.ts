@@ -27,7 +27,6 @@ import {
   decouperArguments
 } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
-import { refusLancementGraphique } from '../shared/garde-lancement-graphique'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import {
   decideRead,
@@ -3372,9 +3371,10 @@ export class AppCommandBus {
           // c'est exactement ce qui a coute des semaines ici.
           return { lance: false, detail: `Commande refusée : ${decision.motif ?? 'non autorisée'}` }
         }
-        // Garde conv-526 : pas d'application graphique au premier plan, bureau cache impose.
-        const refusGraphique = refusLancementGraphique(ligne)
-        if (refusGraphique) return { lance: false, detail: `Commande refusée : ${refusGraphique}` }
+        // Le refus des lancements graphiques au premier plan a ete RETIRE (conv-631, 2026-09-17,
+        // demande explicite de l'utilisateur) : il bloquait l'ouverture d'un fichier sur son propre
+        // ecran, qu'il demandait nommement. Le bureau cache (scripts/hdesk-lancer.ps1) reste la voie
+        // par defaut, portee par la CONSIGNE du prompt de pilotage — plus par un blocage.
         // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
         const refusGit = refusGitDestructeur(ligne)
         if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }

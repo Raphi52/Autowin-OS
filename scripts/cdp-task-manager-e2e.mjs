@@ -2,13 +2,17 @@ import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, normalize, resolve } from 'node:path'
+import { portCdp } from './cdp-port.mjs'
 
 function argument(name, fallback) {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : fallback
 }
 
-const port = Number(argument('--port', '9240'))
+// Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+const port = portCdp()
 const instanceRoot = resolve(
   argument('--instance-root', 'Audit/headless-instances/task-manager-e2e')
 )

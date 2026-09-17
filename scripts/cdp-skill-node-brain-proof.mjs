@@ -55,9 +55,13 @@ import { racineDepot } from './racine-depot.mjs'
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { portCdp } from './cdp-port.mjs'
 
 const root = racineDepot()
-const port = Number(process.env.AUTOWIN_CDP_PORT || 9224)
+// Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+const port = portCdp()
 const nbRuns = Number(process.argv[2] || 3)
 const traceRoot = join(root, '.autowin-data', 'autowin-os', 'causal-trace')
 

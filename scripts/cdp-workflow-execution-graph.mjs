@@ -4,8 +4,12 @@ import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 import { assertWorkflowRequestGraphProof } from './cdp-proof-validation.mjs'
 import { cheminArtefact } from './racine-depot.mjs'
 import { agirJusqua } from './cdp-attente.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9251'
+// Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+const port = String(portCdp())
 const output =
   process.env.AUTOWIN_WORKFLOW_GRAPH_SCREENSHOT || cheminArtefact('workflow-execution-graph.png')
 const proofOutput = output.replace(/\.png$/i, '.json')

@@ -8,19 +8,20 @@ vi.mock('./Markdown', () => ({
 }))
 
 /**
- * COMPTEUR HORS-MODÈLE des rendus de ChatView. `ChatQueuePanel` est rendu par le CORPS de
- * ChatView : chaque exécution du corps le re-rend. S'il compte une frappe, c'est que la vue
+ * COMPTEUR HORS-MODÈLE des rendus de ChatView. `ProdAutorisationHote` est rendu par le CORPS de
+ * ChatView : chaque exécution du corps le re-rend. (Il a remplacé `ChatQueuePanel`, supprimé avec
+ * l'affichage de la file d'attente le 2026-09-17 — la sonde change, la mesure est la même.) S'il compte une frappe, c'est que la vue
  * entière (3800 lignes de JSX, listes, panneaux) se recalcule à chaque caractère — le freeze
  * mesuré en conv-1466. Le composer isolé doit absorber la frappe SEUL.
  */
 const compteur = { rendus: 0 }
-vi.mock('./ChatQueuePanel', async (importOriginal) => {
-  const reel = await importOriginal<typeof import('./ChatQueuePanel')>()
+vi.mock('./ProdAutorisationHote', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('./ProdAutorisationHote')>()
   return {
     ...reel,
-    ChatQueuePanel: (props: Parameters<typeof reel.ChatQueuePanel>[0]) => {
+    ProdAutorisationHote: (props: Parameters<typeof reel.ProdAutorisationHote>[0]) => {
       compteur.rendus += 1
-      return reel.ChatQueuePanel(props)
+      return reel.ProdAutorisationHote(props)
     }
   }
 })
@@ -91,9 +92,9 @@ describe('ChatView — le composer est isolé : taper ne re-rend pas la vue', ()
     h = await mountChat(
       chatApi({
         conversationRuns: vi.fn().mockResolvedValue([RUN]),
-        capabilityControls: vi.fn().mockResolvedValue([
-          { id: 'scout', description: 'Chercher.', enabled: true }
-        ])
+        capabilityControls: vi
+          .fn()
+          .mockResolvedValue([{ id: 'scout', description: 'Chercher.', enabled: true }])
       })
     )
     await h.click('.conv-pick')

@@ -13,8 +13,7 @@
  *
  * Usage : node scripts/cdp-presence-systeme.mjs [--runs 2] [--etapes 7]
  */
-import { readFileSync } from 'node:fs'
-import { cheminDevToolsPort } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
 const argument = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
@@ -26,13 +25,18 @@ const rendre = (charge, code = 0) => {
   process.exit(code)
 }
 
-const port = (() => {
-  try {
-    return readFileSync(cheminDevToolsPort(), 'utf8').split('\n')[0].trim()
-  } catch {
-    return '9223'
-  }
-})()
+/*
+ * PAS DE REPLI MUET SUR 9223 (conv-611, redit conv-615) : cette sonde gardait sa PROPRE copie du
+ * repli que `scripts/cdp-port.mjs` avait retire. Depuis une copie de travail qui n'a pas lance son
+ * instance, elle poussait un etat de runs factice dans l'application d'un AUTRE travail — ou dans
+ * celle de l'utilisateur. On passe par le resolveur commun, qui REFUSE sans cible propre.
+ */
+let port
+try {
+  port = String(portCdp())
+} catch (e) {
+  rendre({ ok: false, echec: 'aucune-instance-a-piloter', detail: String(e.message ?? e) }, 3)
+}
 
 const cibles = await fetch(`http://127.0.0.1:${port}/json/list`)
   .then((r) => r.json())

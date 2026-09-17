@@ -38,6 +38,28 @@ if ([string]::IsNullOrWhiteSpace($Conversation)) { throw "Fil absent : passe -Co
 if ($Conversation -notmatch '^[a-zA-Z0-9_-]+$') { throw "Identifiant de fil invalide : '$Conversation'." }
 if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw "Executable introuvable : $Executable" }
 
+# IDENTIFIANT DEJA PRIS = REFUS (conv-617, « mes travaux en parallele se parasitent »). Le bureau
+# (AutowinTest_<Id>), le dossier WebView2 et la fiche de la TV sont tous nommes par -Id : deux
+# travaux paralleles qui choisissent le meme Id partagent le meme bureau, s'ecrasent la fiche, et
+# hdesk-observe capture la fenetre de l'autre. On refuse tant que l'instance precedente VIT.
+$registreId = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk'
+$ficheId = Join-Path $registreId "$Id.json"
+if (Test-Path -LiteralPath $ficheId) {
+  try { $fiche = Get-Content -LiteralPath $ficheId -Raw | ConvertFrom-Json } catch { $fiche = $null }
+  $vivant = $false
+  if ($fiche -and $fiche.pid) { $vivant = [bool](Get-Process -Id ([int]$fiche.pid) -ErrorAction SilentlyContinue) }
+  if ($vivant) {
+    $libre = "$Id-$Conversation-$PID"
+    [pscustomobject]@{
+      id = $Id; pret = $false; pidOccupant = [int]$fiche.pid; conversationOccupante = $fiche.conversationId
+      travailOccupant = $fiche.travail; idLibre = $libre
+      erreur = "Identifiant '$Id' deja utilise par un travail VIVANT (pid $($fiche.pid), fil $($fiche.conversationId)) : meme bureau cache, meme fiche, meme dossier WebView2. Relance avec -Id $libre, ou capture l'instance existante avec hdesk-observe.ps1 -InstanceId $Id."
+    } | ConvertTo-Json -Compress
+    [Console]::Error.WriteLine("hdesk-lancer : identifiant '$Id' occupe (pid $($fiche.pid)). Utilise -Id $libre.")
+    exit 5
+  }
+}
+
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;

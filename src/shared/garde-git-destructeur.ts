@@ -15,7 +15,7 @@
  * ce sont precisement les sorties de secours proposees.
  *
  * CONTRAINTE : fonction AUTOPORTEE (aucun import) — elle est serialisee telle quelle dans le script
- * de hook du CLI, comme `refusLancementGraphique`.
+ * de hook du CLI (`scriptHookGardes`).
  */
 export function refusGitDestructeur(commande: string): string | undefined {
   const c = String(commande ?? '')
@@ -63,4 +63,33 @@ export function refusGitDestructeur(commande: string): string | undefined {
     }
   }
   return undefined
+}
+
+/**
+ * Corps du script de hook PreToolUse (Bash) du CLI. Refus = JSON `permissionDecision: deny` sur
+ * stdout (https://code.claude.com/docs/en/hooks). Mesure 2026-09-13 : avec exit 2 + stderr, l'appel
+ * etait bien bloque mais l'agent recevait un resultat VIDE, sans le motif ni la voie a suivre.
+ *
+ * NE PORTE PLUS QUE L'EFFACEMENT DE TRAVAIL (conv-587). Le refus des lancements graphiques au
+ * premier plan a ete RETIRE le 2026-09-17 sur demande explicite de l'utilisateur (conv-631) : il
+ * bloquait l'ouverture d'un simple fichier sur son propre ecran, qu'il demandait nommement, et
+ * aucun chemin de contournement ne restait. Le bureau cache (`scripts/hdesk-lancer.ps1`) reste la
+ * VOIE PAR DEFAUT, portee par la consigne en prose du prompt de pilotage — plus par un blocage.
+ */
+export function scriptHookGardes(): string {
+  return `const refusGitDestructeur = ${refusGitDestructeur.toString()};
+let d = '';
+process.stdin.on('data', (b) => (d += b));
+process.stdin.on('end', () => {
+  let cmd = '';
+  try { const j = JSON.parse(d); cmd = (j.tool_input && j.tool_input.command) || ''; } catch {}
+  const motif = refusGitDestructeur(cmd);
+  if (motif) {
+    // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
+    process.exit(0);
+  }
+  process.exit(0);
+});
+`
 }

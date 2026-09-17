@@ -70,8 +70,6 @@ import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
 import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
 import { deciderRepriseProgrammee, libelleRepriseProgrammee } from './reprise-quota-planifiee'
 import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
-import { moveQueueEntry } from './chat-queue-order'
-import { ChatQueuePanel } from './ChatQueuePanel'
 import { HdeskTv } from './HdeskTv'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 // La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
@@ -772,8 +770,9 @@ export function ChatView({
    * un dossier de conversations est une etiquette, pas un repertoire Windows.
    */
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
-  const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
-  const [steeringDirectives, setSteeringDirectives] = useState<Set<number>>(() => new Set())
+  // Elle n'a PLUS d'affichage (choix utilisateur du 2026-09-17 : le panneau ne servait à rien) —
+  // les messages en attente se drainent seuls à la fin du tour. L'état reste tenu ici parce que
+  // c'est lui que le drain lit.
   const [directiveReceipts, setDirectiveReceipts] = useState<Record<string, DirectiveReceipt[]>>({})
   /*
    * REJOUER LES CONSIGNES DU TOUR A L'OUVERTURE D'UNE CONVERSATION.
@@ -1023,7 +1022,6 @@ export function ChatView({
   const busyConversationsRef = useRef(new Set<string>())
   const interruptingConversationsRef = useRef(new Set<string>())
   const stoppedQueueDrainRef = useRef(new Set<string>())
-  const steeringRef = useRef(new Set<number>())
   const sendLocksRef = useRef(new Set<string>())
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
   const [draftsVersion, setDraftsVersion] = useState(0)
@@ -1319,12 +1317,6 @@ export function ChatView({
     else interruptingConversationsRef.current.delete(id)
     setInterruptingConversations(new Set(interruptingConversationsRef.current))
   }
-  /** Injection « Orienter » en vol, par DIRECTIVE (deux messages peuvent être orientés de suite). */
-  function setDirectiveSteering(directiveId: number, value: boolean): void {
-    if (value) steeringRef.current.add(directiveId)
-    else steeringRef.current.delete(directiveId)
-    setSteeringDirectives(new Set(steeringRef.current))
-  }
   /**
    * FILET DE SÉCURITÉ : écrit le texte de l'utilisateur sur disque AVANT qu'il ne quitte le composer.
    *
@@ -1596,7 +1588,6 @@ export function ChatView({
   function setConversationQueue(id: string, next: QueuedDirective[]): void {
     if (next.length) queueRef.current.set(id, next)
     else queueRef.current.delete(id)
-    if (activeRef.current === id) setPendingDirectives(next)
   }
   /**
    * `mode: 'btw'` = « celui-la passe EN DERNIER ». Il ne suffit pas de deplacer l'entree une fois :
@@ -1634,9 +1625,6 @@ export function ChatView({
     next.splice(insertAt, 0, entry)
     setConversationQueue(id, next)
   }
-  useEffect(() => {
-    setPendingDirectives(queueRef.current.get(activeId ?? '') ?? [])
-  }, [activeId])
   /**
    * Workflows affichés : ceux de la CONVERSATION ACTIVE, et rien d'autre. Le cadrage « tous »
    * a été retiré — cette barre montre le contexte courant, le global relève de l'Observatory.
@@ -2987,33 +2975,6 @@ export function ChatView({
   }
 
   /**
-   * Interrompre le tour en cours → la file se draine depuis le début via l'effet `busy→false`
-   * (le message choisi + ses antérieurs partent d'abord ; les postérieurs suivent en auto-drain).
-   * Sert au bouton « Interrompre et envoyer tout » (en tête de file) ET aux boutons par-message.
-   */
-  /** `cible` : la mosaique arrete une fenetre NON active — sans elle, Stop viserait l'autre fil. */
-  function interruptAndFlushQueue(cible?: string): void {
-    const id = cible ?? activeRef.current
-    if (!id || interruptingConversationsRef.current.has(id)) return
-    // Rien à interrompre → ne PAS armer l'état « interruption en cours ». Sans cette garde, le
-    // drapeau n'est remis à false que par la transition `busy→false` de l'effet de drain : hors tour
-    // actif, cette transition n'arrive jamais et les boutons restent figés sur « ⏳ Interruption… »
-    // pour toujours, file bloquée. Constaté sur une file survivante à un changement de conversation.
-    if (!busyConversationsRef.current.has(id)) return
-    // Ce nouveau geste explicite remplace un éventuel Stop simple raté : la file doit désormais
-    // partir dès la fin du tour, même si le premier IPC avait laissé son gel one-shot armé.
-    stoppedQueueDrainRef.current.delete(id)
-    setConversationInterrupting(id, true)
-    void window.api
-      .cancelPilotChat(id)
-      .then((result) => {
-        if (result?.ok === false) libererTourFantome(id)
-        else armerReprisesStop(id)
-      })
-      .catch(() => setConversationInterrupting(id, false))
-  }
-
-  /**
    * TOUR FANTOME : le renderer se croit occupe, le main dit que rien ne tourne.
    *
    * `os:pilotChat:cancel` rend `{ ok: pilotAborted || orchestrationAborted }` : un `ok: false` n'est
@@ -3117,6 +3078,23 @@ export function ChatView({
     }, STOP_REARMEMENT_MS)
   }
 
+  /**
+   * Remet les messages encore en file dans le composer de la conversation `id`, puis vide la file.
+   * Seule porte de sortie depuis que la file n'a plus d'affichage : appelee par Stop, qui gele le
+   * drain. Si la conversation visee n'est pas celle affichee, on laisse la file tranquille — elle
+   * repartira d'elle-meme au prochain tour.
+   */
+  function rendreLaFileAuComposer(id: string): void {
+    if (id !== activeRef.current) return
+    const enFile = queueRef.current.get(id) ?? []
+    if (enFile.length === 0) return
+    const draftKey = composerDraftKeyRef.current
+    const draft = getComposerDraft(draftKey).input
+    const textes = enFile.map((entree) => entree.text)
+    setDraftInput(draftKey, [draft, ...textes].filter(Boolean).join('\n\n'))
+    setConversationQueue(id, [])
+  }
+
   /** Stop simple : annule le tour sans transformer la file en relance automatique. */
   /** `cible` : en mosaique, Stop vise SA fenetre — sinon il couperait le tour de la conversation active. */
   function stopPilotTurn(cible?: string): void {
@@ -3128,6 +3106,10 @@ export function ChatView({
     )
       return
     stoppedQueueDrainRef.current.add(id)
+    // LA FILE N'A PLUS D'AFFICHAGE (panneau retire le 2026-09-17) : un Stop gele son drain, donc
+    // sans cette restitution les messages en attente deviendraient INATTEIGNABLES — invisibles et
+    // jamais envoyes. Ils reviennent donc dans le composer, ou l'utilisateur les voit et decide.
+    rendreLaFileAuComposer(id)
     /*
      * STOP DESARME AUSSI LA CHAINE AUTO — sinon le bouton relance ce qu'il vient de couper.
      *
@@ -3166,89 +3148,6 @@ export function ChatView({
    */
   function issueDeLInjection(conversationId: string): 'sent' | 'differee' {
     return liveRuns[conversationId]?.status === 'running' ? 'differee' : 'sent'
-  }
-
-  /**
-   * ORIENTER SANS INTERROMPRE : injecte le message comme directive dans le tour EN COURS
-   * (drainée à l'itération suivante du pilote) sans l'annuler, puis le retire de la file.
-   * Différent de « Interrompre et envoyer » qui coupe le tour.
-   */
-  async function steerWithoutInterrupt(entry: QueuedDirective): Promise<void> {
-    const id = activeRef.current
-    if (!id) return
-    const original = queueRef.current.get(id) ?? []
-    const originalIndex = original.findIndex((queued) => queued.id === entry.id)
-    if (originalIndex < 0) return
-    // L'injection est un aller-retour IPC : sans état d'attente, le clic ne rend RIEN de visible et
-    // rien n'empêche de recliquer (double injection de la même directive dans le tour).
-    if (steeringRef.current.has(entry.id)) return
-    setDirectiveSteering(entry.id, true)
-    followTailRef.current = true
-    setHasNewActivity(false)
-    setDirectiveReceipt(id, entry, 'sending')
-    const settle = (): void => setDirectiveSteering(entry.id, false)
-    setConversationQueue(
-      id,
-      original.filter((queued) => queued.id !== entry.id)
-    )
-    const restore = (): void => {
-      const current = queueRef.current.get(id) ?? []
-      if (current.some((queued) => queued.id === entry.id)) return
-      const next = current.slice()
-      next.splice(Math.min(originalIndex, next.length), 0, entry)
-      setConversationQueue(id, next)
-    }
-    let result: { ok: boolean }
-    try {
-      result = await window.api.injectDirective(id, entry.text)
-    } catch (error) {
-      traceSilentFailure('inject-directive', error)
-      restore()
-      setDirectiveReceipt(id, entry, 'failed')
-      settle()
-      return
-    }
-    if (!result.ok) {
-      restore()
-      setDirectiveReceipt(id, entry, 'failed')
-    } else {
-      setDirectiveReceipt(id, entry, issueDeLInjection(id))
-    }
-    settle()
-  }
-
-  function restoreQueuedMessageToDraft(entry: QueuedDirective): void {
-    const id = activeRef.current
-    if (!id) return
-    const draftKey = composerDraftKeyRef.current
-    const draft = getComposerDraft(draftKey).input
-    setDraftInput(draftKey, draft ? `${draft}\n\n${entry.text}` : entry.text)
-    const q = queueRef.current.get(id) ?? []
-    setConversationQueue(
-      id,
-      q.filter((queued) => queued.id !== entry.id)
-    )
-  }
-
-  /** Réordonne la file d'un cran. L'ordre de frappe n'est plus une fatalité. */
-  function moveQueuedMessage(entry: QueuedDirective, delta: -1 | 1): void {
-    const id = activeRef.current
-    if (!id) return
-    const q = queueRef.current.get(id) ?? []
-    const next = moveQueueEntry(q, entry.id, delta)
-    if (next === q) return
-    setConversationQueue(id, next)
-  }
-
-  function moveQueuedMessageToBtw(entry: QueuedDirective): void {
-    const id = activeRef.current
-    if (!id) return
-    const q = queueRef.current.get(id) ?? []
-    if (!q.some((queued) => queued.id === entry.id)) return
-    setConversationQueue(
-      id,
-      q.filter((queued) => queued.id !== entry.id).concat({ ...entry, mode: 'btw' })
-    )
   }
 
   /**
@@ -6227,19 +6126,6 @@ Cliquer pour choisir une autre branche.`}
            * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
            */}
           <ProdAutorisationHote conversationId={activeId} />
-          <ChatQueuePanel
-            pendingDirectives={pendingDirectives}
-            busy={busy}
-            interrupting={interruptingConversations.has(activeId ?? '')}
-            steeringDirectives={steeringDirectives}
-            /* Enveloppe OBLIGATOIRE : passe directement, React lui donnerait l evenement
-               comme `cible` et le Stop viserait une conversation inexistante. */
-            interruptAndFlushQueue={() => interruptAndFlushQueue()}
-            steerWithoutInterrupt={(directive) => void steerWithoutInterrupt(directive)}
-            moveQueuedMessage={moveQueuedMessage}
-            moveQueuedMessageToBtw={moveQueuedMessageToBtw}
-            restoreQueuedMessageToDraft={restoreQueuedMessageToDraft}
-          />
           <ChatComposer
             ref={composerRef}
             busy={busy}

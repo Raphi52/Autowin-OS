@@ -18,6 +18,14 @@ description: >-
    test. Exemple concret : une portée à dériver pour une nouvelle famille de fichiers existe déjà pour les
    feuilles de style dans `src/main/verify-command.ts` (`EXTENSIONS_DE_STYLE`, `porteeDUneEdition`, et la
    garde d'angle mort `VERIFY_STYLE_ANGLE_MORT`) ; la réinventer produit un second mécanisme, plus faible.
+   **COPIE L'INVARIANT, PAS LA SILHOUETTE** — avant de reprendre sa forme, NOMME ce que le précédent protège, puis
+   vérifie que ta copie le protège aussi. Un précédent à moitié copié est plus faible que pas de précédent du tout :
+   mesuré au banc `arena-bench-build-positif` (2026-09-17), trois bras sur quatre ont repris le geste de
+   `src/main/brain-remember.ts:516-521` (lire l'environnement, replier si la valeur est inutilisable) sans son
+   invariant — là-bas le défaut reste PRIVÉ — et ont laissé une constante publique annoncer une valeur pendant
+   qu'une autre s'appliquait ; le test voisin passait au rouge dès que la variable était posée. Le seul bras sans
+   précédent à imiter a été classé premier. *(Garde NON VÉRIFIÉE : écrite d'après ce banc, jamais mise au banc
+   elle-même — son effet sur le comportement reste à mesurer.)*
    Aucun précédent trouvé après deux greps → dis-le en une ligne et continue.
 3. **AU MOMENT où tu tiens le précédent → LOCALISE LA LIGNE QUI S'EXÉCUTE VRAIMENT.** Grep le symptôme visible
    (la chaîne de caractères, le message d'assertion), ouvre LE seul fichier qu'il nomme, et arrête ta lecture là. Lire

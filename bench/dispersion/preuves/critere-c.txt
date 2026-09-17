@@ -1,0 +1,11 @@
+OK   G0 le fichier scripts/banc-dispersion.mjs existe
+OK   G1 nominal : sortie JSON valide, code 0
+OK   G2 chiffres recomputables : moyenne et ecart intra du bras a
+OK   G3 cas limite : ecart inter < dispersion intra => departage false
+OK   G4 nominal : ecart inter >> dispersion intra => departage true
+OK   G5 cas limite : une seule replique => ecartRelatif null et departage refuse
+OK   G6 cas limite : lignes illisibles ignorees et comptees
+OK   G7 cas limite : banc sans aucune ligne => code de sortie 2
+
+score 8/8
+CRITERE ATTEINT

@@ -31,7 +31,7 @@ describe('refusGitDestructeur', () => {
 
   it('est cable aux DEUX points d execution : le hook du CLI et la commande run interne', () => {
     const src = (p: string) => readFileSync(join(__dirname, p), 'utf8')
-    expect(src('./garde-lancement-graphique.ts')).toMatch(/refusGitDestructeur/)
+    expect(src('./garde-git-destructeur.ts')).toMatch(/scriptHookGardes/)
     expect(src('../main/commands.ts')).toMatch(/refusGitDestructeur\(ligne\)/)
   })
 })
@@ -41,9 +41,9 @@ describe('hook reel du CLI', () => {
     const { execFileSync, spawnSync } = await import('node:child_process')
     const { writeFileSync, mkdtempSync } = await import('node:fs')
     const { tmpdir } = await import('node:os')
-    const { scriptHookGardeGraphique } = await import('./garde-lancement-graphique')
+    const { scriptHookGardes } = await import('./garde-git-destructeur')
     const script = join(mkdtempSync(join(tmpdir(), 'garde-git-')), 'garde.mjs')
-    writeFileSync(script, scriptHookGardeGraphique(), 'utf8')
+    writeFileSync(script, scriptHookGardes(), 'utf8')
     expect(execFileSync(process.execPath, ['--check', script]).toString()).toBe('')
     const r = spawnSync(process.execPath, [script], {
       input: JSON.stringify({ tool_input: { command: 'git reset --hard' } }),

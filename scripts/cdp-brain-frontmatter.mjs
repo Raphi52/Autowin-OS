@@ -1,12 +1,16 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { cheminArtefact } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
 const arg = (name, fallback) => {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : fallback
 }
-const port = Number(arg('--port', '9252'))
+// Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+const port = portCdp()
 const output = arg('--output', cheminArtefact('brain-frontmatter-green.png'))
 const deadline = Date.now() + 10_000
 let pages

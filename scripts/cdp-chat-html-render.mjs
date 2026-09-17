@@ -31,7 +31,10 @@ const argument = (name, fallback) => {
 }
 // Resolution COMMUNE du port : --port, puis AUTOWIN_CDP_PORT, puis le port REEL de l'instance.
 const port = portCdp()
-const canaryPort = Number(argument('--canary-port', '9262'))
+// Port du serveur temoin : 0 = le systeme en attribue un LIBRE (conv-615). Le 9262 en dur faisait
+// echouer par EADDRINUSE le second de deux travaux paralleles, ou pire, le faisait compter les
+// requetes de l'autre. Le port reel est relu apres l'ecoute.
+let canaryPort = Number(argument('--canary-port', '0'))
 const productFingerprint = argument('--fingerprint', 'unbound')
 const output = resolve(argument('--out', 'Audit/headless-instances/chat-html/proof/chat-html.png'))
 const proofOutput = output.replace(/\.png$/i, '.json')
@@ -58,6 +61,7 @@ await new Promise((resolveListen, rejectListen) => {
   canaryServer.once('error', rejectListen)
   canaryServer.listen(canaryPort, '127.0.0.1', resolveListen)
 })
+canaryPort = canaryServer.address().port
 const canaryHealth = (await fetch(`http://127.0.0.1:${canaryPort}/health`)).status === 204
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
