@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { REGLES_VISUELLES } from './chat-pilotage-prompt'
+import { REGLES_VISUELLES, tourTouchantAuVisuel } from './chat-pilotage-prompt'
 
 /**
  * DEFAUT VECU (conv-526, tour c14c2d28-f864-4ca5-ba3f-3dfe24e41d47, 2026-09-13) : le chat a lance
@@ -23,5 +23,16 @@ describe('pilotage non invasif par defaut', () => {
     expect(prompt).toContain('ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR')
     expect(prompt).toContain('journalWindows')
     expect(prompt).not.toContain('pid disparu')
+  })
+  // kaizen conv-660, turnId 726f9797-7e65-44c7-97ee-c5a1b5d4478b : « tu arretes pas de fermer mon app ».
+  it("interdit de fermer l'app de l'utilisateur et nomme la compilation sans copie", () => {
+    expect(REGLES_VISUELLES).toContain("NE FERME JAMAIS L'APPLICATION DE L'UTILISATEUR")
+    expect(REGLES_VISUELLES).toContain('dotnet msbuild -t:Compile')
+  })
+
+  it('declenche le bloc du bureau cache sur un tour de build verrouille', () => {
+    expect(tourTouchantAuVisuel('taskkill /IM RigV3Desktop.exe puis rebuild')).toBe(true)
+    expect(tourTouchantAuVisuel('le build echoue, MSB3021 le binaire est verrouille')).toBe(true)
+    expect(tourTouchantAuVisuel('resume moi le dernier commit')).toBe(false)
   })
 })
