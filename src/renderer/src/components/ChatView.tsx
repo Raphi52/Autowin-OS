@@ -5419,13 +5419,33 @@ export function ChatView({
                 onClick={() => {
                   const { conv, top, left } = convMenu
                   setConvMenu(null)
-                  setConvFolderMenu({ conv, top, left })
+                  setConvFolderMenu({ conv, top, left, mode: 'categorie' })
                 }}
               >
                 <span className="conv-menu-ic" aria-hidden="true">
                   🗂
                 </span>
-                Ranger dans un dossier…
+                Ranger dans une catégorie…
+              </button>
+              {/*
+                DEUX gestes, DEUX entrees. Classer un fil (ou il apparait dans la liste) et choisir
+                le depot ou l'agent travaille n'ont ni les memes valeurs ni les memes consequences :
+                les empiler dans un seul menu faisait choisir sa categorie sous une pile de chemins
+                de depots (conv-79, 2026-09-17). La separation se fait ICI, a l'etape d'avant.
+              */}
+              <button
+                role="menuitem"
+                data-testid="conv-menu-set-workdir"
+                onClick={() => {
+                  const { conv, top, left } = convMenu
+                  setConvMenu(null)
+                  setConvFolderMenu({ conv, top, left, mode: 'dossier' })
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  📁
+                </span>
+                Choisir le répertoire de travail…
               </button>
               {/*
                 La categorie compte autant que le dossier : sans elle dans ce test, un fil range
