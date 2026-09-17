@@ -33,6 +33,11 @@ import {
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
+  densiteSuivante,
+  libelleDensite,
+  lireDensiteConversations,
+  traitsDensite,
+  type DensiteConversation,
   createLiveRunDeltaBatcher,
   deriveConversationState,
   hydrateStoredAssistant,
@@ -903,6 +908,19 @@ export function ChatView({
     convViewModeRef.current = convViewMode
     window.localStorage.setItem('autowin.chat.conversationsViewMode', convViewMode)
   }, [convViewMode])
+  /**
+   * DENSITE de la liste — cran CHOISI, independant de la largeur de la colonne, et memorise comme
+   * elle. Avant ce reglage, le rendu serre n'etait atteignable qu'en tirant la colonne sous 170 px :
+   * on ne pouvait pas avoir a la fois des titres larges et des lignes serrees (demande du
+   * 2026-09-17). Le cran par defaut est celui d'AVANT, pour que personne ne voie sa liste changer
+   * sans l'avoir demande.
+   */
+  const [convDensity, setConvDensity] = useState<DensiteConversation>(() =>
+    lireDensiteConversations(window.localStorage.getItem('autowin.chat.conversationsDensity'))
+  )
+  useEffect(() => {
+    window.localStorage.setItem('autowin.chat.conversationsDensity', convDensity)
+  }, [convDensity])
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.conversationsPaneWidth'))
     return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 232)
@@ -5030,6 +5048,10 @@ export function ChatView({
       <aside
         className="lisere-dessus conv-pane"
         data-view-mode={convViewMode}
+        data-density={convDensity}
+        // Une RECHERCHE en cours re-montre la ligne d'identifiant meme en cran serre : taper « 171 »
+        // doit continuer de prouver qu'on a trouve la bonne conversation (lecon du 2026-09-03).
+        data-recherche={convQuery.trim() ? 'oui' : undefined}
         style={{ width: `${conversationsPaneWidth}px` }}
       >
         <div className="conv-head">
@@ -5052,13 +5074,41 @@ export function ChatView({
                 )}
                 <button
                   type="button"
+                  className="conv-density-toggle"
+                  data-testid="conv-density-toggle"
+                  data-density={convDensity}
+                  title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
+                  aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
+                  onClick={() => setConvDensity(densiteSuivante(convDensity))}
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    {traitsDensite(convDensity).map((y) => (
+                      <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
+                    ))}
+                  </svg>
+                </button>
+                <button
+                  type="button"
                   className="conv-view-toggle"
                   data-testid="conv-view-toggle"
                   role="switch"
                   aria-checked={convViewMode === 'mosaic'}
                   aria-label="Vue mosaïque"
                   title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
-                  onClick={() => setConvViewMode(convViewMode === 'mosaic' ? 'list' : 'mosaic')}
+                  onClick={() => {
+                    if (convViewMode === 'mosaic') {
+                      setConvViewMode('list')
+                      return
+                    }
+                    setConvViewMode('mosaic')
+                    // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
+                    // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
+                    // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
+                    // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
+                    // travail, et « Tout fermer » doit rester une mosaique vide.
+                    if (mosaicIdsRef.current.length === 0 && activeId)
+                      void ouvrirDansMosaique(activeId)
+                  }}
                 >
                   <span className="conv-view-toggle-knob" aria-hidden="true" />
                 </button>
