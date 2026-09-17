@@ -1,0 +1,201 @@
+<!doctype html>
+<!-- fix-ok: cause mesuree du tour precedent = maquette livree en bloc ```html-render non referme dans le message, donc affichee en code brut. Correction a la source : la maquette est un fichier HTML autonome et complet, verifie balises ouvertes = balises fermees et zero ressource externe. Les editions multiples de ce fichier sont sa redaction, pas un correctif a l aveugle. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Autowin OS — Worktrees (maquette)</title>
+<style>
+  :root{
+    --txt:#dde3ee; --sec:#a9b2c4;
+    --or1:#d4a94f; --or2:#e3ba55;
+    --filet:linear-gradient(90deg,rgba(212,169,79,0) 0%,rgba(212,169,79,.55) 18%,rgba(227,186,85,.75) 50%,rgba(212,169,79,.55) 82%,rgba(212,169,79,0) 100%);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --ui:-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{background:transparent;margin:0}
+  body{font:12px/1.45 var(--ui);color:var(--txt);padding:14px 16px}
+  .wrap{max-width:1180px;margin:0 auto}
+
+  h1{font:600 15px/1.2 var(--ui);margin:0 0 2px;letter-spacing:.2px}
+  .sub{color:var(--sec);font-size:11px;margin:0 0 10px}
+  h2{font:600 11px/1 var(--ui);letter-spacing:.12em;text-transform:uppercase;color:var(--or2);margin:16px 0 6px}
+  .filet{height:1px;background:var(--filet);border:0;margin:6px 0 9px}
+  .filet.court{background:linear-gradient(90deg,rgba(212,169,79,.6),rgba(212,169,79,0))}
+
+  .sante{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 2px}
+  .kpi{flex:1 1 118px;padding:6px 9px;border:1px solid rgba(212,169,79,.22);border-radius:6px;background:rgba(255,255,255,.018)}
+  .kpi b{display:block;font:600 16px/1.1 var(--mono);color:var(--or2)}
+  .kpi span{color:var(--sec);font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th{text-align:left;font:600 10px/1 var(--ui);letter-spacing:.1em;text-transform:uppercase;color:var(--sec);
+     padding:0 8px 5px 0;border-bottom:1px solid rgba(212,169,79,.28)}
+  td{padding:6px 8px 6px 0;border-bottom:1px solid rgba(221,227,238,.07);vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  .num{font-family:var(--mono);color:var(--sec);white-space:nowrap}
+
+  .chip{display:inline-block;font:11px/1.35 var(--mono);padding:1px 6px;border-radius:4px;
+        border:1px solid rgba(212,169,79,.26);background:rgba(212,169,79,.07);color:var(--txt);max-width:100%}
+  .chip.sha{color:var(--or2);border-color:rgba(212,169,79,.4)}
+  .chip.pale{color:var(--sec);border-color:rgba(221,227,238,.16);background:rgba(221,227,238,.04)}
+  /* chemin tronque PAR LE DEBUT : la fin, qui identifie la copie, reste lisible */
+  .chip.chemin{direction:rtl;text-align:left;unicode-bidi:plaintext;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px}
+
+  .pt{display:inline-flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
+  .pt::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .propre{color:#7fc79a}.modif{color:var(--or2)}.conflit{color:#e0736b}.detache{color:var(--sec)}
+  .meta{color:var(--sec);font-size:10.5px}
+  .act{display:flex;gap:4px;flex-wrap:wrap}
+  .b{font:11px/1 var(--ui);padding:4px 7px;border-radius:4px;border:1px solid rgba(212,169,79,.3);
+     background:rgba(212,169,79,.06);color:var(--txt);white-space:nowrap}
+  .b.or{border-color:rgba(227,186,85,.75);background:linear-gradient(180deg,rgba(227,186,85,.22),rgba(212,169,79,.1));color:#f3e4bd}
+  .b.danger{border-color:rgba(224,115,107,.45);color:#f0b6b1;background:rgba(224,115,107,.08)}
+  .b.off{border-color:rgba(221,227,238,.14);color:#6f7889;background:transparent}
+
+  .bloc{border:1px solid rgba(212,169,79,.2);border-radius:7px;padding:9px 11px;background:rgba(255,255,255,.015)}
+  .vide{text-align:center;padding:18px 10px;color:var(--sec);border:1px dashed rgba(212,169,79,.3);border-radius:7px}
+  .vide b{display:block;color:var(--txt);font-weight:600;margin-bottom:3px}
+  .note{color:var(--sec);font-size:10.5px;margin:5px 0 0}
+  .fichiers{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+  .cas{margin:9px 0 0;padding-left:10px;border-left:2px solid rgba(212,169,79,.3)}
+  .cas>span.t{display:block;font:600 10px/1 var(--ui);letter-spacing:.1em;text-transform:uppercase;color:var(--or1);margin-bottom:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Copies de travail isolées</h1>
+  <p class="sub">Dépôt <span class="chip pale">D:\AutoWinOS</span> · branche de base <span class="chip pale">main</span> · dernier balayage de rétention : il y a 22 min</p>
+
+  <div class="sante">
+    <div class="kpi"><b>6</b><span>copies</span></div>
+    <div class="kpi"><b>1</b><span>en conflit</span></div>
+    <div class="kpi"><b>2</b><span>jamais publiées</span></div>
+    <div class="kpi"><b>2</b><span>interrompues</span></div>
+    <div class="kpi"><b>1,84 Go</b><span>sur disque</span></div>
+  </div>
+  <hr class="filet">
+
+  <h2>Les copies</h2>
+  <table>
+    <thead><tr>
+      <th>Copie · chemin</th><th>Branche</th><th>SHA</th><th>État</th><th>Âge</th><th>Disque</th><th>Origine</th><th>Actions</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><b>agent__run-70f1d69fed10-1</b><br><span class="chip chemin">.autowin-data\autowin-os\worktrees\5a94588848d48682\agent__run-70f1d69fed10-1</span></td>
+        <td><span class="chip">autowin/agent/run-70f1d69</span><div class="meta">base main</div></td>
+        <td><span class="chip sha">5a94588</span></td>
+        <td><span class="pt modif">modifié · 3 fichiers</span><div class="meta">en cours · vérification non rendue</div></td>
+        <td class="num">12 min</td><td class="num">312 Mo</td>
+        <td><div class="meta">run <span class="chip pale">run-70f1d69fed10</span></div><div class="meta">conv-627 — « prompter dans autowin… »</div></td>
+        <td><div class="act"><span class="b">Ouvrir</span><span class="b">Voir les changements</span><span class="b off">Publier</span></div></td>
+      </tr>
+      <tr>
+        <td><b>agent__run-3106a10d-2</b><br><span class="chip chemin">.autowin-data\autowin-os\worktrees\9f31bb2\agent__run-3106a10d-2</span></td>
+        <td><span class="chip">autowin/agent/run-3106a10</span><div class="meta">base main</div></td>
+        <td><span class="chip sha">3106a10</span></td>
+        <td><span class="pt propre">propre</span><div class="meta">prêt à fusionner · vérification verte</div></td>
+        <td class="num">1 h 05</td><td class="num">298 Mo</td>
+        <td><div class="meta">run <span class="chip pale">run-3106a10d</span></div><div class="meta">conv-611 — « constitution : réflexe 9 »</div></td>
+        <td><div class="act"><span class="b or">Publier</span><span class="b">Voir le patch</span><span class="b danger">Jeter</span></div></td>
+      </tr>
+      <tr>
+        <td><b>agent__run-8b7a1876-1</b><br><span class="chip chemin">.autowin-data\autowin-os\worktrees\c0d4ee1\agent__run-8b7a1876-1</span></td>
+        <td><span class="chip">autowin/agent/run-8b7a187</span><div class="meta">base main</div></td>
+        <td><span class="chip sha">8b7a187</span></td>
+        <td><span class="pt conflit">en conflit</span><div class="meta">fusion refusée · 2 fichiers</div></td>
+        <td class="num">3 h 20</td><td class="num">305 Mo</td>
+        <td><div class="meta">run <span class="chip pale">run-8b7a1876</span></div><div class="meta">conv-627 — « maquettes Worktrees »</div></td>
+        <td><div class="act"><span class="b or">Résoudre</span><span class="b">Réessayer</span><span class="b">Préserver puis libérer</span><span class="b danger">Jeter</span></div></td>
+      </tr>
+      <tr>
+        <td><b>agent__run-cdp-observatory-1</b><br><span class="chip chemin">.autowin-data\autowin-os\worktrees\4ab77c3\agent__run-cdp-observatory-1</span></td>
+        <td><span class="chip">autowin/agent/cdp-observatory</span><div class="meta">base main</div></td>
+        <td><span class="chip sha">4ab77c3</span></td>
+        <td><span class="pt detache">interrompu</span><div class="meta">coupé par l’arrêt de l’app · n’attend personne</div></td>
+        <td class="num">2 j 04 h</td><td class="num">287 Mo</td>
+        <td><div class="meta">run <span class="chip pale">cdp-observatory-attente</span></div><div class="meta">conv-598 — « bandeau Observatoire »</div></td>
+        <td><div class="act"><span class="b">Relancer</span><span class="b">Voir le patch</span><span class="b danger">Oublier</span></div></td>
+      </tr>
+      <tr>
+        <td><b>agent__run-recovered-0</b><br><span class="chip chemin">.autowin-data\autowin-os\worktrees\77c1a90\agent__run-recovered-0</span></td>
+        <td><span class="pt detache">détaché</span><div class="meta">aucune branche associée</div></td>
+        <td><span class="chip sha">77c1a90</span></td>
+        <td><span class="pt modif">modifié · 1 fichier</span><div class="meta">rattachement inconnu</div></td>
+        <td class="num">6 j</td><td class="num">301 Mo</td>
+        <td><div class="meta">run inconnu</div><div class="meta">aucune conversation rattachée</div></td>
+        <td><div class="act"><span class="b">Créer une branche</span><span class="b">Voir le patch</span><span class="b danger">Jeter</span></div></td>
+      </tr>
+      <tr>
+        <td><b>agent__run-banc-orchestration-vs-nu-12</b><br><span class="chip chemin">D:\AutoWinOS\.autowin-data\autowin-os\worktrees\d41d8cd98f00b204e9800998ecf8427e\bancs\2026-09\orchestration-vs-nu\agent__run-banc-orchestration-vs-nu-12</span><div class="meta">chemin long — début masqué, la fin reste lisible</div></td>
+        <td><span class="chip">autowin/agent/banc-orch-12</span><div class="meta">base main</div></td>
+        <td><span class="chip sha">d41d8cd</span></td>
+        <td><span class="pt propre">propre</span><div class="meta">publiée · nettoyage en attente</div></td>
+        <td class="num">9 j</td><td class="num">341 Mo</td>
+        <td><div class="meta">run <span class="chip pale">run-banc-orch-12</span></div><div class="meta">conv-604 — « banc orchestration »</div></td>
+        <td><div class="act"><span class="b or">Libérer la place</span><span class="b">Ouvrir</span></div></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Conflits à trancher</h2>
+  <hr class="filet court">
+  <div class="bloc">
+    <b>agent__run-8b7a1876-1</b> <span class="meta">· la fusion vers <span class="chip pale">main</span> a été refusée · il y a 40 min</span>
+    <div class="fichiers">
+      <span class="chip">src/main/constitution.ts</span>
+      <span class="chip">src/renderer/views/WorktreeView.tsx</span>
+    </div>
+    <p class="note">Aussi touchés par : agent__run-3106a10d-2. Choisis une version — le travail non retenu reste dans <span class="chip pale">autowin/recovery/run-8b7a1876</span>.</p>
+    <div class="act" style="margin-top:6px">
+      <span class="b or">Garder la version de l’agent</span><span class="b">Garder ma version</span><span class="b">Voir le détail ligne à ligne</span>
+    </div>
+  </div>
+
+  <h2>Terminés, jamais publiés</h2>
+  <hr class="filet court">
+  <div class="bloc">
+    <table>
+      <thead><tr><th>Copie</th><th>Date</th><th>Fichiers du travail</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>agent__run-3106a10d-2</b><div class="meta">vérification verte · branche non fusionnée</div></td>
+          <td class="num">2026-09-14</td>
+          <td><div class="fichiers"><span class="chip">src/main/constitution.ts</span><span class="chip">src/main/chat-pilotage-prompt.ts</span><span class="chip">src/main/agent-pilot.ts</span><span class="chip pale">+1 autre</span></div></td>
+          <td><div class="act"><span class="b or">Publier</span><span class="b">Voir le patch</span></div></td>
+        </tr>
+        <tr>
+          <td><b>agent__run-recovered-0</b><div class="meta">retrouvé après redémarrage · rattachement inconnu</div></td>
+          <td class="num">2026-09-08</td>
+          <td><div class="fichiers"><span class="chip">scripts/arena-protocole-check.mjs</span></div></td>
+          <td><div class="act"><span class="b">Voir le patch</span><span class="b danger">Jeter</span></div></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">Seuls les premiers fichiers sont listés : tout afficher coûterait une commande git par branche.</p>
+  </div>
+
+  <h2>Cas limites d’affichage</h2>
+  <hr class="filet court">
+
+  <div class="cas">
+    <span class="t">Aucune copie de travail</span>
+    <div class="vide">
+      <b>Aucune copie de travail isolée</b>
+      Rien n’occupe le disque, aucun travail n’attend. Une copie est créée automatiquement au prochain run.
+    </div>
+  </div>
+
+  <div class="cas">
+    <span class="t">Zéro travail non publié</span>
+    <div class="bloc">
+      <b>Terminés, jamais publiés — section masquée</b>
+      <p class="note">Aucun travail terminé n’attend d’être publié : rien à afficher ici. La section réapparaît dès qu’une branche de secours reste non fusionnée.</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
