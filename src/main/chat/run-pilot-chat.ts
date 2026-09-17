@@ -188,7 +188,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     activeChatTurns,
     scheduledTasks,
     causalTrace,
-    ledger,
     pendingDirectives,
     turnJournalRoot,
     isolatedTestInstance,
