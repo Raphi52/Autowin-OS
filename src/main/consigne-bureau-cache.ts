@@ -36,7 +36,11 @@ export function consigneBureauCache(runId: string): string {
     `N'emploie aucun autre identifiant de bureau : ${id} est réservé à ce run, c'est ce qui empêche ` +
     `deux travaux parallèles de se parasiter. Un code de sortie non nul du lanceur (4 = l'app est morte, ` +
     `3 = aucune fenêtre, 1 = échec) est une erreur de TON tour : lis \`erreur\` et \`journalWindows\`, ` +
-    `corrige la cause, relance — ne bascule pas sur l'écran de l'utilisateur.\n`
+    `corrige la cause, relance — ne bascule pas sur l'écran de l'utilisateur. ` +
+    `NE FERME JAMAIS l'application de l'utilisateur pour te debloquer (taskkill /IM, Stop-Process -Name) : ` +
+    `un garde-fou refuse ce geste, et sa fenetre ouverte n'est pas la tienne. Un .exe verrouille par SON ` +
+    `app (MSB3021/MSB3027) se compile avec la cible Compile seule (dotnet msbuild -t:Compile) ; pour ` +
+    `observer, lance TA propre instance dans ton bureau cache.\n`
   )
 }
 
