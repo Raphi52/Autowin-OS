@@ -11,6 +11,12 @@ cedric.tumelaire@amitel365.onmicrosoft.com (masque 228990, ForcePush compris). T
 autres comptes heritent de Contributors, qui n'inclut pas ce droit. C'est donc a lui, ou a
 un administrateur du projet, que la demande doit aller — pas a l'equipe.
 
+Et l'equipe ne peut pas se debloquer elle-meme : vincent.fayolle n'appartient qu'a
+[AutoWinOS]\AutoWinOS Team et [RIG]\Judiciaire, aucun groupe d'administration (verifie le
+2026-09-17, API graph/memberships). Cedric.tumelaire est, lui, dans Project Administrators.
+Cette demande ne peut donc PAS etre honorree cote developpeur, quelle que soit la bonne
+volonte : elle attend une action d'administration.
+
 CE QUI EST BLOQUE
 La suppression de 45 branches de sauvegarde devenues inutiles. Azure repond, aussi bien par
 `git push` que par son API REST (`updateStatus: forcePushRequired`) :
