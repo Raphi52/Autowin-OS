@@ -5608,7 +5608,11 @@ export function ChatView({
               ref={convFolderMenuRef}
               className="conv-menu-pop"
               role="menu"
-              aria-label="Dossiers de conversations"
+              aria-label={
+                convFolderMenu.mode === 'categorie'
+                  ? 'Catégories de conversations'
+                  : 'Répertoires de travail'
+              }
               style={{ top: convFolderMenu.top, left: convFolderMenu.left }}
             >
               {/*
@@ -5618,7 +5622,8 @@ export function ChatView({
                 (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
                 choisissable comme les autres.
               */}
-              {defaultWorkspace?.trim() &&
+              {convFolderMenu.mode === 'dossier' &&
+                defaultWorkspace?.trim() &&
                 !dossiersConversations.includes(defaultWorkspace.trim()) && (
                   <button
                     role="menuitem"
@@ -5638,7 +5643,8 @@ export function ChatView({
                     {nomDeDossier(defaultWorkspace.trim())} · par défaut
                   </button>
                 )}
-              {dossiersConversations.length === 0 && !defaultWorkspace?.trim() ? (
+              {convFolderMenu.mode !== 'dossier' ? null : dossiersConversations.length === 0 &&
+                !defaultWorkspace?.trim() ? (
                 <span className="conv-menu-empty">Aucun dossier de conversations</span>
               ) : (
                 dossiersConversations.map((chemin) => (
@@ -5675,22 +5681,24 @@ export function ChatView({
                   </div>
                 ))
               )}
-              <button
-                role="menuitem"
-                data-testid="conv-project-pick"
-                onClick={() => {
-                  const conv = convFolderMenu.conv
-                  setConvFolderMenu(null)
-                  void window.api.pickGitRepo?.().then((chemin) => {
-                    if (chemin) choisirDossier(conv, chemin)
-                  })
-                }}
-              >
-                <span className="conv-menu-ic" aria-hidden="true">
-                  📁
-                </span>
-                Choisir un dossier…
-              </button>
+              {convFolderMenu.mode === 'dossier' && (
+                <button
+                  role="menuitem"
+                  data-testid="conv-project-pick"
+                  onClick={() => {
+                    const conv = convFolderMenu.conv
+                    setConvFolderMenu(null)
+                    void window.api.pickGitRepo?.().then((chemin) => {
+                      if (chemin) choisirDossier(conv, chemin)
+                    })
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    📁
+                  </span>
+                  Parcourir…
+                </button>
+              )}
               {/*
                 CATEGORIES — l'autre moitie du geste « ranger ». Depuis que le dossier de travail
                 et le libelle de classement sont deux champs distincts (conv-81), ce menu ne
@@ -5698,8 +5706,10 @@ export function ChatView({
                 souris alors que des fils y vivaient toujours (conv-79). Le tri entre les deux se
                 fait plus bas, sur la FORME de la valeur — un libelle n'ecrase jamais le dossier.
               */}
-              <span className="conv-menu-titre">Catégories</span>
-              {categoriesConnues.map((libelle) => (
+              {convFolderMenu.mode === 'categorie' && categoriesConnues.length > 0 && (
+                <span className="conv-menu-titre">Catégories</span>
+              )}
+              {(convFolderMenu.mode === 'categorie' ? categoriesConnues : []).map((libelle) => (
                 <button
                   key={libelle}
                   role="menuitem"
@@ -5718,7 +5728,7 @@ export function ChatView({
                   {libelle}
                 </button>
               ))}
-              {saisieCategorie === null ? (
+              {convFolderMenu.mode !== 'categorie' ? null : saisieCategorie === null ? (
                 <button
                   role="menuitem"
                   data-testid="conv-category-new"
