@@ -90,7 +90,9 @@ describe('disjoncteur de coût — volume non chiffré', () => {
 /**
  * LE GARDE VOLUMÉTRIQUE EST INATTEIGNABLE EN PRODUCTION, et les tests ci-dessus ne le montraient pas
  * parce qu'ils instancient `{maxUsd}` SEUL. La seule instanciation réelle (`index.ts`) passe par
- * `chatTurnBudget()`, qui pose TOUJOURS `maxTokens: 1_500_000` — or `unpricedTokens <= spentTokens`,
+ * `chatTurnBudget()`, qui pose TOUJOURS `// 8 M : calibrage MESURE le 2026-09-16 sur 7 356 tours reels (p99 = 7 622 971), pas un
+      // chiffre au doigt. Cette assertion RECOPIE la constante de prod : elle la suit, elle ne la borne pas.
+      maxTokens: 8_000_000` — or `unpricedTokens <= spentTokens`,
  * donc `maxTokens` mord toujours avant le seuil de 250M. Ces tests sont donc construits sur les
  * limites EXACTES de `chatTurnBudget({})`, sinon ils prouvent la même illusion.
  */
@@ -98,7 +100,7 @@ const LIMITES_PROD = chatTurnBudget({}).limits
 
 describe('disjoncteur de coût — montant ESTIMÉ des tours non tarifés (limites de production)', () => {
   it('les limites de référence sont bien celles de la production', () => {
-    expect(LIMITES_PROD).toEqual({ maxUsd: 2, maxTokens: 1_500_000, maxCalls: 6 })
+    expect(LIMITES_PROD).toEqual({ maxUsd: 2, maxTokens: 8_000_000, maxCalls: 6 })
   })
 
   it('coupe sur le MONTANT estimé d’un modèle connu, bien avant les plafonds de volume', () => {
