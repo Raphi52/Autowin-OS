@@ -22,18 +22,27 @@ import { describe, expect, it } from 'vitest'
 describe('hauteur des schemas mermaid dans le fil', () => {
   const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
 
-  it('plafonne la hauteur par le CADRE, qui fait defiler au lieu d ecraser', () => {
+  /*
+   * CE TEST CITAIT UN CHOIX ABANDONNE. Le commit 5534d939 (« un schema trop haut est mis a
+   * l echelle au lieu de derouler », conv-590, 2026-09-16) a deplace le plafond du CADRE vers le
+   * DESSIN : le cadre borne a 300 px faisait apparaitre une barre de defilement pour quelques
+   * dizaines de pixels manquants. Le test n'a pas suivi et laissait la feuille de style ROUGE en
+   * permanence, ce qui bloquait toute autre edition (conv-79, 2026-09-17). L'exigence testee est
+   * inchangee — un schema du fil tient sous les yeux — seul l'endroit qui la porte a bouge.
+   */
+  it('ne fait PAS defiler le cadre verticalement', () => {
     const bloc = css.slice(css.indexOf('.md-mermaid {'))
     const regle = bloc.slice(0, bloc.indexOf('}'))
-    expect(regle).toMatch(/max-height:\s*min\(45vh,\s*300px\)/)
-    expect(regle).toMatch(/overflow-y:\s*auto/)
+    expect(regle).toMatch(/overflow-y:\s*visible/)
+    expect(regle).not.toMatch(/max-height/)
   })
 
-  it('laisse le SVG suivre la largeur du fil sans etre ecrase en hauteur', () => {
+  it('plafonne la hauteur sur le DESSIN, qui est mis a l echelle sans etre deforme', () => {
     const bloc = css.slice(css.indexOf('.md-mermaid svg'))
     const regle = bloc.slice(0, bloc.indexOf('}'))
-    expect(regle).toMatch(/width:\s*100%/)
+    expect(regle).toMatch(/max-width:\s*100%/)
     expect(regle).toMatch(/height:\s*auto/)
+    expect(regle).toMatch(/max-height:\s*min\(60vh,\s*420px\)/)
   })
 
   it('neutralise la hauteur plancher heritee du panneau d artefacts', () => {
