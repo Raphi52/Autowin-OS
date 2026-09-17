@@ -173,3 +173,37 @@ describe('correctionConversationLisible', () => {
     expect(message).toMatch(/c.est une réponse, pas un refus/u)
   })
 })
+
+/**
+ * TROISIEME FORME DU MEME DEFAUT : le TABLEAU de capacites.
+ *
+ * Mesure conv-650, turnId 6a3498c3-8d01-4928-a4ae-9b97c7495af8 (2026-09-17). L'agent n'ecrit
+ * aucune des phrases surveillees : il dresse un tableau markdown « Capacite | Disponible ? » et
+ * coche `edit_file` / `create_file` a **non**. La garde ne voyait rien, l'utilisateur a redemande
+ * quatre fois (saisies ts 1789639857023, 1789639927623, 1789640030803, 1789640116782) et le tour
+ * s'est termine sur un script PowerShell a coller a la main.
+ */
+describe('un tableau de capacites qui coche « non » vaut declaration d’absence', () => {
+  const catalogue = ['edit_file', 'create_file', 'verify']
+
+  it('detecte la ligne de tableau qui declare l’outil indisponible', () => {
+    const texte = [
+      '| Capacité | Disponible ? | Ce que ça permettrait |',
+      '|---|---|---|',
+      '| `edit_file` / `create_file` | **non** | écrire le patch |'
+    ].join('\n')
+    expect(outilsFaussementAbsents(texte, catalogue)).toEqual(
+      expect.arrayContaining(['edit_file', 'create_file'])
+    )
+  })
+
+  it('ne declenche PAS sur une ligne qui declare l’outil disponible', () => {
+    const texte = '| `verify` | **oui** | rejouer la vérification |'
+    expect(outilsFaussementAbsents(texte, catalogue)).toEqual([])
+  })
+
+  it('ne declenche PAS sur une prose ordinaire contenant « non »', () => {
+    const texte = 'J’ai utilisé `edit_file`, non sans mal, et la vérification passe.'
+    expect(outilsFaussementAbsents(texte, catalogue)).toEqual([])
+  })
+})

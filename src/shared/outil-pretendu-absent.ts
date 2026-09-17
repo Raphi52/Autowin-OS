@@ -48,6 +48,48 @@ function sansAccent(texte: string): string {
 }
 
 /**
+ * TROISIEME FORME : le TABLEAU de capacites (mesure conv-650, 2026-09-17).
+ *
+ * turnId 6a3498c3-8d01-4928-a4ae-9b97c7495af8 : aucune des phrases surveillees n'est ecrite. L'agent
+ * dresse « | Capacite | Disponible ? | » et coche `edit_file` / `create_file` a **non**. La forme est
+ * plus affirmative qu'une phrase — c'est un inventaire — et elle passait entierement sous la garde.
+ *
+ * PRECISION : on n'accepte qu'une LIGNE de tableau markdown (bordee de `|`), dont une cellule VAUT
+ * la negation (« non », « aucun », « ✗ », « ❌ »), pas une cellule qui la contient au fil d'une
+ * phrase. « J'ai utilise edit_file, non sans mal » n'est pas un tableau et ne declenche rien.
+ */
+const CELLULES_NEGATIVES = new Set(['non', 'aucun', 'aucune', 'x', '✗', '❌', '⛔', 'no', 'nope'])
+
+function outilsNiesParUnTableau(texte: string, catalogue: readonly string[]): string[] {
+  const trouves: string[] = []
+  for (const ligne of texte.split(/\r?\n/u)) {
+    const brut = ligne.trim()
+    if (!brut.startsWith('|') || !brut.endsWith('|')) continue
+    const cellules = brut
+      .slice(1, -1)
+      .split('|')
+      .map((cellule) =>
+        sansAccent(cellule)
+          .toLowerCase()
+          .split(String.fromCharCode(96))
+          .join('')
+          .replace(/\*/gu, '')
+          .trim()
+      )
+    if (!cellules.some((cellule) => CELLULES_NEGATIVES.has(cellule))) continue
+    for (const nom of catalogue) {
+      const cible = sansAccent(nom).toLowerCase()
+      if (!cible) continue
+      const cite = cellules.some((cellule) =>
+        cellule.split(/[^\w-]+/u).some((mot) => mot === cible)
+      )
+      if (cite && !trouves.includes(nom)) trouves.push(nom)
+    }
+  }
+  return trouves
+}
+
+/**
  * Les noms d'outils que le texte declare absents alors qu'ils sont au catalogue.
  *
  * `catalogue` est la liste REELLEMENT envoyee pour ce tour : un outil absent d'un sous-agent
@@ -88,6 +130,9 @@ export function outilsFaussementAbsents(texte: unknown, catalogue: readonly stri
         break
       }
     }
+  }
+  for (const nom of outilsNiesParUnTableau(texte, catalogue)) {
+    if (!trouves.includes(nom)) trouves.push(nom)
   }
   return trouves
 }
