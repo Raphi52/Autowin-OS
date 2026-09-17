@@ -104,6 +104,13 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   roles: { destination: 'agent-studio', section: 'topology' },
   models: { destination: 'agent-studio', section: 'topology' },
   router: { destination: 'agent-studio', section: 'routing' },
+  // La vue Workflows est une SECTION d'Agent Studio, pas une destination : sans ces entrées,
+  // « va sur Workflows » retombait en silence sur le chat (constaté le 2026-09-17, un agent a cru
+  // avoir navigué). Les RUN.md s'y lisent, un agent les adresse aussi par « runs ».
+  workflows: { destination: 'agent-studio', section: 'workflows' },
+  workflow: { destination: 'agent-studio', section: 'workflows' },
+  runs: { destination: 'agent-studio', section: 'workflows' },
+  run: { destination: 'agent-studio', section: 'workflows' },
   routeur: { destination: 'agent-studio', section: 'routing' },
   capabilities: { destination: 'settings', section: 'capabilities' },
   skills: { destination: 'settings', section: 'capabilities' },

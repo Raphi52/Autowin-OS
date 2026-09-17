@@ -1172,12 +1172,18 @@ function allowedReadRoots(): string[] {
   // `AUTOWIN_APP_DATA_ROOT`, heritee par le worker Brain. Sans elle, les RUN.md reellement ecrits
   // etaient refuses par cette liste blanche, qui ne connaissait que l'emplacement %APPDATA%.
   const effectiveAppDataRoot = process.env.AUTOWIN_APP_DATA_ROOT?.trim()
+  // Le DEPOT DE TRAVAIL choisi dans les Reglages. Un RUN.md vit couramment a sa RACINE (celui
+  // d'Autowin lui-meme y est), et cette liste ne connaissait que les dossiers `runs/` de donnees :
+  // la vue Workflows repondait alors « fichier hors perimetre autorise » sur le depot que
+  // l'utilisateur venait justement de designer. Constate le 2026-09-17 dans l'app reelle.
+  const executionWorkspace = process.env.AUTOWIN_OS_WORKSPACE?.trim()
   return [
     amitelBrainRoot(),
     join(home, '.graphify'),
     join(home, '.claude', 'runs'), // RUN.md du pipeline (vue Workflow)
     join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
     ...(effectiveAppDataRoot ? [join(effectiveAppDataRoot, 'runs')] : []),
+    ...(executionWorkspace ? [executionWorkspace] : []),
     ...amitelWorkspaces()
   ]
 }
