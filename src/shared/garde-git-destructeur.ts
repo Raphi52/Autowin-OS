@@ -1,3 +1,5 @@
+import { refusFermetureApplication } from './garde-fermeture-app'
+
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
  *
@@ -78,12 +80,13 @@ export function refusGitDestructeur(commande: string): string | undefined {
  */
 export function scriptHookGardes(): string {
   return `const refusGitDestructeur = ${refusGitDestructeur.toString()};
+const refusFermetureApplication = ${refusFermetureApplication.toString()};
 let d = '';
 process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
   let cmd = '';
   try { const j = JSON.parse(d); cmd = (j.tool_input && j.tool_input.command) || ''; } catch {}
-  const motif = refusGitDestructeur(cmd);
+  const motif = refusGitDestructeur(cmd) || refusFermetureApplication(cmd);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
