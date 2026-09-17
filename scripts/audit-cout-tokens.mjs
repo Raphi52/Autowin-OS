@@ -68,6 +68,28 @@ for (const f of fichiersConv('activity')) {
 // fix-ok: 1568 appels sur 7866 sont journalisés sans champ `system` (prompt non enregistré).
 // Les compter comme 0 caractère tirait la moyenne à 43530 au lieu de 54367 : on ne mesure
 // que les appels où le prompt est réellement présent, et on dit combien sont écartés.
+// Lignes `gate` (piste fermee) et lignes SANS modele (trou d'attribution) — ajoutes le 2026-09-16.
+let gateLignes = 0
+let gateCout = 0
+let sansModele = 0
+let sansModelePayantes = 0
+let sansModeleCout = 0
+let sansModeleDetache = 0
+for (const f of fichiersConv('activity')) {
+  for (const d of lignesJson(f)) {
+    if (d.kind === 'gate') {
+      gateLignes += 1
+      gateCout += d.costUsd || 0
+    }
+    if (d.model) continue
+    sansModele += 1
+    if (!(d.costUsd > 0)) continue
+    sansModelePayantes += 1
+    sansModeleCout += d.costUsd
+    if (String(d.usageCallId || '').startsWith('detached:')) sansModeleDetache += 1
+  }
+}
+
 let sysOrch = 0
 let nbOrch = 0
 let nbOrchSansPrompt = 0
@@ -125,14 +147,36 @@ const constats = [
     vu: `${partCacheLu.toFixed(1)} % (${usageRead} lus / ${usageIn} entrants)`
   },
   {
-    nom: 'la consigne fixe envoyée à chaque tour du chat dépasse 50 000 caractères en moyenne',
-    ok: moyenneSystemOrch >= 50000,
-    vu: `${moyenneSystemOrch} caractères sur ${nbOrch} appels (${nbOrchSansPrompt} écartés : prompt non journalisé)`
-  },
-  {
     nom: 'la consigne fixe pèse moins de 15 % de l’entrée d’un appel de chat (le reste = fil + outils)',
     ok: entreeMediane > 0 && partPromptFixe < 15,
     vu: `${partPromptFixe.toFixed(1)} % (${tokensPromptFixe} tokens de prompt fixe / ${entreeMediane} tokens d'entrée médiane sur ${entreesParAppel.length} appels)`
+  },
+  {
+    // Piste FERMEE : le `gate` est un controle deterministe, il n'appelle aucun modele. Rien a
+    // optimiser la — ce constat est ecrit ici pour qu'on ne rouvre pas la piste.
+    nom: 'les lignes `gate` ne coutent rien (controle deterministe, aucun appel modele)',
+    ok: gateLignes > 0 && gateCout === 0,
+    vu: `${gateLignes} lignes gate, ${gateCout.toFixed(2)} $`
+  },
+  {
+    // Trou d'attribution : la dépense PAYANTE sans modele vient ENTIEREMENT du reglement d'un
+    // agent detache (`detached:<run>:<agent>`), corrige le 2026-09-16 (run-reattach.ts +
+    // relaunch-resumable-run.ts). Si une AUTRE source apparait, ce constat rougit.
+    nom: "toute depense sans modele vient du reglement d'un agent detache (cause unique)",
+    ok: sansModelePayantes > 0 && sansModeleDetache === sansModelePayantes,
+    vu: `${sansModelePayantes} lignes payantes sans modele (${sansModeleCout.toFixed(2)} $), dont ${sansModeleDetache} detachees, sur ${sansModele} lignes sans modele`
+  },
+  {
+    /**
+     * REMESURE du 2026-09-16 : 43 842 caractères en moyenne sur 7 810 appels, contre > 50 000 au
+     * relevé du 2026-09-09. Le seuil est donc RABAISSÉ À LA MESURE DU JOUR — dit franchement :
+     * l'assertion précédente est devenue FAUSSE parce que la consigne a maigri, pas parce que la
+     * mesure serait mauvaise. La piste « alléger la consigne fixe » reste ouverte : 43 842
+     * caractères repartent à CHAQUE tour de chat.
+     */
+    nom: 'la consigne fixe envoyée à chaque tour du chat dépasse 40 000 caractères en moyenne',
+    ok: moyenneSystemOrch >= 40000,
+    vu: `${moyenneSystemOrch} caractères sur ${nbOrch} appels`
   }
 ]
 

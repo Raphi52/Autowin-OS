@@ -365,6 +365,47 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
    * PLUS FORT : le texte prouvait l appel ; ceci prouve que son REFUS arrete la relance — aucun
    * appel provider, aucun RUN.md ouvert pour un checkpoint que la reconciliation a ecarte.
    */
+  /**
+   * Le reglement d un agent DETACHE ecrivait sa depense sans le modele : mesure du 2026-09-16 sur
+   * `.autowin-data/autowin-os/activity`, 78 lignes payantes (131,69 $) sans champ `model`, donc
+   * hors de tout arbitrage par modele. La ligne doit porter le modele que le checkpoint connait.
+   */
+  it('ecrit le MODELE de l agent detache sur la depense recuperee', async () => {
+    const lignes: Array<[string, Record<string, unknown>]> = []
+    const b = banc({
+      sabotage: (d) => ({
+        ...d,
+        appendConvActivity: ((conv: string, entree: Record<string, unknown>) => {
+          lignes.push([conv, entree])
+        }) as never,
+        os: {
+          ...d.os,
+          reconcileResumableOrchestrationForRelaunch: (
+            _runId: string,
+            _identite: unknown,
+            onReglement: (s: Record<string, unknown>) => void
+          ) => {
+            onReglement({
+              conversationId: 'conv-1',
+              callId: 'detached:run-repris:agent-build',
+              phase: 'build',
+              provider: 'claude',
+              model: 'claude-opus-5',
+              costUsd: 2.5,
+              inputTokens: 140,
+              outputTokens: 20,
+              cacheReadTokens: 90
+            })
+            return undefined
+          }
+        } as never
+      })
+    })
+    await b.relance()
+    expect(lignes).toHaveLength(1)
+    expect(lignes[0][1]).toMatchObject({ kind: 'exec', provider: 'claude', model: 'claude-opus-5' })
+  })
+
   it('n engage rien quand la reconciliation refuse le checkpoint', async () => {
     const b = banc({
       sabotage: (d) => ({

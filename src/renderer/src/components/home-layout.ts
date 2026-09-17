@@ -417,6 +417,76 @@ export function layoutFitsViewport(
 }
 
 /**
+ * Cette disposition est-elle EXACTEMENT celle d'origine, pour UNE surface quelconque ?
+ *
+ * Sert a separer ce que l'utilisateur a POSE de ce que le code a DEDUIT. Un agencement pose fait
+ * autorite et ne bouge plus ; un agencement deduit n'en a aucune et doit suivre la surface reelle.
+ *
+ * Defaut mesure le 2026-09-17 en pilotant le rendu hors ecran : au premier rendu la surface n'est
+ * pas encore mesuree, l'agencement est donc deduit de la FENETRE (1584 x 935) alors que l'Accueil
+ * n'occupe que 1320 x 887 une fois la barre laterale deduite -- puis il est PERSISTE tel quel.
+ * Barre deployee il ne tient pas dans la surface, donc il ne s'affiche jamais et rien ne se voit.
+ * Barre REPLIEE la surface gagne 156 px, cet agencement trop large « tient » tout juste et
+ * s'affiche : tuiles de 445 px au lieu de 419, et rangee du bas a 902 px pour 887 px de haut, donc
+ * coupee. C'est le defaut rapporte par l'utilisateur ce jour-la.
+ *
+ * On compare la STRUCTURE, pas des pixels absolus : largeur de colonne, pas des rangees et haut
+ * reserve sont deduits de la tuile d'ancrage, et les six autres doivent tomber au pixel sur leur
+ * case. Deplacer ou redimensionner UNE seule tuile suffit a rendre faux -- c'est exactement voulu.
+ */
+export function estDispositionDOrigine(layout: HomeLayout): boolean {
+  if (layout.length !== HOME_WIDGET_IDS.length) return false
+  const parId = new Map(layout.map((box) => [box.id, box]))
+  if (parId.size !== HOME_WIDGET_IDS.length) return false
+  return suitLaGrille(parId, WIDE) || suitLaGrille(parId, MEDIUM) || suitLaColonneUnique(parId)
+}
+
+function suitLaGrille(
+  parId: Map<HomeWidgetId, HomeWidgetBox>,
+  spec: Readonly<Record<HomeWidgetId, RelativeSpec>>
+): boolean {
+  const ancre = parId.get('mails')
+  if (!ancre) return false
+  const colonne = ancre.w
+  const rangee = (ancre.h - V_GAP * (spec.mails.rowSpan - 1)) / spec.mails.rowSpan
+  const haut = ancre.y - spec.mails.row * (rangee + V_GAP)
+  if (colonne < MIN_WIDGET_WIDTH || rangee <= 0) return false
+  return HOME_WIDGET_IDS.every((id) => {
+    const box = parId.get(id)
+    if (!box) return false
+    const entry = spec[id]
+    const hauteur = Math.max(
+      MIN_WIDGET_HEIGHT,
+      rangee * entry.rowSpan + V_GAP * (entry.rowSpan - 1)
+    )
+    return (
+      box.x === PAD_X + entry.col * (colonne + GAP) &&
+      box.w === colonne * entry.colSpan + GAP * (entry.colSpan - 1) &&
+      Math.abs(box.y - (haut + entry.row * (rangee + V_GAP))) <= 1 &&
+      Math.abs(box.h - hauteur) <= 1
+    )
+  })
+}
+
+function suitLaColonneUnique(parId: Map<HomeWidgetId, HomeWidgetBox>): boolean {
+  const premier = parId.get(NARROW_ORDER[0])
+  const second = parId.get(NARROW_ORDER[1])
+  if (!premier || !second) return false
+  const pas = second.y - premier.y
+  if (pas <= 0) return false
+  return NARROW_ORDER.every((id, index) => {
+    const box = parId.get(id)
+    return Boolean(
+      box &&
+        box.x === PAD_X &&
+        box.w === premier.w &&
+        box.h === premier.h &&
+        Math.abs(box.y - (premier.y + index * pas)) <= 1
+    )
+  })
+}
+
+/**
  * La disposition a utiliser pour cette surface : celle qui etait enregistree si elle tient encore,
  * sinon celle d'origine.
  */

@@ -94,6 +94,12 @@ export interface OrchestrationRunState {
     token: string
     /** Provider qui a produit le journal brut. */
     provider?: string
+    /**
+     * Modèle réellement lancé pour cette occurrence. ABSENT jusqu'au 2026-09-16 : le règlement
+     * d'un agent détaché ne pouvait donc écrire que le provider, et 78 lignes payantes du journal
+     * (131,69 $) restaient « sans modèle », donc hors de tout arbitrage par modèle.
+     */
+    model?: string
     /** Phase réellement exécutée par ce CLI ; ne jamais la redéduire de l'ordre du devis. */
     phase?: NodePhase
     /** `true` de la réservation jusqu'au règlement provider, y compris après la sortie du PID. */
@@ -391,6 +397,7 @@ function isRunAgentRef(
   if (!isRecord(value) || typeof value.token !== 'string' || !value.token.trim()) return false
   return (
     (value.provider === undefined || typeof value.provider === 'string') &&
+    (value.model === undefined || typeof value.model === 'string') &&
     /**
      * Une phase du pipeline OU l'identifiant d'une skill du disque — meme borne que `isPhaseOutput`.
      *

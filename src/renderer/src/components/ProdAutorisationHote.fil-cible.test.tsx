@@ -38,7 +38,21 @@ function poserApi(demandes: DemandeTest[]): void {
     onProdAutorisationClose: () => () => {},
     prodAutorisationConfirmer: vi.fn(),
     prodAutorisationAnnuler: vi.fn(),
-    prodAutorisationDeposer: vi.fn()
+    prodAutorisationDeposer: vi.fn(),
+    /*
+     * DOUBLE COMPLET, sinon le test mesure une panne de son propre montage. `ProdAutorisationHote`
+     * monte `ProdPassphraseGate`, qui appelle `prodPassphraseEtat()` des son premier effet : un
+     * faux `window.api` sans ces trois entrees fait echouer le rendu AVANT que la regle testee
+     * (une demande n'apparait que dans SON fil) soit seulement evaluee. Memes valeurs que le double
+     * du test frere `ProdAutorisationHote.test.tsx` — aucune assertion n'a ete touchee.
+     */
+    prodPassphraseEtat: vi.fn(async () => ({ definie: true, definieLe: 1, longueurMinimale: 12 })),
+    prodPassphraseAutoriser: vi.fn(async () => ({
+      accorde: true,
+      jeton: 'jeton-opaque',
+      expireLe: 9_999
+    })),
+    prodPassphraseDefinir: vi.fn(async () => ({ ok: true }))
   }
 }
 

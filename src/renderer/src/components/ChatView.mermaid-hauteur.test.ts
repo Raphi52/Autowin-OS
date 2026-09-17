@@ -29,6 +29,10 @@ describe('hauteur des schemas mermaid dans le fil', () => {
    * dizaines de pixels manquants. Le test n'a pas suivi et laissait la feuille de style ROUGE en
    * permanence, ce qui bloquait toute autre edition (conv-79, 2026-09-17). L'exigence testee est
    * inchangee — un schema du fil tient sous les yeux — seul l'endroit qui la porte a bouge.
+   * FUSION 2026-09-17 : la branche fix/scout-interne-5-candidats portait EXACTEMENT la meme
+   * correction, ecrite de son cote (meme assertion `overflow-y: visible`, meme retrait de
+   * `max-height` du cadre). Un seul des deux textes est garde ; aucune assertion n'a ete
+   * desserree pour fusionner.
    */
   it('ne fait PAS defiler le cadre verticalement', () => {
     const bloc = css.slice(css.indexOf('.md-mermaid {'))

@@ -1983,3 +1983,50 @@ export function doitSuivreLeRoutage(input: {
   if (input.cleBrouillonActuelle !== input.cleBrouillonEnvoi) return false
   return input.generationSelectionActuelle === input.generationSelectionEnvoi
 }
+
+/* ---------- DENSITE DE LA LISTE DES CONVERSATIONS ---------- */
+
+/**
+ * Trois crans d'affichage de la liste, du plus serre au plus bavard. Demande du 2026-09-17 :
+ * « il devrait exister plusieurs type d'affichage de la liste des conversations, plus reduite
+ * comme claude code et detaille comme celle-la ».
+ *
+ * Le rendu serre EXISTAIT deja dans la feuille de style, mais il n'etait atteignable qu'en tirant
+ * la colonne sous 170 px — densite et largeur etaient le MEME reglage. Ces trois crans en font un
+ * choix explicite, independant de la largeur, et memorise comme elle.
+ */
+export const DENSITES_CONVERSATION = ['compact', 'normal', 'detail'] as const
+export type DensiteConversation = (typeof DENSITES_CONVERSATION)[number]
+
+/** Cran par defaut : celui d'AVANT ce reglage — personne ne doit voir sa liste changer sans l'avoir demande. */
+export const DENSITE_CONVERSATION_DEFAUT: DensiteConversation = 'detail'
+
+/** Valeur relue du stockage local : tout ce qui n'est pas un cran connu retombe sur le defaut. */
+export function lireDensiteConversations(brut: string | null | undefined): DensiteConversation {
+  return DENSITES_CONVERSATION.includes(brut as DensiteConversation)
+    ? (brut as DensiteConversation)
+    : DENSITE_CONVERSATION_DEFAUT
+}
+
+/** Rotation du bouton unique : compact → normal → detaille → compact. */
+export function densiteSuivante(courante: DensiteConversation): DensiteConversation {
+  const index = DENSITES_CONVERSATION.indexOf(courante)
+  return DENSITES_CONVERSATION[(index + 1) % DENSITES_CONVERSATION.length]
+}
+
+/** Nom lisible du cran — sert l'infobulle ET le lecteur d'ecran, donc jamais un mot de mecanique. */
+export function libelleDensite(densite: DensiteConversation): string {
+  if (densite === 'compact') return 'compacte'
+  if (densite === 'normal') return 'normale'
+  return 'détaillée'
+}
+
+/**
+ * Traits de l'icone du bouton, en coordonnees d'un carre de 16 : plus le cran est serre, plus il y
+ * a de lignes. L'icone DIT donc le cran courant sans texte.
+ */
+export function traitsDensite(densite: DensiteConversation): number[] {
+  if (densite === 'compact') return [1.9, 5.3, 8.7, 12.1]
+  if (densite === 'normal') return [2.6, 7.2, 11.8]
+  return [3.6, 8.6]
+}

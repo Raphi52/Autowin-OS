@@ -482,6 +482,8 @@ export interface RunAgentRef {
   token: string
   /** Décodeur du journal brut à employer après crash. */
   provider?: string
+  /** Modèle lancé — sans lui, la dépense réglée après coup n'est attribuable à aucun modèle. */
+  model?: string
   /** Attribution persistée : le graphe/devis ne suffit pas à redéduire la phase après un crash. */
   phase?: NodePhase
   /** Réservation provider non réglée ; reste vraie entre la sortie du PID et le règlement du stream. */
@@ -1387,18 +1389,18 @@ export class Orchestrator {
       spawnIntent: (
         token: string,
         active: boolean,
-        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>,
+        assignment: Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'>,
         reservationId?: string
       ) => void
       spawned: (
         token: string,
         pid: number,
-        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>
+        assignment: Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'>
       ) => void
       journal: (
         token: string,
         journalPath: string,
-        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>
+        assignment: Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'>
       ) => void
       reservationSettled: (reservationId: string) => void
     }
@@ -1507,12 +1509,14 @@ export class Orchestrator {
     runId: string,
     phase: NodePhase,
     provider: string,
-    fanOut = false
+    fanOut = false,
+    model?: string
   ): NonNullable<SendOptions['execution']> {
     const observers = this.processObservers.get(runId)
     let executorProvider = provider
-    const assignment = (): Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'> => ({
+    const assignment = (): Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'> => ({
       provider: executorProvider,
+      ...(model ? { model } : {}),
       phase,
       fanOut
     })
@@ -2544,7 +2548,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       systemBlocks,
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort,
-      execution: this.executionOptions(workCwd, 'read-only', runId, 'judge', judgeProvider),
+      execution: this.executionOptions(
+        workCwd,
+        'read-only',
+        runId,
+        'judge',
+        judgeProvider,
+        false,
+        judgeBinding.model
+      ),
       signal,
       observePrompt: (observed) => {
         observed.systemBlocks = systemBlocks
@@ -2811,7 +2823,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 systemBlocks,
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
-                execution: this.executionOptions(workCwd, sandbox, runId, phase, subProvider, true),
+                execution: this.executionOptions(
+                  workCwd,
+                  sandbox,
+                  runId,
+                  phase,
+                  subProvider,
+                  true,
+                  phaseBinding.model
+                ),
                 signal,
                 observePrompt: (observed) => {
                   observed.systemBlocks = systemBlocks
@@ -3053,7 +3073,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 runId,
                 phase,
                 orchBinding.provider,
-                true
+                true,
+                orchBinding.model
               ),
               signal
             }
@@ -3950,7 +3971,8 @@ ${empreinteDepot}`
                 runId,
                 phase,
                 member.provider,
-                fanMembers.length > 1
+                fanMembers.length > 1,
+                member.model
               ),
               signal
             }
@@ -4136,7 +4158,9 @@ ${empreinteDepot}`
             'read-only',
             runId,
             phase,
-            orchBinding.provider
+            orchBinding.provider,
+            false,
+            orchBinding.model
           ),
           signal
         }
@@ -4442,7 +4466,9 @@ ${empreinteDepot}`
           phaseSandbox,
           runId,
           phase,
-          providerDeLaPhase
+          providerDeLaPhase,
+          false,
+          phaseBinding.model
         ),
         signal,
         /**
@@ -5051,7 +5077,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         systemBlocks: judgeBlocks,
         model: judgeBinding.model,
         reasoningEffort: judgeBinding.reasoningEffort,
-        execution: this.executionOptions(workCwd, 'read-only', runId, 'judge', judgeProvider),
+        execution: this.executionOptions(
+        workCwd,
+        'read-only',
+        runId,
+        'judge',
+        judgeProvider,
+        false,
+        judgeBinding.model
+      ),
         signal,
         observePrompt: (observed) => {
           observed.systemBlocks = judgeBlocks
@@ -5111,7 +5145,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 runId,
                 'judge',
                 member.provider,
-                true
+                true,
+                member.model
               )
             }
             const startedAt = performance.now()

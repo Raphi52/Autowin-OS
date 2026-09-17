@@ -204,6 +204,7 @@ describe('fin réussie pendant le rattachement', () => {
           token: 'agent-build',
           reservationId: 'reservation-build',
           provider: 'claude',
+          model: 'claude-opus-5',
           phase: 'build',
           active: true,
           fanOut: false,
@@ -245,6 +246,9 @@ describe('fin réussie pendant le rattachement', () => {
         callId: 'detached:run-detached-success:agent-build',
         phase: 'build',
         provider: 'claude',
+        // Sans le modèle, cette dépense retombe dans les lignes « sans modèle » du journal
+        // (mesure du 2026-09-16 : 78 lignes, 131,69 $ non attribuables à un modèle).
+        model: 'claude-opus-5',
         costUsd: 2.5,
         inputTokens: 140,
         outputTokens: 20,

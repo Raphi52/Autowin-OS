@@ -20,6 +20,7 @@ import {
 } from './home-widgets-model'
 import {
   defaultHomeLayout,
+  estDispositionDOrigine,
   HOME_WIDGET_IDS,
   HOME_WIDGET_TITLES,
   reconcileLayout,
@@ -400,6 +401,17 @@ export function HomeView({
   if (surfaceJugee !== surface) {
     setSurfaceJugee(surface)
     setPoseALaMain(false)
+    /*
+     * Un agencement que PERSONNE n'a pose ne fait pas autorite : il suit la surface REELLE.
+     *
+     * Au premier rendu la surface n'est pas encore mesuree, donc l'agencement est deduit de la
+     * FENETRE -- toujours plus large et plus haute que l'Accueil, qui n'en a pas la barre laterale.
+     * Le garder revenait a persister des tuiles calibrees pour une surface qui n'existe pas, puis a
+     * les afficher des que la surface s'elargit assez pour les accepter : c'est exactement ce que
+     * produit le repli de la barre laterale (mesure du 2026-09-17 : 445 px de large au lieu de 419,
+     * rangee du bas coupee de 15 px). Il n'y a rien a preserver la-dedans, donc on re-derive.
+     */
+    if (estDispositionDOrigine(arrangement)) setArrangement(defaultHomeLayout(surface))
   }
 
   /* ---------------------------------------------------------------- *

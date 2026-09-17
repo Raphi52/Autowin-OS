@@ -4714,3 +4714,94 @@ button.chat-project-dot:disabled {
 .cosmic-outline .composer-input-row > .composer-dictee svg {
   transform: translateX(-0.5px);
 }
+
+/* ============================================================================
+   DENSITE DE LA LISTE DES CONVERSATIONS (demande du 2026-09-17)
+
+   Trois crans CHOISIS, portes par `data-density` sur le panneau :
+     compact  — titre seul, ligne d'environ 24 px, facon Claude Code / Codex ;
+     normal   — titre seul, ligne aeree ;
+     detail   — le rendu historique : titre + identifiant + nombre de messages.
+
+   POURQUOI CETTE SPECIFICITE. Le theme cosmic repeint `.conv-item` / `.conv-pick` avec une hauteur
+   MINIMALE de 64 px (`.cosmic-outline .conv-pick`, deux classes). Un selecteur a une seule classe
+   ne l'atteint pas : `.conv-pane[data-density='…'] .conv-pick` en compte trois, il gagne sur TOUS
+   les themes sans avoir a les nommer un par un — et sans dependre de l'ordre des feuilles.
+
+   CE QUI RESTE AUTOMATIQUE. Le bloc `@container convpane (max-width: 170px)` en tete de fichier
+   continue de densifier une colonne tiree au minimum : sous cette largeur, une ligne detaillee ne
+   TIENT physiquement pas. Le cran choisi gagne partout ailleurs, et les crans serres gagnent de
+   toute facon sur ce filet (specificite superieure).
+   ============================================================================ */
+
+.conv-density-toggle {
+  display: inline-flex;
+  flex: 0 0 22px;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  border-radius: 6px;
+  background: rgba(212, 169, 79, 0.08);
+  color: var(--gold-doux);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.conv-density-toggle:hover {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}
+.conv-density-toggle svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
+/* --- Le cran serre et le cran normal masquent la ligne d'identifiant... --- */
+.conv-pane[data-density='compact'] .conv-meta,
+.conv-pane[data-density='normal'] .conv-meta {
+  display: none;
+}
+/* --- ...SAUF pendant une recherche : le numero est ce qui prouve qu'on a trouve la bonne
+       conversation (lecon du 2026-09-03, « je tape 171 et ca ne me montre rien »). --- */
+.conv-pane[data-density='compact'][data-recherche] .conv-meta,
+.conv-pane[data-density='normal'][data-recherche] .conv-meta {
+  display: flex;
+}
+
+.conv-pane[data-density='normal'] .conv-item,
+.conv-pane[data-density='normal'] .conv-pick,
+.conv-pane[data-density='compact'] .conv-item,
+.conv-pane[data-density='compact'] .conv-pick {
+  min-height: 0;
+}
+.conv-pane[data-density='normal'] .conv-pick {
+  gap: 9px;
+  padding: 7px 8px 7px 11px;
+}
+.conv-pane[data-density='normal'] .conv-list {
+  gap: 4px;
+}
+
+.conv-pane[data-density='compact'] .conv-pick {
+  gap: 8px;
+  padding: 3px 8px 3px 10px;
+}
+.conv-pane[data-density='compact'] .conv-label {
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.conv-pane[data-density='compact'] .conv-list {
+  gap: 1px;
+}
+.conv-pane[data-density='compact'] .conv-group-head {
+  padding: 3px 6px;
+}
+.conv-pane[data-density='compact'] .conv-new-row {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
