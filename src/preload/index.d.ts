@@ -230,6 +230,8 @@ interface ChatApi {
     needsChoice?: boolean
     strategies?: UpdateStrategy[]
   }>
+  listerGreffes: () => Promise<{ server: string; database: string }[]>
+  lireActions: (demande: { database: string }) => Promise<unknown>
   ticketSources: () => Promise<import('../shared/tickets').TicketSourceSummary[]>
   saveTicketSource: (
     profile: import('../shared/tickets').TicketSourceProfile

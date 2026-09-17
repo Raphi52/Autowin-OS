@@ -227,6 +227,11 @@ const api = {
     needsChoice?: boolean
     strategies?: UpdateStrategy[]
   }> => ipcRenderer.invoke('update:apply', strategy),
+  // Actions des utilisateurs d'un greffe : le renderer n'envoie qu'un nom de base, jamais de SQL.
+  listerGreffes: (): Promise<{ server: string; database: string }[]> =>
+    ipcRenderer.invoke('greffe:actions:liste'),
+  lireActions: (demande: { database: string }): Promise<unknown> =>
+    ipcRenderer.invoke('greffe:actions:lire', demande),
   ticketSources: (): Promise<TicketSourceSummary[]> => ipcRenderer.invoke('tickets:sources'),
   saveTicketSource: (profile: TicketSourceProfile): Promise<TicketSourceSummary[]> =>
     ipcRenderer.invoke('tickets:source:save', profile),

@@ -18,6 +18,8 @@ export type HomeWidgetId =
   | 'conversations'
   | 'jarvis'
   | 'enregistrements'
+  // Ce que les utilisateurs d'un greffe ont fait — la tuile du chef de greffe.
+  | 'actions-utilisateurs'
 
 export interface HomeWidgetBox {
   id: HomeWidgetId
@@ -47,7 +49,8 @@ export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   notifications: 'Remontées des agents',
   conversations: 'Conversations',
   jarvis: 'Jarvis',
-  enregistrements: 'Transcription'
+  enregistrements: 'Transcription',
+  'actions-utilisateurs': 'Actions des utilisateurs'
 }
 
 /**
@@ -75,7 +78,11 @@ interface RelativeSpec {
  * d'une ligne de 0,5) recouvrait la tuile juste en dessous. Avec des lignes entieres, un
  * chevauchement devient impossible par construction — c'est de l'arithmetique, plus du reglage.
  */
-const ROWS = 6
+/**
+ * Huit rangees depuis l'ajout de la tuile « Actions des utilisateurs » : les trois colonnes etaient
+ * PLEINES sur six rangees, et y glisser une huitieme tuile l'aurait fait chevaucher une voisine.
+ */
+const ROWS = 8
 /**
  * Deux colonnes demandent plus de rangees : sept tuiles a deux rangees minimum ne tiennent pas sur
  * les six rangees de l'arrangement large.
@@ -83,15 +90,18 @@ const ROWS = 6
 const MEDIUM_ROWS = 10
 
 const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
-  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 4, z: 0 },
+  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
   // Les enregistrements sont sous les mails : on les consulte apres coup, pas en parlant.
-  enregistrements: { col: 0, colSpan: 1, row: 4, rowSpan: 2, z: -50 },
-  agenda: { col: 1, colSpan: 1, row: 0, rowSpan: 2, z: -30 },
-  routines: { col: 1, colSpan: 1, row: 2, rowSpan: 4, z: -60 },
+  enregistrements: { col: 0, colSpan: 1, row: 3, rowSpan: 3, z: -50 },
+  // Les actions des utilisateurs du greffe closent la colonne de gauche : on les consulte
+  // posement, pas d'un coup d'oeil.
+  'actions-utilisateurs': { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -70 },
+  agenda: { col: 1, colSpan: 1, row: 0, rowSpan: 3, z: -30 },
+  routines: { col: 1, colSpan: 1, row: 3, rowSpan: 5, z: -60 },
   notifications: { col: 2, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
   // Jarvis est en colonne de droite, a hauteur d'oeil : c'est l'endroit qu'on regarde en parlant.
-  jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 2, z: -40 },
-  conversations: { col: 2, colSpan: 1, row: 4, rowSpan: 2, z: -120 }
+  jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 3, z: -40 },
+  conversations: { col: 2, colSpan: 1, row: 5, rowSpan: 3, z: -120 }
 }
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
@@ -104,7 +114,8 @@ const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   jarvis: { col: 1, colSpan: 1, row: 3, rowSpan: 3, z: -40 },
   routines: { col: 1, colSpan: 1, row: 6, rowSpan: 2, z: -60 },
   conversations: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 },
-  enregistrements: { col: 0, colSpan: 1, row: 8, rowSpan: 2, z: -50 }
+  enregistrements: { col: 0, colSpan: 1, row: 8, rowSpan: 2, z: -50 },
+  'actions-utilisateurs': { col: 1, colSpan: 1, row: 8, rowSpan: 2, z: -70 }
 }
 
 /** L'ordre de lecture en colonne unique : ce qu'on regarde en premier, en haut. */
@@ -115,7 +126,8 @@ const NARROW_ORDER: HomeWidgetId[] = [
   'routines',
   'agenda',
   'mails',
-  'conversations'
+  'conversations',
+  'actions-utilisateurs'
 ]
 
 /**
@@ -246,7 +258,8 @@ export const HOME_WIDGET_IDS: HomeWidgetId[] = [
   'routines',
   'notifications',
   'conversations',
-  'jarvis'
+  'jarvis',
+  'actions-utilisateurs'
 ]
 
 export function clampWidgetBox(
