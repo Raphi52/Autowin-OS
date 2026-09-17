@@ -1007,15 +1007,25 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         ...autorises(tools),
         ...outilsMcpAutorises
       )
-    } else if (materialized) {
-      args.push(
-        '--tools',
-        'Read,' + OUTILS_WEB,
-        '--allowedTools',
-        ...autorises('Read,' + OUTILS_WEB),
-        ...outilsMcpAutorises
-      )
     } else {
+      /**
+       * fix-ok: une piece jointe DESARMAIT le tour de chat (cause mesuree, conv-650 2026-09-17).
+       *
+       * Il existait ici une branche `else if (materialized)` qui, des qu'une piece jointe etait
+       * materialisee, remplacait TOUTE la branche chat : outils reduits a `Read,WebFetch,WebSearch`
+       * et — surtout — aucun `--add-dir`, donc `readOnlyCwd` restait `undefined` et le CLI repartait
+       * dans le cwd du PROCESSUS Autowin. Or `agent-pilot` remonte les pieces jointes du fil ENTIER
+       * depuis le 2026-08-27 : une seule image jointe au premier message desarmait donc TOUS les
+       * tours suivants de la conversation.
+       *
+       * Mesure conv-650, turnId 5bd288bc-7617-4ab7-9810-3acfbed17c23 : argv
+       * `--tools Read,WebFetch,WebSearch`, lectures parties de `D:\AutoWinOS` alors que la
+       * conversation etait rangee sur `D:\RigV3Desktop`, et quatre demandes d'ecriture refusees
+       * d'affilee (saisies ts 1789639857023, 1789639927623, 1789640030803, 1789640116782).
+       *
+       * Les pieces jointes n'ont plus besoin d'une branche a elles : elles vivent dans un dossier
+       * temporaire, ouvert en lecture par un `--add-dir` supplementaire ci-dessous.
+       */
       /**
        * TOUR DE CHAT : PLEINEMENT OUTILLE (lecture + shell + ecriture).
        *
@@ -1054,6 +1064,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           args.push(
             '--add-dir',
             readOnlyWorkspace,
+            ...(materialized ? ['--add-dir', materialized.dir] : []),
             '--tools',
             'Read,Grep,Glob,' + OUTILS_WEB,
             '--allowedTools',
@@ -1074,6 +1085,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             'bypassPermissions',
             '--add-dir',
             readOnlyWorkspace,
+            ...(materialized ? ['--add-dir', materialized.dir] : []),
             '--tools',
             'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,' + OUTILS_WEB,
             '--allowedTools',
@@ -1099,11 +1111,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // La MEME valeur aux deux drapeaux, comme dans les autres branches : `--tools` charge,
         // `--allowedTools` autorise, et une asymetrie entre les deux laisse un outil declare mais
         // refuse (ou l'inverse) sans que rien ne le signale.
+        // Sans workspace, il reste le web — et les pieces jointes, qui vivent dans un dossier
+        // temporaire a nous : `Read` n'est charge que si elles existent reellement.
+        const outilsSansWorkspace = materialized ? 'Read,' + OUTILS_WEB : OUTILS_WEB
         args.push(
+          ...(materialized ? ['--add-dir', materialized.dir] : []),
           '--tools',
-          OUTILS_WEB,
+          outilsSansWorkspace,
           '--allowedTools',
-          ...autorises(OUTILS_WEB),
+          ...autorises(outilsSansWorkspace),
           ...outilsMcpAutorises
         )
       }
