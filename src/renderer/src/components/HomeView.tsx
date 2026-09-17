@@ -43,10 +43,7 @@ import {
   type HomeWidgetsVisibility
 } from './home-widgets-visibility'
 import { EVENEMENT_NOM_JARVIS, lireNomJarvis } from './jarvis-nom'
-import {
-  memoriserOuvertureReglages,
-  reglagesSontOuverts
-} from './home-reglages-ouverture'
+import { memoriserOuvertureReglages, reglagesSontOuverts } from './home-reglages-ouverture'
 import {
   instantaneConversationsEnAttente,
   retirerConversationEnAttente,
@@ -57,6 +54,7 @@ import { autowinStorageKey } from '../storage-keys'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
 import { InterlocuteursWidget } from './InterlocuteursWidget'
+import { ActionsUtilisateursWidget } from './ActionsUtilisateursWidget'
 import './HomeView.css'
 import { Spinner } from './Spinner'
 
@@ -705,7 +703,10 @@ export function HomeView({
       const api = (
         window as unknown as {
           api?: {
-            outlookRepondre?: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+            outlookRepondre?: (
+              id: string,
+              corps: string
+            ) => Promise<{ ok: boolean; erreur?: string }>
           }
         }
       ).api
@@ -919,7 +920,12 @@ export function HomeView({
           ) : null}
         </div>
         {reglagesOuverts ? (
-          <div className="home-view__settings" role="dialog" aria-label="Réglages de l'accueil" data-testid="home-settings-panel">
+          <div
+            className="home-view__settings"
+            role="dialog"
+            aria-label="Réglages de l'accueil"
+            data-testid="home-settings-panel"
+          >
             <section className="home-settings__bloc">
               <h3>Widgets affichés</h3>
               <ul>
@@ -982,119 +988,119 @@ export function HomeView({
       {layout
         .filter((box) => estVisible(visibilite, box.id))
         .map((box) => (
-        <section
-          key={box.id}
-          className="home-tile"
-          data-widget={box.id}
-          data-held={held === box.id ? 'true' : undefined}
-          data-testid={`home-widget-${box.id}`}
-          tabIndex={0}
-          role="group"
-          aria-label={`${titreWidget(box.id)} — flèches pour déplacer, Maj+flèches pour redimensionner`}
-          onKeyDown={(event) => auClavier(event, box.id)}
-          style={{
-            width: `${box.w}px`,
-            height: `${box.h}px`,
-            zIndex: plans.get(box.id) ?? 10,
-            // Z RAMENE A 0 au rendu : avec `perspective: 1600px`, un z negatif mettait la tuile a
-            // l'echelle 1600/(1600+|z|) (0.93 a 0.98) et rasterisait son texte hors grille pixel —
-            // d'ou des widgets plus FLOUS que « mails » (seul z: 0). La profondeur reste portee par
-            // `zIndex` (plans) et les ombres, sans mise a l'echelle fractionnaire.
-            transform: `translate3d(${box.x}px, ${box.y}px, 0)`
-          }}
-        >
-          {/*
+          <section
+            key={box.id}
+            className="home-tile"
+            data-widget={box.id}
+            data-held={held === box.id ? 'true' : undefined}
+            data-testid={`home-widget-${box.id}`}
+            tabIndex={0}
+            role="group"
+            aria-label={`${titreWidget(box.id)} — flèches pour déplacer, Maj+flèches pour redimensionner`}
+            onKeyDown={(event) => auClavier(event, box.id)}
+            style={{
+              width: `${box.w}px`,
+              height: `${box.h}px`,
+              zIndex: plans.get(box.id) ?? 10,
+              // Z RAMENE A 0 au rendu : avec `perspective: 1600px`, un z negatif mettait la tuile a
+              // l'echelle 1600/(1600+|z|) (0.93 a 0.98) et rasterisait son texte hors grille pixel —
+              // d'ou des widgets plus FLOUS que « mails » (seul z: 0). La profondeur reste portee par
+              // `zIndex` (plans) et les ombres, sans mise a l'echelle fractionnaire.
+              transform: `translate3d(${box.x}px, ${box.y}px, 0)`
+            }}
+          >
+            {/*
             LA PRISE EST LA BARRE DU HAUT, ET ELLE SEULE (demande utilisateur du 2026-09-02).
             Saisir n'importe ou dans le corps rendait le contenu inutilisable : selectionner un
             texte, tirer un curseur de reglage ou cliquer un lien amorçait un deplacement de tuile.
           */}
-          <div
-            className="home-tile__label"
-            onPointerDown={(event) => grab(event, box.id, 'move')}
-          >
-            <h2>{titreWidget(box.id)}</h2>
-            <i className="home-tile__rule" />
-            {box.id === 'notifications' && pending > 0 ? (
-              <span className="home-tile__count" title={`${pending} remontée(s) à lire`}>
-                {pending}
-              </span>
-            ) : null}
-            {box.id === 'conversations' && enAttente.length > 0 ? (
-              <span
-                className="home-tile__count"
-                title={`${enAttente.length} conversation(s) en attente de reprise`}
-              >
-                {enAttente.length}
-              </span>
-            ) : null}
-            {/* Relire Outlook se commande DEPUIS la tuile Outlook : le bouton vivait dans la barre
-                du haut, loin de ce qu'il rafraichit. Demande de l'utilisateur du 2026-09-01. */}
-            {box.id === 'mails' ? (
-              <button
-                type="button"
-                className="home-tile__action"
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setOutlookEnCours(true)
-                  void readOutlook(true)
-                }}
-                disabled={outlookEnCours}
-                data-testid="home-refresh-outlook"
-                title={
-                  outlook.etat === 'ok'
-                    ? `Outlook lu à ${new Date(outlook.luLe).toLocaleTimeString('fr-FR')}`
-                    : 'Relire Outlook maintenant'
-                }
-              >
-                {outlookEnCours ? <Spinner /> : 'Actualiser'}
-              </button>
-            ) : null}
-            {box.id === 'mails' && compteurs.personnes > 0 ? (
-              <span
-                className="home-tile__count"
-                title={`${compteurs.personnes} non lu(s) de personnes — ${compteurs.total} au total avec les envois automatiques`}
-              >
-                {compteurs.personnes}
-              </span>
-            ) : null}
-          </div>
-          <div className="home-tile__panel">
             <div
-              className="home-tile__scroll"
-              ref={(element) => marquerDebordement(element)}
-              onScroll={(event) => marquerDebordement(event.currentTarget)}
+              className="home-tile__label"
+              onPointerDown={(event) => grab(event, box.id, 'move')}
             >
-              <WidgetBody
-                id={box.id}
-                departures={departures}
-                notices={notices}
-                outlook={outlook}
-                now={now}
-                loading={snapshot === null && snapshotError === null}
-                error={snapshotError}
-                onNavigate={onNavigate}
-                enAttente={enAttente}
-                onOuvrirConversation={ouvrirConversation}
-                onOuvrir={ouvrirDansOutlook}
-                onRepondre={repondreDansOutlook}
-                onNouvelleConversation={nouvelleConversationOutlook}
-                onMarquerLu={marquerLuDansOutlook}
-                onAcquitter={acquitter}
-                ouvertureEnCours={ouvertureEnCours}
-              />
+              <h2>{titreWidget(box.id)}</h2>
+              <i className="home-tile__rule" />
+              {box.id === 'notifications' && pending > 0 ? (
+                <span className="home-tile__count" title={`${pending} remontée(s) à lire`}>
+                  {pending}
+                </span>
+              ) : null}
+              {box.id === 'conversations' && enAttente.length > 0 ? (
+                <span
+                  className="home-tile__count"
+                  title={`${enAttente.length} conversation(s) en attente de reprise`}
+                >
+                  {enAttente.length}
+                </span>
+              ) : null}
+              {/* Relire Outlook se commande DEPUIS la tuile Outlook : le bouton vivait dans la barre
+                du haut, loin de ce qu'il rafraichit. Demande de l'utilisateur du 2026-09-01. */}
+              {box.id === 'mails' ? (
+                <button
+                  type="button"
+                  className="home-tile__action"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setOutlookEnCours(true)
+                    void readOutlook(true)
+                  }}
+                  disabled={outlookEnCours}
+                  data-testid="home-refresh-outlook"
+                  title={
+                    outlook.etat === 'ok'
+                      ? `Outlook lu à ${new Date(outlook.luLe).toLocaleTimeString('fr-FR')}`
+                      : 'Relire Outlook maintenant'
+                  }
+                >
+                  {outlookEnCours ? <Spinner /> : 'Actualiser'}
+                </button>
+              ) : null}
+              {box.id === 'mails' && compteurs.personnes > 0 ? (
+                <span
+                  className="home-tile__count"
+                  title={`${compteurs.personnes} non lu(s) de personnes — ${compteurs.total} au total avec les envois automatiques`}
+                >
+                  {compteurs.personnes}
+                </span>
+              ) : null}
             </div>
-            {(['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'] as ResizeEdge[]).map((edge) => (
-              <i
-                key={edge}
-                className="home-tile__grip"
-                data-edge={edge}
-                data-testid={`home-grip-${box.id}-${edge}`}
-                onPointerDown={(event) => grab(event, box.id, edge)}
-              />
-            ))}
-          </div>
-        </section>
+            <div className="home-tile__panel">
+              <div
+                className="home-tile__scroll"
+                ref={(element) => marquerDebordement(element)}
+                onScroll={(event) => marquerDebordement(event.currentTarget)}
+              >
+                <WidgetBody
+                  id={box.id}
+                  departures={departures}
+                  notices={notices}
+                  outlook={outlook}
+                  now={now}
+                  loading={snapshot === null && snapshotError === null}
+                  error={snapshotError}
+                  onNavigate={onNavigate}
+                  enAttente={enAttente}
+                  onOuvrirConversation={ouvrirConversation}
+                  onOuvrir={ouvrirDansOutlook}
+                  onRepondre={repondreDansOutlook}
+                  onNouvelleConversation={nouvelleConversationOutlook}
+                  onMarquerLu={marquerLuDansOutlook}
+                  onAcquitter={acquitter}
+                  ouvertureEnCours={ouvertureEnCours}
+                />
+              </div>
+              {(['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'] as ResizeEdge[]).map((edge) => (
+                <i
+                  key={edge}
+                  className="home-tile__grip"
+                  data-edge={edge}
+                  data-testid={`home-grip-${box.id}-${edge}`}
+                  onPointerDown={(event) => grab(event, box.id, edge)}
+                />
+              ))}
+            </div>
+          </section>
         ))}
     </div>
   )
@@ -1143,6 +1149,11 @@ function WidgetBody({
     // Le micro qui ECRIT sur le disque, et la liste de ce qu'il a ecrit. A part de Jarvis a
     // dessein : ici le mot « Jarvis » prononce ne lance rien.
     return <EnregistrementsWidget />
+  }
+
+  if (id === 'actions-utilisateurs') {
+    // Ce que les utilisateurs d'un greffe ont fait, lu en consultation seule dans sa base.
+    return <ActionsUtilisateursWidget />
   }
 
   if (id === 'jarvis') {
@@ -1271,7 +1282,6 @@ function WidgetBody({
     </ul>
   )
 }
-
 
 /**
  * Les conversations qui ATTENDENT une reprise, une ligne cliquable chacune.

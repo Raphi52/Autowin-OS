@@ -300,6 +300,7 @@ import { gitlabTicketProvider } from './ticket-providers/gitlab'
 import { loadAzureDevOpsCliToken } from './azure-cli-token'
 import { loadForgeCliToken } from './forge-cli-token'
 import { registerTicketsIpc } from './tickets-ipc'
+import { registerGreffeActionsIpc } from './greffe-actions-ipc'
 import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
 import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
@@ -4089,6 +4090,7 @@ app.whenReady().then(async () => {
     return guichetProd.enAttente()
   })
   registerChatIpc()
+  registerGreffeActionsIpc({ ipc: ipcMain, assertTrusted: assertTrustedRendererSender })
   registerTicketsIpc({
     ipc: ipcMain,
     service: tickets,

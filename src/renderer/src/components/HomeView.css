@@ -2169,3 +2169,57 @@
 .home-threads__alerte input:focus-visible {
   outline: 1px solid var(--line-strong);
 }
+
+/* Actions des utilisateurs d'un greffe : une liste dense, lisible d'un coup d'oeil. */
+.actions-utilisateurs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.actions-utilisateurs__barre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.actions-utilisateurs__barre label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.actions-utilisateurs__liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.actions-utilisateurs__liste li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.actions-utilisateurs__qui {
+  font-weight: 600;
+}
+
+.actions-utilisateurs__quoi,
+.actions-utilisateurs__quand {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions-utilisateurs__quand {
+  opacity: 0.7;
+}
