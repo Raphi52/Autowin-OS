@@ -5661,6 +5661,68 @@ export function ChatView({
                 </span>
                 Choisir un dossier…
               </button>
+              {/*
+                CATEGORIES — l'autre moitie du geste « ranger ». Depuis que le dossier de travail
+                et le libelle de classement sont deux champs distincts (conv-81), ce menu ne
+                proposait plus que des chemins : « Fiches Team » etait devenu inatteignable a la
+                souris alors que des fils y vivaient toujours (conv-79). Le tri entre les deux se
+                fait plus bas, sur la FORME de la valeur — un libelle n'ecrase jamais le dossier.
+              */}
+              <span className="conv-menu-titre">Catégories</span>
+              {categoriesConnues.map((libelle) => (
+                <button
+                  key={libelle}
+                  role="menuitem"
+                  data-testid="conv-category-choice"
+                  data-category={libelle}
+                  onClick={() => {
+                    const conv = convFolderMenu.conv
+                    setConvFolderMenu(null)
+                    setSaisieCategorie(null)
+                    choisirDossier(conv, libelle)
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    🏷
+                  </span>
+                  {libelle}
+                </button>
+              ))}
+              {saisieCategorie === null ? (
+                <button
+                  role="menuitem"
+                  data-testid="conv-category-new"
+                  onClick={() => setSaisieCategorie('')}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    ＋
+                  </span>
+                  Nouvelle catégorie…
+                </button>
+              ) : (
+                <input
+                  className="conv-menu-saisie"
+                  data-testid="conv-category-input"
+                  aria-label="Nom de la nouvelle catégorie"
+                  placeholder="Nom de la catégorie"
+                  autoFocus
+                  value={saisieCategorie}
+                  onChange={(event) => setSaisieCategorie(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setSaisieCategorie(null)
+                      return
+                    }
+                    if (event.key !== 'Enter') return
+                    const libelle = saisieCategorie.trim()
+                    if (!libelle) return
+                    const conv = convFolderMenu.conv
+                    setSaisieCategorie(null)
+                    setConvFolderMenu(null)
+                    choisirDossier(conv, libelle)
+                  }}
+                />
+              )}
             </div>
           </>,
           document.body
