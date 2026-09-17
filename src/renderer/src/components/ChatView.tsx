@@ -5868,7 +5868,10 @@ Cliquer pour changer le dossier de travail.`}
                           setConvFolderMenu({
                             conv: active ?? null,
                             top: r.bottom + 4,
-                            left: r.left
+                            left: r.left,
+                            // La pastille de la barre du haut PARLE du repertoire de travail : elle
+                            // n'ouvre donc que celui-la, jamais le classement.
+                            mode: 'dossier'
                           })
                         }}
                       >
