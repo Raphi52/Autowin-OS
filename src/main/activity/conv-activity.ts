@@ -19,6 +19,12 @@ export interface ConvActivityEntry {
   outputTokens?: number
   cacheReadTokens?: number
   /**
+   * Tokens ECRITS en cache (le PRIX du cache, la contrepartie de `cacheReadTokens`). Absent du
+   * journal jusqu'au 2026-09-16 : la projection le portait, cette recopie champ par champ le
+   * jetait — d'ou le « cacheCreationTokens cumules = 0 » de `scripts/audit-cout-tokens.mjs`.
+   */
+  cacheCreationTokens?: number
+  /**
    * ENTREE DU DERNIER APPEL PROVIDER de ce tour — l'OCCUPATION de la fenetre, et non la depense.
    * `inputTokens` ci-dessus est un CUMUL (toutes les iterations du tour), donc inexploitable pour
    * mesurer une fenetre : un tour a affiche 10,6 M de cumul sur un modele servi bien en dessous.
@@ -94,6 +100,7 @@ export function appendConvActivity(
       inputTokens: entry.inputTokens,
       outputTokens: entry.outputTokens,
       cacheReadTokens: entry.cacheReadTokens,
+      cacheCreationTokens: entry.cacheCreationTokens,
       derniereEntree: entry.derniereEntree,
       derniereEntreeCache: entry.derniereEntreeCache,
       costUsd: entry.costUsd,

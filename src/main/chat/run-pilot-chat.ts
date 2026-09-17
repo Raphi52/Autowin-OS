@@ -246,6 +246,11 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     // de l'utilisateur, le trip OBSERVE (ledger) mais ne coupe plus.
     const budgetDuTour = chatTurnBudget(process.env)
     const chatBreaker = new CostCircuitBreaker(budgetDuTour.limits)
+    // Les DEUX breakers observent ; AUCUN ne coupe sans cap explicite de l'utilisateur.
+    // Décision de l'utilisateur du 2026-09-16 (« non je veux aucun blocage ») : l'emballement
+    // coupait encore de lui-même à 25 $ / 24 M. Il ne coupe plus — il ÉCRIT le dépassement, et
+    // c'est `AUTOWIN_CHAT_USD_CAP` / `_TOKEN_CAP` / `_CALL_CAP` qui réarment la coupure.
+    const breakerEmballement = new CostCircuitBreaker(budgetDuTour.emballement)
     const spoken: string[] = []
     /**
      * Les etiquettes d'action, TENUES A PART du vrai texte — et c'est un COUPLE de garanties.
@@ -932,6 +937,25 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
                 : `seuil d'observation dépassé (mesure seule, aucun arrêt) — ${tripped.reason}`
             })
             if (coupe) controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : ${tripped.reason}`)
+          }
+          const emballe = breakerEmballement.observe({
+            step: 'exec',
+            detail: 'chat',
+            costUsd: pilotEvent.callUsage.costUsd,
+            tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
+          } as Parameters<typeof breakerEmballement.observe>[0])
+          if (emballe) {
+            const coupeEmballement = budgetDuTour.emballementBloquant
+            ledger.append({
+              source: 'orchestrate',
+              name: 'chat-budget',
+              detail: coupeEmballement
+                ? `tour coupé — emballement — ${emballe.reason}`
+                : `emballement dépassé (mesure seule, aucun arrêt) — ${emballe.reason}`
+            })
+            if (coupeEmballement) {
+              controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : emballement — ${emballe.reason}`)
+            }
           }
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {

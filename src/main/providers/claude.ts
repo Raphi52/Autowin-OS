@@ -1720,9 +1720,23 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             reported || (cost === undefined ? code : `${code} · ${cost.toFixed(4)} USD`)
           // Un event `result` est deja la decision terminale du CLI (qui gere ses propres retries).
           // Le rejouer au niveau AgentPilot repaie le meme prompt et contourne la borne provider.
+          //
+          // SAUF le plantage transitoire QUI N'A RIEN COUTE. Mesure conv-599, tour
+          // `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : apres 4 iterations payees (≈1,06 USD, 917 k
+          // tokens), l'iteration 4 meurt en `error_during_execution` en 1,9 s pour 0 token et
+          // 0 USD. Ce n'est pas une decision du CLI sur le fond, c'est sa propre execution qui a
+          // casse — et le tour ENTIER etait jete, l'utilisateur devant retaper la demande
+          // (saisie ts 1789562253947, « /kaizen cette erreur et reprend »). Rien n'ayant ete
+          // facture, le rejouer ne « repaie » rien et ne contourne aucune borne ; AgentPilot le
+          // borne de toute facon a 2 tentatives, et reprend la session CLI en cours.
+          const rienConsomme =
+            !normalizedUsage ||
+            ((normalizedUsage.costUsd ?? 0) === 0 &&
+              (normalizedUsage.inputTokens ?? 0) === 0 &&
+              (normalizedUsage.outputTokens ?? 0) === 0)
           errored = new ProviderCallError(`Claude a interrompu l'appel : ${detail}`, {
             code,
-            retryable: false,
+            retryable: code === 'error_during_execution' && rienConsomme,
             usage: normalizedUsage,
             resolvedModel
           })

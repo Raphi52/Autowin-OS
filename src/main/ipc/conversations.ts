@@ -138,6 +138,10 @@ export function registerConversationsIpc({
         reasoningEffort: decision.reasoningEffort,
         inputTokens: decision.usage?.inputTokens,
         outputTokens: decision.usage?.outputTokens,
+        // Sans ces deux champs, la part de cache du tri etait un ZERO PAR ABSENCE : le journal ne
+        // la portait pas, donc l'audit ne pouvait ni la confirmer ni l'infirmer.
+        cacheReadTokens: decision.usage?.cacheReadTokens,
+        cacheCreationTokens: decision.usage?.cacheCreationTokens,
         costUsd: decision.usage?.costUsd,
         text: JSON.stringify({
           route: decision.route,

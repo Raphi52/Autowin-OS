@@ -19,6 +19,8 @@
 import { decideSqlRead, type SqlReadArgs } from './sql-read-guard'
 import { resolveSqlTargets, type CatalogDeps, type SqlTargetCatalog } from './sql-read-catalog'
 import { runSqlcmdJson } from './sqlcmd-runner'
+import type { PorteProd } from './prod-gate'
+import type { GuichetProd } from './prod-guichet'
 
 /** Assez pour constater une spécificité, trop peu pour aspirer une table. */
 const DEFAULT_MAX_ROWS = 200
@@ -38,6 +40,24 @@ export interface SqlReadCommandDeps extends CatalogDeps {
   maxRows?: number
   /** Catalogue déjà résolu. Injectable pour les tests, et pour éviter une résolution par appel. */
   catalog?: SqlTargetCatalog
+  /**
+   * CINQUIÈME COUCHE : le point de passage de production (`prod-gate.ts`). Absent, rien ne change —
+   * les quatre couches historiques s'appliquent seules. Présent, il décide AVANT la connexion si la
+   * base ciblée exige une autorisation de l'utilisateur.
+   */
+  /**
+   * La conversation d'où part le geste. Transmise telle quelle au guichet, pour que l'écran
+   * d'autorisation n'apparaisse QUE dans le fil concerné (conv-626, 2026-09-16).
+   */
+  conversationId?: string
+  porteProd?: PorteProd
+  /** Le jeton obtenu par l'écran de saisie, quand l'utilisateur vient d'autoriser ce geste. */
+  jetonProd?: string
+  /**
+   * LE GUICHET : au refus, il ouvre l'écran de saisie chez l'utilisateur et ATTEND. Absent, le refus
+   * part tel quel (c'est le comportement des tests et des appels non interactifs).
+   */
+  guichetProd?: GuichetProd
 }
 
 /**
@@ -89,6 +109,43 @@ export async function runSqlRead(
   const catalogue = deps.catalog ?? (await resolveSqlTargets(deps))
   const decision = decideSqlRead(args, catalogue)
   if (!decision.allowed) return { ok: false, reason: decision.reason }
+
+  // LE POINT DE PASSAGE EST ICI, DANS LA FONCTION, et pas chez l'appelant : un garde placé sur le
+  // site d'appel se contourne en ajoutant un second appelant. La base retenue est celle de la
+  // DÉCISION, jamais l'argument brut du modèle — celui-ci a pu être normalisé ou refusé entre-temps.
+  if (deps.porteProd) {
+    const verdict = deps.porteProd.verifier({
+      nature: 'base',
+      nom: decision.database,
+      operation: 'sql-read',
+      ...(deps.jetonProd ? { jeton: deps.jetonProd } : {})
+    })
+    if (!verdict.autorise) {
+      // Le refus n'est pas une fin : on ouvre l'écran de saisie et on attend le jeton, puis on
+      // REJOUE le même geste. Sans ce rattrapage, l'utilisateur lit un refus sans aucun moyen
+      // d'autoriser — et c'est au modèle qu'on demanderait de recommencer, alors qu'il est
+      // justement la pièce qui n'a pas le droit de décider.
+      // L'IDENTIFIANT DE CONVERSATION VOYAGE AVEC LA DEMANDE : l'écran d'autorisation vit dans le
+      // fil, et sans lui la question s'affichait au bas de toutes les conversations (conv-626).
+      const reponse = deps.guichetProd
+        ? await deps.guichetProd.demander({
+            ...verdict.demande,
+            niveau: verdict.niveau,
+            ...(deps.conversationId ? { conversationId: deps.conversationId } : {})
+          })
+        : undefined
+      if (!reponse) return { ok: false, reason: verdict.motif }
+      // UNE seule reprise : un jeton refusé est déjà brûlé par le coffre, en redemander en boucle
+      // ne ferait que rouvrir l'écran indéfiniment.
+      const reprise = deps.porteProd.verifier({
+        nature: 'base',
+        nom: decision.database,
+        operation: 'sql-read',
+        ...(reponse.type === 'jeton' ? { jeton: reponse.valeur } : { confirme: true })
+      })
+      if (!reprise.autorise) return { ok: false, reason: reprise.motif }
+    }
+  }
 
   const maxRows = Math.min(MAX_ROWS_CAP, Math.max(1, Math.trunc(deps.maxRows ?? DEFAULT_MAX_ROWS)))
   // On demande UNE ligne de plus que le plafond annoncé : c'est ce qui permet de distinguer un

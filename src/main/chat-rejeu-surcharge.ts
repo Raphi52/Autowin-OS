@@ -37,13 +37,31 @@ export interface DecisionRejeu {
 }
 
 /**
+ * Le CLI s'est casse en cours d'execution — ce n'est pas un verdict sur le fond, c'est son process
+ * qui est tombe. Mesure conv-623, tour `ee2cae40-7dca-4c58-8ebb-9fb9aeadbcbb` : l'appel meurt en
+ * `error_during_execution` a 18:51:58.702 en 1,9 s pour 0 token, le rejeu part 10 ms plus tard
+ * (event `retry`, at 1789584718704) et remeurt a l'identique en 1,9 s. Le tour ENTIER est jete
+ * apres 753 650 tokens et 0,7190 USD deja payes, et ce que le modele avait a dire est perdu.
+ *
+ * Rejouer dans la meme seconde un CLI encore casse, c'est refaire la meme chose en attendant un
+ * autre resultat. Meme politique que la surcharge serveur : on attend, et on laisse deux chances.
+ *
+ * SURETE : cette famille n'est atteinte QUE si l'adaptateur a deja juge l'erreur rejouable, et il
+ * ne le fait que lorsque l'appel n'a RIEN consomme (`providers/claude.ts`, champ `retryable`). Un
+ * `error_during_execution` deja facture reste terminal et ne passe jamais par ici.
+ */
+export function estCrashDExecutionDuCli(message: string): boolean {
+  return /error_during_execution/i.test(message)
+}
+
+/**
  * Que faire apres l'echec numero `attempt` (0 = le premier appel vient d'echouer) ?
  *
  * `message` est le texte de l'erreur remontee par l'adaptateur — c'est lui qui porte le code HTTP
  * et la phrase « usually temporary » sur laquelle repose la classification.
  */
 export function deciderRejeuDeChat(message: string, attempt: number): DecisionRejeu {
-  const transitoire = isTransientOverload(message)
+  const transitoire = isTransientOverload(message) || estCrashDExecutionDuCli(message)
   const maxAttempts = transitoire ? TENTATIVES_SURCHARGE : TENTATIVES_ORDINAIRES
   const rejouer = attempt < maxAttempts - 1
   return {

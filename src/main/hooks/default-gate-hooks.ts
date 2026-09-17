@@ -1,6 +1,6 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { exactLineFingerprint } from '../exact-line-fingerprint'
 import { HookBus, type HookContext, type HookResult } from './hook-bus'
 import { createVerifyReplayHook, type VerifyRunner } from './verify-replay-hook'
@@ -177,7 +177,71 @@ export function jetonsDeCauseParFichier(
       jetons[homonymes[0]] = true
     }
   }
+
+  // Source 3 — le jeton depose dans le fichier par un tour PRECEDENT de la meme session.
+  // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — le compte d'edits est cumule
+  // sur la session, mais la source 1 ne creditait le jeton que s'il figurait parmi les lignes
+  // ecrites par CE run : le `fix-ok:` depose a la reparation 1 (commit a9126f34) ne desarmait
+  // pas la reparation 2, et le meme refus revenait a l'identique. Portee etroite : seul un jeton
+  // AJOUTE par le dernier changement du fichier (non commite, ou dernier commit qui le touche)
+  // compte — un vieux `fix-ok:` sans rapport ne vaut pas laissez-passer perpetuel.
+  for (const f of connus) {
+    // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — le filtre excluait « : », donc
+    // un chemin absolu Windows (D:/AutoWinOS/src/main/x.ts), forme sous laquelle editsByFile
+    // remonte souvent, ne pouvait JAMAIS etre credite : meme refus fix-gate rejoue 3 fois.
+    if (jetons[f] || !/^(?:[A-Za-z]:)?[\w./-]+$/.test(f)) continue
+    if (lignesAjouteesAuDernierChangement(f).some((l) => JETON_DE_CAUSE.test(l))) jetons[f] = true
+  }
   return jetons
+}
+
+/**
+ * Les lignes AJOUTEES par le dernier changement d'un fichier : d'abord ce qui n'est pas encore
+ * commite, sinon le dernier commit qui le touche. Sert a dater un jeton de cause.
+ */
+function lignesAjouteesAuDernierChangement(fichier: string): string[] {
+  // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — un run s'execute dans un worktree
+  // en HEAD DETACHE anterieur au commit qui depose le jeton : `git log -1 -- <fichier>` y renvoie
+  // l'ancien commit et le jeton reste invisible (meme refus fix-gate rejoue 4 fois). On interroge
+  // donc le depot QUI CONTIENT le fichier (-C), et toutes les refs (--all), pas le seul HEAD local.
+  const surDisque = (() => {
+    try {
+      return existsSync(fichier) ? resolve(fichier) : ''
+    } catch {
+      return ''
+    }
+  })()
+  const dossier = surDisque ? dirname(surDisque) : process.cwd()
+  const cible = surDisque || fichier
+  const git = (args: string[]): string => {
+    try {
+      return execFileSync('git', ['-C', dossier, ...args], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore']
+      })
+    } catch {
+      return ''
+    }
+  }
+  const ajoutees = (diff: string): string[] =>
+    diff
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+      .map((l) => l.slice(1))
+  const enCours = ajoutees(git(['diff', 'HEAD', '--', cible]))
+  if (enCours.length) return enCours
+  const shas = new Set(
+    ['log', 'log-all'].map((mode) =>
+      git(
+        mode === 'log-all'
+          ? ['log', '-1', '--all', '--format=%H', '--', cible]
+          : ['log', '-1', '--format=%H', '--', cible]
+      ).trim()
+    )
+  )
+  return [...shas]
+    .filter(Boolean)
+    .flatMap((sha) => ajoutees(git(['show', sha, '--format=', '--', cible])))
 }
 
 /**

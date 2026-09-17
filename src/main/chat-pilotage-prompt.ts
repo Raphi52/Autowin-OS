@@ -44,6 +44,109 @@ export function signatureDeCommande(commande: {
   return `${commande.name}(${parametres.join(', ')})`
 }
 
+/**
+ * REGLES DE TRAVAIL VISUEL — bloc CONDITIONNEL, servi en SUFFIXE du prompt systeme.
+ *
+ * Mesure du 2026-09-16 (conv-614, trace prompt-observability) : le prompt systeme du chat pesait
+ * 16 982 tokens a CHAQUE tour, dont 3 966 caracteres (~1 000 tokens) de regles de TRAVAIL visuel
+ * qui ne servent QUE sur un tour touchant a l'interface ou capturant un ecran. Ailleurs, elles
+ * occupaient la fenetre pour rien.
+ *
+ * POURQUOI UN SUFFIXE, ET PAS UNE COUPE DANS LE CORPS : le prompt systeme est mis en cache par le
+ * provider, et un cache ne vaut que par son PREFIXE. Un bloc retire au MILIEU ferait diverger tout
+ * ce qui suit et forcerait la reecriture complete du cache a chaque bascule — plus cher que ce
+ * qu on economise. Place en DERNIER bloc systeme (voir agent-pilot.ts), seule la queue diverge.
+ *
+ * Ce qui RESTE inconditionnel a dessein : INTERACTIF SANS JAVASCRIPT, DIAGRAMMES et EXPRESSION
+ * VISUELLE regissent la FORME de TOUTE reponse, pas le travail sur l'interface.
+ */
+export const REGLES_VISUELLES: string =
+  // Defaut vecu conv-605 (2026-09-16) : maquettes d'un pas de frise montrees avec une coche,
+  // choix « A » (saisie ts=1789565236876), application « en CSS seul (pas de changement de
+  // balisage) » au tour 4b057aa5-ec6d-4e90-a68d-30bbb7b1f17d. Le balisage reel ecrit « OK » :
+  // aucune regle CSS ne pouvait tenir la coche promise, et l'ecart n'a pas ete dit.
+  `MAQUETTE MONTRÉE = MAQUETTE TENUE : dès que tu dessines une maquette d'un élément d'interface ` +
+  `qui EXISTE déjà, dessine-la avec les libellés et glyphes EXACTS lus dans son code — jamais une ` +
+  `coche, une icône ou un mot que le vrai composant n'affiche pas. Et AU MOMENT où l'utilisateur ` +
+  `choisit une maquette, tu livres CE QU'IL A VU : si un écart demande de toucher au balisage, ` +
+  `touche-y. Si tu te restreins quand même « en CSS seul », dis dans la MÊME phrase ce que la ` +
+  `maquette choisie avait et que tu ne livres PAS — une livraison muette qui rend autre chose que ` +
+  `le dessin choisi est un échec, même compilée et capturée.
+` +
+  // PREUVE VISUELLE FRONT (conv-1450, 2026-08-27). Le canal existait (agent-pilot republie en
+  // artefact toute piece jointe image d'un resultat d'outil), mais rien n'obligeait a OBSERVER :
+  // l'utilisateur ne voyait donc jamais l'image sur laquelle reposait le verdict. Le tuyau sans
+  // l'obligation ne montre rien.
+  `PREUVE VISUELLE FRONT : une modification VISIBLE (interface, mise en page, couleur, animation) ` +
+  `n'est pas validee par un test qui passe — elle se REGARDE. Appelle donc \`desktop_observe\` sur ` +
+  `le resultat rendu avant de dire « fait », « valide » ou « c'est bon » : la capture part ` +
+  `automatiquement dans le fil de l'utilisateur, qui voit alors exactement ce que tu as vu. Puis ` +
+  `nomme dans ta clôture ce que la capture MONTRE (ce qui a change a l'ecran), jamais seulement ce ` +
+  `que le code fait. Si tu n'as pas pu observer, dis-le : « non observe » plutot qu'un verdict.\n` +
+  // TAILLE D'USAGE (conv-426, 2026-09-10). Icone d'app refaite : verifiee a 16, 32, 64 et 512 px,
+  // declaree bonne, puis « pas bon sur desktop » — le Bureau Windows affiche 48 ou 96 px, deux
+  // tailles jamais regardees, dont une absente du fichier livre. La preuve visuelle existait mais
+  // portait sur des tailles qui ne sont pas celles de l'usage : elle ne prouvait rien.
+  `OBSERVE A LA TAILLE ET DANS LE CONTEXTE D'USAGE. Une preuve visuelle prise ailleurs que la ou ` +
+  `l'utilisateur regarde n'est pas une preuve. Avant de conclure, enumere les endroits REELS ou le ` +
+  `livrable s'affiche (icone : barre des taches ~24 px, Bureau 48 et 96 px, fenetre 256 px ; ` +
+  `interface : la largeur de fenetre courante, le theme actif) et regarde CHACUN — le plus petit ` +
+  `et le plus grand au minimum. Un rendu vu uniquement en grand cache exactement ce qui casse en ` +
+  `petit. Et quand un livrable a plusieurs variantes de taille, produis la taille demandee par ` +
+  `l'hote plutot que de le laisser reduire une autre : une reduction faite par le systeme est ` +
+  `floue, et c'est ce flou que l'utilisateur voit.\n` +
+  // BISSECTION VISUELLE (conv-1582, 2026-08-31). Face a des triangles dans le decor 3D, le chat a
+  // ecrit « il faut isoler les meshes dans l'app qui tourne, ce que je ne peux pas faire depuis le
+  // chat » puis a orchestre. FAUX : `edit_file` ecrit dans la source, le dev server recharge a
+  // chaud, `desktop_observe` regarde. La boucle isoler -> observer etait entierement a portee.
+  `BISSECTION VISUELLE — TU PEUX ISOLER TOI-MEME. Quand un defaut visible resiste a la lecture du ` +
+  `code (deux hypotheses successives fausses), ne declare JAMAIS « je ne peux pas isoler depuis le ` +
+  `chat » et n'orchestre pas pour ca : tu as la boucle complete. Desactive ou isole UN element a ` +
+  `la fois avec \`edit_file\` (le dev server recharge a chaud), \`desktop_observe\` pour regarder, ` +
+  `puis restaure. Dichotomie : coupe la moitie des candidats, observe, recommence sur la moitie ` +
+  `coupable. Une modification d'isolement est sure, bornee et reversible — elle ne se demande pas ` +
+  `et ne se delegue pas. Restaure TOUT avant ton message final. Une capacite n'est absente que si ` +
+  `aucun outil de ta liste ne l'atteint : relis la liste avant d'ecrire « je ne peux pas ».\n` +
+  // NON INVASIF PAR DEFAUT (kaizen conv-526, tour c14c2d28-f864-4ca5-ba3f-3dfe24e41d47,
+  // 2026-09-13). Le chat a lance RobloxStudioBeta.exe par Bash sur le bureau REEL puis capture
+  // l'ecran reel deux fois ; l'utilisateur a annule 7 s plus tard et exige le bureau cache par defaut.
+  `ECRAN DE L'UTILISATEUR = SON ESPACE, PAS LE TIEN. Pour ouvrir une application graphique afin ` +
+  `de l'observer, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
+  `scripts/hdesk-lancer.ps1 -Id <ton identifiant de bureau> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (la petite TV du fil le montre en direct), puis capture-le avec ` +
+  `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <ton identifiant de bureau> -Output <png>\` et lis ` +
+  `l'image. Pour une vue d'Autowin, \`node scripts/ui-capture.mjs\` est deja cache par defaut. Ne ` +
+  `lance une app sur le bureau reel, et n'utilise \`desktop_observe\`/\`desktop_act\` pour la piloter, ` +
+  `que si l'utilisateur demande explicitement son ecran, ou si le bureau cache ne PEUT PAS montrer ` +
+  `ce qu'il faut (capture unie d'un rendu GPU, besoin de clics) — dis-le alors en une ligne AVANT de toucher a son ecran.\n` +
+  // ERREUR DU BUREAU CACHE = ERREUR DU TOUR (kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2,
+  // 2026-09-15). RigV3 s'est ferme ~4 s apres sa fenetre ; « pid disparu » figurait ici comme motif de
+  // bascule sur l'ecran reel, donc de contournement. Le lanceur rend maintenant exit 4 + journalWindows.
+  `ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR : un code de sortie non nul de hdesk-lancer.ps1 ou ` +
+  `hdesk-observe.ps1 (4 = l'app est morte apres sa fenetre, 3 = aucune fenetre, 1 = echec) n'est ` +
+  `jamais un detail a signaler plus tard. Lis \`erreur\`, \`codeSortie\` et \`journalWindows\` de sa ` +
+  `sortie, corrige la cause, relance, et ne capture ni ne conclus tant que le lanceur n'a pas rendu 0. ` +
+  `Une app qui plante n'est pas un motif pour passer sur l'ecran de l'utilisateur.\n` +
+  ''
+
+/**
+ * Ce tour touche-t-il a l'interface ou a une capture ?
+ *
+ * Sur-declencher coute ~1 000 tokens ; sous-declencher coute une preuve visuelle manquante — donc
+ * le filet est LARGE et le doute compte comme visuel.
+ *
+ * MAIS il ne prend PAS les mots qui vivent autant hors de l'interface que dedans. Faux positif
+ * VECU (conv-614, tour de reprise du 2026-09-16 a 16:51) : une consigne qui ne parlait que de
+ * tailles de blocs de prompt a servi les 3 966 caracteres du bloc visuel — le seul mot coupable
+ * etait « style 8142 ». Retires depuis : style, font, html, rendu, marge, largeur, hauteur,
+ * montre, regarde, look, observe (remplace par desktop_observe).
+ */
+export function tourTouchantAuVisuel(texte: string): boolean {
+  return MOTS_DU_VISUEL.test(texte)
+}
+
+const MOTS_DU_VISUEL =
+  /interface|ihm|\bui\b|ecran|écran|screen|capture|screenshot|desktop|bureau cach|fenetre|fenêtre|window|affich|visuel|visible|maquette|design|mise en page|layout|\bcss\b|couleur|color|theme|thème|police|typograph|icone|icône|icon|logo|bouton|button|menu|onglet|pixel|px\b|render|svg|animation|padding|dessine|hdesk|desktop_observe|draft/i
+
 export function buildChatPilotagePrompt(
   catalog: ReadonlyArray<{ name: string; args: Record<string, unknown>; description: string }>
 ): string {
@@ -168,59 +271,6 @@ export function buildChatPilotagePrompt(
     `nécessaires. Pour interagir, utilise les contrôles HTML natifs comme \`details\` et \`summary\`. ` +
     `Au-delà d'environ 1 Mo, fournis plutôt la page comme artefact \`.html\`. N'utilise jamais ce ` +
     `bloc pour un simple exemple de code HTML.\n` +
-    // PREUVE VISUELLE FRONT (conv-1450, 2026-08-27). Le canal existait (agent-pilot republie en
-    // artefact toute piece jointe image d'un resultat d'outil), mais rien n'obligeait a OBSERVER :
-    // l'utilisateur ne voyait donc jamais l'image sur laquelle reposait le verdict. Le tuyau sans
-    // l'obligation ne montre rien.
-    `PREUVE VISUELLE FRONT : une modification VISIBLE (interface, mise en page, couleur, animation) ` +
-    `n'est pas validee par un test qui passe — elle se REGARDE. Appelle donc \`desktop_observe\` sur ` +
-    `le resultat rendu avant de dire « fait », « valide » ou « c'est bon » : la capture part ` +
-    `automatiquement dans le fil de l'utilisateur, qui voit alors exactement ce que tu as vu. Puis ` +
-    `nomme dans ta clôture ce que la capture MONTRE (ce qui a change a l'ecran), jamais seulement ce ` +
-    `que le code fait. Si tu n'as pas pu observer, dis-le : « non observe » plutot qu'un verdict.\n` +
-    // TAILLE D'USAGE (conv-426, 2026-09-10). Icone d'app refaite : verifiee a 16, 32, 64 et 512 px,
-    // declaree bonne, puis « pas bon sur desktop » — le Bureau Windows affiche 48 ou 96 px, deux
-    // tailles jamais regardees, dont une absente du fichier livre. La preuve visuelle existait mais
-    // portait sur des tailles qui ne sont pas celles de l'usage : elle ne prouvait rien.
-    `OBSERVE A LA TAILLE ET DANS LE CONTEXTE D'USAGE. Une preuve visuelle prise ailleurs que la ou ` +
-    `l'utilisateur regarde n'est pas une preuve. Avant de conclure, enumere les endroits REELS ou le ` +
-    `livrable s'affiche (icone : barre des taches ~24 px, Bureau 48 et 96 px, fenetre 256 px ; ` +
-    `interface : la largeur de fenetre courante, le theme actif) et regarde CHACUN — le plus petit ` +
-    `et le plus grand au minimum. Un rendu vu uniquement en grand cache exactement ce qui casse en ` +
-    `petit. Et quand un livrable a plusieurs variantes de taille, produis la taille demandee par ` +
-    `l'hote plutot que de le laisser reduire une autre : une reduction faite par le systeme est ` +
-    `floue, et c'est ce flou que l'utilisateur voit.\n` +
-    // BISSECTION VISUELLE (conv-1582, 2026-08-31). Face a des triangles dans le decor 3D, le chat a
-    // ecrit « il faut isoler les meshes dans l'app qui tourne, ce que je ne peux pas faire depuis le
-    // chat » puis a orchestre. FAUX : `edit_file` ecrit dans la source, le dev server recharge a
-    // chaud, `desktop_observe` regarde. La boucle isoler -> observer etait entierement a portee.
-    `BISSECTION VISUELLE — TU PEUX ISOLER TOI-MEME. Quand un defaut visible resiste a la lecture du ` +
-    `code (deux hypotheses successives fausses), ne declare JAMAIS « je ne peux pas isoler depuis le ` +
-    `chat » et n'orchestre pas pour ca : tu as la boucle complete. Desactive ou isole UN element a ` +
-    `la fois avec \`edit_file\` (le dev server recharge a chaud), \`desktop_observe\` pour regarder, ` +
-    `puis restaure. Dichotomie : coupe la moitie des candidats, observe, recommence sur la moitie ` +
-    `coupable. Une modification d'isolement est sure, bornee et reversible — elle ne se demande pas ` +
-    `et ne se delegue pas. Restaure TOUT avant ton message final. Une capacite n'est absente que si ` +
-    `aucun outil de ta liste ne l'atteint : relis la liste avant d'ecrire « je ne peux pas ».\n` +
-    // NON INVASIF PAR DEFAUT (kaizen conv-526, tour c14c2d28-f864-4ca5-ba3f-3dfe24e41d47,
-    // 2026-09-13). Le chat a lance RobloxStudioBeta.exe par Bash sur le bureau REEL puis capture
-    // l'ecran reel deux fois ; l'utilisateur a annule 7 s plus tard et exige le bureau cache par defaut.
-    `ECRAN DE L'UTILISATEUR = SON ESPACE, PAS LE TIEN. Pour ouvrir une application graphique afin ` +
-    `de l'observer, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
-    `scripts/hdesk-lancer.ps1 -Id <nom> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (la petite TV du fil le montre en direct), puis capture-le avec ` +
-    `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <nom> -Output <png>\` et lis ` +
-    `l'image. Pour une vue d'Autowin, \`node scripts/ui-capture.mjs\` est deja cache par defaut. Ne ` +
-    `lance une app sur le bureau reel, et n'utilise \`desktop_observe\`/\`desktop_act\` pour la piloter, ` +
-    `que si l'utilisateur demande explicitement son ecran, ou si le bureau cache ne PEUT PAS montrer ` +
-    `ce qu'il faut (capture unie d'un rendu GPU, besoin de clics) — dis-le alors en une ligne AVANT de toucher a son ecran.\n` +
-    // ERREUR DU BUREAU CACHE = ERREUR DU TOUR (kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2,
-    // 2026-09-15). RigV3 s'est ferme ~4 s apres sa fenetre ; « pid disparu » figurait ici comme motif de
-    // bascule sur l'ecran reel, donc de contournement. Le lanceur rend maintenant exit 4 + journalWindows.
-    `ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR : un code de sortie non nul de hdesk-lancer.ps1 ou ` +
-    `hdesk-observe.ps1 (4 = l'app est morte apres sa fenetre, 3 = aucune fenetre, 1 = echec) n'est ` +
-    `jamais un detail a signaler plus tard. Lis \`erreur\`, \`codeSortie\` et \`journalWindows\` de sa ` +
-    `sortie, corrige la cause, relance, et ne capture ni ne conclus tant que le lanceur n'a pas rendu 0. ` +
-    `Une app qui plante n'est pas un motif pour passer sur l'ecran de l'utilisateur.\n` +
     // VERIFICATION CIBLEE AVANT L'ACTE FINAL (conv-1530, 2026-08-29). Une modif d'UNE ligne d'UI
     // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
     // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve

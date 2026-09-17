@@ -192,6 +192,8 @@ import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
 import { runSqlRead } from './sql-read-command'
+import type { PorteProd } from './prod-gate'
+import type { GuichetProd } from './prod-guichet'
 import type {
   TicketCreateRequest,
   TicketGetRequest,
@@ -556,11 +558,12 @@ export function circonstanceDePublication(finalized: Record<string, unknown>): s
   }
 }
 
-const CATALOG: CommandSpec[] = [
+/** Le catalogue BRUT, expose pour que les tests puissent en mesurer le poids dans le prompt. */
+export const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail. Pour voir une application que tu viens de modifier, de compiler ou de lancer, le bureau CACHE est le reflexe premier : `scripts/hdesk-lancer.ps1` puis `scripts/hdesk-observe.ps1` (et `node scripts/ui-capture.mjs` pour une vue d'Autowin). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; dans ce cas passe `ecran_utilisateur: true` et dis-le en une ligne (defaut vecu conv-586, tour 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63 : capture de l'ecran reel, annulation utilisateur 17 s plus tard). Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
+      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail : le bureau CACHE est le reflexe premier (voir REGLES_VISUELLES du prompt de pilotage). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
     args: {
       display:
         'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans',
@@ -1225,7 +1228,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'read_file',
     description:
-      'Lire un fichier du workspace (lignes numérotées, plage from/lines, max 400 lignes par appel) — traces .autowin-data comprises, secrets exclus',
+      'Lire un fichier : chemin relatif au dossier de travail, ou chemin ABSOLU dans un autre dépôt (même périmètre que edit_file). Lignes numérotées, plage from/lines, max 400 lignes par appel — traces .autowin-data comprises, secrets et racines système exclus',
     args: {
       path: 'chemin du fichier, relatif au workspace',
       from: 'première ligne à lire (défaut 1)',
@@ -1269,7 +1272,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'find_in_files',
     description:
-      'Chercher un motif (regex, insensible à la casse) dans les fichiers du workspace — rend chemin:ligne + extrait, max 80 correspondances',
+      'Chercher un motif (regex, insensible à la casse) dans les fichiers du dossier de travail, ou d’un autre dépôt en donnant son chemin ABSOLU dans `dir` — rend chemin:ligne + extrait, max 80 correspondances',
     args: {
       pattern: 'motif regex à chercher',
       dir: 'sous-dossier à fouiller (défaut : tout le workspace)'
@@ -1893,7 +1896,22 @@ export class AppCommandBus {
      */
     private readonly sqlcmdPath?: string,
     /** Ledger causal des leçons de run. Dernier paramètre pour préserver les appels positionnels. */
-    private readonly outcomeLearning?: OutcomeLearningSupervisor
+    private readonly outcomeLearning?: OutcomeLearningSupervisor,
+    /**
+     * LE POINT DE PASSAGE DE PRODUCTION (`prod-gate.ts`). Absent → rien ne change : les gardes
+     * historiques s'appliquent seules. Présent → il décide, AVANT toute connexion, si la cible exige
+     * une autorisation saisie par l'utilisateur.
+     *
+     * Ajouté en DERNIER, comme `sqlcmdPath` avant lui et pour la même raison : les paramètres de ce
+     * constructeur sont positionnels, l'insérer plus haut décalerait silencieusement les appels.
+     */
+    private readonly porteProd?: PorteProd,
+    /**
+     * LE GUICHET (`prod-guichet.ts`) : au refus de la porte, il ouvre l'écran de saisie chez
+     * l'utilisateur et attend le jeton, puis le geste est rejoué. Absent → le refus part tel quel.
+     * Positionnel lui aussi, donc ajouté APRÈS `porteProd`.
+     */
+    private readonly guichetProd?: GuichetProd
   ) {}
 
   /**
@@ -3452,7 +3470,19 @@ export class AppCommandBus {
             database: a.database,
             query: a.query
           },
-          { ...(this.cheminSqlcmd() ? { sqlcmdPath: this.cheminSqlcmd() } : {}) }
+          {
+            ...(this.cheminSqlcmd() ? { sqlcmdPath: this.cheminSqlcmd() } : {}),
+            // La porte décide dans `runSqlRead`, pas ici : un garde posé sur le site d'appel se
+            // contourne en ajoutant un second appelant. Aucun jeton n'est transmis par le modèle —
+            // il ne peut donc pas s'autoriser en l'inventant dans ses arguments.
+            // Le fil d'où part le geste : l'écran d'autorisation vit DANS la conversation, il ne
+            // doit donc s'afficher que dans celle-ci (conv-626, 2026-09-16).
+            ...(conversationId ? { conversationId } : {}),
+            ...(this.porteProd ? { porteProd: this.porteProd } : {}),
+            // Le guichet ne contourne rien : il ouvre l'écran de saisie de l'utilisateur quand la
+            // porte refuse, et c'est la porte qui tranche à nouveau avec le jeton obtenu.
+            ...(this.guichetProd ? { guichetProd: this.guichetProd } : {})
+          }
         )
       case 'ticket_get':
         return await getTicketFromCommand(a as TicketGetArgs, {
@@ -3720,8 +3750,20 @@ export class AppCommandBus {
       case 'find_in_files': {
         const motif = typeof a.pattern === 'string' ? a.pattern : ''
         if (!motif.trim()) return { trouve: 0, detail: 'motif manquant' }
-        const racine = resolve(this.workspaceDuTour)
-        const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
+        /*
+         * MEME PERIMETRE QUE `read_file` ET `edit_file` : un `dir` ABSOLU vise un autre depot.
+         * Sans ca, `find_in_files` restait confine alors que la lecture et l'ecriture ne l'etaient
+         * plus — et l'agent retombait sur `Select-String` en PowerShell, hors de toute borne.
+         * Les zones interdites (`isForbidden`) restent appliquees par `rechercherDansFichiers`.
+         */
+        const dirDemande = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
+        const dirExterne = dirDemande !== '' && isAbsolute(dirDemande)
+        if (dirExterne) {
+          const refus = refusRacineSysteme(resolve(dirDemande)) ?? refusRacineSysteme(dirDemande)
+          if (refus) return { trouve: 0, detail: `recherche refusée : ${refus}` }
+        }
+        const racine = dirExterne ? resolve(dirDemande) : resolve(this.workspaceDuTour)
+        const sousDossier = dirExterne ? '' : dirDemande
         const fichiers = enumererFichiersLisibles(racine, sousDossier)
         // MEME CAUSE QUE `read_file` : un fichier non-UTF-8 rend des lignes ou `�` a remplace
         // des octets. On continue de le chercher (l'ASCII y est vrai) mais on le NOMME.
@@ -5121,7 +5163,9 @@ export class AppCommandBus {
           command: label,
           output: capVerifyOutput(
             `${output}
-[arret demande] ${label} — interrompu par l'utilisateur (Stop).`
+[arret demande] ${label} — interrompu par l'utilisateur (Stop).`,
+            undefined,
+            archiverSortie
           )
         })
       }
@@ -5154,9 +5198,33 @@ export class AppCommandBus {
             ok: code === 0,
             exitCode: code,
             command: label,
-            output: capVerifyOutput(output)
+            output: capVerifyOutput(output, undefined, archiverSortie)
           }))
       )
     })
+  }
+}
+
+/**
+ * ARCHIVE LA SORTIE COMPLETE d'une commande avant sa troncature, et rend son chemin.
+ *
+ * Mesure du 2026-09-16 : 2 434 771 caracteres de sorties de `run` ont ete jetes faute d'un endroit
+ * ou les poser, ce qui a fait REJOUER des commandes entieres juste pour relire leur fin. Le fichier
+ * atterrit dans la racine de donnees (jamais dans le depot de l'utilisateur) et reste lisible par
+ * `read_file`, qui le borne a son tour.
+ *
+ * Rend `undefined` en cas d'echec d'ecriture : une sortie tronquee sans archive vaut mieux qu'une
+ * commande qui parait avoir echoue parce que le disque est plein.
+ */
+function archiverSortie(texteComplet: string): string | undefined {
+  try {
+    const dossier = join(ensureAutowinAppData(), 'sorties')
+    mkdirSync(dossier, { recursive: true })
+    const horodatage = new Date().toISOString().replace(/[:.]/g, '-')
+    const chemin = join(dossier, `${horodatage}-${randomUUID().slice(0, 8)}.txt`)
+    writeFileSync(chemin, texteComplet, 'utf8')
+    return chemin
+  } catch {
+    return undefined
   }
 }

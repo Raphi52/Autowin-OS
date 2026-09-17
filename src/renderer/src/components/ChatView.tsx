@@ -79,6 +79,9 @@ import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
 import { HdeskTv } from './HdeskTv'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
+// La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
+// de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
+import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
 import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
@@ -6392,6 +6395,15 @@ Cliquer pour choisir une autre branche.`}
             </button>
           )}
 
+          {/*
+           * LA DEMANDE D'AUTORISATION DE PRODUCTION VIT ICI, DANS LE FIL — pas en fenêtre flottante.
+           * Elle se pose au bas de la conversation, juste au-dessus de la file d'attente et de la
+           * zone de saisie : l'utilisateur lit la cible et l'opération SANS perdre de vue ce que
+           * l'agent venait de dire, et le reste de l'application reste utilisable pendant qu'il
+           * décide. La version précédente couvrait tout l'écran d'un voile translucide et rendait le
+           * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
+           */}
+          <ProdAutorisationHote conversationId={activeId} />
           <ChatQueuePanel
             pendingDirectives={pendingDirectives}
             busy={busy}

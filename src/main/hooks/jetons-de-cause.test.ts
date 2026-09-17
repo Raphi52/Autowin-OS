@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resolve, sep } from 'node:path'
 import { jetonsDeCauseParFichier, createDefaultHookBus } from './default-gate-hooks'
 import type { HookContext } from './hook-bus'
 import type { ExecutionEvidence } from '../providers/types'
@@ -191,5 +192,66 @@ describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () =
     const preuve = [mutation([fichier], { diff: `+  // ${jeton} cause mesuree par le test rouge\n` })]
     const jetons = jetonsDeCauseParFichier(undefined, preuve, Object.keys(edits))
     expect(detectBlindFixLoop(edits, jetons)).toEqual([])
+  })
+})
+
+/**
+ * SOURCE 3 — le jeton DEJA present dans le fichier edite.
+ *
+ * Mesure conv-597, tour 4e502786-4887-4101-85b3-ea2dee304091 : le refus fix-gate demandait
+ * « depose dans src/main/root-execution-contract.ts un commentaire `fix-ok:` ». Le jeton a ete
+ * depose (commit a9126f34), et le MEME refus est revenu au tour suivant : le compte d'edits est
+ * CUMULE sur la session, alors que la source 1 ne credite le jeton que s'il fait partie des
+ * lignes ecrites par CE run-ci. Un jeton depose a une reparation ne desarmait donc jamais la
+ * suivante — la porte de sortie promise par le message du refus etait murée.
+ */
+describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier edite', () => {
+  it('credite un fichier edite qui porte deja son jeton sur disque', () => {
+    const cible = 'src/main/hooks/default-gate-hooks.ts'
+    expect(jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
+  })
+  it('ne credite pas un fichier edite sans jeton', () => {
+    expect(jetonsDeCauseParFichier(undefined, [], ['package.json'])).toEqual({})
+  })
+  it('ignore un fichier introuvable sans lever', () => {
+    expect(jetonsDeCauseParFichier(undefined, [], ['src/main/neant-xyz.ts'])).toEqual({})
+  })
+  it('credite le MEME fichier nomme par son chemin ABSOLU Windows (conv-597)', () => {
+    const cible = resolve(process.cwd(), 'src/main/hooks/default-gate-hooks.ts').split(sep).join('/')
+    expect(jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
+  })
+})
+
+/**
+ * SOURCE 3 DEPUIS UNE COPIE DE TRAVAIL — conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091.
+ * Les runs s'executent dans un worktree en HEAD detache ANTERIEUR au commit qui depose le jeton :
+ * `git log -1 -- <fichier>` y renvoie l'ancien commit, le jeton reste invisible, et le meme refus
+ * fix-gate revient a l'identique (4 reparations de suite).
+ */
+describe('jetonsDeCauseParFichier — source 3 depuis un worktree en HEAD detache', () => {
+  it('credite un jeton depose par le dernier changement du depot, meme hors du HEAD local', () => {
+    const { mkdtempSync, writeFileSync: w, mkdirSync, realpathSync } = require('node:fs') as typeof import('node:fs')
+    const { execFileSync } = require('node:child_process') as typeof import('node:child_process')
+    const { tmpdir } = require('node:os') as typeof import('node:os')
+    const base = mkdtempSync(resolve(realpathSync.native(tmpdir()), 'jeton-'))
+    const repo = resolve(base, 'repo')
+    mkdirSync(repo)
+    const git = (...a: string[]): void => {
+      execFileSync('git', a, { cwd: repo, stdio: 'ignore' })
+    }
+    git('init', '-b', 'main')
+    git('config', 'user.email', 'a@b.c')
+    git('config', 'user.name', 'test')
+    w(resolve(repo, 'cible.ts'), 'export const x = 1\n')
+    git('add', '-A')
+    git('commit', '-m', 'avant')
+    const avant = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim()
+    w(resolve(repo, 'cible.ts'), '// fix-ok: cause mesuree\nexport const x = 1\n')
+    git('add', '-A')
+    git('commit', '-m', 'depose le jeton')
+    const wt = resolve(base, 'wt')
+    git('worktree', 'add', '--detach', wt, avant)
+    const cible = resolve(wt, 'cible.ts').split(sep).join('/')
+    expect(jetonsDeCauseParFichier('', [], [cible])).toEqual({ [cible]: true })
   })
 })

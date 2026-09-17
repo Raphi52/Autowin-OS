@@ -1,0 +1,105 @@
+/* Protection de production — même grammaire que les autres panneaux de réglages : pas de décor,
+   des filets or dégradés, un verdict lisible en un coup d'œil. */
+.settings-prod-protection .prod-etat {
+  font: 600 11px/1.4 ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+}
+.settings-prod-protection .prod-etat-active {
+  color: #7fd39b;
+  border-color: rgba(127, 211, 155, 0.45);
+}
+.settings-prod-protection .prod-etat-inactive {
+  color: #e3ba55;
+  border-color: rgba(227, 186, 85, 0.45);
+}
+.settings-prod-protection .prod-etat-inconnu {
+  color: #a9b2c4;
+}
+.settings-prod-protection .prod-detail {
+  margin: 6px 0 8px;
+  color: #a9b2c4;
+  line-height: 1.5;
+}
+.settings-prod-protection .prod-faits {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  line-height: 1.5;
+  border-bottom: 1px solid;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.55), rgba(212, 169, 79, 0.06)) 1;
+  padding-bottom: 10px;
+}
+.settings-prod-protection .prod-faits code {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.settings-prod-protection .prod-formulaire {
+  display: grid;
+  gap: 8px;
+  max-width: 460px;
+}
+.settings-prod-protection .prod-label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #a9b2c4;
+}
+.settings-prod-protection .prod-label input {
+  font: inherit;
+  color: #dde3ee;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+.settings-prod-protection .prod-valider {
+  justify-self: start;
+  margin-top: 2px;
+}
+.settings-prod-protection .prod-message {
+  margin: 8px 0 0;
+}
+.settings-prod-protection .prod-message-ok {
+  color: #7fd39b;
+}
+.settings-prod-protection .prod-message-erreur {
+  color: #e08a8a;
+}
+.settings-prod-protection .prod-note {
+  margin: 8px 0 0;
+  color: #a9b2c4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Le CHOIX du niveau passe avant le formulaire : c'est la vraie décision de l'écran. */
+.settings-prod-protection .prod-niveaux {
+  border: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+}
+.settings-prod-protection .prod-niveaux legend {
+  font: 600 11px/1.4 ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d4a94f;
+  padding: 0 0 6px;
+}
+.settings-prod-protection .prod-niveau {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  line-height: 1.45;
+}
+.settings-prod-protection .prod-niveau-note {
+  color: #a9b2c4;
+  font-size: 12px;
+}

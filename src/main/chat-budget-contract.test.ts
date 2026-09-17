@@ -76,3 +76,32 @@ describe('breaker — comportement sur des usages de CHAT reels', () => {
     expect(breaker.observe(step(0.5))).toBeNull()
   })
 })
+
+/**
+ * Le plafond d'EMBALLEMENT n'est PLUS un garde-fou armé par défaut.
+ *
+ * Il l'a été le 2026-09-16 (conv-611) parce qu'un tour de 33,6 M tokens passait sans rien pour
+ * l'arrêter. L'utilisateur a tranché l'inverse le même jour, en toutes lettres : « non je veux
+ * aucun blocage ». Cette assertion n'est donc pas DESSERRÉE, elle est INVERSÉE — et le dépassement
+ * reste écrit au ledger, ce qui garde la mesure sans garder la coupure. Seul un cap explicite
+ * (AUTOWIN_CHAT_USD_CAP / _TOKEN_CAP / _CALL_CAP) réarme l'arrêt.
+ */
+describe('tour de chat — l’emballement MESURE, il ne coupe pas', () => {
+  it('instancie bien un SECOND breaker sur budgetDuTour.emballement', () => {
+    expect(chatRunner).toContain('new CostCircuitBreaker(budgetDuTour.emballement)')
+  })
+
+  it('ne coupe PAS sans cap explicite de l’utilisateur', () => {
+    expect(chatTurnBudget({}).emballementBloquant).toBe(false)
+  })
+
+  it('réarme la coupure dès que l’utilisateur pose un cap', () => {
+    expect(chatTurnBudget({ AUTOWIN_CHAT_USD_CAP: '5' }).emballementBloquant).toBe(true)
+  })
+
+  it('conditionne l’abort d’emballement à ce drapeau, jamais à un défaut câblé', () => {
+    const bloc = chatRunner.slice(chatRunner.indexOf('breakerEmballement.observe('))
+    const avantAbort = bloc.slice(0, bloc.indexOf('controller.abort('))
+    expect(avantAbort).toContain('emballementBloquant')
+  })
+})
