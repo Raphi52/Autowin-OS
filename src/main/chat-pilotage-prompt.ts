@@ -126,16 +126,6 @@ export const REGLES_VISUELLES: string =
   `jamais un detail a signaler plus tard. Lis \`erreur\`, \`codeSortie\` et \`journalWindows\` de sa ` +
   `sortie, corrige la cause, relance, et ne capture ni ne conclus tant que le lanceur n'a pas rendu 0. ` +
   `Une app qui plante n'est pas un motif pour passer sur l'ecran de l'utilisateur.\n` +
-  // NE PAS FERMER L'APP DE L'UTILISATEUR (kaizen conv-660, turnId
-  // 726f9797-7e65-44c7-97ee-c5a1b5d4478b, 2026-09-17) : l'utilisateur a ecrit « tu utilises
-  // jamais mon systeme de hdesk et tu arretes pas de fermer mon app c'es trop invasif ».
-  // Geste type : taskkill /IM RigV3Desktop.exe pour debloquer un build verrouille.
-  `NE FERME JAMAIS L'APPLICATION DE L'UTILISATEUR : fermer par NOM un programme que tu n'as pas ` +
-  `demarre (taskkill /IM, Stop-Process -Name, pkill) detruit son etat non enregistre - un garde-fou ` +
-  `refuse ce geste. Si un build echoue parce que le .exe est verrouille par SON app ouverte ` +
-  `(MSB3021/MSB3027), compile sans copier le binaire : \`dotnet msbuild -t:Compile\`. Si tu as ` +
-  `besoin de l'app pour observer, lance TA propre instance dans ton bureau cache (hdesk-lancer.ps1) ` +
-  `- la sienne continue de tourner a cote, intacte.\n` +
   ''
 
 /**
@@ -155,7 +145,7 @@ export function tourTouchantAuVisuel(texte: string): boolean {
 }
 
 const MOTS_DU_VISUEL =
-  /interface|ihm|\bui\b|ecran|écran|screen|capture|screenshot|desktop|bureau cach|fenetre|fenêtre|window|affich|visuel|visible|maquette|design|mise en page|layout|\bcss\b|couleur|color|theme|thème|police|typograph|icone|icône|icon|logo|bouton|button|menu|onglet|pixel|px\b|render|svg|animation|padding|dessine|hdesk|desktop_observe|draft|taskkill|stop-process|pkill|\\.exe\b|verrouill|msb302/i
+  /interface|ihm|\bui\b|ecran|écran|screen|capture|screenshot|desktop|bureau cach|fenetre|fenêtre|window|affich|visuel|visible|maquette|design|mise en page|layout|\bcss\b|couleur|color|theme|thème|police|typograph|icone|icône|icon|logo|bouton|button|menu|onglet|pixel|px\b|render|svg|animation|padding|dessine|hdesk|desktop_observe|draft/i
 
 export function buildChatPilotagePrompt(
   catalog: ReadonlyArray<{ name: string; args: Record<string, unknown>; description: string }>
