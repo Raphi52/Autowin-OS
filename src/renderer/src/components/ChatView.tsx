@@ -740,6 +740,16 @@ export function ChatView({
     conv: Conv | null
     top: number
     left: number
+    /**
+     * QUEL des deux rangements ce menu sert.
+     *
+     * `categorie` = le classement de la barre laterale (un libelle libre). `dossier` = le
+     * repertoire de travail de l'agent (un vrai chemin). Les deux tenaient dans une seule liste :
+     * on choisissait sa categorie sous une pile de chemins de depots qui n'avaient rien a y faire
+     * (conv-79, 2026-09-17). Le choix se fait donc a l'etape D'AVANT — l'entree cliquee dans le
+     * menu de la conversation dit lequel des deux on veut — et ce menu-ci n'en montre qu'un.
+     */
+    mode: 'categorie' | 'dossier'
   } | null>(null)
   /*
    * Menu de choix de la branche, ouvert depuis la barre du haut du chat.
