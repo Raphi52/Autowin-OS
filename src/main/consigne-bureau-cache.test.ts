@@ -20,6 +20,16 @@ describe('consigne du bureau caché injectée aux agents de run', () => {
     expect(identifiantBureauCache('///')).toBe('run-sans-id')
   })
 
+  it('donne la compilation SANS lier comme issue au binaire verrouille, au lieu de fermer l app', () => {
+    const texte = consigneBureauCache('run-42')
+    expect(texte).toContain('-t:Compile')
+    expect(texte).toMatch(/MSB3021/)
+    expect(texte.toLowerCase()).toContain('ne ferme jamais')
+    // Le refus des lancements au premier plan a ete retire (conv-631) : la consigne
+    // ne doit plus s appuyer sur un garde-fou qui n existe pas.
+    expect(texte).not.toContain('garde-fou refuse')
+  })
+
   it('ne dit rien sans runId', () => {
     expect(consigneBureauCache('')).toBe('')
     expect(consigneBureauCache('   ')).toBe('')
