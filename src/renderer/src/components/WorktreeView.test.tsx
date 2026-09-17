@@ -275,8 +275,10 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     const points = [
       ...(container?.querySelectorAll('[data-testid="git-topology"] circle') ?? [])
     ] as SVGCircleElement[]
-    expect(points[0].getAttribute('stroke')).toBe(couleurDeBranche('main'))
-    expect(points[1].getAttribute('stroke')).toBe(couleurDeBranche('feat/cockpit'))
+    // La couleur est portée par le REMPLISSAGE depuis le 2026-09-16 : les points sont pleins comme
+    // ceux de SourceTree, et le contour ne sert plus qu'à détacher le disque du trait qui passe dessous.
+    expect(points[0].getAttribute('fill')).toBe(couleurDeBranche('main'))
+    expect(points[1].getAttribute('fill')).toBe(couleurDeBranche('feat/cockpit'))
     // La gouttière est ÉTROITE : plus d'épinglage à 280 px + 480 px de marge morte.
     points.forEach((point) => expect(Number(point.getAttribute('cx'))).toBeLessThan(120))
   })

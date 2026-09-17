@@ -261,8 +261,12 @@
   font-family: var(--font-mono, monospace);
   letter-spacing: 0.02em;
 }
+/*
+  Un LISERE de la couleur du fond, pas un contour coloré : il détache le disque du trait qui passe
+  dessous sans ajouter une seconde couleur. Fin (1 px), sinon il ronge un point de 3 px de rayon.
+*/
 circle.wt-topologie-noeud {
-  stroke-width: 2;
+  stroke-width: 1;
 }
 .cockpit-detail__files {
   min-height: 0;
@@ -586,7 +590,7 @@ circle.wt-topologie-noeud {
   restent du HTML normal (selectionnable, survolable, saisissable a la souris), et le trace ne bloque
   aucun clic (`pointer-events: none`).
 
-  L'alignement tient a une seule regle : chaque ligne fait exactement HAUTEUR_LIGNE (26 px), la meme
+  L'alignement tient a une seule regle : chaque ligne fait exactement HAUTEUR_LIGNE (20 px), la meme
   constante que le calcul utilise pour placer les points. Elle est imposee en `height` inline par le
   rendu ; ne pas la contredire ici.
 */
@@ -610,7 +614,7 @@ circle.wt-topologie-noeud {
   z-index: 2;
   padding-block: 6px;
   border-bottom: 1px solid var(--container-border);
-  background: var(--surface-panel, #14161d);
+  background-color: var(--surface-panel, #14161d);
   color: var(--text-faint, rgba(245, 247, 251, 0.45));
   font-size: 10px;
   font-weight: 700;
@@ -644,8 +648,34 @@ circle.wt-topologie-noeud {
   color: var(--text-dim);
   white-space: nowrap;
 }
+/*
+  LE FILET VERTICAL qui ferme la colonne « Graphique », comme SourceTree. Sans lui, le tracé et les
+  sujets flottent dans une même zone et rien ne dit où finit le dessin : c'est ce qui rendait notre
+  version « pas claire » à densité pourtant proche. Posé en dégradé sur la ligne elle-même — un vrai
+  bord de colonne aurait coupé le SVG, qui est en position absolue par-dessus.
+
+  DEUX MESURES, deux corrections du 2026-09-17 :
+  — Il est porté par l'EN-TÊTE AUSSI, pas seulement par les lignes : un trait qui démarre sous le mot
+    « GRAPHIQUE » ne se lit pas comme un bord de colonne, il se lit comme une décoration de tableau.
+    L'en-tête peint donc son fond en `background-color` (et non `background`), sinon le raccourci
+    écraserait cette image de fond.
+  — Sa couleur est ÉCRITE ICI, et non reprise de `--container-border` : mesuré au pixel sur la
+    capture du 2026-09-17, ce jeton rendait 41,41,41 sur un fond à ~30, soit 4 % d'écart de
+    luminosité — le trait EXISTAIT dans le DOM et restait invisible à l'œil. 0.22 le pose autour de
+    80,80,80 : visible sans devenir une barre.
+*/
+.wt-st-entete,
+.wt-st-ligne {
+  background-image: linear-gradient(
+    to right,
+    transparent calc(var(--wt-st-gouttiere, 60px) + 3px),
+    rgba(255, 255, 255, 0.22) calc(var(--wt-st-gouttiere, 60px) + 3px),
+    rgba(255, 255, 255, 0.22) calc(var(--wt-st-gouttiere, 60px) + 4px),
+    transparent calc(var(--wt-st-gouttiere, 60px) + 4px)
+  );
+}
 .wt-st-ligne:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background-color: rgba(255, 255, 255, 0.055);
 }
 /* La ligne principale est la seule mise en avant : tout surligner ne distingue plus rien. */
 .wt-st-ligne.is-main .wt-st-sujet {

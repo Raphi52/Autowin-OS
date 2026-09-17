@@ -441,9 +441,15 @@ function GitTopology({
               data-side={node.side ?? 'main'}
               cx={node.x}
               cy={node.y}
-              r={node.branche ? 5 : 3.5}
-              stroke={node.couleur}
-              fill={node.branche ? node.couleur : 'var(--surface-inset)'}
+              /*
+                PLEIN, toujours. Les points creux (anneau + fond de panneau) étaient le principal
+                reproche visuel du 2026-09-16 : sur fond sombre, un anneau de 3,5 px se lit comme un
+                trou dans la ligne, et vingt trous alignés effacent la voie. SourceTree ne dessine
+                que des disques pleins ; seul le DIAMÈTRE distingue un commit porteur de branche.
+              */
+              r={node.branche ? 4.5 : 3}
+              stroke="var(--surface-panel, #14161d)"
+              fill={node.couleur}
             />
           ))}
         </svg>

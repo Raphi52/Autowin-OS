@@ -15,10 +15,19 @@ import { brancheDeCommit } from './git-graph-refs'
  * un pas vertical recopié à la main des deux côtés finit toujours par décaler les points d'un cran,
  * et un point en face du mauvais commit est pire qu'un graphe absent.
  */
-export const HAUTEUR_LIGNE = 26
-export const LARGEUR_VOIE = 14
+/**
+ * 20 px, et non 26 : MESURÉ sur la capture SourceTree fournie le 2026-09-16, une ligne d'historique
+ * y fait 19-20 px. À 26 px, le même écran montrait ~18 commits là où SourceTree en montre 25, et
+ * l'espace vide entre les points cassait la lecture verticale d'une branche — le reproche exact de
+ * l'utilisateur (« beaucoup plus clair chez SourceTree »). La densité EST la lisibilité ici : un
+ * graphe de branches se lit par la continuité des colonnes, pas commit par commit.
+ */
+export const HAUTEUR_LIGNE = 20
+/** 12 px, comme l'écart entre deux voies de SourceTree : plus large, les voies cessent de se lire
+ * comme un faisceau et deviennent des traits isolés. */
+export const LARGEUR_VOIE = 12
 /** Marge à gauche et à droite de la gouttière : le rayon du point, plus un souffle. */
-export const MARGE_VOIE = 11
+export const MARGE_VOIE = 10
 
 export interface GitGraphLayoutNode {
   commit: GitGraphCommit
