@@ -51,16 +51,6 @@ export type Fenetres = {
   showMainWindow: () => void
   setupTray: () => void
   openQuestionWindow: (parent: BrowserWindow | null, question: PendingModelQuestion) => void
-  /** Sort un onglet dans sa propre fenetre (2e ecran). Meme page, adressee par un `#hash`. */
-  openDetachedTabWindow: (
-    windowId: string,
-    tab: string,
-    bounds?: { x: number; y: number; width: number; height: number },
-    onClosed?: (windowId: string) => void
-  ) => BrowserWindow
-  closeDetachedTabWindow: (windowId: string) => void
-  /** Les fenetres detachees vivantes, par identifiant d'agencement. */
-  detachedWindows: Map<string, BrowserWindow>
   rendererLocation: () => { devRendererUrl?: string; rendererHtmlPath: string }
   /** Vrai UNIQUEMENT après un quit demandé depuis le menu du tray. */
   estEnFermeture: () => boolean
@@ -146,7 +136,10 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     }
   }
   function refleterRunsVivants(etat: EtatRunsVivants): void {
-    appliquerPresenceSysteme({ fenetre: mainWindowVivante, icone: tray }, etat)
+    appliquerPresenceSysteme(
+      { fenetre: mainWindowVivante, icone: tray },
+      etat
+    )
   }
   function openQuestionWindow(parent: BrowserWindow | null, question: PendingModelQuestion): void {
     const win = new BrowserWindow({
@@ -189,93 +182,6 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'model-question' })
     }
   }
-  /**
-   * LES FENETRES DETACHEES — un onglet sorti sur un 2e ecran.
-   *
-   * Meme patron que `openQuestionWindow` : la MEME page, adressee par un `#hash`. La page y lit son
-   * identifiant de fenetre et n'affiche que ses onglets a elle. Ce ne sont pas des « secondes
-   * fenetres principales » : `createWindow` en garantit une seule, et cette garantie reste.
-   */
-  const detachedWindows = new Map<string, BrowserWindow>()
-
-  function openDetachedTabWindow(
-    windowId: string,
-    tab: string,
-    bounds?: { x: number; y: number; width: number; height: number },
-    onClosed?: (windowId: string) => void
-  ): BrowserWindow {
-    const existante = detachedWindows.get(windowId)
-    if (existante && !existante.isDestroyed()) {
-      existante.show()
-      existante.focus()
-      return existante
-    }
-    const win = new BrowserWindow({
-      width: bounds?.width ?? 1000,
-      height: bounds?.height ?? 720,
-      ...(bounds ? { x: Math.round(bounds.x), y: Math.round(bounds.y) } : {}),
-      minWidth: 520,
-      minHeight: 420,
-      show: false,
-      autoHideMenuBar: true,
-      title: 'Autowin OS',
-      icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon,
-      webPreferences: {
-        preload: join(__dirname, '../preload/index.js'),
-        contextIsolation: true,
-        sandbox: false
-      }
-    })
-    detachedWindows.set(windowId, win)
-    // MEME correctif d'affichage que la fenetre principale : sans lui, le contenu d'une fenetre
-    // qui apparait sur un ecran a DPI different reste rendu aux anciennes metriques (rogne).
-    const forceRelayout = (): void => {
-      const wc = win.webContents
-      if (wc.isDestroyed()) return
-      try {
-        wc.enableDeviceEmulation({
-          screenPosition: 'desktop',
-          screenSize: { width: 0, height: 0 },
-          viewPosition: { x: 0, y: 0 },
-          viewSize: { width: 0, height: 0 },
-          deviceScaleFactor: 0,
-          scale: 1
-        })
-        wc.disableDeviceEmulation()
-      } catch {
-        try {
-          wc.invalidate()
-        } catch {
-          /* rien de mieux a faire */
-        }
-      }
-    }
-    win.on('show', forceRelayout)
-    win.on('restore', forceRelayout)
-    win.on('maximize', forceRelayout)
-    win.on('unmaximize', forceRelayout)
-    win.on('closed', () => {
-      if (detachedWindows.get(windowId) === win) detachedWindows.delete(windowId)
-      onClosed?.(windowId)
-    })
-    win.once('ready-to-show', () => {
-      presentAutomationWindow(win, headlessTestInstance, { focus: true, flash: false })
-    })
-    const hash = `tab?window=${encodeURIComponent(windowId)}&tab=${encodeURIComponent(tab)}`
-    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-      win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${hash}`)
-    } else {
-      win.loadFile(join(__dirname, '../renderer/index.html'), { hash })
-    }
-    return win
-  }
-
-  function closeDetachedTabWindow(windowId: string): void {
-    const win = detachedWindows.get(windowId)
-    detachedWindows.delete(windowId)
-    if (win && !win.isDestroyed()) win.close()
-  }
-
   function rendererLocation(): { devRendererUrl?: string; rendererHtmlPath: string } {
     return {
       devRendererUrl: is.dev ? process.env['ELECTRON_RENDERER_URL'] : undefined,
@@ -565,9 +471,6 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     showMainWindow,
     setupTray,
     openQuestionWindow,
-    openDetachedTabWindow,
-    closeDetachedTabWindow,
-    detachedWindows,
     rendererLocation,
     estEnFermeture: () => isQuitting,
     questionWindows,
