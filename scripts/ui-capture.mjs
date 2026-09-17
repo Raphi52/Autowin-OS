@@ -553,7 +553,13 @@ const main = async () => {
     return {
       destinationActive: actif?.getAttribute('data-testid')?.replace(/^nav-/, '') ?? null,
       longueurTexte: (document.querySelector('main')?.innerText ?? document.body.innerText ?? '').trim().length,
-      elements: document.querySelectorAll('main *').length || document.querySelectorAll('body *').length
+      // LE PERIMETRE EST 'body', PAS 'main' (2026-09-17, conv-79) : un menu contextuel, un popover
+      // ou une boite modale sont dessines PAR-DESSUS la page, rattaches a 'body' et non a 'main'.
+      // Les compter dans 'main' rendait un delta NUL apres un clic qui ouvrait pourtant le menu :
+      // le harnais criait « clic-sans-effet » sur une interface qui fonctionnait, et aucune preuve
+      // visuelle de menu n'etait capturable. 'body' contient 'main' : le seuil de vue vide est
+      // inchange pour toutes les autres captures.
+      elements: document.querySelectorAll('body *').length
     }
   })()`)
   let mesuresDom = await mesurerDom()

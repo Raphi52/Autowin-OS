@@ -190,7 +190,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(trigger).not.toBeNull()
     await act(async () => trigger!.click())
     const action = document.querySelector<HTMLButtonElement>(
-      '[data-testid="conv-menu-set-project"]'
+      '[data-testid="conv-menu-set-workdir"]'
     )
     expect(action).not.toBeNull()
     await act(async () => action!.click())
@@ -231,7 +231,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
         convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
       )
       await act(async () =>
-        document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-project"]')!.click()
+        document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-workdir"]')!.click()
       )
     }
     const dossiersAffiches = (): string[] =>
@@ -276,7 +276,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
     )
     await act(async () =>
-      document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-project"]')!.click()
+      document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-workdir"]')!.click()
     )
 
     const croix = document.querySelector<HTMLButtonElement>('[data-testid="conv-project-forget"]')
@@ -319,7 +319,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
     )
     await act(async () =>
-      document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-project"]')!.click()
+      document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-workdir"]')!.click()
     )
 
     const proposes = [

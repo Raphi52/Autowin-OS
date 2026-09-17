@@ -741,6 +741,16 @@ export function ChatView({
     conv: Conv | null
     top: number
     left: number
+    /**
+     * QUEL des deux rangements ce menu sert.
+     *
+     * `categorie` = le classement de la barre laterale (un libelle libre). `dossier` = le
+     * repertoire de travail de l'agent (un vrai chemin). Les deux tenaient dans une seule liste :
+     * on choisissait sa categorie sous une pile de chemins de depots qui n'avaient rien a y faire
+     * (conv-79, 2026-09-17). Le choix se fait donc a l'etape D'AVANT — l'entree cliquee dans le
+     * menu de la conversation dit lequel des deux on veut — et ce menu-ci n'en montre qu'un.
+     */
+    mode: 'categorie' | 'dossier'
   } | null>(null)
   /*
    * Menu de choix de la branche, ouvert depuis la barre du haut du chat.
@@ -4719,6 +4729,28 @@ export function ChatView({
   )
 
   /**
+   * Les CATEGORIES deja utilisees, lues sur les conversations elles-memes.
+   *
+   * Elles ne sont pas memorisees en local comme les dossiers : une categorie n'existe QUE portee
+   * par au moins un fil, donc la liste se deduit et ne peut pas se desynchroniser. Depuis la
+   * separation des deux roles (conv-81), le menu « Ranger dans… » ne proposait plus que des
+   * chemins : classer sous « Fiches Team » etait devenu impossible a la souris (conv-79).
+   */
+  const categoriesConnues = useMemo(
+    () =>
+      [
+        ...new Set(
+          convs
+            .map((conv) => conv.categorie?.trim())
+            .filter((libelle): libelle is string => !!libelle)
+        )
+      ].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })),
+    [convs]
+  )
+  /** Saisie en cours d'une categorie neuve dans le menu (null = le champ n'est pas ouvert). */
+  const [saisieCategorie, setSaisieCategorie] = useState<string | null>(null)
+
+  /**
    * Les résultats de recherche, groupés. On transporte le HIT entier (`snippet` compris) plutôt que
    * d'aplatir la conversation dedans : l'aplatissement faisait collisionner des champs homonymes et
    * rendait impossible de savoir, à la lecture, d'où venait chaque valeur.
@@ -5289,13 +5321,33 @@ export function ChatView({
                 onClick={() => {
                   const { conv, top, left } = convMenu
                   setConvMenu(null)
-                  setConvFolderMenu({ conv, top, left })
+                  setConvFolderMenu({ conv, top, left, mode: 'categorie' })
                 }}
               >
                 <span className="conv-menu-ic" aria-hidden="true">
                   🗂
                 </span>
-                Ranger dans un dossier…
+                Ranger dans une catégorie…
+              </button>
+              {/*
+                DEUX gestes, DEUX entrees. Classer un fil (ou il apparait dans la liste) et choisir
+                le depot ou l'agent travaille n'ont ni les memes valeurs ni les memes consequences :
+                les empiler dans un seul menu faisait choisir sa categorie sous une pile de chemins
+                de depots (conv-79, 2026-09-17). La separation se fait ICI, a l'etape d'avant.
+              */}
+              <button
+                role="menuitem"
+                data-testid="conv-menu-set-workdir"
+                onClick={() => {
+                  const { conv, top, left } = convMenu
+                  setConvMenu(null)
+                  setConvFolderMenu({ conv, top, left, mode: 'dossier' })
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  📁
+                </span>
+                Choisir le répertoire de travail…
               </button>
               {/*
                 La categorie compte autant que le dossier : sans elle dans ce test, un fil range
@@ -5458,7 +5510,11 @@ export function ChatView({
               ref={convFolderMenuRef}
               className="conv-menu-pop"
               role="menu"
-              aria-label="Dossiers de conversations"
+              aria-label={
+                convFolderMenu.mode === 'categorie'
+                  ? 'Catégories de conversations'
+                  : 'Répertoires de travail'
+              }
               style={{ top: convFolderMenu.top, left: convFolderMenu.left }}
             >
               {/*
@@ -5468,7 +5524,8 @@ export function ChatView({
                 (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
                 choisissable comme les autres.
               */}
-              {defaultWorkspace?.trim() &&
+              {convFolderMenu.mode === 'dossier' &&
+                defaultWorkspace?.trim() &&
                 !dossiersConversations.includes(defaultWorkspace.trim()) && (
                   <button
                     role="menuitem"
@@ -5488,7 +5545,8 @@ export function ChatView({
                     {nomDeDossier(defaultWorkspace.trim())} · par défaut
                   </button>
                 )}
-              {dossiersConversations.length === 0 && !defaultWorkspace?.trim() ? (
+              {convFolderMenu.mode !== 'dossier' ? null : dossiersConversations.length === 0 &&
+                !defaultWorkspace?.trim() ? (
                 <span className="conv-menu-empty">Aucun dossier de conversations</span>
               ) : (
                 dossiersConversations.map((chemin) => (
@@ -5525,22 +5583,88 @@ export function ChatView({
                   </div>
                 ))
               )}
-              <button
-                role="menuitem"
-                data-testid="conv-project-pick"
-                onClick={() => {
-                  const conv = convFolderMenu.conv
-                  setConvFolderMenu(null)
-                  void window.api.pickGitRepo?.().then((chemin) => {
-                    if (chemin) choisirDossier(conv, chemin)
-                  })
-                }}
-              >
-                <span className="conv-menu-ic" aria-hidden="true">
-                  📁
-                </span>
-                Choisir un dossier…
-              </button>
+              {convFolderMenu.mode === 'dossier' && (
+                <button
+                  role="menuitem"
+                  data-testid="conv-project-pick"
+                  onClick={() => {
+                    const conv = convFolderMenu.conv
+                    setConvFolderMenu(null)
+                    void window.api.pickGitRepo?.().then((chemin) => {
+                      if (chemin) choisirDossier(conv, chemin)
+                    })
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    📁
+                  </span>
+                  Parcourir…
+                </button>
+              )}
+              {/*
+                CATEGORIES — l'autre moitie du geste « ranger ». Depuis que le dossier de travail
+                et le libelle de classement sont deux champs distincts (conv-81), ce menu ne
+                proposait plus que des chemins : « Fiches Team » etait devenu inatteignable a la
+                souris alors que des fils y vivaient toujours (conv-79). Le tri entre les deux se
+                fait plus bas, sur la FORME de la valeur — un libelle n'ecrase jamais le dossier.
+              */}
+              {convFolderMenu.mode === 'categorie' && categoriesConnues.length > 0 && (
+                <span className="conv-menu-titre">Catégories</span>
+              )}
+              {(convFolderMenu.mode === 'categorie' ? categoriesConnues : []).map((libelle) => (
+                <button
+                  key={libelle}
+                  role="menuitem"
+                  data-testid="conv-category-choice"
+                  data-category={libelle}
+                  onClick={() => {
+                    const conv = convFolderMenu.conv
+                    setConvFolderMenu(null)
+                    setSaisieCategorie(null)
+                    choisirDossier(conv, libelle)
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    🏷
+                  </span>
+                  {libelle}
+                </button>
+              ))}
+              {convFolderMenu.mode !== 'categorie' ? null : saisieCategorie === null ? (
+                <button
+                  role="menuitem"
+                  data-testid="conv-category-new"
+                  onClick={() => setSaisieCategorie('')}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    ＋
+                  </span>
+                  Nouvelle catégorie…
+                </button>
+              ) : (
+                <input
+                  className="conv-menu-saisie"
+                  data-testid="conv-category-input"
+                  aria-label="Nom de la nouvelle catégorie"
+                  placeholder="Nom de la catégorie"
+                  autoFocus
+                  value={saisieCategorie}
+                  onChange={(event) => setSaisieCategorie(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setSaisieCategorie(null)
+                      return
+                    }
+                    if (event.key !== 'Enter') return
+                    const libelle = saisieCategorie.trim()
+                    if (!libelle) return
+                    const conv = convFolderMenu.conv
+                    setSaisieCategorie(null)
+                    setConvFolderMenu(null)
+                    choisirDossier(conv, libelle)
+                  }}
+                />
+              )}
             </div>
           </>,
           document.body
@@ -5676,7 +5800,10 @@ Cliquer pour changer le dossier de travail.`}
                           setConvFolderMenu({
                             conv: active ?? null,
                             top: r.bottom + 4,
-                            left: r.left
+                            left: r.left,
+                            // La pastille de la barre du haut PARLE du repertoire de travail : elle
+                            // n'ouvre donc que celui-la, jamais le classement.
+                            mode: 'dossier'
                           })
                         }}
                       >
