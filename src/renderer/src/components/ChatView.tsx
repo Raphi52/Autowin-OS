@@ -4817,6 +4817,28 @@ export function ChatView({
   )
 
   /**
+   * Les CATEGORIES deja utilisees, lues sur les conversations elles-memes.
+   *
+   * Elles ne sont pas memorisees en local comme les dossiers : une categorie n'existe QUE portee
+   * par au moins un fil, donc la liste se deduit et ne peut pas se desynchroniser. Depuis la
+   * separation des deux roles (conv-81), le menu « Ranger dans… » ne proposait plus que des
+   * chemins : classer sous « Fiches Team » etait devenu impossible a la souris (conv-79).
+   */
+  const categoriesConnues = useMemo(
+    () =>
+      [
+        ...new Set(
+          convs
+            .map((conv) => conv.categorie?.trim())
+            .filter((libelle): libelle is string => !!libelle)
+        )
+      ].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })),
+    [convs]
+  )
+  /** Saisie en cours d'une categorie neuve dans le menu (null = le champ n'est pas ouvert). */
+  const [saisieCategorie, setSaisieCategorie] = useState<string | null>(null)
+
+  /**
    * Les résultats de recherche, groupés. On transporte le HIT entier (`snippet` compris) plutôt que
    * d'aplatir la conversation dedans : l'aplatissement faisait collisionner des champs homonymes et
    * rendait impossible de savoir, à la lecture, d'où venait chaque valeur.
