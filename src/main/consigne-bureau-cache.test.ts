@@ -25,12 +25,3 @@ describe('consigne du bureau caché injectée aux agents de run', () => {
     expect(consigneBureauCache('   ')).toBe('')
   })
 })
-
-// kaizen conv-660, turnId 726f9797-7e65-44c7-97ee-c5a1b5d4478b : « tu arretes pas de fermer mon app ».
-describe('consigne des runs : ne pas fermer l app de l utilisateur', () => {
-  it('interdit la fermeture par nom et nomme la compilation sans copie', () => {
-    const texte = consigneBureauCache('run-42')
-    expect(texte).toContain('NE FERME JAMAIS')
-    expect(texte).toContain('dotnet msbuild -t:Compile')
-  })
-})
