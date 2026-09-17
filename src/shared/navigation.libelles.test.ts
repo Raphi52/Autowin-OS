@@ -37,6 +37,15 @@ describe('resolveAppLocation — le nom AFFICHÉ est une adresse valide', () => 
     })
   })
 
+  it('atteint le Diagnostic de démarrage par son nom', () => {
+    for (const nom of ['diagnostic', 'Diagnostic', 'preflight', 'prerequis']) {
+      expect(resolveAppLocation(nom), nom).toMatchObject({
+        destination: 'settings',
+        section: 'preflight'
+      })
+    }
+  })
+
   it('DIT que la destination n’a pas été reconnue, au lieu de replier en silence', () => {
     // Le repli sur `chat` reste — refuser produirait des faux blocages. Mais l'appelant doit pouvoir
     // distinguer « je suis sur le chat parce que tu l'as demandé » de « je n'ai pas compris ».

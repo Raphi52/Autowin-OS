@@ -135,8 +135,19 @@ describe('la pastille verte reste VERTE meme sur un cran rempli/actif', () => {
       resolve(process.cwd(), 'src/renderer/src/components/ChatView.css'),
       'utf8'
     )
+    /*
+     * ON POSE AUSSI theme.css, ET C'EST INDISPENSABLE DEPUIS QUE LA COULEUR EST UN JETON.
+     *
+     * `#35d07f` etait ecrit en dur dans ChatView.css ; il vient maintenant de
+     * `var(--chat-cran-reco)`, defini dans theme.css -- c'est ce qui permet aux themes clairs de
+     * reteinter la pastille. Sans la feuille de theme, le moteur de test ne peut pas resoudre
+     * l'appel : il ABANDONNE la declaration, et le rose du cran rempli reprend le dessus. On
+     * mesurait alors un faux defaut de cascade. Avec les deux feuilles, la mesure redevient la
+     * couleur REELLE, et l'exigence est intacte : le vert de la reco gagne sur le rose.
+     */
+    const theme = readFileSync(resolve(process.cwd(), 'src/renderer/src/assets/theme.css'), 'utf8')
     const style = document.createElement('style')
-    style.textContent = css
+    style.textContent = theme + '\n' + css
     document.head.append(style)
     const host = document.createElement('div')
     host.innerHTML = `<div class="effort-matrix"><div class="effort-matrix-row ${classesRow}"><span class="effort-matrix-track"><button class="effort-cran ${classesCran}"><i></i></button></span></div></div>`
@@ -148,6 +159,14 @@ describe('la pastille verte reste VERTE meme sur un cran rempli/actif', () => {
     // happy-dom rend la valeur brute de la feuille : on normalise avant de comparer.
     return fond.replace(/\s/g, '').toLowerCase()
   }
+
+  it('le jeton de la reco porte bien le vert, et pas autre chose', () => {
+    const theme = readFileSync(
+      resolve(process.cwd(), 'src/renderer/src/assets/theme.css'),
+      'utf8'
+    )
+    expect(theme).toMatch(/--chat-cran-reco:\s*#35d07f;/)
+  })
 
   it('cran recommande + rempli (ligne inactive) : vert', () => {
     expect(cranVert('', 'is-recommended is-filled is-memorized')).toBe(VERT)

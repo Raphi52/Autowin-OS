@@ -149,7 +149,15 @@ const DOSSIERS_EXCLUS = new Set([
   'coverage',
   '.autowin-data',
   'Audit',
-  'graphify-out'
+  'graphify-out',
+  /*
+    CACHE DE BYTECODE PYTHON. Mesure du 2026-09-10 : `find_in_files` citait
+    `scripts/__pycache__/launch_dev_splash.cpython-313.pyc:43` avec des lignes de `�` — l'ASCII
+    des noms de symboles est bien present dans le bytecode, donc le motif y matche VRAIMENT.
+    Ce n'est pas un defaut d'affichage : c'est un fichier GENERE qu'on n'aurait jamais du lire,
+    au meme titre que `dist` ou `out`.
+  */
+  '__pycache__'
 ])
 
 /**

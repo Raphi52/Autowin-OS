@@ -1014,7 +1014,7 @@ const CATALOG: CommandSpec[] = [
     args: {
       question: 'la question, en une phrase',
       options:
-        'les reponses proposees (2 a 4). Chacune est un objet : { libelle } court (une poignee de ' +
+        'les reponses proposees (2 a 10). Chacune est un objet : { libelle } court (une poignee de ' +
         'mots, PAS une phrase portant le raisonnement), { consequence } en une ligne, ' +
         '{ recommande: true } sur celle que tu recommandes (une seule), et facultativement ' +
         '{ detail: { fait, touche, neReglePas } } — ce que ca fait, ce que ca touche, ce que ca ne ' +
@@ -2139,7 +2139,7 @@ export class AppCommandBus {
         // une phrase entiere. Les chaines nues restent acceptees — un modele qui emet l'ancienne
         // forme obtient un bloc degrade, jamais une erreur.
         const options = normaliserReponsesAsk(a.options)
-        if (options.length < 2) throw new Error('Une question cliquable demande 2 a 4 reponses')
+        if (options.length < 2) throw new Error('Une question cliquable demande 2 a 10 reponses')
         // SIGNAL, JAMAIS REFUS. Quand le fil part d'un symptome et que l'utilisateur n'a nomme
         // aucune cible, une option qui envoie deja un chemin de fichier lui fait ACCEPTER une
         // solution qu'il n'a pas choisie — mesure conv-1376 du 2026-08-23 : le texte clique devient

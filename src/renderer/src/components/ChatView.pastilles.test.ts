@@ -21,17 +21,34 @@ const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
 /** L'atome du spinner vit dans theme.css : c'est la SOURCE UNIQUE de l'animation « en cours ». */
 const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
 
+/**
+ * UNE COULEUR PEUT DESORMAIS VENIR D'UN JETON. ChatView.css n'ecrit plus ses couleurs en dur :
+ * elles vivent dans theme.css, et theme-modes.css les redefinit pour les themes clairs. On les
+ * RESOUT donc jusqu'a la valeur finale au lieu de les chercher telles quelles. L'exigence du test
+ * ne bouge pas d'un pouce -- six etats, six couleurs distinctes -- seule la source a change.
+ * Sans cette resolution, le test annoncerait « couleur manquante » alors que la couleur existe.
+ */
+const resoudreJeton = (valeur: string): string => {
+  const brut = valeur.trim()
+  const appel = /^var\((--[a-z0-9-]+)\)$/.exec(brut)
+  if (!appel) return brut.toLowerCase()
+  const definition = new RegExp(`^\\s*${appel[1]}:\\s*([^;]+);`, 'm').exec(theme)
+  return definition ? resoudreJeton(definition[1]) : brut.toLowerCase()
+}
+
+/** Une couleur en dur OU un appel de jeton : les deux formes sont lues, puis resolues. */
+const TEINTE = String.raw`(#[0-9a-fA-F]{3,8}|var\(--[a-z0-9-]+\))`
+
 /** Couleur RÉSOLUE d'un état : sa règle propre, sinon la couleur de `.conversation-state`. */
 function couleurEtat(key: string): string | null {
   const propre = css.match(
-    new RegExp(
-      `\\.conversation-state\\.is-${key}\\s*\\{[^}]*?\\bcolor:\\s*(#[0-9a-fA-F]{3,8})`,
-      's'
-    )
+    new RegExp(`\\.conversation-state\\.is-${key}\\s*\\{[^}]*?\\bcolor:\\s*${TEINTE}`, 's')
   )
-  if (propre) return propre[1].toLowerCase()
-  const base = css.match(/\.conversation-state\s*\{[^}]*?\bcolor:\s*(#[0-9a-fA-F]{3,8})/s)
-  return base ? base[1].toLowerCase() : null
+  if (propre) return resoudreJeton(propre[1])
+  const base = css.match(
+    new RegExp(String.raw`\.conversation-state\s*\{[^}]*?\bcolor:\s*` + TEINTE, 's')
+  )
+  return base ? resoudreJeton(base[1]) : null
 }
 
 const ETATS = ['running', 'completed', 'failed', 'interrupted', 'cancelled', 'waiting'] as const

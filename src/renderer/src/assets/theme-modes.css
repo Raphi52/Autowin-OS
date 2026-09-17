@@ -68,6 +68,126 @@
   --err: #b23a34;
   --info: #0f6f9c;
   --violet: #5a48c8;
+
+  /* --------------------------------------------------------------------------
+     LE CHAT SUIT ENFIN LE THEME. Les 116 jetons `--chat-*` valent, dans theme.css, la couleur
+     qui etait ECRITE EN DUR dans ChatView.css. On les renvoie ici vers les jetons du theme :
+     un seul bloc reteinte le Chat pour les QUATRE themes clairs, aucun n'est nomme.
+
+     Trois jetons n'ont VOLONTAIREMENT pas de valeur claire, parce qu'ils sont poses sur un
+     aplat qui reste sombre dans les deux modes — les eclaircir les rendrait illisibles :
+     - --chat-surlignage-texte : texte de l occurrence trouvee, pose sur un aplat or FIXE : reste sombre dans les deux modes
+     - --chat-depot-texte : texte du voile de depot de fichier, pose sur un fond sombre FIXE
+     - --chat-depot-detail : detail du voile de depot de fichier, pose sur un fond sombre FIXE
+     -------------------------------------------------------------------------- */
+  --chat-recherche-fond:            var(--bg-inset);   /* fond du champ de recherche de la liste */
+  --chat-recherche-fond-vue:        var(--bg-inset);   /* fond du champ de recherche, variante de la vue */
+  --chat-conv-survol:               var(--bg-3);   /* survol d une ligne de conversation */
+  --chat-conv-filet-active:         var(--rose);   /* filet rose de la conversation ouverte */
+  --chat-conv-titre:                var(--text);   /* titre d une conversation dans la liste */
+  --chat-conv-meta:                 var(--text-faint);   /* date et compteurs sous un titre de conversation */
+  --chat-conv-separateur:           var(--gold);   /* point de separation entre deux metadonnees */
+  --chat-liste-bouton:              var(--gold);   /* boutons de l entete de la liste */
+  --chat-neuf-titre:                var(--text);   /* intitule du bouton nouvelle conversation */
+  --chat-bulle-texte:               var(--text);   /* texte de la bulle d aide du champ de saisie */
+  --chat-fond-page:                 var(--bg-0);   /* fond de la page du chat sous le decor */
+  --chat-tete-kicker:               var(--text);   /* surtitre de l entete du fil */
+  --chat-tete-titre:                var(--text);   /* titre du fil dans l entete */
+  --chat-tete-bouton-fond:          var(--bg-3);   /* fond des boutons de l entete du fil */
+  --chat-suggestion-fond:           var(--bg-3);   /* fond des suggestions de demarrage */
+  --chat-signal-rose:               var(--rose);   /* haut du degrade du signal de vie de l entete */
+  --chat-signal-cyan:               var(--cyan);   /* bas du degrade du signal de vie de l entete */
+  --chat-ascenseur:                 var(--line-strong);   /* ascenseur du fil */
+  --chat-wf-action:                 var(--text-faint);   /* boutons d action du volet des enchainements */
+  --chat-wf-fermer-survol:          var(--err);   /* croix de fermeture du volet, au survol */
+  --chat-wf-onglet-survol:          var(--text);   /* onglet du volet au survol */
+  --chat-wf-bascule:                var(--text-dim);   /* bouton Details de l entete */
+  --chat-wf-bascule-active:         var(--text);   /* bouton Details allume */
+  --chat-wf-trait-rose:             var(--rose);   /* debut du soulignement du bouton Details allume */
+  --chat-wf-trait-or:               var(--gold-bright);   /* fin du soulignement du bouton Details allume */
+  --chat-wf-icone:                  var(--text-faint);   /* icone du bouton Details */
+  --chat-wf-icone-active:           var(--rose);   /* icone du bouton Details allume */
+  --chat-etat-defaut:               var(--info);   /* pastille d etat, teinte par defaut */
+  --chat-etat-fini:                 var(--ok);   /* pastille d etat : tour termine */
+  --chat-etat-echec:                var(--err);   /* pastille d etat : tour en echec */
+  --chat-etat-interrompu:           var(--warn);   /* pastille d etat : tour interrompu */
+  --chat-etat-attente:              var(--violet);   /* pastille d etat : en attente */
+  --chat-etat-question:             var(--gold);   /* pastille d etat : question posee */
+  --chat-etat-non-lu:               var(--gold-bright);   /* pastille d etat : non lu */
+  --chat-etat-annule:               var(--text-faint);   /* pastille d etat : annule */
+  --chat-piece-jointe-survol:       var(--info);   /* bouton de piece jointe au survol */
+  --chat-suppr-orbite:              var(--rose);   /* orbite decorative de la carte de suppression */
+  --chat-suppr-kicker:              var(--rose);   /* surtitre de la carte de suppression */
+  --chat-suppr-titre:               var(--text);   /* titre de la carte de suppression */
+  --chat-suppr-fort:                var(--text);   /* texte mis en avant de la carte de suppression */
+  --chat-suppr-bouton:              var(--err);   /* bouton rouge de confirmation de suppression */
+  --chat-suppr-bouton-survol:       var(--rose);   /* bouton de suppression au survol */
+  --chat-renommer-texte:            var(--text);   /* champ de renommage d une conversation */
+  --chat-md-h6:                     var(--text-dim);   /* titre de niveau 6 du markdown */
+  --chat-md-citation:               var(--text-dim);   /* bloc de citation du markdown */
+  --chat-md-bon:                    var(--ok);   /* pastille markdown : bon */
+  --chat-md-alerte:                 var(--warn);   /* pastille markdown : alerte */
+  --chat-md-mauvais:                var(--err);   /* pastille markdown : mauvais */
+  --chat-md-ref:                    var(--text-dim);   /* reference de bas de reponse */
+  --chat-md-ref-survol:             var(--text);   /* reference de bas de reponse au survol */
+  --chat-consigne-filet:            var(--line-strong);   /* bord de l enveloppe de consigne */
+  --chat-consigne-fond:             var(--bg-inset);   /* fond de l enveloppe de consigne */
+  --chat-consigne-titre:            var(--violet);   /* titre depliable de l enveloppe de consigne */
+  --chat-consigne-meta-filet:       var(--line);   /* bord des etiquettes de l enveloppe de consigne */
+  --chat-consigne-meta:             var(--violet);   /* etiquettes de l enveloppe de consigne */
+  --chat-consigne-limite:           var(--gold-doux);   /* mention de troncature de l enveloppe de consigne */
+  --chat-consigne-bloc-filet:       var(--line);   /* bord des blocs de texte de la consigne */
+  --chat-consigne-bloc-fond:        var(--bg-inset);   /* fond des blocs de texte de la consigne */
+  --chat-consigne-bloc-texte:       var(--text);   /* texte des blocs de la consigne */
+  --chat-consigne-sys-titre:        var(--text);   /* titre du bloc systeme de la consigne */
+  --chat-consigne-note:             var(--text-dim);   /* notes de bas de section de la consigne */
+  --chat-role-agent:                var(--info);   /* libelle du role de l agent */
+  --chat-role-vous:                 var(--rose);   /* libelle du role de l utilisateur */
+  --chat-corps:                     var(--text);   /* corps d un message */
+  --chat-corps-vous:                var(--text);   /* corps d un message de l utilisateur */
+  --chat-accueil-titre:             var(--text);   /* titre de l ecran d accueil d un fil */
+  --chat-modele-texte:              var(--text);   /* texte du selecteur de modele */
+  --chat-modele-note:               var(--text-dim);   /* precision a cote du nom du modele */
+  --chat-modele-chevron:            var(--text-dim);   /* chevron du selecteur de modele */
+  --chat-modele-groupe:             var(--text-faint);   /* intitule d un groupe de modeles */
+  --chat-modele-groupe-teinte:      var(--text-dim);   /* gris melange a l accent sur l intitule de groupe */
+  --chat-modele-option:             var(--text);   /* nom d un modele dans la liste */
+  --chat-modele-option-note:        var(--text-faint);   /* precision sous un nom de modele */
+  --chat-modele-option-choisie:     var(--text);   /* nom du modele choisi */
+  --chat-modele-option-chevron:     var(--text-faint);   /* chevron d une option de modele */
+  --chat-modele-etat-fond:          var(--bg-3);   /* fond du bandeau d etat du selecteur de modele */
+  --chat-modele-etat-texte:         var(--gold);   /* texte du bandeau d etat du selecteur de modele */
+  --chat-effort-texte:              var(--text-dim);   /* texte du menu de niveau d effort */
+  --chat-effort-fond:               var(--bg-inset);   /* fond du menu de niveau d effort */
+  --chat-effort-actif:              var(--text);   /* entree active du menu de niveau d effort */
+  --chat-effort-icone:              var(--text-dim);   /* icone du menu de niveau d effort */
+  --chat-matrice-ouvrir:            var(--violet);   /* bouton d ouverture de la matrice d effort */
+  --chat-matrice-ouvrir-focus:      var(--text);   /* bouton d ouverture de la matrice, au clavier */
+  --chat-matrice-fond:              var(--bg-inset);   /* fond de la matrice d effort */
+  --chat-matrice-titre:             var(--text);   /* titre de la matrice d effort */
+  --chat-matrice-groupe:            var(--violet);   /* titre de groupe de la matrice d effort */
+  --chat-matrice-colonnes:          var(--text-faint);   /* entetes de colonnes de la matrice d effort */
+  --chat-matrice-nom:               var(--text);   /* nom d un modele dans la matrice d effort */
+  --chat-cran-fond:                 var(--line-strong);   /* cran vide de la matrice d effort */
+  --chat-cran-texte:                var(--text-faint);   /* intitule d un cran de la matrice d effort */
+  --chat-cran-rempli:               var(--rose);   /* cran rempli de la ligne active */
+  --chat-cran-vif:                  var(--rose-bright);   /* cran survole ou selectionne */
+  --chat-cran-reco:                 var(--ok);   /* cran recommande */
+  --chat-cran-focus:                var(--rose);   /* cran au clavier */
+  --chat-saisie-fond:               var(--bg-inset);   /* bas du degrade de la zone de saisie */
+  --chat-saisie-invite:             var(--text-faint);   /* texte d invite du champ de saisie */
+  --chat-envoi-rose:                var(--rose);   /* bouton d envoi, teinte rose de la vue */
+  --chat-envoi-vert:                var(--ok);   /* debut du degrade du bouton d envoi */
+  --chat-envoi-bleu:                var(--info);   /* fin du degrade du bouton d envoi */
+  --chat-envoi-vert-survol:         var(--ok);   /* debut du degrade du bouton d envoi, au survol */
+  --chat-envoi-bleu-survol:         var(--info);   /* fin du degrade du bouton d envoi, au survol */
+  --chat-sur-vif:                   var(--on-accent);   /* texte pose sur le bouton d envoi vif */
+  --chat-sur-vif-survol:            var(--on-accent);   /* texte pose sur le bouton d envoi vif, au survol */
+  --chat-dictee:                    var(--rose);   /* barre et bouton de dictee en cours */
+  --chat-erreur-douce:              var(--err);   /* message d erreur des travaux non publies */
+  --chat-file-envoi:                var(--gold-clair);   /* consigne en file : envoi */
+  --chat-file-orienter:             var(--info);   /* consigne en file : orientation */
+
 }
 
 /* Le fond de page : plus d'image cosmique ni de voile noir en mode clair. */

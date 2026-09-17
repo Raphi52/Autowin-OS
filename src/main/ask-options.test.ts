@@ -52,16 +52,13 @@ describe('normaliserReponsesAsk — le contrat elargi accepte l’ancienne forme
     expect(normaliserReponsesAsk('a, b')).toEqual([])
   })
 
-  it('plafonne a quatre reponses et borne les longueurs', () => {
+  it('plafonne a dix reponses et borne les longueurs', () => {
     const long = 'x'.repeat(500)
     const reponses = normaliserReponsesAsk([
       { libelle: long, consequence: long },
-      'b',
-      'c',
-      'd',
-      'e'
+      ...Array.from({ length: 12 }, (_, index) => `option ${index}`)
     ])
-    expect(reponses).toHaveLength(4)
+    expect(reponses).toHaveLength(10)
     expect(reponses[0].libelle).toHaveLength(200)
     expect(reponses[0].consequence).toHaveLength(400)
   })

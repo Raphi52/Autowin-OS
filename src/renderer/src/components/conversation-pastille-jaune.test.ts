@@ -83,12 +83,29 @@ describe('pastille jaune : question posee, ou travail fini non visite', () => {
 
   it('`is-unread` porte un jaune propre, distinct du vert de `is-completed`', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
+    /*
+     * LA TEINTE VIENT D'UN JETON MAINTENANT. ChatView.css appelle `var(--chat-etat-non-lu)` et la
+     * valeur vit dans theme.css : c'est ce qui permet aux themes clairs de reteinter la pastille.
+     * On resout l'appel jusqu'a sa valeur finale, donc l'exigence tient toujours sur la COULEUR
+     * REELLE -- un jaune propre, distinct du vert de `completed` -- et pas sur un nom de variable.
+     */
+    const resoudre = (valeur: string): string => {
+      const brut = valeur.trim()
+      const appel = /^var\((--[a-z0-9-]+)\)$/.exec(brut)
+      if (!appel) return brut.toLowerCase()
+      const def = new RegExp(`^\\s*${appel[1]}:\\s*([^;]+);`, 'm').exec(theme)
+      return def ? resoudre(def[1]) : brut.toLowerCase()
+    }
     const couleur = (k: string): string | undefined => {
       const motif = new RegExp(
-        '\\.conversation-state\\.is-' + k + '\\s*\\{[^}]*?color:\\s*(#[0-9a-fA-F]{3,8})',
+        '\\.conversation-state\\.is-' +
+          k +
+          '\\s*\\{[^}]*?color:\\s*(#[0-9a-fA-F]{3,8}|var\\(--[a-z0-9-]+\\))',
         's'
       )
-      return css.match(motif)?.[1]?.toLowerCase()
+      const brut = css.match(motif)?.[1]
+      return brut === undefined ? undefined : resoudre(brut)
     }
     expect(couleur('unread')).toMatch(/^#[0-9a-f]{3,8}$/)
     expect(couleur('unread')).not.toBe(couleur('completed'))
