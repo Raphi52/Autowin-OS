@@ -28,7 +28,6 @@ import {
 } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
-import { refusFermetureApplication } from '../shared/garde-fermeture-app'
 import {
   decideRead,
   enumererFichiersLisibles,
@@ -3386,9 +3385,6 @@ export class AppCommandBus {
         // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
         const refusGit = refusGitDestructeur(ligne)
         if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
-        // Garde conv-660 : on ne ferme pas l'app OUVERTE de l'utilisateur pour se debloquer.
-        const refusFermeture = refusFermetureApplication(ligne)
-        if (refusFermeture) return { lance: false, detail: `Commande refusée : ${refusFermeture}` }
         const cwd = this.workspaceDuTour
         if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
         // Les guillemets GROUPENT : `decouperArguments` respecte `-m "trois mots"` là où un
