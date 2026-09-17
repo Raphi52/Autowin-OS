@@ -20,6 +20,7 @@ import {
 } from './home-widgets-model'
 import {
   defaultHomeLayout,
+  estDispositionDOrigine,
   HOME_WIDGET_IDS,
   HOME_WIDGET_TITLES,
   reconcileLayout,
