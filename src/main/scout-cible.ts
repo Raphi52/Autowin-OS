@@ -22,7 +22,7 @@
  * PUR : pas d'horloge, pas de provider, aucune E/S.
  */
 
-import { decisionDepuisPiste, type DecisionScout } from '../shared/scout-cible-lecture'
+import { decisionDepuisPiste, LIGNE_CIBLE, type DecisionScout } from '../shared/scout-cible-lecture'
 
 /** Le titre de section attendu, sans accent ni casse. Aligné sur `normaliserTitre` de phase-carry. */
 const TITRE_CIBLE = 'cible'
@@ -36,6 +36,39 @@ function normaliser(titre: string): string {
     .trim()
 }
 
+/** `#3`, `n°3`, `3` : un numéro de ligne, qui ne nomme rien une fois le tableau hors de vue. */
+function estNumeroNu(piste: string): boolean {
+  return /^(?:#|n[o°]\s*)?\d+$/iu.test(piste)
+}
+
+/**
+ * La valeur d'une ligne `CIBLES:`, décorations Markdown retirées (`**CIBLES:** a`, `> CIBLES: a`) —
+ * même motif que `LIGNE_CIBLES` de `chat-auto-mode.ts`. `undefined` si la ligne n'en est pas une.
+ */
+function valeurLigneCibles(ligne: string): string | undefined {
+  const trouve = /^\s*[>*_`\s]*cibles\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu.exec(ligne)
+  return trouve ? trouve[1]!.replace(/^[\s*_`]+/u, '').trim() : undefined
+}
+
+/** Découpe un lot en pistes, décorations Markdown retirées — même découpe que `lireCiblesScout`. */
+function pistesDuLot(valeur: string): string[] {
+  return valeur
+    .split(/\s*[,;·|]\s*|\s+\/\s+/u)
+    .map((piste) => piste.replace(/^[\s*_`]+|[\s*_`]+$/gu, '').trim())
+    .filter(Boolean)
+}
+
+/** La première ligne `CIBLES:` non vide ne donne QUE des numéros nus (rejetés, skills/scout/SKILL.md l.59). */
+function lotDeNumerosNus(texte: string): boolean {
+  for (const ligne of (texte ?? '').split('\n')) {
+    const valeur = valeurLigneCibles(ligne)
+    if (valeur === undefined) continue
+    const pistes = pistesDuLot(valeur)
+    return pistes.length > 0 && pistes.every(estNumeroNu)
+  }
+  return false
+}
+
 /**
  * La DÉCISION portée par une sortie de scout, avec la MÊME grammaire que le mode auto du chat
  * (`shared/scout-cible-lecture.ts`) : la justification après un tiret ne fait pas partie de la
@@ -46,13 +79,28 @@ function normaliser(titre: string): string {
  */
 export function lireDecisionScoutTexte(texte: string): DecisionScout {
   const lignes = (texte ?? '').split('\n')
+  // `CIBLES:` (lot de pistes, skills/scout/SKILL.md) l'emporte sur `CIBLE:` — même règle que
+  // `lireCiblesScout` côté chat : une piste destructrice arrête le lot, des numéros nus ne nomment rien.
+  for (const ligne of lignes) {
+    const valeur = valeurLigneCibles(ligne)
+    if (valeur === undefined) continue
+    // La PREMIÈRE ligne `CIBLES:` fait foi, comme côté chat : vide = aucune cible.
+    const pistes = pistesDuLot(valeur)
+    if (pistes.length === 0) return { statut: 'aucune-cible' }
+    for (const piste of pistes) {
+      const decision = decisionDepuisPiste(piste)
+      if (decision.statut === 'cible-destructrice') return decision
+    }
+    if (pistes.every(estNumeroNu)) return { statut: 'aucune-cible' }
+    return decisionDepuisPiste(valeur)
+  }
   for (let i = 0; i < lignes.length; i++) {
     const ligne = lignes[i]!
-    const enLigne = /^\s*CIBLE\s*:(.*)$/i.exec(ligne)
+    // Même motif que le chat (`LIGNE_CIBLE`) : `**CIBLE:** a` et `> CIBLE: a` sont reconnus.
+    const enLigne = LIGNE_CIBLE.exec(ligne)
     if (enLigne) {
-      const valeur = enLigne[1]!.trim()
-      if (!valeur) continue
-      return decisionDepuisPiste(valeur)
+      // La PREMIÈRE ligne `CIBLE:` fait foi, comme côté chat : vide = aucune cible.
+      return decisionDepuisPiste(enLigne[1]!.trim())
     }
     const titre = /^\s{0,3}#{1,6}\s+(.+?)\s*$/.exec(ligne)
     if (!titre || normaliser(titre[1]!) !== TITRE_CIBLE) continue
@@ -101,6 +149,15 @@ export function enteteCibleManquante(texte: string): string | undefined {
       "ou un push forcé ne s'exécute pas sans l'accord explicite de l'utilisateur : ne la joue PAS. " +
       'Choisis une autre piste du tableau et écris-la sous la forme `CIBLE: <la piste> — POURQUOI: ' +
       "<la raison>`, ou termine le run par `SUITE: fin` en demandant l'accord."
+    )
+  // fix-ok: des numéros nus sous `CIBLES:` tombaient dans l'avertissement générique « aucune piste » au lieu d'être refusés (SKILL.md l.59).
+  if (lotDeNumerosNus(texte))
+    return (
+      '## Cible\n' +
+      '⚠️ Lot `CIBLES:` REJETÉ : il ne donne que des numéros de ligne, qui ne nomment rien sans le tableau. ' +
+      'Avant toute action : réécris-le avec les pistes en toutes lettres, sous la forme ' +
+      '`CIBLES: <piste A>, <piste B>`, et ne travaille que sur celles-là. ' +
+      'Aucune piste défendable ? Termine le run par `SUITE: fin` en le disant.'
     )
   return (
     '## Cible\n' +

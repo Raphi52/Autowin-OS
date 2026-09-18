@@ -20,7 +20,7 @@ export type DecisionScout =
 export const CIBLE_DESTRUCTRICE =
   /\b(supprim\w*|effac\w*|ecras\w*|purg\w*|detrui\w*|delete|drop\s+(table|database)|truncate|rm\s+-[a-z]*[rf]|reset\s+--hard|force[- ]push|push\s+--force|clean\s+-[a-z]*f)\b/u
 
-const LIGNE_CIBLE = /^\s*[>*_`]*\s*cible\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu
+export const LIGNE_CIBLE = /^\s*[>*_`]*\s*cible\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu
 
 /** Sans accents ni casse — la comparaison de forme ne doit pas dépendre de la frappe. */
 export function normaliserPisteCible(valeur: string): string {
