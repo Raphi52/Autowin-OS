@@ -90,6 +90,7 @@ interface ChatApi {
     text?: string
     error?: string
   }>
+  identiteUtilisateur: () => Promise<string>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
   hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>

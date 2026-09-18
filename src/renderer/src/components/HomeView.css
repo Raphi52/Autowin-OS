@@ -2222,4 +2222,131 @@
 
 .actions-utilisateurs__quand {
   opacity: 0.7;
+
+/* --- Tuile Performance (RCS / RSM) ---------------------------------------
+   L'apparence sera dessinee plus tard par l'utilisateur ; ce bloc ne pose que le strict necessaire
+   pour que les chiffres soient lisibles et que le code couleur se VOIE. Les quatre couleurs sont
+   portees par `data-couleur`, jamais par une classe calculee dans le rendu. */
+.perf-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.perf-widget__barre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.perf-widget__barre button {
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.perf-widget__barre button[aria-pressed='true'] {
+  border-color: rgba(212, 169, 79, 0.55);
+  background: rgba(212, 169, 79, 0.22);
+  color: #e3ba55;
+}
+
+.perf-widget__groupe h3,
+.perf-widget__personnes h3 {
+  margin: 0 0 2px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #cfd6e4;
+}
+
+.perf-widget__lignes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.perf-widget__lignes li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 6px;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.perf-widget__valeur {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-couleur='vert'] {
+  border-left-color: #48b06a;
+  color: #8ae0a6;
+}
+
+[data-couleur='jaune'] {
+  border-left-color: #d8c44a;
+  color: #eadb8c;
+}
+
+[data-couleur='orange'] {
+  border-left-color: #dd8f3c;
+  color: #f0b97c;
+}
+
+[data-couleur='rouge'] {
+  border-left-color: #cf4f4f;
+  color: #f19a9a;
+}
+
+.perf-widget__personnes ul,
+.perf-widget__seuils ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.perf-widget__personnes li,
+.perf-widget__seuils li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.perf-widget__personnes em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  text-align: right;
+}
+
+.perf-widget__seuils input {
+  width: 54px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+}
+
+.perf-widget__champ {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-right: 3px;
 }

@@ -7,6 +7,7 @@ import { CoffreAutorisationProd, definirPhrase } from './prod-passphrase'
 import { ecrireEmpreinteProd, lireEmpreinteProd } from './store/prod-passphrase-store'
 import { ecrireNiveauProd, lireNiveauProd } from './store/prod-niveau-store'
 import { estNiveauProtection } from '../shared/prod-protection'
+import { nomUtilisateurCourant } from './identite-utilisateur'
 import { spawn } from 'node:child_process'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
 import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local'
@@ -1555,6 +1556,17 @@ function coffreAutorisationProd(): CoffreAutorisationProd {
   return (coffreProd ??= new CoffreAutorisationProd(
     lireEmpreinteProd(ensureAutowinAppData(appDataRoot))
   ))
+}
+
+/**
+ * Qui est connecte au poste. Lecture seule, aucun parametre venant de l'ecran : la tuile
+ * Performance a besoin d'un sujet pour son mode « mes chiffres ».
+ */
+function registerIdentiteIpc(): void {
+  ipcMain.handle('app:identite-utilisateur', (event) => {
+    assertTrustedRendererSender(event, "Identite de l'utilisateur")
+    return nomUtilisateurCourant()
+  })
 }
 
 /** Petite TV du bureau cache (conv-528) : lecture seule, processus de capture cree a la demande. */
@@ -4045,6 +4057,7 @@ app.whenReady().then(async () => {
     assertTrustedRendererSender(event, 'Autorisation de production')
     return guichetProd.enAttente()
   })
+  registerIdentiteIpc()
   registerChatIpc()
   registerGreffeActionsIpc({ ipc: ipcMain, assertTrusted: assertTrustedRendererSender })
   registerTicketsIpc({
