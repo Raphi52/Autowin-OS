@@ -10,8 +10,9 @@ import type { TicketsSection } from '../../../shared/navigation'
 import { ViewTopBar } from './ViewTopBar'
 import { VeilleCandidatsSection } from './VeilleCandidatsSection'
 import {
-  formatTicketSelectionPrompt,
-  mapWithConcurrency,
+  forgetTicketTreatmentRecord,
+  formatTicketReferencePrompt,
+  pruneTicketTreatmentRecords,
   plainText,
   reconcileTicketTreatmentRecords,
   reportTicketTreatment,
@@ -36,6 +37,7 @@ import {
   stopAutoModeNow,
   type AutoModeSettings
 } from './ticket-auto-mode'
+import { deposerOuvertureConversation } from './pending-conversation-open'
 import './ViewPage.css'
 import './TicketsView.css'
 import { Spinner } from './Spinner'
@@ -116,6 +118,15 @@ function ticketTags(item: TicketItem): string[] {
     .split(';')
     .map((tag) => tag.trim())
     .filter(Boolean)
+}
+
+/** État d'un traitement en mots — sert l'infobulle de la bulle de conversation. */
+function treatmentLabel(status: TicketTreatmentRecord['status']): string {
+  if (status === 'prepared') return 'prêt'
+  if (status === 'running') return 'en cours'
+  if (status === 'succeeded') return 'traité'
+  if (status === 'interrupted') return 'interrompu'
+  return 'échec'
 }
 
 function priorityRank(priority: TicketItem['priority']): number {
@@ -212,8 +223,25 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   )
 
   const openTreatmentConversation = useCallback(async (conversationId: string): Promise<void> => {
+    // La demande est DÉPOSÉE avant la navigation : si le chat n'est pas encore monté, il la
+    // réclamera en s'affichant. L'événement reste le chemin direct quand il est déjà là.
+    deposerOuvertureConversation(conversationId)
     await window.api.appCommand?.('navigate', { tab: 'chat' })
     window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: conversationId }))
+  }, [])
+
+  /**
+   * La conversation mémorisée existe-t-elle ENCORE ? L'utilisateur peut l'avoir supprimée ; sans ce
+   * contrôle, la bulle demandait l'ouverture d'un fil disparu et rien ne se passait.
+   * Prudence volontaire : si la liste est illisible, on répond « oui » plutôt que de jeter la trace.
+   */
+  const conversationStillExists = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const list = await window.api.conversations()
+      return list.some((conversation) => conversation.id === id)
+    } catch {
+      return true
+    }
   }, [])
 
   /**
@@ -813,19 +841,16 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     void treatIncoming()
   }, [items, autoMode, treatIncoming])
 
-  const openSelectionConversation = useCallback(async () => {
-    const selected = checkedVisibleItems
+  // Ouvre UNE conversation pour la liste de tickets passée : la sélection cochée (bouton d'action)
+  // ou un SEUL ticket (petit bouton de ligne), même chemin pour les deux.
+  const openConversationForItems = useCallback(
+    async (selected: TicketItem[]) => {
     if (!selected.length) return
-    // Les listes fournisseur sont légères. Le prompt, lui, relit chaque fiche pour inclure la
-    // discussion et les titres de relations réellement courants.
-    // Pool BORNÉ (même garde-fou que les lots auto) : 30 tickets cochés ne doivent pas ouvrir 30
-    // requêtes distantes simultanées.
-    const selection = await mapWithConcurrency(
-      selected,
-      autoSettingsRef.current.concurrency,
-      (item) => enrichTicket(item, activeSourceRef.current)
-    )
-    const prompt = formatTicketSelectionPrompt(selection, activeSourceRef.current)
+    // Le prompt NOMME les fiches au lieu d'en recopier le contenu : l'agent les lit lui-même avec
+    // `ticket_get`. Plus aucune relecture distante n'est donc nécessaire ici — le prompt s'ouvre
+    // instantanément, et il ne peut pas porter un contenu déjà périmé.
+    const selection = selected
+    const prompt = formatTicketReferencePrompt(selection, activeSourceRef.current)
     if (!prompt) return
     let provider: string | undefined
     try {
@@ -862,7 +887,59 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         detail: { conversationId: conv.id, prompt, send: sendDirectly }
       })
     )
-  }, [checkedVisibleItems, enrichTicket, recordTreatment, sendDirectly])
+    },
+    [recordTreatment, sendDirectly]
+  )
+
+  const openSelectionConversation = useCallback(
+    () => openConversationForItems(checkedVisibleItems),
+    [checkedVisibleItems, openConversationForItems]
+  )
+
+  /**
+   * Geste de la BULLE, pour UN ticket : rejoindre sa conversation si elle existe encore, sinon
+   * oublier la trace périmée et en ouvrir une neuve. Sans l'oubli, un fil supprimé laissait la
+   * bulle colorée pointer dans le vide à chaque clic.
+   */
+  const openTicketConversation = useCallback(
+    async (item: TicketItem, treatment: TicketTreatmentRecord | undefined): Promise<void> => {
+      if (treatment && (await conversationStillExists(treatment.conversationId))) {
+        await openTreatmentConversation(treatment.conversationId)
+        return
+      }
+      if (treatment) setTreatmentRecords(forgetTicketTreatmentRecord(localStorage, item))
+      await openConversationForItems([item])
+    },
+    [conversationStillExists, openConversationForItems, openTreatmentConversation]
+  )
+
+  /**
+   * PURGE DES BULLES ORPHELINES à chaque fois que l'écran devient visible : une conversation
+   * supprimée laissait sa bulle colorée jusqu'au prochain clic dessus. On compare les traces
+   * locales à la liste réelle des conversations, et on oublie celles qui ne pointent plus nulle
+   * part. Liste illisible → on ne touche à rien (mieux vaut une couleur de trop qu'un oubli à tort).
+   */
+  useEffect(() => {
+    if (!active) return
+    let annule = false
+    void (async () => {
+      try {
+        const list = await window.api.conversations()
+        if (annule) return
+        setTreatmentRecords(
+          pruneTicketTreatmentRecords(
+            localStorage,
+            list.map((conversation) => conversation.id)
+          )
+        )
+      } catch {
+        /* Liste indisponible : les traces restent telles quelles. */
+      }
+    })()
+    return () => {
+      annule = true
+    }
+  }, [active])
 
   const retry = (): void => {
     if (sourceError) void loadSources()
@@ -1466,25 +1543,30 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                             </span>
                           </span>
                         </button>
-                        {treatment && (
-                          <button
-                            type="button"
-                            data-testid="ticket-treatment-status"
-                            className={`ticket-treatment-status is-${treatment.status}`}
-                            title="Ouvrir la conversation de traitement"
-                            onClick={() => void openTreatmentConversation(treatment.conversationId)}
-                          >
-                            {treatment.status === 'prepared'
-                              ? 'prêt'
-                              : treatment.status === 'running'
-                                ? 'en cours'
-                                : treatment.status === 'succeeded'
-                                  ? 'traité'
-                                  : treatment.status === 'interrupted'
-                                    ? 'interrompu'
-                                    : 'échec'}
-                          </button>
-                        )}
+                        {/* UNE SEULE bulle par ticket (demande du 2026-09-17) : elle REJOINT la
+                        conversation déjà ouverte pour ce ticket s'il en existe une, sinon elle en
+                        crée une. L'ancien badge texte (« prêt », « en cours »…) est supprimé : son
+                        état survit dans la couleur de la bulle et dans l'infobulle. */}
+                        <button
+                          type="button"
+                          data-testid="ticket-open-conversation"
+                          className={`ticket-open-conversation${treatment ? ` is-${treatment.status}` : ''}`}
+                          aria-label={
+                            treatment
+                              ? `Rejoindre la conversation du ticket ${item.id}`
+                              : `Ouvrir une conversation pour le ticket ${item.id}`
+                          }
+                          title={
+                            treatment
+                              ? `Rejoindre la conversation de #${item.id} (${treatmentLabel(treatment.status)})`
+                              : sendDirectly
+                                ? `Ouvrir une conversation pour #${item.id} et ENVOYER le prompt`
+                                : `Ouvrir une conversation pour #${item.id} (prompt pré-rempli, non envoyé)`
+                          }
+                          onClick={() => void openTicketConversation(item, treatment)}
+                        >
+                          💬
+                        </button>
                       </div>
                     )
                   })}

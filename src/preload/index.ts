@@ -104,6 +104,8 @@ const api = {
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>
     ipcRenderer.invoke('app:storage-migration-complete'),
+  /** Le compte du poste : qui est « moi » dans la tuile Performance. */
+  identiteUtilisateur: (): Promise<string> => ipcRenderer.invoke('app:identite-utilisateur'),
   // Petite TV du bureau cache (lecture seule)
   hdeskTvBureaux: (conversationId?: string): Promise<BureauTv[]> =>
     ipcRenderer.invoke('hdesk:tv:bureaux', conversationId),

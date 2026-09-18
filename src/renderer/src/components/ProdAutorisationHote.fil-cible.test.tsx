@@ -27,12 +27,6 @@ interface DemandeTest {
 
 function poserApi(demandes: DemandeTest[]): void {
   ;(globalThis as unknown as { window: Record<string, unknown> }).window.api = {
-    /*
-     * L'ecran lit l'etat de la phrase au montage MEME en mode << confirmation >> : son effet n'est
-     * pas conditionne par le niveau. Sans cette fonction, le rendu jette avant d'afficher quoi que
-     * ce soit — et le test mesurerait une absence due a l'erreur, pas au filtre qu'il garde.
-     */
-    prodPassphraseEtat: () => Promise.resolve({ definie: true, longueurMinimale: 8 }),
     prodAutorisationEnAttente: () => Promise.resolve(demandes),
     onProdAutorisationDemandee: () => () => {},
     onProdAutorisationClose: () => () => {},

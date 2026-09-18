@@ -20,6 +20,7 @@ export type HomeWidgetId =
   | 'enregistrements'
   // Ce que les utilisateurs d'un greffe ont fait — la tuile du chef de greffe.
   | 'actions-utilisateurs'
+  | 'performance'
 
 export interface HomeWidgetBox {
   id: HomeWidgetId
@@ -50,7 +51,8 @@ export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   conversations: 'Conversations',
   jarvis: 'Jarvis',
   enregistrements: 'Transcription',
-  'actions-utilisateurs': 'Actions des utilisateurs'
+  'actions-utilisateurs': 'Actions des utilisateurs',
+  performance: 'Performance'
 }
 
 /**
@@ -87,7 +89,7 @@ const ROWS = 8
  * Deux colonnes demandent plus de rangees : sept tuiles a deux rangees minimum ne tiennent pas sur
  * les six rangees de l'arrangement large.
  */
-const MEDIUM_ROWS = 10
+const MEDIUM_ROWS = 12
 
 const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
@@ -100,8 +102,11 @@ const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   routines: { col: 1, colSpan: 1, row: 3, rowSpan: 5, z: -60 },
   notifications: { col: 2, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
   // Jarvis est en colonne de droite, a hauteur d'oeil : c'est l'endroit qu'on regarde en parlant.
-  jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 3, z: -40 },
-  conversations: { col: 2, colSpan: 1, row: 5, rowSpan: 3, z: -120 }
+  jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 2, z: -40 },
+  conversations: { col: 2, colSpan: 1, row: 4, rowSpan: 2, z: -120 },
+  // La performance ferme la colonne de droite, en tuile d'une colonne : la grille de main (8 rangees)
+  // garde Actions des utilisateurs en bas a gauche (choix utilisateur du 2026-09-18, conv-705).
+  performance: { col: 2, colSpan: 1, row: 6, rowSpan: 2, z: -80 }
 }
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
@@ -115,7 +120,8 @@ const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   routines: { col: 1, colSpan: 1, row: 6, rowSpan: 2, z: -60 },
   conversations: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 },
   enregistrements: { col: 0, colSpan: 1, row: 8, rowSpan: 2, z: -50 },
-  'actions-utilisateurs': { col: 1, colSpan: 1, row: 8, rowSpan: 2, z: -70 }
+  'actions-utilisateurs': { col: 1, colSpan: 1, row: 8, rowSpan: 2, z: -70 },
+  performance: { col: 0, colSpan: 2, row: 10, rowSpan: 2, z: -80 }
 }
 
 /** L'ordre de lecture en colonne unique : ce qu'on regarde en premier, en haut. */
@@ -127,7 +133,8 @@ const NARROW_ORDER: HomeWidgetId[] = [
   'agenda',
   'mails',
   'conversations',
-  'actions-utilisateurs'
+  'actions-utilisateurs',
+  'performance'
 ]
 
 /**
@@ -161,6 +168,13 @@ const V_GAP = WIDGET_LABEL_HEIGHT + 8
  * elles. Le bloc est alors CENTRE, ce qui laisse une bande de decor symetrique de chaque cote.
  */
 const MAX_COLUMN_WIDTH = 384
+/**
+ * Hauteur minimale d'une RANGEE de la grille.
+ *
+ * Aucune tuile n'occupe moins de DEUX rangees (voir `WIDE` et `MEDIUM`) : pour qu'une tuile a sa
+ * taille minimale tienne dans son pas, il faut `2 * rangee + V_GAP >= MIN_WIDGET_HEIGHT`.
+ */
+const MIN_ROW_HEIGHT = Math.ceil((MIN_WIDGET_HEIGHT - V_GAP) / 2)
 /**
  * Part de la largeur utile laissee au decor, a DROITE.
  *
@@ -234,7 +248,19 @@ export function defaultHomeLayout(
   const originX = PAD_X
   // Deux colonnes n'ont pas la meme grille que trois : voir `MEDIUM_ROWS`.
   const gridRows = columns === 3 ? ROWS : MEDIUM_ROWS
-  const rowHeight = Math.max(24, Math.round((usableHeight - V_GAP * (gridRows - 1)) / gridRows))
+  /**
+   * fix-ok: une rangee plus courte que `MIN_ROW_HEIGHT` fait DEBORDER les tuiles hors de leur place.
+   *
+   * La hauteur d'une tuile est plafonnee par le bas a `MIN_WIDGET_HEIGHT` ; son PAS, lui, suit la
+   * rangee. Des que le pas de deux rangees passe sous ce plancher, la tuile depasse dans la tuile du
+   * dessous — mesure en ajoutant la tuile Performance : a 700 x 800 px, rangee de 24 px, un pas de
+   * 112 px portait une tuile de 116 px et trois chevauchements apparaissaient d'un coup. Le plancher
+   * de la RANGEE doit donc decouler du plancher de la TUILE, pas d'une constante arbitraire.
+   */
+  const rowHeight = Math.max(
+    MIN_ROW_HEIGHT,
+    Math.round((usableHeight - V_GAP * (gridRows - 1)) / gridRows)
+  )
 
   return HOME_WIDGET_IDS.map((id) => {
     const entry = spec[id]
@@ -259,7 +285,8 @@ export const HOME_WIDGET_IDS: HomeWidgetId[] = [
   'notifications',
   'conversations',
   'jarvis',
-  'actions-utilisateurs'
+  'actions-utilisateurs',
+  'performance'
 ]
 
 export function clampWidgetBox(

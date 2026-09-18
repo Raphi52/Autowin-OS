@@ -159,6 +159,27 @@ describe('disposition par defaut et dispersion', () => {
   })
 })
 
+describe('la tuile Performance a sa place', () => {
+  // Ajoutee le 2026-09-17 en bande pleine largeur ; le 2026-09-18 (conv-705) l'utilisateur a garde la
+  // grille de main a 8 rangees : Performance devient une tuile d'une colonne qui FERME la colonne de
+  // droite, sous Conversations. Ce test tient cette nouvelle promesse, sans desserrer la precedente
+  // par commodite : la bande n'existe plus, c'est un choix de mise en page, pas une tolerance.
+  it('ferme la colonne de droite, sous Conversations, en largeur d une tuile', () => {
+    expect(HOME_WIDGET_IDS).toContain('performance')
+    const layout = defaultHomeLayout(VIEW)
+    const perf = layout.find((entry) => entry.id === 'performance')!
+    const conv = layout.find((entry) => entry.id === 'conversations')!
+    expect(perf).toBeDefined()
+    expect(perf.w).toBe(conv.w)
+    expect(perf.x).toBe(conv.x)
+    expect(perf.y).toBeGreaterThanOrEqual(conv.y + conv.h)
+    for (const entry of layout) {
+      if (entry.id === 'performance' || entry.x !== perf.x) continue
+      expect(entry.y).toBeLessThan(perf.y)
+    }
+  })
+})
+
 describe('la disposition suit la surface qui la porte', () => {
   // Defaut mesure le 2026-08-21 dans l'app : avec des positions en pixels absolus calibrees sur
   // 1440, une fenetre de 491 px mettait QUATRE tuiles sur cinq entierement hors champ.

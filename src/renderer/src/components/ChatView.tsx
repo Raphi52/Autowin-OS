@@ -1,4 +1,14 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import { useBrancheCourante } from './branche-courante'
 import { presenceDepuisRunsVivants } from './run-presence'
 import { useClampDansFenetre } from './useClampDansFenetre'
@@ -21,6 +31,7 @@ import {
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
+import { reclamerOuvertureConversation } from './pending-conversation-open'
 import { refreshesActiveConversation } from './chat-event-routing'
 import { pickRunForTrace } from './run-trace-target'
 import {
@@ -260,6 +271,170 @@ function TexteSurligne({ texte, terme }: { texte: string; terme: string }): Reac
     </>
   )
 }
+
+/**
+ * UNE LIGNE DE LA LISTE DES CONVERSATIONS, memorisee (heal gels vue chat, 2026-09-18).
+ * Mesure dans l'app (serveur de dev, 637 lignes) : changer de conversation recreait TOUTES les
+ * lignes (~430 ms par bascule, surtout de la creation d'elements). Une ligne ne se re-rend plus que
+ * si SES donnees changent : a la bascule, seules l'ancienne et la nouvelle ligne active bougent.
+ * Les actions passent par `actionsRef` (toujours les dernieres, sans invalider la memoire).
+ */
+type ActionsLigneConversation = {
+  loadConv: (c: Conv) => Promise<void>
+  basculerDansMosaique: (id: string) => Promise<void>
+  toggleConvSelection: (id: string) => void
+}
+const LigneConversation = memo(function LigneConversation({
+  c,
+  snippet,
+  depth,
+  actif,
+  occupe,
+  nonVue,
+  selectionnee,
+  mosaiqueOuverte,
+  convQuery,
+  convSelectionMode,
+  convViewMode,
+  actionsRef,
+  setConvMenu
+}: {
+  c: Conv
+  snippet?: string
+  depth: number
+  actif: boolean
+  occupe: boolean
+  nonVue: boolean
+  selectionnee: boolean
+  mosaiqueOuverte: boolean
+  convQuery: string
+  convSelectionMode: boolean
+  convViewMode: string
+  actionsRef: { readonly current: ActionsLigneConversation }
+  setConvMenu: Dispatch<SetStateAction<{ conv: Conv; top: number; left: number } | null>>
+}): React.JSX.Element {
+  const conversationState = deriveConversationState({
+    busy: occupe,
+    messageCount: c.messageCount ?? c.messages?.length ?? 0,
+    lastMessageRole:
+      c.lastMessageRole ??
+      // Même règle que la projection du store : une consigne écrite pendant un
+      // tour (`orientation`) ne porte pas d'attente de réponse (conv-61).
+      [...(c.messages ?? [])].reverse().find((m) => m.orientation !== true)?.role,
+    lastAssistantStatus: c.lastAssistantStatus,
+    asksUser: c.lastAssistantAsksUser === true,
+    // La conversation OUVERTE est lue par definition : elle ne doit jamais
+    // s'afficher « non lue » sous les yeux de celui qui la regarde.
+    unseen: nonVue
+  })
+  const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+  return (
+    <div
+      className={`conv-item${actif ? ' active' : ''}${c.surlignee ? ' surlignee' : ''}`}
+      style={{ marginLeft: depth * 14 }}
+      // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
+      // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
+      // ceux qui ne peuvent pas glisser.
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/autowin-conversation', c.id)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+    >
+      {convSelectionMode && convViewMode !== 'mosaic' && (
+        <input
+          type="checkbox"
+          className="conv-select-box"
+          checked={selectionnee}
+          onChange={() => actionsRef.current.toggleConvSelection(c.id)}
+          aria-label={`Sélectionner « ${c.title} »`}
+        />
+      )}
+      <button
+        className="conv-pick"
+        onClick={() =>
+          convViewMode === 'mosaic'
+            ? void actionsRef.current.basculerDansMosaique(c.id)
+            : void actionsRef.current.loadConv(c)
+        }
+      >
+        {/* EN COURS = le MEME atome que partout ailleurs : le composant
+            <Spinner/>. La pastille etait le dernier endroit a rendre l'ancien
+            atome CSS a bordures (.spinner), d'ou un indicateur qui ne
+            ressemblait a aucun autre. Les autres etats restent une pastille. */}
+        {conversationState.key === 'running' ? (
+          <Spinner
+            size={14}
+            className="conversation-state is-running"
+            label={`État de la conversation : ${stateDescription}`}
+            title={stateDescription}
+            data-conversation-state={conversationState.key}
+          />
+        ) : (
+          <span
+            className={`conversation-state is-${conversationState.key}`}
+            data-conversation-state={conversationState.key}
+            role="img"
+            aria-label={`État de la conversation : ${stateDescription}`}
+            title={stateDescription}
+          />
+        )}
+        <span className="conv-copy">
+          <span className="conv-label">
+            {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
+          </span>
+          {convQuery && snippet && (
+            <span className="conv-snippet">
+              <TexteSurligne texte={snippet} terme={convQuery} />
+            </span>
+          )}
+          {/* Le NUMERO reste visible pendant une recherche, et surligne quand il
+              correspond : taper « 171 » masquait la seule information qui prouve
+              qu'on a trouve la bonne conversation (2026-09-03). */}
+          <span className="conv-meta">
+            <span>{convQuery ? <TexteSurligne texte={c.id} terme={convQuery} /> : c.id}</span>
+            {!convQuery && <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>}
+          </span>
+        </span>
+        {convQuery && (
+          <span className="conv-count tnum">{c.messageCount ?? c.messages?.length ?? 0}</span>
+        )}
+        {/* En mosaique, la liste n'est plus une SELECTION mais un jeu
+            d'interrupteurs : l'etat ouvert/ferme se lit a droite du titre. */}
+        {convViewMode === 'mosaic' && (
+          <span
+            className={`conv-mosaic-toggle${mosaiqueOuverte ? ' is-open' : ''}`}
+            data-testid={`conv-mosaic-toggle-${c.id}`}
+            role="img"
+            aria-pressed={mosaiqueOuverte ? 'true' : 'false'}
+            aria-label={
+              mosaiqueOuverte
+                ? `« ${c.title} » ouverte en mosaïque — cliquer pour fermer`
+                : `« ${c.title} » fermée — cliquer pour ouvrir`
+            }
+            title={mosaiqueOuverte ? 'Ouverte' : 'Fermée'}
+          >
+            <span className="conv-mosaic-toggle-knob" aria-hidden="true" />
+          </span>
+        )}
+      </button>
+      <button
+        className="conv-menu-trigger"
+        title="Actions"
+        aria-label="Actions de la conversation"
+        onClick={(event) => {
+          event.stopPropagation()
+          const rect = event.currentTarget.getBoundingClientRect()
+          setConvMenu((current) =>
+            current?.conv.id === c.id ? null : { conv: c, top: rect.top, left: rect.right + 6 }
+          )
+        }}
+      >
+        ⋮
+      </button>
+    </div>
+  )
+})
 
 /**
  * `depotPresent` : le dossier de travail est-il un depot git ? Sans depot, `/salvage` n'a ni
@@ -1713,9 +1888,24 @@ export function ChatView({
       // de veille (et tout flux né hors du chat) sélectionne sa conversation PENDANT que cette vue
       // est démontée — l'événement de sélection n'a alors aucun auditeur, et la vue remontait sur
       // son ancienne sélection avec un panneau vide (mesuré le 14/08, conv-1164/1165).
+      // DEMANDE EXPLICITE D'ABORD : un autre écran (la bulle d'un ticket) a pu demander une
+      // conversation PENDANT que cette vue était démontée — l'événement n'avait alors aucun
+      // auditeur. Cette demande déposée est PRIORITAIRE sur l'alignement ci-dessous, qui ouvrirait
+      // la conversation active du main (la dernière créée) et volerait la sélection.
+      const demandee = reclamerOuvertureConversation()
+      let ouvertureHonoree = false
+      if (!disposed && demandee) {
+        const cible = convsRef.current.find((conversation) => conversation.id === demandee)
+        if (cible) {
+          await loadConv(cible)
+          ouvertureHonoree = true
+        }
+      }
       try {
-        const etat = (await window.api.appState()) as { activeConversationId?: string }
-        const cibleId = etat?.activeConversationId
+        const etat = ouvertureHonoree
+          ? {}
+          : ((await window.api.appState()) as { activeConversationId?: string })
+        const cibleId = (etat as { activeConversationId?: string })?.activeConversationId
         if (!disposed && cibleId && cibleId !== activeRef.current) {
           const cible = convsRef.current.find((conversation) => conversation.id === cibleId)
           if (cible) await loadConv(cible)
@@ -2802,11 +2992,24 @@ export function ChatView({
   // tour a été interrompu par la fermeture de l'app (son fil est rechargé depuis le store).
   useEffect(() => {
     const openConversation = (event: Event): void => {
-      const detail = (event as CustomEvent<{ conversationId?: string; turnId?: string }>).detail
+      // DEUX FORMES acceptées : l'objet `{ conversationId }` (bandeau de reprise) et l'id NU en
+      // chaîne, envoyé par l'écran des fiches et l'accueil. Avant, la chaîne tombait dans
+      // `detail?.conversationId === undefined` et l'ouverture était silencieusement ignorée : le
+      // chat restait sur la conversation courante, d'où l'impression d'« aller vers la dernière ».
+      const raw = (event as CustomEvent<{ conversationId?: string; turnId?: string } | string>)
+        .detail
+      const detail = typeof raw === 'string' ? { conversationId: raw } : raw
       const id = detail?.conversationId
       if (!id) return
-      const target = convsRef.current.find((conversation) => conversation.id === id)
-      if (target) void loadConv(target)
+      // La conversation demandée peut ne PAS être dans la liste en mémoire : celle créée depuis
+      // l'écran des fiches est plus récente que le dernier chargement. Sans ce rafraîchissement, la
+      // recherche échouait et le chat restait sur la conversation affichée — on croyait « atterrir
+      // sur la dernière ». Même garde que le chemin de pré-remplissage voisin.
+      void (async () => {
+        if (!convsRef.current.some((conversation) => conversation.id === id)) await refreshConvs()
+        const target = convsRef.current.find((conversation) => conversation.id === id)
+        if (target) await loadConv(target)
+      })()
       // REJEU du journal : l'app était fermée pendant le tour → le store n'a pas reçu ces événements,
       // seul le journal fichier les contient. On reconstruit le texte produit et on l'affiche.
       if (detail?.turnId) void replayTurnJournal(id, detail.turnId)
@@ -4960,6 +5163,107 @@ export function ChatView({
     ]
   )
 
+  /**
+   * LES LIGNES DE LA LISTE, memorisees (heal gels vue chat, 2026-09-18). Sans cela, chaque morceau
+   * de texte recu pendant un tour re-rendait ChatView, et donc recreait les ~600 lignes de la liste
+   * alors que rien de ce qu'elles affichent n'avait change. Mesure (test profile, 600 conversations,
+   * 30 morceaux) : 3,1 s des 5 s passees dans le corps de ChatView venaient de ce seul bloc.
+   * Les actions qui ne sont pas stables passent par `actionsListeRef` : toujours les dernieres,
+   * sans invalider la memoire.
+   */
+  const actionsListeRef = useRef({
+    loadConv,
+    basculerDansMosaique,
+    toggleConvSelection,
+    rangerDans
+  })
+  actionsListeRef.current = { loadConv, basculerDansMosaique, toggleConvSelection, rangerDans }
+  const lignesListe = useMemo(
+    () =>
+      groupes.map((groupe) => {
+        // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
+        // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
+        const replie = !convQuery.trim() && estReplie(groupe.key, groupesReplies)
+        return (
+          <Fragment key={groupe.key}>
+            {/*
+                  L'en-tête est AUSSI la zone de dépôt : viser un titre est plus facile que viser un
+                  interstice, et ça évite d'inventer une cible invisible. On ne dépose pas sur un
+                  groupe dérivé (« Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence
+                  de dossier) — y traîner une conversation ne voudrait rien dire.
+                */}
+            <div
+              className={`conv-group${replie ? ' is-collapsed' : ''}${
+                surviole === groupe.key ? ' is-drop' : ''
+              }`}
+              data-testid={`conv-group-${groupe.key}`}
+              data-depth={groupe.depth}
+              onDragOver={(e) => {
+                if (!deposable(groupe.kind)) return
+                e.preventDefault()
+                setSurvole(groupe.key)
+              }}
+              onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
+              onDrop={(e) => {
+                e.preventDefault()
+                setSurvole(null)
+                const id = e.dataTransfer.getData('text/autowin-conversation')
+                if (id && deposable(groupe.kind))
+                  void actionsListeRef.current.rangerDans(id, groupe.key)
+              }}
+            >
+              <button
+                className="conv-group-head"
+                onClick={() => basculerGroupe(groupe.key, replie)}
+                aria-expanded={!replie}
+                title={deposable(groupe.kind) ? groupe.key : groupe.label}
+                style={{ paddingLeft: 8 + groupe.depth * 14 }}
+              >
+                <span className="conv-group-chevron" aria-hidden="true">
+                  {replie ? '▸' : '▾'}
+                </span>
+                <span className="conv-group-label">{groupe.label}</span>
+                <span className="conv-group-count tnum">{groupe.items.length}</span>
+              </button>
+            </div>
+            {!replie &&
+              groupe.items.map(({ hit: { conversation: c, snippet } }) => (
+                <LigneConversation
+                  key={c.id}
+                  c={c}
+                  snippet={snippet}
+                  depth={groupe.depth}
+                  actif={c.id === activeId}
+                  occupe={busyConversations.has(c.id)}
+                  nonVue={c.id !== activeId && estNonVue(c, conversationsVues)}
+                  selectionnee={selectedConvIds.has(c.id)}
+                  mosaiqueOuverte={mosaicIds.includes(c.id)}
+                  convQuery={convQuery}
+                  convSelectionMode={convSelectionMode}
+                  convViewMode={convViewMode}
+                  actionsRef={actionsListeRef}
+                  setConvMenu={setConvMenu}
+                />
+              ))}
+          </Fragment>
+        )
+      }),
+    [
+      groupes,
+      convQuery,
+      groupesReplies,
+      surviole,
+      busyConversations,
+      activeId,
+      conversationsVues,
+      convSelectionMode,
+      convViewMode,
+      selectedConvIds,
+      mosaicIds,
+      basculerGroupe
+    ]
+  )
+
   return (
     <div
       className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}${
@@ -4968,398 +5272,217 @@ export function ChatView({
       data-testid="chat-view"
       data-active-conversation-id={activeId ?? ''}
     >
+      {/* HARNAIS DE PROFILAGE (heal gels vue chat, 2026-09-18) : `vue-chat` seul ne disait pas QUELLE
+          zone tenait le fil d'affichage (1,3 a 2,8 s sur conv-680). Chaque zone signale son propre
+          rendu long sous `vue-chat-<zone>`, par le canal existant de `gels.jsonl`. */}
       {/* ---- Panneau gauche : conversations ---- */}
-      <aside
-        className="lisere-dessus conv-pane"
-        data-view-mode={convViewMode}
-        data-density={convDensity}
-        // Une RECHERCHE en cours re-montre la ligne d'identifiant meme en cran serre : taper « 171 »
-        // doit continuer de prouver qu'on a trouve la bonne conversation (lecon du 2026-09-03).
-        data-recherche={convQuery.trim() ? 'oui' : undefined}
-        style={{ width: `${conversationsPaneWidth}px` }}
-      >
-        <div className="conv-head">
-          <ModuleHeader
-            eyebrow="Espace de travail"
-            title="Conversations"
-            actions={
-              <>
-                {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
+      <VueMesuree id="chat-liste">
+        <aside
+          className="lisere-dessus conv-pane"
+          data-view-mode={convViewMode}
+          data-density={convDensity}
+          // Une RECHERCHE en cours re-montre la ligne d'identifiant meme en cran serre : taper « 171 »
+          // doit continuer de prouver qu'on a trouve la bonne conversation (lecon du 2026-09-03).
+          data-recherche={convQuery.trim() ? 'oui' : undefined}
+          style={{ width: `${conversationsPaneWidth}px` }}
+        >
+          <div className="conv-head">
+            <ModuleHeader
+              eyebrow="Espace de travail"
+              title="Conversations"
+              actions={
+                <>
+                  {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
+                    <button
+                      type="button"
+                      className="conv-mosaic-close-all"
+                      data-testid="conv-mosaic-close-all"
+                      title="Fermer toutes les fenêtres ouvertes"
+                      aria-label="Fermer toutes les fenêtres ouvertes"
+                      onClick={fermerToutesFenetresMosaique}
+                    >
+                      Tout fermer
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="conv-mosaic-close-all"
-                    data-testid="conv-mosaic-close-all"
-                    title="Fermer toutes les fenêtres ouvertes"
-                    aria-label="Fermer toutes les fenêtres ouvertes"
-                    onClick={fermerToutesFenetresMosaique}
+                    className="conv-density-toggle"
+                    data-testid="conv-density-toggle"
+                    data-density={convDensity}
+                    title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
+                    aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
+                    onClick={() => setConvDensity(densiteSuivante(convDensity))}
                   >
-                    Tout fermer
+                    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                      {traitsDensite(convDensity).map((y) => (
+                        <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
+                      ))}
+                    </svg>
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="conv-density-toggle"
-                  data-testid="conv-density-toggle"
-                  data-density={convDensity}
-                  title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
-                  aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
-                  onClick={() => setConvDensity(densiteSuivante(convDensity))}
-                >
-                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                    {traitsDensite(convDensity).map((y) => (
-                      <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
-                    ))}
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  className="conv-view-toggle"
-                  data-testid="conv-view-toggle"
-                  role="switch"
-                  aria-checked={convViewMode === 'mosaic'}
-                  aria-label="Vue mosaïque"
-                  title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
-                  onClick={() => {
-                    if (convViewMode === 'mosaic') {
-                      setConvViewMode('list')
-                      return
-                    }
-                    setConvViewMode('mosaic')
-                    // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
-                    // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
-                    // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
-                    // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
-                    // travail, et « Tout fermer » doit rester une mosaique vide.
-                    if (mosaicIdsRef.current.length === 0 && activeId)
-                      void ouvrirDansMosaique(activeId)
-                  }}
-                >
-                  <span className="conv-view-toggle-knob" aria-hidden="true" />
-                </button>
-              </>
-            }
-          />
-        </div>
-        <div className="conv-search">
-          <span aria-hidden="true">⌕</span>
-          <input
-            value={convQuery}
-            onChange={(event) => setConvQuery(event.target.value)}
-            placeholder="Rechercher partout…"
-            aria-label="Rechercher dans les conversations"
-          />
-          {convQuery && (
-            <button onClick={() => setConvQuery('')} title="Effacer la recherche">
-              ×
-            </button>
-          )}
-        </div>
-        {/*
+                  <button
+                    type="button"
+                    className="conv-view-toggle"
+                    data-testid="conv-view-toggle"
+                    role="switch"
+                    aria-checked={convViewMode === 'mosaic'}
+                    aria-label="Vue mosaïque"
+                    title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
+                    onClick={() => {
+                      if (convViewMode === 'mosaic') {
+                        setConvViewMode('list')
+                        return
+                      }
+                      setConvViewMode('mosaic')
+                      // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
+                      // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
+                      // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
+                      // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
+                      // travail, et « Tout fermer » doit rester une mosaique vide.
+                      if (mosaicIdsRef.current.length === 0 && activeId)
+                        void ouvrirDansMosaique(activeId)
+                    }}
+                  >
+                    <span className="conv-view-toggle-knob" aria-hidden="true" />
+                  </button>
+                </>
+              }
+            />
+          </div>
+          <div className="conv-search">
+            <span aria-hidden="true">⌕</span>
+            <input
+              value={convQuery}
+              onChange={(event) => setConvQuery(event.target.value)}
+              placeholder="Rechercher partout…"
+              aria-label="Rechercher dans les conversations"
+            />
+            {convQuery && (
+              <button onClick={() => setConvQuery('')} title="Effacer la recherche">
+                ×
+              </button>
+            )}
+          </div>
+          {/*
           La barre n'existe QUE pendant une sélection en cours : hors de ce moment elle n'offrait
           qu'un bouton « Sélectionner » vu toute la journée pour un geste rare. L'entrée est
           désormais dans le menu contextuel d'une conversation, au-dessus de « Supprimer ».
         */}
-        {convSelectionMode && convViewMode !== 'mosaic' && (
-          <div className="conv-bulk-bar">
-            <button type="button" className="conv-date-sort" onClick={() => quitterModeSelection()}>
-              Annuler la sélection
-            </button>
-            <button
-              type="button"
-              className="conv-date-sort"
-              disabled={selectedConvIds.size === 0}
-              onClick={() => setBulkDeleteAsking(true)}
-            >
-              Supprimer ({selectedConvIds.size})
-            </button>
-          </div>
-        )}
-        {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor.
+          {convSelectionMode && convViewMode !== 'mosaic' && (
+            <div className="conv-bulk-bar">
+              <button
+                type="button"
+                className="conv-date-sort"
+                onClick={() => quitterModeSelection()}
+              >
+                Annuler la sélection
+              </button>
+              <button
+                type="button"
+                className="conv-date-sort"
+                disabled={selectedConvIds.size === 0}
+                onClick={() => setBulkDeleteAsking(true)}
+              >
+                Supprimer ({selectedConvIds.size})
+              </button>
+            </div>
+          )}
+          {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor.
             MAIS reste VISIBLE tant qu'une reprise tourne : les fils repris sortent de la liste des
             coupes des qu'ils passent occupes, si bien que le bloc disparaissait au premier clic et
             emportait la progression avec lui — « ca n'en a repris qu'une sur 3 » (2026-09-05),
             alors que les deux autres attendaient leur tour, invisibles. */}
-        {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) &&
-          (repriseQuotaEnCours || repriseQuotaMasqueePour !== cleRepriseQuota) && (
-            <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
-              {!repriseQuotaEnCours ? (
-                <button
-                  type="button"
-                  className="conv-reprise-quota-fermer"
-                  data-testid="conv-reprise-quota-fermer"
-                  aria-label="Masquer"
-                  title="Masquer (réapparaît si une autre conversation est coupée)"
-                  onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
-                >
-                  ×
-                </button>
-              ) : null}
-              {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
+          {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) &&
+            (repriseQuotaEnCours || repriseQuotaMasqueePour !== cleRepriseQuota) && (
+              <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
+                {!repriseQuotaEnCours ? (
+                  <button
+                    type="button"
+                    className="conv-reprise-quota-fermer"
+                    data-testid="conv-reprise-quota-fermer"
+                    aria-label="Masquer"
+                    title="Masquer (réapparaît si une autre conversation est coupée)"
+                    onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
+                  >
+                    ×
+                  </button>
+                ) : null}
+                {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
                 reprise, la notice reste seule quelques secondes, sans un « (0) » qui n'offre
                 rien a cliquer. */}
-              {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
-                <button
-                  type="button"
-                  className="conv-date-sort"
-                  data-testid="conv-reprise-quota-bouton"
-                  disabled={repriseQuotaEnCours}
-                  onClick={() => void reprendreConversationsCoupeesParQuota()}
-                  title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
-                >
-                  {repriseQuotaEnCours ? (
-                    <>
-                      <Spinner size={12} label="Reprise des conversations en cours" />
-                      {repriseQuotaProgres ?? 'Reprise en cours…'}
-                    </>
-                  ) : (
-                    `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
-                  )}
-                </button>
-              ) : null}
-              {repriseQuotaNotice ? (
-                <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
-                  {repriseQuotaNotice}
-                </span>
-              ) : null}
-              {/* Rien ne part en silence : quand une reprise est armée, elle s'annonce avec son heure
-                et offre le moyen de l'annuler. Sans ce libelle, l'utilisateur verrait ses fils
-                repartir sans savoir pourquoi. */}
-              {repriseAutoPrevueA ? (
-                <span className="conv-auto-notice" data-testid="conv-reprise-quota-auto">
-                  {libelleRepriseProgrammee(repriseAutoPrevueA, convsCoupeesParQuota.length)}
+                {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
                   <button
                     type="button"
                     className="conv-date-sort"
-                    data-testid="conv-reprise-quota-auto-annuler"
-                    onClick={() => setRepriseAutoRefusee(true)}
-                    title="Ne pas reprendre automatiquement au retour du quota"
+                    data-testid="conv-reprise-quota-bouton"
+                    disabled={repriseQuotaEnCours}
+                    onClick={() => void reprendreConversationsCoupeesParQuota()}
+                    title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
                   >
-                    ne pas reprendre
+                    {repriseQuotaEnCours ? (
+                      <>
+                        <Spinner size={12} label="Reprise des conversations en cours" />
+                        {repriseQuotaProgres ?? 'Reprise en cours…'}
+                      </>
+                    ) : (
+                      `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
+                    )}
                   </button>
-                </span>
-              ) : null}
-            </div>
-          )}
-        <div className="conv-list scroll-y">
-          <button
-            className={`conv-new-row${convViewMode !== 'mosaic' && activeId === null ? ' active' : ''}`}
-            onClick={() => {
-              // En mosaique, « Nouveau » doit OUVRIR UNE FENETRE de plus : vider le fil unique,
-              // masque derriere la grille, ne produisait aucun effet visible.
-              if (convViewMode === 'mosaic') void nouvelleFenetreMosaique()
-              else newConv()
-            }}
-            title="Démarrer une nouvelle conversation"
-            aria-current={activeId === null ? 'page' : undefined}
-          >
-            <span className="conv-new-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </span>
-            <span className="conv-new-title">Nouveau fil</span>
-          </button>
-          {convs.length === 0 && (
-            <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-              Aucune conversation — écris un message pour en démarrer une.
-            </div>
-          )}
-          {convs.length > 0 && conversationHits.length === 0 && (
-            <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
-          )}
-          {groupes.map((groupe) => {
-            // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
-            // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
-            const replie = !convQuery.trim() && estReplie(groupe.key, groupesReplies)
-            return (
-              <Fragment key={groupe.key}>
-                {/*
-                  L'en-tête est AUSSI la zone de dépôt : viser un titre est plus facile que viser un
-                  interstice, et ça évite d'inventer une cible invisible. On ne dépose pas sur un
-                  groupe dérivé (« Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence
-                  de dossier) — y traîner une conversation ne voudrait rien dire.
-                */}
-                <div
-                  className={`conv-group${replie ? ' is-collapsed' : ''}${
-                    surviole === groupe.key ? ' is-drop' : ''
-                  }`}
-                  data-testid={`conv-group-${groupe.key}`}
-                  data-depth={groupe.depth}
-                  onDragOver={(e) => {
-                    if (!deposable(groupe.kind)) return
-                    e.preventDefault()
-                    setSurvole(groupe.key)
-                  }}
-                  onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    setSurvole(null)
-                    const id = e.dataTransfer.getData('text/autowin-conversation')
-                    if (id && deposable(groupe.kind)) void rangerDans(id, groupe.key)
-                  }}
-                >
-                  <button
-                    className="conv-group-head"
-                    onClick={() => basculerGroupe(groupe.key, replie)}
-                    aria-expanded={!replie}
-                    title={deposable(groupe.kind) ? groupe.key : groupe.label}
-                    style={{ paddingLeft: 8 + groupe.depth * 14 }}
-                  >
-                    <span className="conv-group-chevron" aria-hidden="true">
-                      {replie ? '▸' : '▾'}
-                    </span>
-                    <span className="conv-group-label">{groupe.label}</span>
-                    <span className="conv-group-count tnum">{groupe.items.length}</span>
-                  </button>
-                </div>
-                {!replie &&
-                  groupe.items.map(({ hit: { conversation: c, snippet } }) => {
-                    const conversationState = deriveConversationState({
-                      busy: busyConversations.has(c.id),
-                      messageCount: c.messageCount ?? c.messages?.length ?? 0,
-                      lastMessageRole:
-                        c.lastMessageRole ??
-                        // Même règle que la projection du store : une consigne écrite pendant un
-                        // tour (`orientation`) ne porte pas d'attente de réponse (conv-61).
-                        [...(c.messages ?? [])].reverse().find((m) => m.orientation !== true)?.role,
-                      lastAssistantStatus: c.lastAssistantStatus,
-                      asksUser: c.lastAssistantAsksUser === true,
-                      // La conversation OUVERTE est lue par definition : elle ne doit jamais
-                      // s'afficher « non lue » sous les yeux de celui qui la regarde.
-                      unseen: c.id !== activeId && estNonVue(c, conversationsVues)
-                    })
-                    const stateDescription = `${conversationState.label} — ${conversationState.detail}`
-                    return (
-                      <div
-                        key={c.id}
-                        className={`conv-item${c.id === activeId ? ' active' : ''}${
-                          c.surlignee ? ' surlignee' : ''
-                        }`}
-                        style={{ marginLeft: groupe.depth * 14 }}
-                        // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
-                        // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
-                        // ceux qui ne peuvent pas glisser.
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/autowin-conversation', c.id)
-                          e.dataTransfer.effectAllowed = 'move'
-                        }}
-                      >
-                        {convSelectionMode && convViewMode !== 'mosaic' && (
-                          <input
-                            type="checkbox"
-                            className="conv-select-box"
-                            checked={selectedConvIds.has(c.id)}
-                            onChange={() => toggleConvSelection(c.id)}
-                            aria-label={`Sélectionner « ${c.title} »`}
-                          />
-                        )}
-                        <button
-                          className="conv-pick"
-                          onClick={() =>
-                            convViewMode === 'mosaic'
-                              ? void basculerDansMosaique(c.id)
-                              : void loadConv(c)
-                          }
-                        >
-                          {/* EN COURS = le MEME atome que partout ailleurs : le composant
-                              <Spinner/>. La pastille etait le dernier endroit a rendre l'ancien
-                              atome CSS a bordures (.spinner), d'ou un indicateur qui ne
-                              ressemblait a aucun autre. Les autres etats restent une pastille. */}
-                          {conversationState.key === 'running' ? (
-                            <Spinner
-                              size={14}
-                              className="conversation-state is-running"
-                              label={`État de la conversation : ${stateDescription}`}
-                              title={stateDescription}
-                              data-conversation-state={conversationState.key}
-                            />
-                          ) : (
-                            <span
-                              className={`conversation-state is-${conversationState.key}`}
-                              data-conversation-state={conversationState.key}
-                              role="img"
-                              aria-label={`État de la conversation : ${stateDescription}`}
-                              title={stateDescription}
-                            />
-                          )}
-                          <span className="conv-copy">
-                            <span className="conv-label">
-                              {convQuery ? (
-                                <TexteSurligne texte={c.title} terme={convQuery} />
-                              ) : (
-                                c.title
-                              )}
-                            </span>
-                            {convQuery && snippet && (
-                              <span className="conv-snippet">
-                                <TexteSurligne texte={snippet} terme={convQuery} />
-                              </span>
-                            )}
-                            {/* Le NUMERO reste visible pendant une recherche, et surligne quand il
-                                correspond : taper « 171 » masquait la seule information qui prouve
-                                qu'on a trouve la bonne conversation (2026-09-03). */}
-                            <span className="conv-meta">
-                              <span>
-                                {convQuery ? (
-                                  <TexteSurligne texte={c.id} terme={convQuery} />
-                                ) : (
-                                  c.id
-                                )}
-                              </span>
-                              {!convQuery && (
-                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
-                              )}
-                            </span>
-                          </span>
-                          {convQuery && (
-                            <span className="conv-count tnum">
-                              {c.messageCount ?? c.messages?.length ?? 0}
-                            </span>
-                          )}
-                          {/* En mosaique, la liste n'est plus une SELECTION mais un jeu
-                              d'interrupteurs : l'etat ouvert/ferme se lit a droite du titre. */}
-                          {convViewMode === 'mosaic' && (
-                            <span
-                              className={`conv-mosaic-toggle${mosaicIds.includes(c.id) ? ' is-open' : ''}`}
-                              data-testid={`conv-mosaic-toggle-${c.id}`}
-                              role="img"
-                              aria-pressed={mosaicIds.includes(c.id) ? 'true' : 'false'}
-                              aria-label={
-                                mosaicIds.includes(c.id)
-                                  ? `« ${c.title} » ouverte en mosaïque — cliquer pour fermer`
-                                  : `« ${c.title} » fermée — cliquer pour ouvrir`
-                              }
-                              title={mosaicIds.includes(c.id) ? 'Ouverte' : 'Fermée'}
-                            >
-                              <span className="conv-mosaic-toggle-knob" aria-hidden="true" />
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          className="conv-menu-trigger"
-                          title="Actions"
-                          aria-label="Actions de la conversation"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            const rect = event.currentTarget.getBoundingClientRect()
-                            setConvMenu((current) =>
-                              current?.conv.id === c.id
-                                ? null
-                                : { conv: c, top: rect.top, left: rect.right + 6 }
-                            )
-                          }}
-                        >
-                          ⋮
-                        </button>
-                      </div>
-                    )
-                  })}
-              </Fragment>
-            )
-          })}
-        </div>
-      </aside>
+                ) : null}
+                {repriseQuotaNotice ? (
+                  <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
+                    {repriseQuotaNotice}
+                  </span>
+                ) : null}
+                {/* Rien ne part en silence : quand une reprise est armée, elle s'annonce avec son heure
+                et offre le moyen de l'annuler. Sans ce libelle, l'utilisateur verrait ses fils
+                repartir sans savoir pourquoi. */}
+                {repriseAutoPrevueA ? (
+                  <span className="conv-auto-notice" data-testid="conv-reprise-quota-auto">
+                    {libelleRepriseProgrammee(repriseAutoPrevueA, convsCoupeesParQuota.length)}
+                    <button
+                      type="button"
+                      className="conv-date-sort"
+                      data-testid="conv-reprise-quota-auto-annuler"
+                      onClick={() => setRepriseAutoRefusee(true)}
+                      title="Ne pas reprendre automatiquement au retour du quota"
+                    >
+                      ne pas reprendre
+                    </button>
+                  </span>
+                ) : null}
+              </div>
+            )}
+          <div className="conv-list scroll-y">
+            <button
+              className={`conv-new-row${convViewMode !== 'mosaic' && activeId === null ? ' active' : ''}`}
+              onClick={() => {
+                // En mosaique, « Nouveau » doit OUVRIR UNE FENETRE de plus : vider le fil unique,
+                // masque derriere la grille, ne produisait aucun effet visible.
+                if (convViewMode === 'mosaic') void nouvelleFenetreMosaique()
+                else newConv()
+              }}
+              title="Démarrer une nouvelle conversation"
+              aria-current={activeId === null ? 'page' : undefined}
+            >
+              <span className="conv-new-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+              <span className="conv-new-title">Nouveau fil</span>
+            </button>
+            {convs.length === 0 && (
+              <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
+                Aucune conversation — écris un message pour en démarrer une.
+              </div>
+            )}
+            {convs.length > 0 && conversationHits.length === 0 && (
+              <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
+            )}
+            {lignesListe}
+          </div>
+        </aside>
+      </VueMesuree>
       {convMenu &&
         createPortal(
           <>
