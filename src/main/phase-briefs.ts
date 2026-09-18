@@ -123,7 +123,7 @@ Livrable :
  * Le texte distingue explicitement PRÉCISER (autorisé, c'est le travail de `frame`) de
  * SUBSTITUER (interdit) : une garde trop serrée empêcherait de remonter au besoin réel.
  */
-export const GARDE_TACHE = `TÂCHE DONNÉE = TÂCHE TRAITÉE. L'énoncé qui t'est confié ne se remplace pas en cours de route. Tu peux le PRÉCISER — remonter à son problème réel, borner son périmètre, nommer ses critères — jamais lui en SUBSTITUER un autre, même voisin, plus facile ou plus intéressant. Au moment où tu constates que la tâche est DÉJÀ FAITE, INFAISABLE en l'état, ou repose sur une prémisse fausse : tu t'ARRÊTES et tu le DIS, avec la preuve du constat (le fichier lu et sa ligne, la commande et son code de sortie) — tu ne traites pas autre chose à la place, et tu ne le laisses pas deviner. Un livrable parfait qui répond à une question que personne n'a posée est un échec.`
+export const GARDE_TACHE = `TÂCHE DONNÉE = TÂCHE TRAITÉE — réflexe (5) de la constitution : PRÉCISER oui, SUBSTITUER jamais ; DÉJÀ FAITE, infaisable ou prémisse fausse → arrête-toi et dis-le, preuve du constat à l'appui.`
 
 /** Consigne d'une phase (vide si inconnue — l'appelant retombe alors sur la discipline générique). */
 export function phaseBrief(phase: NodePhase): string {

@@ -281,3 +281,13 @@ ${n}. `)
   })
 
 })
+
+describe('fusion : la regle « tache donnee » vit dans la constitution, la consigne n est qu un renvoi', async () => {
+  const { CONSTITUTION } = await import('./constitution')
+  it('la constitution porte la preuve du constat ; GARDE_TACHE ne la recopie pas', () => {
+    expect(CONSTITUTION).toMatch(/fichier lu et sa ligne/)
+    expect(CONSTITUTION).toMatch(/PRÉCISER/)
+    expect(GARDE_TACHE).toMatch(/réflexe \(5\)/)
+    expect(GARDE_TACHE.length).toBeLessThan(300)
+  })
+})
