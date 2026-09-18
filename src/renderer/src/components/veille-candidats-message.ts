@@ -290,7 +290,9 @@ function lireLignesCibles(texteScout: string): string | null {
     // Le corps de la section : jusqu'au titre suivant. Une section vide ne déclare rien.
     const corps: string[] = []
     for (let j = i + 1; j < lignes.length; j++) {
-      if (/^\s{0,3}#{1,6}\s+/u.test(lignes[j]!)) break
+      // fix-ok: le tableau qui suit la section n'est pas la declaration — ses chiffres (scores, l.3)
+      // cochaient tout (conv-690, saisie ts 1789715005953 : 5/5 envoyes pour « la piste 1 »).
+      if (/^\s{0,3}#{1,6}\s+/u.test(lignes[j]!) || /^\s*\|/u.test(lignes[j]!)) break
       corps.push(lignes[j]!)
     }
     const valeur = corps.join(' ').trim()
