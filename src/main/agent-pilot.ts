@@ -582,7 +582,68 @@ function retirerConclusionBloquantePrematuree(texte: string): string {
   }
 }
 
-export function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
+/**
+ * `<cmd>` A LA FERMETURE ERRONEE — mesure conv-686, tour `6185f7e7-88fa-4add-bf84-c51741d1b8b0`
+ * (2026-09-18) : le modele emet `<cmd>{...JSON complet...}</invoke>
+</function_calls>` puis sa
+ * phrase de cloture. Sans `</cmd>`, CONTROL_RE ne matchait rien : l'orchestration n'etait PAS
+ * lancee et tout le texte depuis `<cmd>` (conclusion comprise) etait masque — l'utilisateur lisait
+ * « Aucune reponse produite pour ce tour. ». fix-ok: fermeture `</invoke>` au lieu de `</cmd>`.
+ * On recupere un objet JSON EQUILIBRE et PARSABLE juste apres `<cmd>`, on le referme proprement et
+ * on retire les fermetures parasites qui le suivent. Un JSON incomplet reste intact (chemin invalid).
+ */
+export function normaliserFermeturesCmd(raw: string): string {
+  let out = ''
+  let i = 0
+  while (true) {
+    const start = raw.indexOf('<cmd>', i)
+    if (start < 0) return out + raw.slice(i)
+    const apresOuverture = start + 5
+    let j = apresOuverture
+    while (j < raw.length && /\s/.test(raw[j])) j++
+    const fin = raw[j] === '{' ? finObjetJson(raw, j) : -1
+    if (fin < 0) {
+      out += raw.slice(i, apresOuverture)
+      i = apresOuverture
+      continue
+    }
+    const json = raw.slice(j, fin)
+    const reste = raw.slice(fin)
+    if (/^\s*<\/cmd>/.test(reste)) {
+      out += raw.slice(i, fin)
+      i = fin
+      continue
+    }
+    try {
+      JSON.parse(json)
+    } catch {
+      out += raw.slice(i, apresOuverture)
+      i = apresOuverture
+      continue
+    }
+    const parasites = /^(?:\s*<\/(?:invoke|function_calls|parameter|antml:[a-z_]+)>)*/.exec(reste)
+    out += raw.slice(i, start) + '<cmd>' + json + '</cmd>'
+    i = fin + (parasites ? parasites[0].length : 0)
+  }
+}
+
+function finObjetJson(raw: string, debut: number): number {
+  let profondeur = 0
+  let dansChaine = false
+  for (let k = debut; k < raw.length; k++) {
+    const c = raw[k]
+    if (dansChaine) {
+      if (c === '\\') k++
+      else if (c === '"') dansChaine = false
+    } else if (c === '"') dansChaine = true
+    else if (c === '{') profondeur++
+    else if (c === '}' && --profondeur === 0) return k + 1
+  }
+  return -1
+}
+
+export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
+  const raw = normaliserFermeturesCmd(input)
   const tokens: OrderedPilotToken[] = []
   let cursor = 0
   CONTROL_RE.lastIndex = 0
