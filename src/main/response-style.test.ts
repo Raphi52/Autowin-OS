@@ -1,3 +1,4 @@
+import { CONSTITUTION } from './constitution'
 import { describe, expect, it } from 'vitest'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 
@@ -106,34 +107,39 @@ describe('prompt suivant prérempli dans le composer', () => {
  * seule une execution reelle le montre.
  */
 describe('agir plutot que recommander — la cloture ne sert pas a rendre le travail', () => {
-  const consigne = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+  // Règle fusionnée le 2026-09-18 : elle vit UNE fois, au réflexe 10 de la CONSTITUTION (injectée
+  // avec ce profil à chaque appel). Le profil ne garde qu'un renvoi, placé avant la rubrique.
+  const consigne = CONSTITUTION
 
-  it('pose la regle AVANT la rubrique Recommandé, la ou la decision se prend', () => {
-    const regle = consigne.search(/AGIR PLUT[ÔO]T QUE RECOMMANDER/u)
+  it('pose un renvoi AVANT la rubrique Recommandé, la ou la decision se prend', () => {
+    const style = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+    const regle = style.search(/AGIR PLUT[ÔO]T QUE RECOMMANDER/u)
     expect(regle).toBeGreaterThanOrEqual(0)
-    expect(regle).toBeLessThan(consigne.indexOf('👉 Recommandé'))
+    expect(regle).toBeLessThan(style.indexOf('👉 Recommandé'))
+    expect(style).toMatch(/réflexe 10/u)
+  })
+
+  it('ne recopie plus la regle dans le profil : un seul endroit', () => {
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).not.toMatch(/ne se recommandent JAMAIS/u)
   })
 
   it('ordonne d EXECUTER l action sure, bornee et reversible au lieu de l ecrire', () => {
-    expect(consigne).toMatch(/ex[ée]cute-la|fais-la|EX[ÉE]CUTE/u)
-    expect(consigne).toMatch(/s[ûu]re|born[ée]e|r[ée]versible/u)
+    expect(consigne).toMatch(/EX[ÉE]CUTE-LA dans CE tour/u)
+    expect(consigne).toMatch(/s[ûu]re, born[ée]e et r[ée]versible/u)
   })
 
   it('reserve « Recommandé » a ce que l agent ne peut PAS faire lui-meme', () => {
-    expect(consigne).toMatch(/destructe?/iu)
+    expect(consigne).toMatch(/acte destructeur/iu)
     expect(consigne).toMatch(/hors p[ée]rim[èe]tre/iu)
-    expect(consigne).toMatch(/d[ée]cision qui appartient|appartient [àa] l'utilisateur/iu)
+    expect(consigne).toMatch(/d[ée]cision qui appartient [àa] l'utilisateur/iu)
   })
 
   it('nomme les actes qui ne se recommandent JAMAIS : lecture seule, diagnostic, verification', () => {
-    expect(consigne).toMatch(/lecture seule/iu)
-    expect(consigne).toMatch(/diagnostic/iu)
-    expect(consigne).toMatch(/v[ée]rification/iu)
+    expect(consigne).toMatch(/diagnostic, une lecture seule, une v[ée]rification, une recherche ne se recommandent JAMAIS/iu)
   })
 
   it('interdit la question dont l agent prendrait lui-meme l option recommandee', () => {
-    expect(consigne).toMatch(/ne pose pas.*question|ne demande pas/iu)
-    expect(consigne).toMatch(/tu prendrais de toute fa/iu)
+    expect(consigne).toMatch(/QCM dont tu prendrais l'option recommandée de toute fa/iu)
   })
 })
 
