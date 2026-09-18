@@ -310,7 +310,8 @@ export function createAmitelContextProvider(
       pushBrain
         ? retrieveBrain(boundedQuery, meta?.conversationId)
         : Promise.resolve({ context: '', status: 'empty' } as BrainRetrievalResult),
-      retrieveGraph(boundedQuery)
+      // `sources` gouverne AUSSI le graphe : il etait interroge sans condition (conv-703).
+      sources.includes('graph') ? retrieveGraph(boundedQuery) : Promise.resolve('')
     ])
     // PORTÉE PAR WORKSPACE : le Brain est à 99 % de la doc RIG (mesure 2026-07-29), donc une question
     // Autowin ramène majoritairement des sources d'un AUTRE projet. On restreint au corpus du

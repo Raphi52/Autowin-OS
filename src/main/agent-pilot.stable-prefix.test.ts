@@ -65,3 +65,25 @@ describe('system prompt — préfixe stable (cachable)', () => {
     expect(withBrain.systems[0]).toBe(withoutBrain.systems[0])
   })
 })
+
+/**
+ * UN TOUR D'ACTION GARDE TOUTES SES RÈGLES (conv-703, « enlève les poids morts », 2026-09-18).
+ * La coupe des poids morts porte sur le contexte payé plein tarif (graphe de code), jamais sur
+ * les règles : un tour qui agit doit toujours recevoir constitution + style complets.
+ */
+describe('tour d’action — règles complètes', () => {
+  it('le system d’un tour d’action contient la constitution et la consigne de style entières', async () => {
+    const { CONSTITUTION } = await import('./constitution')
+    const { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } = await import('./response-style')
+    const { pilot, systems } = harness(async () => '')
+    await pilot.chat(
+      [{ role: 'user', content: 'corrige le bug dans src/main/index.ts et lance les tests' }],
+      () => {},
+      undefined,
+      1,
+      'c-action'
+    )
+    expect(systems[0]).toContain(CONSTITUTION)
+    expect(systems[0]).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
+  })
+})

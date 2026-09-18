@@ -1030,7 +1030,12 @@ const pilot = new AgentPilot(
     // AUCUNE source utile ; le graphe coute 7 ms. Le Brain reste atteignable A LA DEMANDE, par la
     // commande `brain_query` que le prompt recommande deja — on passe d'un contexte pousse a une
     // capacite disponible.
-    sources: ['graph'],
+    // POIDS MORT RETIRE (conv-703, mesure 2026-09-18) : le graphe poussait ~900 car. de noms de
+    // fichiers sans rapport (« 0. Etat des lieux », `app-data.ts`...) sur 3 questions d'avis sur 3,
+    // payes plein tarif a chaque tour. Pour une question sur le code, seule la recherche texte a la demande
+    // (`find_in_files`) reste : ce n'est PAS la carte de structure du graphe (perte non evaluee).
+    // fix-ok: graphe injecte a chaque tour de chat = 877/812/813 car. hors cache sur 3 questions d avis, 0 apres (createAmitelContextProvider reel)
+    sources: [],
     // RESOLU PAR TOUR : le corpus autorise derive du dossier RANGE sur la conversation, pas d'un global fige.
     workspace: (conversationId?: string) => dossierDuTour(conversationId),
     onScope: ({ kept, dropped, corpus }) => {
