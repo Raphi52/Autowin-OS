@@ -30,7 +30,9 @@ export function consigneBureauCache(runId: string): string {
     `\nBUREAU CACHÉ (ton bureau à toi : ${id}) : pour ouvrir une application graphique — autre chose ` +
     `qu'une vue d'Autowin, que \`scripts/ui-capture.mjs\` couvre déjà —, ne la lance JAMAIS au premier ` +
     `plan : elle s'afficherait sur l'écran de l'utilisateur et se disputerait l'instance des travaux ` +
-    `parallèles (un garde-fou refuse d'ailleurs le geste). Passe par ` +
+    `parallèles. Et ne FERME jamais une application de l'utilisateur pour te débloquer : un binaire ` +
+    `verrouillé pendant une compilation (MSB3021 / MSB3027) se contourne en compilant SANS lier — ` +
+    `\`dotnet msbuild <projet> -t:Compile\` —, jamais en tuant le processus par son nom. Passe par ` +
     `\`powershell -NoProfile -File scripts/hdesk-lancer.ps1 -Id ${id} -Executable "<chemin.exe>" -Arguments "<args>" -Travail "<ce que tu fais>"\`, ` +
     `puis capture avec \`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId ${id} -Output <chemin.png>\` et LIS l'image. ` +
     `N'emploie aucun autre identifiant de bureau : ${id} est réservé à ce run, c'est ce qui empêche ` +

@@ -6,6 +6,7 @@
  * l'IPC. C'est ce qui rend tenable l'invariant perf « composer change ≠ re-render des lignes »
  * (comparateur data-only en bas de fichier).
  */
+import { tourRefusePourAutoLancer } from './veille-candidats-message'
 import React, { Fragment, memo } from 'react'
 import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
@@ -510,7 +511,13 @@ export const ChatMessageRow = memo(
                         key={index}
                         candidats={part.candidats}
                         texteScout={part.texteScout}
-                        autoLancer={autoLancerCandidats}
+                        autoLancer={
+                          autoLancerCandidats === true &&
+                          !tourRefusePourAutoLancer(
+                            message.status,
+                            message.parts.flatMap((p) => (p.kind === 'text' ? [p.text] : []))
+                          )
+                        }
                         onPick={(prompt) => onPickSuggestion?.(prompt)}
                       />
                     ) : part.kind === 'error' ? (

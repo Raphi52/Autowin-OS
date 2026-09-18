@@ -582,7 +582,79 @@ function retirerConclusionBloquantePrematuree(texte: string): string {
   }
 }
 
-export function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
+/**
+ * `<cmd>` A LA FERMETURE ERRONEE — mesure conv-686, tour `6185f7e7-88fa-4add-bf84-c51741d1b8b0`
+ * (2026-09-18) : le modele emet `<cmd>{...JSON complet...}</invoke>
+</function_calls>` puis sa
+ * phrase de cloture. Sans `</cmd>`, CONTROL_RE ne matchait rien : l'orchestration n'etait PAS
+ * lancee et tout le texte depuis `<cmd>` (conclusion comprise) etait masque — l'utilisateur lisait
+ * « Aucune reponse produite pour ce tour. ». fix-ok: fermeture `</invoke>` au lieu de `</cmd>`.
+ * On recupere un objet JSON EQUILIBRE et PARSABLE juste apres `<cmd>`, on le referme proprement et
+ * on retire les fermetures parasites qui le suivent. Un JSON incomplet reste intact (chemin invalid).
+ */
+export function normaliserFermeturesCmd(raw: string): string {
+  let out = ''
+  let i = 0
+  while (true) {
+    const start = raw.indexOf('<cmd>', i)
+    if (start < 0) return out + raw.slice(i)
+    const apresOuverture = start + 5
+    let j = apresOuverture
+    while (j < raw.length && /\s/.test(raw[j])) j++
+    const fin = raw[j] === '{' ? finObjetJson(raw, j) : -1
+    if (fin < 0) {
+      out += raw.slice(i, apresOuverture)
+      i = apresOuverture
+      continue
+    }
+    const json = raw.slice(j, fin)
+    const reste = raw.slice(fin)
+    if (/^\s*<\/cmd>/.test(reste)) {
+      out += raw.slice(i, fin)
+      i = fin
+      continue
+    }
+    try {
+      JSON.parse(json)
+    } catch {
+      out += raw.slice(i, apresOuverture)
+      i = apresOuverture
+      continue
+    }
+    const parasites = /^(?:\s*<\/(?:invoke|function_calls|parameter|antml:[a-z_]+)>)*/.exec(reste)
+    out += raw.slice(i, start) + '<cmd>' + json + '</cmd>'
+    i = fin + (parasites ? parasites[0].length : 0)
+  }
+}
+
+function finObjetJson(raw: string, debut: number): number {
+  let profondeur = 0
+  let dansChaine = false
+  for (let k = debut; k < raw.length; k++) {
+    const c = raw[k]
+    if (dansChaine) {
+      if (c === '\\') k++
+      else if (c === '"') dansChaine = false
+    } else if (c === '"') dansChaine = true
+    else if (c === '{') profondeur++
+    else if (c === '}' && --profondeur === 0) return k + 1
+  }
+  return -1
+}
+
+/**
+ * conv-686, tours `6185f7e7-88fa-4add-bf84-c51741d1b8b0` et `30876029-68c5-43c8-948c-59786b28a081`
+ * (saisies ts 1789711890089 et 1789712145048) : le modele a emis une commande `<cmd>` illisible,
+ * rien n'a ete lance, et l'ecran disait « Aucune reponse produite » — l'utilisateur a renvoye le
+ * meme message sans savoir qu'une commande avait ete perdue. Le repli le dit desormais.
+ */
+export function texteCmdIlisible(): string {
+  return 'J’ai voulu lancer une action, mais ma commande était mal formée : rien n’a été lancé. ' +
+    'Renvoie ton message pour relancer.'
+}
+
+export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
+  const raw = normaliserFermeturesCmd(input)
   const tokens: OrderedPilotToken[] = []
   let cursor = 0
   CONTROL_RE.lastIndex = 0
@@ -1560,6 +1632,8 @@ export class AgentPilot {
      * redemande explicitement la conclusion. Une seule fois, comme la reprise de question invalide.
      */
     let anyActionExecuted = false
+    /** Le modele a emis `<cmd>` dans ce tour (lu ou non) — sert au repli de cloture. */
+    let cmdEmisCeTour = false
     /**
      * A-t-il parle A UN MOMENT du tour ? La question porte sur le TOUR ENTIER, pas sur la derniere
      * iteration : un tour « Avant. <action> Apres. » suivi d'une reponse vide a deja tout dit, le
@@ -1714,7 +1788,9 @@ export class AgentPilot {
         (anyActionExecuted
           ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
             'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
-          : 'Aucune reponse produite pour ce tour.')
+          : cmdEmisCeTour
+            ? texteCmdIlisible()
+            : 'Aucune reponse produite pour ce tour.')
       /*
        * UN REFUS DE MEMOIRE ENCORE DEBOUT SUIT LE TOUR JUSQU'A SA CLOTURE, QUELLE QU'ELLE SOIT.
        *
@@ -2230,6 +2306,7 @@ export class AgentPilot {
         return
       }
 
+      if (texteProvider.includes('<cmd>')) cmdEmisCeTour = true
       const ordered = parseOrderedPilotTokens(texteProvider)
       const hasCommand = ordered.some((token) => token.kind === 'command')
       const spoken = ordered
