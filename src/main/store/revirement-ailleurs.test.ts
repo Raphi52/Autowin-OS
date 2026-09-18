@@ -69,3 +69,21 @@ describe('un revirement hors du message porteur', () => {
     expect(extrait).toBe("l'ambre signale un travail en cours")
   })
 })
+
+/**
+ * DEFAUT VECU conv-706 (2026-09-18) : la REPONSE annexee a la question portait un connecteur
+ * (« mais »), et la recherche de revirement repartait juste apres la QUESTION -- donc sur cette
+ * meme reponse. Elle sortait deux fois, la seconde sous « [la suite revient sur ce qui precede] ».
+ */
+describe('la reponse annexee n est pas redite comme revirement', () => {
+  it('chaque message n apparait qu une fois dans les extraits', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const c = store.create({ title: 'Doublon', provider: 'claude' })
+    store.append(c.id, { role: 'user', content: "quel code couleur pour l'ambre ?" })
+    store.append(c.id, { role: 'assistant', content: 'ambre = en cours, mais pas pour les erreurs' })
+
+    const textes = store.search('ambre')[0].extraits.map((e) => e.extrait.replace(/^\[[^\]]*\]\s*/, ''))
+    expect(new Set(textes).size).toBe(textes.length)
+  })
+})
