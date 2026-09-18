@@ -237,3 +237,19 @@ describe('langage simple — le vocabulaire, pas seulement la longueur', () => {
     expect(regle).toBeLessThan(cloture)
   })
 })
+
+/**
+ * CLÔTURE = MÊME CRITÈRE QUE LE CODE (2026-09-18, conv-710). La consigne disait « après une tâche
+ * substantielle » — jugement laissé au modèle — alors que `exigeUneConclusion` (chat-turn-messages.ts)
+ * ne réclame les rubriques QUE si le tour a exécuté une commande. L'écart produisait des blocs de
+ * clôture sur des réponses sans action (réponses verbeuses).
+ */
+describe('STYLE_CLOTURE_CHAT — critère « a agi »', () => {
+  it('lie la clôture à une commande exécutée, pas à « substantielle »', () => {
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).not.toMatch(/après une tâche substantielle/iu)
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /seulement si ce tour a exécuté au moins une commande/iu
+    )
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(/sans commande.*aucun bloc de clôture/iu)
+  })
+})
