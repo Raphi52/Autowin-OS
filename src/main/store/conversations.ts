@@ -1384,7 +1384,8 @@ export class ConversationStore {
         const densite =
           motsIci / Math.sqrt(Math.max(60, Math.min(message.content.length, PLAFOND_LONGUEUR)))
         if (densite > meilleurScore) meilleurScore = densite
-        if (extraits.length < parConversation) {
+        // fix-ok: la reponse annexee au rang precedent peut etre elle-meme un resultat -- ne pas la redire.
+        if (extraits.length < parConversation && !derniersRangs.includes(rang)) {
           extraits.push({
             role: message.role,
             ts: message.ts,
@@ -1408,6 +1409,9 @@ export class ConversationStore {
               ts: suivant.ts,
               extrait: fenetre(suivant.content, 0, 0)
             })
+            // La reponse annexee est deja citee : le revirement se cherche APRES elle, sinon il
+            // la redit mot pour mot sous « [la suite revient sur ce qui precede] ».
+            derniersRangs.push(rang + 1)
           }
         }
       }

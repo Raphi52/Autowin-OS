@@ -183,3 +183,37 @@ export function rappelDesEchangesPasses(
   // n'y avait rien de plus.
   return rendu.length <= PLAFOND ? rendu : `${rendu.slice(0, PLAFOND)}…[rappel tronqué]`
 }
+
+/**
+ * Retire du rappel les extraits DEJA envoyes dans la session reprise du modele.
+ *
+ * Signale le 2026-09-18 (conv-706) : en session reprise (`--resume`), le meme rappel de conv-627 /
+ * conv-624 repartait a chaque tour alors que la session le portait deja depuis le premier envoi.
+ * On ne coupe PAS le rappel en session reprise : il porte d'AUTRES conversations, absentes de la
+ * session (garde conv-1407). On retire seulement ce qui y est deja. `dejaEnvoyes` est tenu par
+ * conversation et remis a zero quand la session change ; il est complete ici.
+ * fix-ok: en session --resume, agent-pilot.ts reemettait a chaque tour les memes extraits de rappel deja portes par la session (mesure conv-706 : conv-627/conv-624 renvoyes a chaque tour).
+ */
+export function rappelSansDejaEnvoye(rappel: string, dejaEnvoyes: Set<string>): string {
+  if (!rappel.trim()) return ''
+  const [enTete, ...lignes] = rappel.split('\n')
+  const sortie: string[] = []
+  let titre = ''
+  let titreEcrit = false
+  for (const ligne of lignes) {
+    if (ligne.startsWith('— ')) {
+      titre = ligne
+      titreEcrit = false
+      continue
+    }
+    const cle = `${titre}\n${ligne}`
+    if (dejaEnvoyes.has(cle)) continue
+    dejaEnvoyes.add(cle)
+    if (titre && !titreEcrit) {
+      sortie.push(titre)
+      titreEcrit = true
+    }
+    sortie.push(ligne)
+  }
+  return sortie.length > 0 ? [enTete, ...sortie].join('\n') : ''
+}

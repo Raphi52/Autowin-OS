@@ -125,7 +125,12 @@ function porteLeToken(mots: readonly string[], token: string): boolean {
   // C'etait la classe de bug de conv-1407 (« les » sous-chaine de « roles.ts ») reintroduite dans
   // l'autre sens, releve par l'audit.
   return mots.some(
-    (mot) => mot.startsWith(token) || (mot.length >= 3 && token.startsWith(mot))
+    // Token de 3 lettres : egalite stricte. En prefixe, « cli » attrapait `click` et « non »
+    // `nonEmpty` sur une question de couts (conv-706).
+    (mot) =>
+      mot === token ||
+      (token.length >= 4 && mot.startsWith(token)) ||
+      (mot.length >= 3 && token.startsWith(mot))
   )
 }
 
