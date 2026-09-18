@@ -3,6 +3,7 @@ import {
   noterRendu,
   oublierRendusRecents,
   signalerRenduLong,
+  sousBlocDominant,
   vueDominanteRecente
 } from './rendu-long'
 
@@ -68,5 +69,36 @@ describe('vueDominanteRecente', () => {
     expect(vueDominanteRecente(1_000)).toBeUndefined()
     noterRendu('chat', 0, 1_000)
     expect(vueDominanteRecente(1_000)).toBeUndefined()
+  })
+})
+
+/**
+ * LE HARNAIS DANS LA VUE CHAT — 859 gels `vue-chat` (p95 ≈ 10 s) sans dire QUEL bloc de ChatView.
+ * Les sous-blocs sont imbriques dans la vue : la vue cumule donc TOUJOURS au moins autant qu'eux.
+ * Sans descente, le bloc fautif ne gagnerait jamais et l'etiquette resterait `vue-chat`.
+ */
+describe('sous-blocs d une vue (harnais ChatView)', () => {
+  it('descend vers le sous-bloc qui a le plus rendu dans la vue dominante', () => {
+    oublierRendusRecents()
+    noterRendu('chat-saisie', 50, 1_000)
+    noterRendu('chat-fil', 700, 1_000)
+    noterRendu('chat', 800, 1_000)
+    expect(vueDominanteRecente(1_100)).toBe('chat-fil')
+    expect(sousBlocDominant('chat', 1_100)).toBe('chat-fil')
+  })
+
+  it('reste sur la vue quand aucun sous-bloc n a ete mesure', () => {
+    oublierRendusRecents()
+    noterRendu('chat', 800, 1_000)
+    expect(sousBlocDominant('chat', 1_100)).toBe('chat')
+  })
+
+  it('le rendu long isole porte le nom du sous-bloc, une seule fois', () => {
+    oublierRendusRecents()
+    const vus: Array<[number, string | undefined]> = []
+    const canal = { signalerGelRenderer: (ms: number, e?: string) => vus.push([ms, e]) }
+    noterRendu('chat-fil', 1_900, Date.now())
+    signalerRenduLong('chat', 2_000, 1_000, canal)
+    expect(vus).toEqual([[2000, 'vue-chat-fil']])
   })
 })

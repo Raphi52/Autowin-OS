@@ -179,6 +179,8 @@ import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-
 import { TravauxNonPublies } from './TravauxNonPublies'
 import { ChatFindBar } from './ChatFindBar'
 import { Spinner } from './Spinner'
+import { VueMesuree } from './VueMesuree'
+import { useDebutProgressif } from './fil-progressif'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
@@ -4890,49 +4892,60 @@ export function ChatView({
    * `ChatView.frappe-cout.test.tsx`). D'où le gel à la frappe sur une conversation longue.
    * `input` n'est VOLONTAIREMENT pas une dépendance : le composer ne touche pas au fil.
    */
+  // Un long fil s'ouvre par sa fin puis se complète par tranches (fil-progressif.ts, cause des
+  // gels `vue-chat`) ; les index restent ceux du fil ENTIER, clés et balayages compris.
+  const debutFil = useDebutProgressif(activeId, messages.length)
   const filRendu = useMemo(
     () =>
-      messages.map((message, index) => (
-        <Fragment key={messageKey(message, index)}>
-          <ChatMessageRow
-            onPickSuggestion={pickSuggestion}
-            autoLancerCandidats={
-              message.role === 'assistant' &&
-              doitAutoLancerCandidats(
-                // La cle porte la conversation : `role:index` seul se RECOUVRE d'un fil a l'autre.
-                `${activeId ?? ''}#${messageKey(message, index)}`,
-                index === messages.length - 1,
-                message.done === true
-              )
-            }
-            onAnswerAsk={answerAsk}
-            /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
+      messages.slice(debutFil).map((message, rang) => {
+        const index = debutFil + rang
+        return (
+          <Fragment key={messageKey(message, index)}>
+            <ChatMessageRow
+              onPickSuggestion={pickSuggestion}
+              autoLancerCandidats={
+                message.role === 'assistant' &&
+                doitAutoLancerCandidats(
+                  // La cle porte la conversation : `role:index` seul se RECOUVRE d'un fil a l'autre.
+                  `${activeId ?? ''}#${messageKey(message, index)}`,
+                  index === messages.length - 1,
+                  message.done === true
+                )
+              }
+              onAnswerAsk={answerAsk}
+              /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
              question. Derive du fil, donc vrai apres un remontage comme apres un redemarrage.
              Se fermer sur n'importe quel message posterieur avalait le clic (conv-50). */
-            askRepondu={message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined}
-            message={message}
-            conversationId={activeId}
-            onInspectTurn={onInspectTurn}
-            onFork={handleFork}
-            onOpenImage={setOpenImage}
-            onOpenLiveAction={revealLiveAction}
-            retryPrompt={
-              message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
-            }
-            onResend={pickSuggestion}
-            onRefineResume={refineResumeDraft}
-            onLogin={ouvrirLogin}
-            directiveReceipts={
-              message.role === 'assistant' ? activeDirectiveReceiptsByMessage.get(index) : undefined
-            }
-          />
-          {message.role === 'user' &&
-            (activeDirectiveReceiptsByMessage.get(index) ?? []).map((receipt) => (
-              <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
-            ))}
-        </Fragment>
-      )),
+              askRepondu={
+                message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined
+              }
+              message={message}
+              conversationId={activeId}
+              onInspectTurn={onInspectTurn}
+              onFork={handleFork}
+              onOpenImage={setOpenImage}
+              onOpenLiveAction={revealLiveAction}
+              retryPrompt={
+                message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
+              }
+              onResend={pickSuggestion}
+              onRefineResume={refineResumeDraft}
+              onLogin={ouvrirLogin}
+              directiveReceipts={
+                message.role === 'assistant'
+                  ? activeDirectiveReceiptsByMessage.get(index)
+                  : undefined
+              }
+            />
+            {message.role === 'user' &&
+              (activeDirectiveReceiptsByMessage.get(index) ?? []).map((receipt) => (
+                <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
+              ))}
+          </Fragment>
+        )
+      }),
     [
+      debutFil,
       messages,
       doitAutoLancerCandidats,
       activeId,
@@ -6280,7 +6293,9 @@ Cliquer pour choisir une autre branche.`}
                 <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
               ))}
 
-            {filRendu}
+            <VueMesuree id="chat-fil" bloc>
+              {filRendu}
+            </VueMesuree>
 
             {/* Petite TV du bureau cache (conv-528) : un BLOC DEDIE du fil, apres le dernier message
                 (demande du 2026-09-14 « la TV doit etre dans le fil dans un bloc dedie »). Rien
@@ -6312,302 +6327,308 @@ Cliquer pour choisir une autre branche.`}
            * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
            */}
           <ProdAutorisationHote conversationId={activeId} />
-          <ChatComposer
-            ref={composerRef}
-            busy={busy}
-            hasActiveConversation={Boolean(activeId)}
-            resumeAvailable={resumeAvailable}
-            attachmentCount={attachments.length}
-            mentionSources={mentionSources}
-            skillCommands={skillCommands}
-            ghostRecommendation={ghostRecommendation}
-            placeholderPendantTour={busy && activeId !== null}
-            /* Le filet au-dessus du champ porte l'occupation de la fenetre du modele. Meme source
+          <VueMesuree id="chat-saisie" bloc>
+            <ChatComposer
+              ref={composerRef}
+              busy={busy}
+              hasActiveConversation={Boolean(activeId)}
+              resumeAvailable={resumeAvailable}
+              attachmentCount={attachments.length}
+              mentionSources={mentionSources}
+              skillCommands={skillCommands}
+              ghostRecommendation={ghostRecommendation}
+              placeholderPendantTour={busy && activeId !== null}
+              /* Le filet au-dessus du champ porte l'occupation de la fenetre du modele. Meme source
                que la jauge de l'en-tete : `contextGauges`, jamais un calcul refait ici. */
-            /* Le filet montre le MEME panneau que la barre de l en-tete au survol : deux vues
+              /* Le filet montre le MEME panneau que la barre de l en-tete au survol : deux vues
                de la meme donnee doivent repondre pareil au meme geste. */
-            contextPanelNode={(() => {
-              const j = jaugeCourante
-              if (!j) return undefined
-              return (
-                <ContextGaugeDetail
-                  gauge={j}
-                  busy={busy}
-                  onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
-                />
-              )
-            })()}
-            contextRatio={jaugeCourante?.ratio}
-            contextLevel={jaugeCourante?.level}
-            contextTitle={(() => {
-              const j = jaugeCourante
-              if (!j) return undefined
-              return (
-                `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +
-                `${j.limit.toLocaleString('fr-FR')} (${Math.round(j.ratio * 100)} %), dont ` +
-                `${j.cacheRead.toLocaleString('fr-FR')} relus du cache.`
-              )
-            })()}
-            onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
-            onDraftPresence={setBrouillonPresent}
-            onBtw={handleBtw}
-            onSend={() => send()}
-            onQueue={queueCurrentMessage}
-            onResume={() => void resumePilotTurn()}
-            onPaste={(files) => void addFiles(files)}
-            attachmentsNode={
-              attachments.length > 0 ? (
-                <div className="attachment-list pending">
-                  {attachments.map((file, fileIndex) => (
-                    <span
-                      className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
-                      key={`${file.name}-${fileIndex}`}
-                    >
-                      {file.kind === 'image' ? (
+              contextPanelNode={(() => {
+                const j = jaugeCourante
+                if (!j) return undefined
+                return (
+                  <ContextGaugeDetail
+                    gauge={j}
+                    busy={busy}
+                    onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
+                  />
+                )
+              })()}
+              contextRatio={jaugeCourante?.ratio}
+              contextLevel={jaugeCourante?.level}
+              contextTitle={(() => {
+                const j = jaugeCourante
+                if (!j) return undefined
+                return (
+                  `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +
+                  `${j.limit.toLocaleString('fr-FR')} (${Math.round(j.ratio * 100)} %), dont ` +
+                  `${j.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+                )
+              })()}
+              onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
+              onDraftPresence={setBrouillonPresent}
+              onBtw={handleBtw}
+              onSend={() => send()}
+              onQueue={queueCurrentMessage}
+              onResume={() => void resumePilotTurn()}
+              onPaste={(files) => void addFiles(files)}
+              attachmentsNode={
+                attachments.length > 0 ? (
+                  <div className="attachment-list pending">
+                    {attachments.map((file, fileIndex) => (
+                      <span
+                        className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
+                        key={`${file.name}-${fileIndex}`}
+                      >
+                        {file.kind === 'image' ? (
+                          <button
+                            type="button"
+                            className="attachment-thumb-button"
+                            aria-label={`Agrandir ${file.name}`}
+                            title="Agrandir"
+                            onClick={() =>
+                              setOpenImage({
+                                src: `data:${file.mimeType};base64,${file.content}`,
+                                name: file.name
+                              })
+                            }
+                          >
+                            <img
+                              className="attachment-thumb"
+                              src={`data:${file.mimeType};base64,${file.content}`}
+                              alt={file.name}
+                            />
+                          </button>
+                        ) : (
+                          <span aria-hidden="true">▤</span>
+                        )}
+                        <span className="attachment-name">{file.name}</span>
+                        <small>{formatFileSize(file.size)}</small>
                         <button
                           type="button"
-                          className="attachment-thumb-button"
-                          aria-label={`Agrandir ${file.name}`}
-                          title="Agrandir"
                           onClick={() =>
-                            setOpenImage({
-                              src: `data:${file.mimeType};base64,${file.content}`,
-                              name: file.name
-                            })
+                            setDraftAttachments(composerDraftKeyRef.current, (current) =>
+                              current.filter((_, index) => index !== fileIndex)
+                            )
                           }
+                          aria-label={`Retirer ${file.name}`}
+                          title="Retirer"
                         >
-                          <img
-                            className="attachment-thumb"
-                            src={`data:${file.mimeType};base64,${file.content}`}
-                            alt={file.name}
-                          />
+                          ×
                         </button>
-                      ) : (
-                        <span aria-hidden="true">▤</span>
-                      )}
-                      <span className="attachment-name">{file.name}</span>
-                      <small>{formatFileSize(file.size)}</small>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraftAttachments(composerDraftKeyRef.current, (current) =>
-                            current.filter((_, index) => index !== fileIndex)
-                          )
-                        }
-                        aria-label={`Retirer ${file.name}`}
-                        title="Retirer"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              ) : null
-            }
-            errorNode={
-              attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
-            }
-            cadrageNode={
-              /* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
+                      </span>
+                    ))}
+                  </div>
+                ) : null
+              }
+              errorNode={
+                attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
+              }
+              cadrageNode={
+                /* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
                tourne. Ne bloque rien ; un clic pré-remplit le composer pour corriger. */
-              activeId && hypothesesCadrage[activeId]?.length ? (
-                <CadrageHypotheses
-                  hypotheses={hypothesesCadrage[activeId]}
-                  onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
-                  onMasquer={() =>
-                    setHypothesesCadrage((current) => {
-                      const suivant = { ...current }
-                      delete suivant[activeId]
-                      return suivant
-                    })
-                  }
-                />
-              ) : null
-            }
-            frictionNode={
-              /* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
+                activeId && hypothesesCadrage[activeId]?.length ? (
+                  <CadrageHypotheses
+                    hypotheses={hypothesesCadrage[activeId]}
+                    onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
+                    onMasquer={() =>
+                      setHypothesesCadrage((current) => {
+                        const suivant = { ...current }
+                        delete suivant[activeId]
+                        return suivant
+                      })
+                    }
+                  />
+                ) : null
+              }
+              frictionNode={
+                /* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
                suivante. Ne bloque rien — la décision reste humaine. */
-              friction ? (
-                <div
-                  className="composer-friction"
-                  data-testid="friction-echecs-repetes"
-                  role="status"
-                >
-                  <span aria-hidden="true">⚠</span> {friction.message}
-                </div>
-              ) : null
-            }
-            leadingNode={
-              <>
-                {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
-                <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
-                {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
-                <button
-                  type="button"
-                  className={`btn composer-auto${
-                    (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
-                      ? ' actif'
-                      : ''
-                  }`}
-                  data-testid="composer-auto-toggle"
-                  aria-pressed={
-                    (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
-                  }
-                  aria-label={
-                    autoConvs.has(activeId ?? '')
-                      ? 'Arrêter le mode auto de cette conversation'
-                      : 'Mode auto de cette conversation'
-                  }
-                  onClick={() => basculerModeAuto()}
-                  title={
-                    autoConvs.has('*')
-                      ? 'Le mode auto est déjà actif sur TOUS les fils (bouton de la liste des conversations)'
-                      : autoConvs.has(activeId ?? '')
-                        ? 'Arrêter le mode auto de cette conversation'
-                        : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
-                  }
-                >
-                  {/* ROND 34 px comme le micro, glyphe INFINI : « ça continue sans moi ». */}
-                  <span aria-hidden="true">∞</span>
-                </button>
-                <button
-                  type="button"
-                  className="attachment-button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={busy}
-                  aria-label="Joindre des fichiers"
-                  title="Joindre des fichiers"
-                >
-                  <svg
-                    className="attachment-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden="true"
+                friction ? (
+                  <div
+                    className="composer-friction"
+                    data-testid="friction-echecs-repetes"
+                    role="status"
                   >
-                    <path
-                      d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="m7.55 15.45 7.16-7.16a1.25 1.25 0 0 1 1.77 1.77l-6.12 6.12"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                <input
-                  ref={fileInputRef}
-                  className="attachment-input"
-                  type="file"
-                  multiple
-                  onChange={(event) => {
-                    if (event.currentTarget.files) void addFiles(event.currentTarget.files)
-                    event.currentTarget.value = ''
-                  }}
-                  disabled={busy}
-                />
-              </>
-            }
-            stopNode={
-              /*
+                    <span aria-hidden="true">⚠</span> {friction.message}
+                  </div>
+                ) : null
+              }
+              leadingNode={
+                <>
+                  {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
+                  <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
+                  {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
+                  <button
+                    type="button"
+                    className={`btn composer-auto${
+                      (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
+                        ? ' actif'
+                        : ''
+                    }`}
+                    data-testid="composer-auto-toggle"
+                    aria-pressed={
+                      (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
+                    }
+                    aria-label={
+                      autoConvs.has(activeId ?? '')
+                        ? 'Arrêter le mode auto de cette conversation'
+                        : 'Mode auto de cette conversation'
+                    }
+                    onClick={() => basculerModeAuto()}
+                    title={
+                      autoConvs.has('*')
+                        ? 'Le mode auto est déjà actif sur TOUS les fils (bouton de la liste des conversations)'
+                        : autoConvs.has(activeId ?? '')
+                          ? 'Arrêter le mode auto de cette conversation'
+                          : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
+                    }
+                  >
+                    {/* ROND 34 px comme le micro, glyphe INFINI : « ça continue sans moi ». */}
+                    <span aria-hidden="true">∞</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="attachment-button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={busy}
+                    aria-label="Joindre des fichiers"
+                    title="Joindre des fichiers"
+                  >
+                    <svg
+                      className="attachment-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="m7.55 15.45 7.16-7.16a1.25 1.25 0 0 1 1.77 1.77l-6.12 6.12"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    className="attachment-input"
+                    type="file"
+                    multiple
+                    onChange={(event) => {
+                      if (event.currentTarget.files) void addFiles(event.currentTarget.files)
+                      event.currentTarget.value = ''
+                    }}
+                    disabled={busy}
+                  />
+                </>
+              }
+              stopNode={
+                /*
               ARRÊTER ne doit dépendre de RIEN d'autre que « un tour est en cours » : ni du texte
               tapé, ni d'un état accessoire. Stop a donc son propre bouton, et il reste dans le
               parent — il ne dépend pas de la frappe.
             */
-              busy ? (
-                <button
-                  className="btn composer-stop"
-                  data-testid="composer-stop"
-                  onClick={() => stopPilotTurn()}
-                  disabled={!activeId || interruptingConversations.has(activeId ?? '')}
-                  aria-label="Arrêter la réponse"
-                  title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
-                >
-                  <span className="composer-btn-glyph" aria-hidden="true">
-                    ■
+                busy ? (
+                  <button
+                    className="btn composer-stop"
+                    data-testid="composer-stop"
+                    onClick={() => stopPilotTurn()}
+                    disabled={!activeId || interruptingConversations.has(activeId ?? '')}
+                    aria-label="Arrêter la réponse"
+                    title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
+                  >
+                    <span className="composer-btn-glyph" aria-hidden="true">
+                      ■
+                    </span>
+                    <span className="composer-btn-label">
+                      {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : 'Stop'}
+                    </span>
+                  </button>
+                ) : null
+              }
+              metaNode={
+                <div className="composer-meta">
+                  <span className="composer-hint">
+                    Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
                   </span>
-                  <span className="composer-btn-label">
-                    {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : 'Stop'}
-                  </span>
-                </button>
-              ) : null
-            }
-            metaNode={
-              <div className="composer-meta">
-                <span className="composer-hint">
-                  Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
-                </span>
-                <div className="composer-meta-actions">
-                  <OrchestratorModelSelector
-                    busy={busy}
-                    catalogLoaded={modelCatalogLoaded}
-                    models={modelCatalog}
-                    binding={orchestratorBinding}
-                    pending={modelChangePending}
-                    error={modelChangeError}
-                    onSelect={(option) => void changeOrchestratorModel(option)}
-                    comptes={
-                      // Sans conversation ouverte (fil neuf pas encore cree), le bloc reste
-                      // AFFICHE et se replie sur le compte actif de l'application : le faire
-                      // disparaitre donnait l'impression que la fonctionnalite avait ete retiree.
-                      comptesClaude
-                        ? {
-                            accounts: comptesClaude.accounts,
-                            selectedId: activeId
-                              ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
-                              : undefined,
-                            activeId: comptesClaude.activeId,
-                            busy: compteBusy || busy,
-                            error: compteError,
-                            onSelect: (accountId) => void choisirCompteDeConversation(accountId)
-                          }
-                        : undefined
-                    }
-                  />
+                  <div className="composer-meta-actions">
+                    <OrchestratorModelSelector
+                      busy={busy}
+                      catalogLoaded={modelCatalogLoaded}
+                      models={modelCatalog}
+                      binding={orchestratorBinding}
+                      pending={modelChangePending}
+                      error={modelChangeError}
+                      onSelect={(option) => void changeOrchestratorModel(option)}
+                      comptes={
+                        // Sans conversation ouverte (fil neuf pas encore cree), le bloc reste
+                        // AFFICHE et se replie sur le compte actif de l'application : le faire
+                        // disparaitre donnait l'impression que la fonctionnalite avait ete retiree.
+                        comptesClaude
+                          ? {
+                              accounts: comptesClaude.accounts,
+                              selectedId: activeId
+                                ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
+                                : undefined,
+                              activeId: comptesClaude.activeId,
+                              busy: compteBusy || busy,
+                              error: compteError,
+                              onSelect: (accountId) => void choisirCompteDeConversation(accountId)
+                            }
+                          : undefined
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
-            }
-          />
+              }
+            />
+          </VueMesuree>
         </section>
       )}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (
-        <WorkflowsPanel
-          runsPaneWidth={runsPaneWidth}
-          beginRunsResize={beginRunsResize}
-          refreshRuns={refreshRuns}
-          setShowRuns={setShowRuns}
-          activeId={activeId}
-          send={send}
-          isActive={isActive}
-          requestLabel={[...messages].reverse().find((message) => message.role === 'user')?.content}
-          messages={messages}
-          liveGraphActive={
-            Boolean(activeId && busyConversations.has(activeId)) ||
-            liveRuns[activeId ?? '']?.status === 'running'
-          }
-          visibleLiveRuns={visibleLiveRuns}
-          checkpoints={checkpoints}
-          forkedCheckpoint={forkedCheckpoint}
-          setForkedCheckpoint={setForkedCheckpoint}
-          runs={runs}
-          openRun={openRun}
-          viewRun={viewRun}
-          setOpenRun={setOpenRun}
-          setOpenTrace={setOpenTrace}
-          requestDeleteRun={requestDeleteRun}
-          openTrace={openTrace}
-          runDetailTab={runDetailTab}
-          setRunDetailTab={setRunDetailTab}
-          liveRunCardRef={liveRunCardRef}
-          {...(ongletPanneau ? { ongletDemande: ongletPanneau } : {})}
-        />
+        <VueMesuree id="chat-workflows" bloc>
+          <WorkflowsPanel
+            runsPaneWidth={runsPaneWidth}
+            beginRunsResize={beginRunsResize}
+            refreshRuns={refreshRuns}
+            setShowRuns={setShowRuns}
+            activeId={activeId}
+            send={send}
+            isActive={isActive}
+            requestLabel={
+              [...messages].reverse().find((message) => message.role === 'user')?.content
+            }
+            messages={messages}
+            liveGraphActive={
+              Boolean(activeId && busyConversations.has(activeId)) ||
+              liveRuns[activeId ?? '']?.status === 'running'
+            }
+            visibleLiveRuns={visibleLiveRuns}
+            checkpoints={checkpoints}
+            forkedCheckpoint={forkedCheckpoint}
+            setForkedCheckpoint={setForkedCheckpoint}
+            runs={runs}
+            openRun={openRun}
+            viewRun={viewRun}
+            setOpenRun={setOpenRun}
+            setOpenTrace={setOpenTrace}
+            requestDeleteRun={requestDeleteRun}
+            openTrace={openTrace}
+            runDetailTab={runDetailTab}
+            setRunDetailTab={setRunDetailTab}
+            liveRunCardRef={liveRunCardRef}
+            {...(ongletPanneau ? { ongletDemande: ongletPanneau } : {})}
+          />
+        </VueMesuree>
       )}
       {openImage &&
         createPortal(
