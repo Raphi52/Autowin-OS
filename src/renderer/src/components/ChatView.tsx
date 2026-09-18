@@ -21,6 +21,7 @@ import {
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
+import { reclamerOuvertureConversation } from './pending-conversation-open'
 import { refreshesActiveConversation } from './chat-event-routing'
 import { pickRunForTrace } from './run-trace-target'
 import {
@@ -1713,9 +1714,24 @@ export function ChatView({
       // de veille (et tout flux né hors du chat) sélectionne sa conversation PENDANT que cette vue
       // est démontée — l'événement de sélection n'a alors aucun auditeur, et la vue remontait sur
       // son ancienne sélection avec un panneau vide (mesuré le 14/08, conv-1164/1165).
+      // DEMANDE EXPLICITE D'ABORD : un autre écran (la bulle d'un ticket) a pu demander une
+      // conversation PENDANT que cette vue était démontée — l'événement n'avait alors aucun
+      // auditeur. Cette demande déposée est PRIORITAIRE sur l'alignement ci-dessous, qui ouvrirait
+      // la conversation active du main (la dernière créée) et volerait la sélection.
+      const demandee = reclamerOuvertureConversation()
+      let ouvertureHonoree = false
+      if (!disposed && demandee) {
+        const cible = convsRef.current.find((conversation) => conversation.id === demandee)
+        if (cible) {
+          await loadConv(cible)
+          ouvertureHonoree = true
+        }
+      }
       try {
-        const etat = (await window.api.appState()) as { activeConversationId?: string }
-        const cibleId = etat?.activeConversationId
+        const etat = ouvertureHonoree
+          ? {}
+          : ((await window.api.appState()) as { activeConversationId?: string })
+        const cibleId = (etat as { activeConversationId?: string })?.activeConversationId
         if (!disposed && cibleId && cibleId !== activeRef.current) {
           const cible = convsRef.current.find((conversation) => conversation.id === cibleId)
           if (cible) await loadConv(cible)
@@ -2802,11 +2818,24 @@ export function ChatView({
   // tour a été interrompu par la fermeture de l'app (son fil est rechargé depuis le store).
   useEffect(() => {
     const openConversation = (event: Event): void => {
-      const detail = (event as CustomEvent<{ conversationId?: string; turnId?: string }>).detail
+      // DEUX FORMES acceptées : l'objet `{ conversationId }` (bandeau de reprise) et l'id NU en
+      // chaîne, envoyé par l'écran des fiches et l'accueil. Avant, la chaîne tombait dans
+      // `detail?.conversationId === undefined` et l'ouverture était silencieusement ignorée : le
+      // chat restait sur la conversation courante, d'où l'impression d'« aller vers la dernière ».
+      const raw = (event as CustomEvent<{ conversationId?: string; turnId?: string } | string>)
+        .detail
+      const detail = typeof raw === 'string' ? { conversationId: raw } : raw
       const id = detail?.conversationId
       if (!id) return
-      const target = convsRef.current.find((conversation) => conversation.id === id)
-      if (target) void loadConv(target)
+      // La conversation demandée peut ne PAS être dans la liste en mémoire : celle créée depuis
+      // l'écran des fiches est plus récente que le dernier chargement. Sans ce rafraîchissement, la
+      // recherche échouait et le chat restait sur la conversation affichée — on croyait « atterrir
+      // sur la dernière ». Même garde que le chemin de pré-remplissage voisin.
+      void (async () => {
+        if (!convsRef.current.some((conversation) => conversation.id === id)) await refreshConvs()
+        const target = convsRef.current.find((conversation) => conversation.id === id)
+        if (target) await loadConv(target)
+      })()
       // REJEU du journal : l'app était fermée pendant le tour → le store n'a pas reçu ces événements,
       // seul le journal fichier les contient. On reconstruit le texte produit et on l'affiche.
       if (detail?.turnId) void replayTurnJournal(id, detail.turnId)

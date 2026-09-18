@@ -230,7 +230,9 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
-  it('relit les fiches sélectionnées avant de préparer le prompt', async () => {
+  // 2026-09-17 : le prompt NOMME la fiche au lieu d'en recopier le contenu (décision utilisateur),
+  // donc plus aucune relecture distante à la préparation — l'agent lit la fiche lui-même.
+  it('prépare un prompt PAR RÉFÉRENCE : pas de relecture distante, pas de contenu recopié', async () => {
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate: vi.fn(async () => ({ id: 'conv-enriched' })),
@@ -257,7 +259,9 @@ describe('vue Tickets', () => {
       for (let index = 0; index < 20; index += 1) await Promise.resolve()
     })
 
-    expect(prompts[0]).toContain('Décision issue de la discussion distante.')
+    expect(prompts[0]).not.toContain('Décision issue de la discussion distante.')
+    expect(prompts[0]).toContain('ticket_get')
+    expect(prompts[0]).toContain('#1')
     window.removeEventListener('autowin:prefill-conversation', listener)
     await act(async () => root.unmount())
   })
@@ -926,14 +930,83 @@ describe('vue Tickets — lots automatiques différés', () => {
       for (let index = 0; index < 10; index += 1) await Promise.resolve()
     })
 
+    // La bulle du ticket REJOINT la conversation déjà préparée au lieu d'en ouvrir une nouvelle.
     const badge = container.querySelector(
-      '[data-testid="ticket-treatment-status"]'
+      '[data-testid="ticket-open-conversation"]'
     ) as HTMLButtonElement
-    expect(badge.textContent).toContain('prêt')
+    expect(badge.className).toContain('is-prepared')
+    expect(badge.getAttribute('title')).toContain('prêt')
     await act(async () => badge.click())
     expect(appCommand).toHaveBeenCalledWith('navigate', { tab: 'chat' })
     expect(opened).toContain('conv-ticket-1')
 
+    window.removeEventListener('autowin:open-conversation', listener)
+    await act(async () => root.unmount())
+  })
+
+  // Une bulle restait TEINTÉE après suppression du fil tant qu'on ne cliquait pas dessus.
+  it('conversation supprimée → la bulle perd sa couleur dès l’affichage, sans clic', async () => {
+    localStorage.setItem(
+      'autowin:tickets-treatment-records',
+      JSON.stringify({
+        [`${DEFAULT_TICKET_SOURCE.id}::1`]: {
+          conversationId: 'conv-supprimee',
+          status: 'prepared',
+          updatedAt: '2026-09-17T10:00:00.000Z'
+        }
+      })
+    )
+    api({
+      listTickets: vi.fn(async (): Promise<TicketPage> => ({ items: [item('1')], hasMore: false })),
+      conversations: vi.fn(async () => [{ id: 'conv-autre' }])
+    })
+    const { root, container } = await render()
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+    const bulle = container.querySelector('[data-testid="ticket-open-conversation"]')
+    expect(bulle?.className).not.toContain('is-prepared')
+    expect(localStorage.getItem('autowin:tickets-treatment-records')).not.toContain('conv-supprimee')
+    await act(async () => root.unmount())
+  })
+
+  // Conversation mémorisée SUPPRIMÉE par l'utilisateur : la bulle ne doit plus pointer vers un fil
+  // fantôme (ce qui laissait le chat sur la conversation courante), mais en ouvrir une NEUVE.
+  it('conversation disparue → la bulle oublie la trace et en ouvre une nouvelle', async () => {
+    localStorage.setItem(
+      'autowin:tickets-treatment-records',
+      JSON.stringify({
+        [`${DEFAULT_TICKET_SOURCE.id}::1`]: {
+          conversationId: 'conv-supprimee',
+          status: 'prepared',
+          updatedAt: '2026-09-17T10:00:00.000Z'
+        }
+      })
+    )
+    const conversationsCreate = vi.fn(async () => ({ id: 'conv-neuve' }))
+    api({
+      listTickets: vi.fn(async (): Promise<TicketPage> => ({ items: [item('1')], hasMore: false })),
+      conversations: vi.fn(async () => [{ id: 'conv-autre' }]),
+      conversationsCreate,
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      appCommand: vi.fn(async () => ({ ok: true }))
+    })
+    const opened: string[] = []
+    const listener = (event: Event): void => {
+      void opened.push((event as CustomEvent<string>).detail)
+    }
+    window.addEventListener('autowin:open-conversation', listener)
+    const { root, container } = await render()
+    await act(async () => {
+      ;(
+        container.querySelector('[data-testid="ticket-open-conversation"]') as HTMLButtonElement
+      ).click()
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(opened).not.toContain('conv-supprimee')
+    expect(conversationsCreate).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('autowin:tickets-treatment-records')).not.toContain('conv-supprimee')
     window.removeEventListener('autowin:open-conversation', listener)
     await act(async () => root.unmount())
   })
@@ -1089,8 +1162,9 @@ describe('vue Tickets — lots automatiques différés', () => {
       listTickets: vi.fn(async (): Promise<TicketPage> => ({ items: [item('1')], hasMore: false }))
     })
     const { root, container } = await render()
-    const badge = container.querySelector('[data-testid="ticket-treatment-status"]')
-    expect(badge?.textContent).toBe('interrompu')
+    const badge = container.querySelector('[data-testid="ticket-open-conversation"]')
+    expect(badge?.className).toContain('is-interrupted')
+    expect(badge?.getAttribute('title')).toContain('interrompu')
     await act(async () => root.unmount())
   })
 
@@ -1326,8 +1400,11 @@ describe('vue Tickets — enrichissement mémoïsé et borné (P3)', () => {
       for (let index = 0; index < 20; index += 1) await Promise.resolve()
     })
 
+    // 1 seul appel distant : celui du panneau de détail. La préparation du prompt n'en déclenche
+    // aucun, et le contenu de la fiche n'y est pas recopié.
     expect(getTicket).toHaveBeenCalledTimes(1)
-    expect(prompts[0]).toContain('Décision enrichie conservée après refresh.')
+    expect(prompts[0]).not.toContain('Décision enrichie conservée après refresh.')
+    expect(prompts[0]).toContain('ticket_get')
     window.removeEventListener('autowin:prefill-conversation', listener)
     await act(async () => root.unmount())
   })
@@ -1359,10 +1436,12 @@ describe('vue Tickets — enrichissement mémoïsé et borné (P3)', () => {
     await act(async () => root.unmount())
   })
 
-  it('sélection de 30 tickets → au plus `concurrency` relectures en vol', async () => {
+  // Le prompt par référence supprime la relecture distante à la préparation : 30 tickets cochés
+  // n'ouvrent PLUS aucune requête, la borne de concurrence n'a plus rien à protéger ici.
+  it('sélection de 30 tickets → AUCUNE relecture distante à la préparation', async () => {
     let inflight = 0
     let peak = 0
-    const getTicket = vi.fn(async ({ id }: { id: string }) => {
+    const getTicket = vi.fn(async ({ id }: { id: string; requestId?: string }) => {
       inflight += 1
       peak = Math.max(peak, inflight)
       for (let index = 0; index < 5; index += 1) await Promise.resolve()
@@ -1389,8 +1468,11 @@ describe('vue Tickets — enrichissement mémoïsé et borné (P3)', () => {
       ).click()
       for (let index = 0; index < 200; index += 1) await Promise.resolve()
     })
-    expect(getTicket).toHaveBeenCalledTimes(30)
-    expect(peak).toBeLessThanOrEqual(3)
+    // Le seul appel distant restant est celui du PANNEAU DE DÉTAIL (ticket affiché au montage) :
+    // la préparation du prompt, elle, n'en déclenche aucun — sinon il y en aurait 30.
+    expect(getTicket).toHaveBeenCalledTimes(1)
+    expect(getTicket.mock.calls[0][0].requestId).toContain('ticket-detail')
+    expect(peak).toBeLessThanOrEqual(1)
     await act(async () => root.unmount())
   })
 })

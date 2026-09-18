@@ -1292,7 +1292,10 @@
 .composer textarea {
   resize: none;
   max-height: 180px;
-  min-height: 40px;
+  /* DEUX LIGNES VISIBLES (demande utilisateur du 2026-09-18) : une seule tenait, la deuxieme
+     etait coupee derriere l'ascenseur. En em, la reserve suit la taille de police ; `min-height`
+     prime sur la hauteur inline posee par l'auto-croissance, qui continue au-dela. */
+  min-height: calc(2 * 1.45em + 14px);
   line-height: 1.5;
 }
 .attachment-input {
@@ -2775,7 +2778,8 @@ ol.md-list li {
 }
 
 .cosmic-outline .composer-field textarea {
-  min-height: 24px;
+  /* Sans marge interne ici (padding: 0) : la reserve vaut exactement deux lignes. */
+  min-height: calc(2 * 1.45em);
   padding: 0;
   border: 0;
   background: transparent;

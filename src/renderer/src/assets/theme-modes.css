@@ -1136,3 +1136,49 @@
 :root[data-base='clair'] .attachment-thumb {
   background: rgba(15, 20, 35, 0.06);
 }
+
+/* PANNEAUX FLOTTANTS — signalés avec capture le 2026-09-18 : « corrige le panneau
+   des quotas ». Deux popups restaient en couleurs de NUIT écrites en dur :
+   « Quotas fournisseurs » (`ModelQuotaIndicator.css` l.147, `rgba(0, 0, 0, 0.98)`)
+   et le menu « Orchestrateur » (`ChatView.css` l.3517, `rgba(8, 8, 10, 0.985)`).
+   Le second est le plus traître : ses libellés prennent les jetons de texte, qui
+   passent au SOMBRE en mode clair — donc sombre sur sombre, quasi invisible.
+   Comme pour les zones déjà traitées, la surcharge se pose ICI, jamais au point
+   d'usage : ce sélecteur pèse plus lourd que celui du thème, chargé après. */
+:root[data-base='clair'] .model-quota-popover {
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(15, 20, 35, 0.18);
+  color: var(--text);
+}
+:root[data-base='clair'] .model-quota-popover header,
+:root[data-base='clair'] .model-quota-popover footer {
+  border-bottom-color: var(--line);
+}
+:root[data-base='clair'] .model-quota-popover small,
+:root[data-base='clair'] .model-quota-popover footer,
+:root[data-base='clair'] .model-quota-values small,
+:root[data-base='clair'] .model-quota-unavailable {
+  color: #4d586b;
+}
+:root[data-base='clair'] .model-quota-window > strong {
+  color: #14192a;
+}
+:root[data-base='clair'] .model-quota-popover header button {
+  color: #1d6a58;
+}
+:root[data-base='clair'] .model-quota-scope {
+  border-color: rgba(150, 110, 20, 0.35);
+  color: #7a5a0c;
+}
+:root[data-base='clair'] .model-quota-meter {
+  background: rgba(15, 20, 35, 0.12);
+}
+:root[data-base='clair'] .model-quota-error {
+  background: rgba(200, 30, 80, 0.07);
+  color: #9c1f45;
+}
+:root[data-base='clair'] .model-select-menu {
+  background: #ffffff;
+  box-shadow: 0 24px 64px rgba(15, 20, 35, 0.22);
+}

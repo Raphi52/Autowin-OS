@@ -329,24 +329,50 @@
 
 .ticket-select-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
 }
 
-.ticket-treatment-status {
-  padding: 4px 7px;
+/* UNE bulle par ticket, sans libellé (demande du 2026-09-17). Elle reste VISIBLE en permanence :
+   la toute première version (émoji à opacité 0.55) passait inaperçue dans la liste.
+   La couleur porte l'état du traitement, à la place de l'ancien badge texte. */
+.ticket-open-conversation {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border-radius: 999px;
-  font-size: 10px;
-  white-space: nowrap;
+  font-size: 14px;
+  line-height: 1;
+  border: 1px solid color-mix(in srgb, var(--gold, #d4a94f) 55%, transparent);
+  background: color-mix(in srgb, var(--gold, #d4a94f) 12%, transparent);
 }
 
-.ticket-treatment-status.is-succeeded {
-  color: var(--success, #73d9a2);
+.ticket-open-conversation:hover,
+.ticket-open-conversation:focus-visible {
+  background: color-mix(in srgb, var(--gold, #d4a94f) 26%, transparent);
+  border-color: var(--gold, #d4a94f);
 }
 
-.ticket-treatment-status.is-failed {
-  color: var(--danger, #ff7185);
+/* Une conversation existe déjà : la bulle y renvoie, et sa teinte dit où en est le traitement. */
+.ticket-open-conversation.is-prepared,
+.ticket-open-conversation.is-running {
+  border-color: color-mix(in srgb, var(--rose, #e07a9a) 70%, transparent);
+  background: color-mix(in srgb, var(--rose, #e07a9a) 18%, transparent);
+}
+
+.ticket-open-conversation.is-succeeded {
+  border-color: var(--success, #73d9a2);
+  background: color-mix(in srgb, var(--success, #73d9a2) 18%, transparent);
+}
+
+.ticket-open-conversation.is-failed,
+.ticket-open-conversation.is-interrupted {
+  border-color: var(--danger, #ff7185);
+  background: color-mix(in srgb, var(--danger, #ff7185) 18%, transparent);
 }
 .ticket-select-row > input {
   width: 16px;
