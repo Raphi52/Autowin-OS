@@ -1,3 +1,5 @@
+// fix-ok: cause mesurée — la même règle vivait en double (constitution + consignes d'étape/style), redites relevées dans le prompt injecté ; fusion vers la constitution, tests rouges→verts dans phase-briefs/pipeline-discipline/response-style.test.ts
+import { CONSTITUTION } from './constitution'
 import { describe, expect, it } from 'vitest'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 
@@ -30,21 +32,25 @@ describe('discipline de pipeline canonique', () => {
   it('distingue un obstacle de chemin d un vrai blocage, et impose de le réparer', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/OBSTACLE ≠ BLOCAGE/)
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/répare-le et poursuis/i)
+    // Fusion 2026-09-18 : la partie générale vit dans « Autonomie » de la CONSTITUTION
+    // (injectée avec ce bloc) ; ici ne reste que ce qui dépend de la phase.
+    expect(CONSTITUTION).toMatch(/n'est PAS la tâche/)
     // Les motifs d'arrêt LÉGITIMES restent nommés : sans eux la consigne dirait « ne t'arrête
     // jamais », ce qui pousserait un agent à forcer une action destructrice.
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/destructrice ou irréversible/)
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/droit dont tu ne disposes pas/)
+    expect(CONSTITUTION).toMatch(/destructrice ou irréversible/)
+    expect(CONSTITUTION).toMatch(/droit dont tu ne disposes pas/)
   })
 
   it('ne relâche AUCUNE exigence de preuve en levant le blocage', () => {
     // Le risque de cette consigne est qu'un agent lise « ne t'arrête pas » comme « passe outre la
     // preuve ». Elle doit dire l'inverse, explicitement.
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/relâche AUCUNE exigence de preuve/)
+    expect(CONSTITUTION).toMatch(/ne relâche AUCUNE preuve/)
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/déguiser reste interdit|ne déguise JAMAIS/)
   })
 
   it('impose de vérifier que le rouge vient du dépôt, pas de l environnement du run', () => {
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/vient du DÉPÔT et non de ton environnement/)
+    expect(CONSTITUTION).toMatch(/vient du DÉPÔT et non de ton environnement/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/vient du DÉPÔT et non de ton environnement/)
   })
 
   /**
@@ -89,7 +95,7 @@ describe('discipline de pipeline canonique', () => {
   it('reconcilie la regle avec la phase JUDGE au lieu de la contredire', () => {
     // Le « bloqué » de JUDGE doit rester un cas de rendu de main EXPLICITEMENT autorisé.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
-      /échec du livrable que l'outillage de ta phase ne permet pas de réparer/
+      /échec du résultat que l'outillage de ta phase ne permet pas de réparer/
     )
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/JUDGE dit « bloqué », et il reste obligatoire/)
   })
@@ -107,5 +113,25 @@ describe('discipline de pipeline canonique', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('--motion')
     // Et il doit dire POURQUOI, sinon il sera lu comme une option decorative.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/capture fixe ne (?:peut|prouve)/i)
+  })
+})
+
+describe('fusion 2026-09-18 — chaque regle a un seul endroit', () => {
+  it('LECTURE CIBLÉE renvoie au réflexe 11 au lieu de le redire', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/LECTURE CIBLÉE : réflexes 6 et 11/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/jamais un dump de l'arbre entier/)
+    expect(CONSTITUTION).toMatch(/lecture CIBLÉE/)
+    // Seul apport propre à la phase, gardé ici :
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/scout DOIT survoler la cible/)
+  })
+
+  it('la preuve hors-modèle de BUILD renvoie au réflexe 2 sans le recopier', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/4\. BUILD — .*réflexe 2/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/4\. BUILD — .*test rouge→vert, exit-code, capture lue/)
+  })
+
+  it('n impose plus le mot « livrable » que le profil de réponse interdit', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/livrable/i)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/RÉSULTAT : produis EXACTEMENT/)
   })
 })
