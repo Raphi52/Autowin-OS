@@ -27,7 +27,8 @@ export function signalerRenduLong(
     // Pas de canal = RIEN N'EST ECRIT : on rend `false`, jamais un succes qui n'a pas eu lieu.
     if (typeof api?.signalerGelRenderer !== 'function') return false
     // L'etiquette est bornee par le canal principal ([a-z0-9:-], 48 signes) : on la respecte ici.
-    api.signalerGelRenderer(ms, `vue-${id}`.slice(0, 48))
+    // Un sous-bloc mesure DANS la vue (harnais ChatView) donne son nom : `vue-chat-fil`, pas `vue-chat`.
+    api.signalerGelRenderer(ms, `vue-${sousBlocDominant(id)}`.slice(0, 48))
     return true
   } catch {
     /* observabilite best-effort : un canal indisponible ne doit rien casser */
@@ -70,7 +71,29 @@ export function vueDominanteRecente(maintenant: number = Date.now()): string | u
     parVue.set(rendu.id, (parVue.get(rendu.id) ?? 0) + rendu.ms)
   }
   if (parVue.size === 0) return undefined
-  return [...parVue].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]
+  const plusLourde = (ids: Array<[string, number]>): string =>
+    ids.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]
+  // Les sous-blocs (`chat-fil`) sont imbriques DANS leur vue (`chat`) : la vue cumule toujours au
+  // moins autant qu'eux. On choisit donc parmi les vues de premier niveau, puis on descend.
+  const racines = [...parVue].filter(
+    ([id]) => ![...parVue.keys()].some((v) => id.startsWith(`${v}-`))
+  )
+  return sousBlocDominant(plusLourde(racines.length ? racines : [...parVue]), maintenant)
+}
+
+/**
+ * LE SOUS-BLOC d'une vue qui a le plus rendu recemment (`chat-fil` dans `chat`), sinon la vue.
+ * C'est ce qui rend utile le harnais pose DANS ChatView : 859 gels `vue-chat` ne disaient pas quel
+ * bloc de la vue tenait le fil d'affichage.
+ */
+export function sousBlocDominant(id: string, maintenant: number = Date.now()): string {
+  const parBloc = new Map<string, number>()
+  for (const rendu of rendusRecents) {
+    if (maintenant - rendu.a > FENETRE_RECENTE_MS || !rendu.id.startsWith(`${id}-`)) continue
+    parBloc.set(rendu.id, (parBloc.get(rendu.id) ?? 0) + rendu.ms)
+  }
+  if (parBloc.size === 0) return id
+  return [...parBloc].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]
 }
 
 /** Vide le registre — reserve aux tests, pour qu’une mesure ne fuite pas dans la suivante. */
