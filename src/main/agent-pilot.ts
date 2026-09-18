@@ -642,6 +642,17 @@ function finObjetJson(raw: string, debut: number): number {
   return -1
 }
 
+/**
+ * conv-686, tours `6185f7e7-88fa-4add-bf84-c51741d1b8b0` et `30876029-68c5-43c8-948c-59786b28a081`
+ * (saisies ts 1789711890089 et 1789712145048) : le modele a emis une commande `<cmd>` illisible,
+ * rien n'a ete lance, et l'ecran disait « Aucune reponse produite » — l'utilisateur a renvoye le
+ * meme message sans savoir qu'une commande avait ete perdue. Le repli le dit desormais.
+ */
+export function texteCmdIlisible(): string {
+  return 'J’ai voulu lancer une action, mais ma commande était mal formée : rien n’a été lancé. ' +
+    'Renvoie ton message pour relancer.'
+}
+
 export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
   const raw = normaliserFermeturesCmd(input)
   const tokens: OrderedPilotToken[] = []
@@ -1621,6 +1632,8 @@ export class AgentPilot {
      * redemande explicitement la conclusion. Une seule fois, comme la reprise de question invalide.
      */
     let anyActionExecuted = false
+    /** Le modele a emis `<cmd>` dans ce tour (lu ou non) — sert au repli de cloture. */
+    let cmdEmisCeTour = false
     /**
      * A-t-il parle A UN MOMENT du tour ? La question porte sur le TOUR ENTIER, pas sur la derniere
      * iteration : un tour « Avant. <action> Apres. » suivi d'une reponse vide a deja tout dit, le
@@ -1775,7 +1788,9 @@ export class AgentPilot {
         (anyActionExecuted
           ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
             'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
-          : 'Aucune reponse produite pour ce tour.')
+          : cmdEmisCeTour
+            ? texteCmdIlisible()
+            : 'Aucune reponse produite pour ce tour.')
       /*
        * UN REFUS DE MEMOIRE ENCORE DEBOUT SUIT LE TOUR JUSQU'A SA CLOTURE, QUELLE QU'ELLE SOIT.
        *
@@ -2291,6 +2306,7 @@ export class AgentPilot {
         return
       }
 
+      if (texteProvider.includes('<cmd>')) cmdEmisCeTour = true
       const ordered = parseOrderedPilotTokens(texteProvider)
       const hasCommand = ordered.some((token) => token.kind === 'command')
       const spoken = ordered

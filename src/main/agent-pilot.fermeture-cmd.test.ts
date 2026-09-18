@@ -22,3 +22,15 @@ describe('parseOrderedPilotTokens — fermeture </cmd> erronée', () => {
     expect(parseOrderedPilotTokens('<cmd>{"name":"x","args":{}').some((t) => t.kind === 'command')).toBe(false)
   })
 })
+
+// conv-686, tour 30876029-68c5-43c8-948c-59786b28a081 : commande perdue affichée « Aucune reponse produite ».
+import { readFileSync } from 'node:fs'
+import { texteCmdIlisible } from './agent-pilot'
+describe('repli de clôture après une commande illisible', () => {
+  it('dit que rien n’a été lancé, et le repli est câblé', () => {
+    expect(texteCmdIlisible()).toMatch(/rien n’a été lancé/)
+    const src = readFileSync(new URL('./agent-pilot.ts', import.meta.url), 'utf8')
+    expect(src).toMatch(/cmdEmisCeTour\s*\n?\s*\? texteCmdIlisible\(\)/)
+    expect(src).toMatch(/texteProvider\.includes\('<cmd>'\)\) cmdEmisCeTour = true/)
+  })
+})
