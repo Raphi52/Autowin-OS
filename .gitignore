@@ -72,3 +72,6 @@ src/**/*.js
 src/**/*.d.ts
 !src/preload/index.d.ts
 !src/renderer/src/env.d.ts
+
+# Factures personnelles : hors depot
+factures/
