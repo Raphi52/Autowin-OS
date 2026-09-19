@@ -48,8 +48,9 @@ describe('rejeu du chat sur panne serveur temporaire', () => {
     expect(deciderRejeuDeChat('API Error: 429 rate limit', 0).maxAttempts).toBe(
       TENTATIVES_ORDINAIRES
     )
-    expect(deciderRejeuDeChat("You've hit your session limit · resets 7:10pm", 0).maxAttempts).toBe(
-      TENTATIVES_ORDINAIRES
+    // conv-717 : un mur de quota ne se rejoue plus DU TOUT — l'appel est payé et le mur tient.
+    expect(deciderRejeuDeChat("You've hit your session limit · resets 7:10pm", 0).rejouer).toBe(
+      false
     )
   })
 
