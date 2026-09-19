@@ -173,7 +173,7 @@ Le livrable est le tableau d'ÉNONCÉ (présenté en mots SIMPLES) + les éditio
 
 ## Moteur et réflexes
 - La notation et la mécanique de boucle sont CANONIQUES dans `skills/_engine/ENGINE.md`. Kaizen porte désormais l'audit COMPORTEMENTAL lui-même (étape 2 — absorbée de judge le 2026-09-01) plus son propre delta : la localisation de la cible, l'étape d'intégration auto-appliquée, et la contrainte d'un commit par édition. **En cas de divergence avec le moteur, le moteur gagne.**
-- Contrainte cardinale (constitution, réflexe 14 — kaizen) : kaizen APPLIQUE ses propres éditions — diagnostic → éditions précises appliquées directement, chacune vérifiée hors modèle et commitée à part. Le garde-fou est la RÉVERSIBILITÉ, pas une attente d'accord.
+- Contrainte cardinale (constitution, réflexe 13 — kaizen) : kaizen APPLIQUE ses propres éditions — diagnostic → éditions précises appliquées directement, chacune vérifiée hors modèle et commitée à part. Le garde-fou est la RÉVERSIBILITÉ, pas une attente d'accord.
 
 ## Les LOGS de conversation — la source de première main
 

@@ -60,7 +60,7 @@ describe('CONSTITUTION (source unique du soul)', () => {
 
     expect(derniere).toBeGreaterThan(0)
     expect(CONSTITUTION).toContain(`Les ${derniere} réflexes`)
-    expect(CONSTITUTION).not.toContain('Les 13 réflexes')
+    expect(CONSTITUTION).not.toContain('Les 14 réflexes')
     expect(CONSTITUTION).toContain('La limite honnête')
   })
 
