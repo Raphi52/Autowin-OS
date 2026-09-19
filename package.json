@@ -132,7 +132,8 @@
     "test:knowledge-circulaire": "node scripts/cdp-knowledge-circular-proof.mjs",
     "test:sondes-lecture": "node scripts/verifier-sondes-lecture.mjs",
     "test:trois-conversations": "node scripts/cdp-trois-conversations-proof.mjs",
-    "test:relance": "node scripts/cdp-relance-jusquau-vert-proof.mjs"
+    "test:relance": "node scripts/cdp-relance-jusquau-vert-proof.mjs",
+    "banc:orchestration": "node scripts/banc-orchestration-vs-nu.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
