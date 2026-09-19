@@ -30,6 +30,32 @@ const PREFIXES_PARTIELS = Array.from({ length: MARQUEUR_PROMPT_SUIVANT.length },
 const estOuvertureDeBloc = (ligne: string): boolean => ligne.trimStart().startsWith('```')
 
 /**
+ * SIGNAL DE FIN EXPLICITE du mode auto. Avant lui, l'arret reposait sur le MOT « rien » (et ses
+ * variantes) ecrit dans une rubrique : une liste de formulations toujours incomplete, qui a relance
+ * des chaines finies (« rien d'autre », 2026-09-12) ou coupe des chaines vivantes. Une ligne
+ * technique posee SEULE — `AUTOWIN_FIN_V1` (motif facultatif apres « : ») — ne s'interprete pas.
+ * Invisible comme `AUTOWIN_PROMPT_V1` : l'affichage la retire.
+ */
+const MARQUEUR_FIN = 'AUTOWIN_FIN_V1'
+const LIGNE_FIN = /^AUTOWIN_FIN_V1\s*(?::.*)?$/u
+const PREFIXES_FIN = Array.from({ length: MARQUEUR_FIN.length }, (_, index) =>
+  MARQUEUR_FIN.slice(0, index + 1)
+)
+
+/** Vrai si la reponse porte, hors bloc de code, la ligne de fin explicite. */
+export function signalFinExplicite(texte: string): boolean {
+  let dansUnBloc = false
+  for (const ligne of texte.split(SAUT)) {
+    if (estOuvertureDeBloc(ligne)) {
+      dansUnBloc = !dansUnBloc
+      continue
+    }
+    if (!dansUnBloc && LIGNE_FIN.test(ligne.trim().replace(/`/g, ''))) return true
+  }
+  return false
+}
+
+/**
  * Rend le DERNIER prompt émis, nettoyé de son markdown et borné. `null` s'il n'y en a pas —
  * l'appelant retombe alors sur la recommandation, donc rien ne régresse.
  *
@@ -89,6 +115,7 @@ export function retirerLignePromptSuivant(texte: string): string {
       const nu = ligne.trim()
       if (nu.includes(MARQUEUR_PROMPT_SUIVANT)) continue
       if (PREFIXES_PARTIELS.includes(nu)) continue
+      if (LIGNE_FIN.test(nu.replace(/`/g, '')) || PREFIXES_FIN.includes(nu)) continue
     }
     gardees.push(ligne)
   }

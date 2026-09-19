@@ -1,0 +1,548 @@
+diff --git a/docs/glossaire.md b/docs/glossaire.md
+index 60ccb0bc..b0a7d6aa 100644
+--- a/docs/glossaire.md
++++ b/docs/glossaire.md
+@@ -11,7 +11,7 @@ Les mots de la mécanique interne, traduits. Chaque entrée renvoie au fichier q
+ | **RUN.md** | Journal d'une orchestration, lu par le panneau Workflows. Un tour de chat direct n'en crée pas. | `src/main/runs/conv-runs.ts` |
+ | **Copie de travail séparée (worktree)** | Copie isolée du dépôt où un agent travaille ; elle n'est fusionnée que si le run finit vert. | `src/main/worktree-path-rewrite.ts` |
+ | **Clôture en 4 rubriques** | « ✅ Fait / 📍 Maintenant / ⏳ Reste à faire / 👉 Recommandé », exigée seulement quand le tour a exécuté une commande. | `src/main/response-style.ts`, `src/main/chat-turn-messages.ts` (`exigeUneConclusion`) |
+-| **Mode auto** | Enchaîne seul les suites recommandées ; une rubrique réduite à « rien » l'arrête. | `src/renderer/src/components/chat-auto-mode.ts` |
++| **Mode auto** | Enchaîne seul les suites recommandées ; la ligne `AUTOWIN_FIN_V1` en fin de réponse l'arrête (une rubrique réduite à « rien » l'arrête encore, pour les anciens fils). | `src/renderer/src/components/chat-auto-mode.ts` |
+ | **Tour muet** | Tour qui agit sans écrire un mot. Dans le chat de l'app, le pilote redemande la conclusion une seule fois. Pour les agents lancés via claude.exe, la relance « Continue from where you left off. » vient de claude.exe lui-même, pas de ce dépôt. | `src/main/agent-pilot.ts:2466-2470` (`muted-turn`), `docs/tours-muets-etat-des-lieux.md` |
+ | **Verify rejoué** | Rejoue la vérification avant d'accepter un « vert ». Désactivé par défaut, volontairement. | `src/main/hooks/verify-replay-config.ts` |
+ | **/salvage** | Tri des travaux non publiés avant toute publication. | `src/main/response-style.ts` (règle PUBLICATION) |
+diff --git a/docs/prise-en-main.md b/docs/prise-en-main.md
+new file mode 100644
+index 00000000..e10cb4a5
+--- /dev/null
++++ b/docs/prise-en-main.md
+@@ -0,0 +1,53 @@
++# Prise en main d'Autowin OS
++
++Pour démarrer en dix minutes. Les mots techniques sont traduits dans [`glossaire.md`](glossaire.md).
++Ce que le produit fait vraiment, avec ses limites : [`features.md`](features.md).
++
++## 1. Installer et lancer
++
++1. Depuis le dossier du dépôt : `npm install` (installe les dépendances).
++2. `npm run dev` lance l'application en mode développement.
++3. Au moins un modèle IA doit être disponible sur le poste (par exemple le CLI Claude, déjà connecté).
++   Le choix du modèle se fait dans l'onglet **Réglages**.
++
++## 2. Poser une première demande
++
++Écris dans le champ du **Chat** et envoie. Le titre de la conversation reprend le début de ton message
++(80 caractères au plus).
++
++- Une question simple reçoit une réponse directe.
++- Une demande de travail (corriger, créer, vérifier) lance un **travail** : une ligne d'état apparaît
++  tout de suite dans le fil — « Travail lancé : … » —, puis le travail avance dans une copie de
++  travail séparée de ton dépôt. Rien n'arrive dans ton dépôt tant que le contrôle final n'a pas validé.
++- Sous chaque réponse, le **coût du tour** s'affiche quand le modèle IA le fournit. S'il ne le fournit
++  pas, rien n'est affiché : aucun chiffre n'est inventé.
++
++## 3. Lire la fin d'un tour
++
++Quand l'agent a agi, il termine par quatre rubriques : **✅ Fait**, **📍 Maintenant**,
++**⏳ Reste à faire**, **👉 Recommandé**. La dernière propose une seule suite ; elle est pré-remplie en
++grisé dans le champ, et **Tab** l'accepte.
++
++## 4. Le mode auto
++
++L'interrupteur **mode auto**, dans la barre de gauche, renvoie tout seul la suite recommandée à chaque
++fin de tour. Chaque tour coûte de l'argent réel. Il s'arrête :
++
++- quand l'agent écrit la ligne de fin explicite `AUTOWIN_FIN_V1` (invisible à l'affichage) ;
++- quand la même suite est proposée deux fois de suite ;
++- quand tu le désactives.
++
++Le code de cette décision : `src/renderer/src/components/chat-auto-mode.ts`.
++
++## 5. Suivre et contrôler
++
++- **Workflows** : le détail d'un travail (étapes, preuves, verdict du contrôle final).
++- **Observatory** : ce que chaque tour a consommé et ce qu'il a reçu en contexte.
++- Rien n'est publié (commit, push, fusion) sans ta demande explicite.
++
++## 6. Quand ça coince
++
++- Un travail refusé par le contrôle final affiche son motif dans le fil ; le bouton **Relancer** le
++  rejoue.
++- Un tour interrompu se **reprend** d'un clic, sans retaper la demande.
++- Pour les tours qui agissent sans rien écrire : [`tours-muets-etat-des-lieux.md`](tours-muets-etat-des-lieux.md).
+diff --git a/src/main/prise-en-main.doc.test.ts b/src/main/prise-en-main.doc.test.ts
+new file mode 100644
+index 00000000..e38eb368
+--- /dev/null
++++ b/src/main/prise-en-main.doc.test.ts
+@@ -0,0 +1,29 @@
++import { existsSync, readFileSync } from 'node:fs'
++import { join, resolve } from 'node:path'
++import { describe, expect, it } from 'vitest'
++import { signalFinExplicite } from '../shared/prompt-suivant'
++import { TITRE_CONVERSATION_MAX } from '../renderer/src/components/titre-conversation'
++
++const RACINE = resolve(__dirname, '..', '..')
++const DOC = join(RACINE, 'docs', 'prise-en-main.md')
++
++describe('docs/prise-en-main.md', () => {
++  it('existe et commence par un titre', () => {
++    expect(existsSync(DOC)).toBe(true)
++    expect(readFileSync(DOC, 'utf8').startsWith('# Prise en main')).toBe(true)
++  })
++  it('ne renvoie vers aucun fichier absent', () => {
++    const texte = readFileSync(DOC, 'utf8')
++    const liens = [...texte.matchAll(/\]\(([^)#]+)\)/g)].map((m) => join(RACINE, 'docs', m[1]))
++    const chemins = [...texte.matchAll(/`((?:src|docs|scripts)\/[^`]+)`/g)].map((m) => join(RACINE, m[1]))
++    expect(liens.length + chemins.length).toBeGreaterThan(0)
++    for (const cible of [...liens, ...chemins]) expect(existsSync(cible), cible).toBe(true)
++  })
++  it('décrit le comportement réel du code (titre, fin du mode auto, scripts)', () => {
++    const texte = readFileSync(DOC, 'utf8')
++    expect(texte).toContain(`${TITRE_CONVERSATION_MAX} caractères`)
++    expect(signalFinExplicite(texte.match(/`(AUTOWIN_FIN_V1)`/)![1])).toBe(true)
++    const scripts = JSON.parse(readFileSync(join(RACINE, 'package.json'), 'utf8')).scripts
++    for (const m of texte.matchAll(/`npm run ([\w:-]+)`/g)) expect(scripts[m[1]], m[1]).toBeDefined()
++  })
++})
+diff --git a/src/main/response-style.fin-explicite.test.ts b/src/main/response-style.fin-explicite.test.ts
+new file mode 100644
+index 00000000..f4c8b01b
+--- /dev/null
++++ b/src/main/response-style.fin-explicite.test.ts
+@@ -0,0 +1,14 @@
++import { describe, expect, it } from 'vitest'
++import { STYLE_CLOTURE_CHAT } from './response-style'
++import { signalFinExplicite } from '../shared/prompt-suivant'
++
++describe('consigne de clôture — fin explicite du mode auto', () => {
++  it('demande la ligne AUTOWIN_FIN_V1 que le mode auto sait lire', () => {
++    expect(STYLE_CLOTURE_CHAT).toContain('`AUTOWIN_FIN_V1`')
++    // La forme décrite par la consigne est bien celle que le code reconnaît.
++    expect(signalFinExplicite('👉 Recommandé — aucune suite : le travail est livré\nAUTOWIN_FIN_V1')).toBe(true)
++  })
++  it("ne présente plus le mot « rien » comme l'interrupteur", () => {
++    expect(STYLE_CLOTURE_CHAT).not.toMatch(/« rien », mais aussi/)
++  })
++})
+diff --git a/src/main/response-style.ts b/src/main/response-style.ts
+index bf95f64e..432a2af1 100644
+--- a/src/main/response-style.ts
++++ b/src/main/response-style.ts
+@@ -29,7 +29,7 @@ Les blocs de contrôle comme <cmd>{"name":"...","args":{...}}</cmd> doivent cons
+  * suivante, que ces rubriques parasitent.
+  */
+ export const STYLE_CLOTURE_CHAT = `
+-CLÔTURE : hors format strict, seulement si ce tour a exécuté au moins une commande (le même critère que le contrôle automatique de fin de tour), termine par quatre rubriques obligatoires, exactement intitulées et ordonnées « ✅ Fait », « 📍 Maintenant », « ⏳ Reste à faire » et « 👉 Recommandé ». Leur contenu doit refléter fidèlement les actions, preuves, limites et suites réelles, sans répétition ; une ligne de FIN posée SEULE dans une rubrique — « rien », mais aussi « aucune suite nécessaire », « rien à signaler », « néant » — est l'INTERRUPTEUR qui ÉTEINT le mode auto du chat (le mode auto le lit sur « Fait », « Reste à faire » et « Recommandé ») : ne l'écris QUE lorsque le travail est réellement terminé et qu'aucune suite n'existe. Quand une rubrique n'a rien à signaler mais que le travail continue, écris le fait en clair (« aucun fichier modifié », « aucune limite connue ») au lieu du mot nu — « rien » en remplissage coupe une chaîne en cours. La rubrique « 👉 Recommandé » contient une seule prochaine action. Pour une réponse conversationnelle triviale, et plus largement pour toute réponse sans commande, n'ajoute aucun bloc de clôture.
++CLÔTURE : hors format strict, seulement si ce tour a exécuté au moins une commande (le même critère que le contrôle automatique de fin de tour), termine par quatre rubriques obligatoires, exactement intitulées et ordonnées « ✅ Fait », « 📍 Maintenant », « ⏳ Reste à faire » et « 👉 Recommandé ». Leur contenu doit refléter fidèlement les actions, preuves, limites et suites réelles, sans répétition ; l'INTERRUPTEUR qui ÉTEINT le mode auto du chat est une ligne technique posée SEULE en toute dernière ligne, exactement \`AUTOWIN_FIN_V1\` (motif facultatif après « : »), À LA PLACE de la ligne de prompt suivant : écris-la QUE lorsque le travail est réellement terminé et qu'aucune suite n'existe, et dis alors la fin en clair dans « 👉 Recommandé » (« aucune suite : le travail est livré »). N'écris jamais le mot « rien » nu dans une rubrique : écris le fait en clair (« aucun fichier modifié », « aucune limite connue »). La rubrique « 👉 Recommandé » contient une seule prochaine action. Pour une réponse conversationnelle triviale, et plus largement pour toute réponse sans commande, n'ajoute aucun bloc de clôture.
+ RELANCE SANS CIBLE — au moment où le message de l utilisateur ne porte qu un accord ou une relance (« go », « ok », « vas-y », « continue », « oui »), ce n est PAS une demande vide : c est l ORDRE d exécuter la rubrique « 👉 Recommandé » de ton dernier bloc de clôture, telle que tu l as écrite. Exécute-la, sans inventer d autre action, sans redemander une cible et sans lui substituer ta propre idée du plus utile — tu viens de désigner la suite, l utilisateur l a acceptée. Avant d'exécuter, regarde le tour PRÉCÉDENT : s'il a été interrompu ou annulé sans résultat, la relance porte sur la demande de CE tour abandonné — reprends-la telle qu'il l'a écrite, elle est plus récente que ta dernière recommandation ; repartir sur une recommandation antérieure laisse sans réponse ce que l'utilisateur venait de demander, et l'oblige à le re-taper ailleurs. Seule exception : si la dernière recommandation est « rien », la relance ne porte sur rien — demande alors une cible concrète plutôt que de fabriquer du travail.
+ PROMPT SUIVANT — quand tu as écrit un bloc de cloture, ajoute APRES lui une dernière ligne exactement \`AUTOWIN_PROMPT_V1: <le message>\`. Cette ligne est INVISIBLE : l'interface la retire de l'affichage et s'en sert seulement pour prégarnir en grisé le champ de saisie de l'utilisateur. Ne l'annonce pas, ne la commente pas, n'y mets aucun autre champ. Écris le message à la DEUXIÈME PERSONNE, à l'impératif, tel que l'utilisateur le taperait pour lancer la suite — autonome (il se comprend sans relire le fil) et immédiatement envoyable. Ce n'est PAS une copie de la rubrique « 👉 Recommandé » : celle-ci décrit un état pour le lecteur (« passer en terrain »), le prompt est un ordre adressé à l'agent (« lance le terrain sur X, et prépare l'observabilité »). Une seule ligne, une seule action, jamais de bloc de clôture ni de prompt sur une réponse conversationnelle triviale. PUBLICATION : au moment où la suite que tu proposes est un acte de publication (commit, push, pull request, merge, fusion, publication, livraison, déploiement, mise en ligne), le prompt suivant n'est PAS cet acte — c'est \`Lance /salvage …\` : on trie d'abord, par leur contenu, les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées), sinon on publie par-dessus un travail qui existait déjà ailleurs. Cette règle est aussi appliquée par le code : un prompt de publication est réécrit en /salvage. MAIS elle ne s'applique QUE si l'utilisateur a lui-même parlé de publier. Une publication qu'il n'a pas demandée ne se propose PAS : au moment où tu t'apprêtes à recommander un commit, un push ou un tri de travaux non publiés alors que sa demande n'en disait rien, n'écris ni l'un ni l'autre — la tâche demandée est finie, dis-le et n'ajoute pas de prompt suivant. Inventer une suite de publication pour ne pas laisser la rubrique vide lui impose une corvée qu'il n'a jamais demandée.`
+ 
+diff --git a/src/renderer/src/components/ChatMessageRow.tsx b/src/renderer/src/components/ChatMessageRow.tsx
+index 7918ff3c..b178e0cd 100644
+--- a/src/renderer/src/components/ChatMessageRow.tsx
++++ b/src/renderer/src/components/ChatMessageRow.tsx
+@@ -18,7 +18,12 @@ import { AssistantActivityGroup } from './ChatView.parts'
+ import { clotureEnDernier } from './cloture-en-dernier'
+ import { CheckIcon, CopyIcon, ForkIcon, InspectIcon } from './chat-view-icons'
+ import { formatFileSize } from './chat-attachments'
+-import { groupAssistantActivity, type ChatErrorPart, type ChatPart } from './chat-view-model'
++import {
++  groupAssistantActivity,
++  libelleCoutDuTour,
++  type ChatErrorPart,
++  type ChatPart
++} from './chat-view-model'
+ import { bilanDuTour, formaterBilan } from './bilan-tour'
+ import { estErreurAuthExpiree } from './erreur-auth'
+ import type { TerminalStatus } from './chat-resume-refine'
+@@ -623,6 +628,11 @@ export const ChatMessageRow = memo(
+           })()}
+         <div className="msg-turn-actions">
+           <CopyMessageButton message={message} />
++          {libelleCoutDuTour((message as { coutUsd?: number }).coutUsd) && (
++            <span className="c-faint tnum msg-turn-cost" data-testid="msg-turn-cost">
++              {libelleCoutDuTour((message as { coutUsd?: number }).coutUsd)}
++            </span>
++          )}
+           {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
+             <button
+               type="button"
+diff --git a/src/renderer/src/components/ChatView.parts.tsx b/src/renderer/src/components/ChatView.parts.tsx
+index 4ecfd195..52ab401e 100644
+--- a/src/renderer/src/components/ChatView.parts.tsx
++++ b/src/renderer/src/components/ChatView.parts.tsx
+@@ -22,6 +22,7 @@ import {
+   iconeFamille,
+   interruptedTask,
+   raisonDuLien,
++  ligneEtatLancement,
+   resumeCible
+ } from './chat-parts-helpers'
+ 
+@@ -526,6 +527,8 @@ export function AssistantActivityGroup({
+   const battement = [...actions]
+     .reverse()
+     .find((action) => action.ok === undefined && !action.interrupted && action.progress)?.progress
++  // Avant le premier battement, la ligne d'etat du lancement dit QUOI tourne et OU.
++  const ligneEtat = battement ?? ligneEtatLancement(actions)
+   const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`
+   const status = running
+     ? completedCount > 0
+@@ -666,9 +669,9 @@ export function AssistantActivityGroup({
+           )}
+         </button>
+         {/* Hors du bouton : c'est une INFORMATION qui change toute seule, pas une cible de clic. */}
+-        {battement && (
+-          <div className="activity-progress" data-testid="activity-progress" title={battement}>
+-            {battement}
++        {ligneEtat && (
++          <div className="activity-progress" data-testid="activity-progress" title={ligneEtat}>
++            {ligneEtat}
+           </div>
+         )}
+         {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,
+diff --git a/src/renderer/src/components/ChatView.tsx b/src/renderer/src/components/ChatView.tsx
+index b1a2e733..8d5bc16f 100644
+--- a/src/renderer/src/components/ChatView.tsx
++++ b/src/renderer/src/components/ChatView.tsx
+@@ -9,6 +9,7 @@ import {
+   type Dispatch,
+   type SetStateAction
+ } from 'react'
++import { titreDepuisPremierMessage } from './titre-conversation'
+ import { useBrancheCourante } from './branche-courante'
+ import { presenceDepuisRunsVivants } from './run-presence'
+ import { useClampDansFenetre } from './useClampDansFenetre'
+@@ -4084,7 +4085,7 @@ export function ChatView({
+       if (!convId) {
+         const identity = await refreshRuntimeIdentity()
+         const titleSource = value || outgoingAttachments[0].name
+-        const title = titleSource.length > 42 ? `${titleSource.slice(0, 42)}…` : titleSource
++        const title = titreDepuisPremierMessage(titleSource)
+         const c = await window.api.conversationsCreate({
+           title,
+           category: identity.provider,
+diff --git a/src/renderer/src/components/chat-auto-mode.fin-explicite.test.ts b/src/renderer/src/components/chat-auto-mode.fin-explicite.test.ts
+new file mode 100644
+index 00000000..1d382222
+--- /dev/null
++++ b/src/renderer/src/components/chat-auto-mode.fin-explicite.test.ts
+@@ -0,0 +1,37 @@
++import { describe, expect, it } from 'vitest'
++import type { Msg } from './chat-view-types'
++import { deciderRelanceAuto } from './chat-auto-mode'
++import { retirerLignePromptSuivant, signalFinExplicite } from '../../../shared/prompt-suivant'
++
++const agent = (texte: string): Msg =>
++  ({ role: 'assistant', content: texte, parts: [{ kind: 'text', text: texte }] }) as unknown as Msg
++const base = {
++  actif: true,
++  occupe: false,
++  dernierTourTraite: null,
++  dernierPromptEnvoye: null,
++  brouillonPresent: false
++}
++
++describe('mode auto — signal de fin explicite AUTOWIN_FIN_V1', () => {
++  it("arrête sur la ligne de fin, même quand la rubrique ne dit pas « rien »", () => {
++    const texte = ['✅ Fait', '- titres allongés', '👉 Recommandé — aucune suite, le travail est livré', 'AUTOWIN_FIN_V1'].join('\n')
++    expect(deciderRelanceAuto({ ...base, fil: [agent(texte)] })).toMatchObject({
++      action: 'arreter',
++      raison: 'fin-explicite'
++    })
++  })
++  it('passe avant un prompt suivant écrit par erreur', () => {
++    const texte = ['👉 Recommandé — passer en terrain', 'AUTOWIN_PROMPT_V1: lance X', 'AUTOWIN_FIN_V1: livré'].join('\n')
++    expect(deciderRelanceAuto({ ...base, fil: [agent(texte)] })).toMatchObject({ raison: 'fin-explicite' })
++  })
++  it("ne se déclenche ni dans un bloc de code ni au milieu d'une phrase", () => {
++    expect(signalFinExplicite('```\nAUTOWIN_FIN_V1\n```')).toBe(false)
++    expect(signalFinExplicite('écris AUTOWIN_FIN_V1 quand tu as fini')).toBe(false)
++    expect(deciderRelanceAuto({ ...base, fil: [agent('👉 Recommandé — passer en terrain\nAUTOWIN_PROMPT_V1: lance X')] })).toMatchObject({ action: 'envoyer' })
++  })
++  it("reste invisible à l'affichage, y compris en cours d'écriture", () => {
++    expect(retirerLignePromptSuivant('Fini.\nAUTOWIN_FIN_V1')).not.toContain('AUTOWIN_FIN')
++    expect(retirerLignePromptSuivant('Fini.\nAUTOWIN_FI')).not.toContain('AUTOWIN_FI')
++  })
++})
+diff --git a/src/renderer/src/components/chat-auto-mode.ts b/src/renderer/src/components/chat-auto-mode.ts
+index 65ba90f4..2ec50687 100644
+--- a/src/renderer/src/components/chat-auto-mode.ts
++++ b/src/renderer/src/components/chat-auto-mode.ts
+@@ -23,6 +23,7 @@ import {
+   extrairePromptSuivant,
+   estPromptDePublication,
+   publicationJamaisDemandee,
++  signalFinExplicite,
+   PROMPT_SALVAGE
+ } from '../../../shared/prompt-suivant'
+ import { extractRecommendation } from './markdown-recommandation'
+@@ -275,6 +276,7 @@ export type RaisonArret =
+   | 'deja-traite'
+   | 'aucune-reponse'
+   | 'brouillon'
++  | 'fin-explicite'
+   | 'recommandation-rien'
+   | 'fait-rien'
+   | 'reste-rien'
+@@ -335,6 +337,7 @@ export type DecisionAuto =
+  * une fin : c'est juste « rien à envoyer sur CE tour ». On patiente, l'interrupteur reste allumé.
+  */
+ const MESSAGES_ARRET: Record<string, string> = {
++  'fin-explicite': "Mode auto terminé : l'agent a signalé explicitement que le travail est fini.",
+   'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.',
+   'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.',
+   'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.',
+@@ -423,7 +426,10 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
+    * bloc « Fait » vide (c'est la que le mot tombe le plus souvent). Garde-fou 1 ter : « ⏳ Reste à
+    * faire : rien », le texte qu'Autowin ecrit lui-meme apres le dernier maillon.
+    */
+-  const finDeChaine: RaisonArret | null = recommandationDitRien(extractRecommendation(texteReponse))
++  // Le signal EXPLICITE passe devant : les portes « rien » ne restent que pour les fils ecrits avant lui.
++  const finDeChaine: RaisonArret | null = signalFinExplicite(texteReponse)
++    ? 'fin-explicite'
++    : recommandationDitRien(extractRecommendation(texteReponse))
+     ? 'recommandation-rien'
+     : blocFaitDitRien(texteReponse)
+       ? 'fait-rien'
+diff --git a/src/renderer/src/components/chat-parts-helpers.lancement.test.ts b/src/renderer/src/components/chat-parts-helpers.lancement.test.ts
+new file mode 100644
+index 00000000..57a73438
+--- /dev/null
++++ b/src/renderer/src/components/chat-parts-helpers.lancement.test.ts
+@@ -0,0 +1,22 @@
++import { describe, expect, it } from 'vitest'
++import { ligneEtatLancement } from './chat-parts-helpers'
++import type { ChatActionPart } from './chat-view-model'
++
++const action = (over: Partial<ChatActionPart>): ChatActionPart =>
++  ({ kind: 'action', name: 'orchestrate', args: { task: 'allonger les titres' }, ...over }) as ChatActionPart
++
++describe('ligneEtatLancement', () => {
++  it('dit quoi tourne et ou, des le lancement', () => {
++    const ligne = ligneEtatLancement([action({})])
++    expect(ligne).toContain('Travail lancé : « allonger les titres »')
++    expect(ligne).toContain('copie de travail séparée')
++  })
++  it("se tait des qu'un battement existe, ou une fois termine/interrompu", () => {
++    expect(ligneEtatLancement([action({ progress: 'phase build' })])).toBeUndefined()
++    expect(ligneEtatLancement([action({ ok: true })])).toBeUndefined()
++    expect(ligneEtatLancement([action({ interrupted: true })])).toBeUndefined()
++  })
++  it("ignore les actions qui ne lancent pas de travail", () => {
++    expect(ligneEtatLancement([action({ name: 'verify' })])).toBeUndefined()
++  })
++})
+diff --git a/src/renderer/src/components/chat-parts-helpers.ts b/src/renderer/src/components/chat-parts-helpers.ts
+index ef902208..8404461b 100644
+--- a/src/renderer/src/components/chat-parts-helpers.ts
++++ b/src/renderer/src/components/chat-parts-helpers.ts
+@@ -122,3 +122,22 @@ export function failedTask(actions: ChatActionPart[]): string | undefined {
+   }
+   return undefined
+ }
++
++/**
++ * LIGNE D'ETAT AU LANCEMENT d'un travail (orchestration). Entre le clic et le premier signe de vie,
++ * le fil ne disait que « 1 action en cours » : l'utilisateur ne savait ni QUOI tournait, ni OU.
++ * Rendue seulement tant qu'aucun battement (`progress`) n'est arrive — ensuite c'est lui qui parle.
++ */
++export function ligneEtatLancement(actions: ChatActionPart[]): string | undefined {
++  const enVol = actions.find(
++    (action) =>
++      action.name === 'orchestrate' && action.ok === undefined && !action.interrupted && !action.progress
++  )
++  if (!enVol) return undefined
++  const task = (enVol.args as { task?: unknown } | undefined)?.task
++  const quoi =
++    typeof task === 'string' && task.trim()
++      ? ` : « ${task.trim().length > 100 ? `${task.trim().slice(0, 99)}…` : task.trim()} »`
++      : ''
++  return `Travail lancé${quoi} — dans une copie de travail séparée, résultat vérifié avant de revenir ici.`
++}
+diff --git a/src/renderer/src/components/chat-view-model.cout-tour.test.ts b/src/renderer/src/components/chat-view-model.cout-tour.test.ts
+new file mode 100644
+index 00000000..629a4f9b
+--- /dev/null
++++ b/src/renderer/src/components/chat-view-model.cout-tour.test.ts
+@@ -0,0 +1,36 @@
++import { describe, expect, it } from 'vitest'
++import {
++  libelleCoutDuTour,
++  reduceAssistantPilotEvent,
++  type HydratedAssistantMessage
++} from './chat-view-model'
++
++const enCours = (): HydratedAssistantMessage => ({
++  role: 'assistant',
++  turnId: 't1',
++  parts: [],
++  status: 'streaming',
++  done: false
++})
++
++describe('coût par tour', () => {
++  it("recopie le coût rendu par l'événement done, sans le recalculer", () => {
++    const fini = reduceAssistantPilotEvent(enCours(), {
++      kind: 'done',
++      turnId: 't1',
++      usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.4321 }
++    } as never)
++    expect(fini.done).toBe(true)
++    expect(fini.coutUsd).toBe(0.4321)
++    expect(libelleCoutDuTour(fini.coutUsd)).toBe('coût du tour : 0.43 $')
++  })
++  it("n'invente rien quand le fournisseur ne chiffre pas", () => {
++    const fini = reduceAssistantPilotEvent(enCours(), { kind: 'done', turnId: 't1' } as never)
++    expect(fini.coutUsd).toBeUndefined()
++    expect(libelleCoutDuTour(undefined)).toBeUndefined()
++    expect(libelleCoutDuTour(0)).toBeUndefined()
++  })
++  it('garde la précision pour un petit tour', () => {
++    expect(libelleCoutDuTour(0.0042)).toBe('coût du tour : 0.0042 $')
++  })
++})
+diff --git a/src/renderer/src/components/chat-view-model.ts b/src/renderer/src/components/chat-view-model.ts
+index 3512349b..c4607373 100644
+--- a/src/renderer/src/components/chat-view-model.ts
++++ b/src/renderer/src/components/chat-view-model.ts
+@@ -90,6 +90,11 @@ export interface HydratedAssistantMessage {
+    * mêlé à la réponse. Sert à montrer l'activité durant les secondes précédant le premier mot.
+    */
+   reasoning?: string
++  /**
++   * COUT DU TOUR tel que le fournisseur l'a rendu dans l'evenement `done` (`usage.costUsd`).
++   * Recopie, jamais recalcule : le seul chiffre de reference reste celui du main.
++   */
++  coutUsd?: number
+   /**
+    * Signe de vie TECHNIQUE du provider — REMPLACE le precedent, jamais accumule, jamais persiste,
+    * jamais melange au bloc « Reflexion ».
+@@ -761,6 +766,9 @@ export function reduceAssistantPilotEvent(
+     turnEvent
+   )
+   const done = next.status !== 'streaming'
++  const coutRecu =
++    event.kind === 'done' ? (event as { usage?: { costUsd?: unknown } }).usage?.costUsd : undefined
++  const coutUsd = typeof coutRecu === 'number' ? coutRecu : message.coutUsd
+   return {
+     role: 'assistant',
+     turnId,
+@@ -768,10 +776,17 @@ export function reduceAssistantPilotEvent(
+     parts: done ? settleUnresolvedActions(next.parts) : next.parts,
+     status: next.status,
+     done,
+-    ...(next.error ? { error: next.error } : {})
++    ...(next.error ? { error: next.error } : {}),
++    ...(coutUsd !== undefined ? { coutUsd } : {})
+   }
+ }
+ 
++/** Libelle du cout d'un tour ; rien quand le fournisseur ne l'a pas chiffre (jamais « 0 $ » invente). */
++export function libelleCoutDuTour(coutUsd: number | undefined): string | undefined {
++  if (typeof coutUsd !== 'number' || !Number.isFinite(coutUsd) || coutUsd <= 0) return undefined
++  return `coût du tour : ${coutUsd < 0.01 ? coutUsd.toFixed(4) : coutUsd.toFixed(2)} $`
++}
++
+ interface RuntimeSlot {
+   slotId?: string
+   provider: string
+diff --git a/src/renderer/src/components/titre-conversation.test.ts b/src/renderer/src/components/titre-conversation.test.ts
+new file mode 100644
+index 00000000..1d543455
+--- /dev/null
++++ b/src/renderer/src/components/titre-conversation.test.ts
+@@ -0,0 +1,25 @@
++import { describe, expect, it } from 'vitest'
++import { TITRE_CONVERSATION_MAX, titreDepuisPremierMessage } from './titre-conversation'
++
++describe('titreDepuisPremierMessage', () => {
++  it('garde intact un message court', () => {
++    expect(titreDepuisPremierMessage('liste moi 100 inconvénients de autowin OS')).toBe(
++      'liste moi 100 inconvénients de autowin OS'
++    )
++  })
++  it('ne tronque plus a 42 caracteres', () => {
++    const msg = 'Relance les points 2 à 7 dans D:\AutoWinOS : allonger les titres tronqués'
++    expect(msg.length).toBeGreaterThan(42)
++    expect(titreDepuisPremierMessage(msg)).toBe(msg)
++  })
++  it('coupe un long message au mot, sous la borne, avec une ellipse', () => {
++    const msg = 'mot '.repeat(60)
++    const t = titreDepuisPremierMessage(msg)
++    expect(t.endsWith('…')).toBe(true)
++    expect(t.length).toBeLessThanOrEqual(TITRE_CONVERSATION_MAX + 1)
++    expect(t).not.toMatch(/\bmo…$|\bm…$/)
++  })
++  it('aplatit les retours a la ligne', () => {
++    expect(titreDepuisPremierMessage('a\n\n  b')).toBe('a b')
++  })
++})
+diff --git a/src/renderer/src/components/titre-conversation.ts b/src/renderer/src/components/titre-conversation.ts
+new file mode 100644
+index 00000000..94e11149
+--- /dev/null
++++ b/src/renderer/src/components/titre-conversation.ts
+@@ -0,0 +1,16 @@
++/**
++ * Titre d'une nouvelle conversation, tire de son premier message.
++ * Avant : coupe brute a 42 caracteres (« liste moi 100 inconvénients de autowin O… »),
++ * trop court pour distinguer deux fils. Maintenant : 80 caracteres, coupe au dernier
++ * espace pour ne pas trancher un mot, espaces multiples/retours ramenes a un seul.
++ */
++export const TITRE_CONVERSATION_MAX = 80
++
++export function titreDepuisPremierMessage(source: string): string {
++  const propre = source.replace(/\s+/g, ' ').trim()
++  if (propre.length <= TITRE_CONVERSATION_MAX) return propre
++  const coupe = propre.slice(0, TITRE_CONVERSATION_MAX)
++  const dernierEspace = coupe.lastIndexOf(' ')
++  const base = dernierEspace >= TITRE_CONVERSATION_MAX / 2 ? coupe.slice(0, dernierEspace) : coupe
++  return `${base.trimEnd()}…`
++}
+diff --git a/src/shared/prompt-suivant.ts b/src/shared/prompt-suivant.ts
+index 66dea7b8..d0769749 100644
+--- a/src/shared/prompt-suivant.ts
++++ b/src/shared/prompt-suivant.ts
+@@ -29,6 +29,32 @@ const PREFIXES_PARTIELS = Array.from({ length: MARQUEUR_PROMPT_SUIVANT.length },
+ 
+ const estOuvertureDeBloc = (ligne: string): boolean => ligne.trimStart().startsWith('```')
+ 
++/**
++ * SIGNAL DE FIN EXPLICITE du mode auto. Avant lui, l'arret reposait sur le MOT « rien » (et ses
++ * variantes) ecrit dans une rubrique : une liste de formulations toujours incomplete, qui a relance
++ * des chaines finies (« rien d'autre », 2026-09-12) ou coupe des chaines vivantes. Une ligne
++ * technique posee SEULE — `AUTOWIN_FIN_V1` (motif facultatif apres « : ») — ne s'interprete pas.
++ * Invisible comme `AUTOWIN_PROMPT_V1` : l'affichage la retire.
++ */
++const MARQUEUR_FIN = 'AUTOWIN_FIN_V1'
++const LIGNE_FIN = /^AUTOWIN_FIN_V1\s*(?::.*)?$/u
++const PREFIXES_FIN = Array.from({ length: MARQUEUR_FIN.length }, (_, index) =>
++  MARQUEUR_FIN.slice(0, index + 1)
++)
++
++/** Vrai si la reponse porte, hors bloc de code, la ligne de fin explicite. */
++export function signalFinExplicite(texte: string): boolean {
++  let dansUnBloc = false
++  for (const ligne of texte.split(SAUT)) {
++    if (estOuvertureDeBloc(ligne)) {
++      dansUnBloc = !dansUnBloc
++      continue
++    }
++    if (!dansUnBloc && LIGNE_FIN.test(ligne.trim().replace(/`/g, ''))) return true
++  }
++  return false
++}
++
+ /**
+  * Rend le DERNIER prompt émis, nettoyé de son markdown et borné. `null` s'il n'y en a pas —
+  * l'appelant retombe alors sur la recommandation, donc rien ne régresse.
+@@ -89,6 +115,7 @@ export function retirerLignePromptSuivant(texte: string): string {
+       const nu = ligne.trim()
+       if (nu.includes(MARQUEUR_PROMPT_SUIVANT)) continue
+       if (PREFIXES_PARTIELS.includes(nu)) continue
++      if (LIGNE_FIN.test(nu.replace(/`/g, '')) || PREFIXES_FIN.includes(nu)) continue
+     }
+     gardees.push(ligne)
+   }

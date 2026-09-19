@@ -23,6 +23,7 @@ import {
   extrairePromptSuivant,
   estPromptDePublication,
   publicationJamaisDemandee,
+  signalFinExplicite,
   PROMPT_SALVAGE
 } from '../../../shared/prompt-suivant'
 import { extractRecommendation } from './markdown-recommandation'
@@ -275,6 +276,7 @@ export type RaisonArret =
   | 'deja-traite'
   | 'aucune-reponse'
   | 'brouillon'
+  | 'fin-explicite'
   | 'recommandation-rien'
   | 'fait-rien'
   | 'reste-rien'
@@ -335,6 +337,7 @@ export type DecisionAuto =
  * une fin : c'est juste « rien à envoyer sur CE tour ». On patiente, l'interrupteur reste allumé.
  */
 const MESSAGES_ARRET: Record<string, string> = {
+  'fin-explicite': "Mode auto terminé : l'agent a signalé explicitement que le travail est fini.",
   'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.',
   'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.',
   'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.',
@@ -423,7 +426,10 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * bloc « Fait » vide (c'est la que le mot tombe le plus souvent). Garde-fou 1 ter : « ⏳ Reste à
    * faire : rien », le texte qu'Autowin ecrit lui-meme apres le dernier maillon.
    */
-  const finDeChaine: RaisonArret | null = recommandationDitRien(extractRecommendation(texteReponse))
+  // Le signal EXPLICITE passe devant : les portes « rien » ne restent que pour les fils ecrits avant lui.
+  const finDeChaine: RaisonArret | null = signalFinExplicite(texteReponse)
+    ? 'fin-explicite'
+    : recommandationDitRien(extractRecommendation(texteReponse))
     ? 'recommandation-rien'
     : blocFaitDitRien(texteReponse)
       ? 'fait-rien'
