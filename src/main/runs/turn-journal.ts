@@ -10,7 +10,7 @@ import {
   rmSync,
   statSync
 } from 'node:fs'
-import { appendFile } from 'node:fs/promises'
+import { appendFile, open, readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 /**
@@ -337,11 +337,21 @@ const QUEUE_OCTETS = 8_192
  * sur la lecture complète, jamais sur une conclusion optimiste. Un tour déclaré terminé à tort ne
  * serait plus jamais repris — c'est exactement la perte que la survie niveau 2 doit empêcher.
  */
+/*
+ * fix-ok: 2026-09-17 18:59, `ipc:runs:unfinishedTurns` 1,48 s dont 986 `openSync` (1 218 ms) — la
+ * queue de chaque journal TERMINÉ était rouverte à chaque appel. Un terminé reste terminé tant que
+ * le fichier ne bouge pas : on retient ce verdict (et lui seul) avec la taille et la date vues.
+ */
+const termineConnus = new Map<string, { taille: number; mtimeMs: number }>()
+
 function journalTermineParLaQueue(path: string): boolean | undefined {
   let fd: number | undefined
   try {
-    const taille = statSync(path).size
+    const etat = statSync(path)
+    const taille = etat.size
     if (taille === 0) return undefined
+    const connu = termineConnus.get(path)
+    if (connu && connu.taille === taille && connu.mtimeMs === etat.mtimeMs) return true
     fd = openSync(path, 'r')
     const debut = Math.max(0, taille - QUEUE_OCTETS)
     const tampon = Buffer.allocUnsafe(taille - debut)
@@ -357,7 +367,10 @@ function journalTermineParLaQueue(path: string): boolean | undefined {
         const evenement = JSON.parse(nette) as TurnJournalEvent
         if (!evenement || typeof evenement.kind !== 'string') continue
         vuUnEvenement = true
-        if (TERMINAL_KINDS.has(evenement.kind)) return true
+        if (TERMINAL_KINDS.has(evenement.kind)) {
+          termineConnus.set(path, { taille, mtimeMs: etat.mtimeMs })
+          return true
+        }
       } catch {
         // Ligne tronquée par un crash : la queue ne conclut plus rien de fiable.
         return undefined
@@ -407,6 +420,112 @@ export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
         turnId,
         events: events.length,
         updatedAt: statSync(join(dir, file)).mtimeMs
+      })
+    }
+  }
+  return found.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/*
+ * INVENTAIRE NON BLOQUANT, pour le canal IPC de démarrage.
+ *
+ * fix-ok: 2026-09-17 18:59, `ipc:runs:unfinishedTurns` 1,48 s à l'ouverture dont 986 `openSync` —
+ * la mémoire `termineConnus` est vide au premier appel, donc la version synchrone rouvre encore
+ * chaque journal. Même logique, mêmes verdicts, mais toutes les E/S passent par `fs/promises` :
+ * la fenêtre n'est plus figée pendant le parcours. Seul le vidage des tampons reste synchrone
+ * (obligatoire : un tour en vol pas encore sur disque serait invisible).
+ */
+async function journalTermineParLaQueueAsync(path: string): Promise<boolean | undefined> {
+  let fichier: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    const etat = await stat(path)
+    const taille = etat.size
+    if (taille === 0) return undefined
+    const connu = termineConnus.get(path)
+    if (connu && connu.taille === taille && connu.mtimeMs === etat.mtimeMs) return true
+    fichier = await open(path, 'r')
+    const debut = Math.max(0, taille - QUEUE_OCTETS)
+    const tampon = Buffer.allocUnsafe(taille - debut)
+    const { bytesRead } = await fichier.read(tampon, 0, tampon.length, debut)
+    const lignes = tampon.subarray(0, bytesRead).toString('utf8').split('\n')
+    if (debut > 0) lignes.shift()
+    let vuUnEvenement = false
+    for (const ligne of lignes) {
+      const nette = ligne.trim()
+      if (!nette) continue
+      try {
+        const evenement = JSON.parse(nette) as TurnJournalEvent
+        if (!evenement || typeof evenement.kind !== 'string') continue
+        vuUnEvenement = true
+        if (TERMINAL_KINDS.has(evenement.kind)) {
+          termineConnus.set(path, { taille, mtimeMs: etat.mtimeMs })
+          return true
+        }
+      } catch {
+        return undefined
+      }
+    }
+    return vuUnEvenement && debut === 0 ? false : undefined
+  } catch {
+    return undefined
+  } finally {
+    await fichier?.close().catch(() => undefined)
+  }
+}
+
+async function readTurnJournalAsync(path: string): Promise<TurnJournalEvent[]> {
+  const memoire = [...(enVol.get(path) ?? []), ...(pending.get(path) ?? [])]
+  const surDisque = await readFile(path, 'utf8').catch(() => '')
+  const out: TurnJournalEvent[] = []
+  for (const line of [...surDisque.split('\n'), ...memoire]) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      const parsed = JSON.parse(trimmed) as TurnJournalEvent
+      if (parsed && typeof parsed === 'object' && typeof parsed.kind === 'string') out.push(parsed)
+    } catch {
+      // ligne tronquée/corrompue → on saute, comme `readTurnJournal`
+    }
+  }
+  return out
+}
+
+/** Version non bloquante de `listUnfinishedTurns` : même résultat, aucune E/S synchrone. */
+export async function listUnfinishedTurnsAsync(root: string): Promise<UnfinishedTurn[]> {
+  flushAllTurnJournals()
+  let conversations: string[]
+  try {
+    conversations = await readdir(root)
+  } catch {
+    return []
+  }
+  const found: UnfinishedTurn[] = []
+  for (const conversationId of conversations) {
+    const dir = join(root, conversationId)
+    let entries: string[]
+    try {
+      if (!(await stat(dir)).isDirectory()) continue
+      entries = await readdir(dir)
+    } catch {
+      continue
+    }
+    for (const file of entries) {
+      if (!file.endsWith('.jsonl')) continue
+      const path = join(dir, file)
+      if ((await journalTermineParLaQueueAsync(path)) === true) continue
+      const events = await readTurnJournalAsync(path)
+      if (events.length === 0 || isTurnFinished(events)) continue
+      let updatedAt: number
+      try {
+        updatedAt = (await stat(path)).mtimeMs
+      } catch {
+        continue
+      }
+      found.push({
+        conversationId,
+        turnId: file.slice(0, -'.jsonl'.length),
+        events: events.length,
+        updatedAt
       })
     }
   }
@@ -508,6 +627,27 @@ export function listUnfinishedTurnsPuisMenage(
 ): UnfinishedTurn[] {
   flushAllTurnJournals()
   const liste = listUnfinishedTurns(root)
+  planifierMenage(root, options)
+  return liste
+}
+
+/** Variante NON bloquante pour le canal IPC de démarrage (cf. `listUnfinishedTurnsAsync`). */
+export async function listUnfinishedTurnsPuisMenageAsync(
+  root: string,
+  options: {
+    menage?: () => void
+    planifier?: (tache: () => void) => void
+  } = {}
+): Promise<UnfinishedTurn[]> {
+  const liste = await listUnfinishedTurnsAsync(root)
+  planifierMenage(root, options)
+  return liste
+}
+
+function planifierMenage(
+  root: string,
+  options: { menage?: () => void; planifier?: (tache: () => void) => void }
+): void {
   const menage = options.menage ?? ((): void => void pruneFinishedTurnJournals(root))
   const planifier = options.planifier ?? ((tache: () => void): void => void setImmediate(tache))
   planifier(() => {
@@ -517,7 +657,6 @@ export function listUnfinishedTurnsPuisMenage(
       /* GC best-effort : jamais au prix du demarrage */
     }
   })
-  return liste
 }
 
 /**

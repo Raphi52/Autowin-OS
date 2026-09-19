@@ -34,75 +34,75 @@ function mutation(paths: string[], extra: Partial<ExecutionEvidence> = {}): Exec
 }
 
 describe('jetonsDeCauseParFichier — la cause se DECLARE, elle ne se suppose pas', () => {
-  it('lit un `fix-ok:` depose dans le diff du fichier mute', () => {
+  it('lit un `fix-ok:` depose dans le diff du fichier mute', async () => {
     const evidence = [
       mutation(['src/main/boucle.ts'], {
         diff: '+  // fix-ok: cause mesuree hors modele, le compteur repartait a zero\n'
       })
     ]
-    expect(jetonsDeCauseParFichier(undefined, evidence, [])).toEqual({
+    expect(await jetonsDeCauseParFichier(undefined, evidence, [])).toEqual({
       'src/main/boucle.ts': true
     })
   })
 
-  it('accepte les trois jetons nommes par le hook, et eux seuls', () => {
+  it('accepte les trois jetons nommes par le hook, et eux seuls', async () => {
     for (const jeton of ['CausalHypothesis:', 'fix-ok:', 'check:']) {
       const ev = [mutation(['a.ts'], { diff: `+ // ${jeton} raison` })]
-      expect(jetonsDeCauseParFichier(undefined, ev, []), jeton).toEqual({ 'a.ts': true })
+      expect(await jetonsDeCauseParFichier(undefined, ev, []), jeton).toEqual({ 'a.ts': true })
     }
     const muet = [mutation(['a.ts'], { diff: '+ // TODO: revoir ca plus tard' })]
-    expect(jetonsDeCauseParFichier(undefined, muet, [])).toEqual({})
+    expect(await jetonsDeCauseParFichier(undefined, muet, [])).toEqual({})
   })
 
-  it('lit un jeton du TEXTE du run quand il NOMME le chemin sur la meme ligne', () => {
+  it('lit un jeton du TEXTE du run quand il NOMME le chemin sur la meme ligne', async () => {
     const texte = 'CausalHypothesis: src/main/boucle.ts remet le compteur a zero a chaque tour.'
-    expect(jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({
+    expect(await jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({
       'src/main/boucle.ts': true
     })
   })
 
-  it('lit un jeton qui nomme un chemin Windows ABSOLU (lettre de lecteur)', () => {
+  it('lit un jeton qui nomme un chemin Windows ABSOLU (lettre de lecteur)', async () => {
     const texte = 'CausalHypothesis: D:/AutoWinOS/scripts/ui-capture.mjs — opt-in --instance-dediee.'
-    expect(jetonsDeCauseParFichier(texte, [], ['D:/AutoWinOS/scripts/ui-capture.mjs'])).toEqual({
+    expect(await jetonsDeCauseParFichier(texte, [], ['D:/AutoWinOS/scripts/ui-capture.mjs'])).toEqual({
       'D:/AutoWinOS/scripts/ui-capture.mjs': true
     })
   })
 
-  it('lit un jeton qui nomme un fichier dont l extension contient un CHIFFRE (.ps1)', () => {
+  it('lit un jeton qui nomme un fichier dont l extension contient un CHIFFRE (.ps1)', async () => {
     const texte = 'CausalHypothesis: resources/hdesk-tv.ps1 — delegue sans CharSet.Unicode.'
-    expect(jetonsDeCauseParFichier(texte, [], ['resources/hdesk-tv.ps1'])).toEqual({
+    expect(await jetonsDeCauseParFichier(texte, [], ['resources/hdesk-tv.ps1'])).toEqual({
       'resources/hdesk-tv.ps1': true
     })
   })
 
-  it('resout un nom de fichier SEUL quand un seul fichier edite le porte', () => {
+  it('resout un nom de fichier SEUL quand un seul fichier edite le porte', async () => {
     const texte = 'fix-ok: boucle.ts — cause prouvee par le test rouge d abord.'
-    expect(jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({
+    expect(await jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({
       'src/main/boucle.ts': true
     })
   })
 
-  it('refuse de trancher un nom AMBIGU porte par deux fichiers edites', () => {
+  it('refuse de trancher un nom AMBIGU porte par deux fichiers edites', async () => {
     const texte = 'fix-ok: index.ts corrige.'
     const edites = ['src/main/index.ts', 'src/renderer/index.ts']
-    expect(jetonsDeCauseParFichier(texte, [], edites)).toEqual({})
+    expect(await jetonsDeCauseParFichier(texte, [], edites)).toEqual({})
   })
 
-  it('reconnait un DOSSIER edite (cle porcelain sans extension) nomme sur la ligne', () => {
+  it('reconnait un DOSSIER edite (cle porcelain sans extension) nomme sur la ligne', async () => {
     const texte = 'CausalHypothesis: .autowin-preuve/ — captures de preuve, pas un correctif.'
-    expect(jetonsDeCauseParFichier(texte, [], ['.autowin-preuve/', 'src/main/b.ts'])).toEqual({
+    expect(await jetonsDeCauseParFichier(texte, [], ['.autowin-preuve/', 'src/main/b.ts'])).toEqual({
       '.autowin-preuve/': true
     })
   })
 
-  it('un jeton qui ne nomme AUCUN fichier ne desarme rien', () => {
+  it('un jeton qui ne nomme AUCUN fichier ne desarme rien', async () => {
     const texte = 'check: npm test\nTout est vert, je cloture.'
-    expect(jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({})
+    expect(await jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({})
   })
 
-  it('le jeton ne vaut que pour la ligne : un chemin cite AILLEURS n est pas couvert', () => {
+  it('le jeton ne vaut que pour la ligne : un chemin cite AILLEURS n est pas couvert', async () => {
     const texte = 'fix-ok: src/main/a.ts corrige.\nJ ai aussi touche src/main/b.ts au passage.'
-    expect(jetonsDeCauseParFichier(texte, [], ['src/main/a.ts', 'src/main/b.ts'])).toEqual({
+    expect(await jetonsDeCauseParFichier(texte, [], ['src/main/a.ts', 'src/main/b.ts'])).toEqual({
       'src/main/a.ts': true
     })
   })
@@ -164,11 +164,11 @@ describe('fix-gate — ARME, et un run iteratif LEGITIME passe', () => {
         writtenLineFingerprintsByPath: { 'src/main/boucle.ts': lignes.map(exactLineFingerprint) }
       })
     ]
-    expect(jetonsDeCauseParFichier(undefined, reel([neuf]), [])).toEqual({
+    expect(await jetonsDeCauseParFichier(undefined, reel([neuf]), [])).toEqual({
       'src/main/boucle.ts': true
     })
     // Un jeton ancien, non ecrit par ce run, ne desarme rien.
-    expect(jetonsDeCauseParFichier(undefined, reel(['const x = 1']), [])).toEqual({})
+    expect(await jetonsDeCauseParFichier(undefined, reel(['const x = 1']), [])).toEqual({})
   })
 
   it('ne bloque PAS non plus quand la cause est nommee dans le texte du run', async () => {
@@ -190,7 +190,7 @@ describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () =
     expect(geste, refus.detail).not.toBeNull()
     const [, fichier, jeton] = geste!
     const preuve = [mutation([fichier], { diff: `+  // ${jeton} cause mesuree par le test rouge\n` })]
-    const jetons = jetonsDeCauseParFichier(undefined, preuve, Object.keys(edits))
+    const jetons = await jetonsDeCauseParFichier(undefined, preuve, Object.keys(edits))
     expect(detectBlindFixLoop(edits, jetons)).toEqual([])
   })
 })
@@ -206,19 +206,19 @@ describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () =
  * suivante — la porte de sortie promise par le message du refus etait murée.
  */
 describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier edite', () => {
-  it('credite un fichier edite qui porte deja son jeton sur disque', () => {
+  it('credite un fichier edite qui porte deja son jeton sur disque', async () => {
     const cible = 'src/main/hooks/default-gate-hooks.ts'
-    expect(jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
+    expect(await jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
   })
-  it('ne credite pas un fichier edite sans jeton', () => {
-    expect(jetonsDeCauseParFichier(undefined, [], ['package.json'])).toEqual({})
+  it('ne credite pas un fichier edite sans jeton', async () => {
+    expect(await jetonsDeCauseParFichier(undefined, [], ['package.json'])).toEqual({})
   })
-  it('ignore un fichier introuvable sans lever', () => {
-    expect(jetonsDeCauseParFichier(undefined, [], ['src/main/neant-xyz.ts'])).toEqual({})
+  it('ignore un fichier introuvable sans lever', async () => {
+    expect(await jetonsDeCauseParFichier(undefined, [], ['src/main/neant-xyz.ts'])).toEqual({})
   })
-  it('credite le MEME fichier nomme par son chemin ABSOLU Windows (conv-597)', () => {
+  it('credite le MEME fichier nomme par son chemin ABSOLU Windows (conv-597)', async () => {
     const cible = resolve(process.cwd(), 'src/main/hooks/default-gate-hooks.ts').split(sep).join('/')
-    expect(jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
+    expect(await jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
   })
 })
 
@@ -229,7 +229,7 @@ describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier e
  * fix-gate revient a l'identique (4 reparations de suite).
  */
 describe('jetonsDeCauseParFichier — source 3 depuis un worktree en HEAD detache', () => {
-  it('credite un jeton depose par le dernier changement du depot, meme hors du HEAD local', () => {
+  it('credite un jeton depose par le dernier changement du depot, meme hors du HEAD local', async () => {
     const { mkdtempSync, writeFileSync: w, mkdirSync, realpathSync } = require('node:fs') as typeof import('node:fs')
     const { execFileSync } = require('node:child_process') as typeof import('node:child_process')
     const { tmpdir } = require('node:os') as typeof import('node:os')
@@ -252,6 +252,6 @@ describe('jetonsDeCauseParFichier — source 3 depuis un worktree en HEAD detach
     const wt = resolve(base, 'wt')
     git('worktree', 'add', '--detach', wt, avant)
     const cible = resolve(wt, 'cible.ts').split(sep).join('/')
-    expect(jetonsDeCauseParFichier('', [], [cible])).toEqual({ [cible]: true })
+    expect(await jetonsDeCauseParFichier('', [], [cible])).toEqual({ [cible]: true })
   })
 })

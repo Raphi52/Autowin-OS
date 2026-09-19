@@ -177,7 +177,7 @@ import {
   appendTurnEvent,
   flushAllTurnJournals,
   isTurnFinished,
-  listUnfinishedTurnsPuisMenage,
+  listUnfinishedTurnsPuisMenageAsync,
   pruneFinishedTurnJournals,
   removeConversationTurnJournals,
   readTurnJournal
@@ -1601,7 +1601,7 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
     // La LISTE part tout de suite (tampons vides d'abord, sinon un tour en vol serait invisible) ;
     // scan et suppressions passent apres le premier rendu. 25 gels, 69 s, ~2,8 s par ouverture.
-    return listUnfinishedTurnsPuisMenage(turnJournalRoot, {
+    return listUnfinishedTurnsPuisMenageAsync(turnJournalRoot, {
       menage: () => {
         pruneFinishedTurnJournals(turnJournalRoot)
         pruneLegacyContextValues()

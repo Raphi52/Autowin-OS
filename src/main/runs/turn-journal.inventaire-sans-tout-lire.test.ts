@@ -26,7 +26,7 @@ import { join } from 'node:path'
 
 vi.mock('node:fs', async (importOriginal) => {
   const real = await importOriginal<typeof import('node:fs')>()
-  return { ...real, default: real, readFileSync: vi.fn(real.readFileSync) }
+  return { ...real, default: real, readFileSync: vi.fn(real.readFileSync), openSync: vi.fn(real.openSync) }
 })
 
 const fs = await import('node:fs')
@@ -47,6 +47,7 @@ const delta = (i: number): string => JSON.stringify({ kind: 'delta', text: `t${i
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'turnjournal-inventaire-'))
   vi.mocked(fs.readFileSync).mockClear()
+  vi.mocked(fs.openSync).mockClear()
 })
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
@@ -83,5 +84,31 @@ describe('inventaire des tours inacheves', () => {
 
     expect(trouves.map((t) => t.turnId)).toEqual(['tronque'])
     expect(trouves[0].events).toBe(1)
+  })
+  /*
+   * Mesure du 2026-09-17 18:59 (gels.jsonl) : `ipc:runs:unfinishedTurns` 1,48 s dont 986 `openSync`
+   * (1 218 ms) — la queue de CHAQUE journal terminé était rouverte à chaque appel. Un journal terminé
+   * et inchangé (même taille, même date) ne doit plus être rouvert.
+   */
+  it('ne rouvre pas un journal termine et inchange au second inventaire', () => {
+    const chemin = ecrireJournal('conv-1', 'fini', [
+      delta(1),
+      JSON.stringify({ kind: 'done', at: 2 })
+    ])
+    listUnfinishedTurns(root)
+    vi.mocked(fs.openSync).mockClear()
+
+    listUnfinishedTurns(root)
+
+    const ouverts = vi.mocked(fs.openSync).mock.calls.map((appel) => String(appel[0]))
+    expect(ouverts).not.toContain(chemin)
+  })
+
+  it('rejuge un journal termine que l on a reecrit en vol', () => {
+    ecrireJournal('conv-1', 'repris', [delta(1), JSON.stringify({ kind: 'done', at: 2 })])
+    expect(listUnfinishedTurns(root)).toEqual([])
+    ecrireJournal('conv-1', 'repris', [delta(1), delta(2), delta(3)])
+
+    expect(listUnfinishedTurns(root).map((t) => t.turnId)).toEqual(['repris'])
   })
 })

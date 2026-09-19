@@ -18,7 +18,7 @@ import { exigenceAppuiSourcesNeuves } from '../autowin-kaizen-context'
  * anti-flaky / fix-gate / done-without-proof). On ne réécrit PAS leur logique — on la branche
  * comme handler du bus (unification demandée, zéro duplication).
  */
-function syncGateHooksHandler(ctx: HookContext): HookResult {
+async function syncGateHooksHandler(ctx: HookContext): Promise<HookResult> {
   const violations = runHooks({
     requireProof: ctx.requireProof,
     evidenceOkCount: ctx.evidenceOkCount,
@@ -33,7 +33,7 @@ function syncGateHooksHandler(ctx: HookContext): HookResult {
     editsByFile: ctx.editsByFile,
     causeTokensByFile:
       ctx.causeTokensByFile ??
-      jetonsDeCauseParFichier(ctx.output, ctx.evidence, Object.keys(ctx.editsByFile ?? {}))
+      (await jetonsDeCauseParFichier(ctx.output, ctx.evidence, Object.keys(ctx.editsByFile ?? {})))
   })
   return violations.length
     ? { block: true, reason: violations.map((h) => `hook ${h.hook}: ${h.detail}`).join('; ') }
@@ -113,11 +113,11 @@ export function fichiersEditesParLeRun(
  */
 const JETON_DE_CAUSE = /\b(?:CausalHypothesis|fix-ok|check)\s*:/
 
-export function jetonsDeCauseParFichier(
+export async function jetonsDeCauseParFichier(
   texteDuRun: string | undefined,
   evidence: readonly ExecutionEvidence[] | undefined,
   fichiersEdites: readonly string[]
-): Record<string, boolean> {
+): Promise<Record<string, boolean>> {
   const jetons: Record<string, boolean> = {}
   const norm = (f: string): string => f.replace(/\\/g, '/').trim()
 
@@ -190,7 +190,8 @@ export function jetonsDeCauseParFichier(
     // un chemin absolu Windows (D:/AutoWinOS/src/main/x.ts), forme sous laquelle editsByFile
     // remonte souvent, ne pouvait JAMAIS etre credite : meme refus fix-gate rejoue 3 fois.
     if (jetons[f] || !/^(?:[A-Za-z]:)?[\w./-]+$/.test(f)) continue
-    if (lignesAjouteesAuDernierChangement(f).some((l) => JETON_DE_CAUSE.test(l))) jetons[f] = true
+    if ((await lignesAjouteesAuDernierChangement(f)).some((l) => JETON_DE_CAUSE.test(l)))
+      jetons[f] = true
   }
   return jetons
 }
@@ -199,7 +200,9 @@ export function jetonsDeCauseParFichier(
  * Les lignes AJOUTEES par le dernier changement d'un fichier : d'abord ce qui n'est pas encore
  * commite, sinon le dernier commit qui le touche. Sert a dater un jeton de cause.
  */
-function lignesAjouteesAuDernierChangement(fichier: string): string[] {
+async function lignesAjouteesAuDernierChangement(fichier: string): Promise<string[]> {
+  // fix-ok: gels.jsonl — 17 gels du process principal venaient de ce `execFileSync('git')` (jusqu a
+  // 4 appels git par fichier edite, sur le fil principal) : git passe desormais par `execFile`.
   // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — un run s'execute dans un worktree
   // en HEAD DETACHE anterieur au commit qui depose le jeton : `git log -1 -- <fichier>` y renvoie
   // l'ancien commit et le jeton reste invisible (meme refus fix-gate rejoue 4 fois). On interroge
@@ -213,35 +216,29 @@ function lignesAjouteesAuDernierChangement(fichier: string): string[] {
   })()
   const dossier = surDisque ? dirname(surDisque) : process.cwd()
   const cible = surDisque || fichier
-  const git = (args: string[]): string => {
-    try {
-      return execFileSync('git', ['-C', dossier, ...args], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore']
-      })
-    } catch {
-      return ''
-    }
-  }
+  const git = (args: string[]): Promise<string> =>
+    new Promise((ok) => {
+      execFile('git', ['-C', dossier, ...args], { encoding: 'utf8', windowsHide: true }, (err, out) =>
+        ok(err ? '' : out)
+      )
+    })
   const ajoutees = (diff: string): string[] =>
     diff
       .split(/\r?\n/)
       .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
       .map((l) => l.slice(1))
-  const enCours = ajoutees(git(['diff', 'HEAD', '--', cible]))
+  const enCours = ajoutees(await git(['diff', 'HEAD', '--', cible]))
   if (enCours.length) return enCours
   const shas = new Set(
-    ['log', 'log-all'].map((mode) =>
-      git(
-        mode === 'log-all'
-          ? ['log', '-1', '--all', '--format=%H', '--', cible]
-          : ['log', '-1', '--format=%H', '--', cible]
-      ).trim()
-    )
+    await Promise.all([
+      git(['log', '-1', '--format=%H', '--', cible]).then((o) => o.trim()),
+      git(['log', '-1', '--all', '--format=%H', '--', cible]).then((o) => o.trim())
+    ])
   )
-  return [...shas]
-    .filter(Boolean)
-    .flatMap((sha) => ajoutees(git(['show', sha, '--format=', '--', cible])))
+  const diffs = await Promise.all(
+    [...shas].filter(Boolean).map((sha) => git(['show', sha, '--format=', '--', cible]))
+  )
+  return diffs.flatMap(ajoutees)
 }
 
 /**
