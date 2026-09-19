@@ -1085,68 +1085,90 @@ export class AutowinOS {
       join(ensureAutowinAppData(), 'orchestration-budget.json')
     )
     const quote = resumeControl?.executionQuote ?? compileExecutionQuote(task, settings)
-    return this.executionSupervisor.run(
-      quote,
-      signal,
-      async () => {
-        // LE branchement qui fait qu'un workflow sélectionné change quelque chose. Sans lui, choisir
-        // un profil n'écrivait qu'un champ dans un fichier : l'écran promettait un pilotage qui
-        // n'existait pas.
-        //
-        // Résolu POUR CE RUN, puis enfermé dans la closure d'un orchestrateur qui n'appartient qu'à
-        // lui. Avant, il était posé dans un champ partagé de l'instance et retiré dans un `finally` :
-        // deux conversations simultanées se volaient leur workflow, et le `finally` de l'une effaçait
-        // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
-        const workflowDuRun =
-          runOptions.workflowOverride ?? (await this.poseConversationWorkflow(conversationId, task))
-        const orchestrator = this.orchestrateurPour(workflowDuRun, task, runOptions.workspace)
-        const result = await orchestrator.run(
-          task,
-          onStep,
-          onPhase,
-          onDelta,
-          this.executionSupervisor.currentSignal(),
-          collectedContext,
-          resumeOutputs,
-          conversationId,
-          bindingOverride,
-          onBrainRetrieved,
-          turnId,
-          onRunLifecycle,
-          admittedRuntime,
-          causalWatchPaths,
-          onLateCausalMutationClaims,
-          {
-            publication: runOptions.publication,
-            sourceSnapshot: runOptions.sourceSnapshot,
-            resumeRunId: resumeControl?.runId
-          }
-        )
-        result.quote = quote
-        result.usage = this.executionSupervisor.currentSnapshot()
-        if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
-          result.costUsd = result.usage.knownCostUsd
-        }
-        return result
-      },
-      resumeControl?.usage,
-      onLateUsageSettlement,
-      {
-        /*
-         * PATIENTER PLUTOT QUE REFUSER (mesure du 2026-09-12 : 17 refus « appel(s) provider encore
-         * actif(s) » sur 75 lancements, la famille d'echec la plus frequente). Le compteur qui
-         * bloque est PERSISTE : l'appel en vol le remet a zero en se reglant, dans ce meme process.
-         * On relit donc le checkpoint du run repris jusqu'a ce qu'il retombe, au lieu de renvoyer
-         * l'utilisateur retaper sa demande au tour suivant.
-         */
-        relire: () =>
-          resumeControl?.runId
-            ? loadOrchestrationStates(this.orchestrationStateRoot).find(
-                (etat) => etat.runId === resumeControl.runId
-              )?.usage
-            : undefined
+    // Runs que CE process execute en ce moment : une demande identique s'y rattache au lieu de
+    // tenter une reprise de leur checkpoint (voir `isOrchestrationLive`).
+    const runIdsDeCetAppel = new Set<string>()
+    const suivreLeRun = (event: RunLifecycleEvent): void => {
+      if (event.runId && !runIdsDeCetAppel.has(event.runId)) {
+        runIdsDeCetAppel.add(event.runId)
+        this.liveOrchestrationRunIds.add(event.runId)
       }
-    )
+      onRunLifecycle?.(event)
+    }
+    try {
+      return await this.executionSupervisor.run(
+        quote,
+        signal,
+        async () => {
+          // LE branchement qui fait qu'un workflow sélectionné change quelque chose. Sans lui, choisir
+          // un profil n'écrivait qu'un champ dans un fichier : l'écran promettait un pilotage qui
+          // n'existait pas.
+          //
+          // Résolu POUR CE RUN, puis enfermé dans la closure d'un orchestrateur qui n'appartient qu'à
+          // lui. Avant, il était posé dans un champ partagé de l'instance et retiré dans un `finally` :
+          // deux conversations simultanées se volaient leur workflow, et le `finally` de l'une effaçait
+          // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
+          const workflowDuRun =
+            runOptions.workflowOverride ??
+            (await this.poseConversationWorkflow(conversationId, task))
+          const orchestrator = this.orchestrateurPour(workflowDuRun, task, runOptions.workspace)
+          const result = await orchestrator.run(
+            task,
+            onStep,
+            onPhase,
+            onDelta,
+            this.executionSupervisor.currentSignal(),
+            collectedContext,
+            resumeOutputs,
+            conversationId,
+            bindingOverride,
+            onBrainRetrieved,
+            turnId,
+            suivreLeRun,
+            admittedRuntime,
+            causalWatchPaths,
+            onLateCausalMutationClaims,
+            {
+              publication: runOptions.publication,
+              sourceSnapshot: runOptions.sourceSnapshot,
+              resumeRunId: resumeControl?.runId
+            }
+          )
+          result.quote = quote
+          result.usage = this.executionSupervisor.currentSnapshot()
+          if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
+            result.costUsd = result.usage.knownCostUsd
+          }
+          return result
+        },
+        resumeControl?.usage,
+        onLateUsageSettlement,
+        {
+          /*
+           * PATIENTER PLUTOT QUE REFUSER (mesure du 2026-09-12 : 17 refus « appel(s) provider encore
+           * actif(s) » sur 75 lancements, la famille d'echec la plus frequente). Le compteur qui
+           * bloque est PERSISTE : l'appel en vol le remet a zero en se reglant, dans ce meme process.
+           * On relit donc le checkpoint du run repris jusqu'a ce qu'il retombe, au lieu de renvoyer
+           * l'utilisateur retaper sa demande au tour suivant.
+           */
+          relire: () =>
+            resumeControl?.runId
+              ? loadOrchestrationStates(this.orchestrationStateRoot).find(
+                  (etat) => etat.runId === resumeControl.runId
+                )?.usage
+              : undefined
+        }
+      )
+    } finally {
+      for (const runId of runIdsDeCetAppel) this.liveOrchestrationRunIds.delete(runId)
+    }
+  }
+
+  private readonly liveOrchestrationRunIds = new Set<string>()
+
+  /** Vrai si ce process est en train d'executer ce run (entre son admission et la fin de `runTask`). */
+  isOrchestrationLive(runId: string): boolean {
+    return this.liveOrchestrationRunIds.has(runId)
   }
 
   /**

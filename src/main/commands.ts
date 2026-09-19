@@ -35,6 +35,7 @@ import {
   rechercherDansFichiers
 } from './read-file-command'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
+import { defaultProcessIdentity } from './store/worktree-manager'
 import {
   copyFileSync,
   existsSync,
@@ -2597,7 +2598,7 @@ export class AppCommandBus {
           // REPRISE depuis le chat : le chemin de reprise n'existait qu'au REDEMARRAGE de l'app, donc
           // « reprend » relancait de zero et REPAYAIT les phases deja produites (2026-07-29). On cherche
           // un acquis de la MEME tache dans LA MEME conversation, recent et non vide.
-          const resumable =
+          const trouve =
             this.os.resumableOrchestrationForTask?.(
               task,
               convId,
@@ -2605,6 +2606,27 @@ export class AppCommandBus {
               bindingOverride,
               runtimeSnapshot
             ) ?? null
+          // fix-ok: checkpoint conv-691 lu sur disque : activeCalls=1 avec agent build PID 28028 mort ; test commands.test.ts rouge sur HEAD, vert avec ce correctif.
+          // UN VERROU LAISSE PAR UN PROCESS MORT SE RECONCILIE AUSSI DEPUIS LE CHAT (conv-691,
+          // 2026-09-18). Un agent qui survit a la fermeture de l app garde activeCalls=1 dans le
+          // checkpoint : seul le process qui l a lance pouvait le regler. Le demarrage reconcilie
+          // (relaunch-resumable-run.ts) ; ce chemin reprenait le compteur tel quel, et chaque relance
+          // etait refusee « appel(s) provider encore actif(s) ». Un agent encore VIVANT laisse l etat
+          // inchange : le refus protecteur du superviseur reste entier.
+          const resumable =
+            trouve && (trouve.usage?.activeCalls ?? 0) > 0
+              ? (this.os.reconcileResumableOrchestrationForRelaunch?.(
+                  trouve.runId,
+                  defaultProcessIdentity
+                ) ?? trouve)
+              : trouve
+          // UN RUN VIVANT NE SE REPREND PAS, IL SE REJOINT (mesure conv-691, 2026-09-18) : le mode
+          // auto avait lance le run avec le prompt suggere, puis le meme texte revenait en tour
+          // utilisateur. La cle de reprise designait ce run encore en cours dans CE process ; la
+          // reprise attendait 60 s puis rendait « Reprise refusee » alors que le run travaillait.
+          if (resumable && this.os.isOrchestrationLive?.(resumable.runId)) {
+            return { runId: resumable.runId, status: 'running', reused: true }
+          }
           // Publication Git DÉJÀ acquise pour ce checkpoint → le tour se clôt en SUCCÈS, sans
           // repayer aucun provider. Mesuré sur conv-1145 (13/08) : le run avait publié — verdict
           // green, publication complete, SHA poussé sur origin/auto/… — puis la reprise du
