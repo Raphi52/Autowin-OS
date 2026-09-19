@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   discoverSkillProviders,
   discoverConfiguredSkillRegistry,
@@ -34,9 +34,21 @@ function configuredProviders(configured: SkillRegistryRoots) {
   ]
 }
 
+const createdBases: string[] = []
+
+function tempBase(): string {
+  const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
+  createdBases.push(base)
+  return base
+}
+
+afterEach(() => {
+  for (const base of createdBases.splice(0)) rmSync(base, { recursive: true, force: true })
+})
+
 describe('registre multi-source des skills (souverain de Native)', () => {
   it('conserve les homonymes Codex, Claude et Autowin avec des identités qualifiées', async () => {
-    const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
+    const base = tempBase()
     const configured = roots(base)
     put(configured.codex, 'shared', 'shared')
     put(configured.claude, 'shared', 'shared')
@@ -57,7 +69,7 @@ describe('registre multi-source des skills (souverain de Native)', () => {
   })
 
   it('un skill présent sur disque est actif (plus d’état enabled via Native)', async () => {
-    const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
+    const base = tempBase()
     const configured = roots(base)
     put(configured.autowin, 'frame', 'frame')
 
@@ -69,7 +81,7 @@ describe('registre multi-source des skills (souverain de Native)', () => {
   })
 
   it('accepte une nouvelle source sans modifier le registre ni le renderer', async () => {
-    const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
+    const base = tempBase()
     const windsurf = join(base, 'windsurf')
     put(windsurf, 'custom', 'custom')
 
@@ -87,7 +99,7 @@ describe('registre multi-source des skills (souverain de Native)', () => {
   })
 
   it('charge une source supplémentaire depuis la configuration runtime', async () => {
-    const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
+    const base = tempBase()
     const configured = roots(base)
     const windsurf = join(base, 'windsurf')
     put(windsurf, 'custom', 'custom')
