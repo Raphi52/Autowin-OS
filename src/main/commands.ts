@@ -199,6 +199,7 @@ import type {
   TicketUpdateRequest
 } from './ticket-providers/provider-contract'
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
+import { dedupliquerDossier, paginerDossier, resumerAppelsOutils } from './retrospective-compacte'
 import {
   buildAutowinKaizenTask,
   collectAutowinKaizenEvidence,
@@ -212,6 +213,20 @@ import {
 } from './activity/orchestration-observability'
 import { createHash, randomUUID } from 'node:crypto'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
+import {
+  FENETRE_PRINCIPALE,
+  activerOnglet,
+  deplacerOnglet,
+  detacherOnglet,
+  fenetreDeLOnglet,
+  fermerOnglet,
+  layoutParDefaut,
+  ongletActif,
+  ouvrirOnglet,
+  rattacherFenetre,
+  type TabLayout,
+  type TabWindowBounds
+} from '../shared/tab-layout'
 import {
   executionCostCoverageFields,
   formatExecutionCostCoverage
@@ -438,7 +453,14 @@ export interface PromptSnapshot {
 }
 
 export type AppEvent =
-  | { type: 'navigate'; tab: string; origin?: string }
+  /**
+   * `window` DIT A QUI. Sans ce champ, l'evenement partait vers toutes les fenetres et la fenetre
+   * detachee sur le 2e ecran changeait de vue en meme temps que la principale. Absent = la fenetre
+   * principale (compatibilite : les anciens emetteurs ne le posent pas).
+   */
+  | { type: 'navigate'; tab: string; origin?: string; window?: string }
+  /** L'agencement des onglets a change : chaque fenetre relit le sien. */
+  | { type: 'tab-layout'; layout: TabLayout }
   | { type: 'refresh'; scope: string; convId?: string }
   | { type: 'toast'; text: string; noticeId?: number }
   // Orchestration LIVE (statut temps réel + fil des sous-agents), diffusée par étape.
@@ -499,6 +521,9 @@ export type AppEvent =
 export function parseDisplayArg(raw: unknown): number | undefined {
   if (raw === undefined || raw === null || raw === '') return undefined
   const value = typeof raw === 'string' ? Number(raw.trim()) : raw
+  // 0 = reflexe 0-base du modele (conv-30, 2026-09-01) : on le lit comme l'ecran principal
+  // plutot que de brûler un aller-retour sur un refus.
+  if (value === 0) return 1
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     throw new Error(`display invalide: ${JSON.stringify(raw)} (entier >= 1 attendu)`)
   }
@@ -562,7 +587,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail : le bureau CACHE est le reflexe premier (voir REGLES_VISUELLES du prompt de pilotage). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
+      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail : le bureau CACHE est le reflexe premier (voir REGLES_VISUELLES du prompt de pilotage). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : l'ecran principal est `display: 1` (`display: 0` est lu comme 1, mesure conv-30 du 2026-09-01).",
     args: {
       display:
         'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans',
@@ -680,7 +705,8 @@ export const CATALOG: CommandSpec[] = [
       'de relancer un travail deja tente : tu sauras ce qui a DEJA ete essaye au lieu de le refaire. ' +
       "C'est de la LECTURE — cela ne lance aucun run et ne coute aucun appel de modele.",
     args: {
-      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)'
+      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)',
+      page: 'numero de page du dossier (defaut 1) : le dossier est rendu par pages de ~20 000 caracteres, demande la suivante tant que `page` < `pages`'
     },
     annotations: {
       readOnlyHint: true,
@@ -1540,6 +1566,35 @@ export function restaurer(
   return false
 }
 
+/**
+ * LES GESTES D'INTERFACE (barre d'onglets) ne sont PAS dans le catalogue des agents.
+ *
+ * Ils passent par le meme canal que `navigate` — c'est la page qui les emet, a la souris — mais les
+ * inscrire au catalogue gonflerait la liste d'outils lue par chaque modele a chaque tour sans rien
+ * lui apporter : deplacer un onglet n'est pas une action d'agent. Ils restent donc executables,
+ * jamais proposes.
+ */
+const COMMANDES_INTERFACE = new Set([
+  'tab_layout',
+  'tab_open',
+  'tab_close',
+  'tab_move',
+  'tab_detach',
+  'tab_reattach',
+  'tab_bounds'
+])
+
+/** Position d'ecran fournie par la page au relachement du glisse. Toute forme douteuse -> absente. */
+function lireBoundsCommande(brut: unknown): TabWindowBounds | undefined {
+  if (!brut || typeof brut !== 'object') return undefined
+  const b = brut as Record<string, unknown>
+  const valeurs = ['x', 'y', 'width', 'height'].map((k) => b[k])
+  if (!valeurs.every((v) => typeof v === 'number' && Number.isFinite(v))) return undefined
+  const [x, y, width, height] = valeurs as number[]
+  if (width <= 0 || height <= 0) return undefined
+  return { x, y, width, height }
+}
+
 export class AppCommandBus {
   /**
    * La vue d'OUVERTURE, et elle doit etre la meme que celle du renderer.
@@ -1550,6 +1605,22 @@ export class AppCommandBus {
    * `autowin-cdp-proof.mjs --verify-navigation`, qui compare exactement ces deux valeurs.
    */
   private tab: AppDestination = 'accueil'
+  /**
+   * L'AGENCEMENT : fenetre -> onglets -> onglet actif. Il REMPLACE la vue unique comme autorite
+   * des-lors qu'il y a plus d'une fenetre. `this.tab` reste la vue de la fenetre PRINCIPALE : c'est
+   * le contrat que lisent les agents (`appState().tab`), il ne bouge pas.
+   */
+  private layout: TabLayout = layoutParDefaut('accueil')
+  /** Compteur de fenetres detachees : donne un identifiant stable et non devinable en double. */
+  private detachedSeq = 0
+  /** Cable depuis index.ts : ouvre/ferme les vraies fenetres. Absent -> l'agencement reste logique. */
+  gererFenetreOnglet?: (
+    action:
+      | { type: 'ouvrir'; windowId: string; tab: AppDestination; bounds?: TabWindowBounds }
+      | { type: 'fermer'; windowId: string }
+  ) => void
+  /** Cable depuis index.ts : persiste l'agencement (fichier). Absent -> rien n'est memorise. */
+  memoriserAgencement?: (layout: TabLayout) => void
   private traceStore?: TraceStore
   /** Hook de traçage (ledger) — chaque commande exécutée y laisse une ligne. */
   trace?: (name: string, args: Record<string, unknown>, ok: boolean) => void
@@ -1988,6 +2059,22 @@ export class AppCommandBus {
    * comme avant. Présent (chemin chaud du chat), il IMPUTE le temps à la lecture responsable —
    * `snapshot` seul disait « c'est lent » sans jamais dire OÙ.
    */
+  /** L'agencement courant (lecture seule pour l'exterieur). */
+  agencement(): TabLayout {
+    return this.layout
+  }
+
+  /** Restaure un agencement memorise au demarrage, sans rouvrir de fenetre ici. */
+  restaurerAgencement(layout: TabLayout): void {
+    this.layout = layout
+    this.tab = ongletActif(this.layout) ?? this.tab
+  }
+
+  private publierAgencement(): void {
+    this.memoriserAgencement?.(this.layout)
+    this.broadcast({ type: 'tab-layout', layout: this.layout })
+  }
+
   async snapshot(jalon?: (nom: string) => void): Promise<AppSnapshot> {
     const runs = await this.os.runsWithGate()
     jalon?.('snapshot:runs')
@@ -2242,7 +2329,9 @@ export class AppCommandBus {
     }
     try {
       const specification = CATALOG.find((command) => command.name === name)
-      if (!specification) throw new Error(refusAvecIssue('commande-inconnue', name))
+      if (!specification && !COMMANDES_INTERFACE.has(name)) {
+        throw new Error(refusAvecIssue('commande-inconnue', name))
+      }
       if (!this.isCommandEnabled(name)) throw new Error(refusAvecIssue('capacite-desactivee', name))
       if (name === 'desktop_observe') {
         // Voir `refusEcranReel` : refus du PREMIER appel du tour seulement, porte de sortie exposee.
@@ -2289,14 +2378,103 @@ export class AppCommandBus {
       case 'navigate': {
         const requestedTab = s('tab')
         const location = resolveAppLocation(requestedTab)
-        this.tab = location.destination
         const origin = typeof a.origin === 'string' ? a.origin : undefined
+        // A QUI s'adresse cette navigation : la fenetre qui la demande, sinon celle qui porte deja
+        // l'onglet vise, sinon la principale. Avant, tout partait a tout le monde.
+        const demandeur = typeof a.window === 'string' ? a.window : undefined
+        const cible =
+          demandeur ?? fenetreDeLOnglet(this.layout, location.destination) ?? FENETRE_PRINCIPALE
+        this.layout =
+          fenetreDeLOnglet(this.layout, location.destination) === cible
+            ? activerOnglet(this.layout, location.destination)
+            : ouvrirOnglet(this.layout, location.destination, cible)
+        // `this.tab` = la vue de la fenetre principale. Elle ne bouge PAS quand c'est une fenetre
+        // detachee qui navigue : sinon le 2e ecran repilotait l'ecran principal.
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        // `window` n'est POSE que pour une fenetre detachee : la forme de l'evenement pour la
+        // fenetre principale reste exactement celle d'avant (contrat des agents et des tests).
+        const adresse = cible === FENETRE_PRINCIPALE ? {} : { window: cible }
         this.broadcast({
           type: 'navigate',
           tab: requestedTab,
+          ...adresse,
           ...(origin ? { origin } : {})
         })
-        return { tab: location.destination, section: location.section }
+        return { tab: location.destination, section: location.section, ...adresse }
+      }
+      case 'tab_layout':
+        return { layout: this.layout }
+      case 'tab_open': {
+        const location = resolveAppLocation(s('tab'))
+        const cible = typeof a.window === 'string' ? a.window : FENETRE_PRINCIPALE
+        const index = typeof a.index === 'number' ? a.index : undefined
+        this.layout = ouvrirOnglet(this.layout, location.destination, cible, index)
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        return { layout: this.layout }
+      }
+      case 'tab_close': {
+        const location = resolveAppLocation(s('tab'))
+        const porteuse = fenetreDeLOnglet(this.layout, location.destination)
+        this.layout = fermerOnglet(this.layout, location.destination)
+        // Fermer le dernier onglet d'une fenetre detachee ferme la fenetre : sinon il resterait un
+        // cadre vide sur le 2e ecran.
+        if (
+          porteuse &&
+          porteuse !== FENETRE_PRINCIPALE &&
+          !this.layout.windows.some((w) => w.id === porteuse)
+        ) {
+          this.gererFenetreOnglet?.({ type: 'fermer', windowId: porteuse })
+        }
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        return { layout: this.layout }
+      }
+      case 'tab_move': {
+        const location = resolveAppLocation(s('tab'))
+        const cible = typeof a.window === 'string' ? a.window : FENETRE_PRINCIPALE
+        if (!this.layout.windows.some((w) => w.id === cible)) {
+          throw new Error(`Fenetre inconnue : ${cible}`)
+        }
+        const index = typeof a.index === 'number' ? a.index : undefined
+        this.layout = deplacerOnglet(this.layout, location.destination, cible, index)
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        return { layout: this.layout }
+      }
+      case 'tab_detach': {
+        const location = resolveAppLocation(s('tab'))
+        const bounds = lireBoundsCommande(a.bounds)
+        const windowId = `detached-${++this.detachedSeq}-${Date.now().toString(36)}`
+        this.layout = detacherOnglet(this.layout, location.destination, windowId, bounds)
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.gererFenetreOnglet?.({
+          type: 'ouvrir',
+          windowId,
+          tab: location.destination,
+          ...(bounds ? { bounds } : {})
+        })
+        this.publierAgencement()
+        return { layout: this.layout, window: windowId }
+      }
+      case 'tab_bounds': {
+        // La POSITION a l'ecran est memorisee ici : elle n'est connue que du processus principal,
+        // donc elle ne peut pas venir du stockage de la page.
+        const windowId = s('window')
+        const bounds = lireBoundsCommande(a.bounds)
+        const fenetre = this.layout.windows.find((w) => w.id === windowId)
+        if (!fenetre || !bounds) return { layout: this.layout }
+        fenetre.bounds = bounds
+        this.memoriserAgencement?.(this.layout)
+        return { layout: this.layout }
+      }
+      case 'tab_reattach': {
+        const windowId = s('window')
+        this.layout = rattacherFenetre(this.layout, windowId)
+        this.tab = ongletActif(this.layout) ?? this.tab
+        this.publierAgencement()
+        return { layout: this.layout }
       }
       case 'ask': {
         // Les options arrivent DECLAREES, jamais devinees a partir du texte de la reponse.
@@ -2605,6 +2783,13 @@ export class AppCommandBus {
               bindingOverride,
               runtimeSnapshot
             ) ?? null
+          // UN RUN VIVANT NE SE REPREND PAS, IL SE REJOINT (mesure conv-691, 2026-09-18) : le mode
+          // auto avait lance le run avec le prompt suggere, puis le meme texte revenait en tour
+          // utilisateur. La cle de reprise designait ce run encore en cours dans CE process ; la
+          // reprise attendait 60 s puis rendait « Reprise refusee » alors que le run travaillait.
+          if (resumable && this.os.isOrchestrationLive?.(resumable.runId)) {
+            return { runId: resumable.runId, status: 'running', reused: true }
+          }
           // Publication Git DÉJÀ acquise pour ce checkpoint → le tour se clôt en SUCCÈS, sans
           // repayer aucun provider. Mesuré sur conv-1145 (13/08) : le run avait publié — verdict
           // green, publication complete, SHA poussé sur origin/auto/… — puis la reprise du
@@ -3123,9 +3308,18 @@ export class AppCommandBus {
          * muet de son propre echantillonnage.
          */
         const dossier = collectAutowinKaizenEvidence(conversation, undefined, PLAFONDS_AMPLES)
+        // Renvois « identique au tour N » puis pages de ~20 000 caracteres : conv-703 passait de
+        // 363 064 caracteres a un dossier lisible en quelques pages (retrospective-compacte.ts).
+        const decoupe = paginerDossier(
+          JSON.stringify(dedupliquerDossier(resumerAppelsOutils(dossier))),
+          Number(a.page)
+        )
         return {
-          ...dossier,
-          note:
+          page: decoupe.page,
+          pages: decoupe.pages,
+          dossier: decoupe.contenu,
+          suite: decoupe.note,
+          resume:
             `${dossier.conversation.messages.length} message(s), ` +
             `${dossier.causalEvents.length} evenement(s) causal(aux), ` +
             `${dossier.activity.length} entree(s) d'activite, ${dossier.runs.length} RUN.md, ` +
@@ -3134,6 +3328,7 @@ export class AppCommandBus {
             `Lecture large (plafonds: ${PLAFONDS_AMPLES.trace} evenements causaux, ` +
             `${PLAFONDS_AMPLES.runs} RUN.md, ${PLAFONDS_AMPLES.promptCalls} appels modele) : ` +
             `si un compte touche exactement son plafond, le reste a ete coupe. ` +
+            `Les textes repetes sont remplaces par « [identique a tour N (...)] ». ` +
             `Lecture seule : aucun run lance.`
         }
       }

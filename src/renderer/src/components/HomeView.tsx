@@ -55,7 +55,6 @@ import { autowinStorageKey } from '../storage-keys'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
 import { InterlocuteursWidget } from './InterlocuteursWidget'
-import { ActionsUtilisateursWidget } from './ActionsUtilisateursWidget'
 import { PerformanceWidget } from './PerformanceWidget'
 import './HomeView.css'
 import { Spinner } from './Spinner'
@@ -1162,11 +1161,6 @@ function WidgetBody({
     // Le micro qui ECRIT sur le disque, et la liste de ce qu'il a ecrit. A part de Jarvis a
     // dessein : ici le mot « Jarvis » prononce ne lance rien.
     return <EnregistrementsWidget />
-  }
-
-  if (id === 'actions-utilisateurs') {
-    // Ce que les utilisateurs d'un greffe ont fait, lu en consultation seule dans sa base.
-    return <ActionsUtilisateursWidget />
   }
 
   if (id === 'performance') {

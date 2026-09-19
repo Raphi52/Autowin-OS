@@ -168,6 +168,28 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
 
+  /**
+   * Le selecteur de repertoire de travail ne s'ouvre plus depuis le menu de la conversation
+   * (entree retiree, conv-674) : il s'ouvre par la pastille 📁 de la barre du haut, qui porte
+   * sur la conversation ACTIVE — on la selectionne donc d'abord.
+   */
+  async function ouvrirSelecteurDossiers(nom: string): Promise<void> {
+    const conv = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find((b) =>
+      b.textContent?.includes(nom)
+    )
+    if (!conv) throw new Error(`conversation ${nom} introuvable`)
+    await act(async () => {
+      conv.click()
+      await Promise.resolve()
+    })
+    const pastille = container!.querySelector<HTMLButtonElement>('[data-testid="chat-project-dot"]')
+    if (!pastille) throw new Error('pastille du dossier de travail introuvable')
+    await act(async () => {
+      pastille.click()
+      await Promise.resolve()
+    })
+  }
+
   it('propose les dossiers deja utilises au lieu du selecteur Windows', async () => {
     const conversationsSetProject = vi.fn().mockResolvedValue(undefined)
     const mockApi = api({
@@ -182,18 +204,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     await mount(mockApi)
 
-    const conversationA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find(
-      (button) => button.textContent?.includes('Conversation A')
-    )
-    const trigger =
-      conversationA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')
-    expect(trigger).not.toBeNull()
-    await act(async () => trigger!.click())
-    const action = document.querySelector<HTMLButtonElement>(
-      '[data-testid="conv-menu-set-workdir"]'
-    )
-    expect(action).not.toBeNull()
-    await act(async () => action!.click())
+    await ouvrirSelecteurDossiers('Conversation A')
 
     expect(conversationsSetProject).not.toHaveBeenCalled()
     const choice = [
@@ -224,15 +235,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await mount(api({ conversations, conversationsSetProject }))
 
     const ouvrirMenuDossiers = async (): Promise<void> => {
-      const convA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find((b) =>
-        b.textContent?.includes('Conversation A')
-      )
-      await act(async () =>
-        convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
-      )
-      await act(async () =>
-        document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-workdir"]')!.click()
-      )
+      await ouvrirSelecteurDossiers('Conversation A')
     }
     const dossiersAffiches = (): string[] =>
       [...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')].map(
@@ -269,15 +272,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     window.localStorage.removeItem('autowin.conv-folders.connus')
     await mount(mockApi)
 
-    const convA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find((b) =>
-      b.textContent?.includes('Conversation A')
-    )
-    await act(async () =>
-      convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
-    )
-    await act(async () =>
-      document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-workdir"]')!.click()
-    )
+    await ouvrirSelecteurDossiers('Conversation A')
 
     const croix = document.querySelector<HTMLButtonElement>('[data-testid="conv-project-forget"]')
     expect(croix, 'aucune croix pour retirer un dossier de la liste').not.toBeNull()
@@ -312,15 +307,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       })
     )
 
-    const convA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find((b) =>
-      b.textContent?.includes('Conversation A')
-    )
-    await act(async () =>
-      convA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
-    )
-    await act(async () =>
-      document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-workdir"]')!.click()
-    )
+    await ouvrirSelecteurDossiers('Conversation A')
 
     const proposes = [
       ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')

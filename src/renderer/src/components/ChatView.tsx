@@ -3210,7 +3210,11 @@ export function ChatView({
   function queueCurrentMessage(): void {
     if (!activeId) return
     const input = texteDuComposer()
-    if (!input.trim()) return
+    // IMAGE SEULE pendant un tour : `trim()` seul jetait le geste en silence — le composer gardait
+    // l'image, rien ne partait, et le message n'arrivait jamais (constate le 2026-09-17). Une piece
+    // jointe EST un message, meme sans texte : elle part en file avec le tour en cours.
+    if (!input.trim() && getComposerDraft(composerDraftKeyRef.current).attachments.length === 0)
+      return
     // Une question `ask` encore ouverte au bout du fil : ce texte y REPOND, meme tape a la main.
     // Sans ce test, seul le clic sur un bouton comptait comme reponse et le reçu disait « Orienté ».
     void submitBtw(input, 'normal', askEnAttente(liveMessagesRef.current.get(activeId) ?? []))
@@ -3416,13 +3420,13 @@ export function ChatView({
     const replimode: QueuedDirective['mode'] = repli === 'btw' ? 'btw' : undefined
     const text = body.trim()
     const cleDraft = cible ?? composerDraftKeyRef.current
-    if (!text) {
-      setDraftInput(cleDraft, '') // "/btw" seul → rien à injecter, on nettoie
-      return
-    }
     const id = cible ?? activeRef.current
     if (!id) return
     const occupe = cible ? busyConversationsRef.current.has(cible) : busy
+    if (!text && getComposerDraft(cleDraft).attachments.length === 0) {
+      setDraftInput(cleDraft, '') // "/btw" seul → rien à injecter, on nettoie
+      return
+    }
     // PIECES JOINTES : l'injection ne transporte qu'un texte. Injecter ici laisserait l'image dans
     // le composer, donc jamais envoyee (constate le 2026-09-04). Le message part en file AVEC ses
     // pieces jointes et le drain de fin de tour l'envoie en entier.
@@ -4611,7 +4615,7 @@ export function ChatView({
         }}
         onQueue={() => {
           const texte = getComposerDraft(id).input
-          if (!texte.trim()) return
+          if (!texte.trim() && getComposerDraft(id).attachments.length === 0) return
           viderComposerMosaique(id)
           void submitBtw(texte, 'normal', askEnAttente(mosaicFils[id] ?? []), id)
         }}
@@ -5525,25 +5529,11 @@ export function ChatView({
                 Ranger dans une catégorie…
               </button>
               {/*
-                DEUX gestes, DEUX entrees. Classer un fil (ou il apparait dans la liste) et choisir
-                le depot ou l'agent travaille n'ont ni les memes valeurs ni les memes consequences :
-                les empiler dans un seul menu faisait choisir sa categorie sous une pile de chemins
-                de depots (conv-79, 2026-09-17). La separation se fait ICI, a l'etape d'avant.
+                L'entree « Choisir le repertoire de travail… » a ete RETIREE de ce menu sur demande
+                (conv-674, 2026-09-17). Le choix du depot de travail reste entier : il se fait par la
+                pastille 📁 de la barre du haut (data-testid="chat-project-dot"), qui ouvre le meme
+                selecteur en mode 'dossier', et par le glisser-deposer.
               */}
-              <button
-                role="menuitem"
-                data-testid="conv-menu-set-workdir"
-                onClick={() => {
-                  const { conv, top, left } = convMenu
-                  setConvMenu(null)
-                  setConvFolderMenu({ conv, top, left, mode: 'dossier' })
-                }}
-              >
-                <span className="conv-menu-ic" aria-hidden="true">
-                  📁
-                </span>
-                Choisir le répertoire de travail…
-              </button>
               {/*
                 La categorie compte autant que le dossier : sans elle dans ce test, un fil range
                 sous un libelle n'avait plus AUCUN moyen d'en sortir depuis le menu (conv-81).

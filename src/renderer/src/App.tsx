@@ -36,6 +36,14 @@ import { AgentStudioView } from './components/AgentStudioView'
 import { KnowledgeView } from './components/KnowledgeView'
 import { SettingsView } from './components/SettingsView'
 import { ModelQuestionPopup } from './components/ModelQuestionPopup'
+import { lireFenetreDuHash } from './fenetre-onglet'
+import {
+  FENETRE_PRINCIPALE,
+  lireAgencement,
+  layoutParDefaut,
+  ouvrirOnglet,
+  type TabLayout
+} from '../../shared/tab-layout'
 import {
   APP_DESTINATIONS,
   resolveAppLocation,
@@ -124,7 +132,20 @@ export function MainApp(): React.JSX.Element {
   // L'accueil est la vue d'ouverture : c'est l'endroit ou l'on lit l'etat de sa journee d'un coup
   // d'oeil. Le repli d'une destination INCONNUE reste `chat` (voir `normalizeDestination`) : un agent
   // qui se trompe de nom doit atterrir la ou il peut parler, pas sur un tableau de bord.
-  const [tab, setTab] = useState<Tab>('accueil')
+  // Quelle fenetre porte cette page : la principale, ou un onglet sorti sur un 2e ecran.
+  const [{ windowId, tab: tabDuHash }] = useState(() => lireFenetreDuHash(window.location.hash))
+  const estFenetrePrincipale = windowId === FENETRE_PRINCIPALE
+  const [tab, setTab] = useState<Tab>(() => tabDuHash ?? 'accueil')
+  /**
+   * L'AGENCEMENT complet (toutes les fenetres), tenu par le processus principal et recopie ici.
+   * On n'affiche QUE les onglets de SA fenetre : c'est ce qui empeche la fenetre du 2e ecran de
+   * suivre la navigation de la principale.
+   */
+  const [layout, setLayout] = useState<TabLayout>(() =>
+    tabDuHash
+      ? { windows: [{ id: windowId, tabs: [tabDuHash], active: tabDuHash }] }
+      : layoutParDefaut('accueil')
+  )
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
   // chaque lancement.
@@ -139,7 +160,7 @@ export function MainApp(): React.JSX.Element {
    * question ne changerait rien -- sauf a payer un balayage disque pour le meme resultat.
    */
   const [moteurPerime, setMoteurPerime] = useState<string | null>(null)
-  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['accueil']))
+  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set([tabDuHash ?? 'accueil']))
   useEffect(() => {
     // Un pied de page ne fait jamais tomber l'interface : toute panne laisse l'avertissement absent
     // plutot que de propager une erreur. Silence = rien a signaler, jamais « on ne sait pas ».
@@ -235,15 +256,21 @@ export function MainApp(): React.JSX.Element {
     localStorage.setItem('autowin:rail-collapsed', railCollapsed ? '1' : '0')
   }, [railCollapsed])
 
-  const activateTab = useCallback((nextTab: Tab): void => {
-    setVisitedTabs((visited) => {
-      if (visited.has(nextTab)) return visited
-      const next = new Set(visited)
-      next.add(nextTab)
-      return next
-    })
-    setTab(nextTab)
-  }, [])
+  const activateTab = useCallback(
+    (nextTab: Tab): void => {
+      setVisitedTabs((visited) => {
+        if (visited.has(nextTab)) return visited
+        const next = new Set(visited)
+        next.add(nextTab)
+        return next
+      })
+      // L'onglet entre dans la barre de CETTE fenetre tout de suite : le processus principal
+      // confirmera par `tab-layout`, mais l'affichage ne doit pas attendre un aller-retour.
+      setLayout((courant) => ouvrirOnglet(courant, nextTab, windowId))
+      setTab(nextTab)
+    },
+    [windowId]
+  )
 
   const applyLocation = useCallback(
     (requestedTab: string): void => {
@@ -302,7 +329,7 @@ export function MainApp(): React.JSX.Element {
       const command = window.api?.appCommand
       if (!command) return
       const generation = ++navigationGeneration.current
-      void command('navigate', { tab: nextTab, origin: navigationOrigin }).then(
+      void command('navigate', { tab: nextTab, origin: navigationOrigin, window: windowId }).then(
         (result) => {
           if (result.ok && generation === navigationGeneration.current) activateTab(nextTab)
         },
@@ -311,7 +338,7 @@ export function MainApp(): React.JSX.Element {
         }
       )
     },
-    [activateTab, navigationOrigin]
+    [activateTab, navigationOrigin, windowId]
   )
 
   // #11 — raccourcis clavier : Ctrl/Cmd+1..N changent d'onglet, Ctrl/Cmd+K focalise la recherche de
@@ -387,6 +414,10 @@ export function MainApp(): React.JSX.Element {
     }, 0)
   }
 
+  // Les onglets de CETTE fenetre, dans leur ordre. La fenetre detachee n'affiche que les siens.
+  const mesOnglets = layout.windows.find((w) => w.id === windowId)?.tabs ?? []
+  const estOuvert = (cible: Tab): boolean => visitedTabs.has(cible) && mesOnglets.includes(cible)
+
   function inspectTurn(target: InspectTurnTarget): void {
     setObservatoryFocus({ ...target, requestId: Date.now() })
     navigate('observatory')
@@ -398,7 +429,16 @@ export function MainApp(): React.JSX.Element {
     // le fil de chat en plein tour d'agent).
     let disposed = false
     const off = window.api.onAppEvent((e) => {
+      if (e.type === 'tab-layout') {
+        const recu = lireAgencement((e as { layout?: unknown }).layout)
+        if (recu) setLayout(recu)
+        return
+      }
       if (e.type === 'navigate' && e.tab) {
+        // A QUI s'adresse cette navigation. Sans ce filtre, la fenetre du 2e ecran changeait de vue
+        // en meme temps que la principale — c'est le defaut que l'agencement corrige.
+        const destinataire = (e as { window?: string }).window ?? FENETRE_PRINCIPALE
+        if (destinataire !== windowId) return
         navigationGeneration.current += 1
         applyLocation(e.tab)
         if (e.origin !== navigationOrigin) {
@@ -407,6 +447,16 @@ export function MainApp(): React.JSX.Element {
         }
       }
     })
+    // L'agencement memorise (onglets deja ouverts, fenetres detachees) remonte a l'ouverture.
+    void window.api?.appCommand?.('tab_layout', {}).then(
+      (resultat) => {
+        const recu = lireAgencement((resultat as { data?: { layout?: unknown } })?.data?.layout)
+        if (!disposed && recu) setLayout(recu)
+      },
+      () => {
+        // Agencement indisponible : la fenetre garde le sien, jamais d'ecran vide.
+      }
+    )
     const readAppState = window.api?.appState
     if (typeof readAppState === 'function') {
       const hydrationGeneration = navigationGeneration.current
@@ -419,7 +469,8 @@ export function MainApp(): React.JSX.Element {
           if (
             !disposed &&
             hydrationGeneration === navigationGeneration.current &&
-            typeof stateTab === 'string'
+            typeof stateTab === 'string' &&
+            estFenetrePrincipale
           ) {
             applyLocation(stateTab)
           }
@@ -433,7 +484,7 @@ export function MainApp(): React.JSX.Element {
       disposed = true
       off()
     }
-  }, [applyLocation, navigationOrigin])
+  }, [applyLocation, navigationOrigin, windowId, estFenetrePrincipale])
 
   return (
     <div
@@ -540,22 +591,22 @@ export function MainApp(): React.JSX.Element {
         )}
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
-        {visitedTabs.has('accueil') && (
-          <div className={`view-slot${tab === 'accueil' ? ' is-active' : ''}`}>
+        {estOuvert('accueil') && (
+          <div data-testid="vue-accueil" data-active={tab === 'accueil' ? 'true' : 'false'} className={`view-slot${tab === 'accueil' ? ' is-active' : ''}`}>
             <VueMesuree id="accueil">
               <HomeView active={tab === 'accueil'} onNavigate={applyLocation} />
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('chat') && (
-          <div className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
+        {estOuvert('chat') && (
+          <div data-testid="vue-chat" data-active={tab === 'chat' ? 'true' : 'false'} className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
             <VueMesuree id="chat">
               <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('agent-studio') && (
-          <div className={`view-slot${tab === 'agent-studio' ? ' is-active' : ''}`}>
+        {estOuvert('agent-studio') && (
+          <div data-testid="vue-agent-studio" data-active={tab === 'agent-studio' ? 'true' : 'false'} className={`view-slot${tab === 'agent-studio' ? ' is-active' : ''}`}>
             <VueMesuree id="agent-studio">
               <AgentStudioView
                 active={tab === 'agent-studio'}
@@ -565,8 +616,8 @@ export function MainApp(): React.JSX.Element {
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('knowledge') && (
-          <div className={`view-slot${tab === 'knowledge' ? ' is-active' : ''}`}>
+        {estOuvert('knowledge') && (
+          <div data-testid="vue-knowledge" data-active={tab === 'knowledge' ? 'true' : 'false'} className={`view-slot${tab === 'knowledge' ? ' is-active' : ''}`}>
             <VueMesuree id="knowledge">
               <KnowledgeView
                 active={tab === 'knowledge'}
@@ -575,8 +626,8 @@ export function MainApp(): React.JSX.Element {
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('observatory') && (
-          <div className={`view-slot${tab === 'observatory' ? ' is-active' : ''}`}>
+        {estOuvert('observatory') && (
+          <div data-testid="vue-observatory" data-active={tab === 'observatory' ? 'true' : 'false'} className={`view-slot${tab === 'observatory' ? ' is-active' : ''}`}>
             <VueMesuree id="observatory">
               <ObservatoryView
                 active={tab === 'observatory'}
@@ -590,15 +641,15 @@ export function MainApp(): React.JSX.Element {
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('worktree') && (
-          <div className={`view-slot${tab === 'worktree' ? ' is-active' : ''}`}>
+        {estOuvert('worktree') && (
+          <div data-testid="vue-worktree" data-active={tab === 'worktree' ? 'true' : 'false'} className={`view-slot${tab === 'worktree' ? ' is-active' : ''}`}>
             <VueMesuree id="worktree">
               <WorktreeView active={tab === 'worktree'} />
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('task-manager') && (
-          <div className={`view-slot${tab === 'task-manager' ? ' is-active' : ''}`}>
+        {estOuvert('task-manager') && (
+          <div data-testid="vue-task-manager" data-active={tab === 'task-manager' ? 'true' : 'false'} className={`view-slot${tab === 'task-manager' ? ' is-active' : ''}`}>
             <VueMesuree id="task-manager">
               <TaskManagerView
                 active={tab === 'task-manager'}
@@ -609,22 +660,22 @@ export function MainApp(): React.JSX.Element {
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('tickets') && (
-          <div className={`view-slot${tab === 'tickets' ? ' is-active' : ''}`}>
+        {estOuvert('tickets') && (
+          <div data-testid="vue-tickets" data-active={tab === 'tickets' ? 'true' : 'false'} className={`view-slot${tab === 'tickets' ? ' is-active' : ''}`}>
             <VueMesuree id="tickets">
               <TicketsView active={tab === 'tickets'} />
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('tests') && (
-          <div className={`view-slot${tab === 'tests' ? ' is-active' : ''}`}>
+        {estOuvert('tests') && (
+          <div data-testid="vue-tests" data-active={tab === 'tests' ? 'true' : 'false'} className={`view-slot${tab === 'tests' ? ' is-active' : ''}`}>
             <VueMesuree id="tests">
               <TestsView active={tab === 'tests'} />
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('settings') && (
-          <div className={`view-slot${tab === 'settings' ? ' is-active' : ''}`}>
+        {estOuvert('settings') && (
+          <div data-testid="vue-settings" data-active={tab === 'settings' ? 'true' : 'false'} className={`view-slot${tab === 'settings' ? ' is-active' : ''}`}>
             <VueMesuree id="settings">
               <SettingsView
                 active={tab === 'settings'}

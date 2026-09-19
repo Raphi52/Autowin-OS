@@ -79,6 +79,30 @@ const INVENTAIRE_RECUPERATION_TIMEOUT_MS = 300_000
  * en `merge-failed` alors que le travail etait publie.
  */
 const FINALIZE_TIMEOUT_MS = 300_000
+/**
+ * Message du commit qui transporte le travail d'une copie isolée vers la branche de l'utilisateur.
+ *
+ * Le préfixe `agent <id>` est CONSERVÉ : des tests et la reprise repèrent ces commits par lui. On lui
+ * ajoute le résumé de la tâche (première ligne non vide, sans caractère de contrôle, ≤ 72
+ * caractères) pour que l'historique dise CE QUI a changé — `agent run-xxx-1` seul ne disait rien
+ * (conv-710).
+ * fix-ok: cause mesurée — les deux commits (finalize, commitCopyIfDirty) codaient en dur `agent ${agentId}` ; test rouge (3 échecs) sans ce helper, vert avec.
+ */
+export function messageCommitAgent(agentId: string, task?: string): string {
+  const premiere = (task ?? '')
+    .split(/\r?\n/)
+    .map((ligne) =>
+      Array.from(ligne, (c) => (c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f ? ' ' : c))
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
+    .find((ligne) => ligne.length > 0)
+  if (!premiere) return `agent ${agentId}`
+  const resume = premiere.length > 72 ? `${premiere.slice(0, 71).trimEnd()}…` : premiere
+  return `agent ${agentId}: ${resume}`
+}
+
 function assertSafeId(value: string, label: string): void {
   if (!SAFE_ID.test(value))
     throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
@@ -992,6 +1016,8 @@ export class WorktreeManager {
     options: {
       baseBranch?: string
       expectedAgentSha?: string
+      /** Tâche du run : décrit le changement dans le message du commit (`messageCommitAgent`). */
+      task?: string
       /** Résolution humaine d'un conflit : garder la base (`ours`) ou l'agent (`theirs`). */
       conflictStrategy?: 'ours' | 'theirs'
       onPrepared?: (agentSha: string, baseSha: string) => void
@@ -5570,6 +5596,8 @@ exit 0
     options: {
       baseBranch?: string
       expectedAgentSha?: string
+      /** Tâche du run : décrit le changement dans le message du commit (`messageCommitAgent`). */
+      task?: string
       /**
        * Résolution humaine d'un conflit : `ours` garde le workspace sur les zones en conflit,
        * `theirs` garde la version de l'agent. Absent = merge strict (comportement automatique).
@@ -5616,7 +5644,7 @@ exit 0
     }
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return issue
-    return this.secureWorkBeforeRefusal(agentId, path)
+    return this.secureWorkBeforeRefusal(agentId, path, options.task)
       ? { ...issue, rescueRef: this.rescueRef(agentId) }
       : issue
   }
@@ -5824,6 +5852,7 @@ exit 0
     options: {
       baseBranch?: string
       expectedAgentSha?: string
+      task?: string
       conflictStrategy?: 'ours' | 'theirs'
       preserverEditionLocale?: boolean
       onPrepared?: (agentSha: string, baseSha: string) => void
@@ -5909,7 +5938,7 @@ exit 0
         agentId,
         files: existingOperationFiles,
         reason: 'base-in-progress',
-        ...(this.secureWorkBeforeRefusal(agentId, path)
+        ...(this.secureWorkBeforeRefusal(agentId, path, options.task)
           ? { rescueRef: this.rescueRef(agentId) }
           : {})
       }
@@ -5928,14 +5957,7 @@ exit 0
       }
     }
 
-    const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
-    let committed = false
-    if (dirty) {
-      this.git(path, ['add', '-A'])
-      this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `agent ${agentId}`])
-      committed = true
-    }
-    const sha = this.git(path, ['rev-parse', 'HEAD'])
+    const { sha, committed } = this.commitCopyIfDirty(agentId, path, options.task)
     const baseSha = this.git(this.baseRepo, ['rev-parse', 'HEAD'])
     options.onPrepared?.(sha, baseSha)
     if (sha === baseSha) {
@@ -6475,11 +6497,16 @@ exit 0
    * desserrer son assertion. Factorisé parce que `finalize` et `secureWorkBeforeRefusal` faisaient
    * la même séquence à l'identique (relevé par un juge externe).
    */
-  private commitCopyIfDirty(agentId: string, path: string): { sha: string; committed: boolean } {
+  private commitCopyIfDirty(
+    agentId: string,
+    path: string,
+    task?: string
+  ): { sha: string; committed: boolean } {
     const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
     if (dirty) {
       this.git(path, ['add', '-A'])
-      this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `agent ${agentId}`])
+      const message = messageCommitAgent(agentId, task)
+      this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message])
     }
     return { sha: this.git(path, ['rev-parse', 'HEAD']), committed: dirty }
   }
@@ -6504,7 +6531,7 @@ exit 0
    * question — « cette copie porte-t-elle des commits qu'aucune branche ne connaît ? » — sans
    * dépendre d'un reflog, et toute réponse illisible vaut refus.
    */
-  private secureWorkBeforeRefusal(agentId: string, path: string): boolean {
+  private secureWorkBeforeRefusal(agentId: string, path: string, task?: string): boolean {
     try {
       // Ordre choisi pour le COÛT : les lectures d'abord, et on sort au plus tôt. Ce chemin s'exécute
       // à CHAQUE refus, et un refus est la norme sur un dépôt partagé — deux tests de compensation,
@@ -6532,7 +6559,7 @@ exit 0
       // même un commit « pour les sauver ». Sécuriser est un service ; il ne justifie pas d'écrire là
       // où le reste du module s'interdit de toucher.
       if (this.ownershipIssue(path)) return false
-      const { sha } = this.commitCopyIfDirty(agentId, path)
+      const { sha } = this.commitCopyIfDirty(agentId, path, task)
       return this.tryGitFn(this.baseRepo, ['update-ref', this.rescueRef(agentId), sha]).code === 0
     } catch {
       // Sécuriser est un BONUS : son échec ne doit jamais transformer un refus propre en exception.

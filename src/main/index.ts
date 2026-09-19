@@ -238,6 +238,8 @@ import {
   behaviourRendererOptions
 } from './ipc-senders'
 import { createWindowing } from './window'
+import { FENETRE_PRINCIPALE } from '../shared/tab-layout'
+import { cheminAgencement, ecrireAgencementDisque, lireAgencementDisque } from './tab-layout-store'
 import { ModelQuestionHub, type ModelQuestion } from './model-questions'
 import { maybeUpdateClaudeCli } from './claude-cli-update'
 import {
@@ -1077,6 +1079,48 @@ const {
   questionWindows,
   refleterRunsVivants
 } = fenetres
+
+/*
+ * LES ONGLETS DETACHES — cablage de l'agencement sur les vraies fenetres.
+ *
+ * Le bus tient l'agencement (fenetre -> onglets -> actif) ; ici on lui donne de quoi OUVRIR et
+ * FERMER une fenetre, et de quoi MEMORISER l'agencement sur disque. Sans ce cablage l'agencement
+ * resterait purement logique — aucune fenetre ne sortirait sur le 2e ecran.
+ */
+const fichierAgencement = cheminAgencement(app.getPath('userData'))
+bus.memoriserAgencement = (layout) => {
+  ecrireAgencementDisque(fichierAgencement, layout)
+}
+/** Memorise la place de la fenetre des qu'elle bouge : c'est « mon agencement global » du 2e ecran. */
+function suivrePositionFenetre(windowId: string, win: Electron.BrowserWindow): void {
+  const noter = (): void => {
+    if (win.isDestroyed()) return
+    void bus.exec('tab_bounds', { window: windowId, bounds: win.getBounds() })
+  }
+  win.on('moved', noter)
+  win.on('resized', noter)
+}
+bus.gererFenetreOnglet = (action) => {
+  if (action.type === 'ouvrir') {
+    const win = fenetres.openDetachedTabWindow(
+      action.windowId,
+      action.tab,
+      action.bounds,
+      (windowId) => {
+        // Fenetre fermee a la croix : ses onglets reviennent dans la principale plutot que de
+        // disparaitre de l'agencement (et donc de l'application).
+        void bus.exec('tab_reattach', { window: windowId })
+      }
+    )
+    suivrePositionFenetre(action.windowId, win)
+  } else {
+    fenetres.closeDetachedTabWindow(action.windowId)
+  }
+}
+{
+  const memorise = lireAgencementDisque(fichierAgencement)
+  if (memorise) bus.restaurerAgencement(memorise)
+}
 /** Raccourci clavier global : posé au démarrage, libéré à la fermeture (sinon il reste capté). */
 let raccourciCapture: RaccourciInstalle | null = null
 const diagnosticCapabilities = new DiagnosticCapabilities()
@@ -4085,6 +4129,20 @@ app.whenReady().then(async () => {
   })
   jalonDemarrage('avant createWindow')
   createWindow()
+  // L'AGENCEMENT MEMORISE remonte a l'ecran : chaque fenetre detachee est rouverte a sa place.
+  // Apres `createWindow` : la principale existe d'abord, les autres viennent se poser dessus.
+  for (const fenetre of bus.agencement().windows) {
+    if (fenetre.id === FENETRE_PRINCIPALE || fenetre.tabs.length === 0) continue
+    const win = fenetres.openDetachedTabWindow(
+      fenetre.id,
+      fenetre.active ?? fenetre.tabs[0],
+      fenetre.bounds,
+      (windowId) => {
+        void bus.exec('tab_reattach', { window: windowId })
+      }
+    )
+    suivrePositionFenetre(fenetre.id, win)
+  }
   setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
   // Ramener Autowin sans aller chercher sa fenêtre : les autres raccourcis sont tous locaux au
   // renderer, donc inertes quand l'app est en arrière-plan.

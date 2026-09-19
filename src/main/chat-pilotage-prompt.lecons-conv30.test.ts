@@ -50,6 +50,6 @@ describe('chat-pilotage-prompt — lecons mesurees de conv-30', () => {
     expect(debut, 'la commande desktop_observe doit exister').toBeGreaterThan(-1)
     const specification = source.slice(debut, source.indexOf("name: 'desktop_act'"))
     expect(specification).toMatch(/A PARTIR DE 1/u)
-    expect(specification).toMatch(/display: 0` est refuse/u)
+    expect(specification).toMatch(/display: 0` est lu comme 1/u)
   })
 })

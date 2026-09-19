@@ -406,6 +406,7 @@ import {
 } from './provider-failure-diagnosis'
 import { retryOnTransientOverload } from './transient-overload'
 import { alignReportWithDisk, dispositionPourIssue } from './worktree-path-rewrite'
+import { annonceCommitLocal } from './annonce-commit-local'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
 import type { ChatArtifact } from '../shared/artifacts'
 import type { RunLifecycleEvent } from '../shared/run-execution'
@@ -2295,6 +2296,14 @@ export class Orchestrator {
         )
         produced.result = aligned.result
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
+      }
+      // Le commit de transport est ANNONCÉ dans la réponse : il arrivait dans l'historique sans un mot
+      // et passait pour un commit fait en cachette malgré la consigne (conv-710).
+      const annonceCommit = produced ? annonceCommitLocal(finalized, runId, task) : undefined
+      if (produced && annonceCommit && !produced.result.includes(annonceCommit)) {
+        produced.result = `${produced.result.trimEnd()}
+
+${annonceCommit}`
       }
       const publishedCommitSha =
         projectPublication?.publishedSha ??

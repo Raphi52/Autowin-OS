@@ -143,3 +143,34 @@ describe('un livrable tronqué dit ce qui manque, et où', () => {
     expect(texte).not.toContain('tronqué')
   })
 })
+
+/*
+ * CAS REEL conv-687 (18/09) : « scout comment améliorer le gameplay » en mode auto. Le run joue
+ * scout puis frame ; la garde des cas limites REFUSE le cadrage (« ⛔ Cadrage incomplet … SUITE:
+ * frame »). La clôture comptait pourtant frame comme acquis et recommandait « lancer terrain » — le
+ * mode auto a sauté le cadrage. Une phase qui finit en demandant à être REFAITE n'est pas aboutie.
+ */
+describe('une phase refusée qui demande à être refaite ne compte pas comme acquise', () => {
+  const refuse = {
+    ...livre(['scout']),
+    phaseOutputs: [
+      { phase: 'scout', text: '## Cible\nLigne 1\n\nSUITE: frame' },
+      { phase: 'frame', text: '⛔ Cadrage incomplet — aucun cas limite.\nSUITE: frame\n\n## Besoin\n…' }
+    ]
+  }
+
+  it('recommande de relancer frame, jamais terrain', () => {
+    const texte = formatOrchestrationOutcome(true, refuse)
+    expect(texte).toContain('Recommandé : lancer frame.')
+    expect(texte).toContain('Reste à faire : frame → terrain → build → clean → judge.')
+    expect(texte).not.toContain('lancer terrain')
+  })
+
+  it('un frame abouti garde « lancer terrain »', () => {
+    const texte = formatOrchestrationOutcome(true, {
+      ...refuse,
+      phaseOutputs: [refuse.phaseOutputs[0], { phase: 'frame', text: '## Besoin\nok' }]
+    })
+    expect(texte).toContain('Recommandé : lancer terrain.')
+  })
+})
