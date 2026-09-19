@@ -790,9 +790,34 @@ export function persistConversations(
       l'interface.
     */
     if (!differable && (journalEnVol(path) || pending.length > 0)) {
-      pending.splice(0, pending.length)
-      saveConversations(store.list(), path)
-      writeConversationIdFloor(store.idFloor(), path)
+      const lot = pending.splice(0, pending.length)
+      try {
+        saveConversations(store.list(), path)
+        writeConversationIdFloor(store.idFloor(), path)
+      } catch (erreurSnapshot) {
+        /*
+          FICHIER VERROUILLÉ À LA FERMETURE (conv-717, point 4). Le snapshot réécrit
+          conversations.json : un autre processus qui le tient fait échouer le renommage. Laisser
+          l'erreur remonter perdait le lot ET cassait la suite de `before-quit` (tâches, journaux).
+          Repli : le JOURNAL, un fichier distinct, rejoué au prochain démarrage. Seulement si aucune
+          écriture n'est en vol — sinon l'ajout synchrone la devancerait et casserait l'ordre.
+        */
+        const cause = erreurSnapshot instanceof Error ? erreurSnapshot.message : String(erreurSnapshot)
+        if (lot.length && !journalEnVol(path)) {
+          try {
+            appendConversationChanges(lot, store.list(), path)
+            console.error(`[conversations] fermeture : snapshot refusé (${cause}), lot sauvé dans le journal.`)
+            return
+          } catch (erreurJournal) {
+            const causeJournal = erreurJournal instanceof Error ? erreurJournal.message : String(erreurJournal)
+            pending.unshift(...lot)
+            console.error(`[conversations] fermeture : ÉCHEC d'écriture, ${lot.length} changement(s) perdu(s). Snapshot : ${cause}. Journal : ${causeJournal}.`)
+            return
+          }
+        }
+        pending.unshift(...lot)
+        console.error(`[conversations] fermeture : ÉCHEC d'écriture du snapshot (${cause}).`)
+      }
       return
     }
     if (!pending.length) return
