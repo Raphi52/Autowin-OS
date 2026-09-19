@@ -17,7 +17,9 @@ import { cloreDemarrage, pendantOperation } from './gel-main'
 import { surveillerFenetreInjoignable } from './gel-fenetre'
 import { surveillerParBattement } from './gel-battement-fenetre'
 import { journaliserGel } from './gel-main'
-import { app, shell, BrowserWindow, Menu, Tray, desktopCapturer } from 'electron'
+import { app, shell, BrowserWindow, Menu, Tray, desktopCapturer, screen } from 'electron'
+import { placerFenetreDetachee } from '../shared/view-tabs'
+import type { AppDestination } from '../shared/navigation'
 import { installerCaptureSonSysteme } from './audio-loopback'
 import { join } from 'path'
 import { writeFileSync } from 'node:fs'
@@ -51,6 +53,8 @@ export type Fenetres = {
   showMainWindow: () => void
   setupTray: () => void
   openQuestionWindow: (parent: BrowserWindow | null, question: PendingModelQuestion) => void
+  /** Ouvre une vue seule dans sa propre fenêtre, centrée sur le point écran du lâcher d'onglet. */
+  openViewWindow: (view: AppDestination, screenX: number, screenY: number) => void
   rendererLocation: () => { devRendererUrl?: string; rendererHtmlPath: string }
   /** Vrai UNIQUEMENT après un quit demandé depuis le menu du tray. */
   estEnFermeture: () => boolean
@@ -136,10 +140,7 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     }
   }
   function refleterRunsVivants(etat: EtatRunsVivants): void {
-    appliquerPresenceSysteme(
-      { fenetre: mainWindowVivante, icone: tray },
-      etat
-    )
+    appliquerPresenceSysteme({ fenetre: mainWindowVivante, icone: tray }, etat)
   }
   function openQuestionWindow(parent: BrowserWindow | null, question: PendingModelQuestion): void {
     const win = new BrowserWindow({
@@ -180,6 +181,38 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#model-question`)
     } else {
       win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'model-question' })
+    }
+  }
+  // fix-ok: la fenetre detachee etait centree sur la souris sans tenir compte de l ecran (bord = hors ecran) ; mesure par les tests placerFenetreDetachee de view-tabs.test.ts
+  function openViewWindow(view: AppDestination, screenX: number, screenY: number): void {
+    // Fenêtre INDÉPENDANTE (ni `parent`, ni `alwaysOnTop`) : elle doit pouvoir vivre seule sur un
+    // autre écran. Même preload et même isolation que les autres fenêtres.
+    const zone = screen.getDisplayNearestPoint({
+      x: Math.round(screenX),
+      y: Math.round(screenY)
+    }).workArea
+    const place = placerFenetreDetachee({ screenX, screenY }, { width: 1100, height: 760 }, zone)
+    const win = new BrowserWindow({
+      ...place,
+      minWidth: 480,
+      minHeight: 360,
+      show: false,
+      autoHideMenuBar: true,
+      backgroundColor: '#05070d',
+      title: 'Autowin OS',
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        sandbox: false
+      }
+    })
+    win.once('ready-to-show', () => {
+      presentAutomationWindow(win, headlessTestInstance, { focus: true, flash: false })
+    })
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#view=${view}`)
+    } else {
+      win.loadFile(join(__dirname, '../renderer/index.html'), { hash: `view=${view}` })
     }
   }
   function rendererLocation(): { devRendererUrl?: string; rendererHtmlPath: string } {
@@ -471,6 +504,7 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     showMainWindow,
     setupTray,
     openQuestionWindow,
+    openViewWindow,
     rendererLocation,
     estEnFermeture: () => isQuitting,
     questionWindows,

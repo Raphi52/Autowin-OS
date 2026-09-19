@@ -410,4 +410,75 @@ describe('navigation humaine synchronisée avec le main', () => {
     expect(await window.api.appState()).toEqual({ tab: 'chat' })
     await act(async () => root.unmount())
   })
+
+  it('onglets de vues : une vue ouverte fait un onglet, lâchée hors de la fenêtre elle part dans sa propre fenêtre', async () => {
+    const detachView = vi.fn(async () => ({ ok: true }))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appState: vi.fn(async () => ({ tab: 'chat' })),
+        onAppEvent: vi.fn(() => vi.fn()),
+        detachView,
+        windowBounds: () => ({ x: 0, y: 0, width: 1920, height: 1080 })
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+    const onglets = (): string[] =>
+      [...container.querySelectorAll('[data-testid^="view-tab-"]')].map(
+        (el) => el.getAttribute('data-testid') ?? ''
+      )
+    expect(onglets()).toEqual(['view-tab-accueil', 'view-tab-chat'])
+
+    const chat = container.querySelector('[data-testid="view-tab-chat"]') as HTMLElement
+    // Lâcher DANS la fenêtre : rien ne se détache.
+    await act(async () => {
+      chat.dispatchEvent(new MouseEvent('dragend', { bubbles: true, screenX: 500, screenY: 300 }))
+      await Promise.resolve()
+    })
+    expect(detachView).not.toHaveBeenCalled()
+    // Lâcher sur l'autre écran : fenêtre séparée demandée au point du lâcher, onglet retiré.
+    await act(async () => {
+      chat.dispatchEvent(new MouseEvent('dragend', { bubbles: true, screenX: 2600, screenY: 400 }))
+      await Promise.resolve()
+    })
+    expect(detachView).toHaveBeenCalledWith('chat', 2600, 400)
+    expect(onglets()).toEqual(['view-tab-accueil'])
+    await act(async () => root.unmount())
+  })
+
+  it('une fenêtre détachée (#view=) montre sa seule vue, sans menu ni onglets', async () => {
+    window.history.replaceState({}, '', '/#view=chat')
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appState: vi.fn(async () => ({ tab: 'accueil' })),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+    expect(container.querySelector('.rail')).toBeNull()
+    expect(container.querySelector('[data-testid="view-tabs"]')).toBeNull()
+    expect(
+      container.querySelector('.view-slot.is-active [data-vue="chat"], .view-slot.is-active')
+    ).not.toBeNull()
+    expect(container.querySelectorAll('.view-slot')).toHaveLength(1)
+    expect(window.api.onAppEvent).not.toHaveBeenCalled()
+    await act(async () => root.unmount())
+  })
 })

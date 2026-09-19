@@ -37,6 +37,12 @@ import { KnowledgeView } from './components/KnowledgeView'
 import { SettingsView } from './components/SettingsView'
 import { ModelQuestionPopup } from './components/ModelQuestionPopup'
 import {
+  deplacerOnglet,
+  fermerOnglet,
+  lacheHorsFenetre,
+  vueDetacheeDepuisHash
+} from '../../shared/view-tabs'
+import {
   APP_DESTINATIONS,
   resolveAppLocation,
   type AgentStudioSection,
@@ -124,7 +130,10 @@ export function MainApp(): React.JSX.Element {
   // L'accueil est la vue d'ouverture : c'est l'endroit ou l'on lit l'etat de sa journee d'un coup
   // d'oeil. Le repli d'une destination INCONNUE reste `chat` (voir `normalizeDestination`) : un agent
   // qui se trompe de nom doit atterrir la ou il peut parler, pas sur un tableau de bord.
-  const [tab, setTab] = useState<Tab>('accueil')
+  // Fenêtre DÉTACHÉE (onglet lâché hors de la fenêtre principale) : une seule vue, fixe.
+  const detachedView = vueDetacheeDepuisHash(window.location.hash)
+  const [tab, setTab] = useState<Tab>(detachedView ?? 'accueil')
+  const draggedTab = useRef<Tab | null>(null)
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
   // chaque lancement.
@@ -139,7 +148,9 @@ export function MainApp(): React.JSX.Element {
    * question ne changerait rien -- sauf a payer un balayage disque pour le meme resultat.
    */
   const [moteurPerime, setMoteurPerime] = useState<string | null>(null)
-  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['accueil']))
+  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(
+    () => new Set([detachedView ?? 'accueil'])
+  )
   useEffect(() => {
     // Un pied de page ne fait jamais tomber l'interface : toute panne laisse l'avertissement absent
     // plutot que de propager une erreur. Silence = rien a signaler, jamais « on ne sait pas ».
@@ -314,6 +325,39 @@ export function MainApp(): React.JSX.Element {
     [activateTab, navigationOrigin]
   )
 
+  const closeTab = useCallback(
+    (vue: Tab): void => {
+      // Les vues montées SONT les onglets ouverts (un Set garde l'ordre d'insertion).
+      // Fermer un onglet DÉMONTE sa vue, comme un navigateur.
+      const { onglets, actif } = fermerOnglet([...visitedTabs], vue, tab)
+      setVisitedTabs(new Set<Tab>(onglets.length ? onglets : ['accueil']))
+      setTab(actif ?? 'accueil')
+    },
+    [visitedTabs, tab]
+  )
+
+  // Onglet glissé sur un autre onglet : il prend sa place dans la barre.
+  const reorderTab = useCallback((cible: Tab): void => {
+    const source = draggedTab.current
+    if (source) setVisitedTabs((v) => new Set(deplacerOnglet([...v], source, cible)))
+  }, [])
+
+  // Onglet lâché HORS de la fenêtre → il part dans sa propre fenêtre (autre écran), et quitte
+  // la barre de celle-ci. Si le main refuse, l'onglet reste où il était.
+  const detachTab = useCallback(
+    (vue: Tab, screenX: number, screenY: number): void => {
+      const api = window.api
+      if (!api?.detachView) return
+      void api.detachView(vue, screenX, screenY).then(
+        (result) => {
+          if (result?.ok) closeTab(vue)
+        },
+        (error) => console.warn('[Autowin onglets] détachement refusé', error)
+      )
+    },
+    [closeTab]
+  )
+
   // #11 — raccourcis clavier : Ctrl/Cmd+1..N changent d'onglet, Ctrl/Cmd+K focalise la recherche de
   // conversation (best-effort : ne fait rien si le champ n'est pas monté). N'interfère pas avec le
   // zoom (Ctrl+0/±) ni la saisie (on ignore Alt).
@@ -397,6 +441,8 @@ export function MainApp(): React.JSX.Element {
     // Les refresh de données sont gérés PAR les vues (pas de remount : il tuerait
     // le fil de chat en plein tour d'agent).
     let disposed = false
+    // Une fenêtre détachée garde SA vue : la navigation pilotée vit dans la fenêtre principale.
+    if (detachedView) return
     const off = window.api.onAppEvent((e) => {
       if (e.type === 'navigate' && e.tab) {
         navigationGeneration.current += 1
@@ -433,7 +479,7 @@ export function MainApp(): React.JSX.Element {
       disposed = true
       off()
     }
-  }, [applyLocation, navigationOrigin])
+  }, [applyLocation, navigationOrigin, detachedView])
 
   return (
     <div
@@ -461,85 +507,140 @@ export function MainApp(): React.JSX.Element {
        * fil de la conv ». Le voile plein écran qu'il posait rendait le fil et la question illisibles
        * l'un à travers l'autre.
        */}
-      <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
-        <div className="brand">
-          <Spinner className="brand-logo" size={34} />
-          <span className="brand-name">Autowin OS</span>
-          <button
-            type="button"
-            className="rail-toggle"
-            aria-label={railCollapsed ? 'Déployer le menu' : 'Réduire le menu'}
-            aria-expanded={!railCollapsed}
-            title={railCollapsed ? 'Déployer le menu' : 'Réduire le menu'}
-            onClick={() => setRailCollapsed((collapsed) => !collapsed)}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="15"
-              height="15"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+      {!detachedView && (
+        <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
+          <div className="brand">
+            <Spinner className="brand-logo" size={34} />
+            <span className="brand-name">Autowin OS</span>
+            <button
+              type="button"
+              className="rail-toggle"
+              aria-label={railCollapsed ? 'Déployer le menu' : 'Réduire le menu'}
+              aria-expanded={!railCollapsed}
+              title={railCollapsed ? 'Déployer le menu' : 'Réduire le menu'}
+              onClick={() => setRailCollapsed((collapsed) => !collapsed)}
             >
-              <path d={railCollapsed ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'} />
-            </svg>
-          </button>
-        </div>
-        <nav className="nav">
-          <div className="nav-group">
-            {NAV.map((it) => (
-              <button
-                key={it.id}
-                data-testid={`nav-${it.id}`}
-                className={`nav-item${tab === it.id ? ' active' : ''}`}
-                onClick={() => navigate(it.id)}
+              <svg
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                <span className="space-toy-icon" aria-hidden="true">
-                  {it.id === 'worktree' ? (
-                    <WorktreeIcon />
-                  ) : it.id === 'task-manager' ? (
-                    <TaskManagerIcon />
-                  ) : (
-                    it.icon
-                  )}
-                </span>
-                <span>{it.label}</span>
-                {it.id === 'settings' && preflightAlert && (
-                  <span
-                    className="domain-badge-alert nav-alert-badge"
-                    data-testid="nav-settings-alert"
-                    title="Un prérequis est en échec"
-                    aria-label="Un prérequis est en échec"
-                  >
-                    !
-                  </span>
-                )}
-              </button>
-            ))}
+                <path d={railCollapsed ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'} />
+              </svg>
+            </button>
           </div>
-        </nav>
-        <UpdateBanner collapsed={railCollapsed} />
-        {/* Le NUMÉRO DE BUILD (nombre de commits) incrémente à chaque commit → l'utilisateur voit d'un
+          <nav className="nav">
+            <div className="nav-group">
+              {NAV.map((it) => (
+                <button
+                  key={it.id}
+                  data-testid={`nav-${it.id}`}
+                  className={`nav-item${tab === it.id ? ' active' : ''}`}
+                  onClick={() => navigate(it.id)}
+                >
+                  <span className="space-toy-icon" aria-hidden="true">
+                    {it.id === 'worktree' ? (
+                      <WorktreeIcon />
+                    ) : it.id === 'task-manager' ? (
+                      <TaskManagerIcon />
+                    ) : (
+                      it.icon
+                    )}
+                  </span>
+                  <span>{it.label}</span>
+                  {it.id === 'settings' && preflightAlert && (
+                    <span
+                      className="domain-badge-alert nav-alert-badge"
+                      data-testid="nav-settings-alert"
+                      title="Un prérequis est en échec"
+                      aria-label="Un prérequis est en échec"
+                    >
+                      !
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </nav>
+          <UpdateBanner collapsed={railCollapsed} />
+          {/* Le NUMÉRO DE BUILD (nombre de commits) incrémente à chaque commit → l'utilisateur voit d'un
             coup s'il lance une version plus récente. Le SHA court lève l'ambiguïté. `__BUILD_*__` sont
             gravés au build par `electron.vite.config.ts` ; en test (non défini) on retombe proprement. */}
-        <div className="rail-foot c-faint" title={`commit ${buildSha}`}>
-          {`v${packageManifest.version} · build ${buildNumber} · ${buildSha}`}
-        </div>
-        {/* MOTEUR PÉRIMÉ — mesuré le 25/08 : `electron-vite dev` ne reconstruit PAS le processus
+          <div className="rail-foot c-faint" title={`commit ${buildSha}`}>
+            {`v${packageManifest.version} · build ${buildNumber} · ${buildSha}`}
+          </div>
+          {/* MOTEUR PÉRIMÉ — mesuré le 25/08 : `electron-vite dev` ne reconstruit PAS le processus
             principal, donc un correctif reste invisible jusqu'à un redémarrage manuel. Le renderer,
             lui, est bien rechargé à chaud : l'interface bouge, le moteur non, et rien ne le disait.
             On MONTRE au lieu de redémarrer — `--watch` tuait l'app pendant le travail
             (`dev-sans-watch.test.ts`). Rien n'est rendu quand l'état est sain. */}
-        {moteurPerime && (
-          <div className="rail-foot rail-foot--perime" role="status" title={moteurPerime}>
-            ⚠ {moteurPerime}
+          {moteurPerime && (
+            <div className="rail-foot rail-foot--perime" role="status" title={moteurPerime}>
+              ⚠ {moteurPerime}
+            </div>
+          )}
+        </aside>
+      )}
+      <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
+        {!detachedView && (
+          <div className="view-tabs" role="tablist" data-testid="view-tabs">
+            {[...visitedTabs].map((id) => {
+              const meta = NAV.find((it) => it.id === id)
+              return (
+                <div
+                  key={id}
+                  role="tab"
+                  aria-selected={tab === id}
+                  data-testid={`view-tab-${id}`}
+                  className={`view-tab${tab === id ? ' is-active' : ''}`}
+                  draggable
+                  title="Glisser hors de la fenêtre pour l'ouvrir dans sa propre fenêtre"
+                  onClick={() => navigate(id)}
+                  onAuxClick={(e) => {
+                    if (e.button === 1) closeTab(id)
+                  }}
+                  onDragStart={(e) => {
+                    draggedTab.current = id
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('text/plain', id)
+                  }}
+                  onDragOver={(e) => {
+                    if (draggedTab.current) e.preventDefault()
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    reorderTab(id)
+                  }}
+                  onDragEnd={(e) => {
+                    draggedTab.current = null
+                    const bounds = window.api?.windowBounds?.()
+                    if (bounds && lacheHorsFenetre(e, bounds)) detachTab(id, e.screenX, e.screenY)
+                  }}
+                >
+                  <span aria-hidden="true">{meta?.icon}</span>
+                  <span className="view-tab-label">{meta?.label ?? id}</span>
+                  <button
+                    type="button"
+                    className="view-tab-close"
+                    aria-label={`Fermer l'onglet ${meta?.label ?? id}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      closeTab(id)
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
-      </aside>
-      <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
         {visitedTabs.has('accueil') && (
           <div className={`view-slot${tab === 'accueil' ? ' is-active' : ''}`}>
             <VueMesuree id="accueil">

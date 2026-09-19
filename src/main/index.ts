@@ -1,3 +1,4 @@
+import { isAppDestination } from '../shared/view-tabs'
 import { observerLeMoteur } from './observer-les-sources'
 import { registerProdPassphraseIpc } from './prod-passphrase-ipc'
 import { PorteProd } from './prod-gate'
@@ -1073,6 +1074,7 @@ const {
   setupTray,
   showMainWindow,
   openQuestionWindow,
+  openViewWindow,
   rendererLocation,
   questionWindows,
   refleterRunsVivants
@@ -2648,6 +2650,18 @@ Le fil reprend ensuite normalement.`
     const selected = await pickDirectory(event.sender)
     return selected ? behaviourAccess.approve(selected) : null
   })
+
+  ipcMain.handle(
+    'window:detach-view',
+    (event, view: unknown, screenX: unknown, screenY: unknown) => {
+      assertTrustedRendererSender(event, 'Detach view')
+      if (!isAppDestination(view)) throw new Error('Vue inconnue')
+      if (!Number.isFinite(screenX) || !Number.isFinite(screenY))
+        throw new Error('Position invalide')
+      openViewWindow(view, screenX as number, screenY as number)
+      return { ok: true }
+    }
+  )
 
   ipcMain.handle('model:question:answer', (event, id: string, answer: unknown) => {
     assertTrustedRendererSender(event, 'Model question')

@@ -679,6 +679,16 @@ const api = {
     ipcRenderer.invoke('os:revealFile', path, line),
   // Plan de contrôle (app pilotable par les agents) + pilotage in-model
   appState: (): Promise<AppSnapshot> => ipcRenderer.invoke('os:appState'),
+  /** Ouvre une vue dans sa propre fenêtre au point écran du lâcher d'onglet. */
+  detachView: (view: string, screenX: number, screenY: number): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('window:detach-view', view, screenX, screenY),
+  /** Limites écran de la fenêtre courante (pour savoir si un onglet est lâché dehors). */
+  windowBounds: (): { x: number; y: number; width: number; height: number } => ({
+    x: window.screenX,
+    y: window.screenY,
+    width: window.outerWidth,
+    height: window.outerHeight
+  }),
   appCommand: (name: string, args?: Record<string, unknown>): Promise<CommandResult> =>
     ipcRenderer.invoke('os:appCommand', name, args),
   pilotChat: (
