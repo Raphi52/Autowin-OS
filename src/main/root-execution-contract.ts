@@ -1,6 +1,7 @@
 import type { ExecutionEvidence } from './providers/types'
 import { attributedPaths, normalized } from './providers/causal-verification-evidence'
 import { classifyMutationConfidence } from './task-mutation-classifier'
+import { cadrageRefuse } from './frame-cas-limites'
 
 export const ROOT_DOD = {
   analysis: 'Analyse demandee presente dans le livrable',
@@ -434,8 +435,22 @@ export function etatDeCloture(
   if (cibleManquee) {
     checks.push({ label: libelleCibleNommee(ciblesNommees(task)), checked: false })
   }
+  // Garde « cadrage refusé » (conv-687, 18/09) : si le DERNIER frame porte encore le refus des cas
+  // limites, le run n'a pas de cadrage valide — il ne ferme pas vert. Un frame refait après passe.
+  // Portee (conv-710, 19/09) : la garde ne vaut que pour un run dont le cadrage EST le resultat
+  // (scout → frame, conv-687). Si un `build` a joue APRES le dernier frame, le travail a ete produit
+  // et prouve par ses propres preuves ; la reparation ne rejoue que `build` et ne peut plus refaire
+  // le cadrage — le refus devenait insatisfaisable, affiche en « Promis mais pas fait » a l'agent.
+  const indexDernierFrame = phases.map((p) => p.phase).lastIndexOf('frame')
+  const dernierFrame = indexDernierFrame >= 0 ? phases[indexDernierFrame] : undefined
+  const buildApresCadrage = phases.slice(indexDernierFrame + 1).some((p) => p.phase === 'build')
+  const cadrageEnRefus =
+    indexDernierFrame >= 0 && !buildApresCadrage && cadrageRefuse(dernierFrame?.text ?? '')
+  if (cadrageEnRefus) {
+    checks.push({ label: 'Cadrage accepté par le contrôle des cas limites', checked: false })
+  }
   return {
-    status: !cibleManquee && (lectureSeule || evidenceOk) ? 'green' : 'red',
+    status: !cibleManquee && !cadrageEnRefus && (lectureSeule || evidenceOk) ? 'green' : 'red',
     dod: checks
   }
 }

@@ -934,6 +934,7 @@ export class RunWorktreeCoordinator {
     let preparedPublication: { baseSha: string; agentSha: string } | undefined
     const res = this.manager.finalize(runId, {
       baseBranch: tracked.baseBranch,
+      ...(tracked.task ? { task: tracked.task } : {}),
       onPrepared: (agentSha, baseSha) => {
         tracked.publicationAgentSha = agentSha
         tracked.publicationBaseSha = baseSha
@@ -2873,6 +2874,7 @@ export class RunWorktreeCoordinator {
               ...(cleanupAgentSha && cleanupAgentSha !== publishedSha ? [cleanupAgentSha] : [])
             )
           : this.manager.finalize(runId, {
+              ...(tracked.task ? { task: tracked.task } : {}),
               ...((record?.baseBranch ?? tracked.baseBranch)
                 ? { baseBranch: record?.baseBranch ?? tracked.baseBranch }
                 : {}),
@@ -3068,6 +3070,7 @@ export class RunWorktreeCoordinator {
             )
           : this.manager.finalizeAsync
             ? await this.manager.finalizeAsync(runId, {
+                ...(tracked.task ? { task: tracked.task } : {}),
                 ...(baseBranch ? { baseBranch } : {}),
                 ...((record?.publicationAgentSha ?? tracked.publicationAgentSha)
                   ? {
@@ -3090,6 +3093,7 @@ export class RunWorktreeCoordinator {
                 }
               })
             : this.manager.finalize(runId, {
+                ...(tracked.task ? { task: tracked.task } : {}),
                 ...(baseBranch ? { baseBranch } : {}),
                 ...(publishedSha ? { expectedAgentSha: publishedSha } : {})
               })

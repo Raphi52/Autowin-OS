@@ -24,6 +24,7 @@ export type WorktreeOperationRequest =
       options?: {
         baseBranch?: string
         expectedAgentSha?: string
+        task?: string
         conflictStrategy?: 'ours' | 'theirs'
       }
     }

@@ -114,6 +114,15 @@ describe('faut-il seulement poser la question', () => {
     expect(meriteUneDecision('corrige ça')).toBe(false)
   })
 
+  it('une question sans « ? » final reste une question', () => {
+    expect(meriteUneDecision("c'est quoi la meilleure option pour la facturation du projet")).toBe(false)
+    expect(meriteUneDecision('quelle est la meilleure approche pour ce module de facturation')).toBe(false)
+    // Une question suivie d'une consigne d'action reste une demande de travail.
+    expect(
+      meriteUneDecision('Pourquoi le build échoue. Corrige-le puis relance toute la suite de tests')
+    ).toBe(true)
+  })
+
   it('une question pure appelle une réponse, pas un pipeline', () => {
     expect(meriteUneDecision('Comment fonctionne le système de worktrees dans ce dépôt ?')).toBe(
       false

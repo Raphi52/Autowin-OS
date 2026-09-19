@@ -1,4 +1,5 @@
 import { isTransientOverload } from './transient-overload'
+import { estMurDeQuota } from '../shared/reprise-quota'
 
 /**
  * REJOUER UN TOUR DE CHAT TUE PAR UNE PANNE SERVEUR TEMPORAIRE.
@@ -61,6 +62,10 @@ export function estCrashDExecutionDuCli(message: string): boolean {
  * et la phrase « usually temporary » sur laquelle repose la classification.
  */
 export function deciderRejeuDeChat(message: string, attempt: number): DecisionRejeu {
+  // MUR DE QUOTA (conv-717, point 1) : le rejouer est un appel payé contre un mur qui ne tombera
+  // qu'à l'heure annoncée. Mesuré : l'ancien rejeu « ordinaire » renvoyait un vide, que la garde du
+  // tour muet relançait à son tour — 4 appels, et une clôture générique qui masquait le quota.
+  if (estMurDeQuota(message)) return { rejouer: false, maxAttempts: 1, delaiMs: 0 }
   const transitoire = isTransientOverload(message) || estCrashDExecutionDuCli(message)
   const maxAttempts = transitoire ? TENTATIVES_SURCHARGE : TENTATIVES_ORDINAIRES
   const rejouer = attempt < maxAttempts - 1

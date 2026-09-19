@@ -200,6 +200,7 @@ import type {
   TicketUpdateRequest
 } from './ticket-providers/provider-contract'
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
+import { dedupliquerDossier, paginerDossier, resumerAppelsOutils } from './retrospective-compacte'
 import {
   buildAutowinKaizenTask,
   collectAutowinKaizenEvidence,
@@ -500,6 +501,9 @@ export type AppEvent =
 export function parseDisplayArg(raw: unknown): number | undefined {
   if (raw === undefined || raw === null || raw === '') return undefined
   const value = typeof raw === 'string' ? Number(raw.trim()) : raw
+  // 0 = reflexe 0-base du modele (conv-30, 2026-09-01) : on le lit comme l'ecran principal
+  // plutot que de brûler un aller-retour sur un refus.
+  if (value === 0) return 1
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     throw new Error(`display invalide: ${JSON.stringify(raw)} (entier >= 1 attendu)`)
   }
@@ -563,7 +567,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail : le bureau CACHE est le reflexe premier (voir REGLES_VISUELLES du prompt de pilotage). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
+      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail : le bureau CACHE est le reflexe premier (voir REGLES_VISUELLES du prompt de pilotage). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : l'ecran principal est `display: 1` (`display: 0` est lu comme 1, mesure conv-30 du 2026-09-01).",
     args: {
       display:
         'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans',
@@ -681,7 +685,8 @@ export const CATALOG: CommandSpec[] = [
       'de relancer un travail deja tente : tu sauras ce qui a DEJA ete essaye au lieu de le refaire. ' +
       "C'est de la LECTURE — cela ne lance aucun run et ne coute aucun appel de modele.",
     args: {
-      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)'
+      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)',
+      page: 'numero de page du dossier (defaut 1) : le dossier est rendu par pages de ~20 000 caracteres, demande la suivante tant que `page` < `pages`'
     },
     annotations: {
       readOnlyHint: true,
@@ -3145,9 +3150,18 @@ export class AppCommandBus {
          * muet de son propre echantillonnage.
          */
         const dossier = collectAutowinKaizenEvidence(conversation, undefined, PLAFONDS_AMPLES)
+        // Renvois « identique au tour N » puis pages de ~20 000 caracteres : conv-703 passait de
+        // 363 064 caracteres a un dossier lisible en quelques pages (retrospective-compacte.ts).
+        const decoupe = paginerDossier(
+          JSON.stringify(dedupliquerDossier(resumerAppelsOutils(dossier))),
+          Number(a.page)
+        )
         return {
-          ...dossier,
-          note:
+          page: decoupe.page,
+          pages: decoupe.pages,
+          dossier: decoupe.contenu,
+          suite: decoupe.note,
+          resume:
             `${dossier.conversation.messages.length} message(s), ` +
             `${dossier.causalEvents.length} evenement(s) causal(aux), ` +
             `${dossier.activity.length} entree(s) d'activite, ${dossier.runs.length} RUN.md, ` +

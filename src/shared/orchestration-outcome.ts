@@ -1025,6 +1025,30 @@ export function phasesJouees(outcome: OrchestrationOutcome | undefined): string[
 }
 
 /**
+ * Les phases jouees ET abouties : on retire celle dont la sortie demande a etre REFAITE (sa
+ * derniere ligne `SUITE:` la designe elle-meme). C'est la forme d'un cadrage refuse par
+ * `frame-cas-limites` (conv-687, 18/09) : le compter comme acquis faisait recommander « lancer
+ * terrain », et le mode auto sautait le cadrage.
+ */
+export function phasesAbouties(outcome: OrchestrationOutcome | undefined): string[] {
+  const sorties = (outcome as { phaseOutputs?: unknown } | undefined)?.phaseOutputs
+  if (!Array.isArray(sorties)) return []
+  return sorties.flatMap((sortie) => {
+    const { phase, text } = (sortie ?? {}) as { phase?: unknown; text?: unknown }
+    if (typeof phase !== 'string' || !phase.trim()) return []
+    const suite =
+      typeof text === 'string'
+        ? text
+            .split('\n')
+            .reverse()
+            .find((l) => /^\s*SUITE\s*:/i.test(l))
+        : undefined
+    const cible = suite?.replace(/^\s*SUITE\s*:/i, '').trim().toLowerCase()
+    return cible === phase.trim().toLowerCase() ? [] : [phase]
+  })
+}
+
+/**
  * Bloc final derive de l'issue structuree — et de la PORTEE reellement jouee.
  *
  * DEFAUT VECU le 20/08. Ce bloc etait une constante : il annoncait « Reste a faire : rien » et
@@ -1091,7 +1115,8 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
    * mais elle ne dispense ni du nettoyage ni de l'audit : la premiere ligne distingue donc les deux
    * portees, la suite de la chaine se dit dans les deux cas.
    */
-  const restantes = phasesRestantes(phases)
+  const abouties = phasesAbouties(outcome)
+  const restantes = phasesRestantes(abouties.length ? abouties : phases)
   if (restantes.length) {
     const analyse = runDAnalyseSeule(phases)
     return [

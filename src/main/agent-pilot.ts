@@ -1,3 +1,4 @@
+import { rappelSansDejaEnvoye } from './rappel-conversations'
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
 import { deciderRejeuDeChat, dormirAnnulable, estCrashDExecutionDuCli } from './chat-rejeu-surcharge'
 import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from './runs/resume-refusal'
@@ -826,6 +827,9 @@ export class AgentPilot {
    */
   private readonly dernierEtatPousse = new Map<string, unknown>()
 
+  /** Extraits de rappel deja envoyes dans la session courante de chaque conversation. */
+  private readonly rappelDejaEnvoye = new Map<string, Set<string>>()
+
   /**
    * L'index memoire ci-dessus est HYDRATE une fois depuis le disque, puis maintenu en miroir.
    *
@@ -1472,10 +1476,20 @@ export class AgentPilot {
     // Dependance OPTIONNELLE, et assumee comme telle : un rappel est un CONFORT. Un tour qui
     // echouerait faute de rappel ferait dependre chaque message d'une commodite -- et les bus
     // factices des tests, qui n'implementent que ce qu'ils exercent, tomberaient avec lui.
-    const rappelConversations =
+    const rappelBrut =
       typeof this.bus.rappelPourDemande === 'function'
         ? this.bus.rappelPourDemande(lastUserMessage?.content, conversationId)
         : ''
+    // Session neuve = rien d'envoye encore : on repart a zero. Session reprise = on ne renvoie
+    // pas un extrait que la session porte deja (conv-706 : conv-627/conv-624 a chaque tour).
+    const cleRappel = conversationId ?? ''
+    if (!resumeSessionId || !this.rappelDejaEnvoye.has(cleRappel)) {
+      this.rappelDejaEnvoye.set(cleRappel, new Set())
+    }
+    const rappelConversations = rappelSansDejaEnvoye(
+      rappelBrut,
+      this.rappelDejaEnvoye.get(cleRappel) as Set<string>
+    )
     /**
      * LE NOM DE CHAQUE INJECTION DU MESSAGE, tenu a part du texte.
      *

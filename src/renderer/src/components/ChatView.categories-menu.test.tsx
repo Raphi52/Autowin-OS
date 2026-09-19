@@ -95,12 +95,11 @@ describe('ChatView — classer une conversation par categorie', () => {
       document.querySelector<HTMLElement>('.conv-menu-backdrop')!.click()
     })
 
-    // « Choisir le repertoire de travail… » ne montre QUE des chemins.
-    const actions = harness.container.querySelector<HTMLButtonElement>('.conv-menu-trigger')
-    await act(async () => {
-      actions!.click()
-    })
-    const dossiers = document.querySelector<HTMLElement>('[data-testid="conv-menu-set-workdir"]')
+    // La pastille 📁 de la barre du haut ne montre QUE des chemins (l'entree du menu de la
+    // conversation a ete retiree, conv-674).
+    const dossiers = harness.container.querySelector<HTMLElement>(
+      '[data-testid="chat-project-dot"]'
+    )
     expect(dossiers).not.toBeNull()
     await act(async () => {
       dossiers!.click()

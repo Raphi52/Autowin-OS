@@ -44,7 +44,12 @@ const MARQUE = '⛔ Cadrage incomplet'
  */
 const MARQUEURS_ENTREE: RegExp[] = [
   /(^|[^\w-])--[a-z][\w-]*/i,
-  /\b(argument|parametre|paramètre|option|drapeau|flag|saisie|champ|formulaire|input)\b/i,
+  // Mots NUS « option / argument / parametre / drapeau / champ / input » retires (conv-710, 19/09) :
+  // ils designent aussi du code interne (« ajouter une option a `finalize` ») et refusaient a tort le
+  // cadrage d'une tache sans aucune saisie. Ils ne comptent plus qu'avec un contexte d'entree.
+  /\b(saisies?|formulaires?)\b/i,
+  /\b(options?|arguments?|param[eè]tres?|drapeaux?|flags?)\s+(de\s+(la\s+)?|en\s+)?(ligne\s+de\s+commande|cli)\b/i,
+  /\b(champs?\s+(de\s+(saisie|texte)|du\s+formulaire)|input\s+utilisateur)\b/i,
   /\b(valeur|entree|entrée)\s+(saisie|fournie|passee|passée|utilisateur)\b/i,
   /\b(requete|requête|payload|query\s?string|variable d'environnement)\b/i
 ]
@@ -121,6 +126,11 @@ export function enteteCasLimitesManquants(texte: string): string | undefined {
  * Inchangee quand les cas limites sont la. Sinon le refus est mis en TETE : le seul endroit qui
  * survit a la projection de `phase-carry.ts` ET a la troncature.
  */
+/** Vrai quand une sortie de `frame` ENREGISTREE porte en tete le refus des cas limites. */
+export function cadrageRefuse(texte: string): boolean {
+  return (texte ?? '').trimStart().startsWith(MARQUE)
+}
+
 export function sortieFrameAvecCasLimites(texte: string): string {
   const entete = enteteCasLimitesManquants(texte)
   return entete ? `${entete}\n\n${texte ?? ''}` : texte
