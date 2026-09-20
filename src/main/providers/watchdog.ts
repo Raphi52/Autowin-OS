@@ -136,6 +136,48 @@ export function withHardDeadline<T>(
   return Promise.race([promise, deadline]).finally(() => clearTimeout(timer))
 }
 
+/**
+ * Variante RÉARMABLE de `withHardDeadline` : la deadline ne compte plus depuis le début de l'appel
+ * mais depuis la DERNIÈRE activité signalée par `beat()`. Un tour qui produit encore n'est donc
+ * jamais abandonné pour sa seule durée — seul un SILENCE de `idleMs` le fait.
+ *
+ * Pourquoi : supprimer le cap de durée des adaptateurs (conv-729, turn
+ * `aa90027e-01c1-4d39-9645-7e5d01619323`) ne sert à rien si le plafond de coordination, lui, coupe
+ * toujours à date fixe — la coupure se contenterait de se déplacer de 40 à 45 minutes.
+ */
+export function withIdleDeadline<T>(
+  promise: Promise<T>,
+  idleMs: number,
+  message: string,
+  onExpire?: () => void
+): { promise: Promise<T>; beat: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let expired = false
+  let arm: () => void = () => undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    arm = (): void => {
+      if (expired) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        expired = true
+        try {
+          onExpire?.()
+        } finally {
+          reject(new Error(message))
+        }
+      }, idleMs)
+      unref(timer)
+    }
+    arm()
+  })
+  return {
+    promise: Promise.race([promise, deadline]).finally(() => {
+      if (timer) clearTimeout(timer)
+    }),
+    beat: () => arm()
+  }
+}
+
 export interface StreamWatchdog {
   /** Signale une activité (chunk reçu) → réarme le timer d'inactivité. No-op après déclenchement. */
   beat: () => void

@@ -4,7 +4,8 @@ import {
   createStreamWatchdog,
   resolveProviderTimeoutMs,
   SUBAGENT_INACTIVITY_MS,
-  withHardDeadline
+  withHardDeadline,
+  withIdleDeadline
 } from './watchdog'
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -123,5 +124,25 @@ describe('assertArgvWithinLimit (anti spawn ENAMETOOLONG)', () => {
   it('compte le CUMUL des arguments, pas seulement le plus gros', () => {
     const args = Array.from({ length: 30 }, () => 'x'.repeat(1_000)) // 30 × 1k > budget
     expect(() => assertArgvWithinLimit('cli', args)).toThrow(/trop longue/)
+  })
+})
+
+describe('withIdleDeadline', () => {
+  it('ne coupe PAS tant que des battements arrivent, coupe dès le silence', async () => {
+    let fini: (v: string) => void = () => undefined
+    const travail = new Promise<string>((resolve) => {
+      fini = resolve
+    })
+    const { promise, beat } = withIdleDeadline(travail, 40, 'silence coordination')
+    for (let i = 0; i < 5; i++) {
+      await wait(20)
+      beat()
+    }
+    fini('livré')
+    await expect(promise).resolves.toBe('livré')
+
+    const jamais = new Promise<string>(() => undefined)
+    const mort = withIdleDeadline(jamais, 20, 'silence coordination')
+    await expect(mort.promise).rejects.toThrow('silence coordination')
   })
 })
