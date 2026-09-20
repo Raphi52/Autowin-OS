@@ -192,6 +192,7 @@ import { ChatFindBar } from './ChatFindBar'
 import { Spinner } from './Spinner'
 import { VueMesuree } from './VueMesuree'
 import { useDebutProgressif } from './fil-progressif'
+import { flattenChatParts } from '../../../shared/chat-turn'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
@@ -515,10 +516,56 @@ type MessageStocke = Partial<StoredAssistantMessage> & {
   messageId?: string
   attachments?: UserMsg['attachments']
   done?: boolean
+  orientation?: boolean
+  coupeLaReponse?: number
+}
+
+/**
+ * LA SUITE DU TOUR SE RELIT SOUS LA CONSIGNE QUI L'A PROVOQUÉE (conv-717, 2026-09-19).
+ *
+ * Une consigne écrite pendant un tour est stockée APRÈS le message assistant du tour, qui porte
+ * TOUT le texte — y compris la réponse à cette consigne. Au rechargement, cette réponse remontait
+ * donc au-dessus de la question : « quand j'ai écrit fais tout ça a effacé ton message précédent ».
+ * Le store note sur la consigne combien de parts existaient déjà (`coupeLaReponse`) ; on coupe la
+ * bulle à cet endroit et la suite s'affiche sous la consigne. Tour encore en cours : rien ne bouge,
+ * l'affichage en direct a sa propre coupure (`.directive-receipt`).
+ */
+function couperAuxConsignes(messages: readonly MessageStocke[]): MessageStocke[] {
+  const out: MessageStocke[] = []
+  for (let i = 0; i < messages.length; i++) {
+    const assistant = messages[i]
+    const parts = assistant.role === 'assistant' ? assistant.parts : undefined
+    if (!parts || assistant.status === 'streaming') {
+      out.push(assistant)
+      continue
+    }
+    let debut = 0
+    let j = i + 1
+    const morceaux: MessageStocke[] = []
+    for (; j < messages.length; j++) {
+      const consigne = messages[j]
+      if (consigne.role !== 'user' || !consigne.orientation) break
+      const coupure = consigne.coupeLaReponse
+      if (typeof coupure === 'number' && coupure > debut && coupure < parts.length) {
+        const tranche = parts.slice(debut, coupure)
+        morceaux.push({ ...assistant, parts: tranche, content: flattenChatParts(tranche) })
+        debut = coupure
+      }
+      morceaux.push(consigne)
+    }
+    if (debut === 0) {
+      out.push(assistant, ...messages.slice(i + 1, j))
+    } else {
+      const reste = parts.slice(debut)
+      out.push(...morceaux, { ...assistant, parts: reste, content: flattenChatParts(reste) })
+    }
+    i = j - 1
+  }
+  return out
 }
 
 function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
-  return messages.map((m) =>
+  return couperAuxConsignes(messages).map((m) =>
     m.role === 'user'
       ? {
           role: 'user' as const,

@@ -70,6 +70,20 @@ export interface Msg {
    * jour). Ce drapeau est la seule chose qui distingue les deux.
    */
   orientation?: boolean
+  /**
+   * POINT DE COUPURE de la réponse en cours au moment où cette orientation a été écrite : nombre de
+   * `parts` que le message assistant juste au-dessus avait DÉJÀ produit. L'écran s'en sert pour
+   * afficher la suite du tour SOUS la consigne (conv-717, 2026-09-19 : « quand j'ai écrit fais tout
+   * ça a effacé ton message précédent » — la réponse à la question vivait au-dessus d'elle).
+   */
+  coupeLaReponse?: number
+}
+
+/** Nombre de parts déjà produites par une réponse encore en cours, ou `undefined` s'il n'y en a pas. */
+export function pointDeCoupure(precedent: Msg | undefined): number | undefined {
+  if (precedent?.role !== 'assistant' || precedent.status !== 'streaming') return undefined
+  const n = precedent.parts?.length ?? 0
+  return n > 0 ? n : undefined
 }
 
 /** D'où vient une conversation créée par un fork — trace d'origine, sans lien vivant. */
@@ -863,6 +877,8 @@ export class ConversationStore {
       ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       ...(m.orientation ? { orientation: true as const } : {})
     }
+    const coupure = m.orientation && rangReponseEnCours < 0 ? pointDeCoupure(dernier) : undefined
+    if (coupure !== undefined) message.coupeLaReponse = coupure
     if (rangReponseEnCours >= 0) conversation.messages.splice(rangReponseEnCours, 0, message)
     else conversation.messages.push(message)
     this.indexerMessage(conversation.id, message.content)

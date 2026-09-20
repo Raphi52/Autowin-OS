@@ -12,7 +12,7 @@ import {
 import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { ChatTurnEvent } from '../../shared/chat-turn'
-import { applyTurnEventToMessages, deterministicMessageId } from './conversations'
+import { applyTurnEventToMessages, deterministicMessageId, pointDeCoupure } from './conversations'
 import type { Conversation, ConversationChange, ConversationStore, Msg } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
 import type { FinishedRunOutcome } from '../runs/run-interruption'
@@ -438,7 +438,15 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
       ) {
         const conversation = byId.get(record.id)
         if (!conversation) throw new Error('conversation du delta introuvable')
-        conversation.messages.push(...record.messages)
+        // Historique antérieur au marqueur : l'ordre du journal dit encore où la consigne est
+        // arrivée dans la réponse en cours. On le retrouve ici, en mémoire, sans réécrire le disque.
+        for (const message of record.messages) {
+          if (message.orientation && message.coupeLaReponse === undefined) {
+            const coupure = pointDeCoupure(conversation.messages.at(-1))
+            if (coupure !== undefined) message.coupeLaReponse = coupure
+          }
+          conversation.messages.push(message)
+        }
         conversation.updatedAt = record.updatedAt
       } else if (
         record.op === 'turn-event' &&
