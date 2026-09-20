@@ -678,7 +678,7 @@ export function claudeTransportEnvelope(
  * l'outil shell du CLI s'appelle `PowerShell` sur ce poste, pas `Bash` : le matcher couvre les deux.
  */
 export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
-  const q = (v: string) => `"${v.split('\\').join('/')}"`
+  const q = (v: string): string => `"${v.split('\\').join('/')}"`
   return {
     autoMemoryDirectory: '',
     hooks: {
