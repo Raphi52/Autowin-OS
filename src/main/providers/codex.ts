@@ -20,9 +20,7 @@ import {
   assertArgvWithinLimit,
   createStreamWatchdog,
   killEscalate,
-  resolveProviderTimeoutMs,
-  SUBAGENT_INACTIVITY_MS,
-  SUBAGENT_TOTAL_MS
+  SUBAGENT_INACTIVITY_MS
 } from './watchdog'
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { findNpmGlobalFile } from './npm-global-resolve'
@@ -105,7 +103,7 @@ export function codexStructuralFailure(error: unknown): Error {
  * le juge doit voir un tour coupé, jamais croire à une livraison complète.
  */
 export function salvageOnWatchdogTrip(
-  reason: 'inactivity' | 'total',
+  reason: 'inactivity',
   produit: { finalText: string; executionEvidence: ExecutionEvidence[] }
 ):
   | { kind: 'salvaged'; result: { text: string; executionEvidence: ExecutionEvidence[] } }
@@ -413,7 +411,6 @@ async function runCodexExec(
   messages: Message[],
   opts: SendOptions,
   model: string,
-  fallbackTimeoutMs: number,
   // Relais LIVE de la progression. Sans lui, l'adaptateur absorbait tout le grain fin du CLI et ne
   // rendait la main qu'a la fin : la carte du fil restait muette pendant TOUT l'appel (2026-08-22).
   onProgress?: (chunk: StreamChunk) => void
@@ -484,9 +481,10 @@ async function runCodexExec(
     const executionEvidence: ExecutionEvidence[] = []
     // Anti-blocage : watchdog inactivité + cap total → kill en escalade + REJET (idempotent) même si
     // l'event `close` ne tire jamais (zombie). Remplace l'ancien kill-total-30min sans filet de rejet.
+    // Plus de cap de durée totale (supprimé le 2026-09-20, voir `watchdog.ts`) : seul le SILENCE
+    // prolongé tue le process.
     const watchdog = createStreamWatchdog({
       inactivityMs: SUBAGENT_INACTIVITY_MS,
-      totalMs: resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, fallbackTimeoutMs),
       onTrip: (reason) => {
         killEscalate(child)
         // Ne pas jeter ce qui a déjà été produit : mesuré le 2026-08-12 (conv-1122), un appel de
@@ -729,8 +727,6 @@ export interface CodexAdapterOptions {
   /** Fournit/rafraîchit les tokens ; défaut = store Autowin OS. */
   loadTokensFn?: () => Tokens | null
   model?: string
-  /** Garde locale d'un appel direct ; le devis orchestré prime quand il est présent. */
-  timeoutMs?: number
 }
 
 export class CodexAdapter implements ProviderAdapter {
@@ -739,7 +735,6 @@ export class CodexAdapter implements ProviderAdapter {
   private readonly fetchFn: FetchLike
   private readonly loadTokensFn: () => Tokens | null
   private readonly model: string
-  private readonly timeoutMs: number
 
   constructor(opts: CodexAdapterOptions = {}) {
     this.fetchFn = opts.fetchFn ?? fetch
@@ -747,7 +742,6 @@ export class CodexAdapter implements ProviderAdapter {
     // gpt-5.6-terra : modèle réel accepté par Codex/compte ChatGPT (vérifié live ;
     // gpt-5-codex renvoie « model not supported »). Suffixe -terra = vrai variant.
     this.model = opts.model ?? 'gpt-5.6-terra'
-    this.timeoutMs = opts.timeoutMs ?? SUBAGENT_TOTAL_MS
   }
 
   async auth(): Promise<boolean> {
@@ -799,7 +793,6 @@ export class CodexAdapter implements ProviderAdapter {
         messages,
         opts,
         opts.model ?? this.model,
-        this.timeoutMs,
         (chunk) => {
           queue.push(chunk)
           reveiller()

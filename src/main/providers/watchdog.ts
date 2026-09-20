@@ -5,8 +5,8 @@
  *    par un rejet-deadline), même si le producteur sous-jacent ne se résout jamais (process zombie,
  *    event `close` qui ne tire pas). C'est le filet qui empêche « bloqué des jours ».
  *  - `createStreamWatchdog` : surveillance d'un flux — timer d'INACTIVITÉ réarmé à chaque battement
- *    (chunk stdout) + cap TOTAL. Déclenche `onTrip` UNE seule fois (figé → à tuer), distinguant un
- *    silence prolongé d'une tâche longue mais qui progresse.
+ *    (chunk stdout). Déclenche `onTrip` UNE seule fois (figé → à tuer). Une tâche longue QUI
+ *    PROGRESSE n'est jamais tuée : il n'existe plus de plafond de durée absolue.
  *
  * Les timers sont `unref()` : ils ne retiennent jamais l'event loop (pas de fuite au quit).
  */
@@ -19,16 +19,18 @@ const envMs = (name: string, fallback: number): number => {
 }
 
 /**
- * Défauts anti-blocage des sous-agents CLI (tous env-overridables) :
- *  - INACTIVITÉ : silence stdout au-delà → figé → kill. Détecteur FIN d'un vrai blocage.
- *  - TOTAL : plafond de durée d'un tour, même s'il progresse (backstop généreux).
- * Ancien comportement = un simple kill total à 120s SANS filet de rejet (→ pouvait pendre à l'infini
- * si `close` ne tirait pas). L'inactivité 5 min reste le vrai signal de figé. Le cap total doit
- * laisser finir un build actif. Ces valeurs sont les gardes des appels directs ; une orchestration
- * transporte désormais la durée de son devis jusqu'au watchdog et au plafond de coordination.
+ * Défaut anti-blocage des sous-agents CLI (env-overridable) : silence stdout au-delà → figé → kill.
+ * L'inactivité est le SEUL détecteur de figé conservé.
+ *
+ * Le cap de DURÉE TOTALE a été supprimé le 2026-09-20. Mesure : conv-729, turn
+ * `aa90027e-01c1-4d39-9645-7e5d01619323` — deux appels tués à 2 400 018 ms et 2 400 022 ms (40 min
+ * pile = l'ancien `SUBAGENT_TOTAL_MS`) avec l'erreur « claude CLI figé (durée max) », alors que le
+ * journal du même tour montrait des battements réguliers (« Bash en cours - 30 s / 1 min / … /
+ * 3 min »). Le tour PROGRESSAIT : une simulation de 60 parties (saisie ts=1789921425334) demande
+ * plus de 40 min de travail utile. Le cap total ne détectait donc aucun blocage — il détruisait du
+ * travail vivant, ici 80 minutes et le résultat attendu par l'utilisateur, deux fois de suite.
  */
 export const SUBAGENT_INACTIVITY_MS = envMs('AUTOWIN_SUBAGENT_INACTIVITY_MS', 5 * 60_000)
-export const SUBAGENT_TOTAL_MS = envMs('AUTOWIN_SUBAGENT_TOTAL_MS', 40 * 60_000)
 /** Délai de grâce entre SIGTERM et SIGKILL lors de l'escalade de kill d'un process figé. */
 const KILL_GRACE_MS = envMs('AUTOWIN_SUBAGENT_KILL_GRACE_MS', 3_000)
 
@@ -142,26 +144,22 @@ export interface StreamWatchdog {
 }
 
 /**
- * Surveille un flux : déclenche `onTrip('inactivity')` si aucun `beat()` pendant `inactivityMs`, ou
- * `onTrip('total')` si `totalMs` s'écoule depuis la création. Ne déclenche qu'UNE fois puis se dispose.
- * Un seuil absent (undefined/0) désactive le timer correspondant.
+ * Surveille un flux : déclenche `onTrip('inactivity')` si aucun `beat()` pendant `inactivityMs`.
+ * Ne déclenche qu'UNE fois puis se dispose. Un seuil absent (undefined/0) désactive le timer.
+ * Aucun plafond de durée absolue : une tâche qui parle reste en vie aussi longtemps qu'elle parle.
  */
 export function createStreamWatchdog(opts: {
   inactivityMs?: number
-  totalMs?: number
-  onTrip: (reason: 'inactivity' | 'total') => void
+  onTrip: (reason: 'inactivity') => void
 }): StreamWatchdog {
   let inactivityTimer: ReturnType<typeof setTimeout> | undefined
-  let totalTimer: ReturnType<typeof setTimeout> | undefined
   let tripped = false
 
   const dispose = (): void => {
     if (inactivityTimer) clearTimeout(inactivityTimer)
-    if (totalTimer) clearTimeout(totalTimer)
     inactivityTimer = undefined
-    totalTimer = undefined
   }
-  const trip = (reason: 'inactivity' | 'total'): void => {
+  const trip = (reason: 'inactivity'): void => {
     if (tripped) return
     tripped = true
     dispose()
@@ -174,10 +172,6 @@ export function createStreamWatchdog(opts: {
     unref(inactivityTimer)
   }
 
-  if (opts.totalMs && opts.totalMs > 0) {
-    totalTimer = setTimeout(() => trip('total'), opts.totalMs)
-    unref(totalTimer)
-  }
   beat() // arme l'inactivité dès le départ (avant le 1er chunk)
   return { beat, dispose }
 }

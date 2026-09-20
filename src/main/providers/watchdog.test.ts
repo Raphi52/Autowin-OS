@@ -4,7 +4,6 @@ import {
   createStreamWatchdog,
   resolveProviderTimeoutMs,
   SUBAGENT_INACTIVITY_MS,
-  SUBAGENT_TOTAL_MS,
   withHardDeadline
 } from './watchdog'
 
@@ -35,17 +34,18 @@ describe('withHardDeadline', () => {
 })
 
 describe('createStreamWatchdog', () => {
-  it('ne tue pas un build encore actif au seuil historique de 20 minutes', () => {
+  it('ne tue JAMAIS un tour qui progresse, même au-delà de l’ancien cap de 40 minutes', () => {
+    // conv-729, turn aa90027e-01c1-4d39-9645-7e5d01619323 : deux appels tués à 2 400 018 ms alors
+    // que le tour battait toutes les 30 s. Plus aucun plafond de durée ne doit exister.
     vi.useFakeTimers()
     try {
       const onTrip = vi.fn()
       const wd = createStreamWatchdog({
         inactivityMs: SUBAGENT_INACTIVITY_MS,
-        totalMs: SUBAGENT_TOTAL_MS,
         onTrip
       })
 
-      for (let minute = 0; minute < 20; minute += 1) {
+      for (let minute = 0; minute < 180; minute += 1) {
         vi.advanceTimersByTime(60_000)
         wd.beat()
       }
@@ -76,14 +76,14 @@ describe('createStreamWatchdog', () => {
     wd.dispose()
   })
 
-  it('déclenche sur le cap TOTAL même si les beats continuent', async () => {
+  it('ne déclenche PAS sur la durée écoulée tant que les beats continuent', async () => {
     const onTrip = vi.fn()
-    const wd = createStreamWatchdog({ inactivityMs: 1000, totalMs: 40, onTrip })
+    const wd = createStreamWatchdog({ inactivityMs: 1000, onTrip })
     for (let i = 0; i < 5; i++) {
       await wait(15)
       wd.beat()
     }
-    expect(onTrip).toHaveBeenCalledWith('total')
+    expect(onTrip).not.toHaveBeenCalled()
     wd.dispose()
   })
 
