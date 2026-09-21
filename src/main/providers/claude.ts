@@ -1,3 +1,4 @@
+// fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
 import { joinThinking } from './thinking'
 import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 import {
@@ -22,6 +23,7 @@ import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
+import { refusReglageProd } from '../prod-run-guard'
 import { join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
@@ -684,7 +686,8 @@ export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
     hooks: {
       PreToolUse: [
         {
-          matcher: 'Bash|PowerShell',
+          // Edit/Write/MultiEdit/NotebookEdit : les réglages de la protection de prod (conv-738, faille 2).
+          matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit',
           hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
         }
       ]
@@ -1143,7 +1146,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // qui detruisent l'arbre de travail entier (git reset --hard & co).
       // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
       const hookGarde = join(settingsDir, 'garde-git-destructeur.mjs')
-      writeFileSync(hookGarde, scriptHookGardes(), 'utf8')
+      writeFileSync(hookGarde, scriptHookGardes(refusReglageProd), 'utf8')
       writeFileSync(
         settingsFile,
         JSON.stringify(reglagesCliAutowin(hookGarde)),

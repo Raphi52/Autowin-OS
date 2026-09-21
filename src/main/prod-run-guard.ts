@@ -1,3 +1,4 @@
+// fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
 /**
  * LA COMMANDE `run` FACE À LA PRODUCTION (évaluation conv-738, 2026-09-21).
  *
@@ -11,10 +12,10 @@
  *      ligne → nom `inconnu`, que le classifieur traite comme de la production (refus par défaut).
  */
 
-const FICHIERS_REGLAGE_PROD = /prod-(niveau|autorite|passphrase)\.json/i
-
+// AUTOPORTÉE (motif en ligne, aucune référence externe) : elle est aussi sérialisée dans le hook
+// PreToolUse du CLI (`scriptHookGardes`), qui couvre le terminal et les outils Edit/Write de l'agent.
 export function refusReglageProd(ligne: string): string | undefined {
-  const m = FICHIERS_REGLAGE_PROD.exec(ligne)
+  const m = /prod-(niveau|autorite|passphrase)\.json/i.exec(String(ligne ?? ''))
   if (!m) return undefined
   return (
     `la commande touche ${m[0]}, un réglage de la protection de production. ` +

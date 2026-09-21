@@ -1,3 +1,4 @@
+// fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
  *
@@ -76,14 +77,25 @@ export function refusGitDestructeur(commande: string): string | undefined {
  * aucun chemin de contournement ne restait. Le bureau cache (`scripts/hdesk-lancer.ps1`) reste la
  * VOIE PAR DEFAUT, portee par la consigne en prose du prompt de pilotage — plus par un blocage.
  */
-export function scriptHookGardes(): string {
+export function scriptHookGardes(
+  // Garde des réglages de la protection de prod (`refusReglageProd`, src/main/prod-run-guard.ts),
+  // passée par l'appelant : shared/ n'importe pas main/. Fonction autoportée, sérialisée telle quelle.
+  refusReglageProd: (texte: string) => string | undefined
+): string {
   return `const refusGitDestructeur = ${refusGitDestructeur.toString()};
+const refusReglageProd = ${refusReglageProd.toString()};
 let d = '';
 process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
   let cmd = '';
-  try { const j = JSON.parse(d); cmd = (j.tool_input && j.tool_input.command) || ''; } catch {}
-  const motif = refusGitDestructeur(cmd);
+  let chemin = '';
+  try {
+    const j = JSON.parse(d);
+    const t = j.tool_input || {};
+    cmd = t.command || '';
+    chemin = t.file_path || t.notebook_path || '';
+  } catch {}
+  const motif = refusGitDestructeur(cmd) || refusReglageProd(cmd) || refusReglageProd(chemin);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

@@ -43,7 +43,7 @@ describe('hook reel du CLI', () => {
     const { tmpdir } = await import('node:os')
     const { scriptHookGardes } = await import('./garde-git-destructeur')
     const script = join(mkdtempSync(join(tmpdir(), 'garde-git-')), 'garde.mjs')
-    writeFileSync(script, scriptHookGardes(), 'utf8')
+    writeFileSync(script, scriptHookGardes(() => undefined), 'utf8')
     expect(execFileSync(process.execPath, ['--check', script]).toString()).toBe('')
     const r = spawnSync(process.execPath, [script], {
       input: JSON.stringify({ tool_input: { command: 'git reset --hard' } }),
