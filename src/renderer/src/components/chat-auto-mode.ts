@@ -379,6 +379,7 @@ export function premierPassageLaisseSortirLeTour(entree: {
   return entree.allumageManuel || entree.repriseApresRedemarrage
 }
 
+// fix-ok: suite identique au tour precedent (turnId 98ce00d9-2276-4a96-bb15-b66c622bfee8, saisie ts 1789970040849) = arret anti-boucle alors que le tour rapportait un travail dans « ✅ Fait » ; titres en gras non reconnus.
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
 export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   if (!entree.actif) return { action: 'attendre', raison: 'inactif' }
