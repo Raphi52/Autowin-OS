@@ -79,9 +79,11 @@ recherche-arbre : l'appel nu gagne.
 ## 2. Les bras
 Mêmes règles qu'`arena` § 3 : A = workflow actuel (témoin) · B = variante de TEXTE d'une skill ·
 C = candidat non-texte (outil, garde-fou, routage) · X = appel nu. Chaque bras part d'une copie de
-`modele/` dans `essais/<tournoi>/<bras>/`, avec un **budget fixe** identique (série t2 :
-**4 h et 40 $ par bras**, écrit dans `RUN.md`). Budget épuisé = le bras s'arrête et il est noté tel
-quel : un jeu inachevé est une mesure, pas un incident.
+`modele/` dans `essais/<tournoi>/<bras>/`, avec un **budget en dollars** identique (40 $ par bras,
+écrit dans `RUN.md`). **Aucune limite de temps** (choix de l'utilisateur, conv-767, saisie
+ts 1790013239241 : « je veux aucune limite de temps ») : pas de `timeout`, pas de durée dans le
+lanceur ni dans l'énoncé. Budget épuisé = le bras s'arrête et il est noté tel quel : un jeu
+inachevé est une mesure, pas un incident. La durée réelle est relevée, jamais plafonnée.
 
 ## 3. Grille — DEUX notes, la seconde est la vraie
 
