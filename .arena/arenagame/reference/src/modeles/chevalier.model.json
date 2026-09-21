@@ -1,0 +1,74 @@
+{
+ "ClassName": "Model",
+ "Children": [
+  {
+   "Name": "Corps",
+   "ClassName": "Part",
+   "Properties": {
+    "Size": {
+     "Vector3": [
+      2,
+      1.6500000000000001,
+      1
+     ]
+    },
+    "Position": {
+     "Vector3": [
+      0,
+      0.8999999999999999,
+      0
+     ]
+    },
+    "Anchored": {
+     "Bool": true
+    }
+   }
+  },
+  {
+   "Name": "Tete",
+   "ClassName": "Part",
+   "Properties": {
+    "Size": {
+     "Vector3": [
+      1,
+      0.75,
+      0.8
+     ]
+    },
+    "Position": {
+     "Vector3": [
+      0,
+      2.16,
+      0
+     ]
+    },
+    "Anchored": {
+     "Bool": true
+    }
+   }
+  },
+  {
+   "Name": "Arme",
+   "ClassName": "Part",
+   "Properties": {
+    "Size": {
+     "Vector3": [
+      0.3,
+      1.5,
+      0.3
+     ]
+    },
+    "Position": {
+     "Vector3": [
+      0,
+      1.2000000000000002,
+      0
+     ]
+    },
+    "Anchored": {
+     "Bool": true
+    }
+   }
+  }
+ ]
+}

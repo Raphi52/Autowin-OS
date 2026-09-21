@@ -1,0 +1,9 @@
+# Tentatives des tournois : copies de bras, projets Roblox, sorties brutes — effacées par la skill (§ effacer).
+# Seul le RUN.md de chaque tournoi est gardé : il porte les notes et les analyses.
+essais/*
+!essais/*/
+essais/*/*
+!essais/*/RUN.md
+# Binaires Rokit (12 Mo) : retéléchargeables depuis GitHub, version épinglée dans modele/rokit.toml.
+outils/rokit.exe
+outils/*.zip
