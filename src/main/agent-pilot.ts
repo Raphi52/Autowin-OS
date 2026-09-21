@@ -1319,7 +1319,11 @@ export class AgentPilot {
              */
             {
               name: 'visuel',
-              text: tourTouchantAuVisuel(latestUserMessage ?? '')
+              // Image jointe au dernier message = tour visuel, meme sans mot-cle (kaizen conv-742).
+              text: tourTouchantAuVisuel(
+                latestUserMessage ?? '',
+                (history.at(-1)?.attachments ?? []).some((piece) => piece.kind === 'image')
+              )
                 ? REGLES_VISUELLES + consigneBureauCacheChat(conversationId ?? '')
                 : ''
             }
