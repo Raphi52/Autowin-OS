@@ -194,6 +194,7 @@ import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-
 import { runSqlRead } from './sql-read-command'
 import type { PorteProd } from './prod-gate'
 import type { GuichetProd } from './prod-guichet'
+import { cibleSqlDeCommande, refusReglageProd } from './prod-run-guard'
 import type {
   TicketCreateRequest,
   TicketGetRequest,
@@ -3421,6 +3422,30 @@ export class AppCommandBus {
         // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
         const refusGit = refusGitDestructeur(ligne)
         if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
+        // Porte de production (conv-738) : `run` ne coupe pas la protection et ne contourne pas
+        // `sql_query` en lançant lui-même un client SQL. Même verdict, même fenêtre, une reprise.
+        const refusReglage = refusReglageProd(ligne)
+        if (refusReglage) return { lance: false, detail: `Commande refusée : ${refusReglage}` }
+        const cibleSql = cibleSqlDeCommande(ligne)
+        if (cibleSql && this.porteProd) {
+          const geste = { nature: 'base' as const, nom: cibleSql.base, operation: `run-${cibleSql.client}` }
+          const verdict = this.porteProd.verifier(geste)
+          if (!verdict.autorise) {
+            const reponse = this.guichetProd
+              ? await this.guichetProd.demander({
+                  ...verdict.demande,
+                  niveau: verdict.niveau,
+                  ...(conversationId ? { conversationId } : {})
+                })
+              : undefined
+            if (!reponse) return { lance: false, detail: `Commande refusée : ${verdict.motif}` }
+            const reprise = this.porteProd.verifier({
+              ...geste,
+              ...(reponse.type === 'jeton' ? { jeton: reponse.valeur } : { confirme: true })
+            })
+            if (!reprise.autorise) return { lance: false, detail: `Commande refusée : ${reprise.motif}` }
+          }
+        }
         const cwd = this.workspaceDuTour
         if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
         // Les guillemets GROUPENT : `decouperArguments` respecte `-m "trois mots"` là où un

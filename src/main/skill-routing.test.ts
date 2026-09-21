@@ -230,3 +230,24 @@ describe('« scout » COMPOSE avec une mutation garde le pipeline complet', () =
     }
   })
 })
+
+describe('« judge » / « juge » en tete de message declenche la phase JUDGE', () => {
+  // Defaut vecu 2026-09-21 (conv-738) : « judge le systeme de protection de la prod » n'a pas
+  // invoque /judge — seul le slash etait route, comme scout avant conv-1297.
+  it.each(['judge le systeme de protection de la prod', 'juge le rendu', 'Judge'])(
+    'route %s vers judge',
+    (message) => {
+      expect(routeSkillRequest(message)).toEqual({
+        task: message,
+        explicitPhase: 'judge',
+        reason: 'explicit-skill'
+      })
+    }
+  )
+  it.each(['le judge a refuse', 'jugement dernier', 'judge ça ?', 'judge puis corrige le bouton'])(
+    'ne route pas %s vers judge',
+    (message) => {
+      expect(routeSkillRequest(message)?.explicitPhase).not.toBe('judge')
+    }
+  )
+})
