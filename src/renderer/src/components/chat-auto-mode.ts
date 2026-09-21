@@ -26,6 +26,7 @@ import {
   PROMPT_SALVAGE
 } from '../../../shared/prompt-suivant'
 import { extractRecommendation } from './markdown-recommandation'
+import { parseAskDecision, promptDeLOption } from './ask-choices'
 import {
   CIBLE_DESTRUCTRICE,
   lireDecisionScout,
@@ -428,6 +429,28 @@ export function premierPassageLaisseSortirLeTour(entree: {
 }
 
 // fix-ok: suite identique au tour precedent (turnId 98ce00d9-2276-4a96-bb15-b66c622bfee8, saisie ts 1789970040849) = arret anti-boucle alors que le tour rapportait un travail dans « ✅ Fait » ; titres en gras non reconnus.
+/**
+ * QUESTION `ask` OUVERTE AU BOUT DU FIL — en mode auto, l'agent y repond SEUL (demande utilisateur
+ * du 2026-09-21 : « le mode auto doit répondre seul aux ask »). On prend l'option marquee
+ * `recommande`, sinon la PREMIERE (le contrat de `ask` place la recommandee en tete). Une reponse
+ * destructrice ne part jamais seule : on rend null et la question attend l'humain.
+ */
+export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
+  const dernier = [...fil].reverse().find((m) => m.role === 'assistant') as AsstMsg | undefined
+  if (!dernier) return null
+  const decisions = (dernier.parts ?? []).flatMap((part) => {
+    if (part.kind === 'text') return []
+    const d = parseAskDecision(part as { kind: string })
+    return d ? [d] : []
+  })
+  const decision = decisions[decisions.length - 1]
+  if (!decision) return null
+  const option = decision.options.find((o) => o.recommande) ?? decision.options[0]
+  const texte = promptDeLOption(option).trim()
+  if (!texte || CIBLE_DESTRUCTRICE.test(normaliserPisteCible(texte))) return null
+  return texte
+}
+
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
 export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   if (!entree.actif) return { action: 'attendre', raison: 'inactif' }
@@ -437,6 +460,9 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   if (signature === entree.dernierTourTraite) return { action: 'attendre', raison: 'deja-traite' }
   // Le mode reste ARMÉ pendant que l'utilisateur écrit : on patiente, on ne se coupe pas.
   if (entree.brouillonPresent) return { action: 'attendre', raison: 'brouillon' }
+  // Une question `ask` ouverte : le mode auto choisit l'option recommandee a la place de l'humain.
+  const reponseAsk = reponseAutoAuDernierAsk(entree.fil)
+  if (reponseAsk) return { action: 'envoyer', texte: reponseAsk, signature }
   const texteReponse = texteDernierAssistant(entree.fil) ?? ''
   /*
    * APRES UN SCOUT — la porte lit la ligne `CIBLE:` AVANT tout le reste du raisonnement de suite.
