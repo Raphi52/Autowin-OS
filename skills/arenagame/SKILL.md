@@ -85,13 +85,16 @@ ts 1790013239241 : « je veux aucune limite de temps ») : pas de `timeout`, pas
 lanceur ni dans l'énoncé. Budget épuisé = le bras s'arrête et il est noté tel quel : un jeu
 inachevé est une mesure, pas un incident. La durée réelle est relevée, jamais plafonnée.
 
-**Lancer les bras DÉTACHÉS du tour, jamais en tâche de fond du chat.** Une commande Bash
-`run_in_background` meurt quand le tour se termine : en conv-767 (tour
-2b379502-28e2-4200-a14c-1f2af73c66aa), les 12 bras ont été arrêtés 7 s après leur lancement, et les
-24 fichiers `out-*`/`err-*` sont restés vides. Lance `lance.sh` par un processus qui survit au
-tour :
-`powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -FilePath '<Git>inash.exe' -ArgumentList '-lc','\"<banc>/lance.sh\"'"`
-(chemin ABSOLU vers `Gitinash.exe`, pas `usrin` : sans `-l`, `sleep` et `date` sont introuvables).
+**Lancer les bras HORS du tour, par le Planificateur de tâches — jamais en tâche de fond du chat,
+jamais par `Start-Process`.** Le `claude` du chat tourne dans un Job Windows `KILL_ON_JOB_CLOSE`
+(`src/main/providers/claude.ts` → `src/main/runs/survivable-spawn.ts`) : tout descendant, même lancé par
+`Start-Process`, appartient au Job et meurt à la fin du tour. Mesuré en conv-767 : t2 (`run_in_background`,
+12 bras morts à 7 s) puis t2v (`Start-Process`, 4 bras vivants à 2 min pendant le tour, morts ensuite sans
+`statut.txt` et avec des sorties à 0 octet). Lancement :
+`schtasks //Create //F //TN AutowinArena-<tournoi> //SC ONCE //ST 23:59 //TR "\"<Git>\bin\bash.exe\" -lc \"<banc>/lance.sh\""`
+puis `schtasks //Run //TN AutowinArena-<tournoi>` (`bin\bash.exe`, pas `usr\bin` : sans `-l`, `sleep` et
+`date` sont introuvables). Contrôle : la chaîne des processus parents d'un bras ne doit pas remonter au
+`claude.exe` du chat. Supprime la tâche (`schtasks //Delete //TN … //F`) une fois `fin.txt` écrit.
 Termine ensuite le tour en disant où lire l'avancement (`statut.txt`, `fin.txt`). Au tour suivant,
 relis ces fichiers au lieu de relancer. Avant de noter, vérifie que les `out-*.json` ne sont pas
 vides : un bras à 0 octet n'a pas tourné, ce n'est pas un bras qui a perdu.
@@ -103,6 +106,13 @@ Chaque ligne dit sa preuve. **Auto** = script rejouable, aucun avis. **Juge** = 
 0 / 1 / 2 / 3 (0 absent · 1 présent mais cassé ou brut · 2 correct · 3 niveau d'un jeu publié du
 genre), noté par DEUX juges distincts sur captures et vidéo du bureau caché ; un écart ≥ 2 niveaux
 entre juges = arbitrage humain. Aucune note juge sans l'image LUE qui la fonde.
+**Ouvrir Studio avec un chemin ABSOLU vers le `.rbxl`.** Avec un chemin relatif, Studio ne trouve pas
+la place et reste sur son accueil « Chargement de Studio… » (conv-767 : journal Studio
+`place session context change (nullptr <-> nullptr)`). Avec le chemin absolu, via
+`scripts/hdesk-lancer.ps1 -Conversation <id>`, la place s'ouvre (titre de fenêtre = le fichier), mais la
+**vue 3D reste unie** : `hdesk-observe.ps1` le signale lui-même, car le rendu GPU ne se capture pas sur un
+bureau caché — aucun mode de rendu n'y échappe : OpenGL (`FFlagDebugGraphicsPreferOpenGL`) et Vulkan (`FFlagDebugGraphicsPreferVulkan`) testés en conv-767, vue 3D toujours unie et Explorer vide ; Studio n'a pas de rendu logiciel. Sur bureau caché, seuls l'interface de Studio (Explorer, Propriétés, sortie) est
+observable ; un volet juge qui exige la vue 3D ou le jeu lancé est noté « non observable », jamais deviné.
 
 | volet | poids | mesure | preuve |
 |---|---|---|---|
