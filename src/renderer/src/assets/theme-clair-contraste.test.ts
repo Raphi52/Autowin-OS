@@ -100,3 +100,32 @@ describe('mode clair — vignette de pièce jointe du champ de saisie', () => {
     expect(contraste(hex('--text-dim'), fond![1])).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+/**
+ * LA BANDE DU HAUT (onglets de vues + boutons de fenêtre). Signalé avec capture le 2026-09-21 :
+ * « on ne voit pas bien les boutons en haut à gauche en mode clair », puis « c'est TOUT le haut
+ * qui n'est pas visible ».
+ *
+ * Cause : le voile ivoire qui lave la galaxie en mode clair était posé sur `.home-view::after`,
+ * un calque `absolute` INTÉRIEUR à la vue Accueil. La bande de 28 px et les marges de la coque
+ * n'étaient pas couvertes, et le décor y restait noir opaque (`FOND_DECOR`) sous du texte sombre.
+ * Il est passé sur `.decor-de-fond::after`, qui est `fixed inset: 0`.
+ *
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : remettre le voile sur un calque intérieur à une vue —
+ * la bande du haut redeviendrait noire sous du texte sombre, sans que rien ne le signale.
+ */
+describe('mode clair — le voile couvre TOUTE la surface du décor', () => {
+  it('le voile est posé sur le décor lui-même, pas sur une vue', () => {
+    const regle = /:root\[data-base='clair'\] \.decor-de-fond::after \{([^}]*)\}/.exec(css)
+    expect(regle, 'voile clair absent du décor').toBeTruthy()
+    expect(regle![1], 'le voile doit être fixe et couvrir toute la fenêtre').toMatch(
+      /position:\s*fixed/
+    )
+    expect(regle![1]).toMatch(/inset:\s*0/)
+  })
+
+  it('les boutons de fenêtre suivent le fond lavé et non le décor sombre', () => {
+    // Windows peint ces symboles hors de la page : la seule prise est ce jeton, lu par theme-mode.ts.
+    expect(contraste(hex('--titlebar-symbol'), hex('--bg-0'))).toBeGreaterThanOrEqual(4.5)
+  })
+})

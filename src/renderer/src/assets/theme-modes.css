@@ -46,6 +46,9 @@
 
   --text: #14192a;
   --text-dim: #4d5567;
+  /* Les boutons de fenetre suivent le texte : le decor est LAVE en mode clair (voir le voile en
+     fin de fichier), donc la bande du haut est claire elle aussi. Jeton lu par theme-mode.ts. */
+  --titlebar-symbol: #14192a;
   /* REMONTE le 2026-09-07 : #767f92 donnait 3,69, sous le seuil de 4,5. */
   --text-faint: #5f6879;
 
@@ -718,14 +721,11 @@
    Réversible d'une ligne : c'est l'argument qui a fait préférer cette voie au
    chantier de shaders. */
 :root[data-base='clair'] .home-view::after {
-  background:
-    linear-gradient(
-      170deg,
-      rgba(250, 248, 243, 0.9) 0%,
-      rgba(246, 244, 239, 0.86) 45%,
-      rgba(243, 240, 234, 0.9) 100%
-    ),
-    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
+  /* ALLEGE le 2026-09-21 : le voile ivoire est passe sur le decor entier (fin de fichier), donc
+     ce calque-ci ferait un SECOND voile et sur-blanchirait l'Accueil. Il ne garde que l'eclairci
+     central, qui aide les tuiles a se detacher. L'assombrissement du sombre (HomeView.css) reste
+     neutralise : il n'a pas de sens sur un fond lave. */
+  background: radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.4), transparent 80%);
 }
 
 /* RETIRE le 2026-09-09 : un second jeu des quatre etats colores vivait ICI, en double des
@@ -1181,4 +1181,39 @@
 :root[data-base='clair'] .model-select-menu {
   background: #ffffff;
   box-shadow: 0 24px 64px rgba(15, 20, 35, 0.22);
+}
+
+/* ============================================================================
+   LE VOILE DU MODE CLAIR COUVRE TOUT LE DECOR, et plus seulement l'Accueil.
+
+   Constat ecran du 2026-09-21 : en mode clair, les onglets « Accueil / Chat /
+   Settings » et les boutons reduire/agrandir/fermer etaient ecrits en SOMBRE
+   par-dessus une galaxie restee NOIRE. Illisible.
+
+   CAUSE REELLE, et elle n'est pas dans la bande du haut : le voile ivoire qui
+   lave le cosmos en mode clair (direction choisie le 2026-09-03) etait pose sur
+   `.home-view::after` — un element `absolute` INTERIEUR a la vue Accueil. Il ne
+   couvrait donc ni la bande de 28 px, ni les marges de la coque, ou le decor
+   continuait de s'effacer en noir opaque (home-decor-scene.ts, FOND_DECOR).
+
+   On pose le meme voile sur le DECOR lui-meme, qui est `fixed inset: 0` : toute
+   la surface est lavee, bande du haut comprise, et le texte sombre du theme
+   clair redevient lisible partout SANS bande opaque par-dessus la galaxie
+   (celle-ci avait ete essayee et refusee : « c'est tout le haut qui n'est pas
+   visible », et elle balafrait le decor). La galaxie reste visible, lavee comme
+   un ciel de jour — elle n'est ni cachee ni remplacee.
+   ============================================================================ */
+:root[data-base='clair'] .decor-de-fond::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      170deg,
+      rgba(250, 248, 243, 0.9) 0%,
+      rgba(246, 244, 239, 0.86) 45%,
+      rgba(243, 240, 234, 0.9) 100%
+    ),
+    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
 }
