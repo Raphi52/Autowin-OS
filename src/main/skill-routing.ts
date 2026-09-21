@@ -151,6 +151,13 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
     return { task: text, explicitPhase: 'scout', reason: 'explicit-skill' }
   }
 
+  // « judge » / « juge » NU en tete : meme defaut que scout (conv-738, 2026-09-21) — seul `/judge`
+  // etait route. Phase READ-ONLY, memes bornes : tete + frontiere de mot, pas de question, pas de
+  // mutation composee. « jugement », « le judge a refuse » ne declenchent rien.
+  if (/^(?:judge|juge)(?=\s|$)/i.test(text) && !text.includes('?') && !MUTATION_AILLEURS.test(text)) {
+    return { task: text, explicitPhase: 'judge', reason: 'explicit-skill' }
+  }
+
   const target = WORKSPACE_TARGET.test(text) || /^corriger[.!]?$/.test(text)
   const questionEnd = text.indexOf('?')
   if (questionEnd >= 0) {

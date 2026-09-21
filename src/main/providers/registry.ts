@@ -7,7 +7,7 @@ import {
   type SendResult,
   type StreamChunk
 } from './types'
-import { resolveProviderTimeoutMs, withHardDeadline } from './watchdog'
+import { resolveProviderTimeoutMs, withIdleDeadline } from './watchdog'
 import { estMurDeQuota, instantDeRetourAnnonce } from '../../shared/reprise-quota'
 import type { ExecutionSupervisor } from '../execution-supervisor'
 
@@ -423,6 +423,10 @@ export class ProviderRegistry {
      * épuisé, refusé d'entrée.
      */
     let chunksLivres = 0
+    // Réarme le plafond de coordination : il mesure le SILENCE, plus la durée absolue d'un tour.
+    // Défini avant la pompe, assigné après la création de la deadline (même tick, jamais appelé
+    // avant puisque la pompe attend d'abord `gen.next()`).
+    let battreCoordination: () => void = () => undefined
     const pump = (async (): Promise<SendResult> => {
       let step = await nextStep()
       while (!step.done) {
@@ -430,6 +434,7 @@ export class ProviderRegistry {
         // mais ne plus livrer de delta à une conversation déjà clôturée.
         if (!effectiveOptions.signal.aborted && !spawnFailure) {
           chunksLivres += 1
+          battreCoordination()
           onChunk?.(step.value)
         }
         step = await nextStep()
@@ -491,7 +496,7 @@ export class ProviderRegistry {
       route.opts.execution?.providerTimeoutMs,
       COORDINATION_CEILING_MS
     )
-    return withHardDeadline(
+    const coordination = withIdleDeadline(
       trackedPump.catch(rotationSiQuotaEpuise),
       coordinationCeilingMs,
       `Sous-agent ${route.id} sans réponse depuis ${Math.round(coordinationCeilingMs / 1000)}s (watchdog coordination) — abandonné pour ne pas bloquer le run.`,
@@ -538,5 +543,7 @@ export class ProviderRegistry {
         drainGraceTimer.unref?.()
       }
     )
+    battreCoordination = coordination.beat
+    return coordination.promise
   }
 }

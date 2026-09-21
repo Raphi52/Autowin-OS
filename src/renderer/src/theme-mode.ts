@@ -117,7 +117,7 @@ export function appliquerThemeMode(mode: ThemeId): void {
   const base = baseDuTheme(mode)
   if (base === THEME_MODE_PAR_DEFAUT) racine.removeAttribute('data-base')
   else racine.setAttribute('data-base', base)
-  accorderBoutonsDeFenetre(racine)
+  accorderBoutonsDeFenetre(racine, base)
 }
 
 /**
@@ -133,12 +133,27 @@ export function appliquerThemeMode(mode: ThemeId): void {
  * Silencieux par construction : hors d'Electron (test, navigateur) le pont n'existe pas, et sur une
  * plateforme sans overlay de barre de titre l'appel rend `false`. Aucun des deux n'est une panne.
  */
-function accorderBoutonsDeFenetre(racine: Element): void {
+function accorderBoutonsDeFenetre(racine: Element, base: ThemeBase): void {
   const pont = (globalThis as { api?: { setTitlebarSymbolColor?: (c: string) => unknown } }).api
   if (!pont?.setTitlebarSymbolColor) return
   try {
-    const calculee = globalThis.getComputedStyle?.(racine).getPropertyValue('--text').trim()
-    const couleur = enHexadecimal(calculee)
+    const styles = globalThis.getComputedStyle?.(racine)
+    /*
+     * LE JETON LU EST `--titlebar-symbol`, PAS `--text` — et c'est toute la correction du
+     * 2026-09-21. La barre est TRANSPARENTE : le symbole se pose sur le decor cosmique, qui reste
+     * SOMBRE sous tous les themes (le canevas 3D s'efface en noir opaque, home-decor-scene.ts
+     * FOND_DECOR). Un theme clair peignait donc un symbole sombre sur du sombre.
+     *
+     * La premiere tentative posait un fond BLANC OPAQUE derriere les symboles. Refuse par
+     * l'utilisateur, et il avait raison sur les deux points : ca ne traitait que les trois boutons
+     * alors que TOUTE la bande du haut est illisible en clair, et ca collait un rectangle blanc en
+     * travers de la galaxie. Le fond reste donc transparent ; c'est la COULEUR du symbole qui
+     * devient claire en mode clair, comme le reste de ce qui est pose sur le decor.
+     */
+    const declaree = styles?.getPropertyValue('--titlebar-symbol').trim() ?? ''
+    // Repli si le theme n'a pas declare le jeton : clair au-dessus du decor sombre, `--text` sinon.
+    const repli = base === 'clair' ? '#e6e9f2' : (styles?.getPropertyValue('--text').trim() ?? '')
+    const couleur = enHexadecimal(declaree) ?? enHexadecimal(repli)
     if (couleur) void pont.setTitlebarSymbolColor(couleur)
   } catch {
     // Style non calculable (document detache) : la barre garde sa couleur, rien de casse.

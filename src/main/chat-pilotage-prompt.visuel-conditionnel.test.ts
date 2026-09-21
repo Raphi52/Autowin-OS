@@ -57,10 +57,20 @@ describe('regles visuelles conditionnelles', () => {
       'ouvre RigV3 et regarde la fenêtre',
       'refais l icône de l app',
       'le CSS du tableau déborde',
-      'montre-moi une maquette du menu'
+      'montre-moi une maquette du menu',
+      // conv-742, tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43 : les images n'ouvraient pas le bloc
+      'analyse cette image',
+      'que vois-tu sur cette photo ?',
+      'lis rendu.png et dis-moi ce qui cloche'
     ]) {
       expect(tourTouchantAuVisuel(message)).toBe(true)
     }
+  })
+
+  it('se declenche sur une image jointe meme sans mot visuel, et nomme la procedure look', () => {
+    expect(tourTouchantAuVisuel('et ça ?', true)).toBe(true)
+    expect(tourTouchantAuVisuel('et ça ?')).toBe(false)
+    expect(REGLES_VISUELLES).toContain('skills/look/SKILL.md')
   })
 
   it('ne le declenche pas sur un tour sans rapport avec l ecran', () => {

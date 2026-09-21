@@ -126,6 +126,12 @@ export const REGLES_VISUELLES: string =
   `jamais un detail a signaler plus tard. Lis \`erreur\`, \`codeSortie\` et \`journalWindows\` de sa ` +
   `sortie, corrige la cause, relance, et ne capture ni ne conclus tant que le lanceur n'a pas rendu 0. ` +
   `Une app qui plante n'est pas un motif pour passer sur l'ecran de l'utilisateur.\n` +
+  // LOOK (kaizen conv-742, tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43) : la procedure skills/look
+  // n'etait nommee nulle part dans ce que le chat recoit.
+  `TOUTE IMAGE SE LIT AVEC LA PROCEDURE look (skills/look/SKILL.md) : image jointe, capture, .png lu. ` +
+  `Avant d'en tirer une conclusion, ecris ce qu'elle MONTRE — au minimum VU LE · QUESTION · TEXTE LU ` +
+  `· VERDICT ; checklist complete si c'est une premiere observation ou une anomalie. Rien d'infere ` +
+  `du code ou d'une attente : ce qui n'est pas lisible est « non visible ».\n` +
   ''
 
 /**
@@ -140,12 +146,16 @@ export const REGLES_VISUELLES: string =
  * etait « style 8142 ». Retires depuis : style, font, html, rendu, marge, largeur, hauteur,
  * montre, regarde, look, observe (remplace par desktop_observe).
  */
-export function tourTouchantAuVisuel(texte: string): boolean {
-  return MOTS_DU_VISUEL.test(texte)
+// IMAGES (kaizen conv-742, tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43, 2026-09-21) : « Autowin
+// utilise pas assez /look pour analyser les images ». Cause localisee ici : ce filtre, seule porte
+// du bloc visuel, ignorait « image », « photo », « .png » ET les images jointes — un tour « analyse
+// cette image » ne recevait donc aucune consigne d'observation.
+export function tourTouchantAuVisuel(texte: string, imageJointe = false): boolean {
+  return imageJointe || MOTS_DU_VISUEL.test(texte)
 }
 
 const MOTS_DU_VISUEL =
-  /interface|ihm|\bui\b|ecran|écran|screen|capture|screenshot|desktop|bureau cach|fenetre|fenêtre|window|affich|visuel|visible|maquette|design|mise en page|layout|\bcss\b|couleur|color|theme|thème|police|typograph|icone|icône|icon|logo|bouton|button|menu|onglet|pixel|px\b|render|svg|animation|padding|dessine|hdesk|desktop_observe|draft/i
+  /interface|ihm|\bui\b|ecran|écran|screen|capture|screenshot|desktop|bureau cach|fenetre|fenêtre|window|affich|visuel|visible|maquette|design|mise en page|layout|\bcss\b|couleur|color|theme|thème|police|typograph|icone|icône|icon|logo|bouton|button|menu|onglet|pixel|px\b|render|svg|animation|padding|dessine|hdesk|desktop_observe|draft|\bimages?\b|photo|screenshot|\.?(?:png|jpe?g|webp|gif)\b/i
 
 export function buildChatPilotagePrompt(
   catalog: ReadonlyArray<{ name: string; args: Record<string, unknown>; description: string }>

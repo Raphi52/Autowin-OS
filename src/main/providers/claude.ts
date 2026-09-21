@@ -4,9 +4,7 @@ import {
   assertArgvWithinLimit,
   createStreamWatchdog,
   killEscalate,
-  resolveProviderTimeoutMs,
-  SUBAGENT_INACTIVITY_MS,
-  SUBAGENT_TOTAL_MS
+  SUBAGENT_INACTIVITY_MS
 } from './watchdog'
 import { contextWindowFor } from '../../shared/context-gauge'
 import { spawn } from 'node:child_process'
@@ -596,8 +594,6 @@ export function findClaudeExecutable(deps: ClaudeBinLookupDeps = {}): string | u
 export interface ClaudeAdapterOptions {
   /** Binaire claude (défaut: 'claude' résolu via PATH). */
   bin?: string
-  /** Timeout d'un tour en ms. */
-  timeoutMs?: number
 }
 
 /** Les seules valeurs de `--effort` que le CLI Claude accepte (mesure du 2026-09-01 sur 2.1.251). */
@@ -682,7 +678,7 @@ export function claudeTransportEnvelope(
  * l'outil shell du CLI s'appelle `PowerShell` sur ce poste, pas `Bash` : le matcher couvre les deux.
  */
 export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
-  const q = (v: string) => `"${v.split('\\').join('/')}"`
+  const q = (v: string): string => `"${v.split('\\').join('/')}"`
   return {
     autoMemoryDirectory: '',
     hooks: {
@@ -766,11 +762,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
   /** Vrai : `send` pousse `--resume <id>` au CLI (voir plus bas). Le seul adaptateur dans ce cas. */
   readonly honoursSessionResume = true
   private readonly bin: string
-  private readonly timeoutMs: number
 
   constructor(opts: ClaudeAdapterOptions = {}) {
     this.bin = resolveClaudeBin(opts.bin)
-    this.timeoutMs = opts.timeoutMs ?? SUBAGENT_TOTAL_MS
   }
 
   /** L'auth vit dans le CLI (abonnement déjà loggé) — on vérifie qu'il répond. */
@@ -1387,16 +1381,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       killEscalate(child)
       forceSettle(new Error(reason))
     })
+    // Un seul détecteur : le SILENCE. Le cap de durée totale a été supprimé le 2026-09-20 (voir
+    // `watchdog.ts`) — il tuait des tours vivants, pas des tours figés.
     const watchdog = createStreamWatchdog({
       inactivityMs: SUBAGENT_INACTIVITY_MS,
-      totalMs: resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, this.timeoutMs),
-      onTrip: (reason) => {
+      onTrip: () => {
         killEscalate(child)
-        forceSettle(
-          new Error(
-            `claude CLI figé (${reason === 'inactivity' ? 'aucune sortie' : 'durée max'}) — tué par le watchdog`
-          )
-        )
+        forceSettle(new Error('claude CLI figé (aucune sortie) — tué par le watchdog'))
       }
     })
     opts.signal?.addEventListener('abort', () => {

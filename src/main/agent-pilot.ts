@@ -1319,7 +1319,12 @@ export class AgentPilot {
              */
             {
               name: 'visuel',
-              text: tourTouchantAuVisuel(latestUserMessage ?? '')
+              // Image jointe au dernier message = tour visuel, meme sans mot-cle (kaizen conv-742).
+              // fix-ok: le bloc visuel (qui nomme skills/look) ne s'ouvrait que sur mots-cles du texte ; une image jointe sans mot visuel ne le declenchait pas.
+              text: tourTouchantAuVisuel(
+                latestUserMessage ?? '',
+                (history.at(-1)?.attachments ?? []).some((piece) => piece.kind === 'image')
+              )
                 ? REGLES_VISUELLES + consigneBureauCacheChat(conversationId ?? '')
                 : ''
             }

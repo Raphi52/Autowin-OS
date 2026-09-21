@@ -43,7 +43,7 @@ afterEach(() => {
 /** Draine le générateur et sépare ce qui a été relayé EN DIRECT du texte final. */
 async function drainer(): Promise<{ direct: string[]; textes: string[] }> {
   process.env.CODEX_BIN = 'codex-test'
-  const stream = new CodexAdapter({ timeoutMs: 5_000 }).send(
+  const stream = new CodexAdapter().send(
     [{ role: 'user', content: 'travaille' }],
     { execution: { cwd: process.cwd(), sandbox: 'read-only', providerTimeoutMs: 60_000 } }
   )
