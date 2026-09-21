@@ -13,6 +13,13 @@
  */
 
 export type ProviderFailureKind =
+  /**
+   * Le modèle a émis un appel d'outil ILLISIBLE, et le CLI a déjà retenté une fois (« retry also
+   * failed »). Mesuré conv-737, tour `f0e1c2b0-a1c9-4140-8496-dc40709fcab9` : 0,10 USD payés,
+   * réponse vide, et aucun conseil affiché (classé `other`). Ni le provider ni la connexion ne sont en
+   * cause : c'est la sortie du modèle, à cet effort-là, qui a cassé.
+   */
+  | 'malformed-tool-call'
   /** Le CLI est là mais personne n'est connecté → une reconnexion suffit. */
   | 'auth'
   /** L'exécutable est introuvable → rien ne peut tourner tant qu'il n'est pas résolu. */
@@ -165,6 +172,7 @@ export function classifyProviderFailure(message: string): ProviderFailureKind {
   // Budget USD depasse (…) » et se classe `budget`, pas `cancelled` — la cause est le plafond,
   // l'interruption n'en est que le moyen.
   if (/safeguards flagged|usage policy|\/legal\/aup/.test(text)) return 'refused'
+  if (/tool call could not be parsed/.test(text)) return 'malformed-tool-call'
   if (/\[abort\]/.test(text)) return 'cancelled'
   if (
     /codex exec annul[ée]|claude cli annul[ée]|kimi code annul[ée]|envoi gemini annul[ée]/.test(text)
@@ -204,6 +212,12 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
     return (
       `Le filtre de sécurité de ${provider} a refusé ce message : le relancer à l'identique échouera pareil. ` +
       'Change le modèle de ce rôle (Agent Studio) ou allège le prompt (dossier brut collé en entier).'
+    )
+  }
+  if (kind === 'malformed-tool-call') {
+    return (
+      `Le modèle de ${provider} a produit deux fois un appel d'outil illisible (le CLI a déjà retenté). ` +
+      "Relance la demande ; si ça se répète, monte l'effort de raisonnement ou change de modèle (Agent Studio)."
     )
   }
   if (kind === 'budget') {
