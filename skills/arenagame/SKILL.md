@@ -85,6 +85,17 @@ ts 1790013239241 : « je veux aucune limite de temps ») : pas de `timeout`, pas
 lanceur ni dans l'énoncé. Budget épuisé = le bras s'arrête et il est noté tel quel : un jeu
 inachevé est une mesure, pas un incident. La durée réelle est relevée, jamais plafonnée.
 
+**Lancer les bras DÉTACHÉS du tour, jamais en tâche de fond du chat.** Une commande Bash
+`run_in_background` meurt quand le tour se termine : en conv-767 (tour
+2b379502-28e2-4200-a14c-1f2af73c66aa), les 12 bras ont été arrêtés 7 s après leur lancement, et les
+24 fichiers `out-*`/`err-*` sont restés vides. Lance `lance.sh` par un processus qui survit au
+tour :
+`powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -FilePath '<Git>inash.exe' -ArgumentList '-lc','\"<banc>/lance.sh\"'"`
+(chemin ABSOLU vers `Gitinash.exe`, pas `usrin` : sans `-l`, `sleep` et `date` sont introuvables).
+Termine ensuite le tour en disant où lire l'avancement (`statut.txt`, `fin.txt`). Au tour suivant,
+relis ces fichiers au lieu de relancer. Avant de noter, vérifie que les `out-*.json` ne sont pas
+vides : un bras à 0 octet n'a pas tourné, ce n'est pas un bras qui a perdu.
+
 ## 3. Grille — DEUX notes, la seconde est la vraie
 
 ### Note JEU /100 — l'instrument : un jeu PUBLIABLE, pas seulement des règles justes
