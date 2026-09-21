@@ -94,7 +94,8 @@ export function recommandationDitRien(recommandation: string | null): boolean {
 
 /** Les quatre en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. */
 const EN_TETES_CLOTURE =
-  /^\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)\b/u
+  // `\**` en tête : les réponses réelles titrent en gras (« **✅ Fait** », conv-733).
+  /^\s*\**\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)\b/u
 
 /**
  * Contenu de la rubrique « ✅ Fait » : le reste de sa ligne d'en-tête ET les lignes qui la suivent,
@@ -474,7 +475,18 @@ ${suite}`
         : suite
   const texte = ancrerSurLaTacheInitiale(suiteCiblee, tacheInitiale(entree.fil))
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
-  if (entree.dernierPromptEnvoye && texte.trim() === entree.dernierPromptEnvoye.trim())
+  /*
+   * MÊME SUITE ≠ BOUCLE quand le tour a TRAVAILLÉ. Mesuré conv-733, tour
+   * 98ce00d9-2276-4a96-bb15-b66c622bfee8 (saisie ts 1789970040849) : audit à 100 points, point #93
+   * fait et rapporté dans « ✅ Fait », suite proposée mot pour mot identique (« Traite le point
+   * suivant… ») → la chaîne s'est tue alors qu'il restait ~7 points. Une boucle, c'est la même
+   * suite SANS travail rapporté : c'est ce cas-là seul que le garde-fou retient.
+   */
+  if (
+    entree.dernierPromptEnvoye &&
+    texte.trim() === entree.dernierPromptEnvoye.trim() &&
+    lignesDuBlocFait(texteReponse).every((l) => l.trim() === '')
+  )
     return { action: 'attendre', raison: 'prompt-identique' }
   return { action: 'envoyer', texte, signature }
 }
