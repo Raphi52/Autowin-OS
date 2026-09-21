@@ -85,16 +85,22 @@ ts 1790013239241 : « je veux aucune limite de temps ») : pas de `timeout`, pas
 lanceur ni dans l'énoncé. Budget épuisé = le bras s'arrête et il est noté tel quel : un jeu
 inachevé est une mesure, pas un incident. La durée réelle est relevée, jamais plafonnée.
 
-**Lancer les bras HORS du tour, par le Planificateur de tâches — jamais en tâche de fond du chat,
-jamais par `Start-Process`.** Le `claude` du chat tourne dans un Job Windows `KILL_ON_JOB_CLOSE`
+**Lancer les bras HORS du tour — jamais en tâche de fond du chat, jamais par `Start-Process`.**
+Le `claude` du chat tourne dans un Job Windows `KILL_ON_JOB_CLOSE`
 (`src/main/providers/claude.ts` → `src/main/runs/survivable-spawn.ts`) : tout descendant, même lancé par
 `Start-Process`, appartient au Job et meurt à la fin du tour. Mesuré en conv-767 : t2 (`run_in_background`,
 12 bras morts à 7 s) puis t2v (`Start-Process`, 4 bras vivants à 2 min pendant le tour, morts ensuite sans
-`statut.txt` et avec des sorties à 0 octet). Lancement :
+`statut.txt` et avec des sorties à 0 octet). Lancement, par l'outil d'Autowin (processus créé par WMI,
+donc hors du Job du tour) :
+`powershell -NoProfile -File D:\AutoWinOS\scripts\lancer-detache.ps1 -Commande '"<Git>\bin\bash.exe" -lc "<banc>/lance.sh"' -Dossier <banc>`
+(`bin\bash.exe`, pas `usr\bin` : sans `-l`, `sleep` et `date` sont introuvables). Code 0 et
+`"horsJob":true` = lancé et vérifié hors Job ; tout autre code = pas lancé proprement. Survie à une
+VRAIE fin de tour pas encore observée pour cet outil : relis le processus ou `statut.txt` au tour suivant.
+Repli déjà prouvé (t2b, 12 bras vivants au tour suivant) :
 `schtasks //Create //F //TN AutowinArena-<tournoi> //SC ONCE //ST 23:59 //TR "\"<Git>\bin\bash.exe\" -lc \"<banc>/lance.sh\""`
-puis `schtasks //Run //TN AutowinArena-<tournoi>` (`bin\bash.exe`, pas `usr\bin` : sans `-l`, `sleep` et
-`date` sont introuvables). Contrôle : la chaîne des processus parents d'un bras ne doit pas remonter au
-`claude.exe` du chat. Supprime la tâche (`schtasks //Delete //TN … //F`) une fois `fin.txt` écrit.
+puis `schtasks //Run //TN AutowinArena-<tournoi>` ; supprime la tâche (`schtasks //Delete //TN … //F`)
+une fois `fin.txt` écrit. Contrôle commun : la chaîne des processus parents d'un bras ne doit pas
+remonter au `claude.exe` du chat.
 Termine ensuite le tour en disant où lire l'avancement (`statut.txt`, `fin.txt`). Au tour suivant,
 relis ces fichiers au lieu de relancer. Avant de noter, vérifie que les `out-*.json` ne sont pas
 vides : un bras à 0 octet n'a pas tourné, ce n'est pas un bras qui a perdu.
