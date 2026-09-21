@@ -174,7 +174,9 @@ describe('discipline de pipeline canonique', () => {
     const CONTRAT_DE_PREUVE = ['--click', '--css', '--motion', '--out', '--state', '--view']
     // Reglages a valeur par defaut suffisante : ils affinent une preuve deja accessible, ils n'en
     // ouvrent aucune. Les annoncer allongerait une consigne injectee a chaque appel pour rien.
-    const REGLAGES = ['--frames', '--interval', '--port', '--state-selector']
+    // `--scroll` (arrive par la mise a jour amont du 2026-09-21) : il AMENE la cible dans le
+    //   cadre avant la capture — il affine une preuve deja accessible, il n'en ouvre aucune.
+    const REGLAGES = ['--frames', '--interval', '--port', '--scroll', '--state-selector']
 
     // Sans cette borne, la disparition du motif de lecture ferait passer le test a vide.
     expect(optionsLues.length).toBeGreaterThanOrEqual(6)
