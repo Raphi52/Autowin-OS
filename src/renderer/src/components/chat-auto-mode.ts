@@ -287,6 +287,8 @@ export type RaisonArret =
   | 'cible-destructrice'
   /* MULTI-PISTES (`CIBLES:`) — des numeros seuls ne nomment rien hors du tableau. */
   | 'cibles-non-nommees'
+  /* conv-751 — la suite parle a la place de l'utilisateur et annonce une donnee qu'il n'a pas donnee. */
+  | 'suite-attend-utilisateur'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -344,7 +346,24 @@ const MESSAGES_ARRET: Record<string, string> = {
   'cible-destructrice':
     'Mode auto en pause : la piste retenue détruit quelque chose. Elle ne part pas toute seule — dis-moi si tu la lances.',
   'cibles-non-nommees':
-    'Mode auto en pause : la ligne `CIBLES:` ne donne que des numéros. Hors du tableau ils ne désignent rien — récris les pistes en toutes lettres.'
+    'Mode auto en pause : la ligne `CIBLES:` ne donne que des numéros. Hors du tableau ils ne désignent rien — récris les pistes en toutes lettres.',
+  'suite-attend-utilisateur':
+    'Mode auto en pause : la suite proposée attend des informations que toi seul peux donner (identifiants, clés, choix). Écris-les dans ton message pour continuer.'
+}
+
+/**
+ * UNE SUITE ECRITE A LA PLACE DE L'UTILISATEUR (« Voici les identifiants… », « je te donne… »).
+ *
+ * Mesure conv-751 : tour 4a4374c0-3f0c-4c42-82f0-ff6b03b76a27 propose « Voici les identifiants
+ * Robux… : reporte-les » ; le mode auto l'envoie tel quel (saisie ts 1789993655768), SANS aucun
+ * identifiant ; le tour 308ae1cf-9416-461f-a1ed-14775607df62 refuse d'inventer, ne propose rien, et
+ * la chaine se tait (`aucun-prompt`) sans un mot. Seul l'utilisateur possede cette donnee : la suite
+ * ne part pas seule, la pause est DITE.
+ */
+const SUITE_PORTE_DONNEE_UTILISATEUR =
+  /^\s*(?:voici|voil[aà])\s+(?:les|mes|le|la|l['’]|ma|nos|notre)\b|^\s*je\s+te\s+(?:donne|colle|transmets|fournis|envoie)\b/i
+export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
+  return SUITE_PORTE_DONNEE_UTILISATEUR.test(suite)
 }
 
 /**
@@ -455,6 +474,12 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
         : brut
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
   if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
+  if (suiteAttendUneDonneeUtilisateur(suite))
+    return {
+      action: 'arreter',
+      raison: 'suite-attend-utilisateur',
+      message: MESSAGES_ARRET['suite-attend-utilisateur']
+    }
   /*
    * L'ANCRAGE EST POSÉ AVANT la comparaison anti-boucle, et c'est délibéré : c'est le texte
    * RÉELLEMENT envoyé qui est mémorisé dans `dernierPromptEnvoye`. Comparer la suite NUE à un
