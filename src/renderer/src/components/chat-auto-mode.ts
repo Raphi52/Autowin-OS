@@ -289,6 +289,8 @@ export type RaisonArret =
   | 'cibles-non-nommees'
   /* conv-751 — la suite parle a la place de l'utilisateur et annonce une donnee qu'il n'a pas donnee. */
   | 'suite-attend-utilisateur'
+  /* conv-767 — la suite ne peut avancer qu'à un moment donné (heure, « demain », « quand X existe »). */
+  | 'suite-differee'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -348,7 +350,9 @@ const MESSAGES_ARRET: Record<string, string> = {
   'cibles-non-nommees':
     'Mode auto en pause : la ligne `CIBLES:` ne donne que des numéros. Hors du tableau ils ne désignent rien — récris les pistes en toutes lettres.',
   'suite-attend-utilisateur':
-    'Mode auto en pause : la suite proposée attend des informations que toi seul peux donner (identifiants, clés, choix). Écris-les dans ton message pour continuer.'
+    'Mode auto en pause : la suite proposée attend des informations que toi seul peux donner (identifiants, clés, choix). Écris-les dans ton message pour continuer.',
+  'suite-differee':
+    'Mode auto en pause : la suite proposée ne peut avancer qu’à un moment précis (une heure, « demain », « quand … existe »). La relancer maintenant ne ferait que constater l’attente — relance-la toi-même le moment venu.'
 }
 
 /**
@@ -364,6 +368,31 @@ const SUITE_PORTE_DONNEE_UTILISATEUR =
   /^\s*(?:voici|voil[aà])\s+(?:les|mes|le|la|l['’]|ma|nos|notre)\b|^\s*je\s+te\s+(?:donne|colle|transmets|fournis|envoie)\b/i
 export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
   return SUITE_PORTE_DONNEE_UTILISATEUR.test(suite)
+}
+
+/**
+ * UNE SUITE QUI NE PEUT AVANCER QU'À UN MOMENT DONNÉ.
+ *
+ * Mesure conv-767 (2026-09-21, 20:59 → 21:04) : un tournoi programmé pour 01:05 ; la suite proposée
+ * « Relis debut.txt, statut.txt et fin.txt de essais/t2c-2026-09-22… » est partie TROIS fois, chaque
+ * fois pour constater « rien n'a encore démarré ». L'échéance n'était PAS dans le prompt : elle vivait
+ * dans « 👉 Recommandé » (« Demain matin, relire… ») ou dans le prompt lui-même sous la forme
+ * « Quand … fin.txt existe, … ». Les deux textes sont donc lus. Le mode auto ne sait pas attendre une
+ * heure : relancer tout de suite ne peut que constater l'attente, à chaque fois payée.
+ */
+const SUITE_DIFFEREE = new RegExp(
+  [
+    String.raw`\b(?:demain|ce\s+soir|cette\s+nuit|plus\s+tard)\b`,
+    String.raw`\bdans\s+(?:\d+|quelques)\s*(?:min(?:utes?)?|h|heures?)\b`,
+    // `\b` ignore « à » (hors ASCII) : on borne à gauche par un début de texte ou une espace.
+    String.raw`(?:^|[\s(])(?:apr[eè]s|vers|d[eè]s|à|a)\s+\d{1,2}\s*(?:h|:)\s*\d{0,2}\b`,
+    // Le point est permis : un nom de fichier (« fin.txt ») en porte un. La borne reste la ligne.
+    String.raw`\bquand\b[^\n]{0,80}?\b(?:existe(?:ra)?|appara[iî]t(?:ra)?|sera\s+(?:apparu|fini|termin[ée]|pr[eê]t)|aura\s+fini)\b`
+  ].join('|'),
+  'iu'
+)
+export function suiteEstDifferee(suite: string, recommandation: string | null): boolean {
+  return SUITE_DIFFEREE.test(suite) || (recommandation !== null && SUITE_DIFFEREE.test(recommandation))
 }
 
 /**
@@ -480,6 +509,8 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
       raison: 'suite-attend-utilisateur',
       message: MESSAGES_ARRET['suite-attend-utilisateur']
     }
+  if (suiteEstDifferee(suite, extractRecommendation(texteReponse)))
+    return { action: 'arreter', raison: 'suite-differee', message: MESSAGES_ARRET['suite-differee'] }
   /*
    * L'ANCRAGE EST POSÉ AVANT la comparaison anti-boucle, et c'est délibéré : c'est le texte
    * RÉELLEMENT envoyé qui est mémorisé dans `dernierPromptEnvoye`. Comparer la suite NUE à un
