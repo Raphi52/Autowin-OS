@@ -26,7 +26,7 @@ import { parseOrderedPilotTokens } from './agent-pilot'
  */
 
 /** Ce qu'un nœud skill a le droit d'appeler. Toute autre commande est refusée et tracée. */
-export const OUTILS_NOEUD_SKILL = ['brain_query', 'remember'] as const
+export const OUTILS_NOEUD_SKILL = ['brain_query', 'brain_graph', 'brain_read', 'remember'] as const
 
 /** Tours d'outils au maximum. Au-delà, on garde le dernier texte et on continue. */
 export const TOURS_OUTILS_MAX = 2

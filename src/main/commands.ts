@@ -50,6 +50,7 @@ import {
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
+import { runBrainGraph, runBrainRead } from './brain-graph-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -1073,7 +1074,9 @@ export const CATALOG: CommandSpec[] = [
       runId:
         'identité exacte renvoyée par orchestrate ; obligatoire pour lier la leçon à ses preuves',
       tags: 'facultatif — quelques mots-clés',
-      confidence: 'facultatif — low | medium | high'
+      confidence: 'facultatif — low | medium | high',
+      supersedes:
+        'facultatif — uid(s) des notes que ce fait REMPLACE (lus via brain_read) ; la note ancienne ne passe « remplacée » qu’à la revue'
     },
     annotations: {
       readOnlyHint: false,
@@ -1115,6 +1118,35 @@ export const CATALOG: CommandSpec[] = [
     description:
       'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis',
     args: { question: 'la question, en langage naturel' },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'brain_graph',
+    description:
+      'Suivre les liens du Brain : « qui dépend de X » (dependents) ou « de quoi X dépend » (dependencies) — notes liées et relations de code (calls, imports, inherits…). Pour une question d’impact, avant de lire le code',
+    args: {
+      entity: 'identifiant exact, nom de symbole ou chemin knowledge/…md',
+      direction: 'facultatif — dependents (défaut) | dependencies',
+      depth: 'facultatif — 1 à 3, défaut 1',
+      relation: 'facultatif — ne suivre qu’une relation (ex. calls)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'brain_read',
+    description:
+      'Relire EN ENTIER une note curée du Brain nommée par brain_query ou brain_graph — pour décider soi-même si elle est à jour, et la remplacer via remember (supersedes) si elle ne l’est plus',
+    args: { path: 'chemin de la note, knowledge/…/nom.md' },
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -3541,6 +3573,20 @@ export class AppCommandBus {
         )
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
+      case 'brain_graph':
+      case 'brain_read': {
+        const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
+        if (corpus?.length === 0) {
+          return {
+            found: false,
+            status: 'empty',
+            knowledge: '',
+            note: 'aucun savoir Brain pour ce dossier'
+          }
+        }
+        const deps = { token: brainServiceToken(), corpus: corpus ?? null }
+        return name === 'brain_graph' ? await runBrainGraph(a, deps) : await runBrainRead(a, deps)
+      }
       case 'ticket_create':
         // Écriture chez un tiers : la cible et les bornes sont décidées hors du modèle
         // (`ticket-create-command.ts` + `TicketService`), jamais d'après les arguments bruts.
