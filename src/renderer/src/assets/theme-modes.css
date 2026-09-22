@@ -1402,3 +1402,27 @@
 :root[data-theme^='malvoyant-'] .control-source-badge {
   color: var(--text);
 }
+/* Reglages › Skills · Hooks · Tools : les libelles y sont en pixels FIXES de 7 a 11 px
+   (CapabilitiesView.css), donc insensibles au 1.25em du theme. Mesure au pixel sur capture du
+   2026-09-22 : texte fonce (45-61/255) mais si fin que le lissage le grise. Plancher a 13 px. */
+:root[data-theme^='malvoyant-'] :is(
+  .cockpit-toolbar label > span, .cockpit-inspector > h2, .cockpit-sources button b,
+  .cockpit-sources button strong, .cockpit-sources button small, .cockpit-tabs button,
+  .registry-heading, .control-row strong, .control-row p, .control-source-badge,
+  .control-hook-meta code, .control-empty, .inspector-hero p, .cockpit-inspector dl > div,
+  .inspector-impact, .control-error, .control-notice, .related-list > button b,
+  .related-list > button small, .related-list > p
+) {
+  font-size: 13px;
+  line-height: 1.45;
+}
+:root[data-theme^='malvoyant-'] :is(
+  .cockpit-toolbar label > span, .cockpit-inspector > h2, .cockpit-sources button small,
+  .registry-heading, .control-row p, .control-empty, .inspector-hero p,
+  .cockpit-inspector dl > div, .inspector-impact, .related-list > button small, .related-list > p
+) {
+  color: var(--text);
+}
+:root[data-theme^='malvoyant-'] .cockpit-sources button.is-future {
+  opacity: 1;
+}
