@@ -45,6 +45,34 @@ describe('chat_send — destination conversation', () => {
     expect((result.data as { turnId: string }).turnId).toBe('turn-1')
   })
 
+  // Mesure arena t13/t14 (2026-09-21) : impossible de faire tourner un fil sur un autre modele que
+  // celui de l'orchestrateur, alors que `runPrompt` accepte deja un binding (taches planifiees).
+  it('transmet le modele demande au tour lance, et rien quand il n est pas demande', async () => {
+    const { os } = socle()
+    const bindings: unknown[] = []
+    const bus = new AppCommandBus(os as never, () => undefined)
+    bus.conversationExiste = () => true
+    bus.lancerDansConversation = async (_id, _prompt, binding) => {
+      bindings.push(binding)
+      return { ok: true, turnId: 't' }
+    }
+
+    await bus.exec('chat_send', { message: 'x', conversationId: 'conv-300', model: 'sonnet' })
+    await bus.exec('chat_send', {
+      message: 'x',
+      conversationId: 'conv-300',
+      provider: 'codex',
+      model: 'gpt-5'
+    })
+    await bus.exec('chat_send', { message: 'x', conversationId: 'conv-300' })
+
+    expect(bindings).toEqual([
+      { provider: 'claude', model: 'sonnet' },
+      { provider: 'codex', model: 'gpt-5' },
+      undefined
+    ])
+  })
+
   it('refuse explicitement une conversation inconnue', async () => {
     const { appelsModele, os } = socle()
     const bus = new AppCommandBus(os as never, () => undefined)

@@ -620,6 +620,8 @@ export const CATALOG: CommandSpec[] = [
       conversationId:
         'conversation destinataire (optionnel) — sans elle, aucun fil ne recoit le message',
       provider: 'claude|codex (optionnel)',
+      model:
+        'modèle du tour lancé dans la conversation (optionnel, ex. « sonnet », « opus ») — sans lui, le tour suit le modèle de l’orchestrateur',
       role: 'rôle (optionnel)'
     }
   },
@@ -1847,7 +1849,9 @@ export class AppCommandBus {
    */
   lancerDansConversation?: (
     conversationId: string,
-    prompt: string
+    prompt: string,
+    /** Modele du tour — absent : le tour suit l'orchestrateur, comme avant. */
+    binding?: { provider: string; model: string }
   ) => Promise<{ ok: boolean; turnId?: string; error?: string }>
 
   /** Existence REELLE d'une conversation, cablee depuis index.ts. */
@@ -2291,6 +2295,10 @@ export class AppCommandBus {
     switch (name) {
       case 'desktop_act': {
         if (!this.desktop) throw new Error('Controle desktop indisponible')
+        // Pendant une confirmation de production, le modèle ne clique pas « continuer » à la place
+        // de l'utilisateur (conv-738) : la confirmation doit venir d'un vrai clic humain.
+        if ((this.guichetProd?.enAttente().length ?? 0) > 0)
+          throw new Error('desktop_act refusé : une confirmation de production attend la réponse de l’utilisateur.')
         return await this.desktop.act(a.actions)
       }
       case 'navigate': {
@@ -2361,7 +2369,15 @@ export class AppCommandBus {
             )
           if (this.conversationExiste && !this.conversationExiste(cibleConversation))
             throw new Error(`chat_send : conversation inconnue « ${cibleConversation} ».`)
-          const lance = await this.lancerDansConversation(cibleConversation, messageEnvoye)
+          const modeleDemande = typeof a.model === 'string' ? a.model.trim() : ''
+          const fournisseur =
+            typeof a.provider === 'string' && a.provider.trim() ? a.provider.trim() : 'claude'
+          const lance = modeleDemande
+            ? await this.lancerDansConversation(cibleConversation, messageEnvoye, {
+                provider: fournisseur,
+                model: modeleDemande
+              })
+            : await this.lancerDansConversation(cibleConversation, messageEnvoye)
           if (!lance.ok)
             throw new Error(
               `chat_send : le tour n'a pas demarre dans « ${cibleConversation} » ` +
@@ -3427,6 +3443,9 @@ export class AppCommandBus {
         const refusReglage = refusReglageProd(ligne)
         if (refusReglage) return { lance: false, detail: `Commande refusée : ${refusReglage}` }
         const cibleSql = cibleSqlDeCommande(ligne)
+        // Sans porte branchée, un client SQL ne part PAS sans contrôle : refus par défaut (conv-738).
+        if (cibleSql && !this.porteProd)
+          return { lance: false, detail: 'Commande refusée : la protection de production n’est pas disponible, aucun client SQL ne part sans elle.' }
         if (cibleSql && this.porteProd) {
           const geste = { nature: 'base' as const, nom: cibleSql.base, operation: `run-${cibleSql.client}` }
           const verdict = this.porteProd.verifier(geste)
