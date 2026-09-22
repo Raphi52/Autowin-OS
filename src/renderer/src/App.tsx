@@ -47,6 +47,7 @@ import {
 import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
 import './assets/theme-modes.css'
+import './assets/theme-malvoyant-planchers.css'
 import './assets/ui-system.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'

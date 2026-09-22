@@ -1,0 +1,1153 @@
+/* GENERE par scripts/gen-malvoyant-planchers.mjs — ne pas editer a la main.
+   Plancher de 13px pour tout texte ecrit sous 12px, et texte plein pour tout gris ecrit en dur, themes malvoyants seulement. */
+
+/* components/AgentsTopologyView.css — tailles */
+:root[data-theme^='malvoyant-'] .topology-eyebrow,
+:root[data-theme^='malvoyant-'] .topology-panel > header span,
+:root[data-theme^='malvoyant-'] .topology-parallel-heading span,
+:root[data-theme^='malvoyant-'] .topology-toolbar p,
+:root[data-theme^='malvoyant-'] .topology-profiles select,
+:root[data-theme^='malvoyant-'] .topology-state,
+:root[data-theme^='malvoyant-'] .topology-library > p,
+:root[data-theme^='malvoyant-'] .topology-model strong,
+:root[data-theme^='malvoyant-'] .topology-model small,
+:root[data-theme^='malvoyant-'] .topology-authority-note,
+:root[data-theme^='malvoyant-'] .topology-authority-note b,
+:root[data-theme^='malvoyant-'] .topology-panel > header p,
+:root[data-theme^='malvoyant-'] .topology-panel > header b,
+:root[data-theme^='malvoyant-'] .topology-slot-copy small,
+:root[data-theme^='malvoyant-'] .topology-slot-copy strong,
+:root[data-theme^='malvoyant-'] .topology-slot-copy span,
+:root[data-theme^='malvoyant-'] .topology-slot label,
+:root[data-theme^='malvoyant-'] .topology-slot select,
+:root[data-theme^='malvoyant-'] .topology-slot > em,
+:root[data-theme^='malvoyant-'] .topology-empty,
+:root[data-theme^='malvoyant-'] .slot-inactive,
+:root[data-theme^='malvoyant-'] .slot-unresolved,
+:root[data-theme^='malvoyant-'] .topology-profile-badge,
+:root[data-theme^='malvoyant-'] .topology-assign-button,
+:root[data-theme^='malvoyant-'] .topology-parallel-heading small,
+:root[data-theme^='malvoyant-'] .topology-runtime-limit {
+  font-size: 13px;
+}
+
+/* components/AgentsTopologyView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .agents-topology,
+:root[data-theme^='malvoyant-'] .topology-eyebrow,
+:root[data-theme^='malvoyant-'] .topology-panel > header span,
+:root[data-theme^='malvoyant-'] .topology-parallel-heading span,
+:root[data-theme^='malvoyant-'] .topology-toolbar p,
+:root[data-theme^='malvoyant-'] .topology-profiles select,
+:root[data-theme^='malvoyant-'] .topology-library > p,
+:root[data-theme^='malvoyant-'] .topology-model,
+:root[data-theme^='malvoyant-'] .topology-model small,
+:root[data-theme^='malvoyant-'] .topology-panel > header p,
+:root[data-theme^='malvoyant-'] .topology-panel > header b,
+:root[data-theme^='malvoyant-'] .topology-slot-copy span,
+:root[data-theme^='malvoyant-'] .topology-slot label,
+:root[data-theme^='malvoyant-'] .topology-slot select,
+:root[data-theme^='malvoyant-'] .topology-parallel-heading small,
+:root[data-theme^='malvoyant-'] .agents-topology-loading,
+:root[data-theme^='malvoyant-'] .theme-serious .agents-topology,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-model,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-slot,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-panel > header b,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-profiles,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-slot select,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-empty,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-assign-button,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-eyebrow,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-panel > header span,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-parallel-heading span,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-model small,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-slot-copy span,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-slot-copy small,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-slot label,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-toolbar p,
+:root[data-theme^='malvoyant-'] .theme-serious .topology-panel > header p {
+  color: var(--text);
+}
+
+/* components/ArtifactPreview.css — tailles */
+:root[data-theme^='malvoyant-'] .artifact-preview__header,
+:root[data-theme^='malvoyant-'] .artifact-preview__footer,
+:root[data-theme^='malvoyant-'] .artifact-preview__kind,
+:root[data-theme^='malvoyant-'] .artifact-table-wrap table,
+:root[data-theme^='malvoyant-'] .artifact-notebook__cell > span,
+:root[data-theme^='malvoyant-'] .artifact-archive__summary {
+  font-size: 13px;
+}
+
+/* components/ArtifactPreview.css — gris en dur */
+:root[data-theme^='malvoyant-'] .artifact-preview__header,
+:root[data-theme^='malvoyant-'] .artifact-preview__footer,
+:root[data-theme^='malvoyant-'] .artifact-preview__header strong,
+:root[data-theme^='malvoyant-'] .artifact-preview__source,
+:root[data-theme^='malvoyant-'] .artifact-notebook__cell pre,
+:root[data-theme^='malvoyant-'] .artifact-preview__source.is-diff,
+:root[data-theme^='malvoyant-'] .artifact-table-wrap table,
+:root[data-theme^='malvoyant-'] .artifact-notebook__cell > span,
+:root[data-theme^='malvoyant-'] .artifact-preview__font,
+:root[data-theme^='malvoyant-'] .artifact-preview__placeholder,
+:root[data-theme^='malvoyant-'] .artifact-preview__blocked,
+:root[data-theme^='malvoyant-'] .artifact-preview__font small,
+:root[data-theme^='malvoyant-'] .artifact-model3d,
+:root[data-theme^='malvoyant-'] .artifact-archive__entry,
+:root[data-theme^='malvoyant-'] .artifact-archive__entry small,
+:root[data-theme^='malvoyant-'] .artifact-office-document,
+:root[data-theme^='malvoyant-'] .artifact-slide,
+:root[data-theme^='malvoyant-'] .artifact-slide > span,
+:root[data-theme^='malvoyant-'] .artifact-preview__reveal,
+:root[data-theme^='malvoyant-'] .artifact-preview__toggle {
+  color: var(--text);
+}
+
+/* components/AskDecision.css — tailles */
+:root[data-theme^='malvoyant-'] .askd-pied {
+  font-size: 13px;
+}
+
+/* components/AskDecision.css — gris en dur */
+:root[data-theme^='malvoyant-'] .askd-tri,
+:root[data-theme^='malvoyant-'] .askd-consequence,
+:root[data-theme^='malvoyant-'] .askd-touche,
+:root[data-theme^='malvoyant-'] .askd-q b,
+:root[data-theme^='malvoyant-'] .askd-q.est-residuel p,
+:root[data-theme^='malvoyant-'] .askd-pied,
+:root[data-theme^='malvoyant-'] .askd-envoyer:disabled {
+  color: var(--text);
+}
+
+/* components/BehaviourView.css — tailles */
+:root[data-theme^='malvoyant-'] .behaviour-view > header p {
+  font-size: 13px;
+}
+
+/* components/BrainMarkdown.css — tailles */
+:root[data-theme^='malvoyant-'] .brain-markdown__meta dt,
+:root[data-theme^='malvoyant-'] .brain-markdown__meta dd,
+:root[data-theme^='malvoyant-'] .brain-markdown table,
+:root[data-theme^='malvoyant-'] .brain-markdown th,
+:root[data-theme^='malvoyant-'] .node-panel .brain-markdown pre {
+  font-size: 13px;
+}
+
+/* components/BrainMarkdown.css — gris en dur */
+:root[data-theme^='malvoyant-'] .brain-markdown,
+:root[data-theme^='malvoyant-'] .brain-markdown__meta dt,
+:root[data-theme^='malvoyant-'] .brain-markdown h1,
+:root[data-theme^='malvoyant-'] .brain-markdown h2,
+:root[data-theme^='malvoyant-'] .brain-markdown h3,
+:root[data-theme^='malvoyant-'] .brain-markdown h4,
+:root[data-theme^='malvoyant-'] .brain-markdown strong,
+:root[data-theme^='malvoyant-'] .brain-markdown a:hover,
+:root[data-theme^='malvoyant-'] .brain-markdown blockquote,
+:root[data-theme^='malvoyant-'] .brain-markdown pre code,
+:root[data-theme^='malvoyant-'] .node-panel .brain-markdown pre,
+:root[data-theme^='malvoyant-'] .brain-markdown__brut {
+  color: var(--text);
+}
+
+/* components/CadrageHypotheses.css — gris en dur */
+:root[data-theme^='malvoyant-'] .cadrage-hyp-masquer,
+:root[data-theme^='malvoyant-'] .cadrage-hyp-masquer:hover {
+  color: var(--text);
+}
+
+/* components/CandidatsPickPanel.css — tailles */
+:root[data-theme^='malvoyant-'] .cpick-compte,
+:root[data-theme^='malvoyant-'] .cpick-auto {
+  font-size: 13px;
+}
+
+/* components/CandidatsPickPanel.css — gris en dur */
+:root[data-theme^='malvoyant-'] .cpick-tete,
+:root[data-theme^='malvoyant-'] .cpick-titre,
+:root[data-theme^='malvoyant-'] .cpick-q p {
+  color: var(--text);
+}
+
+/* components/CapabilitiesView.css — tailles */
+:root[data-theme^='malvoyant-'] .cockpit-toolbar label > span,
+:root[data-theme^='malvoyant-'] .cockpit-sources h2,
+:root[data-theme^='malvoyant-'] .cockpit-inspector > h2,
+:root[data-theme^='malvoyant-'] .cockpit-sources button b,
+:root[data-theme^='malvoyant-'] .cockpit-sources button strong,
+:root[data-theme^='malvoyant-'] .cockpit-sources button small,
+:root[data-theme^='malvoyant-'] .cockpit-tabs button,
+:root[data-theme^='malvoyant-'] .registry-heading,
+:root[data-theme^='malvoyant-'] .control-row strong,
+:root[data-theme^='malvoyant-'] .control-row p,
+:root[data-theme^='malvoyant-'] .control-source-badge,
+:root[data-theme^='malvoyant-'] .control-hook-meta em,
+:root[data-theme^='malvoyant-'] .control-hook-meta code,
+:root[data-theme^='malvoyant-'] .control-empty,
+:root[data-theme^='malvoyant-'] .inspector-hero p,
+:root[data-theme^='malvoyant-'] .cockpit-inspector dl > div,
+:root[data-theme^='malvoyant-'] .inspector-impact,
+:root[data-theme^='malvoyant-'] .control-error,
+:root[data-theme^='malvoyant-'] .control-notice,
+:root[data-theme^='malvoyant-'] .related-list > button b,
+:root[data-theme^='malvoyant-'] .related-list > button small,
+:root[data-theme^='malvoyant-'] .related-list > p {
+  font-size: 13px;
+}
+
+/* components/CapabilitiesView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .cockpit-tabs small,
+:root[data-theme^='malvoyant-'] .control-source-badge,
+:root[data-theme^='malvoyant-'] .cockpit-inspector code {
+  color: var(--text);
+}
+
+/* components/ChatComposerExtras.css — tailles */
+:root[data-theme^='malvoyant-'] .composer-friction {
+  font-size: 13px;
+}
+
+/* components/ChatMosaic.css — tailles */
+:root[data-theme^='malvoyant-'] .chat-mosaic-window-composer .composer-dictee-message {
+  font-size: 13px;
+}
+
+/* components/ChatView.css — tailles */
+:root[data-theme^='malvoyant-'] .conv-search input,
+:root[data-theme^='malvoyant-'] .conv-search-empty,
+:root[data-theme^='malvoyant-'] .conv-date-sort,
+:root[data-theme^='malvoyant-'] .conv-group-head,
+:root[data-theme^='malvoyant-'] .conv-group-chevron,
+:root[data-theme^='malvoyant-'] .conv-snippet,
+:root[data-theme^='malvoyant-'] .conv-count,
+:root[data-theme^='malvoyant-'] .conv-menu-pop .conv-menu-oubli,
+:root[data-theme^='malvoyant-'] .conv-menu-titre,
+:root[data-theme^='malvoyant-'] .workflow-section-tab,
+:root[data-theme^='malvoyant-'] .subagent-live-note,
+:root[data-theme^='malvoyant-'] .subagent-live-text,
+:root[data-theme^='malvoyant-'] .subagent-text,
+:root[data-theme^='malvoyant-'] .subagent-text-toggle,
+:root[data-theme^='malvoyant-'] .run-detail-tab,
+:root[data-theme^='malvoyant-'] .chat-find-count,
+:root[data-theme^='malvoyant-'] .msg-meta,
+:root[data-theme^='malvoyant-'] .directive-receipt-status,
+:root[data-theme^='malvoyant-'] .composer-input-row > .composer-send,
+:root[data-theme^='malvoyant-'] .attachment-chip,
+:root[data-theme^='malvoyant-'] .attachment-chip small,
+:root[data-theme^='malvoyant-'] .attachment-error,
+:root[data-theme^='malvoyant-'] .msg-error-bilan,
+:root[data-theme^='malvoyant-'] .msg-error-action,
+:root[data-theme^='malvoyant-'] .delete-confirm-kicker,
+:root[data-theme^='malvoyant-'] .file-drop-overlay span,
+:root[data-theme^='malvoyant-'] .md-table th,
+:root[data-theme^='malvoyant-'] .md-badge,
+:root[data-theme^='malvoyant-'] .md-ref,
+:root[data-theme^='malvoyant-'] .prompt-envelope summary,
+:root[data-theme^='malvoyant-'] .prompt-envelope-meta span,
+:root[data-theme^='malvoyant-'] .prompt-envelope-limit,
+:root[data-theme^='malvoyant-'] .prompt-envelope > strong,
+:root[data-theme^='malvoyant-'] .prompt-envelope-system,
+:root[data-theme^='malvoyant-'] .prompt-envelope-system .brain-markdown,
+:root[data-theme^='malvoyant-'] .prompt-envelope-system h1,
+:root[data-theme^='malvoyant-'] .prompt-envelope-system h2,
+:root[data-theme^='malvoyant-'] .prompt-envelope-system h3,
+:root[data-theme^='malvoyant-'] .prompt-envelope-system h4,
+:root[data-theme^='malvoyant-'] .cosmic-outline .conv-meta,
+:root[data-theme^='malvoyant-'] .cosmic-outline .conv-snippet,
+:root[data-theme^='malvoyant-'] .model-select-status:not(:empty),
+:root[data-theme^='malvoyant-'] .cosmic-outline .msg-meta,
+:root[data-theme^='malvoyant-'] .msg-terminal-text,
+:root[data-theme^='malvoyant-'] .msg-terminal-action,
+:root[data-theme^='malvoyant-'] .cosmic-outline .composer-field > span,
+:root[data-theme^='malvoyant-'] .activity-outcome,
+:root[data-theme^='malvoyant-'] .activity-local-details summary,
+:root[data-theme^='malvoyant-'] .activity-local-details pre,
+:root[data-theme^='malvoyant-'] .chat-context-gauge,
+:root[data-theme^='malvoyant-'] .activity-step,
+:root[data-theme^='malvoyant-'] .activity-step-target,
+:root[data-theme^='malvoyant-'] .activity-step-detail,
+:root[data-theme^='malvoyant-'] .activity-step-pipeline,
+:root[data-theme^='malvoyant-'] .activity-pipeline-vide,
+:root[data-theme^='malvoyant-'] .activity-pipeline-titre,
+:root[data-theme^='malvoyant-'] .activity-step-icon,
+:root[data-theme^='malvoyant-'] .activity-step-link,
+:root[data-theme^='malvoyant-'] .thinking-block > summary .thinking-status,
+:root[data-theme^='malvoyant-'] .thinking-block--actions .thinking-body,
+:root[data-theme^='malvoyant-'] .conv-mosaic-close-all,
+:root[data-theme^='malvoyant-'] .msg-provider-status,
+:root[data-theme^='malvoyant-'] .composer-dictee-message,
+:root[data-theme^='malvoyant-'] .msg-orientation-tag,
+:root[data-theme^='malvoyant-'] .conv-auto-notice,
+:root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label {
+  font-size: 13px;
+}
+
+/* components/ChatView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .attachment-button,
+:root[data-theme^='malvoyant-'] .chat-travail-non-publie,
+:root[data-theme^='malvoyant-'] .chat-travail-non-publie button,
+:root[data-theme^='malvoyant-'] .chat-travail-non-publie__fermer,
+:root[data-theme^='malvoyant-'] .chat-travail-non-publie__fermer:hover,
+:root[data-theme^='malvoyant-'] .composer-dictee-apercu,
+:root[data-theme^='malvoyant-'] .composer-input-row > .composer-send.btn-accent:disabled,
+:root[data-theme^='malvoyant-'] .composer-input-row > .composer-stop:disabled,
+:root[data-theme^='malvoyant-'] .composer-dictee-apercu-texte {
+  color: var(--text);
+}
+
+/* components/ConversationCostIndicator.css — tailles */
+:root[data-theme^='malvoyant-'] .conv-cost-btn,
+:root[data-theme^='malvoyant-'] .conv-cost-panel,
+:root[data-theme^='malvoyant-'] .conv-cost-refresh {
+  font-size: 13px;
+}
+
+/* components/ConversationCostIndicator.css — gris en dur */
+:root[data-theme^='malvoyant-'] .conv-cost-btn {
+  color: var(--text);
+}
+
+/* components/DiffView.css — tailles */
+:root[data-theme^='malvoyant-'] .diff-view,
+:root[data-theme^='malvoyant-'] .diff-empty {
+  font-size: 13px;
+}
+
+/* components/DomainShell.css — tailles */
+:root[data-theme^='malvoyant-'] .domain-tab-anomaly {
+  font-size: 13px;
+}
+
+/* components/Evidence.css — tailles */
+:root[data-theme^='malvoyant-'] .evidence-item > summary,
+:root[data-theme^='malvoyant-'] .evidence-item .evidence-exit,
+:root[data-theme^='malvoyant-'] .evidence-diff,
+:root[data-theme^='malvoyant-'] .evidence-stdout,
+:root[data-theme^='malvoyant-'] .run-cost-recap,
+:root[data-theme^='malvoyant-'] .subagent-failed-pill,
+:root[data-theme^='malvoyant-'] .subagent-error,
+:root[data-theme^='malvoyant-'] .subagent-thinking > summary,
+:root[data-theme^='malvoyant-'] .subagent-thinking pre {
+  font-size: 13px;
+}
+
+/* components/FirstRunWizard.css — tailles */
+:root[data-theme^='malvoyant-'] .frw-detail,
+:root[data-theme^='malvoyant-'] .frw-repair,
+:root[data-theme^='malvoyant-'] .frw-optional,
+:root[data-theme^='malvoyant-'] .frw-repair-note {
+  font-size: 13px;
+}
+
+/* components/GraphView.css — tailles */
+:root[data-theme^='malvoyant-'] .graph-stage__heading span,
+:root[data-theme^='malvoyant-'] .graph-mode-switch__icon,
+:root[data-theme^='malvoyant-'] .graph-clean-memory,
+:root[data-theme^='malvoyant-'] .graph-toolbar__stats,
+:root[data-theme^='malvoyant-'] .sidebar-heading,
+:root[data-theme^='malvoyant-'] .settings-section__heading,
+:root[data-theme^='malvoyant-'] .sidebar-heading button,
+:root[data-theme^='malvoyant-'] .settings-section__heading button,
+:root[data-theme^='malvoyant-'] .node-search-result small,
+:root[data-theme^='malvoyant-'] .theme-sidebar__note,
+:root[data-theme^='malvoyant-'] .graph-settings-popover__heading,
+:root[data-theme^='malvoyant-'] .tree-branch-controls button,
+:root[data-theme^='malvoyant-'] .tree-branch-controls button small,
+:root[data-theme^='malvoyant-'] .graph-health-lens header,
+:root[data-theme^='malvoyant-'] .graph-health-lens p,
+:root[data-theme^='malvoyant-'] .graph-health-issue > span,
+:root[data-theme^='malvoyant-'] .graph-health-issue button,
+:root[data-theme^='malvoyant-'] .theme-cluster-label.is-active,
+:root[data-theme^='malvoyant-'] .graph-stage__heading small,
+:root[data-theme^='malvoyant-'] .graph-status,
+:root[data-theme^='malvoyant-'] .graph-loading__label,
+:root[data-theme^='malvoyant-'] .selected-node span,
+:root[data-theme^='malvoyant-'] .graph-hint,
+:root[data-theme^='malvoyant-'] .theme-nodes-panel__heading,
+:root[data-theme^='malvoyant-'] .toggle-row,
+:root[data-theme^='malvoyant-'] .range-row,
+:root[data-theme^='malvoyant-'] .setting-help,
+:root[data-theme^='malvoyant-'] .node-links__heading,
+:root[data-theme^='malvoyant-'] .node-links p,
+:root[data-theme^='malvoyant-'] .node-links button strong,
+:root[data-theme^='malvoyant-'] .node-panel__loading,
+:root[data-theme^='malvoyant-'] .node-panel__theme,
+:root[data-theme^='malvoyant-'] .node-panel__path,
+:root[data-theme^='malvoyant-'] .node-panel__error,
+:root[data-theme^='malvoyant-'] .node-panel pre,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__head,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__head > button,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__error,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__warning,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__empty,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__list summary,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__type,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__list summary > small,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__dup,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__meta,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__twins,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__body,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__actions button,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__actions > small,
+:root[data-theme^='malvoyant-'] .brain-bench__head,
+:root[data-theme^='malvoyant-'] .brain-bench__head > small,
+:root[data-theme^='malvoyant-'] .brain-bench__ask input,
+:root[data-theme^='malvoyant-'] .brain-bench__ask button,
+:root[data-theme^='malvoyant-'] .brain-bench__status,
+:root[data-theme^='malvoyant-'] .brain-bench__status > strong,
+:root[data-theme^='malvoyant-'] .brain-budget > li,
+:root[data-theme^='malvoyant-'] .brain-bench__cut,
+:root[data-theme^='malvoyant-'] .brain-bench__local,
+:root[data-theme^='malvoyant-'] .theme-sidebar__retrieval,
+:root[data-theme^='malvoyant-'] .graph-workbench-badge,
+:root[data-theme^='malvoyant-'] .graph-brains-retry,
+:root[data-theme^='malvoyant-'] .graph-themes-retry,
+:root[data-theme^='malvoyant-'] .graph-theme-nodes-retry,
+:root[data-theme^='malvoyant-'] .graph-status__retry,
+:root[data-theme^='malvoyant-'] .graph-empty-reindex,
+:root[data-theme^='malvoyant-'] .graph-empty-brains,
+:root[data-theme^='malvoyant-'] .graph-truncation__extend,
+:root[data-theme^='malvoyant-'] .node-panel__retry,
+:root[data-theme^='malvoyant-'] .graph-brains-recovery__message,
+:root[data-theme^='malvoyant-'] .graph-status__message,
+:root[data-theme^='malvoyant-'] .node-panel__details > summary,
+:root[data-theme^='malvoyant-'] .node-panel__meta dt,
+:root[data-theme^='malvoyant-'] .node-panel__relations li,
+:root[data-theme^='malvoyant-'] .node-links__degre,
+:root[data-theme^='malvoyant-'] .node-links__relation,
+:root[data-theme^='malvoyant-'] .node-links__saut > summary,
+:root[data-theme^='malvoyant-'] .node-panel__copier {
+  font-size: 13px;
+}
+
+/* components/GraphView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .graph-observatory,
+:root[data-theme^='malvoyant-'] .graph-stage__heading span,
+:root[data-theme^='malvoyant-'] .graph-toolbar select,
+:root[data-theme^='malvoyant-'] .theme-sidebar input,
+:root[data-theme^='malvoyant-'] .graph-refresh,
+:root[data-theme^='malvoyant-'] .graph-toolbar__stats,
+:root[data-theme^='malvoyant-'] .graph-toolbar__stats strong,
+:root[data-theme^='malvoyant-'] .sidebar-heading,
+:root[data-theme^='malvoyant-'] .settings-section__heading,
+:root[data-theme^='malvoyant-'] .sidebar-heading button,
+:root[data-theme^='malvoyant-'] .settings-section__heading button,
+:root[data-theme^='malvoyant-'] .theme-filter,
+:root[data-theme^='malvoyant-'] .theme-filter:hover,
+:root[data-theme^='malvoyant-'] .theme-filter.is-active,
+:root[data-theme^='malvoyant-'] .theme-filter small,
+:root[data-theme^='malvoyant-'] .theme-sidebar__note,
+:root[data-theme^='malvoyant-'] .theme-sidebar__note strong,
+:root[data-theme^='malvoyant-'] .graph-settings-button,
+:root[data-theme^='malvoyant-'] .graph-settings-button:hover,
+:root[data-theme^='malvoyant-'] .graph-settings-button.is-active,
+:root[data-theme^='malvoyant-'] .graph-settings-popover__heading,
+:root[data-theme^='malvoyant-'] .graph-settings-popover__heading button,
+:root[data-theme^='malvoyant-'] .tree-branch-controls button,
+:root[data-theme^='malvoyant-'] .tree-branch-controls button:hover,
+:root[data-theme^='malvoyant-'] .tree-branch-controls button:focus-visible,
+:root[data-theme^='malvoyant-'] .tree-branch-controls button.is-collapsed,
+:root[data-theme^='malvoyant-'] .tree-branch-controls button small,
+:root[data-theme^='malvoyant-'] .graph-health-lens header,
+:root[data-theme^='malvoyant-'] .graph-health-lens header span,
+:root[data-theme^='malvoyant-'] .graph-health-lens p,
+:root[data-theme^='malvoyant-'] .graph-health-issue button,
+:root[data-theme^='malvoyant-'] .graph-health-issue i,
+:root[data-theme^='malvoyant-'] .graph-stage__heading strong,
+:root[data-theme^='malvoyant-'] .graph-stage__heading small,
+:root[data-theme^='malvoyant-'] .graph-status,
+:root[data-theme^='malvoyant-'] .selected-node,
+:root[data-theme^='malvoyant-'] .selected-node span,
+:root[data-theme^='malvoyant-'] .graph-hint,
+:root[data-theme^='malvoyant-'] .theme-nodes-panel__heading,
+:root[data-theme^='malvoyant-'] .theme-nodes-panel__heading strong,
+:root[data-theme^='malvoyant-'] .toggle-row,
+:root[data-theme^='malvoyant-'] .range-row,
+:root[data-theme^='malvoyant-'] .range-row strong,
+:root[data-theme^='malvoyant-'] .setting-help,
+:root[data-theme^='malvoyant-'] .node-links__heading,
+:root[data-theme^='malvoyant-'] .node-links p,
+:root[data-theme^='malvoyant-'] .node-links button,
+:root[data-theme^='malvoyant-'] .node-links button:hover,
+:root[data-theme^='malvoyant-'] .node-panel__loading,
+:root[data-theme^='malvoyant-'] .node-panel h2,
+:root[data-theme^='malvoyant-'] .node-panel__path,
+:root[data-theme^='malvoyant-'] .node-panel pre,
+:root[data-theme^='malvoyant-'] .graph-workbench-button,
+:root[data-theme^='malvoyant-'] .graph-workbench-button:hover,
+:root[data-theme^='malvoyant-'] .graph-workbench-button.is-active,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__head,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__head > button,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__error,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__empty,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__list summary,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__list summary > small,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__meta dt,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__meta dd,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__sha,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__source-problem,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__body,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__actions .is-promote,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__actions .is-reject,
+:root[data-theme^='malvoyant-'] .knowledge-inbox__actions > small,
+:root[data-theme^='malvoyant-'] .brain-bench__head,
+:root[data-theme^='malvoyant-'] .brain-bench__head > small,
+:root[data-theme^='malvoyant-'] .brain-bench__ask input,
+:root[data-theme^='malvoyant-'] .brain-bench__status > span,
+:root[data-theme^='malvoyant-'] .brain-bench__status.is-empty,
+:root[data-theme^='malvoyant-'] .brain-bench__status.is-failed,
+:root[data-theme^='malvoyant-'] .brain-budget-label,
+:root[data-theme^='malvoyant-'] .brain-budget-figures,
+:root[data-theme^='malvoyant-'] .brain-budget-ok,
+:root[data-theme^='malvoyant-'] .brain-bench__local,
+:root[data-theme^='malvoyant-'] .theme-sidebar__retrieval,
+:root[data-theme^='malvoyant-'] .theme-sidebar__retrieval.is-failed,
+:root[data-theme^='malvoyant-'] .graph-brains-retry,
+:root[data-theme^='malvoyant-'] .graph-themes-retry,
+:root[data-theme^='malvoyant-'] .graph-theme-nodes-retry,
+:root[data-theme^='malvoyant-'] .graph-status__retry,
+:root[data-theme^='malvoyant-'] .graph-empty-reindex,
+:root[data-theme^='malvoyant-'] .graph-empty-brains,
+:root[data-theme^='malvoyant-'] .graph-truncation__extend,
+:root[data-theme^='malvoyant-'] .node-panel__retry,
+:root[data-theme^='malvoyant-'] .graph-brains-retry:hover,
+:root[data-theme^='malvoyant-'] .graph-themes-retry:hover,
+:root[data-theme^='malvoyant-'] .graph-theme-nodes-retry:hover,
+:root[data-theme^='malvoyant-'] .graph-status__retry:hover,
+:root[data-theme^='malvoyant-'] .graph-empty-reindex:hover,
+:root[data-theme^='malvoyant-'] .graph-empty-brains:hover,
+:root[data-theme^='malvoyant-'] .graph-truncation__extend:hover,
+:root[data-theme^='malvoyant-'] .node-panel__retry:hover,
+:root[data-theme^='malvoyant-'] .graph-status--empty,
+:root[data-theme^='malvoyant-'] .node-panel__meta dt,
+:root[data-theme^='malvoyant-'] .node-panel__meta dd,
+:root[data-theme^='malvoyant-'] .node-panel__relations span,
+:root[data-theme^='malvoyant-'] .node-links__degre,
+:root[data-theme^='malvoyant-'] .node-links__relation,
+:root[data-theme^='malvoyant-'] .node-panel__copier {
+  color: var(--text);
+}
+
+/* components/HomeView.css — tailles */
+:root[data-theme^='malvoyant-'] .home-tile__label h2,
+:root[data-theme^='malvoyant-'] .home-tile__count,
+:root[data-theme^='malvoyant-'] .home-list time,
+:root[data-theme^='malvoyant-'] .home-list em,
+:root[data-theme^='malvoyant-'] .home-notices button small,
+:root[data-theme^='malvoyant-'] .home-hint,
+:root[data-theme^='malvoyant-'] .home-error,
+:root[data-theme^='malvoyant-'] .home-threads__who,
+:root[data-theme^='malvoyant-'] .home-threads__name em,
+:root[data-theme^='malvoyant-'] .home-threads__last,
+:root[data-theme^='malvoyant-'] .home-threads__tally,
+:root[data-theme^='malvoyant-'] .home-subhead,
+:root[data-theme^='malvoyant-'] .home-notices__acquitter,
+:root[data-theme^='malvoyant-'] .home-tile__panel:has(.home-tile__scroll[data-reste-en-bas='true'])::after,
+:root[data-theme^='malvoyant-'] .home-view__alerte,
+:root[data-theme^='malvoyant-'] .jarvis__bascule,
+:root[data-theme^='malvoyant-'] .jarvis__mute,
+:root[data-theme^='malvoyant-'] .jarvis__whisper-bouton,
+:root[data-theme^='malvoyant-'] .jarvis__aide,
+:root[data-theme^='malvoyant-'] .jarvis__partiel,
+:root[data-theme^='malvoyant-'] .jarvis__envoi,
+:root[data-theme^='malvoyant-'] .jarvis__paroles li,
+:root[data-theme^='malvoyant-'] .jarvis__flux li,
+:root[data-theme^='malvoyant-'] .jarvis__audio,
+:root[data-theme^='malvoyant-'] .jarvis__audio > summary,
+:root[data-theme^='malvoyant-'] .jarvis__audio-champ select,
+:root[data-theme^='malvoyant-'] .jarvis__audio-champ input[type='range'],
+:root[data-theme^='malvoyant-'] .jarvis__audio-champ input[type='text'],
+:root[data-theme^='malvoyant-'] .enregistrements__bouton,
+:root[data-theme^='malvoyant-'] .enregistrements__etat,
+:root[data-theme^='malvoyant-'] .enregistrements__cible,
+:root[data-theme^='malvoyant-'] .enregistrements__partiel,
+:root[data-theme^='malvoyant-'] .enregistrements__vide,
+:root[data-theme^='malvoyant-'] .enregistrements__champ,
+:root[data-theme^='malvoyant-'] .enregistrements__champ select,
+:root[data-theme^='malvoyant-'] .enregistrements__audio,
+:root[data-theme^='malvoyant-'] .enregistrements__audio > summary,
+:root[data-theme^='malvoyant-'] .enregistrements__aide,
+:root[data-theme^='malvoyant-'] .enregistrements__titre,
+:root[data-theme^='malvoyant-'] .enregistrements__lignes li,
+:root[data-theme^='malvoyant-'] .enregistrements__fichier-nom,
+:root[data-theme^='malvoyant-'] .enregistrements__fichier-meta,
+:root[data-theme^='malvoyant-'] .home-settings__bloc h3,
+:root[data-theme^='malvoyant-'] .home-settings__champ span,
+:root[data-theme^='malvoyant-'] .home-settings__actions button,
+:root[data-theme^='malvoyant-'] .home-tile__action,
+:root[data-theme^='malvoyant-'] .home-settings__note,
+:root[data-theme^='malvoyant-'] .home-inter__back,
+:root[data-theme^='malvoyant-'] .home-inter__titre em,
+:root[data-theme^='malvoyant-'] .home-chat__meta b,
+:root[data-theme^='malvoyant-'] .home-chat__meta em,
+:root[data-theme^='malvoyant-'] .home-chat__bulle,
+:root[data-theme^='malvoyant-'] .home-chat__saisie,
+:root[data-theme^='malvoyant-'] .home-chat__envoyer,
+:root[data-theme^='malvoyant-'] .home-chat__annuler,
+:root[data-theme^='malvoyant-'] .home-chat__ouvrir,
+:root[data-theme^='malvoyant-'] .home-threads__alerte,
+:root[data-theme^='malvoyant-'] .perf-widget__barre button,
+:root[data-theme^='malvoyant-'] .perf-widget__groupe h3,
+:root[data-theme^='malvoyant-'] .perf-widget__personnes h3,
+:root[data-theme^='malvoyant-'] .perf-widget__champ {
+  font-size: 13px;
+}
+
+/* components/HomeView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .jarvis__bascule,
+:root[data-theme^='malvoyant-'] .jarvis__mute,
+:root[data-theme^='malvoyant-'] .jarvis__mute:hover,
+:root[data-theme^='malvoyant-'] .jarvis__mute:focus-visible,
+:root[data-theme^='malvoyant-'] .jarvis__mute[aria-pressed='true'],
+:root[data-theme^='malvoyant-'] .jarvis__bascule:hover,
+:root[data-theme^='malvoyant-'] .jarvis__bascule:focus-visible,
+:root[data-theme^='malvoyant-'] .jarvis__partiel,
+:root[data-theme^='malvoyant-'] .jarvis__audio-champ > span,
+:root[data-theme^='malvoyant-'] .jarvis__audio-champ select,
+:root[data-theme^='malvoyant-'] .jarvis__audio-champ input[type='range'],
+:root[data-theme^='malvoyant-'] .jarvis__audio-champ input[type='text'],
+:root[data-theme^='malvoyant-'] .jarvis__audio-champ select option,
+:root[data-theme^='malvoyant-'] .enregistrements__bouton,
+:root[data-theme^='malvoyant-'] .enregistrements[data-enregistre='true'] .enregistrements__bouton,
+:root[data-theme^='malvoyant-'] .enregistrements__partiel,
+:root[data-theme^='malvoyant-'] .enregistrements__champ > span,
+:root[data-theme^='malvoyant-'] .enregistrements__champ select,
+:root[data-theme^='malvoyant-'] .enregistrements__aide,
+:root[data-theme^='malvoyant-'] .enregistrements__fichier-nom,
+:root[data-theme^='malvoyant-'] .jarvis__anneau-texte > strong,
+:root[data-theme^='malvoyant-'] .perf-widget__groupe h3,
+:root[data-theme^='malvoyant-'] .perf-widget__personnes h3 {
+  color: var(--text);
+}
+
+/* components/HumanJson.css — tailles */
+:root[data-theme^='malvoyant-'] .human-json__toggle,
+:root[data-theme^='malvoyant-'] .human-json__group summary {
+  font-size: 13px;
+}
+
+/* components/HumanJson.css — gris en dur */
+:root[data-theme^='malvoyant-'] .human-json__tree,
+:root[data-theme^='malvoyant-'] .human-json__key,
+:root[data-theme^='malvoyant-'] .human-json__string,
+:root[data-theme^='malvoyant-'] .human-json__null {
+  color: var(--text);
+}
+
+/* components/InterfaceView.css — tailles */
+:root[data-theme^='malvoyant-'] .interface-row-text p,
+:root[data-theme^='malvoyant-'] .interface-theme-label,
+:root[data-theme^='malvoyant-'] .interface-reserve {
+  font-size: 13px;
+}
+
+/* components/JugesPanel.css — gris en dur */
+:root[data-theme^='malvoyant-'] .jpan-compte,
+:root[data-theme^='malvoyant-'] .jpan-juge,
+:root[data-theme^='malvoyant-'] .jpan-q li,
+:root[data-theme^='malvoyant-'] .jpan-cout,
+:root[data-theme^='malvoyant-'] .jpan-verdict p {
+  color: var(--text);
+}
+
+/* components/ModelActivityLogPane.css — tailles */
+:root[data-theme^='malvoyant-'] .model-log-more,
+:root[data-theme^='malvoyant-'] .model-log-filter select,
+:root[data-theme^='malvoyant-'] .model-log-json,
+:root[data-theme^='malvoyant-'] .model-log-tour__head,
+:root[data-theme^='malvoyant-'] .model-log-tour__head strong,
+:root[data-theme^='malvoyant-'] .model-log-delta,
+:root[data-theme^='malvoyant-'] .model-log-toggle {
+  font-size: 13px;
+}
+
+/* components/ModelActivityLogPane.css — gris en dur */
+:root[data-theme^='malvoyant-'] .model-log-time,
+:root[data-theme^='malvoyant-'] .model-log-label,
+:root[data-theme^='malvoyant-'] .model-log-row[data-log-ok='false'] .model-log-label,
+:root[data-theme^='malvoyant-'] .model-log-detail,
+:root[data-theme^='malvoyant-'] .model-log-detail[open] > summary,
+:root[data-theme^='malvoyant-'] .model-log-detail > summary:hover,
+:root[data-theme^='malvoyant-'] .model-log-empty,
+:root[data-theme^='malvoyant-'] .model-log-source,
+:root[data-theme^='malvoyant-'] .model-log-meta,
+:root[data-theme^='malvoyant-'] .model-log-voie {
+  color: var(--text);
+}
+
+/* components/ModelQuestionPopup.css — tailles */
+:root[data-theme^='malvoyant-'] .model-question-popup header small,
+:root[data-theme^='malvoyant-'] .model-question-popup footer small,
+:root[data-theme^='malvoyant-'] .model-question-source,
+:root[data-theme^='malvoyant-'] .model-question-context,
+:root[data-theme^='malvoyant-'] .model-question-popup label {
+  font-size: 13px;
+}
+
+/* components/ModelQuotaIndicator.css — tailles */
+:root[data-theme^='malvoyant-'] .model-quota-bar-value,
+:root[data-theme^='malvoyant-'] .model-quota-popover small,
+:root[data-theme^='malvoyant-'] .model-quota-popover footer,
+:root[data-theme^='malvoyant-'] .model-quota-name strong,
+:root[data-theme^='malvoyant-'] .model-quota-scope,
+:root[data-theme^='malvoyant-'] .model-quota-window,
+:root[data-theme^='malvoyant-'] .model-quota-values small,
+:root[data-theme^='malvoyant-'] .model-quota-unavailable,
+:root[data-theme^='malvoyant-'] .model-quota-error,
+:root[data-theme^='malvoyant-'] .quota-context-gauge .quota-context-compact,
+:root[data-theme^='malvoyant-'] .model-quota-tip,
+:root[data-theme^='malvoyant-'] .model-quota-tip-hint,
+:root[data-theme^='malvoyant-'] .model-quota-provider-chip {
+  font-size: 13px;
+}
+
+/* components/ModelQuotaIndicator.css — gris en dur */
+:root[data-theme^='malvoyant-'] .model-quota-trigger,
+:root[data-theme^='malvoyant-'] .model-quota-popover,
+:root[data-theme^='malvoyant-'] .model-quota-popover small,
+:root[data-theme^='malvoyant-'] .model-quota-popover footer,
+:root[data-theme^='malvoyant-'] .model-quota-popover header button,
+:root[data-theme^='malvoyant-'] .model-quota-window > strong,
+:root[data-theme^='malvoyant-'] .model-quota-values small,
+:root[data-theme^='malvoyant-'] .model-quota-unavailable {
+  color: var(--text);
+}
+
+/* components/ObservatoryView.css — tailles */
+:root[data-theme^='malvoyant-'] .observatory-panel-title,
+:root[data-theme^='malvoyant-'] .observatory-head p,
+:root[data-theme^='malvoyant-'] .observatory-metrics small,
+:root[data-theme^='malvoyant-'] .observatory-toolbar__scope,
+:root[data-theme^='malvoyant-'] .observatory-toolbar__scope small,
+:root[data-theme^='malvoyant-'] .observatory-quick-filters button,
+:root[data-theme^='malvoyant-'] .observatory-causal-controls button,
+:root[data-theme^='malvoyant-'] .observatory-filter-menu > summary,
+:root[data-theme^='malvoyant-'] .observatory-toolbar__actions summary,
+:root[data-theme^='malvoyant-'] .observatory-turn-focus,
+:root[data-theme^='malvoyant-'] .observatory-native-proof,
+:root[data-theme^='malvoyant-'] .observatory-native-diagnostics,
+:root[data-theme^='malvoyant-'] .observatory-rag-causal-step > header > b,
+:root[data-theme^='malvoyant-'] .rag-trace-card > header span,
+:root[data-theme^='malvoyant-'] .observatory-conversations small,
+:root[data-theme^='malvoyant-'] .observatory-diagnostics span,
+:root[data-theme^='malvoyant-'] .observatory-diagnostics p,
+:root[data-theme^='malvoyant-'] .observatory-causal-path > header small,
+:root[data-theme^='malvoyant-'] .observatory-causal-path > header span,
+:root[data-theme^='malvoyant-'] .observatory-causal-node-wrap > button small,
+:root[data-theme^='malvoyant-'] .observatory-causal-node-wrap > button em,
+:root[data-theme^='malvoyant-'] .observatory-causal-node-wrap > button.is-bottleneck::after,
+:root[data-theme^='malvoyant-'] .observatory-event > span:nth-child(2) b,
+:root[data-theme^='malvoyant-'] .observatory-event > span:nth-child(2) small,
+:root[data-theme^='malvoyant-'] .observatory-event p small,
+:root[data-theme^='malvoyant-'] .observatory-event p strong,
+:root[data-theme^='malvoyant-'] .observatory-load,
+:root[data-theme^='malvoyant-'] .observatory-decision-ledger dt,
+:root[data-theme^='malvoyant-'] .observatory-authority-ledger dt,
+:root[data-theme^='malvoyant-'] .observatory-payload-label,
+:root[data-theme^='malvoyant-'] .observatory-call-preview,
+:root[data-theme^='malvoyant-'] [data-testid='observatory-conversation-count'],
+:root[data-theme^='malvoyant-'] .observatory-compare-status,
+:root[data-theme^='malvoyant-'] .observatory-run-jump {
+  font-size: 13px;
+}
+
+/* components/ObservatoryView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .observatory-rag-causal-step > header strong,
+:root[data-theme^='malvoyant-'] .observatory-event.is-cancellation > i,
+:root[data-theme^='malvoyant-'] .observatory-event.is-cancellation > span:nth-child(2) b,
+:root[data-theme^='malvoyant-'] .observatory-event.is-cancellation p strong,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-toolbar input,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-toolbar select,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-toolbar button,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-toolbar summary,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-view-switch,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-event-detail button,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-diff button,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-panel-title,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-head p,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-conversations small,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-diagnostics span,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-turn > header,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-event p small,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-conversations > button.is-active,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-calls button.is-active,
+:root[data-theme^='malvoyant-'] .theme-serious .observatory-view .observatory-event.is-selected {
+  color: var(--text);
+}
+
+/* components/ProdPassphraseGate.css — gris en dur */
+:root[data-theme^='malvoyant-'] .ppg,
+:root[data-theme^='malvoyant-'] .ppg-raison,
+:root[data-theme^='malvoyant-'] .ppg-note,
+:root[data-theme^='malvoyant-'] .ppg-label,
+:root[data-theme^='malvoyant-'] .ppg-champ,
+:root[data-theme^='malvoyant-'] .ppg-actions button,
+:root[data-theme^='malvoyant-'] .ppg-question {
+  color: var(--text);
+}
+
+/* components/ProdProtectionSettings.css — gris en dur */
+:root[data-theme^='malvoyant-'] .settings-prod-protection .prod-etat-inconnu,
+:root[data-theme^='malvoyant-'] .settings-prod-protection .prod-detail,
+:root[data-theme^='malvoyant-'] .settings-prod-protection .prod-label,
+:root[data-theme^='malvoyant-'] .settings-prod-protection .prod-label input,
+:root[data-theme^='malvoyant-'] .settings-prod-protection .prod-note,
+:root[data-theme^='malvoyant-'] .settings-prod-protection .prod-niveau-note {
+  color: var(--text);
+}
+
+/* components/ProjectPane.css — tailles */
+:root[data-theme^='malvoyant-'] .project-pane .pp-editeur-head,
+:root[data-theme^='malvoyant-'] .project-pane .pp-enregistrer,
+:root[data-theme^='malvoyant-'] .project-pane .pp-etat,
+:root[data-theme^='malvoyant-'] .project-pane .pp-erreur {
+  font-size: 13px;
+}
+
+/* components/RouterView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .router-view,
+:root[data-theme^='malvoyant-'] .router-actions .router-standby {
+  color: var(--text);
+}
+
+/* components/RunInspector.css — tailles */
+:root[data-theme^='malvoyant-'] .run-inspector__summary,
+:root[data-theme^='malvoyant-'] .run-inspector__nav,
+:root[data-theme^='malvoyant-'] .run-inspector__nav button,
+:root[data-theme^='malvoyant-'] .run-inspector__kicker,
+:root[data-theme^='malvoyant-'] .run-inspector__fichiers code {
+  font-size: 13px;
+}
+
+/* components/RunInspector.css — gris en dur */
+:root[data-theme^='malvoyant-'] .run-inspector__summary,
+:root[data-theme^='malvoyant-'] .run-inspector__nav button,
+:root[data-theme^='malvoyant-'] .run-inspector__nav button:disabled,
+:root[data-theme^='malvoyant-'] .run-inspector__besoin,
+:root[data-theme^='malvoyant-'] .run-inspector__ligne ul,
+:root[data-theme^='malvoyant-'] .run-inspector__fichiers code {
+  color: var(--text);
+}
+
+/* components/RunProgress.css — tailles */
+:root[data-theme^='malvoyant-'] .run-progress__icon {
+  font-size: 13px;
+}
+
+/* components/SandboxedHtmlPreview.css — tailles */
+:root[data-theme^='malvoyant-'] .html-render-preview__identity,
+:root[data-theme^='malvoyant-'] .html-render-preview__toolbar button {
+  font-size: 13px;
+}
+
+/* components/SandboxedHtmlPreview.css — gris en dur */
+:root[data-theme^='malvoyant-'] .html-render-preview__identity,
+:root[data-theme^='malvoyant-'] .html-render-preview__toolbar button,
+:root[data-theme^='malvoyant-'] .html-render-preview__toolbar button:hover,
+:root[data-theme^='malvoyant-'] .html-render-preview__toolbar button:focus-visible,
+:root[data-theme^='malvoyant-'] .html-render-preview__toolbar button.is-active,
+:root[data-theme^='malvoyant-'] .html-render-preview__source,
+:root[data-theme^='malvoyant-'] .html-render-preview__too-large {
+  color: var(--text);
+}
+
+/* components/SlashPalette.css — tailles */
+:root[data-theme^='malvoyant-'] .slash-hint {
+  font-size: 13px;
+}
+
+/* components/SourceControlPane.css — tailles */
+:root[data-theme^='malvoyant-'] .sc-loading,
+:root[data-theme^='malvoyant-'] .sc-repo-path,
+:root[data-theme^='malvoyant-'] .sc-repo-btn,
+:root[data-theme^='malvoyant-'] .sc-tab-badge,
+:root[data-theme^='malvoyant-'] .sc-h,
+:root[data-theme^='malvoyant-'] .sc-ab,
+:root[data-theme^='malvoyant-'] .sc-btn,
+:root[data-theme^='malvoyant-'] .sc-chev,
+:root[data-theme^='malvoyant-'] .sc-diff-title,
+:root[data-theme^='malvoyant-'] .sc-diff-wrap-mode,
+:root[data-theme^='malvoyant-'] .sc-fn,
+:root[data-theme^='malvoyant-'] .sc-autoclose-last,
+:root[data-theme^='malvoyant-'] .sc-autoclose-last strong,
+:root[data-theme^='malvoyant-'] .sc-brain-call > header,
+:root[data-theme^='malvoyant-'] .sc-brain-call > footer,
+:root[data-theme^='malvoyant-'] .sc-brain-call > p,
+:root[data-theme^='malvoyant-'] .sc-brain-sources li {
+  font-size: 13px;
+}
+
+/* components/SuggestionGrid.css — tailles */
+:root[data-theme^='malvoyant-'] .sg-key {
+  font-size: 13px;
+}
+
+/* components/TaskManagerView.css — tailles */
+:root[data-theme^='malvoyant-'] .task-manager-description,
+:root[data-theme^='malvoyant-'] .task-manager-health,
+:root[data-theme^='malvoyant-'] .task-manager-stats,
+:root[data-theme^='malvoyant-'] .task-manager-error,
+:root[data-theme^='malvoyant-'] .task-manager-panel-title,
+:root[data-theme^='malvoyant-'] .task-manager-panel-title button,
+:root[data-theme^='malvoyant-'] .task-manager-row-main small,
+:root[data-theme^='malvoyant-'] .task-manager-row-meta small,
+:root[data-theme^='malvoyant-'] .task-manager-row-meta b,
+:root[data-theme^='malvoyant-'] .task-manager-empty p,
+:root[data-theme^='malvoyant-'] .task-manager-alert-empty p,
+:root[data-theme^='malvoyant-'] .task-manager-muted,
+:root[data-theme^='malvoyant-'] .task-manager-detail-head p,
+:root[data-theme^='malvoyant-'] .task-manager-mode,
+:root[data-theme^='malvoyant-'] .task-manager-prompt > span,
+:root[data-theme^='malvoyant-'] .task-manager-facts dt,
+:root[data-theme^='malvoyant-'] .task-manager-facts dd,
+:root[data-theme^='malvoyant-'] .task-manager-occurrence > span,
+:root[data-theme^='malvoyant-'] .task-manager-occurrence strong,
+:root[data-theme^='malvoyant-'] .task-manager-occurrence small,
+:root[data-theme^='malvoyant-'] .task-manager-occurrence-open,
+:root[data-theme^='malvoyant-'] .task-manager-alert strong,
+:root[data-theme^='malvoyant-'] .task-manager-alert time,
+:root[data-theme^='malvoyant-'] .task-manager-alert p,
+:root[data-theme^='malvoyant-'] .task-manager-alert button,
+:root[data-theme^='malvoyant-'] .task-manager-field > span,
+:root[data-theme^='malvoyant-'] .task-manager-weekdays legend,
+:root[data-theme^='malvoyant-'] .task-manager-weekdays label,
+:root[data-theme^='malvoyant-'] .task-manager-switch,
+:root[data-theme^='malvoyant-'] .task-manager-form-actions > span,
+:root[data-theme^='malvoyant-'] .watchdog-stats,
+:root[data-theme^='malvoyant-'] .watchdog-rule-state,
+:root[data-theme^='malvoyant-'] .watchdog-rule-guards,
+:root[data-theme^='malvoyant-'] .watchdog-rule-history li,
+:root[data-theme^='malvoyant-'] .watchdog-status,
+:root[data-theme^='malvoyant-'] .watchdog-outcome,
+:root[data-theme^='malvoyant-'] .watchdog-fields-note,
+:root[data-theme^='malvoyant-'] .watchdog-fields-warning,
+:root[data-theme^='malvoyant-'] .watchdog-fields-reset,
+:root[data-theme^='malvoyant-'] .watchdog-events legend,
+:root[data-theme^='malvoyant-'] .task-manager-alert-task,
+:root[data-theme^='malvoyant-'] .task-manager-running {
+  font-size: 13px;
+}
+
+/* components/TaskManagerView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .watchdog-section-head p,
+:root[data-theme^='malvoyant-'] .watchdog-stats,
+:root[data-theme^='malvoyant-'] .watchdog-stats strong,
+:root[data-theme^='malvoyant-'] .watchdog-empty,
+:root[data-theme^='malvoyant-'] .watchdog-rule-state,
+:root[data-theme^='malvoyant-'] .watchdog-rule-source,
+:root[data-theme^='malvoyant-'] .watchdog-rule-guards,
+:root[data-theme^='malvoyant-'] .watchdog-rule-history time,
+:root[data-theme^='malvoyant-'] .watchdog-status,
+:root[data-theme^='malvoyant-'] .watchdog-outcome.is-unknown,
+:root[data-theme^='malvoyant-'] .watchdog-fields-note,
+:root[data-theme^='malvoyant-'] .watchdog-fields-reset,
+:root[data-theme^='malvoyant-'] .watchdog-fields-reset:hover,
+:root[data-theme^='malvoyant-'] .watchdog-events legend {
+  color: var(--text);
+}
+
+/* components/TestsView.css — tailles */
+:root[data-theme^='malvoyant-'] .tests-project-runner,
+:root[data-theme^='malvoyant-'] .tests-project-totals,
+:root[data-theme^='malvoyant-'] .tests-project-reason,
+:root[data-theme^='malvoyant-'] .tests-case-error,
+:root[data-theme^='malvoyant-'] .tests-memo,
+:root[data-theme^='malvoyant-'] .tests-file-count,
+:root[data-theme^='malvoyant-'] .tests-case-tools button {
+  font-size: 13px;
+}
+
+/* components/TestsView.css — gris en dur */
+:root[data-theme^='malvoyant-'] .tests-case-error {
+  color: var(--text);
+}
+
+/* components/TicketsView.css — tailles */
+:root[data-theme^='malvoyant-'] .tickets-source-eyebrow,
+:root[data-theme^='malvoyant-'] .tickets-auth-mode,
+:root[data-theme^='malvoyant-'] .tickets-auth-help,
+:root[data-theme^='malvoyant-'] .tickets-stats,
+:root[data-theme^='malvoyant-'] .tickets-state-chip,
+:root[data-theme^='malvoyant-'] .tickets-actions,
+:root[data-theme^='malvoyant-'] .tickets-list .tickets-meta,
+:root[data-theme^='malvoyant-'] .tickets-badge,
+:root[data-theme^='malvoyant-'] .tickets-avatar,
+:root[data-theme^='malvoyant-'] .tickets-updated,
+:root[data-theme^='malvoyant-'] .tickets-tag,
+:root[data-theme^='malvoyant-'] .tickets-detail-id,
+:root[data-theme^='malvoyant-'] .tickets-page-end,
+:root[data-theme^='malvoyant-'] .tickets-detail dt,
+:root[data-theme^='malvoyant-'] .tickets-auto-status,
+:root[data-theme^='malvoyant-'] .tickets-auto-guards,
+:root[data-theme^='malvoyant-'] .tickets-server-query {
+  font-size: 13px;
+}
+
+/* components/UpdateBanner.css — tailles */
+:root[data-theme^='malvoyant-'] .rail-update-count,
+:root[data-theme^='malvoyant-'] .rail-update-error,
+:root[data-theme^='malvoyant-'] .rail-update-repair,
+:root[data-theme^='malvoyant-'] .rail-update-choice {
+  font-size: 13px;
+}
+
+/* components/VeilleCandidatsSection.css — tailles */
+:root[data-theme^='malvoyant-'] .veille-ligne-tete,
+:root[data-theme^='malvoyant-'] .veille-pertinence small {
+  font-size: 13px;
+}
+
+/* components/VeilleCandidatsSection.css — gris en dur */
+:root[data-theme^='malvoyant-'] .veille-citation {
+  color: var(--text);
+}
+
+/* components/WorkflowCanvas.css — tailles */
+:root[data-theme^='malvoyant-'] .wf-kicker,
+:root[data-theme^='malvoyant-'] .wf-hint,
+:root[data-theme^='malvoyant-'] .wf-pal-item,
+:root[data-theme^='malvoyant-'] .wf-node-id,
+:root[data-theme^='malvoyant-'] .wf-ag-label,
+:root[data-theme^='malvoyant-'] .wf-quorum-badge,
+:root[data-theme^='malvoyant-'] .wf-node-defect,
+:root[data-theme^='malvoyant-'] .wf-pill,
+:root[data-theme^='malvoyant-'] .wf-node-detail input,
+:root[data-theme^='malvoyant-'] .wf-agent-rang,
+:root[data-theme^='malvoyant-'] .wf-agent-card label,
+:root[data-theme^='malvoyant-'] .wf-agent-card select,
+:root[data-theme^='malvoyant-'] .wf-agent-card input,
+:root[data-theme^='malvoyant-'] .wf-return-buttons button,
+:root[data-theme^='malvoyant-'] .wf-defects,
+:root[data-theme^='malvoyant-'] .wf-returns li,
+:root[data-theme^='malvoyant-'] .wf-return-name,
+:root[data-theme^='malvoyant-'] .wf-returns label,
+:root[data-theme^='malvoyant-'] .wf-returns input,
+:root[data-theme^='malvoyant-'] .wf-inert {
+  font-size: 13px;
+}
+
+/* components/WorkflowExecutionGraph.css — tailles */
+:root[data-theme^='malvoyant-'] .workflow-execution-summary span,
+:root[data-theme^='malvoyant-'] .workflow-execution-loading,
+:root[data-theme^='malvoyant-'] .workflow-execution-empty,
+:root[data-theme^='malvoyant-'] .workflow-execution-error,
+:root[data-theme^='malvoyant-'] .workflow-execution-node-title b,
+:root[data-theme^='malvoyant-'] .workflow-execution-node-title em,
+:root[data-theme^='malvoyant-'] .workflow-execution-node-meta,
+:root[data-theme^='malvoyant-'] .workflow-execution-detail header,
+:root[data-theme^='malvoyant-'] .workflow-execution-detail dt,
+:root[data-theme^='malvoyant-'] .workflow-execution-detail dd,
+:root[data-theme^='malvoyant-'] .workflow-execution-warning,
+:root[data-theme^='malvoyant-'] .workflow-execution-reasoning > summary,
+:root[data-theme^='malvoyant-'] .workflow-execution-reasoning pre,
+:root[data-theme^='malvoyant-'] .workflow-execution-turn-select {
+  font-size: 13px;
+}
+
+/* components/WorkflowProfilesView.css — tailles */
+:root[data-theme^='malvoyant-'] .workflow-profiles-actions button,
+:root[data-theme^='malvoyant-'] .workflow-profile-summary,
+:root[data-theme^='malvoyant-'] .workflow-profile-desc,
+:root[data-theme^='malvoyant-'] .workflow-profile-action,
+:root[data-theme^='malvoyant-'] .workflow-profile-confirm,
+:root[data-theme^='malvoyant-'] .workflow-profile-issues,
+:root[data-theme^='malvoyant-'] .workflow-profile-roles,
+:root[data-theme^='malvoyant-'] .wf-badge,
+:root[data-theme^='malvoyant-'] .wf-tn-head,
+:root[data-theme^='malvoyant-'] .workflow-profiles-note,
+:root[data-theme^='malvoyant-'] .workflow-graph-hint {
+  font-size: 13px;
+}
+
+/* components/WorkflowVerdict.css — tailles */
+:root[data-theme^='malvoyant-'] .workflow-verdict-table,
+:root[data-theme^='malvoyant-'] .workflow-verdict-badge,
+:root[data-theme^='malvoyant-'] .workflow-verdict-caveat,
+:root[data-theme^='malvoyant-'] .workflow-verdict-rationale,
+:root[data-theme^='malvoyant-'] .workflow-verdict-skipped {
+  font-size: 13px;
+}
+
+/* components/WorktreeActivityView.css — tailles */
+:root[data-theme^='malvoyant-'] .wt-office-base,
+:root[data-theme^='malvoyant-'] .wt-office-excluded,
+:root[data-theme^='malvoyant-'] .wt-hub-count,
+:root[data-theme^='malvoyant-'] .wt-main-copy p,
+:root[data-theme^='malvoyant-'] .wt-inbox p,
+:root[data-theme^='malvoyant-'] .wt-no-offices p,
+:root[data-theme^='malvoyant-'] .wt-office-person strong,
+:root[data-theme^='malvoyant-'] .wt-office-person div > span,
+:root[data-theme^='malvoyant-'] .wt-office-state,
+:root[data-theme^='malvoyant-'] .wt-recovered,
+:root[data-theme^='malvoyant-'] .wt-office-empty,
+:root[data-theme^='malvoyant-'] .wt-office-outcome,
+:root[data-theme^='malvoyant-'] .wt-office-route,
+:root[data-theme^='malvoyant-'] .wt-office-duration,
+:root[data-theme^='malvoyant-'] .wt-office-trace,
+:root[data-theme^='malvoyant-'] .wt-office-error,
+:root[data-theme^='malvoyant-'] .wt-no-offices strong,
+:root[data-theme^='malvoyant-'] .wt-inbox strong {
+  font-size: 13px;
+}
+
+/* components/WorktreeView.css — tailles */
+:root[data-theme^='malvoyant-'] .project-strip span,
+:root[data-theme^='malvoyant-'] .cockpit-section header span,
+:root[data-theme^='malvoyant-'] .cockpit-notice,
+:root[data-theme^='malvoyant-'] .cockpit-now p,
+:root[data-theme^='malvoyant-'] .cockpit-recent p,
+:root[data-theme^='malvoyant-'] .cockpit-empty,
+:root[data-theme^='malvoyant-'] .cockpit-recent time,
+:root[data-theme^='malvoyant-'] .wt-topologie-elide-libelle,
+:root[data-theme^='malvoyant-'] .wt-topologie-legende,
+:root[data-theme^='malvoyant-'] .wt-cdp-nombre span,
+:root[data-theme^='malvoyant-'] .wt-cdp-pastille {
+  font-size: 13px;
+}
+
+/* assets/app-shell.css — tailles */
+:root[data-theme^='malvoyant-'] .test-instance-banner,
+:root[data-theme^='malvoyant-'] .rail-foot {
+  font-size: 13px;
+}
+
+/* assets/cosmic-outline.css — tailles */
+:root[data-theme^='malvoyant-'] .cosmic-outline .chat-runtime,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-go,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-title,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-tools,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-progress {
+  font-size: 13px;
+}
+
+/* assets/cosmic-outline.css — gris en dur */
+:root[data-theme^='malvoyant-'] .cosmic-outline .msg-meta,
+:root[data-theme^='malvoyant-'] .cosmic-outline .msg.assistant .msg-body,
+:root[data-theme^='malvoyant-'] .cosmic-outline .msg.user .msg-body,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-step-toggle,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-step-detail,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-step-target,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-resume:hover,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-why,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-open-run,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-open-run:hover,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-go,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-title,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-tools,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-progress,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-step,
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-step-link,
+:root[data-theme^='malvoyant-'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled {
+  color: var(--text);
+}
+
+/* assets/theme.css — tailles */
+:root[data-theme^='malvoyant-'] .btn-sm,
+:root[data-theme^='malvoyant-'] .badge {
+  font-size: 13px;
+}
+
+/* assets/theme.css — gris en dur */
+:root[data-theme^='malvoyant-'] .btn-accent {
+  color: var(--text);
+}
