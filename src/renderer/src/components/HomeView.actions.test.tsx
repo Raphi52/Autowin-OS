@@ -267,6 +267,38 @@ describe('la vue agit : marquer lu', () => {
   })
 })
 
+describe('la vue agit : arreter de lire Outlook', () => {
+  /**
+   * Defaut releve par l'utilisateur le 2026-09-22 : « je remarque des lenteurs dans Outlook quand
+   * Autowin est ouvert ». Eteindre les tuiles retirait l'AFFICHAGE mais pas la LECTURE : un dialogue
+   * COM par minute continuait dans le process Outlook, invisible et pourtant payant.
+   */
+  it('ne lit plus Outlook du tout quand les deux tuiles qui s en servent sont eteintes', async () => {
+    window.localStorage.setItem(
+      autowinStorageKey('home.widgets-visibles.v1'),
+      JSON.stringify({ mails: false, agenda: false })
+    )
+    const container = await mount()
+    expect(tile(container, 'mails')).toBeNull()
+    expect(api().outlookSnapshot).not.toHaveBeenCalled()
+
+    // Et le retour dans la fenetre ne la rallume pas non plus.
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(api().outlookSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('continue de lire si UNE seule des deux tuiles reste allumee', async () => {
+    window.localStorage.setItem(
+      autowinStorageKey('home.widgets-visibles.v1'),
+      JSON.stringify({ mails: false })
+    )
+    await mount()
+    expect(api().outlookSnapshot).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('la vue agit : solder une alerte', () => {
   it('acquitte depuis l accueil', async () => {
     const container = await mount()

@@ -16,7 +16,11 @@ param(
   [Parameter(Mandatory = $true)][string]$Out,
   # Plafond de messages lus. Une boite volumineuse ne doit pas faire durer l'appel : on trie par date
   # AVANT de lire, donc ce plafond garde les plus recents.
-  [ValidateRange(1, 2000)][int]$MaxMails = 300,
+  # Ramene de 300 a 80 le 2026-09-22 : chaque message lu est un aller-retour COM DANS le process
+  # Outlook, qui est mono-thread -- son interface rame pendant toute la lecture. Mesure du poste :
+  # la lecture depassait le budget de 45 s, le script etait tue, et le fichier a moitie ecrit
+  # s'affichait comme "la lecture s'est interrompue avant d'avoir fini d'ecrire".
+  [ValidateRange(1, 2000)][int]$MaxMails = 80,
   # Fenetre volontairement LARGE : le widget montre la semaine, mais si elle est vide il annonce le
   # prochain rendez-vous au lieu d'un vide que l'utilisateur lirait comme une panne.
   [ValidateRange(1, 400)][int]$Jours = 120,
@@ -26,10 +30,12 @@ param(
   [ValidateRange(0, 3650)][int]$DepuisJours = 0,
   # Plafond de messages ENVOYES rapportes. Ils servent a montrer les DEUX cotes d'un fil : sans eux
   # une conversation n'a qu'une moitie, et elle se lit comme un monologue du correspondant.
-  [ValidateRange(0, 1000)][int]$MaxEnvoyes = 150,
+  [ValidateRange(0, 1000)][int]$MaxEnvoyes = 80,
   # Longueur retenue du corps d'un message. Tronque ICI et pas cote application : le cout est dans le
   # transport, et un fil de discussion se lit sur les premiers milliers de caracteres.
-  [ValidateRange(0, 20000)][int]$MaxCorps = 2000
+  # Ramene de 2000 a 800 le 2026-09-22 : lire `.Body` est l'appel le PLUS couteux du parcours, et il
+  # est paye une fois par message. Un apercu de fil se lit sur les premieres centaines de caracteres.
+  [ValidateRange(0, 20000)][int]$MaxCorps = 800
 )
 
 $ErrorActionPreference = 'Stop'
@@ -182,7 +188,9 @@ try {
     $envoyes.Sort('[SentOn]', $true)
     $vus = 0
     foreach ($envoye in $envoyes) {
-      if ($vus -ge 400) { break }
+      # Ramene de 400 a 200 le 2026-09-22 : chaque element envoye resout ses destinataires, et une
+      # resolution Exchange est un appel reseau. 200 suffit a etablir avec QUI l'on echange.
+      if ($vus -ge 200) { break }
       $vus++
       $premiereAdresse = ''
       $premierNom = ''

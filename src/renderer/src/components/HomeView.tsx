@@ -509,13 +509,23 @@ export function HomeView({
    * taire l'outil. Le `setState` synchrone du chemin NORMAL, lui, a ete retire : il est desormais
    * pose par le bouton qui l'allume.
    */
+  /**
+   * UNE TUILE ETEINTE NE LIT PLUS RIEN.
+   *
+   * Seules « Interlocuteurs » et « Agenda » consomment l'instantane Outlook. Tant que l'une des deux
+   * est allumee, on lit ; si les DEUX sont eteintes, l'intervalle ne se pose meme pas. Sans cette
+   * condition, eteindre les tuiles retirait l'affichage mais laissait un dialogue COM par minute avec
+   * Outlook -- l'utilisateur ne voyait plus rien et payait quand meme la lenteur (demande du
+   * 2026-09-22 : « quand je desactive le widget ca arrete le polling »).
+   */
+  const outlookRequis = estVisible(visibilite, 'mails') || estVisible(visibilite, 'agenda')
   useEffect(() => {
-    if (!active) return
+    if (!active || !outlookRequis) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void readOutlook()
     const timer = window.setInterval(() => void readOutlook(), OUTLOOK_REFRESH_MS)
     return () => window.clearInterval(timer)
-  }, [active, readOutlook])
+  }, [active, outlookRequis, readOutlook])
 
   /**
    * Relit Outlook quand on REVIENT dans la fenetre.
@@ -528,7 +538,7 @@ export function HomeView({
    * c'est-a-dire precisement ce qu'on cherche a remplacer.
    */
   useEffect(() => {
-    if (!active) return
+    if (!active || !outlookRequis) return
     const relire = (): void => {
       if (document.visibilityState === 'hidden') return
       if (Date.now() - derniereLecture.current < OUTLOOK_ECART_MIN_MS) return
@@ -540,7 +550,7 @@ export function HomeView({
       window.removeEventListener('focus', relire)
       document.removeEventListener('visibilitychange', relire)
     }
-  }, [active, readOutlook])
+  }, [active, outlookRequis, readOutlook])
 
   const departures = useMemo(
     () => (snapshot ? nextDepartures(snapshot.tasks, now) : []),
