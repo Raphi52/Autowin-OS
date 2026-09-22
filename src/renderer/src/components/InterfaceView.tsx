@@ -39,8 +39,8 @@ export function InterfaceView(): React.JSX.Element {
         <div className="interface-row-text">
           <strong>Thème</strong>
           <p>
-            L’apparence de l’application : <strong>huit thèmes</strong>, quatre sombres et quatre
-            clairs. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas ne voit
+            L’apparence de l’application : <strong>dix thèmes</strong>, cinq sombres et cinq clairs,
+            dont deux <strong>Spécial malvoyant</strong> à très fort contraste. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas ne voit
             rien changer. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans
             redémarrage.
           </p>
