@@ -1217,3 +1217,144 @@
     ),
     radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
 }
+
+/* SPECIAL MALVOYANT -- deux themes d accessibilite. Texte courant >= 7:1 (AAA), texte
+   secondaire et accents >= 4,5:1, fonds OPAQUES (une transparence baisse le contraste reel),
+   focus epais, bordures franches, texte agrandi ~1,25x sur la coque. */
+:root[data-theme='malvoyant-sombre'] {
+  color-scheme: dark;
+  --bg-0: #000000;
+  --bg-1: #0a0a0a;
+  --bg-2: #141414;
+  --bg-3: #1f1f1f;
+  --bg-inset: #000000;
+  --line: #9a9a9a;
+  --line-strong: #ffffff;
+  --text: #ffffff;
+  --text-dim: #e6e6e6;
+  --text-faint: #c8c8c8;
+  --gold: #ffd84a;
+  --gold-bright: #ffe680;
+  --gold-doux: #ffd84a;
+  --gold-clair: #ffe680;
+  --rose: #ff8cc6;
+  --rose-bright: #ffb3da;
+  --cyan: #6ee7ff;
+  --violet: #c9b8ff;
+  --accent: #ffd84a;
+  --accent-dim: #5c4a00;
+  --accent-soft: rgba(255, 216, 74, 0.2);
+  --ok: #7dff8a;
+  --warn: #ffd84a;
+  --err: #ff8a80;
+  --info: var(--cyan);
+  --voile-rgb: 0, 0, 0;
+  --focus-malvoyant: #ffd84a;
+}
+:root[data-theme='malvoyant-sombre'] .shell,
+:root[data-theme='malvoyant-sombre'] .shell.theme-serious {
+  --surface-page: #000000;
+  --surface-panel: #0a0a0a;
+  --surface-card: #141414;
+  --surface-inset: #000000;
+  --surface-hover: #2a2a2a;
+  --surface-selected: #3d3300;
+  --container-border: #9a9a9a;
+  --container-border-strong: #ffffff;
+  --container-shadow: none;
+}
+
+:root[data-theme='malvoyant-clair'] {
+  color-scheme: light;
+  --bg-0: #ffffff;
+  --bg-1: #ffffff;
+  --bg-2: #f5f5f5;
+  --bg-3: #ebebeb;
+  --bg-inset: #ffffff;
+  --line: #595959;
+  --line-strong: #000000;
+  --text: #000000;
+  --text-dim: #1f1f1f;
+  --text-faint: #404040;
+  --gold: #5c4200;
+  --gold-bright: #4a3500;
+  --gold-doux: #5c4200;
+  --gold-clair: #5c4200;
+  --rose: #8a0040;
+  --rose-bright: #6e0033;
+  --cyan: #004a66;
+  --violet: #3a1f99;
+  --accent: #0033aa;
+  --accent-dim: #c7d4f5;
+  --accent-soft: rgba(0, 51, 170, 0.12);
+  --ok: #1d5a14;
+  --warn: #6b4a00;
+  --err: #8f1a14;
+  --info: var(--cyan);
+  --voile-rgb: 0, 0, 0;
+  --focus-malvoyant: #0033aa;
+}
+:root[data-theme='malvoyant-clair'] .shell,
+:root[data-theme='malvoyant-clair'] .shell.theme-serious {
+  --surface-page: #ffffff;
+  --surface-panel: #ffffff;
+  --surface-card: #f5f5f5;
+  --surface-inset: #ffffff;
+  --surface-hover: #e0e0e0;
+  --surface-selected: #c7d4f5;
+  --container-border: #595959;
+  --container-border-strong: #000000;
+  --container-shadow: none;
+}
+
+/* Commun aux deux : texte plus grand, interlignage genereux, focus et bordures visibles. */
+:root[data-theme^='malvoyant-'] body {
+  font-size: 16px;
+  line-height: 1.6;
+}
+:root[data-theme^='malvoyant-'] .shell {
+  font-size: 1.25em;
+}
+:root[data-theme^='malvoyant-'] :focus-visible {
+  outline: 3px solid var(--focus-malvoyant) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 6px var(--bg-0) !important;
+}
+:root[data-theme^='malvoyant-'] button,
+:root[data-theme^='malvoyant-'] input,
+:root[data-theme^='malvoyant-'] select,
+:root[data-theme^='malvoyant-'] textarea {
+  border: 2px solid var(--line-strong);
+}
+:root[data-theme^='malvoyant-'] a {
+  text-decoration: underline;
+}
+/* Le texte agrandi elargit les pastilles de l'en-tete du chat : sans retour a la ligne, le bloc
+   de gauche (min-width: 0) deborde sous « Details ». On laisse l'en-tete passer sur 2 lignes. */
+:root[data-theme^='malvoyant-'] .chat-head,
+:root[data-theme^='malvoyant-'] .chat-runtime {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+/* Texte d'aide des champs : le gris par defaut du navigateur est sous 7:1. */
+:root[data-theme^='malvoyant-'] input::placeholder,
+:root[data-theme^='malvoyant-'] textarea::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+/* Envoyer, meme inactif, doit rester reperable : trait plein et icone contrastee. */
+:root[data-theme^='malvoyant-'] .composer-send:disabled,
+:root[data-theme^='malvoyant-'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled {
+  opacity: 1;
+  color: var(--text-dim);
+  background: var(--bg-2);
+  border: 2px solid var(--line-strong);
+}
+/* Fond decoratif (image galaxie du body, decor 3D de l'Accueil) : du bruit visuel derriere le
+   texte. On le remplace par l'aplat du theme. */
+:root[data-theme^='malvoyant-'] body {
+  background: var(--bg-0);
+}
+:root[data-theme^='malvoyant-'] .decor-de-fond {
+  display: none;
+}

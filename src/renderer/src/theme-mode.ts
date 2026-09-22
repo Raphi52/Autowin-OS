@@ -61,7 +61,11 @@ export const THEMES: readonly Theme[] = [
   // ces palettes sont PROPOSEES, a corriger a l oeil.
   { id: 'ardoise', libelle: 'Ardoise', base: 'clair' },
   { id: 'parchemin', libelle: 'Parchemin', base: 'clair' },
-  { id: 'rose-poudre', libelle: 'Rose poudre', base: 'clair' }
+  { id: 'rose-poudre', libelle: 'Rose poudre', base: 'clair' },
+  // SPECIAL MALVOYANT : contraste AAA (7:1) sur le texte courant, focus epais, bordures nettes,
+  // texte agrandi. Une base de chaque cote pour heriter des corrections de lisibilite existantes.
+  { id: 'malvoyant-sombre', libelle: 'Spécial malvoyant — sombre', base: 'sombre' },
+  { id: 'malvoyant-clair', libelle: 'Spécial malvoyant — clair', base: 'clair' }
 ]
 
 export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'

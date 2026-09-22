@@ -62,6 +62,10 @@ export function InterfaceView(): React.JSX.Element {
           </select>
         </label>
       </div>
+      <p className="interface-reserve" data-testid="interface-zoom">
+        <strong>Pour agrandir tout l’écran</strong> (utile avec les thèmes Spécial malvoyant) :
+        Ctrl + molette, ou Ctrl + « + » / Ctrl + « - ». Ctrl + 0 revient à la taille normale.
+      </p>
       <p className="interface-reserve">
         <strong>Ce qui ne suit pas encore.</strong> Le thème choisi s’applique à presque tout
         l’écran : le menu, les panneaux, les textes, les champs, et les pages <strong>Chat</strong>,{' '}
