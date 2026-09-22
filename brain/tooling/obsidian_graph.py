@@ -31,6 +31,9 @@ class GraphReport:
     isolates: tuple[str, ...]
     components: tuple[tuple[str, ...], ...]
     unresolved: tuple[str, ...]
+    # Liens ORIENTES (source -> cible) : `edges` est trie donc perd le sens, or « qui depend de X »
+    # a besoin du sens. Meme analyseur, aucune seconde lecture des notes (cf. brain_graph.py).
+    links: frozenset[tuple[str, str]] = frozenset()
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -94,6 +97,7 @@ def analyze(root: Path) -> GraphReport:
         stems[Path(relative).stem.casefold()].append(relative)
     adjacency = {relative: set() for relative in files}
     edges: set[tuple[str, str]] = set()
+    links: set[tuple[str, str]] = set()
     unresolved: set[str] = set()
 
     def resolve(source: str, raw: str, wiki: bool) -> str | None:
@@ -130,6 +134,7 @@ def analyze(root: Path) -> GraphReport:
                 continue
             edge = tuple(sorted((source, destination)))
             edges.add(edge)
+            links.add((source, destination))
             adjacency[source].add(destination)
             adjacency[destination].add(source)
 
@@ -157,6 +162,7 @@ def analyze(root: Path) -> GraphReport:
         isolates=isolates,
         components=tuple(components),
         unresolved=tuple(sorted(unresolved)),
+        links=frozenset(links),
     )
 
 

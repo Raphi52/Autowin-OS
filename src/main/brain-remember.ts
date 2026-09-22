@@ -320,6 +320,11 @@ export type RememberDecision =
       source: string
       tags: string[]
       confidence: 'low' | 'medium' | 'high'
+      /**
+       * Uids des notes que ce candidat propose de REMPLACER. L'agent gere sa memoire (il peut dire
+       * « cette note est perimee »), mais le statut `superseded` ne change qu'a la promotion humaine.
+       */
+      supersedes: string[]
       /** Le fait dépassait la borne : à DIRE, sinon le candidat ment par omission. */
       truncated: boolean
     }
@@ -451,8 +456,20 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
     source,
     tags,
     confidence,
+    supersedes: parseSupersedes(args.supersedes),
     truncated: anythingCut
   }
+}
+
+/** Meme forme que `SUPERSEDES_UID_RE` du Brain : une valeur hors forme est ecartee, jamais inventee. */
+const SUPERSEDES_UID = /^[a-z0-9][a-z0-9:/._-]{2,127}$/
+
+export function parseSupersedes(raw: unknown): string[] {
+  const values = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[\s,]+/) : []
+  return values
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter((value) => SUPERSEDES_UID.test(value))
+    .slice(0, 8)
 }
 
 export interface RememberOutcome {
@@ -803,6 +820,7 @@ async function performDepositCandidate(
         source: decision.source,
         tags: decision.tags,
         confidence: decision.confidence,
+        ...(decision.supersedes.length ? { supersedes: decision.supersedes } : {}),
         author_agent: deps.authorAgent ?? 'autowin-os',
         model: deps.model ?? 'autowin'
       })
