@@ -26,9 +26,9 @@ import {
   PROMPT_SALVAGE
 } from '../../../shared/prompt-suivant'
 import { extractRecommendation } from './markdown-recommandation'
-import { parseAskDecision, promptDeLOption } from './ask-choices'
+import { parseAskDecision, promptDeLOption, promptDesOptions } from './ask-choices'
 import {
-  CIBLE_DESTRUCTRICE,
+  estCibleDestructrice,
   lireDecisionScout,
   normaliserPisteCible
 } from '../../../shared/scout-cible-lecture'
@@ -90,7 +90,34 @@ export function signatureTour(fil: readonly Msg[]): string | null {
  */
 export function recommandationDitRien(recommandation: string | null): boolean {
   if (!recommandation) return false
-  return ligneNueDitRien(recommandation.split(SAUT_ANCRAGE))
+  const lignes = recommandation.split(SAUT_ANCRAGE)
+  return ligneNueDitRien(lignes) || lignes.some(estUneFinRedigee)
+}
+
+/**
+ * UNE FIN ECRITE EN PHRASE, pas avec le mot nu (conv-787) : « Rien de plus sur ce sujet : le
+ * comportement est retabli. » a ete RENVOYEE comme un ordre, un tour paye pour rien.
+ *
+ * On n'accepte que l'OUVERTURE de la ligne : « rien ne bloque, lance le judge » propose une vraie
+ * suite et doit continuer a passer — d'ou l'absence de `ne`, `n'` et de tout verbe d'action ici.
+ */
+const OUVERTURE_DE_FIN =
+  /^(?:(?:plus\s+)?rien\s+(?:de\s+plus|d'autre|a\s+(?:faire|ajouter|signaler|verifier|corriger))|aucune\s+(?:suite|action)(?:\s+\S+){0,2}\s*(?:necessaire|requise|prevue)?)\b|^rien\s*[:—–-]/
+/** Ce qui transforme une fin annoncee en vraie suite : une action proposee sur la meme ligne. */
+const OFFRE_DE_SUITE =
+  /\b(?:tu\s+peux|on\s+peut|je\s+peux|passe|lance|relance|encha[iî]ne|envoie|dis-moi|donne-moi|regarde|clique|continue|reprends|v[eé]rifie|corrige)\b/u
+function estUneFinRedigee(ligne: string): boolean {
+  const nu = ligne
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[’ʼ]/gu, "'")
+    .replace(/^[\s>*•\-–—]+/u, '')
+    .trim()
+  if (!OUVERTURE_DE_FIN.test(nu)) return false
+  // Une fin SUIVIE d'une offre reste une suite (mesure du 2026-09-12 : « rien d'autre : tu peux
+  // m'envoyer un nom d'instance » avait ete pris pour une fin).
+  return !OFFRE_DE_SUITE.test(nu)
 }
 
 /** Les quatre en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. */
@@ -120,15 +147,28 @@ function lignesDeRubrique(texte: string, rubrique: 'Fait' | 'Reste à faire'): s
     if (entete) {
       dedans = entete[1] === rubrique
       if (dedans) {
+        // PLUSIEURS CLOTURES DANS UN MESSAGE (sondage conv-787 : jusqu'a 3) — seule la DERNIERE dit
+        // l'etat final. Les fusionner melangeait un « rien » ancien avec du travail encore listé.
+        sortie.length = 0
         const reste = brute.replace(EN_TETES_CLOTURE, '').replace(/^\s*\**\s*[:：—–-]?\s*/u, '')
         if (reste.trim()) sortie.push(reste)
       }
+      continue
+    }
+    // BORNE BASSE (sondage conv-787) : sans elle, la rubrique avalait tout le texte qui suit quand
+    // un message enchaine plusieurs etapes — jusqu'a un « ⚠️ » encore ouvert lu comme une fin.
+    if (dedans && FIN_DE_RUBRIQUE.test(brute)) {
+      dedans = false
       continue
     }
     if (dedans) sortie.push(brute)
   }
   return sortie
 }
+
+/** Ce qui ferme une rubrique de cloture autrement qu'une autre rubrique : une nouvelle section. */
+const FIN_DE_RUBRIQUE =
+  /^\s*(?:\[phase\s|#{1,6}\s|(?:---|___|\*\*\*)\s*$|AUTOWIN_PROMPT_V1\s*:|\*\*[^*]+\s*[:：]\*\*\s*$|```)/u
 
 /**
  * « rien » posé SEUL sur une ligne (puce comprise) = la rubrique est vide. C'est le signal d'arrêt.
@@ -155,7 +195,22 @@ export function blocFaitDitRien(texte: string): boolean {
  * « rien ne bloque le lancement de clean » raconte une suite POSSIBLE, pas une fin.
  */
 function resteAFaireDitRien(texte: string): boolean {
-  return ligneNueDitRien(lignesDeRubrique(texte, 'Reste à faire'))
+  /*
+   * SONDAGE conv-787 (2970 clotures reelles) : elargir cette porte aux fins ECRITES EN PHRASE, comme
+   * on l'a fait pour « Recommande », a ete ESSAYE puis ANNULE. Cette rubrique n'est pas bornee par la
+   * fin du message : quand plusieurs phases se suivent, elle avale la suite du texte, et une phrase
+   * de fin trouvee la-dedans coupait des chaines qui portaient encore du travail (« ⚠️ Les 4 tickets
+   * ne sont pas dans ta vue »). Le mot NU reste donc la seule condition ici.
+   */
+  const lignes = lignesDeRubrique(texte, 'Reste à faire')
+  if (ligneNueDitRien(lignes)) return true
+  /*
+   * SONDAGE conv-787 (2970 clotures reelles) : une fin ECRITE en phrase ne vaut ici que si la
+   * rubrique ENTIERE est cette fin. En acceptant UNE ligne parmi d'autres, la porte coupait des
+   * clotures qui listaient encore du travail (« Verifier que SELECT … INTO est bien refuse »).
+   */
+  const contenu = lignes.filter((ligne) => ligne.trim() !== '')
+  return contenu.length > 0 && contenu.every(estUneFinRedigee)
 }
 
 /**
@@ -365,8 +420,10 @@ const MESSAGES_ARRET: Record<string, string> = {
  * la chaine se tait (`aucun-prompt`) sans un mot. Seul l'utilisateur possede cette donnee : la suite
  * ne part pas seule, la pause est DITE.
  */
+// Le verbe seul ne suffit pas : « Voici le message du bandeau : dis-moi… » (conv-787) est une suite
+// ordinaire. Il faut qu'il porte une DONNEE que seul l'utilisateur detient.
 const SUITE_PORTE_DONNEE_UTILISATEUR =
-  /^\s*(?:voici|voil[aà])\s+(?:les|mes|le|la|l['’]|ma|nos|notre)\b|^\s*je\s+te\s+(?:donne|colle|transmets|fournis|envoie)\b/i
+  /^\s*(?:voici|voil[aà]|je\s+te\s+(?:donne|colle|transmets|fournis|envoie))\s+(?:les|mes|le|la|l['’]|ma|nos|notre)\s*(?:\S+\s+){0,2}?(?:identifiants?|cl[ée]s?(?!\s+(?:de\s+(?:tri|cache|hachage)|primaires?|[ée]trang[eè]res?))|mots?\s+de\s+passe|tokens?|jetons?|secrets?|codes?\s+d['’]acc[eè]s|credentials?|logins?)(?![\p{L}])/iu
 export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
   return SUITE_PORTE_DONNEE_UTILISATEUR.test(suite)
 }
@@ -386,14 +443,17 @@ const SUITE_DIFFEREE = new RegExp(
     String.raw`\b(?:demain|ce\s+soir|cette\s+nuit|plus\s+tard)\b`,
     String.raw`\bdans\s+(?:\d+|quelques)\s*(?:min(?:utes?)?|h|heures?)\b`,
     // `\b` ignore « à » (hors ASCII) : on borne à gauche par un début de texte ou une espace.
-    String.raw`(?:^|[\s(])(?:apr[eè]s|vers|d[eè]s|à|a)\s+\d{1,2}\s*(?:h|:)\s*\d{0,2}\b`,
+    // `des` SANS accent est un article (« le calcul des 12 h de retention ») : seul `dès` compte.
+    String.raw`(?:^|[\s(])(?:apr[eè]s|vers|dès|à|a)\s+\d{1,2}\s*(?:h|:)\s*\d{0,2}\b`,
     // Le point est permis : un nom de fichier (« fin.txt ») en porte un. La borne reste la ligne.
     String.raw`\bquand\b[^\n]{0,80}?\b(?:existe(?:ra)?|appara[iî]t(?:ra)?|sera\s+(?:apparu|fini|termin[ée]|pr[eê]t)|aura\s+fini)\b`
   ].join('|'),
   'iu'
 )
 export function suiteEstDifferee(suite: string, recommandation: string | null): boolean {
-  return SUITE_DIFFEREE.test(suite) || (recommandation !== null && SUITE_DIFFEREE.test(recommandation))
+  return (
+    SUITE_DIFFEREE.test(suite) || (recommandation !== null && SUITE_DIFFEREE.test(recommandation))
+  )
 }
 
 /**
@@ -445,10 +505,19 @@ export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
   })
   const decision = decisions[decisions.length - 1]
   if (!decision) return null
+  const sure = (o: (typeof decision.options)[number]): boolean => {
+    const t = promptDeLOption(o).trim()
+    return t !== '' && !estCibleDestructrice(t)
+  }
+  // CHOIX NON CONCURRENTS (`choixMultiple`) : on coche TOUTES les options sures — demande utilisateur
+  // conv-787 : « par défaut tous les choix si pas concurrents sinon faire au mieux ».
+  if (decision.choixMultiple) {
+    const retenues = decision.options.filter(sure)
+    return retenues.length > 0 ? promptDesOptions(retenues).trim() : null
+  }
+  // CHOIX CONCURRENTS : au mieux = la recommandee, sinon la premiere.
   const option = decision.options.find((o) => o.recommande) ?? decision.options[0]
-  const texte = promptDeLOption(option).trim()
-  if (!texte || CIBLE_DESTRUCTRICE.test(normaliserPisteCible(texte))) return null
-  return texte
+  return sure(option) ? promptDeLOption(option).trim() : null
 }
 
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
@@ -536,7 +605,11 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
       message: MESSAGES_ARRET['suite-attend-utilisateur']
     }
   if (suiteEstDifferee(suite, extractRecommendation(texteReponse)))
-    return { action: 'arreter', raison: 'suite-differee', message: MESSAGES_ARRET['suite-differee'] }
+    return {
+      action: 'arreter',
+      raison: 'suite-differee',
+      message: MESSAGES_ARRET['suite-differee']
+    }
   /*
    * L'ANCRAGE EST POSÉ AVANT la comparaison anti-boucle, et c'est délibéré : c'est le texte
    * RÉELLEMENT envoyé qui est mémorisé dans `dernierPromptEnvoye`. Comparer la suite NUE à un
@@ -642,7 +715,7 @@ export function lireCiblesScout(texteScout: string): DecisionScoutMulti {
       .map((piste) => piste.replace(/^[\s*_`]+|[\s*_`]+$/gu, '').trim())
       .filter((piste) => piste.length > 0)
     if (pistes.length === 0) return { statut: 'aucune-cible' }
-    const destructrice = pistes.find((piste) => CIBLE_DESTRUCTRICE.test(normaliserPiste(piste)))
+    const destructrice = pistes.find((piste) => estCibleDestructrice(piste))
     if (destructrice) return { statut: 'cible-destructrice', cible: destructrice }
     if (pistes.every((piste) => PISTE_NUMERIQUE.test(piste)))
       return { statut: 'cibles-non-nommees' }

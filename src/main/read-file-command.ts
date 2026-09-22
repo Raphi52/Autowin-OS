@@ -217,10 +217,29 @@ export function enumererFichiersLisibles(
   sousDossier = '',
   plafond = 20_000
 ): string[] {
+  return enumererFichiersLisiblesDetail(racine, sousDossier, plafond).fichiers
+}
+
+/**
+ * Même énumération, avec `incomplet: true` quand le plafond l'a coupée. Parcours PAR NIVEAUX :
+ * mesuré le 2026-09-22 (conv-782), le parcours en profondeur remplissait les 20 000 fichiers avec
+ * `bench/runs/` et ne visitait jamais `.arena/` ni `skills/` — et la recherche le taisait.
+ */
+export function enumererFichiersLisiblesDetail(
+  racine: string,
+  sousDossier = '',
+  plafond = 20_000
+): { fichiers: string[]; incomplet: boolean } {
   const resultat: string[] = []
-  const pile = [sousDossier.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')]
-  while (pile.length > 0 && resultat.length < plafond) {
-    const courant = pile.pop()!
+  const file = [sousDossier.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')]
+  let tete = 0
+  let incomplet = false
+  while (tete < file.length) {
+    if (resultat.length >= plafond) {
+      incomplet = true
+      break
+    }
+    const courant = file[tete++]!
     let entrees
     try {
       entrees = readdirSync(join(racine, courant), { withFileTypes: true })
@@ -230,12 +249,16 @@ export function enumererFichiersLisibles(
     for (const entree of entrees) {
       const relatif = courant ? `${courant}/${entree.name}` : entree.name
       if (entree.isDirectory()) {
-        if (!DOSSIERS_EXCLUS.has(entree.name)) pile.push(relatif)
+        if (!DOSSIERS_EXCLUS.has(entree.name)) file.push(relatif)
       } else if (entree.isFile()) {
+        if (resultat.length >= plafond) {
+          incomplet = true
+          break
+        }
         resultat.push(relatif)
-        if (resultat.length >= plafond) break
       }
     }
+    if (incomplet) break
   }
-  return resultat
+  return { fichiers: resultat, incomplet }
 }

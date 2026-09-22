@@ -882,6 +882,24 @@ export function statusEstUneLecture(status: string | undefined): boolean {
   return bash ? BASH_LECTEUR.test(bash[1] ?? '') : false
 }
 
+/**
+ * UN OUTIL NATIF QUI AGIT compte comme une action — pendant de `statusEstUneLecture`.
+ *
+ * Mesure du 2026-09-22 (conv-782) : un tour qui avait cree un script (Write), modifie une skill
+ * (Edit) et joue des tests (Bash) a recu « tu as ANNONCE ce que tu allais faire, sans rien faire ».
+ * `anyActionExecuted` n'est leve que par un `<cmd>` Autowin ; les outils natifs passent par
+ * `chunk.status`. Est une action : un ecrivain natif, ou un `Bash` qui n'est pas une lecture sure.
+ */
+const ECRIVAINS_NATIFS = /^(Write|Edit|MultiEdit|NotebookEdit)\b/
+
+export function statusEstUneAction(status: string | undefined): boolean {
+  const texte = (status ?? '').trim()
+  if (!texte) return false
+  if (ECRIVAINS_NATIFS.test(texte)) return true
+  const bash = /^Bash\b\s*(?:·\s*)?(.*)$/s.exec(texte)
+  return bash ? !statusEstUneLecture(texte) : false
+}
+
 /** Ce qu'on renvoie a l'agent : l'ordre de REGARDER, puis de decider lui-meme si possible. */
 export const RELANCE_QUESTION_SANS_LECTURE =
   'SYSTÈME: tu viens de poser une question à l’utilisateur SANS avoir lu un seul fichier. ' +

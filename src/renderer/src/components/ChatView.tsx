@@ -3623,6 +3623,8 @@ export function ChatView({
     if (decision.action === 'arreter') {
       // N'eteint QUE le fil affiche : les autres fils armes gardent leur reglage.
       desarmerAuto(activeId)
+      // L'arret DIT sa raison : sans elle, le bouton ∞ s'allumait puis s'eteignait sans un mot.
+      setAppNotice({ text: decision.message })
       return
     }
     etat.tour = decision.signature

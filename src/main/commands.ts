@@ -31,6 +31,7 @@ import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import {
   decideRead,
   enumererFichiersLisibles,
+  enumererFichiersLisiblesDetail,
   executeRead,
   rechercherDansFichiers
 } from './read-file-command'
@@ -3897,7 +3898,8 @@ export class AppCommandBus {
         }
         const racine = dirExterne ? resolve(dirDemande) : resolve(this.workspaceDuTour)
         const sousDossier = dirExterne ? '' : dirDemande
-        const fichiers = enumererFichiersLisibles(racine, sousDossier)
+        const enumeration = enumererFichiersLisiblesDetail(racine, sousDossier)
+        const fichiers = enumeration.fichiers
         // MEME CAUSE QUE `read_file` : un fichier non-UTF-8 rend des lignes ou `�` a remplace
         // des octets. On continue de le chercher (l'ASCII y est vrai) mais on le NOMME.
         const nonUtf8: string[] = []
@@ -3921,7 +3923,14 @@ export class AppCommandBus {
           correspondances: resultat.correspondances.map(
             (c) => `${c.chemin}:${c.ligne}: ${c.texte}`
           ),
-          ...(suspects.length > 0 ? { fichiersNonUtf8: suspects } : {})
+          ...(suspects.length > 0 ? { fichiersNonUtf8: suspects } : {}),
+          // Plafond d'énumération atteint : une absence de résultat ne prouve PAS l'absence du motif.
+          ...(enumeration.incomplet
+            ? {
+                incomplet: true,
+                detail: `recherche INCOMPLÈTE : plafond de ${fichiers.length} fichiers atteint avant la fin du dossier — resserre \`dir\` sur un sous-dossier`
+              }
+            : {})
         }
       }
       case 'edit_file': {

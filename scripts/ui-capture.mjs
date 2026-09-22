@@ -512,6 +512,38 @@ const main = async () => {
     await new Promise((r) => setTimeout(r, 300))
   }
 
+  // --theme : REGARDER un theme sans passer par la liste deroulante des Reglages. Une liste
+  // <select> s'ouvre HORS de la page (menu natif Windows) : aucun clic scriptable n'y choisit une
+  // option, donc un theme n'etait tout simplement pas capturable. On ecrit le reglage la ou
+  // l'application le lit (localStorage) ET sur le document, comme `appliquerThemeMode` le fait.
+  // Le JSON porte `themeForce` : une capture obtenue ainsi ne se fait pas passer pour un reglage
+  // choisi a la main.
+  const themeDemande = argument('--theme')
+  let themeForce
+  if (themeDemande !== undefined) {
+    const applique = await evaluer(`(() => {
+      const id = ${JSON.stringify(themeDemande)}
+      const clair = id.endsWith('-clair') || id === 'clair'
+      try {
+        localStorage.setItem('autowin-theme-mode.v1', id)
+      } catch {
+        /* profil sans stockage : l'attribut suffit pour la capture */
+      }
+      const racine = document.documentElement
+      if (id === 'sombre') racine.removeAttribute('data-theme')
+      else racine.setAttribute('data-theme', id)
+      if (clair) racine.setAttribute('data-base', 'clair')
+      else racine.removeAttribute('data-base')
+      return racine.getAttribute('data-theme') ?? 'sombre'
+    })()`)
+    if (applique !== themeDemande) {
+      socket.close()
+      rendre({ ok: false, echecs: [`theme-non-applique(${themeDemande})`], vue }, 9)
+    }
+    themeForce = { theme: themeDemande }
+    await new Promise((r) => setTimeout(r, 300))
+  }
+
   // Ou etait l'utilisateur AVANT qu'on lui prenne la main : mesure avant tout clic, sinon il n'y a
   // plus rien a restaurer.
   const vueAvant = await evaluer(`(() => {
@@ -772,6 +804,7 @@ const main = async () => {
         vue,
         ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
         ...(cssInjecte ? { cssInjecte } : {}),
+        ...(themeForce ? { themeForce } : {}),
         planche: boites.boites.length > 0 ? sortie : null,
         portUtilise,
         selecteur: selecteurMouvement,
@@ -815,6 +848,7 @@ const main = async () => {
       vue,
       ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
       ...(cssInjecte ? { cssInjecte } : {}),
+      ...(themeForce ? { themeForce } : {}),
       fichier: sortie,
       portUtilise,
       vueAvant,

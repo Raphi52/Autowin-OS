@@ -22,6 +22,19 @@ export const CIBLE_DESTRUCTRICE =
 
 export const LIGNE_CIBLE = /^\s*[>*_`]*\s*cible\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu
 
+/**
+ * Une piste qui EMPECHE la destruction n'est pas destructrice (conv-787) : « Verifier que rien
+ * n'est supprime », « Empecher l'effacement du brouillon » etaient bloquees a tort.
+ */
+export const PISTE_PROTECTRICE =
+  /\b(?:empech\w*|evit\w*|interdi\w*|refus\w*|proteg\w*|prevenir|sans)\b|\bne\s+\w*\s*(?:jamais|plus|pas)\b|\brien\s+n['’e]/u
+
+/** Le verdict complet : un verbe destructeur ET aucune intention de l'empecher. */
+export function estCibleDestructrice(texte: string): boolean {
+  const nu = normaliserPisteCible(texte)
+  return CIBLE_DESTRUCTRICE.test(nu) && !PISTE_PROTECTRICE.test(nu)
+}
+
 /** Sans accents ni casse — la comparaison de forme ne doit pas dépendre de la frappe. */
 export function normaliserPisteCible(valeur: string): string {
   return valeur.normalize('NFD').replace(/[̀-ͯ]/gu, '').toLowerCase().trim()
@@ -44,7 +57,8 @@ export function decisionDepuisPiste(valeur: string): DecisionScout {
   if (!cible) return { statut: 'aucune-cible' }
   const nu = normaliserPisteCible(cible)
   if (nu === 'aucune' || nu === 'rien' || nu === 'aucune cible') return { statut: 'aucune-cible' }
-  if (CIBLE_DESTRUCTRICE.test(nu)) return { statut: 'cible-destructrice', cible }
+  if (CIBLE_DESTRUCTRICE.test(nu) && !PISTE_PROTECTRICE.test(nu))
+    return { statut: 'cible-destructrice', cible }
   return { statut: 'cible', cible }
 }
 

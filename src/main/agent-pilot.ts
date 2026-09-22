@@ -36,6 +36,7 @@ import {
   blocVisuelNonFerme,
   RELANCE_BLOC_VISUEL_NON_FERME,
   questionPoseeSansAvoirLu,
+  statusEstUneAction,
   statusEstUneLecture,
   RELANCE_QUESTION_SANS_LECTURE,
   exigeUneConclusion,
@@ -1653,6 +1654,12 @@ export class AgentPilot {
      * redemande explicitement la conclusion. Une seule fois, comme la reprise de question invalide.
      */
     let anyActionExecuted = false
+    /**
+     * Un outil NATIF qui agit (Write, Edit, Bash non lecteur) a tourne dans ce tour. Separe de
+     * `anyActionExecuted` a dessein : il ne sert qu'au garde « annonce sans action » (fausse alerte
+     * du 2026-09-22, conv-782), sans changer les autres gardes fondes sur les `<cmd>` Autowin.
+     */
+    let actionNativeCeTour = false
     /** Le modele a emis `<cmd>` dans ce tour (lu ou non) — sert au repli de cloture. */
     let cmdEmisCeTour = false
     /**
@@ -2032,6 +2039,8 @@ export class AgentPilot {
                * qui exige justement de faire choisir l'humain (mesure conv-167, 2026-09-03).
                */
               if (statusEstUneLecture(chunk.status)) anyReadExecuted = true
+              // Un Write/Edit/Bash natif a AGI : le garde « annonce sans action » doit le voir.
+              if (statusEstUneAction(chunk.status)) actionNativeCeTour = true
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
               emit({
                 kind: 'provider-status',
@@ -2565,7 +2574,11 @@ export class AgentPilot {
           exigerExperienceSoignee &&
           !relanceDeFormeUtilisee &&
           annonceSansActionRecoveryAvailable &&
-          exigeAgirPasAnnoncer(latestUserMessage, visibleTextThisTurn, anyActionExecuted)
+          exigeAgirPasAnnoncer(
+            latestUserMessage,
+            visibleTextThisTurn,
+            anyActionExecuted || actionNativeCeTour
+          )
         ) {
           annonceSansActionRecoveryAvailable = false
           relanceDeFormeUtilisee = true

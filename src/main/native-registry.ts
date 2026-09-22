@@ -321,7 +321,7 @@ export function setNativeEnablement(
   return listNativeRegistry(kind, base)
 }
 
-/** Amorçage unique : fige un snapshot d'état en local (catalogue + activation). Idempotent. */
+/** Amorçage : rafraîchit le catalogue des types fournis, sans écraser l'activation déjà choisie. */
 export function seedRegistrySnapshot(
   snapshot: Partial<Record<RegistryKind, RegistryItem[]>>,
   base = ensureAutowinAppData()
@@ -330,7 +330,9 @@ export function seedRegistrySnapshot(
   const catalogFile = catalogPath(base)
   const existingEnablement = readEnablement(enablementFile)
   const enablement: Enablement = { ...existingEnablement }
-  const catalog: Catalog = {}
+  // Le catalogue est RAFRAÎCHI à chaque amorçage pour les types fournis (les autres sont gardés) :
+  // figé au premier démarrage, il masquait toute commande ajoutée ensuite (34 outils au 2026-08-31).
+  const catalog: Catalog = readJson<Catalog>(catalogFile, {})
   for (const kind of ['skills', 'tools', 'plugins', 'hooks'] as RegistryKind[]) {
     const items = snapshot[kind]
     if (!items) continue
@@ -350,6 +352,6 @@ export function seedRegistrySnapshot(
   }
   // Un toggle peut créer enablement.v1.json avant que le catalogue soit amorcé :
   // chaque fichier est donc initialisé indépendamment, sans écraser l'état déjà choisi.
-  if (!existsSync(catalogFile)) writeFileSync(catalogFile, JSON.stringify(catalog, null, 2), 'utf8')
+  writeFileSync(catalogFile, JSON.stringify(catalog, null, 2), 'utf8')
   writeDurableJson(enablementFile, completeEnablement(enablement), decodeEnablement)
 }
