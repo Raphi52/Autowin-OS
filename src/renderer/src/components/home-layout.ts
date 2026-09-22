@@ -18,9 +18,6 @@ export type HomeWidgetId =
   | 'conversations'
   | 'jarvis'
   | 'enregistrements'
-  // Ce que les utilisateurs d'un greffe ont fait — la tuile du chef de greffe.
-  | 'actions-utilisateurs'
-  | 'performance'
 
 export interface HomeWidgetBox {
   id: HomeWidgetId
@@ -50,9 +47,7 @@ export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   notifications: 'Remontées des agents',
   conversations: 'Conversations',
   jarvis: 'Jarvis',
-  enregistrements: 'Transcription',
-  'actions-utilisateurs': 'Actions des utilisateurs',
-  performance: 'Performance'
+  enregistrements: 'Transcription'
 }
 
 /**
@@ -94,19 +89,15 @@ const MEDIUM_ROWS = 12
 const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
   // Les enregistrements sont sous les mails : on les consulte apres coup, pas en parlant.
-  enregistrements: { col: 0, colSpan: 1, row: 3, rowSpan: 3, z: -50 },
-  // Les actions des utilisateurs du greffe closent la colonne de gauche : on les consulte
-  // posement, pas d'un coup d'oeil.
-  'actions-utilisateurs': { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -70 },
+  // Tuile « Actions des utilisateurs » retiree (demande utilisateur du 2026-09-21, conv-750) :
+  // les enregistrements reprennent le bas de la colonne de gauche.
+  enregistrements: { col: 0, colSpan: 1, row: 3, rowSpan: 5, z: -50 },
   agenda: { col: 1, colSpan: 1, row: 0, rowSpan: 3, z: -30 },
   routines: { col: 1, colSpan: 1, row: 3, rowSpan: 5, z: -60 },
   notifications: { col: 2, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
   // Jarvis est en colonne de droite, a hauteur d'oeil : c'est l'endroit qu'on regarde en parlant.
   jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 2, z: -40 },
-  conversations: { col: 2, colSpan: 1, row: 4, rowSpan: 2, z: -120 },
-  // La performance ferme la colonne de droite, en tuile d'une colonne : la grille de main (8 rangees)
-  // garde Actions des utilisateurs en bas a gauche (choix utilisateur du 2026-09-18, conv-705).
-  performance: { col: 2, colSpan: 1, row: 6, rowSpan: 2, z: -80 }
+  conversations: { col: 2, colSpan: 1, row: 4, rowSpan: 2, z: -120 }
 }
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
@@ -119,9 +110,7 @@ const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   jarvis: { col: 1, colSpan: 1, row: 3, rowSpan: 3, z: -40 },
   routines: { col: 1, colSpan: 1, row: 6, rowSpan: 2, z: -60 },
   conversations: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 },
-  enregistrements: { col: 0, colSpan: 1, row: 8, rowSpan: 2, z: -50 },
-  'actions-utilisateurs': { col: 1, colSpan: 1, row: 8, rowSpan: 2, z: -70 },
-  performance: { col: 0, colSpan: 2, row: 10, rowSpan: 2, z: -80 }
+  enregistrements: { col: 0, colSpan: 2, row: 8, rowSpan: 2, z: -50 }
 }
 
 /** L'ordre de lecture en colonne unique : ce qu'on regarde en premier, en haut. */
@@ -132,9 +121,7 @@ const NARROW_ORDER: HomeWidgetId[] = [
   'routines',
   'agenda',
   'mails',
-  'conversations',
-  'actions-utilisateurs',
-  'performance'
+  'conversations'
 ]
 
 /**
@@ -284,9 +271,7 @@ export const HOME_WIDGET_IDS: HomeWidgetId[] = [
   'routines',
   'notifications',
   'conversations',
-  'jarvis',
-  'actions-utilisateurs',
-  'performance'
+  'jarvis'
 ]
 
 export function clampWidgetBox(

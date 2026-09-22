@@ -182,7 +182,7 @@ export function estimateCostUsd(usage: TokenUsageShape, nowMs?: number): number 
 export function formatUsd(amount: number): string {
   if (!Number.isFinite(amount)) return '—'
   if (amount === 0) return '0 $'
-  const decimals = amount < 0.01 ? 3 : 2
+  const decimals = Math.abs(amount) < 0.01 ? 3 : 2
   return `${amount.toFixed(decimals).replace('.', ',')} $`
 }
 

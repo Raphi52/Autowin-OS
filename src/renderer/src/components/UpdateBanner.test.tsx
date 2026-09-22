@@ -451,6 +451,9 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
       const prompt = (events[0].detail as { prompt: string }).prompt
       expect(prompt).toContain('bloquée')
       expect(prompt).toContain('ton travail non committé bloque')
+      // Incident du 2026-09-21 : un vieux travail local re-poussé a ressuscité des onglets retirés sur main.
+      expect(prompt).toContain('ne réintroduis jamais')
+      expect(prompt).toContain('git diff')
     } finally {
       window.removeEventListener('autowin:prefill-conversation', listener)
     }

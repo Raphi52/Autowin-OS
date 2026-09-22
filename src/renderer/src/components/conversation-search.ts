@@ -1,3 +1,5 @@
+import { replierComplet } from '../../../shared/mots'
+
 export type ConversationSearchSource = {
   id: string
   title: string
@@ -17,11 +19,37 @@ export type ConversationSearchHit<T extends ConversationSearchSource = Conversat
   matchedIn: 'title' | 'message' | 'all'
 }
 
-const normalize = (value: unknown): string =>
-  String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('fr')
+const normalize = (value: unknown): string => replierComplet(String(value ?? ''))
+
+/**
+ * Le texte repli\u00e9 ET, pour chaque unit\u00e9 repli\u00e9e, la plage qu'elle occupe dans l'ORIGINE. Le repliage
+ * change la longueur (\u0153 -> oe, accent stock\u00e9 \u00e0 part de sa lettre -> 0 unit\u00e9) : les positions du texte
+ * repli\u00e9 ne sont donc pas celles du texte affich\u00e9. Un accent combinant est rattach\u00e9 \u00e0 la lettre qui
+ * le pr\u00e9c\u00e8de, pour que le surlignage l'emporte avec elle.
+ */
+function replierAvecCarte(source: string): { replie: string; debuts: number[]; fins: number[] } {
+  let replie = ''
+  const debuts: number[] = []
+  const fins: number[] = []
+  let premiereUniteDuPrecedent = -1
+  for (let i = 0; i < source.length;) {
+    const taille = (source.codePointAt(i) ?? 0) > 0xffff ? 2 : 1
+    const fin = i + taille
+    const unites = replierComplet(source.slice(i, fin))
+    if (unites.length === 0) {
+      for (let k = premiereUniteDuPrecedent; k >= 0 && k < fins.length; k += 1) fins[k] = fin
+    } else {
+      premiereUniteDuPrecedent = debuts.length
+      for (let k = 0; k < unites.length; k += 1) {
+        debuts.push(i)
+        fins.push(fin)
+      }
+      replie += unites
+    }
+    i = fin
+  }
+  return { replie, debuts, fins }
+}
 
 /**
  * Cache de normalisation par conversation (cl\u00e9 id, invalid\u00e9 quand updatedAt change).
@@ -232,15 +260,16 @@ export function doitAfficherRecentes(
  * Decoupe un texte en segments alternant hors-terme / terme, pour SURLIGNER ce qui a ete cherche.
  *
  * Compare sur la forme repliee (minuscules, sans accents) mais rend les segments du texte
- * D'ORIGINE : « À jour » se surligne quand on tape « a jour ». Les positions se correspondent parce
- * que la normalisation NFD ne retire que des diacritiques combinants, jamais de lettre.
+ * D'ORIGINE : « À jour » se surligne quand on tape « a jour », « l'œuvre » quand on tape « oeuvre ».
+ * Le repliage change la longueur du texte : `replierAvecCarte` ramène chaque position repliée à sa
+ * plage dans l'original.
  */
 export function segmentsSurlignes(
   texte: string,
   rawQuery: string
 ): Array<{ texte: string; marque: boolean }> {
   const source = String(texte ?? '')
-  const replie = normalize(source)
+  const { replie, debuts, fins } = replierAvecCarte(source)
   const phrase = normalize(rawQuery).trim()
   /*
    * La PHRASE ENTIERE d'abord, les mots seulement si elle n'apparait pas.
@@ -263,9 +292,9 @@ export function segmentsSurlignes(
     let position = replie.indexOf(token)
     while (position >= 0) {
       trouve = true
-      for (let i = position; i < position + token.length && i < marques.length; i += 1) {
-        marques[i] = true
-      }
+      // Les positions sont celles du texte REPLIÉ : on les ramène à la plage de l'origine.
+      const dernier = Math.min(position + token.length, debuts.length) - 1
+      for (let i = debuts[position]; i < fins[dernier]; i += 1) marques[i] = true
       position = replie.indexOf(token, position + token.length)
     }
   }

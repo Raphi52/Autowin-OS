@@ -6,7 +6,8 @@
  * un bouton du renderer — les actions composent un PROMPT envoyé à l'agent.
  */
 
-export type GitFileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked'
+export type GitFileStatus =
+  'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted'
 export interface GitChange {
   path: string
   status: GitFileStatus
@@ -67,6 +68,10 @@ export function parseGitStatus(porcelain: string): GitState {
         (line.split('\t')[0]?.split(' ').slice(pathFieldIndex).join(' ') ?? '')
       const staged = xy[0] !== '.'
       state.changes.push({ path, status: classify(xy), staged })
+    } else if (line.startsWith('u ')) {
+      // "u XY <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>" : fichier en CONFLIT de fusion.
+      const path = line.split(' ').slice(10).join(' ').trim()
+      state.changes.push({ path, status: 'conflicted', staged: false })
     } else if (line.startsWith('? ')) {
       state.changes.push({ path: line.slice(2).trim(), status: 'untracked', staged: false })
     }
@@ -91,15 +96,36 @@ export function parseUnifiedDiff(text: string): DiffLine[] {
   // de dire QUELLE ligne du fichier a changé, au lieu d'un simple +/- sans repère.
   let oldCursor = 0
   let newCursor = 0
+  // Lignes encore attendues dans le hunk courant (tirées des longueurs de l'en-tête) : tant qu'il en
+  // reste, « --- x » est une ligne RETIRÉE « -- x » et « +++ x » une ligne AJOUTÉE « ++ x », pas un en-tête.
+  let oldRestant = 0
+  let newRestant = 0
   for (const raw of text.split('\n')) {
     const line = raw.replace(/\r$/, '')
     if (line.startsWith('@@')) {
-      const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line)
+      const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line)
       if (header) {
         oldCursor = Number(header[1])
-        newCursor = Number(header[2])
+        newCursor = Number(header[3])
+        oldRestant = header[2] === undefined ? 1 : Number(header[2])
+        newRestant = header[4] === undefined ? 1 : Number(header[4])
       }
       lines.push({ kind: 'hunk', text: line })
+    } else if (line.startsWith('\\')) {
+      // « \ No newline at end of file » : annotation, ni ajout, ni suppression, ni contexte.
+      lines.push({ kind: 'meta', text: line })
+    } else if (oldRestant > 0 || newRestant > 0) {
+      if (line.startsWith('+')) {
+        lines.push({ kind: 'add', text: line, newLine: newCursor++ })
+        newRestant--
+      } else if (line.startsWith('-')) {
+        lines.push({ kind: 'del', text: line, oldLine: oldCursor++ })
+        oldRestant--
+      } else {
+        lines.push({ kind: 'context', text: line, oldLine: oldCursor++, newLine: newCursor++ })
+        oldRestant--
+        newRestant--
+      }
     } else if (
       line.startsWith('diff ') ||
       line.startsWith('index ') ||

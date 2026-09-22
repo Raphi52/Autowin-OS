@@ -55,8 +55,6 @@ import { autowinStorageKey } from '../storage-keys'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
 import { InterlocuteursWidget } from './InterlocuteursWidget'
-import { ActionsUtilisateursWidget } from './ActionsUtilisateursWidget'
-import { PerformanceWidget } from './PerformanceWidget'
 import './HomeView.css'
 import { Spinner } from './Spinner'
 
@@ -1162,24 +1160,6 @@ function WidgetBody({
     // Le micro qui ECRIT sur le disque, et la liste de ce qu'il a ecrit. A part de Jarvis a
     // dessein : ici le mot « Jarvis » prononce ne lance rien.
     return <EnregistrementsWidget />
-  }
-
-  if (id === 'actions-utilisateurs') {
-    // Ce que les utilisateurs d'un greffe ont fait, lu en consultation seule dans sa base.
-    return <ActionsUtilisateursWidget />
-  }
-
-  if (id === 'performance') {
-    // fix-ok: la tuile etait montee sans sujet — aucune source d'identite n'existait dans l'app
-    // (grep userInfo|USERNAME sur src/main et src/preload : 0 occurrence), donc le mode « mes
-    // chiffres » n'avait personne a qui rattacher la production. Cause corrigee a sa source par le
-    // canal app:identite-utilisateur (src/main/identite-utilisateur.ts), pas par une valeur en dur ici.
-    // La production du greffe : RCS et RSM, pour soi ou pour tout le monde. La tuile demande
-    // elle-meme au processus principal QUI est connecte (app:identite-utilisateur) : c'est le sujet
-    // du mode « mes chiffres ». Les CHIFFRES, eux, n'ont pas encore de source branchee — les tables
-    // reperees dans RIG_DEV le 2026-09-17 sont DEMAT_DCA, DEMAT_DAS et DEMAT_RSM, mais aucune ne
-    // porte de colonne « fait par qui », donc la repartition par personne reste a trancher.
-    return <PerformanceWidget />
   }
 
   if (id === 'jarvis') {

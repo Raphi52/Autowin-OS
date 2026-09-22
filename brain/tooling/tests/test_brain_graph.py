@@ -67,6 +67,30 @@ class EntityGraphTests(unittest.TestCase):
         self.assertEqual([r["label"] for r in self.graph.query("OrderController", "dependencies")["results"]],
                          ["OrderService"])
 
+    def test_code_graph_in_current_graphify_edges_format(self):
+        code = self.root / "projects" / "rig-neuf" / "graphify-out"
+        code.mkdir(parents=True)
+        (code / "graph.json").write_text(json.dumps({
+            "nodes": [{"id": "hook", "label": "brain_hook.py"}, {"id": "srv", "label": "brain_server.py"}],
+            "edges": [{"source": "hook", "target": "srv", "relation": "imports_from"}],
+        }), encoding="utf-8")
+        result = build_graph(self.root).query("brain_server.py", "dependents")
+        self.assertEqual([r["label"] for r in result["results"]], ["brain_hook.py"])
+
+    def test_import_of_a_bare_module_reaches_its_file(self):
+        code = self.root / "projects" / "py" / "graphify-out"
+        code.mkdir(parents=True)
+        (code / "graph.json").write_text(json.dumps({
+            "nodes": [{"id": "tooling_srv", "label": "srv.py"}, {"id": "tooling_test", "label": "test.py"},
+                      {"id": "a_util", "label": "util.py"}, {"id": "b_util", "label": "util.py"}],
+            "edges": [{"source": "tooling_test", "target": "srv", "relation": "imports"},
+                      {"source": "tooling_test", "target": "util", "relation": "imports"}],
+        }), encoding="utf-8")
+        graph = build_graph(self.root)
+        self.assertEqual([r["label"] for r in graph.query("srv.py")["results"]], ["test.py"])
+        # Deux util.py : l'import reste sur le module nu, jamais attribue au hasard.
+        self.assertEqual(graph.query("tooling_test", "dependencies")["results"][1]["entity"], "util")
+
     def test_unknown_entity_and_bad_direction(self):
         self.assertFalse(self.graph.query("nope")["found"])
         with self.assertRaises(ValueError):

@@ -119,10 +119,27 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
     expect(container.querySelector('[data-testid="conversation-cost"]')).toBeNull()
   })
 
-  it('un tour EN COURS n’interroge pas le journal (la dépense n’y est pas encore)', async () => {
+  /*
+   * CONTRAT RETOURNÉ le 2026-09-21. Ce test affirmait « un tour EN COURS n'interroge pas le journal
+   * (la dépense n'y est pas encore) ». La prémisse était fausse : le journal porte TOUS les tours
+   * déjà finis, seul le tour en vol y manque. Ne rien lire en arrivant sur un fil occupé laissait à
+   * l'écran le total du fil PRÉCÉDENT — « je navigue de conv en conv et ça écrit le même coût ».
+   * Le bon contrat : on lit à l'arrivée, puis on relit à la fin du tour.
+   */
+  it('un fil OCCUPÉ lit son journal à l’arrivée, puis le relit à la fin du tour', async () => {
     const { calls } = setApi({ costBreakdown: async () => rows })
     await render({ conversationId: 'conv-76', busy: true })
-    expect(calls).toEqual([])
+    expect(calls).toEqual([['actor', 'conv-76']])
+    await act(async () => {
+      root.render(
+        createElement(ConversationCostIndicator, { conversationId: 'conv-76', busy: false })
+      )
+    })
+    await flush()
+    expect(calls).toEqual([
+      ['actor', 'conv-76'],
+      ['actor', 'conv-76']
+    ])
   })
 
   it('le clic déplie le détail par acteur, trié par coût', async () => {

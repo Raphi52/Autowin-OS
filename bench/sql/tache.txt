@@ -1,0 +1,24 @@
+Écris un module JavaScript ESM `sql.mjs` qui exporte :
+
+  export function executer(tables, requete)
+
+Il doit rendre EXACTEMENT le résultat que donnerait SQLite 3 (version 3.53) si l'on créait les tables
+décrites (CREATE TABLE avec les types déclarés), qu'on y insérait les lignes telles quelles (INSERT avec
+ces valeurs), puis qu'on exécutait `requete`. Tu n'as droit à aucun moteur SQL (ni node:sqlite, ni
+bibliothèque) : tu écris l'analyseur et l'exécuteur.
+
+- tables : { nomTable: { colonnes: [{ nom, type }], lignes: [[v1, v2, …], …] } }
+  type est la déclaration SQL de la colonne (ex. "INTEGER", "TEXT", "REAL", ou "" sans type).
+  Les valeurs sont des number, des string ou null.
+- Retour : un tableau de lignes, chaque ligne étant un tableau de valeurs (number, string ou null),
+  dans l'ordre de SQLite.
+
+La requête est un SELECT : DISTINCT, expressions et alias, FROM avec une table ou une jointure
+(JOIN / LEFT JOIN … ON), WHERE, GROUP BY, HAVING, ORDER BY (positions ou expressions, ASC/DESC).
+Expressions : colonnes (éventuellement préfixées par la table), littéraux entiers, réels, chaînes, NULL,
++ - * / %, ||, = <> != < <= > >=, AND OR NOT, IS NULL, IS NOT NULL, BETWEEN, IN (liste), IN (SELECT …),
+LIKE, CASE WHEN … THEN … ELSE … END, sous-requête scalaire (SELECT …), fonctions COALESCE, ABS,
+LENGTH, UPPER, LOWER, SUBSTR, CAST(… AS INTEGER|REAL|TEXT), agrégats COUNT(*), COUNT(x), SUM, AVG,
+MIN, MAX, TOTAL.
+
+Rends uniquement le contenu du fichier, dans un seul bloc ```js.

@@ -28,11 +28,20 @@ const SONNERIE = String.fromCharCode(7)
  */
 const SEQUENCE_CSI = new RegExp(ECHAPPEMENT + '[[]' + '[0-9;?]*' + '[A-Za-z]', 'g')
 
+/** CSI en 8 bits : `U+009B` tient lieu de `<ESC>[`. C'est un caractere de controle, pas du texte. */
+const SEQUENCE_CSI_8_BITS = new RegExp(String.fromCharCode(0x9b) + '[0-9;?]*' + '[A-Za-z]', 'g')
+
+/** Designation de jeu de caracteres G0-G3 : `<ESC>(B`, `<ESC>)0`, etc. */
+const DESIGNATION_JEU = new RegExp(ECHAPPEMENT + '[()*+]' + '[A-Za-z0-9]', 'g')
+
 /** Sequences de systeme d'exploitation (titre de fenetre, hyperliens) : `<ESC>]` … `BEL`. */
 const SEQUENCE_OSC = new RegExp(ECHAPPEMENT + ']' + '[^' + SONNERIE + ']*' + SONNERIE, 'g')
 
-/** Un echappement ORPHELIN — reste d'un depouillement partiel, ou sortie tronquee au milieu. */
-const ECHAPPEMENT_ORPHELIN = new RegExp(ECHAPPEMENT, 'g')
+/**
+ * Un echappement ORPHELIN — reste d'un depouillement partiel, ou sortie tronquee au milieu. Vaut
+ * aussi pour l'introducteur CSI 8 bits `U+009B` seul : invisible, mais il mange le budget de troncature.
+ */
+const ECHAPPEMENT_ORPHELIN = new RegExp('[' + ECHAPPEMENT + String.fromCharCode(0x9b) + ']', 'g')
 
 /**
  * Rend le texte tel qu'un humain le lit. Ne retire QUE des sequences de terminal : un crochet du
@@ -42,5 +51,7 @@ export function sansSequencesAnsi(texte: string): string {
   return texte
     .replace(SEQUENCE_OSC, '')
     .replace(SEQUENCE_CSI, '')
+    .replace(SEQUENCE_CSI_8_BITS, '')
+    .replace(DESIGNATION_JEU, '')
     .replace(ECHAPPEMENT_ORPHELIN, '')
 }

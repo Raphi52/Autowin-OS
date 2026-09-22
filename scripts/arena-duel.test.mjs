@@ -56,6 +56,8 @@ describe('arena-duel — journal des duels', () => {
     expect(() => normaliserDuel(duel({ workflow: '' }))).toThrow(/workflow/)
     expect(() => normaliserDuel(duel({ verdict: 'excellent' }))).toThrow(/verdict/)
     expect(() => normaliserDuel(duel({ bras: 'z' }))).toThrow(/bras/)
+    expect(() => normaliserDuel(duel({ bras: 'z1' }))).toThrow(/bras/)
+    expect(() => normaliserDuel(duel({ bras: 'a0' }))).toThrow(/bras/)
     expect(() => normaliserDuel(duel({ dureeMs: -5 }))).toThrow(/duree-ms/)
     expect(() => normaliserDuel(duel({ coutUsd: 'gratuit' }))).toThrow(/cout-usd/)
     expect(() => normaliserDuel(duel({ dureeMs: undefined }))).toThrow(/duree-ms/)
@@ -69,6 +71,11 @@ describe('arena-duel — journal des duels', () => {
     expect(lireDuels({ tache: 'alpha' }, r).duels).toHaveLength(1)
     expect(lireDuels({ workflow: 'terrain' }, r).duels).toHaveLength(1)
     expect(lireDuels({ limite: 1 }, r).duels).toHaveLength(1)
+  })
+
+  it('accepte les repliques d un bras (a1, b3) exigees par arena G7', () => {
+    expect(normaliserDuel(duel({ bras: 'A1' })).bras).toBe('a1')
+    expect(normaliserDuel(duel({ bras: 'x3' })).bras).toBe('x3')
   })
 
   it('refuse de re-noter le meme bras du meme banc deux fois', () => {

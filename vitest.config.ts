@@ -174,6 +174,12 @@ export default defineConfig({
      * Gardes et cas limites : `tests/temp-cleanup.test.ts`.
      */
     globalSetup: ['./tests/global-nettoyage-temp.ts'],
+    /**
+     * Voir `tests/reinit-couts-session.ts` : le magasin de cumuls de session CLI est persistant par
+     * conception, la racine de donnees des tests est stable — il doit donc etre vide avant chaque
+     * test, sinon le meme scenario rend un cout au premier passage et 0 au suivant.
+     */
+    setupFiles: ['./tests/reinit-couts-session.ts'],
     /*
      * PAS de redirection de TMPDIR par fichier de test. Tentee le 2026-09-04 (`tests/temp-suivi.ts`,
      * supprime) : les workers de vitest partagent le MEME `process.env` (threads en SHARE_ENV), donc

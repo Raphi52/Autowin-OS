@@ -367,6 +367,25 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     expect(point(res, 'P17').ok).toBe(false)
   })
 
+  it('P17 ne prend pas un CHEMIN de fichier pour une invocation (scripts/arena-panel/, banc panel-t1)', () => {
+    const f = bancConforme()
+    writeFileSync(
+      join(f.bench, 'prompt-x.txt'),
+      ['TACHE : rends `npx tsx scripts/arena-panel/p1.mts` vert, appel nu', ''].join(
+        String.fromCharCode(10)
+      )
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P17').ok).toBe(true)
+  })
+
+  it('P17 RATE toujours sur une vraie invocation /arena en debut de mot', () => {
+    const f = bancConforme()
+    writeFileSync(join(f.bench, 'prompt-x.txt'), 'TACHE, puis lance /arena dessus\n')
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P17').ok).toBe(false)
+  })
+
   it('P17 RATE quand prompt-x.txt est absent', () => {
     const f = bancConforme()
     rmSync(join(f.bench, 'prompt-x.txt'))

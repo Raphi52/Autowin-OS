@@ -76,6 +76,11 @@ describe('retrait de la ligne technique de l’affichage', () => {
     expect(retirerLignePromptSuivant(texte)).toBe(texte)
   })
 
+  it('CRLF : ne laisse pas de « \\r\\n » en fin, et garde l’alignement des autres lignes', () => {
+    expect(retirerLignePromptSuivant(`fin\r\n${LIGNE}\r\n`)).toBe('fin')
+    expect(retirerLignePromptSuivant(`avant\r\n${LIGNE}\r\napres\r\n`)).toBe('avant\r\napres\r\n')
+  })
+
   it('ne laisse pas une ligne vide en fin de texte à la place de la ligne retirée', () => {
     expect(retirerLignePromptSuivant(`fin du travail\n${LIGNE}`)).toBe('fin du travail')
   })

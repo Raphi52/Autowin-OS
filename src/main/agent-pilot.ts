@@ -1,6 +1,10 @@
 import { rappelSansDejaEnvoye } from './rappel-conversations'
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
-import { deciderRejeuDeChat, dormirAnnulable, estCrashDExecutionDuCli } from './chat-rejeu-surcharge'
+import {
+  deciderRejeuDeChat,
+  dormirAnnulable,
+  estCrashDExecutionDuCli
+} from './chat-rejeu-surcharge'
 import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from './runs/resume-refusal'
 import { chargerMurs, enregistrerMur } from './runs/murs-store'
 import type { ProviderRegistry } from './providers/registry'
@@ -39,6 +43,7 @@ import {
 } from './chat-turn-messages'
 import { invokedSkillId, noteSkillInconnue, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
+import { suivreBlocsDeCode } from '../shared/bloc-de-code'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
@@ -471,18 +476,14 @@ export function separationDeltaCollee(dejaEmis: string, suivant: string): string
 export function detacherFenceCollee(texte: string): string {
   if (!texte.includes('```') && !texte.includes('~~~')) return texte
   const lignes = texte.split(/(\r?\n)/u)
-  let dansUneFence = false
+  const suivi = suivreBlocsDeCode()
   for (let index = 0; index < lignes.length; index += 2) {
     const ligne = lignes[index]
-    if (/^[ \t]*(?:`{3,}|~{3,})/u.test(ligne)) {
-      dansUneFence = !dansUneFence
-      continue
-    }
-    if (dansUneFence) continue
+    if (suivi.delimiteur(ligne) || suivi.dansUnBloc) continue
     const soudure = /^(.*[^\s`~])(`{3,}|~{3,})([A-Za-z][\w-]*)[ \t]*$/u.exec(ligne)
     if (!soudure) continue
     lignes[index] = `${soudure[1]}\n\n${soudure[2]}${soudure[3]}`
-    dansUneFence = true
+    suivi.delimiteur(`${soudure[2]}${soudure[3]}`)
   }
   return lignes.join('')
 }
@@ -550,8 +551,9 @@ export class DeltaCollageTracker {
   }
 
   private fenceOuverte(texte: string): boolean {
-    const ouvertures = texte.match(/^[ \t]*(?:```|~~~)/gm)
-    return ouvertures !== null && ouvertures.length % 2 === 1
+    const suivi = suivreBlocsDeCode()
+    for (const ligne of texte.split('\n')) suivi.delimiteur(ligne)
+    return suivi.dansUnBloc
   }
 }
 
@@ -650,8 +652,10 @@ function finObjetJson(raw: string, debut: number): number {
  * meme message sans savoir qu'une commande avait ete perdue. Le repli le dit desormais.
  */
 export function texteCmdIlisible(): string {
-  return 'J’ai voulu lancer une action, mais ma commande était mal formée : rien n’a été lancé. ' +
+  return (
+    'J’ai voulu lancer une action, mais ma commande était mal formée : rien n’a été lancé. ' +
     'Renvoie ton message pour relancer.'
+  )
 }
 
 export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
@@ -1386,9 +1390,7 @@ export class AgentPilot {
      * Franchir le seuil perime la session par le chemin deja ecrit pour la compaction : le tour
      * suivant repart sur le fil aplati d'Autowin — bulles finales + resultats d'action resumes.
      */
-    const coupesPoids = conversationId
-      ? coupesParPoids(loadConvActivity(conversationId))
-      : 0
+    const coupesPoids = conversationId ? coupesParPoids(loadConvActivity(conversationId)) : 0
     const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}:c${compactions}:w${coupesPoids}`
     // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
     // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.

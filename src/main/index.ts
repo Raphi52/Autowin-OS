@@ -300,7 +300,6 @@ import { gitlabTicketProvider } from './ticket-providers/gitlab'
 import { loadAzureDevOpsCliToken } from './azure-cli-token'
 import { loadForgeCliToken } from './forge-cli-token'
 import { registerTicketsIpc } from './tickets-ipc'
-import { registerGreffeActionsIpc } from './greffe-actions-ipc'
 import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
 import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
@@ -369,6 +368,9 @@ import { persistTaskStore } from './task-manager/task-store-disk'
 import { TaskScheduler } from './task-manager/task-scheduler'
 import { WatchdogEngine } from './task-manager/watchdog-engine'
 import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
+import { seedMaintenanceTask } from './task-manager/maintenance-seed'
+import { seedGcTask } from './task-manager/gc-seed'
+import { seedCurateTask } from './task-manager/curate-seed'
 import type { WatchdogAppEvent } from './task-manager/types'
 import {
   ScheduledChatDispatcher,
@@ -3359,8 +3361,8 @@ Le fil reprend ensuite normalement.`
   // MEME autorite que la sonde `os:pilotChat:active` du renderer : l'agent du chat doit pouvoir
   // repondre « est-ce que ca tourne encore ? » sans deviner en lisant des journaux de fin de tour.
   bus.tourDeChatActif = (conversationId) => Boolean(activeChatTurns.get(conversationId))
-  bus.lancerDansConversation = async (conversationId, prompt) => {
-    const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt)
+  bus.lancerDansConversation = async (conversationId, prompt, binding) => {
+    const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
     return {
       ok: resultat.ok,
       ...(resultat.turnId ? { turnId: resultat.turnId } : {}),
@@ -3586,6 +3588,9 @@ Le fil reprend ensuite normalement.`
       // règle auto-kaizen encore posée quand elle est restée intacte, avant que le moteur ne la voie.
       const seeded = seedWatchdogTasks(scheduledTasks)
       if (seeded.length) console.log(`[watchdog] règles livrées posées : ${seeded.length}`)
+      if (seedMaintenanceTask(scheduledTasks)) console.log('[task-manager] tâche Maintenance quotidienne posée')
+      if (seedGcTask(scheduledTasks)) console.log('[task-manager] tâche Garbage collector quotidienne posée')
+      if (seedCurateTask(scheduledTasks)) console.log('[task-manager] tâche Curation quotidienne posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
       // l'historique déjà écrit ne réveille personne au démarrage.
       await watchdogEngine?.start()
@@ -4078,7 +4083,6 @@ app.whenReady().then(async () => {
   })
   registerIdentiteIpc()
   registerChatIpc()
-  registerGreffeActionsIpc({ ipc: ipcMain, assertTrusted: assertTrustedRendererSender })
   registerTicketsIpc({
     ipc: ipcMain,
     service: tickets,

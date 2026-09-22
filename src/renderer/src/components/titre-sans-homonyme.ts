@@ -16,6 +16,8 @@
  * couterait un appel a chaque nouveau fil pour un probleme que la date tranche exactement.
  */
 
+import { replierComplet } from '../../../shared/mots'
+
 /** Longueur max d'un titre, comme `conversation-demandee.ts` et la barre laterale. */
 export const LONGUEUR_TITRE = 42
 
@@ -23,11 +25,7 @@ const compacter = (texte: string): string => texte.replace(/\s+/g, ' ').trim()
 
 /** Meme comparaison que le store : insensible a la casse, aux accents et a la ponctuation finale. */
 const empreinte = (titre: string): string =>
-  compacter(titre)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[.!?…\s]+$/, '')
+  replierComplet(compacter(titre)).replace(/[.!?…\s]+$/, '')
 
 /** Le titre coupe a la longueur d'affichage — exactement comme avant. */
 export function titreCourt(source: string): string {

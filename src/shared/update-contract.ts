@@ -46,8 +46,22 @@ export const UPDATE_STRATEGY_HINTS: Record<UpdateStrategy, string> = {
  * message qui lui demandait de faire à la main ce que le bouton pouvait faire. On offre donc les deux
  * voies réelles, rebase d'abord (historique linéaire, c'est le cas courant : des commits locaux pas
  * encore poussés).
+ *
+ * `arbreSale` = des fichiers sont modifiés en local. `git rebase` refuse ALORS À COUP SÛR (« cannot
+ * rebase: You have unstaged changes »), même si les commits entrants ne touchent aucun de ces
+ * fichiers — seule la fusion ne refuse que sur un fichier touché des deux côtés. Le rebase n'est donc
+ * plus proposé (conv-454, conv-604).
  */
-export function strategiesFor(branch: string | undefined, diverged = false): UpdateStrategy[] {
-  if (branch !== 'main') return ['merge', 'rebase', 'switch-main']
-  return diverged ? ['rebase', 'merge'] : ['fast-forward']
+export function strategiesFor(
+  branch: string | undefined,
+  diverged = false,
+  arbreSale = false
+): UpdateStrategy[] {
+  const choix: UpdateStrategy[] =
+    branch !== 'main'
+      ? ['merge', 'rebase', 'switch-main']
+      : diverged
+        ? ['rebase', 'merge']
+        : ['fast-forward']
+  return arbreSale ? choix.filter((s) => s !== 'rebase') : choix
 }

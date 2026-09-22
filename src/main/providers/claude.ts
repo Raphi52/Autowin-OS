@@ -23,7 +23,9 @@ import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
-import { refusReglageProd } from '../prod-run-guard'
+import { refusReglageProd, refusSqlAgent } from '../prod-run-guard'
+import { chargerAutoriteProd } from '../store/prod-autorite-store'
+import { autowinAppDataRoot } from '../app-data'
 import { join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
@@ -50,6 +52,7 @@ import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
+import { coutDuTourDepuisCumul } from './claude-session-cost'
 import { abortFailure } from './abort-diagnostic'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
@@ -679,6 +682,20 @@ export function claudeTransportEnvelope(
  * guillemets en tete comme une valeur, pas comme un programme — et le garde restait muet. Et
  * l'outil shell du CLI s'appelle `PowerShell` sur ce poste, pas `Bash` : le matcher couvre les deux.
  */
+/**
+ * Bases déclarées `non-prod` dans la liste d'autorité : les SEULES qu'un agent peut viser depuis son
+ * terminal (revue conv-738). Liste illisible -> aucune : tout client SQL est alors refusé.
+ */
+function basesNonProdDeclarees(): string[] {
+  try {
+    return chargerAutoriteProd(autowinAppDataRoot())
+      .autorite.entrees.filter((e) => e.nature === 'base' && e.classe === 'non-prod')
+      .map((e) => e.nom)
+  } catch {
+    return []
+  }
+}
+
 export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
   const q = (v: string): string => `"${v.split('\\').join('/')}"`
   return {
@@ -1146,7 +1163,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // qui detruisent l'arbre de travail entier (git reset --hard & co).
       // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
       const hookGarde = join(settingsDir, 'garde-git-destructeur.mjs')
-      writeFileSync(hookGarde, scriptHookGardes(refusReglageProd), 'utf8')
+      writeFileSync(hookGarde, scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees()), 'utf8')
       writeFileSync(
         settingsFile,
         JSON.stringify(reglagesCliAutowin(hookGarde)),
@@ -1697,11 +1714,22 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (typeof o['session_id'] === 'string') sessionId = o['session_id'] as string
         // Tokens/coût RÉELS du tour (le result event du CLI les porte).
         const hasReportedCost = Object.prototype.hasOwnProperty.call(o, 'total_cost_usd')
-        const normalizedUsage = normalizeClaudeUsage(
-          o['usage'],
-          o['total_cost_usd'],
-          hasReportedCost
-        )
+        /*
+         * `total_cost_usd` est le CUMUL DE LA SESSION, pas le coût de ce tour — et toutes nos
+         * sessions sont reprises (`--resume`). Écrit tel quel, il était ADDITIONNÉ aux tours
+         * précédents par l'indicateur de coût : 9 320 $ affichés pour 4 428 $ réels sur les 661
+         * conversations du poste (mesure 2026-09-20). On retire donc ce qui a déjà été compté sur
+         * la MÊME session. Voir `claude-session-cost.ts` pour la preuve.
+         */
+        const cumulRapporte = o['total_cost_usd']
+        const coutDuTour =
+          typeof cumulRapporte === 'number'
+            ? coutDuTourDepuisCumul(
+                typeof o['session_id'] === 'string' ? (o['session_id'] as string) : sessionId,
+                cumulRapporte
+              )
+            : cumulRapporte
+        const normalizedUsage = normalizeClaudeUsage(o['usage'], coutDuTour, hasReportedCost)
         if (normalizedUsage)
           usage = {
             ...normalizedUsage,

@@ -15,6 +15,8 @@
  * caractères — on retombe sur l'ancien comportement au lieu de casser le composer.
  */
 
+import { suivreBlocsDeCode } from './bloc-de-code'
+
 const MARQUEUR_PROMPT_SUIVANT = 'AUTOWIN_PROMPT_V1:'
 
 /** Au-delà, ce n'est plus un prompt mais un paragraphe : on le borne au lieu de noyer le champ. */
@@ -26,8 +28,6 @@ const SAUT = String.fromCharCode(10)
 const PREFIXES_PARTIELS = Array.from({ length: MARQUEUR_PROMPT_SUIVANT.length }, (_, index) =>
   MARQUEUR_PROMPT_SUIVANT.slice(0, index + 1)
 )
-
-const estOuvertureDeBloc = (ligne: string): boolean => ligne.trimStart().startsWith('```')
 
 /**
  * Rend le DERNIER prompt émis, nettoyé de son markdown et borné. `null` s'il n'y en a pas —
@@ -44,14 +44,11 @@ export function extrairePromptSuivant(
 ): string | null {
   if (!texte) return null
   let trouve: string | null = null
-  let dansUnBloc = false
+  const bloc = suivreBlocsDeCode()
   for (const ligne of texte.split(SAUT)) {
-    if (estOuvertureDeBloc(ligne)) {
-      dansUnBloc = !dansUnBloc
-      continue
-    }
+    if (bloc.delimiteur(ligne)) continue
     // Un exemple du format cité dans un bloc de code n'est pas une consigne à exécuter.
-    if (dansUnBloc) continue
+    if (bloc.dansUnBloc) continue
     const debut = ligne.lastIndexOf(MARQUEUR_PROMPT_SUIVANT)
     if (debut < 0) continue
     const brut = ligne
@@ -78,19 +75,32 @@ export function extrairePromptSuivant(
 export function retirerLignePromptSuivant(texte: string): string {
   const lignes = texte.split(SAUT)
   const gardees: string[] = []
-  let dansUnBloc = false
-  for (const ligne of lignes) {
-    if (estOuvertureDeBloc(ligne)) {
-      dansUnBloc = !dansUnBloc
+  const bloc = suivreBlocsDeCode()
+  let retireeEnFin = false
+  for (const [index, ligne] of lignes.entries()) {
+    if (bloc.delimiteur(ligne)) {
       gardees.push(ligne)
+      retireeEnFin = false
       continue
     }
-    if (!dansUnBloc) {
+    // Le reste vide qui suit la ligne retirée n'est que SON propre saut de ligne : il part avec elle.
+    if (retireeEnFin && ligne === '' && index === lignes.length - 1) continue
+    if (!bloc.dansUnBloc) {
       const nu = ligne.trim()
-      if (nu.includes(MARQUEUR_PROMPT_SUIVANT)) continue
-      if (PREFIXES_PARTIELS.includes(nu)) continue
+      if (nu.includes(MARQUEUR_PROMPT_SUIVANT) || PREFIXES_PARTIELS.includes(nu)) {
+        retireeEnFin = true
+        continue
+      }
     }
     gardees.push(ligne)
+    retireeEnFin = false
+  }
+  /*
+   * En CRLF, le `\r` du séparateur qui PRÉCÈDE la ligne retirée reste collé à la ligne gardée : en
+   * fin de texte il faut l'ôter, comme `join` ôte déjà le `\n`. Au milieu, `join` le recoud en `\r\n`.
+   */
+  if (retireeEnFin && gardees.length) {
+    gardees[gardees.length - 1] = gardees[gardees.length - 1].replace(/\r$/, '')
   }
   /*
    * On ne touche À RIEN d'autre. Une premiere version elaguait aussi les lignes vides finales, pour

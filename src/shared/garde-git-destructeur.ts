@@ -80,10 +80,16 @@ export function refusGitDestructeur(commande: string): string | undefined {
 export function scriptHookGardes(
   // Garde des réglages de la protection de prod (`refusReglageProd`, src/main/prod-run-guard.ts),
   // passée par l'appelant : shared/ n'importe pas main/. Fonction autoportée, sérialisée telle quelle.
-  refusReglageProd: (texte: string) => string | undefined
+  refusReglageProd: (texte: string) => string | undefined,
+  // Garde SQL des agents (`refusSqlAgent`, même module) et bases déclarées non-prod : sans elles,
+  // aucun client SQL n'est bloqué (compatibilité des appelants qui ne portent pas la prod).
+  refusSqlAgent?: (texte: string, basesNonProd: readonly string[]) => string | undefined,
+  basesNonProd: readonly string[] = []
 ): string {
   return `const refusGitDestructeur = ${refusGitDestructeur.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
+const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
+const basesNonProd = ${JSON.stringify(basesNonProd)};
 let d = '';
 process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
@@ -95,7 +101,7 @@ process.stdin.on('end', () => {
     cmd = t.command || '';
     chemin = t.file_path || t.notebook_path || '';
   } catch {}
-  const motif = refusGitDestructeur(cmd) || refusReglageProd(cmd) || refusReglageProd(chemin);
+  const motif = refusGitDestructeur(cmd) || refusReglageProd(cmd) || refusReglageProd(chemin) || refusSqlAgent(cmd, basesNonProd);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

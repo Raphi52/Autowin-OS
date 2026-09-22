@@ -1,0 +1,16 @@
+Écris un module JavaScript ESM `regex.mjs` qui exporte :
+
+  export function executer(motif, texte)
+
+Il doit se comporter EXACTEMENT comme `new RegExp(motif).exec(texte)` de JavaScript (sans drapeau),
+mais SANS utiliser le moteur d'expressions régulières du langage : aucun RegExp, aucune expression
+littérale /…/, ni .match / .exec / .test / .replace / .search / .split / matchAll.
+
+Retour : null si pas de correspondance, sinon un tableau [indexDeDebut, texteCorrespondant, groupe1, groupe2, …]
+(un groupe qui n'a pas participé vaut undefined).
+
+Syntaxe à prendre en charge : caractères littéraux, `.`, classes [abc] [^a] [a-c], groupes capturants ( ),
+non capturants (?: ), alternative |, quantificateurs * + ? {n} {n,} {n,m} et leurs versions paresseuses
+(suffixe ?), ancres ^ $, références arrière \1 à \9, assertions (?= ) et (?! ).
+
+Rends uniquement le contenu du fichier, dans un seul bloc ```js.

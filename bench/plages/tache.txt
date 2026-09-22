@@ -1,0 +1,23 @@
+Écris un module JavaScript ESM `disponibilites.mjs` qui exporte :
+
+  export function disponibilites({ personnes, debut, fin, dureeMin = 0 })
+
+Le temps est en MINUTES entières (nombres). Une semaine = 10080 minutes.
+
+Chaque personne : { creneaux: [...], occupations: [...] }
+- creneau    : { debut, fin, hebdo? }  — disponibilité sur [debut, fin)
+- occupation : { debut, fin, hebdo? }  — indisponibilité sur [debut, fin), prioritaire sur les créneaux
+- hebdo: true → l'intervalle se RÉPÈTE toutes les 10080 minutes, dans les deux sens
+  (debut + k*10080, fin + k*10080 pour tout entier k, négatif compris). Un intervalle hebdo peut
+  dépasser la fin de semaine (ex. debut 10000, fin 10200) et doit alors déborder sur la suivante.
+- Un intervalle avec fin <= debut, ou des valeurs non finies, est IGNORÉ.
+- Les listes ne sont ni triées ni disjointes.
+
+Retourne la liste des intervalles [debut, fin) (objets { debut, fin }) où TOUTES les personnes
+sont disponibles et aucune occupée, restreints à [debut, fin) de la requête, triés, fusionnés
+(deux intervalles qui se touchent ou se chevauchent forment un seul), en ne gardant que ceux
+de longueur >= dureeMin.
+- Aucune personne, ou requête avec fin <= debut → [].
+- Doit rester rapide : 10 000 intervalles et une plage d'un an en moins d'une seconde.
+
+Rends uniquement le contenu du fichier, dans un seul bloc ```js.

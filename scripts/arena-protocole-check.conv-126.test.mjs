@@ -37,7 +37,9 @@ const RATES_ATTENDUS = {
   P15: /aucun bras journalise/,
   // Banc d'avant la regle du 2026-09-05 (conv-305) : ni bras de TEXTE en B, ni appel NU en X.
   P16: /section des candidats absente/,
-  P17: /cite de l_outillage/,
+  // Son prompt-x ne citait que des CHEMINS (scripts/scout-rendement.mjs, arena-bench/) : le motif
+  // « cite de l_outillage » etait un faux positif, corrige le 2026-09-21. Le vrai motif reste.
+  P17: /ne declarent X comme appel nu/,
   // Banc d'avant la regle du critere binaire (2026-09-06) : il ne declare aucune ligne
   // `**Critere binaire** :`, donc son gagnant ne repose que sur l'avis du juge.
   P20: /aucune ligne .\*\*Crit[eè]re binaire\*\*/

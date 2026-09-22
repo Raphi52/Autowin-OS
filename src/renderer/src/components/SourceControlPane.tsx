@@ -11,7 +11,8 @@ const markGlyph: Record<GitChange['status'], string> = {
   added: '+',
   deleted: '–',
   renamed: '»',
-  untracked: '?'
+  untracked: '?',
+  conflicted: '!'
 }
 
 /**
@@ -236,14 +237,14 @@ export function SourceControlPane({
     view === 'tree'
       ? 'Arborescence du projet'
       : view === 'brain'
-      ? 'Appels Brain de la conversation'
-      : view === 'workspace' && repoPath
-        ? repoPath.replace(/^.*[\\/]/, '')
-        : view === 'project'
-          ? // Suit le renommage de l'onglet : un onglet « Fichiers » ouvrant un panneau intitulé
-            // « Projet de la conversation » se contredirait à l'écran.
-            'Fichiers de la conversation'
-          : 'Dépôt courant'
+        ? 'Appels Brain de la conversation'
+        : view === 'workspace' && repoPath
+          ? repoPath.replace(/^.*[\\/]/, '')
+          : view === 'project'
+            ? // Suit le renommage de l'onglet : un onglet « Fichiers » ouvrant un panneau intitulé
+              // « Projet de la conversation » se contredirait à l'écran.
+              'Fichiers de la conversation'
+            : 'Dépôt courant'
 
   return (
     <div className="sc-pane" data-testid="source-control-pane">

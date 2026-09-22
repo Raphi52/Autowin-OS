@@ -19,6 +19,13 @@ describe('la tokenisation partagee', () => {
     expect(motsDe('src/main/store/conversations.ts')).toContain('conversations.ts')
   })
 
+  // Banc arena panel-t1 (2026-09-21) : 3 correctifs sur 4 depliaient les ligatures dans replier,
+  // qui doit garder la longueur (positions reportees sur l original, store/conversations.ts:398).
+  it('replier garde la longueur meme avec des ligatures', () => {
+    const texte = 'Straße, l’œuvre, ex æquo : CIBLE'
+    expect(replier(texte).length).toBe(texte.length)
+  })
+
   it('rend tous les mots quand l appelant le demande', () => {
     expect(motsDe('de la', 1)).toEqual(['de', 'la'])
   })

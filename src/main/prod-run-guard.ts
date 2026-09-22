@@ -50,3 +50,37 @@ export function cibleSqlDeCommande(ligne: string): CibleSqlRun | undefined {
   }
   return { client, base: base?.replace(/^\[|\]$/g, '') || 'inconnu' }
 }
+
+/**
+ * GARDE SQL DES AGENTS lancés par `orchestrate` (revue conv-738) : leur terminal ne passe ni par
+ * `run` ni par `sql_query`, seul le hook PreToolUse du CLI le voit. Ce hook ne peut pas ouvrir la
+ * fenêtre de confirmation : une base de production OU inconnue est donc refusée NET, et seules les
+ * bases déclarées `non-prod` dans la liste d'autorité passent (refus par défaut, comme `classerCible`).
+ * AUTOPORTÉE : sérialisée telle quelle dans le script du hook, aucune référence au module.
+ */
+export function refusSqlAgent(ligne: string, basesNonProd: readonly string[]): string | undefined {
+  const texte = String(ligne ?? '')
+  const m = /(?:^|[\s"'\/\(;&|])(sqlcmd|osql|bcp|invoke-sqlcmd)(?:\.exe)?(?=["'\s]|$)/i.exec(texte)
+  if (!m) return undefined
+  const client = m[1].toLowerCase()
+  const jetons = (texte.slice(m.index + m[0].length).match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((j) =>
+    j.replace(/^["']|["']$/g, '')
+  )
+  let base: string | undefined
+  for (let i = 0; i < jetons.length - 1; i++) {
+    if (['-d', '/d', '-database'].includes(jetons[i].toLowerCase())) {
+      base = jetons[i + 1]
+      break
+    }
+  }
+  if (!base && client === 'bcp' && jetons[0] && !jetons[0].startsWith('-') && jetons[0].includes('.')) {
+    base = jetons[0].split('.')[0]
+  }
+  const nom = (base ?? '').replace(/^\[|\]$/g, '').trim().toLowerCase()
+  if (nom && basesNonProd.some((b) => String(b).trim().toLowerCase() === nom)) return undefined
+  return (
+    `${client} vers la base « ${nom || 'inconnue'} » refusé : elle n'est pas déclarée non-prod, ` +
+    `donc traitée comme de la production. Un agent ne touche pas la prod depuis son terminal ; ` +
+    `passe par sql_query (lecture seule, avec confirmation de l'utilisateur).`
+  )
+}

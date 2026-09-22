@@ -178,6 +178,11 @@ describe('canoniserReplis — l’état plié survit à la canonisation des chem
     expect(estReplie('C:\\Clients', relu)).toBe(true)
     expect(estReplie('D:\\Clients', relu)).toBe(false)
   })
+
+  it('séparateurs doublés, « . » et « .. » retrouvent la clé du même dossier', () => {
+    const relu = canoniserReplis({ 'C://x/../Clients/.': true })
+    expect(estReplie('C:\\Clients', relu)).toBe(true)
+  })
 })
 
 /**

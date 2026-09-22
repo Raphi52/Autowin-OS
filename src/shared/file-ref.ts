@@ -15,14 +15,15 @@ const SCHEME = /^[a-z][a-z0-9+.-]*:/i
 export function parseFileRef(target: string): FileRef | null {
   const raw = (target ?? '').trim()
   if (!raw || raw.startsWith('#') || raw.startsWith('//')) return null
-  if (!WINDOWS_ABS.test(raw) && SCHEME.test(raw) && !/^[^\s:]+:\d+$/.test(raw)) return null
+  if (!WINDOWS_ABS.test(raw) && SCHEME.test(raw) && !/^[^\s:]+:\d+(?::\d+)?$/.test(raw)) return null
 
   let path = raw
   let line: number | undefined
   const withLine = /^(.+?):(\d{1,7})(?::\d{1,7})?$/.exec(raw)
   if (withLine) {
     path = withLine[1]
-    line = Number(withLine[2])
+    // Les lignes commencent à 1 : « a.ts:0 » désigne le fichier, pas une ligne.
+    line = Number(withLine[2]) || undefined
   }
   if (!path || /[\\/]$/.test(path)) return null
   const name = path.split(/[\\/]/).pop() ?? ''

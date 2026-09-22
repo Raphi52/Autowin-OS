@@ -25,6 +25,22 @@ export function replier(texte: string): string {
     .toLowerCase()
 }
 
+/**
+ * Les ligatures que NFD ne decompose pas : sans elles, `SEPARATEURS` les prend pour des coupures
+ * et « l'œuvre » devient « uvre ». Appliquees ici et non dans `replier`, dont des appelants
+ * utilisent les positions (`indexOf`) -- `ß` -> `ss` les decalerait.
+ */
+const LIGATURES: Readonly<Record<string, string>> = { œ: 'oe', æ: 'ae', ß: 'ss' }
+
+/**
+ * `replier` + ligatures (`œ` -> `oe`, `æ` -> `ae`, `ß` -> `ss`) : la forme a comparer quand on
+ * cherche un texte, pour que « oeuvre » trouve « l'œuvre ». Le repliage change la longueur du
+ * texte : qui a besoin de positions dans l'original doit replier caractere par caractere.
+ */
+export function replierComplet(texte: string): string {
+  return replier(texte).replace(/[œæß]/g, (ligature) => LIGATURES[ligature])
+}
+
 /** Les separateurs : tout ce qui n'est ni lettre, ni chiffre, ni ponctuation de chemin. */
 const SEPARATEURS = /[^a-z0-9_.:-]+/
 
@@ -37,7 +53,7 @@ const SEPARATEURS = /[^a-z0-9_.:-]+/
 export function motsDe(texte: string, longueurMin = 3): string[] {
   return [
     ...new Set(
-      replier(texte)
+      replierComplet(texte)
         .split(SEPARATEURS)
         .filter((mot) => mot.length >= longueurMin)
     )

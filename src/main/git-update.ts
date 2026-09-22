@@ -67,7 +67,7 @@ export async function checkForUpdate(
       return {
         available: true,
         behind: 0,
-        ...(branch ? { branch, strategies: strategiesFor(branch) } : {}),
+        ...(branch ? { branch, strategies: strategiesFor(branch, false, true) } : {}),
         dirty: true,
         conflicted: true,
         conflictOperation: mergeHead ? 'merge' : 'unknown'
@@ -119,7 +119,7 @@ export async function checkForUpdate(
       reference,
       dirty,
       conflicted: false,
-      strategies: strategiesFor(branch, ahead > 0)
+      strategies: strategiesFor(branch, ahead > 0, dirty)
     }
   } catch (error) {
     return {
@@ -226,9 +226,10 @@ function packageSignature(cwd: string): string {
 /**
  * Applique la mise à jour selon la stratégie demandée.
  *
- * Un arbre SALE n'est ni stashé ni refusé d'emblée : la mise à jour est tentée telle quelle et git
- * refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier modifié
- * localement. Plus AUCUN stash — la mécanique `stash push`/`pop` a déjà effacé du travail non
+ * Un arbre SALE n'est ni stashé ni refusé d'emblée : la mise à jour est tentée telle quelle et une
+ * fusion/avance refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier
+ * modifié localement ; un REBASE, lui, refuse dès qu'un fichier est modifié — il n'est donc pas proposé.
+ * Plus AUCUN stash — la mécanique `stash push`/`pop` a déjà effacé du travail non
  * committé (un `pop` en conflit laissait le stash orphelin). Le travail local reste EN PLACE.
  *
  * La SEULE garde conservée : hors de `main`, aucune stratégie n'est choisie à la place de l'utilisateur
@@ -264,7 +265,10 @@ export async function applyUpdate(
         /* avance illisible : on tente l'avance simple, git refusera proprement */
       }
     }
-    const available = strategiesFor(currentBranch, diverged)
+    // Calculé AVANT le choix des stratégies : un arbre sale rend le rebase impossible (git le refuse
+    // d'office, qu'importe ce que touchent les commits entrants).
+    const dirty = (await run(['status', '--porcelain'], cwd)).stdout.trim().length > 0
+    const available = strategiesFor(currentBranch, diverged, dirty)
     // Sur main, avancer est sans ambiguïté → défaut. Ailleurs, l'appelant DOIT nommer sa stratégie :
     // c'est la seule garde conservée, et elle empêche exactement une chose — fabriquer un merge que
     // personne n'a demandé sur la branche de quelqu'un.
@@ -302,7 +306,6 @@ export async function applyUpdate(
     // pouvant contenir du non-committé jamais remis. On tente désormais la mise à jour TELLE QUELLE ;
     // git refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier
     // modifié localement. Le travail non committé reste EN PLACE, visible, jamais rangé ailleurs.
-    const dirty = (await run(['status', '--porcelain'], cwd)).stdout.trim().length > 0
 
     let switchedToMain = false
     try {

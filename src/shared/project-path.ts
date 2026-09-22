@@ -3,7 +3,9 @@
  *
  * `C:/Clients`, `C:\Clients\` et ` C:\Clients ` désignent le MÊME dossier : sans canonisation ils
  * font trois groupes distincts dans la liste et trois entrées dans le sélecteur. Règle : `trim`,
- * séparateurs vers `\`, séparateur final retiré, lettre de lecteur en MAJUSCULE.
+ * séparateurs vers `\`, séparateurs doublés fusionnés, segments `.` retirés et `..` résolus,
+ * séparateur final retiré, lettre de lecteur en MAJUSCULE. Le `\\` de tête d'un partage réseau
+ * reste, et `..` ne remonte jamais au-dessus du lecteur ni du partage.
  *
  * La casse du RESTE du chemin est laissée intacte à dessein : la minusculiser fusionnerait bien
  * `c:\clients` et `C:\Clients`, mais dégraderait le libellé rendu par `nomDeDossier` (« clients »).
@@ -18,7 +20,23 @@
  * silencieusement tous les dossiers de la barre latérale.
  */
 export function canonicalProjectPath(raw: string | null | undefined): string | undefined {
-  const propre = raw?.trim().replace(/\//g, '\\').replace(/\\+$/, '')
+  const brut = raw?.trim().replace(/\//g, '\\')
+  if (!brut) return undefined
+  const racine = brut.startsWith('\\\\') ? '\\\\' : brut.startsWith('\\') ? '\\' : ''
+  const segments: string[] = []
+  for (const segment of brut.slice(racine.length).split('\\')) {
+    if (segment === '' || segment === '.') continue
+    if (segment === '..') {
+      // Plancher : la lettre de lecteur, ou le serveur et le partage d'un chemin réseau.
+      const plancher = racine === '\\\\' ? 2 : /^[a-z]:$/i.test(segments[0] ?? '') ? 1 : 0
+      const dernier = segments[segments.length - 1]
+      if (segments.length > plancher && dernier !== '..') segments.pop()
+      else if (plancher === 0) segments.push(segment)
+      continue
+    }
+    segments.push(segment)
+  }
+  const propre = segments.length ? racine + segments.join('\\') : ''
   if (!propre) return undefined
   return /^[a-z]:/.test(propre) ? propre[0].toUpperCase() + propre.slice(1) : propre
 }

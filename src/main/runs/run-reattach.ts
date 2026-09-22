@@ -12,6 +12,7 @@ import {
 } from '../providers/claude'
 import type { ExecutionEvidence } from '../providers/types'
 import { normalizeClaudeUsage } from '../providers/claude'
+import { coutDuTourDepuisCumul } from '../providers/claude-session-cost'
 import { codexExecutionEvidenceFromItem, type CodexExecItem } from '../providers/codex'
 import { isSameProcessIdentity } from '../process-identity'
 
@@ -647,7 +648,19 @@ function detachedClaudeSuccess(
         : undefined
     if (!rawUsage) return undefined
     const hasReportedCost = Object.prototype.hasOwnProperty.call(event, 'total_cost_usd')
-    const usage = normalizeClaudeUsage(rawUsage, event.total_cost_usd, hasReportedCost)
+    /*
+     * MEME CUMUL QU'A LA SOURCE : `total_cost_usd` porte le total de la session CLI, pas le cout de
+     * ce tour-la. Une reprise de journal doit donc de-cumuler comme le fait l'adaptateur, sinon
+     * elle reinjecte un cumul dans les journaux de cout (cf. `providers/claude-session-cost.ts`).
+     */
+    const coutDuTour =
+      typeof event.total_cost_usd === 'number'
+        ? coutDuTourDepuisCumul(
+            typeof event.session_id === 'string' ? event.session_id : undefined,
+            event.total_cost_usd
+          )
+        : event.total_cost_usd
+    const usage = normalizeClaudeUsage(rawUsage, coutDuTour, hasReportedCost)
     if (!usage) return undefined
     return {
       text: (includeAssistantText ? assistantText : '') || event.result.trim(),

@@ -122,6 +122,15 @@ l'assertion.
 
 ### 4. RÉCUPÉRER — appliquer sans écraser
 
+- **AVANT chaque cherry-pick ou apply, lance `node scripts/salvage-resurrection.mjs <sha> --base main`.**
+  Code **1** : le candidat remet ce que `main` a annulé ou supprimé → ne reporte PAS le commit entier,
+  isole ses vraies modifications récentes. Code **3** : il modifie des fichiers qu'une annulation récente a
+  touchés → ouvre chaque annulation citée (`git show <commit>`), vérifie qu'il ne remet pas ce qu'elle
+  retirait, et écris ta décision dans ta réponse. Seul le code **0** autorise un report sans relecture.
+  MESURÉ le 2026-09-19 (conv-719) : un /salvage a cherry-pické la copie préservée a93c3b61 ; elle réécrivait
+  les onglets que l'utilisateur avait fait retirer par le revert e4413ce3 deux jours plus tôt, et ils sont
+  revenus sur `main`. `git cherry` ne pouvait pas le voir : le patch était bien « nouveau ». Deux annulations
+  « Revert "salvage(decor)…" » du même mois portent la même signature.
 - **Fusionne par patch, jamais par restauration de fichier.** `git cherry-pick <sha>`, ou
   `git diff <base>..<sha> > /tmp/p.patch && git apply --3way /tmp/p.patch`.
   **Jamais `git checkout <ref> -- <file>`** quand la base a bougé : cela remplace tout le fichier et

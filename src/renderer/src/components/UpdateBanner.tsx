@@ -74,9 +74,14 @@ async function reparerBlocageUpdate(raison: string): Promise<void> {
     /* navigation refusée : le prompt reste préparé dans la conversation */
   }
   const prompt =
-    `La mise à jour d'Autowin est bloquée : « ${raison} ». Résous le blocage — committe ou mets de ` +
-    `côté mon travail non committé selon le cas, ou résous le conflit d'intégration — puis relance la ` +
-    `mise à jour.`
+    `La mise à jour d'Autowin est bloquée : « ${raison} ». Résous le blocage puis relance la mise à ` +
+    `jour. Mon travail local peut être PÉRIMÉ : une vieille copie reprise ici contient souvent des ` +
+    `choses que main a retirées depuis (annulation, suppression). Avant de committer ou de trancher un ` +
+    `conflit, compare chaque fichier à la version entrante (git fetch puis git diff HEAD..origin/main, ` +
+    `et git log origin/main sur ces fichiers) : ne réintroduis jamais ce que main a supprimé ou annulé, ` +
+    `garde seulement mes vraies modifications récentes. Dans le doute, mets le fichier de côté ` +
+    `(git stash) plutôt que de le committer. Termine par la liste de ce que tu as gardé et de ce que ` +
+    `tu as écarté.`
   window.dispatchEvent(
     new CustomEvent('autowin:prefill-conversation', {
       detail: { conversationId: conversation.id, prompt, send: true }

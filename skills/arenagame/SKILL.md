@@ -2,7 +2,7 @@
 name: arenagame
 description: >-
   Variante de `arena` sur un banc FIXE et LONG : un clone jouable de Clash Royale dans Roblox Studio,
-  refait de zéro à chaque tournoi. Le jeu n'est QUE l'instrument de mesure : le livrable est une
+  refait de zéro à chaque tournoi. But final : un jeu PARFAIT produit en UN SEUL prompt. Le jeu n'est QUE l'instrument de mesure : le livrable est une
   amélioration PROUVÉE d'Autowin OS (skill réécrite, garde-fou, outil forgé). Quatre bras A/B/C/X
   isolés, une grille déterministe (tests cachés de règles de jeu exécutés hors Studio, build Rojo,
   lint, capture sur bureau caché) PLUS une grille de FRICTIONS du workflow lue dans les journaux ;
@@ -26,6 +26,12 @@ Un clone de Clash Royale oblige à : cadrer un besoin large, découper, outiller
 inconnu (Roblox, Luau, Rojo), vérifier sans interface, tenir sur des dizaines de tours. C'est là que
 les workflows diffèrent — et que leurs défauts se VOIENT.
 
+**But final : un jeu PARFAIT en UN SEUL prompt.** Chaque tournoi doit rapprocher Autowin OS du
+jour où un unique message utilisateur (« fais un clone de Clash Royale dans Roblox ») suffit à
+produire un jeu complet, sans relance ni intervention humaine. C'est l'étalon de toutes les
+améliorations : une édition d'Autowin OS vaut ce qu'elle retire comme relance, blocage ou retouche
+manuelle sur ce chemin.
+
 **Règle cardinale : le score du jeu n'est pas le but.** Un bras qui fait un meilleur jeu en
 contournant Autowin OS (outil bricolé en silence, vérification sautée) apprend MOINS qu'un bras
 moyen dont chaque blocage est tracé. Le tournoi se clôt sur des ÉDITIONS D'AUTOWIN OS, pas sur un jeu.
@@ -46,7 +52,7 @@ Dossier : `D:\AutoWinOS\.arena\arenagame\`. Contenu permanent (jamais effacé) :
 |---|---|
 | `tache.txt` | l'énoncé donné aux bras, mot pour mot (ci-dessous) |
 | `modele/` | point de départ copié dans chaque bras : `default.project.json` Rojo, `rokit.toml`, `selene.toml`, `CONTRAT.md`, `src/shared/Partie.luau` vide |
-| `cache/regles.luau` | **28 tests cachés** de règles (élixir, cycle, pose, combat, fin de partie, déterminisme) |
+| `cache/regles.luau` | **32 tests cachés** de règles (élixir, cycle, pose, combat, fin de partie, déterminisme ; depuis t4 : sorts et départage de fin de prolongation) |
 | `cache/simulation.luau` | 200 parties aléatoires, invariants vérifiés à chaque pas |
 | `cache/equilibrage.luau` | 2 400 parties « bot qui privilégie une carte » + 2 000 parties bot contre bot (≈ 45 s) |
 | `cache/boutique.luau` | 13 tests cachés de la logique de boutique (`src/shared/Boutique.luau`, interface dans `CONTRAT.md`) |
@@ -95,7 +101,17 @@ donc hors du Job du tour) :
 `powershell -NoProfile -File D:\AutoWinOS\scripts\lancer-detache.ps1 -Commande '"<Git>\bin\bash.exe" -lc "<banc>/lance.sh"' -Dossier <banc>`
 (`bin\bash.exe`, pas `usr\bin` : sans `-l`, `sleep` et `date` sont introuvables). Code 0 et
 `"horsJob":true` = lancé et vérifié hors Job ; tout autre code = pas lancé proprement. Survie à une
-VRAIE fin de tour pas encore observée pour cet outil : relis le processus ou `statut.txt` au tour suivant.
+vraie fin de tour observée (conv-767 : témoin pid 24972 lancé à 20:28:49, toujours vivant et écrivant
+à 20:29:36, après la fin du tour qui l'avait lancé).
+**Chaque bras passe par `lance-bras.sh`, jamais par un `claude -p` nu.** t2b, t2v et t3 ont eu TOUS
+leurs bras coupés vers 30 min par la limite de session Claude (« You've hit your session limit ·
+resets 7pm », `is_error: true`) : des jeux inachevés, notés comme s'ils avaient perdu.
+`lance-bras.sh <banc> <bras-replique> <prompt> [sys]` attend l'heure de remise à zéro annoncée puis
+reprend la MÊME session (`--resume`) avec le budget restant ; `out-<bras>.json` cumule coût, tours
+et durée, et porte `reprises`. Corps du `lance.sh` d'un tournoi :
+`for b in a b c x; do for r in 1 2; do bash "$ARENE/lance-bras.sh" "$BANC" $b-$r "$BANC/prompt-$b.txt" $( [ $b = x ] || echo "$BANC/sys-$b.txt" ) & done; done; wait; date > "$BANC/fin.txt"`
+(`ARENE=D:/AutoWinOS/.arena/arenagame`). Vérifié le 2026-09-22 avec un faux `claude` coupé deux fois :
+2 reprises sur la même session, budget 40 → 30,50 → 21 $, attente calculée jusqu'à 19h02.
 Repli déjà prouvé (t2b, 12 bras vivants au tour suivant) :
 `schtasks //Create //F //TN AutowinArena-<tournoi> //SC ONCE //ST 23:59 //TR "\"<Git>\bin\bash.exe\" -lc \"<banc>/lance.sh\""`
 puis `schtasks //Run //TN AutowinArena-<tournoi>` ; supprime la tâche (`schtasks //Delete //TN … //F`)

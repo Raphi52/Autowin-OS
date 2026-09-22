@@ -84,8 +84,6 @@ import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
 import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
-import { deciderRepriseProgrammee, libelleRepriseProgrammee } from './reprise-quota-planifiee'
-import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
 import { HdeskTv } from './HdeskTv'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 // La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
@@ -4393,16 +4391,6 @@ export function ChatView({
    */
   const [repriseQuotaProgres, setRepriseQuotaProgres] = useState<string | null>(null)
   const [repriseQuotaNotice, setRepriseQuotaNotice] = useState<string | null>(null)
-  /**
-   * REPRISE AUTOMATIQUE À L'HEURE DU RETOUR DE QUOTA.
-   *
-   * Le bouton ci-dessus suppose d'être devant l'écran au bon moment. L'heure du retour est pourtant
-   * connue (`resetsAt`) — jusqu'ici seulement affichée. On arme donc un minuteur dessus, et on le
-   * DIT dans la barre pour que rien ne parte en silence. Le refus de l'utilisateur est un verrou :
-   * une fois « ne pas reprendre » cliqué, plus rien ne s'arme tant que la fenêtre vit.
-   */
-  const [quotasSnapshot, setQuotasSnapshot] = useState<ModelQuotaSnapshot | null>(null)
-  const [repriseAutoRefusee, setRepriseAutoRefusee] = useState(false)
   /* Croix de fermeture (demande du 2026-09-15) : on retient la LISTE des fils coupes au moment du
      clic. Le bloc revient de lui-meme si un nouveau fil est coupe — masquer pour toujours ferait
      rater une coupure suivante. */
@@ -4411,57 +4399,6 @@ export function ChatView({
     .map((c) => c.id)
     .sort()
     .join('|')
-  const [repriseAutoPrevueA, setRepriseAutoPrevueA] = useState<string | null>(null)
-  const repriseAutoDejaTentee = useRef<string | undefined>(undefined)
-  const repriseQuotaRef = useRef<() => Promise<void>>(async () => undefined)
-  useEffect(() => {
-    if (typeof window.api?.modelQuotas !== 'function') return
-    let vivant = true
-    const lire = (): void => {
-      window.api
-        .modelQuotas()
-        .then((valeur) => {
-          if (vivant) setQuotasSnapshot(valeur)
-        })
-        .catch(() => undefined)
-    }
-    lire()
-    // Le reset peut être repoussé par le fournisseur : on relit, sans forcer (lecture en cache).
-    const t = setInterval(lire, 120_000)
-    return () => {
-      vivant = false
-      clearInterval(t)
-    }
-  }, [])
-  const decisionRepriseAuto = useMemo(
-    () =>
-      deciderRepriseProgrammee({
-        coupees: convsCoupeesParQuota.length,
-        quotas: quotasSnapshot,
-        refusee: repriseAutoRefusee,
-        enCours: repriseQuotaEnCours,
-        ...(repriseAutoDejaTentee.current ? { dejaTentee: repriseAutoDejaTentee.current } : {})
-      }),
-    [convsCoupeesParQuota.length, quotasSnapshot, repriseAutoRefusee, repriseQuotaEnCours]
-  )
-  useEffect(() => {
-    if (decisionRepriseAuto.type !== 'programmer') {
-      setRepriseAutoPrevueA(null)
-      return
-    }
-    const { resetsAt, dansMs } = decisionRepriseAuto
-    setRepriseAutoPrevueA(resetsAt)
-    const t = setTimeout(
-      () => {
-        // Marqué AVANT de partir : si la reprise retombe sur le mur, on ne rejoue pas cette échéance.
-        repriseAutoDejaTentee.current = resetsAt
-        setRepriseAutoPrevueA(null)
-        void repriseQuotaRef.current()
-      },
-      Math.max(0, dansMs)
-    )
-    return () => clearTimeout(t)
-  }, [decisionRepriseAuto])
   // Le compte-rendu de reprise est une information de l'INSTANT : lu, il n'a plus de raison
   // d'occuper la barre. Sans cette expiration, « 2 conversations reprises. » restait affiche
   // indefiniment alors qu'il n'y avait plus rien a reprendre.
@@ -4503,7 +4440,6 @@ export function ChatView({
   }
   // Le minuteur est armé AVANT que la fonction ne soit définie (ordre des déclarations) : il passe
   // par cette référence plutôt que par une capture, qui serait figée sur un état périmé.
-  repriseQuotaRef.current = reprendreConversationsCoupeesParQuota
 
   /**
    * Continue le fil sans recréer ni renvoyer le dernier message utilisateur.
@@ -5482,23 +5418,6 @@ export function ChatView({
                 {repriseQuotaNotice ? (
                   <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
                     {repriseQuotaNotice}
-                  </span>
-                ) : null}
-                {/* Rien ne part en silence : quand une reprise est armée, elle s'annonce avec son heure
-                et offre le moyen de l'annuler. Sans ce libelle, l'utilisateur verrait ses fils
-                repartir sans savoir pourquoi. */}
-                {repriseAutoPrevueA ? (
-                  <span className="conv-auto-notice" data-testid="conv-reprise-quota-auto">
-                    {libelleRepriseProgrammee(repriseAutoPrevueA, convsCoupeesParQuota.length)}
-                    <button
-                      type="button"
-                      className="conv-date-sort"
-                      data-testid="conv-reprise-quota-auto-annuler"
-                      onClick={() => setRepriseAutoRefusee(true)}
-                      title="Ne pas reprendre automatiquement au retour du quota"
-                    >
-                      ne pas reprendre
-                    </button>
                   </span>
                 ) : null}
               </div>

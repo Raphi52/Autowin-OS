@@ -1,0 +1,10 @@
+Écris un module JavaScript ESM `nombres.mjs` qui exporte :
+
+  export function formater(x)   // x : un number JavaScript quelconque
+
+Il doit rendre EXACTEMENT la même chaîne que `String(x)` pour TOUT double IEEE-754, sans utiliser les
+conversions nombre→texte du langage : aucun String(), toString, toFixed, toPrecision, toExponential,
+Intl, JSON, gabarit `${}` ni concaténation d'un nombre avec une chaîne. Vous pouvez utiliser BigInt,
+Math, DataView/Float64Array.
+
+Rends uniquement le contenu du fichier, dans un seul bloc ```js.

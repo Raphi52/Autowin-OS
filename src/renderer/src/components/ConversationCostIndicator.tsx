@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   callsLabel,
   formatDuration,
@@ -48,7 +48,21 @@ export function ConversationCostIndicator({
   conversationId,
   busy
 }: Props): React.JSX.Element | null {
-  const [rows, setRows] = useState<CostRow[]>([])
+  /*
+   * LES LIGNES PORTENT LE FIL DONT ELLES VIENNENT. Signalé le 2026-09-21 : « je navigue de conv en
+   * conv et ça écrit le même coût ». Le serveur rendait bien un total par fil ; la pastille, elle,
+   * gardait des lignes SANS propriétaire, donc affichait celles du fil précédent tant que rien ne
+   * les remplaçait — et rien ne les remplaçait en arrivant sur un fil occupé (voir l'effet plus bas),
+   * ni pendant le chargement, et une réponse tardive du fil quitté pouvait les écraser. Des lignes
+   * étiquetées ne s'affichent que pour LEUR fil : les trois cas tombent d'un coup.
+   */
+  const [donnees, setDonnees] = useState<{ conversationId: string; rows: CostRow[] } | null>(null)
+  /** Le fil affiché À L'INSTANT — une réponse qui revient pour un autre fil est jetée. */
+  const filCourant = useRef(conversationId)
+  // Mis à jour au COMMIT, avant tout effet et avant qu'une réponse en vol puisse être traitée.
+  useLayoutEffect(() => {
+    filCourant.current = conversationId
+  }, [conversationId])
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   /**
@@ -62,7 +76,11 @@ export function ConversationCostIndicator({
    * rien ne l'additionnait : c'est le seul levier mesurable sur la facture. Lu à part du coût
    * (autre journal), et un échec reste silencieux : la section disparaît, le coût reste affiché.
    */
-  const [promptCalls, setPromptCalls] = useState<CompositionCallInput[]>([])
+  // Même étiquette que les lignes de coût : la composition d'un autre fil ne s'affiche jamais.
+  const [promptCalls, setPromptCalls] = useState<{
+    conversationId: string
+    calls: CompositionCallInput[]
+  } | null>(null)
 
   const refresh = useCallback(
     async (manual = false) => {
@@ -72,13 +90,19 @@ export function ConversationCostIndicator({
       try {
         const result = (await window.api.costBreakdown('actor', conversationId)) as
           CostRow[] | undefined
-        setRows(Array.isArray(result) ? result : [])
+        // L'utilisateur a changé de fil pendant la requête : cette réponse n'est plus la sienne.
+        if (filCourant.current !== conversationId) return
+        setDonnees({ conversationId, rows: Array.isArray(result) ? result : [] })
         setManualError(false)
         try {
           const calls = await window.api?.promptCalls?.(conversationId)
-          setPromptCalls(Array.isArray(calls) ? (calls as CompositionCallInput[]) : [])
+          if (filCourant.current !== conversationId) return
+          setPromptCalls({
+            conversationId,
+            calls: Array.isArray(calls) ? (calls as CompositionCallInput[]) : []
+          })
         } catch {
-          setPromptCalls([])
+          if (filCourant.current === conversationId) setPromptCalls({ conversationId, calls: [] })
         }
       } catch {
         // Un journal illisible ne doit pas casser le composeur : on garde le dernier total connu.
@@ -90,22 +114,37 @@ export function ConversationCostIndicator({
     [conversationId]
   )
 
-  // Au changement de conversation, et à la FIN d'un tour (busy repasse à false) : c'est le moment où
-  // le journal contient la dépense du tour.
+  /*
+   * DEUX déclencheurs distincts, qui étaient confondus en un seul :
+   * - à l'ARRIVÉE sur un fil, TOUJOURS — occupé ou non. L'ancien garde `if (busy) return` sautait ce
+   *   chargement sur un fil qui travaille (mode auto, tour en cours) : la pastille gardait alors le
+   *   total du fil précédent, soit exactement « même coût partout » sur un dossier où plusieurs fils
+   *   tournent en même temps ;
+   * - à la FIN d'un tour (busy repasse à false) : c'est là que le journal contient la dépense du tour.
+   */
   useEffect(() => {
-    if (busy) return
     // Chargement asynchrone déclenché par l'état externe du journal, pas état dérivé du rendu.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh()
-  }, [refresh, busy])
+  }, [refresh])
+  const etaitOccupe = useRef(busy)
+  useEffect(() => {
+    const finDeTour = etaitOccupe.current === true && !busy
+    etaitOccupe.current = busy
+    if (finDeTour) void refresh()
+  }, [busy, refresh])
 
   const open = openConversationId === conversationId
+  // Des lignes d'un AUTRE fil ne s'affichent jamais — pas même le temps d'un chargement.
+  const rows = donnees && donnees.conversationId === conversationId ? donnees.rows : []
   const summary = summarizeConversationCost(rows)
   // Rien dépensé = rien à dire. Afficher « 0 $ » laisserait croire à une mesure là où il n'y a
   // qu'un journal vide.
   if (summary.calls <= 0) return null
   const detail = spendingRows(rows)
-  const composition = aggregatePromptComposition(promptCalls)
+  const composition = aggregatePromptComposition(
+    promptCalls && promptCalls.conversationId === conversationId ? promptCalls.calls : []
+  )
   const totalDuration = formatDuration(summary.durationMs)
 
   return (

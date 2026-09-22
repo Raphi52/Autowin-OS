@@ -454,4 +454,94 @@ cas("etat() rend une copie", function()
 	exiger(f.joueurs[2].tours.roi.pv > 0, "modifier la copie detruit une tour")
 end)
 
+-- ===== Durcissement t4 (2026-09-22) : sorts et departage de fin de prolongation =====
+-- Regles de Clash Royale DEDUITES (jamais dans l'enonce) : un sort se lance partout, touche
+-- l'adversaire et epargne ses propres unites ; a egalite de couronnes a la fin de la prolongation,
+-- le joueur dont la tour la plus faible a le moins de pv perd.
+
+local function estSort(id: string): boolean
+	return Partie.CARTES[id].type == "sort"
+end
+
+-- Premiere graine (depuis g0) ou la main initiale de J1 contient un sort (et une unite si demande).
+local function graineAvecSort(g0: number, avecUnite: boolean): (any, number, number?)
+	for g = g0, g0 + 300 do
+		local p = Partie.nouvelle(g)
+		local m = p:etat().joueurs[1].main
+		local iS, iU
+		for i = 1, 4 do
+			if estSort(m[i]) and not iS then iS = i end
+			if estUnite(m[i]) and not iU then iU = i end
+		end
+		if iS and (iU or not avecUnite) then
+			return p, iS, iU
+		end
+	end
+	error("aucune carte de type sort dans la main de J1 sur 300 graines", 0)
+end
+
+cas("un sort se lance dans le camp adverse", function()
+	local p, iS = graineAvecSort(500, false)
+	avancer(p, 20)
+	local e0 = p:etat().joueurs[1].elixir
+	local c = cout(p:etat().joueurs[1].main[iS])
+	local ok, motif = p:jouer(1, iS, 3.5, 25.5)
+	exiger(ok, "sort refuse dans le camp adverse : " .. tostring(motif))
+	proche(p:etat().joueurs[1].elixir, e0 - c, 0.05, "elixir apres le sort")
+end)
+
+cas("un sort touche l'adversaire et epargne ses propres unites", function()
+	local function scenario(avecSort: boolean)
+		local p, iS, iU = graineAvecSort(700, true)
+		avancer(p, 20)
+		local idSort = p:etat().joueurs[1].main[iS]
+		exiger(p:jouer(1, iU :: number, 9, 14), "pose de l'unite de J1 refusee")
+		exiger(p:jouer(2, indexUnite(p, 2), 9, 18), "pose de l'unite de J2 refusee")
+		avancer(p, 0.5)
+		if avecSort then
+			local u1, u2
+			for _, u in p:etat().unites do
+				if u.joueur == 1 then u1 = u else u2 = u end
+			end
+			exiger(u1 and u2, "les deux unites n'existent pas avant le sort")
+			local m = p:etat().joueurs[1].main
+			local i = table.find(m, idSort)
+			exiger(i ~= nil, "le sort a quitte la main")
+			local ok, motif = p:jouer(1, i :: number, (u1.x + u2.x) / 2, (u1.y + u2.y) / 2)
+			exiger(ok, "sort refuse : " .. tostring(motif))
+		end
+		avancer(p, 1)
+		local pv = { [1] = 0, [2] = 0 }
+		for _, u in p:etat().unites do
+			pv[u.joueur] += math.max(0, u.pv)
+		end
+		return pv
+	end
+	local sans, avec = scenario(false), scenario(true)
+	exiger(avec[2] < sans[2], string.format("le sort n'abime pas l'unite adverse (pv %s avec, %s sans)", avec[2], sans[2]))
+	exiger(avec[1] >= sans[1], string.format("le sort abime sa propre unite (pv %s avec, %s sans)", avec[1], sans[1]))
+end)
+
+cas("egalite apres prolongation : la tour la plus abimee perd", function()
+	local p, iS = graineAvecSort(900, false)
+	avancer(p, 20)
+	local pv0 = p:etat().joueurs[2].tours.gauche.pv
+	exiger(p:jouer(1, iS, 3.5, 25.5), "sort sur la tour refuse")
+	avancer(p, 2)
+	local e = p:etat()
+	exiger(e.joueurs[2].tours.gauche.pv < pv0, "le sort n'abime pas la tour")
+	avancer(p, 330)
+	e = p:etat()
+	exiger(e.phase == "terminee", "partie toujours en cours a 350 s")
+	exiger(e.vainqueur == 1, "vainqueur " .. tostring(e.vainqueur) .. " : la tour la plus abimee (J2) devait perdre")
+end)
+
+cas("aucun coup joue : match nul apres prolongation", function()
+	local p = Partie.nouvelle(31)
+	avancer(p, 400)
+	local e = p:etat()
+	exiger(e.phase == "terminee", "partie toujours en cours a 400 s")
+	exiger(e.vainqueur == 0, "vainqueur " .. tostring(e.vainqueur) .. " alors que les tours sont intactes des deux cotes")
+end)
+
 print(string.format("SCORE %d/%d", resultats.ok, resultats.total))

@@ -89,12 +89,15 @@ export function instantDeRetourAnnonce(
   const depart = maintenant.valueOf()
   if (!Number.isFinite(depart)) return undefined
   // « resets 3:20pm », « resets 6pm », « resets 2am » — les trois formes réellement relevées.
-  const heure = /\bresets?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i.exec(t)
+  // `(?![\w:])` : « 3:5pm » ne doit pas se lire « 3 » en laissant tomber le « :5pm ».
+  const heure = /\bresets?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?![\w:])/i.exec(t)
   if (!heure) return undefined
   let h = Number(heure[1])
   const min = heure[2] ? Number(heure[2]) : 0
   const meridien = heure[3]?.toLowerCase()
   if (h > 23 || min > 59) return undefined
+  // Sur 12 heures, seules 1 à 12 existent : « 13pm » ou « 0am » sont illisibles, pas 13h ou minuit.
+  if (meridien && (h < 1 || h > 12)) return undefined
   if (meridien === 'pm' && h < 12) h += 12
   if (meridien === 'am' && h === 12) h = 0
   // Le fuseau est celui que le refus cite entre parenthèses : l'heure annoncée est une heure de

@@ -161,6 +161,37 @@ remplie d'une estimation.
 - **Baseline** : coût et durée observés des tâches comparables (sonde rendement + journaux). Si rien
   de comparable n'existe, le dire : le bras A FERA la baseline.
 
+### 1 bis. GRILLE DE NOTATION — ce qu'un test caché a le droit de vérifier
+Motif MESURÉ (conv-746, tours 7 à 13) : 14 bras, 5 leviers, **aucun au-dessus de 64/68**, toujours les
+mêmes cas ratés — ils vérifiaient des CHOIX du correctif d'origine (« classer l'erreur au diagnostic »
+plutôt que « l'afficher avec un conseil »), absents du symptôme. La grille mesurait « as-tu refait le
+même correctif ? », pas « est-ce réparé ? » : aucun levier ne pouvait bouger la note.
+- **G1 — Comportement visible seulement.** Chaque test caché s'écrit depuis le SYMPTÔME et ce que
+  l'utilisateur attend, et passe par un point d'entrée PUBLIC (commande, fonction exportée déjà
+  appelée par l'app, sortie affichée). Interdit : importer une fonction créée par le correctif
+  d'origine, tester un nom, une signature ou le fichier où la correction a atterri.
+- **G2 — Deux correctifs valides passent.** Avant le lancement, la grille est rejouée sur le dépôt
+  avec défaut (**rouge** attendu), sur le correctif d'origine (**vert**) ET sur un correctif ALTERNATIF
+  écrit à part, qui répare autrement (**vert**). Un test qui rejette l'alternatif vérifie une
+  implémentation : il sort de la grille. Les trois résultats se collent dans `## Grille validée`.
+- **G3 — Ce que le symptôme ne dit pas ne se note pas.** Un comportement attendu absent de l'énoncé
+  est soit AJOUTÉ à l'énoncé des bras (identique pour tous), soit retiré de la grille. Jamais noté en
+  silence.
+- **G4 — Au moins 4 cas par défaut**, dont 2 cas limites, pour qu'un test ne décide pas seul du
+  classement. Note par défaut et note totale rendues séparément.
+- **G5 — L'empreinte se mesure.** Fichiers de code touchés et lignes du diff (hors tests) : colonne
+  du tableau à côté du coût. À note égale, la plus petite empreinte gagne ; une empreinte plus grande
+  qui ne rapporte aucun point est une dérive, pas un bonus.
+- **G6 — Non-régression et typage, en seuil.** Tests existants des fichiers touchés verts (un échec
+  isolé se rejoue SEUL avant d'être imputé) et 0 erreur de typage ajoutée. Seuil éliminatoire, pas
+  des points.
+- **G7 — Comparabilité.** Modèle fixe (voir 2 bis) · **3 répliques par bras, toutes dans la MÊME
+  vague** · aucun témoin réutilisé d'un autre tour (charge machine différente) · coût LU
+  (`total_cost_usd` ou `chat-usage`), jamais reconstitué — un bras coupé par le délai sort « non
+  mesuré », il n'est pas estimé.
+- **Ordre de départage** : G6 (seuil) → note sur la grille → empreinte → coût → durée, chaque écart
+  comparé à la dispersion intra-bras mesurée.
+
 ### 2. SCOUT des candidats de workflow (lecture seule, en parallèle)
 **D'ABORD : lire les duels DÉJÀ mesurés — un banc ne repart pas de zéro.**
 
@@ -219,6 +250,11 @@ B étant TOUJOURS une variante de formulation (voir étape 1), ces règles s'app
 et pas seulement quand la cible est une skill :
 - **UN SEUL facteur bouge** : le texte. Même tâche, même critère, même modèle, même régime, même
   découpage. Un bras qui change le texte ET le routage ne dit plus lequel des deux a agi → INVALIDE.
+- **Le MODÈLE n'est JAMAIS un levier**, ni dans un bras, ni dans une recommandation, ni comme piste
+  du tour suivant. Tous les bras tournent sur le modèle par défaut de l'app. Un bras « même méthode,
+  autre modèle » (Sonnet, Haiku, Opus) ou « autre effort de raisonnement » est REFUSÉ. Décision de
+  l'utilisateur du 2026-09-21 (conv-746), prise après un tour 14 préparé sur un changement de
+  modèle : on cherche le meilleur WORKFLOW, pas le modèle le moins cher.
 - **A garde le texte ACTUEL, intact.** Chaque autre bras reçoit sa copie du fichier de skill réécrite
   DANS SA propre copie de travail — jamais d'édition du fichier partagé pendant le banc.
 - **La variante s'écrit sur disque** : `variantes/<bras>.diff` (ou le fichier réécrit en entier) dans
@@ -266,7 +302,8 @@ Passer la main à `judge` avec les quatre livrables ANONYMISÉS (bras A/B/C/X, s
 témoin ni lequel est « l'idée neuve »). Grille, dans cet ordre — un bras qui rate la première
 dimension ne peut PAS gagner sur les suivantes :
 1. **Le critère de succès est-il atteint, avec preuve ?** (oui/non, jamais « presque »)
-2. **Qualité du livrable** (défauts avec preuve, rustines, dette laissée)
+2. **Qualité du livrable** : note sur la grille de l'étape 1 bis (G1-G6), puis **empreinte**
+   (fichiers et lignes touchés), puis défauts avec preuve, rustines, dette laissée
 3. **Coût $ mesuré**
 4. **Durée / tours mesurés**, et **efficacité** : tours et appels d'outils dépensés POUR atteindre le
    critère, reprises comprises (un bras qui y arrive en 3 tours bat un bras à 9 tours au même prix)
@@ -285,7 +322,7 @@ n'est plus une phrase, c'est un contrôle.
 
 **LE SEUIL DE 30 % EST UN PLANCHER, PAS LA MESURE : le bruit se MESURE sur le banc, avec 2 répliques
 par bras.** Au moment où un banc veut départager deux bras qui atteignent TOUS LES DEUX le critère,
-chaque bras part en **2 répliques identiques dans une seule vague** (`for bras; for replique;` puis
+chaque bras part en **3 répliques identiques dans une seule vague** (2 au strict minimum, voir G7) (`for bras; for replique;` puis
 un seul `wait`) et le RUN.md porte une section `## Dispersion mesurée` : l'écart intra-bras entre
 répliques. Un écart INTER-bras plus petit que la dispersion INTRA-bras n'est pas un résultat, quel
 que soit le seuil. Mesuré le 2026-09-07 (banc `arena-bench-dogfood-v2`, conv-335) : le tir unique du
