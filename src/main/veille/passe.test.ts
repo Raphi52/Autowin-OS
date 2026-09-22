@@ -77,6 +77,16 @@ describe('extraction de la sortie', () => {
     expect(extraireCandidats('aucun tableau ici')).toBeUndefined()
   })
 
+  it('lit le bloc ```json même si un texte ajouté APRÈS contient des crochets (conv-776)', () => {
+    // Mesuré sur conv-776, tour 3b9464dd-7788-45b4-809f-bb06dcd9cedc : l'app a ajouté après le
+    // JSON l'avertissement « Tâche de fond pas terminée » dont la commande contenait `]` — le
+    // dernier `]` tombait dedans, JSON.parse échouait, et les 4 tickets n'ont jamais été créés.
+    const sortie =
+      '```html-render\n<p>[synthèse]</p>\n```\n\n```json\n[{"titre":"A"}]\n```\n\n' +
+      "⚠️ Tâche de fond pas terminée : `sed -E 's/^\\[[0-9-]+\\] //'`."
+    expect(extraireCandidats(sortie)).toEqual([{ titre: 'A' }])
+  })
+
   it('rend un tableau vide pour une page sans nouveauté', () => {
     expect(extraireCandidats('[]')).toEqual([])
   })
