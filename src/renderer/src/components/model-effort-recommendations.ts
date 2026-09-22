@@ -8,6 +8,9 @@
  */
 const RECOMMENDATIONS: { provider: string; model: RegExp; effort: string }[] = [
   { provider: 'claude', model: /^(claude-)?opus-5$/, effort: 'low' },
+  // 2026-09-22 : Opus 5.5 publie (scan du CLI installe : `claude-opus-5-5` present). Meme profil
+  // cout/qualite que son predecesseur, donc meme cran recommande.
+  { provider: 'claude', model: /^(claude-)?opus-5-5$/, effort: 'low' },
   // Cote ChatGPT la pastille va sur SOL et sur lui seul (demande utilisateur du 2026-08-25).
   // `gpt-5.6-sol` est ajoute au catalogue codex par `withCodexNamedSupplements` quand le listing
   // live ne l'expose pas encore ; terra n'est plus recommande.
