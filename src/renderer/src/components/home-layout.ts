@@ -84,7 +84,7 @@ const ROWS = 8
  * Deux colonnes demandent plus de rangees : sept tuiles a deux rangees minimum ne tiennent pas sur
  * les six rangees de l'arrangement large.
  */
-const MEDIUM_ROWS = 12
+const MEDIUM_ROWS = 8
 
 const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
@@ -101,16 +101,20 @@ const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
 }
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
-  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
-  notifications: { col: 1, colSpan: 1, row: 0, rowSpan: 3, z: -20 },
-  agenda: { col: 0, colSpan: 1, row: 3, rowSpan: 3, z: -30 },
-  // Jarvis fait face aux mails. Aucune ligne a une seule rangee ici : sous deux rangees,
-  // MIN_WIDGET_HEIGHT (116 px) depasse le pas de la grille et les tuiles se chevauchent des que la
-  // fenetre est courte — c'est le defaut deja mesure le 2026-08-21 sur le hublot (historique).
-  jarvis: { col: 1, colSpan: 1, row: 3, rowSpan: 3, z: -40 },
-  routines: { col: 1, colSpan: 1, row: 6, rowSpan: 2, z: -60 },
-  conversations: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 },
-  enregistrements: { col: 0, colSpan: 2, row: 8, rowSpan: 2, z: -50 }
+  // Huit rangees, quatre tuiles a gauche et trois a droite : les deux colonnes finissent a la MEME
+  // rangee. Avant (conv-785, 2026-09-22), la Transcription occupait seule une cinquieme ligne
+  // (rangees 8-9 d'une grille de 12 dont 10-11 vides) : sur une fenetre courte, elle et les
+  // Conversations passaient sous le bord, et le recadrage les ramenait toutes deux au meme y --
+  // titres ecrits l'un sur l'autre.
+  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 2, z: 0 },
+  notifications: { col: 1, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
+  agenda: { col: 0, colSpan: 1, row: 2, rowSpan: 2, z: -30 },
+  // Jarvis fait face aux mails. Aucune tuile a une seule rangee : sous deux rangees,
+  // MIN_WIDGET_HEIGHT (116 px) depasse le pas de la grille et les tuiles se chevauchent.
+  jarvis: { col: 1, colSpan: 1, row: 2, rowSpan: 3, z: -40 },
+  conversations: { col: 0, colSpan: 1, row: 4, rowSpan: 2, z: -120 },
+  routines: { col: 1, colSpan: 1, row: 5, rowSpan: 3, z: -60 },
+  enregistrements: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -50 }
 }
 
 /** L'ordre de lecture en colonne unique : ce qu'on regarde en premier, en haut. */

@@ -394,3 +394,12 @@ describe('un agencement ne doit pas deborder du cadre', () => {
     expect(gare.x + gare.w).toBeGreaterThan(ecran.width)
   })
 })
+
+describe('deux colonnes sur une fenetre courte (conv-785, 2026-09-22)', () => {
+  it("n'empile jamais deux titres au meme endroit apres recadrage", () => {
+    const v = { width: 690, height: 650, top: 160 }
+    const l = reconcileLayout(defaultHomeLayout(v), v)
+    const positions = l.map((b) => `${b.x}:${b.y}`)
+    expect(new Set(positions).size).toBe(l.length)
+  })
+})
