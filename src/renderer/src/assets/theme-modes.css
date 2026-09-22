@@ -1370,3 +1370,35 @@
 :root[data-theme^='malvoyant-'] .decor-de-fond {
   display: none;
 }
+
+/* Malvoyant clair — capture Accueil du 2026-09-22 : le widget Jarvis restait ivoire trame d'or
+   (surcharge data-base='clair' plus haut), bascule brun-dore, et l'etat « hors ligne » de l'anneau
+   ecrit a 6.5-9.5px. Aplat blanc, trait noir, texte noir et etat lisible. */
+:root[data-theme='malvoyant-clair'] .jarvis {
+  --jv-or: #000000;
+  background: #ffffff;
+  border: 2px solid #000000;
+  box-shadow: none;
+  color: #000000;
+}
+:root[data-theme='malvoyant-clair'] .jarvis__bascule,
+:root[data-theme='malvoyant-clair'] .jarvis__mute,
+:root[data-theme='malvoyant-clair'] .jarvis__anneau-texte > strong {
+  color: #000000;
+  background: #ffffff;
+}
+:root[data-theme='malvoyant-clair'] .jarvis__anneau-coeur {
+  fill: #ffffff;
+  stroke: #000000;
+}
+:root[data-theme^='malvoyant-'] .jarvis__anneau-texte > span {
+  font-size: clamp(9px, 2.4cqi, 12px);
+  font-weight: 700;
+  color: var(--text);
+}
+/* Reglages › Skills : le compteur des onglets (« Skills 17 ») est un gris en dur #a9b0c5
+   (CapabilitiesView.css), sous 2:1 sur le fond clair. */
+:root[data-theme^='malvoyant-'] .cockpit-tabs small,
+:root[data-theme^='malvoyant-'] .control-source-badge {
+  color: var(--text);
+}
