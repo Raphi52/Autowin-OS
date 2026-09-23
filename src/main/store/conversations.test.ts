@@ -612,3 +612,21 @@ describe('ConversationStore — le surlignage manuel', () => {
     expect(store.surligner('inconnu', true)).toBeUndefined()
   })
 })
+
+describe('nettoyage des imports claude.exe annulés (103ef113)', () => {
+  it('retire à la relecture les fils portant claudeExe et demande la réécriture', () => {
+    const store = new ConversationStore(makeClock())
+    const base = { provider: 'claude', createdAt: 1, updatedAt: 2, messages: [] }
+    const migrated = store.hydrate([
+      { ...base, id: 'conv-1', title: 'Née dans Autowin' },
+      {
+        ...base,
+        id: 'conv-2',
+        title: 'Importée',
+        claudeExe: { sessionId: 's1', statut: 'inactive' }
+      } as never
+    ])
+    expect(migrated).toBe(true)
+    expect(store.list().map((c) => c.id)).toEqual(['conv-1'])
+  })
+})

@@ -556,6 +556,13 @@ export class ConversationStore {
     let migrated = false
     const usedMessageIds = new Set<string>()
     for (const c of saved) {
+      // NETTOYAGE (2026-09-23) : l'import automatique des sessions claude.exe (commit 99548336,
+      // annulé par 103ef113) a créé chez CHAQUE utilisateur des fils portant `claudeExe`. On les
+      // retire à la relecture ; `migrated` force la réécriture du fichier pour que ce soit définitif.
+      if ((c as { claudeExe?: unknown }).claudeExe !== undefined) {
+        migrated = true
+        continue
+      }
       let previousMessageId: string | undefined
       const seenMessageIds = new Set<string>()
       const messageIdRemap = new Map<string, string>()
