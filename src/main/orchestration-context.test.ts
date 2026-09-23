@@ -104,4 +104,24 @@ describe('mémoire inter-runs dans le contexte', () => {
     expect(context).not.toContain('FINDINGS DU JUGE')
     expect(context).not.toContain('Tours antérieurs')
   })
+
+  it('joint la dernière réponse de l’assistant en entier (conv-798, tour d97a3d36)', () => {
+    const reponse = `Stack
+| Format stocké | JSON |
+${'y'.repeat(1500)}
+FIN-DE-REPONSE`
+    const context = collectOrchestrationContext({
+      task: 'judge cette archi',
+      conversation: {
+        id: 'c',
+        messages: [
+          { role: 'user', content: 'quelle stack ?' },
+          { role: 'assistant', content: reponse },
+          { role: 'user', content: 'judge cette archi' }
+        ]
+      }
+    })
+    expect(context).toContain('FIN-DE-REPONSE')
+    expect(context).toContain('| Format stocké | JSON |\n')
+  })
 })
