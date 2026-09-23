@@ -1596,7 +1596,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       Array.from(pane!.querySelectorAll('button[role="tab"]')).map((b) => b.textContent?.trim())
       // 2026-09-12 : l'onglet « Files » (diff des fichiers modifies + arborescence editable) rejoint
       // les trois historiques. Le fil etait rouge ici depuis son arrivee dans `WorkflowsPanel`.
-    ).toEqual(['Graph', 'Runs', 'Logs', 'Files', 'Trace'])
+    ).toEqual(['Graph', 'Runs', 'Logs', 'Files'])
     // Le graphe est monté d'emblée, et son détail de sélection reste sous lui.
     expect(pane!.querySelector('.workflow-execution-graph')).toBeTruthy()
     expect(pane!.querySelector('[data-workflow-detail]')).toBeTruthy()

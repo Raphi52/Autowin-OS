@@ -148,7 +148,7 @@ describe('WorkflowsPanel', () => {
     const onglets = Array.from(container.querySelectorAll('button[role="tab"]')).map((b) =>
       b.textContent?.trim()
     )
-    expect(onglets).toEqual(['Graph', 'Runs', 'Logs', 'Files', 'Trace'])
+    expect(onglets).toEqual(['Graph', 'Runs', 'Logs', 'Files'])
     expect(container.querySelector('[role="tablist"]')).not.toBeNull()
     // Le graphe est l'onglet d'accueil : le panneau s'ouvre sur l'execution, pas sur une liste.
     expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()

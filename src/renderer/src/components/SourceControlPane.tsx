@@ -64,9 +64,12 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
 
 export function SourceControlPane({
   conversationId,
+  depotConversation,
   onSendPrompt
 }: {
   conversationId?: string
+  /** Depot de la CONVERSATION : ce que la vue « Workspace » doit lire, branche comprise. */
+  depotConversation?: string
   onSendPrompt?: (prompt: string) => void
 }): React.JSX.Element {
   const [git, setGit] = useState<GitReadResult | null>(null)
@@ -76,7 +79,16 @@ export function SourceControlPane({
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
   const diffRequestRef = useRef(0)
   const dataRequestRef = useRef(0)
-  const [repoPath] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')
+  /*
+   * DEPOT DE LA VUE « WORKSPACE ».
+   *
+   * Il suit la CONVERSATION. Auparavant il ne lisait que `autowin:sc-repo`, un chemin choisi une
+   * fois dans le navigateur et jamais revu : le panneau affichait alors le nom et la branche d'un
+   * AUTRE depot que celui du fil (constate le 2026-09-23 : « RIG-V3 » sur une conversation
+   * AutoWinOS). Le chemin memorise ne sert plus que de repli quand la conversation n'en porte pas.
+   */
+  const [repoMemorise] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')
+  const repoPath = depotConversation?.trim() || repoMemorise
   const [refreshTick, setRefreshTick] = useState(0)
   /** Fichier dont « Annuler ces changements » attend le clic de confirmation. */
   const [annulerArme, setAnnulerArme] = useState<string | null>(null)

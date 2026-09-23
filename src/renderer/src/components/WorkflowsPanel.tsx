@@ -8,20 +8,18 @@ import { StepThread } from './ChatView.parts'
 // que `libelleRun`, qui rend le sujet d'un run lisible a l'affichage.
 import { libelleRun } from './run-label'
 import { RunInspector } from './RunInspector'
-import { TraceRetrospectivePane } from './TraceRetrospectivePane'
 
 /**
- * Les objets du panneau, chacun sur son onglet : le graphe, les RUN.md, la trace, les fichiers
- * modifies ET l'arborescence editable, reunis sur un seul onglet (« Files »).
+ * Les objets du panneau, chacun sur son onglet : le graphe, les RUN.md, les journaux des modeles,
+ * les fichiers modifies ET l'arborescence editable, reunis sur un seul onglet (« Files »).
  */
-export type PanelTab = 'graph' | 'runs' | 'logs' | 'code' | 'trace'
+export type PanelTab = 'graph' | 'runs' | 'logs' | 'code'
 
 const PANEL_TABS: ReadonlyArray<readonly [PanelTab, string]> = [
   ['graph', 'Graph'],
   ['runs', 'Runs'],
   ['logs', 'Logs'],
-  ['code', 'Files'],
-  ['trace', 'Trace']
+  ['code', 'Files']
 ]
 
 /** Onglets du détail d'un RUN. `trace` = fil des sous-agents, `runmd` = fichier produit. */
@@ -70,6 +68,13 @@ function selectionParleDuDepot(selection: ExecutionNodeSelection | null): boolea
 }
 
 export type WorkflowsPanelProps = {
+  /**
+   * Depot de la CONVERSATION (meme valeur que le badge de branche du chat). La vue « Workspace »
+   * lisait un depot memorise dans le navigateur, sans lien avec le fil : elle annoncait RIG-V3 sur
+   * une conversation ouverte sur AutoWinOS. Un panneau qui nomme un autre depot que celui ou le
+   * travail se fait ment sur ce que « Push » et « Cloture auto » vont toucher.
+   */
+  depotConversation?: string
   runsPaneWidth: number
   beginRunsResize: (event: React.PointerEvent<HTMLDivElement>) => void
   refreshRuns: () => void
@@ -130,6 +135,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     openRun,
     viewRun,
     setOpenRun,
+    depotConversation,
     setOpenTrace,
     requestDeleteRun,
     openTrace,
@@ -283,7 +289,11 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           style={{ gap: 'var(--s2)', minHeight: 0 }}
         >
           {depot && (
-            <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
+            <SourceControlPane
+              conversationId={activeId ?? undefined}
+              depotConversation={depotConversation}
+              onSendPrompt={send}
+            />
           )}
 
           </div>
@@ -296,7 +306,11 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             data-workflow-detail="source-control"
             style={{ gap: 'var(--s2)', minHeight: 0 }}
           >
-            <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
+            <SourceControlPane
+              conversationId={activeId ?? undefined}
+              depotConversation={depotConversation}
+              onSendPrompt={send}
+            />
           </div>
         )}
         {panelTab === 'runs' && (
@@ -527,13 +541,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               )
             })}
         </div>
-        )}
-        {/* ONGLET TRACE : le raisonnement et les actions DEJA enregistres sur le disque, rendus
-            consultables — le bloc « Actions » du fil n'en garde qu'un resume. */}
-        {panelTab === 'trace' && (
-          <div className="col grow" style={{ minHeight: 0 }} data-workflow-detail="trace">
-            <TraceRetrospectivePane conversationId={activeId ?? undefined} />
-          </div>
         )}
         {panelTab === 'logs' && (
           <div className="col grow" style={{ minHeight: 0 }}>

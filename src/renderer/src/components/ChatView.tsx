@@ -6867,6 +6867,7 @@ Cliquer pour choisir une autre branche.`}
       {showRuns && (
         <VueMesuree id="chat-workflows" bloc>
           <WorkflowsPanel
+            depotConversation={gitCwd}
             runsPaneWidth={runsPaneWidth}
             beginRunsResize={beginRunsResize}
             refreshRuns={refreshRuns}

@@ -439,6 +439,27 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.querySelector('[data-testid="sc-remettre"]')).toBeNull()
   })
 
+  it('vue Workspace : lit le dépôt de la CONVERSATION, pas le dépôt mémorisé', async () => {
+    // 2026-09-23 : le panneau annonçait « RIG-V3 » et sa branche sur une conversation ouverte sur
+    // AutoWinOS — le chemin mémorisé une fois dans le navigateur primait sur le fil.
+    localStorage.setItem('autowin:sc-repo', 'C:/rig-v3')
+    mockApi(GIT)
+    await act(async () => {
+      root.render(
+        createElement(SourceControlPane, {
+          conversationId: 'conv-a',
+          depotConversation: 'C:/Sources/AutoWinOS'
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await openWorkspaceView()
+    expect(calls.repoArgs).toContain('C:/Sources/AutoWinOS')
+    expect(calls.repoArgs).not.toContain('C:/rig-v3')
+    expect(container.textContent).toContain('AutoWinOS')
+  })
+
   it('le dépôt Worktree persisté ne change jamais le dépôt du Projet', async () => {
     localStorage.setItem('autowin:sc-repo', 'C:/rig')
     mockApi(GIT)
