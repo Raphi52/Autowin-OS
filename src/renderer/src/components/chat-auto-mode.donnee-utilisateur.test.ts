@@ -33,3 +33,20 @@ describe('suite qui attend une donnée que seul l’utilisateur possède (conv-7
     if (d.action === 'arreter') expect(d.message).toMatch(/toi seul/)
   })
 })
+
+describe('suite à trou (conv-798, saisie ts 1790170650709)', () => {
+  it('bloque une valeur « : <adresse> » non remplie', () => {
+    expect(
+      suiteAttendUneDonneeUtilisateur(
+        "Lance webtest record sur l'adresse de ma webapp que je te donne : <adresse>"
+      )
+    ).toBe(true)
+  })
+  it('laisse passer une spécification qui cite <url> en milieu de phrase', () => {
+    expect(
+      suiteAttendUneDonneeUtilisateur(
+        'Ajoute à D:\WebTesting une commande webtest record <url> qui ouvre un navigateur'
+      )
+    ).toBe(false)
+  })
+})
