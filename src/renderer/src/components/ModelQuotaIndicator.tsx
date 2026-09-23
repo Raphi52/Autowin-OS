@@ -354,10 +354,16 @@ export function ModelQuotaIndicator({
     const placer = (): void => {
       const trigger = triggerRef.current?.getBoundingClientRect()
       if (!trigger) return
-      const width = Math.min(430, window.innerWidth - 16)
-      const droite = Math.min(trigger.right, window.innerWidth - 8)
-      const left = Math.max(8, Math.min(droite - width, window.innerWidth - width - 8))
-      setAncrage({ left, bottom: Math.max(8, window.innerHeight - trigger.top + 10), width })
+      // Mode malvoyant : la coque porte `zoom`, qui multiplie AUSSI left/bottom d'un element fixe.
+      // Les mesures (fenetre, rectangle) sont en pixels ecran : on les divise par ce zoom, sinon
+      // la popup part hors ecran et le clic semble ne rien faire (constat 2026-09-23).
+      const z = (triggerRef.current as (HTMLElement & { currentCSSZoom?: number }) | null)?.currentCSSZoom || 1
+      const vw = window.innerWidth / z
+      const vh = window.innerHeight / z
+      const width = Math.min(430, vw - 16)
+      const droite = Math.min(trigger.right / z, vw - 8)
+      const left = Math.max(8, Math.min(droite - width, vw - width - 8))
+      setAncrage({ left, bottom: Math.max(8, vh - trigger.top / z + 10), width })
     }
     placer()
     window.addEventListener('resize', placer)

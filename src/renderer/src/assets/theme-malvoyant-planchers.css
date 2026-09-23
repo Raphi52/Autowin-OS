@@ -277,7 +277,8 @@
 :root[data-theme^='malvoyant-'] .msg-orientation-tag,
 :root[data-theme^='malvoyant-'] .conv-auto-notice,
 :root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label,
-:root[data-theme^='malvoyant-'] .conv-status-filter {
+:root[data-theme^='malvoyant-'] .conv-status-filter,
+:root[data-theme^='malvoyant-'] .conv-bulk-bar .conv-date-sort {
   font-size: 13px;
 }
 
@@ -703,7 +704,9 @@
 :root[data-theme^='malvoyant-'] .quota-context-gauge .quota-context-compact,
 :root[data-theme^='malvoyant-'] .model-quota-tip,
 :root[data-theme^='malvoyant-'] .model-quota-tip-hint,
-:root[data-theme^='malvoyant-'] .model-quota-provider-chip {
+:root[data-theme^='malvoyant-'] .model-quota-provider-chip,
+:root[data-theme^='malvoyant-'] .model-quota-resets,
+:root[data-theme^='malvoyant-'] .model-quota-reset button {
   font-size: 13px;
 }
 
@@ -715,7 +718,9 @@
 :root[data-theme^='malvoyant-'] .model-quota-popover header button,
 :root[data-theme^='malvoyant-'] .model-quota-window > strong,
 :root[data-theme^='malvoyant-'] .model-quota-values small,
-:root[data-theme^='malvoyant-'] .model-quota-unavailable {
+:root[data-theme^='malvoyant-'] .model-quota-unavailable,
+:root[data-theme^='malvoyant-'] .model-quota-reset button,
+:root[data-theme^='malvoyant-'] .model-quota-reset-message {
   color: var(--text);
 }
 

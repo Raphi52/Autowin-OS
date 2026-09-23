@@ -21,7 +21,7 @@ const fichiersCss = () => {
   const out = []
   for (const dir of ['components', 'assets']) {
     for (const f of readdirSync(join(RACINE, dir)).sort()) {
-      if (f.endsWith('.css') && f !== 'theme-malvoyant-planchers.css') out.push(join(RACINE, dir, f))
+      if (f.endsWith('.css') && f !== 'theme-malvoyant-planchers.css' && f !== 'theme-clair-gris.css') out.push(join(RACINE, dir, f))
     }
   }
   return out
@@ -97,6 +97,55 @@ export function genererPlanchers() {
   )
 }
 
+// Theme CLAIR (tous, pas seulement malvoyant) — demande utilisateur du 2026-09-23 : « jamais gris
+// sur blanc ». Les gris en dur des composants ont ete choisis pour le fond sombre ; sur fond clair ils
+// tombent sous 4.5:1. Tout gris en dur dont le contraste sur blanc est < 4.5 retombe sur --text-dim.
+export const SORTIE_CLAIR = join(RACINE, 'assets/theme-clair-gris.css')
+const PREFIXE_CLAIR = ":root[data-base='clair']"
+const luminance = ([r, g, b]) => {
+  const c = [r, g, b].map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 })
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+}
+export function contrasteSurBlanc(valeur) {
+  const v = valeur.trim().toLowerCase()
+  let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(v)
+  let rgb
+  if (m) {
+    const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1]
+    rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
+  } else if ((m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(v))) rgb = m.slice(1, 4).map(Number)
+  else return null
+  return 1.05 / (luminance(rgb) + 0.05)
+}
+export function genererGrisClair() {
+  const blocs = []
+  for (const fichier of fichiersCss()) {
+    if (fichier.endsWith('theme-clair-gris.css')) continue
+    const racine = postcss.parse(readFileSync(fichier, 'utf8'))
+    const gris = new Set()
+    racine.walkDecls('color', (decl) => {
+      if (!estGris(decl.value)) return
+      const k = contrasteSurBlanc(decl.value)
+      if (k === null || k >= 4.5) return
+      const regle = decl.parent
+      if (regle?.type !== 'rule') return
+      for (const sel of regle.selectors) {
+        if (/data-theme|data-base/.test(sel)) continue
+        const t = sel.trim()
+        if (/^(html|body)\b/.test(t)) continue
+        gris.add(/^:root\b/.test(t) ? t.replace(/^:root/, PREFIXE_CLAIR) : `${PREFIXE_CLAIR} ${t}`)
+      }
+    })
+    const chemin = relative(RACINE, fichier).split('\\').join('/')
+    if (gris.size) blocs.push(`/* ${chemin} */\n${[...gris].join(',\n')} {\n  color: var(--text-dim);\n}`)
+  }
+  return (
+    `/* GENERE par scripts/gen-malvoyant-planchers.mjs — ne pas editer a la main.\n` +
+    `   Themes clairs : tout gris ecrit en dur sous 4.5:1 sur blanc retombe sur --text-dim. */\n\n` +
+    blocs.join('\n\n') + '\n'
+  )
+}
+
 if (process.argv[1]?.endsWith('gen-malvoyant-planchers.mjs')) {
   const attendu = genererPlanchers()
   if (process.argv.includes('--check')) {
@@ -108,5 +157,7 @@ if (process.argv[1]?.endsWith('gen-malvoyant-planchers.mjs')) {
   } else {
     writeFileSync(SORTIE, attendu)
     console.log(`ecrit ${SORTIE}`)
+    writeFileSync(SORTIE_CLAIR, genererGrisClair())
+    console.log(`ecrit ${SORTIE_CLAIR}`)
   }
 }

@@ -30,11 +30,12 @@
 :root[data-base='clair'] {
   color-scheme: light;
 
-  --bg-0: #f4f5f8;
-  --bg-1: rgba(255, 255, 255, 0.82);
-  --bg-2: rgba(255, 255, 255, 0.7);
+  /* Gris bleute (choix utilisateur 2026-09-23 : le blanc pique les yeux). */
+  --bg-0: #e4e8ee;
+  --bg-1: #e4e8ee;
+  --bg-2: #dde2e9;
   --bg-3: rgba(15, 20, 35, 0.06);
-  --bg-inset: rgba(255, 255, 255, 0.92);
+  --bg-inset: #eef1f5;
 
   --line: rgba(18, 24, 40, 0.16);
   --line-strong: rgba(18, 24, 40, 0.34);
@@ -1266,11 +1267,12 @@
 
 :root[data-theme='malvoyant-clair'] {
   color-scheme: light;
-  --bg-0: #ffffff;
-  --bg-1: #ffffff;
-  --bg-2: #f5f5f5;
-  --bg-3: #ebebeb;
-  --bg-inset: #ffffff;
+  /* Gris bleute (choix utilisateur 2026-09-23 : le blanc pur pique les yeux). */
+  --bg-0: #e4e8ee;
+  --bg-1: #eef1f5;
+  --bg-2: #e4e8ee;
+  --bg-3: #d8dde5;
+  --bg-inset: #eef1f5;
   --line: #595959;
   --line-strong: #000000;
   --text: #000000;
@@ -1313,18 +1315,18 @@
   line-height: 1.6;
 }
 :root[data-theme^='malvoyant-'] .shell {
-  font-size: 1.25em;
+  /* Retour utilisateur 2026-09-23 : ce qui aide, c'est le TEXTE plus grand, pas des cadres
+     autour de chaque bouton (retires). Un font-size en em n'atteignait que ~40 declarations : 813
+     tailles sont en px fixes. zoom agrandit TOUT ; la hauteur est compensee pour tenir a l'ecran. */
+  zoom: 1.5;
+  height: calc(100vh / 1.5);
 }
-:root[data-theme^='malvoyant-'] :focus-visible {
+/* Champs de saisie exclus (retour utilisateur 2026-09-23) : un champ texte declenche :focus-visible
+   meme au clic, d'ou un gros cadre bleu autour de la barre de prompt. Le curseur suffit a situer. */
+:root[data-theme^='malvoyant-'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
   outline: 3px solid var(--focus-malvoyant) !important;
   outline-offset: 2px !important;
   box-shadow: 0 0 0 6px var(--bg-0) !important;
-}
-:root[data-theme^='malvoyant-'] button,
-:root[data-theme^='malvoyant-'] input,
-:root[data-theme^='malvoyant-'] select,
-:root[data-theme^='malvoyant-'] textarea {
-  border: 2px solid var(--line-strong);
 }
 :root[data-theme^='malvoyant-'] a {
   text-decoration: underline;
@@ -1360,7 +1362,6 @@
   opacity: 1;
   color: var(--text-dim);
   background: var(--bg-2);
-  border: 2px solid var(--line-strong);
 }
 /* Fond decoratif (image galaxie du body, decor 3D de l'Accueil) : du bruit visuel derriere le
    texte. On le remplace par l'aplat du theme. */
@@ -1377,7 +1378,6 @@
 :root[data-theme='malvoyant-clair'] .jarvis {
   --jv-or: #000000;
   background: #ffffff;
-  border: 2px solid #000000;
   box-shadow: none;
   color: #000000;
 }
@@ -1434,4 +1434,69 @@
 }
 :root[data-theme^='malvoyant-'] button:disabled {
   color: var(--text-dim);
+}
+
+/* Police des themes malvoyants : Atkinson Hyperlegible (Braille Institute), concue pour distinguer
+   les lettres confondables (I/l/1, O/0, b/d). Essai demande le 2026-09-23. Le code garde sa police. */
+:root[data-theme^='malvoyant-'] body,
+:root[data-theme^='malvoyant-'] .shell,
+:root[data-theme^='malvoyant-'] .shell *:not(code):not(pre):not(pre *):not(kbd):not(samp) {
+  font-family: 'Atkinson Hyperlegible', system-ui, sans-serif !important;
+}
+
+:root[data-theme^='malvoyant-'] :is(textarea, input, [contenteditable]):focus,
+:root[data-theme^='malvoyant-'] :is(textarea, input, [contenteditable]):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Clair + Malvoyant clair (choix utilisateur 2026-09-23) : la GALAXIE reste en fond d'ecran, non
+   lavee ; les panneaux sont des aplats gris bleu OPAQUES ecrits en noir. Passe apres les regles qui
+   aplatissaient le fond (clair) ou le masquaient (malvoyant). */
+:root[data-base='clair'] body {
+  background:
+    linear-gradient(rgba(1, 2, 9, 0.1), rgba(0, 0, 5, 0.16)),
+    url('./autowin-galaxy-bg-hq.png') center / cover fixed,
+    #05060c;
+}
+:root[data-base='clair'] .decor-de-fond { display: block; }
+:root[data-base='clair'] .decor-de-fond::after { display: none; }
+:root[data-base='clair'] .shell,
+:root[data-base='clair'] .shell.theme-serious,
+:root[data-theme='malvoyant-clair'] .shell,
+:root[data-theme='malvoyant-clair'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: #e4e8ee;
+  --surface-card: #eef1f5;
+  --surface-inset: #eef1f5;
+}
+:root[data-base='clair'] .theme-serious .rail,
+:root[data-base='clair'] .cosmic-outline .conv-pane {
+  background: #e4e8ee;
+}
+:root[data-base='clair'] .theme-serious .brand {
+  background: #eef1f5;
+}
+
+/* Retour utilisateur 2026-09-23 (capture) : liste des conversations, fil et barre de prompt restaient
+   BLANCS. Gris bleu franc pour les panneaux, un cran plus clair pour les champs, texte noir. */
+:root[data-base='clair'] .shell,
+:root[data-base='clair'] .shell.theme-serious,
+:root[data-theme='malvoyant-clair'] .shell,
+:root[data-theme='malvoyant-clair'] .shell.theme-serious {
+  --surface-panel: #cfd6e0;
+  --surface-card: #dde2e9;
+  --surface-inset: #dde2e9;
+}
+:root[data-base='clair'] :is(.theme-serious .rail, .cosmic-outline .conv-pane, .cosmic-outline .chat,
+  .cosmic-outline .chat-layout .chat, .cosmic-outline .chat-head, .cosmic-outline .composer) {
+  background: #cfd6e0;
+}
+:root[data-base='clair'] :is(.theme-serious .brand, .cosmic-outline .composer-field,
+  .cosmic-outline .conv-search, .cosmic-outline .chat-suggest .btn) {
+  background: #dde2e9;
+}
+/* Cartes « image Read » / pieces jointes du fil : blanches, elles aussi en gris bleu (2026-09-23). */
+:root[data-base='clair'] .artifact-preview {
+  background: #dde2e9;
 }

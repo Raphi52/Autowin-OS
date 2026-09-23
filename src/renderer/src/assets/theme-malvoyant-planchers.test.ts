@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { genererPlanchers } from '../../../../scripts/gen-malvoyant-planchers.mjs'
+import { genererGrisClair, genererPlanchers } from '../../../../scripts/gen-malvoyant-planchers.mjs'
 
 describe('planchers de taille des themes malvoyants', () => {
   it('le fichier genere est a jour avec les feuilles de style', () => {
@@ -12,5 +12,16 @@ describe('planchers de taille des themes malvoyants', () => {
     const selecteurs = actuel.split('\n').filter((l) => l.startsWith(':root') || l.startsWith('.'))
     expect(selecteurs.length).toBeGreaterThan(100)
     for (const s of selecteurs) expect(s.startsWith(":root[data-theme^='malvoyant-']")).toBe(true)
+  })
+})
+
+describe('gris en dur des themes clairs', () => {
+  it('le fichier genere est a jour', () => {
+    expect(readFileSync('src/renderer/src/assets/theme-clair-gris.css', 'utf8')).toBe(genererGrisClair())
+  })
+  it('ne touche que les themes clairs', () => {
+    const lignes = genererGrisClair().split('\n').filter((l) => l.startsWith(':root') || l.startsWith('.'))
+    expect(lignes.length).toBeGreaterThan(0)
+    for (const s of lignes) expect(s.startsWith(":root[data-base='clair']")).toBe(true)
   })
 })
