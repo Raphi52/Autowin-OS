@@ -574,12 +574,6 @@ const api = {
 
   conversation: (id: string): Promise<Conversation | null> =>
     ipcRenderer.invoke('os:conversation', id),
-  /** Import (upsert) des conversations claude.exe — actives et inactives, lecture seule. */
-  conversationsImportClaudeExe: (): Promise<{
-    creees: number
-    statutsMisAJour: number
-    sessions: number
-  }> => ipcRenderer.invoke('os:conversations:importClaudeExe'),
   conversationsCreate: (p: {
     title: string
     category: string

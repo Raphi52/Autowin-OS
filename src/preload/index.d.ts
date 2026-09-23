@@ -443,12 +443,6 @@ interface ChatApi {
     terme: string
   ) => Promise<Array<{ id: string; extrait: string; occurrences: number }>>
   conversation: (id: string) => Promise<Conversation | null>
-  /** Import (upsert) des conversations claude.exe — actives et inactives, lecture seule. */
-  conversationsImportClaudeExe: () => Promise<{
-    creees: number
-    statutsMisAJour: number
-    sessions: number
-  }>
   conversationsCreate: (p: { title: string; category: string; provider: string }) => Promise<{
     id: string
     title: string
