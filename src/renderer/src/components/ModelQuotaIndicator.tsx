@@ -5,7 +5,9 @@ import type {
   ModelQuotaSnapshot,
   ModelQuotaWindow
 } from '../../../shared/model-quotas'
+import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../../../shared/claude-resets'
 import { quotaGradientColor } from './quota-gradient'
+import type { OrchestratorAccounts } from './OrchestratorModelSelector'
 import './ModelQuotaIndicator.css'
 
 const providerLabels: Record<string, string> = {
@@ -222,7 +224,41 @@ function observedLabel(observedAt: string | undefined, stale: boolean): string {
   })}`
 }
 
-export function ModelQuotaIndicator({ provider }: { provider?: string }): React.JSX.Element {
+/** Message court d'une réclamation, dans les mots du serveur (`reset`, `already_used`…). */
+const CLAIM_LABELS: Record<string, string> = {
+  reset: 'Reset appliqué : vos limites sont remises à zéro.',
+  already_used: 'Ce reset a déjà été utilisé.',
+  not_limited: 'Refusé : aucune limite à remettre à zéro pour l’instant.',
+  cooldown: 'Refusé : délai d’attente en cours.',
+  ineligible: 'Refusé : compte non éligible.',
+  unavailable: 'Reset indisponible.',
+  rate_limited: 'Trop de demandes, réessayez plus tard.',
+  auth_error: 'Session Claude refusée.',
+  error: 'Échec de la demande.'
+}
+
+function claimLabel(result: ClaudeResetClaimResult): string {
+  return CLAIM_LABELS[result.result] ?? `Réponse du serveur : ${result.result}`
+}
+
+function expiresLabel(iso: string | undefined): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (!Number.isFinite(date.valueOf())) return ''
+  return ` · expire le ${date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}`
+}
+
+export function ModelQuotaIndicator({
+  provider,
+  comptes
+}: {
+  provider?: string
+  /** Choix du compte Claude (même chemin que la pop-up de modèle). Absent = bloc masqué. */
+  comptes?: OrchestratorAccounts
+}): React.JSX.Element {
+  const [resets, setResets] = useState<ClaudeResetsStatus>()
+  const [claimBusy, setClaimBusy] = useState(false)
+  const [claimMessage, setClaimMessage] = useState<string>()
   const [snapshot, setSnapshot] = useState<ModelQuotaSnapshot>()
   const [selectedProvider, setSelectedProvider] = useState<string>(lireFournisseurChoisi)
   const [open, setOpen] = useState(false)
@@ -241,6 +277,13 @@ export function ModelQuotaIndicator({ provider }: { provider?: string }): React.
     const requestSequence = ++requestSequenceRef.current
     setLoading(true)
     setError(undefined)
+    // Les resets offerts se lisent à part : un échec ici ne doit jamais masquer les quotas.
+    if (typeof window.api?.claudeResets === 'function') {
+      void window.api
+        .claudeResets()
+        .then((value) => setResets(value))
+        .catch(() => setResets(undefined))
+    }
     try {
       const value = await window.api.modelQuotas(true)
       if (requestSequence === requestSequenceRef.current) setSnapshot(value)
@@ -350,6 +393,30 @@ export function ModelQuotaIndicator({ provider }: { provider?: string }): React.
   const windowLabel = summary?.windowLabel ?? windowIdLabel(summaryWindowId(affiche))
   const alert = summary?.statusWindowLabel ? ` · ${summary.statusWindowLabel} plus contrainte` : ''
   const providerQuotas = quotasByProvider(snapshot?.models ?? [])
+  /**
+   * CONSOMME le reset. Irréversible : une confirmation explicite est exigée avant l'appel, pour
+   * qu'un clic égaré ne brûle pas le reset offert.
+   */
+  const utiliserReset = async (grantId: string, label: string): Promise<void> => {
+    if (claimBusy || typeof window.api?.claudeResetClaim !== 'function') return
+    if (!window.confirm(`Utiliser maintenant ce reset ?
+
+${label}
+
+Il sera consommé.`)) return
+    setClaimBusy(true)
+    setClaimMessage(undefined)
+    try {
+      const result = await window.api.claudeResetClaim(grantId)
+      setClaimMessage(claimLabel(result))
+      if (result.result === 'reset') window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
+    } catch (failure) {
+      setClaimMessage(failure instanceof Error ? failure.message : 'Échec de la demande.')
+    } finally {
+      setClaimBusy(false)
+    }
+  }
+  const resetsVisibles = (resets?.grants ?? []).filter((grant) => grant.resetsLeft > 0)
   const choisirFournisseur = (nom: string): void => {
     setSelectedProvider(nom)
     try {
@@ -531,6 +598,73 @@ export function ModelQuotaIndicator({ provider }: { provider?: string }): React.
               </article>
             ))}
           </div>
+          {affiche === 'claude' && resetsVisibles.length > 0 && (
+            <div className="model-quota-resets" data-testid="model-quota-resets">
+              <strong>Resets offerts</strong>
+              {resetsVisibles.map((grant) => {
+                const bloque = !grant.usableNow || grant.paused
+                return (
+                  <div className="model-quota-reset" key={grant.id}>
+                    <span>
+                      <b>{grant.label}</b>
+                      <small>
+                        {grant.resetsLeft} sur {grant.resetsTotal} restant
+                        {expiresLabel(grant.endsAt)}
+                        {grant.useRequiresLimit ? ' · utilisable une fois la limite atteinte' : ''}
+                      </small>
+                    </span>
+                    <button
+                      type="button"
+                      data-testid={`model-quota-reset-${grant.id}`}
+                      disabled={claimBusy || bloque}
+                      title={bloque ? 'Pas utilisable pour l’instant' : 'Consomme ce reset'}
+                      onClick={() => void utiliserReset(grant.id, grant.label)}
+                    >
+                      {claimBusy ? '…' : 'Utiliser le reset'}
+                    </button>
+                  </div>
+                )
+              })}
+              {claimMessage && (
+                <p className="model-quota-reset-message" role="status">
+                  {claimMessage}
+                </p>
+              )}
+            </div>
+          )}
+          {affiche === 'claude' && comptes && comptes.accounts.length > 0 && (
+            <div className="router-accounts" data-testid="model-quota-accounts">
+              <span className="router-accounts-title">Compte de cette conversation</span>
+              <div className="router-accounts-list">
+                {comptes.accounts.map((account) => {
+                  const choisi =
+                    comptes.selectedId === undefined
+                      ? account.id === comptes.activeId
+                      : comptes.selectedId === account.id
+                  return (
+                    <button
+                      key={account.id}
+                      type="button"
+                      className={`router-account-chip${choisi ? ' is-active' : ''}`}
+                      data-testid={`model-quota-account-${account.id}`}
+                      aria-pressed={choisi}
+                      disabled={comptes.busy}
+                      title={account.email ?? account.displayName}
+                      onClick={() => comptes.onSelect(account.id)}
+                    >
+                      {account.displayName}
+                      {account.tier && <em className="router-account-tier">{account.tier}</em>}
+                    </button>
+                  )
+                })}
+              </div>
+              {comptes.error && (
+                <p className="router-account-error" role="alert">
+                  Action impossible : {comptes.error}
+                </p>
+              )}
+            </div>
+          )}
           <footer>Capacité restante · la barre suit le fournisseur sélectionné ci-dessus</footer>
         </section>
       )}

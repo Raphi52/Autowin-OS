@@ -22,6 +22,7 @@ import type {
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
@@ -433,6 +434,10 @@ const api = {
   ): Promise<ShadowRouteResult> => ipcRenderer.invoke('os:shadowRoute:recommend', phase, champion),
   modelQuotas: (force = false): Promise<ModelQuotaSnapshot> =>
     ipcRenderer.invoke('os:models:quotas', force),
+  claudeResets: (): Promise<ClaudeResetsStatus> => ipcRenderer.invoke('os:claude:resets'),
+  /** CONSOMME le reset : appelé seulement après confirmation explicite de l'utilisateur. */
+  claudeResetClaim: (grantId: string): Promise<ClaudeResetClaimResult> =>
+    ipcRenderer.invoke('os:claude:resets:claim', grantId),
   profiles: (): Promise<AutowinProfile[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<AutowinProfile[]> =>
     ipcRenderer.invoke('os:profiles:save', profile),

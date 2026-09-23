@@ -154,7 +154,7 @@ import {
   fusionnerDossiersImportes,
   sansDossierRetire
 } from './chat-dossiers-import'
-import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { OrchestratorModelSelector, type OrchestratorAccounts } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
@@ -1597,6 +1597,27 @@ export function ChatView({
   }, [activeId])
 
   const busy = activeId ? busyConversations.has(activeId) : false
+  /**
+   * Le choix de compte Claude de la conversation ouverte, partagé par la pop-up de modèle ET la
+   * pop-up des quotas (demande du 2026-09-23) : un seul chemin, celui qui mémorise le compte sur le
+   * fil — une bascule seulement globale serait défaite au tour suivant (index.ts ré-applique le
+   * compte de la conversation au départ de chaque tour).
+   * Sans conversation ouverte (fil neuf pas encore créé), le bloc reste AFFICHÉ et se replie sur le
+   * compte actif de l'application : le faire disparaître donnait l'impression que la fonctionnalité
+   * avait été retirée.
+   */
+  const comptesDeConversation: OrchestratorAccounts | undefined = comptesClaude
+    ? {
+        accounts: comptesClaude.accounts,
+        selectedId: activeId
+          ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
+          : undefined,
+        activeId: comptesClaude.activeId,
+        busy: compteBusy || busy,
+        error: compteError,
+        onSelect: (accountId) => void choisirCompteDeConversation(accountId)
+      }
+    : undefined
   function setConversationBusy(id: string, value: boolean): void {
     if (value) busyConversationsRef.current.add(id)
     else busyConversationsRef.current.delete(id)
@@ -6815,7 +6836,10 @@ Cliquer pour choisir une autre branche.`}
               leadingNode={
                 <>
                   {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
-                  <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
+                  <ModelQuotaIndicator
+                    provider={runtimeIdentity?.provider}
+                    comptes={comptesDeConversation}
+                  />
                   {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
                   <button
                     type="button"
@@ -6926,23 +6950,7 @@ Cliquer pour choisir une autre branche.`}
                       pending={modelChangePending}
                       error={modelChangeError}
                       onSelect={(option) => void changeOrchestratorModel(option)}
-                      comptes={
-                        // Sans conversation ouverte (fil neuf pas encore cree), le bloc reste
-                        // AFFICHE et se replie sur le compte actif de l'application : le faire
-                        // disparaitre donnait l'impression que la fonctionnalite avait ete retiree.
-                        comptesClaude
-                          ? {
-                              accounts: comptesClaude.accounts,
-                              selectedId: activeId
-                                ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
-                                : undefined,
-                              activeId: comptesClaude.activeId,
-                              busy: compteBusy || busy,
-                              error: compteError,
-                              onSelect: (accountId) => void choisirCompteDeConversation(accountId)
-                            }
-                          : undefined
-                      }
+                      comptes={comptesDeConversation}
                     />
                   </div>
                 </div>
