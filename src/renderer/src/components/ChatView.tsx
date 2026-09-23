@@ -5047,8 +5047,15 @@ export function ChatView({
     const utilises = convs
       .map((conv) => conv.projectPath?.trim())
       .filter((chemin): chemin is string => estCheminDeDossier(chemin))
-    if (utilises.length > 0)
-      setDossiersMemorises((connus) => [...new Set([...connus, ...utilises])])
+    // fix-ok: cause mesurée — cet amorçage ignorait la mémoire des retraits : un dossier ôté par
+    // la croix mais porté par une conversation (ex. scratch claude.exe importé) revenait à chaque
+    // lancement. Même fusion que l'import claude.exe, donc même respect des retraits.
+    if (utilises.length > 0) {
+      const retires = lireDossiersRetires()
+      setDossiersMemorises(
+        (connus) => fusionnerDossiersImportes(connus, utilises, retires) ?? connus
+      )
+    }
   }, [convs])
 
   /**
