@@ -21,6 +21,7 @@ class RecordingProvider implements ProviderAdapter {
   async auth(): Promise<boolean> {
     return true
   }
+  // eslint-disable-next-line require-yield
   async *send(
     messages: Message[],
     options: SendOptions = {}
@@ -44,8 +45,8 @@ const orchestrateur = (provider: ProviderAdapter): Orchestrator =>
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    executionWorkspace: 'C:\ws',
-    worktrees: makeTestWorktrees('C:\ws'),
+    executionWorkspace: 'C:\\ws',
+    worktrees: makeTestWorktrees('C:\\ws'),
     classifyPhases: () => ['build']
   })
 

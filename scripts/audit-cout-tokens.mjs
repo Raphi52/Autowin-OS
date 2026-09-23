@@ -176,7 +176,7 @@ const constats = [
      */
     nom: 'la consigne fixe envoyée à chaque tour du chat dépasse 40 000 caractères en moyenne',
     ok: moyenneSystemOrch >= 40000,
-    vu: `${moyenneSystemOrch} caractères sur ${nbOrch} appels`
+    vu: `${moyenneSystemOrch} caractères sur ${nbOrch} appels (+ ${nbOrchSansPrompt} sans prompt système)`
   }
 ]
 

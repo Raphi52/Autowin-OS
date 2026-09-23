@@ -214,8 +214,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
      * d'outil, devis, cloture, depot...) restent sur le graphe, ou leur panneau de detail s'ouvre
      * sous l'arbre — c'est la seule vue qui les detaille.
      */
-    if (suivant?.kind === 'agent') setPanelTab('runs')
-    else if (!suivant) setPanelTab('graph')
+    // Un nœud d'AGENT ne bascule PLUS vers Runs (demande du 2026-09-23) : son détail — prompt
+    // envoyé et retour de l'étape — s'ouvre sous le graphe, même sans RUN.md.
+    if (!suivant) setPanelTab('graph')
   }
 
   return (

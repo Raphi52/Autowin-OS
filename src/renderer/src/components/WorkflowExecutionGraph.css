@@ -345,13 +345,15 @@
 }
 
 /* Pli de la délibération : replié par défaut, il ne doit jamais pousser le détail hors écran. */
-.workflow-execution-reasoning {
+.workflow-execution-reasoning,
+.workflow-execution-exchange > details {
   margin: var(--s2) 0 0;
   border-top: 1px solid var(--line);
   padding-top: var(--s2);
 }
 
-.workflow-execution-reasoning > summary {
+.workflow-execution-reasoning > summary,
+.workflow-execution-exchange > details > summary {
   cursor: pointer;
   color: var(--text-faint);
   font-size: 10px;
@@ -359,7 +361,8 @@
   text-transform: uppercase;
 }
 
-.workflow-execution-reasoning pre {
+.workflow-execution-reasoning pre,
+.workflow-execution-exchange pre {
   margin: 6px 0 0;
   max-height: 220px;
   overflow: auto;
@@ -381,4 +384,10 @@
   padding: 2px 4px;
   color: var(--text-faint);
   font-size: 10px;
+}
+
+.workflow-execution-exchange-empty {
+  margin: var(--s2) 0 0;
+  font-size: 10px;
+  color: var(--text-faint);
 }

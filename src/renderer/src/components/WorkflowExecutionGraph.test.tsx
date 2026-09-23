@@ -614,6 +614,49 @@ describe('WorkflowExecutionGraph', () => {
     expect(pli?.textContent).toContain('A coûte moins cher mais casse le gate ; donc B')
   })
 
+  /**
+   * UNE DEMANDE SIMPLE, SANS RUN.md : le clic sur la brique montre le prompt envoyé et le retour
+   * (demande du 2026-09-23) — la trace causale suffit, aucun RUN.md n'est lu.
+   */
+  it('montre le prompt envoyé et le retour de l’étape dans le détail d’un nœud', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('agent', 1, {
+        turnId: 'turn-latest',
+        type: 'handoff',
+        execution: { phase: 'build', agentId: 'builder', taskId: 'task-build' }
+      }),
+      trace('appel', 2, {
+        turnId: 'turn-latest',
+        parentId: 'agent',
+        type: 'message',
+        payloads: [
+          { kind: 'user-message', content: 'corrige le bouton Envoyer' },
+          { kind: 'tool-call', content: 'contenu sensible' }
+        ]
+      }),
+      trace('reponse', 3, {
+        turnId: 'turn-latest',
+        parentId: 'agent',
+        type: 'model-response',
+        payloads: [{ kind: 'model-response', content: 'bouton corrigé dans Composer.tsx' }]
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
+    )
+    const detail = view.querySelector('.workflow-execution-detail')
+    expect(detail?.querySelector('[data-execution-prompt]')?.textContent).toContain(
+      'corrige le bouton Envoyer'
+    )
+    expect(detail?.querySelector('[data-execution-response]')?.textContent).toContain(
+      'bouton corrigé dans Composer.tsx'
+    )
+    expect(detail?.textContent).not.toContain('contenu sensible')
+  })
+
   /** Sans charge `reasoning`, aucun pli vide ne s'invite dans le détail — discriminant. */
   it('n’affiche aucun pli de raisonnement quand la trace n’en porte pas', async () => {
     const causalTrace = vi

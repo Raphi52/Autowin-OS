@@ -121,6 +121,11 @@ Termine ensuite le tour en disant où lire l'avancement (`statut.txt`, `fin.txt`
 relis ces fichiers au lieu de relancer. Avant de noter, vérifie que les `out-*.json` ne sont pas
 vides : un bras à 0 octet n'a pas tourné, ce n'est pas un bras qui a perdu.
 
+## 2 bis. Mode nuit — enchaîner les tournois sans humain
+Demande utilisateur (conv-782, 2026-09-22 : « lance des /arenagame toute la nuit le but c est d améliorer les workflows jusqu a avoir un jeu parfait en one shot »).
+`.arena/arenagame/nuit.sh` enchaîne des MANCHES dans `essais/nuit-<date>/m<k>` : 4 bras × 1 réplique (A = meilleur workflow mesuré, B = variante de texte, C = variante outil/procédure, X = appel nu), chacun via `lance-bras.sh` à 40 $, notés par `check.mjs` et ajoutés à `historique.jsonl`, puis clos par `clore-run.mjs` (`status: green` si le critère de `check.mjs` est atteint, `red` sinon) ; copies archivées en `m<k>.bras.tar` puis effacées. Entre deux manches, un AMÉLIORATEUR (`claude -p`, 15 $) lit les notes et le code produit, garde A sauf si B ou C le bat d au moins 2 points, écrit deux nouvelles variantes et une section `## m<k>` dans `essais/nuit-<date>/RUN.md`. Il n a PAS le droit de toucher `check.mjs`, `cache/`, `reference/`, `modele/` ni l énoncé.
+Arrêts : `NUIT_BUDGET_USD` (500 $ par défaut, une manche ne démarre que s il reste 170 $), `NUIT_FIN_H` (9 h), `NUIT_MANCHES` (6). Lancement hors du tour par `lancer-detache.ps1` comme au § 2. Au réveil : lire `journal.txt`, `RUN.md`, `fin.txt` ; la note des 48 points de jugement reste non observable (§ 3).
+
 ## 3. Grille — DEUX notes, la seconde est la vraie
 
 ### Note JEU /100 — l'instrument : un jeu PUBLIABLE, pas seulement des règles justes
@@ -171,7 +176,11 @@ sous 40/100 en JEU ne peut pas gagner, comme un bras qui rate le critère dans `
 ## 4. Clôture — Autowin OS amélioré, tentatives effacées
 Dans cet ordre, sans en sauter :
 1. **Relever** toutes les notes et frictions dans `historique.jsonl` et `RUN.md` (`## Dispersion
-   mesurée`, `## Causes Autowin`) — AVANT tout effacement.
+   mesurée`, `## Causes Autowin`) — AVANT tout effacement. Chaque bras noté est aussitôt CLOS :
+   `node .arena/arenagame/clore-run.mjs <note-<b>.json> <out-<b>-1.json>` pose `status: green|red`
+   dans le RUN.md que sa session a écrit (retrouvé par le journal de session, le nom du dossier
+   n'étant pas le session_id). Sans ce statut, Autowin lit `unknown` et compte l'essai comme run
+   BLOQUÉ (mesuré le 2026-09-23 : 46 essais terminés remontaient ainsi).
 2. **Traduire chaque cause localisée en édition d'Autowin OS** (skill, prompt de pilotage,
    garde-fou, script), une par commit dédié, vérifiée hors modèle (`npm test` ciblé sur le fichier
    touché). Une friction sans cause localisée s'écrit « non localisée », jamais en règle ajoutée

@@ -26,7 +26,6 @@ import type {
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { EtatWhisper } from '../main/whisper-local'
-import type { EtatDiarisation } from '../main/diarisation'
 import type { EtatPiper } from '../main/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'

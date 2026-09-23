@@ -1185,7 +1185,18 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     } else if (systemInjected) {
       args.push('--system-prompt', system!)
     }
-    if (opts.resumeSessionId) args.push('--resume', opts.resumeSessionId)
+    if (opts.resumeSessionId) {
+      args.push('--resume', opts.resumeSessionId)
+      // PROMPT SYSTEME FIGE A LA REPRISE. Par defaut (`--system-prompt-snapshot on`), le CLI
+      // enregistre le prompt systeme au PREMIER tour et le renvoie tel quel a chaque `--resume`,
+      // en ignorant le texte qu'on lui repasse. Mesure du 2026-09-22 (CLI 2.1.280) : premier tour
+      // « reponds ANANAS », reprise avec « reponds MANGUE » -> ANANAS ; avec `off` -> MANGUE.
+      // Une conversation commencee avant une retouche de la constitution ou du pilotage ne la
+      // voyait donc jamais. Cout : le prompt Autowin est stable d'un tour a l'autre (conv-792 :
+      // 1 prompt distinct sur 7 tours), donc le cache reste valide ; il ne se reconstruit qu'au
+      // tour qui suit une vraie retouche — c'est exactement le but.
+      if (systemInjected) args.push('--system-prompt-snapshot', 'off')
+    }
     appendClaudeSelectionArgs(args, opts)
 
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
