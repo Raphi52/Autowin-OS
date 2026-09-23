@@ -1563,6 +1563,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           ...taskUsageMetricsFromExecution(supervisedUsage)
         }
       /**
+       * fix-ok: le retour d'échec du chat direct rendait `e.message` BRUT sans passer par
+       * provider-failure-diagnosis — mesuré conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a
+       * (2026-09-23T09:41:45Z, « tool call could not be parsed », message assistant vide).
+       *
        * DIAGNOSTIC AVANT AFFICHAGE. L'erreur brute seule laissait l'utilisateur sans geste :
        * `provider-failure-diagnosis` n'était branché que sur l'orchestrateur et le watchdog, jamais
        * sur le chat direct (mesuré conv-737 puis conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a :
