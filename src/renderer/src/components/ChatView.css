@@ -4825,7 +4825,8 @@ button.chat-project-dot:disabled {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px 8px 0;
+  margin-bottom: calc(var(--s2) * -1.6);
   border-top: 1px solid rgba(212, 169, 79, 0.2);
   flex-shrink: 0;
 }

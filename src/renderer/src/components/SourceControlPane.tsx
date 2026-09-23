@@ -78,6 +78,14 @@ export function SourceControlPane({
   const dataRequestRef = useRef(0)
   const [repoPath] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')
   const [refreshTick, setRefreshTick] = useState(0)
+  /** Fichier dont « Annuler ces changements » attend le clic de confirmation. */
+  const [annulerArme, setAnnulerArme] = useState<string | null>(null)
+  /**
+   * Fichiers ANNULES depuis ce panneau : une fois annules, ils sortent de la liste des modifies,
+   * donc « Remettre » vit a part. Memoire de l'ecran seulement : un rechargement l'oublie, la copie
+   * des changements reste sur le disque (voir la demande envoyee a l'agent).
+   */
+  const [annules, setAnnules] = useState<string[]>([])
   const [view, setView] = useState<PaneView>('project')
   const scope = `${view}:${conversationId ?? ''}:${view === 'workspace' ? repoPath : ''}`
   const [loadedScope, setLoadedScope] = useState('')
@@ -159,6 +167,9 @@ export function SourceControlPane({
       if (target !== conversationId) return
       if (
         event.kind === 'result' ||
+        // FIN DE TOUR : les fichiers modifies par le chat sont notes juste avant (agent-pilot,
+        // capture avant/apres). Sans cette relecture, il fallait quitter puis rouvrir l'onglet.
+        event.kind === 'done' ||
         event.type === 'orchestrate-step' ||
         event.type === 'orchestrate-end'
       ) {
@@ -355,16 +366,33 @@ export function SourceControlPane({
                             )}
                           </div>
                           <div className="sc-diff-actions">
+                            {/* ANNULER (demande du 2026-09-23) remplace « Expliquer / committer ».
+                                Geste qui PERD du travail : un premier clic arme, le second envoie.
+                                Comme les autres boutons, le panneau ne lance aucun git lui-meme. */}
                             <button
-                              className="sc-btn sc-diff-action"
+                              className={`sc-btn sc-diff-action${annulerArme === change.path ? ' is-armed' : ''}`}
+                              data-testid="sc-diff-annuler"
                               onClick={(event) => {
                                 event.stopPropagation()
+                                if (annulerArme !== change.path) {
+                                  setAnnulerArme(change.path)
+                                  return
+                                }
+                                setAnnulerArme(null)
+                                setAnnules((liste) =>
+                                  liste.includes(change.path) ? liste : [...liste, change.path]
+                                )
                                 propose(
-                                  `explique ce qui a changé dans ${change.path} et propose un commit`
+                                  `annule les changements de ${change.path} faits par cette conversation : ` +
+                                    `remets-le dans son état d'avant. Avant d'annuler, garde une copie ` +
+                                    `de ces changements dans artifacts/annules/ pour pouvoir les remettre. ` +
+                                    `Ne touche pas aux modifications d'autres travaux dans ce fichier.`
                                 )
                               }}
                             >
-                              Expliquer / committer ce fichier
+                              {annulerArme === change.path
+                                ? 'Confirmer : annuler ces changements'
+                                : 'Annuler ces changements'}
                             </button>
                           </div>
                         </div>
@@ -384,6 +412,26 @@ export function SourceControlPane({
                 </div>
               </>
             )}
+            {annules.map((path) => (
+              <div className="sc-annule" data-testid="sc-annule" key={path}>
+                <span className="sc-annule-path" title={path}>
+                  ↺ {path}
+                </span>
+                <button
+                  className="sc-btn"
+                  data-testid="sc-remettre"
+                  onClick={() => {
+                    setAnnules((liste) => liste.filter((p) => p !== path))
+                    propose(
+                      `remets les changements de ${path} que tu viens d'annuler, ` +
+                        `à partir de la copie gardée dans artifacts/annules/.`
+                    )
+                  }}
+                >
+                  Remettre le changement
+                </button>
+              </div>
+            ))}
           </section>
         )}
 
