@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { describeChatTurnFailure } from '../provider-failure-diagnosis'
 
 /**
+ * fix-ok: run-pilot-chat.ts rendait l'erreur brute (`e.message`) sans appeler
+ * provider-failure-diagnosis — mesuré conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a.
+ * Entrée qui fait échouer ce test si le correctif est faux : le message réel REEL_CONV5
+ * ci-dessous, rendu sans geste `→` par la version 9291acd1^ (rouge vérifié le 2026-09-23).
+ *
  * UN TOUR DE CHAT QUI ÉCHOUE DOIT CONSEILLER UN GESTE, pas seulement citer l'incident.
  *
  * Mesuré conv-5, promptCall du tour `d98b3e44-bc1c-4d37-8495-d64f4bea225a` (2026-09-23T09:41:45Z) :
