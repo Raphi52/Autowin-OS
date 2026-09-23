@@ -605,6 +605,11 @@ const api = {
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. Rend l'état retenu. */
   conversationsSetHighlight: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setHighlight', id, on),
+  /**
+   * Les projets déjà ouverts dans claude.exe, filtrés côté main : uniquement des chemins de
+   * dossiers de travail, jamais le contenu du profil. Sert à pré-remplir la liste du Chat.
+   */
+  dossiersClaudeCli: (): Promise<string[]> => ipcRenderer.invoke('os:dossiersClaudeCli'),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>
