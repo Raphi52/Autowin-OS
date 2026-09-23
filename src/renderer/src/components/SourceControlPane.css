@@ -20,6 +20,7 @@
   top: 0;
   z-index: 4;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 11px;
@@ -66,7 +67,9 @@
   opacity: 0.6;
 }
 .sc-repo-path {
-  flex: 1;
+  /* Titre SOUS les onglets, sur sa propre ligne (demande du 2026-09-23). */
+  order: 1;
+  flex: 1 0 100%;
   font-size: 11.5px;
   color: var(--muted, #8b939f);
   overflow: hidden;
@@ -322,4 +325,42 @@
   font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Variante D : le bouton du bloc des changements passe en or plein. */
+.sc-diff-action {
+  background: var(--gold, #d4a94f);
+  border-color: var(--gold, #d4a94f);
+  color: var(--bg-0, #000);
+  font-weight: 700;
+}
+.sc-diff-action:hover {
+  background: var(--gold-bright, #e3ba55);
+}
+/* Bouton armé : il attend le second clic qui annule vraiment. */
+.sc-diff-action.is-armed {
+  background: var(--danger, #e6635b);
+  border-color: var(--danger, #e6635b);
+  color: var(--text, #e6e9ee);
+}
+.sc-diff-action.is-armed:hover {
+  background: var(--danger, #e6635b);
+}
+/* Fichier annulé depuis le panneau : on peut remettre ses changements. */
+.sc-annule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.sc-annule-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted, #8b939f);
+  text-decoration: line-through;
 }
