@@ -49,11 +49,6 @@ import {
   lireDensiteConversations,
   traitsDensite,
   type DensiteConversation,
-  filtreStatutSuivant,
-  filtrerParStatut,
-  libelleFiltreStatut,
-  lireFiltreStatutConversations,
-  type FiltreStatutConversation,
   createLiveRunDeltaBatcher,
   deriveConversationState,
   hydrateStoredAssistant,
@@ -192,7 +187,6 @@ import type { InspectTurnTarget } from '../observatory-focus'
 // Types partagés : dans `chat-view-types.ts` depuis la découpe. Ré-exportés ici pour que les
 // importateurs historiques (`RunEntry`, `CheckpointEntry`) n'aient RIEN à changer.
 export type { RunEntry, CheckpointEntry } from './chat-view-types'
-import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
 import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-publie'
 import { TravauxNonPublies } from './TravauxNonPublies'
@@ -1187,19 +1181,6 @@ export function ChatView({
   useEffect(() => {
     window.localStorage.setItem('autowin.chat.conversationsDensity', convDensity)
   }, [convDensity])
-  /**
-   * FILTRE actives/inactives — le systeme de claude.exe, reproduit sur la liste (demande du
-   * 2026-09-22, avec l'import des conversations Desktop). Memorise comme la densite ; le cran
-   * par defaut montre TOUT.
-   */
-  const [convStatusFilter, setConvStatusFilter] = useState<FiltreStatutConversation>(() =>
-    lireFiltreStatutConversations(
-      window.localStorage.getItem('autowin.chat.conversationsStatusFilter')
-    )
-  )
-  useEffect(() => {
-    window.localStorage.setItem('autowin.chat.conversationsStatusFilter', convStatusFilter)
-  }, [convStatusFilter])
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.conversationsPaneWidth'))
     return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 232)
@@ -1217,8 +1198,6 @@ export function ChatView({
   // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
   const [runs, setRuns] = useState<RunEntry[]>([])
-  const [checkpoints, setCheckpoints] = useState<CheckpointEntry[]>([])
-  const [forkedCheckpoint, setForkedCheckpoint] = useState('')
   /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
   const runsRef = useRef<RunEntry[]>([])
   runsRef.current = runs
@@ -1950,10 +1929,6 @@ export function ChatView({
       convId: activeRef.current
     }
     if (isRunRequestCurrent(request, currentRequest)) setRuns(nextRuns)
-    if (window.api.checkpointForks) {
-      const nextCheckpoints = await window.api.checkpointForks()
-      if (isRunRequestCurrent(request, currentRequest)) setCheckpoints(nextCheckpoints)
-    }
   }
   useEffect(() => {
     void Promise.resolve().then(refreshRuns)
@@ -3524,15 +3499,21 @@ export function ChatView({
       setDraftInput(cleDraft, '') // "/btw" seul → rien à injecter, on nettoie
       return
     }
-    // PIECES JOINTES : l'injection ne transporte qu'un texte. Injecter ici laisserait l'image dans
-    // le composer, donc jamais envoyee (constate le 2026-09-04). Le message part en file AVEC ses
-    // pieces jointes et le drain de fin de tour l'envoie en entier.
+    // PIECES JOINTES : elles partent AVEC l'injection, dans le tour en cours (2026-09-23). Avant,
+    // le message attendait la fin du tour en file, et l'utilisateur voyait « rien envoye » pendant
+    // des minutes. Si l'injection est refusee, le repli reste la file AVEC les pieces jointes.
     const jointes = getComposerDraft(cleDraft).attachments
     if (occupe && jointes.length > 0) {
-      journaliserSaisie(id, text, 'message')
+      journaliserSaisie(id, text, 'orientation')
       setDraftInput(cleDraft, '')
       setDraftAttachments(cleDraft, () => [])
-      enqueueMessage(id, text, replimode, jointes)
+      let accepte = false
+      try {
+        accepte = (await window.api.injectDirective(id, text, jointes))?.ok === true
+      } catch (error) {
+        traceSilentFailure('inject-directive:pieces-jointes', error)
+      }
+      if (!accepte) enqueueMessage(id, text, replimode, jointes)
       return
     }
     if (!occupe) {
@@ -4832,21 +4813,30 @@ export function ChatView({
     }
   }, [convQuery])
 
-  const conversationHits = useMemo(
-    () =>
-      trierParRecenceUtilisateur(
-        searchConversations(
-          // Le filtre actif/inactif s'applique AVANT la recherche : chercher dans « inactives »
-          // ne doit ramener que des inactives, comme dans claude.exe.
-          filtrerParStatut(convs, convStatusFilter),
-          convQuery,
-          undefined,
-          correspondancesContenu
-        ),
-        conversationDateOrder
-      ),
-    [convs, convQuery, conversationDateOrder, correspondancesContenu, convStatusFilter]
+  /**
+   * FILTRE PAR STATUT (demande du 2026-09-23) : statut MANUEL posé par le menu « Marquer comme
+   * inactive/active » (`Conversation.inactive`, absent = active).
+   * Memorise comme la densite : c'est une preference d'affichage locale.
+   */
+  const [convStatusFilter, setConvStatusFilter] = useState<'toutes' | 'actives' | 'inactives'>(
+    () => {
+      const v = window.localStorage.getItem('autowin.chat.conversationsStatusFilter')
+      return v === 'actives' || v === 'inactives' ? v : 'toutes'
+    }
   )
+  useEffect(() => {
+    window.localStorage.setItem('autowin.chat.conversationsStatusFilter', convStatusFilter)
+  }, [convStatusFilter])
+
+  const conversationHits = useMemo(() => {
+    const hits = trierParRecenceUtilisateur(
+      searchConversations(convs, convQuery, undefined, correspondancesContenu),
+      conversationDateOrder
+    )
+    if (convStatusFilter === 'toutes') return hits
+    const veutActives = convStatusFilter === 'actives'
+    return hits.filter((h) => (h.conversation.inactive !== true) === veutActives)
+  }, [convs, convQuery, conversationDateOrder, correspondancesContenu, convStatusFilter])
 
   /**
    * Repli des groupes, PERSISTÉ. Le redéplier à chaque ouverture annulerait tout le bénéfice :
@@ -4943,6 +4933,34 @@ export function ChatView({
    * de le savoir. Un pont absent est un ÉTAT DE L'APPLICATION, pas un cas à ignorer : il se dit, et
    * il dit ce qui répare.
    */
+  const marquerInactive = useCallback(
+    async (conversationId: string, on: boolean): Promise<void> => {
+      const poser = window.api.conversationsSetInactive
+      if (!poser) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: 'Statut indisponible : redémarre Autowin OS pour activer « Marquer comme inactive ».'
+          })
+        )
+        return
+      }
+      try {
+        await poser(conversationId, on)
+      } catch (erreur) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: `Le statut n’a pas pu être enregistré : ${
+              erreur instanceof Error ? erreur.message : String(erreur)
+            }`
+          })
+        )
+        return
+      }
+      await refreshConvs()
+    },
+    [refreshConvs]
+  )
+
   const surligner = useCallback(
     async (conversationId: string, on: boolean): Promise<void> => {
       const poser = window.api.conversationsSetHighlight
@@ -5379,18 +5397,20 @@ export function ChatView({
               eyebrow="Espace de travail"
               title="Conversations"
               actions={
-                convViewMode === 'mosaic' && mosaicIds.length > 0 ? (
-                  <button
-                    type="button"
-                    className="conv-mosaic-close-all"
-                    data-testid="conv-mosaic-close-all"
-                    title="Fermer toutes les fenêtres ouvertes"
-                    aria-label="Fermer toutes les fenêtres ouvertes"
-                    onClick={fermerToutesFenetresMosaique}
-                  >
-                    Tout fermer
-                  </button>
-                ) : undefined
+                <>
+                  {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
+                    <button
+                      type="button"
+                      className="conv-mosaic-close-all"
+                      data-testid="conv-mosaic-close-all"
+                      title="Fermer toutes les fenêtres ouvertes"
+                      aria-label="Fermer toutes les fenêtres ouvertes"
+                      onClick={fermerToutesFenetresMosaique}
+                    >
+                      Tout fermer
+                    </button>
+                  )}
+                </>
               }
             />
           </div>
@@ -5510,85 +5530,69 @@ export function ChatView({
             )}
             {lignesListe}
           </div>
-          {/*
-            Les COMMANDES de la liste vivent SOUS elle, tout en bas du panneau (directive du
-            2026-09-22) : le filtre actif/inactif à côté de la densité et de la mosaïque.
-          */}
-          {/* fix-ok: 7 édits de ce fichier = feature en zones multiples (imports, état du filtre,
-              application du filtre à la liste, bouton) PUIS la directive utilisateur arrivée en
-              cours de run — déplacer filtre/mosaïque/densité SOUS la liste, dans cette barre —
-              cause mesurée : ChatView.filtre-statut.test.tsx 4/4 verts (vitest exit 0, 2026-09-23),
-              pas un correctif rejoué au même endroit. */}
-          <div className="conv-footer" data-testid="conv-footer">
+          {/* PIED DE LISTE (demande du 2026-09-23) : filtre de statut, densite et mosaique
+            vivent ici, plus dans l'en-tete. */}
+          <div className="conv-foot" data-testid="conv-foot">
             <button
               type="button"
               className="conv-status-filter"
               data-testid="conv-status-filter"
-              data-filtre={convStatusFilter}
-              title={`Conversations affichées : ${libelleFiltreStatut(convStatusFilter)} — cliquer pour montrer les ${libelleFiltreStatut(filtreStatutSuivant(convStatusFilter))}`}
-              aria-label={`Conversations affichées : ${libelleFiltreStatut(convStatusFilter)}`}
-              onClick={() => setConvStatusFilter(filtreStatutSuivant(convStatusFilter))}
+              data-filter={convStatusFilter}
+              title={`Statut affiché : ${convStatusFilter} — cliquer pour changer`}
+              aria-label={`Filtrer par statut : ${convStatusFilter}`}
+              onClick={() =>
+                setConvStatusFilter((f) =>
+                  f === 'toutes' ? 'actives' : f === 'actives' ? 'inactives' : 'toutes'
+                )
+              }
             >
-              {/* Entonnoir : la pastille sous le bec dit le cran (pleine = actives, vide = inactives). */}
-              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                <path
-                  d="M2 3h12L9.5 8.5V12l-3 1.5V8.5L2 3Z"
-                  fill={convStatusFilter === 'tous' ? 'none' : 'currentColor'}
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinejoin="round"
-                />
-                {convStatusFilter !== 'tous' && (
-                  <circle
-                    cx="12.6"
-                    cy="12.4"
-                    r="2.4"
-                    fill={convStatusFilter === 'actives' ? 'currentColor' : 'none'}
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                  />
-                )}
-              </svg>
+              {convStatusFilter === 'toutes'
+                ? 'Toutes'
+                : convStatusFilter === 'actives'
+                  ? '● Actives'
+                  : '○ Inactives'}
             </button>
-            <button
-              type="button"
-              className="conv-density-toggle"
-              data-testid="conv-density-toggle"
-              data-density={convDensity}
-              title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
-              aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
-              onClick={() => setConvDensity(densiteSuivante(convDensity))}
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                {traitsDensite(convDensity).map((y) => (
-                  <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
-                ))}
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="conv-view-toggle"
-              data-testid="conv-view-toggle"
-              role="switch"
-              aria-checked={convViewMode === 'mosaic'}
-              aria-label="Vue mosaïque"
-              title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
-              onClick={() => {
-                if (convViewMode === 'mosaic') {
-                  setConvViewMode('list')
-                  return
-                }
-                setConvViewMode('mosaic')
-                // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
-                // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
-                // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
-                // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
-                // travail, et « Tout fermer » doit rester une mosaique vide.
-                if (mosaicIdsRef.current.length === 0 && activeId) void ouvrirDansMosaique(activeId)
-              }}
-            >
-              <span className="conv-view-toggle-knob" aria-hidden="true" />
-            </button>
+            <span className="conv-foot-spacer" />
+        <button
+          type="button"
+          className="conv-density-toggle"
+          data-testid="conv-density-toggle"
+          data-density={convDensity}
+          title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
+          aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
+          onClick={() => setConvDensity(densiteSuivante(convDensity))}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            {traitsDensite(convDensity).map((y) => (
+              <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
+            ))}
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="conv-view-toggle"
+          data-testid="conv-view-toggle"
+          role="switch"
+          aria-checked={convViewMode === 'mosaic'}
+          aria-label="Vue mosaïque"
+          title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
+          onClick={() => {
+            if (convViewMode === 'mosaic') {
+              setConvViewMode('list')
+              return
+            }
+            setConvViewMode('mosaic')
+            // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
+            // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
+            // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
+            // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
+            // travail, et « Tout fermer » doit rester une mosaique vide.
+            if (mosaicIdsRef.current.length === 0 && activeId)
+              void ouvrirDansMosaique(activeId)
+          }}
+        >
+          <span className="conv-view-toggle-knob" aria-hidden="true" />
+        </button>
           </div>
         </aside>
       </VueMesuree>
@@ -5676,6 +5680,20 @@ export function ChatView({
                   ★
                 </span>
                 {convMenu.conv.surlignee ? 'Retirer le surlignage' : 'Surligner'}
+              </button>
+              <button
+                role="menuitem"
+                data-testid="conv-menu-inactive"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  void marquerInactive(conv.id, conv.inactive !== true)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  {convMenu.conv.inactive ? '●' : '○'}
+                </span>
+                {convMenu.conv.inactive ? 'Marquer comme active' : 'Marquer comme inactive'}
               </button>
               {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
@@ -6831,9 +6849,6 @@ Cliquer pour choisir une autre branche.`}
               liveRuns[activeId ?? '']?.status === 'running'
             }
             visibleLiveRuns={visibleLiveRuns}
-            checkpoints={checkpoints}
-            forkedCheckpoint={forkedCheckpoint}
-            setForkedCheckpoint={setForkedCheckpoint}
             runs={runs}
             openRun={openRun}
             viewRun={viewRun}

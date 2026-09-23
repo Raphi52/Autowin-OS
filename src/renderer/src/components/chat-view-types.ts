@@ -124,6 +124,8 @@ export type Conv = {
   lastAssistantAsksUser?: boolean
   /** Repère visuel posé à la main sur cette conversation (voir `Conversation.surlignee`). */
   surlignee?: boolean
+  /** Statut manuel : `true` = marquée inactive (voir `Conversation.inactive`). */
+  inactive?: boolean
   /** Compte Claude retenu pour CETTE conversation (voir `Conversation.claudeAccountId`). */
   claudeAccountId?: string
   /**

@@ -3942,7 +3942,13 @@ ${empreinteDepot}`
           .map((p) => ({ name: p.name, chars: p.text.length }))
         const fanSystem = parts.map((p) => p.text).join('')
         const sandbox = sandboxForPhase(task, phase)
-        const runMember = async (member: (typeof fanMembers)[number], rang: number) => {
+        const runMember = async (
+          member: (typeof fanMembers)[number],
+          rang: number
+        ): Promise<
+          | { member: (typeof fanMembers)[number]; text: string; ok: true; cause: undefined }
+          | { member: (typeof fanMembers)[number]; text: string; ok: false; cause: string }
+        > => {
             // L'identité prend la persona quand il y en a une, sinon le modèle. Le rang n'est ajouté
             // QUE s'il lève une ambiguïté réelle : trois membres sur le même modèle portaient
             // jusqu'ici le MÊME agentId et se télescopaient dans le suivi comme dans l'UI ; deux

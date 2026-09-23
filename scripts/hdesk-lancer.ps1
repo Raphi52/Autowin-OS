@@ -29,7 +29,11 @@ param(
   [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][string]$Travail,
   # Le fil : -Conversation, sinon AUTOWIN_CONVERSATION_ID, posee par Autowin dans l'environnement
   # de tout agent lance par une orchestration (2026-09-14) — l'agent n'a rien a recopier.
-  [string]$Conversation = ''
+  [string]$Conversation = '',
+  # Registre des bureaux (fiches <id>.json). Defaut : %LOCALAPPDATA%\autowin-hdesk. Les TESTS passent un dossier
+  # temporaire : l'app Autowin en marche purge du registre reel toute fiche sans bureau cache vivant
+  # (purgerBureauxFermes, ~0,5 s mesure le 2026-09-23), ce qui effacait la fiche de test avant sa lecture.
+  [string]$Registre = ''
 )
 $ErrorActionPreference = 'Stop'
 trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
@@ -42,7 +46,7 @@ if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw "Executabl
 # (AutowinTest_<Id>), le dossier WebView2 et la fiche de la TV sont tous nommes par -Id : deux
 # travaux paralleles qui choisissent le meme Id partagent le meme bureau, s'ecrasent la fiche, et
 # hdesk-observe capture la fenetre de l'autre. On refuse tant que l'instance precedente VIT.
-$registreId = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk'
+$registreId = if ([string]::IsNullOrWhiteSpace($Registre)) { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk' } else { $Registre }
 $ficheId = Join-Path $registreId "$Id.json"
 if (Test-Path -LiteralPath $ficheId) {
   try { $fiche = Get-Content -LiteralPath $ficheId -Raw | ConvertFrom-Json } catch { $fiche = $null }
@@ -160,7 +164,7 @@ if ($fenetres -gt 0 -and $codeSortie -ne [AutowinHdeskLanceur]::STILL_ACTIVE) {
   exit 4
 }
 if ($fenetres -gt 0) {
-  $registre = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'autowin-hdesk'
+  $registre = $registreId
   New-Item -ItemType Directory -Path $registre -Force | Out-Null
   $entree = [pscustomobject]@{ id = $Id; pid = $pi.dwProcessId; executable = $Executable; travail = $Travail; conversationId = $Conversation; lanceLe = (Get-Date).ToString('o') }
   [IO.File]::WriteAllText((Join-Path $registre "$Id.json"), ($entree | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))

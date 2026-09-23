@@ -41,3 +41,27 @@
 {"tournoi":"t3-2026-09-22","bras":"X2","workflow":"appel nu","jeu":45.2,"sur":52,"cout_usd":8.92,"tours":65,"duree_ms":1815920,"note":"coupé par le quota de session Claude à ~31 min (8 bras en parallèle) ; part juge non notée"}
 {"tournoi":"durcissement-t4","date":"2026-09-22","note":"cache/regles.luau 28 -> 32 cas : sort dans le camp adverse, sort qui epargne ses unites, departage par la tour la plus abimee, match nul sans coup. Etalonnage apres : modele 5, reference 51.8. Rejoue sur 12 jeux t2c/t3 : 3 des 4 nouveaux cas echouent sur 5 jeux (t2c b-1 sans aucun sort, t3 b-1 sans departage). Ancien fichier : cache/regles.luau.avant-t4"}
 {"tournoi":"t2c-2026-09-22","type":"juge-par-code","sur":16,"non_observable":32,"notes":{"A1":10,"B1":13,"C1":11,"X1":13},"observable_sur_68":{"A1":60.4,"B1":62.8,"C1":58.2,"X1":64.3},"note":"presence dans le code seulement ; aucun son dans les 4 jeux ; voir essais/t2c-2026-09-22/juge/notes-code.md"}
+{"tournoi":"nuit-2026-09-22-m1","bras":"A1","jeu":48.9,"sur":52,"cout_usd":10.629345000000004}
+{"tournoi":"nuit-2026-09-22-m1","bras":"B1","jeu":50.4,"sur":52,"cout_usd":11.169251200000001}
+{"tournoi":"nuit-2026-09-22-m1","bras":"C1","jeu":50,"sur":52,"cout_usd":9.778704000000001}
+{"tournoi":"nuit-2026-09-22-m1","bras":"X1","jeu":50.2,"sur":52,"cout_usd":13.3176084}
+{"tournoi":"nuit-2026-09-22-m2","bras":"A1","jeu":50.2,"sur":52,"cout_usd":15.319579200000002}
+{"tournoi":"nuit-2026-09-22-m2","bras":"B1","jeu":51.4,"sur":52,"cout_usd":8.583522599999995}
+{"tournoi":"nuit-2026-09-22-m2","bras":"C1","jeu":50,"sur":52,"cout_usd":9.858740399999999}
+{"tournoi":"nuit-2026-09-22-m2","bras":"X1","jeu":50.6,"sur":52,"cout_usd":11.518053800000004}
+{"tournoi":"nuit-2026-09-23-m3","bras":"A1","jeu":49.6,"sur":52,"cout_usd":16.8586914}
+{"tournoi":"nuit-2026-09-23-m3","bras":"B1","jeu":5,"sur":52,"cout_usd":null}
+{"tournoi":"nuit-2026-09-23-m3","bras":"C1","jeu":5,"sur":52,"cout_usd":null}
+{"tournoi":"nuit-2026-09-23-m3","bras":"X1","jeu":49.8,"sur":52,"cout_usd":21.415010399999993}
+{"tournoi":"nuit-2026-09-23-m4","bras":"A1","jeu":50.1,"sur":52,"cout_usd":13.145969200000001}
+{"tournoi":"nuit-2026-09-23-m4","bras":"B1","jeu":51.3,"sur":52,"cout_usd":8.510644200000003}
+{"tournoi":"nuit-2026-09-23-m4","bras":"C1","jeu":51.4,"sur":52,"cout_usd":11.908017400000006}
+{"tournoi":"nuit-2026-09-23-m4","bras":"X1","jeu":49.7,"sur":52,"cout_usd":9.195015600000005}
+{"tournoi":"nuit-2026-09-23-m5","bras":"A1","jeu":51.1,"sur":52,"cout_usd":14.730147200000001}
+{"tournoi":"nuit-2026-09-23-m5","bras":"B1","jeu":51.4,"sur":52,"cout_usd":12.120758400000003}
+{"tournoi":"nuit-2026-09-23-m5","bras":"C1","jeu":51.6,"sur":52,"cout_usd":17.631164800000008}
+{"tournoi":"nuit-2026-09-23-m5","bras":"X1","jeu":50.8,"sur":52,"cout_usd":10.171299200000004}
+{"tournoi":"nuit-2026-09-23-m6","bras":"A1","jeu":41.1,"sur":52,"cout_usd":6.804520200000001}
+{"tournoi":"nuit-2026-09-23-m6","bras":"B1","jeu":49.4,"sur":52,"cout_usd":10.420121199999997}
+{"tournoi":"nuit-2026-09-23-m6","bras":"C1","jeu":52,"sur":52,"cout_usd":12.548042600000002}
+{"tournoi":"nuit-2026-09-23-m6","bras":"X1","jeu":51.5,"sur":52,"cout_usd":10.544798000000007}

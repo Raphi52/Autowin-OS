@@ -18,7 +18,10 @@
  * ATTENTION — CETTE TABLE CONTIENT DES SECRETS : `GRF_PWD_BD`, `GRF_INFOGREFFE_PASSWORD`,
  * `GRF_DOCVERIF_PASSWORD`, `GRF_WS_IDNUM_CLEF_API`. D'où deux règles qui ne doivent pas bouger :
  *   1. la requête ci-dessous est FIXE et ne sélectionne que le nom de base et le serveur ;
- *   2. `COMMUN_RIG` n'est PAS dans le catalogue, donc l'agent ne peut pas la lire lui-même.
+ *   2. `COMMUN_RIG` est lisible par l'agent (décision utilisateur du 2026-09-23, conv-113 : sans elle,
+ *      il ne pouvait pas connaître la liste des greffes), MAIS sous une garde dédiée
+ *      (`sql-read-guard.ts`, `secretColumnViolation`) : `*` et toute colonne de mot de passe / clé
+ *      sont refusés avant d'atteindre le serveur.
  */
 import { runSqlcmdJson, type SqlcmdDeps } from './sqlcmd-runner'
 
@@ -27,9 +30,12 @@ export interface SqlTarget {
   database: string
 }
 
-/** Où vit l'autorité. `COMMUN_RIG` n'est jamais une cible de lecture pour l'agent. */
+/** Où vit l'autorité. Lisible par l'agent, colonnes secrètes exclues (cf. en-tête). */
 export const CATALOG_SERVER = 'SQL-PROD\\PROD'
 export const CATALOG_DATABASE = 'COMMUN_RIG'
+
+/** La base commune comme cible de lecture — ajoutée au catalogue quand l'autorité est joignable. */
+export const COMMUN_TARGET: SqlTarget = { server: CATALOG_SERVER, database: CATALOG_DATABASE }
 
 /**
  * Requête FIXE, jamais influencée par l'agent, et volontairement minimale : deux colonnes, aucune
@@ -134,7 +140,7 @@ export async function resolveSqlTargets(deps: CatalogDeps = {}): Promise<SqlTarg
 
   const resultat = await runSqlcmdJson(CATALOG_SERVER, CATALOG_DATABASE, CATALOG_QUERY, deps)
   const catalogue = resultat.ok
-    ? buildSqlTargetCatalog([...parseCatalogRows(resultat.rows), ...DEV_TARGETS])
+    ? buildSqlTargetCatalog([...parseCatalogRows(resultat.rows), COMMUN_TARGET, ...DEV_TARGETS])
     : buildSqlTargetCatalog(DEV_TARGETS, true)
 
   // Un catalogue dégradé n'est PAS mis en cache pour 30 minutes : on retentera au prochain appel,

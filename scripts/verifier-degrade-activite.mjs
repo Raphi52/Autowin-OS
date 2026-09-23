@@ -11,6 +11,7 @@
  * backgroundImage`. Un aplat rend « none » -> exit 6. L'iframe est retiree ensuite : la page de
  * l'utilisateur n'est jamais repeinte.
  */
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { portCdp } from './cdp-port.mjs'
 

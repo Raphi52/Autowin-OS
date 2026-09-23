@@ -261,7 +261,7 @@ describe('AgentPilot turn contract', () => {
     expect(bus.exec).toHaveBeenCalledTimes(1)
     expect(events.at(-1)).toMatchObject({ kind: 'done' })
     expect((events.at(-1) as { text?: string }).text).toMatch(
-      /orientation[\s\S]*aucun second run.*relanc/i
+      /^⚠️ Question[\s\S]*PAS ENCORE TRAIT[\s\S]*aucun second travail relanc/u
     )
     expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(/👉 Recommandé : .+\.$/u)
   })

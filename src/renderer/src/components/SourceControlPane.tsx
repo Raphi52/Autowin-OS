@@ -12,7 +12,8 @@ const markGlyph: Record<GitChange['status'], string> = {
   deleted: '–',
   renamed: '»',
   untracked: '?',
-  conflicted: '!'
+  conflicted: '!',
+  committed: '✓'
 }
 
 /**

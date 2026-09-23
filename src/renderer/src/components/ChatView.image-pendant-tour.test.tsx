@@ -4,8 +4,9 @@
  *
  * Cause reelle : pendant un tour, le message ORIENTE le tour en cours via l'injection, qui ne
  * transporte qu'un TEXTE. Les pieces jointes restaient donc dans le composer et n'etaient jamais
- * envoyees. Le message a pieces jointes part desormais en FILE avec ses images, et le drain de
- * fin de tour l'envoie en entier.
+ * envoyees. Depuis le 2026-09-23, les pieces jointes voyagent AVEC l'injection (le main les ecrit
+ * sur disque et ajoute leurs chemins au texte) ; la file ne sert plus que de repli si l'injection
+ * est refusee.
  */
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -40,13 +41,15 @@ describe('ChatView — image tapee pendant un tour', () => {
     vi.restoreAllMocks()
   })
 
-  it('met le message EN FILE avec son image au lieu de l’injecter, puis l’envoie en fin de tour', async () => {
+  async function tourAvecImage(injectDirective: ReturnType<typeof vi.fn>): Promise<{
+    appels: unknown[][]
+    finir: () => Promise<void>
+  }> {
     let finirLeTour: (() => void) | null = null
     const premierTour = new Promise<{ ok: boolean }>((resolve) => {
       finirLeTour = () => resolve({ ok: true })
     })
     const appels: unknown[][] = []
-    const injectDirective = vi.fn().mockResolvedValue({ ok: true, messageId: 'm1' })
     const pilotChat = vi.fn((...args: unknown[]) => {
       appels.push(args)
       return appels.length === 1 ? premierTour : Promise.resolve({ ok: true })
@@ -60,8 +63,6 @@ describe('ChatView — image tapee pendant un tour', () => {
     await h.click('.conv-pick')
     await h.type('premier')
     await h.click('.composer-send')
-
-    // Tour en cours : on colle une image et on envoie.
     const file = new File(['abc'], 'capture.png', { type: 'image/png' })
     const paste = new Event('paste', { bubbles: true, cancelable: true })
     Object.defineProperty(paste, 'clipboardData', { configurable: true, value: { files: [file] } })
@@ -73,17 +74,41 @@ describe('ChatView — image tapee pendant un tour', () => {
     })
     await h.type('regarde ca')
     await h.click('.composer-send')
-
-    // L'injection ne sait pas transporter l'image : elle ne doit PAS avoir ete utilisee.
-    expect(injectDirective).not.toHaveBeenCalled()
-
-    await act(async () => {
-      finirLeTour?.()
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    return {
+      appels,
+      finir: async () => {
+        await act(async () => {
+          finirLeTour?.()
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+      }
+    }
+  }
+
+  it('INJECTE le message avec son image dans le tour en cours, sans attendre sa fin', async () => {
+    const injectDirective = vi.fn().mockResolvedValue({ ok: true, messageId: 'm1' })
+    const { appels, finir } = await tourAvecImage(injectDirective)
+
+    expect(injectDirective).toHaveBeenCalledTimes(1)
+    const [, texte, jointes] = injectDirective.mock.calls[0] as [string, string, Array<{ name: string }>]
+    expect(texte).toBe('regarde ca')
+    expect(jointes.map((j) => j.name)).toEqual(['capture.png'])
+
+    // Rien ne doit repartir en fin de tour : le message est deja arrive.
+    await finir()
+    expect(appels.length).toBe(1)
+  })
+
+  it('si l’injection est refusee, le message part EN FILE avec son image en fin de tour', async () => {
+    const injectDirective = vi.fn().mockResolvedValue({ ok: false })
+    const { appels, finir } = await tourAvecImage(injectDirective)
+    await finir()
 
     expect(appels.length).toBe(2)
     const messages = appels[1][0] as Array<{

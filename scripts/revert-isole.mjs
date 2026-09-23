@@ -65,7 +65,9 @@ try {
 } finally {
   try {
     git(['worktree', 'remove', '--force', arbre])
-  } catch {}
+  } catch {
+    // Nettoyage au mieux : le worktree peut deja etre absent ; rmSync ci-dessous finit le travail.
+  }
   rmSync(base, { recursive: true, force: true })
 }
 console.log(JSON.stringify(sortie, null, 2))

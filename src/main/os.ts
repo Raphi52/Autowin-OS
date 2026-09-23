@@ -1038,6 +1038,21 @@ export class AutowinOS {
     return this.roles.all()
   }
 
+  /**
+   * Change PLUSIEURS rôles et persiste UNE seule fois. `setRole` en boucle réécrivait `roles.json`
+   * par rôle (écriture temporaire + relectures de validation, toutes synchrones) : mesuré le
+   * 2026-09-23 dans gels.jsonl, 8 lectures bloquantes pour 20,7 s de gel sur le fil principal.
+   */
+  setRoles(bindings: ReadonlyArray<readonly [Role, RoleBinding]>): Record<Role, RoleBinding> {
+    if (bindings.length === 0) return this.roles.all()
+    const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
+    for (const [role, binding] of bindings) proposed.setBinding(role, binding)
+    const all = proposed.all()
+    saveRoleBindings(all)
+    for (const [role] of bindings) this.roles.setBinding(role, all[role])
+    return this.roles.all()
+  }
+
   // --- Orchestration disciplinée (le cœur) ---
   async runTask(
     task: string,

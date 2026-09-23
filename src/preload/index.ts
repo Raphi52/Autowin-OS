@@ -616,6 +616,9 @@ const api = {
    * dossiers de travail, jamais le contenu du profil. Sert à pré-remplir la liste du Chat.
    */
   dossiersClaudeCli: (): Promise<string[]> => ipcRenderer.invoke('os:dossiersClaudeCli'),
+  /** Marque (`true`) ou retire (`false`) le statut inactive d'une conversation. */
+  conversationsSetInactive: (id: string, on: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('os:conversations:setInactive', id, on),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>
@@ -759,9 +762,10 @@ const api = {
    */
   injectDirective: (
     conversationId: string,
-    directive: string
+    directive: string,
+    attachments?: ChatAttachment[]
   ): Promise<{ ok: boolean; messageId?: string }> =>
-    ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive),
+    ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive, attachments),
   /**
    * Écrit le texte de l'utilisateur sur disque AVANT qu'il ne parte. Filet de dernier recours : un
    * texte qui ne produit aucun tour (orientation, file d'attente) reste retrouvable malgré tout.

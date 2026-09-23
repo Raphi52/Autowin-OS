@@ -217,6 +217,21 @@ describe('renderer chat IPC contract', () => {
     expect(staleDirectiveCleanup).toBeGreaterThan(turnCleanup)
   })
 
+  it('carries attachments of a live directive into the running turn (2026-09-23)', () => {
+    const { main } = readChatContractSources()
+    const handler = extractIpcHandler(main, 'os:pilotChat:inject')
+    const garde = handler.indexOf('guardAttachments(rawAttachments)')
+    const ecriture = handler.indexOf('materializeClaudeAttachments(jointes).promptSuffix')
+    const empile = handler.indexOf('queued.push(')
+
+    expect(garde).toBeGreaterThanOrEqual(0)
+    expect(ecriture).toBeGreaterThan(garde)
+    expect(empile).toBeGreaterThan(ecriture)
+    expect(handler.slice(empile)).toContain('+ suffixe)')
+    // Une image SANS texte est un message : elle ne doit pas etre refusee comme vide.
+    expect(handler).toContain('if (!directive && jointes.length === 0) return { ok: false }')
+  })
+
   it('acknowledges a live directive immediately after the bounded active-turn guard', () => {
     const { main } = readChatContractSources()
     // Borne = la FIN de la fonction, plus la declaration voisine : `const questionWindows` a

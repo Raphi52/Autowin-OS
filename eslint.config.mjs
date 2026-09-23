@@ -12,8 +12,15 @@ export default defineConfig(
      * tient a sa fidelite octet pour octet a l'original (voir le README du dossier). La reformater
      * -- meme un simple retour a la ligne de prettier -- casserait cette fidelite. On l'exclut donc
      * du lint plutot que de la corriger.
+     *
+     * `bench/runs` et les dossiers `essais` de `.arena` sont des copies de travail GENEREES par les bancs et les
+     * arenas (ignorees par git : bench/.gitignore, .arena/arenagame/.gitignore). `bench/runs`
+     * contenait 6 copies completes de `src` : 13 957 des 16 442 fichiers lintes, et plus de 400 s
+     * pour un lint sans cache (mesure du 2026-09-23).
      */
     ignores: [
+      'bench/runs/**',
+      '.arena/**/essais/**',
       '**/node_modules',
       '**/dist',
       '**/out',

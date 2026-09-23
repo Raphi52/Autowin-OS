@@ -234,6 +234,14 @@ export function registerConversationsIpc({
     if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
     return updated?.surlignee === true
   })
+  /** Statut manuel active/inactive d'une conversation. Rend l'état retenu (`true` = inactive). */
+  ipcMain.handle('os:conversations:setInactive', (event, rawId: string, rawOn: unknown) => {
+    assertTrustedRendererSender(event, 'Conversations')
+    const id = guardString(rawId, 'id')
+    const updated = os.conversations.marquerInactive(id, rawOn === true)
+    if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
+    return updated?.inactive === true
+  })
   /**
    * Choisir le compte Claude d'UNE conversation. Rend l'id retenu, ou null si aucun choix propre
    * (id inconnu, ou retour au compte de l'application) : le renderer n'a pas a distinguer les deux.

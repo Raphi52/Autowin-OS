@@ -479,6 +479,7 @@ interface ChatApi {
    * déclaration, ChatView ne pouvait pas typer l'appel (tsc rouge avant ajout, vert après).
    */
   dossiersClaudeCli: () => Promise<string[]>
+  conversationsSetInactive: (id: string, on: boolean) => Promise<boolean>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
   conversationsRemove: (id: string) => Promise<boolean>
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
@@ -567,7 +568,8 @@ interface ChatApi {
   cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   injectDirective: (
     conversationId: string,
-    directive: string
+    directive: string,
+    attachments?: ChatAttachment[]
   ) => Promise<{ ok: boolean; messageId?: string }>
   /** Écrit le texte de l'utilisateur sur disque AVANT son envoi — filet contre les textes sans tour. */
   journaliserSaisie: (

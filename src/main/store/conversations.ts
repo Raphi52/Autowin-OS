@@ -155,6 +155,11 @@ export interface Conversation {
    */
   surlignee?: boolean
   /**
+   * Statut posé à la main (menu « Marquer comme inactive »). Absent = active. Retirer la marque
+   * EFFACE le champ, comme `surlignee`.
+   */
+  inactive?: boolean
+  /**
    * Le compte Claude que CETTE conversation doit utiliser (id du store de comptes).
    *
    * OPTIONNEL, et il le reste : un `conversations.json` ecrit par une version anterieure doit
@@ -1919,6 +1924,16 @@ export class ConversationStore {
     if (!conversation) return undefined
     if (surlignee) conversation.surlignee = true
     else delete conversation.surlignee
+    this.changed(id)
+    return conversation
+  }
+
+  /** Marque la conversation active/inactive (statut manuel). Ne touche pas `updatedAt`. */
+  marquerInactive(id: string, inactive: boolean): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    if (!conversation) return undefined
+    if (inactive) conversation.inactive = true
+    else delete conversation.inactive
     this.changed(id)
     return conversation
   }

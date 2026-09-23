@@ -147,6 +147,43 @@ describe('ClaudeCliAdapter — plafond de depense provider', () => {
   })
 })
 
+describe('ClaudeCliAdapter — prompt systeme a la reprise', () => {
+  const drain = async (gen: AsyncGenerator<unknown>): Promise<void> => {
+    try {
+      let step = await gen.next()
+      while (!step.done) step = await gen.next()
+    } catch {
+      // seul l'argv compte ici
+    }
+  }
+  const resultat = [{ type: 'result', subtype: 'success', result: 'ok', session_id: 's1', total_cost_usd: 0, usage: {} }]
+
+  it('desactive le figeage du prompt systeme quand une session est reprise', async () => {
+    spawnCapture.stdoutEvents = [...resultat]
+    const { ClaudeCliAdapter } = await import('./claude')
+    await drain(
+      new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'suite' }], {
+        system: 'REGLE A JOUR',
+        resumeSessionId: 's1'
+      }) as AsyncGenerator<unknown>
+    )
+    const i = spawnCapture.args.indexOf('--system-prompt-snapshot')
+    expect(i).toBeGreaterThan(-1)
+    expect(spawnCapture.args[i + 1]).toBe('off')
+  })
+
+  it("ne touche pas au figeage au premier tour d'une conversation", async () => {
+    spawnCapture.stdoutEvents = [...resultat]
+    const { ClaudeCliAdapter } = await import('./claude')
+    await drain(
+      new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'debut' }], {
+        system: 'REGLE'
+      }) as AsyncGenerator<unknown>
+    )
+    expect(spawnCapture.args).not.toContain('--system-prompt-snapshot')
+  })
+})
+
 describe('ClaudeCliAdapter — pièces jointes', () => {
   it('convertit les blocs image/document Claude en artefacts supplier-agnostic', () => {
     expect(

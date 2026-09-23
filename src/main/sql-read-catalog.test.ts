@@ -197,7 +197,8 @@ describe('resolveSqlTargets', () => {
     expect(c.has('RIGBD-POLYNESIE', 'RIG_PAPEETE')).toBe(true)
     expect(c.has('SQL-DEV\\DEV', 'RIG_DEV')).toBe(true)
     expect(c.has('SQL-DEV\\DEV', 'RIG_RECETTE')).toBe(true)
-    expect(c.size()).toBe(4)
+    expect(c.has('SQL-PROD\\PROD', 'COMMUN_RIG')).toBe(true)
+    expect(c.size()).toBe(5)
   })
 
   /**

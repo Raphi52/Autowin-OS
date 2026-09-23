@@ -4418,6 +4418,12 @@ button.chat-project-dot:disabled {
   display: inline-flex;
   align-items: center;
 }
+/* Dans la barre du HAUT, le panneau s'ouvre VERS LE BAS : ouvert vers le haut (reglage du
+   composeur), il recouvrait le titre et sortait de la fenetre (signale le 2026-09-23). */
+.chat-runtime .conv-cost-panel {
+  top: calc(100% + 6px);
+  bottom: auto;
+}
 
 /* BARRE UNIQUE DE DICTEE (2026-09-03) : une seule barre HORIZONTALE qui porte les deux infos --
    le remplissage rose montre le volume de la voix, le rond blanc pose dessus regle la capture. */
@@ -4742,26 +4748,6 @@ button.chat-project-dot:disabled {
    toute facon sur ce filet (specificite superieure).
    ============================================================================ */
 
-/* Barre des COMMANDES de la liste, SOUS les conversations (directive du 2026-09-22) : le filtre
-   actif/inactif de claude.exe, la densité et la mosaïque, alignées au bord droit du panneau. */
-.conv-footer {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--s2);
-  padding: var(--s1) 0 0;
-  border-top: 1px solid rgba(212, 169, 79, 0.18);
-}
-/* fix-ok: les 7 édits étaient la construction incrémentale de cette barre (pas une boucle de
-   correctif aveugle) ; la seule vraie cause corrigée en route est mesurée : les `fill` inline
-   des tracés du SVG priment sur `fill: currentColor` hérité (spécificité des attributs de
-   présentation < style hérité NE s'applique PAS — l'attribut gagne sur l'héritage), d'où la
-   fusion des sélecteurs avec .conv-density-toggle au lieu d'une règle d'héritage sans effet. */
-/* Le bouton de filtre EMPRUNTE le chrome du bouton de densité (règles partagées ci-dessous) :
-   même boîte, même survol, même transition déjà en production — rien de dupliqué, rien de neuf
-   à prouver en mouvement : l'entonnoir garde ses pleins/vides pilotés par le cran du filtre. */
-.conv-status-filter,
 .conv-density-toggle {
   display: inline-flex;
   flex: 0 0 22px;
@@ -4779,12 +4765,10 @@ button.chat-project-dot:disabled {
     border-color 120ms ease,
     color 120ms ease;
 }
-.conv-status-filter:hover,
 .conv-density-toggle:hover {
   border-color: var(--gold);
   color: var(--gold-bright);
 }
-.conv-status-filter svg,
 .conv-density-toggle svg {
   width: 13px;
   height: 13px;
@@ -4834,4 +4818,32 @@ button.chat-project-dot:disabled {
 .conv-pane[data-density='compact'] .conv-new-row {
   padding-top: 4px;
   padding-bottom: 4px;
+}
+
+/* Pied de la liste des conversations : filtre de statut, densite, mosaique (2026-09-23). */
+.conv-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid rgba(212, 169, 79, 0.2);
+  flex-shrink: 0;
+}
+.conv-foot-spacer {
+  flex: 1;
+}
+.conv-status-filter {
+  font-size: 11px;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  background: rgba(212, 169, 79, 0.08);
+  color: var(--gold-doux);
+  cursor: pointer;
+}
+.conv-status-filter:hover,
+.conv-status-filter:not([data-filter='toutes']) {
+  border-color: var(--gold);
+  color: var(--gold-bright);
 }

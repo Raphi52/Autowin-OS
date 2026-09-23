@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { RunEntry, CheckpointEntry } from './ChatView'
+import type { RunEntry } from './ChatView'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
 import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
 import { StepThread } from './ChatView.parts'
@@ -80,9 +80,6 @@ export type WorkflowsPanelProps = {
   requestLabel: string | undefined
   liveGraphActive: boolean
   visibleLiveRuns: [string, ScopedLiveRun<OrchStep>][]
-  checkpoints: CheckpointEntry[]
-  forkedCheckpoint: string
-  setForkedCheckpoint: (id: string) => void
   runs: RunEntry[]
   openRun: OpenRunState | null
   viewRun: (r: RunEntry) => void
@@ -129,9 +126,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     requestLabel,
     liveGraphActive,
     visibleLiveRuns,
-    checkpoints,
-    forkedCheckpoint,
-    setForkedCheckpoint,
     runs,
     openRun,
     viewRun,
@@ -214,8 +208,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
      * d'outil, devis, cloture, depot...) restent sur le graphe, ou leur panneau de detail s'ouvre
      * sous l'arbre — c'est la seule vue qui les detaille.
      */
-    if (suivant?.kind === 'agent') setPanelTab('runs')
-    else if (!suivant) setPanelTab('graph')
+    // Un nœud d'AGENT ne bascule PLUS vers Runs (demande du 2026-09-23) : son détail — prompt
+    // envoyé et retour de l'étape — s'ouvre sous le graphe, même sans RUN.md.
+    if (!suivant) setPanelTab('graph')
   }
 
   return (
@@ -425,26 +420,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             </div>
           ))}
           {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
-          {checkpoints.length > 0 && (
-            <section className="card checkpoint-forks">
-              <strong>Checkpoints persistants</strong>
-              {checkpoints.map((checkpoint) => (
-                <button
-                  key={checkpoint.id}
-                  className="btn btn-sm"
-                  onClick={() => {
-                    const forkId = `fork-${Date.now()}`
-                    void window.api
-                      .createCheckpointFork(checkpoint.id, forkId)
-                      .then(() => setForkedCheckpoint(forkId))
-                  }}
-                >
-                  Forker {checkpoint.runId}
-                </button>
-              ))}
-              {forkedCheckpoint && <small>Fork immuable préparé : {forkedCheckpoint}</small>}
-            </section>
-          )}
           {runs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               {activeId

@@ -30,7 +30,7 @@ describe('hook du CLI — réglages de la protection de prod', () => {
     expect(hook({ tool_name: 'Bash', tool_input: { command: 'git status' } })).toBe('')
   })
   it('le hook est branché sur les outils d’édition et reçoit la garde prod au site d’appel', () => {
-    const m = (reglagesCliAutowin('x') as any).hooks.PreToolUse[0].matcher as string
+    const m = (reglagesCliAutowin('x') as { hooks: { PreToolUse: { matcher: string }[] } }).hooks.PreToolUse[0].matcher
     for (const t of ['Bash', 'PowerShell', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']) expect(m.split('|')).toContain(t)
     expect(readFileSync(join(__dirname, 'providers/claude.ts'), 'utf8')).toMatch(/scriptHookGardes\(refusReglageProd[,)]/)
   })
