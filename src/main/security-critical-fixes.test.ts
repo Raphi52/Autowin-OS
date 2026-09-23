@@ -492,7 +492,8 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   201 apres ce travail -> CE travail en ajoute UN SEUL (`git:action`, garde des sa premiere
     //   ligne ; `unguarded` reste vide). Le +1 restant etait DEJA arrive par la mise a jour amont
     //   sans reprise du compte : le fil-piege etait deja rouge avant cette integration.
-    expect(handlers).toHaveLength(200)
+    //   +1 : `project:openInVscode` (bouton « Ouvrir dans VS Code » de l onglet Projet), garde.
+    expect(handlers).toHaveLength(202)
     expect(unguarded).toEqual([])
   })
 

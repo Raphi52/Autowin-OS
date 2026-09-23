@@ -176,6 +176,8 @@ interface ChatApi {
   pickGitRepo: () => Promise<string | null>
   /** Onglet « Projet » : racine du projet, arborescence par dossier, lecture/ecriture d'un fichier. */
   projectRoot: () => Promise<string>
+  /** Ouvre tout le projet courant dans VS Code (commande `code`). */
+  openProjectInVscode: () => Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }>
   listProjectDir: (path?: string) => Promise<import('../main/project-files').ProjectListResult>
   readProjectFile: (path: string) => Promise<import('../main/project-files').ProjectReadResult>
   writeProjectFile: (

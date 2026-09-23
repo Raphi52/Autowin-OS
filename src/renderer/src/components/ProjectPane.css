@@ -130,3 +130,8 @@
   font-size: 11px;
   color: #ff8a8a;
 }
+
+.project-pane .pp-barre {
+  display: flex;
+  justify-content: flex-end;
+}
