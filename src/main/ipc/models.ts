@@ -16,7 +16,9 @@
 import { ipcMain } from 'electron'
 import { assertTrustedRendererSender } from '../ipc-senders'
 import { assertRuntimeTopologyAvailable } from '../runtime-topology'
-import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from '../model-quotas'
+import { buildModelQuotaSnapshot, getModelQuotaSnapshot, invalidateModelQuotaCache } from '../model-quotas'
+import { claimClaudeReset, readClaudeResets } from '../claude-resets'
+import { guardString } from '../ipc-guards'
 import type { AgentTopology } from '../topology'
 import type { ImportedModel } from '../models'
 import type { AutowinOS } from '../os'
@@ -60,6 +62,40 @@ export function registerModelsIpc({
     await refresh
     synchroniserFabric()
     return lireModeles()
+  })
+  // Resets offerts par Anthropic. En instance isolée de test : une fixture, et la réclamation est
+  // REFUSÉE — un test ne doit jamais pouvoir consommer le reset réel de l'utilisateur.
+  ipcMain.handle('os:claude:resets', async (event) => {
+    assertTrustedRendererSender(event, 'Claude resets')
+    if (isolatedTestInstance) {
+      return {
+        status: 'available',
+        eligible: true,
+        nextGrantId: 'fixture-reset',
+        grants: [
+          {
+            id: 'fixture-reset',
+            label: 'Fixture isolée : un reset offert',
+            resetsLeft: 1,
+            resetsTotal: 1,
+            endsAt: new Date(Date.now() + 29 * 24 * 60 * 60_000).toISOString(),
+            usableNow: true,
+            paused: false,
+            useRequiresLimit: false
+          }
+        ]
+      }
+    }
+    return readClaudeResets()
+  })
+  ipcMain.handle('os:claude:resets:claim', async (event, grantId: unknown) => {
+    assertTrustedRendererSender(event, 'Claude reset claim')
+    const id = guardString(grantId, 'grantId')
+    if (isolatedTestInstance) return { result: 'unavailable', reason: 'instance de test' }
+    const result = await claimClaudeReset(id)
+    // Un reset réussi remet les fenêtres à zéro : le quota mémorisé est faux dès maintenant.
+    if (result.result === 'reset') invalidateModelQuotaCache()
+    return result
   })
   ipcMain.handle('os:models:quotas', async (event, force = false) => {
     assertTrustedRendererSender(event, 'Model quotas')

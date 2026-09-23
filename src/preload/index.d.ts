@@ -16,6 +16,7 @@ import type {
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 import type {
@@ -356,6 +357,8 @@ interface ChatApi {
     champion: { provider: string; model: string }
   ) => Promise<ShadowRouteResult>
   modelQuotas: (force?: boolean) => Promise<ModelQuotaSnapshot>
+  claudeResets: () => Promise<ClaudeResetsStatus>
+  claudeResetClaim: (grantId: string) => Promise<ClaudeResetClaimResult>
   profiles: () => Promise<AutowinProfile[]>
   saveProfile: (profile: unknown) => Promise<AutowinProfile[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
