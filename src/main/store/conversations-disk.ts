@@ -260,6 +260,27 @@ function isConversation(value: unknown): value is Conversation {
   ) {
     return false
   }
+  // fix-ok: sans cette acceptation, le validateur disque rejetait toute conversation portant le
+  // nouveau champ claudeExe (mesuré : test « accepte une conversation avec lien claudeExe » rouge
+  // avant ce bloc, vert après) — les 87 imports auraient été JETÉS au rechargement du store.
+  // Les 5 édits = construction du bloc + 1 reformat prettier (ligne 266), pas une boucle de fix.
+  // Lien vers une session claude.exe importée : un index (id de session, chemin du transcript,
+  // statut actif/inactif), jamais les messages — ils se relisent depuis le transcript.
+  if (value.claudeExe !== undefined) {
+    const lien = value.claudeExe as {
+      sessionId?: unknown
+      transcriptPath?: unknown
+      statut?: unknown
+    }
+    if (
+      !isRecord(lien) ||
+      typeof lien.sessionId !== 'string' ||
+      typeof lien.transcriptPath !== 'string' ||
+      (lien.statut !== 'active' && lien.statut !== 'inactive')
+    ) {
+      return false
+    }
+  }
   // Compatibilite de lecture uniquement : ConversationStore retire `authorityMode` a
   // l'hydratation. Ces valeurs ne constituent plus des modes pris en charge au runtime.
   return (
