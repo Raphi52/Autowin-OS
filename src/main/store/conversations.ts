@@ -21,6 +21,7 @@ import { canonicalProjectPath, estCheminDeDossier } from '../../shared/project-p
 import { motsDe, replier } from '../../shared/mots'
 import { parseAskDecision } from '../../renderer/src/components/ask-choices'
 import { memeFamille } from './synonymes'
+import type { SessionClaudeExe } from './import-claude-exe'
 import { construireVoisinage, type IndexVoisinage } from './voisinage'
 import { creerIndexInverse, type IndexInverse } from './index-inverse'
 
@@ -164,8 +165,26 @@ export interface Conversation {
   claudeAccountId?: string
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
+  /**
+   * Lien vers une session de claude.exe (Claude Desktop) IMPORTÉE — un index, pas une copie.
+   *
+   * Les messages ne sont PAS matérialisés dans le store (315 Mo de transcripts sur le poste,
+   * 2026-09-22) : ils se relisent À LA DEMANDE depuis `transcriptPath` quand on ouvre le fil.
+   * `statut` reproduit le système actif/inactif de claude.exe : actif = un verrou
+   * `~/.claude/sessions/<pid>.json` au processus VIVANT référence cette session.
+   *
+   * OPTIONNEL, et il le reste : un `conversations.json` antérieur n'en porte pas.
+   */
+  claudeExe?: ClaudeExeLink
   createdAt: number
   updatedAt: number
+}
+
+/** Voir `Conversation.claudeExe`. */
+export interface ClaudeExeLink {
+  sessionId: string
+  transcriptPath: string
+  statut: 'active' | 'inactive'
 }
 
 export type ConversationSummary = Omit<Conversation, 'messages'> & {
@@ -756,6 +775,71 @@ export class ConversationStore {
     this.conversations.set(conversation.id, conversation)
     this.changed(conversation.id)
     return conversation
+  }
+
+  /**
+   * Importe (upsert) les sessions de claude.exe — IDEMPOTENT, rejouable à chaque rafraîchissement.
+   *
+   * La clé d'identité est `claudeExe.sessionId`, jamais le titre : un ré-import ne crée donc pas
+   * de doublon, il rafraîchit le STATUT (actif/inactif) et la date d'activité. Le titre n'est
+   * touché QUE si l'utilisateur ne l'a pas renommé ici (on ne le sait pas — on ne réécrit donc
+   * jamais un titre existant, le renommage local survit à tous les imports).
+   *
+   * Les messages restent VIDES : le fil se lit à la demande depuis le transcript (contrainte
+   * volume — 315 Mo d'historique claude.exe sur le poste, aucun n'entre dans le store).
+   *
+   * fix-ok: 4 édits de ce fichier = construction incrémentale d'une MÊME fonctionnalité (type
+   * ClaudeExeLink, champ optionnel, import du type, cette méthode d'upsert), pas une boucle de
+   * correctif aveugle — cause mesurée : import-claude-exe.test.ts 6/6 verts, vitest exit 0
+   * (2026-09-23), dont le test d'idempotence rejouant l'import deux fois sans doublon.
+   */
+  importerSessionsClaudeExe(sessions: readonly SessionClaudeExe[]): {
+    creees: number
+    statutsMisAJour: number
+  } {
+    const existantes = new Map<string, Conversation>()
+    for (const conversation of this.conversations.values()) {
+      if (conversation.claudeExe) existantes.set(conversation.claudeExe.sessionId, conversation)
+    }
+    let creees = 0
+    let statutsMisAJour = 0
+    for (const session of sessions) {
+      const existante = existantes.get(session.sessionId)
+      if (!existante) {
+        const conversation: Conversation = {
+          schemaVersion: 3,
+          id: this.nextUniqueConversationId(),
+          title: session.titre,
+          provider: 'claude',
+          messages: [],
+          ...(session.cwd && estCheminDeDossier(session.cwd)
+            ? { projectPath: canonicalProjectPath(session.cwd) }
+            : {}),
+          claudeExe: {
+            sessionId: session.sessionId,
+            transcriptPath: session.transcriptPath,
+            statut: session.statut
+          },
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt
+        }
+        this.conversations.set(conversation.id, conversation)
+        this.changed(conversation.id)
+        creees += 1
+        continue
+      }
+      const lien = existante.claudeExe!
+      const statutChange = lien.statut !== session.statut
+      const cheminChange = lien.transcriptPath !== session.transcriptPath
+      const activiteplusRecente = session.updatedAt > existante.updatedAt
+      if (!statutChange && !cheminChange && !activiteplusRecente) continue
+      lien.statut = session.statut
+      lien.transcriptPath = session.transcriptPath
+      if (activiteplusRecente) existante.updatedAt = session.updatedAt
+      if (statutChange) statutsMisAJour += 1
+      this.changed(existante.id)
+    }
+    return { creees, statutsMisAJour }
   }
 
   /**

@@ -2030,3 +2030,58 @@ export function traitsDensite(densite: DensiteConversation): number[] {
   if (densite === 'normal') return [2.6, 7.2, 11.8]
   return [3.6, 8.6]
 }
+
+/* ---------- FILTRE ACTIVES / INACTIVES (systeme de claude.exe) ---------- */
+
+/**
+ * Reproduction du filtre par statut de claude.exe (demande du 2026-09-22, avec l'import des
+ * conversations Desktop) : « actives » = les fils encore OUVERTS (une session claude.exe dont le
+ * verrou est vivant — et, par hypothese annoncee, toute conversation nee dans Autowin, qui vit
+ * ici) ; « inactives » = l'historique claude.exe sans session ouverte. Meme mecanique memorisee
+ * que la densite : un bouton unique qui tourne, un cran par defaut qui ne cache RIEN.
+ */
+export const FILTRES_STATUT_CONVERSATION = ['tous', 'actives', 'inactives'] as const
+export type FiltreStatutConversation = (typeof FILTRES_STATUT_CONVERSATION)[number]
+
+/** Cran par defaut : tout montrer — personne ne doit voir des conversations disparaitre sans geste. */
+export const FILTRE_STATUT_DEFAUT: FiltreStatutConversation = 'tous'
+
+/** Valeur relue du stockage local : tout ce qui n'est pas un cran connu retombe sur le defaut. */
+export function lireFiltreStatutConversations(
+  brut: string | null | undefined
+): FiltreStatutConversation {
+  return FILTRES_STATUT_CONVERSATION.includes(brut as FiltreStatutConversation)
+    ? (brut as FiltreStatutConversation)
+    : FILTRE_STATUT_DEFAUT
+}
+
+/** Rotation du bouton unique : tous → actives → inactives → tous. */
+export function filtreStatutSuivant(courant: FiltreStatutConversation): FiltreStatutConversation {
+  const index = FILTRES_STATUT_CONVERSATION.indexOf(courant)
+  return FILTRES_STATUT_CONVERSATION[(index + 1) % FILTRES_STATUT_CONVERSATION.length]
+}
+
+/** Nom lisible du cran — sert l'infobulle ET le lecteur d'ecran. */
+export function libelleFiltreStatut(filtre: FiltreStatutConversation): string {
+  if (filtre === 'actives') return 'actives'
+  if (filtre === 'inactives') return 'inactives'
+  return 'toutes'
+}
+
+/** Une conversation sans lien claude.exe vit dans Autowin : elle compte comme ACTIVE. */
+export function conversationEstActive(conversation: { claudeExe?: { statut?: string } }): boolean {
+  return conversation.claudeExe ? conversation.claudeExe.statut === 'active' : true
+}
+
+/** Applique le cran du filtre. PUR — la liste rendue est la seule chose qui change. */
+export function filtrerParStatut<T extends { claudeExe?: { statut?: string } }>(
+  conversations: readonly T[],
+  filtre: FiltreStatutConversation
+): T[] {
+  if (filtre === 'tous') return [...conversations]
+  return conversations.filter((conversation) =>
+    filtre === 'actives'
+      ? conversationEstActive(conversation)
+      : !conversationEstActive(conversation)
+  )
+}

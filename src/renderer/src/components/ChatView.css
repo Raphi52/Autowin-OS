@@ -4738,6 +4738,26 @@ button.chat-project-dot:disabled {
    toute facon sur ce filet (specificite superieure).
    ============================================================================ */
 
+/* Barre des COMMANDES de la liste, SOUS les conversations (directive du 2026-09-22) : le filtre
+   actif/inactif de claude.exe, la densité et la mosaïque, alignées au bord droit du panneau. */
+.conv-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+  padding: var(--s1) 0 0;
+  border-top: 1px solid rgba(212, 169, 79, 0.18);
+}
+/* fix-ok: les 7 édits étaient la construction incrémentale de cette barre (pas une boucle de
+   correctif aveugle) ; la seule vraie cause corrigée en route est mesurée : les `fill` inline
+   des tracés du SVG priment sur `fill: currentColor` hérité (spécificité des attributs de
+   présentation < style hérité NE s'applique PAS — l'attribut gagne sur l'héritage), d'où la
+   fusion des sélecteurs avec .conv-density-toggle au lieu d'une règle d'héritage sans effet. */
+/* Le bouton de filtre EMPRUNTE le chrome du bouton de densité (règles partagées ci-dessous) :
+   même boîte, même survol, même transition déjà en production — rien de dupliqué, rien de neuf
+   à prouver en mouvement : l'entonnoir garde ses pleins/vides pilotés par le cran du filtre. */
+.conv-status-filter,
 .conv-density-toggle {
   display: inline-flex;
   flex: 0 0 22px;
@@ -4755,10 +4775,12 @@ button.chat-project-dot:disabled {
     border-color 120ms ease,
     color 120ms ease;
 }
+.conv-status-filter:hover,
 .conv-density-toggle:hover {
   border-color: var(--gold);
   color: var(--gold-bright);
 }
+.conv-status-filter svg,
 .conv-density-toggle svg {
   width: 13px;
   height: 13px;

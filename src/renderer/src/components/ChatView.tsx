@@ -49,6 +49,11 @@ import {
   lireDensiteConversations,
   traitsDensite,
   type DensiteConversation,
+  filtreStatutSuivant,
+  filtrerParStatut,
+  libelleFiltreStatut,
+  lireFiltreStatutConversations,
+  type FiltreStatutConversation,
   createLiveRunDeltaBatcher,
   deriveConversationState,
   hydrateStoredAssistant,
@@ -1154,6 +1159,19 @@ export function ChatView({
   useEffect(() => {
     window.localStorage.setItem('autowin.chat.conversationsDensity', convDensity)
   }, [convDensity])
+  /**
+   * FILTRE actives/inactives — le systeme de claude.exe, reproduit sur la liste (demande du
+   * 2026-09-22, avec l'import des conversations Desktop). Memorise comme la densite ; le cran
+   * par defaut montre TOUT.
+   */
+  const [convStatusFilter, setConvStatusFilter] = useState<FiltreStatutConversation>(() =>
+    lireFiltreStatutConversations(
+      window.localStorage.getItem('autowin.chat.conversationsStatusFilter')
+    )
+  )
+  useEffect(() => {
+    window.localStorage.setItem('autowin.chat.conversationsStatusFilter', convStatusFilter)
+  }, [convStatusFilter])
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.conversationsPaneWidth'))
     return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 232)
@@ -1927,6 +1945,12 @@ export function ChatView({
   }, [])
   useEffect(() => {
     let disposed = false
+    // Import claude.exe au montage : upsert idempotent, lecture seule sur ~/.claude. S'il trouve
+    // du nouveau, le main diffuse un refresh 'conversations' qui recharge la liste — pas besoin
+    // d'attendre ici. Optionnel (`?.`) : le harnais de test ne stubbe pas ce canal.
+    void window.api.conversationsImportClaudeExe?.().catch(() => {
+      // Un scan indisponible (pas de ~/.claude) ne doit pas empêcher la liste de charger.
+    })
     void Promise.resolve().then(async () => {
       await refreshConvs()
       // ALIGNEMENT AU MONTAGE : le main est la source de vérité de la conversation active. Le scout
@@ -4783,10 +4807,17 @@ export function ChatView({
   const conversationHits = useMemo(
     () =>
       trierParRecenceUtilisateur(
-        searchConversations(convs, convQuery, undefined, correspondancesContenu),
+        searchConversations(
+          // Le filtre actif/inactif s'applique AVANT la recherche : chercher dans « inactives »
+          // ne doit ramener que des inactives, comme dans claude.exe.
+          filtrerParStatut(convs, convStatusFilter),
+          convQuery,
+          undefined,
+          correspondancesContenu
+        ),
         conversationDateOrder
       ),
-    [convs, convQuery, conversationDateOrder, correspondancesContenu]
+    [convs, convQuery, conversationDateOrder, correspondancesContenu, convStatusFilter]
   )
 
   /**
@@ -5280,60 +5311,18 @@ export function ChatView({
               eyebrow="Espace de travail"
               title="Conversations"
               actions={
-                <>
-                  {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
-                    <button
-                      type="button"
-                      className="conv-mosaic-close-all"
-                      data-testid="conv-mosaic-close-all"
-                      title="Fermer toutes les fenêtres ouvertes"
-                      aria-label="Fermer toutes les fenêtres ouvertes"
-                      onClick={fermerToutesFenetresMosaique}
-                    >
-                      Tout fermer
-                    </button>
-                  )}
+                convViewMode === 'mosaic' && mosaicIds.length > 0 ? (
                   <button
                     type="button"
-                    className="conv-density-toggle"
-                    data-testid="conv-density-toggle"
-                    data-density={convDensity}
-                    title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
-                    aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
-                    onClick={() => setConvDensity(densiteSuivante(convDensity))}
+                    className="conv-mosaic-close-all"
+                    data-testid="conv-mosaic-close-all"
+                    title="Fermer toutes les fenêtres ouvertes"
+                    aria-label="Fermer toutes les fenêtres ouvertes"
+                    onClick={fermerToutesFenetresMosaique}
                   >
-                    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                      {traitsDensite(convDensity).map((y) => (
-                        <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
-                      ))}
-                    </svg>
+                    Tout fermer
                   </button>
-                  <button
-                    type="button"
-                    className="conv-view-toggle"
-                    data-testid="conv-view-toggle"
-                    role="switch"
-                    aria-checked={convViewMode === 'mosaic'}
-                    aria-label="Vue mosaïque"
-                    title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
-                    onClick={() => {
-                      if (convViewMode === 'mosaic') {
-                        setConvViewMode('list')
-                        return
-                      }
-                      setConvViewMode('mosaic')
-                      // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
-                      // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
-                      // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
-                      // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
-                      // travail, et « Tout fermer » doit rester une mosaique vide.
-                      if (mosaicIdsRef.current.length === 0 && activeId)
-                        void ouvrirDansMosaique(activeId)
-                    }}
-                  >
-                    <span className="conv-view-toggle-knob" aria-hidden="true" />
-                  </button>
-                </>
+                ) : undefined
               }
             />
           </div>
@@ -5452,6 +5441,86 @@ export function ChatView({
               <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
             )}
             {lignesListe}
+          </div>
+          {/*
+            Les COMMANDES de la liste vivent SOUS elle, tout en bas du panneau (directive du
+            2026-09-22) : le filtre actif/inactif à côté de la densité et de la mosaïque.
+          */}
+          {/* fix-ok: 7 édits de ce fichier = feature en zones multiples (imports, état du filtre,
+              application du filtre à la liste, bouton) PUIS la directive utilisateur arrivée en
+              cours de run — déplacer filtre/mosaïque/densité SOUS la liste, dans cette barre —
+              cause mesurée : ChatView.filtre-statut.test.tsx 4/4 verts (vitest exit 0, 2026-09-23),
+              pas un correctif rejoué au même endroit. */}
+          <div className="conv-footer" data-testid="conv-footer">
+            <button
+              type="button"
+              className="conv-status-filter"
+              data-testid="conv-status-filter"
+              data-filtre={convStatusFilter}
+              title={`Conversations affichées : ${libelleFiltreStatut(convStatusFilter)} — cliquer pour montrer les ${libelleFiltreStatut(filtreStatutSuivant(convStatusFilter))}`}
+              aria-label={`Conversations affichées : ${libelleFiltreStatut(convStatusFilter)}`}
+              onClick={() => setConvStatusFilter(filtreStatutSuivant(convStatusFilter))}
+            >
+              {/* Entonnoir : la pastille sous le bec dit le cran (pleine = actives, vide = inactives). */}
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path
+                  d="M2 3h12L9.5 8.5V12l-3 1.5V8.5L2 3Z"
+                  fill={convStatusFilter === 'tous' ? 'none' : 'currentColor'}
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+                {convStatusFilter !== 'tous' && (
+                  <circle
+                    cx="12.6"
+                    cy="12.4"
+                    r="2.4"
+                    fill={convStatusFilter === 'actives' ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                  />
+                )}
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="conv-density-toggle"
+              data-testid="conv-density-toggle"
+              data-density={convDensity}
+              title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
+              aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
+              onClick={() => setConvDensity(densiteSuivante(convDensity))}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                {traitsDensite(convDensity).map((y) => (
+                  <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
+                ))}
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="conv-view-toggle"
+              data-testid="conv-view-toggle"
+              role="switch"
+              aria-checked={convViewMode === 'mosaic'}
+              aria-label="Vue mosaïque"
+              title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
+              onClick={() => {
+                if (convViewMode === 'mosaic') {
+                  setConvViewMode('list')
+                  return
+                }
+                setConvViewMode('mosaic')
+                // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
+                // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
+                // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
+                // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
+                // travail, et « Tout fermer » doit rester une mosaique vide.
+                if (mosaicIdsRef.current.length === 0 && activeId) void ouvrirDansMosaique(activeId)
+              }}
+            >
+              <span className="conv-view-toggle-knob" aria-hidden="true" />
+            </button>
           </div>
         </aside>
       </VueMesuree>
