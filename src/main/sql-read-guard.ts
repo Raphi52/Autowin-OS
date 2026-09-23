@@ -569,6 +569,35 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
   if (/\binto\b/.test(normalise)) {
     return { allowed: false, reason: 'Clause INTO interdite : elle créerait une table.' }
   }
+  if (database.toLowerCase() === 'commun_rig') {
+    const secret = secretColumnViolation(sansLitteraux)
+    if (secret) return { allowed: false, reason: secret }
+  }
 
   return { allowed: true, server, database, query }
+}
+
+/**
+ * Colonnes SECRÈTES de `COMMUN_RIG` — la base commune porte des mots de passe et des clés
+ * (`GRF_PWD_BD`, `GRF_INFOGREFFE_PASSWORD`, `GRF_DOCVERIF_PASSWORD`, `GRF_WS_IDNUM_CLEF_API`).
+ * Décision utilisateur du 2026-09-23 (conv-113) : la base est lisible, mais toute requête qui NOMME
+ * une colonne de ce type, ou qui utilise `*` (qui les ramènerait sans les nommer), est refusée.
+ * Motif cherché en SOUS-CHAÎNE d'identifiant, sur la forme qui conserve le contenu des `[…]` et
+ * vide les littéraux (chercher `'GRF_PWD_BD'` comme valeur dans `sys.columns` reste permis : c'est
+ * un nom, pas le secret). LIMITE ASSUMÉE : une vue qui renommerait une colonne secrète sans ces mots
+ * échapperait au motif ; aucune n'est connue.
+ */
+const SECRET_COLUMN_PATTERN =
+  /(pwd|passw|mot_?de_?passe|mdp|secret|clef|cle_api|api_?key|apikey|token|jeton|credential)/
+
+function secretColumnViolation(stripped: StrippedQuery): string | undefined {
+  const sansCount = stripped.masked.replace(/\bcount(?:_big)?\s*\(\s*\*\s*\)/gi, 'count(1)')
+  if (sansCount.includes('*')) {
+    return 'COMMUN_RIG : « * » interdit (il ramènerait les colonnes de mots de passe) — nomme les colonnes voulues. COUNT(*) reste permis.'
+  }
+  const trouve = stripped.named.toLowerCase().match(SECRET_COLUMN_PATTERN)
+  if (trouve) {
+    return `COMMUN_RIG : colonne secrète interdite (motif « ${trouve[1]} ») — mots de passe et clés ne sont pas lisibles.`
+  }
+  return undefined
 }

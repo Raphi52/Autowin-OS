@@ -1179,7 +1179,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'sql_query',
     description:
-      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seuls les greffes EXPLOITÉS sont lisibles (la liste vient de COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) : les maquettes, copies figées et bases de formation sont refusées. Toute écriture est refusée avant d’atteindre le serveur.',
+      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seuls les greffes EXPLOITÉS sont lisibles (la liste vient de COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) : les maquettes, copies figées et bases de formation sont refusées. La base commune COMMUN_RIG (SQL-PROD\\PROD) est AUSSI lisible — ex. la liste des greffes exploités : SELECT GRF_NOMBASE_BD, GRF_SERVEUR_BD FROM dbo.GREFFE WHERE GRF_IS_EXPLOIT = 1 — mais « * » et toute colonne de mot de passe ou de clé y sont refusés. Toute écriture est refusée avant d’atteindre le serveur.',
     args: {
       query: 'un SELECT unique, sans point-virgule ni commentaire (obligatoire)',
       database: 'la base greffe visée, ex. RIG_AMIENS (obligatoire)',

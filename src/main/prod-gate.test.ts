@@ -252,3 +252,62 @@ describe('niveau confirmation', () => {
     expect(porte('aucun').etat()).toMatchObject({ active: false, niveau: 'aucun' })
   })
 })
+
+describe('accord groupé des lectures (conv-113, 2026-09-23)', () => {
+  const AUTORITE2 = construireAutoriteProd([
+    { nature: 'base', nom: 'RIG_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+    { nature: 'base', nom: 'RIG_LYON', classe: 'prod', motif: 'greffe exploité' }
+  ])
+  function porteHorloge(niveau: 'confirmation' | 'phrase' = 'confirmation') {
+    const temps = { t: 0 }
+    const p = new PorteProd({
+      autorite: () => AUTORITE2,
+      coffre: () => new CoffreAutorisationProd(EMPREINTE),
+      phraseDefinie: () => true,
+      niveau: () => niveau,
+      maintenant: () => temps.t
+    })
+    return { p, temps }
+  }
+  const lecture = (nom: string, conversationId?: string) => ({
+    nature: 'base' as const,
+    nom,
+    operation: 'sql-read',
+    ...(conversationId ? { conversationId } : {})
+  })
+
+  it('UNE confirmation couvre les lectures suivantes du même fil, sur les autres greffes', () => {
+    const { p } = porteHorloge()
+    expect(p.verifier(lecture('RIG_AMIENS', 'conv-1')).autorise).toBe(false)
+    expect(p.verifier({ ...lecture('RIG_AMIENS', 'conv-1'), confirme: true }).autorise).toBe(true)
+    expect(p.verifier(lecture('RIG_LYON', 'conv-1')).autorise).toBe(true)
+  })
+
+  it('ne couvre PAS une autre conversation, ni un geste sans conversation', () => {
+    const { p } = porteHorloge()
+    p.verifier({ ...lecture('RIG_AMIENS', 'conv-1'), confirme: true })
+    expect(p.verifier(lecture('RIG_LYON', 'conv-2')).autorise).toBe(false)
+    expect(p.verifier(lecture('RIG_LYON')).autorise).toBe(false)
+  })
+
+  it('ne couvre PAS un client SQL lancé par run (peut écrire)', () => {
+    const { p } = porteHorloge()
+    p.verifier({ nature: 'base', nom: 'RIG_AMIENS', operation: 'run-sqlcmd', conversationId: 'conv-1', confirme: true })
+    expect(
+      p.verifier({ nature: 'base', nom: 'RIG_LYON', operation: 'run-sqlcmd', conversationId: 'conv-1' }).autorise
+    ).toBe(false)
+  })
+
+  it('expire après la durée bornée', () => {
+    const { p, temps } = porteHorloge()
+    p.verifier({ ...lecture('RIG_AMIENS', 'conv-1'), confirme: true })
+    temps.t = 15 * 60_000 + 1
+    expect(p.verifier(lecture('RIG_LYON', 'conv-1')).autorise).toBe(false)
+  })
+
+  it('ne s’applique pas au niveau phrase de passe', () => {
+    const { p } = porteHorloge('phrase')
+    p.verifier({ ...lecture('RIG_AMIENS', 'conv-1'), confirme: true })
+    expect(p.verifier(lecture('RIG_LYON', 'conv-1')).autorise).toBe(false)
+  })
+})

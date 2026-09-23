@@ -45,7 +45,25 @@ export interface GesteProd {
    * chemin, il ne peut pas le poser dans les arguments d'un outil.
    */
   confirme?: boolean
+  /**
+   * La conversation d'où part le geste. Sert à l'ACCORD GROUPÉ : une lecture confirmée une fois vaut
+   * pour les lectures suivantes du même fil pendant `DUREE_ACCORD_LECTURE_MS` (demande du
+   * 2026-09-23, conv-113 : 39 greffes = 39 fenêtres pour une même requête répétée).
+   */
+  conversationId?: string
 }
+
+/**
+ * Durée de l'accord groupé. Bornée : l'accord couvre une série de lectures qui s'enchaînent, pas le
+ * reste de la journée.
+ */
+export const DUREE_ACCORD_LECTURE_MS = 15 * 60_000
+
+/**
+ * Seules les LECTURES garanties par `sql_query` (enveloppe ROLLBACK, garde lecture seule) profitent de
+ * l'accord groupé. Un client SQL lancé par `run` peut écrire : il garde une confirmation par geste.
+ */
+const OPERATIONS_GROUPABLES = new Set(['sql-read'])
 
 export type VerdictPorte =
   | { autorise: true }
@@ -67,6 +85,8 @@ export interface PorteProdPorts {
   phraseDefinie(): boolean
   /** Le niveau de protection choisi par l'utilisateur. Défaut : `confirmation`. */
   niveau(): NiveauProtectionProd
+  /** Horloge injectable pour les tests. */
+  maintenant?(): number
 }
 
 /** Identifiant lisible d'une cible, utilisé dans les jetons et à l'écran. */
@@ -75,7 +95,19 @@ export function nommerCible(cible: Cible): string {
 }
 
 export class PorteProd {
+  /** Accords groupés vivants : `conversation|opération` → échéance. En mémoire seulement. */
+  private readonly accords = new Map<string, number>()
+
   constructor(private readonly ports: PorteProdPorts) {}
+
+  private cleAccord(geste: GesteProd): string | undefined {
+    if (!geste.conversationId || !OPERATIONS_GROUPABLES.has(geste.operation)) return undefined
+    return `${geste.conversationId}|${geste.operation}`
+  }
+
+  private horloge(): number {
+    return this.ports.maintenant?.() ?? Date.now()
+  }
 
   /** Ce que l'interface peut afficher pour dire si la protection tourne ou dort. */
   etat(): { active: boolean; niveau: NiveauProtectionProd; raison: string } {
@@ -144,9 +176,18 @@ export class PorteProd {
     })
 
     if (niveau === 'confirmation') {
-      return geste.confirme === true
-        ? { autorise: true }
-        : refus(`${verdict.raison} Confirmation requise avant d'agir sur cette cible.`)
+      const cle = this.cleAccord(geste)
+      if (geste.confirme === true) {
+        // Le clic réel ouvre l'accord groupé pour ce fil et cette opération.
+        if (cle) this.accords.set(cle, this.horloge() + DUREE_ACCORD_LECTURE_MS)
+        return { autorise: true }
+      }
+      const echeance = cle ? this.accords.get(cle) : undefined
+      if (echeance !== undefined) {
+        if (echeance > this.horloge()) return { autorise: true }
+        this.accords.delete(cle as string)
+      }
+      return refus(`${verdict.raison} Confirmation requise avant d'agir sur cette cible.`)
     }
 
     if (!geste.jeton) {
