@@ -1,5 +1,7 @@
 import type { GitReadResult, GitDiffResult } from '../../shared/git-read'
+import { execFile } from 'node:child_process'
 import { resolve } from 'node:path'
+import { promisify } from 'node:util'
 import { readGitDiff, readGitState } from '../git-read-main'
 import {
   captureWorkspaceMutationSnapshot,
@@ -9,6 +11,23 @@ import {
   readCurrentConversationPathOwnership,
   workspaceTracePathKey
 } from './conversation-file-trace-spool'
+
+/**
+ * Diff du DERNIER commit qui a touché `path` (lecture seule : `git log`). Sert au fichier de la
+ * conversation déjà commité, que `git status` ne montre plus. Vide = fichier jamais commité.
+ */
+async function readLastCommitDiff(cwd: string, path: string): Promise<string> {
+  try {
+    const r = await promisify(execFile)(
+      'git',
+      ['log', '-1', '-p', '--no-color', '--format=', '--', path],
+      { cwd, windowsHide: true }
+    )
+    return r.stdout
+  } catch {
+    return ''
+  }
+}
 
 function workspaceRootKey(path: string): string {
   const normalized = resolve(path).replaceAll('\\', '/').replace(/\/+$/, '')
@@ -56,18 +75,35 @@ export async function readConversationGitState(
             ] as const)
           )
         )
-        return git.state.changes
-          .filter((change) => {
-            const key = workspaceTracePathKey(change.path)
-            const attribution = expected.get(key)
-            return (
-              Boolean(attribution?.fingerprint) &&
-              Boolean(attribution?.generationMarker) &&
-              currentFingerprints.get(key) === attribution?.fingerprint &&
-              currentGenerationMarkers.get(key) === attribution?.generationMarker
-            )
-          })
+        const stillOwned = (key: string, committed = false): boolean => {
+          const attribution = expected.get(key)
+          return (
+            Boolean(attribution?.fingerprint) &&
+            Boolean(attribution?.generationMarker) &&
+            // fix-ok: l'empreinte hache le diff contre HEAD, un commit la change par construction ;
+            // pour un fichier commité (absent de git status), le marqueur physique seul fait foi.
+            (committed || currentFingerprints.get(key) === attribution?.fingerprint) &&
+            currentGenerationMarkers.get(key) === attribution?.generationMarker
+          )
+        }
+        const pending = git.state.changes
+          .filter((change) => stillOwned(workspaceTracePathKey(change.path)))
           .map((change) => ({ ...change, workspaceRoot }))
+        // Cause du « Fichiers » vide : la liste ne venait QUE de git status, donc un fichier de la
+        // conversation disparaissait dès son commit. Même contrôle d'attribution, source élargie.
+        const inStatus = new Set(git.state.changes.map((change) => workspaceTracePathKey(change.path)))
+        const committed = (
+          await Promise.all(
+            [...expected.entries()]
+              .filter(([key]) => !inStatus.has(key) && stillOwned(key, true))
+              .map(async ([, item]) =>
+                (await readLastCommitDiff(workspaceRoot, item.path)).trim()
+                  ? [{ path: item.path, status: 'committed' as const, staged: false, workspaceRoot }]
+                  : []
+              )
+          )
+        ).flat()
+        return [...pending, ...committed]
       })
     )
   ).flat()
@@ -109,11 +145,16 @@ export async function readConversationGitDiff(
     ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
   )?.[1]
   if (
-    !currentPath ||
-    currentFingerprint !== ownership.fingerprint ||
+    (currentPath !== undefined && currentFingerprint !== ownership.fingerprint) ||
     currentGenerationMarker !== ownership.generationMarker
   ) {
     return { available: false, error: 'Le diff courant appartient à une autre action.' }
+  }
+  if (!currentPath) {
+    const diff = await readLastCommitDiff(ownership.workspaceRoot, ownership.path)
+    return diff.trim()
+      ? { available: true, diff }
+      : { available: false, error: 'Aucun changement git pour ce fichier.' }
   }
   return readGitDiff(ownership.workspaceRoot, currentPath)
 }
