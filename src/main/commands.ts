@@ -4906,7 +4906,12 @@ export class AppCommandBus {
         : await this.retrieveBrain(decision.query, { corpus })
     // MEME PORTEE que la voie poussee : le contexte, le statut et la navigation sont projetés ensemble.
     const scoped = scopeBrainRetrieval(brain, corpus)
-    const outcome = buildBrainOutcome(decision.query, scoped.context, scoped.status)
+    const outcome = buildBrainOutcome(
+      decision.query,
+      scoped.context,
+      scoped.status,
+      scoped.unavailableReason
+    )
     if (conversationId) {
       appendBrainTrace({
         timestamp: new Date().toISOString(),

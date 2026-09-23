@@ -1,4 +1,4 @@
-import type { BrainRetrievalStatus } from './brain-retrieval'
+import type { BrainRetrievalStatus, BrainUnavailableReason } from './brain-retrieval'
 
 /**
  * COMMANDE `brain_query` — interroger le savoir CURE a la demande.
@@ -88,13 +88,49 @@ export interface BrainQueryOutcome {
   status: BrainRetrievalStatus | 'not-requested'
   /** Renseigné quand rien n'est rendu : le serveur est absent, ou le savoir ne couvre pas la question. */
   note?: string
+  /** LAQUELLE des causes d'indisponibilité s'est produite — pour ne pas rediagnostiquer à l'aveugle. */
+  unavailableReason?: BrainUnavailableReason
+}
+
+/**
+ * LAQUELLE des causes, pas six hypotheses. `retrieveBrain` sait deja laquelle s'est produite
+ * (brain-retrieval.ts) ; sans ce relais la note restait generique et l'agent rediagnostiquait a
+ * l'aveugle un serveur parfois SAIN (mesure du 2026-09-23 : `npm run brain:doctor` repondait
+ * « CANAL UTILISABLE » pendant que `brain_query` annoncait une panne).
+ */
+const CAUSES_INDISPONIBLE: Record<BrainUnavailableReason, string> = {
+  'no-token':
+    "cause exacte : aucun jeton de service lisible, aucun jeton n'a ete lu donc aucune requete n'est partie " +
+    "- le reglage BRAIN_TOKEN manque a l'app (le recharger a chaud plutot que redemarrer)",
+  'empty-query': 'cause exacte : la requete etait vide, rien n’a ete envoye',
+  'challenge-refused':
+    'cause exacte : le serveur est vivant mais a refuse d’ouvrir la session (GET /challenge non-ok)',
+  'query-refused':
+    'cause exacte : le serveur a refuse la requete (POST /query-secure non-ok : jeton rejete ou index degrade)',
+  network: 'cause exacte : rien n’a repondu (serveur arrete, delai depasse ou reseau)',
+  'test-mode':
+    'neutralisation sous test : ce n’est PAS une panne reelle, aucune reparation n’est attendue ici'
+}
+
+const PANNE_GENERIQUE =
+  'service Brain indisponible - ne pas conclure que la reponse est negative. ' +
+  "C'est une PANNE a reparer, pas une reponse : relancer la MEME question a l'identique " +
+  'ne servira a rien. Diagnostique le serveur Brain (process, port, protocole, journal), ' +
+  'repare-le, puis rejoue la question - et ne rends la main sur une autre source ' +
+  "qu'apres avoir dit ce que tu as essaye."
+
+function noteIndisponible(reason?: BrainUnavailableReason): string {
+  if (reason === 'test-mode') return CAUSES_INDISPONIBLE['test-mode']
+  if (!reason) return PANNE_GENERIQUE
+  return `${CAUSES_INDISPONIBLE[reason]}. ${PANNE_GENERIQUE}`
 }
 
 /** Compose la réponse, en distinguant « rien trouvé » d'une panne (l'agent doit pouvoir le dire). */
 export function buildBrainOutcome(
   query: string,
   context: string,
-  status: BrainRetrievalStatus = context.trim() ? 'found' : 'unavailable'
+  status: BrainRetrievalStatus = context.trim() ? 'found' : 'unavailable',
+  unavailableReason?: BrainUnavailableReason
 ): BrainQueryOutcome {
   const knowledge = capBrainResult(context)
   const effectiveStatus: BrainRetrievalStatus = knowledge || status !== 'found' ? status : 'empty'
@@ -110,17 +146,14 @@ export function buildBrainOutcome(
             // (traces status=unavailable), puis s'est rabattu sur d'autres sources et a rendu la
             // main. Il a fallu que l'utilisateur ordonne la reparation. La note porte desormais le
             // geste attendu.
-            'service Brain indisponible - ne pas conclure que la reponse est negative. ' +
-            "C'est une PANNE a reparer, pas une reponse : relancer la MEME question a l'identique " +
-            'ne servira a rien. Diagnostique le serveur Brain (process, port, protocole, journal), ' +
-            'repare-le, puis rejoue la question - et ne rends la main sur une autre source ' +
-            "qu'apres avoir dit ce que tu as essaye."
+            noteIndisponible(unavailableReason)
     return {
       found: false,
       query,
       knowledge: '',
       status: effectiveStatus,
-      note
+      note,
+      ...(unavailableReason ? { unavailableReason } : {})
     }
   }
   return { found: true, query, knowledge, status: 'found' }
