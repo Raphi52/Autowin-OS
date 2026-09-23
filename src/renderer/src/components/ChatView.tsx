@@ -1002,6 +1002,12 @@ export function ChatView({
   const convFolderMenuRef = useRef<HTMLDivElement | null>(null)
   const [convFolderMenu, setConvFolderMenu] = useState<{
     conv: Conv | null
+    /**
+     * LOT de conversations cochées (mode sélection). Champ DISTINCT de `conv` : `conv: null` veut
+     * déjà dire « dossier du prochain fil » (voir `choisirDossier`) ; coder le lot par `null`
+     * rangerait en silence le prochain fil au lieu des conversations cochées.
+     */
+    ids?: string[]
     top: number
     left: number
     /**
@@ -5028,6 +5034,28 @@ export function ChatView({
     [rangerDans, memoriserDossier]
   )
   /**
+   * Aiguillage du menu de rangement : un LOT (mode sélection) est rangé conversation par
+   * conversation par le même canal que `rangerDans`, puis la liste n'est relue qu'UNE fois.
+   * Sans lot, c'est `choisirDossier` inchangé.
+   */
+  const appliquerRangement = useCallback(
+    (menu: { conv: Conv | null; ids?: string[] }, chemin: string | null): void => {
+      if (!menu.ids) {
+        choisirDossier(menu.conv, chemin)
+        return
+      }
+      const ids = menu.ids
+      void (async () => {
+        if (chemin) memoriserDossier(chemin)
+        for (const id of ids) await window.api.conversationsSetProject?.(id, chemin)
+        setConvSelectionMode(false)
+        setSelectedConvIds(new Set())
+        await refreshConvs()
+      })()
+    },
+    [choisirDossier, memoriserDossier, refreshConvs]
+  )
+  /**
    * AMORCAGE unique : au tout premier chargement, la memoire est vide alors que des conversations
    * sont deja rangees. On l'amorce avec ces dossiers-la. Ensuite la memoire fait autorite -- sinon
    * un dossier retire par la croix reviendrait tant qu'une conversation le porte encore.
@@ -5478,6 +5506,47 @@ export function ChatView({
               >
                 Supprimer ({selectedConvIds.size})
               </button>
+              {(() => {
+                // Si TOUT le lot est déjà inactif, le geste utile est l'inverse.
+                const lot = convs.filter((c) => selectedConvIds.has(c.id))
+                const toutInactif = lot.length > 0 && lot.every((c) => c.inactive)
+                return (
+                  <button
+                    type="button"
+                    className="conv-date-sort"
+                    data-testid="conv-bulk-inactive"
+                    disabled={selectedConvIds.size === 0}
+                    onClick={() => {
+                      const ids = [...selectedConvIds]
+                      quitterModeSelection()
+                      void (async () => {
+                        for (const id of ids) await marquerInactive(id, !toutInactif)
+                      })()
+                    }}
+                  >
+                    {toutInactif ? 'Marquer comme active' : 'Marquer comme inactive'}
+                  </button>
+                )
+              })()}
+              <button
+                type="button"
+                className="conv-date-sort"
+                data-testid="conv-bulk-category"
+                disabled={selectedConvIds.size === 0}
+                onClick={(event) => {
+                  const r = event.currentTarget.getBoundingClientRect()
+                  setSaisieCategorie(null)
+                  setConvFolderMenu({
+                    conv: null,
+                    ids: [...selectedConvIds],
+                    top: r.bottom + 4,
+                    left: r.left,
+                    mode: 'categorie'
+                  })
+                }}
+              >
+                Ranger dans une catégorie…
+              </button>
             </div>
           )}
           {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor.
@@ -5869,10 +5938,10 @@ export function ChatView({
                     data-project-path={defaultWorkspace.trim()}
                     title={defaultWorkspace.trim()}
                     onClick={() => {
-                      const conv = convFolderMenu.conv
+                      const menu = convFolderMenu
                       const repli = defaultWorkspace.trim()
                       setConvFolderMenu(null)
-                      choisirDossier(conv, repli)
+                      appliquerRangement(menu, repli)
                     }}
                   >
                     <span className="conv-menu-ic" aria-hidden="true">
@@ -5892,9 +5961,9 @@ export function ChatView({
                       data-testid="conv-project-choice"
                       data-project-path={chemin}
                       onClick={() => {
-                        const conv = convFolderMenu.conv
+                        const menu = convFolderMenu
                         setConvFolderMenu(null)
-                        choisirDossier(conv, chemin)
+                        appliquerRangement(menu, chemin)
                       }}
                     >
                       <span className="conv-menu-ic" aria-hidden="true">
@@ -5924,10 +5993,10 @@ export function ChatView({
                   role="menuitem"
                   data-testid="conv-project-pick"
                   onClick={() => {
-                    const conv = convFolderMenu.conv
+                    const menu = convFolderMenu
                     setConvFolderMenu(null)
                     void window.api.pickGitRepo?.().then((chemin) => {
-                      if (chemin) choisirDossier(conv, chemin)
+                      if (chemin) appliquerRangement(menu, chemin)
                     })
                   }}
                 >
@@ -5954,10 +6023,10 @@ export function ChatView({
                   data-testid="conv-category-choice"
                   data-category={libelle}
                   onClick={() => {
-                    const conv = convFolderMenu.conv
+                    const menu = convFolderMenu
                     setConvFolderMenu(null)
                     setSaisieCategorie(null)
-                    choisirDossier(conv, libelle)
+                    appliquerRangement(menu, libelle)
                   }}
                 >
                   <span className="conv-menu-ic" aria-hidden="true">
@@ -5994,10 +6063,10 @@ export function ChatView({
                     if (event.key !== 'Enter') return
                     const libelle = saisieCategorie.trim()
                     if (!libelle) return
-                    const conv = convFolderMenu.conv
+                    const menu = convFolderMenu
                     setSaisieCategorie(null)
                     setConvFolderMenu(null)
-                    choisirDossier(conv, libelle)
+                    appliquerRangement(menu, libelle)
                   }}
                 />
               )}

@@ -3633,6 +3633,7 @@ button.chat-project-dot:disabled {
 /* Purge en lot : la barre n'occupe une ligne que dans la barre latérale, au-dessus de la liste. */
 .conv-bulk-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 0 var(--s2) 4px;
 }
