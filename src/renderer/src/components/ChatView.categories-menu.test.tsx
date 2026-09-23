@@ -48,12 +48,10 @@ describe('ChatView — classer une conversation par categorie', () => {
     const conversationsSetProject = vi.fn().mockResolvedValue('Fiches Team')
     harness = await mountChat(
       chatApi({
-        conversations: vi
-          .fn()
-          .mockResolvedValue([
-            { ...conversation('A'), categorie: 'Fiches Team' },
-            { ...conversation('B'), categorie: 'archives' }
-          ]),
+        conversations: vi.fn().mockResolvedValue([
+          { ...conversation('A'), categorie: 'Fiches Team' },
+          { ...conversation('B'), categorie: 'archives' }
+        ]),
         conversationsSetProject
       })
     )
@@ -76,12 +74,10 @@ describe('ChatView — classer une conversation par categorie', () => {
   it('ne melange PAS les repertoires de travail aux categories', async () => {
     harness = await mountChat(
       chatApi({
-        conversations: vi
-          .fn()
-          .mockResolvedValue([
-            { ...conversation('A'), categorie: 'Fiches Team' },
-            { ...conversation('B'), projectPath: 'D:\\GIT\\RigApplication' }
-          ])
+        conversations: vi.fn().mockResolvedValue([
+          { ...conversation('A'), categorie: 'Fiches Team' },
+          { ...conversation('B'), projectPath: 'D:\\GIT\\RigApplication' }
+        ])
       })
     )
 
@@ -143,5 +139,37 @@ describe('ChatView — classer une conversation par categorie', () => {
     })
 
     expect(conversationsSetProject).toHaveBeenCalledWith('A', 'Factures')
+  })
+
+  it('liste AUSSI les dossiers de conversations (conv-815)', async () => {
+    // Sans libelle libre, le menu etait vide alors que la barre laterale groupe par dossier.
+    const conversationsSetProject = vi.fn().mockResolvedValue('D:/AutoWinOS')
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([
+          { ...conversation('A'), projectPath: 'D:/AutoWinOS' },
+          { ...conversation('B'), projectPath: 'D:/RigV3Desktop' }
+        ]),
+        conversationsSetProject
+      })
+    )
+
+    await ouvrirMenuRangement(harness)
+
+    const dossiers = [
+      ...document.querySelectorAll('[data-testid="conv-category-folder-choice"]')
+    ].map((bouton) => bouton.getAttribute('data-project-path'))
+    // Le menu rend les chemins sous leur forme Windows normalisee.
+    expect(dossiers).toContain('D:\\AutoWinOS')
+    expect(dossiers).toContain('D:\\RigV3Desktop')
+
+    await act(async () => {
+      document
+        .querySelector<HTMLElement>(
+          '[data-testid="conv-category-folder-choice"][title$="RigV3Desktop"]'
+        )!
+        .click()
+    })
+    expect(conversationsSetProject).toHaveBeenCalledWith('A', 'D:\\RigV3Desktop')
   })
 })
