@@ -2639,9 +2639,23 @@ export class AppCommandBus {
          * REUTILISANT le dernier fait connu au lieu d'inventer une seconde verite.
          */
         let dernierSigneDeVie: string | undefined
+        /**
+         * LA PHASE EN COURS, gardee a part du dernier fait.
+         *
+         * DEFAUT MESURE le 2026-09-16 (conv-63, run c295e4061094) : releve du DOM de l'app reelle
+         * pendant que l'utilisateur demandait « la conv semble a l'arret ? », le battement affichait
+         * « 23 min 53 s · Bash · cd "C:/…/agent__run-c295e4061094-1" && cp /tmp/pee… ». Il TOURNAIT
+         * donc, mais la seule source qui l'alimentait etait la note d'outil : la moindre commande
+         * Bash ECRASE le nom de la phase, et trois phases se sont succede sans jamais etre nommees.
+         * Les deux faits ne se remplacent pas — « ou en est-on » et « que fait-il a l'instant » —,
+         * on les garde donc dans deux variables au lieu d'une.
+         */
+        let phaseCourante: string | undefined
         const battementOrchestration = onProgress
           ? setInterval(() => {
-              onProgress(battementDOrchestration(dernierSigneDeVie, Date.now() - debutRun))
+              onProgress(
+                battementDOrchestration(dernierSigneDeVie, Date.now() - debutRun, phaseCourante)
+              )
             }, VERIFY_BATTEMENT_MS)
           : undefined
         // Un battement ne doit JAMAIS retenir la fermeture du process : le timer suit le run.
@@ -2835,6 +2849,24 @@ export class AppCommandBus {
               }
             },
             (phase) => {
+              /*
+               * LE DEBUT DE PHASE ARRIVE ENFIN DANS LE FIL.
+               *
+               * Ce rappel existait deja, mais il ne parlait qu'a la carte du panneau Workflows
+               * (`orchestrate-phase`) et a la trace causale. Le fil, lui, n'apprenait jamais qu'on
+               * passait de `frame` a `build`. On REUTILISE la source existante plutot que d'en
+               * fabriquer une seconde — meme regle que la note d'outil juste en dessous.
+               *
+               * Le dernier fait connu est REMIS A ZERO au passage : garder la derniere commande de
+               * la phase precedente afficherait un fait perime sous le nom de la nouvelle phase.
+               */
+              if (phase.phase) {
+                phaseCourante = phase.phase
+                dernierSigneDeVie = undefined
+                onProgress?.(
+                  battementDOrchestration(undefined, Date.now() - debutRun, phaseCourante)
+                )
+              }
               if (currentRunId) {
                 persistOrchestrationPhaseStart(
                   phase,

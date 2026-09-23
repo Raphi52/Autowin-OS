@@ -7,6 +7,16 @@
  * ni dépendre d'une vraie boîte aux lettres — ce qui serait intestable sur une machine d'intégration.
  */
 
+/**
+ * UNE pièce jointe telle que le script d'instantané la rapporte : son nom et sa taille, jamais son
+ * contenu. L'instantané est relu à chaque rafraîchissement de la tuile, et un PDF de 3,5 Mo par
+ * message le rendrait inutilisable. Pour ouvrir la pièce, on renvoie au message dans Outlook.
+ */
+export interface OutlookRawPiece {
+  nom: string
+  taille: number
+}
+
 /** La forme rendue par `scripts/outlook-local-snapshot.ps1`. */
 export interface OutlookRawMail {
   id: string
@@ -35,6 +45,15 @@ export interface OutlookRawMail {
   corps?: string
   /** `true` pour un message que l'utilisateur a ENVOYE. Sans lui, un fil n'a qu'un seul cote. */
   deMoi?: boolean
+  /**
+   * Les fichiers que le correspondant a joints, images de signature exclues.
+   *
+   * Optionnel, et l'absence n'est PAS « aucune pièce » : relevé du 2026-09-10 sur la vraie boîte,
+   * les 10 messages ENVOYÉS de l'instantané n'ont pas ce champ du tout (seule la boîte de réception
+   * le remplit), et un instantané mis en cache par une version antérieure du script n'en a nulle
+   * part. C'est pourquoi le message affiché, lui, porte TOUJOURS un tableau.
+   */
+  pieces?: OutlookRawPiece[]
 }
 
 export interface OutlookRawEvent {
@@ -89,6 +108,41 @@ export interface MessageInterlocuteur {
    * nettoyé, sinon l'objet du message nettoyé.
    */
   fil: string
+  /**
+   * Les pièces jointes reçues, TOUJOURS un tableau — vide quand il n'y en a pas.
+   *
+   * Jamais `undefined`, à la différence du champ brut : sinon chaque endroit qui les affiche devrait
+   * se protéger de l'absence, et celui qu'on oublierait planterait le rendu du fil. Le tableau est
+   * construit une seule fois, ici, avec les autres règles d'affichage du message.
+   */
+  pieces: PieceJointeRecue[]
+}
+
+/** UNE pièce jointe reçue, prête à afficher. Même forme que la brute, mais garantie nommée. */
+export interface PieceJointeRecue {
+  nom: string
+  taille: number
+}
+
+/**
+ * Les pièces affichables d'un message brut.
+ *
+ * Une pièce sans nom est écartée : elle produirait une ligne vide cliquable dans la bulle, ce qui se
+ * lit comme un défaut d'affichage. La taille est ramenée à un nombre fini positif — le script rend 0
+ * quand Outlook refuse `.Size`, et un `NaN` traverserait jusqu'au texte affiché.
+ */
+export function piecesAffichables(
+  brutes: readonly OutlookRawPiece[] | undefined | null
+): PieceJointeRecue[] {
+  if (!Array.isArray(brutes)) return []
+  const retenues: PieceJointeRecue[] = []
+  for (const piece of brutes) {
+    const nom = (piece?.nom ?? '').trim()
+    if (nom === '') continue
+    const taille = Number(piece?.taille)
+    retenues.push({ nom, taille: Number.isFinite(taille) && taille > 0 ? taille : 0 })
+  }
+  return retenues
 }
 
 export interface Interlocuteur {
@@ -177,7 +231,8 @@ export function groupByInterlocutor(
       nonLu: !deMoi && Boolean(mail.nonLu),
       deMoi,
       auteur: deMoi ? 'moi' : nom || adresse || cle,
-      fil: cleDeFil(mail)
+      fil: cleDeFil(mail),
+      pieces: piecesAffichables(mail.pieces)
     }
     if (existant) {
       existant.messages.push(message)

@@ -2034,6 +2034,67 @@
   color: var(--text-faint);
 }
 
+/* ─── Les pièces jointes REÇUES : sous la bulle, jamais dedans ───────────────────────────────── */
+
+/*
+ * Posées SOUS la bulle et alignées sur elle, pas à l'intérieur : une pièce n'est pas du texte du
+ * message, et dans la bulle elle se lisait comme une dernière ligne du courrier. Le trombone porte
+ * le sens à lui seul, ce qui évite un mot de plus dans une tuile déjà dense.
+ */
+.home-chat__pieces {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 3px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-chat__piece {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  max-width: 100%;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--r1, 8px);
+}
+
+.home-chat__piece::before {
+  content: '📎';
+  flex: none;
+  font-size: 9.5px;
+  opacity: 0.75;
+}
+
+/*
+ * Le nom est TRONQUÉ, jamais replié : un nom de pièce réel fait 70 caractères
+ * (« convocation individuelle - promeom v3_813649364_030920261101128537805.pdf », relevé du
+ * 2026-09-10) et sur trois lignes il repousserait le message suivant hors de la tuile. Le nom
+ * complet reste lisible au survol, par l'attribut `title`.
+ */
+.home-chat__piece-nom {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* La taille ne se comprime PAS : c'est elle qui dit si le document est entier ou n'est qu'un bout. */
+.home-chat__piece-taille {
+  flex: none;
+  font-size: 9.5px;
+  font-style: normal;
+  color: var(--text-faint);
+}
+
+/* Côté « moi », la bulle est à droite : ses pièces suivent, sinon elles pendraient sous le vide. */
+.home-chat__ligne[data-moi='true'] .home-chat__pieces {
+  align-items: flex-end;
+}
+
 /* ─── La réponse : collée en bas, toujours atteignable ───────────────────────────────────────── */
 .home-chat__repondre {
   position: sticky;
@@ -2067,6 +2128,132 @@
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+}
+
+/* ─── Glisser-déposer une pièce jointe (nouveau message) ─────────────────────────────────────── */
+/* La zone de réponse devient la zone de dépôt : c'est là que le fichier tombe, donc c'est là que
+   l'accusé de réception doit s'afficher. Le `position: sticky` du bloc suffit à porter le calque
+   absolu ci-dessous — le repasser en `relative` ici décollerait la zone du bas de la tuile. */
+/*
+ * L'ecran « nouveau message » n'a QUE ce formulaire sous son en-tete. Colle en bas
+ * (`position: sticky`), il ne couvre que la hauteur de ses champs : un fichier lache deux
+ * centimetres plus haut retombe dans le vide, et l'utilisateur revit le defaut qu'il a signale le
+ * 2026-09-08 — « il ne se passe rien quand je le lache ». La cible du glisser GRANDIT donc pour
+ * occuper toute la tuile.
+ */
+.home-chat__nouveau {
+  position: static;
+  flex: 1;
+}
+
+.home-chat__repondre.is-depot {
+  border-top-color: var(--cyan);
+}
+
+/*
+ * L'ecran de REPONSE : la cible du glisser couvre la conversation, pas seulement la barre du bas.
+ *
+ * Meme raison que `.home-chat__nouveau` juste au-dessus, mesuree sur une capture de l'ecran reel le
+ * 2026-09-09 : la barre de reponse est collee en bas et ne fait que la hauteur de ses champs —
+ * environ 70 pixels sur les 520 de la tuile. Un fichier lache sur les messages retomberait dans le
+ * vide. Cette zone enveloppe donc la liste ET la barre.
+ *
+ * `flex: 1` + `min-height: 0` reprennent exactement ce que faisait la liste quand elle etait fille
+ * directe de `.home-inter` : sans `min-height: 0`, un fil long deborderait au lieu de defiler.
+ * `position: relative` porte le calque de survol, qui est en `position: absolute; inset: 0`.
+ */
+.home-chat__zone {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.home-chat__zone.is-depot .home-chat__repondre {
+  border-top-color: var(--cyan);
+}
+
+.home-chat__depot-calque {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  /* Le calque ne doit pas AVALER le lâcher : sans cela, il devient la cible et le dépôt échoue. */
+  pointer-events: none;
+  border: 2px dashed var(--cyan);
+  border-radius: var(--r1, 8px);
+  background: rgba(3, 10, 16, 0.92);
+  color: var(--text);
+}
+
+.home-chat__depot-calque strong {
+  font-size: 12px;
+}
+
+.home-chat__depot-calque span {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.home-chat__depot-invite {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Ce qui va PARTIR, lisible avant le premier clic : un envoi ne se rattrape pas. */
+.home-chat__pieces {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-chat__pieces li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--r1, 8px);
+}
+
+.home-chat__piece-nom {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-chat__pieces em {
+  flex: none;
+  font-style: normal;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+.home-chat__piece-retirer {
+  flex: none;
+  padding: 0 4px;
+  color: var(--text-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.home-chat__piece-retirer:hover {
+  color: var(--rose);
 }
 
 /* L'envoi est l'action PRINCIPALE et la seule qui part chez quelqu'un : il porte la couleur, les

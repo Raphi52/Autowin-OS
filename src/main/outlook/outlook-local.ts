@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 
@@ -50,6 +50,44 @@ const MAX_CORPS = 20_000
 /** Plafond de l'OBJET d'un message neuf. Au-dela, aucune messagerie n'en montre la fin. */
 const MAX_OBJET = 255
 /**
+ * Plafonds des PIECES JOINTES d'un message neuf. Demande de l'utilisateur du 2026-09-08 : glisser
+ * un PDF dans l'ecran « nouveau message ». Memes ordres de grandeur que le compositeur du chat,
+ * pour que l'utilisateur n'ait pas deux regles a retenir selon l'endroit ou il lache son fichier.
+ */
+const MAX_PIECES = 5
+const MAX_PIECE_OCTETS = 10 * 1024 * 1024
+const MAX_PIECES_OCTETS = 20 * 1024 * 1024
+/**
+ * Ce qu'un nom de pièce jointe n'a PAS le droit de contenir.
+ *
+ * Ce nom vient du renderer par IPC et il sert à NOMMER un fichier écrit sur le disque, parce que
+ * `Attachments.Add` prend le nom du fichier pour nom de pièce. Un séparateur de chemin (`/` ou
+ * `\`), un deux-points ou un caractère interdit par Windows écrirait donc ailleurs que dans le
+ * dossier temporaire, ou ne s'écrirait pas du tout.
+ */
+const NOM_PIECE_INTERDIT = /[\\/:*?"<>|]/
+/**
+ * Le nom d'une pièce jointe est-il utilisable comme nom de fichier ?
+ *
+ * Les caractères de CONTRÔLE sont écartés par leur code et non par le motif ci-dessus : un motif
+ * qui les contient est illisible, et la règle `no-control-regex` le refuse — à raison.
+ */
+function nomPieceAcceptable(nom: string): boolean {
+  if (nom === '' || nom === '.' || nom === '..' || nom.length > 150) return false
+  if (NOM_PIECE_INTERDIT.test(nom)) return false
+  for (const caractere of nom) {
+    const code = caractere.codePointAt(0) ?? 0
+    if (code < 0x20 || code === 0x7f) return false
+  }
+  return true
+}
+
+/** Du base64 canonique, et rien d'autre : un contenu abime ecrirait un fichier corrompu. */
+const BASE64_STRICT = /^[A-Za-z0-9+/]*={0,2}$/
+/** Le refus, en une phrase qui dit quoi regarder : le NOM du fichier, pas son contenu. */
+const PIECE_NOM_REFUSE =
+  'Le nom d’une pièce jointe n’est pas utilisable comme nom de fichier : le message n’est pas parti.'
+/**
  * La forme d'une adresse acceptée pour un message NEUF.
  *
  * Un envoi neuf n'a pas d'élément de départ : l'adresse du destinataire est FOURNIE, elle ne se
@@ -69,16 +107,28 @@ export interface OutlookGatewayOptions {
   runner?: (scriptPath: string, outPath: string) => Promise<void>
   /** Idem pour l'ouverture d'un élément. Rend le code de sortie du script. */
   opener?: (scriptPath: string, id: string) => Promise<number>
-  /** Idem pour la RÉPONSE. Le corps est passé par un fichier, pas en argument. */
-  replier?: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
+  /**
+   * Idem pour la RÉPONSE. Le corps est passé par un fichier, pas en argument. La LISTE des pièces
+   * jointes aussi, et `piecesPath` est absent quand la réponse n'en a aucune.
+   */
+  replier?: (
+    scriptPath: string,
+    id: string,
+    corpsPath: string,
+    piecesPath?: string
+  ) => Promise<number>
   /** Idem pour le MARQUAGE LU. Les identifiants passent par un fichier, un par ligne. */
   marqueur?: (scriptPath: string, idsPath: string) => Promise<number>
-  /** Idem pour un message NEUF. Objet et corps passent par des fichiers, pas en arguments. */
+  /**
+   * Idem pour un message NEUF. Objet, corps et LISTE DE PIECES JOINTES passent par des fichiers,
+   * pas en arguments. `piecesPath` est absent quand le message n'a aucune piece.
+   */
   redacteur?: (
     scriptPath: string,
     adresse: string,
     objetPath: string,
-    corpsPath: string
+    corpsPath: string,
+    piecesPath?: string
   ) => Promise<number>
   now?: () => number
 }
@@ -137,7 +187,8 @@ const REPLY_FAILURES: Readonly<Record<number, string>> = {
   1: "Outlook n'a pas pu envoyer cette réponse.",
   2: "Cet identifiant n'a pas la forme d'un élément Outlook.",
   3: 'Ce message n’existe plus dans Outlook — il a peut-être été supprimé ou déplacé.',
-  4: 'La réponse est vide : rien n’a été envoyé.'
+  4: 'La réponse est vide : rien n’a été envoyé.',
+  7: 'Outlook a refusé une pièce jointe : la réponse n’est pas partie.'
 }
 
 /**
@@ -165,14 +216,71 @@ const NEW_FAILURES: Readonly<Record<number, string>> = {
   3: 'Le message n’a pas pu être préparé sur le disque.',
   4: 'Le message est vide : rien n’a été envoyé.',
   5: 'L’objet est vide : rien n’a été envoyé.',
-  6: 'Outlook ne reconnaît pas cette adresse — vérifiez-la avant de renvoyer.'
+  6: 'Outlook ne reconnaît pas cette adresse — vérifiez-la avant de renvoyer.',
+  7: 'Outlook a refusé une pièce jointe : le message n’est pas parti.'
+}
+
+/**
+ * Une pièce jointe VÉRIFIÉE, prête à être écrite sur le disque pour qu'Outlook l'attache.
+ *
+ * Le renderer envoie le CONTENU du fichier, pas son chemin : un fichier glissé depuis Outlook ou
+ * depuis une archive n'existe pas sur le disque, et Electron ne rend plus `File.path`. Les octets
+ * redeviennent donc un fichier ICI.
+ */
+interface PieceJointeVerifiee {
+  nom: string
+  octets: Buffer
+}
+
+/**
+ * Rend les pièces jointes prêtes à écrire, ou la PHRASE qui dit pourquoi rien ne partira.
+ *
+ * Ce qui arrive vient du renderer par IPC : le nom servira à NOMMER un fichier sur le disque et le
+ * contenu à le remplir. Tout est donc revérifié ici, comme l'adresse — une frontière de confiance ne
+ * se garde pas d'un seul côté.
+ *
+ * Une pièce refusée ANNULE l'envoi, elle ne le laisse pas partir sans elle : un envoi est
+ * irréversible, et un message parti sans son devis se lit comme un message envoyé.
+ */
+function verifierPieces(pieces: unknown): { pieces: PieceJointeVerifiee[] } | { erreur: string } {
+  if (pieces === undefined || pieces === null) return { pieces: [] }
+  if (!Array.isArray(pieces)) {
+    return {
+      erreur: 'Les pièces jointes n’ont pas la forme attendue : le message n’est pas parti.'
+    }
+  }
+  if (pieces.length > MAX_PIECES) {
+    return { erreur: `Pas plus de ${MAX_PIECES} pièces jointes par message.` }
+  }
+  const pretes: PieceJointeVerifiee[] = []
+  let total = 0
+  for (const brute of pieces) {
+    const piece = (brute ?? {}) as { nom?: unknown; contenuBase64?: unknown }
+    const nom = typeof piece.nom === 'string' ? piece.nom.trim() : ''
+    if (!nomPieceAcceptable(nom)) return { erreur: PIECE_NOM_REFUSE }
+    const base64 = typeof piece.contenuBase64 === 'string' ? piece.contenuBase64 : ''
+    if (base64 === '' || !BASE64_STRICT.test(base64)) {
+      return { erreur: `« ${nom} » n’a pas pu être lu : le message n’est pas parti.` }
+    }
+    const octets = Buffer.from(base64, 'base64')
+    if (octets.length > MAX_PIECE_OCTETS) {
+      return { erreur: `« ${nom} » dépasse la limite de 10 Mo : le message n’est pas parti.` }
+    }
+    total += octets.length
+    pretes.push({ nom, octets })
+  }
+  if (total > MAX_PIECES_OCTETS) {
+    return { erreur: 'Le total des pièces jointes dépasse 20 Mo : le message n’est pas parti.' }
+  }
+  return { pieces: pretes }
 }
 
 function defaultRedacteur(
   scriptPath: string,
   adresse: string,
   objetPath: string,
-  corpsPath: string
+  corpsPath: string,
+  piecesPath?: string
 ): Promise<number> {
   return new Promise((resolve) => {
     execFile(
@@ -188,7 +296,10 @@ function defaultRedacteur(
         '-ObjetFichier',
         objetPath,
         '-CorpsFichier',
-        corpsPath
+        corpsPath,
+        // Le parametre n'est POSE que s'il y a des pieces : un message sans piece part exactement
+        // comme avant, et le script n'a pas de fichier vide a interpreter.
+        ...(piecesPath ? ['-PiecesFichier', piecesPath] : [])
       ],
       { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 256 * 1024 },
       (error) => {
@@ -213,7 +324,12 @@ function defaultMarqueur(scriptPath: string, idsPath: string): Promise<number> {
   })
 }
 
-function defaultReplier(scriptPath: string, id: string, corpsPath: string): Promise<number> {
+function defaultReplier(
+  scriptPath: string,
+  id: string,
+  corpsPath: string,
+  piecesPath?: string
+): Promise<number> {
   return new Promise((resolve) => {
     execFile(
       'powershell',
@@ -226,7 +342,10 @@ function defaultReplier(scriptPath: string, id: string, corpsPath: string): Prom
         '-Id',
         id,
         '-CorpsFichier',
-        corpsPath
+        corpsPath,
+        // Le paramètre n'est POSÉ que s'il y a des pièces : une réponse sans pièce part exactement
+        // comme avant, et le script n'a pas de fichier vide à interpréter.
+        ...(piecesPath ? ['-PiecesFichier', piecesPath] : [])
       ],
       { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 256 * 1024 },
       (error) => {
@@ -257,13 +376,19 @@ export class OutlookLocalGateway {
   private readonly ttlMs: number
   private readonly runner: (scriptPath: string, outPath: string) => Promise<void>
   private readonly opener: (scriptPath: string, id: string) => Promise<number>
-  private readonly replier: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
+  private readonly replier: (
+    scriptPath: string,
+    id: string,
+    corpsPath: string,
+    piecesPath?: string
+  ) => Promise<number>
   private readonly marqueur: (scriptPath: string, idsPath: string) => Promise<number>
   private readonly redacteur: (
     scriptPath: string,
     adresse: string,
     objetPath: string,
-    corpsPath: string
+    corpsPath: string,
+    piecesPath?: string
   ) => Promise<number>
   private readonly now: () => number
   private cache: { at: number; result: OutlookGatewayResult } | null = null
@@ -355,8 +480,16 @@ export class OutlookLocalGateway {
    * ce poste : l'encodage de la console est cp1252, donc un accent en argument arrive abîmé ; et un
    * texte libre concaténé dans une ligne de commande est une porte ouverte, alors qu'un fichier n'est
    * jamais interprété.
+   *
+   * Et depuis le 2026-09-09, sur demande de l'utilisateur (« ça marche bien pour les nouveaux fils
+   * de message, il faudrait aussi que ça marche pour les messages de réponse »), ce chemin porte
+   * aussi des PIÈCES JOINTES — exactement comme `sendNew` depuis la veille, et par le même
+   * mécanisme : elles arrivent en CONTENU et non en chemin (un fichier glissé depuis Outlook
+   * n'existe pas sur le disque, et Electron ne rend plus `File.path`), les octets redeviennent des
+   * fichiers ici, chacun dans son propre sous-dossier pour que son NOM reste celui que verra le
+   * destinataire, et la LISTE des chemins voyage par un fichier UTF-8 comme le corps.
    */
-  async replyToItem(id: unknown, corps: unknown): Promise<OutlookReplyResult> {
+  async replyToItem(id: unknown, corps: unknown, pieces?: unknown): Promise<OutlookReplyResult> {
     if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
       return { ok: false, erreur: REPLY_FAILURES[2] }
     }
@@ -366,12 +499,22 @@ export class OutlookLocalGateway {
     if (texte.length > MAX_CORPS) {
       return { ok: false, erreur: `La réponse dépasse ${MAX_CORPS} caractères.` }
     }
+    // Les pièces jointes sont vérifiées AVANT d'ouvrir un dossier temporaire : un refus ne doit pas
+    // laisser d'octets derrière lui, et il annule l'envoi entier.
+    const verifiees = verifierPieces(pieces)
+    if ('erreur' in verifiees) return { ok: false, erreur: verifiees.erreur }
     let dossier: string | null = null
     try {
       dossier = await mkdtemp(join(tmpdir(), 'autowin-outlook-reply-'))
       const corpsPath = join(dossier, 'corps.txt')
       await writeFile(corpsPath, texte, 'utf8')
-      const code = await this.replier(this.scriptVoisin('outlook-local-reply.ps1'), id, corpsPath)
+      const piecesPath = await this.ecrirePieces(dossier, verifiees.pieces)
+      const code = await this.replier(
+        this.scriptVoisin('outlook-local-reply.ps1'),
+        id,
+        corpsPath,
+        piecesPath
+      )
       if (code === 0) return { ok: true }
       return { ok: false, erreur: REPLY_FAILURES[code] ?? REPLY_FAILURES[1] }
     } catch (error) {
@@ -436,11 +579,19 @@ export class OutlookLocalGateway {
    *  - un succès VIDE le cache. Le message part dans les éléments envoyés, donc il APPARTIENT au fil
    *    que la tuile affiche : sans cela, la nouvelle conversation resterait invisible jusqu'à
    *    l'expiration du cache, et le clic paraîtrait sans effet.
+   *
+   * Et depuis le 2026-09-08, sur demande de l'utilisateur (« glisser déposer des fichiers, par
+   * exemple des pdf »), ce chemin porte aussi des PIÈCES JOINTES. Elles arrivent en CONTENU, pas en
+   * chemin : un fichier glissé depuis Outlook n'existe pas sur le disque, et Electron ne rend plus
+   * `File.path`. Les octets redeviennent donc des fichiers ici, chacun dans son propre sous-dossier
+   * pour que son NOM reste celui que verra le destinataire — `Attachments.Add` prend le nom du
+   * fichier. Et la LISTE des chemins voyage par un fichier UTF-8, comme l'objet et le corps.
    */
   async sendNew(
     adresse: unknown,
     objet: unknown,
-    corps: unknown
+    corps: unknown,
+    pieces?: unknown
   ): Promise<OutlookNewMessageResult> {
     if (typeof adresse !== 'string' || !ADRESSE_SMTP.test(adresse.trim())) {
       return { ok: false, erreur: NEW_FAILURES[2] }
@@ -458,6 +609,10 @@ export class OutlookLocalGateway {
     if (texte.length > MAX_CORPS) {
       return { ok: false, erreur: `Le message dépasse ${MAX_CORPS} caractères.` }
     }
+    // Les pièces jointes sont vérifiées AVANT d'ouvrir un dossier temporaire : un refus ne doit pas
+    // laisser d'octets derrière lui, et il annule l'envoi entier.
+    const verifiees = verifierPieces(pieces)
+    if ('erreur' in verifiees) return { ok: false, erreur: verifiees.erreur }
     let dossier: string | null = null
     try {
       dossier = await mkdtemp(join(tmpdir(), 'autowin-outlook-nouveau-'))
@@ -465,11 +620,13 @@ export class OutlookLocalGateway {
       const corpsPath = join(dossier, 'corps.txt')
       await writeFile(objetPath, sujet, 'utf8')
       await writeFile(corpsPath, texte, 'utf8')
+      const piecesPath = await this.ecrirePieces(dossier, verifiees.pieces)
       const code = await this.redacteur(
         this.scriptVoisin('outlook-local-nouveau.ps1'),
         adresse.trim(),
         objetPath,
-        corpsPath
+        corpsPath,
+        piecesPath
       )
       if (code !== 0) return { ok: false, erreur: NEW_FAILURES[code] ?? NEW_FAILURES[1] }
       this.invalidate()
@@ -480,6 +637,36 @@ export class OutlookLocalGateway {
       // Le texte d'un message ne traîne pas dans le dossier temporaire une fois parti.
       if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
     }
+  }
+
+  /**
+   * Écrit les pièces jointes sur le disque et rend le chemin du fichier qui les LISTE.
+   *
+   * Chaque pièce va dans SON sous-dossier, sous son vrai nom : `Attachments.Add` prend le nom du
+   * fichier pour nom de pièce, donc renommer pour éviter une collision renommerait ce que le
+   * destinataire voit. Deux pièces homonymes restent ainsi distinctes.
+   *
+   * Rend `undefined` quand il n'y a aucune pièce : le script ne reçoit alors pas le paramètre, et un
+   * message sans pièce part exactement comme avant.
+   */
+  private async ecrirePieces(
+    dossier: string,
+    pieces: readonly PieceJointeVerifiee[]
+  ): Promise<string | undefined> {
+    if (pieces.length === 0) return undefined
+    const chemins: string[] = []
+    for (const [index, piece] of pieces.entries()) {
+      const dossierPiece = join(dossier, 'pieces', String(index))
+      await mkdir(dossierPiece, { recursive: true })
+      const chemin = join(dossierPiece, piece.nom)
+      await writeFile(chemin, piece.octets)
+      chemins.push(chemin)
+    }
+    const liste = join(dossier, 'pieces.txt')
+    // UTF-8, comme l'objet et le corps : un nom de fichier accentué passé par la console cp1252 de
+    // ce poste arriverait abîmé, et Outlook ne trouverait pas le fichier.
+    await writeFile(liste, chemins.join('\n'), 'utf8')
+    return liste
   }
 
   /** Un script livré À CÔTÉ de celui de lecture, résolu de la même façon (packagé compris). */

@@ -466,7 +466,33 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   la garantie reelle reste `unguarded` VIDE, qui n'a jamais faibli.
     // +1 le 2026-09-18 (conv-685) : `window:detach-view` — un onglet lâché hors de la fenêtre
     //   ouvre sa vue dans une fenêtre séparée ; gardé par `assertTrustedRendererSender`.
-    expect(handlers).toHaveLength(198)
+    // MISE A JOUR 2026-09-15 - 189 -> 193. ATTRIBUTION DE L'ECART, mesuree avant de toucher le
+    //   chiffre : la MEME detection (`(?:ipcMain|ipc)\.handle`) rejouee sur les fichiers de
+    //   `src/main` a la revision de base de ce travail rend 192 canaux, et 193 apres ; ce travail
+    //   en ajoute donc UN SEUL. Les TROIS autres etaient deja arrives par la mise a jour amont
+    //   sans reprise du compte : le fil-piege etait DEJA ROUGE avant ce tour.
+    // UN canal ajoute par ce travail, garde des sa PREMIERE
+    //   ligne par `assertTrustedRendererSender(event, 'GitAction')` :
+    //   `git:action` (`src/main/ipc/git.ts`) - LE GESTE de glisser-deposer du graphe (demande
+    //     utilisateur du 2026-09-15). Il ECRIT dans le depot, et c'est le canal le plus sensible de
+    //     cette liste : il ne recoit donc AUCUNE ligne de commande. Le renderer envoie un TYPE de
+    //     geste et des noms ; `git-action-main.ts` valide (nom de branche contre
+    //     `^[A-Za-z0-9][A-Za-z0-9._/-]*$`, empreinte contre `^[0-9a-f]{7,40}$`) puis ASSEMBLE la
+    //     ligne git. Deux gestes en liste blanche, tous deux en AVANT (`merge --no-ff`,
+    //     `cherry-pick`) ; `rebase`, `reset`, `branch -f`, `push --force` sont refuses par
+    //     construction, avec un test qui le prouve (`git-action-main.test.ts`).
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    // FUSION 2026-09-16 - les DEUX mises a jour du 2026-09-15 ci-dessus sont nees en parallele :
+    //   l'une RETIRE `os:conversations:split` (191), l'autre AJOUTE `git:action` (193 depuis un
+    //   compte perime). Reunies sur la meme base, elles donnent 191 + 1 = 192, chiffre MESURE ici
+    //   par le test lui-meme et non deduit. `unguarded` reste VIDE.
+    // FUSION 2026-09-17 - base amont a 197 canaux ; ce travail en ajoute UN (`git:action`) : 198.
+    // FUSION 2026-09-21 - ATTRIBUTION MESUREE de 198 -> 200, avant de toucher le chiffre :
+    //   la meme detection rejouee sur src/main hors tests rend 200 canaux a la revision amont et
+    //   201 apres ce travail -> CE travail en ajoute UN SEUL (`git:action`, garde des sa premiere
+    //   ligne ; `unguarded` reste vide). Le +1 restant etait DEJA arrive par la mise a jour amont
+    //   sans reprise du compte : le fil-piege etait deja rouge avant cette integration.
+    expect(handlers).toHaveLength(200)
     expect(unguarded).toEqual([])
   })
 

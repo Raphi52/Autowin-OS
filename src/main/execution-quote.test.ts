@@ -172,3 +172,38 @@ describe('devis face à un workflow plus large que le régime', () => {
     expect(() => allocateExecutionTopology(quote, demande as never)).toThrow(/Plan d’exécution impossible/)
   })
 })
+
+/*
+ * Regression du 2026-09-09 (conv-46). Trace du run run-3f7459905786-1 : devis `maxProviderCalls: 24`
+ * pour `maxAgents: 5`. Les cinq places sont parties dans frame et le fan-out de build, puis le juge
+ * FINAL a ete refuse sur « Budget d'agents atteint (5) » sans avoir rien consomme — le travail etait
+ * fait et verifie, il n'a jamais ete publie.
+ *
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer le provisionnement des tetes de fan-out dans
+ * `allocateExecutionTopology`. Verifie en le retirant : ce test passe au rouge (maxAgents reste 5).
+ */
+describe('allocateExecutionTopology — un fan-out lance un agent PAR MEMBRE', () => {
+  it('provisionne assez de places pour que le juge final ne se refuse pas lui-meme', () => {
+    const quote = compileExecutionQuote('place la scrollbar tout en bas du panneau')
+    expect(quote.limits.maxAgents).toBe(5)
+    expect(quote.limits.maxConcurrency).toBe(3)
+
+    allocateExecutionTopology(quote, {
+      phases: quote.phases,
+      completedPhases: [],
+      startedAgents: 0,
+      startedCalls: 0,
+      mutation: true,
+      // Pas de decomposeur ici : c'est le provisionnement des TETES de fan-out qui est mesure, et
+      // un decomposeur consommerait des places optionnelles sans rien prouver sur ce defaut.
+      hasDecomposer: false,
+      phaseFanOut: { frame: 1, build: 3 },
+      judgeFanOut: 1
+    })
+
+    // Deux phases servies par un panel de 3, plus les passages de juge et la reparation promise :
+    // le plafond de TETES doit depasser le compte d'appels obligatoires, jamais l'egaler tout juste.
+    expect(quote.limits.maxAgents).toBeGreaterThan(5)
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(2 * 3)
+  })
+})

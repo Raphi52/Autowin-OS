@@ -30,6 +30,9 @@
  *                                    capture se fait sur une instance cachee demarree puis arretee
  *                                    pour l'occasion (scripts/avec-instance-headless.mjs), profil
  *                                    dedie, aucun vol de focus, aucun reste ouvert derriere.
+ *         [--scroll <selecteur CSS>] AMENE la cible dans le cadre avant de declencher (une vue
+ *                                    longue cache sa moitie basse : la capture serait verte et
+ *                                    montrerait autre chose). Cible absente = echec nomme, code 9.
  *         [--click <selecteur CSS>]  ouvre ce que la vue seule ne montre pas (popover, menu,
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
@@ -662,6 +665,29 @@ const main = async () => {
     }
   }
 
+  // --scroll : AMENER LA PREUVE DANS LE CADRE.
+  //
+  // Mesure du 2026-09-15 : la vue « worktree » fait 31 444 caracteres et le graphe git vit tout en
+  // bas. La capture prise en haut de page etait verte (vue active, 3 235 elements) et ne montrait
+  // PAS l'element change — une preuve vraie de la mauvaise chose. Un selecteur, un
+  // `scrollIntoView`, et le verdict refuse une cible absente au lieu de capturer le haut de page
+  // en silence.
+  const cibleDefilement = argument('--scroll')
+  if (cibleDefilement) {
+    const trouve = await evaluer(`(() => {
+      const cible = document.querySelector(${JSON.stringify(cibleDefilement)})
+      cible?.scrollIntoView({ block: 'center', behavior: 'instant' })
+      return Boolean(cible)
+    })()`)
+    if (!trouve) {
+      await restaurerVue()
+      socket.close()
+      rendre({ ok: false, echecs: [`scroll-cible-absente(${cibleDefilement})`], vue }, 9)
+    }
+    await new Promise((r) => setTimeout(r, 400))
+    mesuresDom = await mesurerDom()
+  }
+
   // --------------------------------------------------------------------
   // MOUVEMENT — la seule chose qu'une capture fixe ne peut pas prouver.
   // --------------------------------------------------------------------
@@ -839,6 +865,7 @@ const main = async () => {
     vue,
     ...mesuresDom,
     octetsPng,
+    ...(cibleDefilement ? { defilementVers: cibleDefilement } : {}),
     ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {})
   }
   const verdict = verdictCapture(mesures)

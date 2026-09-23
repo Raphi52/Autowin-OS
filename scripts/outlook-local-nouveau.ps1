@@ -12,20 +12,28 @@
 # concatene dans une ligne de commande serait interpretable, alors qu'un fichier ne l'est jamais.
 # L'adresse, elle, passe en argument : elle est contrainte a un motif ASCII strict des DEUX cotes.
 #
+# Les PIECES JOINTES suivent la meme regle, ajoutees le 2026-09-08 sur demande de l'utilisateur
+# ("glisser deposer des fichiers, par exemple des pdf") : leurs chemins arrivent par un FICHIER
+# UTF-8, un par ligne. `Attachments.Add` prend le nom du fichier pour nom de piece, donc l'appelant
+# ecrit chaque piece dans son propre sous-dossier sous son vrai nom -- ce script ne renomme rien.
+# Le parametre est OPTIONNEL : un message sans piece part exactement comme avant.
+#
 # Ecrit en ASCII et avec BOM : Windows PowerShell 5.1 relit un .ps1 sans BOM en ANSI, et un accent y
 # devient un jeton invalide.
 #
 # Codes de sortie -- ils portent la CAUSE, que l'appelant traduit en phrase :
 #   0 envoye | 1 echec Outlook | 2 adresse invalide | 3 fichier introuvable
 #   4 corps vide | 5 objet vide | 6 destinataire non resolu par Outlook
+#   7 piece jointe refusee par Outlook
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/outlook-local-nouveau.ps1 `
-#     -A <adresse> -ObjetFichier <fichier> -CorpsFichier <fichier>
+#     -A <adresse> -ObjetFichier <fichier> -CorpsFichier <fichier> [-PiecesFichier <fichier>]
 
 param(
   [Parameter(Mandatory = $true)][string]$A,
   [Parameter(Mandatory = $true)][string]$ObjetFichier,
-  [Parameter(Mandatory = $true)][string]$CorpsFichier
+  [Parameter(Mandatory = $true)][string]$CorpsFichier,
+  [Parameter(Mandatory = $false)][string]$PiecesFichier
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,6 +68,25 @@ if ([string]::IsNullOrWhiteSpace($corps)) {
   exit 4
 }
 
+# Les chemins des pieces jointes, lus AVANT d'ouvrir Outlook : un chemin manquant doit se dire sans
+# avoir cree un brouillon. Chaque ligne est un chemin absolu ecrit par l'appelant.
+$pieces = @()
+if (-not [string]::IsNullOrWhiteSpace($PiecesFichier)) {
+  if (-not (Test-Path -LiteralPath $PiecesFichier)) {
+    Write-Host 'ECHEC - fichier introuvable'
+    exit 3
+  }
+  foreach ($ligne in [System.IO.File]::ReadAllLines($PiecesFichier, $utf8)) {
+    $chemin = $ligne.Trim()
+    if ([string]::IsNullOrWhiteSpace($chemin)) { continue }
+    if (-not (Test-Path -LiteralPath $chemin)) {
+      Write-Host ('ECHEC - fichier introuvable : ' + $chemin)
+      exit 3
+    }
+    $pieces += $chemin
+  }
+}
+
 try {
   # Liage TARDIF, et NON `New-Object -ComObject`. Mesure de ce poste le 2026-08-31 : l'interface
   # `_Application` n'est pas enregistree, `New-Object -ComObject` reussit puis le PREMIER acces
@@ -72,6 +99,17 @@ try {
   $mail = $outlook.CreateItem(0)
   $mail.Subject = $objet
   $mail.Body = $corps
+
+  # Les PIECES JOINTES avant tout envoi : une piece ajoutee apres `.Send()` n'arriverait jamais, et
+  # un refus doit porter sa propre cause -- "Outlook n'a pas pu envoyer ce message" ferait chercher
+  # l'erreur du cote de l'adresse ou du texte.
+  foreach ($chemin in $pieces) {
+    try { [void]$mail.Attachments.Add($chemin) }
+    catch {
+      Write-Host ('ECHEC - piece jointe refusee : ' + $chemin)
+      exit 7
+    }
+  }
 
   # `Recipients.Add` plutot que `.To = ...` : la propriete `To` est une CHAINE qu'Outlook n'analyse
   # qu'a l'enregistrement, donc un destinataire refuse ne se verrait qu'apres l'envoi. Ajoute puis

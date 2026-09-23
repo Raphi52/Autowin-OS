@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { GitGraphCommit } from '../../../shared/git-graph'
-import { layoutGitGraph, projectGitGraphAxes } from './GitGraphLayout'
+import {
+  HAUTEUR_LIGNE,
+  LARGEUR_VOIE,
+  MARGE_VOIE,
+  layoutGitGraph,
+  projectGitGraphAxes
+} from './GitGraphLayout'
+import { couleurDeBranche } from './git-graph-couleurs'
 
 function commit(hash: string, parents: string[] = []): GitGraphCommit {
   return {
@@ -27,7 +34,9 @@ describe('layoutGitGraph', () => {
       layout.nodes.find((node) => node.commit.hash === 'right')?.lane
     )
     expect(layout.edges).toHaveLength(4)
-    expect(layout.width).toBeGreaterThanOrEqual(720)
+    // La largeur est celle de la GOUTTIÈRE seule : elle suit le nombre de voies, pas un plancher de
+    // 720 px hérité du temps où le sujet du commit était dessiné DANS le SVG.
+    expect(layout.width).toBe(MARGE_VOIE * 2 + LARGEUR_VOIE)
   })
 
   it('ignore proprement un parent hors de la fenêtre d’historique', () => {
@@ -105,7 +114,16 @@ describe('les voies sont LIBÉRÉES : sinon le graphe part en escalier vers la d
    * Trois frères partageant un parent occupent LÉGITIMEMENT trois voies. Ce que ce test vérifie, c'est
    * qu'une fois ce parent placé, les voies sont RENDUES au groupe suivant.
    */
-  it('epingle main au centre, ferme a gauche et ouvert a droite', () => {
+  it('n’épingle PLUS les commits en trois colonnes : une seule gouttière étroite', () => {
+    /*
+      LE CHANGEMENT DEMANDÉ (2026-09-15) : « j'aime bien SourceTree, le côté graphique ».
+      L'ancien tracé épinglait les commits en TROIS colonnes (fermé à gauche, main au centre, ouvert
+      à droite) séparées de 64 px, plus 480 px de marge morte à droite : mesuré, une largeur de
+      2 952 px dont l'essentiel était vide, et la lecture demandait un défilement horizontal.
+
+      SourceTree fait l'inverse : une gouttière étroite à gauche, et le texte juste à côté. Ce test
+      interdit le retour de l'épinglage — les x ne doivent dépendre QUE de la voie.
+    */
     const commits = [
       commit('main-tip', ['main-old', 'closed-tip']),
       commit('open-tip', ['main-old']),
@@ -117,12 +135,55 @@ describe('les voies sont LIBÉRÉES : sinon le graphe part en escalier vers la d
       main: new Set(['main-tip', 'main-old', 'root']),
       ouvertes: new Set(['open-tip'])
     })
-    const main = layout.nodes.filter((node) => node.side === 'main')
-    const ferme = layout.nodes.find((node) => node.commit.hash === 'closed-tip')
-    const ouvert = layout.nodes.find((node) => node.commit.hash === 'open-tip')
-    expect(new Set(main.map((node) => node.x))).toHaveLength(1)
-    expect(ferme?.x).toBeLessThan(main[0].x)
-    expect(ouvert?.x).toBeGreaterThan(main[0].x)
+    // La gouttière tient dans une colonne de vue, sans défilement horizontal.
+    expect(layout.width).toBeLessThanOrEqual(200)
+    // x ne dépend QUE de la voie : deux commits de voies différentes s'écartent de la largeur de voie,
+    // jamais de 280 px + une catégorie.
+    const parVoie = new Map(layout.nodes.map((node) => [node.lane, node.x]))
+    ;[...parVoie.keys()].forEach((lane) => {
+      expect(parVoie.get(lane)).toBe(layout.nodes.find((n) => n.lane === lane)?.x)
+    })
+    const xs = [...new Set(layout.nodes.map((node) => node.x))].sort((a, b) => a - b)
+    xs.slice(1).forEach((x, index) => expect(x - xs[index]).toBeLessThanOrEqual(LARGEUR_VOIE))
+    // La catégorie SURVIT : elle sert la couleur et la légende, elle ne commande plus la position.
+    expect(layout.nodes.find((n) => n.commit.hash === 'open-tip')?.side).toBe('open')
+    expect(layout.nodes.find((n) => n.commit.hash === 'closed-tip')?.side).toBe('closed')
+  })
+
+  it('aligne chaque ligne du graphe sur UNE ligne de texte', () => {
+    // Le tracé est une colonne D'UN TABLEAU : si le pas vertical du SVG n'est pas exactement celui
+    // des lignes HTML, les points dérivent de leur commit et le graphe ment sur qui est qui.
+    const layout = layoutGitGraph([commit('a', ['b']), commit('b'), commit('c')])
+    const ys = layout.nodes.map((node) => node.y)
+    expect(ys[1] - ys[0]).toBe(HAUTEUR_LIGNE)
+    expect(ys[2] - ys[1]).toBe(HAUTEUR_LIGNE)
+    expect(layout.height).toBe(3 * HAUTEUR_LIGNE)
+  })
+
+  it('donne à chaque nœud une couleur STABLE, pas un tirage par rendu', () => {
+    const commits = [commit('a', ['b']), commit('b')]
+    const premier = layoutGitGraph(commits)
+    const second = layoutGitGraph(commits)
+    expect(premier.nodes[0].couleur).toMatch(/^hsl\(/)
+    expect(premier.nodes.map((n) => n.couleur)).toEqual(second.nodes.map((n) => n.couleur))
+    expect(premier.edges[0].couleur).toMatch(/^hsl\(/)
+  })
+
+  it('tire la couleur d’une voie du NOM de branche qu’elle porte', () => {
+    // Deux dépôts différents, la même branche : la même couleur. C'est ce qui rend l'œil capable de
+    // suivre `feat/cockpit` d'un écran à l'autre.
+    const avecRef: GitGraphCommit = { ...commit('tip'), refs: ['HEAD -> feat/cockpit'] }
+    const layout = layoutGitGraph([avecRef])
+    expect(layout.nodes[0].couleur).toBe(couleurDeBranche('feat/cockpit'))
+  })
+
+  /** CAS LIMITE — aucun commit : pas d'exception, une disposition vide et bornée. */
+  it('rend une disposition vide sans jeter quand il n’y a aucun commit', () => {
+    const layout = layoutGitGraph([])
+    expect(layout.nodes).toEqual([])
+    expect(layout.edges).toEqual([])
+    expect(layout.width).toBeGreaterThan(0)
+    expect(layout.height).toBeGreaterThan(0)
   })
 
   const fratrie = (parent: string, prefixe: string): GitGraphCommit[] => [

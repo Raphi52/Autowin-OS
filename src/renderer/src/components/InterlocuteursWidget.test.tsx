@@ -38,6 +38,9 @@ function message(part: Partial<MessageInterlocuteur> & { id: string }): MessageI
     nonLu: false,
     deMoi: false,
     auteur: 'Zoé Martin',
+    // Aucune pièce jointe par défaut : c'est le cas de 150 des 153 messages reçus de la vraie boîte
+    // (relevé du 2026-09-10). Les pièces reçues ont leur propre fichier de tests.
+    pieces: [],
     fil: 'devis',
     ...part
   }
@@ -201,7 +204,9 @@ describe('InterlocuteursWidget', () => {
 
     await cliquer('home-inter-confirmer')
     // `m1`, le dernier message RECU — pas `m2`, qui est mon propre envoi.
-    expect(onRepondre).toHaveBeenCalledWith('m1', 'Le voici')
+    // Le troisieme argument est la liste des pieces jointes, vide ici : depuis le 2026-09-09 un
+    // fichier peut etre glisse dans cet ecran (voir InterlocuteursWidget.reponse-pieces.test.tsx).
+    expect(onRepondre).toHaveBeenCalledWith('m1', 'Le voici', [])
     expect(container.querySelector('[role="status"]')?.textContent).toContain('envoyée')
   })
 
@@ -300,10 +305,13 @@ describe('InterlocuteursWidget — ouvrir une conversation qui n existe pas enco
     expect(onNouvelleConversation).not.toHaveBeenCalled()
 
     await cliquer('home-inter-nouveau-confirmer')
+    // Le quatrieme argument est la liste des pieces jointes, vide ici : depuis le 2026-09-08 un
+    // fichier peut etre glisse dans cet ecran (voir InterlocuteursWidget.pieces.test.tsx).
     expect(onNouvelleConversation).toHaveBeenCalledWith(
       'zoe@ex.fr',
       'Devis 2027',
-      'Bonjour Zoé, pouvez-vous me le renvoyer ?'
+      'Bonjour Zoé, pouvez-vous me le renvoyer ?',
+      []
     )
     expect(container.querySelector('[role="status"]')?.textContent).toContain('envoyé')
   })

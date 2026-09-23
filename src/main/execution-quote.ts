@@ -239,6 +239,30 @@ export function allocateExecutionTopology(
     (request.worstCaseNodeExecutions === undefined
       ? nodeExecutions + judgePasses + recoveries
       : nodeExecutions)
+  /*
+   * UNE PHASE EN FAN-OUT LANCE UN AGENT PAR MEMBRE — mesure du 2026-09-09 (conv-46).
+   *
+   * `mandatory` compte des APPELS : une visite de noeud, plus les passages de juge et les reprises.
+   * Le plafond de TETES, lui, restait celui du regime. Trace du run run-3f7459905786-1 : devis
+   * `maxProviderCalls: 24` pour `maxAgents: 5` — vingt-quatre appels autorises, cinq tetes pour les
+   * servir. Le run a donc consomme ses cinq places sur frame et sur le fan-out de build, puis le
+   * juge FINAL a ete refuse sur « Budget d'agents atteint (5) » sans avoir rien consomme : travail
+   * fait, verifie, et jamais publie — la pire issue possible, payee et perdue.
+   *
+   * C'est le defaut deja corrige le 2026-08-31 (conv-1587) dans l'orchestrateur, mais UNIQUEMENT
+   * pour les workflows EXPLICITES du canevas : un run lance depuis le chat n'y passait pas. La
+   * correction vit donc ICI, sur le chemin commun, ou le devis est compile pour TOUS les runs.
+   *
+   * On provisionne le pire cas de tetes : chaque visite de noeud peut etre servie par un panel
+   * borne par `maxConcurrency`, plus les passages de juge et les reprises. En mesure seule
+   * seulement — en mode bloquant le plafond est un contrat, il garde son refus. Aucun frein reel
+   * ne bouge : jetons, USD, duree et concurrence bornent exactement ce qu'ils bornaient.
+   */
+  if (quote.limits.spendEnforcement === 'metering-only') {
+    const tetesFanOut =
+      nodeExecutions * Math.max(1, quote.limits.maxConcurrency) + judgePasses + recoveries
+    quote.limits.maxAgents = Math.max(quote.limits.maxAgents, tetesFanOut + startedAgents)
+  }
   if (mandatory > available) {
     // En mesure seule (défaut depuis la décision utilisateur du 12/08), un workflow DÉTERMINISTE
     // au pire cas fini ne se refuse pas : le devis S'AGRANDIT à sa demande. Mesuré sur conv-1148 :

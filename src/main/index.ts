@@ -3540,10 +3540,17 @@ Le fil reprend ensuite normalement.`
   // Le seul canal Outlook qui ECRIT : il envoie une reponse, donc un acte irreversible. La
   // confirmation appartient a l'interface, qui est le seul endroit ou l'utilisateur est present ; ici
   // on garde la validation du contenu, parce qu'une frontiere de confiance ne se garde pas d'un cote.
-  ipcMain.handle('outlook:repondre', async (event, id: unknown, corps: unknown) => {
-    assertTrustedRendererSender(event, 'Outlook')
-    return outlookGateway.replyToItem(id, corps)
-  })
+  // Les PIECES JOINTES arrivent en contenu (base64) et non en chemin, comme pour un message neuf :
+  // un fichier glisse depuis Outlook n'existe pas sur le disque. Elles sont donc revalidees par la
+  // passerelle -- nom, forme du base64, taille -- avant de redevenir des fichiers dans un dossier
+  // temporaire.
+  ipcMain.handle(
+    'outlook:repondre',
+    async (event, id: unknown, corps: unknown, pieces: unknown) => {
+      assertTrustedRendererSender(event, 'Outlook')
+      return outlookGateway.replyToItem(id, corps, pieces)
+    }
+  )
   // MARQUE des messages comme lus. Ecrit aussi dans la boite, mais rien n'en sort : declenche par le
   // geste de l'utilisateur qui OUVRE un fil, jamais par la relecture periodique -- une relecture qui
   // marque lu viderait la boite de ses non-lus pendant qu'il regarde ailleurs.
@@ -3556,11 +3563,14 @@ Le fil reprend ensuite normalement.`
   // existant -- l'adresse vient d'une saisie. Elle est donc contrainte a un motif ASCII cote main
   // AVANT de partir dans un appel COM, et l'objet comme le corps voyagent par des fichiers
   // temporaires : jamais concatenes dans une ligne de commande.
+  // Les PIECES JOINTES arrivent en contenu (base64) et non en chemin : un fichier glisse depuis
+  // Outlook n'existe pas sur le disque. Elles sont donc revalidees par la passerelle -- nom, forme
+  // du base64, taille -- avant de redevenir des fichiers dans un dossier temporaire.
   ipcMain.handle(
     'outlook:nouveau-message',
-    async (event, adresse: unknown, objet: unknown, corps: unknown) => {
+    async (event, adresse: unknown, objet: unknown, corps: unknown, pieces: unknown) => {
       assertTrustedRendererSender(event, 'Outlook')
-      return outlookGateway.sendNew(adresse, objet, corps)
+      return outlookGateway.sendNew(adresse, objet, corps, pieces)
     }
   )
 

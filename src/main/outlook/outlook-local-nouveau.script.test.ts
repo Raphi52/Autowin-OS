@@ -51,6 +51,23 @@ describe('script d envoi d un message neuf', () => {
     expect(validation).toBeLessThan(connexion)
   })
 
+  it('accepte une LISTE de pieces jointes par fichier, jamais en argument', () => {
+    // Demande de l'utilisateur du 2026-09-08 : glisser un PDF dans l'ecran « nouveau message ».
+    // Les chemins voyagent par un fichier UTF-8, pour la meme raison que l'objet et le corps : la
+    // console de ce poste est en cp1252, et un chemin concatene dans une ligne de commande serait
+    // interpretable. Le parametre est OPTIONNEL : un message sans piece part comme avant.
+    expect(code).toMatch(/\[Parameter\(Mandatory = \$false\)\]\[string\]\$PiecesFichier/)
+    expect(code).toMatch(/Attachments\.Add\(/)
+  })
+
+  it('joint les pieces AVANT d envoyer, et nomme le refus d une piece', () => {
+    // Une piece ajoutee apres `.Send()` n'arriverait jamais. Et un echec d'ajout doit porter sa
+    // propre cause : « Outlook n'a pas pu envoyer ce message » ferait chercher du cote de l'adresse.
+    expect(code).toMatch(/exit 7/)
+    expect(code.indexOf('Attachments.Add(')).toBeLessThan(code.indexOf('.Send()'))
+    expect(code.indexOf('exit 7')).toBeLessThan(code.indexOf('.Send()'))
+  })
+
   it('refuse d envoyer quand Outlook ne resout pas le destinataire', () => {
     // Un message adresse a personne serait envoye « avec succes » et n'arriverait nulle part.
     expect(code).toMatch(/\.Resolve\(\)/)

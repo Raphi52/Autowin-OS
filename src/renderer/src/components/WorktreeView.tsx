@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GitGraphSnapshot } from '../../../shared/git-graph'
 import { BureauxConserves } from './BureauxConserves'
-import { AgentOffice } from './WorktreeActivityView'
+import { useOfficeAction } from './WorktreeActivityView'
 import { ConflitBureauPanneau } from './ConflitBureau'
 import { useConflitBureau } from './useConflitBureau'
-import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
+import type {
+  WorktreeAgentActivity,
+  WorktreeConflictResolutionChoice
+} from '../../../shared/worktree-activity-model'
 import { ViewTopBar } from './ViewTopBar'
-import { layoutGitGraph, projectGitGraphAxes, type GitGraphLayout } from './GitGraphLayout'
+import {
+  HAUTEUR_LIGNE,
+  LARGEUR_VOIE,
+  layoutGitGraph,
+  projectGitGraphAxes,
+  type GitGraphLayout
+} from './GitGraphLayout'
+import { couleurDeBranche } from './git-graph-couleurs'
+import { parserRefsCommit } from './git-graph-refs'
+import { planifierActionGit, type DemandeActionGit } from '../../../shared/git-action'
 import {
   formatAttente,
   LIBELLES_VERDICT,
@@ -184,66 +196,306 @@ function ResumeChefDeProjet({
   )
 }
 
-function GitTopology({ layout }: { layout: GitGraphLayout }): React.JSX.Element {
+/**
+ * La date d'un commit, lisible d'un coup d'oeil dans une colonne etroite.
+ *
+ * Le champ `date` existait dans le modele depuis toujours et n'etait affiche NULLE PART. Format court
+ * a la SourceTree : jour, mois abrege, heure. Une date illisible est rendue telle quelle plutot que
+ * remplacee par un tiret — un « Invalid Date » masque est une donnee perdue en silence.
+ */
+function formaterDateCommit(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+/**
+ * CE QU'ON PEUT SAISIR ET OU ON PEUT LE LACHER.
+ *
+ * Deux prises : une etiquette de branche, ou une ligne de commit. Une seule zone de depot : une
+ * etiquette de branche LOCALE. Deposer sur une distante est refuse — `git checkout origin/x`
+ * detacherait la tete, ce qui n'est pas ce qu'un glisse veut dire.
+ */
+export type SaisieGraphe = { genre: 'branche'; nom: string } | { genre: 'commit'; hash: string }
+
+export interface OutilsGeste {
+  saisir: (saisie: SaisieGraphe) => void
+  deposerSur: (branche: string) => void
+}
+
+/** Les etiquettes `main`, `origin/main`, `tag: v1` posees sur la ligne du commit, comme SourceTree. */
+function EtiquettesRef({
+  refs,
+  geste
+}: {
+  refs: string[]
+  geste: OutilsGeste
+}): React.JSX.Element | null {
+  const etiquettes = parserRefsCommit(refs)
+  if (etiquettes.length === 0) return null
   return (
-    <div className="cockpit-detail__graph" data-testid="git-topology">
-      <svg
-        viewBox={`0 0 ${layout.width} ${layout.height}`}
-        width={layout.width}
-        height={layout.height}
-      >
-        {layout.edges.map((edge) => {
-          const side =
-            edge.from.side === 'main' && edge.to.side === 'main'
-              ? 'main'
-              : edge.from.side === 'open' || edge.to.side === 'open'
-                ? 'open'
-                : 'closed'
-          const cle = `${edge.from.commit.hash}-${edge.to.commit.hash}${edge.elidee ? '-elide' : ''}`
-          return (
-            <g key={cle}>
+    <>
+      {etiquettes.map((etiquette) => {
+        const locale = etiquette.genre === 'head' || etiquette.genre === 'local'
+        return (
+          <span
+            key={`${etiquette.genre}-${etiquette.libelle}`}
+            className={`wt-st-ref is-${etiquette.genre}${locale ? ' is-prise' : ''}`}
+            data-testid="git-ref-badge"
+            draggable={locale}
+            onDragStart={(evenement) => {
+              if (!locale) return
+              // Sans cela le glisse remonterait a la LIGNE, et on rapporterait un commit en croyant
+              // fusionner une branche : deux gestes differents partant du meme pixel.
+              evenement.stopPropagation()
+              // SANS CES DONNEES LE GLISSER N'EXISTE PAS : Chromium annule un `dragstart` qui
+              // laisse le `dataTransfer` vide, donc aucun `dragover`/`drop` ne suit. Les tests ne
+              // le voyaient pas — ils envoient un Event nu, sans `dataTransfer`. Mesure du
+              // 2026-09-15 : le geste etait injouable a la souris alors que la suite etait verte.
+              evenement.dataTransfer?.setData('text/plain', etiquette.libelle)
+              if (evenement.dataTransfer) evenement.dataTransfer.effectAllowed = 'move'
+              geste.saisir({ genre: 'branche', nom: etiquette.libelle })
+            }}
+            onDragOver={(evenement) => {
+              if (locale) evenement.preventDefault()
+            }}
+            onDrop={(evenement) => {
+              if (!locale) return
+              evenement.preventDefault()
+              evenement.stopPropagation()
+              geste.deposerSur(etiquette.libelle)
+            }}
+            style={
+              {
+                // Variable CSS et non `color` : la pastille s'en sert POUR le texte ET sa bordure.
+                '--wt-ref-couleur': couleurDeBranche(etiquette.libelle)
+              } as React.CSSProperties
+            }
+          >
+            {etiquette.libelle}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
+/**
+ * LE GRAPHE, en tableau facon SourceTree.
+ *
+ * Trois choses le distinguent du trace precedent, et toutes les trois viennent de la demande du
+ * 2026-09-15 :
+ *  1. le SVG n'est plus qu'une COLONNE etroite — le sujet, l'auteur et la date sont du HTML aligne a
+ *     droite, donc selectionnable et lisible sans defilement horizontal ;
+ *  2. la couleur ne dit plus la categorie (3 couleurs pour tout le depot) mais la BRANCHE, tiree de
+ *     son nom : imprevisible a l'oeil, stable d'un rendu a l'autre ;
+ *  3. les etiquettes de branche sont posees sur la ligne, la ou git les decore.
+ *
+ * L'alignement SVG / lignes de texte tient a une seule constante partagee, `HAUTEUR_LIGNE` : la
+ * recopier ici aurait suffi a decaler tous les points d'un cran le jour ou l'une des deux change.
+ */
+/**
+ * UN conflit = UNE ligne, et trois boutons.
+ *
+ * Demande de l'utilisateur (2026-09-15) : « je ne veux plus voir les onglets trancher etc, juste des
+ * boutons pour résoudre les conflits ». La fiche complète (`AgentOffice`) affichait ici la commande,
+ * le chemin de la copie, la base vérifiée, la durée, la liste des fichiers et le message de refus —
+ * constaté sur capture : ~300 px de hauteur par conflit, pour une décision binaire. Tout cela reste
+ * disponible dans le Hub des bureaux ; ce qui manquait ici, c'était la décision au premier coup d'œil.
+ *
+ * Le fichier en cause RESTE affiché : c'est la seule information sans laquelle « garder ma version »
+ * ne veut rien dire. Le retirer aurait été simplifier au prix de la justesse.
+ */
+function LigneConflit({
+  agent,
+  onComparer,
+  onChoisir
+}: {
+  agent: WorktreeAgentActivity
+  onComparer?: (agentId: string) => void
+  onChoisir?: (agentId: string, choix: WorktreeConflictResolutionChoice) => unknown
+}): React.JSX.Element {
+  const action = useOfficeAction()
+  const fichier = agent.conflictFile ?? agent.files[0]?.path
+  return (
+    <div className="wt-conflit-ligne" data-testid="wt-conflit-ligne" data-agent={agent.agentId}>
+      <div className="wt-conflit-quoi">
+        <strong>{fichier ?? agent.agentName}</strong>
+        {fichier ? <span>{agent.agentName}</span> : null}
+      </div>
+      <div className="wt-conflit-boutons">
+        {onComparer ? (
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-testid="wt-resolve-conflict"
+            onClick={() => onComparer(agent.agentId)}
+          >
+            Comparer
+          </button>
+        ) : null}
+        {onChoisir ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-sm"
+              data-testid="wt-keep-agent"
+              disabled={action.pending !== null}
+              onClick={() => action.run('keep-agent', () => onChoisir(agent.agentId, 'agent'))}
+            >
+              {action.pending === 'keep-agent' ? 'Application…' : 'Version de l’agent'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              data-testid="wt-keep-mine"
+              disabled={action.pending !== null}
+              onClick={() => action.run('keep-mine', () => onChoisir(agent.agentId, 'mine'))}
+            >
+              {action.pending === 'keep-mine' ? 'Application…' : 'Ma version'}
+            </button>
+          </>
+        ) : null}
+      </div>
+      {action.error ? (
+        <p className="wt-conflit-erreur" data-testid="wt-office-error" role="alert">
+          {action.error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function GitTopology({
+  layout,
+  geste
+}: {
+  layout: GitGraphLayout
+  geste: OutilsGeste
+}): React.JSX.Element {
+  // Une elision est portee par la ligne du commit d'ARRIVEE : c'est au-dessus de lui que l'histoire
+  // manque. Le trait pointille reste dans le SVG, le nombre devient lisible dans la description.
+  const elisionParCommit = new Map<string, number>()
+  layout.edges.forEach((edge) => {
+    if (edge.elidee) elisionParCommit.set(edge.to.commit.hash, edge.omis ?? 0)
+  })
+
+  return (
+    <div
+      className="wt-st"
+      data-testid="git-topology"
+      style={{ '--wt-st-gouttiere': `${layout.width}px` } as React.CSSProperties}
+    >
+      <div className="wt-st-entete" data-testid="git-topology-entete">
+        <span className="wt-st-entete-graphe">Graphique</span>
+        <span>Description</span>
+        <span>Auteur</span>
+        <span>Date</span>
+      </div>
+      <div className="wt-st-corps" style={{ height: layout.height }}>
+        <svg
+          className="wt-st-graphe"
+          width={layout.width}
+          height={layout.height}
+          viewBox={`0 0 ${layout.width} ${layout.height}`}
+          aria-hidden="true"
+        >
+          {layout.edges.map((edge) => {
+            const side =
+              edge.from.side === 'main' && edge.to.side === 'main'
+                ? 'main'
+                : edge.from.side === 'open' || edge.to.side === 'open'
+                  ? 'open'
+                  : 'closed'
+            const cle = `${edge.from.commit.hash}-${edge.to.commit.hash}${edge.elidee ? '-elide' : ''}`
+            /*
+              Un COUDE, pas une diagonale : SourceTree descend dans la voie du depart puis bascule
+              d'un quart de tour vers la voie d'arrivee. Une diagonale franche sur 26 px de haut
+              croise les voies voisines et rend deux branches paralleles indiscernables.
+            */
+            const sens = Math.sign(edge.to.x - edge.from.x)
+            const coude =
+              edge.from.x === edge.to.x
+                ? `M ${edge.from.x} ${edge.from.y} L ${edge.to.x} ${edge.to.y}`
+                : `M ${edge.from.x} ${edge.from.y} L ${edge.from.x} ${edge.to.y - HAUTEUR_LIGNE / 2} Q ${edge.from.x} ${edge.to.y} ${edge.from.x + sens * (LARGEUR_VOIE / 2)} ${edge.to.y} L ${edge.to.x} ${edge.to.y}`
+            return (
               <path
+                key={cle}
                 className={`wt-topologie-lien is-${side}${edge.elidee ? ' is-elide' : ''}`}
-                d={`M ${edge.from.x} ${edge.from.y} L ${edge.to.x} ${edge.to.y}`}
+                d={coude}
+                stroke={edge.couleur}
                 fill="none"
               />
-              {/*
-                Le nombre est le message. Un pointillé seul dit « ce n'est pas une parenté directe »
-                sans dire ce qui manque ; « ⋯ 181 commits » transforme un trou suspect en une omission
-                assumée. Mesuré le 2026-08-14 : 23 sauts sur ce dépôt, le plus large en omettant 181.
-              */}
-              {edge.elidee ? (
-                <text
-                  className="wt-topologie-elide-libelle"
-                  data-testid="git-topology-elision"
-                  x={edge.from.x + 10}
-                  y={(edge.from.y + edge.to.y) / 2 + 4}
-                >
-                  {`⋯ ${edge.omis} commit${(edge.omis ?? 0) > 1 ? 's' : ''} non chargés`}
-                </text>
-              ) : null}
-            </g>
-          )
-        })}
-        {layout.nodes.map((node) => (
-          <g key={node.commit.hash} className={`wt-topologie-noeud is-${node.side ?? 'main'}`}>
+            )
+          })}
+          {layout.nodes.map((node) => (
             <circle
+              key={node.commit.hash}
+              className={`wt-topologie-noeud is-${node.side ?? 'main'}`}
               data-commit={node.commit.hash}
               data-side={node.side ?? 'main'}
               cx={node.x}
               cy={node.y}
-              r="5"
+              /*
+                PLEIN, toujours. Les points creux (anneau + fond de panneau) étaient le principal
+                reproche visuel du 2026-09-16 : sur fond sombre, un anneau de 3,5 px se lit comme un
+                trou dans la ligne, et vingt trous alignés effacent la voie. SourceTree ne dessine
+                que des disques pleins ; seul le DIAMÈTRE distingue un commit porteur de branche.
+              */
+              r={node.branche ? 4.5 : 3}
+              stroke="var(--surface-panel, #14161d)"
+              fill={node.couleur}
             />
-            <text
-              x={node.x + (node.side === 'closed' ? -14 : 14)}
-              y={node.y + 4}
-              textAnchor={node.side === 'closed' ? 'end' : 'start'}
+          ))}
+        </svg>
+
+        {layout.nodes.map((node) => {
+          const omis = elisionParCommit.get(node.commit.hash)
+          return (
+            <div
+              key={node.commit.hash}
+              className={`wt-st-ligne is-${node.side ?? 'main'}`}
+              data-testid="git-commit-row"
+              data-commit={node.commit.hash}
+              draggable
+              onDragStart={(evenement) => {
+                // Meme raison que sur les etiquettes : un `dataTransfer` vide = glisser annule.
+                evenement.dataTransfer?.setData('text/plain', node.commit.hash)
+                if (evenement.dataTransfer) evenement.dataTransfer.effectAllowed = 'copy'
+                geste.saisir({ genre: 'commit', hash: node.commit.hash })
+              }}
+              style={{ height: HAUTEUR_LIGNE }}
+              title={`${node.commit.shortHash} - ${node.commit.subject}`}
             >
-              {node.commit.shortHash} · {node.commit.subject}
-            </text>
-          </g>
-        ))}
-      </svg>
+              <span className="wt-st-desc">
+                {omis !== undefined ? (
+                  /*
+                    Le nombre est le message. Un pointille seul dit « ce n'est pas une parente
+                    directe » sans dire ce qui manque. Mesure le 2026-08-14 : 23 sauts sur ce depot,
+                    le plus large en omettant 181 commits.
+                  */
+                  <span className="wt-st-elision" data-testid="git-topology-elision">
+                    {`⋯ ${omis} commit${omis > 1 ? 's' : ''} non chargés`}
+                  </span>
+                ) : null}
+                <EtiquettesRef refs={node.commit.refs} geste={geste} />
+                <span className="wt-st-sujet">{node.commit.subject}</span>
+              </span>
+              <span className="wt-st-auteur" data-testid="git-commit-auteur">
+                {node.commit.author}
+              </span>
+              <span className="wt-st-date" data-testid="git-commit-date">
+                {formaterDateCommit(node.commit.date)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -255,7 +507,6 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   const [activityAvailable, setActivityAvailable] = useState(true)
   const [repoPath, setRepoPath] = useState(() => localStorage.getItem('autowin:sc-repo') ?? '')
   const requestId = useRef(0)
-  // Le conteneur sert aussi à centrer horizontalement l'axe principal après chaque chargement.
   const grapheRef = useRef<HTMLDivElement>(null)
   // Voir `recuEvenement` : distingue « pas encore de donnée » de « zéro chantier ».
   const [recuEvenement, setRecuEvenement] = useState(false)
@@ -287,6 +538,76 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     setAgents(activityResult.status === 'fulfilled' ? activityResult.value : [])
     setLoading(false)
   }, [repoPath])
+
+  /*
+    LE GLISSER-DEPOSER DU GRAPHE (demande du 2026-09-15).
+
+    Ce qui est saisi vit dans une REF et non dans un etat : un glisse en cours ne doit pas
+    redessiner 356 lignes a chaque survol. Ce qui est PROPOSE, lui, est un etat — il s'affiche.
+
+    Et le geste ne lance rien tout seul. Un relachement de souris au mauvais endroit est l'accident
+    le plus banal qui soit ; une fusion partie sans un mot ne se reprend pas d'un Ctrl-Z. Le geste
+    propose donc la commande EXACTE, construite par la meme fonction que le processus principal
+    utilisera (`planifierActionGit`, dans src/shared) : ce qui est affiche est ce qui partira.
+  */
+  const saisieRef = useRef<SaisieGraphe | undefined>(undefined)
+  const [propositionGeste, setPropositionGeste] = useState<
+    { demande: DemandeActionGit; libelle: string } | undefined
+  >()
+  const [refusGeste, setRefusGeste] = useState<string | undefined>()
+  const [resultatGeste, setResultatGeste] = useState<{ ok: boolean; texte: string } | undefined>()
+  const [gesteEnCours, setGesteEnCours] = useState(false)
+
+  const geste = useMemo<OutilsGeste>(
+    () => ({
+      saisir: (saisie) => {
+        saisieRef.current = saisie
+        setRefusGeste(undefined)
+      },
+      deposerSur: (branche) => {
+        const saisie = saisieRef.current
+        saisieRef.current = undefined
+        if (!saisie) return
+        if (saisie.genre === 'branche' && saisie.nom === branche) {
+          setRefusGeste('Une branche ne se fusionne pas dans elle-meme.')
+          return
+        }
+        const demande: DemandeActionGit =
+          saisie.genre === 'branche'
+            ? { type: 'merge', source: saisie.nom, cible: branche }
+            : { type: 'cherry-pick', commit: saisie.hash, cible: branche }
+        const plan = planifierActionGit(demande)
+        // Un refus de la liste blanche s'AFFICHE : sans cela le geste semblerait n'avoir rien fait.
+        if ('refus' in plan) {
+          setRefusGeste(plan.refus)
+          return
+        }
+        setResultatGeste(undefined)
+        setPropositionGeste({ demande, libelle: plan.libelle })
+      }
+    }),
+    []
+  )
+
+  const lancerGeste = useCallback(async (): Promise<void> => {
+    const proposition = propositionGeste
+    if (!proposition) return
+    setGesteEnCours(true)
+    const resultat = await window.api?.runGitAction?.(proposition.demande, repoPath || undefined)
+    setGesteEnCours(false)
+    setPropositionGeste(undefined)
+    if (!resultat) {
+      setResultatGeste({ ok: false, texte: 'Le pont Git est indisponible : rien n’a été lancé.' })
+      return
+    }
+    setResultatGeste(
+      resultat.ok
+        ? { ok: true, texte: `${resultat.commande} — ${resultat.sortie || 'terminé'}` }
+        : { ok: false, texte: resultat.raison }
+    )
+    // Le graphe a bougé : le relire est la seule façon de ne pas afficher l'état d'avant.
+    if (resultat.ok) void load()
+  }, [load, propositionGeste, repoPath])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -329,14 +650,11 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     return layoutGitGraph(commits, axes, snapshot?.mainLineElisions)
   }, [snapshot])
 
-  useEffect(() => {
-    const noeud = grapheRef.current
-    if (!noeud || noeud.scrollHeight === 0) return
-    const axeMain = dispositionGraphe.nodes.find((node) => node.side === 'main')
-    if (axeMain && noeud.clientWidth > 0) {
-      noeud.scrollLeft = Math.max(0, axeMain.x - noeud.clientWidth / 2)
-    }
-  }, [dispositionGraphe])
+  /*
+    Le centrage horizontal sur l'axe `main` a été RETIRÉ avec l'épinglage en trois colonnes : il
+    servait à ramener au centre un tracé de 2 952 px de large. La gouttière tient maintenant en une
+    cinquantaine de pixels, et forcer `scrollLeft` y déplacerait la vue pour rien.
+  */
   const activeAgents = agents.filter(
     (agent) => agent.state === 'working' || agent.state === 'isolated'
   )
@@ -390,13 +708,13 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
           {agentsEnConflit.length > 0 && (
             <section className="wt-conflits" data-testid="worktree-conflicts">
               <h3>Conflits à trancher · {agentsEnConflit.length}</h3>
-              <div className="wt-offices" aria-label="Bureaux en conflit">
+              <div className="wt-conflits-liste" aria-label="Conflits à trancher">
                 {agentsEnConflit.map((agent) => (
-                  <AgentOffice
+                  <LigneConflit
                     key={agent.agentId}
                     agent={agent}
-                    onResolveConflict={conflit.openConflictDiff}
-                    onResolveConflictChoice={conflit.resolveConflictChoice}
+                    onComparer={conflit.openConflictDiff}
+                    onChoisir={conflit.resolveConflictChoice}
                   />
                 ))}
               </div>
@@ -454,16 +772,64 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
             seule question : où en est le dépôt.
           */}
           <section className="wt-topologie" data-testid="worktree-topology-main">
+            {/*
+              La légende ne peut plus nommer trois couleurs : il y en a désormais une par branche.
+              Elle dit donc ce que les couleurs SIGNIFIENT, et ce que les deux styles de trait disent.
+            */}
             <div className="wt-topologie-legende" aria-label="Legende de la topologie Git">
-              <span className="is-closed">Fusionné / fermé</span>
-              <span className="is-main">main</span>
-              <span className="is-open">Ouvert</span>
+              <span className="is-couleur">Une couleur par branche</span>
+              <span className="is-main">Trait épais - ligne principale</span>
+              <span className="is-elide">Pointillé - histoire non chargée</span>
             </div>
+            {/*
+              CE QUE LE GESTE VA FAIRE, avant de le faire. La commande est ecrite en toutes lettres :
+              « fusionner » ne dit pas si la branche courante change, `git checkout main && git merge
+              --no-ff feat/x` le dit.
+            */}
+            {propositionGeste && (
+              <div className="wt-geste" role="alertdialog" data-testid="git-geste-confirmation">
+                <strong>
+                  {propositionGeste.demande.type === 'merge'
+                    ? `Fusionner ${propositionGeste.demande.source} dans ${propositionGeste.demande.cible}`
+                    : `Rapporter ce commit sur ${propositionGeste.demande.cible}`}
+                </strong>
+                <code data-testid="git-geste-commande">{propositionGeste.libelle}</code>
+                <button
+                  type="button"
+                  data-testid="git-geste-lancer"
+                  disabled={gesteEnCours}
+                  onClick={() => void lancerGeste()}
+                >
+                  {gesteEnCours ? 'En cours…' : 'Lancer'}
+                </button>
+                <button
+                  type="button"
+                  data-testid="git-geste-annuler"
+                  onClick={() => setPropositionGeste(undefined)}
+                >
+                  Annuler
+                </button>
+              </div>
+            )}
+            {refusGeste && (
+              <p className="wt-geste-refus" role="status" data-testid="git-geste-refus">
+                {refusGeste}
+              </p>
+            )}
+            {resultatGeste && (
+              <p
+                className={`wt-geste-resultat is-${resultatGeste.ok ? 'ok' : 'ko'}`}
+                role="status"
+                data-testid="git-geste-resultat"
+              >
+                {resultatGeste.texte}
+              </p>
+            )}
             {snapshot?.available === false ? (
               <p className="wt-topologie-vide">Topologie indisponible.</p>
             ) : (
               <div className="wt-topologie-defilement" ref={grapheRef}>
-                <GitTopology layout={dispositionGraphe} />
+                <GitTopology layout={dispositionGraphe} geste={geste} />
               </div>
             )}
           </section>
