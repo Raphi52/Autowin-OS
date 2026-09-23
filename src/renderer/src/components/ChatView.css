@@ -4849,3 +4849,40 @@ button.chat-project-dot:disabled {
   border-color: var(--gold);
   color: var(--gold-bright);
 }
+
+/*
+ * Barre de sélection multiple — style « liste d'actions » (choix conv-815, 2026-09-23) :
+ * les boutons en texte gris 10 px ne se lisaient pas comme des boutons.
+ */
+.conv-bulk-bar {
+  flex-direction: column;
+  gap: 2px;
+}
+.conv-bulk-bar .conv-date-sort {
+  align-self: stretch;
+  width: 100%;
+  padding: 5px 10px;
+  border-left: 2px solid var(--accent, #d4a94f);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font-size: 11.5px;
+  text-align: left;
+}
+.conv-bulk-bar .conv-date-sort:hover:not(:disabled),
+.conv-bulk-bar .conv-date-sort:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+.conv-bulk-bar .conv-date-sort:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.conv-bulk-bar .conv-bulk-del {
+  border-left-color: var(--danger);
+  color: var(--danger);
+}
+/* Un liseré de couleur par action (conv-815) : rose, doré, bleu ; Supprimer reste rouge. */
+.conv-bulk-bar .conv-date-sort:nth-child(1) { border-left-color: #e87fb0; }
+.conv-bulk-bar .conv-date-sort:nth-child(2) { border-left-color: #d4a94f; }
+.conv-bulk-bar .conv-date-sort:nth-child(3) { border-left-color: #5b9cf0; }
+.conv-bulk-bar .conv-date-sort.conv-bulk-del { border-left-color: var(--danger); }

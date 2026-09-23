@@ -5498,14 +5498,6 @@ export function ChatView({
               >
                 Annuler la sélection
               </button>
-              <button
-                type="button"
-                className="conv-date-sort"
-                disabled={selectedConvIds.size === 0}
-                onClick={() => setBulkDeleteAsking(true)}
-              >
-                Supprimer ({selectedConvIds.size})
-              </button>
               {(() => {
                 // Si TOUT le lot est déjà inactif, le geste utile est l'inverse.
                 const lot = convs.filter((c) => selectedConvIds.has(c.id))
@@ -5546,6 +5538,14 @@ export function ChatView({
                 }}
               >
                 Ranger dans une catégorie…
+              </button>
+              <button
+                type="button"
+                className="conv-date-sort conv-bulk-del"
+                disabled={selectedConvIds.size === 0}
+                onClick={() => setBulkDeleteAsking(true)}
+              >
+                Supprimer ({selectedConvIds.size})
               </button>
             </div>
           )}
@@ -6013,9 +6013,35 @@ export function ChatView({
                 souris alors que des fils y vivaient toujours (conv-79). Le tri entre les deux se
                 fait plus bas, sur la FORME de la valeur — un libelle n'ecrase jamais le dossier.
               */}
-              {convFolderMenu.mode === 'categorie' && categoriesConnues.length > 0 && (
-                <span className="conv-menu-titre">Catégories</span>
-              )}
+              {/*
+                Les DOSSIERS sont aussi des categories dans la barre laterale (AUTOWINOS,
+                RIGV3DESKTOP…). Sans eux ici, le menu ouvert depuis la selection multiple etait
+                vide des qu'aucun libelle libre n'existait (conv-815, 2026-09-23).
+              */}
+              {convFolderMenu.mode === 'categorie' &&
+                (categoriesConnues.length > 0 || dossiersConversations.length > 0) && (
+                  <span className="conv-menu-titre">Catégories</span>
+                )}
+              {(convFolderMenu.mode === 'categorie' ? dossiersConversations : []).map((chemin) => (
+                <button
+                  key={`dossier:${chemin}`}
+                  role="menuitem"
+                  data-testid="conv-category-folder-choice"
+                  data-project-path={chemin}
+                  title={chemin}
+                  onClick={() => {
+                    const menu = convFolderMenu
+                    setConvFolderMenu(null)
+                    setSaisieCategorie(null)
+                    appliquerRangement(menu, chemin)
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    🗂
+                  </span>
+                  {nomDeDossier(chemin)}
+                </button>
+              ))}
               {(convFolderMenu.mode === 'categorie' ? categoriesConnues : []).map((libelle) => (
                 <button
                   key={libelle}
