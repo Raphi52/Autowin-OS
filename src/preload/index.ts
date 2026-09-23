@@ -605,6 +605,9 @@ const api = {
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. Rend l'état retenu. */
   conversationsSetHighlight: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setHighlight', id, on),
+  /** Marque (`true`) ou retire (`false`) le statut inactive d'une conversation. */
+  conversationsSetInactive: (id: string, on: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('os:conversations:setInactive', id, on),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>

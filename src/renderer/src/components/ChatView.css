@@ -4809,3 +4809,31 @@ button.chat-project-dot:disabled {
   padding-top: 4px;
   padding-bottom: 4px;
 }
+
+/* Pied de la liste des conversations : filtre de statut, densite, mosaique (2026-09-23). */
+.conv-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid rgba(212, 169, 79, 0.2);
+  flex-shrink: 0;
+}
+.conv-foot-spacer {
+  flex: 1;
+}
+.conv-status-filter {
+  font-size: 11px;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  background: rgba(212, 169, 79, 0.08);
+  color: var(--gold-doux);
+  cursor: pointer;
+}
+.conv-status-filter:hover,
+.conv-status-filter:not([data-filter='toutes']) {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}

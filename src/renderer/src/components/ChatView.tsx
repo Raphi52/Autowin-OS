@@ -4780,14 +4780,30 @@ export function ChatView({
     }
   }, [convQuery])
 
-  const conversationHits = useMemo(
-    () =>
-      trierParRecenceUtilisateur(
-        searchConversations(convs, convQuery, undefined, correspondancesContenu),
-        conversationDateOrder
-      ),
-    [convs, convQuery, conversationDateOrder, correspondancesContenu]
+  /**
+   * FILTRE PAR STATUT (demande du 2026-09-23) : statut MANUEL posé par le menu « Marquer comme
+   * inactive/active » (`Conversation.inactive`, absent = active).
+   * Memorise comme la densite : c'est une preference d'affichage locale.
+   */
+  const [convStatusFilter, setConvStatusFilter] = useState<'toutes' | 'actives' | 'inactives'>(
+    () => {
+      const v = window.localStorage.getItem('autowin.chat.conversationsStatusFilter')
+      return v === 'actives' || v === 'inactives' ? v : 'toutes'
+    }
   )
+  useEffect(() => {
+    window.localStorage.setItem('autowin.chat.conversationsStatusFilter', convStatusFilter)
+  }, [convStatusFilter])
+
+  const conversationHits = useMemo(() => {
+    const hits = trierParRecenceUtilisateur(
+      searchConversations(convs, convQuery, undefined, correspondancesContenu),
+      conversationDateOrder
+    )
+    if (convStatusFilter === 'toutes') return hits
+    const veutActives = convStatusFilter === 'actives'
+    return hits.filter((h) => (h.conversation.inactive !== true) === veutActives)
+  }, [convs, convQuery, conversationDateOrder, correspondancesContenu, convStatusFilter])
 
   /**
    * Repli des groupes, PERSISTÉ. Le redéplier à chaque ouverture annulerait tout le bénéfice :
@@ -4878,6 +4894,34 @@ export function ChatView({
    * de le savoir. Un pont absent est un ÉTAT DE L'APPLICATION, pas un cas à ignorer : il se dit, et
    * il dit ce qui répare.
    */
+  const marquerInactive = useCallback(
+    async (conversationId: string, on: boolean): Promise<void> => {
+      const poser = window.api.conversationsSetInactive
+      if (!poser) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: 'Statut indisponible : redémarre Autowin OS pour activer « Marquer comme inactive ».'
+          })
+        )
+        return
+      }
+      try {
+        await poser(conversationId, on)
+      } catch (erreur) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: `Le statut n’a pas pu être enregistré : ${
+              erreur instanceof Error ? erreur.message : String(erreur)
+            }`
+          })
+        )
+        return
+      }
+      await refreshConvs()
+    },
+    [refreshConvs]
+  )
+
   const surligner = useCallback(
     async (conversationId: string, on: boolean): Promise<void> => {
       const poser = window.api.conversationsSetHighlight
@@ -5293,46 +5337,6 @@ export function ChatView({
                       Tout fermer
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="conv-density-toggle"
-                    data-testid="conv-density-toggle"
-                    data-density={convDensity}
-                    title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
-                    aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
-                    onClick={() => setConvDensity(densiteSuivante(convDensity))}
-                  >
-                    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                      {traitsDensite(convDensity).map((y) => (
-                        <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
-                      ))}
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="conv-view-toggle"
-                    data-testid="conv-view-toggle"
-                    role="switch"
-                    aria-checked={convViewMode === 'mosaic'}
-                    aria-label="Vue mosaïque"
-                    title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
-                    onClick={() => {
-                      if (convViewMode === 'mosaic') {
-                        setConvViewMode('list')
-                        return
-                      }
-                      setConvViewMode('mosaic')
-                      // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
-                      // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
-                      // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
-                      // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
-                      // travail, et « Tout fermer » doit rester une mosaique vide.
-                      if (mosaicIdsRef.current.length === 0 && activeId)
-                        void ouvrirDansMosaique(activeId)
-                    }}
-                  >
-                    <span className="conv-view-toggle-knob" aria-hidden="true" />
-                  </button>
                 </>
               }
             />
@@ -5453,6 +5457,70 @@ export function ChatView({
             )}
             {lignesListe}
           </div>
+          {/* PIED DE LISTE (demande du 2026-09-23) : filtre de statut, densite et mosaique
+            vivent ici, plus dans l'en-tete. */}
+          <div className="conv-foot" data-testid="conv-foot">
+            <button
+              type="button"
+              className="conv-status-filter"
+              data-testid="conv-status-filter"
+              data-filter={convStatusFilter}
+              title={`Statut affiché : ${convStatusFilter} — cliquer pour changer`}
+              aria-label={`Filtrer par statut : ${convStatusFilter}`}
+              onClick={() =>
+                setConvStatusFilter((f) =>
+                  f === 'toutes' ? 'actives' : f === 'actives' ? 'inactives' : 'toutes'
+                )
+              }
+            >
+              {convStatusFilter === 'toutes'
+                ? 'Toutes'
+                : convStatusFilter === 'actives'
+                  ? '● Actives'
+                  : '○ Inactives'}
+            </button>
+            <span className="conv-foot-spacer" />
+        <button
+          type="button"
+          className="conv-density-toggle"
+          data-testid="conv-density-toggle"
+          data-density={convDensity}
+          title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
+          aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
+          onClick={() => setConvDensity(densiteSuivante(convDensity))}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            {traitsDensite(convDensity).map((y) => (
+              <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
+            ))}
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="conv-view-toggle"
+          data-testid="conv-view-toggle"
+          role="switch"
+          aria-checked={convViewMode === 'mosaic'}
+          aria-label="Vue mosaïque"
+          title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
+          onClick={() => {
+            if (convViewMode === 'mosaic') {
+              setConvViewMode('list')
+              return
+            }
+            setConvViewMode('mosaic')
+            // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
+            // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
+            // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
+            // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
+            // travail, et « Tout fermer » doit rester une mosaique vide.
+            if (mosaicIdsRef.current.length === 0 && activeId)
+              void ouvrirDansMosaique(activeId)
+          }}
+        >
+          <span className="conv-view-toggle-knob" aria-hidden="true" />
+        </button>
+          </div>
         </aside>
       </VueMesuree>
       {convMenu &&
@@ -5539,6 +5607,20 @@ export function ChatView({
                   ★
                 </span>
                 {convMenu.conv.surlignee ? 'Retirer le surlignage' : 'Surligner'}
+              </button>
+              <button
+                role="menuitem"
+                data-testid="conv-menu-inactive"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  void marquerInactive(conv.id, conv.inactive !== true)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  {convMenu.conv.inactive ? '●' : '○'}
+                </span>
+                {convMenu.conv.inactive ? 'Marquer comme active' : 'Marquer comme inactive'}
               </button>
               {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
