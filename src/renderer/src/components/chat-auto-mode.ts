@@ -424,8 +424,14 @@ const MESSAGES_ARRET: Record<string, string> = {
 // ordinaire. Il faut qu'il porte une DONNEE que seul l'utilisateur detient.
 const SUITE_PORTE_DONNEE_UTILISATEUR =
   /^\s*(?:voici|voil[aà]|je\s+te\s+(?:donne|colle|transmets|fournis|envoie))\s+(?:les|mes|le|la|l['’]|ma|nos|notre)\s*(?:\S+\s+){0,2}?(?:identifiants?|cl[ée]s?(?!\s+(?:de\s+(?:tri|cache|hachage)|primaires?|[ée]trang[eè]res?))|mots?\s+de\s+passe|tokens?|jetons?|secrets?|codes?\s+d['’]acc[eè]s|credentials?|logins?)(?![\p{L}])/iu
+// Mesure conv-798 : saisie ts 1790170650709 « Lance webtest record sur l'adresse de ma webapp que je
+// te donne : <adresse> » est partie SEULE, trou non rempli ; le tour suivant a dû redemander l'adresse,
+// puis (tour 093342be-fc36-4489-864d-f091af4ec015) l'agent a DEVINÉ un projet au hasard sur D:.
+// Un emplacement « : <mot> » en fin de ligne est une valeur que seul l'utilisateur peut écrire.
+// « commande webtest record <url> qui … » (spécification, saisie ts 1790170354034) ne l'est pas.
+const SUITE_A_TROU = /:\s*<[\p{L}][\p{L}\s_'’-]{0,30}>\s*$/mu
 export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
-  return SUITE_PORTE_DONNEE_UTILISATEUR.test(suite)
+  return SUITE_PORTE_DONNEE_UTILISATEUR.test(suite) || SUITE_A_TROU.test(suite)
 }
 
 /**

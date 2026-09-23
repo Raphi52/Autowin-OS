@@ -880,7 +880,8 @@
 :root[data-theme^='malvoyant-'] .sc-brain-call > header,
 :root[data-theme^='malvoyant-'] .sc-brain-call > footer,
 :root[data-theme^='malvoyant-'] .sc-brain-call > p,
-:root[data-theme^='malvoyant-'] .sc-brain-sources li {
+:root[data-theme^='malvoyant-'] .sc-brain-sources li,
+:root[data-theme^='malvoyant-'] .sc-annule-path {
   font-size: 13px;
 }
 

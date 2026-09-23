@@ -70,6 +70,50 @@ describe('journal des fichiers : mutations de l’agent du chat', () => {
     )
   })
 
+  it('trace un fichier modifié par une COMMANDE SHELL du chat (aucune preuve Edit/Write)', async () => {
+    const data = mkdtempSync(join(tmpdir(), 'autowin-journal-data-'))
+    configureAutowinAppDataBase(data)
+    const base = ensureAutowinAppData()
+    const ws = depot()
+    writeFileSync(join(ws, 'deja-sale.ts'), 'avant\n')
+    const registry = {
+      send: vi.fn(async (): Promise<SendResult> => {
+        // Ce que fait un `python`/`sed` lance par Bash : le fichier change, sans aucune preuve.
+        writeFileSync(join(ws, 'par-shell.css'), '.a{}\n')
+        return { text: 'Fait.', provider: 'claude', systemInjected: true } as SendResult
+      }),
+      describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 'test' }))
+    }
+    const pilot = new AgentPilot(
+      registry as never,
+      { getBinding: vi.fn(() => ({ provider: 'claude', model: 'm' })) } as never,
+      { catalog: vi.fn(() => []), snapshotForPrompt: vi.fn(async () => ({})), exec: vi.fn() } as never,
+      undefined,
+      undefined,
+      () => ws
+    )
+    await pilot.chat(
+      [{ role: 'user', content: 'modifie' }],
+      () => undefined,
+      undefined,
+      2,
+      'conv-shell',
+      undefined,
+      undefined,
+      undefined,
+      'turn-shell'
+    )
+
+    const traces = readConversationFileTraces('conv-shell', base)
+    // Seul le fichier CHANGE pendant le tour est attribue : `deja-sale.ts` l'etait deja avant.
+    expect(traces.map((t) => [t.turnId, t.source, t.paths])).toEqual([
+      ['turn-shell', 'chat_tool', ['par-shell.css']]
+    ])
+    expect(readCurrentConversationPathOwnership('conv-shell', base).map((o) => o.path)).toEqual([
+      'par-shell.css'
+    ])
+  })
+
   it('trace un Edit/Write natif du modèle du chat', async () => {
     const data = mkdtempSync(join(tmpdir(), 'autowin-journal-data-'))
     configureAutowinAppDataBase(data)

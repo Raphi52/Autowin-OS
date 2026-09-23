@@ -50,6 +50,18 @@ const history = (...turns: string[]): Message[] =>
     (content, index) => ({ role: index % 2 === 0 ? 'user' : 'assistant', content }) as Message
   )
 
+/** Horloge REELLE, prise avant `useFakeTimers` : les lectures git du tour avancent en vrai. */
+const vraiSetTimeout = globalThis.setTimeout
+async function jusquAuBout<T>(tour: Promise<T>): Promise<T> {
+  let fini = false
+  void tour.finally(() => (fini = true)).catch(() => undefined)
+  for (let i = 0; i < 400 && !fini; i++) {
+    await vi.advanceTimersByTimeAsync(10_000)
+    await new Promise((r) => vraiSetTimeout(r, 5))
+  }
+  return tour
+}
+
 describe('chat() — crash d execution a 0 token sur une session reprise', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -63,7 +75,7 @@ describe('chat() — crash d execution a 0 token sur une session reprise', () =>
   it('LACHE la session heritee avant le rejeu (le 2e essai ne refait pas le premier)', async () => {
     const captured: SendOptions[] = []
     const p = pilotAvecCrash(captured, 0)
-    await p.chat(history('tour 1'), () => {}, undefined, 1, 'conv-A')
+    await jusquAuBout(p.chat(history('tour 1'), () => {}, undefined, 1, 'conv-A'))
     expect(captured[0].resumeSessionId).toBeUndefined()
 
     const p2 = pilotAvecCrash(captured, 1)
@@ -74,8 +86,9 @@ describe('chat() — crash d execution a 0 token sur une session reprise', () =>
       1,
       'conv-A'
     )
-    await vi.advanceTimersByTimeAsync(10_000)
-    await encours
+    // Le tour fait de VRAIES lectures git (capture avant/apres du dossier, 2026-09-23) : l'attente
+    // de rejeu peut s'armer APRES un premier saut d'horloge. On avance donc jusqu'a la fin du tour.
+    await jusquAuBout(encours)
 
     // 2e appel du tour 2 = le rejeu : il ne doit PLUS reclamer la session qui vient de casser.
     expect(captured).toHaveLength(3)

@@ -140,6 +140,24 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
   })
 
+  it('relit les fichiers modifies a la FIN d’un tour du chat (sans quitter l’onglet)', async () => {
+    mockApi(GIT)
+    let emettre: ((e: unknown) => void) | null = null
+    ;(window as unknown as { api: { onPilotEvent: unknown } }).api.onPilotEvent = (
+      cb: (e: unknown) => void
+    ) => {
+      emettre = cb
+      return () => {}
+    }
+    await render()
+    expect(calls.conversationArgs).toEqual(['conv-a'])
+    await act(async () => {
+      emettre?.({ conversationId: 'conv-a', kind: 'done' })
+      await Promise.resolve()
+    })
+    expect(calls.conversationArgs).toEqual(['conv-a', 'conv-a'])
+  })
+
   it('vue par défaut : UNIQUEMENT les changements (ni branche ni historique)', async () => {
     mockApi(GIT)
     await render()
@@ -391,6 +409,34 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(onSendPrompt).toHaveBeenCalledTimes(1)
     expect(String(onSendPrompt.mock.calls[0][0])).toContain('commit')
     expect(container.querySelector('[data-testid="sc-prompt-input"]')).toBeNull()
+  })
+
+  it('« Annuler ces changements » demande une CONFIRMATION avant d’envoyer la demande', async () => {
+    mockApi(GIT)
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    await act(async () => {
+      ;(container.querySelector('[data-testid="sc-file"]') as HTMLDivElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const bouton = (): HTMLButtonElement =>
+      container.querySelector('[data-testid="sc-diff-annuler"]') as HTMLButtonElement
+    expect(bouton().textContent).toBe('Annuler ces changements')
+    act(() => bouton().click())
+    // Premier clic : rien ne part, le bouton demande confirmation.
+    expect(onSendPrompt).not.toHaveBeenCalled()
+    expect(bouton().textContent).toContain('Confirmer')
+    act(() => bouton().click())
+    expect(onSendPrompt).toHaveBeenCalledTimes(1)
+    expect(String(onSendPrompt.mock.calls[0][0])).toMatch(/^annule les changements de /)
+    expect(bouton().textContent).toBe('Annuler ces changements')
+    // Une fois annule, le fichier propose de REMETTRE ses changements.
+    const remettre = container.querySelector('[data-testid="sc-remettre"]') as HTMLButtonElement
+    expect(remettre.textContent).toBe('Remettre le changement')
+    act(() => remettre.click())
+    expect(String(onSendPrompt.mock.calls[1][0])).toMatch(/^remets les changements de /)
+    expect(container.querySelector('[data-testid="sc-remettre"]')).toBeNull()
   })
 
   it('le dépôt Worktree persisté ne change jamais le dépôt du Projet', async () => {

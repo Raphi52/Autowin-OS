@@ -21,7 +21,10 @@ import {
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { coupesParPoids } from './chat-session-poids'
 import { loadConvActivity } from './activity/conv-activity'
-import { appendWorkspaceMutationTrace } from './activity/trace-workspace-mutation'
+import {
+  appendWorkspaceMutationTrace,
+  captureMutationTraceBase
+} from './activity/trace-workspace-mutation'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import {
   buildTurnMessageBlocks,
@@ -713,6 +716,26 @@ export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
   const trailing = filterVisibleText(raw.slice(cursor))
   if (trailing) tokens.push({ kind: 'text', text: trailing })
   return tokens
+}
+
+/**
+ * Capture avant/apres du dossier du tour, ABANDONNEE des qu'on annule : elle coute ~200 ms de git
+ * sur un gros depot, et un Stop ne doit jamais attendre l'observabilite. Rend `undefined` = pas de
+ * trace pour ce tour, jamais une erreur.
+ */
+async function captureSaufAnnulation(
+  workspace: string,
+  signal?: AbortSignal
+): Promise<Awaited<ReturnType<typeof captureMutationTraceBase>>> {
+  if (signal?.aborted) return undefined
+  if (!signal) return captureMutationTraceBase(workspace, [])
+  return new Promise((resolve) => {
+    const abandon = (): void => resolve(undefined)
+    signal.addEventListener('abort', abandon, { once: true })
+    captureMutationTraceBase(workspace, [])
+      .then(resolve, () => resolve(undefined))
+      .finally(() => signal.removeEventListener('abort', abandon))
+  })
 }
 
 function waitForAnswer(answer: Promise<string>, signal?: AbortSignal): Promise<string> {
@@ -1987,6 +2010,7 @@ export class AgentPilot {
           ? recoveredProviderCall
           : undefined
       let res: SendResult | undefined = recoveredHere?.result
+      let etatAvantEnvoi: Awaited<ReturnType<typeof captureMutationTraceBase>>
       let callStartedAt = performance.now()
       let successfulStreamedPrefix = recoveredHere?.streamedPrefix ?? ''
       let successfulAttempt = recoveredHere?.attempt ?? 0
@@ -2008,6 +2032,12 @@ export class AgentPilot {
             emit({ kind: 'delta', streamId, text: segment.text, iteration: i })
           }
         }
+        // AVANT/APRES du tour (2026-09-23) : un fichier modifie par une commande shell (python,
+        // sed…) n'apparait dans aucune preuve Edit/Write, et l'onglet Fichiers restait a 0.
+        etatAvantEnvoi =
+          conversationId && workspaceDuTour
+            ? await captureSaufAnnulation(workspaceDuTour, signal)
+            : undefined
         try {
           callStartedAt = performance.now()
           timer.mark(`send${i}:start`)
@@ -2243,11 +2273,13 @@ export class AgentPilot {
        * (`ok: false`) n'est pas tracée ; l'écriture du journal ne fait jamais échouer le tour.
        */
       if (conversationId && workspaceDuTour) {
+        const dejaTraces = new Set<string>()
         for (const item of res.executionEvidence ?? []) {
           if (!item.ok || item.kind !== 'mutation') continue
           const paths = item.path ? [item.path] : (item.paths ?? [])
           if (paths.length === 0) continue
           const lines = item.writtenLineFingerprints
+          for (const p of paths) dejaTraces.add(p.replaceAll('\\', '/').toLowerCase())
           await appendWorkspaceMutationTrace({
             conversationId,
             ...(turnId ? { turnId } : {}),
@@ -2258,6 +2290,22 @@ export class AgentPilot {
               ? { pathLineFingerprints: { [paths[0]]: lines } }
               : {})
           })
+        }
+        if (etatAvantEnvoi) {
+          const etatApres = await captureSaufAnnulation(workspaceDuTour, signal)
+          const changes = [...(etatApres ?? [])]
+            .filter(([path, empreinte]) => etatAvantEnvoi.get(path) !== empreinte)
+            .map(([path]) => path)
+            .filter((path) => !dejaTraces.has(path.replaceAll('\\', '/').toLowerCase()))
+          if (changes.length > 0)
+            await appendWorkspaceMutationTrace({
+              conversationId,
+              ...(turnId ? { turnId } : {}),
+              workspaceRoot: workspaceDuTour,
+              source: 'chat_tool',
+              paths: changes,
+              before: etatAvantEnvoi
+            })
         }
       }
       if (res.usage) {
