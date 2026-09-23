@@ -194,3 +194,9 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(SOURCE_CONSTITUTION).toContain('ts=1788351936324')
   })
 })
+
+describe('reprise apres un tour arrete (conv-798, tour 556f1923-e1d1-403b-b43b-56dbf9248428)', () => {
+  it("dit au modele que « No response requested » est synthetique apres un Stop, pas sa faute", () => {
+    expect(CONSTITUTION).toMatch(/après un tour ARRÊTÉ[^\n]*SYNTHÉTIQUE « No response requested\. »[^\n]*n'est PAS de toi/)
+  })
+})
