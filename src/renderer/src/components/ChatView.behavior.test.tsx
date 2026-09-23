@@ -2691,6 +2691,28 @@ describe('ChatView behavior under concurrent UI actions', () => {
       expect(mockApi.resumePilotChat).toHaveBeenCalledWith('A')
     })
 
+    // conv-809 (2026-09-23) : « Réponse interrompue avant la fin » s'affichait puis la réponse
+    // repartait seule. Si le main dit que le tour VIT encore, le fil reste « en cours ».
+    it('promesse revenue mais tour encore vivant cote main : pas d’« interrompu »', async () => {
+      const turn = deferred<{ ok: boolean }>()
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A')]),
+        pilotChat: vi.fn(() => turn.promise),
+        pilotChatActive: vi.fn().mockResolvedValue({ active: true })
+      })
+      await mount(mockApi)
+      await click('.conv-pick')
+      await type('ma tâche longue')
+      await click('.composer-send')
+      await act(async () => {
+        turn.resolve({ ok: true })
+        await flushAnimationFrames()
+      })
+
+      expect(mockApi.pilotChatActive).toHaveBeenCalledWith('A')
+      expect(container!.textContent).not.toContain('Réponse interrompue avant la fin')
+    })
+
     // CONTRAT MIS À JOUR : l'échec n'est plus une part texte `⚠️ …` inerte (indistinguable d'un
     // contenu du modèle) mais un bloc d'ALERTE structuré, qui porte lui-même la reprise.
     it('échoué : rend une alerte structurée (cause + message) porteuse de la reprise', async () => {

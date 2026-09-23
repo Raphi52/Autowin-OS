@@ -103,7 +103,15 @@ export async function readConversationGitState(
               )
           )
         ).flat()
-        return [...pending, ...committed]
+        // Mesure 2026-09-23 (conv-804) : sur le journal réel, conv-626 possède 21 fichiers dont 14
+        // avec empreinte, et la liste en montrait 0 — tous retouchés depuis par un autre tour.
+        // L'utilisateur veut la liste de CE QUE la conversation a modifié : un fichier retouché
+        // depuis reste listé ; seul son diff reste refusé (il ne serait plus celui de la conversation).
+        const shown = new Set([...pending, ...committed].map((change) => workspaceTracePathKey(change.path)))
+        const retouched = [...expected.entries()]
+          .filter(([key]) => !shown.has(key))
+          .map(([, item]) => ({ path: item.path, status: 'retouched' as const, staged: false, workspaceRoot }))
+        return [...pending, ...committed, ...retouched]
       })
     )
   ).flat()

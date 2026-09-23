@@ -92,7 +92,9 @@ describe('conversation Git state', () => {
 
     rmSync(join(repo, 'foo.ts'))
     writeFileSync(join(repo, 'foo.ts'), 'modifié puis commité\n', 'utf8')
-    expect((await readConversationGitState('conv-commit', repo, spool)).state?.changes).toEqual([])
+    expect((await readConversationGitState('conv-commit', repo, spool)).state?.changes).toEqual([
+      expect.objectContaining({ path: 'foo.ts', status: 'retouched' })
+    ])
     expect((await readConversationGitDiff('conv-commit', 'foo.ts', repo, spool)).available).toBe(false)
   })
 
@@ -197,7 +199,9 @@ describe('conversation Git state', () => {
     execFileSync('git', ['restore', '--', 'foo.ts'], { cwd: repo })
     writeFileSync(join(repo, 'foo.ts'), 'état X\n', 'utf8')
 
-    expect((await readConversationGitState('conv-a', repo, spool)).state?.changes).toEqual([])
+    expect((await readConversationGitState('conv-a', repo, spool)).state?.changes).toEqual([
+      expect.objectContaining({ path: 'foo.ts', status: 'retouched' })
+    ])
     expect((await readConversationGitDiff('conv-a', 'foo.ts', repo, spool)).available).toBe(false)
 
     const externalBase = await captureWorkspaceMutationSnapshot(repo)
@@ -265,7 +269,9 @@ describe('conversation Git state', () => {
 
     execFileSync('git', ['restore', '--', 'dir/foo.ts'], { cwd: repo })
     rmSync(join(repo, 'dir', 'foo.ts'))
-    expect((await readConversationGitState('conv-delete', repo, spool)).state?.changes).toEqual([])
+    expect((await readConversationGitState('conv-delete', repo, spool)).state?.changes).toEqual([
+      expect.objectContaining({ path: 'dir/foo.ts', status: 'retouched' })
+    ])
   })
 
   it('rend une suppression non attribuable après une lacune entre deux processus', () => {
@@ -296,6 +302,9 @@ describe('conversation Git state', () => {
     ) as { before: string[]; after: string[] }
 
     expect(firstProcess.generationMarker).toMatch(/^missing:[0-9a-f-]+:0$/)
-    expect(secondProcess).toEqual({ before: [], after: [] })
+    expect(secondProcess).toEqual({
+      before: ['dir/foo.ts:retouched'],
+      after: ['dir/foo.ts:retouched']
+    })
   })
 })

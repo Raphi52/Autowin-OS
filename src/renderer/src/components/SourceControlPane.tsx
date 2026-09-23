@@ -13,7 +13,8 @@ const markGlyph: Record<GitChange['status'], string> = {
   renamed: '»',
   untracked: '?',
   conflicted: '!',
-  committed: '✓'
+  committed: '✓',
+  retouched: '~'
 }
 
 /**
