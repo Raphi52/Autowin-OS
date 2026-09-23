@@ -189,3 +189,98 @@ describe('orchestrate -- le signe de vie ne depend pas du modele', () => {
     expect(vus[0]).toContain('5 s')
   })
 })
+
+/**
+ * LA PHASE QUI DEMARRE DOIT ARRIVER DANS LE FIL -- mesure le 2026-09-16 (conv-63, run
+ * c295e4061094).
+ *
+ * L'utilisateur a demande « la conv semble a l'arret, c'est juste une impression ? » apres dix
+ * minutes. Releve du DOM de l'app reelle au moment de la question : le battement TOURNAIT bien
+ * (« 23 min 53 s · Bash · cd "C:/Sources/.../agent__run-c295e4061094-1" && cp /tmp/pee… »). Une
+ * horloge qui avance a cote d'un chemin absolu tronque ne dit pourtant rien de l'AVANCEMENT : les
+ * phases think, frame et build s'etaient succede — 21 000 caracteres de livrable — sans qu'aucune
+ * ne soit nommee a l'ecran.
+ *
+ * CAUSE, la meme classe que les deux correctifs precedents d'un cran plus loin : le rappel de
+ * DEBUT de phase existe dans `commands.ts` (il alimente `orchestrate-phase` et la trace causale)
+ * mais il n'a jamais touche `dernierSigneDeVie`. La seule source qui l'alimentait etait la note
+ * d'outil, qui ECRASE la phase des le premier Bash. On ne cree donc pas une source de plus : on
+ * branche celle qui existait sur le fil.
+ */
+function osQuiAnnonceUnePhase(phase: string, fin: Promise<void>): OsDouble {
+  const base = osQuiEmetUneNote('') as unknown as Record<string, unknown>
+  return {
+    ...base,
+    runTask: async (...args: unknown[]) => {
+      // Signature POSITIONNELLE de `runTask` (cf. le double voisin) : `args[2]` = onPhase.
+      const onPhase = args[2] as (p: { step: string; phase?: string }) => void
+      onPhase({ step: 'exec', phase })
+      await fin
+      return {
+        task: String(args[0] ?? ''),
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+  } as unknown as OsDouble
+}
+
+describe('orchestrate -- le battement nomme la phase en cours', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('annonce la phase des son demarrage, sans attendre le prochain battement', async () => {
+    vi.useFakeTimers()
+    const vus: string[] = []
+    let libere: () => void = () => {}
+    const fin = new Promise<void>((resolve) => {
+      libere = resolve
+    })
+    const bus = new AppCommandBus(osQuiAnnonceUnePhase('build', fin), () => {})
+
+    const tour = bus.exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      undefined,
+      (t) => vus.push(t)
+    )
+    await vi.advanceTimersByTimeAsync(1_000)
+    libere()
+    await tour
+
+    expect(vus[0]).toContain('build')
+  })
+
+  it('garde la phase dans les battements suivants, meme sans aucune note', async () => {
+    vi.useFakeTimers()
+    const vus: string[] = []
+    let libere: () => void = () => {}
+    const fin = new Promise<void>((resolve) => {
+      libere = resolve
+    })
+    const bus = new AppCommandBus(osQuiAnnonceUnePhase('frame', fin), () => {})
+
+    const tour = bus.exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      undefined,
+      (t) => vus.push(t)
+    )
+    await vi.advanceTimersByTimeAsync(12_000)
+    libere()
+    await tour
+
+    const horloges = vus.filter((ligne) => /\d+ s|\d+ min/.test(ligne))
+    expect(horloges.length).toBeGreaterThanOrEqual(2)
+    for (const ligne of horloges) expect(ligne).toContain('frame')
+  })
+})
