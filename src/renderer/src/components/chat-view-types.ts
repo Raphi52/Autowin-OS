@@ -134,6 +134,11 @@ export type Conv = {
    * quelles (`estMurDeQuota`, src/shared/reprise-quota.ts).
    */
   lastAssistantError?: string
+  /**
+   * Lien vers une session claude.exe importée (voir `Conversation.claudeExe`). `statut` porte le
+   * système actif/inactif de claude.exe, que le filtre de la liste reproduit.
+   */
+  claudeExe?: { sessionId: string; transcriptPath?: string; statut: 'active' | 'inactive' }
   /** Le dossier de travail de la conversation — le répertoire où l'agent travaille. */
   projectPath?: string
   /**

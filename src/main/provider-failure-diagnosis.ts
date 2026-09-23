@@ -236,6 +236,23 @@ export function diagnoseProviderFailure(failure: ProviderFailure): DiagnosedFail
 }
 
 /**
+ * Message d'échec d'un TOUR DE CHAT direct : l'erreur brute, suivie du geste de réparation quand on
+ * en connaît un. Le message d'origine reste INTACT en tête — les détecteurs aval (reprise
+ * surcharge, session expirée, quota) le lisent par inclusion, jamais par égalité.
+ *
+ * Pourquoi ce helper existe : ce module n'était appelé que par l'orchestrateur et le watchdog, le
+ * chat direct rendait l'erreur brute et un message assistant vide. Mesuré conv-737 (tour
+ * f0e1c2b0-a1c9-4140-8496-dc40709fcab9, 2026-09-21), récidive conv-5 (tour
+ * d98b3e44-bc1c-4d37-8495-d64f4bea225a, 2026-09-23) : « The model's tool call could not be parsed
+ * (retry also failed) », 0,0956 USD payés, et l'écran n'offrait aucun geste alors que `repairHint`
+ * savait déjà conseiller de relancer / monter l'effort / changer de modèle.
+ */
+export function describeChatTurnFailure(failure: ProviderFailure): string {
+  const diagnosed = diagnoseProviderFailure(failure)
+  return diagnosed.hint ? `${failure.message}\n→ ${diagnosed.hint}` : failure.message
+}
+
+/**
  * Message d'échec d'un fan-out qui NOMME le rôle, son provider et la cause.
  *
  * Ne prétend jamais connaître une cause qu'il n'a pas : sans aucune erreur collectée, on retombe sur le

@@ -17,6 +17,7 @@ import { registerPiperIpc } from './ipc/piper'
 import { registerActivityIpc } from './ipc/activity'
 import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerConversationsIpc } from './ipc/conversations'
+import { lireDossiersProjetsClaude } from './dossiers-claude-cli'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
 import { registerGitIpc } from './ipc/git'
@@ -2709,6 +2710,19 @@ Le fil reprend ensuite normalement.`
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
 
+  // fix-ok: cause mesurée — aucun code du dépôt ne lisait `~/.claude.json` (grep « claude.json »
+  // vide dans src/ avant ce travail) : la liste des dossiers du Chat ne pouvait donc pas
+  // s'enrichir des projets claude.exe. Sonde réelle sur le poste : 24 entrées `projects`,
+  // 5 vrais projets après filtre.
+  // Les projets déjà ouverts dans claude.exe (conv-5) : le main lit et FILTRE `~/.claude.json`,
+  // le renderer ne reçoit que des chemins de dossiers — jamais le contenu du profil (jetons,
+  // comptes). Relu à CHAQUE appel plutôt que mis en cache : le fichier bouge à chaque session
+  // claude.exe, et le renderer n'appelle qu'une fois par montage du Chat.
+  ipcMain.handle('os:dossiersClaudeCli', (event) => {
+    assertTrustedRendererSender(event, 'Dossiers Claude CLI')
+    return lireDossiersProjetsClaude()
+  })
+
   // Les canaux du Brain (graphe 3D, recherche, boite de reception) vivent dans
   // src/main/ipc/brain.ts.
   registerBrainIpc({
@@ -3600,9 +3614,12 @@ Le fil reprend ensuite normalement.`
       // règle auto-kaizen encore posée quand elle est restée intacte, avant que le moteur ne la voie.
       const seeded = seedWatchdogTasks(scheduledTasks)
       if (seeded.length) console.log(`[watchdog] règles livrées posées : ${seeded.length}`)
-      if (seedMaintenanceTask(scheduledTasks)) console.log('[task-manager] tâche Maintenance quotidienne posée')
-      if (seedGcTask(scheduledTasks)) console.log('[task-manager] tâche Garbage collector quotidienne posée')
-      if (seedCurateTask(scheduledTasks)) console.log('[task-manager] tâche Curation quotidienne posée')
+      if (seedMaintenanceTask(scheduledTasks))
+        console.log('[task-manager] tâche Maintenance quotidienne posée')
+      if (seedGcTask(scheduledTasks))
+        console.log('[task-manager] tâche Garbage collector quotidienne posée')
+      if (seedCurateTask(scheduledTasks))
+        console.log('[task-manager] tâche Curation quotidienne posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
       // l'historique déjà écrit ne réveille personne au démarrage.
       await watchdogEngine?.start()

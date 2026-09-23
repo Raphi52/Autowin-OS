@@ -167,10 +167,14 @@ export const verdictCapture = (mesures) => {
     // preuve montrerait autre chose que ce qu'elle affirme, et le juge la croirait.
     if (!mesures.declencheurTrouve) {
       echecs.push(`declencheur-absent(${mesures.declencheur})`)
-    } else if ((mesures.elementsAvantClic ?? 0) >= (mesures.elements ?? 0)) {
-      // Le declencheur existe, le clic part, et rien ne s'ouvre — deja ouvert, clic absorbe,
+    } else if ((mesures.elementsAvantClic ?? 0) === (mesures.elements ?? 0)) {
+      // Le declencheur existe, le clic part, et rien ne change — deja ouvert, clic absorbe,
       // handler non pose. Sans cette garde le verdict dirait « prouve » sur une vue inchangee.
       // Le DELTA est ce qui rend le clic falsifiable ; « j'ai clique » ne l'est pas.
+      // fix-ok: le critere exigeait un delta CROISSANT (ecrit pour les clics qui OUVRENT un
+      // popover) et refusait a tort un clic de FILTRE — mesure du 2026-09-23 : 1320 → 580
+      // elements apres clic sur .conv-status-filter, declare « clic-sans-effet ». Un clic mort
+      // rend un compte EGAL : c'est l'egalite qui le signe, pas le sens du delta.
       echecs.push(`clic-sans-effet(${mesures.declencheur})`)
     }
   }

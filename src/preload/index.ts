@@ -574,6 +574,12 @@ const api = {
 
   conversation: (id: string): Promise<Conversation | null> =>
     ipcRenderer.invoke('os:conversation', id),
+  /** Import (upsert) des conversations claude.exe — actives et inactives, lecture seule. */
+  conversationsImportClaudeExe: (): Promise<{
+    creees: number
+    statutsMisAJour: number
+    sessions: number
+  }> => ipcRenderer.invoke('os:conversations:importClaudeExe'),
   conversationsCreate: (p: {
     title: string
     category: string
@@ -607,6 +613,11 @@ const api = {
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. Rend l'état retenu. */
   conversationsSetHighlight: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setHighlight', id, on),
+  /**
+   * Les projets déjà ouverts dans claude.exe, filtrés côté main : uniquement des chemins de
+   * dossiers de travail, jamais le contenu du profil. Sert à pré-remplir la liste du Chat.
+   */
+  dossiersClaudeCli: (): Promise<string[]> => ipcRenderer.invoke('os:dossiersClaudeCli'),
   /** Marque (`true`) ou retire (`false`) le statut inactive d'une conversation. */
   conversationsSetInactive: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setInactive', id, on),
