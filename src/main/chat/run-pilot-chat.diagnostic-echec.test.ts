@@ -30,6 +30,18 @@ describe('échec du tour de chat direct (conv-5, tour d98b3e44-bc1c-4d37-8495-d6
     expect(describeChatTurnFailure({ provider: 'claude', message: brut })).toBe(brut)
   })
 
+  it('le bloc d’erreur du chat préserve les sauts de ligne du geste (contrat CSS)', () => {
+    // Le geste est ajouté sur SA ligne (`\n→ …`) ; sans `white-space: pre-line`, le rendu HTML
+    // l'aplatit en espace et le conseil se noie dans l'incident. Même sort pour les messages de
+    // fan-out (`describeFanoutFailure`), multi-lignes à dessein.
+    const css = readFileSync(
+      join(__dirname, '..', '..', 'renderer', 'src', 'components', 'ChatView.css'),
+      'utf8'
+    )
+    const bloc = /\.msg-error-message\s*\{[^}]*\}/.exec(css)?.[0] ?? ''
+    expect(bloc).toContain('white-space: pre-line')
+  })
+
   it('le chemin du chat direct appelle bien le diagnostic (contrat de source)', () => {
     // Même idiome que `chat-ipc-contract.test.ts` : la source du tour de chat doit passer par
     // `describeChatTurnFailure` dans son retour d'échec, sinon on retombe sur l'erreur brute.
