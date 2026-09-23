@@ -1948,12 +1948,6 @@ export function ChatView({
   }, [])
   useEffect(() => {
     let disposed = false
-    // Import claude.exe au montage : upsert idempotent, lecture seule sur ~/.claude. S'il trouve
-    // du nouveau, le main diffuse un refresh 'conversations' qui recharge la liste — pas besoin
-    // d'attendre ici. Optionnel (`?.`) : le harnais de test ne stubbe pas ce canal.
-    void window.api.conversationsImportClaudeExe?.().catch(() => {
-      // Un scan indisponible (pas de ~/.claude) ne doit pas empêcher la liste de charger.
-    })
     void Promise.resolve().then(async () => {
       await refreshConvs()
       // ALIGNEMENT AU MONTAGE : le main est la source de vérité de la conversation active. Le scout

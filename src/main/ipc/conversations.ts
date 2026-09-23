@@ -22,10 +22,6 @@
  */
 import { ipcMain } from 'electron'
 import { LOT_SUPPRESSION_MAX } from '../store/conversations'
-import {
-  messagesDepuisTranscriptClaude,
-  scannerSessionsClaudeExe
-} from '../store/import-claude-exe'
 import { removeConversationTurnJournals } from '../runs/turn-journal'
 import { removeConvActivity } from '../activity/conv-activity'
 import { appendConvActivity } from '../activity/conv-activity'
@@ -81,39 +77,10 @@ export function registerConversationsIpc({
     if (terme.trim().length === 0) return []
     return os.conversations.rechercherParContenu(terme)
   })
-  ipcMain.handle('os:conversation', async (event, rawId: unknown) => {
+  ipcMain.handle('os:conversation', (event, rawId: unknown) => {
     assertTrustedRendererSender(event, 'Conversation detail')
     if (isolatedTestInstance) compterLectureIsolee()
-    const conversation = os.conversations.get(guardString(rawId, 'conversationId')) ?? null
-    /*
-     * Fil claude.exe : les messages ne vivent PAS dans le store (315 Mo de transcripts sur le
-     * poste — contrainte volume de l'import), ils se relisent ICI, à l'ouverture, depuis le
-     * transcript `~/.claude/projects/...`. Lecture seule, jamais persistée.
-     */
-    if (conversation?.claudeExe && conversation.messages.length === 0) {
-      return {
-        ...conversation,
-        messages: await messagesDepuisTranscriptClaude(conversation.claudeExe.transcriptPath)
-      }
-    }
-    return conversation
-  })
-  /**
-   * Import (upsert) des conversations de claude.exe — actives ET inactives. Idempotent : la clé
-   * est l'id de session, un rappel rafraîchit seulement le statut. Lecture seule sur `~/.claude`.
-   *
-   * fix-ok: 3 édits de ce fichier = un même ajout réparti en 3 zones obligées (import du module,
-   * lecture paresseuse du fil dans os:conversation, ce canal d'import) — cause mesurée :
-   * import-claude-exe.test.ts 6/6 verts (vitest exit 0, 2026-09-23), aucun correctif à répétition.
-   */
-  ipcMain.handle('os:conversations:importClaudeExe', async (event) => {
-    assertTrustedRendererSender(event, 'Conversations import claude.exe')
-    const sessions = await scannerSessionsClaudeExe()
-    const bilan = os.conversations.importerSessionsClaudeExe(sessions)
-    if (bilan.creees > 0 || bilan.statutsMisAJour > 0) {
-      broadcast({ type: 'refresh', scope: 'conversations' })
-    }
-    return { ...bilan, sessions: sessions.length }
+    return os.conversations.get(guardString(rawId, 'conversationId')) ?? null
   })
   ipcMain.handle(
     'os:conversations:create',

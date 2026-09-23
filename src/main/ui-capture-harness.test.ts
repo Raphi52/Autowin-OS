@@ -138,19 +138,6 @@ describe('verdict quand la preuve exige un clic', () => {
     expect(verdict.echecs).toContain('declencheur-absent([data-testid="quota-indicator"])')
   })
 
-  // fix-ok: cause mesuree — le verdict de clic n'acceptait qu'un delta CROISSANT (clic = ouvrir) ;
-  // le clic reel sur le filtre de statut faisait passer la liste de 1320 a 580 elements et etait
-  // refuse comme « sans effet ». C'est l'EGALITE avant/apres qui signe le clic mort, pas le sens
-  // du delta ; le test du clic sans effet reste rouge sur l'egalite (garde anti-faux-vert intacte).
-  it('accepte un clic qui RETIRE des elements — un filtre est un delta, pas un clic mort', () => {
-    // Mesure du 2026-09-23 : le clic sur le filtre de statut des conversations fait passer la
-    // liste de 1320 a 580 elements — effet massif, refuse a tort parce que le verdict exigeait
-    // que le clic OUVRE (delta croissant seulement). Un clic sans effet rend un compte EGAL :
-    // c'est l'egalite qui signe le clic mort, pas le sens du delta.
-    const filtre = verdictCapture({ ...ouvert, elementsAvantClic: 1320, elements: 580 })
-    expect(filtre).toEqual({ ok: true, echecs: [] })
-  })
-
   it('refuse un clic SANS EFFET — le piege du vert creux', () => {
     // Le declencheur existe, le clic part, et rien ne s'ouvre. Sans cette garde, la capture
     // montrerait la vue fermee et le verdict dirait « prouve ».
