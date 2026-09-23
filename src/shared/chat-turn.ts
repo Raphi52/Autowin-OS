@@ -248,7 +248,11 @@ export function createChatTurn(turnId: string, runtime?: ChatTurnRuntime): ChatT
  * quelque chose, ni si du travail a ete perdu. Le mot est ajoute UNIQUEMENT si rien d'autre n'existe —
  * un tour qui a deja parle garde sa reponse intacte.
  */
-const MOT_ANNULE = 'Tour annulé avant toute réponse — rien n’a été exécuté.'
+// conv-798, tour caea20e6-d64b-436a-9af7-6912bdd13943 (saisie ts 1790162049307) : « annulé » sans
+// auteur a ete lu comme « réponse bizarre ». `cancelled` n'est pose que par un Stop (chat-turn-arret.ts) :
+// le dire, et dire quoi faire.
+export const MOT_ANNULE =
+  'Tour arrêté (bouton Stop) avant toute réponse — rien n’a été exécuté. Renvoie ton message si l’arrêt était involontaire.'
 const MOT_INTERROMPU =
   'Tour interrompu avant sa conclusion — le travail lancé a pu ne pas rendre son résultat.'
 
