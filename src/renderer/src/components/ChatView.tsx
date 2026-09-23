@@ -9,6 +9,7 @@ import {
   type Dispatch,
   type SetStateAction
 } from 'react'
+import { titreDepuisPremierMessage } from './titre-conversation'
 import { useBrancheCourante } from './branche-courante'
 import { presenceDepuisRunsVivants } from './run-presence'
 import { useClampDansFenetre } from './useClampDansFenetre'
@@ -4211,7 +4212,7 @@ export function ChatView({
       if (!convId) {
         const identity = await refreshRuntimeIdentity()
         const titleSource = value || outgoingAttachments[0].name
-        const title = titleSource.length > 42 ? `${titleSource.slice(0, 42)}…` : titleSource
+        const title = titreDepuisPremierMessage(titleSource)
         const c = await window.api.conversationsCreate({
           title,
           category: identity.provider,

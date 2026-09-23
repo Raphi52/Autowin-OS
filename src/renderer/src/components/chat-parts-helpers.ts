@@ -122,3 +122,22 @@ export function failedTask(actions: ChatActionPart[]): string | undefined {
   }
   return undefined
 }
+
+/**
+ * LIGNE D'ETAT AU LANCEMENT d'un travail (orchestration). Entre le clic et le premier signe de vie,
+ * le fil ne disait que « 1 action en cours » : l'utilisateur ne savait ni QUOI tournait, ni OU.
+ * Rendue seulement tant qu'aucun battement (`progress`) n'est arrive — ensuite c'est lui qui parle.
+ */
+export function ligneEtatLancement(actions: ChatActionPart[]): string | undefined {
+  const enVol = actions.find(
+    (action) =>
+      action.name === 'orchestrate' && action.ok === undefined && !action.interrupted && !action.progress
+  )
+  if (!enVol) return undefined
+  const task = (enVol.args as { task?: unknown } | undefined)?.task
+  const quoi =
+    typeof task === 'string' && task.trim()
+      ? ` : « ${task.trim().length > 100 ? `${task.trim().slice(0, 99)}…` : task.trim()} »`
+      : ''
+  return `Travail lancé${quoi} — dans une copie de travail séparée, résultat vérifié avant de revenir ici.`
+}

@@ -22,6 +22,7 @@ import {
   iconeFamille,
   interruptedTask,
   raisonDuLien,
+  ligneEtatLancement,
   resumeCible
 } from './chat-parts-helpers'
 
@@ -526,6 +527,8 @@ export function AssistantActivityGroup({
   const battement = [...actions]
     .reverse()
     .find((action) => action.ok === undefined && !action.interrupted && action.progress)?.progress
+  // Avant le premier battement, la ligne d'etat du lancement dit QUOI tourne et OU.
+  const ligneEtat = battement ?? ligneEtatLancement(actions)
   const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`
   const status = running
     ? completedCount > 0
@@ -666,9 +669,9 @@ export function AssistantActivityGroup({
           )}
         </button>
         {/* Hors du bouton : c'est une INFORMATION qui change toute seule, pas une cible de clic. */}
-        {battement && (
-          <div className="activity-progress" data-testid="activity-progress" title={battement}>
-            {battement}
+        {ligneEtat && (
+          <div className="activity-progress" data-testid="activity-progress" title={ligneEtat}>
+            {ligneEtat}
           </div>
         )}
         {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,

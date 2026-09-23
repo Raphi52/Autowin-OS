@@ -18,7 +18,12 @@ import { AssistantActivityGroup } from './ChatView.parts'
 import { clotureEnDernier } from './cloture-en-dernier'
 import { CheckIcon, CopyIcon, ForkIcon, InspectIcon } from './chat-view-icons'
 import { formatFileSize } from './chat-attachments'
-import { groupAssistantActivity, type ChatErrorPart, type ChatPart } from './chat-view-model'
+import {
+  groupAssistantActivity,
+  libelleCoutDuTour,
+  type ChatErrorPart,
+  type ChatPart
+} from './chat-view-model'
 import { bilanDuTour, formaterBilan } from './bilan-tour'
 import { estErreurAuthExpiree } from './erreur-auth'
 import type { TerminalStatus } from './chat-resume-refine'
@@ -623,6 +628,11 @@ export const ChatMessageRow = memo(
           })()}
         <div className="msg-turn-actions">
           <CopyMessageButton message={message} />
+          {libelleCoutDuTour((message as { coutUsd?: number }).coutUsd) && (
+            <span className="c-faint tnum msg-turn-cost" data-testid="msg-turn-cost">
+              {libelleCoutDuTour((message as { coutUsd?: number }).coutUsd)}
+            </span>
+          )}
           {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
             <button
               type="button"

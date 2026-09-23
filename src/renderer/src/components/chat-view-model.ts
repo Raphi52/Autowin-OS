@@ -91,6 +91,11 @@ export interface HydratedAssistantMessage {
    */
   reasoning?: string
   /**
+   * COUT DU TOUR tel que le fournisseur l'a rendu dans l'evenement `done` (`usage.costUsd`).
+   * Recopie, jamais recalcule : le seul chiffre de reference reste celui du main.
+   */
+  coutUsd?: number
+  /**
    * Signe de vie TECHNIQUE du provider — REMPLACE le precedent, jamais accumule, jamais persiste,
    * jamais melange au bloc « Reflexion ».
    */
@@ -761,6 +766,9 @@ export function reduceAssistantPilotEvent(
     turnEvent
   )
   const done = next.status !== 'streaming'
+  const coutRecu =
+    event.kind === 'done' ? (event as { usage?: { costUsd?: unknown } }).usage?.costUsd : undefined
+  const coutUsd = typeof coutRecu === 'number' ? coutRecu : message.coutUsd
   return {
     role: 'assistant',
     turnId,
@@ -768,8 +776,15 @@ export function reduceAssistantPilotEvent(
     parts: done ? settleUnresolvedActions(next.parts) : next.parts,
     status: next.status,
     done,
-    ...(next.error ? { error: next.error } : {})
+    ...(next.error ? { error: next.error } : {}),
+    ...(coutUsd !== undefined ? { coutUsd } : {})
   }
+}
+
+/** Libelle du cout d'un tour ; rien quand le fournisseur ne l'a pas chiffre (jamais « 0 $ » invente). */
+export function libelleCoutDuTour(coutUsd: number | undefined): string | undefined {
+  if (typeof coutUsd !== 'number' || !Number.isFinite(coutUsd) || coutUsd <= 0) return undefined
+  return `coût du tour : ${coutUsd < 0.01 ? coutUsd.toFixed(4) : coutUsd.toFixed(2)} $`
 }
 
 interface RuntimeSlot {
