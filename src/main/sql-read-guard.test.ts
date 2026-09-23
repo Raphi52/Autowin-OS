@@ -779,3 +779,42 @@ describe('decideSqlRead — pas de faux refus sur des colonnes réelles', () => 
     }
   })
 })
+
+describe('decideSqlRead — COMMUN_RIG lisible, secrets exclus (décision du 2026-09-23)', () => {
+  const avecCommun = buildSqlTargetCatalog([{ server: 'SQL-PROD\PROD', database: 'COMMUN_RIG' }])
+  const lire = (query: string): ReturnType<typeof decideSqlRead> =>
+    decideSqlRead({ server: 'SQL-PROD\PROD', database: 'COMMUN_RIG', query }, avecCommun)
+
+  it('laisse lire la liste des greffes exploités', () => {
+    expect(
+      lire('SELECT GRF_NOMBASE_BD, GRF_SERVEUR_BD FROM dbo.GREFFE WHERE GRF_IS_EXPLOIT = 1').allowed
+    ).toBe(true)
+    expect(lire('SELECT COUNT(*) AS n FROM dbo.GREFFE').allowed).toBe(true)
+    expect(lire("SELECT name FROM sys.columns WHERE name = 'GRF_PWD_BD'").allowed).toBe(true)
+  })
+
+  it('refuse * sous toutes ses formes', () => {
+    for (const q of [
+      'SELECT * FROM dbo.GREFFE',
+      'SELECT g.* FROM dbo.GREFFE g',
+      'SELECT (SELECT TOP 1 * FROM dbo.GREFFE FOR JSON PATH) AS j'
+    ]) {
+      expect(lire(q).allowed, q).toBe(false)
+    }
+  })
+
+  it('refuse chaque colonne secrète connue, même délimitée', () => {
+    for (const col of [
+      'GRF_PWD_BD',
+      '[GRF_INFOGREFFE_PASSWORD]',
+      'GRF_DOCVERIF_PASSWORD',
+      '"GRF_WS_IDNUM_CLEF_API"'
+    ]) {
+      expect(lire(`SELECT ${col} FROM dbo.GREFFE`).allowed, col).toBe(false)
+    }
+  })
+
+  it('ne touche pas aux bases greffe : * y reste permis', () => {
+    expect(decide({ server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT * FROM dbo.GREFFIER' }).allowed).toBe(true)
+  })
+})

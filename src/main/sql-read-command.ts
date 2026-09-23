@@ -118,6 +118,7 @@ export async function runSqlRead(
       nature: 'base',
       nom: decision.database,
       operation: 'sql-read',
+      ...(deps.conversationId ? { conversationId: deps.conversationId } : {}),
       ...(deps.jetonProd ? { jeton: deps.jetonProd } : {})
     })
     if (!verdict.autorise) {
@@ -141,6 +142,7 @@ export async function runSqlRead(
         nature: 'base',
         nom: decision.database,
         operation: 'sql-read',
+      ...(deps.conversationId ? { conversationId: deps.conversationId } : {}),
         ...(reponse.type === 'jeton' ? { jeton: reponse.valeur } : { confirme: true })
       })
       if (!reprise.autorise) return { ok: false, reason: reprise.motif }
