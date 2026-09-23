@@ -580,7 +580,14 @@
 :root[data-theme^='malvoyant-'] .home-chat__meta b,
 :root[data-theme^='malvoyant-'] .home-chat__meta em,
 :root[data-theme^='malvoyant-'] .home-chat__bulle,
+:root[data-theme^='malvoyant-'] .home-chat__piece,
+:root[data-theme^='malvoyant-'] .home-chat__piece::before,
+:root[data-theme^='malvoyant-'] .home-chat__piece-taille,
 :root[data-theme^='malvoyant-'] .home-chat__saisie,
+:root[data-theme^='malvoyant-'] .home-chat__depot-calque span,
+:root[data-theme^='malvoyant-'] .home-chat__depot-invite,
+:root[data-theme^='malvoyant-'] .home-chat__pieces li,
+:root[data-theme^='malvoyant-'] .home-chat__pieces em,
 :root[data-theme^='malvoyant-'] .home-chat__envoyer,
 :root[data-theme^='malvoyant-'] .home-chat__annuler,
 :root[data-theme^='malvoyant-'] .home-chat__ouvrir,
@@ -1039,8 +1046,11 @@
 :root[data-theme^='malvoyant-'] .workflow-execution-detail dd,
 :root[data-theme^='malvoyant-'] .workflow-execution-warning,
 :root[data-theme^='malvoyant-'] .workflow-execution-reasoning > summary,
+:root[data-theme^='malvoyant-'] .workflow-execution-exchange > details > summary,
 :root[data-theme^='malvoyant-'] .workflow-execution-reasoning pre,
-:root[data-theme^='malvoyant-'] .workflow-execution-turn-select {
+:root[data-theme^='malvoyant-'] .workflow-execution-exchange pre,
+:root[data-theme^='malvoyant-'] .workflow-execution-turn-select,
+:root[data-theme^='malvoyant-'] .workflow-execution-exchange-empty {
   font-size: 13px;
 }
 
@@ -1101,7 +1111,15 @@
 :root[data-theme^='malvoyant-'] .wt-topologie-elide-libelle,
 :root[data-theme^='malvoyant-'] .wt-topologie-legende,
 :root[data-theme^='malvoyant-'] .wt-cdp-nombre span,
-:root[data-theme^='malvoyant-'] .wt-cdp-pastille {
+:root[data-theme^='malvoyant-'] .wt-cdp-pastille,
+:root[data-theme^='malvoyant-'] .wt-conflit-quoi span,
+:root[data-theme^='malvoyant-'] .wt-conflit-erreur,
+:root[data-theme^='malvoyant-'] .wt-st-entete,
+:root[data-theme^='malvoyant-'] .wt-st-auteur,
+:root[data-theme^='malvoyant-'] .wt-st-date,
+:root[data-theme^='malvoyant-'] .wt-st-ref,
+:root[data-theme^='malvoyant-'] .wt-st-elision,
+:root[data-theme^='malvoyant-'] .wt-geste code {
   font-size: 13px;
 }
 
