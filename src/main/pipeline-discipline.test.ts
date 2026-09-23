@@ -171,7 +171,19 @@ describe('discipline de pipeline canonique', () => {
 
     // Ouvrent une preuve que rien d'autre ne donne : doivent etre NOMMEES dans la consigne, sinon
     // l'agent ne les appellera jamais.
-    const CONTRAT_DE_PREUVE = ['--click', '--css', '--motion', '--out', '--state', '--view']
+    // `--theme` (arrive par la mise a jour amont du 2026-09-22, classe le 2026-09-23) : il ouvre
+    //   une preuve qu'AUCUNE navigation ne donne — la liste deroulante des themes est un <select>
+    //   natif Windows, qui s'ouvre HORS de la page : aucun clic scriptable n'y choisit une option,
+    //   donc un theme n'etait tout simplement pas capturable. Il appartient au contrat.
+    const CONTRAT_DE_PREUVE = [
+      '--click',
+      '--css',
+      '--motion',
+      '--out',
+      '--state',
+      '--theme',
+      '--view'
+    ]
     // Reglages a valeur par defaut suffisante : ils affinent une preuve deja accessible, ils n'en
     // ouvrent aucune. Les annoncer allongerait une consigne injectee a chaque appel pour rien.
     // `--scroll` (arrive par la mise a jour amont du 2026-09-21) : il AMENE la cible dans le
