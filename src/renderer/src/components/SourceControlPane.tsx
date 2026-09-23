@@ -13,7 +13,8 @@ const markGlyph: Record<GitChange['status'], string> = {
   renamed: '»',
   untracked: '?',
   conflicted: '!',
-  committed: '✓'
+  committed: '✓',
+  retouched: '~'
 }
 
 /**
@@ -345,9 +346,12 @@ export function SourceControlPane({
                                 <Spinner /> Chargement du diff…
                               </div>
                             ) : diff.available ? (
-                              <DiffView diff={diff.diff ?? ''} />
+                              <>
+                                {diff.note ? <div className="sc-clean">{diff.note}</div> : null}
+                                <DiffView diff={diff.diff ?? ''} />
+                              </>
                             ) : (
-                              <div className="sc-clean">Diff indisponible.</div>
+                              <div className="sc-clean">Diff indisponible{diff.error ? ` : ${diff.error}` : '.'}</div>
                             )}
                           </div>
                           <div className="sc-diff-actions">

@@ -3307,6 +3307,28 @@ export function ChatView({
    * actions sans issue deviennent `interrupted` et cessent de se lire « en cours ». L'issue ne
    * viendra jamais — le dire est la verite, la maquiller en echec constate (`ok: false`) serait faux.
    */
+  /**
+   * Le tour tourne-t-il ENCORE cote processus principal alors que sa promesse d'envoi est revenue ?
+   *
+   * Symptome vecu (conv-809, 2026-09-23) : « Reponse interrompue avant la fin » s'affichait, puis la
+   * reponse repartait toute seule. Cause : les `finally` d'envoi et de reprise marquaient le tour
+   * `interrupted` sur la seule fin de la promesse, sans demander a l'autorite (`pilotChatActive`)
+   * si le tour vivait encore — puis `resumed`/les deltas le rallumaient. Choix utilisateur : garder
+   * le tour « en cours » jusqu'a sa vraie fin. Un tour reellement mort est clos par la VEILLE
+   * (deux sondes negatives -> `libererTourFantome`). Sonde absente/en echec = pas de preuve de vie.
+   */
+  async function tourEncoreVivant(id: string): Promise<boolean> {
+    const dernier = [...(liveMessagesRef.current.get(id) ?? [])]
+      .reverse()
+      .find((message) => message.role === 'assistant') as AsstMsg | undefined
+    if (!dernier || dernier.done || dernier.status !== 'streaming') return false
+    try {
+      return (await window.api.pilotChatActive?.(id))?.active === true
+    } catch {
+      return false
+    }
+  }
+
   function libererTourFantome(id: string): void {
     setConversationInterrupting(id, false)
     if (!busyConversationsRef.current.has(id)) return
@@ -4350,51 +4372,54 @@ export function ChatView({
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
         )
-        patchLast(convId, (m) => {
-          if (m.status === 'streaming') m.status = 'interrupted'
-          m.done = true
-          // Un tour annulé/interrompu porte désormais son propre libellé terminal (msg-terminal) :
-          // le remplissage « aucune réponse » ferait doublon et masquerait la vraie raison.
-          if (m.parts.length === 0 && m.status !== 'cancelled' && m.status !== 'interrupted')
-            m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
-        })
-        setConversationBusy(convId, false)
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-        )
-        const rendered = [...(liveMessagesRef.current.get(convId) ?? [])]
-          .reverse()
-          .find((message) => message.role === 'assistant') as AsstMsg | undefined
-        const renderedText =
-          rendered?.parts
-            .filter((part) => part.kind === 'text')
-            .map((part) => part.text)
-            .join('\n') ?? ''
-        if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
-        // Le tour s'est CLOS sans erreur, mais tout ce qu'il a rendu est l'incident du fournisseur :
-        // c'est la même perte qu'un échec, elle passait juste par un autre chemin. On la fait juger
-        // par la MÊME porte, avec le texte rendu — jamais par une règle parallèle.
-        if (!repriseApresSurcharge) {
-          const surTexte = deciderRepriseSurcharge({
-            ok: true,
-            cancelled: false,
-            texteRendu: renderedText,
-            tentativesDejaFaites: options?.repriseSurcharge ?? 0
+        // Toujours vivant cote main : rien a clore, la fin viendra par ses propres evenements.
+        if (!(await tourEncoreVivant(convId))) {
+          patchLast(convId, (m) => {
+            if (m.status === 'streaming') m.status = 'interrupted'
+            m.done = true
+            // Un tour annulé/interrompu porte désormais son propre libellé terminal (msg-terminal) :
+            // le remplissage « aucune réponse » ferait doublon et masquerait la vraie raison.
+            if (m.parts.length === 0 && m.status !== 'cancelled' && m.status !== 'interrupted')
+              m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
           })
-          if (surTexte.action === 'forker-et-reprendre') {
-            repriseApresSurcharge = {
-              tentative: surTexte.tentative,
-              attenteMs: surTexte.attenteMs,
-              ancre: ancreCopieSurcharge
-            }
-            patchLast(convId, (m) => {
-              m.status = 'failed'
-              m.parts.push({
-                kind: 'error',
-                cause: 'turn',
-                message: `${renderedText.trim()} — ${libelleReprise(surTexte.tentative)}`
-              })
+          setConversationBusy(convId, false)
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          )
+          const rendered = [...(liveMessagesRef.current.get(convId) ?? [])]
+            .reverse()
+            .find((message) => message.role === 'assistant') as AsstMsg | undefined
+          const renderedText =
+            rendered?.parts
+              .filter((part) => part.kind === 'text')
+              .map((part) => part.text)
+              .join('\n') ?? ''
+          if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
+          // Le tour s'est CLOS sans erreur, mais tout ce qu'il a rendu est l'incident du fournisseur :
+          // c'est la même perte qu'un échec, elle passait juste par un autre chemin. On la fait juger
+          // par la MÊME porte, avec le texte rendu — jamais par une règle parallèle.
+          if (!repriseApresSurcharge) {
+            const surTexte = deciderRepriseSurcharge({
+              ok: true,
+              cancelled: false,
+              texteRendu: renderedText,
+              tentativesDejaFaites: options?.repriseSurcharge ?? 0
             })
+            if (surTexte.action === 'forker-et-reprendre') {
+              repriseApresSurcharge = {
+                tentative: surTexte.tentative,
+                attenteMs: surTexte.attenteMs,
+                ancre: ancreCopieSurcharge
+              }
+              patchLast(convId, (m) => {
+                m.status = 'failed'
+                m.parts.push({
+                  kind: 'error',
+                  cause: 'turn',
+                  message: `${renderedText.trim()} — ${libelleReprise(surTexte.tentative)}`
+                })
+              })
+            }
           }
         }
       }
@@ -4523,11 +4548,13 @@ export function ChatView({
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
       )
-      patchLast(conversationId, (message) => {
-        if (message.status === 'streaming') message.status = 'interrupted'
-        message.done = true
-      })
-      setConversationBusy(conversationId, false)
+      if (!(await tourEncoreVivant(conversationId))) {
+        patchLast(conversationId, (message) => {
+          if (message.status === 'streaming') message.status = 'interrupted'
+          message.done = true
+        })
+        setConversationBusy(conversationId, false)
+      }
     }
   }
 

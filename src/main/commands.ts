@@ -179,6 +179,10 @@ import {
 import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace } from './activity/brain-trace-spool'
 import {
+  appendWorkspaceMutationTrace,
+  captureMutationTraceBase
+} from './activity/trace-workspace-mutation'
+import {
   appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
   normalizeWorkspaceTracePath,
@@ -3973,11 +3977,26 @@ export class AppCommandBus {
         )
       }
       case 'create_file':
-        return this.runCreateFile({ path: a.path, content: a.content })
+        return await this.runTracedFileCommand(
+          [a.path],
+          () => this.runCreateFile({ path: a.path, content: a.content }),
+          conversationId,
+          turnId
+        )
       case 'move_file':
-        return this.runMoveFile({ from: a.from, to: a.to })
+        return await this.runTracedFileCommand(
+          [a.from, a.to],
+          () => this.runMoveFile({ from: a.from, to: a.to }),
+          conversationId,
+          turnId
+        )
       case 'delete_file':
-        return this.runDeleteFile({ path: a.path })
+        return await this.runTracedFileCommand(
+          [a.path],
+          () => this.runDeleteFile({ path: a.path }),
+          conversationId,
+          turnId
+        )
       case 'run_status':
         return await this.runWorktreeStatus(a.agentId)
       default:
@@ -4744,6 +4763,35 @@ export class AppCommandBus {
    * celui qui compte : les bornes pures de `file-ops-command.ts`, plus `verify` que l'agent doit
    * lancer ensuite (la description de chaque commande le dit).
    */
+  /**
+   * JOURNAL DES FICHIERS pour create/move/delete_file : seule `edit_file` y écrivait, donc ces
+   * mutations restaient invisibles dans l'onglet Fichiers. Une commande refusée n'écrit rien.
+   */
+  private async runTracedFileCommand<R extends { allowed: boolean }>(
+    rawPaths: unknown[],
+    run: () => R,
+    conversationId?: string,
+    turnId?: string
+  ): Promise<R> {
+    const workspaceRoot = this.workspaceDuTour
+    const paths = rawPaths.filter((path): path is string => typeof path === 'string')
+    const before = conversationId
+      ? await captureMutationTraceBase(workspaceRoot, paths)
+      : undefined
+    const outcome = run()
+    if (outcome.allowed && conversationId) {
+      await appendWorkspaceMutationTrace({
+        conversationId,
+        ...(turnId ? { turnId } : {}),
+        workspaceRoot,
+        source: 'file_command',
+        paths,
+        before
+      })
+    }
+    return outcome
+  }
+
   private runCreateFile(input: { path: unknown; content: unknown }): {
     allowed: boolean
     reason?: string

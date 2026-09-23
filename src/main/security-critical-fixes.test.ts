@@ -502,7 +502,10 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     fix-ok: cause mesuree — ce fil-piege compte les canaux d'index.ts ; l'ajout du canal
     //     d'import l'a fait passer de 200 a 201 (rouge avant reprise du compte, vert apres),
     //     exactement le declenchement voulu : forcer l'audit du nouveau canal ci-dessus.
-    expect(handlers).toHaveLength(201)
+    //   +1 : `project:openInVscode` (bouton « Ouvrir dans VS Code » de l onglet Projet), garde.
+    //   +1 : `os:conversations:importClaudeExe` (import claude.exe, conv-4) : lecture seule de
+    //     ~/.claude, aucun argument du renderer, garde de sender en tete (unguarded reste vide).
+    expect(handlers).toHaveLength(204)
     expect(unguarded).toEqual([])
   })
 

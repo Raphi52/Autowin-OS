@@ -205,6 +205,8 @@ const api = {
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
   // Onglet « Projet » : arborescence + editeur. Chemins RELATIFS ; la racine vit cote principal.
   projectRoot: (): Promise<string> => ipcRenderer.invoke('project:root'),
+  openProjectInVscode: (): Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }> =>
+    ipcRenderer.invoke('project:openInVscode'),
   listProjectDir: (path?: string): Promise<ProjectListResult> =>
     ipcRenderer.invoke('project:list', path ?? ''),
   readProjectFile: (path: string): Promise<ProjectReadResult> =>

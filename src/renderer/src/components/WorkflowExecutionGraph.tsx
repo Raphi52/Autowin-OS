@@ -740,33 +740,35 @@ export function WorkflowExecutionGraph({
                   </span>
                 </span>
               </button>
+              {/* LA BRIQUE SE DÉPLIE SUR PLACE (demande du 2026-09-23) : le détail vit sous la
+                  brique cliquée, dans l'arbre, et non dans un bloc séparé sous tout le graphe. */}
+              {selectedId === node.id && (
+                <div
+                  className="workflow-execution-detail is-inline"
+                  role="region"
+                  aria-label="Détail de l’étape sélectionnée"
+                >
+                  <ExecutionNodeDetail
+                    event={node.event}
+                    offsetMs={offsetFromStart(node.event.timestamp, baseMs)}
+                  />
+                  <ExecutionNodeExchange event={node.event} />
+                  <ExecutionNodeReasoning event={node.event} />
+                  {node.issues.length > 0 && (
+                    <p className="workflow-execution-warning">
+                      Trace partielle · {node.issues.join(', ')}
+                    </p>
+                  )}
+                  {node.event.display?.limitation && (
+                    <p className="workflow-execution-warning">{node.event.display.limitation}</p>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {selected && (
-        <aside className="workflow-execution-detail" aria-label="Détail de l’étape sélectionnée">
-          <header>
-            <strong>{selected.event.display?.title ?? EVENT_LABEL[selected.event.kind]}</strong>
-            <span>{statusLabel(selected.event.status)}</span>
-          </header>
-          <ExecutionNodeDetail
-            event={selected.event}
-            offsetMs={offsetFromStart(selected.event.timestamp, baseMs)}
-          />
-          <ExecutionNodeExchange event={selected.event} />
-          <ExecutionNodeReasoning event={selected.event} />
-          {selected.issues.length > 0 && (
-            <p className="workflow-execution-warning">
-              Trace partielle · {selected.issues.join(', ')}
-            </p>
-          )}
-          {selected.event.display?.limitation && (
-            <p className="workflow-execution-warning">{selected.event.display.limitation}</p>
-          )}
-        </aside>
-      )}
     </section>
   )
 }

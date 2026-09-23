@@ -44,8 +44,8 @@ async function main(): Promise<void> {
     )
     process.stdout.write(
       JSON.stringify({
-        before: beforeRestartMutation.state?.changes.map((change) => change.path) ?? [],
-        after: afterRestartMutation.state?.changes.map((change) => change.path) ?? []
+        before: beforeRestartMutation.state?.changes.map((change) => `${change.path}:${change.status}`) ?? [],
+        after: afterRestartMutation.state?.changes.map((change) => `${change.path}:${change.status}`) ?? []
       })
     )
   } else {

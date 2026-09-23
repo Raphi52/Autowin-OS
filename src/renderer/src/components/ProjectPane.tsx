@@ -20,6 +20,7 @@ export function ProjectPane(): React.JSX.Element {
   const [initial, setInitial] = useState('')
   const [etat, setEtat] = useState<string>('')
   const [erreur, setErreur] = useState<string>('')
+  const [vscodeEnCours, setVscodeEnCours] = useState(false)
 
   const lister = useCallback(async (chemin: string): Promise<ProjectEntry[]> => {
     const r = await window.api.listProjectDir(chemin)
@@ -155,6 +156,27 @@ export function ProjectPane(): React.JSX.Element {
 
   return (
     <div className="project-pane" data-testid="project-pane">
+      <div className="pp-barre">
+        <button
+          type="button"
+          className="pp-vscode"
+          data-testid="pp-vscode"
+          title="Ouvrir tout le projet dans VS Code"
+          disabled={vscodeEnCours}
+          onClick={() => {
+            setVscodeEnCours(true)
+            setErreur('')
+            void window.api
+              .openProjectInVscode()
+              .then((r) => {
+                if (!r.ok) setErreur(`VS Code : ${r.raison}`)
+              })
+              .finally(() => setVscodeEnCours(false))
+          }}
+        >
+          {vscodeEnCours ? 'Ouverture (installation si absent)…' : 'Ouvrir dans VS Code'}
+        </button>
+      </div>
       <div className="pp-arbre scroll-y" role="tree" aria-label="Arborescence du projet">
         {racines.length === 0 && <div className="c-faint pp-vide">Arborescence vide.</div>}
         {racines.map((e) => rendreNoeud(e, 0))}

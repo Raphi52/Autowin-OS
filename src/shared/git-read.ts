@@ -10,6 +10,8 @@ export type GitFileStatus =
   'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted'
   /** Fichier de la conversation déjà commité : diff = son dernier commit, pas l'arbre courant. */
   | 'committed'
+  /** Modifié par la conversation puis retouché depuis ailleurs : listé, diff non attribuable. */
+  | 'retouched'
 export interface GitChange {
   path: string
   status: GitFileStatus
@@ -37,6 +39,8 @@ export interface GitDiffResult {
   available: boolean
   diff?: string
   error?: string
+  /** Avertissement affiché au-dessus du diff (ex. : il inclut des changements venus d'ailleurs). */
+  note?: string
 }
 
 function classify(code: string): GitFileStatus {

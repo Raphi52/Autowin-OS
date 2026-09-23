@@ -20,7 +20,7 @@ export interface ConversationFileTrace {
   conversationId: string
   turnId?: string
   workspaceRoot: string
-  source: 'edit_file' | 'subagent'
+  source: 'edit_file' | 'subagent' | 'file_command' | 'chat_tool'
   paths: string[]
   /** Empreinte du diff courant immédiatement après la mutation. */
   pathFingerprints?: Record<string, string>

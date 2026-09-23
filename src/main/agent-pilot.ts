@@ -21,6 +21,7 @@ import {
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { coupesParPoids } from './chat-session-poids'
 import { loadConvActivity } from './activity/conv-activity'
+import { appendWorkspaceMutationTrace } from './activity/trace-workspace-mutation'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import {
   buildTurnMessageBlocks,
@@ -2234,6 +2235,29 @@ export class AgentPilot {
           // à la précédente. La conserver ferait élider un historique qu'il n'a peut-être jamais reçu.
           this.chatSessions.delete(conversationId)
           this.forgetPersistedChatSession(conversationId)
+        }
+      }
+      /*
+       * JOURNAL DES FICHIERS : les Edit/Write natifs du modèle du chat n'y étaient jamais écrits,
+       * donc l'onglet Fichiers restait vide pour un tour de chat direct. Une édition échouée
+       * (`ok: false`) n'est pas tracée ; l'écriture du journal ne fait jamais échouer le tour.
+       */
+      if (conversationId && workspaceDuTour) {
+        for (const item of res.executionEvidence ?? []) {
+          if (!item.ok || item.kind !== 'mutation') continue
+          const paths = item.path ? [item.path] : (item.paths ?? [])
+          if (paths.length === 0) continue
+          const lines = item.writtenLineFingerprints
+          await appendWorkspaceMutationTrace({
+            conversationId,
+            ...(turnId ? { turnId } : {}),
+            workspaceRoot: item.workspaceRoot ?? workspaceDuTour,
+            source: 'chat_tool',
+            paths,
+            ...(lines?.length && paths.length === 1
+              ? { pathLineFingerprints: { [paths[0]]: lines } }
+              : {})
+          })
         }
       }
       if (res.usage) {

@@ -648,6 +648,11 @@ describe('WorkflowExecutionGraph', () => {
       view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
     )
     const detail = view.querySelector('.workflow-execution-detail')
+    // La brique se déplie sur place : le détail est DANS son conteneur, pas sous l'arbre.
+    expect(detail?.closest('.workflow-execution-node-wrap')).toBe(
+      view.querySelector('[data-execution-node="agent"]')?.closest('.workflow-execution-node-wrap')
+    )
+    expect(detail?.closest('.workflow-execution-node-wrap')).not.toBeNull()
     expect(detail?.querySelector('[data-execution-prompt]')?.textContent).toContain(
       'corrige le bouton Envoyer'
     )
