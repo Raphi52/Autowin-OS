@@ -249,6 +249,9 @@
 .sc-m-conflicted {
   color: var(--danger, #e6635b);
 }
+.sc-m-committed {
+  color: var(--ok, #3ecb8f);
+}
 .sc-fn {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 11.5px;
