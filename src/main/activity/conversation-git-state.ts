@@ -138,8 +138,28 @@ export async function readConversationGitDiff(
       workspaceRootKey(item.workspaceRoot) === workspaceRootKey(workspaceRoot) &&
       workspaceTracePathKey(item.path) === workspaceTracePathKey(path)
   )
-  if (!ownership?.fingerprint || !ownership.generationMarker) {
+  if (!ownership) {
     return { available: false, error: 'Fichier non attribué à cette conversation.' }
+  }
+  // Fichier modifié par la conversation puis retouché ailleurs (ou trace sans empreinte) : on
+  // montre quand même son diff actuel, en le DISANT — il n'est plus exclusivement celui de la
+  // conversation. Refuser tout diff laissait l'utilisateur devant « Diff indisponible » (conv-804).
+  const retouchedDiff = async (currentPath?: string): Promise<GitDiffResult> => {
+    const note = 'Fichier retouché depuis cette conversation : le diff inclut aussi ces changements.'
+    if (currentPath) {
+      const current = await readGitDiff(ownership.workspaceRoot, currentPath)
+      return current.available ? { ...current, note } : current
+    }
+    const diff = await readLastCommitDiff(ownership.workspaceRoot, ownership.path)
+    return diff.trim()
+      ? { available: true, diff, note: 'Fichier retouché depuis cette conversation : diff de son dernier commit.' }
+      : { available: false, error: 'Aucun changement git pour ce fichier.' }
+  }
+  if (!ownership.fingerprint || !ownership.generationMarker) {
+    const git = await readGitState(ownership.workspaceRoot, 0)
+    return retouchedDiff(
+      git.state?.changes.find((c) => workspaceTracePathKey(c.path) === workspaceTracePathKey(path))?.path
+    )
   }
   const [git, snapshot, currentGenerationMarker] = await Promise.all([
     readGitState(ownership.workspaceRoot, 0),
@@ -156,7 +176,7 @@ export async function readConversationGitDiff(
     (currentPath !== undefined && currentFingerprint !== ownership.fingerprint) ||
     currentGenerationMarker !== ownership.generationMarker
   ) {
-    return { available: false, error: 'Le diff courant appartient à une autre action.' }
+    return retouchedDiff(currentPath)
   }
   if (!currentPath) {
     const diff = await readLastCommitDiff(ownership.workspaceRoot, ownership.path)

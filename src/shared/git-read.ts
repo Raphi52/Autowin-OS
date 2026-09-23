@@ -39,6 +39,8 @@ export interface GitDiffResult {
   available: boolean
   diff?: string
   error?: string
+  /** Avertissement affiché au-dessus du diff (ex. : il inclut des changements venus d'ailleurs). */
+  note?: string
 }
 
 function classify(code: string): GitFileStatus {

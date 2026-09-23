@@ -95,7 +95,9 @@ describe('conversation Git state', () => {
     expect((await readConversationGitState('conv-commit', repo, spool)).state?.changes).toEqual([
       expect.objectContaining({ path: 'foo.ts', status: 'retouched' })
     ])
-    expect((await readConversationGitDiff('conv-commit', 'foo.ts', repo, spool)).available).toBe(false)
+    const retouche = await readConversationGitDiff('conv-commit', 'foo.ts', repo, spool)
+    expect(retouche.available, retouche.error).toBe(true)
+    expect(retouche.note).toContain('retouché')
   })
 
   it('lit le diff encore présent dans le vrai worktree du sous-agent', async () => {
@@ -202,7 +204,9 @@ describe('conversation Git state', () => {
     expect((await readConversationGitState('conv-a', repo, spool)).state?.changes).toEqual([
       expect.objectContaining({ path: 'foo.ts', status: 'retouched' })
     ])
-    expect((await readConversationGitDiff('conv-a', 'foo.ts', repo, spool)).available).toBe(false)
+    const retoucheA = await readConversationGitDiff('conv-a', 'foo.ts', repo, spool)
+    expect(retoucheA.available, retoucheA.error).toBe(true)
+    expect(retoucheA.note).toContain('retouché')
 
     const externalBase = await captureWorkspaceMutationSnapshot(repo)
     writeFileSync(join(repo, 'foo.ts'), 'état Y par B\n', 'utf8')
