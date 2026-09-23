@@ -72,6 +72,30 @@ describe('conversation Git state', () => {
     expect(diffB.diff).toContain('modifié par B')
   })
 
+  // fix-ok: cause mesurée — un fichier commité sort de git status, perd son empreinte (sha256 du diff vs HEAD) et la liste de la conversation se vidait ; ce test rouge avant le correctif le prouve.
+  it('garde le fichier de la conversation une fois commité, avec le diff de son commit', async () => {
+    const repo = initRepo()
+    const spool = mkdtempSync(join(tmpdir(), 'autowin-committed-spool-'))
+    roots.push(spool)
+    writeFileSync(join(repo, 'foo.ts'), 'modifié puis commité\n', 'utf8')
+    await trace('conv-commit', repo, spool)
+    execFileSync('git', ['commit', '-am', 'run'], { cwd: repo })
+
+    expect((await readConversationGitState('conv-commit', repo, spool)).state?.changes).toEqual([
+      expect.objectContaining({ path: 'foo.ts', status: 'committed', staged: false })
+    ])
+    const diff = await readConversationGitDiff('conv-commit', 'foo.ts', repo, spool)
+    expect(diff.available, diff.error).toBe(true)
+    expect(diff.diff).toContain('+modifié puis commité')
+    expect(diff.diff).toContain('-initial')
+    expect((await readConversationGitState('conv-autre', repo, spool)).state?.changes).toEqual([])
+
+    rmSync(join(repo, 'foo.ts'))
+    writeFileSync(join(repo, 'foo.ts'), 'modifié puis commité\n', 'utf8')
+    expect((await readConversationGitState('conv-commit', repo, spool)).state?.changes).toEqual([])
+    expect((await readConversationGitDiff('conv-commit', 'foo.ts', repo, spool)).available).toBe(false)
+  })
+
   it('lit le diff encore présent dans le vrai worktree du sous-agent', async () => {
     const repo = initRepo()
     const spool = mkdtempSync(join(tmpdir(), 'autowin-worktree-spool-'))

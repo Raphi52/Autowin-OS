@@ -182,7 +182,6 @@ import type { InspectTurnTarget } from '../observatory-focus'
 // Types partagés : dans `chat-view-types.ts` depuis la découpe. Ré-exportés ici pour que les
 // importateurs historiques (`RunEntry`, `CheckpointEntry`) n'aient RIEN à changer.
 export type { RunEntry, CheckpointEntry } from './chat-view-types'
-import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
 import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-publie'
 import { TravauxNonPublies } from './TravauxNonPublies'
@@ -1171,8 +1170,6 @@ export function ChatView({
   // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
   const [runs, setRuns] = useState<RunEntry[]>([])
-  const [checkpoints, setCheckpoints] = useState<CheckpointEntry[]>([])
-  const [forkedCheckpoint, setForkedCheckpoint] = useState('')
   /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
   const runsRef = useRef<RunEntry[]>([])
   runsRef.current = runs
@@ -1904,10 +1901,6 @@ export function ChatView({
       convId: activeRef.current
     }
     if (isRunRequestCurrent(request, currentRequest)) setRuns(nextRuns)
-    if (window.api.checkpointForks) {
-      const nextCheckpoints = await window.api.checkpointForks()
-      if (isRunRequestCurrent(request, currentRequest)) setCheckpoints(nextCheckpoints)
-    }
   }
   useEffect(() => {
     void Promise.resolve().then(refreshRuns)
@@ -6776,9 +6769,6 @@ Cliquer pour choisir une autre branche.`}
               liveRuns[activeId ?? '']?.status === 'running'
             }
             visibleLiveRuns={visibleLiveRuns}
-            checkpoints={checkpoints}
-            forkedCheckpoint={forkedCheckpoint}
-            setForkedCheckpoint={setForkedCheckpoint}
             runs={runs}
             openRun={openRun}
             viewRun={viewRun}
