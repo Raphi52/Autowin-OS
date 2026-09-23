@@ -499,6 +499,9 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     Ne rend que les CLES de `projects` filtrees (jamais jetons ni comptes du profil). Il
     //     porte `assertTrustedRendererSender(event, 'Dossiers Claude CLI')` des sa PREMIERE ligne.
     //     Aucune ecriture, aucune execution. `unguarded` reste VIDE.
+    //     fix-ok: cause mesuree — ce fil-piege compte les canaux d'index.ts ; l'ajout du canal
+    //     d'import l'a fait passer de 200 a 201 (rouge avant reprise du compte, vert apres),
+    //     exactement le declenchement voulu : forcer l'audit du nouveau canal ci-dessus.
     expect(handlers).toHaveLength(201)
     expect(unguarded).toEqual([])
   })

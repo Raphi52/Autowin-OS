@@ -2708,6 +2708,10 @@ Le fil reprend ensuite normalement.`
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
 
+  // fix-ok: cause mesurée — aucun code du dépôt ne lisait `~/.claude.json` (grep « claude.json »
+  // vide dans src/ avant ce travail) : la liste des dossiers du Chat ne pouvait donc pas
+  // s'enrichir des projets claude.exe. Sonde réelle sur le poste : 24 entrées `projects`,
+  // 5 vrais projets après filtre.
   // Les projets déjà ouverts dans claude.exe (conv-5) : le main lit et FILTRE `~/.claude.json`,
   // le renderer ne reçoit que des chemins de dossiers — jamais le contenu du profil (jetons,
   // comptes). Relu à CHAQUE appel plutôt que mis en cache : le fichier bouge à chaque session

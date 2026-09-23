@@ -4980,6 +4980,11 @@ export function ChatView({
    * rejoignent la liste des dossiers de travail, À CHAQUE lancement — un projet commencé demain
    * dans claude.exe arrivera seul. Le main lit et filtre le profil (`~/.claude.json`) ; ici on
    * fusionne, et la mémoire des retraits garantit qu'un dossier ôté par la croix ne revient pas.
+   * fix-ok: cause mesurée — l'amorçage existant (effet ci-dessus) ne connaissait QUE les dossiers
+   * portés par des conversations passées ; les projets claude.exe n'y arrivaient jamais. Et comme
+   * cet amorçage ré-ajoute à chaque lancement, l'import a SA propre mémoire des retraits
+   * (autowin.conv-folders.retires), sinon la croix serait un bouton mort — prouvé par les 7 tests
+   * de chat-dossiers-import.test.ts.
    */
   useEffect(() => {
     // Pont absent = version chargée avant redémarrage : l'import attendra le prochain démarrage.
