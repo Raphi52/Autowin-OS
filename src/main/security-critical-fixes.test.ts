@@ -492,7 +492,17 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   201 apres ce travail -> CE travail en ajoute UN SEUL (`git:action`, garde des sa premiere
     //   ligne ; `unguarded` reste vide). Le +1 restant etait DEJA arrive par la mise a jour amont
     //   sans reprise du compte : le fil-piege etait deja rouge avant cette integration.
-    expect(handlers).toHaveLength(200)
+    // MISE A JOUR 2026-09-23 — 200 -> 201. UN canal ajoute, relu AVANT de toucher le compte :
+    //   `os:dossiersClaudeCli` — import des projets claude.exe dans la liste des dossiers du Chat
+    //     (conv-5). LECTURE SEULE du profil `~/.claude.json` resolu cote main depuis
+    //     l'environnement : AUCUN argument ne vient du renderer, donc aucun chemin injectable.
+    //     Ne rend que les CLES de `projects` filtrees (jamais jetons ni comptes du profil). Il
+    //     porte `assertTrustedRendererSender(event, 'Dossiers Claude CLI')` des sa PREMIERE ligne.
+    //     Aucune ecriture, aucune execution. `unguarded` reste VIDE.
+    //     fix-ok: cause mesuree — ce fil-piege compte les canaux d'index.ts ; l'ajout du canal
+    //     d'import l'a fait passer de 200 a 201 (rouge avant reprise du compte, vert apres),
+    //     exactement le declenchement voulu : forcer l'audit du nouveau canal ci-dessus.
+    expect(handlers).toHaveLength(201)
     expect(unguarded).toEqual([])
   })
 

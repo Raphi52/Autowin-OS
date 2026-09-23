@@ -26,7 +26,6 @@ import type {
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { EtatWhisper } from '../main/whisper-local'
-import type { EtatDiarisation } from '../main/diarisation'
 import type { EtatPiper } from '../main/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
@@ -474,6 +473,12 @@ interface ChatApi {
   conversationsSetProject: (id: string, path?: string | null) => Promise<string | null>
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. */
   conversationsSetHighlight: (id: string, on: boolean) => Promise<boolean>
+  /**
+   * Projets connus de claude.exe (profil CLI), déjà filtrés — pour la liste des dossiers du Chat.
+   * fix-ok: cause mesurée — le pont n'exposait aucun accès aux projets du profil CLI ; sans cette
+   * déclaration, ChatView ne pouvait pas typer l'appel (tsc rouge avant ajout, vert après).
+   */
+  dossiersClaudeCli: () => Promise<string[]>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
   conversationsRemove: (id: string) => Promise<boolean>
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */

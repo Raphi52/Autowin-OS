@@ -154,6 +154,11 @@ import {
   type ConversationGroupKind
 } from './conversation-groups'
 import { estCheminDeDossier } from '../../../shared/project-path'
+import {
+  avecDossierRetire,
+  fusionnerDossiersImportes,
+  sansDossierRetire
+} from './chat-dossiers-import'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
@@ -211,6 +216,29 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 const CLE_JAUGES = 'autowin.context-gauges.v1'
 /** Dossiers de classement deja choisis, memorises entre les sessions. */
 const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
+/**
+ * Dossiers RETIRES par la croix — la memoire qui empeche l'import claude.exe de les ressusciter
+ * a chaque lancement. Distincte de la liste : « absent » ne dit pas si c'est « jamais vu » ou
+ * « retire expres », et l'import a besoin de cette difference.
+ */
+const CLE_DOSSIERS_RETIRES = 'autowin.conv-folders.retires'
+
+function lireDossiersRetires(): string[] {
+  try {
+    const lu = JSON.parse(window.localStorage.getItem(CLE_DOSSIERS_RETIRES) ?? '[]') as unknown
+    return Array.isArray(lu) ? lu.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return [] // mémoire illisible : au pire un dossier retiré revient UNE fois, la croix le range
+  }
+}
+
+function ecrireDossiersRetires(retires: string[]): void {
+  try {
+    window.localStorage.setItem(CLE_DOSSIERS_RETIRES, JSON.stringify(retires))
+  } catch (error) {
+    traceSilentFailure('dossiers-retires:persist', error)
+  }
+}
 /** Fils armes en mode auto (reglage PAR conversation ; `*` = ancien reglage global migre). */
 const CLE_MODE_AUTO_CONVS = 'autowin.chat.modeAuto.convs'
 /** Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions. */
@@ -4881,9 +4909,15 @@ export function ChatView({
   const memoriserDossier = useCallback((chemin: string): void => {
     const propre = chemin.trim()
     if (!estCheminDeDossier(propre)) return
+    // Un ajout MANUEL efface le retrait : l'utilisateur vient de dire le contraire de la croix,
+    // et l'import claude.exe redevient autorisé à maintenir ce dossier.
+    ecrireDossiersRetires(sansDossierRetire(lireDossiersRetires(), propre))
     setDossiersMemorises((connus) => (connus.includes(propre) ? connus : [...connus, propre]))
   }, [])
   const oublierDossier = useCallback((chemin: string): void => {
+    // Retrait EXPLICITE, mémorisé : sans cette trace, l'import claude.exe rejoué à chaque
+    // lancement ressusciterait le dossier et la croix serait un bouton mort.
+    ecrireDossiersRetires(avecDossierRetire(lireDossiersRetires(), chemin))
     setDossiersMemorises((connus) => connus.filter((connu) => connu !== chemin))
   }, [])
   useEffect(() => {
@@ -4971,6 +5005,40 @@ export function ChatView({
     if (utilises.length > 0)
       setDossiersMemorises((connus) => [...new Set([...connus, ...utilises])])
   }, [convs])
+
+  /**
+   * IMPORT claude.exe (conv-5, 2026-09-23) : les projets déjà ouverts dans le CLI Claude
+   * rejoignent la liste des dossiers de travail, À CHAQUE lancement — un projet commencé demain
+   * dans claude.exe arrivera seul. Le main lit et filtre le profil (`~/.claude.json`) ; ici on
+   * fusionne, et la mémoire des retraits garantit qu'un dossier ôté par la croix ne revient pas.
+   * fix-ok: cause mesurée — l'amorçage existant (effet ci-dessus) ne connaissait QUE les dossiers
+   * portés par des conversations passées ; les projets claude.exe n'y arrivaient jamais. Et comme
+   * cet amorçage ré-ajoute à chaque lancement, l'import a SA propre mémoire des retraits
+   * (autowin.conv-folders.retires), sinon la croix serait un bouton mort — prouvé par les 7 tests
+   * de chat-dossiers-import.test.ts.
+   */
+  useEffect(() => {
+    // Pont absent = version chargée avant redémarrage : l'import attendra le prochain démarrage.
+    // Pas de bandeau ici, contrairement au surlignage : rien n'a été CLIQUÉ, rien n'est perdu.
+    const lireProjetsClaude = window.api.dossiersClaudeCli
+    if (!lireProjetsClaude) return
+    let demonte = false
+    void lireProjetsClaude()
+      .then((importes) => {
+        if (demonte || !Array.isArray(importes) || importes.length === 0) return
+        const retires = lireDossiersRetires()
+        setDossiersMemorises(
+          (connus) => fusionnerDossiersImportes(connus, importes, retires) ?? connus
+        )
+      })
+      .catch((error) => {
+        // Profil illisible : la liste locale suffit, l'import est un confort, jamais une panne.
+        traceSilentFailure('import-dossiers-claude', error)
+      })
+    return () => {
+      demonte = true
+    }
+  }, [])
 
   const dossiersConversations = useMemo(
     () =>
