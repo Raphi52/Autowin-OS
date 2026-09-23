@@ -31,13 +31,9 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$HermesBrainRepo = $(
-    if ($env:AUTOWIN_HERMES_BRAIN_REPO) { $env:AUTOWIN_HERMES_BRAIN_REPO }
-    elseif (Test-Path (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'brain') 'install.ps1')) {
-      Join-Path (Split-Path -Parent $PSScriptRoot) 'brain'
-    }
-    else { Join-Path $env:USERPROFILE 'Hermes-Brain' }
-  ),
+  # Défaut résolu APRÈS le bloc param : sous Windows PowerShell 5.1, $PSScriptRoot y est vide
+  # (Split-Path échouait sur une chaîne vide avant même le premier Write-Host).
+  [string]$HermesBrainRepo = '',
   [string]$BrainRoot = $(if ($env:AMITEL_BRAIN_ROOT) { $env:AMITEL_BRAIN_ROOT } else { '\\ged2\rig\Projets IA\Amitel Brain' }),
   [string]$GraphifySource = $(if ($env:AUTOWIN_GRAPHIFY_SOURCE) { $env:AUTOWIN_GRAPHIFY_SOURCE } else { '\\ged2\rig\Projets IA\Graphify' }),
   [switch]$SkipCli,
@@ -45,6 +41,13 @@ param(
   [switch]$SkipBrain
 )
 $ErrorActionPreference = 'Stop'
+if (-not $HermesBrainRepo) {
+  $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+  $embeddedBrain = Join-Path (Split-Path -Parent $scriptDir) 'brain'
+  $HermesBrainRepo = if ($env:AUTOWIN_HERMES_BRAIN_REPO) { $env:AUTOWIN_HERMES_BRAIN_REPO }
+    elseif (Test-Path (Join-Path $embeddedBrain 'install.ps1')) { $embeddedBrain }
+    else { Join-Path $env:USERPROFILE 'Hermes-Brain' }
+}
 function Ok($m)   { Write-Host "  [OK]   $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "  [!]    $m" -ForegroundColor Yellow }
 function Step($m) { Write-Host "`n== $m ==" -ForegroundColor Cyan }
