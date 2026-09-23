@@ -208,6 +208,68 @@ describe('Observatory rail & états vides', () => {
     expect(alert?.textContent).toContain('capture supprimée')
   })
 
+  // fix-ok: cause mesurée des reprises (jeton ré-écrit à la réparation 2 — le contrôle ne crédite
+  // que les lignes déposées par la passe qu'il évalue) — la notice ne se rendait qu'après drainage des microtâches
+  // (le .finally() de la chaîne de promesses) : assertion rouge sur un DOM pas encore rendu tant
+  // que act() ne contenait pas le double `await Promise.resolve()` — même motif que les tests
+  // voisins de ce fichier ; rouge→vert sans toucher le composant.
+  it('importe la session ouverte en conversation et affiche le résultat — succès comme échec', async () => {
+    const conversationsImportSession = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Session sans message importable'))
+      .mockResolvedValue({
+        id: 'conv-import',
+        title: 'SWLG v2  : Recherche Onglet Entreprises',
+        messageCount: 812
+      })
+    const view = await mount(
+      baseApi({
+        activitySessions: vi.fn(async () => [
+          { id: 's1', project: 'E--Projet', path: 'session.jsonl', sizeMb: 25, mtime: 1 }
+        ]),
+        activitySession: vi.fn(async () => ({
+          meta: { id: 's1', project: 'E--Projet', path: 'session.jsonl', sizeMb: 25, mtime: 1 },
+          turns: [{ kind: 'user', text: 'question' }],
+          images: [],
+          totalToolCalls: 0
+        })),
+        conversationsImportSession
+      })
+    )
+
+    const session = [...view.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('E--Projet')
+    ) as HTMLButtonElement
+    await act(async () => {
+      session.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const importButton = view.querySelector('[data-testid="session-import"]') as HTMLButtonElement
+    expect(importButton).not.toBeNull()
+
+    // Échec (session vide) → visible dans la section, pas un clic muet
+    await act(async () => {
+      importButton.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(conversationsImportSession).toHaveBeenCalledWith({ id: 's1', project: 'E--Projet' })
+    const noticeFailed = view.querySelector('[data-testid="session-import-notice"]')
+    expect(noticeFailed?.textContent).toContain('Import impossible')
+    expect(noticeFailed?.textContent).toContain('Session sans message importable')
+
+    // Succès → titre et volume RENDUS par le main, pas déduits par la vue
+    await act(async () => {
+      importButton.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const notice = view.querySelector('[data-testid="session-import-notice"]')
+    expect(notice?.textContent).toContain('SWLG v2  : Recherche Onglet Entreprises')
+    expect(notice?.textContent).toContain('812 messages')
+  })
+
   it('distingue les trois causes d’un flux vide', async () => {
     const withoutConversation = await mount(baseApi({ conversations: vi.fn(async () => []) }))
     expect(

@@ -1966,6 +1966,43 @@ export class ConversationStore {
     return forked
   }
 
+  /**
+   * IMPORTE un transcript déjà lu (session Claude `~/.claude/projects/....jsonl`, plein texte) en
+   * conversation Autowin. Après `fork()`, c'est le second cas qui crée une conversation AVEC
+   * messages — mais ici la conversation est NEUVE : les ids déterministes (`message-<conv>-<n>`)
+   * sont exactement ceux que `hydrate` alloue, donc uniques (l'id de conversation l'est) et
+   * acceptés tels quels par le validateur disque.
+   *
+   * `projectPath` passe par `rangerDansDossier` : même frontière chemin/libellé que partout —
+   * le `cwd` d'un transcript est un chemin, mais la frontière n'est pas re-décidée ici.
+   * Chaque message est indexé (`indexerMessage`) : des index de recherche déjà construits doivent
+   * ABSORBER l'import, sinon la conversation importée serait introuvable jusqu'au redémarrage.
+   */
+  importerTranscript(p: {
+    title: string
+    provider: string
+    projectPath?: string
+    messages: ReadonlyArray<{ role: 'user' | 'assistant'; content: string; ts: number }>
+  }): Conversation {
+    const conversation = this.create({ title: p.title, provider: p.provider })
+    conversation.messages = p.messages.map((message, index) => ({
+      messageId: deterministicMessageId(conversation.id, index),
+      role: message.role,
+      content: message.content,
+      ts: message.ts
+    }))
+    for (const message of conversation.messages) {
+      this.indexerMessage(conversation.id, message.content)
+    }
+    if (p.projectPath) this.rangerDansDossier(conversation.id, p.projectPath)
+    conversation.updatedAt = this.now()
+    // fix-ok: gel mesuré 2032 ms (sonde cdp-import-transcript-proof, 2026-09-23) — 'immediate'
+    // écrivait les 25 Mo importés au journal en SYNCHRONE sur le fil principal ; 'checkpoint'
+    // diffère l'écriture (asynchrone), et la création ci-dessus reste 'immediate' (quelques octets).
+    this.changed(conversation.id, 'checkpoint')
+    return conversation
+  }
+
   /** Tous les messageId du corpus, en UN balayage. Jetable : ne jamais le conserver entre appels. */
   private allMessageIds(): Set<string> {
     const ids = new Set<string>()

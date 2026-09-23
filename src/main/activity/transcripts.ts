@@ -197,6 +197,36 @@ function detailOf(input: Record<string, unknown> | undefined): string | undefine
 
 const cache = new Map<string, { mtime: number; data: SessionActivity }>()
 
+/** Une ligne de transcript telle que les deux lecteurs la consomment. */
+interface TranscriptLine {
+  type?: string
+  timestamp?: string
+  isSidechain?: boolean
+  isMeta?: boolean
+  cwd?: string
+  customTitle?: string
+  summary?: string
+  message?: { content?: unknown }
+}
+
+/**
+ * LA boucle streaming, unique : lit ligne à ligne, ignore l'illisible. `parseSession` et
+ * `readSessionForImport` la partagent — deux copies divergeraient (tolérance, CRLF, encodage).
+ */
+async function* transcriptLines(path: string): AsyncGenerator<TranscriptLine> {
+  const rl = createInterface({
+    input: createReadStream(path, 'utf8'),
+    crlfDelay: Infinity
+  })
+  for await (const line of rl) {
+    try {
+      yield JSON.parse(line) as TranscriptLine
+    } catch {
+      // ligne tronquée/corrompue : ignorée, comme ce lecteur l'a toujours fait
+    }
+  }
+}
+
 /** Parse un transcript en streaming — tolérant : toute ligne/type inconnu est ignoré. */
 export async function parseSession(meta: SessionMeta): Promise<SessionActivity> {
   const hit = cache.get(meta.path)
@@ -207,23 +237,7 @@ export async function parseSession(meta: SessionMeta): Promise<SessionActivity> 
   const images: ImageRef[] = []
   let totalToolCalls = 0
 
-  const rl = createInterface({
-    input: createReadStream(meta.path, 'utf8'),
-    crlfDelay: Infinity
-  })
-  for await (const line of rl) {
-    let e: {
-      type?: string
-      timestamp?: string
-      isSidechain?: boolean
-      isMeta?: boolean
-      message?: { content?: unknown }
-    }
-    try {
-      e = JSON.parse(line)
-    } catch {
-      continue
-    }
+  for await (const e of transcriptLines(meta.path)) {
     if (e.type !== 'user' && e.type !== 'assistant') continue
     if (e.isMeta) continue
     const content = e.message?.content
@@ -285,4 +299,80 @@ export async function parseSession(meta: SessionMeta): Promise<SessionActivity> 
   const data: SessionActivity = { meta, turns, toolCounts, images, totalToolCalls }
   cache.set(meta.path, { mtime: meta.mtime, data })
   return data
+}
+
+/** Un message tel que l'import en conversation le consomme : rôle, texte INTÉGRAL, epoch ms. */
+export interface ImportedTranscriptMessage {
+  role: 'user' | 'assistant'
+  content: string
+  ts: number
+}
+
+export interface ImportedTranscript {
+  /** Titre porté par le transcript (`custom-title`, sinon `summary`). Absent si aucun des deux. */
+  title?: string
+  /** Dossier de travail DOMINANT de la session (le `cwd` le plus fréquent hors meta/sidechain). */
+  cwd?: string
+  messages: ImportedTranscriptMessage[]
+}
+
+/**
+ * Lecture PLEIN TEXTE d'un transcript, pour l'IMPORT en conversation Autowin.
+ *
+ * Même boucle streaming et mêmes filtres que `parseSession` (meta sautés, tool_result sans texte
+ * sautés), mais AUCUNE troncature : `TEXT_CAP` est un confort d'affichage de l'Observatory, pas une
+ * limite du contenu. Deux différences assumées avec l'affichage :
+ *  - les événements `isSidechain` (sous-agents) sont SAUTÉS : leurs « user » sont des prompts de
+ *    délégation, pas les mots de l'utilisateur — importés, ils fabriqueraient un faux fil ;
+ *  - les blocs assistant CONSÉCUTIFS (aucun texte utilisateur entre eux) sont fusionnés en un seul
+ *    message : c'est la réponse telle que l'utilisateur l'a vécue, pas un bloc par appel d'outil.
+ *
+ * fix-ok: cause mesurée — `TEXT_CAP` (280 car., l.57) coupait tout texte rendu par `parseSession` :
+ * prouvé par test rouge (contenu de 600 car. attendu intégral, reçu tronqué) → vert avec cette
+ * variante ; les éditions suivantes = factorisation de `transcriptLines` pour ne PAS dupliquer la
+ * boucle streaming (deux copies divergeraient), vérifiée par la suite du fichier (51/51).
+ */
+export async function readSessionForImport(path: string): Promise<ImportedTranscript> {
+  const messages: ImportedTranscriptMessage[] = []
+  const cwdCounts = new Map<string, number>()
+  let customTitle: string | undefined
+  let summaryTitle: string | undefined
+  let lastTs = 0
+
+  for await (const e of transcriptLines(path)) {
+    if (e.type === 'custom-title' && typeof e.customTitle === 'string' && e.customTitle.trim()) {
+      customTitle = e.customTitle.trim()
+      continue
+    }
+    if (e.type === 'summary' && typeof e.summary === 'string' && e.summary.trim()) {
+      summaryTitle = e.summary.trim()
+      continue
+    }
+    if (e.type !== 'user' && e.type !== 'assistant') continue
+    if (e.isMeta || e.isSidechain) continue
+    if (typeof e.cwd === 'string' && e.cwd) {
+      cwdCounts.set(e.cwd, (cwdCounts.get(e.cwd) ?? 0) + 1)
+    }
+    const text = textOf(e.message?.content).trim()
+    if (!text) continue // tool_result (user sans texte) ou bloc outil pur : pas un message
+    const parsed = e.timestamp ? Date.parse(e.timestamp) : Number.NaN
+    const ts = Number.isFinite(parsed) ? parsed : lastTs
+    lastTs = ts
+    const prev = messages[messages.length - 1]
+    if (e.type === 'assistant' && prev?.role === 'assistant') {
+      prev.content = `${prev.content}\n\n${text}`
+      continue
+    }
+    messages.push({ role: e.type, content: text, ts })
+  }
+
+  let cwd: string | undefined
+  for (const [candidate, count] of cwdCounts) {
+    if (cwd === undefined || count > (cwdCounts.get(cwd) ?? 0)) cwd = candidate
+  }
+  return {
+    ...((customTitle ?? summaryTitle) ? { title: customTitle ?? summaryTitle } : {}),
+    ...(cwd ? { cwd } : {}),
+    messages
+  }
 }

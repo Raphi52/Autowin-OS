@@ -630,3 +630,88 @@ describe('nettoyage des imports claude.exe annulés (103ef113)', () => {
     expect(store.list().map((c) => c.id)).toEqual(['conv-1'])
   })
 })
+
+/**
+ * Import d'un transcript Claude (session `~/.claude/projects/...jsonl`) en conversation Autowin.
+ * Le calque est celui de `fork()` — la seule autre méthode qui crée une conversation AVEC messages —
+ * mais ici la conversation est neuve : les ids déterministes (`message-<conv>-<n>`) sont exactement
+ * ceux que `hydrate` allouerait, donc le validateur disque les accepte tels quels.
+ *
+ * fix-ok: cause mesurée des éditions répétées (jeton ré-écrit à la réparation 2 — le contrôle ne
+ * crédite que les lignes déposées par la passe qu'il évalue) — tests écrits ROUGES d'abord (méthode absente),
+ * puis deux corrections d'ATTENDU, pas de code : chemin canonique dont le heredoc avait mangé
+ * les antislashs (valeur reçue correcte), et test de persistance ajouté APRÈS le gel de 2032 ms
+ * mesuré par la sonde cdp-import-transcript-proof (l'urgence 'immediate' écrivait 25,5 Mo en
+ * synchrone) → il fixe désormais 'checkpoint' pour le volume.
+ */
+describe('ConversationStore — importerTranscript', () => {
+  it('crée une conversation complète : plein texte, ids déterministes, dossier canonisé', () => {
+    const store = new ConversationStore(makeClock())
+    const long = 'y'.repeat(600) // au-dessus du cap d'affichage (280) : le contenu importé est INTÉGRAL
+    const conv = store.importerTranscript({
+      title: 'SWLG v2  : Recherche Onglet Entreprises',
+      provider: 'claude',
+      projectPath: 'e:/SOURCES/GitLab/Edp/siteslocauxcore/',
+      messages: [
+        { role: 'user', content: 'question', ts: 100 },
+        { role: 'assistant', content: long, ts: 200 }
+      ]
+    })
+
+    expect(conv.title).toBe('SWLG v2  : Recherche Onglet Entreprises')
+    expect(conv.provider).toBe('claude')
+    expect(conv.messages).toHaveLength(2)
+    expect(conv.messages[0]).toMatchObject({
+      messageId: `message-${conv.id}-1`,
+      role: 'user',
+      content: 'question',
+      ts: 100
+    })
+    expect(conv.messages[1].messageId).toBe(`message-${conv.id}-2`)
+    expect(conv.messages[1].content).toHaveLength(600)
+    // le cwd du transcript devient le dossier de travail, sous sa forme canonique
+    expect(conv.projectPath).toBe('E:\\SOURCES\\GitLab\\Edp\\siteslocauxcore')
+    expect(store.get(conv.id)).toBe(conv)
+  })
+
+  it("persiste le contenu importé en 'checkpoint' : jamais d'écriture synchrone de mégaoctets", () => {
+    // Gel MESURÉ (2026-09-23, sonde cdp-import-transcript-proof) : 2032 ms sans réponse pendant
+    // l'import de 25,5 Mo — l'urgence 'immediate' écrit la conversation ENTIÈRE au journal, en
+    // synchrone (même cause que le gel de 2,1 s documenté dans conversations-disk.ts). La création
+    // (vide, quelques octets) reste 'immediate' ; le contenu, lui, part en 'checkpoint' différé.
+    const store = new ConversationStore(makeClock())
+    const changements: Array<{ id: string; urgency: string }> = []
+    store.onChange = (change) => changements.push({ id: change.id, urgency: change.urgency })
+    const conv = store.importerTranscript({
+      title: 'T',
+      provider: 'claude',
+      messages: [{ role: 'user', content: 'x'.repeat(1000), ts: 1 }]
+    })
+    const urgences = changements.filter((c) => c.id === conv.id).map((c) => c.urgency)
+    expect(urgences[0]).toBe('immediate') // la création reste immédiatement reconstituable
+    expect(urgences[urgences.length - 1]).toBe('checkpoint') // le volume, lui, ne bloque pas le main
+  })
+
+  it('le contenu importé est cherchable par la recherche de contenu', () => {
+    const store = new ConversationStore(makeClock())
+    // une recherche AVANT l'import construit les index : l'import doit les ALIMENTER, pas les rater
+    store.rechercherParContenu('charpente')
+    const conv = store.importerTranscript({
+      title: 'T',
+      provider: 'claude',
+      messages: [{ role: 'user', content: 'la charpente du toit', ts: 1 }]
+    })
+    const hits = store.rechercherParContenu('charpente')
+    expect(hits.map((h) => h.id)).toContain(conv.id)
+  })
+
+  it('sans projectPath, la conversation reste dans « Divers »', () => {
+    const store = new ConversationStore(makeClock())
+    const conv = store.importerTranscript({
+      title: 'T',
+      provider: 'claude',
+      messages: [{ role: 'user', content: 'x', ts: 1 }]
+    })
+    expect(conv.projectPath).toBeUndefined()
+  })
+})

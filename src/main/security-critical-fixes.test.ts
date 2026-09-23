@@ -503,7 +503,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     d'import l'a fait passer de 200 a 201 (rouge avant reprise du compte, vert apres),
     //     exactement le declenchement voulu : forcer l'audit du nouveau canal ci-dessus.
     //   +1 : `project:openInVscode` (bouton « Ouvrir dans VS Code » de l onglet Projet), garde.
-    expect(handlers).toHaveLength(203)
+    // MISE A JOUR 2026-09-23 — 200 → 201. UN canal ajoute, garde des sa premiere ligne par
+    //   `assertTrustedRendererSender(event, 'Conversation import')` :
+    //   `os:conversations:importSession` — import d'une session transcript (~/.claude/projects) en
+    //   conversation Autowin ; la reference est resolue par `resolveListedSessionAsync` (inventaire,
+    //   jamais un chemin forge par le renderer). `unguarded` reste VIDE.
+    //   203 + 1 = 204 : les deux ajouts (VS Code / dossiers CLI sur main, importSession de run-37a45ad99156-1) cumulés au salvage.
+    expect(handlers).toHaveLength(204)
     expect(unguarded).toEqual([])
   })
 

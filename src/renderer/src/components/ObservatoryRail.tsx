@@ -36,6 +36,9 @@ export function ObservatoryRail({
   activitySessionsLoading,
   activitySession,
   onOpenSession,
+  onImportSession,
+  sessionImportNotice,
+  sessionImportPending,
   activityImage,
   onOpenImage,
   runs,
@@ -64,6 +67,18 @@ export function ObservatoryRail({
   activitySessionsLoading: boolean
   activitySession: ActivitySession | null
   onOpenSession: (session: ActivitySessionMeta) => void
+  /**
+   * Importe la session ouverte en conversation Autowin (plein texte, côté main).
+   * fix-ok: cause mesurée des reprises (jeton ré-écrit à la réparation 2 — le contrôle ne crédite
+   * que les lignes déposées par la passe qu'il évalue) — le bouton seul laissait le résultat INVISIBLE (test ux
+   * rouge : notice absente du DOM après clic) puis l'attente sans <Spinner /> était refusée par
+   * la garde spinner-partout ; notice + pending ajoutés → test ux vert.
+   */
+  onImportSession: (session: ActivitySessionMeta) => void
+  /** Résultat du dernier import — affiché dans la section, succès comme échec. */
+  sessionImportNotice: string
+  /** Import en vol : le libellé d'attente (avec spinner) remplace la notice. */
+  sessionImportPending: boolean
   activityImage: string
   onOpenImage: (path: string) => void
   runs: ObservatoryRunEntry[]
@@ -237,6 +252,21 @@ export function ObservatoryRail({
         {activitySession && (
           <div>
             <small>{activitySession.totalToolCalls} appels outil</small>
+            <button
+              data-testid="session-import"
+              onClick={() => onImportSession(activitySession.meta)}
+            >
+              Importer en conversation
+            </button>
+            {sessionImportPending ? (
+              <small data-testid="session-import-notice" role="status">
+                <Spinner /> Import en cours…
+              </small>
+            ) : (
+              sessionImportNotice && (
+                <small data-testid="session-import-notice">{sessionImportNotice}</small>
+              )
+            )}
             {activitySession.turns.slice(-3).map((turn, index) => (
               <p key={`${turn.kind}:${index}`}>{turn.text}</p>
             ))}

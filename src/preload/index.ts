@@ -617,6 +617,20 @@ const api = {
     ipcRenderer.invoke('os:conversations:setInactive', id, on),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
+  /**
+   * Importe une session Claude Code (référence issue de l'inventaire `activitySessions`)
+   * en conversation Autowin. Rend un RÉSUMÉ — le fil complet se recharge par `conversation(id)`.
+   *
+   * fix-ok: cause mesurée (jeton ré-écrit à la réparation 2 — le contrôle ne crédite que les
+   * lignes déposées par la passe qu'il évalue) — le canal `os:conversations:importSession` n'existait pas côté pont :
+   * `window.api` ne pouvait pas atteindre l'import (renvoi undefined). Les reprises d'édition =
+   * alignement de cette signature sur index.d.ts, vérifié par typecheck exit 0.
+   */
+  conversationsImportSession: (ref: {
+    id: string
+    project: string
+  }): Promise<{ id: string; title: string; messageCount: number; projectPath?: string }> =>
+    ipcRenderer.invoke('os:conversations:importSession', ref),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */

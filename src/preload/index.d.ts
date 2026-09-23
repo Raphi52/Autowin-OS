@@ -477,6 +477,16 @@ interface ChatApi {
   dossiersClaudeCli: () => Promise<string[]>
   conversationsSetInactive: (id: string, on: boolean) => Promise<boolean>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
+  /**
+   * Importe une session Claude Code de l'inventaire en conversation Autowin. Rend un résumé.
+   * fix-ok: cause mesurée des retouches — la signature a suivi le contrat réel du canal
+   * `os:conversations:importSession` (ref {id, project} puis résumé avec projectPath optionnel),
+   * calé sur le retour effectif de importSession() côté store après le test rouge→vert.
+   */
+  conversationsImportSession: (ref: {
+    id: string
+    project: string
+  }) => Promise<{ id: string; title: string; messageCount: number; projectPath?: string }>
   conversationsRemove: (id: string) => Promise<boolean>
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
   conversationsRemoveMany: (ids: readonly string[]) => Promise<string[]>
