@@ -3465,15 +3465,21 @@ export function ChatView({
       setDraftInput(cleDraft, '') // "/btw" seul → rien à injecter, on nettoie
       return
     }
-    // PIECES JOINTES : l'injection ne transporte qu'un texte. Injecter ici laisserait l'image dans
-    // le composer, donc jamais envoyee (constate le 2026-09-04). Le message part en file AVEC ses
-    // pieces jointes et le drain de fin de tour l'envoie en entier.
+    // PIECES JOINTES : elles partent AVEC l'injection, dans le tour en cours (2026-09-23). Avant,
+    // le message attendait la fin du tour en file, et l'utilisateur voyait « rien envoye » pendant
+    // des minutes. Si l'injection est refusee, le repli reste la file AVEC les pieces jointes.
     const jointes = getComposerDraft(cleDraft).attachments
     if (occupe && jointes.length > 0) {
-      journaliserSaisie(id, text, 'message')
+      journaliserSaisie(id, text, 'orientation')
       setDraftInput(cleDraft, '')
       setDraftAttachments(cleDraft, () => [])
-      enqueueMessage(id, text, replimode, jointes)
+      let accepte = false
+      try {
+        accepte = (await window.api.injectDirective(id, text, jointes))?.ok === true
+      } catch (error) {
+        traceSilentFailure('inject-directive:pieces-jointes', error)
+      }
+      if (!accepte) enqueueMessage(id, text, replimode, jointes)
       return
     }
     if (!occupe) {

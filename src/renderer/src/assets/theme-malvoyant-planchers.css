@@ -276,7 +276,8 @@
 :root[data-theme^='malvoyant-'] .composer-dictee-message,
 :root[data-theme^='malvoyant-'] .msg-orientation-tag,
 :root[data-theme^='malvoyant-'] .conv-auto-notice,
-:root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label {
+:root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label,
+:root[data-theme^='malvoyant-'] .conv-status-filter {
   font-size: 13px;
 }
 

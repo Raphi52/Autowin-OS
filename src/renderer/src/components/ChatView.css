@@ -4414,6 +4414,12 @@ button.chat-project-dot:disabled {
   display: inline-flex;
   align-items: center;
 }
+/* Dans la barre du HAUT, le panneau s'ouvre VERS LE BAS : ouvert vers le haut (reglage du
+   composeur), il recouvrait le titre et sortait de la fenetre (signale le 2026-09-23). */
+.chat-runtime .conv-cost-panel {
+  top: calc(100% + 6px);
+  bottom: auto;
+}
 
 /* BARRE UNIQUE DE DICTEE (2026-09-03) : une seule barre HORIZONTALE qui porte les deux infos --
    le remplissage rose montre le volume de la voix, le rond blanc pose dessus regle la capture. */

@@ -556,7 +556,8 @@ interface ChatApi {
   cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   injectDirective: (
     conversationId: string,
-    directive: string
+    directive: string,
+    attachments?: ChatAttachment[]
   ) => Promise<{ ok: boolean; messageId?: string }>
   /** Écrit le texte de l'utilisateur sur disque AVANT son envoi — filet contre les textes sans tour. */
   journaliserSaisie: (

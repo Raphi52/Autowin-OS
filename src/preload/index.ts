@@ -751,9 +751,10 @@ const api = {
    */
   injectDirective: (
     conversationId: string,
-    directive: string
+    directive: string,
+    attachments?: ChatAttachment[]
   ): Promise<{ ok: boolean; messageId?: string }> =>
-    ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive),
+    ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive, attachments),
   /**
    * Écrit le texte de l'utilisateur sur disque AVANT qu'il ne parte. Filet de dernier recours : un
    * texte qui ne produit aucun tour (orientation, file d'attente) reste retrouvable malgré tout.

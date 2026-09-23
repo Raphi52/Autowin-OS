@@ -288,7 +288,8 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardString, guardStringOrNull } from './ipc-guards'
+import { materializeClaudeAttachments } from './providers/claude'
+import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -3657,16 +3658,29 @@ Le fil reprend ensuite normalement.`
   // au prochain point d'itération (pilotage continu, sans attendre la fin du tour).
   ipcMain.handle(
     'os:pilotChat:inject',
-    async (event, rawConversationId: string, rawDirective: string) => {
+    async (
+      event,
+      rawConversationId: string,
+      rawDirective: string,
+      rawAttachments?: unknown
+    ) => {
       assertTrustedRendererSender(event, 'Pilot chat directive')
       const conversationId = guardString(rawConversationId, 'conversationId')
       const directive = guardString(rawDirective, 'directive').trim()
-      if (!directive) return { ok: false }
+      const jointes = guardAttachments(rawAttachments)
+      if (!directive && jointes.length === 0) return { ok: false }
       // Le renderer passe busy avant que l'IPC `pilotChat` ait fini d'enregistrer son controleur.
       // Une attente courte absorbe cette course de demarrage sans accepter de directive hors tour.
       if (!(await activeChatTurns.waitForActive(conversationId, 500))) return { ok: false }
+      // PIECES JOINTES EN COURS DE TOUR (2026-09-23) : elles attendaient la fin du tour, parfois
+      // plusieurs minutes (« j'ai envoye un message avec une image et ca n'a rien envoye »). Elles
+      // sont ecrites sur disque comme pour un message normal, et leurs chemins suivent le texte.
+      // Pas de nettoyage ici : le tour doit pouvoir les lire ; les temporaires orphelins sont
+      // balayes par `temporaires-orphelins.ts`.
+      const suffixe =
+        jointes.length > 0 ? materializeClaudeAttachments(jointes).promptSuffix : ''
       const queued = pendingDirectives.get(conversationId) ?? []
-      queued.push(directive)
+      queued.push((directive || '(image envoyée sans texte)') + suffixe)
       pendingDirectives.set(conversationId, queued)
       broadcast({ type: 'refresh', scope: 'directives' })
       // La directive est acceptee -> elle devient un VRAI message du fil. Sans cette ecriture, le
@@ -3676,7 +3690,11 @@ Le fil reprend ensuite normalement.`
       const messageId = enregistrerDirectiveDansLeFil({
         conversations: os.conversations,
         conversationId,
-        texte: directive,
+        texte:
+          directive +
+          (jointes.length > 0
+            ? `${directive ? '\n\n' : ''}📎 ${jointes.map((j) => j.name).join(', ')}`
+            : ''),
         broadcast: (event) => broadcast(event),
         onError: (error) => console.error('[inject] message non ecrit dans le fil', error)
       })
