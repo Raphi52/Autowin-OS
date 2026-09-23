@@ -21,6 +21,7 @@
  *    faire ici.
  */
 import { ipcMain } from 'electron'
+import { readSessionForImport, resolveListedSessionAsync } from '../activity/transcripts'
 import { LOT_SUPPRESSION_MAX } from '../store/conversations'
 import { removeConversationTurnJournals } from '../runs/turn-journal'
 import { removeConvActivity } from '../activity/conv-activity'
@@ -224,6 +225,40 @@ export function registerConversationsIpc({
       return updated?.claudeAccountId ?? null
     }
   )
+  /**
+   * IMPORTE une session Claude (`~/.claude/projects/<projet>/<session>.jsonl`) en conversation.
+   *
+   * Même autorisation que les canaux d'activité : la référence doit être RECONNUE par l'inventaire
+   * (`resolveListedSessionAsync`) — aucun chemin fourni par la fenêtre n'est ouvert tel quel.
+   * La lecture est plein texte et streaming côté main (`readSessionForImport`) ; le retour est un
+   * RÉSUMÉ, jamais la conversation entière : renvoyer des mégaoctets de messages sur ce canal
+   * gèlerait le renderer pour rien — il rechargera le fil par `os:conversation` s'il l'ouvre.
+   */
+  ipcMain.handle('os:conversations:importSession', async (event, ref: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation import')
+    if (!ref || typeof ref !== 'object') throw new Error('Référence de session invalide')
+    const raw = ref as Record<string, unknown>
+    const session = await resolveListedSessionAsync({
+      id: guardString(raw.id, 'session.id'),
+      project: guardString(raw.project, 'session.project')
+    })
+    if (!session) throw new Error('Session non autorisée ou hors inventaire')
+    const transcript = await readSessionForImport(session.path)
+    if (transcript.messages.length === 0) throw new Error('Session sans message importable')
+    const conversation = os.conversations.importerTranscript({
+      title: transcript.title ?? `Import ${session.id}`,
+      provider: 'claude',
+      ...(transcript.cwd ? { projectPath: transcript.cwd } : {}),
+      messages: transcript.messages
+    })
+    broadcast({ type: 'refresh', scope: 'conversations' })
+    return {
+      id: conversation.id,
+      title: conversation.title,
+      messageCount: conversation.messages.length,
+      ...(conversation.projectPath ? { projectPath: conversation.projectPath } : {})
+    }
+  })
   ipcMain.handle('os:conversations:fork', (event, rawId: string, rawMessageId: string) => {
     assertTrustedRendererSender(event, 'Conversation fork')
     return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))

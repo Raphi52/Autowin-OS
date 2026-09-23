@@ -134,6 +134,9 @@ export function ObservatoryView({
   const [causalTracePartial, setCausalTracePartial] = useState(false)
   const [activitySession, setActivitySession] = useState<ActivitySession | null>(null)
   const [activityImage, setActivityImage] = useState('')
+  /** Résultat du dernier import de transcript — succès comme échec, sinon clic muet. */
+  const [sessionImportNotice, setSessionImportNotice] = useState('')
+  const [sessionImportPending, setSessionImportPending] = useState(false)
   const causalRequestGate = useRef(new LatestRequestGate())
   const promptRequestGate = useRef(new LatestRequestGate())
   const brainRequestGate = useRef(new LatestRequestGate())
@@ -529,6 +532,30 @@ export function ObservatoryView({
           'activitySession',
           `Session illisible (${session.path}) : ${error instanceof Error ? error.message : String(error)}`
         )
+      })
+  }
+
+  function importActivitySession(session: ActivitySessionMeta): void {
+    // fix-ok: cause mesurée des reprises — 1re version : clic MUET, le rejet IPC n'apparaissait
+    // nulle part (test ux rouge : « Import impossible » absent du DOM) ; 2e rouge : état d'attente
+    // sans <Spinner /> refusé par la garde spinner-partout → notice succès/échec + pending, vert.
+    // Le libellé d'attente vit dans le JSX du rail, à côté du <Spinner /> (garde spinner-partout) :
+    // ici on ne pose que l'état « en vol », jamais la chaîne.
+    setSessionImportPending(true)
+    setSessionImportNotice('')
+    // Même exigence que les deux handlers voisins : un rejet SILENCIEUX = clic muet.
+    void window.api
+      .conversationsImportSession({ id: session.id, project: session.project })
+      .then((result) => {
+        setSessionImportNotice(`Importée : « ${result.title} » (${result.messageCount} messages)`)
+      })
+      .catch((error: unknown) => {
+        setSessionImportNotice(
+          `Import impossible : ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
+      .finally(() => {
+        setSessionImportPending(false)
       })
   }
 
@@ -1209,6 +1236,9 @@ export function ObservatoryView({
           activitySessionsLoading={loadingActivitySessions}
           activitySession={activitySession}
           onOpenSession={openActivitySession}
+          onImportSession={importActivitySession}
+          sessionImportNotice={sessionImportNotice}
+          sessionImportPending={sessionImportPending}
           activityImage={activityImage}
           onOpenImage={openActivityImage}
           runs={runs}
