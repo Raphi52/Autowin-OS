@@ -58,6 +58,7 @@ import {
   persistRecoveredChatProviderUsage
 } from '../activity/chat-usage-settlement'
 import { taskUsageMetricsFromExecution } from '../activity/task-usage-metrics'
+import { describeChatTurnFailure } from '../provider-failure-diagnosis'
 import { sameExecutionUsage, type ExecutionUsageSnapshot } from '../execution-supervisor'
 import { appendPromptCall } from '../activity/prompt-observability'
 import { promptCallToTraceEvents } from '../activity/prompt-call-trace'
@@ -1561,11 +1562,23 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
           ...taskUsageMetricsFromExecution(supervisedUsage)
         }
+      /**
+       * DIAGNOSTIC AVANT AFFICHAGE. L'erreur brute seule laissait l'utilisateur sans geste :
+       * `provider-failure-diagnosis` n'était branché que sur l'orchestrateur et le watchdog, jamais
+       * sur le chat direct (mesuré conv-737 puis conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a :
+       * « tool call could not be parsed », 0,0956 USD, message assistant vide, aucun conseil).
+       * Le message d'origine reste en tête, intact : la reprise surcharge et la détection de
+       * session expirée le lisent par inclusion.
+       */
       return {
         ok: false,
         cancelled: false,
         turnId,
-        error: e instanceof Error ? e.message : String(e),
+        error: describeChatTurnFailure({
+          provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
+          model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+          message: e instanceof Error ? e.message : String(e)
+        }),
         ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
         ...taskUsageMetricsFromExecution(supervisedUsage)
       }
