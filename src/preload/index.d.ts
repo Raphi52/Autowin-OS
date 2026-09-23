@@ -467,6 +467,7 @@ interface ChatApi {
   conversationsSetProject: (id: string, path?: string | null) => Promise<string | null>
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. */
   conversationsSetHighlight: (id: string, on: boolean) => Promise<boolean>
+  conversationsSetInactive: (id: string, on: boolean) => Promise<boolean>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
   conversationsRemove: (id: string) => Promise<boolean>
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */

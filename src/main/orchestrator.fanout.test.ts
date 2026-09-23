@@ -565,8 +565,8 @@ describe('Orchestrator — refus du filtre de sécurité (conv-540, tour 4dfe282
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      executionWorkspace: 'C:\ws',
-      worktrees: makeTestWorktrees('C:\ws'),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],
       phaseFanOut: (phase) =>
         phase === 'frame' ? [{ provider: provider.id, model: 'claude-opus-5' }] : []

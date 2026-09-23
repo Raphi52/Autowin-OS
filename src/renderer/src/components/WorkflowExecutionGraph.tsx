@@ -242,6 +242,63 @@ function ExecutionNodeReasoning({
   )
 }
 
+/**
+ * CE QUE L'ÉTAPE A REÇU ET RENDU (demande du 2026-09-23).
+ *
+ * Le clic sur une brique renvoyait vers Runs, vide pour une demande simple (aucun RUN.md). Le
+ * prompt et la réponse sont dans la trace causale : on les montre ici. Seuls ces genres sont lus —
+ * un contenu d'outil ne s'affiche jamais.
+ */
+function ExecutionNodeExchange({
+  event
+}: {
+  event: HarnessTimelineEvent
+}): React.JSX.Element | null {
+  const pick = (...kinds: string[]): string[] =>
+    (event.payloads ?? [])
+      .filter((payload) => kinds.includes(payload.kind))
+      .map((payload) => payload.content)
+      .filter((content) => Boolean(content?.trim()))
+  const prompt = pick('user-message')
+  const system = pick('system-instruction')
+  const response = pick('model-response', 'error')
+  if (prompt.length === 0 && system.length === 0 && response.length === 0) {
+    return (
+      <p className="workflow-execution-exchange-empty" data-execution-exchange="vide">
+        Aucun prompt ni retour enregistré pour cette étape.
+      </p>
+    )
+  }
+  return (
+    <div className="workflow-execution-exchange" data-execution-exchange>
+      {prompt.length > 0 && (
+        <details open data-execution-prompt>
+          <summary>Prompt envoyé</summary>
+          {prompt.map((content, index) => (
+            <pre key={index}>{content}</pre>
+          ))}
+        </details>
+      )}
+      {system.length > 0 && (
+        <details data-execution-system>
+          <summary>Instructions système</summary>
+          {system.map((content, index) => (
+            <pre key={index}>{content}</pre>
+          ))}
+        </details>
+      )}
+      {response.length > 0 && (
+        <details open data-execution-response>
+          <summary>Retour de l’étape</summary>
+          {response.map((content, index) => (
+            <pre key={index}>{content}</pre>
+          ))}
+        </details>
+      )}
+    </div>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element {
   return (
     <div>
@@ -698,6 +755,7 @@ export function WorkflowExecutionGraph({
             event={selected.event}
             offsetMs={offsetFromStart(selected.event.timestamp, baseMs)}
           />
+          <ExecutionNodeExchange event={selected.event} />
           <ExecutionNodeReasoning event={selected.event} />
           {selected.issues.length > 0 && (
             <p className="workflow-execution-warning">

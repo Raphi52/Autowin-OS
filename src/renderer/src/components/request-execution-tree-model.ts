@@ -5,6 +5,15 @@ import type {
 } from './harness-timeline-model'
 import { extractHumanMessage } from './human-message'
 
+/** Charges qu'un nœud d'étape garde pour son détail : pensée, prompt envoyé, retour. */
+export const NODE_PAYLOAD_KINDS = new Set([
+  'reasoning',
+  'user-message',
+  'system-instruction',
+  'model-response',
+  'error'
+])
+
 /** Un tour atteignable depuis le graphe : de quoi peupler un sélecteur sans relire la trace. */
 export interface RequestTurnOption {
   id: string
@@ -589,8 +598,11 @@ export function projectLatestRequestExecution(
       // `stepPayloads`. La descente « jusqu'à la pensée » se coupait donc exactement ici, alors
       // que la donnée était présente. Seul `reasoning` remonte : les contenus d'outils et les
       // réponses brutes restent hors du graphe, comme avant.
+      // Le PROMPT envoyé et le RETOUR de l'étape remontent aussi (demande du 2026-09-23) : ils sont
+      // le détail d'une étape, y compris pour une demande simple qui n'écrit aucun RUN.md. Les
+      // contenus d'OUTILS restent hors du graphe.
       payloads: [...(event.payloads ?? []), ...absorbed.flatMap((c) => c.payloads ?? [])].filter(
-        (payload) => payload.kind === 'reasoning'
+        (payload) => NODE_PAYLOAD_KINDS.has(payload.kind)
       ),
       display: {
         kind: event.kind === 'gate' || rawActorKind === 'system' ? 'event' : 'agent',

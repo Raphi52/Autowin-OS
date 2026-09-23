@@ -23,7 +23,7 @@ export function refusReglageProd(ligne: string): string | undefined {
   )
 }
 
-const CLIENT_SQL = /(?:^|[\s"'\/(;&|])(sqlcmd|osql|bcp|invoke-sqlcmd)(?:\.exe)?(?=["'\s]|$)/i
+const CLIENT_SQL = /(?:^|[\s"'/(;&|])(sqlcmd|osql|bcp|invoke-sqlcmd)(?:\.exe)?(?=["'\s]|$)/i
 
 export interface CibleSqlRun {
   client: string
@@ -60,7 +60,7 @@ export function cibleSqlDeCommande(ligne: string): CibleSqlRun | undefined {
  */
 export function refusSqlAgent(ligne: string, basesNonProd: readonly string[]): string | undefined {
   const texte = String(ligne ?? '')
-  const m = /(?:^|[\s"'\/\(;&|])(sqlcmd|osql|bcp|invoke-sqlcmd)(?:\.exe)?(?=["'\s]|$)/i.exec(texte)
+  const m = /(?:^|[\s"'/(;&|])(sqlcmd|osql|bcp|invoke-sqlcmd)(?:\.exe)?(?=["'\s]|$)/i.exec(texte)
   if (!m) return undefined
   const client = m[1].toLowerCase()
   const jetons = (texte.slice(m.index + m[0].length).match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((j) =>

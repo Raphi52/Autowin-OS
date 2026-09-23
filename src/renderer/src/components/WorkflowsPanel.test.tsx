@@ -238,35 +238,19 @@ describe('WorkflowsPanel', () => {
   })
 
   /**
-   * LE FIL DES SOUS-AGENTS EST DANS L'ONGLET RUNS — demande utilisateur repetee (2026-09-01).
+   * CLIQUER UNE BRIQUE D'AGENT RESTE SUR LE GRAPHE (demande du 2026-09-23).
    *
-   * Il s'ouvrait SOUS le graphe, dans l'onglet Graph. Descendre sur un noeud d'agent bascule
-   * desormais sur Runs et y montre le fil du tour choisi ; le graphe redevient une navigation
-   * pure. Le retour au graphe se fait par son onglet.
+   * La bascule vers Runs laissait l'utilisateur sans détail pour une demande simple, qui n'écrit
+   * aucun RUN.md. Le prompt et le retour de l'étape s'affichent désormais sous le graphe.
    */
-  it('descendre sur un nœud agent bascule sur Runs et y ouvre le fil des sous-agents', () => {
+  it('descendre sur un nœud agent reste sur le graphe', () => {
     render(baseProps({ runs: [run()] }))
 
     act(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-agent"]')?.click())
     expect(
       container.querySelector('button[role="tab"][aria-selected="true"]')?.textContent?.trim()
-    ).toBe('Runs')
-    expect(
-      container.querySelector('[data-workflow-detail]')?.getAttribute('data-workflow-detail')
-    ).toBe('subagents')
-    expect(container.textContent).toContain('Aucun fil de sous-agents pour cette étape')
-    // Le graphe n'est plus a l'ecran : un objet par onglet, c'est tout le point de la separation.
-    expect(container.querySelector('[data-testid="graph-stub"]')).toBeNull()
-    // Les RUN.md restent sur le meme onglet, sous le fil.
-    expect(container.textContent).toContain('Audit du panneau')
-
-    const graphe = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
-    ).find((b) => b.textContent?.trim() === 'Graph')!
-    act(() => graphe.click())
+    ).toBe('Graph')
     expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()
-    // L'onglet Graph ne rend plus AUCUN fil : c'etait le doublon a supprimer.
-    expect(container.textContent).not.toContain('Aucun fil de sous-agents pour cette étape')
   })
 
   /** Le fil affiché est celui du TOUR sélectionné — le seul appariement réellement disponible. */
@@ -282,6 +266,11 @@ describe('WorkflowsPanel', () => {
     )
 
     act(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-agent"]')?.click())
+    // Le clic reste sur le graphe : on ouvre Runs soi-même, la sélection du tour y est gardée.
+    const runs = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
+    ).find((b) => b.textContent?.trim() === 'Runs')!
+    act(() => runs.click())
 
     expect(container.textContent).toContain('fil du tour vise')
     expect(container.textContent).not.toContain('fil d’un autre tour')

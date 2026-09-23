@@ -21,7 +21,7 @@ function atom(d, st) {
   if (k < 0.55) return '.';
   if (k < 0.7) return pick(['[ab]', '[^a]', '[a-b]', '[^bc]', '[c]']);
   if (k < 0.8) return pick(['^', '$']);
-  if (k < 0.92 && d < 4) { st.n++; const n = st.n; return '(' + gen(d + 1, st) + ')'; }
+  if (k < 0.92 && d < 4) { st.n++; return '(' + gen(d + 1, st) + ')'; }
   if (st.n > 0 || r() < 0.3) return BS + (1 + Math.floor(r() * Math.max(1, st.n + (r() < 0.2 ? 1 : 0))));
   return pick(['a', 'b']);
 }

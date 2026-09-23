@@ -1,4 +1,9 @@
-import { CONTEXT_MESSAGE_CHARS, CONTEXT_MESSAGE_LIMIT, clip } from './conversation-window'
+import {
+  CONTEXT_LAST_REPLY_CHARS,
+  CONTEXT_MESSAGE_CHARS,
+  CONTEXT_MESSAGE_LIMIT,
+  clip
+} from './conversation-window'
 
 /**
  * Contexte collecté AVANT toute orchestration substantielle. Cette collecte est locale,
@@ -57,6 +62,19 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
             `  ${message.role === 'user' ? 'UTILISATEUR' : 'ASSISTANT'}: ${clip(message.content, CONTEXT_MESSAGE_CHARS)}`
         )
       )
+      // « juge ça / cette archi » désigne la dernière réponse : elle est jointe EN ENTIER (conv-798).
+      const derniere = [...recents].reverse().find((m) => m.role === 'assistant')
+      if (derniere && derniere.content.trim().length > CONTEXT_MESSAGE_CHARS) {
+        const texte = derniere.content.trim()
+        lines.push(
+          'DERNIÈRE RÉPONSE DE L’ASSISTANT, EN ENTIER (c’est souvent l’objet que la demande désigne) :',
+          texte.length > CONTEXT_LAST_REPLY_CHARS
+            ? `${texte.slice(0, CONTEXT_LAST_REPLY_CHARS)}
+[…coupée à ${CONTEXT_LAST_REPLY_CHARS} caractères sur ${texte.length}]`
+            : texte,
+          '[FIN DE LA DERNIÈRE RÉPONSE]'
+        )
+      }
     }
   }
   if (input.toursAnterieurs?.length) {

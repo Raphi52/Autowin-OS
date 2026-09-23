@@ -11,14 +11,14 @@ import { buildSqlTargetCatalog } from './sql-read-catalog'
  * l'aveugle. Un aller-retour entier paye pour une information que le garde connait deja.
  */
 const CATALOGUE = buildSqlTargetCatalog([
-  { server: 'SQL-PROD\PROD', database: 'RIG_AMIENS' },
-  { server: 'SQL-DEV\DEV', database: 'RIG_DEV' }
+  { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' },
+  { server: 'SQL-DEV\\DEV', database: 'RIG_DEV' }
 ])
 
 describe('garde SQL — argument de cible absent', () => {
   it('nomme la base manquante et liste les bases du serveur', () => {
     const refus = decideSqlRead(
-      { server: 'SQL-DEV\DEV', query: 'SELECT 1 AS n' },
+      { server: 'SQL-DEV\\DEV', query: 'SELECT 1 AS n' },
       CATALOGUE
     )
     expect(refus.allowed).toBe(false)
@@ -32,6 +32,6 @@ describe('garde SQL — argument de cible absent', () => {
     expect(refus.allowed).toBe(false)
     const reason = refus.allowed ? '' : refus.reason
     expect(reason).toContain('server')
-    expect(reason).toContain('SQL-DEV\DEV')
+    expect(reason).toContain('SQL-DEV\\DEV')
   })
 })

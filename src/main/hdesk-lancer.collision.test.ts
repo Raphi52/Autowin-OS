@@ -5,23 +5,25 @@
  * l'occupant vit, et nommer un identifiant libre.
  */
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe.skipIf(process.platform !== 'win32')('hdesk-lancer : identifiant deja pris', () => {
   it('refuse (exit 5) sans rien lancer et propose un identifiant libre', () => {
     const id = `kzcol${process.pid}`
-    const registre = join(process.env.LOCALAPPDATA ?? '', 'autowin-hdesk')
-    mkdirSync(registre, { recursive: true })
+    // Registre PROPRE au test : l'app Autowin en marche purge du registre reel toute fiche sans
+    // bureau cache vivant en ~0,5 s, et le lanceur ne voyait alors plus l'occupant (exit 3).
+    const registre = mkdtempSync(join(tmpdir(), 'hdesk-registre-'))
     const fiche = join(registre, `${id}.json`)
     // Occupant VIVANT : le process de test lui-meme.
     writeFileSync(fiche, JSON.stringify({ id, pid: process.pid, travail: 'autre travail', conversationId: 'conv-000' }), 'utf8')
     try {
-      const ps = join(process.env.SystemRoot ?? 'C:\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+      const ps = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
       const r = spawnSync('powershell', [
         '-NoProfile', '-File', join(process.cwd(), 'scripts', 'hdesk-lancer.ps1'),
-        '-Id', id, '-Executable', ps, '-Travail', 'test', '-Conversation', 'conv-617'
+        '-Id', id, '-Executable', ps, '-Travail', 'test', '-Conversation', 'conv-617', '-Registre', registre
       ], { encoding: 'utf8', timeout: 60_000 })
       expect(r.status).toBe(5)
       const sortie = JSON.parse(r.stdout.trim().split(/\r?\n/)[0])
@@ -30,7 +32,7 @@ describe.skipIf(process.platform !== 'win32')('hdesk-lancer : identifiant deja p
       expect(sortie.idLibre).toContain(id)
       expect(sortie.erreur).toMatch(/deja utilise/i)
     } finally {
-      rmSync(fiche, { force: true })
+      rmSync(registre, { recursive: true, force: true })
     }
   }, 70_000)
 })

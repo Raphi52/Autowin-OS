@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import React, { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSkillsCatalog } from './useSkillsInventory'
@@ -12,16 +12,13 @@ import { useSkillsCatalog } from './useSkillsInventory'
  */
 let container: HTMLDivElement
 let root: Root
-let rendu: string[]
 
-function Sonde(): null {
-  rendu = useSkillsCatalog()?.map((s) => s.id) ?? []
-  return null
+function Sonde(): React.ReactElement {
+  return createElement('span', null, (useSkillsCatalog()?.map((s) => s.id) ?? []).join(','))
 }
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  rendu = []
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -49,7 +46,7 @@ describe('useSkillsCatalog', () => {
     await act(async () => {
       root.render(createElement(Sonde))
     })
-    expect(rendu).toEqual(['scout', 'facture'])
+    expect(container.textContent).toBe('scout,facture')
     expect(capabilityControls).toHaveBeenCalledTimes(1)
 
     // La skill est supprimee du disque pendant que l'app tourne, puis l'utilisateur revient
@@ -59,6 +56,6 @@ describe('useSkillsCatalog', () => {
     })
 
     expect(capabilityControls).toHaveBeenCalledTimes(2)
-    expect(rendu).toEqual(['scout'])
+    expect(container.textContent).toBe('scout')
   })
 })

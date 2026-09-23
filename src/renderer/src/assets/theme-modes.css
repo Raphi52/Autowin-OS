@@ -1426,3 +1426,12 @@
 :root[data-theme^='malvoyant-'] .cockpit-sources button.is-future {
   opacity: 1;
 }
+/* Contour des controles GARANTI. Des regles d'ecran plus precises l'ecrasaient : dans
+   l'Observatory, `.theme-serious .observatory-view .observatory-toolbar button` pose un blanc a
+   22 %, invisible sur le fond blanc du malvoyant clair (capture du 2026-09-22, conv-785). */
+:root[data-theme^='malvoyant-'] :is(button, input, select, textarea, summary) {
+  border-color: var(--line-strong) !important;
+}
+:root[data-theme^='malvoyant-'] button:disabled {
+  color: var(--text-dim);
+}

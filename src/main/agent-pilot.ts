@@ -62,6 +62,7 @@ import {
   outilsFaussementAbsents
 } from '../shared/outil-pretendu-absent'
 import { startTurnTimer } from './turn-timing'
+import { avecAvisEnTete, avisOrientationsTardives } from './orientations-tardives'
 import { claudeActiveAccountId } from './claude-accounts'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 import {
@@ -1181,16 +1182,16 @@ export class AgentPilot {
         if (!directives.length) break
         lateDirectives.push(...directives)
       }
-      const directiveNotice = lateDirectives.length
-        ? `⚠️ ${lateDirectives.length} orientation(s) reçue(s) après le lancement : aucun second run n'a été relancé. Renvoyez-la comme nouveau message si elle reste nécessaire.`
-        : undefined
+      const directiveNotice = avisOrientationsTardives(lateDirectives)
       // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
       // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
       // n'affichait que « Workflow Autowin execute. »).
-      const compteRendu = formatOrchestrationOutcome(
-        result.ok,
-        result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
-        result.ok ? undefined : String(result.error ?? ''),
+      const compteRendu = avecAvisEnTete(
+        formatOrchestrationOutcome(
+          result.ok,
+          result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
+          result.ok ? undefined : String(result.error ?? '')
+        ),
         directiveNotice
       )
       /**

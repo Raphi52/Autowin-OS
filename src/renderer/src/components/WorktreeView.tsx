@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GitGraphSnapshot } from '../../../shared/git-graph'
 import { BureauxConserves } from './BureauxConserves'
-import { useOfficeAction } from './WorktreeActivityView'
+import { useOfficeAction } from './useOfficeAction'
 import { ConflitBureauPanneau } from './ConflitBureau'
 import { useConflitBureau } from './useConflitBureau'
 import type {

@@ -117,7 +117,7 @@ import { CapteurHdesk, racineScriptsHorsArchive } from './hdesk-tv'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
-import { type ReasoningEffort, type Role } from './roles'
+import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { compensateOutcomeCuration } from './outcome-learning-curation'
 import {
@@ -1276,25 +1276,26 @@ function runtimeTopologyReadiness(topology: AgentTopology): Promise<void> {
 }
 
 function syncRuntimeTopology(topology: AgentTopology): void {
-  const sync = (role: Role, binding: SlotBinding): void => {
+  const resolve = (binding: SlotBinding): RoleBinding => {
     try {
-      os.setRole(role, runtimeRoleBinding(binding, agentModels))
+      return runtimeRoleBinding(binding, agentModels)
     } catch (error) {
       if (!(error instanceof UnresolvedRuntimeModelError)) throw error
       // Identité visible et fail-closed : aucun ancien rôle d'un autre provider ne survit, mais la
       // readiness bloque l'appel provider tant que l'alias n'a pas de transport découvert.
-      os.setRole(role, {
+      return {
         provider: binding.provider,
         model: binding.modelId,
         reasoningEffort: binding.reasoningEffort
-      })
+      }
     }
   }
-  for (const [role, binding] of Object.entries(runtimeRoleSlots(topology)) as Array<
-    [Role, SlotBinding]
-  >) {
-    sync(role, binding)
-  }
+  // UNE écriture de roles.json pour tous les rôles (avant : une par rôle, gel mesuré de 20,7 s).
+  os.setRoles(
+    (Object.entries(runtimeRoleSlots(topology)) as Array<[Role, SlotBinding]>).map(
+      ([role, binding]) => [role, resolve(binding)] as const
+    )
+  )
   // Fan-out multi-modèles : on fournit à l'orchestrateur la LISTE COMPLÈTE des modèles de chaque
   // bloc de divergence/jugement (plus le seul `[0]`). ≥2 → il duplique + agrège. La ligne `sync`
   // ci-dessus reste pour le chemin mono-modèle (rétrocompat : 0/1 slot → comportement actuel).
