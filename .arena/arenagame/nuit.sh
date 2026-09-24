@@ -28,8 +28,9 @@ for k in $(seq 1 $MANCHES); do
     n=$(node -e 'try{console.log(require(process.argv[1]).auto)}catch{console.log("")}' "$M/note-$b.json")
     c=$(node -e 'try{console.log(require(process.argv[1]).total_cost_usd)}catch{console.log("")}' "$M/out-$b-1.json")
     echo "{\"tournoi\":\"nuit-$(date +%F)-m$k\",\"bras\":\"${b^^}1\",\"jeu\":${n:-null},\"sur\":52,\"cout_usd\":${c:-null}}" >> "$ARENE/historique.jsonl"
+    node "$ARENE/clore-run.mjs" "$M/note-$b.json" "$M/out-$b-1.json" >> "$LOG" 2>&1
     echo "m$k $b note=$n cout=$c" >> "$LOG"; done
-  tar -cf "$M.bras.tar" -C "$M" a-1 b-1 c-1 x-1 && tar -tf "$M.bras.tar" >/dev/null && rm -rf "$M"/a-1 "$M"/b-1 "$M"/c-1 "$M"/x-1
+  tar --force-local -cf "$M.bras.tar" -C "$M" a-1 b-1 c-1 x-1 && tar --force-local -tf "$M.bras.tar" >/dev/null && rm -rf "$M"/a-1 "$M"/b-1 "$M"/c-1 "$M"/x-1
   stop && break
   A=$M/ameliore; mkdir -p "$A/moi"
   cat > "$A/prompt.txt" <<P

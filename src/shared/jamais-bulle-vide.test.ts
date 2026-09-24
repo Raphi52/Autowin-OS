@@ -15,7 +15,7 @@ describe('un tour clos sans un mot', () => {
   it('ANNULÉ sans rien dire reçoit un mot lisible', () => {
     const tour = reduceChatTurn(createChatTurn('t1'), { kind: 'cancelled' })
     expect(tour.status).toBe('cancelled')
-    expect(flattenChatParts(tour.parts)).toContain('annulé')
+    expect(flattenChatParts(tour.parts)).toContain('Tour arrêté (bouton Stop)')
   })
 
   it('INTERROMPU sans rien dire reçoit un mot lisible', () => {

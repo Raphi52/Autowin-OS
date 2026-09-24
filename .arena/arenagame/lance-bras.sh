@@ -28,7 +28,7 @@ while :; do
   reste=$(node -e 'console.log(Math.max(0,(+process.argv[1])-(+process.argv[2])).toFixed(2))' "$BUDGET" "$depense")
   if [ "$(node -e 'console.log(+process.argv[1]<0.5?1:0)' "$reste")" = 1 ]; then echo "budget épuisé ($depense \$)" >> "$ERR"; break; fi
   if [ -z "$sid" ]; then
-    if [ -n "$SYS" ]; then r=$(claude -p "$(cat "$PROMPT")" --append-system-prompt "$(cat "$SYS")" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR")
+    if [ -n "$SYS" ]; then r=$(claude -p "$(cat "$PROMPT")" --append-system-prompt-file "$SYS" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR")
     else r=$(claude -p "$(cat "$PROMPT")" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR"); fi
   else
     r=$(claude -p "$REPRISE_MSG" --resume "$sid" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR")

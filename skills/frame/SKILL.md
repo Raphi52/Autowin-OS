@@ -101,6 +101,8 @@ Une fois `## Besoin` écrit, tranche : le besoin cadré laisse-t-il un vrai choi
 
 ### Passe B — les options (SEULEMENT s'il reste un choix d'approche ouvert ; sinon saute)
 
+**0. Ancre dans le code réel (mini-scout de direction)** — avant de générer, une lecture CIBLÉE du dépôt (escalier grep → fichier → symbole, jamais un dump d'arbre) répond à trois questions, citées chemin:ligne dans `## Options` : qu'est-ce qui EXISTE déjà et couvre tout ou partie du besoin (piège du doublon) ? quels points d'accroche la feature toucherait-elle ? quelle contrainte du code rend une direction plus chère qu'elle n'en a l'air ? Une option dont l'effort ou la faisabilité ne s'appuie sur aucun fait lu est marquée `non ancrée`. `disposable` → saute cette étape.
+
 **1. Génère** par lentilles d'approche (ENGINE ch.1 : MVP · robuste · perf · frugal · réutiliser-l'existant · créatif · coût-d'abord · UX-d'abord · convention · contrarien), boucle jusqu'à épuisement, **déduplique par idée centrale**.
 
 **2. Note** en mode CLASSEMENT (ENGINE ch.2) : critères typés, la fidélité en veto éliminatoire (~0 disqualifie), somme pondérée après veto ; 2 tirages décorrélés sur les dimensions subjectives, médiane puis MIN. (Cette somme pondérée est le calcul INTERNE de l'ordre — PAS ce qui est montré : l'AFFICHAGE à l'humain expose Impact ⊥ Effort en axes séparés, jamais une note unique effondrée — règle d'affichage ENGINE ch.1, voir étape 5.)
