@@ -4972,7 +4972,12 @@ button.chat-project-dot:disabled {
   content: '✏️';
 }
 .thinking-frise-icone[data-famille='commande']::before {
-  content: '▶';
+  /* Invite de terminal, pas '▶' : un triangle se lit comme une fleche depliable alors que la
+     ligne ne s'ouvre pas (retour utilisateur du 2026-09-24, conv-831). */
+  content: '>_';
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  opacity: 0.8;
 }
 .thinking-frise-icone[data-famille='autre']::before {
   content: '•';
