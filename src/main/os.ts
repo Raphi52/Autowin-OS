@@ -476,6 +476,7 @@ export class AutowinOS {
             if (this.autoClose) {
               this.lastAutoClose = await closeGreenRunOnDisk({
                 runId: publication.runId,
+                direct: true,
                 task: publication.task ?? 'Run récupéré',
                 projectRepo: executionWorkspace,
                 brainRepo: amitelBrainRoot(),
@@ -680,6 +681,7 @@ export class AutowinOS {
           if (!this.autoClose || !baselinePromise) return
           this.lastAutoClose = await closeGreenRunOnDisk({
             runId,
+            direct: true,
             task,
             projectRepo: executionWorkspace,
             brainRepo: amitelBrainRoot(),

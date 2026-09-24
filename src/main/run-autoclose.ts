@@ -28,10 +28,37 @@ export interface AutoCloseInput {
   runGit: GitRunner
   /** Publier sur le distant. `false` ⇒ commit local seulement. */
   push?: boolean
+  /** Enchaînement générique : voir `publishRunCommits`. */
+  direct?: boolean
+  openPr?: PrOpener
 }
 
+/**
+ * Ouvre une demande de fusion `head` → `base`. Rend le lien/numéro, ou lève avec le motif.
+ * Injectable → testable sans hébergeur.
+ */
+export type PrOpener = (input: {
+  repo: string
+  head: string
+  base: string
+  title: string
+  runGit: GitRunner
+}) => Promise<string>
+
 export type AutoCloseResult =
-  | { status: 'pushed'; branch: string; files: number }
+  | {
+      status: 'pushed'
+      branch: string
+      files: number
+      /** `direct` : poussé sur la branche courante ; `pr` : branche dédiée + demande de fusion. */
+      mode?: 'direct' | 'pr'
+      /** Pourquoi le push direct a été refusé (règle du dépôt, retard sur le distant…). */
+      directRefused?: string
+      /** Lien ou numéro de la PR ouverte. */
+      pr?: string
+      /** PR non ouverte : motif (CLI absente, hébergeur inconnu…). La branche reste poussée. */
+      prError?: string
+    }
   | { status: 'committed'; files: number }
   | {
       status: 'skipped'
@@ -154,7 +181,10 @@ export async function autoCloseRun(input: AutoCloseInput): Promise<AutoCloseResu
       repo,
       publication: { baseSha, publishedSha },
       branch,
-      runGit
+      runGit,
+      direct: input.direct,
+      openPr: input.openPr,
+      title: message
     })
   } catch (error) {
     if (indexTree && !committed) {
@@ -190,6 +220,16 @@ async function publishRunCommits(input: {
   publication: Readonly<GitPublicationRange>
   branch: string
   runGit: GitRunner
+  /**
+   * ENCHAÎNEMENT GÉNÉRIQUE (conv-850, choix utilisateur : « la règle dépend du repo, mais je veux
+   * que ça reste générique »). Aucune liste de dépôts : c'est le DÉPÔT qui tranche par ses propres
+   * règles. On tente d'abord le push sur la branche courante ; si quoi que ce soit le refuse (hook
+   * pre-push, politique de branche du distant, retard non fast-forward), on retombe sur la branche
+   * dédiée puis on ouvre une PR vers la branche courante.
+   */
+  direct?: boolean
+  openPr?: PrOpener
+  title?: string
 }): Promise<AutoCloseResult> {
   const { repo, publication, branch, runGit } = input
   if (PROTECTED.test(branch.trim())) {
@@ -247,11 +287,78 @@ async function publishRunCommits(input: {
 
     const remotes = (await runGit(['remote'], repo)).trim()
     if (!remotes) return { status: 'skipped', reason: 'no-remote' }
+    let base: string | undefined
+    let directRefused: string | undefined
+    if (input.direct) {
+      const courante = (await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], repo)).trim()
+      if (courante && courante !== 'HEAD') {
+        base = courante
+        try {
+          await runGit(['push', 'origin', `${publishedSha}:refs/heads/${courante}`], repo)
+          return { status: 'pushed', branch: courante, files: files.length, mode: 'direct' }
+        } catch (error) {
+          directRefused = (error instanceof Error ? error.message : String(error)).slice(0, 300)
+        }
+      }
+    }
     await runGit(['push', 'origin', `${publishedSha}:refs/heads/${branch}`], repo)
-    return { status: 'pushed', branch, files: files.length }
+    if (!input.direct || !base) return { status: 'pushed', branch, files: files.length }
+    try {
+      const pr = await (input.openPr ?? openPullRequest)({
+        repo,
+        head: branch,
+        base,
+        title: input.title ?? branch,
+        runGit
+      })
+      return { status: 'pushed', branch, files: files.length, mode: 'pr', directRefused, pr }
+    } catch (error) {
+      const prError = (error instanceof Error ? error.message : String(error)).slice(0, 300)
+      return { status: 'pushed', branch, files: files.length, mode: 'pr', directRefused, prError }
+    }
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }
+}
+
+/**
+ * PR par défaut : l'hébergeur est déduit de l'URL du distant (GitHub → `gh`, Azure DevOps → `az`).
+ * Tout autre hébergeur lève : la branche reste poussée, la PR se fait à la main.
+ */
+export async function openPullRequest(input: {
+  repo: string
+  head: string
+  base: string
+  title: string
+  runGit: GitRunner
+}): Promise<string> {
+  const url = (await input.runGit(['remote', 'get-url', 'origin'], input.repo)).trim()
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const exec = promisify(execFile)
+  const body = 'Ouverte par l’enchaînement automatique d’Autowin OS après un run vert.'
+  if (/github\.com/i.test(url)) {
+    const { stdout } = await exec(
+      'gh',
+      ['pr', 'create', '--head', input.head, '--base', input.base, '--title', input.title, '--body', body],
+      { cwd: input.repo, windowsHide: true, shell: process.platform === 'win32' }
+    )
+    return stdout.trim()
+  }
+  if (/dev\.azure\.com|visualstudio\.com/i.test(url)) {
+    const { stdout } = await exec(
+      'az',
+      [
+        'repos', 'pr', 'create', '--detect', 'true',
+        '--source-branch', input.head, '--target-branch', input.base,
+        '--title', input.title, '--description', body,
+        '--query', 'pullRequestId', '--output', 'tsv'
+      ],
+      { cwd: input.repo, windowsHide: true, shell: process.platform === 'win32' }
+    )
+    return `PR ${stdout.trim()}`
+  }
+  throw new Error(`hébergeur non reconnu pour ouvrir une PR (${url.replace(/\/\/[^@/]*@/, '//')})`)
 }
 
 /** Compatibilité des clôtures sans attestation worktree : attribution prudente par message. */
@@ -261,6 +368,9 @@ async function publishLegacyRunCommits(input: {
   runId: string
   branch: string
   runGit: GitRunner
+  direct?: boolean
+  openPr?: PrOpener
+  title?: string
 }): Promise<AutoCloseResult> {
   try {
     const publishedSha = (await input.runGit(['rev-parse', 'HEAD'], input.repo)).trim()
@@ -277,7 +387,10 @@ async function publishLegacyRunCommits(input: {
       repo: input.repo,
       publication: { baseSha: input.baseHead, publishedSha },
       branch: input.branch,
-      runGit: input.runGit
+      runGit: input.runGit,
+      direct: input.direct,
+      openPr: input.openPr,
+      title: input.title
     })
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
@@ -392,7 +505,11 @@ export async function closeGreenRunOnDisk(input: {
   /** Après crash sans baseline Brain durable, interdit toute attribution opportuniste du dirty. */
   recoveredWithoutBrainBaseline?: boolean
   runGit?: GitRunner
+  /** Enchaînement générique : push direct si le dépôt l'accepte, sinon branche dédiée + PR. */
+  direct?: boolean
+  openPr?: PrOpener
 }): Promise<AutoCloseReport> {
+  const chaine = { direct: input.direct, openPr: input.openPr }
   const runGit: GitRunner = input.runGit ?? (await defaultGitRunner())
 
   const branch = autoCloseBranch(input.runId)
@@ -417,10 +534,12 @@ export async function closeGreenRunOnDisk(input: {
           baseHead,
           runId: input.runId,
           branch,
-          runGit
+          runGit,
+          ...chaine,
+          title: message
         })
       }
-      return await autoCloseRun({ repo, branch, message, paths: mine, runGit })
+      return await autoCloseRun({ repo, branch, message, paths: mine, runGit, ...chaine })
     } catch (error) {
       return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
     }
@@ -433,7 +552,9 @@ export async function closeGreenRunOnDisk(input: {
         repo: input.projectRepo,
         publication: input.projectPublication,
         branch,
-        runGit
+        runGit,
+        ...chaine,
+        title: message
       })
     : await closeScoped(
         input.projectRepo,

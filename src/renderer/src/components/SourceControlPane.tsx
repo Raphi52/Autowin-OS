@@ -30,7 +30,14 @@ const EMPTY_GIT: GitReadResult = {
 }
 
 type AutoCloseViewResult =
-  | { status: 'pushed'; branch: string; files: number }
+  | {
+      status: 'pushed'
+      branch: string
+      files: number
+      mode?: 'direct' | 'pr'
+      pr?: string
+      prError?: string
+    }
   | { status: 'committed'; files: number }
   | { status: 'skipped'; reason: string; detail?: string }
   | { status: 'failed'; error: string }
@@ -47,7 +54,14 @@ interface AutoCloseViewState {
 }
 
 function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): string {
-  if (result.status === 'pushed') return `${scope} · publié · ${result.branch}`
+  if (result.status === 'pushed') {
+    if (result.mode === 'direct') return `${scope} · poussé sur ${result.branch}`
+    if (result.mode === 'pr')
+      return result.pr
+        ? `${scope} · push refusé sur la branche → ${result.branch} + ${result.pr}`
+        : `${scope} · poussé sur ${result.branch}, PR non ouverte · ${result.prError ?? 'motif inconnu'}`
+    return `${scope} · publié · ${result.branch}`
+  }
   if (result.status === 'committed') return `${scope} · commité localement`
   if (result.status === 'failed') return `${scope} · échec · ${result.error}`
   const reasons: Record<string, string> = {
@@ -577,13 +591,13 @@ export function SourceControlPane({
                 aria-pressed={autoClose?.enabled ?? false}
                 title={
                   autoClose?.enabled
-                    ? 'Activée — tente de publier chaque run vert sur une branche dédiée, jamais sur main. Clic : désactiver.'
-                    : 'Désactivée — rien n’est publié automatiquement. Clic : activer.'
+                    ? 'Activé — après chaque run vert, tente de publier : commit, puis push sur la branche courante. Si le dépôt le refuse (règle de branche, hook, retard), push sur une branche dédiée et ouverture d’une PR. Clic : désactiver.'
+                    : 'Désactivé — rien n’est publié automatiquement. Clic : activer.'
                 }
                 onClick={() => void toggleAutoClose()}
               >
                 <span className="sc-toggle-dot" aria-hidden="true" />
-                Clôture auto
+                Enchaînement auto
                 <b className="sc-toggle-state">{autoClose?.enabled ? 'ON' : 'OFF'}</b>
               </button>
             </div>
@@ -628,7 +642,7 @@ export function SourceControlPane({
             )}
             {autoClose?.last && (
               <div className="sc-autoclose-last" data-testid="sc-autoclose-last">
-                <strong>Dernière clôture · {autoClose.last.runId}</strong>
+                <strong>Dernier enchaînement · {autoClose.last.runId}</strong>
                 <span>{autoCloseResultLabel('Projet', autoClose.last.project)}</span>
                 <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
               </div>
