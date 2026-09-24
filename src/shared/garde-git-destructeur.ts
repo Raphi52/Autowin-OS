@@ -45,7 +45,7 @@ export function refusGitDestructeur(commande: string): string | undefined {
     if (sous === 'reset' && a(/^--hard$/i)) {
       return motif(
         'git reset --hard',
-        'git revert --abort, git stash, ou git checkout HEAD -- <chemin>'
+        'git revert --abort, git checkout HEAD -- <chemin>, ou copie la version commitée à part : git show HEAD:<chemin> > /tmp/<nom>'
       )
     }
     // 2. checkout/restore de l'arbre entier : le dernier argument vise tout (`.`, `:/`, `*`).
@@ -56,6 +56,16 @@ export function refusGitDestructeur(commande: string): string | undefined {
       return motif(
         "rétablissement de tout l'arbre",
         'vise le seul fichier concerné : git checkout HEAD -- <chemin>'
+      )
+    }
+    // 4. stash (hors lectures list/show) : la pile refs/stash est PARTAGEE par tous les worktrees du
+    // depot principal. Un stash d'agent y melange son etat a celui de l'utilisateur ; un pop/drop/clear
+    // peut emporter la remise de cote de quelqu'un d'autre. On lit la version commitee a part.
+    if (sous === 'stash' && !/^(list|show)$/i.test(reste[0] ?? '')) {
+      return (
+        `git stash refusé pour un agent : la pile de remises de côté est partagée avec le dépôt principal ` +
+        `de l'utilisateur, un stash/pop/drop peut y mélanger ou perdre son travail. ` +
+        `Voie sûre : lis la version commitée à part, sans toucher l'arbre — git show HEAD:<chemin> > /tmp/<nom>.`
       )
     }
     // 3. clean -f : les fichiers non suivis n'ont AUCUN objet git, rien ne les recupere.

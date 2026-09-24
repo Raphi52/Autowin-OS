@@ -11,13 +11,25 @@ describe('refusGitDestructeur', () => {
   it('refuse git reset --hard, la commande qui a detruit le travail en cours (conv-587)', () => {
     const motif = refusGitDestructeur('git reset --hard')
     expect(motif).toBeTruthy()
-    expect(motif).toMatch(/revert --abort|stash/)
+    expect(motif).toMatch(/revert --abort/)
+    expect(motif).toMatch(/git show HEAD:<chemin> > \/tmp\//)
+    expect(motif).not.toMatch(/git stash/)
   })
 
   it('refuse aussi la forme enchainee et le retablissement de tout l arbre', () => {
     expect(refusGitDestructeur('git revert --abort ; git reset --hard HEAD')).toBeTruthy()
     expect(refusGitDestructeur('git checkout -- .')).toBeTruthy()
     expect(refusGitDestructeur('git clean -fd')).toBeTruthy()
+  })
+
+  it('refuse git stash (toutes formes mutantes) et recommande git show HEAD:chemin > /tmp', () => {
+    for (const c of ['git stash', 'git stash push -u', 'git stash pop', 'git stash drop', 'git stash clear', 'git -C D:/AutoWinOS stash save x', 'git status && git stash']) {
+      const m = refusGitDestructeur(c)
+      expect(m, c).toBeTruthy()
+      expect(m).toMatch(/git show HEAD:<chemin> > \/tmp\//)
+    }
+    expect(refusGitDestructeur('git stash list')).toBeUndefined()
+    expect(refusGitDestructeur('git stash show -p')).toBeUndefined()
   })
 
   it('laisse passer les voies de secours et les lectures', () => {
