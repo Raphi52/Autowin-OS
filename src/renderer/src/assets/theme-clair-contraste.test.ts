@@ -122,6 +122,13 @@ describe('mode clair — le voile couvre TOUTE la surface du décor', () => {
       /position:\s*fixed/
     )
     expect(regle![1]).toMatch(/inset:\s*0/)
+    // Régression du 2026-09-23 (8072d4e9) : une règle plus bas coupait le voile par display:none,
+    // et le test restait vert. Aucune règle ne doit masquer ce voile.
+    expect(css).not.toMatch(/\.decor-de-fond::after\s*\{\s*display:\s*none/)
+    // Hors Accueil le décor 3D n'est pas monté : la galaxie du body doit porter le même voile.
+    const bodies = [...css.matchAll(/:root\[data-base='clair'\] body \{([^}]*)\}/g)]
+    const body = bodies[bodies.length - 1]
+    expect(body?.[1] ?? '', 'galaxie du body non lavée en clair').toMatch(/rgba\(250, 248, 243, 0\.9\)/)
   })
 
   it('les boutons de fenêtre suivent le fond lavé et non le décor sombre', () => {
