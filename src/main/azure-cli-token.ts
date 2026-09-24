@@ -74,7 +74,7 @@ export async function loadAzureDevOpsCliToken(
   run: AzureCliRunner = defaultRunner
 ): Promise<string> {
   try {
-    const result = await run('az.cmd', [
+    const result = await run('az', [
       'account',
       'get-access-token',
       '--resource',

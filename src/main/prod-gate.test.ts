@@ -311,3 +311,30 @@ describe('accord groupé des lectures (conv-113, 2026-09-23)', () => {
     expect(p.verifier(lecture('RIG_LYON', 'conv-1')).autorise).toBe(false)
   })
 })
+
+describe('lectures de COMMUN_RIG dispensées (conv-117, 2026-09-24)', () => {
+  function porte(niveau: 'confirmation' | 'phrase') {
+    return new PorteProd({
+      autorite: () => construireAutoriteProd([]),
+      coffre: () => new CoffreAutorisationProd(definirPhrase('phrase-de-passe-longue')),
+      phraseDefinie: () => true,
+      niveau: () => niveau
+    })
+  }
+
+  it('laisse passer un sql-read sur COMMUN_RIG sans confirmation, quelle que soit la casse', () => {
+    expect(porte('confirmation').verifier({ nature: 'base', nom: 'COMMUN_RIG', operation: 'sql-read' }).autorise).toBe(true)
+    expect(porte('confirmation').verifier({ nature: 'base', nom: ' commun_rig ', operation: 'sql-read' }).autorise).toBe(true)
+  })
+
+  it('garde la confirmation pour tout autre geste sur COMMUN_RIG', () => {
+    expect(porte('confirmation').verifier({ nature: 'base', nom: 'COMMUN_RIG', operation: 'run-sqlcmd' }).autorise).toBe(false)
+    expect(porte('confirmation').verifier({ nature: 'base', nom: 'COMMUN_RIG', operation: 'sql-write' }).autorise).toBe(false)
+  })
+
+  it('ne couvre pas une base voisine, ni le niveau phrase de passe', () => {
+    expect(porte('confirmation').verifier({ nature: 'base', nom: 'COMMUN_RIG_TEST', operation: 'sql-read' }).autorise).toBe(false)
+    expect(porte('confirmation').verifier({ nature: 'serveur', nom: 'COMMUN_RIG', operation: 'sql-read' }).autorise).toBe(false)
+    expect(porte('phrase').verifier({ nature: 'base', nom: 'COMMUN_RIG', operation: 'sql-read' }).autorise).toBe(false)
+  })
+})

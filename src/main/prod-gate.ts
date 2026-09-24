@@ -65,6 +65,28 @@ export const DUREE_ACCORD_LECTURE_MS = 15 * 60_000
  */
 const OPERATIONS_GROUPABLES = new Set(['sql-read'])
 
+/**
+ * LECTURES DISPENSÉES DE CONFIRMATION (demande utilisateur du 2026-09-24, conv-117). La base commune
+ * `COMMUN_RIG` est lue en permanence (catalogue des greffes, paramétrage), et l'utilisateur a décidé le
+ * 2026-09-23 (conv-113) que l'agent peut y faire des SELECT. Seule l'opération `sql-read` est
+ * dispensée : elle n'est émise que par `sql_query`, déjà bridé (un seul SELECT, enveloppe ROLLBACK,
+ * pas de `SELECT *`, colonnes de mot de passe et de clé refusées par `sql-read-guard.ts`). Tout autre
+ * geste sur la même base (`run-sqlcmd`, écriture) garde sa confirmation. La dispense ne vaut qu'au
+ * niveau `confirmation` : le niveau `phrase`, choisi exprès, reste entier. Appariement EXACT après
+ * normalisation, comme `prod-guard.ts` : `COMMUN_RIG_TEST` n'est pas couvert.
+ */
+const LECTURES_DISPENSEES: ReadonlyArray<{ nature: NatureCible; nom: string; operation: string }> = [
+  { nature: 'base', nom: 'commun_rig', operation: 'sql-read' }
+]
+
+function lectureDispensee(geste: GesteProd): boolean {
+  const nom = geste.nom.trim().toLowerCase()
+  return LECTURES_DISPENSEES.some(
+    (dispense) =>
+      dispense.nature === geste.nature && dispense.nom === nom && dispense.operation === geste.operation
+  )
+}
+
 export type VerdictPorte =
   | { autorise: true }
   | {
@@ -162,6 +184,7 @@ export class PorteProd {
   verifier(geste: GesteProd): VerdictPorte {
     const niveau = this.ports.niveau()
     if (niveau === 'aucun') return { autorise: true }
+    if (niveau === 'confirmation' && lectureDispensee(geste)) return { autorise: true }
 
     const cible: Cible = { nature: geste.nature, nom: geste.nom }
     const verdict = classerCible(cible, this.ports.autorite())
