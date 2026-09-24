@@ -147,6 +147,49 @@
 .sc-btn:hover {
   border-color: var(--accent, #4b9fff);
 }
+/* Onglet Git, maquette 5B1 (conv-844) : l'interrupteur à droite de la branche, puis le flux. */
+.sc-branch-row {
+  align-items: center;
+}
+.sc-branch-toggle {
+  margin-left: auto;
+}
+.sc-flux {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 6px 0 4px;
+}
+.sc-flux-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line2, #31373f);
+  background: var(--surface2, #191d23);
+  color: var(--text, #e6e9ee);
+  cursor: pointer;
+}
+.sc-flux-step:hover {
+  border-color: var(--accent, #4b9fff);
+}
+.sc-flux-detail {
+  font-size: 11px;
+  color: var(--text-faint, #6b727c);
+}
+/* L'étape suggérée (Push quand des commits attendent) : bordure et texte dorés. */
+.sc-flux-step.is-suggested {
+  border-color: var(--gold, #e9bd4e);
+  color: var(--gold, #e9bd4e);
+}
+.sc-flux-step.is-suggested .sc-flux-detail {
+  color: var(--gold, #e9bd4e);
+}
 .sc-btn:disabled {
   opacity: 0.5;
   cursor: default;

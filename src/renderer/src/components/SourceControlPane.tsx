@@ -62,17 +62,57 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
   return `${scope} · non publié · ${reasons[result.reason] ?? result.reason}`
 }
 
-/** Options de l'onglet Git : chaque clic envoie la demande à l'agent, rien n'est exécuté ici. */
-const GIT_ACTIONS: ReadonlyArray<{ label: string; prompt: string }> = [
-  { label: 'Fetch', prompt: 'fais un git fetch et dis-moi ce qui a changé sur le distant' },
-  { label: 'Pull', prompt: 'pull la branche courante depuis le distant' },
-  { label: 'Nouvelle branche', prompt: 'crée une nouvelle branche à partir de la branche courante, nommée : ' },
-  { label: 'Récupérer main', prompt: 'intègre les derniers changements de main dans la branche courante' },
-  { label: 'Mettre de côté', prompt: 'mets de côté mes changements en cours (stash nommé) sans rien perdre' },
-  { label: 'Résumer les changements', prompt: 'résume les changements non commités du dépôt, fichier par fichier' },
-  { label: 'Derniers commits', prompt: 'montre et explique les 10 derniers commits de la branche courante' },
-  { label: 'Ouvrir une PR', prompt: 'ouvre une pull request pour la branche courante avec une description claire' }
-]
+/**
+ * Onglet Git : le FLUX est calculé depuis l'état RÉEL du dépôt (retard, fichiers modifiés,
+ * avance, branche) — seules les étapes qui ont quelque chose à faire s'affichent, dans l'ordre,
+ * et la première est mise en avant. Chaque clic PROPOSE la demande à l'agent, rien n'est
+ * exécuté ici.
+ */
+type EtapeGit = { label: string; detail: string; prompt: string }
+
+const pluriel = (n: number, mot: string): string => `${n} ${mot}${n > 1 ? 's' : ''}`
+
+export function etapesGit(state: { branch: string; ahead: number; behind: number; changes: unknown[] }): EtapeGit[] {
+  const etapes: EtapeGit[] = []
+  const n = state.changes.length
+  const surMain = state.branch === 'main' || state.branch === 'master'
+  if (state.behind > 0)
+    etapes.push({
+      label: 'Récupérer',
+      detail: `${pluriel(state.behind, 'commit')} du distant à intégrer`,
+      prompt: 'récupère les derniers commits du distant sur la branche courante, sans perdre mes changements en cours'
+    })
+  if (n > 0)
+    etapes.push({
+      label: 'Commiter',
+      detail: `${pluriel(n, 'fichier')} modifié${n > 1 ? 's' : ''} — résumé puis commit`,
+      prompt: 'résume les changements non commités fichier par fichier, puis commite-les avec un message clair'
+    })
+  if (state.ahead > 0 || n > 0)
+    etapes.push({
+      label: 'Push',
+      detail: state.ahead > 0 ? `${pluriel(state.ahead, 'commit')} à envoyer` : 'après le commit',
+      prompt: 'push la branche courante'
+    })
+  if (!surMain && state.branch)
+    etapes.push({
+      label: 'Ouvrir une PR',
+      detail: `${state.branch} → main`,
+      prompt: 'ouvre une pull request pour la branche courante avec une description claire'
+    })
+  return etapes
+}
+
+/** Actions hors flux : uniquement celles qu'aucune étape ne couvre déjà. */
+function actionsGit(nbChanges: number): Array<{ label: string; prompt: string }> {
+  return [
+    { label: 'Nouvelle branche', prompt: 'crée une nouvelle branche à partir de la branche courante, nommée : ' },
+    { label: 'Changer de branche', prompt: 'change de branche vers : ' },
+    ...(nbChanges > 0
+      ? [{ label: 'Mettre de côté', prompt: 'mets de côté mes changements en cours (stash nommé) sans rien perdre' }]
+      : [])
+  ]
+}
 
 export function SourceControlPane({
   conversationId,
@@ -531,10 +571,8 @@ export function SourceControlPane({
                   ↑{visibleGit.state.ahead} ↓{visibleGit.state.behind}
                 </span>
               )}
-            </div>
-            <div className="sc-btns">
               <button
-                className={`sc-btn sc-toggle ${autoClose?.enabled ? 'is-on' : 'is-off'}`}
+                className={`sc-btn sc-toggle sc-branch-toggle ${autoClose?.enabled ? 'is-on' : 'is-off'}`}
                 data-testid="sc-autoclose"
                 aria-pressed={autoClose?.enabled ?? false}
                 title={
@@ -548,18 +586,31 @@ export function SourceControlPane({
                 Clôture auto
                 <b className="sc-toggle-state">{autoClose?.enabled ? 'ON' : 'OFF'}</b>
               </button>
-              <button className="sc-btn" onClick={() => propose('change de branche vers : ')}>
-                Changer de branche
-              </button>
-              <button className="sc-btn" onClick={() => propose('push la branche courante')}>
-                Push
-              </button>
             </div>
-            {/* Options Git (conv-844). Comme Push, chaque bouton PROPOSE la demande à l'agent :
-                le panneau ne lance aucun git lui-même, l'agent garde ses garde-fous. */}
-            <header className="sc-h">Actions Git</header>
+            <header className="sc-h">Étapes</header>
+            <div className="sc-flux" data-testid="sc-git-flux">
+              {etapesGit(visibleGit.state).length === 0 ? (
+                <div className="sc-clean" data-testid="sc-git-a-jour">
+                  À jour : aucun changement, rien à envoyer ni à récupérer.
+                </div>
+              ) : (
+                etapesGit(visibleGit.state).map((etape, index) => (
+                  <button
+                    key={etape.label}
+                    className={`sc-flux-step${index === 0 ? ' is-suggested' : ''}`}
+                    title={etape.prompt}
+                    onClick={() => propose(etape.prompt)}
+                  >
+                    <b>
+                      {index + 1} {etape.label}
+                    </b>
+                    <span className="sc-flux-detail">{etape.detail}</span>
+                  </button>
+                ))
+              )}
+            </div>
             <div className="sc-btns" data-testid="sc-git-actions">
-              {GIT_ACTIONS.map((action) => (
+              {actionsGit(visibleGit.state.changes.length).map((action) => (
                 <button
                   key={action.label}
                   className="sc-btn"

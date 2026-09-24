@@ -668,17 +668,43 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(onSendPrompt).toHaveBeenCalledWith('push la branche courante')
   })
 
-  it('onglet Git : les options Git proposent leur demande à l’agent', async () => {
+  it('onglet Git : seules les actions non couvertes par les étapes restent', async () => {
     mockApi(GIT)
     const onSendPrompt = vi.fn()
     await render(onSendPrompt)
     await openWorkspaceView()
-    const actions = container.querySelector('[data-testid="sc-git-actions"]')
-    expect(actions?.querySelectorAll('button').length).toBeGreaterThanOrEqual(8)
-    const pull = [...(actions?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent === 'Pull'
-    ) as HTMLButtonElement
-    act(() => pull.click())
-    expect(onSendPrompt).toHaveBeenCalledWith('pull la branche courante depuis le distant')
+    const actions = [...(container.querySelector('[data-testid="sc-git-actions"]')?.querySelectorAll('button') ?? [])]
+    expect(actions.map((b) => b.textContent)).toEqual(['Nouvelle branche', 'Changer de branche', 'Mettre de côté'])
+    act(() => (actions[2] as HTMLButtonElement).click())
+    expect(onSendPrompt).toHaveBeenCalledWith('mets de côté mes changements en cours (stash nommé) sans rien perdre')
+  })
+
+  it('onglet Git : les étapes suivent l’état réel du dépôt', async () => {
+    mockApi(GIT)
+    await render()
+    await openWorkspaceView()
+    const etapes = [...container.querySelectorAll('[data-testid="sc-git-flux"] button')]
+    expect(etapes.map((b) => b.querySelector('b')?.textContent?.trim())).toEqual([
+      '1 Commiter',
+      '2 Push',
+      '3 Ouvrir une PR'
+    ])
+    expect(etapes[0].className).toContain('is-suggested')
+    expect(etapes[1].querySelector('.sc-flux-detail')?.textContent).toBe('1 commit à envoyer')
+    expect(container.querySelector('[data-testid="sc-autoclose"]')).not.toBeNull()
+  })
+})
+
+describe('etapesGit', () => {
+  it('main en retard et en avance : récupérer puis push, jamais de PR', async () => {
+    const { etapesGit } = await import('./SourceControlPane')
+    expect(etapesGit({ branch: 'main', ahead: 5, behind: 2, changes: [] }).map((e) => e.label)).toEqual([
+      'Récupérer',
+      'Push'
+    ])
+  })
+  it('main propre et synchronisé : aucune étape', async () => {
+    const { etapesGit } = await import('./SourceControlPane')
+    expect(etapesGit({ branch: 'main', ahead: 0, behind: 0, changes: [] })).toEqual([])
   })
 })
