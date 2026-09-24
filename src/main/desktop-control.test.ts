@@ -243,3 +243,9 @@ describe('WindowsDesktopController', () => {
     await expect(unsupported.observe()).rejects.toThrow(/Windows/i)
   })
 })
+
+describe('keys en chaine (tour c4e319ca-783f-4b49-9b87-971cd6392c8e)', () => {
+  it("accepte 'ctrl+t' comme ['CTRL','T']", () => {
+    expect(parseDesktopActions([{ type: 'key', keys: 'ctrl+t' }])).toEqual([{ type: 'key', keys: ['CTRL', 'T'] }])
+  })
+})

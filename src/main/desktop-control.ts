@@ -175,7 +175,13 @@ function closestKeys(key: string): string[] {
   return scored.slice(0, 5).map((entry) => entry.candidate)
 }
 
-function normalizedKeys(value: unknown): string[] {
+function normalizedKeys(input: unknown): string[] {
+  // fix-ok: tour c4e319ca-783f-4b49-9b87-971cd6392c8e — keys:"ctrl+t" (chaine) refusait tout le lot
+  // et l'agent a abandonne l'action pour la rendre a l'utilisateur. Une chaine 'A+B' est sans ambiguite.
+  const value =
+    typeof input === 'string' && input.trim() !== ''
+      ? input.split('+').map((k) => k.trim()).filter((k) => k !== '')
+      : input
   if (!Array.isArray(value) || value.length === 0 || value.length > 8) {
     throw new Error('keys doit contenir entre 1 et 8 touches')
   }
