@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { readFileSync } from 'node:fs'
 import {
+  processusVivant,
   CapteurHdesk,
   fusionnerBureaux,
   interpreterCapture,
@@ -197,5 +198,24 @@ describe('petite TV — disque propre', () => {
     expect(purgerDossiersOrphelins(racine)).toBe(1)
     expect(execFileSync('cmd', ['/c', 'dir', '/b', racine]).toString().trim()).toBe('autre.txt')
     rmSync(racine, { recursive: true, force: true })
+  })
+})
+
+describe('fusionnerBureaux — application morte', () => {
+  it('écarte un bureau dont le processus inscrit est mort, garde celui qui vit ou sans pid', () => {
+    const registre = [
+      { id: 'mort', travail: 'A', conversationId: 'c', pid: 11 },
+      { id: 'vif', travail: 'B', conversationId: 'c', pid: 22 },
+      { id: 'sanspid', travail: 'C', conversationId: 'c' }
+    ]
+    const ids = fusionnerBureaux(['mort', 'vif', 'sanspid'], registre, 'c', (pid) => pid === 22).map(
+      (b) => b.id
+    )
+    expect(ids.sort()).toEqual(['sanspid', 'vif'])
+  })
+
+  it('processusVivant : vrai pour ce processus, faux pour un pid inexistant', () => {
+    expect(processusVivant(process.pid)).toBe(true)
+    expect(processusVivant(2 ** 30)).toBe(false)
   })
 })

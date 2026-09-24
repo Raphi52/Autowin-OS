@@ -31,6 +31,46 @@ const BOUTON_TV = {
   cursor: 'pointer'
 } as const
 
+/**
+ * MASQUAGE MEMORISE HORS DU COMPOSANT (retour utilisateur 2026-09-24, conv-536) : « il reapparait
+ * meme si j'ai clique sur le bouton des que je reposte un message ». Le composant est remonte a
+ * chaque envoi, donc un simple useState perdait le choix. On retient, par conversation, les bureaux
+ * deja masques : la TV ne revient que si un bureau NOUVEAU apparait dans ce fil.
+ */
+// Rangé dans sessionStorage et non en memoire du module : un rechargement complet de l'interface
+// (mise a jour a chaud d'un fichier partage) vidait la memoire et la TV revenait (conv-536).
+const CLE_STOCKAGE = 'autowin.hdesk-tv.masques'
+function lireMasques(): Record<string, string[]> {
+  try {
+    const brut = JSON.parse(globalThis.sessionStorage?.getItem(CLE_STOCKAGE) ?? '{}')
+    return brut && typeof brut === 'object' ? (brut as Record<string, string[]>) : {}
+  } catch {
+    return {}
+  }
+}
+function ecrireMasques(masques: Record<string, string[]>): void {
+  try {
+    globalThis.sessionStorage?.setItem(CLE_STOCKAGE, JSON.stringify(masques))
+  } catch {
+    // Stockage indisponible : le masquage vaut alors jusqu'au prochain rechargement seulement.
+  }
+}
+const bureauxMasques = {
+  has: (cle: string): boolean => cle in lireMasques(),
+  get: (cle: string): Set<string> | undefined => {
+    const ids = lireMasques()[cle]
+    return ids ? new Set(ids) : undefined
+  },
+  set: (cle: string, ids: Set<string>): void => ecrireMasques({ ...lireMasques(), [cle]: [...ids] }),
+  delete: (cle: string): void => {
+    const { [cle]: _retire, ...reste } = lireMasques()
+    ecrireMasques(reste)
+  }
+}
+/** Cadence du guet quand la TV est masquee : la liste seule, jamais d'image. */
+const GUET_MS = 5000
+const cleMasquage = (conversationId?: string | null): string => conversationId ?? ''
+
 export function HdeskTv({
   conversationId,
   api,
@@ -41,17 +81,38 @@ export function HdeskTv({
   const [choisi, setChoisi] = useState<string | null>(null)
   const [image, setImage] = useState<ImageTv | null>(null)
   const [ferme, setFerme] = useState<BureauTv | null>(null)
-  const [masquee, setMasquee] = useState(false)
+  const [masquee, setMasquee] = useState(() => bureauxMasques.has(cleMasquage(conversationId)))
   const [grand, setGrand] = useState(false)
   const choisiRef = useRef<string | null>(null)
   const connusRef = useRef<BureauTv[]>([])
 
   useEffect(() => {
     const cible = api ?? (window as unknown as { api?: Partial<HdeskTvApi> }).api
-    if (masquee || !cible?.hdeskTvBureaux || !cible.hdeskTvImage) return
+    if (!cible?.hdeskTvBureaux || !cible.hdeskTvImage) return
     const a = cible as HdeskTvApi
     let actif = true
     let minuterie: ReturnType<typeof setTimeout> | null = null
+
+    // TV masquee : on ne capture plus, on surveille seulement la LISTE (peu couteux) pour reapparaitre
+    // quand un bureau jamais masque arrive.
+    const guetter = async (): Promise<void> => {
+      const deja = bureauxMasques.get(cleMasquage(conversationId)) ?? new Set<string>()
+      const liste = await a.hdeskTvBureaux(conversationId ?? undefined).catch(() => [] as BureauTv[])
+      if (!actif) return
+      if (liste.some((b) => !deja.has(b.id))) {
+        bureauxMasques.delete(cleMasquage(conversationId))
+        setMasquee(false)
+        return
+      }
+      minuterie = setTimeout(() => void guetter(), GUET_MS)
+    }
+    if (masquee) {
+      minuterie = setTimeout(() => void guetter(), GUET_MS)
+      return () => {
+        actif = false
+        if (minuterie) clearTimeout(minuterie)
+      }
+    }
 
     const tour = async (): Promise<void> => {
       if (typeof document !== 'undefined' && document.hidden) return
@@ -112,6 +173,10 @@ export function HdeskTv({
   }
 
   const fermerTv = (): void => {
+    bureauxMasques.set(
+      cleMasquage(conversationId),
+      new Set([...connusRef.current.map((b) => b.id), ...(ferme ? [ferme.id] : [])])
+    )
     setMasquee(true)
     const cible = api ?? (window as unknown as { api?: Partial<HdeskTvApi> }).api
     void cible?.hdeskTvArreter?.()
