@@ -108,3 +108,12 @@ describe('une lecture NATIVE compte comme une lecture', () => {
     expect(statusEstUneLecture(undefined)).toBe(false)
   })
 })
+
+describe('lecture Bash precedee de cd (conv-844, turn 852bb2fd-25e4-40dd-a959-57d9337b084c)', () => {
+  it('compte `cd X; sed -n` et `cd X && cat` comme des lectures, pas `cd X; rm`', async () => {
+    const { statusEstUneLecture } = await import('./chat-turn-messages')
+    expect(statusEstUneLecture('Bash · cd /d/AutoWinOS; sed -n 1,70p a.css')).toBe(true)
+    expect(statusEstUneLecture('Bash · cd /d/AutoWinOS && cat a.tsx')).toBe(true)
+    expect(statusEstUneLecture('Bash · cd /d/AutoWinOS; rm -rf x')).toBe(false)
+  })
+})

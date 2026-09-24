@@ -871,8 +871,10 @@ export function questionPoseeSansAvoirLu(
  * lecture : la liste est fermee, pas heuristique.
  */
 const LECTEURS_NATIFS = /^(Read|Grep|Glob)\b/
+// fix-ok: turn 852bb2fd-25e4-40dd-a959-57d9337b084c (conv-844) -- `cd D:/x; sed -n ...` n'etait pas
+// reconnu (ancre sur le 1er mot) : relance « question sans lecture » a tort, question affichee 2x.
 const BASH_LECTEUR =
-  /^\s*(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|git\s+(log|show|diff|status))\b/
+  /^\s*(?:cd\s+\S+\s*(?:;|&&)\s*)?(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|git\s+(log|show|diff|status))\b/
 
 export function statusEstUneLecture(status: string | undefined): boolean {
   const texte = (status ?? '').trim()
