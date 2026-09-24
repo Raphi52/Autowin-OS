@@ -153,4 +153,38 @@ describe('HdeskTv', () => {
     expect(host.querySelector('[data-testid="hdesk-tv"]')).toBeNull()
     vi.useRealTimers()
   })
+
+  it('reste masquée après un remontage (nouveau message), et revient pour un bureau NOUVEAU', async () => {
+    const etat = { bureaux: [{ id: 'a', travail: 'Jeu' }] as BureauTv[], image: ok }
+    const api = faux(etat)
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    let root = createRoot(host)
+    const rendre = async (): Promise<void> =>
+      act(async () => {
+        root.render(createElement(HdeskTv, { conversationId: 'conv-remonte', api, intervalleMs: 1000 }))
+      })
+    await rendre()
+    await act(async () =>
+      (host.querySelector('[data-testid="hdesk-tv-fermer"]') as HTMLButtonElement).click()
+    )
+    expect(host.querySelector('[data-testid="hdesk-tv"]')).toBeNull()
+    // Remontage complet, comme a l'envoi d'un message.
+    act(() => root.unmount())
+    root = createRoot(host)
+    await rendre()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+    expect(host.querySelector('[data-testid="hdesk-tv"]')).toBeNull()
+    // Un bureau jamais masque arrive : la TV revient.
+    etat.bureaux = [...etat.bureaux, { id: 'b', travail: 'Autre' }]
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+    expect(host.querySelector('[data-testid="hdesk-tv"]')).not.toBeNull()
+    act(() => root.unmount())
+    vi.useRealTimers()
+  })
 })

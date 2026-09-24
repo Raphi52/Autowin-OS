@@ -70,17 +70,35 @@ export function lireRegistre(dossier: string): EntreeRegistre[] {
   return entrees
 }
 
+/** Le processus existe-t-il encore ? `kill(pid, 0)` n'envoie rien : il ne fait que sonder. */
+export function processusVivant(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    // EPERM : il existe mais appartient a un autre utilisateur.
+    return (e as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
 /**
  * Bureaux a montrer dans un fil : les VIVANTS relies a CE fil, plus recent d'abord.
  */
 export function fusionnerBureaux(
   vivants: readonly string[],
   registre: readonly EntreeRegistre[],
-  conversationId?: string
+  conversationId?: string,
+  pidVivant: (pid: number) => boolean = processusVivant
 ): BureauTv[] {
   const parId = new Map(registre.map((e) => [e.id, e]))
   const tous: BureauTv[] = vivants
     .filter((id) => ID_BUREAU.test(id))
+    // APP MORTE = BUREAU FINI (conv-536, 2026-09-24) : le bureau Windows survit a son application
+    // (le capteur en tient une poignee), donc la TV restait « en direct » sur un Bloc-notes tue.
+    .filter((id) => {
+      const pid = parId.get(id)?.pid
+      return typeof pid !== 'number' || pidVivant(pid)
+    })
     .map((id) => {
       const e = parId.get(id)
       return {
