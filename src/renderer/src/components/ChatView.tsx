@@ -237,7 +237,7 @@ function ecrireDossiersRetires(retires: string[]): void {
   }
 }
 /** Fils armes en mode auto (reglage PAR conversation ; `*` = ancien reglage global migre). */
-const CLE_MODE_AUTO_CONVS = 'autowin.chat.modeAuto.convs'
+import { CLE_MODE_AUTO_CONVS, EVT_ARMER_MODE_AUTO } from './chat-auto-convs'
 /** Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions. */
 const CLE_DOSSIER_NOUVEAU_FIL = 'autowin.chat.dossierNouveauFil'
 
@@ -678,6 +678,16 @@ export function ChatView({
   useEffect(() => {
     window.localStorage.setItem(CLE_MODE_AUTO_CONVS, JSON.stringify([...autoConvs]))
   }, [autoConvs])
+  // Un fil arme de l'exterieur (mode auto Tickets) rejoint l'ensemble sans etre ecrase.
+  useEffect(() => {
+    const armer = (e: Event): void => {
+      const id = (e as CustomEvent<unknown>).detail
+      if (typeof id === 'string' && id)
+        setAutoConvs((prev) => (prev.has(id) ? prev : new Set([...prev, id])))
+    }
+    window.addEventListener(EVT_ARMER_MODE_AUTO, armer)
+    return () => window.removeEventListener(EVT_ARMER_MODE_AUTO, armer)
+  }, [])
   const autoArmePour = useCallback(
     (id: string | null | undefined): boolean =>
       // `id`, PAS le fil affiche : cette fonction est appelee pour les fils d'ARRIERE-PLAN.

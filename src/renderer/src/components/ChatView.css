@@ -4933,6 +4933,10 @@ button.chat-project-dot:disabled {
   margin-left: 6px;
   color: #e3ba55;
   font-size: 12px;
+  /* Ne se laisse pas ecraser par le signe de vie voisin : sans ca, « 7.3 s » passait a un
+     caractere par ligne (capture conv-836, 2026-09-24). C'est le statut qui se tronque. */
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .thinking-block .thinking-frise {
   white-space: normal;
