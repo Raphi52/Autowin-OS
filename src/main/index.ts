@@ -1,3 +1,4 @@
+import { routeSkillRequest } from './skill-routing'
 import { isAppDestination } from '../shared/view-tabs'
 import { observerLeMoteur } from './observer-les-sources'
 import { registerProdPassphraseIpc } from './prod-passphrase-ipc'
@@ -3827,6 +3828,13 @@ Le fil reprend ensuite normalement.`
       const directive = guardString(rawDirective, 'directive').trim()
       const jointes = guardAttachments(rawAttachments)
       if (!directive && jointes.length === 0) return { ok: false }
+      // UNE COMMANDE DE SKILL NE S'INJECTE PAS EN TEXTE (conv-843, turn 6d0e352f-0624-4c9a-b2f5-c6aabf57d310,
+      // saisie ts 1790275118313) : « /judge mon watchdog » envoye pendant un tour a ete colle dans le
+      // fil comme simple phrase ; la skill judge n'a jamais ete chargee et le modele a juge lui-meme.
+      // Refus -> le renderer met le texte en FILE, il repart en message normal, donc route par
+      // `routeSkillRequest` comme n'importe quel `/judge`.
+      if (jointes.length === 0 && routeSkillRequest(directive)?.reason === 'explicit-skill')
+        return { ok: false }
       // Le renderer passe busy avant que l'IPC `pilotChat` ait fini d'enregistrer son controleur.
       // Une attente courte absorbe cette course de demarrage sans accepter de directive hors tour.
       if (!(await activeChatTurns.waitForActive(conversationId, 500))) return { ok: false }

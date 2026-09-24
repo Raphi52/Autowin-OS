@@ -232,6 +232,14 @@ describe('renderer chat IPC contract', () => {
     expect(handler).toContain('if (!directive && jointes.length === 0) return { ok: false }')
   })
 
+  it('refuse d injecter une commande de skill en texte (conv-843, turn 6d0e352f)', () => {
+    const { main } = readChatContractSources()
+    const handler = extractIpcHandler(main, 'os:pilotChat:inject')
+    const refus = handler.indexOf("routeSkillRequest(directive)?.reason === 'explicit-skill'")
+    expect(refus).toBeGreaterThanOrEqual(0)
+    expect(refus).toBeLessThan(handler.indexOf('queued.push('))
+  })
+
   it('acknowledges a live directive immediately after the bounded active-turn guard', () => {
     const { main } = readChatContractSources()
     // Borne = la FIN de la fonction, plus la declaration voisine : `const questionWindows` a
