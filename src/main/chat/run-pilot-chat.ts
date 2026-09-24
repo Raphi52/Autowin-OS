@@ -396,8 +396,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
        * trompait sur ce qu'il voyait (mesure du 2026-08-27 : 3 bandes de couleur sur 4).
        */
       const metasParContenu = new Map<string, AttachmentMeta[]>()
+      /** Textes des consignes envoyees PENDANT un tour : le renderer n'envoie pas ce drapeau, le store l'a. */
+      const orientations = new Set<string>()
       if (conversationId) {
         for (const stocke of os.conversations.get(conversationId)?.messages ?? []) {
+          if (stocke.role === 'user' && stocke.orientation && typeof stocke.content === 'string') {
+            orientations.add(stocke.content)
+          }
           const parts = (stocke as { parts?: PersistedChatPart[] }).parts
           if (stocke.role === 'assistant' && parts?.length && typeof stocke.content === 'string') {
             partsParContenu.set(stocke.content, parts)
@@ -439,6 +444,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         return {
           role: m.role,
           content: guardString(pourLeModele, 'content'),
+          // fix-ok: sans ce drapeau, `orientationsDuTourPrecedent` (7459e8cd) ne voyait jamais une
+          // consigne envoyee pendant un tour : le renderer ne transmet pas le drapeau, on le relit dans le
+          // store (conv-844).
+          ...(m.role === 'user' && orientations.has(m.content) ? { orientation: true } : {}),
           ...(m.attachments?.length
             ? {
                 attachments: guardAttachments(
