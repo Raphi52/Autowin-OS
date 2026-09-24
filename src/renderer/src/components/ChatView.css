@@ -4836,8 +4836,17 @@ button.chat-project-dot:disabled {
 }
 .conv-status-filter {
   font-size: 11px;
-  height: 18px;
-  padding: 0 8px;
+  /* Hauteur minimale et non fixe : en thème malvoyant (13 px), une boîte de 18 px plus petite que
+     la ligne de texte faisait déborder le libellé vers le haut. Centrage explicite, ligne serrée. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  line-height: 1;
+  /* « Actives » n'a aucune lettre descendante : la place réservée aux jambages sous la ligne
+     remontait le texte d'un pixel. On rogne la boîte aux capitales et à la ligne de base,
+     puis le padding symétrique centre le texte visible. */
+  text-box: trim-both cap alphabetic;
+  padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid rgba(212, 169, 79, 0.45);
   background: rgba(212, 169, 79, 0.08);
