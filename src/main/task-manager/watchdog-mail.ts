@@ -12,7 +12,10 @@ import { AGENT_STUDIO_DEFAULT_PROVIDER } from '../../shared/task-provider'
  * messages Teams n'existe dans ce depot (seule la passerelle Outlook COM locale est disponible).
  */
 
-export const MAIL_WATCHDOG_SEED_ID = 'assistant-mails-outlook-v1'
+// v2 : la v1 a ete supprimee le 2026-09-24 a 19:10 sans trace ; la marque « deja posee » empechait
+// de la reposer (l'app reecrit le fichier a la fermeture). Nouvel identifiant = nouvelle pose unique.
+// v3 (2026-09-24 20:30) : la v2 a ete supprimee depuis Planification avant la separation des onglets.
+export const MAIL_WATCHDOG_SEED_ID = 'assistant-mails-outlook-v3'
 
 export const MAIL_REPLY_START = '--- RÉPONSE MAIL ---'
 export const MAIL_REPLY_END = '--- FIN RÉPONSE MAIL ---'

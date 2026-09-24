@@ -71,6 +71,8 @@ function stripHtml(html: string): string {
 interface GraphChat {
   id?: string
   topic?: string | null
+  /** Graph : 'oneOnOne' | 'group' | 'meeting' | 'unknownFutureValue' (ressource chat, v1.0). */
+  chatType?: string
   lastMessagePreview?: {
     id?: string
     createdDateTime?: string
@@ -94,6 +96,8 @@ export function chatsToSnapshot(
   for (const chat of chats) {
     const preview = chat.lastMessagePreview
     if (!chat.id || !preview?.id || preview.isDeleted) continue
+    // Messages perso uniquement : groupes et reunions ignores (type absent = ignore aussi).
+    if (chat.chatType !== 'oneOnOne') continue
     if (preview.messageType && preview.messageType !== 'message') continue
     const raw = preview.body?.content ?? ''
     mails.push({

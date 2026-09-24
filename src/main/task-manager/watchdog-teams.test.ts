@@ -19,10 +19,17 @@ import {
 
 const ME = 'user-me'
 
-function chat(id: string, msgId: string, fromId: string, text = 'Peux-tu relire le devis ?') {
+function chat(
+  id: string,
+  msgId: string,
+  fromId: string,
+  text = 'Peux-tu relire le devis ?',
+  chatType = 'oneOnOne'
+) {
   return {
     id,
     topic: null,
+    chatType,
     lastMessagePreview: {
       id: msgId,
       createdDateTime: '2026-09-24T10:00:00Z',
@@ -53,6 +60,18 @@ describe('watchdog Teams', () => {
     expect(fresh.map((m) => m.id)).toEqual([teamsItemId('c1', 'm2')])
     expect(fresh[0].corps).toBe('Peux-tu relire le devis ?')
     expect(detector.next(chatsToSnapshot([chat('c1', 'm2', 'alice')], ME))).toEqual([])
+  })
+
+  it('ignore les conversations de groupe et de réunion : messages perso uniquement', () => {
+    const snap = chatsToSnapshot(
+      [
+        chat('solo', 'm1', 'alice'),
+        chat('grp', 'm2', 'alice', 'salut', 'group'),
+        chat('reu', 'm3', 'alice', 'salut', 'meeting')
+      ],
+      ME
+    )
+    expect(snap.mails.map((m) => m.id)).toEqual([teamsItemId('solo', 'm1')])
   })
 
   it('code d’appareil puis réponse postée dans le même fil, jeton rangé dans le coffre', async () => {
