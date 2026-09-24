@@ -15,6 +15,10 @@ describe('pilotage non invasif par defaut', () => {
     expect(prompt).toContain('scripts/hdesk-observe.ps1')
     expect(existsSync('scripts/hdesk-lancer.ps1')).toBe(true)
     expect(existsSync('scripts/hdesk-observe.ps1')).toBe(true)
+    // kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f, saisie ts 1790278416518 :
+    // sans outil de clic/frappe cache, le chat cliquait l'ecran reel pour saisir un code.
+    expect(prompt).toContain('scripts/hdesk-act.ps1')
+    expect(existsSync('scripts/hdesk-act.ps1')).toBe(true)
   })
 
   // kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2 : un crash n'autorise plus la bascule.

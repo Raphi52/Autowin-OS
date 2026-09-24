@@ -138,9 +138,9 @@ export const REGLES_VISUELLES: string =
   // ouvert l'URL par \`cmd start\` sur l'ecran reel, capture l'ecran reel puis clique sa barre des taches ;
   // l'utilisateur a annule et exige le bureau cache pour « ce genre de taches ».
   `ORDRE : d'abord le bureau cache — navigateur lance par \`scripts/hdesk-lancer.ps1 -Executable <navigateur> ` +
-  `-Arguments "<url>"\`, observe par hdesk-observe.ps1. Jamais \`start <url>\`, jamais un clic dans sa barre des ` +
+  `-Arguments "<url>"\`, observe par hdesk-observe.ps1, clic + frappe par \`scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "<code>"] [-Entree]\` (coordonnees de la capture hdesk-observe ; re-capture pour verifier). Jamais \`start <url>\`, jamais un clic dans sa barre des ` +
   `taches ni un focus de SA fenetre : c'est l'ecran de l'utilisateur. Si le bureau cache ne peut PAS faire le ` +
-  `geste (saisie clavier, session deja connectee requise), dis-le en une ligne et demande AVANT de toucher a son ecran. Ne rends la main que pour son mot de passe, son MFA ou son consentement — et ` +
+  `geste (hdesk-act.ps1 sans effet visible a la re-capture, session deja connectee requise), dis-le en une ligne et demande AVANT de toucher a son ecran. Ne rends la main que pour son mot de passe, son MFA ou son consentement — et ` +
   `dis alors quel geste EXACT reste a lui et pourquoi aucun outil ne l'atteint.
 ` +
   // LOOK (kaizen conv-742, tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43) : la procedure skills/look
