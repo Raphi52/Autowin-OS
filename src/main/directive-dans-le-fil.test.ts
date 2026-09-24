@@ -17,6 +17,27 @@ import { ConversationStore } from './store/conversations'
  * contient pas — exactement ce que l'utilisateur a vécu.
  */
 describe('une réponse injectée pendant un tour devient un VRAI message du fil', () => {
+  // DÉFAUT VÉCU (2026-09-24) : une image envoyée pendant un tour s'affichait « 📎 image.png » au lieu
+  // de sa miniature — seule la liste des noms était écrite dans le texte du message.
+  it('garde la vignette de l’image en pièce jointe, pas un libellé « 📎 nom » dans le texte', () => {
+    const store = new ConversationStore(() => 1)
+    const conv = store.create({ title: 'A', provider: 'claude' })
+    store.beginTurn(conv.id, { content: 'fais des drafts' }, { turnId: 't1' })
+    const thumbnail = 'data:image/jpeg;base64,bWluaQ=='
+    const messageId = enregistrerDirectiveDansLeFil({
+      conversations: store,
+      conversationId: conv.id,
+      texte: 'il manque des éléments',
+      attachments: [{ name: 'image.png', mimeType: 'image/png', size: 42, thumbnail }],
+      broadcast: vi.fn()
+    })
+    const message = store.get(conv.id)!.messages.find((m) => m.messageId === messageId)!
+    expect(message.content).toBe('il manque des éléments')
+    expect(message.attachments).toEqual([
+      { name: 'image.png', mimeType: 'image/png', size: 42, thumbnail }
+    ])
+  })
+
   /**
    * MESURE DU 2026-09-11 (conv-439) : « le message vient de s'afficher APRÈS ton bloc fait, comme un
    * cheveu sur la soupe ». Le brouillon assistant est VIDE à l'injection : son texte n'arrive qu'à

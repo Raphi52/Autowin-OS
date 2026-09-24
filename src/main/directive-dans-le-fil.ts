@@ -18,6 +18,7 @@ export interface FilPourDirective {
       content: string
       orientation?: boolean
       avantLaReponseEnCours?: boolean
+      attachments?: Array<{ name: string; mimeType: string; size: number; thumbnail?: string }>
     }
   ): {
     messages: ReadonlyArray<{ messageId?: string; role: 'user' | 'assistant'; content: string }>
@@ -28,15 +29,26 @@ export function enregistrerDirectiveDansLeFil(params: {
   conversations: FilPourDirective
   conversationId: string
   texte: string
+  /** Pieces jointes envoyees avec la consigne : stockees en METADONNEES (vignette), comme un message normal. */
+  attachments?: ReadonlyArray<{ name: string; mimeType: string; size: number; thumbnail?: string }>
   broadcast: (event: { type: 'refresh'; scope: 'chat'; convId: string }) => void
   onError?: (error: unknown) => void
 }): string | undefined {
   const texte = params.texte.trim()
-  if (!texte) return undefined
+  const attachments = (params.attachments ?? []).map((piece) => ({
+    name: piece.name,
+    mimeType: piece.mimeType,
+    size: piece.size,
+    ...(piece.thumbnail ? { thumbnail: piece.thumbnail } : {})
+  }))
+  if (!texte && attachments.length === 0) return undefined
   try {
     const conversation = params.conversations.append(params.conversationId, {
       role: 'user',
       content: texte,
+      // VIGNETTE, PAS « 📎 nom » (2026-09-24) : l'image envoyee pendant un tour s'affichait en simple
+      // libelle texte au lieu de sa miniature, parce que seule sa liste de noms etait ecrite.
+      ...(attachments.length ? { attachments } : {}),
       // CE MESSAGE ORIENTE, IL NE REPOND PAS (conv-50, 2026-09-01). Sans ce drapeau, le verrou du
       // bloc `ask` le prend pour la reponse a la question du tour : le bloc affiche « Répondu » et
       // le clic de l'utilisateur ne part plus. Le verrou anti-double-envoi, lui, reste entier.

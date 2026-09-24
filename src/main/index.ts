@@ -3856,11 +3856,8 @@ Le fil reprend ensuite normalement.`
       const messageId = enregistrerDirectiveDansLeFil({
         conversations: os.conversations,
         conversationId,
-        texte:
-          directive +
-          (jointes.length > 0
-            ? `${directive ? '\n\n' : ''}📎 ${jointes.map((j) => j.name).join(', ')}`
-            : ''),
+        texte: directive,
+        attachments: jointes,
         broadcast: (event) => broadcast(event),
         onError: (error) => console.error('[inject] message non ecrit dans le fil', error)
       })
