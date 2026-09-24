@@ -382,10 +382,20 @@ export interface EntreeDecisionAuto {
    * comportement, pour ne jamais relacher le garde-fou par simple oubli d'appelant.
    */
   depotPresent?: boolean
+  /**
+   * RELANCES DIFFÉRÉES DÉJÀ PROGRAMMÉES D'AFFILÉE dans ce fil (conv-826 : « faudrait que le mode
+   * auto gère ce cas au lieu de s'arrêter »). Au-delà de `MAX_RELANCES_DIFFEREES`, la chaîne se
+   * met en pause : une attente qui ne finit jamais ne doit pas payer un tour toutes les 15 min.
+   */
+  relancesDifferees?: number
+  /** Horloge injectable (tests). Absent = `Date.now()`. */
+  maintenant?: number
 }
 
 export type DecisionAuto =
   | { action: 'envoyer'; texte: string; signature: string }
+  /** Suite différée : elle part SEULE à `echeance` (ms epoch), pas maintenant. */
+  | { action: 'programmer'; texte: string; signature: string; echeance: number }
   | { action: 'attendre'; raison: RaisonArret }
   | { action: 'arreter'; raison: RaisonArret; message: string }
 
@@ -411,7 +421,7 @@ const MESSAGES_ARRET: Record<string, string> = {
   'suite-attend-utilisateur':
     'Mode auto en pause : la suite proposée attend des informations que toi seul peux donner (identifiants, clés, choix). Écris-les dans ton message pour continuer.',
   'suite-differee':
-    'Mode auto en pause : la suite proposée ne peut avancer qu’à un moment précis (une heure, « demain », « quand … existe »). La relancer maintenant ne ferait que constater l’attente — relance-la toi-même le moment venu.'
+    'Mode auto en pause : la suite attend toujours son moment après plusieurs relances programmées. Relance-la toi-même le moment venu.'
 }
 
 /**
@@ -447,6 +457,7 @@ export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
  * « Quand … fin.txt existe, … ». Les deux textes sont donc lus. Le mode auto ne sait pas attendre une
  * heure : relancer tout de suite ne peut que constater l'attente, à chaque fois payée.
  */
+// fix-ok: la branche suite-differee de deciderRelanceAuto renvoyait arreter (mesure conv-826 : mode auto en pause sur « quand fin.txt existe ») ; elle renvoie maintenant programmer avec une echeance calculee.
 const SUITE_DIFFEREE = new RegExp(
   [
     String.raw`\b(?:demain|ce\s+soir|cette\s+nuit|plus\s+tard)\b`,
@@ -459,6 +470,49 @@ const SUITE_DIFFEREE = new RegExp(
   ].join('|'),
   'iu'
 )
+export const MAX_RELANCES_DIFFEREES = 12
+const MINUTE = 60_000
+/** « quand X existe », « plus tard », « cette nuit » : aucune heure lisible — on revient voir. */
+export const DELAI_SONDAGE_DIFFERE = 15 * MINUTE
+const ECHEANCE_MAX = 24 * 60 * MINUTE
+
+/**
+ * QUAND relancer une suite différée (conv-826). Ordre : heure explicite (« à 01:05 ») → durée
+ * (« dans 2 h », « après 1h ») → « demain » (8 h) / « ce soir » (19 h) → sinon on revient voir
+ * toutes les 15 min. Toujours dans le futur (≥ 1 min), jamais au-delà de 24 h.
+ */
+export function echeanceSuiteDifferee(
+  suite: string,
+  recommandation: string | null,
+  maintenant: number
+): number {
+  const texte = `${suite}\n${recommandation ?? ''}`
+  const borne = (t: number): number =>
+    Math.min(maintenant + ECHEANCE_MAX, Math.max(maintenant + MINUTE, t))
+  const heure = /(?:^|[\s(])(?:apr[eè]s|vers|dès|à|a)\s+(\d{1,2})\s*(?:h|:)\s*(\d{2})(?!\d)/iu.exec(texte)
+  if (heure) {
+    const d = new Date(maintenant)
+    d.setHours(Number(heure[1]), Number(heure[2]), 0, 0)
+    if (d.getTime() <= maintenant) d.setDate(d.getDate() + 1)
+    return borne(d.getTime())
+  }
+  const duree = /(?:^|[\s(])(?:dans|apr[eè]s)\s+(\d+|quelques)\s*(min(?:utes?)?|h|heures?)(?![\p{L}\d:])/iu.exec(texte)
+  if (duree) {
+    const enMinutes = /^min/i.test(duree[2])
+    const n = duree[1].toLowerCase() === 'quelques' ? (enMinutes ? 10 : 2) : Number(duree[1])
+    return borne(maintenant + n * (enMinutes ? MINUTE : 60 * MINUTE))
+  }
+  const aHeure = (h: number, jours: number): number => {
+    const d = new Date(maintenant)
+    d.setDate(d.getDate() + jours)
+    d.setHours(h, 0, 0, 0)
+    return d.getTime()
+  }
+  if (/\bdemain\b/iu.test(texte)) return borne(aHeure(8, 1))
+  if (/\bce\s+soir\b/iu.test(texte) && aHeure(19, 0) > maintenant) return borne(aHeure(19, 0))
+  return borne(maintenant + DELAI_SONDAGE_DIFFERE)
+}
+
 export function suiteEstDifferee(suite: string, recommandation: string | null): boolean {
   return (
     SUITE_DIFFEREE.test(suite) || (recommandation !== null && SUITE_DIFFEREE.test(recommandation))
@@ -616,7 +670,10 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
       raison: 'suite-attend-utilisateur',
       message: MESSAGES_ARRET['suite-attend-utilisateur']
     }
-  if (suiteEstDifferee(suite, extractRecommendation(texteReponse)))
+  // conv-826 : une suite différée n'arrête plus la chaîne — elle est PROGRAMMÉE (voir plus bas).
+  const recommandationDifferee = extractRecommendation(texteReponse)
+  const differee = suiteEstDifferee(suite, recommandationDifferee)
+  if (differee && (entree.relancesDifferees ?? 0) >= MAX_RELANCES_DIFFEREES)
     return {
       action: 'arreter',
       raison: 'suite-differee',
@@ -642,6 +699,17 @@ ${suite}`
 ${suite}`
         : suite
   const texte = ancrerSurLaTacheInitiale(suiteCiblee, tacheInitiale(entree.fil))
+  /*
+   * DIFFÉRÉE : programmée AVANT le garde-fou « même suite » — « quand fin.txt existe » revient
+   * forcément identique d'une vérification à l'autre. La borne est `MAX_RELANCES_DIFFEREES`.
+   */
+  if (differee)
+    return {
+      action: 'programmer',
+      texte,
+      signature,
+      echeance: echeanceSuiteDifferee(suite, recommandationDifferee, entree.maintenant ?? Date.now())
+    }
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
   /*
    * MÊME SUITE ≠ BOUCLE quand le tour a TRAVAILLÉ. Mesuré conv-733, tour

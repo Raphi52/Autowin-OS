@@ -46,6 +46,8 @@ const decisionsDuCorpus = (): { envoi: number; raisons: Record<string, number> }
       fil
     })
     if (d.action === 'arreter') raisons[d.raison] = (raisons[d.raison] ?? 0) + 1
+    // conv-826 : une suite différée est programmée au lieu d'arrêter — même règle, même compte.
+    if (d.action === 'programmer') raisons['suite-differee'] = (raisons['suite-differee'] ?? 0) + 1
     if (d.action === 'envoyer') envoi++
   }
   return { envoi, raisons }

@@ -715,6 +715,19 @@ export function ChatView({
     if (dossierNouveauFil) window.localStorage.setItem(CLE_DOSSIER_NOUVEAU_FIL, dossierNouveauFil)
     else window.localStorage.removeItem(CLE_DOSSIER_NOUVEAU_FIL)
   }, [dossierNouveauFil])
+  /**
+   * RELANCES DIFFÉRÉES PROGRAMMÉES, PAR CONVERSATION (conv-826 : « faudrait que le mode auto gère ce
+   * cas au lieu de s'arrêter »). Le minuteur vit ici, pas dans l'effet du fil affiché : changer de
+   * fil ne le tue pas. `differees` = nombre de relances différées d'affilée (borne dans
+   * `deciderRelanceAuto`), remis à zéro au premier envoi ordinaire.
+   */
+  const autoProgrammeesRef = useRef(new Map<string, { minuteur: number; signature: string }>())
+  const autoDiffereesRef = useRef(new Map<string, number>())
+  const annulerRelanceProgrammee = useCallback((id: string): void => {
+    const p = autoProgrammeesRef.current.get(id)
+    if (p) window.clearTimeout(p.minuteur)
+    autoProgrammeesRef.current.delete(id)
+  }, [])
   /** Desarme un fil precis (le joker `*` disparait : eteindre ici eteint le reglage herite). */
   const desarmerAuto = useCallback((id: string | null | undefined): void => {
     setAutoConvs((precedent) => {
@@ -723,7 +736,9 @@ export function ChatView({
       if (id) suivant.delete(id)
       return suivant
     })
-  }, [])
+    // Éteindre le mode annule aussi la relance différée qui attendait son heure dans ce fil.
+    if (id) annulerRelanceProgrammee(id)
+  }, [annulerRelanceProgrammee])
   /**
    * L'avancement de la boucle, PAR CONVERSATION — `tour` = dernier tour déjà traité (un re-rendu du
    * même tour ne renvoie rien), `prompt` = dernier texte envoyé (la même suite deux fois = boucle).
@@ -3646,6 +3661,58 @@ export function ChatView({
    * Rien n'est décidé ici : `deciderRelanceAuto` tranche, cet effet exécute. Un envoi automatique
    * coûte un tour payant : sa condition ne doit pas être éparpillée dans la vue.
    */
+  /*
+   * Ce que le minuteur relit AU MOMENT où il sonne (des heures plus tard) : jamais une valeur
+   * capturée à la programmation.
+   */
+  const autoArmePourRef = useRef(autoArmePour)
+  autoArmePourRef.current = autoArmePour
+  const activeIdAutoRef = useRef(activeId)
+  activeIdAutoRef.current = activeId
+  const messagesAfficheAutoRef = useRef(messages)
+  messagesAfficheAutoRef.current = messages
+  const sendAutoRef = useRef(send)
+  sendAutoRef.current = send
+
+  /**
+   * PROGRAMME une suite différée : elle part seule à son échéance, si rien n'a bougé entre-temps
+   * (mode toujours armé, aucun tour en cours, et le dernier tour du fil est TOUJOURS celui qui l'a
+   * proposée — un message de l'utilisateur entre-temps l'annule).
+   */
+  function programmerRelanceAuto(
+    id: string,
+    decision: { texte: string; signature: string; echeance: number }
+  ): void {
+    annulerRelanceProgrammee(id)
+    const etat = autoEtat(id)
+    etat.tour = decision.signature
+    autoDiffereesRef.current.set(id, (autoDiffereesRef.current.get(id) ?? 0) + 1)
+    const minuteur = window.setTimeout(
+      () => {
+        autoProgrammeesRef.current.delete(id)
+        if (!autoArmePourRef.current(id)) return
+        if (busyConversationsRef.current.has(id)) return
+        const fil =
+          id === activeIdAutoRef.current
+            ? messagesAfficheAutoRef.current
+            : (liveMessagesRef.current.get(id) ?? [])
+        if (signatureTour(fil) !== decision.signature) return
+        etat.prompt = decision.texte
+        // Le fil est suivi : la fin de CE tour sera enchaînée, même s'il n'est pas affiché.
+        autoSuiviesRef.current.add(id)
+        void sendAutoRef.current(decision.texte, {
+          keepComposerDraft: true,
+          automatique: true,
+          targetConversationId: id
+        })
+      },
+      Math.max(0, decision.echeance - Date.now())
+    )
+    autoProgrammeesRef.current.set(id, { minuteur, signature: decision.signature })
+  }
+  const heureLisible = (t: number): string =>
+    new Date(t).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+
   /** L'avancement de la boucle pour CE fil — créé à la demande, jamais partagé entre fils. */
   function autoEtat(conversationId: string): { tour: string | null; prompt: string | null } {
     const connu = autoEtatsRef.current.get(conversationId)
@@ -3692,7 +3759,8 @@ export function ChatView({
       // Fil AFFICHÉ : une chaîne finie demande une nouvelle cible au lieu de couper l'interrupteur.
       proposerNouvelleCible: true,
       // APRES UN SCOUT : la suite ne part que si une ligne `CIBLE:` nomme UNE piste.
-      tourEstUnScout: dernierTourEstUnScout(messages)
+      tourEstUnScout: dernierTourEstUnScout(messages),
+      relancesDifferees: autoDiffereesRef.current.get(activeId) ?? 0
     })
     if (decision.action === 'attendre') {
       return
@@ -3704,6 +3772,14 @@ export function ChatView({
       setAppNotice({ text: decision.message })
       return
     }
+    if (decision.action === 'programmer') {
+      programmerRelanceAuto(activeId, decision)
+      setAppNotice({
+        text: `Mode auto : la suite proposée attend son moment. Je la relance seul ${heureLisible(decision.echeance)} (éteins ∞ ou écris un message pour annuler).`
+      })
+      return
+    }
+    autoDiffereesRef.current.delete(activeId)
     etat.tour = decision.signature
     etat.prompt = decision.texte
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
@@ -3744,7 +3820,8 @@ export function ChatView({
         dernierTourTraite: etat.tour,
         dernierPromptEnvoye: etat.prompt,
         brouillonPresent: false,
-        tourEstUnScout: dernierTourEstUnScout(liveMessagesRef.current.get(id) ?? [])
+        tourEstUnScout: dernierTourEstUnScout(liveMessagesRef.current.get(id) ?? []),
+        relancesDifferees: autoDiffereesRef.current.get(id) ?? 0
       })
       /*
        * UN FIL D'ARRIÈRE-PLAN NE COUPE PLUS L'INTERRUPTEUR GLOBAL (demande du 2026-09-02).
@@ -3755,6 +3832,11 @@ export function ChatView({
        */
       if (decision.action === 'arreter') {
         autoEssaisRef.current.delete(id)
+        continue
+      }
+      if (decision.action === 'programmer') {
+        autoEssaisRef.current.delete(id)
+        programmerRelanceAuto(id, decision)
         continue
       }
       if (decision.action !== 'envoyer') {
@@ -3775,6 +3857,7 @@ export function ChatView({
         continue
       }
       autoEssaisRef.current.delete(id)
+      autoDiffereesRef.current.delete(id)
       etat.tour = decision.signature
       etat.prompt = decision.texte
       void send(decision.texte, {

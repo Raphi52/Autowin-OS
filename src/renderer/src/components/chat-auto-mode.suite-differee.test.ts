@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
-import { deciderRelanceAuto, suiteEstDifferee } from './chat-auto-mode'
+import {
+  DELAI_SONDAGE_DIFFERE,
+  MAX_RELANCES_DIFFEREES,
+  deciderRelanceAuto,
+  echeanceSuiteDifferee,
+  suiteEstDifferee
+} from './chat-auto-mode'
 
 const agent = (t: string): Msg =>
   ({ role: 'assistant', content: t, parts: [{ kind: 'text', text: t }] }) as unknown as Msg
@@ -32,13 +38,47 @@ describe('suite qui ne peut avancer qu’à un moment donné (conv-767)', () => 
     expect(suiteEstDifferee('Quand le test passe, lance le judge', null)).toBe(false)
     expect(suiteEstDifferee('Note les 12 bras avec check.mjs', 'Noter les 12 bras.')).toBe(false)
   })
-  it('ne l’envoie pas : met en pause AVEC un message visible', () => {
-    const fil = [
-      humain('go'),
-      agent(`✅ Fait\n- relu\n📍 Maintenant\n- attente\n⏳ Reste à faire\n- noter t2c\n👉 Recommandé\n- ${RECO_T2C}\n\nAUTOWIN_PROMPT_V1: ${PROMPT_T2C}`)
-    ]
-    const d = deciderRelanceAuto({ ...base, fil })
-    expect(d).toMatchObject({ action: 'arreter', raison: 'suite-differee' })
-    if (d.action === 'arreter') expect(d.message).toMatch(/moment venu/)
+  const filT2C = [
+    humain('go'),
+    agent(`✅ Fait
+- relu
+📍 Maintenant
+- attente
+⏳ Reste à faire
+- noter t2c
+👉 Recommandé
+- ${RECO_T2C}
+
+AUTOWIN_PROMPT_V1: ${PROMPT_T2C}`)
+  ]
+  // conv-826 : « faudrait que le mode auto gère ce cas au lieu de s'arrêter ».
+  it('ne l’envoie pas maintenant : la PROGRAMME pour le moment venu', () => {
+    const maintenant = new Date(2026, 8, 24, 11, 10).getTime()
+    const d = deciderRelanceAuto({ ...base, fil: filT2C, maintenant })
+    expect(d).toMatchObject({ action: 'programmer' })
+    if (d.action !== 'programmer') return
+    expect(d.texte).toContain(PROMPT_T2C)
+    // « Demain matin » → demain 8 h.
+    expect(d.echeance).toBe(new Date(2026, 8, 25, 8, 0).getTime())
+  })
+  it('une suite « quand X existe » est reprogrammée même identique, puis s’arrête après la borne', () => {
+    const fil = [humain('go'), agent(`✅ Fait
+
+AUTOWIN_PROMPT_V1: ${PROMPT_T2B}`)]
+    const maintenant = 1_000_000
+    const d = deciderRelanceAuto({ ...base, fil, maintenant, dernierPromptEnvoye: PROMPT_T2B })
+    expect(d).toMatchObject({ action: 'programmer', echeance: maintenant + DELAI_SONDAGE_DIFFERE })
+    const fin = deciderRelanceAuto({ ...base, fil, relancesDifferees: MAX_RELANCES_DIFFEREES })
+    expect(fin).toMatchObject({ action: 'arreter', raison: 'suite-differee' })
+    if (fin.action === 'arreter') expect(fin.message).toMatch(/moment venu/)
+  })
+  it('lit l’heure, la durée, « ce soir »', () => {
+    const t = new Date(2026, 8, 24, 11, 10).getTime()
+    expect(echeanceSuiteDifferee('Relance le tournoi à 01:05', null, t)).toBe(new Date(2026, 8, 25, 1, 5).getTime())
+    expect(echeanceSuiteDifferee('Relance vers 14h30', null, t)).toBe(new Date(2026, 8, 24, 14, 30).getTime())
+    expect(echeanceSuiteDifferee('Après 1h, relance t2b avec 4 bras', null, t)).toBe(t + 3_600_000)
+    expect(echeanceSuiteDifferee('Relis dans 20 min', null, t)).toBe(t + 20 * 60_000)
+    expect(echeanceSuiteDifferee('Relis le statut', 'Relancer dans quelques heures.', t)).toBe(t + 2 * 3_600_000)
+    expect(echeanceSuiteDifferee('Relis ce soir', null, t)).toBe(new Date(2026, 8, 24, 19, 0).getTime())
   })
 })
