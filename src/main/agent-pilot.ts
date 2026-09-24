@@ -2725,9 +2725,10 @@ export class AgentPilot {
           continue
         }
         // Geste d'écran rendu à l'utilisateur alors que le bureau était piloté (tour c4e319ca).
+        // fix-ok: ne dépend PAS de relanceDeFormeUtilisee — dans le tour c4e319ca la relance
+        // « échec tu » part d'abord et éteignait cette garde ; son propre drapeau la borne à 1.
         if (
           exigerExperienceSoignee &&
-          !relanceDeFormeUtilisee &&
           gesteRenduRecoveryAvailable &&
           exigeFaireLeGeste(visibleTextThisTurn, bureauUtilise)
         ) {
