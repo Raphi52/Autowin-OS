@@ -3661,7 +3661,24 @@ Le fil reprend ensuite normalement.`
         console.log('[task-manager] tâche Garbage collector quotidienne posée')
       // Regle PERSONNELLE : posee seulement sur le poste qui l'a demandee (`setx AUTOWIN_WATCHDOG_MAILS 1`),
       // jamais chez tout le monde — elle lit la boite de l'utilisateur et repond en son nom.
-      if (process.env.AUTOWIN_WATCHDOG_MAILS === '1' && seedMailWatchdogTask(scheduledTasks))
+      // `setx` n'atteint pas un lanceur deja ouvert : la relance heritait d'un environnement sans la
+      // variable (constat conv-839, 2026-09-24). On relit donc aussi la valeur persistee HKCU.
+      const mailsPerso = (): boolean => {
+        if (process.env.AUTOWIN_WATCHDOG_MAILS === '1') return true
+        if (process.platform !== 'win32') return false
+        try {
+          return /AUTOWIN_WATCHDOG_MAILS\s+REG_\w+\s+1\s*$/m.test(
+            execFileSync('reg', ['query', 'HKCU\\Environment', '/v', 'AUTOWIN_WATCHDOG_MAILS'], {
+              encoding: 'utf8',
+              windowsHide: true,
+              timeout: 3_000
+            })
+          )
+        } catch {
+          return false // variable absente : regle non posee, c'est le cas normal des autres postes
+        }
+      }
+      if (mailsPerso() && seedMailWatchdogTask(scheduledTasks))
         console.log('[watchdog] règle Assistant mails posée')
       if (seedCurateTask(scheduledTasks))
         console.log('[task-manager] tâche Curation quotidienne posée')
