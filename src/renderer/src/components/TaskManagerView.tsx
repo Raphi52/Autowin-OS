@@ -8,6 +8,7 @@ import {
   DEFAULT_DRAFT_GUARDS,
   DEFAULT_FILE_SOURCE,
   describeWatchdogSource,
+  splitByTrigger,
   toTaskPayload,
   triggerKindOf,
   watchdogDraftProblem,
@@ -401,6 +402,11 @@ export function TaskManagerView({
   const [selectedId, setSelectedId] = useState<string>()
   const [draft, setDraft] = useState<TaskDraft>()
   const [editingId, setEditingId] = useState<string>()
+  // Changer d'onglet (clic ou lien profond du parent) ferme l'editeur : un brouillon ne suit pas.
+  useEffect(() => {
+    setDraft(undefined)
+    setEditingId(undefined)
+  }, [sectionActive])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
@@ -728,6 +734,599 @@ export function TaskManagerView({
     )
   }
 
+  // Détail + éditeur, partagés par les onglets Planification et Watchdog (même état, deux rendus).
+  const scheduledTasks = splitByTrigger(snapshot.tasks).scheduled
+  const renderDetail = (selected: (typeof snapshot.tasks)[number] | undefined) => (
+    <main className="task-manager-detail">
+      {draft ? (
+        <div className="task-manager-editor">
+          <div className="task-manager-panel-title">
+            <span>{editingId ? 'Modifier la tâche' : 'Nouvelle tâche'}</span>
+            <button type="button" onClick={closeEditor}>
+              Annuler
+            </button>
+          </div>
+          <div className="task-manager-form-grid">
+            <label className="task-manager-field is-wide">
+              <span>Titre</span>
+              <input
+                name="title"
+                value={draft.title}
+                placeholder="Ex. Veille concurrentielle"
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current ? { ...current, title: event.target.value } : current
+                  )
+                }
+              />
+            </label>
+            <label className="task-manager-field is-wide">
+              <span>Prompt envoyé</span>
+              <textarea
+                name="prompt"
+                value={draft.prompt}
+                rows={5}
+                placeholder="Décris exactement ce que le modèle doit faire…"
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current ? { ...current, prompt: event.target.value } : current
+                  )
+                }
+              />
+            </label>
+            <label className="task-manager-field">
+              <span>Mode d’exécution</span>
+              <select
+                value={draft.mode}
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current
+                      ? { ...current, mode: event.target.value as ExecutionMode }
+                      : current
+                  )
+                }
+              >
+                <option value="active-only">Autowin actif uniquement</option>
+                <option value="windows">Autonome Windows · réveille le PC</option>
+              </select>
+            </label>
+            <label className="task-manager-field">
+              <span>Destination</span>
+              <select
+                value={draft.destination.kind}
+                onChange={(event) => {
+                  const kind = event.target.value
+                  setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          destination:
+                            kind === 'existing' && conversations[0]
+                              ? {
+                                  kind: 'existing',
+                                  conversationId: conversations[0].id,
+                                  ...(selectableModels[0]
+                                    ? {
+                                        provider: selectableModels[0].provider,
+                                        model: selectableModels[0].model,
+                                        reasoningEffort:
+                                          selectableModels[0].defaultReasoningEffort
+                                      }
+                                    : {})
+                                }
+                              : {
+                                  kind: 'new',
+                                  title: current.title || 'Tâche planifiée',
+                                  category: selectableModels[0]?.provider ?? '',
+                                  provider: selectableModels[0]?.provider ?? '',
+                                  ...(selectableModels[0]
+                                    ? {
+                                        model: selectableModels[0].model,
+                                        reasoningEffort:
+                                          selectableModels[0].defaultReasoningEffort
+                                      }
+                                    : {})
+                                }
+                        }
+                      : current
+                  )
+                }}
+              >
+                <option value="existing">Conversation existante</option>
+                <option
+                  value="new"
+                  disabled={!modelCatalogReady || selectableModels.length === 0}
+                >
+                  Nouvelle conversation dédiée
+                </option>
+              </select>
+            </label>
+            {draft.destination.kind === 'existing' ? (
+              <label className="task-manager-field is-wide">
+                <span>Conversation ciblée</span>
+                <select
+                  value={draft.destination.conversationId}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current?.destination.kind === 'existing'
+                        ? {
+                            ...current,
+                            destination: {
+                              ...current.destination,
+                              conversationId: event.target.value
+                            }
+                          }
+                        : current
+                    )
+                  }
+                >
+                  {conversations.map((conversation) => (
+                    <option key={conversation.id} value={conversation.id}>
+                      {conversation.title} · {conversation.provider}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label className="task-manager-field">
+                <span>Nom de la conversation</span>
+                <input
+                  value={draft.destination.title}
+                  onChange={(event) => {
+                    const title = event.target.value
+                    setDraft((current) =>
+                      current?.destination.kind === 'new'
+                        ? {
+                            ...current,
+                            destination: { ...current.destination, title }
+                          }
+                        : current
+                    )
+                  }}
+                />
+              </label>
+            )}
+            <label className="task-manager-field">
+              <span>Modèle</span>
+              <select
+                value={draftModelId}
+                disabled={!modelCatalogReady || selectableModels.length === 0}
+                onChange={(event) => {
+                  if (event.target.value === AGENT_STUDIO_DEFAULT_PROVIDER) {
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            destination: followAgentStudioDefault(current.destination)
+                          }
+                        : current
+                    )
+                    return
+                  }
+                  const selectedModel = selectableModels.find(
+                    (candidate) => candidate.id === event.target.value
+                  )
+                  if (!selectedModel) return
+                  setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          destination:
+                            current.destination.kind === 'new'
+                              ? {
+                                  ...current.destination,
+                                  provider: selectedModel.provider,
+                                  category: selectedModel.provider,
+                                  model: selectedModel.model,
+                                  reasoningEffort: selectedModel.defaultReasoningEffort
+                                }
+                              : {
+                                  ...current.destination,
+                                  provider: selectedModel.provider,
+                                  model: selectedModel.model,
+                                  reasoningEffort: selectedModel.defaultReasoningEffort
+                                }
+                        }
+                      : current
+                  )
+                }}
+              >
+                <option value={AGENT_STUDIO_DEFAULT_PROVIDER}>
+                  {AGENT_STUDIO_DEFAULT_MODEL_LABEL}
+                </option>
+                {!draftModelId && draft.destination.model && (
+                  <option value="" disabled>
+                    {draft.destination.model} · indisponible
+                  </option>
+                )}
+                {!draftModelId && !draft.destination.model && selectableModels.length > 0 && (
+                  <option value="" disabled>
+                    Choisir un modèle
+                  </option>
+                )}
+                {selectableModels.length === 0 && !draft.destination.model && (
+                  <option value="">Aucun modèle chargé dans Agent Studio</option>
+                )}
+                {selectableModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label ?? model.model} · {model.provider}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="task-manager-field">
+              <span>Effort</span>
+              <select
+                value={draftEffort}
+                disabled={!draftModel || draftEfforts.length <= 1}
+                onChange={(event) => {
+                  const reasoningEffort = event.target.value
+                  setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          destination: {
+                            ...current.destination,
+                            reasoningEffort
+                          }
+                        }
+                      : current
+                  )
+                }}
+              >
+                {draftEfforts.map((effort) => (
+                  <option key={effort} value={effort}>
+                    {EFFORT_LABELS[effort] ?? effort}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="task-manager-field task-manager-field-wide">
+              <span>Déclencheur</span>
+              <select
+                value={triggerKindOf(draft)}
+                data-testid="trigger-kind"
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          watchdog:
+                            event.target.value === 'watchdog'
+                              ? (current.watchdog ?? {
+                                  source: { ...DEFAULT_FILE_SOURCE },
+                                  guards: { ...DEFAULT_DRAFT_GUARDS }
+                                })
+                              : undefined
+                        }
+                      : current
+                  )
+                }
+              >
+                <option value="schedule">À une heure (planifié)</option>
+                <option value="watchdog">Sur événement (Watchdog Agent)</option>
+              </select>
+            </label>
+            {draft.watchdog && (
+              <WatchdogRuleFields
+                rule={draft.watchdog}
+                onChange={(rule) =>
+                  setDraft((current) => (current ? { ...current, watchdog: rule } : current))
+                }
+              />
+            )}
+            {!draft.watchdog && (
+              <>
+                <label className="task-manager-field">
+                  <span>Date de départ</span>
+                  <input
+                    type="date"
+                    value={draft.schedule.startDate}
+                    onChange={(event) => setSchedule({ startDate: event.target.value })}
+                  />
+                </label>
+                <label className="task-manager-field">
+                  <span>Heure</span>
+                  <input
+                    type="time"
+                    value={draft.schedule.time}
+                    onChange={(event) => setSchedule({ time: event.target.value })}
+                  />
+                </label>
+                <label className="task-manager-field">
+                  <span>Répétition</span>
+                  <select
+                    value={draft.schedule.recurrence.unit}
+                    onChange={(event) =>
+                      setRecurrence({
+                        unit: event.target.value as RecurrenceUnit,
+                        ...(event.target.value === 'week' &&
+                        !draft.schedule.recurrence.weekDays?.length
+                          ? { weekDays: [new Date().getDay() || 7] }
+                          : {})
+                      })
+                    }
+                  >
+                    <option value="none">Aucune</option>
+                    <option value="minute">Minute(s)</option>
+                    <option value="hour">Heure(s)</option>
+                    <option value="day">Jour(s)</option>
+                    <option value="week">Semaine(s)</option>
+                    <option value="month">Mois</option>
+                  </select>
+                </label>
+                {draft.schedule.recurrence.unit !== 'none' && (
+                  <label className="task-manager-field">
+                    <span>Intervalle</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={draft.schedule.recurrence.interval}
+                      onChange={(event) =>
+                        setRecurrence({ interval: Math.max(1, Number(event.target.value)) })
+                      }
+                    />
+                  </label>
+                )}
+                {draft.schedule.recurrence.unit === 'week' && (
+                  <fieldset className="task-manager-weekdays">
+                    <legend>Jours</legend>
+                    {WEEK_DAYS.map((day) => {
+                      const selected = draft.schedule.recurrence.weekDays?.includes(day.value)
+                      return (
+                        <label key={day.value} className={selected ? 'is-selected' : ''}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => {
+                              const current = draft.schedule.recurrence.weekDays ?? []
+                              setRecurrence({
+                                weekDays: selected
+                                  ? current.filter((value) => value !== day.value)
+                                  : [...current, day.value].sort()
+                              })
+                            }}
+                          />
+                          {day.label}
+                        </label>
+                      )
+                    })}
+                  </fieldset>
+                )}
+                <label className="task-manager-field">
+                  <span>Date de fin · optionnelle</span>
+                  <input
+                    type="date"
+                    value={draft.schedule.endDate ?? ''}
+                    onChange={(event) =>
+                      setSchedule({ endDate: event.target.value || undefined })
+                    }
+                  />
+                </label>
+              </>
+            )}
+            <label className="task-manager-switch">
+              <input
+                type="checkbox"
+                checked={draft.enabled}
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current ? { ...current, enabled: event.target.checked } : current
+                  )
+                }
+              />
+              <span>Activer dès l’enregistrement</span>
+            </label>
+          </div>
+          <div className="task-manager-form-actions">
+            <span>
+              {draft.mode === 'windows'
+                ? 'Windows réveillera le PC. Aucun rattrapage tardif.'
+                : 'S’exécute tant que le processus Autowin reste actif, même dans le tray.'}
+            </span>
+            <button
+              type="button"
+              className="task-manager-primary"
+              disabled={
+                saving || !modelCatalogReady || !hasLoadedModel(draft.destination, models)
+              }
+              onClick={() => void save()}
+            >
+              {saving ? 'Enregistrement…' : editingId ? 'Enregistrer' : 'Créer la tâche'}
+            </button>
+          </div>
+        </div>
+      ) : selected ? (
+        <>
+          <div className="task-manager-detail-head">
+            <div>
+              <span className={`task-manager-mode mode-${selected.mode}`}>
+                {modeLabel(selected.mode)}
+              </span>
+              <h2>{selected.title}</h2>
+              <p>
+                {selected.schedule
+                  ? `${recurrenceLabel(selected.schedule)} · ${selected.schedule.timeZone}`
+                  : selected.watchdog
+                    ? describeWatchdogSource(selected.watchdog.source)
+                    : 'Déclencheur invalide'}
+              </p>
+            </div>
+            <div className="task-manager-detail-actions">
+              <button type="button" onClick={() => openEdit(selected)}>
+                Modifier
+              </button>
+              <button
+                type="button"
+                disabled={saving || !selected.enabled}
+                onClick={() => void runNow(selected)}
+              >
+                Lancer maintenant
+              </button>
+              <button
+                type="button"
+                onClick={() => void updateTask(selected, { enabled: !selected.enabled })}
+              >
+                {selected.enabled ? 'Désactiver' : 'Activer'}
+              </button>
+              <button
+                type="button"
+                className="is-danger"
+                disabled={saving || taskIsRunning}
+                title={
+                  taskIsRunning
+                    ? 'Cette tâche est en cours et ne peut pas être supprimée.'
+                    : undefined
+                }
+                onClick={() => void removeTask(selected)}
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+          <div className="task-manager-prompt">
+            <span>Prompt envoyé</span>
+            <p>{selected.prompt}</p>
+          </div>
+          <dl className="task-manager-facts">
+            <div>
+              <dt>Prochaine échéance</dt>
+              <dd>{formatDateTime(selected.nextRunAt)}</dd>
+            </div>
+            <div>
+              <dt>Destination</dt>
+              <dd>
+                {selected.destination.kind === 'existing'
+                  ? (conversations.find(
+                      ({ id }) => id === selected.destination.conversationId
+                    )?.title ?? selected.destination.conversationId)
+                  : selected.destination.conversationId
+                    ? `Conversation dédiée · ${selected.destination.title}`
+                    : `Nouvelle conversation · ${selected.destination.title}`}
+              </dd>
+            </div>
+            <div>
+              <dt>Répétition</dt>
+              <dd>
+                {selected.schedule
+                  ? recurrenceLabel(selected.schedule)
+                  : selected.watchdog
+                    ? describeWatchdogSource(selected.watchdog.source)
+                    : 'Inconnu'}
+              </dd>
+            </div>
+            <div>
+              <dt>État</dt>
+              <dd>{selected.enabled ? 'Active' : 'Désactivée'}</dd>
+            </div>
+            {selected.watchdog && (
+              <>
+                <div>
+                  <dt>Activité watchdog</dt>
+                  <dd>
+                    {snapshot.watchdogs?.[selected.id]?.admittedLastHour ?? 0} réveils sur la
+                    dernière heure
+                  </dd>
+                </div>
+                {(() => {
+                  const diagnostic = snapshot.watchdogs?.[selected.id]
+                  if (!diagnostic) return null
+                  const recentUsage = usageMeta({
+                    knownCostUsd: diagnostic.knownCostUsdLastHour,
+                    totalTokens: diagnostic.totalTokensLastHour,
+                    unpricedCalls: diagnostic.unpricedCallsLastHour
+                  })
+                  return recentUsage.length ? (
+                    <div>
+                      <dt>Coût dernière heure</dt>
+                      <dd>{recentUsage.join(' · ')}</dd>
+                    </div>
+                  ) : null
+                })()}
+                {snapshot.watchdogs?.[selected.id]?.complaint && (
+                  <div>
+                    <dt>Diagnostic</dt>
+                    <dd>{snapshot.watchdogs[selected.id].complaint}</dd>
+                  </div>
+                )}
+              </>
+            )}
+          </dl>
+          <section className="task-manager-history">
+            <div className="task-manager-panel-title">
+              <span>Historique des occurrences</span>
+              <small>{occurrences.length}</small>
+            </div>
+            {occurrences.length === 0 ? (
+              <p className="task-manager-muted">Aucune exécution pour le moment.</p>
+            ) : (
+              occurrences.map((occurrence) => (
+                <div className="task-manager-occurrence" key={occurrence.id}>
+                  <span className={`status-${occurrence.status}`}>{occurrence.status}</span>
+                  <strong>
+                    {formatDateTime(occurrence.scheduledFor)} · {modeLabel(occurrence.mode)}
+                  </strong>
+                  <small data-testid="task-manager-occurrence-meta">
+                    {occurrenceMeta(occurrence).join(' · ') || 'Tour Chat'}
+                  </small>
+                  {occurrence.status === 'failed' && (
+                    <span className="task-manager-occurrence-actions">
+                      <button
+                        type="button"
+                        className="task-manager-occurrence-open"
+                        data-testid="task-manager-occurrence-replay"
+                        disabled={saving}
+                        onClick={() => void runNow(selected)}
+                      >
+                        Rejouer
+                      </button>
+                      <button
+                        type="button"
+                        className="task-manager-occurrence-open"
+                        data-testid="task-manager-occurrence-replay-fixed"
+                        onClick={() => openFixAfterFailure(selected, occurrence)}
+                      >
+                        Rejouer avec prompt corrigé
+                      </button>
+                    </span>
+                  )}
+                  {occurrence.conversationId && (
+                    <button
+                      className="task-manager-occurrence-open"
+                      data-testid="task-manager-occurrence-open"
+                      onClick={() =>
+                        onOpenConversation?.({
+                          conversationId: occurrence.conversationId!,
+                          ...(occurrence.turnId ? { turnId: occurrence.turnId } : {})
+                        })
+                      }
+                      title={`Conversation ${occurrence.conversationId}`}
+                      type="button"
+                    >
+                      Ouvrir la conversation
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </section>
+        </>
+      ) : loading ? (
+        <div className="task-manager-empty is-detail" data-testid="task-manager-loading">
+          <Spinner />
+          <strong>Chargement des tâches…</strong>
+        </div>
+      ) : (
+        <div className="task-manager-empty is-detail">
+          <span aria-hidden="true">◷</span>
+          <strong>Sélectionne ou crée une tâche</strong>
+          <p>Les prompts planifiés apparaîtront ici avec leur historique complet.</p>
+        </div>
+      )}
+    </main>
+  )
+
   return (
     <section className="view-page task-manager-view" data-testid="task-manager-view">
       <ViewTopBar
@@ -773,15 +1372,29 @@ export function TaskManagerView({
           tasks={snapshot.tasks satisfies WatchdogTaskLike[]}
           occurrences={snapshot.occurrences satisfies WatchdogOccurrenceLike[]}
           formatDateTime={formatDateTime}
-          onCreate={openCreate}
-          // LE LIEN PRÉSERVÉ. Le détail d'une tâche vit côté planification : sélectionner sans
-          // basculer aurait ouvert un détail invisible, et le geste le plus utile de la vue serait
-          // devenu un clic sans effet. On sélectionne ET on change de section.
-          onSelect={(id) => {
+          onCreate={() => {
+            setEditingId(undefined)
+            setSelectedId(undefined)
+            setDraft({
+              ...defaultDraft(conversations, selectableModels[0]),
+              watchdog: { source: { ...DEFAULT_FILE_SOURCE }, guards: { ...DEFAULT_DRAFT_GUARDS } }
+            })
+          }}
+          // Chaque onglet gère ses propres règles : le détail et l'éditeur d'une règle de réveil
+          // s'ouvrent ici, sans basculer vers Planification (qui ne liste plus ces règles).
+          onSelect={(id) => setSelectedId(id)}
+          onConfigure={(id) => {
+            const task = snapshot.tasks.find((candidate) => candidate.id === id)
+            if (!task) return
             setSelectedId(id)
-            changerSection('planification')
+            openEdit(task)
           }}
         />
+      )}
+      {sectionActive === 'watchdog' && (draft || selected?.watchdog) && (
+        <div className="task-manager-layout" data-testid="task-manager-watchdog-detail">
+          {renderDetail(selected?.watchdog ? selected : undefined)}
+        </div>
       )}
 
       <div className="task-manager-stats">
@@ -851,7 +1464,7 @@ export function TaskManagerView({
                 <Spinner />
                 <strong>Chargement des tâches…</strong>
               </div>
-            ) : snapshot.tasks.length === 0 ? (
+            ) : scheduledTasks.length === 0 ? (
               <div className="task-manager-empty">
                 <span aria-hidden="true">◷</span>
                 <strong>Aucune tâche</strong>
@@ -861,7 +1474,7 @@ export function TaskManagerView({
                 </button>
               </div>
             ) : (
-              snapshot.tasks.map((task) => (
+              scheduledTasks.map((task) => (
                 <button
                   type="button"
                   key={task.id}
@@ -889,594 +1502,7 @@ export function TaskManagerView({
             )}
           </aside>
 
-          <main className="task-manager-detail">
-            {draft ? (
-              <div className="task-manager-editor">
-                <div className="task-manager-panel-title">
-                  <span>{editingId ? 'Modifier la tâche' : 'Nouvelle tâche'}</span>
-                  <button type="button" onClick={closeEditor}>
-                    Annuler
-                  </button>
-                </div>
-                <div className="task-manager-form-grid">
-                  <label className="task-manager-field is-wide">
-                    <span>Titre</span>
-                    <input
-                      name="title"
-                      value={draft.title}
-                      placeholder="Ex. Veille concurrentielle"
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current ? { ...current, title: event.target.value } : current
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="task-manager-field is-wide">
-                    <span>Prompt envoyé</span>
-                    <textarea
-                      name="prompt"
-                      value={draft.prompt}
-                      rows={5}
-                      placeholder="Décris exactement ce que le modèle doit faire…"
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current ? { ...current, prompt: event.target.value } : current
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="task-manager-field">
-                    <span>Mode d’exécution</span>
-                    <select
-                      value={draft.mode}
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current
-                            ? { ...current, mode: event.target.value as ExecutionMode }
-                            : current
-                        )
-                      }
-                    >
-                      <option value="active-only">Autowin actif uniquement</option>
-                      <option value="windows">Autonome Windows · réveille le PC</option>
-                    </select>
-                  </label>
-                  <label className="task-manager-field">
-                    <span>Destination</span>
-                    <select
-                      value={draft.destination.kind}
-                      onChange={(event) => {
-                        const kind = event.target.value
-                        setDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                destination:
-                                  kind === 'existing' && conversations[0]
-                                    ? {
-                                        kind: 'existing',
-                                        conversationId: conversations[0].id,
-                                        ...(selectableModels[0]
-                                          ? {
-                                              provider: selectableModels[0].provider,
-                                              model: selectableModels[0].model,
-                                              reasoningEffort:
-                                                selectableModels[0].defaultReasoningEffort
-                                            }
-                                          : {})
-                                      }
-                                    : {
-                                        kind: 'new',
-                                        title: current.title || 'Tâche planifiée',
-                                        category: selectableModels[0]?.provider ?? '',
-                                        provider: selectableModels[0]?.provider ?? '',
-                                        ...(selectableModels[0]
-                                          ? {
-                                              model: selectableModels[0].model,
-                                              reasoningEffort:
-                                                selectableModels[0].defaultReasoningEffort
-                                            }
-                                          : {})
-                                      }
-                              }
-                            : current
-                        )
-                      }}
-                    >
-                      <option value="existing">Conversation existante</option>
-                      <option
-                        value="new"
-                        disabled={!modelCatalogReady || selectableModels.length === 0}
-                      >
-                        Nouvelle conversation dédiée
-                      </option>
-                    </select>
-                  </label>
-                  {draft.destination.kind === 'existing' ? (
-                    <label className="task-manager-field is-wide">
-                      <span>Conversation ciblée</span>
-                      <select
-                        value={draft.destination.conversationId}
-                        onChange={(event) =>
-                          setDraft((current) =>
-                            current?.destination.kind === 'existing'
-                              ? {
-                                  ...current,
-                                  destination: {
-                                    ...current.destination,
-                                    conversationId: event.target.value
-                                  }
-                                }
-                              : current
-                          )
-                        }
-                      >
-                        {conversations.map((conversation) => (
-                          <option key={conversation.id} value={conversation.id}>
-                            {conversation.title} · {conversation.provider}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : (
-                    <label className="task-manager-field">
-                      <span>Nom de la conversation</span>
-                      <input
-                        value={draft.destination.title}
-                        onChange={(event) => {
-                          const title = event.target.value
-                          setDraft((current) =>
-                            current?.destination.kind === 'new'
-                              ? {
-                                  ...current,
-                                  destination: { ...current.destination, title }
-                                }
-                              : current
-                          )
-                        }}
-                      />
-                    </label>
-                  )}
-                  <label className="task-manager-field">
-                    <span>Modèle</span>
-                    <select
-                      value={draftModelId}
-                      disabled={!modelCatalogReady || selectableModels.length === 0}
-                      onChange={(event) => {
-                        if (event.target.value === AGENT_STUDIO_DEFAULT_PROVIDER) {
-                          setDraft((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  destination: followAgentStudioDefault(current.destination)
-                                }
-                              : current
-                          )
-                          return
-                        }
-                        const selectedModel = selectableModels.find(
-                          (candidate) => candidate.id === event.target.value
-                        )
-                        if (!selectedModel) return
-                        setDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                destination:
-                                  current.destination.kind === 'new'
-                                    ? {
-                                        ...current.destination,
-                                        provider: selectedModel.provider,
-                                        category: selectedModel.provider,
-                                        model: selectedModel.model,
-                                        reasoningEffort: selectedModel.defaultReasoningEffort
-                                      }
-                                    : {
-                                        ...current.destination,
-                                        provider: selectedModel.provider,
-                                        model: selectedModel.model,
-                                        reasoningEffort: selectedModel.defaultReasoningEffort
-                                      }
-                              }
-                            : current
-                        )
-                      }}
-                    >
-                      <option value={AGENT_STUDIO_DEFAULT_PROVIDER}>
-                        {AGENT_STUDIO_DEFAULT_MODEL_LABEL}
-                      </option>
-                      {!draftModelId && draft.destination.model && (
-                        <option value="" disabled>
-                          {draft.destination.model} · indisponible
-                        </option>
-                      )}
-                      {!draftModelId && !draft.destination.model && selectableModels.length > 0 && (
-                        <option value="" disabled>
-                          Choisir un modèle
-                        </option>
-                      )}
-                      {selectableModels.length === 0 && !draft.destination.model && (
-                        <option value="">Aucun modèle chargé dans Agent Studio</option>
-                      )}
-                      {selectableModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.label ?? model.model} · {model.provider}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="task-manager-field">
-                    <span>Effort</span>
-                    <select
-                      value={draftEffort}
-                      disabled={!draftModel || draftEfforts.length <= 1}
-                      onChange={(event) => {
-                        const reasoningEffort = event.target.value
-                        setDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                destination: {
-                                  ...current.destination,
-                                  reasoningEffort
-                                }
-                              }
-                            : current
-                        )
-                      }}
-                    >
-                      {draftEfforts.map((effort) => (
-                        <option key={effort} value={effort}>
-                          {EFFORT_LABELS[effort] ?? effort}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="task-manager-field task-manager-field-wide">
-                    <span>Déclencheur</span>
-                    <select
-                      value={triggerKindOf(draft)}
-                      data-testid="trigger-kind"
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                watchdog:
-                                  event.target.value === 'watchdog'
-                                    ? (current.watchdog ?? {
-                                        source: { ...DEFAULT_FILE_SOURCE },
-                                        guards: { ...DEFAULT_DRAFT_GUARDS }
-                                      })
-                                    : undefined
-                              }
-                            : current
-                        )
-                      }
-                    >
-                      <option value="schedule">À une heure (planifié)</option>
-                      <option value="watchdog">Sur événement (Watchdog Agent)</option>
-                    </select>
-                  </label>
-                  {draft.watchdog && (
-                    <WatchdogRuleFields
-                      rule={draft.watchdog}
-                      onChange={(rule) =>
-                        setDraft((current) => (current ? { ...current, watchdog: rule } : current))
-                      }
-                    />
-                  )}
-                  {!draft.watchdog && (
-                    <>
-                      <label className="task-manager-field">
-                        <span>Date de départ</span>
-                        <input
-                          type="date"
-                          value={draft.schedule.startDate}
-                          onChange={(event) => setSchedule({ startDate: event.target.value })}
-                        />
-                      </label>
-                      <label className="task-manager-field">
-                        <span>Heure</span>
-                        <input
-                          type="time"
-                          value={draft.schedule.time}
-                          onChange={(event) => setSchedule({ time: event.target.value })}
-                        />
-                      </label>
-                      <label className="task-manager-field">
-                        <span>Répétition</span>
-                        <select
-                          value={draft.schedule.recurrence.unit}
-                          onChange={(event) =>
-                            setRecurrence({
-                              unit: event.target.value as RecurrenceUnit,
-                              ...(event.target.value === 'week' &&
-                              !draft.schedule.recurrence.weekDays?.length
-                                ? { weekDays: [new Date().getDay() || 7] }
-                                : {})
-                            })
-                          }
-                        >
-                          <option value="none">Aucune</option>
-                          <option value="minute">Minute(s)</option>
-                          <option value="hour">Heure(s)</option>
-                          <option value="day">Jour(s)</option>
-                          <option value="week">Semaine(s)</option>
-                          <option value="month">Mois</option>
-                        </select>
-                      </label>
-                      {draft.schedule.recurrence.unit !== 'none' && (
-                        <label className="task-manager-field">
-                          <span>Intervalle</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={365}
-                            value={draft.schedule.recurrence.interval}
-                            onChange={(event) =>
-                              setRecurrence({ interval: Math.max(1, Number(event.target.value)) })
-                            }
-                          />
-                        </label>
-                      )}
-                      {draft.schedule.recurrence.unit === 'week' && (
-                        <fieldset className="task-manager-weekdays">
-                          <legend>Jours</legend>
-                          {WEEK_DAYS.map((day) => {
-                            const selected = draft.schedule.recurrence.weekDays?.includes(day.value)
-                            return (
-                              <label key={day.value} className={selected ? 'is-selected' : ''}>
-                                <input
-                                  type="checkbox"
-                                  checked={selected}
-                                  onChange={() => {
-                                    const current = draft.schedule.recurrence.weekDays ?? []
-                                    setRecurrence({
-                                      weekDays: selected
-                                        ? current.filter((value) => value !== day.value)
-                                        : [...current, day.value].sort()
-                                    })
-                                  }}
-                                />
-                                {day.label}
-                              </label>
-                            )
-                          })}
-                        </fieldset>
-                      )}
-                      <label className="task-manager-field">
-                        <span>Date de fin · optionnelle</span>
-                        <input
-                          type="date"
-                          value={draft.schedule.endDate ?? ''}
-                          onChange={(event) =>
-                            setSchedule({ endDate: event.target.value || undefined })
-                          }
-                        />
-                      </label>
-                    </>
-                  )}
-                  <label className="task-manager-switch">
-                    <input
-                      type="checkbox"
-                      checked={draft.enabled}
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current ? { ...current, enabled: event.target.checked } : current
-                        )
-                      }
-                    />
-                    <span>Activer dès l’enregistrement</span>
-                  </label>
-                </div>
-                <div className="task-manager-form-actions">
-                  <span>
-                    {draft.mode === 'windows'
-                      ? 'Windows réveillera le PC. Aucun rattrapage tardif.'
-                      : 'S’exécute tant que le processus Autowin reste actif, même dans le tray.'}
-                  </span>
-                  <button
-                    type="button"
-                    className="task-manager-primary"
-                    disabled={
-                      saving || !modelCatalogReady || !hasLoadedModel(draft.destination, models)
-                    }
-                    onClick={() => void save()}
-                  >
-                    {saving ? 'Enregistrement…' : editingId ? 'Enregistrer' : 'Créer la tâche'}
-                  </button>
-                </div>
-              </div>
-            ) : selected ? (
-              <>
-                <div className="task-manager-detail-head">
-                  <div>
-                    <span className={`task-manager-mode mode-${selected.mode}`}>
-                      {modeLabel(selected.mode)}
-                    </span>
-                    <h2>{selected.title}</h2>
-                    <p>
-                      {selected.schedule
-                        ? `${recurrenceLabel(selected.schedule)} · ${selected.schedule.timeZone}`
-                        : selected.watchdog
-                          ? describeWatchdogSource(selected.watchdog.source)
-                          : 'Déclencheur invalide'}
-                    </p>
-                  </div>
-                  <div className="task-manager-detail-actions">
-                    <button type="button" onClick={() => openEdit(selected)}>
-                      Modifier
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving || !selected.enabled}
-                      onClick={() => void runNow(selected)}
-                    >
-                      Lancer maintenant
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void updateTask(selected, { enabled: !selected.enabled })}
-                    >
-                      {selected.enabled ? 'Désactiver' : 'Activer'}
-                    </button>
-                    <button
-                      type="button"
-                      className="is-danger"
-                      disabled={saving || taskIsRunning}
-                      title={
-                        taskIsRunning
-                          ? 'Cette tâche est en cours et ne peut pas être supprimée.'
-                          : undefined
-                      }
-                      onClick={() => void removeTask(selected)}
-                    >
-                      Supprimer
-                    </button>
-                  </div>
-                </div>
-                <div className="task-manager-prompt">
-                  <span>Prompt envoyé</span>
-                  <p>{selected.prompt}</p>
-                </div>
-                <dl className="task-manager-facts">
-                  <div>
-                    <dt>Prochaine échéance</dt>
-                    <dd>{formatDateTime(selected.nextRunAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Destination</dt>
-                    <dd>
-                      {selected.destination.kind === 'existing'
-                        ? (conversations.find(
-                            ({ id }) => id === selected.destination.conversationId
-                          )?.title ?? selected.destination.conversationId)
-                        : selected.destination.conversationId
-                          ? `Conversation dédiée · ${selected.destination.title}`
-                          : `Nouvelle conversation · ${selected.destination.title}`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Répétition</dt>
-                    <dd>
-                      {selected.schedule
-                        ? recurrenceLabel(selected.schedule)
-                        : selected.watchdog
-                          ? describeWatchdogSource(selected.watchdog.source)
-                          : 'Inconnu'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>État</dt>
-                    <dd>{selected.enabled ? 'Active' : 'Désactivée'}</dd>
-                  </div>
-                  {selected.watchdog && (
-                    <>
-                      <div>
-                        <dt>Activité watchdog</dt>
-                        <dd>
-                          {snapshot.watchdogs?.[selected.id]?.admittedLastHour ?? 0} réveils sur la
-                          dernière heure
-                        </dd>
-                      </div>
-                      {(() => {
-                        const diagnostic = snapshot.watchdogs?.[selected.id]
-                        if (!diagnostic) return null
-                        const recentUsage = usageMeta({
-                          knownCostUsd: diagnostic.knownCostUsdLastHour,
-                          totalTokens: diagnostic.totalTokensLastHour,
-                          unpricedCalls: diagnostic.unpricedCallsLastHour
-                        })
-                        return recentUsage.length ? (
-                          <div>
-                            <dt>Coût dernière heure</dt>
-                            <dd>{recentUsage.join(' · ')}</dd>
-                          </div>
-                        ) : null
-                      })()}
-                      {snapshot.watchdogs?.[selected.id]?.complaint && (
-                        <div>
-                          <dt>Diagnostic</dt>
-                          <dd>{snapshot.watchdogs[selected.id].complaint}</dd>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </dl>
-                <section className="task-manager-history">
-                  <div className="task-manager-panel-title">
-                    <span>Historique des occurrences</span>
-                    <small>{occurrences.length}</small>
-                  </div>
-                  {occurrences.length === 0 ? (
-                    <p className="task-manager-muted">Aucune exécution pour le moment.</p>
-                  ) : (
-                    occurrences.map((occurrence) => (
-                      <div className="task-manager-occurrence" key={occurrence.id}>
-                        <span className={`status-${occurrence.status}`}>{occurrence.status}</span>
-                        <strong>
-                          {formatDateTime(occurrence.scheduledFor)} · {modeLabel(occurrence.mode)}
-                        </strong>
-                        <small data-testid="task-manager-occurrence-meta">
-                          {occurrenceMeta(occurrence).join(' · ') || 'Tour Chat'}
-                        </small>
-                        {occurrence.status === 'failed' && (
-                          <span className="task-manager-occurrence-actions">
-                            <button
-                              type="button"
-                              className="task-manager-occurrence-open"
-                              data-testid="task-manager-occurrence-replay"
-                              disabled={saving}
-                              onClick={() => void runNow(selected)}
-                            >
-                              Rejouer
-                            </button>
-                            <button
-                              type="button"
-                              className="task-manager-occurrence-open"
-                              data-testid="task-manager-occurrence-replay-fixed"
-                              onClick={() => openFixAfterFailure(selected, occurrence)}
-                            >
-                              Rejouer avec prompt corrigé
-                            </button>
-                          </span>
-                        )}
-                        {occurrence.conversationId && (
-                          <button
-                            className="task-manager-occurrence-open"
-                            data-testid="task-manager-occurrence-open"
-                            onClick={() =>
-                              onOpenConversation?.({
-                                conversationId: occurrence.conversationId!,
-                                ...(occurrence.turnId ? { turnId: occurrence.turnId } : {})
-                              })
-                            }
-                            title={`Conversation ${occurrence.conversationId}`}
-                            type="button"
-                          >
-                            Ouvrir la conversation
-                          </button>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </section>
-              </>
-            ) : loading ? (
-              <div className="task-manager-empty is-detail" data-testid="task-manager-loading">
-                <Spinner />
-                <strong>Chargement des tâches…</strong>
-              </div>
-            ) : (
-              <div className="task-manager-empty is-detail">
-                <span aria-hidden="true">◷</span>
-                <strong>Sélectionne ou crée une tâche</strong>
-                <p>Les prompts planifiés apparaîtront ici avec leur historique complet.</p>
-              </div>
-            )}
-          </main>
+          {renderDetail(selected?.watchdog ? undefined : selected)}
 
           <aside className="task-manager-alerts" aria-label="Alertes Task Manager">
             <div className="task-manager-panel-title">

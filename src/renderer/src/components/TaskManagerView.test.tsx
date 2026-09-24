@@ -132,7 +132,10 @@ function api() {
 
 async function mount(
   mockApi = api(),
-  props: { onOpenConversation?: (target: { conversationId: string; turnId?: string }) => void } = {}
+  props: {
+    onOpenConversation?: (target: { conversationId: string; turnId?: string }) => void
+    section?: 'watchdog' | 'planification'
+  } = {}
 ) {
   Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
   const container = document.createElement('div')
@@ -204,7 +207,8 @@ describe('TaskManagerView', () => {
     }
     mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
 
-    const { container } = await mount(mockApi)
+    // Une règle de réveil se consulte dans SON onglet : Watchdog.
+    const { container } = await mount(mockApi, { section: 'watchdog' })
 
     expect(container.textContent).toContain('3 réveils sur la dernière heure')
     expect(container.textContent).toContain('0,42 $ connus')

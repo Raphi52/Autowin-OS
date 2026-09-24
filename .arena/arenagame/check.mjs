@@ -26,7 +26,7 @@ if (!racine || !existsSync(racine)) {
 }
 
 function lancer(cmd, args, cwd, timeoutMs) {
-  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 })
+  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', timeout: timeoutMs, windowsHide: true, maxBuffer: 64 * 1024 * 1024 })
   return { code: r.status, sortie: `${r.stdout ?? ''}${r.stderr ?? ''}`, expire: r.error?.code === 'ETIMEDOUT' }
 }
 

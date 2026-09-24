@@ -382,6 +382,14 @@ describe('#3 contrat de sortie — definition of done falsifiable, plus de narra
     expect(prompt).toContain('État visé du ticket')
   })
 
+  it('suit la pratique de l’équipe : s’arrête à « Développement terminé », compte-rendu en sections', () => {
+    const prompt = formatTicketTreatmentPrompt(base)
+    expect(prompt).toContain('l\'état « Développement terminé »')
+    expect(prompt).toMatch(/JAMAIS au-delà \(recette, release, production, terminé, clos\)/)
+    expect(prompt).toContain('Évolutions · Corrections · État · Composants concernés')
+    expect(prompt).not.toContain('l’état final')
+  })
+
   it('cite la commande de vérification DÉCLARÉE dans le point exit code', () => {
     const prompt = formatTicketTreatmentPrompt(base, {
       id: 's',

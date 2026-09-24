@@ -1634,7 +1634,7 @@ export class Orchestrator {
      * sessions — ils attribuaient tout au run courant et refusaient un vert merite. On fige
      * donc la saleté PREEXISTANTE ici, une fois, pour que les hooks la soustraient.
      */
-    this.fichiersSalesAuDemarrage = fichiersTouchesGit(this.deps.executionWorkspace)
+    this.fichiersSalesAuDemarrage = await fichiersTouchesGit(this.deps.executionWorkspace)
     onStep = protegerRappel('onStep', onStep)
     onPhase = protegerRappel('onPhase', onPhase)
     onDelta = protegerRappel('onDelta', onDelta)

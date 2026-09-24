@@ -72,3 +72,22 @@ bien sous les 2 h de m6.
   cellule de C5, au prix de son coût.
 - A (C5) sous 50 : le 52 de m6 était du bruit d'une réplique. Les 2 répliques de t4 le diront.
 - Pour tous les bras, vérifier dans les traces qu'aucune commande n'arrête un processus par son nom.
+
+## Résultats t4 (relance du 2026-09-24 15:46 → 19:02, bureau non caché)
+| bras | note auto /52 (rép. 1 · 2) | moyenne | coût $ (1 · 2) | coût moyen |
+|---|---|---|---|---|
+| A (meilleur mesuré) | 51,3 · 51,6 | 51,45 | 18,17 · 10,40 | 14,28 |
+| B (texte) | 51,8 · 51,5 | **51,65** | 8,83 · 6,56 | **7,70** |
+| C (outil) | 51,5 · 50,1 | 50,80 | 8,40 · 7,83 | 8,12 |
+| X (appel nu) | 52 · 51,4 | 51,70 | 9,21 · 13,29 | 11,25 |
+Total des 8 bras : 82,7 $ (hors améliorateur, 15 $ max). Tous les bras : 1 coupure de session reprise par lance-bras.sh (`reprises=1`), code 0.
+**Discrimination** : écart max 1,9 point (< 10) → **banc à durcir** (§ 5). À note égale, B coûte 46 % de moins que A et 32 % de moins que X. La règle « battre A de 2 points » est inatteignable sur une échelle saturée à 52 : A n'est pas remplacé mécaniquement, décision humaine.
+
+## Causes Autowin
+1. **Consoles lune.exe sur l'écran de l'utilisateur** — cause localisée : les bras écrivent leurs propres `verifier.mjs`, `outils/equilibre.mjs`, `outils/regler.mjs` (a-1, a-2, c-1, c-2) qui appellent `~/.rokit/tool-storage/.../lune.exe` par `spawnSync` sans `windowsHide: true`. Corrigé côté banc : lancement sur bureau caché (`outils/lancer-cache.ps1`, skill § 2).
+2. **5 bras sur 8 sans RUN.md** (`clore-run : aucun RUN.md écrit par la session …` pour a-1, b-1, c-1, x-1, x-2) → Autowin les compte en `unknown` (runsBlocked). X n'a pas de kit, c'est attendu ; pour a-1, b-1, c-1 : **non localisé**.
+3. **Mort des 3 premiers lancements** : 2 redémarrages du PC (événement 1074, 11:23:49 et 14:56:18) et une console `schtasks` fermée (0xC000013A). Pas un défaut d'Autowin ; consigne ajoutée à la skill.
+
+## Points juge — lecture du code seulement (2026-09-24, sans image)
+Présents chez les **8 bras** : menu à onglets (accueil/boutique/cartes ou deck/progression selon le bras), écran de fin, trophées ou route de progression, coffres, quêtes, `BindToClose`, gestion des entrées (tactile/manette), mise en page adaptative (UIScale/contraintes), transitions `TweenService`, retour visuel des coups. Rares : paramètres de son (x-2 seul), probabilités affichées des coffres (b-2, c-1). Taille du code client : 2 825 (c-2) à 5 394 lignes (x-1).
+**Conclusion** : la PRÉSENCE des écrans ne départage pas plus que les règles — tous les bras cochent la structure. Seul un jugement sur images (écran réel, Studio en jeu) peut noter la qualité ; le bureau caché ne rend pas la 3D (§ 3). Non observable ici, jamais deviné.

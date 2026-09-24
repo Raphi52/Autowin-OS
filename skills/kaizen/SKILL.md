@@ -13,7 +13,9 @@ description: >-
   `frame`) : kaizen vise le COMPORTEMENT, pas un artefact.
 ---
 
-# kaizen — améliorer le système à partir de ses propres échecs (audit comportemental → énoncer → intégrer → vérifier)
+# kaizen — améliorer Autowin OS à partir de ses propres échecs (audit comportemental → énoncer → intégrer → vérifier)
+
+**BUT FINAL : améliorer Autowin OS.** Chaque kaizen doit laisser l'app meilleure qu'avant : ses skills, ses prompts injectés, sa constitution, ses garde-fous et son code. Un défaut analysé sans correction appliquée dans Autowin OS est un kaizen raté.
 
 ## À quoi ça sert
 **Faire APPRENDRE le SYSTÈME de ses propres échecs — pour que la même erreur ne revienne pas à la session suivante.**

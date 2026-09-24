@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { exactLineFingerprint } from '../exact-line-fingerprint'
@@ -288,19 +288,32 @@ export function attribuablesAuRun(
  * sait lire. Injectable pour les tests ; en cas d'échec git, on rend une liste vide — un garde-fou
  * ne doit pas inventer un refus sur un dépôt qu'il n'a pas su lire.
  */
-export function fichiersTouchesGit(cwd: string): readonly string[] {
-  const lire = (args: string[], brut = false): string[] => {
-    try {
-      return execFileSync('git', args, { cwd, encoding: 'utf-8', windowsHide: true })
-        .split(/\r?\n/)
-        .map((l) => (brut ? l : l.trim()))
-        .filter(Boolean)
-    } catch {
-      return []
-    }
-  }
-  const porcelain = lire(['status', '--porcelain'], true).map(cheminPorcelain).filter(Boolean)
-  return [...new Set([...porcelain, ...lire(['diff', '--name-only', 'HEAD'])])]
+// fix-ok: gels.jsonl du 2026-09-24 — 21 gels du process principal (78 s cumules, jusqu'a 24,5 s
+// d'affilee) venaient d'un git SYNCHRONE ici : `git status` sur un arbre partage tres sale,
+// au demarrage de CHAQUE run et a chaque garde-fou de preuve. Git passe desormais par `execFile`.
+function gitHorsFil(cwd: string, args: string[], maxBuffer?: number): Promise<string> {
+  return new Promise((ok) => {
+    execFile(
+      'git',
+      args,
+      { cwd, encoding: 'utf8', windowsHide: true, ...(maxBuffer ? { maxBuffer } : {}) },
+      (err, out) => ok(err ? '' : String(out))
+    )
+  })
+}
+
+export async function fichiersTouchesGit(cwd: string): Promise<readonly string[]> {
+  const lignes = (out: string, brut = false): string[] =>
+    out
+      .split(/\r?\n/)
+      .map((l) => (brut ? l : l.trim()))
+      .filter(Boolean)
+  const [status, diff] = await Promise.all([
+    gitHorsFil(cwd, ['status', '--porcelain']),
+    gitHorsFil(cwd, ['diff', '--name-only', 'HEAD'])
+  ])
+  const porcelain = lignes(status, true).map(cheminPorcelain).filter(Boolean)
+  return [...new Set([...porcelain, ...lignes(diff)])]
 }
 
 /** Une capture est une preuve VISUELLE seulement si elle a réellement été exécutée et rendue ok. */
@@ -309,16 +322,18 @@ function capturesLues(evidence: HookContext['evidence']): number {
 }
 
 export function creerPreuveVisuelleHandler(
-  listerFichiersTouches: (cwd: string) => readonly string[] = fichiersTouchesGit
+  listerFichiersTouches: (
+    cwd: string
+  ) => readonly string[] | Promise<readonly string[]> = fichiersTouchesGit
 ): HookHandler {
-  return (ctx: HookContext): HookResult => {
+  return async (ctx: HookContext): Promise<HookResult> => {
     // `requireProof` marque déjà les tâches MUTANTES : hors de là, aucun rendu n'est en jeu.
     if (!ctx.requireProof || !ctx.cwd) return { block: false }
     // Le diff du RUN fait foi quand il existe ; sinon seulement, on deduit par soustraction.
     const mutes = Object.keys(ctx.editsByFile ?? fichiersEditesParLeRun(ctx.evidence))
     const perimetre = mutes.length
       ? mutes
-      : attribuablesAuRun(listerFichiersTouches(ctx.cwd), ctx.fichiersTouchesAvantLeRun)
+      : attribuablesAuRun(await listerFichiersTouches(ctx.cwd), ctx.fichiersTouchesAvantLeRun)
     const diff = perimetre
       .map((f) => `+++ b/${f.replace(/\\/g, '/')}`)
       .join('\n')
@@ -375,30 +390,21 @@ export function diffLimiteAux(diff: string, fichiers: readonly string[]): string
  * HEAD`), seul texte ou les lignes ajoutees `animation:` / `@keyframes` sont lisibles. Diff illisible
  * ou vide => aucun refus invente.
  */
-export function diffGit(cwd: string): string {
-  try {
-    return execFileSync('git', ['diff', 'HEAD'], {
-      cwd,
-      encoding: 'utf-8',
-      windowsHide: true,
-      maxBuffer: 32 * 1024 * 1024
-    })
-  } catch {
-    return ''
-  }
+export function diffGit(cwd: string): Promise<string> {
+  return gitHorsFil(cwd, ['diff', 'HEAD'], 32 * 1024 * 1024)
 }
 
 export function creerPreuveMouvementHandler(
-  lireDiff: (cwd: string) => string = diffGit
+  lireDiff: (cwd: string) => string | Promise<string> = diffGit
 ): HookHandler {
-  return (ctx: HookContext): HookResult => {
+  return async (ctx: HookContext): Promise<HookResult> => {
     if (!ctx.requireProof || !ctx.cwd) return { block: false }
     // Un diff d animation ne se lit que dans le TEXTE du diff : on garde la lecture git, mais
     // bornee au perimetre du run quand il est connu.
     const mutes = Object.keys(ctx.editsByFile ?? fichiersEditesParLeRun(ctx.evidence))
     const diff = mutes.length
-      ? diffLimiteAux(lireDiff(ctx.cwd), mutes)
-      : diffAttribuable(lireDiff(ctx.cwd), ctx.fichiersTouchesAvantLeRun)
+      ? diffLimiteAux(await lireDiff(ctx.cwd), mutes)
+      : diffAttribuable(await lireDiff(ctx.cwd), ctx.fichiersTouchesAvantLeRun)
     if (!diff) return { block: false }
     const mesures = (ctx.evidence ?? []).filter(
       (e) => e.ok && /ui-capture/.test(e.command ?? '') && /--motion/.test(e.command ?? '')

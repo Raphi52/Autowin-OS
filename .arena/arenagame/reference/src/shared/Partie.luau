@@ -70,6 +70,15 @@ local function poseAutorisee(self, j: number, x: number, y: number): boolean
 	if x < 0 or x > 18 then
 		return false
 	end
+	-- Emprise des tours vivantes (roi 4x4, princesses 3x3) : on ne pose pas sur une tour.
+	for jj = 1, 2 do
+		for nom, t in self.joueurs[jj].tours do
+			local demi = nom == "roi" and 2 or 1.5
+			if t.pv > 0 and math.abs(x - t.x) < demi and math.abs(y - t.y) < demi then
+				return false
+			end
+		end
+	end
 	if j == 1 then
 		if y >= 0 and y < 15 then
 			return true
@@ -130,7 +139,7 @@ function Partie:jouer(j: number, i: number, x: number, y: number): (boolean, str
 		if not poseAutorisee(self, j, x, y) then
 			return false, "pose interdite"
 		end
-		table.insert(self.unites, { id = self.prochainId, joueur = j, carte = id, pv = c.pv, x = x, y = y, recharge = 0 })
+		table.insert(self.unites, { id = self.prochainId, joueur = j, carte = id, pv = c.pv, x = x, y = y, recharge = 0, deploiement = 1 })
 		self.prochainId += 1
 	end
 	J.elixir -= c.cout
@@ -209,6 +218,11 @@ function Partie:_pas(dt: number)
 	end
 	-- unites
 	for _, u in self.unites do
+		-- Temps de deploiement (1 s) : l'unite est posee mais n'agit pas encore.
+		if (u.deploiement or 0) > 0 then
+			u.deploiement -= dt
+			continue
+		end
 		local c = Partie.CARTES[u.carte]
 		local t, d = cible(self, u, c)
 		u.recharge = math.max(0, u.recharge - dt)

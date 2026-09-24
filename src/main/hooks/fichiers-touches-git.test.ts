@@ -38,3 +38,30 @@ describe('cheminPorcelain — le prefixe d etat de git status --porcelain', () =
     expect(cheminPorcelain('   ')).toBe('')
   })
 })
+
+/**
+ * GEL DU PROCESS PRINCIPAL — gels.jsonl du 2026-09-24 : 21 gels, 78 s cumules, jusqu'a 24,5 s
+ * d'affilee, tous sur `execFileSync git` depuis `fichiersTouchesGit` (demarrage de chaque run,
+ * garde-fous de preuve). Ce module tourne sur le fil principal : aucun git synchrone n'y a sa place.
+ */
+describe('default-gate-hooks — aucun git bloquant sur le fil principal', () => {
+  it('ne contient plus aucun appel execFileSync', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const source = readFileSync(
+      fileURLToPath(new URL('./default-gate-hooks.ts', import.meta.url)),
+      'utf8'
+    )
+    // Seul le CODE compte : les commentaires d'historique citent l'ancien appel.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(code).not.toMatch(/execFileSync\s*\(/)
+  })
+
+  it('fichiersTouchesGit rend une promesse, et une liste vide hors depot', async () => {
+    const { fichiersTouchesGit } = await import('./default-gate-hooks')
+    const { tmpdir } = await import('node:os')
+    const resultat = fichiersTouchesGit(tmpdir())
+    expect(resultat).toBeInstanceOf(Promise)
+    expect(Array.isArray(await resultat)).toBe(true)
+  })
+})

@@ -41,7 +41,8 @@ describe('WatchdogAgentsSection', () => {
         ],
         formatDateTime: (value) => String(value),
         onCreate: vi.fn(),
-        onSelect: vi.fn()
+        onSelect: vi.fn(),
+        onConfigure: vi.fn()
       })
     )
 

@@ -37,6 +37,7 @@ import {
   stopAutoModeNow,
   type AutoModeSettings
 } from './ticket-auto-mode'
+import { armerModeAutoConversation } from './chat-auto-convs'
 import { deposerOuvertureConversation } from './pending-conversation-open'
 import './ViewPage.css'
 import './TicketsView.css'
@@ -738,6 +739,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             category: provider as string,
             provider: provider as string
           })
+          // Les fils ouverts par le mode auto Tickets enchainent eux aussi en mode auto.
+          armerModeAutoConversation(conv.id, localStorage)
           return { id: conv.id }
         },
         promptConversation: async (conv, _item, prompt) => {

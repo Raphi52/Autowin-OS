@@ -165,19 +165,93 @@ describe('TaskManagerView — deux onglets, deux métiers', () => {
     expect(boutonSection(container, 'Watchdog')?.getAttribute('aria-pressed')).toBe('false')
   })
 
-  it('LE LIEN PRÉSERVÉ : cliquer une tâche du watchdog ouvre son détail en planification', async () => {
-    const { container } = await monter({ section: 'watchdog' })
+  async function monterAvecRegle(props: Record<string, unknown> = {}) {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.tasks.push({
+      ...snapshot.tasks[0],
+      id: 'task-w',
+      title: 'Assistant mails',
+      schedule: undefined,
+      watchdog: {
+        source: { kind: 'file-match', path: 'C:/logs/app.log', pattern: 'ERROR' },
+        guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 12, maxChainDepth: 0, maxPerRoot: 20 }
+      }
+    } as (typeof snapshot.tasks)[number])
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+    Object.defineProperty(window, 'api', { value: mockApi, configurable: true })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+    await act(async () => root.render(createElement(TaskManagerView, { active: true, ...props })))
+    return { container, mockApi }
+  }
+
+  it("une règle watchdog n'apparaît pas dans la liste de Planification", async () => {
+    const { container } = await monterAvecRegle({ section: 'planification' })
+    const liste = container.querySelector('.task-manager-list')?.textContent ?? ''
+    expect(liste).toContain('Rapport du matin')
+    expect(liste).not.toContain('Assistant mails')
+  })
+
+  it("cliquer une carte ouvre le détail (avec Supprimer) DANS l'onglet Watchdog", async () => {
+    const onSectionChange = vi.fn()
+    const { container } = await monterAvecRegle({ section: 'watchdog', onSectionChange })
     const cible = container.querySelector<HTMLElement>(
-      '[data-testid="watchdog-agents-section"] [data-task-id="task-1"]'
+      '[data-testid="watchdog-agents-section"] .watchdog-rule-main'
     )
-    // Si le watchdog n'expose aucune cible cliquable dans ce jeu de données, le lien n'a pas à être
-    // testé ici — mais la bascule, elle, doit rester possible.
-    if (!cible) {
-      expect(boutonSection(container, 'Planification')).toBeDefined()
-      return
-    }
-    await act(async () => cible.click())
-    expect(container.querySelector('.task-manager-list')).not.toBeNull()
+    expect(cible).not.toBeNull()
+    await act(async () => cible!.click())
+    expect(onSectionChange).not.toHaveBeenCalled()
+    const detail = container.querySelector('[data-testid="task-manager-watchdog-detail"]')
+    expect(detail?.textContent).toContain('Assistant mails')
+    const supprimer = [...(detail?.querySelectorAll('button') ?? [])].some((b) =>
+      b.textContent?.includes('Supprimer')
+    )
+    expect(supprimer).toBe(true)
+  })
+
+  it("« Paramétrer » ouvre l'éditeur en restant dans l'onglet Watchdog", async () => {
+    const onSectionChange = vi.fn()
+    const { container } = await monterAvecRegle({ section: 'watchdog', onSectionChange })
+    const bouton = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-testid="watchdog-agents-section"] button')
+    ].find((b) => b.textContent?.includes('Paramétrer'))
+    expect(bouton).toBeDefined()
+    await act(async () => bouton!.click())
+    expect(onSectionChange).not.toHaveBeenCalled()
+    expect(
+      container.querySelector('[data-testid="task-manager-watchdog-detail"] .task-manager-editor')
+    ).not.toBeNull()
+    expect(boutonSection(container, 'Watchdog')?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('« + Règle de réveil » ouvre un brouillon déjà réglé sur « Sur événement »', async () => {
+    const { container } = await monterAvecRegle({ section: 'watchdog' })
+    const bouton = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-testid="watchdog-agents-section"] button')
+    ].find((b) => b.textContent?.includes('Règle de réveil'))
+    expect(bouton).toBeDefined()
+    await act(async () => bouton!.click())
+    const editeur = container.querySelector('[data-testid="task-manager-watchdog-detail"] .task-manager-editor')
+    expect(editeur).not.toBeNull()
+    const declencheur = [...editeur!.querySelectorAll('select')].find((s) =>
+      [...s.options].some((o) => o.value === 'watchdog')
+    )
+    expect(declencheur?.value).toBe('watchdog')
+  })
+
+  it("changer d'onglet ferme l'éditeur ouvert", async () => {
+    const { container } = await monterAvecRegle()
+    await act(async () => boutonSection(container, 'Watchdog')!.click())
+    const bouton = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-testid="watchdog-agents-section"] button')
+    ].find((b) => b.textContent?.includes('Paramétrer'))
+    await act(async () => bouton!.click())
+    expect(container.querySelector('.task-manager-editor')).not.toBeNull()
+    await act(async () => boutonSection(container, 'Planification')!.click())
+    expect(container.querySelector('.task-manager-editor')).toBeNull()
   })
 
   it('un agent peut naviguer directement vers le watchdog par son nom', () => {

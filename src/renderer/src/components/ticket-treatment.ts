@@ -284,6 +284,20 @@ export function plainText(value: string | undefined): string {
  * action ») : une prose ne permet ni de savoir si le travail est fini, ni de le contredire. Chaque
  * ligne ci-dessous se vérifie hors du modèle (nom de branche, exit code, URL de PR, état visé).
  */
+/**
+ * PRATIQUE DE L'ÉQUIPE RIG, relevée sur les fiches Azure DevOps le 2026-09-24 (demande utilisateur :
+ * « base-toi sur comment mes collègues gèrent leurs work items »). Le développeur s'arrête à
+ * « Développement terminé » (fiches 1765, 1665, 1664) ; recette, release et production suivent,
+ * faites par d'autres. Le compte-rendu suit la fiche 1765 : Évolutions / Corrections / État / DLL.
+ */
+export const TEAM_DONE_STATE = 'Développement terminé'
+export const TEAM_REPORT_SECTIONS = [
+  'Évolutions',
+  'Corrections',
+  'État',
+  'Composants concernés'
+] as const
+
 function definitionOfDone(context: TicketExecutionContext): string {
   const lines = [
     context.branch
@@ -296,8 +310,8 @@ function definitionOfDone(context: TicketExecutionContext): string {
       ? `3. Commit(s) selon la convention : ${context.commitConvention} — donner le sujet du commit.`
       : '3. Commit(s) poussé(s) — donner le sujet du commit et la branche distante.',
     '4. Pull request ouverte — donner son URL, ou dire explicitement « pas de PR » et pourquoi.',
-    '5. Compte-rendu : ce qui a été changé (fichiers), ce qui a été vérifié, ce qui reste.',
-    '6. État visé du ticket : après les preuves seulement, appelle `ticket_update` avec `sourceId`, `id`, un commentaire factuel et l’état final ; si le fournisseur refuse, rapporte ce refus sans prétendre la fiche close.'
+    `5. Compte-rendu rédigé comme ceux de l'équipe, en HTML, sections dans cet ordre : ${TEAM_REPORT_SECTIONS.join(' · ')}. Chaque correction dit sa CAUSE ; « État » dit comment c'est validé, sur quelle branche, commité ou non. Une section sans contenu est omise, jamais inventée.`,
+    `6. État visé du ticket : après les preuves seulement, appelle \`ticket_update\` avec \`sourceId\`, \`id\`, ce compte-rendu en commentaire et l'état « ${TEAM_DONE_STATE} ». JAMAIS au-delà (recette, release, production, terminé, clos) : ces étapes appartiennent à d'autres personnes. Si le fournisseur refuse, rapporte ce refus sans prétendre la fiche mise à jour.`
   ]
   return lines.join('\n')
 }

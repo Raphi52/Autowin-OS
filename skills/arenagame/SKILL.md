@@ -42,7 +42,7 @@ dans `modele/rokit.toml`. `check.mjs` appelle les binaires RÉELS de
 `~/.rokit/tool-storage/<auteur>/<outil>/<version>/` : les raccourcis de `~/.rokit/bin` refusent de
 démarrer dans un dossier sans `rokit.toml` (constaté : « Failed to find tool 'lune' in any project
 manifest file »). Vérifier avant tout lancement : `node check.mjs modele` rend `auto: 5` (socle du
-squelette vide, tout le reste à 0) et `node check.mjs reference` rend `auto: 51.8`. Un autre chiffre = le banc a bougé : STOP.
+squelette vide, tout le reste à 0) et `node check.mjs reference` rend `auto: 51.9` (depuis t5 ; 51.8 avant). Un autre chiffre = le banc a bougé : STOP.
 Un outil absent n'arrête pas le tournoi : c'est une étape à fabriquer (`forge`).
 
 ## 1. Le banc — FIGÉ, identique d'un tournoi à l'autre
@@ -52,12 +52,12 @@ Dossier : `D:\AutoWinOS\.arena\arenagame\`. Contenu permanent (jamais effacé) :
 |---|---|
 | `tache.txt` | l'énoncé donné aux bras, mot pour mot (ci-dessous) |
 | `modele/` | point de départ copié dans chaque bras : `default.project.json` Rojo, `rokit.toml`, `selene.toml`, `CONTRAT.md`, `src/shared/Partie.luau` vide |
-| `cache/regles.luau` | **32 tests cachés** de règles (élixir, cycle, pose, combat, fin de partie, déterminisme ; depuis t4 : sorts et départage de fin de prolongation) |
+| `cache/regles.luau` | **35 tests cachés** de règles (élixir, cycle, pose, combat, fin de partie, déterminisme ; depuis t4 : sorts et départage de fin de prolongation ; depuis t5 : pose sur une tour, temps de déploiement, tenue de voie) |
 | `cache/simulation.luau` | 200 parties aléatoires, invariants vérifiés à chaque pas |
 | `cache/equilibrage.luau` | 2 400 parties « bot qui privilégie une carte » + 2 000 parties bot contre bot (≈ 45 s) |
 | `cache/boutique.luau` | 13 tests cachés de la logique de boutique (`src/shared/Boutique.luau`, interface dans `CONTRAT.md`) |
 | `cache/visuels.luau` | lit le `.rbxl` construit : images des cartes, modèles `ReplicatedStorage.Modeles.<idCarte>` |
-| `reference/` | implémentation de référence : **51,8/52** en auto — preuve que la note auto maximale est atteignable ; elle ne couvre PAS les volets juge (menus, ressenti…) |
+| `reference/` | implémentation de référence : **51,9/52** en auto (51,8 avant t5) — preuve que la note auto maximale est atteignable ; elle ne couvre PAS les volets juge (menus, ressenti…) |
 | `check.mjs` | `node check.mjs <racine du bras>` → part AUTO de la note JEU, JSON sur 52, code 0 si ≥ 30 ; série t1 : `check-t1.mjs` (sur 85) |
 | `historique.jsonl` | une ligne par bras et par tournoi : notes, $, durée, frictions |
 
@@ -98,7 +98,13 @@ Le `claude` du chat tourne dans un Job Windows `KILL_ON_JOB_CLOSE`
 12 bras morts à 7 s) puis t2v (`Start-Process`, 4 bras vivants à 2 min pendant le tour, morts ensuite sans
 `statut.txt` et avec des sorties à 0 octet). Lancement, par l'outil d'Autowin (processus créé par WMI,
 donc hors du Job du tour) :
-`powershell -NoProfile -File D:\AutoWinOS\scripts\lancer-detache.ps1 -Commande '"<Git>\bin\bash.exe" -lc "<banc>/lance.sh"' -Dossier <banc>`
+`powershell -NoProfile -File D:\AutoWinOS\scripts\lancer-detache.ps1 -Commande 'powershell -NoProfile -File D:\AutoWinOS\.arena\arenagame\outils\lancer-cache.ps1 -Script <banc>/lance.sh -Id <tournoi>' -Dossier <banc>`
+**Toujours sur un bureau caché** (`outils/lancer-cache.ps1` → `scripts/hdesk-lancer.ps1`) : en t4
+(2026-09-24), les bras ont écrit leurs propres `verifier.mjs` / `outils/equilibre.mjs` qui appellent
+`lune.exe` par `spawnSync` SANS `windowsHide` — une console par appel sur l'écran de l'utilisateur,
+des centaines pendant l'équilibrage. Un bureau caché les absorbe toutes, quoi qu'écrivent les bras.
+Pas de `schtasks` : sa console bash est VISIBLE et la fermer tue tout (t4 essai 3, code 0xC000013A).
+Ne pas redémarrer le PC pendant un tournoi : t4 essais 1 et 2 sont morts ainsi (événement 1074).
 (`bin\bash.exe`, pas `usr\bin` : sans `-l`, `sleep` et `date` sont introuvables). Code 0 et
 `"horsJob":true` = lancé et vérifié hors Job ; tout autre code = pas lancé proprement. Survie à une
 vraie fin de tour observée (conv-767 : témoin pid 24972 lancé à 20:28:49, toujours vivant et écrivant
@@ -200,6 +206,7 @@ Tournoi t1 (2026-09-21, 12 bras) : **11 sur 12 à 85/85, l'appel nu compris** �
 pas encore. Tout point de pose d'un test caché doit tomber sur une case LIBRE : `(9, 2)` touchait la
 tour du roi et pénalisait les bras qui appliquaient la bonne règle (corrigé en `(9, 10)`).
 
+Durcissement t5 (2026-09-24), mesuré sur les 8 bras de t4 rejoués : « pose refusée sur une tour » rate chez **7 bras sur 8** (seul c-2 passe) ; « temps de déploiement » et « tenue de voie » passent chez les 8. Écart auto inchangé (**50,2 → 51,6**, 1,4 point) : un cas de règles pèse 20/35 ≈ 0,6 point, trop peu pour départager. Les règles sont presque épuisées comme levier ; le vrai départage est dans les 48 points juge (menus, ressenti), encore non mesurés.
 Si 3 bras ou plus dépassent 85 en JEU, le banc ne départage plus : ajouter des cas cachés
 (règle déduite, pas dictée) dans `cache/` et le noter dans `historique.jsonl`. Ne JAMAIS modifier
 `tache.txt` entre deux tournois qu'on veut comparer : un énoncé changé casse la série.

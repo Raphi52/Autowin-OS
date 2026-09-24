@@ -65,3 +65,12 @@
 {"tournoi":"nuit-2026-09-23-m6","bras":"B1","jeu":49.4,"sur":52,"cout_usd":10.420121199999997}
 {"tournoi":"nuit-2026-09-23-m6","bras":"C1","jeu":52,"sur":52,"cout_usd":12.548042600000002}
 {"tournoi":"nuit-2026-09-23-m6","bras":"X1","jeu":51.5,"sur":52,"cout_usd":10.544798000000007}
+{"tournoi":"t4-2026-09-24","bras":"A1","jeu":51.3,"sur":52,"cout_usd":18.165096499999994}
+{"tournoi":"t4-2026-09-24","bras":"A2","jeu":51.6,"sur":52,"cout_usd":10.4024614}
+{"tournoi":"t4-2026-09-24","bras":"B1","jeu":51.8,"sur":52,"cout_usd":8.830093800000002}
+{"tournoi":"t4-2026-09-24","bras":"B2","jeu":51.5,"sur":52,"cout_usd":6.5638284}
+{"tournoi":"t4-2026-09-24","bras":"C1","jeu":51.5,"sur":52,"cout_usd":8.401852999999997}
+{"tournoi":"t4-2026-09-24","bras":"C2","jeu":50.1,"sur":52,"cout_usd":7.828526400000001}
+{"tournoi":"t4-2026-09-24","bras":"X1","jeu":52,"sur":52,"cout_usd":9.2067996}
+{"tournoi":"t4-2026-09-24","bras":"X2","jeu":51.4,"sur":52,"cout_usd":13.288240400000005}
+{"tournoi":"durcissement-t5","date":"2026-09-24","regles":"32->35 (pose sur une tour, deploiement 1 s, tenue de voie)","reference_auto":51.9,"modele_auto":5,"t4_rejoue":{"a-1":50.9,"a-2":51.2,"b-1":51.4,"b-2":51.1,"c-1":51.1,"c-2":50.2,"x-1":51.6,"x-2":51},"constat":"pose sur une tour rate chez 7/8 ; deploiement et voie passent chez 8/8 ; ecart 1,4 point"}
