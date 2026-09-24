@@ -13,15 +13,21 @@ describe('etiquette MINEUR bornee au verdict VALIDE', () => {
     expect(dod.map((c) => c.label ?? '').join('\n')).toContain('aucune capture du mode sombre')
   })
 
-  it('un VALIDE dont les puces sont MINEUR/OK reste une cloture', () => {
+  // conv-844 (2026-09-24) : decision utilisateur, MINEUR bloque desormais la cloture verte.
+  it("un VALIDE dont une puce est MINEUR n'est plus une cloture", () => {
     const valide = 'VALIDE\nSCORE: 80\nOBJECTIONS:\n- MINEUR: libelle perfectible\n- OK: 12/12 tests'
-    expect(verdictAvecObjectionsPortees(valide)).toBe(valide)
+    expect(verdictAvecObjectionsPortees(valide)).toMatch(/^DEFAUT:/)
   })
 
-  // Tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparation 8 : juge « VALIDE SCORE 74 », puces toutes MINEUR/OK,
-  // mais rouge venu de la preuve (Échec déjà déclaré) → le refus listait les MINEUR/OK comme « Promis mais pas fait ».
-  it('un VALIDE rouge pour une AUTRE raison ne transforme pas ses MINEUR/OK en raisons de refus', () => {
-    const valide = "Je vérifie.\n\nVALIDE\nSCORE: 74\nOBJECTIONS:\n- MINEUR: seuil non mesure\n- OK: 261 tests"
+  // Tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparation 8 : rouge venu de la preuve → les constats
+  // OK ne deviennent pas « Promis mais pas fait ».
+  it('un VALIDE rouge pour une AUTRE raison ne transforme pas ses constats OK en raisons de refus', () => {
+    const valide = "Je vérifie.\n\nVALIDE\nSCORE: 74\nOBJECTIONS:\n- OK: 261 tests"
     expect(dodDuVerdict(false, valide)).toEqual([{ checked: false, hasContent: true }])
+  })
+
+  it('un VALIDE rouge porte ses puces MINEUR comme raisons de refus', () => {
+    const valide = 'VALIDE\nSCORE: 74\nOBJECTIONS:\n- MINEUR: seuil non mesure\n- OK: 261 tests'
+    expect(dodDuVerdict(false, valide).map((c) => c.label ?? '').join('\n')).toContain('seuil non mesure')
   })
 })

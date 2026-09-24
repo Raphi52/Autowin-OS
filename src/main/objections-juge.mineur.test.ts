@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { objectionsDuJuge, verdictAvecObjectionsPortees, dodDuVerdict } from './objections-juge'
 
-// conv-539, tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparation 3 : juge « VALIDE SCORE 74 » dont
-// la 1re puce etait « Ce que j'ai verifie moi-meme : ... 54 sur 54 passent » -> transformee en
-// « Promis mais pas fait » et tour rouge. Saisie ts 1789462078031 : finir quand plus de defaut MAJEUR.
-describe('objections MINEUR / constats ne bloquent pas un VALIDE', () => {
+// conv-844 (2026-09-24) : run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont une puce
+// MINEUR etait un vrai trou. Decision utilisateur : tout defaut du juge, meme MINEUR, bloque la
+// cloture verte. Seuls les constats OK passent (remplace la regle de la saisie ts 1789462078031).
+describe('une objection MINEUR bloque un VALIDE ; seul OK passe', () => {
   const texte =
     'VALIDE\nSCORE: 74\nOBJECTIONS:\n- MINEUR: le seuil de 3 n\'est pas mesure\n- OK: 54 sur 54 tests passent'
-  it('un VALIDE sans puce majeure reste vert', () => {
-    expect(objectionsDuJuge(texte)).toEqual([])
-    expect(verdictAvecObjectionsPortees(texte)).toBe(texte)
+  it('un VALIDE avec une puce MINEUR devient un refus portant cette puce', () => {
+    expect(objectionsDuJuge(texte)).toEqual(["le seuil de 3 n'est pas mesure"])
+    expect(verdictAvecObjectionsPortees(texte)).toMatch(/^DEFAUT:/)
+  })
+  it('un VALIDE dont les puces sont toutes OK reste vert', () => {
+    const vert = 'VALIDE\nSCORE: 90\nOBJECTIONS:\n- OK: 54 sur 54 tests passent'
+    expect(objectionsDuJuge(vert)).toEqual([])
+    expect(verdictAvecObjectionsPortees(vert)).toBe(vert)
   })
   it('une puce MAJEUR ou non etiquetee bloque toujours', () => {
-    expect(objectionsDuJuge('VALIDE\nOBJECTIONS:\n- MAJEUR: aucun test\n- MINEUR: style')).toEqual(['aucun test'])
+    expect(objectionsDuJuge('VALIDE\nOBJECTIONS:\n- MAJEUR: aucun test\n- MINEUR: style')).toEqual(['aucun test', 'style'])
     expect(objectionsDuJuge('VALIDE\nOBJECTIONS:\n- preuve absente')).toEqual(['preuve absente'])
-    expect(dodDuVerdict(false, 'DEFAUT: x\nOBJECTIONS:\n- **MINEUR** : style\n- MAJEUR: y')).toHaveLength(1)
+    expect(dodDuVerdict(false, 'DEFAUT: x\nOBJECTIONS:\n- **MINEUR** : style\n- MAJEUR: y')).toHaveLength(2)
   })
 })

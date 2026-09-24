@@ -77,7 +77,10 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
     // Saisie ts 1789462078031 : le tour finit quand il n'y a plus de defaut MAJEUR. Non etiquete = majeur.
     const etiquette = ETIQUETTE.exec(contenu)
     // Etiquette bornee au VALIDE : sur un refus, MINEUR/OK ne masquent pas les raisons (reparation 4).
-    if (etiquette && !toutesGravites && !/^majeur/i.test(etiquette[1])) continue
+    // fix-ok: conv-844 (2026-09-24) — run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont
+    // une puce MINEUR etait un vrai trou (drapeau `orientation` jamais transmis par run-pilot-chat.ts).
+    // Decision utilisateur : tout defaut du juge, meme MINEUR, bloque la cloture verte. Seul OK passe.
+    if (etiquette && !toutesGravites && /^ok$/i.test(etiquette[1])) continue
     if (!etiquette && !toutesGravites && aUnMajeur) continue
     objections.push(etiquette ? contenu.slice(etiquette[0].length).trim() : contenu)
   }
@@ -202,7 +205,8 @@ export type MembreDuPanel = string | { text: string; ok: boolean }
  */
 function etiqueterSelonLeVote(puce: string, ok: boolean): string {
   if (PUCE_ETIQUETEE.test(`- ${puce}`)) return puce
-  return ok ? `MINEUR: ${puce}` : `MAJEUR: ${puce}`
+  // conv-844 : MINEUR bloque desormais ; une puce NUE d'un approbateur est un constat -> OK.
+  return ok ? `OK: ${puce}` : `MAJEUR: ${puce}`
 }
 
 export function verdictPanelValide(membresDuPanel: MembreDuPanel[]): string {
@@ -244,3 +248,4 @@ function objectionsBrutesDuJuge(text: string): string[] {
   }
   return puces
 }
+
