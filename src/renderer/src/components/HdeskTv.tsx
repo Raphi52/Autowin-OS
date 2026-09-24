@@ -22,10 +22,10 @@ interface Props {
 }
 
 const BOUTON_TV = {
-  background: 'rgba(255,255,255,.045)',
-  border: '1px solid rgba(255,255,255,.13)',
+  background: 'var(--surface-inset, rgba(255,255,255,.045))',
+  border: '1px solid var(--border, rgba(255,255,255,.13))',
   borderRadius: 4,
-  color: '#a9b2c4',
+  color: 'var(--text-dim, #a9b2c4)',
   fontSize: 11,
   padding: '1px 6px',
   cursor: 'pointer'
@@ -140,7 +140,7 @@ export function HdeskTv({
           width: '100%',
           maxWidth: grand ? 760 : 420,
           fontSize: 12,
-          color: '#dde3ee'
+          color: 'var(--text, #dde3ee)'
         }}
       >
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -151,7 +151,7 @@ export function HdeskTv({
               fontSize: 10,
               letterSpacing: '.12em',
               textTransform: 'uppercase',
-              color: '#d4a94f'
+              color: 'var(--gold, #d4a94f)'
             }}
           >
             📺 en direct
@@ -198,7 +198,7 @@ export function HdeskTv({
           </button>
         </div>
         {ferme && (
-          <p data-testid="hdesk-tv-ferme" style={{ margin: '4px 0' }}>
+          <p data-testid="hdesk-tv-ferme" style={{ margin: '4px 0', color: 'var(--text-dim, #a9b2c4)' }}>
             Le bureau « {ferme.travail} » s&apos;est fermé.
           </p>
         )}

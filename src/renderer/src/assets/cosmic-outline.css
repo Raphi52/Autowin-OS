@@ -320,6 +320,11 @@
   color: #ffd45a;
 }
 
+
+/* Theme clair : l or vif #ffd45a est illisible sur fond clair -> or sombre du theme. */
+:root[data-base='clair'] .cosmic-outline .msg.assistant .msg-role {
+  color: var(--gold);
+}
 .cosmic-outline .msg.user .msg-body {
   border-color: rgba(255, 60, 172, 0.58);
   background: rgba(89, 18, 57, 0.48);
