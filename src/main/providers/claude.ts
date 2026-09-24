@@ -1385,7 +1385,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const tachesDeFond = new Map<string, { commande: string; arretee: boolean }>()
     const pendingTools = new Map<
       string,
-      { name: string; command: string; filePath: string; writtenLineFingerprints: string[] }
+      {
+        name: string
+        command: string
+        filePath: string
+        writtenLineFingerprints: string[]
+        /** Heure de depart : la ligne de FIN d'action porte sa duree (frise C3 du bloc Actions). */
+        startedAt: number
+      }
     >()
     const queue: StreamChunk[] = []
     let done = false
@@ -1629,7 +1636,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               name: part.name,
               command,
               filePath,
-              writtenLineFingerprints: claudeWrittenLineFingerprints(part.input)
+              writtenLineFingerprints: claudeWrittenLineFingerprints(part.input),
+              startedAt: Date.now()
             })
             /*
              * SIGNE DE VIE PAR APPEL D'OUTIL — relaye en DIRECT, jamais persiste (meme regle que le
@@ -1677,6 +1685,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           const call = pendingTools.get(part.tool_use_id)
           if (!call) continue
           pendingTools.delete(part.tool_use_id)
+          // FIN D'ACTION (frise C3, 2026-09-24) : le bloc Actions ne recoit que du texte ; cette ligne
+          // lui dit si l'action a REUSSI ou ECHOUE, et combien de temps elle a pris. Elle ne cree pas
+          // de ligne : `thinking-block-corps.ts` la replie sur la ligne de son outil.
+          const dureeOutil = dureeLisible((Date.now() - call.startedAt) / 1000)
+          queue.push({
+            delta: '',
+            status: `${call.name} ${part.is_error ? 'échoué' : 'terminé'} - ${dureeOutil}`
+          })
           // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
           const output = claudeToolResultText(part.content).slice(-20_000)
           collectArtifacts(part.content, call.name)

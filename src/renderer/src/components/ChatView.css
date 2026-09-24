@@ -4895,3 +4895,85 @@ button.chat-project-dot:disabled {
 .conv-bulk-bar .conv-date-sort:nth-child(2) { border-left-color: #d4a94f; }
 .conv-bulk-bar .conv-date-sort:nth-child(3) { border-left-color: #5b9cf0; }
 .conv-bulk-bar .conv-date-sort.conv-bulk-del { border-left-color: var(--danger); }
+
+/* Bloc Actions — variante C3 « frise » (2026-09-24) : barre de temps puis frise a pastilles.
+   Icones, pastilles et « … » en CSS : le texte du corps reste les lignes d'action. */
+.thinking-block > summary .thinking-bilan {
+  margin-left: 6px;
+  color: #e3ba55;
+  font-size: 12px;
+}
+.thinking-block .thinking-frise {
+  white-space: normal;
+}
+.thinking-frise-barre {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  margin: 2px 0 8px;
+}
+.thinking-frise-barre > span {
+  flex-basis: 0;
+  min-width: 3px;
+  border-radius: 2px;
+  background: #7fc98f;
+}
+.thinking-frise-barre > span[data-etat='ko'] {
+  background: #e07a6a;
+}
+.thinking-frise-barre > span[data-etat='encours'] {
+  background: #e3ba55;
+}
+.thinking-frise-liste {
+  border-left: 1px solid rgba(255, 255, 255, 0.13);
+  margin-left: 6px;
+  padding-left: 12px;
+}
+.thinking-frise-ligne {
+  position: relative;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 1px 0;
+}
+.thinking-frise-ligne::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 0.55em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7fc98f;
+}
+.thinking-frise-ligne[data-etat='ko'] {
+  color: #e07a6a;
+}
+.thinking-frise-ligne[data-etat='ko']::before {
+  background: #e07a6a;
+}
+.thinking-frise-ligne[data-etat='encours']::before {
+  background: #e3ba55;
+}
+.thinking-frise-ligne[data-etat='encours']::after {
+  content: '…';
+  color: #e3ba55;
+}
+.thinking-frise-icone {
+  display: inline-block;
+  width: 18px;
+}
+.thinking-frise-icone[data-famille='lire']::before {
+  content: '📖';
+}
+.thinking-frise-icone[data-famille='chercher']::before {
+  content: '🔎';
+}
+.thinking-frise-icone[data-famille='modifier']::before {
+  content: '✏️';
+}
+.thinking-frise-icone[data-famille='commande']::before {
+  content: '▶';
+}
+.thinking-frise-icone[data-famille='autre']::before {
+  content: '•';
+}

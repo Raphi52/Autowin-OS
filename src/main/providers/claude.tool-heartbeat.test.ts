@@ -418,3 +418,39 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
     expect(reasoning).toHaveLength(0)
   })
 })
+
+/**
+ * FIN D'ACTION — le bloc Actions (frise C3, conv-831, 2026-09-24) colore chaque action selon son
+ * RESULTAT. Ce resultat n'existait que dans `executionEvidence` ; il voyage desormais aussi dans le
+ * canal status, sous une forme que `thinking-block-corps.ts` replie sur la ligne de l'outil.
+ */
+describe('ClaudeCliAdapter — la fin d’une action dit si elle a échoué', () => {
+  it('émet « outil échoué - durée » au résultat en erreur, « terminé » sinon', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test' } },
+            { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: 'src/a.ts' } }
+          ]
+        }
+      },
+      {
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 't1', is_error: true, content: '2 rouges' },
+            { type: 'tool_result', tool_use_id: 't2', content: 'ok' }
+          ]
+        }
+      },
+      succes
+    ]
+    const statuts = await drainStatus()
+
+    expect(statuts).toContain('Bash · npm test')
+    expect(statuts.find((s) => s.startsWith('Bash échoué'))).toMatch(/^Bash échoué - \d+ s$/)
+    expect(statuts.find((s) => s.startsWith('Read terminé'))).toMatch(/^Read terminé - \d+ s$/)
+  })
+})

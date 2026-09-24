@@ -49,33 +49,116 @@ function outilDe(ligne: string): string {
   return (ligne.split('·')[0] ?? ligne).trim()
 }
 
+/** Ligne de FIN d'action emise au resultat de l'outil : `Bash échoué - 31 s`, `Read terminé - 1 s`. */
+const FIN = /^(.+?) (terminé|échoué)(?: - (.*))?$/
+
+export type EtatAction = 'ok' | 'ko' | 'encours'
+
+/** Une action du bloc, telle que la frise C3 la dessine. */
+export type ActionFrise = {
+  /** Texte de la ligne — inchange par rapport au corps texte (`outil · cible — duree`). */
+  texte: string
+  outil: string
+  /** Famille d'icone : lecture, recherche, modification, commande, autre. */
+  famille: 'lire' | 'chercher' | 'modifier' | 'commande' | 'autre'
+  etat: EtatAction
+  /** Duree en secondes, si connue (sert a la largeur du segment de la barre de temps). */
+  secondes: number | null
+}
+
+function familleDe(outil: string): ActionFrise['famille'] {
+  if (/^(Read|NotebookRead)$/i.test(outil)) return 'lire'
+  if (/^(Grep|Glob|WebSearch|WebFetch|LS)$/i.test(outil)) return 'chercher'
+  if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(outil)) return 'modifier'
+  if (/^(Bash|PowerShell|tache de fond)$/i.test(outil)) return 'commande'
+  return 'autre'
+}
+
+/** « 45 s », « 2 min 30 s », « 3 min » -> secondes ; null si la chaine ne commence pas par une duree. */
+export function secondesDe(texte: string): number | null {
+  const m = /^(?:(\d+) min)?\s*(?:(\d+) s)?/.exec(texte.trim())
+  if (!m || (m[1] === undefined && m[2] === undefined)) return null
+  return Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0)
+}
+
+/**
+ * Actions du tour, UNE PAR LIGNE, avec leur etat et leur duree — la matiere de la frise C3.
+ * Memes regles de repli que le corps texte : battements et fins METTENT A JOUR la ligne de leur
+ * outil, ils n'en creent pas. Tour termine (`done`) : une action restee sans fin compte comme
+ * reussie (l'ancien historique n'a pas de lignes de fin).
+ */
+export function actionsDuTour(
+  statusLog: string[] | undefined,
+  status: string | undefined,
+  done = false
+): ActionFrise[] {
+  const lignes = (statusLog?.length ? statusLog : status ? [status] : []).filter(Boolean)
+  const sortie: ActionFrise[] = []
+  const derniere = (outil: string): number => {
+    for (let i = sortie.length - 1; i >= 0; i -= 1) if (sortie[i]!.outil === outil) return i
+    return -1
+  }
+  const nouvelle = (texte: string, outil: string, secondes: number | null): ActionFrise => ({
+    texte,
+    outil,
+    famille: familleDe(outil),
+    etat: 'encours',
+    secondes
+  })
+  for (const ligne of lignes) {
+    const fin = FIN.exec(ligne)
+    const battement = fin ? null : BATTEMENT.exec(ligne)
+    if (!fin && !battement) {
+      if (sortie.at(-1)?.texte !== ligne) sortie.push(nouvelle(ligne, outilDe(ligne), null))
+      continue
+    }
+    const outil = (fin ?? battement)![1]!.trim()
+    const suite = ((fin ? fin[3] : battement![2]) ?? '').trim()
+    let index = derniere(outil)
+    // Une fin ne rattache qu'une action ENCORE en cours ; un battement, la derniere de son outil.
+    if (fin && index >= 0 && sortie[index]!.etat !== 'encours') index = -1
+    if (index < 0) {
+      sortie.push(
+        nouvelle(fin ? `${outil}${suite ? ` — ${suite}` : ''}` : ligne, outil, secondesDe(suite))
+      )
+      if (fin) sortie.at(-1)!.etat = fin[2] === 'échoué' ? 'ko' : 'ok'
+      continue
+    }
+    const action = sortie[index]!
+    if (!fin && BATTEMENT.test(action.texte)) action.texte = ligne
+    else
+      action.texte = suite
+        ? `${action.texte.split(' — ')[0]!} — ${suite}`
+        : action.texte.split(' — ')[0]!
+    action.secondes = secondesDe(suite) ?? action.secondes
+    if (fin) action.etat = fin[2] === 'échoué' ? 'ko' : 'ok'
+  }
+  if (done) for (const a of sortie) if (a.etat === 'encours') a.etat = 'ok'
+  return sortie
+}
+
+/** Bilan de l'en-tete C3 : `6 · 1 échec · 44 s`. */
+export function bilanDesActions(actions: readonly ActionFrise[]): string {
+  const echecs = actions.filter((a) => a.etat === 'ko').length
+  const total = actions.reduce((s, a) => s + (a.secondes ?? 0), 0)
+  const duree =
+    total >= 60
+      ? `${Math.floor(total / 60)} min${total % 60 ? ` ${total % 60} s` : ''}`
+      : `${total} s`
+  return [
+    String(actions.length),
+    echecs ? `${echecs} échec${echecs > 1 ? 's' : ''}` : '',
+    total ? duree : ''
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 export function corpsDesActions(
   statusLog: string[] | undefined,
   status: string | undefined
 ): string {
-  const lignes = (statusLog?.length ? statusLog : status ? [status] : []).filter(Boolean)
-  const sortie: string[] = []
-  for (const ligne of lignes) {
-    const battement = BATTEMENT.exec(ligne)
-    if (!battement) {
-      if (sortie.at(-1) !== ligne) sortie.push(ligne)
-      continue
-    }
-    const outil = battement[1]!.trim()
-    const suite = (battement[2] ?? '').trim()
-    const index = sortie.map(outilDe).lastIndexOf(outil)
-    if (index < 0) {
-      sortie.push(ligne)
-      continue
-    }
-    // Ligne d'action deja annoncee : elle garde son libelle, l'avancement s'ecrit APRES (une seule
-    // fois). Ligne qui n'etait DEJA qu'un battement : elle est remplacee par le battement courant.
-    const ancre = sortie[index]!
-    sortie[index] = BATTEMENT.test(ancre)
-      ? ligne
-      : suite
-        ? `${ancre.split(' — ')[0]!} — ${suite}`
-        : ancre.split(' — ')[0]!
-  }
-  return sortie.join('\n')
+  return actionsDuTour(statusLog, status)
+    .map((a) => a.texte)
+    .join('\n')
 }
