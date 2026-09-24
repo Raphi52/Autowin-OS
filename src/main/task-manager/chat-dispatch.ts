@@ -1,4 +1,5 @@
 import { buildWatchdogPrompt, parseWatchdogOutcome } from './watchdog-prompt'
+import { extractMailReply } from './watchdog-mail'
 import type { DispatchResult, TaskDispatcher } from './task-scheduler'
 import type {
   ScheduledTask,
@@ -31,6 +32,8 @@ export interface ScheduledChatRuntime {
   waitForInteractiveIdle?(timeoutMs: number): Promise<boolean>
   /** Rend le lease d'inactivite pris par `waitForInteractiveIdle`. */
   releaseInteractiveIdle?(): void
+  /** Envoie le compte rendu en reponse au mail qui a reveille la regle `outlook-mail`. */
+  replyToMail?(itemId: string, body: string): Promise<{ ok: boolean; erreur?: string }>
   runPrompt(
     conversationId: string,
     prompt: string,
@@ -211,8 +214,17 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
           : task.prompt
       const maxBudgetUsd =
         binding?.provider === 'claude' ? watchdogProviderBudgetUsd(task) : undefined
-      const readOnlyPolicy =
-        (occurrence.watchdog || task.watchdog) && task.watchdog?.action !== 'orchestration'
+      // Une regle mail doit FAIRE ce qu'on lui demande : mode auto (ecriture permise, plusieurs
+      // iterations), toujours en fond et borne par le budget de la regle.
+      const isMailTask = task.watchdog?.source?.kind === 'outlook-mail'
+      const readOnlyPolicy = isMailTask
+        ? {
+            readOnly: false,
+            maxIterations: 6,
+            background: true,
+            ...(maxBudgetUsd === undefined ? {} : { maxBudgetUsd })
+          }
+        : (occurrence.watchdog || task.watchdog) && task.watchdog?.action !== 'orchestration'
           ? {
               readOnly: true,
               maxIterations: 1,
@@ -304,6 +316,22 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
           error:
             `Modele Watchdog non conforme : ${binding?.model ?? requestedFamily} demande, ` +
             `${result.resolvedModel} execute.`
+        }
+      }
+      const mailItemId = occurrence.watchdog?.mail?.itemId
+      if (isMailTask && mailItemId && this.runtime.replyToMail) {
+        const reply = extractMailReply(result.text)
+        if (reply) {
+          const sent = await this.runtime.replyToMail(mailItemId, reply)
+          if (!sent.ok) {
+            return {
+              status: 'failed',
+              conversationId,
+              turnId: result.turnId,
+              ...metering,
+              error: `Compte rendu non envoyé : ${sent.erreur ?? 'échec Outlook'}`
+            }
+          }
         }
       }
       return {

@@ -51,12 +51,15 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
               source:
                 event.target.value === 'app-event'
                   ? { kind: 'app-event', events: ['task-failed'] }
-                  : { ...DEFAULT_FILE_SOURCE }
+                  : event.target.value === 'outlook-mail'
+                    ? { kind: 'outlook-mail' }
+                    : { ...DEFAULT_FILE_SOURCE }
             })
           }
         >
           <option value="file-match">Une ligne dans un fichier surveillé</option>
           <option value="app-event">Un événement interne d’Autowin</option>
+          <option value="outlook-mail">Un mail reçu dans Outlook</option>
         </select>
       </label>
 
@@ -100,7 +103,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
             <span>Respecter la casse</span>
           </label>
         </>
-      ) : (
+      ) : source.kind === 'app-event' ? (
         <fieldset className="task-manager-field task-manager-field-wide watchdog-events">
           <legend>Événements surveillés</legend>
           {APP_EVENTS.map((entry) => (
@@ -130,6 +133,10 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
             </p>
           )}
         </fieldset>
+      ) : (
+        <p className="task-manager-field task-manager-field-wide">
+          Chaque mail non lu reçu dans Outlook réveille l’agent, qui répond par mail.
+        </p>
       )}
 
       <label className="task-manager-field task-manager-field-wide">

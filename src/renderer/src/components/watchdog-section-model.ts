@@ -19,6 +19,7 @@ export type WatchdogAppEvent =
 export type WatchdogSource =
   | { kind: 'file-match'; path: string; pattern: string; caseSensitive?: boolean }
   | { kind: 'app-event'; events: WatchdogAppEvent[] }
+  | { kind: 'outlook-mail' }
 
 export interface WatchdogGuards {
   dedupWindowMs: number
@@ -81,6 +82,8 @@ const APP_EVENT_LABEL: Record<WatchdogAppEvent, string> = {
 }
 
 export function describeWatchdogSource(source: WatchdogSource): string {
+  if (source.kind === 'outlook-mail')
+    return 'Quand un mail non lu arrive dans Outlook — l’agent répond au mail par un compte rendu'
   if (source.kind === 'app-event') {
     if (!source.events.length)
       return 'Aucun événement surveillé — cette règle ne se déclenchera jamais'

@@ -373,6 +373,11 @@ import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
 import { seedMaintenanceTask } from './task-manager/maintenance-seed'
 import { seedGcTask } from './task-manager/gc-seed'
 import { seedCurateTask } from './task-manager/curate-seed'
+import {
+  NewUnreadMailDetector,
+  describeMail,
+  seedMailWatchdogTask
+} from './task-manager/watchdog-mail'
 import type { WatchdogAppEvent } from './task-manager/types'
 import {
   ScheduledChatDispatcher,
@@ -695,6 +700,10 @@ jalonDemarrage('stores conversations et taches charges')
 for (const alert of scheduledTasks.listAlerts(true)) notifiedTaskAlerts.add(alert.id)
 let scheduledTaskScheduler: TaskScheduler | undefined
 let watchdogEngine: WatchdogEngine | undefined
+/** Branche apres la creation de la passerelle Outlook : repond au mail d'une regle `outlook-mail`. */
+let mailWatchdogReplier:
+  | ((itemId: string, body: string) => Promise<{ ok: boolean; erreur?: string }>)
+  | undefined
 const pendingScheduledOccurrences = new Set<string>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
@@ -3321,6 +3330,10 @@ Le fil reprend ensuite normalement.`
       activeChatTurns.abortAndWait(conversationId, reason),
     waitForInteractiveIdle: (timeoutMs) => activeChatTurns.waitForIdle(timeoutMs),
     releaseInteractiveIdle: () => activeChatTurns.releaseIdleLease(),
+    replyToMail: async (itemId, body) =>
+      mailWatchdogReplier
+        ? mailWatchdogReplier(itemId, body)
+        : { ok: false, erreur: 'passerelle Outlook non initialisée' },
     runPrompt: async (conversationId, prompt, binding, policy, onLateUsageSettlement) => {
       const result = await runPilotChat(
         undefined,
@@ -3543,6 +3556,34 @@ Le fil reprend ensuite normalement.`
    * rafraichissement de la page d'accueil.
    */
   const outlookGateway = new OutlookLocalGateway({ appRoot: app.getAppPath() })
+  mailWatchdogReplier = async (itemId, body) => {
+    const sent = await outlookGateway.replyToItem(itemId, body)
+    if (sent.ok) await outlookGateway.markRead([itemId])
+    return sent
+  }
+  // Surveillance des mails pour les regles `outlook-mail`. Interroge Outlook seulement si une regle
+  // active l'ecoute : sans elle, aucun dialogue COM supplementaire.
+  const mailDetector = new NewUnreadMailDetector()
+  let mailPolling = false
+  setInterval(() => {
+    if (mailPolling || !watchdogEngine) return
+    const listening = scheduledTasks
+      .listTasks()
+      .some((task) => task.enabled && task.watchdog?.source?.kind === 'outlook-mail')
+    if (!listening) return
+    mailPolling = true
+    void (async () => {
+      try {
+        const fresh = mailDetector.next(await outlookGateway.snapshot(true))
+        for (const mail of fresh)
+          await watchdogEngine?.notifyMail({ itemId: mail.id, context: describeMail(mail) })
+      } catch (error) {
+        console.warn('[watchdog] lecture des mails impossible', error)
+      } finally {
+        mailPolling = false
+      }
+    })()
+  }, 60_000).unref?.()
   ipcMain.handle('outlook:snapshot', async (event, force: unknown) => {
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.snapshot(force === true)
@@ -3618,6 +3659,10 @@ Le fil reprend ensuite normalement.`
         console.log('[task-manager] tâche Maintenance quotidienne posée')
       if (seedGcTask(scheduledTasks))
         console.log('[task-manager] tâche Garbage collector quotidienne posée')
+      // Regle PERSONNELLE : posee seulement sur le poste qui l'a demandee (`setx AUTOWIN_WATCHDOG_MAILS 1`),
+      // jamais chez tout le monde — elle lit la boite de l'utilisateur et repond en son nom.
+      if (process.env.AUTOWIN_WATCHDOG_MAILS === '1' && seedMailWatchdogTask(scheduledTasks))
+        console.log('[watchdog] règle Assistant mails posée')
       if (seedCurateTask(scheduledTasks))
         console.log('[task-manager] tâche Curation quotidienne posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc

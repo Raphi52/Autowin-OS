@@ -115,7 +115,7 @@ function isRunnableWatchdogSource(source: unknown): source is WatchdogSource {
   if (isRunnableFileMatchSource(source)) return true
   if (!source || typeof source !== 'object' || Array.isArray(source)) return false
   const value = source as Record<string, unknown>
-  return value.kind === 'app-event' && Array.isArray(value.events)
+  return (value.kind === 'app-event' && Array.isArray(value.events)) || value.kind === 'outlook-mail'
 }
 
 export class WatchdogEngine {
@@ -301,6 +301,27 @@ export class WatchdogEngine {
         depth: this.causalDepth.getStore() ?? 0,
         source: 'app-event',
         observedAt
+      })
+    }
+  }
+
+  /**
+   * Un mail NON LU vient d'arriver dans Outlook. Appele par le cablage (`index.ts`), qui seul sait
+   * interroger la passerelle COM ; le moteur reste testable sans Outlook. La signature porte
+   * l'identifiant du message : le meme mail revu au passage suivant est deduplique par les gardes.
+   */
+  async notifyMail(mail: { itemId: string; context: string }): Promise<void> {
+    for (const task of this.watchdogTasks()) {
+      if (task.watchdog?.source?.kind !== 'outlook-mail') continue
+      const signature = `outlook-mail:${mail.itemId}`
+      await this.fire(task, {
+        signature,
+        rootSignature: this.causalRoot.getStore() ?? signature,
+        context: mail.context,
+        depth: this.causalDepth.getStore() ?? 0,
+        source: 'outlook-mail',
+        observedAt: this.clock.now(),
+        mail: { itemId: mail.itemId }
       })
     }
   }

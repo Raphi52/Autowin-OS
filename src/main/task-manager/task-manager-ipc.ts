@@ -231,6 +231,13 @@ function watchdog(raw: unknown): WatchdogRule {
       ...(value.action === undefined ? {} : { action: watchdogAction(value.action) })
     }
   }
+  if (source.kind === 'outlook-mail') {
+    return {
+      source: { kind: 'outlook-mail' },
+      guards: guards(value.guards),
+      ...(value.action === undefined ? {} : { action: watchdogAction(value.action) })
+    }
+  }
   throw new Error('Source de réveil invalide')
 }
 

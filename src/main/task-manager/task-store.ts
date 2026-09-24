@@ -73,7 +73,11 @@ export class TaskStore {
             }
             delete persistedSource.event
           }
-          if (persistedSource.kind === 'app-event' || persistedSource.kind === 'file-match') {
+          if (
+            persistedSource.kind === 'app-event' ||
+            persistedSource.kind === 'file-match' ||
+            persistedSource.kind === 'outlook-mail'
+          ) {
             const guards = persistedWatchdog.guards
             persistedWatchdog.guards = {
               ...DEFAULT_WATCHDOG_GUARDS,

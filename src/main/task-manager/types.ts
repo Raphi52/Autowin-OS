@@ -35,6 +35,12 @@ export type TaskDestination =
 export type WatchdogSource =
   | { kind: 'file-match'; path: string; pattern: string; caseSensitive?: boolean }
   | { kind: 'app-event'; events: WatchdogAppEvent[] }
+  /**
+   * `outlook-mail` : un mail NON LU arrive dans la boite Outlook locale (passerelle COM,
+   * `outlook/outlook-local.ts`). Comme `file-match`, seuls les mails apparus APRES le demarrage
+   * comptent : la boite deja pleine n'est pas un evenement.
+   */
+  | { kind: 'outlook-mail' }
 
 /**
  * Incidents REELLEMENT emis aujourd'hui (verifies un par un dans le code) — pas un catalogue souhaite.
@@ -165,6 +171,8 @@ export interface WatchdogSignal {
   rootSignature: string
   source: WatchdogSource['kind']
   observedAt: number
+  /** Present pour `outlook-mail` : le message auquel envoyer le compte rendu. */
+  mail?: { itemId: string }
 }
 
 /** Frontière d'autorité : la règle décide, le signal observé ne fournit qu'une preuve non fiable. */
