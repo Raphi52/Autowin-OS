@@ -56,6 +56,15 @@ describe('groupAssistantActivity — la question cliquable ferme le message', ()
     expect(derniere?.kind === 'ask-decision' && derniere.decision.question).toBe('Seconde ?')
   })
 
+  it('une question REPOSÉE dans le même message remplace la première (conv-116)', () => {
+    const blocks = groupAssistantActivity([
+      questionCliquable('Quelle version ?'),
+      texte('J’ai relu le code avant de te reposer la question.'),
+      questionCliquable('Quelle  version ? ')
+    ])
+    expect(blocks.map((bloc) => bloc.kind)).toEqual(['text', 'ask-decision'])
+  })
+
   it('un message sans décision est laissé intact', () => {
     // Deux textes consécutifs sont FUSIONNES par `coalesceAssistantParts` — comportement existant,
     // anterieur au deplacement de la decision. Une premiere version de ce test attendait deux blocs

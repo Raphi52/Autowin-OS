@@ -1559,6 +1559,18 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
     // sinon le libelle, comme prompt ordinaire.
     const askDecision = parseAskDecision(part)
     if (askDecision) {
+      /*
+       * UNE QUESTION REPOSEE REMPLACE LA PRECEDENTE (conv-116, 2026-09-24 : deux fenetres « Ask »
+       * identiques). Le controle « question sans lecture » relance le modele, qui lit puis REPOSE la
+       * meme question avec des options affinees. L'ancien bloc restait affiche et cliquable. Meme
+       * libelle de question dans le meme message = la nouvelle version annule l'ancienne.
+       */
+      const memeQuestion = normaliserQuestion(askDecision.question)
+      const ancienne = blocks.findIndex(
+        (bloc) =>
+          bloc.kind === 'ask-decision' && normaliserQuestion(bloc.decision.question) === memeQuestion
+      )
+      if (ancienne >= 0) blocks.splice(ancienne, 1)
       blocks.push({
         kind: 'ask-decision',
         decision: askDecision,
@@ -1591,6 +1603,10 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
     blocks.push(decision)
   }
   return blocks
+}
+
+function normaliserQuestion(question: string): string {
+  return question.trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 export function isChatNearBottom(
