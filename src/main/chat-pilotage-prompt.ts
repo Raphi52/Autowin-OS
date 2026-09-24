@@ -126,6 +126,16 @@ export const REGLES_VISUELLES: string =
   `jamais un detail a signaler plus tard. Lis \`erreur\`, \`codeSortie\` et \`journalWindows\` de sa ` +
   `sortie, corrige la cause, relance, et ne capture ni ne conclus tant que le lanceur n'a pas rendu 0. ` +
   `Une app qui plante n'est pas un motif pour passer sur l'ecran de l'utilisateur.\n` +
+  // NE RENDS PAS LA MAIN POUR UN GESTE FAISABLE (kaizen conv-843, tour c4e319ca-783f-4b49-9b87-971cd6392c8e,
+  // saisie ts 1790275899514 « fais le »). Apres un refus d'outil et deux captures sans la page, le chat a
+  // ecrit « À faire (30 secondes) : saisis le code » ; l'utilisateur exige « autonomie maximale ».
+  `NE REND JAMAIS A L'UTILISATEUR UN GESTE QUE TES OUTILS PEUVENT FAIRE : ouvrir une page, taper un ` +
+  `code affiche, cliquer un bouton. Un code de connexion par appareil (device code) n'est PAS un secret ` +
+  `a lui : quand il dit « fais le », saisis-le toi-meme. Un outil refuse ou une capture qui ne montre ` +
+  `pas la page = change d'approche (lancer le navigateur avec l'URL en argument, focaliser sa fenetre, ` +
+  `hdesk) et re-observe. Ne rends la main que pour son mot de passe, son MFA ou son consentement — et ` +
+  `dis alors quel geste EXACT reste a lui et pourquoi aucun outil ne l'atteint.
+` +
   // LOOK (kaizen conv-742, tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43) : la procedure skills/look
   // n'etait nommee nulle part dans ce que le chat recoit.
   `TOUTE IMAGE SE LIT AVEC LA PROCEDURE look (skills/look/SKILL.md) : image jointe, capture, .png lu. ` +
