@@ -1245,9 +1245,11 @@ export class WorktreeManager {
    * révision : `cat-file -e` ne se déclenche qu'APRÈS le commit, donc trop tard.
    * Indéterminable (git muet, chemin absent) → le code appelant bloque avant toute écriture.
    */
-  private foreignCopyDetail(path: string): string | undefined {
+  private foreignCopyDetail(
+    path: string,
+    copyCommon: string | undefined = this.gitCommonDir(path)
+  ): string | undefined {
     const baseCommon = this.gitCommonDir(this.baseRepo)
-    const copyCommon = this.gitCommonDir(path)
     if (!baseCommon || !copyCommon) return undefined
     if (canonicalPath(baseCommon) === canonicalPath(copyCommon)) return undefined
     return `La copie appartient à un autre dépôt (${copyCommon}) que la base (${baseCommon}) : aucune écriture n’y est faite.`
@@ -1270,22 +1272,33 @@ export class WorktreeManager {
    * Le discriminant est la racine de travail : pour une copie legitime, `--show-toplevel` rend la
    * copie elle-meme ; pour un dossier ampute, il rend le depot de base.
    */
-  private copieSansRacinePropre(path: string): string | undefined {
-    const top = this.tryGitFn(path, ['rev-parse', '--show-toplevel'])
-    if (top.code !== 0) {
+  private copieSansRacinePropre(
+    path: string,
+    topLue: string | undefined = ((): string | undefined => {
+      const top = this.tryGitFn(path, ['rev-parse', '--show-toplevel'])
+      return top.code === 0 ? top.stdout.trim() : undefined
+    })()
+  ): string | undefined {
+    if (!topLue) {
       return `Impossible de prouver la racine de travail de la copie ${path} : aucune écriture n’y est faite.`
     }
-    const racine = canonicalPath(top.stdout.trim())
+    const racine = canonicalPath(topLue)
     if (racine === canonicalPath(path)) return undefined
     return `La copie ${path} n’est pas une racine de travail : git remonte sur ${racine} (arbre partagé) — aucune écriture n’y est faite.`
   }
 
   private ownershipIssue(path: string): string | undefined {
-    const foreign = this.foreignCopyDetail(path)
+    // fix-ok: gels.jsonl 2026-09-23/24 : `execFileSync git rev-parse` x3 par appel depuis
+    // ownershipIssue (jusqu'a 2,3 s). `--git-common-dir` et `--show-toplevel` de la copie sont lus
+    // par UN SEUL lancement git ; la base est deja memorisee par gitCommonDir.
+    const sonde = this.tryGitFn(path, ['rev-parse', '--git-common-dir', '--show-toplevel'])
+    const [commonBrut, topBrut] = sonde.code === 0 ? sonde.stdout.split(String.fromCharCode(10)).map((l) => l.trim()) : []
+    const copyCommon = commonBrut ? (isAbsolute(commonBrut) ? commonBrut : resolve(path, commonBrut)) : undefined
+    const foreign = this.foreignCopyDetail(path, copyCommon)
     if (foreign) return foreign
-    const sansRacine = this.copieSansRacinePropre(path)
+    const sansRacine = this.copieSansRacinePropre(path, topBrut || undefined)
     if (sansRacine) return sansRacine
-    if (!this.gitCommonDir(path) || !this.gitCommonDir(this.baseRepo)) {
+    if (!copyCommon || !this.gitCommonDir(this.baseRepo)) {
       return `Impossible de prouver l’appartenance Git de la copie ${path} : aucune écriture n’y est faite.`
     }
     return undefined

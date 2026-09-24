@@ -24,7 +24,7 @@ import { SECRET_SHAPES_SOURCE } from './activity/trace-redact'
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
+import { shaHeadSurDisque } from './depot-git'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
 import { amitelBrainOrigin } from './amitel-paths'
 import { memoryWorkspaceIdentity } from './session-memory-echo'
@@ -246,17 +246,8 @@ const REVISIONS_SYMBOLIQUES = new Set([
 export function headShaOfWorkspace(workspace?: string): string {
   const root = workspace?.trim()
   if (!root) return ''
-  try {
-    const sha = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: root,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore']
-    }).trim()
-    return /^[0-9a-fA-F]{7,64}$/.test(sha) ? sha : ''
-  } catch {
-    // Pas un dépôt, git absent, dossier disparu : on ne répare pas, le refus d'origine tient.
-    return ''
-  }
+  // Lecture disque, sans lancer git : un execFileSync ici figeait la fenêtre (gels.jsonl).
+  return shaHeadSurDisque(root)
 }
 
 /**
