@@ -11,3 +11,11 @@ import { reinitialiserMagasinCoutsDeSession } from '../src/main/providers/claude
 beforeEach(() => {
   reinitialiserMagasinCoutsDeSession()
 })
+
+/**
+ * conv-844 (2026-09-24) : en production la reparation tourne jusqu'au vert, sans borne (choix
+ * utilisateur). Les tests d'orchestrateur simulent souvent un juge qui refuse TOUJOURS : sans borne,
+ * ils bouclaient jusqu'a saturer la memoire. Ils gardent donc l'ancien plafond ; le mode sans borne
+ * est couvert a part par `src/main/gates/stopgate.jusqu-au-vert.test.ts`.
+ */
+process.env.AUTOWIN_REPARATION_BORNEE = '1'

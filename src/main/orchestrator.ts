@@ -5434,7 +5434,17 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     let motifsPrecedents: string[] = []
     /** Combien de fois DE SUITE le refus est revenu mot pour mot (conv-470, tour 52fbe05f : 4). */
     let refusIdentiquesConsecutifs = 0
-    for (let attempt = 0; attempt <= PLAFOND_DUR; attempt++) {
+    // conv-844 : choix utilisateur, on repare jusqu'a ce qu'il n'y ait plus de defaut. Seul un budget
+    // BLOQUANT (reparations accordees = 0) garde l'ancienne borne ; sinon on ne sort que sur un vert
+    // ou sur un code perime (`arretDeLaReparation`).
+    // Les tests d'orchestrateur gardent l'ancien plafond (tests/reinit-couts-session.ts).
+    const jusquAuVert =
+      politique.reparations > 0 && process.env.AUTOWIN_REPARATION_BORNEE !== '1'
+    for (
+      let attempt = 0;
+      attempt <= PLAFOND_DUR || jusquAuVert;
+      attempt++
+    ) {
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
         // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
@@ -5547,7 +5557,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         // parce que out/main/index.js (11:06) etait plus ancien que les correctifs commites
         // (11:11-11:31) : le code qui jugeait n'etait pas celui qu'on reparait. La boucle le NOMME
         // desormais au lieu de bruler un build et un panel de juge par passage.
-        bundlePerime: mesureBundlePerime(process.cwd())
+        bundlePerime: mesureBundlePerime(process.cwd()),
+        jusquAuVert
       })
       if (passage.arret) {
         gate.reasons.push(passage.arret)

@@ -287,6 +287,12 @@ export function arretDeLaReparation(entree: {
    * dire. Absent = aucune mesure : comportement inchange.
    */
   bundlePerime?: { bundleMs: number; sourceMs: number; demarrageMs?: number; bundle: string }
+  /**
+   * JUSQU'AU VERT (conv-844, 2026-09-24, choix utilisateur : « que ça s'arrête que quand y a plus
+   * de défauts »). Ni plafond dur, ni arrêt sur refus répété : seul le code PÉRIMÉ arrête encore,
+   * car aucune réparation ne peut alors changer le verdict.
+   */
+  jusquAuVert?: boolean
 }): string | undefined {
   const b = entree.bundlePerime
   // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — comparer le bundle a la seule
@@ -299,6 +305,7 @@ export function arretDeLaReparation(entree: {
   if (b && b.sourceMs > b.bundleMs) {
     return `Réparation interrompue : le code exécuté est périmé — ${b.bundle} est plus ancien que la source du contrôle. Recompiler et relancer l'application avant de rejouer.`
   }
+  if (entree.jusquAuVert) return undefined
   if (entree.tentative >= entree.plafondDur) {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
   }

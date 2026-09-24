@@ -43,6 +43,8 @@ export function deciderDuPassage(entree: {
   motifsCourants: readonly string[]
   etat: EtatDeBoucleDeReparation
   bundlePerime?: { bundleMs: number; sourceMs: number; demarrageMs?: number; bundle: string }
+  /** conv-844 : réparer jusqu'à ce qu'il n'y ait plus de défaut (voir `arretDeLaReparation`). */
+  jusquAuVert?: boolean
 }): PassageDeReparation {
   const { attempt, reparationsAccordees, plafondDur, motifsCourants, etat } = entree
   const arret = arretDeLaReparation({
@@ -52,7 +54,8 @@ export function deciderDuPassage(entree: {
     motifsCourants,
     motifsPrecedents: etat.motifsPrecedents,
     refusIdentiquesConsecutifs: etat.refusIdentiquesConsecutifs,
-    bundlePerime: entree.bundlePerime
+    bundlePerime: entree.bundlePerime,
+    jusquAuVert: entree.jusquAuVert
   })
   const trace = traceDuPassage(attempt, plafondDur)
   if (arret) return { ...(trace ? { trace } : {}), arret, etatSuivant: etat }
