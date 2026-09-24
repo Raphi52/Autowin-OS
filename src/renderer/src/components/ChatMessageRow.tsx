@@ -18,6 +18,7 @@ import { AssistantActivityGroup } from './ChatView.parts'
 import { clotureEnDernier } from './cloture-en-dernier'
 import { CheckIcon, CopyIcon, ForkIcon, InspectIcon } from './chat-view-icons'
 import { formatFileSize } from './chat-attachments'
+import { formaterHeureComplete, formaterHeureMessage } from './heure-message'
 import {
   groupAssistantActivity,
   libelleCoutDuTour,
@@ -362,6 +363,11 @@ export const ChatMessageRow = memo(
         <div className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}>
           <div className="msg-meta">
             <span className="msg-role">Toi</span>
+            {message.ts ? (
+              <span className="msg-time" data-heure-complete={formaterHeureComplete(message.ts)}>
+                {formaterHeureMessage(message.ts)}
+              </span>
+            ) : null}
             {/* MESSAGE INJECTE EN COURS DE TOUR (conv-257, 2026-09-04). Le drapeau `orientation`
                 existait deja cote donnees, mais RIEN ne le montrait : un message tape pendant un
                 tour n'ouvre pas de nouveau tour, il rejoint celui qui court -- et l'utilisateur

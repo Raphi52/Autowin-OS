@@ -58,6 +58,8 @@ export interface UserMsg {
    * « Répondu » (conv-50, 2026-09-01). Posé côté main par `enregistrerDirectiveDansLeFil`.
    */
   orientation?: boolean
+  /** Heure d'écriture (ms epoch), montrée au survol à côté de « Toi ». */
+  ts?: number
 }
 export type AsstMsg = HydratedAssistantMessage
 export type Msg = (UserMsg | AsstMsg) & { messageId?: string }

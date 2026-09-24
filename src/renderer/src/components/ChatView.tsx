@@ -546,6 +546,7 @@ type MessageStocke = Partial<StoredAssistantMessage> & {
   done?: boolean
   orientation?: boolean
   coupeLaReponse?: number
+  ts?: number
 }
 
 /**
@@ -599,7 +600,8 @@ function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
           role: 'user' as const,
           content: m.content,
           attachments: m.attachments,
-          messageId: m.messageId
+          messageId: m.messageId,
+          ts: m.ts
         }
       : { ...hydrateStoredAssistant(m as StoredAssistantMessage), messageId: m.messageId }
   )
@@ -4204,6 +4206,7 @@ export function ChatView({
       {
         role: 'user',
         content: value,
+        ts: Date.now(),
         attachments: outgoingAttachments.map(
           ({ name, mimeType, size, kind, content, thumbnail }) => ({
             name,
@@ -4421,6 +4424,7 @@ export function ChatView({
         {
           role: 'user',
           content: value,
+          ts: Date.now(),
           attachments: outgoingAttachments.map(
             ({ name, mimeType, size, kind, content, thumbnail }) => ({
               name,

@@ -1110,6 +1110,37 @@
   color: var(--text-dim);
   font-weight: 600;
 }
+/* Heure d'écriture : invisible tant que la souris n'est pas sur le message. */
+.msg-time {
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.msg:hover .msg-time {
+  opacity: 1;
+}
+/* Infobulle dessinée en CSS : la fenêtre transparente d'Electron n'affiche pas les `title` natifs. */
+.msg-time {
+  position: relative;
+  cursor: default;
+}
+.msg-time:hover::after {
+  content: attr(data-heure-complete);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 20;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .msg-body {
   min-width: 0;
   max-width: 100%;
