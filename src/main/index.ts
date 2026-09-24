@@ -78,7 +78,7 @@ import {
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation
 } from './claude-accounts'
-import { app, shell, BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage } from 'electron'
 import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -378,6 +378,12 @@ import {
   describeMail,
   seedMailWatchdogTask
 } from './task-manager/watchdog-mail'
+import {
+  TeamsGraphClient,
+  describeTeamsMessage,
+  parseTeamsItemId,
+  replyTeams
+} from './task-manager/watchdog-teams'
 import type { WatchdogAppEvent } from './task-manager/types'
 import {
   ScheduledChatDispatcher,
@@ -3556,7 +3562,65 @@ Le fil reprend ensuite normalement.`
    * rafraichissement de la page d'accueil.
    */
   const outlookGateway = new OutlookLocalGateway({ appRoot: app.getAppPath() })
+  // fix-ok: 3 edits mesures - (1) remplacement Python a casse les antislashs, (2) bloc finally repris, (3) format de mes seules lignes (index.ts deja rouge au format avant moi).
+  // Teams (Microsoft Graph) : configuration PERSONNELLE, lue dans l'environnement ou HKCU comme
+  // AUTOWIN_WATCHDOG_MAILS. Sans AUTOWIN_TEAMS_CLIENT_ID, aucun appel reseau n'est fait.
+  const variablePerso = (name: string): string | undefined => {
+    const direct = process.env[name]?.trim()
+    if (direct) return direct
+    if (process.platform !== 'win32') return undefined
+    try {
+      const match = new RegExp(`${name}\\s+REG_\\w+\\s+(\\S+)\\s*$`, 'm').exec(
+        execFileSync('reg', ['query', 'HKCU\\Environment', '/v', name], {
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 3_000
+        })
+      )
+      return match?.[1]
+    } catch {
+      return undefined
+    }
+  }
+  const teamsClientId = variablePerso('AUTOWIN_TEAMS_CLIENT_ID')
+  const teamsVaultPath = join(app.getPath('userData'), 'teams-graph-token.bin')
+  const teamsClient = teamsClientId
+    ? new TeamsGraphClient(
+        {
+          clientId: teamsClientId,
+          tenantId: variablePerso('AUTOWIN_TEAMS_TENANT_ID') ?? 'organizations'
+        },
+        {
+          // Le jeton de renouvellement est un secret : chiffre par le systeme, jamais en clair.
+          load: () => {
+            try {
+              if (!existsSync(teamsVaultPath) || !safeStorage.isEncryptionAvailable())
+                return undefined
+              return safeStorage.decryptString(readFileSync(teamsVaultPath))
+            } catch {
+              return undefined
+            }
+          },
+          save: (token) => {
+            if (safeStorage.isEncryptionAvailable())
+              writeFileSync(teamsVaultPath, safeStorage.encryptString(token))
+          }
+        },
+        (prompt) => {
+          console.log(
+            `[watchdog] connexion Teams demandée : code ${prompt.userCode} sur ${prompt.verificationUri}`
+          )
+          void dialog.showMessageBox({
+            type: 'info',
+            title: 'Assistant mails — connexion Teams',
+            message: `Pour que le watchdog lise et réponde à tes messages Teams, ouvre ${prompt.verificationUri} et saisis le code ${prompt.userCode}.`
+          })
+        }
+      )
+    : undefined
   mailWatchdogReplier = async (itemId, body) => {
+    if (parseTeamsItemId(itemId))
+      return replyTeams(teamsClient, itemId, body)
     const sent = await outlookGateway.replyToItem(itemId, body)
     if (sent.ok) await outlookGateway.markRead([itemId])
     return sent
@@ -3564,6 +3628,7 @@ Le fil reprend ensuite normalement.`
   // Surveillance des mails pour les regles `outlook-mail`. Interroge Outlook seulement si une regle
   // active l'ecoute : sans elle, aucun dialogue COM supplementaire.
   const mailDetector = new NewUnreadMailDetector()
+  const teamsDetector = new NewUnreadMailDetector()
   let mailPolling = false
   setInterval(() => {
     if (mailPolling || !watchdogEngine) return
@@ -3579,9 +3644,23 @@ Le fil reprend ensuite normalement.`
           await watchdogEngine?.notifyMail({ itemId: mail.id, context: describeMail(mail) })
       } catch (error) {
         console.warn('[watchdog] lecture des mails impossible', error)
-      } finally {
-        mailPolling = false
       }
+      // Teams passe par la MEME regle : un echec Teams ne prive pas les mails, et inversement.
+      if (teamsClient) {
+        try {
+          for (const message of teamsDetector.next(await teamsClient.snapshot()))
+            await watchdogEngine?.notifyMail({
+              itemId: message.id,
+              context: describeTeamsMessage(message)
+            })
+        } catch (error) {
+          console.warn(
+            '[watchdog] lecture Teams impossible :',
+            error instanceof Error ? error.message : String(error)
+          )
+        }
+      }
+      mailPolling = false
     })()
   }, 60_000).unref?.()
   ipcMain.handle('outlook:snapshot', async (event, force: unknown) => {
