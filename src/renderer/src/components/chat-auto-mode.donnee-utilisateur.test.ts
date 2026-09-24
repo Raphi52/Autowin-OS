@@ -45,7 +45,7 @@ describe('suite à trou (conv-798, saisie ts 1790170650709)', () => {
   it('laisse passer une spécification qui cite <url> en milieu de phrase', () => {
     expect(
       suiteAttendUneDonneeUtilisateur(
-        'Ajoute à D:\WebTesting une commande webtest record <url> qui ouvre un navigateur'
+        'Ajoute à D:\\WebTesting une commande webtest record <url> qui ouvre un navigateur'
       )
     ).toBe(false)
   })

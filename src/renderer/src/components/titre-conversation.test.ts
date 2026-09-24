@@ -8,7 +8,7 @@ describe('titreDepuisPremierMessage', () => {
     )
   })
   it('ne tronque plus a 42 caracteres', () => {
-    const msg = 'Relance les points 2 à 7 dans D:\AutoWinOS : allonger les titres tronqués'
+    const msg = 'Relance les points 2 à 7 dans D:\\AutoWinOS : allonger les titres tronqués'
     expect(msg.length).toBeGreaterThan(42)
     expect(titreDepuisPremierMessage(msg)).toBe(msg)
   })

@@ -781,9 +781,9 @@ describe('decideSqlRead — pas de faux refus sur des colonnes réelles', () => 
 })
 
 describe('decideSqlRead — COMMUN_RIG lisible, secrets exclus (décision du 2026-09-23)', () => {
-  const avecCommun = buildSqlTargetCatalog([{ server: 'SQL-PROD\PROD', database: 'COMMUN_RIG' }])
+  const avecCommun = buildSqlTargetCatalog([{ server: 'SQL-PROD\\PROD', database: 'COMMUN_RIG' }])
   const lire = (query: string): ReturnType<typeof decideSqlRead> =>
-    decideSqlRead({ server: 'SQL-PROD\PROD', database: 'COMMUN_RIG', query }, avecCommun)
+    decideSqlRead({ server: 'SQL-PROD\\PROD', database: 'COMMUN_RIG', query }, avecCommun)
 
   it('laisse lire la liste des greffes exploités', () => {
     expect(
