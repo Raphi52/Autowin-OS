@@ -2326,7 +2326,7 @@ export class AppCommandBus {
           this.tourActionReelleRefusee = cle
           this.trace?.(name, redactedArgs(name, args), false)
           noterIssue(false)
-          return { ok: false, error: refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') }
+          return { ok: false, error: refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') + ' Pour cliquer ou taper dans le bureau cache : `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]`.' }
         }
       }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)

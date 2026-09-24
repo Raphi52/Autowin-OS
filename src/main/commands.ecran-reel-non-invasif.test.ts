@@ -61,6 +61,7 @@ describe('desktop_act : bureau cache par defaut', () => {
     expect(r.ok).toBe(false)
     expect(r.error).toContain('`desktop_act` agit sur')
     expect(r.error).toContain('hdesk-lancer.ps1')
+    expect(r.error).toContain('hdesk-act.ps1')
   })
 
   it('le drapeau pose d office au premier appel ne saute pas le refus (tour 78a0d7d3)', async () => {
