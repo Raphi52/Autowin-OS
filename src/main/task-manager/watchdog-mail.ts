@@ -53,8 +53,9 @@ export function mailWatchdogSeed(): ScheduledTaskInput {
       source: { kind: 'outlook-mail' },
       guards: {
         dedupWindowMs: 24 * 60 * 60 * 1000,
-        maxTriggersPerHour: 10,
-        maxTriggersPerDay: 60,
+        // Demande utilisateur 2026-09-24 : pas de plafond de volume. 240/h est le maximum que la
+        // validation accepte (task-manager-ipc.ts) ; aucun plafond sur 24 h.
+        maxTriggersPerHour: 240,
         maxChainDepth: 0,
         maxPerRoot: 1
       }
