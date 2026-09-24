@@ -37,6 +37,8 @@ import {
   exigeUnChiffreVerifie,
   exigePreuveAvantDePromettre,
   RELANCE_PREUVE_AVANT_DE_PROMETTRE,
+  exigeFaireLeGeste,
+  RELANCE_FAIRE_LE_GESTE,
   blocVisuelNonFerme,
   RELANCE_BLOC_VISUEL_NON_FERME,
   questionPoseeSansAvoirLu,
@@ -1646,6 +1648,7 @@ export class AgentPilot {
       | 'question-sans-lecture'
       | 'commande-illisible'
       | 'preuve-promise'
+      | 'geste-rendu'
       | 'bloc-visuel-non-ferme'
     > = []
     const grantRecoveryIteration = (
@@ -1662,6 +1665,7 @@ export class AgentPilot {
         | 'question-sans-lecture'
         | 'commande-illisible'
         | 'preuve-promise'
+        | 'geste-rendu'
         | 'bloc-visuel-non-ferme'
     ): void => {
       recoveryReasons.push(reason)
@@ -1812,6 +1816,8 @@ export class AgentPilot {
     let annonceSansActionRecoveryAvailable = true
     /** Une clôture qui promet un compte-rendu futur : relance UNE fois, jamais plus. */
     let preuvePromiseRecoveryAvailable = true
+    let gesteRenduRecoveryAvailable = true
+    let bureauUtilise = false
     /** Une fence ```html-render laissée ouverte : relance UNE fois, jamais plus. */
     let blocVisuelRecoveryAvailable = true
     /**
@@ -2718,6 +2724,19 @@ export class AgentPilot {
           )
           continue
         }
+        // Geste d'écran rendu à l'utilisateur alors que le bureau était piloté (tour c4e319ca).
+        if (
+          exigerExperienceSoignee &&
+          !relanceDeFormeUtilisee &&
+          gesteRenduRecoveryAvailable &&
+          exigeFaireLeGeste(visibleTextThisTurn, bureauUtilise)
+        ) {
+          gesteRenduRecoveryAvailable = false
+          relanceDeFormeUtilisee = true
+          grantRecoveryIteration('geste-rendu')
+          convo.push(RELANCE_FAIRE_LE_GESTE)
+          continue
+        }
         /*
          * LA PROMESSE DE COMPTE-RENDU — passe AVANT le bloc visuel, et c'est deliberé : elle porte
          * un TRAVAIL potentiellement perdu (run non recolté), l'autre ne porte qu'un rendu cassé.
@@ -2856,6 +2875,7 @@ export class AgentPilot {
 
         const actionId = `${i}:${commandIndex++}`
         anyActionExecuted = true
+        if (token.name === 'desktop_act' || token.name === 'desktop_observe') bureauUtilise = true
         // Les commandes qui OBSERVENT reellement le disque. `get_state` n'en est pas : c'est
         // l'apercu partiel dont l'agent tirait justement ses chiffres faux.
         if (

@@ -1053,3 +1053,30 @@ export const RELANCE_BLOC_VISUEL_NON_FERME =
   'alors ton HTML en bloc de code BRUT, et toute ta mise en forme est perdue à l’écran. ' +
   'Ré-émets MAINTENANT ta réponse complète, SANS aucune commande, avec la fence ouverte par ' +
   '```html-render et fermée par ``` sur une ligne seule.'
+
+/**
+ * RENDRE UN GESTE FAISABLE — garde déterministe. Mesuré conv-843, tour
+ * c4e319ca-783f-4b49-9b87-971cd6392c8e (saisie ts 1790275899514 « fais le ») : après avoir piloté
+ * le bureau (desktop_act / desktop_observe), le chat a clos par « À faire : Va dans Brave… Saisis
+ * le code CAP56FNHZ » — un geste que ses outils atteignaient. La consigne en prose (commit
+ * 67c45bc2) ne suffit pas seule : on vérifie le message final.
+ * Mord seulement si un outil de bureau a servi dans le tour ET si la clôture confie une consigne
+ * manuelle d'écran. Un mot de passe / MFA reste une vraie limite et passe.
+ */
+export function exigeFaireLeGeste(reponse: string, bureauUtilise: boolean): boolean {
+  if (!bureauUtilise) return false
+  const texte = (reponse ?? '').trim()
+  if (!texte) return false
+  if (/\b(?:mot de passe|password|mfa|authenticator|empreinte|code (?:reçu )?par sms)\b/i.test(texte))
+    return false
+  const rubrique = /(?:^|\n)\s*\**\s*(?:à|a) faire\b/i.test(texte)
+  const GESTE =
+    /(?:^|\n)\s*(?:\d+[.)]|[-*])?\s*\**(?:va dans|ouvre|clique|saisis|tape|colle|appuie|sélectionne|selectionne)\b/i
+  return rubrique && GESTE.test(texte)
+}
+
+export const RELANCE_FAIRE_LE_GESTE =
+  'SYSTÈME: ta clôture confie à l’utilisateur un geste d’écran (ouvrir, cliquer, saisir) alors ' +
+  'que tu as piloté le bureau dans CE tour — cas mesuré c4e319ca (conv-843). Fais le geste ' +
+  'MAINTENANT avec desktop_act puis vérifie par desktop_observe. Ne le rends que s’il exige un ' +
+  'secret que tu n’as pas (mot de passe, MFA) : nomme alors CE geste précis et pourquoi.'
