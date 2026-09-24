@@ -2882,6 +2882,14 @@ export class AgentPilot {
           tokenIndex += 1
           continue
         }
+        if (token.name === 'ask' && questionPoseeCeTour) {
+          // UNE SEULE QUESTION PAR TOUR. conv-844, turn 852bb2fd-25e4-40dd-a959-57d9337b084c : la
+          // relance « question sans lecture » a fait reposer la meme question -> 2 cartes a l'ecran.
+          // La premiere est deja affichee : la seconde n'est pas emise.
+          results.push('ask → une question est DÉJÀ affichée dans ce tour : ne la repose pas.')
+          tokenIndex += 1
+          continue
+        }
         if (token.name === 'ask') questionPoseeCeTour = true
         const settledAction = recoveredHere?.settledActions?.find(
           (action) => action.actionId === actionId && action.name === token.name

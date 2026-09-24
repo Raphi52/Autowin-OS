@@ -117,3 +117,11 @@ describe('lecture Bash precedee de cd (conv-844, turn 852bb2fd-25e4-40dd-a959-57
     expect(statusEstUneLecture('Bash · cd /d/AutoWinOS; rm -rf x')).toBe(false)
   })
 })
+
+describe('une seule question affichee par tour (conv-844, turn 852bb2fd-25e4-40dd-a959-57d9337b084c)', () => {
+  it('agent-pilot ne remet pas une deuxieme carte ask dans le meme tour', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync(new URL('./agent-pilot.ts', import.meta.url), 'utf8')
+    expect(src).toMatch(/token\.name === 'ask' && questionPoseeCeTour\)[\s\S]{0,400}tokenIndex \+= 1\s*continue/)
+  })
+})
