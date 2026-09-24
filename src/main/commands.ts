@@ -1485,6 +1485,10 @@ const refusEcranReel =
   "Si tu as vraiment besoin de son ecran, reemets l'appel avec `ecran_utilisateur: true` et dis-le " +
   'en une ligne avant.'
 
+/** Vrai quand le message utilisateur designe son propre ecran (« mon écran », « sur l'ecran »...). */
+export const demandeEcranReel = (texte: string | undefined): boolean =>
+  typeof texte === 'string' && /[ée]cran/i.test(texte)
+
 /** Vrai quand l'appel assume explicitement de regarder l'ecran de l'utilisateur. */
 const assumeEcranReel = (args: Record<string, unknown>): boolean =>
   args.ecran_utilisateur === true || args.ecran_utilisateur === 'true'
@@ -2327,6 +2331,18 @@ export class AppCommandBus {
           this.trace?.(name, redactedArgs(name, args), false)
           noterIssue(false)
           return { ok: false, error: refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') + ' Pour cliquer ou taper dans le bureau cache : `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]`.' }
+        }
+        // Kaizen conv-854 (saisie ts 1790278416518) : le drapeau seul restait un contournement au 2e
+        // appel. Agir sur l'ecran reel exige desormais que le DERNIER message de l'utilisateur parle
+        // de son ecran ; le modele ne peut plus s'y autoriser lui-meme. Dans le tour 78a0d7d3 le
+        // message etait « fais le toi stp » : le clic aurait ete refuse.
+        const dernierMessage = [...(this.os.conversations?.get?.(conversationId ?? '')?.messages ?? [])]
+          .reverse()
+          .find((m) => m.role === 'user')?.content
+        if (!demandeEcranReel(dernierMessage)) {
+          this.trace?.(name, redactedArgs(name, args), false)
+          noterIssue(false)
+          return { ok: false, error: "Appel REFUSE : l'utilisateur n'a pas demande d'agir sur SON ecran dans son dernier message. Passe par le bureau cache : `scripts/hdesk-act.ps1`. Si c'est impossible, dis-le et demande-lui." }
         }
       }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)

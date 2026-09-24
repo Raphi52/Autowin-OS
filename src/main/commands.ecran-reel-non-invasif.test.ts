@@ -69,6 +69,30 @@ describe('desktop_act : bureau cache par defaut', () => {
     const premier = await b.exec('desktop_act', { ...clic, ecran_utilisateur: true }, undefined, undefined, 'act-2')
     expect(String(premier.error)).toContain('hdesk-lancer.ps1')
     const second = await b.exec('desktop_act', { ...clic, ecran_utilisateur: true }, undefined, undefined, 'act-2')
+    expect(String(second.error)).toContain('hdesk-act.ps1')
+  })
+
+  // saisie ts 1790278416518 : le drapeau au 2e appel ne suffit plus, il faut la demande de l'utilisateur.
+  const busAvec = (texte: string): AppCommandBus =>
+    new AppCommandBus(
+      {
+        executionWorkspace: process.cwd(),
+        conversations: new Map([['c1', { messages: [{ role: 'user', content: texte }] }]])
+      } as never,
+      () => undefined
+    )
+
+  it('refuse au 2e appel si l utilisateur n a pas parle de son ecran (tour 78a0d7d3)', async () => {
+    const b = busAvec('mon watchdog me dit ca fais le toi stp')
+    await b.exec('desktop_act', { ...clic, ecran_utilisateur: true }, 'c1', undefined, 'act-4')
+    const second = await b.exec('desktop_act', { ...clic, ecran_utilisateur: true }, 'c1', undefined, 'act-4')
+    expect(String(second.error)).toContain('pas demande')
+  })
+
+  it('laisse passer au 2e appel quand l utilisateur demande son ecran', async () => {
+    const b = busAvec('clique sur mon écran stp')
+    await b.exec('desktop_act', clic, 'c1', undefined, 'act-5')
+    const second = await b.exec('desktop_act', clic, 'c1', undefined, 'act-5')
     expect(String(second.error)).toContain('Controle desktop indisponible')
   })
 
