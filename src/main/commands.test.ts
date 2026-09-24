@@ -1814,8 +1814,11 @@ describe('AppCommandBus command execution policy', () => {
       }),
       act: vi.fn().mockResolvedValue({ executed: 1 })
     }
+    // L'utilisateur demande son ecran : seule cette demande autorise un geste reel (kaizen conv-854).
+    const os = fakeOs()
+    os.conversations.get('conv-1').messages.push({ role: 'user', content: 'clique sur mon ecran', ts: 2 })
     const bus = new AppCommandBus(
-      fakeOs(),
+      os,
       () => {},
       undefined,
       undefined,
@@ -1838,9 +1841,9 @@ describe('AppCommandBus command execution policy', () => {
       attachments: [image]
     })
     // Premier geste du tour toujours refuse, meme drapeau pose (kaizen conv-854).
-    await bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true })
+    await bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true }, 'conv-1')
     await expect(
-      bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true })
+      bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true }, 'conv-1')
     ).resolves.toMatchObject({ ok: true, data: { executed: 1 } })
     expect(desktop.act).toHaveBeenCalledWith([{ type: 'click', x: 10, y: 20 }])
   })
