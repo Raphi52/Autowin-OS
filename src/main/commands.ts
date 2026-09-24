@@ -2318,8 +2318,11 @@ export class AppCommandBus {
         // kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : un clic sur la barre des taches
         // de l'utilisateur est passe sans aucune garde (decision « confirm » jamais bloquante). Meme
         // friction d'un appel que `refusEcranReel`, porte de sortie `ecran_utilisateur: true`.
+        // Le drapeau pose d'office au PREMIER appel ne compte pas (meme tour : le modele l'a ajoute
+        // seul, sans demande) : le premier geste du tour est toujours refuse, le drapeau ne vaut
+        // qu'apres avoir lu le refus qui nomme le bureau cache.
         const cle = turnId ?? 'sans-tour'
-        if (!assumeEcranReel(args) && this.tourActionReelleRefusee !== cle) {
+        if (this.tourActionReelleRefusee !== cle) {
           this.tourActionReelleRefusee = cle
           this.trace?.(name, redactedArgs(name, args), false)
           noterIssue(false)

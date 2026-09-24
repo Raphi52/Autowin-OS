@@ -63,9 +63,12 @@ describe('desktop_act : bureau cache par defaut', () => {
     expect(r.error).toContain('hdesk-lancer.ps1')
   })
 
-  it('laisse passer quand l action sur son ecran est assumee', async () => {
-    const r = await bus().exec('desktop_act', { ...clic, ecran_utilisateur: true }, undefined, undefined, 'act-2')
-    expect(String(r.error)).toContain('Controle desktop indisponible')
+  it('le drapeau pose d office au premier appel ne saute pas le refus (tour 78a0d7d3)', async () => {
+    const b = bus()
+    const premier = await b.exec('desktop_act', { ...clic, ecran_utilisateur: true }, undefined, undefined, 'act-2')
+    expect(String(premier.error)).toContain('hdesk-lancer.ps1')
+    const second = await b.exec('desktop_act', { ...clic, ecran_utilisateur: true }, undefined, undefined, 'act-2')
+    expect(String(second.error)).toContain('Controle desktop indisponible')
   })
 
   it('une observation refusee n arme pas le clic', async () => {

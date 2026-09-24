@@ -1837,6 +1837,8 @@ describe('AppCommandBus command execution policy', () => {
       data: { width: 1280, height: 720 },
       attachments: [image]
     })
+    // Premier geste du tour toujours refuse, meme drapeau pose (kaizen conv-854).
+    await bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true })
     await expect(
       bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true })
     ).resolves.toMatchObject({ ok: true, data: { executed: 1 } })
