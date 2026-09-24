@@ -11,6 +11,9 @@
   Clique en (X,Y) (coordonnees de la capture hdesk-observe), puis tape -Texte dans la fenetre visee.
   Limite : messages fenetre (PostMessage), pas SendInput — une app qui lit le clavier brut peut les ignorer ;
   verifier par une capture hdesk-observe apres coup.
+  Mesure 2026-09-24 (Brave 154, --disable-gpu) : clic + frappe RECUS par Brave (barre d'adresse = "about:blankCXC8M5FC5",
+  Audit/hact/brave2-apres.png). MAIS le contenu web s'affiche uni (blanc/noir) dans la capture du bureau cache :
+  on ne peut pas VOIR un formulaire de page ; seule l'interface native du navigateur (barre d'adresse) est lisible.
 #>
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
