@@ -1368,6 +1368,8 @@ export function TaskManagerView({
       />
 
       {sectionActive === 'watchdog' && (
+        <div className="task-manager-watchdog-split">
+        <aside className="task-manager-watchdog-aside">
         <WatchdogAgentsSection
           tasks={snapshot.tasks satisfies WatchdogTaskLike[]}
           occurrences={snapshot.occurrences satisfies WatchdogOccurrenceLike[]}
@@ -1390,10 +1392,12 @@ export function TaskManagerView({
             openEdit(task)
           }}
         />
-      )}
-      {sectionActive === 'watchdog' && (draft || selected?.watchdog) && (
-        <div className="task-manager-layout" data-testid="task-manager-watchdog-detail">
-          {renderDetail(selected?.watchdog ? selected : undefined)}
+        </aside>
+        {(draft || selected?.watchdog) && (
+          <div className="task-manager-layout is-single" data-testid="task-manager-watchdog-detail">
+            {renderDetail(selected?.watchdog ? selected : undefined)}
+          </div>
+        )}
         </div>
       )}
 

@@ -163,6 +163,11 @@
   gap: 12px;
 }
 
+/* Detail Watchdog : un seul bloc — il prend toute la largeur au lieu de la 1re colonne de la grille a 3. */
+.task-manager-layout.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .task-manager-list,
 .task-manager-detail,
 .task-manager-alerts {
@@ -901,4 +906,21 @@
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* Watchdog : liste des regles en colonne a gauche, detail sur le reste de la largeur (demande du 24/09). */
+.task-manager-watchdog-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.task-manager-watchdog-aside {
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
 }
