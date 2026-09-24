@@ -1072,7 +1072,10 @@ export function exigeFaireLeGeste(reponse: string, bureauUtilise: boolean): bool
   const rubrique = /(?:^|\n)\s*\**\s*(?:à|a) faire\b/i.test(texte)
   const GESTE =
     /(?:^|\n)\s*(?:\d+[.)]|[-*])?\s*\**(?:va dans|ouvre|clique|saisis|tape|colle|appuie|sélectionne|selectionne)\b/i
-  return rubrique && GESTE.test(texte)
+  // Tournure sans rubrique (« il te reste à entrer le code », « à toi de saisir… »).
+  const RENVOI =
+    /(?:^|[\s(«])(?:il te reste à|il ne te reste (?:plus )?qu[’']à|à toi de|tu n[’']as plus qu[’']à|tu dois)\s+(?:aller|ouvrir|cliquer|saisir|taper|entrer|coller|appuyer|sélectionner)(?![a-zà-ÿ])/i
+  return (rubrique && GESTE.test(texte)) || RENVOI.test(texte)
 }
 
 export const RELANCE_FAIRE_LE_GESTE =

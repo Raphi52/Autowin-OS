@@ -24,4 +24,8 @@ describe('exigeFaireLeGeste', () => {
   it('la relance cite le cas mesuré', () => {
     expect(RELANCE_FAIRE_LE_GESTE).toContain('c4e319ca')
   })
+  it('mord aussi sur une tournure sans rubrique « À faire » (objection du juge)', () => {
+    expect(exigeFaireLeGeste('Il te reste à entrer le code CAP56FNHZ dans Brave.', true)).toBe(true)
+    expect(exigeFaireLeGeste('À toi de saisir le code dans la page Microsoft.', true)).toBe(true)
+  })
 })
