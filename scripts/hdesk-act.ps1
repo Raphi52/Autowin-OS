@@ -14,6 +14,9 @@
   Mesure 2026-09-24 (Brave 154, --disable-gpu) : clic + frappe RECUS par Brave (barre d'adresse = "about:blankCXC8M5FC5",
   Audit/hact/brave2-apres.png). MAIS le contenu web s'affiche uni (blanc/noir) dans la capture du bureau cache :
   on ne peut pas VOIR un formulaire de page ; seule l'interface native du navigateur (barre d'adresse) est lisible.
+  Mesure 2026-09-24 (champ de FORMULAIRE web) : page locale Audit/hact/device.html (input autofocus, oninput -> document.title)
+  ouverte en --app dans le bureau cache ; clic (400,300) + frappe CXC8M5FC5 -> titre de fenetre lu via EnumDesktopWindows
+  = "SAISI:CXC8M5FC5" (Audit/hact/titres.ps1). La frappe atteint donc un champ web ; pour VERIFIER sans capture, lire le titre.
 #>
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
