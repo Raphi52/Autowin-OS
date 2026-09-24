@@ -205,15 +205,25 @@ const api = {
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
   // Onglet « Projet » : arborescence + editeur. Chemins RELATIFS ; la racine vit cote principal.
-  projectRoot: (): Promise<string> => ipcRenderer.invoke('project:root'),
-  openProjectInVscode: (): Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }> =>
-    ipcRenderer.invoke('project:openInVscode'),
-  listProjectDir: (path?: string): Promise<ProjectListResult> =>
-    ipcRenderer.invoke('project:list', path ?? ''),
-  readProjectFile: (path: string): Promise<ProjectReadResult> =>
-    ipcRenderer.invoke('project:read', path),
-  writeProjectFile: (path: string, content: string): Promise<ProjectWriteResult> =>
-    ipcRenderer.invoke('project:write', path, content),
+  // `conversationId` : la racine devient le CWD de cette conversation (resolu cote principal).
+  projectRoot: (conversationId?: string): Promise<string> =>
+    ipcRenderer.invoke('project:root', conversationId),
+  openProjectInVscode: (
+    conversationId?: string
+  ): Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }> =>
+    ipcRenderer.invoke('project:openInVscode', conversationId),
+  fichierExiste: (path: string, base?: string): Promise<boolean | null> =>
+    ipcRenderer.invoke('fs:exists', path, base),
+  listProjectDir: (path?: string, conversationId?: string): Promise<ProjectListResult> =>
+    ipcRenderer.invoke('project:list', path ?? '', conversationId),
+  readProjectFile: (path: string, conversationId?: string): Promise<ProjectReadResult> =>
+    ipcRenderer.invoke('project:read', path, conversationId),
+  writeProjectFile: (
+    path: string,
+    content: string,
+    conversationId?: string
+  ): Promise<ProjectWriteResult> =>
+    ipcRenderer.invoke('project:write', path, content, conversationId),
   // Vue Tests (multi-projets) : registre de racines + execution du harnais du projet demande.
   testProjects: () => ipcRenderer.invoke('tests:projects'),
   saveTestProjects: (projects: Array<{ root: string; label?: string }>) =>

@@ -395,7 +395,14 @@ export interface EntreeDecisionAuto {
 export type DecisionAuto =
   | { action: 'envoyer'; texte: string; signature: string }
   /** Suite différée : elle part SEULE à `echeance` (ms epoch), pas maintenant. */
-  | { action: 'programmer'; texte: string; signature: string; echeance: number }
+  | {
+      action: 'programmer'
+      texte: string
+      signature: string
+      echeance: number
+      /** « quand fin.txt existe » : sondé (lecture seule) avant d'envoyer le tour. */
+      fichier?: string
+    }
   | { action: 'attendre'; raison: RaisonArret }
   | { action: 'arreter'; raison: RaisonArret; message: string }
 
@@ -474,6 +481,9 @@ export const MAX_RELANCES_DIFFEREES = 12
 const MINUTE = 60_000
 /** « quand X existe », « plus tard », « cette nuit » : aucune heure lisible — on revient voir. */
 export const DELAI_SONDAGE_DIFFERE = 15 * MINUTE
+/** « quand X existe » avec chemin lisible : sonde GRATUITE du fichier (fs:exists), pas un tour payé. */
+export const DELAI_SONDAGE_FICHIER = 5 * MINUTE
+export const DUREE_MAX_SONDAGE_FICHIER = 48 * 60 * MINUTE
 const ECHEANCE_MAX = 24 * 60 * MINUTE
 
 /**
@@ -511,6 +521,21 @@ export function echeanceSuiteDifferee(
   if (/\bdemain\b/iu.test(texte)) return borne(aHeure(8, 1))
   if (/\bce\s+soir\b/iu.test(texte) && aHeure(19, 0) > maintenant) return borne(aHeure(19, 0))
   return borne(maintenant + DELAI_SONDAGE_DIFFERE)
+}
+
+/**
+ * LE FICHIER ATTENDU d'une suite « quand X existe » (conv-826) : le mode auto le sonde — lecture
+ * seule, gratuite — avant de payer un tour. `null` = aucune condition de fichier lisible.
+ */
+export function fichierAttenduSuiteDifferee(
+  suite: string,
+  recommandation: string | null
+): string | null {
+  const m =
+    /\bquand\b[^\n]{0,80}?[`"'«\s]([^\s`"'«»]*\.[A-Za-z0-9]{1,8})[`"'»]?\s+(?:existe(?:ra)?|appara[iî]t(?:ra)?|sera\s+(?:apparu|pr[eê]t))\b/iu.exec(
+      `${suite}\n${recommandation ?? ''}`
+    )
+  return m ? m[1] : null
 }
 
 export function suiteEstDifferee(suite: string, recommandation: string | null): boolean {
@@ -703,13 +728,19 @@ ${suite}`
    * DIFFÉRÉE : programmée AVANT le garde-fou « même suite » — « quand fin.txt existe » revient
    * forcément identique d'une vérification à l'autre. La borne est `MAX_RELANCES_DIFFEREES`.
    */
-  if (differee)
+  if (differee) {
+    const fichier = fichierAttenduSuiteDifferee(suite, recommandationDifferee)
     return {
       action: 'programmer',
       texte,
       signature,
-      echeance: echeanceSuiteDifferee(suite, recommandationDifferee, entree.maintenant ?? Date.now())
+      // Chemin lisible : la première vérification est une sonde gratuite, donc on regarde tôt.
+      echeance: fichier
+        ? (entree.maintenant ?? Date.now()) + DELAI_SONDAGE_FICHIER
+        : echeanceSuiteDifferee(suite, recommandationDifferee, entree.maintenant ?? Date.now()),
+      ...(fichier ? { fichier } : {})
     }
+  }
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
   /*
    * MÊME SUITE ≠ BOUCLE quand le tour a TRAVAILLÉ. Mesuré conv-733, tour

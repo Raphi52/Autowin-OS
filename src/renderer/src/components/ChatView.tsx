@@ -98,7 +98,9 @@ import {
   deciderRelanceAuto,
   dernierTourEstUnScout,
   premierPassageLaisseSortirLeTour,
-  signatureTour
+  signatureTour,
+  DELAI_SONDAGE_FICHIER,
+  DUREE_MAX_SONDAGE_FICHIER,
 } from './chat-auto-mode'
 import { titreSansHomonyme } from './titre-sans-homonyme'
 import { reprendreApresRedemarrage } from './chat-reprise'
@@ -3681,12 +3683,15 @@ export function ChatView({
    */
   function programmerRelanceAuto(
     id: string,
-    decision: { texte: string; signature: string; echeance: number }
+    decision: { texte: string; signature: string; echeance: number; fichier?: string },
+    /** Re-sondage gratuit d'un fichier attendu : ne consomme PAS une relance payée. */
+    sondeDepuis?: number
   ): void {
     annulerRelanceProgrammee(id)
     const etat = autoEtat(id)
     etat.tour = decision.signature
-    autoDiffereesRef.current.set(id, (autoDiffereesRef.current.get(id) ?? 0) + 1)
+    if (sondeDepuis === undefined)
+      autoDiffereesRef.current.set(id, (autoDiffereesRef.current.get(id) ?? 0) + 1)
     const minuteur = window.setTimeout(
       () => {
         autoProgrammeesRef.current.delete(id)
@@ -3697,6 +3702,53 @@ export function ChatView({
             ? messagesAfficheAutoRef.current
             : (liveMessagesRef.current.get(id) ?? [])
         if (signatureTour(fil) !== decision.signature) return
+        // fix-ok: la relance « quand X existe » payait un tour même fichier absent (sendAutoRef appelé sans sonde) — on sonde fs:exists avant.
+        if (decision.fichier && !window.api.fichierExiste) {
+          // Sans vérificateur, « existe » est invérifiable : payer un tour pour le constater est le
+          // défaut mesuré conv-826 (14:38:57, fin.txt absent). On attend l'utilisateur, en le disant.
+          setAppNotice({
+            text: `Mode auto : je ne peux pas vérifier si ${decision.fichier} existe (vérificateur indisponible — redémarre l'app). La suite attend.`
+          })
+          return
+        }
+        if (decision.fichier && window.api.fichierExiste) {
+          /*
+           * « quand fin.txt existe » : sonde gratuite (lecture seule, processus principal) AVANT de
+           * payer un tour. Absent → on revient voir toutes les DELAI_SONDAGE_FICHIER, sans consommer
+           * de relance payée, jusqu'à DUREE_MAX_SONDAGE_FICHIER (48 h) : au-delà, on arrête et on le dit.
+           * SEUL un `true` envoie : `null` ou une erreur ne prouvent rien et ne paient donc pas de tour
+           * (conv-826 : la relance partait sur tout ce qui n'était pas `false`).
+           */
+          const base = convsRef.current.find((c) => c.id === id)?.projectPath?.trim() || undefined
+          const fichier = decision.fichier
+          void Promise.resolve(window.api.fichierExiste(fichier, base))
+            .catch(() => null)
+            .then((present) => {
+              if (present === true) return envoyer()
+              if (present !== false) console.warn('[mode-auto] vérification de fichier sans réponse', fichier, present)
+              // La sonde ne coûte rien : pas de plafond de relances, mais une borne de temps DITE.
+              const debut = sondeDepuis ?? Date.now()
+              if (Date.now() - debut >= DUREE_MAX_SONDAGE_FICHIER) {
+                setAppNotice({
+                  text: `Mode auto : ${fichier} n'existe toujours pas après ${Math.round(DUREE_MAX_SONDAGE_FICHIER / 3_600_000)} h de vérification. J'arrête d'attendre — relance la suite quand tu veux.`
+                })
+                return
+              }
+              programmerRelanceAuto(
+                id,
+                { ...decision, echeance: Date.now() + DELAI_SONDAGE_FICHIER },
+                debut
+              )
+            })
+          return
+        }
+        envoyer()
+      },
+      Math.max(0, decision.echeance - Date.now())
+    )
+    function envoyer(): void {
+        if (!autoArmePourRef.current(id)) return
+        if (busyConversationsRef.current.has(id)) return
         etat.prompt = decision.texte
         // Le fil est suivi : la fin de CE tour sera enchaînée, même s'il n'est pas affiché.
         autoSuiviesRef.current.add(id)
@@ -3705,9 +3757,7 @@ export function ChatView({
           automatique: true,
           targetConversationId: id
         })
-      },
-      Math.max(0, decision.echeance - Date.now())
-    )
+    }
     autoProgrammeesRef.current.set(id, { minuteur, signature: decision.signature })
   }
   const heureLisible = (t: number): string =>
@@ -3775,7 +3825,9 @@ export function ChatView({
     if (decision.action === 'programmer') {
       programmerRelanceAuto(activeId, decision)
       setAppNotice({
-        text: `Mode auto : la suite proposée attend son moment. Je la relance seul ${heureLisible(decision.echeance)} (éteins ∞ ou écris un message pour annuler).`
+        text: decision.fichier
+          ? `Mode auto : la suite proposée attend ${decision.fichier}. Je vérifie toutes les 5 min, sans frais, et je la relance seul dès qu'il existe (éteins ∞ ou écris un message pour annuler).`
+          : `Mode auto : la suite proposée attend son moment. Je la relance seul ${heureLisible(decision.echeance)} (éteins ∞ ou écris un message pour annuler).`
       })
       return
     }

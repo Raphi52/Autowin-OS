@@ -114,3 +114,102 @@ describe('ChatView — une suite différée est programmée, pas abandonnée', (
     expect(envoisDe(pilotChat, avant)).toBe(0)
   })
 })
+
+/**
+ * conv-826 (2026-09-24) : « quand fin.txt existe » — le mode auto sonde le fichier (lecture seule,
+ * processus principal) AVANT de payer un tour : absent → aucun envoi, présent → un envoi.
+ */
+describe('ChatView — suite « quand X existe » : sonde gratuite avant le tour', () => {
+  beforeAll(installRafShim)
+  let h: Harness | null = null
+  afterEach(async () => {
+    await h?.unmount()
+    h = null
+    window.localStorage.clear()
+    vi.restoreAllMocks()
+  })
+  const SUITE_FICHIER = 'quand fin.txt existe, relever les résultats du tournoi.'
+
+  it('fichier absent ou réponse inconnue (null) : aucun tour payé ; présent : la suite part une fois', async () => {
+    // conv-826, 14:38:57 : tout ce qui n'était pas `false` payait un tour. `null` doit attendre aussi.
+    let present: boolean | null = null
+    const fichierExiste = vi.fn(async () => present)
+    const base = [{ role: 'user', content: 'salut' }, { role: 'assistant', content: cloture('lancer terrain.') }]
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
+    let pilote!: (event: Record<string, unknown>) => void
+    h = await mountChat(
+      chatApi({
+        pilotChat,
+        fichierExiste,
+        conversations: vi.fn().mockResolvedValue([conversation('A', base)]),
+        conversation: vi.fn(async (id: string) => conversation(id, base)),
+        onPilotEvent: vi.fn((listener) => {
+          pilote = listener as (event: Record<string, unknown>) => void
+          return vi.fn()
+        })
+      })
+    )
+    const envois = (depuis: number): number =>
+      pilotChat.mock.calls.slice(depuis).filter((c) => JSON.stringify(c).includes('fin.txt')).length
+    await h.click('.conv-item .conv-pick')
+    await h.click('[data-testid="composer-auto-toggle"]')
+    await attendre(20)
+    accelererLesLongsMinuteurs()
+    const avant = pilotChat.mock.calls.length
+    await act(async () =>
+      pilote({ conversationId: 'A', kind: 'delta', text: cloture(SUITE_FICHIER), streamId: 's1' })
+    )
+    await act(async () => pilote({ conversationId: 'A', kind: 'done' }))
+    await attendre(400)
+    expect(fichierExiste).toHaveBeenCalledWith('fin.txt', undefined)
+    expect(envois(avant)).toBe(0)
+    present = false
+    await attendre(400)
+    expect(envois(avant)).toBe(0)
+    present = true
+    await attendre(400)
+    expect(envois(avant)).toBe(1)
+  })
+  it('fichier toujours absent après 48 h : arrêt annoncé, aucun tour payé', async () => {
+    const fichierExiste = vi.fn(async () => false)
+    const base = [{ role: 'user', content: 'salut' }, { role: 'assistant', content: cloture('lancer terrain.') }]
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
+    let pilote!: (event: Record<string, unknown>) => void
+    h = await mountChat(
+      chatApi({
+        pilotChat,
+        fichierExiste,
+        conversations: vi.fn().mockResolvedValue([conversation('A', base)]),
+        conversation: vi.fn(async (id: string) => conversation(id, base)),
+        onPilotEvent: vi.fn((listener) => {
+          pilote = listener as (event: Record<string, unknown>) => void
+          return vi.fn()
+        })
+      })
+    )
+    await h.click('.conv-item .conv-pick')
+    await h.click('[data-testid="composer-auto-toggle"]')
+    await attendre(20)
+    accelererLesLongsMinuteurs()
+    const avant = pilotChat.mock.calls.length
+    await act(async () =>
+      pilote({ conversationId: 'A', kind: 'delta', text: cloture(SUITE_FICHIER), streamId: 's1' })
+    )
+    await act(async () => pilote({ conversationId: 'A', kind: 'done' }))
+    await attendre(250)
+    expect(fichierExiste).toHaveBeenCalled()
+    // Le temps saute de 49 h : la prochaine sonde dépasse la borne.
+    const reel = Date.now.bind(Date)
+    vi.spyOn(Date, 'now').mockImplementation(() => reel() + 49 * 3_600_000)
+    await attendre(400)
+    const sondes = fichierExiste.mock.calls.length
+    await attendre(400)
+    expect(fichierExiste.mock.calls.length).toBe(sondes)
+    expect(h.container.ownerDocument.body.textContent).toContain(
+      "fin.txt n'existe toujours pas après 48 h de vérification"
+    )
+    expect(
+      pilotChat.mock.calls.slice(avant).filter((c) => JSON.stringify(c).includes('fin.txt')).length
+    ).toBe(0)
+  })
+})

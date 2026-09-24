@@ -11,7 +11,15 @@ import './ProjectPane.css'
  * un dépôt réel. L'écriture ne passe que par le canal `project:write`, borné à la racine côté
  * principal : ici on n'ajoute aucune garde de chemin, on ne la duplique pas.
  */
-export function ProjectPane(): React.JSX.Element {
+export function ProjectPane({
+  conversationId,
+  racine
+}: {
+  /** Conversation dont le CWD sert de racine (resolu cote principal). */
+  conversationId?: string
+  /** CWD courant : quand il CHANGE, l'arbre se recharge et l'editeur se referme. */
+  racine?: string
+} = {}): React.JSX.Element {
   const [racines, setRacines] = useState<ProjectEntry[]>([])
   const [ouverts, setOuverts] = useState<Record<string, ProjectEntry[]>>({})
   const [deplies, setDeplies] = useState<Record<string, boolean>>({})
@@ -23,16 +31,22 @@ export function ProjectPane(): React.JSX.Element {
   const [vscodeEnCours, setVscodeEnCours] = useState(false)
 
   const lister = useCallback(async (chemin: string): Promise<ProjectEntry[]> => {
-    const r = await window.api.listProjectDir(chemin)
+    const r = await window.api.listProjectDir(chemin, conversationId)
     if (!r.ok) {
       setErreur(`Dossier illisible : ${r.reason}`)
       return []
     }
     return r.entries
-  }, [])
+  }, [conversationId])
 
   useEffect(() => {
     let vivant = true
+    // Nouveau CWD ou nouvelle conversation : l'ancien arbre et le fichier ouvert n'y existent plus.
+    setOuverts({})
+    setDeplies({})
+    setFichier(null)
+    setErreur('')
+    setEtat('')
     void (async () => {
       const entries = await lister('')
       if (vivant) setRacines(entries)
@@ -40,7 +54,7 @@ export function ProjectPane(): React.JSX.Element {
     return () => {
       vivant = false
     }
-  }, [lister])
+  }, [lister, racine])
 
   const basculer = async (entry: ProjectEntry): Promise<void> => {
     const estDeplie = !!deplies[entry.path]
@@ -54,7 +68,7 @@ export function ProjectPane(): React.JSX.Element {
   const ouvrir = async (entry: ProjectEntry): Promise<void> => {
     setErreur('')
     setEtat('')
-    const r = await window.api.readProjectFile(entry.path)
+    const r = await window.api.readProjectFile(entry.path, conversationId)
     if (!r.ok) {
       setErreur(`Fichier illisible : ${r.reason}`)
       return
@@ -67,7 +81,7 @@ export function ProjectPane(): React.JSX.Element {
   const enregistrer = async (): Promise<void> => {
     if (!fichier) return
     setEtat('Enregistrement…')
-    const r = await window.api.writeProjectFile(fichier, texte)
+    const r = await window.api.writeProjectFile(fichier, texte, conversationId)
     if (!r.ok) {
       setEtat('')
       setErreur(`Écriture refusée : ${r.reason}`)
@@ -167,7 +181,7 @@ export function ProjectPane(): React.JSX.Element {
             setVscodeEnCours(true)
             setErreur('')
             void window.api
-              .openProjectInVscode()
+              .openProjectInVscode(conversationId)
               .then((r) => {
                 if (!r.ok) setErreur(`VS Code : ${r.raison}`)
               })

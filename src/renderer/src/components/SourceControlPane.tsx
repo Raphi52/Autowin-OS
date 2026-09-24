@@ -321,7 +321,7 @@ export function SourceControlPane({
           </button>
         </div>
 
-        {view === 'tree' && <ProjectPane />}
+        {view === 'tree' && <ProjectPane conversationId={conversationId} racine={repoPath} />}
 
         {view !== 'brain' && view !== 'tree' && visibleGit && !visibleGit.available && (
           <div className="sc-empty">Dépôt Git introuvable ici (lecture indisponible).</div>

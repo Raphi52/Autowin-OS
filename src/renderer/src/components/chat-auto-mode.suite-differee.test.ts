@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
 import {
-  DELAI_SONDAGE_DIFFERE,
+  DELAI_SONDAGE_FICHIER,
   MAX_RELANCES_DIFFEREES,
   deciderRelanceAuto,
   echeanceSuiteDifferee,
@@ -67,7 +67,7 @@ AUTOWIN_PROMPT_V1: ${PROMPT_T2C}`)
 AUTOWIN_PROMPT_V1: ${PROMPT_T2B}`)]
     const maintenant = 1_000_000
     const d = deciderRelanceAuto({ ...base, fil, maintenant, dernierPromptEnvoye: PROMPT_T2B })
-    expect(d).toMatchObject({ action: 'programmer', echeance: maintenant + DELAI_SONDAGE_DIFFERE })
+    expect(d).toMatchObject({ action: 'programmer', echeance: maintenant + DELAI_SONDAGE_FICHIER, fichier: 'essais/t2b-2026-09-21/fin.txt' })
     const fin = deciderRelanceAuto({ ...base, fil, relancesDifferees: MAX_RELANCES_DIFFEREES })
     expect(fin).toMatchObject({ action: 'arreter', raison: 'suite-differee' })
     if (fin.action === 'arreter') expect(fin.message).toMatch(/moment venu/)

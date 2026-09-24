@@ -176,14 +176,17 @@ interface ChatApi {
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
   /** Onglet « Projet » : racine du projet, arborescence par dossier, lecture/ecriture d'un fichier. */
-  projectRoot: () => Promise<string>
+  projectRoot: (conversationId?: string) => Promise<string>
   /** Ouvre tout le projet courant dans VS Code (commande `code`). */
-  openProjectInVscode: () => Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }>
-  listProjectDir: (path?: string) => Promise<import('../main/project-files').ProjectListResult>
-  readProjectFile: (path: string) => Promise<import('../main/project-files').ProjectReadResult>
+  openProjectInVscode: (conversationId?: string) => Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }>
+  /** Lecture seule : le fichier existe-t-il ? `null` = chemin relatif sans base connue. */
+  fichierExiste?: (path: string, base?: string) => Promise<boolean | null>
+  listProjectDir: (path?: string, conversationId?: string) => Promise<import('../main/project-files').ProjectListResult>
+  readProjectFile: (path: string, conversationId?: string) => Promise<import('../main/project-files').ProjectReadResult>
   writeProjectFile: (
     path: string,
-    content: string
+    content: string,
+    conversationId?: string
   ) => Promise<import('../main/project-files').ProjectWriteResult>
   testProjects: () => Promise<
     Array<

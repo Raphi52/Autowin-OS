@@ -61,6 +61,31 @@ async function monter(): Promise<void> {
 
 describe('ProjectPane', () => {
   /**
+   * CHANGER DE CWD CHANGE LE CONTENU. Demande du 2026-09-24 : l'onglet lisait toujours le dossier
+   * global et ne se rechargeait jamais. Il transmet la conversation (le principal en deduit le CWD)
+   * et relit la racine quand ce CWD change.
+   */
+  it('relit l’arbre de la conversation quand son CWD change', async () => {
+    listProjectDir.mockImplementation(async () => ({
+      ok: true,
+      path: '',
+      entries: [{ name: 'x.ts', path: 'x.ts', kind: 'file' }]
+    }))
+    await act(async () => {
+      root = createRoot(host)
+      root.render(<ProjectPane conversationId="conv-1" racine="D:/A" />)
+    })
+    expect(listProjectDir).toHaveBeenLastCalledWith('', 'conv-1')
+    const avant = listProjectDir.mock.calls.length
+    await act(async () => {
+      root.render(<ProjectPane conversationId="conv-1" racine="D:/B" />)
+    })
+    expect(listProjectDir.mock.calls.length).toBe(avant + 1)
+    expect(listProjectDir).toHaveBeenLastCalledWith('', 'conv-1')
+  })
+
+
+  /**
    * EDITEUR DANS L'ARBRE, ET CROIX POUR LE FERMER. Demande de l'utilisateur du 2026-09-12 :
    * l'editeur ne doit plus etre un bloc fixe sous l'arbre mais s'inserer JUSTE SOUS la ligne du
    * fichier ouvert, et se refermer par une croix. Les deux points sont verifies par la POSITION
@@ -122,7 +147,7 @@ describe('ProjectPane', () => {
     expect(q<HTMLButtonElement>('pp-enregistrer').disabled).toBe(false)
     await clic('pp-enregistrer')
 
-    expect(writeProjectFile).toHaveBeenCalledWith('a.ts', 'y')
+    expect(writeProjectFile).toHaveBeenCalledWith('a.ts', 'y', undefined)
     expect(host.textContent).toContain('Enregistré')
   })
 
