@@ -52,6 +52,8 @@ export interface TurnMessageParts {
   history: ReadonlyArray<{
     role: string
     content: string
+    /** Consigne envoyee PENDANT un tour (`directive-dans-le-fil.ts`), pas une demande de tour. */
+    orientation?: boolean
     /**
      * Pieces jointes du message. Presentes ici pour etre NOMMEES dans le fil aplati : le binaire
      * lui-meme voyage a part (`attachments` du message provider), mais sans ce nom rien n'indique
@@ -424,6 +426,37 @@ export function besoinInitialDuFil(history: TurnMessageParts['history']): string
   )
 }
 
+/**
+ * LES CONSIGNES DU TOUR PRECEDENT, REMISES A UNE SESSION REPRISE (conv-844, 2026-09-24).
+ *
+ * fix-ok: session reprise = seul `lastUserMessage` part ; une orientation posee pendant un tour
+ * joue SANS le modele (`/kaizen` -> orchestrate) ou coupe par un redemarrage n'etait jamais remise.
+ * Saisie `ts 1790273878476` (voie orientation) « /draft le 5 mais en vertical apres », envoyee
+ * pendant le /kaizen ; l'app redemarre ; au tour « reprend » (`ts 1790274416782`) le modele repond
+ * « Tu n'as pas encore choisi de maquette. Je pars donc de ... la 2 ». La file en memoire
+ * (`pendingDirectives`) et `comptesRendusNonVus` ne survivent pas au redemarrage ; le fil, lui,
+ * porte la consigne (drapeau `orientation`). On la relit donc dans le fil : les orientations
+ * situees entre la derniere vraie demande et le message courant.
+ */
+export function orientationsDuTourPrecedent(history: TurnMessageParts['history']): string {
+  const derniere = history.length - 1
+  if (derniere < 0 || history[derniere]?.role !== 'user') return ''
+  const textes: string[] = []
+  for (let i = derniere - 1; i >= 0; i--) {
+    const m = history[i]
+    if (!m) continue
+    if (m.role === 'user' && !m.orientation) break
+    if (m.role === 'user' && m.orientation && m.content.trim()) textes.unshift(m.content.trim())
+  }
+  if (!textes.length) return ''
+  return (
+    "CONSIGNES QUE L'UTILISATEUR A ENVOYÉES PENDANT LE TOUR PRÉCÉDENT (ta session peut ne pas les " +
+    'contenir : ce tour a pu se jouer sans toi ou être coupé par un redémarrage). Chacune prime sur ' +
+    "ta propre recommandation ; si l'une n'a pas encore été traitée, traite-la :\n" +
+    textes.map((t) => `> ${t.replace(/\n/g, '\n> ')}`).join('\n')
+  )
+}
+
 export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBlock[] {
   const nonVu = parts.compteRenduNonVu?.trim()
   /**
@@ -447,6 +480,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
             ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
             : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`
         },
+        { name: 'orientationsDuTourPrecedent', text: orientationsDuTourPrecedent(parts.history) },
         { name: 'messageUtilisateur', text: `UTILISATEUR: ${parts.lastUserMessage ?? ''}` }
       ]
     : [
