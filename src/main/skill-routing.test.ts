@@ -251,3 +251,15 @@ describe('« judge » / « juge » en tete de message declenche la phase JUDGE',
     }
   )
 })
+
+describe('judge apres un accuse (conv-843, saisie ts 1790275012499)', () => {
+  it.each(['ok c bon judge mon watchdog', 'ok judge le watchdog', 'bon, juge ça'])('%s -> judge', (m) => {
+    expect(routeSkillRequest(m)?.explicitPhase).toBe('judge')
+  })
+  it.each(['ok le judge a refuse', 'ok c bon judge mon watchdog ?', 'ok judge mon watchdog puis corrige'])(
+    '%s -> pas judge',
+    (m) => {
+      expect(routeSkillRequest(m)?.explicitPhase).not.toBe('judge')
+    }
+  )
+})

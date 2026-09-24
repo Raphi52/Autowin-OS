@@ -154,7 +154,15 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
   // « judge » / « juge » NU en tete : meme defaut que scout (conv-738, 2026-09-21) — seul `/judge`
   // etait route. Phase READ-ONLY, memes bornes : tete + frontiere de mot, pas de question, pas de
   // mutation composee. « jugement », « le judge a refuse » ne declenchent rien.
-  if (/^(?:judge|juge)(?=\s|$)/i.test(text) && !text.includes('?') && !MUTATION_AILLEURS.test(text)) {
+  // Apres un court ACCUSE (« ok c bon judge mon watchdog », saisie ts 1790275012499, conv-843,
+  // turn aa0c6735-a883-4f14-a93f-992e6840669e) : l'ancre stricte ratait, le modele a juge seul.
+  const JUGE_APRES_ACCUSE =
+    /^(?:(?:ok|okay|oui|ouai|ouais|bon|bien|parfait|super|go|vas-y|c|c'est|est|bon|alors|maintenant|et)[\s,.!]+){1,4}(?:judge|juge)\s+(?:mon|ma|mes|le|la|les|l'|ce|cette|ces|ça|ca|du|des|tout)(?=\s|$)/i
+  if (
+    (/^(?:judge|juge)(?=\s|$)/i.test(text) || JUGE_APRES_ACCUSE.test(text)) &&
+    !text.includes('?') &&
+    !MUTATION_AILLEURS.test(text)
+  ) {
     return { task: text, explicitPhase: 'judge', reason: 'explicit-skill' }
   }
 
