@@ -9,7 +9,7 @@
 
   Usage : powershell -NoProfile -File scripts/hdesk-lancer.ps1 -Id roblox -Executable "C:\...\app.exe" -Travail "ce que je fais" -Conversation conv-526 [-Arguments "a b"] [-AttenteSecondes 30]
   Puis  : powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId roblox -Output capture.png
-  Limites connues : pas de clic/clavier dans ce bureau (desktop_act vise l'ecran reel) ; une app
+  Clic et frappe dans ce bureau : scripts/hdesk-act.ps1 (desktop_act vise l'ecran reel). Limites : une app
   rendue par GPU peut se capturer noire — la capture le dit (uni = true, exit 2). Une app a
   INSTANCE UNIQUE deja ouverte (ex. Bloc-notes moderne, mesure 2026-09-13) confie le travail a son
   processus existant : le pid lance disparait et rien n'est isole. Verifier que `pid` vit encore.
