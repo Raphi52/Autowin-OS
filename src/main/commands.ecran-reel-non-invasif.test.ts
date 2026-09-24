@@ -49,3 +49,29 @@ describe('desktop_observe : bureau cache par defaut', () => {
     expect(String(autreTour.error)).toContain('hdesk-lancer.ps1')
   })
 })
+
+// kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : clic sur la barre des taches reelle.
+describe('desktop_act : bureau cache par defaut', () => {
+  const bus = (): AppCommandBus =>
+    new AppCommandBus({ executionWorkspace: process.cwd() } as never, () => undefined)
+  const clic = { actions: [{ type: 'click', x: 558, y: 978 }] }
+
+  it('refuse le premier clic du tour sur l ecran reel', async () => {
+    const r = await bus().exec('desktop_act', clic, undefined, undefined, 'act-1')
+    expect(r.ok).toBe(false)
+    expect(r.error).toContain('`desktop_act` agit sur')
+    expect(r.error).toContain('hdesk-lancer.ps1')
+  })
+
+  it('laisse passer quand l action sur son ecran est assumee', async () => {
+    const r = await bus().exec('desktop_act', { ...clic, ecran_utilisateur: true }, undefined, undefined, 'act-2')
+    expect(String(r.error)).toContain('Controle desktop indisponible')
+  })
+
+  it('une observation refusee n arme pas le clic', async () => {
+    const b = bus()
+    await b.exec('desktop_observe', { display: 1 }, undefined, undefined, 'act-3')
+    const r = await b.exec('desktop_act', clic, undefined, undefined, 'act-3')
+    expect(String(r.error)).toContain('hdesk-lancer.ps1')
+  })
+})

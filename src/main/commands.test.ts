@@ -1838,7 +1838,7 @@ describe('AppCommandBus command execution policy', () => {
       attachments: [image]
     })
     await expect(
-      bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }] })
+      bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true })
     ).resolves.toMatchObject({ ok: true, data: { executed: 1 } })
     expect(desktop.act).toHaveBeenCalledWith([{ type: 'click', x: 10, y: 20 }])
   })

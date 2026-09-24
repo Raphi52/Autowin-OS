@@ -597,7 +597,9 @@ export const CATALOG: CommandSpec[] = [
         "tableau JSON (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'double_click',x,y}, {type:'drag',x,y,toX,toY,button?,steps?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}. " +
         '`drag` glisse du point de depart (x,y) au point d arrivee (toX,toY) — deplacer une fenetre, redimensionner, selectionner : appui, deplacement par paliers, relachement. ' +
         "`keys` est un TABLEAU de touches, jamais une chaine : ['CTRL','A'] et non 'CTRL+A'. `ms` est borne a 5000 (au-dela = refus, enchainer deux waits). " +
-        'Exemple complet : [{"type":"click","x":500,"y":320},{"type":"wait","ms":800},{"type":"key","keys":["CTRL","A"]},{"type":"type","text":"bonjour"}]'
+        'Exemple complet : [{"type":"click","x":500,"y":320},{"type":"wait","ms":800},{"type":"key","keys":["CTRL","A"]},{"type":"type","text":"bonjour"}]',
+      ecran_utilisateur:
+        "booleen — mettre true pour assumer d'agir sur l'ecran REEL de l'utilisateur. Sans lui, le premier appel du tour est refuse et renvoie vers le bureau cache."
     },
     annotations: {
       readOnlyHint: false,
@@ -2188,6 +2190,9 @@ export class AppCommandBus {
   /** Tours dont la capture d'ecran reel a deja ete refusee une fois (voir `refusEcranReel`). */
   private tourEcranReelRefuse?: string
 
+  /** Idem pour `desktop_act` (kaizen conv-854) : compteur distinct, une observation n'arme pas un clic. */
+  private tourActionReelleRefusee?: string
+
   /** Vrai si ce tour a deja recu le refus : on ne facture pas la friction deux fois. */
   private ecranReelDejaRefuse(turnId?: string): boolean {
     const cle = turnId ?? 'sans-tour'
@@ -2307,6 +2312,18 @@ export class AppCommandBus {
           ok: true,
           data: avecNoteDeRejeu(observed.data, dejaVu, name),
           attachments: [observed.attachment]
+        }
+      }
+      if (name === 'desktop_act') {
+        // kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : un clic sur la barre des taches
+        // de l'utilisateur est passe sans aucune garde (decision « confirm » jamais bloquante). Meme
+        // friction d'un appel que `refusEcranReel`, porte de sortie `ecran_utilisateur: true`.
+        const cle = turnId ?? 'sans-tour'
+        if (!assumeEcranReel(args) && this.tourActionReelleRefusee !== cle) {
+          this.tourActionReelleRefusee = cle
+          this.trace?.(name, redactedArgs(name, args), false)
+          noterIssue(false)
+          return { ok: false, error: refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') }
         }
       }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)
