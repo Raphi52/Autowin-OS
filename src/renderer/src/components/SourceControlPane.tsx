@@ -62,6 +62,18 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
   return `${scope} · non publié · ${reasons[result.reason] ?? result.reason}`
 }
 
+/** Options de l'onglet Git : chaque clic envoie la demande à l'agent, rien n'est exécuté ici. */
+const GIT_ACTIONS: ReadonlyArray<{ label: string; prompt: string }> = [
+  { label: 'Fetch', prompt: 'fais un git fetch et dis-moi ce qui a changé sur le distant' },
+  { label: 'Pull', prompt: 'pull la branche courante depuis le distant' },
+  { label: 'Nouvelle branche', prompt: 'crée une nouvelle branche à partir de la branche courante, nommée : ' },
+  { label: 'Récupérer main', prompt: 'intègre les derniers changements de main dans la branche courante' },
+  { label: 'Mettre de côté', prompt: 'mets de côté mes changements en cours (stash nommé) sans rien perdre' },
+  { label: 'Résumer les changements', prompt: 'résume les changements non commités du dépôt, fichier par fichier' },
+  { label: 'Derniers commits', prompt: 'montre et explique les 10 derniers commits de la branche courante' },
+  { label: 'Ouvrir une PR', prompt: 'ouvre une pull request pour la branche courante avec une description claire' }
+]
+
 export function SourceControlPane({
   conversationId,
   depotConversation,
@@ -314,10 +326,11 @@ export function SourceControlPane({
           <button
             className={`sc-btn sc-repo-btn${view === 'workspace' ? ' is-active' : ''}`}
             data-testid="sc-view-workspace"
-            title="Branche et copies d’agents du workspace"
+            title="Git : branche, synchronisation et actions sur le dépôt"
             onClick={() => selectView('workspace')}
           >
-            Workspace
+            {/* « Git » et non « Workspace » : demande de l'utilisateur (conv-844). */}
+            Git
           </button>
         </div>
 
@@ -541,6 +554,21 @@ export function SourceControlPane({
               <button className="sc-btn" onClick={() => propose('push la branche courante')}>
                 Push
               </button>
+            </div>
+            {/* Options Git (conv-844). Comme Push, chaque bouton PROPOSE la demande à l'agent :
+                le panneau ne lance aucun git lui-même, l'agent garde ses garde-fous. */}
+            <header className="sc-h">Actions Git</header>
+            <div className="sc-btns" data-testid="sc-git-actions">
+              {GIT_ACTIONS.map((action) => (
+                <button
+                  key={action.label}
+                  className="sc-btn"
+                  title={action.prompt}
+                  onClick={() => propose(action.prompt)}
+                >
+                  {action.label}
+                </button>
+              ))}
             </div>
             {autoCloseError && (
               <div className="sc-clean" data-testid="sc-autoclose-error" role="alert">

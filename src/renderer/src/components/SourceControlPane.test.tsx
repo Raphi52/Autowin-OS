@@ -127,7 +127,7 @@ describe('SourceControlPane (prompt-first)', () => {
     const onglets = Array.from(container.querySelectorAll('.sc-repo-btn')).map((b) =>
       b.textContent?.trim().replace(/\d+$/, '')
     )
-    expect(onglets).toEqual(['Fichiers', 'Projet', 'Brain', 'Workspace'])
+    expect(onglets).toEqual(['Fichiers', 'Projet', 'Brain', 'Git'])
     expect(container.querySelector('[data-testid="project-pane"]')).toBeNull()
 
     const tab = container.querySelector('[data-testid="sc-view-tree"]') as HTMLButtonElement
@@ -173,7 +173,7 @@ describe('SourceControlPane (prompt-first)', () => {
     mockApi(GIT)
     await render()
     const tab = container.querySelector('[data-testid="sc-view-workspace"]')
-    expect(tab?.textContent?.trim()).toBe('Workspace')
+    expect(tab?.textContent?.trim()).toBe('Git')
     await openWorkspaceView()
     expect(container.textContent).toContain('feat/source-control')
     // Le Hub des bureaux a quitté ce panneau : il vit dans l'onglet plein écran Worktrees.
@@ -666,5 +666,19 @@ describe('SourceControlPane (prompt-first)', () => {
     ) as HTMLButtonElement
     act(() => push.click())
     expect(onSendPrompt).toHaveBeenCalledWith('push la branche courante')
+  })
+
+  it('onglet Git : les options Git proposent leur demande à l’agent', async () => {
+    mockApi(GIT)
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    await openWorkspaceView()
+    const actions = container.querySelector('[data-testid="sc-git-actions"]')
+    expect(actions?.querySelectorAll('button').length).toBeGreaterThanOrEqual(8)
+    const pull = [...(actions?.querySelectorAll('button') ?? [])].find(
+      (b) => b.textContent === 'Pull'
+    ) as HTMLButtonElement
+    act(() => pull.click())
+    expect(onSendPrompt).toHaveBeenCalledWith('pull la branche courante depuis le distant')
   })
 })
