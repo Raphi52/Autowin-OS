@@ -24,4 +24,12 @@ describe('pilotage non invasif par defaut', () => {
     expect(prompt).toContain('journalWindows')
     expect(prompt).not.toContain('pid disparu')
   })
+
+  // kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : ouvrir une page / taper un code
+  // passe d'abord par le bureau cache, plus par le focus de la fenetre de l'utilisateur.
+  it('place le bureau cache avant tout geste sur la fenetre de l utilisateur', () => {
+    const prompt = REGLES_VISUELLES
+    expect(prompt).toContain("ORDRE : d'abord le bureau cache")
+    expect(prompt).not.toContain('focaliser sa fenetre, hdesk')
+  })
 })
