@@ -40,7 +40,23 @@ export type WatchdogSource =
    * `outlook/outlook-local.ts`). Comme `file-match`, seuls les mails apparus APRES le demarrage
    * comptent : la boite deja pleine n'est pas un evenement.
    */
-  | { kind: 'outlook-mail' }
+  | {
+      kind: 'outlook-mail'
+      /** Canal ecoute. Absent = Outlook ET Teams (regles anterieures au 2026-09-25). */
+      channel?: WatchdogMessageChannel
+      /**
+       * Interlocuteurs deja vus, cle = `senderKey` (adresse mail, ou `teams:<nom>`). `enabled: false`
+       * = la regle ne repond PAS a cette personne. Un interlocuteur inconnu est repondu puis ajoute
+       * automatiquement a la liste, pour pouvoir etre coupe ensuite (demande du 2026-09-25).
+       */
+      senders?: Record<string, WatchdogSender>
+    }
+
+export type WatchdogMessageChannel = 'outlook' | 'teams'
+export interface WatchdogSender {
+  name: string
+  enabled: boolean
+}
 
 /**
  * Incidents REELLEMENT emis aujourd'hui (verifies un par un dans le code) — pas un catalogue souhaite.

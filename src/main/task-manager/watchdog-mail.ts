@@ -73,6 +73,66 @@ export function seedMailWatchdogTask(store: TaskStore): string | undefined {
   }
 }
 
+export const MAIL_WATCHDOG_SPLIT_SEED_ID = 'assistant-mails-split-outlook-teams-v1'
+
+/**
+ * Separe l'ancienne regle unique (Outlook + Teams) en DEUX regles : elle garde Outlook, une copie
+ * prend Teams. Une seule fois (demande du 2026-09-25) : une copie supprimee ne revient pas.
+ */
+export function splitMailWatchdogByChannel(store: TaskStore): string | undefined {
+  if (store.hasSeed(MAIL_WATCHDOG_SPLIT_SEED_ID)) return undefined
+  try {
+    const legacy = store
+      .listTasks()
+      .find((task) => task.watchdog?.source.kind === 'outlook-mail' && !task.watchdog.source.channel)
+    if (!legacy?.watchdog || legacy.watchdog.source.kind !== 'outlook-mail') return undefined
+    const { id: _id, ...rest } = legacy
+    void _id
+    store.update(legacy.id, {
+      title: legacy.title.replace(/mails?/i, 'mails Outlook'),
+      watchdog: { ...legacy.watchdog, source: { ...legacy.watchdog.source, channel: 'outlook' } }
+    })
+    return store.create({
+      title: 'Assistant Teams — répond aux messages Teams perso',
+      prompt: rest.prompt,
+      enabled: rest.enabled,
+      mode: rest.mode,
+      ...(rest.action ? { action: rest.action } : {}),
+      destination:
+        rest.destination.kind === 'new'
+          ? { ...rest.destination, title: 'Assistant Teams', category: 'Teams' }
+          : rest.destination,
+      watchdog: { ...legacy.watchdog, source: { kind: 'outlook-mail', channel: 'teams' } }
+    }).id
+  } finally {
+    store.markSeeded(MAIL_WATCHDOG_SPLIT_SEED_ID)
+  }
+}
+
+/**
+ * Ajoute un interlocuteur jamais vu a chaque regle du canal, ACTIVE par defaut, pour que
+ * l'utilisateur puisse ensuite le couper d'un clic. Un interlocuteur deja connu n'est pas touche.
+ */
+export function rememberMailSender(
+  store: TaskStore,
+  channel: 'outlook' | 'teams',
+  key: string,
+  name: string
+): void {
+  for (const task of store.listTasks()) {
+    const source = task.watchdog?.source
+    if (source?.kind !== 'outlook-mail') continue
+    if (source.channel && source.channel !== channel) continue
+    if (source.senders?.[key]) continue
+    store.update(task.id, {
+      watchdog: {
+        ...task.watchdog!,
+        source: { ...source, senders: { ...source.senders, [key]: { name, enabled: true } } }
+      }
+    })
+  }
+}
+
 /**
  * Le texte a envoyer, extrait de la reponse de l'agent. `undefined` = rien ne part : bloc absent
  * (l'agent n'a pas conclu), vide, ou refus explicite. Un envoi ne se devine jamais.
@@ -87,6 +147,14 @@ export function extractMailReply(text: string | undefined): string | undefined {
   const body = after.slice(0, end).trim()
   if (!body || body.includes(MAIL_NO_REPLY)) return undefined
   return body
+}
+
+/** Cle stable d'un interlocuteur : adresse mail pour Outlook, nom affiche pour Teams. */
+export function senderKey(channel: 'outlook' | 'teams', mail: InboxMail): string | undefined {
+  const raw = channel === 'teams' ? mail.nom : mail.adresse || mail.nom
+  const key = raw?.trim().toLowerCase()
+  if (!key) return undefined
+  return channel === 'teams' ? `teams:${key}` : key
 }
 
 export interface InboxMail {

@@ -19,7 +19,13 @@ export type WatchdogAppEvent =
 export type WatchdogSource =
   | { kind: 'file-match'; path: string; pattern: string; caseSensitive?: boolean }
   | { kind: 'app-event'; events: WatchdogAppEvent[] }
-  | { kind: 'outlook-mail' }
+  | {
+      kind: 'outlook-mail'
+      /** Absent = Outlook ET Teams (ancienne règle unique). */
+      channel?: 'outlook' | 'teams'
+      /** Interlocuteurs déjà vus ; `enabled: false` = la règle ne leur répond pas. */
+      senders?: Record<string, { name: string; enabled: boolean }>
+    }
 
 export interface WatchdogGuards {
   dedupWindowMs: number
@@ -82,8 +88,16 @@ const APP_EVENT_LABEL: Record<WatchdogAppEvent, string> = {
 }
 
 export function describeWatchdogSource(source: WatchdogSource): string {
+  if (source.kind === 'outlook-mail') {
+    const muted = Object.values(source.senders ?? {}).filter((sender) => !sender.enabled).length
+    const suffix = muted ? ` — ${muted} interlocuteur(s) ignoré(s)` : ''
+    if (source.channel === 'outlook')
+      return `Quand un mail non lu arrive dans Outlook — l’agent répond par mail${suffix}`
+    if (source.channel === 'teams')
+      return `Quand un message Teams perso arrive — l’agent répond dans le même fil${suffix}`
+  }
   if (source.kind === 'outlook-mail')
-    return 'Quand un mail non lu arrive dans Outlook — l’agent répond au mail par un compte rendu'
+    return 'Quand un mail non lu arrive dans Outlook, ou un message Teams perso — l’agent répond dans le même fil par un compte rendu'
   if (source.kind === 'app-event') {
     if (!source.events.length)
       return 'Aucun événement surveillé — cette règle ne se déclenchera jamais'

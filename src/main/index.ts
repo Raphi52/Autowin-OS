@@ -377,6 +377,9 @@ import { seedCurateTask } from './task-manager/curate-seed'
 import {
   NewUnreadMailDetector,
   describeMail,
+  rememberMailSender,
+  senderKey,
+  splitMailWatchdogByChannel,
   seedMailWatchdogTask
 } from './task-manager/watchdog-mail'
 import {
@@ -3611,11 +3614,7 @@ Le fil reprend ensuite normalement.`
           console.log(
             `[watchdog] connexion Teams demandée : code ${prompt.userCode} sur ${prompt.verificationUri}`
           )
-          void dialog.showMessageBox({
-            type: 'info',
-            title: 'Assistant mails — connexion Teams',
-            message: `Pour que le watchdog lise et réponde à tes messages Teams, ouvre ${prompt.verificationUri} et saisis le code ${prompt.userCode}.`
-          })
+          // Plus de fenetre (demande utilisateur conv-854, 2026-09-25) : le code reste dans le journal.
         }
       )
     : undefined
@@ -3641,19 +3640,32 @@ Le fil reprend ensuite normalement.`
     void (async () => {
       try {
         const fresh = mailDetector.next(await outlookGateway.snapshot(true))
-        for (const mail of fresh)
-          await watchdogEngine?.notifyMail({ itemId: mail.id, context: describeMail(mail) })
+        for (const mail of fresh) {
+          const key = senderKey('outlook', mail)
+          if (key) rememberMailSender(scheduledTasks, 'outlook', key, mail.nom || mail.adresse || key)
+          await watchdogEngine?.notifyMail({
+            itemId: mail.id,
+            context: describeMail(mail),
+            channel: 'outlook',
+            senderKey: key
+          })
+        }
       } catch (error) {
         console.warn('[watchdog] lecture des mails impossible', error)
       }
       // Teams passe par la MEME regle : un echec Teams ne prive pas les mails, et inversement.
       if (teamsClient) {
         try {
-          for (const message of teamsDetector.next(await teamsClient.snapshot()))
+          for (const message of teamsDetector.next(await teamsClient.snapshot())) {
+            const key = senderKey('teams', message)
+            if (key) rememberMailSender(scheduledTasks, 'teams', key, message.nom || key)
             await watchdogEngine?.notifyMail({
               itemId: message.id,
-              context: describeTeamsMessage(message)
+              context: describeTeamsMessage(message),
+              channel: 'teams',
+              senderKey: key
             })
+          }
         } catch (error) {
           console.warn(
             '[watchdog] lecture Teams impossible :',
@@ -3760,6 +3772,8 @@ Le fil reprend ensuite normalement.`
       }
       if (mailsPerso() && seedMailWatchdogTask(scheduledTasks))
         console.log('[watchdog] règle Assistant mails posée')
+      if (splitMailWatchdogByChannel(scheduledTasks))
+        console.log('[watchdog] règle mails séparée en Outlook + Teams')
       if (seedCurateTask(scheduledTasks))
         console.log('[task-manager] tâche Curation quotidienne posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc

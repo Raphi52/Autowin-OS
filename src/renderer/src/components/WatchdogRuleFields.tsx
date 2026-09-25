@@ -134,9 +134,67 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
           )}
         </fieldset>
       ) : (
-        <p className="task-manager-field task-manager-field-wide">
-          Chaque mail non lu reçu dans Outlook réveille l’agent, qui répond par mail.
-        </p>
+        <>
+          <label className="task-manager-field task-manager-field-wide">
+            <span>Canal écouté</span>
+            <select
+              value={source.channel ?? 'both'}
+              data-testid="watchdog-mail-channel"
+              onChange={(event) => {
+                const value = event.target.value
+                const { channel: _old, ...rest } = source
+                void _old
+                onChange({
+                  ...rule,
+                  source:
+                    value === 'outlook' || value === 'teams' ? { ...rest, channel: value } : rest
+                })
+              }}
+            >
+              <option value="outlook">Outlook (mails)</option>
+              <option value="teams">Teams (messages perso)</option>
+              <option value="both">Outlook et Teams</option>
+            </select>
+          </label>
+          <fieldset className="task-manager-field task-manager-field-wide watchdog-events watchdog-senders" data-testid="watchdog-senders">
+            <legend>Interlocuteurs — cochés = l’agent leur répond</legend>
+            {Object.keys(source.senders ?? {}).length === 0 ? (
+              <p className="watchdog-fields-note">
+                Aucun interlocuteur encore vu. Chaque nouvelle personne qui écrit apparaît ici,
+                cochée par défaut : décoche-la pour que l’agent ne lui réponde plus.
+              </p>
+            ) : (
+              Object.entries(source.senders ?? {})
+                .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+                .map(([key, sender]) => (
+                  <label key={key} className="task-manager-switch">
+                    <input
+                      type="checkbox"
+                      checked={sender.enabled}
+                      onChange={(event) =>
+                        onChange({
+                          ...rule,
+                          source: {
+                            ...source,
+                            senders: {
+                              ...source.senders,
+                              [key]: { ...sender, enabled: event.target.checked }
+                            }
+                          }
+                        })
+                      }
+                    />
+                    <span>
+                      {sender.name}
+                      {sender.name.toLowerCase() !== key && !key.startsWith('teams:') && (
+                        <small> — {key}</small>
+                      )}
+                    </span>
+                  </label>
+                ))
+            )}
+          </fieldset>
+        </>
       )}
 
       <label className="task-manager-field task-manager-field-wide">

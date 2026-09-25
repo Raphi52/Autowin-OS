@@ -171,6 +171,21 @@ const WATCHDOG_APP_EVENTS: readonly WatchdogAppEvent[] = [
 
 /** Bornes des gardes. Ce sont des valeurs qui arrivent du renderer : on les CONTRAINT, on ne les
  *  croit pas. Un plafond a 0 desarmerait la regle, un plafond immense annulerait l'anti-rafale. */
+/** Liste des interlocuteurs d'une regle mail/Teams : seules les entrees bien formees passent. */
+function mailSenders(raw: unknown): Record<string, { name: string; enabled: boolean }> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, { name: string; enabled: boolean }> = {}
+  for (const [key, entry] of Object.entries(raw as Record<string, unknown>).slice(0, 500)) {
+    if (!key.trim() || !entry || typeof entry !== 'object') continue
+    const value = entry as Record<string, unknown>
+    out[key] = {
+      name: typeof value.name === 'string' ? value.name.slice(0, 200) : key,
+      enabled: value.enabled !== false
+    }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 function guards(raw: unknown): WatchdogGuards {
   const value = object(raw, 'watchdog.guards')
   const clamp = (input: unknown, min: number, max: number, fallback: number): number => {
@@ -233,7 +248,13 @@ function watchdog(raw: unknown): WatchdogRule {
   }
   if (source.kind === 'outlook-mail') {
     return {
-      source: { kind: 'outlook-mail' },
+      source: {
+        kind: 'outlook-mail',
+        ...(source.channel === 'outlook' || source.channel === 'teams'
+          ? { channel: source.channel }
+          : {}),
+        ...(mailSenders(source.senders) ? { senders: mailSenders(source.senders) } : {})
+      },
       guards: guards(value.guards),
       ...(value.action === undefined ? {} : { action: watchdogAction(value.action) })
     }

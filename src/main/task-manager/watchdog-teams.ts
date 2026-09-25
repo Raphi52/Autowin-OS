@@ -19,6 +19,8 @@ import type { InboxMail } from './watchdog-mail'
 
 export const TEAMS_ID_PREFIX = 'teams:'
 export const TEAMS_SCOPES = 'offline_access User.Read Chat.Read ChatMessage.Send'
+/** Delai avant de redemander un code apres un code expire ou refuse. */
+export const TEAMS_PROMPT_PAUSE_MS = 6 * 60 * 60 * 1000
 const GRAPH = 'https://graph.microsoft.com/v1.0'
 
 export interface TeamsConfig {
@@ -132,6 +134,8 @@ export class TeamsGraphClient {
   private accessExpiresAt = 0
   private myId: string | undefined
   private signingIn: Promise<void> | undefined
+  /** Apres un code laisse sans reponse, plus aucune fenetre avant cette date (voir `token`). */
+  private promptPausedUntil = 0
 
   constructor(
     private readonly config: TeamsConfig,
@@ -217,10 +221,19 @@ export class TeamsGraphClient {
   private async token(): Promise<string> {
     if (this.accessToken && this.now() < this.accessExpiresAt) return this.accessToken
     if (await this.refresh().catch(() => false)) return this.accessToken!
+    // Un code expire ou refuse ne relance PAS de fenetre au passage suivant : sans cette pause,
+    // chaque expiration (15 min) rouvrait une fenetre — 58 fenetres constatees le 2026-09-25.
+    if (!this.signingIn && this.now() < this.promptPausedUntil)
+      throw new Error('connexion Teams en pause : dernier code non saisi, nouvelle demande plus tard')
     // Une seule connexion interactive a la fois : la surveillance repasse toutes les minutes.
-    this.signingIn ??= this.deviceCodeSignIn().finally(() => {
-      this.signingIn = undefined
-    })
+    this.signingIn ??= this.deviceCodeSignIn()
+      .catch((error: unknown) => {
+        this.promptPausedUntil = this.now() + TEAMS_PROMPT_PAUSE_MS
+        throw error
+      })
+      .finally(() => {
+        this.signingIn = undefined
+      })
     await this.signingIn
     return this.accessToken!
   }

@@ -9,6 +9,7 @@ import {
 } from './watchdog-mail'
 import type { ScheduledTask, TaskOccurrence } from './types'
 import {
+  TEAMS_PROMPT_PAUSE_MS,
   TeamsGraphClient,
   chatsToSnapshot,
   parseTeamsItemId,
@@ -114,6 +115,34 @@ describe('watchdog Teams', () => {
     expect(JSON.parse(post.body!)).toEqual({
       body: { contentType: 'text', content: 'Fait : devis relu.' }
     })
+  })
+
+  it('un code expiré ne rouvre pas de fenêtre au passage suivant, seulement après la pause', async () => {
+    let clock = 0
+    const fetchImpl = async (url: string): Promise<Response> => {
+      if (url.endsWith('/devicecode'))
+        return json({ device_code: 'dc', user_code: `C${clock}`, interval: 1, expires_in: 1 })
+      if (url.endsWith('/token')) {
+        clock += 2000
+        return json({ error: 'authorization_pending' }, 400)
+      }
+      return json({}, 404)
+    }
+    const codes: string[] = []
+    const client = new TeamsGraphClient(
+      { clientId: 'cid', tenantId: 'organizations' },
+      { load: () => undefined, save: () => {} },
+      (p) => codes.push(p.userCode),
+      fetchImpl,
+      () => clock,
+      async () => {}
+    )
+    await expect(client.snapshot()).rejects.toThrow(/expirée/)
+    await expect(client.snapshot()).rejects.toThrow(/en pause/)
+    expect(codes).toHaveLength(1)
+    clock += TEAMS_PROMPT_PAUSE_MS
+    await expect(client.snapshot()).rejects.toThrow(/expirée/)
+    expect(codes).toHaveLength(2)
   })
 
   it('un refus Graph remonte en échec, jamais en succès', async () => {

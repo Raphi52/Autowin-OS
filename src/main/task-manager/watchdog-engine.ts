@@ -310,9 +310,19 @@ export class WatchdogEngine {
    * interroger la passerelle COM ; le moteur reste testable sans Outlook. La signature porte
    * l'identifiant du message : le meme mail revu au passage suivant est deduplique par les gardes.
    */
-  async notifyMail(mail: { itemId: string; context: string }): Promise<void> {
+  async notifyMail(mail: {
+    itemId: string
+    context: string
+    channel?: 'outlook' | 'teams'
+    senderKey?: string
+  }): Promise<void> {
     for (const task of this.watchdogTasks()) {
-      if (task.watchdog?.source?.kind !== 'outlook-mail') continue
+      const source = task.watchdog?.source
+      if (source?.kind !== 'outlook-mail') continue
+      // Regle dediee a l'autre canal : pas pour elle. Sans canal (ancienne regle) : les deux.
+      if (source.channel && mail.channel && source.channel !== mail.channel) continue
+      // Interlocuteur coupe par l'utilisateur : la regle ne lui repond pas.
+      if (mail.senderKey && source.senders?.[mail.senderKey]?.enabled === false) continue
       const signature = `outlook-mail:${mail.itemId}`
       await this.fire(task, {
         signature,
