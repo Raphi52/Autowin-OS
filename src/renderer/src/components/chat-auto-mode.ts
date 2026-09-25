@@ -450,8 +450,18 @@ const SUITE_PORTE_DONNEE_UTILISATEUR =
 // Un emplacement « : <mot> » en fin de ligne est une valeur que seul l'utilisateur peut écrire.
 // « commande webtest record <url> qui … » (spécification, saisie ts 1790170354034) ne l'est pas.
 const SUITE_A_TROU = /:\s*<[\p{L}][\p{L}\s_'’-]{0,30}>\s*$/mu
+// Mesure conv-854 : saisies ts 1790329789299 et ts 1790331255647 (« J'ai saisi CE67N36QT et
+// accepté, vérifie… ») sont parties SEULES, au nom de l'utilisateur, qui n'avait rien saisi. Les
+// tours suivants ont vérifié une connexion jamais faite. Un geste de l'utilisateur affirmé en
+// première personne en tête de suite est une donnée que seul lui détient.
+const SUITE_AFFIRME_GESTE_UTILISATEUR =
+  /^\s*j['’]ai\s+(?:bien\s+)?(?:saisi|valid[ée]|accept[ée]|tap[ée]|entr[ée]|confirm[ée]|autoris[ée]|approuv[ée])(?![\p{L}])/iu
 export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
-  return SUITE_PORTE_DONNEE_UTILISATEUR.test(suite) || SUITE_A_TROU.test(suite)
+  return (
+    SUITE_PORTE_DONNEE_UTILISATEUR.test(suite) ||
+    SUITE_A_TROU.test(suite) ||
+    SUITE_AFFIRME_GESTE_UTILISATEUR.test(suite)
+  )
 }
 
 /**

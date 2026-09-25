@@ -50,3 +50,21 @@ describe('suite à trou (conv-798, saisie ts 1790170650709)', () => {
     ).toBe(false)
   })
 })
+
+describe('suite qui affirme un geste que seul l’utilisateur a pu faire (conv-854)', () => {
+  it('bloque « J’ai saisi X et accepté » (saisie ts 1790331255647)', () => {
+    expect(
+      suiteAttendUneDonneeUtilisateur(
+        "J'ai saisi CE67N36QT et accepté, vérifie que le fichier de connexion Teams existe"
+      )
+    ).toBe(true)
+    expect(
+      suiteAttendUneDonneeUtilisateur(
+        "J'ai validé le code Microsoft, vérifie que le watchdog lit bien mes messages Teams"
+      )
+    ).toBe(true)
+  })
+  it('laisse passer une suite d’action ordinaire', () => {
+    expect(suiteAttendUneDonneeUtilisateur('Vérifie que le fichier de connexion Teams existe')).toBe(false)
+  })
+})
