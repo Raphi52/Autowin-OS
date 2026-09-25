@@ -20,13 +20,13 @@ import {
 } from '../runs/stdout-journal'
 import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
-import { findNpmGlobalFile } from './npm-global-resolve'
+import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
 import { refusReglageProd, refusSqlAgent } from '../prod-run-guard'
 import { chargerAutoriteProd } from '../store/prod-autorite-store'
 import { autowinAppDataRoot } from '../app-data'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
 import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
@@ -511,7 +511,58 @@ export function resolveClaudeBin(explicit?: string): string {
   if (explicit) return explicit
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
   const found = findClaudeExecutable()
+  if (found) dernierClaudeTrouve = found
   return found ?? 'claude'
+}
+
+/** Dernier `claude.exe` resolu dans ce processus — secours si une resolution ulterieure echoue. */
+let dernierClaudeTrouve: string | undefined
+
+export interface BinaireLancableDeps {
+  platform?: string
+  /** Binaire DESIGNE (option `bin` ou `CLAUDE_BIN`) : choix de l'operateur, jamais re-resolu. */
+  designe?: boolean
+  rechercher?: () => string | undefined
+  dernierConnu?: () => string | undefined
+  existe?: (chemin: string) => boolean
+  candidats?: () => string[]
+  attendre?: (ms: number) => Promise<void>
+}
+
+/**
+ * Binaire que le relais survivable Windows peut REELLEMENT lancer.
+ *
+ * Le runner passe l'executable a CreateProcessW en `lpApplicationName`, qui ne cherche JAMAIS dans le
+ * PATH : le repli nu `claude` y echoue a coup sur, en « Le fichier specifie est introuvable » (reproduit
+ * le 2026-09-25, `-ExecutableB64` decode = « claude »). Plutot que de lancer un echec certain, on
+ * re-resout (dernier binaire connu, puis quelques essais espaces) ; sinon on echoue en NOMMANT les
+ * dossiers cherches — la prochaine occurrence s'explique d'elle-meme.
+ */
+export async function binaireClaudeLancable(
+  bin: string,
+  deps: BinaireLancableDeps = {}
+): Promise<string> {
+  const platform = deps.platform ?? process.platform
+  if (platform !== 'win32' || deps.designe || isAbsolute(bin)) return bin
+  const existe = deps.existe ?? existsSync
+  const connu = (deps.dernierConnu ?? ((): string | undefined => dernierClaudeTrouve))()
+  if (connu && existe(connu)) return connu
+  const rechercher = deps.rechercher ?? ((): string | undefined => findClaudeExecutable())
+  const attendre =
+    deps.attendre ?? ((ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)))
+  for (const ms of [0, 250, 1000, 3000]) {
+    if (ms) await attendre(ms)
+    const trouve = rechercher()
+    if (trouve) {
+      dernierClaudeTrouve = trouve
+      return trouve
+    }
+  }
+  const cherches = (deps.candidats ?? ((): string[] => npmPrefixCandidates()))()
+  throw new Error(
+    `CLI claude introuvable : aucun claude.exe sous ${cherches.slice(0, 6).join(' ; ') || '(aucun dossier candidat)'}. ` +
+      'Installe-le (npm i -g @anthropic-ai/claude-code) ou désigne-le via CLAUDE_BIN.'
+  )
 }
 
 /**
@@ -1308,7 +1359,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       }
       invocation = journal
-        ? backgroundSurvivalInvocation(this.bin, args, journalRoot!, journal.path, lastUser)
+        ? backgroundSurvivalInvocation(
+            // Le relais Windows ne cherche pas dans le PATH : jamais de nom nu (voir binaireClaudeLancable).
+            await binaireClaudeLancable(this.bin, {
+              designe: Boolean(this.explicitBin || process.env.CLAUDE_BIN)
+            }),
+            args,
+            journalRoot!,
+            journal.path,
+            lastUser
+          )
         : {
             bin: this.bin,
             args,
