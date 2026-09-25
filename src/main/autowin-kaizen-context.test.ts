@@ -674,14 +674,27 @@ describe('regime ample : la retrospective ne rend pas un echantillon muet', () =
 })
 
 describe('dossier kaizen sans mot de passe (conv-854, saisie ts 1790334398650)', () => {
-  it('compactSaisie rédige un identifiant collé en clair', async () => {
-    const mod = await import('./autowin-kaizen-context')
-    const f = (mod as Record<string, unknown>).__compactSaisieForTest as
-      | ((s: { ts: number; voie: string; texte: string }) => { texte: string })
-      | undefined
-    expect(f).toBeTypeOf('function')
-    expect(f!({ ts: 1, voie: 'message', texte: 'u@corp.com Secr3t2026! fais le' }).texte).toBe(
-      'u@corp.com [REDACTED] fais le'
+  it('rédige un identifiant collé en clair dans une saisie, via collectAutowinKaizenEvidence', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-secret-'))
+    writeFileSync(
+      join(appData, 'saisies-utilisateur.jsonl'),
+      JSON.stringify({
+        schema: 'autowin.saisie/v1',
+        ts: 1,
+        conversationId: 'conv-s',
+        texte: 'u@corp.com Secr3t2026! fais le',
+        voie: 'message'
+      }) + '\n'
     )
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        { id: 'conv-s', title: 's', provider: 'codex', messages: [], createdAt: 1, updatedAt: 1 },
+        appData
+      )
+      expect((evidence.saisies ?? []).map((x) => x.texte)).toEqual(['u@corp.com [REDACTED] fais le'])
+      expect(buildAutowinKaizenTask('/kaizen', evidence)).not.toContain('Secr3t2026!')
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
   })
 })

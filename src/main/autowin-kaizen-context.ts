@@ -678,4 +678,3 @@ ${MARQUEUR_FIN}
 
   return `${entete}${JSON.stringify(snapshot)}${pied}`
 }
-export const __compactSaisieForTest = compactSaisie
