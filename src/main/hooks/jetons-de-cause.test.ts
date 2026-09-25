@@ -75,6 +75,14 @@ describe('jetonsDeCauseParFichier — la cause se DECLARE, elle ne se suppose pa
     })
   })
 
+  // run-36461be778d0-1, reparations 1-4 : « 4 edits de D:/GIT/RigApplication/.../PROC_SURVBOD.csproj »
+  // — l'extension etait bornee a 5 caracteres, un `.csproj` (6) ne pouvait jamais etre nomme.
+  it('lit un jeton qui nomme un fichier a extension LONGUE (.csproj)', async () => {
+    const f = 'Z:/absent/BODACC/PROC_SURVBOD/PROC_SURVBOD.csproj' // hors disque : isole la source 2
+    const texte = `CausalHypothesis: ${f} — projet deplace d'un dossier.`
+    expect(await jetonsDeCauseParFichier(texte, [], [f])).toEqual({ [f]: true })
+  })
+
   it('resout un nom de fichier SEUL quand un seul fichier edite le porte', async () => {
     const texte = 'fix-ok: boucle.ts — cause prouvee par le test rouge d abord.'
     expect(await jetonsDeCauseParFichier(texte, [], ['src/main/boucle.ts'])).toEqual({
@@ -253,5 +261,42 @@ describe('jetonsDeCauseParFichier — source 3 depuis un worktree en HEAD detach
     git('worktree', 'add', '--detach', wt, avant)
     const cible = resolve(wt, 'cible.ts').split(sep).join('/')
     expect(await jetonsDeCauseParFichier('', [], [cible])).toEqual({ [cible]: true })
+  })
+})
+
+/**
+ * SOURCE 3 SUR UN FICHIER NON SUIVI — run-36461be778d0-1, reparations 1 a 3 : le refus fix-gate
+ * visait D:/GIT/RigApplication/.../BODACC/PROC_SURVBOD/PROC_SURVBOD.csproj, fichier DEPLACE donc
+ * non suivi (`??`), qui portait deja son `fix-ok:` ligne 3. `git diff HEAD` ne montre rien d'un
+ * fichier non suivi et `git log` n'a aucun commit : le jeton restait invisible, meme refus rejoue.
+ */
+describe('jetonsDeCauseParFichier — source 3 sur un fichier non suivi par git', () => {
+  it('credite un fichier NON SUIVI qui porte son jeton', async () => {
+    const { mkdtempSync, writeFileSync: w, realpathSync } = await import('node:fs')
+    const { execFileSync } = await import('node:child_process')
+    const { tmpdir } = await import('node:os')
+    const repo = mkdtempSync(resolve(realpathSync.native(tmpdir()), 'jeton-nonsuivi-'))
+    const git = (...a: string[]): void => {
+      execFileSync('git', a, { cwd: repo, stdio: 'ignore' })
+    }
+    git('init', '-b', 'main')
+    git('config', 'user.email', 'a@b.c')
+    git('config', 'user.name', 'test')
+    w(resolve(repo, 'autre.txt'), 'x\n')
+    git('add', '-A')
+    git('commit', '-m', 'init')
+    w(resolve(repo, 'Projet.csproj'), '<Project>\n  <!-- fix-ok: cause mesuree -->\n</Project>\n')
+    const cible = resolve(repo, 'Projet.csproj').split(sep).join('/')
+    expect(await jetonsDeCauseParFichier('', [], [cible])).toEqual({ [cible]: true })
+  })
+  it('ne credite pas un fichier non suivi SANS jeton', async () => {
+    const { mkdtempSync, writeFileSync: w, realpathSync } = await import('node:fs')
+    const { execFileSync } = await import('node:child_process')
+    const { tmpdir } = await import('node:os')
+    const repo = mkdtempSync(resolve(realpathSync.native(tmpdir()), 'jeton-nonsuivi-'))
+    execFileSync('git', ['init', '-b', 'main'], { cwd: repo, stdio: 'ignore' })
+    w(resolve(repo, 'Projet.csproj'), '<Project>\n</Project>\n')
+    const cible = resolve(repo, 'Projet.csproj').split(sep).join('/')
+    expect(await jetonsDeCauseParFichier('', [], [cible])).toEqual({})
   })
 })

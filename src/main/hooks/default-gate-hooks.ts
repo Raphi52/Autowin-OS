@@ -165,7 +165,8 @@ export async function jetonsDeCauseParFichier(
     for (const f of connus) if (f.endsWith('/') && ligneNorm.includes(f)) jetons[f] = true
     // fix-ok: la classe excluait « : » — un chemin absolu Windows (D:/...) perdait sa lettre de lecteur et ne pouvait jamais desarmer le fichier (conv-526, refus « 5 edits de D:/AutoWinOS/scripts/ui-capture.mjs »)
     // fix-ok: l'extension exigeait des lettres seules — un « .ps1 » ne pouvait jamais desarmer son fichier (conv-528, refus « 7 edits de resources/hdesk-tv.ps1 » malgre le jeton ; recupere de run-0e76c99a3021-1)
-    const candidats = ligne.match(/(?:\b[A-Za-z]:)?[\w./\\-]+\.[A-Za-z][A-Za-z0-9]{0,4}\b/g) ?? []
+    // fix-ok: run-36461be778d0-1 reparations 1-4 — l'extension etait bornee a 5 caracteres : un « .csproj » (6) ne pouvait jamais desarmer son fichier
+    const candidats = ligne.match(/(?:\b[A-Za-z]:)?[\w./\\-]+\.[A-Za-z][A-Za-z0-9]{0,9}\b/g) ?? []
     for (const brut of candidats) {
       const c = norm(brut)
       if (connus.includes(c)) {
@@ -229,6 +230,11 @@ async function lignesAjouteesAuDernierChangement(fichier: string): Promise<strin
       .map((l) => l.slice(1))
   const enCours = ajoutees(await git(['diff', 'HEAD', '--', cible]))
   if (enCours.length) return enCours
+  // fix-ok: run-36461be778d0-1 reparations 1-3 — un fichier NON SUIVI (deplace, `??`) n'apparait
+  // ni dans `git diff HEAD` ni dans `git log` : son `fix-ok:` restait invisible. Toutes ses lignes
+  // sont nouvelles, donc toutes comptent comme ajoutees.
+  if (surDisque && (await git(['ls-files', '--others', '--exclude-standard', '--', cible])).trim())
+    return readFileSync(surDisque, 'utf8').split(/\r?\n/)
   const shas = new Set(
     await Promise.all([
       git(['log', '-1', '--format=%H', '--', cible]).then((o) => o.trim()),
