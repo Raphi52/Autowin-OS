@@ -403,10 +403,13 @@ export function TaskManagerView({
   const [draft, setDraft] = useState<TaskDraft>()
   const [editingId, setEditingId] = useState<string>()
   // Changer d'onglet (clic ou lien profond du parent) ferme l'editeur : un brouillon ne suit pas.
-  useEffect(() => {
+  // Ajuste pendant le rendu (motif React) plutot qu'un setState synchrone dans un effet.
+  const [sectionVue, setSectionVue] = useState(sectionActive)
+  if (sectionVue !== sectionActive) {
+    setSectionVue(sectionActive)
     setDraft(undefined)
     setEditingId(undefined)
-  }, [sectionActive])
+  }
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
@@ -736,7 +739,7 @@ export function TaskManagerView({
 
   // Détail + éditeur, partagés par les onglets Planification et Watchdog (même état, deux rendus).
   const scheduledTasks = splitByTrigger(snapshot.tasks).scheduled
-  const renderDetail = (selected: (typeof snapshot.tasks)[number] | undefined) => (
+  const renderDetail = (selected: (typeof snapshot.tasks)[number] | undefined): React.JSX.Element => (
     <main className="task-manager-detail">
       {draft ? (
         <div className="task-manager-editor">

@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SourceControlPane } from './SourceControlPane'
+import { RELIRE_PENDANT_TOUR_MS, SourceControlPane } from './SourceControlPane'
 import type { GitReadResult } from '../../../shared/git-read'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -156,6 +156,37 @@ describe('SourceControlPane (prompt-first)', () => {
       await Promise.resolve()
     })
     expect(calls.conversationArgs).toEqual(['conv-a', 'conv-a'])
+  })
+
+  it('relit PENDANT le tour quand l’agent passe par son terminal (commit sans result ni done)', async () => {
+    vi.useFakeTimers()
+    try {
+      mockApi(GIT)
+      let emettre: ((e: unknown) => void) | null = null
+      ;(window as unknown as { api: { onPilotEvent: unknown } }).api.onPilotEvent = (
+        cb: (e: unknown) => void
+      ) => {
+        emettre = cb
+        return () => {}
+      }
+      await render()
+      expect(calls.conversationArgs).toEqual(['conv-a'])
+      await act(async () => {
+        emettre?.({ conversationId: 'conv-a', kind: 'provider-status', text: 'Bash' })
+        emettre?.({ conversationId: 'conv-a', kind: 'delta', text: 'commit fait' })
+        emettre?.({ conversationId: 'conv-b', kind: 'provider-status', text: 'Bash' })
+        await Promise.resolve()
+      })
+      expect(calls.conversationArgs).toEqual(['conv-a'])
+      await act(async () => {
+        vi.advanceTimersByTime(RELIRE_PENDANT_TOUR_MS)
+        await Promise.resolve()
+      })
+      // Une seule relecture pour la rafale, aucune pour l'autre conversation.
+      expect(calls.conversationArgs).toEqual(['conv-a', 'conv-a'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('vue par défaut : UNIQUEMENT les changements (ni branche ni historique)', async () => {
@@ -697,14 +728,14 @@ describe('SourceControlPane (prompt-first)', () => {
 
 describe('etapesGit', () => {
   it('main en retard et en avance : récupérer puis push, jamais de PR', async () => {
-    const { etapesGit } = await import('./SourceControlPane')
+    const { etapesGit } = await import('./etapes-git')
     expect(etapesGit({ branch: 'main', ahead: 5, behind: 2, changes: [] }).map((e) => e.label)).toEqual([
       'Récupérer',
       'Push'
     ])
   })
   it('main propre et synchronisé : aucune étape', async () => {
-    const { etapesGit } = await import('./SourceControlPane')
+    const { etapesGit } = await import('./etapes-git')
     expect(etapesGit({ branch: 'main', ahead: 0, behind: 0, changes: [] })).toEqual([])
   })
 })

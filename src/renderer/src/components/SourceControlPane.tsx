@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { etapesGit } from './etapes-git'
 import { ProjectPane } from './ProjectPane'
 import { DiffView } from './DiffView'
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
@@ -82,40 +83,8 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
  * et la première est mise en avant. Chaque clic PROPOSE la demande à l'agent, rien n'est
  * exécuté ici.
  */
-type EtapeGit = { label: string; detail: string; prompt: string }
-
-const pluriel = (n: number, mot: string): string => `${n} ${mot}${n > 1 ? 's' : ''}`
-
-export function etapesGit(state: { branch: string; ahead: number; behind: number; changes: unknown[] }): EtapeGit[] {
-  const etapes: EtapeGit[] = []
-  const n = state.changes.length
-  const surMain = state.branch === 'main' || state.branch === 'master'
-  if (state.behind > 0)
-    etapes.push({
-      label: 'Récupérer',
-      detail: `${pluriel(state.behind, 'commit')} du distant à intégrer`,
-      prompt: 'récupère les derniers commits du distant sur la branche courante, sans perdre mes changements en cours'
-    })
-  if (n > 0)
-    etapes.push({
-      label: 'Commiter',
-      detail: `${pluriel(n, 'fichier')} modifié${n > 1 ? 's' : ''} — résumé puis commit`,
-      prompt: 'résume les changements non commités fichier par fichier, puis commite-les avec un message clair'
-    })
-  if (state.ahead > 0 || n > 0)
-    etapes.push({
-      label: 'Push',
-      detail: state.ahead > 0 ? `${pluriel(state.ahead, 'commit')} à envoyer` : 'après le commit',
-      prompt: 'push la branche courante'
-    })
-  if (!surMain && state.branch)
-    etapes.push({
-      label: 'Ouvrir une PR',
-      detail: `${state.branch} → main`,
-      prompt: 'ouvre une pull request pour la branche courante avec une description claire'
-    })
-  return etapes
-}
+/** Delai de regroupement des relectures git pendant un tour (signes de vie d'outil, texte). */
+export const RELIRE_PENDANT_TOUR_MS = 1500
 
 /** Actions hors flux : uniquement celles qu'aucune étape ne couvre déjà. */
 function actionsGit(nbChanges: number): Array<{ label: string; prompt: string }> {
@@ -233,6 +202,7 @@ export function SourceControlPane({
   }, [conversationId, refreshTick, repoPath, scope, view])
 
   useEffect(() => {
+    let relectureEnAttente: ReturnType<typeof setTimeout> | null = null
     const refreshConversation = (raw: unknown): void => {
       const event = raw as {
         conversationId?: string
@@ -243,6 +213,18 @@ export function SourceControlPane({
       }
       const target = event.conversationId ?? event.convId
       if (target !== conversationId) return
+      // OUTIL NATIF DE L'AGENT (son terminal : `git commit`, `git push`…) : il ne produit ni
+      // `result` ni `done`, seulement des signes de vie `provider-status` puis du texte. Sans cette
+      // relecture, le bouton restait sur « Commiter » jusqu'a la fin du tour (conv-855). Relecture
+      // GROUPEE : au plus une par RELIRE_PENDANT_TOUR_MS, la derniere toujours jouee.
+      if (event.kind === 'provider-status' || event.kind === 'delta') {
+        if (relectureEnAttente) return
+        relectureEnAttente = setTimeout(() => {
+          relectureEnAttente = null
+          setRefreshTick((value) => value + 1)
+        }, RELIRE_PENDANT_TOUR_MS)
+        return
+      }
       if (
         event.kind === 'result' ||
         // FIN DE TOUR : les fichiers modifies par le chat sont notes juste avant (agent-pilot,
@@ -257,6 +239,7 @@ export function SourceControlPane({
     const offPilot = window.api.onPilotEvent?.(refreshConversation)
     const offApp = window.api.onAppEvent?.(refreshConversation)
     return () => {
+      if (relectureEnAttente) clearTimeout(relectureEnAttente)
       offPilot?.()
       offApp?.()
     }

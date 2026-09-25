@@ -39,14 +39,22 @@ export function ProjectPane({
     return r.entries
   }, [conversationId])
 
-  useEffect(() => {
-    let vivant = true
-    // Nouveau CWD ou nouvelle conversation : l'ancien arbre et le fichier ouvert n'y existent plus.
+  // Nouveau CWD ou nouvelle conversation : l'ancien arbre et le fichier ouvert n'y existent plus.
+  // Remise a zero PENDANT le rendu (motif React « ajuster l'etat quand une prop change ») plutot
+  // qu'un setState synchrone dans l'effet, qui rendait d'abord l'ancien arbre une fois de trop.
+  const cleArbre = `${conversationId ?? ''}|${racine ?? ''}`
+  const [cleVue, setCleVue] = useState(cleArbre)
+  if (cleVue !== cleArbre) {
+    setCleVue(cleArbre)
     setOuverts({})
     setDeplies({})
     setFichier(null)
     setErreur('')
     setEtat('')
+  }
+
+  useEffect(() => {
+    let vivant = true
     void (async () => {
       const entries = await lister('')
       if (vivant) setRacines(entries)
