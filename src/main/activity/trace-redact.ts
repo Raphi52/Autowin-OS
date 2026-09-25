@@ -17,7 +17,15 @@
 const KEYED = String.raw`(Bearer\s+)[^\s"']+|((?:api[_-]?key|token|secret|password)["']?\s*(?::\s*[A-Za-z_$][\w.$<>\[\]| ]*)?(?:\/\*[\s\S]*?\*\/\s*)?[=:]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;]+)`
 const SHAPES = String.raw`\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|\bAKIA[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`
 
-const SECRET_VALUE = new RegExp(`${KEYED}|${SHAPES}`, 'gi')
+/**
+ * Identifiant collé en clair : « adresse@domaine.tld <mot de passe> ». Mesuré conv-854, saisie
+ * ts 1790334398650 : l'utilisateur a tapé son mail puis son mot de passe dans le chat, et le texte a été
+ * recopié tel quel dans le dossier kaizen suivant. La valeur doit mêler lettre ET chiffre/symbole pour
+ * épargner « mail@x.com merci » ; sur-rédiger reste sans danger ici (redaction seulement, jamais un garde).
+ */
+const EMAIL_CREDENTIAL = String.raw`([\w.+-]+@[\w-]+(?:\.[\w-]+)+\s+)(?=\S*[A-Za-z])(?=\S*[\d!#$%^&*?])[^\s@]{6,}`
+
+const SECRET_VALUE = new RegExp(`${KEYED}|${SHAPES}|${EMAIL_CREDENTIAL}`, 'gi')
 
 /**
  * Les formes de jetons à faible faux-positif, exposées en SOURCE pour qu'un consommateur choisisse sa
@@ -60,7 +68,8 @@ function redact(value: unknown, key = ''): unknown {
   if (typeof value === 'string') {
     return value.replace(
       SECRET_VALUE,
-      (_match, bearer: string, assignment: string) => `${bearer || assignment || ''}[REDACTED]`
+      (_match, bearer: string, assignment: string, email: string) =>
+        `${bearer || assignment || email || ''}[REDACTED]`
     )
   }
   if (Array.isArray(value)) return value.map((item) => redact(item))
