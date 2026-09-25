@@ -514,6 +514,37 @@ export function resolveClaudeBin(explicit?: string): string {
   return found ?? 'claude'
 }
 
+/**
+ * `claude update` en cours, lance par l'app elle-meme (`claude-cli-update.ts`). Sur une install npm,
+ * la mise a jour SUPPRIME puis recree tout le paquet (mesure du 2026-09-25 : ~3 s sans `claude.exe`).
+ * Un tour lance dans cette fenetre echoue en « fichier introuvable » ; il attend donc la fin.
+ */
+let miseAJourClaudeCli: Promise<unknown> | undefined
+/** Plafond d'attente : une mise a jour qui traine ne doit pas retenir un tour indefiniment. */
+const ATTENTE_MISE_A_JOUR_MAX_MS = 180_000
+
+export function signalerMiseAJourClaudeCli(enCours: Promise<unknown>): void {
+  const suivie = enCours.then(
+    () => undefined,
+    () => undefined
+  )
+  miseAJourClaudeCli = suivie
+  void suivie.then(() => {
+    if (miseAJourClaudeCli === suivie) miseAJourClaudeCli = undefined
+  })
+}
+
+async function attendreMiseAJourClaudeCli(): Promise<void> {
+  const enCours = miseAJourClaudeCli
+  if (!enCours) return
+  let minuteur: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    enCours,
+    new Promise<void>((resolve) => (minuteur = setTimeout(resolve, ATTENTE_MISE_A_JOUR_MAX_MS)))
+  ])
+  clearTimeout(minuteur)
+}
+
 /** Sous-chemin du binaire natif dans le paquet npm `@anthropic-ai/claude-code`. */
 const CLAUDE_PACKAGE_BIN = join('node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')
 
@@ -781,10 +812,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
   readonly supportsExecution = true
   /** Vrai : `send` pousse `--resume <id>` au CLI (voir plus bas). Le seul adaptateur dans ce cas. */
   readonly honoursSessionResume = true
-  private readonly bin: string
+  private readonly explicitBin: string | undefined
 
   constructor(opts: ClaudeAdapterOptions = {}) {
-    this.bin = resolveClaudeBin(opts.bin)
+    this.explicitBin = opts.bin
+  }
+
+  /**
+   * Resolu a CHAQUE lancement, jamais fige a la construction : l'adaptateur vit toute la session, et
+   * un `claude.exe` absent a ce moment-la (mise a jour npm en cours au demarrage, 2026-09-25) figeait
+   * le repli nu `claude` — que CreateProcess ne sait pas lancer — jusqu'au redemarrage de l'app.
+   */
+  private get bin(): string {
+    return resolveClaudeBin(this.explicitBin)
   }
 
   /** L'auth vit dans le CLI (abonnement déjà loggé) — on vérifie qu'il répond. */
@@ -1214,6 +1254,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * `onJournal`. Aucune ne passait par `close` ni par `error` : le couple restait dans %TEMP%.
      * Garde : `claude.nettoyage-sur-exception-avant-spawn.test.ts`.
      */
+    // Un `claude update` en cours retire le binaire quelques secondes : on attend qu'il revienne.
+    await attendreMiseAJourClaudeCli()
     let journal: StdoutJournalHandle | undefined
     let invocation:
       | ReturnType<typeof backgroundSurvivalInvocation>
