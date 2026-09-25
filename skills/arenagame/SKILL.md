@@ -109,7 +109,12 @@ Ne pas redémarrer le PC pendant un tournoi : t4 essais 1 et 2 sont morts ainsi 
 `"horsJob":true` = lancé et vérifié hors Job ; tout autre code = pas lancé proprement. Survie à une
 vraie fin de tour observée (conv-767 : témoin pid 24972 lancé à 20:28:49, toujours vivant et écrivant
 à 20:29:36, après la fin du tour qui l'avait lancé).
-**Chaque bras passe par `lance-bras.sh`, jamais par un `claude -p` nu.** t2b, t2v et t3 ont eu TOUS
+**Chaque bras passe par `lance-bras.sh`, jamais par un `claude -p` nu.** C'est aussi LE point où
+tout tournoi reçoit, quel que soit son `lance.sh` : (1) une copie du `sys` complétée par `clean` et
+`judge` si elle ne les porte pas (`sys-effectif-<bras>.txt`, le `sys` du tournoi reste intact, le
+bras X nu n'est pas touché ; `ARENA_SANS_CLEAN_JUDGE=1` désactive) ; (2) la clôture du RUN.md
+(`check.mjs` → `note-clore-<bras>.json` → `clore-run.mjs`). t4 (2026-09-24), lancé hors de
+`nuit.sh`, n'avait ni l'un ni l'autre : 11 runs sur 12 bloqués, 0 trace de nettoyage. t2b, t2v et t3 ont eu TOUS
 leurs bras coupés vers 30 min par la limite de session Claude (« You've hit your session limit ·
 resets 7pm », `is_error: true`) : des jeux inachevés, notés comme s'ils avaient perdu.
 `lance-bras.sh <banc> <bras-replique> <prompt> [sys]` attend l'heure de remise à zéro annoncée puis

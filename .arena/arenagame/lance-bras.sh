@@ -15,7 +15,26 @@ BANC=$1; BRAS=$2; PROMPT=$3; SYS=${4:-}
 BUDGET=${ARENA_BUDGET_USD:-40}
 MAX=${ARENA_REPRISES_MAX:-10}
 MARGE=${ARENA_MARGE_S:-120}
+ARENE=$(cd "$(dirname "$0")" && pwd)   # AVANT le cd : $0 peut être relatif
 cd "$BANC/$BRAS" || exit 1
+# CONSIGNE À 4 SKILLS (2026-09-25). Sans `clean` ni `judge`, les bras ne laissaient aucune trace
+# CLEAN-* ni case cochée : 11 des 12 runs de t4 remontaient BLOQUÉS (isBlocked). Tout tournoi passe
+# par ce script, quel que soit son lance.sh : on complète ici une COPIE du sys (celui du tournoi
+# reste intact). Le bras X (appel nu, sans sys) n'est pas touché. ARENA_SANS_CLEAN_JUDGE=1 désactive.
+SKILLS=D:/AutoWinOS/skills
+if [ -n "$SYS" ] && [ -z "${ARENA_SANS_CLEAN_JUDGE:-}" ]; then
+  EFF="$BANC/sys-effectif-$BRAS.txt"; cp "$SYS" "$EFF"
+  grep -q '^=== CLEAN ===$' "$EFF" || { printf '
+=== CLEAN ===
+' >> "$EFF"; cat "$SKILLS/clean/SKILL.md" >> "$EFF"; }
+  grep -q '^=== JUDGE ===$' "$EFF" || { printf '
+=== JUDGE ===
+' >> "$EFF"; cat "$SKILLS/judge/SKILL.md" >> "$EFF"; }
+  printf '
+Applique aussi, après build : clean (trace CLEAN-VERIFIED ou CLEAN-NOOP dans le RUN.md), puis judge (coche chaque case de ## Besoin prouvée).
+' >> "$EFF"
+  SYS=$EFF
+fi
 OUT="$BANC/out-$BRAS.json"; TENT="$BANC/out-$BRAS.tentatives.jsonl"; ERR="$BANC/err-$BRAS.txt"
 : > "$TENT"
 REPRISE_MSG="Ta session a été coupée par la limite d'utilisation. Reprends exactement là où tu t'es arrêté et mène la tâche initiale jusqu'au bout."
@@ -61,3 +80,7 @@ if(!L.length){process.exit(1)}
 const d={...L[L.length-1]};d.total_cost_usd=L.reduce((a,j)=>a+(+j.total_cost_usd||0),0);d.num_turns=L.reduce((a,j)=>a+(+j.num_turns||0),0);
 d.duration_ms=L.reduce((a,j)=>a+(+j.duration_ms||0),0);d.reprises=L.length-1;fs.writeFileSync(process.argv[2],JSON.stringify(d))' "$TENT" "$OUT"
 echo "$BRAS exit=$code reprises=$n" >> "$BANC/statut.txt"
+# CLÔTURE DU RUN (2026-09-25) : note check.mjs puis status green|red dans le RUN.md du bras, quel que
+# soit le lance.sh du tournoi. Idempotent : un lance.sh qui clôt aussi ne change rien.
+node "$ARENE/check.mjs" "$BANC/$BRAS" > "$BANC/note-clore-$BRAS.json" 2>/dev/null
+node "$ARENE/clore-run.mjs" "$BANC/note-clore-$BRAS.json" "$OUT" >> "$BANC/statut.txt" 2>&1
