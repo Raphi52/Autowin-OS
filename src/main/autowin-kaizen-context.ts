@@ -9,6 +9,7 @@ import { readConversationTurnJournals } from './runs/turn-journal'
 import type { TraceEventV1 } from './activity/trace-event'
 import type { Conversation } from './store/conversations'
 import { lireSaisies, type SaisieJournalisee } from './store/journal-saisie'
+import { redactTrace } from './activity/trace-redact'
 
 const MESSAGE_LIMIT = 24
 const MESSAGE_CAP = 700
@@ -214,7 +215,8 @@ function compactCausalEvent(event: TraceEventV1, cap = 900): KaizenCausalEvent {
 }
 
 function compactSaisie(saisie: SaisieJournalisee, cap = SAISIE_CAP): KaizenSaisie {
-  return { ts: saisie.ts, voie: saisie.voie, texte: clipped(saisie.texte, cap) }
+  // Rédigé : conv-854 saisie ts 1790334398650 a recopié un mot de passe en clair dans le dossier kaizen.
+  return { ts: saisie.ts, voie: saisie.voie, texte: redactTrace(clipped(saisie.texte, cap)) as string }
 }
 
 function readNativeRuns(
@@ -362,7 +364,11 @@ export function collectAutowinKaizenEvidence(
     conversation: {
       id: conversation.id,
       title: conversation.title,
-      messages: conversation.messages.map(({ role, content, ts }) => ({ role, content, ts })),
+      messages: conversation.messages.map(({ role, content, ts }) => ({
+        role,
+        content: redactTrace(content) as string,
+        ts
+      })),
       runPaths: conversation.runPaths
     },
     activity: loadConvActivity(conversation.id, join(appData, 'activity')),
@@ -672,3 +678,4 @@ ${MARQUEUR_FIN}
 
   return `${entete}${JSON.stringify(snapshot)}${pied}`
 }
+export const __compactSaisieForTest = compactSaisie

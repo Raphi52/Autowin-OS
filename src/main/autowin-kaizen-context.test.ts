@@ -672,3 +672,16 @@ describe('regime ample : la retrospective ne rend pas un echantillon muet', () =
     }
   })
 })
+
+describe('dossier kaizen sans mot de passe (conv-854, saisie ts 1790334398650)', () => {
+  it('compactSaisie rédige un identifiant collé en clair', async () => {
+    const mod = await import('./autowin-kaizen-context')
+    const f = (mod as Record<string, unknown>).__compactSaisieForTest as
+      | ((s: { ts: number; voie: string; texte: string }) => { texte: string })
+      | undefined
+    expect(f).toBeTypeOf('function')
+    expect(f!({ ts: 1, voie: 'message', texte: 'u@corp.com Secr3t2026! fais le' }).texte).toBe(
+      'u@corp.com [REDACTED] fais le'
+    )
+  })
+})
