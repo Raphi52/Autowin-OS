@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { UpdateBanner } from './UpdateBanner'
+import { UpdateBanner, depuis } from './UpdateBanner'
 
 let container: HTMLDivElement
 let root: Root
@@ -693,5 +693,92 @@ describe('apres un echec, le bouton se rafraichit encore', () => {
       await Promise.resolve()
     })
     expect(container.querySelector('[data-testid="update-apply"]')!.textContent).toContain('+12')
+  })
+})
+
+describe('qui a poussé quoi — décider AVANT de fusionner', () => {
+  const incoming = [
+    {
+      hash: '3646cf37aaaa',
+      author: 'emmanuel.heurtier',
+      date: '2026-09-25T08:00:00Z',
+      subject: 'autowin: travail préservé de la copie run-36461be778d0-1',
+      files: ['src/main/a.ts', 'src/renderer/src/components/B.tsx', 'docs/c.md', 'd.json'],
+      fileCount: 11
+    }
+  ]
+
+  it('l’œil à gauche du bouton déroule auteur, sujet et fichiers des commits entrants', async () => {
+    api({
+      checkUpdate: vi.fn().mockResolvedValue({
+        available: true,
+        behind: 3,
+        branch: 'main',
+        strategies: ['merge'],
+        incoming
+      })
+    })
+    await render()
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="update-incoming-toggle"]'
+    )!
+    // Un ŒIL sans texte, juste À GAUCHE du bouton de mise à jour, dans la même rangée.
+    expect(toggle.textContent).toBe('')
+    expect(toggle.getAttribute('aria-label')).toContain('Qui a poussé quoi ?')
+    expect(toggle.nextElementSibling?.getAttribute('data-testid')).toBe('update-apply')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-testid="update-incoming"]')).toBeNull()
+
+    await act(async () => toggle.click())
+
+    const list = container.querySelector('[data-testid="update-incoming"]')!
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(list.textContent).toContain('emmanuel.heurtier')
+    expect(list.textContent).toContain('travail préservé de la copie run-36461be778d0-1')
+    // Les NOMS des fichiers (le chemin entier reste dans l'infobulle), puis le reste compté.
+    expect(list.textContent).toContain('a.ts, B.tsx, c.md')
+    expect(list.textContent).toContain('+8')
+    expect(
+      list.querySelector('[data-testid="update-incoming-commit"]')!.getAttribute('title')
+    ).toContain('src/renderer/src/components/B.tsx')
+    // 3 commits en retard, 1 seul lu : le manque est DIT, jamais tu.
+    expect(list.textContent).toContain('2 commit(s) plus ancien(s)')
+
+    await act(async () => toggle.click())
+    expect(container.querySelector('[data-testid="update-incoming"]')).toBeNull()
+  })
+
+  it('sans liste lue (ancien processus principal, git en échec) → aucun bouton vide', async () => {
+    api({
+      checkUpdate: vi.fn().mockResolvedValue({ available: true, behind: 2, branch: 'main' })
+    })
+    await render()
+    expect(container.querySelector('[data-testid="update-apply"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="update-incoming-toggle"]')).toBeNull()
+  })
+
+  it('rail replié → icône seule, la liste s’ouvre À CÔTÉ du rail', async () => {
+    api({
+      checkUpdate: vi.fn().mockResolvedValue({ available: true, behind: 1, branch: 'main', incoming })
+    })
+    await render(true)
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="update-incoming-toggle"]'
+    )!
+    expect(toggle.textContent).toBe('')
+    expect(toggle.getAttribute('aria-label')).toContain('Qui a poussé quoi ?')
+    await act(async () => toggle.click())
+    expect(
+      container.querySelector('[data-testid="update-incoming"]')!.classList.contains('is-floating')
+    ).toBe(true)
+  })
+
+  it('date relative en français', () => {
+    const maintenant = Date.parse('2026-09-25T10:00:00Z')
+    // Intl sépare « 2 » et « h » par une espace fine insécable (U+202F), pas une espace simple.
+    expect(depuis('2026-09-25T08:00:00Z', maintenant)).toMatch(/^il y a 2.h$/)
+    expect(depuis('2026-09-25T09:59:40Z', maintenant)).toBe('à l’instant')
+    expect(depuis('pas une date', maintenant)).toBe('pas une date')
   })
 })

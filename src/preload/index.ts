@@ -24,7 +24,7 @@ import type {
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { RapportRetention } from '../shared/rapport-retention'
-import type { UpdateStrategy } from '../shared/update-contract'
+import type { IncomingCommit, UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
 import type {
   ProjectListResult,
@@ -286,6 +286,8 @@ const api = {
     reference?: string
     dirty?: boolean
     strategies?: UpdateStrategy[]
+    /** Commits qui arriveront (auteur, date, sujet, fichiers) — absent si git n'a pas pu les lire. */
+    incoming?: IncomingCommit[]
     error?: string
   }> => ipcRenderer.invoke('update:check'),
   applyUpdate: (
