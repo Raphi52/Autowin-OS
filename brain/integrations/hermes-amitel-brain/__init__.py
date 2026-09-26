@@ -1,4 +1,5 @@
 """Ephemeral Amitel Brain recall for Hermes prompts."""
+import ast
 import importlib.util
 import json
 import os
@@ -33,6 +34,37 @@ def _configured_paths() -> tuple[Path, Path]:
     return Path(root), Path(code_root)
 
 
+def _local_dependencies(module_path: Path) -> list[str]:
+    """Local modules `module_path` imports at top level, dependencies first.
+
+    Derived from the source, never listed by hand: a hand-written list (brain_auth only)
+    missed `brain_singleton` when brain_hook gained it, and Hermes recall failed with
+    ModuleNotFoundError, swallowed by _pre_llm_call — an empty recall with no message.
+    """
+    ordered: list[str] = []
+    visiting: set[str] = set()
+
+    def visit(path: Path) -> None:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names = [node.module]
+            elif isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            else:
+                continue
+            for name in names:
+                candidate = module_path.with_name(f"{name}.py")
+                if "." in name or name in ordered or name in visiting or not candidate.is_file():
+                    continue
+                visiting.add(name)
+                visit(candidate)
+                ordered.append(name)
+
+    visit(module_path)
+    return ordered
+
+
 def _load_hook_module():
     global _HOOK_MODULE, _HOOK_PATH
     _, code_root = _configured_paths()
@@ -40,23 +72,29 @@ def _load_hook_module():
     with _MODULE_LOCK:
         if _HOOK_MODULE is not None and _HOOK_PATH == hook_path:
             return _HOOK_MODULE
-        auth_path = hook_path.with_name("brain_auth.py")
-        auth_spec = importlib.util.spec_from_file_location("brain_auth", auth_path)
+        # Every dependency is loaded by explicit path from the LOCAL runtime, never through
+        # sys.path: a shared brain must not be able to substitute one of them.
+        specs = []
+        for name in _local_dependencies(hook_path):
+            dep_spec = importlib.util.spec_from_file_location(name, hook_path.with_name(f"{name}.py"))
+            specs.append((name, dep_spec))
         spec = importlib.util.spec_from_file_location("_amitel_brain_local_hook", hook_path)
-        if auth_spec is None or auth_spec.loader is None or spec is None or spec.loader is None:
+        if spec is None or spec.loader is None or any(s is None or s.loader is None for _, s in specs):
             raise RuntimeError(f"cannot load Amitel Brain hook dependencies from: {hook_path.parent}")
-        auth_module = importlib.util.module_from_spec(auth_spec)
         module = importlib.util.module_from_spec(spec)
-        previous_auth = sys.modules.get("brain_auth")
+        previous = {name: sys.modules.get(name) for name, _ in specs}
         try:
-            sys.modules["brain_auth"] = auth_module
-            auth_spec.loader.exec_module(auth_module)
+            for name, dep_spec in specs:
+                dep_module = importlib.util.module_from_spec(dep_spec)
+                sys.modules[name] = dep_module
+                dep_spec.loader.exec_module(dep_module)
             spec.loader.exec_module(module)
         finally:
-            if previous_auth is None:
-                sys.modules.pop("brain_auth", None)
-            else:
-                sys.modules["brain_auth"] = previous_auth
+            for name, earlier in previous.items():
+                if earlier is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = earlier
         _HOOK_MODULE = module
         _HOOK_PATH = hook_path
         return module

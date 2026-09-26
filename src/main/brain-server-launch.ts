@@ -16,7 +16,8 @@ import {
   amitelBrainPort,
   amitelBrainRoot,
   amitelBrainStateRoot,
-  amitelBrainTooling
+  amitelBrainTooling,
+  autowinOwnBrainRoot
 } from './amitel-paths'
 
 // Le chemin du tooling vient de la SOURCE UNIQUE `amitel-paths.ts` et reste distinct du corpus partagé.
@@ -197,7 +198,10 @@ export function resolveBrainRuntime(env: NodeJS.ProcessEnv = process.env): Brain
       : stateRoot
         ? join(stateRoot, '.venv', 'Scripts', 'python.exe')
         : '')
-  const brainRoot = nonEmptyString(env.AMITEL_BRAIN_ROOT)
+  // Le Brain PROPRE a Autowin prime sur `AMITEL_BRAIN_ROOT` herite d'un autre Brain du poste
+  // (constate le 2026-09-25, conv-3) : voir `autowinOwnBrainRoot`.
+  const brainRoot = autowinOwnBrainRoot(env)
+    ?? nonEmptyString(env.AMITEL_BRAIN_ROOT)
     ?? nonEmptyString(config.brain_root)
     ?? amitelBrainRoot(env)
   return { tooling, python, brainRoot }

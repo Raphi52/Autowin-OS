@@ -236,6 +236,41 @@ describe('ensureBrainServerStarted', () => {
     expect(resolveBrainRuntime({}).tooling).toBe('')
   })
 
+  it('le serveur lance par Autowin sert SON Brain, pas la racine heritee d un Brain personnel', () => {
+    // Constate le 2026-09-25 (conv-3) : `AMITEL_BRAIN_ROOT`, pose par l'installateur du Brain
+    // personnel, primait et le serveur d'Autowin servait (et recevait les lecons de) ce Brain-la.
+    const localAppData = mkdtempSync(join(tmpdir(), 'brain-autowin-launch-'))
+    // L'installation partagee du Brain personnel, dont l'installateur a pose AMITEL_BRAIN_ROOT.
+    mkdirSync(join(localAppData, 'AmitelBrain'), { recursive: true })
+    writeFileSync(
+      join(localAppData, 'AmitelBrain', 'config.json'),
+      JSON.stringify({ brain_root: 'C:\\Perso\\Hermes-Brain' })
+    )
+    mkdirSync(join(localAppData, 'AutowinBrain'), { recursive: true })
+    writeFileSync(
+      join(localAppData, 'AutowinBrain', 'config.json'),
+      JSON.stringify({
+        brain_root: 'C:\\Perso\\Autowin-Brain',
+        code_root: 'C:\\rt\\tooling',
+        python: 'C:\\rt\\python.exe',
+        port: 8766
+      })
+    )
+    try {
+      const runtime = resolveBrainRuntime({
+        LOCALAPPDATA: localAppData,
+        AMITEL_BRAIN_ROOT: 'C:\\Perso\\Hermes-Brain'
+      })
+      expect(runtime).toMatchObject({
+        brainRoot: 'C:\\Perso\\Autowin-Brain',
+        tooling: 'C:\\rt\\tooling',
+        python: 'C:\\rt\\python.exe'
+      })
+    } finally {
+      rmSync(localAppData, { recursive: true, force: true })
+    }
+  })
+
   it('resout le runtime INSTALLE localement sans jamais executer le tooling du partage GED', () => {
     const localAppData = mkdtempSync(join(tmpdir(), 'brain-localappdata-'))
     const stateRoot = join(localAppData, 'AmitelBrain')

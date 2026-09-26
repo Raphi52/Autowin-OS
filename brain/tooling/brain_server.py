@@ -127,9 +127,15 @@ def _path_in_corpus(path, corpus):
     return False
 
 
-def health_response(retriever, token):
+def health_response(retriever, token, root_id=""):
+    """Health of the index, SIGNED with the root this server serves.
+
+    The signed context names the corpus so a hook configured for another root can tell it is
+    talking to a stale server and restart it (brain_hook.query_service). Autowin OS reads only
+    the `health` field, so naming the root changes nothing for it.
+    """
     health = retriever.status()
-    payload = signed_context_payload("", token)
+    payload = signed_context_payload(root_id or "", token)
     payload["health"] = health
     return (200 if health.get("state") == "healthy" else 503), payload
 
@@ -216,11 +222,27 @@ def build_context_result(
     }
 
 
+class LocalThreadingHTTPServer(ThreadingHTTPServer):
+    """Loopback server that OWNS its port: a second server on the same address must fail.
+
+    HTTPServer enables SO_REUSEADDR by default; Windows forbids combining it with
+    SO_EXCLUSIVEADDRUSE, and reuse would defeat the singleton port reservation.
+    """
+
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 class Handler(BaseHTTPRequestHandler):
     retriever = None
     knowledge_root = None
     allowed_roots = None
     brain_root = None
+    root_id = None
     token = None
     trace = None
 
@@ -265,7 +287,7 @@ class Handler(BaseHTTPRequestHandler):
         elif not self._authorized():
             self._json(403, {"error": "forbidden"})
         elif parsed.path == "/health":
-            status, payload = health_response(self.retriever, self.token)
+            status, payload = health_response(self.retriever, self.token, self.root_id)
             self._json(status, payload)
         else:
             self._json(404, {"error": "not found"})
@@ -274,6 +296,16 @@ class Handler(BaseHTTPRequestHandler):
         secure_request = self.path == "/query-secure"
         if not secure_request and not self._authorized():
             self._json(403, {"error": "forbidden"})
+            return
+        if self.path == "/shutdown":
+            # Local-token only (checked above). Lets a hook stop a server that serves another
+            # root than the configured one, then respawn it on the right corpus.
+            size = int(self.headers.get("Content-Length", "0") or 0)
+            if 0 < size <= MAX_REQUEST_BYTES:
+                self.rfile.read(size)
+            self._json(200, signed_context_payload(self.root_id or "", self.token))
+            self.wfile.flush()
+            threading.Timer(0.2, self.server.shutdown).start()
             return
         if self.path == "/ingest":
             # RESTAUREE le 2026-08-20. Cette route existait (cf. .rollback-20260808-final) et a
@@ -464,32 +496,32 @@ class Handler(BaseHTTPRequestHandler):
         return
 
 
-def run_server(root, port, retriever_factory=BrainRetriever, server_factory=ThreadingHTTPServer):
-    """Reserve the singleton and port before constructing FastEmbed/BM25."""
+def run_server(root, port, retriever_factory=None, server_factory=None):
+    """Reserve the singleton and port, then the local token, before constructing FastEmbed/BM25.
+
+    Cheap failures (port taken, unreadable token) must surface before the ~30 s model warm-up.
+    Factories are resolved at CALL time so the module-level names stay substitutable.
+    """
+    retriever_factory = retriever_factory or BrainRetriever
+    server_factory = server_factory or LocalThreadingHTTPServer
     lifetime_mutex = ProcessMutex.try_acquire(f"server-{port}")
     if lifetime_mutex is None:
         return False
     server = None
     retriever = None
     try:
-        server = server_factory(("127.0.0.1", port), Handler, bind_and_activate=False)
-        if os.name == "nt":
-            # HTTPServer enables SO_REUSEADDR by default; Windows forbids combining it with
-            # SO_EXCLUSIVEADDRUSE and reuse would defeat the singleton port reservation.
-            server.allow_reuse_address = False
-            server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-        server.server_bind()
-        server.server_activate()
+        server = server_factory(("127.0.0.1", port), Handler)
         server.challenge_registry = ChallengeRegistry()
+        Handler.token = service_token()
 
         root = Path(root)
         Handler.knowledge_root = root / "knowledge"
         index_dir = root / "tooling" / "index"
         Handler.brain_root = root
+        Handler.root_id = str(root.resolve())
         Handler.allowed_roots = indexed_note_roots(index_dir, root)
         retriever = retriever_factory(index_dir, allow_unavailable=True, brain_root=root)
         Handler.retriever = retriever
-        Handler.token = service_token()
         Handler.trace = configured_trace()
         server.serve_forever()
         return True
