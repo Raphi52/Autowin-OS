@@ -388,7 +388,12 @@ import {
   parseTeamsItemId,
   replyTeams
 } from './task-manager/watchdog-teams'
-import { TeamsLocalClient } from './task-manager/watchdog-teams-local'
+import { sourceTeams, TeamsLocalClient } from './task-manager/watchdog-teams-local'
+import {
+  cheminJournalWatchdogTeams,
+  creerJournalWatchdog,
+  empreinteConversation
+} from './task-manager/journal-watchdog-teams'
 import type { WatchdogAppEvent } from './task-manager/types'
 import {
   ScheduledChatDispatcher,
@@ -3591,48 +3596,76 @@ Le fil reprend ensuite normalement.`
   }
   const teamsClientId = variablePerso('AUTOWIN_TEAMS_CLIENT_ID')
   const teamsVaultPath = join(app.getPath('userData'), 'teams-graph-token.bin')
-  const teamsClient = teamsClientId
-    ? new TeamsGraphClient(
-        {
-          clientId: teamsClientId,
-          tenantId: variablePerso('AUTOWIN_TEAMS_TENANT_ID') ?? 'organizations'
-        },
-        {
-          // Le jeton de renouvellement est un secret : chiffre par le systeme, jamais en clair.
-          load: () => {
-            try {
-              if (!existsSync(teamsVaultPath) || !safeStorage.isEncryptionAvailable())
-                return undefined
-              return safeStorage.decryptString(readFileSync(teamsVaultPath))
-            } catch {
-              return undefined
+  // Le jeton de renouvellement est un secret : chiffre par le systeme, jamais en clair.
+  const chargerJetonTeams = (): string | undefined => {
+    try {
+      if (!existsSync(teamsVaultPath) || !safeStorage.isEncryptionAvailable()) return undefined
+      return safeStorage.decryptString(readFileSync(teamsVaultPath))
+    } catch {
+      return undefined
+    }
+  }
+  // Graph seulement s'il est deja CONNECTE ; sinon lecture locale (sourceTeams, conv-770).
+  const modeTeams = sourceTeams({
+    clientId: teamsClientId,
+    jetonGraph: chargerJetonTeams() !== undefined,
+    windows: process.platform === 'win32'
+  })
+  console.log(`[watchdog] Teams : ${modeTeams ?? 'désactivé'}`)
+  // Seul temoin lisible apres un redemarrage : la console du processus principal est jetee (conv-770).
+  const journalTeams = creerJournalWatchdog(cheminJournalWatchdogTeams(appDataRoot))
+  journalTeams('source', {
+    mode: modeTeams ?? 'désactivé',
+    identifiantGraph: teamsClientId ? 'présent' : 'absent',
+    jetonGraph: chargerJetonTeams() !== undefined ? 'présent' : 'absent'
+  })
+  const teamsClient =
+    modeTeams === 'graph' && teamsClientId
+      ? new TeamsGraphClient(
+          {
+            clientId: teamsClientId,
+            tenantId: variablePerso('AUTOWIN_TEAMS_TENANT_ID') ?? 'organizations'
+          },
+          {
+            load: chargerJetonTeams,
+            save: (token) => {
+              if (safeStorage.isEncryptionAvailable())
+                writeFileSync(teamsVaultPath, safeStorage.encryptString(token))
             }
           },
-          save: (token) => {
-            if (safeStorage.isEncryptionAvailable())
-              writeFileSync(teamsVaultPath, safeStorage.encryptString(token))
+          (prompt) => {
+            console.log(
+              `[watchdog] connexion Teams demandée : code ${prompt.userCode} sur ${prompt.verificationUri}`
+            )
+            // Plus de fenetre (demande utilisateur conv-854, 2026-09-25) : le code reste dans le journal.
           }
-        },
-        (prompt) => {
-          console.log(
-            `[watchdog] connexion Teams demandée : code ${prompt.userCode} sur ${prompt.verificationUri}`
-          )
-          // Plus de fenetre (demande utilisateur conv-854, 2026-09-25) : le code reste dans le journal.
-        }
-      )
-    : undefined
+        )
+      : undefined
   // Sans connexion Microsoft (conv-854, 2026-09-25) : lecture du stockage local du client Teams
   // deja connecte, reponse en pilotant sa fenetre, repli par mail si ce pilotage echoue.
   const teamsLocal =
-    !teamsClient && process.platform === 'win32'
+    modeTeams === 'local'
       ? new TeamsLocalClient({
-          mail: (adresse, objet, corps) => outlookGateway.sendNew(adresse, objet, corps)
+          mail: (adresse, objet, corps) => outlookGateway.sendNew(adresse, objet, corps),
+          log: (ligne) => {
+            console.warn(ligne)
+            journalTeams('pilotage', { detail: ligne.replace(/^[watchdog]s*/, '') })
+          }
         })
       : undefined
   const teamsSource = teamsClient ?? teamsLocal
   mailWatchdogReplier = async (itemId, body) => {
-    if (parseTeamsItemId(itemId))
-      return teamsLocal ? teamsLocal.reply(itemId, body) : replyTeams(teamsClient, itemId, body)
+    if (parseTeamsItemId(itemId)) {
+      const resultat = await (teamsLocal
+        ? teamsLocal.reply(itemId, body)
+        : replyTeams(teamsClient, itemId, body))
+      journalTeams('reponse', {
+        conv: empreinteConversation(itemId),
+        ok: resultat.ok,
+        erreur: resultat.ok ? undefined : resultat.erreur
+      })
+      return resultat
+    }
     const sent = await outlookGateway.replyToItem(itemId, body)
     if (sent.ok) await outlookGateway.markRead([itemId])
     return sent
@@ -3641,6 +3674,10 @@ Le fil reprend ensuite normalement.`
   // active l'ecoute : sans elle, aucun dialogue COM supplementaire.
   const mailDetector = new NewUnreadMailDetector()
   const teamsDetector = new NewUnreadMailDetector()
+  // Le journal ne note une lecture qu'a son RETABLISSEMENT et une erreur qu'a son CHANGEMENT : pas
+  // une ligne par minute.
+  let lectureTeamsAnnoncee = false
+  let derniereErreurTeams: string | undefined
   let mailPolling = false
   setInterval(() => {
     if (mailPolling || !watchdogEngine) return
@@ -3668,21 +3705,39 @@ Le fil reprend ensuite normalement.`
       // Teams passe par la MEME regle : un echec Teams ne prive pas les mails, et inversement.
       if (teamsSource) {
         try {
-          for (const message of teamsDetector.next(await teamsSource.snapshot())) {
+          const instantane = await teamsSource.snapshot()
+          if (!lectureTeamsAnnoncee || derniereErreurTeams !== undefined)
+            journalTeams('lecture-ok', { conversations: instantane.mails.length })
+          lectureTeamsAnnoncee = true
+          derniereErreurTeams = undefined
+          for (const message of teamsDetector.next(instantane)) {
             const key = senderKey('teams', message)
             if (key) rememberMailSender(scheduledTasks, 'teams', key, message.nom || key)
-            await watchdogEngine?.notifyMail({
-              itemId: message.id,
-              context: describeTeamsMessage(message),
-              channel: 'teams',
-              senderKey: key
-            })
+            const conv = empreinteConversation(message.id)
+            journalTeams('detecte', { conv, recuLe: message.recuLe ?? undefined })
+            const bilan =
+              (await watchdogEngine?.notifyMail({
+                itemId: message.id,
+                context: describeTeamsMessage(message),
+                channel: 'teams',
+                senderKey: key
+              })) ?? []
+            const concernees = bilan.filter((b) => b.issue !== 'autre-canal')
+            if (!concernees.length)
+              journalTeams('ignore', { conv, raison: 'aucune-regle-teams-active' })
+            for (const b of concernees)
+              journalTeams(b.issue === 'declenche' ? 'declenche' : 'refus', {
+                conv,
+                regle: b.taskId.slice(0, 8),
+                raison: b.issue === 'declenche' ? undefined : b.issue
+              })
           }
         } catch (error) {
-          console.warn(
-            '[watchdog] lecture Teams impossible :',
-            error instanceof Error ? error.message : String(error)
-          )
+          const message = error instanceof Error ? error.message : String(error)
+          console.warn('[watchdog] lecture Teams impossible :', message)
+          if (message !== derniereErreurTeams)
+            journalTeams('lecture-impossible', { erreur: message })
+          derniereErreurTeams = message
         }
       }
       mailPolling = false

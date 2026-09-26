@@ -48,6 +48,22 @@ export function teamsLocalStoreDir(): string {
   )
 }
 
+/**
+ * Voie de lecture Teams du watchdog. Graph seulement s'il est configure ET deja connecte (jeton
+ * present) ; sinon, sous Windows, le stockage local du client Teams deja connecte. Avant (conv-770,
+ * 2026-09-26) : un AUTOWIN_TEAMS_CLIENT_ID defini suffisait a choisir Graph, jamais connecte faute
+ * de pouvoir saisir le code — le watchdog Teams restait « en pause » et la lecture locale ne servait jamais.
+ */
+export function sourceTeams(o: {
+  clientId: string | undefined
+  jetonGraph: boolean
+  windows: boolean
+}): 'graph' | 'local' | undefined {
+  if (o.clientId && o.jetonGraph) return 'graph'
+  if (o.windows) return 'local'
+  return o.clientId ? 'graph' : undefined
+}
+
 const ONE_ON_ONE = /@unq\.gbl\.spaces$/
 const READABLE = new Set(['RichText/Html', 'Text'])
 

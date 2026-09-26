@@ -10,6 +10,7 @@ import {
   LOCAL_REPLY_SCRIPT,
   localValuesToSnapshot,
   readLocalTeamsStore,
+  sourceTeams,
   TeamsLocalClient,
   type LocalTeamsSnapshot
 } from './watchdog-teams-local'
@@ -286,6 +287,24 @@ describe('localValuesToSnapshot', () => {
     expect(detecteur.next(localValuesToSnapshot(neuf))).toEqual([
       expect.objectContaining({ id: teamsItemId(ONE, '4'), adresse: 'bob@example.test', nonLu: true, deMoi: false })
     ])
+  })
+})
+
+describe('sourceTeams', () => {
+  // conv-770, 2026-09-26 : AUTOWIN_TEAMS_CLIENT_ID etait defini mais Graph jamais connecte (aucun
+  // jeton) -> l'app choisissait Graph, restait « en pause », et la lecture locale ne servait jamais.
+  it('Graph seulement s’il est configure ET connecte (jeton present)', () => {
+    expect(sourceTeams({ clientId: 'id', jetonGraph: true, windows: true })).toBe('graph')
+  })
+  it('Graph configure mais JAMAIS connecte, sous Windows : lecture locale', () => {
+    expect(sourceTeams({ clientId: 'id', jetonGraph: false, windows: true })).toBe('local')
+  })
+  it('rien de configure, sous Windows : lecture locale', () => {
+    expect(sourceTeams({ clientId: undefined, jetonGraph: false, windows: true })).toBe('local')
+  })
+  it('hors Windows : Graph s’il est configure (seule voie, connexion par code), sinon rien', () => {
+    expect(sourceTeams({ clientId: 'id', jetonGraph: false, windows: false })).toBe('graph')
+    expect(sourceTeams({ clientId: undefined, jetonGraph: false, windows: false })).toBeUndefined()
   })
 })
 

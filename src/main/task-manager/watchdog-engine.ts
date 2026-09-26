@@ -315,16 +315,25 @@ export class WatchdogEngine {
     context: string
     channel?: 'outlook' | 'teams'
     senderKey?: string
-  }): Promise<void> {
+  }): Promise<Array<{ taskId: string; issue: string }>> {
+    // Bilan par regle (conv-770, 2026-09-26) : le journal du watchdog Teams doit dire POURQUOI un
+    // message detecte n'a pas eu de reponse, pas seulement qu'il n'en a pas eu.
+    const bilan: Array<{ taskId: string; issue: string }> = []
     for (const task of this.watchdogTasks()) {
       const source = task.watchdog?.source
       if (source?.kind !== 'outlook-mail') continue
       // Regle dediee a l'autre canal : pas pour elle. Sans canal (ancienne regle) : les deux.
-      if (source.channel && mail.channel && source.channel !== mail.channel) continue
+      if (source.channel && mail.channel && source.channel !== mail.channel) {
+        bilan.push({ taskId: task.id, issue: 'autre-canal' })
+        continue
+      }
       // Interlocuteur coupe par l'utilisateur : la regle ne lui repond pas.
-      if (mail.senderKey && source.senders?.[mail.senderKey]?.enabled === false) continue
+      if (mail.senderKey && source.senders?.[mail.senderKey]?.enabled === false) {
+        bilan.push({ taskId: task.id, issue: 'interlocuteur-coupe' })
+        continue
+      }
       const signature = `outlook-mail:${mail.itemId}`
-      await this.fire(task, {
+      const issue = await this.fire(task, {
         signature,
         rootSignature: this.causalRoot.getStore() ?? signature,
         context: mail.context,
@@ -333,7 +342,9 @@ export class WatchdogEngine {
         observedAt: this.clock.now(),
         mail: { itemId: mail.itemId }
       })
+      bilan.push({ taskId: task.id, issue })
     }
+    return bilan
   }
 
   /** Un passage de surveillance. Public pour que les tests pilotent le temps au lieu de l'attendre. */
@@ -393,7 +404,8 @@ export class WatchdogEngine {
     }
   }
 
-  private async fire(task: ScheduledTask, signal: WatchdogSignal): Promise<void> {
+  /** Rend 'declenche', ou la raison du refus (suppression, garde, orchestration en vol). */
+  private async fire(task: ScheduledTask, signal: WatchdogSignal): Promise<string> {
     // Avant toute garde de cadence : certains signaux ne meritent AUCUN agent, quel que soit le
     // budget. Reveiller quelqu'un sur un run que l'utilisateur vient d'annuler, sur un quota epuise
     // ou sur une API en panne, c'est depenser un agent pour une chose qu'aucun code ne repare — et,
@@ -401,14 +413,14 @@ export class WatchdogEngine {
     const suppression = suppressionFor(signal.signature, signal.context)
     if (suppression) {
       this.suppressions.set(task.id, suppression)
-      return
+      return suppression
     }
     this.suppressions.delete(task.id)
 
     const singleFlight = task.watchdog?.action === 'orchestration'
     if (singleFlight && this.inFlightOrchestrations.has(task.id)) {
       this.suppressions.set(task.id, 'in-flight')
-      return
+      return 'in-flight'
     }
 
     const guards = task.watchdog?.guards ?? DEFAULT_WATCHDOG_GUARDS
@@ -418,7 +430,7 @@ export class WatchdogEngine {
     const verdict = book.admit(signal.signature, signal.depth, signal.rootSignature)
     if (!verdict.admitted) {
       this.suppressions.set(task.id, verdict.reason)
-      return
+      return verdict.reason
     }
     this.notifyDiagnosticsChanged()
 
@@ -456,6 +468,7 @@ export class WatchdogEngine {
         unpricedCalls: metrics.unpricedCalls
       })
     }
+    return 'declenche'
   }
 
   private rememberDispatchClaims(
