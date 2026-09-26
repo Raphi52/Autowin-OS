@@ -50,6 +50,14 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
     expect(ecran.text).toContain("t'en servir a sa place")
   })
 
+  it('nomme le profil Teams du bureau cache sans figer son etat de connexion', () => {
+    // Juge de la reparation 5 (kaizen conv-835) : « Ce profil n'est PAS connecte a son compte » devient
+    // faux des que l'utilisateur s'y connecte, et le profil edge-teams n'etait pas nomme.
+    const [ecran] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-835')
+    expect(ecran.text).toContain('autowin-hdesk\\edge-teams')
+    expect(ecran.text).not.toContain("n'est PAS connecte")
+  })
+
   it('garde les regles de travail visuel conditionnelles', () => {
     const [, visuel] = blocsSystemeEcran(
       'le bouton de la sidebar est mal aligné',

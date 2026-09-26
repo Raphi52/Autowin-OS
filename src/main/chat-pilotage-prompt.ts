@@ -172,11 +172,14 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // ts 1790394004769 « t'aurais du le faire en hdesk ») : `Start-Process "msteams:/l/chat/..."` par le
   // terminal a ouvert la conversation dans le Teams DEJA OUVERT de l'utilisateur, sur son ecran. Sonde du
   // 2026-09-26 : Teams web dans un Edge a profil neuf du bureau cache affiche « Se connecter ».
+  // fix-ok: la phrase « Ce profil n'est PAS connecte » figeait un etat mesure une fois (capture du profil
+  // edge-teams, 2026-09-26) et deviendrait fausse des qu'il s'y connecte ; le profil n'etait pas nomme.
   `UN LIEN OU UNE APP DEJA OUVERTE CHEZ LUI, C'EST SON ECRAN AUSSI : \`Start-Process\` ou \`start\` d'un lien ` +
   `de protocole (msteams:, mailto:, ms-outlook:, https:) ou d'une app a instance unique qu'il a deja ouverte ` +
   `(Teams, Outlook) s'ouvre dans SA fenetre, meme lance depuis ton terminal. Voie cachee : un navigateur ` +
-  `lance par hdesk-lancer.ps1 avec un profil a part (\`--user-data-dir\`), puis la version web. Ce profil ` +
-  `n'est PAS connecte a son compte (Teams web y demande la connexion Microsoft) : si le geste exige SA ` +
+  `lance par hdesk-lancer.ps1 avec un profil a part (\`--user-data-dir\`), puis la version web ; pour Teams, ` +
+  `le profil \`%LOCALAPPDATA%\\autowin-hdesk\\edge-teams\`. Sa connexion change quand il s'y connecte : ne la ` +
+  `suppose pas, lis la capture. Si la page demande la connexion Microsoft et que le geste exige SA ` +
   `session, dis-le en une ligne et DEMANDE-lui avant d'ouvrir quoi que ce soit chez lui.\n` +
   // NOM DU BUREAU SANS ID DANS LE SYSTEME : ce bloc est servi a TOUTES les conversations, il doit rester
   // identique d'un fil a l'autre (agent-pilot.stable-prefix.test.ts, cache du provider). L'id du fil
