@@ -998,7 +998,9 @@ export function skillSlashCommands(
           ...aliases.map((a) => ({
             name: a,
             hint: `${cmd.hint} (alias de /${cmd.name})`,
-            ...(cmd.description ? { description: `${cmd.description} (alias de /${cmd.name})` } : {}),
+            ...(cmd.description
+              ? { description: `${cmd.description} (alias de /${cmd.name})` }
+              : {}),
             insert: `/${a} `
           }))
         ]

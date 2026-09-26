@@ -31,16 +31,34 @@
   color: var(--text-faint, #7f8fa1);
   font-size: 11px;
 }
-/* Description ENTIÈRE de la skill survolée (demande du 2026-09-26), dans un encart AU-DESSUS de
-   la liste : il pousse vers le haut, la liste reste immobile sous le pointeur. Borné en hauteur
-   et défilable : le pointeur peut y entrer sans le faire disparaître (voir ChatComposer). */
+/* Description ENTIÈRE de la skill survolée (demande du 2026-09-26), dans un encart SUPERPOSÉ
+   au-dessus de la liste : il ne décale rien, la liste reste immobile sous le pointeur. Sa hauteur
+   est bornée en ligne (style) à la place libre au-dessus, puis il défile. La zone porte une marge
+   TRANSPARENTE de 6 px : le pointeur passe de la liste à l'encart sans sortir du bloc. */
+.slash-palette-bloc {
+  position: relative;
+}
+.slash-detail-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  z-index: 30;
+  padding-bottom: 6px;
+}
 .slash-detail {
-  margin: 0 0 6px;
   padding: 8px 12px;
   border: 1px solid var(--container-border, rgba(255, 255, 255, 0.14));
   border-radius: 10px;
-  background: var(--surface-panel, rgba(12, 12, 14, 0.96));
-  max-height: 40vh;
+  /* OPAQUE : superposé au fil, un fond translucide laissait transparaître le titre de la
+     conversation sous le texte (capture du 2026-09-26). Teinte du panneau posée sur --bg-0,
+     le seul fond plein défini par TOUS les thèmes. */
+  background:
+    linear-gradient(
+      var(--surface-panel, rgba(12, 12, 14, 0.96)),
+      var(--surface-panel, rgba(12, 12, 14, 0.96))
+    ),
+    var(--bg-0, #000);
   overflow-y: auto;
   overscroll-behavior: contain;
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);

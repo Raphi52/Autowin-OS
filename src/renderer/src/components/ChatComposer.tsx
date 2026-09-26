@@ -219,6 +219,22 @@ export interface ChatComposerProps {
   metaNode?: ReactNode
 }
 
+/**
+ * Hauteur libre AU-DESSUS d'un élément avant qu'un ancêtre ne la coupe (`overflow` non visible),
+ * pour borner un encart superposé : au-delà, le texte serait rogné au lieu de défiler. Mesuré le
+ * 2026-09-26 dans une fenêtre de 670 px : 213 px au-dessus de la palette `/`. Plancher de 80 px.
+ */
+function espaceAuDessus(element: HTMLElement): number {
+  const haut = element.getBoundingClientRect().top
+  let borne = 0
+  for (let n = element.parentElement; n; n = n.parentElement) {
+    if (getComputedStyle(n).overflowY !== 'visible')
+      borne = Math.max(borne, n.getBoundingClientRect().top)
+  }
+  const PONT = 6 // la marge transparente entre l'encart et la liste (.slash-detail-zone)
+  return Math.max(80, Math.floor(haut - borne - PONT - 4))
+}
+
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
   function ChatComposer(props, ref): React.JSX.Element {
     const [input, setInput] = useState('')
@@ -226,6 +242,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [slashDismissed, setSlashDismissed] = useState(false)
     /** Skill SURVOLÉE dans la palette `/` : son nom, pour afficher sa description entière. */
     const [slashSurvol, setSlashSurvol] = useState<string | null>(null)
+    /** Hauteur disponible AU-DESSUS de la palette pour l'encart, mesurée à l'entrée du survol. */
+    const [slashEspace, setSlashEspace] = useState(0)
     const [mentionIndex, setMentionIndex] = useState(0)
     const [mentionDismissed, setMentionDismissed] = useState(false)
     const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -508,18 +526,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
           ) : null}
           {slashVisibles.length > 0 ? (
             /*
-              DESCRIPTION ENTIÈRE AU SURVOL (demande du 2026-09-26) : un encart AU-DESSUS de la
-              liste, jamais un dépliage dans la ligne. Déplier la ligne faisait remonter toutes
-              les lignes suivantes quand elle se repliait : la souris sautait plusieurs skills.
-              L'encart pousse vers le HAUT, la liste ne bouge pas sous le pointeur. Il reste
-              affiché tant que le pointeur est dans le bloc (encart compris), pour pouvoir le
-              faire défiler.
+              DESCRIPTION ENTIÈRE AU SURVOL (demande du 2026-09-26) : un encart SUPERPOSÉ au-dessus
+              de la liste, qui ne décale rien. Deux formes ont été mesurées fausses dans l'app
+              (scripts/cdp-slash-palette-survol.mjs) : déplier la ligne faisait sauter les lignes
+              suivantes sous la souris ; un encart dans le flux poussait la liste de 239 px vers
+              le bas (la zone des messages ne rétrécit pas assez). Il reste affiché tant que le
+              pointeur est dans le bloc, encart compris, pour pouvoir le faire défiler.
             */
             <div className="slash-palette-bloc" onMouseLeave={() => setSlashSurvol(null)}>
               {slashDetail ? (
-                <div className="slash-detail" data-testid="slash-detail">
-                  <span className="slash-name mono">/{slashDetail.name}</span>
-                  <p className="slash-detail-texte">{slashDetail.description}</p>
+                <div className="slash-detail-zone">
+                  <div
+                    className="slash-detail"
+                    data-testid="slash-detail"
+                    style={{ maxHeight: slashEspace }}
+                  >
+                    <span className="slash-name mono">/{slashDetail.name}</span>
+                    <p className="slash-detail-texte">{slashDetail.description}</p>
+                  </div>
                 </div>
               ) : null}
               <ul className="slash-palette" role="listbox" aria-label="Commandes">
@@ -529,7 +553,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                     role="option"
                     aria-selected={i === slashSel}
                     className={`slash-item${i === slashSel ? ' is-selected' : ''}`}
-                    onMouseEnter={() => setSlashSurvol(c.name)}
+                    onMouseEnter={(ev) => {
+                      const bloc = ev.currentTarget.closest('.slash-palette-bloc')
+                      if (bloc instanceof HTMLElement) setSlashEspace(espaceAuDessus(bloc))
+                      setSlashSurvol(c.name)
+                    }}
                     onMouseDown={(ev) => {
                       ev.preventDefault() // garde le focus du composer
                       acceptSlash(c)

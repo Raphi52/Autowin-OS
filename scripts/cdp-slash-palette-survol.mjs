@@ -61,7 +61,11 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id, method, params }))
   })
 const evaluate = async (expression) => {
-  const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+  const result = await send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true
+  })
   if (result.exceptionDetails)
     throw new Error(`Erreur renderer: ${JSON.stringify(result.exceptionDetails).slice(0, 800)}`)
   return result.result?.value
@@ -80,7 +84,10 @@ const waitFor = async (expression, label, timeoutMs = 25_000) => {
 await send('Runtime.enable')
 await send('Page.enable')
 await evaluate(`document.querySelector('[data-testid="first-run-wizard"] .frw-primary')?.click()`)
-await waitFor(`!document.querySelector('[data-testid="first-run-wizard"]')`, 'fermeture du first-run')
+await waitFor(
+  `!document.querySelector('[data-testid="first-run-wizard"]')`,
+  'fermeture du first-run'
+)
 // Une instance neuve n'a aucune conversation ouverte, donc aucun composer : on charge la fixture
 // de conversation (meme amorce que cdp-chat-mermaid.mjs) et on l'ouvre.
 await evaluate(`window.api.seedArtifactPreviewsTest(true)`)
@@ -189,15 +196,25 @@ const passage = await mesurer()
 const echecs = []
 if (repos.encart) echecs.push('encart visible AU REPOS')
 if (!survol.encart) echecs.push('aucun encart au survol')
-if (survol.nomEncart !== cible.nom) echecs.push(`encart de ${survol.nomEncart} au lieu de ${cible.nom}`)
+if (survol.nomEncart !== cible.nom)
+  echecs.push(`encart de ${survol.nomEncart} au lieu de ${cible.nom}`)
 if (survol.longueurTexteEncart !== cible.longueurCatalogue)
   echecs.push(`texte tronque : ${survol.longueurTexteEncart} car. sur ${cible.longueurCatalogue}`)
 if (survol.encartDansLaFenetre === false) echecs.push('encart qui sort de la fenetre')
 if (survol.positionLigne !== repos.positionLigne)
   echecs.push(`la ligne survolee a bouge de ${survol.positionLigne - repos.positionLigne} px`)
-if (survol.ligneSousLaSouris !== cible.nom) echecs.push(`souris sur ${survol.ligneSousLaSouris} apres affichage`)
+if (survol.ligneSousLaSouris !== cible.nom)
+  echecs.push(`souris sur ${survol.ligneSousLaSouris} apres affichage`)
 if (passage.ligneSousLaSouris !== cible.suivante)
-  echecs.push(`passage a la suivante : souris sur ${passage.ligneSousLaSouris}, attendu ${cible.suivante}`)
+  echecs.push(
+    `passage a la suivante : souris sur ${passage.ligneSousLaSouris}, attendu ${cible.suivante}`
+  )
 socket.close()
-console.log(JSON.stringify({ ok: echecs.length === 0, echecs, cible, repos, survol, passage, capture }, null, 2))
+console.log(
+  JSON.stringify(
+    { ok: echecs.length === 0, echecs, cible, repos, survol, passage, capture },
+    null,
+    2
+  )
+)
 process.exit(echecs.length === 0 ? 0 : 1)
