@@ -26,6 +26,8 @@ export interface ExecutionUsageSnapshot {
    * d'instantanes deja persistes (et de fixtures) qui n'ont jamais porte ce compteur.
    */
   cacheCreationTokens?: number
+  /** Part de `cacheCreationTokens` ecrite pour 1 h (2x l'entree). Absente = aucune ou inconnue. */
+  cacheCreation1hTokens?: number
   totalTokens: number
   freshTokens: number
   knownCostUsd: number | null
@@ -58,6 +60,7 @@ export function sameExecutionUsage(
     left.outputTokens === right.outputTokens &&
     left.cacheReadTokens === right.cacheReadTokens &&
     left.cacheCreationTokens === right.cacheCreationTokens &&
+    (left.cacheCreation1hTokens ?? 0) === (right.cacheCreation1hTokens ?? 0) &&
     left.totalTokens === right.totalTokens &&
     left.freshTokens === right.freshTokens &&
     left.knownCostUsd === right.knownCostUsd &&
@@ -85,6 +88,7 @@ interface ExecutionRuntime {
   outputTokens: number
   cacheReadTokens: number
   cacheCreationTokens: number
+  cacheCreation1hTokens: number
   totalTokens: number
   freshTokens: number
   knownCostUsd: number
@@ -132,6 +136,10 @@ function snapshot(runtime: ExecutionRuntime): ExecutionUsageSnapshot {
     outputTokens: runtime.outputTokens,
     cacheReadTokens: runtime.cacheReadTokens,
     cacheCreationTokens: runtime.cacheCreationTokens,
+    // Pose seulement s'il existe : les instantanes sans cache 1 h gardent leur forme d'avant.
+    ...(runtime.cacheCreation1hTokens > 0
+      ? { cacheCreation1hTokens: runtime.cacheCreation1hTokens }
+      : {}),
     totalTokens: runtime.totalTokens,
     freshTokens: runtime.freshTokens,
     knownCostUsd: runtime.pricedCalls > 0 ? runtime.knownCostUsd : null,
@@ -239,6 +247,7 @@ export class ExecutionSupervisor {
       outputTokens: prior?.outputTokens ?? 0,
       cacheReadTokens: prior?.cacheReadTokens ?? 0,
       cacheCreationTokens: prior?.cacheCreationTokens ?? 0,
+      cacheCreation1hTokens: prior?.cacheCreation1hTokens ?? 0,
       totalTokens: prior?.totalTokens ?? 0,
       freshTokens: prior?.freshTokens ?? 0,
       knownCostUsd: prior?.knownCostUsd ?? 0,
@@ -428,6 +437,10 @@ export class ExecutionSupervisor {
         runtime.outputTokens += output
         runtime.cacheReadTokens += cache
         runtime.cacheCreationTokens += cacheWrite
+        const ecriture1h = Number.isFinite(usage.cacheCreation1hTokens)
+          ? Math.max(0, usage.cacheCreation1hTokens as number)
+          : 0
+        runtime.cacheCreation1hTokens += Math.min(cacheWrite, ecriture1h)
         runtime.totalTokens += input + output
         runtime.freshTokens += Math.max(0, input - cache) + output
         if (Number.isFinite(usage.costUsd)) {

@@ -124,6 +124,8 @@ interface UsageLine {
   input: number
   cacheRead: number
   cacheWrite: number
+  /** Part de `cacheWrite` écrite pour 1 h (`cache_creation.ephemeral_1h_input_tokens`) : 2× l'entrée. */
+  cacheWrite1h: number
   output: number
 }
 
@@ -174,6 +176,8 @@ function readUsageLines(path: string): UsageLine[] {
     if (!usage) continue
     const atMs = Date.parse(String(parsed.timestamp ?? ''))
     if (!Number.isFinite(atMs)) continue
+    const cacheWrite = count(usage.cache_creation_input_tokens)
+    const detailEcriture = usage.cache_creation as Record<string, unknown> | undefined
     const requestId =
       (typeof parsed.requestId === 'string' && parsed.requestId) ||
       (typeof message?.id === 'string' && message.id) ||
@@ -184,7 +188,8 @@ function readUsageLines(path: string): UsageLine[] {
       ...(typeof message?.model === 'string' ? { model: message.model } : {}),
       input: count(usage.input_tokens),
       cacheRead: count(usage.cache_read_input_tokens),
-      cacheWrite: count(usage.cache_creation_input_tokens),
+      cacheWrite,
+      cacheWrite1h: Math.min(cacheWrite, count(detailEcriture?.ephemeral_1h_input_tokens)),
       output: count(usage.output_tokens)
     })
   }
@@ -267,6 +272,7 @@ export function recoverUnpricedCallsUsage(
     let outputTokens = 0
     let cacheReadTokens = 0
     let cacheCreationTokens = 0
+    let cacheCreation1hTokens = 0
     let model: string | undefined
     for (const line of seen.values()) {
       claimed.add(line.requestId)
@@ -274,6 +280,7 @@ export function recoverUnpricedCallsUsage(
       outputTokens += line.output
       cacheReadTokens += line.cacheRead
       cacheCreationTokens += line.cacheWrite
+      cacheCreation1hTokens += line.cacheWrite1h
       if (!model && line.model) model = line.model
     }
     const usage = {
@@ -281,6 +288,7 @@ export function recoverUnpricedCallsUsage(
       outputTokens,
       cacheReadTokens,
       cacheCreationTokens,
+      cacheCreation1hTokens,
       ...((model ?? call.resolvedModel ?? call.model)
         ? { model: model ?? call.resolvedModel ?? call.model }
         : {}),

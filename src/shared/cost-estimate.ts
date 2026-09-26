@@ -82,11 +82,21 @@ const MODEL_RATES: readonly ModelRate[] = [
 /** Un token relu en cache coûte 10 % du tarif d'entrée. */
 const CACHE_READ_RATIO = 0.1
 /**
- * Un token ÉCRIT dans le cache coûte 1,25× le tarif d'entrée (TTL 5 min, le défaut). Un TTL 1 h
- * coûterait 2×, mais `cache_creation_input_tokens` ne dit pas le TTL : 1,25× est donc un PLANCHER
- * assumé, pas une valeur exacte — l'estimation reste marquée « ≈ estimés ».
+ * Un token ÉCRIT dans le cache pour 5 MIN coûte 1,25× le tarif d'entrée. C'est aussi le tarif
+ * appliqué quand la durée de vie est INCONNUE : un PLANCHER assumé, jamais une durée devinée.
  */
 const CACHE_WRITE_RATIO = 1.25
+/**
+ * Un token ÉCRIT dans le cache pour 1 HEURE coûte 2× le tarif d'entrée.
+ * Source : https://platform.claude.com/docs/en/build-with-claude/prompt-caching (relu le 2026-09-26).
+ *
+ * Le CLI Claude écrit en 1 h : mesuré le 2026-09-26, `cache_creation.ephemeral_5m_input_tokens` = 0
+ * sur toutes les sessions du jour. Son propre `total_cost_usd` applique d'ailleurs déjà ce taux
+ * (`.arena/banc-heal/out-a.json` : 0,8698835 $ = 26 × 5 + 10 129 × 25 + 487 297 × 0,5
+ * + 37 288 × 10, en $ par million). Au taux de 1,25×, l'estimation de secours d'Autowin sous-évaluait donc chaque
+ * écriture de 37,5 %.
+ */
+const CACHE_WRITE_1H_RATIO = 2
 
 /**
  * Conservé comme ALIAS de `TokenUsage` : la forme de l'usage n'a plus qu'une définition, mais le
@@ -104,7 +114,7 @@ export interface InputTokenSplit {
   readonly fresh: number
   /** Relu depuis le cache (0,1× l'entrée). */
   readonly cacheRead: number
-  /** Écrit dans le cache (1,25× l'entrée). */
+  /** Écrit dans le cache (1,25× l'entrée pour 5 min, 2× pour 1 h — voir `estimateCostUsd`). */
   readonly cacheWrite: number
 }
 
@@ -165,9 +175,12 @@ export function estimateCostUsd(usage: TokenUsageShape, nowMs?: number): number 
   // seule fois, à leur tarif propre, et on retire leur part du plein tarif. L'arbitrage de cet
   // invariant vit dans `splitInputTokens`, partagé avec le superviseur d'exécution.
   const { fresh: freshInput, cacheRead, cacheWrite } = splitInputTokens(usage)
+  // La part 1 h est un SOUS-ENSEMBLE de l'écriture : bornée à elle, jamais ajoutée par-dessus.
+  const cacheWrite1h = Math.min(cacheWrite, positive(usage.cacheCreation1hTokens))
   return (
     (freshInput * inputPerMTok +
-      cacheWrite * inputPerMTok * CACHE_WRITE_RATIO +
+      (cacheWrite - cacheWrite1h) * inputPerMTok * CACHE_WRITE_RATIO +
+      cacheWrite1h * inputPerMTok * CACHE_WRITE_1H_RATIO +
       cacheRead * inputPerMTok * CACHE_READ_RATIO +
       output * outputPerMTok) /
     1_000_000

@@ -177,6 +177,15 @@ export function normalizeClaudeUsage(
   // `cacheCreation` etait calcule puis PERDU dans le total : le consommateur ne pouvait donc pas le
   // tarifer a 1,25x. On le transporte a cote, comme la lecture de cache.
   const cacheCreationTokens = cacheCreation
+  // DUREE DE VIE du cache ecrit : 1 h se facture 2x l'entree, 5 min 1,25x. Le CLI la detaille dans
+  // `cache_creation` ; sans ce detail l'estimateur retombe sur 1,25x (plancher, cf. cost-estimate).
+  const detailEcriture = usage.cache_creation
+  const brut1h =
+    detailEcriture && typeof detailEcriture === 'object' && !Array.isArray(detailEcriture)
+      ? tokenCount((detailEcriture as Record<string, unknown>).ephemeral_1h_input_tokens)
+      : undefined
+  const cacheCreation1hTokens =
+    brut1h === undefined ? undefined : Math.min(brut1h, cacheCreationTokens)
   const normalizedCost =
     typeof costUsd === 'number' && Number.isFinite(costUsd) && costUsd >= 0 ? costUsd : undefined
   if (hasReportedCost && normalizedCost === undefined) return undefined
@@ -185,6 +194,7 @@ export function normalizeClaudeUsage(
     outputTokens: output,
     cacheReadTokens: cache,
     cacheCreationTokens,
+    ...(cacheCreation1hTokens ? { cacheCreation1hTokens } : {}),
     ...(normalizedCost === undefined ? {} : { costUsd: normalizedCost })
   }
 }

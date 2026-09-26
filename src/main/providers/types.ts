@@ -248,6 +248,11 @@ export interface Usage {
    */
   cacheCreationTokens?: number
   /**
+   * Part de `cacheCreationTokens` écrite pour 1 HEURE (`cache_creation.ephemeral_1h_input_tokens`
+   * chez Claude) — sous-ensemble, jamais un ajout. Facturée 2× l'entrée au lieu de 1,25×.
+   */
+  cacheCreation1hTokens?: number
+  /**
    * OCCUPATION DE LA FENETRE au DERNIER appel du tour, cache inclus — a ne pas confondre avec
    * `inputTokens`, qui est le CUMUL de tous les appels du tour.
    *

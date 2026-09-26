@@ -119,6 +119,7 @@ export function persistChatUsageSettlement(
       outputTokens: current.outputTokens,
       cacheReadTokens: current.cacheReadTokens,
       cacheCreationTokens: current.cacheCreationTokens,
+      cacheCreation1hTokens: current.cacheCreation1hTokens,
       provider: input.provider,
       ...(input.model ? { model: input.model } : {})
     })

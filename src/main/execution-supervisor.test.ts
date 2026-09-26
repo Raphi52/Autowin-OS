@@ -589,6 +589,42 @@ describe('ExecutionSupervisor', () => {
       // fresh = entree - LECTURE + sortie : inchange, l'ecriture reste du contexte frais envoye.
       freshTokens: 450
     })
+    // Sans cache 1 h, l'instantane garde exactement sa forme d'avant.
+    expect(settlements[0]).not.toHaveProperty('cacheCreation1hTokens')
+  })
+
+  it('cumule la part du cache ecrite pour 1 h, bornee a l ecriture de chaque appel', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = devisBloquant('mesurer un cache 1 h')
+    const settlements: Array<NonNullable<ReturnType<typeof supervisor.currentSnapshot>>> = []
+
+    await supervisor.run(
+      quote,
+      undefined,
+      async () => {
+        supervisor.reserveProviderCall()?.complete({
+          inputTokens: 1000,
+          outputTokens: 50,
+          cacheReadTokens: 600,
+          cacheCreationTokens: 200,
+          cacheCreation1hTokens: 200
+        })
+        // Compteur incoherent : 1 h (500) > ecriture (100). Seuls les 100 ecrits comptent.
+        supervisor.reserveProviderCall()?.complete({
+          inputTokens: 500,
+          outputTokens: 10,
+          cacheCreationTokens: 100,
+          cacheCreation1hTokens: 500
+        })
+      },
+      undefined,
+      (usage) => settlements.push(usage)
+    )
+
+    expect(settlements.at(-1)).toMatchObject({
+      cacheCreationTokens: 300,
+      cacheCreation1hTokens: 300
+    })
   })
 
   it('refuse avant provider une reprise deja exactement au plafond de tokens', async () => {

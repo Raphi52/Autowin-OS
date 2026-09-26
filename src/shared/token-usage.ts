@@ -19,6 +19,11 @@ export interface TokenUsage {
   cacheReadTokens?: number
   /** Tokens ÉCRITS dans le cache — SOUS-ENSEMBLE de `inputTokens`, jamais un ajout. */
   cacheCreationTokens?: number
+  /**
+   * Part de `cacheCreationTokens` écrite avec une durée de vie d'1 HEURE — SOUS-ENSEMBLE, jamais un
+   * ajout. Se facture 2× l'entrée, contre 1,25× pour le cache de 5 min. Absent = durée inconnue.
+   */
+  cacheCreation1hTokens?: number
   /** Modèle concret servi : sans lui, aucun tarif n'est reconstituable. */
   model?: string
   provider?: string
