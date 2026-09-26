@@ -337,6 +337,29 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     expect(result.gateBlocked).toBe(true)
   })
 
+  // conv-835, tour 8641812d-6401-4129-a6b0-13a64228e0bc : le juge (VALIDE 86) a releve que le
+  // raccourci corrige par 0014ffca au pre-gate sequentiel restait ici. Preuve bonne + hook qui
+  // bloque AVEC sa raison : le refus ne doit pas s'ouvrir sur « Échec déjà déclaré ».
+  it('un hook pre-green bloquant du chemin greedy ne se double pas d’un faux « Échec déjà déclaré »', async () => {
+    const hooks = new HookBus().register('pre-green', () => ({
+      block: true,
+      reason: 'hook fix-gate: 6 édits de x.mjs sans cause vérifiée'
+    }))
+    const result = await makeGreedy(
+      new GreedyProvider(),
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['build'],
+      { hooks }
+    ).run('corrige le bug en plusieurs volets')
+
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons.join('\n')).toMatch(/hook fix-gate: 6 édits de x\.mjs/)
+    expect(result.gateReasons.join('\n')).not.toMatch(/Échec déjà déclaré/)
+  })
+
   it('une sous-tâche qui ÉCHOUE conserve les actions déjà faites', async () => {
     // Mesuré le 2026-08-21 sur les 60 traces les plus récentes : un sous-agent `completed` montre ses
     // actions 38 fois sur 39, un sous-agent `failed` ne les montre JAMAIS (0 sur 9). On veut voir ce

@@ -2487,10 +2487,17 @@ ${annonceCommit}`
       fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
     })
     const preGate = evaluateClosure({
-      status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
+      // fix-ok: conv-835 tour 8641812d-6401-4129-a6b0-13a64228e0bc — meme raccourci que 0014ffca :
+      // un hook bloquant AVEC sa raison forcait `red`, donc « Échec déjà déclaré » alors que rien ne
+      // l'etait. Test orchestrator.greedy rouge avant / vert apres. Sans raison du hook : `red` garde.
+      status:
+        evidenceOk && !(hookOutcome.blocked && hookOutcome.reasons.length === 0) ? 'green' : 'red',
       dod: [{ checked: evidenceOk, hasContent: true }]
     })
-    if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
+    if (hookOutcome.blocked) {
+      preGate.blocked = true
+      preGate.reasons.push(...hookOutcome.reasons)
+    }
     /**
      * ON N'INTERROMPT PLUS EN ROUTE — on CONSTATE, et on répare après coup.
      *
