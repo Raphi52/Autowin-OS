@@ -20,6 +20,25 @@ export type UpdateStrategy = 'fast-forward' | 'merge' | 'rebase' | 'switch-main'
 /** Action contextuelle du bouton quand une fusion Git est déjà ouverte. */
 export type UpdateAction = UpdateStrategy | 'abort-conflict'
 
+/**
+ * Un commit qui ARRIVERA avec la mise à jour : qui l'a poussé, quand, et ce qu'il touche.
+ *
+ * Existe pour que « Fusionner » ne soit plus un clic à l'aveugle : le bouton annonçait « +1 » sans
+ * dire de qui ni de quoi, et l'utilisateur devait ouvrir un terminal pour décider (demande du
+ * 2026-09-25, conv-858).
+ */
+export interface IncomingCommit {
+  hash: string
+  author: string
+  /** Date d'auteur, ISO 8601. */
+  date: string
+  subject: string
+  /** Fichiers touchés, TRONQUÉS (cf. `fileCount` pour le total). */
+  files: string[]
+  /** Nombre total de fichiers touchés, même quand `files` est tronqué. */
+  fileCount: number
+}
+
 /** Libellés destinés à l'utilisateur — un bouton doit DIRE ce qu'il fait avant d'être cliqué. */
 export const UPDATE_STRATEGY_LABELS: Record<UpdateStrategy, string> = {
   'fast-forward': 'Mettre à jour',

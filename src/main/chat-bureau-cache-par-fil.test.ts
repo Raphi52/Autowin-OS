@@ -3,7 +3,7 @@ import {
   consigneBureauCacheChat,
   identifiantBureauCacheChat
 } from './consigne-bureau-cache'
-import { REGLES_VISUELLES } from './chat-pilotage-prompt'
+import { REGLES_ECRAN_UTILISATEUR, REGLES_VISUELLES } from './chat-pilotage-prompt'
 
 describe('bureau cache du chat : un nom par fil (conv-620)', () => {
   it('deux conversations paralleles n ont jamais le meme bureau', () => {
@@ -26,5 +26,7 @@ describe('bureau cache du chat : un nom par fil (conv-620)', () => {
   it('les regles visuelles ne prescrivent plus un nom libre', () => {
     expect(REGLES_VISUELLES).not.toContain('-Id <nom>')
     expect(REGLES_VISUELLES).not.toContain('-InstanceId <nom>')
+    expect(REGLES_ECRAN_UTILISATEUR).not.toContain('-Id <nom>')
+    expect(REGLES_ECRAN_UTILISATEUR).not.toContain('-InstanceId <nom>')
   })
 })

@@ -105,12 +105,31 @@ export type DepsRangementPremierMessage = {
    * correspondance de nom, moins fine mais gratuite.
    */
   demanderAuModele?: EnvoyerAuModele
+  /**
+   * La fin du tour lance par ce premier message, quand le rangement tourne A COTE de la reponse
+   * au lieu de la faire attendre (index.ts, `runPilotChat`). Seul un rangement qui DEPLACE le
+   * dossier de travail l'attend : voir `rangerConversationSurLePremierMessage`.
+   */
+  finDuTour?: Promise<unknown>
+  /**
+   * Relit l'etat COURANT de la conversation avant d'ecrire. Pendant l'appel au modele, l'utilisateur,
+   * l'agent (`classer_conversation`) ou la bascule par chemin cite ont pu la ranger : leur choix prime.
+   */
+  toujoursNonRangee?: () => boolean
 }
 
 /**
  * Applique le rangement au premier message : decide, range, ANNONCE. Rend le dossier applique, ou
  * `null` si rien n'a bouge. Un echec de `ranger`/`annoncer` est avale : un rangement rate ne doit
  * JAMAIS empecher le tour de partir.
+ *
+ * LA REPONSE N'ATTEND PLUS CE RANGEMENT (2026-09-26, conv-867). L'appel au modele coutait ~5 s
+ * AVANT le premier mot de chaque nouvelle conversation, et ce trou faisait afficher un faux
+ * « Reponse interrompue avant la fin » (conv-809, conv-862). Il tourne desormais a cote du tour.
+ * Consequence assumee : un rangement qui DEPLACE le dossier de travail n'est applique qu'une fois
+ * ce premier tour fini — les outils du tour relisent ce dossier a chaque appel (index.ts,
+ * `workspace: dossierDuTour`), et un tour a cheval sur deux depots serait pire qu'un tour dans
+ * l'ancien. Mesure du 2026-09-26 : 0 rangement de ce type sur 22 (19 categories, 3 meme dossier).
  *
  * fix-ok: le cablage n'etait prouve que par lecture du TEXTE de index.ts (objection majeure du
  * controle) ; la decision + l'effet vivent desormais ici, joues pour de vrai dans le test.
@@ -143,19 +162,28 @@ export async function rangerConversationSurLePremierMessage(
         deps.existe ?? existsSync
       )
   if (!deduit) return null
+  const deplaceLeTravail = isAbsolute(deduit) && !memeDossier(deduit, deps.dossierActif || deduit)
+  const differe = deplaceLeTravail && deps.finDuTour !== undefined
+  if (differe) await Promise.resolve(deps.finDuTour).catch(() => undefined)
+  if (deps.toujoursNonRangee && !deps.toujoursNonRangee()) return null
   try {
     deps.ranger(deduit)
     deps.annoncer(
       !isAbsolute(deduit)
         ? `📂 Ta demande porte sur « ${deduit} » : je range cette conversation dans ce dossier de la ` +
-          `liste. Le dossier de travail ne change pas. Si ce n'est pas le bon, change-le dans la liste des conversations.`
-        : memeDossier(deduit, deps.dossierActif || deduit)
+            `liste. Le dossier de travail ne change pas. Si ce n'est pas le bon, change-le dans la liste des conversations.`
+        : !deplaceLeTravail
           ? `📂 Cette conversation n'était rangée nulle part : je la range dans ${deduit}, ` +
             `le dossier sur lequel porte ta demande. Le dossier de travail ne change pas. ` +
             `Si ce n'est pas le bon, change-le dans la liste des conversations.`
-          : `📂 Ta demande parle de ${deduit}, et cette conversation n'était pas encore rangée ` +
-            `(elle partait dans ${deps.dossierActif}). Je la range là et j'y travaille — c'est son AGENTS.md qui sera lu. ` +
-            `Si ce n'est pas le bon dossier, change-le dans la liste des conversations.`
+          : differe
+            ? `📂 Ta demande parle de ${deduit}, et cette conversation n'était pas encore rangée : ` +
+              `cette première réponse a travaillé dans ${deps.dossierActif}. Je la range dans ${deduit} ` +
+              `pour la suite — tes prochains messages y travailleront, avec son AGENTS.md. ` +
+              `Si ce n'est pas le bon dossier, change-le dans la liste des conversations.`
+            : `📂 Ta demande parle de ${deduit}, et cette conversation n'était pas encore rangée ` +
+              `(elle partait dans ${deps.dossierActif}). Je la range là et j'y travaille — c'est son AGENTS.md qui sera lu. ` +
+              `Si ce n'est pas le bon dossier, change-le dans la liste des conversations.`
     )
     return deduit
   } catch {

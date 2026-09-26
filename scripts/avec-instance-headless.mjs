@@ -20,8 +20,10 @@
  *   5. un code de sortie HONNETE : celui de la sonde, ou un code nomme si le demarrage a echoue.
  *
  * Usage : node scripts/avec-instance-headless.mjs [--instance-id <id>] [--port <depart>] [--attendre <s>]
- *                -- node scripts/cdp-xxx.mjs [args...]
+ *                [--code-dev [--renderer-url <url>]] -- node scripts/cdp-xxx.mjs [args...]
  * Le `--port <port choisi>` est ajoute a la commande enfant si elle ne le porte pas deja.
+ * `--code-dev` : lance le CODE EN COURS (electron.exe du depot + serveur de dev) au lieu du binaire
+ * empaquete ; sortie 7, sans rien demarrer, si ce code n'est pas lancable (voir `preparerCodeDev`).
  *
  * TRAVAUX PARALLELES (2026-09-13) : sans --instance-id, l'identifiant vaut `preuve-<pid>`, donc
  * deux lancements simultanes ont chacun leur bureau cache et leur profil. L'instance ET le port
@@ -39,6 +41,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   statSync,
   rmSync,
   writeFileSync,
@@ -48,8 +51,22 @@ import { dirname, join } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
 import { portsEnEcouteSysteme } from './port-libre.mjs'
 
-/** La commande PowerShell du lanceur, pour une action donnee. Pure. */
-export function commandeLanceur({ racine, action, instanceId, port }) {
+/**
+ * La commande PowerShell du lanceur, pour une action donnee. Pure.
+ *
+ * `executable` doit etre le MEME au demarrage et a l'arret : le script PowerShell refuse d'arreter
+ * un processus dont le programme differe de celui de sa fiche (garde anti-mauvaise-cible). Absent =
+ * binaire empaquete par defaut. `appPath` et `rendererUrl` ne servent qu'au demarrage du code dev.
+ */
+export function commandeLanceur({
+  racine,
+  action,
+  instanceId,
+  port,
+  executable,
+  appPath,
+  rendererUrl
+}) {
   return {
     commande: 'powershell',
     args: [
@@ -63,9 +80,65 @@ export function commandeLanceur({ racine, action, instanceId, port }) {
       '-InstanceId',
       instanceId,
       '-Port',
-      String(port)
+      String(port),
+      ...(executable ? ['-Executable', executable] : []),
+      ...(action === 'Start' && appPath ? ['-AppPath', appPath] : []),
+      ...(action === 'Start' && rendererUrl ? ['-RendererUrl', rendererUrl] : [])
     ]
   }
+}
+
+/** Une adresse de serveur de dev acceptable : locale, http(s), rendue sans chemin. Pure. */
+export function origineDevLocale(url) {
+  try {
+    const u = new URL(url)
+    if (!/^https?:$/.test(u.protocol)) return undefined
+    if (u.hostname !== 'localhost' && u.hostname !== '127.0.0.1') return undefined
+    return u.origin
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * OU TROUVER LE SERVEUR DE DEV, sans le deviner. Pure (les lectures sont injectees).
+ *
+ * Ordre : (1) `--renderer-url` explicite ; (2) `ELECTRON_RENDERER_URL` herite — c'est le cas de tout
+ * agent lance par l'app de dev, qui la recoit d'electron-vite ; (3) la fenetre de dev ouverte, par
+ * son port CDP (`DevToolsActivePort` du depot) : l'adresse de sa page EST celle du serveur. Cette
+ * troisieme sonde ne fait que LIRE la liste des pages : rien ne bouge a l'ecran.
+ * Rend `{ rendererUrl, source }` ou `{ erreur }` qui nomme ce qui a ete sonde.
+ */
+export async function trouverServeurDev({ explicite, env, lirePortFenetreDev, listerPages }) {
+  const sondes = []
+  if (explicite) {
+    const origine = origineDevLocale(explicite)
+    if (origine) return { rendererUrl: origine, source: '--renderer-url' }
+    return { erreur: `--renderer-url refusee (adresse locale http attendue) : ${explicite}` }
+  }
+  const herite = env.ELECTRON_RENDERER_URL
+  if (herite) {
+    const origine = origineDevLocale(herite)
+    if (origine) return { rendererUrl: origine, source: 'ELECTRON_RENDERER_URL' }
+    sondes.push(`ELECTRON_RENDERER_URL non locale (${herite})`)
+  } else sondes.push('ELECTRON_RENDERER_URL absente')
+  const port = lirePortFenetreDev()
+  if (!port) {
+    sondes.push('aucun DevToolsActivePort de fenetre de dev')
+  } else {
+    try {
+      const pages = await listerPages(port)
+      const page = (Array.isArray(pages) ? pages : []).find(
+        (p) => p?.type === 'page' && origineDevLocale(p.url)
+      )
+      if (page)
+        return { rendererUrl: origineDevLocale(page.url), source: `fenetre de dev (CDP ${port})` }
+      sondes.push(`fenetre CDP ${port} sans page servie par un serveur de dev`)
+    } catch (erreur) {
+      sondes.push(`fenetre CDP ${port} injoignable (${erreur?.message ?? erreur})`)
+    }
+  }
+  return { erreur: `aucun serveur de dev trouve. Sondes : ${sondes.join(' | ')}` }
 }
 
 /** L'identifiant par defaut : propre au processus lanceur, donc distinct entre travaux paralleles. Pure. */
@@ -86,7 +159,136 @@ export function decouperArguments(argv, pid = process.pid) {
     instanceId: lire('--instance-id') ?? identifiantParDefaut(pid),
     portDemande: Number(lire('--port') ?? 9240),
     attendreMs: Number(lire('--attendre') ?? 0) * 1000,
+    codeDev: options.includes('--code-dev'),
+    rendererUrl: lire('--renderer-url'),
     enfant
+  }
+}
+
+/**
+ * CE QU'IL FAUT POUR LANCER LE CODE EN DEVELOPPEMENT dans l'instance cachee. Rend
+ * `{ executable, appPath, rendererUrl, source }` ou `{ erreur }` — jamais un repli silencieux sur le
+ * binaire empaquete : la capture montrerait alors l'ancienne interface en se disant a jour.
+ * - `executable` : l'electron.exe du depot (celui que lance `electron-vite dev`) ;
+ * - `appPath` : la racine du depot, dont le package.json designe `out/main/index.js` ;
+ * - `rendererUrl` : le serveur de dev qui sert l'interface A JOUR (voir `trouverServeurDev`).
+ * Le process principal vient de `out/main` tel que le serveur de dev l'a construit : une
+ * modification du main non reconstruite n'y est pas, et `mainConstruitLe` le date.
+ */
+export async function preparerCodeDev({
+  racine,
+  explicite,
+  env = process.env,
+  existe = existsSync,
+  dateFichier = (chemin) => statSync(chemin).mtime.toISOString(),
+  resoudreLien = (chemin) => realpathSync.native(chemin),
+  construire = construireCopie,
+  lirePortFenetreDev = () => lirePortDevTools(racine),
+  listerPages = listerPagesCdp,
+  sonderServeur = sonderServeurDev
+}) {
+  const lien = join(racine, 'node_modules', 'electron', 'dist', 'electron.exe')
+  if (!existe(lien)) return { erreur: `electron.exe du depot introuvable : ${lien}` }
+  // CHEMIN REEL : dans une copie de travail, `node_modules` est un LIEN vers celui du depot. Windows
+  // rapporte le processus sous le chemin reel ; le script PowerShell compare ce chemin a celui qu'on
+  // lui donne avant d'arreter l'instance. Avec le chemin du lien, l'arret serait refuse.
+  const executable = resoudreLien(lien)
+  const main = join(racine, 'out', 'main', 'index.js')
+
+  // COPIE DE TRAVAIL D'AGENT (demande du 2026-09-26) : le serveur de dev sert le depot PRINCIPAL,
+  // jamais cette copie. On RECONSTRUIT donc la copie (`electron-vite build`, sans typage : la
+  // capture prouve un rendu, le typage a sa propre preuve) puis l'instance lance SES fichiers
+  // construits — aucune adresse de serveur, l'interface vient de `<copie>/out/renderer`.
+  if (estCopieDeTravail(racine)) {
+    const construction = construire(racine)
+    if (construction !== true)
+      return { erreur: `reconstruction de la copie de travail echouee : ${construction}` }
+    if (!existe(main)) return { erreur: `reconstruction sans process principal (${main})` }
+    return {
+      executable,
+      appPath: racine,
+      source: 'copie de travail reconstruite',
+      mainConstruitLe: dateFichier(main)
+    }
+  }
+
+  if (!existe(main))
+    return { erreur: `process principal non construit (${main}) : lance « npm run dev » une fois` }
+  const serveur = await trouverServeurDev({ explicite, env, lirePortFenetreDev, listerPages })
+  if (serveur.erreur) return { erreur: serveur.erreur }
+  const joignable = await sonderServeur(serveur.rendererUrl)
+  if (joignable !== true)
+    return { erreur: `serveur de dev ${serveur.rendererUrl} injoignable (${joignable})` }
+  return {
+    executable,
+    appPath: racine,
+    rendererUrl: serveur.rendererUrl,
+    source: serveur.source,
+    mainConstruitLe: dateFichier(main)
+  }
+}
+
+/**
+ * Reconstruit une copie de travail : `electron-vite build` dans son dossier, sortie dans son `out/`
+ * (ignore par git : le diff de l'agent n'en porte rien). Le journal de construction part sur la
+ * sortie d'ERREUR : la sortie standard reste au JSON de la sonde. Rend `true` ou la raison.
+ */
+function construireCopie(racine) {
+  const debut = Date.now()
+  const r = spawnSync(
+    process.execPath,
+    [join(racine, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js'), 'build'],
+    { cwd: racine, encoding: 'utf8', windowsHide: true, timeout: 10 * 60_000 }
+  )
+  if (r.error) return r.error.message
+  if (r.status !== 0) {
+    const fin = [r.stdout ?? '', r.stderr ?? '']
+      .join('\n')
+      .trim()
+      .split(/\r?\n/)
+      .slice(-15)
+      .join('\n')
+    return `code ${r.status}\n${fin}`
+  }
+  console.error(
+    `[instance-headless] copie de travail reconstruite en ${Math.round((Date.now() - debut) / 1000)} s`
+  )
+  return true
+}
+
+/** Une copie de travail d'agent vit sous `<depot>/.autowin-data/.../worktrees/...`. Pure. */
+export function estCopieDeTravail(racine) {
+  return /[\\/]\.autowin-data[\\/](.*[\\/])?worktrees[\\/]/i.test(String(racine))
+}
+
+/** Le port CDP de la fenetre de dev du depot, lu dans son `DevToolsActivePort`. */
+function lirePortDevTools(racine) {
+  try {
+    const texte = readFileSync(
+      join(racine, '.autowin-data', 'autowin-os', 'DevToolsActivePort'),
+      'utf8'
+    )
+    const port = Number(texte.trim().split(/\r?\n/)[0])
+    return Number.isInteger(port) && port > 0 ? port : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function listerPagesCdp(port) {
+  const reponse = await fetch(`http://127.0.0.1:${port}/json`, {
+    signal: AbortSignal.timeout(3_000)
+  })
+  return reponse.json()
+}
+
+/** `true` si le serveur repond, sinon la raison. Un simple GET de la racine : rien n'est modifie. */
+async function sonderServeurDev(url) {
+  try {
+    const reponse = await fetch(`${url}/`, { signal: AbortSignal.timeout(3_000) })
+    return reponse.ok ? true : `HTTP ${reponse.status}`
+  } catch (erreur) {
+    return erreur?.message ?? String(erreur)
   }
 }
 
@@ -230,7 +432,11 @@ export function orphelinsAarreter({ fiches, lireLanceur, vivant = pidVivant }) {
       const lanceur = lireLanceur(f.instanceId)
       return Number.isInteger(lanceur) && lanceur > 0 && !vivant(lanceur) && vivant(f.pid)
     })
-    .map((f) => ({ instanceId: f.instanceId, port: f.port }))
+    .map((f) => ({
+      instanceId: f.instanceId,
+      port: f.port,
+      ...(f.executable ? { executable: f.executable } : {})
+    }))
 }
 
 const traceLanceur = (racineInstances, instanceId) =>
@@ -298,7 +504,15 @@ export function purgerDossiersInstance(
  */
 export function lireEtatInstance(texte) {
   const etat = JSON.parse(String(texte).replace(new RegExp('^' + String.fromCharCode(0xfeff)), ''))
-  return { pid: Number(etat.pid), port: Number(etat.port) }
+  // Le programme lance est garde : une instance de CODE DEV (electron.exe) ne s'arrete qu'en le
+  // redonnant au script PowerShell, qui refuse sinon l'arret (identite differente).
+  return {
+    pid: Number(etat.pid),
+    port: Number(etat.port),
+    ...(typeof etat.executable === 'string' && etat.executable
+      ? { executable: etat.executable }
+      : {})
+  }
 }
 
 /** Lit les `instance.json` presents sous la racine des instances. */
@@ -340,8 +554,14 @@ function dormirUneSeconde() {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
 }
 
-function stopper(racine, instanceId, port) {
-  const { commande, args } = commandeLanceur({ racine, action: 'Stop', instanceId, port })
+function stopper(racine, instanceId, port, executable) {
+  const { commande, args } = commandeLanceur({
+    racine,
+    action: 'Stop',
+    instanceId,
+    port,
+    executable
+  })
   return spawnSync(commande, args, { cwd: racine, encoding: 'utf8', windowsHide: true })
 }
 
@@ -366,7 +586,7 @@ export function reserverInstance({
     fiches: lireFiches(racineInstances),
     lireLanceur: (id) => lirePidLanceur(racineInstances, id)
   })) {
-    const stop = stopper(racine, orpheline.instanceId, orpheline.port)
+    const stop = stopper(racine, orpheline.instanceId, orpheline.port, orpheline.executable)
     console.error(
       stop.status === 0
         ? `${prefixe} application orpheline arretee : « ${orpheline.instanceId} » (port ${orpheline.port})`
@@ -425,7 +645,7 @@ export function reserverInstance({
   // Le nom est a nous : une fiche de ce nom est forcement un reste d'un lanceur mort.
   const reste = lireFiches(racineInstances).find((f) => f.instanceId === instanceId)
   if (reste && pidVivant(reste.pid)) {
-    const stopReste = stopper(racine, instanceId, reste.port)
+    const stopReste = stopper(racine, instanceId, reste.port, reste.executable)
     if (stopReste.status !== 0) {
       console.error(
         `${prefixe} reste de « ${instanceId} » non arrete : ${stopReste.stderr || stopReste.stdout}`
@@ -444,17 +664,39 @@ export function reserverInstance({
 
 async function main() {
   const racine = racineDepot()
-  const { instanceId, portDemande, attendreMs, enfant } = decouperArguments(process.argv.slice(2))
+  const { instanceId, portDemande, attendreMs, codeDev, rendererUrl, enfant } = decouperArguments(
+    process.argv.slice(2)
+  )
   if (enfant.length === 0) {
     console.error(
-      '[instance-headless] aucune commande a executer. Usage : --instance-id <id> [--attendre <s>] -- node scripts/xxx.mjs'
+      '[instance-headless] aucune commande a executer. Usage : --instance-id <id> [--attendre <s>] [--code-dev [--renderer-url <url>]] -- node scripts/xxx.mjs'
     )
     process.exit(2)
+  }
+  // Resolu AVANT toute reservation : un code dev indisponible ne doit rien demarrer ni verrouiller.
+  let dev
+  if (codeDev) {
+    dev = await preparerCodeDev({ racine, explicite: rendererUrl })
+    if (dev.erreur) {
+      console.error(`[instance-headless] code en developpement indisponible : ${dev.erreur}`)
+      process.exit(7)
+    }
+    console.error(
+      `[instance-headless] code en developpement : interface ${dev.rendererUrl ?? `fichiers construits de ${dev.appPath}`} (${dev.source}), process principal construit le ${dev.mainConstruitLe}`
+    )
   }
   const { port } = reserverInstance({ instanceId, portDemande, racine, attendreMs })
 
   const lanceur = (action) => {
-    const { commande, args } = commandeLanceur({ racine, action, instanceId, port })
+    const { commande, args } = commandeLanceur({
+      racine,
+      action,
+      instanceId,
+      port,
+      ...(dev
+        ? { executable: dev.executable, appPath: dev.appPath, rendererUrl: dev.rendererUrl }
+        : {})
+    })
     return spawnSync(commande, args, { cwd: racine, encoding: 'utf8', windowsHide: true })
   }
 

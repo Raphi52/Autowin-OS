@@ -26,3 +26,16 @@ describe('pont preload de la protection de production', () => {
     expect(implementes).toEqual(declares)
   })
 })
+
+describe('pont preload des règles de surveillance (task-manager)', () => {
+  // fix-ok: mesure 2026-09-26 (run-0940cc5e0fcd-1) — sans les 8 lignes `taskManagerSetSender` /
+  // `taskManagerTeamsConnect` de index.ts, `npm run typecheck` rendait 0 et TaskManagerView.test.tsx
+  // 31/31 (il simule window.api) : l'interrupteur par personne et « Connecter Teams » auraient appelé
+  // une fonction inexistante dans l'app, sans aucun rouge. Même faute silencieuse que `prodPorteEtat`.
+  it('implémente TOUT ce que le fichier de types déclare', () => {
+    const motif = /^\s{2}(taskManager[A-Za-z]+|onTaskManager[A-Za-z]+):/gm
+    const declares = noms('index.d.ts', motif)
+    expect(declares.length).toBeGreaterThan(0)
+    expect(noms('index.ts', motif)).toEqual(declares)
+  })
+})

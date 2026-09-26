@@ -112,6 +112,16 @@ describe('moyens du producteur opposables au juge', () => {
     expect(prompt).toMatch(/exit-code 0/)
   })
 
+  // 2026-09-26 (conv-863) : une capture verte de l'application EMPAQUETÉE ne contient pas une
+  // modification non empaquetée. Le juge doit savoir lire d'où vient l'interface capturée.
+  it('apprend au juge à lire d’où vient l’interface capturée', async () => {
+    const prompt = await promptDuJuge()
+    expect(prompt).toContain('interfaceCapturee')
+    expect(prompt).toContain('--code-dev')
+    expect(prompt).toMatch(/application-empaquetee.*ne contient PAS une modification/)
+    expect(prompt).toMatch(/code-construit.*copie de travail du producteur reconstruite/)
+  })
+
   it('interdit de réclamer un mécanisme absent de cet outillage', async () => {
     const prompt = await promptDuJuge()
     expect(prompt).toMatch(/binaire packagé/)

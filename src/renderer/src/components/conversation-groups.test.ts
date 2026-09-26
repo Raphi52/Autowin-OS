@@ -277,16 +277,16 @@ describe('groupeRecent — le raccourci « Récent »', () => {
     ...(autoKaizen ? { autoKaizen: true } : {})
   })
 
-  it('rend les 10 plus récentes, toutes catégories confondues, sans retirer leur catégorie', () => {
-    const conversations = Array.from({ length: 14 }, (_, i) => conv(`c${i}`, 'C:\\P'))
+  it('rend les 20 plus récentes, toutes catégories confondues, sans retirer leur catégorie', () => {
+    const conversations = Array.from({ length: 24 }, (_, i) => conv(`c${i}`, 'C:\\P'))
     const dates = new Map(conversations.map((c, i) => [c.id, i]))
     const recent = groupeRecent(conversations, (c) => dates.get(c.id) ?? 0)
-    expect(recent?.items).toHaveLength(10)
-    expect(recent?.items[0].id).toBe('c13')
+    expect(recent?.items).toHaveLength(20)
+    expect(recent?.items[0].id).toBe('c23')
     expect(recent?.key).toBe(GROUPE_RECENT)
     // La duplication est VOULUE : la conversation reste aussi dans son dossier.
     const dossier = grouperConversations(conversations).find((g) => g.kind === 'dossier')
-    expect(dossier?.items).toHaveLength(14)
+    expect(dossier?.items).toHaveLength(24)
   })
 
   it('exclut les analyses automatiques et rend null quand il n’y a rien à montrer', () => {

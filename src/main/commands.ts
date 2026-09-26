@@ -360,7 +360,14 @@ export interface AppSnapshot {
      */
     tourEnCours?: boolean
   }>
+  /** Les 12 runs les plus récents, PLUS tout run bloqué plus ancien lu dans la fenêtre du scan. */
   runs: Array<{ subject: string; status: string; blocked: boolean }>
+  /**
+   * RUN.md NON LUS par le scan borné (au-delà des `LIMITE_RUNS_SNAPSHOT` plus récents) — ABSENT
+   * quand rien n'a été écarté. Présent = `runs` et `runsBlocked` sont PARTIELS : un run bloqué plus
+   * ancien n'y figure pas. Ajouté le 2026-09-25 (conv-861) : ce compte était calculé puis jeté.
+   */
+  runsNonExamines?: number
   /**
    * Worktrees ENCORE connus d'Autowin (un worktree nettoyé/fermé n'y figure PLUS) — permet de répondre
    * « le workspace s'est-il fermé ? » par une VÉRITÉ LIVE au lieu d'un « non vérifié » : absent d'ici
@@ -416,6 +423,12 @@ export interface PromptSnapshot {
   activeConversationId?: string
   providers: string[]
   runsBlocked: Array<{ subject: string; status: string }>
+  /**
+   * RUN.md NON EXAMINÉS pour `runsBlocked` — ABSENT quand le scan a tout lu. Présent, il dit que
+   * `runsBlocked` ne couvre que les runs les plus récents : une liste vide n'y prouve PAS l'absence de
+   * run bloqué (conv-861, 2026-09-25).
+   */
+  runsNonExamines?: number
   conversationsCount: number
   /**
    * Les commandes `/` REELLEMENT invocables, lues sur disque a chaque tour.
@@ -574,7 +587,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut pour verifier ton propre travail : le bureau CACHE est le reflexe premier (voir REGLES_VISUELLES du prompt de pilotage). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : l'ecran principal est `display: 1` (`display: 0` est lu comme 1, mesure conv-30 du 2026-09-01).",
+      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut, ni pour verifier ton travail ni pour te servir d'une app a sa place : le bureau CACHE est le reflexe premier (voir la regle ECRAN DE L'UTILISATEUR = SON ESPACE, servie a chaque tour). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : l'ecran principal est `display: 1` (`display: 0` est lu comme 1, mesure conv-30 du 2026-09-01).",
     args: {
       display:
         'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans',
@@ -1485,6 +1498,26 @@ const refusEcranReel =
   "Si tu as vraiment besoin de son ecran, reemets l'appel avec `ecran_utilisateur: true` et dis-le " +
   'en une ligne avant.'
 
+/**
+ * Refus de `desktop_act` quand le dernier message de l'utilisateur ne demande PAS son ecran.
+ *
+ * Kaizen conv-835, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 (evenements 87-89) : l'appel portait
+ * DEJA `ecran_utilisateur: true` et le refus repondait « reemets l'appel avec
+ * `ecran_utilisateur: true` » — une sortie qui n'existait pas, le 2e appel etant refuse faute de
+ * demande (« envoi un message teams a leslie… » ne parle pas de son ecran). Et il ne parlait que de
+ * clics : le plan suivant du modele etait de rouvrir le lien msteams: sur l'ecran reel (reponse
+ * affichee, evenement 96). Le message dit donc la seule sortie reelle.
+ */
+const refusActionSansDemande =
+  "Appel REFUSE : `desktop_act` agit sur l'ECRAN REEL de l'utilisateur, et il n'a pas demande " +
+  "d'agir sur SON ecran dans son dernier message : ne reemets pas l'appel, `ecran_utilisateur: true` " +
+  "n'y change rien. Passe par le bureau CACHE : `powershell -NoProfile -File scripts/hdesk-lancer.ps1 ...` " +
+  'pour ouvrir, `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]` ' +
+  'pour cliquer ou taper. Ne contourne pas ce refus en rouvrant un lien ou une app sur son ecran ' +
+  "(`Start-Process`, `start`, msteams:, mailto:) : c'est le meme geste. Si le bureau cache ne peut pas " +
+  "faire le geste (app deja ouverte chez lui, connexion a son compte requise), dis-le en une ligne et " +
+  'DEMANDE-lui.'
+
 /** Vrai quand le message utilisateur designe son propre ecran (« mon écran », « sur l'ecran »...). */
 export const demandeEcranReel = (texte: string | undefined): boolean =>
   typeof texte === 'string' && /[ée]cran/i.test(texte)
@@ -2065,9 +2098,12 @@ export class AppCommandBus {
             ...(this.tourDeChatActif?.(c.id) ? { tourEnCours: true } : {})
           }
         }),
+      // Les 12 plus récents pour l'affichage, mais un run BLOQUÉ lu plus loin dans la fenêtre n'est
+      // jamais coupé : `runsBlocked` filtre CETTE liste, et la coupe à 12 le faisait disparaître.
       runs: runs
-        .slice(0, 12)
+        .filter((r, i) => i < 12 || r.blocked)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
+      ...(runs.horsFenetre ? { runsNonExamines: runs.horsFenetre } : {}),
       // Worktrees encore vivants côté Autowin : ce qui n'y figure plus a été nettoyé/fermé. C'est LA
       // sonde qui manquait pour répondre « le workspace s'est fermé ? » sans hausser les épaules.
       worktrees: this.jalonne(jalon, 'snapshot:worktrees', () =>
@@ -2143,6 +2179,7 @@ export class AppCommandBus {
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
+      ...(full.runsNonExamines ? { runsNonExamines: full.runsNonExamines } : {}),
       conversationsCount: full.conversations.length,
       ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),
       ...(this.travauxNonAnnonces(full.travauxNonPublies).length > 0
@@ -2325,24 +2362,32 @@ export class AppCommandBus {
         // Le drapeau pose d'office au PREMIER appel ne compte pas (meme tour : le modele l'a ajoute
         // seul, sans demande) : le premier geste du tour est toujours refuse, le drapeau ne vaut
         // qu'apres avoir lu le refus qui nomme le bureau cache.
+        // Kaizen conv-854 (saisie ts 1790278416518) : le drapeau seul restait un contournement au 2e
+        // appel. Agir sur l'ecran reel exige desormais que le DERNIER message de l'utilisateur parle
+        // de son ecran ; le modele ne peut plus s'y autoriser lui-meme. Dans le tour 78a0d7d3 le
+        // message etait « fais le toi stp » : le clic aurait ete refuse.
+        // Lu AVANT le premier refus (kaizen conv-835) : c'est lui qui dit si la porte de sortie
+        // `ecran_utilisateur: true` existe vraiment — voir `refusActionSansDemande`.
+        const dernierMessage = [...(this.os.conversations?.get?.(conversationId ?? '')?.messages ?? [])]
+          .reverse()
+          .find((m) => m.role === 'user')?.content
+        const demande = demandeEcranReel(dernierMessage)
         const cle = turnId ?? 'sans-tour'
         if (this.tourActionReelleRefusee !== cle) {
           this.tourActionReelleRefusee = cle
           this.trace?.(name, redactedArgs(name, args), false)
           noterIssue(false)
-          return { ok: false, error: refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') + ' Pour cliquer ou taper dans le bureau cache : `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]`.' }
+          return {
+            ok: false,
+            error: demande
+              ? refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') + ' Pour cliquer ou taper dans le bureau cache : `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]`.'
+              : refusActionSansDemande
+          }
         }
-        // Kaizen conv-854 (saisie ts 1790278416518) : le drapeau seul restait un contournement au 2e
-        // appel. Agir sur l'ecran reel exige desormais que le DERNIER message de l'utilisateur parle
-        // de son ecran ; le modele ne peut plus s'y autoriser lui-meme. Dans le tour 78a0d7d3 le
-        // message etait « fais le toi stp » : le clic aurait ete refuse.
-        const dernierMessage = [...(this.os.conversations?.get?.(conversationId ?? '')?.messages ?? [])]
-          .reverse()
-          .find((m) => m.role === 'user')?.content
-        if (!demandeEcranReel(dernierMessage)) {
+        if (!demande) {
           this.trace?.(name, redactedArgs(name, args), false)
           noterIssue(false)
-          return { ok: false, error: "Appel REFUSE : l'utilisateur n'a pas demande d'agir sur SON ecran dans son dernier message. Passe par le bureau cache : `scripts/hdesk-act.ps1`. Si c'est impossible, dis-le et demande-lui." }
+          return { ok: false, error: refusActionSansDemande }
         }
       }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)

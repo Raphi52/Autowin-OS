@@ -3,7 +3,14 @@
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
   [ValidateRange(1024, 65535)][int]$Port = 9240,
   [string]$Executable = '',
-  [string]$InstancesRoot = ''
+  [string]$InstancesRoot = '',
+  # CODE EN DEVELOPPEMENT (demande du 2026-09-26) : sans ces deux parametres, l'instance cachee ne
+  # pouvait lancer que le binaire EMPAQUETE (dist/win-unpacked) et montrait donc l'interface du
+  # dernier empaquetage, pas le code en cours. `-AppPath` = dossier de l'application passe a
+  # `electron.exe` (son package.json designe out/main) ; `-RendererUrl` = serveur de dev qui sert
+  # l'interface a jour (ELECTRON_RENDERER_URL, lu par le main seulement hors empaquetage).
+  [string]$AppPath = '',
+  [string]$RendererUrl = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -163,6 +170,19 @@ if (-not (Test-Path -LiteralPath $cacheModeles)) {
   Copy-Item -LiteralPath $semence -Destination $cacheModeles -Force
 }
 $env:APPDATA = $appData
+if (-not [string]::IsNullOrWhiteSpace($AppPath)) {
+  if (-not (Test-Path -LiteralPath (Join-Path $AppPath 'package.json') -PathType Leaf)) { throw "Dossier d'application sans package.json : $AppPath" }
+  $AppPath = (Get-Item -LiteralPath $AppPath).FullName
+}
+# L'adresse de l'interface est TOUJOURS posee explicitement : un lanceur demarre depuis l'app de dev
+# herite de son ELECTRON_RENDERER_URL, et l'instance aurait alors servi le code de dev sans qu'on
+# l'ait demande. Sans -RendererUrl, la variable est retiree : l'interface vient des fichiers construits.
+if ([string]::IsNullOrWhiteSpace($RendererUrl)) {
+  Remove-Item Env:ELECTRON_RENDERER_URL -ErrorAction SilentlyContinue
+} else {
+  if ($RendererUrl -notmatch '^https?://(localhost|127\.0\.0\.1)(:\d+)?/?$') { throw "Adresse du serveur de dev refusee (locale uniquement) : $RendererUrl" }
+  $env:ELECTRON_RENDERER_URL = $RendererUrl.TrimEnd('/')
+}
 # `Start-Process` n'expose PAS STARTUPINFO.lpDesktop : c'est le seul champ qui fasse naitre le
 # process dans un autre bureau. On passe donc par CreateProcess. Le PID vient de
 # PROCESS_INFORMATION, donc tous les controles d'identite en aval (Read-OwnedProcess, Stop)
@@ -171,6 +191,7 @@ $hBureau = [AutowinHdesk]::CreateDesktop($nomBureau, [IntPtr]::Zero, [IntPtr]::Z
 if ($hBureau -eq [IntPtr]::Zero) { throw "CreateDesktop('$nomBureau') a echoue (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))." }
 $ligneCommande = New-Object System.Text.StringBuilder
 [void]$ligneCommande.Append('"').Append($identity.executable).Append('"')
+if (-not [string]::IsNullOrWhiteSpace($AppPath)) { [void]$ligneCommande.Append(' "').Append($AppPath).Append('"') }
 foreach ($argument in @("--remote-debugging-port=$Port", "--user-data-dir=$userData", '--isolated-test-instance', '--headless-test-instance')) {
   [void]$ligneCommande.Append(' "').Append($argument).Append('"')
 }
@@ -202,7 +223,7 @@ try {
   Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
   throw
 }
-@{ pid = $process.Id; desktop = $nomBureau; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion; port = $Port; userData = $userData } | ConvertTo-Json | ForEach-Object { [IO.File]::WriteAllText($stateFile, $_, (New-Object Text.UTF8Encoding $false)) }
+@{ pid = $process.Id; desktop = $nomBureau; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion; port = $Port; userData = $userData; appPath = $AppPath; rendererUrl = $env:ELECTRON_RENDERER_URL } | ConvertTo-Json | ForEach-Object { [IO.File]::WriteAllText($stateFile, $_, (New-Object Text.UTF8Encoding $false)) }
 
 $deadline = (Get-Date).AddSeconds(20)
 do {
@@ -224,7 +245,7 @@ do {
     if (-not $listener) { throw "Le endpoint CDP $Port n'appartient pas au PID $($process.Id)." }
     # Le process tient desormais le bureau par ses propres fenetres : notre handle peut partir.
     [void][AutowinHdesk]::CloseDesktop($hBureau)
-    [pscustomobject]@{ instanceId = $InstanceId; status = 'ready'; desktop = $nomBureau; pid = $process.Id; port = $Port; userData = $userData; webSocketDebuggerUrl = $pagesUi[0].webSocketDebuggerUrl; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion } | ConvertTo-Json -Compress
+    [pscustomobject]@{ instanceId = $InstanceId; status = 'ready'; desktop = $nomBureau; pid = $process.Id; port = $Port; userData = $userData; webSocketDebuggerUrl = $pagesUi[0].webSocketDebuggerUrl; appPath = $AppPath; rendererUrl = $env:ELECTRON_RENDERER_URL; executable = $launchedIdentity.executable; executableSha256 = $launchedIdentity.executableSha256; executableVersion = $launchedIdentity.executableVersion } | ConvertTo-Json -Compress
     exit 0
   }
   Start-Sleep -Milliseconds 100

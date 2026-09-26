@@ -49,9 +49,17 @@ interface AutoCloseViewState {
     runId: string
     branch: string
     project: AutoCloseViewResult
-    brain: AutoCloseViewResult
+    /** Absent pour un tour de chat : il ne publie jamais le Brain. */
+    brain?: AutoCloseViewResult
     at: string
+    source?: 'chat'
+    exclus?: Array<{ path: string; motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' }>
   }
+}
+
+const MOTIFS_EXCLUSION: Record<string, string> = {
+  'modifie-avant-le-tour': 'déjà modifié avant le tour',
+  'touche-par-un-autre-fil': 'touché aussi par un autre fil'
 }
 
 function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): string {
@@ -72,7 +80,8 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
     'protected-branch': 'branche protégée',
     'secret-detected': 'secret détecté',
     'concurrent-commits': 'commits concurrents',
-    'invalid-publication-range': 'plage Git non vérifiable'
+    'invalid-publication-range': 'plage Git non vérifiable',
+    unattributed: 'aucun fichier du tour prouvé à ce fil'
   }
   return `${scope} · non publié · ${reasons[result.reason] ?? result.reason}`
 }
@@ -574,7 +583,7 @@ export function SourceControlPane({
                 aria-pressed={autoClose?.enabled ?? false}
                 title={
                   autoClose?.enabled
-                    ? 'Activé — après chaque run vert, tente de publier : commit, puis push sur la branche courante. Si le dépôt le refuse (règle de branche, hook, retard), push sur une branche dédiée et ouverture d’une PR. Clic : désactiver.'
+                    ? 'Activé — après chaque tâche d’agent réussie ET chaque tour de chat réussi qui a modifié des fichiers, tente de publier : commit de ces fichiers-là, puis push sur la branche courante. Si le dépôt le refuse (règle de branche, hook, retard), push sur une branche dédiée et ouverture d’une PR. Un fichier touché aussi par un autre fil reste en attente. Clic : désactiver.'
                     : 'Désactivé — rien n’est publié automatiquement. Clic : activer.'
                 }
                 onClick={() => void toggleAutoClose()}
@@ -627,7 +636,16 @@ export function SourceControlPane({
               <div className="sc-autoclose-last" data-testid="sc-autoclose-last">
                 <strong>Dernier enchaînement · {autoClose.last.runId}</strong>
                 <span>{autoCloseResultLabel('Projet', autoClose.last.project)}</span>
-                <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
+                {autoClose.last.brain && (
+                  <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
+                )}
+                {autoClose.last.exclus?.length ? (
+                  <span data-testid="sc-autoclose-exclus">
+                    {`Laissé en attente · ${autoClose.last.exclus
+                      .map((item) => `${item.path} (${MOTIFS_EXCLUSION[item.motif] ?? item.motif})`)
+                      .join(', ')}`}
+                  </span>
+                ) : null}
               </div>
             )}
           </section>

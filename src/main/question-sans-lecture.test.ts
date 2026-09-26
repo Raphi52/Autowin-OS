@@ -78,7 +78,9 @@ describe('le garde est réellement branché dans la boucle de tour', () => {
    * donc en ecrasant la skill `draft` qui exige de faire choisir l'humain (conv-167, 2026-09-03).
    */
   it('compte AUSSI les lectures natives, qui arrivent par le battement d’outil', () => {
-    expect(source).toMatch(/statusEstUneLecture\(chunk\.status\)\)\s*anyReadExecuted = true/)
+    // La commande ENTIERE (statusTarget) est jugée, pas le libellé coupé à 120 caractères (conv-861).
+    expect(source).toMatch(/statutEntier = statutComplet\(chunk\.status, chunk\.statusTarget\)/)
+    expect(source).toMatch(/statusEstUneLecture\(statutEntier\)\)\s*anyReadExecuted = true/)
   })
 
   it('ne relance QU’UNE FOIS — sinon un tour peut boucler en payant à chaque passage', () => {
@@ -122,6 +124,47 @@ describe('une seule question affichee par tour (conv-844, turn 852bb2fd-25e4-40d
   it('agent-pilot ne remet pas une deuxieme carte ask dans le meme tour', async () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync(new URL('./agent-pilot.ts', import.meta.url), 'utf8')
-    expect(src).toMatch(/token\.name === 'ask' && questionPoseeCeTour\)[\s\S]{0,400}tokenIndex \+= 1\s*continue/)
+    expect(src).toMatch(
+      /token\.name === 'ask' && questionPoseeCeTour\)[\s\S]{0,400}tokenIndex \+= 1\s*continue/
+    )
+  })
+})
+
+/**
+ * LECTURE COMPOSÉE — conv-861 (2026-09-25). La règle ne regardait que le 1er mot après un `cd`.
+ * Trois relances « tu as posé une question SANS avoir lu un seul fichier » sont tombées à tort,
+ * chacune après des lectures bien réelles dont la commande commençait par `date`, par une
+ * affectation `N=…` ou par `git -C <dossier> log`. Formes RELEVÉES dans ce fil, tronquées comme le
+ * battement d'outil les transporte (120 caractères).
+ */
+describe('lecture Bash composée (conv-861)', () => {
+  it('compte une lecture précédée de commandes neutres ou d’affectations', () => {
+    expect(
+      statusEstUneLecture(
+        "Bash · cd /d/AutoWinOS; date '+%H:%M'; tail -2 .arena/arenagame/essais/nuit-2026-09-25/journal.txt; ls .arena/arenag"
+      )
+    ).toBe(true)
+    expect(
+      statusEstUneLecture(
+        "Bash · N=/d/AutoWinOS/.arena/arenagame/essais/nuit-2026-09-25; date '+%m-%d %H:%M'; tail -12 $N/journal.txt"
+      )
+    ).toBe(true)
+    expect(
+      statusEstUneLecture(
+        "Bash · git -C /d/AutoWinOS log -3 --format='%h %ad %s' -- src/main/commands.ts"
+      )
+    ).toBe(true)
+    expect(statusEstUneLecture('Bash · for m in m1 m2; do sed -n 1,5p $m/RUN.md; done')).toBe(true)
+  })
+
+  it('ne se laisse pas prendre par un séparateur ENTRE guillemets', () => {
+    expect(statusEstUneLecture('Bash · echo "x; cat y"')).toBe(false)
+    expect(statusEstUneLecture('Bash · ls essais | grep -E "^m3|fin"')).toBe(true)
+  })
+
+  it('reste FERMÉE : sans aucun lecteur, ce n’est pas une lecture', () => {
+    expect(statusEstUneLecture("Bash · date '+%H:%M'")).toBe(false)
+    expect(statusEstUneLecture('Bash · N=1; npm run build')).toBe(false)
+    expect(statusEstUneLecture("Bash · sed -i 's/a/b/' f.ts")).toBe(false)
   })
 })

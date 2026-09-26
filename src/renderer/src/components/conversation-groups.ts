@@ -26,8 +26,11 @@ export const GROUPE_DIVERS = 'divers'
  * (demande utilisateur du 2026-09-09 : « une catégorie récent avec 10 éléments qui duplique »).
  */
 export const GROUPE_RECENT = 'recent'
-/** Combien de conversations le raccourci « Récent » montre. Au-delà, ce n'est plus un raccourci. */
-export const TAILLE_RECENT = 10
+/**
+ * Combien de conversations le raccourci « Récent » montre. Au-delà, ce n'est plus un raccourci.
+ * Passé de 10 à 20 à la demande de l'utilisateur (conv-868, 2026-09-26 : « mets 20 conv dans récent »).
+ */
+export const TAILLE_RECENT = 20
 
 /** Le strict nécessaire au groupement — pas le type complet, pour que ce module reste testable seul. */
 export interface ConversationLike {

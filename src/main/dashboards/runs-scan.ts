@@ -197,7 +197,21 @@ export async function deleteListedRun(runPath: string, root = runsRoot()): Promi
  */
 export const LIMITE_RUNS_SNAPSHOT = 24
 
-/** Variante BORNÉE destinée au chemin chaud — jamais `scanRuns()` sans borne. */
-export function scanRunsPourSnapshot(root = runsRoot()): Promise<RunEntry[]> {
-  return scanRuns(root, { limit: LIMITE_RUNS_SNAPSHOT })
+/**
+ * Une fenêtre de runs qui SAIT ce qu'elle n'a pas lu : `horsFenetre` = RUN.md écartés par la borne.
+ * Tableau conservé (et non objet `{ entries, remaining }`) pour que les doubles de test existants,
+ * qui rendent `[]`, restent valides.
+ */
+export type FenetreRuns<T> = T[] & { horsFenetre: number }
+
+/**
+ * Variante BORNÉE destinée au chemin chaud — jamais `scanRuns()` sans borne.
+ *
+ * Elle passait par `scanRuns`, qui JETTE `remaining` : au-delà des 24 plus récents, un run bloqué
+ * disparaissait de `runsBlocked` sans aucun signal (constat conv-861, 2026-09-25 : ranger des runs
+ * récents a fait REMONTER 6 anciens runs bloqués, invisibles jusque-là). Le compte voyage désormais.
+ */
+export async function scanRunsPourSnapshot(root = runsRoot()): Promise<FenetreRuns<RunEntry>> {
+  const { entries, remaining } = await scanRunsBounded(root, { limit: LIMITE_RUNS_SNAPSHOT })
+  return Object.assign(entries, { horsFenetre: remaining })
 }

@@ -24,6 +24,17 @@
  *                                    celle du depot : sans elle, un agent en worktree ne peut rien
  *                                    prouver visuellement (l'app sert le depot, pas sa copie). Le
  *                                    JSON porte alors `cssInjecte` — la capture le DIT.
+ *         [--code-dev] [--renderer-url <url>] L'INSTANCE CACHEE LANCE LE CODE EN COURS (2026-09-26) :
+ *                                    electron.exe du depot + interface servie par le serveur de dev
+ *                                    (trouve seul : ELECTRON_RENDERER_URL, puis la fenetre de dev
+ *                                    ouverte ; `--renderer-url` l'impose). Sans cette option,
+ *                                    l'instance cachee lance le binaire EMPAQUETE (dist/win-unpacked)
+ *                                    et montre l'interface du dernier empaquetage. Le JSON porte
+ *                                    toujours `interfaceCapturee` (code-dev | code-construit |
+ *                                    application-empaquetee). Depuis une COPIE DE TRAVAIL d'agent,
+ *                                    `--code-dev` la reconstruit puis lance SES fichiers (code-construit) ;
+ *                                    `--code-dev` sur une page non servie par le dev = echec nomme,
+ *                                    et l'enrobage sort en 7 si aucun serveur de dev n'est joignable.
  *         PAR DEFAUT (depuis le 2026-09-13) : instance cachee, ecran intact. `--instance-dediee` reste
  *         accepte (sans effet). `--fenetre-reelle` ou `--port <n>` pilotent la fenetre ouverte.
  *         [--instance-dediee] [--instance-id <id>] PREND LA PREUVE SANS TOUCHER A L'ECRAN : la
@@ -52,9 +63,9 @@
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, parse, resolve } from 'node:path'
+import { dirname, parse, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { cheminDevToolsPort } from './racine-depot.mjs'
+import { cheminDevToolsPort, racineDepot } from './racine-depot.mjs'
 
 /** Identifiants réels du catalogue applicatif (src/shared/navigation.ts). */
 export const VUES_CONNUES = [
@@ -157,6 +168,11 @@ export const verdictMouvement = ({ selecteur, occurrences }) => {
 export const verdictCapture = (mesures) => {
   const echecs = []
   if (!mesures.vue) echecs.push('vue-inconnue')
+  // `--code-dev` promet le code EN COURS : une page servie depuis des fichiers construits montrerait
+  // l'interface d'un ancien empaquetage en se disant a jour.
+  if (mesures.codeDevExige && !SOURCES_CODE_EN_COURS.includes(mesures.interfaceCapturee?.source)) {
+    echecs.push(`code-dev-non-servi(${mesures.interfaceCapturee?.source ?? 'inconnue'})`)
+  }
   if (mesures.destinationActive && mesures.vue && mesures.destinationActive !== mesures.vue) {
     echecs.push(`navigation-non-appliquee(${mesures.destinationActive})`)
   }
@@ -207,15 +223,71 @@ export const mediaMouvementEmulee = (argv) => {
  * Rend les arguments de la re-execution : on RETIRE le drapeau (sinon la relance boucle a l'infini)
  * et on laisse l'enrobage imposer le port de l'instance qu'il vient d'ouvrir. Pure.
  */
-export const argumentsInstanceDediee = (argv, { enrobage, script, instanceId }) => [
-  enrobage,
-  '--instance-id',
-  instanceId,
-  '--',
-  'node',
-  script,
-  ...argv.filter((a) => a !== '--instance-dediee' && a !== '--fenetre-reelle')
-]
+export const argumentsInstanceDediee = (argv, { enrobage, script, instanceId }) => {
+  // `--code-dev` va AUSSI a l'enrobage : c'est lui qui lance electron.exe sur le depot au lieu du
+  // binaire empaquete. L'enfant le garde, pour refuser une capture qui ne viendrait pas du serveur de dev.
+  const i = argv.indexOf('--renderer-url')
+  const rendererUrl = i >= 0 ? argv[i + 1] : undefined
+  const codeDev = argv.includes('--code-dev')
+  return [
+    enrobage,
+    '--instance-id',
+    instanceId,
+    ...(codeDev ? ['--code-dev'] : []),
+    ...(codeDev && rendererUrl ? ['--renderer-url', rendererUrl] : []),
+    '--',
+    'node',
+    script,
+    ...argv.filter((a) => a !== '--instance-dediee' && a !== '--fenetre-reelle')
+  ]
+}
+
+/**
+ * LE PIEGE DU 2026-09-26, rendu visible dans le rapport : un agent lance par l'app de dev capture en
+ * fenetre cachee, obtient `ok: true`... sur l'interface du dernier EMPAQUETAGE, sans son changement.
+ * Quand un serveur de dev est connu (ELECTRON_RENDERER_URL heritee) et que la capture vient de fichiers
+ * construits, le rapport le DIT et donne l'option. Ce n'est pas un echec : le binaire empaquete peut
+ * etre exactement ce qu'on voulait voir. Pure.
+ */
+export const avertissementInterface = (capturee, env) =>
+  capturee?.source === 'application-empaquetee' && env?.ELECTRON_RENDERER_URL
+    ? {
+        avertissement: `capture de l'application empaquetee, pas du code en cours (servi sur ${env.ELECTRON_RENDERER_URL}) : ajoute --code-dev pour le voir`
+      }
+    : {}
+
+/**
+ * D'OU VIENT L'INTERFACE CAPTUREE, lu sur l'adresse de la page. C'est ce fait — pas l'option
+ * demandee — qui dit ce que montre la capture. Pure.
+ * - `code-dev` : serveur de dev local, le code en cours du depot principal ;
+ * - `code-construit` : fichiers construits de CE depot ou de CETTE copie (`<racine>/out/renderer`),
+ *   que `--code-dev` vient de reconstruire depuis une copie de travail ;
+ * - `application-empaquetee` : toute autre page de fichiers, en pratique le binaire empaquete
+ *   (`dist/win-unpacked/.../app.asar`), qui ne contient pas une modification non empaquetee ;
+ * - `inconnue` : ni l'un ni l'autre.
+ */
+export const interfaceCapturee = (url, racine) => {
+  const texte = typeof url === 'string' ? url : ''
+  const dev = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.exec(texte)
+  if (dev) return { source: 'code-dev', origine: new URL(texte).origin }
+  if (texte.startsWith('file:')) {
+    let chemin = ''
+    try {
+      chemin = fileURLToPath(texte.split(/[?#]/)[0])
+    } catch {
+      chemin = ''
+    }
+    const construit = racine ? resolve(racine, 'out', 'renderer') : ''
+    const normaliser = (c) => resolve(c).toLowerCase()
+    if (construit && chemin && normaliser(chemin).startsWith(`${normaliser(construit)}${sep}`))
+      return { source: 'code-construit', racine: resolve(racine) }
+    return { source: 'application-empaquetee' }
+  }
+  return { source: 'inconnue', ...(texte ? { url: texte.slice(0, 120) } : {}) }
+}
+
+/** Les sources qui montrent le code EN COURS : ce que `--code-dev` promet. */
+export const SOURCES_CODE_EN_COURS = ['code-dev', 'code-construit']
 
 /**
  * LE BUREAU CACHE EST LE COMPORTEMENT PAR DEFAUT (demande utilisateur du 2026-09-13, conv-526 :
@@ -268,6 +340,9 @@ export const verdictEtat = ({ etat, selecteur, appliques }) => {
 // ————————————————————————————————————————————————————————————————————————
 // À partir d'ici : pilotage réel. Rien de tout cela ne s'exécute à l'import.
 // ————————————————————————————————————————————————————————————————————————
+
+/** Une option SANS valeur (`--code-dev`) : presente ou non. */
+const drapeau = (nom) => process.argv.includes(nom)
 
 const argument = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
@@ -594,7 +669,11 @@ const main = async () => {
       // le harnais criait « clic-sans-effet » sur une interface qui fonctionnait, et aucune preuve
       // visuelle de menu n'etait capturable. 'body' contient 'main' : le seuil de vue vide est
       // inchange pour toutes les autres captures.
-      elements: document.querySelectorAll('body *').length
+      elements: document.querySelectorAll('body *').length,
+      // L'ADRESSE DU DOCUMENT MESURE, pas celle de la liste CDP lue a la decouverte : l'instance est
+      // declaree prete des qu'une page autre que l'attente existe, 'about:blank' compris. Mesure du
+      // 2026-09-26 : une capture --code-dev verte par ailleurs a ete classee « inconnue » une fois.
+      adressePage: location.href
     }
   })()`)
   let mesuresDom = await mesurerDom()
@@ -865,6 +944,8 @@ const main = async () => {
     vue,
     ...mesuresDom,
     octetsPng,
+    interfaceCapturee: interfaceCapturee(mesuresDom.adressePage ?? page.url, racineDepot()),
+    ...(drapeau('--code-dev') ? { codeDevExige: true } : {}),
     ...(cibleDefilement ? { defilementVers: cibleDefilement } : {}),
     ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {})
   }
@@ -881,6 +962,7 @@ const main = async () => {
       vueAvant,
       vueRestauree: aRestaurer ?? null,
       ...mesures,
+      ...avertissementInterface(mesures.interfaceCapturee, process.env),
       erreursConsole: erreursConsole.slice(0, 5),
       // Ce que le producteur peut CITER au juge comme preuve hors-modèle.
       preuve: verdict.ok

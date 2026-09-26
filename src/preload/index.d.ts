@@ -552,6 +552,15 @@ interface ChatApi {
   taskManagerRemove: (id: string) => Promise<boolean>
   taskManagerAcknowledge: (alertId: string) => Promise<boolean>
   taskManagerRunNow: (id: string) => Promise<{ started: boolean }>
+  // fix-ok: mesure 2026-09-26 — sans ces deux declarations, `npm run typecheck:web` rend 2
+  // (TS2339 sur TaskManagerView.tsx:724 et :738) : l'ecran appelle ces deux fonctions du pont.
+  /** Coupe (`false`) ou retablit UNE personne d'une regle mails / Teams. */
+  taskManagerSetSender: (id: string, key: string, enabled: boolean) => Promise<ScheduledTask>
+  /** « Connecter Teams » : le code a saisir sur la page Microsoft, ou la raison de l'echec. */
+  taskManagerTeamsConnect: () => Promise<
+    | { ok: true; userCode: string; verificationUri: string; expiresAt: number }
+    | { ok: false; erreur: string }
+  >
   openFolder: (path: string) => Promise<void>
   /** Ouvre un fichier cite par un agent (`[a.ts:80](src/main/a.ts:80)`). Chemin resolu cote main. */
   revealFile: (path: string, line?: number) => Promise<{ ok: boolean; reason?: string }>

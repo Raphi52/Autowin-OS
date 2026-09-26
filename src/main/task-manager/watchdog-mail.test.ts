@@ -23,6 +23,11 @@ describe('Watchdog mail — détection des nouveaux mails', () => {
     expect(detector.next(snap(mail('C'), mail('D', false), mail('A'))).map((m) => m.id)).toEqual([
       'C'
     ])
+    // Pas encore pris en charge : il revient (un echec en cours de lot ne le perd plus).
+    expect(detector.next(snap(mail('C'))).map((m) => m.id)).toEqual(['C'])
+    detector.take('C')
+    expect(detector.next(snap(mail('C')))).toEqual([])
+    detector.settle('C')
     expect(detector.next(snap(mail('C')))).toEqual([])
   })
 

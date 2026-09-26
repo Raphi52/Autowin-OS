@@ -9,7 +9,6 @@ import {
 } from './watchdog-mail'
 import type { ScheduledTask, TaskOccurrence } from './types'
 import {
-  TEAMS_PROMPT_PAUSE_MS,
   TeamsGraphClient,
   chatsToSnapshot,
   parseTeamsItemId,
@@ -60,6 +59,7 @@ describe('watchdog Teams', () => {
     )
     expect(fresh.map((m) => m.id)).toEqual([teamsItemId('c1', 'm2')])
     expect(fresh[0].corps).toBe('Peux-tu relire le devis ?')
+    detector.settle(fresh[0].id) // pris en charge par la surveillance
     expect(detector.next(chatsToSnapshot([chat('c1', 'm2', 'alice')], ME))).toEqual([])
   })
 
@@ -106,6 +106,10 @@ describe('watchdog Teams', () => {
       () => 0,
       async () => {}
     )
+    // Piste n°2 : la connexion part du bouton « Connecter Teams », plus de la surveillance.
+    // fix-ok: mesure le 2026-09-26 — `reply()`/`snapshot()` lancaient eux-memes la demande de code (watchdog-teams.connexion.test.ts rouge : « connexion Teams refusée » sans aucun clic) ; ces deux tests decrivaient ce comportement retire.
+    await client.connect()
+    await client.signInSettled()
     const sent = await client.reply(teamsItemId('19:chat', 'm2'), 'Fait : devis relu.')
     expect(sent).toEqual({ ok: true })
     expect(codes).toEqual(['ABCD'])
@@ -117,7 +121,7 @@ describe('watchdog Teams', () => {
     })
   })
 
-  it('un code expiré ne rouvre pas de fenêtre au passage suivant, seulement après la pause', async () => {
+  it('un code expiré ne relance aucune demande aux passages suivants : seul un nouveau clic le fait', async () => {
     let clock = 0
     const fetchImpl = async (url: string): Promise<Response> => {
       if (url.endsWith('/devicecode'))
@@ -137,11 +141,13 @@ describe('watchdog Teams', () => {
       () => clock,
       async () => {}
     )
-    await expect(client.snapshot()).rejects.toThrow(/expirée/)
-    await expect(client.snapshot()).rejects.toThrow(/en pause/)
+    await client.connect()
+    await client.signInSettled()
+    expect(client.signInState()).toMatchObject({ state: 'disconnected' })
+    for (let passage = 0; passage < 3; passage++)
+      await expect(client.snapshot()).rejects.toThrow(/Connecter Teams/)
     expect(codes).toHaveLength(1)
-    clock += TEAMS_PROMPT_PAUSE_MS
-    await expect(client.snapshot()).rejects.toThrow(/expirée/)
+    await client.connect()
     expect(codes).toHaveLength(2)
   })
 
@@ -198,8 +204,13 @@ describe('watchdog Teams', () => {
       () => 0,
       async () => {}
     )
+    // La connexion refusée passe par le bouton : sa raison est ce que le détail de la règle affiche.
+    await signInDenied.connect()
+    await signInDenied.signInSettled()
+    const refus = signInDenied.signInState()
     const errors = [
       (await graphDenied.reply(teamsItemId('c1', 'm1'), 'x')).erreur,
+      refus.state === 'disconnected' ? refus.erreur : undefined,
       (await signInDenied.reply(teamsItemId('c1', 'm1'), 'x')).erreur,
       await graphDenied.snapshot().then(
         () => 'ok',

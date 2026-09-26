@@ -40,6 +40,14 @@ const JUDGE_TOOLSET_CONTRACT =
   `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui, par défaut, ` +
   `ouvre une instance CACHÉE (écran de l'utilisateur intact), navigue par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
   `Une capture citée avec son exit-code 0 et son chemin EST une preuve recevable. ` +
+  // D'OU VIENT L'INTERFACE (2026-09-26, conv-863) : une capture verte de l'application empaquetee
+  // ne contient pas une modification non empaquetee ; le juge doit savoir la lire.
+  `Son JSON dit d'où vient l'interface capturée (\`interfaceCapturee\`) : \`application-empaquetee\` = ` +
+  `dernier empaquetage, qui ne contient PAS une modification d'interface non empaquetée (hors ` +
+  `styles injectés par \`--css\`, signalés par \`cssInjecte\`) ; avec l'option \`--code-dev\`, ` +
+  `\`code-dev\` = code en cours servi par le serveur de dev du dépôt principal, et \`code-construit\` = ` +
+  `copie de travail du producteur reconstruite puis lancée sur ses propres fichiers. Une capture ne ` +
+  `prouve donc un changement d'interface que si ce changement y est VISIBLE. ` +
   `Ne réclame aucun mécanisme absent de cet outillage — binaire packagé, relais planifié, outil ` +
   `tiers : leur absence n'est jamais un défaut du livrable. En revanche exige ce qui EST à portée ` +
   `— exit-code de test, lecture ciblée, capture par ce harnais — et une affirmation invérifiable ` +
@@ -2487,10 +2495,17 @@ ${annonceCommit}`
       fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
     })
     const preGate = evaluateClosure({
-      status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
+      // fix-ok: conv-835 tour 8641812d-6401-4129-a6b0-13a64228e0bc — meme raccourci que 0014ffca :
+      // un hook bloquant AVEC sa raison forcait `red`, donc « Échec déjà déclaré » alors que rien ne
+      // l'etait. Test orchestrator.greedy rouge avant / vert apres. Sans raison du hook : `red` garde.
+      status:
+        evidenceOk && !(hookOutcome.blocked && hookOutcome.reasons.length === 0) ? 'green' : 'red',
       dod: [{ checked: evidenceOk, hasContent: true }]
     })
-    if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
+    if (hookOutcome.blocked) {
+      preGate.blocked = true
+      preGate.reasons.push(...hookOutcome.reasons)
+    }
     /**
      * ON N'INTERROMPT PLUS EN ROUTE — on CONSTATE, et on répare après coup.
      *
@@ -4939,11 +4954,18 @@ ${empreinteDepot}`
        * pre-gate est en prime moins cher : cela coupe AVANT de payer le juge.
        */
       const preGate = evaluateClosure({
-        status: hookOutcome.blocked ? 'red' : cloture.status,
+        // fix-ok: conv-835 tour 8641812d-6401-4129-a6b0-13a64228e0bc (activity 04:27:22.132Z) — un hook
+        // bloquant forcait `red`, donc le refus s'ouvrait sur « Échec déjà déclaré » alors que le run
+        // n'avait rien declare : seul le fix-gate bloquait, et il porte deja sa raison (meme defaut
+        // que 11f829ad au gate final). Sans raison du hook, on garde `red` pour ne pas bloquer muet.
+        status: hookOutcome.blocked && hookOutcome.reasons.length === 0 ? 'red' : cloture.status,
         dod: cloture.dod.map((check) => ({ ...check, hasContent: true })),
         travauxNonLivres: [...travauxNonLivres]
       })
-      if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
+      if (hookOutcome.blocked) {
+        preGate.blocked = true
+        preGate.reasons.push(...hookOutcome.reasons)
+      }
       if (preGate.blocked) {
         onPhase?.({ step: 'gate' })
         push({

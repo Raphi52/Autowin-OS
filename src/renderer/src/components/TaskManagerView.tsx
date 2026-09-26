@@ -127,6 +127,20 @@ interface Snapshot {
       totalTokensLastHour?: number
       unpricedCallsLastHour?: number
       complaint?: string
+      mailLog?: Array<{
+        at: number
+        channel: 'outlook' | 'teams'
+        outcome: string
+        from?: string
+        subject?: string
+        detail?: string
+      }>
+      mailReadError?: { channel: 'outlook' | 'teams'; since: number; erreur: string }
+      teamsSignIn?:
+        | { state: 'connected' }
+        | { state: 'code'; userCode: string; verificationUri: string; expiresAt: number }
+        | { state: 'disconnected'; erreur?: string }
+        | { state: 'unconfigured' }
     }
   >
   scheduler: {
@@ -227,6 +241,27 @@ function formatDateTime(value: number | null | undefined): string {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(value)
+}
+
+/** Decision de la surveillance mails, en mots : ce qui a ete fait du message, et pourquoi. */
+// fix-ok: le detail d'une regle n'affichait que les reveils de l'heure, le cout et `complaint` (vide pour une regle mails) — test « explique pourquoi un mail n'a rien déclenché » rouge avant cet ajout (2026-09-26).
+const MAIL_OUTCOMES: Record<string, string> = {
+  fired: 'agent lancé',
+  'sender-off': 'ignoré, interlocuteur coupé',
+  'in-flight': 'ignoré, un agent de cette règle tourne déjà',
+  dedup: 'ignoré, déjà traité',
+  rate: 'ignoré, plafond par heure atteint',
+  'daily-rate': 'ignoré, plafond du jour atteint',
+  'cost-budget': 'ignoré, budget de coût atteint',
+  'unpriced-budget': "ignoré, trop d'appels au coût inconnu",
+  depth: 'ignoré, chaîne de réveils trop longue',
+  'root-width': 'ignoré, même cause déjà traitée'
+}
+
+function mailOutcomeLabel(outcome: string, detail?: string): string {
+  if (outcome === 'baseline') return `ignoré, ${detail ?? 'déjà là au démarrage'}`
+  if (outcome === 'error') return `échec du lancement${detail ? ` : ${detail}` : ''}`
+  return MAIL_OUTCOMES[outcome] ?? `ignoré (${outcome})`
 }
 
 function recurrenceLabel(schedule: TaskSchedule): string {
@@ -671,6 +706,37 @@ export function TaskManagerView({
     setSaving(true)
     try {
       await window.api.taskManagerUpdate(task.id, { ...task, ...patch })
+      await refreshSnapshot()
+    } catch (failure) {
+      setError(errorText(failure))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Interrupteur par personne du détail (piste n°9) : une seule personne part, relue au clic côté
+  // main — l'enregistrement du formulaire renvoyait la liste entière de son ouverture.
+  // fix-ok: mesuré le 2026-09-26 (TaskManagerView.test.tsx, rouge « interrupteur de Bob absent du détail » et « Connecter Teams » absent) : le détail d'une règle mails n'avait ni interrupteur par personne ni état de connexion Teams.
+  const setSender = async (task: ScheduledTask, key: string, enabled: boolean): Promise<void> => {
+    setSaving(true)
+    setError(undefined)
+    try {
+      await window.api.taskManagerSetSender(task.id, key, enabled)
+      await refreshSnapshot()
+    } catch (failure) {
+      setError(errorText(failure))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // « Connecter Teams » (piste n°2) : le code revient dans le détail de la règle Teams.
+  const connectTeams = async (): Promise<void> => {
+    setSaving(true)
+    setError(undefined)
+    try {
+      const result = await window.api.taskManagerTeamsConnect()
+      if (!result.ok) setError(`Connexion Teams impossible : ${result.erreur}`)
       await refreshSnapshot()
     } catch (failure) {
       setError(errorText(failure))
@@ -1253,6 +1319,115 @@ export function TaskManagerView({
                     <dd>{snapshot.watchdogs[selected.id].complaint}</dd>
                   </div>
                 )}
+                {(() => {
+                  const failure = snapshot.watchdogs?.[selected.id]?.mailReadError
+                  if (!failure) return null
+                  return (
+                    <div>
+                      <dt>Lecture {failure.channel === 'teams' ? 'Teams' : 'Outlook'}</dt>
+                      <dd>
+                        Lecture {failure.channel === 'teams' ? 'Teams' : 'Outlook'} impossible
+                        depuis {formatDateTime(failure.since)} : {failure.erreur}
+                      </dd>
+                    </div>
+                  )
+                })()}
+                {(() => {
+                  const log = snapshot.watchdogs?.[selected.id]?.mailLog
+                  if (!log?.length) return null
+                  return (
+                    <div className="task-manager-mail-log-card">
+                      <dt>Derniers messages</dt>
+                      <dd>
+                        <ul className="task-manager-mail-log">
+                          {log.map((entry, index) => (
+                            <li key={`${entry.at}-${index}`}>
+                              {formatDateTime(entry.at)} ·{' '}
+                              {entry.from || entry.subject
+                                ? `${entry.from ?? ''}${entry.subject ? ` — ${entry.subject}` : ''} : `
+                                : ''}
+                              {mailOutcomeLabel(entry.outcome, entry.detail)}
+                            </li>
+                          ))}
+                        </ul>
+                      </dd>
+                    </div>
+                  )
+                })()}
+                {(() => {
+                  const signIn = snapshot.watchdogs?.[selected.id]?.teamsSignIn
+                  if (!signIn) return null
+                  return (
+                    <div className="task-manager-mail-log-card" data-testid="watchdog-teams-signin">
+                      <dt>Connexion Teams</dt>
+                      <dd>
+                        {signIn.state === 'connected' ? (
+                          'Connecté à Microsoft Teams.'
+                        ) : signIn.state === 'code' ? (
+                          <>
+                            Ouvre <strong>{signIn.verificationUri}</strong> et saisis le code{' '}
+                            <strong className="task-manager-teams-code">{signIn.userCode}</strong>{' '}
+                            avant {formatDateTime(signIn.expiresAt)}.
+                          </>
+                        ) : signIn.state === 'unconfigured' ? (
+                          'Teams n’est pas configuré sur ce poste (réglage AUTOWIN_TEAMS_CLIENT_ID absent).'
+                        ) : (
+                          <>
+                            Non connecté{signIn.erreur ? ` : ${signIn.erreur}` : ''}.{' '}
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => void connectTeams()}
+                            >
+                              Connecter Teams
+                            </button>
+                          </>
+                        )}
+                      </dd>
+                    </div>
+                  )
+                })()}
+                {(() => {
+                  const source = selected.watchdog?.source
+                  if (source?.kind !== 'outlook-mail') return null
+                  const senders = Object.entries(source.senders ?? {}).sort(([, a], [, b]) =>
+                    a.name.localeCompare(b.name)
+                  )
+                  return (
+                    <div className="task-manager-mail-log-card">
+                      <dt>Interlocuteurs — cochés = l’agent leur répond</dt>
+                      <dd>
+                        {senders.length === 0 ? (
+                          'Aucune personne encore vue : chaque nouvelle personne apparaît ici, cochée.'
+                        ) : (
+                          <div className="task-manager-mail-senders">
+                            {senders.map(([key, sender]) => (
+                              <label
+                                key={key}
+                                className="task-manager-switch"
+                                data-testid="watchdog-detail-sender"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={sender.enabled}
+                                  disabled={saving}
+                                  onChange={(event) =>
+                                    void setSender(selected, key, event.target.checked)
+                                  }
+                                />
+                                <span>
+                                  {sender.name}
+                                  {!key.startsWith('teams:') &&
+                                    sender.name.toLowerCase() !== key && <small> — {key}</small>}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </dd>
+                    </div>
+                  )
+                })()}
               </>
             )}
           </dl>

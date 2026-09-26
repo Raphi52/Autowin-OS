@@ -124,6 +124,13 @@ function api() {
     taskManagerRemove: vi.fn().mockResolvedValue(true),
     taskManagerAcknowledge: vi.fn().mockResolvedValue(true),
     taskManagerRunNow: vi.fn().mockResolvedValue({ started: true }),
+    taskManagerSetSender: vi.fn().mockResolvedValue({ id: 'task-1' }),
+    taskManagerTeamsConnect: vi.fn().mockResolvedValue({
+      ok: true,
+      userCode: 'ABCD-EFGH',
+      verificationUri: 'https://microsoft.com/devicelogin',
+      expiresAt: 0
+    }),
     onAppEvent: vi.fn(
       (_listener: (event: { type: string; scope?: string }) => void) => () => undefined
     )
@@ -215,6 +222,138 @@ describe('TaskManagerView', () => {
     expect(container.textContent).toContain('12 345 tokens')
     expect(container.textContent).toContain('1 appel non chiffré')
     expect(container.textContent).toContain('Fichier surveillé illisible')
+  })
+
+  it("explique pourquoi un mail n'a rien déclenché, et montre une lecture en panne", async () => {
+    // Avant : les motifs d'abandon restaient dans la mémoire du moteur, jamais affichés, et une
+    // lecture Outlook en échec ne laissait aucune trace. « Rien ne s'est passé » n'avait pas de réponse.
+    // fix-ok: mesuré le 2026-09-26 — TaskManagerView.tsx remis à HEAD (sans mailLog/mailReadError affichés) : ce test rouge (1 échec / 29, texte « Bob — Promo : ignoré, interlocuteur coupé » absent), 28 autres verts ; version corrigée restaurée (même diff) : 29/29.
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.tasks[0].schedule = undefined
+    snapshot.tasks[0].watchdog = {
+      source: { kind: 'outlook-mail', channel: 'outlook' },
+      guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 240, maxChainDepth: 0, maxPerRoot: 1 }
+    }
+    const at = Date.UTC(2026, 8, 26, 7, 5)
+    snapshot.watchdogs = {
+      'task-1': {
+        admittedLastHour: 1,
+        mailLog: [
+          { at, channel: 'outlook', outcome: 'sender-off', from: 'Bob', subject: 'Promo' },
+          { at, channel: 'outlook', outcome: 'fired', from: 'Alice', subject: 'Devis' },
+          { at, channel: 'outlook', outcome: 'dedup', from: 'Alice', subject: 'Devis' },
+          {
+            at,
+            channel: 'outlook',
+            outcome: 'baseline',
+            detail: '2 non lu(s) déjà là au premier démarrage'
+          }
+        ],
+        mailReadError: { channel: 'outlook', since: at, erreur: "Outlook n'est pas ouvert" }
+      }
+    }
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi, { section: 'watchdog' })
+    const text = container.textContent ?? ''
+
+    expect(text).toContain('Bob — Promo : ignoré, interlocuteur coupé')
+    expect(text).toContain('Alice — Devis : agent lancé')
+    expect(text).toContain('Alice — Devis : ignoré, déjà traité')
+    expect(text).toContain('ignoré, 2 non lu(s) déjà là au premier démarrage')
+    expect(text).toContain('Lecture Outlook impossible depuis')
+    expect(text).toContain("Outlook n'est pas ouvert")
+  })
+
+  // Pistes n°9 et n°12 du repérage du 2026-09-26 : couper une personne se faisait seulement par
+  // Modifier → Enregistrer, et aucun test d'écran ne décochait une personne.
+  it('coupe une personne depuis le détail de la règle : seule elle est envoyée, avec enabled false', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.tasks[0].schedule = undefined
+    snapshot.tasks[0].watchdog = {
+      source: {
+        kind: 'outlook-mail',
+        channel: 'outlook',
+        senders: {
+          'bob@x.fr': { name: 'Bob', enabled: true },
+          'alice@x.fr': { name: 'Alice', enabled: false }
+        }
+      },
+      guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 240, maxChainDepth: 0, maxPerRoot: 1 }
+    }
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi, { section: 'watchdog' })
+    const toggle = (name: string): HTMLInputElement => {
+      const label = [...container.querySelectorAll('[data-testid="watchdog-detail-sender"]')].find(
+        (item) => item.textContent?.includes(name)
+      )
+      if (!label) throw new Error(`interrupteur de ${name} absent du détail`)
+      return label.querySelector('input')!
+    }
+
+    expect(toggle('Bob').checked).toBe(true)
+    expect(toggle('Alice').checked).toBe(false)
+    await act(async () => toggle('Bob').click())
+
+    expect(mockApi.taskManagerSetSender).toHaveBeenCalledWith('task-1', 'bob@x.fr', false)
+    expect(mockApi.taskManagerUpdate).not.toHaveBeenCalled()
+  })
+
+  // Piste n°2 : le code de connexion Teams n'allait que dans le journal de l'app.
+  it('règle Teams non connectée : « Connecter Teams » demande le code, puis le code s’affiche', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.tasks[0].schedule = undefined
+    snapshot.tasks[0].watchdog = {
+      source: { kind: 'outlook-mail', channel: 'teams' },
+      guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 240, maxChainDepth: 0, maxPerRoot: 1 }
+    }
+    snapshot.watchdogs = {
+      'task-1': {
+        admittedLastHour: 0,
+        teamsSignIn: {
+          state: 'disconnected',
+          erreur: 'connexion Teams expirée : code non saisi à temps'
+        }
+      }
+    }
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi, { section: 'watchdog' })
+    expect(container.textContent).toContain('connexion Teams expirée')
+    const button = [...container.querySelectorAll('button')].find(
+      (item) => item.textContent === 'Connecter Teams'
+    )
+    if (!button) throw new Error('bouton « Connecter Teams » absent du détail')
+
+    mockApi.taskManagerSnapshot.mockResolvedValue({
+      ...snapshot,
+      watchdogs: {
+        'task-1': {
+          admittedLastHour: 0,
+          teamsSignIn: {
+            state: 'code',
+            userCode: 'ABCD-EFGH',
+            verificationUri: 'https://microsoft.com/devicelogin',
+            expiresAt: Date.UTC(2026, 8, 26, 9, 15)
+          }
+        }
+      }
+    })
+    await act(async () => button.click())
+
+    expect(mockApi.taskManagerTeamsConnect).toHaveBeenCalledTimes(1)
+    const text = container.textContent ?? ''
+    expect(text).toContain('ABCD-EFGH')
+    expect(text).toContain('https://microsoft.com/devicelogin')
+    expect(
+      [...container.querySelectorAll('button')].some(
+        (item) => item.textContent === 'Connecter Teams'
+      )
+    ).toBe(false)
   })
 
   it("affiche le mode figé sur chaque ligne d'historique", async () => {

@@ -44,6 +44,7 @@ import {
   questionPoseeSansAvoirLu,
   statusEstUneAction,
   statusEstUneLecture,
+  statutComplet,
   RELANCE_QUESTION_SANS_LECTURE,
   exigeUneConclusion,
   compactionsAbouties
@@ -54,13 +55,8 @@ import { suivreBlocsDeCode } from '../shared/bloc-de-code'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
-import { consigneBureauCacheChat } from './consigne-bureau-cache'
 import { routeSkillRequest } from './skill-routing'
-import {
-  REGLES_VISUELLES,
-  buildChatPilotagePrompt,
-  tourTouchantAuVisuel
-} from './chat-pilotage-prompt'
+import { blocsSystemeEcran, buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import {
   conversationPretendueInaccessible,
   correctionConversationLisible,
@@ -1340,26 +1336,20 @@ export class AgentPilot {
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
             { name: 'projectContext', text: this.projectContext(conversationId) },
             /**
-             * DERNIER bloc, et conditionnel : les regles de travail visuel (preuve a l'ecran,
-             * bureau cache, bissection, maquette tenue) pesent 3 966 caracteres (~1 000 tokens) sur les 16 982 tokens du
-             * prompt systeme (mesure 2026-09-16, conv-614). Elles ne servent qu'a un tour qui
-             * touche a l'interface ou capture un ecran.
+             * DERNIERS blocs (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
+             * TOUJOURS servi et identique pour tous les fils (kaizen conv-835, tour
+             * ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 : « envoi un message teams… » n'avait aucun mot
+             * visuel, le chat n'a donc pas recu la regle et a ouvert Teams sur l'ecran reel), puis les
+             * regles de travail visuel, conditionnelles (conv-614) — image jointe comprise (conv-742).
              *
-             * En DERNIER a dessein : le cache du provider vaut par son PREFIXE. Tout ce qui
-             * precede reste identique d'un tour a l'autre et donc relu depuis le cache ; seule
-             * cette queue apparait ou disparait.
+             * En DERNIER a dessein : le cache du provider vaut par son PREFIXE. Seule la queue
+             * visuelle apparait ou disparait d'un tour a l'autre.
              */
-            {
-              name: 'visuel',
-              // Image jointe au dernier message = tour visuel, meme sans mot-cle (kaizen conv-742).
-              // fix-ok: le bloc visuel (qui nomme skills/look) ne s'ouvrait que sur mots-cles du texte ; une image jointe sans mot visuel ne le declenchait pas.
-              text: tourTouchantAuVisuel(
-                latestUserMessage ?? '',
-                (history.at(-1)?.attachments ?? []).some((piece) => piece.kind === 'image')
-              )
-                ? REGLES_VISUELLES + consigneBureauCacheChat(conversationId ?? '')
-                : ''
-            }
+            ...blocsSystemeEcran(
+              latestUserMessage ?? '',
+              (history.at(-1)?.attachments ?? []).some((piece) => piece.kind === 'image'),
+              conversationId ?? ''
+            )
           ]
     const system = systemParts.map((p) => p.text).join('')
     const systemBlocks = systemParts
@@ -2076,9 +2066,11 @@ export class AgentPilot {
                * question -- en ordonnant d'avancer sans demander, donc en ecrasant la skill `draft`
                * qui exige justement de faire choisir l'humain (mesure conv-167, 2026-09-03).
                */
-              if (statusEstUneLecture(chunk.status)) anyReadExecuted = true
+              // Juge la commande ENTIERE, pas le libelle coupe a 120 caracteres (conv-861).
+              const statutEntier = statutComplet(chunk.status, chunk.statusTarget)
+              if (statusEstUneLecture(statutEntier)) anyReadExecuted = true
               // Un Write/Edit/Bash natif a AGI : le garde « annonce sans action » doit le voir.
-              if (statusEstUneAction(chunk.status)) actionNativeCeTour = true
+              if (statusEstUneAction(statutEntier)) actionNativeCeTour = true
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
               emit({
                 kind: 'provider-status',

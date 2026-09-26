@@ -582,8 +582,37 @@ export const PROMPT_NOUVELLE_CIBLE =
 export function premierPassageLaisseSortirLeTour(entree: {
   allumageManuel: boolean
   repriseApresRedemarrage: boolean
+  /** Le tour attend un FICHIER (`attenteFichierAReprendre`) : sa surveillance est gratuite, on la reprend. */
+  attenteFichier?: boolean
 }): boolean {
-  return entree.allumageManuel || entree.repriseApresRedemarrage
+  return entree.allumageManuel || entree.repriseApresRedemarrage || entree.attenteFichier === true
+}
+
+/**
+ * REPRISE D'UNE ATTENTE DE FICHIER après un redémarrage (conv-826, 2026-09-26 — demande de
+ * l'utilisateur : « après un redémarrage, ∞ reprend tout seul l'attente d'un fichier encore attendu »).
+ *
+ * Défaut vécu : la suite « Quand …/fin.txt existe, compare… » était surveillée par un minuteur de
+ * l'écran. L'app a redémarré à 10:48 ; le minuteur est mort, et le premier passage a marqué le
+ * tour « déjà traité ». fin.txt est apparu à 12:38:36 et rien n'est parti avant 15:57, ∞ affiché
+ * allumé. Le gel du premier passage protège d'un tour PAYÉ que personne n'a demandé ; or une attente
+ * de fichier ne coûte rien tant que le fichier manque, et n'envoie que la suite qu'on avait armée.
+ *
+ * Rend la décision `programmer` à reprendre, ou null. Bornes : seule une suite qui nomme un FICHIER
+ * (une échéance horaire repaierait un tour) ; tour d'au plus `DUREE_MAX_SONDAGE_FICHIER`, mesuré depuis
+ * la saisie qui l'a lancé — âge inconnu = pas de reprise, faute de pouvoir le borner.
+ */
+export function attenteFichierAReprendre(
+  entree: Omit<EntreeDecisionAuto, 'dernierTourTraite' | 'dernierPromptEnvoye'>
+): Extract<DecisionAuto, { action: 'programmer' }> | null {
+  // Un message de l'utilisateur APRÈS la suite l'a annulée (même règle que le minuteur) : rien à reprendre.
+  if (entree.fil[entree.fil.length - 1]?.role !== 'assistant') return null
+  const decision = deciderRelanceAuto({ ...entree, dernierTourTraite: null, dernierPromptEnvoye: null })
+  if (decision.action !== 'programmer' || !decision.fichier) return null
+  const saisie = [...entree.fil].reverse().find((m) => m.role === 'user') as { ts?: number } | undefined
+  if (typeof saisie?.ts !== 'number') return null
+  if ((entree.maintenant ?? Date.now()) - saisie.ts > DUREE_MAX_SONDAGE_FICHIER) return null
+  return decision
 }
 
 // fix-ok: suite identique au tour precedent (turnId 98ce00d9-2276-4a96-bb15-b66c622bfee8, saisie ts 1789970040849) = arret anti-boucle alors que le tour rapportait un travail dans « ✅ Fait » ; titres en gras non reconnus.

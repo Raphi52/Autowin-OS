@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CATALOG } from './commands'
-import { REGLES_VISUELLES } from './chat-pilotage-prompt'
+import { REGLES_ECRAN_UTILISATEUR } from './chat-pilotage-prompt'
 
 /**
  * MESURE (conv-614, 2026-09-16) : le catalogue de commandes pese 12 390 caracteres dans le prompt
@@ -18,9 +18,12 @@ describe('catalogue de commandes sans doublon du prompt', () => {
     expect(desktopObserve).toBeDefined()
   })
 
-  it('ne repete pas la procedure du bureau cache, qui vit dans les regles visuelles', () => {
+  // Depuis kaizen conv-835, la regle vit dans REGLES_ECRAN_UTILISATEUR, servi a CHAQUE tour.
+  it('ne repete pas la procedure du bureau cache, qui vit dans les regles de l ecran', () => {
     const description = desktopObserve?.description ?? ''
-    expect(REGLES_VISUELLES).toContain('hdesk-lancer.ps1')
+    expect(REGLES_ECRAN_UTILISATEUR).toContain('hdesk-lancer.ps1')
+    expect(description).toContain("ECRAN DE L'UTILISATEUR = SON ESPACE")
+    expect(description).not.toContain('REGLES_VISUELLES')
     expect(description).not.toContain('hdesk-lancer.ps1')
     expect(description).not.toContain('hdesk-observe.ps1')
     expect(description).not.toContain('ui-capture.mjs')

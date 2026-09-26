@@ -22,3 +22,40 @@ describe('une objection MINEUR bloque un VALIDE ; seul OK passe', () => {
     expect(dodDuVerdict(false, 'DEFAUT: x\nOBJECTIONS:\n- **MINEUR** : style\n- MAJEUR: y')).toHaveLength(2)
   })
 })
+
+/*
+ * fix-ok: run-0940cc5e0fcd-1 (conv-857, 2026-09-26), reparation 13 (rouge 2/5 avant le correctif) : le juge rend « VALIDE / SCORE 86 ». Sa puce
+ * « OK: Chaque correction annoncee existe dans le code : » porte 9 SOUS-puces indentees, toutes des
+ * constats. Sans etiquette propre, elles etaient retenues comme objections : le controle final a
+ * recite 8 d'entre elles en « Promis mais pas fait » (slice 0..8) et masque les 4 vraies reserves MINEUR.
+ */
+describe("une sous-puce herite de l'etiquette de sa puce parente", () => {
+  const verdict = [
+    'VALIDE',
+    'SCORE: 86',
+    'OBJECTIONS:',
+    '- OK: Chaque correction annoncee existe dans le code :',
+    "  - le filtre anti-incident ne s'applique plus aux mails (`watchdog-engine.ts:423`) ;",
+    '  - le reglage `newSenders` existe ;',
+    "- OK: La capture existe, et je l'ai ouverte.",
+    "- MINEUR: La n°2 (Teams) n'est pas verifiee de bout en bout.",
+    '- MINEUR: Trois changements de comportement :',
+    '  - Teams ne se connecte plus que sur clic.'
+  ].join('\n')
+
+  it("les sous-puces d'un OK ne deviennent pas des promesses non tenues", () => {
+    expect(objectionsDuJuge(verdict)).toEqual([
+      "La n°2 (Teams) n'est pas verifiee de bout en bout.",
+      'Trois changements de comportement :',
+      'Teams ne se connecte plus que sur clic.'
+    ])
+    const libelles = dodDuVerdict(false, verdict).map((d) => d.label ?? '')
+    expect(libelles.join('\n')).not.toMatch(/filtre anti-incident|newSenders/)
+    expect(libelles.join('\n')).toMatch(/n°2 \(Teams\)/)
+  })
+
+  it('sous un MAJEUR, une sous-puce reste un defaut meme quand les puces nues sont des constats', () => {
+    const texte = 'DEFAUT: x\nOBJECTIONS:\n- MAJEUR: deux trous :\n  - pas de test\n- constat nu'
+    expect(objectionsDuJuge(texte)).toEqual(['deux trous :', 'pas de test'])
+  })
+})

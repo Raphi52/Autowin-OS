@@ -263,6 +263,35 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  it('un enchaînement de CHAT dit ce qui est parti et nomme ce qui reste en attente', async () => {
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-871 · tour a87271b1',
+          branch: 'auto/conv-871-a87271b1',
+          at: '2026-09-26T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'pushed', branch: 'main', files: 2, mode: 'direct' },
+          exclus: [{ path: 'src/partage.ts', motif: 'touche-par-un-autre-fil' }]
+        }
+      })
+    await render()
+    await openWorkspaceView()
+
+    const last = container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent ?? ''
+    expect(last).toContain('Projet · poussé sur main')
+    // Un tour de chat ne publie jamais le Brain : aucune ligne ne doit le laisser croire.
+    expect(last).not.toContain('Brain')
+    expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
+      'Laissé en attente · src/partage.ts (touché aussi par un autre fil)'
+    )
+    const toggle = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
+    expect(toggle.title).toContain('chaque tour de chat')
+  })
+
   it('rafraichit le resultat auto-close quand une publication differee se termine', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api

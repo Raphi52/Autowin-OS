@@ -1,7 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { abortUpdateConflict, checkForUpdate, applyUpdate, type GitRunner } from './git-update'
+import {
+  abortUpdateConflict,
+  checkForUpdate,
+  applyUpdate,
+  INCOMING_FILES_MAX,
+  parseIncomingCommits,
+  type GitRunner
+} from './git-update'
+
+/** Clé exacte de la commande qui lit les commits entrants (cf. `readIncoming`). */
+const LOG_INCOMING =
+  '-c core.quotePath=false log --max-count=20 --format=%x1e%H%x1f%an%x1f%aI%x1f%s --name-only HEAD..origin/main'
+const RS = String.fromCharCode(0x1e)
+const US = String.fromCharCode(0x1f)
+const NL = String.fromCharCode(10)
+const CR = String.fromCharCode(13)
 
 function runnerFrom(map: Record<string, string>, throwOn?: string): GitRunner {
   return async (args) => {
@@ -16,7 +31,8 @@ describe('checkForUpdate', () => {
     const run = runnerFrom({
       'fetch --quiet': '',
       'rev-parse --abbrev-ref HEAD': 'main',
-      'rev-list --count HEAD..origin/main': '3'
+      'rev-list --count HEAD..origin/main': '3',
+      [LOG_INCOMING]: `${RS}abc123${US}Emmanuel${US}2026-09-25T10:00:00+02:00${US}fix: rail${NL}${NL}src/a.ts${NL}`
     })
     // La reference comparee est l'etat d'EQUIPE (origin/main), pas l'upstream de la branche sortie.
     // `toEqual` volontairement EXHAUSTIF : un champ ajoute au contrat doit forcer une relecture de ce
@@ -29,7 +45,17 @@ describe('checkForUpdate', () => {
       reference: 'origin/main',
       dirty: false,
       conflicted: false,
-      strategies: ['fast-forward']
+      strategies: ['fast-forward'],
+      incoming: [
+        {
+          hash: 'abc123',
+          author: 'Emmanuel',
+          date: '2026-09-25T10:00:00+02:00',
+          subject: 'fix: rail',
+          files: ['src/a.ts'],
+          fileCount: 1
+        }
+      ]
     })
   })
 
@@ -462,5 +488,68 @@ describe('le check de mise à jour vise le DÉPÔT, pas le dossier de lancement'
       expect(status.available).toBe(false)
       expect(status.behind).toBe(0)
     })
+  })
+})
+
+describe('checkForUpdate — qui a poussé quoi (commits entrants)', () => {
+  it('lecture des commits en échec → le compte reste, AUCUN blocage, aucun champ inventé', async () => {
+    const run = runnerFrom(
+      {
+        'fetch --quiet': '',
+        'rev-parse --abbrev-ref HEAD': 'main',
+        'rev-list --count HEAD..origin/main': '2'
+      },
+      ' log '
+    )
+    const status = await checkForUpdate('/r', run)
+    expect(status).toMatchObject({ available: true, behind: 2 })
+    expect(status).not.toHaveProperty('incoming')
+  })
+
+  it('à jour → git log n’est même pas lancé', async () => {
+    const calls: string[] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args.join(' '))
+      return { stdout: args.includes('--count') ? '0' : '' }
+    }
+    await checkForUpdate('/r', run)
+    expect(calls.some((c) => c.includes(' log '))).toBe(false)
+  })
+
+  it('découpe auteur / date / sujet / fichiers, merges sans fichiers compris, chemins accentués intacts', () => {
+    const stdout =
+      `${RS}h1${US}Emmanuel Heurtier${US}2026-09-25T09:00:00+02:00${US}Merge pull request #12${US}suite${NL}` +
+      `${RS}h2${US}raphael${US}2026-09-24T18:00:00+02:00${US}feat: rail${CR}${NL}${CR}${NL}` +
+      `src/éditeur.ts${CR}${NL}README.md${CR}${NL}`
+    expect(parseIncomingCommits(stdout)).toEqual([
+      {
+        hash: 'h1',
+        author: 'Emmanuel Heurtier',
+        date: '2026-09-25T09:00:00+02:00',
+        subject: `Merge pull request #12${US}suite`,
+        files: [],
+        fileCount: 0
+      },
+      {
+        hash: 'h2',
+        author: 'raphael',
+        date: '2026-09-24T18:00:00+02:00',
+        subject: 'feat: rail',
+        files: ['src/éditeur.ts', 'README.md'],
+        fileCount: 2
+      }
+    ])
+  })
+
+  it('beaucoup de fichiers → liste tronquée, total conservé', () => {
+    const files = Array.from({ length: INCOMING_FILES_MAX + 5 }, (_, i) => `f${i}.ts`)
+    const [commit] = parseIncomingCommits(`${RS}h${US}a${US}d${US}s${NL}${NL}${files.join(NL)}${NL}`)
+    expect(commit.files).toHaveLength(INCOMING_FILES_MAX)
+    expect(commit.fileCount).toBe(INCOMING_FILES_MAX + 5)
+  })
+
+  it('sortie vide → aucune ligne fantôme', () => {
+    expect(parseIncomingCommits('')).toEqual([])
+    expect(parseIncomingCommits(`${NL}${NL}`)).toEqual([])
   })
 })

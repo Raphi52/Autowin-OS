@@ -24,7 +24,7 @@ import type {
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { RapportRetention } from '../shared/rapport-retention'
-import type { UpdateStrategy } from '../shared/update-contract'
+import type { IncomingCommit, UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
 import type {
   ProjectListResult,
@@ -286,6 +286,8 @@ const api = {
     reference?: string
     dirty?: boolean
     strategies?: UpdateStrategy[]
+    /** Commits qui arriveront (auteur, date, sujet, fichiers) — absent si git n'a pas pu les lire. */
+    incoming?: IncomingCommit[]
     error?: string
   }> => ipcRenderer.invoke('update:check'),
   applyUpdate: (
@@ -722,6 +724,17 @@ const api = {
     ipcRenderer.invoke('task-manager:acknowledge', alertId),
   taskManagerRunNow: (id: string): Promise<{ started: boolean }> =>
     ipcRenderer.invoke('task-manager:run-now', id),
+  // fix-ok: mesure 2026-09-26 — sans ces deux fonctions, `npm run typecheck` restait a 0 et les tests
+  // d'ecran (qui simulent window.api) verts : l'interrupteur par personne et « Connecter Teams »
+  // appelaient une fonction absente. Garde : src/preload/prod-pont.test.ts (rouge sans elles).
+  /** Coupe (`false`) ou retablit UNE personne d'une regle mails / Teams, relue au moment du clic. */
+  taskManagerSetSender: (id: string, key: string, enabled: boolean): Promise<ScheduledTask> =>
+    ipcRenderer.invoke('task-manager:set-sender', id, key, enabled),
+  /** « Connecter Teams » : rend le code a saisir sur la page Microsoft, ou la raison de l'echec. */
+  taskManagerTeamsConnect: (): Promise<
+    | { ok: true; userCode: string; verificationUri: string; expiresAt: number }
+    | { ok: false; erreur: string }
+  > => ipcRenderer.invoke('task-manager:teams-connect'),
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),
   // Liens de fichiers cites dans le markdown des agents : ouverture reelle (resolution + garde
   // de racine cote main, le renderer n'est jamais cru sur un chemin).

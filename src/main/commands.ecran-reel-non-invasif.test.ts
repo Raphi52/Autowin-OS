@@ -96,6 +96,30 @@ describe('desktop_act : bureau cache par defaut', () => {
     expect(String(second.error)).toContain('Controle desktop indisponible')
   })
 
+  // kaizen conv-835, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 (evenements 87-89) : l'appel portait
+  // deja le drapeau, et le refus proposait... de reemettre avec le drapeau. Sortie inexistante : le
+  // message de l'utilisateur ne parlait pas de son ecran.
+  it('sans demande, le premier refus ne propose pas une sortie qui n existe pas (tour ac1d0434)', async () => {
+    const b = busAvec('envoi un message teams a leslie pour lui dire ou cest rangé')
+    const saisie = { actions: [{ type: 'click', x: 489, y: 69 }, { type: 'type', text: 'Leslie' }], ecran_utilisateur: true }
+    const premier = String((await b.exec('desktop_act', saisie, 'c1', undefined, 'act-6')).error)
+    expect(premier).not.toContain("reemets l'appel avec `ecran_utilisateur: true`")
+    expect(premier).toContain("ne reemets pas l'appel")
+    expect(premier).toContain('hdesk-act.ps1')
+    // Le contournement effectivement prevu par le modele : rouvrir le lien msteams: sur son ecran.
+    expect(premier).toContain('Start-Process')
+    expect(premier).toContain('msteams:')
+    expect(premier).toContain('DEMANDE-lui')
+    const second = String((await b.exec('desktop_act', saisie, 'c1', undefined, 'act-6')).error)
+    expect(second).toBe(premier)
+  })
+
+  it('avec demande, le premier refus garde la porte de sortie du drapeau', async () => {
+    const b = busAvec('clique sur mon écran stp')
+    const premier = String((await b.exec('desktop_act', clic, 'c1', undefined, 'act-7')).error)
+    expect(premier).toContain("reemets l'appel avec `ecran_utilisateur: true`")
+  })
+
   it('une observation refusee n arme pas le clic', async () => {
     const b = bus()
     await b.exec('desktop_observe', { display: 1 }, undefined, undefined, 'act-3')

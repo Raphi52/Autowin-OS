@@ -20,6 +20,14 @@ description: >-
 4. **AU MOMENT où la cause est nommée → CORRIGE CETTE CAUSE, AU MINIMUM.** Uniquement la cause nommée. Aucun
    refactor opportuniste, aucun renommage, aucun « tant que j'y suis ». Une garde qui CONTOURNE le défaut, une erreur avalée, une
    assertion desserrée, un timeout élargi = FAUX VERT → refuse-le, ou étiquette-le « rustine — cause réelle : X ».
+4 bis. **AU MOMENT où tu écris un REFUS (garde, validation, interdiction) ou son test → donne-lui son JUMEAU
+   d'acceptation, et n'ajoute aucun refus que le contrat n'implique pas.** Chaque test « ceci est refusé » a son voisin
+   « le cas légal le plus proche est accepté » (même borne, de l'autre côté). Un refus trop large casse autant qu'un
+   refus manquant, et une restriction inventée (achat « unique », limite par jour) casse l'appelant qui suit le contrat.
+   Mesuré sur le banc arenagame : une emprise fermée (`<=` au lieu de `<`) refusait la rangée du fond et a fait perdre
+   deux règles d'élixir pourtant justes (nuit-2026-09-25 m3) ; avec le jumeau, 35/35 aux trois manches suivantes. Un
+   refus inventé dans la boutique a coûté un cas caché à 2 bras sur 4 (nuit-2026-09-22 m1), puis au seul bras sans
+   cette consigne (appel nu, nuit-2026-09-25 m5).
 5. **AU MOMENT où tu dirais « fini » → REJOUE LE MÊME CRITÈRE et lis son code de sortie.** Un artefact
    hors modèle, sinon ça n'a pas eu lieu : test rouge→vert, code de sortie, capture LUE, requête. Jamais un texte auto-déclaré.
 6. **AU MOMENT où le rejeu est encore rouge → CHANGE D'APPROCHE, ne répète pas.** Deux tentatives identiques n'en font

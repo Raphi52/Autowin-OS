@@ -317,6 +317,7 @@ import {
 } from './bascule-dossier-conversation'
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
+import { photographierDebutDeTour } from './chat-turn-publication'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -377,10 +378,13 @@ import { seedMaintenanceTask } from './task-manager/maintenance-seed'
 import { seedGcTask } from './task-manager/gc-seed'
 import { seedCurateTask } from './task-manager/curate-seed'
 import {
-  NewUnreadMailDetector,
+  MailChannelWatcher,
+  MailWatchMemory,
   describeMail,
-  rememberMailSender,
-  senderKey,
+  liftLegacyMailWatchdogCaps,
+  listeningChannels,
+  mailDiagnostics,
+  retargetTeamsWatchdogPrompt,
   splitMailWatchdogByChannel,
   seedMailWatchdogTask
 } from './task-manager/watchdog-mail'
@@ -390,6 +394,13 @@ import {
   parseTeamsItemId,
   replyTeams
 } from './task-manager/watchdog-teams'
+import { sourceTeams, TeamsLocalClient } from './task-manager/watchdog-teams-local'
+import {
+  cheminJournalWatchdogTeams,
+  creerBattementWatchdog,
+  creerJournalWatchdog,
+  empreinteConversation
+} from './task-manager/journal-watchdog-teams'
 import type { WatchdogAppEvent } from './task-manager/types'
 import {
   ScheduledChatDispatcher,
@@ -3051,7 +3062,8 @@ Le fil reprend ensuite normalement.`
    */
   const rangerSurLePremierMessage = async (
     conversationId: string,
-    messages: Message[]
+    messages: Message[],
+    finDuTour: Promise<unknown>
   ): Promise<void> => {
     const conversation = os.conversations.get(conversationId)
     if (!conversation) return
@@ -3104,25 +3116,76 @@ Le fil reprend ensuite normalement.`
         )
         return reponse.text
       },
+      finDuTour,
+      toujoursNonRangee: () => {
+        const actuelle = os.conversations.get(conversationId)
+        return Boolean(actuelle && !actuelle.projectPath?.trim() && !actuelle.categorie?.trim())
+      },
       ranger: (chemin) => os.conversations.rangerDansDossier(conversationId, chemin),
+      // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse tant qu'elle est vierge.
       annoncer: (message) =>
-        os.conversations.append(conversationId, { role: 'assistant', content: message })
+        os.conversations.append(conversationId, {
+          role: 'assistant',
+          content: message,
+          avantLaReponseEnCours: true
+        })
     })
     if (!applique) return
     broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
     broadcast({ type: 'refresh', scope: 'conversations' })
   }
 
-  const runPilotChat: typeof lancerTour = async (...args) => {
-    const conversationId = args[2]
-    if (typeof conversationId === 'string' && conversationId.trim()) {
-      await rangerSurLePremierMessage(conversationId, args[1])
+  /*
+   * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
+   *
+   * Avant, le tour ATTENDAIT l'appel au modele qui range la conversation (~5 s au premier message) :
+   * attente sans un mot, et faux « Reponse interrompue avant la fin » pendant ce trou (conv-809,
+   * conv-862). Le rangement n'est plus attendu. Il demarre APRES la bascule par chemin cite (qui
+   * prime et le rend inutile), et un rangement qui deplacerait le dossier de travail attend
+   * `finDuTour` : un tour ne change jamais de dossier en cours de route.
+   * La demande compte toujours comme EN COURS des sa reception (voir trackPreparation).
+   */
+  const runPilotChat: typeof lancerTour = (...args) =>
+    activeChatTurns.trackPreparation(args[2], async () => {
+      const conversationId = args[2]
+      if (typeof conversationId !== 'string' || !conversationId.trim()) return lancerTour(...args)
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
       appliquerCompteDeConversation(conversationId)
-    }
-    return lancerTour(...args)
-  }
+      let finirTour!: () => void
+      const finDuTour = new Promise<void>((resolve) => {
+        finirTour = resolve
+      })
+      void rangerSurLePremierMessage(conversationId, args[1], finDuTour).catch((error) => {
+        // Un rangement rate ne doit JAMAIS toucher la reponse : il est seulement journalise.
+        console.warn('[rangement] premier message non range :', error)
+      })
+      /*
+       * ENCHAINEMENT AUTO DU CHAT (conv-871) : l'interrupteur ne publiait que les taches d'agent.
+       * Photo de l'arbre AVANT le tour (~65 ms), publication APRES un tour reussi, sans faire
+       * attendre la reponse. Un tour arrete ou en echec ne publie rien.
+       */
+      const debutPublication = os.autoCloseEnabled()
+        ? await photographierDebutDeTour(dossierDuTour(conversationId))
+        : undefined
+      try {
+        const resultat = await lancerTour(...args)
+        if (debutPublication && resultat.ok && !resultat.cancelled) {
+          const demande = [...args[1]].reverse().find((m) => m.role === 'user')?.content ?? ''
+          void os
+            .publishChatTurn({
+              conversationId,
+              turnId: resultat.turnId,
+              request: demande,
+              debut: debutPublication
+            })
+            .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
+        }
+        return resultat
+      } finally {
+        finirTour()
+      }
+    })
   /**
    * Reprend les appels de chat dont le CLI a survécu au main. La réservation locale empêche un
    * nouveau message d'entrer dans la même conversation pendant qu'on attend la preuve `.exit.json`.
@@ -3435,7 +3498,7 @@ Le fil reprend ensuite normalement.`
   bus.conversationExiste = (conversationId) => scheduledChatRuntime.hasConversation(conversationId)
   // MEME autorite que la sonde `os:pilotChat:active` du renderer : l'agent du chat doit pouvoir
   // repondre « est-ce que ca tourne encore ? » sans deviner en lisant des journaux de fin de tour.
-  bus.tourDeChatActif = (conversationId) => Boolean(activeChatTurns.get(conversationId))
+  bus.tourDeChatActif = (conversationId) => activeChatTurns.isInFlight(conversationId)
   bus.lancerDansConversation = async (conversationId, prompt, binding) => {
     const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
     return {
@@ -3624,89 +3687,176 @@ Le fil reprend ensuite normalement.`
   }
   const teamsClientId = variablePerso('AUTOWIN_TEAMS_CLIENT_ID')
   const teamsVaultPath = join(app.getPath('userData'), 'teams-graph-token.bin')
-  const teamsClient = teamsClientId
-    ? new TeamsGraphClient(
-        {
-          clientId: teamsClientId,
-          tenantId: variablePerso('AUTOWIN_TEAMS_TENANT_ID') ?? 'organizations'
-        },
-        {
-          // Le jeton de renouvellement est un secret : chiffre par le systeme, jamais en clair.
-          load: () => {
-            try {
-              if (!existsSync(teamsVaultPath) || !safeStorage.isEncryptionAvailable())
-                return undefined
-              return safeStorage.decryptString(readFileSync(teamsVaultPath))
-            } catch {
-              return undefined
+  // Le jeton de renouvellement est un secret : chiffre par le systeme, jamais en clair.
+  const chargerJetonTeams = (): string | undefined => {
+    try {
+      if (!existsSync(teamsVaultPath) || !safeStorage.isEncryptionAvailable()) return undefined
+      return safeStorage.decryptString(readFileSync(teamsVaultPath))
+    } catch {
+      return undefined
+    }
+  }
+  // Graph seulement s'il est deja CONNECTE ; sinon lecture locale (sourceTeams, conv-770).
+  const modeTeams = sourceTeams({
+    clientId: teamsClientId,
+    jetonGraph: chargerJetonTeams() !== undefined,
+    windows: process.platform === 'win32'
+  })
+  console.log(`[watchdog] Teams : ${modeTeams ?? 'désactivé'}`)
+  // Seul temoin lisible apres un redemarrage : la console du processus principal est jetee (conv-770).
+  const journalTeams = creerJournalWatchdog(cheminJournalWatchdogTeams(appDataRoot))
+  // Une ligne « actif » par heure, écrite par la boucle de lecture elle-même : plus d'une heure sans
+  // elle = surveillance arrêtée (conv-770).
+  const battementTeams = creerBattementWatchdog(journalTeams)
+  journalTeams('source', {
+    mode: modeTeams ?? 'désactivé',
+    identifiantGraph: teamsClientId ? 'présent' : 'absent',
+    jetonGraph: chargerJetonTeams() !== undefined ? 'présent' : 'absent'
+  })
+  const teamsClient =
+    modeTeams === 'graph' && teamsClientId
+      ? new TeamsGraphClient(
+          {
+            clientId: teamsClientId,
+            tenantId: variablePerso('AUTOWIN_TEAMS_TENANT_ID') ?? 'organizations'
+          },
+          {
+            load: chargerJetonTeams,
+            save: (token) => {
+              if (safeStorage.isEncryptionAvailable())
+                writeFileSync(teamsVaultPath, safeStorage.encryptString(token))
             }
           },
-          save: (token) => {
-            if (safeStorage.isEncryptionAvailable())
-              writeFileSync(teamsVaultPath, safeStorage.encryptString(token))
+          (prompt) => {
+            console.log(
+              `[watchdog] connexion Teams demandée : code ${prompt.userCode} sur ${prompt.verificationUri}`
+            )
+            // Plus de fenetre (demande utilisateur conv-854, 2026-09-25) : le code reste dans le journal.
           }
-        },
-        (prompt) => {
-          console.log(
-            `[watchdog] connexion Teams demandée : code ${prompt.userCode} sur ${prompt.verificationUri}`
-          )
-          // Plus de fenetre (demande utilisateur conv-854, 2026-09-25) : le code reste dans le journal.
-        }
-      )
-    : undefined
+        )
+      : undefined
+  // Sans connexion Microsoft (conv-854, 2026-09-25) : lecture du stockage local du client Teams
+  // deja connecte, reponse en pilotant sa fenetre, repli par mail si ce pilotage echoue.
+  const teamsLocal =
+    modeTeams === 'local'
+      ? new TeamsLocalClient({
+          mail: (adresse, objet, corps) => outlookGateway.sendNew(adresse, objet, corps),
+          log: (ligne) => {
+            console.warn(ligne)
+            journalTeams('pilotage', { detail: ligne.replace(/^[watchdog]s*/, '') })
+          }
+        })
+      : undefined
+  const teamsSource = teamsClient ?? teamsLocal
   mailWatchdogReplier = async (itemId, body) => {
-    if (parseTeamsItemId(itemId))
-      return replyTeams(teamsClient, itemId, body)
+    if (parseTeamsItemId(itemId)) {
+      const resultat = await (teamsLocal
+        ? teamsLocal.reply(itemId, body)
+        : replyTeams(teamsClient, itemId, body))
+      journalTeams('reponse', {
+        conv: empreinteConversation(itemId),
+        ok: resultat.ok,
+        erreur: resultat.ok ? undefined : resultat.erreur
+      })
+      return resultat
+    }
     const sent = await outlookGateway.replyToItem(itemId, body)
     if (sent.ok) await outlookGateway.markRead([itemId])
     return sent
   }
-  // Surveillance des mails pour les regles `outlook-mail`. Interroge Outlook seulement si une regle
-  // active l'ecoute : sans elle, aucun dialogue COM supplementaire.
-  const mailDetector = new NewUnreadMailDetector()
-  const teamsDetector = new NewUnreadMailDetector()
+  // Surveillance des mails pour les regles `outlook-mail`. Un canal n'est interroge que si une regle
+  // ACTIVE l'ecoute : sans elle, aucun dialogue COM (Outlook) ni appel reseau (Teams).
+  // fix-ok: une seule regle mail active suffisait a interroger Outlook ET Teams (ancien test `.some(kind === 'outlook-mail')`), et chaque `await notifyMail` attendait la FIN de l'agent : la lecture suivante, et Teams, attendaient l'agent Outlook.
+  // Salvage 2026-09-26 : cette surveillance (conv-857) et la source Teams locale + son journal
+  // (conv-770) ont ete ecrites en parallele ; la surveillance lit desormais `teamsSource`.
+  // Le journal ne note une lecture qu'a son RETABLISSEMENT et une erreur qu'a son CHANGEMENT : pas
+  // une ligne par minute.
+  let lectureTeamsAnnoncee = false
+  let derniereErreurTeams: string | undefined
+  const mailMemoryPath = join(app.getPath('userData'), 'watchdog-mail-state.json')
+  const mailMemory = new MailWatchMemory({
+    load: () => (existsSync(mailMemoryPath) ? readFileSync(mailMemoryPath, 'utf8') : undefined),
+    save: (text) => writeFileSync(mailMemoryPath, text)
+  })
+  const mailWatcher = new MailChannelWatcher({
+    store: scheduledTasks,
+    memory: mailMemory,
+    notifyMail: async (mail) => {
+      const bilan = (await watchdogEngine?.notifyMail(mail)) ?? []
+      if (mail.channel !== 'teams') return
+      // Journal Teams (conv-770) : POURQUOI un message detecte a eu, ou non, une reponse.
+      const conv = empreinteConversation(mail.itemId)
+      const concernees = bilan.filter((b) => b.issue !== 'autre-canal')
+      if (!concernees.length) journalTeams('ignore', { conv, raison: 'aucune-regle-teams-active' })
+      for (const b of concernees)
+        journalTeams(b.issue === 'declenche' ? 'declenche' : 'refus', {
+          conv,
+          regle: b.taskId.slice(0, 8),
+          raison: b.issue === 'declenche' ? undefined : b.issue
+        })
+    }
+  })
   let mailPolling = false
   setInterval(() => {
     if (mailPolling || !watchdogEngine) return
-    const listening = scheduledTasks
-      .listTasks()
-      .some((task) => task.enabled && task.watchdog?.source?.kind === 'outlook-mail')
-    if (!listening) return
+    const listening = listeningChannels(scheduledTasks.listTasks())
+    if (!listening.outlook && !(listening.teams && teamsSource)) return
     mailPolling = true
     void (async () => {
-      try {
-        const fresh = mailDetector.next(await outlookGateway.snapshot(true))
-        for (const mail of fresh) {
-          const key = senderKey('outlook', mail)
-          if (key) rememberMailSender(scheduledTasks, 'outlook', key, mail.nom || mail.adresse || key)
-          await watchdogEngine?.notifyMail({
-            itemId: mail.id,
-            context: describeMail(mail),
-            channel: 'outlook',
-            senderKey: key
-          })
-        }
-      } catch (error) {
-        console.warn('[watchdog] lecture des mails impossible', error)
-      }
-      // Teams passe par la MEME regle : un echec Teams ne prive pas les mails, et inversement.
-      if (teamsClient) {
+      if (listening.outlook) {
         try {
-          for (const message of teamsDetector.next(await teamsClient.snapshot())) {
-            const key = senderKey('teams', message)
-            if (key) rememberMailSender(scheduledTasks, 'teams', key, message.nom || key)
-            await watchdogEngine?.notifyMail({
-              itemId: message.id,
-              context: describeTeamsMessage(message),
-              channel: 'teams',
-              senderKey: key
-            })
-          }
-        } catch (error) {
-          console.warn(
-            '[watchdog] lecture Teams impossible :',
-            error instanceof Error ? error.message : String(error)
+          await mailWatcher.watch(
+            'outlook',
+            await outlookGateway.snapshot(true),
+            async (mail, full) => {
+              if (!full) return describeMail(mail)
+              // L'instantane coupe chaque corps a 800 caracteres (tuile d'accueil) : l'agent relit donc
+              // ce seul mail en entier. Un echec de relecture garde l'apercu, et il se voit au journal.
+              // fix-ok: MaxCorps=800 dans outlook-local-snapshot.ps1 — 54 mails sur 80 coupes pile a 800 (mesure 2026-09-26), describeMail recevait donc l'apercu.
+              const complet = await outlookGateway.readBody(mail.id)
+              if (!complet.ok)
+                console.warn(
+                  '[watchdog] mail relu en entier impossible, aperçu gardé :',
+                  complet.erreur
+                )
+              return describeMail(complet.ok ? { ...mail, corps: complet.corps } : mail)
+            }
           )
+        } catch (error) {
+          console.warn('[watchdog] lecture des mails impossible', error)
+        }
+      }
+      // Un echec Teams ne prive pas les mails, et inversement. Source : Graph s'il est connecte,
+      // sinon le stockage local du client Teams (conv-770).
+      if (listening.teams && teamsSource) {
+        let snapshot: unknown
+        try {
+          const instantane = await teamsSource.snapshot()
+          snapshot = instantane
+          battementTeams(true)
+          if (!lectureTeamsAnnoncee || derniereErreurTeams !== undefined)
+            journalTeams('lecture-ok', { conversations: instantane.mails.length })
+          lectureTeamsAnnoncee = true
+          derniereErreurTeams = undefined
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          snapshot = { ok: false, erreur: message }
+          battementTeams(false)
+          console.warn('[watchdog] lecture Teams impossible :', message)
+          if (message !== derniereErreurTeams)
+            journalTeams('lecture-impossible', { erreur: message })
+          derniereErreurTeams = message
+        }
+        try {
+          await mailWatcher.watch('teams', snapshot, async (message) => {
+            journalTeams('detecte', {
+              conv: empreinteConversation(message.id),
+              recuLe: message.recuLe ?? undefined
+            })
+            return describeTeamsMessage(message)
+          })
+        } catch (error) {
+          console.warn('[watchdog] messages Teams non traités', error)
         }
       }
       mailPolling = false
@@ -3763,14 +3913,29 @@ Le fil reprend ensuite normalement.`
     ipc: ipcMain,
     store: scheduledTasks,
     scheduler: scheduledTaskScheduler,
-    watchdogDiagnostics: (taskId) => ({
-      admittedLastHour: watchdogEngine?.admittedLastHour(taskId) ?? 0,
-      ...(watchdogEngine?.complaint(taskId) ? { complaint: watchdogEngine.complaint(taskId) } : {})
-    }),
+    watchdogDiagnostics: (taskId) => {
+      const task = scheduledTasks.getTask(taskId)
+      return {
+        admittedLastHour: watchdogEngine?.admittedLastHour(taskId) ?? 0,
+        ...(watchdogEngine?.complaint(taskId)
+          ? { complaint: watchdogEngine.complaint(taskId) }
+          : {}),
+        // Pourquoi un mail n'a rien declenche : journal et lecture en panne, gardes sur le disque.
+        // Regle Teams : etat de la connexion Microsoft et code a saisir (bouton « Connecter Teams »).
+        ...(task
+          ? mailDiagnostics(
+              mailMemory,
+              task,
+              teamsClient ? teamsClient.signInState() : { state: 'unconfigured' }
+            )
+          : {})
+      }
+    },
     assertTrusted: assertTrustedRendererSender,
     onChanged: () => {
       broadcast({ type: 'refresh', scope: 'task-manager' })
-    }
+    },
+    ...(teamsClient ? { teams: teamsClient } : {})
   })
   void scheduledTaskScheduler
     .start(startupTaskOccurrence)
@@ -3810,6 +3975,10 @@ Le fil reprend ensuite normalement.`
         console.log('[watchdog] règle Assistant mails posée')
       if (splitMailWatchdogByChannel(scheduledTasks))
         console.log('[watchdog] règle mails séparée en Outlook + Teams')
+      if (retargetTeamsWatchdogPrompt(scheduledTasks))
+        console.log('[watchdog] règle Teams : consigne Teams posée')
+      if (liftLegacyMailWatchdogCaps(scheduledTasks))
+        console.log('[watchdog] règles mails : plafond relevé à 240/h, sans plafond du jour')
       if (seedCurateTask(scheduledTasks))
         console.log('[task-manager] tâche Curation quotidienne posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
@@ -3848,7 +4017,7 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:pilotChat:active', (event, rawConversationId: string) => {
     assertTrustedRendererSender(event, 'Pilot chat active probe')
     const conversationId = guardString(rawConversationId, 'conversationId')
-    return { active: Boolean(activeChatTurns.get(conversationId)) }
+    return { active: activeChatTurns.isInFlight(conversationId) }
   })
   ipcMain.handle('os:orchestrate:cancel', (event, rawConversationId: string) => {
     assertTrustedRendererSender(event, 'Orchestration cancel')

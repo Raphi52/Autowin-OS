@@ -61,6 +61,7 @@ import {
   projectPublicationNeedsRetry,
   type AutoCloseReport
 } from './run-autoclose'
+import { publierTourDeChat, type ChatTurnStart } from './chat-turn-publication'
 import { amitelBrainRoot } from './amitel-context'
 import { regimePhases } from './task-regime'
 import type { NodePhase } from './skill-pipeline'
@@ -85,7 +86,10 @@ import { WorktreeRunStateStore } from './store/worktree-run-state'
 import type { WatchdogMutationClaimsSink } from './task-manager/types'
 import type { WatchdogMutationClaims } from './task-manager/types'
 import { preparedCommitMutationEvidence } from './providers/workspace-mutation-evidence'
-import { appendExecutionEvidenceFileTrace } from './activity/conversation-file-trace-spool'
+import {
+  appendExecutionEvidenceFileTrace,
+  readRecentConversationFileTraces
+} from './activity/conversation-file-trace-spool'
 import { repositoryWorktreeIdentity } from './store/worktree-repository'
 import type {
   WorktreeAgentActivity,
@@ -720,6 +724,41 @@ export class AutowinOS {
   }
   getAutoClose(): { enabled: boolean; last?: AutoCloseReport } {
     return { enabled: this.autoClose, ...(this.lastAutoClose ? { last: this.lastAutoClose } : {}) }
+  }
+
+  /** Lu au DÉPART d'un tour de chat : la photo de l'arbre n'est prise que si l'enchaînement est actif. */
+  autoCloseEnabled(): boolean {
+    return this.autoClose
+  }
+
+  /** Une publication de tour de chat à la fois, dans l'ordre des tours : git n'aime pas le parallèle. */
+  private chatTurnPublications: Promise<unknown> = Promise.resolve()
+
+  /**
+   * Enchaînement auto d'un tour de chat TERMINÉ (voir `chat-turn-publication.ts`). Relit l'interrupteur
+   * au moment de publier : le désactiver pendant le tour suffit à ne rien pousser.
+   */
+  publishChatTurn(input: {
+    conversationId: string
+    turnId: string
+    request: string
+    debut: ChatTurnStart
+  }): Promise<AutoCloseReport | undefined> {
+    const next = this.chatTurnPublications.then(async () => {
+      if (!this.autoClose) return undefined
+      const report = await publierTourDeChat({
+        ...input,
+        traces: await readRecentConversationFileTraces()
+      })
+      if (report) {
+        this.lastAutoClose = report
+        // Même signal que la fin d'une tâche d'agent : le panneau Git relit le dernier rapport.
+        this.worktreeActivityListener?.(this.getWorktreeActivity())
+      }
+      return report
+    })
+    this.chatTurnPublications = next.catch(() => undefined)
+    return next
   }
 
   /** Met à jour la source live du fan-out (appelé par la topology au boot et à chaque changement). */
@@ -1380,8 +1419,13 @@ export class AutowinOS {
    * p95 1 288 ms / max 19 250 ms par tour le 2026-08-28. Le geste explicite de l'utilisateur
    * (Observatoire) garde `listRuns()`, lui, intact.
    */
-  async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }>> {
-    return (await scanRunsPourSnapshot()).map((r) => ({ ...r, blocked: isBlocked(r.summary) }))
+  async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }> & { horsFenetre?: number }> {
+    const fenetre = await scanRunsPourSnapshot()
+    // `horsFenetre` suit la liste : sans lui, un run bloqué plus ancien que la borne disparaît en silence.
+    return Object.assign(
+      fenetre.map((r) => ({ ...r, blocked: isBlocked(r.summary) })),
+      { horsFenetre: fenetre.horsFenetre }
+    )
   }
   kaizenPatterns(jsonl: string): ReturnType<typeof recurrentPatterns> {
     return recurrentPatterns(parseJsonl(jsonl))

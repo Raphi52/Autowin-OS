@@ -108,4 +108,41 @@ describe('ChatView — le composer est isolé : taper ne re-rend pas la vue', ()
     })
     expect(h.textarea().value).toBe('débloque @run:workflow-bench-regression ')
   })
+
+  it('au survol d’une skill de la palette `/`, un encart montre sa description ENTIÈRE', async () => {
+    // Demande utilisateur du 2026-09-26 : « quand je fais / et que je hover un skill je veux voir
+    // la full description ». Le libellé de la ligne reste court ; l'encart porte tout le texte.
+    const complete = `Chercher. ${'Une consigne longue que le libellé court ne montre pas. '.repeat(3)}Fin.`
+    h = await mountChat(
+      chatApi({
+        conversationRuns: vi.fn().mockResolvedValue([RUN]),
+        capabilityControls: vi.fn().mockResolvedValue([
+          { id: 'scout', description: complete, enabled: true },
+          { id: 'think', description: 'Court.', enabled: true }
+        ])
+      })
+    )
+    await h.click('.conv-pick')
+    await h.type('/')
+    // Constante locale : `h` (let, nullable) perd son affinage de type dans les fonctions fléchées.
+    const vue = h.container
+    const detail = (): Element | null => vue.querySelector('[data-testid="slash-detail"]')
+    const ligne = (nom: string): Element =>
+      [...vue.querySelectorAll('.slash-palette .slash-item')].find(
+        (li) => li.querySelector('.slash-name')?.textContent === `/${nom}`
+      ) as Element
+    expect(detail()).toBeNull() // au repos : aucun encart
+    expect(ligne('scout').querySelector('.slash-hint')?.textContent).toBe('Chercher.')
+
+    await act(async () => {
+      ligne('scout').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    })
+    expect(detail()?.textContent).toContain(complete)
+
+    // Une skill dont le libellé dit déjà tout n'ouvre pas d'encart redondant.
+    await act(async () => {
+      ligne('think').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    })
+    expect(detail()).toBeNull()
+  })
 })

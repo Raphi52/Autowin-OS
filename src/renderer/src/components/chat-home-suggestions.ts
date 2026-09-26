@@ -9,6 +9,7 @@
  * PUR (aucun React, aucun IPC) → testable directement. Rendu par le `SuggestionGrid` existant.
  */
 
+import { isBlocked } from '../../../shared/run-blocked'
 import type { SuggestionGroup } from './scout-suggestions'
 
 /** Le jeu historique, conservé à l'identique comme REPLI. */
@@ -20,8 +21,11 @@ export const STATIC_SUGGESTIONS = [
 ]
 
 export interface HomeSuggestionState {
-  /** Runs déjà chargés (panneau workflows). */
-  runs?: Array<{ subject: string; summary?: { status?: string } }>
+  /** Runs déjà chargés (panneau workflows), résumés par `parseRun` : statut ET compte de DoD. */
+  runs?: Array<{
+    subject: string
+    summary: { status: string; dodTotal: number; dodChecked: number }
+  }>
   /**
    * Brouillon repris (non envoyé) pour la conversation courante. Il n'est JAMAIS recopié en chip :
    * son texte vit déjà dans le composer, et l'afficher une seconde fois dans la zone de chat
@@ -30,14 +34,6 @@ export interface HomeSuggestionState {
    * des prompts sans rapport.
    */
   resumedDraft?: string | null
-}
-
-/** Un run est « à débloquer » si son statut n'est ni vert ni clos. */
-export function isBlockedRun(status?: string): boolean {
-  if (!status) return false
-  const s = status.toLowerCase()
-  if (/(green|vert|done|clos|closed|termin)/.test(s)) return false
-  return /(bloqu|blocked|open|red|rouge|fail|échec|echec)/.test(s)
 }
 
 /**
@@ -50,13 +46,18 @@ export function buildHomeSuggestions(state: HomeSuggestionState): SuggestionGrou
   // Un brouillon en cours = l'utilisateur sait déjà quoi écrire : aucune chip, pas même le repli.
   if (state.resumedDraft?.trim()) return []
 
-  const blocked = (state.runs ?? []).filter((r) => isBlockedRun(r.summary?.status)).slice(0, 3)
+  // LA règle unique (src/shared/run-blocked.ts), celle de get_state et de l'Observatoire. L'accueil
+  // avait la sienne, par motif de texte sur le seul statut : elle ignorait `unknown`, les fossiles
+  // `running`/`pending` et toute case de DoD non cochée (conv-861, 2026-09-25).
+  // Compter AVANT de couper : le sous-titre coupait la liste à 3 puis la comptait, et 7 runs
+  // bloqués s'affichaient « 3 » (conv-861, 2026-09-25). Seules les chips restent limitées à 3.
+  const blocked = (state.runs ?? []).filter((r) => isBlocked(r.summary))
   if (blocked.length > 0)
     groups.push({
       key: '⛔',
       title: 'Runs bloqués',
       subtitle: `${blocked.length}`,
-      items: blocked.map((r) => ({ label: `Débloque @run:${r.subject}` }))
+      items: blocked.slice(0, 3).map((r) => ({ label: `Débloque @run:${r.subject}` }))
     })
 
   if (groups.length === 0)

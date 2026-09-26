@@ -2,9 +2,13 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { strategiesFor, type UpdateStrategy } from '../shared/update-contract'
+import {
+  strategiesFor,
+  type IncomingCommit,
+  type UpdateStrategy
+} from '../shared/update-contract'
 
-export { strategiesFor, type UpdateStrategy }
+export { strategiesFor, type IncomingCommit, type UpdateStrategy }
 
 /**
  * Auto-update GIT au démarrage (distribution clone-and-run) : vérifie si le clone local est en retard
@@ -39,11 +43,79 @@ export interface UpdateStatus {
   branch?: string
   /** Référence de comparaison réellement utilisée (`origin/main`, ou l'upstream en repli). */
   reference?: string
+  /**
+   * Les commits qui arriveront, du plus récent au plus ancien, bornés à `INCOMING_MAX`. Absent si
+   * leur lecture a échoué : le compte `behind` reste alors la seule information, jamais un blocage.
+   */
+  incoming?: IncomingCommit[]
   error?: string
 }
 
 /** État de référence de l'équipe. Repli sur l'upstream de la branche si ce ref n'existe pas. */
 const TEAM_REFERENCE = 'origin/main'
+
+/**
+ * Bornes de la liste des commits entrants. La sonde tourne toutes les 3 minutes : lire un historique
+ * entier après des semaines d'absence n'apporterait rien de lisible dans un rail de 216 px.
+ */
+export const INCOMING_MAX = 20
+export const INCOMING_FILES_MAX = 8
+
+/** Séparateurs de `git log --format` : ni un auteur, ni un sujet, ni un chemin ne les contiennent. */
+const RECORD_SEP = '\x1e'
+const FIELD_SEP = '\x1f'
+
+/**
+ * Découpe la sortie de `git log --format=%x1e%H%x1f%an%x1f%aI%x1f%s --name-only`.
+ * Fonction PURE, pour être testée sans dépôt.
+ */
+export function parseIncomingCommits(stdout: string): IncomingCommit[] {
+  return stdout
+    .split(RECORD_SEP)
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const [header, ...lines] = record.split(/\r?\n/)
+      const [hash = '', author = '', date = '', ...subject] = header.split(FIELD_SEP)
+      const files = lines.map((line) => line.trim()).filter(Boolean)
+      return {
+        hash: hash.trim(),
+        author: author.trim(),
+        date: date.trim(),
+        // Le sujet est le DERNIER champ : s'il contenait le séparateur, on le recolle entier.
+        subject: subject.join(FIELD_SEP).trim(),
+        files: files.slice(0, INCOMING_FILES_MAX),
+        fileCount: files.length
+      }
+    })
+    .filter((commit) => commit.hash.length > 0)
+}
+
+/** Lit les commits entrants ; `undefined` si git refuse — la liste n'est qu'une aide à la décision. */
+async function readIncoming(
+  run: GitRunner,
+  cwd: string,
+  reference: string
+): Promise<IncomingCommit[] | undefined> {
+  try {
+    const { stdout } = await run(
+      [
+        '-c',
+        // Sans cela git échappe les chemins accentués en octal (« \303\251 ») : illisible à l'écran.
+        'core.quotePath=false',
+        'log',
+        `--max-count=${INCOMING_MAX}`,
+        '--format=%x1e%H%x1f%an%x1f%aI%x1f%s',
+        '--name-only',
+        `HEAD..${reference}`
+      ],
+      cwd
+    )
+    return parseIncomingCommits(stdout)
+  } catch {
+    return undefined
+  }
+}
 
 /** Détecte d'abord les conflits locaux, puis fetch et compte les commits de retard. */
 export async function checkForUpdate(
@@ -112,6 +184,7 @@ export async function checkForUpdate(
     } catch {
       /* avance illisible : on reste sur le comportement d'avant (avancer) */
     }
+    const incoming = behind > 0 ? await readIncoming(run, cwd, reference) : undefined
     return {
       available: behind > 0,
       behind,
@@ -119,7 +192,8 @@ export async function checkForUpdate(
       reference,
       dirty,
       conflicted: false,
-      strategies: strategiesFor(branch, ahead > 0, dirty)
+      strategies: strategiesFor(branch, ahead > 0, dirty),
+      ...(incoming ? { incoming } : {})
     }
   } catch (error) {
     return {

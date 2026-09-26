@@ -95,6 +95,7 @@ import { rejouerOrientations } from './orientations-rejouees'
 import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import {
+  attenteFichierAReprendre,
   deciderRelanceAuto,
   dernierTourEstUnScout,
   premierPassageLaisseSortirLeTour,
@@ -164,6 +165,7 @@ import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { ContextGaugeDetail } from './ContextGaugeIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
+import { fusionnerRelecture, relireRun } from './run-ouvert-a-jour'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   mergeLiveAndPersisted,
@@ -1276,6 +1278,12 @@ export function ChatView({
     [runs, brouillonPresent]
   )
   const [openRun, setOpenRun] = useState<OpenRunState | null>(null)
+  // Chemin du run déplié à l'instant présent : une relecture en vol vérifie dessus que
+  // l'utilisateur n'a pas replié ou changé de run pendant qu'elle lisait le disque.
+  const openRunPathRef = useRef<string | null>(null)
+  useEffect(() => {
+    openRunPathRef.current = openRun?.path ?? null
+  })
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
   // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
   const [runDetailTab, setRunDetailTab] = useState<RunDetailTab>('trace')
@@ -2078,6 +2086,23 @@ export function ChatView({
     )
     const offApp = window.api.onAppEvent((e) => {
       if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
+      /*
+       * LA LISTE DES RUNS SE RAFRAICHIT SEULE (demande du 2026-09-26 : « tout doit se rafraichir
+       * tout seul »). Le bouton « Rafraichir » du panneau Détails a disparu ; il couvrait un trou :
+       * le main n'emet `refresh/workflows` qu'en FIN de tour ou d'orchestration, alors que le RUN.md
+       * naît au démarrage (`orchestrate-start`) et avance à chaque phase. On relit donc la liste à
+       * ces battements, pour la seule conversation affichée. `refreshRuns` ignore d'elle-même une
+       * réponse périmée : deux relectures rapprochées ne se marchent pas dessus.
+       */
+      if (
+        (e.type === 'orchestrate-start' ||
+          e.type === 'orchestrate-phase' ||
+          e.type === 'orchestrate-step') &&
+        e.convId &&
+        e.convId === activeRef.current
+      ) {
+        void refreshRuns()
+      }
       if (e.type === 'toast') {
         if (e.text) {
           const text = e.text
@@ -3803,7 +3828,20 @@ export function ChatView({
       // l'envoyer. On ne fige donc pas ce tour, on le laisse passer la porte de décision.
       const allumageManuel = premierPassageLaisseSortirLeTour({
         allumageManuel: autoAllumageManuelRef.current,
-        repriseApresRedemarrage: autoRepriseApresRedemarrageRef.current
+        repriseApresRedemarrage: autoRepriseApresRedemarrageRef.current,
+        // ATTENTE DE FICHIER (conv-826, 2026-09-26) : un redémarrage tuait sa surveillance et ce gel la
+        // rendait définitive, ∞ affiché allumé. Déjà surveillée (fil rouvert) → on ne la relance pas.
+        attenteFichier:
+          !autoProgrammeesRef.current.has(activeId) &&
+          attenteFichierAReprendre({
+            depotPresent,
+            actif: true,
+            occupe: busy,
+            fil: messages,
+            brouillonPresent,
+            tourEstUnScout: dernierTourEstUnScout(messages),
+            relancesDifferees: autoDiffereesRef.current.get(activeId) ?? 0
+          }) !== null
       })
       autoAllumageManuelRef.current = false
       autoRepriseApresRedemarrageRef.current = false
@@ -4008,6 +4046,53 @@ export function ChatView({
   // On la stabilise via un ref (même pattern que forkRef), ici comme pour la relance gratuite.
   const sendRef = useRef(send)
   sendRef.current = send
+  /**
+   * LES ATTENTES DE FICHIER DES FILS ARMÉS NON AFFICHÉS, reprises au démarrage (conv-826, 2026-09-26 :
+   * « après un redémarrage, ∞ reprend tout seul l'attente d'un fichier encore attendu »).
+   *
+   * La surveillance d'un « quand X existe » est un minuteur de l'écran : un redémarrage l'efface,
+   * alors que ∞ est relu du stockage et reste allumé. Le fil affiché la reprend à son premier passage
+   * (`attenteFichierAReprendre`) ; les autres fils armés, seulement ici. Une fois par démarrage, après
+   * le chargement de la liste. Rien n'est envoyé : on reprogramme la sonde GRATUITE, qui n'envoie la
+   * suite que si le fichier existe.
+   */
+  const attentesReprisesRef = useRef(false)
+  useEffect(() => {
+    if (attentesReprisesRef.current || convs.length === 0) return
+    attentesReprisesRef.current = true
+    for (const id of autoConvs) {
+      if (id === '*' || id === activeIdAutoRef.current || !convs.some((c) => c.id === id)) continue
+      void (async () => {
+        let fil = liveMessagesRef.current.get(id)
+        if (!fil || fil.length === 0) {
+          try {
+            const detail = (await window.api.conversation(id)) as Conv | null
+            fil = hydraterFilStocke(detail?.messages ?? [])
+          } catch {
+            return
+          }
+          // Un fil rempli entre-temps (tour lancé, fil ouvert) garde SA version.
+          const recent = liveMessagesRef.current.get(id)
+          if (recent && recent.length > 0) fil = recent
+          else liveMessagesRef.current.set(id, fil)
+        }
+        // Devenu le fil affiché entre-temps : son premier passage s'en charge.
+        if (id === activeIdAutoRef.current || !autoArmePourRef.current(id)) return
+        if (autoProgrammeesRef.current.has(id) || busyConversationsRef.current.has(id)) return
+        const decision = attenteFichierAReprendre({
+          depotPresent,
+          actif: true,
+          occupe: false,
+          fil,
+          brouillonPresent: false,
+          tourEstUnScout: dernierTourEstUnScout(fil),
+          relancesDifferees: autoDiffereesRef.current.get(id) ?? 0
+        })
+        if (decision) programmerRelanceAuto(id, decision)
+      })()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convs])
   /**
    * REPRISE APRES UN REDEMARRAGE DEMANDE PAR L'AGENT (`restart_app`).
    *
@@ -4746,10 +4831,27 @@ export function ChatView({
     }
     try {
       const fichier = await window.api.readNodeFile(r.path)
-      setOpenRun({ path: fichier.path, content: fichier.content })
+      setOpenRun({ path: fichier.path, content: fichier.content, mtime: r.mtime })
     } catch (e) {
-      setOpenRun({ path: r.path, content: '', error: String(e) })
+      setOpenRun({ path: r.path, content: '', error: String(e), mtime: r.mtime })
     }
+  }
+
+  /**
+   * RELECTURE SILENCIEUSE du run déplié, déclenchée par le panneau quand la date de son RUN.md a
+   * bougé (demande du 2026-09-26 : « tout doit se rafraichir tout seul »).
+   *
+   * Différences avec `viewRun`, pour que la mise à jour ne se VOIE que par son contenu : pas
+   * d'état « Ouverture du RUN.md… », l'onglet choisi reste, et un échec de lecture garde le
+   * contenu affiché. Le détail et ses tests vivent dans `run-ouvert-a-jour.ts`.
+   * Si l'utilisateur a replié ou changé de run pendant la lecture, le résultat est jeté.
+   */
+  async function relireRunOuvert(r: RunEntry): Promise<void> {
+    const relu = await relireRun(window.api, r, openTrace, traceSilentFailure)
+    if (openRunPathRef.current !== r.path) return
+    setOpenTrace(relu.trace)
+    if (relu.montrerRunMd) setRunDetailTab('runmd')
+    setOpenRun((courant) => fusionnerRelecture(courant, r, relu.contenu))
   }
 
   /* --- rendu --- */
@@ -7117,7 +7219,6 @@ Cliquer pour choisir une autre branche.`}
             depotConversation={gitCwd}
             runsPaneWidth={runsPaneWidth}
             beginRunsResize={beginRunsResize}
-            refreshRuns={refreshRuns}
             setShowRuns={setShowRuns}
             activeId={activeId}
             send={send}
@@ -7134,6 +7235,7 @@ Cliquer pour choisir une autre branche.`}
             runs={runs}
             openRun={openRun}
             viewRun={viewRun}
+            relireRunOuvert={(r) => void relireRunOuvert(r)}
             setOpenRun={setOpenRun}
             setOpenTrace={setOpenTrace}
             requestDeleteRun={requestDeleteRun}

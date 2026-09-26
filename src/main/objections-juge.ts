@@ -54,9 +54,18 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
   const lignes = (text ?? '').split(/\r?\n/)
   const objections: string[] = []
   let dansLaSection = false
+  /*
+   * fix-ok: run-0940cc5e0fcd-1 (conv-857, 2026-09-26) reparation 13 — le juge rend VALIDE 86 ; sa puce
+   * « OK: Chaque correction annoncee existe dans le code : » porte 9 sous-puces indentees, sans etiquette
+   * propre, donc retenues comme objections : le controle final en a recite 8 en « Promis mais pas fait »
+   * et masque les 4 MINEUR. Mesure : objections.mineur.test.ts rouge (2/5) avant, vert apres.
+   * Une sous-puce (plus indentee que la puce precedente) herite donc de l'etiquette de sa parente.
+   */
+  let parente: { retrait: number; etiquette: string | null } | null = null
   for (const ligne of lignes) {
     if (ENTETE_OBJECTIONS.test(ligne)) {
       dansLaSection = true
+      parente = null
       // Forme en ligne : « OBJECTIONS: aucune » ou « OBJECTIONS: X ».
       const reste = ligne.replace(ENTETE_OBJECTIONS, '').trim()
       if (reste && !VIDE.test(normaliser(reste))) objections.push(reste)
@@ -76,12 +85,16 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
     // etaient des constats (« 54 sur 54 passent ») ou des reserves mineures devenait « Promis mais pas fait ».
     // Saisie ts 1789462078031 : le tour finit quand il n'y a plus de defaut MAJEUR. Non etiquete = majeur.
     const etiquette = ETIQUETTE.exec(contenu)
+    const retrait = (/^\s*/.exec(ligne)?.[0] ?? '').replace(/\t/g, '    ').length
+    const sousPuce = !etiquette && parente !== null && retrait > parente.retrait
+    const gravite = etiquette ? etiquette[1] : sousPuce && parente ? parente.etiquette : null
+    if (!sousPuce) parente = { retrait, etiquette: etiquette ? etiquette[1] : null }
     // Etiquette bornee au VALIDE : sur un refus, MINEUR/OK ne masquent pas les raisons (reparation 4).
     // fix-ok: conv-844 (2026-09-24) — run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont
     // une puce MINEUR etait un vrai trou (drapeau `orientation` jamais transmis par run-pilot-chat.ts).
     // Decision utilisateur : tout defaut du juge, meme MINEUR, bloque la cloture verte. Seul OK passe.
-    if (etiquette && !toutesGravites && /^ok$/i.test(etiquette[1])) continue
-    if (!etiquette && !toutesGravites && aUnMajeur) continue
+    if (gravite && !toutesGravites && /^ok$/i.test(gravite)) continue
+    if (!gravite && !toutesGravites && aUnMajeur) continue
     objections.push(etiquette ? contenu.slice(etiquette[0].length).trim() : contenu)
   }
   return objections
