@@ -185,8 +185,10 @@ import {
   readTurnJournal
 } from './runs/turn-journal'
 import {
-  listRecoverableChatProviderCalls,
+  listRecoverableChatProviderCallsAsync,
+  recoverableChatProviderCallForTurn,
   recoverCompletedChatProviderCall,
+  type RecoverableChatProviderCall,
   streamedPrefixForProviderCall,
   waitForRecoverableChatProviderExit
 } from './runs/chat-provider-recovery'
@@ -594,14 +596,29 @@ os.terminalizeAbandonedOrchestrations(
   Date.now(),
   persistedRunTerminalizationProbes
 )
-const startupRecoverableChatCalls = listRecoverableChatProviderCalls(turnJournalRoot)
-jalonDemarrage('appels chat recuperables inventories')
+/*
+ * APPELS DE CHAT À REPRENDRE : plus d'inventaire complet au chargement.
+ *
+ * fix-ok: gels.jsonl 2026-09-26T09:30, 8951 ms pendant « corps du module terminé » dont `openSync`
+ * 3438 ms dans `listUnfinishedTurns`, lancé ICI par `listRecoverableChatProviderCalls` : chaque
+ * journal de tour était ouvert en synchrone avant la fenêtre. L'hydratation ne demande plus la
+ * réponse que pour les messages restés `streaming` (un journal chacun, zéro à deux en pratique) ;
+ * les appels ainsi reconnus sont gardés pour être repris sans relecture. L'inventaire complet,
+ * non bloquant, est attendu par la boucle de reprise après `whenReady` (`registerChatIpc`).
+ */
+const appelsChatReconnusAuChargement = new Map<string, RecoverableChatProviderCall>()
+/** Un journal touché APRÈS cet instant appartient à un tour de CETTE session, pas à un survivant. */
+const debutInventaireAppelsChat = Date.now()
+const appelChatReprenable = (conversationId: string, turnId: string): boolean => {
+  const call = recoverableChatProviderCallForTurn(turnJournalRoot, conversationId, turnId)
+  if (call) appelsChatReconnusAuChargement.set(turnId, call)
+  return call !== undefined
+}
 const resumableTurnIds = new Set([
   ...os
     .resumableOrchestrations()
     .map((state) => state.turnId)
-    .filter((turnId): turnId is string => Boolean(turnId)),
-  ...startupRecoverableChatCalls.map((call) => call.turnId)
+    .filter((turnId): turnId is string => Boolean(turnId))
 ])
 /**
  * RESTITUER un run TERMINÉ après une coupure.
@@ -673,6 +690,7 @@ let flushConversations: () => void
 try {
   flushConversations = persistConversations(os.conversations, undefined, {
     resumableTurnIds,
+    appelChatReprenable,
     finishedRunOutcome: finishedRunOutcomeByTurnId
   })
 } catch (erreur) {
@@ -688,6 +706,7 @@ try {
   try {
     flushConversations = persistConversations(os.conversations, undefined, {
       resumableTurnIds,
+      appelChatReprenable,
       finishedRunOutcome: finishedRunOutcomeByTurnId
     })
   } catch (secondeErreur) {
@@ -3109,7 +3128,7 @@ Le fil reprend ensuite normalement.`
    * nouveau message d'entrer dans la même conversation pendant qu'on attend la preuve `.exit.json`.
    * Aucun timeout ne transforme une ignorance en relance : seule une sortie certifiée est traitée.
    */
-  for (const call of startupRecoverableChatCalls) {
+  const reprendreAppelChat = (call: RecoverableChatProviderCall): void => {
     const recoveryController = new AbortController()
     let resolveRecovery!: () => void
     const recoveryCompletion = new Promise<void>((resolve) => {
@@ -3218,6 +3237,23 @@ Le fil reprend ensuite normalement.`
       })()
     })
   }
+  // Les appels reconnus au chargement (message resté « en cours ») réservent leur conversation
+  // TOUT DE SUITE, avant la fenêtre : c'est eux que l'utilisateur voit tourner.
+  for (const call of appelsChatReconnusAuChargement.values()) reprendreAppelChat(call)
+  // Le reste — tour inachevé dont le message n'était pas « en cours » sur disque — vient de
+  // l'inventaire NON bloquant. La fenêtre est ouverte entre-temps : un tour lancé depuis doit
+  // garder la main, et son propre journal (touché après le chargement) n'est pas un survivant.
+  void listRecoverableChatProviderCallsAsync(turnJournalRoot).then(
+    (calls) => {
+      for (const call of calls) {
+        if (appelsChatReconnusAuChargement.has(call.turnId)) continue
+        if (call.updatedAt >= debutInventaireAppelsChat) continue
+        if (activeChatTurns.get(call.conversationId)) continue
+        reprendreAppelChat(call)
+      }
+    },
+    (erreur) => console.warn('[resume-chat-provider] inventaire impossible :', erreur)
+  )
 
   /**
    * Le balayage des copies d'agent abandonnées, RÉPÉTÉ pendant la session et non plus au seul démarrage.

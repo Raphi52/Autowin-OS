@@ -9,7 +9,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { open as ouvrirAsync, stat as statAsync } from 'node:fs/promises'
+import { open as ouvrirAsync, readFile as readFileAsync, stat as statAsync } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const SURVIVABLE_EXIT_EVENT_TYPE = 'autowin.survivable-exit'
@@ -25,6 +25,15 @@ export function survivableExitPath(journalPath: string): string {
 export function survivableExitCode(journalPath: string): number | undefined {
   try {
     return survivableExitCodeFromLine(readFileSync(survivableExitPath(journalPath), 'utf8'))
+  } catch {
+    return undefined
+  }
+}
+
+/** Version non bloquante de `survivableExitCode`, pour les inventaires de démarrage. */
+export async function survivableExitCodeAsync(journalPath: string): Promise<number | undefined> {
+  try {
+    return survivableExitCodeFromLine(await readFileAsync(survivableExitPath(journalPath), 'utf8'))
   } catch {
     return undefined
   }

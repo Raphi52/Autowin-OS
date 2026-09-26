@@ -727,6 +727,8 @@ export function persistConversations(
    */
   options?: {
     resumableTurnIds?: ReadonlySet<string>
+    /** Appel de chat reprenable, demandé tour par tour — voir `ConversationStore.hydrate`. */
+    appelChatReprenable?: (conversationId: string, turnId: string) => boolean
     /** Issue d'un run déjà terminé — voir `ConversationStore.hydrate`. */
     finishedRunOutcome?: (turnId: string) => FinishedRunOutcome | undefined
   }

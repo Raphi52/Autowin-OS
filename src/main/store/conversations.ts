@@ -538,6 +538,12 @@ export class ConversationStore {
     options?: {
       resumableTurnIds?: ReadonlySet<string>
       /**
+       * Appel de chat direct dont le CLI a survécu : posée pour les seuls tours restés `streaming`,
+       * avec la conversation qui situe leur journal. Remplace un inventaire COMPLET des journaux
+       * fait avant le chargement (8951 ms de gel, gels.jsonl 2026-09-26T09:30).
+       */
+      appelChatReprenable?: (conversationId: string, turnId: string) => boolean
+      /**
        * Issue d'un run DÉJÀ TERMINÉ, lue dans son état persisté. Absente de `resumableTurnIds` pour
        * la raison inverse de l'interruption : plus rien ne reprend parce que tout est fini. Sans
        * elle, le fil annonçait « interrompu » sur un travail vert et publié, et n'en disait rien
@@ -614,7 +620,11 @@ export class ConversationStore {
           // réellement prendre la main. Conserver l'état streaming intact évite deux mensonges :
           // afficher « interrompu » pendant que le CLI travaille encore, et marquer ses actions en
           // vol comme définitivement interrompues avant que leur résultat récupéré soit réinjecté.
-          if (message.turnId && resumable?.has(message.turnId)) return message
+          if (
+            message.turnId &&
+            (resumable?.has(message.turnId) || options?.appelChatReprenable?.(c.id, message.turnId))
+          )
+            return message
           const interrupted: Msg = {
             ...message,
             status: 'interrupted' as const,

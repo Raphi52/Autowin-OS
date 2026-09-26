@@ -2688,4 +2688,11 @@ describe('câblage — le chargement des conversations connaît les runs reprena
     expect(source).toContain('resumableTurnIds')
     expect(source).toMatch(/persistConversations\(\s*os\.conversations/)
   })
+
+  it('les appels de chat ne sont plus inventoriés en synchrone au chargement', () => {
+    // gels.jsonl 2026-09-26T09:30 : 8951 ms, dont openSync 3438 ms dans l'inventaire complet.
+    expect(source).not.toContain('listRecoverableChatProviderCalls(')
+    expect(source).toContain('appelChatReprenable,')
+    expect(source).toContain('listRecoverableChatProviderCallsAsync(turnJournalRoot)')
+  })
 })

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { appendTurnEvent, readTurnJournal } from './turn-journal'
 import { writeSurvivableExit } from './stdout-journal'
 import {
-  listRecoverableChatProviderCalls,
+  listRecoverableChatProviderCallsAsync,
   recoverCompletedChatProviderCall,
   streamedPrefixForProviderCall,
   waitForRecoverableChatProviderExit
@@ -41,7 +41,7 @@ function claudeSuccess(path: string, text: string): void {
 }
 
 describe('reprise des appels provider du chat direct', () => {
-  it('retrouve le dernier journal lie a un tour non terminal et son prefixe visible', () => {
+  it('retrouve le dernier journal lie a un tour non terminal et son prefixe visible', async () => {
     root = mkdtempSync(join(tmpdir(), 'autowin-chat-provider-recovery-'))
     const journalPath = join(root, 'provider.stdout.jsonl')
     appendTurnEvent(root, 'conv-1', 'turn-1', {
@@ -66,7 +66,7 @@ describe('reprise des appels provider du chat direct', () => {
       text: 'visible'
     })
 
-    const calls = listRecoverableChatProviderCalls(root)
+    const calls = await listRecoverableChatProviderCallsAsync(root)
     expect(calls).toEqual([
       expect.objectContaining({
         conversationId: 'conv-1',
@@ -86,7 +86,7 @@ describe('reprise des appels provider du chat direct', () => {
     )
   })
 
-  it('refuse une reprise dont la politique persistée est invalide (fail-closed)', () => {
+  it('refuse une reprise dont la politique persistée est invalide (fail-closed)', async () => {
     root = mkdtempSync(join(tmpdir(), 'autowin-chat-provider-policy-'))
     appendTurnEvent(root, 'conv-1', 'turn-1', {
       kind: 'provider-journal',
@@ -100,10 +100,10 @@ describe('reprise des appels provider du chat direct', () => {
       policy: { readOnly: true, maxIterations: 0 }
     })
 
-    expect(listRecoverableChatProviderCalls(root)).toEqual([])
+    expect(await listRecoverableChatProviderCallsAsync(root)).toEqual([])
   })
 
-  it('ne retombe jamais sur un ancien essai quand le journal provider le plus récent est invalide', () => {
+  it('ne retombe jamais sur un ancien essai quand le journal provider le plus récent est invalide', async () => {
     root = mkdtempSync(join(tmpdir(), 'autowin-chat-provider-chain-policy-'))
     appendTurnEvent(root, 'conv-1', 'turn-1', {
       kind: 'provider-journal',
@@ -127,10 +127,10 @@ describe('reprise des appels provider du chat direct', () => {
       policy: { readOnly: true, maxIterations: 0 }
     })
 
-    expect(listRecoverableChatProviderCalls(root)).toEqual([])
+    expect(await listRecoverableChatProviderCallsAsync(root)).toEqual([])
   })
 
-  it('ne declare pas reprenable un provider ancien sans recu terminal', () => {
+  it('ne declare pas reprenable un provider ancien sans recu terminal', async () => {
     root = mkdtempSync(join(tmpdir(), 'autowin-chat-provider-orphan-'))
     const journalPath = join(root, 'provider.stdout.jsonl')
     writeFileSync(journalPath, '{"type":"assistant"}\n', 'utf8')
@@ -146,7 +146,7 @@ describe('reprise des appels provider du chat direct', () => {
     })
 
     expect(
-      listRecoverableChatProviderCalls(root, {
+      await listRecoverableChatProviderCallsAsync(root, {
         now: Date.now() + 2 * 60 * 60_000,
         maxUncertifiedAgeMs: 60 * 60_000
       })
@@ -156,7 +156,7 @@ describe('reprise des appels provider du chat direct', () => {
     const recentActivity = new Date(Date.now() + 90 * 60_000)
     utimesSync(journalPath, recentActivity, recentActivity)
     expect(
-      listRecoverableChatProviderCalls(root, {
+      await listRecoverableChatProviderCallsAsync(root, {
         now: Date.now() + 2 * 60 * 60_000,
         maxUncertifiedAgeMs: 60 * 60_000
       })
@@ -179,7 +179,7 @@ describe('reprise des appels provider du chat direct', () => {
     expect(result).toEqual({ kind: 'stale' })
   })
 
-  it('ignore un tour deja terminal pour ne jamais rejouer un resultat', () => {
+  it('ignore un tour deja terminal pour ne jamais rejouer un resultat', async () => {
     root = mkdtempSync(join(tmpdir(), 'autowin-chat-provider-terminal-'))
     appendTurnEvent(root, 'conv-1', 'turn-1', {
       kind: 'provider-journal',
@@ -193,10 +193,10 @@ describe('reprise des appels provider du chat direct', () => {
     })
     appendTurnEvent(root, 'conv-1', 'turn-1', { kind: 'done' })
 
-    expect(listRecoverableChatProviderCalls(root)).toEqual([])
+    expect(await listRecoverableChatProviderCallsAsync(root)).toEqual([])
   })
 
-  it('rattache au provider les actions deja resolues avant un second crash', () => {
+  it('rattache au provider les actions deja resolues avant un second crash', async () => {
     root = mkdtempSync(join(tmpdir(), 'autowin-chat-provider-settled-action-'))
     const journalPath = join(root, 'provider.stdout.jsonl')
     appendTurnEvent(root, 'conv-1', 'turn-1', {
@@ -233,7 +233,7 @@ describe('reprise des appels provider du chat direct', () => {
       ]
     })
 
-    expect(listRecoverableChatProviderCalls(root)).toEqual([
+    expect(await listRecoverableChatProviderCallsAsync(root)).toEqual([
       expect.objectContaining({
         token: 'paid-call',
         settledActions: [
