@@ -92,7 +92,12 @@ describe('jetonsDeCauseParFichier — la cause se DECLARE, elle ne se suppose pa
 
   it('refuse de trancher un nom AMBIGU porte par deux fichiers edites', async () => {
     const texte = 'fix-ok: index.ts corrige.'
-    const edites = ['src/main/index.ts', 'src/renderer/index.ts']
+    // Chemins SANS historique git : la source 3 lit le dernier changement REEL du fichier.
+    // fix-ok: mesure le 2026-09-26 (run-0940cc5e0fcd-1) — avec 'src/main/index.ts', ce test echouait des qu'un `fix-ok:` venait d'etre ajoute au vrai src/main/index.ts (diff non commite, ou dernier commit sur n'importe quelle branche) : rouge dans la copie de travail, vert sur 8cae4db1.
+    const edites = [
+      'src/zz-sans-historique/main/index.ts',
+      'src/zz-sans-historique/renderer/index.ts'
+    ]
     expect(await jetonsDeCauseParFichier(texte, [], edites)).toEqual({})
   })
 

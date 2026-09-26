@@ -406,6 +406,32 @@
   font-size: 11px;
 }
 
+/* Journal de la surveillance mails : pleine largeur, une ligne par message. */
+.task-manager-facts > .task-manager-mail-log-card {
+  grid-column: 1 / -1;
+}
+
+.task-manager-mail-log {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 14px;
+}
+
+/* Interrupteurs par personne du detail d'une regle mails / Teams : a la ligne quand c'est etroit.
+   fix-ok: le detail d'une regle mails n'avait aucun interrupteur par personne (TaskManagerView.test.tsx rouge « interrupteur de Bob absent du détail », 2026-09-26). */
+.task-manager-mail-senders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.task-manager-teams-code {
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 1px;
+  user-select: all;
+}
+
 .task-manager-history {
   margin-top: 14px;
 }

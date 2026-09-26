@@ -247,3 +247,72 @@ describe('WatchdogRuleFields — action et largeur de cascade', () => {
     expect(current.guards.maxPerRoot).toBe(1)
   })
 })
+
+// Piste n°12 du repérage du 2026-09-26 : aucun test d'écran ne couvrait le choix du canal ni les
+// interrupteurs par personne (recherche « sender », « channel », « canal » : 0 résultat).
+// fix-ok: mesuré le 2026-09-26 — WatchdogRuleFields.tsx cassé à la main (interrupteur qui garde l'ancienne valeur, canal Teams ignoré) : ces 2 tests rouges, 17 autres verts ; fichier restauré (diff vide).
+describe('WatchdogRuleFields — règle mails / Teams', () => {
+  const mailRule: WatchdogRule = {
+    source: {
+      kind: 'outlook-mail',
+      channel: 'outlook',
+      senders: {
+        'bob@x.fr': { name: 'Bob', enabled: true },
+        'teams:id:42': { name: 'Alice Martin', enabled: true }
+      }
+    },
+    guards: { ...DEFAULT_DRAFT_GUARDS }
+  }
+
+  it('choisit le canal écouté, et « les deux » retire le canal', () => {
+    render(structuredClone(mailRule))
+    type(field<HTMLSelectElement>('watchdog-mail-channel'), 'teams')
+    expect(current.source).toMatchObject({ kind: 'outlook-mail', channel: 'teams' })
+
+    render(current)
+    type(field<HTMLSelectElement>('watchdog-mail-channel'), 'both')
+    expect(current.source.kind).toBe('outlook-mail')
+    expect(current.source).not.toHaveProperty('channel')
+    // Changer de canal ne perd pas les interrupteurs déjà réglés.
+    expect(current.source).toMatchObject({
+      senders: mailRule.source.kind === 'outlook-mail' ? mailRule.source.senders : {}
+    })
+  })
+
+  it('décocher une personne envoie enabled: false pour elle seule', () => {
+    render(structuredClone(mailRule))
+    const bob = [...field('watchdog-senders').querySelectorAll('label')].find((label) =>
+      label.textContent?.includes('Bob')
+    )
+    if (!bob) throw new Error('interrupteur de Bob absent')
+
+    act(() => bob.querySelector('input')!.click())
+
+    expect(current.source).toMatchObject({
+      senders: {
+        'bob@x.fr': { name: 'Bob', enabled: false },
+        'teams:id:42': { name: 'Alice Martin', enabled: true }
+      }
+    })
+    // L'identifiant Microsoft d'une personne Teams n'est pas montré : seul son nom l'est.
+    expect(field('watchdog-senders').textContent).not.toContain('teams:id:42')
+  })
+
+  // Piste n°10 : « nouvelle personne = on lui répond » devient un réglage, « répondre » par défaut.
+  it('règle les nouvelles personnes : « ignorer » se garde, « répondre » retire le réglage', () => {
+    render(structuredClone(mailRule))
+    const select = field<HTMLSelectElement>('watchdog-mail-new-senders')
+    expect(select.value).toBe('reply')
+
+    type(select, 'ignore')
+    expect(current.source).toMatchObject({ kind: 'outlook-mail', newSenders: 'ignore' })
+
+    render(current)
+    type(field<HTMLSelectElement>('watchdog-mail-new-senders'), 'reply')
+    expect(current.source).not.toHaveProperty('newSenders')
+    // Les interrupteurs déjà réglés ne bougent pas.
+    expect(current.source).toMatchObject({
+      senders: mailRule.source.kind === 'outlook-mail' ? mailRule.source.senders : {}
+    })
+  })
+})

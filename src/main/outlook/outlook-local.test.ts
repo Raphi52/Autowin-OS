@@ -441,3 +441,54 @@ describe('message NEUF depuis l accueil', () => {
     await expect(readFile(corpsPathVu, 'utf8')).rejects.toThrow()
   })
 })
+
+describe('texte entier d un seul message, pour la regle Assistant mails', () => {
+  // L'instantane coupe chaque corps a 800 caracteres (54 mails sur 80, mesure 2026-09-26) : l'agent
+  // qui repond a un mail ne lisait que son debut. Il relit donc ce seul mail en entier.
+  // fix-ok: outlook-local.ts et electron-builder.yml remis a HEAD (sans readBody ni la ligne asarUnpack du script corps) : ces 4 tests echouent, 44 autres passent (4 failed | 48, mesure 2026-09-26) ; restaures : 48/48.
+  const ID = 'ABCDEF0123456789ABCDEF'
+
+  it('rend le corps entier ecrit par le script, sans passer par l instantane', async () => {
+    const long = 'é'.repeat(5_000)
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const lecteurCorps = vi.fn(
+      async (_script: string, id: string, outPath: string, max: number) => {
+        expect(id).toBe(ID)
+        expect(max).toBe(8_000)
+        await writeFile(outPath, JSON.stringify({ ok: true, corps: long }), 'utf8')
+      }
+    )
+    const passerelle = new OutlookLocalGateway({
+      appRoot: await racineFactice(),
+      runner,
+      lecteurCorps
+    })
+    const resultat = await passerelle.readBody(ID)
+    expect(resultat).toEqual({ ok: true, corps: long })
+    expect(lecteurCorps.mock.calls[0][0]).toMatch(/outlook-local-corps\.ps1$/)
+    expect(runner).not.toHaveBeenCalled()
+  })
+
+  it('refuse un identifiant qui n a pas la forme d un element Outlook, sans lancer le script', async () => {
+    const lecteurCorps = vi.fn(async () => {})
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), lecteurCorps })
+    expect((await passerelle.readBody('pas un id')).ok).toBe(false)
+    expect(lecteurCorps).not.toHaveBeenCalled()
+  })
+
+  it('nomme la panne quand le script echoue', async () => {
+    const lecteurCorps = vi.fn(async (_s: string, _i: string, outPath: string) => {
+      await writeFile(outPath, JSON.stringify({ ok: false, erreur: 'element introuvable' }), 'utf8')
+    })
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), lecteurCorps })
+    expect(await passerelle.readBody(ID)).toEqual({ ok: false, erreur: 'element introuvable' })
+  })
+
+  it('le script est extrait de l archive au packaging, sinon l app installee ne le trouve pas', async () => {
+    // resolveOutlookScriptPath vise `app.asar.unpacked` : un script absent d'`asarUnpack` reste DANS
+    // app.asar, que PowerShell ne sait pas ouvrir (dist/win-unpacked du 2026-09-23 : ui-capture.mjs
+    // y est range sans extraction, outlook-local-open.ps1 est marque extrait).
+    const config = await readFile(join(process.cwd(), 'electron-builder.yml'), 'utf8')
+    expect(config).toContain('- scripts/outlook-local-corps.ps1')
+  })
+})

@@ -25,6 +25,8 @@ export type WatchdogSource =
       channel?: 'outlook' | 'teams'
       /** Interlocuteurs déjà vus ; `enabled: false` = la règle ne leur répond pas. */
       senders?: Record<string, { name: string; enabled: boolean }>
+      /** Personne jamais vue : absent = on lui répond ; `ignore` = ajoutée décochée. */
+      newSenders?: 'reply' | 'ignore'
     }
 
 export interface WatchdogGuards {

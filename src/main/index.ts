@@ -376,10 +376,13 @@ import { seedMaintenanceTask } from './task-manager/maintenance-seed'
 import { seedGcTask } from './task-manager/gc-seed'
 import { seedCurateTask } from './task-manager/curate-seed'
 import {
-  NewUnreadMailDetector,
+  MailChannelWatcher,
+  MailWatchMemory,
   describeMail,
-  rememberMailSender,
-  senderKey,
+  liftLegacyMailWatchdogCaps,
+  listeningChannels,
+  mailDiagnostics,
+  retargetTeamsWatchdogPrompt,
   splitMailWatchdogByChannel,
   seedMailWatchdogTask
 } from './task-manager/watchdog-mail'
@@ -3725,76 +3728,99 @@ Le fil reprend ensuite normalement.`
     if (sent.ok) await outlookGateway.markRead([itemId])
     return sent
   }
-  // Surveillance des mails pour les regles `outlook-mail`. Interroge Outlook seulement si une regle
-  // active l'ecoute : sans elle, aucun dialogue COM supplementaire.
-  const mailDetector = new NewUnreadMailDetector()
-  const teamsDetector = new NewUnreadMailDetector()
+  // Surveillance des mails pour les regles `outlook-mail`. Un canal n'est interroge que si une regle
+  // ACTIVE l'ecoute : sans elle, aucun dialogue COM (Outlook) ni appel reseau (Teams).
+  // fix-ok: une seule regle mail active suffisait a interroger Outlook ET Teams (ancien test `.some(kind === 'outlook-mail')`), et chaque `await notifyMail` attendait la FIN de l'agent : la lecture suivante, et Teams, attendaient l'agent Outlook.
+  // Salvage 2026-09-26 : cette surveillance (conv-857) et la source Teams locale + son journal
+  // (conv-770) ont ete ecrites en parallele ; la surveillance lit desormais `teamsSource`.
   // Le journal ne note une lecture qu'a son RETABLISSEMENT et une erreur qu'a son CHANGEMENT : pas
   // une ligne par minute.
   let lectureTeamsAnnoncee = false
   let derniereErreurTeams: string | undefined
+  const mailMemoryPath = join(app.getPath('userData'), 'watchdog-mail-state.json')
+  const mailMemory = new MailWatchMemory({
+    load: () => (existsSync(mailMemoryPath) ? readFileSync(mailMemoryPath, 'utf8') : undefined),
+    save: (text) => writeFileSync(mailMemoryPath, text)
+  })
+  const mailWatcher = new MailChannelWatcher({
+    store: scheduledTasks,
+    memory: mailMemory,
+    notifyMail: async (mail) => {
+      const bilan = (await watchdogEngine?.notifyMail(mail)) ?? []
+      if (mail.channel !== 'teams') return
+      // Journal Teams (conv-770) : POURQUOI un message detecte a eu, ou non, une reponse.
+      const conv = empreinteConversation(mail.itemId)
+      const concernees = bilan.filter((b) => b.issue !== 'autre-canal')
+      if (!concernees.length) journalTeams('ignore', { conv, raison: 'aucune-regle-teams-active' })
+      for (const b of concernees)
+        journalTeams(b.issue === 'declenche' ? 'declenche' : 'refus', {
+          conv,
+          regle: b.taskId.slice(0, 8),
+          raison: b.issue === 'declenche' ? undefined : b.issue
+        })
+    }
+  })
   let mailPolling = false
   setInterval(() => {
     if (mailPolling || !watchdogEngine) return
-    const listening = scheduledTasks
-      .listTasks()
-      .some((task) => task.enabled && task.watchdog?.source?.kind === 'outlook-mail')
-    if (!listening) return
+    const listening = listeningChannels(scheduledTasks.listTasks())
+    if (!listening.outlook && !(listening.teams && teamsSource)) return
     mailPolling = true
     void (async () => {
-      try {
-        const fresh = mailDetector.next(await outlookGateway.snapshot(true))
-        for (const mail of fresh) {
-          const key = senderKey('outlook', mail)
-          if (key) rememberMailSender(scheduledTasks, 'outlook', key, mail.nom || mail.adresse || key)
-          await watchdogEngine?.notifyMail({
-            itemId: mail.id,
-            context: describeMail(mail),
-            channel: 'outlook',
-            senderKey: key
-          })
+      if (listening.outlook) {
+        try {
+          await mailWatcher.watch(
+            'outlook',
+            await outlookGateway.snapshot(true),
+            async (mail, full) => {
+              if (!full) return describeMail(mail)
+              // L'instantane coupe chaque corps a 800 caracteres (tuile d'accueil) : l'agent relit donc
+              // ce seul mail en entier. Un echec de relecture garde l'apercu, et il se voit au journal.
+              // fix-ok: MaxCorps=800 dans outlook-local-snapshot.ps1 — 54 mails sur 80 coupes pile a 800 (mesure 2026-09-26), describeMail recevait donc l'apercu.
+              const complet = await outlookGateway.readBody(mail.id)
+              if (!complet.ok)
+                console.warn(
+                  '[watchdog] mail relu en entier impossible, aperçu gardé :',
+                  complet.erreur
+                )
+              return describeMail(complet.ok ? { ...mail, corps: complet.corps } : mail)
+            }
+          )
+        } catch (error) {
+          console.warn('[watchdog] lecture des mails impossible', error)
         }
-      } catch (error) {
-        console.warn('[watchdog] lecture des mails impossible', error)
       }
-      // Teams passe par la MEME regle : un echec Teams ne prive pas les mails, et inversement.
-      if (teamsSource) {
+      // Un echec Teams ne prive pas les mails, et inversement. Source : Graph s'il est connecte,
+      // sinon le stockage local du client Teams (conv-770).
+      if (listening.teams && teamsSource) {
+        let snapshot: unknown
         try {
           const instantane = await teamsSource.snapshot()
+          snapshot = instantane
           battementTeams(true)
           if (!lectureTeamsAnnoncee || derniereErreurTeams !== undefined)
             journalTeams('lecture-ok', { conversations: instantane.mails.length })
           lectureTeamsAnnoncee = true
           derniereErreurTeams = undefined
-          for (const message of teamsDetector.next(instantane)) {
-            const key = senderKey('teams', message)
-            if (key) rememberMailSender(scheduledTasks, 'teams', key, message.nom || key)
-            const conv = empreinteConversation(message.id)
-            journalTeams('detecte', { conv, recuLe: message.recuLe ?? undefined })
-            const bilan =
-              (await watchdogEngine?.notifyMail({
-                itemId: message.id,
-                context: describeTeamsMessage(message),
-                channel: 'teams',
-                senderKey: key
-              })) ?? []
-            const concernees = bilan.filter((b) => b.issue !== 'autre-canal')
-            if (!concernees.length)
-              journalTeams('ignore', { conv, raison: 'aucune-regle-teams-active' })
-            for (const b of concernees)
-              journalTeams(b.issue === 'declenche' ? 'declenche' : 'refus', {
-                conv,
-                regle: b.taskId.slice(0, 8),
-                raison: b.issue === 'declenche' ? undefined : b.issue
-              })
-          }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
+          snapshot = { ok: false, erreur: message }
           battementTeams(false)
           console.warn('[watchdog] lecture Teams impossible :', message)
           if (message !== derniereErreurTeams)
             journalTeams('lecture-impossible', { erreur: message })
           derniereErreurTeams = message
+        }
+        try {
+          await mailWatcher.watch('teams', snapshot, async (message) => {
+            journalTeams('detecte', {
+              conv: empreinteConversation(message.id),
+              recuLe: message.recuLe ?? undefined
+            })
+            return describeTeamsMessage(message)
+          })
+        } catch (error) {
+          console.warn('[watchdog] messages Teams non traités', error)
         }
       }
       mailPolling = false
@@ -3851,14 +3877,29 @@ Le fil reprend ensuite normalement.`
     ipc: ipcMain,
     store: scheduledTasks,
     scheduler: scheduledTaskScheduler,
-    watchdogDiagnostics: (taskId) => ({
-      admittedLastHour: watchdogEngine?.admittedLastHour(taskId) ?? 0,
-      ...(watchdogEngine?.complaint(taskId) ? { complaint: watchdogEngine.complaint(taskId) } : {})
-    }),
+    watchdogDiagnostics: (taskId) => {
+      const task = scheduledTasks.getTask(taskId)
+      return {
+        admittedLastHour: watchdogEngine?.admittedLastHour(taskId) ?? 0,
+        ...(watchdogEngine?.complaint(taskId)
+          ? { complaint: watchdogEngine.complaint(taskId) }
+          : {}),
+        // Pourquoi un mail n'a rien declenche : journal et lecture en panne, gardes sur le disque.
+        // Regle Teams : etat de la connexion Microsoft et code a saisir (bouton « Connecter Teams »).
+        ...(task
+          ? mailDiagnostics(
+              mailMemory,
+              task,
+              teamsClient ? teamsClient.signInState() : { state: 'unconfigured' }
+            )
+          : {})
+      }
+    },
     assertTrusted: assertTrustedRendererSender,
     onChanged: () => {
       broadcast({ type: 'refresh', scope: 'task-manager' })
-    }
+    },
+    ...(teamsClient ? { teams: teamsClient } : {})
   })
   void scheduledTaskScheduler
     .start(startupTaskOccurrence)
@@ -3898,6 +3939,10 @@ Le fil reprend ensuite normalement.`
         console.log('[watchdog] règle Assistant mails posée')
       if (splitMailWatchdogByChannel(scheduledTasks))
         console.log('[watchdog] règle mails séparée en Outlook + Teams')
+      if (retargetTeamsWatchdogPrompt(scheduledTasks))
+        console.log('[watchdog] règle Teams : consigne Teams posée')
+      if (liftLegacyMailWatchdogCaps(scheduledTasks))
+        console.log('[watchdog] règles mails : plafond relevé à 240/h, sans plafond du jour')
       if (seedCurateTask(scheduledTasks))
         console.log('[task-manager] tâche Curation quotidienne posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc

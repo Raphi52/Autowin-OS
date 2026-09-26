@@ -156,12 +156,32 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
               <option value="both">Outlook et Teams</option>
             </select>
           </label>
+          <label className="task-manager-field task-manager-field-wide">
+            <span>Nouvelle personne qui écrit</span>
+            <select
+              value={source.newSenders ?? 'reply'}
+              data-testid="watchdog-mail-new-senders"
+              onChange={(event) => {
+                const { newSenders: _old, ...rest } = source
+                void _old
+                onChange({
+                  ...rule,
+                  source: event.target.value === 'ignore' ? { ...rest, newSenders: 'ignore' } : rest
+                })
+              }}
+            >
+              <option value="reply">L’agent lui répond (cochée)</option>
+              <option value="ignore">Ignorée jusqu’à ce que je la coche</option>
+            </select>
+          </label>
           <fieldset className="task-manager-field task-manager-field-wide watchdog-events watchdog-senders" data-testid="watchdog-senders">
             <legend>Interlocuteurs — cochés = l’agent leur répond</legend>
             {Object.keys(source.senders ?? {}).length === 0 ? (
               <p className="watchdog-fields-note">
                 Aucun interlocuteur encore vu. Chaque nouvelle personne qui écrit apparaît ici,
-                cochée par défaut : décoche-la pour que l’agent ne lui réponde plus.
+                {source.newSenders === 'ignore'
+                  ? ' décochée : coche-la pour que l’agent lui réponde.'
+                  : ' cochée par défaut : décoche-la pour que l’agent ne lui réponde plus.'}
               </p>
             ) : (
               Object.entries(source.senders ?? {})

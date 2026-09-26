@@ -119,6 +119,8 @@ export interface OutlookGatewayOptions {
   ) => Promise<number>
   /** Idem pour le MARQUAGE LU. Les identifiants passent par un fichier, un par ligne. */
   marqueur?: (scriptPath: string, idsPath: string) => Promise<number>
+  /** Idem pour la lecture du texte ENTIER d'un seul message. Le script écrit son JSON dans `outPath`. */
+  lecteurCorps?: (scriptPath: string, id: string, outPath: string, max: number) => Promise<void>
   /**
    * Idem pour un message NEUF. Objet, corps et LISTE DE PIECES JOINTES passent par des fichiers,
    * pas en arguments. `piecesPath` est absent quand le message n'a aucune piece.
@@ -157,6 +159,39 @@ function defaultRunner(scriptPath: string, outPath: string): Promise<void> {
         // Le code de sortie 1 est un ÉCHEC ÉCRIT par le script : le fichier contient alors sa cause,
         // qui est plus précise que le message d'`execFile`. On laisse donc la lecture décider.
         if (error && (error as { code?: number }).code !== 1) reject(error)
+        else resolve()
+      }
+    )
+  })
+}
+
+function defaultLecteurCorps(
+  scriptPath: string,
+  id: string,
+  outPath: string,
+  max: number
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'powershell',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        '-Id',
+        id,
+        '-Out',
+        outPath,
+        '-MaxCorps',
+        String(max)
+      ],
+      { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 1024 * 1024 },
+      (error) => {
+        // Comme la lecture : un code non nul ECRIT sa cause dans le fichier, qui la dit mieux
+        // qu'`execFile`. Seule une panne sans fichier (script tue, introuvable) remonte telle quelle.
+        if (error && typeof (error as { code?: unknown }).code !== 'number') reject(error)
         else resolve()
       }
     )
@@ -383,6 +418,12 @@ export class OutlookLocalGateway {
     piecesPath?: string
   ) => Promise<number>
   private readonly marqueur: (scriptPath: string, idsPath: string) => Promise<number>
+  private readonly lecteurCorps: (
+    scriptPath: string,
+    id: string,
+    outPath: string,
+    max: number
+  ) => Promise<void>
   private readonly redacteur: (
     scriptPath: string,
     adresse: string,
@@ -402,6 +443,7 @@ export class OutlookLocalGateway {
     this.opener = options.opener ?? defaultOpener
     this.replier = options.replier ?? defaultReplier
     this.marqueur = options.marqueur ?? defaultMarqueur
+    this.lecteurCorps = options.lecteurCorps ?? defaultLecteurCorps
     this.redacteur = options.redacteur ?? defaultRedacteur
     this.now = options.now ?? (() => Date.now())
   }
@@ -443,6 +485,46 @@ export class OutlookLocalGateway {
     } catch (error) {
       return { ok: false, erreur: describeFailure(error) }
     } finally {
+      if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  /**
+   * Le texte ENTIER d'un seul message (lecture seule), borné à `max` caractères.
+   *
+   * L'instantané coupe chaque corps à 800 caractères pour la tuile d'accueil — 54 mails sur 80 l'étaient,
+   * mesure du 2026-09-26 —, et la règle « Assistant mails » ne donnait donc à l'agent que le début du
+   * mail auquel il répond. Ce chemin relit CE SEUL message, sans toucher l'instantané ni son cache.
+   * fix-ok: MaxCorps=800 (outlook-local-snapshot.ps1) coupait 54 mails sur 80 ; relus par ce chemin sur la vraie boîte le 2026-09-26 : 4008, 1007 et 1598 caractères, chacun commençant par l'aperçu.
+   */
+  async readBody(
+    id: unknown,
+    max = 8_000
+  ): Promise<{ ok: true; corps: string } | { ok: false; erreur: string }> {
+    if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
+      return { ok: false, erreur: OPEN_FAILURES[2] }
+    }
+    let dossier: string | null = null
+    try {
+      dossier = await mkdtemp(join(tmpdir(), 'autowin-outlook-corps-'))
+      const outPath = join(dossier, 'corps.json')
+      await this.lecteurCorps(this.scriptVoisin('outlook-local-corps.ps1'), id, outPath, max)
+      const parsed = JSON.parse(await readFile(outPath, 'utf8')) as {
+        ok?: unknown
+        corps?: unknown
+        erreur?: unknown
+      }
+      if (parsed?.ok === true && typeof parsed.corps === 'string')
+        return { ok: true, corps: parsed.corps }
+      return {
+        ok: false,
+        erreur:
+          typeof parsed?.erreur === 'string' ? parsed.erreur : "Outlook n'a pas rendu ce message."
+      }
+    } catch (error) {
+      return { ok: false, erreur: describeFailure(error) }
+    } finally {
+      // Le texte d'un mail ne traîne pas dans le dossier temporaire une fois lu.
       if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
     }
   }

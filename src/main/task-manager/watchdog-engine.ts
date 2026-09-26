@@ -16,6 +16,7 @@ import {
 } from './watchdog-file-source'
 import { describeFileMatch } from './watchdog-prompt'
 import { suppressionFor } from './watchdog-suppression'
+import { mailRuleHears } from './watchdog-mail'
 import type {
   ScheduledTask,
   TaskUsageSettlement,
@@ -315,33 +316,46 @@ export class WatchdogEngine {
     context: string
     channel?: 'outlook' | 'teams'
     senderKey?: string
+    /**
+     * Chaque decision, au moment ou elle est prise (AVANT la fin de l'agent) : `fired`,
+     * `sender-off`, ou le motif de refus. Sans elle, un mail ignore ne laissait aucune trace.
+     * fix-ok: les refus n'allaient que dans `this.suppressions` (memoire) et `lastSuppression` n'etait lu nulle part (grep : 0 appel hors de ce fichier) ; canal/interlocuteur coupe faisaient `continue` sans rien noter.
+     */
+    onDecision?: (taskId: string, outcome: string) => void
   }): Promise<Array<{ taskId: string; issue: string }>> {
     // Bilan par regle (conv-770, 2026-09-26) : le journal du watchdog Teams doit dire POURQUOI un
-    // message detecte n'a pas eu de reponse, pas seulement qu'il n'en a pas eu.
+    // message detecte n'a pas eu de reponse, pas seulement qu'il n'en a pas eu. Il est RENDU apres
+    // coup (fin de l'agent comprise) ; `onDecision` (conv-857) le dit AU MOMENT de la decision.
+    // Salvage 2026-09-26 : les deux voies etaient ecrites en parallele, les deux sont gardees.
     const bilan: Array<{ taskId: string; issue: string }> = []
     for (const task of this.watchdogTasks()) {
       const source = task.watchdog?.source
       if (source?.kind !== 'outlook-mail') continue
       // Regle dediee a l'autre canal : pas pour elle. Sans canal (ancienne regle) : les deux.
-      if (source.channel && mail.channel && source.channel !== mail.channel) {
+      if (!mailRuleHears(task, mail.channel, undefined)) {
         bilan.push({ taskId: task.id, issue: 'autre-canal' })
         continue
       }
       // Interlocuteur coupe par l'utilisateur : la regle ne lui repond pas.
-      if (mail.senderKey && source.senders?.[mail.senderKey]?.enabled === false) {
+      if (!mailRuleHears(task, mail.channel, mail.senderKey)) {
+        mail.onDecision?.(task.id, 'sender-off')
         bilan.push({ taskId: task.id, issue: 'interlocuteur-coupe' })
         continue
       }
       const signature = `outlook-mail:${mail.itemId}`
-      const issue = await this.fire(task, {
-        signature,
-        rootSignature: this.causalRoot.getStore() ?? signature,
-        context: mail.context,
-        depth: this.causalDepth.getStore() ?? 0,
-        source: 'outlook-mail',
-        observedAt: this.clock.now(),
-        mail: { itemId: mail.itemId }
-      })
+      const issue = await this.fire(
+        task,
+        {
+          signature,
+          rootSignature: this.causalRoot.getStore() ?? signature,
+          context: mail.context,
+          depth: this.causalDepth.getStore() ?? 0,
+          source: 'outlook-mail',
+          observedAt: this.clock.now(),
+          mail: { itemId: mail.itemId }
+        },
+        (outcome) => mail.onDecision?.(task.id, outcome)
+      )
       bilan.push({ taskId: task.id, issue })
     }
     return bilan
@@ -404,15 +418,31 @@ export class WatchdogEngine {
     }
   }
 
-  /** Rend 'declenche', ou la raison du refus (suppression, garde, orchestration en vol). */
-  private async fire(task: ScheduledTask, signal: WatchdogSignal): Promise<string> {
+  /**
+   * Rend 'declenche', ou la raison du refus (suppression, garde, orchestration en vol). `report`
+   * recoit la meme decision des qu'elle est prise ('fired' avant l'agent, ou le motif de refus).
+   */
+  private async fire(
+    task: ScheduledTask,
+    signal: WatchdogSignal,
+    report?: (outcome: string) => void
+  ): Promise<string> {
     // Avant toute garde de cadence : certains signaux ne meritent AUCUN agent, quel que soit le
     // budget. Reveiller quelqu'un sur un run que l'utilisateur vient d'annuler, sur un quota epuise
     // ou sur une API en panne, c'est depenser un agent pour une chose qu'aucun code ne repare — et,
     // pour la panne amont, le rappeler pour echouer pareil.
-    const suppression = suppressionFor(signal.signature, signal.context)
+    // Un mail ou un message Teams n'est PAS un echec d'agent : son texte est ecrit par un humain.
+    // Le passer dans ce filtre jetait sans trace « Internal Server Error », « quota exceeded »,
+    // « re-authenticate »… (3 mails ordinaires sur 4, mesure 2026-09-26). Les gardes de cadence
+    // ci-dessous continuent de s'appliquer aux mails.
+    // fix-ok: suppressionFor() rend 'upstream-outage' (« Internal Server Error ») et 'non-actionable' (« quota exceeded », « re-authenticate ») sur 3 mails humains sur 4 — test rouge 2/8 reveils avant ce garde, 8/8 apres (2026-09-26).
+    const suppression =
+      signal.source === 'outlook-mail'
+        ? undefined
+        : suppressionFor(signal.signature, signal.context)
     if (suppression) {
       this.suppressions.set(task.id, suppression)
+      report?.(suppression)
       return suppression
     }
     this.suppressions.delete(task.id)
@@ -420,6 +450,7 @@ export class WatchdogEngine {
     const singleFlight = task.watchdog?.action === 'orchestration'
     if (singleFlight && this.inFlightOrchestrations.has(task.id)) {
       this.suppressions.set(task.id, 'in-flight')
+      report?.('in-flight')
       return 'in-flight'
     }
 
@@ -430,8 +461,10 @@ export class WatchdogEngine {
     const verdict = book.admit(signal.signature, signal.depth, signal.rootSignature)
     if (!verdict.admitted) {
       this.suppressions.set(task.id, verdict.reason)
+      report?.(verdict.reason)
       return verdict.reason
     }
+    report?.('fired')
     this.notifyDiagnosticsChanged()
 
     const rememberLate: WatchdogMutationClaimsSink = (claims) => {

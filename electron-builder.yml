@@ -28,6 +28,8 @@ asarUnpack:
   - scripts/outlook-local-reply.ps1
   - scripts/outlook-local-marquer-lu.ps1
   - scripts/outlook-local-nouveau.ps1
+  # fix-ok: readBody (outlook-local.ts) lance ce script via resolveOutlookScriptPath, qui vise app.asar.unpacked ; dans dist/win-unpacked du 2026-09-23, un script non liste (ui-capture.mjs) reste DANS app.asar, un script liste (outlook-local-open.ps1) est extrait — sans cette ligne la relecture du mail entier echoue une fois l'app installee. Garde : outlook-local.test.ts « extrait de l archive » (rouge sans la ligne).
+  - scripts/outlook-local-corps.ps1
   # Même contrainte pour la petite TV du bureau caché (src/main/hdesk-tv.ts).
   - scripts/hdesk-tv.ps1
   - scripts/hdesk-observe.ps1

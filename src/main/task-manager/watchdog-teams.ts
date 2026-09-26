@@ -19,9 +19,14 @@ import type { InboxMail } from './watchdog-mail'
 
 export const TEAMS_ID_PREFIX = 'teams:'
 export const TEAMS_SCOPES = 'offline_access User.Read Chat.Read ChatMessage.Send'
-/** Delai avant de redemander un code apres un code expire ou refuse. */
-export const TEAMS_PROMPT_PAUSE_MS = 6 * 60 * 60 * 1000
 const GRAPH = 'https://graph.microsoft.com/v1.0'
+
+/** Ce que le detail de la regle Teams affiche. `unconfigured` : aucun client (pose par le cablage). */
+export type TeamsSignInState =
+  | { state: 'connected' }
+  | { state: 'code'; userCode: string; verificationUri: string; expiresAt: number }
+  | { state: 'disconnected'; erreur?: string }
+  | { state: 'unconfigured' }
 
 export interface TeamsConfig {
   clientId: string
@@ -105,6 +110,8 @@ export function chatsToSnapshot(
     mails.push({
       id: teamsItemId(chat.id, preview.id),
       nom: preview.from?.user?.displayName ?? undefined,
+      // Cle de l'interrupteur par personne : l'identifiant, pas le nom (deux homonymes, un renommage).
+      expediteurId: preview.from?.user?.id ?? undefined,
       adresse: 'Teams',
       sujet: chat.topic ?? 'Conversation Teams',
       recuLe: preview.createdDateTime ?? null,
@@ -129,13 +136,22 @@ export function describeTeamsMessage(message: InboxMail): string {
   ].join('\n')
 }
 
+/**
+ * La connexion interactive ne part QUE du bouton « Connecter Teams » (`connect`). La surveillance
+ * (`snapshot`, `reply`) n'utilise que le jeton deja obtenu : sans lui, elle echoue tout de suite avec
+ * un message qui dit quoi faire.
+ * fix-ok: mesure le 2026-09-26 (watchdog-teams.connexion.test.ts, rouge) — `snapshot()` demandait lui-meme un code a Microsoft ; ce code n'allait que dans le journal (aucun `teams-graph-token.bin` sur le poste), et la lecture attendait sa saisie jusqu'a 15 min, pendant lesquelles la boucle d'index.ts sautait la lecture Outlook.
+ */
 export class TeamsGraphClient {
   private accessToken: string | undefined
   private accessExpiresAt = 0
   private myId: string | undefined
   private signingIn: Promise<void> | undefined
-  /** Apres un code laisse sans reponse, plus aucune fenetre avant cette date (voir `token`). */
-  private promptPausedUntil = 0
+  private requestingCode: Promise<DeviceCodePrompt & { expiresAt: number }> | undefined
+  /** Code en attente de saisie, affiche dans le detail de la regle. */
+  private pendingPrompt: (DeviceCodePrompt & { expiresAt: number }) | undefined
+  /** Derniere raison de « non connecte » (code expire, refus, jeton absent). Jamais un jeton. */
+  private authError: string | undefined
 
   constructor(
     private readonly config: TeamsConfig,
@@ -185,7 +201,11 @@ export class TeamsGraphClient {
     return this.accept(tokens)
   }
 
-  private async deviceCodeSignIn(): Promise<void> {
+  private async requestDeviceCode(): Promise<{
+    deviceCode: string
+    interval: number
+    prompt: DeviceCodePrompt & { expiresAt: number }
+  }> {
     const base = `https://login.microsoftonline.com/${encodeURIComponent(this.config.tenantId)}/oauth2/v2.0`
     const code = await this.postForm(`${base}/devicecode`, {
       client_id: this.config.clientId,
@@ -193,19 +213,26 @@ export class TeamsGraphClient {
     })
     if (typeof code.device_code !== 'string' || typeof code.user_code !== 'string')
       throw new Error(`connexion Teams refusée : ${String(code.error ?? 'réponse inattendue')}`)
-    this.onDeviceCode({
-      userCode: code.user_code,
-      verificationUri: String(code.verification_uri ?? 'https://microsoft.com/devicelogin'),
-      message: String(code.message ?? '')
-    })
-    const deadline = this.now() + (Number(code.expires_in) || 900) * 1000
-    let interval = (Number(code.interval) || 5) * 1000
+    return {
+      deviceCode: code.device_code,
+      interval: (Number(code.interval) || 5) * 1000,
+      prompt: {
+        userCode: code.user_code,
+        verificationUri: String(code.verification_uri ?? 'https://microsoft.com/devicelogin'),
+        message: String(code.message ?? ''),
+        expiresAt: this.now() + (Number(code.expires_in) || 900) * 1000
+      }
+    }
+  }
+
+  private async pollDeviceCode(deviceCode: string, deadline: number, every: number): Promise<void> {
+    let interval = every
     while (this.now() < deadline) {
       await this.sleep(interval)
       const tokens = await this.postForm(this.tokenUrl(), {
         client_id: this.config.clientId,
         grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-        device_code: code.device_code
+        device_code: deviceCode
       })
       if (this.accept(tokens)) return
       if (tokens.error === 'authorization_pending') continue
@@ -218,24 +245,65 @@ export class TeamsGraphClient {
     throw new Error('connexion Teams expirée : code non saisi à temps')
   }
 
+  /**
+   * Bouton « Connecter Teams » : demande un code et le rend DES qu'il est connu ; la saisie est
+   * attendue en arriere-plan (`signInSettled`). Un 2e clic pendant l'attente rend le meme code.
+   */
+  async connect(): Promise<DeviceCodePrompt & { expiresAt: number }> {
+    if (this.signingIn && this.pendingPrompt) return this.pendingPrompt
+    this.requestingCode ??= (async () => {
+      const { deviceCode, interval, prompt } = await this.requestDeviceCode()
+      this.pendingPrompt = prompt
+      this.authError = undefined
+      this.onDeviceCode(prompt)
+      this.signingIn = this.pollDeviceCode(deviceCode, prompt.expiresAt, interval)
+        .catch((error: unknown) => {
+          this.authError = error instanceof Error ? error.message : String(error)
+        })
+        .finally(() => {
+          this.signingIn = undefined
+          this.pendingPrompt = undefined
+        })
+      return prompt
+    })().finally(() => {
+      this.requestingCode = undefined
+    })
+    return this.requestingCode
+  }
+
+  /** Fin de la connexion en cours (code saisi, expire ou refuse) ; resolu tout de suite sinon. */
+  signInSettled(): Promise<void> {
+    return this.signingIn ?? Promise.resolve()
+  }
+
+  signInState(): TeamsSignInState {
+    if (this.pendingPrompt)
+      return {
+        state: 'code',
+        userCode: this.pendingPrompt.userCode,
+        verificationUri: this.pendingPrompt.verificationUri,
+        expiresAt: this.pendingPrompt.expiresAt
+      }
+    if (this.accessToken && this.now() < this.accessExpiresAt) return { state: 'connected' }
+    if (this.authError) return { state: 'disconnected', erreur: this.authError }
+    return this.vault.load() ? { state: 'connected' } : { state: 'disconnected' }
+  }
+
   private async token(): Promise<string> {
     if (this.accessToken && this.now() < this.accessExpiresAt) return this.accessToken
-    if (await this.refresh().catch(() => false)) return this.accessToken!
-    // Un code expire ou refuse ne relance PAS de fenetre au passage suivant : sans cette pause,
-    // chaque expiration (15 min) rouvrait une fenetre — 58 fenetres constatees le 2026-09-25.
-    if (!this.signingIn && this.now() < this.promptPausedUntil)
-      throw new Error('connexion Teams en pause : dernier code non saisi, nouvelle demande plus tard')
-    // Une seule connexion interactive a la fois : la surveillance repasse toutes les minutes.
-    this.signingIn ??= this.deviceCodeSignIn()
-      .catch((error: unknown) => {
-        this.promptPausedUntil = this.now() + TEAMS_PROMPT_PAUSE_MS
-        throw error
-      })
-      .finally(() => {
-        this.signingIn = undefined
-      })
-    await this.signingIn
-    return this.accessToken!
+    if (await this.refresh().catch(() => false)) {
+      this.authError = undefined
+      return this.accessToken!
+    }
+    if (this.signingIn)
+      throw new Error(
+        'connexion Teams en attente : code affiché dans la règle Teams, pas encore saisi'
+      )
+    // Jamais de connexion interactive depuis la surveillance : elle repasse toutes les minutes.
+    this.authError ??= 'Teams non connecté'
+    throw new Error(
+      'Teams non connecté : bouton « Connecter Teams » dans le détail de la règle Teams'
+    )
   }
 
   private async graph(path: string, init?: RequestInit): Promise<Record<string, unknown>> {
