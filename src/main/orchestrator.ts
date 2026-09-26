@@ -4939,11 +4939,18 @@ ${empreinteDepot}`
        * pre-gate est en prime moins cher : cela coupe AVANT de payer le juge.
        */
       const preGate = evaluateClosure({
-        status: hookOutcome.blocked ? 'red' : cloture.status,
+        // fix-ok: conv-835 tour 8641812d-6401-4129-a6b0-13a64228e0bc (activity 04:27:22.132Z) — un hook
+        // bloquant forcait `red`, donc le refus s'ouvrait sur « Échec déjà déclaré » alors que le run
+        // n'avait rien declare : seul le fix-gate bloquait, et il porte deja sa raison (meme defaut
+        // que 11f829ad au gate final). Sans raison du hook, on garde `red` pour ne pas bloquer muet.
+        status: hookOutcome.blocked && hookOutcome.reasons.length === 0 ? 'red' : cloture.status,
         dod: cloture.dod.map((check) => ({ ...check, hasContent: true })),
         travauxNonLivres: [...travauxNonLivres]
       })
-      if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
+      if (hookOutcome.blocked) {
+        preGate.blocked = true
+        preGate.reasons.push(...hookOutcome.reasons)
+      }
       if (preGate.blocked) {
         onPhase?.({ step: 'gate' })
         push({

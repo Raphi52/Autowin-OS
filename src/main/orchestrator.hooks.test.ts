@@ -83,6 +83,20 @@ describe('HookBus branché dans l’orchestrateur (pre-green)', () => {
     expect(r.gateBlocked).toBe(true)
   })
 
+  // conv-835, tour 8641812d-6401-4129-a6b0-13a64228e0bc (activity ts 2026-09-26T04:27:22.132Z) :
+  // « Arrêté au contrôle final : Échec déjà déclaré […] ; hook fix-gate: 6 édits de … ». Le run
+  // n'avait rien déclaré : seul le hook bloquait, et son refus se lève par un passage de build.
+  it('un hook pre-green bloquant ne se double pas d’un faux « Échec déjà déclaré »', async () => {
+    const bus = new HookBus().register('pre-green', () => ({
+      block: true,
+      reason: 'hook fix-gate: 6 édits de x.mjs sans cause vérifiée'
+    }))
+    const r = await makeOrchestrator({ hooks: bus }).run('corrige le bug')
+    expect(r.gateBlocked).toBe(true)
+    expect(r.gateReasons.join('\n')).toMatch(/hook fix-gate: 6 édits de x\.mjs/)
+    expect(r.gateReasons.join('\n')).not.toMatch(/Échec déjà déclaré/)
+  })
+
   it('v2 : verifyCmd fourni → verify-replay REJOUE la commande et BLOQUE si elle échoue', async () => {
     const calls: string[] = []
     const failing: VerifyRunner = async (cmd) => {
