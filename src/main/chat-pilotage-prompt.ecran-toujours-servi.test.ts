@@ -12,6 +12,8 @@ import type { Message, SendOptions, SendResult } from './providers/types'
  * bureau cache » n'a pas ete servi (blocs systeme [constitution, pilotage, style, projectContext],
  * prompt-observability/conv-835.jsonl). Le chat a lance `Start-Process "msteams:/l/chat/..."` sur
  * l'ecran reel ; saisie ts 1790394004769 : « t'aurais du le faire en hdesk ».
+ *
+ * fix-ok: REGLES_ECRAN_UTILISATEUR n'etait servi que si tourTouchantAuVisuel(message) (chat-pilotage-prompt.ts, blocsSystemeEcran) ; defaut reinjecte le 2026-09-26 = 3 tests rouges (« expected '' to contain 'ECRAN DE L'UTILISATEUR = SON ESPACE' »), retire = 7/7 verts
  */
 const MESSAGE_DU_TOUR = 'envoi un message teams a leslie pour lui dire ou cest rangé'
 
