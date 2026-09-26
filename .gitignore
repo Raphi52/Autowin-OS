@@ -75,3 +75,7 @@ src/**/*.d.ts
 
 # Factures personnelles : hors depot
 factures/
+
+# Skill arenagame et son banc Roblox : usage personnel, hors depot (gardes sur le disque local)
+skills/arenagame/
+.arena/arenagame/

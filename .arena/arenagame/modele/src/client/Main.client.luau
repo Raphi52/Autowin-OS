@@ -1,1 +1,0 @@
--- Point d'entree client : a implementer.
