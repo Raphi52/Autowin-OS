@@ -166,7 +166,9 @@ describe('discipline de pipeline canonique', () => {
   it('annonce les options de PREUVE du harnais, et classe toutes les autres', () => {
     const source = readFileSync(new URL('../../scripts/ui-capture.mjs', import.meta.url), 'utf8')
     const optionsLues = [
-      ...new Set([...source.matchAll(/argument\((?:'|")(--[a-z-]+)(?:'|")/g)].map((m) => m[1]))
+      ...new Set(
+        [...source.matchAll(/(?:argument|drapeau)\((?:'|")(--[a-z-]+)(?:'|")/g)].map((m) => m[1])
+      )
     ].sort()
 
     // Ouvrent une preuve que rien d'autre ne donne : doivent etre NOMMEES dans la consigne, sinon
@@ -175,8 +177,13 @@ describe('discipline de pipeline canonique', () => {
     //   une preuve qu'AUCUNE navigation ne donne — la liste deroulante des themes est un <select>
     //   natif Windows, qui s'ouvre HORS de la page : aucun clic scriptable n'y choisit une option,
     //   donc un theme n'etait tout simplement pas capturable. Il appartient au contrat.
+    // `--code-dev` (2026-09-26, conv-863) : sans lui l'instance cachee lance l'application
+    //   EMPAQUETEE, qui ne contient pas la modification a prouver ; depuis une copie de travail il la
+    //   reconstruit et lance ses fichiers. C'est la seule preuve d'un changement d'interface non publie.
+    //   Lu par `drapeau(...)` (option sans valeur) : le motif ci-dessus le repere aussi.
     const CONTRAT_DE_PREUVE = [
       '--click',
+      '--code-dev',
       '--css',
       '--motion',
       '--out',

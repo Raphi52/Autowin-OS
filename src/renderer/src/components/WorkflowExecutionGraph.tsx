@@ -662,15 +662,8 @@ export function WorkflowExecutionGraph({
             ))}
           </select>
         )}
-        <button
-          className="btn btn-sm btn-ghost"
-          type="button"
-          onClick={() => void load(nodes.length === 0)}
-          title="Rafraîchir le graphe"
-          aria-label="Rafraîchir le graphe d’exécution"
-        >
-          ↻
-        </button>
+        {/* Pas de bouton « ↻ » : le graphe se recharge seul à chaque écriture de trace
+            (`causal-trace-updated`), chaque seconde en direct, et à la fin du tour. */}
       </header>
 
       {loading && nodes.length === 0 && (

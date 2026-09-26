@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RunEntry } from './ChatView'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
-import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
+import { WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
 import { StepThread } from './ChatView.parts'
 // Conflit resolu le 2026-09-15 (salvage) : le candidat importait AUSSI `RunProgress`, retire de
 // main depuis (le composant n'existe plus, seuls son CSS et son test subsistent). On ne garde donc
 // que `libelleRun`, qui rend le sujet d'un run lisible a l'affichage.
 import { libelleRun } from './run-label'
 import { RunInspector } from './RunInspector'
+import { runOuvertARelire } from './run-ouvert-a-jour'
 
 /**
  * Les objets du panneau, chacun sur son onglet : le graphe, les RUN.md, les journaux des modeles,
@@ -30,7 +31,14 @@ export type RunDetailTab = 'trace' | 'runmd'
  * contenu du RUN.md, SOIT un echec de lecture (`error`). L'echec ne passe plus par `content` :
  * il s'affichait alors comme si la pile d'erreur ETAIT le run.
  */
-export type OpenRunState = { path: string; content: string; pending?: boolean; error?: string }
+export type OpenRunState = {
+  path: string
+  content: string
+  pending?: boolean
+  error?: string
+  /** Date de modification du RUN.md lue au dernier chargement : la relecture se déclenche dessus. */
+  mtime?: number
+}
 
 import { SourceControlPane } from './SourceControlPane'
 import { WorkflowExecutionGraph, type ExecutionNodeSelection } from './WorkflowExecutionGraph'
@@ -77,7 +85,6 @@ export type WorkflowsPanelProps = {
   depotConversation?: string
   runsPaneWidth: number
   beginRunsResize: (event: React.PointerEvent<HTMLDivElement>) => void
-  refreshRuns: () => void
   setShowRuns: (value: boolean) => void
   activeId: string | null
   send: (prompt: string) => void
@@ -88,6 +95,11 @@ export type WorkflowsPanelProps = {
   runs: RunEntry[]
   openRun: OpenRunState | null
   viewRun: (r: RunEntry) => void
+  /**
+   * Relit EN SILENCE le run déplié quand son RUN.md a changé sur disque : ni état « Ouverture… »,
+   * ni changement d'onglet. Appelé par le panneau, une fois par nouvelle version du fichier.
+   */
+  relireRunOuvert: (r: RunEntry) => void
   setOpenRun: (value: OpenRunState | null) => void
   setOpenTrace: (value: OrchStep[] | null) => void
   requestDeleteRun: (run: RunEntry) => void
@@ -123,7 +135,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   const {
     runsPaneWidth,
     beginRunsResize,
-    refreshRuns,
     setShowRuns,
     activeId,
     send,
@@ -134,6 +145,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     runs,
     openRun,
     viewRun,
+    relireRunOuvert,
     setOpenRun,
     depotConversation,
     setOpenTrace,
@@ -147,6 +159,23 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   } = props
 
   const [selection, setSelection] = useState<ExecutionNodeSelection | null>(null)
+
+  /**
+   * LE RUN.md DÉPLIÉ SE RELIT SEUL quand son fichier a bougé (voir `run-ouvert-a-jour.ts`).
+   *
+   * La clé `chemin@date` n'est demandée qu'UNE fois : pendant que la relecture est en vol, la liste
+   * peut être rechargée plusieurs fois avec la même date, et chaque rendu du parent recrée
+   * `relireRunOuvert`. Sans cette clé, chacun de ces rendus relancerait la même lecture.
+   */
+  const derniereRelecture = useRef<string | null>(null)
+  const aRelire = runOuvertARelire(openRun, runs)
+  const cleRelecture = aRelire ? `${aRelire.path}@${aRelire.mtime}` : null
+  useEffect(() => {
+    if (!aRelire || !cleRelecture || derniereRelecture.current === cleRelecture) return
+    derniereRelecture.current = cleRelecture
+    relireRunOuvert(aRelire)
+  }, [aRelire, cleRelecture, relireRunOuvert])
+
   const jeton = ongletDemande?.jeton
   const tabDemande = ongletDemande?.tab
   /**
@@ -247,15 +276,10 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               </button>
             ))}
           </div>
+          {/* Plus de bouton « Rafraîchir » (demande du 2026-09-26) : la liste des runs suit les
+              événements d'orchestration et de fin de tour, le graphe chaque écriture de trace,
+              l'onglet Files ses propres événements. Tout se met à jour seul. */}
           <div className="workflow-panel-actions">
-            <button
-              className="workflow-panel-action workflow-panel-refresh"
-              onClick={refreshRuns}
-              title="Rafraîchir"
-              aria-label="Rafraîchir les runs"
-            >
-              <WorkflowRefreshIcon />
-            </button>
             <button
               className="workflow-panel-action workflow-panel-close"
               onClick={() => setShowRuns(false)}

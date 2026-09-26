@@ -31,3 +31,25 @@
   color: var(--text-faint, #7f8fa1);
   font-size: 11px;
 }
+/* Description ENTIÈRE de la skill survolée (demande du 2026-09-26), dans un encart AU-DESSUS de
+   la liste : il pousse vers le haut, la liste reste immobile sous le pointeur. Borné en hauteur
+   et défilable : le pointeur peut y entrer sans le faire disparaître (voir ChatComposer). */
+.slash-detail {
+  margin: 0 0 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--container-border, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  background: var(--surface-panel, rgba(12, 12, 14, 0.96));
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
+}
+.slash-detail-texte {
+  margin: 4px 0 0;
+  color: var(--text-muted, #a9b2c4);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

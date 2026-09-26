@@ -391,6 +391,7 @@ import {
 import { sourceTeams, TeamsLocalClient } from './task-manager/watchdog-teams-local'
 import {
   cheminJournalWatchdogTeams,
+  creerBattementWatchdog,
   creerJournalWatchdog,
   empreinteConversation
 } from './task-manager/journal-watchdog-teams'
@@ -3038,7 +3039,8 @@ Le fil reprend ensuite normalement.`
    */
   const rangerSurLePremierMessage = async (
     conversationId: string,
-    messages: Message[]
+    messages: Message[],
+    finDuTour: Promise<unknown>
   ): Promise<void> => {
     const conversation = os.conversations.get(conversationId)
     if (!conversation) return
@@ -3091,26 +3093,55 @@ Le fil reprend ensuite normalement.`
         )
         return reponse.text
       },
+      finDuTour,
+      toujoursNonRangee: () => {
+        const actuelle = os.conversations.get(conversationId)
+        return Boolean(actuelle && !actuelle.projectPath?.trim() && !actuelle.categorie?.trim())
+      },
       ranger: (chemin) => os.conversations.rangerDansDossier(conversationId, chemin),
+      // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse tant qu'elle est vierge.
       annoncer: (message) =>
-        os.conversations.append(conversationId, { role: 'assistant', content: message })
+        os.conversations.append(conversationId, {
+          role: 'assistant',
+          content: message,
+          avantLaReponseEnCours: true
+        })
     })
     if (!applique) return
     broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
     broadcast({ type: 'refresh', scope: 'conversations' })
   }
 
-  // La demande compte comme EN COURS des sa reception, rangement compris (voir trackPreparation).
+  /*
+   * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
+   *
+   * Avant, le tour ATTENDAIT l'appel au modele qui range la conversation (~5 s au premier message) :
+   * attente sans un mot, et faux « Reponse interrompue avant la fin » pendant ce trou (conv-809,
+   * conv-862). Le rangement n'est plus attendu. Il demarre APRES la bascule par chemin cite (qui
+   * prime et le rend inutile), et un rangement qui deplacerait le dossier de travail attend
+   * `finDuTour` : un tour ne change jamais de dossier en cours de route.
+   * La demande compte toujours comme EN COURS des sa reception (voir trackPreparation).
+   */
   const runPilotChat: typeof lancerTour = (...args) =>
     activeChatTurns.trackPreparation(args[2], async () => {
       const conversationId = args[2]
-      if (typeof conversationId === 'string' && conversationId.trim()) {
-        await rangerSurLePremierMessage(conversationId, args[1])
-        alignerDossierSurLaDemande(conversationId, args[1])
-        avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
-        appliquerCompteDeConversation(conversationId)
+      if (typeof conversationId !== 'string' || !conversationId.trim()) return lancerTour(...args)
+      alignerDossierSurLaDemande(conversationId, args[1])
+      avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
+      appliquerCompteDeConversation(conversationId)
+      let finirTour!: () => void
+      const finDuTour = new Promise<void>((resolve) => {
+        finirTour = resolve
+      })
+      void rangerSurLePremierMessage(conversationId, args[1], finDuTour).catch((error) => {
+        // Un rangement rate ne doit JAMAIS toucher la reponse : il est seulement journalise.
+        console.warn('[rangement] premier message non range :', error)
+      })
+      try {
+        return await lancerTour(...args)
+      } finally {
+        finirTour()
       }
-      return lancerTour(...args)
     })
   /**
    * Reprend les appels de chat dont le CLI a survécu au main. La réservation locale empêche un
@@ -3614,6 +3645,9 @@ Le fil reprend ensuite normalement.`
   console.log(`[watchdog] Teams : ${modeTeams ?? 'désactivé'}`)
   // Seul temoin lisible apres un redemarrage : la console du processus principal est jetee (conv-770).
   const journalTeams = creerJournalWatchdog(cheminJournalWatchdogTeams(appDataRoot))
+  // Une ligne « actif » par heure, écrite par la boucle de lecture elle-même : plus d'une heure sans
+  // elle = surveillance arrêtée (conv-770).
+  const battementTeams = creerBattementWatchdog(journalTeams)
   journalTeams('source', {
     mode: modeTeams ?? 'désactivé',
     identifiantGraph: teamsClientId ? 'présent' : 'absent',
@@ -3706,6 +3740,7 @@ Le fil reprend ensuite normalement.`
       if (teamsSource) {
         try {
           const instantane = await teamsSource.snapshot()
+          battementTeams(true)
           if (!lectureTeamsAnnoncee || derniereErreurTeams !== undefined)
             journalTeams('lecture-ok', { conversations: instantane.mails.length })
           lectureTeamsAnnoncee = true
@@ -3734,6 +3769,7 @@ Le fil reprend ensuite normalement.`
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
+          battementTeams(false)
           console.warn('[watchdog] lecture Teams impossible :', message)
           if (message !== derniereErreurTeams)
             journalTeams('lecture-impossible', { erreur: message })

@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   cheminJournalWatchdogTeams,
+  creerBattementWatchdog,
   creerJournalWatchdog,
-  empreinteConversation
+  empreinteConversation,
+  type ValeurJournal
 } from './journal-watchdog-teams'
 import { WatchdogEngine } from './watchdog-engine'
 import { mailWatchdogSeed } from './watchdog-mail'
@@ -62,6 +64,42 @@ describe('journal du watchdog Teams', () => {
       e
     )
     expect(empreinteConversation('teams:19:cccc@unq.gbl.spaces:1')).not.toBe(e)
+  })
+})
+
+describe('battement « toujours actif » du watchdog Teams', () => {
+  // conv-770, 2026-09-26 : le journal n'ecrit rien tant que tout va bien (derniere ligne a 11:11:23,
+  // puis silence) ; on ne distinguait pas « aucun message » de « la boucle de lecture est morte ».
+  const lignes: Array<[string, Record<string, ValeurJournal>]> = []
+  const journal = (e: string, d: Record<string, ValeurJournal> = {}): void => {
+    lignes.push([e, d])
+  }
+  afterEach(() => {
+    lignes.length = 0
+  })
+
+  it('au plus une ligne par intervalle, avec les lectures et echecs depuis la precedente', () => {
+    let t = 0
+    const battement = creerBattementWatchdog(journal, 3_600_000, () => t)
+    for (let i = 0; i < 59; i++) {
+      t += 60_000
+      battement(i !== 10) // une lecture en echec
+    }
+    expect(lignes).toEqual([]) // 59 min : pas encore d'heure pleine
+    t += 60_000
+    battement(true)
+    expect(lignes).toEqual([['actif', { lectures: 59, echecs: 1, depuisMin: 60 }]])
+    // Les compteurs repartent de zero pour l'heure suivante.
+    t += 3_600_000
+    battement(true)
+    expect(lignes[1]).toEqual(['actif', { lectures: 1, echecs: 0, depuisMin: 60 }])
+  })
+
+  it('ecrit par la BOUCLE elle-meme : sans lecture, aucune ligne, meme apres des heures', () => {
+    let t = 0
+    creerBattementWatchdog(journal, 3_600_000, () => t)
+    t += 5 * 3_600_000
+    expect(lignes).toEqual([]) // l'absence de ligne « actif » est le signal d'une boucle arretee
   })
 })
 

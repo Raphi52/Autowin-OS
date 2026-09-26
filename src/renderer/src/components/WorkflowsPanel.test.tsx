@@ -41,7 +41,6 @@ function baseProps(overrides: Partial<WorkflowsPanelProps> = {}): WorkflowsPanel
     runsPaneWidth: 320,
     messages: [],
     beginRunsResize: vi.fn(),
-    refreshRuns: vi.fn(),
     setShowRuns: vi.fn(),
     activeId: 'conv-1',
     send: vi.fn(),
@@ -52,6 +51,7 @@ function baseProps(overrides: Partial<WorkflowsPanelProps> = {}): WorkflowsPanel
     runs: [],
     openRun: null,
     viewRun: vi.fn(),
+    relireRunOuvert: vi.fn(),
     setOpenRun: vi.fn(),
     setOpenTrace: vi.fn(),
     requestDeleteRun: vi.fn(),
@@ -141,6 +141,17 @@ describe('WorkflowsPanel', () => {
     act(() => onglet('Files').dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('[data-testid="source-control-stub"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="graph-stub"]')).toBeNull()
+  })
+
+  // Demande du 2026-09-26 : « enleve le bouton rafraichir, tout doit se rafraichir tout seul ».
+  // Seul le bouton de fermeture reste dans la barre du panneau.
+  it('ne porte plus aucun bouton « Rafraîchir » : seule la fermeture reste en tête', () => {
+    render(baseProps())
+    const actions = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.workflow-panel-actions button')
+    ).map((b) => b.getAttribute('aria-label'))
+    expect(actions).toEqual(['Fermer les détails'])
+    expect(container.querySelector('[aria-label*="Rafraîchir"]')).toBeNull()
   })
 
   it('expose exactement cinq onglets — Graph, Runs, Logs, Files, Trace — et monte le graphe par defaut', () => {
@@ -332,5 +343,74 @@ describe('WorkflowsPanel — ouverture d’un RUN.md', () => {
     const erreur = container.querySelector('[data-testid="run-detail-error"]')
     expect(erreur?.textContent).toContain('ENOENT')
     expect(container.querySelector('.run-inspector')).toBeNull()
+  })
+})
+
+// Demande du 2026-09-26 : « fais recharger automatiquement le RUN.md déplié quand son run avance,
+// sans bouton ». Le panneau compare la date du RUN.md chargé à celle de la liste relue.
+describe('WorkflowsPanel — le RUN.md déplié se relit seul quand son run avance', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  function render(props: WorkflowsPanelProps): void {
+    act(() => {
+      root.render(<WorkflowsPanel {...props} />)
+    })
+  }
+
+  it('relit UNE fois chaque nouvelle version du fichier, et jamais une version déjà chargée', () => {
+    const relire = vi.fn()
+    // Le parent recrée sa fonction à chaque rendu : on reproduit ce cas, qui relançait la lecture.
+    const props = (mtimeListe: number, mtimeCharge: number): WorkflowsPanelProps =>
+      baseProps({
+        runs: [run({ mtime: mtimeListe })],
+        openRun: { path: '/runs/one/RUN.md', content: '# v', mtime: mtimeCharge },
+        relireRunOuvert: (r) => relire(r)
+      })
+
+    render(props(1, 1))
+    expect(relire).not.toHaveBeenCalled()
+
+    // Le run avance : sa liste est relue avec une date plus récente.
+    render(props(2, 1))
+    expect(relire).toHaveBeenCalledTimes(1)
+    expect(relire.mock.calls[0][0]).toMatchObject({ path: '/runs/one/RUN.md', mtime: 2 })
+
+    // Liste relue encore une fois pendant la relecture, même date : pas de seconde lecture.
+    render(props(2, 1))
+    expect(relire).toHaveBeenCalledTimes(1)
+
+    // Relecture terminée : le détail porte la nouvelle date, plus rien à faire.
+    render(props(2, 2))
+    expect(relire).toHaveBeenCalledTimes(1)
+
+    // Étape suivante du run : nouvelle version, nouvelle relecture.
+    render(props(3, 2))
+    expect(relire).toHaveBeenCalledTimes(2)
+    expect(relire.mock.calls[1][0]).toMatchObject({ mtime: 3 })
+  })
+
+  it('ne relit rien tant que le run est replié ou que son ouverture est en cours', () => {
+    const relire = vi.fn()
+    render(baseProps({ runs: [run({ mtime: 5 })], openRun: null, relireRunOuvert: relire }))
+    render(
+      baseProps({
+        runs: [run({ mtime: 5 })],
+        openRun: { path: '/runs/one/RUN.md', content: '', pending: true },
+        relireRunOuvert: relire
+      })
+    )
+    expect(relire).not.toHaveBeenCalled()
   })
 })

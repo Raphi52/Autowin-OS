@@ -40,7 +40,6 @@ function props(over: Partial<WorkflowsPanelProps> = {}): WorkflowsPanelProps {
   return {
     runsPaneWidth: 320,
     beginRunsResize: vi.fn(),
-    refreshRuns: vi.fn(),
     setShowRuns: vi.fn(),
     activeId: 'conv-1',
     send: vi.fn(),
@@ -51,6 +50,7 @@ function props(over: Partial<WorkflowsPanelProps> = {}): WorkflowsPanelProps {
     runs: [runEntry],
     openRun: { path: runEntry.path, content: '## Besoin\nX' },
     viewRun: vi.fn(),
+    relireRunOuvert: vi.fn(),
     setOpenRun: vi.fn(),
     setOpenTrace: vi.fn(),
     requestDeleteRun: vi.fn(),

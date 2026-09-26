@@ -224,6 +224,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [input, setInput] = useState('')
     const [slashIndex, setSlashIndex] = useState(0)
     const [slashDismissed, setSlashDismissed] = useState(false)
+    /** Skill SURVOLÉE dans la palette `/` : son nom, pour afficher sa description entière. */
+    const [slashSurvol, setSlashSurvol] = useState<string | null>(null)
     const [mentionIndex, setMentionIndex] = useState(0)
     const [mentionDismissed, setMentionDismissed] = useState(false)
     const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -430,6 +432,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const slashVisibles = slashDismissed ? [] : slashItems
     const mentionSel = Math.min(mentionIndex, mentionsVisibles.length - 1)
     const slashSel = Math.min(slashIndex, slashVisibles.length - 1)
+    // Description ENTIÈRE de la skill survolée — seulement si elle dit plus que le libellé court.
+    // Déduite des lignes VISIBLES : une skill filtrée par la frappe ne laisse pas d'encart orphelin.
+    const slashDetail = slashVisibles.find(
+      (c) => c.name === slashSurvol && c.description && c.description !== c.hint
+    )
 
     return (
       <div
@@ -500,23 +507,40 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
             </ul>
           ) : null}
           {slashVisibles.length > 0 ? (
-            <ul className="slash-palette" role="listbox" aria-label="Commandes">
-              {slashVisibles.map((c, i) => (
-                <li
-                  key={c.name}
-                  role="option"
-                  aria-selected={i === slashSel}
-                  className={`slash-item${i === slashSel ? ' is-selected' : ''}`}
-                  onMouseDown={(ev) => {
-                    ev.preventDefault() // garde le focus du composer
-                    acceptSlash(c)
-                  }}
-                >
-                  <span className="slash-name mono">/{c.name}</span>
-                  <span className="slash-hint">{c.hint}</span>
-                </li>
-              ))}
-            </ul>
+            /*
+              DESCRIPTION ENTIÈRE AU SURVOL (demande du 2026-09-26) : un encart AU-DESSUS de la
+              liste, jamais un dépliage dans la ligne. Déplier la ligne faisait remonter toutes
+              les lignes suivantes quand elle se repliait : la souris sautait plusieurs skills.
+              L'encart pousse vers le HAUT, la liste ne bouge pas sous le pointeur. Il reste
+              affiché tant que le pointeur est dans le bloc (encart compris), pour pouvoir le
+              faire défiler.
+            */
+            <div className="slash-palette-bloc" onMouseLeave={() => setSlashSurvol(null)}>
+              {slashDetail ? (
+                <div className="slash-detail" data-testid="slash-detail">
+                  <span className="slash-name mono">/{slashDetail.name}</span>
+                  <p className="slash-detail-texte">{slashDetail.description}</p>
+                </div>
+              ) : null}
+              <ul className="slash-palette" role="listbox" aria-label="Commandes">
+                {slashVisibles.map((c, i) => (
+                  <li
+                    key={c.name}
+                    role="option"
+                    aria-selected={i === slashSel}
+                    className={`slash-item${i === slashSel ? ' is-selected' : ''}`}
+                    onMouseEnter={() => setSlashSurvol(c.name)}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault() // garde le focus du composer
+                      acceptSlash(c)
+                    }}
+                  >
+                    <span className="slash-name mono">/{c.name}</span>
+                    <span className="slash-hint">{c.hint}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           <div className="composer-input-row">
             {/*

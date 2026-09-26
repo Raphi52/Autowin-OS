@@ -40,6 +40,14 @@ const JUDGE_TOOLSET_CONTRACT =
   `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui, par défaut, ` +
   `ouvre une instance CACHÉE (écran de l'utilisateur intact), navigue par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
   `Une capture citée avec son exit-code 0 et son chemin EST une preuve recevable. ` +
+  // D'OU VIENT L'INTERFACE (2026-09-26, conv-863) : une capture verte de l'application empaquetee
+  // ne contient pas une modification non empaquetee ; le juge doit savoir la lire.
+  `Son JSON dit d'où vient l'interface capturée (\`interfaceCapturee\`) : \`application-empaquetee\` = ` +
+  `dernier empaquetage, qui ne contient PAS une modification d'interface non empaquetée (hors ` +
+  `styles injectés par \`--css\`, signalés par \`cssInjecte\`) ; avec l'option \`--code-dev\`, ` +
+  `\`code-dev\` = code en cours servi par le serveur de dev du dépôt principal, et \`code-construit\` = ` +
+  `copie de travail du producteur reconstruite puis lancée sur ses propres fichiers. Une capture ne ` +
+  `prouve donc un changement d'interface que si ce changement y est VISIBLE. ` +
   `Ne réclame aucun mécanisme absent de cet outillage — binaire packagé, relais planifié, outil ` +
   `tiers : leur absence n'est jamais un défaut du livrable. En revanche exige ce qui EST à portée ` +
   `— exit-code de test, lecture ciblée, capture par ce harnais — et une affirmation invérifiable ` +

@@ -139,7 +139,12 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   `l'observer OU pour t'en servir a sa place (envoyer un message, remplir une page) —, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
   `scripts/hdesk-lancer.ps1 -Id <ton identifiant de bureau> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (la petite TV du fil le montre en direct), puis capture-le avec ` +
   `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <ton identifiant de bureau> -Output <png>\` et lis ` +
-  `l'image. Pour une vue d'Autowin, \`node scripts/ui-capture.mjs\` est deja cache par defaut. Ne ` +
+  // CODE EN COURS (2026-09-26, conv-863) : sans `--code-dev`, l'instance cachee lance le binaire
+  // EMPAQUETE ; la capture d'un changement d'interface rendait `ok: true` sans ce changement.
+  `l'image. Pour une vue d'Autowin, \`node scripts/ui-capture.mjs\` est deja cache par defaut ; ` +
+  `ajoute \`--code-dev\` des qu'il s'agit de prouver une modification d'interface : sans lui, la ` +
+  `capture montre l'application EMPAQUETEE, qui ne contient pas encore ta modification (le JSON le ` +
+  `dit dans \`interfaceCapturee\`). Ne ` +
   `lance une app sur le bureau reel, et n'utilise \`desktop_observe\`/\`desktop_act\` pour la piloter, ` +
   `que si l'utilisateur demande explicitement son ecran, ou si le bureau cache ne PEUT PAS montrer ` +
   `ce qu'il faut (capture unie d'un rendu GPU, besoin de clics) — dis-le alors en une ligne AVANT de toucher a son ecran.\n` +

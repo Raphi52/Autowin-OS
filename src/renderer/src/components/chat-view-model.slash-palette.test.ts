@@ -63,6 +63,21 @@ describe('palette slash générique', () => {
     expect(cmd.hint).not.toContain('Suite ignorée')
   })
 
+  it('garde la description COMPLÈTE pour le survol — le libellé court ne la remplace pas', () => {
+    // Demande utilisateur du 2026-09-26 : « quand je fais / et que je hover un skill je veux voir
+    // la full description ». Le libellé est borné ; la description entière doit rester disponible.
+    const complete = `${'a'.repeat(200)}. Suite ignorée par le libellé.`
+    const [cmd] = skillSlashCommands([{ id: 'think', description: complete, enabled: true }])
+    expect(cmd.description).toBe(complete)
+    expect(cmd.hint).not.toContain('Suite ignorée')
+  })
+
+  it("porte la description complète jusqu'aux alias", () => {
+    const complete = 'Première phrase. Seconde phrase que le libellé coupe.'
+    const cmds = skillSlashCommands([{ id: 'arena', description: complete, enabled: true }])
+    for (const c of cmds) expect(c.description).toContain('Seconde phrase que le libellé coupe.')
+  })
+
   it('reste fermée dès qu’un corps est tapé', () => {
     expect(matchSlashCommands('/think quelque chose', skillSlashCommands(inventaire))).toEqual([])
   })

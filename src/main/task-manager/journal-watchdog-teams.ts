@@ -71,3 +71,31 @@ export function creerJournalWatchdog(
     }
   }
 }
+
+/**
+ * BATTEMENT « TOUJOURS ACTIF » (conv-770, 2026-09-26) : le journal n'ecrit rien tant que tout va
+ * bien, donc un journal silencieux ne distinguait pas « aucun message » de « boucle de lecture morte ».
+ * Rend une fonction a appeler a CHAQUE lecture Teams (ok ou en echec) : au plus une ligne
+ * `actif lectures=N echecs=M depuisMin=X` par intervalle (une heure par defaut).
+ * Elle est appelee PAR la boucle elle-meme, jamais par une minuterie a part : si la boucle s'arrete,
+ * les lignes `actif` cessent — plus d'une heure sans ligne `actif` = surveillance arretee.
+ */
+export function creerBattementWatchdog(
+  journal: JournalWatchdog,
+  intervalleMs = 3_600_000,
+  maintenant: () => number = Date.now
+): (ok: boolean) => void {
+  let depuis = maintenant()
+  let lectures = 0
+  let echecs = 0
+  return (ok) => {
+    if (ok) lectures++
+    else echecs++
+    const t = maintenant()
+    if (t - depuis < intervalleMs) return
+    journal('actif', { lectures, echecs, depuisMin: Math.round((t - depuis) / 60_000) })
+    depuis = t
+    lectures = 0
+    echecs = 0
+  }
+}

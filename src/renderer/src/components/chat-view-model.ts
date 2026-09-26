@@ -914,6 +914,12 @@ export function parseBtw(text: string): { isBtw: boolean; body: string } {
 export interface SlashCommand {
   name: string
   hint: string
+  /**
+   * Description ENTIÈRE, affichée au survol de la ligne. `hint` n'en garde que la première phrase
+   * bornée ; demande utilisateur du 2026-09-26 : « quand je hover un skill je veux voir la full
+   * description ». Absente pour une commande sans rien de plus que son libellé.
+   */
+  description?: string
   /** Texte inséré dans le composer à la sélection (l'utilisateur complète le corps ensuite). */
   insert: string
 }
@@ -976,7 +982,12 @@ export function skillSlashCommands(
         const phrase = brut.split(/(?<=\.)\s/u)[0]?.trim() ?? ''
         const hint =
           phrase.length > HINT_MAX ? `${phrase.slice(0, HINT_MAX - 1).trimEnd()}…` : phrase
-        return { name: item.id, hint: hint || 'Skill', insert: `/${item.id} ` }
+        return {
+          name: item.id,
+          hint: hint || 'Skill',
+          ...(brut.length > 0 ? { description: brut } : {}),
+          insert: `/${item.id} `
+        }
       })
       // ALIAS : même skill, entrée courte. Générée depuis la MÊME table que la résolution côté main
       // (`shared/skill-aliases`), sinon la palette proposerait un alias que l'injection ignore.
@@ -987,6 +998,7 @@ export function skillSlashCommands(
           ...aliases.map((a) => ({
             name: a,
             hint: `${cmd.hint} (alias de /${cmd.name})`,
+            ...(cmd.description ? { description: `${cmd.description} (alias de /${cmd.name})` } : {}),
             insert: `/${a} `
           }))
         ]

@@ -119,7 +119,8 @@ describe('câblage dans index.ts', () => {
 
   it('runPilotChat enveloppe le rangement ET le lancement du tour', () => {
     const pilote = source.slice(source.indexOf('const runPilotChat: typeof lancerTour'))
-    const entete = pilote.slice(0, pilote.indexOf('return lancerTour(...args)'))
+    // Le lancement AVEC rangement : `await lancerTour` (le rangement tourne a cote, conv-867).
+    const entete = pilote.slice(0, pilote.indexOf('return await lancerTour(...args)'))
     expect(entete).toContain('activeChatTurns.trackPreparation(args[2]')
     expect(entete.indexOf('trackPreparation')).toBeLessThan(
       entete.indexOf('rangerSurLePremierMessage')

@@ -88,20 +88,6 @@ export function InspectIcon(): React.JSX.Element {
   )
 }
 
-export function WorkflowRefreshIcon(): React.JSX.Element {
-  return (
-    <svg className="workflow-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M13.2 5.2A5.6 5.6 0 1 0 13 11M13.2 2.5v2.8h-2.8"
-        stroke="currentColor"
-        strokeWidth="1.35"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 export function WorkflowCloseIcon(): React.JSX.Element {
   return (
     <svg className="workflow-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
