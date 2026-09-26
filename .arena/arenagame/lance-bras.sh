@@ -17,6 +17,13 @@ MAX=${ARENA_REPRISES_MAX:-10}
 MARGE=${ARENA_MARGE_S:-120}
 ARENE=$(cd "$(dirname "$0")" && pwd)   # AVANT le cd : $0 peut être relatif
 cd "$BANC/$BRAS" || exit 1
+# BRAS ISOLÉS DE LA MÉMOIRE D'AUTOWIN (2026-09-26, conv-826). Le dossier du bras est DANS le dépôt git
+# D:\AutoWinOS ; or la mémoire automatique de Claude Code est partagée par tout un dépôt, sous-dossiers
+# compris (https://code.claude.com/docs/en/memory : « all worktrees and subdirectories within the same
+# git repository share one auto memory directory »). Mesuré nuit-2026-09-25 m2 à m5 : les 4 bras, appel nu
+# compris, lisaient d'abord ~\.claude\projects\D--AutoWinOS\memory\arenagame-*.md, et b-1 / c-1 y
+# écrivaient leurs leçons — X n'était plus un appel nu, et les manches n'étaient plus indépendantes.
+export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 # CONSIGNE À 4 SKILLS (2026-09-25). Sans `clean` ni `judge`, les bras ne laissaient aucune trace
 # CLEAN-* ni case cochée : 11 des 12 runs de t4 remontaient BLOQUÉS (isBlocked). Tout tournoi passe
 # par ce script, quel que soit son lance.sh : on complète ici une COPIE du sys (celui du tournoi
@@ -32,6 +39,7 @@ if [ -n "$SYS" ] && [ -z "${ARENA_SANS_CLEAN_JUDGE:-}" ]; then
 ' >> "$EFF"; cat "$SKILLS/judge/SKILL.md" >> "$EFF"; }
   printf '
 Applique aussi, après build : clean (trace CLEAN-VERIFIED ou CLEAN-NOOP dans le RUN.md), puis judge (coche chaque case de ## Besoin prouvée).
+Là où ton workflow (le texte AVANT === CLEAN ===) contredit CLEAN ou JUDGE — sous-agents, nombre ou modèle des juges —, ton workflow prime. Des juges « en parallèle » se lancent dans UN seul message, au premier plan : jamais run_in_background, jamais ScheduleWakeup.
 ' >> "$EFF"
   SYS=$EFF
 fi
@@ -43,7 +51,9 @@ champ() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{c
 
 sid=""; n=0
 while :; do
-  depense=$(node -e 'const fs=require("fs");let t=0;for(const l of fs.readFileSync(process.argv[1],"utf8").split("\n"))if(l.trim())try{t+=+JSON.parse(l).total_cost_usd||0}catch{};console.log(t)' "$TENT")
+  # Coût déjà dépensé = le PLUS GRAND total_cost_usd des segments, pas leur somme : `--resume` rend un
+  # coût CUMULÉ sur toute la session (voir la note au-dessus du calcul de out-<bras>.json).
+  depense=$(node -e 'const fs=require("fs");let t=0;for(const l of fs.readFileSync(process.argv[1],"utf8").split("\n"))if(l.trim())try{t=Math.max(t,+JSON.parse(l).total_cost_usd||0)}catch{};console.log(t)' "$TENT")
   reste=$(node -e 'console.log(Math.max(0,(+process.argv[1])-(+process.argv[2])).toFixed(2))' "$BUDGET" "$depense")
   if [ "$(node -e 'console.log(+process.argv[1]<0.5?1:0)' "$reste")" = 1 ]; then echo "budget épuisé ($depense \$)" >> "$ERR"; break; fi
   if [ -z "$sid" ]; then
@@ -74,10 +84,17 @@ while :; do
 done
 
 # out-<bras>.json = dernier résultat, avec coût, tours et durée CUMULÉS sur toutes les reprises.
+# COÛT = le plus grand total_cost_usd des segments, TOURS et DURÉE = leur somme (2026-09-26, conv-826).
+# `claude -p --resume` rend un total_cost_usd et un modelUsage déjà cumulés sur toute la session, alors
+# que num_turns, duration_ms et usage ne couvrent que le segment. Preuve, m5 a-1 de nuit-2026-09-25 :
+# segment 2 modelUsage.cacheReadInputTokens 7 439 605 = 3 236 245 (segment 1) + 4 203 360 (usage du
+# segment 2) ; coût 3,78 $ puis 9,03 $. L'ancienne somme annonçait 12,80 $ pour 9,03 $ réels.
+# Limite connue : un bras qui lance des tâches de fond ne rend que le dernier segment dans num_turns et
+# duration_ms (m1 à m4) — les tours réels se lisent alors dans le journal de session.
 node -e '
 const fs=require("fs");const L=fs.readFileSync(process.argv[1],"utf8").split("\n").filter(l=>l.trim()).map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);
 if(!L.length){process.exit(1)}
-const d={...L[L.length-1]};d.total_cost_usd=L.reduce((a,j)=>a+(+j.total_cost_usd||0),0);d.num_turns=L.reduce((a,j)=>a+(+j.num_turns||0),0);
+const d={...L[L.length-1]};d.total_cost_usd=L.reduce((a,j)=>Math.max(a,+j.total_cost_usd||0),0);d.num_turns=L.reduce((a,j)=>a+(+j.num_turns||0),0);
 d.duration_ms=L.reduce((a,j)=>a+(+j.duration_ms||0),0);d.reprises=L.length-1;fs.writeFileSync(process.argv[2],JSON.stringify(d))' "$TENT" "$OUT"
 echo "$BRAS exit=$code reprises=$n" >> "$BANC/statut.txt"
 # CLÔTURE DU RUN (2026-09-25) : note check.mjs puis status green|red dans le RUN.md du bras, quel que
