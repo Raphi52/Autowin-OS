@@ -43,6 +43,39 @@ describe('hook des agents — SQL vers la production', () => {
     expect(hook('git status')).toBe('')
     expect(hook('npm run sqlcmd-docs')).toBe('')
   })
+
+  // conv-770, 2026-09-26 : le motif appliqué à TOUTE la ligne bloquait deux fois une simple lecture
+  // (un grep dont le motif nommait un client SQL). Seul un APPEL doit être bloqué.
+  it.each([
+    'grep -c "sqlcmd|osql" src/main/prod-run-guard.ts',
+    'git grep -n -E "sqlcmdPath" origin/main -- src',
+    'rg -n osql docs',
+    "Select-String -Path x.ps1 -Pattern 'Invoke-Sqlcmd'",
+    'echo "on utilisera sqlcmd plus tard"',
+    'powershell -c "Select-String -Pattern \'bcp\' notes.txt"'
+  ])('laisse passer une simple MENTION : %s', (c) => {
+    expect(hook(c)).toBe('')
+  })
+
+  it.each([
+    'echo ok && sqlcmd -S srv -d Ventes -Q "select 1"',
+    'cat requete.sql | osql -S srv -d Ventes',
+    '"C:\\Program Files\\SQL\\SQLCMD.EXE" -S srv -Q "select 1"',
+    "& 'C:\\Tools\\sqlcmd.exe' -S srv -Q 'select 1'",
+    'bash -c "sqlcmd -S srv -d Ventes -Q \'select 1\'"',
+    'cmd /c sqlcmd -S srv -d Ventes -Q "select 1"',
+    'echo "resultat : $(sqlcmd -S srv -Q \'select 1\')"',
+    'X=1 sqlcmd -S srv -Q "select 1"',
+    'timeout 60 sqlcmd -S srv -Q "select 1"',
+    'sudo -u admin sqlcmd -S srv -Q "select 1"',
+    'Start-Process sqlcmd -ArgumentList "-S srv"',
+    'find . -name "*.sql" -exec sqlcmd -S srv -i {} ;',
+    'Get-ChildItem *.sql | ForEach-Object { Invoke-Sqlcmd -InputFile $_ }',
+    'node -e "require(\'child_process\').execSync(\'sqlcmd -S srv -Q x\')"',
+    'sqlcmd -S srv -Q "guillemet non ferme'
+  ])('refuse toujours un APPEL : %s', (c) => {
+    expect(refuse(hook(c))).toBe(true)
+  })
   it('claude.ts branche la garde SQL et la liste non-prod au site d’appel', () => {
     expect(readFileSync(join(__dirname, 'providers/claude.ts'), 'utf8')).toMatch(
       /scriptHookGardes\(refusReglageProd, refusSqlAgent, /
