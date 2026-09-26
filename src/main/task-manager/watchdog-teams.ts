@@ -56,7 +56,7 @@ export function parseTeamsItemId(
   return { chatId: rest.slice(0, cut), messageId: rest.slice(cut + 1) }
 }
 
-function stripHtml(html: string): string {
+export function stripHtml(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')

@@ -388,6 +388,7 @@ import {
   parseTeamsItemId,
   replyTeams
 } from './task-manager/watchdog-teams'
+import { TeamsLocalClient } from './task-manager/watchdog-teams-local'
 import type { WatchdogAppEvent } from './task-manager/types'
 import {
   ScheduledChatDispatcher,
@@ -3620,9 +3621,18 @@ Le fil reprend ensuite normalement.`
         }
       )
     : undefined
+  // Sans connexion Microsoft (conv-854, 2026-09-25) : lecture du stockage local du client Teams
+  // deja connecte, reponse en pilotant sa fenetre, repli par mail si ce pilotage echoue.
+  const teamsLocal =
+    !teamsClient && process.platform === 'win32'
+      ? new TeamsLocalClient({
+          mail: (adresse, objet, corps) => outlookGateway.sendNew(adresse, objet, corps)
+        })
+      : undefined
+  const teamsSource = teamsClient ?? teamsLocal
   mailWatchdogReplier = async (itemId, body) => {
     if (parseTeamsItemId(itemId))
-      return replyTeams(teamsClient, itemId, body)
+      return teamsLocal ? teamsLocal.reply(itemId, body) : replyTeams(teamsClient, itemId, body)
     const sent = await outlookGateway.replyToItem(itemId, body)
     if (sent.ok) await outlookGateway.markRead([itemId])
     return sent
@@ -3656,9 +3666,9 @@ Le fil reprend ensuite normalement.`
         console.warn('[watchdog] lecture des mails impossible', error)
       }
       // Teams passe par la MEME regle : un echec Teams ne prive pas les mails, et inversement.
-      if (teamsClient) {
+      if (teamsSource) {
         try {
-          for (const message of teamsDetector.next(await teamsClient.snapshot())) {
+          for (const message of teamsDetector.next(await teamsSource.snapshot())) {
             const key = senderKey('teams', message)
             if (key) rememberMailSender(scheduledTasks, 'teams', key, message.nom || key)
             await watchdogEngine?.notifyMail({
