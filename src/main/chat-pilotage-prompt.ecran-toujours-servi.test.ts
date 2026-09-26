@@ -53,6 +53,7 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
   it('nomme le profil Teams du bureau cache sans figer son etat de connexion', () => {
     // Juge de la reparation 5 (kaizen conv-835) : « Ce profil n'est PAS connecte a son compte » devient
     // faux des que l'utilisateur s'y connecte, et le profil edge-teams n'etait pas nomme.
+    // fix-ok: REGLES_ECRAN_UTILISATEUR (chat-pilotage-prompt.ts, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8) figeait « n'est PAS connecte » sans nommer edge-teams ; ce test rejoue sur bc9b13d9^ le 2026-09-26 = rouge (1/8, « to contain 'autowin-hdesk\\edge-teams' »), sur bc9b13d9 = vert
     const [ecran] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-835')
     expect(ecran.text).toContain('autowin-hdesk\\edge-teams')
     expect(ecran.text).not.toContain("n'est PAS connecte")
