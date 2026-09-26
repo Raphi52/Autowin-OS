@@ -35,8 +35,10 @@ describe('rangement automatique au premier message', () => {
 
   it('apprend la vraie fin du tour, meme quand le tour echoue', () => {
     const essai = corps.slice(corps.indexOf('try {'))
+    // Le resultat est garde pour l'enchainement du chat (conv-871) avant d'etre rendu : le contrat
+    // reste que la fin du tour est signalee dans le `finally` du MEME `try` que l'appel au tour.
     expect(essai).toMatch(
-      /try \{\s*return await lancerTour\(\.\.\.args\)\s*\} finally \{\s*finirTour\(\)/
+      /try \{\s*const resultat = await lancerTour\(\.\.\.args\)[^]*?return resultat\s*\} finally \{\s*finirTour\(\)/
     )
   })
 

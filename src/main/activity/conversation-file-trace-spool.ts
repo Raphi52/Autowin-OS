@@ -7,6 +7,7 @@ import {
   rmSync,
   statSync
 } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import type { ExecutionEvidence } from '../providers/types'
@@ -294,6 +295,42 @@ export function readConversationFileTraces(
     ...readFileTraces(join(root, 'events.previous.jsonl')),
     ...readFileTraces(join(root, 'events.jsonl'))
   ].filter((trace) => trace.conversationId === conversationId)
+}
+
+/**
+ * Traces RÉCENTES, tous fils confondus : le journal courant et le précédent (4 Mo max chacun), sans
+ * l'archive qui grossit sans borne. Lecture ASYNCHRONE : elle tourne à chaque fin de tour de chat,
+ * dans le processus qui fait vivre la fenêtre. Sert à l'enchaînement du chat : savoir si un AUTRE fil
+ * a touché un fichier pendant le tour, avant de publier ce fichier au nom du tour.
+ */
+export async function readRecentConversationFileTraces(
+  base = ensureAutowinAppData()
+): Promise<ConversationFileTrace[]> {
+  const root = spoolRoot(base)
+  const traces: ConversationFileTrace[] = []
+  for (const name of ['events.previous.jsonl', 'events.jsonl']) {
+    let raw: string
+    try {
+      raw = await readFile(join(root, name), 'utf8')
+    } catch {
+      continue // journal absent : rien à lire
+    }
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue
+      try {
+        const parsed = JSON.parse(line) as ConversationFileTrace
+        if (
+          typeof parsed.conversationId === 'string' &&
+          Array.isArray(parsed.paths) &&
+          parsed.paths.every((item) => typeof item === 'string')
+        )
+          traces.push(parsed)
+      } catch {
+        // Une dernière ligne partielle après crash est ignorée.
+      }
+    }
+  }
+  return traces
 }
 
 /** Chemins absolus attribués à UN tour, pour relier une mutation à sa cause sans deviner au temps. */

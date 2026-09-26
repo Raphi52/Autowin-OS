@@ -315,6 +315,7 @@ import {
 } from './bascule-dossier-conversation'
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
+import { photographierDebutDeTour } from './chat-turn-publication'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -3137,8 +3138,28 @@ Le fil reprend ensuite normalement.`
         // Un rangement rate ne doit JAMAIS toucher la reponse : il est seulement journalise.
         console.warn('[rangement] premier message non range :', error)
       })
+      /*
+       * ENCHAINEMENT AUTO DU CHAT (conv-871) : l'interrupteur ne publiait que les taches d'agent.
+       * Photo de l'arbre AVANT le tour (~65 ms), publication APRES un tour reussi, sans faire
+       * attendre la reponse. Un tour arrete ou en echec ne publie rien.
+       */
+      const debutPublication = os.autoCloseEnabled()
+        ? await photographierDebutDeTour(dossierDuTour(conversationId))
+        : undefined
       try {
-        return await lancerTour(...args)
+        const resultat = await lancerTour(...args)
+        if (debutPublication && resultat.ok && !resultat.cancelled) {
+          const demande = [...args[1]].reverse().find((m) => m.role === 'user')?.content ?? ''
+          void os
+            .publishChatTurn({
+              conversationId,
+              turnId: resultat.turnId,
+              request: demande,
+              debut: debutPublication
+            })
+            .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
+        }
+        return resultat
       } finally {
         finirTour()
       }

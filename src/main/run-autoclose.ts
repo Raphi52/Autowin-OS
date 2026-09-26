@@ -72,6 +72,8 @@ export type AutoCloseResult =
         | 'recovery-baseline-missing'
         /** L'historique à publier contient un commit qui n'appartient pas à ce run. */
         | 'concurrent-commits'
+        /** Tour de chat : aucun de ses fichiers n'est prouvé à ce fil (voir chat-turn-publication). */
+        | 'unattributed'
       detail?: string
     }
   | { status: 'failed'; error: string }
@@ -455,7 +457,7 @@ export async function captureCloseBaseline(
   return { project, brain, projectHead, brainHead }
 }
 
-async function defaultGitRunner(): Promise<GitRunner> {
+export async function defaultGitRunner(): Promise<GitRunner> {
   const { execFile } = await import('node:child_process')
   const { promisify } = await import('node:util')
   const exec = promisify(execFile)
@@ -466,8 +468,13 @@ export interface AutoCloseReport {
   runId: string
   branch: string
   project: AutoCloseResult
-  brain: AutoCloseResult
+  /** Absent pour un tour de chat : il ne publie jamais le Brain. */
+  brain?: AutoCloseResult
   at: string
+  /** `chat` : fin d'un tour de chat ; absent : fin d'une tâche d'agent. */
+  source?: 'chat'
+  /** Fichiers du tour LAISSÉS en attente faute de preuve qu'ils appartiennent à ce fil. */
+  exclus?: Array<{ path: string; motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' }>
 }
 
 /**
