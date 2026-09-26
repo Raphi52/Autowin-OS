@@ -95,6 +95,7 @@ import { rejouerOrientations } from './orientations-rejouees'
 import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import {
+  attenteFichierAReprendre,
   deciderRelanceAuto,
   dernierTourEstUnScout,
   premierPassageLaisseSortirLeTour,
@@ -3827,7 +3828,20 @@ export function ChatView({
       // l'envoyer. On ne fige donc pas ce tour, on le laisse passer la porte de décision.
       const allumageManuel = premierPassageLaisseSortirLeTour({
         allumageManuel: autoAllumageManuelRef.current,
-        repriseApresRedemarrage: autoRepriseApresRedemarrageRef.current
+        repriseApresRedemarrage: autoRepriseApresRedemarrageRef.current,
+        // ATTENTE DE FICHIER (conv-826, 2026-09-26) : un redémarrage tuait sa surveillance et ce gel la
+        // rendait définitive, ∞ affiché allumé. Déjà surveillée (fil rouvert) → on ne la relance pas.
+        attenteFichier:
+          !autoProgrammeesRef.current.has(activeId) &&
+          attenteFichierAReprendre({
+            depotPresent,
+            actif: true,
+            occupe: busy,
+            fil: messages,
+            brouillonPresent,
+            tourEstUnScout: dernierTourEstUnScout(messages),
+            relancesDifferees: autoDiffereesRef.current.get(activeId) ?? 0
+          }) !== null
       })
       autoAllumageManuelRef.current = false
       autoRepriseApresRedemarrageRef.current = false
@@ -4032,6 +4046,53 @@ export function ChatView({
   // On la stabilise via un ref (même pattern que forkRef), ici comme pour la relance gratuite.
   const sendRef = useRef(send)
   sendRef.current = send
+  /**
+   * LES ATTENTES DE FICHIER DES FILS ARMÉS NON AFFICHÉS, reprises au démarrage (conv-826, 2026-09-26 :
+   * « après un redémarrage, ∞ reprend tout seul l'attente d'un fichier encore attendu »).
+   *
+   * La surveillance d'un « quand X existe » est un minuteur de l'écran : un redémarrage l'efface,
+   * alors que ∞ est relu du stockage et reste allumé. Le fil affiché la reprend à son premier passage
+   * (`attenteFichierAReprendre`) ; les autres fils armés, seulement ici. Une fois par démarrage, après
+   * le chargement de la liste. Rien n'est envoyé : on reprogramme la sonde GRATUITE, qui n'envoie la
+   * suite que si le fichier existe.
+   */
+  const attentesReprisesRef = useRef(false)
+  useEffect(() => {
+    if (attentesReprisesRef.current || convs.length === 0) return
+    attentesReprisesRef.current = true
+    for (const id of autoConvs) {
+      if (id === '*' || id === activeIdAutoRef.current || !convs.some((c) => c.id === id)) continue
+      void (async () => {
+        let fil = liveMessagesRef.current.get(id)
+        if (!fil || fil.length === 0) {
+          try {
+            const detail = (await window.api.conversation(id)) as Conv | null
+            fil = hydraterFilStocke(detail?.messages ?? [])
+          } catch {
+            return
+          }
+          // Un fil rempli entre-temps (tour lancé, fil ouvert) garde SA version.
+          const recent = liveMessagesRef.current.get(id)
+          if (recent && recent.length > 0) fil = recent
+          else liveMessagesRef.current.set(id, fil)
+        }
+        // Devenu le fil affiché entre-temps : son premier passage s'en charge.
+        if (id === activeIdAutoRef.current || !autoArmePourRef.current(id)) return
+        if (autoProgrammeesRef.current.has(id) || busyConversationsRef.current.has(id)) return
+        const decision = attenteFichierAReprendre({
+          depotPresent,
+          actif: true,
+          occupe: false,
+          fil,
+          brouillonPresent: false,
+          tourEstUnScout: dernierTourEstUnScout(fil),
+          relancesDifferees: autoDiffereesRef.current.get(id) ?? 0
+        })
+        if (decision) programmerRelanceAuto(id, decision)
+      })()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convs])
   /**
    * REPRISE APRES UN REDEMARRAGE DEMANDE PAR L'AGENT (`restart_app`).
    *
