@@ -360,7 +360,14 @@ export interface AppSnapshot {
      */
     tourEnCours?: boolean
   }>
+  /** Les 12 runs les plus récents, PLUS tout run bloqué plus ancien lu dans la fenêtre du scan. */
   runs: Array<{ subject: string; status: string; blocked: boolean }>
+  /**
+   * RUN.md NON LUS par le scan borné (au-delà des `LIMITE_RUNS_SNAPSHOT` plus récents) — ABSENT
+   * quand rien n'a été écarté. Présent = `runs` et `runsBlocked` sont PARTIELS : un run bloqué plus
+   * ancien n'y figure pas. Ajouté le 2026-09-25 (conv-861) : ce compte était calculé puis jeté.
+   */
+  runsNonExamines?: number
   /**
    * Worktrees ENCORE connus d'Autowin (un worktree nettoyé/fermé n'y figure PLUS) — permet de répondre
    * « le workspace s'est-il fermé ? » par une VÉRITÉ LIVE au lieu d'un « non vérifié » : absent d'ici
@@ -416,6 +423,12 @@ export interface PromptSnapshot {
   activeConversationId?: string
   providers: string[]
   runsBlocked: Array<{ subject: string; status: string }>
+  /**
+   * RUN.md NON EXAMINÉS pour `runsBlocked` — ABSENT quand le scan a tout lu. Présent, il dit que
+   * `runsBlocked` ne couvre que les runs les plus récents : une liste vide n'y prouve PAS l'absence de
+   * run bloqué (conv-861, 2026-09-25).
+   */
+  runsNonExamines?: number
   conversationsCount: number
   /**
    * Les commandes `/` REELLEMENT invocables, lues sur disque a chaque tour.
@@ -2085,9 +2098,12 @@ export class AppCommandBus {
             ...(this.tourDeChatActif?.(c.id) ? { tourEnCours: true } : {})
           }
         }),
+      // Les 12 plus récents pour l'affichage, mais un run BLOQUÉ lu plus loin dans la fenêtre n'est
+      // jamais coupé : `runsBlocked` filtre CETTE liste, et la coupe à 12 le faisait disparaître.
       runs: runs
-        .slice(0, 12)
+        .filter((r, i) => i < 12 || r.blocked)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
+      ...(runs.horsFenetre ? { runsNonExamines: runs.horsFenetre } : {}),
       // Worktrees encore vivants côté Autowin : ce qui n'y figure plus a été nettoyé/fermé. C'est LA
       // sonde qui manquait pour répondre « le workspace s'est fermé ? » sans hausser les épaules.
       worktrees: this.jalonne(jalon, 'snapshot:worktrees', () =>
@@ -2163,6 +2179,7 @@ export class AppCommandBus {
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
+      ...(full.runsNonExamines ? { runsNonExamines: full.runsNonExamines } : {}),
       conversationsCount: full.conversations.length,
       ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),
       ...(this.travauxNonAnnonces(full.travauxNonPublies).length > 0

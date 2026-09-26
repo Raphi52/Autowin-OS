@@ -2,10 +2,8 @@
 # Lance UN bras du banc arenagame et le mène au bout malgré la limite de session Claude.
 # Usage : lance-bras.sh <dossier du tournoi> <bras-replique> <fichier prompt> [fichier sys]
 #
-# Pourquoi : t2b, t2v et t3 ont eu tous leurs bras coupés (« You've hit your session limit ·
-# resets 7pm ») vers 30 min ; `claude -p` rend alors is_error=true et le bras s'arrêtait là.
-# Ici, une coupure n'arrête plus le bras : on attend l'heure de remise à zéro annoncée, puis on
-# REPREND la même session (`--resume <session_id>`) avec le budget restant.
+# Pourquoi (bras coupés vers 30 min en t2b, t2v, t3) : voir skills/arenagame/SKILL.md. Une coupure
+# n'arrête plus le bras : on attend la remise à zéro annoncée puis on REPREND la session (--resume).
 # Sorties : out-<bras>.json (dernier résultat, coût et tours CUMULÉS, champ `reprises`),
 #           out-<bras>.tentatives.jsonl (chaque sortie brute), attente-<bras>.txt (attentes).
 # Réglages : ARENA_BUDGET_USD (40), ARENA_REPRISES_MAX (10), ARENA_ATTENTE_S (force l'attente,
@@ -15,8 +13,48 @@ BANC=$1; BRAS=$2; PROMPT=$3; SYS=${4:-}
 BUDGET=${ARENA_BUDGET_USD:-40}
 MAX=${ARENA_REPRISES_MAX:-10}
 MARGE=${ARENA_MARGE_S:-120}
+# Bras ISOLÉS des réglages personnels (~/.claude/settings.json) : son hook Brain injectait des notes
+# d'un vrai projet voisin dans chaque bras depuis le 24/09 (X délégué, +25 % de coût). Opt-out :
+# ARENA_AVEC_HOOKS_PERSO=1.                                                                                                      
+ISOLE='--setting-sources project,local'; [ -n "${ARENA_AVEC_HOOKS_PERSO:-}" ] && ISOLE=''
 ARENE=$(cd "$(dirname "$0")" && pwd)   # AVANT le cd : $0 peut être relatif
-cd "$BANC/$BRAS" || exit 1
+MOD=${ARENA_MODELE:+--model $ARENA_MODELE}   # tests à blanc sur un modèle bon marché ; vide = modèle par défaut
+[ -d "$BANC/$BRAS" ] || exit 1
+ERR="$BANC/err-$BRAS.txt"
+# BRAS HORS DU DÉPÔT (2026-09-26, conv-826). Le bras tournait dans $BANC/$BRAS, DANS D:\AutoWinOS : son chemin
+# menait au banc (nuit-2026-09-26 m1 : un bras a lu .arena/arenagame/lance-bras.sh) et son RUN.md vivait sous
+# ~\.claude\runs, où il listait les bras voisins et les runs des autres conversations. Désormais :
+#  (1) sa copie part hors du dépôt le temps du bras (renommage, même disque), puis revient pour la notation ;
+#  (2) son RUN.md vit sous une racine à lui, écrite dans out.json (`runs_racine`) pour clore-run.mjs ;
+#  (3) des interdictions (--settings) ferment le dépôt, ~\.claude\runs et ~\.claude\projects aux outils de
+#      fichiers ET aux commandes qui les nomment — elles valent aussi en --dangerously-skip-permissions.
+#      Limite (https://code.claude.com/docs/en/permissions) : un script qui ouvre ces fichiers lui-même n'est
+#      pas bloqué ; seul un bac à sable du système le serait.
+# ARENA_ISOLER=0 désactive : l'améliorateur de nuit.sh DOIT lire le banc. ARENA_ISOLES = racine (D:/bras-isoles).
+TRAVAIL="$BANC/$BRAS"; EXT=""; RUNS=""; REGLES=""
+if [ "${ARENA_ISOLER:-1}" != 0 ]; then
+  EXT=${ARENA_ISOLES:-D:/bras-isoles}/$(basename "$(dirname "$BANC")")-$(basename "$BANC")-$BRAS
+  [ -e "$EXT" ] && EXT="$EXT-$$"   # jamais d'écrasement d'un reste de bras précédent
+  mkdir -p "$EXT/runs" && mv "$BANC/$BRAS" "$EXT/jeu" || { echo "isolement impossible ($EXT)" >> "$ERR"; exit 1; }
+  TRAVAIL="$EXT/jeu"; RUNS="$EXT/runs"
+  REPO=$(cd "$ARENE/../.." && pwd); PERSO=$(cygpath -u "$USERPROFILE")
+  REGLES="$BANC/isolement-$BRAS.json"   # dans le dépôt : le bras ne peut pas le lire
+  # Forme exigée par Claude Code sous Windows : C:\Users\x → /c/Users/x, préfixé de / pour un chemin absolu (//c/…).
+  node -e 'const px=(p)=>"/"+p.replace(/\\/g,"/").replace(/^\/?([A-Za-z]):?\//,(m,l)=>"/"+l.toLowerCase()+"/");
+    const [r,h,f]=process.argv.slice(1).map((a,i)=>i<2?px(a):a);const d=[];
+    for(const p of [r,h+"/.claude/runs"])d.push(`Read(${p}/**)`,`Edit(${p}/**)`);d.push(`Read(${h}/.claude/projects/**)`);
+    for(const t of ["Bash","PowerShell"])for(const m of ["*AutoWinOS*",            "*.claude*runs*","*.claude*projects*"])d.push(`${t}(${m})`);
+    require("fs").writeFileSync(f,JSON.stringify({permissions:{deny:d}},null,1))' "$REPO" "$PERSO" "$REGLES"
+  for v in $(compgen -e | grep '^NUIT_'); do unset "$v"; done   # NUIT_DIR, NUIT_SOURCE… pointaient vers le banc
+fi
+# Rendre la copie à sa place : avant la notation, et aussi si le script est interrompu.
+rendre() {
+  [ -n "$EXT" ] && [ -d "$EXT/jeu" ] || return 0
+  for i in 1 2 3 4 5 6; do mv "$EXT/jeu" "$BANC/$BRAS" 2>/dev/null && return 0; sleep 10; done
+  cp -r "$EXT/jeu" "$BANC/$BRAS" && echo "copie isolée RECOPIÉE (renommage refusé), reste : $EXT/jeu" >> "$ERR"
+}
+trap rendre EXIT; trap 'rendre; exit 143' TERM INT
+cd "$TRAVAIL" || exit 1
 # BRAS ISOLÉS DE LA MÉMOIRE D'AUTOWIN (2026-09-26, conv-826). Le dossier du bras est DANS le dépôt git
 # D:\AutoWinOS ; or la mémoire automatique de Claude Code est partagée par tout un dépôt, sous-dossiers
 # compris (https://code.claude.com/docs/en/memory : « all worktrees and subdirectories within the same
@@ -24,10 +62,7 @@ cd "$BANC/$BRAS" || exit 1
 # compris, lisaient d'abord ~\.claude\projects\D--AutoWinOS\memory\arenagame-*.md, et b-1 / c-1 y
 # écrivaient leurs leçons — X n'était plus un appel nu, et les manches n'étaient plus indépendantes.
 export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
-# CONSIGNE À 4 SKILLS (2026-09-25). Sans `clean` ni `judge`, les bras ne laissaient aucune trace
-# CLEAN-* ni case cochée : 11 des 12 runs de t4 remontaient BLOQUÉS (isBlocked). Tout tournoi passe
-# par ce script, quel que soit son lance.sh : on complète ici une COPIE du sys (celui du tournoi
-# reste intact). Le bras X (appel nu, sans sys) n'est pas touché. ARENA_SANS_CLEAN_JUDGE=1 désactive.
+# CONSIGNE À 4 SKILLS : copie du sys complétée par clean + judge (voir SKILL.md). Opt-out : ARENA_SANS_CLEAN_JUDGE=1.
 SKILLS=D:/AutoWinOS/skills
 if [ -n "$SYS" ] && [ -z "${ARENA_SANS_CLEAN_JUDGE:-}" ]; then
   EFF="$BANC/sys-effectif-$BRAS.txt"; cp "$SYS" "$EFF"
@@ -43,7 +78,13 @@ Là où ton workflow (le texte AVANT === CLEAN ===) contredit CLEAN ou JUDGE —
 ' >> "$EFF"
   SYS=$EFF
 fi
-OUT="$BANC/out-$BRAS.json"; TENT="$BANC/out-$BRAS.tentatives.jsonl"; ERR="$BANC/err-$BRAS.txt"
+if [ -n "$SYS" ] && [ -n "$RUNS" ]; then
+  [ "$SYS" = "$BANC/sys-effectif-$BRAS.txt" ] || { cp "$SYS" "$BANC/sys-effectif-$BRAS.txt"; SYS="$BANC/sys-effectif-$BRAS.txt"; }
+  RW=$(cygpath -w "$RUNS")
+  printf '\n=== BANC ISOLÉ (prime sur tout chemin de RUN.md cité plus haut) ===\nIci la racine des runs n'\''est PAS ~\\.claude\\runs mais %s : ton RUN.md est %s\\<session_id>\\<sujet>-workspace\\RUN.md, même forme et même en-tête. Ton dossier de travail est ta copie du projet.\n' "$RW" "$RW" >> "$SYS"
+fi
+PERM=""; [ -n "$REGLES" ] && PERM="--settings $REGLES"
+OUT="$BANC/out-$BRAS.json"; TENT="$BANC/out-$BRAS.tentatives.jsonl"
 : > "$TENT"
 REPRISE_MSG="Ta session a été coupée par la limite d'utilisation. Reprends exactement là où tu t'es arrêté et mène la tâche initiale jusqu'au bout."
 
@@ -57,10 +98,10 @@ while :; do
   reste=$(node -e 'console.log(Math.max(0,(+process.argv[1])-(+process.argv[2])).toFixed(2))' "$BUDGET" "$depense")
   if [ "$(node -e 'console.log(+process.argv[1]<0.5?1:0)' "$reste")" = 1 ]; then echo "budget épuisé ($depense \$)" >> "$ERR"; break; fi
   if [ -z "$sid" ]; then
-    if [ -n "$SYS" ]; then r=$(claude -p "$(cat "$PROMPT")" --append-system-prompt-file "$SYS" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR")
-    else r=$(claude -p "$(cat "$PROMPT")" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR"); fi
+    if [ -n "$SYS" ]; then r=$(claude $ISOLE $PERM $MOD -p "$(cat "$PROMPT")" --append-system-prompt-file "$SYS" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR")
+    else r=$(claude $ISOLE $PERM $MOD -p "$(cat "$PROMPT")" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR"); fi
   else
-    r=$(claude -p "$REPRISE_MSG" --resume "$sid" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR")
+    r=$(claude $ISOLE $PERM $MOD -p "$REPRISE_MSG" --resume "$sid" --output-format json --dangerously-skip-permissions --max-budget-usd "$reste" 2>>"$ERR")
   fi
   code=$?
   echo "$r" | tr -d '\n' >> "$TENT"; echo >> "$TENT"
@@ -95,9 +136,17 @@ node -e '
 const fs=require("fs");const L=fs.readFileSync(process.argv[1],"utf8").split("\n").filter(l=>l.trim()).map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);
 if(!L.length){process.exit(1)}
 const d={...L[L.length-1]};d.total_cost_usd=L.reduce((a,j)=>Math.max(a,+j.total_cost_usd||0),0);d.num_turns=L.reduce((a,j)=>a+(+j.num_turns||0),0);
-d.duration_ms=L.reduce((a,j)=>a+(+j.duration_ms||0),0);d.reprises=L.length-1;fs.writeFileSync(process.argv[2],JSON.stringify(d))' "$TENT" "$OUT"
+d.duration_ms=L.reduce((a,j)=>a+(+j.duration_ms||0),0);d.reprises=L.length-1;if(process.argv[3])d.runs_racine=process.argv[3];fs.writeFileSync(process.argv[2],JSON.stringify(d))' "$TENT" "$OUT" "$( [ -n "$RUNS" ] && cygpath -m "$RUNS" )"
+rendre   # la copie revient dans $BANC/$BRAS AVANT la notation (check.mjs, nuit.sh, archive)
+cd "$BANC" || exit 1   # l'ancien dossier courant vient de partir avec la copie
 echo "$BRAS exit=$code reprises=$n" >> "$BANC/statut.txt"
 # CLÔTURE DU RUN (2026-09-25) : note check.mjs puis status green|red dans le RUN.md du bras, quel que
 # soit le lance.sh du tournoi. Idempotent : un lance.sh qui clôt aussi ne change rien.
 node "$ARENE/check.mjs" "$BANC/$BRAS" > "$BANC/note-clore-$BRAS.json" 2>/dev/null
 node "$ARENE/clore-run.mjs" "$BANC/note-clore-$BRAS.json" "$OUT" >> "$BANC/statut.txt" 2>&1
+# Racine isolée vidée (copie rendue, RUN.md rangé par clore-run) : on la retire. Il reste un FICHIER → on la
+# laisse et on le dit (jamais d'effacement de ce qu'on n'a pas relevé).
+if [ -n "$EXT" ] && [ -d "$EXT" ]; then
+  find "$EXT" -depth -type d -empty -delete 2>/dev/null   # ne retire QUE des dossiers vides
+  if [ -d "$EXT" ]; then echo "racine isolée non vide, laissée : $EXT" >> "$ERR"; fi
+fi

@@ -21,6 +21,9 @@ export default defineConfig(
     ignores: [
       'bench/runs/**',
       '.arena/**/essais/**',
+      // Copies de bras extraites pour la notation juge (ex. juge-t4/bras/, non suivies par git) :
+      // meme nature generee que essais/, 8 erreurs de lint le 2026-09-26.
+      '.arena/**/bras/**',
       '**/node_modules',
       '**/dist',
       '**/out',

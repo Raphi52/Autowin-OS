@@ -44,6 +44,7 @@ import {
   questionPoseeSansAvoirLu,
   statusEstUneAction,
   statusEstUneLecture,
+  statutComplet,
   RELANCE_QUESTION_SANS_LECTURE,
   exigeUneConclusion,
   compactionsAbouties
@@ -2065,9 +2066,11 @@ export class AgentPilot {
                * question -- en ordonnant d'avancer sans demander, donc en ecrasant la skill `draft`
                * qui exige justement de faire choisir l'humain (mesure conv-167, 2026-09-03).
                */
-              if (statusEstUneLecture(chunk.status)) anyReadExecuted = true
+              // Juge la commande ENTIERE, pas le libelle coupe a 120 caracteres (conv-861).
+              const statutEntier = statutComplet(chunk.status, chunk.statusTarget)
+              if (statusEstUneLecture(statutEntier)) anyReadExecuted = true
               // Un Write/Edit/Bash natif a AGI : le garde « annonce sans action » doit le voir.
-              if (statusEstUneAction(chunk.status)) actionNativeCeTour = true
+              if (statusEstUneAction(statutEntier)) actionNativeCeTour = true
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
               emit({
                 kind: 'provider-status',

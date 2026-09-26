@@ -2,7 +2,8 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { UpdateBanner, depuis } from './UpdateBanner'
+import { UpdateBanner } from './UpdateBanner'
+import { depuis } from './depuis'
 
 let container: HTMLDivElement
 let root: Root

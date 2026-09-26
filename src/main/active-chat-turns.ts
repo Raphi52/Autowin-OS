@@ -6,6 +6,8 @@ interface ActiveChatTurn {
 export class ActiveChatTurns {
   private readonly turns = new Map<string, Map<AbortController, ActiveChatTurn>>()
   private readonly deleting = new Set<string>()
+  /** Demandes recues mais pas encore (ou plus) enregistrees comme tour — voir `trackPreparation`. */
+  private readonly preparing = new Map<string, number>()
   private readonly idleWaiters = new Set<() => void>()
   private readonly interactiveWaiters = new Set<() => void>()
   private readonly activeWaiters = new Map<string, Set<() => void>>()
@@ -26,6 +28,35 @@ export class ActiveChatTurns {
 
   get(conversationId: string): ActiveChatTurn | undefined {
     return [...(this.turns.get(conversationId)?.values() ?? [])].at(-1)
+  }
+
+  /**
+   * Une demande RECUE compte comme en cours des sa reception, jusqu'a la vraie fin de son tour.
+   *
+   * Faux « Reponse interrompue avant la fin » (conv-809, conv-862) : le tour n'est ENREGISTRE (`set`)
+   * qu'apres sa preparation — au premier message, `runPilotChat` (index.ts) interroge d'abord le
+   * modele pour ranger la conversation, puis le tour peut encore attendre `waitForInteractiveAccess`.
+   * Pendant ce temps la sonde de l'ecran entendait « rien ne tourne », declarait la reponse
+   * interrompue, puis la reponse arrivait quand meme dans une nouvelle bulle.
+   *
+   * Compteur SEPARE de `turns`, a dessein : une preparation n'est pas un tour. Ni l'attente
+   * d'inactivite du Watchdog, ni Stop, ni la garde de reprise n'en sont changes.
+   */
+  async trackPreparation<T>(conversationId: unknown, run: () => Promise<T>): Promise<T> {
+    if (typeof conversationId !== 'string' || !conversationId.trim()) return run()
+    this.preparing.set(conversationId, (this.preparing.get(conversationId) ?? 0) + 1)
+    try {
+      return await run()
+    } finally {
+      const restant = (this.preparing.get(conversationId) ?? 1) - 1
+      if (restant > 0) this.preparing.set(conversationId, restant)
+      else this.preparing.delete(conversationId)
+    }
+  }
+
+  /** Une reponse est-elle en cours, preparation comprise ? Verite de la sonde `os:pilotChat:active`. */
+  isInFlight(conversationId: string): boolean {
+    return Boolean(this.get(conversationId)) || this.preparing.has(conversationId)
   }
 
   /**

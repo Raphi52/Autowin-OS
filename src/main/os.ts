@@ -1380,8 +1380,13 @@ export class AutowinOS {
    * p95 1 288 ms / max 19 250 ms par tour le 2026-08-28. Le geste explicite de l'utilisateur
    * (Observatoire) garde `listRuns()`, lui, intact.
    */
-  async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }>> {
-    return (await scanRunsPourSnapshot()).map((r) => ({ ...r, blocked: isBlocked(r.summary) }))
+  async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }> & { horsFenetre?: number }> {
+    const fenetre = await scanRunsPourSnapshot()
+    // `horsFenetre` suit la liste : sans lui, un run bloqué plus ancien que la borne disparaît en silence.
+    return Object.assign(
+      fenetre.map((r) => ({ ...r, blocked: isBlocked(r.summary) })),
+      { horsFenetre: fenetre.horsFenetre }
+    )
   }
   kaizenPatterns(jsonl: string): ReturnType<typeof recurrentPatterns> {
     return recurrentPatterns(parseJsonl(jsonl))

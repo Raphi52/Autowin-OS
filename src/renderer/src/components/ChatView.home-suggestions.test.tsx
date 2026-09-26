@@ -14,7 +14,8 @@ const blockedRun = (subject: string) => ({
   session: 'attaché',
   path: `runs/${subject}/RUN.md`,
   mtime: 1,
-  summary: { status: 'bloqué', dodTotal: 0, dodChecked: 0, journalEvents: 0, defauts: 0 }
+  // `open` : un statut que `parseRun` produit vraiment (`bloqué` n'en est pas un, il deviendrait `unknown`).
+  summary: { status: 'open', dodTotal: 0, dodChecked: 0, journalEvents: 0, defauts: 0 }
 })
 
 describe('ChatView — la home propose l’état réel, plus quatre phrases figées', () => {
@@ -37,6 +38,15 @@ describe('ChatView — la home propose l’état réel, plus quatre phrases fig�
       (c) => c.textContent
     )
     expect(chips).toContain('Débloque @run:workflow-bench-regression')
+  })
+
+  // conv-861 (2026-09-25) : 7 runs bloqués s'affichaient « 3 » — la liste était coupée avant d'être comptée.
+  it('affiche le VRAI nombre de runs bloqués, même avec 3 chips seulement', async () => {
+    const sept = Array.from({ length: 7 }, (_, i) => blockedRun(`bloque-${i}`))
+    h = await mountChat(chatApi({ conversationRuns: vi.fn().mockResolvedValue(sept) }))
+    await h.click('.conv-pick')
+    expect(h.container.querySelector('.sg-subtitle')?.textContent).toBe('7')
+    expect(h.container.querySelectorAll('[data-testid="sg-chip"]')).toHaveLength(3)
   })
 
   it('retombe sur le jeu statique quand aucun run n’est bloqué', async () => {

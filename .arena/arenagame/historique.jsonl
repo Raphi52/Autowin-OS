@@ -74,3 +74,35 @@
 {"tournoi":"t4-2026-09-24","bras":"X1","jeu":52,"sur":52,"cout_usd":9.2067996}
 {"tournoi":"t4-2026-09-24","bras":"X2","jeu":51.4,"sur":52,"cout_usd":13.288240400000005}
 {"tournoi":"durcissement-t5","date":"2026-09-24","regles":"32->35 (pose sur une tour, deploiement 1 s, tenue de voie)","reference_auto":51.9,"modele_auto":5,"t4_rejoue":{"a-1":50.9,"a-2":51.2,"b-1":51.4,"b-2":51.1,"c-1":51.1,"c-2":50.2,"x-1":51.6,"x-2":51},"constat":"pose sur une tour rate chez 7/8 ; deploiement et voie passent chez 8/8 ; ecart 1,4 point"}
+{"tournoi":"nuit-2026-09-25-m1","bras":"A1","jeu":52,"sur":52,"cout_usd":12.209427400000004}
+{"tournoi":"nuit-2026-09-25-m1","bras":"B1","jeu":52,"sur":52,"cout_usd":14.442964700000008}
+{"tournoi":"nuit-2026-09-25-m1","bras":"C1","jeu":50.7,"sur":52,"cout_usd":9.414573200000001}
+{"tournoi":"nuit-2026-09-25-m1","bras":"X1","jeu":51.3,"sur":52,"cout_usd":17.648746399999997}
+{"tournoi":"nuit-2026-09-25-m2","bras":"A1","jeu":50.9,"sur":52,"cout_usd":10.512860600000007}
+{"tournoi":"nuit-2026-09-25-m2","bras":"B1","jeu":51.6,"sur":52,"cout_usd":8.6025766}
+{"tournoi":"nuit-2026-09-25-m2","bras":"C1","jeu":51.9,"sur":52,"cout_usd":8.859924200000002}
+{"tournoi":"nuit-2026-09-25-m2","bras":"X1","jeu":51.1,"sur":52,"cout_usd":13.254699799999996}
+{"tournoi":"nuit-2026-09-25-m3","bras":"A1","jeu":50.4,"sur":52,"cout_usd":10.448320899999999}
+{"tournoi":"nuit-2026-09-25-m3","bras":"B1","jeu":50.8,"sur":52,"cout_usd":7.4219525}
+{"tournoi":"nuit-2026-09-25-m3","bras":"C1","jeu":51.7,"sur":52,"cout_usd":9.987757200000003}
+{"tournoi":"nuit-2026-09-25-m3","bras":"X1","jeu":51.8,"sur":52,"cout_usd":12.148793199999998}
+{"tournoi":"nuit-2026-09-25-m4","bras":"A1","jeu":50.9,"sur":52,"cout_usd":9.720782900000005,"correction":"conv-826 2026-09-26 : libellé = dossier de nuit (m4 noté après minuit)"}
+{"tournoi":"nuit-2026-09-25-m4","bras":"B1","jeu":51.4,"sur":52,"cout_usd":8.319573549999998,"correction":"conv-826 2026-09-26 : libellé = dossier de nuit (m4 noté après minuit)"}
+{"tournoi":"nuit-2026-09-25-m4","bras":"C1","jeu":51.8,"sur":52,"cout_usd":9.045691799999998,"correction":"conv-826 2026-09-26 : libellé = dossier de nuit (m4 noté après minuit)"}
+{"tournoi":"nuit-2026-09-25-m4","bras":"X1","jeu":50.6,"sur":52,"cout_usd":16.790994599999994,"correction":"conv-826 2026-09-26 : libellé = dossier de nuit (m4 noté après minuit)"}
+{"tournoi":"nuit-2026-09-25-m5","bras":"A1","jeu":51.2,"sur":52,"cout_usd":9.026,"cout_annonce_usd":12.803656499999997,"correction":"conv-826 2026-09-26 : coût réel = dernier segment (--resume cumule) ; libellé = dossier de nuit"}
+{"tournoi":"nuit-2026-09-25-m5","bras":"B1","jeu":52,"sur":52,"cout_usd":7.8296,"cout_annonce_usd":10.246751700000004,"correction":"conv-826 2026-09-26 : coût réel = dernier segment (--resume cumule) ; libellé = dossier de nuit"}
+{"tournoi":"nuit-2026-09-25-m5","bras":"C1","jeu":51.9,"sur":52,"cout_usd":12.3953,"cout_annonce_usd":15.439658200000006,"correction":"conv-826 2026-09-26 : coût réel = dernier segment (--resume cumule) ; libellé = dossier de nuit"}
+{"tournoi":"nuit-2026-09-25-m5","bras":"X1","jeu":51,"sur":52,"cout_usd":15.9406,"cout_annonce_usd":22.3037514,"correction":"conv-826 2026-09-26 : coût réel = dernier segment (--resume cumule) ; libellé = dossier de nuit"}
+{"tournoi":"nuit-2026-09-25-m6","bras":"A1","jeu":51.3,"sur":52,"cout_usd":9.0254}
+{"tournoi":"nuit-2026-09-25-m6","bras":"B1","jeu":51.7,"sur":52,"cout_usd":7.4216}
+{"tournoi":"nuit-2026-09-25-m6","bras":"C1","jeu":52,"sur":52,"cout_usd":10.4164}
+{"tournoi":"nuit-2026-09-25-m6","bras":"X1","jeu":49.4,"sur":52,"cout_usd":13.3761}
+{"tournoi":"nuit-2026-09-26-m1","bras":"A1","jeu":51.6,"sur":52,"cout_usd":6.82806255}
+{"tournoi":"nuit-2026-09-26-m1","bras":"B1","jeu":51.3,"sur":52,"cout_usd":5.892790499999999}
+{"tournoi":"nuit-2026-09-26-m1","bras":"C1","jeu":51.2,"sur":52,"cout_usd":6.18774785}
+{"tournoi":"nuit-2026-09-26-m1","bras":"X1","jeu":49.2,"sur":52,"cout_usd":9.320238800000004}
+{"tournoi":"nuit-2026-09-26-m2","bras":"A1","jeu":51.5,"sur":52,"cout_usd":8.851528900000002}
+{"tournoi":"nuit-2026-09-26-m2","bras":"B1","jeu":51.2,"sur":52,"cout_usd":6.411158149999999}
+{"tournoi":"nuit-2026-09-26-m2","bras":"C1","jeu":51.2,"sur":52,"cout_usd":8.38892215}
+{"tournoi":"nuit-2026-09-26-m2","bras":"X1","jeu":50,"sur":52,"cout_usd":8.797237800000001}

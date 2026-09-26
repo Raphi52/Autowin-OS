@@ -141,3 +141,45 @@ B13.
 5. Non localisée : l'écart entre le banc d'un bras et le correcteur reste de 10 points sur une carte, même avec un
    bot qui ne passe que par le contrat (point 3 ci-dessus). La cause est dans le bot caché du correcteur, que ni les
    bras ni l'améliorateur ne doivent lire.
+
+## m2 (relevé par l'orchestrateur, conv-826 — aucun améliorateur après la dernière manche)
+Bras : A = B12 (SHA-256 760784C0…), B = B14, C = C14, X = appel nu. Lancés à 07:18 ; les 4 bras ont été coupés par la limite de
+session dès le départ (« resets 7:50am », `attente-*.txt`) et repris après ≈ 33 min (`reprises=1` ×4) : chaque reprise a réécrit le
+cache, les coûts de m2 ne se comparent pas à ceux de m1 sans cette réserve. Fin de nuit : `fin.txt` 09:18:30, 65,13 $ au total.
+
+| bras | note | règles | équilibrage | $ réel | sortie Opus | échecs check.mjs |
+|---|---|---|---|---|---|---|
+| A (B12) | **51,5** | 35/35 | 9,5 | 8,85 | 194 k | géant 61,0 %, gobelins 55,2 % |
+| B (B14) | 51,2 | 34/35 | 9,6 | **6,41** | 157 k | « destruction du roi : J1 ne gagne pas en attaquant seul » |
+| C (C14) | 51,2 | 34/35 | 9,6 | 8,39 | 173 k | même règle que B |
+| X (nu) | 50,0 | 34/35 | 8,4 | 8,80 | 228 k | « les tours tirent sur les unités » ; boule de feu 31,3 %, mini P.E.K.K.A 66,7 % |
+
+Prédictions de m1 : B14 et C14 visaient ≥ 51,7 — **non tenues** (51,2). B14 tient son coût (≤ 6,5 $) malgré la reprise.
+
+## Clôture de la nuit du 2026-09-26 (conv-826)
+**A = B12 reste** : sur 2 manches, A fait 51,6 puis 51,5 ; B13/B14 51,3 / 51,2 et C13/C14 51,2 / 51,2. Les variantes coûtent moins
+(−14 % et −28 % pour B) mais sous le seuil de 30 %, et avec une note plus basse à chaque manche : aucune règle d'adoption ne joue.
+
+**Premier vrai appel nu (mémoire automatique coupée, `lance-bras.sh`)** : X fait **49,2** et **50,0**, contre 50,87 en moyenne pour
+les 6 X de la nuit du 25 qui lisaient `memory\arenagame-*.md`. Les trois bras kit font 51,2 à 51,6 (moyenne 51,33) : **le kit bat
+l'appel nu en note dans les 2 manches** (+1,7 point en moyenne, contre ≈ +0,6 quand X lisait la mémoire), et B le bat en coût dans
+les 2 manches. Deux manches seulement : écart à confirmer, mais il a le signe attendu — une partie de l'avance de X venait des
+leçons du kit qu'il lisait en mémoire.
+
+**Coût** : m1, sans reprise, coûte 5,89 à 6,83 $ par bras kit (m6 du 25 : 7,42 à 10,42 $). Candidat non isolé : le contexte de
+départ allégé de la mémoire. Même tendance pour X (9,32 $ contre 13,38 $ en m6).
+
+**Frictions et causes**
+- `clore-run.mjs` réécrit l'en-tête `status:` (m0, cause 1) : `m2/runs/arena-m2-a1/…/RUN.md` porte `status: green` en l. 3 et
+  « - status: red » en l. 83 (verdict du bras). Autowin affiche ce run « clash-clone » en **rouge bloqué**. Non corrigé ici :
+  `clore-run.mjs` est en cours de modification dans un autre fil (conv-861).
+- `historique.jsonl` : les 4 lignes de m4 du 25 (notées après minuit) portaient `nuit-2026-09-26-m4` ; corrigées en
+  `nuit-2026-09-25-m4` (champ `correction`). Les lignes de cette nuit portent le bon libellé (`nuit.sh` corrigé).
+- Limite de session sur les 4 bras à la fois en m2 : m0 + m1 + l'améliorateur ont épuisé la fenêtre ; non corrigeable dans le kit.
+
+**Effacé / conservé** : copies `m1/` et `m2/{a,b,c,x}-1` effacées par `nuit.sh` après archive (`m1.bras.tar`, `m2.bras.tar`,
+117 fichiers chacune, relues) ; notes, `out-*`, `sys-*`, `runs/`, journaux et ce RUN.md conservés.
+
+**Discrimination** : kit 51,2 à 51,6 — saturé, banc à durcir entre A/B/C. Seul X se détache désormais (−1,2 à −2,4 points).
+
+remember (leçon) : voir la mémoire du fil conv-826.

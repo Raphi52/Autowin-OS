@@ -907,15 +907,160 @@ export function questionPoseeSansAvoirLu(
 const LECTEURS_NATIFS = /^(Read|Grep|Glob)\b/
 // fix-ok: turn 852bb2fd-25e4-40dd-a959-57d9337b084c (conv-844) -- `cd D:/x; sed -n ...` n'etait pas
 // reconnu (ancre sur le 1er mot) : relance « question sans lecture » a tort, question affichee 2x.
-const BASH_LECTEUR =
-  /^\s*(?:cd\s+\S+\s*(?:;|&&)\s*)?(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|git\s+(log|show|diff|status))\b/
+// MEME DEFAUT, AUTRES FORMES (conv-861, 2026-09-25) : `cd X; date; tail ...`, `N=...; tail ...` et
+// `git -C X log` -- trois relances a tort dans le meme fil. On ne regarde donc plus le 1er mot : la
+// commande est DECOUPEE en segments (hors guillemets) et chaque segment est classe sur une liste
+// FERMEE. Le patch par forme (un `cd` ici, un `date` la) ne finissait jamais.
+const LECTEUR_BASH = /^(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type)$/
+const SOUS_COMMANDE_GIT_LECTRICE = /^(log|show|diff|status)$/
+/** Ne lit ni n'ecrit rien : n'empeche pas une lecture d'etre « pure ». */
+const NEUTRE_BASH =
+  /^(cd|date|echo|printf|pwd|true|test|\[|for|while|until|if|case|done|fi|esac|\}|\))$/
+/** Mot-cle qui PRECEDE la vraie commande du segment (`do sed ...`, `then cat ...`). */
+const PREFIXE_BASH = /^(do|then|else|elif|\{|\(|!|time)$/
+const AFFECTATION_BASH = /^[A-Za-z_]\w*=/
 
+interface SegmentBash {
+  mots: string[]
+  /** Redirection `>` / `>>` vers autre chose que `/dev/null` ou un descripteur (`&1`). */
+  ecritFichier: boolean
+  /** `$(...)` ou accent grave : une commande cachee, jamais classee « pure ». */
+  substitution: boolean
+}
+
+/** Decoupe sur `;` `&&` `||` `|` `&` et saut de ligne, HORS guillemets (`grep -E "a|b"` reste entier). */
+function segmentsBash(commande: string): SegmentBash[] {
+  const segments: SegmentBash[] = []
+  let courant: SegmentBash = { mots: [], ecritFichier: false, substitution: false }
+  let mot = ''
+  let guillemet: string | null = null
+  const finMot = (): void => {
+    if (mot) courant.mots.push(mot)
+    mot = ''
+  }
+  const finSegment = (): void => {
+    finMot()
+    if (courant.mots.length || courant.ecritFichier || courant.substitution) segments.push(courant)
+    courant = { mots: [], ecritFichier: false, substitution: false }
+  }
+  for (let i = 0; i < commande.length; i++) {
+    const c = commande[i]
+    const substitution = c === '`' || (c === '$' && commande[i + 1] === '(')
+    if (guillemet) {
+      if (c === guillemet) guillemet = null
+      else if (guillemet === '"' && c === '\\' && i + 1 < commande.length) mot += commande[++i]
+      else {
+        if (guillemet === '"' && substitution) courant.substitution = true
+        mot += c
+      }
+      continue
+    }
+    if (c === "'" || c === '"') {
+      guillemet = c
+      continue
+    }
+    if (c === '\\' && i + 1 < commande.length) {
+      // `\;`, `\|`, `\``, `\>` : caractere LITTERAL, ni separateur, ni substitution, ni redirection.
+      mot += commande[++i]
+      continue
+    }
+    if (substitution) courant.substitution = true
+    if (c === ';' || c === '\n' || c === '|' || c === '&') {
+      finSegment()
+      if ((c === '|' || c === '&') && commande[i + 1] === c) i++
+      continue
+    }
+    if (c === '>') {
+      finMot()
+      let j = i + 1
+      if (commande[j] === '>') j++
+      while (commande[j] === ' ') j++
+      if (commande[j] === '&') {
+        // `2>&1` : vers un descripteur, aucun fichier ecrit.
+        j++
+        while (/\d/.test(commande[j] ?? '')) j++
+      } else {
+        let cible = ''
+        while (j < commande.length && !/[\s;|&]/.test(commande[j])) cible += commande[j++]
+        if (cible !== '/dev/null') courant.ecritFichier = true
+      }
+      i = j - 1
+      continue
+    }
+    if (c === ' ' || c === '\t') finMot()
+    else mot += c
+  }
+  finSegment()
+  return segments
+}
+
+/** Commande reelle du segment : mots-cles de tete et affectations `N=...` retires. */
+function commandeDuSegment(segment: SegmentBash): string[] {
+  const mots = [...segment.mots]
+  while (mots.length && (PREFIXE_BASH.test(mots[0]) || AFFECTATION_BASH.test(mots[0]))) mots.shift()
+  return mots
+}
+
+function segmentLit(segment: SegmentBash): boolean {
+  const [commande, ...args] = commandeDuSegment(segment)
+  if (!commande) return false
+  if (commande === 'git') {
+    // `git -C <dossier> log`, `git --no-pager diff` : les options globales precedent la sous-commande.
+    let k = 0
+    while (k < args.length && args[k].startsWith('-'))
+      k += args[k] === '-C' || args[k] === '-c' ? 2 : 1
+    return SOUS_COMMANDE_GIT_LECTRICE.test(args[k] ?? '')
+  }
+  if (!LECTEUR_BASH.test(commande)) return false
+  // `sed -i` REECRIT le fichier ; `find -delete` / `-exec` agit : ni l'un ni l'autre ne lit seulement.
+  if (commande === 'sed' && args.some((a) => /^(-[A-Za-z]*i|--in-place)/.test(a))) return false
+  if (commande === 'find' && args.some((a) => /^-(delete|exec|execdir|ok)$/.test(a))) return false
+  return true
+}
+
+function segmentNeutre(segment: SegmentBash): boolean {
+  const [commande] = commandeDuSegment(segment)
+  return commande === undefined || NEUTRE_BASH.test(commande)
+}
+
+/**
+ * Le battement d'outil ENTIER : `Outil · <cible complete>` quand le libelle a ete coupe.
+ *
+ * Le fournisseur coupe la cible a 120 caracteres pour l'affichage et garde l'entiere dans
+ * `statusTarget` (providers/claude.ts). Juger une commande sur son moignon est faux dans les deux
+ * sens : rejoue sur les 134 commandes Bash de conv-861, `R=...; DEST=...; for d in ...` passait pour
+ * une lecture PURE alors que son `cp` / `rm -r` tombait apres la coupure. Seule la forme
+ * `Outil · cible` est reconstruite ; le battement « Bash en cours - 2 min - ... » reste tel quel.
+ */
+export function statutComplet(status: string | undefined, statusTarget?: string): string {
+  const texte = status ?? ''
+  if (!statusTarget) return texte
+  const outil = /^(\w+) · /.exec(texte)
+  return outil ? `${outil[1]} · ${statusTarget}` : texte
+}
+
+/** Le texte de commande d'un battement `Bash · ...`, ou null si ce n'est pas un `Bash`. */
+function commandeBash(texte: string): string | null {
+  const bash = /^Bash\b\s*(?:·\s*)?(.*)$/s.exec(texte)
+  return bash ? (bash[1] ?? '') : null
+}
+
+/** AU MOINS UN segment lit : preuve que l'agent a REGARDE, quoi que fassent les autres. */
 export function statusEstUneLecture(status: string | undefined): boolean {
   const texte = (status ?? '').trim()
   if (!texte) return false
   if (LECTEURS_NATIFS.test(texte)) return true
-  const bash = /^Bash\b\s*(?:·\s*)?(.*)$/s.exec(texte)
-  return bash ? BASH_LECTEUR.test(bash[1] ?? '') : false
+  const commande = commandeBash(texte)
+  return commande !== null && segmentsBash(commande).some(segmentLit)
+}
+
+/** CHAQUE segment lit ou ne fait rien, sans ecrire de fichier ni cacher de commande. */
+function lecturePure(commande: string): boolean {
+  const segments = segmentsBash(commande)
+  return (
+    segments.length > 0 &&
+    segments.every((s) => !s.ecritFichier && !s.substitution && (segmentLit(s) || segmentNeutre(s)))
+  )
 }
 
 /**
@@ -924,7 +1069,10 @@ export function statusEstUneLecture(status: string | undefined): boolean {
  * Mesure du 2026-09-22 (conv-782) : un tour qui avait cree un script (Write), modifie une skill
  * (Edit) et joue des tests (Bash) a recu « tu as ANNONCE ce que tu allais faire, sans rien faire ».
  * `anyActionExecuted` n'est leve que par un `<cmd>` Autowin ; les outils natifs passent par
- * `chunk.status`. Est une action : un ecrivain natif, ou un `Bash` qui n'est pas une lecture sure.
+ * `chunk.status`. Est une action : un ecrivain natif, ou un `Bash` qui n'est pas une lecture PURE.
+ *
+ * Pure, et non plus « le 1er mot lit » (conv-861) : depuis que `statusEstUneLecture` reconnait une
+ * lecture n'importe ou dans la commande, `date; rm -rf x; cat y` CONTIENT une lecture -- mais il agit.
  */
 const ECRIVAINS_NATIFS = /^(Write|Edit|MultiEdit|NotebookEdit)\b/
 
@@ -932,8 +1080,8 @@ export function statusEstUneAction(status: string | undefined): boolean {
   const texte = (status ?? '').trim()
   if (!texte) return false
   if (ECRIVAINS_NATIFS.test(texte)) return true
-  const bash = /^Bash\b\s*(?:·\s*)?(.*)$/s.exec(texte)
-  return bash ? !statusEstUneLecture(texte) : false
+  const commande = commandeBash(texte)
+  return commande !== null && !lecturePure(commande)
 }
 
 /** Ce qu'on renvoie a l'agent : l'ordre de REGARDER, puis de decider lui-meme si possible. */

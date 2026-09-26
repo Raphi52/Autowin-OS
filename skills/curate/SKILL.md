@@ -8,7 +8,8 @@ description: >-
   note consolidée qui remplace les deux), `reject` (contrôle dur échoué → corriger ou supprimer).
   Ne promeut QUE ce qui sert le travail (métier, code, décisions techniques, contraintes, préférences
   de l'utilisateur) : un candidat hors de ce périmètre est rejeté même s'il est vrai.
-  Se termine par réindexation + `brain_validate.py` vert + commit. Ne promeut jamais une fusion
+  Commence par prendre le verrou `inbox/.curation.lock` et s'arrête si une autre passe le tient.
+  Se termine par réindexation + `brain_validate.py` vert + commit, puis rend le verrou. Ne promeut jamais une fusion
   à l'aveugle et ne supprime jamais un candidat sans avoir lu son contenu.
 ---
 
@@ -23,6 +24,23 @@ description: >-
 - `brain_curate.py` n'a PAS d'option `--report` : sans `--apply`, il rapporte déjà.
 
 ## Procédure
+0. **Verrou — AVANT toute lecture de la file.** Deux passes peuvent viser la même `inbox/` en même temps
+   (la tâche quotidienne de 08:30 et une passe lancée à la main). Mesuré le 2026-09-26 : la seconde passe
+   a trouvé 9 candidats sur 10 déjà déplacés entre son rapport et son application. Le 2026-09-23, deux
+   indexations simultanées ont fait planter l'une d'elles sur un fichier disparu. Prendre le verrou :
+   `mkdir "<brainRoot>/inbox/.curation.lock"` — atomique, y compris sur le partage réseau : une seule
+   passe réussit (vérifié le 2026-09-26 : le second `mkdir` rend le code 1, « File exists »).
+   - Réussi → la passe est à toi. Rafraîchis-le avec `touch` avant chaque réindexation (étape 6).
+   - Échec → une autre passe tourne : **STOP**, ne lis ni n'écris rien dans le Brain, et rends un bilan
+     « passe déjà en cours depuis <heure> » (heure lue par `stat -c %y` sur le dossier). Ce n'est pas un
+     échec de la tâche : la file sera vidée par l'autre passe.
+   - Exception, verrou périmé : si `find "<verrou>" -maxdepth 0 -mmin +240` rend son chemin (aucun
+     `touch` depuis plus de 4 h), la passe qui l'a posé est morte. Fais `rmdir` puis de nouveau `mkdir` ;
+     si ce second `mkdir` échoue, une autre passe l'a repris → STOP. Limite connue : deux passes qui
+     reprennent le même verrou périmé à la même seconde peuvent encore se croiser.
+   - Le verrou est un dossier VIDE, sans extension `.md` : l'outillage ne lit que `inbox/*.md` et git
+     ignore les dossiers vides. N'y écris jamais de fichier, sinon il apparaît dans git et peut partir
+     dans un commit.
 1. Compter la file : `ls <brainRoot>/inbox/*.md` (README exclu).
 2. Rapport : `python tooling/brain_curate.py --brain <brainRoot>` → JSON
    `{candidates:[{verdict, reason, merge_with}]}`. `--brain` est OBLIGATOIRE : par défaut le script vise le
@@ -60,6 +78,9 @@ description: >-
    knowledge/_maps/vault-inventory.md` se corrige avec
    `python tooling/obsidian_graph.py --root <brainRoot> --refresh-indexes --reviewer <agent>`, puis on revalide.
 8. Commit dans le dépôt Brain, message `curation: <n> promus, <m> fusionnés, <k> rejetés`.
+9. Rendre le verrou : `rmdir "<brainRoot>/inbox/.curation.lock"`, APRÈS le commit — et aussi quand la
+   passe s'arrête avant (blocage, erreur, interruption). Un verrou oublié bloque toutes les passes
+   pendant 4 h. Le bilan dit que le verrou est rendu.
 
 ## Ce que la skill ne fait pas
 Elle ne décide pas à la place du protocole : les fusions et les rejets sont des ÉCRITURES de

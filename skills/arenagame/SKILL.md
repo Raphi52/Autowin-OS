@@ -114,7 +114,15 @@ tout tournoi reçoit, quel que soit son `lance.sh` : (1) une copie du `sys` comp
 `judge` si elle ne les porte pas (`sys-effectif-<bras>.txt`, le `sys` du tournoi reste intact, le
 bras X nu n'est pas touché ; `ARENA_SANS_CLEAN_JUDGE=1` désactive) ; (2) la clôture du RUN.md
 (`check.mjs` → `note-clore-<bras>.json` → `clore-run.mjs`). t4 (2026-09-24), lancé hors de
-`nuit.sh`, n'avait ni l'un ni l'autre : 11 runs sur 12 bloqués, 0 trace de nettoyage. t2b, t2v et t3 ont eu TOUS
+`nuit.sh`, n'avait ni l'un ni l'autre : 11 runs sur 12 bloqués, 0 trace de nettoyage. (3) chaque
+`claude -p` y est lancé avec `--setting-sources project,local` : les réglages PERSONNELS
+(`~/.claude/settings.json`, qui ne portent qu'un hook Brain) sont ignorés. Ce hook, remis en état le
+24/09 à 15:09, injectait dans tous les bras des notes d'un vrai projet voisin (BrainRotRoyale), X
+compris : 0 injection dans X le 22/09, 31 le 25/09, et X délégait alors sa production (+25 % de coût).
+Prouvé sur un vrai `claude -p` (`--include-hook-events`) : sans l'option, le hook s'exécute ; avec,
+aucun événement de hook. Opt-out : `ARENA_AVEC_HOOKS_PERSO=1`. Un `claude` de test lancé depuis une
+session Autowin hérite de `CLAUDE_CONFIG_DIR` (compte Autowin, sans ce hook) : le retirer
+(`env -u CLAUDE_CONFIG_DIR …`) pour reproduire l'environnement réel d'un bras. t2b, t2v et t3 ont eu TOUS
 leurs bras coupés vers 30 min par la limite de session Claude (« You've hit your session limit ·
 resets 7pm », `is_error: true`) : des jeux inachevés, notés comme s'ils avaient perdu.
 `lance-bras.sh <banc> <bras-replique> <prompt> [sys]` attend l'heure de remise à zéro annoncée puis
@@ -123,6 +131,23 @@ et durée, et porte `reprises`. Corps du `lance.sh` d'un tournoi :
 `for b in a b c x; do for r in 1 2; do bash "$ARENE/lance-bras.sh" "$BANC" $b-$r "$BANC/prompt-$b.txt" $( [ $b = x ] || echo "$BANC/sys-$b.txt" ) & done; done; wait; date > "$BANC/fin.txt"`
 (`ARENE=D:/AutoWinOS/.arena/arenagame`). Vérifié le 2026-09-22 avec un faux `claude` coupé deux fois :
 2 reprises sur la même session, budget 40 → 30,50 → 21 $, attente calculée jusqu'à 19h02.
+**Bras isolés (depuis le 2026-09-26, conv-826)** : `lance-bras.sh` déplace la copie du bras dans
+`D:\bras-isoles\<tournoi>-<bras>\jeu` (hors du dépôt) le temps du bras, puis la rend avant la notation ; le RUN.md
+du bras vit sous `…\runs` (racine dite en fin de sys, écrite dans `out.json` → `runs_racine`, que `clore-run.mjs`
+suit) ; `--settings isolement-<bras>.json` interdit Read/Edit sur `D:\AutoWinOS`, `~\.claude\runs` et Read sur
+`~\.claude\projects`, plus les commandes Bash/PowerShell qui les nomment (motifs `*AutoWinOS*`, `*.claude*runs*`,
+`*.claude*projects*` — la correspondance IGNORE LA CASSE : un motif sans le point, `*claude*runs*`, a refusé à tort en
+nuit-2026-09-26-iso m1 une commande de c-1 qui citait `$env:CLAUDE_SESSION_ID` puis sa propre racine `…\runs`) ; les variables `NUIT_*` sont retirées.
+**Ne jamais modifier `lance-bras.sh` ou `nuit.sh` pendant qu'un tournoi tourne** : bash lit le script au fil de
+l'exécution, un décalage d'octets casse la fin des bras en cours (notation, retour des copies). Correctif urgent =
+même longueur en octets, sinon attendre `fin.txt`.
+`ARENA_ISOLER=0` désactive (l'améliorateur de `nuit.sh` l'utilise : il doit lire le banc) ; `ARENA_MODELE` choisit le
+modèle (tests à blanc). Mesuré sur un bras à blanc réel (haiku, 0,07 $) : dossiers parents sans trace du banc ;
+Read, Get-Content, Glob, Get-ChildItem sur `lance-bras.sh`, `~\.claude\runs` et un ancien RUN.md d'essai →
+**refusés**. **Fuite restante** : une recherche récursive de tout `D:\` (`Get-ChildItem D:\ -Recurse -Name`)
+voit encore le NOM `AutoWinOS\.arena\arenagame\lance-bras.sh` ; son contenu reste fermé aux outils et aux commandes
+qui le nomment, pas à un script qui ouvrirait le fichier lui-même (limite documentée des interdictions ; seul un bac
+à sable du système la fermerait).
 Repli déjà prouvé (t2b, 12 bras vivants au tour suivant) :
 `schtasks //Create //F //TN AutowinArena-<tournoi> //SC ONCE //ST 23:59 //TR "\"<Git>\bin\bash.exe\" -lc \"<banc>/lance.sh\""`
 puis `schtasks //Run //TN AutowinArena-<tournoi>` ; supprime la tâche (`schtasks //Delete //TN … //F`)
@@ -135,7 +160,10 @@ vides : un bras à 0 octet n'a pas tourné, ce n'est pas un bras qui a perdu.
 ## 2 bis. Mode nuit — enchaîner les tournois sans humain
 Demande utilisateur (conv-782, 2026-09-22 : « lance des /arenagame toute la nuit le but c est d améliorer les workflows jusqu a avoir un jeu parfait en one shot »).
 `.arena/arenagame/nuit.sh` enchaîne des MANCHES dans `essais/nuit-<date>/m<k>` : 4 bras × 1 réplique (A = meilleur workflow mesuré, B = variante de texte, C = variante outil/procédure, X = appel nu), chacun via `lance-bras.sh` à 40 $, notés par `check.mjs` et ajoutés à `historique.jsonl`, puis clos par `clore-run.mjs` (`status: green` si le critère de `check.mjs` est atteint, `red` sinon) ; copies archivées en `m<k>.bras.tar` puis effacées. Entre deux manches, un AMÉLIORATEUR (`claude -p`, 15 $) lit les notes et le code produit, garde A sauf si B ou C le bat d au moins 2 points, écrit deux nouvelles variantes et une section `## m<k>` dans `essais/nuit-<date>/RUN.md`. Il n a PAS le droit de toucher `check.mjs`, `cache/`, `reference/`, `modele/` ni l énoncé.
-Arrêts : `NUIT_BUDGET_USD` (500 $ par défaut, une manche ne démarre que s il reste 170 $), `NUIT_FIN_H` (9 h), `NUIT_MANCHES` (6). Lancement hors du tour par `lancer-detache.ps1` comme au § 2. Au réveil : lire `journal.txt`, `RUN.md`, `fin.txt` ; la note des 48 points de jugement reste non observable (§ 3).
+Depuis conv-826 (2026-09-25) : si `NUIT_SOURCE` est un tournoi DÉJÀ noté (`note-*.json`), l améliorateur passe d abord (`m0/ameliore`) — sinon m1 rejouait à l identique des workflows déjà mesurés (~45 $). Règle d adoption de A élargie : B ou C remplace A aussi s il est à moins de 1 point pour un coût inférieur d au moins 30 % (la note auto sature près de 52/52 depuis t4, la règle des 2 points ne pouvait plus jouer). Piège : l arrêt à l heure vaut de `NUIT_FIN_H` à 18 h, donc un lancement l après-midi avec la valeur par défaut s arrête AVANT la première manche — mettre `NUIT_FIN_H=24` pour ne pas s arrêter à l heure. Les variables ne traversent pas `lancer-detache.ps1` (WMI) : les fixer dans un `lance.sh` du dossier de nuit (modèle : `essais/nuit-2026-09-25/lance.sh`).
+**Nuit du 2026-09-25 (m0-m6, 277 $ réels dont 12,70 $ d améliorateurs ; arrêtée à la main après m6, conv-826 « fini ce banc »)** : sur m2-m6, la lignée B (B8 → B12) bat le témoin B6 en note ET en coût dans les **5 manches sur 5** (moyennes 51,50 contre 50,94 ; 7,92 $ contre 9,75 $ réels) ; la lignée C a la meilleure note (51,86) pour un coût voisin de A (10,14 $). Écarts de note dans le bruit de l équilibrage (≈ 0,5 point), SAUF une règle : B6 accepte la pose sur une tour **5 fois sur 5**, les B et C qui la disent la passent. Décision humaine : la lignée B est adoptée, **A = B12** (`essais/nuit-2026-09-25/m6/sys-b.txt`, 38 969 octets), point de départ par défaut de la prochaine nuit (`NUIT_SOURCE` = `essais/nuit-2026-09-25/m6`). La règle d adoption de l améliorateur accepte désormais une lignée qui bat A sur les deux axes 3 manches de suite. Ce qui en sort pour Autowin OS (hors jeu) : `build` 4 bis (jumeau d acceptation de chaque refus) et `judge` (juges au premier plan). Correctifs du lanceur le 2026-09-26 : `lance-bras.sh` coupe la mémoire automatique (`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` : avant, les 4 bras, appel nu compris, lisaient `memory\arenagame-*.md` du dépôt — **tout X antérieur au 2026-09-26 n est pas un appel nu**), prend le coût du DERNIER segment après une reprise (`--resume` rend un coût cumulé : m5 annonçait 12,80 $ pour 9,03 $ réels) et dit que le workflow du bras prime sur CLEAN/JUDGE ; `nuit.sh` étiquette `historique.jsonl` par le dossier de nuit et exige, pour toute règle de jeu écrite par l améliorateur, la ligne d un bras qui la passe.
+`NUIT_A_FIXE=<sys>` impose A à la première manche (l améliorateur m0 écrit B et C sur ce texte ; le script recopie A après lui). Aucun améliorateur ne tourne après la DERNIÈRE manche. Nuit du 2026-09-26 (`essais/nuit-2026-09-26/lance.sh`, 2 manches, A = B12) : premiers vrais appels nus, aucun des 4 bras de m1 ne lit `memory\` (contrôlé sur leurs premiers appels d outils) ; 0 console visible sur l écran réel avec jusqu à 21 `lune.exe` actifs (`surveillance-consoles.txt`). Isolement encore incomplet, observé le même jour : un bras kit a lu `D:\AutoWinOS\.arena\arenagame\lance-bras.sh` (hors de sa copie) et les bras listent `~\.claude\runs` (RUN.md des essais précédents) — le dossier du banc reste lisible depuis un bras. Résultat (fin 09:18, 65 $) : A = B12 reste (51,6 · 51,5 ; B13/B14 et C13/C14 plus bas, moins chers sous le seuil de 30 %) ; **le vrai appel nu fait 49,2 · 50,0**, contre 50,87 en moyenne pour les X du 25 qui lisaient la mémoire — le kit le bat en note dans les 2 manches (+1,7 point). m1 sans reprise : 5,9 à 6,8 $ par bras kit (m6 : 7,4 à 10,4 $).
+Arrêts : `NUIT_BUDGET_USD` (500 $ par défaut, une manche ne démarre que s il reste 170 $), `NUIT_FIN_H` (9 h), `NUIT_MANCHES` (6). Arrêter une nuit en cours : tuer le SEUL pid de `nuit.sh` (jamais par nom), laisser finir les `lance-bras.sh` vivants, puis faire à la main la fin de manche du script (notes, `historique.jsonl`, archive `m<k>.bras.tar` relue, effacement du manifeste, `fin.txt`). Lancement hors du tour par `lancer-detache.ps1` comme au § 2. Au réveil : lire `journal.txt`, `RUN.md`, `fin.txt` ; la note des 48 points de jugement reste non observable (§ 3).
 
 ## 3. Grille — DEUX notes, la seconde est la vraie
 
@@ -151,6 +179,15 @@ la place et reste sur son accueil « Chargement de Studio… » (conv-767 : jour
 **vue 3D reste unie** : `hdesk-observe.ps1` le signale lui-même, car le rendu GPU ne se capture pas sur un
 bureau caché — aucun mode de rendu n'y échappe : OpenGL (`FFlagDebugGraphicsPreferOpenGL`) et Vulkan (`FFlagDebugGraphicsPreferVulkan`) testés en conv-767, vue 3D toujours unie et Explorer vide ; Studio n'a pas de rendu logiciel. Sur bureau caché, seuls l'interface de Studio (Explorer, Propriétés, sortie) est
 observable ; un volet juge qui exige la vue 3D ou le jeu lancé est noté « non observable », jamais deviné.
+**Voie qui voit la 3D : Studio dans la session de l'utilisateur, piloté SANS sa souris** (conv-826, 2026-09-25,
+outils `juge-t4/fenetre.ps1`) : `PrintWindow(PW_RENDERFULLCONTENT)` sur la fenêtre Studio capture la vue 3D
+(arène, tours, rivière lues), et des clics par `PostMessage` ferment les dialogues (« Migration de la technologie
+d'éclairage » → Continuer) et lancent Jouer, sans prendre le curseur ni le premier plan. LIMITE mesurée : quand
+la fenêtre du bureau à distance de l'utilisateur est RÉDUITE, Studio ne redessine plus la 3D (capture édition et
+capture en jeu identiques au pixel, redimensionner n'y change rien). Préalable : fenêtre RDP affichée, ou sur le
+PC CLIENT `HKCU\Software\Microsoft\Terminal Server Client\RemoteDesktop_SuppressWhenMinimized` = 2 (DWORD)
+(https://docs.uipath.com/robot/standalone/2023.4/user-guide/executing-tasks-in-a-minimized-rdp-window). Non
+encore mesuré : le rendu quand Studio est simplement caché derrière une autre fenêtre.
 
 | volet | poids | mesure | preuve |
 |---|---|---|---|
@@ -191,7 +228,14 @@ Dans cet ordre, sans en sauter :
    `node .arena/arenagame/clore-run.mjs <note-<b>.json> <out-<b>-1.json>` pose `status: green|red`
    dans le RUN.md que sa session a écrit (retrouvé par le journal de session, le nom du dossier
    n'étant pas le session_id). Sans ce statut, Autowin lit `unknown` et compte l'essai comme run
-   BLOQUÉ (mesuré le 2026-09-23 : 46 essais terminés remontaient ainsi).
+   BLOQUÉ (mesuré le 2026-09-23 : 46 essais terminés remontaient ainsi). Le statut ne suffit pas
+   (une case `- [ ]` bloque aussi) : clore-run RANGE ensuite le dossier du RUN.md dans
+   `<dossier du out.json>/runs/` — c'est là, et plus sous `~\.claude\runs`, qu'on relit un bras clos. Avant de
+   poser son statut, clore-run recopie UNE fois le `status:` du bras dans `status_bras:` (`aucun` s'il n'en avait
+   pas, `inconnu` si le RUN.md était déjà rangé) : le verdict déclaré par le bras est la base de la note « preuve
+   honnête » (§ 3). Avant le 2026-09-26 il était écrasé (nuit-2026-09-26 m2 a-1 : `red` posé, `green` relu).
+   Tant que le bras tourne, son RUN.md est sous `~\.claude\runs` et Autowin l'affiche (ouvert, puis rouge si le
+   bras s'est déclaré `red`) jusqu'à sa clôture : c'est attendu, pas un blocage.
 2. **Traduire chaque cause localisée en édition d'Autowin OS** (skill, prompt de pilotage,
    garde-fou, script), une par commit dédié, vérifiée hors modèle (`npm test` ciblé sur le fichier
    touché). Une friction sans cause localisée s'écrit « non localisée », jamais en règle ajoutée

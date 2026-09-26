@@ -3094,16 +3094,18 @@ Le fil reprend ensuite normalement.`
     broadcast({ type: 'refresh', scope: 'conversations' })
   }
 
-  const runPilotChat: typeof lancerTour = async (...args) => {
-    const conversationId = args[2]
-    if (typeof conversationId === 'string' && conversationId.trim()) {
-      await rangerSurLePremierMessage(conversationId, args[1])
-      alignerDossierSurLaDemande(conversationId, args[1])
-      avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
-      appliquerCompteDeConversation(conversationId)
-    }
-    return lancerTour(...args)
-  }
+  // La demande compte comme EN COURS des sa reception, rangement compris (voir trackPreparation).
+  const runPilotChat: typeof lancerTour = (...args) =>
+    activeChatTurns.trackPreparation(args[2], async () => {
+      const conversationId = args[2]
+      if (typeof conversationId === 'string' && conversationId.trim()) {
+        await rangerSurLePremierMessage(conversationId, args[1])
+        alignerDossierSurLaDemande(conversationId, args[1])
+        avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
+        appliquerCompteDeConversation(conversationId)
+      }
+      return lancerTour(...args)
+    })
   /**
    * Reprend les appels de chat dont le CLI a survécu au main. La réservation locale empêche un
    * nouveau message d'entrer dans la même conversation pendant qu'on attend la preuve `.exit.json`.
@@ -3399,7 +3401,7 @@ Le fil reprend ensuite normalement.`
   bus.conversationExiste = (conversationId) => scheduledChatRuntime.hasConversation(conversationId)
   // MEME autorite que la sonde `os:pilotChat:active` du renderer : l'agent du chat doit pouvoir
   // repondre « est-ce que ca tourne encore ? » sans deviner en lisant des journaux de fin de tour.
-  bus.tourDeChatActif = (conversationId) => Boolean(activeChatTurns.get(conversationId))
+  bus.tourDeChatActif = (conversationId) => activeChatTurns.isInFlight(conversationId)
   bus.lancerDansConversation = async (conversationId, prompt, binding) => {
     const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
     return {
@@ -3812,7 +3814,7 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:pilotChat:active', (event, rawConversationId: string) => {
     assertTrustedRendererSender(event, 'Pilot chat active probe')
     const conversationId = guardString(rawConversationId, 'conversationId')
-    return { active: Boolean(activeChatTurns.get(conversationId)) }
+    return { active: activeChatTurns.isInFlight(conversationId) }
   })
   ipcMain.handle('os:orchestrate:cancel', (event, rawConversationId: string) => {
     assertTrustedRendererSender(event, 'Orchestration cancel')
