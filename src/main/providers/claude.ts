@@ -20,13 +20,13 @@ import {
 } from '../runs/stdout-journal'
 import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
-import { findNpmGlobalFile } from './npm-global-resolve'
+import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
 import { refusReglageProd, refusSqlAgent } from '../prod-run-guard'
 import { chargerAutoriteProd } from '../store/prod-autorite-store'
 import { autowinAppDataRoot } from '../app-data'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
 import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
@@ -511,7 +511,89 @@ export function resolveClaudeBin(explicit?: string): string {
   if (explicit) return explicit
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
   const found = findClaudeExecutable()
+  if (found) dernierClaudeTrouve = found
   return found ?? 'claude'
+}
+
+/** Dernier `claude.exe` resolu dans ce processus — secours si une resolution ulterieure echoue. */
+let dernierClaudeTrouve: string | undefined
+
+export interface BinaireLancableDeps {
+  platform?: string
+  /** Binaire DESIGNE (option `bin` ou `CLAUDE_BIN`) : choix de l'operateur, jamais re-resolu. */
+  designe?: boolean
+  rechercher?: () => string | undefined
+  dernierConnu?: () => string | undefined
+  existe?: (chemin: string) => boolean
+  candidats?: () => string[]
+  attendre?: (ms: number) => Promise<void>
+}
+
+/**
+ * Binaire que le relais survivable Windows peut REELLEMENT lancer.
+ *
+ * Le runner passe l'executable a CreateProcessW en `lpApplicationName`, qui ne cherche JAMAIS dans le
+ * PATH : le repli nu `claude` y echoue a coup sur, en « Le fichier specifie est introuvable » (reproduit
+ * le 2026-09-25, `-ExecutableB64` decode = « claude »). Plutot que de lancer un echec certain, on
+ * re-resout (dernier binaire connu, puis quelques essais espaces) ; sinon on echoue en NOMMANT les
+ * dossiers cherches — la prochaine occurrence s'explique d'elle-meme.
+ */
+export async function binaireClaudeLancable(
+  bin: string,
+  deps: BinaireLancableDeps = {}
+): Promise<string> {
+  const platform = deps.platform ?? process.platform
+  if (platform !== 'win32' || deps.designe || isAbsolute(bin)) return bin
+  const existe = deps.existe ?? existsSync
+  const connu = (deps.dernierConnu ?? ((): string | undefined => dernierClaudeTrouve))()
+  if (connu && existe(connu)) return connu
+  const rechercher = deps.rechercher ?? ((): string | undefined => findClaudeExecutable())
+  const attendre =
+    deps.attendre ?? ((ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)))
+  for (const ms of [0, 250, 1000, 3000]) {
+    if (ms) await attendre(ms)
+    const trouve = rechercher()
+    if (trouve) {
+      dernierClaudeTrouve = trouve
+      return trouve
+    }
+  }
+  const cherches = (deps.candidats ?? ((): string[] => npmPrefixCandidates()))()
+  throw new Error(
+    `CLI claude introuvable : aucun claude.exe sous ${cherches.slice(0, 6).join(' ; ') || '(aucun dossier candidat)'}. ` +
+      'Installe-le (npm i -g @anthropic-ai/claude-code) ou désigne-le via CLAUDE_BIN.'
+  )
+}
+
+/**
+ * `claude update` en cours, lance par l'app elle-meme (`claude-cli-update.ts`). Sur une install npm,
+ * la mise a jour SUPPRIME puis recree tout le paquet (mesure du 2026-09-25 : ~3 s sans `claude.exe`).
+ * Un tour lance dans cette fenetre echoue en « fichier introuvable » ; il attend donc la fin.
+ */
+let miseAJourClaudeCli: Promise<unknown> | undefined
+/** Plafond d'attente : une mise a jour qui traine ne doit pas retenir un tour indefiniment. */
+const ATTENTE_MISE_A_JOUR_MAX_MS = 180_000
+
+export function signalerMiseAJourClaudeCli(enCours: Promise<unknown>): void {
+  const suivie = enCours.then(
+    () => undefined,
+    () => undefined
+  )
+  miseAJourClaudeCli = suivie
+  void suivie.then(() => {
+    if (miseAJourClaudeCli === suivie) miseAJourClaudeCli = undefined
+  })
+}
+
+async function attendreMiseAJourClaudeCli(): Promise<void> {
+  const enCours = miseAJourClaudeCli
+  if (!enCours) return
+  let minuteur: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    enCours,
+    new Promise<void>((resolve) => (minuteur = setTimeout(resolve, ATTENTE_MISE_A_JOUR_MAX_MS)))
+  ])
+  clearTimeout(minuteur)
 }
 
 /** Sous-chemin du binaire natif dans le paquet npm `@anthropic-ai/claude-code`. */
@@ -781,10 +863,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
   readonly supportsExecution = true
   /** Vrai : `send` pousse `--resume <id>` au CLI (voir plus bas). Le seul adaptateur dans ce cas. */
   readonly honoursSessionResume = true
-  private readonly bin: string
+  private readonly explicitBin: string | undefined
 
   constructor(opts: ClaudeAdapterOptions = {}) {
-    this.bin = resolveClaudeBin(opts.bin)
+    this.explicitBin = opts.bin
+  }
+
+  /**
+   * Resolu a CHAQUE lancement, jamais fige a la construction : l'adaptateur vit toute la session, et
+   * un `claude.exe` absent a ce moment-la (mise a jour npm en cours au demarrage, 2026-09-25) figeait
+   * le repli nu `claude` — que CreateProcess ne sait pas lancer — jusqu'au redemarrage de l'app.
+   */
+  private get bin(): string {
+    return resolveClaudeBin(this.explicitBin)
   }
 
   /** L'auth vit dans le CLI (abonnement déjà loggé) — on vérifie qu'il répond. */
@@ -1214,6 +1305,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * `onJournal`. Aucune ne passait par `close` ni par `error` : le couple restait dans %TEMP%.
      * Garde : `claude.nettoyage-sur-exception-avant-spawn.test.ts`.
      */
+    // Un `claude update` en cours retire le binaire quelques secondes : on attend qu'il revienne.
+    await attendreMiseAJourClaudeCli()
     let journal: StdoutJournalHandle | undefined
     let invocation:
       | ReturnType<typeof backgroundSurvivalInvocation>
@@ -1266,7 +1359,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       }
       invocation = journal
-        ? backgroundSurvivalInvocation(this.bin, args, journalRoot!, journal.path, lastUser)
+        ? backgroundSurvivalInvocation(
+            // Le relais Windows ne cherche pas dans le PATH : jamais de nom nu (voir binaireClaudeLancable).
+            await binaireClaudeLancable(this.bin, {
+              designe: Boolean(this.explicitBin || process.env.CLAUDE_BIN)
+            }),
+            args,
+            journalRoot!,
+            journal.path,
+            lastUser
+          )
         : {
             bin: this.bin,
             args,

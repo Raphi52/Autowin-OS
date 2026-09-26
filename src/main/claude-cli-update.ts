@@ -14,7 +14,7 @@
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { resolveClaudeBin } from './providers/claude'
+import { resolveClaudeBin, signalerMiseAJourClaudeCli } from './providers/claude'
 
 /** Fenetre entre deux tentatives : assez courte pour suivre les publications, assez large pour ne pas payer un spawn a chaque demarrage. */
 export const CLAUDE_CLI_UPDATE_WINDOW_MS = 12 * 60 * 60 * 1000
@@ -72,7 +72,10 @@ export async function maybeUpdateClaudeCli(
   writeStamp(stampPath, now)
   const run = options.run ?? runClaudeUpdate
   try {
-    const { code, output } = await run(options.bin ?? resolveClaudeBin())
+    const enCours = run(options.bin ?? resolveClaudeBin())
+    // Les tours Claude lances pendant la mise a jour l'attendent (le paquet npm est recree).
+    signalerMiseAJourClaudeCli(enCours)
+    const { code, output } = await enCours
     const detail =
       output
         .split(/[\r\n]+/)
