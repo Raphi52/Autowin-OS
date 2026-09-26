@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bundledSkillsRoot, skillRoots } from './native-registry'
+import { bundledSkillsRoot, nativeSkills, skillRoots } from './native-registry'
 import { phaseInstructionFromRoots, PIPELINE_PHASES } from './skill-pipeline'
 
 /**
@@ -16,7 +16,6 @@ import { phaseInstructionFromRoots, PIPELINE_PHASES } from './skill-pipeline'
 const cleanups: string[] = []
 afterEach(() => {
   while (cleanups.length) rmSync(cleanups.pop()!, { recursive: true, force: true })
-  delete process.env.AUTOWIN_SKILLS_PREFER_LOCAL
 })
 
 /** Une racine de skills jetable portant un corps RECONNAISSABLE, pour prouver la provenance. */
@@ -38,16 +37,28 @@ describe('skills embarquées dans la code base', () => {
     expect(existsSync(join(root!, '_engine', 'ENGINE.md'))).toBe(true)
   })
 
-  it('la racine du dépôt passe AVANT les racines externes', () => {
-    const roots = skillRoots('C:\\home-bidon', undefined, 'C:\\depot\\skills')
-    expect(roots[0]).toBe('C:\\depot\\skills')
+  /**
+   * Décision utilisateur du 2026-09-26 (conv-16) : « je garde que les skills d'autowin ». Les kits
+   * externes `~/.claude/skills` et `~/.codex/skills` ne sont plus lus : c'est par là qu'entraient
+   * `_engine`, `autowin-setup` et `capafy-publisher` dans la palette `/` et dans l'état du modèle.
+   */
+  it("seules les racines Autowin sont lues : le dépôt d'abord, puis la racine Autowin du poste", () => {
+    const roots = skillRoots('C:\\LocalAppData', 'C:\\depot\\skills')
+    expect(roots).toEqual(['C:\\depot\\skills', join('C:\\LocalAppData', 'autowin-os', 'skills')])
   })
 
-  it("l'échappatoire nommée remet le kit live devant (développement du kit sans rebuild)", () => {
-    process.env.AUTOWIN_SKILLS_PREFER_LOCAL = '1'
-    const roots = skillRoots('C:\\home-bidon', undefined, 'C:\\depot\\skills')
-    expect(roots[0]).not.toBe('C:\\depot\\skills')
-    expect(roots).toContain('C:\\depot\\skills') // reléguée, jamais perdue
+  it('aucune racine par défaut ne pointe vers ~/.claude ni ~/.codex', () => {
+    expect(skillRoots().filter((root) => /[/\\]\.(claude|codex)[/\\]/u.test(root))).toEqual([])
+  })
+
+  it("les skills d'un kit externe (_engine, autowin-setup, capafy-publisher) ne sont plus listées", () => {
+    const base = mkdtempSync(join(tmpdir(), 'skills-autowin-seules-'))
+    cleanups.push(base)
+    const ids = nativeSkills(base).map((skill) => skill.id)
+    expect(ids).toContain('build')
+    expect(ids).not.toContain('_engine')
+    expect(ids).not.toContain('autowin-setup')
+    expect(ids).not.toContain('capafy-publisher')
   })
 
   /**
@@ -57,7 +68,7 @@ describe('skills embarquées dans la code base', () => {
   it('le corps injecté PROVIENT de la racine du dépôt, pas du kit externe', () => {
     const bundled = rootWithSentinel('build', 'CORPS-VENU-DU-DEPOT')
     const externe = rootWithSentinel('build', 'CORPS-VENU-DU-KIT-EXTERNE')
-    const roots = skillRoots(externe.replace(/[/\\]\.codex[/\\]skills$/, ''), undefined, bundled)
+    const roots = skillRoots(undefined, bundled)
     const rendered = phaseInstructionFromRoots('build', [bundled, externe])
     expect(rendered).toContain('CORPS-VENU-DU-DEPOT')
     expect(rendered).not.toContain('CORPS-VENU-DU-KIT-EXTERNE')
@@ -107,8 +118,8 @@ describe('skills embarquées dans la code base', () => {
     }
   })
 
-  it("kit externe ABSENT → l'instruction reste NON VIDE (avant : chaîne vide, en silence)", () => {
-    const roots = skillRoots(join(tmpdir(), 'home-inexistant-' + Math.random()), undefined)
+  it("racine Autowin du poste ABSENTE → l'instruction reste NON VIDE (avant : chaîne vide, en silence)", () => {
+    const roots = skillRoots(join(tmpdir(), 'localappdata-inexistant-' + Math.random()))
     const rendered = phaseInstructionFromRoots('build', roots)
     expect(rendered.length).toBeGreaterThan(0)
     expect(rendered).toContain('SKILL BUILD')

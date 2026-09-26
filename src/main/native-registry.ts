@@ -1,5 +1,4 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { readDurableJson, writeDurableJson } from './durable-json'
@@ -145,10 +144,6 @@ function readJson<T>(path: string, fallback: T): T {
 }
 
 /**
- * Racines de skills scannées : le kit `~/.claude/skills` (l'âme d'Autowin), `~/.codex/skills`, et la
- * racine Autowin `%APPDATA%/autowin-os/skills`. Générique : indépendant de tout arbre externe.
- */
-/**
  * Emplacements possibles des skills EMBARQUÉES avec l'application, par ordre de préférence.
  *
  * Le chemin doit résoudre en dev ET en application packagée : `process.cwd()` vaut la racine du dépôt
@@ -180,23 +175,24 @@ export function bundledSkillsRoot(
 }
 
 /**
- * Racines de skills scannées. La racine EMBARQUÉE (dépôt) passe en tête : le comportement de l'app ne
- * doit pas dépendre d'un arbre externe qu'elle ne possède pas — sans kit local, les phases s'injectaient
- * VIDES sans que rien ne l'annonce. Les racines externes (`~/.codex`, `~/.claude`, `%LOCALAPPDATA%`)
- * restent lues ensuite : la découverte des skills du poste est une fonctionnalité, pas un accident.
+ * Racines de skills scannées — UNIQUEMENT celles d'Autowin : la racine EMBARQUÉE (dépôt `skills/`) en
+ * tête, puis la racine Autowin du poste `%LOCALAPPDATA%/autowin-os/skills`.
  *
- * Échappatoire nommée `AUTOWIN_SKILLS_PREFER_LOCAL=1` : remet le kit local devant, pour travailler sur
- * le kit et voir l'effet sans rebuild. Reléguée, la racine embarquée n'est jamais perdue.
+ * Décision utilisateur du 2026-09-26 (conv-16) : « je garde que les skills d'autowin ». Avant, les kits
+ * externes `~/.codex/skills` et `~/.claude/skills` étaient lus aussi : leurs skills (`_engine`,
+ * `autowin-setup`, `capafy-publisher`) entraient dans la palette `/` et dans l'état remis au modèle à
+ * chaque tour. `_engine` en est le cas d'école : ignoré dans le dépôt (il n'y porte pas de SKILL.md),
+ * il revenait par `~/.claude`, où l'installeur du kit Claude Code lui en pose un. Ces dossiers restent
+ * INTACTS — Claude Code s'en sert ; seule l'app cesse de les lire. L'ancienne échappatoire
+ * `AUTOWIN_SKILLS_PREFER_LOCAL`, qui remettait `~/.claude` devant, disparaît avec eux.
  */
 export function skillRoots(
-  home = homedir(),
   localAppData = process.env.LOCALAPPDATA,
   bundled = bundledSkillsRoot()
 ): string[] {
-  const roots = [join(home, '.codex', 'skills'), join(home, '.claude', 'skills')]
+  const roots = bundled ? [bundled] : []
   if (localAppData) roots.push(join(localAppData, 'autowin-os', 'skills'))
-  if (!bundled) return roots
-  return process.env.AUTOWIN_SKILLS_PREFER_LOCAL === '1' ? [...roots, bundled] : [bundled, ...roots]
+  return roots
 }
 
 /** Lit le champ `name:` d'un SKILL.md (front-matter simple) ; à défaut le nom du dossier. */
