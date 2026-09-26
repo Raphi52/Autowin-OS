@@ -1,4 +1,5 @@
 import { MODEL_QUESTION_INSTRUCTION } from './model-questions'
+import { consigneBureauCacheChat } from './consigne-bureau-cache'
 
 /**
  * Prompt de PILOTAGE du chat, extrait de `AgentPilot.chat()`.
@@ -107,11 +108,35 @@ export const REGLES_VISUELLES: string =
   `coupable. Une modification d'isolement est sure, bornee et reversible — elle ne se demande pas ` +
   `et ne se delegue pas. Restaure TOUT avant ton message final. Une capacite n'est absente que si ` +
   `aucun outil de ta liste ne l'atteint : relis la liste avant d'ecrire « je ne peux pas ».\n` +
+  // LOOK (kaizen conv-742, tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43) : la procedure skills/look
+  // n'etait nommee nulle part dans ce que le chat recoit.
+  `TOUTE IMAGE SE LIT AVEC LA PROCEDURE look (skills/look/SKILL.md) : image jointe, capture, .png lu. ` +
+  `Avant d'en tirer une conclusion, ecris ce qu'elle MONTRE — au minimum VU LE · QUESTION · TEXTE LU ` +
+  `· VERDICT ; checklist complete si c'est une premiere observation ou une anomalie. Rien d'infere ` +
+  `du code ou d'une attente : ce qui n'est pas lisible est « non visible ».\n` +
+  ''
+
+/**
+ * REGLES DE L'ECRAN DE L'UTILISATEUR — bloc INCONDITIONNEL (kaizen conv-835, 2026-09-26).
+ *
+ * Elles vivaient dans `REGLES_VISUELLES`, servi seulement quand le DERNIER MESSAGE contient un mot
+ * visuel. Or c'est l'ACTION de l'agent (lancer une app, ouvrir un lien) qui envahit l'ecran, pas le
+ * vocabulaire de la demande. Mesure : tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8, saisie
+ * ts 1790393862643 « envoi un message teams a leslie pour lui dire ou cest rangé » — aucun mot
+ * visuel, donc blocs systeme [constitution, pilotage, style, projectContext] sans « visuel » aux deux
+ * appels (prompt-observability/conv-835.jsonl, 03:38:55 et 03:39:16). Le chat a lance
+ * `Start-Process "msteams:/l/chat/..."` sur l'ecran reel ; l'utilisateur a annule le tour.
+ *
+ * Le refus deterministe des lancements graphiques a ete RETIRE a sa demande (conv-631, voir
+ * src/shared/garde-git-destructeur.ts) : cette prose est le SEUL porteur de la regle, elle doit donc
+ * arriver a CHAQUE tour. Elle se place avant le bloc visuel : prefixe stable, relu depuis le cache.
+ */
+export const REGLES_ECRAN_UTILISATEUR: string =
   // NON INVASIF PAR DEFAUT (kaizen conv-526, tour c14c2d28-f864-4ca5-ba3f-3dfe24e41d47,
   // 2026-09-13). Le chat a lance RobloxStudioBeta.exe par Bash sur le bureau REEL puis capture
   // l'ecran reel deux fois ; l'utilisateur a annule 7 s plus tard et exige le bureau cache par defaut.
-  `ECRAN DE L'UTILISATEUR = SON ESPACE, PAS LE TIEN. Pour ouvrir une application graphique afin ` +
-  `de l'observer, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
+  `ECRAN DE L'UTILISATEUR = SON ESPACE, PAS LE TIEN. Pour ouvrir une application graphique — pour ` +
+  `l'observer OU pour t'en servir a sa place (envoyer un message, remplir une page) —, lance-la PAR DEFAUT dans un bureau Windows cache : \`powershell -NoProfile -File ` +
   `scripts/hdesk-lancer.ps1 -Id <ton identifiant de bureau> -Executable <exe> [-Arguments "..."] -Travail "<ce que tu fais>" -Conversation <id du fil>\` (la petite TV du fil le montre en direct), puis capture-le avec ` +
   `\`powershell -NoProfile -File scripts/hdesk-observe.ps1 -InstanceId <ton identifiant de bureau> -Output <png>\` et lis ` +
   `l'image. Pour une vue d'Autowin, \`node scripts/ui-capture.mjs\` est deja cache par defaut. Ne ` +
@@ -143,13 +168,44 @@ export const REGLES_VISUELLES: string =
   `geste (hdesk-act.ps1 sans effet visible a la re-capture, session deja connectee requise), dis-le en une ligne et demande AVANT de toucher a son ecran. Ne rends la main que pour son mot de passe, son MFA ou son consentement — et ` +
   `dis alors quel geste EXACT reste a lui et pourquoi aucun outil ne l'atteint.
 ` +
-  // LOOK (kaizen conv-742, tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43) : la procedure skills/look
-  // n'etait nommee nulle part dans ce que le chat recoit.
-  `TOUTE IMAGE SE LIT AVEC LA PROCEDURE look (skills/look/SKILL.md) : image jointe, capture, .png lu. ` +
-  `Avant d'en tirer une conclusion, ecris ce qu'elle MONTRE — au minimum VU LE · QUESTION · TEXTE LU ` +
-  `· VERDICT ; checklist complete si c'est une premiere observation ou une anomalie. Rien d'infere ` +
-  `du code ou d'une attente : ce qui n'est pas lisible est « non visible ».\n` +
+  // LIEN OU APP DEJA OUVERTE (kaizen conv-835, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8, saisie
+  // ts 1790394004769 « t'aurais du le faire en hdesk ») : `Start-Process "msteams:/l/chat/..."` par le
+  // terminal a ouvert la conversation dans le Teams DEJA OUVERT de l'utilisateur, sur son ecran. Sonde du
+  // 2026-09-26 : Teams web dans un Edge a profil neuf du bureau cache affiche « Se connecter ».
+  `UN LIEN OU UNE APP DEJA OUVERTE CHEZ LUI, C'EST SON ECRAN AUSSI : \`Start-Process\` ou \`start\` d'un lien ` +
+  `de protocole (msteams:, mailto:, ms-outlook:, https:) ou d'une app a instance unique qu'il a deja ouverte ` +
+  `(Teams, Outlook) s'ouvre dans SA fenetre, meme lance depuis ton terminal. Voie cachee : un navigateur ` +
+  `lance par hdesk-lancer.ps1 avec un profil a part (\`--user-data-dir\`), puis la version web. Ce profil ` +
+  `n'est PAS connecte a son compte (Teams web y demande la connexion Microsoft) : si le geste exige SA ` +
+  `session, dis-le en une ligne et DEMANDE-lui avant d'ouvrir quoi que ce soit chez lui.\n` +
+  // NOM DU BUREAU SANS ID DANS LE SYSTEME : ce bloc est servi a TOUTES les conversations, il doit rester
+  // identique d'un fil a l'autre (agent-pilot.stable-prefix.test.ts, cache du provider). L'id du fil
+  // arrive deja dans l'ETAT du message (`activeConversationId`, pose par `snapshotDuTour`).
+  `TON BUREAU CACHE S'APPELLE chat-<id du fil> : l'id du fil est \`activeConversationId\` de l'ETAT ` +
+  `(conv-12 -> \`-Id chat-conv-12\`, \`-InstanceId chat-conv-12\`, \`-Conversation conv-12\`), jamais un nom que tu inventes.\n` +
   ''
+
+/**
+ * Les deux derniers blocs du prompt systeme du chat, dans l'ordre. Pure : `agent-pilot.ts` l'appelle
+ * telle quelle, ce qui fait de son test une preuve sur le chemin reel et non sur une copie.
+ * L'ecran de l'utilisateur est TOUJOURS servi, identique pour tous les fils ; les regles de travail
+ * visuel restent conditionnelles et portent, comme avant, l'identifiant explicite du fil.
+ */
+export function blocsSystemeEcran(
+  dernierMessage: string,
+  imageJointe: boolean,
+  conversationId: string
+): Array<{ name: string; text: string }> {
+  return [
+    { name: 'ecranUtilisateur', text: REGLES_ECRAN_UTILISATEUR },
+    {
+      name: 'visuel',
+      text: tourTouchantAuVisuel(dernierMessage, imageJointe)
+        ? REGLES_VISUELLES + consigneBureauCacheChat(conversationId)
+        : ''
+    }
+  ]
+}
 
 /**
  * Ce tour touche-t-il a l'interface ou a une capture ?

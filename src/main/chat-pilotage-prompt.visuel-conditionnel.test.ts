@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  REGLES_ECRAN_UTILISATEUR,
   REGLES_VISUELLES,
   buildChatPilotagePrompt,
   tourTouchantAuVisuel
@@ -30,11 +31,18 @@ describe('regles visuelles conditionnelles', () => {
       'MAQUETTE MONTRÉE = MAQUETTE TENUE',
       'PREUVE VISUELLE FRONT',
       'OBSERVE A LA TAILLE',
-      'BISSECTION VISUELLE',
+      'BISSECTION VISUELLE'
+    ]) {
+      expect(REGLES_VISUELLES).toContain(regle)
+    }
+    // kaizen conv-835 : les regles de l'ecran de l'utilisateur ont quitte le bloc CONDITIONNEL pour
+    // un bloc servi a chaque tour — elles ne sont pas perdues, elles sont ailleurs.
+    for (const regle of [
       "ECRAN DE L'UTILISATEUR = SON ESPACE",
       'ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR'
     ]) {
-      expect(REGLES_VISUELLES).toContain(regle)
+      expect(REGLES_VISUELLES).not.toContain(regle)
+      expect(REGLES_ECRAN_UTILISATEUR).toContain(regle)
     }
   })
 
@@ -97,7 +105,8 @@ describe('regles visuelles conditionnelles', () => {
    */
   it('pese une part utile mais minoritaire du pilotage', () => {
     const corps = buildChatPilotagePrompt([]).length
-    expect(REGLES_VISUELLES.length).toBeGreaterThan(3500)
+    // 2 993 caracteres apres le depart des regles de l'ecran (kaizen conv-835, 2026-09-26).
+    expect(REGLES_VISUELLES.length).toBeGreaterThan(2500)
     expect(REGLES_VISUELLES.length).toBeLessThan(corps / 2)
   })
 })
