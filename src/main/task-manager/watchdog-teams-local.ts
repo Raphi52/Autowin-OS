@@ -96,11 +96,20 @@ export interface LocalTeamsSnapshot {
 export function localValuesToSnapshot(values: Iterable<unknown>): LocalTeamsSnapshot {
   const latest = new Map<string, LocalMessage>()
   const emailByMri = new Map<string, string>()
+  // Heure de DERNIERE LECTURE par conversation : l'enregistrement de conversation (cle `id`) porte
+  // properties.consumptionhorizon = « heureDeLecture;heure;idMessage » (format Skype/Teams, mesure sur
+  // le stockage reel le 2026-09-26 ; le champ consumptionHorizon des chaines de reponses, lui, est vide).
+  const luJusqua = new Map<string, number>()
   for (const value of values) {
     if (!value || typeof value !== 'object') continue
     const record = value as Record<string, unknown>
     if (typeof record.mri === 'string' && typeof record.email === 'string' && record.email)
       emailByMri.set(record.mri.toLowerCase(), record.email)
+    const props = record.properties as Record<string, unknown> | undefined
+    if (typeof record.id === 'string' && typeof props?.consumptionhorizon === 'string') {
+      const lu = Number(props.consumptionhorizon.split(';')[0])
+      if (Number.isFinite(lu) && lu > 0) luJusqua.set(record.id, lu)
+    }
     const map = record.messageMap
     if (typeof record.conversationId !== 'string' || !map || typeof map !== 'object') continue
     if (!ONE_ON_ONE.test(record.conversationId)) continue
@@ -123,13 +132,18 @@ export function localValuesToSnapshot(values: Iterable<unknown>): LocalTeamsSnap
     if (email) emails.set(id, email)
     if (typeof message.imDisplayName === 'string' && message.imDisplayName.trim())
       noms.set(id, message.imDisplayName.trim())
+    const lu = luJusqua.get(conversationId)
     mails.push({
       id,
       nom: typeof message.imDisplayName === 'string' ? message.imDisplayName : undefined,
-      adresse: 'Teams',
+      // Vraie adresse quand la personne est connue du stockage ; « Teams » sinon (l'identite d'un
+      // expediteur Teams reste son NOM pour le moteur : senderKey, watchdog-mail.ts).
+      adresse: email ?? 'Teams',
       sujet: 'Conversation Teams',
       recuLe: when ? new Date(when).toISOString() : null,
-      nonLu: true,
+      // Lu dans Teams = arrive au plus tard a l'heure de derniere lecture. Sans horizon connu, on ne
+      // sait pas : non lu, comme avant (le detecteur ne reagit de toute facon qu'aux NOUVEAUX messages).
+      nonLu: lu === undefined || when > lu,
       corps: String(message.messageType) === 'RichText/Html' ? stripHtml(raw) : raw,
       deMoi: message.isSentByCurrentUser === true
     })

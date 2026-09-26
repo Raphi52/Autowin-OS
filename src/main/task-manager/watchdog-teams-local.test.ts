@@ -14,6 +14,7 @@ import {
   type LocalTeamsSnapshot
 } from './watchdog-teams-local'
 import { teamsItemId } from './watchdog-teams'
+import { NewUnreadMailDetector } from './watchdog-mail'
 
 // Donnees 100 % SYNTHETIQUES : aucune donnee Teams reelle dans le depot.
 
@@ -216,13 +217,75 @@ describe('localValuesToSnapshot', () => {
     const alice = snap.mails.find((m) => m.id === teamsItemId(ONE, '2'))
     expect(alice).toMatchObject({
       nom: 'Alice',
-      adresse: 'Teams',
+      adresse: 'alice@example.test',
       corps: 'Bonjour toi',
       deMoi: false,
       recuLe: new Date(2000).toISOString()
     })
     expect(snap.emails.get(teamsItemId(ONE, '2'))).toBe('alice@example.test')
     expect(snap.mails.find((m) => m.nom === 'Moi')?.deMoi).toBe(true)
+  })
+
+  // 2026-09-26, lecture du stockage reel : 27 conversations, UNE seule adresse (« Teams », en dur) et
+  // 27 « non lus » (en dur). L'adresse du createur etait pourtant connue (187 personnes sur 246 ont
+  // un email) et l'etat de lecture vit dans l'enregistrement de CONVERSATION :
+  // properties.consumptionhorizon = « heureDeLecture;heure;idMessage » (format Skype/Teams).
+  const bob = (id: string, at: number, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id,
+    messageType: 'Text',
+    content: 'salut',
+    originalArrivalTime: at,
+    creator: '8:orgid:bob',
+    imDisplayName: 'Bob',
+    ...extra
+  })
+  const horizon = (conversationId: string, lu: number): Record<string, unknown> => ({
+    id: conversationId,
+    lastMessageTimeUtc: lu,
+    properties: { consumptionhorizon: `${lu};${lu + 5};42` }
+  })
+
+  it('adresse = email du createur quand il est connu, « Teams » sinon', () => {
+    const snap = localValuesToSnapshot([
+      { mri: '8:orgid:bob', email: 'bob@example.test' },
+      chain(ONE, [bob('1', 1000)]),
+      chain('19:ffff_gggg@unq.gbl.spaces', [bob('2', 1000, { creator: '8:orgid:inconnu', imDisplayName: 'Zoe' })])
+    ])
+    expect(snap.mails.find((m) => m.nom === 'Bob')?.adresse).toBe('bob@example.test')
+    expect(snap.mails.find((m) => m.nom === 'Zoe')?.adresse).toBe('Teams')
+  })
+
+  it('non lu = arrive APRES la derniere lecture de la conversation ; sans horizon connu, non lu', () => {
+    const DEUX = '19:hhhh_iiii@unq.gbl.spaces'
+    const TROIS = '19:jjjj_kkkk@unq.gbl.spaces'
+    const snap = localValuesToSnapshot([
+      horizon(ONE, 5000),
+      chain(ONE, [bob('1', 4000)]), // lu : arrive avant l'horizon
+      horizon(DEUX, 5000),
+      chain(DEUX, [bob('2', 6000)]), // arrive apres : non lu
+      chain(TROIS, [bob('3', 1000)]) // aucun horizon : on ne sait pas -> non lu, comme avant
+    ])
+    expect(snap.mails.find((m) => m.id === teamsItemId(ONE, '1'))?.nonLu).toBe(false)
+    expect(snap.mails.find((m) => m.id === teamsItemId(DEUX, '2'))?.nonLu).toBe(true)
+    expect(snap.mails.find((m) => m.id === teamsItemId(TROIS, '3'))?.nonLu).toBe(true)
+  })
+
+  it('le detecteur du watchdog ne declenche NI sur un message envoye par moi NI sur un message deja lu', () => {
+    const detecteur = new NewUnreadMailDetector()
+    const base = [{ mri: '8:orgid:bob', email: 'bob@example.test' }, horizon(ONE, 5000)]
+    // 1er passage = ligne de base : rien ne declenche.
+    expect(detecteur.next(localValuesToSnapshot([...base, chain(ONE, [bob('1', 4000)])]))).toEqual([])
+    // Nouveau message ECRIT PAR MOI (dont la reponse postee par l'agent) : aucun declenchement.
+    const moi = bob('2', 7000, { isSentByCurrentUser: true, creator: '8:orgid:moi', imDisplayName: 'Moi' })
+    expect(detecteur.next(localValuesToSnapshot([...base, chain(ONE, [bob('1', 4000), moi])]))).toEqual([])
+    // Nouveau message de Bob, mais DEJA LU dans Teams (horizon avance) : aucun declenchement.
+    const lu = [base[0], horizon(ONE, 9000), chain(ONE, [bob('1', 4000), moi, bob('3', 8000)])]
+    expect(detecteur.next(localValuesToSnapshot(lu))).toEqual([])
+    // Nouveau message de Bob, non lu : UN declenchement, avec sa vraie adresse.
+    const neuf = [base[0], horizon(ONE, 9000), chain(ONE, [bob('1', 4000), moi, bob('3', 8000), bob('4', 9500)])]
+    expect(detecteur.next(localValuesToSnapshot(neuf))).toEqual([
+      expect.objectContaining({ id: teamsItemId(ONE, '4'), adresse: 'bob@example.test', nonLu: true, deMoi: false })
+    ])
   })
 })
 
