@@ -1485,6 +1485,26 @@ const refusEcranReel =
   "Si tu as vraiment besoin de son ecran, reemets l'appel avec `ecran_utilisateur: true` et dis-le " +
   'en une ligne avant.'
 
+/**
+ * Refus de `desktop_act` quand le dernier message de l'utilisateur ne demande PAS son ecran.
+ *
+ * Kaizen conv-835, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 (evenements 87-89) : l'appel portait
+ * DEJA `ecran_utilisateur: true` et le refus repondait « reemets l'appel avec
+ * `ecran_utilisateur: true` » — une sortie qui n'existait pas, le 2e appel etant refuse faute de
+ * demande (« envoi un message teams a leslie… » ne parle pas de son ecran). Et il ne parlait que de
+ * clics : le plan suivant du modele etait de rouvrir le lien msteams: sur l'ecran reel (reponse
+ * affichee, evenement 96). Le message dit donc la seule sortie reelle.
+ */
+const refusActionSansDemande =
+  "Appel REFUSE : `desktop_act` agit sur l'ECRAN REEL de l'utilisateur, et il n'a pas demande " +
+  "d'agir sur SON ecran dans son dernier message : ne reemets pas l'appel, `ecran_utilisateur: true` " +
+  "n'y change rien. Passe par le bureau CACHE : `powershell -NoProfile -File scripts/hdesk-lancer.ps1 ...` " +
+  'pour ouvrir, `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]` ' +
+  'pour cliquer ou taper. Ne contourne pas ce refus en rouvrant un lien ou une app sur son ecran ' +
+  "(`Start-Process`, `start`, msteams:, mailto:) : c'est le meme geste. Si le bureau cache ne peut pas " +
+  "faire le geste (app deja ouverte chez lui, connexion a son compte requise), dis-le en une ligne et " +
+  'DEMANDE-lui.'
+
 /** Vrai quand le message utilisateur designe son propre ecran (« mon écran », « sur l'ecran »...). */
 export const demandeEcranReel = (texte: string | undefined): boolean =>
   typeof texte === 'string' && /[ée]cran/i.test(texte)
@@ -2325,24 +2345,32 @@ export class AppCommandBus {
         // Le drapeau pose d'office au PREMIER appel ne compte pas (meme tour : le modele l'a ajoute
         // seul, sans demande) : le premier geste du tour est toujours refuse, le drapeau ne vaut
         // qu'apres avoir lu le refus qui nomme le bureau cache.
+        // Kaizen conv-854 (saisie ts 1790278416518) : le drapeau seul restait un contournement au 2e
+        // appel. Agir sur l'ecran reel exige desormais que le DERNIER message de l'utilisateur parle
+        // de son ecran ; le modele ne peut plus s'y autoriser lui-meme. Dans le tour 78a0d7d3 le
+        // message etait « fais le toi stp » : le clic aurait ete refuse.
+        // Lu AVANT le premier refus (kaizen conv-835) : c'est lui qui dit si la porte de sortie
+        // `ecran_utilisateur: true` existe vraiment — voir `refusActionSansDemande`.
+        const dernierMessage = [...(this.os.conversations?.get?.(conversationId ?? '')?.messages ?? [])]
+          .reverse()
+          .find((m) => m.role === 'user')?.content
+        const demande = demandeEcranReel(dernierMessage)
         const cle = turnId ?? 'sans-tour'
         if (this.tourActionReelleRefusee !== cle) {
           this.tourActionReelleRefusee = cle
           this.trace?.(name, redactedArgs(name, args), false)
           noterIssue(false)
-          return { ok: false, error: refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') + ' Pour cliquer ou taper dans le bureau cache : `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]`.' }
+          return {
+            ok: false,
+            error: demande
+              ? refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') + ' Pour cliquer ou taper dans le bureau cache : `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]`.'
+              : refusActionSansDemande
+          }
         }
-        // Kaizen conv-854 (saisie ts 1790278416518) : le drapeau seul restait un contournement au 2e
-        // appel. Agir sur l'ecran reel exige desormais que le DERNIER message de l'utilisateur parle
-        // de son ecran ; le modele ne peut plus s'y autoriser lui-meme. Dans le tour 78a0d7d3 le
-        // message etait « fais le toi stp » : le clic aurait ete refuse.
-        const dernierMessage = [...(this.os.conversations?.get?.(conversationId ?? '')?.messages ?? [])]
-          .reverse()
-          .find((m) => m.role === 'user')?.content
-        if (!demandeEcranReel(dernierMessage)) {
+        if (!demande) {
           this.trace?.(name, redactedArgs(name, args), false)
           noterIssue(false)
-          return { ok: false, error: "Appel REFUSE : l'utilisateur n'a pas demande d'agir sur SON ecran dans son dernier message. Passe par le bureau cache : `scripts/hdesk-act.ps1`. Si c'est impossible, dis-le et demande-lui." }
+          return { ok: false, error: refusActionSansDemande }
         }
       }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)
