@@ -94,7 +94,7 @@ export function promptTravauxNonPublies(entrees: readonly EntreeTravail[]): stri
     const fichiers = entree.fichiersNonPublies ?? []
     const quoi = fichiers.length ? fichiers.join(', ') : '(fichiers inconnus)'
     const date = entree.dateNonPublie ? ` — ${entree.dateNonPublie}` : ''
-    return `- autowin/recovery/${entree.agentId}${date} : ${quoi}`
+    return `- ${entree.agentId}${date} (piste : autowin/recovery/${entree.agentId}) : ${quoi}`
   })
   const reste = enAttente.length - lignes.length
 
@@ -117,8 +117,13 @@ export function promptTravauxNonPublies(entrees: readonly EntreeTravail[]): stri
   return [
     '/salvage',
     '',
-    `${enAttente.length} travaux terminés n’ont jamais été publiés. Chacun vit sur une branche de`,
-    'secours : rien n’est perdu, mais rien n’arrive dans main non plus.',
+    enAttente.length === 1
+      ? '1 travail terminé n’a jamais été publié. Il n’arrive pas dans main.'
+      : `${enAttente.length} travaux terminés n’ont jamais été publiés. Rien n’arrive dans main.`,
+    'L’adresse donnée pour chacun est une PISTE, pas un fait : l’interface connaît son identifiant,',
+    'pas l’endroit où son travail a survécu. VÉRIFIE-la (`git rev-parse --verify`) et, si la branche',
+    'n’existe pas, cherche les autres cachettes puis DIS-le dans ta réponse — mesuré sur conv-623 :',
+    'la branche annoncée n’existait pas, le travail était dans une copie détachée, et personne ne l’a su.',
     '',
     ...lignes,
     ...(reste > 0 ? [`- … et ${reste} autres.`] : []),

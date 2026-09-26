@@ -39,10 +39,13 @@ export function meriteUneDecision(task: string): boolean {
   const propre = task.trim()
   if (propre.length < 40) return false
   // Une question pure appelle une réponse, pas un pipeline.
-  if (
-    /^(qu(i|e|el|elle|oi)|comment|pourquoi|où|quand|combien)\b/i.test(propre) &&
-    propre.endsWith('?')
-  ) {
+  // fix-ok: la regex exigeait un « ? » final ; « c'est quoi la meilleure option… » sans « ? » passait (test rouge 1/22 dans workflow-dynamic.test.ts).
+  // Le « ? » final est souvent omis (« c'est quoi la meilleure option ») : une phrase interrogative
+  // UNIQUE compte comme question ; une ponctuation interne signale une consigne qui suit.
+  const interrogative =
+    /^(qu(i|e|el|els|elle|elles|oi)|comment|pourquoi|où|quand|combien|c'est quoi|est-ce que)(?![\p{L}\d])/iu
+  const phraseUnique = !/[.!:;\n]/.test(propre.replace(/[?.!\s]+$/, ''))
+  if (interrogative.test(propre) && (propre.endsWith('?') || phraseUnique)) {
     return false
   }
   return true

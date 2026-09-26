@@ -111,41 +111,51 @@ interface RegimePreset {
  * un PAR ETAPE — lire, editer, verifier, corriger — donc le compteur mesurait des COUPS, un mauvais
  * proxy de la depense.
  *
- * LES FREINS REELS N'ONT PAS BOUGE : `maxFreshTokens`, `maxTotalTokens` et `maxUsd` bornent toujours
- * exactement ce qu'ils bornaient. Et `stricter` continue de faire gagner tout cap pose a la main :
- * relever un prereglage n'ouvre aucune porte a un budget explicite.
+ * DECISION UTILISATEUR DU 2026-09-12 : ces compteurs de COUPS sont DESACTIVES de fait. Demande
+ * explicite apres un enieme run tue — un fan-out build coupe sur « Budget d'agents atteint (10) »
+ * alors que le travail etait en cours. Un plafond qui interrompt un run A MI-CHEMIN rend la pire
+ * issue possible : paye, et rien de fini. Les valeurs ci-dessous sont si hautes qu'aucun run reel
+ * ne les atteint ; elles restent des NOMBRES (et non `Infinity`) pour que la telemetrie, les
+ * allocations et l'arithmetique de `stricter` continuent de fonctionner sans cas particulier.
+ *
+ * CE QUI FREINE ENCORE LA DEPENSE, et c'est voulu : `maxUsd` (pose a la main, `null` par defaut) et
+ * les compteurs de tokens, eux aussi tres larges. `stricter` fait toujours gagner tout cap pose
+ * explicitement : relever un prereglage n'ouvre aucune porte a un budget que l'utilisateur a fixe.
  */
 const PRESETS: Record<TaskRegime, RegimePreset> = {
   trivial: {
-    maxProviderCalls: 10,
-    maxFreshTokens: 250_000,
-    maxTotalTokens: 2_000_000,
-    maxAgents: 2,
-    maxConcurrency: 1,
-    maxDurationMs: 15 * 60_000,
-    maxRecoveries: 0,
+    maxProviderCalls: 1_000,
+    maxFreshTokens: 20_000_000,
+    maxTotalTokens: 100_000_000,
+    maxAgents: 100,
+    // La CONCURRENCE n'est pas un plafond de budget : c'est le nombre de fronts menes en meme
+    // temps. Elle reste modeste par regime, sinon un fan-out large sature le fournisseur et se
+    // fait refuser — ce serait remplacer un mur par un autre.
+    maxConcurrency: 2,
+    maxDurationMs: 4 * 60 * 60_000,
+    maxRecoveries: 5,
     decomposition: { mode: 'disabled', maxNodes: 1 }
   },
   standard: {
-    maxProviderCalls: 40,
-    maxFreshTokens: 750_000,
-    maxTotalTokens: 6_000_000,
-    maxAgents: 5,
-    maxConcurrency: 3,
-    maxDurationMs: 45 * 60_000,
+    maxProviderCalls: 5_000,
+    maxFreshTokens: 50_000_000,
+    maxTotalTokens: 250_000_000,
+    maxAgents: 500,
+    maxConcurrency: 4,
+    maxDurationMs: 12 * 60 * 60_000,
     // La réparation promise après un juge rouge : la retirer casse « 1 prompt = 1 réussite ».
-    maxRecoveries: 1,
+    maxRecoveries: 10,
     decomposition: { mode: 'disabled', maxNodes: 1 }
   },
   critical: {
-    maxProviderCalls: 80,
-    maxFreshTokens: 2_000_000,
-    maxTotalTokens: 15_000_000,
-    maxAgents: 10,
-    maxConcurrency: 4,
-    maxDurationMs: 120 * 60_000,
-    maxRecoveries: 1,
-    decomposition: { mode: 'build-only', maxNodes: 5 }
+    maxProviderCalls: 20_000,
+    maxFreshTokens: 200_000_000,
+    maxTotalTokens: 1_000_000_000,
+    maxAgents: 2_000,
+    maxConcurrency: 8,
+    maxDurationMs: 24 * 60 * 60_000,
+    maxRecoveries: 20,
+    decomposition: { mode: 'build-only', maxNodes: 20 }
   }
 }
 
@@ -229,6 +239,30 @@ export function allocateExecutionTopology(
     (request.worstCaseNodeExecutions === undefined
       ? nodeExecutions + judgePasses + recoveries
       : nodeExecutions)
+  /*
+   * UNE PHASE EN FAN-OUT LANCE UN AGENT PAR MEMBRE — mesure du 2026-09-09 (conv-46).
+   *
+   * `mandatory` compte des APPELS : une visite de noeud, plus les passages de juge et les reprises.
+   * Le plafond de TETES, lui, restait celui du regime. Trace du run run-3f7459905786-1 : devis
+   * `maxProviderCalls: 24` pour `maxAgents: 5` — vingt-quatre appels autorises, cinq tetes pour les
+   * servir. Le run a donc consomme ses cinq places sur frame et sur le fan-out de build, puis le
+   * juge FINAL a ete refuse sur « Budget d'agents atteint (5) » sans avoir rien consomme : travail
+   * fait, verifie, et jamais publie — la pire issue possible, payee et perdue.
+   *
+   * C'est le defaut deja corrige le 2026-08-31 (conv-1587) dans l'orchestrateur, mais UNIQUEMENT
+   * pour les workflows EXPLICITES du canevas : un run lance depuis le chat n'y passait pas. La
+   * correction vit donc ICI, sur le chemin commun, ou le devis est compile pour TOUS les runs.
+   *
+   * On provisionne le pire cas de tetes : chaque visite de noeud peut etre servie par un panel
+   * borne par `maxConcurrency`, plus les passages de juge et les reprises. En mesure seule
+   * seulement — en mode bloquant le plafond est un contrat, il garde son refus. Aucun frein reel
+   * ne bouge : jetons, USD, duree et concurrence bornent exactement ce qu'ils bornaient.
+   */
+  if (quote.limits.spendEnforcement === 'metering-only') {
+    const tetesFanOut =
+      nodeExecutions * Math.max(1, quote.limits.maxConcurrency) + judgePasses + recoveries
+    quote.limits.maxAgents = Math.max(quote.limits.maxAgents, tetesFanOut + startedAgents)
+  }
   if (mandatory > available) {
     // En mesure seule (défaut depuis la décision utilisateur du 12/08), un workflow DÉTERMINISTE
     // au pire cas fini ne se refuse pas : le devis S'AGRANDIT à sa demande. Mesuré sur conv-1148 :

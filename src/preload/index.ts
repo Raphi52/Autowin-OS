@@ -1,4 +1,12 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import type { InventaireDisque } from '../main/store/inventaire-disque'
+import type {
+  EtatPhraseProd,
+  ReponseAutorisation as ReponseAutorisationProd,
+  ReponseDefinition as ReponseDefinitionPhrase
+} from '../main/prod-passphrase-ipc'
+import type { EtatPorteProd, NiveauProtectionProd } from '../shared/prod-protection'
+import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
 import type { GitGraphSnapshot } from '../shared/git-graph'
 import type {
   ChatAttachment,
@@ -14,9 +22,15 @@ import type {
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { RapportRetention } from '../shared/rapport-retention'
-import type { UpdateStrategy } from '../shared/update-contract'
+import type { IncomingCommit, UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
+import type {
+  ProjectListResult,
+  ProjectReadResult,
+  ProjectWriteResult
+} from '../main/project-files'
 import type {
   TicketItem,
   TicketSourceSummary,
@@ -27,6 +41,7 @@ import type {
 import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { EtatWhisper } from '../main/whisper-local'
+import type { EtatDiarisation } from '../main/diarisation'
 import type { EtatPiper } from '../main/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
@@ -77,6 +92,7 @@ import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
+import type { BureauTv, ImageTv } from '../main/hdesk-tv'
 
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
@@ -89,6 +105,55 @@ const api = {
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>
     ipcRenderer.invoke('app:storage-migration-complete'),
+  /** Le compte du poste : qui est « moi » dans la tuile Performance. */
+  identiteUtilisateur: (): Promise<string> => ipcRenderer.invoke('app:identite-utilisateur'),
+  // Petite TV du bureau cache (lecture seule)
+  hdeskTvBureaux: (conversationId?: string): Promise<BureauTv[]> =>
+    ipcRenderer.invoke('hdesk:tv:bureaux', conversationId),
+  hdeskTvImage: (id: string): Promise<ImageTv> => ipcRenderer.invoke('hdesk:tv:image', id),
+  hdeskTvArreter: (): Promise<void> => ipcRenderer.invoke('hdesk:tv:arreter'),
+  // Phrase de passe de production. Elle part de l'ecran vers le processus principal et n'en revient
+  // JAMAIS : aucune de ces trois fonctions ne rend la phrase, seulement un etat, un refus ou un
+  // jeton opaque borne a une cible, une operation et cinq minutes.
+  prodPassphraseEtat: (): Promise<EtatPhraseProd> => ipcRenderer.invoke('prod:passphrase:etat'),
+  // La phrase ACTUELLE n'est exigee que pour en CHANGER : sans elle, la protection se desactiverait
+  // en la reecrivant par-dessus. Elle part vers le processus principal et n'en revient jamais.
+  prodPassphraseDefinir: (
+    phrase: string,
+    phraseActuelle?: string
+  ): Promise<ReponseDefinitionPhrase> =>
+    ipcRenderer.invoke('prod:passphrase:definir', phrase, phraseActuelle),
+  // Etat et niveau de la protection : ce que l'ecran de reglages affiche, et le seul moyen de
+  // changer le niveau. Aucun secret ne transite par ces deux canaux.
+  prodPorteEtat: (): Promise<EtatPorteProd> => ipcRenderer.invoke('prod:porte:etat'),
+  prodPorteNiveau: (niveau: NiveauProtectionProd): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('prod:porte:niveau', niveau),
+  prodPassphraseAutoriser: (
+    phrase: string,
+    demande: { cible: string; operation: string }
+  ): Promise<ReponseAutorisationProd> =>
+    ipcRenderer.invoke('prod:passphrase:autoriser', phrase, demande),
+  // Autorisation de production : la demande ARRIVE du processus principal (un outil est bloque),
+  // l'ecran la presente, et seul un JETON opaque repart. La phrase, elle, ne passe jamais par ici.
+  onProdAutorisationDemandee: (cb: (demande: DemandeAutorisationProd) => void): (() => void) => {
+    const handler = (_e: unknown, demande: DemandeAutorisationProd): void => cb(demande)
+    ipcRenderer.on('prod:autorisation:demandee', handler)
+    return () => ipcRenderer.removeListener('prod:autorisation:demandee', handler)
+  },
+  onProdAutorisationClose: (cb: (id: string) => void): (() => void) => {
+    const handler = (_e: unknown, id: string): void => cb(id)
+    ipcRenderer.on('prod:autorisation:close', handler)
+    return () => ipcRenderer.removeListener('prod:autorisation:close', handler)
+  },
+  prodAutorisationDeposer: (id: string, jeton: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('prod:autorisation:deposer', id, jeton),
+  // Le clic « continuer » du niveau CONFIRMATION. Aucun secret : c'est le clic qui autorise.
+  prodAutorisationConfirmer: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('prod:autorisation:confirmer', id),
+  prodAutorisationAnnuler: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('prod:autorisation:annuler', id),
+  prodAutorisationEnAttente: (): Promise<DemandeAutorisationProd[]> =>
+    ipcRenderer.invoke('prod:autorisation:en-attente'),
   // Orchestration disciplinée
   orchestrate: (
     task: string,
@@ -117,6 +182,17 @@ const api = {
     repoPath?: string
   ): Promise<{ ok: true; branch: string } | { ok: false; reason: string }> =>
     ipcRenderer.invoke('git:checkout', branch, repoPath),
+  /*
+    Le glisser-deposer du graphe. Le renderer envoie un GESTE, jamais une commande : c'est le
+    processus principal qui construit la ligne git, apres liste blanche.
+  */
+  runGitAction: (
+    demande:
+      | { type: 'merge'; source: string; cible: string }
+      | { type: 'cherry-pick'; commit: string; cible: string },
+    repoPath?: string
+  ): Promise<{ ok: true; commande: string; sortie: string } | { ok: false; raison: string }> =>
+    ipcRenderer.invoke('git:action', demande, repoPath),
   conversationGitState: (conversationId: string): Promise<GitReadResult> =>
     ipcRenderer.invoke('git:conversationRead', conversationId),
   conversationGitDiff: (
@@ -128,6 +204,26 @@ const api = {
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
+  // Onglet « Projet » : arborescence + editeur. Chemins RELATIFS ; la racine vit cote principal.
+  // `conversationId` : la racine devient le CWD de cette conversation (resolu cote principal).
+  projectRoot: (conversationId?: string): Promise<string> =>
+    ipcRenderer.invoke('project:root', conversationId),
+  openProjectInVscode: (
+    conversationId?: string
+  ): Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }> =>
+    ipcRenderer.invoke('project:openInVscode', conversationId),
+  fichierExiste: (path: string, base?: string): Promise<boolean | null> =>
+    ipcRenderer.invoke('fs:exists', path, base),
+  listProjectDir: (path?: string, conversationId?: string): Promise<ProjectListResult> =>
+    ipcRenderer.invoke('project:list', path ?? '', conversationId),
+  readProjectFile: (path: string, conversationId?: string): Promise<ProjectReadResult> =>
+    ipcRenderer.invoke('project:read', path, conversationId),
+  writeProjectFile: (
+    path: string,
+    content: string,
+    conversationId?: string
+  ): Promise<ProjectWriteResult> =>
+    ipcRenderer.invoke('project:write', path, content, conversationId),
   // Vue Tests (multi-projets) : registre de racines + execution du harnais du projet demande.
   testProjects: () => ipcRenderer.invoke('tests:projects'),
   saveTestProjects: (projects: Array<{ root: string; label?: string }>) =>
@@ -137,6 +233,11 @@ const api = {
   // Onglet Latence : rapport LU du journal de jalons de tour (lecture seule, cote main).
   perfTurnLatency: (derniers?: number) => ipcRenderer.invoke('perf:turnLatency', derniers),
   perfGels: (derniers?: number) => ipcRenderer.invoke('perf:gels', derniers),
+  /** Ce qu'Autowin occupe sur le disque, par famille, plus le menage deja fait au demarrage. */
+  osDiskUsage: (): Promise<InventaireDisque> => ipcRenderer.invoke('os:disk-usage'),
+  // Mesures d'arene deja journalisees, agregees par workflow (lecture seule, aucun rejeu).
+  arenaDuelsParWorkflow: (derniers?: number) =>
+    ipcRenderer.invoke('arena:duelsParWorkflow', derniers),
   // Depose une tache longue du thread d'interface dans le journal de gels commun.
   signalerGelRenderer: (dureeMs: number, etiquette?: string) =>
     ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette),
@@ -166,6 +267,15 @@ const api = {
    * thème courant. Rend `false` sur une plateforme sans overlay de barre de titre : ce n'est pas
    * une panne, et l'appelant n'a rien à en faire.
    */
+  /**
+   * Ce que l'OS montre des runs en cours (jauge de barre des tâches, texte de l'icône de
+   * notification). Le renderer est le seul à tenir la liste des runs vivants.
+   */
+  signalerRunsVivants: (etat: {
+    runsActifs: number
+    etapesFaites: number
+    etapesTotales: number
+  }): Promise<boolean> => ipcRenderer.invoke('os:presence', etat),
   setTitlebarSymbolColor: (couleur: string): Promise<boolean> =>
     ipcRenderer.invoke('app:titlebar-symbol-color', couleur),
   // Auto-update git au démarrage.
@@ -176,6 +286,8 @@ const api = {
     reference?: string
     dirty?: boolean
     strategies?: UpdateStrategy[]
+    /** Commits qui arriveront (auteur, date, sujet, fichiers) — absent si git n'a pas pu les lire. */
+    incoming?: IncomingCommit[]
     error?: string
   }> => ipcRenderer.invoke('update:check'),
   applyUpdate: (
@@ -334,6 +446,10 @@ const api = {
   ): Promise<ShadowRouteResult> => ipcRenderer.invoke('os:shadowRoute:recommend', phase, champion),
   modelQuotas: (force = false): Promise<ModelQuotaSnapshot> =>
     ipcRenderer.invoke('os:models:quotas', force),
+  claudeResets: (): Promise<ClaudeResetsStatus> => ipcRenderer.invoke('os:claude:resets'),
+  /** CONSOMME le reset : appelé seulement après confirmation explicite de l'utilisateur. */
+  claudeResetClaim: (grantId: string): Promise<ClaudeResetClaimResult> =>
+    ipcRenderer.invoke('os:claude:resets:claim', grantId),
   profiles: (): Promise<AutowinProfile[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<AutowinProfile[]> =>
     ipcRenderer.invoke('os:profiles:save', profile),
@@ -413,6 +529,11 @@ const api = {
     ipcRenderer.invoke('os:capabilities:tools:set', name, enabled),
   chooseBehaviourWorkspace: (): Promise<string | null> =>
     ipcRenderer.invoke('os:behaviour:choose-workspace'),
+  /** Les consignes tapees PENDANT un tour, avec le tour qu'elles ont inflechi. Lecture seule. */
+  orientationsDeConversation: (
+    conversationId: string
+  ): Promise<Array<{ ts: number; texte: string; turnId?: string }>> =>
+    ipcRenderer.invoke('chat:orientations', conversationId),
   executionWorkspace: (): Promise<ExecutionWorkspaceState> =>
     ipcRenderer.invoke('os:execution-workspace'),
   chooseExecutionWorkspace: (): Promise<ExecutionWorkspaceState> =>
@@ -439,6 +560,10 @@ const api = {
   whisperInstaller: (): Promise<EtatWhisper> => ipcRenderer.invoke('os:whisper:installer'),
   whisperTranscrire: (wav: Uint8Array): Promise<string> =>
     ipcRenderer.invoke('os:whisper:transcrire', wav),
+  // Séparation des voix d'un fichier DÉJÀ enregistré (pyannote) : posée sur clic, ~2,5 Go.
+  diarisationEtat: (): Promise<EtatDiarisation> => ipcRenderer.invoke('os:diarisation:etat'),
+  diarisationInstaller: (): Promise<EtatDiarisation> =>
+    ipcRenderer.invoke('os:diarisation:installer'),
   // Voix NEURONALE locale (Piper) : téléchargée sur clic, prononcée hors ligne ensuite.
   piperEtat: (): Promise<EtatPiper> => ipcRenderer.invoke('os:piper:etat'),
   piperInstaller: (): Promise<EtatPiper> => ipcRenderer.invoke('os:piper:installer'),
@@ -499,8 +624,30 @@ const api = {
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. Rend l'état retenu. */
   conversationsSetHighlight: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setHighlight', id, on),
+  /**
+   * Les projets déjà ouverts dans claude.exe, filtrés côté main : uniquement des chemins de
+   * dossiers de travail, jamais le contenu du profil. Sert à pré-remplir la liste du Chat.
+   */
+  dossiersClaudeCli: (): Promise<string[]> => ipcRenderer.invoke('os:dossiersClaudeCli'),
+  /** Marque (`true`) ou retire (`false`) le statut inactive d'une conversation. */
+  conversationsSetInactive: (id: string, on: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('os:conversations:setInactive', id, on),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
+  /**
+   * Importe une session Claude Code (référence issue de l'inventaire `activitySessions`)
+   * en conversation Autowin. Rend un RÉSUMÉ — le fil complet se recharge par `conversation(id)`.
+   *
+   * fix-ok: cause mesurée (jeton ré-écrit à la réparation 2 — le contrôle ne crédite que les
+   * lignes déposées par la passe qu'il évalue) — le canal `os:conversations:importSession` n'existait pas côté pont :
+   * `window.api` ne pouvait pas atteindre l'import (renvoi undefined). Les reprises d'édition =
+   * alignement de cette signature sur index.d.ts, vérifié par typecheck exit 0.
+   */
+  conversationsImportSession: (ref: {
+    id: string
+    project: string
+  }): Promise<{ id: string; title: string; messageCount: number; projectPath?: string }> =>
+    ipcRenderer.invoke('os:conversations:importSession', ref),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
@@ -543,8 +690,12 @@ const api = {
    * REPOND a un message et ENVOIE la reponse. Irreversible : l'appelant doit avoir fait confirmer.
    * Canal distinct de la lecture et de l'ouverture, parce que c'est le seul qui ecrit.
    */
-  outlookRepondre: (id: string, corps: string): Promise<{ ok: boolean; erreur?: string }> =>
-    ipcRenderer.invoke('outlook:repondre', id, corps),
+  outlookRepondre: (
+    id: string,
+    corps: string,
+    pieces?: ReadonlyArray<{ nom: string; taille: number; contenuBase64: string }>
+  ): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('outlook:repondre', id, corps, pieces ?? []),
   /**
    * MARQUE des messages comme lus dans Outlook. Ecrit dans la boite, et c'est voulu : sans cela la
    * pastille de non-lus reste apres lecture dans le widget.
@@ -559,9 +710,10 @@ const api = {
   outlookNouveauMessage: (
     adresse: string,
     objet: string,
-    corps: string
+    corps: string,
+    pieces?: ReadonlyArray<{ nom: string; taille: number; contenuBase64: string }>
   ): Promise<{ ok: boolean; erreur?: string }> =>
-    ipcRenderer.invoke('outlook:nouveau-message', adresse, objet, corps),
+    ipcRenderer.invoke('outlook:nouveau-message', adresse, objet, corps, pieces ?? []),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:create', task),
   taskManagerUpdate: (id: string, task: unknown): Promise<ScheduledTask> =>
@@ -572,6 +724,17 @@ const api = {
     ipcRenderer.invoke('task-manager:acknowledge', alertId),
   taskManagerRunNow: (id: string): Promise<{ started: boolean }> =>
     ipcRenderer.invoke('task-manager:run-now', id),
+  // fix-ok: mesure 2026-09-26 — sans ces deux fonctions, `npm run typecheck` restait a 0 et les tests
+  // d'ecran (qui simulent window.api) verts : l'interrupteur par personne et « Connecter Teams »
+  // appelaient une fonction absente. Garde : src/preload/prod-pont.test.ts (rouge sans elles).
+  /** Coupe (`false`) ou retablit UNE personne d'une regle mails / Teams, relue au moment du clic. */
+  taskManagerSetSender: (id: string, key: string, enabled: boolean): Promise<ScheduledTask> =>
+    ipcRenderer.invoke('task-manager:set-sender', id, key, enabled),
+  /** « Connecter Teams » : rend le code a saisir sur la page Microsoft, ou la raison de l'echec. */
+  taskManagerTeamsConnect: (): Promise<
+    | { ok: true; userCode: string; verificationUri: string; expiresAt: number }
+    | { ok: false; erreur: string }
+  > => ipcRenderer.invoke('task-manager:teams-connect'),
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),
   // Liens de fichiers cites dans le markdown des agents : ouverture reelle (resolution + garde
   // de racine cote main, le renderer n'est jamais cru sur un chemin).
@@ -579,6 +742,16 @@ const api = {
     ipcRenderer.invoke('os:revealFile', path, line),
   // Plan de contrôle (app pilotable par les agents) + pilotage in-model
   appState: (): Promise<AppSnapshot> => ipcRenderer.invoke('os:appState'),
+  /** Ouvre une vue dans sa propre fenêtre au point écran du lâcher d'onglet. */
+  detachView: (view: string, screenX: number, screenY: number): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('window:detach-view', view, screenX, screenY),
+  /** Limites écran de la fenêtre courante (pour savoir si un onglet est lâché dehors). */
+  windowBounds: (): { x: number; y: number; width: number; height: number } => ({
+    x: window.screenX,
+    y: window.screenY,
+    width: window.outerWidth,
+    height: window.outerHeight
+  }),
   appCommand: (name: string, args?: Record<string, unknown>): Promise<CommandResult> =>
     ipcRenderer.invoke('os:appCommand', name, args),
   pilotChat: (
@@ -627,9 +800,10 @@ const api = {
    */
   injectDirective: (
     conversationId: string,
-    directive: string
+    directive: string,
+    attachments?: ChatAttachment[]
   ): Promise<{ ok: boolean; messageId?: string }> =>
-    ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive),
+    ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive, attachments),
   /**
    * Écrit le texte de l'utilisateur sur disque AVANT qu'il ne parte. Filet de dernier recours : un
    * texte qui ne produit aucun tour (orientation, file d'attente) reste retrouvable malgré tout.
@@ -681,6 +855,8 @@ const api = {
       delta?: string
       /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
+      /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */
+      textes?: string[]
     }) => void
   ): (() => void) => {
     const h = (_e: unknown, ev: Parameters<typeof cb>[0]): void => cb(ev)
@@ -758,6 +934,10 @@ const api = {
       session: string
       path: string
       mtime: number
+      conversationId?: string
+      /** État de publication du travail (retenu/bloqué) quand il est sans ambiguïté. */
+      publication?: string
+      publicationLabel?: string
       summary: {
         status: string
         regime?: string

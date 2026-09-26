@@ -1,0 +1,53 @@
+TACHE (identique pour les quatre bras du banc) :
+
+Le depot n a AUCUN outil pour mesurer la DISPERSION d un banc de mesure A/B/C/X, alors que la procedure de banc du depot (section 4 de sa regle de mesure) l exige : « chaque bras part en 2 repliques identiques » et
+« un ecart INTER-bras plus petit que la dispersion INTRA-bras n est pas un resultat ».
+Aujourd hui ce calcul se fait a la main, donc il ne se fait pas.
+
+Ecris `scripts/banc-dispersion.mjs` : il lit un journal de duels au format JSON-Lines
+(le fichier `arena-duels.jsonl` du dossier de donnees, une ligne par bras : champs `banc`, `bras`,
+`dureeMs`, `coutUsd`, `verdict`), regroupe les lignes d un MEME banc par bras — plusieurs lignes
+d un meme bras = ses repliques — et rend la dispersion intra-bras, puis dit si l ecart entre les
+deux meilleurs bras DEPARTAGE quelque chose ou non.
+
+CONTRAT DE LIGNE DE COMMANDE (impose, aucune variante acceptee) :
+  node scripts/banc-dispersion.mjs --journal <chemin.jsonl> --banc <nom du banc> --json
+Sortie : UN objet JSON sur la sortie standard, exactement cette forme :
+{
+  "banc": "<nom>",
+  "bras": [
+    { "bras": "a", "repliques": 2,
+      "coutUsd":  { "moyenne": <nombre>, "ecartRelatif": <nombre|null> },
+      "dureeMs":  { "moyenne": <nombre>, "ecartRelatif": <nombre|null> } }
+  ],
+  "comparaison": {
+    "meilleur": "<bras|null>",
+    "ecartRelatifCout": <nombre|null>,
+    "ecartRelatifDuree": <nombre|null>,
+    "departage": <true|false>,
+    "motif": "<phrase courte>"
+  },
+  "lignesIgnorees": <entier>
+}
+REGLES DE CALCUL (elles sont le coeur de la tache) :
+ - `ecartRelatif` intra-bras = (max - min) / min sur les repliques de CE bras. Avec UNE SEULE
+   replique la dispersion est INCONNUE : `ecartRelatif` vaut `null` — jamais 0.
+ - `moyenne` = moyenne arithmetique des repliques du bras.
+ - `meilleur` = le bras au cout moyen le plus bas parmi ceux dont le verdict n est pas `casse`.
+   `ecartRelatifCout` / `ecartRelatifDuree` = ecart entre le meilleur et le deuxieme,
+   rapporte au meilleur : (second - meilleur) / meilleur.
+ - `departage` est `true` SEULEMENT si l ecart INTER-bras de cout est STRICTEMENT superieur a la
+   plus grande dispersion INTRA-bras connue parmi les deux bras compares. Sinon `false`, avec un
+   `motif` qui nomme le chiffre qui l empeche. Une dispersion intra inconnue (`null`) sur l un des
+   deux bras compares interdit le departage : `departage: false`, motif « dispersion intra non
+   mesuree ».
+ - Une ligne JSONL illisible ou sans `bras`/`coutUsd`/`dureeMs` est IGNOREE et comptee dans
+   `lignesIgnorees` — le programme ne plante pas.
+ - Journal absent, vide, ou banc sans aucune ligne : message explicite sur la sortie d erreur et
+   CODE DE SORTIE 2 (pas 0, pas 1).
+ - Aucune dependance nouvelle : Node pur, ESM, aucun paquet npm ajoute.
+
+CRITERE DE SUCCES — deterministe, aujourd hui ROUGE (le fichier n existe pas) :
+  node D:/AutoWinOS/bench/dispersion/check.mjs <racine de ta copie>
+doit afficher « CRITERE ATTEINT » avec le code de sortie 0. Il fabrique lui-meme ses journaux
+d essai dans un dossier temporaire : aucune valeur ne peut etre mise en dur pour le satisfaire.

@@ -15,6 +15,8 @@
  * caractères — on retombe sur l'ancien comportement au lieu de casser le composer.
  */
 
+import { suivreBlocsDeCode } from './bloc-de-code'
+
 const MARQUEUR_PROMPT_SUIVANT = 'AUTOWIN_PROMPT_V1:'
 
 /** Au-delà, ce n'est plus un prompt mais un paragraphe : on le borne au lieu de noyer le champ. */
@@ -27,26 +29,49 @@ const PREFIXES_PARTIELS = Array.from({ length: MARQUEUR_PROMPT_SUIVANT.length },
   MARQUEUR_PROMPT_SUIVANT.slice(0, index + 1)
 )
 
-const estOuvertureDeBloc = (ligne: string): boolean => ligne.trimStart().startsWith('```')
+/**
+ * SIGNAL DE FIN EXPLICITE du mode auto. Avant lui, l'arret reposait sur le MOT « rien » (et ses
+ * variantes) ecrit dans une rubrique : une liste de formulations toujours incomplete, qui a relance
+ * des chaines finies (« rien d'autre », 2026-09-12) ou coupe des chaines vivantes. Une ligne
+ * technique posee SEULE — `AUTOWIN_FIN_V1` (motif facultatif apres « : ») — ne s'interprete pas.
+ * Invisible comme `AUTOWIN_PROMPT_V1` : l'affichage la retire.
+ */
+const MARQUEUR_FIN = 'AUTOWIN_FIN_V1'
+const LIGNE_FIN = /^AUTOWIN_FIN_V1\s*(?::.*)?$/u
+const PREFIXES_FIN = Array.from({ length: MARQUEUR_FIN.length }, (_, index) =>
+  MARQUEUR_FIN.slice(0, index + 1)
+)
+
+/** Vrai si la reponse porte, hors bloc de code, la ligne de fin explicite. */
+export function signalFinExplicite(texte: string): boolean {
+  const bloc = suivreBlocsDeCode()
+  for (const ligne of texte.split(SAUT)) {
+    if (bloc.delimiteur(ligne)) continue
+    if (!bloc.dansUnBloc && LIGNE_FIN.test(ligne.trim().replace(/`/g, ''))) return true
+  }
+  return false
+}
 
 /**
  * Rend le DERNIER prompt émis, nettoyé de son markdown et borné. `null` s'il n'y en a pas —
  * l'appelant retombe alors sur la recommandation, donc rien ne régresse.
+ *
+ * `depotPresent` : sans dépôt git, il n'existe ni branche, ni remise de côté, ni copie isolée à
+ * trier — les deux gardes de publication n'ont donc plus d'objet et la suite passe INTACTE. Par
+ * défaut `true` : un appelant qui ne sait pas garde l'ancien comportement, jamais un relâchement.
  */
 export function extrairePromptSuivant(
   texte: string | undefined | null,
-  demandeDuTour?: string
+  demandeDuTour?: string,
+  depotPresent = true
 ): string | null {
   if (!texte) return null
   let trouve: string | null = null
-  let dansUnBloc = false
+  const bloc = suivreBlocsDeCode()
   for (const ligne of texte.split(SAUT)) {
-    if (estOuvertureDeBloc(ligne)) {
-      dansUnBloc = !dansUnBloc
-      continue
-    }
+    if (bloc.delimiteur(ligne)) continue
     // Un exemple du format cité dans un bloc de code n'est pas une consigne à exécuter.
-    if (dansUnBloc) continue
+    if (bloc.dansUnBloc) continue
     const debut = ligne.lastIndexOf(MARQUEUR_PROMPT_SUIVANT)
     if (debut < 0) continue
     const brut = ligne
@@ -59,8 +84,8 @@ export function extrairePromptSuivant(
     trouve = brut.length > LONGUEUR_MAX ? brut.slice(0, LONGUEUR_MAX).trimEnd() : brut
   }
   // Publication que PERSONNE n'a demandée : pas de suite du tout (voir plus bas).
-  if (trouve && publicationJamaisDemandee(trouve, demandeDuTour)) return null
-  if (trouve && estPromptDePublication(trouve, demandeDuTour)) return PROMPT_SALVAGE
+  if (trouve && publicationJamaisDemandee(trouve, demandeDuTour, depotPresent)) return null
+  if (trouve && estPromptDePublication(trouve, demandeDuTour, depotPresent)) return PROMPT_SALVAGE
   return trouve
 }
 
@@ -73,19 +98,37 @@ export function extrairePromptSuivant(
 export function retirerLignePromptSuivant(texte: string): string {
   const lignes = texte.split(SAUT)
   const gardees: string[] = []
-  let dansUnBloc = false
-  for (const ligne of lignes) {
-    if (estOuvertureDeBloc(ligne)) {
-      dansUnBloc = !dansUnBloc
+  const bloc = suivreBlocsDeCode()
+  let retireeEnFin = false
+  for (const [index, ligne] of lignes.entries()) {
+    if (bloc.delimiteur(ligne)) {
       gardees.push(ligne)
+      retireeEnFin = false
       continue
     }
-    if (!dansUnBloc) {
+    // Le reste vide qui suit la ligne retirée n'est que SON propre saut de ligne : il part avec elle.
+    if (retireeEnFin && ligne === '' && index === lignes.length - 1) continue
+    if (!bloc.dansUnBloc) {
       const nu = ligne.trim()
-      if (nu.includes(MARQUEUR_PROMPT_SUIVANT)) continue
-      if (PREFIXES_PARTIELS.includes(nu)) continue
+      if (
+        nu.includes(MARQUEUR_PROMPT_SUIVANT) ||
+        PREFIXES_PARTIELS.includes(nu) ||
+        LIGNE_FIN.test(nu.replace(/`/g, '')) ||
+        PREFIXES_FIN.includes(nu)
+      ) {
+        retireeEnFin = true
+        continue
+      }
     }
     gardees.push(ligne)
+    retireeEnFin = false
+  }
+  /*
+   * En CRLF, le `\r` du séparateur qui PRÉCÈDE la ligne retirée reste collé à la ligne gardée : en
+   * fin de texte il faut l'ôter, comme `join` ôte déjà le `\n`. Au milieu, `join` le recoud en `\r\n`.
+   */
+  if (retireeEnFin && gardees.length) {
+    gardees[gardees.length - 1] = gardees[gardees.length - 1].replace(/\r$/, '')
   }
   /*
    * On ne touche À RIEN d'autre. Une premiere version elaguait aussi les lignes vides finales, pour
@@ -104,8 +147,34 @@ export function retirerLignePromptSuivant(texte: string): string {
  * leur CONTENU avant toute publication. C'est un garde-fou déterministe, pas une consigne de prose :
  * la règle ne dépend pas de ce que le modèle a pensé à écrire.
  */
-const ACTES_DE_PUBLICATION =
-  /\b(commit\w*|push\w*|pousse[rz]?|pull request|\bPR\b|merge\w*|fusionn\w*|publi\w*|livre[rz]?|livraison|d[ée]ploi\w*|d[ée]ploy\w*|release|mets? en ligne|mise en ligne)\b/i
+/*
+ * FRONTIERES UNICODE, PAS `\b`.
+ *
+ * VECU LE 2026-09-11 (conv-467) : un prompt terminant par « les lignes deja PRESENTES » a ete
+ * classe « pull request », donc SUPPRIME — l'utilisateur n'a eu aucun prompt dans son champ.
+ * Cause : en JavaScript `\b` est une frontiere ASCII, et une lettre accentuee n'est PAS un
+ * caractere de mot. Le « pr » de « présentes » se retrouvait encadre de deux frontieres et
+ * satisfaisait `\bPR\b`. Le francais est plein de ce piege : présentes, prépare, prévois.
+ *
+ * Les bords sont donc poses sur les LETTRES au sens Unicode. Et le sigle « PR » sort de
+ * l'alternative insensible a la casse : deux lettres aussi courtes ne se reconnaissent qu'en
+ * MAJUSCULES, sinon n'importe quel « pr » isole redeviendrait une pull request.
+ */
+const BORD_GAUCHE = '(?<![\\p{L}\\p{N}_])'
+const BORD_DROIT = '(?![\\p{L}\\p{N}_])'
+
+const ACTES_DE_PUBLICATION = new RegExp(
+  `${BORD_GAUCHE}(?:commit\\p{L}*|push\\p{L}*|pousse[rz]?|pull request|merge\\p{L}*|fusionn\\p{L}*|publi\\p{L}*|livre[rz]?|livraison|d[ée]ploi\\p{L}*|d[ée]ploy\\p{L}*|release|mets? en ligne|mise en ligne)${BORD_DROIT}`,
+  'iu'
+)
+
+/** Le sigle seul, en MAJUSCULES uniquement : « pr » minuscule est trop court pour etre sur. */
+const SIGLE_PULL_REQUEST = new RegExp(`${BORD_GAUCHE}PR${BORD_DROIT}`, 'u')
+
+/** Un texte parle-t-il de PUBLIER ? Point d'entree unique : les deux motifs se lisent ensemble. */
+function mentionneUnActeDePublication(texte: string): boolean {
+  return ACTES_DE_PUBLICATION.test(texte) || SIGLE_PULL_REQUEST.test(texte)
+}
 
 export const PROMPT_SALVAGE =
   "Lance /salvage : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées) avant qu'on publie quoi que ce soit."
@@ -167,18 +236,45 @@ export function ordreDeTriDejaJoue(demandeDuTour: string | undefined): boolean {
  * Le garde-fou garde tout son mordant sur le cas qu'il vise vraiment : l'utilisateur veut publier,
  * on trie d'abord.
  */
-export function publicationJamaisDemandee(prompt: string, demandeDuTour?: string): boolean {
+export function publicationJamaisDemandee(
+  prompt: string,
+  demandeDuTour?: string,
+  depotPresent = true
+): boolean {
   // Sans demande connue, on ne sait RIEN : on garde l'ancien garde-fou plutot que de supprimer une
   // suite peut-etre legitime. La suppression n'a lieu que sur une demande LUE qui ne publie pas.
   if (!demandeDuTour?.trim()) return false
-  if (!estPromptDePublication(prompt, demandeDuTour)) return false
-  return !ACTES_DE_PUBLICATION.test(demandeDuTour)
+  // Sans depot, `estPromptDePublication` rend deja `false` : aucune suite n'est supprimee, elle
+  // passe intacte. Le drapeau est passe explicitement pour que la regle vive a UN seul endroit.
+  if (!estPromptDePublication(prompt, demandeDuTour, depotPresent)) return false
+  return !mentionneUnActeDePublication(demandeDuTour)
 }
 
-export function estPromptDePublication(prompt: string, demandeDuTour?: string): boolean {
+/**
+ * LE DOSSIER SANS DEPOT GIT NE PEUT RIEN AVOIR A TRIER.
+ *
+ * Mesure des saisies des 09 et 10/09/2026 sur `D:\RigV3Desktop` : « comment ca commiter? ya pas de
+ * repo », puis « j1i jamais fait de repo tas mis ca sur quel git? », puis « j'ai pas de git arrete
+ * de me casser les couilles pour publier ». Trois fois la meme reponse, parce que cette fonction ne
+ * connaissait que le TEXTE du prompt : ses trois exceptions (ordre de tri deja joue, charniere de
+ * suite, publication jamais demandee) ne regardent jamais l'etat REEL du dossier de travail.
+ *
+ * Or `/salvage` trie des branches, des remises de cote et des copies de travail non fusionnees.
+ * Sans `.git`, aucun de ces objets n'existe : la reecriture propose un tri VIDE, et elle le
+ * repropose a chaque tour. `depotPresent === false` la desactive donc entierement.
+ *
+ * Par DEFAUT le drapeau vaut `true` : un appelant qui ne sait pas garde l'ancien comportement,
+ * jamais un relachement silencieux du garde-fou.
+ */
+export function estPromptDePublication(
+  prompt: string,
+  demandeDuTour?: string,
+  depotPresent = true
+): boolean {
+  if (!depotPresent) return false
   if (ordreDeTriDejaJoue(demandeDuTour)) return false
   if (ORDRE_DE_TRI.test(prompt)) return false
   const charniere = prompt.search(CHARNIERE_DE_SUITE)
-  if (charniere > 0 && !ACTES_DE_PUBLICATION.test(prompt.slice(0, charniere))) return false
-  return ACTES_DE_PUBLICATION.test(prompt)
+  if (charniere > 0 && !mentionneUnActeDePublication(prompt.slice(0, charniere))) return false
+  return mentionneUnActeDePublication(prompt)
 }

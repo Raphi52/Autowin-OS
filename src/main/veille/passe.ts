@@ -84,6 +84,21 @@ export function construirePromptScout(source: SourceVeille): string {
  * voulu écrire serait la première marche vers l'invention.
  */
 export function extraireCandidats(sortie: string): CandidatBrut[] | undefined {
+  // Le prompt exige un bloc ```json en dernière position, mais l'app peut AJOUTER du texte après
+  // (avertissement « Tâche de fond pas terminée », conv-776) : ce texte peut contenir des `]`.
+  // On lit donc d'abord les blocs ```json, du dernier au premier ; le premier/dernier crochet
+  // n'est qu'un repli pour une sortie sans bloc.
+  const blocs = [...sortie.matchAll(/```json\s*\n([\s\S]*?)```/g)].map((m) => m[1])
+  for (const bloc of blocs.reverse()) {
+    try {
+      const valeur: unknown = JSON.parse(bloc.trim())
+      if (Array.isArray(valeur)) {
+        return valeur.filter((e): e is CandidatBrut => !!e && typeof e === 'object')
+      }
+    } catch {
+      // bloc illisible : on essaie le précédent, puis le repli — jamais de réparation.
+    }
+  }
   const debut = sortie.indexOf('[')
   const fin = sortie.lastIndexOf(']')
   if (debut < 0 || fin <= debut) return undefined

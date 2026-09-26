@@ -409,7 +409,7 @@ describe('codexExecSpec — recherche web vive', () => {
    * REFUSE par `codex exec` (mesure du 2026-09-09, codex-cli 0.151.0) : seule la cle passe.
    */
   it('active tools.web_search par cle de configuration, jamais par --search', () => {
-    const args = codexExecSpec('C:\repo', 'gpt-5.6-sol', 'workspace-write', 'low', 'C:\AppData', () => true).args
+    const args = codexExecSpec('C:\\repo', 'gpt-5.6-sol', 'workspace-write', 'low', 'C:\\AppData', () => true).args
     const i = args.indexOf('tools.web_search=true')
     expect(i).toBeGreaterThan(0)
     expect(args[i - 1]).toBe('-c')

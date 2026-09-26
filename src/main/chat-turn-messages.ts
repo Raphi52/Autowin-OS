@@ -12,10 +12,22 @@
  */
 
 import { COMPACT_REQUEST } from '../shared/context-gauge'
+import { type EtatPrompt, blocEtatSuivant } from './etat-diff'
 
 export interface TurnMessageParts {
   /** État courant de l'app, sérialisé. */
   snapshot: unknown
+  /**
+   * DERNIER état déjà poussé dans la session REPRISE, s'il y en a un.
+   *
+   * Fourni, le bloc d'état devient un DIFF : la session du provider porte deja l'état complet, le
+   * repousser entier le fait repayer PLEIN TARIF a chaque message (il change, donc il n'est jamais
+   * mis en cache). Mesure du 2026-09-16 (conv-614) : 3 043 caracteres d'état a chaque tour, dont
+   * 2 821 (93 %) pour la seule liste des skills, qui ne bouge jamais.
+   *
+   * `diffEtat` existait, teste, depuis le 2026-08-31 — mais n'etait appele NULLE PART.
+   */
+  snapshotPrecedent?: EtatPrompt
   /** Bloc de connaissance récupérée (Brain + graphe), déjà mis en forme. Peut être vide. */
   brainContext: string
   /** Écho des faits retenus dans ce fil. Peut être vide. */
@@ -40,6 +52,8 @@ export interface TurnMessageParts {
   history: ReadonlyArray<{
     role: string
     content: string
+    /** Consigne envoyee PENDANT un tour (`directive-dans-le-fil.ts`), pas une demande de tour. */
+    orientation?: boolean
     /**
      * Pieces jointes du message. Presentes ici pour etre NOMMEES dans le fil aplati : le binaire
      * lui-meme voyage a part (`attachments` du message provider), mais sans ce nom rien n'indique
@@ -225,9 +239,7 @@ function avecAvisDeCoupe<T extends MessageBorne>(retenus: T[], total: number): T
  * ABOUTIE veut dire : la demande a RECU sa reponse. Une demande sans resume ne perime rien, sinon
  * le tour qui doit ecrire le resume perdrait justement le fil a resumer.
  */
-export function compactionsAbouties(
-  history: readonly { role: string; content: string }[]
-): number {
+export function compactionsAbouties(history: readonly { role: string; content: string }[]): number {
   let total = 0
   for (let index = 1; index < history.length; index += 1) {
     const demande = history[index - 1]
@@ -394,9 +406,7 @@ export interface TurnMessageBlock {
  */
 const LONGUEUR_BESOIN_RAPPELE = 300
 
-export function besoinInitialDuFil(
-  history: TurnMessageParts['history']
-): string {
+export function besoinInitialDuFil(history: TurnMessageParts['history']): string {
   const demandes = history.filter((m) => m.role === 'user')
   // Un seul tour : le besoin initial EST le message courant, le rappeler serait du bruit.
   if (demandes.length < 2) return ''
@@ -416,11 +426,50 @@ export function besoinInitialDuFil(
   )
 }
 
+/**
+ * LES CONSIGNES DU TOUR PRECEDENT, REMISES A UNE SESSION REPRISE (conv-844, 2026-09-24).
+ *
+ * fix-ok: session reprise = seul `lastUserMessage` part ; une orientation posee pendant un tour
+ * joue SANS le modele (`/kaizen` -> orchestrate) ou coupe par un redemarrage n'etait jamais remise.
+ * Saisie `ts 1790273878476` (voie orientation) « /draft le 5 mais en vertical apres », envoyee
+ * pendant le /kaizen ; l'app redemarre ; au tour « reprend » (`ts 1790274416782`) le modele repond
+ * « Tu n'as pas encore choisi de maquette. Je pars donc de ... la 2 ». La file en memoire
+ * (`pendingDirectives`) et `comptesRendusNonVus` ne survivent pas au redemarrage ; le fil, lui,
+ * porte la consigne (drapeau `orientation`). On la relit donc dans le fil : les orientations
+ * situees entre la derniere vraie demande et le message courant.
+ */
+export function orientationsDuTourPrecedent(history: TurnMessageParts['history']): string {
+  const derniere = history.length - 1
+  if (derniere < 0 || history[derniere]?.role !== 'user') return ''
+  const textes: string[] = []
+  for (let i = derniere - 1; i >= 0; i--) {
+    const m = history[i]
+    if (!m) continue
+    if (m.role === 'user' && !m.orientation) break
+    if (m.role === 'user' && m.orientation && m.content.trim()) textes.unshift(m.content.trim())
+  }
+  if (!textes.length) return ''
+  return (
+    "CONSIGNES QUE L'UTILISATEUR A ENVOYÉES PENDANT LE TOUR PRÉCÉDENT (ta session peut ne pas les " +
+    'contenir : ce tour a pu se jouer sans toi ou être coupé par un redémarrage). Chacune prime sur ' +
+    "ta propre recommandation ; si l'une n'a pas encore été traitée, traite-la :\n" +
+    textes.map((t) => `> ${t.replace(/\n/g, '\n> ')}`).join('\n')
+  )
+}
+
 export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBlock[] {
   const nonVu = parts.compteRenduNonVu?.trim()
+  /**
+   * Session REPRISE + un etat deja pousse = on n'envoie que ce qui a CHANGE. Sinon, etat entier :
+   * une session neuve na aucun etat anterieur auquel appliquer un diff.
+   */
+  const blocEtat =
+    parts.resumeSessionId && parts.snapshotPrecedent !== undefined
+      ? blocEtatSuivant(parts.snapshotPrecedent, parts.snapshot as EtatPrompt)
+      : `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`
   const nommes: TurnMessageBlock[] = parts.resumeSessionId
     ? [
-        { name: 'etatDeLApp', text: `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}` },
+        { name: 'etatDeLApp', text: blocEtat },
         { name: 'brainContext', text: parts.brainContext },
         { name: 'memoryEcho', text: parts.memoryEcho },
         { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
@@ -431,6 +480,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
             ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
             : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`
         },
+        { name: 'orientationsDuTourPrecedent', text: orientationsDuTourPrecedent(parts.history) },
         { name: 'messageUtilisateur', text: `UTILISATEUR: ${parts.lastUserMessage ?? ''}` }
       ]
     : [
@@ -855,14 +905,183 @@ export function questionPoseeSansAvoirLu(
  * lecture : la liste est fermee, pas heuristique.
  */
 const LECTEURS_NATIFS = /^(Read|Grep|Glob)\b/
-const BASH_LECTEUR = /^\s*(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|git\s+(log|show|diff|status))\b/
+// fix-ok: turn 852bb2fd-25e4-40dd-a959-57d9337b084c (conv-844) -- `cd D:/x; sed -n ...` n'etait pas
+// reconnu (ancre sur le 1er mot) : relance « question sans lecture » a tort, question affichee 2x.
+// MEME DEFAUT, AUTRES FORMES (conv-861, 2026-09-25) : `cd X; date; tail ...`, `N=...; tail ...` et
+// `git -C X log` -- trois relances a tort dans le meme fil. On ne regarde donc plus le 1er mot : la
+// commande est DECOUPEE en segments (hors guillemets) et chaque segment est classe sur une liste
+// FERMEE. Le patch par forme (un `cd` ici, un `date` la) ne finissait jamais.
+const LECTEUR_BASH = /^(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type)$/
+const SOUS_COMMANDE_GIT_LECTRICE = /^(log|show|diff|status)$/
+/** Ne lit ni n'ecrit rien : n'empeche pas une lecture d'etre « pure ». */
+const NEUTRE_BASH =
+  /^(cd|date|echo|printf|pwd|true|test|\[|for|while|until|if|case|done|fi|esac|\}|\))$/
+/** Mot-cle qui PRECEDE la vraie commande du segment (`do sed ...`, `then cat ...`). */
+const PREFIXE_BASH = /^(do|then|else|elif|\{|\(|!|time)$/
+const AFFECTATION_BASH = /^[A-Za-z_]\w*=/
 
+interface SegmentBash {
+  mots: string[]
+  /** Redirection `>` / `>>` vers autre chose que `/dev/null` ou un descripteur (`&1`). */
+  ecritFichier: boolean
+  /** `$(...)` ou accent grave : une commande cachee, jamais classee « pure ». */
+  substitution: boolean
+}
+
+/** Decoupe sur `;` `&&` `||` `|` `&` et saut de ligne, HORS guillemets (`grep -E "a|b"` reste entier). */
+function segmentsBash(commande: string): SegmentBash[] {
+  const segments: SegmentBash[] = []
+  let courant: SegmentBash = { mots: [], ecritFichier: false, substitution: false }
+  let mot = ''
+  let guillemet: string | null = null
+  const finMot = (): void => {
+    if (mot) courant.mots.push(mot)
+    mot = ''
+  }
+  const finSegment = (): void => {
+    finMot()
+    if (courant.mots.length || courant.ecritFichier || courant.substitution) segments.push(courant)
+    courant = { mots: [], ecritFichier: false, substitution: false }
+  }
+  for (let i = 0; i < commande.length; i++) {
+    const c = commande[i]
+    const substitution = c === '`' || (c === '$' && commande[i + 1] === '(')
+    if (guillemet) {
+      if (c === guillemet) guillemet = null
+      else if (guillemet === '"' && c === '\\' && i + 1 < commande.length) mot += commande[++i]
+      else {
+        if (guillemet === '"' && substitution) courant.substitution = true
+        mot += c
+      }
+      continue
+    }
+    if (c === "'" || c === '"') {
+      guillemet = c
+      continue
+    }
+    if (c === '\\' && i + 1 < commande.length) {
+      // `\;`, `\|`, `\``, `\>` : caractere LITTERAL, ni separateur, ni substitution, ni redirection.
+      mot += commande[++i]
+      continue
+    }
+    if (substitution) courant.substitution = true
+    if (c === ';' || c === '\n' || c === '|' || c === '&') {
+      finSegment()
+      if ((c === '|' || c === '&') && commande[i + 1] === c) i++
+      continue
+    }
+    if (c === '>') {
+      finMot()
+      let j = i + 1
+      if (commande[j] === '>') j++
+      while (commande[j] === ' ') j++
+      if (commande[j] === '&') {
+        // `2>&1` : vers un descripteur, aucun fichier ecrit.
+        j++
+        while (/\d/.test(commande[j] ?? '')) j++
+      } else {
+        let cible = ''
+        while (j < commande.length && !/[\s;|&]/.test(commande[j])) cible += commande[j++]
+        if (cible !== '/dev/null') courant.ecritFichier = true
+      }
+      i = j - 1
+      continue
+    }
+    if (c === ' ' || c === '\t') finMot()
+    else mot += c
+  }
+  finSegment()
+  return segments
+}
+
+/** Commande reelle du segment : mots-cles de tete et affectations `N=...` retires. */
+function commandeDuSegment(segment: SegmentBash): string[] {
+  const mots = [...segment.mots]
+  while (mots.length && (PREFIXE_BASH.test(mots[0]) || AFFECTATION_BASH.test(mots[0]))) mots.shift()
+  return mots
+}
+
+function segmentLit(segment: SegmentBash): boolean {
+  const [commande, ...args] = commandeDuSegment(segment)
+  if (!commande) return false
+  if (commande === 'git') {
+    // `git -C <dossier> log`, `git --no-pager diff` : les options globales precedent la sous-commande.
+    let k = 0
+    while (k < args.length && args[k].startsWith('-'))
+      k += args[k] === '-C' || args[k] === '-c' ? 2 : 1
+    return SOUS_COMMANDE_GIT_LECTRICE.test(args[k] ?? '')
+  }
+  if (!LECTEUR_BASH.test(commande)) return false
+  // `sed -i` REECRIT le fichier ; `find -delete` / `-exec` agit : ni l'un ni l'autre ne lit seulement.
+  if (commande === 'sed' && args.some((a) => /^(-[A-Za-z]*i|--in-place)/.test(a))) return false
+  if (commande === 'find' && args.some((a) => /^-(delete|exec|execdir|ok)$/.test(a))) return false
+  return true
+}
+
+function segmentNeutre(segment: SegmentBash): boolean {
+  const [commande] = commandeDuSegment(segment)
+  return commande === undefined || NEUTRE_BASH.test(commande)
+}
+
+/**
+ * Le battement d'outil ENTIER : `Outil · <cible complete>` quand le libelle a ete coupe.
+ *
+ * Le fournisseur coupe la cible a 120 caracteres pour l'affichage et garde l'entiere dans
+ * `statusTarget` (providers/claude.ts). Juger une commande sur son moignon est faux dans les deux
+ * sens : rejoue sur les 134 commandes Bash de conv-861, `R=...; DEST=...; for d in ...` passait pour
+ * une lecture PURE alors que son `cp` / `rm -r` tombait apres la coupure. Seule la forme
+ * `Outil · cible` est reconstruite ; le battement « Bash en cours - 2 min - ... » reste tel quel.
+ */
+export function statutComplet(status: string | undefined, statusTarget?: string): string {
+  const texte = status ?? ''
+  if (!statusTarget) return texte
+  const outil = /^(\w+) · /.exec(texte)
+  return outil ? `${outil[1]} · ${statusTarget}` : texte
+}
+
+/** Le texte de commande d'un battement `Bash · ...`, ou null si ce n'est pas un `Bash`. */
+function commandeBash(texte: string): string | null {
+  const bash = /^Bash\b\s*(?:·\s*)?(.*)$/s.exec(texte)
+  return bash ? (bash[1] ?? '') : null
+}
+
+/** AU MOINS UN segment lit : preuve que l'agent a REGARDE, quoi que fassent les autres. */
 export function statusEstUneLecture(status: string | undefined): boolean {
   const texte = (status ?? '').trim()
   if (!texte) return false
   if (LECTEURS_NATIFS.test(texte)) return true
-  const bash = /^Bash\b\s*(?:·\s*)?(.*)$/s.exec(texte)
-  return bash ? BASH_LECTEUR.test(bash[1] ?? '') : false
+  const commande = commandeBash(texte)
+  return commande !== null && segmentsBash(commande).some(segmentLit)
+}
+
+/** CHAQUE segment lit ou ne fait rien, sans ecrire de fichier ni cacher de commande. */
+function lecturePure(commande: string): boolean {
+  const segments = segmentsBash(commande)
+  return (
+    segments.length > 0 &&
+    segments.every((s) => !s.ecritFichier && !s.substitution && (segmentLit(s) || segmentNeutre(s)))
+  )
+}
+
+/**
+ * UN OUTIL NATIF QUI AGIT compte comme une action — pendant de `statusEstUneLecture`.
+ *
+ * Mesure du 2026-09-22 (conv-782) : un tour qui avait cree un script (Write), modifie une skill
+ * (Edit) et joue des tests (Bash) a recu « tu as ANNONCE ce que tu allais faire, sans rien faire ».
+ * `anyActionExecuted` n'est leve que par un `<cmd>` Autowin ; les outils natifs passent par
+ * `chunk.status`. Est une action : un ecrivain natif, ou un `Bash` qui n'est pas une lecture PURE.
+ *
+ * Pure, et non plus « le 1er mot lit » (conv-861) : depuis que `statusEstUneLecture` reconnait une
+ * lecture n'importe ou dans la commande, `date; rm -rf x; cat y` CONTIENT une lecture -- mais il agit.
+ */
+const ECRIVAINS_NATIFS = /^(Write|Edit|MultiEdit|NotebookEdit)\b/
+
+export function statusEstUneAction(status: string | undefined): boolean {
+  const texte = (status ?? '').trim()
+  if (!texte) return false
+  if (ECRIVAINS_NATIFS.test(texte)) return true
+  const commande = commandeBash(texte)
+  return commande !== null && !lecturePure(commande)
 }
 
 /** Ce qu'on renvoie a l'agent : l'ordre de REGARDER, puis de decider lui-meme si possible. */
@@ -982,3 +1201,33 @@ export const RELANCE_BLOC_VISUEL_NON_FERME =
   'alors ton HTML en bloc de code BRUT, et toute ta mise en forme est perdue à l’écran. ' +
   'Ré-émets MAINTENANT ta réponse complète, SANS aucune commande, avec la fence ouverte par ' +
   '```html-render et fermée par ``` sur une ligne seule.'
+
+/**
+ * RENDRE UN GESTE FAISABLE — garde déterministe. Mesuré conv-843, tour
+ * c4e319ca-783f-4b49-9b87-971cd6392c8e (saisie ts 1790275899514 « fais le ») : après avoir piloté
+ * le bureau (desktop_act / desktop_observe), le chat a clos par « À faire : Va dans Brave… Saisis
+ * le code CAP56FNHZ » — un geste que ses outils atteignaient. La consigne en prose (commit
+ * 67c45bc2) ne suffit pas seule : on vérifie le message final.
+ * Mord seulement si un outil de bureau a servi dans le tour ET si la clôture confie une consigne
+ * manuelle d'écran. Un mot de passe / MFA reste une vraie limite et passe.
+ */
+export function exigeFaireLeGeste(reponse: string, bureauUtilise: boolean): boolean {
+  if (!bureauUtilise) return false
+  const texte = (reponse ?? '').trim()
+  if (!texte) return false
+  if (/\b(?:mot de passe|password|mfa|authenticator|empreinte|code (?:reçu )?par sms)\b/i.test(texte))
+    return false
+  const rubrique = /(?:^|\n)\s*\**\s*(?:à|a) faire\b/i.test(texte)
+  const GESTE =
+    /(?:^|\n)\s*(?:\d+[.)]|[-*])?\s*\**(?:va dans|ouvre|clique|saisis|tape|colle|appuie|sélectionne|selectionne)\b/i
+  // Tournure sans rubrique (« il te reste à entrer le code », « à toi de saisir… »).
+  const RENVOI =
+    /(?:^|[\s(«])(?:il te reste à|il ne te reste (?:plus )?qu[’']à|à toi de|tu n[’']as plus qu[’']à|tu dois)\s+(?:aller|ouvrir|cliquer|saisir|taper|entrer|coller|appuyer|sélectionner)(?![a-zà-ÿ])/i
+  return (rubrique && GESTE.test(texte)) || RENVOI.test(texte)
+}
+
+export const RELANCE_FAIRE_LE_GESTE =
+  'SYSTÈME: ta clôture confie à l’utilisateur un geste d’écran (ouvrir, cliquer, saisir) alors ' +
+  'que tu as piloté le bureau dans CE tour — cas mesuré c4e319ca (conv-843). Fais le geste ' +
+  'MAINTENANT avec desktop_act puis vérifie par desktop_observe. Ne le rends que s’il exige un ' +
+  'secret que tu n’as pas (mot de passe, MFA) : nomme alors CE geste précis et pourquoi.'

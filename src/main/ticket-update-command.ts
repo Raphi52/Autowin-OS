@@ -10,6 +10,11 @@ export interface TicketUpdateArgs {
   comment?: unknown
   state?: unknown
   assignee?: unknown
+  /**
+   * Champs libres `{ "Custom.DLL": "…" }`, indexés par leur nom de référence côté fournisseur.
+   * Permet de remplir les onglets métier d'une fiche, que `state` et `assignee` n'atteignent pas.
+   */
+  fields?: unknown
   /** Toléré mais ignoré : la cible est toujours relue dans le store. */
   source?: unknown
 }
@@ -24,6 +29,23 @@ export type TicketUpdateOutcome =
 
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
 
+/**
+ * Ne retient que les entrées exploitables : une clé qui ressemble à un nom de référence
+ * (`Custom.DLL`, `System.Title`) et une valeur texte non vide. Une valeur vide est écartée
+ * plutôt qu'envoyée : effacer un champ métier n'est pas ce que demande un compte-rendu.
+ */
+const fieldsOf = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const retained: Record<string, string> = {}
+  for (const [reference, raw] of Object.entries(value as Record<string, unknown>)) {
+    const name = reference.trim()
+    const written = text(raw)
+    if (!/^[A-Za-z][\w]*(\.[\w-]+)+$/.test(name) || !written) continue
+    retained[name] = written
+  }
+  return retained
+}
+
 export async function updateTicketFromCommand(
   args: TicketUpdateArgs,
   deps: TicketUpdateCommandDeps
@@ -33,10 +55,12 @@ export async function updateTicketFromCommand(
   const comment = text(args?.comment)
   const state = text(args?.state)
   const assignee = text(args?.assignee)
-  if (!comment && !state && !assignee) {
+  const fields = fieldsOf(args?.fields)
+  const hasFields = Object.keys(fields).length > 0
+  if (!comment && !state && !assignee && !hasFields) {
     return {
       ok: false,
-      reason: 'Mise à jour vide : fournis un commentaire, un état ou un assigné.'
+      reason: 'Mise à jour vide : fournis un commentaire, un état, un assigné ou des champs.'
     }
   }
   const resolved = resolveTicketCreateSource(deps.listSources(), id.sourceId)
@@ -53,7 +77,8 @@ export async function updateTicketFromCommand(
       id: id.id,
       ...(comment ? { comment } : {}),
       ...(state ? { state } : {}),
-      ...(assignee ? { assignee } : {})
+      ...(assignee ? { assignee } : {}),
+      ...(hasFields ? { fields } : {})
     })
     return {
       ok: true,

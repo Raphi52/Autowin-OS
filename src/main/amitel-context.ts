@@ -125,7 +125,12 @@ function porteLeToken(mots: readonly string[], token: string): boolean {
   // C'etait la classe de bug de conv-1407 (« les » sous-chaine de « roles.ts ») reintroduite dans
   // l'autre sens, releve par l'audit.
   return mots.some(
-    (mot) => mot.startsWith(token) || (mot.length >= 3 && token.startsWith(mot))
+    // Token de 3 lettres : egalite stricte. En prefixe, « cli » attrapait `click` et « non »
+    // `nonEmpty` sur une question de couts (conv-706).
+    (mot) =>
+      mot === token ||
+      (token.length >= 4 && mot.startsWith(token)) ||
+      (mot.length >= 3 && token.startsWith(mot))
   )
 }
 
@@ -310,7 +315,8 @@ export function createAmitelContextProvider(
       pushBrain
         ? retrieveBrain(boundedQuery, meta?.conversationId)
         : Promise.resolve({ context: '', status: 'empty' } as BrainRetrievalResult),
-      retrieveGraph(boundedQuery)
+      // `sources` gouverne AUSSI le graphe : il etait interroge sans condition (conv-703).
+      sources.includes('graph') ? retrieveGraph(boundedQuery) : Promise.resolve('')
     ])
     // PORTÉE PAR WORKSPACE : le Brain est à 99 % de la doc RIG (mesure 2026-07-29), donc une question
     // Autowin ramène majoritairement des sources d'un AUTRE projet. On restreint au corpus du

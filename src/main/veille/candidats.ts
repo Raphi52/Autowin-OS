@@ -165,9 +165,39 @@ export function normaliserTitre(titre: string): string {
 export function cleDedup(candidat: Pick<CandidatBrut, 'concurrent' | 'url' | 'titre'>): string {
   return [
     (candidat.concurrent ?? '').trim().toLocaleLowerCase('fr'),
-    (candidat.url ?? '').trim(),
+    ancrageSansLigne((candidat.url ?? '').trim()),
     normaliserTitre(candidat.titre ?? '')
   ].join('|')
+}
+
+/**
+ * L'ancrage INTERNE perd son numero de ligne ; une URL web n'est PAS touchee.
+ *
+ * fix-ok: la cle portait `src/main/truc.ts:123`. Le meme defaut re-ancre une ligne plus loin
+ * produisait donc une cle neuve et revenait « nouveau » — d'ou 28 candidats tous 'ecarte' qui ne
+ * restaient pas ecartes. Deux candidats sur le meme FICHIER sont le meme sujet. Pour une URL web,
+ * en revanche, l'URL reste entiere dans la cle EXPRES : une page de notes de version porte toutes
+ * les versions, la retirer fondrait des candidats concurrents legitimement distincts.
+ */
+function ancrageSansLigne(url: string): string {
+  return ancrageInterne(url) ? url.replace(/:\d+$/, '') : url
+}
+
+/**
+ * La SECONDE cle : le concurrent et le titre seuls, sans aucune adresse.
+ *
+ * Elle rattrape le defaut re-formule ET re-ancre ailleurs — ce que la premiere cle laisse passer.
+ * Le concurrent y reste, sinon deux produits qui sortent « support MCP » la meme semaine fusionnent.
+ */
+export function cleTitre(candidat: Pick<CandidatBrut, 'concurrent' | 'titre'>): string {
+  return `titre::${(candidat.concurrent ?? '').trim().toLocaleLowerCase('fr')}|${normaliserTitre(candidat.titre ?? '')}`
+}
+
+/** Les cles d'un candidat : toucher l'UNE OU L'AUTRE suffit a le tenir pour deja connu. */
+export function clesCandidat(
+  candidat: Pick<CandidatBrut, 'concurrent' | 'url' | 'titre'>
+): string[] {
+  return [cleDedup(candidat), cleTitre(candidat)]
 }
 
 function urlAcceptable(url: string): boolean {
@@ -247,11 +277,12 @@ export function trierCandidats(
       continue
     }
     const cle = cleDedup(brut)
-    if (vues.has(cle)) {
+    const cles = clesCandidat(brut)
+    if (cles.some((candidate) => vues.has(candidate))) {
       refuses.push({ raison: 'deja connu', brut })
       continue
     }
-    vues.add(cle)
+    for (const connue of cles) vues.add(connue)
     retenus.push({
       id: cle,
       concurrent: brut.concurrent!.trim(),

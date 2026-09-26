@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
-import { choisirPortLibre } from './port-libre.mjs'
+import { reserverInstance } from './avec-instance-headless.mjs'
 
 /*
  * SIX PREUVES DE LECTURE, UNE SEULE INSTANCE — et branchees automatiquement.
@@ -69,13 +69,14 @@ if (!existsSync(binaire)) {
 
 // Un socket ORPHELIN peut tenir le port demande sans qu'aucun processus vivant ne le detienne : on
 // prend le suivant libre plutot que de tomber sur une cause sans rapport avec le produit.
-const port = choisirPortLibre(portDemande)
-if (port === undefined) {
-  console.error(
-    `[sondes-lecture] aucun port libre entre ${portDemande} et ${portDemande + 19} — machine saturee.`
-  )
-  process.exit(3)
-}
+// Nom ET port reserves par verrou : une sonde parallele ne prend plus le meme port, et un second
+// lancement de la meme sonde est refuse au lieu de fermer l'application du premier.
+const { port } = reserverInstance({
+  instanceId: instance,
+  portDemande: portDemande,
+  racine,
+  prefixe: '[sondes-lecture]'
+})
 if (port !== portDemande)
   console.log(`[sondes-lecture] port ${portDemande} occupe — repli sur ${port}`)
 

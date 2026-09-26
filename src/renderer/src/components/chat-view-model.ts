@@ -91,6 +91,11 @@ export interface HydratedAssistantMessage {
    */
   reasoning?: string
   /**
+   * COUT DU TOUR tel que le fournisseur l'a rendu dans l'evenement `done` (`usage.costUsd`).
+   * Recopie, jamais recalcule : le seul chiffre de reference reste celui du main.
+   */
+  coutUsd?: number
+  /**
    * Signe de vie TECHNIQUE du provider — REMPLACE le precedent, jamais accumule, jamais persiste,
    * jamais melange au bloc « Reflexion ».
    */
@@ -115,6 +120,8 @@ export interface StoredAssistantMessage {
   error?: string
   /** Raisonnement conservé par le tour : c'est lui qui rend le bloc « Réflexion » relisible. */
   reasoning?: string
+  /** Journal des actions conservé par le tour : c'est lui qui rend le bloc « Actions » relisible. */
+  actionsLog?: string[]
 }
 
 export type ConversationStateKey =
@@ -305,6 +312,13 @@ export function noterChoixDePipeline(parts: ChatPart[], choix: PipelineChoice): 
     ...(choix.model ? { model: choix.model } : {})
   }
   if (Object.keys(propre).length === 0) return parts
+  /*
+   * LE PROMPT DES LE DEMARRAGE. Il n'arrivait qu'avec le step TERMINE (`completerChoixDePipeline`),
+   * alors qu'il est deja construit quand la phase demarre. Pendant toute la phase — 10 min sur un
+   * kaizen — le deplie « prompt envoye » restait vide (« j'ai rien en preprompt », 2026-09-12).
+   * Ajoute APRES le test de vacuite : un prompt seul, sans phase ni agent, ne fabrique pas de ligne.
+   */
+  if (choix.prompt) propre.prompt = choix.prompt
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i]
     if (part.kind !== 'action' || part.name !== 'orchestrate') continue
@@ -655,7 +669,13 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     ...(message.error ? { error: message.error } : {}),
     // Le raisonnement SURVIT au rechargement : sans cette ligne, le bloc « Réflexion » d'un tour
     // relu reste vide alors que le tour l'a bien conservé.
-    ...(message.reasoning ? { reasoning: message.reasoning } : {})
+    ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+    // Le JOURNAL DES ACTIONS survit de la même façon : sans cette ligne, le bloc « Actions » d'un
+    // tour relu est vide alors que le tour l'a bien conservé. `providerStatus` (l'en-tête repliée)
+    // reprend la DERNIÈRE ligne, exactement ce que montrait le direct à la fin du tour.
+    ...(message.actionsLog?.length
+      ? { providerStatusLog: message.actionsLog, providerStatus: message.actionsLog.at(-1)! }
+      : {})
   }
 }
 
@@ -746,6 +766,9 @@ export function reduceAssistantPilotEvent(
     turnEvent
   )
   const done = next.status !== 'streaming'
+  const coutRecu =
+    event.kind === 'done' ? (event as { usage?: { costUsd?: unknown } }).usage?.costUsd : undefined
+  const coutUsd = typeof coutRecu === 'number' ? coutRecu : message.coutUsd
   return {
     role: 'assistant',
     turnId,
@@ -753,8 +776,15 @@ export function reduceAssistantPilotEvent(
     parts: done ? settleUnresolvedActions(next.parts) : next.parts,
     status: next.status,
     done,
-    ...(next.error ? { error: next.error } : {})
+    ...(next.error ? { error: next.error } : {}),
+    ...(coutUsd !== undefined ? { coutUsd } : {})
   }
+}
+
+/** Libelle du cout d'un tour ; rien quand le fournisseur ne l'a pas chiffre (jamais « 0 $ » invente). */
+export function libelleCoutDuTour(coutUsd: number | undefined): string | undefined {
+  if (typeof coutUsd !== 'number' || !Number.isFinite(coutUsd) || coutUsd <= 0) return undefined
+  return `coût du tour : ${coutUsd < 0.01 ? coutUsd.toFixed(4) : coutUsd.toFixed(2)} $`
 }
 
 interface RuntimeSlot {
@@ -884,6 +914,12 @@ export function parseBtw(text: string): { isBtw: boolean; body: string } {
 export interface SlashCommand {
   name: string
   hint: string
+  /**
+   * Description ENTIÈRE, affichée au survol de la ligne. `hint` n'en garde que la première phrase
+   * bornée ; demande utilisateur du 2026-09-26 : « quand je hover un skill je veux voir la full
+   * description ». Absente pour une commande sans rien de plus que son libellé.
+   */
+  description?: string
   /** Texte inséré dans le composer à la sélection (l'utilisateur complète le corps ensuite). */
   insert: string
 }
@@ -946,7 +982,12 @@ export function skillSlashCommands(
         const phrase = brut.split(/(?<=\.)\s/u)[0]?.trim() ?? ''
         const hint =
           phrase.length > HINT_MAX ? `${phrase.slice(0, HINT_MAX - 1).trimEnd()}…` : phrase
-        return { name: item.id, hint: hint || 'Skill', insert: `/${item.id} ` }
+        return {
+          name: item.id,
+          hint: hint || 'Skill',
+          ...(brut.length > 0 ? { description: brut } : {}),
+          insert: `/${item.id} `
+        }
       })
       // ALIAS : même skill, entrée courte. Générée depuis la MÊME table que la résolution côté main
       // (`shared/skill-aliases`), sinon la palette proposerait un alias que l'injection ignore.
@@ -957,6 +998,9 @@ export function skillSlashCommands(
           ...aliases.map((a) => ({
             name: a,
             hint: `${cmd.hint} (alias de /${cmd.name})`,
+            ...(cmd.description
+              ? { description: `${cmd.description} (alias de /${cmd.name})` }
+              : {}),
             insert: `/${a} `
           }))
         ]
@@ -1529,6 +1573,18 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
     // sinon le libelle, comme prompt ordinaire.
     const askDecision = parseAskDecision(part)
     if (askDecision) {
+      /*
+       * UNE QUESTION REPOSEE REMPLACE LA PRECEDENTE (conv-116, 2026-09-24 : deux fenetres « Ask »
+       * identiques). Le controle « question sans lecture » relance le modele, qui lit puis REPOSE la
+       * meme question avec des options affinees. L'ancien bloc restait affiche et cliquable. Meme
+       * libelle de question dans le meme message = la nouvelle version annule l'ancienne.
+       */
+      const memeQuestion = normaliserQuestion(askDecision.question)
+      const ancienne = blocks.findIndex(
+        (bloc) =>
+          bloc.kind === 'ask-decision' && normaliserQuestion(bloc.decision.question) === memeQuestion
+      )
+      if (ancienne >= 0) blocks.splice(ancienne, 1)
       blocks.push({
         kind: 'ask-decision',
         decision: askDecision,
@@ -1563,6 +1619,10 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
   return blocks
 }
 
+function normaliserQuestion(question: string): string {
+  return question.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
 export function isChatNearBottom(
   metrics: Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'>,
   threshold = 72
@@ -1581,6 +1641,19 @@ export function isChatNearBottom(
  * Le discriminant est le SIGNE du deplacement : on ne quitte pas le bas en DESCENDANT. Tant que
  * `scrollTop` ne RECULE pas, un suivi deja actif se poursuit ; seul un recul rend la main au lecteur.
  */
+/**
+ * SUIVI DU BAS A L'ENVOI. Un envoi TAPE par l'utilisateur ramene toujours en bas : il veut voir sa
+ * reponse. Un envoi AUTOMATIQUE (mode auto, vidage de la file, reprise apres surcharge) n'est pas
+ * un geste : il garde la position choisie par le lecteur. Avant, `send()` forcait le suivi a chaque
+ * envoi, et le fil redescendait tout seul a chaque tour enchaine alors qu'on avait remonte.
+ */
+export function suiviDuBasApresEnvoi(input: {
+  suivaitLeBas: boolean
+  envoiAutomatique: boolean
+}): boolean {
+  return input.envoiAutomatique ? input.suivaitLeBas : true
+}
+
 export function doitSuivreLeBas(input: {
   suivaitLeBas: boolean
   precedentTop: number
@@ -1651,7 +1724,19 @@ export function scrollChatToBottom(
    * donc il n'armait pas le bouton « ↓ Dernière réponse », et rien ne signalait les 1688 px non lus
    * mesurés le 2026-08-17. Un défaut résiduel doit rester VISIBLE, pas se taire.
    */
-  onSettled?: (landed: boolean) => void
+  onSettled?: (landed: boolean) => void,
+  /**
+   * LE LECTEUR A-T-IL PRIS LA MAIN ? Sonde optionnelle, fournie par la vue, qui dit si un GESTE
+   * (molette, doigt, clavier, barre de defilement) a eu lieu.
+   *
+   * Defaut vecu le 2026-09-12 : « quand je clique sur mode auto ca envoie le message mais ca ne
+   * scrolle pas ». Pendant la descente, un re-rendu repose le fil quelques pixels plus haut SANS
+   * que la hauteur change — le message qui part remplace la carte du tour precedent. Ce recul etait
+   * lu comme un geste de lecture : la descente rendait la main en plein vol et allumait le bouton
+   * « derniere reponse ». Sans geste declare, un recul vient donc de L'APP, et on re-vise le bas.
+   * Sonde absente = comportement d'avant (tout recul rend la main).
+   */
+  lecteurAPrisLaMain?: () => boolean
   /**
    * REND UN ANNULEUR. Sans lui, l'effet appelant relançait une descente à CHAQUE delta de streaming
    * sans arrêter la précédente : plusieurs boucles vivaient sur le même conteneur, chacune avec son
@@ -1678,11 +1763,21 @@ export function scrollChatToBottom(
     const height = element.scrollHeight
     const heightMoved = height !== lastHeight
     const reculBrutalEnHaut = element.scrollTop <= 4 && lastTop > element.clientHeight
+    // Un recul accompagne d'un GESTE DECLARE appartient au lecteur, meme si le fil grandit encore
+    // (streaming) : sans cela la descente re-visait le bas par-dessus sa molette (conv-518, 2026-09-13).
+    if (element.scrollTop < lastTop - 4 && heightMoved && lecteurAPrisLaMain?.() === true) {
+      onSettled?.(isChatNearBottom(element))
+      return
+    }
     if (element.scrollTop < lastTop - 4 && !heightMoved) {
-      if (!reculBrutalEnHaut || !retourEnHautTolere) {
+      // AUCUN GESTE DECLARE = ce recul vient de l'app (re-rendu), pas du lecteur : on re-vise le
+      // bas au lieu de rendre la main en plein vol. Voir `lecteurAPrisLaMain`.
+      const reculDeLApp = lecteurAPrisLaMain !== undefined && !lecteurAPrisLaMain()
+      if (!reculDeLApp && (!reculBrutalEnHaut || !retourEnHautTolere)) {
         onSettled?.(isChatNearBottom(element))
         return
       }
+      if (reculDeLApp) element.scrollTo({ top: height, behavior: 'auto' })
       retourEnHautTolere = false
       element.scrollTo({ top: height, behavior: 'auto' })
     }
@@ -1932,4 +2027,51 @@ export function doitSuivreLeRoutage(input: {
   if (input.filAffiche !== input.sourceId) return false
   if (input.cleBrouillonActuelle !== input.cleBrouillonEnvoi) return false
   return input.generationSelectionActuelle === input.generationSelectionEnvoi
+}
+
+/* ---------- DENSITE DE LA LISTE DES CONVERSATIONS ---------- */
+
+/**
+ * Trois crans d'affichage de la liste, du plus serre au plus bavard. Demande du 2026-09-17 :
+ * « il devrait exister plusieurs type d'affichage de la liste des conversations, plus reduite
+ * comme claude code et detaille comme celle-la ».
+ *
+ * Le rendu serre EXISTAIT deja dans la feuille de style, mais il n'etait atteignable qu'en tirant
+ * la colonne sous 170 px — densite et largeur etaient le MEME reglage. Ces trois crans en font un
+ * choix explicite, independant de la largeur, et memorise comme elle.
+ */
+export const DENSITES_CONVERSATION = ['compact', 'normal', 'detail'] as const
+export type DensiteConversation = (typeof DENSITES_CONVERSATION)[number]
+
+/** Cran par defaut : celui d'AVANT ce reglage — personne ne doit voir sa liste changer sans l'avoir demande. */
+export const DENSITE_CONVERSATION_DEFAUT: DensiteConversation = 'detail'
+
+/** Valeur relue du stockage local : tout ce qui n'est pas un cran connu retombe sur le defaut. */
+export function lireDensiteConversations(brut: string | null | undefined): DensiteConversation {
+  return DENSITES_CONVERSATION.includes(brut as DensiteConversation)
+    ? (brut as DensiteConversation)
+    : DENSITE_CONVERSATION_DEFAUT
+}
+
+/** Rotation du bouton unique : compact → normal → detaille → compact. */
+export function densiteSuivante(courante: DensiteConversation): DensiteConversation {
+  const index = DENSITES_CONVERSATION.indexOf(courante)
+  return DENSITES_CONVERSATION[(index + 1) % DENSITES_CONVERSATION.length]
+}
+
+/** Nom lisible du cran — sert l'infobulle ET le lecteur d'ecran, donc jamais un mot de mecanique. */
+export function libelleDensite(densite: DensiteConversation): string {
+  if (densite === 'compact') return 'compacte'
+  if (densite === 'normal') return 'normale'
+  return 'détaillée'
+}
+
+/**
+ * Traits de l'icone du bouton, en coordonnees d'un carre de 16 : plus le cran est serre, plus il y
+ * a de lignes. L'icone DIT donc le cran courant sans texte.
+ */
+export function traitsDensite(densite: DensiteConversation): number[] {
+  if (densite === 'compact') return [1.9, 5.3, 8.7, 12.1]
+  if (densite === 'normal') return [2.6, 7.2, 11.8]
+  return [3.6, 8.6]
 }

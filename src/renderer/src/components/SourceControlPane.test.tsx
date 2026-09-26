@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SourceControlPane } from './SourceControlPane'
+import { RELIRE_PENDANT_TOUR_MS, SourceControlPane } from './SourceControlPane'
 import type { GitReadResult } from '../../../shared/git-read'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -76,7 +76,11 @@ function mockApi(
     onWorktreeActivity: () => () => {},
     onPilotEvent: () => () => {},
     onAppEvent: () => () => {},
-    retryWorktreeRecovery: () => Promise.resolve(undefined)
+    retryWorktreeRecovery: () => Promise.resolve(undefined),
+    listProjectDir: () =>
+      Promise.resolve({ ok: true, entries: [{ name: 'README.md', path: 'README.md', dir: false }] }),
+    readProjectFile: () => Promise.resolve({ ok: true, content: '# titre' }),
+    writeProjectFile: () => Promise.resolve({ ok: true })
   }
 }
 
@@ -112,6 +116,79 @@ describe('SourceControlPane (prompt-first)', () => {
     })
   }
 
+  /**
+   * SOUS-ONGLET « PROJET ». Demande de l'utilisateur le 2026-09-12 : l'arborescence editable doit
+   * etre une vue du panneau, au MEME rang que Fichiers / Brain / Workspace — et non un bloc
+   * empile au-dessus d'eux dans l'onglet Files.
+   */
+  it('vue Projet : quatrieme sous-onglet, monte l’arborescence editable', async () => {
+    mockApi(GIT)
+    await render()
+    const onglets = Array.from(container.querySelectorAll('.sc-repo-btn')).map((b) =>
+      b.textContent?.trim().replace(/\d+$/, '')
+    )
+    expect(onglets).toEqual(['Fichiers', 'Projet', 'Brain', 'Git'])
+    expect(container.querySelector('[data-testid="project-pane"]')).toBeNull()
+
+    const tab = container.querySelector('[data-testid="sc-view-tree"]') as HTMLButtonElement
+    await act(async () => {
+      tab.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="project-pane"]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
+  })
+
+  it('relit les fichiers modifies a la FIN d’un tour du chat (sans quitter l’onglet)', async () => {
+    mockApi(GIT)
+    let emettre: ((e: unknown) => void) | null = null
+    ;(window as unknown as { api: { onPilotEvent: unknown } }).api.onPilotEvent = (
+      cb: (e: unknown) => void
+    ) => {
+      emettre = cb
+      return () => {}
+    }
+    await render()
+    expect(calls.conversationArgs).toEqual(['conv-a'])
+    await act(async () => {
+      emettre?.({ conversationId: 'conv-a', kind: 'done' })
+      await Promise.resolve()
+    })
+    expect(calls.conversationArgs).toEqual(['conv-a', 'conv-a'])
+  })
+
+  it('relit PENDANT le tour quand l’agent passe par son terminal (commit sans result ni done)', async () => {
+    vi.useFakeTimers()
+    try {
+      mockApi(GIT)
+      let emettre: ((e: unknown) => void) | null = null
+      ;(window as unknown as { api: { onPilotEvent: unknown } }).api.onPilotEvent = (
+        cb: (e: unknown) => void
+      ) => {
+        emettre = cb
+        return () => {}
+      }
+      await render()
+      expect(calls.conversationArgs).toEqual(['conv-a'])
+      await act(async () => {
+        emettre?.({ conversationId: 'conv-a', kind: 'provider-status', text: 'Bash' })
+        emettre?.({ conversationId: 'conv-a', kind: 'delta', text: 'commit fait' })
+        emettre?.({ conversationId: 'conv-b', kind: 'provider-status', text: 'Bash' })
+        await Promise.resolve()
+      })
+      expect(calls.conversationArgs).toEqual(['conv-a'])
+      await act(async () => {
+        vi.advanceTimersByTime(RELIRE_PENDANT_TOUR_MS)
+        await Promise.resolve()
+      })
+      // Une seule relecture pour la rafale, aucune pour l'autre conversation.
+      expect(calls.conversationArgs).toEqual(['conv-a', 'conv-a'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('vue par défaut : UNIQUEMENT les changements (ni branche ni historique)', async () => {
     mockApi(GIT)
     await render()
@@ -127,24 +204,15 @@ describe('SourceControlPane (prompt-first)', () => {
     mockApi(GIT)
     await render()
     const tab = container.querySelector('[data-testid="sc-view-workspace"]')
-    expect(tab?.textContent?.trim()).toBe('Workspace')
+    expect(tab?.textContent?.trim()).toBe('Git')
     await openWorkspaceView()
     expect(container.textContent).toContain('feat/source-control')
-    expect(container.textContent).toContain('Hub des bureaux')
+    // Le Hub des bureaux a quitté ce panneau : il vit dans l'onglet plein écran Worktrees.
+    expect(container.textContent).not.toContain('Hub des bureaux')
+    expect(container.querySelector('[data-testid="wt-view"]')).toBeNull()
     expect(container.textContent).not.toContain('a1b2c3d')
     expect(container.textContent).not.toContain('Historique')
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
-  })
-
-  it('demande les bureaux de la conversation active, pas le snapshot global', async () => {
-    mockApi(GIT)
-    const getWorktreeActivity = vi.fn(() => Promise.resolve([]))
-    ;(window as unknown as { api: Record<string, unknown> }).api.getWorktreeActivity =
-      getWorktreeActivity
-
-    await render(undefined, 'conv-cible')
-
-    expect(getWorktreeActivity).toHaveBeenCalledWith('conv-cible')
   })
 
   it('rétablit et explique l’état Auto-close quand sa persistance échoue', async () => {
@@ -195,6 +263,35 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  it('un enchaînement de CHAT dit ce qui est parti et nomme ce qui reste en attente', async () => {
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-871 · tour a87271b1',
+          branch: 'auto/conv-871-a87271b1',
+          at: '2026-09-26T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'pushed', branch: 'main', files: 2, mode: 'direct' },
+          exclus: [{ path: 'src/partage.ts', motif: 'touche-par-un-autre-fil' }]
+        }
+      })
+    await render()
+    await openWorkspaceView()
+
+    const last = container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent ?? ''
+    expect(last).toContain('Projet · poussé sur main')
+    // Un tour de chat ne publie jamais le Brain : aucune ligne ne doit le laisser croire.
+    expect(last).not.toContain('Brain')
+    expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
+      'Laissé en attente · src/partage.ts (touché aussi par un autre fil)'
+    )
+    const toggle = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
+    expect(toggle.title).toContain('chaque tour de chat')
+  })
+
   it('rafraichit le resultat auto-close quand une publication differee se termine', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api
@@ -236,122 +333,6 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent).toContain(
       'Projet · publié · auto/run-delayed'
     )
-  })
-
-  it('ouvre le vrai diff read-only du bureau conflictuel sans écrire dans le prompt', async () => {
-    mockApi(GIT)
-    const getWorktreeConflictDiff = vi.fn(() =>
-      Promise.resolve({
-        available: true as const,
-        agentId: 'a2',
-        paths: ['src/main/os.ts'],
-        diff: '@@ -1 +1 @@\n-version principale\n+version du bureau'
-      })
-    )
-    const api = (window as unknown as { api: Record<string, unknown> }).api
-    api.getWorktreeActivity = () =>
-      Promise.resolve([
-        {
-          agentId: 'a2',
-          agentName: 'Builder',
-          state: 'conflict',
-          files: [{ path: 'src/main/os.ts', kind: 'mod' }],
-          startedAtMs: 1,
-          conflictFile: 'src/main/os.ts',
-          verdict: 'green',
-          publication: 'blocked'
-        }
-      ])
-    api.getWorktreeStatus = () =>
-      Promise.resolve({ available: true, workspacePath: 'C:\\Amitel\\Autowin OS' })
-    api.getWorktreeConflictDiff = getWorktreeConflictDiff
-    const onSendPrompt = vi.fn()
-    await render(onSendPrompt)
-    await openWorkspaceView()
-
-    const compare = container.querySelector(
-      '[data-testid="wt-resolve-conflict"]'
-    ) as HTMLButtonElement
-    await act(async () => {
-      compare.click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(getWorktreeConflictDiff).toHaveBeenCalledWith('a2')
-    expect(onSendPrompt).not.toHaveBeenCalled()
-    expect(container.querySelector('[data-testid="wt-conflict-diff"]')).toBeTruthy()
-    expect(container.querySelector('[data-testid="diff-view"]')).toBeTruthy()
-    expect(container.textContent).toContain('version du bureau')
-  })
-
-  it('sort de la préparation quand la comparaison du bureau échoue', async () => {
-    mockApi(GIT)
-    const api = (window as unknown as { api: Record<string, unknown> }).api
-    api.getWorktreeActivity = () =>
-      Promise.resolve([
-        {
-          agentId: 'a2',
-          agentName: 'Builder',
-          state: 'conflict',
-          files: [{ path: 'src/main/os.ts', kind: 'mod' }],
-          startedAtMs: 1,
-          conflictFile: 'src/main/os.ts',
-          verdict: 'green',
-          publication: 'blocked'
-        }
-      ])
-    api.getWorktreeStatus = () =>
-      Promise.resolve({ available: true, workspacePath: 'C:\\Amitel\\Autowin OS' })
-    api.getWorktreeConflictDiff = () => Promise.reject(new Error('bureau illisible'))
-    await render()
-    await openWorkspaceView()
-
-    await act(async () => {
-      ;(container.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(container.textContent).toContain('Comparaison indisponible')
-    expect(container.textContent).not.toContain('Préparation des deux versions')
-  })
-
-  it('réarme depuis le Hub la recréation d’un bureau épuisé', async () => {
-    mockApi(GIT)
-    const retryWorktreeRecovery = vi.fn(() => Promise.resolve(undefined))
-    const api = (window as unknown as { api: Record<string, unknown> }).api
-    api.getWorktreeActivity = () =>
-      Promise.resolve([
-        {
-          agentId: 'restore-me',
-          agentName: 'Agent récupéré',
-          state: 'ready',
-          files: [{ path: 'late.txt', kind: 'mod' }],
-          startedAtMs: 1,
-          verdict: 'green',
-          publication: 'cleanup-pending',
-          attentionReason: 'retry-exhausted',
-          retryCount: 6,
-          worktreePath: 'C:\\AppData\\worktrees\\agent__restore-me',
-          worktreeAvailable: false
-        }
-      ])
-    api.getWorktreeStatus = () =>
-      Promise.resolve({ available: true, workspacePath: 'C:\\Amitel\\Autowin OS' })
-    api.retryWorktreeRecovery = retryWorktreeRecovery
-    await render()
-    await openWorkspaceView()
-
-    const retry = container.querySelector<HTMLButtonElement>('[data-testid="wt-retry-office"]')
-    expect(retry?.textContent).toContain('Réessayer de recréer')
-    await act(async () => {
-      retry!.click()
-      await Promise.resolve()
-    })
-
-    expect(retryWorktreeRecovery).toHaveBeenCalledWith('restore-me')
-    expect(container.querySelector('[data-testid="wt-open-office"]')).toBeNull()
   })
 
   it('clic sur un fichier affiche son diff (consultation read-only)', async () => {
@@ -488,6 +469,55 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(onSendPrompt).toHaveBeenCalledTimes(1)
     expect(String(onSendPrompt.mock.calls[0][0])).toContain('commit')
     expect(container.querySelector('[data-testid="sc-prompt-input"]')).toBeNull()
+  })
+
+  it('« Annuler ces changements » demande une CONFIRMATION avant d’envoyer la demande', async () => {
+    mockApi(GIT)
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    await act(async () => {
+      ;(container.querySelector('[data-testid="sc-file"]') as HTMLDivElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const bouton = (): HTMLButtonElement =>
+      container.querySelector('[data-testid="sc-diff-annuler"]') as HTMLButtonElement
+    expect(bouton().textContent).toBe('Annuler ces changements')
+    act(() => bouton().click())
+    // Premier clic : rien ne part, le bouton demande confirmation.
+    expect(onSendPrompt).not.toHaveBeenCalled()
+    expect(bouton().textContent).toContain('Confirmer')
+    act(() => bouton().click())
+    expect(onSendPrompt).toHaveBeenCalledTimes(1)
+    expect(String(onSendPrompt.mock.calls[0][0])).toMatch(/^annule les changements de /)
+    expect(bouton().textContent).toBe('Annuler ces changements')
+    // Une fois annule, le fichier propose de REMETTRE ses changements.
+    const remettre = container.querySelector('[data-testid="sc-remettre"]') as HTMLButtonElement
+    expect(remettre.textContent).toBe('Remettre le changement')
+    act(() => remettre.click())
+    expect(String(onSendPrompt.mock.calls[1][0])).toMatch(/^remets les changements de /)
+    expect(container.querySelector('[data-testid="sc-remettre"]')).toBeNull()
+  })
+
+  it('vue Workspace : lit le dépôt de la CONVERSATION, pas le dépôt mémorisé', async () => {
+    // 2026-09-23 : le panneau annonçait « RIG-V3 » et sa branche sur une conversation ouverte sur
+    // AutoWinOS — le chemin mémorisé une fois dans le navigateur primait sur le fil.
+    localStorage.setItem('autowin:sc-repo', 'C:/rig-v3')
+    mockApi(GIT)
+    await act(async () => {
+      root.render(
+        createElement(SourceControlPane, {
+          conversationId: 'conv-a',
+          depotConversation: 'C:/Sources/AutoWinOS'
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await openWorkspaceView()
+    expect(calls.repoArgs).toContain('C:/Sources/AutoWinOS')
+    expect(calls.repoArgs).not.toContain('C:/rig-v3')
+    expect(container.textContent).toContain('AutoWinOS')
   })
 
   it('le dépôt Worktree persisté ne change jamais le dépôt du Projet', async () => {
@@ -697,225 +727,44 @@ describe('SourceControlPane (prompt-first)', () => {
     act(() => push.click())
     expect(onSendPrompt).toHaveBeenCalledWith('push la branche courante')
   })
+
+  it('onglet Git : seules les actions non couvertes par les étapes restent', async () => {
+    mockApi(GIT)
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    await openWorkspaceView()
+    const actions = [...(container.querySelector('[data-testid="sc-git-actions"]')?.querySelectorAll('button') ?? [])]
+    expect(actions.map((b) => b.textContent)).toEqual(['Nouvelle branche', 'Changer de branche', 'Mettre de côté'])
+    act(() => (actions[2] as HTMLButtonElement).click())
+    expect(onSendPrompt).toHaveBeenCalledWith('mets de côté mes changements en cours (stash nommé) sans rien perdre')
+  })
+
+  it('onglet Git : les étapes suivent l’état réel du dépôt', async () => {
+    mockApi(GIT)
+    await render()
+    await openWorkspaceView()
+    const etapes = [...container.querySelectorAll('[data-testid="sc-git-flux"] button')]
+    expect(etapes.map((b) => b.querySelector('b')?.textContent?.trim())).toEqual([
+      '1 Commiter',
+      '2 Push',
+      '3 Ouvrir une PR'
+    ])
+    expect(etapes[0].className).toContain('is-suggested')
+    expect(etapes[1].querySelector('.sc-flux-detail')?.textContent).toBe('1 commit à envoyer')
+    expect(container.querySelector('[data-testid="sc-autoclose"]')).not.toBeNull()
+  })
 })
 
-describe('SourceControlPane — Hub des bureaux', () => {
-  const CONFLICT_AGENT = {
-    agentId: 'a2',
-    agentName: 'Builder',
-    state: 'conflict',
-    files: [{ path: 'src/main/os.ts', kind: 'mod' }],
-    startedAtMs: 1,
-    conflictFile: 'src/main/os.ts',
-    verdict: 'green',
-    publication: 'blocked'
-  }
-
-  function api(): Record<string, unknown> {
-    return (window as unknown as { api: Record<string, unknown> }).api
-  }
-
-  async function renderPane(): Promise<void> {
-    await act(async () => {
-      root.render(createElement(SourceControlPane, { conversationId: 'conv-a' }))
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-  }
-
-  async function openWorkspace(): Promise<void> {
-    await act(async () => {
-      ;(container.querySelector('[data-testid="sc-view-workspace"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-    })
-  }
-
-  it('P0-1 : le panneau de comparaison peut être refermé', async () => {
-    mockApi(GIT)
-    api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
-    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
-    api().getWorktreeConflictDiff = () =>
-      Promise.resolve({ available: true, agentId: 'a2', paths: ['src/main/os.ts'], diff: '-a\n+b' })
-    await renderPane()
-    await openWorkspace()
-
-    await act(async () => {
-      ;(container.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    expect(container.querySelector('[data-testid="wt-conflict-diff"]')).toBeTruthy()
-
-    await act(async () => {
-      ;(container.querySelector('[data-testid="wt-conflict-close"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-    })
-
-    expect(container.querySelector('[data-testid="wt-conflict-diff"]')).toBeNull()
+describe('etapesGit', () => {
+  it('main en retard et en avance : récupérer puis push, jamais de PR', async () => {
+    const { etapesGit } = await import('./etapes-git')
+    expect(etapesGit({ branch: 'main', ahead: 5, behind: 2, changes: [] }).map((e) => e.label)).toEqual([
+      'Récupérer',
+      'Push'
+    ])
   })
-
-  it('P0-2 : pendant la lecture du statut, la protection n’est pas déclarée indisponible', async () => {
-    mockApi(GIT)
-    api().getWorktreeActivity = () => Promise.resolve([])
-    api().getWorktreeStatus = () => new Promise(() => {})
-    await renderPane()
-    await openWorkspace()
-
-    const main = container.querySelector('[data-testid="wt-main-office"]')!
-    expect(main.className).not.toContain('is-unavailable')
-    expect(main.textContent).toContain('Vérification de la protection')
-  })
-
-  it('P0-3 : un échec de lecture est nommé et rejouable', async () => {
-    mockApi(GIT)
-    let attempt = 0
-    api().getWorktreeActivity = () => {
-      attempt += 1
-      return attempt === 1
-        ? Promise.reject(new Error('IPC coupé'))
-        : Promise.resolve([CONFLICT_AGENT])
-    }
-    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
-    await renderPane()
-    await openWorkspace()
-
-    const banner = container.querySelector('[data-testid="wt-load-error"]')!
-    expect(banner.getAttribute('role')).toBe('alert')
-    expect(banner.textContent).toContain('Lecture des bureaux agents indisponible.')
-
-    await act(async () => {
-      ;(container.querySelector('[data-testid="wt-load-retry"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(attempt).toBe(2)
-    expect(container.querySelector('[data-testid="wt-load-error"]')).toBeNull()
-    expect(container.querySelectorAll('[data-testid="wt-agent-office"]')).toHaveLength(1)
-  })
-
-  it('P0-4 : la résolution est envoyée au main puis referme la comparaison', async () => {
-    mockApi(GIT)
-    const resolveWorktreeConflict = vi.fn(() =>
-      Promise.resolve({ resolved: true as const, agentId: 'a2', outcome: 'merged' as const })
-    )
-    api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
-    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
-    api().getWorktreeConflictDiff = () =>
-      Promise.resolve({ available: true, agentId: 'a2', paths: ['src/main/os.ts'], diff: '-a\n+b' })
-    api().resolveWorktreeConflict = resolveWorktreeConflict
-    await renderPane()
-    await openWorkspace()
-
-    await act(async () => {
-      ;(container.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-    await act(async () => {
-      ;(container.querySelector('[data-testid="wt-keep-agent"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(resolveWorktreeConflict).toHaveBeenCalledWith('a2', 'agent')
-    expect(container.querySelector('[data-testid="wt-conflict-diff"]')).toBeNull()
-    expect(
-      container.querySelector('[data-testid="wt-conflict-resolution"]')?.textContent
-    ).toContain('Version de l’agent appliquée')
-  })
-
-  it('P0-4 : un refus du main est affiché sans prétendre avoir résolu', async () => {
-    mockApi(GIT)
-    api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
-    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
-    api().resolveWorktreeConflict = () =>
-      Promise.resolve({ resolved: false as const, reason: 'blocked' as const })
-    await renderPane()
-    await openWorkspace()
-
-    await act(async () => {
-      ;(container.querySelector('[data-testid="wt-keep-mine"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(container.querySelector('[data-testid="wt-office-error"]')?.textContent).toContain(
-      'Résolution refusée'
-    )
-    expect(container.querySelector('[data-testid="wt-conflict-resolution"]')).toBeNull()
-  })
-
-  it('P1-7 : l’onglet Workspace porte le nombre de bureaux à décider', async () => {
-    mockApi(GIT)
-    api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
-    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
-    await renderPane()
-
-    expect(container.querySelector('[data-testid="sc-workspace-badge"]')?.textContent).toBe('1')
-  })
-
-  it('P1-6 : chaque raison d’échec de comparaison a son propre message', async () => {
-    const reasons = [
-      ['invalid-agent', 'plus connu'],
-      ['not-conflict', 'plus en conflit'],
-      ['ownership-unproven', 'n’appartient plus'],
-      ['invalid-path', 'pas lisibles'],
-      ['revision-unavailable', 'plus présentes'],
-      ['read-failed', 'a échoué']
-    ] as const
-    for (const [reason, expected] of reasons) {
-      mockApi(GIT)
-      api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
-      api().getWorktreeStatus = () =>
-        Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
-      api().getWorktreeConflictDiff = () => Promise.resolve({ available: false, reason })
-      await renderPane()
-      await openWorkspace()
-      await act(async () => {
-        ;(
-          container.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement
-        ).click()
-        await Promise.resolve()
-        await Promise.resolve()
-      })
-
-      expect(
-        container.querySelector('[data-testid="wt-conflict-diff-error"]')?.textContent
-      ).toContain(expected)
-    }
-  })
-
-  it('P2-11 : un preload partiel ne crashe pas et le dit', async () => {
-    mockApi(GIT)
-    delete api().retryWorktreeRecovery
-    api().getWorktreeActivity = () =>
-      Promise.resolve([
-        {
-          agentId: 'restore-me',
-          agentName: 'Agent récupéré',
-          state: 'ready',
-          files: [],
-          startedAtMs: 1,
-          verdict: 'green',
-          publication: 'cleanup-pending',
-          attentionReason: 'retry-exhausted',
-          retryCount: 6,
-          worktreeAvailable: false
-        }
-      ])
-    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
-    await renderPane()
-    await openWorkspace()
-
-    await act(async () => {
-      ;(container.querySelector('[data-testid="wt-retry-office"]') as HTMLButtonElement).click()
-      await Promise.resolve()
-    })
-
-    expect(container.querySelector('[data-testid="wt-office-error"]')?.textContent).toContain(
-      'Nouvel essai indisponible'
-    )
-    expect(container.querySelector('[data-testid="wt-agent-office"]')).toBeTruthy()
+  it('main propre et synchronisé : aucune étape', async () => {
+    const { etapesGit } = await import('./etapes-git')
+    expect(etapesGit({ branch: 'main', ahead: 0, behind: 0, changes: [] })).toEqual([])
   })
 })

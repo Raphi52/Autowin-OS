@@ -116,6 +116,7 @@ export function creerRelanceDeRunReprenable(
           kind: settlement.phase === 'judge' ? 'judge' : 'exec',
           label: settlement.phase,
           provider: settlement.provider,
+          ...(settlement.model ? { model: settlement.model } : {}),
           costUsd: settlement.costUsd,
           inputTokens: settlement.inputTokens,
           outputTokens: settlement.outputTokens,

@@ -47,6 +47,10 @@ import {
 import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
 import './assets/theme-modes.css'
+import '@fontsource/atkinson-hyperlegible/400.css'
+import '@fontsource/atkinson-hyperlegible/700.css'
+import './assets/theme-malvoyant-planchers.css'
+import './assets/theme-clair-gris.css'
 import './assets/ui-system.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
@@ -453,6 +457,14 @@ export function MainApp(): React.JSX.Element {
        */}
       {tab === 'accueil' && <DecorDeFond />}
       <FirstRunWizard />
+      {/*
+       * L'écran d'autorisation de production n'est PLUS monté ici. Il vivait à la racine de
+       * l'application, en fenêtre flottante par-dessus tout le reste ; il vit désormais DANS LE FIL
+       * de la conversation (`ChatView`, juste au-dessus de la zone de saisie), à la demande de
+       * l'utilisateur le 2026-09-16 (conv-626) : « ça doit pas être une popup, ça doit être dans le
+       * fil de la conv ». Le voile plein écran qu'il posait rendait le fil et la question illisibles
+       * l'un à travers l'autre.
+       */}
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
           <Spinner className="brand-logo" size={34} />

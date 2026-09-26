@@ -11,7 +11,7 @@
  */
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   amitelBrainPort,
   amitelBrainRoot,
@@ -57,6 +57,54 @@ export interface BrainLaunchCommand {
 export function windowlessPython(python: string, exists: (p: string) => boolean = existsSync): string {
   const gui = python.replace(/python\.exe$/i, 'pythonw.exe')
   return gui !== python && exists(gui) ? gui : python
+}
+
+/** L'interpréteur à lancer, et ce qu'il faut lui donner pour retrouver les paquets du venv. */
+export interface WindowlessInterpreter {
+  bin: string
+  /** site-packages du venv — à passer en PYTHONPATH quand on court-circuite le relais uv. */
+  venvSitePackages?: string
+}
+
+/**
+ * UV NE RESPECTE PAS LE CONTRAT DE `pythonw.exe` — mesure du 2026-09-14, console constatée à l'écran.
+ *
+ * Dans un venv créé par uv, `Scripts/python.exe` et `Scripts/pythonw.exe` sont deux copies OCTET POUR
+ * OCTET du même relais, compilé en sous-système CONSOLE ; ce relais lance ensuite le `python.exe`
+ * (console lui aussi) de l'interpréteur de base. Windows alloue donc une fenêtre, malgré `pythonw`,
+ * `windowsHide` et `start /b`. Défaut public : https://github.com/astral-sh/uv/issues/19226 —
+ * observé ici en direct : pythonw.exe du venv (PID parent) avec un python.exe enfant portant le même
+ * script.
+ *
+ * On court-circuite donc le relais : on lit `pyvenv.cfg`, et si le venv est marqué `uv = …` on vise
+ * le VRAI `pythonw.exe` de l'interpréteur de base (`home`). Cet interpréteur n'active pas le venv
+ * tout seul, d'où le site-packages rendu à côté : c'est la seule façon de garder les paquets.
+ *
+ * Hors venv uv, rien ne change : on garde `windowlessPython`, qui suffit à un venv standard.
+ */
+export function resolveWindowlessInterpreter(
+  python: string,
+  deps: { exists?: (p: string) => boolean; read?: (p: string) => string } = {}
+): WindowlessInterpreter {
+  const exists = deps.exists ?? existsSync
+  const read = deps.read ?? ((p: string): string => readFileSync(p, 'utf8'))
+  const gui = windowlessPython(python, exists)
+  const venv = dirname(dirname(python))
+  const cfg = join(venv, 'pyvenv.cfg')
+  if (!exists(cfg)) return { bin: gui }
+  let contenu: string
+  try {
+    contenu = read(cfg)
+  } catch {
+    return { bin: gui }
+  }
+  // Marqueur écrit par uv lui-même dans pyvenv.cfg : c'est LUI qui signe des relais console.
+  if (!/^[ \t]*uv[ \t]*=/m.test(contenu)) return { bin: gui }
+  const home = /^[ \t]*home[ \t]*=[ \t]*(.+?)[ \t]*$/m.exec(contenu)?.[1]
+  if (!home) return { bin: gui }
+  const baseGui = join(home, 'pythonw.exe')
+  if (!exists(baseGui)) return { bin: gui }
+  return { bin: baseGui, venvSitePackages: join(venv, 'Lib', 'site-packages') }
 }
 
 /**
@@ -209,8 +257,13 @@ export async function ensureBrainServerStarted(
     return { status: 'unavailable', detail: `brain_server.py introuvable (${script})` }
   }
   // ⚠️ PYTHONPATH retiré : sinon un PYTHONPATH hérité (Hermes) shadow les deps du venv isolé (cf. README).
+  const interpreter = resolveWindowlessInterpreter(python)
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
+  // Seule exception au retrait ci-dessus, et elle est MAÎTRISÉE (pas un héritage) : quand on
+  // court-circuite le relais uv, l'interpréteur de base ignore le venv — sans ce chemin, aucune
+  // dépendance du Brain ne serait trouvée.
+  if (interpreter.venvSitePackages) childEnv.PYTHONPATH = interpreter.venvSitePackages
   childEnv.AMITEL_BRAIN_ROOT = runtime.brainRoot
   childEnv.AMITEL_BRAIN_CODE_ROOT = runtime.tooling
   childEnv.AMITEL_BRAIN_PYTHON = runtime.python
@@ -238,7 +291,7 @@ export async function ensureBrainServerStarted(
   // `stdio:'ignore'` + `windowsHide` étaient DÉJÀ posés quand le port 9223 a été séquestré : le
   // lanceur reste donc obligatoire — mais il est fail-closed (cf. buildBrainLaunchCommand).
   // pythonw.exe quand il existe : aucune console ne peut apparaître (cf. windowlessPython).
-  const command = buildBrainLaunchCommand(tooling, windowlessPython(python), script)
+  const command = buildBrainLaunchCommand(tooling, interpreter.bin, script)
   if (!command) {
     return {
       status: 'unavailable',

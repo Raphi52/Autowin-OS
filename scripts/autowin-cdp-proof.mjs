@@ -1,10 +1,14 @@
 import { cheminAudit, ecrireSousDepot } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
 const value = (name, fallback) => {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : fallback
 }
-const port = Number(value('--port', '9240'))
+// Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+const port = portCdp()
 const output = value('--out', cheminAudit(`headless-instances/proof-${port}.png`))
 const jsonOutput = value('--json-out', output.replace(/\.png$/i, '') + '.json')
 const section = value('--section', '')

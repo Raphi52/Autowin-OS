@@ -788,11 +788,19 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     await orch.run('modifie un fichier')
 
     expect(snapshots.slice(0, 2)).toEqual([
-      [{ token: 'tok-pending', provider: 'rec', phase: 'build', active: true, fanOut: false }],
+      [{
+        token: 'tok-pending',
+        provider: 'rec',
+        model: 'gros',
+        phase: 'build',
+        active: true,
+        fanOut: false
+      }],
       [
         {
           token: 'tok-pending',
           provider: 'rec',
+          model: 'gros',
           phase: 'build',
           active: true,
           fanOut: false,
@@ -834,7 +842,14 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
       await supervisor.run(quote, undefined, () => orch.run('modifie un fichier'))
       expect(checkpointAtIntent).toMatchObject({
         agents: [
-          { token: 'tok-pending', provider: 'rec', phase: 'build', active: true, fanOut: false }
+          {
+        token: 'tok-pending',
+        provider: 'rec',
+        model: 'gros',
+        phase: 'build',
+        active: true,
+        fanOut: false
+      }
         ],
         usage: {
           startedAgents: 1,
@@ -870,7 +885,14 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     await expect(orch.run('modifie un fichier')).rejects.toThrow(/annul.*processus/i)
 
     expect(snapshots.slice(0, 2)).toEqual([
-      [{ token: 'tok-failed', provider: 'rec', phase: 'build', active: true, fanOut: false }],
+      [{
+        token: 'tok-failed',
+        provider: 'rec',
+        model: 'gros',
+        phase: 'build',
+        active: true,
+        fanOut: false
+      }],
       []
     ])
   })
@@ -980,6 +1002,7 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
       {
         token: 'tok-1',
         provider: 'rec',
+        model: 'gros',
         phase: 'build',
         active: true,
         fanOut: false,
@@ -1039,5 +1062,38 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
         ])
       })
     ])
+  })
+})
+
+/**
+ * CAPITALISATION EN MONO-PHASE — mesuré le 2026-09-12 : 34 clôtures vertes sur 84 portaient
+ * « aucun noeud learn declare par le profil (run mono-phase) ». Une phase NOMMÉE réduit le travail,
+ * elle ne doit pas supprimer la mémoire.
+ */
+describe('#learn hors graphe', () => {
+  it('un run mono-phase `/build` joue quand même la capitalisation après un gate vert', async () => {
+    const provider = new RecordingProvider()
+    const phases: NodePhase[] = []
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build'],
+      onPhaseCompleted: (info) => {
+        phases.push(...info.phaseOutputs.map((sortie) => sortie.phase))
+      }
+    })
+    await orch.run('/build corrige le bug')
+    expect(phases).toContain('learn')
+  })
+
+  it('un run `/judge` ne capitalise rien : il ne joue aucune phase', async () => {
+    const provider = new RecordingProvider()
+    const phases: NodePhase[] = []
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => [],
+      onPhaseCompleted: (info) => {
+        phases.push(...info.phaseOutputs.map((sortie) => sortie.phase))
+      }
+    })
+    await orch.run('/judge le livrable')
+    expect(phases).not.toContain('learn')
   })
 })

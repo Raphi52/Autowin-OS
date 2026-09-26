@@ -54,7 +54,17 @@ describe('OrchestratorModelSelector — compte de la conversation', () => {
         })
       )
     })
-    return host
+    /*
+     * Le menu est une fenetre FLOTTANTE (portail vers `document.body`), montee seulement apres
+     * l'evenement `toggle` qui mesure sa position. On l'ouvre donc ici, et on rend la PAGE :
+     * chercher dans l'hote ne trouverait plus rien.
+     */
+    const details = host.querySelector('details') as HTMLDetailsElement
+    await act(async () => {
+      details.open = true
+      details.dispatchEvent(new Event('toggle'))
+    })
+    return document.body
   }
 
   const deuxComptes = [

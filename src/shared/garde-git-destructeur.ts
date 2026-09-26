@@ -1,0 +1,123 @@
+// fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
+/**
+ * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
+ *
+ * Mesure conv-587 (2026-09-16, saisie ts=1789550244094) : pour nettoyer un `git revert -n` d'essai,
+ * l'agent a lance `git reset --hard`. La commande porte sur TOUT l'arbre de travail : elle a detruit
+ * trois fichiers modifies non commites et sans rapport avec la tache (skills/kaizen/SKILL.md,
+ * src/main/providers/claude.ts, src/main/providers/claude-bin-resolution.test.ts). Perte
+ * IRREVERSIBLE : `git fsck --lost-found` n'a rendu aucun blob correspondant, aucun revert ne repare.
+ *
+ * La constitution l'interdit deja en prose — et la prose n'a pas tenu. Ce garde refuse le geste
+ * AVANT qu'il parte, et NOMME la voie recuperable.
+ *
+ * PORTEE VOLONTAIREMENT ETROITE : seules les formes qui effacent l'arbre ENTIER sont refusees.
+ * `git checkout HEAD -- <chemin>`, `git restore <chemin>`, `git revert --abort` restent libres :
+ * ce sont precisement les sorties de secours proposees.
+ *
+ * CONTRAINTE : fonction AUTOPORTEE (aucun import) — elle est serialisee telle quelle dans le script
+ * de hook du CLI (`scriptHookGardes`).
+ */
+export function refusGitDestructeur(commande: string): string | undefined {
+  const c = String(commande ?? '')
+  if (!c.trim()) return undefined
+  const motif = (quoi: string, voie: string): string =>
+    `Effacement du travail en cours refusé (${quoi}) : cette commande porte sur TOUT l'arbre de travail ` +
+    `et supprime définitivement les fichiers modifiés non commités, y compris ceux qui n'ont rien à voir ` +
+    `avec ta tâche (mesuré conv-587 : 3 fichiers perdus, irrécupérables). ` +
+    `Voie récupérable : ${voie}. ` +
+    `Si l'effacement large est vraiment voulu, demande-le à l'utilisateur en nommant ce qui disparaît.`
+
+  for (const brut of c.split(/;|&&|\|\||\||\r?\n/)) {
+    const seg = brut.trim().replace(/^&\s*/, '')
+    if (!/^git\b/i.test(seg)) continue
+    // La SOUS-COMMANDE, pas un mot quelconque de la ligne : `git log -S "reset --hard"` cherche du
+    // texte, il n'efface rien. Les options globales (-C <chemin>, -c k=v, --no-pager) sont sautees.
+    const mots = seg.split(/\s+/).slice(1)
+    let i = 0
+    while (i < mots.length && /^-/.test(mots[i])) {
+      i += /^(-C|-c|--git-dir|--work-tree|--exec-path)$/i.test(mots[i]) ? 2 : 1
+    }
+    const sous = (mots[i] ?? '').toLowerCase()
+    const reste = mots.slice(i + 1)
+    const a = (re: RegExp): boolean => reste.some((m) => re.test(m))
+    // 1. reset --hard : git refuse de toute facon `reset --hard <chemin>`, la portee est l'arbre entier.
+    if (sous === 'reset' && a(/^--hard$/i)) {
+      return motif(
+        'git reset --hard',
+        'git revert --abort, git checkout HEAD -- <chemin>, ou copie la version commitée à part : git show HEAD:<chemin> > /tmp/<nom>'
+      )
+    }
+    // 2. checkout/restore de l'arbre entier : le dernier argument vise tout (`.`, `:/`, `*`).
+    if (
+      (sous === 'checkout' || sous === 'restore') &&
+      /^(\.|:\/|\*)$/.test(reste[reste.length - 1] ?? '')
+    ) {
+      return motif(
+        "rétablissement de tout l'arbre",
+        'vise le seul fichier concerné : git checkout HEAD -- <chemin>'
+      )
+    }
+    // 4. stash (hors lectures list/show) : la pile refs/stash est PARTAGEE par tous les worktrees du
+    // depot principal. Un stash d'agent y melange son etat a celui de l'utilisateur ; un pop/drop/clear
+    // peut emporter la remise de cote de quelqu'un d'autre. On lit la version commitee a part.
+    if (sous === 'stash' && !/^(list|show)$/i.test(reste[0] ?? '')) {
+      return (
+        `git stash refusé pour un agent : la pile de remises de côté est partagée avec le dépôt principal ` +
+        `de l'utilisateur, un stash/pop/drop peut y mélanger ou perdre son travail. ` +
+        `Voie sûre : lis la version commitée à part, sans toucher l'arbre — git show HEAD:<chemin> > /tmp/<nom>.`
+      )
+    }
+    // 3. clean -f : les fichiers non suivis n'ont AUCUN objet git, rien ne les recupere.
+    if (sous === 'clean' && a(/^-[a-z]*f/i) && !a(/^(-n|--dry-run)$/i)) {
+      return motif('git clean', "git clean -n d'abord, puis supprime nommément ce que tu as vérifié")
+    }
+  }
+  return undefined
+}
+
+/**
+ * Corps du script de hook PreToolUse (Bash) du CLI. Refus = JSON `permissionDecision: deny` sur
+ * stdout (https://code.claude.com/docs/en/hooks). Mesure 2026-09-13 : avec exit 2 + stderr, l'appel
+ * etait bien bloque mais l'agent recevait un resultat VIDE, sans le motif ni la voie a suivre.
+ *
+ * NE PORTE PLUS QUE L'EFFACEMENT DE TRAVAIL (conv-587). Le refus des lancements graphiques au
+ * premier plan a ete RETIRE le 2026-09-17 sur demande explicite de l'utilisateur (conv-631) : il
+ * bloquait l'ouverture d'un simple fichier sur son propre ecran, qu'il demandait nommement, et
+ * aucun chemin de contournement ne restait. Le bureau cache (`scripts/hdesk-lancer.ps1`) reste la
+ * VOIE PAR DEFAUT, portee par la consigne en prose du prompt de pilotage — plus par un blocage.
+ */
+export function scriptHookGardes(
+  // Garde des réglages de la protection de prod (`refusReglageProd`, src/main/prod-run-guard.ts),
+  // passée par l'appelant : shared/ n'importe pas main/. Fonction autoportée, sérialisée telle quelle.
+  refusReglageProd: (texte: string) => string | undefined,
+  // Garde SQL des agents (`refusSqlAgent`, même module) et bases déclarées non-prod : sans elles,
+  // aucun client SQL n'est bloqué (compatibilité des appelants qui ne portent pas la prod).
+  refusSqlAgent?: (texte: string, basesNonProd: readonly string[]) => string | undefined,
+  basesNonProd: readonly string[] = []
+): string {
+  return `const refusGitDestructeur = ${refusGitDestructeur.toString()};
+const refusReglageProd = ${refusReglageProd.toString()};
+const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
+const basesNonProd = ${JSON.stringify(basesNonProd)};
+let d = '';
+process.stdin.on('data', (b) => (d += b));
+process.stdin.on('end', () => {
+  let cmd = '';
+  let chemin = '';
+  try {
+    const j = JSON.parse(d);
+    const t = j.tool_input || {};
+    cmd = t.command || '';
+    chemin = t.file_path || t.notebook_path || '';
+  } catch {}
+  const motif = refusGitDestructeur(cmd) || refusReglageProd(cmd) || refusReglageProd(chemin) || refusSqlAgent(cmd, basesNonProd);
+  if (motif) {
+    // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
+    process.exit(0);
+  }
+  process.exit(0);
+});
+`
+}

@@ -45,7 +45,11 @@ const FORBIDDEN_FILES = [
   'settings.json',
   'settings.local.json',
   'credentials.json',
-  'id_rsa'
+  'id_rsa',
+  // Réglages de la protection de production (conv-738) : seul l'écran de réglages les écrit.
+  'prod-niveau.json',
+  'prod-autorite.json',
+  'prod-passphrase.json'
 ]
 
 /** Réutilisé par la lecture (`read-file-command`) : les zones interdites sont les MÊMES aux deux sens. */

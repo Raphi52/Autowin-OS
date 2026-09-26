@@ -2,9 +2,13 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { strategiesFor, type UpdateStrategy } from '../shared/update-contract'
+import {
+  strategiesFor,
+  type IncomingCommit,
+  type UpdateStrategy
+} from '../shared/update-contract'
 
-export { strategiesFor, type UpdateStrategy }
+export { strategiesFor, type IncomingCommit, type UpdateStrategy }
 
 /**
  * Auto-update GIT au démarrage (distribution clone-and-run) : vérifie si le clone local est en retard
@@ -39,11 +43,79 @@ export interface UpdateStatus {
   branch?: string
   /** Référence de comparaison réellement utilisée (`origin/main`, ou l'upstream en repli). */
   reference?: string
+  /**
+   * Les commits qui arriveront, du plus récent au plus ancien, bornés à `INCOMING_MAX`. Absent si
+   * leur lecture a échoué : le compte `behind` reste alors la seule information, jamais un blocage.
+   */
+  incoming?: IncomingCommit[]
   error?: string
 }
 
 /** État de référence de l'équipe. Repli sur l'upstream de la branche si ce ref n'existe pas. */
 const TEAM_REFERENCE = 'origin/main'
+
+/**
+ * Bornes de la liste des commits entrants. La sonde tourne toutes les 3 minutes : lire un historique
+ * entier après des semaines d'absence n'apporterait rien de lisible dans un rail de 216 px.
+ */
+export const INCOMING_MAX = 20
+export const INCOMING_FILES_MAX = 8
+
+/** Séparateurs de `git log --format` : ni un auteur, ni un sujet, ni un chemin ne les contiennent. */
+const RECORD_SEP = '\x1e'
+const FIELD_SEP = '\x1f'
+
+/**
+ * Découpe la sortie de `git log --format=%x1e%H%x1f%an%x1f%aI%x1f%s --name-only`.
+ * Fonction PURE, pour être testée sans dépôt.
+ */
+export function parseIncomingCommits(stdout: string): IncomingCommit[] {
+  return stdout
+    .split(RECORD_SEP)
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const [header, ...lines] = record.split(/\r?\n/)
+      const [hash = '', author = '', date = '', ...subject] = header.split(FIELD_SEP)
+      const files = lines.map((line) => line.trim()).filter(Boolean)
+      return {
+        hash: hash.trim(),
+        author: author.trim(),
+        date: date.trim(),
+        // Le sujet est le DERNIER champ : s'il contenait le séparateur, on le recolle entier.
+        subject: subject.join(FIELD_SEP).trim(),
+        files: files.slice(0, INCOMING_FILES_MAX),
+        fileCount: files.length
+      }
+    })
+    .filter((commit) => commit.hash.length > 0)
+}
+
+/** Lit les commits entrants ; `undefined` si git refuse — la liste n'est qu'une aide à la décision. */
+async function readIncoming(
+  run: GitRunner,
+  cwd: string,
+  reference: string
+): Promise<IncomingCommit[] | undefined> {
+  try {
+    const { stdout } = await run(
+      [
+        '-c',
+        // Sans cela git échappe les chemins accentués en octal (« \303\251 ») : illisible à l'écran.
+        'core.quotePath=false',
+        'log',
+        `--max-count=${INCOMING_MAX}`,
+        '--format=%x1e%H%x1f%an%x1f%aI%x1f%s',
+        '--name-only',
+        `HEAD..${reference}`
+      ],
+      cwd
+    )
+    return parseIncomingCommits(stdout)
+  } catch {
+    return undefined
+  }
+}
 
 /** Détecte d'abord les conflits locaux, puis fetch et compte les commits de retard. */
 export async function checkForUpdate(
@@ -67,7 +139,7 @@ export async function checkForUpdate(
       return {
         available: true,
         behind: 0,
-        ...(branch ? { branch, strategies: strategiesFor(branch) } : {}),
+        ...(branch ? { branch, strategies: strategiesFor(branch, false, true) } : {}),
         dirty: true,
         conflicted: true,
         conflictOperation: mergeHead ? 'merge' : 'unknown'
@@ -112,6 +184,7 @@ export async function checkForUpdate(
     } catch {
       /* avance illisible : on reste sur le comportement d'avant (avancer) */
     }
+    const incoming = behind > 0 ? await readIncoming(run, cwd, reference) : undefined
     return {
       available: behind > 0,
       behind,
@@ -119,7 +192,8 @@ export async function checkForUpdate(
       reference,
       dirty,
       conflicted: false,
-      strategies: strategiesFor(branch, ahead > 0)
+      strategies: strategiesFor(branch, ahead > 0, dirty),
+      ...(incoming ? { incoming } : {})
     }
   } catch (error) {
     return {
@@ -226,9 +300,10 @@ function packageSignature(cwd: string): string {
 /**
  * Applique la mise à jour selon la stratégie demandée.
  *
- * Un arbre SALE n'est ni stashé ni refusé d'emblée : la mise à jour est tentée telle quelle et git
- * refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier modifié
- * localement. Plus AUCUN stash — la mécanique `stash push`/`pop` a déjà effacé du travail non
+ * Un arbre SALE n'est ni stashé ni refusé d'emblée : la mise à jour est tentée telle quelle et une
+ * fusion/avance refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier
+ * modifié localement ; un REBASE, lui, refuse dès qu'un fichier est modifié — il n'est donc pas proposé.
+ * Plus AUCUN stash — la mécanique `stash push`/`pop` a déjà effacé du travail non
  * committé (un `pop` en conflit laissait le stash orphelin). Le travail local reste EN PLACE.
  *
  * La SEULE garde conservée : hors de `main`, aucune stratégie n'est choisie à la place de l'utilisateur
@@ -264,7 +339,10 @@ export async function applyUpdate(
         /* avance illisible : on tente l'avance simple, git refusera proprement */
       }
     }
-    const available = strategiesFor(currentBranch, diverged)
+    // Calculé AVANT le choix des stratégies : un arbre sale rend le rebase impossible (git le refuse
+    // d'office, qu'importe ce que touchent les commits entrants).
+    const dirty = (await run(['status', '--porcelain'], cwd)).stdout.trim().length > 0
+    const available = strategiesFor(currentBranch, diverged, dirty)
     // Sur main, avancer est sans ambiguïté → défaut. Ailleurs, l'appelant DOIT nommer sa stratégie :
     // c'est la seule garde conservée, et elle empêche exactement une chose — fabriquer un merge que
     // personne n'a demandé sur la branche de quelqu'un.
@@ -302,7 +380,6 @@ export async function applyUpdate(
     // pouvant contenir du non-committé jamais remis. On tente désormais la mise à jour TELLE QUELLE ;
     // git refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier
     // modifié localement. Le travail non committé reste EN PLACE, visible, jamais rangé ailleurs.
-    const dirty = (await run(['status', '--porcelain'], cwd)).stdout.trim().length > 0
 
     let switchedToMain = false
     try {

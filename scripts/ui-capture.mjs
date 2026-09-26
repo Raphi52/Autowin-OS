@@ -24,6 +24,26 @@
  *                                    celle du depot : sans elle, un agent en worktree ne peut rien
  *                                    prouver visuellement (l'app sert le depot, pas sa copie). Le
  *                                    JSON porte alors `cssInjecte` — la capture le DIT.
+ *         [--code-dev] [--renderer-url <url>] L'INSTANCE CACHEE LANCE LE CODE EN COURS (2026-09-26) :
+ *                                    electron.exe du depot + interface servie par le serveur de dev
+ *                                    (trouve seul : ELECTRON_RENDERER_URL, puis la fenetre de dev
+ *                                    ouverte ; `--renderer-url` l'impose). Sans cette option,
+ *                                    l'instance cachee lance le binaire EMPAQUETE (dist/win-unpacked)
+ *                                    et montre l'interface du dernier empaquetage. Le JSON porte
+ *                                    toujours `interfaceCapturee` (code-dev | code-construit |
+ *                                    application-empaquetee). Depuis une COPIE DE TRAVAIL d'agent,
+ *                                    `--code-dev` la reconstruit puis lance SES fichiers (code-construit) ;
+ *                                    `--code-dev` sur une page non servie par le dev = echec nomme,
+ *                                    et l'enrobage sort en 7 si aucun serveur de dev n'est joignable.
+ *         PAR DEFAUT (depuis le 2026-09-13) : instance cachee, ecran intact. `--instance-dediee` reste
+ *         accepte (sans effet). `--fenetre-reelle` ou `--port <n>` pilotent la fenetre ouverte.
+ *         [--instance-dediee] [--instance-id <id>] PREND LA PREUVE SANS TOUCHER A L'ECRAN : la
+ *                                    capture se fait sur une instance cachee demarree puis arretee
+ *                                    pour l'occasion (scripts/avec-instance-headless.mjs), profil
+ *                                    dedie, aucun vol de focus, aucun reste ouvert derriere.
+ *         [--scroll <selecteur CSS>] AMENE la cible dans le cadre avant de declencher (une vue
+ *                                    longue cache sa moitie basse : la capture serait verte et
+ *                                    montrerait autre chose). Cible absente = echec nomme, code 9.
  *         [--click <selecteur CSS>]  ouvre ce que la vue seule ne montre pas (popover, menu,
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
@@ -41,10 +61,11 @@
  *                                    sous-pixel et rendrait « ca bouge » sur un ecran ou l'humain
  *                                    ne voit rien.
  */
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, parse, resolve } from 'node:path'
+import { dirname, parse, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { cheminDevToolsPort } from './racine-depot.mjs'
+import { cheminDevToolsPort, racineDepot } from './racine-depot.mjs'
 
 /** Identifiants réels du catalogue applicatif (src/shared/navigation.ts). */
 export const VUES_CONNUES = [
@@ -147,6 +168,11 @@ export const verdictMouvement = ({ selecteur, occurrences }) => {
 export const verdictCapture = (mesures) => {
   const echecs = []
   if (!mesures.vue) echecs.push('vue-inconnue')
+  // `--code-dev` promet le code EN COURS : une page servie depuis des fichiers construits montrerait
+  // l'interface d'un ancien empaquetage en se disant a jour.
+  if (mesures.codeDevExige && !SOURCES_CODE_EN_COURS.includes(mesures.interfaceCapturee?.source)) {
+    echecs.push(`code-dev-non-servi(${mesures.interfaceCapturee?.source ?? 'inconnue'})`)
+  }
   if (mesures.destinationActive && mesures.vue && mesures.destinationActive !== mesures.vue) {
     echecs.push(`navigation-non-appliquee(${mesures.destinationActive})`)
   }
@@ -185,6 +211,112 @@ export const mediaMouvementEmulee = (argv) => {
   return undefined
 }
 
+/**
+ * PREUVE SANS TOUCHER A L'ECRAN DE L'UTILISATEUR (`--instance-dediee`).
+ *
+ * Par defaut ce harnais pilote la fenetre REELLE du poste : il clique le vrai bouton de navigation
+ * (mesure du 2026-09-02 : l'utilisateur a ete deplace deux fois sur Knowledge pendant qu'il
+ * travaillait). Avec `--instance-dediee`, la capture est prise sur une instance cachee demarree puis
+ * ARRETEE pour l'occasion, via `scripts/avec-instance-headless.mjs` : rien ne bouge a l'ecran et
+ * rien ne reste ouvert derriere.
+ *
+ * Rend les arguments de la re-execution : on RETIRE le drapeau (sinon la relance boucle a l'infini)
+ * et on laisse l'enrobage imposer le port de l'instance qu'il vient d'ouvrir. Pure.
+ */
+export const argumentsInstanceDediee = (argv, { enrobage, script, instanceId }) => {
+  // `--code-dev` va AUSSI a l'enrobage : c'est lui qui lance electron.exe sur le depot au lieu du
+  // binaire empaquete. L'enfant le garde, pour refuser une capture qui ne viendrait pas du serveur de dev.
+  const i = argv.indexOf('--renderer-url')
+  const rendererUrl = i >= 0 ? argv[i + 1] : undefined
+  const codeDev = argv.includes('--code-dev')
+  return [
+    enrobage,
+    '--instance-id',
+    instanceId,
+    ...(codeDev ? ['--code-dev'] : []),
+    ...(codeDev && rendererUrl ? ['--renderer-url', rendererUrl] : []),
+    '--',
+    'node',
+    script,
+    ...argv.filter((a) => a !== '--instance-dediee' && a !== '--fenetre-reelle')
+  ]
+}
+
+/**
+ * LE PIEGE DU 2026-09-26, rendu visible dans le rapport : un agent lance par l'app de dev capture en
+ * fenetre cachee, obtient `ok: true`... sur l'interface du dernier EMPAQUETAGE, sans son changement.
+ * Quand un serveur de dev est connu (ELECTRON_RENDERER_URL heritee) et que la capture vient de fichiers
+ * construits, le rapport le DIT et donne l'option. Ce n'est pas un echec : le binaire empaquete peut
+ * etre exactement ce qu'on voulait voir. Pure.
+ */
+export const avertissementInterface = (capturee, env) =>
+  capturee?.source === 'application-empaquetee' && env?.ELECTRON_RENDERER_URL
+    ? {
+        avertissement: `capture de l'application empaquetee, pas du code en cours (servi sur ${env.ELECTRON_RENDERER_URL}) : ajoute --code-dev pour le voir`
+      }
+    : {}
+
+/**
+ * D'OU VIENT L'INTERFACE CAPTUREE, lu sur l'adresse de la page. C'est ce fait — pas l'option
+ * demandee — qui dit ce que montre la capture. Pure.
+ * - `code-dev` : serveur de dev local, le code en cours du depot principal ;
+ * - `code-construit` : fichiers construits de CE depot ou de CETTE copie (`<racine>/out/renderer`),
+ *   que `--code-dev` vient de reconstruire depuis une copie de travail ;
+ * - `application-empaquetee` : toute autre page de fichiers, en pratique le binaire empaquete
+ *   (`dist/win-unpacked/.../app.asar`), qui ne contient pas une modification non empaquetee ;
+ * - `inconnue` : ni l'un ni l'autre.
+ */
+export const interfaceCapturee = (url, racine) => {
+  const texte = typeof url === 'string' ? url : ''
+  const dev = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.exec(texte)
+  if (dev) return { source: 'code-dev', origine: new URL(texte).origin }
+  if (texte.startsWith('file:')) {
+    let chemin = ''
+    try {
+      chemin = fileURLToPath(texte.split(/[?#]/)[0])
+    } catch {
+      chemin = ''
+    }
+    const construit = racine ? resolve(racine, 'out', 'renderer') : ''
+    const normaliser = (c) => resolve(c).toLowerCase()
+    if (construit && chemin && normaliser(chemin).startsWith(`${normaliser(construit)}${sep}`))
+      return { source: 'code-construit', racine: resolve(racine) }
+    return { source: 'application-empaquetee' }
+  }
+  return { source: 'inconnue', ...(texte ? { url: texte.slice(0, 120) } : {}) }
+}
+
+/** Les sources qui montrent le code EN COURS : ce que `--code-dev` promet. */
+export const SOURCES_CODE_EN_COURS = ['code-dev', 'code-construit']
+
+/**
+ * LE BUREAU CACHE EST LE COMPORTEMENT PAR DEFAUT (demande utilisateur du 2026-09-13, conv-526 :
+ * « je t'ai code une feature pour que tu travailles en non invasif hdesk, ca doit etre ton
+ * comportement par defaut »). Le drapeau `--instance-dediee` existait mais restait OPT-IN : un
+ * agent qui suivait la consigne de preuve (« navigue par le vrai bouton ») pilotait donc la fenetre
+ * de l'utilisateur. Ne pilote la fenetre reelle QUE sur demande nommee : `--fenetre-reelle`, ou un
+ * `--port` explicite (c'est aussi ce que recoit la re-execution derriere l'enrobage : pas de boucle).
+ * Pure.
+ */
+// fix-ok: main() ne passait par l'instance cachee que si argv contenait --instance-dediee (opt-in) — conv-526 turnId c14c2d28-f864-4ca5-ba3f-3dfe24e41d47 a pilote l'ecran reel ; defaut desormais = instance cachee, ecran reel seulement via --fenetre-reelle ou --port
+export const doitPasserParInstanceCachee = (argv) =>
+  !argv.includes('--fenetre-reelle') && !argv.includes('--port')
+
+/**
+ * L'IDENTIFIANT D'INSTANCE EST PROPRE A CHAQUE EXECUTION.
+ *
+ * Defaut mesure (conv-618, 2026-09-16) : « mes travaux en parallele se parasitent ». Le defaut
+ * valait la CONSTANTE 'ui-capture'. Deux travaux paralleles qui prenaient une preuve UI
+ * demandaient donc le MEME bureau cache et le MEME verrou d'instance : le second etait refuse,
+ * ou reprenait l'instance du premier. `avec-instance-headless.mjs` isole par identifiant — un
+ * identifiant partage annule cette isolation. Pure.
+ */
+export const instanceIdUiCapture = (argv, pid) => {
+  const i = argv.indexOf('--instance-id')
+  const explicite = i >= 0 ? argv[i + 1] : undefined
+  return explicite && !explicite.startsWith('--') ? explicite : `ui-capture-${pid}`
+}
+
 export const ETATS_CONNUS = ['attention', 'occupe']
 
 export const resoudreEtat = (valeur) => {
@@ -208,6 +340,9 @@ export const verdictEtat = ({ etat, selecteur, appliques }) => {
 // ————————————————————————————————————————————————————————————————————————
 // À partir d'ici : pilotage réel. Rien de tout cela ne s'exécute à l'import.
 // ————————————————————————————————————————————————————————————————————————
+
+/** Une option SANS valeur (`--code-dev`) : presente ou non. */
+const drapeau = (nom) => process.argv.includes(nom)
 
 const argument = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
@@ -256,7 +391,11 @@ const decouvrirCible = async (port, portImpose) => {
     })
     return { cibles: await reponse.json(), portUtilise: String(p) }
   }
+  // AUCUN PORT DEVINE (conv-615) : sans `--port` ni AUTOWIN_CDP_PORT, on lit d'abord le
+  // DevToolsActivePort de CE depot. L'ancien defaut `9231` etait sonde EN PREMIER : quand un autre
+  // travail parallele ecoutait dessus, la capture venait de SON application, en rendant ok: true.
   try {
+    if (port === undefined) throw new Error('aucun port explicite')
     return await lire(port)
   } catch (erreur) {
     if (portImpose) throw erreur
@@ -274,10 +413,30 @@ const decouvrirCible = async (port, portImpose) => {
 }
 
 const main = async () => {
+  // `--instance-dediee` : on se relance a l'identique DERRIERE l'enrobage, qui ouvre une instance
+  // cachee, nous passe son port, puis l'arrete quoi qu'il arrive. Le code de sortie est le notre.
+  if (doitPasserParInstanceCachee(process.argv.slice(2))) {
+    const dossierScripts = dirname(fileURLToPath(import.meta.url))
+    const { status, error } = spawnSync(
+      process.execPath,
+      argumentsInstanceDediee(process.argv.slice(2), {
+        enrobage: resolve(dossierScripts, 'avec-instance-headless.mjs'),
+        script: resolve(dossierScripts, 'ui-capture.mjs'),
+        instanceId: instanceIdUiCapture(process.argv.slice(2), process.pid)
+      }),
+      { stdio: 'inherit', windowsHide: true }
+    )
+    if (error) {
+      console.error(`[ui-capture] instance dediee illancable : ${error.message}`)
+      process.exit(9)
+    }
+    process.exit(status ?? 1)
+  }
+
   const vue = resoudreVue(argument('--view'))
   const sortie = resolve(argument('--out', `artifacts/ui-capture-${vue ?? 'inconnue'}.png`))
   const portImpose = process.argv.includes('--port')
-  const port = argument('--port', process.env.AUTOWIN_CDP_PORT || '9231')
+  const port = argument('--port', process.env.AUTOWIN_CDP_PORT)
 
   const rendre = (charge, code) => {
     console.log(JSON.stringify(charge, null, 2))
@@ -297,7 +456,7 @@ const main = async () => {
   }
 
   let cibles
-  let portUtilise = String(port)
+  let portUtilise = port === undefined ? '' : String(port)
   try {
     const trouve = await decouvrirCible(port, portImpose)
     cibles = trouve.cibles
@@ -364,6 +523,17 @@ const main = async () => {
   await envoyer('Runtime.enable')
   await envoyer('Log.enable')
 
+  // fix-ok: scripts/ui-capture.mjs — une instance cachee neuve repond au debogueur AVANT que React
+  // ait rendu la navigation : le bouton etait cherche trop tot (code 4 bouton-nav-absent). On
+  // attend l'apparition des boutons (borne 30 s) ; absents apres ce delai, le code 4 reste du.
+  for (let essai = 0; essai < 60; essai++) {
+    const pret = await evaluer(`Boolean(document.querySelector('[data-testid^="nav-"]'))`).catch(
+      () => false
+    )
+    if (pret) break
+    await new Promise((r) => setTimeout(r, 500))
+  }
+
   // --reduced-motion : rejoue la condition reelle d'un poste ou les effets visuels systeme sont
   // desactives (Windows > Accessibilite). Sans cette emulation, une preuve de mouvement ne dit
   // RIEN du poste utilisateur : elle mesure un navigateur ou l'animation n'a jamais ete coupee.
@@ -420,6 +590,38 @@ const main = async () => {
     await new Promise((r) => setTimeout(r, 300))
   }
 
+  // --theme : REGARDER un theme sans passer par la liste deroulante des Reglages. Une liste
+  // <select> s'ouvre HORS de la page (menu natif Windows) : aucun clic scriptable n'y choisit une
+  // option, donc un theme n'etait tout simplement pas capturable. On ecrit le reglage la ou
+  // l'application le lit (localStorage) ET sur le document, comme `appliquerThemeMode` le fait.
+  // Le JSON porte `themeForce` : une capture obtenue ainsi ne se fait pas passer pour un reglage
+  // choisi a la main.
+  const themeDemande = argument('--theme')
+  let themeForce
+  if (themeDemande !== undefined) {
+    const applique = await evaluer(`(() => {
+      const id = ${JSON.stringify(themeDemande)}
+      const clair = id.endsWith('-clair') || id === 'clair'
+      try {
+        localStorage.setItem('autowin-theme-mode.v1', id)
+      } catch {
+        /* profil sans stockage : l'attribut suffit pour la capture */
+      }
+      const racine = document.documentElement
+      if (id === 'sombre') racine.removeAttribute('data-theme')
+      else racine.setAttribute('data-theme', id)
+      if (clair) racine.setAttribute('data-base', 'clair')
+      else racine.removeAttribute('data-base')
+      return racine.getAttribute('data-theme') ?? 'sombre'
+    })()`)
+    if (applique !== themeDemande) {
+      socket.close()
+      rendre({ ok: false, echecs: [`theme-non-applique(${themeDemande})`], vue }, 9)
+    }
+    themeForce = { theme: themeDemande }
+    await new Promise((r) => setTimeout(r, 300))
+  }
+
   // Ou etait l'utilisateur AVANT qu'on lui prenne la main : mesure avant tout clic, sinon il n'y a
   // plus rien a restaurer.
   const vueAvant = await evaluer(`(() => {
@@ -461,7 +663,17 @@ const main = async () => {
     return {
       destinationActive: actif?.getAttribute('data-testid')?.replace(/^nav-/, '') ?? null,
       longueurTexte: (document.querySelector('main')?.innerText ?? document.body.innerText ?? '').trim().length,
-      elements: document.querySelectorAll('main *').length || document.querySelectorAll('body *').length
+      // LE PERIMETRE EST 'body', PAS 'main' (2026-09-17, conv-79) : un menu contextuel, un popover
+      // ou une boite modale sont dessines PAR-DESSUS la page, rattaches a 'body' et non a 'main'.
+      // Les compter dans 'main' rendait un delta NUL apres un clic qui ouvrait pourtant le menu :
+      // le harnais criait « clic-sans-effet » sur une interface qui fonctionnait, et aucune preuve
+      // visuelle de menu n'etait capturable. 'body' contient 'main' : le seuil de vue vide est
+      // inchange pour toutes les autres captures.
+      elements: document.querySelectorAll('body *').length,
+      // L'ADRESSE DU DOCUMENT MESURE, pas celle de la liste CDP lue a la decouverte : l'instance est
+      // declaree prete des qu'une page autre que l'attente existe, 'about:blank' compris. Mesure du
+      // 2026-09-26 : une capture --code-dev verte par ailleurs a ete classee « inconnue » une fois.
+      adressePage: location.href
     }
   })()`)
   let mesuresDom = await mesurerDom()
@@ -505,15 +717,54 @@ const main = async () => {
   let elementsAvantClic
   if (declencheur) {
     elementsAvantClic = mesuresDom.elements
-    declencheurTrouve = await evaluer(`(() => {
-      const cible = document.querySelector(${JSON.stringify(declencheur)})
-      cible?.click()
-      return Boolean(cible)
-    })()`)
-    if (declencheurTrouve) {
+    // CHAINE de clics : certaines vues ne s'atteignent pas en UN geste (ouvrir l'onglet, puis la
+    // ligne, puis le sous-onglet). Les selecteurs sont separes par ` >> ` et joues DANS L'ORDRE,
+    // avec une pause entre chacun — le suivant n'existe qu'apres le rendu du precedent.
+    // UN SEUL selecteur introuvable fait echouer toute la chaine : sans cela, une capture serait
+    // prise sur une vue a mi-chemin en pretendant montrer la destination.
+    const etapes = declencheur
+      .split('>>')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    declencheurTrouve = true
+    for (const etape of etapes) {
+      const trouve = await evaluer(`(() => {
+        const cible = document.querySelector(${JSON.stringify(etape)})
+        cible?.click()
+        return Boolean(cible)
+      })()`)
+      if (!trouve) {
+        declencheurTrouve = false
+        break
+      }
       await new Promise((r) => setTimeout(r, 600))
+    }
+    if (declencheurTrouve) {
       mesuresDom = await mesurerDom()
     }
+  }
+
+  // --scroll : AMENER LA PREUVE DANS LE CADRE.
+  //
+  // Mesure du 2026-09-15 : la vue « worktree » fait 31 444 caracteres et le graphe git vit tout en
+  // bas. La capture prise en haut de page etait verte (vue active, 3 235 elements) et ne montrait
+  // PAS l'element change — une preuve vraie de la mauvaise chose. Un selecteur, un
+  // `scrollIntoView`, et le verdict refuse une cible absente au lieu de capturer le haut de page
+  // en silence.
+  const cibleDefilement = argument('--scroll')
+  if (cibleDefilement) {
+    const trouve = await evaluer(`(() => {
+      const cible = document.querySelector(${JSON.stringify(cibleDefilement)})
+      cible?.scrollIntoView({ block: 'center', behavior: 'instant' })
+      return Boolean(cible)
+    })()`)
+    if (!trouve) {
+      await restaurerVue()
+      socket.close()
+      rendre({ ok: false, echecs: [`scroll-cible-absente(${cibleDefilement})`], vue }, 9)
+    }
+    await new Promise((r) => setTimeout(r, 400))
+    mesuresDom = await mesurerDom()
   }
 
   // --------------------------------------------------------------------
@@ -658,6 +909,7 @@ const main = async () => {
         vue,
         ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
         ...(cssInjecte ? { cssInjecte } : {}),
+        ...(themeForce ? { themeForce } : {}),
         planche: boites.boites.length > 0 ? sortie : null,
         portUtilise,
         selecteur: selecteurMouvement,
@@ -692,6 +944,9 @@ const main = async () => {
     vue,
     ...mesuresDom,
     octetsPng,
+    interfaceCapturee: interfaceCapturee(mesuresDom.adressePage ?? page.url, racineDepot()),
+    ...(drapeau('--code-dev') ? { codeDevExige: true } : {}),
+    ...(cibleDefilement ? { defilementVers: cibleDefilement } : {}),
     ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {})
   }
   const verdict = verdictCapture(mesures)
@@ -701,11 +956,13 @@ const main = async () => {
       vue,
       ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
       ...(cssInjecte ? { cssInjecte } : {}),
+      ...(themeForce ? { themeForce } : {}),
       fichier: sortie,
       portUtilise,
       vueAvant,
       vueRestauree: aRestaurer ?? null,
       ...mesures,
+      ...avertissementInterface(mesures.interfaceCapturee, process.env),
       erreursConsole: erreursConsole.slice(0, 5),
       // Ce que le producteur peut CITER au juge comme preuve hors-modèle.
       preuve: verdict.ok

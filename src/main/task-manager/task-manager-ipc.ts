@@ -13,19 +13,51 @@ import type {
 } from './types'
 import type { StructuredRecurrence, StructuredSchedule } from './schedule'
 import { watchdogRegexProblem } from '../../shared/watchdog-regex'
+import { setMailSender, type MailRuleDiagnostics } from './watchdog-mail'
 import { isReasoningEffort, type ReasoningEffort } from '../roles'
 
 interface RegisterTaskManagerIpcOptions {
   ipc: IpcMain
   store: TaskStore
   scheduler: TaskScheduler
-  watchdogDiagnostics(taskId: string): { admittedLastHour: number; complaint?: string }
+  watchdogDiagnostics(
+    taskId: string
+  ): { admittedLastHour: number; complaint?: string } & MailRuleDiagnostics
   assertTrusted(event: IpcMainInvokeEvent, scope: string): void
   onChanged(): void
+  /** Client Teams (`TeamsGraphClient`) ; absent quand AUTOWIN_TEAMS_CLIENT_ID n'est pas regle. */
+  teams?: {
+    connect(): Promise<{ userCode: string; verificationUri: string; expiresAt: number }>
+    signInSettled(): Promise<void>
+  }
 }
 
 export function registerTaskManagerIpc(options: RegisterTaskManagerIpcOptions): void {
-  const { ipc, store, scheduler, watchdogDiagnostics, assertTrusted, onChanged } = options
+  const { ipc, store, scheduler, watchdogDiagnostics, assertTrusted, onChanged, teams } = options
+
+  // Bouton « Connecter Teams » du detail de la regle Teams : rend le code a saisir, puis rafraichit
+  // l'ecran une 2e fois quand la connexion aboutit, expire ou est refusee.
+  ipc.handle('task-manager:teams-connect', async (event) => {
+    assertTrusted(event, 'Task Manager')
+    if (!teams)
+      return {
+        ok: false,
+        erreur: 'Teams non configuré sur ce poste (réglage AUTOWIN_TEAMS_CLIENT_ID absent)'
+      }
+    try {
+      const prompt = await teams.connect()
+      onChanged()
+      void teams.signInSettled().then(onChanged)
+      return {
+        ok: true,
+        userCode: prompt.userCode,
+        verificationUri: prompt.verificationUri,
+        expiresAt: prompt.expiresAt
+      }
+    } catch (error) {
+      return { ok: false, erreur: error instanceof Error ? error.message : String(error) }
+    }
+  })
 
   ipc.handle('task-manager:snapshot', (event) => {
     assertTrusted(event, 'Task Manager')
@@ -72,6 +104,23 @@ export function registerTaskManagerIpc(options: RegisterTaskManagerIpcOptions): 
     onChanged()
     return task
   })
+
+  // Interrupteur par personne du detail d'une regle mails / Teams : UNE personne, relue au clic.
+  ipc.handle(
+    'task-manager:set-sender',
+    async (event, rawId: unknown, rawKey: unknown, rawEnabled: unknown) => {
+      assertTrusted(event, 'Task Manager')
+      const task = setMailSender(
+        store,
+        requiredString(rawId, 'id'),
+        requiredString(rawKey, 'interlocuteur'),
+        boolean(rawEnabled, 'enabled')
+      )
+      await scheduler.refresh()
+      onChanged()
+      return task
+    }
+  )
 
   ipc.handle('task-manager:remove', async (event, rawId: unknown) => {
     assertTrusted(event, 'Task Manager')
@@ -125,7 +174,7 @@ export function summarizeTaskUsageLastHour(
 export function parseTaskUpdate(current: ScheduledTaskInput, raw: unknown): ScheduledTaskInput {
   const patch = object(raw, 'mise à jour')
   const replacesTrigger = hasOwn(patch, 'schedule') || hasOwn(patch, 'watchdog')
-  return parseTaskInput({
+  const parsed = parseTaskInput({
     title: patch.title ?? current.title,
     prompt: patch.prompt ?? current.prompt,
     enabled: patch.enabled ?? current.enabled,
@@ -135,6 +184,16 @@ export function parseTaskUpdate(current: ScheduledTaskInput, raw: unknown): Sche
     schedule: replacesTrigger ? patch.schedule : current.schedule,
     watchdog: replacesTrigger ? patch.watchdog : current.watchdog
   })
+  // Le formulaire renvoie la liste des interlocuteurs de SON ouverture : une personne apprise pendant
+  // l'edition n'y figure pas et disparaissait a l'enregistrement. Le formulaire ne sait que cocher ou
+  // decocher, jamais retirer : ce qu'il ne mentionne pas est garde tel quel.
+  // fix-ok: mesure le 2026-09-26 (watchdog-mail.interlocuteurs.test.ts, rouge) — formulaire ouvert avec Bob seul, Alice apprise pendant l'edition, enregistrement : la regle ne gardait que Bob.
+  const before = current.watchdog?.source
+  const after = parsed.watchdog?.source
+  if (before?.kind === 'outlook-mail' && after?.kind === 'outlook-mail' && before.senders) {
+    after.senders = { ...before.senders, ...after.senders }
+  }
+  return parsed
 }
 
 function hasOwn(value: object, key: PropertyKey): boolean {
@@ -171,6 +230,21 @@ const WATCHDOG_APP_EVENTS: readonly WatchdogAppEvent[] = [
 
 /** Bornes des gardes. Ce sont des valeurs qui arrivent du renderer : on les CONTRAINT, on ne les
  *  croit pas. Un plafond a 0 desarmerait la regle, un plafond immense annulerait l'anti-rafale. */
+/** Liste des interlocuteurs d'une regle mail/Teams : seules les entrees bien formees passent. */
+function mailSenders(raw: unknown): Record<string, { name: string; enabled: boolean }> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, { name: string; enabled: boolean }> = {}
+  for (const [key, entry] of Object.entries(raw as Record<string, unknown>).slice(0, 500)) {
+    if (!key.trim() || !entry || typeof entry !== 'object') continue
+    const value = entry as Record<string, unknown>
+    out[key] = {
+      name: typeof value.name === 'string' ? value.name.slice(0, 200) : key,
+      enabled: value.enabled !== false
+    }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 function guards(raw: unknown): WatchdogGuards {
   const value = object(raw, 'watchdog.guards')
   const clamp = (input: unknown, min: number, max: number, fallback: number): number => {
@@ -227,6 +301,21 @@ function watchdog(raw: unknown): WatchdogRule {
     if (!events.length) throw new Error('Choisis au moins un événement interne à surveiller')
     return {
       source: { kind: 'app-event', events },
+      guards: guards(value.guards),
+      ...(value.action === undefined ? {} : { action: watchdogAction(value.action) })
+    }
+  }
+  if (source.kind === 'outlook-mail') {
+    return {
+      source: {
+        kind: 'outlook-mail',
+        ...(source.channel === 'outlook' || source.channel === 'teams'
+          ? { channel: source.channel }
+          : {}),
+        ...(mailSenders(source.senders) ? { senders: mailSenders(source.senders) } : {}),
+        // Seul « ignore » se garde : absent = repondre (comportement d'avant le reglage).
+        ...(source.newSenders === 'ignore' ? { newSenders: 'ignore' as const } : {})
+      },
       guards: guards(value.guards),
       ...(value.action === undefined ? {} : { action: watchdogAction(value.action) })
     }

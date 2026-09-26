@@ -29,6 +29,41 @@ describe('commande agent ticket_update', () => {
     })
   })
 
+  it('transmet les champs métier et écarte les entrées inexploitables', async () => {
+    const update = vi.fn(async (request) => ({
+      id: request.id,
+      sourceId: request.source.id,
+      type: 'Fiche Team',
+      title: 'Ticket traité',
+      state: 'Ouvert',
+      url: 'https://example.test/1',
+      updatedAt: '2026-08-10T10:00:00.000Z',
+      fields: {}
+    }))
+
+    const result = await updateTicketFromCommand(
+      {
+        id: '1602',
+        sourceId: DEFAULT_TICKET_SOURCE.id,
+        fields: {
+          'Custom.DLL': ' ULT_CDESSALLES.dll ',
+          'Custom.SQL': 'Aucun script',
+          'Custom.Vide': '   ',
+          nomSansPrefixe: 'ignoré',
+          'Custom.Nombre': 42
+        }
+      },
+      { listSources: () => [DEFAULT_TICKET_SOURCE], update }
+    )
+
+    expect(result.ok).toBe(true)
+    expect(update).toHaveBeenCalledWith({
+      source: DEFAULT_TICKET_SOURCE,
+      id: '1602',
+      fields: { 'Custom.DLL': 'ULT_CDESSALLES.dll', 'Custom.SQL': 'Aucun script' }
+    })
+  })
+
   it('refuse une cible ambiguë et une mise à jour vide', async () => {
     const update = vi.fn()
     await expect(

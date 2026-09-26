@@ -17,11 +17,11 @@ import { bundledSkillsRoot } from './native-registry'
  */
 const AXES: Array<[string, RegExp]> = [
   ['axe 2 — conversations Autowin', /conversation_read|conversation_search/],
-  ['axe 3 — injections runtime', /INJECTED instruction/],
-  ['axe 4 — lentilles workflow', /WORKFLOW\/TOPOLOGY lenses/],
+  ['axe 3 — injections runtime', /instruction INJECTÉE/],
+  ['axe 4 — lentilles workflow', /lentilles WORKFLOW\/TOPOLOGIE/],
   // Demande utilisateur du 2026-09-02 : kaizen invoqué PENDANT un travail doit d'abord FINIR
   // la tâche, puis faire l'amélioration comportementale — l'audit ne remplace pas le livrable.
-  ['axe 5 — finir la tâche avant l’audit', /FINISH THE TASK FIRST/],
+  ['axe 5 — finir la tâche avant l’audit', /FINIR LA TÂCHE D'ABORD/],
   // Demande utilisateur du 2026-09-02 : kaizen doit connaître SES LEVIERS — skills, outils, code
   // Autowin, .md, Brain — sinon il corrige toujours dans `skills/` faute de savoir où d'autre agir.
   ['axe 6 — la liste des leviers éditables', /## Tes leviers/]
@@ -70,18 +70,18 @@ describe('kaizen — périmètres d’audit et propagation package→live', () =
 
   it('les axes sont ANNONCÉS dans le frontmatter (ce que l’app charge comme déclencheur)', () => {
     const front = texte.split('---')[1] ?? ''
-    expect(front).toMatch(/AUTOWIN conversation/)
-    expect(front).toMatch(/INJECTED instruction/)
-    expect(front).toMatch(/FINISH THE TASK FIRST/)
+    expect(front).toMatch(/conversation Autowin/)
+    expect(front).toMatch(/INSTRUCTION INJECTÉE/)
+    expect(front).toMatch(/FINIR LA TÂCHE D'ABORD/)
   })
 
   it('l’ordre est IMPOSÉ : la tâche est finie AVANT l’audit, dans la même passe', () => {
     // La règle doit être une étape de la procédure (donc jouée), pas une phrase d'intention.
-    expect(texte).toMatch(/0\. \*\*FINISH THE TASK FIRST/)
+    expect(texte).toMatch(/0\. \*\*FINIR LA TÂCHE D'ABORD/)
     expect(texte).toMatch(/Abandonner la tâche pour faire l'audit/)
     // Et l'étape 0 vient AVANT l'étape 1 « LOCATE the target ».
-    expect(texte.indexOf('FINISH THE TASK FIRST')).toBeLessThan(
-      texte.indexOf('1. **LOCATE the target.**')
+    expect(texte.indexOf("FINIR LA TÂCHE D'ABORD")).toBeLessThan(
+      texte.indexOf('1. **LOCALISE la cible.**')
     )
   })
 
@@ -94,7 +94,7 @@ describe('kaizen — périmètres d’audit et propagation package→live', () =
   it('les leviers sont balayés AVANT le choix du fichier (renvoi depuis l’étape INTEGRATE)', () => {
     expect(texte).toMatch(/§ « Tes leviers »/)
     // La section vient AVANT la procédure : elle se lit avant de choisir une cible.
-    expect(texte.indexOf('## Tes leviers')).toBeLessThan(texte.indexOf('## Procedure'))
+    expect(texte.indexOf('## Tes leviers')).toBeLessThan(texte.indexOf('## Procédure'))
   })
 
   it('l’ordre d’enforcement est écrit (une règle qui échoue MONTE d’un niveau)', () => {

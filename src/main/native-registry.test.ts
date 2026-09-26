@@ -66,7 +66,7 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     expect(Array.isArray(nativeSkills(base))).toBe(true)
   })
 
-  it('amorçage unique depuis Native fige tools/plugins + état, sans écraser si déjà amorcé', () => {
+  it('amorçage rafraîchit le catalogue fourni, garde les autres types et le choix local', () => {
     seedRegistrySnapshot(
       {
         tools: [{ id: 't1', label: 't1', description: 'outil', enabled: true, mutable: true }],
@@ -80,9 +80,22 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     expect(tools[0].enabled).toBe(true)
     const plugins = listNativeRegistry('plugins', base)
     expect(plugins[0].enabled).toBe(false)
-    // 2e amorçage ignoré (état local préservé)
-    seedRegistrySnapshot({ tools: [] }, base)
-    expect(listNativeRegistry('tools', base)).toHaveLength(1)
+    setNativeEnablement('tools', 't1', false, base)
+    // 2e amorçage : un outil ajouté depuis apparaît, le choix local et les plugins restent
+    seedRegistrySnapshot(
+      {
+        tools: [
+          { id: 't1', label: 't1', description: 'outil', enabled: true, mutable: true },
+          { id: 't2', label: 't2', description: 'nouveau', enabled: true, mutable: true }
+        ]
+      },
+      base
+    )
+    expect(listNativeRegistry('tools', base).map((t) => [t.id, t.enabled])).toEqual([
+      ['t1', false],
+      ['t2', true]
+    ])
+    expect(listNativeRegistry('plugins', base)).toHaveLength(1)
   })
 
   it('réhydrate le catalogue après un toggle précoce et persiste ses mises à jour', async () => {

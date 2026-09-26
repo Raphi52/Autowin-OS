@@ -35,9 +35,12 @@ export function ContextGaugeIndicator({
     const placer = (): void => {
       const trigger = triggerRef.current?.getBoundingClientRect()
       if (!trigger) return
-      const width = Math.min(380, window.innerWidth - 16)
-      const left = Math.max(8, Math.min(trigger.left, window.innerWidth - width - 8))
-      setAncrage({ left, top: trigger.bottom + 8, width })
+      // Meme correction que ModelQuotaIndicator : le zoom du mode malvoyant multiplie left/top.
+      const z = (triggerRef.current as (HTMLElement & { currentCSSZoom?: number }) | null)?.currentCSSZoom || 1
+      const vw = window.innerWidth / z
+      const width = Math.min(380, vw - 16)
+      const left = Math.max(8, Math.min(trigger.left / z, vw - width - 8))
+      setAncrage({ left, top: trigger.bottom / z + 8, width })
     }
     placer()
     window.addEventListener('resize', placer)

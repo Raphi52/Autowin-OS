@@ -197,3 +197,17 @@ describe('le module ne contient aucun caractere de controle', () => {
     expect(invisibles.map((c) => (c.codePointAt(0) ?? 0).toString(16))).toEqual([])
   })
 })
+
+describe('hypothesesDuCadrage — texte réel du cadrage SURVBOD (conv-536)', () => {
+  const ligne =
+    "- `SURVBOD` est déclaré comme processus exécutable dans le menu : **NON VÉRIFIÉ** (c'est en base). Risque : l'accueil afficherait « ne peut pas être directement exécuté » (`FORM_ACCUEIL.cs:1631`). Je le contrôle avec une requête en lecture seule avant la capture finale, ou tu me le confirmes."
+  it('ne laisse pas « ** ** » et garde la phrase entière', () => {
+    const [h] = hypothesesDuCadrage(`## Confiance\n${ligne}`)
+    expect(h.affirmation).not.toContain('**')
+    expect(h.affirmation.endsWith('ou tu me le confirmes.')).toBe(true)
+  })
+  it('un texte aberrant est coupé sur un mot, avec une ellipse', () => {
+    const [h] = hypothesesDuCadrage(`## Confiance\n- ${'mot '.repeat(300)}NON VÉRIFIÉ`)
+    expect(h.affirmation.endsWith('mot…')).toBe(true)
+  })
+})

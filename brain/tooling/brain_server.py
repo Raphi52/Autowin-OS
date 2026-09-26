@@ -16,6 +16,7 @@ from brain_context import declared_note_roots, indexed_note_roots, render_hits
 from brain_retrieval import BrainRetriever
 from brain_auth import open_request, service_token, signed_context_payload
 from brain_propose import propose_note
+from brain_graph import build_graph
 from brain_trace import configured_trace
 from brain_singleton import ProcessMutex
 
@@ -285,6 +286,14 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._handle_ingest(self.rfile.read(size))
             return
+        if self.path in {"/graph", "/read"}:
+            size = int(self.headers.get("Content-Length", "0"))
+            if size <= 0 or size > MAX_REQUEST_BYTES:
+                self._json(400, {"error": "invalid request size"})
+                return
+            handler = self._handle_graph if self.path == "/graph" else self._handle_read
+            handler(self.rfile.read(size))
+            return
         if self.path not in {"/query", "/query-secure"}:
             self._json(404, {"error": "not found"})
             return
@@ -323,6 +332,76 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self._json(500, {"error": "retrieval failed"})
 
+    def _handle_graph(self, body):
+        """POST /graph — « qui depend de X » (dependents) ou « de quoi X depend » (dependencies).
+
+        Le graphe est reconstruit a la demande (analyse Python standard, sans cache a invalider) ;
+        les resultats hors corpus demande sont retires, comme pour /query.
+        """
+        try:
+            payload = json.loads(body)
+            entity = str(payload.get("entity", "")).strip()[:300]
+            if not entity:
+                raise ValueError("entity is empty")
+            direction = str(payload.get("direction", "dependents"))
+            depth = int(payload.get("depth", 1))
+            relation = payload.get("relation")
+            relation = str(relation)[:64] if relation else None
+            corpus = _validated_corpus(payload.get("corpus"))
+            result = build_graph(Path(self.brain_root)).query(entity, direction, depth, relation)
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            self._json(400, {"error": str(exc)})
+            return
+        except Exception:
+            self._json(500, {"error": "graph failed"})
+            return
+        if corpus is not None:
+            result["results"] = [
+                item for item in result["results"]
+                if not str(item["entity"]).startswith("knowledge/")
+                or _path_in_corpus(item["entity"], corpus)
+            ]
+        # Le client refuse tout contexte > MAX_CONTEXT_CHARS (brain-protocol.ts) : on retire les
+        # voisins les plus lointains (fin de liste, parcours en largeur) jusqu'a tenir, et on le DIT.
+        text = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+        while len(text) > MAX_CONTEXT_CHARS and result["results"]:
+            result["results"].pop()
+            result["truncated"] = True
+            text = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+        self._json(200, signed_context_payload(text[:MAX_CONTEXT_CHARS], self.token))
+
+    def _handle_read(self, body):
+        """POST /read — relire UNE note curee, confinee a knowledge/ (jamais inbox/ ni ailleurs)."""
+        try:
+            payload = json.loads(body)
+            relative = _normalized_knowledge_path(str(payload.get("path", "")))
+            parts = relative.split("/")
+            if (
+                not relative.startswith("knowledge/") or not relative.endswith(".md")
+                or any(part in {"", ".", ".."} for part in parts)
+            ):
+                raise ValueError("path must name a note under knowledge/")
+            corpus = _validated_corpus(payload.get("corpus"))
+            if not _path_in_corpus(relative, corpus):
+                raise ValueError("path is outside the requested corpus")
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            self._json(400, {"error": str(exc)})
+            return
+        root = (Path(self.brain_root) / "knowledge").resolve()
+        # Le chemin est normalise en minuscules : on retrouve le fichier reel sans suivre de lien sortant.
+        target = next(
+            (path for path in root.rglob("*.md")
+             if path.relative_to(root.parent).as_posix().lower() == relative),
+            None,
+        )
+        if target is None or root not in target.resolve().parents:
+            self._json(404, {"error": "note not found"})
+            return
+        text = REFERENCE_PREAMBLE + target.read_text(encoding="utf-8", errors="replace")[
+            :MAX_CONTEXT_CHARS - len(REFERENCE_PREAMBLE)
+        ]
+        self._json(200, signed_context_payload(text, self.token))
+
     def _handle_ingest(self, body):
         """POST /ingest — ecrit un CANDIDAT (fait) dans inbox/ via la gate brain_propose.
 
@@ -350,6 +429,9 @@ class Handler(BaseHTTPRequestHandler):
             tags = payload.get("tags") or []
             if not isinstance(tags, list):
                 raise ValueError("tags must be a list")
+            supersedes = payload.get("supersedes") or []
+            if not isinstance(supersedes, list):
+                raise ValueError("supersedes must be a list")
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self._json(400, {"error": str(exc)})
             return
@@ -370,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
             path = propose_note(
                 root / "inbox", title=title, body=note_body, note_type=note_type,
                 scope=scope, author_agent=author_agent, model=model, source=source,
-                tags=tags, confidence=confidence, brain_root=root,
+                tags=tags, confidence=confidence, brain_root=root, supersedes=supersedes,
             )
             self._json(200, signed_context_payload(str(path), self.token))
         except ValueError as exc:
@@ -432,3 +514,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# fix-ok: le client Autowin rejette tout contexte > 3000 caracteres (brain-protocol.ts MAX_BRAIN_CONTEXT_CHARS) ; /graph et /read coupes a MAX_CONTEXT_CHARS

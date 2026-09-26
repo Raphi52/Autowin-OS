@@ -17,12 +17,12 @@ import {
 } from './chat-view-model'
 import './ChatView.css'
 import './Evidence.css'
-import { Spinner } from './Spinner'
 import {
   failedTask,
   iconeFamille,
   interruptedTask,
   raisonDuLien,
+  ligneEtatLancement,
   resumeCible
 } from './chat-parts-helpers'
 
@@ -38,12 +38,6 @@ const CMD_LABEL: Record<string, string> = {
   load_graph: 'Graphe chargé',
   get_state: 'Lecture d’état'
 }
-
-
-
-
-
-
 
 /**
  * UNE LIGNE de pipeline, depliable pour elle-meme.
@@ -169,7 +163,8 @@ function EtageActivite({
         {/* PAS DE CIBLE ICI (2026-09-03) : elle etait ecrite une seconde fois plus bas, sous le meme
             `data-testid`, et l'ecran affichait donc la meme tache deux lignes de suite. Celle du bas
             est la seule qui porte le clic de depliage — c'est cette copie muette qui part. */}
-        {etape.ok === undefined && !etape.interrupted && <Spinner />}
+        {/* UN SEUL tourniquet par tour, sur la ligne « Agent » (demande du 2026-09-12). L'etape en
+            cours reste signalee par son icone et son libelle, sans animation propre. */}
         {depliable && (
           <button
             type="button"
@@ -209,7 +204,10 @@ function EtageActivite({
       {ouvert && pipeline.length > 0 && (
         <ul className="activity-step-pipeline" data-testid="activity-step-pipeline">
           {pipeline.map((choix, index) => (
-            <LignePipeline key={`${choix.phase ?? ''}-${choix.model ?? ''}-${index}`} choix={choix} />
+            <LignePipeline
+              key={`${choix.phase ?? ''}-${choix.model ?? ''}-${index}`}
+              choix={choix}
+            />
           ))}
         </ul>
       )}
@@ -459,8 +457,6 @@ function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.Element {
   )
 }
 
-
-
 export function AssistantActivityGroup({
   actions,
   onOpenLiveAction,
@@ -507,7 +503,12 @@ export function AssistantActivityGroup({
    */
   const resumeDesActions = groupOutcomeSummary(actions)
   const failed =
-    actions.some((action) => action.ok === false) || resumeDesActions?.state === 'refused'
+    actions.some((action) => action.ok === false) ||
+    resumeDesActions?.state === 'refused' ||
+    // `failed` couvre aussi le DEPOT qui echoue apres validation (Brain injoignable, jeton absent) :
+    // la commande reussit a rendre un echec, donc `action.ok` reste vrai et l'en-tete affichait
+    // « terminee » au-dessus d'un fait perdu (mesure du 2026-09-11 sur les traces causales).
+    resumeDesActions?.state === 'failed'
   // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
   // résultat) n'est PAS en cours : c'est ce qui laissait l'indicateur tourner indéfiniment.
   const runningCount = actions.filter(
@@ -526,6 +527,8 @@ export function AssistantActivityGroup({
   const battement = [...actions]
     .reverse()
     .find((action) => action.ok === undefined && !action.interrupted && action.progress)?.progress
+  // Avant le premier battement, la ligne d'etat du lancement dit QUOI tourne et OU.
+  const ligneEtat = battement ?? ligneEtatLancement(actions)
   const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`
   const status = running
     ? completedCount > 0
@@ -647,7 +650,8 @@ export function AssistantActivityGroup({
           {/* DEMANDE (2026-09-10) : un seul tourniquet a l'ecran. Quand les etapes sont visibles,
               celle qui tourne porte deja le sien (« Orchestration ») — deux animations cote a cote
               pour le meme fait. Le groupe ne garde le sien que replie, sinon il redevient muet. */}
-          {running && !etapesOuvertes && <Spinner />}
+          {/* Plus de tourniquet ici non plus : le point de statut colore dit deja « en cours », et
+              le seul spinner du tour vit sur la ligne « Agent » (demande du 2026-09-12). */}
           {why.length ? (
             <span className="activity-group-go" aria-hidden="true">
               {whyOpen ? '▾' : '▸'}
@@ -665,9 +669,9 @@ export function AssistantActivityGroup({
           )}
         </button>
         {/* Hors du bouton : c'est une INFORMATION qui change toute seule, pas une cible de clic. */}
-        {battement && (
-          <div className="activity-progress" data-testid="activity-progress" title={battement}>
-            {battement}
+        {ligneEtat && (
+          <div className="activity-progress" data-testid="activity-progress" title={ligneEtat}>
+            {ligneEtat}
           </div>
         )}
         {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,

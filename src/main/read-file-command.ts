@@ -8,7 +8,8 @@
  *
  * Mêmes bornes que l'écriture, dans le même esprit (décision PURE, testée, jamais déléguée aux
  * patterns d'un CLI) :
- *   1. confinement au workspace (traversée `..` et chemins absolus extérieurs refusés) ;
+ *   1. même périmètre que l'écriture (un chemin ABSOLU externe est lisible depuis le 2026-09-16 ;
+ *      seuls la traversée `..` d'un chemin relatif et les racines système restent refusées) ;
  *   2. zones interdites PARTAGÉES avec `edit_file` (`isForbidden` : .git, node_modules, secrets…) —
  *      lire un secret est aussi grave que l'écrire ;
  *   3. volume borné : une lecture rend au plus RANGE_MAX lignes, une recherche au plus
@@ -16,12 +17,14 @@
  */
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { readdirSync } from 'node:fs'
-import { isForbidden } from './edit-file-command'
+import { isForbidden, refusRacineSysteme } from './edit-file-command'
 
 export const RANGE_MAX = 400
 export const CORRESPONDANCES_MAX = 80
 /** Un fichier plus lourd n'est jamais lu d'un bloc : traces jsonl de plusieurs Mo. */
 const OCTETS_MAX_FICHIER = 4_000_000
+/** Octet NUL, ecrit par code point pour ne jamais deposer un vrai NUL dans ce source. */
+const NUL = String.fromCharCode(0)
 
 export type ReadDecision =
   | { allowed: true; absolutePath: string; relativePath: string; from: number; count: number }
@@ -35,12 +38,40 @@ export function decideRead(
   if (typeof input.path !== 'string' || !input.path.trim()) {
     return { allowed: false, reason: 'chemin de fichier manquant' }
   }
-  const absolutePath = isAbsolute(input.path) ? resolve(input.path) : resolve(workspace, input.path)
+  /*
+   * LIRE OU L'ON PEUT DEJA ECRIRE.
+   *
+   * `edit_file` accepte un chemin ABSOLU hors du dossier Autowin depuis le 2026-09-02 : « l'asymetrie
+   * lire-partout / ecrire-ici n'etait pas une regle de securite, c'etait le confinement d'origine ».
+   * La LECTURE, elle, etait restee au confinement — donc on pouvait modifier un fichier d'un autre
+   * depot sans avoir le droit de le relire, et le prompt de pilotage promettait pourtant l'inverse a
+   * l'agent (« tu peux LIRE un chemin ABSOLU hors du workspace »).
+   *
+   * Mesure du 2026-09-16 (causal-trace) : quatre refus « chemin hors du workspace », les 10, 11 et
+   * encore le 16 a 13h48 sur `D:\RigV3Desktop\Components\Pages\Home.razor` — un fichier que la meme
+   * session EDITAIT. Le contournement est pire que l'ouverture : dix lectures de secours en
+   * PowerShell (`Get-Content`, `Select-String`), qui echappent a TOUTES les bornes de ce module.
+   *
+   * Ce qui protege reste EN PLACE et vaut pour l'exterieur aussi : racines systeme fermees, zones
+   * interdites IDENTIQUES (`isForbidden` : .git, secrets…), volume borne. Un chemin RELATIF reste
+   * resolu dans le dossier Autowin et sa traversee `..` reste refusee : `../x` est une ambiguite
+   * (relatif a quoi ?), pas une intention — pour viser un autre depot, on donne son chemin absolu.
+   */
+  const relatifDemande = !isAbsolute(input.path)
+  const absolutePath = relatifDemande ? resolve(workspace, input.path) : resolve(input.path)
   const relativePath = relative(resolve(workspace), absolutePath)
-  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+  const externe = !relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)
+  if (externe && relatifDemande) {
     return { allowed: false, reason: 'chemin hors du workspace' }
   }
-  const forbidden = isForbidden(relativePath)
+  if (externe) {
+    // Chemin RESOLU et chemin DEMANDE juges tous les deux : sous Windows `resolve('/etc/x')` rend
+    // `E:\etc\x` (ancre sur le disque courant), donc la racine POSIX ne survit qu'au brut.
+    const refusSysteme = refusRacineSysteme(absolutePath) ?? refusRacineSysteme(input.path)
+    if (refusSysteme) return { allowed: false, reason: refusSysteme }
+  }
+  // Zones interdites : les MEMES dedans et dehors.
+  const forbidden = isForbidden(externe ? absolutePath : relativePath)
   if (forbidden) return { allowed: false, reason: forbidden }
   const from =
     Number.isSafeInteger(input.from) && (input.from as number) > 0 ? (input.from as number) : 1
@@ -48,7 +79,15 @@ export function decideRead(
     Number.isSafeInteger(input.lines) && (input.lines as number) > 0
       ? (input.lines as number)
       : RANGE_MAX
-  return { allowed: true, absolutePath, relativePath, from, count: Math.min(wanted, RANGE_MAX) }
+  return {
+    allowed: true,
+    absolutePath,
+    // Un fichier EXTERIEUR se cite par son chemin ABSOLU : un `../../autre-depot/x.cs` serait un
+    // ancrage que personne — ni l'agent, ni l'utilisateur — ne peut rouvrir tel quel.
+    relativePath: externe ? absolutePath : relativePath,
+    from,
+    count: Math.min(wanted, RANGE_MAX)
+  }
 }
 
 export interface LectureFichier {
@@ -113,6 +152,14 @@ export function rechercherDansFichiers(
     if (isForbidden(chemin)) continue
     const contenu = lire(chemin)
     if (contenu === null || contenu.length > OCTETS_MAX_FICHIER) continue
+    /*
+      CONTENU BINAIRE ECARTE, mais SEULEMENT lui. Un fichier de bytecode ou une image contient de
+      l'ASCII : le motif y matche pour de vrai, et la ligne rendue est une bouillie de `�` que
+      l'agent ne peut ni lire ni citer. L'octet NUL est le discriminant retenu (c'est celui de
+      `git diff`) : il n'apparait pas dans du texte, meme mal encode — un fichier cp1252 reste
+      donc cherche et signale par `fichiersNonUtf8`, comportement voulu et couvert par test.
+    */
+    if (contenu.includes(NUL)) continue
     const lignes = contenu.split(/\r?\n/)
     for (let i = 0; i < lignes.length; i += 1) {
       if (!regex.test(lignes[i])) continue
@@ -170,10 +217,29 @@ export function enumererFichiersLisibles(
   sousDossier = '',
   plafond = 20_000
 ): string[] {
+  return enumererFichiersLisiblesDetail(racine, sousDossier, plafond).fichiers
+}
+
+/**
+ * Même énumération, avec `incomplet: true` quand le plafond l'a coupée. Parcours PAR NIVEAUX :
+ * mesuré le 2026-09-22 (conv-782), le parcours en profondeur remplissait les 20 000 fichiers avec
+ * `bench/runs/` et ne visitait jamais `.arena/` ni `skills/` — et la recherche le taisait.
+ */
+export function enumererFichiersLisiblesDetail(
+  racine: string,
+  sousDossier = '',
+  plafond = 20_000
+): { fichiers: string[]; incomplet: boolean } {
   const resultat: string[] = []
-  const pile = [sousDossier.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')]
-  while (pile.length > 0 && resultat.length < plafond) {
-    const courant = pile.pop()!
+  const file = [sousDossier.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')]
+  let tete = 0
+  let incomplet = false
+  while (tete < file.length) {
+    if (resultat.length >= plafond) {
+      incomplet = true
+      break
+    }
+    const courant = file[tete++]!
     let entrees
     try {
       entrees = readdirSync(join(racine, courant), { withFileTypes: true })
@@ -183,12 +249,16 @@ export function enumererFichiersLisibles(
     for (const entree of entrees) {
       const relatif = courant ? `${courant}/${entree.name}` : entree.name
       if (entree.isDirectory()) {
-        if (!DOSSIERS_EXCLUS.has(entree.name)) pile.push(relatif)
+        if (!DOSSIERS_EXCLUS.has(entree.name)) file.push(relatif)
       } else if (entree.isFile()) {
+        if (resultat.length >= plafond) {
+          incomplet = true
+          break
+        }
         resultat.push(relatif)
-        if (resultat.length >= plafond) break
       }
     }
+    if (incomplet) break
   }
-  return resultat
+  return { fichiers: resultat, incomplet }
 }

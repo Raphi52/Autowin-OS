@@ -54,13 +54,17 @@ const ALLOWED_TAGS = new Set([
   'hr',
   'i',
   'img',
+  'input',
   'ins',
   'kbd',
+  'label',
   'li',
   'mark',
+  'meter',
   'ol',
   'p',
   'pre',
+  'progress',
   's',
   'samp',
   'section',
@@ -185,10 +189,21 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 const ALLOWED_ATTRS = new Set([
   'align',
   'alt',
+  'checked',
   'class',
   'colspan',
   'datetime',
+  'disabled',
+  'for',
   'height',
+  'high',
+  'id',
+  'low',
+  'max',
+  'min',
+  'name',
+  'open',
+  'optimum',
   'rowspan',
   'span',
   'start',
@@ -197,6 +212,17 @@ const ALLOWED_ATTRS = new Set([
   'value',
   'width'
 ])
+
+/**
+ * INTERACTIVITE SANS JAVASCRIPT : les seuls champs acceptes.
+ *
+ * `checkbox` et `radio` ne portent aucune saisie et n'emportent rien — associes a un `<label>` et a
+ * `:checked` en CSS, ils suffisent aux onglets, aux accordeons et aux filtres. Tout autre `type`
+ * est refuse et l'element entier disparait : un `text` ou un `password` au milieu d'une reponse
+ * ressemblerait a un formulaire de l'application alors qu'il ne mene nulle part, et `file`, `image`
+ * ou `submit` ouvrent des chemins (fichier local, requete sortante) qui n'ont rien a faire ici.
+ */
+const ALLOWED_INPUT_TYPES = new Set(['checkbox', 'radio'])
 
 /** Proprietes CSS inline autorisees : mise en forme dans le flux, jamais de positionnement. */
 const ALLOWED_STYLE_PROPS = new Set([
@@ -311,8 +337,7 @@ export function clampVerticalRhythm(property: string, value: string): string {
     return value
   }
 
-  if (VERTICAL_SPACE_PROPS.has(property))
-    return raw.split(/\s+/).map(clampLength).join(' ')
+  if (VERTICAL_SPACE_PROPS.has(property)) return raw.split(/\s+/).map(clampLength).join(' ')
 
   if (BOX_SHORTHAND_PROPS.has(property)) {
     const parts = raw.split(/\s+/)
@@ -397,6 +422,47 @@ function scopeToken(source: string): string {
 /** `html`, `body` et `:root` designent, dans le fil, le conteneur du bloc — pas la page de l'app. */
 const ROOT_SELECTORS = /^(?:html|body|:root)$/i
 
+/**
+ * LE PREFIXE DES IDENTIFIANTS DU BLOC.
+ *
+ * Un `id` du modele ne doit jamais repondre a un `getElementById` de l'application, ni entrer en
+ * collision avec un `id` d'une AUTRE reponse du meme fil (deux blocs d'onglets se voleraient leurs
+ * cases cochees). Le meme prefixe est applique au HTML (`id`, `for`, `name`) et aux selecteurs
+ * `#...` de la feuille du bloc : sans cette symetrie, le CSS ne designerait plus rien et les
+ * onglets resteraient inertes.
+ */
+export function prefixeIdentifiantsDuBloc(scope: string): string {
+  return `htm-${/data-html-scope="([^"]+)"/.exec(scope)?.[1] ?? 'bloc'}-`
+}
+
+/**
+ * Reecrit les identifiants d'un selecteur avec le prefixe du bloc : la forme `#ident`, MAIS AUSSI
+ * les selecteurs d'attribut `[for=...]`, `[id=...]` et `[name=...]`.
+ *
+ * Mesure du 2026-09-13 : en ne traitant que `#ident`, `label[for=t1]` continuait de viser la valeur
+ * BRUTE alors que le HTML portait deja `for="htm-xxx-t1"`. L'onglet se dessinait, mais son libelle
+ * ne s'allumait jamais — un demi-correctif est ici indistinguable d'une panne.
+ */
+function prefixerIdentifiantsCss(selector: string, prefixe: string): string {
+  return selector
+    .replace(/#(-?[_a-zA-Z][\w-]*)/g, (_all, nom: string) => `#${prefixe}${nom}`)
+    .replace(
+      /\[\s*(for|id|name)\s*([~|^$*]?=)\s*("([^"]*)"|'([^']*)'|([^\]\s]+))\s*\]/gi,
+      (
+        _all,
+        attribut: string,
+        operateur: string,
+        _brut: string,
+        double?: string,
+        simple?: string,
+        nu?: string
+      ) => {
+        const valeur = double ?? simple ?? nu ?? ''
+        return `[${attribut}${operateur}"${prefixe}${valeur}"]`
+      }
+    )
+}
+
 function scopeSelector(selector: string, scope: string): string {
   return selector
     .split(',')
@@ -404,9 +470,11 @@ function scopeSelector(selector: string, scope: string): string {
       const trimmed = part.trim()
       if (!trimmed) return ''
       // Un selecteur de la feuille du modele ne doit JAMAIS pouvoir designer un noeud de l'app.
+      const prefixe = prefixeIdentifiantsDuBloc(scope)
       const [head, ...rest] = trimmed.split(/\s+/)
-      if (ROOT_SELECTORS.test(head)) return rest.length ? `${scope} ${rest.join(' ')}` : scope
-      return `${scope} ${trimmed}`
+      if (ROOT_SELECTORS.test(head))
+        return rest.length ? `${scope} ${prefixerIdentifiantsCss(rest.join(' '), prefixe)}` : scope
+      return `${scope} ${prefixerIdentifiantsCss(trimmed, prefixe)}`
     })
     .filter(Boolean)
     .join(', ')
@@ -423,7 +491,102 @@ function scopeSelector(selector: string, scope: string): string {
  * Le positionnement reste retire : `contain: paint` sur le conteneur ancre deja un `position: fixed`
  * au bloc plutot qu'a la fenetre, mais une seconde barriere ne coute rien ici.
  */
-export function scopeChatStyleSheet(css: string, scope: string): string {
+/**
+ * LES SELECTEURS QU'UNE INTERACTION PEUT RE-AFFICHER.
+ *
+ * `display:none` reste interdit par defaut : du texte invisible mais copiable et lu par un lecteur
+ * d'ecran est une tromperie (mesure du 2026-08-28). Mais un systeme d'onglets a BESOIN de cacher le
+ * panneau inactif, et ce contenu-la n'est pas cache : il revient en un clic.
+ *
+ * On distingue les deux mecaniquement. Une regle qui REVELE porte `:checked`, `:target` ou `[open]`
+ * et redonne un `display` different de `none`. La fin de son selecteur (`.p1` dans
+ * `#t1:checked ~ .p1`) est alors la seule cible pour laquelle un `display:none` est accepte
+ * ailleurs dans la MEME feuille. Un `display:none` sans revelateur correspondant reste refuse.
+ */
+function ciblesRevelablesParInteraction(css: string): string[] {
+  const cibles: string[] = []
+  const regles = css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)
+  for (const [, prelude, corps] of regles) {
+    if (!/:checked|:target|\[\s*open\s*\]/i.test(prelude)) continue
+    if (!/(^|;)\s*display\s*:\s*(?!none)[^;]+/i.test(corps)) continue
+    for (const part of prelude.split(',')) {
+      const fin = part
+        .trim()
+        .split(/[\s>+~]+/)
+        .pop()
+      if (fin) cibles.push(fin.replace(/:{1,2}[\w-]+(\([^)]*\))?/g, ''))
+    }
+  }
+  return cibles.filter(Boolean)
+}
+
+/**
+ * Le masquage est-il REVOCABLE pour les elements reellement vises ?
+ *
+ * On ne compare pas des textes de selecteurs — `.panneau{display:none}` et `#t1:checked ~ .p1` ne se
+ * ressemblent pas alors qu'ils designent le MEME element `<div class="panneau p1">`. On interroge
+ * donc le document : chaque element cache doit aussi etre atteint par une regle qui le revele.
+ * Aucun element vise (selecteur sans effet) = rien n'est cache = rien a autoriser.
+ */
+function masquageRevocable(
+  racine: ParentNode,
+  selecteurMasque: string,
+  revelateurs: string[]
+): boolean {
+  if (!revelateurs.length) return false
+  const vises = (selecteur: string): Element[] => {
+    try {
+      return Array.from(racine.querySelectorAll(selecteur))
+    } catch {
+      return []
+    }
+  }
+  const caches = selecteurMasque
+    .split(',')
+    .flatMap((part) => vises(part.trim().replace(/:{1,2}[\w-]+(\([^)]*\))?/g, '')))
+  if (!caches.length) return false
+  const revelables = new Set(revelateurs.flatMap((selecteur) => vises(selecteur)))
+  return caches.every((element) => revelables.has(element))
+}
+
+/**
+ * Le masquage ne vise-t-il QUE des cases a cocher / boutons radio pilotes par un libelle visible ?
+ *
+ * Un onglet en CSS pur cache le rond du bouton radio et laisse son `<label for>` servir de bouton.
+ * Ce champ ne porte aucun texte : le cacher ne rend rien d'invisible-mais-copiable, contrairement a
+ * un `<p>`. Chaque element vise doit donc etre un tel champ ET avoir un libelle dans le bloc ; un
+ * seul autre element atteint par le selecteur (`input, p`) fait refuser la declaration entiere.
+ */
+function masqueSeulementDesChampsLibelles(racine: ParentNode, selecteurMasque: string): boolean {
+  const vises = selecteurMasque.split(',').flatMap((part) => {
+    try {
+      return Array.from(
+        racine.querySelectorAll(part.trim().replace(/:{1,2}[\w-]+(\([^)]*\))?/g, ''))
+      )
+    } catch {
+      return [null]
+    }
+  })
+  if (!vises.length) return false
+  const libelles = new Set(
+    Array.from(racine.querySelectorAll('label[for]')).map((label) => label.getAttribute('for'))
+  )
+  return vises.every(
+    (element) =>
+      element !== null &&
+      element.tagName.toLowerCase() === 'input' &&
+      /^(radio|checkbox)$/i.test(element.getAttribute('type') ?? '') &&
+      !!element.id &&
+      libelles.has(element.id)
+  )
+}
+
+export function scopeChatStyleSheet(
+  css: string,
+  scope: string,
+  racine: ParentNode | null = null,
+  revelateurs: string[] = ciblesRevelablesParInteraction(css)
+): string {
   // Les regles-INSTRUCTION (`@import`, `@charset`, `@namespace`) se terminent par `;` et n'ont pas
   // de bloc : les laisser dans le flux collait leur texte au preambule de la regle SUIVANTE, qui
   // etait alors rejetee avec elles. On les retire avant de decouper.
@@ -458,7 +621,7 @@ export function scopeChatStyleSheet(css: string, scope: string): string {
 
     if (/^@(?:import|charset|namespace)/i.test(prelude)) continue
     if (/^@(?:media|supports|layer|container)/i.test(prelude)) {
-      const inner = scopeChatStyleSheet(body, scope)
+      const inner = scopeChatStyleSheet(body, scope, racine, revelateurs)
       if (inner.trim()) out.push(`${prelude}{${inner}}`)
       continue
     }
@@ -476,7 +639,16 @@ export function scopeChatStyleSheet(css: string, scope: string): string {
         if (!declaration.includes(':')) return false
         const property = declaration.slice(0, declaration.indexOf(':')).trim().toLowerCase()
         if (property === 'position' || property === 'z-index') return false
-        if (masqueLeContenu(property, declaration.slice(declaration.indexOf(':') + 1))) return false
+        if (masqueLeContenu(property, declaration.slice(declaration.indexOf(':') + 1))) {
+          // Deux exceptions : cacher un panneau qu'une interaction de la meme feuille sait rouvrir,
+          // ou cacher le rond d'une case/bouton radio dont le libelle sert de bouton.
+          const revocable =
+            racine !== null &&
+            ((property === 'display' && masquageRevocable(racine, prelude, revelateurs)) ||
+              ((property === 'display' || property === 'opacity') &&
+                masqueSeulementDesChampsLibelles(racine, prelude)))
+          if (!revocable) return false
+        }
         return !/url\s*\(|expression\s*\(/i.test(declaration)
       })
       .map((declaration) => {
@@ -547,6 +719,7 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
 
   // Domaine du bloc, reutilise pour prefixer les `id` du dessin (degrades, masques, decoupes).
   const prefixeId = `svg-${/data-html-scope="([^"]+)"/.exec(scopeSelector_)?.[1] ?? 'bloc'}-`
+  const prefixeHtml = prefixeIdentifiantsDuBloc(scopeSelector_)
 
   const walk = (node: Element): void => {
     for (const child of Array.from(node.children)) walk(child)
@@ -563,7 +736,9 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
       // Conservee mais CONFINEE. Sans domaine de style, on ne rendrait pas ce bloc plus beau, on
       // laisserait sa feuille repeindre l'application.
       const scoped = scopeSelector_
-        ? scopeChatStyleSheet(node.textContent ?? '', scopeSelector_)
+        ? // `template.content` est la racine interrogee : c'est le bloc du modele, deja assaini,
+          // jamais le document de l'application.
+          scopeChatStyleSheet(node.textContent ?? '', scopeSelector_, template.content)
         : ''
       if (scoped) node.textContent = scoped
       else node.remove()
@@ -578,6 +753,16 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
     if (!ALLOWED_TAGS.has(tag)) {
       // Deplier : on jette la BALISE inconnue, pas le texte qu'elle porte.
       node.replaceWith(...Array.from(node.childNodes))
+      return
+    }
+
+    // Un champ qui n'est ni une case a cocher ni un bouton radio part ENTIEREMENT : il n'a pas de
+    // contenu a preserver, et le deplier laisserait un element inerte que rien ne pilote.
+    if (
+      tag === 'input' &&
+      !ALLOWED_INPUT_TYPES.has((node.getAttribute('type') ?? '').toLowerCase())
+    ) {
+      node.remove()
       return
     }
 
@@ -607,6 +792,14 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
         const src = sanitizeImageSource(attribute.value)
         if (src) node.setAttribute('src', src)
         else node.remove()
+        continue
+      }
+
+      // Les identifiants sont CONFINES au bloc, comme ceux du dessin SVG : meme prefixe des deux
+      // cotes (ici et dans les selecteurs `#...` de la feuille), sinon le lien entre une case et
+      // son libelle — donc l'onglet — cesserait de fonctionner.
+      if (name === 'id' || name === 'for' || name === 'name') {
+        if (attribute.value) node.setAttribute(name, `${prefixeHtml}${attribute.value}`)
         continue
       }
 

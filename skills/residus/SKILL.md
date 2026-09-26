@@ -42,6 +42,6 @@ du rejet). Le `file:line` désigne un fichier et une ligne RÉELS.
   2026-09-06 : `cdp-proof-validation.test.mjs` servi douze fois alors qu'il ne nomme que trois
   fichiers (l.73-75) — les douze retraits étaient non prouvés. À défaut : « aucun signal automatique
   — retrait à valider à la main ».
-- Ne jamais toucher à ce que la demande n'a pas nommé (réflexe 11) ; passer la main à `clean` pour
+- Ne jamais toucher à ce que la demande n'a pas nommé (réflexe 9) ; passer la main à `clean` pour
   l'exécution, jamais supprimer depuis ici.
 - Un item non tranché reste listé AVEC sa réserve, il ne disparaît pas du rapport.

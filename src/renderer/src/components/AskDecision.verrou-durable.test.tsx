@@ -99,6 +99,8 @@ describe('les touches 1..N du bloc ask', () => {
   it('répondent à la question — le chiffre affiché n’est pas décoratif', () => {
     const onPick = vi.fn()
     act(() => racine.render(<AskDecisionBlock decision={decision} onPick={onPick} />))
+    // Le bloc doit avoir le focus pour ecouter (demande du 2026-09-11).
+    choix()[0].focus()
 
     taper('2')
 
@@ -118,9 +120,28 @@ describe('les touches 1..N du bloc ask', () => {
     champ.remove()
   })
 
+  /*
+   * LA FRAPPE EGAREE NE REPOND PLUS (demande du 2026-09-11 : « le chiffre ne doit repondre que si
+   * le bloc de questions a le focus »). Un chiffre tape alors que le curseur n'etait nulle part
+   * partait comme une reponse, et la question se verrouillait sur un choix jamais fait.
+   */
+  it('ne répondent PAS quand le focus est ailleurs qu’au bloc', () => {
+    const onPick = vi.fn()
+    act(() => racine.render(<AskDecisionBlock decision={decision} onPick={onPick} />))
+    const ailleurs = document.createElement('button')
+    document.body.appendChild(ailleurs)
+    ailleurs.focus()
+
+    taper('2')
+
+    expect(onPick).not.toHaveBeenCalled()
+    ailleurs.remove()
+  })
+
   it('se taisent une fois la question répondue', () => {
     const onPick = vi.fn()
     act(() => racine.render(<AskDecisionBlock decision={decision} dejaRepondu onPick={onPick} />))
+    choix()[0].focus()
 
     taper('1')
 

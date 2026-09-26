@@ -9,7 +9,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
  * chat a lu D:\GIT\RigApplication\greffe_map.txt sans difficulte. L'argv journalise des DEUX tours est
  * identique (`--add-dir E:\GIT\Autowin-OS`, aucun autre dossier) : il n'y avait aucun blocage technique.
  *
- * Le reflexe 10 de la constitution (cloture NEGATIVE : balayer l'atteignable avant « impossible »)
+ * Le reflexe 8 de la constitution (cloture NEGATIVE : balayer l'atteignable avant « impossible »)
  * existait deja et n'a pas suffi — il est generique. Ce test garde la consigne qui NOMME le cas.
  */
 describe('perimetre de lecture du chat', () => {

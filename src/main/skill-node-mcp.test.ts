@@ -11,7 +11,7 @@ import {
 } from './skill-node-mcp'
 import type { LanceurCommandeSkill, SpecCommandeSkill } from './skill-node-tools'
 
-/** Les specs REELLES des deux commandes, recopiees de `commands.ts` (arguments compris). */
+/** Les specs REELLES des commandes, recopiees de `commands.ts` (arguments compris). */
 const SPECS: SpecCommandeSkill[] = [
   {
     name: 'brain_query',
@@ -31,6 +31,21 @@ const SPECS: SpecCommandeSkill[] = [
     }
   },
   {
+    name: 'brain_graph',
+    description: 'Suivre les liens du Brain',
+    args: {
+      entity: 'identifiant exact, nom de symbole ou chemin knowledge/…md',
+      direction: 'facultatif — dependents (défaut) | dependencies',
+      depth: 'facultatif — 1 à 3, défaut 1',
+      relation: 'facultatif — ne suivre qu’une relation (ex. calls)'
+    }
+  },
+  {
+    name: 'brain_read',
+    description: 'Relire une note curée',
+    args: { path: 'chemin de la note, knowledge/…/nom.md' }
+  },
+  {
     name: 'orchestrate',
     description: 'Lancer un run',
     args: { task: 'la tâche' }
@@ -46,7 +61,7 @@ function lanceur(
 describe('publication des outils', () => {
   it('ne publie QUE la liste blanche — `orchestrate` est absent du catalogue servi', () => {
     const noms = outilsPublies(lanceur()).map((o) => o.name)
-    expect(noms).toEqual(['brain_query', 'remember'])
+    expect(noms).toEqual(['brain_query', 'remember', 'brain_graph', 'brain_read'])
     expect(noms).not.toContain('orchestrate')
   })
 
@@ -74,7 +89,9 @@ describe('publication des outils', () => {
     try {
       expect(serveur.nomsExposes()).toEqual([
         `mcp__${NOM_SERVEUR_MCP}__brain_query`,
-        `mcp__${NOM_SERVEUR_MCP}__remember`
+        `mcp__${NOM_SERVEUR_MCP}__remember`,
+        `mcp__${NOM_SERVEUR_MCP}__brain_graph`,
+        `mcp__${NOM_SERVEUR_MCP}__brain_read`
       ])
     } finally {
       await serveur.arreter()
@@ -100,6 +117,27 @@ describe('appel d’outil', () => {
     const r = (rep.corps as { result: { content: Array<{ text: string }>; isError: boolean } })
       .result
     expect(r.content[0]!.text).toBe('le savoir')
+    expect(r.isError).toBe(false)
+  })
+
+  it('relaie un appel `brain_graph` au bus avec ses arguments', async () => {
+    const vus: Array<{ name: string; args: unknown }> = []
+    const rep = await traiterMessageMcp(
+      {
+        method: 'tools/call',
+        id: 4,
+        params: { name: 'brain_graph', arguments: { entity: 'OrderService', direction: 'dependents' } }
+      },
+      lanceur(async (name, args) => {
+        vus.push({ name, args })
+        return { ok: true, data: 'OrderController calls OrderService' }
+      })
+    )
+    expect(vus).toEqual([
+      { name: 'brain_graph', args: { entity: 'OrderService', direction: 'dependents' } }
+    ])
+    const r = (rep.corps as { result: { content: Array<{ text: string }>; isError: boolean } })
+      .result
     expect(r.isError).toBe(false)
   })
 
@@ -203,7 +241,7 @@ describe('transport', () => {
       const noms = (
         JSON.parse(avec.texte) as { result: { tools: Array<{ name: string }> } }
       ).result.tools.map((t) => t.name)
-      expect(noms).toEqual(['brain_query', 'remember'])
+      expect(noms).toEqual(['brain_query', 'remember', 'brain_graph', 'brain_read'])
     } finally {
       await serveur.arreter()
     }

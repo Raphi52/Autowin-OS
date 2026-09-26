@@ -1,4 +1,5 @@
 import { racineDepot } from './racine-depot.mjs'
+import { reserverInstance } from './avec-instance-headless.mjs'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -10,7 +11,13 @@ const helper = join(root, 'scripts', 'autowin-headless.ps1')
 const freshnessCheck = join(root, 'scripts', 'assert-ui-package-fresh.ps1')
 const executable = join(root, 'dist', 'win-unpacked', 'autowin-os.exe')
 const instanceId = 'perfect-memory-proof'
-const port = 9267
+// Port reserve par verrou a partir de 9267 : il etait en dur et croisait les travaux paralleles.
+const { port } = reserverInstance({
+  instanceId,
+  portDemande: 9267,
+  racine: root,
+  prefixe: '[memory-proof]'
+})
 const artifactsRoot = join(
   root,
   'Audit',

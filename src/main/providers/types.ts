@@ -126,6 +126,12 @@ export interface SendOptions {
      * durée promise par le run. L'abort du superviseur reste la borne autoritaire du run entier.
      */
     providerTimeoutMs?: number
+    /**
+     * Variables posées dans l'environnement du PROCESSUS de l'agent. Porte AUTOWIN_CONVERSATION_ID
+     * (le fil du run) : scripts/hdesk-lancer.ps1 le lit pour relier un bureau caché à la petite TV
+     * de ce fil sans que l'agent recopie l'identifiant (conv-528, 2026-09-14).
+     */
+    agentEnv?: Record<string, string>
     /** Vrai uniquement quand ce cwd appartient exclusivement à ce run/conversation. */
     causallyIsolated?: boolean
     /** Fichiers surveillés présents dans la copie isolée, à attribuer exactement. */

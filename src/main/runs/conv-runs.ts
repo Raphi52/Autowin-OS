@@ -30,14 +30,119 @@ export function convRunsRoot(): string {
   return join(ensureAutowinAppData(), 'runs')
 }
 
+/**
+ * REMPLISSAGE CONVERSATIONNEL. Le sujet d'un run était un bout BRUT de la phrase tapée :
+ * « ensuite de la meme maniere si il veut un nouveau skill… » donnait
+ * `ensuite-de-la-meme-maniere-si-il-veut-un-<ts>` — une pastille illisible et un `@run:`
+ * impossible à recopier. Ces mots-outils ne nomment RIEN : ils sont écartés pour que le libellé
+ * porte les mots PORTEURS. La liste est fermée et courte : aucun verbe, aucun substantif métier
+ * n'y figure, donc une consigne déjà dense la traverse intacte.
+ */
+const MOTS_OUTILS = new Set([
+  'a',
+  'ah',
+  'alors',
+  'apres',
+  'au',
+  'aussi',
+  'aux',
+  'avec',
+  'bien',
+  'bon',
+  'ca',
+  'ce',
+  'cela',
+  'ces',
+  'cette',
+  'coup',
+  'd',
+  'dans',
+  'de',
+  'des',
+  'donc',
+  'du',
+  'elle',
+  'en',
+  'ensuite',
+  'est',
+  'et',
+  'faut',
+  'il',
+  'ils',
+  'j',
+  'je',
+  'juste',
+  'l',
+  'la',
+  'le',
+  'les',
+  'lui',
+  'm',
+  'maniere',
+  'me',
+  'meme',
+  'mon',
+  'n',
+  'ne',
+  'nous',
+  'ok',
+  'on',
+  'ou',
+  'par',
+  'pas',
+  'peut',
+  'peux',
+  'plus',
+  'pour',
+  'puis',
+  'qu',
+  'que',
+  'qui',
+  'quoi',
+  's',
+  'sa',
+  'se',
+  'si',
+  'son',
+  'stp',
+  'sur',
+  't',
+  'ta',
+  'te',
+  'tes',
+  'toi',
+  'ton',
+  'tres',
+  'tu',
+  'un',
+  'une',
+  'vazy',
+  'voila',
+  'vous',
+  'y'
+])
+
+const SLUG_MOTS_MAX = 6
+const SLUG_LONGUEUR_MAX = 40
+
 function slugify(task: string): string {
-  const s = task
+  const tokens = task
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
+    .replace(/\p{Diacritic}/gu, '')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  const porteurs = tokens.filter((t) => !MOTS_OUTILS.has(t))
+  // Une phrase FAITE de mots-outils (« vazy stp ») n'a aucun mot porteur : on garde le brut
+  // plutôt que de rendre un dossier anonyme.
+  const retenus = (porteurs.length ? porteurs : tokens).slice(0, SLUG_MOTS_MAX)
+  // Troncature au MOT, jamais au milieu d'un mot : un fragment coupé n'est pas un libellé.
+  const s = retenus
+    .reduce<string[]>((acc, mot) => {
+      const longueur = acc.reduce((n, m) => n + m.length + 1, -1)
+      return longueur + 1 + mot.length <= SLUG_LONGUEUR_MAX ? [...acc, mot] : acc
+    }, [])
+    .join('-')
   return s || 'tache'
 }
 
@@ -90,7 +195,9 @@ export function createConvRun(
   mkdirSync(dir, { recursive: true })
   const path = join(dir, 'RUN.md')
   const date = new Date(now()).toISOString().slice(0, 10)
-  const dod = rootDodLabels(task, phasesProgrammees).map((label) => `- [ ] ${label}`).join('\n')
+  const dod = rootDodLabels(task, phasesProgrammees)
+    .map((label) => `- [ ] ${label}`)
+    .join('\n')
   writeFileSync(
     path,
     `status: open
@@ -202,10 +309,7 @@ export async function reuseOrCreateConvRun(
         const md = await readFile(path, 'utf8')
         const storedTask =
           md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1]?.trim() ?? ''
-        if (
-          parseRun(md).status === 'open' &&
-          comparableTask(storedTask) === comparableTask(task)
-        ) {
+        if (parseRun(md).status === 'open' && comparableTask(storedTask) === comparableTask(task)) {
           return { path, reused: true }
         }
       } catch {
@@ -239,7 +343,8 @@ export function populateConvRunSections(
   if (!phaseOutputs?.length) return
   try {
     let md = readFileSync(runPath, 'utf8')
-    const rootTask = md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1]?.trim() ?? ''
+    const rootTask =
+      md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1]?.trim() ?? ''
     for (const check of rootRequirementChecks(rootTask, {
       phases: phaseOutputs,
       publishedCommitSha: proofs.publishedCommitSha
@@ -269,8 +374,29 @@ export function populateConvRunSections(
       .map((p) => extractSection(p.text, 'Défauts'))
       .filter((c) => c && !c.startsWith('<!--'))
       .sort((a, b) => b.length - a.length)[0]
-    if (defauts) {
-      md = md.replace(/(\n##\s+Défauts\s*\n)[\s\S]*?(?=\n##\s)/, `$1${defauts}\n`)
+    /*
+     * UNE REPRISE (`salvage`) EST UN DÉFAUT DU RUN, MÊME QUAND LE RUN EST VERT — mesure du
+     * 2026-09-16, conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091.
+     *
+     * Déroulé lu dans le dossier de ce tour : le juge valide (12:33:59), la clôture est autorisée,
+     * puis `salvage` rend à 12:35:13 « J'ai trouvé le jeu. Ma conclusion précédente était trop
+     * courte » — la conclusion du run était FAUSSE. Le RUN.md, lui, est resté `status: green`,
+     * Journal « Juge: validé », `## Défauts` VIDE : le panneau Workflows montrait un run vert dont
+     * la conclusion avait été démentie 70 secondes plus tard, sans une ligne pour le dire.
+     *
+     * `salvage` n'écrit presque jamais de section `## Défauts` — son livrable est une prose de
+     * rattrapage — donc le filtre ci-dessus le laissait tomber. Sa seule EXISTENCE avec du texte
+     * suffit à qualifier le défaut : la phase ne se joue que pour rattraper ce que le run a raté.
+     * On l'inscrit donc telle quelle, repliée en une ligne, et de façon idempotente (le peuplement
+     * est rejoué à chaque phase).
+     */
+    const reprise = phaseOutputs
+      .filter((p) => p.phase === 'salvage' && p.text?.trim())
+      .map((p) => `- Reprise (salvage) : ${p.text.replace(/\s*\n\s*/g, ' · ').trim().slice(0, 600)}`)
+      .slice(-1)[0]
+    const contenuDefauts = [defauts, reprise].filter(Boolean).join('\n')
+    if (contenuDefauts) {
+      md = md.replace(/(\n##\s+Défauts\s*\n)[\s\S]*?(?=\n##\s)/, `$1${contenuDefauts}\n`)
     }
 
     const annexe = phaseOutputs

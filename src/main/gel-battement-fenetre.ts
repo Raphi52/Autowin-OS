@@ -37,6 +37,12 @@ export function fenetreSilencieuse(
 
 /** Le minimum vital d'une fenetre pour ce battement — pas besoin d'un vrai Electron en test. */
 export interface FenetreBattante {
+  /**
+   * Fenetre DETRUITE. Seul membre encore interrogeable apres destruction : sur un BrowserWindow
+   * detruit, le simple ACCES a `webContents` leve `TypeError: Object has been destroyed` — un throw
+   * SYNCHRONE, que ni `?.` ni un `.catch()` n'attrapent.
+   */
+  isDestroyed?(): boolean
   webContents?: {
     executeJavaScript?(code: string): Promise<unknown>
     reloadIgnoringCache?(): void
@@ -79,7 +85,29 @@ export function surveillerParBattement(
   let silenceAuRechargement: number | undefined
   let dejaEscalade = false
 
-  const jeton = planifier(() => {
+  /*
+   * LA FENETRE FERMEE ARRETE LE BATTEMENT ELLE-MEME.
+   *
+   * Mesure du 2026-09-12 (.autowin-data/dev-app-stdout.log) : apres destruction de la fenetre, ce
+   * callback relevait `TypeError: Object has been destroyed` TOUTES LES 5 SECONDES. Le throw part du
+   * timer, donc hors de toute promesse : il remonte en `uncaughtException`, et le filet de crash
+   * global (src/main/index.ts, `onFatal`) repond en coupant TOUTES les orchestrations en vol. Un
+   * battement orphelin tuait donc en boucle des runs parfaitement sains.
+   */
+  const fenetreMorte = (): boolean => {
+    try {
+      return fenetre.isDestroyed?.() === true
+    } catch {
+      // Un objet si mort que meme cette question echoue : il n'y a plus rien a surveiller.
+      return true
+    }
+  }
+
+  const jeton: unknown = planifier(() => {
+    if (fenetreMorte()) {
+      annuler(jeton)
+      return
+    }
     let repondu = false
     void fenetre.webContents
       ?.executeJavaScript?.('1')
@@ -94,6 +122,12 @@ export function surveillerParBattement(
     // L'echo est juge au tour SUIVANT : s'il n'est pas revenu d'ici la, il est manque.
     setTimeout(() => {
       if (repondu) return
+      // La fenetre peut mourir ENTRE la demande d'echo et son verdict : sans cette garde, le
+      // rechargement plus bas toucherait un objet detruit et relancerait le meme crash.
+      if (fenetreMorte()) {
+        annuler(jeton)
+        return
+      }
       echosManques += 1
       const silenceMs = echosManques * intervalleMs
       if (!fenetreSilencieuse({ echosManques, intervalleMs }, silenceAvantGelMs)) return

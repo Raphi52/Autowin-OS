@@ -1,0 +1,417 @@
+/* GENERE par scripts/gen-malvoyant-planchers.mjs — ne pas editer a la main.
+   Themes clairs : tout gris ecrit en dur sous 4.5:1 sur blanc retombe sur --text-dim. */
+
+/* components/AgentsTopologyView.css */
+:root[data-base='clair'] .agents-topology,
+:root[data-base='clair'] .topology-eyebrow,
+:root[data-base='clair'] .topology-panel > header span,
+:root[data-base='clair'] .topology-parallel-heading span,
+:root[data-base='clair'] .topology-toolbar p,
+:root[data-base='clair'] .topology-profiles select,
+:root[data-base='clair'] .topology-library > p,
+:root[data-base='clair'] .topology-model,
+:root[data-base='clair'] .topology-model small,
+:root[data-base='clair'] .topology-panel > header p,
+:root[data-base='clair'] .topology-panel > header b,
+:root[data-base='clair'] .topology-slot-copy span,
+:root[data-base='clair'] .topology-slot label,
+:root[data-base='clair'] .topology-slot select,
+:root[data-base='clair'] .topology-parallel-heading small,
+:root[data-base='clair'] .agents-topology-loading,
+:root[data-base='clair'] .theme-serious .agents-topology,
+:root[data-base='clair'] .theme-serious .topology-model,
+:root[data-base='clair'] .theme-serious .topology-slot,
+:root[data-base='clair'] .theme-serious .topology-panel > header b,
+:root[data-base='clair'] .theme-serious .topology-profiles,
+:root[data-base='clair'] .theme-serious .topology-slot select,
+:root[data-base='clair'] .theme-serious .topology-empty,
+:root[data-base='clair'] .theme-serious .topology-assign-button,
+:root[data-base='clair'] .theme-serious .topology-eyebrow,
+:root[data-base='clair'] .theme-serious .topology-panel > header span,
+:root[data-base='clair'] .theme-serious .topology-parallel-heading span,
+:root[data-base='clair'] .theme-serious .topology-model small,
+:root[data-base='clair'] .theme-serious .topology-slot-copy span,
+:root[data-base='clair'] .theme-serious .topology-slot-copy small,
+:root[data-base='clair'] .theme-serious .topology-slot label,
+:root[data-base='clair'] .theme-serious .topology-toolbar p,
+:root[data-base='clair'] .theme-serious .topology-panel > header p {
+  color: var(--text-dim);
+}
+
+/* components/ArtifactPreview.css */
+:root[data-base='clair'] .artifact-preview__header,
+:root[data-base='clair'] .artifact-preview__footer,
+:root[data-base='clair'] .artifact-preview__header strong,
+:root[data-base='clair'] .artifact-preview__source,
+:root[data-base='clair'] .artifact-notebook__cell pre,
+:root[data-base='clair'] .artifact-preview__source.is-diff,
+:root[data-base='clair'] .artifact-table-wrap table,
+:root[data-base='clair'] .artifact-notebook__cell > span,
+:root[data-base='clair'] .artifact-preview__font,
+:root[data-base='clair'] .artifact-preview__placeholder,
+:root[data-base='clair'] .artifact-preview__blocked,
+:root[data-base='clair'] .artifact-preview__font small,
+:root[data-base='clair'] .artifact-model3d,
+:root[data-base='clair'] .artifact-archive__entry,
+:root[data-base='clair'] .artifact-archive__entry small,
+:root[data-base='clair'] .artifact-slide,
+:root[data-base='clair'] .artifact-slide > span,
+:root[data-base='clair'] .artifact-preview__reveal,
+:root[data-base='clair'] .artifact-preview__toggle {
+  color: var(--text-dim);
+}
+
+/* components/AskDecision.css */
+:root[data-base='clair'] .askd-tri,
+:root[data-base='clair'] .askd-consequence,
+:root[data-base='clair'] .askd-touche,
+:root[data-base='clair'] .askd-q b,
+:root[data-base='clair'] .askd-q.est-residuel p,
+:root[data-base='clair'] .askd-pied,
+:root[data-base='clair'] .askd-envoyer:disabled {
+  color: var(--text-dim);
+}
+
+/* components/BrainMarkdown.css */
+:root[data-base='clair'] .brain-markdown,
+:root[data-base='clair'] .brain-markdown__meta dt,
+:root[data-base='clair'] .brain-markdown h1,
+:root[data-base='clair'] .brain-markdown h2,
+:root[data-base='clair'] .brain-markdown h3,
+:root[data-base='clair'] .brain-markdown h4,
+:root[data-base='clair'] .brain-markdown strong,
+:root[data-base='clair'] .brain-markdown a:hover,
+:root[data-base='clair'] .brain-markdown blockquote,
+:root[data-base='clair'] .brain-markdown pre code,
+:root[data-base='clair'] .node-panel .brain-markdown pre,
+:root[data-base='clair'] .brain-markdown__brut {
+  color: var(--text-dim);
+}
+
+/* components/CadrageHypotheses.css */
+:root[data-base='clair'] .cadrage-hyp-masquer,
+:root[data-base='clair'] .cadrage-hyp-masquer:hover {
+  color: var(--text-dim);
+}
+
+/* components/CandidatsPickPanel.css */
+:root[data-base='clair'] .cpick-tete,
+:root[data-base='clair'] .cpick-titre,
+:root[data-base='clair'] .cpick-q p {
+  color: var(--text-dim);
+}
+
+/* components/CapabilitiesView.css */
+:root[data-base='clair'] .cockpit-tabs small,
+:root[data-base='clair'] .control-source-badge,
+:root[data-base='clair'] .cockpit-inspector code {
+  color: var(--text-dim);
+}
+
+/* components/ChatView.css */
+:root[data-base='clair'] .attachment-button,
+:root[data-base='clair'] .chat-travail-non-publie,
+:root[data-base='clair'] .chat-travail-non-publie button,
+:root[data-base='clair'] .chat-travail-non-publie__fermer,
+:root[data-base='clair'] .chat-travail-non-publie__fermer:hover,
+:root[data-base='clair'] .composer-dictee-apercu,
+:root[data-base='clair'] .composer-input-row > .composer-send.btn-accent:disabled,
+:root[data-base='clair'] .composer-input-row > .composer-stop:disabled,
+:root[data-base='clair'] .composer-dictee-apercu-texte {
+  color: var(--text-dim);
+}
+
+/* components/ConversationCostIndicator.css */
+:root[data-base='clair'] .conv-cost-btn {
+  color: var(--text-dim);
+}
+
+/* components/GraphView.css */
+:root[data-base='clair'] .graph-observatory,
+:root[data-base='clair'] .graph-toolbar select,
+:root[data-base='clair'] .theme-sidebar input,
+:root[data-base='clair'] .graph-refresh,
+:root[data-base='clair'] .graph-toolbar__stats strong,
+:root[data-base='clair'] .sidebar-heading,
+:root[data-base='clair'] .settings-section__heading,
+:root[data-base='clair'] .theme-filter,
+:root[data-base='clair'] .theme-filter:hover,
+:root[data-base='clair'] .theme-filter.is-active,
+:root[data-base='clair'] .theme-sidebar__note strong,
+:root[data-base='clair'] .graph-settings-button,
+:root[data-base='clair'] .graph-settings-button:hover,
+:root[data-base='clair'] .graph-settings-button.is-active,
+:root[data-base='clair'] .graph-settings-popover__heading,
+:root[data-base='clair'] .graph-settings-popover__heading button,
+:root[data-base='clair'] .tree-branch-controls button,
+:root[data-base='clair'] .tree-branch-controls button:hover,
+:root[data-base='clair'] .tree-branch-controls button:focus-visible,
+:root[data-base='clair'] .tree-branch-controls button.is-collapsed,
+:root[data-base='clair'] .tree-branch-controls button small,
+:root[data-base='clair'] .graph-health-lens header,
+:root[data-base='clair'] .graph-health-lens header span,
+:root[data-base='clair'] .graph-health-lens p,
+:root[data-base='clair'] .graph-health-issue button,
+:root[data-base='clair'] .graph-stage__heading strong,
+:root[data-base='clair'] .graph-status,
+:root[data-base='clair'] .selected-node,
+:root[data-base='clair'] .theme-nodes-panel__heading,
+:root[data-base='clair'] .theme-nodes-panel__heading strong,
+:root[data-base='clair'] .toggle-row,
+:root[data-base='clair'] .range-row,
+:root[data-base='clair'] .node-links__heading,
+:root[data-base='clair'] .node-links button,
+:root[data-base='clair'] .node-links button:hover,
+:root[data-base='clair'] .node-panel h2,
+:root[data-base='clair'] .node-panel pre,
+:root[data-base='clair'] .graph-workbench-button,
+:root[data-base='clair'] .graph-workbench-button:hover,
+:root[data-base='clair'] .graph-workbench-button.is-active,
+:root[data-base='clair'] .knowledge-inbox__head,
+:root[data-base='clair'] .knowledge-inbox__head > button,
+:root[data-base='clair'] .knowledge-inbox__error,
+:root[data-base='clair'] .knowledge-inbox__empty,
+:root[data-base='clair'] .knowledge-inbox__list summary,
+:root[data-base='clair'] .knowledge-inbox__list summary > small,
+:root[data-base='clair'] .knowledge-inbox__meta dt,
+:root[data-base='clair'] .knowledge-inbox__meta dd,
+:root[data-base='clair'] .knowledge-inbox__sha,
+:root[data-base='clair'] .knowledge-inbox__source-problem,
+:root[data-base='clair'] .knowledge-inbox__body,
+:root[data-base='clair'] .knowledge-inbox__actions .is-promote,
+:root[data-base='clair'] .knowledge-inbox__actions .is-reject,
+:root[data-base='clair'] .knowledge-inbox__actions > small,
+:root[data-base='clair'] .brain-bench__head,
+:root[data-base='clair'] .brain-bench__head > small,
+:root[data-base='clair'] .brain-bench__ask input,
+:root[data-base='clair'] .brain-bench__status > span,
+:root[data-base='clair'] .brain-bench__status.is-empty,
+:root[data-base='clair'] .brain-bench__status.is-failed,
+:root[data-base='clair'] .brain-budget-label,
+:root[data-base='clair'] .brain-budget-figures,
+:root[data-base='clair'] .brain-budget-ok,
+:root[data-base='clair'] .brain-bench__local,
+:root[data-base='clair'] .theme-sidebar__retrieval,
+:root[data-base='clair'] .theme-sidebar__retrieval.is-failed,
+:root[data-base='clair'] .graph-brains-retry,
+:root[data-base='clair'] .graph-themes-retry,
+:root[data-base='clair'] .graph-theme-nodes-retry,
+:root[data-base='clair'] .graph-status__retry,
+:root[data-base='clair'] .graph-empty-reindex,
+:root[data-base='clair'] .graph-empty-brains,
+:root[data-base='clair'] .graph-truncation__extend,
+:root[data-base='clair'] .node-panel__retry,
+:root[data-base='clair'] .graph-brains-retry:hover,
+:root[data-base='clair'] .graph-themes-retry:hover,
+:root[data-base='clair'] .graph-theme-nodes-retry:hover,
+:root[data-base='clair'] .graph-status__retry:hover,
+:root[data-base='clair'] .graph-empty-reindex:hover,
+:root[data-base='clair'] .graph-empty-brains:hover,
+:root[data-base='clair'] .graph-truncation__extend:hover,
+:root[data-base='clair'] .node-panel__retry:hover,
+:root[data-base='clair'] .graph-status--empty,
+:root[data-base='clair'] .node-panel__meta dt,
+:root[data-base='clair'] .node-panel__meta dd,
+:root[data-base='clair'] .node-panel__relations span,
+:root[data-base='clair'] .node-links__degre,
+:root[data-base='clair'] .node-links__relation,
+:root[data-base='clair'] .node-panel__copier {
+  color: var(--text-dim);
+}
+
+/* components/HomeView.css */
+:root[data-base='clair'] .jarvis__bascule,
+:root[data-base='clair'] .jarvis__mute,
+:root[data-base='clair'] .jarvis__mute:hover,
+:root[data-base='clair'] .jarvis__mute:focus-visible,
+:root[data-base='clair'] .jarvis__mute[aria-pressed='true'],
+:root[data-base='clair'] .jarvis__bascule:hover,
+:root[data-base='clair'] .jarvis__bascule:focus-visible,
+:root[data-base='clair'] .jarvis__partiel,
+:root[data-base='clair'] .jarvis__audio-champ > span,
+:root[data-base='clair'] .jarvis__audio-champ select,
+:root[data-base='clair'] .jarvis__audio-champ input[type='range'],
+:root[data-base='clair'] .jarvis__audio-champ input[type='text'],
+:root[data-base='clair'] .jarvis__audio-champ select option,
+:root[data-base='clair'] .enregistrements__bouton,
+:root[data-base='clair'] .enregistrements[data-enregistre='true'] .enregistrements__bouton,
+:root[data-base='clair'] .enregistrements__partiel,
+:root[data-base='clair'] .enregistrements__champ > span,
+:root[data-base='clair'] .enregistrements__champ select,
+:root[data-base='clair'] .enregistrements__aide,
+:root[data-base='clair'] .enregistrements__fichier-nom,
+:root[data-base='clair'] .jarvis__anneau-texte > strong,
+:root[data-base='clair'] .perf-widget__groupe h3,
+:root[data-base='clair'] .perf-widget__personnes h3 {
+  color: var(--text-dim);
+}
+
+/* components/HumanJson.css */
+:root[data-base='clair'] .human-json__tree,
+:root[data-base='clair'] .human-json__key,
+:root[data-base='clair'] .human-json__string,
+:root[data-base='clair'] .human-json__null {
+  color: var(--text-dim);
+}
+
+/* components/JugesPanel.css */
+:root[data-base='clair'] .jpan-compte,
+:root[data-base='clair'] .jpan-juge,
+:root[data-base='clair'] .jpan-q li,
+:root[data-base='clair'] .jpan-cout,
+:root[data-base='clair'] .jpan-verdict p {
+  color: var(--text-dim);
+}
+
+/* components/ModelActivityLogPane.css */
+:root[data-base='clair'] .model-log-time,
+:root[data-base='clair'] .model-log-label,
+:root[data-base='clair'] .model-log-row[data-log-ok='false'] .model-log-label,
+:root[data-base='clair'] .model-log-detail,
+:root[data-base='clair'] .model-log-detail[open] > summary,
+:root[data-base='clair'] .model-log-detail > summary:hover,
+:root[data-base='clair'] .model-log-empty,
+:root[data-base='clair'] .model-log-source,
+:root[data-base='clair'] .model-log-meta,
+:root[data-base='clair'] .model-log-voie {
+  color: var(--text-dim);
+}
+
+/* components/ModelQuotaIndicator.css */
+:root[data-base='clair'] .model-quota-trigger,
+:root[data-base='clair'] .model-quota-popover,
+:root[data-base='clair'] .model-quota-popover small,
+:root[data-base='clair'] .model-quota-popover footer,
+:root[data-base='clair'] .model-quota-popover header button,
+:root[data-base='clair'] .model-quota-window > strong,
+:root[data-base='clair'] .model-quota-values small,
+:root[data-base='clair'] .model-quota-unavailable,
+:root[data-base='clair'] .model-quota-reset button,
+:root[data-base='clair'] .model-quota-reset-message {
+  color: var(--text-dim);
+}
+
+/* components/ObservatoryView.css */
+:root[data-base='clair'] .observatory-rag-causal-step > header strong,
+:root[data-base='clair'] .observatory-event.is-cancellation > i,
+:root[data-base='clair'] .observatory-event.is-cancellation > span:nth-child(2) b,
+:root[data-base='clair'] .observatory-event.is-cancellation p strong,
+:root[data-base='clair'] .theme-serious .observatory-view,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-toolbar input,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-toolbar select,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-toolbar button,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-toolbar summary,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-view-switch,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-event-detail button,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-diff button,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-panel-title,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-head p,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-conversations small,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-diagnostics span,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-turn > header,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-event p small,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-conversations > button.is-active,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-calls button.is-active,
+:root[data-base='clair'] .theme-serious .observatory-view .observatory-event.is-selected {
+  color: var(--text-dim);
+}
+
+/* components/ProdPassphraseGate.css */
+:root[data-base='clair'] .ppg,
+:root[data-base='clair'] .ppg-raison,
+:root[data-base='clair'] .ppg-note,
+:root[data-base='clair'] .ppg-label,
+:root[data-base='clair'] .ppg-champ,
+:root[data-base='clair'] .ppg-actions button,
+:root[data-base='clair'] .ppg-question {
+  color: var(--text-dim);
+}
+
+/* components/ProdProtectionSettings.css */
+:root[data-base='clair'] .settings-prod-protection .prod-etat-inconnu,
+:root[data-base='clair'] .settings-prod-protection .prod-detail,
+:root[data-base='clair'] .settings-prod-protection .prod-label,
+:root[data-base='clair'] .settings-prod-protection .prod-label input,
+:root[data-base='clair'] .settings-prod-protection .prod-note,
+:root[data-base='clair'] .settings-prod-protection .prod-niveau-note {
+  color: var(--text-dim);
+}
+
+/* components/RouterView.css */
+:root[data-base='clair'] .router-view,
+:root[data-base='clair'] .router-actions .router-standby {
+  color: var(--text-dim);
+}
+
+/* components/RunInspector.css */
+:root[data-base='clair'] .run-inspector__summary,
+:root[data-base='clair'] .run-inspector__nav button,
+:root[data-base='clair'] .run-inspector__besoin,
+:root[data-base='clair'] .run-inspector__ligne ul,
+:root[data-base='clair'] .run-inspector__fichiers code {
+  color: var(--text-dim);
+}
+
+/* components/SandboxedHtmlPreview.css */
+:root[data-base='clair'] .html-render-preview__identity,
+:root[data-base='clair'] .html-render-preview__toolbar button,
+:root[data-base='clair'] .html-render-preview__toolbar button:hover,
+:root[data-base='clair'] .html-render-preview__toolbar button:focus-visible,
+:root[data-base='clair'] .html-render-preview__toolbar button.is-active,
+:root[data-base='clair'] .html-render-preview__source,
+:root[data-base='clair'] .html-render-preview__too-large {
+  color: var(--text-dim);
+}
+
+/* components/TaskManagerView.css */
+:root[data-base='clair'] .watchdog-section-head p,
+:root[data-base='clair'] .watchdog-stats,
+:root[data-base='clair'] .watchdog-stats strong,
+:root[data-base='clair'] .watchdog-empty,
+:root[data-base='clair'] .watchdog-rule-state,
+:root[data-base='clair'] .watchdog-rule-source,
+:root[data-base='clair'] .watchdog-rule-guards,
+:root[data-base='clair'] .watchdog-rule-history time,
+:root[data-base='clair'] .watchdog-status,
+:root[data-base='clair'] .watchdog-outcome.is-unknown,
+:root[data-base='clair'] .watchdog-fields-note,
+:root[data-base='clair'] .watchdog-fields-reset,
+:root[data-base='clair'] .watchdog-fields-reset:hover,
+:root[data-base='clair'] .watchdog-events legend {
+  color: var(--text-dim);
+}
+
+/* components/TestsView.css */
+:root[data-base='clair'] .tests-case-error {
+  color: var(--text-dim);
+}
+
+/* components/VeilleCandidatsSection.css */
+:root[data-base='clair'] .veille-citation {
+  color: var(--text-dim);
+}
+
+/* assets/cosmic-outline.css */
+:root[data-base='clair'] .cosmic-outline .msg-meta,
+:root[data-base='clair'] .cosmic-outline .msg.assistant .msg-body,
+:root[data-base='clair'] .cosmic-outline .msg.user .msg-body,
+:root[data-base='clair'] .cosmic-outline .activity-group,
+:root[data-base='clair'] .cosmic-outline .activity-step-toggle,
+:root[data-base='clair'] .cosmic-outline .activity-step-detail,
+:root[data-base='clair'] .cosmic-outline .activity-step-target,
+:root[data-base='clair'] .cosmic-outline .activity-resume:hover,
+:root[data-base='clair'] .cosmic-outline .activity-why,
+:root[data-base='clair'] .cosmic-outline .activity-open-run,
+:root[data-base='clair'] .cosmic-outline .activity-open-run:hover,
+:root[data-base='clair'] .cosmic-outline .activity-group-title,
+:root[data-base='clair'] .cosmic-outline .activity-progress,
+:root[data-base='clair'] .cosmic-outline .activity-step,
+:root[data-base='clair'] .cosmic-outline .activity-step-link,
+:root[data-base='clair'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled {
+  color: var(--text-dim);
+}
+
+/* assets/theme.css */
+:root[data-base='clair'] .btn-accent {
+  color: var(--text-dim);
+}

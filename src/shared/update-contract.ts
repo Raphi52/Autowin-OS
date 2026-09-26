@@ -20,6 +20,25 @@ export type UpdateStrategy = 'fast-forward' | 'merge' | 'rebase' | 'switch-main'
 /** Action contextuelle du bouton quand une fusion Git est déjà ouverte. */
 export type UpdateAction = UpdateStrategy | 'abort-conflict'
 
+/**
+ * Un commit qui ARRIVERA avec la mise à jour : qui l'a poussé, quand, et ce qu'il touche.
+ *
+ * Existe pour que « Fusionner » ne soit plus un clic à l'aveugle : le bouton annonçait « +1 » sans
+ * dire de qui ni de quoi, et l'utilisateur devait ouvrir un terminal pour décider (demande du
+ * 2026-09-25, conv-858).
+ */
+export interface IncomingCommit {
+  hash: string
+  author: string
+  /** Date d'auteur, ISO 8601. */
+  date: string
+  subject: string
+  /** Fichiers touchés, TRONQUÉS (cf. `fileCount` pour le total). */
+  files: string[]
+  /** Nombre total de fichiers touchés, même quand `files` est tronqué. */
+  fileCount: number
+}
+
 /** Libellés destinés à l'utilisateur — un bouton doit DIRE ce qu'il fait avant d'être cliqué. */
 export const UPDATE_STRATEGY_LABELS: Record<UpdateStrategy, string> = {
   'fast-forward': 'Mettre à jour',
@@ -46,8 +65,22 @@ export const UPDATE_STRATEGY_HINTS: Record<UpdateStrategy, string> = {
  * message qui lui demandait de faire à la main ce que le bouton pouvait faire. On offre donc les deux
  * voies réelles, rebase d'abord (historique linéaire, c'est le cas courant : des commits locaux pas
  * encore poussés).
+ *
+ * `arbreSale` = des fichiers sont modifiés en local. `git rebase` refuse ALORS À COUP SÛR (« cannot
+ * rebase: You have unstaged changes »), même si les commits entrants ne touchent aucun de ces
+ * fichiers — seule la fusion ne refuse que sur un fichier touché des deux côtés. Le rebase n'est donc
+ * plus proposé (conv-454, conv-604).
  */
-export function strategiesFor(branch: string | undefined, diverged = false): UpdateStrategy[] {
-  if (branch !== 'main') return ['merge', 'rebase', 'switch-main']
-  return diverged ? ['rebase', 'merge'] : ['fast-forward']
+export function strategiesFor(
+  branch: string | undefined,
+  diverged = false,
+  arbreSale = false
+): UpdateStrategy[] {
+  const choix: UpdateStrategy[] =
+    branch !== 'main'
+      ? ['merge', 'rebase', 'switch-main']
+      : diverged
+        ? ['rebase', 'merge']
+        : ['fast-forward']
+  return arbreSale ? choix.filter((s) => s !== 'rebase') : choix
 }

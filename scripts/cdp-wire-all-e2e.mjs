@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { cheminArtefact } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = process.env.AUTOWIN_CDP_PORT || '9291'
+// Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+const port = String(portCdp())
 const appData = process.env.AUTOWIN_WIRE_APPDATA
 const output = process.env.AUTOWIN_WIRE_REPORT || cheminArtefact('wire-all-packaged-report.json')
 const screenshotOutput = output.replace(/\.json$/i, '.png')

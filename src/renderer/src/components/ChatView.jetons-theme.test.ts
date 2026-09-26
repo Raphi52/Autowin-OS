@@ -78,14 +78,13 @@ const FAMILLE_OR = [
   '--chat-etat-question',
   '--chat-etat-non-lu',
   '--chat-consigne-limite',
-  '--chat-modele-etat-texte',
-  '--chat-file-envoi'
+  '--chat-modele-etat-texte'
 ] as const
 
 /** Le bloc de jetons du mode clair, extrait une seule fois. */
 const blocClair = ((): string => {
   const debut = modes.indexOf(":root[data-base='clair'] {")
-  expect(debut, "le bloc de jetons du mode clair a disparu de theme-modes.css").toBeGreaterThan(-1)
+  expect(debut, 'le bloc de jetons du mode clair a disparu de theme-modes.css').toBeGreaterThan(-1)
   return modes.slice(debut, modes.indexOf('\n}', debut))
 })()
 
@@ -123,7 +122,10 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
       // un TAUX d'eclaircissement dans un color-mix, une etincelle de 1 px d'un radial-gradient,
       // et les deux noirs assumes ci-dessus.
       if (/color-mix\(/.test(ligne) || /radial-gradient\(/.test(ligne)) return
-      if (SELECTEURS_NOIR_ASSUME.includes(selecteur) && /^background:\s*#000;$/.test(ligne.trim())) {
+      if (
+        SELECTEURS_NOIR_ASSUME.includes(selecteur) &&
+        /^background:\s*#000;$/.test(ligne.trim())
+      ) {
         assumes.push(selecteur)
         return
       }
@@ -148,8 +150,9 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
     // deja directement (--voile-rgb, --err, --text). Un alias de plus n'est pas une couleur de
     // plus : les quatre regles concernees suivent toujours les huit themes, par le jeton commun.
     // Ce nombre ne doit pas remonter par ajout de couleurs en dur -- il peut descendre encore si
-    // d'autres jetons se reduisent a un alias.
-    expect(definis.size).toBeGreaterThanOrEqual(110)
+    // d'autres jetons se reduisent a un alias. Descendu a 108 le 2026-09-17 : --chat-file-envoi et
+    // --chat-file-orienter sont partis avec le panneau de file d'attente, retire de l'interface.
+    expect(definis.size).toBeGreaterThanOrEqual(108)
     const mauvais = [...definis].filter(([, valeur]) => !/^#[0-9a-fA-F]{3,8}$/.test(valeur))
     expect(
       mauvais.map(([nom, valeur]) => `${nom} = ${valeur}`),

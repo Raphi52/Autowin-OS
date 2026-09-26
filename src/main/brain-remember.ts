@@ -24,6 +24,7 @@ import { SECRET_SHAPES_SOURCE } from './activity/trace-redact'
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
+import { shaHeadSurDisque } from './depot-git'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
 import { amitelBrainOrigin } from './amitel-paths'
 import { memoryWorkspaceIdentity } from './session-memory-echo'
@@ -216,6 +217,66 @@ const LOCATOR_RULES: Array<{
   }
 ]
 
+/**
+ * UNE RÉVISION SYMBOLIQUE N'EST PAS UNE SOURCE ABSENTE — elle se RÉSOUT.
+ *
+ * Mesuré le 2026-09-11 (traces causales, 150 appels `remember`) : 19 refus « locator non vérifiable »
+ * sur 35 échecs, et 18 d'entre eux portaient un `git:` PARFAITEMENT désigné dont seule la révision
+ * manquait ou était symbolique — `@HEAD` (13 fois), `@working`, `@working-tree`, ou aucun `@` du tout.
+ * Le fait était bon, le fichier existait, et rien n'a été retenu.
+ *
+ * Le sha du dépôt est une source TRACÉE que l'app tient déjà (même raisonnement que
+ * `projectScopeFromWorkspace` pour la portée) : on le COPIE au lieu de demander au modèle de le deviner.
+ * On ne répare QUE la révision : un chemin absent reste un refus, car deviner le fichier serait inventer.
+ */
+const REVISIONS_SYMBOLIQUES = new Set([
+  'head',
+  'working',
+  'working-tree',
+  'worktree',
+  'workdir',
+  'current',
+  'local',
+  'dirty',
+  'main',
+  'master'
+])
+
+/** Sha réel du dépôt, ou chaîne vide si le dossier n'est pas un dépôt git lisible. */
+export function headShaOfWorkspace(workspace?: string): string {
+  const root = workspace?.trim()
+  if (!root) return ''
+  // Lecture disque, sans lancer git : un execFileSync ici figeait la fenêtre (gels.jsonl).
+  return shaHeadSurDisque(root)
+}
+
+/**
+ * Complète un `git:<chemin>` dont la révision manque ou est symbolique, avec le sha du workspace.
+ * Rend la source INCHANGÉE dans tous les autres cas — y compris quand aucun sha n'est disponible.
+ */
+export function repairSourceLocator(
+  source: string,
+  workspace?: string,
+  resolveHead: (workspace?: string) => string = headShaOfWorkspace
+): string {
+  const given = source.trim()
+  if (!/^git:/i.test(given)) return source
+  if (!sourceLocatorProblem(given)) return source
+  const locator = given.slice(given.indexOf(':') + 1).trim()
+  if (!locator) return source
+  const at = locator.lastIndexOf('@')
+  const path = at > 0 ? locator.slice(0, at) : locator
+  const revision = at > 0 ? locator.slice(at + 1).trim() : ''
+  // Une révision déjà concrète mais MAL formée (sha tronqué à 4 signes) n'est pas symbolique : la
+  // remplacer masquerait une source fausse. On ne complète que l'absence et le symbolique.
+  if (revision && !REVISIONS_SYMBOLIQUES.has(revision.toLowerCase())) return source
+  if (!path.trim()) return source
+  const sha = resolveHead(workspace)
+  if (!sha) return source
+  const repaired = `git:${path.trim()}@${sha}`
+  return sourceLocatorProblem(repaired) ? source : repaired
+}
+
 /** Décrit le problème du locator, ou `undefined` s'il est conforme. */
 export function sourceLocatorProblem(source: string): string | undefined {
   // Un chemin SANS préfixe : lecteur Windows (`C:\…`, lu comme le schéma « c »), UNC en antislashes, UNC
@@ -250,6 +311,11 @@ export type RememberDecision =
       source: string
       tags: string[]
       confidence: 'low' | 'medium' | 'high'
+      /**
+       * Uids des notes que ce candidat propose de REMPLACER. L'agent gere sa memoire (il peut dire
+       * « cette note est perimee »), mais le statut `superseded` ne change qu'a la promotion humaine.
+       */
+      supersedes: string[]
       /** Le fait dépassait la borne : à DIRE, sinon le candidat ment par omission. */
       truncated: boolean
     }
@@ -381,8 +447,20 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
     source,
     tags,
     confidence,
+    supersedes: parseSupersedes(args.supersedes),
     truncated: anythingCut
   }
+}
+
+/** Meme forme que `SUPERSEDES_UID_RE` du Brain : une valeur hors forme est ecartee, jamais inventee. */
+const SUPERSEDES_UID = /^[a-z0-9][a-z0-9:/._-]{2,127}$/
+
+export function parseSupersedes(raw: unknown): string[] {
+  const values = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[\s,]+/) : []
+  return values
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter((value) => SUPERSEDES_UID.test(value))
+    .slice(0, 8)
 }
 
 export interface RememberOutcome {
@@ -592,8 +670,13 @@ export async function rememberFact(
 ): Promise<RememberOutcome & { allowed: boolean; reason?: string }> {
   // La portée absente est REMPLIE depuis le projet, pas refusée : voir `projectScopeFromWorkspace`.
   const scopeGiven = typeof args.scope === 'string' && args.scope.trim().length > 0
+  const scoped = scopeGiven ? args : { ...args, scope: projectScopeFromWorkspace(deps.workspace) }
+  // Même principe pour la RÉVISION d'un `git:` : résolue depuis le dépôt, pas refusée — voir
+  // `repairSourceLocator`. Le chemin, lui, reste au modèle : il désigne le fait.
+  const givenSource = typeof scoped.source === 'string' ? scoped.source : ''
+  const repairedSource = repairSourceLocator(givenSource, deps.workspace)
   const decision = decideRemember(
-    scopeGiven ? args : { ...args, scope: projectScopeFromWorkspace(deps.workspace) }
+    repairedSource === givenSource ? scoped : { ...scoped, source: repairedSource }
   )
   if (!decision.allowed) {
     /*
@@ -728,6 +811,7 @@ async function performDepositCandidate(
         source: decision.source,
         tags: decision.tags,
         confidence: decision.confidence,
+        ...(decision.supersedes.length ? { supersedes: decision.supersedes } : {}),
         author_agent: deps.authorAgent ?? 'autowin-os',
         model: deps.model ?? 'autowin'
       })

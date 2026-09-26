@@ -19,6 +19,9 @@ export type SettingsSection =
   | 'behaviour'
   | 'providers'
   | 'preflight'
+  // Protection de production : la phrase de passe qui garde les gestes sur les bases reelles.
+  // Distincte de « capabilities » : accorder un outil n'est pas autoriser un geste sur la prod.
+  | 'production'
   // Apparence de l'application (mode sombre / clair). Séparée de « behaviour » : régler ce qu'on
   // VOIT n'est pas régler ce que les agents FONT.
   | 'interface'

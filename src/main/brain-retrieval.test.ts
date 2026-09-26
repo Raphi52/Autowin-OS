@@ -530,3 +530,50 @@ describe('fraîcheur — aucune publication n’est masquée par le client', () 
     expect(retour.context).toContain('revenu')
   })
 })
+
+/*
+ * QUATRE ECHECS, QUATRE MOTIFS — mesure conv-586 (2026-09-16). `unavailable` seul obligeait a
+ * quatre sondes manuelles pour retrouver laquelle des causes s'etait produite. Entree qui DOIT
+ * rougir : renvoyer le meme motif (ou aucun) pour des echecs distincts.
+ */
+describe('motif d’indisponibilité — la cause, pas une énumération', () => {
+  const env = { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
+  const fetchKo = (status: number, only?: 'challenge'): typeof fetch =>
+    (async (url: unknown) => {
+      if (only === 'challenge') return new Response('non', { status })
+      const chall = challengeResponse(url)
+      if (chall) return chall
+      return new Response('non', { status })
+    }) as unknown as typeof fetch
+
+  it('jeton absent', async () => {
+    const res = await retrieveBrainContext('q', { env: {} as NodeJS.ProcessEnv, fetchFn: fetchKo(500) })
+    expect(res.status).toBe('unavailable')
+    expect(res.unavailableReason).toBe('no-token')
+  })
+
+  it('requête vide', async () => {
+    const res = await retrieveBrainContext('   ', { env, fetchFn: fetchKo(500) })
+    expect(res.unavailableReason).toBe('empty-query')
+  })
+
+  it('préalable d’authentification refusé', async () => {
+    const res = await retrieveBrainContext('q', { env, fetchFn: fetchKo(403, 'challenge') })
+    expect(res.unavailableReason).toBe('challenge-refused')
+  })
+
+  it('requête refusée par le serveur', async () => {
+    const res = await retrieveBrainContext('q', { env, fetchFn: fetchKo(503) })
+    expect(res.unavailableReason).toBe('query-refused')
+  })
+
+  it('rien ne répond', async () => {
+    const res = await retrieveBrainContext('q', {
+      env,
+      fetchFn: (async () => {
+        throw new Error('ECONNREFUSED')
+      }) as unknown as typeof fetch
+    })
+    expect(res.unavailableReason).toBe('network')
+  })
+})

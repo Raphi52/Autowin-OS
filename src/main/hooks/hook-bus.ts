@@ -23,6 +23,12 @@ export interface HookContext {
   // Entrées des hooks synchrones existants (gates/hooks.ts), réutilisés comme handlers pre-green.
   requireProof?: boolean
   evidenceOkCount?: number
+  /**
+   * Les fichiers DEJA modifies dans le depot quand le run a demarre — ce qui ne lui
+   * appartient pas. Sans cette liste, un garde-fou qui relit `git status` attribue au run la
+   * saleté laissée par une autre session et refuse un vert que le run a merite.
+   */
+  fichiersTouchesAvantLeRun?: readonly string[]
   producedDiff?: string
   editsByFile?: Record<string, number>
   causeTokensByFile?: Record<string, boolean>

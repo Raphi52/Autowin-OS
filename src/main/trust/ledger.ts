@@ -13,6 +13,23 @@ export interface JudgeVerdict {
   verdict: Verdict
   /** Verite terrain confirmee par l'humain, optionnelle. */
   humanTruth?: Verdict
+  /** Date ISO d'ecriture, posee par `record` si absente. */
+  ts?: string
+  /** Run et conversation d'origine : sans eux, aucun verdict passe n'est re-etiquetable. */
+  runId?: string
+  conversationId?: string
+}
+
+/**
+ * Ligne de CONFIRMATION humaine, ecrite apres coup dans le meme journal append-only.
+ * Au rechargement, elle est appliquee au(x) verdict(s) du run vise : on ne reecrit jamais
+ * une ligne deja ecrite, on la corrige par une ligne suivante.
+ */
+interface ConfirmationLine {
+  kind: 'confirmation'
+  runId: string
+  humanTruth: Verdict
+  ts: string
 }
 
 export interface Calibration {
@@ -43,7 +60,13 @@ export class TrustLedger {
       for (const line of readFileSync(persistPath, 'utf8').split(/\r?\n/)) {
         if (!line) continue
         try {
-          this.verdicts.push(JSON.parse(line) as JudgeVerdict)
+          const parsed = JSON.parse(line) as JudgeVerdict | ConfirmationLine
+          if ((parsed as ConfirmationLine).kind === 'confirmation') {
+            const conf = parsed as ConfirmationLine
+            this.appliquer(conf.runId, conf.humanTruth)
+          } else {
+            this.verdicts.push(parsed as JudgeVerdict)
+          }
         } catch {
           /* ligne corrompue — ignorée */
         }
@@ -52,14 +75,46 @@ export class TrustLedger {
   }
 
   record(v: JudgeVerdict): void {
-    this.verdicts.push(v)
-    if (this.persistPath) {
-      try {
-        mkdirSync(dirname(this.persistPath), { recursive: true })
-        appendFileSync(this.persistPath, `${JSON.stringify(v)}\n`, 'utf8')
-      } catch {
-        /* persistance best-effort */
-      }
+    const ligne: JudgeVerdict = { ...v, ts: v.ts ?? new Date().toISOString() }
+    this.verdicts.push(ligne)
+    this.ecrire(ligne)
+  }
+
+  /**
+   * L'humain tranche APRES COUP : « c'etait bon » / « c'etait faux ».
+   * Rend le nombre de verdicts re-etiquetes (0 si le run est inconnu).
+   */
+  confirmer(runId: string, humanTruth: Verdict): number {
+    const touches = this.appliquer(runId, humanTruth)
+    if (touches > 0) {
+      this.ecrire({ kind: 'confirmation', runId, humanTruth, ts: new Date().toISOString() })
+    }
+    return touches
+  }
+
+  /** Les verdicts rattaches a un run — sert a montrer ce qu'une confirmation va toucher. */
+  verdictsPour(runId: string): JudgeVerdict[] {
+    return this.verdicts.filter((v) => v.runId === runId)
+  }
+
+  private appliquer(runId: string, humanTruth: Verdict): number {
+    if (!runId) return 0
+    let n = 0
+    for (const v of this.verdicts) {
+      if (v.runId !== runId) continue
+      v.humanTruth = humanTruth
+      n += 1
+    }
+    return n
+  }
+
+  private ecrire(ligne: JudgeVerdict | ConfirmationLine): void {
+    if (!this.persistPath) return
+    try {
+      mkdirSync(dirname(this.persistPath), { recursive: true })
+      appendFileSync(this.persistPath, `${JSON.stringify(ligne)}\n`, 'utf8')
+    } catch {
+      /* persistance best-effort */
     }
   }
 

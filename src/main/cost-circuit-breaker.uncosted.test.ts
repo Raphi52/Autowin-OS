@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { chatTurnBudget } from './chat-turn-budget'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
 import type { OrchestrationStep } from './orchestrator'
 
@@ -88,16 +87,16 @@ describe('disjoncteur de coût — volume non chiffré', () => {
 })
 
 /**
- * LE GARDE VOLUMÉTRIQUE EST INATTEIGNABLE EN PRODUCTION, et les tests ci-dessus ne le montraient pas
- * parce qu'ils instancient `{maxUsd}` SEUL. La seule instanciation réelle (`index.ts`) passe par
- * `chatTurnBudget()`, qui pose TOUJOURS `maxTokens: 1_500_000` — or `unpricedTokens <= spentTokens`,
- * donc `maxTokens` mord toujours avant le seuil de 250M. Ces tests sont donc construits sur les
- * limites EXACTES de `chatTurnBudget({})`, sinon ils prouvent la même illusion.
+ * LE GARDE VOLUMÉTRIQUE EST INATTEIGNABLE dès qu'un plafond de VOLUME est posé à côté du montant, et
+ * les tests ci-dessus ne le montraient pas parce qu'ils instancient `{maxUsd}` SEUL : avec
+ * `maxTokens: 1_500_000` — or `unpricedTokens <= spentTokens` — le volume mord toujours avant le
+ * seuil de 250M. Ce triplet était celui du budget du tour de chat, supprimé le 2026-09-16 ; il
+ * reste ici comme JEU DE LIMITES SERRÉES, le cas où l'illusion se voit.
  */
-const LIMITES_PROD = chatTurnBudget({}).limits
+const LIMITES_PROD = { maxUsd: 2, maxTokens: 1_500_000, maxCalls: 6 }
 
-describe('disjoncteur de coût — montant ESTIMÉ des tours non tarifés (limites de production)', () => {
-  it('les limites de référence sont bien celles de la production', () => {
+describe('disjoncteur de coût — montant ESTIMÉ des tours non tarifés (limites serrées)', () => {
+  it('les limites de référence sont bien le triplet serré', () => {
     expect(LIMITES_PROD).toEqual({ maxUsd: 2, maxTokens: 1_500_000, maxCalls: 6 })
   })
 

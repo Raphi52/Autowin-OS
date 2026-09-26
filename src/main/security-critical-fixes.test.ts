@@ -395,7 +395,121 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     d'UNE conversation. Il ECRIT, mais rien ne SORT du poste : l'identifiant et l'id de
     //     compte passent par `guardString`, `null` est le seul autre cas accepte, et aucun
     //     chemin n'est construit depuis l'appel (le dossier du compte est derive cote store).
-    expect(handlers).toHaveLength(178)
+    // MISE A JOUR 2026-09-12 - 178 -> 184. SIX canaux ajoutes, relus un par un AVANT de toucher le
+    //   compte. Le fil-piege etait DEJA rouge avant ce tour : les six existaient sans que ce
+    //   compteur soit repris. Tous portent `assertTrustedRendererSender` des leur PREMIERE ligne.
+    //   QUATRE viennent de l'onglet « Files » du panneau de droite (`src/main/ipc/project-files.ts`) :
+    //   `project:root` - rend la racine du projet courant. Aucune ecriture, aucun parametre recu.
+    //   `project:list` - liste UN dossier. Le renderer n'envoie qu'un chemin RELATIF ; la racine
+    //     vient du processus principal, jamais de l'appel.
+    //   `project:read` - lit UN fichier texte sous cette racine (`guardString` sur le chemin).
+    //   `project:write` - REMPLACE le contenu d'un fichier EXISTANT sous cette racine. Il ECRIT,
+    //     mais rien ne SORT du poste : chemin et contenu passent par `guardString`, le chemin est
+    //     resolu puis verifie sous la racine (un `..`, un chemin absolu ou un lien qui sort est
+    //     refuse), et aucun fichier n'est cree.
+    //   DEUX viennent de la diarisation locale (`src/main/ipc/diarisation.ts`) :
+    //   `os:diarisation:etat` - LECTURE SEULE de la presence du modele. Aucun argument du renderer.
+    //   `os:diarisation:installer` - telechargement EXPLICITE vers des URL CONSTANTES du module :
+    //     le renderer ne fournit ni URL, ni chemin, ni nom de fichier.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    // MISE A JOUR 2026-09-12 - 184 -> 185. UN canal ajoute par le commit 2d0bd9ca, relu AVANT de
+    //   toucher le compte, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'ArenaDuelsParWorkflow')` :
+    //   `arena:duelsParWorkflow` (`src/main/ipc/perf.ts`) - LECTURE SEULE des mesures de duels
+    //     deja ecrites dans les donnees de l'application. Aucune ecriture, et rien ne sort du
+    //     poste. Le renderer ne fournit AUCUN chemin ni chaine : son unique argument est un
+    //     nombre, ramene a un entier strictement positif (`Math.floor`), 500 par defaut des qu'il
+    //     n'est pas un nombre. La racine des donnees vient du processus principal.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    // MISE A JOUR 2026-09-13 - 185 -> 187. DEUX canaux ajoutes par le commit c1faa566, relus AVANT
+    //   de toucher le compte, gardes des leur PREMIERE ligne par `assertTrustedRendererSender` :
+    //   `os:disk-usage` (index.ts) - LECTURE SEULE de l'inventaire du dossier de donnees deja
+    //     calcule au demarrage. Aucun argument venant du renderer, aucune ecriture, rien ne sort
+    //     du poste ; la racine des donnees vient du processus principal.
+    //   `chat:orientations` (index.ts) - LECTURE SEULE des consignes deja journalisees pour UNE
+    //     conversation. Son unique argument est rejete s'il n'est pas une chaine non vide.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    // MISE A JOUR 2026-09-13 - 187 -> 188. UN canal ajoute par ce tour, garde des sa PREMIERE
+    //   ligne par `assertTrustedRendererSender(event, 'Presence systeme des runs')` :
+    //   `os:presence` (index.ts) - la fenetre dit combien de runs tournent, pour la jauge de la
+    //     barre des taches et le texte de l'icone de notification. Rien ne SORT du poste : les
+    //     trois champs recus sont ramenes a des NOMBRES (tout le reste devient 0), aucun texte du
+    //     renderer n'atteint l'OS, aucun chemin n'est construit depuis l'appel.
+    // MISE A JOUR 2026-09-13 - 187 -> 188. UN canal imputable a ce changement, garde des sa
+    //   premiere ligne : `os:conversations:split` (`src/main/ipc/conversations.ts`,
+    //   `assertTrustedRendererSender(event, 'Conversation split')`) - DEPLACE la suite d'un fil vers
+    //   une conversation neuve. Il ECRIT, mais rien ne SORT du poste : les deux identifiants passent
+    //   par `guardString`, aucun chemin n'est construit depuis l'appel.
+    // ATTRIBUTION DE L'ECART, mesuree avant de toucher le chiffre (methode de la lecon Brain :
+    //   rejouer la MEME regex sur une revision archivee) : `git archive c1faa566 src`, puis
+    //   `creerLecteurSource('<archive>/src/main')` rend 187 canaux AVANT ce travail, 188 apres. Le
+    //   compteur etait donc deja perime de TROIS canaux a la revision c1faa566 - trois canaux
+    //   ajoutes sans etre inscrits ici, qui ne viennent pas de ce changement.
+    // MISE A JOUR 2026-09-13 - 188 -> 189. Les DEUX mises a jour ci-dessus sont nees de deux
+    //   travaux paralleles qui comptaient chacun 187 -> 188 : reunis, ils ajoutent DEUX canaux
+    //   (`os:presence` et `os:conversations:split`), donc 189. Mesure relue apres fusion.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    // MISE A JOUR 2026-09-15 - 189 -> 188. UN canal RETIRE, sur decision produit explicite de
+    //   l'utilisateur (« pas de bouton scinder ») : `os:conversations:split`
+    //   (`src/main/ipc/conversations.ts`) est supprime avec toute sa chaine - la methode `split`
+    //   de `ConversationStore`, l'API `conversationsSplit` du preload et ses tests. Le geste
+    //   n'avait AUCUN appelant dans le renderer : la chaine etait morte de bout en bout. Le `fork`
+    //   voisin, lui, reste branche (`ChatView.tsx`) et n'est pas touche.
+    //   La surface RETRECIT donc d'un canal : `unguarded` reste VIDE, aucune garantie ne faiblit.
+    // ATTRIBUTION DE L'ECART, mesuree et non supposee : le compteur inscrit ici disait 189, mais la
+    //   surface REELLE en comptait 192 avant ce tour - le commentaire du 2026-09-13 ci-dessus
+    //   signalait deja TROIS canaux ajoutes sans etre inscrits, et personne ne les a rattrapes.
+    //   Preuve du delta imputable a CE changement : `ipcMain.handle(` compte 242 occurrences sous
+    //   `src/main` a la revision publiee et 241 apres la suppression de `os:conversations:split`,
+    //   soit EXACTEMENT un canal en moins. 192 - 1 = 191. Le chiffre monte donc de 189 a 191 non
+    //   pas parce que la surface grandit, mais parce qu'on cesse de trainer un compteur perime ;
+    //   la garantie reelle reste `unguarded` VIDE, qui n'a jamais faibli.
+    // +1 le 2026-09-18 (conv-685) : `window:detach-view` — un onglet lâché hors de la fenêtre
+    //   ouvre sa vue dans une fenêtre séparée ; gardé par `assertTrustedRendererSender`.
+    // MISE A JOUR 2026-09-15 - 189 -> 193. ATTRIBUTION DE L'ECART, mesuree avant de toucher le
+    //   chiffre : la MEME detection (`(?:ipcMain|ipc)\.handle`) rejouee sur les fichiers de
+    //   `src/main` a la revision de base de ce travail rend 192 canaux, et 193 apres ; ce travail
+    //   en ajoute donc UN SEUL. Les TROIS autres etaient deja arrives par la mise a jour amont
+    //   sans reprise du compte : le fil-piege etait DEJA ROUGE avant ce tour.
+    // UN canal ajoute par ce travail, garde des sa PREMIERE
+    //   ligne par `assertTrustedRendererSender(event, 'GitAction')` :
+    //   `git:action` (`src/main/ipc/git.ts`) - LE GESTE de glisser-deposer du graphe (demande
+    //     utilisateur du 2026-09-15). Il ECRIT dans le depot, et c'est le canal le plus sensible de
+    //     cette liste : il ne recoit donc AUCUNE ligne de commande. Le renderer envoie un TYPE de
+    //     geste et des noms ; `git-action-main.ts` valide (nom de branche contre
+    //     `^[A-Za-z0-9][A-Za-z0-9._/-]*$`, empreinte contre `^[0-9a-f]{7,40}$`) puis ASSEMBLE la
+    //     ligne git. Deux gestes en liste blanche, tous deux en AVANT (`merge --no-ff`,
+    //     `cherry-pick`) ; `rebase`, `reset`, `branch -f`, `push --force` sont refuses par
+    //     construction, avec un test qui le prouve (`git-action-main.test.ts`).
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    // FUSION 2026-09-16 - les DEUX mises a jour du 2026-09-15 ci-dessus sont nees en parallele :
+    //   l'une RETIRE `os:conversations:split` (191), l'autre AJOUTE `git:action` (193 depuis un
+    //   compte perime). Reunies sur la meme base, elles donnent 191 + 1 = 192, chiffre MESURE ici
+    //   par le test lui-meme et non deduit. `unguarded` reste VIDE.
+    // FUSION 2026-09-17 - base amont a 197 canaux ; ce travail en ajoute UN (`git:action`) : 198.
+    // FUSION 2026-09-21 - ATTRIBUTION MESUREE de 198 -> 200, avant de toucher le chiffre :
+    //   la meme detection rejouee sur src/main hors tests rend 200 canaux a la revision amont et
+    //   201 apres ce travail -> CE travail en ajoute UN SEUL (`git:action`, garde des sa premiere
+    //   ligne ; `unguarded` reste vide). Le +1 restant etait DEJA arrive par la mise a jour amont
+    //   sans reprise du compte : le fil-piege etait deja rouge avant cette integration.
+    // MISE A JOUR 2026-09-23 — 200 -> 201. UN canal ajoute, relu AVANT de toucher le compte :
+    //   `os:dossiersClaudeCli` — import des projets claude.exe dans la liste des dossiers du Chat
+    //     (conv-5). LECTURE SEULE du profil `~/.claude.json` resolu cote main depuis
+    //     l'environnement : AUCUN argument ne vient du renderer, donc aucun chemin injectable.
+    //     Ne rend que les CLES de `projects` filtrees (jamais jetons ni comptes du profil). Il
+    //     porte `assertTrustedRendererSender(event, 'Dossiers Claude CLI')` des sa PREMIERE ligne.
+    //     Aucune ecriture, aucune execution. `unguarded` reste VIDE.
+    //     fix-ok: cause mesuree — ce fil-piege compte les canaux d'index.ts ; l'ajout du canal
+    //     d'import l'a fait passer de 200 a 201 (rouge avant reprise du compte, vert apres),
+    //     exactement le declenchement voulu : forcer l'audit du nouveau canal ci-dessus.
+    //   +1 : `project:openInVscode` (bouton « Ouvrir dans VS Code » de l onglet Projet), garde.
+    // MISE A JOUR 2026-09-23 — 200 → 201. UN canal ajoute, garde des sa premiere ligne par
+    //   `assertTrustedRendererSender(event, 'Conversation import')` :
+    //   `os:conversations:importSession` — import d'une session transcript (~/.claude/projects) en
+    //   conversation Autowin ; la reference est resolue par `resolveListedSessionAsync` (inventaire,
+    //   jamais un chemin forge par le renderer). `unguarded` reste VIDE.
+    //   203 + 1 = 204 : les deux ajouts (VS Code / dossiers CLI sur main, importSession de run-37a45ad99156-1) cumulés au salvage.
+    expect(handlers).toHaveLength(204)
     expect(unguarded).toEqual([])
   })
 

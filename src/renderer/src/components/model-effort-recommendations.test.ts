@@ -5,6 +5,8 @@ describe('recommendedEffort', () => {
   it('recommande low sur Opus 5 (claude) et xhigh sur Sol (codex)', () => {
     expect(recommendedEffort('claude', 'claude-opus-5')).toBe('low')
     expect(recommendedEffort('claude', 'opus-5')).toBe('low')
+    expect(recommendedEffort('claude', 'claude-opus-5-5')).toBe('low')
+    expect(recommendedEffort('claude', 'opus-5-5')).toBe('low')
     expect(recommendedEffort('codex', 'gpt-5.6-sol')).toBe('xhigh')
     // 2026-08-25 : « sol » est desormais AJOUTE au catalogue codex (withCodexNamedSupplements) ;
     // la pastille lui revient et QUITTE terra — entree qui ferait echouer une reco trop large.

@@ -24,9 +24,20 @@ import { describe, expect, it } from 'vitest'
  * n'affirme qu'UNE chose, mais elle l'affirme sans ambiguïté : la consigne de phase ne revient jamais
  * coller la constitution. C'est précisément la régression à empêcher.
  *
- * LIMITE ASSUMÉE : ceci vérifie l'ORDRE ÉCRIT, pas le taux de cache obtenu. Le taux se mesure sur un
- * run réel avec `measure-cache.ps1` (épinglé `provider=claude, model=claude-opus-5`, seul chemin où
- * `cacheReadTokens` est peuplé) et n'est PAS prouvé par ce test.
+ * LIMITE ASSUMÉE : ceci vérifie l'ORDRE ÉCRIT, pas le taux de cache obtenu. Le taux se mesure sur
+ * les journaux réels (`.autowin-data/autowin-os/activity/*.jsonl`, champ `cacheReadTokens`) ;
+ * `measure-cache.ps1`, cité par une version antérieure de ce commentaire, N'EXISTE PAS dans
+ * `scripts/` (vérifié le 2026-09-16).
+ *
+ * CE QUE CE TEST NE PEUT PAS CORRIGER — mesuré le 2026-09-16, et c'est la réfutation d'une piste
+ * souvent rouverte : le mauvais taux de l'acteur `judge` n'est PAS un problème d'ordre de blocs.
+ * Sur 350 prompts de juge réels (`prompt-observability`), les blocs système du juge pèsent
+ * 4 836 caractères (`consigne:judge` 1 693 + `style` 3 143), tous constants et déjà en tête,
+ * tandis que le MESSAGE utilisateur pèse 119 007 caractères médians — dont 93 169 (78 %) de
+ * `PREUVES OUTILS` et 15 533 de livrable. Sur 273 appels `judge` du journal : 62 102 tokens non
+ * cachés en médiane, `cacheCreationTokens` = 0. La charge non cachable du juge est donc son
+ * PAYLOAD par run, pas son préambule ; le levier est le plafond de volume des preuves
+ * (`EVIDENCE_TOTAL_CHARS`, src/main/evidence-digest.ts).
  */
 describe('ordre des blocs système — préfixe cachable', () => {
   const source = readFileSync(join(process.cwd(), 'src', 'main', 'orchestrator.ts'), 'utf8')

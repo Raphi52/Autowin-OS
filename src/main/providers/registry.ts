@@ -7,7 +7,8 @@ import {
   type SendResult,
   type StreamChunk
 } from './types'
-import { resolveProviderTimeoutMs, withHardDeadline } from './watchdog'
+import { resolveProviderTimeoutMs, withIdleDeadline } from './watchdog'
+import { estMurDeQuota, instantDeRetourAnnonce } from '../../shared/reprise-quota'
 import type { ExecutionSupervisor } from '../execution-supervisor'
 
 /**
@@ -38,15 +39,40 @@ const COORDINATION_DRAIN_GRACE_MS = ((): number => {
  *
  * Deux sources acceptées : la signature structurée posée par un adaptateur, et le texte brut — pour
  * qu'un provider qui n'a pas (encore) de signature soit couvert quand même.
+ *
+ * Le VOCABULAIRE vient de `estMurDeQuota` (src/shared/reprise-quota.ts), source unique partagée avec
+ * la liste des conversations. Une copie privée vivait ici jusqu'au 2026-09-11 : elle ignorait
+ * « session limit » — le texte que Claude écrit VRAIMENT quand l'abonnement est épuisé — donc la
+ * rotation d'abonnement ne partait pas sur le refus le plus fréquent. Deux vocabulaires pour un même
+ * mur, c'est un mur qui ne se voit qu'à moitié.
  */
 function quotaWallReason(error: unknown): string | undefined {
   const signature = (error as { signature?: unknown } | null)?.signature
   const texte = error instanceof Error ? error.message : String(error ?? '')
   if (/retry after|try again in|rate limit exceeded/i.test(texte)) return undefined
   if (signature === 'usage-limit-reached') return texte
-  return /usage[_ ]limit|purchase more credits|hit your usage|insufficient_quota/i.test(texte)
-    ? texte
-    : undefined
+  return estMurDeQuota(texte) ? texte : undefined
+}
+
+/**
+ * Un mur, c'est le refus ET l'heure à laquelle il expire — quand le fournisseur la donne.
+ *
+ * Jusqu'au 2026-09-16 on ne gardait que le refus, et le commentaire de `quotaWalls` assumait que
+ * seul un redémarrage rouvrait la porte. Mesuré sur `causal-trace/conv-539.jsonl` : deux appels ont
+ * été refusés à 15h31 (heure de Paris) sur un mur qui annonçait lui-même « resets 3:20pm » — soit
+ * onze minutes après son propre retour. Le geste de levée reste délibéré et gratuit : on ne sonde
+ * rien, on relit simplement ce que le refus avait déjà écrit.
+ */
+interface MurDeQuota {
+  /** Le refus LITTÉRAL du provider, tel qu'il sera cité à l'utilisateur. */
+  readonly raison: string
+  /** Instant de retour annoncé par ce refus, ou rien quand il n'en annonce aucun. */
+  readonly retourA?: number
+}
+
+function murDepuisRefus(raison: string, maintenant: Date = new Date()): MurDeQuota {
+  const retourA = instantDeRetourAnnonce(raison, maintenant)
+  return retourA === undefined ? { raison } : { raison, retourA }
 }
 
 /**
@@ -66,7 +92,24 @@ export class ProviderRegistry {
    *
    * D'où l'état en mémoire : ce n'est pas une limite subie, c'est le mécanisme de levée.
    */
-  private readonly quotaWalls = new Map<string, string>()
+  private readonly quotaWalls = new Map<string, MurDeQuota>()
+
+  /**
+   * LE MUR TOMBE TOUT SEUL À L'HEURE QU'IL A LUI-MÊME ANNONCÉE.
+   *
+   * Lecture unique du disjoncteur : elle rend le refus encore valable, et RETIRE au passage celui
+   * dont l'heure de retour est dépassée. Aucun minuteur, aucune sonde — donc toujours aucun quota
+   * dépensé pour vérifier : le retour se constate au moment où un appel se présente de toute façon.
+   */
+  private murEncoreDebout(cle: string, maintenant: number = Date.now()): string | undefined {
+    const mur = this.quotaWalls.get(cle)
+    if (!mur) return undefined
+    if (mur.retourA !== undefined && maintenant >= mur.retourA) {
+      this.quotaWalls.delete(cle)
+      return undefined
+    }
+    return mur.raison
+  }
   private readonly quotaSuccessors = new Map<string, string>()
   private readonly quotaRotationFlights = new Map<string, Promise<string | undefined>>()
 
@@ -260,7 +303,7 @@ export class ProviderRegistry {
     // une cause EXTERNE : un quota d'abonnement épuisé se rétablit des JOURS plus tard, jamais par une
     // relance. Dépouillement du 2026-08-06 : 852 runs rouges (70 % des échecs réels) n'avaient que cette
     // cause, dont 285 APRÈS le correctif qui se contentait de la NOMMER sans fermer la porte.
-    const mur = this.quotaWalls.get(wallKeyAtStart)
+    const mur = this.murEncoreDebout(wallKeyAtStart)
     if (mur) {
       if (
         mayRotate &&
@@ -274,9 +317,18 @@ export class ProviderRegistry {
           return this.sendPossiblyRotating(id, messages, opts, onChunk, true, visitedWalls)
         }
       }
+      // Le message ne promet plus le redémarrage comme SEULE levée : depuis le 2026-09-16, un refus
+      // qui annonce son heure de retour rouvre la porte tout seul à cette heure-là.
+      const retour = this.quotaWalls.get(wallKeyAtStart)?.retourA
       throw new Error(
         `Provider ${route.id} écarté : quota épuisé, plus aucun appel ne lui est envoyé. ` +
-          `Relancer l'app remet le compteur à zéro. Refus du provider : ${mur.slice(0, 300)}`
+          (retour === undefined
+            ? `Relancer l'app remet le compteur à zéro. `
+            : `La porte se rouvre d'elle-même à ${new Date(retour).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}. `) +
+          `Refus du provider : ${mur.slice(0, 300)}`
       )
     }
     // Admission AVANT l'adaptateur : un budget epuise ne doit jamais faire apparaitre une fenetre,
@@ -371,6 +423,10 @@ export class ProviderRegistry {
      * épuisé, refusé d'entrée.
      */
     let chunksLivres = 0
+    // Réarme le plafond de coordination : il mesure le SILENCE, plus la durée absolue d'un tour.
+    // Défini avant la pompe, assigné après la création de la deadline (même tick, jamais appelé
+    // avant puisque la pompe attend d'abord `gen.next()`).
+    let battreCoordination: () => void = () => undefined
     const pump = (async (): Promise<SendResult> => {
       let step = await nextStep()
       while (!step.done) {
@@ -378,6 +434,7 @@ export class ProviderRegistry {
         // mais ne plus livrer de delta à une conversation déjà clôturée.
         if (!effectiveOptions.signal.aborted && !spawnFailure) {
           chunksLivres += 1
+          battreCoordination()
           onChunk?.(step.value)
         }
         step = await nextStep()
@@ -408,7 +465,7 @@ export class ProviderRegistry {
           // la PREUVE (le refus du provider), pas sur une supposition — `quotaWallReason` écarte
           // explicitement le rate-limit passager.
           const raison = quotaWallReason(error)
-          if (raison) this.quotaWalls.set(wallKeyAtStart, raison)
+          if (raison) this.quotaWalls.set(wallKeyAtStart, murDepuisRefus(raison))
           throw error
         }
       )
@@ -439,7 +496,7 @@ export class ProviderRegistry {
       route.opts.execution?.providerTimeoutMs,
       COORDINATION_CEILING_MS
     )
-    return withHardDeadline(
+    const coordination = withIdleDeadline(
       trackedPump.catch(rotationSiQuotaEpuise),
       coordinationCeilingMs,
       `Sous-agent ${route.id} sans réponse depuis ${Math.round(coordinationCeilingMs / 1000)}s (watchdog coordination) — abandonné pour ne pas bloquer le run.`,
@@ -486,5 +543,7 @@ export class ProviderRegistry {
         drainGraceTimer.unref?.()
       }
     )
+    battreCoordination = coordination.beat
+    return coordination.promise
   }
 }

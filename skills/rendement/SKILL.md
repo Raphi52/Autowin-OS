@@ -2,21 +2,15 @@
 name: rendement
 description: >-
   Analyse TOUT ce que l'app stocke des conversations (`conversations.json`, `activity/*.jsonl`,
-  `causal-trace/*.jsonl`, `cost.jsonl`, les `RUN.md` des runs) pour OPTIMISER le chemin
-  DEMANDE -> MEILLEURE VERSION DU TRAVAIL FINAL, au coût le plus bas et dans la durée la plus courte.
-  Lance d'abord la sonde déterministe `npm run scout:rendement` (LECTURE SEULE) qui mesure, par
-  conversation : tours utilisateur, reprises (l'utilisateur redemande la même chose), $ dépensés,
-  $/tour, minutes modèle, orchestrations, demande initiale floue — et classe par GASPILLAGE
-  (coût pondéré par le taux de reprise). Puis remonte, sur les 3-5 pires, à la CAUSE du détour en
-  lisant le fil réel (`conversation_read`, `conversation_search`, `retrospective`), et rend un
-  plan d'optimisation chiffré : pour chaque cause, le tour où le chemin a bifurqué, le chemin
-  MINIMAL qui aurait livré le même résultat, le delta $ et minutes, et le point d'intégration
-  (règle de routage, consigne de phase, garde-fou, hook, skill). Déclencher sur « analyse nos
-  conversations », « pourquoi ça coûte si cher », « comment aller plus vite au bon résultat »,
-  « optimise le chemin demande -> livrable », « où on perd du temps/de l'argent ».
-  N'UTILISE PAS pour : auditer un livrable unique -> `judge` ; corriger un défaut de code -> `build` ;
-  auditer le COMPORTEMENT depuis un transcript de session -> `kaizen`. Ici la matière est le CORPUS
-  stocké et la métrique est ÉCONOMIQUE (coût, durée, nombre de tours jusqu'au livrable accepté).
+  `causal-trace/*.jsonl`, `cost.jsonl`, les `RUN.md`) pour OPTIMISER le chemin DEMANDE → MEILLEURE
+  VERSION DU TRAVAIL FINAL, au coût le plus bas et dans la durée la plus courte. Lance d'abord la sonde
+  déterministe `npm run scout:rendement` (LECTURE SEULE), qui mesure par conversation les tours, les
+  reprises, les $, les minutes modèle, et classe par GASPILLAGE. Puis remonte, sur les 3-5 pires, à la
+  CAUSE du détour en lisant le fil réel, et rend un plan chiffré : le tour où le chemin a bifurqué, le
+  chemin MINIMAL, le delta $ et minutes, et le point d'intégration
+  (§ Procédure). Déclencher sur « analyse nos conversations », « pourquoi ça coûte si cher », « où on
+  perd du temps / de l'argent » (§ Quand la déclencher). PAS pour auditer un livrable → `judge`,
+  corriger un défaut de code → `build`, auditer le COMPORTEMENT → `kaizen`.
 ---
 
 # rendement — du corpus stocké vers le chemin le plus court demande → livrable
@@ -27,6 +21,11 @@ Trois grandeurs mesurables, jamais une impression :
 - **Coût** — $ réellement consommés sur la conversation (`activity/*.jsonl`, recoupés par `cost.jsonl`).
 - **Durée** — minutes modèle cumulées, et durée mur du premier message au livrable.
 Le gaspillage = ce qui a coûté cher ET a dû être repris. C'est la cible.
+
+## Quand la déclencher — et quand NON
+**Déclencheurs** : « analyse nos conversations » · « pourquoi ça coûte si cher » · « comment aller plus vite au bon résultat » · « optimise le chemin demande → livrable » · « où on perd du temps / de l'argent ».
+**PAS pour** : auditer un livrable unique → `judge` · corriger un défaut de code → `build` · auditer le COMPORTEMENT depuis un transcript de session → `kaizen`. Ici la matière est le CORPUS stocké et la métrique est ÉCONOMIQUE : coût, durée, nombre de tours jusqu'au livrable ACCEPTÉ.
+**La cause se lit dans le fil réel** (`conversation_read`, `conversation_search`, `retrospective`), jamais dans la seule sonde : elle classe, elle n'explique pas. Points d'intégration possibles d'un correctif : règle de routage, consigne de phase, garde-fou de code, skill.
 
 ## Procédure
 1. **MESURER (déterministe, lecture seule).** `npm run scout:rendement` (options : `--top N`,
@@ -97,4 +96,4 @@ consommé, jamais si le livrable était bon — l'acceptation se lit dans le fil
 - **Aucune écriture sur le corpus.** La skill ne renomme, ne supprime, ne reclasse aucune conversation.
 - **Les tours sans coût** (`$0`) sont des tours non instrumentés, pas des tours gratuits : les exclure
   des moyennes plutôt que de conclure qu'ils étaient efficaces.
-- Ne toucher qu'à ce que la demande a nommé (réflexe 11) ; toute règle proposée est déclarée avant d'être posée.
+- Ne toucher qu'à ce que la demande a nommé (réflexe 9) ; toute règle proposée est déclarée avant d'être posée.

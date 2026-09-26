@@ -32,6 +32,7 @@ import type { BrainInjectionInventory as BrainInjectionInventoryView } from '../
 import { summarizeRagTrace } from './rag-trace-model'
 import { LatestRequestGate, settleObservatorySources } from './observatory-reliability'
 import { buildObservatoryExport } from './observatory-export-model'
+import { computeObservatoryTotals, formatObservatoryDuration } from './observatory-totals'
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
 import { isReasoningEvent, layoutTurnEvents } from './observatory-turn-layout'
@@ -133,6 +134,9 @@ export function ObservatoryView({
   const [causalTracePartial, setCausalTracePartial] = useState(false)
   const [activitySession, setActivitySession] = useState<ActivitySession | null>(null)
   const [activityImage, setActivityImage] = useState('')
+  /** Résultat du dernier import de transcript — succès comme échec, sinon clic muet. */
+  const [sessionImportNotice, setSessionImportNotice] = useState('')
+  const [sessionImportPending, setSessionImportPending] = useState(false)
   const causalRequestGate = useRef(new LatestRequestGate())
   const promptRequestGate = useRef(new LatestRequestGate())
   const brainRequestGate = useRef(new LatestRequestGate())
@@ -411,19 +415,7 @@ export function ObservatoryView({
         : conversationCalls,
     [conversationCalls, focusUnavailable, turnFocus]
   )
-  const observed = useMemo(
-    () =>
-      currentCalls.reduce(
-        (sum, call) => ({
-          input: sum.input + (call.usage?.inputTokens ?? 0),
-          output: sum.output + (call.usage?.outputTokens ?? 0),
-          cache: sum.cache + (call.usage?.cacheReadTokens ?? 0),
-          cost: sum.cost + (call.usage?.costUsd ?? 0)
-        }),
-        { input: 0, output: 0, cache: 0, cost: 0 }
-      ),
-    [currentCalls]
-  )
+  const observed = useMemo(() => computeObservatoryTotals(currentCalls), [currentCalls])
   const semanticComparison = useMemo(
     () => (compare.length === 2 ? compareObservatoryEvents(compare[0], compare[1]) : null),
     [compare]
@@ -540,6 +532,30 @@ export function ObservatoryView({
           'activitySession',
           `Session illisible (${session.path}) : ${error instanceof Error ? error.message : String(error)}`
         )
+      })
+  }
+
+  function importActivitySession(session: ActivitySessionMeta): void {
+    // fix-ok: cause mesurée des reprises — 1re version : clic MUET, le rejet IPC n'apparaissait
+    // nulle part (test ux rouge : « Import impossible » absent du DOM) ; 2e rouge : état d'attente
+    // sans <Spinner /> refusé par la garde spinner-partout → notice succès/échec + pending, vert.
+    // Le libellé d'attente vit dans le JSX du rail, à côté du <Spinner /> (garde spinner-partout) :
+    // ici on ne pose que l'état « en vol », jamais la chaîne.
+    setSessionImportPending(true)
+    setSessionImportNotice('')
+    // Même exigence que les deux handlers voisins : un rejet SILENCIEUX = clic muet.
+    void window.api
+      .conversationsImportSession({ id: session.id, project: session.project })
+      .then((result) => {
+        setSessionImportNotice(`Importée : « ${result.title} » (${result.messageCount} messages)`)
+      })
+      .catch((error: unknown) => {
+        setSessionImportNotice(
+          `Import impossible : ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
+      .finally(() => {
+        setSessionImportPending(false)
       })
   }
 
@@ -790,6 +806,29 @@ export function ObservatoryView({
               <small>coût</small>
             </strong>
           )}
+          <strong data-metric="output">
+            {observed.output.toLocaleString('fr-FR')}
+            <small>tokens out</small>
+          </strong>
+          {/* DURÉE : 0 avec des appels ne veut pas dire « instantané » — le fournisseur peut ne pas
+              l'exposer. Même traitement que le coût : on le DIT au lieu d'afficher un faux zéro. */}
+          <strong data-metric="duration" title="Somme des durées mesurées des appels">
+            {observed.durationMs > 0 ? (
+              <>
+                {formatObservatoryDuration(observed.durationMs)}
+                <small>durée cumulée</small>
+              </>
+            ) : (
+              <>
+                non exposé
+                <small>durée inconnue</small>
+              </>
+            )}
+          </strong>
+          <strong data-metric="errors" title="Appels modèle terminés en échec">
+            {observed.errors.toLocaleString('fr-FR')}
+            <small>erreurs</small>
+          </strong>
           <strong
             data-metric="actions"
             title="Actions réelles exécutées par les sous-agents (commandes shell, patchs fichiers)"
@@ -1197,6 +1236,9 @@ export function ObservatoryView({
           activitySessionsLoading={loadingActivitySessions}
           activitySession={activitySession}
           onOpenSession={openActivitySession}
+          onImportSession={importActivitySession}
+          sessionImportNotice={sessionImportNotice}
+          sessionImportPending={sessionImportPending}
           activityImage={activityImage}
           onOpenImage={openActivityImage}
           runs={runs}
@@ -1204,6 +1246,7 @@ export function ObservatoryView({
           // Révéler le fichier plutôt qu'en afficher un aperçu : un RUN.md se lit et s'ÉDITE, et
           // Observatory n'est pas un éditeur. `showItemInFolder` côté main fait le reste.
           onOpenRun={(path) => void window.api.openFolder?.(path)}
+          onOpenRunConversation={(id) => setConversationId(id)}
           prioritySignals={prioritySignals}
           onOpenSignal={openEvent}
         />

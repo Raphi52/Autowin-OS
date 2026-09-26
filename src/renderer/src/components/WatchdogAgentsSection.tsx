@@ -25,6 +25,7 @@ type Props = {
   formatDateTime: (value: number | null) => string
   onCreate: () => void
   onSelect: (taskId: string) => void
+  onConfigure: (taskId: string) => void
 }
 
 export function WatchdogAgentsSection({
@@ -32,7 +33,8 @@ export function WatchdogAgentsSection({
   occurrences,
   formatDateTime,
   onCreate,
-  onSelect
+  onSelect,
+  onConfigure
 }: Props): React.JSX.Element {
   const { watchdog } = splitByTrigger(tasks)
   const summary = watchdogSummary(tasks, occurrences)
@@ -106,6 +108,13 @@ export function WatchdogAgentsSection({
                   <span className="watchdog-rule-guards">
                     {describeWatchdogGuards(task.watchdog!.guards)}
                   </span>
+                </button>
+                <button
+                  type="button"
+                  className="watchdog-rule-configure"
+                  onClick={() => onConfigure(task.id)}
+                >
+                  Paramétrer
                 </button>
                 {history.length > 0 && (
                   <ol className="watchdog-rule-history">

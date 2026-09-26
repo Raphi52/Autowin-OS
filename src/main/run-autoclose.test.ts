@@ -660,3 +660,43 @@ describe('helpers', () => {
     expect(autoCloseBranch('run/étrange espace')).toMatch(/^auto\/run-/)
   })
 })
+
+// conv-850 : « la règle dépend du repo … je veux que ça reste générique ». Le DÉPÔT tranche.
+describe('enchaînement générique : push direct si le dépôt l’accepte, sinon branche dédiée + PR', () => {
+  it('dépôt qui accepte : poussé sur la branche courante, aucune PR', async () => {
+    const { repo, remote } = await repoWithRemote()
+    writeFileSync(join(repo, 'a.ts'), 'a\n')
+    const openPr = vi.fn(async () => 'PR 1')
+    const res = await autoCloseRun({ repo, branch: 'auto/r1', message: 'm', runGit: realGit, direct: true, openPr })
+    expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
+    expect(openPr).not.toHaveBeenCalled()
+    expect((await run('git', ['branch'], { cwd: remote })).stdout).not.toContain('auto/r1')
+  })
+
+  it('dépôt qui refuse (hook du distant) : branche dédiée poussée puis PR vers la branche courante', async () => {
+    const { repo, remote } = await repoWithRemote()
+    // Politique du distant : aucun push direct sur `travail`, comme une branche protégée Azure/GitHub.
+    writeFileSync(
+      join(remote, 'hooks', 'pre-receive'),
+      '#!/bin/sh\nwhile read o n r; do [ "$r" = refs/heads/travail ] && { echo "PR requise"; exit 1; }; done\nexit 0\n',
+      { mode: 0o755 }
+    )
+    writeFileSync(join(repo, 'b.ts'), 'b\n')
+    const openPr = vi.fn(async () => 'PR 7')
+    const res = await autoCloseRun({ repo, branch: 'auto/r2', message: 'titre', runGit: realGit, direct: true, openPr })
+    expect(res).toMatchObject({ status: 'pushed', branch: 'auto/r2', mode: 'pr', pr: 'PR 7' })
+    expect(openPr).toHaveBeenCalledWith(expect.objectContaining({ head: 'auto/r2', base: 'travail', title: 'titre' }))
+    expect((await run('git', ['branch'], { cwd: remote })).stdout).toContain('auto/r2')
+  })
+
+  it('PR impossible : la branche reste poussée et le motif est rapporté', async () => {
+    const { repo, remote } = await repoWithRemote()
+    writeFileSync(join(remote, 'hooks', 'pre-receive'), '#!/bin/sh\nread o n r\n[ "$r" = refs/heads/travail ] && exit 1\nexit 0\n', { mode: 0o755 })
+    writeFileSync(join(repo, 'c.ts'), 'c\n')
+    const res = await autoCloseRun({
+      repo, branch: 'auto/r3', message: 'm', runGit: realGit, direct: true,
+      openPr: async () => { throw new Error('gh absent') }
+    })
+    expect(res).toMatchObject({ status: 'pushed', branch: 'auto/r3', mode: 'pr', prError: 'gh absent' })
+  })
+})

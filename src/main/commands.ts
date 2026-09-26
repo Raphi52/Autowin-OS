@@ -17,6 +17,8 @@ import {
   titreDeConversationDemandee
 } from './conversation-demandee'
 import { decisionDeSynchronisation } from './synchronisation-cible-bureau'
+import { dossierDeTravailDuTour } from './bascule-dossier-conversation'
+import { avecDossierDuTour, dossierDuTourCourant } from './dossier-du-tour-courant'
 import { pendantOperation } from './gel-main'
 import { rechargerEnv } from './env-reload'
 import {
@@ -25,13 +27,16 @@ import {
   decouperArguments
 } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
+import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import {
   decideRead,
   enumererFichiersLisibles,
+  enumererFichiersLisiblesDetail,
   executeRead,
   rechercherDansFichiers
 } from './read-file-command'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
+import { defaultProcessIdentity } from './store/worktree-manager'
 import {
   copyFileSync,
   existsSync,
@@ -46,6 +51,7 @@ import {
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
+import { runBrainGraph, runBrainRead } from './brain-graph-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -173,6 +179,10 @@ import {
 import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace } from './activity/brain-trace-spool'
 import {
+  appendWorkspaceMutationTrace,
+  captureMutationTraceBase
+} from './activity/trace-workspace-mutation'
+import {
   appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
   normalizeWorkspaceTracePath,
@@ -188,12 +198,16 @@ import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
 import { runSqlRead } from './sql-read-command'
+import type { PorteProd } from './prod-gate'
+import type { GuichetProd } from './prod-guichet'
+import { cibleSqlDeCommande, refusReglageProd } from './prod-run-guard'
 import type {
   TicketCreateRequest,
   TicketGetRequest,
   TicketUpdateRequest
 } from './ticket-providers/provider-contract'
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
+import { dedupliquerDossier, paginerDossier, resumerAppelsOutils } from './retrospective-compacte'
 import {
   buildAutowinKaizenTask,
   collectAutowinKaizenEvidence,
@@ -346,7 +360,14 @@ export interface AppSnapshot {
      */
     tourEnCours?: boolean
   }>
+  /** Les 12 runs les plus récents, PLUS tout run bloqué plus ancien lu dans la fenêtre du scan. */
   runs: Array<{ subject: string; status: string; blocked: boolean }>
+  /**
+   * RUN.md NON LUS par le scan borné (au-delà des `LIMITE_RUNS_SNAPSHOT` plus récents) — ABSENT
+   * quand rien n'a été écarté. Présent = `runs` et `runsBlocked` sont PARTIELS : un run bloqué plus
+   * ancien n'y figure pas. Ajouté le 2026-09-25 (conv-861) : ce compte était calculé puis jeté.
+   */
+  runsNonExamines?: number
   /**
    * Worktrees ENCORE connus d'Autowin (un worktree nettoyé/fermé n'y figure PLUS) — permet de répondre
    * « le workspace s'est-il fermé ? » par une VÉRITÉ LIVE au lieu d'un « non vérifié » : absent d'ici
@@ -402,6 +423,12 @@ export interface PromptSnapshot {
   activeConversationId?: string
   providers: string[]
   runsBlocked: Array<{ subject: string; status: string }>
+  /**
+   * RUN.md NON EXAMINÉS pour `runsBlocked` — ABSENT quand le scan a tout lu. Présent, il dit que
+   * `runsBlocked` ne couvre que les runs les plus récents : une liste vide n'y prouve PAS l'absence de
+   * run bloqué (conv-861, 2026-09-25).
+   */
+  runsNonExamines?: number
   conversationsCount: number
   /**
    * Les commandes `/` REELLEMENT invocables, lues sur disque a chaque tour.
@@ -465,6 +492,16 @@ export type AppEvent =
     }
   | { type: 'orchestrate-usage'; convId?: string; runPath?: string }
   /**
+   * ORIENTATIONS ARRIVEES TROP TARD — rendues a l'ecran au lieu d'etre jetees.
+   *
+   * Une directive acceptee pendant un tour n'est lue qu'aux points d'iteration de la boucle pilote.
+   * Si le tour se termine avant d'en atteindre un, elle restait dans `pendingDirectives` et le
+   * `finally` la SUPPRIMAIT en silence : le texte s'affichait dans le fil, mais le modele ne l'avait
+   * jamais vu — « quand j'oriente ca oublie parfois » (2026-09-11). Le tour les renvoie desormais a
+   * l'ecran, qui les remet en file : elles repartent comme un tour normal, et le fil le dit.
+   */
+  | { type: 'directives-orphelines'; convId: string; textes: string[] }
+  /**
    * Le CADRAGE remonte les affirmations sur lesquelles il repose SANS les avoir verifiees, au moment
    * ou la phase se termine — pas a la fin du run. Le run ne s'arrete pas : ce qui change, c'est que
    * l'hypothese devient contestable AVANT que tout soit construit dessus.
@@ -484,6 +521,9 @@ export type AppEvent =
 export function parseDisplayArg(raw: unknown): number | undefined {
   if (raw === undefined || raw === null || raw === '') return undefined
   const value = typeof raw === 'string' ? Number(raw.trim()) : raw
+  // 0 = reflexe 0-base du modele (conv-30, 2026-09-01) : on le lit comme l'ecran principal
+  // plutot que de brûler un aller-retour sur un refus.
+  if (value === 0) return 1
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     throw new Error(`display invalide: ${JSON.stringify(raw)} (entier >= 1 attendu)`)
   }
@@ -542,14 +582,17 @@ export function circonstanceDePublication(finalized: Record<string, unknown>): s
   }
 }
 
-const CATALOG: CommandSpec[] = [
+/** Le catalogue BRUT, expose pour que les tests puissent en mesurer le poids dans le prompt. */
+export const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
+      "ECRAN REEL DE L'UTILISATEUR — PAS le defaut, ni pour verifier ton travail ni pour te servir d'une app a sa place : le bureau CACHE est le reflexe premier (voir la regle ECRAN DE L'UTILISATEUR = SON ESPACE, servie a chaque tour). N'emploie desktop_observe que si l'utilisateur demande SON ecran, ou si le bureau cache ne peut pas montrer ce qu'il faut ; passe alors `ecran_utilisateur: true` et dis-le en une ligne. Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : l'ecran principal est `display: 1` (`display: 0` est lu comme 1, mesure conv-30 du 2026-09-01).",
     args: {
       display:
-        'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans'
+        'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans',
+      ecran_utilisateur:
+        "booleen — mettre true pour assumer la capture de l'ecran REEL de l'utilisateur. Sans lui, le premier appel du tour est refuse et renvoie vers le bureau cache."
     },
     annotations: {
       readOnlyHint: true,
@@ -564,9 +607,12 @@ const CATALOG: CommandSpec[] = [
       "Agir sur le PC Windows apres desktop_observe. Les coordonnees x/y vont de 0 a 1000 dans l'image capturee. Envoyer une courte sequence puis observer de nouveau.",
     args: {
       actions:
-        "tableau JSON (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}. " +
+        "tableau JSON (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'double_click',x,y}, {type:'drag',x,y,toX,toY,button?,steps?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}. " +
+        '`drag` glisse du point de depart (x,y) au point d arrivee (toX,toY) — deplacer une fenetre, redimensionner, selectionner : appui, deplacement par paliers, relachement. ' +
         "`keys` est un TABLEAU de touches, jamais une chaine : ['CTRL','A'] et non 'CTRL+A'. `ms` est borne a 5000 (au-dela = refus, enchainer deux waits). " +
-        'Exemple complet : [{"type":"click","x":500,"y":320},{"type":"wait","ms":800},{"type":"key","keys":["CTRL","A"]},{"type":"type","text":"bonjour"}]'
+        'Exemple complet : [{"type":"click","x":500,"y":320},{"type":"wait","ms":800},{"type":"key","keys":["CTRL","A"]},{"type":"type","text":"bonjour"}]',
+      ecran_utilisateur:
+        "booleen — mettre true pour assumer d'agir sur l'ecran REEL de l'utilisateur. Sans lui, le premier appel du tour est refuse et renvoie vers le bureau cache."
     },
     annotations: {
       readOnlyHint: false,
@@ -595,6 +641,8 @@ const CATALOG: CommandSpec[] = [
       conversationId:
         'conversation destinataire (optionnel) — sans elle, aucun fil ne recoit le message',
       provider: 'claude|codex (optionnel)',
+      model:
+        'modèle du tour lancé dans la conversation (optionnel, ex. « sonnet », « opus ») — sans lui, le tour suit le modèle de l’orchestrateur',
       role: 'rôle (optionnel)'
     }
   },
@@ -661,7 +709,8 @@ const CATALOG: CommandSpec[] = [
       'de relancer un travail deja tente : tu sauras ce qui a DEJA ete essaye au lieu de le refaire. ' +
       "C'est de la LECTURE — cela ne lance aucun run et ne coute aucun appel de modele.",
     args: {
-      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)'
+      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)',
+      page: 'numero de page du dossier (defaut 1) : le dossier est rendu par pages de ~20 000 caracteres, demande la suivante tant que `page` < `pages`'
     },
     annotations: {
       readOnlyHint: true,
@@ -759,10 +808,11 @@ const CATALOG: CommandSpec[] = [
      */
     name: 'classer_conversation',
     description:
-      'Classer une conversation dans une categorie (dossier) — la barre laterale groupe par dossier et indente les dossiers enfants en sous-categories. Chemin vide = retirer du classement.',
+      "Classer une conversation dans la barre laterale. Un CHEMIN de dossier (ex. D:/GIT/RigApplication) devient AUSSI le dossier de travail de la conversation, et le fil se range sous le nom de ce dossier ; les dossiers enfants s'indentent en sous-categories. Un LIBELLE libre (ex. « Perso ») ne cree qu'une categorie d'affichage et ne change PAS le dossier de travail. Vide = retirer du classement.",
     args: {
       id: 'identifiant de la conversation',
-      dossier: 'chemin du dossier (ex. C:/Clients ou C:/Clients/Amitel) ; vide pour declasser'
+      dossier:
+        'chemin du dossier de travail (ex. D:/GIT/RigApplication), OU libelle de categorie (ex. « Perso ») ; vide pour declasser'
     },
     annotations: {
       readOnlyHint: false,
@@ -829,6 +879,31 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'confirmer_verdict_juge',
+    /*
+     * LA VERITE HUMAINE, SEULE MESURE POSSIBLE DES FAUX-VERTS.
+     *
+     * trust.jsonl portait 186 verdicts tous de la forme {judgeModel, verdict} : aucun horodatage,
+     * aucun rattachement, aucune confirmation. `calibration()` ignorant tout verdict sans
+     * `humanTruth`, le taux de faux-verts etait structurellement incalculable. Ce geste est le
+     * seul point d'entree de cette verite : il n'invente rien, il enregistre ce que l'humain dit.
+     */
+    description:
+      'Enregistrer la VERITE HUMAINE sur les verdicts de juge d’un run : « c’était bon » (green) ' +
+      'ou « c’était faux » (red). N’à appeler que sur demande EXPLICITE de l’utilisateur — c’est ' +
+      'sa parole, jamais une auto-évaluation du modèle. Rend le nombre de verdicts ré-étiquetés.',
+    args: {
+      runId: 'identifiant du run jugé',
+      verite: '"green" (le verdict était juste) ou "red" (le verdict était faux)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'marquer_travail_trie',
     /*
      * LE GESTE QUI MANQUAIT AU BOUT DU SALVAGE.
@@ -849,6 +924,29 @@ const CATALOG: CommandSpec[] = [
       agentId: 'identifiant du travail, tel que `get_state.travauxNonPublies` le nomme',
       oublier: 'true pour RETIRER le marquage et faire ressortir le travail (optionnel)'
     },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'marquer_travaux_tries',
+    /*
+     * LE MEME GESTE, MAIS PAR LOT.
+     *
+     * Trace causale au 2026-09-12 : 225 appels a `marquer_travail_trie` sur 94 tours, dont un tour
+     * a 23 appels. Chaque appel etait un aller-retour modele complet pour une ecriture d'une ligne.
+     * Le lot suit `remove_conversations` : ids inconnus IGNORES (et rendus), doublons dedupliques,
+     * compte rendu par identifiant — sans quoi un seul id perime annulerait tout le reste.
+     */
+    description:
+      'Enregistrer par LOT que des travaux non publiés ont été TRIÉS (max 200). NE SUPPRIME RIEN — ' +
+      'les branches de secours restent. Ids inconnus ignorés et rendus dans `introuvables`, ' +
+      'doublons dédupliqués. À n’appeler qu’APRÈS un diagnostic par contenu de CHAQUE travail, ' +
+      'jamais pour faire taire une liste qu’on n’a pas lue.',
+    args: { ids: 'liste d identifiants, ex. ["agent-a","agent-b"]' },
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -996,7 +1094,9 @@ const CATALOG: CommandSpec[] = [
       runId:
         'identité exacte renvoyée par orchestrate ; obligatoire pour lier la leçon à ses preuves',
       tags: 'facultatif — quelques mots-clés',
-      confidence: 'facultatif — low | medium | high'
+      confidence: 'facultatif — low | medium | high',
+      supersedes:
+        'facultatif — uid(s) des notes que ce fait REMPLACE (lus via brain_read) ; la note ancienne ne passe « remplacée » qu’à la revue'
     },
     annotations: {
       readOnlyHint: false,
@@ -1046,6 +1146,35 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'brain_graph',
+    description:
+      'Suivre les liens du Brain : « qui dépend de X » (dependents) ou « de quoi X dépend » (dependencies) — notes liées et relations de code (calls, imports, inherits…). Pour une question d’impact, avant de lire le code',
+    args: {
+      entity: 'identifiant exact, nom de symbole ou chemin knowledge/…md',
+      direction: 'facultatif — dependents (défaut) | dependencies',
+      depth: 'facultatif — 1 à 3, défaut 1',
+      relation: 'facultatif — ne suivre qu’une relation (ex. calls)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'brain_read',
+    description:
+      'Relire EN ENTIER une note curée du Brain nommée par brain_query ou brain_graph — pour décider soi-même si elle est à jour, et la remplacer via remember (supersedes) si elle ne l’est plus',
+    args: { path: 'chemin de la note, knowledge/…/nom.md' },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'ticket_create',
     description:
       'Créer une fiche (work item) chez le fournisseur de tickets configuré — écrit dans le backlog de l’équipe, sous l’identité de l’utilisateur : ne l’utiliser que sur une demande explicite',
@@ -1069,7 +1198,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'sql_query',
     description:
-      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seuls les greffes EXPLOITÉS sont lisibles (la liste vient de COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) : les maquettes, copies figées et bases de formation sont refusées. Toute écriture est refusée avant d’atteindre le serveur.',
+      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seuls les greffes EXPLOITÉS sont lisibles (la liste vient de COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) : les maquettes, copies figées et bases de formation sont refusées. La base commune COMMUN_RIG (SQL-PROD\\PROD) est AUSSI lisible — ex. la liste des greffes exploités : SELECT GRF_NOMBASE_BD, GRF_SERVEUR_BD FROM dbo.GREFFE WHERE GRF_IS_EXPLOIT = 1 — mais « * » et toute colonne de mot de passe ou de clé y sont refusés. Toute écriture est refusée avant d’atteindre le serveur.',
     args: {
       query: 'un SELECT unique, sans point-virgule ni commentaire (obligatoire)',
       database: 'la base greffe visée, ex. RIG_AMIENS (obligatoire)',
@@ -1110,6 +1239,8 @@ const CATALOG: CommandSpec[] = [
       comment: 'facultatif — preuves, changements et vérifications réellement effectués',
       state: 'facultatif — état final exact accepté par le fournisseur',
       assignee: 'facultatif — personne à assigner',
+      fields:
+        'facultatif — champs libres à écrire, indexés par leur nom de référence exact chez le fournisseur, ex. { "Custom.DLL": "MaLib.dll" } ; c’est la seule façon d’atteindre les onglets métier (À livrer, Recette)',
       sourceId: 'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs'
     },
     annotations: {
@@ -1157,7 +1288,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'read_file',
     description:
-      'Lire un fichier du workspace (lignes numérotées, plage from/lines, max 400 lignes par appel) — traces .autowin-data comprises, secrets exclus',
+      'Lire un fichier : chemin relatif au dossier de travail, ou chemin ABSOLU dans un autre dépôt (même périmètre que edit_file). Lignes numérotées, plage from/lines, max 400 lignes par appel — traces .autowin-data comprises, secrets et racines système exclus',
     args: {
       path: 'chemin du fichier, relatif au workspace',
       from: 'première ligne à lire (défaut 1)',
@@ -1201,7 +1332,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'find_in_files',
     description:
-      'Chercher un motif (regex, insensible à la casse) dans les fichiers du workspace — rend chemin:ligne + extrait, max 80 correspondances',
+      'Chercher un motif (regex, insensible à la casse) dans les fichiers du dossier de travail, ou d’un autre dépôt en donnant son chemin ABSOLU dans `dir` — rend chemin:ligne + extrait, max 80 correspondances',
     args: {
       pattern: 'motif regex à chercher',
       dir: 'sous-dossier à fouiller (défaut : tout le workspace)'
@@ -1349,6 +1480,53 @@ interface RejeuConnu {
 const OUTILS_REFUSES_SI_REJEU_APRES_ECHEC = new Set(['edit_file'])
 
 /**
+ * NON INVASIF PAR DEFAUT — garde-fou deterministe (kaizen conv-586, tour
+ * 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63, 2026-09-16). La prose l'exigeait deja deux fois
+ * (`chat-pilotage-prompt.ts`, kaizen conv-526 puis conv-540) et a echoue une troisieme fois : le
+ * modele a capture l'ecran reel pour verifier une modif qu'il venait de compiler, et l'utilisateur
+ * a annule le tour 17 s plus tard (saisie du 2026-09-16T08:44:46). La prose ne suffit donc pas ;
+ * le refus vit ici, au point de decision.
+ *
+ * Il ne ferme PAS la porte : le premier appel du tour est refuse, le message nomme le bureau cache,
+ * et `ecran_utilisateur: true` rouvre immediatement — une friction d'un appel, pas un blocage.
+ */
+const refusEcranReel =
+  "Appel REFUSE : `desktop_observe` regarde l'ECRAN REEL de l'utilisateur, ce n'est pas le defaut. " +
+  'Pour verifier une application que tu viens de modifier, de compiler ou de lancer, utilise le ' +
+  'bureau CACHE : `powershell -NoProfile -File scripts/hdesk-lancer.ps1 ...` puis ' +
+  "`scripts/hdesk-observe.ps1` (ou `node scripts/ui-capture.mjs` pour une vue d'Autowin). " +
+  "Si tu as vraiment besoin de son ecran, reemets l'appel avec `ecran_utilisateur: true` et dis-le " +
+  'en une ligne avant.'
+
+/**
+ * Refus de `desktop_act` quand le dernier message de l'utilisateur ne demande PAS son ecran.
+ *
+ * Kaizen conv-835, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 (evenements 87-89) : l'appel portait
+ * DEJA `ecran_utilisateur: true` et le refus repondait « reemets l'appel avec
+ * `ecran_utilisateur: true` » — une sortie qui n'existait pas, le 2e appel etant refuse faute de
+ * demande (« envoi un message teams a leslie… » ne parle pas de son ecran). Et il ne parlait que de
+ * clics : le plan suivant du modele etait de rouvrir le lien msteams: sur l'ecran reel (reponse
+ * affichee, evenement 96). Le message dit donc la seule sortie reelle.
+ */
+const refusActionSansDemande =
+  "Appel REFUSE : `desktop_act` agit sur l'ECRAN REEL de l'utilisateur, et il n'a pas demande " +
+  "d'agir sur SON ecran dans son dernier message : ne reemets pas l'appel, `ecran_utilisateur: true` " +
+  "n'y change rien. Passe par le bureau CACHE : `powershell -NoProfile -File scripts/hdesk-lancer.ps1 ...` " +
+  'pour ouvrir, `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]` ' +
+  'pour cliquer ou taper. Ne contourne pas ce refus en rouvrant un lien ou une app sur son ecran ' +
+  "(`Start-Process`, `start`, msteams:, mailto:) : c'est le meme geste. Si le bureau cache ne peut pas " +
+  "faire le geste (app deja ouverte chez lui, connexion a son compte requise), dis-le en une ligne et " +
+  'DEMANDE-lui.'
+
+/** Vrai quand le message utilisateur designe son propre ecran (« mon écran », « sur l'ecran »...). */
+export const demandeEcranReel = (texte: string | undefined): boolean =>
+  typeof texte === 'string' && /[ée]cran/i.test(texte)
+
+/** Vrai quand l'appel assume explicitement de regarder l'ecran de l'utilisateur. */
+const assumeEcranReel = (args: Record<string, unknown>): boolean =>
+  args.ecran_utilisateur === true || args.ecran_utilisateur === 'true'
+
+/**
  * Attache au résultat la note qui dit au modèle qu'il vient de REJOUER un appel identique.
  *
  * On ne remplace ni n'enveloppe le résultat : on AJOUTE une clé. Envelopper aurait changé la forme
@@ -1363,7 +1541,7 @@ function avecNoteDeRejeu(data: unknown, dejaVu: RejeuConnu | undefined, name: st
     avertissementRejeu:
       `Tu as déjà émis ce même \`${name}\` avec des arguments identiques dans ce tour ` +
       `(${dejaVu.occurrences}e fois). Si tu attendais un résultat différent, c'est que rien ne l'a ` +
-      "fait changer entre-temps : agis sur la cause au lieu de relire."
+      'fait changer entre-temps : agis sur la cause au lieu de relire.'
   }
 }
 
@@ -1586,7 +1764,7 @@ export class AppCommandBus {
             ...attestedProposal,
             // MEME definition que du cote attestation : c'est leur divergence qui vidait les 256
             // observations. Deux calculs de la meme valeur, c'est un defaut qui attend son heure.
-            scope: porteeDeLecon(attestedProposal.scope, this.os.executionWorkspace)
+            scope: porteeDeLecon(attestedProposal.scope, this.workspaceDuTour)
           }
         : undefined
       const proposalHash = trustedProposal
@@ -1619,12 +1797,12 @@ export class AppCommandBus {
               .digest('hex')
             const provenanceTags = [
               `run:${createHash('sha256').update(input.runId).digest('hex').slice(0, 16)}`,
-              `workspace:${createHash('sha256').update(this.os.executionWorkspace).digest('hex').slice(0, 16)}`,
+              `workspace:${createHash('sha256').update(this.workspaceDuTour).digest('hex').slice(0, 16)}`,
               `role:${(input.role ?? 'orchestrator').slice(0, 30)}`,
               `proposal:${proposalHash.slice(0, 16)}`,
               `proof:${proofHash.slice(0, 16)}`
             ]
-            const canonicalBody = `${trustedProposal.body}\n\nProvenance Autowin (v1):\n- run: ${input.runId}\n- workspace: ${this.os.executionWorkspace}\n- role: ${input.role ?? 'orchestrator'}\n- model: ${input.model ?? 'autowin'}\n- proposal-sha256: ${proposalHash}\n- proof-sha256: ${proofHash}`
+            const canonicalBody = `${trustedProposal.body}\n\nProvenance Autowin (v1):\n- run: ${input.runId}\n- workspace: ${this.workspaceDuTour}\n- role: ${input.role ?? 'orchestrator'}\n- model: ${input.model ?? 'autowin'}\n- proposal-sha256: ${proposalHash}\n- proof-sha256: ${proofHash}`
             const deposited = await rememberFact(
               {
                 title: trustedProposal.title,
@@ -1642,7 +1820,7 @@ export class AppCommandBus {
                 token: brainServiceToken(),
                 authorAgent: 'autowin-os',
                 model: input.model ?? 'autowin',
-                workspace: this.os.executionWorkspace
+                workspace: this.workspaceDuTour
               }
             )
             /**
@@ -1701,7 +1879,7 @@ export class AppCommandBus {
         conversationId: input.conversationId,
         turnId: input.turnId,
         runId: input.runId,
-        workspace: this.os.executionWorkspace,
+        workspace: this.workspaceDuTour,
         status: input.valid && !input.gateBlocked ? 'succeeded' : 'failed',
         terminalClass,
         valid: input.valid,
@@ -1747,7 +1925,9 @@ export class AppCommandBus {
    */
   lancerDansConversation?: (
     conversationId: string,
-    prompt: string
+    prompt: string,
+    /** Modele du tour — absent : le tour suit l'orchestrateur, comme avant. */
+    binding?: { provider: string; model: string }
   ) => Promise<{ ok: boolean; turnId?: string; error?: string }>
 
   /** Existence REELLE d'une conversation, cablee depuis index.ts. */
@@ -1802,7 +1982,22 @@ export class AppCommandBus {
      */
     private readonly sqlcmdPath?: string,
     /** Ledger causal des leçons de run. Dernier paramètre pour préserver les appels positionnels. */
-    private readonly outcomeLearning?: OutcomeLearningSupervisor
+    private readonly outcomeLearning?: OutcomeLearningSupervisor,
+    /**
+     * LE POINT DE PASSAGE DE PRODUCTION (`prod-gate.ts`). Absent → rien ne change : les gardes
+     * historiques s'appliquent seules. Présent → il décide, AVANT toute connexion, si la cible exige
+     * une autorisation saisie par l'utilisateur.
+     *
+     * Ajouté en DERNIER, comme `sqlcmdPath` avant lui et pour la même raison : les paramètres de ce
+     * constructeur sont positionnels, l'insérer plus haut décalerait silencieusement les appels.
+     */
+    private readonly porteProd?: PorteProd,
+    /**
+     * LE GUICHET (`prod-guichet.ts`) : au refus de la porte, il ouvre l'écran de saisie chez
+     * l'utilisateur et attend le jeton, puis le geste est rejoué. Absent → le refus part tel quel.
+     * Positionnel lui aussi, donc ajouté APRÈS `porteProd`.
+     */
+    private readonly guichetProd?: GuichetProd
   ) {}
 
   /**
@@ -1903,9 +2098,12 @@ export class AppCommandBus {
             ...(this.tourDeChatActif?.(c.id) ? { tourEnCours: true } : {})
           }
         }),
+      // Les 12 plus récents pour l'affichage, mais un run BLOQUÉ lu plus loin dans la fenêtre n'est
+      // jamais coupé : `runsBlocked` filtre CETTE liste, et la coupe à 12 le faisait disparaître.
       runs: runs
-        .slice(0, 12)
+        .filter((r, i) => i < 12 || r.blocked)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
+      ...(runs.horsFenetre ? { runsNonExamines: runs.horsFenetre } : {}),
       // Worktrees encore vivants côté Autowin : ce qui n'y figure plus a été nettoyé/fermé. C'est LA
       // sonde qui manquait pour répondre « le workspace s'est fermé ? » sans hausser les épaules.
       worktrees: this.jalonne(jalon, 'snapshot:worktrees', () =>
@@ -1981,6 +2179,7 @@ export class AppCommandBus {
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
+      ...(full.runsNonExamines ? { runsNonExamines: full.runsNonExamines } : {}),
       conversationsCount: full.conversations.length,
       ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),
       ...(this.travauxNonAnnonces(full.travauxNonPublies).length > 0
@@ -2029,6 +2228,20 @@ export class AppCommandBus {
    */
   private registreDuTour?: { turnId: string; appels: Map<string, RejeuConnu> }
 
+  /** Tours dont la capture d'ecran reel a deja ete refusee une fois (voir `refusEcranReel`). */
+  private tourEcranReelRefuse?: string
+
+  /** Idem pour `desktop_act` (kaizen conv-854) : compteur distinct, une observation n'arme pas un clic. */
+  private tourActionReelleRefusee?: string
+
+  /** Vrai si ce tour a deja recu le refus : on ne facture pas la friction deux fois. */
+  private ecranReelDejaRefuse(turnId?: string): boolean {
+    const cle = turnId ?? 'sans-tour'
+    if (this.tourEcranReelRefuse === cle) return true
+    this.tourEcranReelRefuse = cle
+    return false
+  }
+
   /** Enregistre l'appel et rend ce qu'on savait déjà de lui, ou `undefined` si c'est un premier. */
   private noterAppelDuTour(turnId: string, empreinte: string): RejeuConnu | undefined {
     if (this.registreDuTour?.turnId !== turnId) {
@@ -2051,6 +2264,33 @@ export class AppCommandBus {
   }
 
   /** Exécute une commande nommée, mute l'app, diffuse le changement. */
+  /**
+   * LE DOSSIER DE TRAVAIL DE CE TOUR — celui range sur la conversation, sinon le dossier global.
+   *
+   * Toutes les commandes qui touchent au disque passent par ici (`run`, `read_file`, `list_files`,
+   * `find_in_files`, `create_file`, `move_file`, `delete_file`, `edit_file`, `verify`, Brain...).
+   * Avant le 2026-09-16 elles lisaient `os.executionWorkspace`, fige au demarrage de l'app : une
+   * conversation rangee sur un projet voyait son chat partir dans le bon dossier (corrige le
+   * 2026-09-08) mais ses commandes agir dans un AUTRE — `delete_file` supprimait le fichier du
+   * mauvais depot. Hors de tout tour (appel IPC direct), le repli est le dossier global : le
+   * comportement d'avant, a l'identique.
+   */
+  private get workspaceDuTour(): string {
+    return dossierDuTourCourant() ?? this.os.executionWorkspace
+  }
+
+  /**
+   * Le dossier range sur la conversation quand il designe un dossier REEL, sinon le dossier global.
+   * Meme regle que le tour de chat (`dossierDeTravailDuTour`) : un libelle de categorie ou un
+   * dossier disparu ne pilote rien. Lecture defensive : plusieurs tests montent un `os` partiel.
+   */
+  private dossierRangeSur(conversationId?: string): string {
+    const range = conversationId
+      ? this.os.conversations?.get?.(conversationId)?.projectPath
+      : undefined
+    return dossierDeTravailDuTour(range, this.os.executionWorkspace)
+  }
+
   async exec(
     name: string,
     args: Record<string, unknown> = {},
@@ -2060,10 +2300,27 @@ export class AppCommandBus {
     /** Signe de vie d'une commande LONGUE, relaye tel quel au fil (voir `verify-battement`). */
     onProgress?: (text: string) => void
   ): Promise<CommandResult> {
+    // Le dossier est POSE pour la duree de cet appel (et de ses `await`), jamais dans un champ
+    // partage : deux tours paralleles ranges dans deux projets se voleraient le dossier.
+    return avecDossierDuTour(this.dossierRangeSur(conversationId), () =>
+      this.execDansLeDossierDuTour(name, args, conversationId, bindingOverride, turnId, onProgress)
+    )
+  }
+
+  private async execDansLeDossierDuTour(
+    name: string,
+    args: Record<string, unknown> = {},
+    conversationId?: string,
+    bindingOverride?: RoleBinding,
+    turnId?: string,
+    onProgress?: (text: string) => void
+  ): Promise<CommandResult> {
     // Voir `registreDuTour` : l'empreinte porte le TOUR, pas la conversation — au tour suivant
     // l'utilisateur a parlé et le même appel redevient légitime. Sans `turnId`, pas de registre :
     // on ne sait pas de quel tour relève l'appel, et deviner reviendrait à bloquer au hasard.
-    const empreinteDuTour = turnId ? actionFingerprint(name, args, { conversationId: turnId }) : undefined
+    const empreinteDuTour = turnId
+      ? actionFingerprint(name, args, { conversationId: turnId })
+      : undefined
     const dejaVu =
       empreinteDuTour && turnId ? this.noterAppelDuTour(turnId, empreinteDuTour) : undefined
     if (dejaVu?.refuse && OUTILS_REFUSES_SI_REJEU_APRES_ECHEC.has(name)) {
@@ -2082,6 +2339,12 @@ export class AppCommandBus {
       if (!specification) throw new Error(refusAvecIssue('commande-inconnue', name))
       if (!this.isCommandEnabled(name)) throw new Error(refusAvecIssue('capacite-desactivee', name))
       if (name === 'desktop_observe') {
+        // Voir `refusEcranReel` : refus du PREMIER appel du tour seulement, porte de sortie exposee.
+        if (!assumeEcranReel(args) && !this.ecranReelDejaRefuse(turnId)) {
+          this.trace?.(name, redactedArgs(name, args), false)
+          noterIssue(false)
+          return { ok: false, error: refusEcranReel }
+        }
         if (!this.desktop) throw new Error('Controle desktop indisponible')
         const observed = await this.desktop.observe({ display: parseDisplayArg(args.display) })
         this.trace?.(name, redactedArgs(name, args), true)
@@ -2090,6 +2353,41 @@ export class AppCommandBus {
           ok: true,
           data: avecNoteDeRejeu(observed.data, dejaVu, name),
           attachments: [observed.attachment]
+        }
+      }
+      if (name === 'desktop_act') {
+        // kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : un clic sur la barre des taches
+        // de l'utilisateur est passe sans aucune garde (decision « confirm » jamais bloquante). Meme
+        // friction d'un appel que `refusEcranReel`, porte de sortie `ecran_utilisateur: true`.
+        // Le drapeau pose d'office au PREMIER appel ne compte pas (meme tour : le modele l'a ajoute
+        // seul, sans demande) : le premier geste du tour est toujours refuse, le drapeau ne vaut
+        // qu'apres avoir lu le refus qui nomme le bureau cache.
+        // Kaizen conv-854 (saisie ts 1790278416518) : le drapeau seul restait un contournement au 2e
+        // appel. Agir sur l'ecran reel exige desormais que le DERNIER message de l'utilisateur parle
+        // de son ecran ; le modele ne peut plus s'y autoriser lui-meme. Dans le tour 78a0d7d3 le
+        // message etait « fais le toi stp » : le clic aurait ete refuse.
+        // Lu AVANT le premier refus (kaizen conv-835) : c'est lui qui dit si la porte de sortie
+        // `ecran_utilisateur: true` existe vraiment — voir `refusActionSansDemande`.
+        const dernierMessage = [...(this.os.conversations?.get?.(conversationId ?? '')?.messages ?? [])]
+          .reverse()
+          .find((m) => m.role === 'user')?.content
+        const demande = demandeEcranReel(dernierMessage)
+        const cle = turnId ?? 'sans-tour'
+        if (this.tourActionReelleRefusee !== cle) {
+          this.tourActionReelleRefusee = cle
+          this.trace?.(name, redactedArgs(name, args), false)
+          noterIssue(false)
+          return {
+            ok: false,
+            error: demande
+              ? refusEcranReel.replace('`desktop_observe` regarde', '`desktop_act` agit sur') + ' Pour cliquer ou taper dans le bureau cache : `powershell -NoProfile -File scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "..."] [-Entree]`.'
+              : refusActionSansDemande
+          }
+        }
+        if (!demande) {
+          this.trace?.(name, redactedArgs(name, args), false)
+          noterIssue(false)
+          return { ok: false, error: refusActionSansDemande }
         }
       }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)
@@ -2115,6 +2413,10 @@ export class AppCommandBus {
     switch (name) {
       case 'desktop_act': {
         if (!this.desktop) throw new Error('Controle desktop indisponible')
+        // Pendant une confirmation de production, le modèle ne clique pas « continuer » à la place
+        // de l'utilisateur (conv-738) : la confirmation doit venir d'un vrai clic humain.
+        if ((this.guichetProd?.enAttente().length ?? 0) > 0)
+          throw new Error('desktop_act refusé : une confirmation de production attend la réponse de l’utilisateur.')
         return await this.desktop.act(a.actions)
       }
       case 'navigate': {
@@ -2185,7 +2487,15 @@ export class AppCommandBus {
             )
           if (this.conversationExiste && !this.conversationExiste(cibleConversation))
             throw new Error(`chat_send : conversation inconnue « ${cibleConversation} ».`)
-          const lance = await this.lancerDansConversation(cibleConversation, messageEnvoye)
+          const modeleDemande = typeof a.model === 'string' ? a.model.trim() : ''
+          const fournisseur =
+            typeof a.provider === 'string' && a.provider.trim() ? a.provider.trim() : 'claude'
+          const lance = modeleDemande
+            ? await this.lancerDansConversation(cibleConversation, messageEnvoye, {
+                provider: fournisseur,
+                model: modeleDemande
+              })
+            : await this.lancerDansConversation(cibleConversation, messageEnvoye)
           if (!lance.ok)
             throw new Error(
               `chat_send : le tour n'a pas demarre dans « ${cibleConversation} » ` +
@@ -2318,7 +2628,7 @@ export class AppCommandBus {
         const task = isolateWatchdogPromptPaths(
           piecesJointes.suffixe ? `${rawTask}${piecesJointes.suffixe}` : rawTask,
           causalWatchPaths,
-          this.os.executionWorkspace
+          this.workspaceDuTour
         )
         const fingerprint = actionFingerprint('orchestrate', {
           convId,
@@ -2414,9 +2724,23 @@ export class AppCommandBus {
          * REUTILISANT le dernier fait connu au lieu d'inventer une seconde verite.
          */
         let dernierSigneDeVie: string | undefined
+        /**
+         * LA PHASE EN COURS, gardee a part du dernier fait.
+         *
+         * DEFAUT MESURE le 2026-09-16 (conv-63, run c295e4061094) : releve du DOM de l'app reelle
+         * pendant que l'utilisateur demandait « la conv semble a l'arret ? », le battement affichait
+         * « 23 min 53 s · Bash · cd "C:/…/agent__run-c295e4061094-1" && cp /tmp/pee… ». Il TOURNAIT
+         * donc, mais la seule source qui l'alimentait etait la note d'outil : la moindre commande
+         * Bash ECRASE le nom de la phase, et trois phases se sont succede sans jamais etre nommees.
+         * Les deux faits ne se remplacent pas — « ou en est-on » et « que fait-il a l'instant » —,
+         * on les garde donc dans deux variables au lieu d'une.
+         */
+        let phaseCourante: string | undefined
         const battementOrchestration = onProgress
           ? setInterval(() => {
-              onProgress(battementDOrchestration(dernierSigneDeVie, Date.now() - debutRun))
+              onProgress(
+                battementDOrchestration(dernierSigneDeVie, Date.now() - debutRun, phaseCourante)
+              )
             }, VERIFY_BATTEMENT_MS)
           : undefined
         // Un battement ne doit JAMAIS retenir la fermeture du process : le timer suit le run.
@@ -2428,7 +2752,7 @@ export class AppCommandBus {
           // REPRISE depuis le chat : le chemin de reprise n'existait qu'au REDEMARRAGE de l'app, donc
           // « reprend » relancait de zero et REPAYAIT les phases deja produites (2026-07-29). On cherche
           // un acquis de la MEME tache dans LA MEME conversation, recent et non vide.
-          const resumable =
+          const trouve =
             this.os.resumableOrchestrationForTask?.(
               task,
               convId,
@@ -2436,6 +2760,27 @@ export class AppCommandBus {
               bindingOverride,
               runtimeSnapshot
             ) ?? null
+          // fix-ok: checkpoint conv-691 lu sur disque : activeCalls=1 avec agent build PID 28028 mort ; test commands.test.ts rouge sur HEAD, vert avec ce correctif.
+          // UN VERROU LAISSE PAR UN PROCESS MORT SE RECONCILIE AUSSI DEPUIS LE CHAT (conv-691,
+          // 2026-09-18). Un agent qui survit a la fermeture de l app garde activeCalls=1 dans le
+          // checkpoint : seul le process qui l a lance pouvait le regler. Le demarrage reconcilie
+          // (relaunch-resumable-run.ts) ; ce chemin reprenait le compteur tel quel, et chaque relance
+          // etait refusee « appel(s) provider encore actif(s) ». Un agent encore VIVANT laisse l etat
+          // inchange : le refus protecteur du superviseur reste entier.
+          const resumable =
+            trouve && (trouve.usage?.activeCalls ?? 0) > 0
+              ? (this.os.reconcileResumableOrchestrationForRelaunch?.(
+                  trouve.runId,
+                  defaultProcessIdentity
+                ) ?? trouve)
+              : trouve
+          // UN RUN VIVANT NE SE REPREND PAS, IL SE REJOINT (mesure conv-691, 2026-09-18) : le mode
+          // auto avait lance le run avec le prompt suggere, puis le meme texte revenait en tour
+          // utilisateur. La cle de reprise designait ce run encore en cours dans CE process ; la
+          // reprise attendait 60 s puis rendait « Reprise refusee » alors que le run travaillait.
+          if (resumable && this.os.isOrchestrationLive?.(resumable.runId)) {
+            return { runId: resumable.runId, status: 'running', reused: true }
+          }
           // Publication Git DÉJÀ acquise pour ce checkpoint → le tour se clôt en SUCCÈS, sans
           // repayer aucun provider. Mesuré sur conv-1145 (13/08) : le run avait publié — verdict
           // green, publication complete, SHA poussé sur origin/auto/… — puis la reprise du
@@ -2589,6 +2934,24 @@ export class AppCommandBus {
               }
             },
             (phase) => {
+              /*
+               * LE DEBUT DE PHASE ARRIVE ENFIN DANS LE FIL.
+               *
+               * Ce rappel existait deja, mais il ne parlait qu'a la carte du panneau Workflows
+               * (`orchestrate-phase`) et a la trace causale. Le fil, lui, n'apprenait jamais qu'on
+               * passait de `frame` a `build`. On REUTILISE la source existante plutot que d'en
+               * fabriquer une seconde — meme regle que la note d'outil juste en dessous.
+               *
+               * Le dernier fait connu est REMIS A ZERO au passage : garder la derniere commande de
+               * la phase precedente afficherait un fait perime sous le nom de la nouvelle phase.
+               */
+              if (phase.phase) {
+                phaseCourante = phase.phase
+                dernierSigneDeVie = undefined
+                onProgress?.(
+                  battementDOrchestration(undefined, Date.now() - debutRun, phaseCourante)
+                )
+              }
               if (currentRunId) {
                 persistOrchestrationPhaseStart(
                   phase,
@@ -2723,7 +3086,14 @@ export class AppCommandBus {
             },
             runtimeSnapshot,
             causalWatchPaths,
-            onLateMutationClaims
+            onLateMutationClaims,
+            // LE DOSSIER DU TOUR SUIT JUSQU'AU PIPELINE (2026-09-17).
+            // La correction du 2026-09-16 n'avait rebranche que les commandes de fichier et
+            // `verify` : `orchestrate` laissait l'orchestrateur lire `deps.executionWorkspace`,
+            // fige au demarrage de l'app. Une conversation rangee sur un AUTRE depot lancait donc
+            // son run dans le depot d'Autowin. Mesure conv-649 : une demande visant
+            // D:/RigV3Desktop a produit un run analysant D:/AutoWinOS, 11,65 $ perdus.
+            { workspace: this.workspaceDuTour }
           )
           if (!r.gateBlocked) {
             const causalEvidence = causalWatchPaths.length
@@ -2732,7 +3102,7 @@ export class AppCommandBus {
             appendExecutionEvidenceFileTrace(causalEvidence, {
               conversationId: convId,
               turnId: orchestrationTurnId,
-              workspaceRoot: this.os.executionWorkspace,
+              workspaceRoot: this.workspaceDuTour,
               published: true
             })
           }
@@ -2918,11 +3288,19 @@ export class AppCommandBus {
         return c
       }
       case 'classer_conversation': {
+        // fix-ok: conv-81 — la commande classer_conversation écrivait le libellé dans le dossier de travail ; elle route désormais sur la forme de la valeur et rend les DEUX champs.
         const dossier = typeof a.dossier === 'string' ? a.dossier.trim() : ''
         const c = this.os.conversations.rangerDansDossier(s('id'), dossier || null)
         if (!c) throw new Error(`conversation introuvable: ${s('id')}`)
         this.broadcast({ type: 'refresh', scope: 'conversations' })
-        return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }
+        // Les DEUX champs sont rendus : le magasin route sur la forme de la valeur, et un agent qui
+        // ne lirait que `dossier` conclurait « rien n'a ete range » apres avoir pose une categorie.
+        return {
+          id: c.id,
+          titre: c.title,
+          dossier: c.projectPath ?? null,
+          categorie: c.categorie ?? null
+        }
       }
       case 'retrospective': {
         const id = s('id')
@@ -2939,9 +3317,18 @@ export class AppCommandBus {
          * muet de son propre echantillonnage.
          */
         const dossier = collectAutowinKaizenEvidence(conversation, undefined, PLAFONDS_AMPLES)
+        // Renvois « identique au tour N » puis pages de ~20 000 caracteres : conv-703 passait de
+        // 363 064 caracteres a un dossier lisible en quelques pages (retrospective-compacte.ts).
+        const decoupe = paginerDossier(
+          JSON.stringify(dedupliquerDossier(resumerAppelsOutils(dossier))),
+          Number(a.page)
+        )
         return {
-          ...dossier,
-          note:
+          page: decoupe.page,
+          pages: decoupe.pages,
+          dossier: decoupe.contenu,
+          suite: decoupe.note,
+          resume:
             `${dossier.conversation.messages.length} message(s), ` +
             `${dossier.causalEvents.length} evenement(s) causal(aux), ` +
             `${dossier.activity.length} entree(s) d'activite, ${dossier.runs.length} RUN.md, ` +
@@ -3119,6 +3506,44 @@ export class AppCommandBus {
         }
         return { agentId, trie: true, sha: worktrees.shaTravailTrie?.(agentId) }
       }
+      case 'confirmer_verdict_juge': {
+        const runId = String(a.runId ?? '').trim()
+        if (!runId) throw new Error('confirmer_verdict_juge : runId manquant')
+        const verite = String(a.verite ?? '').trim()
+        if (verite !== 'green' && verite !== 'red') {
+          throw new Error('confirmer_verdict_juge : verite doit valoir "green" ou "red"')
+        }
+        // Un runId inconnu n'est PAS une erreur : on rend 0 et on le dit, comme le lot de tri.
+        const reetiquetes = this.os.confirmerVerdictJuge(runId, verite)
+        return { runId, verite, reetiquetes, connu: reetiquetes > 0 }
+      }
+      case 'marquer_travaux_tries': {
+        const brut = a.ids
+        if (!Array.isArray(brut)) throw new Error('marquer_travaux_tries : ids doit etre une liste')
+        // Plafond aligne sur `remove_conversations` : refuse AVANT d'ecrire quoi que ce soit.
+        if (brut.length > 200)
+          throw new Error(`marquer_travaux_tries : ${brut.length} ids demandés, 200 au maximum.`)
+        const worktrees = this.os.worktrees
+        if (!worktrees?.marquerTravailTrie) {
+          throw new Error('Le recensement des travaux non publiés est indisponible.')
+        }
+        const demandes = [...new Set(brut.map((v) => String(v).trim()).filter(Boolean))]
+        const marques: string[] = []
+        const introuvables: string[] = []
+        const shas: Record<string, string> = {}
+        for (const agentId of demandes) {
+          // On AGREGE au lieu de lever : un identifiant perime ne doit pas annuler le tri des
+          // autres, sinon le lot est plus fragile que les appels un par un qu'il remplace.
+          if (worktrees.marquerTravailTrie(agentId)) {
+            marques.push(agentId)
+            const sha = worktrees.shaTravailTrie?.(agentId)
+            if (sha) shas[agentId] = sha
+          } else {
+            introuvables.push(agentId)
+          }
+        }
+        return { marques, introuvables, shas, count: marques.length }
+      }
       case 'get_state':
         return await this.snapshot()
       case 'run': {
@@ -3156,7 +3581,41 @@ export class AppCommandBus {
           // c'est exactement ce qui a coute des semaines ici.
           return { lance: false, detail: `Commande refusée : ${decision.motif ?? 'non autorisée'}` }
         }
-        const cwd = this.os.executionWorkspace
+        // Le refus des lancements graphiques au premier plan a ete RETIRE (conv-631, 2026-09-17,
+        // demande explicite de l'utilisateur) : il bloquait l'ouverture d'un fichier sur son propre
+        // ecran, qu'il demandait nommement. Le bureau cache (scripts/hdesk-lancer.ps1) reste la voie
+        // par defaut, portee par la CONSIGNE du prompt de pilotage — plus par un blocage.
+        // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
+        const refusGit = refusGitDestructeur(ligne)
+        if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
+        // Porte de production (conv-738) : `run` ne coupe pas la protection et ne contourne pas
+        // `sql_query` en lançant lui-même un client SQL. Même verdict, même fenêtre, une reprise.
+        const refusReglage = refusReglageProd(ligne)
+        if (refusReglage) return { lance: false, detail: `Commande refusée : ${refusReglage}` }
+        const cibleSql = cibleSqlDeCommande(ligne)
+        // Sans porte branchée, un client SQL ne part PAS sans contrôle : refus par défaut (conv-738).
+        if (cibleSql && !this.porteProd)
+          return { lance: false, detail: 'Commande refusée : la protection de production n’est pas disponible, aucun client SQL ne part sans elle.' }
+        if (cibleSql && this.porteProd) {
+          const geste = { nature: 'base' as const, nom: cibleSql.base, operation: `run-${cibleSql.client}` }
+          const verdict = this.porteProd.verifier(geste)
+          if (!verdict.autorise) {
+            const reponse = this.guichetProd
+              ? await this.guichetProd.demander({
+                  ...verdict.demande,
+                  niveau: verdict.niveau,
+                  ...(conversationId ? { conversationId } : {})
+                })
+              : undefined
+            if (!reponse) return { lance: false, detail: `Commande refusée : ${verdict.motif}` }
+            const reprise = this.porteProd.verifier({
+              ...geste,
+              ...(reponse.type === 'jeton' ? { jeton: reponse.valeur } : { confirme: true })
+            })
+            if (!reprise.autorise) return { lance: false, detail: `Commande refusée : ${reprise.motif}` }
+          }
+        }
+        const cwd = this.workspaceDuTour
         if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
         // Les guillemets GROUPENT : `decouperArguments` respecte `-m "trois mots"` là où un
         // `split(/\s+/)` en faisait trois arguments et laissait les guillemets dans le texte.
@@ -3232,6 +3691,20 @@ export class AppCommandBus {
         )
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
+      case 'brain_graph':
+      case 'brain_read': {
+        const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
+        if (corpus?.length === 0) {
+          return {
+            found: false,
+            status: 'empty',
+            knowledge: '',
+            note: 'aucun savoir Brain pour ce dossier'
+          }
+        }
+        const deps = { token: brainServiceToken(), corpus: corpus ?? null }
+        return name === 'brain_graph' ? await runBrainGraph(a, deps) : await runBrainRead(a, deps)
+      }
       case 'ticket_create':
         // Écriture chez un tiers : la cible et les bornes sont décidées hors du modèle
         // (`ticket-create-command.ts` + `TicketService`), jamais d'après les arguments bruts.
@@ -3248,7 +3721,19 @@ export class AppCommandBus {
             database: a.database,
             query: a.query
           },
-          { ...(this.cheminSqlcmd() ? { sqlcmdPath: this.cheminSqlcmd() } : {}) }
+          {
+            ...(this.cheminSqlcmd() ? { sqlcmdPath: this.cheminSqlcmd() } : {}),
+            // La porte décide dans `runSqlRead`, pas ici : un garde posé sur le site d'appel se
+            // contourne en ajoutant un second appelant. Aucun jeton n'est transmis par le modèle —
+            // il ne peut donc pas s'autoriser en l'inventant dans ses arguments.
+            // Le fil d'où part le geste : l'écran d'autorisation vit DANS la conversation, il ne
+            // doit donc s'afficher que dans celle-ci (conv-626, 2026-09-16).
+            ...(conversationId ? { conversationId } : {}),
+            ...(this.porteProd ? { porteProd: this.porteProd } : {}),
+            // Le guichet ne contourne rien : il ouvre l'écran de saisie de l'utilisateur quand la
+            // porte refuse, et c'est la porte qui tranche à nouveau avec le jeton obtenu.
+            ...(this.guichetProd ? { guichetProd: this.guichetProd } : {})
+          }
         )
       case 'ticket_get':
         return await getTicketFromCommand(a as TicketGetArgs, {
@@ -3306,7 +3791,7 @@ export class AppCommandBus {
             token: brainServiceToken(),
             authorAgent: 'autowin-os',
             model: this.os.roles.getBinding('orchestrator').model ?? 'autowin',
-            workspace: this.os.executionWorkspace
+            workspace: this.workspaceDuTour
           })
           if (outcome.fact && learningOutcome && convId && turnId && this.outcomeLearning) {
             try {
@@ -3382,7 +3867,7 @@ export class AppCommandBus {
             workspace:
               outcome.fact.scope.trim().toLowerCase() === 'global'
                 ? 'global'
-                : this.os.executionWorkspace,
+                : this.workspaceDuTour,
             note: outcome.note,
             state: outcome.stored ? 'depose' : outcome.unknown ? 'inconnu' : 'local'
           })
@@ -3400,7 +3885,7 @@ export class AppCommandBus {
       case 'read_file': {
         const decision = decideRead(
           { path: a.path, from: a.from, lines: a.lines },
-          this.os.executionWorkspace
+          this.workspaceDuTour
         )
         if (!decision.allowed) return { lu: false, detail: `lecture refusée : ${decision.reason}` }
         /*
@@ -3446,7 +3931,7 @@ export class AppCommandBus {
          * reproduirait l'approximation qu'on corrige ici. Le plafond est DIT quand il mord, pour
          * qu'un total partiel ne se présente jamais comme un total.
          */
-        const racine = resolve(this.os.executionWorkspace)
+        const racine = resolve(this.workspaceDuTour)
         const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
         const recursif = a.recursif === true || a.recursif === 'true'
         const cible = resolve(join(racine, sousDossier))
@@ -3516,9 +4001,22 @@ export class AppCommandBus {
       case 'find_in_files': {
         const motif = typeof a.pattern === 'string' ? a.pattern : ''
         if (!motif.trim()) return { trouve: 0, detail: 'motif manquant' }
-        const racine = resolve(this.os.executionWorkspace)
-        const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
-        const fichiers = enumererFichiersLisibles(racine, sousDossier)
+        /*
+         * MEME PERIMETRE QUE `read_file` ET `edit_file` : un `dir` ABSOLU vise un autre depot.
+         * Sans ca, `find_in_files` restait confine alors que la lecture et l'ecriture ne l'etaient
+         * plus — et l'agent retombait sur `Select-String` en PowerShell, hors de toute borne.
+         * Les zones interdites (`isForbidden`) restent appliquees par `rechercherDansFichiers`.
+         */
+        const dirDemande = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
+        const dirExterne = dirDemande !== '' && isAbsolute(dirDemande)
+        if (dirExterne) {
+          const refus = refusRacineSysteme(resolve(dirDemande)) ?? refusRacineSysteme(dirDemande)
+          if (refus) return { trouve: 0, detail: `recherche refusée : ${refus}` }
+        }
+        const racine = dirExterne ? resolve(dirDemande) : resolve(this.workspaceDuTour)
+        const sousDossier = dirExterne ? '' : dirDemande
+        const enumeration = enumererFichiersLisiblesDetail(racine, sousDossier)
+        const fichiers = enumeration.fichiers
         // MEME CAUSE QUE `read_file` : un fichier non-UTF-8 rend des lignes ou `�` a remplace
         // des octets. On continue de le chercher (l'ASCII y est vrai) mais on le NOMME.
         const nonUtf8: string[] = []
@@ -3542,7 +4040,14 @@ export class AppCommandBus {
           correspondances: resultat.correspondances.map(
             (c) => `${c.chemin}:${c.ligne}: ${c.texte}`
           ),
-          ...(suspects.length > 0 ? { fichiersNonUtf8: suspects } : {})
+          ...(suspects.length > 0 ? { fichiersNonUtf8: suspects } : {}),
+          // Plafond d'énumération atteint : une absence de résultat ne prouve PAS l'absence du motif.
+          ...(enumeration.incomplet
+            ? {
+                incomplet: true,
+                detail: `recherche INCOMPLÈTE : plafond de ${fichiers.length} fichiers atteint avant la fin du dossier — resserre \`dir\` sur un sous-dossier`
+              }
+            : {})
         }
       }
       case 'edit_file': {
@@ -3553,11 +4058,26 @@ export class AppCommandBus {
         )
       }
       case 'create_file':
-        return this.runCreateFile({ path: a.path, content: a.content })
+        return await this.runTracedFileCommand(
+          [a.path],
+          () => this.runCreateFile({ path: a.path, content: a.content }),
+          conversationId,
+          turnId
+        )
       case 'move_file':
-        return this.runMoveFile({ from: a.from, to: a.to })
+        return await this.runTracedFileCommand(
+          [a.from, a.to],
+          () => this.runMoveFile({ from: a.from, to: a.to }),
+          conversationId,
+          turnId
+        )
       case 'delete_file':
-        return this.runDeleteFile({ path: a.path })
+        return await this.runTracedFileCommand(
+          [a.path],
+          () => this.runDeleteFile({ path: a.path }),
+          conversationId,
+          turnId
+        )
       case 'run_status':
         return await this.runWorktreeStatus(a.agentId)
       default:
@@ -3692,6 +4212,9 @@ export class AppCommandBus {
     if (command === 'edit_file' && typeof cible === 'string' && cible.trim()) {
       const synchro = decisionDeSynchronisation(
         cible,
+        // DEPOT DE BASE de la copie isolee, PAS le dossier du tour : la synchronisation reporte le
+        // fichier du bureau isole vers le depot dont ce bureau est issu (`os.worktrees`, construit
+        // sur `executionWorkspace`). Y mettre le dossier du tour ecrirait dans un AUTRE projet.
         this.os.executionWorkspace,
         workspaceRoot,
         (chemin) => (existsSync(chemin) ? readFileSync(chemin) : undefined)
@@ -4093,6 +4616,7 @@ export class AppCommandBus {
     }
     if (!existsSync(source)) return result
     const repoKey = createHash('sha256')
+      // Cle du DEPOT DE BASE du bureau isole (meme raison qu'au-dessus), pas du dossier du tour.
       .update(resolve(this.os.executionWorkspace).toLowerCase())
       .digest('hex')
       .slice(0, 20)
@@ -4320,13 +4844,42 @@ export class AppCommandBus {
    * celui qui compte : les bornes pures de `file-ops-command.ts`, plus `verify` que l'agent doit
    * lancer ensuite (la description de chaque commande le dit).
    */
+  /**
+   * JOURNAL DES FICHIERS pour create/move/delete_file : seule `edit_file` y écrivait, donc ces
+   * mutations restaient invisibles dans l'onglet Fichiers. Une commande refusée n'écrit rien.
+   */
+  private async runTracedFileCommand<R extends { allowed: boolean }>(
+    rawPaths: unknown[],
+    run: () => R,
+    conversationId?: string,
+    turnId?: string
+  ): Promise<R> {
+    const workspaceRoot = this.workspaceDuTour
+    const paths = rawPaths.filter((path): path is string => typeof path === 'string')
+    const before = conversationId
+      ? await captureMutationTraceBase(workspaceRoot, paths)
+      : undefined
+    const outcome = run()
+    if (outcome.allowed && conversationId) {
+      await appendWorkspaceMutationTrace({
+        conversationId,
+        ...(turnId ? { turnId } : {}),
+        workspaceRoot,
+        source: 'file_command',
+        paths,
+        before
+      })
+    }
+    return outcome
+  }
+
   private runCreateFile(input: { path: unknown; content: unknown }): {
     allowed: boolean
     reason?: string
     path?: string
     octets?: number
   } {
-    const decision = decideCreateFile(input, this.os.executionWorkspace, existsSync)
+    const decision = decideCreateFile(input, this.workspaceDuTour, existsSync)
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
     mkdirSync(dirname(decision.absolutePath), { recursive: true })
     writeFileSync(decision.absolutePath, decision.content, 'utf8')
@@ -4343,7 +4896,7 @@ export class AppCommandBus {
     from?: string
     to?: string
   } {
-    const decision = decideMoveFile(input, this.os.executionWorkspace, existsSync)
+    const decision = decideMoveFile(input, this.workspaceDuTour, existsSync)
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
     mkdirSync(dirname(decision.cibleAbsolue), { recursive: true })
     renameSync(decision.sourceAbsolue, decision.cibleAbsolue)
@@ -4355,7 +4908,7 @@ export class AppCommandBus {
     reason?: string
     path?: string
   } {
-    const decision = decideDeleteFile(input, this.os.executionWorkspace, existsSync)
+    const decision = decideDeleteFile(input, this.workspaceDuTour, existsSync)
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
     // `recursive: false` : cette commande supprime UN fichier, jamais une arborescence.
     rmSync(decision.absolutePath, { recursive: false })
@@ -4393,7 +4946,7 @@ export class AppCommandBus {
     this.editFileTail = previous.then(() => current)
     await previous
     try {
-      const baseDecision = decideEdit(input, this.os.executionWorkspace, (absolutePath) =>
+      const baseDecision = decideEdit(input, this.workspaceDuTour, (absolutePath) =>
         existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
       )
       /*
@@ -4409,7 +4962,7 @@ export class AppCommandBus {
        * `decideEdit`, deja evaluees ci-dessus.
        */
       if (baseDecision.allowed && baseDecision.externe) {
-        return this.runEditFile(input, this.os.executionWorkspace)
+        return this.runEditFile(input, this.workspaceDuTour)
       }
       /*
        * UN REFUS DE RACINE SYSTEME SE REND TEL QUEL — il ne depend ni du contenu du fichier ni d'un
@@ -4424,7 +4977,7 @@ export class AppCommandBus {
       const baseContentBefore = baseDecision.allowed
         ? readFileSync(baseDecision.absolutePath, 'utf8')
         : undefined
-      const before = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
+      const before = await captureWorkspaceMutationSnapshot(this.workspaceDuTour)
       /*
        * Les octets d'AVANT sont CAPTURES, pas remis dans le resultat : le resultat part au modele, et
        * y coller le contenu entier d'un fichier inonderait son contexte pour rien.
@@ -4444,10 +4997,10 @@ export class AppCommandBus {
       )
       const path =
         outcome.allowed && outcome.path
-          ? normalizeWorkspaceTracePath(outcome.path, this.os.executionWorkspace)
+          ? normalizeWorkspaceTracePath(outcome.path, this.workspaceDuTour)
           : null
       if (conversationId && path) {
-        const after = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
+        const after = await captureWorkspaceMutationSnapshot(this.workspaceDuTour)
         const key = workspaceTracePathKey(path)
         const fingerprint = [...after].find(
           ([candidate]) => workspaceTracePathKey(candidate) === key
@@ -4459,17 +5012,17 @@ export class AppCommandBus {
           ([candidate]) => workspaceTracePathKey(candidate) === key
         )?.[1]
         const generationMarker = await captureWorkspacePathGenerationMarker(
-          this.os.executionWorkspace,
+          this.workspaceDuTour,
           path
         )
-        const baseContentAfter = existsSync(resolve(this.os.executionWorkspace, path))
-          ? readFileSync(resolve(this.os.executionWorkspace, path), 'utf8')
+        const baseContentAfter = existsSync(resolve(this.workspaceDuTour, path))
+          ? readFileSync(resolve(this.workspaceDuTour, path), 'utf8')
           : ''
         appendConversationFileTrace({
           timestamp: new Date().toISOString(),
           conversationId,
           ...(turnId ? { turnId } : {}),
-          workspaceRoot: this.os.executionWorkspace,
+          workspaceRoot: this.workspaceDuTour,
           source: 'edit_file',
           paths: [path],
           ...(fingerprint ? { pathFingerprints: { [path]: fingerprint } } : {}),
@@ -4507,14 +5060,19 @@ export class AppCommandBus {
         status: 'not-requested'
       }
     }
-    const corpus = brainCorpusForWorkspace(this.os.executionWorkspace)
+    const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
     const brain =
       corpus?.length === 0
         ? { context: '', status: 'empty' as const }
         : await this.retrieveBrain(decision.query, { corpus })
     // MEME PORTEE que la voie poussee : le contexte, le statut et la navigation sont projetés ensemble.
     const scoped = scopeBrainRetrieval(brain, corpus)
-    const outcome = buildBrainOutcome(decision.query, scoped.context, scoped.status)
+    const outcome = buildBrainOutcome(
+      decision.query,
+      scoped.context,
+      scoped.status,
+      scoped.unavailableReason
+    )
     if (conversationId) {
       appendBrainTrace({
         timestamp: new Date().toISOString(),
@@ -4574,7 +5132,7 @@ export class AppCommandBus {
         }
       }
       const bureauScript = await this.bureauDeVerification(conversationId, onProgress)
-      const cwd = bureauScript ?? this.os.executionWorkspace
+      const cwd = bureauScript ?? this.workspaceDuTour
       const decision = decideVerifyScript(type, cwd)
       if (!decision.allowed) {
         return {
@@ -4601,7 +5159,7 @@ export class AppCommandBus {
     }
     const bureau = await this.bureauDeVerification(conversationId, onProgress)
     if (bureau) return this.runVerifyAt(bureau, onProgress, cible)
-    const resultat = await this.runVerifyAt(this.os.executionWorkspace, onProgress, cible)
+    const resultat = await this.runVerifyAt(this.workspaceDuTour, onProgress, cible)
     return { ...resultat, output: `${VERIFY_SANS_ISOLATION}${SAUT_PORTEE}${resultat.output}` }
   }
 
@@ -4614,7 +5172,7 @@ export class AppCommandBus {
     conversationId?: string,
     onProgress?: (text: string) => void
   ): Promise<string | undefined> {
-    const workspace = this.os.executionWorkspace
+    const workspace = this.workspaceDuTour
     const worktrees = this.os.worktrees
     if (!workspace || !worktrees) return undefined
     const runId = cleDuBureauDeVerification(conversationId)
@@ -4815,8 +5373,8 @@ export class AppCommandBus {
     signal?: AbortSignal
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const [file, ...rest] = argv
-    const sharedBin = this.os.executionWorkspace
-      ? join(this.os.executionWorkspace, 'node_modules', '.bin')
+    const sharedBin = this.workspaceDuTour
+      ? join(this.workspaceDuTour, 'node_modules', '.bin')
       : undefined
     const env =
       sharedBin && existsSync(sharedBin)
@@ -4913,7 +5471,9 @@ export class AppCommandBus {
           command: label,
           output: capVerifyOutput(
             `${output}
-[arret demande] ${label} — interrompu par l'utilisateur (Stop).`
+[arret demande] ${label} — interrompu par l'utilisateur (Stop).`,
+            undefined,
+            archiverSortie
           )
         })
       }
@@ -4946,9 +5506,33 @@ export class AppCommandBus {
             ok: code === 0,
             exitCode: code,
             command: label,
-            output: capVerifyOutput(output)
+            output: capVerifyOutput(output, undefined, archiverSortie)
           }))
       )
     })
+  }
+}
+
+/**
+ * ARCHIVE LA SORTIE COMPLETE d'une commande avant sa troncature, et rend son chemin.
+ *
+ * Mesure du 2026-09-16 : 2 434 771 caracteres de sorties de `run` ont ete jetes faute d'un endroit
+ * ou les poser, ce qui a fait REJOUER des commandes entieres juste pour relire leur fin. Le fichier
+ * atterrit dans la racine de donnees (jamais dans le depot de l'utilisateur) et reste lisible par
+ * `read_file`, qui le borne a son tour.
+ *
+ * Rend `undefined` en cas d'echec d'ecriture : une sortie tronquee sans archive vaut mieux qu'une
+ * commande qui parait avoir echoue parce que le disque est plein.
+ */
+function archiverSortie(texteComplet: string): string | undefined {
+  try {
+    const dossier = join(ensureAutowinAppData(), 'sorties')
+    mkdirSync(dossier, { recursive: true })
+    const horodatage = new Date().toISOString().replace(/[:.]/g, '-')
+    const chemin = join(dossier, `${horodatage}-${randomUUID().slice(0, 8)}.txt`)
+    writeFileSync(chemin, texteComplet, 'utf8')
+    return chemin
+  } catch {
+    return undefined
   }
 }

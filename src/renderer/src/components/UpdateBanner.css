@@ -252,3 +252,148 @@
   opacity: 0.45;
   cursor: default;
 }
+
+/*
+ * « Qui a poussé quoi ? » — un ŒIL à gauche du bouton de mise à jour, pour voir les commits
+ * ENTRANTS avant de fusionner. Ni bordure ni fond (choix utilisateur du 25/09) : c'est un regard
+ * posé sur le bouton, pas un second bouton. La liste est bornée en hauteur : le rail n'a pas de
+ * hauteur infinie et le bouton principal ne doit jamais être poussé hors de l'écran.
+ */
+/* Place mesurée le 25/09 (Segoe UI, rail de 216 px) : « Fusionner origin/main +1 » demande 135 px
+   sur UNE ligne ; le libellé en avait 139 sans l'œil, 127 avec un œil posé naïvement — le texte
+   passait alors sur deux lignes. On rend les 12 px : l'œil (16 px) mord dans la marge gauche du
+   rail, la rangée reprend la marge droite du bloc, le bouton serre un peu sa marge intérieure. */
+.rail-update-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin: 0 -4px 0 -8px;
+}
+
+.rail-update-row .rail-update-btn {
+  flex: 1;
+  min-width: 0;
+  gap: 7px;
+  padding-inline: 6px;
+}
+
+.rail-update-who {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--gold, #e9bd4e) 70%, var(--fg, #fff));
+  cursor: pointer;
+  transition: color var(--dur) var(--ease);
+}
+
+.rail-update-who:hover,
+.rail-update-who[aria-expanded='true'] {
+  color: var(--gold, #e9bd4e);
+}
+
+.rail-update-who:focus-visible {
+  outline: 1px solid var(--gold, #e9bd4e);
+  outline-offset: 1px;
+}
+
+/* Rail replié : 36 px de large, le bouton les prend tous — l'œil passe AU-DESSUS, centré. */
+.rail.is-collapsed .rail-update-row {
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.rail.is-collapsed .rail-update-row .rail-update-btn {
+  flex: none;
+}
+
+.rail-update-incoming {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  margin: 0;
+  padding: 6px 4px 6px 8px;
+  overflow-y: auto;
+  list-style: none;
+  border-left: 1px solid color-mix(in srgb, var(--gold, #e9bd4e) 30%, var(--line));
+}
+
+/* Rail replié (54 px) : la liste ne tient pas dedans, elle s'ouvre À CÔTÉ du rail. */
+.rail.is-collapsed .rail-update {
+  position: relative;
+}
+
+.rail-update-incoming.is-floating {
+  position: absolute;
+  bottom: 6px;
+  left: calc(100% + 8px);
+  z-index: 40;
+  width: 300px;
+  border: 1px solid color-mix(in srgb, var(--gold, #e9bd4e) 40%, var(--line));
+  background: var(--surface-raised, var(--bg-1, #0b0b12));
+}
+
+.rail-update-commit {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.rail-update-commit-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rail-update-commit-author {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-update-commit-when {
+  flex: none;
+  margin-left: auto;
+  color: var(--gold, #e9bd4e);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.rail-update-commit-subject {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary, var(--muted));
+}
+
+.rail-update-commit-files {
+  overflow: hidden;
+  color: var(--text-faint, var(--fg-faint));
+  font-family: var(--mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-update-commit-more {
+  color: var(--text-faint, var(--fg-faint));
+  font-size: 10.5px;
+  font-style: italic;
+}

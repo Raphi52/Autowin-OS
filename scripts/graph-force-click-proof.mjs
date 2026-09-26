@@ -16,6 +16,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, parse, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { portCdp } from './cdp-port.mjs'
 
 const argument = (nom, defaut) => {
   const i = process.argv.indexOf(nom)
@@ -41,7 +42,10 @@ const decouvrirCible = async () => {
   const ports = []
   const fichier = candidatsDevToolsPort().find((c) => existsSync(c))
   if (fichier) ports.push(readFileSync(fichier, 'utf8').trim().split(/\r?\n/)[0])
-  ports.push(process.env.AUTOWIN_CDP_PORT || '9231')
+  // Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+ports.push(String(portCdp()))
   for (const p of ports) {
     try {
       const reponse = await fetch(`http://127.0.0.1:${p}/json`, {

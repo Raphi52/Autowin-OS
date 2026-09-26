@@ -10,6 +10,7 @@ import {
   groupAssistantActivity,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  suiviDuBasApresEnvoi,
   doitIgnorerDefilementDeBascule,
   isChatNearBottom,
   scrollChatToBottom,
@@ -1512,6 +1513,18 @@ describe('chat scrolling and layout rules', () => {
       expect(doitIgnorerDefilementDeBascule({ basculeEnCours: false, gesteLecteur: false })).toBe(
         false
       )
+    })
+  })
+
+  describe('suiviDuBasApresEnvoi', () => {
+    it('un envoi AUTOMATIQUE ne ramene pas en bas un lecteur qui a remonte', () => {
+      expect(suiviDuBasApresEnvoi({ suivaitLeBas: false, envoiAutomatique: true })).toBe(false)
+    })
+    it('un envoi automatique garde le suivi d un lecteur deja en bas', () => {
+      expect(suiviDuBasApresEnvoi({ suivaitLeBas: true, envoiAutomatique: true })).toBe(true)
+    })
+    it('un envoi TAPE par l utilisateur ramene toujours en bas', () => {
+      expect(suiviDuBasApresEnvoi({ suivaitLeBas: false, envoiAutomatique: false })).toBe(true)
     })
   })
 

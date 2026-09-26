@@ -286,7 +286,13 @@ export function backgroundSurvivalInvocation(
   journalPath: string,
   stdin = '',
   platform: NodeJS.Platform = process.platform,
-  diagnosticPath = `${journalPath}.stderr.log`
+  diagnosticPath = `${journalPath}.stderr.log`,
+  /**
+   * Environnement que le VRAI processus doit recevoir. Le relais repartait de process.env et jetait
+   * celui de l'appelant : un agent Codex orchestré ne voyait jamais AUTOWIN_CONVERSATION_ID
+   * (mesure 2026-09-14, survivable-spawn.test.ts « transmet l'environnement demandé »).
+   */
+  baseEnv: NodeJS.ProcessEnv = process.env
 ): {
   bin: string
   args: string[]
@@ -329,7 +335,7 @@ export function backgroundSurvivalInvocation(
       Buffer.from(journalPath, 'utf8').toString('base64'),
       Buffer.from(diagnosticPath, 'utf8').toString('base64')
     ],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    env: { ...baseEnv, ELECTRON_RUN_AS_NODE: '1' },
     relay: true,
     inputPath,
     completionPath
@@ -402,7 +408,8 @@ export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
         journal.path,
         input.stdin ?? '',
         process.platform,
-        journal.diagnosticPath
+        journal.diagnosticPath,
+        input.env ?? process.env
       )
     : { bin: input.bin, args: input.args, relay: false, completionPath: '' }
   const child = spawn(invocation.bin, invocation.args, {

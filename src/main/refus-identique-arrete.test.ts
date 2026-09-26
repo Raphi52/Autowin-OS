@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { deciderDuPassage } from './boucle-reparation'
 import {
   CLOSURE_UPSTREAM_REFUSAL,
   arretDeLaReparation,
@@ -108,8 +107,16 @@ describe('boucle de réparation : arrêt sur un refus hors de portée de build',
       'hors de portée'
     )
 
-    const source = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
-    expect(source).toContain('arretDeLaReparation({')
-    expect(source).toContain('motifsPrecedents = [...gate.reasons]')
+    // Le CABLAGE se prouve en EXECUTANT la decision que la boucle appelle (`deciderDuPassage`,
+    // src/main/boucle-reparation.ts), plus en lisant le texte de orchestrator.ts : un scan textuel
+    // ne prouve pas l'execution (objection du juge, conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f).
+    const passage = deciderDuPassage({
+      attempt: 1,
+      reparationsAccordees: 5,
+      plafondDur: 10,
+      motifsCourants: amont,
+      etat: { motifsPrecedents: amont, refusIdentiquesConsecutifs: 0 }
+    })
+    expect(passage.arret).toBe(motif)
   })
 })

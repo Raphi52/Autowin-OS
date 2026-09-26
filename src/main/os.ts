@@ -32,7 +32,13 @@ import { CostAggregator } from './dashboards/cost'
 import { isBlocked } from './dashboards/runs'
 import { recurrentPatterns, parseJsonl } from './dashboards/kaizen'
 import { loadBrainGraph, scanBrainGraphs, type BrainGraphRef } from './viz/fs-brains'
-import { scanRuns, scanRunsPourSnapshot, type RunEntry } from './dashboards/runs-scan'
+import {
+  attachConversationIds,
+  attachPublicationStates,
+  scanRuns,
+  scanRunsPourSnapshot,
+  type RunEntry
+} from './dashboards/runs-scan'
 import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
 import {
@@ -55,6 +61,7 @@ import {
   projectPublicationNeedsRetry,
   type AutoCloseReport
 } from './run-autoclose'
+import { publierTourDeChat, type ChatTurnStart } from './chat-turn-publication'
 import { amitelBrainRoot } from './amitel-context'
 import { regimePhases } from './task-regime'
 import type { NodePhase } from './skill-pipeline'
@@ -79,7 +86,10 @@ import { WorktreeRunStateStore } from './store/worktree-run-state'
 import type { WatchdogMutationClaimsSink } from './task-manager/types'
 import type { WatchdogMutationClaims } from './task-manager/types'
 import { preparedCommitMutationEvidence } from './providers/workspace-mutation-evidence'
-import { appendExecutionEvidenceFileTrace } from './activity/conversation-file-trace-spool'
+import {
+  appendExecutionEvidenceFileTrace,
+  readRecentConversationFileTraces
+} from './activity/conversation-file-trace-spool'
 import { repositoryWorktreeIdentity } from './store/worktree-repository'
 import type {
   WorktreeAgentActivity,
@@ -225,7 +235,19 @@ export class AutowinOS {
    * est realisee, et c'est le seul endroit qu'un harnais doit remplacer pour tester le chemin sans
    * lancer un vrai orchestrateur.
    */
-  protected orchestrateurPour(workflow?: WorkflowRunOverride, task = ''): Orchestrator {
+  protected orchestrateurPour(
+    workflow?: WorkflowRunOverride,
+    task = '',
+    workspace?: string
+  ): Orchestrator {
+    // LE DOSSIER DU RUN, et non celui du DEMARRAGE (2026-09-17).
+    // `orchestratorDeps.executionWorkspace` est fige a la construction de l'OS : il ne peut pas
+    // savoir qu'une conversation est rangee sur un autre depot. L'appelant le resout par tour et
+    // le passe ici ; un rangement absent ou inutilisable retombe sur le global, comme avant.
+    const deps = {
+      ...this.orchestratorDeps,
+      executionWorkspace: workspace ?? this.executionWorkspace
+    }
     /*
      * FIXTURE D'ORCHESTRATION — on remplace le FOURNISSEUR, jamais le pipeline.
      *
@@ -239,9 +261,10 @@ export class AutowinOS {
      */
     const scenario = scenarioDemande(task)
     if (scenario) {
-      assertDepotJetable(this.executionWorkspace)
+      // Le depot verifie est celui ou le run va REELLEMENT travailler, pas le global.
+      assertDepotJetable(deps.executionWorkspace)
       return new Orchestrator({
-        ...this.orchestratorDeps,
+        ...deps,
         registry: new ProviderRegistry().register(fournisseurFixtureOrchestration(scenario)),
         // Les QUATRE rôles avec : sans eux, le premier rôle oublié rappelle un vrai fournisseur.
         roles: rolesFixture(),
@@ -249,7 +272,7 @@ export class AutowinOS {
         currentWorkflow: () => workflow
       })
     }
-    return new Orchestrator({ ...this.orchestratorDeps, currentWorkflow: () => workflow })
+    return new Orchestrator({ ...deps, currentWorkflow: () => workflow })
   }
 
   private async poseConversationWorkflow(
@@ -457,6 +480,7 @@ export class AutowinOS {
             if (this.autoClose) {
               this.lastAutoClose = await closeGreenRunOnDisk({
                 runId: publication.runId,
+                direct: true,
                 task: publication.task ?? 'Run récupéré',
                 projectRepo: executionWorkspace,
                 brainRepo: amitelBrainRoot(),
@@ -661,6 +685,7 @@ export class AutowinOS {
           if (!this.autoClose || !baselinePromise) return
           this.lastAutoClose = await closeGreenRunOnDisk({
             runId,
+            direct: true,
             task,
             projectRepo: executionWorkspace,
             brainRepo: amitelBrainRoot(),
@@ -699,6 +724,41 @@ export class AutowinOS {
   }
   getAutoClose(): { enabled: boolean; last?: AutoCloseReport } {
     return { enabled: this.autoClose, ...(this.lastAutoClose ? { last: this.lastAutoClose } : {}) }
+  }
+
+  /** Lu au DÉPART d'un tour de chat : la photo de l'arbre n'est prise que si l'enchaînement est actif. */
+  autoCloseEnabled(): boolean {
+    return this.autoClose
+  }
+
+  /** Une publication de tour de chat à la fois, dans l'ordre des tours : git n'aime pas le parallèle. */
+  private chatTurnPublications: Promise<unknown> = Promise.resolve()
+
+  /**
+   * Enchaînement auto d'un tour de chat TERMINÉ (voir `chat-turn-publication.ts`). Relit l'interrupteur
+   * au moment de publier : le désactiver pendant le tour suffit à ne rien pousser.
+   */
+  publishChatTurn(input: {
+    conversationId: string
+    turnId: string
+    request: string
+    debut: ChatTurnStart
+  }): Promise<AutoCloseReport | undefined> {
+    const next = this.chatTurnPublications.then(async () => {
+      if (!this.autoClose) return undefined
+      const report = await publierTourDeChat({
+        ...input,
+        traces: await readRecentConversationFileTraces()
+      })
+      if (report) {
+        this.lastAutoClose = report
+        // Même signal que la fin d'une tâche d'agent : le panneau Git relit le dernier rapport.
+        this.worktreeActivityListener?.(this.getWorktreeActivity())
+      }
+      return report
+    })
+    this.chatTurnPublications = next.catch(() => undefined)
+    return next
   }
 
   /** Met à jour la source live du fan-out (appelé par la topology au boot et à chaque changement). */
@@ -915,37 +975,16 @@ export class AutowinOS {
     const settings = loadOrchestrationBudget(
       join(ensureAutowinAppData(), 'orchestration-budget.json')
     )
-    const envCalls = Number(process.env.AUTOWIN_CHAT_CALL_CAP)
-    const envTokens = Number(process.env.AUTOWIN_CHAT_TOKEN_CAP)
-    const envUsd = Number(process.env.AUTOWIN_CHAT_USD_CAP)
     /*
-     * Le plafond d'un tour de chat vient du REGLAGE (`maxChatProviderCalls`, 50 par defaut), plus
-     * d'un `6` cable ici.
+     * Le plafond d'un tour de chat vient UNIQUEMENT du REGLAGE (`maxChatProviderCalls`, 50 par
+     * defaut ; `maxTotalTokens` ; `maxUsd`).
      *
-     * Mesure le 2026-08-25 sur conv-1397 : le tour a ete coupe sur « Budget d'appels provider
-     * atteint (6) » APRES cinq editions reussies, juste avant sa verification. Le 6 datait de
-     * l'epoque ou un tour de chat valait UN appel provider ; un tour agentique en consomme un par
-     * ETAPE, donc ce plafond comptait des coups et tuait le travail en plein milieu.
-     *
-     * Le cap d'environnement continue de RESSERRER : un plafond pose explicitement reste un contrat.
+     * Les caps d'environnement AUTOWIN_CHAT_CALL_CAP / _TOKEN_CAP / _USD_CAP ont ete SUPPRIMES le
+     * 2026-09-16 avec le budget du tour de chat : plus aucun reglage cache ne resserre un tour.
      */
-    const maxProviderCalls =
-      Number.isSafeInteger(envCalls) && envCalls > 0
-        ? Math.min(settings.maxChatProviderCalls, envCalls)
-        : settings.maxChatProviderCalls
-    const maxTotalTokens =
-      Number.isSafeInteger(envTokens) && envTokens > 0
-        ? Math.min(settings.maxTotalTokens, envTokens)
-        : settings.maxTotalTokens
-    // `maxUsd: null` dans le reglage veut dire « pas de plafond de depense » : un 2 $ cable ici le
-    // contredisait en silence. Seul un cap d'environnement pose par l'utilisateur reserre encore.
-    const envUsdCap = Number.isFinite(envUsd) && envUsd > 0 ? envUsd : null
-    const maxUsd =
-      settings.maxUsd === null
-        ? envUsdCap
-        : envUsdCap === null
-          ? settings.maxUsd
-          : Math.min(settings.maxUsd, envUsdCap)
+    const maxProviderCalls = settings.maxChatProviderCalls
+    const maxTotalTokens = settings.maxTotalTokens
+    const maxUsd = settings.maxUsd
     const quote = compileExecutionQuote(task || 'chat', {
       maxProviderCalls,
       maxTotalTokens,
@@ -969,7 +1008,8 @@ export class AutowinOS {
      *
      * Ce compteur compte des ETAPES (lire, editer, verifier), pas de la depense : le laisser tuer un
      * tour agentique en plein travail rend la pire issue possible — paye, et rien de fini. On lui
-     * rend donc la valeur decidee plus haut, qu'un cap d'environnement continue de RESSERRER.
+     * rend donc la valeur decidee plus haut, qui vient du SEUL reglage utilisateur (les caps
+     * d'environnement ont ete supprimes le 2026-09-16 : plus rien ne la resserre).
      */
     quote.limits.maxProviderCalls = maxProviderCalls
     return this.executionSupervisor.run(quote, signal, execute, undefined, onUsageSettlement)
@@ -1039,6 +1079,21 @@ export class AutowinOS {
     return this.roles.all()
   }
 
+  /**
+   * Change PLUSIEURS rôles et persiste UNE seule fois. `setRole` en boucle réécrivait `roles.json`
+   * par rôle (écriture temporaire + relectures de validation, toutes synchrones) : mesuré le
+   * 2026-09-23 dans gels.jsonl, 8 lectures bloquantes pour 20,7 s de gel sur le fil principal.
+   */
+  setRoles(bindings: ReadonlyArray<readonly [Role, RoleBinding]>): Record<Role, RoleBinding> {
+    if (bindings.length === 0) return this.roles.all()
+    const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
+    for (const [role, binding] of bindings) proposed.setBinding(role, binding)
+    const all = proposed.all()
+    saveRoleBindings(all)
+    for (const [role] of bindings) this.roles.setBinding(role, all[role])
+    return this.roles.all()
+  }
+
   // --- Orchestration disciplinée (le cœur) ---
   async runTask(
     task: string,
@@ -1070,6 +1125,11 @@ export class AutowinOS {
       workflowOverride?: WorkflowRunOverride
       publication?: 'auto' | 'hold'
       sourceSnapshot?: { workspaceId: string; baseSha: string; contentHash: string }
+      /**
+       * Le dossier de travail DE CE RUN, resolu par l'appelant depuis la conversation.
+       * Absent -> `this.executionWorkspace`, le repli global : comportement d'avant, a l'identique.
+       */
+      workspace?: string
     } = {}
   ): Promise<OrchestrationResult> {
     await this.waitUntilReady()
@@ -1081,53 +1141,90 @@ export class AutowinOS {
       join(ensureAutowinAppData(), 'orchestration-budget.json')
     )
     const quote = resumeControl?.executionQuote ?? compileExecutionQuote(task, settings)
-    return this.executionSupervisor.run(
-      quote,
-      signal,
-      async () => {
-        // LE branchement qui fait qu'un workflow sélectionné change quelque chose. Sans lui, choisir
-        // un profil n'écrivait qu'un champ dans un fichier : l'écran promettait un pilotage qui
-        // n'existait pas.
-        //
-        // Résolu POUR CE RUN, puis enfermé dans la closure d'un orchestrateur qui n'appartient qu'à
-        // lui. Avant, il était posé dans un champ partagé de l'instance et retiré dans un `finally` :
-        // deux conversations simultanées se volaient leur workflow, et le `finally` de l'une effaçait
-        // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
-        const workflowDuRun =
-          runOptions.workflowOverride ?? (await this.poseConversationWorkflow(conversationId, task))
-        const orchestrator = this.orchestrateurPour(workflowDuRun, task)
-        const result = await orchestrator.run(
-          task,
-          onStep,
-          onPhase,
-          onDelta,
-          this.executionSupervisor.currentSignal(),
-          collectedContext,
-          resumeOutputs,
-          conversationId,
-          bindingOverride,
-          onBrainRetrieved,
-          turnId,
-          onRunLifecycle,
-          admittedRuntime,
-          causalWatchPaths,
-          onLateCausalMutationClaims,
-          {
-            publication: runOptions.publication,
-            sourceSnapshot: runOptions.sourceSnapshot,
-            resumeRunId: resumeControl?.runId
+    // Runs que CE process execute en ce moment : une demande identique s'y rattache au lieu de
+    // tenter une reprise de leur checkpoint (voir `isOrchestrationLive`).
+    const runIdsDeCetAppel = new Set<string>()
+    const suivreLeRun = (event: RunLifecycleEvent): void => {
+      if (event.runId && !runIdsDeCetAppel.has(event.runId)) {
+        runIdsDeCetAppel.add(event.runId)
+        this.liveOrchestrationRunIds.add(event.runId)
+      }
+      onRunLifecycle?.(event)
+    }
+    try {
+      return await this.executionSupervisor.run(
+        quote,
+        signal,
+        async () => {
+          // LE branchement qui fait qu'un workflow sélectionné change quelque chose. Sans lui, choisir
+          // un profil n'écrivait qu'un champ dans un fichier : l'écran promettait un pilotage qui
+          // n'existait pas.
+          //
+          // Résolu POUR CE RUN, puis enfermé dans la closure d'un orchestrateur qui n'appartient qu'à
+          // lui. Avant, il était posé dans un champ partagé de l'instance et retiré dans un `finally` :
+          // deux conversations simultanées se volaient leur workflow, et le `finally` de l'une effaçait
+          // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
+          const workflowDuRun =
+            runOptions.workflowOverride ??
+            (await this.poseConversationWorkflow(conversationId, task))
+          const orchestrator = this.orchestrateurPour(workflowDuRun, task, runOptions.workspace)
+          const result = await orchestrator.run(
+            task,
+            onStep,
+            onPhase,
+            onDelta,
+            this.executionSupervisor.currentSignal(),
+            collectedContext,
+            resumeOutputs,
+            conversationId,
+            bindingOverride,
+            onBrainRetrieved,
+            turnId,
+            suivreLeRun,
+            admittedRuntime,
+            causalWatchPaths,
+            onLateCausalMutationClaims,
+            {
+              publication: runOptions.publication,
+              sourceSnapshot: runOptions.sourceSnapshot,
+              resumeRunId: resumeControl?.runId
+            }
+          )
+          result.quote = quote
+          result.usage = this.executionSupervisor.currentSnapshot()
+          if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
+            result.costUsd = result.usage.knownCostUsd
           }
-        )
-        result.quote = quote
-        result.usage = this.executionSupervisor.currentSnapshot()
-        if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
-          result.costUsd = result.usage.knownCostUsd
+          return result
+        },
+        resumeControl?.usage,
+        onLateUsageSettlement,
+        {
+          /*
+           * PATIENTER PLUTOT QUE REFUSER (mesure du 2026-09-12 : 17 refus « appel(s) provider encore
+           * actif(s) » sur 75 lancements, la famille d'echec la plus frequente). Le compteur qui
+           * bloque est PERSISTE : l'appel en vol le remet a zero en se reglant, dans ce meme process.
+           * On relit donc le checkpoint du run repris jusqu'a ce qu'il retombe, au lieu de renvoyer
+           * l'utilisateur retaper sa demande au tour suivant.
+           */
+          relire: () =>
+            resumeControl?.runId
+              ? loadOrchestrationStates(this.orchestrationStateRoot).find(
+                  (etat) => etat.runId === resumeControl.runId
+                )?.usage
+              : undefined
         }
-        return result
-      },
-      resumeControl?.usage,
-      onLateUsageSettlement
-    )
+      )
+    } finally {
+      for (const runId of runIdsDeCetAppel) this.liveOrchestrationRunIds.delete(runId)
+    }
+  }
+
+  private readonly liveOrchestrationRunIds = new Set<string>()
+
+  /** Vrai si ce process est en train d'executer ce run (entre son admission et la fin de `runTask`). */
+  isOrchestrationLive(runId: string): boolean {
+    return this.liveOrchestrationRunIds.has(runId)
   }
 
   /**
@@ -1305,6 +1402,16 @@ export class AutowinOS {
     return this.trust.ranking()
   }
   /**
+   * L'HUMAIN TRANCHE : « c'etait bon » / « c'etait faux » sur les verdicts d'un run.
+   *
+   * Sans ce geste, trust.jsonl n'accumulait que des verdicts non confirmes et `calibration()`
+   * rendait structurellement accuracy:null — un classement de juges sans aucune mesure.
+   * Rend le nombre de verdicts re-etiquetes (0 si le run est inconnu du registre).
+   */
+  confirmerVerdictJuge(runId: string, humanTruth: 'green' | 'red'): number {
+    return this.trust.confirmer(runId, humanTruth)
+  }
+  /**
    * Gate déterministe évalué sur les VRAIS runs vivants (plus de démo hardcodée).
    *
    * BORNÉ : ce chemin est appelé par `snapshot()`, donc à CHAQUE tour de chat. La variante sans
@@ -1312,8 +1419,13 @@ export class AutowinOS {
    * p95 1 288 ms / max 19 250 ms par tour le 2026-08-28. Le geste explicite de l'utilisateur
    * (Observatoire) garde `listRuns()`, lui, intact.
    */
-  async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }>> {
-    return (await scanRunsPourSnapshot()).map((r) => ({ ...r, blocked: isBlocked(r.summary) }))
+  async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }> & { horsFenetre?: number }> {
+    const fenetre = await scanRunsPourSnapshot()
+    // `horsFenetre` suit la liste : sans lui, un run bloqué plus ancien que la borne disparaît en silence.
+    return Object.assign(
+      fenetre.map((r) => ({ ...r, blocked: isBlocked(r.summary) })),
+      { horsFenetre: fenetre.horsFenetre }
+    )
   }
   kaizenPatterns(jsonl: string): ReturnType<typeof recurrentPatterns> {
     return recurrentPatterns(parseJsonl(jsonl))
@@ -1340,7 +1452,13 @@ export class AutowinOS {
     this.brainGraphCache.set(key, graph)
     return graph
   }
-  listRuns(): Promise<RunEntry[]> {
-    return scanRuns()
+  /**
+   * Runs du dépôt, enrichis de ce que le RUN.md ne dit pas : la conversation d'origine et l'état de
+   * PUBLICATION du travail (retenu/bloqué). Sans ce second champ, un run vert dont l'intégration
+   * n'est jamais passée s'affichait comme un run vert ordinaire.
+   */
+  async listRuns(): Promise<RunEntry[]> {
+    const avecConversation = attachConversationIds(await scanRuns(), this.conversations.list())
+    return attachPublicationStates(avecConversation, this.worktrees?.runRecords() ?? [])
   }
 }

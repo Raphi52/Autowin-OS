@@ -1,6 +1,7 @@
 import type { ExecutionEvidence } from './providers/types'
 import { attributedPaths, normalized } from './providers/causal-verification-evidence'
 import { classifyMutationConfidence } from './task-mutation-classifier'
+import { cadrageRefuse } from './frame-cas-limites'
 
 export const ROOT_DOD = {
   analysis: 'Analyse demandee presente dans le livrable',
@@ -19,8 +20,30 @@ export interface RootExecutionRequirements {
 const ANALYSIS_REQUEST = /\b(?:scout|audit|analys|inspect|cherche|trouve|repere|explore)\w*/i
 const TEST_REQUEST =
   /\b(?:tests?|test(?:e|er|ez|s)?|vitest|verification|verifi\w*|rouge\s*(?:vers|->|→)\s*vert|exit\s*0)\b/i
+/**
+ * « PUBLIER » TOUT SEUL N'EST PAS UN COMMIT — mesure du 2026-09-16, conv-597,
+ * turnId 4e502786-4887-4101-85b3-ea2dee304091.
+ *
+ * La demande etait « ... online ready a etre PUBLIE SUR LE MARKET » : une mise en vente sur une
+ * boutique (Roblox, Steam, itch.io, App Store). Le mot `publie\w*` seul suffisait pourtant a exiger
+ * « Commit demande publie avec une identite Git verifiable ». Lu dans le RUN.md de ce run : la case
+ * est restee `- [ ]` alors qu'aucun commit n'avait jamais ete demande, et le run a ferme
+ * `status: green` avec cette obligation non tenue — une DoD qui ment des deux cotes (elle reclame ce
+ * qui n'est pas demande, puis se laisse fermer quand meme).
+ *
+ * Le verbe garde sa valeur par defaut — « repare puis publie » reste un commit demande — mais il
+ * PERD cette valeur des que la phrase nomme une BOUTIQUE dans les trois mots qui suivent (market,
+ * store, boutique, Steam, itch, Roblox, magasin, plateforme). Le changement est volontairement
+ * borne a cette levee : tout le reste du motif est inchange. Sens d'erreur impose par ce fichier :
+ * faux negatif tolere, faux positif JAMAIS.
+ */
+// fix-ok: le motif COMMIT_REQUEST prenait le verbe « publier » d'une mise en vente sur boutique
+// (« online ready a etre publie sur le market », conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091)
+// pour une demande de commit git : la DoD exigeait alors un commit jamais demande, case laissee
+// `- [ ]` dans le RUN.md et run ferme `status: green` malgre tout. Cause mesuree, correctif borne
+// a la seule levee « publie + boutique dans les 3 mots suivants ».
 const COMMIT_REQUEST =
-  /\b(?:publie\w*(?:\s+(?:les?|un|une|ces|mes|nos|vos)\s+(?:changements?|commit|branche))?|push(?:e|er|ez|ons)?|(?:fais|fait|faire|cree|realise)\w*\s+(?:un\s+)?commit|(?:puis|ensuite|et)\s+commit(?:e|er|ez)?|commit(?:e|er|ez)?\s+(?:les?\s+)?(?:changements?|modifications?|code|branche))\b/i
+  /\b(?:publie\w*(?!(?:[\s-]+[\w'’]+){0,3}[\s-]+(?:markets?|marketplaces?|stores?|boutiques?|magasins?|plateformes?|steam|itch|roblox|epic|(?:app|play)\s*stores?)\b)(?:\s+(?:les?|un|une|ces|mes|nos|vos)\s+(?:changements?|commit|branche))?|push(?:e|er|ez|ons)?|(?:fais|fait|faire|cree|realise)\w*\s+(?:un\s+)?commit|(?:puis|ensuite|et)\s+commit(?:e|er|ez)?|commit(?:e|er|ez)?\s+(?:les?\s+)?(?:changements?|modifications?|code|branche))\b/i
 
 const CLAUSE_BOUNDARY = /(?:[.;:!?,]|\b(?:mais|puis|ensuite|cependant|toutefois)\b)/gi
 const NEGATED_MENTION_PREFIX =
@@ -266,8 +289,19 @@ const CIBLE_ANCREE = new RegExp(
 const HORS_PERIMETRE =
   /\b(?:perimetre\s+out|out\s+of\s+scope|hors\s+perimetre|reste\s+intacts?|touche\w*\s+pas|sans\s+toucher|pas\s+toucher|ne\s+pas\s+modifier|exclu\w*)\b/i
 
+/**
+ * Le dossier de preuve joint est une DONNEE rapportee, jamais une demande.
+ *
+ * Defaut vecu (conv-470, tour 52fbe05f-0086-4806-8f07-c8762e8caa35) : la demande `/kaizen j'ai
+ * rien en preprompt` ne nommait aucun fichier, mais le dossier joint recopiait un message anterieur
+ * portant « Ancrage : src/main/model-quotas.ts:62 ». Le gate a exige la mutation de ce fichier et a
+ * refuse un travail juste — exactement le faux positif que ce garde s'interdit.
+ */
+const MARQUEUR_DOSSIER_JOINT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
+
 export function ciblesNommees(task: string): string[] {
-  const texte = task.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  const demande = task.split(MARQUEUR_DOSSIER_JOINT)[0]
+  const texte = demande.normalize('NFD').replace(/\p{Diacritic}/gu, '')
   const cibles: string[] = []
   for (const match of texte.matchAll(CIBLE_ANCREE)) {
     const index = match.index ?? 0
@@ -401,8 +435,22 @@ export function etatDeCloture(
   if (cibleManquee) {
     checks.push({ label: libelleCibleNommee(ciblesNommees(task)), checked: false })
   }
+  // Garde « cadrage refusé » (conv-687, 18/09) : si le DERNIER frame porte encore le refus des cas
+  // limites, le run n'a pas de cadrage valide — il ne ferme pas vert. Un frame refait après passe.
+  // Portee (conv-710, 19/09) : la garde ne vaut que pour un run dont le cadrage EST le resultat
+  // (scout → frame, conv-687). Si un `build` a joue APRES le dernier frame, le travail a ete produit
+  // et prouve par ses propres preuves ; la reparation ne rejoue que `build` et ne peut plus refaire
+  // le cadrage — le refus devenait insatisfaisable, affiche en « Promis mais pas fait » a l'agent.
+  const indexDernierFrame = phases.map((p) => p.phase).lastIndexOf('frame')
+  const dernierFrame = indexDernierFrame >= 0 ? phases[indexDernierFrame] : undefined
+  const buildApresCadrage = phases.slice(indexDernierFrame + 1).some((p) => p.phase === 'build')
+  const cadrageEnRefus =
+    indexDernierFrame >= 0 && !buildApresCadrage && cadrageRefuse(dernierFrame?.text ?? '')
+  if (cadrageEnRefus) {
+    checks.push({ label: 'Cadrage accepté par le contrôle des cas limites', checked: false })
+  }
   return {
-    status: !cibleManquee && (lectureSeule || evidenceOk) ? 'green' : 'red',
+    status: !cibleManquee && !cadrageEnRefus && (lectureSeule || evidenceOk) ? 'green' : 'red',
     dod: checks
   }
 }

@@ -1814,8 +1814,11 @@ describe('AppCommandBus command execution policy', () => {
       }),
       act: vi.fn().mockResolvedValue({ executed: 1 })
     }
+    // L'utilisateur demande son ecran : seule cette demande autorise un geste reel (kaizen conv-854).
+    const os = fakeOs()
+    os.conversations.get('conv-1').messages.push({ role: 'user', content: 'clique sur mon ecran', ts: 2 })
     const bus = new AppCommandBus(
-      fakeOs(),
+      os,
       () => {},
       undefined,
       undefined,
@@ -1831,13 +1834,16 @@ describe('AppCommandBus command execution policy', () => {
     expect(bus.catalog().map(({ name }) => name)).toEqual(
       expect.arrayContaining(['desktop_observe', 'desktop_act'])
     )
-    await expect(bus.exec('desktop_observe')).resolves.toMatchObject({
+    // `ecran_utilisateur` : la garde non-invasive (conv-586) refuse sinon le premier appel du tour.
+    await expect(bus.exec('desktop_observe', { ecran_utilisateur: true })).resolves.toMatchObject({
       ok: true,
       data: { width: 1280, height: 720 },
       attachments: [image]
     })
+    // Premier geste du tour toujours refuse, meme drapeau pose (kaizen conv-854).
+    await bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true }, 'conv-1')
     await expect(
-      bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }] })
+      bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true }, 'conv-1')
     ).resolves.toMatchObject({ ok: true, data: { executed: 1 } })
     expect(desktop.act).toHaveBeenCalledWith([{ type: 'click', x: 10, y: 20 }])
   })
@@ -1999,6 +2005,83 @@ describe('AppCommandBus command execution policy', () => {
     expect(result).toMatchObject({ ok: false })
     expect(observedResumeControl).toMatchObject({ usage: { activeCalls: 1 } })
     expect(forget).not.toHaveBeenCalled()
+  })
+
+  it('reconcilie un appel actif laisse par un process mort avant de reprendre depuis le chat', async () => {
+    // conv-691 (2026-09-18) : l'agent build d'un run survit a la fermeture de l'app, finit, mais le
+    // checkpoint garde activeCalls=1. Seul le demarrage le reconciliait ; le chemin du chat reprenait
+    // le verrou tel quel et chaque relance etait refusee « appel(s) provider encore actif(s) ».
+    const os = fakeOs()
+    let observedResumeControl: unknown
+    const reconcile = vi.fn(() => ({
+      runId: 'run-orphelin',
+      task: '/build corrige la typo',
+      conversationId: 'conv-1',
+      phaseOutputs: [{ phase: 'frame', text: 'cadrage deja paye' }],
+      executionQuote: { id: 'quote-o' },
+      usage: { quoteId: 'quote-o', activeCalls: 0 },
+      startedAt: 1,
+      updatedAt: 3
+    }))
+    os.resumableOrchestrationForTask = () => ({
+      runId: 'run-orphelin',
+      task: '/build corrige la typo',
+      conversationId: 'conv-1',
+      phaseOutputs: [{ phase: 'frame', text: 'cadrage deja paye' }],
+      executionQuote: { id: 'quote-o' },
+      usage: { quoteId: 'quote-o', activeCalls: 1 },
+      startedAt: 1,
+      updatedAt: 2
+    })
+    os.reconcileResumableOrchestrationForRelaunch = reconcile
+    os.runTask = async (...args: unknown[]) => {
+      observedResumeControl = args[12]
+      throw new Error('stop')
+    }
+
+    await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1'
+    )
+
+    expect(reconcile).toHaveBeenCalledWith('run-orphelin', expect.any(Function))
+    expect(observedResumeControl).toMatchObject({ usage: { activeCalls: 0 } })
+  })
+
+
+  it('rattache la demande au run VIVANT au lieu de tenter une reprise refusee', async () => {
+    // Mesure conv-691 (2026-09-18, 06:41 puis 06:45) : le mode auto lance run-1c4e103133ad-1 avec
+    // le prompt suggere ; le MEME texte arrive ensuite comme tour utilisateur et le chat relance
+    // `orchestrate`. La cle de reprise tombe sur le checkpoint du run encore en cours dans CE process
+    // (activeCalls=1 : sa phase build tourne) -> 60 s d'attente puis « Reprise refusee », alors que
+    // le vrai run continuait et ecrivait son code. Un run vivant n'est pas a reprendre : on s'y rattache.
+    const os = fakeOs()
+    const runTask = vi.fn()
+    os.resumableOrchestrationForTask = () => ({
+      runId: 'run-vivant',
+      task: '/build corrige la typo',
+      conversationId: 'conv-1',
+      phaseOutputs: [{ phase: 'frame', text: 'cadre' }],
+      executionQuote: { id: 'quote-vivant' },
+      usage: { quoteId: 'quote-vivant', activeCalls: 1 },
+      startedAt: 1,
+      updatedAt: 2
+    })
+    os.isOrchestrationLive = (runId: string) => runId === 'run-vivant'
+    os.runTask = runTask
+
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { runId: 'run-vivant', status: 'running', reused: true }
+    })
+    expect(runTask).not.toHaveBeenCalled()
   })
 
   it("oublie l'ancien checkpoint seulement apres l'admission effective de la reprise", async () => {

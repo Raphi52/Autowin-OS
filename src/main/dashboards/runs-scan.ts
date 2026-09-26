@@ -1,6 +1,7 @@
 import { readdir, readFile, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { parseRun, type RunSummary } from './runs'
+import { publicationEnClair } from '../runs/run-interruption'
 
 /**
  * Scanne les RUN.md vivants du kit autowin (~/.claude/runs/<session>/<sujet>-workspace/RUN.md)
@@ -13,6 +14,73 @@ export interface RunEntry {
   path: string
   mtime: number
   summary: RunSummary
+  /**
+   * Conversation qui a produit ce run, quand elle est connue. La racine des runs ne la porte pas
+   * (`<session>` y est un identifiant de session CLI) : le lien vit côté conversations, dans
+   * `runPaths`. Sans lui, une ligne de run est un cul-de-sac — on voit « red · sujet » sans pouvoir
+   * demander pourquoi.
+   */
+  conversationId?: string
+  /**
+   * État de PUBLICATION du travail de cette conversation, quand il est sans ambiguïté
+   * (`held` = retenu, `blocked` = bloqué). Distinct du statut du RUN.md : un run peut être `green`
+   * avec sa DoD complète ET son intégration retenue — c'est ce cas qui était invisible.
+   */
+  publication?: string
+  /** Le même état en clair, dans le vocabulaire de `run-interruption` (une seule source). */
+  publicationLabel?: string
+}
+
+/** États de publication qui réclament une attention : les seuls que le rail a besoin de nommer. */
+const PUBLICATIONS_EN_ATTENTE = new Set(['held', 'blocked'])
+
+/**
+ * Rattache à chaque run l'état de publication de sa conversation, SANS jamais le deviner.
+ *
+ * Un RUN.md ne porte ni `runId` ni état de publication : le seul lien disponible est la
+ * conversation. On n'attache donc l'état que si la conversation a EXACTEMENT UN travail en attente
+ * (`held`/`blocked`) — au-delà, on ne saurait pas dire lequel des runs est concerné, et on préfère
+ * ne rien afficher plutôt qu'attribuer un blocage au mauvais run.
+ */
+export function attachPublicationStates(
+  entries: RunEntry[],
+  records: readonly { conversationId?: string; publication: string }[]
+): RunEntry[] {
+  const enAttente = new Map<string, string[]>()
+  for (const record of records) {
+    if (!record.conversationId || !PUBLICATIONS_EN_ATTENTE.has(record.publication)) continue
+    const deja = enAttente.get(record.conversationId) ?? []
+    deja.push(record.publication)
+    enAttente.set(record.conversationId, deja)
+  }
+  if (enAttente.size === 0) return entries
+  return entries.map((entry) => {
+    const cle = entry.conversationId ?? entry.session
+    const etats = enAttente.get(cle)
+    if (!etats || etats.length !== 1) return entry
+    return { ...entry, publication: etats[0], publicationLabel: publicationEnClair(etats[0]) }
+  })
+}
+
+/**
+ * Rattache chaque run à la conversation dont les `runPaths` le citent. Comparaison sur chemin
+ * NORMALISÉ (casse ignorée sous Windows), comme `deleteListedRun`.
+ */
+export function attachConversationIds(
+  entries: RunEntry[],
+  conversations: readonly { id: string; runPaths?: string[] }[]
+): RunEntry[] {
+  const parConversation = new Map<string, string>()
+  for (const conversation of conversations) {
+    for (const runPath of conversation.runPaths ?? []) {
+      parConversation.set(comparablePath(runPath), conversation.id)
+    }
+  }
+  if (parConversation.size === 0) return entries
+  return entries.map((entry) => {
+    const conversationId = parConversation.get(comparablePath(entry.path))
+    return conversationId ? { ...entry, conversationId } : entry
+  })
 }
 
 /** Racine des runs (override possible via AUTOWIN_RUN_ROOT). */
@@ -129,7 +197,21 @@ export async function deleteListedRun(runPath: string, root = runsRoot()): Promi
  */
 export const LIMITE_RUNS_SNAPSHOT = 24
 
-/** Variante BORNÉE destinée au chemin chaud — jamais `scanRuns()` sans borne. */
-export function scanRunsPourSnapshot(root = runsRoot()): Promise<RunEntry[]> {
-  return scanRuns(root, { limit: LIMITE_RUNS_SNAPSHOT })
+/**
+ * Une fenêtre de runs qui SAIT ce qu'elle n'a pas lu : `horsFenetre` = RUN.md écartés par la borne.
+ * Tableau conservé (et non objet `{ entries, remaining }`) pour que les doubles de test existants,
+ * qui rendent `[]`, restent valides.
+ */
+export type FenetreRuns<T> = T[] & { horsFenetre: number }
+
+/**
+ * Variante BORNÉE destinée au chemin chaud — jamais `scanRuns()` sans borne.
+ *
+ * Elle passait par `scanRuns`, qui JETTE `remaining` : au-delà des 24 plus récents, un run bloqué
+ * disparaissait de `runsBlocked` sans aucun signal (constat conv-861, 2026-09-25 : ranger des runs
+ * récents a fait REMONTER 6 anciens runs bloqués, invisibles jusque-là). Le compte voyage désormais.
+ */
+export async function scanRunsPourSnapshot(root = runsRoot()): Promise<FenetreRuns<RunEntry>> {
+  const { entries, remaining } = await scanRunsBounded(root, { limit: LIMITE_RUNS_SNAPSHOT })
+  return Object.assign(entries, { horsFenetre: remaining })
 }

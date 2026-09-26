@@ -23,11 +23,13 @@ import {
   extrairePromptSuivant,
   estPromptDePublication,
   publicationJamaisDemandee,
+  signalFinExplicite,
   PROMPT_SALVAGE
 } from '../../../shared/prompt-suivant'
 import { extractRecommendation } from './markdown-recommandation'
+import { parseAskDecision, promptDeLOption, promptDesOptions } from './ask-choices'
 import {
-  CIBLE_DESTRUCTRICE,
+  estCibleDestructrice,
   lireDecisionScout,
   normaliserPisteCible
 } from '../../../shared/scout-cible-lecture'
@@ -89,12 +91,40 @@ export function signatureTour(fil: readonly Msg[]): string | null {
  */
 export function recommandationDitRien(recommandation: string | null): boolean {
   if (!recommandation) return false
-  return ligneNueDitRien(recommandation.split(SAUT_ANCRAGE))
+  const lignes = recommandation.split(SAUT_ANCRAGE)
+  return ligneNueDitRien(lignes) || lignes.some(estUneFinRedigee)
+}
+
+/**
+ * UNE FIN ECRITE EN PHRASE, pas avec le mot nu (conv-787) : « Rien de plus sur ce sujet : le
+ * comportement est retabli. » a ete RENVOYEE comme un ordre, un tour paye pour rien.
+ *
+ * On n'accepte que l'OUVERTURE de la ligne : « rien ne bloque, lance le judge » propose une vraie
+ * suite et doit continuer a passer — d'ou l'absence de `ne`, `n'` et de tout verbe d'action ici.
+ */
+const OUVERTURE_DE_FIN =
+  /^(?:(?:plus\s+)?rien\s+(?:de\s+plus|d'autre|a\s+(?:faire|ajouter|signaler|verifier|corriger))|aucune\s+(?:suite|action)(?:\s+\S+){0,2}\s*(?:necessaire|requise|prevue)?)\b|^rien\s*[:—–-]/
+/** Ce qui transforme une fin annoncee en vraie suite : une action proposee sur la meme ligne. */
+const OFFRE_DE_SUITE =
+  /\b(?:tu\s+peux|on\s+peut|je\s+peux|passe|lance|relance|encha[iî]ne|envoie|dis-moi|donne-moi|regarde|clique|continue|reprends|v[eé]rifie|corrige)\b/u
+function estUneFinRedigee(ligne: string): boolean {
+  const nu = ligne
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[’ʼ]/gu, "'")
+    .replace(/^[\s>*•\-–—]+/u, '')
+    .trim()
+  if (!OUVERTURE_DE_FIN.test(nu)) return false
+  // Une fin SUIVIE d'une offre reste une suite (mesure du 2026-09-12 : « rien d'autre : tu peux
+  // m'envoyer un nom d'instance » avait ete pris pour une fin).
+  return !OFFRE_DE_SUITE.test(nu)
 }
 
 /** Les quatre en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. */
 const EN_TETES_CLOTURE =
-  /^\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)\b/u
+  // `\**` en tête : les réponses réelles titrent en gras (« **✅ Fait** », conv-733).
+  /^\s*\**\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)\b/u
 
 /**
  * Contenu de la rubrique « ✅ Fait » : le reste de sa ligne d'en-tête ET les lignes qui la suivent,
@@ -118,15 +148,28 @@ function lignesDeRubrique(texte: string, rubrique: 'Fait' | 'Reste à faire'): s
     if (entete) {
       dedans = entete[1] === rubrique
       if (dedans) {
+        // PLUSIEURS CLOTURES DANS UN MESSAGE (sondage conv-787 : jusqu'a 3) — seule la DERNIERE dit
+        // l'etat final. Les fusionner melangeait un « rien » ancien avec du travail encore listé.
+        sortie.length = 0
         const reste = brute.replace(EN_TETES_CLOTURE, '').replace(/^\s*\**\s*[:：—–-]?\s*/u, '')
         if (reste.trim()) sortie.push(reste)
       }
+      continue
+    }
+    // BORNE BASSE (sondage conv-787) : sans elle, la rubrique avalait tout le texte qui suit quand
+    // un message enchaine plusieurs etapes — jusqu'a un « ⚠️ » encore ouvert lu comme une fin.
+    if (dedans && FIN_DE_RUBRIQUE.test(brute)) {
+      dedans = false
       continue
     }
     if (dedans) sortie.push(brute)
   }
   return sortie
 }
+
+/** Ce qui ferme une rubrique de cloture autrement qu'une autre rubrique : une nouvelle section. */
+const FIN_DE_RUBRIQUE =
+  /^\s*(?:\[phase\s|#{1,6}\s|(?:---|___|\*\*\*)\s*$|AUTOWIN_PROMPT_V1\s*:|\*\*[^*]+\s*[:：]\*\*\s*$|```)/u
 
 /**
  * « rien » posé SEUL sur une ligne (puce comprise) = la rubrique est vide. C'est le signal d'arrêt.
@@ -153,8 +196,57 @@ export function blocFaitDitRien(texte: string): boolean {
  * « rien ne bloque le lancement de clean » raconte une suite POSSIBLE, pas une fin.
  */
 function resteAFaireDitRien(texte: string): boolean {
-  return ligneNueDitRien(lignesDeRubrique(texte, 'Reste à faire'))
+  /*
+   * SONDAGE conv-787 (2970 clotures reelles) : elargir cette porte aux fins ECRITES EN PHRASE, comme
+   * on l'a fait pour « Recommande », a ete ESSAYE puis ANNULE. Cette rubrique n'est pas bornee par la
+   * fin du message : quand plusieurs phases se suivent, elle avale la suite du texte, et une phrase
+   * de fin trouvee la-dedans coupait des chaines qui portaient encore du travail (« ⚠️ Les 4 tickets
+   * ne sont pas dans ta vue »). Le mot NU reste donc la seule condition ici.
+   */
+  const lignes = lignesDeRubrique(texte, 'Reste à faire')
+  if (ligneNueDitRien(lignes)) return true
+  /*
+   * SONDAGE conv-787 (2970 clotures reelles) : une fin ECRITE en phrase ne vaut ici que si la
+   * rubrique ENTIERE est cette fin. En acceptant UNE ligne parmi d'autres, la porte coupait des
+   * clotures qui listaient encore du travail (« Verifier que SELECT … INTO est bien refuse »).
+   */
+  const contenu = lignes.filter((ligne) => ligne.trim() !== '')
+  return contenu.length > 0 && contenu.every(estUneFinRedigee)
 }
+
+/**
+ * LES FORMULATIONS EQUIVALENTES A « rien ».
+ *
+ * Demande utilisateur du 2026-09-11 (conv-468) : le modele avait cloture par « Aucune suite
+ * necessaire. » — une fin de chaine explicite — et le mode auto avait continue, parce que seul le
+ * mot `rien` nu etait reconnu. Le signal d'arret est le SENS de la ligne, pas un mot unique ;
+ * l'exigence de ligne ENTIERE, elle, ne bouge pas (« aucune piste ne bloque » reste une suite).
+ */
+const LIGNES_DE_FIN = new Set([
+  'rien',
+  'rien a signaler',
+  'rien a faire',
+  'rien de plus',
+  // Forme reellement ecrite le 2026-09-12, et qui a relance la chaine pour rien : « rien d'autre ».
+  // Elle n'entre ici que NUE — « rien d'autre : envoie-moi X » reste une suite, comme
+  // « rien a faire de plus sur X — enchaine sur Y » : une phrase qui propose quelque chose
+  // n'est pas une fin, et c'est ce qui distingue cette porte d'une simple recherche de mot.
+  "rien d'autre",
+  'plus rien',
+  'plus rien a faire',
+  'aucune',
+  'aucun',
+  'aucune suite',
+  'aucune suite necessaire',
+  'aucune suite requise',
+  'aucune action',
+  'aucune action necessaire',
+  'aucune action requise',
+  'aucune suite prevue',
+  'neant',
+  'n/a',
+  'terminé'.normalize('NFD').replace(/[̀-ͯ]/g, '')
+])
 
 function ligneNueDitRien(lignes: readonly string[]): boolean {
   return lignes.some((ligne) => {
@@ -162,10 +254,14 @@ function ligneNueDitRien(lignes: readonly string[]): boolean {
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')
       .toLowerCase()
+      // L'apostrophe COURBE et l'apostrophe droite sont deux caracteres differents : sans cette
+      // mise au meme format, « rien d’autre » et « rien d'autre » ne sont pas le meme texte, et
+      // seule la moitie des fins ecrites serait reconnue (mesure du 2026-09-12).
+      .replace(/[’ʼ]/gu, "'")
       .replace(/^[\s>*•\-–—]+/u, '')
       .replace(/[\s.;:!*`]+$/u, '')
       .trim()
-    return nu === 'rien' || nu === 'rien a signaler' || nu === 'rien a faire'
+    return LIGNES_DE_FIN.has(nu)
   })
 }
 
@@ -181,16 +277,30 @@ const TACHE_ANCRAGE_MAX = 240
  * Un message d'ORIENTATION est ecarte : il est tape PENDANT un tour et ne fonde pas la demande.
  */
 export function tacheInitiale(fil: readonly Msg[]): string | null {
+  let premier: string | null = null
   for (const m of fil) {
     if (m.role !== 'user') continue
     const user = m as Extract<Msg, { role: 'user' }>
     if (user.orientation) continue
     const nu = (user.content ?? '').trim()
     if (!nu) continue
-    return nu.length > TACHE_ANCRAGE_MAX ? `${nu.slice(0, TACHE_ANCRAGE_MAX).trimEnd()}…` : nu
+    /*
+     * L'ANCRE DEJA ECRITE PRIME SUR LE HAUT DE LA FENETRE. Mesure conv-470 (saisie ts=1789159231523) :
+     * la chaine a envoye « Applique la piece 3 » ancre sur « Applique la piece 2 », alors que les
+     * cinq autres envois du meme fil citaient « Voici un besoin observe... ». Cause : la tache se
+     * lisait sur la liste de messages CHARGEE ; des qu'elle ne commence pas au premier message du
+     * fil, l'ancre devient un maillon intermediaire et la derive qu'elle devait bloquer est actee.
+     * Une ancre deja portee par un message a ete calculee sur une fenetre plus large : on la relit.
+     */
+    const relue = ANCRE_DEJA_ECRITE.exec(nu)?.[1]?.trim()
+    if (relue) return relue
+    premier ??= nu.length > TACHE_ANCRAGE_MAX ? `${nu.slice(0, TACHE_ANCRAGE_MAX).trimEnd()}…` : nu
   }
-  return null
+  return premier
 }
+
+/** Relit la tache citee par un ancrage precedent. Doit rester le miroir de `ancrerSurLaTacheInitiale`. */
+const ANCRE_DEJA_ECRITE = /\(Mode auto — tâche initiale de ce fil : « ([\s\S]*?) »\./
 
 /**
  * ANCRAGE ANTI-DERIVE — demande utilisateur du 2026-09-02 : « le mode auto doit pas trop trop
@@ -223,6 +333,7 @@ export type RaisonArret =
   | 'deja-traite'
   | 'aucune-reponse'
   | 'brouillon'
+  | 'fin-explicite'
   | 'recommandation-rien'
   | 'fait-rien'
   | 'reste-rien'
@@ -234,6 +345,10 @@ export type RaisonArret =
   | 'cible-destructrice'
   /* MULTI-PISTES (`CIBLES:`) — des numeros seuls ne nomment rien hors du tableau. */
   | 'cibles-non-nommees'
+  /* conv-751 — la suite parle a la place de l'utilisateur et annonce une donnee qu'il n'a pas donnee. */
+  | 'suite-attend-utilisateur'
+  /* conv-767 — la suite ne peut avancer qu'à un moment donné (heure, « demain », « quand X existe »). */
+  | 'suite-differee'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -261,10 +376,33 @@ export interface EntreeDecisionAuto {
    * personne dans `deciderRelanceAuto` — c'est exactement ce que les tests rouges reclament.
    */
   tourEstUnScout?: boolean
+  /**
+   * LE DOSSIER DE TRAVAIL EST-IL UN DEPOT GIT ? Sans depot, aucune branche ni remise de cote a
+   * trier : la suite n'est jamais reecrite en ordre de tri. Absent = `true`, l'ancien
+   * comportement, pour ne jamais relacher le garde-fou par simple oubli d'appelant.
+   */
+  depotPresent?: boolean
+  /**
+   * RELANCES DIFFÉRÉES DÉJÀ PROGRAMMÉES D'AFFILÉE dans ce fil (conv-826 : « faudrait que le mode
+   * auto gère ce cas au lieu de s'arrêter »). Au-delà de `MAX_RELANCES_DIFFEREES`, la chaîne se
+   * met en pause : une attente qui ne finit jamais ne doit pas payer un tour toutes les 15 min.
+   */
+  relancesDifferees?: number
+  /** Horloge injectable (tests). Absent = `Date.now()`. */
+  maintenant?: number
 }
 
 export type DecisionAuto =
   | { action: 'envoyer'; texte: string; signature: string }
+  /** Suite différée : elle part SEULE à `echeance` (ms epoch), pas maintenant. */
+  | {
+      action: 'programmer'
+      texte: string
+      signature: string
+      echeance: number
+      /** « quand fin.txt existe » : sondé (lecture seule) avant d'envoyer le tour. */
+      fichier?: string
+    }
   | { action: 'attendre'; raison: RaisonArret }
   | { action: 'arreter'; raison: RaisonArret; message: string }
 
@@ -277,6 +415,7 @@ export type DecisionAuto =
  * une fin : c'est juste « rien à envoyer sur CE tour ». On patiente, l'interrupteur reste allumé.
  */
 const MESSAGES_ARRET: Record<string, string> = {
+  'fin-explicite': "Mode auto terminé : l'agent a signalé explicitement que le travail est fini.",
   'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.',
   'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.',
   'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.',
@@ -285,7 +424,134 @@ const MESSAGES_ARRET: Record<string, string> = {
   'cible-destructrice':
     'Mode auto en pause : la piste retenue détruit quelque chose. Elle ne part pas toute seule — dis-moi si tu la lances.',
   'cibles-non-nommees':
-    'Mode auto en pause : la ligne `CIBLES:` ne donne que des numéros. Hors du tableau ils ne désignent rien — récris les pistes en toutes lettres.'
+    'Mode auto en pause : la ligne `CIBLES:` ne donne que des numéros. Hors du tableau ils ne désignent rien — récris les pistes en toutes lettres.',
+  'suite-attend-utilisateur':
+    'Mode auto en pause : la suite proposée attend des informations que toi seul peux donner (identifiants, clés, choix). Écris-les dans ton message pour continuer.',
+  'suite-differee':
+    'Mode auto en pause : la suite attend toujours son moment après plusieurs relances programmées. Relance-la toi-même le moment venu.'
+}
+
+/**
+ * UNE SUITE ECRITE A LA PLACE DE L'UTILISATEUR (« Voici les identifiants… », « je te donne… »).
+ *
+ * Mesure conv-751 : tour 4a4374c0-3f0c-4c42-82f0-ff6b03b76a27 propose « Voici les identifiants
+ * Robux… : reporte-les » ; le mode auto l'envoie tel quel (saisie ts 1789993655768), SANS aucun
+ * identifiant ; le tour 308ae1cf-9416-461f-a1ed-14775607df62 refuse d'inventer, ne propose rien, et
+ * la chaine se tait (`aucun-prompt`) sans un mot. Seul l'utilisateur possede cette donnee : la suite
+ * ne part pas seule, la pause est DITE.
+ */
+// Le verbe seul ne suffit pas : « Voici le message du bandeau : dis-moi… » (conv-787) est une suite
+// ordinaire. Il faut qu'il porte une DONNEE que seul l'utilisateur detient.
+const SUITE_PORTE_DONNEE_UTILISATEUR =
+  /^\s*(?:voici|voil[aà]|je\s+te\s+(?:donne|colle|transmets|fournis|envoie))\s+(?:les|mes|le|la|l['’]|ma|nos|notre)\s*(?:\S+\s+){0,2}?(?:identifiants?|cl[ée]s?(?!\s+(?:de\s+(?:tri|cache|hachage)|primaires?|[ée]trang[eè]res?))|mots?\s+de\s+passe|tokens?|jetons?|secrets?|codes?\s+d['’]acc[eè]s|credentials?|logins?)(?![\p{L}])/iu
+// Mesure conv-798 : saisie ts 1790170650709 « Lance webtest record sur l'adresse de ma webapp que je
+// te donne : <adresse> » est partie SEULE, trou non rempli ; le tour suivant a dû redemander l'adresse,
+// puis (tour 093342be-fc36-4489-864d-f091af4ec015) l'agent a DEVINÉ un projet au hasard sur D:.
+// Un emplacement « : <mot> » en fin de ligne est une valeur que seul l'utilisateur peut écrire.
+// « commande webtest record <url> qui … » (spécification, saisie ts 1790170354034) ne l'est pas.
+const SUITE_A_TROU = /:\s*<[\p{L}][\p{L}\s_'’-]{0,30}>\s*$/mu
+// Mesure conv-854 : saisies ts 1790329789299 et ts 1790331255647 (« J'ai saisi CE67N36QT et
+// accepté, vérifie… ») sont parties SEULES, au nom de l'utilisateur, qui n'avait rien saisi. Les
+// tours suivants ont vérifié une connexion jamais faite. Un geste de l'utilisateur affirmé en
+// première personne en tête de suite est une donnée que seul lui détient.
+const SUITE_AFFIRME_GESTE_UTILISATEUR =
+  /^\s*j['’]ai\s+(?:bien\s+)?(?:saisi|valid[ée]|accept[ée]|tap[ée]|entr[ée]|confirm[ée]|autoris[ée]|approuv[ée])(?![\p{L}])/iu
+export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
+  return (
+    SUITE_PORTE_DONNEE_UTILISATEUR.test(suite) ||
+    SUITE_A_TROU.test(suite) ||
+    SUITE_AFFIRME_GESTE_UTILISATEUR.test(suite)
+  )
+}
+
+/**
+ * UNE SUITE QUI NE PEUT AVANCER QU'À UN MOMENT DONNÉ.
+ *
+ * Mesure conv-767 (2026-09-21, 20:59 → 21:04) : un tournoi programmé pour 01:05 ; la suite proposée
+ * « Relis debut.txt, statut.txt et fin.txt de essais/t2c-2026-09-22… » est partie TROIS fois, chaque
+ * fois pour constater « rien n'a encore démarré ». L'échéance n'était PAS dans le prompt : elle vivait
+ * dans « 👉 Recommandé » (« Demain matin, relire… ») ou dans le prompt lui-même sous la forme
+ * « Quand … fin.txt existe, … ». Les deux textes sont donc lus. Le mode auto ne sait pas attendre une
+ * heure : relancer tout de suite ne peut que constater l'attente, à chaque fois payée.
+ */
+// fix-ok: la branche suite-differee de deciderRelanceAuto renvoyait arreter (mesure conv-826 : mode auto en pause sur « quand fin.txt existe ») ; elle renvoie maintenant programmer avec une echeance calculee.
+const SUITE_DIFFEREE = new RegExp(
+  [
+    String.raw`\b(?:demain|ce\s+soir|cette\s+nuit|plus\s+tard)\b`,
+    String.raw`\bdans\s+(?:\d+|quelques)\s*(?:min(?:utes?)?|h|heures?)\b`,
+    // `\b` ignore « à » (hors ASCII) : on borne à gauche par un début de texte ou une espace.
+    // `des` SANS accent est un article (« le calcul des 12 h de retention ») : seul `dès` compte.
+    String.raw`(?:^|[\s(])(?:apr[eè]s|vers|dès|à|a)\s+\d{1,2}\s*(?:h|:)\s*\d{0,2}\b`,
+    // Le point est permis : un nom de fichier (« fin.txt ») en porte un. La borne reste la ligne.
+    String.raw`\bquand\b[^\n]{0,80}?\b(?:existe(?:ra)?|appara[iî]t(?:ra)?|sera\s+(?:apparu|fini|termin[ée]|pr[eê]t)|aura\s+fini)\b`
+  ].join('|'),
+  'iu'
+)
+export const MAX_RELANCES_DIFFEREES = 12
+const MINUTE = 60_000
+/** « quand X existe », « plus tard », « cette nuit » : aucune heure lisible — on revient voir. */
+export const DELAI_SONDAGE_DIFFERE = 15 * MINUTE
+/** « quand X existe » avec chemin lisible : sonde GRATUITE du fichier (fs:exists), pas un tour payé. */
+export const DELAI_SONDAGE_FICHIER = 5 * MINUTE
+export const DUREE_MAX_SONDAGE_FICHIER = 48 * 60 * MINUTE
+const ECHEANCE_MAX = 24 * 60 * MINUTE
+
+/**
+ * QUAND relancer une suite différée (conv-826). Ordre : heure explicite (« à 01:05 ») → durée
+ * (« dans 2 h », « après 1h ») → « demain » (8 h) / « ce soir » (19 h) → sinon on revient voir
+ * toutes les 15 min. Toujours dans le futur (≥ 1 min), jamais au-delà de 24 h.
+ */
+export function echeanceSuiteDifferee(
+  suite: string,
+  recommandation: string | null,
+  maintenant: number
+): number {
+  const texte = `${suite}\n${recommandation ?? ''}`
+  const borne = (t: number): number =>
+    Math.min(maintenant + ECHEANCE_MAX, Math.max(maintenant + MINUTE, t))
+  const heure = /(?:^|[\s(])(?:apr[eè]s|vers|dès|à|a)\s+(\d{1,2})\s*(?:h|:)\s*(\d{2})(?!\d)/iu.exec(texte)
+  if (heure) {
+    const d = new Date(maintenant)
+    d.setHours(Number(heure[1]), Number(heure[2]), 0, 0)
+    if (d.getTime() <= maintenant) d.setDate(d.getDate() + 1)
+    return borne(d.getTime())
+  }
+  const duree = /(?:^|[\s(])(?:dans|apr[eè]s)\s+(\d+|quelques)\s*(min(?:utes?)?|h|heures?)(?![\p{L}\d:])/iu.exec(texte)
+  if (duree) {
+    const enMinutes = /^min/i.test(duree[2])
+    const n = duree[1].toLowerCase() === 'quelques' ? (enMinutes ? 10 : 2) : Number(duree[1])
+    return borne(maintenant + n * (enMinutes ? MINUTE : 60 * MINUTE))
+  }
+  const aHeure = (h: number, jours: number): number => {
+    const d = new Date(maintenant)
+    d.setDate(d.getDate() + jours)
+    d.setHours(h, 0, 0, 0)
+    return d.getTime()
+  }
+  if (/\bdemain\b/iu.test(texte)) return borne(aHeure(8, 1))
+  if (/\bce\s+soir\b/iu.test(texte) && aHeure(19, 0) > maintenant) return borne(aHeure(19, 0))
+  return borne(maintenant + DELAI_SONDAGE_DIFFERE)
+}
+
+/**
+ * LE FICHIER ATTENDU d'une suite « quand X existe » (conv-826) : le mode auto le sonde — lecture
+ * seule, gratuite — avant de payer un tour. `null` = aucune condition de fichier lisible.
+ */
+export function fichierAttenduSuiteDifferee(
+  suite: string,
+  recommandation: string | null
+): string | null {
+  const m =
+    /\bquand\b[^\n]{0,80}?[`"'«\s]([^\s`"'«»]*\.[A-Za-z0-9]{1,8})[`"'»]?\s+(?:existe(?:ra)?|appara[iî]t(?:ra)?|sera\s+(?:apparu|pr[eê]t))\b/iu.exec(
+      `${suite}\n${recommandation ?? ''}`
+    )
+  return m ? m[1] : null
+}
+
+export function suiteEstDifferee(suite: string, recommandation: string | null): boolean {
+  return (
+    SUITE_DIFFEREE.test(suite) || (recommandation !== null && SUITE_DIFFEREE.test(recommandation))
+  )
 }
 
 /**
@@ -316,8 +582,69 @@ export const PROMPT_NOUVELLE_CIBLE =
 export function premierPassageLaisseSortirLeTour(entree: {
   allumageManuel: boolean
   repriseApresRedemarrage: boolean
+  /** Le tour attend un FICHIER (`attenteFichierAReprendre`) : sa surveillance est gratuite, on la reprend. */
+  attenteFichier?: boolean
 }): boolean {
-  return entree.allumageManuel || entree.repriseApresRedemarrage
+  return entree.allumageManuel || entree.repriseApresRedemarrage || entree.attenteFichier === true
+}
+
+/**
+ * REPRISE D'UNE ATTENTE DE FICHIER après un redémarrage (conv-826, 2026-09-26 — demande de
+ * l'utilisateur : « après un redémarrage, ∞ reprend tout seul l'attente d'un fichier encore attendu »).
+ *
+ * Défaut vécu : la suite « Quand …/fin.txt existe, compare… » était surveillée par un minuteur de
+ * l'écran. L'app a redémarré à 10:48 ; le minuteur est mort, et le premier passage a marqué le
+ * tour « déjà traité ». fin.txt est apparu à 12:38:36 et rien n'est parti avant 15:57, ∞ affiché
+ * allumé. Le gel du premier passage protège d'un tour PAYÉ que personne n'a demandé ; or une attente
+ * de fichier ne coûte rien tant que le fichier manque, et n'envoie que la suite qu'on avait armée.
+ *
+ * Rend la décision `programmer` à reprendre, ou null. Bornes : seule une suite qui nomme un FICHIER
+ * (une échéance horaire repaierait un tour) ; tour d'au plus `DUREE_MAX_SONDAGE_FICHIER`, mesuré depuis
+ * la saisie qui l'a lancé — âge inconnu = pas de reprise, faute de pouvoir le borner.
+ */
+export function attenteFichierAReprendre(
+  entree: Omit<EntreeDecisionAuto, 'dernierTourTraite' | 'dernierPromptEnvoye'>
+): Extract<DecisionAuto, { action: 'programmer' }> | null {
+  // Un message de l'utilisateur APRÈS la suite l'a annulée (même règle que le minuteur) : rien à reprendre.
+  if (entree.fil[entree.fil.length - 1]?.role !== 'assistant') return null
+  const decision = deciderRelanceAuto({ ...entree, dernierTourTraite: null, dernierPromptEnvoye: null })
+  if (decision.action !== 'programmer' || !decision.fichier) return null
+  const saisie = [...entree.fil].reverse().find((m) => m.role === 'user') as { ts?: number } | undefined
+  if (typeof saisie?.ts !== 'number') return null
+  if ((entree.maintenant ?? Date.now()) - saisie.ts > DUREE_MAX_SONDAGE_FICHIER) return null
+  return decision
+}
+
+// fix-ok: suite identique au tour precedent (turnId 98ce00d9-2276-4a96-bb15-b66c622bfee8, saisie ts 1789970040849) = arret anti-boucle alors que le tour rapportait un travail dans « ✅ Fait » ; titres en gras non reconnus.
+/**
+ * QUESTION `ask` OUVERTE AU BOUT DU FIL — en mode auto, l'agent y repond SEUL (demande utilisateur
+ * du 2026-09-21 : « le mode auto doit répondre seul aux ask »). On prend l'option marquee
+ * `recommande`, sinon la PREMIERE (le contrat de `ask` place la recommandee en tete). Une reponse
+ * destructrice ne part jamais seule : on rend null et la question attend l'humain.
+ */
+export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
+  const dernier = [...fil].reverse().find((m) => m.role === 'assistant') as AsstMsg | undefined
+  if (!dernier) return null
+  const decisions = (dernier.parts ?? []).flatMap((part) => {
+    if (part.kind === 'text') return []
+    const d = parseAskDecision(part as { kind: string })
+    return d ? [d] : []
+  })
+  const decision = decisions[decisions.length - 1]
+  if (!decision) return null
+  const sure = (o: (typeof decision.options)[number]): boolean => {
+    const t = promptDeLOption(o).trim()
+    return t !== '' && !estCibleDestructrice(t)
+  }
+  // CHOIX NON CONCURRENTS (`choixMultiple`) : on coche TOUTES les options sures — demande utilisateur
+  // conv-787 : « par défaut tous les choix si pas concurrents sinon faire au mieux ».
+  if (decision.choixMultiple) {
+    const retenues = decision.options.filter(sure)
+    return retenues.length > 0 ? promptDesOptions(retenues).trim() : null
+  }
+  // CHOIX CONCURRENTS : au mieux = la recommandee, sinon la premiere.
+  const option = decision.options.find((o) => o.recommande) ?? decision.options[0]
+  return sure(option) ? promptDeLOption(option).trim() : null
 }
 
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
@@ -329,6 +656,9 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   if (signature === entree.dernierTourTraite) return { action: 'attendre', raison: 'deja-traite' }
   // Le mode reste ARMÉ pendant que l'utilisateur écrit : on patiente, on ne se coupe pas.
   if (entree.brouillonPresent) return { action: 'attendre', raison: 'brouillon' }
+  // Une question `ask` ouverte : le mode auto choisit l'option recommandee a la place de l'humain.
+  const reponseAsk = reponseAutoAuDernierAsk(entree.fil)
+  if (reponseAsk) return { action: 'envoyer', texte: reponseAsk, signature }
   const texteReponse = texteDernierAssistant(entree.fil) ?? ''
   /*
    * APRES UN SCOUT — la porte lit la ligne `CIBLE:` AVANT tout le reste du raisonnement de suite.
@@ -365,7 +695,10 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * bloc « Fait » vide (c'est la que le mot tombe le plus souvent). Garde-fou 1 ter : « ⏳ Reste à
    * faire : rien », le texte qu'Autowin ecrit lui-meme apres le dernier maillon.
    */
-  const finDeChaine: RaisonArret | null = recommandationDitRien(extractRecommendation(texteReponse))
+  // Le signal EXPLICITE passe devant : les portes « rien » ne restent que pour les fils ecrits avant lui.
+  const finDeChaine: RaisonArret | null = signalFinExplicite(texteReponse)
+    ? 'fin-explicite'
+    : recommandationDitRien(extractRecommendation(texteReponse))
     ? 'recommandation-rien'
     : blocFaitDitRien(texteReponse)
       ? 'fait-rien'
@@ -385,15 +718,31 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // proposée passe telle quelle — sinon le mode auto renvoie `/salvage` en boucle, à ses frais.
   const demandeDuTour = texteDerniereDemande(entree.fil) ?? undefined
   const brut =
-    extrairePromptSuivant(texteReponse, demandeDuTour) ?? extractRecommendation(texteReponse)
+    extrairePromptSuivant(texteReponse, demandeDuTour, entree.depotPresent ?? true) ??
+    extractRecommendation(texteReponse)
   const suite =
-    brut && publicationJamaisDemandee(brut, demandeDuTour)
+    brut && publicationJamaisDemandee(brut, demandeDuTour, entree.depotPresent ?? true)
       ? null
-      : brut && estPromptDePublication(brut, demandeDuTour)
+      : brut && estPromptDePublication(brut, demandeDuTour, entree.depotPresent ?? true)
         ? PROMPT_SALVAGE
         : brut
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
   if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
+  if (suiteAttendUneDonneeUtilisateur(suite))
+    return {
+      action: 'arreter',
+      raison: 'suite-attend-utilisateur',
+      message: MESSAGES_ARRET['suite-attend-utilisateur']
+    }
+  // conv-826 : une suite différée n'arrête plus la chaîne — elle est PROGRAMMÉE (voir plus bas).
+  const recommandationDifferee = extractRecommendation(texteReponse)
+  const differee = suiteEstDifferee(suite, recommandationDifferee)
+  if (differee && (entree.relancesDifferees ?? 0) >= MAX_RELANCES_DIFFEREES)
+    return {
+      action: 'arreter',
+      raison: 'suite-differee',
+      message: MESSAGES_ARRET['suite-differee']
+    }
   /*
    * L'ANCRAGE EST POSÉ AVANT la comparaison anti-boucle, et c'est délibéré : c'est le texte
    * RÉELLEMENT envoyé qui est mémorisé dans `dernierPromptEnvoye`. Comparer la suite NUE à un
@@ -414,8 +763,36 @@ ${suite}`
 ${suite}`
         : suite
   const texte = ancrerSurLaTacheInitiale(suiteCiblee, tacheInitiale(entree.fil))
+  /*
+   * DIFFÉRÉE : programmée AVANT le garde-fou « même suite » — « quand fin.txt existe » revient
+   * forcément identique d'une vérification à l'autre. La borne est `MAX_RELANCES_DIFFEREES`.
+   */
+  if (differee) {
+    const fichier = fichierAttenduSuiteDifferee(suite, recommandationDifferee)
+    return {
+      action: 'programmer',
+      texte,
+      signature,
+      // Chemin lisible : la première vérification est une sonde gratuite, donc on regarde tôt.
+      echeance: fichier
+        ? (entree.maintenant ?? Date.now()) + DELAI_SONDAGE_FICHIER
+        : echeanceSuiteDifferee(suite, recommandationDifferee, entree.maintenant ?? Date.now()),
+      ...(fichier ? { fichier } : {})
+    }
+  }
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
-  if (entree.dernierPromptEnvoye && texte.trim() === entree.dernierPromptEnvoye.trim())
+  /*
+   * MÊME SUITE ≠ BOUCLE quand le tour a TRAVAILLÉ. Mesuré conv-733, tour
+   * 98ce00d9-2276-4a96-bb15-b66c622bfee8 (saisie ts 1789970040849) : audit à 100 points, point #93
+   * fait et rapporté dans « ✅ Fait », suite proposée mot pour mot identique (« Traite le point
+   * suivant… ») → la chaîne s'est tue alors qu'il restait ~7 points. Une boucle, c'est la même
+   * suite SANS travail rapporté : c'est ce cas-là seul que le garde-fou retient.
+   */
+  if (
+    entree.dernierPromptEnvoye &&
+    texte.trim() === entree.dernierPromptEnvoye.trim() &&
+    lignesDuBlocFait(texteReponse).every((l) => l.trim() === '')
+  )
     return { action: 'attendre', raison: 'prompt-identique' }
   return { action: 'envoyer', texte, signature }
 }
@@ -488,7 +865,7 @@ export function lireCiblesScout(texteScout: string): DecisionScoutMulti {
       .map((piste) => piste.replace(/^[\s*_`]+|[\s*_`]+$/gu, '').trim())
       .filter((piste) => piste.length > 0)
     if (pistes.length === 0) return { statut: 'aucune-cible' }
-    const destructrice = pistes.find((piste) => CIBLE_DESTRUCTRICE.test(normaliserPiste(piste)))
+    const destructrice = pistes.find((piste) => estCibleDestructrice(piste))
     if (destructrice) return { statut: 'cible-destructrice', cible: destructrice }
     if (pistes.every((piste) => PISTE_NUMERIQUE.test(piste)))
       return { statut: 'cibles-non-nommees' }

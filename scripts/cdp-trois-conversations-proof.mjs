@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { racineDepot } from './racine-depot.mjs'
-import { choisirPortLibre } from './port-libre.mjs'
+import { reserverInstance } from './avec-instance-headless.mjs'
 
 /**
  * PREUVE HORS-MODÈLE de la demande de l'utilisateur : « lancer 3 convers sur la même chose, pas
@@ -33,11 +33,14 @@ if (!existsSync(binaire)) {
   process.exit(2)
 }
 
-const port = choisirPortLibre(Number(process.env.AUTOWIN_TROIS_PORT || 9290))
-if (port === undefined) {
-  console.error('[trois-conversations] aucun port libre — machine saturée.')
-  process.exit(3)
-}
+// Nom ET port reserves par verrou : une sonde parallele ne prend plus le meme port, et un second
+// lancement de la meme sonde est refuse au lieu de fermer l'application du premier.
+const { port } = reserverInstance({
+  instanceId: instance,
+  portDemande: Number(process.env.AUTOWIN_TROIS_PORT || 9290),
+  racine,
+  prefixe: '[trois-conversations]'
+})
 
 /*
  * LE DÉPÔT JETABLE, REFAIT À NEUF : une mesure de concurrence ne doit rien hériter du passage

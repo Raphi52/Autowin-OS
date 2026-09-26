@@ -88,6 +88,38 @@ describe('branchement du battement sur une fenetre', () => {
   })
 })
 
+describe('fenetre detruite', () => {
+  /*
+   * REGRESSION du 2026-09-12. Sur un BrowserWindow detruit, le simple ACCES a `webContents` leve
+   * `TypeError: Object has been destroyed`. Ce throw part du timer, donc hors promesse : il remontait
+   * en `uncaughtException` toutes les 5 s, et le filet de crash global y repondait en coupant TOUTES
+   * les orchestrations en vol. Le battement doit se taire tout seul.
+   */
+  it('ne leve rien et s arrete de lui-meme au lieu d interroger la fenetre morte', () => {
+    let battre: (() => void) | undefined
+    let annulations = 0
+    const fenetre = {
+      isDestroyed: () => true,
+      get webContents(): never {
+        throw new TypeError('Object has been destroyed')
+      }
+    }
+    surveillerParBattement(fenetre, () => {}, {
+      intervalleMs: 5,
+      planifier: (action) => {
+        battre = action
+        return 1
+      },
+      annuler: () => {
+        annulations += 1
+      }
+    })
+
+    expect(() => battre?.()).not.toThrow()
+    expect(annulations).toBe(1)
+  })
+})
+
 describe('escalade quand le rechargement reste sans effet', () => {
   it('tue le processus d affichage si le silence persiste apres le rechargement', async () => {
     const journal: string[] = []

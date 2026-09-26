@@ -9,6 +9,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import { open as ouvrirAsync, stat as statAsync } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const SURVIVABLE_EXIT_EVENT_TYPE = 'autowin.survivable-exit'
@@ -139,6 +140,34 @@ export function readChunkFrom(
 }
 
 /**
+ * Même lecture que `readChunkFrom`, mais sans bloquer le fil principal.
+ * fix-ok: gels.jsonl (300 derniers) — 47 gels du process principal venaient de `readChunkFrom`
+ * (openSync/readSync) appelé toutes les 120 ms par la boucle de `tailJsonLines`.
+ */
+export async function readChunkFromAsync(
+  path: string,
+  offset: number,
+  maxBytes = 1_000_000
+): Promise<{ text: string; next: number }> {
+  let size: number
+  try {
+    size = (await statAsync(path)).size
+  } catch {
+    return { text: '', next: offset } // absent = vide, comme readChunkFrom
+  }
+  if (size <= offset) return { text: '', next: offset }
+  const length = Math.min(size - offset, maxBytes)
+  const handle = await ouvrirAsync(path, 'r')
+  try {
+    const buffer = Buffer.allocUnsafe(length)
+    const { bytesRead } = await handle.read(buffer, 0, length, offset)
+    return { text: buffer.subarray(0, bytesRead).toString('utf8'), next: offset + bytesRead }
+  } finally {
+    await handle.close()
+  }
+}
+
+/**
  * Découpe un flux en LIGNES COMPLÈTES : renvoie les lignes terminées + le reste partiel à garder
  * pour le prochain tour (le CLI peut être interrompu au milieu d'une ligne).
  */
@@ -162,7 +191,7 @@ export async function tailJsonLines(
   let buffered = ''
   for (;;) {
     if (options.signal?.aborted) return { offset, stopped: true }
-    const { text, next } = readChunkFrom(path, offset)
+    const { text, next } = await readChunkFromAsync(path, offset)
     offset = next
     if (text) {
       buffered += text
@@ -172,7 +201,7 @@ export async function tailJsonLines(
     }
     // Fin : on drainait déjà ci-dessus, donc si le producteur a fini ET qu'il ne reste rien → stop.
     if (options.isComplete?.()) {
-      const tailEnd = readChunkFrom(path, offset)
+      const tailEnd = await readChunkFromAsync(path, offset)
       offset = tailEnd.next
       if (tailEnd.text) {
         const { lines, rest } = splitCompleteLines(buffered + tailEnd.text)

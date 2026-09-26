@@ -42,7 +42,7 @@ export type TerminalDuTour =
  * L'état terminal d'un tour interrompu.
  *
  * `cancelled` est réservé à ce que l'utilisateur a VOULU (bouton stop → `reason` = `'user'`, ou
- * suppression de la conversation). Tout abort qui porte une cause machine — budget dépassé,
+ * suppression de la conversation). Tout abort qui porte une cause machine — aujourd'hui le seul
  * veilleur d'inactivité — est un ÉCHEC et voyage AVEC son motif : c'est ce que l'utilisateur doit
  * lire à la place d'une bulle muette.
  */
@@ -51,10 +51,8 @@ export function terminalDuTour(arret: {
   reason: unknown
   /** L'erreur levée quand ce n'est pas un abort. */
   erreur?: unknown
-  /** Requalification déjà connue de l'appelant (coupure budget). */
-  motivee?: boolean
 }): TerminalDuTour {
-  const motive = arret.aborted && (arret.motivee === true || estCoupureVeilleur(arret.reason))
+  const motive = arret.aborted && estCoupureVeilleur(arret.reason)
   if (motive) return { kind: 'failed', error: String(arret.reason) }
   if (arret.aborted) return { kind: 'cancelled' }
   return {

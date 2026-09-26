@@ -35,6 +35,35 @@ export type TaskDestination =
 export type WatchdogSource =
   | { kind: 'file-match'; path: string; pattern: string; caseSensitive?: boolean }
   | { kind: 'app-event'; events: WatchdogAppEvent[] }
+  /**
+   * `outlook-mail` : un mail NON LU arrive dans la boite Outlook locale (passerelle COM,
+   * `outlook/outlook-local.ts`). Comme `file-match`, seuls les mails apparus APRES le demarrage
+   * comptent : la boite deja pleine n'est pas un evenement.
+   */
+  | {
+      kind: 'outlook-mail'
+      /** Canal ecoute. Absent = Outlook ET Teams (regles anterieures au 2026-09-25). */
+      channel?: WatchdogMessageChannel
+      /**
+       * Interlocuteurs deja vus, cle = `senderKey` (adresse mail ; pour Teams `teams:id:<identifiant
+       * Microsoft>`, ou `teams:<nom>` a defaut d'identifiant). `enabled: false`
+       * = la regle ne repond PAS a cette personne. Un interlocuteur inconnu est repondu puis ajoute
+       * automatiquement a la liste, pour pouvoir etre coupe ensuite (demande du 2026-09-25).
+       */
+      senders?: Record<string, WatchdogSender>
+      /**
+       * Une personne jamais vue : `reply` (defaut, absent) = ajoutee cochee, on lui repond ;
+       * `ignore` = ajoutee DECOCHEE, la regle ne lui repond qu'une fois cochee (piste n°10 du
+       * reperage du 2026-09-26 : la 1re newsletter lancait un agent complet).
+       */
+      newSenders?: 'reply' | 'ignore'
+    }
+
+export type WatchdogMessageChannel = 'outlook' | 'teams'
+export interface WatchdogSender {
+  name: string
+  enabled: boolean
+}
 
 /**
  * Incidents REELLEMENT emis aujourd'hui (verifies un par un dans le code) — pas un catalogue souhaite.
@@ -165,6 +194,8 @@ export interface WatchdogSignal {
   rootSignature: string
   source: WatchdogSource['kind']
   observedAt: number
+  /** Present pour `outlook-mail` : le message auquel envoyer le compte rendu. */
+  mail?: { itemId: string }
 }
 
 /** Frontière d'autorité : la règle décide, le signal observé ne fournit qu'une preuve non fiable. */
@@ -270,6 +301,26 @@ export interface TaskManagerSnapshot extends TaskStoreSnapshot {
       totalTokensLastHour: number
       unpricedCallsLastHour: number
       complaint?: string
+      /** Regles mails : dernieres decisions (agent lance ou motif d'abandon), les plus recentes d'abord. */
+      mailLog?: Array<{
+        at: number
+        channel: 'outlook' | 'teams'
+        outcome: string
+        from?: string
+        subject?: string
+        detail?: string
+      }>
+      /** Regles mails : lecture du canal en panne, depuis `since`. */
+      mailReadError?: { channel: 'outlook' | 'teams'; since: number; erreur: string }
+      /**
+       * Regles qui ecoutent Teams : connexion Microsoft (`code` = a saisir sur `verificationUri`).
+       * fix-ok: le code de connexion n'allait que dans le journal de l'app (index.ts, onDeviceCode) — aucun `teams-graph-token.bin` sur le poste le 2026-09-26 : Teams n'avait jamais ete connecte.
+       */
+      teamsSignIn?:
+        | { state: 'connected' }
+        | { state: 'code'; userCode: string; verificationUri: string; expiresAt: number }
+        | { state: 'disconnected'; erreur?: string }
+        | { state: 'unconfigured' }
     }
   >
   scheduler: {

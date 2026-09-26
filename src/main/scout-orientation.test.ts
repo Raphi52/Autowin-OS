@@ -21,16 +21,16 @@ describe('demande d orientation d un scout', () => {
     const s = readFileSync(skill, 'utf8').toLowerCase()
     // levier 1 : bascule du quota de pistes ambitieuses
     expect(t).toContain('fresh vision')
-    expect(s).toContain('"fresh vision" request → tilt 🆕 (≥50%)'.toLowerCase())
+    expect(s).toContain('demande « fresh vision » → bascule vers 🆕 (≥ 50 %)'.toLowerCase())
     // levier 2 : elargissement quand la moisson est tiede
     expect(t).toMatch(/refais un tour|elargis|élargis/)
-    expect(s).toContain('widen if the harvest is tepid')
+    expect(s).toContain('élargis si la moisson est tiède')
     // levier 3 : lentille prior-art datee 30-90 jours
     expect(t).toMatch(/30[  ]?(a|à|-)[  ]?90 jours/)
-    expect(s).toContain('last 30-90 days')
+    expect(s).toContain('derniers 30-90 jours')
     // levier 4 : plafond des pistes deduites
     expect(t).toMatch(/file:line|fichier:ligne/)
-    expect(s).toContain('capped at 50')
+    expect(s).toContain('plafonné à 50')
     // levier 5 : la ligne finale lue par la machine
     expect(t).toContain('CIBLE:'.toLowerCase())
     expect(s).toContain('exactly one `cible:` line')

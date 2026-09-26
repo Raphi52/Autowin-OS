@@ -78,8 +78,9 @@ describe('AgentPilot — la reprise de session survit au redémarrage', () => {
     // CLAUDE_CONFIG_DIR, et une session ouverte dans un autre dossier n'existe pas dans le
     // `projects/<cwd>` du nouveau — dans les deux cas le CLI rend « No conversation found ».
     // Le dernier segment compte les COMPACTIONS abouties du fil : une compaction de plus perime la
-    // session, sinon « Compacter » n allege rien sur un provider qui reprend sa session (conv-342).
-    saveChatSession('conv-42', 'claude:opus:::c0', 'sess-anterieure')
+    // session, sinon « Compacter » n allege rien sur un provider qui reprend sa session (conv-342) ;
+    // le segment `w` compte les coupes par POIDS du fil, qui la periment de meme (conv-632).
+    saveChatSession('conv-42', 'claude:opus:::c0:w0', 'sess-anterieure')
 
     // Pilote NEUF : sa Map mémoire est vide, comme après un redémarrage.
     const { optionsVues, registry, roles, bus } = harnais()
@@ -146,10 +147,10 @@ describe('AgentPilot — la reprise de session survit au redémarrage', () => {
       12,
       'conv-7'
     )
-    // `provider:modele:compte:dossier:compactions` — compte et dossier vides ici (ni compte
-    // configure, ni AUTOWIN_OS_WORKSPACE pose dans l'environnement de test), zero compaction.
+    // `provider:modele:compte:dossier:compactions:coupesPoids` — compte et dossier vides ici (ni compte
+    // configure, ni AUTOWIN_OS_WORKSPACE pose dans l'environnement de test), zero compaction, zero coupe par poids.
     expect(loadChatSessions()['conv-7']).toEqual({
-      key: 'claude:opus:::c0',
+      key: 'claude:opus:::c0:w0',
       sessionId: 'sess-neuve'
     })
   })

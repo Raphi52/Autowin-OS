@@ -18,6 +18,20 @@ describe('messageEmpreinteBrain — nommer la cause du silence', () => {
     expect(detail).toBe('think : Brain injoignable')
   })
 
+  it('NOMME la cause quand elle est connue, au lieu d’énumérer trois hypothèses', () => {
+    // Defaut conv-586 (2026-09-16) : quatre echecs distincts rendaient le meme texte « serveur
+    // arrete, jeton absent ou reseau ». Entree qui DOIT rougir : ignorer le motif recu.
+    const refus = messageEmpreinteBrain('unavailable', 0, 'query-refused')
+    expect(refus.text).toMatch(/INJOIGNABLE/u)
+    expect(refus.text).toMatch(/query-secure/u)
+    expect(refus.text).not.toMatch(/jeton absent ou réseau/u)
+    expect(refus.detail).toBe('think : Brain injoignable (query-refused)')
+
+    const reseau = messageEmpreinteBrain('unavailable', 0, 'network')
+    expect(reseau.text).toMatch(/aucune réponse du serveur/u)
+    expect(reseau.text).not.toBe(refus.text)
+  })
+
   it('garde « aucune empreinte » pour une base qui a REPONDU sans rien connaître', () => {
     // L'autre bord : le vrai vide existe, et il ne doit pas devenir une fausse alerte de panne.
     const { text, detail } = messageEmpreinteBrain('empty', 0)

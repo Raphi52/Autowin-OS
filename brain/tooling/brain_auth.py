@@ -38,9 +38,14 @@ def _restrict_token_acl(path: Path, *, directory=False) -> None:
         raise RuntimeError("cannot determine current Windows identity")
     quiet = {"check": True, "stdout": subprocess.DEVNULL, "stderr": subprocess.PIPE}
     subprocess.run(["icacls", str(path), "/reset"], **quiet)
-    subprocess.run(["icacls", str(path), "/inheritance:r"], **quiet)
+    # Retrait de l'heritage ET octroi dans UN SEUL appel : icacls les ecrit en une fois.
+    # En deux appels, un echec ou un arret entre les deux laissait une ACL protegee VIDE
+    # (D:PAI) — constate le 2026-09-24 sur %LOCALAPPDATA%\AmitelBrain : venv et tooling
+    # devenus illisibles, Brain hors service.
     permission = f"{principal}:{'(OI)(CI)F' if directory else 'F'}"
-    subprocess.run(["icacls", str(path), "/grant:r", permission], **quiet)
+    subprocess.run(
+        ["icacls", str(path), "/inheritance:r", "/grant:r", permission], **quiet
+    )
 
 
 def _read_token(path: Path) -> str:

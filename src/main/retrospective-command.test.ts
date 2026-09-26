@@ -44,7 +44,17 @@ describe('retrospective : l orchestrateur peut regarder son propre travail', () 
   it('rend le dossier sans lancer le moindre run', async () => {
     const resultat = await busAvecConversation().exec('retrospective', { id: 'conv-1' })
     expect(resultat.ok).toBe(true)
-    const data = resultat.data as {
+    // Le dossier est rendu par pages de ~20 000 caracteres (retrospective-compacte.ts) : on les
+    // demande toutes, et leur concatenation doit redonner l'objet complet.
+    const premiere = resultat.data as { page: number; pages: number; dossier: string }
+    expect(premiere.page).toBe(1)
+    let complet = premiere.dossier
+    for (let n = 2; n <= premiere.pages; n++) {
+      const suite = await busAvecConversation().exec('retrospective', { id: 'conv-1', page: n })
+      complet += (suite.data as { dossier: string }).dossier
+    }
+    const page = { dossier: complet }
+    const data = JSON.parse(page.dossier) as {
       conversation: { messages: unknown[] }
       causalEvents: unknown[]
       runs: unknown[]

@@ -37,8 +37,13 @@ describe('parseDisplayArg', () => {
     expect(parseDisplayArg(' 3 ')).toBe(3)
   })
 
-  it('refuse zero, negatif, decimal et non-numerique', () => {
-    for (const bad of [0, -1, 1.5, 'gauche', {}, true]) {
+  it('convertit 0 en ecran principal (1) au lieu de perdre l appel (conv-30)', () => {
+    expect(parseDisplayArg(0)).toBe(1)
+    expect(parseDisplayArg(' 0 ')).toBe(1)
+  })
+
+  it('refuse negatif, decimal et non-numerique', () => {
+    for (const bad of [-1, 1.5, 'gauche', {}, true]) {
       expect(() => parseDisplayArg(bad)).toThrow('display invalide')
     }
   })

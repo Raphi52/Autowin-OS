@@ -1,6 +1,15 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { appendFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { join, sep } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import type { Message, Usage } from '../providers/types'
 import type { PipelinePhase } from '../skill-pipeline'
@@ -26,6 +35,12 @@ export interface PromptCallRecord {
   boundary: string
   limitation: string
   system?: string
+  /**
+   * Empreinte du prompt systeme, quand il est range a part (voir `dossierDesSystemes`).
+   * Un enregistrement porte SOIT `system`, SOIT `systemRef` — `loadPromptCalls` rend toujours
+   * `system` rempli, pour qu'aucun lecteur n'ait a connaitre ce rangement.
+   */
+  systemRef?: string
   /** F6 — décomposition du `system` en blocs nommés (skill/discipline/style/capacités/contexte). */
   systemBlocks?: { name: string; chars: number }[]
   /**
@@ -51,6 +66,89 @@ export function promptObservabilityRoot(): string {
 
 function fileFor(conversationId: string, root: string): string {
   return join(root, `${conversationId.replace(/[^a-zA-Z0-9_-]/g, '_')}.jsonl`)
+}
+
+/**
+ * LE PROMPT SYSTEME NE SE RECOPIE PLUS A CHAQUE APPEL.
+ *
+ * Mesure du 2026-09-12 sur les 25 plus gros journaux de ce poste : 2 487 appels, 213,6 Mo, dont
+ * 136,7 Mo — 64 % — pour le SEUL champ `system`… qui ne compte que 44 versions DISTINCTES. Le
+ * dossier entier pese 572 Mo. Ce poids se paie deux fois : a l'ecriture de chaque appel, et a la
+ * lecture par `os:costBreakdown`, qui appelle `loadAllPromptCalls()` et relit tout le dossier sur
+ * le fil principal alors que le calcul du cout n'a besoin ni du prompt systeme ni de la reponse.
+ *
+ * On range donc chaque version UNE fois, sous son empreinte, et l'appel ne garde qu'une reference.
+ * Rien n'est perdu : `loadPromptCalls` reconstitue `system` a la lecture, donc aucun lecteur
+ * existant ne change. Les enregistrements deja ecrits, qui portent `system` en clair, restent lus
+ * tels quels — la migration est nulle.
+ */
+export function dossierDesSystemes(root: string): string {
+  return join(root, 'systems')
+}
+
+/**
+ * En dessous de cette taille, deduplicater coute plus cher que de recopier : un fichier de plus
+ * sur le disque et une lecture de plus a la relecture, pour quelques centaines d'octets gagnes.
+ */
+const TAILLE_MINIMALE_DEDUPLICATION = 4096
+
+/**
+ * Les prompts systeme deja poses sur le disque pendant cette session — evite un `existsSync` par
+ * appel. La cle porte le DOSSIER autant que l'empreinte : deux racines differentes (la vraie et
+ * celle d'un test, ou deux profils) ne partagent pas leurs fichiers, et une memoire indexee sur la
+ * seule empreinte ferait croire a la seconde qu'un fichier qu'elle n'a jamais ecrit existe.
+ */
+const systemesPoses = new Set<string>()
+
+const cleDeSysteme = (root: string, empreinte: string): string => `${root}::${empreinte}`
+
+/**
+ * Range le prompt systeme a part et rend son empreinte — ou `undefined` s'il ne vaut pas la peine.
+ *
+ * Best-effort ASSUME : si l'ecriture echoue, on rend `undefined` et l'appelant recopie le prompt en
+ * clair comme avant. Une trace d'observation ne doit jamais faire echouer un tour.
+ */
+function rangerLeSysteme(systeme: string, root: string): string | undefined {
+  if (systeme.length < TAILLE_MINIMALE_DEDUPLICATION) return undefined
+  try {
+    const empreinte = createHash('sha256').update(systeme, 'utf8').digest('hex').slice(0, 32)
+    if (systemesPoses.has(cleDeSysteme(root, empreinte))) return empreinte
+    const dossier = dossierDesSystemes(root)
+    const chemin = join(dossier, `${empreinte}.txt`)
+    if (!existsSync(chemin)) {
+      if (!existsSync(dossier)) mkdirSync(dossier, { recursive: true })
+      writeFileSync(chemin, systeme, 'utf8')
+    }
+    systemesPoses.add(cleDeSysteme(root, empreinte))
+    return empreinte
+  } catch {
+    return undefined
+  }
+}
+
+/** Prompts systeme deja relus — 2 487 appels ne partagent que 44 versions : on ne les relit pas 2 487 fois. */
+const systemesRelus = new Map<string, string>()
+
+/**
+ * Rend l'enregistrement AVEC son `system` en clair, qu'il soit range a part ou non.
+ *
+ * Une empreinte dont le fichier a disparu ne fait pas disparaitre l'appel : on garde la reference
+ * VISIBLE plutot que de mentir par un prompt vide.
+ */
+function rehydraterLeSysteme(record: PromptCallRecord, root: string): PromptCallRecord {
+  if (record.system !== undefined || !record.systemRef) return record
+  const cle = cleDeSysteme(root, record.systemRef)
+  const memoire = systemesRelus.get(cle)
+  if (memoire !== undefined) return { ...record, system: memoire }
+  try {
+    const chemin = join(dossierDesSystemes(root), `${record.systemRef}.txt`)
+    if (!existsSync(chemin)) return record
+    const systeme = readFileSync(chemin, 'utf8')
+    systemesRelus.set(cle, systeme)
+    return { ...record, system: systeme }
+  } catch {
+    return record
+  }
 }
 
 /**
@@ -132,19 +230,98 @@ function restoreObservedValue<T>(value: T): T {
   return value
 }
 
+/**
+ * HORS DU FIL PRINCIPAL — pourquoi l'ecriture d'un appel modele est ASYNCHRONE.
+ *
+ * Un enregistrement porte le prompt systeme ENTIER, tous les messages et la reponse : mesure du
+ * 2026-09-12 sur ce poste, 565 Mo de journaux, et jusqu'a 112 ko pour UNE ligne (`conv-439.jsonl`,
+ * 16,8 Mo pour 150 appels). Ce bloc partait en `appendFileSync` sur le fil qui dessine l'interface,
+ * a chaque appel modele. `gels.jsonl` porte 549 gels en cause « entree-sortie bloquante »,
+ * 2 257 s cumulees, pic a 53 594 ms — la plus grosse famille de gels de l'app.
+ *
+ * Meme remede que le journal de tour (`src/main/runs/turn-journal.ts`, migre le 2026-09-09 apres un
+ * gel de 26 s) : l'ecriture courante part sur le pool d'I/O de Node, les lignes soumises restent
+ * LISIBLES en memoire (`enVol`) tant qu'elles ne sont pas sur le disque, et une seule ecriture est
+ * en vol par fichier (`chaines`) pour garder l'ORDRE.
+ *
+ * Ce qui reste SYNCHRONE : l'arret de l'app (`flushAllPromptCalls`, appele dans `before-quit`).
+ * Le prix assume : une mort BRUTALE du process peut perdre les derniers appels non encore poses —
+ * une trace d'observation, jamais une donnee de conversation.
+ */
+const enVol = new Map<string, string[]>()
+const chaines = new Map<string, Promise<void>>()
+
+function retirerEnVol(path: string, ligne: string): void {
+  const reste = (enVol.get(path) ?? []).filter((_, index, all) => index !== all.indexOf(ligne))
+  if (reste.length === 0) enVol.delete(path)
+  else enVol.set(path, reste)
+}
+
+function ecrireAsync(path: string, root: string, ligne: string): void {
+  enVol.set(path, [...(enVol.get(path) ?? []), ligne])
+  const precedent = chaines.get(path) ?? Promise.resolve()
+  const suite: Promise<void> = precedent
+    .then(async () => {
+      // Le tampon a pu etre vide par une suppression de conversation entre-temps : ne rien recreer.
+      if (!(enVol.get(path) ?? []).includes(ligne)) return
+      if (!existsSync(root)) mkdirSync(root, { recursive: true })
+      await appendFile(path, ligne, 'utf8')
+      retirerEnVol(path, ligne)
+    })
+    .catch(() => {
+      // Echec d'ecriture : la ligne RESTE en memoire pour rester relisible, et l'arret la reprendra.
+    })
+    .finally(() => {
+      if (chaines.get(path) === suite) chaines.delete(path)
+    })
+  chaines.set(path, suite)
+}
+
+/** Pose sur le disque, en BLOQUANT, tout ce qui n'y est pas encore — reserve a l'arret de l'app. */
+export function flushAllPromptCalls(): void {
+  for (const [path, lignes] of [...enVol.entries()]) {
+    enVol.delete(path)
+    if (lignes.length === 0) continue
+    try {
+      const dir = path.slice(0, Math.max(0, path.lastIndexOf(sep)))
+      if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true })
+      appendFileSync(path, lignes.join(''), 'utf8')
+    } catch {
+      // Arret en cours : une trace d'observation perdue ne doit pas empecher la fermeture.
+    }
+  }
+}
+
+/**
+ * Attend que les ecritures en vol soient posees sur le disque.
+ * Sert aux TESTS et a tout appelant qui doit constater le fichier — pas au chemin de production,
+ * dont tout l'interet est justement de ne pas attendre.
+ */
+export async function attendreEcrituresPromptCalls(): Promise<void> {
+  while (chaines.size > 0) await Promise.all([...chaines.values()])
+}
+
 export function appendPromptCall(
   call: Omit<PromptCallRecord, 'id' | 'ts'>,
   root = promptObservabilityRoot(),
   now: () => number = Date.now,
   makeId: () => string = randomUUID
 ): PromptCallRecord {
-  if (!existsSync(root)) mkdirSync(root, { recursive: true })
   const record: PromptCallRecord = {
     ...restoreObservedValue(call),
     id: makeId(),
     ts: new Date(now()).toISOString()
   }
-  appendFileSync(fileFor(call.conversationId, root), `${JSON.stringify(record)}\n`, 'utf8')
+  /*
+   * SUR LE DISQUE, le prompt systeme part sous forme d'EMPREINTE (voir `rangerLeSysteme`) : 64 %
+   * des 572 Mo de journaux n'etaient que 44 prompts recopies 2 487 fois. L'objet RENDU a l'appelant,
+   * lui, garde son `system` en clair — l'observabilite en direct ne change pas d'un iota.
+   */
+  const empreinteSysteme = record.system ? rangerLeSysteme(record.system, root) : undefined
+  const aEcrire: PromptCallRecord = empreinteSysteme
+    ? { ...record, system: undefined, systemRef: empreinteSysteme }
+    : record
+  ecrireAsync(fileFor(call.conversationId, root), root, `${JSON.stringify(aEcrire)}\n`)
   return record
 }
 
@@ -154,13 +331,19 @@ export function loadPromptCalls(
 ): PromptCallRecord[] {
   try {
     const path = fileFor(conversationId, root)
-    if (!existsSync(path)) return []
-    return readFileSync(path, 'utf8')
+    // Une ligne encore EN VOL vers le disque fait PARTIE du journal : l'omettre rendrait
+    // l'Observatory aveugle sur l'appel qui vient d'avoir lieu.
+    const memoire = (enVol.get(path) ?? []).join('')
+    const surDisque = existsSync(path) ? readFileSync(path, 'utf8') : ''
+    if (!surDisque && !memoire) return []
+    return `${surDisque}${memoire}`
       .split(/\r?\n/)
       .filter(Boolean)
       .flatMap((line) => {
         try {
-          return [JSON.parse(line) as PromptCallRecord]
+          // Le prompt systeme range a part est RECONSTITUE ici : aucun lecteur (Observatory,
+          // trace d'appel, contexte kaizen) n'a a connaitre ce rangement.
+          return [rehydraterLeSysteme(JSON.parse(line) as PromptCallRecord, root)]
         } catch {
           return []
         }
@@ -172,8 +355,11 @@ export function loadPromptCalls(
 
 export function loadAllPromptCalls(root = promptObservabilityRoot()): PromptCallRecord[] {
   try {
-    if (!existsSync(root)) return []
-    return readdirSync(root)
+    const surDisque = existsSync(root) ? readdirSync(root) : []
+    const enMemoire = [...enVol.keys()]
+      .filter((path) => path.startsWith(root))
+      .map((path) => path.slice(path.lastIndexOf(sep) + 1))
+    return [...new Set([...surDisque, ...enMemoire])]
       .filter((name) => name.endsWith('.jsonl'))
       .flatMap((name) => {
         const conversationId = name.slice(0, -'.jsonl'.length)
@@ -190,7 +376,11 @@ export function deletePromptCalls(
   root = promptObservabilityRoot()
 ): boolean {
   const path = fileFor(conversationId, root)
-  if (!existsSync(path)) return false
+  // Ce qui n'est pas encore pose sur le disque doit disparaitre AUSSI : sinon la conversation
+  // supprimee reapparaitrait, soit a la relecture, soit quand l'ecriture en vol atterrirait.
+  const avaitDuTampon = (enVol.get(path) ?? []).length > 0
+  enVol.delete(path)
+  if (!existsSync(path)) return avaitDuTampon
   rmSync(path)
   return true
 }

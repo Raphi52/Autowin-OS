@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { CandidatVeille } from './candidats'
+import { clesCandidat, type CandidatVeille } from './candidats'
 import {
   clesConnues,
   ecrireStockVeille,
@@ -142,6 +142,56 @@ describe('fusion d’une passe', () => {
       candidats: [candidat(), candidat({ id: 'z', titre: 'Autre' })],
       echecs: []
     }
-    expect(clesConnues(stock).size).toBe(2)
+    // Deux cles par candidat depuis que le titre seul en porte une : ce test disait « size === 2 »,
+    // ce qui figeait le NOMBRE de cles, pas l'intention. L'intention, la voici — chaque candidat de
+    // l'historique est bien couvert.
+    const cles = clesConnues(stock)
+    for (const c of stock.candidats) for (const cle of clesCandidat(c)) expect(cles.has(cle)).toBe(true)
+  })
+})
+
+
+/*
+ * COMPATIBILITE DU STOCK EXISTANT : les 28 candidats en place portent un `id` egal a l'ANCIENNE cle
+ * (ancrage avec numero de ligne). Cet `id` sert au marquage de statut par l'interface : il ne doit
+ * pas etre reecrit, et le stock ancien doit rester reconnu par la deduplication.
+ */
+describe('stock ancien, cles nouvelles', () => {
+  const ancien = (): StockVeille => ({
+    candidats: [
+      candidat({
+        id: 'autowin|src/main/truc.ts:123|le compteur fige l interface',
+        concurrent: 'Autowin',
+        titre: "Le compteur fige l'interface",
+        url: 'src/main/truc.ts:123'
+      })
+    ],
+    echecs: []
+  })
+
+  it('ne reecrit aucun id existant en fusionnant une passe', () => {
+    const stock = ancien()
+    const fusionne = fusionnerPasse(stock, {
+      retenus: [],
+      echecs: [],
+      maintenant: '2026-09-13T00:00:00.000Z'
+    })
+    expect(fusionne.candidats[0].id).toBe('autowin|src/main/truc.ts:123|le compteur fige l interface')
+  })
+
+  it('reconnait un candidat du stock ancien re-ancre une ligne plus loin', () => {
+    const stock = ancien()
+    const entrant = {
+      ...stock.candidats[0],
+      id: 'autowin|src/main/truc.ts:124|le compteur fige l interface',
+      url: 'src/main/truc.ts:124'
+    }
+    const fusionne = fusionnerPasse(stock, {
+      retenus: [entrant],
+      echecs: [],
+      maintenant: '2026-09-13T00:00:00.000Z'
+    })
+    expect(fusionne.candidats).toHaveLength(1)
+    expect(fusionne.candidats[0].id).toBe('autowin|src/main/truc.ts:123|le compteur fige l interface')
   })
 })

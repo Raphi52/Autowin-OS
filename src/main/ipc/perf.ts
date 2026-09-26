@@ -17,6 +17,7 @@ import { ipcMain } from 'electron'
 import { ensureAutowinAppData } from '../app-data'
 import { lireLatenceTours } from '../perf-lag-main'
 import { journaliserGel, lireGels } from '../gel-main'
+import { lireDuelsParWorkflow } from '../arena-duels'
 import { assertTrustedRendererSender } from '../ipc-senders'
 
 /** Ce que les canaux de latence prenaient dans `index.ts` — désormais passé explicitement. */
@@ -38,6 +39,15 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
     assertTrustedRendererSender(event, 'PerfGels')
     const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 200
     return lireGels(ensureAutowinAppData(appDataRoot), n)
+  })
+  /*
+   * Vue des workflows : les mesures d'arene DEJA sur disque, agregees par workflow.
+   * Lecture seule et bornee — ce canal ne relance AUCUN duel, il relit `arena-duels.jsonl`.
+   */
+  ipcMain.handle('arena:duelsParWorkflow', (event, derniers?: unknown) => {
+    assertTrustedRendererSender(event, 'ArenaDuelsParWorkflow')
+    const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 500
+    return lireDuelsParWorkflow(ensureAutowinAppData(appDataRoot), n)
   })
   /*
    * Gels du RENDERER, deposes dans le MEME journal que ceux du main.

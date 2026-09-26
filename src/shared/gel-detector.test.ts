@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { appelantApplicatif,
+import {
+  appelantApplicatif,
   blocageDepuisReveil,
   resumerGels,
   PERIODE_BATTEMENT_MS,
@@ -182,7 +183,7 @@ describe('resumerGels — la piste d’un gel anonyme remonte jusqu’a la vue',
 })
 
 describe('appelantApplicatif — NOMMER qui lance l’appel bloquant', () => {
-  it('garde les frames applicatives, condensees en dossier/fichier:ligne', () => {
+  it('garde les frames applicatives, en chemin ouvrable depuis la racine du depot', () => {
     const pile = [
       'Error: gel',
       '    at instrumentee (D:\\AutoWinOS\\src\\main\\gel-main.ts:427:20)',
@@ -191,7 +192,7 @@ describe('appelantApplicatif — NOMMER qui lance l’appel bloquant', () => {
       '    at snapshot (D:\\AutoWinOS\\src\\main\\commands.ts:1710:7)'
     ].join('\n')
     expect(appelantApplicatif(pile)).toBe(
-      'store/worktree-manager.ts:1272:24 < main/commands.ts:1710:7'
+      'src/main/store/worktree-manager.ts:1272:24 < src/main/commands.ts:1710:7'
     )
   })
   it('rend undefined quand aucune frame applicative ne subsiste', () => {

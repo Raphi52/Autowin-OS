@@ -38,7 +38,7 @@ describe('ChatMessageRow', () => {
     // PLIÉ par défaut depuis le 2026-09-01 (« pareil pour reflexion ») : ce que cet oracle protège,
     // c'est que le bloc EXISTE et PORTE la pensée — le défaut d'origine était son absence totale.
     expect(bloc!.open).toBe(false)
-    expect(host.querySelector('[data-testid="thinking-body"]')?.textContent).toBe(
+    expect(host.querySelector('[data-testid="thinking-block-body"]')?.textContent).toBe(
       'raisonnement en cours'
     )
     await act(async () => root.unmount())

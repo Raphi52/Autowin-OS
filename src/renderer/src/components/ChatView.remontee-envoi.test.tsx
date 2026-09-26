@@ -38,13 +38,13 @@ describe('ChatView — ecrire remonte la conversation en tete', () => {
     )
 
     /**
-     * L'ORDRE des fils, chacun compte UNE fois, dans son ordre de premiere apparition.
+     * ORDRE DES TITRES DISTINCTS, dans leur première apparition. Le groupe « Récent » de la barre
+     * latérale DUPLIQUE volontairement les fils déjà rangés ailleurs (`groupeRecent` dans
+     * `conversation-groups.ts`) : la liste à plat rendait donc `[fraiche, vieille, fraiche,
+     * vieille]` et ce test échouait sur un comportement VOULU.
      *
-     * Le groupe « Recent » ouvre la barre laterale et DUPLIQUE a dessein les fils deja ranges
-     * ailleurs (`groupeRecent`, `conversation-groups.ts`). Lire tous les `.conv-label` mesurait donc
-     * « Recent puis Divers », c'est-a-dire la mise en page, alors que ce test porte sur le TRI.
-     * Dedoublonner en gardant la premiere occurrence rend exactement l'ordre du groupe Recent, qui
-     * est celui que l'utilisateur voit en haut. Constate le 2026-09-17, rouge preexistant.
+     * La déduplication ne desserre rien : ce test porte sur l'ORDRE (qui est en tête), et « Récent »
+     * est justement trié sur la même récence — inverser cet ordre le fait toujours échouer.
      */
     const titres = (): string[] => [
       ...new Set(

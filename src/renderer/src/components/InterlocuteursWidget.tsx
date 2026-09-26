@@ -10,6 +10,9 @@ import {
   type Interlocuteur,
   type MessageInterlocuteur
 } from './outlook-model'
+// Le MEME formateur de taille que les pièces jointes ENVOYÉES (le chat et l'écran de réponse
+// passent par lui) : une pièce ne doit pas changer d'unité selon le sens où elle a voyagé.
+import { formatFileSize } from './chat-attachments'
 import { Spinner } from './Spinner'
 import {
   basculerAlerte,
@@ -19,6 +22,12 @@ import {
   type AlertesInterlocuteurs
 } from './outlook-alertes'
 import { alerter, autoriserPopups } from './outlook-alerte-notif'
+import {
+  MAX_PIECES,
+  preparerPiecesLachees,
+  tailleLisible,
+  type PieceJointeMessage
+} from './interlocuteurs-pieces'
 
 /**
  * La tuile Interlocuteurs, en TROIS écrans successifs dans la même tuile.
@@ -68,7 +77,17 @@ export function InterlocuteursWidget({
   now: number
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
-  onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  /**
+   * RÉPOND à un message existant, avec ses pièces jointes éventuelles.
+   *
+   * Les pièces arrivent en CONTENU (base64) et non en chemin, comme pour un message neuf : un
+   * fichier glissé depuis Outlook n'existe pas sur le disque, et Electron ne rend plus `File.path`.
+   */
+  onRepondre: (
+    id: string,
+    corps: string,
+    pieces: readonly PieceJointeMessage[]
+  ) => Promise<{ ok: boolean; erreur?: string }>
   /**
    * ENVOIE un message NEUF : une adresse, un objet, un premier message.
    *
@@ -78,7 +97,8 @@ export function InterlocuteursWidget({
   onNouvelleConversation: (
     adresse: string,
     objet: string,
-    corps: string
+    corps: string,
+    pieces: readonly PieceJointeMessage[]
   ) => Promise<{ ok: boolean; erreur?: string }>
   /**
    * Marque des messages comme LUS dans Outlook. Ecrit dans la boite reelle.
@@ -495,10 +515,16 @@ function EcranConversation({
   contact: Interlocuteur
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
-  onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  onRepondre: (
+    id: string,
+    corps: string,
+    pieces: readonly PieceJointeMessage[]
+  ) => Promise<{ ok: boolean; erreur?: string }>
   onMarquerLu: (ids: string[]) => Promise<{ ok: boolean; erreur?: string }>
 }): React.JSX.Element {
   const [brouillon, setBrouillon] = useState('')
+  const [pieces, setPieces] = useState<PieceJointeMessage[]>([])
+  const [survol, setSurvol] = useState(false)
   const [confirme, setConfirme] = useState(false)
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -568,9 +594,12 @@ function EcranConversation({
     setEnvoiEnCours(true)
     setErreur(null)
     try {
-      const resultat = await onRepondre(ancre.id, corps)
+      const resultat = await onRepondre(ancre.id, corps, pieces)
       if (resultat.ok) {
         setBrouillon('')
+        // Les pieces partent AVEC la reponse : sans ce vidage, elles resteraient accrochees et
+        // repartiraient avec la reponse SUIVANTE.
+        setPieces([])
         setConfirme(false)
         setEnvoye(true)
       } else {
@@ -582,12 +611,99 @@ function EcranConversation({
     } finally {
       setEnvoiEnCours(false)
     }
-  }, [ancre, brouillon, onRepondre])
+  }, [ancre, brouillon, pieces, onRepondre])
 
   const vide = brouillon.trim() === ''
 
+  // Toute modification ANNULE la confirmation : sans cela, on confirmerait une reponse puis on en
+  // enverrait une autre. Une piece jointe qui arrive compte comme une frappe, pour la meme raison :
+  // ce qui partirait ne serait plus ce qui a ete confirme.
+  const modifier = (appliquer: () => void): void => {
+    appliquer()
+    setConfirme(false)
+    setEnvoye(false)
+  }
+
+  /**
+   * GLISSER-DEPOSER un fichier dans la reponse. Demande de l'utilisateur du 2026-09-09 : « ca
+   * marche bien pour les nouveaux fils de message, il faudrait aussi que ca marche pour les
+   * messages de reponse ».
+   *
+   * Le `preventDefault()` sur le survol n'est pas decoratif : c'est LUI qui dit au navigateur que
+   * ce depot est accepte. Sans lui, Chromium affiche son curseur « Copier » puis abandonne le
+   * lacher — exactement le symptome signale pour le message neuf la veille.
+   *
+   * Le filtre sur `types` evite de capter les glissers internes de l'application (une carte, un
+   * onglet) : seuls des FICHIERS ouvrent la zone de depot.
+   */
+  const porteDesFichiers = (event: React.DragEvent<HTMLDivElement>): boolean =>
+    Array.from(event.dataTransfer.types).includes('Files')
+
+  const lacher = async (fichiers: FileList | File[]): Promise<void> => {
+    const resultat = await preparerPiecesLachees(pieces, Array.from(fichiers))
+    if ('erreur' in resultat) {
+      // Aucun refus muet : un fichier ecarte sans un mot ferait croire que la piece est jointe.
+      setErreur(resultat.erreur)
+      return
+    }
+    if (resultat.pieces.length === 0) return
+    modifier(() => {
+      setErreur(null)
+      setPieces((courantes) => [...courantes, ...resultat.pieces])
+    })
+  }
+
+  const retirerPiece = (index: number): void =>
+    modifier(() => setPieces((courantes) => courantes.filter((_, rang) => rang !== index)))
+
+  /**
+   * Les gestionnaires de depot, poses UNIQUEMENT quand une reponse est possible.
+   *
+   * Quand le fil ne contient que mes envois, il n'y a aucun message auquel repondre : une zone de
+   * depot y promettrait un envoi que rien ne peut faire partir.
+   */
+  const zoneDepot =
+    ancre === null
+      ? {}
+      : {
+          'data-testid': 'home-inter-reponse-depot',
+          onDragEnter: (event: React.DragEvent<HTMLDivElement>) => {
+            if (!porteDesFichiers(event)) return
+            event.preventDefault()
+            setSurvol(true)
+          },
+          onDragOver: (event: React.DragEvent<HTMLDivElement>) => {
+            if (porteDesFichiers(event)) event.preventDefault()
+          },
+          onDragLeave: (event: React.DragEvent<HTMLDivElement>) => {
+            // Un passage d'un champ a l'autre reste DANS la zone : sans ce test, le calque clignoterait.
+            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+            setSurvol(false)
+          },
+          onDrop: (event: React.DragEvent<HTMLDivElement>) => {
+            event.preventDefault()
+            setSurvol(false)
+            void lacher(event.dataTransfer.files)
+          }
+        }
+
   return (
-    <>
+    /*
+     * La cible du glisser ENGLOBE la conversation, elle ne se limite pas à la barre de réponse.
+     *
+     * Mesuré sur une capture de l'écran réel le 2026-09-09 : cette barre est collée en bas
+     * (`position: sticky`) et ne fait que la hauteur de ses champs — environ 70 pixels sur les 520
+     * de la tuile. Un fichier lâché sur les messages, là où l'utilisateur regarde, retomberait dans
+     * le vide. C'est le défaut déjà corrigé pour le message neuf (commit 22a0b95c), et il ne doit
+     * pas ressusciter ici.
+     */
+    <div className={`home-chat__zone${survol ? ' is-depot' : ''}`} {...zoneDepot}>
+      {survol ? (
+        <div className="home-chat__depot-calque" aria-hidden="true">
+          <strong>Déposez vos fichiers</strong>
+          <span>Ils partiront en pièce jointe de cette réponse</span>
+        </div>
+      ) : null}
       <ol className="home-chat" data-testid="home-inter-conversation">
         {conversation.messages.map((message) => (
           <Bulle key={message.id} message={message} contact={contact} />
@@ -621,6 +737,34 @@ function EcranConversation({
               rows={2}
               data-testid="home-inter-saisie"
             />
+            {/* Les pièces jointes sont VISIBLES avant le premier clic : un envoi ne se rattrape pas,
+                et ce qui va partir doit se lire avant de confirmer. */}
+            {pieces.length > 0 ? (
+              <ul className="home-chat__pieces" data-testid="home-inter-reponse-pieces">
+                {pieces.map((piece, index) => (
+                  <li key={`${piece.nom}-${piece.taille}-${index}`}>
+                    <span className="home-chat__piece-nom" title={piece.nom}>
+                      {piece.nom}
+                    </span>
+                    <em>{tailleLisible(piece.taille)}</em>
+                    <button
+                      type="button"
+                      className="home-chat__piece-retirer"
+                      onClick={() => retirerPiece(index)}
+                      title={`Retirer ${piece.nom}`}
+                      disabled={envoiEnCours}
+                      data-testid={`home-inter-reponse-piece-retirer-${index}`}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="home-hint home-chat__depot-invite">
+                Glissez un fichier ici pour le joindre ({MAX_PIECES} max, 10 Mo chacun).
+              </p>
+            )}
             <div className="home-chat__actions">
               <EnvoiEnDeuxTemps
                 nom={contact.nom}
@@ -656,7 +800,7 @@ function EcranConversation({
           </>
         )}
       </div>
-    </>
+    </div>
   )
 }
 
@@ -743,11 +887,14 @@ function EcranNouveau({
   onEnvoyer: (
     adresse: string,
     objet: string,
-    corps: string
+    corps: string,
+    pieces: readonly PieceJointeMessage[]
   ) => Promise<{ ok: boolean; erreur?: string }>
 }): React.JSX.Element {
   const [objet, setObjet] = useState('')
   const [message, setMessage] = useState('')
+  const [pieces, setPieces] = useState<PieceJointeMessage[]>([])
+  const [survol, setSurvol] = useState(false)
   const [confirme, setConfirme] = useState(false)
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -762,10 +909,11 @@ function EcranNouveau({
     setEnvoiEnCours(true)
     setErreur(null)
     try {
-      const resultat = await onEnvoyer(contact.adresse, objet.trim(), message.trim())
+      const resultat = await onEnvoyer(contact.adresse, objet.trim(), message.trim(), pieces)
       if (resultat.ok) {
         setObjet('')
         setMessage('')
+        setPieces([])
         setConfirme(false)
         setEnvoye(true)
       } else {
@@ -777,18 +925,77 @@ function EcranNouveau({
     } finally {
       setEnvoiEnCours(false)
     }
-  }, [contact, objet, message, incomplet, onEnvoyer])
+  }, [contact, objet, message, pieces, incomplet, onEnvoyer])
 
   // Toute frappe ANNULE la confirmation : sans cela, on confirmerait un message puis on en
-  // enverrait un autre.
+  // enverrait un autre. Une pièce jointe qui arrive compte comme une frappe, pour la même raison :
+  // ce qui partirait ne serait plus ce qui a été confirmé.
   const modifier = (appliquer: () => void): void => {
     appliquer()
     setConfirme(false)
     setEnvoye(false)
   }
 
+  /**
+   * GLISSER-DÉPOSER un fichier dans cet écran. Demande de l'utilisateur du 2026-09-08.
+   *
+   * Le `preventDefault()` sur le survol n'est pas décoratif : c'est LUI qui dit au navigateur que ce
+   * dépôt est accepté. Sans lui, Chromium affiche son curseur « Copier » puis abandonne le lâcher —
+   * exactement le symptôme signalé, « il ne se passe rien quand je le lâche ».
+   *
+   * Le filtre sur `types` évite de capter les glissers internes de l'application (une carte, un
+   * onglet) : seuls des FICHIERS ouvrent la zone de dépôt.
+   */
+  const porteDesFichiers = (event: React.DragEvent<HTMLDivElement>): boolean =>
+    Array.from(event.dataTransfer.types).includes('Files')
+
+  const lacher = async (fichiers: FileList | File[]): Promise<void> => {
+    const resultat = await preparerPiecesLachees(pieces, Array.from(fichiers))
+    if ('erreur' in resultat) {
+      // Aucun refus muet : un fichier écarté sans un mot ferait croire que la pièce est jointe.
+      setErreur(resultat.erreur)
+      return
+    }
+    if (resultat.pieces.length === 0) return
+    modifier(() => {
+      setErreur(null)
+      setPieces((courantes) => [...courantes, ...resultat.pieces])
+    })
+  }
+
+  const retirerPiece = (index: number): void =>
+    modifier(() => setPieces((courantes) => courantes.filter((_, rang) => rang !== index)))
+
   return (
-    <div className="home-chat__repondre" onPointerDown={(event) => event.stopPropagation()}>
+    <div
+      className={`home-chat__repondre home-chat__nouveau${survol ? ' is-depot' : ''}`}
+      data-testid="home-inter-nouveau-depot"
+      onPointerDown={(event) => event.stopPropagation()}
+      onDragEnter={(event) => {
+        if (!porteDesFichiers(event)) return
+        event.preventDefault()
+        setSurvol(true)
+      }}
+      onDragOver={(event) => {
+        if (porteDesFichiers(event)) event.preventDefault()
+      }}
+      onDragLeave={(event) => {
+        // Un passage d'un champ à l'autre reste DANS la zone : sans ce test, le calque clignoterait.
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+        setSurvol(false)
+      }}
+      onDrop={(event) => {
+        event.preventDefault()
+        setSurvol(false)
+        void lacher(event.dataTransfer.files)
+      }}
+    >
+      {survol ? (
+        <div className="home-chat__depot-calque" aria-hidden="true">
+          <strong>Déposez vos fichiers</strong>
+          <span>Ils partiront en pièce jointe de ce message</span>
+        </div>
+      ) : null}
       <p className="home-hint">Nouveau message à {contact.adresse}</p>
       <input
         type="text"
@@ -807,6 +1014,34 @@ function EcranNouveau({
         rows={3}
         data-testid="home-inter-nouveau-message"
       />
+      {/* Les pièces jointes sont VISIBLES avant le premier clic : un envoi ne se rattrape pas, et ce
+          qui va partir doit se lire avant de confirmer. */}
+      {pieces.length > 0 ? (
+        <ul className="home-chat__pieces" data-testid="home-inter-nouveau-pieces">
+          {pieces.map((piece, index) => (
+            <li key={`${piece.nom}-${piece.taille}-${index}`}>
+              <span className="home-chat__piece-nom" title={piece.nom}>
+                {piece.nom}
+              </span>
+              <em>{tailleLisible(piece.taille)}</em>
+              <button
+                type="button"
+                className="home-chat__piece-retirer"
+                onClick={() => retirerPiece(index)}
+                title={`Retirer ${piece.nom}`}
+                disabled={envoiEnCours}
+                data-testid={`home-inter-nouveau-piece-retirer-${index}`}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="home-hint home-chat__depot-invite">
+          Glissez un fichier ici pour le joindre ({MAX_PIECES} max, 10 Mo chacun).
+        </p>
+      )}
       <div className="home-chat__actions">
         <EnvoiEnDeuxTemps
           nom={contact.nom}
@@ -855,6 +1090,28 @@ function Bulle({
           <i className="home-chat__sans-corps">{message.sujet}</i>
         )}
       </span>
+      {/*
+        Les pièces REÇUES, HORS de la bulle et rendues seulement s'il y en a.
+        Dehors, parce qu'une pièce n'est pas du texte : dans la bulle, elle se lirait comme une
+        ligne du message. Et rien du tout quand la liste est vide — relevé du 2026-09-10 sur la
+        vraie boîte, 150 des 153 messages reçus n'ont aucune pièce, et un cadre vide sur chacun
+        serait un bruit permanent.
+        Nom et taille seulement : le contenu ne traverse pas l'instantané. Pour ouvrir le fichier,
+        le bouton « Ouvrir dans Outlook » du fil est déjà là.
+      */}
+      {message.pieces.length > 0 ? (
+        <ul className="home-chat__pieces" data-testid={`home-chat-pieces-${message.id}`}>
+          {message.pieces.map((piece, rang) => (
+            // Le nom seul ne fait pas une clé : deux pièces d'un même message peuvent le partager.
+            <li className="home-chat__piece" key={`${rang}-${piece.nom}`}>
+              <span className="home-chat__piece-nom" title={piece.nom}>
+                {piece.nom}
+              </span>
+              <em className="home-chat__piece-taille">{formatFileSize(piece.taille)}</em>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </li>
   )
 }

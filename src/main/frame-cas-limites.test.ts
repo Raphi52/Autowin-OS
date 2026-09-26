@@ -82,3 +82,17 @@ describe('frame-cas-limites — la garde de handoff', () => {
     expect(src).toMatch(/phase === 'frame'/)
   })
 })
+
+describe('MARQUEURS_ENTREE ne réagit plus au vocabulaire du code interne (conv-710)', () => {
+  it('le vrai cadrage refusé à tort (« ajouter une option à finalize ») passe sans cas limites', () => {
+    const interne =
+      "## Besoin\nFaire passer la tâche par `finalize` en ajoutant une option ; `-m` est passé en argument séparé ; un paramètre `task`.\n"
+    expect(enteteCasLimitesManquants(interne)).toBeUndefined()
+  })
+
+  it('une vraie entrée utilisateur est toujours détectée', () => {
+    expect(enteteCasLimitesManquants("## Besoin\nL'option de la ligne de commande `jours` accepte tout.\n")).toBeDefined()
+    expect(enteteCasLimitesManquants('## Besoin\nLe champ de saisie du nom accepte tout.\n')).toBeDefined()
+    expect(enteteCasLimitesManquants('## Besoin\nLe formulaire accepte un email vide.\n')).toBeDefined()
+  })
+})

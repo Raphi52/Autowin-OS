@@ -20,6 +20,7 @@ import {
 } from './home-widgets-model'
 import {
   defaultHomeLayout,
+  estDispositionDOrigine,
   HOME_WIDGET_IDS,
   HOME_WIDGET_TITLES,
   reconcileLayout,
@@ -43,10 +44,7 @@ import {
   type HomeWidgetsVisibility
 } from './home-widgets-visibility'
 import { EVENEMENT_NOM_JARVIS, lireNomJarvis } from './jarvis-nom'
-import {
-  memoriserOuvertureReglages,
-  reglagesSontOuverts
-} from './home-reglages-ouverture'
+import { memoriserOuvertureReglages, reglagesSontOuverts } from './home-reglages-ouverture'
 import {
   instantaneConversationsEnAttente,
   retirerConversationEnAttente,
@@ -57,6 +55,7 @@ import { autowinStorageKey } from '../storage-keys'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
 import { InterlocuteursWidget } from './InterlocuteursWidget'
+import type { PieceJointeMessage } from './interlocuteurs-pieces'
 import './HomeView.css'
 import { Spinner } from './Spinner'
 
@@ -390,10 +389,30 @@ export function HomeView({
     [arrangement, surface, poseALaMain]
   )
 
-  // Une nouvelle surface annule cette autorite : la disposition doit y etre re-jugee.
-  useEffect(() => {
+  /*
+   * Une nouvelle surface annule cette autorite : la disposition doit y etre re-jugee.
+   *
+   * AJUSTE PENDANT LE RENDU, pas dans un effet (`react-hooks/set-state-in-effect`) : remettre un
+   * etat a zero depuis un effet fait rendre une fois avec l'ANCIENNE valeur, puis une seconde fois
+   * apres correction. React traite ce cas a part -- le rendu en cours est abandonne et relance
+   * avant tout affichage, donc l'utilisateur ne voit jamais l'etat perime.
+   */
+  const [surfaceJugee, setSurfaceJugee] = useState(surface)
+  if (surfaceJugee !== surface) {
+    setSurfaceJugee(surface)
     setPoseALaMain(false)
-  }, [surface])
+    /*
+     * Un agencement que PERSONNE n'a pose ne fait pas autorite : il suit la surface REELLE.
+     *
+     * Au premier rendu la surface n'est pas encore mesuree, donc l'agencement est deduit de la
+     * FENETRE -- toujours plus large et plus haute que l'Accueil, qui n'en a pas la barre laterale.
+     * Le garder revenait a persister des tuiles calibrees pour une surface qui n'existe pas, puis a
+     * les afficher des que la surface s'elargit assez pour les accepter : c'est exactement ce que
+     * produit le repli de la barre laterale (mesure du 2026-09-17 : 445 px de large au lieu de 419,
+     * rangee du bas coupee de 15 px). Il n'y a rien a preserver la-dedans, donc on re-derive.
+     */
+    if (estDispositionDOrigine(arrangement)) setArrangement(defaultHomeLayout(surface))
+  }
 
   /* ---------------------------------------------------------------- *
    * LE DECOR A DEMENAGE : il est desormais le fond de TOUTE l'application, monte a la racine de la
@@ -491,13 +510,23 @@ export function HomeView({
    * taire l'outil. Le `setState` synchrone du chemin NORMAL, lui, a ete retire : il est desormais
    * pose par le bouton qui l'allume.
    */
+  /**
+   * UNE TUILE ETEINTE NE LIT PLUS RIEN.
+   *
+   * Seules « Interlocuteurs » et « Agenda » consomment l'instantane Outlook. Tant que l'une des deux
+   * est allumee, on lit ; si les DEUX sont eteintes, l'intervalle ne se pose meme pas. Sans cette
+   * condition, eteindre les tuiles retirait l'affichage mais laissait un dialogue COM par minute avec
+   * Outlook -- l'utilisateur ne voyait plus rien et payait quand meme la lenteur (demande du
+   * 2026-09-22 : « quand je desactive le widget ca arrete le polling »).
+   */
+  const outlookRequis = estVisible(visibilite, 'mails') || estVisible(visibilite, 'agenda')
   useEffect(() => {
-    if (!active) return
+    if (!active || !outlookRequis) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void readOutlook()
     const timer = window.setInterval(() => void readOutlook(), OUTLOOK_REFRESH_MS)
     return () => window.clearInterval(timer)
-  }, [active, readOutlook])
+  }, [active, outlookRequis, readOutlook])
 
   /**
    * Relit Outlook quand on REVIENT dans la fenetre.
@@ -510,7 +539,7 @@ export function HomeView({
    * c'est-a-dire precisement ce qu'on cherche a remplacer.
    */
   useEffect(() => {
-    if (!active) return
+    if (!active || !outlookRequis) return
     const relire = (): void => {
       if (document.visibilityState === 'hidden') return
       if (Date.now() - derniereLecture.current < OUTLOOK_ECART_MIN_MS) return
@@ -522,7 +551,7 @@ export function HomeView({
       window.removeEventListener('focus', relire)
       document.removeEventListener('visibilitychange', relire)
     }
-  }, [active, readOutlook])
+  }, [active, outlookRequis, readOutlook])
 
   const departures = useMemo(
     () => (snapshot ? nextDepartures(snapshot.tasks, now) : []),
@@ -692,11 +721,19 @@ export function HomeView({
    * l'utilisateur vient de cliquer.
    */
   const repondreDansOutlook = useCallback(
-    async (id: string, corps: string): Promise<{ ok: boolean; erreur?: string }> => {
+    async (
+      id: string,
+      corps: string,
+      pieces: readonly PieceJointeMessage[] = []
+    ): Promise<{ ok: boolean; erreur?: string }> => {
       const api = (
         window as unknown as {
           api?: {
-            outlookRepondre?: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+            outlookRepondre?: (
+              id: string,
+              corps: string,
+              pieces?: readonly PieceJointeMessage[]
+            ) => Promise<{ ok: boolean; erreur?: string }>
           }
         }
       ).api
@@ -704,7 +741,7 @@ export function HomeView({
         return { ok: false, erreur: 'Cette version ne sait pas encore répondre depuis Outlook.' }
       }
       try {
-        return await api.outlookRepondre(id, corps)
+        return await api.outlookRepondre(id, corps, pieces)
       } catch (error) {
         return { ok: false, erreur: error instanceof Error ? error.message : String(error) }
       }
@@ -728,7 +765,8 @@ export function HomeView({
     async (
       adresse: string,
       objet: string,
-      corps: string
+      corps: string,
+      pieces: readonly PieceJointeMessage[] = []
     ): Promise<{ ok: boolean; erreur?: string }> => {
       const api = (
         window as unknown as {
@@ -736,7 +774,8 @@ export function HomeView({
             outlookNouveauMessage?: (
               adresse: string,
               objet: string,
-              corps: string
+              corps: string,
+              pieces?: readonly PieceJointeMessage[]
             ) => Promise<{ ok: boolean; erreur?: string }>
           }
         }
@@ -748,7 +787,7 @@ export function HomeView({
         }
       }
       try {
-        const resultat = await api.outlookNouveauMessage(adresse, objet, corps)
+        const resultat = await api.outlookNouveauMessage(adresse, objet, corps, pieces)
         if (resultat.ok) await readOutlook(true)
         return resultat
       } catch (error) {
@@ -910,7 +949,12 @@ export function HomeView({
           ) : null}
         </div>
         {reglagesOuverts ? (
-          <div className="home-view__settings" role="dialog" aria-label="Réglages de l'accueil" data-testid="home-settings-panel">
+          <div
+            className="home-view__settings"
+            role="dialog"
+            aria-label="Réglages de l'accueil"
+            data-testid="home-settings-panel"
+          >
             <section className="home-settings__bloc">
               <h3>Widgets affichés</h3>
               <ul>
@@ -973,119 +1017,119 @@ export function HomeView({
       {layout
         .filter((box) => estVisible(visibilite, box.id))
         .map((box) => (
-        <section
-          key={box.id}
-          className="home-tile"
-          data-widget={box.id}
-          data-held={held === box.id ? 'true' : undefined}
-          data-testid={`home-widget-${box.id}`}
-          tabIndex={0}
-          role="group"
-          aria-label={`${titreWidget(box.id)} — flèches pour déplacer, Maj+flèches pour redimensionner`}
-          onKeyDown={(event) => auClavier(event, box.id)}
-          style={{
-            width: `${box.w}px`,
-            height: `${box.h}px`,
-            zIndex: plans.get(box.id) ?? 10,
-            // Z RAMENE A 0 au rendu : avec `perspective: 1600px`, un z negatif mettait la tuile a
-            // l'echelle 1600/(1600+|z|) (0.93 a 0.98) et rasterisait son texte hors grille pixel —
-            // d'ou des widgets plus FLOUS que « mails » (seul z: 0). La profondeur reste portee par
-            // `zIndex` (plans) et les ombres, sans mise a l'echelle fractionnaire.
-            transform: `translate3d(${box.x}px, ${box.y}px, 0)`
-          }}
-        >
-          {/*
+          <section
+            key={box.id}
+            className="home-tile"
+            data-widget={box.id}
+            data-held={held === box.id ? 'true' : undefined}
+            data-testid={`home-widget-${box.id}`}
+            tabIndex={0}
+            role="group"
+            aria-label={`${titreWidget(box.id)} — flèches pour déplacer, Maj+flèches pour redimensionner`}
+            onKeyDown={(event) => auClavier(event, box.id)}
+            style={{
+              width: `${box.w}px`,
+              height: `${box.h}px`,
+              zIndex: plans.get(box.id) ?? 10,
+              // Z RAMENE A 0 au rendu : avec `perspective: 1600px`, un z negatif mettait la tuile a
+              // l'echelle 1600/(1600+|z|) (0.93 a 0.98) et rasterisait son texte hors grille pixel —
+              // d'ou des widgets plus FLOUS que « mails » (seul z: 0). La profondeur reste portee par
+              // `zIndex` (plans) et les ombres, sans mise a l'echelle fractionnaire.
+              transform: `translate3d(${box.x}px, ${box.y}px, 0)`
+            }}
+          >
+            {/*
             LA PRISE EST LA BARRE DU HAUT, ET ELLE SEULE (demande utilisateur du 2026-09-02).
             Saisir n'importe ou dans le corps rendait le contenu inutilisable : selectionner un
             texte, tirer un curseur de reglage ou cliquer un lien amorçait un deplacement de tuile.
           */}
-          <div
-            className="home-tile__label"
-            onPointerDown={(event) => grab(event, box.id, 'move')}
-          >
-            <h2>{titreWidget(box.id)}</h2>
-            <i className="home-tile__rule" />
-            {box.id === 'notifications' && pending > 0 ? (
-              <span className="home-tile__count" title={`${pending} remontée(s) à lire`}>
-                {pending}
-              </span>
-            ) : null}
-            {box.id === 'conversations' && enAttente.length > 0 ? (
-              <span
-                className="home-tile__count"
-                title={`${enAttente.length} conversation(s) en attente de reprise`}
-              >
-                {enAttente.length}
-              </span>
-            ) : null}
-            {/* Relire Outlook se commande DEPUIS la tuile Outlook : le bouton vivait dans la barre
-                du haut, loin de ce qu'il rafraichit. Demande de l'utilisateur du 2026-09-01. */}
-            {box.id === 'mails' ? (
-              <button
-                type="button"
-                className="home-tile__action"
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setOutlookEnCours(true)
-                  void readOutlook(true)
-                }}
-                disabled={outlookEnCours}
-                data-testid="home-refresh-outlook"
-                title={
-                  outlook.etat === 'ok'
-                    ? `Outlook lu à ${new Date(outlook.luLe).toLocaleTimeString('fr-FR')}`
-                    : 'Relire Outlook maintenant'
-                }
-              >
-                {outlookEnCours ? <Spinner /> : 'Actualiser'}
-              </button>
-            ) : null}
-            {box.id === 'mails' && compteurs.personnes > 0 ? (
-              <span
-                className="home-tile__count"
-                title={`${compteurs.personnes} non lu(s) de personnes — ${compteurs.total} au total avec les envois automatiques`}
-              >
-                {compteurs.personnes}
-              </span>
-            ) : null}
-          </div>
-          <div className="home-tile__panel">
             <div
-              className="home-tile__scroll"
-              ref={(element) => marquerDebordement(element)}
-              onScroll={(event) => marquerDebordement(event.currentTarget)}
+              className="home-tile__label"
+              onPointerDown={(event) => grab(event, box.id, 'move')}
             >
-              <WidgetBody
-                id={box.id}
-                departures={departures}
-                notices={notices}
-                outlook={outlook}
-                now={now}
-                loading={snapshot === null && snapshotError === null}
-                error={snapshotError}
-                onNavigate={onNavigate}
-                enAttente={enAttente}
-                onOuvrirConversation={ouvrirConversation}
-                onOuvrir={ouvrirDansOutlook}
-                onRepondre={repondreDansOutlook}
-                onNouvelleConversation={nouvelleConversationOutlook}
-                onMarquerLu={marquerLuDansOutlook}
-                onAcquitter={acquitter}
-                ouvertureEnCours={ouvertureEnCours}
-              />
+              <h2>{titreWidget(box.id)}</h2>
+              <i className="home-tile__rule" />
+              {box.id === 'notifications' && pending > 0 ? (
+                <span className="home-tile__count" title={`${pending} remontée(s) à lire`}>
+                  {pending}
+                </span>
+              ) : null}
+              {box.id === 'conversations' && enAttente.length > 0 ? (
+                <span
+                  className="home-tile__count"
+                  title={`${enAttente.length} conversation(s) en attente de reprise`}
+                >
+                  {enAttente.length}
+                </span>
+              ) : null}
+              {/* Relire Outlook se commande DEPUIS la tuile Outlook : le bouton vivait dans la barre
+                du haut, loin de ce qu'il rafraichit. Demande de l'utilisateur du 2026-09-01. */}
+              {box.id === 'mails' ? (
+                <button
+                  type="button"
+                  className="home-tile__action"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setOutlookEnCours(true)
+                    void readOutlook(true)
+                  }}
+                  disabled={outlookEnCours}
+                  data-testid="home-refresh-outlook"
+                  title={
+                    outlook.etat === 'ok'
+                      ? `Outlook lu à ${new Date(outlook.luLe).toLocaleTimeString('fr-FR')}`
+                      : 'Relire Outlook maintenant'
+                  }
+                >
+                  {outlookEnCours ? <Spinner /> : 'Actualiser'}
+                </button>
+              ) : null}
+              {box.id === 'mails' && compteurs.personnes > 0 ? (
+                <span
+                  className="home-tile__count"
+                  title={`${compteurs.personnes} non lu(s) de personnes — ${compteurs.total} au total avec les envois automatiques`}
+                >
+                  {compteurs.personnes}
+                </span>
+              ) : null}
             </div>
-            {(['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'] as ResizeEdge[]).map((edge) => (
-              <i
-                key={edge}
-                className="home-tile__grip"
-                data-edge={edge}
-                data-testid={`home-grip-${box.id}-${edge}`}
-                onPointerDown={(event) => grab(event, box.id, edge)}
-              />
-            ))}
-          </div>
-        </section>
+            <div className="home-tile__panel">
+              <div
+                className="home-tile__scroll"
+                ref={(element) => marquerDebordement(element)}
+                onScroll={(event) => marquerDebordement(event.currentTarget)}
+              >
+                <WidgetBody
+                  id={box.id}
+                  departures={departures}
+                  notices={notices}
+                  outlook={outlook}
+                  now={now}
+                  loading={snapshot === null && snapshotError === null}
+                  error={snapshotError}
+                  onNavigate={onNavigate}
+                  enAttente={enAttente}
+                  onOuvrirConversation={ouvrirConversation}
+                  onOuvrir={ouvrirDansOutlook}
+                  onRepondre={repondreDansOutlook}
+                  onNouvelleConversation={nouvelleConversationOutlook}
+                  onMarquerLu={marquerLuDansOutlook}
+                  onAcquitter={acquitter}
+                  ouvertureEnCours={ouvertureEnCours}
+                />
+              </div>
+              {(['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'] as ResizeEdge[]).map((edge) => (
+                <i
+                  key={edge}
+                  className="home-tile__grip"
+                  data-edge={edge}
+                  data-testid={`home-grip-${box.id}-${edge}`}
+                  onPointerDown={(event) => grab(event, box.id, edge)}
+                />
+              ))}
+            </div>
+          </section>
         ))}
     </div>
   )
@@ -1120,7 +1164,18 @@ function WidgetBody({
   enAttente: readonly ConversationEnAttente[]
   onOuvrirConversation: (id: string) => void
   onOuvrir: (id: string) => Promise<void>
-  onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  /**
+   * RÉPOND à un message, avec ses pièces jointes éventuelles.
+   *
+   * Le troisième paramètre est déclaré ICI et pas seulement au bout de la chaîne : ce type est le
+   * maillon du milieu, et un maillon qui ignore les pièces les ferait disparaître au premier
+   * appelant qui s'y fie — alors que le fichier serait bien affiché à l'écran comme joint.
+   */
+  onRepondre: (
+    id: string,
+    corps: string,
+    pieces: readonly PieceJointeMessage[]
+  ) => Promise<{ ok: boolean; erreur?: string }>
   onNouvelleConversation: (
     adresse: string,
     objet: string,
@@ -1262,7 +1317,6 @@ function WidgetBody({
     </ul>
   )
 }
-
 
 /**
  * Les conversations qui ATTENDENT une reprise, une ligne cliquable chacune.

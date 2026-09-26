@@ -4,6 +4,7 @@
 // F1 : persistance append-only optionnelle (JSONL) → le dashboard Cout ne se vide plus
 // au redemarrage (avant : compteur en RAM perdu a chaque relance de l'app).
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { TokenUsage } from '../../shared/token-usage'
 import { resolveCostCoverage, type CostCoverage } from '../../shared/cost-estimate'
@@ -127,17 +128,78 @@ export class CostAggregator {
     }
   }
 
-  /** Enregistre un nouveau tour (et l'historise sur disque si `persistPath`). */
+  /**
+   * Enregistre un nouveau tour (et l'historise sur disque si `persistPath`).
+   *
+   * L'AGRÉGATION est synchrone — l'appelant voit son tour immédiatement. L'ÉCRITURE, elle, est
+   * DIFFÉRÉE : mesure du 2026-09-12, `appendFileSync` sur ce chemin a figé le processus principal
+   * **9 449 ms** d'un coup (`cost.jsonl` à 2 Mo, disque saturé par 3,3 Go de données d'app). Un
+   * `appendFileSync` bloque TOUT le fil qui rend l'interface ; aucun appelant n'a besoin que
+   * l'octet soit sur le disque avant de continuer.
+   *
+   * Les lignes s'accumulent dans `enAttente` et partent en UNE écriture groupée au tour de boucle
+   * suivant : une rafale de tours coûte désormais une écriture, pas N. Rien n'est perdu à la
+   * fermeture — `flushPersistSync()` solde ce qui reste (voir plus bas).
+   */
   add(turn: TurnCost): void {
     const t: TurnCost = { ...turn, ts: turn.ts ?? new Date().toISOString() }
     this.turns.push(t)
-    if (this.persistPath) {
-      try {
-        mkdirSync(dirname(this.persistPath), { recursive: true })
-        appendFileSync(this.persistPath, `${JSON.stringify(t)}\n`, 'utf8')
-      } catch {
-        /* persistance best-effort : un échec disque ne casse pas l'agrégation en mémoire */
-      }
+    if (!this.persistPath) return
+    this.enAttente.push(`${JSON.stringify(t)}\n`)
+    this.planifierEcriture()
+  }
+
+  /** Lignes écrites mais pas encore posées sur le disque. */
+  private enAttente: string[] = []
+  /** Écriture différée en cours : sert à ne planifier qu'une seule vidange à la fois. */
+  private vidange?: Promise<void>
+
+  private planifierEcriture(): void {
+    if (this.vidange) return
+    this.vidange = Promise.resolve()
+      .then(async () => {
+        const path = this.persistPath
+        if (!path) return
+        while (this.enAttente.length > 0) {
+          const lot = this.enAttente.join('')
+          this.enAttente = []
+          try {
+            await mkdir(dirname(path), { recursive: true })
+            await appendFile(path, lot, 'utf8')
+          } catch {
+            /* persistance best-effort : un échec disque ne casse pas l'agrégation en mémoire */
+          }
+        }
+      })
+      .finally(() => {
+        this.vidange = undefined
+        // Une ligne ajoutée pendant la vidange doit repartir : sans ça elle attendrait le
+        // prochain `add`, et le dernier tour d'une session serait le plus exposé.
+        if (this.enAttente.length > 0) this.planifierEcriture()
+      })
+  }
+
+  /** Attend que tout ce qui est en attente soit sur le disque. Pour les tests et l'arrêt propre. */
+  async flushPersist(): Promise<void> {
+    while (this.vidange || this.enAttente.length > 0) {
+      if (!this.vidange) this.planifierEcriture()
+      await this.vidange
+    }
+  }
+
+  /**
+   * DERNIER RECOURS, à la fermeture : pose immédiatement ce qui reste. Synchrone ASSUMÉ — on n'est
+   * plus en train de rendre une interface, et perdre le coût des derniers tours serait pire.
+   */
+  flushPersistSync(): void {
+    if (!this.persistPath || this.enAttente.length === 0) return
+    const lot = this.enAttente.join('')
+    this.enAttente = []
+    try {
+      mkdirSync(dirname(this.persistPath), { recursive: true })
+      appendFileSync(this.persistPath, lot, 'utf8')
+    } catch {
+      /* best-effort */
     }
   }
 

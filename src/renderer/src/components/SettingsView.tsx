@@ -3,6 +3,7 @@ import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
 import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
+import { ProdProtectionSettings } from './ProdProtectionSettings'
 import { InterfaceView } from './InterfaceView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
 import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
@@ -168,6 +169,7 @@ export function SettingsView({
           { id: 'behaviour', label: 'Behaviour' },
           { id: 'interface', label: 'Interface' },
           { id: 'providers', label: 'Providers' },
+          { id: 'production', label: 'Production' },
           {
             id: 'preflight',
             label: 'Diagnostic',
@@ -240,6 +242,7 @@ export function SettingsView({
             </p>
           </section>
         )}
+        {section === 'production' && <ProdProtectionSettings />}
         {section === 'preflight' && <ExecutionWorkspaceSettings />}
         {section === 'preflight' && (
           <section

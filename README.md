@@ -38,8 +38,11 @@ Trois idées directrices :
 1. **Multi-fournisseurs, un seul plan de contrôle.** Claude (CLI), Codex/ChatGPT (Responses API),
    Kimi… sont interchangeables derrière une interface commune. Le renderer envoie des *intentions* ;
    le process `main` détient les accès et exécute.
-2. **Un pipeline, pas un prompt géant.** `scout → frame → terrain → build → clean → judge`, avec un
-   juge **séparé** du producteur.
+2. **Des workflows choisis, pas un prompt géant.** Un *mode dynamique* (`src/main/workflow-dynamic.ts`)
+   choisit pour chaque demande un profil existant, invente un petit graphe (12 exécutions au plus
+   dans le pire cas), ou n'en prend **aucun** et répond directement. Les profils livrés
+   (`src/main/workflow-defaults.ts`) : *Éclair*, *Correctif*, *Feature*, *Chantier Autowin*,
+   *Panel critique*, *Exploration*, *Remake*. Le juge est **séparé** du producteur.
 3. **L'enforcement vit dans le code, pas dans le prompt.** Un `HookBus` interne applique des
    garde-fous déterministes (dont un *verify-replay* qui **rejoue** réellement la vérification au lieu
    de croire l'agent sur parole) — uniforme quel que soit le fournisseur.
@@ -53,7 +56,7 @@ workflows par défaut.
 pas cadrée, et qu'elle demande de préparer le terrain avant d'écrire. Pour un simple défaut, préférer
 *Correctif* ; pour un besoin déjà identifié, *Feature* ; pour une question, *Éclair*.
 
-**Chemin** — `scout → frame → terrain → build → clean → judge`, chaque transition inconditionnelle.
+**Chemin** — `think → scout → frame → terrain → build → clean → judge`, chaque transition inconditionnelle ; un `judge` **vert** enchaîne ensuite `learn → salvage`.
 
 **Retour** — un `judge` **rouge** renvoie au `build`, **2 reprises au maximum** ; la reprise repasse
 ensuite par `clean` avant d'être rejugée. Aucun autre retour arrière n'existe dans ce profil.

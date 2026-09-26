@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { WorktreeActivityView } from './WorktreeActivityView'
+import { etapesGit } from './etapes-git'
+import { ProjectPane } from './ProjectPane'
 import { DiffView } from './DiffView'
-import {
-  conflictDiffMessage,
-  requiresAttention,
-  type WorktreeAgentActivity,
-  type WorktreeConflictDiffResult,
-  type WorktreeConflictResolutionChoice,
-  type WorktreeRuntimeStatus
-} from '../../../shared/worktree-activity-model'
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
 import './SourceControlPane.css'
@@ -19,10 +12,18 @@ const markGlyph: Record<GitChange['status'], string> = {
   added: '+',
   deleted: '–',
   renamed: '»',
-  untracked: '?'
+  untracked: '?',
+  conflicted: '!',
+  committed: '✓',
+  retouched: '~'
 }
 
-type PaneView = 'project' | 'brain' | 'workspace'
+/**
+ * Les vues du panneau. `tree` = arborescence editable du depot : demande de l'utilisateur le
+ * 2026-09-12, l'arborescence doit etre un SOUS-ONGLET a cote de Fichiers/Brain/Workspace, et non
+ * un bloc empile au-dessus d'eux.
+ */
+type PaneView = 'project' | 'brain' | 'workspace' | 'tree'
 
 const EMPTY_GIT: GitReadResult = {
   available: true,
@@ -30,7 +31,14 @@ const EMPTY_GIT: GitReadResult = {
 }
 
 type AutoCloseViewResult =
-  | { status: 'pushed'; branch: string; files: number }
+  | {
+      status: 'pushed'
+      branch: string
+      files: number
+      mode?: 'direct' | 'pr'
+      pr?: string
+      prError?: string
+    }
   | { status: 'committed'; files: number }
   | { status: 'skipped'; reason: string; detail?: string }
   | { status: 'failed'; error: string }
@@ -41,13 +49,28 @@ interface AutoCloseViewState {
     runId: string
     branch: string
     project: AutoCloseViewResult
-    brain: AutoCloseViewResult
+    /** Absent pour un tour de chat : il ne publie jamais le Brain. */
+    brain?: AutoCloseViewResult
     at: string
+    source?: 'chat'
+    exclus?: Array<{ path: string; motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' }>
   }
 }
 
+const MOTIFS_EXCLUSION: Record<string, string> = {
+  'modifie-avant-le-tour': 'déjà modifié avant le tour',
+  'touche-par-un-autre-fil': 'touché aussi par un autre fil'
+}
+
 function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): string {
-  if (result.status === 'pushed') return `${scope} · publié · ${result.branch}`
+  if (result.status === 'pushed') {
+    if (result.mode === 'direct') return `${scope} · poussé sur ${result.branch}`
+    if (result.mode === 'pr')
+      return result.pr
+        ? `${scope} · push refusé sur la branche → ${result.branch} + ${result.pr}`
+        : `${scope} · poussé sur ${result.branch}, PR non ouverte · ${result.prError ?? 'motif inconnu'}`
+    return `${scope} · publié · ${result.branch}`
+  }
   if (result.status === 'committed') return `${scope} · commité localement`
   if (result.status === 'failed') return `${scope} · échec · ${result.error}`
   const reasons: Record<string, string> = {
@@ -57,80 +80,82 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
     'protected-branch': 'branche protégée',
     'secret-detected': 'secret détecté',
     'concurrent-commits': 'commits concurrents',
-    'invalid-publication-range': 'plage Git non vérifiable'
+    'invalid-publication-range': 'plage Git non vérifiable',
+    unattributed: 'aucun fichier du tour prouvé à ce fil'
   }
   return `${scope} · non publié · ${reasons[result.reason] ?? result.reason}`
 }
 
+/**
+ * Onglet Git : le FLUX est calculé depuis l'état RÉEL du dépôt (retard, fichiers modifiés,
+ * avance, branche) — seules les étapes qui ont quelque chose à faire s'affichent, dans l'ordre,
+ * et la première est mise en avant. Chaque clic PROPOSE la demande à l'agent, rien n'est
+ * exécuté ici.
+ */
+/** Delai de regroupement des relectures git pendant un tour (signes de vie d'outil, texte). */
+export const RELIRE_PENDANT_TOUR_MS = 1500
+
+/** Actions hors flux : uniquement celles qu'aucune étape ne couvre déjà. */
+function actionsGit(nbChanges: number): Array<{ label: string; prompt: string }> {
+  return [
+    { label: 'Nouvelle branche', prompt: 'crée une nouvelle branche à partir de la branche courante, nommée : ' },
+    { label: 'Changer de branche', prompt: 'change de branche vers : ' },
+    ...(nbChanges > 0
+      ? [{ label: 'Mettre de côté', prompt: 'mets de côté mes changements en cours (stash nommé) sans rien perdre' }]
+      : [])
+  ]
+}
+
 export function SourceControlPane({
   conversationId,
+  depotConversation,
   onSendPrompt
 }: {
   conversationId?: string
+  /** Depot de la CONVERSATION : ce que la vue « Workspace » doit lire, branche comprise. */
+  depotConversation?: string
   onSendPrompt?: (prompt: string) => void
 }): React.JSX.Element {
   const [git, setGit] = useState<GitReadResult | null>(null)
   const [brainTraces, setBrainTraces] = useState<BrainTrace[]>([])
   const [brainUnavailable, setBrainUnavailable] = useState(false)
-  const [worktrees, setWorktrees] = useState<WorktreeAgentActivity[]>([])
-  const [worktreeStatus, setWorktreeStatus] = useState<WorktreeRuntimeStatus | null>(null)
-  const [worktreeError, setWorktreeError] = useState<string | undefined>(undefined)
-  const [worktreeTick, setWorktreeTick] = useState(0)
-  // Horloge figée par rafraîchissement : appeler Date.now() pendant le rendu rendrait la vue impure.
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  const [conflictResolution, setConflictResolution] = useState<string | undefined>(undefined)
   const [openFile, setOpenFile] = useState<string | null>(null)
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
   const diffRequestRef = useRef(0)
   const dataRequestRef = useRef(0)
-  const [conflictAgentId, setConflictAgentId] = useState<string | null>(null)
-  const [conflictDiff, setConflictDiff] = useState<WorktreeConflictDiffResult | null>(null)
-  const conflictRequestRef = useRef(0)
-  const [repoPath] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')
+  /*
+   * DEPOT DE LA VUE « WORKSPACE ».
+   *
+   * Il suit la CONVERSATION. Auparavant il ne lisait que `autowin:sc-repo`, un chemin choisi une
+   * fois dans le navigateur et jamais revu : le panneau affichait alors le nom et la branche d'un
+   * AUTRE depot que celui du fil (constate le 2026-09-23 : « RIG-V3 » sur une conversation
+   * AutoWinOS). Le chemin memorise ne sert plus que de repli quand la conversation n'en porte pas.
+   */
+  const [repoMemorise] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')
+  const repoPath = depotConversation?.trim() || repoMemorise
   const [refreshTick, setRefreshTick] = useState(0)
+  /** Fichier dont « Annuler ces changements » attend le clic de confirmation. */
+  const [annulerArme, setAnnulerArme] = useState<string | null>(null)
+  /**
+   * Fichiers ANNULES depuis ce panneau : une fois annules, ils sortent de la liste des modifies,
+   * donc « Remettre » vit a part. Memoire de l'ecran seulement : un rechargement l'oublie, la copie
+   * des changements reste sur le disque (voir la demande envoyee a l'agent).
+   */
+  const [annules, setAnnules] = useState<string[]>([])
   const [view, setView] = useState<PaneView>('project')
   const scope = `${view}:${conversationId ?? ''}:${view === 'workspace' ? repoPath : ''}`
   const [loadedScope, setLoadedScope] = useState('')
 
   useEffect(() => {
-    let alive = true
-    const loadActivity = (): void => {
-      void window.api
-        .getWorktreeActivity?.(conversationId)
-        .then((activity) => {
-          if (alive) {
-            setWorktrees(activity)
-            setWorktreeError(undefined)
-          }
-        })
-        .catch(() => {
-          if (alive) setWorktreeError('Lecture des bureaux agents indisponible.')
-        })
-    }
-    // fix-ok: un rejet laissait la vue sur « Aucun bureau agent ouvert », impossible à distinguer
-    // d'un vrai vide ; l'échec de lecture est désormais nommé et rejouable.
-    loadActivity()
-    void window.api
-      .getWorktreeStatus?.()
-      .then((status) => {
-        if (alive) setWorktreeStatus(status)
-      })
-      .catch(() => {
-        if (alive) setWorktreeError('Lecture des bureaux agents indisponible.')
-      })
+    // L'activité des bureaux vit dans l'onglet Worktrees ; ici, l'événement sert seulement à relire
+    // le résultat de clôture auto, qui peut se terminer APRÈS le retour du run.
     const off = window.api.onWorktreeActivity?.(() => {
-      // L'Ã©vÃ©nement est global ; relire via l'IPC conserve le scope de CETTE conversation.
-      loadActivity()
-      setNowMs(Date.now())
-      // Une publication peut se terminer après le retour du run : son résultat auto-close
-      // doit apparaître sans attendre un autre événement de chat ni un rafraîchissement manuel.
       setRefreshTick((tick) => tick + 1)
     })
     return () => {
-      alive = false
       off?.()
     }
-  }, [conversationId, worktreeTick])
+  }, [conversationId])
 
   useEffect(() => {
     const requestId = ++dataRequestRef.current
@@ -154,7 +179,10 @@ export function SourceControlPane({
       setLoadedScope(scope)
     }
 
-    if (view === 'project') {
+    if (view === 'tree') {
+      // L'arborescence charge elle-meme par ses propres canaux : aucune lecture git a faire ici.
+      finishGit(EMPTY_GIT)
+    } else if (view === 'project') {
       if (!conversationId) finishGit(EMPTY_GIT)
       else {
         void window.api
@@ -183,6 +211,7 @@ export function SourceControlPane({
   }, [conversationId, refreshTick, repoPath, scope, view])
 
   useEffect(() => {
+    let relectureEnAttente: ReturnType<typeof setTimeout> | null = null
     const refreshConversation = (raw: unknown): void => {
       const event = raw as {
         conversationId?: string
@@ -193,8 +222,23 @@ export function SourceControlPane({
       }
       const target = event.conversationId ?? event.convId
       if (target !== conversationId) return
+      // OUTIL NATIF DE L'AGENT (son terminal : `git commit`, `git push`…) : il ne produit ni
+      // `result` ni `done`, seulement des signes de vie `provider-status` puis du texte. Sans cette
+      // relecture, le bouton restait sur « Commiter » jusqu'a la fin du tour (conv-855). Relecture
+      // GROUPEE : au plus une par RELIRE_PENDANT_TOUR_MS, la derniere toujours jouee.
+      if (event.kind === 'provider-status' || event.kind === 'delta') {
+        if (relectureEnAttente) return
+        relectureEnAttente = setTimeout(() => {
+          relectureEnAttente = null
+          setRefreshTick((value) => value + 1)
+        }, RELIRE_PENDANT_TOUR_MS)
+        return
+      }
       if (
         event.kind === 'result' ||
+        // FIN DE TOUR : les fichiers modifies par le chat sont notes juste avant (agent-pilot,
+        // capture avant/apres). Sans cette relecture, il fallait quitter puis rouvrir l'onglet.
+        event.kind === 'done' ||
         event.type === 'orchestrate-step' ||
         event.type === 'orchestrate-end'
       ) {
@@ -204,6 +248,7 @@ export function SourceControlPane({
     const offPilot = window.api.onPilotEvent?.(refreshConversation)
     const offApp = window.api.onAppEvent?.(refreshConversation)
     return () => {
+      if (relectureEnAttente) clearTimeout(relectureEnAttente)
       offPilot?.()
       offApp?.()
     }
@@ -272,80 +317,17 @@ export function SourceControlPane({
   const visibleBrainTraces = scopeLoaded ? brainTraces : []
   const changes = visibleGit?.state?.changes ?? []
   const paneLabel =
-    view === 'brain'
-      ? 'Appels Brain de la conversation'
-      : view === 'workspace' && repoPath
-        ? repoPath.replace(/^.*[\\/]/, '')
-        : view === 'project'
-          ? // Suit le renommage de l'onglet : un onglet « Fichiers » ouvrant un panneau intitulé
-            // « Projet de la conversation » se contredirait à l'écran.
-            'Fichiers de la conversation'
-          : 'Dépôt courant'
-  const openConflictDiff = (agentId: string): void => {
-    const requestId = ++conflictRequestRef.current
-    setConflictAgentId(agentId)
-    setConflictDiff(null)
-    const request = window.api.getWorktreeConflictDiff?.(agentId)
-    if (!request) {
-      setConflictDiff({ available: false, reason: 'read-failed' })
-      return
-    }
-    void request
-      .then((result) => {
-        if (conflictRequestRef.current === requestId) {
-          setConflictDiff(result as WorktreeConflictDiffResult)
-        }
-      })
-      .catch(() => {
-        if (conflictRequestRef.current === requestId) {
-          setConflictDiff({ available: false, reason: 'read-failed' })
-        }
-      })
-  }
-
-  const closeConflictDiff = (): void => {
-    conflictRequestRef.current += 1
-    setConflictAgentId(null)
-    setConflictDiff(null)
-  }
-
-  /** P2-11 : toutes les API worktree sont optionnelles ; un preload partiel ne doit pas crasher. */
-  const retryOffice = (agentId: string): Promise<unknown> => {
-    const request = window.api.retryWorktreeRecovery?.(agentId)
-    if (!request) throw new Error('Nouvel essai indisponible depuis cette fenêtre.')
-    return request
-  }
-
-  const resolveConflictChoice = async (
-    agentId: string,
-    choice: WorktreeConflictResolutionChoice
-  ): Promise<void> => {
-    setConflictResolution(undefined)
-    const request = window.api.resolveWorktreeConflict?.(agentId, choice)
-    if (!request) throw new Error('Résolution indisponible depuis cette fenêtre.')
-    const result = await request
-    if (result.resolved) {
-      closeConflictDiff()
-      setConflictResolution(
-        choice === 'agent'
-          ? 'Version de l’agent appliquée : les changements sont dans ton workspace.'
-          : 'Ta version est conservée : le bureau agent n’a rien écrasé.'
-      )
-      return
-    }
-    const reasons: Record<typeof result.reason, string> = {
-      'invalid-agent': 'Ce bureau n’est plus connu d’Autowin.',
-      'not-conflict': 'Ce bureau n’est plus en conflit ; rafraîchis le Hub.',
-      unsupported: 'La résolution n’est pas disponible sur cette installation.',
-      'still-conflicting': 'Le conflit persiste : ouvre le bureau protégé pour trancher à la main.',
-      blocked: 'Résolution refusée pour protéger ton workspace.'
-    }
-    throw new Error(
-      `${reasons[result.reason]}${result.detail ? ` ${result.detail}` : ''} Rien n’a été écrasé.`
-    )
-  }
-
-  const attentionCount = worktrees.filter(requiresAttention).length
+    view === 'tree'
+      ? 'Arborescence du projet'
+      : view === 'brain'
+        ? 'Appels Brain de la conversation'
+        : view === 'workspace' && repoPath
+          ? repoPath.replace(/^.*[\\/]/, '')
+          : view === 'project'
+            ? // Suit le renommage de l'onglet : un onglet « Fichiers » ouvrant un panneau intitulé
+              // « Projet de la conversation » se contredirait à l'écran.
+              'Fichiers de la conversation'
+            : 'Dépôt courant'
 
   return (
     <div className="sc-pane" data-testid="source-control-pane">
@@ -372,6 +354,14 @@ export function SourceControlPane({
             Fichiers
           </button>
           <button
+            className={`sc-btn sc-repo-btn${view === 'tree' ? ' is-active' : ''}`}
+            data-testid="sc-view-tree"
+            title="Arborescence du projet et editeur de fichier"
+            onClick={() => selectView('tree')}
+          >
+            Projet
+          </button>
+          <button
             className={`sc-btn sc-repo-btn${view === 'brain' ? ' is-active' : ''}`}
             data-testid="sc-repo-brain"
             title="Appels au Brain effectués depuis cette conversation"
@@ -382,23 +372,17 @@ export function SourceControlPane({
           <button
             className={`sc-btn sc-repo-btn${view === 'workspace' ? ' is-active' : ''}`}
             data-testid="sc-view-workspace"
-            title="Branche et copies d’agents du workspace"
+            title="Git : branche, synchronisation et actions sur le dépôt"
             onClick={() => selectView('workspace')}
           >
-            Workspace
-            {attentionCount > 0 && (
-              <span
-                className="sc-tab-badge"
-                data-testid="sc-workspace-badge"
-                title={`${attentionCount} bureau${attentionCount > 1 ? 'x' : ''} attendent ta décision`}
-              >
-                {attentionCount}
-              </span>
-            )}
+            {/* « Git » et non « Workspace » : demande de l'utilisateur (conv-844). */}
+            Git
           </button>
         </div>
 
-        {view !== 'brain' && visibleGit && !visibleGit.available && (
+        {view === 'tree' && <ProjectPane conversationId={conversationId} racine={repoPath} />}
+
+        {view !== 'brain' && view !== 'tree' && visibleGit && !visibleGit.available && (
           <div className="sc-empty">Dépôt Git introuvable ici (lecture indisponible).</div>
         )}
 
@@ -444,22 +428,42 @@ export function SourceControlPane({
                                 <Spinner /> Chargement du diff…
                               </div>
                             ) : diff.available ? (
-                              <DiffView diff={diff.diff ?? ''} />
+                              <>
+                                {diff.note ? <div className="sc-clean">{diff.note}</div> : null}
+                                <DiffView diff={diff.diff ?? ''} />
+                              </>
                             ) : (
-                              <div className="sc-clean">Diff indisponible.</div>
+                              <div className="sc-clean">Diff indisponible{diff.error ? ` : ${diff.error}` : '.'}</div>
                             )}
                           </div>
                           <div className="sc-diff-actions">
+                            {/* ANNULER (demande du 2026-09-23) remplace « Expliquer / committer ».
+                                Geste qui PERD du travail : un premier clic arme, le second envoie.
+                                Comme les autres boutons, le panneau ne lance aucun git lui-meme. */}
                             <button
-                              className="sc-btn sc-diff-action"
+                              className={`sc-btn sc-diff-action${annulerArme === change.path ? ' is-armed' : ''}`}
+                              data-testid="sc-diff-annuler"
                               onClick={(event) => {
                                 event.stopPropagation()
+                                if (annulerArme !== change.path) {
+                                  setAnnulerArme(change.path)
+                                  return
+                                }
+                                setAnnulerArme(null)
+                                setAnnules((liste) =>
+                                  liste.includes(change.path) ? liste : [...liste, change.path]
+                                )
                                 propose(
-                                  `explique ce qui a changé dans ${change.path} et propose un commit`
+                                  `annule les changements de ${change.path} faits par cette conversation : ` +
+                                    `remets-le dans son état d'avant. Avant d'annuler, garde une copie ` +
+                                    `de ces changements dans artifacts/annules/ pour pouvoir les remettre. ` +
+                                    `Ne touche pas aux modifications d'autres travaux dans ce fichier.`
                                 )
                               }}
                             >
-                              Expliquer / committer ce fichier
+                              {annulerArme === change.path
+                                ? 'Confirmer : annuler ces changements'
+                                : 'Annuler ces changements'}
                             </button>
                           </div>
                         </div>
@@ -479,6 +483,26 @@ export function SourceControlPane({
                 </div>
               </>
             )}
+            {annules.map((path) => (
+              <div className="sc-annule" data-testid="sc-annule" key={path}>
+                <span className="sc-annule-path" title={path}>
+                  ↺ {path}
+                </span>
+                <button
+                  className="sc-btn"
+                  data-testid="sc-remettre"
+                  onClick={() => {
+                    setAnnules((liste) => liste.filter((p) => p !== path))
+                    propose(
+                      `remets les changements de ${path} que tu viens d'annuler, ` +
+                        `à partir de la copie gardée dans artifacts/annules/.`
+                    )
+                  }}
+                >
+                  Remettre le changement
+                </button>
+              </div>
+            ))}
           </section>
         )}
 
@@ -553,29 +577,55 @@ export function SourceControlPane({
                   ↑{visibleGit.state.ahead} ↓{visibleGit.state.behind}
                 </span>
               )}
-            </div>
-            <div className="sc-btns">
               <button
-                className={`sc-btn sc-toggle ${autoClose?.enabled ? 'is-on' : 'is-off'}`}
+                className={`sc-btn sc-toggle sc-branch-toggle ${autoClose?.enabled ? 'is-on' : 'is-off'}`}
                 data-testid="sc-autoclose"
                 aria-pressed={autoClose?.enabled ?? false}
                 title={
                   autoClose?.enabled
-                    ? 'Activée — tente de publier chaque run vert sur une branche dédiée, jamais sur main. Clic : désactiver.'
-                    : 'Désactivée — rien n’est publié automatiquement. Clic : activer.'
+                    ? 'Activé — après chaque tâche d’agent réussie ET chaque tour de chat réussi qui a modifié des fichiers, tente de publier : commit de ces fichiers-là, puis push sur la branche courante. Si le dépôt le refuse (règle de branche, hook, retard), push sur une branche dédiée et ouverture d’une PR. Un fichier touché aussi par un autre fil reste en attente. Clic : désactiver.'
+                    : 'Désactivé — rien n’est publié automatiquement. Clic : activer.'
                 }
                 onClick={() => void toggleAutoClose()}
               >
                 <span className="sc-toggle-dot" aria-hidden="true" />
-                Clôture auto
+                Enchaînement auto
                 <b className="sc-toggle-state">{autoClose?.enabled ? 'ON' : 'OFF'}</b>
               </button>
-              <button className="sc-btn" onClick={() => propose('change de branche vers : ')}>
-                Changer de branche
-              </button>
-              <button className="sc-btn" onClick={() => propose('push la branche courante')}>
-                Push
-              </button>
+            </div>
+            <header className="sc-h">Étapes</header>
+            <div className="sc-flux" data-testid="sc-git-flux">
+              {etapesGit(visibleGit.state).length === 0 ? (
+                <div className="sc-clean" data-testid="sc-git-a-jour">
+                  À jour : aucun changement, rien à envoyer ni à récupérer.
+                </div>
+              ) : (
+                etapesGit(visibleGit.state).map((etape, index) => (
+                  <button
+                    key={etape.label}
+                    className={`sc-flux-step${index === 0 ? ' is-suggested' : ''}`}
+                    title={etape.prompt}
+                    onClick={() => propose(etape.prompt)}
+                  >
+                    <b>
+                      {index + 1} {etape.label}
+                    </b>
+                    <span className="sc-flux-detail">{etape.detail}</span>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="sc-btns" data-testid="sc-git-actions">
+              {actionsGit(visibleGit.state.changes.length).map((action) => (
+                <button
+                  key={action.label}
+                  className="sc-btn"
+                  title={action.prompt}
+                  onClick={() => propose(action.prompt)}
+                >
+                  {action.label}
+                </button>
+              ))}
             </div>
             {autoCloseError && (
               <div className="sc-clean" data-testid="sc-autoclose-error" role="alert">
@@ -584,80 +634,18 @@ export function SourceControlPane({
             )}
             {autoClose?.last && (
               <div className="sc-autoclose-last" data-testid="sc-autoclose-last">
-                <strong>Dernière clôture · {autoClose.last.runId}</strong>
+                <strong>Dernier enchaînement · {autoClose.last.runId}</strong>
                 <span>{autoCloseResultLabel('Projet', autoClose.last.project)}</span>
-                <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
-              </div>
-            )}
-          </section>
-        )}
-
-        {view === 'workspace' && (
-          <section className="sc-sect">
-            <header className="sc-h">
-              Hub des bureaux{worktrees.length ? ` · ${worktrees.length}` : ''}
-            </header>
-            {worktreeError && (
-              <div className="sc-clean" data-testid="wt-load-error" role="alert">
-                {worktreeError}
-                <button
-                  className="sc-btn"
-                  data-testid="wt-load-retry"
-                  onClick={() => {
-                    setWorktreeError(undefined)
-                    setNowMs(Date.now())
-                    setWorktreeTick((tick) => tick + 1)
-                  }}
-                >
-                  Réessayer
-                </button>
-              </div>
-            )}
-            <WorktreeActivityView
-              agents={worktrees}
-              status={worktreeStatus}
-              nowMs={nowMs}
-              onResolveConflict={openConflictDiff}
-              onResolveConflictChoice={resolveConflictChoice}
-              onOpenOffice={(path) => window.api.openFolder(path)}
-              onRetryOffice={(agentId) => retryOffice(agentId)}
-            />
-            {conflictResolution && (
-              <div className="sc-clean" data-testid="wt-conflict-resolution" role="status">
-                {conflictResolution}
-              </div>
-            )}
-            {conflictAgentId && (
-              <div className="sc-diff-wrap" data-testid="wt-conflict-diff">
-                <div className="sc-diff-card">
-                  <div className="sc-diff-head">
-                    <span className="sc-diff-title">
-                      {conflictDiff?.available
-                        ? conflictDiff.paths.join(', ')
-                        : 'Comparaison du bureau'}
-                    </span>
-                    <span className="sc-diff-wrap-mode">Lecture seule</span>
-                    <button
-                      className="sc-btn"
-                      data-testid="wt-conflict-close"
-                      title="Fermer la comparaison"
-                      onClick={closeConflictDiff}
-                    >
-                      Fermer
-                    </button>
-                  </div>
-                  <div className="sc-diff-content">
-                    {conflictDiff === null ? (
-                      <div className="sc-clean">Préparation des deux versions…</div>
-                    ) : conflictDiff.available ? (
-                      <DiffView diff={conflictDiff.diff} />
-                    ) : (
-                      <div className="sc-clean" data-testid="wt-conflict-diff-error">
-                        {conflictDiffMessage(conflictDiff.reason)}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                {autoClose.last.brain && (
+                  <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
+                )}
+                {autoClose.last.exclus?.length ? (
+                  <span data-testid="sc-autoclose-exclus">
+                    {`Laissé en attente · ${autoClose.last.exclus
+                      .map((item) => `${item.path} (${MOTIFS_EXCLUSION[item.motif] ?? item.motif})`)
+                      .join(', ')}`}
+                  </span>
+                ) : null}
               </div>
             )}
           </section>

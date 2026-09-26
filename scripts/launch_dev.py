@@ -50,6 +50,17 @@ JOURNAL = RACINE / ".autowin-data" / "launch-dev.log"
 # Sortie de l'APPLICATION elle-meme, ecrite par elle, pour toute sa vie — voir `demarrer_dev`.
 SORTIE_APP = RACINE / ".autowin-data" / "dev-app-stdout.log"
 BUNDLE = RACINE / "out" / "main" / "index.js"
+# Cache du catalogue de modeles du profil DEV (racine portable `.autowin-data/autowin-os`, voir
+# src/main/app-data.ts). Sur un profil VIERGE il est absent, `loadCachedImportedModels` rend une liste
+# vide et `createDefaultTopology([])` leve : l'app sort en code 78 AVANT toute fenetre (constate le
+# 2026-09-22 sur une machine neuve). On l'amorce alors avec la semence verifiee du depot, exactement
+# comme `scripts/autowin-headless.ps1` ; un cache existant n'est JAMAIS remplace, et le rafraichisseur
+# live de l'app ecrase la semence des la premiere decouverte reussie.
+CACHE_MODELES = RACINE / ".autowin-data" / "autowin-os" / "model-catalog.json"
+SEMENCE_MODELES = RACINE / "scripts" / "fixtures" / "model-catalog-seed.json"
+# Ligne par laquelle l'app NOMME son propre arret (src/main/index.ts, garde-fou topologie). Sans la
+# reconnaitre, le lanceur ne voyait qu'un silence et alertait « bundle perime » : faux diagnostic.
+MARQUEUR_ARRET_APP = "demarrage impossible"
 
 # Sources dont une modification doit rendre le bundle perime. `electron.vite.config.ts` en fait
 # partie : changer la configuration de build sans changer une seule source rend le bundle faux aussi.
@@ -90,6 +101,18 @@ def journaliser(message: str) -> None:
             fichier.write(f"{datetime.now().isoformat(timespec='seconds')} {message}\n")
     except OSError:
         pass
+
+
+def amorcer_catalogue_modeles() -> None:
+    """Pose la semence du catalogue si, et seulement si, le profil dev n'a encore aucun cache."""
+    if CACHE_MODELES.is_file():
+        return
+    if not SEMENCE_MODELES.is_file():
+        journaliser(f"semence de catalogue introuvable, pas d'amorcage : {SEMENCE_MODELES}")
+        return
+    CACHE_MODELES.parent.mkdir(parents=True, exist_ok=True)
+    CACHE_MODELES.write_bytes(SEMENCE_MODELES.read_bytes())
+    journaliser(f"profil vierge : catalogue de modeles amorce depuis {SEMENCE_MODELES.name}")
 
 
 def alerter(message: str, titre: str = "Autowin OS Dev") -> None:
@@ -521,6 +544,7 @@ def main() -> int:
                 # cause racine des morts silencieuses du 2026-08-17 (voir `demarrer_dev`). L'ecran
                 # d'attente SUIT ce fichier depuis la position d'avant le lancement.
                 depuis = SORTIE_APP.stat().st_size if SORTIE_APP.is_file() else 0
+                amorcer_catalogue_modeles()
                 processus = demarrer_dev([commande, "run", "dev"], RACINE, SORTIE_APP)
                 demarrer_enregistreur(processus.pid)
                 limite_totale = time.monotonic() + ATTENTE_TOTALE_S
@@ -535,10 +559,17 @@ def main() -> int:
                     splash.pousser(ligne)
                     if splash.suivi.fermer():
                         break
+                    if MARQUEUR_ARRET_APP in ligne:
+                        resultat["code"] = 8
+                        resultat["detail"] = ligne.strip()
+                        journaliser(f"arret nomme par l'application : {ligne.strip()}")
+                        break
                     parole["dernier"] = time.monotonic()
                     if time.monotonic() > limite_totale:
                         depasse = True
                         break
+                if resultat.get("code") == 8:
+                    return
                 if processus.poll() not in (None, 0):
                     resultat["code"] = 5
                     resultat["detail"] = f"le mode dev s'est arrêté (code {processus.returncode})"
@@ -607,6 +638,20 @@ def main() -> int:
             "Autowin OS Dev — compilation en échec",
         )
         return 7
+    if code == 8:
+        alerter(
+            "".join(
+                [
+                    "L'application s'est arrêtée d'elle-même au démarrage (le bundle est à jour).",
+                    chr(10) + chr(10),
+                    resultat.get('detail', ''),
+                    chr(10) + chr(10),
+                    f"Journal :{chr(10)}{JOURNAL}",
+                ]
+            ),
+            "Autowin OS Dev — démarrage refusé par l'application",
+        )
+        return 8
     if code == 6:
         alerter(
             "".join(

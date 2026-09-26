@@ -15,7 +15,20 @@ const CLAUSE_SPLIT =
   /\b(?:et|puis|then|and|apres|après|mais|but|cependant|however)\b|[;,]|[.!?]\s+/gi
 const APOSTROPHES = /[‘’ʼ]/g
 const SENTINEL_PREFIX = /^\[[^\]]{0,160}\]\s*/
-const PHASE_LECTURE_SEULE_LEAD = /^\/?(?:scout|frame|judge)\b/i
+// « Lance le judge … » demande la MÊME phase de lecture que « judge … » : le verbe de lancement ne
+// change pas ce qui est joué (conv-690, run lance-judge-correctif-cibles-cible-src-mu6l123v).
+const PHASE_LECTURE_SEULE_LEAD =
+  /^\/?(?:(?:re)?lance[rz]?\s+(?:(?:le|la|un|une)\s+)?)?(?:scout|frame|judge|revue|review)\b/i
+// Une clause qui COMMENCE par « sans » décrit ce qui ne doit PAS être fait (« sans toucher aux
+// autres fichiers modifiés ») : elle ne peut pas demander une mutation.
+const CLAUSE_INTERDICTION = /^sans\b/
+// Un verbe de mutation au PASSÉ (« la cause a été corrigée », « j'ai modifié ») RACONTE ce qui est
+// déjà fait : dans une demande de revue, ce n'est pas un ordre d'écrire (conv-690, 2026-09-18).
+// Appliqué au seul chemin « phase de lecture en tête » : ailleurs, le défaut sûr reste la mutation.
+const MUTATION_RACONTEE = new RegExp(
+  `\\b(?:a|ai|as|avons|avez|ont|avait|avaient|est|sont|etait|etaient)\\s+(?:ete\\s+)?(?:deja\\s+)?(?:${MUTATION_STEM})\\w*`,
+  'gi'
+)
 /*
   ATTENTION : un verbe de lecture seule doit être ajouté ICI **et** dans les deux listes de
   `classifyMutationConfidence` (les gardes `explicitReadOnly` / `simpleReadOnlyLead`). Elles ne sont
@@ -53,11 +66,20 @@ export function classifyMutationConfidence(task: string): MutationConfidence {
       .replace(APOSTROPHES, "'")
       .toLowerCase()
       .replace(NEGATED_MUTATION, ' ')
+      .replace(MUTATION_RACONTEE, ' ')
+      // « … sans toucher aux autres fichiers modifiés » : la tournure entière est une interdiction,
+      // quel que soit le nombre de mots entre « sans » et le verbe (bornée à la ponctuation).
+      .replace(/\bsans\b[^,;.:!?»)(«]*/g, ' ')
+      // « n'exige plus de modification » : « plus de » nie l'objet, comme « pas de ».
+      .replace(new RegExp(`\\bplus\\s+de\\s+(?:\\w+\\s+){0,2}(?:${MUTATION_STEM})\\w*`, 'g'), ' ')
     const [, ...clausesSuivantes] = normaliseLead
       .split(CLAUSE_SPLIT)
       .map((clause) => clause.trim())
       .filter(Boolean)
-    if (!clausesSuivantes.some((clause) => MUTATION_TASK.test(clause))) return 'read-only'
+    const demandeMutation = clausesSuivantes.some(
+      (clause) => !CLAUSE_INTERDICTION.test(clause) && MUTATION_TASK.test(clause)
+    )
+    if (!demandeMutation) return 'read-only'
   }
   const normalized = task
     .normalize('NFD')

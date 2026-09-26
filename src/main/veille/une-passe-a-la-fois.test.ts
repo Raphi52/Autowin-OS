@@ -115,4 +115,19 @@ describe('veille — une passe a la fois, tous chemins confondus', () => {
     await Promise.all([cotePlanificateur, coteClic]).catch(() => undefined)
   })
 
+
+  it("transmet l'identifiant de conversation du premier appelant au lieu de l'avaler", async () => {
+    // REGRESSION du 11/09/2026 : la garde etait typee `() => Promise<T>` et perdait TOUS les arguments,
+    // meme sans passe concurrente. Le scout ne recevait donc jamais la conversation creee et ouverte par
+    // le bouton « En generer plus » : il s'en creait une seconde, et la premiere restait VIDE.
+    const recus: (string | undefined)[] = []
+    const garde = unePasseALaFois(async (conversationId?: string) => {
+      recus.push(conversationId)
+      return conversationId
+    })
+
+    await expect(garde('conv-465')).resolves.toBe('conv-465')
+    expect(recus).toEqual(['conv-465'])
+  })
+
 })

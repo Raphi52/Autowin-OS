@@ -51,12 +51,15 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
               source:
                 event.target.value === 'app-event'
                   ? { kind: 'app-event', events: ['task-failed'] }
-                  : { ...DEFAULT_FILE_SOURCE }
+                  : event.target.value === 'outlook-mail'
+                    ? { kind: 'outlook-mail' }
+                    : { ...DEFAULT_FILE_SOURCE }
             })
           }
         >
           <option value="file-match">Une ligne dans un fichier surveillé</option>
           <option value="app-event">Un événement interne d’Autowin</option>
+          <option value="outlook-mail">Un mail reçu dans Outlook</option>
         </select>
       </label>
 
@@ -100,7 +103,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
             <span>Respecter la casse</span>
           </label>
         </>
-      ) : (
+      ) : source.kind === 'app-event' ? (
         <fieldset className="task-manager-field task-manager-field-wide watchdog-events">
           <legend>Événements surveillés</legend>
           {APP_EVENTS.map((entry) => (
@@ -130,6 +133,88 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
             </p>
           )}
         </fieldset>
+      ) : (
+        <>
+          <label className="task-manager-field task-manager-field-wide">
+            <span>Canal écouté</span>
+            <select
+              value={source.channel ?? 'both'}
+              data-testid="watchdog-mail-channel"
+              onChange={(event) => {
+                const value = event.target.value
+                const { channel: _old, ...rest } = source
+                void _old
+                onChange({
+                  ...rule,
+                  source:
+                    value === 'outlook' || value === 'teams' ? { ...rest, channel: value } : rest
+                })
+              }}
+            >
+              <option value="outlook">Outlook (mails)</option>
+              <option value="teams">Teams (messages perso)</option>
+              <option value="both">Outlook et Teams</option>
+            </select>
+          </label>
+          <label className="task-manager-field task-manager-field-wide">
+            <span>Nouvelle personne qui écrit</span>
+            <select
+              value={source.newSenders ?? 'reply'}
+              data-testid="watchdog-mail-new-senders"
+              onChange={(event) => {
+                const { newSenders: _old, ...rest } = source
+                void _old
+                onChange({
+                  ...rule,
+                  source: event.target.value === 'ignore' ? { ...rest, newSenders: 'ignore' } : rest
+                })
+              }}
+            >
+              <option value="reply">L’agent lui répond (cochée)</option>
+              <option value="ignore">Ignorée jusqu’à ce que je la coche</option>
+            </select>
+          </label>
+          <fieldset className="task-manager-field task-manager-field-wide watchdog-events watchdog-senders" data-testid="watchdog-senders">
+            <legend>Interlocuteurs — cochés = l’agent leur répond</legend>
+            {Object.keys(source.senders ?? {}).length === 0 ? (
+              <p className="watchdog-fields-note">
+                Aucun interlocuteur encore vu. Chaque nouvelle personne qui écrit apparaît ici,
+                {source.newSenders === 'ignore'
+                  ? ' décochée : coche-la pour que l’agent lui réponde.'
+                  : ' cochée par défaut : décoche-la pour que l’agent ne lui réponde plus.'}
+              </p>
+            ) : (
+              Object.entries(source.senders ?? {})
+                .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+                .map(([key, sender]) => (
+                  <label key={key} className="task-manager-switch">
+                    <input
+                      type="checkbox"
+                      checked={sender.enabled}
+                      onChange={(event) =>
+                        onChange({
+                          ...rule,
+                          source: {
+                            ...source,
+                            senders: {
+                              ...source.senders,
+                              [key]: { ...sender, enabled: event.target.checked }
+                            }
+                          }
+                        })
+                      }
+                    />
+                    <span>
+                      {sender.name}
+                      {sender.name.toLowerCase() !== key && !key.startsWith('teams:') && (
+                        <small> — {key}</small>
+                      )}
+                    </span>
+                  </label>
+                ))
+            )}
+          </fieldset>
+        </>
       )}
 
       <label className="task-manager-field task-manager-field-wide">

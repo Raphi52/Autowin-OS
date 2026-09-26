@@ -37,6 +37,7 @@ from tkinter import font as tkfont
 import subprocess
 
 from launch_dev_phases import ETAPES, SuiviDemarrage, formater_identite, libelle_duree
+from launch_dev_spinner import SpinnerAtome, disponible as spinner_disponible
 
 _RACINE_PROJET = Path(__file__).resolve().parent.parent
 
@@ -130,9 +131,18 @@ class Splash:
 
         entete = tk.Frame(carte, bg=_CARTE)
         entete.pack(fill="x", padx=(34, 28), pady=(30, 0))
-        self._logo = self._charger_logo()
-        if self._logo is not None:
-            tk.Label(entete, image=self._logo, bg=_CARTE).pack(side="left", padx=(0, 14))
+        # LE SPINNER, pas un logo fixe : l'atome a trois orbites de l'ecran de demarrage de
+        # l'application, en version tkinter. Il tourne des la premiere fenetre, donc pendant toute la
+        # compilation — c'est le seul signe VIVANT que quelque chose travaille.
+        # Sans Pillow, pas d'animation lissee : on garde le VRAI logo plutot qu'un spinner crenele
+        # (defaut signale le 2026-09-10 : « tout pixelise, c'est pas le meme qu'ailleurs »).
+        self.spinner = SpinnerAtome(entete, 40, _CARTE, _RACINE_PROJET) if spinner_disponible() else None
+        if self.spinner is not None:
+            self.spinner.widget.pack(side="left", padx=(0, 14))
+        else:
+            self._logo = self._charger_logo()
+            if self._logo is not None:
+                tk.Label(entete, image=self._logo, bg=_CARTE).pack(side="left", padx=(0, 14))
         bloc_titre = tk.Frame(entete, bg=_CARTE)
         bloc_titre.pack(side="left", anchor="w")
         tk.Label(bloc_titre, text="Autowin OS", bg=_CARTE, fg=_TEXTE, font=titre_police).pack(anchor="w")
@@ -174,6 +184,9 @@ class Splash:
         self.journal.place(x=35, y=196, width=_LARGEUR - 70, height=82)
 
         self.racine.after(200, self._battement)
+        # L'ANIMATION a son propre rythme : 40 ms (~25 images/s). Le battement des etapes est a
+        # 200 ms — a cette cadence, l'atome sauterait au lieu de tourner.
+        self.racine.after(40, self._tourner)
 
     # -- fenetre ---------------------------------------------------------------------------------
     def _identite_version(self) -> str:
@@ -208,13 +221,15 @@ class Splash:
         return formater_identite(commit, branche, non_committes, retard)
 
     def _charger_logo(self) -> tk.PhotoImage | None:
-        """Le VRAI logo du produit. Absent ou illisible : on s'en passe, on n'echoue pas pour une image."""
+        """Repli quand l'animation n'est pas rendable : le VRAI logo du produit, fixe.
+
+        Absent ou illisible : on s'en passe, on n'echoue pas pour une image.
+        """
         chemin = _RACINE_PROJET / "resources" / "autowin-os-dev.png"
         try:
             image = tk.PhotoImage(file=str(chemin))
         except Exception:  # noqa: BLE001 - un logo manquant ne doit pas empecher le demarrage
             return None
-        # `subsample` est entier : 1254 / 28 ≈ 44 donne ~28 px, la taille d'une icone de titre.
         facteur = max(1, image.width() // 28)
         return image.subsample(facteur, facteur)
 
@@ -270,6 +285,13 @@ class Splash:
                 pass
             return
         self.racine.after(200, self._battement)
+
+    def _tourner(self) -> None:
+        """Fait avancer le spinner. Se replanifie tant que la fenetre vit."""
+        if self._detruite or self.spinner is None:
+            return
+        self.spinner.avancer(time.monotonic() - self._debut)
+        self.racine.after(40, self._tourner)
 
     def _absorber(self, ligne: str) -> None:
         retenue = self.suivi.voir_ligne(ligne)

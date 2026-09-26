@@ -42,16 +42,34 @@ describe('consigne KAIZEN injectée — les sept leviers arrivent au modèle', (
     }
   })
 
+  /*
+   * NOMME EN COURT, VERIFIE EN LONG.
+   *
+   * Le texte injecte pose lui-meme sa convention — « Chemin nu = sous `src/main/` » — et nomme
+   * donc `chat-pilotage-prompt.ts` plutot que `src/main/chat-pilotage-prompt.ts`. Ce texte part a
+   * CHAQUE appel : repeter le prefixe neuf fois se paie a chaque tour pour zero information.
+   * Exiger la forme longue rendait ces neuf tests rouges sans qu'aucun levier soit faux.
+   *
+   * Ce qui est garde reste ENTIER : le fichier est nomme dans le texte, et il EXISTE vraiment a
+   * l'emplacement que la convention designe. La ligne de convention est verifiee juste en dessous —
+   * sans elle, un nom court deviendrait ambigu.
+   */
+  it('la convention de chemin court est ECRITE dans le texte injecté', () => {
+    expect(brief).toContain('Chemin nu = sous')
+    expect(brief).toContain('src/main/')
+  })
+
   for (const [nom, chemin] of LEVIERS) {
     it(`le levier ${nom} est nommé par son chemin réel, et ce chemin EXISTE`, () => {
-      expect(brief).toContain(chemin)
+      const nomCourt = chemin.startsWith('src/main/') ? chemin.slice('src/main/'.length) : chemin
+      expect(brief.includes(chemin) || brief.includes(nomCourt)).toBe(true)
       expect(existsSync(join(repoRoot(), chemin))).toBe(true)
     })
   }
 
   it('les leviers 4 (garde-fous) et 7 (Brain) sont nommés par leur dossier réel', () => {
-    expect(brief).toContain('src/main/gates/*.ts')
-    expect(brief).toContain('src/main/brain-*.ts')
+    expect(brief).toMatch(/(?:src\/main\/)?gates\/\*\.ts/)
+    expect(brief).toMatch(/(?:src\/main\/)?brain-\*\.ts/)
     expect(existsSync(join(repoRoot(), 'src/main/gates'))).toBe(true)
   })
 

@@ -14,6 +14,14 @@ vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => nu
 
 import { MainApp } from './App'
 
+/**
+ * Les appels de NAVIGATION seuls. La page emet aussi `tab_layout` a l'ouverture (elle demande
+ * l'agencement des onglets) : compter tous les appels confondrait les deux questions.
+ */
+function appelsNavigate(spy: { mock: { calls: unknown[][] } }): unknown[][] {
+  return spy.mock.calls.filter(([name]) => name === 'navigate')
+}
+
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((next) => {
@@ -223,14 +231,16 @@ describe('navigation humaine synchronisée avec le main', () => {
     expect(container.querySelector('.nav-item.active')?.getAttribute('data-testid')).toBe(
       'nav-settings'
     )
-    expect(appCommand).not.toHaveBeenCalled()
+    expect(appelsNavigate(appCommand)).toHaveLength(0)
     await act(async () => root.unmount())
   })
 
   it('ne marque pas comme pilotage agent l’écho d’une navigation humaine locale', async () => {
     let emitAppEvent: ((event: { type: string; tab?: string; origin?: string }) => void) | undefined
     const appCommand = vi.fn(
-      async (_name: string, args?: Record<string, unknown>): Promise<{ ok: boolean }> => {
+      async (name: string, args?: Record<string, unknown>): Promise<{ ok: boolean }> => {
+        // Le processus principal ne diffuse un echo de navigation que pour `navigate`.
+        if (name !== 'navigate') return { ok: true }
         emitAppEvent?.({
           type: 'navigate',
           tab: String(args?.tab),
@@ -266,14 +276,15 @@ describe('navigation humaine synchronisée avec le main', () => {
     })
 
     expect(container.querySelector('main')?.getAttribute('data-driven')).toBe('false')
-    expect(appCommand).toHaveBeenCalledTimes(1)
+    expect(appelsNavigate(appCommand)).toHaveLength(1)
     await act(async () => root.unmount())
   })
 
   it('ignore un ACK humain résolu après une navigation plus récente', async () => {
     let mainTab = 'chat'
     const pending: Array<ReturnType<typeof deferred<{ ok: boolean }>>> = []
-    const appCommand = vi.fn((_name: string, args?: Record<string, unknown>) => {
+    const appCommand = vi.fn((name: string, args?: Record<string, unknown>) => {
+      if (name !== 'navigate') return Promise.resolve({ ok: true })
       mainTab = String(args?.tab)
       const ack = deferred<{ ok: boolean }>()
       pending.push(ack)
@@ -325,7 +336,8 @@ describe('navigation humaine synchronisée avec le main', () => {
     let mainTab = 'chat'
     let emitAppEvent: ((event: { type: string; tab?: string }) => void) | undefined
     const ack = deferred<{ ok: boolean }>()
-    const appCommand = vi.fn((_name: string, args?: Record<string, unknown>) => {
+    const appCommand = vi.fn((name: string, args?: Record<string, unknown>) => {
+      if (name !== 'navigate') return Promise.resolve({ ok: true })
       mainTab = String(args?.tab)
       return ack.promise
     })
@@ -355,7 +367,7 @@ describe('navigation humaine synchronisée avec le main', () => {
       mainTab = 'observatory'
       emitAppEvent?.({ type: 'navigate', tab: 'observatory' })
     })
-    expect(appCommand).toHaveBeenCalledTimes(1)
+    expect(appelsNavigate(appCommand)).toHaveLength(1)
     await act(async () => {
       ack.resolve({ ok: true })
       await ack.promise
@@ -365,7 +377,7 @@ describe('navigation humaine synchronisée avec le main', () => {
       'nav-observatory'
     )
     expect(await window.api.appState()).toEqual({ tab: 'observatory' })
-    expect(appCommand).toHaveBeenCalledTimes(1)
+    expect(appelsNavigate(appCommand)).toHaveLength(1)
     await act(async () => root.unmount())
   })
 

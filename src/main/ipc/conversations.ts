@@ -21,6 +21,7 @@
  *    faire ici.
  */
 import { ipcMain } from 'electron'
+import { readSessionForImport, resolveListedSessionAsync } from '../activity/transcripts'
 import { LOT_SUPPRESSION_MAX } from '../store/conversations'
 import { removeConversationTurnJournals } from '../runs/turn-journal'
 import { removeConvActivity } from '../activity/conv-activity'
@@ -138,6 +139,10 @@ export function registerConversationsIpc({
         reasoningEffort: decision.reasoningEffort,
         inputTokens: decision.usage?.inputTokens,
         outputTokens: decision.usage?.outputTokens,
+        // Sans ces deux champs, la part de cache du tri etait un ZERO PAR ABSENCE : le journal ne
+        // la portait pas, donc l'audit ne pouvait ni la confirmer ni l'infirmer.
+        cacheReadTokens: decision.usage?.cacheReadTokens,
+        cacheCreationTokens: decision.usage?.cacheCreationTokens,
         costUsd: decision.usage?.costUsd,
         text: JSON.stringify({
           route: decision.route,
@@ -197,6 +202,14 @@ export function registerConversationsIpc({
     if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
     return updated?.surlignee === true
   })
+  /** Statut manuel active/inactive d'une conversation. Rend l'état retenu (`true` = inactive). */
+  ipcMain.handle('os:conversations:setInactive', (event, rawId: string, rawOn: unknown) => {
+    assertTrustedRendererSender(event, 'Conversations')
+    const id = guardString(rawId, 'id')
+    const updated = os.conversations.marquerInactive(id, rawOn === true)
+    if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
+    return updated?.inactive === true
+  })
   /**
    * Choisir le compte Claude d'UNE conversation. Rend l'id retenu, ou null si aucun choix propre
    * (id inconnu, ou retour au compte de l'application) : le renderer n'a pas a distinguer les deux.
@@ -212,6 +225,40 @@ export function registerConversationsIpc({
       return updated?.claudeAccountId ?? null
     }
   )
+  /**
+   * IMPORTE une session Claude (`~/.claude/projects/<projet>/<session>.jsonl`) en conversation.
+   *
+   * Même autorisation que les canaux d'activité : la référence doit être RECONNUE par l'inventaire
+   * (`resolveListedSessionAsync`) — aucun chemin fourni par la fenêtre n'est ouvert tel quel.
+   * La lecture est plein texte et streaming côté main (`readSessionForImport`) ; le retour est un
+   * RÉSUMÉ, jamais la conversation entière : renvoyer des mégaoctets de messages sur ce canal
+   * gèlerait le renderer pour rien — il rechargera le fil par `os:conversation` s'il l'ouvre.
+   */
+  ipcMain.handle('os:conversations:importSession', async (event, ref: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation import')
+    if (!ref || typeof ref !== 'object') throw new Error('Référence de session invalide')
+    const raw = ref as Record<string, unknown>
+    const session = await resolveListedSessionAsync({
+      id: guardString(raw.id, 'session.id'),
+      project: guardString(raw.project, 'session.project')
+    })
+    if (!session) throw new Error('Session non autorisée ou hors inventaire')
+    const transcript = await readSessionForImport(session.path)
+    if (transcript.messages.length === 0) throw new Error('Session sans message importable')
+    const conversation = os.conversations.importerTranscript({
+      title: transcript.title ?? `Import ${session.id}`,
+      provider: 'claude',
+      ...(transcript.cwd ? { projectPath: transcript.cwd } : {}),
+      messages: transcript.messages
+    })
+    broadcast({ type: 'refresh', scope: 'conversations' })
+    return {
+      id: conversation.id,
+      title: conversation.title,
+      messageCount: conversation.messages.length,
+      ...(conversation.projectPath ? { projectPath: conversation.projectPath } : {})
+    }
+  })
   ipcMain.handle('os:conversations:fork', (event, rawId: string, rawMessageId: string) => {
     assertTrustedRendererSender(event, 'Conversation fork')
     return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))

@@ -104,6 +104,10 @@ describe('ChatView — coût d’une frappe dans la recherche du fil', () => {
     })
     const pick = container.querySelector('.conv-pick') as HTMLElement
     await act(async () => pick.click())
+    // Le fil s'ouvre par sa fin puis se complète par tranches (fil-progressif.ts).
+    for (let i = 0; i < 100 && container.querySelectorAll('.msg').length < FIL.length; i += 1) {
+      await act(async () => new Promise((fin) => setTimeout(fin, 5)))
+    }
     expect(container.querySelectorAll('.msg').length).toBeGreaterThan(50)
 
     await act(async () => {

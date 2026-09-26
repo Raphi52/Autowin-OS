@@ -45,8 +45,10 @@ export function normaliserDuel(entree, maintenant = new Date()) {
   if (!VERDICTS.includes(verdict))
     throw new Error(`verdict \`${verdict || '(vide)'}\` inconnu — attendu : ${VERDICTS.join(', ')}`)
   const bras = texte(entree.bras).toLowerCase()
-  if (bras && !BRAS_VALIDES.includes(bras))
-    throw new Error(`bras \`${bras}\` inconnu — attendu : ${BRAS_VALIDES.join(', ')}`)
+  // Replique numerotee (a1, b3) : arena G7 exige 3 repliques par bras, chacune est un duel mesure.
+  const replique = /^([a-z])([1-9]\d*)?$/.exec(bras)
+  if (bras && !(replique && BRAS_VALIDES.includes(replique[1])))
+    throw new Error(`bras \`${bras}\` inconnu — attendu : ${BRAS_VALIDES.join(', ')}, avec ou sans numero de replique (a1, b3)`)
   const nombre = (v, nom) => {
     if (v === undefined || v === null || v === '') throw new Error(`champ \`${nom}\` manquant`)
     const n = Number(String(v).replace(',', '.'))

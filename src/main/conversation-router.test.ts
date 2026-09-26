@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
+import {
+  ConversationRouteCoordinator,
+  ConversationRouter,
+  ROUTER_SYSTEM,
+  ROUTE_CONFIDENCE_THRESHOLD
+} from './conversation-router'
 import { ExecutionSupervisor } from './execution-supervisor'
 import { ProviderRegistry } from './providers/registry'
 import type {
@@ -120,7 +125,9 @@ describe('ConversationRouter', () => {
       message('assistant', 'Le graphe est prêt.', 2)
     ])
 
-    await expect(router.decide(current, 'Décale aussi son icône de 3px vers la gauche, comme convenu')).resolves.toMatchObject({
+    await expect(
+      router.decide(current, 'Décale aussi son icône de 3px vers la gauche, comme convenu')
+    ).resolves.toMatchObject({
       route: 'current',
       confidence: 0.99,
       reason: 'follow-up'
@@ -147,15 +154,18 @@ describe('ConversationRouter', () => {
   })
 
   it.each([
-    [0.96, 'current'],
-    [0.97, 'new']
+    [0.89, 'current'],
+    [0.9, 'new'],
+    [0.96, 'new']
   ] as const)('applies the conservative threshold at confidence %s', async (confidence, route) => {
     const { router } = harness(
       JSON.stringify({ route: 'new', confidence, reason: 'new-topic', title: 'Autre sujet' })
     )
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Sujet clairement distinct du contexte actuel, sans aucun lien')).resolves.toMatchObject({
+    await expect(
+      router.decide(current, 'Sujet clairement distinct du contexte actuel, sans aucun lien')
+    ).resolves.toMatchObject({
       route
     })
   })
@@ -168,7 +178,9 @@ describe('ConversationRouter', () => {
     const { router } = harness(response)
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Peut-être autre chose, mais je ne suis vraiment pas certain du tout')).resolves.toMatchObject({
+    await expect(
+      router.decide(current, 'Peut-être autre chose, mais je ne suis vraiment pas certain du tout')
+    ).resolves.toMatchObject({
       route: 'current'
     })
   })
@@ -195,11 +207,43 @@ describe('ConversationRouter', () => {
     vi.spyOn(supervisor, 'currentQuote').mockReturnValue({} as never)
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Un sujet vraiment différent qui ouvre un autre livrable complet')).resolves.toMatchObject({
+    await expect(
+      router.decide(current, 'Un sujet vraiment différent qui ouvre un autre livrable complet')
+    ).resolves.toMatchObject({
       route: 'current',
       reason: 'fallback'
     })
     expect(registry.send).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Classer une conversation, c'est trancher « même sujet ou nouveau » sur quelques centaines de
+   * caractères. Mesuré le 2026-09-16 sur `.autowin-data/autowin-os/activity` : 1 901 classements
+   * sur claude-opus-5 pour 52,44 $, parce que le routeur empruntait le binding `orchestrator`.
+   * Il doit prendre le modèle LÉGER par défaut du provider, sans toucher aux rôles du pipeline.
+   */
+  it('classe sur le modèle LÉGER du provider, pas sur l’opus des rôles', async () => {
+    const registry = {
+      send: vi.fn(async (_p: string, _m: unknown, options: { model?: string }) => ({
+        text: '{"route":"current","confidence":0.99,"reason":"related","title":""}',
+        provider: 'claude',
+        model: options.model,
+        systemInjected: true
+      }))
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-opus-5', reasoningEffort: 'low' })
+    }
+    const router = new ConversationRouter(registry as never, roles as never, new ExecutionSupervisor())
+    await router.decide(
+      conversation([message('user', 'Sujet courant', 1)]),
+      'Suite substantielle du sujet courant, assez longue pour interroger le modèle'
+    )
+    expect(registry.send).toHaveBeenCalledWith(
+      'claude',
+      expect.any(Array),
+      expect.objectContaining({ model: 'claude-fable-5' })
+    )
   })
 
   it('relit le binding après la readiness quand le catalogue revient pendant l’attente', async () => {
@@ -357,7 +401,7 @@ describe('ConversationRouteCoordinator', () => {
     })
     expect(store.list()).toHaveLength(1)
   })
-it('force route=current sous 40 caractères, sans dépenser d’appel modèle', async () => {
+  it('force route=current sous 40 caractères, sans dépenser d’appel modèle', async () => {
     const { router, registry } = harness(
       '{"route":"new","confidence":1,"reason":"new-topic","title":"Jamais"}'
     )
@@ -383,5 +427,21 @@ it('force route=current sous 40 caractères, sans dépenser d’appel modèle', 
 
     await expect(router.decide(current, long)).resolves.toMatchObject({ route: 'new' })
     expect(registry.send).toHaveBeenCalled()
+  })
+})
+
+/**
+ * MÊME ÉCHELLE DES DEUX CÔTÉS — mesuré le 2026-09-12 : 1 935 décisions de routage, zéro 'new'.
+ * Le prompt enseignait « confidence >= 0.90 » alors que le code exigeait 0.97 : le modèle plafonnait
+ * à 0.94 et la branche 'new' était morte par construction. La consigne doit donc citer le seuil réel.
+ */
+describe('cohérence du barème de confiance du routeur', () => {
+  it('la consigne système enseigne EXACTEMENT le seuil exigé par le code', () => {
+    expect(ROUTER_SYSTEM).toContain(`confidence >= ${ROUTE_CONFIDENCE_THRESHOLD}`)
+  })
+
+  it("aucun autre seuil numérique n'est enseigné pour confidence", () => {
+    const seuils = [...ROUTER_SYSTEM.matchAll(/confidence >= ([\d.]+)/g)].map((m) => m[1])
+    expect(seuils).toEqual([String(ROUTE_CONFIDENCE_THRESHOLD)])
   })
 })

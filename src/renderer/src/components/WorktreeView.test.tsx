@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
 import { WorktreeView } from './WorktreeView'
+import { couleurDeBranche } from './git-graph-couleurs'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -112,6 +113,11 @@ function installApi(
     getWorktreeActivity: vi.fn(async () => activity),
     getWorktreeStatus: vi.fn(async () => ({ available: true, workspacePath: snapshot.repoPath })),
     onWorktreeActivity: vi.fn(() => () => {}),
+    runGitAction: vi.fn(async () => ({
+      ok: true as const,
+      commande: 'git checkout main && git merge --no-ff feat/cockpit',
+      sortie: 'Merge made by the ort strategy.'
+    })),
     getGitDiff: vi.fn(async () => ({ available: true, diff: '@@ -1 +1 @@\n-old\n+new' })),
     listRuns: vi.fn(async () => [
       {
@@ -220,6 +226,61 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     await renderView()
 
     expect(container?.querySelector('[data-testid="git-topology-elision"]')).toBeNull()
+  })
+
+  it('rend le graphe en TABLEAU façon SourceTree : gouttière, description, auteur, date', async () => {
+    /*
+      LA DEMANDE (2026-09-15) : « j'aime bien SourceTree, le côté graphique, ça permet de comprendre
+      tout de suite ». L'écran d'avant dessinait le sujet du commit DANS le SVG, à droite de trois
+      colonnes épinglées : `author` et `date` existaient dans le modèle et n'étaient affichés nulle
+      part, et il fallait défiler horizontalement pour lire une ligne.
+    */
+    installApi()
+    await renderView()
+
+    const tableau = container?.querySelector('[data-testid="git-topology"]')
+    const entete = tableau?.querySelector('[data-testid="git-topology-entete"]')?.textContent ?? ''
+    expect(entete).toContain('Graphique')
+    expect(entete).toContain('Description')
+    expect(entete).toContain('Auteur')
+    expect(entete).toContain('Date')
+
+    const lignes = [...(tableau?.querySelectorAll('[data-testid="git-commit-row"]') ?? [])]
+    expect(lignes).toHaveLength(snapshot.commits.length)
+    expect(lignes[0].textContent).toContain('merge: cockpit')
+    expect(lignes[0].querySelector('[data-testid="git-commit-auteur"]')?.textContent).toBe(
+      'Raphaël'
+    )
+    expect(lignes[0].querySelector('[data-testid="git-commit-date"]')?.textContent).toMatch(/\d/)
+    // Chaque ligne est ANCRÉE sur son commit : c'est ce que le glisser-déposer saisira.
+    expect(lignes[0].getAttribute('data-commit')).toBe('46285c3full')
+  })
+
+  it('pose les étiquettes de branche sur la ligne, colorées d’après leur NOM', async () => {
+    installApi()
+    await renderView()
+
+    const badges = [
+      ...(container?.querySelectorAll('[data-testid="git-ref-badge"]') ?? [])
+    ] as HTMLElement[]
+    expect(badges.map((badge) => badge.textContent)).toEqual(['main', 'feat/cockpit'])
+    // La couleur vient du nom, donc elle ne change pas d'un rafraîchissement à l'autre.
+    expect(badges[1].getAttribute('style')).toContain(couleurDeBranche('feat/cockpit'))
+  })
+
+  it('colore les points par branche au lieu des trois couleurs de catégorie', async () => {
+    installApi()
+    await renderView()
+
+    const points = [
+      ...(container?.querySelectorAll('[data-testid="git-topology"] circle') ?? [])
+    ] as SVGCircleElement[]
+    // La couleur est portée par le REMPLISSAGE depuis le 2026-09-16 : les points sont pleins comme
+    // ceux de SourceTree, et le contour ne sert plus qu'à détacher le disque du trait qui passe dessous.
+    expect(points[0].getAttribute('fill')).toBe(couleurDeBranche('main'))
+    expect(points[1].getAttribute('fill')).toBe(couleurDeBranche('feat/cockpit'))
+    // La gouttière est ÉTROITE : plus d'épinglage à 280 px + 480 px de marge morte.
+    points.forEach((point) => expect(Number(point.getAttribute('cx'))).toBeLessThan(120))
   })
 
   it('le graphe rend un noeud par commit affiché', async () => {
@@ -426,5 +487,329 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(container?.querySelector('[data-testid="git-topology"]')).not.toBeNull()
     expect(api.getGitDiff).not.toHaveBeenCalled()
     expect(api.readNodeFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('WorktreeView — la résolution de conflit se tranche ICI', () => {
+  const DIFF = {
+    available: true as const,
+    agentId: 'judge',
+    paths: ['src/shared/state.ts'],
+    diff: '@@ -1 +1 @@\n-version principale\n+version du bureau'
+  }
+
+  async function ouvrirComparaison(): Promise<void> {
+    await act(async () => {
+      ;(
+        container?.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement
+      ).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  it('la résolution de conflit est ATTEIGNABLE depuis cette vue', async () => {
+    installApi()
+    await renderView()
+
+    // Le point du déplacement : ces boutons n'existaient que dans le panneau de droite du chat.
+    expect(container?.querySelector('[data-testid="worktree-conflicts"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="wt-resolve-conflict"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="wt-keep-agent"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="wt-keep-mine"]')).not.toBeNull()
+    // Seuls les bureaux EN CONFLIT : la section ne réinstalle pas le Hub entier.
+    expect(
+      container?.querySelectorAll(
+        '[data-testid="worktree-conflicts"] [data-testid="wt-conflit-ligne"]'
+      )
+    ).toHaveLength(1)
+    // Demande du 2026-09-15 : « juste des boutons ». La fiche de bureau complète — commande, chemin
+    // de la copie, base vérifiée, durée, liste des fichiers — ne doit plus être rendue ICI.
+    expect(
+      container?.querySelector('[data-testid="worktree-conflicts"] [data-testid="wt-agent-office"]')
+    ).toBeNull()
+    expect(container?.querySelector('[data-testid="wt-main-office"]')).toBeNull()
+  })
+
+  it('aucune section conflit quand aucun bureau n’est en conflit', async () => {
+    installApi({ getWorktreeActivity: vi.fn(async () => [activity[0]]) })
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-conflicts"]')).toBeNull()
+  })
+
+  it('ouvre la comparaison lecture seule puis la referme', async () => {
+    const api = installApi({ getWorktreeConflictDiff: vi.fn(async () => DIFF) })
+    await renderView()
+    await ouvrirComparaison()
+
+    expect(api.getWorktreeConflictDiff).toHaveBeenCalledWith('judge')
+    expect(container?.querySelector('[data-testid="wt-conflict-diff"]')).not.toBeNull()
+    expect(container?.textContent).toContain('version du bureau')
+
+    await act(async () => {
+      ;(container?.querySelector('[data-testid="wt-conflict-close"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+    expect(container?.querySelector('[data-testid="wt-conflict-diff"]')).toBeNull()
+  })
+
+  it('nomme l’échec de comparaison au lieu de rester en préparation', async () => {
+    installApi({
+      getWorktreeConflictDiff: vi.fn(() => Promise.reject(new Error('bureau illisible')))
+    })
+    await renderView()
+    await ouvrirComparaison()
+
+    expect(
+      container?.querySelector('[data-testid="wt-conflict-diff-error"]')?.textContent
+    ).toContain('a échoué')
+    expect(container?.textContent).not.toContain('Préparation des deux versions')
+  })
+
+  it('envoie le choix au processus principal puis referme la comparaison', async () => {
+    const resolveWorktreeConflict = vi.fn(async () => ({
+      resolved: true as const,
+      agentId: 'judge',
+      outcome: 'merged' as const
+    }))
+    installApi({ getWorktreeConflictDiff: vi.fn(async () => DIFF), resolveWorktreeConflict })
+    await renderView()
+    await ouvrirComparaison()
+
+    await act(async () => {
+      ;(container?.querySelector('[data-testid="wt-keep-agent"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(resolveWorktreeConflict).toHaveBeenCalledWith('judge', 'agent')
+    expect(container?.querySelector('[data-testid="wt-conflict-diff"]')).toBeNull()
+    expect(
+      container?.querySelector('[data-testid="wt-conflict-resolution"]')?.textContent
+    ).toContain('Version de l’agent appliquée')
+  })
+
+  it('un refus du processus principal est affiché sans prétendre avoir résolu', async () => {
+    installApi({
+      resolveWorktreeConflict: vi.fn(async () => ({
+        resolved: false as const,
+        reason: 'blocked' as const
+      }))
+    })
+    await renderView()
+
+    await act(async () => {
+      ;(container?.querySelector('[data-testid="wt-keep-mine"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container?.querySelector('[data-testid="wt-office-error"]')?.textContent).toContain(
+      'Résolution refusée'
+    )
+    expect(container?.querySelector('[data-testid="wt-conflict-resolution"]')).toBeNull()
+  })
+})
+
+describe('WorktreeView — glisser-deposer dans le graphe', () => {
+  /*
+    DEMANDE (2026-09-15) : « j'aimerais pouvoir drag and drop les points et que la bonne commande
+    soit appelee en fond ».
+
+    « En fond » ne veut pas dire « sans le dire » : un relachement de souris au mauvais endroit est
+    l'accident le plus banal qui soit, et une commande git partie toute seule ne se reprend pas. Le
+    geste PROPOSE donc la commande exacte, et c'est la confirmation qui la lance.
+  */
+  const glisser = (source: Element, cible: Element): void => {
+    act(() => {
+      source.dispatchEvent(new Event('dragstart', { bubbles: true }))
+      cible.dispatchEvent(new Event('dragover', { bubbles: true, cancelable: true }))
+      cible.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }))
+    })
+  }
+
+  const badge = (libelle: string): Element =>
+    [...(container?.querySelectorAll('[data-testid="git-ref-badge"]') ?? [])].find(
+      (element) => element.textContent === libelle
+    )!
+
+  it('le dragstart DEPOSE des donnees — sans elles Chromium annule le glisser', async () => {
+    /*
+      DEFAUT REEL (2026-09-15, rapporte par l'utilisateur : « j'ai essaye de drag and drop mais je
+      n'ai pas reussi »). Les handlers etaient justes, mais aucun n'ecrivait dans le `dataTransfer`.
+      Chromium ANNULE un `dragstart` qui laisse le presse-papier du glisser vide : ni `dragover` ni
+      `drop` ne suivent, la souris ne fait rien. Le `glisser()` ci-dessus ne l'attrapait pas parce
+      qu'il envoie un Event NU, sans `dataTransfer` — un glisser que le navigateur ne ferait jamais.
+      Ce test-ci porte donc un vrai `dataTransfer` et exige qu'on y ecrive.
+    */
+    installApi()
+    await renderView()
+
+    const dataTransfer = { data: new Map<string, string>(), effectAllowed: 'none' }
+    const evenement = Object.assign(new Event('dragstart', { bubbles: true }), {
+      dataTransfer: {
+        setData: (type: string, valeur: string) => void dataTransfer.data.set(type, valeur),
+        set effectAllowed(valeur: string) {
+          dataTransfer.effectAllowed = valeur
+        },
+        get effectAllowed() {
+          return dataTransfer.effectAllowed
+        }
+      }
+    })
+    act(() => void badge('feat/cockpit').dispatchEvent(evenement))
+
+    expect(dataTransfer.data.get('text/plain')).toBe('feat/cockpit')
+    expect(dataTransfer.effectAllowed).toBe('move')
+  })
+
+  it('une branche deposee sur une autre PROPOSE la fusion et ne lance RIEN', async () => {
+    const api = installApi()
+    await renderView()
+
+    glisser(badge('feat/cockpit'), badge('main'))
+
+    const confirmation = container?.querySelector('[data-testid="git-geste-confirmation"]')
+    expect(confirmation).not.toBeNull()
+    // La commande EXACTE, pas une paraphrase : c'est elle qui partira.
+    expect(container?.querySelector('[data-testid="git-geste-commande"]')?.textContent).toBe(
+      'git checkout main && git merge --no-ff feat/cockpit'
+    )
+    expect(api.runGitAction).not.toHaveBeenCalled()
+  })
+
+  it('la confirmation lance le geste, avec le depot affiche', async () => {
+    const api = installApi()
+    await renderView()
+    glisser(badge('feat/cockpit'), badge('main'))
+
+    await act(async () => {
+      ;(container?.querySelector('[data-testid="git-geste-lancer"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(api.runGitAction).toHaveBeenCalledWith(
+      { type: 'merge', source: 'feat/cockpit', cible: 'main' },
+      undefined
+    )
+    expect(container?.querySelector('[data-testid="git-geste-resultat"]')?.textContent).toContain(
+      'Merge made'
+    )
+  })
+
+  it('Annuler referme la proposition sans rien lancer', async () => {
+    const api = installApi()
+    await renderView()
+    glisser(badge('feat/cockpit'), badge('main'))
+
+    act(() => {
+      ;(container?.querySelector('[data-testid="git-geste-annuler"]') as HTMLButtonElement).click()
+    })
+
+    expect(container?.querySelector('[data-testid="git-geste-confirmation"]')).toBeNull()
+    expect(api.runGitAction).not.toHaveBeenCalled()
+  })
+
+  it('un COMMIT depose sur une branche propose de le rapporter', async () => {
+    // Empreintes REELLES ici : le reste du fichier travaille avec des hashs lisibles (« 5d5cc22full »),
+    // mais la liste blanche exige une vraie empreinte — `HEAD~1` et `--force` sont des chaines eux
+    // aussi. Un fixture irrealiste aurait fait passer ce test pour un defaut du code.
+    installApi({
+      getGitGraph: vi.fn(async () => ({
+        ...snapshot,
+        commits: [
+          { ...snapshot.commits[0], hash: '46285c3aa11bb22cc33', refs: ['HEAD -> main'] },
+          { ...snapshot.commits[1], hash: '5d5cc22ff99ee88dd77', parents: [], refs: [] }
+        ]
+      }))
+    })
+    await renderView()
+
+    // Le POINT du graphe porte lui aussi `data-commit` et vient AVANT dans le document : viser la
+    // ligne, qui est la prise reelle (le SVG est en `pointer-events: none`, il ne se saisit pas).
+    const ligne = container!.querySelector(
+      '[data-testid="git-commit-row"][data-commit="5d5cc22ff99ee88dd77"]'
+    )!
+    glisser(ligne, badge('main'))
+
+    expect(container?.querySelector('[data-testid="git-geste-commande"]')?.textContent).toBe(
+      'git checkout main && git cherry-pick 5d5cc22ff99ee88dd77'
+    )
+  })
+
+  /** CAS LIMITE — une empreinte qui n'en est pas une : refus NOMME, aucune commande proposee. */
+  it('refuse de rapporter ce qui n’est pas une empreinte de commit', async () => {
+    const api = installApi()
+    await renderView()
+
+    // Les commits du fixture portent « …full » : ce ne sont pas des empreintes valides.
+    glisser(
+      container!.querySelector('[data-testid="git-commit-row"][data-commit="5d5cc22full"]')!,
+      badge('main')
+    )
+
+    expect(container?.querySelector('[data-testid="git-geste-confirmation"]')).toBeNull()
+    expect(container?.querySelector('[data-testid="git-geste-refus"]')?.textContent).toContain(
+      'Empreinte de commit invalide'
+    )
+    expect(api.runGitAction).not.toHaveBeenCalled()
+  })
+
+  /** CAS LIMITE — deposer une branche sur elle-meme : refus NOMME, aucune proposition. */
+  it('refuse de fusionner une branche dans elle-meme', async () => {
+    const api = installApi()
+    await renderView()
+
+    glisser(badge('main'), badge('main'))
+
+    expect(container?.querySelector('[data-testid="git-geste-confirmation"]')).toBeNull()
+    expect(container?.querySelector('[data-testid="git-geste-refus"]')?.textContent).toContain(
+      'elle-meme'
+    )
+    expect(api.runGitAction).not.toHaveBeenCalled()
+  })
+
+  /** CAS LIMITE — une branche DISTANTE n'est pas une cible : s'y placer detacherait la tete. */
+  it('n’accepte pas un depot sur une etiquette distante', async () => {
+    const api = installApi({
+      getGitGraph: vi.fn(async () => ({
+        ...snapshot,
+        commits: [
+          { ...snapshot.commits[0], refs: ['HEAD -> main'] },
+          { ...snapshot.commits[1], refs: ['origin/feat/cockpit'] }
+        ]
+      }))
+    })
+    await renderView()
+
+    glisser(badge('main'), badge('origin/feat/cockpit'))
+
+    expect(container?.querySelector('[data-testid="git-geste-confirmation"]')).toBeNull()
+    expect(api.runGitAction).not.toHaveBeenCalled()
+  })
+
+  /** CAS LIMITE — git refuse (arbre sale) : le motif est AFFICHE, pas avale. */
+  it('affiche le refus de git au lieu de le taire', async () => {
+    const api = installApi({
+      runGitAction: vi.fn(async () => ({
+        ok: false as const,
+        raison: 'git checkout main a échoué : error: Your local changes would be overwritten'
+      }))
+    })
+    await renderView()
+    glisser(badge('feat/cockpit'), badge('main'))
+
+    await act(async () => {
+      ;(container?.querySelector('[data-testid="git-geste-lancer"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(api.runGitAction).toHaveBeenCalled()
+    expect(container?.querySelector('[data-testid="git-geste-resultat"]')?.textContent).toContain(
+      'would be overwritten'
+    )
   })
 })

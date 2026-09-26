@@ -89,7 +89,11 @@ function makeOrchestrator(
 }
 
 describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
-  it('réduit la topologie avant tout appel pour préserver build, juge et récupération', async () => {
+  /*
+   * 2026-09-12 — les compteurs de coups ne rabotent plus la topologie (demande utilisateur : un
+   * plafond ne doit plus amputer un travail decide). Les 3 modeles de frame partent donc TOUS.
+   */
+  it('sert la topologie demandée EN ENTIER, build et juge compris', async () => {
     const provider = new RecordingProvider()
     const supervisor = new ExecutionSupervisor()
     const quote = compileExecutionQuote('ajoute une page de réglages')
@@ -117,16 +121,23 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
 
     await supervisor.run(quote, undefined, () => orch.run('ajoute une page de réglages'))
 
-    expect(provider.calls.map((call) => call.model)).toEqual(['m1', 'worker', 'judge'])
+    expect(provider.calls.map((call) => call.model)).toEqual([
+      'm1',
+      'm2',
+      'm3',
+      'orch',
+      'worker',
+      'judge'
+    ])
     expect(supervisor.lastSnapshot()).toMatchObject({
-      startedAgents: 3,
-      completedCalls: 3,
+      startedAgents: 6,
+      completedCalls: 6,
       activeCalls: 0
     })
     expect(quote.allocation).toMatchObject({
-      phaseMembers: { frame: 1 },
-      reservedMandatoryAgents: 5,
-      plannedMaxAgents: 5
+      phaseMembers: { frame: 3 },
+      reservedMandatoryAgents: 23,
+      plannedMaxAgents: 26
     })
   })
 
@@ -517,5 +528,59 @@ describe('Orchestrator — fan-out exec : cas limites', () => {
     const synthSteps = result.trace.filter((s) => s.step === 'exec' && s.model === 'orch')
     expect(synthSteps).toHaveLength(0)
     expect(result.valid).toBe(true)
+  })
+})
+
+/**
+ * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : le seul membre build (claude-opus-5) a ete
+ * refuse par le filtre de securite du modele, et le tour a fini en rouge sans rien tenter d'autre.
+ * Relancer le MEME modele echoue pareil : le repli passe sur le modele voisin de la meme generation.
+ */
+class RefusingProvider extends RecordingProvider {
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    if (options.model === 'claude-opus-5') {
+      this.calls.push(options)
+      throw new Error(
+        "API Error: Opus 5's safeguards flagged this message (https://www.anthropic.com/legal/aup). Details: `[reasoning_extraction]`"
+      )
+    }
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('Orchestrator — refus du filtre de sécurité (conv-540, tour 4dfe2821)', () => {
+  it('rejoue la phase une fois sur le modèle voisin au lieu de finir le tour en échec', async () => {
+    const provider = new RefusingProvider()
+    const registry = new ProviderRegistry().register(provider)
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: provider.id, model: 'claude-opus-5' },
+      subagent: { provider: provider.id, model: 'claude-opus-5' },
+      judge: { provider: provider.id, model: 'judge' }
+    })
+    const orch = new Orchestrator({
+      registry,
+      roles,
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      execPhases: ['frame'],
+      phaseFanOut: (phase) =>
+        phase === 'frame' ? [{ provider: provider.id, model: 'claude-opus-5' }] : []
+    })
+
+    const result = await orch.run('cadre les pistes du projet')
+
+    const models = provider.calls.map((call) => call.model)
+    expect(models).toContain('claude-opus-5')
+    expect(models).toContain('claude-sonnet-5')
+    expect(
+      result.trace.some(
+        (step) => step.role === 'subagent' && step.model === 'claude-sonnet-5' && step.status === 'completed'
+      )
+    ).toBe(true)
   })
 })

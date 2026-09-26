@@ -427,6 +427,15 @@ describe('trace de la voie poussée', () => {
     expect(traces).toEqual([])
   })
 
+  // POIDS MORT (conv-703, mesure 2026-09-18) : le graphe etait interroge MEME hors des sources
+  // poussees, et ramenait ~900 car. de noms de fichiers sans rapport, payes plein tarif a chaque tour.
+  it('ne pousse AUCUNE preuve du graphe quand le graphe n’est pas dans les sources', async () => {
+    const provider = harnais([], () => {})
+    const contexte = await provider('Comment fonctionne AgentPilot chat ?', { conversationId: 'conv-703' })
+    expect(contexte).not.toContain('GRAPHIFY')
+    expect(contexte).toBe('')
+  })
+
   it('n’émet RIEN sans conversation : une trace sans fil est illisible dans l’Observatory', async () => {
     const traces: unknown[] = []
     const provider = harnais(['brain', 'graph'], (t) => traces.push(t))

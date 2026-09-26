@@ -8,19 +8,20 @@ vi.mock('./Markdown', () => ({
 }))
 
 /**
- * COMPTEUR HORS-MODÈLE des rendus de ChatView. `ChatQueuePanel` est rendu par le CORPS de
- * ChatView : chaque exécution du corps le re-rend. S'il compte une frappe, c'est que la vue
+ * COMPTEUR HORS-MODÈLE des rendus de ChatView. `ProdAutorisationHote` est rendu par le CORPS de
+ * ChatView : chaque exécution du corps le re-rend. (Il a remplacé `ChatQueuePanel`, supprimé avec
+ * l'affichage de la file d'attente le 2026-09-17 — la sonde change, la mesure est la même.) S'il compte une frappe, c'est que la vue
  * entière (3800 lignes de JSX, listes, panneaux) se recalcule à chaque caractère — le freeze
  * mesuré en conv-1466. Le composer isolé doit absorber la frappe SEUL.
  */
 const compteur = { rendus: 0 }
-vi.mock('./ChatQueuePanel', async (importOriginal) => {
-  const reel = await importOriginal<typeof import('./ChatQueuePanel')>()
+vi.mock('./ProdAutorisationHote', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('./ProdAutorisationHote')>()
   return {
     ...reel,
-    ChatQueuePanel: (props: Parameters<typeof reel.ChatQueuePanel>[0]) => {
+    ProdAutorisationHote: (props: Parameters<typeof reel.ProdAutorisationHote>[0]) => {
       compteur.rendus += 1
-      return reel.ChatQueuePanel(props)
+      return reel.ProdAutorisationHote(props)
     }
   }
 })
@@ -91,9 +92,9 @@ describe('ChatView — le composer est isolé : taper ne re-rend pas la vue', ()
     h = await mountChat(
       chatApi({
         conversationRuns: vi.fn().mockResolvedValue([RUN]),
-        capabilityControls: vi.fn().mockResolvedValue([
-          { id: 'scout', description: 'Chercher.', enabled: true }
-        ])
+        capabilityControls: vi
+          .fn()
+          .mockResolvedValue([{ id: 'scout', description: 'Chercher.', enabled: true }])
       })
     )
     await h.click('.conv-pick')
@@ -106,5 +107,42 @@ describe('ChatView — le composer est isolé : taper ne re-rend pas la vue', ()
       items[0].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     })
     expect(h.textarea().value).toBe('débloque @run:workflow-bench-regression ')
+  })
+
+  it('au survol d’une skill de la palette `/`, un encart montre sa description ENTIÈRE', async () => {
+    // Demande utilisateur du 2026-09-26 : « quand je fais / et que je hover un skill je veux voir
+    // la full description ». Le libellé de la ligne reste court ; l'encart porte tout le texte.
+    const complete = `Chercher. ${'Une consigne longue que le libellé court ne montre pas. '.repeat(3)}Fin.`
+    h = await mountChat(
+      chatApi({
+        conversationRuns: vi.fn().mockResolvedValue([RUN]),
+        capabilityControls: vi.fn().mockResolvedValue([
+          { id: 'scout', description: complete, enabled: true },
+          { id: 'think', description: 'Court.', enabled: true }
+        ])
+      })
+    )
+    await h.click('.conv-pick')
+    await h.type('/')
+    // Constante locale : `h` (let, nullable) perd son affinage de type dans les fonctions fléchées.
+    const vue = h.container
+    const detail = (): Element | null => vue.querySelector('[data-testid="slash-detail"]')
+    const ligne = (nom: string): Element =>
+      [...vue.querySelectorAll('.slash-palette .slash-item')].find(
+        (li) => li.querySelector('.slash-name')?.textContent === `/${nom}`
+      ) as Element
+    expect(detail()).toBeNull() // au repos : aucun encart
+    expect(ligne('scout').querySelector('.slash-hint')?.textContent).toBe('Chercher.')
+
+    await act(async () => {
+      ligne('scout').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    })
+    expect(detail()?.textContent).toContain(complete)
+
+    // Une skill dont le libellé dit déjà tout n'ouvre pas d'encart redondant.
+    await act(async () => {
+      ligne('think').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    })
+    expect(detail()).toBeNull()
   })
 })

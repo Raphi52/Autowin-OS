@@ -4,6 +4,30 @@ import {
   type GitGraphElision,
   type GitGraphRef
 } from '../../../shared/git-graph'
+import { couleurDeBranche, couleurDeVoie } from './git-graph-couleurs'
+import { brancheDeCommit } from './git-graph-refs'
+
+/**
+ * LA GÉOMÉTRIE DU TRACÉ — celle d'une COLONNE de tableau, façon SourceTree.
+ *
+ * Ces deux constantes sont un CONTRAT avec le rendu : chaque ligne du SVG doit tomber exactement sur
+ * une ligne de texte. Elles sont exportées pour que la vue et le calcul ne puissent pas diverger —
+ * un pas vertical recopié à la main des deux côtés finit toujours par décaler les points d'un cran,
+ * et un point en face du mauvais commit est pire qu'un graphe absent.
+ */
+/**
+ * 20 px, et non 26 : MESURÉ sur la capture SourceTree fournie le 2026-09-16, une ligne d'historique
+ * y fait 19-20 px. À 26 px, le même écran montrait ~18 commits là où SourceTree en montre 25, et
+ * l'espace vide entre les points cassait la lecture verticale d'une branche — le reproche exact de
+ * l'utilisateur (« beaucoup plus clair chez SourceTree »). La densité EST la lisibilité ici : un
+ * graphe de branches se lit par la continuité des colonnes, pas commit par commit.
+ */
+export const HAUTEUR_LIGNE = 20
+/** 12 px, comme l'écart entre deux voies de SourceTree : plus large, les voies cessent de se lire
+ * comme un faisceau et deviennent des traits isolés. */
+export const LARGEUR_VOIE = 12
+/** Marge à gauche et à droite de la gouttière : le rayon du point, plus un souffle. */
+export const MARGE_VOIE = 10
 
 export interface GitGraphLayoutNode {
   commit: GitGraphCommit
@@ -11,12 +35,18 @@ export interface GitGraphLayoutNode {
   x: number
   y: number
   side?: 'closed' | 'main' | 'open'
+  /** Couleur de la voie, fonction PURE du nom de branche. Voir `git-graph-couleurs`. */
+  couleur: string
+  /** Nom de branche porté par ce commit, quand il en porte un. Sert l'étiquette ET la couleur. */
+  branche?: string
 }
 
 export interface GitGraphLayoutEdge {
   from: GitGraphLayoutNode
   to: GitGraphLayoutNode
   lane: number
+  /** La couleur de la VOIE que le trait emprunte : c'est elle qu'on suit des yeux. */
+  couleur: string
   /** Arête qui ENJAMBE une histoire non chargée : à tracer autrement qu'une parenté réelle. */
   elidee?: boolean
   /** Nombre de commits omis par ce saut. Absent sur une arête réelle. */
@@ -155,46 +185,74 @@ export function layoutGitGraph(
       const freeLane = lanes.findIndex((value, index) => index > lane && value === undefined)
       lanes[freeLane < 0 ? lanes.length : freeLane] = parent
     })
-    nodes.push({ commit, lane, x: 42 + lane * 64, y: 34 + row * 48 })
+    nodes.push({
+      commit,
+      lane,
+      x: MARGE_VOIE + lane * LARGEUR_VOIE,
+      y: HAUTEUR_LIGNE / 2 + row * HAUTEUR_LIGNE,
+      couleur: '',
+      ...(brancheDeCommit(commit.refs) ? { branche: brancheDeCommit(commit.refs) } : {})
+    })
   })
 
-  const closedLanes = [
-    ...new Set(
-      nodes
-        .filter(
-          (node) => !axes?.main.has(node.commit.hash) && !axes?.ouvertes.has(node.commit.hash)
-        )
-        .map((node) => node.lane)
-    )
-  ].sort((a, b) => a - b)
-  const openLanes = [
-    ...new Set(
-      nodes.filter((node) => axes?.ouvertes.has(node.commit.hash)).map((node) => node.lane)
-    )
-  ].sort((a, b) => a - b)
-  const mainX = 280 + Math.max(1, closedLanes.length) * 64
+  /*
+    LA CATÉGORIE SURVIT, LA POSITION NON.
+
+    Le tracé épinglait chaque commit dans une des TROIS colonnes (fermé à gauche, `main` au centre à
+    `280 + n * 64`, ouvert à droite), plus 480 px de marge morte : mesuré 2 952 px de large, presque
+    tout vide, et il fallait défiler horizontalement pour lire un sujet. SourceTree fait l'inverse —
+    une gouttière étroite, le texte collé à droite — et c'est ce que l'utilisateur a demandé le
+    2026-09-15. On garde `side` : il ne commande plus le x, il sert la légende et le style du trait.
+  */
   if (axes) {
     nodes.forEach((node) => {
-      if (axes.main.has(node.commit.hash)) {
-        node.side = 'main'
-        node.x = mainX
-        return
-      }
-      if (axes.ouvertes.has(node.commit.hash)) {
-        node.side = 'open'
-        node.x = mainX + (openLanes.indexOf(node.lane) + 1) * 64
-        return
-      }
-      node.side = 'closed'
-      node.x = mainX - (closedLanes.indexOf(node.lane) + 1) * 64
+      node.side = axes.main.has(node.commit.hash)
+        ? 'main'
+        : axes.ouvertes.has(node.commit.hash)
+          ? 'open'
+          : 'closed'
     })
   }
+
+  /*
+    LA COULEUR D'UNE VOIE, tirée du nom de la branche qui l'occupe.
+
+    Une voie est un emplacement réutilisé au fil du temps : on la nomme d'après la PREMIÈRE branche
+    rencontrée dessus (celle du haut, la plus récente). Sans nom connu, la voie se colore d'après son
+    numéro — imprévisible à l'œil, mais toujours la même d'un affichage à l'autre.
+  */
+  const brancheParVoie = new Map<number, string>()
+  nodes.forEach((node) => {
+    if (node.branche && !brancheParVoie.has(node.lane)) brancheParVoie.set(node.lane, node.branche)
+  })
+  const couleurParVoie = new Map<number, string>(
+    nodes.map((node) => [node.lane, couleurDeVoie(node.lane, brancheParVoie.get(node.lane))])
+  )
+  nodes.forEach((node) => {
+    // Un commit qui PORTE une branche est sa tete : il prend la couleur de CETTE branche, celle de
+    // son etiquette juste a cote. Sinon il prend celle de sa voie. Sans cela, la tete de
+    // `feat/cockpit` posee dans la voie de `main` s'affichait aux couleurs de `main`, a un
+    // centimetre d'une etiquette d'une autre couleur.
+    node.couleur = node.branche
+      ? couleurDeBranche(node.branche)
+      : (couleurParVoie.get(node.lane) ?? couleurDeVoie(node.lane))
+  })
 
   const nodeByHash = new Map(nodes.map((node) => [node.commit.hash, node]))
   const edges: GitGraphLayoutEdge[] = nodes.flatMap((node) =>
     node.commit.parents.flatMap((parent) => {
       const target = nodeByHash.get(parent)
-      return target ? [{ from: node, to: target, lane: laneByHash.get(parent) ?? node.lane }] : []
+      if (!target) return []
+      const lane = laneByHash.get(parent) ?? node.lane
+      return [
+        {
+          from: node,
+          to: target,
+          lane,
+          // Le trait prend la couleur de la voie qu'il REJOINT : c'est la ligne qu'on suit des yeux.
+          couleur: couleurParVoie.get(lane) ?? node.couleur
+        }
+      ]
     })
   )
   /**
@@ -209,16 +267,23 @@ export function layoutGitGraph(
     const from = nodeByHash.get(elision.from)
     const to = nodeByHash.get(elision.to)
     if (!from || !to) continue
-    edges.push({ from, to, lane: from.lane, elidee: true, omis: elision.omis })
+    edges.push({
+      from,
+      to,
+      lane: from.lane,
+      couleur: from.couleur,
+      elidee: true,
+      omis: elision.omis
+    })
   }
 
   const laneCount = Math.max(1, ...nodes.map((node) => node.lane + 1))
   return {
     nodes,
     edges,
-    width: axes
-      ? Math.max(720, mainX + Math.max(1, openLanes.length) * 64 + 480)
-      : Math.max(720, laneCount * 64 + 520),
-    height: Math.max(520, nodes.length * 48 + 54)
+    // La gouttière, et RIEN d'autre : la largeur ne réserve plus de place au texte, qui vit
+    // désormais dans les colonnes HTML voisines et non dans le SVG.
+    width: MARGE_VOIE * 2 + (laneCount - 1) * LARGEUR_VOIE,
+    height: Math.max(HAUTEUR_LIGNE, nodes.length * HAUTEUR_LIGNE)
   }
 }

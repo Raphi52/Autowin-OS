@@ -49,9 +49,9 @@ describe('heal peut optimiser sans mesure, mais jamais sans cause localisée', (
   const heal = corpsSkill('heal')
 
   it('ouvre un chemin statique quand aucun chronomètre n’est possible', () => {
-    expect(heal).toMatch(/NO MEASUREMENT AVAILABLE/i)
-    expect(heal).toMatch(/do NOT drop the candidate and do NOT stop the heal/i)
-    for (const famille of [/O\(n²\)/, /N times where 1 suffices/i, /[Ss]ynchronous I\/O/]) {
+    expect(heal).toMatch(/AUCUNE MESURE POSSIBLE/i)
+    expect(heal).toMatch(/n'abandonne PAS le candidat et n'arrête PAS le heal/i)
+    for (const famille of [/O\(n²\)/, /N fois là où 1 suffit/i, /E\/S synchrone/]) {
       expect(heal).toMatch(famille)
     }
   })
@@ -59,12 +59,12 @@ describe('heal peut optimiser sans mesure, mais jamais sans cause localisée', (
   it('exige la localisation et interdit d’annoncer un gain non mesuré', () => {
     expect(heal).toMatch(/file:line/)
     expect(heal).toMatch(/gain non mesuré — cause localisée/)
-    expect(heal).toMatch(/No localisation → the candidate is dropped/i)
+    expect(heal).toMatch(/Pas de localisation → le candidat est abandonné/i)
   })
 
   it('a des dents : la description du sélecteur ne promet plus « no symptom, no heal » sans issue', () => {
     const brut = readFileSync(join(skillRoots()[0], 'heal', 'SKILL.md'), 'utf8')
-    expect(brut).toMatch(/COUNTED static criterion/i)
+    expect(brut).toMatch(/CRITÈRE STATIQUE COMPTÉ/i)
   })
 })
 

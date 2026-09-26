@@ -1,80 +1,80 @@
 ---
 name: graft
-description: GRAFT a new skill onto the kit when the supervisor judges one is missing. Trigger the MOMENT a PROCEDURE is being improvised for the second time — "on refait le même enchaînement à la main", "il faudrait une skill pour ça", a recurring class of work with no owner in the kit, a repeated failure that no existing skill's trigger catches. `graft` turns that repetition into a named, bounded, discoverable SKILL.md, then RUNS it on the case at hand. Do NOT use to: build a missing TOOL or command (→ `forge`), fix or sharpen an EXISTING skill's rules (→ `kaizen`), pick what to work on (→ `scout`). graft adds ONE skill, the one the current work keeps improvising.
+description: GREFFE une nouvelle skill quand une PROCÉDURE manque au kit. Déclenche-toi AU MOMENT où le même enchaînement est improvisé pour la deuxième fois — "on refait le même enchaînement à la main", "il faudrait une skill pour ça", une classe de travail récurrente que personne ne possède dans le kit, un échec répété qu'aucun déclencheur de skill existante n'attrape. `graft` transforme cette répétition en un SKILL.md nommé, borné et découvrable, puis le JOUE sur le cas présent. NE PAS utiliser pour : construire un OUTIL ou une commande qui manque (→ `forge`), corriger ou affûter les règles d'une skill EXISTANTE (→ `kaizen`), choisir sur quoi travailler (→ `scout`). graft ajoute UNE skill, celle que le travail courant n'arrête pas d'improviser.
 ---
 
-# graft — the supervisor extends its own kit
+# graft — le superviseur étend son propre kit
 
-## Purpose
+## À quoi ça sert
 
-`forge` answers "I have no TOOL for this". `graft` answers "I have no PROCEDURE for this". A
-recurring shape of work improvised each time is a skill that has not been written yet. `graft`
-writes it — once, bounded, discoverable — and never as a licence to grow the kit for the pleasure
-of growing it. Every skill added is a line the model must read every turn: the kit pays for it.
+`forge` répond à « je n'ai pas d'OUTIL pour ça ». `graft` répond à « je n'ai pas de PROCÉDURE pour ça ». Une
+forme de travail récurrente, improvisée à chaque fois, est une skill qui n'a pas encore été écrite. `graft`
+l'écrit — une fois, bornée, découvrable — et jamais comme un permis de faire grossir le kit pour le plaisir
+de le faire grossir. Chaque skill ajoutée est une ligne que le modèle doit lire à chaque tour : le kit la paie.
 
-## Entry gate — four questions, in order
+## Contrôle d'entrée — quatre questions, dans l'ordre
 
-1. **What repeated shape of work?** Name at least TWO real occurrences (conversation ids, runs,
-   commits). One occurrence is a task, not a skill. No second occurrence → no graft.
-2. **Does an existing skill already own it?** Read the `description` front-matter of every skill
-   in the kit — that line IS the trigger. If one covers it, the answer is `kaizen` (sharpen its
-   trigger), not a new skill. The duplicate skill is failure mode number one: two triggers that
-   overlap make the router pick at random.
-3. **Is a skill the right shape?** A missing capability is `forge`. A missing rule is `kaizen`. A
-   one-off is just work. Graft only a repeatable PROCEDURE with a recognisable MOMENT.
-4. **What does it cost?** State it: one more line in every turn's snapshot. If the skill would
-   fire less than roughly once a month, say so and stop.
+1. **Quelle forme de travail répétée ?** Nomme au moins DEUX occurrences réelles (identifiants de conversation, runs,
+   commits). Une seule occurrence est une tâche, pas une skill. Pas de seconde occurrence → pas de greffe.
+2. **Une skill existante la possède-t-elle déjà ?** Lis le front-matter `description` de chaque skill
+   du kit — cette ligne EST le déclencheur. Si l'une couvre le cas, la réponse est `kaizen` (affûter son
+   déclencheur), pas une nouvelle skill. La skill en doublon est le mode d'échec numéro un : deux déclencheurs qui
+   se chevauchent font choisir le routeur au hasard.
+3. **Une skill est-elle la bonne forme ?** Une capacité manquante, c'est `forge`. Une règle manquante, c'est `kaizen`. Un
+   coup unique n'est que du travail. Ne greffe qu'une PROCÉDURE reproductible avec un MOMENT reconnaissable.
+4. **Combien ça coûte ?** Dis-le : une ligne de plus dans l'instantané de chaque tour. Si la skill se déclenchait
+   moins d'environ une fois par mois, dis-le et arrête.
 
-If 2 answers "yes", stop and say which skill owns it. Report the search, do not graft.
+Si la question 2 répond « oui », arrête-toi et dis quelle skill possède le cas. Rapporte la recherche, ne greffe pas.
 
-## Procedure
+## Procédure
 
-### 1. SPEC — the trigger before the body
+### 1. SPÉCIFIER — le déclencheur avant le corps
 
-Write, in the run, before any file: the `name` (one word, verb-like) · the MOMENT it fires, in the
-user's own words · what it must NOT be used for, naming the neighbouring skills · the artefact it
-must leave behind. A skill with no stated boundary will be picked for work it cannot do.
+Écris, dans le run, avant tout fichier : le `name` (un mot, tourné comme un verbe) · le MOMENT où elle se déclenche, dans les
+mots de l'utilisateur · ce pour quoi elle ne doit PAS être utilisée, en nommant les skills voisines · l'artefact qu'elle
+doit laisser derrière elle. Une skill sans frontière énoncée sera choisie pour un travail qu'elle ne sait pas faire.
 
-### 2. WRITE — front-matter first
+### 2. ÉCRIRE — le front-matter d'abord
 
-`skills/<name>/SKILL.md`, with a YAML front-matter carrying `name` and `description`. The
-`description` is not documentation: it is the ONLY thing the router sees, and it is truncated to
-roughly 200 characters in the turn snapshot. So the first sentence must carry the MOMENT, not the
-philosophy. Match the kit's existing shape: Purpose · Entry gate · Procedure · Report · Don't.
+`skills/<nom>/SKILL.md`, avec un front-matter YAML portant `name` et `description`. La
+`description` n'est pas de la documentation : c'est la SEULE chose que le routeur voit, et elle est tronquée à
+environ 200 caractères dans l'instantané du tour. La première phrase doit donc porter le MOMENT, pas la
+philosophie. Reprends la forme des skills existantes : À quoi ça sert · Contrôle d'entrée · Procédure · Rapport · À ne pas faire.
 
-### 3. REGISTER — verify discovery, do not assume it
+### 3. ENREGISTRER — vérifie la découverte, ne la suppose pas
 
-The kit root is scanned, so no list needs editing — which is exactly why this step is skipped and
-exactly why it must not be. Re-read the app state and confirm the new name appears in the
-snapshot's skill list, with its trigger phrase attached. Not appearing = not grafted, whatever the
-file says on disk.
+La racine du kit est balayée, donc aucune liste n'est à éditer — ce qui est exactement pourquoi cette étape est sautée et
+exactement pourquoi elle ne doit pas l'être. Relis l'état de l'app et confirme que le nouveau nom apparaît dans
+la liste de skills de l'instantané, avec sa phrase de déclenchement attachée. Pas d'apparition = pas de greffe, quoi que
+dise le fichier sur le disque.
 
-### 4. PROVE ON A REAL CASE
+### 4. PROUVER SUR UN CAS RÉEL
 
-Run the new skill immediately on the occurrence that motivated it, and report what it produced.
-A skill never exercised is a hypothesis. If the first run shows the trigger is wrong, fix the
-front-matter before closing — that correction is the cheapest it will ever be.
+Joue la nouvelle skill tout de suite sur l'occurrence qui l'a motivée, et rapporte ce qu'elle a produit.
+Une skill jamais exercée est une hypothèse. Si le premier run montre que le déclencheur est faux, corrige le
+front-matter avant de clore — cette correction ne sera jamais moins chère.
 
-### 5. JUDGE
+### 5. JUGER
 
-Submit the new SKILL.md to `judge` as a deliverable: overlap with neighbours, trigger precision,
-falsifiable output. A skill written and judged by the same model is self-declared; say so.
+Soumets le nouveau SKILL.md à `judge` comme livrable : recouvrement avec les voisines, précision du déclencheur,
+sortie falsifiable. Une skill écrite et jugée par le même modèle est auto-déclarée ; dis-le.
 
-### 6. RETAIN
+### 6. RETENIR
 
-`remember` ONE fact: the shape of work that had no owner, `type: lesson`, with the two occurrences
-as evidence.
+`remember` UN fait : la forme de travail que personne ne possédait, `type: lesson`, avec les deux occurrences
+comme preuve.
 
-## Report
+## Rapport
 
-Close with: the two occurrences · the neighbouring skills checked and why they don't own it · the
-skill grafted (name + its trigger in one line) · discovery confirmed from the app state · the real
-case it was run on and its outcome · the judge verdict.
+Clos avec : les deux occurrences · les skills voisines vérifiées et pourquoi elles ne possèdent pas le cas · la
+skill greffée (nom + son déclencheur en une ligne) · la découverte confirmée depuis l'état de l'app · le cas réel
+sur lequel elle a été jouée et son résultat · le verdict du juge.
 
-## Don't
+## À ne pas faire
 
-- Don't graft from a single occurrence, an intuition, or "that could be useful one day".
-- Don't write a skill whose trigger overlaps a neighbour's — sharpen the neighbour instead.
-- Don't declare it available because the file exists: read the app's own catalogue.
-- Don't graft a skill and leave the motivating work undone.
-- Don't let the kit grow silently: every graft names its cost in the report.
+- Ne greffe pas depuis une seule occurrence, une intuition, ou un « ça pourrait servir un jour ».
+- N'écris pas une skill dont le déclencheur chevauche celui d'une voisine — affûte plutôt la voisine.
+- Ne la déclare pas disponible parce que le fichier existe : lis le catalogue de l'app elle-même.
+- Ne greffe pas une skill en laissant inachevé le travail qui l'a motivée.
+- Ne laisse pas le kit grossir en silence : chaque greffe nomme son coût dans le rapport.

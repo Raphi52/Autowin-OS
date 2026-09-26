@@ -17,7 +17,9 @@ import { cloreDemarrage, pendantOperation } from './gel-main'
 import { surveillerFenetreInjoignable } from './gel-fenetre'
 import { surveillerParBattement } from './gel-battement-fenetre'
 import { journaliserGel } from './gel-main'
-import { app, shell, BrowserWindow, Menu, Tray, desktopCapturer } from 'electron'
+import { app, shell, BrowserWindow, Menu, Tray, desktopCapturer, screen } from 'electron'
+import { placerFenetreDetachee } from '../shared/view-tabs'
+import type { AppDestination } from '../shared/navigation'
 import { installerCaptureSonSysteme } from './audio-loopback'
 import { join } from 'path'
 import { writeFileSync } from 'node:fs'
@@ -29,6 +31,8 @@ import { behaviourRendererOptions } from './ipc-senders'
 import { type ModelQuestionHub, type PendingModelQuestion } from './model-questions'
 import { annoncerFermeture } from './journal-arrets'
 import { presentAutomationWindow } from './headless-instance'
+import { appliquerPresenceSysteme } from './os-presence-main'
+import type { EtatRunsVivants } from '../shared/os-presence'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
 
@@ -49,11 +53,19 @@ export type Fenetres = {
   showMainWindow: () => void
   setupTray: () => void
   openQuestionWindow: (parent: BrowserWindow | null, question: PendingModelQuestion) => void
+  /** Ouvre une vue seule dans sa propre fenêtre, centrée sur le point écran du lâcher d'onglet. */
+  openViewWindow: (view: AppDestination, screenX: number, screenY: number) => void
   rendererLocation: () => { devRendererUrl?: string; rendererHtmlPath: string }
   /** Vrai UNIQUEMENT après un quit demandé depuis le menu du tray. */
   estEnFermeture: () => boolean
   /** Les fenêtres de question ouvertes, par identifiant — un canal IPC de `index.ts` les ferme. */
   questionWindows: Map<string, BrowserWindow>
+  /**
+   * Jauge de barre des tâches + texte de l'icône de notification, d'après les runs vivants.
+   * Ici parce que `tray` et la fenêtre principale sont tenus DANS cette fermeture : rien d'autre
+   * ne les atteint. Le calcul, lui, est pur (`src/shared/os-presence.ts`).
+   */
+  refleterRunsVivants: (etat: EtatRunsVivants) => void
 }
 
 export function createWindowing(deps: WindowingDeps): Fenetres {
@@ -67,6 +79,17 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
   } = deps
 
   const questionWindows = new Map<string, BrowserWindow>()
+  /**
+   * LA fenêtre principale vivante, ou null. Tenue ICI et pas déduite de
+   * `BrowserWindow.getAllWindows()` : cette liste contient AUSSI les fenêtres de question, donc elle
+   * ne dit pas si la fenêtre principale existe déjà.
+   *
+   * CE QU'ELLE EMPÊCHE (constaté à l'écran le 2026-09-12) : une SECONDE fenêtre principale
+   * construite alors que la première vivait. La nouvelle charge l'écran d'attente
+   * (« Préparation de l'interface… ») puis s'affiche MAXIMISÉE par-dessus — l'application, elle,
+   * continuait de répondre derrière. On voyait donc un démarrage sans fin sur une app en marche.
+   */
+  let mainWindowVivante: BrowserWindow | null = null
   /**
    * Relayout forcé de la fenêtre principale (correctif desync fenêtre↔viewport, cf. createWindow).
    * Exposé au niveau module pour être rejoué depuis les chemins déclenchés PAR LE MODÈLE (fermeture
@@ -116,6 +139,9 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       tray = null
     }
   }
+  function refleterRunsVivants(etat: EtatRunsVivants): void {
+    appliquerPresenceSysteme({ fenetre: mainWindowVivante, icone: tray }, etat)
+  }
   function openQuestionWindow(parent: BrowserWindow | null, question: PendingModelQuestion): void {
     const win = new BrowserWindow({
       width: 640,
@@ -157,6 +183,38 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'model-question' })
     }
   }
+  // fix-ok: la fenetre detachee etait centree sur la souris sans tenir compte de l ecran (bord = hors ecran) ; mesure par les tests placerFenetreDetachee de view-tabs.test.ts
+  function openViewWindow(view: AppDestination, screenX: number, screenY: number): void {
+    // Fenêtre INDÉPENDANTE (ni `parent`, ni `alwaysOnTop`) : elle doit pouvoir vivre seule sur un
+    // autre écran. Même preload et même isolation que les autres fenêtres.
+    const zone = screen.getDisplayNearestPoint({
+      x: Math.round(screenX),
+      y: Math.round(screenY)
+    }).workArea
+    const place = placerFenetreDetachee({ screenX, screenY }, { width: 1100, height: 760 }, zone)
+    const win = new BrowserWindow({
+      ...place,
+      minWidth: 480,
+      minHeight: 360,
+      show: false,
+      autoHideMenuBar: true,
+      backgroundColor: '#05070d',
+      title: 'Autowin OS',
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        sandbox: false
+      }
+    })
+    win.once('ready-to-show', () => {
+      presentAutomationWindow(win, headlessTestInstance, { focus: true, flash: false })
+    })
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#view=${view}`)
+    } else {
+      win.loadFile(join(__dirname, '../renderer/index.html'), { hash: `view=${view}` })
+    }
+  }
   function rendererLocation(): { devRendererUrl?: string; rendererHtmlPath: string } {
     return {
       devRendererUrl: is.dev ? process.env['ELECTRON_RENDERER_URL'] : undefined,
@@ -164,6 +222,15 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     }
   }
   function createWindow(): void {
+    // UNE SEULE fenêtre principale. Un second appel réveille celle qui existe au lieu d'en empiler
+    // une deuxième sur l'écran d'attente : la voie qui déclenche ce second appel peut varier (tray,
+    // `activate`, second lancement), le résultat à l'écran, lui, est toujours le même défaut.
+    if (mainWindowVivante && !mainWindowVivante.isDestroyed()) {
+      if (mainWindowVivante.isMinimized()) mainWindowVivante.restore()
+      mainWindowVivante.show()
+      mainWindowVivante.focus()
+      return
+    }
     // Create the browser window.
     jalonDemarrage('construction de la fenêtre')
     const mainWindow = new BrowserWindow({
@@ -196,6 +263,14 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
         contextIsolation: true,
         sandbox: false
       }
+    })
+
+    // La référence est posée TOUT DE SUITE et relâchée à la fermeture : relâchée trop tard, un
+    // second appel arrivé pendant le chargement rouvrirait une fenêtre ; jamais relâchée, refermer
+    // puis rouvrir depuis la barre d'état ne donnerait plus rien.
+    mainWindowVivante = mainWindow
+    mainWindow.on('closed', () => {
+      if (mainWindowVivante === mainWindow) mainWindowVivante = null
     })
 
     // Clic droit dans un champ de saisie : Electron SOULIGNE les fautes tout seul, mais n'affiche
@@ -429,8 +504,10 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     showMainWindow,
     setupTray,
     openQuestionWindow,
+    openViewWindow,
     rendererLocation,
     estEnFermeture: () => isQuitting,
-    questionWindows
+    questionWindows,
+    refleterRunsVivants
   }
 }

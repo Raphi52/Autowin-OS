@@ -26,21 +26,43 @@ export const GROUPE_DIVERS = 'divers'
  * (demande utilisateur du 2026-09-09 : « une catégorie récent avec 10 éléments qui duplique »).
  */
 export const GROUPE_RECENT = 'recent'
-/** Combien de conversations le raccourci « Récent » montre. Au-delà, ce n'est plus un raccourci. */
-export const TAILLE_RECENT = 10
+/**
+ * Combien de conversations le raccourci « Récent » montre. Au-delà, ce n'est plus un raccourci.
+ * Passé de 10 à 20 à la demande de l'utilisateur (conv-868, 2026-09-26 : « mets 20 conv dans récent »).
+ */
+export const TAILLE_RECENT = 20
 
 /** Le strict nécessaire au groupement — pas le type complet, pour que ce module reste testable seul. */
 export interface ConversationLike {
   id: string
   projectPath?: string
+  /**
+   * Libellé de classement libre, quand il ne correspond à AUCUN dossier de travail (conv-81).
+   * Présent → c'est lui qui groupe, et `projectPath` ne sert plus qu'au dossier de travail.
+   */
+  categorie?: string
   autoKaizen?: unknown
 }
+
+/**
+ * La NATURE d'un groupe. Deux d'entre eux sont un rangement voulu par l'utilisateur (`dossier`,
+ * `categorie`), les autres sont dérivés : `kaizen` vient d'un champ, `divers` est l'absence de
+ * rangement, `recent` est un raccourci qui duplique. Exporté parce que la vue en dépend pour
+ * décider ce qui accepte un dépôt.
+ */
+export type ConversationGroupKind = 'kaizen' | 'dossier' | 'categorie' | 'divers' | 'recent'
 
 export interface ConversationGroup<T extends ConversationLike> {
   /** Clé stable : sert d'identité au repli persisté. Un libellé changerait avec l'affichage. */
   key: string
   label: string
-  kind: 'kaizen' | 'dossier' | 'divers' | 'recent'
+  /**
+   * `categorie` = un libellé rangé à la main, qui ne désigne aucun dossier du disque. Il partage le
+   * rang d'affichage de `dossier` (les deux sont du classement voulu par l'utilisateur) mais rien
+   * d'autre : pas d'arborescence, pas de dossier de travail, pas d'entrée dans la liste des
+   * dossiers connus.
+   */
+  kind: ConversationGroupKind
   /** Niveau visuel dans l'arborescence des dossiers réellement présents. */
   depth: number
   /** Dossier parent le plus proche parmi les dossiers réellement présents. */
@@ -61,8 +83,22 @@ export function nomDeDossier(chemin: string): string {
   return segments[segments.length - 1] || propre
 }
 
-/** À quel groupe appartient une conversation. L'ordre des tests EST la règle de priorité. */
-export function groupeDe(conversation: ConversationLike): {
+/**
+ * À quel groupe appartient une conversation. L'ordre des tests EST la règle de priorité.
+ *
+ * `dossierParDefaut` (le dépôt sélectionné dans la barre du haut) sert UNIQUEMENT de repli
+ * d'affichage : une conversation qui n'a ni catégorie ni dossier de travail tombait dans « Divers »,
+ * alors qu'elle travaille bel et bien dans le dépôt courant. Demande utilisateur du 2026-09-17 :
+ * « le dossier de repo sélectionné dans la barre du haut prime, les catégories à gauche c'est
+ * cosmétique — faut juste la ranger dans une catégorie qui correspond au cwd par défaut. »
+ *
+ * Ce repli ne RANGE rien : il n'écrit ni `projectPath` ni `categorie`, il place seulement le fil
+ * sous le bon en-tête. Un rangement explicite de l'utilisateur gagne toujours.
+ */
+export function groupeDe(
+  conversation: ConversationLike,
+  dossierParDefaut?: string
+): {
   key: string
   label: string
   kind: ConversationGroup<ConversationLike>['kind']
@@ -72,9 +108,21 @@ export function groupeDe(conversation: ConversationLike): {
   if (conversation.autoKaizen) {
     return { key: GROUPE_KAIZEN, label: 'Auto-kaizen', kind: 'kaizen' }
   }
+  // La CATEGORIE avant le dossier : c'est la dissociation demandée le 2026-09-16 (conv-81). Un fil
+  // peut travailler dans `D:\GIT\RigApplication` et se ranger sous « Factures » — sans cette
+  // priorité, choisir une catégorie serait impossible dès qu'un dossier de travail est assigné. Le
+  // libellé EST la clé : il ne se canonise pas, ce n'est pas un chemin.
+  // fix-ok: conv-81 — cause mesurée dans groupeDe : le groupement lisait projectPath, donc classer = écrire un dossier de travail. La catégorie passe devant, et elle seule groupe quand elle est là.
+  const libelle = conversation.categorie?.trim()
+  if (libelle) return { key: libelle, label: libelle, kind: 'categorie' }
   const chemin = conversation.projectPath?.trim()
   if (chemin) {
     const key = chemin.replace(/[\\/]+$/, '') || chemin
+    return { key, label: nomDeDossier(key), kind: 'dossier' }
+  }
+  const defaut = dossierParDefaut?.trim()
+  if (defaut) {
+    const key = defaut.replace(/[\\/]+$/, '') || defaut
     return { key, label: nomDeDossier(key), kind: 'dossier' }
   }
   return { key: GROUPE_DIVERS, label: 'Divers', kind: 'divers' }
@@ -89,11 +137,12 @@ export function groupeDe(conversation: ConversationLike): {
  * ce module groupe, il n'arbitre pas la pertinence.
  */
 export function grouperConversations<T extends ConversationLike>(
-  conversations: readonly T[]
+  conversations: readonly T[],
+  dossierParDefaut?: string
 ): ConversationGroup<T>[] {
   const par = new Map<string, ConversationGroup<T>>()
   for (const conversation of conversations) {
-    const { key, label, kind } = groupeDe(conversation)
+    const { key, label, kind } = groupeDe(conversation, dossierParDefaut)
     const existant = par.get(key)
     if (existant) existant.items.push(conversation)
     else par.set(key, { key, label, kind, depth: 0, items: [conversation] })
@@ -122,8 +171,10 @@ export function grouperConversations<T extends ConversationLike>(
   }
   for (const groupe of dossiers) groupe.depth = profondeur(groupe)
 
+  // Dossiers ET catégories au même rang : les deux sont un classement voulu, ils s'entremêlent par
+  // ordre alphabétique. Reléguer les catégories en bloc ferait de la dissociation une punition.
   const rang = (g: ConversationGroup<T>): number =>
-    g.kind === 'dossier' ? 0 : g.kind === 'divers' ? 1 : 2
+    g.kind === 'dossier' || g.kind === 'categorie' ? 0 : g.kind === 'divers' ? 1 : 2
 
   return [...par.values()].sort((a, b) => {
     const delta = rang(a) - rang(b)

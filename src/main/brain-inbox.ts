@@ -31,7 +31,7 @@ import {
   statSync,
   writeSync
 } from 'node:fs'
-import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { sourceLocatorProblem } from './brain-remember'
 import { foldWindowsOrdinalCase } from './viz/windows-ordinal-case'
 
@@ -332,6 +332,10 @@ export function listInboxCandidates(
     warnings.push(`Inbox incomplète : plus de ${MAX_INBOX_CANDIDATES} candidats`)
   }
   const raw = inboxScan.files.flatMap((file) => {
+    // `inbox/README.md` documente la boîte de réception, il n'a JAMAIS été déposé par `remember` :
+    // le compter gonflait le nombre de candidats en attente d'une unité (constaté le 2026-09-16,
+    // 5 annoncés pour 4 réels). La procédure de curation l'exclut déjà côté outillage Python.
+    if (/^readme\.md$/i.test(basename(file))) return []
     const content = readInboxMarkdown(file)
     if (content.includes(MOVED_MARKER)) return []
     const block = frontmatterBlock(content)

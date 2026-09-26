@@ -431,6 +431,30 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
   const server = typeof args?.server === 'string' ? args.server.trim() : ''
   const database = typeof args?.database === 'string' ? args.database.trim() : ''
 
+  /**
+   * ABSENT n'est pas INVALIDE — le refus doit dire quoi ecrire.
+   *
+   * Mesure conv-599, tour `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : l'appel modele d'iteration 0
+   * (75 s, 0,51 USD) omet `database`. Le refus « Nom de base invalide : «  » » ne nomme pas
+   * l'argument manquant et ne liste aucune cible ; l'iteration suivante rejoue la meme requete en
+   * devinant la base. Le catalogue est pourtant ICI : on le rend.
+   */
+  if (!database) {
+    const connues = catalogue.databasesFor(server)
+    return {
+      allowed: false,
+      reason: connues.length
+        ? `Argument « database » manquant. Bases disponibles sur ${server} : ${connues.slice(0, 8).join(', ')}${connues.length > 8 ? `, … (${connues.length} au total)` : ''}.`
+        : `Argument « database » manquant, et aucune base connue sur « ${server} ». Serveurs disponibles : ${catalogue.servers().join(', ')}.`
+    }
+  }
+  if (!server) {
+    return {
+      allowed: false,
+      reason: `Argument « server » manquant. Serveurs disponibles : ${catalogue.servers().join(', ')}.`
+    }
+  }
+
   // Formes d'abord : le serveur et la base partent dans la ligne de commande de sqlcmd.
   if (!SERVER_PATTERN.test(server)) {
     return { allowed: false, reason: `Nom de serveur invalide : « ${server} ».` }
@@ -545,6 +569,35 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
   if (/\binto\b/.test(normalise)) {
     return { allowed: false, reason: 'Clause INTO interdite : elle créerait une table.' }
   }
+  if (database.toLowerCase() === 'commun_rig') {
+    const secret = secretColumnViolation(sansLitteraux)
+    if (secret) return { allowed: false, reason: secret }
+  }
 
   return { allowed: true, server, database, query }
+}
+
+/**
+ * Colonnes SECRÈTES de `COMMUN_RIG` — la base commune porte des mots de passe et des clés
+ * (`GRF_PWD_BD`, `GRF_INFOGREFFE_PASSWORD`, `GRF_DOCVERIF_PASSWORD`, `GRF_WS_IDNUM_CLEF_API`).
+ * Décision utilisateur du 2026-09-23 (conv-113) : la base est lisible, mais toute requête qui NOMME
+ * une colonne de ce type, ou qui utilise `*` (qui les ramènerait sans les nommer), est refusée.
+ * Motif cherché en SOUS-CHAÎNE d'identifiant, sur la forme qui conserve le contenu des `[…]` et
+ * vide les littéraux (chercher `'GRF_PWD_BD'` comme valeur dans `sys.columns` reste permis : c'est
+ * un nom, pas le secret). LIMITE ASSUMÉE : une vue qui renommerait une colonne secrète sans ces mots
+ * échapperait au motif ; aucune n'est connue.
+ */
+const SECRET_COLUMN_PATTERN =
+  /(pwd|passw|mot_?de_?passe|mdp|secret|clef|cle_api|api_?key|apikey|token|jeton|credential)/
+
+function secretColumnViolation(stripped: StrippedQuery): string | undefined {
+  const sansCount = stripped.masked.replace(/\bcount(?:_big)?\s*\(\s*\*\s*\)/gi, 'count(1)')
+  if (sansCount.includes('*')) {
+    return 'COMMUN_RIG : « * » interdit (il ramènerait les colonnes de mots de passe) — nomme les colonnes voulues. COUNT(*) reste permis.'
+  }
+  const trouve = stripped.named.toLowerCase().match(SECRET_COLUMN_PATTERN)
+  if (trouve) {
+    return `COMMUN_RIG : colonne secrète interdite (motif « ${trouve[1]} ») — mots de passe et clés ne sont pas lisibles.`
+  }
+  return undefined
 }

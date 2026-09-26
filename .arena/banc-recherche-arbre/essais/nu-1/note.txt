@@ -1,0 +1,6 @@
+Arbre D : 50550 noeuds
+Perf detail : exact 47,3 ms, typo 107,6 ms
+Cas : 55/55 -> 80,0/80
+Perf : 107,6 ms -> 10/10
+Compat : 16/16 -> 10,0/10
+NOTE 100/100

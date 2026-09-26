@@ -12,8 +12,8 @@ import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView
  *
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION EST FAUSSE :
  * un message ordinaire ('décale les icônes de 4 px', SANS `/btw`) soumis alors que `busy` est vrai.
- * Si le composer retombe sur `enqueueMessage`, `injectDirective` n'est pas appelée et le bloc
- * `.directive-queue` apparaît → rouge.
+ * Si le composer retombe sur `enqueueMessage`, `injectDirective` n'est pas appelée → rouge.
+ * (L'affichage de la file a été retiré le 2026-09-17 : le repli se constate désormais au reçu.)
  */
 describe('ChatView — pendant un tour, un message ordinaire ORIENTE (pas de file)', () => {
   let harness: ChatHarness | undefined
@@ -60,7 +60,6 @@ describe('ChatView — pendant un tour, un message ordinaire ORIENTE (pas de fil
     await soumettre('décale les icônes de 4 px')
 
     expect(injecte).toHaveBeenCalledWith('A', 'décale les icônes de 4 px')
-    expect(harness!.container.querySelector('.directive-queue')).toBeNull()
   })
 
   it('injection refusée ⇒ repli en file, rien n’est perdu', async () => {
@@ -71,6 +70,9 @@ describe('ChatView — pendant un tour, un message ordinaire ORIENTE (pas de fil
     await soumettre('décale les icônes de 4 px')
 
     expect(injecte).toHaveBeenCalled()
-    expect(harness!.container.querySelector('.directive-queue')).not.toBeNull()
+    // Repli en file : plus aucun affichage, mais le texte reste visible via son reçu d'échec.
+    expect(harness!.container.querySelector('.directive-receipt-status')?.textContent).toContain(
+      'Échec'
+    )
   })
 })

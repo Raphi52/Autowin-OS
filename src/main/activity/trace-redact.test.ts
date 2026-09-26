@@ -61,3 +61,13 @@ describe('redactTrace — LIMITE connue (résidu de defense-in-depth, PAS une ga
     expect(red(`échec auth, jeton brut ${opaque} rejeté`)).toContain(opaque)
   })
 })
+
+describe('identifiant collé en clair (conv-854, saisie ts 1790334398650)', () => {
+  it('masque le mot de passe qui suit une adresse mail, garde le mail', () => {
+    const out = redactTrace('user@corp365.onmicrosoft.com Secr3t2026! je suis a l hopital') as string
+    expect(out).toBe('user@corp365.onmicrosoft.com [REDACTED] je suis a l hopital')
+  })
+  it('ne touche pas un mot ordinaire après un mail', () => {
+    expect(redactTrace('écris à user@corp.com merci')).toBe('écris à user@corp.com merci')
+  })
+})

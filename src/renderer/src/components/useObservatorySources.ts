@@ -27,6 +27,15 @@ export interface ObservatoryRunEntry {
   session: string
   path: string
   mtime: number
+  /** Conversation d'origine quand elle est connue (rattachement fait côté main). */
+  conversationId?: string
+  /**
+   * État de publication du travail (`held`/`blocked`), calculé côté main et attaché seulement
+   * quand il est sans ambiguïté. Absent = on ne sait pas, et on n'affiche rien.
+   */
+  publication?: string
+  /** Le même état en clair, fourni par le main (vocabulaire unique de `run-interruption`). */
+  publicationLabel?: string
   summary: { status: string; dodTotal: number; dodChecked: number; defauts: number }
 }
 

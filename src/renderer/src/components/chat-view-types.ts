@@ -35,6 +35,8 @@ export interface ComposerDraft {
 }
 export type SendOptions = {
   keepComposerDraft?: boolean
+  /** Envoi que l'utilisateur n'a PAS fait (mode auto, file, reprise) : garde sa position de lecture. */
+  automatique?: boolean
   targetConversationId?: string
   /**
    * Reprises DÉJÀ faites après une surcharge du modèle (529) — voir shared/reprise-surcharge.ts.
@@ -56,6 +58,8 @@ export interface UserMsg {
    * « Répondu » (conv-50, 2026-09-01). Posé côté main par `enregistrerDirectiveDansLeFil`.
    */
   orientation?: boolean
+  /** Heure d'écriture (ms epoch), montrée au survol à côté de « Toi ». */
+  ts?: number
 }
 export type AsstMsg = HydratedAssistantMessage
 export type Msg = (UserMsg | AsstMsg) & { messageId?: string }
@@ -122,6 +126,8 @@ export type Conv = {
   lastAssistantAsksUser?: boolean
   /** Repère visuel posé à la main sur cette conversation (voir `Conversation.surlignee`). */
   surlignee?: boolean
+  /** Statut manuel : `true` = marquée inactive (voir `Conversation.inactive`). */
+  inactive?: boolean
   /** Compte Claude retenu pour CETTE conversation (voir `Conversation.claudeAccountId`). */
   claudeAccountId?: string
   /**
@@ -130,8 +136,14 @@ export type Conv = {
    * quelles (`estMurDeQuota`, src/shared/reprise-quota.ts).
    */
   lastAssistantError?: string
-  /** Le dossier de travail qui GROUPE la conversation dans la liste. Absent → « Divers ». */
+  /** Le dossier de travail de la conversation — le répertoire où l'agent travaille. */
   projectPath?: string
+  /**
+   * La catégorie de la barre latérale, quand elle ne correspond à aucun dossier de travail. Elle
+   * GROUPE et rien d'autre ; présente, elle l'emporte sur `projectPath` pour le groupement.
+   * fix-ok: conv-81 — le type n'avait qu'un champ pour deux rôles ; sans ce second champ la vue ne peut pas grouper un fil sans lui écrire un dossier de travail.
+   */
+  categorie?: string
   /** Marque une analyse Auto-Kaizen : elles vivent dans leur propre groupe, replié par défaut. */
   autoKaizen?: unknown
   updatedAt: number

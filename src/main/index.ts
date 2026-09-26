@@ -1,4 +1,15 @@
+import { routeSkillRequest } from './skill-routing'
+import { isAppDestination } from '../shared/view-tabs'
 import { observerLeMoteur } from './observer-les-sources'
+import { registerProdPassphraseIpc } from './prod-passphrase-ipc'
+import { PorteProd } from './prod-gate'
+import { GuichetProd } from './prod-guichet'
+import { chargerAutoriteProd, cheminAutoriteProd } from './store/prod-autorite-store'
+import { CoffreAutorisationProd, definirPhrase } from './prod-passphrase'
+import { ecrireEmpreinteProd, lireEmpreinteProd } from './store/prod-passphrase-store'
+import { ecrireNiveauProd, lireNiveauProd } from './store/prod-niveau-store'
+import { estNiveauProtection } from '../shared/prod-protection'
+import { nomUtilisateurCourant } from './identite-utilisateur'
 import { spawn } from 'node:child_process'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
 import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local'
@@ -7,9 +18,11 @@ import { registerPiperIpc } from './ipc/piper'
 import { registerActivityIpc } from './ipc/activity'
 import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerConversationsIpc } from './ipc/conversations'
+import { lireDossiersProjetsClaude } from './dossiers-claude-cli'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
 import { registerGitIpc } from './ipc/git'
+import { registerProjectFilesIpc } from './ipc/project-files'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
@@ -25,6 +38,7 @@ import { registerWorkflowProfilesIpc } from './ipc/workflow-profiles'
 import { registerChatArtifactsIpc } from './ipc/chat-artifacts'
 import { registerSkillsIpc } from './ipc/skills'
 import { registerWhisperIpc } from './ipc/whisper'
+import { registerDiarisationIpc } from './ipc/diarisation'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -65,7 +79,8 @@ import {
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation
 } from './claude-accounts'
-import { app, shell, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage } from 'electron'
+import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
@@ -86,6 +101,7 @@ import {
   resolveRemoteDebuggingPort
 } from './cdp-port'
 import { execFileSync } from 'node:child_process'
+import { estDansUnDepotGit } from './depot-git'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
@@ -99,10 +115,11 @@ import {
   supersedeKnowledgeCandidate
 } from './brain-inbox'
 import { installCrashHandlers } from './crash-handlers'
+import { CapteurHdesk, racineScriptsHorsArchive } from './hdesk-tv'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
-import { type ReasoningEffort, type Role } from './roles'
+import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { compensateOutcomeCuration } from './outcome-learning-curation'
 import {
@@ -128,6 +145,7 @@ import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
 import { ecarterStoreIllisible, persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals, journauxReferencesParUneReservation } from './runs/journal-gc'
+import { collectCausalTraces } from './activity/causal-trace-gc'
 import { loadOrchestrationStates } from './runs/orchestration-state'
 import { collectRunWorkspaces } from './runs/workspace-gc'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
@@ -161,7 +179,7 @@ import {
   appendTurnEvent,
   flushAllTurnJournals,
   isTurnFinished,
-  listUnfinishedTurns,
+  listUnfinishedTurnsPuisMenageAsync,
   pruneFinishedTurnJournals,
   removeConversationTurnJournals,
   readTurnJournal
@@ -176,6 +194,7 @@ import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
 import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 import {
   deletePromptCalls,
+  flushAllPromptCalls,
   loadAllPromptCalls,
   loadPromptCalls,
   applyRecoveredUsage,
@@ -271,7 +290,8 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardString, guardStringOrNull } from './ipc-guards'
+import { materializeClaudeAttachments } from './providers/claude'
+import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -294,6 +314,8 @@ import {
   dossierDeTravailDuTour
 } from './bascule-dossier-conversation'
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
+import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
+import { photographierDebutDeTour } from './chat-turn-publication'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -319,7 +341,12 @@ import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import type { FinishedRunOutcome } from './runs/run-interruption'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
-import { journaliserSaisie } from './store/journal-saisie'
+import { journaliserSaisie, lireOrientationsRattachees } from './store/journal-saisie'
+import {
+  inventorierDisque,
+  menageDemarrage,
+  retenirMenageDemarrage
+} from './store/inventaire-disque'
 import { defaultProcessIdentity } from './store/worktree-manager'
 import { planifierBalayage } from './store/balayage-retention'
 import { chargerShaConsignes } from './store/registres-consignes'
@@ -345,6 +372,33 @@ import { persistTaskStore } from './task-manager/task-store-disk'
 import { TaskScheduler } from './task-manager/task-scheduler'
 import { WatchdogEngine } from './task-manager/watchdog-engine'
 import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
+import { seedMaintenanceTask } from './task-manager/maintenance-seed'
+import { seedGcTask } from './task-manager/gc-seed'
+import { seedCurateTask } from './task-manager/curate-seed'
+import {
+  MailChannelWatcher,
+  MailWatchMemory,
+  describeMail,
+  liftLegacyMailWatchdogCaps,
+  listeningChannels,
+  mailDiagnostics,
+  retargetTeamsWatchdogPrompt,
+  splitMailWatchdogByChannel,
+  seedMailWatchdogTask
+} from './task-manager/watchdog-mail'
+import {
+  TeamsGraphClient,
+  describeTeamsMessage,
+  parseTeamsItemId,
+  replyTeams
+} from './task-manager/watchdog-teams'
+import { sourceTeams, TeamsLocalClient } from './task-manager/watchdog-teams-local'
+import {
+  cheminJournalWatchdogTeams,
+  creerBattementWatchdog,
+  creerJournalWatchdog,
+  empreinteConversation
+} from './task-manager/journal-watchdog-teams'
 import type { WatchdogAppEvent } from './task-manager/types'
 import {
   ScheduledChatDispatcher,
@@ -667,6 +721,10 @@ jalonDemarrage('stores conversations et taches charges')
 for (const alert of scheduledTasks.listAlerts(true)) notifiedTaskAlerts.add(alert.id)
 let scheduledTaskScheduler: TaskScheduler | undefined
 let watchdogEngine: WatchdogEngine | undefined
+/** Branche apres la creation de la passerelle Outlook : repond au mail d'une regle `outlook-mail`. */
+let mailWatchdogReplier:
+  | ((itemId: string, body: string) => Promise<{ ok: boolean; erreur?: string }>)
+  | undefined
 const pendingScheduledOccurrences = new Set<string>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
@@ -854,6 +912,49 @@ const curationRecoveryReady = reconcileCurationIntents(
   },
   invalidateBrainRuntime
 )
+/**
+ * LE POINT DE PASSAGE DE PRODUCTION, donne aux commandes.
+ *
+ * Il DORT tant qu'aucune phrase de passe n'est definie : sans cet interrupteur, le brancher
+ * rendrait `sql_query` inutilisable du jour au lendemain, puisqu'une liste de declaration absente
+ * rend TOUTE cible « inconnue », donc bloquante.
+ *
+ * LA LISTE EST RELUE A CHAQUE VERIFICATION, pas seulement au demarrage : corriger une declaration
+ * ne doit pas obliger a redemarrer l'application — surtout quand c'est une cible manquante qui
+ * bloque le travail en cours. La lecture est un petit fichier JSON local ; son cout est sans
+ * commune mesure avec une connexion SQL.
+ *
+ * LES ANOMALIES SONT DITES AU DEMARRAGE, une fois : un fichier absent ou fautif ferme la porte, et
+ * l'utilisateur doit savoir POURQUOI plutot que de decouvrir un refus incomprehensible.
+ */
+const autoriteProdAuDemarrage = chargerAutoriteProd(ensureAutowinAppData(appDataRoot))
+for (const anomalie of autoriteProdAuDemarrage.anomalies) {
+  console.warn(`[prod] liste de declaration : ${anomalie}`)
+}
+const porteProd = new PorteProd({
+  autorite: () => chargerAutoriteProd(ensureAutowinAppData(appDataRoot)).autorite,
+  coffre: () => coffreAutorisationProd(),
+  phraseDefinie: () => lireEmpreinteProd(ensureAutowinAppData(appDataRoot)) !== undefined,
+  // Le NIVEAU est relu a chaque verification, comme la liste : changer le reglage doit prendre effet
+  // tout de suite, sans redemarrer. Fichier absent -> « confirmation », jamais « aucun ».
+  niveau: () => lireNiveauProd(ensureAutowinAppData(appDataRoot))
+})
+
+/**
+ * LE GUICHET : il publie la demande d'autorisation vers la fenêtre et attend le jeton saisi. C'est
+ * lui qui transforme un refus en question posée à l'utilisateur, au lieu d'un texte rendu au modèle.
+ */
+const guichetProd = new GuichetProd({
+  notifier: (demande) => {
+    const fenetres = BrowserWindow.getAllWindows()
+    if (fenetres.length === 0) throw new Error('aucune fenêtre pour afficher la demande')
+    for (const w of fenetres) w.webContents.send('prod:autorisation:demandee', demande)
+  },
+  retirer: (id) => {
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('prod:autorisation:close', id)
+  }
+})
+
 const bus = new AppCommandBus(
   os,
   broadcast,
@@ -874,7 +975,9 @@ const bus = new AppCommandBus(
   // Absent -> `sql_query` annoncera l'indisponibilite plutot que de tenter un binaire inexistant.
   // L'ORDRE compte : ce parametre est le DERNIER du constructeur, apres desktop et updateTicket.
   resolveBinOnPath('sqlcmd') ?? undefined,
-  outcomeLearning
+  outcomeLearning,
+  porteProd,
+  guichetProd
 )
 /**
  * Le bouton Stop atteint desormais les programmes lances par la commande `run`.
@@ -884,8 +987,7 @@ const bus = new AppCommandBus(
  * borne que par son horloge, et un programme qui ne rend jamais la main (application a fenetre,
  * serveur) bloquait le tour jusqu'au plafond, Stop compris (conv-384, 2026-09-09).
  */
-bus.signalDuTour = (conversationId) =>
-  activeChatTurns.get(conversationId)?.controller.signal
+bus.signalDuTour = (conversationId) => activeChatTurns.get(conversationId)?.controller.signal
 /**
  * Les outils Brain des noeuds SKILL d'un workflow.
  *
@@ -962,7 +1064,12 @@ const pilot = new AgentPilot(
     // AUCUNE source utile ; le graphe coute 7 ms. Le Brain reste atteignable A LA DEMANDE, par la
     // commande `brain_query` que le prompt recommande deja — on passe d'un contexte pousse a une
     // capacite disponible.
-    sources: ['graph'],
+    // POIDS MORT RETIRE (conv-703, mesure 2026-09-18) : le graphe poussait ~900 car. de noms de
+    // fichiers sans rapport (« 0. Etat des lieux », `app-data.ts`...) sur 3 questions d'avis sur 3,
+    // payes plein tarif a chaque tour. Pour une question sur le code, seule la recherche texte a la demande
+    // (`find_in_files`) reste : ce n'est PAS la carte de structure du graphe (perte non evaluee).
+    // fix-ok: graphe injecte a chaque tour de chat = 877/812/813 car. hors cache sur 3 questions d avis, 0 apres (createAmitelContextProvider reel)
+    sources: [],
     // RESOLU PAR TOUR : le corpus autorise derive du dossier RANGE sur la conversation, pas d'un global fige.
     workspace: (conversationId?: string) => dossierDuTour(conversationId),
     onScope: ({ kept, dropped, corpus }) => {
@@ -1001,7 +1108,18 @@ const fenetres = createWindowing({
   headlessTestInstance,
   modelQuestions
 })
-const { createWindow, setupTray, openQuestionWindow, rendererLocation, questionWindows } = fenetres
+const {
+  createWindow,
+  setupTray,
+  showMainWindow,
+  openQuestionWindow,
+  openViewWindow,
+  rendererLocation,
+  questionWindows,
+  refleterRunsVivants
+} = fenetres
+/** Raccourci clavier global : posé au démarrage, libéré à la fermeture (sinon il reste capté). */
+let raccourciCapture: RaccourciInstalle | null = null
 const diagnosticCapabilities = new DiagnosticCapabilities()
 /** Boucle de re-probe du diagnostic de démarrage (#4) — arrêtée à la fermeture pour ne pas fuir de timer. */
 let preflightWatchHandle: { stop: () => void } | null = null
@@ -1170,7 +1288,9 @@ const agentModelsReady = modelCatalog.refresh(true)
 void maybeUpdateClaudeCli(join(app.getPath('userData'), 'claude-cli-update.json'))
   .then((resultat) => {
     if (resultat.outcome === 'skipped') return
-    console.log(`[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`)
+    console.log(
+      `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
+    )
     if (resultat.outcome === 'updated') void modelCatalog.refresh(true)
   })
   .catch(() => {
@@ -1188,25 +1308,26 @@ function runtimeTopologyReadiness(topology: AgentTopology): Promise<void> {
 }
 
 function syncRuntimeTopology(topology: AgentTopology): void {
-  const sync = (role: Role, binding: SlotBinding): void => {
+  const resolve = (binding: SlotBinding): RoleBinding => {
     try {
-      os.setRole(role, runtimeRoleBinding(binding, agentModels))
+      return runtimeRoleBinding(binding, agentModels)
     } catch (error) {
       if (!(error instanceof UnresolvedRuntimeModelError)) throw error
       // Identité visible et fail-closed : aucun ancien rôle d'un autre provider ne survit, mais la
       // readiness bloque l'appel provider tant que l'alias n'a pas de transport découvert.
-      os.setRole(role, {
+      return {
         provider: binding.provider,
         model: binding.modelId,
         reasoningEffort: binding.reasoningEffort
-      })
+      }
     }
   }
-  for (const [role, binding] of Object.entries(runtimeRoleSlots(topology)) as Array<
-    [Role, SlotBinding]
-  >) {
-    sync(role, binding)
-  }
+  // UNE écriture de roles.json pour tous les rôles (avant : une par rôle, gel mesuré de 20,7 s).
+  os.setRoles(
+    (Object.entries(runtimeRoleSlots(topology)) as Array<[Role, SlotBinding]>).map(
+      ([role, binding]) => [role, resolve(binding)] as const
+    )
+  )
   // Fan-out multi-modèles : on fournit à l'orchestrateur la LISTE COMPLÈTE des modèles de chaque
   // bloc de divergence/jugement (plus le seul `[0]`). ≥2 → il duplique + agrège. La ligne `sync`
   // ci-dessus reste pour le chemin mono-modèle (rétrocompat : 0/1 slot → comportement actuel).
@@ -1302,9 +1423,36 @@ try {
   const collected = collectStdoutJournals(process.env.AUTOWIN_RUN_JOURNAL_ROOT, {
     protectedPaths: journauxAttendus
   })
+  // Ces chiffres n'existaient que le temps d'un `console.log` de demarrage : on les RETIENT pour
+  // que l'interface puisse enfin montrer ce que le menage a libere.
+  retenirMenageDemarrage({
+    famille: 'run-stdout',
+    supprimes: collected.removed,
+    octetsLiberes: collected.freedBytes
+  })
   if (collected.removed > 0) {
     console.log(
       `[run-stdout] ${collected.removed} journaux purges (${Math.round(collected.freedBytes / 1024)} Ko)`
+    )
+  }
+} catch {
+  /* menage best-effort : jamais bloquant au demarrage */
+}
+// Traces causales : rien ne bornait cet arbre — 441 fichiers / 668 Mo en 12 jours mesurés le
+// 2026-09-12, premier poste de volume de `.autowin-data` et cause dominante des gels (83 des
+// 117 gels du jour sont des entrées-sorties disque synchrones). Même fenêtre de 7 jours que les
+// journaux de tour. Best-effort : un échec de ménage ne retarde jamais le démarrage.
+try {
+  const tracesPurgees = collectCausalTraces(join(app.getPath('userData'), 'causal-trace'))
+  retenirMenageDemarrage({
+    famille: 'causal-trace',
+    supprimes: tracesPurgees.removed,
+    octetsLiberes: tracesPurgees.freedBytes,
+    restants: tracesPurgees.remaining
+  })
+  if (tracesPurgees.removed > 0) {
+    console.log(
+      `[causal-trace] ${tracesPurgees.removed} traces purgees (${Math.round(tracesPurgees.freedBytes / 1048576)} Mo), reste ${tracesPurgees.remaining}`
     )
   }
 } catch {
@@ -1439,19 +1587,66 @@ function registerStorageMigrationIpc(lecture: Promise<LectureHistorique>): void 
   })
 }
 
+/**
+ * LE COFFRE DES AUTORISATIONS DE PRODUCTION — cree a la premiere demande, JAMAIS persiste.
+ *
+ * Il vit en memoire parce qu'une autorisation qui survivrait a un redemarrage serait un droit que
+ * l'utilisateur ne sait plus avoir donne. Fermer l'app referme donc la production, et c'est voulu.
+ */
+let coffreProd: CoffreAutorisationProd | null = null
+function coffreAutorisationProd(): CoffreAutorisationProd {
+  return (coffreProd ??= new CoffreAutorisationProd(
+    lireEmpreinteProd(ensureAutowinAppData(appDataRoot))
+  ))
+}
+
+/**
+ * Qui est connecte au poste. Lecture seule, aucun parametre venant de l'ecran : la tuile
+ * Performance a besoin d'un sujet pour son mode « mes chiffres ».
+ */
+function registerIdentiteIpc(): void {
+  ipcMain.handle('app:identite-utilisateur', (event) => {
+    assertTrustedRendererSender(event, "Identite de l'utilisateur")
+    return nomUtilisateurCourant()
+  })
+}
+
+/** Petite TV du bureau cache (conv-528) : lecture seule, processus de capture cree a la demande. */
+let capteurHdesk: CapteurHdesk | null = null
+function registerHdeskTvIpc(): void {
+  const capteur = (): CapteurHdesk =>
+    (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath())))
+  ipcMain.handle('hdesk:tv:bureaux', (event, conversationId?: string) => {
+    assertTrustedRendererSender(event, 'Petite TV du bureau caché')
+    return process.platform === 'win32'
+      ? capteur().bureaux(typeof conversationId === 'string' ? conversationId : undefined)
+      : []
+  })
+  ipcMain.handle('hdesk:tv:image', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Petite TV du bureau caché')
+    return capteur().image(String(id))
+  })
+  ipcMain.handle('hdesk:tv:arreter', (event) => {
+    assertTrustedRendererSender(event, 'Petite TV du bureau caché')
+    return capteurHdesk?.arreter()
+  })
+}
+
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
-  // pleine exécution) pour les rejouer/afficher. GC des journaux terminés au passage.
+  // pleine exécution) pour les rejouer/afficher. Le ménage des journaux terminés suit la réponse
+  // (25 gels, 69 s cumulées, quand il la PRÉCÉDAIT) — cf. runs/inventaire-tours.ts.
   ipcMain.handle('runs:unfinishedTurns', (event) => {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
-    try {
-      pruneFinishedTurnJournals(turnJournalRoot)
-      pruneLegacyContextValues()
-    } catch {
-      /* GC best-effort */
-    }
-    return listUnfinishedTurns(turnJournalRoot)
+    // La LISTE part tout de suite (tampons vides d'abord, sinon un tour en vol serait invisible) ;
+    // scan et suppressions passent apres le premier rendu. 25 gels, 69 s, ~2,8 s par ouverture.
+    return listUnfinishedTurnsPuisMenageAsync(turnJournalRoot, {
+      menage: () => {
+        pruneFinishedTurnJournals(turnJournalRoot)
+        pruneLegacyContextValues()
+      }
+    })
   })
   ipcMain.handle('runs:turnJournal', (event, conversationId: string, turnId: string) => {
     assertTrustedRendererSender(event, 'TurnJournal')
@@ -1492,6 +1687,22 @@ function registerChatIpc(): void {
    * ENTREE QUI DOIT FAIRE ECHOUER LE GARDE : retirer cet appel, ou remettre une couleur en dur
    * dans `window.ts` sans point de mise a jour — le defaut reviendrait en silence.
    */
+  /**
+   * PRÉSENCE SYSTÈME des runs. Le renderer est le seul à tenir la liste des runs vivants ; il
+   * l'envoie ici comme il envoie déjà la couleur des boutons de fenêtre juste en dessous.
+   */
+  ipcMain.handle('os:presence', (event, etat: unknown) => {
+    assertTrustedRendererSender(event, 'Présence système des runs')
+    const brut = (etat ?? {}) as Record<string, unknown>
+    const nombre = (cle: string): number =>
+      typeof brut[cle] === 'number' ? (brut[cle] as number) : 0
+    refleterRunsVivants({
+      runsActifs: nombre('runsActifs'),
+      etapesFaites: nombre('etapesFaites'),
+      etapesTotales: nombre('etapesTotales')
+    })
+    return true
+  })
   ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
     assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
     // On n'accepte qu'un hexadecimal : cette valeur part vers une API natice de Windows.
@@ -1601,6 +1812,31 @@ function registerChatIpc(): void {
   <script>document.documentElement.dataset.forbiddenScript = 'executed';</script>
 </body>
 </html>
+\`\`\`
+
+Et le meme fil porte un DIAGRAMME, rendu par mermaid :
+
+\`\`\`mermaid
+flowchart LR
+  A[Message] --> B{Fence fermee ?}
+  B -- oui --> C[Diagramme rendu]
+  B -- non --> D[Bloc de code]
+\`\`\`
+
+Un diagramme TRES HAUT doit rester sous le plafond de hauteur du fil (300 px) :
+
+\`\`\`mermaid
+flowchart TD
+  H1[Etape 1] --> H2[Etape 2] --> H3[Etape 3] --> H4[Etape 4] --> H5[Etape 5]
+  H5 --> H6[Etape 6] --> H7[Etape 7] --> H8[Etape 8] --> H9[Etape 9] --> H10[Etape 10]
+  H10 --> H11[Etape 11] --> H12[Etape 12] --> H13[Etape 13] --> H14[Etape 14] --> H15[Etape 15]
+\`\`\`
+
+Un diagramme dont la syntaxe est fausse doit retomber sur sa source, sans casser le fil :
+
+\`\`\`mermaid
+flowchart LR
+  A --> ((((  cette ligne n'est pas du mermaid
 \`\`\`
 
 Le fil reprend ensuite normalement.`
@@ -2037,6 +2273,8 @@ Le fil reprend ensuite normalement.`
   registerPreflightIpc({ preflightProviderOptions })
   // Les canaux git (lecture seule) vivent dans src/main/ipc/git.ts.
   registerGitIpc({ os, pickDirectory })
+  // Les canaux « Projet » (arborescence + éditeur) vivent dans src/main/ipc/project-files.ts.
+  registerProjectFilesIpc({ os })
   // Les canaux de la vue Tests vivent dans src/main/ipc/tests-view.ts.
   registerTestsViewIpc({ os, pickDirectory })
   // Les canaux de l'onglet Latence vivent dans src/main/ipc/perf.ts.
@@ -2384,11 +2622,49 @@ Le fil reprend ensuite normalement.`
     return {
       path: os.executionWorkspace,
       chosen,
-      isGitRepo: existsSync(join(os.executionWorkspace, '.git')),
+      isGitRepo: estDansUnDepotGit(os.executionWorkspace),
       // Le workspace est fige au demarrage : un choix different de l'actif exige un redemarrage.
       restartRequired: chosen !== null && chosen !== os.executionWorkspace
     }
   }
+
+  /*
+   * LES CONSIGNES DONNEES PENDANT UN TOUR, RENDUES AU FIL.
+   *
+   * Elles etaient ecrites dans `saisies-utilisateur.jsonl` (101 le 2026-09-12) mais ne vivaient a
+   * l'ecran que dans un etat React : un changement de conversation les effaçait. Lecture seule,
+   * bornee, et jamais bloquante -- une defaillance rend une liste vide.
+   */
+  /*
+   * CE QU'AUTOWIN OCCUPE SUR LE DISQUE. La question a du etre POSEE par l'utilisateur le
+   * 2026-09-11 (« est-ce qu'autowin OS accumule des Go en l'utilisant ? ») : aucune vue ne le
+   * disait. Familles NOMMEES uniquement -- la racine porte aussi les caches de Chromium, qui ne
+   * sont pas de l'accumulation d'Autowin.
+   */
+  const FAMILLES_DISQUE = [
+    'worktrees',
+    'prompt-observability',
+    'causal-trace',
+    'turn-journals',
+    'run-stdout',
+    'runs',
+    'chat-artifacts',
+    'transcripts',
+    'activity',
+    'trace',
+    'semantic-timeline'
+  ]
+
+  ipcMain.handle('os:disk-usage', (event) => {
+    assertTrustedRendererSender(event, 'Espace disque')
+    return inventorierDisque(app.getPath('userData'), FAMILLES_DISQUE, menageDemarrage())
+  })
+
+  ipcMain.handle('chat:orientations', (event, conversationId: unknown) => {
+    assertTrustedRendererSender(event, 'Consignes du tour')
+    if (typeof conversationId !== 'string' || !conversationId.trim()) return []
+    return lireOrientationsRattachees(conversationId)
+  })
 
   ipcMain.handle('os:execution-workspace', (event) => {
     assertTrustedRendererSender(event, 'Dossier de travail')
@@ -2414,6 +2690,18 @@ Le fil reprend ensuite normalement.`
     const selected = await pickDirectory(event.sender)
     return selected ? behaviourAccess.approve(selected) : null
   })
+
+  ipcMain.handle(
+    'window:detach-view',
+    (event, view: unknown, screenX: unknown, screenY: unknown) => {
+      assertTrustedRendererSender(event, 'Detach view')
+      if (!isAppDestination(view)) throw new Error('Vue inconnue')
+      if (!Number.isFinite(screenX) || !Number.isFinite(screenY))
+        throw new Error('Position invalide')
+      openViewWindow(view, screenX as number, screenY as number)
+      return { ok: true }
+    }
+  )
 
   ipcMain.handle('model:question:answer', (event, id: string, answer: unknown) => {
     assertTrustedRendererSender(event, 'Model question')
@@ -2451,6 +2739,19 @@ Le fil reprend ensuite normalement.`
   })
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
+
+  // fix-ok: cause mesurée — aucun code du dépôt ne lisait `~/.claude.json` (grep « claude.json »
+  // vide dans src/ avant ce travail) : la liste des dossiers du Chat ne pouvait donc pas
+  // s'enrichir des projets claude.exe. Sonde réelle sur le poste : 24 entrées `projects`,
+  // 5 vrais projets après filtre.
+  // Les projets déjà ouverts dans claude.exe (conv-5) : le main lit et FILTRE `~/.claude.json`,
+  // le renderer ne reçoit que des chemins de dossiers — jamais le contenu du profil (jetons,
+  // comptes). Relu à CHAQUE appel plutôt que mis en cache : le fichier bouge à chaque session
+  // claude.exe, et le renderer n'appelle qu'une fois par montage du Chat.
+  ipcMain.handle('os:dossiersClaudeCli', (event) => {
+    assertTrustedRendererSender(event, 'Dossiers Claude CLI')
+    return lireDossiersProjetsClaude()
+  })
 
   // Les canaux du Brain (graphe 3D, recherche, boite de reception) vivent dans
   // src/main/ipc/brain.ts.
@@ -2728,15 +3029,144 @@ Le fil reprend ensuite normalement.`
     }
   }
 
-  const runPilotChat: typeof lancerTour = (...args) => {
-    const conversationId = args[2]
-    if (typeof conversationId === 'string' && conversationId.trim()) {
+  /**
+   * RANGEMENT AUTOMATIQUE AU PREMIER MESSAGE, quand la demande NOMME un projet connu sans donner
+   * son chemin.
+   *
+   * Cas mesure (conv-611, 2026-09-16) : conversation ouverte dans D:\BrainRotRoyale, premier
+   * message sur les bureaux virtuels d'Autowin -> restee au mauvais endroit jusqu'a un deplacement
+   * a la main. `alignerDossierSurLaDemande` ne couvre que le chemin ECRIT ; ici l'utilisateur
+   * nomme seulement son projet. On ne choisit QUE parmi les dossiers deja utilises sur ce poste,
+   * jamais sur une conversation deja rangee, et seulement au PREMIER message : au-dela, le fil a
+   * un sujet etabli et un deplacement serait une surprise. Comme la bascule par chemin, la
+   * decision est ECRITE dans le fil et un echec ne doit pas empecher le tour de partir.
+   */
+  const rangerSurLePremierMessage = async (
+    conversationId: string,
+    messages: Message[],
+    finDuTour: Promise<unknown>
+  ): Promise<void> => {
+    const conversation = os.conversations.get(conversationId)
+    if (!conversation) return
+    const dernierUtilisateur = [...messages].reverse().find((m) => m.role === 'user')?.content
+    const messagesConversation = conversation.messages.some((m) => m.role === 'user')
+      ? conversation.messages
+      : typeof dernierUtilisateur === 'string'
+        ? [{ role: 'user', content: dernierUtilisateur }]
+        : conversation.messages
+    const actif = dossierDuTour(conversationId)
+    const applique = await rangerConversationSurLePremierMessage({
+      conversation: { projectPath: conversation.projectPath, messages: messagesConversation },
+      categorie: conversation.categorie,
+      dossiersConnus: [
+        ...new Set(
+          os.conversations
+            .list()
+            .map((c) => c.projectPath?.trim())
+            .filter((chemin): chemin is string => Boolean(chemin))
+        )
+      ],
+      // Le « dossier » de la barre laterale est souvent une CATEGORIE, pas un chemin : conv-611
+      // portait `categorie = "Autowin OS"` et aucun projectPath (mesure du 2026-09-16). Sans cette
+      // liste, le cas fondateur ne pouvait pas etre range.
+      categoriesConnues: [
+        ...new Set(
+          os.conversations
+            .list()
+            .map((c) => c.categorie?.trim())
+            .filter((libelle): libelle is string => Boolean(libelle))
+        )
+      ],
+      dossierActif: actif,
+      // Un seul appel court, sur le PREMIER message : le nom du projet est souvent absent du
+      // message (cas conv-611), seul le SUJET le rattache. Une panne du modele rend null et le
+      // tour part comme avant.
+      demanderAuModele: async (systeme, charge) => {
+        await os.waitUntilReady()
+        const binding = os.roles.getBinding('orchestrator')
+        const reponse = await os.registry.send(
+          binding.provider,
+          [{ role: 'user', content: charge }],
+          {
+            system: systeme,
+            systemBlocks: [{ name: 'rangementPremierMessage', chars: systeme.length }],
+            model: binding.model,
+            reasoningEffort: binding.reasoningEffort,
+            requestId: randomUUID()
+          }
+        )
+        return reponse.text
+      },
+      finDuTour,
+      toujoursNonRangee: () => {
+        const actuelle = os.conversations.get(conversationId)
+        return Boolean(actuelle && !actuelle.projectPath?.trim() && !actuelle.categorie?.trim())
+      },
+      ranger: (chemin) => os.conversations.rangerDansDossier(conversationId, chemin),
+      // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse tant qu'elle est vierge.
+      annoncer: (message) =>
+        os.conversations.append(conversationId, {
+          role: 'assistant',
+          content: message,
+          avantLaReponseEnCours: true
+        })
+    })
+    if (!applique) return
+    broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+    broadcast({ type: 'refresh', scope: 'conversations' })
+  }
+
+  /*
+   * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
+   *
+   * Avant, le tour ATTENDAIT l'appel au modele qui range la conversation (~5 s au premier message) :
+   * attente sans un mot, et faux « Reponse interrompue avant la fin » pendant ce trou (conv-809,
+   * conv-862). Le rangement n'est plus attendu. Il demarre APRES la bascule par chemin cite (qui
+   * prime et le rend inutile), et un rangement qui deplacerait le dossier de travail attend
+   * `finDuTour` : un tour ne change jamais de dossier en cours de route.
+   * La demande compte toujours comme EN COURS des sa reception (voir trackPreparation).
+   */
+  const runPilotChat: typeof lancerTour = (...args) =>
+    activeChatTurns.trackPreparation(args[2], async () => {
+      const conversationId = args[2]
+      if (typeof conversationId !== 'string' || !conversationId.trim()) return lancerTour(...args)
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
       appliquerCompteDeConversation(conversationId)
-    }
-    return lancerTour(...args)
-  }
+      let finirTour!: () => void
+      const finDuTour = new Promise<void>((resolve) => {
+        finirTour = resolve
+      })
+      void rangerSurLePremierMessage(conversationId, args[1], finDuTour).catch((error) => {
+        // Un rangement rate ne doit JAMAIS toucher la reponse : il est seulement journalise.
+        console.warn('[rangement] premier message non range :', error)
+      })
+      /*
+       * ENCHAINEMENT AUTO DU CHAT (conv-871) : l'interrupteur ne publiait que les taches d'agent.
+       * Photo de l'arbre AVANT le tour (~65 ms), publication APRES un tour reussi, sans faire
+       * attendre la reponse. Un tour arrete ou en echec ne publie rien.
+       */
+      const debutPublication = os.autoCloseEnabled()
+        ? await photographierDebutDeTour(dossierDuTour(conversationId))
+        : undefined
+      try {
+        const resultat = await lancerTour(...args)
+        if (debutPublication && resultat.ok && !resultat.cancelled) {
+          const demande = [...args[1]].reverse().find((m) => m.role === 'user')?.content ?? ''
+          void os
+            .publishChatTurn({
+              conversationId,
+              turnId: resultat.turnId,
+              request: demande,
+              debut: debutPublication
+            })
+            .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
+        }
+        return resultat
+      } finally {
+        finirTour()
+      }
+    })
   /**
    * Reprend les appels de chat dont le CLI a survécu au main. La réservation locale empêche un
    * nouveau message d'entrer dans la même conversation pendant qu'on attend la preuve `.exit.json`.
@@ -2973,6 +3403,10 @@ Le fil reprend ensuite normalement.`
       activeChatTurns.abortAndWait(conversationId, reason),
     waitForInteractiveIdle: (timeoutMs) => activeChatTurns.waitForIdle(timeoutMs),
     releaseInteractiveIdle: () => activeChatTurns.releaseIdleLease(),
+    replyToMail: async (itemId, body) =>
+      mailWatchdogReplier
+        ? mailWatchdogReplier(itemId, body)
+        : { ok: false, erreur: 'passerelle Outlook non initialisée' },
     runPrompt: async (conversationId, prompt, binding, policy, onLateUsageSettlement) => {
       const result = await runPilotChat(
         undefined,
@@ -3028,9 +3462,9 @@ Le fil reprend ensuite normalement.`
   bus.conversationExiste = (conversationId) => scheduledChatRuntime.hasConversation(conversationId)
   // MEME autorite que la sonde `os:pilotChat:active` du renderer : l'agent du chat doit pouvoir
   // repondre « est-ce que ca tourne encore ? » sans deviner en lisant des journaux de fin de tour.
-  bus.tourDeChatActif = (conversationId) => Boolean(activeChatTurns.get(conversationId))
-  bus.lancerDansConversation = async (conversationId, prompt) => {
-    const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt)
+  bus.tourDeChatActif = (conversationId) => activeChatTurns.isInFlight(conversationId)
+  bus.lancerDansConversation = async (conversationId, prompt, binding) => {
+    const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
     return {
       ok: resultat.ok,
       ...(resultat.turnId ? { turnId: resultat.turnId } : {}),
@@ -3195,6 +3629,203 @@ Le fil reprend ensuite normalement.`
    * rafraichissement de la page d'accueil.
    */
   const outlookGateway = new OutlookLocalGateway({ appRoot: app.getAppPath() })
+  // fix-ok: 3 edits mesures - (1) remplacement Python a casse les antislashs, (2) bloc finally repris, (3) format de mes seules lignes (index.ts deja rouge au format avant moi).
+  // Teams (Microsoft Graph) : configuration PERSONNELLE, lue dans l'environnement ou HKCU comme
+  // AUTOWIN_WATCHDOG_MAILS. Sans AUTOWIN_TEAMS_CLIENT_ID, aucun appel reseau n'est fait.
+  const variablePerso = (name: string): string | undefined => {
+    const direct = process.env[name]?.trim()
+    if (direct) return direct
+    if (process.platform !== 'win32') return undefined
+    try {
+      const match = new RegExp(`${name}\\s+REG_\\w+\\s+(\\S+)\\s*$`, 'm').exec(
+        execFileSync('reg', ['query', 'HKCU\\Environment', '/v', name], {
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 3_000
+        })
+      )
+      return match?.[1]
+    } catch {
+      return undefined
+    }
+  }
+  const teamsClientId = variablePerso('AUTOWIN_TEAMS_CLIENT_ID')
+  const teamsVaultPath = join(app.getPath('userData'), 'teams-graph-token.bin')
+  // Le jeton de renouvellement est un secret : chiffre par le systeme, jamais en clair.
+  const chargerJetonTeams = (): string | undefined => {
+    try {
+      if (!existsSync(teamsVaultPath) || !safeStorage.isEncryptionAvailable()) return undefined
+      return safeStorage.decryptString(readFileSync(teamsVaultPath))
+    } catch {
+      return undefined
+    }
+  }
+  // Graph seulement s'il est deja CONNECTE ; sinon lecture locale (sourceTeams, conv-770).
+  const modeTeams = sourceTeams({
+    clientId: teamsClientId,
+    jetonGraph: chargerJetonTeams() !== undefined,
+    windows: process.platform === 'win32'
+  })
+  console.log(`[watchdog] Teams : ${modeTeams ?? 'désactivé'}`)
+  // Seul temoin lisible apres un redemarrage : la console du processus principal est jetee (conv-770).
+  const journalTeams = creerJournalWatchdog(cheminJournalWatchdogTeams(appDataRoot))
+  // Une ligne « actif » par heure, écrite par la boucle de lecture elle-même : plus d'une heure sans
+  // elle = surveillance arrêtée (conv-770).
+  const battementTeams = creerBattementWatchdog(journalTeams)
+  journalTeams('source', {
+    mode: modeTeams ?? 'désactivé',
+    identifiantGraph: teamsClientId ? 'présent' : 'absent',
+    jetonGraph: chargerJetonTeams() !== undefined ? 'présent' : 'absent'
+  })
+  const teamsClient =
+    modeTeams === 'graph' && teamsClientId
+      ? new TeamsGraphClient(
+          {
+            clientId: teamsClientId,
+            tenantId: variablePerso('AUTOWIN_TEAMS_TENANT_ID') ?? 'organizations'
+          },
+          {
+            load: chargerJetonTeams,
+            save: (token) => {
+              if (safeStorage.isEncryptionAvailable())
+                writeFileSync(teamsVaultPath, safeStorage.encryptString(token))
+            }
+          },
+          (prompt) => {
+            console.log(
+              `[watchdog] connexion Teams demandée : code ${prompt.userCode} sur ${prompt.verificationUri}`
+            )
+            // Plus de fenetre (demande utilisateur conv-854, 2026-09-25) : le code reste dans le journal.
+          }
+        )
+      : undefined
+  // Sans connexion Microsoft (conv-854, 2026-09-25) : lecture du stockage local du client Teams
+  // deja connecte, reponse en pilotant sa fenetre, repli par mail si ce pilotage echoue.
+  const teamsLocal =
+    modeTeams === 'local'
+      ? new TeamsLocalClient({
+          mail: (adresse, objet, corps) => outlookGateway.sendNew(adresse, objet, corps),
+          log: (ligne) => {
+            console.warn(ligne)
+            journalTeams('pilotage', { detail: ligne.replace(/^[watchdog]s*/, '') })
+          }
+        })
+      : undefined
+  const teamsSource = teamsClient ?? teamsLocal
+  mailWatchdogReplier = async (itemId, body) => {
+    if (parseTeamsItemId(itemId)) {
+      const resultat = await (teamsLocal
+        ? teamsLocal.reply(itemId, body)
+        : replyTeams(teamsClient, itemId, body))
+      journalTeams('reponse', {
+        conv: empreinteConversation(itemId),
+        ok: resultat.ok,
+        erreur: resultat.ok ? undefined : resultat.erreur
+      })
+      return resultat
+    }
+    const sent = await outlookGateway.replyToItem(itemId, body)
+    if (sent.ok) await outlookGateway.markRead([itemId])
+    return sent
+  }
+  // Surveillance des mails pour les regles `outlook-mail`. Un canal n'est interroge que si une regle
+  // ACTIVE l'ecoute : sans elle, aucun dialogue COM (Outlook) ni appel reseau (Teams).
+  // fix-ok: une seule regle mail active suffisait a interroger Outlook ET Teams (ancien test `.some(kind === 'outlook-mail')`), et chaque `await notifyMail` attendait la FIN de l'agent : la lecture suivante, et Teams, attendaient l'agent Outlook.
+  // Salvage 2026-09-26 : cette surveillance (conv-857) et la source Teams locale + son journal
+  // (conv-770) ont ete ecrites en parallele ; la surveillance lit desormais `teamsSource`.
+  // Le journal ne note une lecture qu'a son RETABLISSEMENT et une erreur qu'a son CHANGEMENT : pas
+  // une ligne par minute.
+  let lectureTeamsAnnoncee = false
+  let derniereErreurTeams: string | undefined
+  const mailMemoryPath = join(app.getPath('userData'), 'watchdog-mail-state.json')
+  const mailMemory = new MailWatchMemory({
+    load: () => (existsSync(mailMemoryPath) ? readFileSync(mailMemoryPath, 'utf8') : undefined),
+    save: (text) => writeFileSync(mailMemoryPath, text)
+  })
+  const mailWatcher = new MailChannelWatcher({
+    store: scheduledTasks,
+    memory: mailMemory,
+    notifyMail: async (mail) => {
+      const bilan = (await watchdogEngine?.notifyMail(mail)) ?? []
+      if (mail.channel !== 'teams') return
+      // Journal Teams (conv-770) : POURQUOI un message detecte a eu, ou non, une reponse.
+      const conv = empreinteConversation(mail.itemId)
+      const concernees = bilan.filter((b) => b.issue !== 'autre-canal')
+      if (!concernees.length) journalTeams('ignore', { conv, raison: 'aucune-regle-teams-active' })
+      for (const b of concernees)
+        journalTeams(b.issue === 'declenche' ? 'declenche' : 'refus', {
+          conv,
+          regle: b.taskId.slice(0, 8),
+          raison: b.issue === 'declenche' ? undefined : b.issue
+        })
+    }
+  })
+  let mailPolling = false
+  setInterval(() => {
+    if (mailPolling || !watchdogEngine) return
+    const listening = listeningChannels(scheduledTasks.listTasks())
+    if (!listening.outlook && !(listening.teams && teamsSource)) return
+    mailPolling = true
+    void (async () => {
+      if (listening.outlook) {
+        try {
+          await mailWatcher.watch(
+            'outlook',
+            await outlookGateway.snapshot(true),
+            async (mail, full) => {
+              if (!full) return describeMail(mail)
+              // L'instantane coupe chaque corps a 800 caracteres (tuile d'accueil) : l'agent relit donc
+              // ce seul mail en entier. Un echec de relecture garde l'apercu, et il se voit au journal.
+              // fix-ok: MaxCorps=800 dans outlook-local-snapshot.ps1 — 54 mails sur 80 coupes pile a 800 (mesure 2026-09-26), describeMail recevait donc l'apercu.
+              const complet = await outlookGateway.readBody(mail.id)
+              if (!complet.ok)
+                console.warn(
+                  '[watchdog] mail relu en entier impossible, aperçu gardé :',
+                  complet.erreur
+                )
+              return describeMail(complet.ok ? { ...mail, corps: complet.corps } : mail)
+            }
+          )
+        } catch (error) {
+          console.warn('[watchdog] lecture des mails impossible', error)
+        }
+      }
+      // Un echec Teams ne prive pas les mails, et inversement. Source : Graph s'il est connecte,
+      // sinon le stockage local du client Teams (conv-770).
+      if (listening.teams && teamsSource) {
+        let snapshot: unknown
+        try {
+          const instantane = await teamsSource.snapshot()
+          snapshot = instantane
+          battementTeams(true)
+          if (!lectureTeamsAnnoncee || derniereErreurTeams !== undefined)
+            journalTeams('lecture-ok', { conversations: instantane.mails.length })
+          lectureTeamsAnnoncee = true
+          derniereErreurTeams = undefined
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          snapshot = { ok: false, erreur: message }
+          battementTeams(false)
+          console.warn('[watchdog] lecture Teams impossible :', message)
+          if (message !== derniereErreurTeams)
+            journalTeams('lecture-impossible', { erreur: message })
+          derniereErreurTeams = message
+        }
+        try {
+          await mailWatcher.watch('teams', snapshot, async (message) => {
+            journalTeams('detecte', {
+              conv: empreinteConversation(message.id),
+              recuLe: message.recuLe ?? undefined
+            })
+            return describeTeamsMessage(message)
+          })
+        } catch (error) {
+          console.warn('[watchdog] messages Teams non traités', error)
+        }
+      }
+      mailPolling = false
+    })()
+  }, 60_000).unref?.()
   ipcMain.handle('outlook:snapshot', async (event, force: unknown) => {
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.snapshot(force === true)
@@ -3208,10 +3839,17 @@ Le fil reprend ensuite normalement.`
   // Le seul canal Outlook qui ECRIT : il envoie une reponse, donc un acte irreversible. La
   // confirmation appartient a l'interface, qui est le seul endroit ou l'utilisateur est present ; ici
   // on garde la validation du contenu, parce qu'une frontiere de confiance ne se garde pas d'un cote.
-  ipcMain.handle('outlook:repondre', async (event, id: unknown, corps: unknown) => {
-    assertTrustedRendererSender(event, 'Outlook')
-    return outlookGateway.replyToItem(id, corps)
-  })
+  // Les PIECES JOINTES arrivent en contenu (base64) et non en chemin, comme pour un message neuf :
+  // un fichier glisse depuis Outlook n'existe pas sur le disque. Elles sont donc revalidees par la
+  // passerelle -- nom, forme du base64, taille -- avant de redevenir des fichiers dans un dossier
+  // temporaire.
+  ipcMain.handle(
+    'outlook:repondre',
+    async (event, id: unknown, corps: unknown, pieces: unknown) => {
+      assertTrustedRendererSender(event, 'Outlook')
+      return outlookGateway.replyToItem(id, corps, pieces)
+    }
+  )
   // MARQUE des messages comme lus. Ecrit aussi dans la boite, mais rien n'en sort : declenche par le
   // geste de l'utilisateur qui OUVRE un fil, jamais par la relecture periodique -- une relecture qui
   // marque lu viderait la boite de ses non-lus pendant qu'il regarde ailleurs.
@@ -3224,11 +3862,14 @@ Le fil reprend ensuite normalement.`
   // existant -- l'adresse vient d'une saisie. Elle est donc contrainte a un motif ASCII cote main
   // AVANT de partir dans un appel COM, et l'objet comme le corps voyagent par des fichiers
   // temporaires : jamais concatenes dans une ligne de commande.
+  // Les PIECES JOINTES arrivent en contenu (base64) et non en chemin : un fichier glisse depuis
+  // Outlook n'existe pas sur le disque. Elles sont donc revalidees par la passerelle -- nom, forme
+  // du base64, taille -- avant de redevenir des fichiers dans un dossier temporaire.
   ipcMain.handle(
     'outlook:nouveau-message',
-    async (event, adresse: unknown, objet: unknown, corps: unknown) => {
+    async (event, adresse: unknown, objet: unknown, corps: unknown, pieces: unknown) => {
       assertTrustedRendererSender(event, 'Outlook')
-      return outlookGateway.sendNew(adresse, objet, corps)
+      return outlookGateway.sendNew(adresse, objet, corps, pieces)
     }
   )
 
@@ -3236,14 +3877,29 @@ Le fil reprend ensuite normalement.`
     ipc: ipcMain,
     store: scheduledTasks,
     scheduler: scheduledTaskScheduler,
-    watchdogDiagnostics: (taskId) => ({
-      admittedLastHour: watchdogEngine?.admittedLastHour(taskId) ?? 0,
-      ...(watchdogEngine?.complaint(taskId) ? { complaint: watchdogEngine.complaint(taskId) } : {})
-    }),
+    watchdogDiagnostics: (taskId) => {
+      const task = scheduledTasks.getTask(taskId)
+      return {
+        admittedLastHour: watchdogEngine?.admittedLastHour(taskId) ?? 0,
+        ...(watchdogEngine?.complaint(taskId)
+          ? { complaint: watchdogEngine.complaint(taskId) }
+          : {}),
+        // Pourquoi un mail n'a rien declenche : journal et lecture en panne, gardes sur le disque.
+        // Regle Teams : etat de la connexion Microsoft et code a saisir (bouton « Connecter Teams »).
+        ...(task
+          ? mailDiagnostics(
+              mailMemory,
+              task,
+              teamsClient ? teamsClient.signInState() : { state: 'unconfigured' }
+            )
+          : {})
+      }
+    },
     assertTrusted: assertTrustedRendererSender,
     onChanged: () => {
       broadcast({ type: 'refresh', scope: 'task-manager' })
-    }
+    },
+    ...(teamsClient ? { teams: teamsClient } : {})
   })
   void scheduledTaskScheduler
     .start(startupTaskOccurrence)
@@ -3256,6 +3912,39 @@ Le fil reprend ensuite normalement.`
       // règle auto-kaizen encore posée quand elle est restée intacte, avant que le moteur ne la voie.
       const seeded = seedWatchdogTasks(scheduledTasks)
       if (seeded.length) console.log(`[watchdog] règles livrées posées : ${seeded.length}`)
+      if (seedMaintenanceTask(scheduledTasks))
+        console.log('[task-manager] tâche Maintenance quotidienne posée')
+      if (seedGcTask(scheduledTasks))
+        console.log('[task-manager] tâche Garbage collector quotidienne posée')
+      // Regle PERSONNELLE : posee seulement sur le poste qui l'a demandee (`setx AUTOWIN_WATCHDOG_MAILS 1`),
+      // jamais chez tout le monde — elle lit la boite de l'utilisateur et repond en son nom.
+      // `setx` n'atteint pas un lanceur deja ouvert : la relance heritait d'un environnement sans la
+      // variable (constat conv-839, 2026-09-24). On relit donc aussi la valeur persistee HKCU.
+      const mailsPerso = (): boolean => {
+        if (process.env.AUTOWIN_WATCHDOG_MAILS === '1') return true
+        if (process.platform !== 'win32') return false
+        try {
+          return /AUTOWIN_WATCHDOG_MAILS\s+REG_\w+\s+1\s*$/m.test(
+            execFileSync('reg', ['query', 'HKCU\\Environment', '/v', 'AUTOWIN_WATCHDOG_MAILS'], {
+              encoding: 'utf8',
+              windowsHide: true,
+              timeout: 3_000
+            })
+          )
+        } catch {
+          return false // variable absente : regle non posee, c'est le cas normal des autres postes
+        }
+      }
+      if (mailsPerso() && seedMailWatchdogTask(scheduledTasks))
+        console.log('[watchdog] règle Assistant mails posée')
+      if (splitMailWatchdogByChannel(scheduledTasks))
+        console.log('[watchdog] règle mails séparée en Outlook + Teams')
+      if (retargetTeamsWatchdogPrompt(scheduledTasks))
+        console.log('[watchdog] règle Teams : consigne Teams posée')
+      if (liftLegacyMailWatchdogCaps(scheduledTasks))
+        console.log('[watchdog] règles mails : plafond relevé à 240/h, sans plafond du jour')
+      if (seedCurateTask(scheduledTasks))
+        console.log('[task-manager] tâche Curation quotidienne posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
       // l'historique déjà écrit ne réveille personne au démarrage.
       await watchdogEngine?.start()
@@ -3292,7 +3981,7 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:pilotChat:active', (event, rawConversationId: string) => {
     assertTrustedRendererSender(event, 'Pilot chat active probe')
     const conversationId = guardString(rawConversationId, 'conversationId')
-    return { active: Boolean(activeChatTurns.get(conversationId)) }
+    return { active: activeChatTurns.isInFlight(conversationId) }
   })
   ipcMain.handle('os:orchestrate:cancel', (event, rawConversationId: string) => {
     assertTrustedRendererSender(event, 'Orchestration cancel')
@@ -3311,16 +4000,36 @@ Le fil reprend ensuite normalement.`
   // au prochain point d'itération (pilotage continu, sans attendre la fin du tour).
   ipcMain.handle(
     'os:pilotChat:inject',
-    async (event, rawConversationId: string, rawDirective: string) => {
+    async (
+      event,
+      rawConversationId: string,
+      rawDirective: string,
+      rawAttachments?: unknown
+    ) => {
       assertTrustedRendererSender(event, 'Pilot chat directive')
       const conversationId = guardString(rawConversationId, 'conversationId')
       const directive = guardString(rawDirective, 'directive').trim()
-      if (!directive) return { ok: false }
+      const jointes = guardAttachments(rawAttachments)
+      if (!directive && jointes.length === 0) return { ok: false }
+      // UNE COMMANDE DE SKILL NE S'INJECTE PAS EN TEXTE (conv-843, turn 6d0e352f-0624-4c9a-b2f5-c6aabf57d310,
+      // saisie ts 1790275118313) : « /judge mon watchdog » envoye pendant un tour a ete colle dans le
+      // fil comme simple phrase ; la skill judge n'a jamais ete chargee et le modele a juge lui-meme.
+      // Refus -> le renderer met le texte en FILE, il repart en message normal, donc route par
+      // `routeSkillRequest` comme n'importe quel `/judge`.
+      if (jointes.length === 0 && routeSkillRequest(directive)?.reason === 'explicit-skill')
+        return { ok: false }
       // Le renderer passe busy avant que l'IPC `pilotChat` ait fini d'enregistrer son controleur.
       // Une attente courte absorbe cette course de demarrage sans accepter de directive hors tour.
       if (!(await activeChatTurns.waitForActive(conversationId, 500))) return { ok: false }
+      // PIECES JOINTES EN COURS DE TOUR (2026-09-23) : elles attendaient la fin du tour, parfois
+      // plusieurs minutes (« j'ai envoye un message avec une image et ca n'a rien envoye »). Elles
+      // sont ecrites sur disque comme pour un message normal, et leurs chemins suivent le texte.
+      // Pas de nettoyage ici : le tour doit pouvoir les lire ; les temporaires orphelins sont
+      // balayes par `temporaires-orphelins.ts`.
+      const suffixe =
+        jointes.length > 0 ? materializeClaudeAttachments(jointes).promptSuffix : ''
       const queued = pendingDirectives.get(conversationId) ?? []
-      queued.push(directive)
+      queued.push((directive || '(image envoyée sans texte)') + suffixe)
       pendingDirectives.set(conversationId, queued)
       broadcast({ type: 'refresh', scope: 'directives' })
       // La directive est acceptee -> elle devient un VRAI message du fil. Sans cette ecriture, le
@@ -3331,6 +4040,7 @@ Le fil reprend ensuite normalement.`
         conversations: os.conversations,
         conversationId,
         texte: directive,
+        attachments: jointes,
         broadcast: (event) => broadcast(event),
         onError: (error) => console.error('[inject] message non ecrit dans le fil', error)
       })
@@ -3577,6 +4287,8 @@ Le fil reprend ensuite normalement.`
   // Les canaux de la reconnaissance vocale locale vivent dans src/main/ipc/whisper.ts : ils ne
   // prenaient ici que leur service, construit paresseusement.
   registerWhisperIpc({ serviceWhisper })
+  // Séparation des voix d'un fichier déjà enregistré (pyannote) : état lu, brique posée sur clic.
+  registerDiarisationIpc()
 
   /**
    * OUVRIR LA PAGE MICRO DE WINDOWS. DEMANDE DE L'UTILISATEUR (2026-09-03) : le message « autorisez
@@ -3679,6 +4391,72 @@ app.whenReady().then(async () => {
         )
       : Promise.resolve({ values: {}, canWriteMarker: dejaMigre })
   registerStorageMigrationIpc(lectureHistorique)
+  registerHdeskTvIpc()
+  registerProdPassphraseIpc(ipcMain, {
+    lireEmpreinte: () => lireEmpreinteProd(ensureAutowinAppData(appDataRoot)),
+    // La phrase entre ici et n'en ressort pas : on la transforme aussitot en empreinte, on l'ecrit,
+    // et le coffre est REMPLACE — un jeton accorde sous l'ancienne phrase ne survit pas au changement.
+    enregistrerPhrase: (phrase) => {
+      const empreinte = definirPhrase(phrase)
+      ecrireEmpreinteProd(ensureAutowinAppData(appDataRoot), empreinte)
+      coffreProd = new CoffreAutorisationProd(empreinte)
+    },
+    coffre: () => coffreAutorisationProd(),
+    verifierExpediteur: (event, libelle) => assertTrustedRendererSender(event, libelle)
+  })
+  /**
+   * LE RETOUR DE L'ÉCRAN. Le jeton vient de la fenêtre, jamais du modèle ; l'expéditeur est donc
+   * vérifié comme pour la phrase elle-même. Aucune phrase ne transite ici, seulement un jeton opaque
+   * et l'identifiant de la demande qui l'a déclenché.
+   */
+  /**
+   * L'ÉTAT DE LA PROTECTION, EN CLAIR. Deux faits que l'écran de réglages doit pouvoir dire sans
+   * détour : la porte tourne-t-elle (une phrase est-elle définie), et que contient la liste de
+   * déclaration. Une protection qui DORT ne doit jamais avoir l'air active.
+   */
+  ipcMain.handle('prod:porte:etat', (event) => {
+    assertTrustedRendererSender(event, 'Protection de production')
+    const liste = chargerAutoriteProd(ensureAutowinAppData(appDataRoot))
+    return {
+      ...porteProd.etat(),
+      phraseDefinie: lireEmpreinteProd(ensureAutowinAppData(appDataRoot)) !== undefined,
+      declarees: liste.autorite.entrees.length,
+      anomalies: liste.anomalies,
+      chemin: cheminAutoriteProd(ensureAutowinAppData(appDataRoot))
+    }
+  })
+  /** Changer le niveau de protection (aucun / confirmation / phrase). Prend effet immediatement. */
+  ipcMain.handle('prod:porte:niveau', (event, niveau: unknown) => {
+    assertTrustedRendererSender(event, 'Protection de production')
+    if (!estNiveauProtection(niveau)) return { ok: false, erreur: 'Niveau inconnu.' }
+    // Exiger la phrase pour PASSER au niveau « phrase » n'aurait aucun sens : on la demande au
+    // contraire pour BAISSER la garde quand elle est deja en service.
+    if (porteProd.etat().niveau === 'phrase' && niveau !== 'phrase') {
+      const empreinte = lireEmpreinteProd(ensureAutowinAppData(appDataRoot))
+      if (empreinte)
+        return { ok: false, erreur: 'Saisis la phrase de passe pour baisser la garde.' }
+    }
+    ecrireNiveauProd(ensureAutowinAppData(appDataRoot), niveau)
+    return { ok: true }
+  })
+  ipcMain.handle('prod:autorisation:confirmer', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Autorisation de production')
+    return { ok: guichetProd.confirmer(guardString(id, 'prodAutorisation.id')) }
+  })
+  ipcMain.handle('prod:autorisation:deposer', (event, id: string, jeton: string) => {
+    assertTrustedRendererSender(event, 'Autorisation de production')
+    return { ok: guichetProd.deposer(guardString(id, 'prodAutorisation.id'), String(jeton ?? '')) }
+  })
+  ipcMain.handle('prod:autorisation:annuler', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Autorisation de production')
+    return { ok: guichetProd.annuler(guardString(id, 'prodAutorisation.id')) }
+  })
+  /** Les demandes encore ouvertes — pour une fenêtre qui se recharge pendant l'attente. */
+  ipcMain.handle('prod:autorisation:en-attente', (event) => {
+    assertTrustedRendererSender(event, 'Autorisation de production')
+    return guichetProd.enAttente()
+  })
+  registerIdentiteIpc()
   registerChatIpc()
   registerTicketsIpc({
     ipc: ipcMain,
@@ -3706,6 +4484,9 @@ app.whenReady().then(async () => {
   jalonDemarrage('avant createWindow')
   createWindow()
   setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
+  // Ramener Autowin sans aller chercher sa fenêtre : les autres raccourcis sont tous locaux au
+  // renderer, donc inertes quand l'app est en arrière-plan.
+  raccourciCapture = installerRaccourciCapture(globalShortcut, () => showMainWindow())
 
   // RÉCONCILIATION DES RUNS ABANDONNÉS. Un run dont l'app est morte en cours gardait `status: open`
   // à vie : mesuré le 2026-08-05, 141 runs ouverts depuis plus de 24 h, ni succès ni échec, alors
@@ -4179,11 +4960,22 @@ app.whenReady().then(async () => {
 // resté dans la fenêtre de debounce de 120 ms de la persistance.
 let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
+  capteurHdesk?.detruire()
+  capteurHdesk = null
+  // Un raccourci global laissé posé continue de capter la combinaison pour toute la session.
+  raccourciCapture?.desinstaller()
+  raccourciCapture = null
   flushConversations()
   flushScheduledTasks()
   // Le journal de tour ecrit par LOTS : ce qui dort en tampon doit atteindre le disque avant
   // l'arret, sinon la reprise d'un tour en vol perdrait ses derniers deltas.
   flushAllTurnJournals()
+  // Les appels modele s'ecrivent hors du fil principal : ce qui est encore en vol doit atteindre
+  // le disque avant l'arret, sinon l'Observatory perdrait les derniers appels de la session.
+  flushAllPromptCalls()
+  // Le cout des tours s'ecrit desormais en DIFFERE (appendFileSync figeait l'interface 9,4 s,
+  // mesure du 2026-09-12) : ce qui reste en tampon doit atteindre le disque avant l'arret.
+  os.cost.flushPersistSync()
   preflightWatchHandle?.stop() // couper la boucle de re-probe démarrage (pas de timer résiduel)
   preflightWatchHandle = null
   brainSupervisionHandle?.stop() // couper le battement de surveillance du brain_server

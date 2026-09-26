@@ -206,14 +206,47 @@ export function orchestrationOutcomesFromMessages(
  */
 function rememberOutcomeSummary(action: ActionLike): OutcomeSummary | undefined {
   if (action.name !== 'remember') return undefined
-  const data = action.data as { allowed?: unknown; reason?: unknown } | undefined
-  if (!data || data.allowed !== false) return undefined
-  const motif = typeof data.reason === 'string' ? data.reason.trim() : ''
-  return {
-    label: motif ? `rien retenu — ${motif}` : 'rien retenu — depot refuse',
-    state: 'refused',
-    ...(motif ? { why: [motif] } : {})
+  const data = action.data as
+    | { allowed?: unknown; reason?: unknown; stored?: unknown; detail?: unknown; unknown?: unknown }
+    | undefined
+  if (!data) return undefined
+  const texte = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
+  if (data.allowed === false) {
+    const motif = texte(data.reason)
+    return {
+      label: motif ? `rien retenu — ${motif}` : 'rien retenu — depot refuse',
+      state: 'refused',
+      ...(motif ? { why: [motif] } : {})
+    }
   }
+  /*
+   * LE REFUS N'EST PAS LE SEUL ECHEC — mesure du 2026-09-11 sur les traces causales : sur 35 echecs
+   * de `remember`, une part passait la validation locale (`allowed: true`) et echouait au DEPOT —
+   * « Brain injoignable : fetch failed », « delai depasse (2000 ms) », « jeton du Brain absent »,
+   * « refuse par le Brain : likely personal data detected ». Ces cas ne produisaient AUCUN resume :
+   * l'en-tete retombait sur « terminee », exactement le faux vert que ce module existe pour tuer.
+   * Un fait PERDU ressemblait donc a un fait RETENU.
+   *
+   * L'etat INDETERMINE (`unknown`) est dit a part : ni ecrit, ni sûrement perdu — le confondre avec
+   * un echec pousserait a retenter, donc a creer un doublon que le Brain ne dedoublonne pas.
+   */
+  if (data.stored === true) return undefined
+  const detail = texte(data.detail)
+  if (data.unknown === true) {
+    return {
+      label: detail ? `dépôt d’état inconnu — ${detail}` : 'dépôt d’état inconnu — ne pas retenter',
+      state: 'refused',
+      ...(detail ? { why: [detail] } : {})
+    }
+  }
+  if (data.stored === false) {
+    return {
+      label: detail ? `rien retenu — ${detail}` : 'rien retenu — le dépôt a échoué',
+      state: 'failed',
+      ...(detail ? { why: [detail] } : {})
+    }
+  }
+  return undefined
 }
 
 export function groupOutcomeSummary(actions: readonly ActionLike[]): OutcomeSummary | undefined {

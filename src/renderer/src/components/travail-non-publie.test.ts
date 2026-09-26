@@ -169,7 +169,7 @@ describe('le prompt que « Traiter » dépose', () => {
         { agentId: 'publie', travailNonPublie: false }
       ]) ?? ''
 
-    expect(prompt).toContain('1 travaux')
+    expect(prompt).toContain('1 travail terminé') // le COMPTE vaut 1, quel que soit son accord
     expect(prompt).not.toContain('vivant')
   })
 })
@@ -216,5 +216,35 @@ describe('« Traiter » lance un SALVAGE, il ne réinvente pas la procédure', (
 
   it('rend null quand rien n’attend — pas de bandeau vide', () => {
     expect(promptTravauxNonPublies([])).toBeNull()
+  })
+})
+
+/**
+ * CONV-623 — le prompt affirmait une adresse qu'il n'avait pas verifiee.
+ *
+ * Tour `ee2cae40-7dca-4c58-8ebb-9fb9aeadbcbb` : le texte envoye disait « Chacun vit sur une branche
+ * de secours » et donnait `- autowin/recovery/run-7336f6dd2bd2-1`. Le raisonnement du meme tour
+ * (journal des tours, at 1789584706380) constate « la branche mentionnee dans le prompt n'existait
+ * pas en realite — le travail se trouvait dans une copie detachee ». L'agent a corrige la premisse
+ * en silence ; l'utilisateur n'en a jamais rien su.
+ *
+ * L'interface connait l'identifiant du travail, pas l'endroit ou il a survecu : elle doit donner
+ * l'adresse comme une PISTE a verifier, jamais comme un fait.
+ */
+describe('le prompt ne certifie pas une adresse qu il n a pas verifiee', () => {
+  const unTravail = [
+    { agentId: 'run-7336f6dd2bd2-1', travailNonPublie: true, dateNonPublie: '2026-09-16', fichiersNonPublies: ['src/main/a.ts'] }
+  ] as never
+
+  it('n affirme pas que chaque travail vit sur une branche de secours', () => {
+    const prompt = promptTravauxNonPublies(unTravail) ?? ''
+    expect(prompt).not.toContain('Chacun vit sur une branche de')
+    expect(prompt.toLowerCase()).toContain('piste')
+  })
+
+  it('accorde le nombre : 1 travail, pas « 1 travaux »', () => {
+    const prompt = promptTravauxNonPublies(unTravail) ?? ''
+    expect(prompt).not.toContain('1 travaux')
+    expect(prompt).toContain('1 travail terminé')
   })
 })

@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   appendTurnEvent,
+  flushAllTurnJournals,
   flushTurnJournal,
   isTurnFinished,
   listUnfinishedTurns,
+  listUnfinishedTurnsPuisMenage,
   pruneFinishedTurnJournals,
   readTurnJournal,
   turnJournalPath
@@ -114,5 +116,107 @@ describe('pruneFinishedTurnJournals — âge avant lecture', () => {
     const future = Date.now() + 30 * 24 * 3_600_000
     expect(pruneFinishedTurnJournals(root, 7 * 24 * 3_600_000, future)).toBe(1)
     rmSync(root, { recursive: true, force: true })
+  })
+})
+
+describe('turn-journal — horodatage systématique', () => {
+  it('pose `at` quand l’émetteur ne le fournit pas (failed / resumed indatables)', () => {
+    const avant = Date.now()
+    appendTurnEvent(root, 'conv-at', 'turn-1', { kind: 'resumed' })
+    appendTurnEvent(root, 'conv-at', 'turn-1', { kind: 'failed', error: 'boum' })
+    const events = readTurnJournal(root, 'conv-at', 'turn-1')
+    expect(events).toHaveLength(2)
+    for (const event of events) {
+      expect(typeof event.at).toBe('number')
+      expect(event.at as number).toBeGreaterThanOrEqual(avant)
+    }
+  })
+
+  it('respecte le `at` déjà posé par l’émetteur', () => {
+    appendTurnEvent(root, 'conv-at2', 'turn-1', { kind: 'done', at: 42 })
+    expect(readTurnJournal(root, 'conv-at2', 'turn-1')[0].at).toBe(42)
+  })
+})
+
+/*
+ * CONTRAT EN TETE DE turn-journal.ts : « un evenement TERMINAL, un par tour ». Mesure du
+ * 2026-09-12 : le refus de reprise annonce DEFINITIF revenait a chaque demarrage et reecrivait le
+ * MEME `failed` — 92 occurrences dans un seul journal (conv-226, conv-246), 924 lignes « copie
+ * durable absente » au total. Une cloture identique n'apporte rien : elle est refusee, bruyamment
+ * en test pour que la source soit corrigee plutot que masquee.
+ */
+describe('turn-journal — cloture idempotente', () => {
+  it('refuse bruyamment une seconde cloture identique et n’ecrit qu’une ligne', () => {
+    appendTurnEvent(root, 'conv-9', 'turn-9', { kind: 'failed', error: 'copie durable absente' })
+    expect(() =>
+      appendTurnEvent(root, 'conv-9', 'turn-9', { kind: 'failed', error: 'copie durable absente' })
+    ).toThrow(/déjà écrite/)
+    const events = readTurnJournal(root, 'conv-9', 'turn-9')
+    expect(events.filter((e) => e.kind === 'failed')).toHaveLength(1)
+  })
+
+  it('laisse passer une cloture DIFFERENTE (autre erreur, autre type)', () => {
+    appendTurnEvent(root, 'conv-10', 'turn-10', { kind: 'failed', error: 'premiere cause' })
+    appendTurnEvent(root, 'conv-10', 'turn-10', { kind: 'failed', error: 'autre cause' })
+    appendTurnEvent(root, 'conv-10', 'turn-10', { kind: 'done', result: 'ok' })
+    expect(readTurnJournal(root, 'conv-10', 'turn-10').map((e) => e.kind)).toEqual([
+      'failed',
+      'failed',
+      'done'
+    ])
+  })
+})
+
+
+/*
+ * GEL DU DEMARRAGE — 25 gels « ipc:runs:unfinishedTurns (sync) », 69 s cumulees, ~2,8 s par ouverture.
+ *
+ * Le canal faisait le MENAGE (462 dossiers, 1 376 fichiers, 141 Mo relus ligne a ligne) AVANT de
+ * rendre la liste. La verite rendue prime, le GC attend : la liste part d'abord, le scan est differe.
+ */
+describe('menage differe des journaux de tour', () => {
+  it('rend la liste AVANT de faire le menage, et voit bien un tour en vol', () => {
+    appendTurnEvent(root, 'c', 'en-vol', { kind: 'delta', text: 'pas encore sur disque' })
+    let menageFait = 0
+    let differe: (() => void) | undefined
+    const liste = listUnfinishedTurnsPuisMenage(root, {
+      menage: () => {
+        menageFait += 1
+      },
+      planifier: (tache) => {
+        differe = tache
+      }
+    })
+    // La liste voit le tour en vol (le flush des tampons, lui, n'est PAS differe)...
+    expect(liste.map((t) => t.turnId)).toEqual(['en-vol'])
+    // ...et le menage n'a pas encore tourne quand la liste est rendue.
+    expect(menageFait).toBe(0)
+    differe?.()
+    expect(menageFait).toBe(1)
+  })
+
+  it('ne laisse jamais une exception du menage differe s’echapper', () => {
+    let differe: (() => void) | undefined
+    listUnfinishedTurnsPuisMenage(root, {
+      menage: () => {
+        throw new Error('scan casse')
+      },
+      planifier: (tache) => {
+        differe = tache
+      }
+    })
+    expect(() => differe?.()).not.toThrow()
+  })
+
+  it('borne la passe de menage et REPREND ou elle s’est arretee', () => {
+    const future = Date.now() + 30 * 24 * 3_600_000
+    for (const conv of ['c1', 'c2', 'c3', 'c4', 'c5'])
+      appendTurnEvent(root, conv, 'fini', { kind: 'done' })
+    flushAllTurnJournals()
+    // Plafond de 2 suppressions par passe : trois passes soldent les cinq, sans jamais repartir du debut.
+    expect(pruneFinishedTurnJournals(root, 7 * 24 * 3_600_000, future, { maxSuppressions: 2 })).toBe(2)
+    expect(pruneFinishedTurnJournals(root, 7 * 24 * 3_600_000, future, { maxSuppressions: 2 })).toBe(2)
+    expect(pruneFinishedTurnJournals(root, 7 * 24 * 3_600_000, future, { maxSuppressions: 2 })).toBe(1)
+    expect(listUnfinishedTurns(root)).toEqual([])
   })
 })

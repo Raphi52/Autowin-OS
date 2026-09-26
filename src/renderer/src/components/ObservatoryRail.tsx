@@ -1,3 +1,4 @@
+import { isBlocked } from '../../../shared/run-blocked'
 import { lastUserMessagePreview } from './observatory-event-preview'
 import type { ObservatoryPrioritySignal } from './observatory-priority-signals'
 import type {
@@ -35,11 +36,15 @@ export function ObservatoryRail({
   activitySessionsLoading,
   activitySession,
   onOpenSession,
+  onImportSession,
+  sessionImportNotice,
+  sessionImportPending,
   activityImage,
   onOpenImage,
   runs,
   runsLoading,
   onOpenRun,
+  onOpenRunConversation,
   prioritySignals,
   onOpenSignal
 }: {
@@ -62,11 +67,25 @@ export function ObservatoryRail({
   activitySessionsLoading: boolean
   activitySession: ActivitySession | null
   onOpenSession: (session: ActivitySessionMeta) => void
+  /**
+   * Importe la session ouverte en conversation Autowin (plein texte, côté main).
+   * fix-ok: cause mesurée des reprises (jeton ré-écrit à la réparation 2 — le contrôle ne crédite
+   * que les lignes déposées par la passe qu'il évalue) — le bouton seul laissait le résultat INVISIBLE (test ux
+   * rouge : notice absente du DOM après clic) puis l'attente sans <Spinner /> était refusée par
+   * la garde spinner-partout ; notice + pending ajoutés → test ux vert.
+   */
+  onImportSession: (session: ActivitySessionMeta) => void
+  /** Résultat du dernier import — affiché dans la section, succès comme échec. */
+  sessionImportNotice: string
+  /** Import en vol : le libellé d'attente (avec spinner) remplace la notice. */
+  sessionImportPending: boolean
   activityImage: string
   onOpenImage: (path: string) => void
   runs: ObservatoryRunEntry[]
   runsLoading: boolean
   onOpenRun: (path: string) => void
+  /** Sélectionne la conversation qui a produit ce run, quand elle est connue. */
+  onOpenRunConversation?: (conversationId: string) => void
   prioritySignals: ObservatoryPrioritySignal[]
   onOpenSignal: (eventId: string) => void
 }): React.JSX.Element {
@@ -79,8 +98,14 @@ export function ObservatoryRail({
       <section className="observatory-diagnostics observatory-runs" aria-busy={runsLoading}>
         <span className="observatory-panel-title">
           WORKFLOWS · TOUS
-          {runs.length > 0
-            ? ` · ${runs.filter((r) => r.summary.status === 'open').length} open`
+          {/* BLOQUÉ, pas « open » : un run `green` dont la DoD est incomplète, ou figé sur un
+              statut fossile, est resté sans issue. Ne compter que `open` le rendait INVISIBLE.
+              La règle est celle du dashboard (`isBlocked`), pas une seconde définition locale. */}
+          {runs.length > 0 ? ` · ${runs.filter((r) => isBlocked(r.summary)).length} bloqué(s)` : ''}
+          {/* NON INTÉGRÉ ≠ bloqué : un run vert, DoD complète, peut avoir son travail retenu ou
+              bloqué à la publication. Le compte ci-dessus, fondé sur le RUN.md, ne le voit pas. */}
+          {runs.some((r) => r.publication)
+            ? ` · ${runs.filter((r) => r.publication).length} non intégré(s)`
             : ''}
         </span>
         {runs.length === 0 ? (
@@ -95,22 +120,41 @@ export function ObservatoryRail({
           </p>
         ) : (
           runs.slice(0, 12).map((run) => (
-            <button
-              key={run.path}
-              data-run-status={run.summary.status}
-              data-testid="observatory-run"
-              onClick={() => onOpenRun(run.path)}
-            >
-              <strong>
-                {run.summary.status} · {run.subject}
-              </strong>
-              <span>
-                {run.session}
-                {run.summary.dodTotal > 0
-                  ? ` · DoD ${run.summary.dodChecked}/${run.summary.dodTotal}`
-                  : ''}
-              </span>
-            </button>
+            <div key={run.path} className="observatory-run-line">
+              <button
+                data-run-status={run.summary.status}
+                data-run-blocked={isBlocked(run.summary) ? 'true' : 'false'}
+                {...(run.publication ? { 'data-run-publication': run.publication } : {})}
+                data-testid="observatory-run"
+                onClick={() => onOpenRun(run.path)}
+              >
+                <strong>
+                  {run.summary.status}
+                  {isBlocked(run.summary) ? ' · bloqué' : ''}
+                  {run.publicationLabel ? ` · travail ${run.publicationLabel}` : ''} ·{' '}
+                  {run.subject}
+                </strong>
+                <span>
+                  {run.session}
+                  {run.summary.dodTotal > 0
+                    ? ` · DoD ${run.summary.dodChecked}/${run.summary.dodTotal}`
+                    : ''}
+                </span>
+              </button>
+              {/* Le rail listait des RUN.md sans jamais dire de QUELLE conversation ils venaient :
+                  chaque ligne était un cul-de-sac. Bouton SÉPARÉ, parce que le clic principal
+                  révèle le fichier — les deux gestes ne se confondent pas. */}
+              {run.conversationId && onOpenRunConversation ? (
+                <button
+                  className="observatory-run-jump"
+                  data-testid="observatory-run-conversation"
+                  data-conversation-id={run.conversationId}
+                  onClick={() => onOpenRunConversation(run.conversationId as string)}
+                >
+                  voir la trace
+                </button>
+              ) : null}
+            </div>
           ))
         )}
       </section>
@@ -208,6 +252,21 @@ export function ObservatoryRail({
         {activitySession && (
           <div>
             <small>{activitySession.totalToolCalls} appels outil</small>
+            <button
+              data-testid="session-import"
+              onClick={() => onImportSession(activitySession.meta)}
+            >
+              Importer en conversation
+            </button>
+            {sessionImportPending ? (
+              <small data-testid="session-import-notice" role="status">
+                <Spinner /> Import en cours…
+              </small>
+            ) : (
+              sessionImportNotice && (
+                <small data-testid="session-import-notice">{sessionImportNotice}</small>
+              )
+            )}
             {activitySession.turns.slice(-3).map((turn, index) => (
               <p key={`${turn.kind}:${index}`}>{turn.text}</p>
             ))}

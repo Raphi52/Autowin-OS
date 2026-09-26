@@ -30,7 +30,18 @@ export interface HypotheseDeCadrage {
 
 /** Au-dela, la liste cesse d'etre lisible et redevient le mur de texte qu'on veut eviter. */
 export const PLAFOND_HYPOTHESES = 5
-const PLAFOND_AFFIRMATION = 240
+/*
+ * 600 et non plus 240 (conv-536, 2026-09-24) : une hypothese reelle du cadrage (menu SURVBOD) faisait
+ * ~300 caracteres et s'affichait coupee au milieu d'un mot (« avant la c »). Le plafond ne sert qu'a
+ * borner un texte aberrant ; il coupe desormais sur un mot, avec une ellipse visible.
+ */
+const PLAFOND_AFFIRMATION = 600
+
+function couper(texte: string, plafond: number): string {
+  if (texte.length <= plafond) return texte
+  const bord = texte.lastIndexOf(' ', plafond - 1)
+  return `${texte.slice(0, bord > plafond / 2 ? bord : plafond - 1).trimEnd()}…`
+}
 /** La justification est une phrase du modele, pas un titre : elle a droit a plus de place. */
 const PLAFOND_JUSTIFICATION = 400
 
@@ -59,11 +70,17 @@ function nettoyer(ligne: string): string {
     .replace(PREFIXE_PUCE, '')
     .replace(ETIQUETTE_NON_VERIFIE, ' ')
     .replace(/`/gu, '')
+    // L'etiquette etait souvent en gras (`**NON VERIFIE**`) : une fois retiree, il restait « ** ** »
+    // a l'ecran (conv-536). Un gras VIDE part avec elle.
+    .replace(/\*\*\s*\*\*/gu, ' ')
     .replace(/\((?:\s*)\)/gu, ' ')
     .replace(/\s{2,}/gu, ' ')
     .replace(PONCTUATION_ORPHELINE, '')
     .trim()
-    .slice(0, PLAFOND_AFFIRMATION)
+}
+
+function nettoyerAffirmation(ligne: string): string {
+  return couper(nettoyer(ligne), PLAFOND_AFFIRMATION)
 }
 
 /**
@@ -137,7 +154,7 @@ export function hypothesesDuCadrage(texte: unknown): HypotheseDeCadrage[] {
       const cellulEtiquetee = cellules.find((cellule) => ETIQUETTE_NON_VERIFIE.test(cellule))
       if (!cellulEtiquetee) continue
       const premiere = cellules[0] === cellulEtiquetee ? '' : cellules[0]
-      affirmation = nettoyer(premiere || cellulEtiquetee)
+      affirmation = nettoyerAffirmation(premiere || cellulEtiquetee)
       justification = premiere ? justificationApresEtiquette(cellulEtiquetee) : undefined
     } else if (sectionCourante === 'confiance') {
       /*
@@ -147,10 +164,10 @@ export function hypothesesDuCadrage(texte: unknown): HypotheseDeCadrage[] {
        * affirmation deja VERIFIE ou tenue DE L'UTILISATEUR porte son autorite, on la laisse.
        */
       if (!ETIQUETTE_NON_VERIFIE.test(ligne)) continue
-      affirmation = nettoyer(ligne)
+      affirmation = nettoyerAffirmation(ligne)
     } else {
       if (!/^\s*(?:[-*•]|\d+[.)])?\s*hypoth[eè]se\b/iu.test(ligne)) continue
-      affirmation = nettoyer(ligne.replace(PREFIXE_PUCE, '').replace(/^hypoth[eè]se\b/iu, ''))
+      affirmation = nettoyerAffirmation(ligne.replace(PREFIXE_PUCE, '').replace(/^hypoth[eè]se\b/iu, ''))
     }
 
     if (!affirmation) continue

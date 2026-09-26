@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { extrairePromptSuivant, retirerLignePromptSuivant, PROMPT_SALVAGE } from './prompt-suivant'
+import {
+  extrairePromptSuivant,
+  retirerLignePromptSuivant,
+  estPromptDePublication,
+  PROMPT_SALVAGE
+} from './prompt-suivant'
 
 const LIGNE = 'AUTOWIN_PROMPT_V1: Lance le terrain sur le build du pari.'
 
@@ -71,6 +76,11 @@ describe('retrait de la ligne technique de l’affichage', () => {
     expect(retirerLignePromptSuivant(texte)).toBe(texte)
   })
 
+  it('CRLF : ne laisse pas de « \\r\\n » en fin, et garde l’alignement des autres lignes', () => {
+    expect(retirerLignePromptSuivant(`fin\r\n${LIGNE}\r\n`)).toBe('fin')
+    expect(retirerLignePromptSuivant(`avant\r\n${LIGNE}\r\napres\r\n`)).toBe('avant\r\napres\r\n')
+  })
+
   it('ne laisse pas une ligne vide en fin de texte à la place de la ligne retirée', () => {
     expect(retirerLignePromptSuivant(`fin du travail\n${LIGNE}`)).toBe('fin du travail')
   })
@@ -78,9 +88,9 @@ describe('retrait de la ligne technique de l’affichage', () => {
 
 describe('publication → /salvage', () => {
   it('réécrit un prompt de publication en /salvage', () => {
-    expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: Commit et push les deux corrections sur main.')).toBe(
-      PROMPT_SALVAGE
-    )
+    expect(
+      extrairePromptSuivant('AUTOWIN_PROMPT_V1: Commit et push les deux corrections sur main.')
+    ).toBe(PROMPT_SALVAGE)
     expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: Ouvre une pull request pour ce lot.')).toBe(
       PROMPT_SALVAGE
     )
@@ -129,9 +139,69 @@ describe('toutes les formes de « publier »', () => {
       expect(extrairePromptSuivant(`AUTOWIN_PROMPT_V1: ${forme}`)).toBe(PROMPT_SALVAGE)
     })
   }
-  it("ne se déclenche pas sur un prompt sans acte de publication", () => {
-    expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: Relis le journal des gels et résume-le.')).toBe(
-      'Relis le journal des gels et résume-le.'
+  it('ne se déclenche pas sur un prompt sans acte de publication', () => {
+    expect(
+      extrairePromptSuivant('AUTOWIN_PROMPT_V1: Relis le journal des gels et résume-le.')
+    ).toBe('Relis le journal des gels et résume-le.')
+  })
+})
+
+/*
+ * VECU LE 2026-09-11 (conv-467). Un tour qui corrige le comptage du budget termine par
+ * « …sans créer de doublon avec les lignes déjà PRÉSENTES ». L'utilisateur n'a vu AUCUN prompt
+ * dans son champ de saisie.
+ *
+ * Cause : l'alternative `\bPR\b` du detecteur d'actes de publication. En JavaScript, `\b` est une
+ * frontiere ASCII — `é` n'est pas un caractere de mot. Le « pr » de « présentes » est donc encadre
+ * de deux frontieres et matche le sigle « PR » (pull request). Le prompt a ete classe publication,
+ * puis SUPPRIME par la regle « publication jamais demandee ».
+ *
+ * Le francais est plein de « pr » suivis d'un accent : présentes, prêt, prévois, prépare.
+ */
+describe('frontieres de mots — un accent ne coupe pas un mot', () => {
+  const PROMPT_SANS_PUBLICATION =
+    'Écris un script de rattrapage qui rejoue les événements chat-usage dans cost.jsonl, sans créer de doublon avec les lignes déjà présentes.'
+
+  it('« présentes » ne fait pas passer un prompt pour une pull request', () => {
+    expect(estPromptDePublication(PROMPT_SANS_PUBLICATION)).toBe(false)
+  })
+
+  it.each(['prépare le terrain', 'prêt à relire', 'prévois un test de reprise'])(
+    'ni %s',
+    (prompt) => {
+      expect(estPromptDePublication(prompt)).toBe(false)
+    }
+  )
+
+  it('le prompt survit donc jusqu au champ de saisie', () => {
+    expect(
+      extrairePromptSuivant(
+        `bilan\n\nAUTOWIN_PROMPT_V1: ${PROMPT_SANS_PUBLICATION}`,
+        'Corrige ce defaut du comptage de budget'
+      )
+    ).toBe(PROMPT_SANS_PUBLICATION)
+  })
+
+  it('mais le VRAI sigle PR reste detecte', () => {
+    expect(estPromptDePublication('Ouvre la PR sur main')).toBe(true)
+    expect(estPromptDePublication('ouvre une pull request')).toBe(true)
+  })
+})
+
+describe('dossier de travail sans depot git', () => {
+  // Mesure des saisies des 09 et 10/09/2026 : trois relances de l'utilisateur pour le meme motif
+  // (« j'ai pas de git arrete de me casser les couilles pour publier ») sur un dossier sans `.git`.
+  it('ne reecrit plus une suite de publication en ordre de tri quand il n’y a aucun depot', () => {
+    expect(estPromptDePublication('Commit et push la correction sur main', undefined, false)).toBe(
+      false
     )
+    expect(estPromptDePublication('Ouvre une pull request', 'corrige le bouton', false)).toBe(false)
+  })
+
+  it('garde le garde-fou quand le depot existe, et quand l’appelant ne sait pas', () => {
+    expect(estPromptDePublication('Commit et push la correction sur main', undefined, true)).toBe(
+      true
+    )
+    expect(estPromptDePublication('Commit et push la correction sur main')).toBe(true)
   })
 })

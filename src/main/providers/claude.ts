@@ -1,12 +1,11 @@
+// fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
 import { joinThinking } from './thinking'
 import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 import {
   assertArgvWithinLimit,
   createStreamWatchdog,
   killEscalate,
-  resolveProviderTimeoutMs,
-  SUBAGENT_INACTIVITY_MS,
-  SUBAGENT_TOTAL_MS
+  SUBAGENT_INACTIVITY_MS
 } from './watchdog'
 import { contextWindowFor } from '../../shared/context-gauge'
 import { spawn } from 'node:child_process'
@@ -21,9 +20,13 @@ import {
 } from '../runs/stdout-journal'
 import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
-import { findNpmGlobalFile } from './npm-global-resolve'
+import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { scriptHookGardes } from '../../shared/garde-git-destructeur'
+import { refusReglageProd, refusSqlAgent } from '../prod-run-guard'
+import { chargerAutoriteProd } from '../store/prod-autorite-store'
+import { autowinAppDataRoot } from '../app-data'
+import { isAbsolute, join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
 import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
@@ -49,6 +52,7 @@ import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
+import { coutDuTourDepuisCumul } from './claude-session-cost'
 import { abortFailure } from './abort-diagnostic'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
@@ -240,6 +244,18 @@ export function normalizeClaudeUsage(
  * le CLI interprète ses règles de permission — c'est ce qui les rend fiables ici, là où un
  * périmètre par préfixe ne borne que le verbe.
  */
+/**
+ * Environnement du processus agent : base, puis variables du run (`execution.agentEnv`, ex. le fil
+ * AUTOWIN_CONVERSATION_ID), puis NON_INTERACTIVE_ENV EN DERNIER — une variable du run ne peut pas
+ * rouvrir un pager ou une invite d'identifiants.
+ */
+export function environnementAgent(
+  base: NodeJS.ProcessEnv,
+  agentEnv?: Record<string, string>
+): NodeJS.ProcessEnv {
+  return { ...base, ...(agentEnv ?? {}), ...NON_INTERACTIVE_ENV }
+}
+
 export const NON_INTERACTIVE_ENV: Record<string, string> = {
   GIT_PAGER: 'cat',
   PAGER: 'cat',
@@ -495,7 +511,89 @@ export function resolveClaudeBin(explicit?: string): string {
   if (explicit) return explicit
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
   const found = findClaudeExecutable()
+  if (found) dernierClaudeTrouve = found
   return found ?? 'claude'
+}
+
+/** Dernier `claude.exe` resolu dans ce processus — secours si une resolution ulterieure echoue. */
+let dernierClaudeTrouve: string | undefined
+
+export interface BinaireLancableDeps {
+  platform?: string
+  /** Binaire DESIGNE (option `bin` ou `CLAUDE_BIN`) : choix de l'operateur, jamais re-resolu. */
+  designe?: boolean
+  rechercher?: () => string | undefined
+  dernierConnu?: () => string | undefined
+  existe?: (chemin: string) => boolean
+  candidats?: () => string[]
+  attendre?: (ms: number) => Promise<void>
+}
+
+/**
+ * Binaire que le relais survivable Windows peut REELLEMENT lancer.
+ *
+ * Le runner passe l'executable a CreateProcessW en `lpApplicationName`, qui ne cherche JAMAIS dans le
+ * PATH : le repli nu `claude` y echoue a coup sur, en « Le fichier specifie est introuvable » (reproduit
+ * le 2026-09-25, `-ExecutableB64` decode = « claude »). Plutot que de lancer un echec certain, on
+ * re-resout (dernier binaire connu, puis quelques essais espaces) ; sinon on echoue en NOMMANT les
+ * dossiers cherches — la prochaine occurrence s'explique d'elle-meme.
+ */
+export async function binaireClaudeLancable(
+  bin: string,
+  deps: BinaireLancableDeps = {}
+): Promise<string> {
+  const platform = deps.platform ?? process.platform
+  if (platform !== 'win32' || deps.designe || isAbsolute(bin)) return bin
+  const existe = deps.existe ?? existsSync
+  const connu = (deps.dernierConnu ?? ((): string | undefined => dernierClaudeTrouve))()
+  if (connu && existe(connu)) return connu
+  const rechercher = deps.rechercher ?? ((): string | undefined => findClaudeExecutable())
+  const attendre =
+    deps.attendre ?? ((ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)))
+  for (const ms of [0, 250, 1000, 3000]) {
+    if (ms) await attendre(ms)
+    const trouve = rechercher()
+    if (trouve) {
+      dernierClaudeTrouve = trouve
+      return trouve
+    }
+  }
+  const cherches = (deps.candidats ?? ((): string[] => npmPrefixCandidates()))()
+  throw new Error(
+    `CLI claude introuvable : aucun claude.exe sous ${cherches.slice(0, 6).join(' ; ') || '(aucun dossier candidat)'}. ` +
+      'Installe-le (npm i -g @anthropic-ai/claude-code) ou désigne-le via CLAUDE_BIN.'
+  )
+}
+
+/**
+ * `claude update` en cours, lance par l'app elle-meme (`claude-cli-update.ts`). Sur une install npm,
+ * la mise a jour SUPPRIME puis recree tout le paquet (mesure du 2026-09-25 : ~3 s sans `claude.exe`).
+ * Un tour lance dans cette fenetre echoue en « fichier introuvable » ; il attend donc la fin.
+ */
+let miseAJourClaudeCli: Promise<unknown> | undefined
+/** Plafond d'attente : une mise a jour qui traine ne doit pas retenir un tour indefiniment. */
+const ATTENTE_MISE_A_JOUR_MAX_MS = 180_000
+
+export function signalerMiseAJourClaudeCli(enCours: Promise<unknown>): void {
+  const suivie = enCours.then(
+    () => undefined,
+    () => undefined
+  )
+  miseAJourClaudeCli = suivie
+  void suivie.then(() => {
+    if (miseAJourClaudeCli === suivie) miseAJourClaudeCli = undefined
+  })
+}
+
+async function attendreMiseAJourClaudeCli(): Promise<void> {
+  const enCours = miseAJourClaudeCli
+  if (!enCours) return
+  let minuteur: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    enCours,
+    new Promise<void>((resolve) => (minuteur = setTimeout(resolve, ATTENTE_MISE_A_JOUR_MAX_MS)))
+  ])
+  clearTimeout(minuteur)
 }
 
 /** Sous-chemin du binaire natif dans le paquet npm `@anthropic-ai/claude-code`. */
@@ -583,8 +681,6 @@ export function findClaudeExecutable(deps: ClaudeBinLookupDeps = {}): string | u
 export interface ClaudeAdapterOptions {
   /** Binaire claude (défaut: 'claude' résolu via PATH). */
   bin?: string
-  /** Timeout d'un tour en ms. */
-  timeoutMs?: number
 }
 
 /** Les seules valeurs de `--effort` que le CLI Claude accepte (mesure du 2026-09-01 sur 2.1.251). */
@@ -659,6 +755,45 @@ export function claudeTransportEnvelope(
  * `send` l'appelle et ne decide rien d'autre : c'est ce qui fait du test une preuve sur le chemin de
  * production plutot que sur une reconstitution.
  */
+/**
+ * Reglages PROPRES a Autowin passes au CLI par `--settings` : memoire ramenee au projet courant,
+ * et hook PreToolUse(Bash|PowerShell) du garde de lancement graphique.
+ *
+ * La commande du hook COMMENCE par le nom nu `node`. Mesure 2026-09-13 (CLI 2.1.270, Windows) :
+ * `"C:/.../node.exe" "script"` ne s'executait jamais — le shell du hook lit une chaine entre
+ * guillemets en tete comme une valeur, pas comme un programme — et le garde restait muet. Et
+ * l'outil shell du CLI s'appelle `PowerShell` sur ce poste, pas `Bash` : le matcher couvre les deux.
+ */
+/**
+ * Bases déclarées `non-prod` dans la liste d'autorité : les SEULES qu'un agent peut viser depuis son
+ * terminal (revue conv-738). Liste illisible -> aucune : tout client SQL est alors refusé.
+ */
+function basesNonProdDeclarees(): string[] {
+  try {
+    return chargerAutoriteProd(autowinAppDataRoot())
+      .autorite.entrees.filter((e) => e.nature === 'base' && e.classe === 'non-prod')
+      .map((e) => e.nom)
+  } catch {
+    return []
+  }
+}
+
+export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
+  const q = (v: string): string => `"${v.split('\\').join('/')}"`
+  return {
+    autoMemoryDirectory: '',
+    hooks: {
+      PreToolUse: [
+        {
+          // Edit/Write/MultiEdit/NotebookEdit : les réglages de la protection de prod (conv-738, faille 2).
+          matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit',
+          hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
+        }
+      ]
+    }
+  }
+}
+
 export function argumentsMcpNoeudSkill(opts: SendOptions): {
   /** `--strict-mcp-config`, ou rien s'il est retire pour cet appel. */
   strict: string[]
@@ -728,12 +863,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
   readonly supportsExecution = true
   /** Vrai : `send` pousse `--resume <id>` au CLI (voir plus bas). Le seul adaptateur dans ce cas. */
   readonly honoursSessionResume = true
-  private readonly bin: string
-  private readonly timeoutMs: number
+  private readonly explicitBin: string | undefined
 
   constructor(opts: ClaudeAdapterOptions = {}) {
-    this.bin = resolveClaudeBin(opts.bin)
-    this.timeoutMs = opts.timeoutMs ?? SUBAGENT_TOTAL_MS
+    this.explicitBin = opts.bin
+  }
+
+  /**
+   * Resolu a CHAQUE lancement, jamais fige a la construction : l'adaptateur vit toute la session, et
+   * un `claude.exe` absent a ce moment-la (mise a jour npm en cours au demarrage, 2026-09-25) figeait
+   * le repli nu `claude` — que CreateProcess ne sait pas lancer — jusqu'au redemarrage de l'app.
+   */
+  private get bin(): string {
+    return resolveClaudeBin(this.explicitBin)
   }
 
   /** L'auth vit dans le CLI (abonnement déjà loggé) — on vérifie qu'il répond. */
@@ -847,6 +989,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // remplissait d'un coup, apres coup. Avec `--include-partial-messages`, les `thinking_delta`
       // arrivent au fil de l'eau et le bloc s'ecrit EN TEMPS REEL (comme kimi).
       '--include-partial-messages',
+      /*
+       * PENSEE EN CLAIR, sinon le bloc « Raisonnement » reste VIDE (constat utilisateur 2026-09-12).
+       *
+       * Mesure hors-modele du 2026-09-12 sur le CLI 2.1.269, modele opus-5 : sans ce drapeau le flux
+       * porte `content_block_start {type:'thinking', thinking:''}`, UN `thinking_delta` vide puis un
+       * `signature_delta` (l'enveloppe chiffree). Le texte n'est jamais transmis — il n'y avait donc
+       * rien a « recuperer » cote rendu. Avec `--thinking-display summarized` : 14 `thinking_delta`
+       * NON vides sur la meme question. Cause amont : depuis Opus 4.7 l'API met `thinking.display`
+       * a `omitted` par defaut.
+       * Source : https://github.com/anthropics/claude-code/issues/31326
+       */
+      '--thinking-display',
+      'summarized',
       // Retiré UNIQUEMENT pour un nœud skill en héritage : voir `argumentsMcpNoeudSkill`.
       ...argsMcp.strict,
       '--setting-sources',
@@ -957,15 +1112,25 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         ...autorises(tools),
         ...outilsMcpAutorises
       )
-    } else if (materialized) {
-      args.push(
-        '--tools',
-        'Read,' + OUTILS_WEB,
-        '--allowedTools',
-        ...autorises('Read,' + OUTILS_WEB),
-        ...outilsMcpAutorises
-      )
     } else {
+      /**
+       * fix-ok: une piece jointe DESARMAIT le tour de chat (cause mesuree, conv-650 2026-09-17).
+       *
+       * Il existait ici une branche `else if (materialized)` qui, des qu'une piece jointe etait
+       * materialisee, remplacait TOUTE la branche chat : outils reduits a `Read,WebFetch,WebSearch`
+       * et — surtout — aucun `--add-dir`, donc `readOnlyCwd` restait `undefined` et le CLI repartait
+       * dans le cwd du PROCESSUS Autowin. Or `agent-pilot` remonte les pieces jointes du fil ENTIER
+       * depuis le 2026-08-27 : une seule image jointe au premier message desarmait donc TOUS les
+       * tours suivants de la conversation.
+       *
+       * Mesure conv-650, turnId 5bd288bc-7617-4ab7-9810-3acfbed17c23 : argv
+       * `--tools Read,WebFetch,WebSearch`, lectures parties de `D:\AutoWinOS` alors que la
+       * conversation etait rangee sur `D:\RigV3Desktop`, et quatre demandes d'ecriture refusees
+       * d'affilee (saisies ts 1789639857023, 1789639927623, 1789640030803, 1789640116782).
+       *
+       * Les pieces jointes n'ont plus besoin d'une branche a elles : elles vivent dans un dossier
+       * temporaire, ouvert en lecture par un `--add-dir` supplementaire ci-dessous.
+       */
       /**
        * TOUR DE CHAT : PLEINEMENT OUTILLE (lecture + shell + ecriture).
        *
@@ -1004,6 +1169,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           args.push(
             '--add-dir',
             readOnlyWorkspace,
+            ...(materialized ? ['--add-dir', materialized.dir] : []),
             '--tools',
             'Read,Grep,Glob,' + OUTILS_WEB,
             '--allowedTools',
@@ -1024,6 +1190,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             'bypassPermissions',
             '--add-dir',
             readOnlyWorkspace,
+            ...(materialized ? ['--add-dir', materialized.dir] : []),
             '--tools',
             'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,' + OUTILS_WEB,
             '--allowedTools',
@@ -1049,11 +1216,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // La MEME valeur aux deux drapeaux, comme dans les autres branches : `--tools` charge,
         // `--allowedTools` autorise, et une asymetrie entre les deux laisse un outil declare mais
         // refuse (ou l'inverse) sans que rien ne le signale.
+        // Sans workspace, il reste le web — et les pieces jointes, qui vivent dans un dossier
+        // temporaire a nous : `Read` n'est charge que si elles existent reellement.
+        const outilsSansWorkspace = materialized ? 'Read,' + OUTILS_WEB : OUTILS_WEB
         args.push(
+          ...(materialized ? ['--add-dir', materialized.dir] : []),
           '--tools',
-          OUTILS_WEB,
+          outilsSansWorkspace,
           '--allowedTools',
-          ...autorises(OUTILS_WEB),
+          ...autorises(outilsSansWorkspace),
           ...outilsMcpAutorises
         )
       }
@@ -1079,7 +1250,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     try {
       settingsDir = mkdtempSync(join(tmpdir(), 'autowin-os-settings-'))
       const settingsFile = join(settingsDir, 'settings.json')
-      writeFileSync(settingsFile, JSON.stringify({ autoMemoryDirectory: '' }), 'utf8')
+      // GARDE EFFACEMENT DE TRAVAIL (conv-587) : un hook PreToolUse sur Bash refuse les commandes
+      // qui detruisent l'arbre de travail entier (git reset --hard & co).
+      // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
+      const hookGarde = join(settingsDir, 'garde-git-destructeur.mjs')
+      writeFileSync(hookGarde, scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees()), 'utf8')
+      writeFileSync(
+        settingsFile,
+        JSON.stringify(reglagesCliAutowin(hookGarde)),
+        'utf8'
+      )
       args.push('--settings', settingsFile)
     } catch {
       settingsDir = undefined // impossible d'ecrire : on garde le comportement d'origine
@@ -1096,7 +1276,18 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     } else if (systemInjected) {
       args.push('--system-prompt', system!)
     }
-    if (opts.resumeSessionId) args.push('--resume', opts.resumeSessionId)
+    if (opts.resumeSessionId) {
+      args.push('--resume', opts.resumeSessionId)
+      // PROMPT SYSTEME FIGE A LA REPRISE. Par defaut (`--system-prompt-snapshot on`), le CLI
+      // enregistre le prompt systeme au PREMIER tour et le renvoie tel quel a chaque `--resume`,
+      // en ignorant le texte qu'on lui repasse. Mesure du 2026-09-22 (CLI 2.1.280) : premier tour
+      // « reponds ANANAS », reprise avec « reponds MANGUE » -> ANANAS ; avec `off` -> MANGUE.
+      // Une conversation commencee avant une retouche de la constitution ou du pilotage ne la
+      // voyait donc jamais. Cout : le prompt Autowin est stable d'un tour a l'autre (conv-792 :
+      // 1 prompt distinct sur 7 tours), donc le cache reste valide ; il ne se reconstruit qu'au
+      // tour qui suit une vraie retouche — c'est exactement le but.
+      if (systemInjected) args.push('--system-prompt-snapshot', 'off')
+    }
     appendClaudeSelectionArgs(args, opts)
 
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
@@ -1114,6 +1305,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * `onJournal`. Aucune ne passait par `close` ni par `error` : le couple restait dans %TEMP%.
      * Garde : `claude.nettoyage-sur-exception-avant-spawn.test.ts`.
      */
+    // Un `claude update` en cours retire le binaire quelques secondes : on attend qu'il revienne.
+    await attendreMiseAJourClaudeCli()
     let journal: StdoutJournalHandle | undefined
     let invocation:
       | ReturnType<typeof backgroundSurvivalInvocation>
@@ -1166,7 +1359,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       }
       invocation = journal
-        ? backgroundSurvivalInvocation(this.bin, args, journalRoot!, journal.path, lastUser)
+        ? backgroundSurvivalInvocation(
+            // Le relais Windows ne cherche pas dans le PATH : jamais de nom nu (voir binaireClaudeLancable).
+            await binaireClaudeLancable(this.bin, {
+              designe: Boolean(this.explicitBin || process.env.CLAUDE_BIN)
+            }),
+            args,
+            journalRoot!,
+            journal.path,
+            lastUser
+          )
         : {
             bin: this.bin,
             args,
@@ -1198,11 +1400,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // compte par defaut : sans ce retrait, un dir herite du processus ferait tourner le run
       // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
       // explicitement une variable garde le dernier mot.
-      env: {
-        ...withClaudeAccountEnv(process.env),
-        ...(invocation.env ?? {}),
-        ...NON_INTERACTIVE_ENV
-      },
+      env: environnementAgent(
+        { ...withClaudeAccountEnv(process.env), ...(invocation.env ?? {}) },
+        execution?.agentEnv
+      ),
       ...(journal
         ? {
             detached: true,
@@ -1253,19 +1454,47 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         .map((attachment) => base64Fingerprint(attachment.content))
     )
     const collectArtifacts = (content: unknown, tool?: string): void => {
-      artifactCandidates.push(
-        ...claudeContentArtifacts(content, tool).filter(
-          (artifact) =>
-            !artifact.mimeType?.startsWith('image/') ||
-            artifact.encoding !== 'base64' ||
-            artifact.content === undefined ||
-            !inputImageFingerprints.has(base64Fingerprint(artifact.content))
-        )
+      const nouveaux = claudeContentArtifacts(content, tool).filter(
+        (artifact) =>
+          !artifact.mimeType?.startsWith('image/') ||
+          artifact.encoding !== 'base64' ||
+          artifact.content === undefined ||
+          !inputImageFingerprints.has(base64Fingerprint(artifact.content))
       )
+      if (!nouveaux.length) return
+      artifactCandidates.push(...nouveaux)
+      /**
+       * UNE IMAGE SE VOIT LA OU ELLE A ETE LUE, pas apres la conclusion du tour.
+       *
+       * Mesure du 2026-09-10 (conv-426) : les artefacts n'etaient rendus qu'avec le `SendResult`,
+       * donc APRES tout le texte deja diffuse en direct — les captures et les fichiers lus par
+       * `Read` s'empilaient sous le bloc de cloture (« ✅ Fait »), a l'envers de l'ordre reel du
+       * raisonnement. Le canal existait deja (`StreamChunk.artifacts`) mais personne ne l'emettait.
+       * On le pousse donc DES la lecture : l'ordre du fil redevient l'ordre des faits. Les memes
+       * artefacts restent dans le resultat final (identifiant deterministe), le consommateur
+       * dedoublonne dessus.
+       */
+      const streamed = normalizeProviderArtifacts(nouveaux, {
+        provider: this.id,
+        model: resolvedModel,
+        workspaceRoot: execution?.cwd
+      })
+      if (!streamed.length) return
+      queue.push({ delta: '', artifacts: streamed })
+      wake()
     }
+    /** Taches de fond lancees et pas terminees (id -> commande lisible, vue arretee ?). Voir `task_started`. */
+    const tachesDeFond = new Map<string, { commande: string; arretee: boolean }>()
     const pendingTools = new Map<
       string,
-      { name: string; command: string; filePath: string; writtenLineFingerprints: string[] }
+      {
+        name: string
+        command: string
+        filePath: string
+        writtenLineFingerprints: string[]
+        /** Heure de depart : la ligne de FIN d'action porte sa duree (frise C3 du bloc Actions). */
+        startedAt: number
+      }
     >()
     const queue: StreamChunk[] = []
     let done = false
@@ -1292,16 +1521,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       killEscalate(child)
       forceSettle(new Error(reason))
     })
+    // Un seul détecteur : le SILENCE. Le cap de durée totale a été supprimé le 2026-09-20 (voir
+    // `watchdog.ts`) — il tuait des tours vivants, pas des tours figés.
     const watchdog = createStreamWatchdog({
       inactivityMs: SUBAGENT_INACTIVITY_MS,
-      totalMs: resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, this.timeoutMs),
-      onTrip: (reason) => {
+      onTrip: () => {
         killEscalate(child)
-        forceSettle(
-          new Error(
-            `claude CLI figé (${reason === 'inactivity' ? 'aucune sortie' : 'durée max'}) — tué par le watchdog`
-          )
-        )
+        forceSettle(new Error('claude CLI figé (aucune sortie) — tué par le watchdog'))
       }
     })
     opts.signal?.addEventListener('abort', () => {
@@ -1406,6 +1632,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const demarre = o['subtype'] === 'task_started'
         const brut = String((demarre ? o['description'] : o['summary']) ?? '').trim()
         const commande = resumerCommandeDeFond(brut)
+        // fix-ok: conv-528 turnId 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9 — le CLI -p ARRETE les taches de fond a la fin du tour
+        // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
+        // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
+        const idTache = String(o['task_id'] ?? commande ?? '')
+        if (demarre) tachesDeFond.set(idTache, { commande: commande || 'commande sans description', arretee: false })
+        else {
+          const st = String(o['status'] ?? '').toLowerCase()
+          if (st === 'completed' || st === 'failed') tachesDeFond.delete(idTache)
+          else
+            tachesDeFond.set(idTache, {
+              commande: commande || tachesDeFond.get(idTache)?.commande || 'commande sans description',
+              arretee: true
+            })
+        }
         if (demarre) {
           queue.push({
             delta: '',
@@ -1498,7 +1738,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               name: part.name,
               command,
               filePath,
-              writtenLineFingerprints: claudeWrittenLineFingerprints(part.input)
+              writtenLineFingerprints: claudeWrittenLineFingerprints(part.input),
+              startedAt: Date.now()
             })
             /*
              * SIGNE DE VIE PAR APPEL D'OUTIL — relaye en DIRECT, jamais persiste (meme regle que le
@@ -1546,6 +1787,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           const call = pendingTools.get(part.tool_use_id)
           if (!call) continue
           pendingTools.delete(part.tool_use_id)
+          // FIN D'ACTION (frise C3, 2026-09-24) : le bloc Actions ne recoit que du texte ; cette ligne
+          // lui dit si l'action a REUSSI ou ECHOUE, et combien de temps elle a pris. Elle ne cree pas
+          // de ligne : `thinking-block-corps.ts` la replie sur la ligne de son outil.
+          const dureeOutil = dureeLisible((Date.now() - call.startedAt) / 1000)
+          queue.push({
+            delta: '',
+            status: `${call.name} ${part.is_error ? 'échoué' : 'terminé'} - ${dureeOutil}`
+          })
           // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
           const output = claudeToolResultText(part.content).slice(-20_000)
           collectArtifacts(part.content, call.name)
@@ -1573,14 +1822,43 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
+        if (tachesDeFond.size > 0) {
+          // fix-ok: le message disait « arrêtée » meme pour une tache sans notification `stopped` (objection juge, conv-528 tour 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9)
+          const lister = (arretee: boolean): string =>
+            [...tachesDeFond.values()]
+              .filter((x) => x.arretee === arretee)
+              .map((x) => `\`${x.commande}\``)
+              .join(', ')
+          const arretees = lister(true)
+          const ouvertes = lister(false)
+          const parties = [
+            arretees ? `Tâche de fond arrêtée à la fin de ce tour : ${arretees}.` : '',
+            ouvertes ? `Tâche de fond pas terminée à la fin de ce tour : ${ouvertes}.` : ''
+          ].filter(Boolean)
+          const avis = `\n\n⚠️ ${parties.join('\n⚠️ ')} Son résultat ne reviendra pas tout seul — relance la demande pour la refaire.`
+          tachesDeFond.clear()
+          text += avis
+          queue.push({ delta: avis })
+        }
         if (typeof o['session_id'] === 'string') sessionId = o['session_id'] as string
         // Tokens/coût RÉELS du tour (le result event du CLI les porte).
         const hasReportedCost = Object.prototype.hasOwnProperty.call(o, 'total_cost_usd')
-        const normalizedUsage = normalizeClaudeUsage(
-          o['usage'],
-          o['total_cost_usd'],
-          hasReportedCost
-        )
+        /*
+         * `total_cost_usd` est le CUMUL DE LA SESSION, pas le coût de ce tour — et toutes nos
+         * sessions sont reprises (`--resume`). Écrit tel quel, il était ADDITIONNÉ aux tours
+         * précédents par l'indicateur de coût : 9 320 $ affichés pour 4 428 $ réels sur les 661
+         * conversations du poste (mesure 2026-09-20). On retire donc ce qui a déjà été compté sur
+         * la MÊME session. Voir `claude-session-cost.ts` pour la preuve.
+         */
+        const cumulRapporte = o['total_cost_usd']
+        const coutDuTour =
+          typeof cumulRapporte === 'number'
+            ? coutDuTourDepuisCumul(
+                typeof o['session_id'] === 'string' ? (o['session_id'] as string) : sessionId,
+                cumulRapporte
+              )
+            : cumulRapporte
+        const normalizedUsage = normalizeClaudeUsage(o['usage'], coutDuTour, hasReportedCost)
         if (normalizedUsage)
           usage = {
             ...normalizedUsage,
@@ -1609,9 +1887,23 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             reported || (cost === undefined ? code : `${code} · ${cost.toFixed(4)} USD`)
           // Un event `result` est deja la decision terminale du CLI (qui gere ses propres retries).
           // Le rejouer au niveau AgentPilot repaie le meme prompt et contourne la borne provider.
+          //
+          // SAUF le plantage transitoire QUI N'A RIEN COUTE. Mesure conv-599, tour
+          // `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : apres 4 iterations payees (≈1,06 USD, 917 k
+          // tokens), l'iteration 4 meurt en `error_during_execution` en 1,9 s pour 0 token et
+          // 0 USD. Ce n'est pas une decision du CLI sur le fond, c'est sa propre execution qui a
+          // casse — et le tour ENTIER etait jete, l'utilisateur devant retaper la demande
+          // (saisie ts 1789562253947, « /kaizen cette erreur et reprend »). Rien n'ayant ete
+          // facture, le rejouer ne « repaie » rien et ne contourne aucune borne ; AgentPilot le
+          // borne de toute facon a 2 tentatives, et reprend la session CLI en cours.
+          const rienConsomme =
+            !normalizedUsage ||
+            ((normalizedUsage.costUsd ?? 0) === 0 &&
+              (normalizedUsage.inputTokens ?? 0) === 0 &&
+              (normalizedUsage.outputTokens ?? 0) === 0)
           errored = new ProviderCallError(`Claude a interrompu l'appel : ${detail}`, {
             code,
-            retryable: false,
+            retryable: code === 'error_during_execution' && rienConsomme,
             usage: normalizedUsage,
             resolvedModel
           })

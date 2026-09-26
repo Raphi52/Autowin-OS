@@ -1,0 +1,31 @@
+Joue la skill `judge` de ce depot (skills/judge/SKILL.md) : revue ADVERSARIALE et EXTERNE.
+
+CONTEXTE : quatre livrables ANONYMISES repondent au MEME enonce, dans quatre copies isolees. Tu ne
+sais pas lequel est le temoin ni lequel est l idee neuve. Les quatre passent DEJA le critere
+automatique (8/8 gardes, code de sortie 0) : ce critere ne les departage donc pas. Ton travail est
+de les departager sur la QUALITE, avec des preuves citees en fichier:ligne.
+
+ENONCE COMMUN : D:/AutoWinOS/bench/dispersion/tache.txt
+CRITERE AUTOMATIQUE (deja vert pour les quatre) : D:/AutoWinOS/bench/dispersion/gel/check.mjs
+
+LIVRABLES (lis le fichier `scripts/banc-dispersion.mjs` de chacun, et tout autre fichier modifie) :
+  L1 : D:/AutoWinOS/bench/runs/disp-a
+  L2 : D:/AutoWinOS/bench/runs/disp-b
+  L3 : D:/AutoWinOS/bench/runs/disp-c
+  L4 : D:/AutoWinOS/bench/runs/disp-x
+(`git status --porcelain` dans chaque copie te dit ce qui a ete touche en plus du livrable.)
+
+GRILLE, dans cet ordre :
+1. Le contrat de l enonce est-il tenu EN ENTIER (forme JSON exacte, six regles de calcul, cinq cas
+   limites, aucune dependance ajoutee) ? Cite les ecarts en fichier:ligne.
+2. Defauts, rustines, faux vert : valeur mise en dur pour satisfaire le controle, cas limite traite
+   par hasard, erreur avalee, code mort, dette laissee. Une modification HORS enonce (par exemple
+   `package.json` touche) est un ecart de perimetre : nomme-la.
+3. Robustesse hors du controle : que se passe-t-il sur une entree que `check.mjs` ne teste pas
+   (journal enorme, cout a 0, duree negative, plus de deux bras, replique de verdict `casse`) ?
+   Essaie-le pour de vrai plutot que de le supposer.
+4. Lisibilite et maintenabilite pour l equipe qui reprendra le fichier.
+
+RENDS : un CLASSEMENT des quatre (1er a 4e), l ecart de qualite qui separe le 1er du 2e en une
+phrase, et pour chaque livrable ses defauts prouves. Si deux livrables sont equivalents, dis-le au
+lieu d inventer un ecart.

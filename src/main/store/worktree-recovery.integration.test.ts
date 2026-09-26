@@ -17,7 +17,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
-import { WorktreeManager } from './worktree-manager'
+import { messageCommitAgent, WorktreeManager } from './worktree-manager'
+import { annonceCommitLocal } from '../annonce-commit-local'
 import { WorktreeRunStateStore } from './worktree-run-state'
 
 const roots: string[] = []
@@ -652,5 +653,72 @@ describe('récupération des worktrees après redémarrage', () => {
       'agent manual-retry-before-publication'
     )
     expect(existsSync(worktreePath)).toBe(false)
+  })
+})
+
+describe('commit de transport : message descriptif et annonce (conv-710)', () => {
+  it('le commit de fin de run porte la tâche après le préfixe agent <id>', () => {
+    const repo = tempRepo()
+    const current = manager(repo)
+    const path = current.manager.acquire('run-decrit')
+    writeFileSync(join(path, 'a.txt'), 'travail agent\n')
+
+    const issue = current.manager.finalize('run-decrit', {
+      task: 'Garder le commit local\navec un message qui décrit le changement'
+    })
+
+    expect(issue).toMatchObject({ outcome: 'merged', committed: true })
+    expect(git(repo, 'log', '-1', '--format=%s', 'HEAD')).toBe(
+      'agent run-decrit: Garder le commit local'
+    )
+    const annonce = annonceCommitLocal(issue, 'run-decrit', 'Garder le commit local')
+    expect(annonce).toContain('Commit local')
+    expect(annonce).toContain('agent run-decrit: Garder le commit local')
+    expect(annonce).toContain(git(repo, 'rev-parse', 'HEAD').slice(0, 8))
+  })
+
+  it('le coordinateur transmet la tâche du run jusqu au message du commit', () => {
+    const repo = tempRepo()
+    const current = manager(repo)
+    const coordinator = new RunWorktreeCoordinator({
+      manager: current.manager,
+      stateStore: stateStore(current.worktreeRoot)
+    })
+    const path = coordinator.begin('run-coord', 'Builder', true, { task: 'Corriger le glossaire' })!
+    writeFileSync(join(path, 'a.txt'), 'glossaire\n')
+
+    coordinator.end('run-coord', { merge: true })
+
+    expect(git(repo, 'log', '-1', '--format=%s', 'HEAD')).toBe(
+      'agent run-coord: Corriger le glossaire'
+    )
+  })
+
+  it('le commit de secours avant un refus porte le même message descriptif', () => {
+    const repo = tempRepo()
+    const current = manager(repo)
+    const path = current.manager.acquire('run-secours')
+    writeFileSync(join(path, 'a.txt'), 'travail\n')
+    writeFileSync(join(repo, '.git', 'MERGE_HEAD'), git(repo, 'rev-parse', 'HEAD') + '\n')
+
+    const issue = current.manager.finalize('run-secours', { task: 'Sauver le travail' })
+
+    expect(issue).toMatchObject({ outcome: 'blocked', reason: 'base-in-progress' })
+    expect(git(repo, 'log', '-1', '--format=%s', 'refs/autowin/rescue/run-secours')).toBe(
+      'agent run-secours: Sauver le travail'
+    )
+  })
+
+  it('sans tâche le message reste agent <id> ; le résumé tient sur une ligne de 72 caractères', () => {
+    expect(messageCommitAgent('run-x')).toBe('agent run-x')
+    expect(messageCommitAgent('run-x', '  \n\t ')).toBe('agent run-x')
+    const resume = messageCommitAgent('run-x', 'a'.repeat(200)).slice('agent run-x: '.length)
+    expect(resume.length).toBeLessThanOrEqual(72)
+    expect(messageCommitAgent('run-x', 'deux\u0007mots\r\nsuite')).toBe('agent run-x: deux mots')
+  })
+
+  it('aucune annonce quand le run n a créé aucun commit', () => {
+    expect(annonceCommitLocal({ outcome: 'merged', committed: false }, 'r', 't')).toBeUndefined()
+    expect(annonceCommitLocal({ outcome: 'blocked', committed: true }, 'r', 't')).toBeUndefined()
   })
 })

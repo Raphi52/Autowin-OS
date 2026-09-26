@@ -1,8 +1,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { cheminAudit } from './racine-depot.mjs'
+import { portCdp } from './cdp-port.mjs'
 
-const port = Number(process.argv[2] || 9273)
+// Port RESOLU (conv-615) : le defaut devine visait l'instance d'un AUTRE travail parallele,
+// ou celle de l'utilisateur. `portCdp()` lit le DevToolsActivePort de CE depot, et refuse
+// quand aucune instance propre n'existe.
+const port = Number(process.argv[2]) || portCdp()
 const output = process.argv[3] || cheminAudit('evidence/chat-orchestrator-selector-post-action.png')
 const traceOutput = output.replace(/\.png$/i, '.json')
 const inspectOnly = process.argv.includes('--inspect-only')

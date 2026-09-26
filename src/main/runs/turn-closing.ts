@@ -1,13 +1,25 @@
 /**
- * Un `done` conversationnel reprend souvent le texte deja streame : on ne le duplique pas. Une
- * cloture d'orchestration porte au contraire un outcome structure distinct du preambule ; elle doit
- * toujours rester visible et durable.
+ * CE QUI RESTE A DIRE, une fois retranche ce qui a DEJA ete dit.
+ *
+ * C'est la SEULE garde anti-doublon, et elle regarde le CONTENU. L'ancienne se contentait de
+ * demander « des deltas ont-ils ete vus ? » et, si oui, jetait le texte final en entier au motif
+ * qu'il « reprend ce qui a deja ete dit ». Ce motif n'est vrai que d'un tour qui ne parle qu'une
+ * fois. Des qu'un tour parle ENTRE ses appels d'outils -- ce que la consigne « jamais de fil muet »
+ * lui demande -- son texte final est du texte NEUF, et il etait perdu.
+ *
+ * MESURE le 2026-09-11 sur `conv-471` : quatre phrases diffusees (222 caracteres), puis le process
+ * principal relance pendant la redaction. A la reprise le texte final existait ; le veto l'a jete.
+ * L'utilisateur a lu « je lance les tests » puis plus rien, sans moyen de savoir si c'etait fini,
+ * pour 10652 tokens de sortie deja payes.
  */
-export function shouldPersistClosingText(
-  durableResponseTextSeen: boolean,
-  outcome: Record<string, unknown> | undefined
-): boolean {
-  return !durableResponseTextSeen || Boolean(outcome && Object.keys(outcome).length > 0)
+export function resteADire(closing: string, dejaDit: string): string {
+  const deja = dejaDit.trim()
+  if (!deja) return closing
+  // Prolongement : le texte final reprend le debut deja diffuse, on ne publie que la suite.
+  if (closing.startsWith(deja)) return closing.slice(deja.length).trim()
+  // Rien de neuf : tout ce que porte la cloture a deja ete affiche.
+  if (deja.includes(closing.trim())) return ''
+  return closing
 }
 
 /** Flux dédié : ce texte de clôture n'appartient à aucun stream déjà ouvert. */
@@ -33,26 +45,19 @@ export function closingStreamId(turnId: string): string {
 export function closingTurnDelivery(
   turnId: string,
   closingText: string | undefined,
-  durableResponseTextSeen: boolean,
-  outcome: Record<string, unknown> | undefined,
   texteDejaStreame?: string
 ): { durable: { kind: 'delta'; streamId: string; text: string }; live: { kind: 'delta'; streamId: string; text: string } } | undefined {
   const closing = closingText?.trim()
-  if (!closing || !shouldPersistClosingText(durableResponseTextSeen, outcome)) return undefined
+  if (!closing) return undefined
   /*
    * ON NE REPUBLIE QUE CE QUI N'A PAS DEJA ETE DIT.
    *
-   * Regle historique : une cloture porteuse d'un `outcome` etait TOUJOURS republiee, parce qu'a
-   * l'epoque le compte-rendu d'orchestration n'existait que dans le `done` — rien n'etait streame.
-   * Depuis que le modele reprend la parole apres `orchestrate` (agent-pilot, 2026-08-27), il ECRIT
-   * lui-meme ce compte-rendu en direct ; le `done` reprend alors le meme texte et le fil l'affichait
-   * DEUX FOIS (signale par l'utilisateur le 2026-09-09 sur un rendu de scout).
-   *
-   * On retranche donc le prefixe deja streame et on ne persiste que le reste (typiquement le pied de
-   * cloture ajoute par `texteDeCloture`). Rien de neuf a dire => aucune livraison.
+   * Le `done` reprend souvent le texte deja diffuse ; le fil l'affichait alors DEUX FOIS (signale
+   * par l'utilisateur le 2026-09-09 sur un rendu de scout). On retranche donc ce qui a deja ete dit
+   * et on ne persiste que le RESTE. Rien de neuf a dire => aucune livraison. Cette comparaison de
+   * contenu remplace l'ancien veto « des deltas ont ete vus », qui jetait des textes finaux NEUFS.
    */
-  const deja = texteDejaStreame?.trim() ?? ''
-  const reste = deja && closing.startsWith(deja) ? closing.slice(deja.length).trim() : closing
+  const reste = resteADire(closing, texteDejaStreame ?? '')
   if (!reste) return undefined
   const delta = { kind: 'delta' as const, streamId: closingStreamId(turnId), text: reste }
   return { durable: delta, live: { ...delta } }

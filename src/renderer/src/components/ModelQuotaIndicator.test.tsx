@@ -148,11 +148,32 @@ describe('indicateur de quotas modèles', () => {
       return texte
     }
 
-    const heure = new Date(Date.now() + 90 * 60 * 1000)
-    const attendue = heure.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-    expect(await rendre(heure.toISOString())).toBe(`Recharge à ${attendue}`)
-    // Sans date exposée, on ne fabrique rien : on le DIT.
-    expect(await rendre()).toBe('Heure de reset non exposée')
+    /*
+     * L'HORLOGE EST FIXÉE, pas prise sur la machine. Ce test lisait `Date.now()` et posait le reset
+     * 90 minutes plus tard : joué après 22h30, ces 90 minutes franchissent MINUIT, le libellé passe
+     * à « Recharge le 12/09 à 00:09 » et le test échoue — sans qu'aucun code ait changé. Un test qui
+     * rougit selon l'heure à laquelle on le lance n'accuse plus rien. Midi local : les deux côtés de
+     * minuit sont désormais choisis, pas subis.
+     */
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date(2026, 6, 24, 12, 0, 0))
+      const heure = new Date(Date.now() + 90 * 60 * 1000)
+      const attendue = heure.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      expect(await rendre(heure.toISOString())).toBe(`Recharge à ${attendue}`)
+
+      // L'AUTRE CÔTÉ DE MINUIT — le cas qui faisait rougir ce test au hasard n'était couvert par
+      // aucune assertion : un reset du lendemain doit porter sa DATE, sinon « Recharge à 00:09 »
+      // laisse croire à une attente de quelques minutes.
+      const demain = new Date(Date.now() + 13 * 60 * 60 * 1000)
+      const heureDemain = demain.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      expect(await rendre(demain.toISOString())).toBe(`Recharge le 25/07 à ${heureDemain}`)
+
+      // Sans date exposée, on ne fabrique rien : on le DIT.
+      expect(await rendre()).toBe('Heure de reset non exposée')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('affiche une seule ligne par fournisseur lorsque plusieurs modèles partagent le quota', async () => {

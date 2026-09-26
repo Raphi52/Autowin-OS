@@ -24,6 +24,7 @@ afterEach(() => {
 
 interface Api {
   costBreakdown?: (dimension: string, conversationId?: string) => Promise<unknown>
+  promptCalls?: (conversationId: string) => Promise<unknown>
 }
 
 function setApi(api: Api): { calls: Array<[string, string | undefined]> } {
@@ -32,7 +33,9 @@ function setApi(api: Api): { calls: Array<[string, string | undefined]> } {
     costBreakdown: async (dimension: string, conversationId?: string) => {
       calls.push([dimension, conversationId])
       return api.costBreakdown ? await api.costBreakdown(dimension, conversationId) : []
-    }
+    },
+    promptCalls: async (conversationId: string) =>
+      api.promptCalls ? await api.promptCalls(conversationId) : []
   }
   return { calls }
 }
@@ -116,10 +119,27 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
     expect(container.querySelector('[data-testid="conversation-cost"]')).toBeNull()
   })
 
-  it('un tour EN COURS n’interroge pas le journal (la dépense n’y est pas encore)', async () => {
+  /*
+   * CONTRAT RETOURNÉ le 2026-09-21. Ce test affirmait « un tour EN COURS n'interroge pas le journal
+   * (la dépense n'y est pas encore) ». La prémisse était fausse : le journal porte TOUS les tours
+   * déjà finis, seul le tour en vol y manque. Ne rien lire en arrivant sur un fil occupé laissait à
+   * l'écran le total du fil PRÉCÉDENT — « je navigue de conv en conv et ça écrit le même coût ».
+   * Le bon contrat : on lit à l'arrivée, puis on relit à la fin du tour.
+   */
+  it('un fil OCCUPÉ lit son journal à l’arrivée, puis le relit à la fin du tour', async () => {
     const { calls } = setApi({ costBreakdown: async () => rows })
     await render({ conversationId: 'conv-76', busy: true })
-    expect(calls).toEqual([])
+    expect(calls).toEqual([['actor', 'conv-76']])
+    await act(async () => {
+      root.render(
+        createElement(ConversationCostIndicator, { conversationId: 'conv-76', busy: false })
+      )
+    })
+    await flush()
+    expect(calls).toEqual([
+      ['actor', 'conv-76'],
+      ['actor', 'conv-76']
+    ])
   })
 
   it('le clic déplie le détail par acteur, trié par coût', async () => {
@@ -220,5 +240,46 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
     expect(total).not.toContain('non exposé')
     expect(ligne).not.toContain('non exposé')
     expect(ligne).not.toContain('inconnu')
+  })
+})
+
+describe('composition du prompt', () => {
+  it('additionne les blocs injectés sous le tableau des coûts', async () => {
+    setApi({
+      costBreakdown: async () => rows,
+      promptCalls: async () => [
+        {
+          system: 'x'.repeat(1000),
+          systemBlocks: [{ name: 'pilotage', chars: 600 }],
+          contextBlocks: [{ name: 'echangeIntraTour', chars: 200 }]
+        },
+        {
+          system: 'x'.repeat(1000),
+          systemBlocks: [{ name: 'pilotage', chars: 600 }]
+        }
+      ]
+    })
+    await render({ conversationId: 'conv-1' })
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="conversation-cost-total"]')?.click()
+    })
+    await flush()
+    const section = container.querySelector('[data-testid="conversation-composition"]')
+    expect(section).not.toBeNull()
+    expect(
+      section?.querySelector('[data-testid="conversation-composition-row-pilotage"]')?.textContent
+    ).toContain('0.6 kcar/appel')
+    // Le reste du system que nul bloc ne déclare est MONTRÉ, pas fondu dans le total.
+    expect(section?.textContent).toContain('non attribué')
+  })
+
+  it("n'affiche aucune section quand aucun appel n'est lisible", async () => {
+    setApi({ costBreakdown: async () => rows, promptCalls: async () => [] })
+    await render({ conversationId: 'conv-1' })
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-testid="conversation-cost-total"]')?.click()
+    })
+    await flush()
+    expect(container.querySelector('[data-testid="conversation-composition"]')).toBeNull()
   })
 })

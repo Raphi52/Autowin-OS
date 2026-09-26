@@ -11,13 +11,15 @@ describe('ExecutionQuote', () => {
       phases: ['frame', 'build'],
       decomposition: { mode: 'disabled', maxNodes: 1 },
       limits: {
-        maxProviderCalls: 40,
-        maxFreshTokens: 750_000,
-        maxTotalTokens: 6_000_000,
-        // frame + build + juge, puis une reparation et son re-jugement autorises par maxRecoveries=1.
-        maxAgents: 5,
-        maxConcurrency: 3,
-        maxRecoveries: 1,
+        // Compteurs de COUPS desactives de fait le 2026-09-12 (demande utilisateur) : ils tuaient
+        // des runs a mi-chemin. Ce qui est verrouille ici, c'est qu'un regime standard reste
+        // provisionne LARGEMENT — pas la valeur exacte, qui n'a plus de sens comme frein.
+        maxProviderCalls: 5_000,
+        maxFreshTokens: 50_000_000,
+        maxTotalTokens: 250_000_000,
+        maxAgents: 500,
+        maxConcurrency: 4,
+        maxRecoveries: 10,
         spendEnforcement: 'metering-only'
       }
     })
@@ -30,13 +32,13 @@ describe('ExecutionQuote', () => {
 
     expect(quote.regime).toBe('critical')
     expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean'])
-    expect(quote.decomposition).toEqual({ mode: 'build-only', maxNodes: 5 })
+    expect(quote.decomposition).toEqual({ mode: 'build-only', maxNodes: 20 })
     expect(quote.limits).toMatchObject({
-      maxProviderCalls: 80,
-      maxFreshTokens: 2_000_000,
-      maxTotalTokens: 15_000_000,
-      maxConcurrency: 4,
-      maxRecoveries: 1,
+      maxProviderCalls: 20_000,
+      maxFreshTokens: 200_000_000,
+      maxTotalTokens: 1_000_000_000,
+      maxConcurrency: 8,
+      maxRecoveries: 20,
       spendEnforcement: 'metering-only'
     })
   })
@@ -59,7 +61,13 @@ describe('ExecutionQuote', () => {
     expect({ ...a, id: '', createdAt: '' }).toEqual({ ...b, id: '', createdAt: '' })
   })
 
-  it('réserve la clôture et la récupération avant de réduire un fan-out standard', () => {
+  /*
+   * DEPUIS LE 2026-09-12, un fan-out demandé n'est plus RABOTÉ pour tenir dans un compteur.
+   * Avant, `frame: 3` repartait servi à 1 : la topologie était silencieusement réduite, et le run
+   * travaillait à un tiers de ce qui avait été décidé. Ce que ce test verrouille désormais, c'est
+   * que la demande est SERVIE EN ENTIER — la clôture et la réparation restant provisionnées.
+   */
+  it('sert le fan-out demandé EN ENTIER, clôture et réparation comprises', () => {
     const quote = compileExecutionQuote('ajoute une page de réglages')
 
     const allocation = allocateExecutionTopology(quote, {
@@ -74,11 +82,11 @@ describe('ExecutionQuote', () => {
     })
 
     expect(allocation).toMatchObject({
-      phaseMembers: { frame: 1 },
-      judgeMembers: 1,
+      phaseMembers: { frame: 3 },
+      judgeMembers: 3,
       maxGreedyNodes: 1,
-      reservedMandatoryAgents: 5,
-      plannedMaxAgents: 5
+      reservedMandatoryAgents: 23,
+      plannedMaxAgents: 48
     })
   })
 
@@ -97,11 +105,11 @@ describe('ExecutionQuote', () => {
     })
 
     expect(allocation).toMatchObject({
-      phaseMembers: { scout: 1, frame: 1, terrain: 1 },
-      judgeMembers: 1,
-      maxGreedyNodes: 2,
-      reservedMandatoryAgents: 8,
-      plannedMaxAgents: 10
+      phaseMembers: { scout: 4, frame: 4, terrain: 4 },
+      judgeMembers: 4,
+      maxGreedyNodes: 20,
+      reservedMandatoryAgents: 46,
+      plannedMaxAgents: 141
     })
   })
 
@@ -162,5 +170,40 @@ describe('devis face à un workflow plus large que le régime', () => {
     quote.limits.maxAgents = 10
     quote.limits.maxProviderCalls = 10
     expect(() => allocateExecutionTopology(quote, demande as never)).toThrow(/Plan d’exécution impossible/)
+  })
+})
+
+/*
+ * Regression du 2026-09-09 (conv-46). Trace du run run-3f7459905786-1 : devis `maxProviderCalls: 24`
+ * pour `maxAgents: 5`. Les cinq places sont parties dans frame et le fan-out de build, puis le juge
+ * FINAL a ete refuse sur « Budget d'agents atteint (5) » sans avoir rien consomme — le travail etait
+ * fait et verifie, il n'a jamais ete publie.
+ *
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer le provisionnement des tetes de fan-out dans
+ * `allocateExecutionTopology`. Verifie en le retirant : ce test passe au rouge (maxAgents reste 5).
+ */
+describe('allocateExecutionTopology — un fan-out lance un agent PAR MEMBRE', () => {
+  it('provisionne assez de places pour que le juge final ne se refuse pas lui-meme', () => {
+    const quote = compileExecutionQuote('place la scrollbar tout en bas du panneau')
+    expect(quote.limits.maxAgents).toBe(5)
+    expect(quote.limits.maxConcurrency).toBe(3)
+
+    allocateExecutionTopology(quote, {
+      phases: quote.phases,
+      completedPhases: [],
+      startedAgents: 0,
+      startedCalls: 0,
+      mutation: true,
+      // Pas de decomposeur ici : c'est le provisionnement des TETES de fan-out qui est mesure, et
+      // un decomposeur consommerait des places optionnelles sans rien prouver sur ce defaut.
+      hasDecomposer: false,
+      phaseFanOut: { frame: 1, build: 3 },
+      judgeFanOut: 1
+    })
+
+    // Deux phases servies par un panel de 3, plus les passages de juge et la reparation promise :
+    // le plafond de TETES doit depasser le compte d'appels obligatoires, jamais l'egaler tout juste.
+    expect(quote.limits.maxAgents).toBeGreaterThan(5)
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(2 * 3)
   })
 })

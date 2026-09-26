@@ -144,6 +144,52 @@ describe('Observatory contextual toolbar', () => {
     expect(view.querySelectorAll('.observatory-event')).toHaveLength(4)
   })
 
+  it('rend durée, tokens de sortie et erreurs dans le bandeau, comme le promet le titre', async () => {
+    const mockApi = api()
+    mockApi.promptCalls = vi.fn().mockResolvedValue([
+      {
+        id: 'call-1',
+        ts: '2026-07-23T20:00:00.000Z',
+        conversationId: 'conv-1',
+        turnId: 'conv-1-turn',
+        provider: 'codex',
+        boundary: 'renderer',
+        limitation: '',
+        messages: [],
+        options: {},
+        response: 'ok',
+        durationMs: 1200,
+        status: 'completed',
+        usage: { inputTokens: 10, outputTokens: 40, cacheReadTokens: 5, costUsd: 0.2 }
+      },
+      {
+        id: 'call-2',
+        ts: '2026-07-23T20:00:02.000Z',
+        conversationId: 'conv-1',
+        turnId: 'conv-1-turn',
+        provider: 'codex',
+        boundary: 'renderer',
+        limitation: '',
+        messages: [],
+        options: {},
+        response: '',
+        durationMs: 800,
+        status: 'failed',
+        usage: { inputTokens: 3, outputTokens: 2 }
+      }
+    ])
+    const { view } = await mount(mockApi)
+
+    expect(view.querySelector('[data-metric="output"]')?.textContent).toContain('42')
+    expect(view.querySelector('[data-metric="duration"]')?.textContent).toContain('2,0 s')
+    expect(view.querySelector('[data-metric="errors"]')?.textContent).toContain('1')
+  })
+
+  it('dit « non exposé » plutôt qu une durée nulle quand aucune durée n est mesurée', async () => {
+    const { view } = await mount()
+    expect(view.querySelector('[data-metric="duration"]')?.textContent).toContain('non exposé')
+  })
+
   it('rend la projection temporelle reconstruite pour la conversation active', async () => {
     const { view, mockApi } = await mount()
 

@@ -25,14 +25,14 @@ describe('declencheur automatique — graft', () => {
     const graft = ligne('graft')!
     const declencheur = graft.slice(graft.indexOf(' — ') + 3).toLowerCase()
     expect(declencheur).toContain('skill')
-    expect(declencheur).toMatch(/trigger the moment|le moment/u)
+    expect(declencheur).toMatch(/trigger the moment|le moment|au moment/u)
   })
 
   it('ne se confond pas avec forge : outil vs procedure', () => {
     const graft = ligne('graft')!.toLowerCase()
     const forge = ligne('forge')!.toLowerCase()
-    expect(forge).toContain('tool')
-    expect(graft).toContain('procedure')
+    expect(forge).toContain('outil')
+    expect(graft).toContain('procédure')
     expect(graft).not.toBe(forge)
   })
 })

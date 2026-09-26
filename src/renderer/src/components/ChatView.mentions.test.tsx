@@ -116,7 +116,8 @@ describe('ChatView — mentions de contexte @run / @fichier', () => {
     await type('débloque @work')
     const items = container!.querySelectorAll('[data-testid="mention-item"]')
     expect(items).toHaveLength(1)
-    expect(items[0].textContent).toContain('workflow-bench-regression')
+    // Le libellé affiché est LISIBLE (mots, pas de slug) ; l'identifiant inséré reste le sujet brut.
+    expect(items[0].textContent).toContain('Workflow bench regression')
 
     const textarea = container!.querySelector('textarea') as HTMLTextAreaElement
     await act(async () => {

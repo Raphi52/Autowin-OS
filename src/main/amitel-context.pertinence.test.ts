@@ -45,3 +45,23 @@ describe('la connaissance injectee doit etre PERTINENTE', () => {
     expect(graphifyEvidence(graphe, 'kubernetes ingress')).toBe('')
   })
 })
+
+/**
+ * DEFAUT VECU conv-706 (2026-09-18) : sur « quand on lance un cli on cut beaucoup de choses non? »,
+ * le bloc rendait `click()`, `clickByText()`, `nonEmpty()`. CAUSE : un token de TROIS lettres
+ * (« cli », « non ») matchait en prefixe tout mot plus long. Un prefixe si court ne dit rien.
+ */
+describe('un token court ne matche pas en prefixe', () => {
+  const bruit = JSON.stringify({
+    nodes: [
+      { id: 'c1', label: 'click()', source_file: 'scripts/ui-capture.mjs' },
+      { id: 'c2', label: 'clickByText()', source_file: 'scripts/ui-capture.mjs' },
+      { id: 'c3', label: 'nonEmpty()', source_file: 'scripts/ui-capture.mjs' }
+    ]
+  })
+  it('ne remonte pas click/clickByText/nonEmpty pour « cli » et « non »', () => {
+    expect(
+      graphifyEvidence(bruit, 'quand on lance un cli on cut beaucoup de choses non? des doublons?')
+    ).toBe('')
+  })
+})

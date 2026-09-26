@@ -16,12 +16,7 @@ import { closingTurnDelivery, closingStreamId } from './turn-closing'
  */
 describe('livraison du texte de clôture', () => {
   it('rend un événement durable ET un événement live, même flux et même texte', () => {
-    const livraison = closingTurnDelivery(
-      'turn-9',
-      '  ⛔ Workflow BLOQUÉ par le gate  ',
-      false,
-      undefined
-    )
+    const livraison = closingTurnDelivery('turn-9', '  ⛔ Workflow BLOQUÉ par le gate  ')
 
     expect(livraison?.durable).toEqual({
       kind: 'delta',
@@ -32,19 +27,23 @@ describe('livraison du texte de clôture', () => {
     expect(livraison?.live).toEqual(livraison?.durable)
   })
 
-  it('livre aussi la clôture d’une orchestration qui a déjà parlé, car son outcome est distinct', () => {
-    const livraison = closingTurnDelivery('turn-9', 'verdict final', true, {
-      status: 'failed',
-      gateBlocked: true
-    })
+  /**
+   * Un tour qui a DEJA parle garde son texte final des lors qu'il dit quelque chose de NEUF — que
+   * ce soit un verdict d'orchestration ou le compte-rendu d'un tour ordinaire. Le motif n'est plus
+   * « l'outcome est distinct » mais « ce texte n'a pas encore ete affiche » : c'est le contenu qui
+   * tranche, et c'est ce qui rend le bloc de cloture d'un tour bavard enfin visible (conv-471).
+   */
+  it('livre la clôture d’un tour qui a déjà parlé, car son texte est NEUF', () => {
+    const livraison = closingTurnDelivery('turn-9', 'verdict final', 'préambule déjà diffusé')
 
     expect(livraison?.live.text).toBe('verdict final')
   })
 
   it('ne livre rien quand il n’y a rien à dire, ni quand le done ne fait que répéter le streamé', () => {
-    expect(closingTurnDelivery('turn-9', '   ', false, undefined)).toBeUndefined()
-    expect(closingTurnDelivery('turn-9', 'déjà dit en streaming', true, undefined)).toBeUndefined()
-    expect(closingTurnDelivery('turn-9', 'déjà dit en streaming', true, {})).toBeUndefined()
+    expect(closingTurnDelivery('turn-9', '   ')).toBeUndefined()
+    expect(
+      closingTurnDelivery('turn-9', 'déjà dit en streaming', 'déjà dit en streaming')
+    ).toBeUndefined()
   })
 
   /**
@@ -74,23 +73,21 @@ describe('livraison du texte de clôture', () => {
 describe('clôture d’orchestration déjà streamée', () => {
   it('ne republie rien quand le texte de clôture est exactement celui déjà streamé', () => {
     const texte = '✅ Workflow terminé · statut succeeded\n\n| # | Score |\n|---|---|\n| 1 | 78 |'
-    expect(closingTurnDelivery('turn-1', texte, true, { status: 'succeeded' }, texte)).toBeUndefined()
+    expect(closingTurnDelivery('turn-1', texte, texte)).toBeUndefined()
   })
 
-  it('ne republie QUE le reste quand la clôture prolonge le texte streamé', () => {
-    const streame = '✅ Workflow terminé · statut succeeded'
+  it('ne republie QUE le reste quand la cloture prolonge le texte streame', () => {
+    const streame = 'Workflow termine - statut succeeded'
     const livraison = closingTurnDelivery(
       'turn-2',
-      `${streame}\n\n✅ Fait\n1. Le résultat demandé a été produit.`,
-      true,
-      { status: 'succeeded' },
+      `${streame}\n\nFait\n1. Le resultat demande a ete produit.`,
       streame
     )
-    expect(livraison?.durable.text).toBe('✅ Fait\n1. Le résultat demandé a été produit.')
+    expect(livraison?.durable.text).toBe('Fait\n1. Le resultat demande a ete produit.')
   })
 
   it('publie tout quand rien n’a été streamé (tour muet après orchestration)', () => {
-    const livraison = closingTurnDelivery('turn-3', 'compte-rendu', false, { status: 'succeeded' }, '')
+    const livraison = closingTurnDelivery('turn-3', 'compte-rendu', '')
     expect(livraison?.durable.text).toBe('compte-rendu')
   })
 })

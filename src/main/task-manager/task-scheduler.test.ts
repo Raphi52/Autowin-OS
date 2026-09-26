@@ -385,3 +385,49 @@ describe('Task Manager — ordonnanceur durable', () => {
     expect(dispatch.run.mock.calls[0][2]).toBe(onLateMutationClaims)
   })
 })
+
+/**
+ * UNE TACHE QUI NE SE DECLENCHERA PLUS JAMAIS NE DOIT PLUS S'AFFICHER COMME ACTIVE.
+ *
+ * Constat du 2026-09-16 dans `.autowin-data/autowin-os/scheduled-tasks.json` : les 4 tâches
+ * enregistrées sont des reprises après quota des 31/08 et 01/09, toutes déjà jouées (occurrences
+ * `completed` ou `cancelled`), toutes encore `enabled: true` et `nextRunAt: null` — seize jours plus
+ * tard. La vue les affichait « Aucune échéance » à côté d'un interrupteur ON.
+ */
+describe('Task Manager — fin de vie d’une tâche', () => {
+  const unSeulCoup = {
+    startDate: '2026-08-03',
+    time: '09:30',
+    timeZone: 'Europe/Paris',
+    recurrence: { unit: 'none' as const, interval: 1 }
+  }
+
+  it('éteint une tâche SANS récurrence après son unique échéance', async () => {
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(due - 60_000)
+    const task = h.store.create(input('active-only', { schedule: unSeulCoup }))
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+    await h.advanceTo(due)
+
+    const apres = h.store.listTasks().find((t) => t.id === task.id)!
+    expect(h.dispatched).toHaveLength(1) // elle a bien joué
+    expect(apres.nextRunAt).toBeNull()
+    expect(apres.enabled).toBe(false) // …et elle ne se présente plus comme active
+  })
+
+  it('laisse une tâche RÉCURRENTE active tant qu’une échéance reste', async () => {
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(due - 60_000)
+    const task = h.store.create(input('active-only'))
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+    await h.advanceTo(due)
+
+    const apres = h.store.listTasks().find((t) => t.id === task.id)!
+    expect(apres.enabled).toBe(true)
+    expect(apres.nextRunAt).not.toBeNull()
+  })
+})

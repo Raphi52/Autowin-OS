@@ -148,8 +148,14 @@ describe('spawn CLI — regime de contexte', () => {
      * assouplissement : les deux exigences restent, et la seule chose qu'on cesse d'imposer est
      * l'endroit ou prettier place ses retours a la ligne.
      */
-    expect(chatBranch).toMatch(/'--tools',\s*OUTILS_WEB/)
-    expect(chatBranch).toMatch(/'--allowedTools',\s*\.\.\.autorises\(OUTILS_WEB\)/)
+    // Recale le 2026-09-17 (conv-650) : la liste est nommee `outilsSansWorkspace` depuis que les
+    // pieces jointes n'ont plus de branche a elles. La propriete testee ne bouge pas — web CHARGE,
+    // web AUTORISE, et `Read` seulement quand des pieces jointes existent vraiment.
+    expect(chatBranch).toMatch(
+      /const outilsSansWorkspace = materialized \? 'Read,' \+ OUTILS_WEB : OUTILS_WEB/
+    )
+    expect(chatBranch).toMatch(/'--tools',\s*outilsSansWorkspace/)
+    expect(chatBranch).toMatch(/'--allowedTools',\s*\.\.\.autorises\(outilsSansWorkspace\)/)
     expect(chatBranch).toContain('existsSync(')
   })
 

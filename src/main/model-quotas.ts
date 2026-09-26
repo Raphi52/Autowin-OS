@@ -439,7 +439,12 @@ export async function aggregateClaudeLocalUsage(
 async function claudeLocalQuota(home: string, now: number): Promise<ProviderQuota> {
   const source = 'Transcripts Claude Code (local)'
   try {
-    const root = join(home, '.claude', 'projects')
+    // MEME REGLE QUE LES CREDENTIALS : les transcripts vivent dans le dossier du compte ACTIF
+    // (`CLAUDE_CONFIG_DIR`). Lire `~/.claude` en dur affichait la consommation de l'ANCIEN compte
+    // apres une bascule — c'est ce repli, et non la sonde API, qui semblait « ne pas se mettre a
+    // jour ». Repli sur le dossier historique quand aucun compte dedie n'est actif.
+    const configDir = claudeAccountEnv().CLAUDE_CONFIG_DIR
+    const root = configDir ? join(configDir, 'projects') : join(home, '.claude', 'projects')
     const noms = (await readdir(root, { recursive: true }).catch(() => {
       throw new Error('Aucun transcript local')
     })) as string[]

@@ -37,12 +37,17 @@ describe('recommandationDitRien — la condition d’arrêt demandée', () => {
     expect(recommandationDitRien('rien')).toBe(true)
     expect(recommandationDitRien('Rien.')).toBe(true)
     expect(recommandationDitRien('- rien à signaler')).toBe(true)
+    expect(recommandationDitRien("rien d'autre")).toBe(true)
+    expect(recommandationDitRien("Rien d’autre.")).toBe(true)
   })
   it('n’arrête PAS quand une suite est proposée dans la même phrase', () => {
     // Le défaut « le mode auto se désactive tout seul » : ces trois lignes RECOMMANDENT un tour.
     expect(recommandationDitRien('rien ne bloque, lance le judge')).toBe(false)
     expect(recommandationDitRien('plus rien à vérifier ici, passe au build')).toBe(false)
     expect(recommandationDitRien('Rien à faire de plus sur X — enchaîne sur Y')).toBe(false)
+    // La forme EXACTE qui a relance la chaine pour rien le 2026-09-12 : une fin annoncee, suivie
+    // d'une offre. L'offre en fait une suite — c'est la rubrique qui etait mal ecrite, pas la regle.
+    expect(recommandationDitRien("rien d'autre : tu peux m'envoyer un nom d'instance")).toBe(false)
   })
   it('n’arrête pas sur un mot qui contient les mêmes lettres', () => {
     expect(recommandationDitRien('terrain sur X')).toBe(false)
@@ -116,6 +121,25 @@ describe('fin de chaîne — proposer une cible au lieu d’éteindre (conv-307)
 })
 
 describe('deciderRelanceAuto — arrêts', () => {
+  it('ARRÊTE sur « Aucune suite nécessaire » : c’est le même sens que « rien » (conv-468)', () => {
+    const fil = [
+      agent(
+        '✅ Fait\n- corrigé\n\n⏳ Reste à faire\n- aucune limite connue\n\n👉 Recommandé\nAucune suite nécessaire.\nAUTOWIN_PROMPT_V1: continue'
+      )
+    ]
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({
+      action: 'arreter',
+      raison: 'recommandation-rien'
+    })
+  })
+  it('ne confond pas avec une vraie suite qui contient « aucune »', () => {
+    const fil = [
+      agent(
+        '✅ Fait\n- corrigé\n\n👉 Recommandé\n- aucune régression détectée, lance le judge\nAUTOWIN_PROMPT_V1: lance le judge'
+      )
+    ]
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({ action: 'envoyer' })
+  })
   it('ARRÊTE sur « rien », même si le modèle a quand même écrit un prompt', () => {
     const fil = [agent(`${REPONSE_RIEN}\nAUTOWIN_PROMPT_V1: continue encore`)]
     expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({
@@ -134,10 +158,10 @@ describe('deciderRelanceAuto — arrêts', () => {
   })
   it('« rien » est le SEUL motif qui éteint le mode', () => {
     const arrets = [
-      // même suite deux fois : on ne renvoie pas, mais l'interrupteur reste allumé
+      // même suite deux fois SANS travail rapporté : on ne renvoie pas, l'interrupteur reste allumé
       deciderRelanceAuto({
         ...base,
-        fil: [agent(REPONSE_AVEC_SUITE)],
+        fil: [agent('👉 Recommandé — passer en terrain\nAUTOWIN_PROMPT_V1: lance le terrain sur X')],
         dernierPromptEnvoye: 'lance le terrain sur X'
       }),
       // aucune suite proposée : idem
@@ -320,5 +344,38 @@ describe('le mode auto reste accroché à la tâche initiale', () => {
 
   it('le premier maillon n’est pas ancré sur lui-même', () => {
     expect(ancrerSurLaTacheInitiale('fais X', 'fais X')).toBe('fais X')
+  })
+})
+
+describe('audit à N points : la même suite générique après un vrai progrès', () => {
+  // Mesuré conv-733, tour 98ce00d9-2276-4a96-bb15-b66c622bfee8 (saisie ts 1789970040849) : le
+  // point #93 était fait, la suite proposée était mot pour mot celle du tour précédent, et la
+  // chaîne s'est tue sur `prompt-identique` alors qu'il restait ~7 points.
+  const reponse = (texte: string): Msg =>
+    ({ role: 'assistant', parts: [{ kind: 'text', text: texte }] }) as unknown as Msg
+  const demande = (texte: string): Msg => ({ role: 'user', content: texte }) as unknown as Msg
+  const suite = 'Traite le point suivant de l’audit PvP sans Studio et prouve-le par un banc.'
+  const entree = (texteReponse: string, dernierPromptEnvoye: string | null) => ({
+    actif: true,
+    occupe: false,
+    fil: [demande('trouve 100 trucs et corrige tout'), reponse(texteReponse)],
+    dernierTourTraite: null,
+    dernierPromptEnvoye,
+    brouillonPresent: false
+  })
+  it('repart quand le bloc « Fait » rapporte un travail', () => {
+    const texte = `**✅ Fait**\n\`Duel.lua\` étendu, banc vert.\n\n**👉 Recommandé**\nContinuer.\n\nAUTOWIN_PROMPT_V1: ${suite}`
+    const premier = deciderRelanceAuto(entree(texte, null))
+    if (premier.action !== 'envoyer') throw new Error('premier envoi attendu')
+    expect(deciderRelanceAuto(entree(texte, premier.texte)).action).toBe('envoyer')
+  })
+  it('reste bloqué sans aucun travail rapporté', () => {
+    const texte = `👉 Recommandé — suite\nAUTOWIN_PROMPT_V1: ${suite}`
+    const premier = deciderRelanceAuto(entree(texte, null))
+    if (premier.action !== 'envoyer') throw new Error('premier envoi attendu')
+    expect(deciderRelanceAuto(entree(texte, premier.texte))).toEqual({
+      action: 'attendre',
+      raison: 'prompt-identique'
+    })
   })
 })

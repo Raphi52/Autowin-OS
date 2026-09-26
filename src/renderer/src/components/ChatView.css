@@ -405,13 +405,52 @@
   /* DEMANDE DU 2026-09-10 : une question qui attend une reponse ne se distingue pas assez d'un
      point jaune parmi d'autres jaunes (`is-unread`). Elle porte donc un TRIANGLE D'ALERTE, pas un
      disque : la FORME se lit sans comparer des teintes. On annule ici la geometrie de pastille
-     (disque + halo) et on dessine l'icone en fond, embarquee (aucune URL reseau). */
-  width: 13px;
-  height: 13px;
+     (disque + halo). DEMANDE DU 2026-09-13 : le triangle devient TROIS POINTS qui sautillent
+     (« ... ») — la forme dit « j'attends ta reponse ». Trois fonds radiaux, sans balise ajoutee. */
+  width: 15px;
+  height: 9px;
   border-radius: 0;
   box-shadow: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f0a12e' d='M12 2.4c.5 0 .9.3 1.1.7l10.2 17.4c.4.7-.1 1.5-.9 1.5H1.6c-.8 0-1.3-.8-.9-1.5L10.9 3.1c.2-.4.6-.7 1.1-.7z'/%3E%3Cpath fill='%23231a05' d='M11 8.2h2v6h-2zM11 15.6h2v2.2h-2z'/%3E%3C/svg%3E")
-    center / contain no-repeat;
+  background:
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 0 100% / 4px 4px no-repeat,
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 50% 100% / 4px 4px no-repeat,
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 100% 100% / 4px 4px no-repeat;
+  animation: conv-asking-dots 1.2s infinite ease-in-out;
+}
+@keyframes conv-asking-dots {
+  0%,
+  100% {
+    background-position: 0 100%, 50% 100%, 100% 100%;
+  }
+  20% {
+    background-position: 0 0, 50% 100%, 100% 100%;
+  }
+  40% {
+    background-position: 0 100%, 50% 0, 100% 100%;
+  }
+  60% {
+    background-position: 0 100%, 50% 100%, 100% 0;
+  }
+}
+/* DEMANDE DU 2026-09-13 (bis) : une conversation EN ATTENTE de reponse (message envoye, pas
+   encore de reponse) porte aussi les trois points — c'est le cas « la machine attend ». */
+.conversation-state.is-waiting {
+  width: 15px;
+  height: 9px;
+  border-radius: 0;
+  box-shadow: none;
+  background:
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 0 100% / 4px 4px no-repeat,
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 50% 100% / 4px 4px no-repeat,
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 100% 100% / 4px 4px no-repeat;
+  animation: conv-asking-dots 1.2s infinite ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .conversation-state.is-waiting,
+  .conversation-state.is-asking {
+    animation: none;
+    background-position: 0 50%, 50% 50%, 100% 50%;
+  }
 }
 /* Meme famille JAUNE que la question ouverte — les deux disent « c'est a toi » — mais une teinte
    propre : « on te demande quelque chose » et « c'est fini, tu ne l'as pas encore lu » n'appellent
@@ -544,6 +583,10 @@
      lue en CDP sur le rendu vivant le 2026-08-18, c'est le « gris-bleu hors theme » signale. */
   background: #000;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  /* Un menu plus haut que la fenetre defile au lieu d'etre tronque hors ecran. */
+  max-height: calc(100vh - 16px);
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
 }
 .conv-menu-pop button {
   display: flex;
@@ -604,6 +647,29 @@
   color: var(--text-faint);
   font-size: 12px;
 }
+/* Le menu « Ranger dans… » porte DEUX familles : les dossiers de travail, puis les categories.
+   Sans ce titre, les deux se lisaient comme une seule liste et le choix devenait un piege. */
+.conv-menu-titre {
+  padding: 8px 10px 3px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.conv-menu-saisie {
+  width: calc(100% - 20px);
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 2px 10px 8px;
+  background: var(--bg-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
 .chat-conv-title {
   font-size: 14px;
   overflow: hidden;
@@ -629,9 +695,9 @@
 
 .workflow-panel-actions {
   display: grid;
-  width: 56px;
+  width: 28px;
   flex: none;
-  grid-template-columns: repeat(2, 28px);
+  grid-template-columns: 28px;
 }
 
 .workflow-panel-action {
@@ -659,11 +725,6 @@
   box-shadow: inset 0 0 0 1px var(--gold);
 }
 
-.workflow-panel-refresh.is-placeholder {
-  visibility: hidden;
-  pointer-events: none;
-}
-
 .workflow-panel-close:hover {
   color: var(--chat-wf-fermer-survol);
 }
@@ -684,8 +745,8 @@
   }
 
   .workflow-panel-actions {
-    width: 48px;
-    grid-template-columns: repeat(2, 24px);
+    width: 24px;
+    grid-template-columns: 24px;
   }
 
   .workflow-panel-action {
@@ -1044,6 +1105,37 @@
   color: var(--text-dim);
   font-weight: 600;
 }
+/* Heure d'écriture : invisible tant que la souris n'est pas sur le message. */
+.msg-time {
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.msg:hover .msg-time {
+  opacity: 1;
+}
+/* Infobulle dessinée en CSS : la fenêtre transparente d'Electron n'affiche pas les `title` natifs. */
+.msg-time {
+  position: relative;
+  cursor: default;
+}
+.msg-time:hover::after {
+  content: attr(data-heure-complete);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 20;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .msg-body {
   min-width: 0;
   max-width: 100%;
@@ -1226,7 +1318,10 @@
 .composer textarea {
   resize: none;
   max-height: 180px;
-  min-height: 40px;
+  /* DEUX LIGNES VISIBLES (demande utilisateur du 2026-09-18) : une seule tenait, la deuxieme
+     etait coupee derriere l'ascenseur. En em, la reserve suit la taille de police ; `min-height`
+     prime sur la hauteur inline posee par l'auto-croissance, qui continue au-dela. */
+  min-height: calc(2 * 1.45em + 14px);
   line-height: 1.5;
 }
 .attachment-input {
@@ -1309,7 +1404,10 @@
   max-width: 100%;
   max-height: 100%;
   border-radius: 5px;
-  object-fit: contain;
+  /* REMPLIT le carre au lieu de s'y loger : choix de l'utilisateur du 2026-09-16,
+     « pour la vignette, d'etirer et tronquer l'image ». En `contain`, une capture large
+     ne laissait qu'un mince trait d'image entre deux bandes de fond. */
+  object-fit: cover;
   background: rgba(var(--voile-rgb), 0.04);
 }
 .attachment-chip .attachment-thumb-button {
@@ -1416,6 +1514,10 @@
 .msg-error-message {
   flex: 1;
   min-width: 160px;
+  /* Les erreurs composées sont MULTI-LIGNES à dessein : « erreur brute\n→ geste de réparation »
+     (describeChatTurnFailure) et les fan-out « • provider : cause » (describeFanoutFailure).
+     Sans pre-line, le HTML aplatit tout en une ligne et le geste se noie dans l'incident. */
+  white-space: pre-line;
 }
 /* Bilan d'un tour arrete : il occupe TOUTE la largeur sous la cause, parce qu'il porte le seul
    contenu utile quand un run est coupe — ce qui a deja ete livre. Mesure du 2026-08-19 : deux commits
@@ -1497,21 +1599,12 @@
   width: min(470px, 100%);
   overflow: hidden;
   padding: 30px;
-  border: 1px solid rgba(255, 104, 142, 0.72);
+  /* Meme peau que les autres surfaces de l'app : noir + filet blanc discret.
+     La couleur destructive ne vit que sur le bouton et le surtitre. */
+  border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(145deg, rgba(24, 10, 24, 0.94), rgba(7, 10, 21, 0.9));
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-}
-.delete-confirm-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.34;
-  background-image:
-    radial-gradient(circle at 12% 18%, #ff6f9b 0 1px, transparent 1.7px),
-    radial-gradient(circle at 86% 15%, #75d4ff 0 1px, transparent 1.7px),
-    radial-gradient(circle at 76% 78%, #f4c868 0 1px, transparent 1.7px);
+  background: var(--bg-0);
+  box-shadow: 0 24px 80px rgba(var(--ombre-rgb), 0.5);
 }
 .delete-confirm-card > * {
   position: relative;
@@ -1522,7 +1615,7 @@
   height: 44px;
   margin-bottom: 16px;
   place-items: center;
-  border: 1px solid rgba(255, 119, 154, 0.75);
+  border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--chat-suppr-orbite);
   font-size: 20px;
@@ -1573,8 +1666,8 @@
   background: rgba(var(--voile-rgb), 0.06);
 }
 .delete-confirm-danger {
-  /* Fond PEINT volontaire (rouge-rose destructif) : opaque, donc lisible sur tous les thèmes. */
-  border-color: rgba(255, 103, 141, 0.82);
+  /* Fond PEINT volontaire (rouge destructif) : opaque, donc lisible sur tous les thèmes. */
+  border-color: var(--chat-suppr-bouton);
   background: var(--chat-suppr-bouton);
   color: var(--on-accent);
 }
@@ -1800,6 +1893,42 @@ ol.md-list li {
    aucun cadre : c'est le contenu du modèle qui doit se voir, pas une boîte autour de lui.
    `contain` et `max-width` sont ici la ceinture de mise en page — le sanitizer ayant déjà retiré
    tout positionnement, ceci empêche seulement un contenu large de pousser la bulle. */
+/* Bloc ```mermaid``` rendu en diagramme dans le fil (2026-09-13). Meme principe que `.md-html` :
+   aucun cadre, le dessin se pose sur le fond de la bulle. Le SVG de mermaid porte une largeur
+   intrinseque qui peut depasser la bulle : on le ramene a la largeur disponible. */
+.md-mermaid {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  margin: var(--s1) 0;
+  overflow-x: auto;
+  /* AUCUN DEFILEMENT VERTICAL ICI (2026-09-16, conv-590). Le cadre borne a 300 px faisait
+     apparaitre une barre de defilement pour quelques dizaines de pixels manquants : un schema qui
+     depasse a peine est RETRECI par la regle du dessin ci-dessous, jamais mis a derouler. */
+  overflow-y: visible;
+}
+/* Le conteneur vient du panneau d'artefacts (`.artifact-diagram`), ou il reserve une grande
+   surface. Dans le fil, ce plancher de 180 px et ce rembourrage de 18 px ajoutent du vide
+   autour d'un petit schema. */
+.md-mermaid .artifact-diagram {
+  min-height: 0;
+  padding: 0;
+}
+.md-mermaid svg {
+  /* LARGEUR = min(largeur du fil, largeur naturelle). `width: 100%` prend la largeur du fil ; le
+     `style="max-width: <naturelle>px"` que mermaid ecrit EN LIGNE la ramene a sa taille propre.
+     Aucun `!important` ici : il ecraserait justement ce plafond en ligne et agrandirait un schema
+     etroit (sonde cdp-chat-mermaid du 2026-09-14 : 138 px naturels rendus a 314 px). Un schema
+     plus large que le fil est donc retreci sans deborder, un schema etroit garde sa taille. */
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  /* HAUTEUR PLAFONNEE ICI, pas par un cadre a derouler : un schema trop haut est mis a l'echelle,
+     ratio conserve, jusqu'a tenir sous les yeux. */
+  max-height: min(60vh, 420px);
+  min-height: 0;
+}
+
 .md-html {
   min-width: 0;
   max-width: 100%;
@@ -1949,7 +2078,8 @@ ol.md-list li {
   border-radius: 12px;
   background:
     radial-gradient(circle at 68% 18%, rgba(46, 143, 190, 0.07), transparent 28%),
-    radial-gradient(circle at 91% 82%, rgba(195, 52, 137, 0.06), transparent 25%), var(--chat-fond-page);
+    radial-gradient(circle at 91% 82%, rgba(195, 52, 137, 0.06), transparent 25%),
+    var(--chat-fond-page);
 }
 
 .cosmic-outline .conv-pane {
@@ -2678,7 +2808,8 @@ ol.md-list li {
 }
 
 .cosmic-outline .composer-field textarea {
-  min-height: 24px;
+  /* Sans marge interne ici (padding: 0) : la reserve vaut exactement deux lignes. */
+  min-height: calc(2 * 1.45em);
   padding: 0;
   border: 0;
   background: transparent;
@@ -2863,114 +2994,6 @@ button.chat-project-dot:disabled {
   letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* File d'attente des directives injectées (au-dessus du composer). */
-.directive-queue {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 var(--s3) 6px;
-  padding: 8px 10px;
-  border: 1px solid rgba(233, 189, 78, 0.4);
-  border-left: 2px solid var(--warn);
-  border-radius: var(--r2);
-  background: rgba(233, 189, 78, 0.06);
-}
-.directive-queue-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.directive-queue-send-all {
-  margin-left: auto;
-  align-self: center;
-}
-.directive-queue-title {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--gold-bright);
-}
-.directive-queue-hint {
-  font-size: 10px;
-  color: var(--text-faint);
-}
-.directive-queue-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: var(--r1);
-  background: rgba(var(--voile-rgb), 0.03);
-}
-.directive-queue-index {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(233, 189, 78, 0.18);
-  color: var(--gold-bright);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.directive-queue-text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.directive-queue-send {
-  flex: none;
-  padding: 2px 8px;
-  border: 1px solid rgba(239, 145, 69, 0.5);
-  border-radius: 999px;
-  background: rgba(239, 145, 69, 0.14);
-  color: var(--chat-file-envoi);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.directive-queue-send:hover {
-  background: rgba(239, 145, 69, 0.26);
-}
-/* Orienter sans interrompre : teinte froide (boussole) pour distinguer de l'interruption (orange). */
-.directive-queue-steer {
-  flex: none;
-  padding: 2px 8px;
-  border: 1px solid rgba(96, 165, 250, 0.5);
-  border-radius: 999px;
-  background: rgba(96, 165, 250, 0.14);
-  color: var(--chat-file-orienter);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.directive-queue-steer:hover {
-  background: rgba(96, 165, 250, 0.26);
-}
-.directive-queue-remove {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-}
-.directive-queue-remove:hover {
-  background: rgba(239, 63, 63, 0.16);
-  color: var(--err);
 }
 
 /* PANNEAU « Réflexion » : le raisonnement du modèle, colonne dédiée à droite du fil.
@@ -3636,6 +3659,7 @@ button.chat-project-dot:disabled {
 /* Purge en lot : la barre n'occupe une ligne que dans la barre latérale, au-dessus de la liste. */
 .conv-bulk-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 0 var(--s2) 4px;
 }
@@ -3985,6 +4009,16 @@ button.chat-project-dot:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* DEUX blocs empiles (2026-09-12) : « Raisonnement » puis « Actions ». Le second est distingue
+   par un filet plus froid, pour qu'on voie d'un coup d'oeil lequel porte la pensee. */
+.thinking-block--actions {
+  margin-top: -4px;
+  border-left-color: rgba(169, 178, 196, 0.35);
+}
+.thinking-block--actions .thinking-body {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+}
 .thinking-block .thinking-body {
   margin: 6px 0 0;
   padding: 0;
@@ -4194,6 +4228,27 @@ button.chat-project-dot:disabled {
   flex-direction: column;
   gap: 4px;
   padding: 0 var(--s2) var(--s2);
+  position: relative;
+}
+/* Croix de fermeture, posee dans le coin haut-droit du bloc. */
+.conv-reprise-quota-fermer {
+  position: absolute;
+  top: 2px;
+  right: calc(var(--s2) + 2px);
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chat-etat-echec);
+  opacity: 0.7;
+  font-size: 14px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.conv-reprise-quota-fermer:hover {
+  opacity: 1;
 }
 .conv-reprise-quota .conv-date-sort {
   width: 100%;
@@ -4333,7 +4388,11 @@ button.chat-project-dot:disabled {
 .composer-input-row > .composer-stop:not(:disabled),
 .cosmic-outline .composer-input-row > .composer-stop:not(:disabled) {
   border: 1px solid color-mix(in srgb, var(--err) 65%, var(--on-accent) 18%);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--err) 86%, var(--on-accent) 14%), var(--err));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--err) 86%, var(--on-accent) 14%),
+    var(--err)
+  );
   color: var(--on-accent);
   transition:
     background 140ms ease,
@@ -4386,28 +4445,90 @@ button.chat-project-dot:disabled {
   display: inline-flex;
   align-items: center;
 }
+/* Dans la barre du HAUT, le panneau s'ouvre VERS LE BAS : ouvert vers le haut (reglage du
+   composeur), il recouvrait le titre et sortait de la fenetre (signale le 2026-09-23). */
+.chat-runtime .conv-cost-panel {
+  top: calc(100% + 6px);
+  bottom: auto;
+}
 
 /* BARRE UNIQUE DE DICTEE (2026-09-03) : une seule barre HORIZONTALE qui porte les deux infos --
    le remplissage rose montre le volume de la voix, le rond blanc pose dessus regle la capture. */
-.composer-dictee-niveau {position:relative;width:72px;height:6px;margin:0 4px;border-radius:3px;align-items:stretch;overflow:visible}
-.composer-dictee-niveau i {width:calc(var(--niveau,0) * 100%);height:100%;border-radius:3px;transition:width 90ms linear}
-.composer-dictee-gain {position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;cursor:ew-resize}
-.composer-dictee-gain::-webkit-slider-runnable-track {height:6px;background:transparent}
-.composer-dictee-gain::-webkit-slider-thumb {margin-top:-3px;width:12px;height:12px;border-radius:50%;background:rgba(var(--voile-rgb), 1);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
+.composer-dictee-niveau {
+  position: relative;
+  width: 72px;
+  height: 6px;
+  margin: 0 4px;
+  border-radius: 3px;
+  align-items: stretch;
+  overflow: visible;
+}
+.composer-dictee-niveau i {
+  width: calc(var(--niveau, 0) * 100%);
+  height: 100%;
+  border-radius: 3px;
+  transition: width 90ms linear;
+}
+.composer-dictee-gain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: ew-resize;
+}
+.composer-dictee-gain::-webkit-slider-runnable-track {
+  height: 6px;
+  background: transparent;
+}
+.composer-dictee-gain::-webkit-slider-thumb {
+  margin-top: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(var(--voile-rgb), 1);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
 
 /* APERCU DE DICTEE DANS LE CHAMP (2026-09-03) : le texte provisoire est peint par un calque pose
    sur le champ, memes police et marges. Le texte deja saisi y est invisible et ne sert qu a pousser
    l apercu au curseur. Quand la phrase est reconnue, elle entre en blanc au MEME endroit : aucun
    saut de ligne, aucun texte en dessous. */
-.composer-input-row {position:relative}
-.composer-dictee-apercu {position:absolute;top:0;left:0;right:0;z-index:1;margin:0;padding:9px 11px;font-size:13px;line-height:inherit;font-style:normal;white-space:pre-wrap;overflow-wrap:anywhere;pointer-events:none}
-.composer-dictee-apercu-place {color:transparent}
-.composer-dictee-apercu-texte {color:rgba(221,227,238,.5);transition:opacity 140ms ease}
+.composer-input-row {
+  position: relative;
+}
+.composer-dictee-apercu {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 9px 11px;
+  font-size: 13px;
+  line-height: inherit;
+  font-style: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.composer-dictee-apercu-place {
+  color: transparent;
+}
+.composer-dictee-apercu-texte {
+  color: rgba(221, 227, 238, 0.5);
+  transition: opacity 140ms ease;
+}
 
 /* CALAGE VERTICAL DU CALQUE (2026-09-04) : le champ et le calque doivent partager EXACTEMENT la
    meme hauteur de ligne, sinon la premiere ligne du gris tombe plus bas que le texte blanc. */
-.composer-input-row textarea.input {line-height:1.45}
-.composer-dictee-apercu {line-height:1.45}
+.composer-input-row textarea.input {
+  line-height: 1.45;
+}
+.composer-dictee-apercu {
+  line-height: 1.45;
+}
 
 /* INFOBULLE DE LA JAUGE DE CONTEXTE (demande utilisateur du 2026-09-04).
    Le filet est peint en `::before`/`::after` avec `pointer-events: none` : il ne peut donc pas
@@ -4531,10 +4652,26 @@ button.chat-project-dot:disabled {
    joindre/micro). Ancrée à droite (`right: 0`), la popup partait vers la gauche et sortait
    de l'écran : on n'en voyait plus la moitié. Dans la barre de saisie, elle s'ancre donc à
    GAUCHE du bouton et se borne à la largeur de la fenêtre. */
+/* PEINT AU-DESSUS DE TOUTE L'APP (2026-09-12) : le menu est rendu dans `document.body`, donc
+   plus aucun panneau ne le rogne ni ne le recouvre. Le z-index passe devant le panneau des runs
+   et les surcouches du fil ; il reste SOUS la visionneuse d'image (10000). */
+.model-select-menu.is-flottant {
+  position: fixed;
+  z-index: 9000;
+  right: auto;
+  top: auto;
+  width: min(600px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+}
+
 .composer-meta-actions .model-select-menu {
   right: auto;
   left: 0;
+  /* La matrice fait 600px : dans une fenetre etroite, la colonne de droite sortait de
+     l'ecran (constate le 2026-09-12). On borne sur la largeur reellement visible, et le
+     recadrage JS (useClampDansFenetre) ramene le reste dans le cadre. */
   max-width: calc(100vw - 24px);
+  width: min(600px, calc(100vw - 24px));
 }
 
 /* MODE AUTO DU FIL — bouton de la barre de saisie, distinct du réglage global de la liste.
@@ -4617,4 +4754,261 @@ button.chat-project-dot:disabled {
 .composer-input-row > .composer-dictee svg,
 .cosmic-outline .composer-input-row > .composer-dictee svg {
   transform: translateX(-0.5px);
+}
+
+/* ============================================================================
+   DENSITE DE LA LISTE DES CONVERSATIONS (demande du 2026-09-17)
+
+   Trois crans CHOISIS, portes par `data-density` sur le panneau :
+     compact  — titre seul, ligne d'environ 24 px, facon Claude Code / Codex ;
+     normal   — titre seul, ligne aeree ;
+     detail   — le rendu historique : titre + identifiant + nombre de messages.
+
+   POURQUOI CETTE SPECIFICITE. Le theme cosmic repeint `.conv-item` / `.conv-pick` avec une hauteur
+   MINIMALE de 64 px (`.cosmic-outline .conv-pick`, deux classes). Un selecteur a une seule classe
+   ne l'atteint pas : `.conv-pane[data-density='…'] .conv-pick` en compte trois, il gagne sur TOUS
+   les themes sans avoir a les nommer un par un — et sans dependre de l'ordre des feuilles.
+
+   CE QUI RESTE AUTOMATIQUE. Le bloc `@container convpane (max-width: 170px)` en tete de fichier
+   continue de densifier une colonne tiree au minimum : sous cette largeur, une ligne detaillee ne
+   TIENT physiquement pas. Le cran choisi gagne partout ailleurs, et les crans serres gagnent de
+   toute facon sur ce filet (specificite superieure).
+   ============================================================================ */
+
+.conv-density-toggle {
+  display: inline-flex;
+  flex: 0 0 22px;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  border-radius: 6px;
+  background: rgba(212, 169, 79, 0.08);
+  color: var(--gold-doux);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.conv-density-toggle:hover {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}
+.conv-density-toggle svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
+/* --- Le cran serre et le cran normal masquent la ligne d'identifiant... --- */
+.conv-pane[data-density='compact'] .conv-meta,
+.conv-pane[data-density='normal'] .conv-meta {
+  display: none;
+}
+/* --- ...SAUF pendant une recherche : le numero est ce qui prouve qu'on a trouve la bonne
+       conversation (lecon du 2026-09-03, « je tape 171 et ca ne me montre rien »). --- */
+.conv-pane[data-density='compact'][data-recherche] .conv-meta,
+.conv-pane[data-density='normal'][data-recherche] .conv-meta {
+  display: flex;
+}
+
+.conv-pane[data-density='normal'] .conv-item,
+.conv-pane[data-density='normal'] .conv-pick,
+.conv-pane[data-density='compact'] .conv-item,
+.conv-pane[data-density='compact'] .conv-pick {
+  min-height: 0;
+}
+.conv-pane[data-density='normal'] .conv-pick {
+  gap: 9px;
+  padding: 7px 8px 7px 11px;
+}
+.conv-pane[data-density='normal'] .conv-list {
+  gap: 4px;
+}
+
+.conv-pane[data-density='compact'] .conv-pick {
+  gap: 8px;
+  padding: 3px 8px 3px 10px;
+}
+.conv-pane[data-density='compact'] .conv-label {
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.conv-pane[data-density='compact'] .conv-list {
+  gap: 1px;
+}
+.conv-pane[data-density='compact'] .conv-group-head {
+  padding: 3px 6px;
+}
+.conv-pane[data-density='compact'] .conv-new-row {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* Pied de la liste des conversations : filtre de statut, densite, mosaique (2026-09-23). */
+.conv-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 0;
+  margin-bottom: calc(var(--s2) * -1.6);
+  border-top: 1px solid rgba(212, 169, 79, 0.2);
+  flex-shrink: 0;
+}
+.conv-foot-spacer {
+  flex: 1;
+}
+.conv-status-filter {
+  font-size: 11px;
+  /* Hauteur minimale et non fixe : en thème malvoyant (13 px), une boîte de 18 px plus petite que
+     la ligne de texte faisait déborder le libellé vers le haut. Centrage explicite, ligne serrée. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  line-height: 1;
+  /* « Actives » n'a aucune lettre descendante : la place réservée aux jambages sous la ligne
+     remontait le texte d'un pixel. On rogne la boîte aux capitales et à la ligne de base,
+     puis le padding symétrique centre le texte visible. */
+  text-box: trim-both cap alphabetic;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  background: rgba(212, 169, 79, 0.08);
+  color: var(--gold-doux);
+  cursor: pointer;
+}
+.conv-status-filter:hover,
+.conv-status-filter:not([data-filter='toutes']) {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}
+
+/*
+ * Barre de sélection multiple — style « liste d'actions » (choix conv-815, 2026-09-23) :
+ * les boutons en texte gris 10 px ne se lisaient pas comme des boutons.
+ */
+.conv-bulk-bar {
+  flex-direction: column;
+  gap: 2px;
+}
+.conv-bulk-bar .conv-date-sort {
+  align-self: stretch;
+  width: 100%;
+  padding: 5px 10px;
+  border-left: 2px solid var(--accent, #d4a94f);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font-size: 11.5px;
+  text-align: left;
+}
+.conv-bulk-bar .conv-date-sort:hover:not(:disabled),
+.conv-bulk-bar .conv-date-sort:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+.conv-bulk-bar .conv-date-sort:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.conv-bulk-bar .conv-bulk-del {
+  border-left-color: var(--danger);
+  color: var(--danger);
+}
+/* Un liseré de couleur par action (conv-815) : rose, doré, bleu ; Supprimer reste rouge. */
+.conv-bulk-bar .conv-date-sort:nth-child(1) { border-left-color: #e87fb0; }
+.conv-bulk-bar .conv-date-sort:nth-child(2) { border-left-color: #d4a94f; }
+.conv-bulk-bar .conv-date-sort:nth-child(3) { border-left-color: #5b9cf0; }
+.conv-bulk-bar .conv-date-sort.conv-bulk-del { border-left-color: var(--danger); }
+
+/* Bloc Actions — variante C3 « frise » (2026-09-24) : barre de temps puis frise a pastilles.
+   Icones, pastilles et « … » en CSS : le texte du corps reste les lignes d'action. */
+.thinking-block > summary .thinking-bilan {
+  margin-left: 6px;
+  color: #e3ba55;
+  font-size: 12px;
+  /* Ne se laisse pas ecraser par le signe de vie voisin : sans ca, « 7.3 s » passait a un
+     caractere par ligne (capture conv-836, 2026-09-24). C'est le statut qui se tronque. */
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.thinking-block .thinking-frise {
+  white-space: normal;
+}
+.thinking-frise-barre {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  margin: 2px 0 8px;
+}
+.thinking-frise-barre > span {
+  flex-basis: 0;
+  min-width: 3px;
+  border-radius: 2px;
+  background: #7fc98f;
+}
+.thinking-frise-barre > span[data-etat='ko'] {
+  background: #e07a6a;
+}
+.thinking-frise-barre > span[data-etat='encours'] {
+  background: #e3ba55;
+}
+.thinking-frise-liste {
+  border-left: 1px solid rgba(255, 255, 255, 0.13);
+  margin-left: 6px;
+  padding-left: 12px;
+}
+.thinking-frise-ligne {
+  position: relative;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 1px 0;
+}
+.thinking-frise-ligne::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 0.55em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7fc98f;
+}
+.thinking-frise-ligne[data-etat='ko'] {
+  color: #e07a6a;
+}
+.thinking-frise-ligne[data-etat='ko']::before {
+  background: #e07a6a;
+}
+.thinking-frise-ligne[data-etat='encours']::before {
+  background: #e3ba55;
+}
+.thinking-frise-ligne[data-etat='encours']::after {
+  content: '…';
+  color: #e3ba55;
+}
+.thinking-frise-icone {
+  display: inline-block;
+  width: 18px;
+}
+.thinking-frise-icone[data-famille='lire']::before {
+  content: '📖';
+}
+.thinking-frise-icone[data-famille='chercher']::before {
+  content: '🔎';
+}
+.thinking-frise-icone[data-famille='modifier']::before {
+  content: '✏️';
+}
+.thinking-frise-icone[data-famille='commande']::before {
+  /* Invite de terminal, pas '▶' : un triangle se lit comme une fleche depliable alors que la
+     ligne ne s'ouvre pas (retour utilisateur du 2026-09-24, conv-831). */
+  content: '>_';
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.thinking-frise-icone[data-famille='autre']::before {
+  content: '•';
 }

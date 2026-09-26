@@ -1,4 +1,11 @@
+import { rappelSansDejaEnvoye } from './rappel-conversations'
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
+import {
+  deciderRejeuDeChat,
+  dormirAnnulable,
+  estCrashDExecutionDuCli
+} from './chat-rejeu-surcharge'
+import { classifierRefusDeReprise, refusDeRepriseEstTransitoire } from './runs/resume-refusal'
 import { chargerMurs, enregistrerMur } from './runs/murs-store'
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleBinding, RoleModelConfig } from './roles'
@@ -12,6 +19,12 @@ import {
   type Usage
 } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
+import { coupesParPoids } from './chat-session-poids'
+import { loadConvActivity } from './activity/conv-activity'
+import {
+  appendWorkspaceMutationTrace,
+  captureMutationTraceBase
+} from './activity/trace-workspace-mutation'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import {
   buildTurnMessageBlocks,
@@ -24,21 +37,26 @@ import {
   exigeUnChiffreVerifie,
   exigePreuveAvantDePromettre,
   RELANCE_PREUVE_AVANT_DE_PROMETTRE,
+  exigeFaireLeGeste,
+  RELANCE_FAIRE_LE_GESTE,
   blocVisuelNonFerme,
   RELANCE_BLOC_VISUEL_NON_FERME,
   questionPoseeSansAvoirLu,
+  statusEstUneAction,
   statusEstUneLecture,
+  statutComplet,
   RELANCE_QUESTION_SANS_LECTURE,
   exigeUneConclusion,
   compactionsAbouties
 } from './chat-turn-messages'
-import { invokedSkillId, skillInstruction } from './skill-pipeline'
+import { invokedSkillId, noteSkillInconnue, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
+import { suivreBlocsDeCode } from '../shared/bloc-de-code'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { blocsSystemeEcran, buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import {
   conversationPretendueInaccessible,
   correctionConversationLisible,
@@ -46,6 +64,7 @@ import {
   outilsFaussementAbsents
 } from '../shared/outil-pretendu-absent'
 import { startTurnTimer } from './turn-timing'
+import { avecAvisEnTete, avisOrientationsTardives } from './orientations-tardives'
 import { claudeActiveAccountId } from './claude-accounts'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 import {
@@ -80,8 +99,9 @@ import type { ChatArtifact } from '../shared/artifacts'
  * SUPPRIMÉ le 2026-09-04, demande explicite de l'utilisateur (conv-233, « ENLEVE CE PUTAIN DE
  * BLOQUAGE DE BUDGET ») : relever la borne ne faisait que déplacer la coupure. Ce compteur coupait
  * des tours ENGAGÉS alors qu'il ne mesure RIEN du coût réel — un tour de 41 appels bon marché était
- * tué, un tour de 5 appels ruineux passait. Le frein qui reste est le seul honnête : la dépense
- * réelle du tour (`AUTOWIN_CHAT_USD_CAP`, voir `chat-turn-budget.ts`), plus l'annulation manuelle.
+ * tué, un tour de 5 appels ruineux passait. Le seul frein qui reste est l'annulation manuelle : le
+ * budget du tour de chat a lui aussi été supprimé le 2026-09-16, sur demande de l'utilisateur
+ * (« aucun blocage ») ; le coût est désormais MESURÉ et écrit, jamais coupé.
  * Avec l'infini, les injections « budget du tour » et « dernière itération » ne se déclenchent plus :
  * leurs conditions comparent l'index à une borne finie.
  */
@@ -460,18 +480,14 @@ export function separationDeltaCollee(dejaEmis: string, suivant: string): string
 export function detacherFenceCollee(texte: string): string {
   if (!texte.includes('```') && !texte.includes('~~~')) return texte
   const lignes = texte.split(/(\r?\n)/u)
-  let dansUneFence = false
+  const suivi = suivreBlocsDeCode()
   for (let index = 0; index < lignes.length; index += 2) {
     const ligne = lignes[index]
-    if (/^[ \t]*(?:`{3,}|~{3,})/u.test(ligne)) {
-      dansUneFence = !dansUneFence
-      continue
-    }
-    if (dansUneFence) continue
+    if (suivi.delimiteur(ligne) || suivi.dansUnBloc) continue
     const soudure = /^(.*[^\s`~])(`{3,}|~{3,})([A-Za-z][\w-]*)[ \t]*$/u.exec(ligne)
     if (!soudure) continue
     lignes[index] = `${soudure[1]}\n\n${soudure[2]}${soudure[3]}`
-    dansUneFence = true
+    suivi.delimiteur(`${soudure[2]}${soudure[3]}`)
   }
   return lignes.join('')
 }
@@ -539,8 +555,9 @@ export class DeltaCollageTracker {
   }
 
   private fenceOuverte(texte: string): boolean {
-    const ouvertures = texte.match(/^[ \t]*(?:```|~~~)/gm)
-    return ouvertures !== null && ouvertures.length % 2 === 1
+    const suivi = suivreBlocsDeCode()
+    for (const ligne of texte.split('\n')) suivi.delimiteur(ligne)
+    return suivi.dansUnBloc
   }
 }
 
@@ -572,7 +589,81 @@ function retirerConclusionBloquantePrematuree(texte: string): string {
   }
 }
 
-export function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
+/**
+ * `<cmd>` A LA FERMETURE ERRONEE — mesure conv-686, tour `6185f7e7-88fa-4add-bf84-c51741d1b8b0`
+ * (2026-09-18) : le modele emet `<cmd>{...JSON complet...}</invoke>
+</function_calls>` puis sa
+ * phrase de cloture. Sans `</cmd>`, CONTROL_RE ne matchait rien : l'orchestration n'etait PAS
+ * lancee et tout le texte depuis `<cmd>` (conclusion comprise) etait masque — l'utilisateur lisait
+ * « Aucune reponse produite pour ce tour. ». fix-ok: fermeture `</invoke>` au lieu de `</cmd>`.
+ * On recupere un objet JSON EQUILIBRE et PARSABLE juste apres `<cmd>`, on le referme proprement et
+ * on retire les fermetures parasites qui le suivent. Un JSON incomplet reste intact (chemin invalid).
+ */
+export function normaliserFermeturesCmd(raw: string): string {
+  let out = ''
+  let i = 0
+  while (true) {
+    const start = raw.indexOf('<cmd>', i)
+    if (start < 0) return out + raw.slice(i)
+    const apresOuverture = start + 5
+    let j = apresOuverture
+    while (j < raw.length && /\s/.test(raw[j])) j++
+    const fin = raw[j] === '{' ? finObjetJson(raw, j) : -1
+    if (fin < 0) {
+      out += raw.slice(i, apresOuverture)
+      i = apresOuverture
+      continue
+    }
+    const json = raw.slice(j, fin)
+    const reste = raw.slice(fin)
+    if (/^\s*<\/cmd>/.test(reste)) {
+      out += raw.slice(i, fin)
+      i = fin
+      continue
+    }
+    try {
+      JSON.parse(json)
+    } catch {
+      out += raw.slice(i, apresOuverture)
+      i = apresOuverture
+      continue
+    }
+    const parasites = /^(?:\s*<\/(?:invoke|function_calls|parameter|antml:[a-z_]+)>)*/.exec(reste)
+    out += raw.slice(i, start) + '<cmd>' + json + '</cmd>'
+    i = fin + (parasites ? parasites[0].length : 0)
+  }
+}
+
+function finObjetJson(raw: string, debut: number): number {
+  let profondeur = 0
+  let dansChaine = false
+  for (let k = debut; k < raw.length; k++) {
+    const c = raw[k]
+    if (dansChaine) {
+      if (c === '\\') k++
+      else if (c === '"') dansChaine = false
+    } else if (c === '"') dansChaine = true
+    else if (c === '{') profondeur++
+    else if (c === '}' && --profondeur === 0) return k + 1
+  }
+  return -1
+}
+
+/**
+ * conv-686, tours `6185f7e7-88fa-4add-bf84-c51741d1b8b0` et `30876029-68c5-43c8-948c-59786b28a081`
+ * (saisies ts 1789711890089 et 1789712145048) : le modele a emis une commande `<cmd>` illisible,
+ * rien n'a ete lance, et l'ecran disait « Aucune reponse produite » — l'utilisateur a renvoye le
+ * meme message sans savoir qu'une commande avait ete perdue. Le repli le dit desormais.
+ */
+export function texteCmdIlisible(): string {
+  return (
+    'J’ai voulu lancer une action, mais ma commande était mal formée : rien n’a été lancé. ' +
+    'Renvoie ton message pour relancer.'
+  )
+}
+
+export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
+  const raw = normaliserFermeturesCmd(input)
   const tokens: OrderedPilotToken[] = []
   let cursor = 0
   CONTROL_RE.lastIndex = 0
@@ -625,6 +716,26 @@ export function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
   return tokens
 }
 
+/**
+ * Capture avant/apres du dossier du tour, ABANDONNEE des qu'on annule : elle coute ~200 ms de git
+ * sur un gros depot, et un Stop ne doit jamais attendre l'observabilite. Rend `undefined` = pas de
+ * trace pour ce tour, jamais une erreur.
+ */
+async function captureSaufAnnulation(
+  workspace: string,
+  signal?: AbortSignal
+): Promise<Awaited<ReturnType<typeof captureMutationTraceBase>>> {
+  if (signal?.aborted) return undefined
+  if (!signal) return captureMutationTraceBase(workspace, [])
+  return new Promise((resolve) => {
+    const abandon = (): void => resolve(undefined)
+    signal.addEventListener('abort', abandon, { once: true })
+    captureMutationTraceBase(workspace, [])
+      .then(resolve, () => resolve(undefined))
+      .finally(() => signal.removeEventListener('abort', abandon))
+  })
+}
+
 function waitForAnswer(answer: Promise<string>, signal?: AbortSignal): Promise<string> {
   if (!signal) return answer
   if (signal.aborted) return Promise.reject(new Error(String(signal.reason ?? 'aborted')))
@@ -665,6 +776,22 @@ function replierSurLaMiniature(piece: PieceJointeDuFil | undefined): PieceJointe
     size: content.length,
     content
   }
+}
+
+/**
+ * L'identite du fil injectee au modele est celle du TOUR, jamais celle de l'onglet AFFICHE.
+ * `snapshotForPrompt()` porte `activeConversationId`, pose par le renderer au changement d'onglet.
+ * Un tour qui se joue dans conv-A pendant que l'utilisateur regarde conv-B faisait donc lire au
+ * modele l'id de conv-B : il se croyait dans un autre fil, declarait son historique vide, et pouvait
+ * partir chercher « le vrai fil » avec `conversation_search` — alors que l'historique, lui, etait
+ * correctement transmis. Mesure du 2026-09-14 (conv-526) : reponse « cet echange arrive dans un fil
+ * different (conv-533)… ce fil-ci est vide » rendue DANS conv-526.
+ */
+export function snapshotDuTour<T extends { activeConversationId?: string }>(
+  snapshot: T,
+  conversationId?: string
+): T {
+  return conversationId ? { ...snapshot, activeConversationId: conversationId } : snapshot
 }
 
 export class AgentPilot {
@@ -717,6 +844,19 @@ export class AgentPilot {
    * demanderait de changer la forme du cache de sessions sur disque, hors du perimetre demande.
    */
   private readonly comptesRendusNonVus = new Map<string, string>()
+
+  /**
+   * DERNIER etat de l'app deja pousse dans chaque conversation.
+   *
+   * Sert a n'envoyer QUE le changement quand la session du modele est reprise : cet etat part
+   * cote MESSAGE, il change a chaque tour, donc il nest jamais mis en cache et se repaie PLEIN
+   * TARIF. Mesure du 2026-09-16 (conv-614) : 3 043 caracteres par tour, dont 2 821 pour la seule
+   * liste des skills, identique dun tour a lautre.
+   */
+  private readonly dernierEtatPousse = new Map<string, unknown>()
+
+  /** Extraits de rappel deja envoyes dans la session courante de chaque conversation. */
+  private readonly rappelDejaEnvoye = new Map<string, Set<string>>()
 
   /**
    * L'index memoire ci-dessus est HYDRATE une fois depuis le disque, puis maintenu en miroir.
@@ -778,8 +918,8 @@ export class AgentPilot {
      * consomme 4 iterations en `edit_file` rates avant meme de pouvoir chercher une autre voie, puis
      * s'est arrete sur « cap atteint sans reponse finale » — en laissant des mutations partielles.
      * La regle anti-abandon lui demande desormais de CHERCHER, ESSAYER puis NETTOYER : il faut de quoi
-     * le faire. Le cout reste borne par le budget du tour (AUTOWIN_CHAT_USD_CAP), qui coupe sur la
-     * depense reelle plutot que sur un compteur aveugle.
+     * le faire. Le cout n'est plus borne du tout depuis la suppression du budget du tour
+     * (2026-09-16) : il est MESURE et ecrit, jamais coupe.
      */
     maxIter = CAP_ITERATIONS_TOUR,
     conversationId?: string,
@@ -1017,7 +1157,10 @@ export class AgentPilot {
     const catalog = this.bus.catalog()
     // Sous-jalons : `snapshot` recouvre trois lectures (runs, bureaux, recensement git). Les
     // marquer sépare la cause de l'effet dans l'onglet Latence de la vue Tests.
-    const snapshot = await this.bus.snapshotForPrompt((nom) => timer.mark(nom))
+    const snapshot = snapshotDuTour(
+      await this.bus.snapshotForPrompt((nom) => timer.mark(nom)),
+      conversationId
+    )
     timer.mark('snapshot')
 
     const latestUserMessage = resolveLatestUserMessage(history, routingUserMessageOverride)
@@ -1061,16 +1204,16 @@ export class AgentPilot {
         if (!directives.length) break
         lateDirectives.push(...directives)
       }
-      const directiveNotice = lateDirectives.length
-        ? `⚠️ ${lateDirectives.length} orientation(s) reçue(s) après le lancement : aucun second run n'a été relancé. Renvoyez-la comme nouveau message si elle reste nécessaire.`
-        : undefined
+      const directiveNotice = avisOrientationsTardives(lateDirectives)
       // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
       // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
       // n'affichait que « Workflow Autowin execute. »).
-      const compteRendu = formatOrchestrationOutcome(
-        result.ok,
-        result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
-        result.ok ? undefined : String(result.error ?? ''),
+      const compteRendu = avecAvisEnTete(
+        formatOrchestrationOutcome(
+          result.ok,
+          result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
+          result.ok ? undefined : String(result.error ?? '')
+        ),
         directiveNotice
       )
       /**
@@ -1191,7 +1334,22 @@ export class AgentPilot {
             { name: 'constitution', text: CONSTITUTION },
             { name: 'pilotage', text: pilotage },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            { name: 'projectContext', text: this.projectContext(conversationId) }
+            { name: 'projectContext', text: this.projectContext(conversationId) },
+            /**
+             * DERNIERS blocs (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
+             * TOUJOURS servi et identique pour tous les fils (kaizen conv-835, tour
+             * ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 : « envoi un message teams… » n'avait aucun mot
+             * visuel, le chat n'a donc pas recu la regle et a ouvert Teams sur l'ecran reel), puis les
+             * regles de travail visuel, conditionnelles (conv-614) — image jointe comprise (conv-742).
+             *
+             * En DERNIER a dessein : le cache du provider vaut par son PREFIXE. Seule la queue
+             * visuelle apparait ou disparait d'un tour a l'autre.
+             */
+            ...blocsSystemeEcran(
+              latestUserMessage ?? '',
+              (history.at(-1)?.attachments ?? []).some((piece) => piece.kind === 'image'),
+              conversationId ?? ''
+            )
           ]
     const system = systemParts.map((p) => p.text).join('')
     const systemBlocks = systemParts
@@ -1238,7 +1396,20 @@ export class AgentPilot {
      * cette fois avec le fil coupe au resume. C est le seul geste qui allege reellement.
      */
     const compactions = compactionsAbouties(history)
-    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}:c${compactions}`
+    /**
+     * LE POIDS DU FIL AUSSI — mesure du 2026-09-17 (conv-632).
+     *
+     * Autowin poussait 4 779 caracteres au CLI et l'appel etait facture 491 636 tokens d'entree :
+     * la reinjection reelle est le TRANSCRIPT du CLI (raisonnement + appels d'outils de tous les
+     * tours), qu'Autowin ne voit pas et ne borne pas. Mediane relevee sur 8 891 appels : 210 979
+     * tokens d'entree. Les bornes d'`chat-turn-messages.ts` (40 messages / 60 k tokens) ne
+     * s'appliquaient a RIEN tant que la session etait reprise.
+     *
+     * Franchir le seuil perime la session par le chemin deja ecrit pour la compaction : le tour
+     * suivant repart sur le fil aplati d'Autowin — bulles finales + resultats d'action resumes.
+     */
+    const coupesPoids = conversationId ? coupesParPoids(loadConvActivity(conversationId)) : 0
+    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}:${workspaceDeSession}:c${compactions}:w${coupesPoids}`
     // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
     // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.
     this.hydrateChatSessions()
@@ -1295,7 +1466,15 @@ export class AgentPilot {
      * Générique par construction : toute skill du kit devient atteignable, sans nouvelle phase.
      */
     const invoked = invokedSkillId(lastUserMessage?.content ?? '')
-    const skillBody = invoked ? skillInstruction(invoked) : ''
+    /*
+     * UN `/nom` INCONNU NE DOIT PLUS DISPARAITRE EN SILENCE.
+     *
+     * `skillInstruction` rend '' pour une skill introuvable : le message repartait alors comme du
+     * texte ordinaire, sans que personne sache que la commande n'avait pas pris. Mesure du
+     * 2026-09-16 sur `conversations.json` : 12 invocations reellement tapees dans ce cas, dont
+     * `/design` SIX fois apres son retrait du kit. On injecte donc la note a la place du corps vide.
+     */
+    const skillBody = invoked ? skillInstruction(invoked) || (noteSkillInconnue(invoked) ?? '') : ''
     /**
      * Le compte-rendu d'un tour execute sans le modele est CONSOMME ici — une seule fois.
      *
@@ -1322,10 +1501,20 @@ export class AgentPilot {
     // Dependance OPTIONNELLE, et assumee comme telle : un rappel est un CONFORT. Un tour qui
     // echouerait faute de rappel ferait dependre chaque message d'une commodite -- et les bus
     // factices des tests, qui n'implementent que ce qu'ils exercent, tomberaient avec lui.
-    const rappelConversations =
+    const rappelBrut =
       typeof this.bus.rappelPourDemande === 'function'
         ? this.bus.rappelPourDemande(lastUserMessage?.content, conversationId)
         : ''
+    // Session neuve = rien d'envoye encore : on repart a zero. Session reprise = on ne renvoie
+    // pas un extrait que la session porte deja (conv-706 : conv-627/conv-624 a chaque tour).
+    const cleRappel = conversationId ?? ''
+    if (!resumeSessionId || !this.rappelDejaEnvoye.has(cleRappel)) {
+      this.rappelDejaEnvoye.set(cleRappel, new Set())
+    }
+    const rappelConversations = rappelSansDejaEnvoye(
+      rappelBrut,
+      this.rappelDejaEnvoye.get(cleRappel) as Set<string>
+    )
     /**
      * LE NOM DE CHAQUE INJECTION DU MESSAGE, tenu a part du texte.
      *
@@ -1340,8 +1529,11 @@ export class AgentPilot {
      * de decision. Une entree absente du registre n'est jamais devinee : elle ressort sous le nom
      * generique de l'echange intra-tour, qui est ce qu'elle est.
      */
+    const cleEtat = conversationId ?? ''
+    const snapshotPrecedent = this.dernierEtatPousse.get(cleEtat)
     const blocsDuTour = buildTurnMessageBlocks({
       snapshot,
+      ...(snapshotPrecedent !== undefined ? { snapshotPrecedent } : {}),
       brainContext,
       memoryEcho,
       rappelConversations,
@@ -1352,6 +1544,8 @@ export class AgentPilot {
       compteRenduNonVu,
       tourCoupePourCeMessage
     })
+    // Ce qui vient detre pousse devient la reference du prochain tour de CETTE conversation.
+    this.dernierEtatPousse.set(cleEtat, snapshot)
     const nomsDuTour = new Map(blocsDuTour.map((bloc) => [bloc.text, bloc.name]))
     const convo: string[] = blocsDuTour.map((bloc) => bloc.text)
     /** Decomposition NOMMEE de ce qui part cote user, relue a l'instant de l'envoi. */
@@ -1444,6 +1638,7 @@ export class AgentPilot {
       | 'question-sans-lecture'
       | 'commande-illisible'
       | 'preuve-promise'
+      | 'geste-rendu'
       | 'bloc-visuel-non-ferme'
     > = []
     const grantRecoveryIteration = (
@@ -1460,6 +1655,7 @@ export class AgentPilot {
         | 'question-sans-lecture'
         | 'commande-illisible'
         | 'preuve-promise'
+        | 'geste-rendu'
         | 'bloc-visuel-non-ferme'
     ): void => {
       recoveryReasons.push(reason)
@@ -1478,6 +1674,14 @@ export class AgentPilot {
      */
     let anyActionExecuted = false
     /**
+     * Un outil NATIF qui agit (Write, Edit, Bash non lecteur) a tourne dans ce tour. Separe de
+     * `anyActionExecuted` a dessein : il ne sert qu'au garde « annonce sans action » (fausse alerte
+     * du 2026-09-22, conv-782), sans changer les autres gardes fondes sur les `<cmd>` Autowin.
+     */
+    let actionNativeCeTour = false
+    /** Le modele a emis `<cmd>` dans ce tour (lu ou non) — sert au repli de cloture. */
+    let cmdEmisCeTour = false
+    /**
      * A-t-il parle A UN MOMENT du tour ? La question porte sur le TOUR ENTIER, pas sur la derniere
      * iteration : un tour « Avant. <action> Apres. » suivi d'une reponse vide a deja tout dit, le
      * relancer serait du bavardage paye. (Bug attrape par agent-pilot.streaming.test.ts.)
@@ -1486,6 +1690,14 @@ export class AgentPilot {
     let conclusionRecoveryAvailable = true
     /** Une LECTURE a-t-elle eu lieu ? Un chiffre sans lecture est une supposition, pas une reponse. */
     let anyReadExecuted = false
+    /**
+     * Artefacts DEJA publies dans le fil pendant ce tour, par identifiant.
+     *
+     * Un artefact arrive deux fois : une premiere en direct (flux du provider, a sa place
+     * chronologique) puis une seconde dans le resultat final du meme appel. L'identifiant est
+     * deterministe (empreinte du contenu), donc cet ensemble suffit a n'en afficher qu'un.
+     */
+    const artefactsDejaEmis = new Set<string>()
     /**
      * Une QUESTION a-t-elle ete posee ce tour ? Mesure du 2026-08-25 (conv-1399) : une question a
      * quatre options posee sans avoir lu un seul fichier, dont une option DEJA implementee et
@@ -1594,6 +1806,8 @@ export class AgentPilot {
     let annonceSansActionRecoveryAvailable = true
     /** Une clôture qui promet un compte-rendu futur : relance UNE fois, jamais plus. */
     let preuvePromiseRecoveryAvailable = true
+    let gesteRenduRecoveryAvailable = true
+    let bureauUtilise = false
     /** Une fence ```html-render laissée ouverte : relance UNE fois, jamais plus. */
     let blocVisuelRecoveryAvailable = true
     /**
@@ -1623,7 +1837,9 @@ export class AgentPilot {
         (anyActionExecuted
           ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
             'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
-          : 'Aucune reponse produite pour ce tour.')
+          : cmdEmisCeTour
+            ? texteCmdIlisible()
+            : 'Aucune reponse produite pour ce tour.')
       /*
        * UN REFUS DE MEMOIRE ENCORE DEBOUT SUIT LE TOUR JUSQU'A SA CLOTURE, QUELLE QU'ELLE SOIT.
        *
@@ -1790,6 +2006,7 @@ export class AgentPilot {
           ? recoveredProviderCall
           : undefined
       let res: SendResult | undefined = recoveredHere?.result
+      let etatAvantEnvoi: Awaited<ReturnType<typeof captureMutationTraceBase>>
       let callStartedAt = performance.now()
       let successfulStreamedPrefix = recoveredHere?.streamedPrefix ?? ''
       let successfulAttempt = recoveredHere?.attempt ?? 0
@@ -1811,11 +2028,34 @@ export class AgentPilot {
             emit({ kind: 'delta', streamId, text: segment.text, iteration: i })
           }
         }
+        // AVANT/APRES du tour (2026-09-23) : un fichier modifie par une commande shell (python,
+        // sed…) n'apparait dans aucune preuve Edit/Write, et l'onglet Fichiers restait a 0.
+        etatAvantEnvoi =
+          conversationId && workspaceDuTour
+            ? await captureSaufAnnulation(workspaceDuTour, signal)
+            : undefined
         try {
           callStartedAt = performance.now()
           timer.mark(`send${i}:start`)
           let sawFirstChunk = false
           res = await this.registry.send(provider, messages, options, (chunk) => {
+            /**
+             * ARTEFACTS EN DIRECT — a leur place dans le fil.
+             *
+             * Une image lue par `Read` ou une capture d'ecran arrive au MILIEU du tour. Attendre le
+             * `SendResult` pour l'afficher la faisait tomber sous le bloc de cloture (mesure du
+             * 2026-09-10, conv-426 : « les blocs image read apparaissent apres le bloc Fait »). On
+             * l'emet donc au moment ou le provider la voit, et on retient son identifiant pour ne
+             * pas la republier a la fin du tour.
+             */
+            if (chunk.artifacts?.length) {
+              for (const artifact of chunk.artifacts) {
+                if (artefactsDejaEmis.has(artifact.id)) continue
+                artefactsDejaEmis.add(artifact.id)
+                emit({ kind: 'artifact', artifact, iteration: i })
+              }
+              if (!chunk.delta) return
+            }
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
             if (chunk.status) {
               /*
@@ -1826,7 +2066,11 @@ export class AgentPilot {
                * question -- en ordonnant d'avancer sans demander, donc en ecrasant la skill `draft`
                * qui exige justement de faire choisir l'humain (mesure conv-167, 2026-09-03).
                */
-              if (statusEstUneLecture(chunk.status)) anyReadExecuted = true
+              // Juge la commande ENTIERE, pas le libelle coupe a 120 caracteres (conv-861).
+              const statutEntier = statutComplet(chunk.status, chunk.statusTarget)
+              if (statusEstUneLecture(statutEntier)) anyReadExecuted = true
+              // Un Write/Edit/Bash natif a AGI : le garde « annonce sans action » doit le voir.
+              if (statusEstUneAction(statutEntier)) actionNativeCeTour = true
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
               emit({
                 kind: 'provider-status',
@@ -1926,16 +2170,66 @@ export class AgentPilot {
             continue
           }
           if (error instanceof ProviderCallError && !error.retryable) throw error
-          if (attempt >= 1) throw error
+          /*
+           * UNE PANNE SERVEUR TEMPORAIRE NE DOIT PAS TUER LE TOUR (mesure du 2026-09-12).
+           *
+           * Sur 2 577 messages utilisateur, « reprend » est retape 61 fois ; le message qui le
+           * precede est 11 fois « API Error: 529 Overloaded » et 13 fois « API Error: 500 Internal
+           * server error. This is a server-side issue, usually temporary ». L'ancien plafond nu
+           * (`attempt >= 1`) rejouait UNE fois, IMMEDIATEMENT : le second appel partait dans la
+           * seconde, retombait sur la meme surcharge, et le backoff etait fait a la main par
+           * l'utilisateur. La politique vit desormais dans un module pur teste — l'orchestrateur
+           * avait deja la sienne (`transient-overload.ts`), le chat n'en avait aucune.
+           *
+           * Toute erreur qui n'est PAS une surcharge garde EXACTEMENT l'ancien comportement.
+           */
+          /*
+           * fix-ok: un crash d'execution a 0 token rejoue AVEC la meme session refait le meme
+           * appel — la session reprise est justement ce qui casse.
+           *
+           * CRASH DU CLI A 0 TOKEN SUR UNE SESSION HERITEE — on LACHE la session avant de rejouer.
+           *
+           * Capture fournie par l'utilisateur sur conv-625 (tour `2fbc8f95-6a5d-4fd4-821c-7af5a197303a`,
+           * 2026-09-16) : un tour meurt sur « You've hit your session limit · resets 10:30pm », le
+           * meme prompt renvoye ensuite meurt en « error_during_execution · 0.0000 USD », et la
+           * barre de quotas affiche 94 % de restant sur le compte actif. Rien n'a ete consomme :
+           * ce n'est donc pas un refus de quota, c'est la session reclamee par `--resume` qui n'est
+           * plus ouvrable (laissee ouverte par le mur, ou rangee sous un autre dossier/compte).
+           * Le rejeu repartait avec le MEME `resumeSessionId` et remourait a l'identique.
+           *
+           * On ne lache que la session HERITEE d'un tour precedent (`sessionEnCours ===
+           * resumeSessionId`) : une session ouverte PAR ce tour porte les iterations deja payees,
+           * l'abandonner les perdrait. Meme mecanique que « Prompt is too long » ci-dessus, et le
+           * fil (borne) que ce tour porte deja fournit le contexte au nouvel appel.
+           */
+          const crashSansCout =
+            error instanceof ProviderCallError &&
+            error.retryable &&
+            estCrashDExecutionDuCli(message)
+          if (crashSansCout && sessionEnCours && sessionEnCours === resumeSessionId) {
+            sessionEnCours = undefined
+            delete options.resumeSessionId
+            if (conversationId) {
+              this.chatSessions.delete(conversationId)
+              this.forgetPersistedChatSession(conversationId)
+            }
+          }
+          const rejeu = deciderRejeuDeChat(message, attempt)
+          if (!rejeu.rejouer) throw error
           if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
           attempt += 1
           emit({
             kind: 'retry',
             iteration: i,
             name: provider,
-            text: message,
-            data: { attempt, maxAttempts: 2 }
+            text: rejeu.delaiMs
+              ? `${message} — panne serveur temporaire, nouvel essai dans ${Math.round(rejeu.delaiMs / 1000)} s`
+              : message,
+            data: { attempt, maxAttempts: rejeu.maxAttempts }
           })
+          // Attente ANNULABLE : un Stop pendant le backoff rend la main tout de suite.
+          await dormirAnnulable(rejeu.delaiMs, signal)
+          signal?.throwIfAborted()
         }
       }
       emit({
@@ -1969,6 +2263,47 @@ export class AgentPilot {
           // à la précédente. La conserver ferait élider un historique qu'il n'a peut-être jamais reçu.
           this.chatSessions.delete(conversationId)
           this.forgetPersistedChatSession(conversationId)
+        }
+      }
+      /*
+       * JOURNAL DES FICHIERS : les Edit/Write natifs du modèle du chat n'y étaient jamais écrits,
+       * donc l'onglet Fichiers restait vide pour un tour de chat direct. Une édition échouée
+       * (`ok: false`) n'est pas tracée ; l'écriture du journal ne fait jamais échouer le tour.
+       */
+      if (conversationId && workspaceDuTour) {
+        const dejaTraces = new Set<string>()
+        for (const item of res.executionEvidence ?? []) {
+          if (!item.ok || item.kind !== 'mutation') continue
+          const paths = item.path ? [item.path] : (item.paths ?? [])
+          if (paths.length === 0) continue
+          const lines = item.writtenLineFingerprints
+          for (const p of paths) dejaTraces.add(p.replaceAll('\\', '/').toLowerCase())
+          await appendWorkspaceMutationTrace({
+            conversationId,
+            ...(turnId ? { turnId } : {}),
+            workspaceRoot: item.workspaceRoot ?? workspaceDuTour,
+            source: 'chat_tool',
+            paths,
+            ...(lines?.length && paths.length === 1
+              ? { pathLineFingerprints: { [paths[0]]: lines } }
+              : {})
+          })
+        }
+        if (etatAvantEnvoi) {
+          const etatApres = await captureSaufAnnulation(workspaceDuTour, signal)
+          const changes = [...(etatApres ?? [])]
+            .filter(([path, empreinte]) => etatAvantEnvoi.get(path) !== empreinte)
+            .map(([path]) => path)
+            .filter((path) => !dejaTraces.has(path.replaceAll('\\', '/').toLowerCase()))
+          if (changes.length > 0)
+            await appendWorkspaceMutationTrace({
+              conversationId,
+              ...(turnId ? { turnId } : {}),
+              workspaceRoot: workspaceDuTour,
+              source: 'chat_tool',
+              paths: changes,
+              before: etatAvantEnvoi
+            })
         }
       }
       if (res.usage) {
@@ -2025,6 +2360,9 @@ export class AgentPilot {
         reponseTardiveAUneQuestion = lateDirectives.join(' / ')
       }
       for (const artifact of res.artifacts ?? []) {
+        // Deja affiche en direct a sa place chronologique : ne pas le doubler en fin de tour.
+        if (artefactsDejaEmis.has(artifact.id)) continue
+        artefactsDejaEmis.add(artifact.id)
         emit({ kind: 'artifact', artifact, iteration: i })
       }
       /**
@@ -2069,6 +2407,7 @@ export class AgentPilot {
         return
       }
 
+      if (texteProvider.includes('<cmd>')) cmdEmisCeTour = true
       const ordered = parseOrderedPilotTokens(texteProvider)
       const hasCommand = ordered.some((token) => token.kind === 'command')
       const spoken = ordered
@@ -2306,7 +2645,11 @@ export class AgentPilot {
           exigerExperienceSoignee &&
           !relanceDeFormeUtilisee &&
           annonceSansActionRecoveryAvailable &&
-          exigeAgirPasAnnoncer(latestUserMessage, visibleTextThisTurn, anyActionExecuted)
+          exigeAgirPasAnnoncer(
+            latestUserMessage,
+            visibleTextThisTurn,
+            anyActionExecuted || actionNativeCeTour
+          )
         ) {
           annonceSansActionRecoveryAvailable = false
           relanceDeFormeUtilisee = true
@@ -2371,6 +2714,20 @@ export class AgentPilot {
               'cela empêche. N’écris « Fait » que pour ce qui a RÉELLEMENT abouti — un « ✅ Fait » ' +
               'posé sur un échec est pire que pas de conclusion du tout, parce qu’il rassure à tort.'
           )
+          continue
+        }
+        // Geste d'écran rendu à l'utilisateur alors que le bureau était piloté (tour c4e319ca).
+        // fix-ok: ne dépend PAS de relanceDeFormeUtilisee — dans le tour c4e319ca la relance
+        // « échec tu » part d'abord et éteignait cette garde ; son propre drapeau la borne à 1.
+        if (
+          exigerExperienceSoignee &&
+          gesteRenduRecoveryAvailable &&
+          exigeFaireLeGeste(visibleTextThisTurn, bureauUtilise)
+        ) {
+          gesteRenduRecoveryAvailable = false
+          relanceDeFormeUtilisee = true
+          grantRecoveryIteration('geste-rendu')
+          convo.push(RELANCE_FAIRE_LE_GESTE)
           continue
         }
         /*
@@ -2511,6 +2868,7 @@ export class AgentPilot {
 
         const actionId = `${i}:${commandIndex++}`
         anyActionExecuted = true
+        if (token.name === 'desktop_act' || token.name === 'desktop_observe') bureauUtilise = true
         // Les commandes qui OBSERVENT reellement le disque. `get_state` n'en est pas : c'est
         // l'apercu partiel dont l'agent tirait justement ses chiffres faux.
         if (
@@ -2534,6 +2892,14 @@ export class AgentPilot {
             `ask → l’utilisateur a DÉJÀ répondu pendant ce tour : « ${reponseTardiveAUneQuestion} ». ` +
               'Ne repose pas la question, traite cette réponse.'
           )
+          tokenIndex += 1
+          continue
+        }
+        if (token.name === 'ask' && questionPoseeCeTour) {
+          // UNE SEULE QUESTION PAR TOUR. conv-844, turn 852bb2fd-25e4-40dd-a959-57d9337b084c : la
+          // relance « question sans lecture » a fait reposer la meme question -> 2 cartes a l'ecran.
+          // La premiere est deja affichee : la seconde n'est pas emise.
+          results.push('ask → une question est DÉJÀ affichée dans ce tour : ne la repose pas.')
           tokenIndex += 1
           continue
         }
@@ -2634,6 +3000,25 @@ export class AgentPilot {
             ? (r.data as OrchestrationOutcome | undefined)
             : failedOrchestrationOutcome(r.error)
           const deliveryClosed = r.ok && isDeliveredOrchestrationOutcome(outcome ?? {})
+          /*
+           * UN REFUS TRANSITOIRE NE CONSOMME PAS LE VERROU DU TOUR (mesure conv-489, 2026-09-12).
+           *
+           * `orchestrationIssued` est pose AVANT l'execution, inconditionnellement : il protege
+           * d'une SECONDE orchestration payante dans le meme tour. Mais « Reprise refusee : N
+           * appel(s) provider encore actif(s) » est jete AVANT tout appel provider — rien n'a
+           * demarre, rien n'a coute. Le verrou restait pourtant pose : l'agent lisait « je ne peux
+           * pas relancer dans ce tour », rendait la main sans rien livrer, et l'utilisateur payait
+           * un tour entier pour zero ligne de code puis devait relancer a la main. Le refus dit
+           * lui-meme « la suite correcte est de relancer la MEME demande » : on lui en rend le
+           * droit, dans ce tour-ci. Le garde-fou anti-double-depense reste intact pour tous les
+           * autres cas, y compris les echecs definitifs.
+           */
+          if (
+            !r.ok &&
+            refusDeRepriseEstTransitoire(classifierRefusDeReprise(String(r.error ?? '')))
+          ) {
+            orchestrationIssued = false
+          }
           /*
            * LA COMPTABILITE D'ECHEC EST TENUE MEME ICI, avant le retour anticipe.
            *
@@ -2878,7 +3263,7 @@ export class AgentPilot {
         return
       }
 
-      const state = await this.bus.snapshotForPrompt()
+      const state = snapshotDuTour(await this.bus.snapshotForPrompt(), conversationId)
       const bloc = blocEtatSuivant(dernierEtatEnvoye, state)
       dernierEtatEnvoye = state
       convo.push(`TU AS ÉMIS: ${text}`)

@@ -82,14 +82,25 @@ function detail(valeur: unknown): AskOptionDetail | undefined {
 function optionNormalisee(valeur: unknown): AskOption | null {
   if (typeof valeur === 'string') {
     const libelle = texte(valeur, PLAFOND_LIBELLE)
-    return libelle ? { libelle } : null
+    if (!libelle) return null
+    /*
+     * Une option en chaîne nue n'a pas d'`envoi` : son libellé EST le prompt qui repart. Le couper
+     * à l'affichage coupait donc l'ordre envoyé — mesuré conv-767 (2026-09-21) : le mode auto a
+     * envoyé « …la mettre comme bras B dans le proc » et « …test repond-a ». L'affichage reste
+     * plafonné ; le texte complet repart, sous le plafond d'une ligne envoyée.
+     */
+    const complet = texte(valeur, PLAFOND_LIGNE)
+    return complet && complet !== libelle ? { libelle, envoi: complet } : { libelle }
   }
   if (!valeur || typeof valeur !== 'object' || Array.isArray(valeur)) return null
   const brut = valeur as Record<string, unknown>
   const libelle = texte(brut.libelle, PLAFOND_LIBELLE)
   if (!libelle) return null
   const consequence = texte(brut.consequence, PLAFOND_LIGNE)
-  const envoi = texte(brut.envoi, PLAFOND_LIGNE)
+  // Sans `envoi`, le libellé repart : un libellé coupé ne doit pas couper l'ordre (voir plus haut).
+  const libelleComplet = texte(brut.libelle, PLAFOND_LIGNE)
+  const envoi =
+    texte(brut.envoi, PLAFOND_LIGNE) ?? (libelleComplet !== libelle ? libelleComplet : undefined)
   const detaille = detail(brut.detail)
   return {
     libelle,

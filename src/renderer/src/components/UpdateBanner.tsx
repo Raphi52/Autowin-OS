@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { depuis } from './depuis'
 import {
   UPDATE_STRATEGY_HINTS,
   UPDATE_STRATEGY_LABELS,
+  type IncomingCommit,
   type UpdateStrategy
 } from '../../../shared/update-contract'
 import './UpdateBanner.css'
@@ -17,6 +19,8 @@ interface UpdateInfo {
   dirty?: boolean
   /** Voies d'intégration possibles ici, la première étant la recommandée. */
   strategies?: UpdateStrategy[]
+  /** Ce qui arrivera : auteur, date, sujet, fichiers. Absent si git n'a pas pu le lire. */
+  incoming?: IncomingCommit[]
   error?: string
 }
 
@@ -40,6 +44,22 @@ const UPDATE_STRATEGY_GLYPHS: Record<UpdateStrategy, string> = {
   merge: '⎇',
   rebase: '↻',
   'switch-main': '↰'
+}
+
+/** Le NOM du fichier : le chemin entier ne tient pas dans le rail, il reste dans l'infobulle. */
+function nomDeFichier(chemin: string): string {
+  return chemin.split('/').pop() || chemin
+}
+
+/** Infobulle d'un commit : ce que la ligne compacte ne peut pas montrer (hash, date exacte, TOUS les fichiers lus). */
+function infobulleCommit(commit: IncomingCommit): string {
+  const reste = commit.fileCount - commit.files.length
+  return [
+    `${commit.hash.slice(0, 10)} · ${commit.author} · ${commit.date}`,
+    commit.subject,
+    ...commit.files,
+    ...(reste > 0 ? [`… et ${reste} autre(s) fichier(s)`] : [])
+  ].join('\n')
 }
 
 function errorMessage(reason: unknown, fallback: string): string {
@@ -74,9 +94,14 @@ async function reparerBlocageUpdate(raison: string): Promise<void> {
     /* navigation refusée : le prompt reste préparé dans la conversation */
   }
   const prompt =
-    `La mise à jour d'Autowin est bloquée : « ${raison} ». Résous le blocage — committe ou mets de ` +
-    `côté mon travail non committé selon le cas, ou résous le conflit d'intégration — puis relance la ` +
-    `mise à jour.`
+    `La mise à jour d'Autowin est bloquée : « ${raison} ». Résous le blocage puis relance la mise à ` +
+    `jour. Mon travail local peut être PÉRIMÉ : une vieille copie reprise ici contient souvent des ` +
+    `choses que main a retirées depuis (annulation, suppression). Avant de committer ou de trancher un ` +
+    `conflit, compare chaque fichier à la version entrante (git fetch puis git diff HEAD..origin/main, ` +
+    `et git log origin/main sur ces fichiers) : ne réintroduis jamais ce que main a supprimé ou annulé, ` +
+    `garde seulement mes vraies modifications récentes. Dans le doute, mets le fichier de côté ` +
+    `(git stash) plutôt que de le committer. Termine par la liste de ce que tu as gardé et de ce que ` +
+    `tu as écarté.`
   window.dispatchEvent(
     new CustomEvent('autowin:prefill-conversation', {
       detail: { conversationId: conversation.id, prompt, send: true }
@@ -108,6 +133,7 @@ export function UpdateBanner({
   const [checkError, setCheckError] = useState<string>()
   const [applyError, setApplyError] = useState<string>()
   const [choicesOpen, setChoicesOpen] = useState(false)
+  const [incomingOpen, setIncomingOpen] = useState(false)
   const checkGeneration = useRef(0)
   const applyOwnsBanner = useRef(false)
 
@@ -267,9 +293,14 @@ export function UpdateBanner({
         }
         return
       }
+      // ÉCHEC → le bouton REND la main aux sondes. Ce relâchement manquait ici et dans le `catch` :
+      // le verrou posé au début d'`apply` restait pris à vie, donc `check()` (cycle de 3 minutes ET
+      // retour de focus) jetait tous ses résultats et le bouton figeait le dernier compte connu.
+      applyOwnsBanner.current = false
       setApplyError(r?.error ?? 'Échec de la mise à jour.')
       setApplying(null)
     } catch (reason) {
+      applyOwnsBanner.current = false
       setApplyError(errorMessage(reason, 'Échec de la mise à jour.'))
       setApplying(null)
     }
@@ -284,6 +315,9 @@ export function UpdateBanner({
     : ''
   const detail = `${info.behind} commit(s) à récupérer depuis ${reference}${elsewhere}${dirtyNote}`
   const buttonState = applying ? ' is-applying' : applyError ? ' is-error' : ''
+  const incoming = info.incoming ?? []
+  const incomingHidden = info.behind - incoming.length
+  const whoLabel = `Qui a poussé quoi ? — voir ${incoming.length === 1 ? 'le commit' : `les ${incoming.length} commits`} à récupérer depuis ${reference}`
   const actionLabel = applying
     ? 'Mise à jour en cours'
     : applyError
@@ -291,39 +325,102 @@ export function UpdateBanner({
       : `${UPDATE_STRATEGY_LABELS[primary]} — ${detail}. ${UPDATE_STRATEGY_HINTS[primary]}`
   return (
     <div className="rail-update" data-testid="update-banner">
-      <button
-        type="button"
-        className={`rail-update-btn${buttonState}`}
-        data-testid="update-apply"
-        disabled={applying !== null}
-        aria-label={actionLabel}
-        title={actionLabel}
-        onClick={() => void apply(primary)}
-      >
-        <span className="rail-update-icon" aria-hidden="true">
-          <svg
-            viewBox="0 0 24 24"
-            width="17"
-            height="17"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      <div className="rail-update-row">
+        {incoming.length > 0 && (
+          <button
+            type="button"
+            className="rail-update-who"
+            data-testid="update-incoming-toggle"
+            aria-expanded={incomingOpen}
+            aria-controls="rail-update-incoming"
+            aria-label={whoLabel}
+            title={whoLabel}
+            onClick={() => setIncomingOpen((open) => !open)}
           >
-            <path d="M4.5 9A8 8 0 0 1 18 5.5" />
-            <path d="M18 2.5v3h-3.5" />
-            <path d="M19.5 15A8 8 0 0 1 6 18.5" />
-            <path d="M6 21.5v-3h3.5" />
-          </svg>
-        </span>
-        {!collapsed && (
-          <span className="rail-update-label">
-            {applying ? 'Mise à jour…' : UPDATE_STRATEGY_LABELS[primary]}
-            <span className="rail-update-count">+{info.behind}</span>
-          </span>
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
         )}
-      </button>
+        <button
+          type="button"
+          className={`rail-update-btn${buttonState}`}
+          data-testid="update-apply"
+          disabled={applying !== null}
+          aria-label={actionLabel}
+          title={actionLabel}
+          onClick={() => void apply(primary)}
+        >
+          <span className="rail-update-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="17"
+              height="17"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4.5 9A8 8 0 0 1 18 5.5" />
+              <path d="M18 2.5v3h-3.5" />
+              <path d="M19.5 15A8 8 0 0 1 6 18.5" />
+              <path d="M6 21.5v-3h3.5" />
+            </svg>
+          </span>
+          {!collapsed && (
+            <span className="rail-update-label">
+              {applying ? 'Mise à jour…' : UPDATE_STRATEGY_LABELS[primary]}
+              <span className="rail-update-count">+{info.behind}</span>
+            </span>
+          )}
+        </button>
+      </div>
+      {incomingOpen && incoming.length > 0 && (
+        <ol
+          id="rail-update-incoming"
+          className={`rail-update-incoming${collapsed ? ' is-floating' : ''}`}
+          data-testid="update-incoming"
+          aria-label={`Commits à récupérer depuis ${reference}`}
+        >
+          {incoming.map((commit) => (
+            <li
+              key={commit.hash}
+              className="rail-update-commit"
+              data-testid="update-incoming-commit"
+              title={infobulleCommit(commit)}
+            >
+              <div className="rail-update-commit-head">
+                <b className="rail-update-commit-author">{commit.author}</b>
+                <span className="rail-update-commit-when">{depuis(commit.date)}</span>
+              </div>
+              <div className="rail-update-commit-subject">{commit.subject}</div>
+              {commit.fileCount > 0 && (
+                <div className="rail-update-commit-files">
+                  {commit.files.slice(0, 3).map(nomDeFichier).join(', ')}
+                  {commit.fileCount > 3 && ` +${commit.fileCount - 3}`}
+                </div>
+              )}
+            </li>
+          ))}
+          {incomingHidden > 0 && (
+            <li className="rail-update-commit-more">
+              … et {incomingHidden} commit(s) plus ancien(s)
+            </li>
+          )}
+        </ol>
+      )}
       {alternatives.length > 0 && (
         <button
           type="button"

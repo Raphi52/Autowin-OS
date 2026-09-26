@@ -242,6 +242,63 @@ function ExecutionNodeReasoning({
   )
 }
 
+/**
+ * CE QUE L'ÉTAPE A REÇU ET RENDU (demande du 2026-09-23).
+ *
+ * Le clic sur une brique renvoyait vers Runs, vide pour une demande simple (aucun RUN.md). Le
+ * prompt et la réponse sont dans la trace causale : on les montre ici. Seuls ces genres sont lus —
+ * un contenu d'outil ne s'affiche jamais.
+ */
+function ExecutionNodeExchange({
+  event
+}: {
+  event: HarnessTimelineEvent
+}): React.JSX.Element | null {
+  const pick = (...kinds: string[]): string[] =>
+    (event.payloads ?? [])
+      .filter((payload) => kinds.includes(payload.kind))
+      .map((payload) => payload.content)
+      .filter((content) => Boolean(content?.trim()))
+  const prompt = pick('user-message')
+  const system = pick('system-instruction')
+  const response = pick('model-response', 'error')
+  if (prompt.length === 0 && system.length === 0 && response.length === 0) {
+    return (
+      <p className="workflow-execution-exchange-empty" data-execution-exchange="vide">
+        Aucun prompt ni retour enregistré pour cette étape.
+      </p>
+    )
+  }
+  return (
+    <div className="workflow-execution-exchange" data-execution-exchange>
+      {prompt.length > 0 && (
+        <details open data-execution-prompt>
+          <summary>Prompt envoyé</summary>
+          {prompt.map((content, index) => (
+            <pre key={index}>{content}</pre>
+          ))}
+        </details>
+      )}
+      {system.length > 0 && (
+        <details data-execution-system>
+          <summary>Instructions système</summary>
+          {system.map((content, index) => (
+            <pre key={index}>{content}</pre>
+          ))}
+        </details>
+      )}
+      {response.length > 0 && (
+        <details open data-execution-response>
+          <summary>Retour de l’étape</summary>
+          {response.map((content, index) => (
+            <pre key={index}>{content}</pre>
+          ))}
+        </details>
+      )}
+    </div>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element {
   return (
     <div>
@@ -605,15 +662,8 @@ export function WorkflowExecutionGraph({
             ))}
           </select>
         )}
-        <button
-          className="btn btn-sm btn-ghost"
-          type="button"
-          onClick={() => void load(nodes.length === 0)}
-          title="Rafraîchir le graphe"
-          aria-label="Rafraîchir le graphe d’exécution"
-        >
-          ↻
-        </button>
+        {/* Pas de bouton « ↻ » : le graphe se recharge seul à chaque écriture de trace
+            (`causal-trace-updated`), chaque seconde en direct, et à la fin du tour. */}
       </header>
 
       {loading && nodes.length === 0 && (
@@ -683,32 +733,35 @@ export function WorkflowExecutionGraph({
                   </span>
                 </span>
               </button>
+              {/* LA BRIQUE SE DÉPLIE SUR PLACE (demande du 2026-09-23) : le détail vit sous la
+                  brique cliquée, dans l'arbre, et non dans un bloc séparé sous tout le graphe. */}
+              {selectedId === node.id && (
+                <div
+                  className="workflow-execution-detail is-inline"
+                  role="region"
+                  aria-label="Détail de l’étape sélectionnée"
+                >
+                  <ExecutionNodeDetail
+                    event={node.event}
+                    offsetMs={offsetFromStart(node.event.timestamp, baseMs)}
+                  />
+                  <ExecutionNodeExchange event={node.event} />
+                  <ExecutionNodeReasoning event={node.event} />
+                  {node.issues.length > 0 && (
+                    <p className="workflow-execution-warning">
+                      Trace partielle · {node.issues.join(', ')}
+                    </p>
+                  )}
+                  {node.event.display?.limitation && (
+                    <p className="workflow-execution-warning">{node.event.display.limitation}</p>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {selected && (
-        <aside className="workflow-execution-detail" aria-label="Détail de l’étape sélectionnée">
-          <header>
-            <strong>{selected.event.display?.title ?? EVENT_LABEL[selected.event.kind]}</strong>
-            <span>{statusLabel(selected.event.status)}</span>
-          </header>
-          <ExecutionNodeDetail
-            event={selected.event}
-            offsetMs={offsetFromStart(selected.event.timestamp, baseMs)}
-          />
-          <ExecutionNodeReasoning event={selected.event} />
-          {selected.issues.length > 0 && (
-            <p className="workflow-execution-warning">
-              Trace partielle · {selected.issues.join(', ')}
-            </p>
-          )}
-          {selected.event.display?.limitation && (
-            <p className="workflow-execution-warning">{selected.event.display.limitation}</p>
-          )}
-        </aside>
-      )}
     </section>
   )
 }

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { zoneDuTourDeChat } from '../source-process-principal.test-helpers'
-import { terminalDuTour } from '../chat-turn-arret'
+import { motifInactivite, terminalDuTour } from '../chat-turn-arret'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { shouldPersistClosingText } from './turn-closing'
+import { resteADire } from './turn-closing'
 import { appendTurnEvent, listUnfinishedTurns } from './turn-journal'
 
 /**
@@ -74,7 +74,7 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
 
   it('écrit dans le store ET dans le journal fichier', () => {
     const source = main()
-    const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
+    const catchBlock = source.slice(source.indexOf('const terminal = terminalDuTour({'))
     expect(catchBlock).toContain(
       'os.conversations.applyTurnEvent(conversationId, turnId, terminal)'
     )
@@ -83,7 +83,7 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
 
   it('l’écriture de trace ne masque JAMAIS l’erreur d’origine', () => {
     const source = main()
-    const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
+    const catchBlock = source.slice(source.indexOf('const terminal = terminalDuTour({'))
     const journalWrite = catchBlock.slice(catchBlock.indexOf('appendTurnEvent'))
     expect(journalWrite).toContain('catch')
     // L'erreur d'origine doit toujours etre remontee a l'appelant. Les espaces sont NORMALISES :
@@ -97,15 +97,17 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
     // donc SUR SON COMPORTEMENT, ce qui vaut mieux qu'une lecture de texte, et on verifie que le
     // catch appelle bien ce juge au lieu de refaire la distinction dans son coin.
     const catchBlock = main().slice(
-      main().indexOf('const coupureBudget = controller.signal.aborted')
+      main().indexOf('const terminal = terminalDuTour({')
     )
     expect(catchBlock).toContain('terminalDuTour(')
     // Un stop VOULU par l'utilisateur reste une annulation.
     expect(terminalDuTour({ aborted: true, reason: 'user' })).toEqual({ kind: 'cancelled' })
     // Une coupure qui porte une cause machine est un ECHEC, et voyage AVEC son motif.
-    expect(terminalDuTour({ aborted: true, reason: 'budget', motivee: true })).toEqual({
+    // Depuis la suppression du plafond de cout du tour (2026-09-16), cette cause est le veilleur.
+    const motif = motifInactivite(1_200_000)
+    expect(terminalDuTour({ aborted: true, reason: motif })).toEqual({
       kind: 'failed',
-      error: 'budget'
+      error: motif
     })
     // Une erreur ordinaire (pas d'abort) est un echec qui porte son message.
     expect(terminalDuTour({ aborted: false, reason: undefined, erreur: new Error('boum') })).toEqual(
@@ -138,13 +140,19 @@ describe('cablage — le texte du `done` atterrit dans le message', () => {
     expect(branch).toContain('applyTurnEvent(conversationId, turnId, livraison.durable)')
   })
 
+  /*
+   * L'ANCIEN VETO EST PARTI, et c'est le fond du correctif du 2026-09-11 (conv-471).
+   * `shouldPersistClosingText` refusait tout texte final des qu'un delta avait ete vu dans le tour.
+   * Un tour qui parle ENTRE ses appels d'outils perdait donc son compte-rendu. La decision se prend
+   * desormais sur le CONTENU : on publie ce qui n'a pas encore ete dit, et rien d'autre.
+   */
   it('conserve une cloture structuree meme apres un preambule deja diffuse', () => {
-    expect(shouldPersistClosingText(true, { status: 'succeeded', valid: true })).toBe(true)
+    expect(resteADire('preambule\n\nverdict final', 'preambule')).toBe('verdict final')
   })
 
   it('ne duplique pas le done conversationnel ordinaire deja diffuse', () => {
-    expect(shouldPersistClosingText(true, undefined)).toBe(false)
-    expect(shouldPersistClosingText(false, undefined)).toBe(true)
+    expect(resteADire('deja dit', 'deja dit')).toBe('')
+    expect(resteADire('texte neuf', '')).toBe('texte neuf')
   })
 
   it('ecrit aussi au journal du tour (une reprise doit retrouver la conclusion)', () => {

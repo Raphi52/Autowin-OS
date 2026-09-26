@@ -19,6 +19,10 @@ from brain_candidate_policy import (
 )
 
 ALLOWED_TYPES = {"lesson", "decision", "preference", "domain"}
+# Meme forme que `brain_validate.UID_RE` : un candidat peut proposer de REMPLACER des notes, la
+# promotion humaine reste le seul geste qui change leur statut (on ne touche jamais knowledge/).
+SUPERSEDES_UID_RE = re.compile(r"^[a-z0-9][a-z0-9:/._-]{2,127}$")
+MAX_SUPERSEDES = 8
 def _slug(text: str) -> str:
     ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-") or "candidate"
@@ -41,6 +45,7 @@ def propose_note(
     tags: list[str] | None = None,
     confidence: str = "medium",
     brain_root: str | Path | None = None,
+    supersedes: list[str] | None = None,
 ) -> Path:
     required = {
         "title": title, "scope": scope, "author_agent": author_agent,
@@ -59,6 +64,11 @@ def propose_note(
     policy_finding = scan_candidate(title, body, source, "\n".join((scope, author_agent, model, " ".join(tags or []))))
     if policy_finding:
         raise ValueError(f"{policy_finding}; candidate rejected")
+    supersedes = list(supersedes or [])
+    if len(supersedes) > MAX_SUPERSEDES or any(
+        not isinstance(uid, str) or not SUPERSEDES_UID_RE.fullmatch(uid) for uid in supersedes
+    ):
+        raise ValueError("supersedes must be a short list of note uids")
     inbox = Path(inbox_dir).resolve()
     if inbox.name.casefold() != "inbox" or any(parent.name.casefold() == "knowledge" for parent in inbox.parents):
         raise ValueError("inbox target must be an inbox/ directory outside knowledge/")
@@ -76,7 +86,7 @@ def propose_note(
         f"model: {_yaml_string(model.strip())}\n"
         f"created: {now:%Y-%m-%d}\n"
         "status: candidate\n"
-        "supersedes: []\n"
+        f"supersedes: {json.dumps(supersedes)}\n"
         f"tags: {json.dumps(tags or [], ensure_ascii=False)}\n"
         "mocs: []\n"
         f"source: {_yaml_string(source.strip())}\n"
@@ -133,3 +143,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+# fix-ok: une chaine f mal echappee cassait l'ecriture du champ supersedes du candidat ; mesure par test_brain_graph (propose avec supersedes)

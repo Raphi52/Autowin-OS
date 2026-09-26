@@ -86,17 +86,8 @@ const maximizeBudget = action === 'maximize-budget'
 const inspectCampaignRuntime = action === 'campaign-runtime'
 const retryWorktreeId = action?.startsWith('retry:') ? action.slice('retry:'.length) : undefined
 const sendConversationId = action?.startsWith('send:') ? action.slice('send:'.length) : undefined
-const removeQueueMatch = action?.match(/^remove-queue:([^:]+):(\d+)$/)
-const removeQueueEntry = removeQueueMatch
-  ? { conversationId: removeQueueMatch[1], index: Number(removeQueueMatch[2]) }
-  : undefined
-const flushQueueConversationId = action?.startsWith('flush-queue:')
-  ? action.slice('flush-queue:'.length)
-  : undefined
-const orientQueueMatch = action?.match(/^orient-queue:([^:]+):(\d+)$/)
-const orientQueueEntry = orientQueueMatch
-  ? { conversationId: orientQueueMatch[1], index: Number(orientQueueMatch[2]) }
-  : undefined
+// Les actions `flush-queue:` / `orient-queue:` / `remove-queue:` ont ete retirees le 2026-09-17 :
+// elles pilotaient les boutons du panneau de file d'attente, panneau supprime de l'interface.
 const inspectConversationId = action?.startsWith('conversation:')
   ? action.slice('conversation:'.length)
   : undefined
@@ -117,9 +108,6 @@ const cancelConversationId =
   !inspectCampaignRuntime &&
   !retryWorktreeId &&
   !sendConversationId &&
-  !removeQueueEntry &&
-  !flushQueueConversationId &&
-  !orientQueueEntry &&
   !inspectConversationId &&
   !telemetryConversationId &&
   !statusConversationId &&
@@ -226,99 +214,6 @@ if (inspectCampaignRuntime) {
   console.log(JSON.stringify(snapshot, null, 2))
   socket.close()
   process.exit(0)
-}
-
-if (flushQueueConversationId) {
-  await evaluate(`document.querySelector('[data-testid="nav-chat"]')?.click()`)
-  await sleep(250)
-  const selected = await evaluate(`(async () => {
-    const conversation = await window.api.conversation(${JSON.stringify(flushQueueConversationId)})
-    const item = [...document.querySelectorAll('.conv-item')].find(
-      (candidate) => candidate.querySelector('.conv-label')?.textContent?.trim() === conversation?.title
-    )
-    item?.querySelector('.conv-pick')?.click()
-    return Boolean(item)
-  })()`)
-  if (!selected) throw new Error(`Conversation UI introuvable: ${flushQueueConversationId}`)
-  await sleep(350)
-  const result = await evaluate(`(() => {
-    const queued = [...document.querySelectorAll('.directive-queue-text')].map(
-      (item) => item.textContent?.trim() ?? ''
-    )
-    const target = document.querySelector('[aria-label="Interrompre et envoyer tout"]')
-    if (!(target instanceof HTMLButtonElement) || target.disabled) {
-      return { flushed: false, queued, reason: target ? 'disabled' : 'button-absent' }
-    }
-    target.click()
-    return { flushed: true, queued }
-  })()`)
-  console.log(JSON.stringify({ conversationId: flushQueueConversationId, ...result }, null, 2))
-  socket.close()
-  process.exit(result.flushed ? 0 : 1)
-}
-
-if (orientQueueEntry) {
-  await evaluate(`document.querySelector('[data-testid="nav-chat"]')?.click()`)
-  await sleep(250)
-  const selected = await evaluate(`(async () => {
-    const conversation = await window.api.conversation(${JSON.stringify(orientQueueEntry.conversationId)})
-    const item = [...document.querySelectorAll('.conv-item')].find(
-      (candidate) => candidate.querySelector('.conv-label')?.textContent?.trim() === conversation?.title
-    )
-    item?.querySelector('.conv-pick')?.click()
-    return Boolean(item)
-  })()`)
-  if (!selected) throw new Error(`Conversation UI introuvable: ${orientQueueEntry.conversationId}`)
-  await sleep(350)
-  const result = await evaluate(`(() => {
-    const target = document.querySelector(
-      ${JSON.stringify(`[aria-label="Orienter le tour en cours avec le message ${orientQueueEntry.index}"]`)}
-    )
-    if (!(target instanceof HTMLButtonElement) || target.disabled) {
-      return { oriented: false, reason: target ? 'disabled' : 'button-absent' }
-    }
-    target.click()
-    return { oriented: true }
-  })()`)
-  console.log(
-    JSON.stringify({ conversationId: orientQueueEntry.conversationId, ...result }, null, 2)
-  )
-  socket.close()
-  process.exit(result.oriented ? 0 : 1)
-}
-
-if (removeQueueEntry) {
-  await evaluate(`document.querySelector('[data-testid="nav-chat"]')?.click()`)
-  await sleep(250)
-  const selected = await evaluate(`(async () => {
-    const conversation = await window.api.conversation(${JSON.stringify(removeQueueEntry.conversationId)})
-    const item = [...document.querySelectorAll('.conv-item')].find(
-      (candidate) => candidate.querySelector('.conv-label')?.textContent?.trim() === conversation?.title
-    )
-    item?.querySelector('.conv-pick')?.click()
-    return Boolean(item)
-  })()`)
-  if (!selected) throw new Error(`Conversation UI introuvable: ${removeQueueEntry.conversationId}`)
-  await sleep(350)
-  const result = await evaluate(`(() => {
-    const before = [...document.querySelectorAll('[aria-label^="Retirer le message "]')].map(
-      (button) => button.getAttribute('aria-label')
-    )
-    const target = document.querySelector(
-      ${JSON.stringify(`[aria-label="Retirer le message ${removeQueueEntry.index}"]`)}
-    )
-    if (!(target instanceof HTMLButtonElement)) return { removed: false, before, after: before }
-    target.click()
-    const after = [...document.querySelectorAll('[aria-label^="Retirer le message "]')].map(
-      (button) => button.getAttribute('aria-label')
-    )
-    return { removed: true, before, after }
-  })()`)
-  console.log(
-    JSON.stringify({ conversationId: removeQueueEntry.conversationId, ...result }, null, 2)
-  )
-  socket.close()
-  process.exit(result.removed ? 0 : 1)
 }
 
 if (sendConversationId) {

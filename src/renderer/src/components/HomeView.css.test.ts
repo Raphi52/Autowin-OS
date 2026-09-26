@@ -34,11 +34,16 @@ describe('HomeView.css — l accueil laisse passer le decor 3D global', () => {
   it('.home-view ne peint AUCUNE couche opaque par-dessus le decor global', () => {
     const corps = regleRacine()
     const fond = corps.match(/(?<!-)background(-color)?\s*:\s*([^;]+);/)
-    expect(fond, 'la regle doit declarer son fond explicitement, pas le laisser implicite').not.toBeNull()
+    expect(
+      fond,
+      'la regle doit declarer son fond explicitement, pas le laisser implicite'
+    ).not.toBeNull()
     const valeur = (fond?.[2] ?? '').trim()
     // La valeur DEVENUE fautive : toute couleur pleine, qui masquerait le decor monte derriere.
     expect(valeur).not.toMatch(/^(#[0-9a-f]{3,8}|black|rgb\()/i)
-    expect(valeur).toMatch(/^(transparent|rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0?\.?0+\s*\)|none)$/)
+    expect(valeur).toMatch(
+      /^(transparent|rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0?\.?0+\s*\)|none)$/
+    )
   })
 
   it('le decor n est plus possede par l Accueil : plus d hote local', () => {
@@ -50,5 +55,54 @@ describe('HomeView.css — l accueil laisse passer le decor 3D global', () => {
     // Contre-exemple utile : si quelqu un rend le fond transparent MAIS retire l assombrissement,
     // le texte redevient illisible sur les nebuleuses. Les deux vont ensemble.
     expect(css).toMatch(/\.home-view::after\s*\{[^}]*radial-gradient/)
+  })
+})
+
+/**
+ * La zone de depot d'un message neuf couvre TOUT l'ecran de la tuile.
+ *
+ * Sans cela, le formulaire reste colle en bas (`position: sticky`) et l'espace libre au-dessus
+ * n'appartient a personne : un fichier lache a deux centimetres du champ retombe dans le vide, et
+ * l'utilisateur revit exactement le defaut qu'il a signale le 2026-09-08 — « il ne se passe rien
+ * quand je le lache ». La cible du glisser doit donc GRANDIR pour occuper la tuile.
+ *
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer `flex` de `.home-chat__nouveau` (ou le remettre
+ * a `0`). Verifie en le retirant : ce test passe au rouge.
+ */
+describe('HomeView.css — la zone de depot du message neuf remplit la tuile', () => {
+  const brut = readFileSync(new URL('./HomeView.css', import.meta.url), 'utf8')
+  const css = brut.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it('.home-chat__nouveau grandit au lieu de rester colle en bas', () => {
+    const debut = css.search(/^\.home-chat__nouveau\s*\{/m)
+    expect(debut, 'la regle .home-chat__nouveau est absente').toBeGreaterThanOrEqual(0)
+    const corps = css.slice(debut, css.indexOf('}', debut))
+    const croissance = corps.match(/flex(-grow)?\s*:\s*([^;]+);/)
+    expect(croissance, 'la zone doit declarer sa croissance').not.toBeNull()
+    expect((croissance?.[2] ?? '').trim()).not.toMatch(/^0(\s|$)/)
+    // Collee en bas, elle ne couvrirait que la hauteur de ses champs.
+    expect(corps).toMatch(/position\s*:\s*static/)
+  })
+
+  /*
+   * Le MEME defaut, pour l'ecran de REPONSE (demande du 2026-09-09). Mesure sur une capture de
+   * l'ecran reel : la barre de reponse fait environ 70 pixels sur les 520 de la tuile. La zone qui
+   * l'enveloppe doit donc grandir, et porter le calque de survol.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer `flex` de `.home-chat__zone`, ou son
+   * `position: relative` (le calque en `inset: 0` se caserait alors sur un ancetre plus lointain).
+   */
+  it('.home-chat__zone enveloppe la conversation et porte le calque', () => {
+    const debut = css.search(/^\.home-chat__zone\s*\{/m)
+    expect(debut, 'la regle .home-chat__zone est absente').toBeGreaterThanOrEqual(0)
+    const corps = css.slice(debut, css.indexOf('}', debut))
+    const croissance = corps.match(/flex(-grow)?\s*:\s*([^;]+);/)
+    expect(croissance, 'la zone doit declarer sa croissance').not.toBeNull()
+    expect((croissance?.[2] ?? '').trim()).not.toMatch(/^0(\s|$)/)
+    // Le calque de survol est en `position: absolute; inset: 0` : sans reference ici, il se
+    // caserait sur un ancetre plus lointain et couvrirait autre chose que la zone.
+    expect(corps).toMatch(/position\s*:\s*relative/)
+    // Sans `min-height: 0`, un fil long deborde au lieu de defiler dans la tuile.
+    expect(corps).toMatch(/min-height\s*:\s*0/)
   })
 })

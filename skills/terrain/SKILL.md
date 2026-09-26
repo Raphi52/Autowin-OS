@@ -1,98 +1,99 @@
 ---
 name: terrain
 description: >-
-  Step 2 of the pipeline (frame→[explore]→terrain→build→clean→judge): from a framed need with a settled approach,
-  PREPARE THE SELF-CORRECTION TERRAIN before launching autonomous work — (1) OBSERVABILITY (how Claude gets its
-  screenshots + logs to loop on its own real output), (2) the ENVIRONMENT / tech, (3) the resume STATE — and
-  BUILD the missing harness if absent; PLUS the loop spec the executor needs (per-increment signal, decompose
-  map, cost caps, green-checkpoint, need→loop→judge wiring, /goal driver arming at handoff). The loop's EXECUTION mechanics (decompose into
-  signal-bearing increments, red-first then green, parallel dispatch, anti-regression cadence, systematic
-  debugging, checkpoint/rollback) are OWNED BY THE ENGINE — Chapter 4 BUILD — consulted by the executor
-  during the build phase; no third-party skill is involved. Use when you want to
-  launch autonomous/iterative work and must first PREPARE how Claude will loop — especially on a project/PC
-  where this harness does not exist yet. Trigger on "prepare the workflow/terrain", "how will Claude loop / get its screenshots-logs", "set up self-correction / the autonomous work environment", "run Claude solo to completion". Chains after `frame` (need scoped, approach settled) and before the build,
-  then `clean`, then `judge`. Do NOT use to frame the need or pick the approach (→ `frame`), to execute the loop mechanics
-  themselves — decompose/execute a plan, TDD, test-driven increments (→ ENGINE Ch.4 BUILD, the executor's
-  manual; no skill fires during the build) — nor to
-  judge the finished deliverable (→ `judge`).
+  Étape 2 du pipeline (frame → terrain → build → clean → judge) : depuis un besoin cadré dont
+  l'approche est tranchée, PRÉPARER LE TERRAIN D'AUTO-CORRECTION avant le travail autonome — (1)
+  OBSERVABILITÉ (captures + logs pour boucler sur la sortie réelle), (2) l'ENVIRONNEMENT / la
+  technique, (3) l'ÉTAT de reprise — et CONSTRUIRE le harnais s'il manque ; PLUS la spécification de
+  boucle dont l'exécutant a besoin (signal par incrément, carte de découpage, plafonds de coût,
+  point de reprise vert, câblage besoin→boucle→judge, pilote /goal armé à la passation). À utiliser
+  quand un travail autonome va démarrer et que le COMMENT de la boucle doit être préparé d'abord (§
+  Quand la déclencher). PAS pour cadrer le besoin ou choisir l'approche (→ `frame`), PAS pour jouer
+  les mécaniques de boucle — découpage, TDD, incréments APPARTIENNENT AU MOTEUR (ch.4 BUILD) — ni
+  pour juger le résultat (→ `judge`).
 ---
 
-# terrain — prepare the self-correction terrain (step 2)
+# terrain — préparer le terrain d'auto-correction (étape 2)
 
-## Purpose
-**Make the ground ready for Claude to work AUTONOMOUSLY and self-correct — BEFORE the loop starts.** A framed
-need with a settled approach isn't enough to run solo: Claude must be able to SEE its own real output
-(screenshots + logs), run in the right environment, and resume after interruption. Terrain installs that
-observability + harness + resume-state (building what's missing) so the autonomous loop catches its own errors
-instead of running blind.
+## À quoi ça sert
+**Rendre le terrain prêt pour que Claude travaille de façon AUTONOME et se corrige lui-même — AVANT que la boucle démarre.** Un besoin
+cadré avec une approche tranchée ne suffit pas pour tourner seul : Claude doit pouvoir VOIR sa propre sortie réelle
+(captures + logs), tourner dans le bon environnement, et reprendre après une interruption. Terrain installe cette
+observabilité + le harnais + l'état de reprise (en construisant ce qui manque) pour que la boucle autonome attrape ses propres erreurs
+au lieu de tourner en aveugle.
 
-## Procedure
+## Quand la déclencher — et quand NON
+**Déclencheurs** : « prépare le workflow / le terrain » · « comment Claude va boucler / récupérer ses captures et ses logs » · « mets en place l'auto-correction / l'environnement de travail autonome » · « fais tourner Claude seul jusqu'au bout ». Surtout sur un projet ou un PC où ce harnais n'existe pas encore.
+**Chaîne** : APRÈS `frame` (besoin cadré, approche tranchée) et AVANT la construction, puis `clean`, puis `judge`.
+**PAS pour** : cadrer le besoin ou choisir l'approche → `frame` · exécuter les mécaniques de boucle elles-mêmes (découper et exécuter un plan, TDD, incréments guidés par les tests) → ENGINE Ch.4 BUILD, le manuel de l'exécutant : AUCUNE skill ne se déclenche pendant la construction · juger le livrable fini → `judge`.
 
-1. **Read the RUN.md first** — header `regime:`, `## Besoin`, and the `Décision:` line of `## Options`. The chosen approach pilots the harness: a CLI approach and a GUI approach demand different observability; mounting the wrong one makes the executor blind. You spec ONLY the signal↔harness bridge specific to this task; the generic loop mechanics are **owned by ENGINE Ch.4 — BUILD**. Never re-specify those.
+## Procédure
 
-2. **Ex-ante devis (one line, before locking regime)**: expected turns × fan-out width × judge passes → rough token/time range. The regime dial is the human's; never set it blind without a devis. In doubt **lower + flag**, note the correction in `## Besoin`. *disposable* = minimal terrain to verify one shot (skip skill packaging); *standard* = full terrain + the engine loop (Ch.4); *critical* = full terrain + ≥1 out-of-model source (see `judge`).
+1. **Lis le RUN.md d'abord** — l'en-tête `regime:`, `## Besoin`, et la ligne `Décision:` de `## Options`. L'approche choisie pilote le harnais : une approche en ligne de commande et une approche graphique exigent des observabilités différentes ; monter la mauvaise rend l'exécutant aveugle. Tu ne spécifies QUE le pont signal↔harnais propre à cette tâche ; les mécaniques génériques de boucle **appartiennent au moteur, ch.4 — BUILD**. Ne les respécifie jamais.
 
-3. **Detect the three prerequisites in parallel** — read-only, independent → fan-out 3 explorers in ONE message. Then mount what is missing in serialized, idempotent, reversible steps — **one builder for the build, never two concurrent**. Confirm before any heavy or irreversible action. A loop cannot self-correct without all three:
+2. **Devis ex ante (une ligne, avant de verrouiller le régime)** : tours attendus × largeur de la salve × passes de juge → une fourchette grossière de jetons et de temps. Le curseur du régime appartient à l'humain ; ne le pose jamais en aveugle sans devis. En doute, **baisse + signale**, et note la correction dans `## Besoin`. *disposable* = terrain minimal pour vérifier un seul coup (pas d'empaquetage en skill) ; *standard* = terrain complet + la boucle du moteur (ch.4) ; *critical* = terrain complet + ≥ 1 source hors modèle (voir `judge`).
 
-   - 🔭 **OBSERVABILITY — the feedback the loop reads.** *How does the executor see the REAL effect of its work?* By tech: **UI** → post-action screenshot READ by Claude (PrintWindow → PNG on disk; hunt an existing capture script first). **Capture-AND-drive channels for a UI, when connected this session** (route via the GUI-control reflex — desktop MCP / browser / local web app / UIA script): a **desktop-control MCP** (e.g. windows-mcp: `Snapshot` = UIA tree + screenshot + coords, then `Click`/`Type`) gives BOTH the observation and the action in one loop; a **browser** target → the Chrome tools (`read_page` + screenshot as signal, `navigate`/`computer` to drive); a **local web app** → Preview (`preview_start` + screenshot/inspect); an **opaque / no-steal-focus** app → a UIA/FlaUI/PostMessage script. Prefer the structural (UIA tree) signal over pixel-vision when the app exposes one. **CLI / service / batch** → logs + exit code; **code / lib** → tests fail→pass (falsifiable); **data / SQL** → verification query on produced state; **doc / plan / skill** → walk ONE concrete case end to end. Two non-negotiables: **ensure-fresh** — never pilot a stale binary, check artifact timestamp and rebuild if older than source (a stale-binary incident has cost days); and a **signal that AUTO-PROVES** (ENGINE Ch.2): fresh (artifact newer than the action), non-vacuous (N>0 tests / non-empty log / exit==0 + clean stderr), run-stamp-bound to THIS run, with a negative control (does the check fail when it should?).
+3. **Détecte les trois prérequis en parallèle** — en lecture seule, indépendants → lance 3 explorateurs dans UN seul message. Puis monte ce qui manque par étapes sérialisées, idempotentes et réversibles — **un seul constructeur pour le build, jamais deux en parallèle**. Confirme avant toute action lourde ou irréversible. Une boucle ne peut pas se corriger sans les trois :
 
-   - 🖥️ **ENVIRONMENT / TECH.** Stack, build/run/test commands, where logs and artifacts physically live, what is authoritative. If `frame` already recorded recon in the RUN.md — read it, don't re-scan; fill only workflow-specific gaps (feedback source, ensure-fresh gesture).
+   - 🔭 **OBSERVABILITÉ — le retour que la boucle lit.** *Comment l'exécutant voit-il l'effet RÉEL de son travail ?* Selon la technique : **UI** → capture après action, LUE par Claude (PrintWindow → PNG sur le disque ; cherche d'abord un script de capture existant). **Canaux qui capturent ET pilotent une UI, quand ils sont connectés cette session** (passe par le réflexe de contrôle graphique — MCP de bureau / navigateur / app web locale / script UIA) : un **MCP de contrôle du bureau** (par ex. windows-mcp : `Snapshot` = arbre UIA + capture + coordonnées, puis `Click`/`Type`) donne À LA FOIS l'observation et l'action dans une seule boucle ; une cible **navigateur** → les outils Chrome (`read_page` + capture comme signal, `navigate`/`computer` pour piloter) ; une **app web locale** → Preview (`preview_start` + capture/inspection) ; une app **opaque ou qui ne doit pas voler le focus** → un script UIA/FlaUI/PostMessage. Préfère le signal STRUCTUREL (arbre UIA) à la vision par pixels quand l'app en expose un. **Ligne de commande / service / traitement par lot** → logs + code de sortie ; **code / bibliothèque** → tests échec→succès (falsifiable) ; **données / SQL** → requête de vérification sur l'état produit ; **doc / plan / skill** → déroule UN cas concret de bout en bout. Deux points non négociables : **garantir la fraîcheur** — ne pilote jamais un binaire périmé, vérifie l'horodatage de l'artefact et reconstruis s'il est plus vieux que la source (un incident de binaire périmé a coûté des jours) ; et un **signal qui SE PROUVE TOUT SEUL** (moteur ch.2) : frais (artefact plus récent que l'action), non vide (N > 0 tests / log non vide / code de sortie 0 + stderr propre), lié à l'empreinte de CE run, avec un contrôle négatif (le contrôle échoue-t-il quand il le devrait ?).
 
-   - 📋 **RESUME STATE = RUN.md itself.** Open it `status: open` (the Stop gate then takes over closure — never set green to satisfy it). The live state lives in `## Journal` (append-only events) and `## Reprise` (Goal / Hypothesis / Tried / Next / Blockers + turn counters) — this is the 30-second resume after compaction. Fill the header `signal:` and, where possible, an **IDEMPOTENT whitelisted `signal-cmd:`** — the gate will REPLAY it rather than believe your green.
+   - 🖥️ **ENVIRONNEMENT / TECHNIQUE.** La pile, les commandes de build/exécution/test, où vivent physiquement les logs et les artefacts, ce qui fait foi. Si `frame` a déjà consigné sa reconnaissance dans le RUN.md — lis-la, ne rescanne pas ; ne comble que les trous propres au workflow (source du retour, geste de fraîcheur).
 
-4. **Prerequisite deliverable gate + `## SOP`**: confirm "feedback via X, env Y, state via RUN.md" is explicit and artifacts are mounted. Then write task-specific `## SOP` as `action → command/tool → expected signal → fallback/stop`; reference ENGINE Ch.4, never duplicate it.
+   - 📋 **ÉTAT DE REPRISE = le RUN.md lui-même.** Ouvre-le en `status: open` (le contrôle d'arrêt prend ensuite la main sur la clôture — ne pose jamais le vert pour lui faire plaisir). L'état vivant vit dans `## Journal` (événements ajoutés, jamais réécrits) et `## Reprise` (Objectif / Hypothèse / Tenté / Suite / Blocages + compteurs de tours) — c'est la reprise en 30 secondes après une compaction. Remplis l'en-tête `signal:` et, si possible, un **`signal-cmd:` IDEMPOTENT et sur liste blanche** — le contrôle le REJOUERA plutôt que de croire ton vert.
 
-5. **Per-increment signal** = a real-observation artifact from the harness above (screenshot read, log+exit, green test, query result) — **never self-judged text**. This is the bridge that makes the output judge-able. **It must reproduce the USER's symptom AS THEY LIVE IT** (their scenario, their view, their success criterion) — not a technical proxy adjacent to it. If ≥2 causal steps separate the signal from the terminal effect the user observes, it is NOT a closure signal (scar: "workers dispatched" passed green while the user saw failed/black tiles — the proxy was clean and entirely beside the point).
+4. **Contrôle du livrable de prérequis + `## SOP`** : confirme que « retour via X, environnement Y, état via RUN.md » est explicite et que les artefacts sont montés. Écris ensuite le `## SOP` propre à la tâche sous la forme `action → commande/outil → signal attendu → repli/arrêt` ; renvoie au moteur ch.4, ne le duplique jamais.
 
-6. **Test pyramid**: pure logic in unit tests run in the HOT loop (seconds); e2e/UI/integration at the gate.
+5. **Signal par incrément** = un artefact d'observation réelle issu du harnais ci-dessus (capture lue, log + code de sortie, test vert, résultat de requête) — **jamais un texte auto-jugé**. C'est le pont qui rend la sortie jugeable. **Il doit reproduire le symptôme de l'UTILISATEUR TEL QU'IL LE VIT** (son scénario, sa vue, son critère de succès) — pas un substitut technique voisin. Si ≥ 2 étapes causales séparent le signal de l'effet terminal que l'utilisateur observe, ce n'est PAS un signal de clôture (cicatrice : « workers dispatched » passait au vert pendant que l'utilisateur voyait des tuiles noires en échec — le substitut était propre et totalement à côté).
 
-7. **Decomposition map** for parallelism (only when increments are genuinely parallel; a single deliverable stays a simple flow): annotate each `{independent | depends-on-X}` + its signal; mark **shared resources** (build / DB / bench / port) and prescribe **isolation** (worktree/scratch per increment) — a single builder only. A serial dependency map makes everything downstream serial; maximize the independent ratio deliberately.
+6. **Pyramide de tests** : la logique pure en tests unitaires joués dans la boucle CHAUDE (quelques secondes) ; bout-en-bout / UI / intégration au contrôle final.
 
-8. **Cost caps**: global 12 turns (adjustable) + progress floor **N=3** (3 turns with no failed→done and no signal turning green → hard-stop). Plus anti-destruction (irreversible op → stop + confirm/backup).
+7. **Carte de découpage** pour le parallélisme (seulement quand les incréments sont réellement parallèles ; un livrable unique reste un flux simple) : annote chacun `{indépendant | dépend-de-X}` + son signal ; marque les **ressources partagées** (build / base / banc / port) et prescris l'**isolation** (copie de travail ou bac à sable par incrément) — un seul constructeur. Une carte de dépendances en série rend tout l'aval sériel ; maximise délibérément la proportion d'indépendants.
 
-9. **Green checkpoint + rollback to last green**: snapshot a NAMED green BEFORE each increment (commit/tag in a **disposable worktree** — abandoning = dropping the branch). On a CONFIRMED regression, REVERT to the last green and re-attack with a different hypothesis — never stack fixes on a broken state. Multi-repo green = a **coordinated TUPLE** (restoring one repo alone restores only half the green).
+8. **Plafonds de coût** : global 12 tours (ajustable) + plancher de progrès **N = 3** (3 tours sans passage échec→fait et sans signal qui passe au vert → arrêt dur). Plus l'anti-destruction (opération irréversible → arrêt + confirmation/sauvegarde).
 
-10. **Blockers → parallel resolvers BEFORE escalation**: on ≥2–3 exhausted distinct approaches, dispatch resolver agents with orthogonal hypotheses. Interrupt the human only for hard-stops (destructive, out-of-scope, legacy untouchable). **Anti-littering**: clean scratch at stop; keep the deliverable + RUN.md.
+9. **Point de reprise vert + retour au dernier vert** : fige un vert NOMMÉ AVANT chaque incrément (commit/tag dans une **copie de travail jetable** — abandonner = jeter la branche). Sur une régression CONFIRMÉE, REVIENS au dernier vert et réattaque avec une autre hypothèse — n'empile jamais des correctifs sur un état cassé. Un vert multi-dépôts est un **TUPLE coordonné** (restaurer un seul dépôt ne restaure que la moitié du vert).
 
-11. **Arm the `/goal` driver at handoff** *(native Claude Code ≥ 2.1.139; decision USER-OK 2026-07-10)* — the stop-gate BLOCKS false closure but does not RELAUNCH work (Stop-hook blocks are capped at 8 consecutive); `/goal` is the native relaunch driver + live cost panel (elapsed/turns/tokens — the cost-visibility reflex). Arm at handoff, BEFORE the build starts: the evaluator judges each subsequent turn, and the condition becomes satisfiable once the first signal output lands in the transcript. **Compile the condition FROM the RUN, never free text**: the `signal:`/`signal-cmd:` + the DoD items, each demanded as proof VISIBLE in the transcript — the `/goal` evaluator (separate fast model) reads ONLY the transcript and runs nothing, so a sloppy condition swallows self-declared success; align the driver on the gate's authority instead of creating a second judge. Keep the compiled condition ≤4000 chars — compress a long DoD to its essential checks, never concatenate the RUN verbatim. Template:
+10. **Blocages → résolveurs en parallèle AVANT toute escalade** : dès 2 ou 3 approches distinctes épuisées, envoie des agents résolveurs avec des hypothèses orthogonales. N'interromps l'humain que pour un arrêt dur (destructeur, hors périmètre, hérité intouchable). **Anti-détritus** : nettoie le bac à sable à l'arrêt ; garde le livrable + le RUN.md.
+
+11. **Arme le pilote `/goal` à la passation** *(natif Claude Code ≥ 2.1.139 ; décision validée par l'utilisateur le 2026-07-10)* — le contrôle d'arrêt BLOQUE une fausse clôture mais ne RELANCE pas le travail (les blocages du hook d'arrêt sont plafonnés à 8 d'affilée) ; `/goal` est le pilote de relance natif + le panneau de coût en direct (temps écoulé / tours / jetons — le réflexe de visibilité du coût). Arme-le à la passation, AVANT que la construction démarre : l'évaluateur juge chaque tour suivant, et la condition devient satisfiable dès que la première sortie de signal atterrit dans le transcript. **Compile la condition DEPUIS le RUN, jamais en texte libre** : le `signal:`/`signal-cmd:` + les items de la liste de sortie, chacun exigé comme preuve VISIBLE dans le transcript — l'évaluateur de `/goal` (un modèle rapide séparé) ne lit QUE le transcript et n'exécute rien, donc une condition bâclée avale un succès auto-déclaré ; aligne le pilote sur l'autorité du contrôle au lieu de créer un second juge. Garde la condition compilée sous 4000 caractères — compresse une longue liste de sortie à ses contrôles essentiels, ne concatène jamais le RUN mot pour mot. Gabarit :
     > `/goal Done ONLY when the transcript SHOWS: (1) <signal-cmd> executed with exit 0 AND its output visible (N>0 assertions displayed, not merely claimed), (2) the RUN.md at <path> at status: green shown via a read/tool result (not stated in prose) AND the end-of-turn accepted by the stop-gate (no BLOCK message after it), (3) <task's terminal artifact, e.g. post-action capture READ>. A "done" without these artifacts visible does not count — keep working.`
-    **ONE condition per session** — before arming, check the session's Journals for a prior `goal armed =` on a still-OPEN run: re-arming REPLACES it silently (trace the supersede in both Journals, or skip arming and rely on the gate alone). Arming is USER-side (⚠️ programmatic arming unverified — pilot it): hand the ready-to-paste line ("arm this before letting me loop"). **Non-interactive run** (`-p` / scheduled / remote-headless — nobody to hand the line to) → record `not armed: non-interactive — stop-gate + Ch.4 loop only`; disposable with no RUN.md → `not armed: disposable, no RUN to compile from`. Trace `goal armed = <condition>` in `## Journal`; on session resume the condition is restored — re-check it still matches the RUN's signal/DoD (drifted → re-arm and re-trace). **At close (green / degraded-closed): have the user run `/goal clear`, logged in Journal** — a lingering condition keeps the evaluator judging (and nudging) later unrelated work. **Driver, never authority**: `/goal` pushes, the stop-gate certifies — the evaluator saying "condition met" is NOT a green. **Pilot guard**: on the FIRST armed run, observe CONCRETELY (evaluator cost/latency · does it agree with the gate's block decisions · no relaunch after close) before making arming the default; log findings to `## Cicatrices`.
+    **UNE seule condition par session** — avant d'armer, vérifie dans les Journaux de la session s'il existe un `goal armed =` antérieur sur un run encore OUVERT : réarmer le REMPLACE en silence (trace le remplacement dans les deux Journaux, ou n'arme pas et repose-toi sur le seul contrôle d'arrêt). L'armement se fait CÔTÉ UTILISATEUR (⚠️ l'armement par programme n'est pas vérifié — traite-le en pilote) : donne-lui la ligne prête à coller (« arme ça avant de me laisser boucler »). **Run non interactif** (`-p` / planifié / distant sans interface — personne à qui donner la ligne) → consigne `non armé : non interactif — contrôle d'arrêt + boucle ch.4 seulement` ; jetable sans RUN.md → `non armé : jetable, aucun RUN à compiler`. Trace `goal armed = <condition>` dans `## Journal` ; à la reprise de session la condition est restaurée — revérifie qu'elle correspond toujours au signal et à la liste de sortie du RUN (si elle a dérivé → réarme et retrace). **À la clôture (vert / fermeture dégradée) : fais lancer `/goal clear` par l'utilisateur, consigné dans le Journal** — une condition qui traîne fait juger (et relancer) par l'évaluateur un travail ultérieur sans rapport. **Pilote, jamais autorité** : `/goal` pousse, le contrôle d'arrêt certifie — l'évaluateur qui dit « condition remplie » n'est PAS un vert. **Garde de pilote** : au PREMIER run armé, observe CONCRÈTEMENT (coût/latence de l'évaluateur · est-il d'accord avec les décisions de blocage du contrôle · aucune relance après la clôture) avant de faire de l'armement le défaut ; consigne les constats dans `## Cicatrices`.
 
-12. **Wire `clean` then `judge` (steps 4–5)**: after build's proof and adjacent guard, `clean` inspects attributable residue, replays the signal, and fingerprints the post-clean diff; then hand the deliverable + RUN path to `judge`. A judge defect re-enters as an increment, followed again by `clean`. Any added signal also stales the armed `/goal` condition — re-compile and re-hand it (or trace unchanged coverage). The cycle cap remains `judge`'s. **Package as a reusable skill ONLY on recurrence ≥2**; name `loop-<task>`, cover terrain + loop spec + handoffs, then trigger-test it.
+12. **Câble `clean` puis `judge` (étapes 4-5)** : après la preuve du build et la garde voisine, `clean` inspecte les résidus attribuables, rejoue le signal et prend l'empreinte du diff nettoyé ; passe ensuite le livrable + le chemin du RUN à `judge`. Un défaut de juge rentre à nouveau comme incrément, suivi encore de `clean`. Tout signal ajouté périme aussi la condition `/goal` armée — recompile-la et redonne-la (ou trace que la couverture est inchangée). Le plafond de cycles reste celui de `judge`. **N'empaquette en skill réutilisable QU'à partir de 2 récurrences** ; nomme-la `loop-<tâche>`, couvre le terrain + la spécification de boucle + les passations, puis teste son déclenchement.
 
-## Output
+## Ce que ça produit
 
-Deliver to the user — in **plain words, no internal jargon**:
+À livrer à l'utilisateur — en **mots simples, aucun jargon interne** :
 
-- Confirmed regime + **up-front estimate** (rough turns × time)
-- Loop plan: how Claude sees its real result / the environment / how it resumes
-- Terrain artifacts mounted (or proposed, awaiting confirmation)
-- Task-specific spec: signal · **task breakdown** (parallel vs sequential) · caps · **last-working-snapshot** checkpoint · judge wiring
-- Explicit handoff to the build (ENGINE Ch.4) · loop-skill created OR "no skill — disposable / not recurring"
-- The ready-to-paste `/goal` line (user arms it at loop start) — or "not armed: <reason>" (e.g. short interactive run)
-- The RUN.md path
+- Le régime confirmé + une **estimation d'entrée** (tours × temps, en gros)
+- Le plan de boucle : comment Claude voit son résultat réel / l'environnement / comment il reprend
+- Les artefacts de terrain montés (ou proposés, en attente de confirmation)
+- La spécification propre à la tâche : signal · **découpage de la tâche** (parallèle contre séquentiel) · plafonds · point de reprise **dernier-état-qui-marche** · câblage vers le juge
+- La passation explicite vers la construction (moteur ch.4) · la skill de boucle créée OU « aucune skill — jetable / non récurrent »
+- La ligne `/goal` prête à coller (l'utilisateur l'arme au démarrage de la boucle) — ou « non armé : <raison> » (par ex. un run interactif court)
+- Le chemin du RUN.md
 
-Never report "done" without a RUN.md that is **open and filled** (signal + Reprise) — the build hasn't started yet. **Exception**: a `disposable` one-shot may need no RUN at all — ENGINE regime-table + `frame` proportionality.
+Ne rapporte jamais « fini » sans un RUN.md **ouvert et rempli** (signal + Reprise) — la construction n'a pas encore commencé. **Exception** : un one-shot `disposable` peut n'avoir besoin d'aucun RUN — table des régimes du moteur + proportionnalité de `frame`.
 
-**Next: run the work** (per ENGINE Ch.4 — BUILD), **then `clean`, then `judge`, regime propagated.**
+**Ensuite : joue le travail** (selon le moteur ch.4 — BUILD), **puis `clean`, puis `judge`, régime propagé.**
 
-## Don't
+## À ne pas faire
 
-- **Frame the need or pick the approach** — that's `frame`'s job; terrain starts with a settled `Décision:`.
-- **Execute the loop mechanics** (decompose/execute a plan, TDD, test-driven increments) — those are ENGINE Ch.4 BUILD, the executor's manual; no skill fires during the build.
-- **Re-specify generic loop mechanics** — only the task-specific signal↔harness bridge belongs here.
-- **Clean or judge the finished deliverable** — those are `clean` (step 4) then `judge` (step 5).
-- **Set `status: green` to satisfy the Stop hook** — the gate replays `signal-cmd`; a false green blocks.
-- **Mount two concurrent builders** — serialized, idempotent, reversible steps only; confirm before irreversible actions.
-- **Invent a judge cycle cap** — `judge`'s cap is authoritative; terrain does not duplicate it.
-- **Let `/goal` (or its evaluator) act as closure authority** — it is a relaunch driver; only the stop-gate's replayed proof (or USER-OK) closes. Never arm it during framing/QCM phases — only at the handoff to the build.
+- **Cadrer le besoin ou choisir l'approche** — c'est le travail de `frame` ; terrain part d'une `Décision:` déjà tranchée.
+- **Jouer les mécaniques de boucle** (découper/exécuter un plan, TDD, incréments guidés par les tests) — elles sont au moteur ch.4 BUILD, le manuel de l'exécutant ; aucune skill ne se déclenche pendant la construction.
+- **Respécifier des mécaniques génériques de boucle** — seul le pont signal↔harnais propre à la tâche a sa place ici.
+- **Nettoyer ou juger le livrable fini** — ce sont `clean` (étape 4) puis `judge` (étape 5).
+- **Poser `status: green` pour satisfaire le hook d'arrêt** — le contrôle rejoue `signal-cmd` ; un faux vert bloque.
+- **Monter deux constructeurs en parallèle** — des étapes sérialisées, idempotentes et réversibles seulement ; confirme avant toute action irréversible.
+- **Inventer un plafond de cycles de juge** — le plafond de `judge` fait foi ; terrain ne le duplique pas.
+- **Laisser `/goal` (ou son évaluateur) jouer l'autorité de clôture** — c'est un pilote de relance ; seule la preuve rejouée du contrôle d'arrêt (ou l'accord de l'utilisateur) clôt. Ne l'arme jamais pendant les phases de cadrage ou de QCM — uniquement à la passation vers la construction.
 
-## Engine & reflexes
+## Moteur et réflexes
 
-Loop-execution mechanics — decompose into signal-bearing increments, red-first then green, parallel dispatch, anti-regression cadence, systematic debugging, checkpoint/rollback — are **canonical in `_engine/ENGINE.md` Ch.4 BUILD**. Terrain prepares the ground; the executor consults Ch.4 during the build. On any divergence between this skill and the engine, the engine wins.
+Les mécaniques d'exécution de la boucle — découper en incréments porteurs de signal, rouge d'abord puis vert, envoi en parallèle, cadence anti-régression, débogage systématique, point de reprise et retour arrière — sont **canoniques dans `_engine/ENGINE.md` ch.4 BUILD**. Terrain prépare le terrain ; l'exécutant consulte le ch.4 pendant la construction. En cas de divergence entre cette skill et le moteur, le moteur gagne.
 
-Workspace convention and `signal-cmd` whitelist: **ENGINE Ch.3** (RUN.md header `status/regime/signal/signal-cmd/gate`, single-writer, FLAKY, session-scoping + legacy fallback). Signal trustworthiness (proof classes, self-proving, auto-proves): **ENGINE Ch.2**.
+Convention d'espace de travail et liste blanche des `signal-cmd` : **moteur ch.3** (en-tête du RUN.md `status/regime/signal/signal-cmd/gate`, rédacteur unique, FLAKY, portée de session + repli historique). Fiabilité du signal (classes de preuve, auto-preuve) : **moteur ch.2**.
 
-Workspace path (session-scoped): `~\.claude\runs\<session_id>\<subject>-workspace\RUN.md` — set the `session:` header. The installed Stop hook reads RUN.md and **blocks end-of-turn while a run is open/red** — that out-of-model gate is the real closure authority, not you.
+Chemin de l'espace de travail (porté par la session) : `~\.claude\runs\<session_id>\<subject>-workspace\RUN.md` — pose l'en-tête `session:`. Le hook d'arrêt installé lit le RUN.md et **bloque la fin de tour tant qu'un run est ouvert ou rouge** — ce contrôle hors modèle est la vraie autorité de clôture, pas toi.
 
-Reflex anchor: **the signal must reproduce the USER's symptom as they live it** — a proxy two causal steps away from the terminal effect is not a closure signal.
+Ancrage de réflexe : **le signal doit reproduire le symptôme de l'UTILISATEUR tel qu'il le vit** — un substitut à deux étapes causales de l'effet terminal n'est pas un signal de clôture.

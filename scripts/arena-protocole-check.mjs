@@ -538,8 +538,10 @@ export function verifierProtocole({
     const prompt = lire(path.join(bench, 'prompt-x.txt'))
     if (prompt === null || prompt.trim() === '')
       return 'prompt-x.txt absent ou vide : impossible de verifier que X est l_appel nu'
+    // Une invocation commence un mot (`/arena`) ; un segment de chemin (`scripts/arena-panel/`) n'en
+    // est pas une. L'ancien `\b` coupait au tiret et refusait le X du banc panel-t1 (2026-09-21).
     const cite = prompt.match(
-      /\/(?:frame|terrain|build|clean|judge|heal|scout|arena)\b|SKILL\.md|skills[/]/gi
+      /(?<![\w.-])\/(?:frame|terrain|build|clean|judge|heal|scout|arena)(?![\w-])|SKILL\.md|skills[/]/gi
     )
     if (cite)
       return (

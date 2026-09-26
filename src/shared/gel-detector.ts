@@ -178,6 +178,29 @@ export function nommerAccumulation(
     .slice(0, CONTRIBUTEURS_REPORTES)
 }
 
+/**
+ * LE NOM DE L'OPERATION BLOQUANTE — pris dans l'accumulation quand rien n'a ete declare.
+ *
+ * Mesure du 2026-09-12 (`gels.jsonl`) : depuis le 2026-09-09, 61 gels sortent en
+ * `operation: 'inconnu'` pour 275 s de fenetre figee, pic a 53 594 ms — la plus grosse famille, et
+ * la seule anonyme. Or ces MEMES lignes portent deja le vrai nom dans `accumulation[0].operation`
+ * (« execFileSync git config », « appendFileSync », « openSync »). `PerfLagPanel` groupe par
+ * `operation` : le poste le plus cher etait donc le seul illisible dans la vue de performance.
+ *
+ * C'est exactement la promotion deja faite pour `appelant` — la liste est triee par cumul
+ * decroissant, on prend donc le contributeur le PLUS COUTEUX. Et SEULEMENT faute d'operation
+ * declaree : sur un gel deja nomme, ecraser le nom serait une seconde accusation sans preuve.
+ */
+export function nommerOperationDuGel(
+  operationDeclaree: string,
+  accumulation: readonly AccesCumule[] | undefined,
+  nomInconnu = 'inconnu'
+): string {
+  if (operationDeclaree !== nomInconnu) return operationDeclaree
+  const principal = accumulation?.find((contributeur) => contributeur.operation.trim())
+  return principal ? principal.operation : nomInconnu
+}
+
 export function classerGel(
   ecouleMs: number,
   cpuMsConsomme: number,
@@ -329,6 +352,31 @@ export function cleDeCumul(api: string, args: readonly unknown[]): string {
 }
 
 /**
+ * UN CHEMIN QU'ON PEUT OUVRIR — mesure du 2026-09-12.
+ *
+ * Sur 60 blocages non attribues, 46 portaient un `appelant` en coordonnees de BUILD :
+ * `main/index.js:8955:118 < chunks/worktree-manager-C3-Z8-U7.js:494:39`. Aucune de ces lignes
+ * n'existe dans le depot : nommer l'appelant ne servait donc a rien, chaque diagnostic repartait
+ * en fouille. Les cartes de sources ramenent la pile en `.ts` ; encore faut-il ne pas TRONQUER ce
+ * chemin retrouve. Pour une frame de source du depot, on rend le chemin depuis sa racine
+ * (`src/main/store/worktree-manager.ts:494:39`), directement ouvrable dans l'editeur.
+ *
+ * Tout le reste garde la troncature a deux segments : une dependance ou un fichier compile n'a pas
+ * de racine de depot, et inventer un chemin plausible serait pire que d'en rendre un court.
+ */
+export function cheminLisibleDeFrame(emplacement: string): string {
+  const segments = emplacement.split(/[\\/]/)
+  const fichier = segments[segments.length - 1] ?? ''
+  const dependance = segments.includes('node_modules')
+  const source = /[.](ts|tsx|mts|cts)(:[0-9]+){0,2}$/.test(fichier)
+  if (!dependance && source) {
+    const racine = segments.lastIndexOf('src')
+    if (racine > 0) return segments.slice(racine).join('/')
+  }
+  return segments.slice(-2).join('/')
+}
+
+/**
  * LES FRAMES APPLICATIVES d'une pile, condensees en une ligne — jamais le bruit de node.
  *
  * On garde `fichier:ligne` des trois premieres frames hors `node:` et hors le detecteur lui-meme :
@@ -346,7 +394,7 @@ export function appelantApplicatif(pile: string | undefined, maxFrames = 3): str
     .map((ligne) => {
       const emplacement = /\(?([^()\s]+:\d+:\d+)\)?$/.exec(ligne)?.[1]
       if (!emplacement) return undefined
-      return emplacement.split(/[\\/]/).slice(-2).join('/')
+      return cheminLisibleDeFrame(emplacement)
     })
     .filter((frame): frame is string => frame !== undefined)
   return frames.length ? frames.slice(0, maxFrames).join(' < ') : undefined

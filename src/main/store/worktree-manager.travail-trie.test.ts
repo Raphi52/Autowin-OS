@@ -57,6 +57,64 @@ describe('WorktreeManager — un travail TRIE cesse de crier, sans rien perdre',
     expect(git(repo, 'rev-parse', 'autowin/recovery/run-superseded')).toBe(sha)
   })
 
+  /*
+   * LE GISEMENT QUI SE RECENSAIT MAIS NE SE MARQUAIT PAS.
+   *
+   * Mesure du 2026-09-12 (conv-506) : quand la publication est refusee parce que l'arbre principal
+   * est sale, `poserAttenteDIntegration` depose le commit sur `refs/autowin/integration/<agentId>`.
+   * Si la copie est ensuite nettoyee, cette adresse est le SEUL endroit ou le travail existe : ni
+   * branche de secours, ni sauvetage, ni bureau. `marquerTravailTrie` ne resolvait que les deux
+   * premiers, donc il rendait `false` et le travail restait incrementable a l'infini — le bandeau
+   * qu'on ne peut pas refermer, revenu par une autre porte.
+   */
+  it('un travail pose sur l’adresse d’ATTENTE se marque aussi', () => {
+    const repo = tempRepo()
+    const wm = manager(repo)
+    const base = git(repo, 'rev-parse', 'HEAD')
+    writeFileSync(join(repo, 'attente.txt'), 'travail refuse pour arbre sale')
+    git(repo, 'add', 'attente.txt')
+    git(repo, 'commit', '-q', '-m', 'travail run-attente')
+    const sha = git(repo, 'rev-parse', 'HEAD')
+    // SEULE trace du travail : l'adresse d'attente. Aucune branche de secours, aucun sauvetage.
+    git(repo, 'update-ref', 'refs/autowin/integration/run-attente', sha)
+    git(repo, 'reset', '-q', '--hard', base)
+
+    expect(wm.marquerTravailTrie('run-attente')).toBe(true)
+    // Le marquage porte le SHA JUGE, et n'a rien detruit : l'adresse repond toujours.
+    expect(wm.shaTravailTrie('run-attente')).toBe(sha)
+    expect(git(repo, 'rev-parse', 'refs/autowin/integration/run-attente')).toBe(sha)
+  })
+
+  /*
+   * L'AUTRE MOITIE DU MEME DEFAUT : marquable ne veut pas dire VISIBLE.
+   *
+   * Mesure du 2026-09-12 (conv-506) : 26 adresses d'attente dormaient dans le depot, dont QUATRE
+   * portant du travail jamais applique. Le recensement ne regardait que quatre gisements — branche
+   * de secours, bureau pose, sauvetage, bureau sali — et jamais `refs/autowin/integration/<id>`.
+   * Un travail refuse faute d'arbre propre, dont la copie a ensuite ete nettoyee, etait donc
+   * INVISIBLE a jamais : exactement le travail que l'utilisateur finit par refaire.
+   */
+  it('un travail pose sur une adresse d’ATTENTE est RECENSE', () => {
+    const repo = tempRepo()
+    const wm = manager(repo)
+    const base = git(repo, 'rev-parse', 'HEAD')
+    writeFileSync(join(repo, 'attente-recensee.txt'), 'travail refuse pour arbre sale')
+    git(repo, 'add', 'attente-recensee.txt')
+    git(repo, 'commit', '-q', '-m', 'travail run-attente-vu')
+    const sha = git(repo, 'rev-parse', 'HEAD')
+    // SEULE trace : l'adresse d'attente. Aucune branche de secours, aucun sauvetage, aucun bureau.
+    git(repo, 'update-ref', 'refs/autowin/integration/run-attente-vu', sha)
+    git(repo, 'reset', '-q', '--hard', base)
+
+    // Il CRIE, parce qu'il porte du travail que la base n'a pas.
+    expect(wm.travauxNonPublies()).toContain('run-attente-vu')
+
+    // Et il se tait des qu'il est trie — sans que rien ne soit supprime.
+    wm.marquerTravailTrie('run-attente-vu')
+    expect(wm.travauxNonPublies()).not.toContain('run-attente-vu')
+    expect(git(repo, 'rev-parse', 'refs/autowin/integration/run-attente-vu')).toBe(sha)
+  })
+
   it('un travail qui REPREND apres le tri ressort de lui-meme', () => {
     const repo = tempRepo()
     const wm = manager(repo)

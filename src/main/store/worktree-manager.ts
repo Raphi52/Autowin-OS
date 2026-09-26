@@ -3,6 +3,7 @@ import { execFile, execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import type { EntreeBalayage } from './balayage-retention'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
+import { copiesVivantes, supprimerHistoriqueCli } from './historique-cli-copie'
 import { verdictDeBureau, type VerdictBureau } from './verdict-bureau'
 import type { Dirent } from 'node:fs'
 import {
@@ -78,6 +79,30 @@ const INVENTAIRE_RECUPERATION_TIMEOUT_MS = 300_000
  * en `merge-failed` alors que le travail etait publie.
  */
 const FINALIZE_TIMEOUT_MS = 300_000
+/**
+ * Message du commit qui transporte le travail d'une copie isolée vers la branche de l'utilisateur.
+ *
+ * Le préfixe `agent <id>` est CONSERVÉ : des tests et la reprise repèrent ces commits par lui. On lui
+ * ajoute le résumé de la tâche (première ligne non vide, sans caractère de contrôle, ≤ 72
+ * caractères) pour que l'historique dise CE QUI a changé — `agent run-xxx-1` seul ne disait rien
+ * (conv-710).
+ * fix-ok: cause mesurée — les deux commits (finalize, commitCopyIfDirty) codaient en dur `agent ${agentId}` ; test rouge (3 échecs) sans ce helper, vert avec.
+ */
+export function messageCommitAgent(agentId: string, task?: string): string {
+  const premiere = (task ?? '')
+    .split(/\r?\n/)
+    .map((ligne) =>
+      Array.from(ligne, (c) => (c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f ? ' ' : c))
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
+    .find((ligne) => ligne.length > 0)
+  if (!premiere) return `agent ${agentId}`
+  const resume = premiere.length > 72 ? `${premiere.slice(0, 71).trimEnd()}…` : premiere
+  return `agent ${agentId}: ${resume}`
+}
+
 function assertSafeId(value: string, label: string): void {
   if (!SAFE_ID.test(value))
     throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
@@ -991,6 +1016,8 @@ export class WorktreeManager {
     options: {
       baseBranch?: string
       expectedAgentSha?: string
+      /** Tâche du run : décrit le changement dans le message du commit (`messageCommitAgent`). */
+      task?: string
       /** Résolution humaine d'un conflit : garder la base (`ours`) ou l'agent (`theirs`). */
       conflictStrategy?: 'ours' | 'theirs'
       onPrepared?: (agentSha: string, baseSha: string) => void
@@ -1218,9 +1245,11 @@ export class WorktreeManager {
    * révision : `cat-file -e` ne se déclenche qu'APRÈS le commit, donc trop tard.
    * Indéterminable (git muet, chemin absent) → le code appelant bloque avant toute écriture.
    */
-  private foreignCopyDetail(path: string): string | undefined {
+  private foreignCopyDetail(
+    path: string,
+    copyCommon: string | undefined = this.gitCommonDir(path)
+  ): string | undefined {
     const baseCommon = this.gitCommonDir(this.baseRepo)
-    const copyCommon = this.gitCommonDir(path)
     if (!baseCommon || !copyCommon) return undefined
     if (canonicalPath(baseCommon) === canonicalPath(copyCommon)) return undefined
     return `La copie appartient à un autre dépôt (${copyCommon}) que la base (${baseCommon}) : aucune écriture n’y est faite.`
@@ -1243,22 +1272,33 @@ export class WorktreeManager {
    * Le discriminant est la racine de travail : pour une copie legitime, `--show-toplevel` rend la
    * copie elle-meme ; pour un dossier ampute, il rend le depot de base.
    */
-  private copieSansRacinePropre(path: string): string | undefined {
-    const top = this.tryGitFn(path, ['rev-parse', '--show-toplevel'])
-    if (top.code !== 0) {
+  private copieSansRacinePropre(
+    path: string,
+    topLue: string | undefined = ((): string | undefined => {
+      const top = this.tryGitFn(path, ['rev-parse', '--show-toplevel'])
+      return top.code === 0 ? top.stdout.trim() : undefined
+    })()
+  ): string | undefined {
+    if (!topLue) {
       return `Impossible de prouver la racine de travail de la copie ${path} : aucune écriture n’y est faite.`
     }
-    const racine = canonicalPath(top.stdout.trim())
+    const racine = canonicalPath(topLue)
     if (racine === canonicalPath(path)) return undefined
     return `La copie ${path} n’est pas une racine de travail : git remonte sur ${racine} (arbre partagé) — aucune écriture n’y est faite.`
   }
 
   private ownershipIssue(path: string): string | undefined {
-    const foreign = this.foreignCopyDetail(path)
+    // fix-ok: gels.jsonl 2026-09-23/24 : `execFileSync git rev-parse` x3 par appel depuis
+    // ownershipIssue (jusqu'a 2,3 s). `--git-common-dir` et `--show-toplevel` de la copie sont lus
+    // par UN SEUL lancement git ; la base est deja memorisee par gitCommonDir.
+    const sonde = this.tryGitFn(path, ['rev-parse', '--git-common-dir', '--show-toplevel'])
+    const [commonBrut, topBrut] = sonde.code === 0 ? sonde.stdout.split(String.fromCharCode(10)).map((l) => l.trim()) : []
+    const copyCommon = commonBrut ? (isAbsolute(commonBrut) ? commonBrut : resolve(path, commonBrut)) : undefined
+    const foreign = this.foreignCopyDetail(path, copyCommon)
     if (foreign) return foreign
-    const sansRacine = this.copieSansRacinePropre(path)
+    const sansRacine = this.copieSansRacinePropre(path, topBrut || undefined)
     if (sansRacine) return sansRacine
-    if (!this.gitCommonDir(path) || !this.gitCommonDir(this.baseRepo)) {
+    if (!copyCommon || !this.gitCommonDir(this.baseRepo)) {
       return `Impossible de prouver l’appartenance Git de la copie ${path} : aucune écriture n’y est faite.`
     }
     return undefined
@@ -1325,7 +1365,21 @@ export class WorktreeManager {
    */
   marquerTravailTrie(agentId: string): boolean {
     if (!SAFE_ID.test(agentId)) return false
-    const candidats = [`refs/heads/autowin/recovery/${agentId}`, `refs/autowin/rescue/${agentId}`]
+    /*
+     * LE TROISIEME PORTEUR : l'adresse d'ATTENTE posee par `poserAttenteDIntegration`.
+     *
+     * Mesure du 2026-09-12 (conv-506) : un travail publie-refuse pour arbre sale vit sur
+     * `refs/autowin/integration/<agentId>` et NULLE PART ailleurs — ni branche de secours, ni
+     * sauvetage, ni bureau (la copie avait ete nettoyee). Le recensement le listait, ce marquage
+     * ne savait pas le resoudre : le bandeau criait un travail que rien ne pouvait refermer,
+     * exactement le defaut que cette methode existe pour supprimer. Un gisement recense doit etre
+     * un gisement marquable.
+     */
+    const candidats = [
+      `refs/heads/autowin/recovery/${agentId}`,
+      `refs/autowin/rescue/${agentId}`,
+      `refs/autowin/integration/${agentId}`
+    ]
     let sha: string | undefined
     for (const ref of candidats) {
       const sortie = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `${ref}^{commit}`])
@@ -1861,6 +1915,39 @@ export class WorktreeManager {
         .filter((agentId) => !branches.includes(agentId) && !detaches.includes(agentId))
         .filter((agentId) => this.apporteQuelqueChose(`refs/autowin/rescue/${agentId}`, baseRef))
       /*
+       * CINQUIEME GISEMENT : les travaux poses sur une ADRESSE D'ATTENTE.
+       *
+       * Quand la publication est refusee parce que l'arbre principal est SALE,
+       * `poserAttenteDIntegration` depose le commit sur `refs/autowin/integration/<agentId>`. Si la
+       * copie est ensuite nettoyee, cette adresse devient le SEUL porteur du travail : ni branche de
+       * secours, ni sauvetage, ni bureau. Aucun des quatre gisements ci-dessus ne la regarde.
+       *
+       * Mesure du 2026-09-12 (conv-506) : 26 adresses d'attente dormaient dans le depot, dont
+       * QUATRE portant du travail jamais applique — invisibles au bandeau, donc jamais triees. Le
+       * defaut est exactement celui du troisieme gisement, une porte plus loin : un travail que
+       * l'utilisateur finit par refaire parce que rien ne le lui montre.
+       *
+       * Meme filtre de CONTENU que les autres (`apporteQuelqueChose`, patch-id) : une adresse dont
+       * le travail est deja repris dans la base se tait.
+       */
+      const attentes = this.git(this.baseRepo, [
+        'for-each-ref',
+        '--format=%(refname:strip=3)',
+        'refs/autowin/integration/'
+      ])
+        .split(/\r?\n/)
+        .map((ligne) => ligne.trim())
+        .filter((agentId) => SAFE_ID.test(agentId))
+        .filter(
+          (agentId) =>
+            !branches.includes(agentId) &&
+            !detaches.includes(agentId) &&
+            !sauvetages.includes(agentId)
+        )
+        .filter((agentId) =>
+          this.apporteQuelqueChose(`refs/autowin/integration/${agentId}`, baseRef)
+        )
+      /*
        * QUATRIEME GISEMENT : le travail jamais committe. Un bureau simplement PROPRE reste tu — sinon
        * chaque bureau ouvert crierait, et c'est ainsi qu'on fabrique le bandeau qu'on n'ecoute plus.
        */
@@ -1906,6 +1993,9 @@ export class WorktreeManager {
           }),
           ...sauvetages.filter(
             (agentId) => !trie(agentId, shaDe(`refs/autowin/rescue/${agentId}`))
+          ),
+          ...attentes.filter(
+            (agentId) => !trie(agentId, shaDe(`refs/autowin/integration/${agentId}`))
           ),
           ...salis
         ])
@@ -2817,6 +2907,18 @@ export class WorktreeManager {
     }
 
     const cleanup = this.cleanupWorktree(quarantinePath, false)
+    if (cleanup.ok) {
+      /*
+       * L'historique CLI se purge sur le chemin D'ORIGINE, jamais sur celui de la quarantaine.
+       *
+       * La copie est DEPLACEE avant d'etre liberee : le nettoyage ci-dessus ne voit donc que
+       * `.quarantine/<agent>__<uuid>`, un chemin qui n'a jamais servi de repertoire courant au CLI
+       * et auquel aucun dossier d'historique ne correspond. C'est exactement ce que le test de bout
+       * en bout a revele le 2026-09-12 : la purge branchee dans `cleanupWorktree` ne ramassait rien
+       * par cette voie, qui est pourtant la voie NORMALE de `remove()`.
+       */
+      supprimerHistoriqueCli(path, copiesVivantes(path))
+    }
     if (!cleanup.ok) {
       restore()
       return {
@@ -4959,6 +5061,11 @@ exit 0
 
   private cleanupWorktree(path: string, force = true): { ok: boolean; detail?: string } {
     /*
+     * Les copies encore presentes sont relevees AVANT toute suppression : elles servent a proteger
+     * leur propre historique CLI, et apres coup la copie visee aurait deja disparu de la liste.
+     */
+    const voisines = copiesVivantes(path)
+    /*
      * On retire D'ABORD ce que NOUS avons ajouté : le lien vers les dépendances.
      *
      * Mesuré le 2026-08-25 : `git worktree remove --force` rend 0 mais ne touche pas au
@@ -5002,6 +5109,7 @@ exit 0
              reussie pour un dossier vide qu'on n'a pas pu retirer maintenant. */
         }
       }
+      supprimerHistoriqueCli(path, voisines)
       return { ok: true }
     }
     if (!force) {
@@ -5015,7 +5123,10 @@ exit 0
       filesystemDetail = error instanceof Error ? error.message : String(error)
     }
     const prune = this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
-    if (!existsSync(path) && prune.code === 0) return { ok: true }
+    if (!existsSync(path) && prune.code === 0) {
+      supprimerHistoriqueCli(path, voisines)
+      return { ok: true }
+    }
 
     return {
       ok: false,
@@ -5498,6 +5609,8 @@ exit 0
     options: {
       baseBranch?: string
       expectedAgentSha?: string
+      /** Tâche du run : décrit le changement dans le message du commit (`messageCommitAgent`). */
+      task?: string
       /**
        * Résolution humaine d'un conflit : `ours` garde le workspace sur les zones en conflit,
        * `theirs` garde la version de l'agent. Absent = merge strict (comportement automatique).
@@ -5544,7 +5657,7 @@ exit 0
     }
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return issue
-    return this.secureWorkBeforeRefusal(agentId, path)
+    return this.secureWorkBeforeRefusal(agentId, path, options.task)
       ? { ...issue, rescueRef: this.rescueRef(agentId) }
       : issue
   }
@@ -5752,6 +5865,7 @@ exit 0
     options: {
       baseBranch?: string
       expectedAgentSha?: string
+      task?: string
       conflictStrategy?: 'ours' | 'theirs'
       preserverEditionLocale?: boolean
       onPrepared?: (agentSha: string, baseSha: string) => void
@@ -5837,7 +5951,7 @@ exit 0
         agentId,
         files: existingOperationFiles,
         reason: 'base-in-progress',
-        ...(this.secureWorkBeforeRefusal(agentId, path)
+        ...(this.secureWorkBeforeRefusal(agentId, path, options.task)
           ? { rescueRef: this.rescueRef(agentId) }
           : {})
       }
@@ -5856,14 +5970,7 @@ exit 0
       }
     }
 
-    const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
-    let committed = false
-    if (dirty) {
-      this.git(path, ['add', '-A'])
-      this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `agent ${agentId}`])
-      committed = true
-    }
-    const sha = this.git(path, ['rev-parse', 'HEAD'])
+    const { sha, committed } = this.commitCopyIfDirty(agentId, path, options.task)
     const baseSha = this.git(this.baseRepo, ['rev-parse', 'HEAD'])
     options.onPrepared?.(sha, baseSha)
     if (sha === baseSha) {
@@ -6403,11 +6510,16 @@ exit 0
    * desserrer son assertion. Factorisé parce que `finalize` et `secureWorkBeforeRefusal` faisaient
    * la même séquence à l'identique (relevé par un juge externe).
    */
-  private commitCopyIfDirty(agentId: string, path: string): { sha: string; committed: boolean } {
+  private commitCopyIfDirty(
+    agentId: string,
+    path: string,
+    task?: string
+  ): { sha: string; committed: boolean } {
     const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
     if (dirty) {
       this.git(path, ['add', '-A'])
-      this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `agent ${agentId}`])
+      const message = messageCommitAgent(agentId, task)
+      this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message])
     }
     return { sha: this.git(path, ['rev-parse', 'HEAD']), committed: dirty }
   }
@@ -6432,7 +6544,7 @@ exit 0
    * question — « cette copie porte-t-elle des commits qu'aucune branche ne connaît ? » — sans
    * dépendre d'un reflog, et toute réponse illisible vaut refus.
    */
-  private secureWorkBeforeRefusal(agentId: string, path: string): boolean {
+  private secureWorkBeforeRefusal(agentId: string, path: string, task?: string): boolean {
     try {
       // Ordre choisi pour le COÛT : les lectures d'abord, et on sort au plus tôt. Ce chemin s'exécute
       // à CHAQUE refus, et un refus est la norme sur un dépôt partagé — deux tests de compensation,
@@ -6460,7 +6572,7 @@ exit 0
       // même un commit « pour les sauver ». Sécuriser est un service ; il ne justifie pas d'écrire là
       // où le reste du module s'interdit de toucher.
       if (this.ownershipIssue(path)) return false
-      const { sha } = this.commitCopyIfDirty(agentId, path)
+      const { sha } = this.commitCopyIfDirty(agentId, path, task)
       return this.tryGitFn(this.baseRepo, ['update-ref', this.rescueRef(agentId), sha]).code === 0
     } catch {
       // Sécuriser est un BONUS : son échec ne doit jamais transformer un refus propre en exception.

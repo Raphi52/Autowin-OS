@@ -38,6 +38,29 @@ describe('démarrage — la fenêtre n’attend plus la migration', () => {
     expect(source).toMatch(/const \{ canWriteMarker \} = await lecture/)
   })
 
+  /**
+   * CONSTATÉ À L'ÉCRAN le 2026-09-12 : l'écran « Préparation de l'interface… » occupait tout le
+   * moniteur pendant que l'application, derrière, répondait normalement. Une SECONDE fenêtre
+   * principale avait été construite sur une première encore vivante : elle charge l'écran d'attente
+   * puis s'affiche maximisée par-dessus la vraie.
+   *
+   * Le test porte sur la SOURCE comme le reste du fichier — le sujet est l'ordonnancement au
+   * démarrage d'Electron, qu'on ne rejoue pas sans lancer l'application pour de bon.
+   */
+  it('ne construit JAMAIS une seconde fenêtre principale sur une première vivante', () => {
+    // La garde est la PREMIÈRE chose que fait createWindow : placée après, la fenêtre est déjà née.
+    const debut = source.indexOf('function createWindow(): void {')
+    const construction = source.indexOf('new BrowserWindow({', debut)
+    expect(debut).toBeGreaterThan(-1)
+    expect(source.slice(debut, construction)).toMatch(
+      /if \(mainWindowVivante && !mainWindowVivante\.isDestroyed\(\)\)/
+    )
+    // …et elle réveille l'existante au lieu de ne rien faire, sinon « Ouvrir Autowin » serait muet.
+    expect(source.slice(debut, construction)).toMatch(/mainWindowVivante\.focus\(\)/)
+    // La référence est relâchée à la fermeture : sans cela, rouvrir depuis la barre d'état échoue.
+    expect(source).toMatch(/if \(mainWindowVivante === mainWindow\) mainWindowVivante = null/)
+  })
+
   it('un échec de migration ne bloque pas le démarrage', () => {
     // La promesse a une branche de rejet qui repart sur « rien à importer », et n'écrit pas le
     // marqueur — la prochaine ouverture réessaiera.

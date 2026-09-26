@@ -30,10 +30,32 @@ const OUVRE_UNE_FENCE = /^[ \t]*(?:```|~~~)/
 const FIN_DE_PHRASE = /[.!?…][»”"')\]]*$/u
 const DEBUT_DE_PHRASE = /^[\p{L}«“"'(#*\->`]/u
 
-/** Une fence est-elle ENCORE ouverte à la fin du texte accumulé ? (nombre impair de délimiteurs) */
+const DELIMITEUR_DE_FENCE = /^[ \t]*(`{3,}|~{3,})(.*)$/
+
+/**
+ * Une fence est-elle ENCORE ouverte à la fin du texte accumulé ? Suit la règle CommonMark : la fence
+ * se ferme par un délimiteur du MÊME caractère, au moins aussi long que celui d'ouverture, sans texte
+ * derrière. Un ~~~ dans un bloc ``` (ou un ``` dans un bloc ````) est donc du contenu.
+ */
 function fenceEncoreOuverte(texte: string): boolean {
-  const delimiteurs = texte.match(/^[ \t]*(?:```|~~~)/gm)
-  return delimiteurs !== null && delimiteurs.length % 2 === 1
+  let ouverte: string | null = null
+  for (const ligne of texte.split('\n')) {
+    const m = DELIMITEUR_DE_FENCE.exec(ligne.replace(/\r$/, ''))
+    if (!m) continue
+    const [, delimiteur, reste] = m
+    if (ouverte === null) {
+      // Une ouverture en backticks ne porte pas de backtick dans son info string (sinon : code en ligne).
+      if (delimiteur[0] === '`' && reste.includes('`')) continue
+      ouverte = delimiteur
+    } else if (
+      delimiteur[0] === ouverte[0] &&
+      delimiteur.length >= ouverte.length &&
+      reste.trim() === ''
+    ) {
+      ouverte = null
+    }
+  }
+  return ouverte !== null
 }
 
 /** Deux phrases soudées sans espace : « …ciblée. » + « Maintenant… ». */

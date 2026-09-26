@@ -47,7 +47,7 @@ export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   notifications: 'Remontées des agents',
   conversations: 'Conversations',
   jarvis: 'Jarvis',
-  enregistrements: 'Enregistrements'
+  enregistrements: 'Transcription'
 }
 
 /**
@@ -75,19 +75,25 @@ interface RelativeSpec {
  * d'une ligne de 0,5) recouvrait la tuile juste en dessous. Avec des lignes entieres, un
  * chevauchement devient impossible par construction — c'est de l'arithmetique, plus du reglage.
  */
-const ROWS = 6
+/**
+ * Huit rangees depuis l'ajout de la tuile « Actions des utilisateurs » : les trois colonnes etaient
+ * PLEINES sur six rangees, et y glisser une huitieme tuile l'aurait fait chevaucher une voisine.
+ */
+const ROWS = 8
 /**
  * Deux colonnes demandent plus de rangees : sept tuiles a deux rangees minimum ne tiennent pas sur
  * les six rangees de l'arrangement large.
  */
-const MEDIUM_ROWS = 10
+const MEDIUM_ROWS = 8
 
 const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
-  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 4, z: 0 },
+  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
   // Les enregistrements sont sous les mails : on les consulte apres coup, pas en parlant.
-  enregistrements: { col: 0, colSpan: 1, row: 4, rowSpan: 2, z: -50 },
-  agenda: { col: 1, colSpan: 1, row: 0, rowSpan: 2, z: -30 },
-  routines: { col: 1, colSpan: 1, row: 2, rowSpan: 4, z: -60 },
+  // Tuile « Actions des utilisateurs » retiree (demande utilisateur du 2026-09-21, conv-750) :
+  // les enregistrements reprennent le bas de la colonne de gauche.
+  enregistrements: { col: 0, colSpan: 1, row: 3, rowSpan: 5, z: -50 },
+  agenda: { col: 1, colSpan: 1, row: 0, rowSpan: 3, z: -30 },
+  routines: { col: 1, colSpan: 1, row: 3, rowSpan: 5, z: -60 },
   notifications: { col: 2, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
   // Jarvis est en colonne de droite, a hauteur d'oeil : c'est l'endroit qu'on regarde en parlant.
   jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 2, z: -40 },
@@ -95,16 +101,20 @@ const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
 }
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
-  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
-  notifications: { col: 1, colSpan: 1, row: 0, rowSpan: 3, z: -20 },
-  agenda: { col: 0, colSpan: 1, row: 3, rowSpan: 3, z: -30 },
-  // Jarvis fait face aux mails. Aucune ligne a une seule rangee ici : sous deux rangees,
-  // MIN_WIDGET_HEIGHT (116 px) depasse le pas de la grille et les tuiles se chevauchent des que la
-  // fenetre est courte — c'est le defaut deja mesure le 2026-08-21 sur le hublot (historique).
-  jarvis: { col: 1, colSpan: 1, row: 3, rowSpan: 3, z: -40 },
-  routines: { col: 1, colSpan: 1, row: 6, rowSpan: 2, z: -60 },
-  conversations: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 },
-  enregistrements: { col: 0, colSpan: 1, row: 8, rowSpan: 2, z: -50 }
+  // Huit rangees, quatre tuiles a gauche et trois a droite : les deux colonnes finissent a la MEME
+  // rangee. Avant (conv-785, 2026-09-22), la Transcription occupait seule une cinquieme ligne
+  // (rangees 8-9 d'une grille de 12 dont 10-11 vides) : sur une fenetre courte, elle et les
+  // Conversations passaient sous le bord, et le recadrage les ramenait toutes deux au meme y --
+  // titres ecrits l'un sur l'autre.
+  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 2, z: 0 },
+  notifications: { col: 1, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
+  agenda: { col: 0, colSpan: 1, row: 2, rowSpan: 2, z: -30 },
+  // Jarvis fait face aux mails. Aucune tuile a une seule rangee : sous deux rangees,
+  // MIN_WIDGET_HEIGHT (116 px) depasse le pas de la grille et les tuiles se chevauchent.
+  jarvis: { col: 1, colSpan: 1, row: 2, rowSpan: 3, z: -40 },
+  conversations: { col: 0, colSpan: 1, row: 4, rowSpan: 2, z: -120 },
+  routines: { col: 1, colSpan: 1, row: 5, rowSpan: 3, z: -60 },
+  enregistrements: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -50 }
 }
 
 /** L'ordre de lecture en colonne unique : ce qu'on regarde en premier, en haut. */
@@ -149,6 +159,13 @@ const V_GAP = WIDGET_LABEL_HEIGHT + 8
  * elles. Le bloc est alors CENTRE, ce qui laisse une bande de decor symetrique de chaque cote.
  */
 const MAX_COLUMN_WIDTH = 384
+/**
+ * Hauteur minimale d'une RANGEE de la grille.
+ *
+ * Aucune tuile n'occupe moins de DEUX rangees (voir `WIDE` et `MEDIUM`) : pour qu'une tuile a sa
+ * taille minimale tienne dans son pas, il faut `2 * rangee + V_GAP >= MIN_WIDGET_HEIGHT`.
+ */
+const MIN_ROW_HEIGHT = Math.ceil((MIN_WIDGET_HEIGHT - V_GAP) / 2)
 /**
  * Part de la largeur utile laissee au decor, a DROITE.
  *
@@ -222,7 +239,19 @@ export function defaultHomeLayout(
   const originX = PAD_X
   // Deux colonnes n'ont pas la meme grille que trois : voir `MEDIUM_ROWS`.
   const gridRows = columns === 3 ? ROWS : MEDIUM_ROWS
-  const rowHeight = Math.max(24, Math.round((usableHeight - V_GAP * (gridRows - 1)) / gridRows))
+  /**
+   * fix-ok: une rangee plus courte que `MIN_ROW_HEIGHT` fait DEBORDER les tuiles hors de leur place.
+   *
+   * La hauteur d'une tuile est plafonnee par le bas a `MIN_WIDGET_HEIGHT` ; son PAS, lui, suit la
+   * rangee. Des que le pas de deux rangees passe sous ce plancher, la tuile depasse dans la tuile du
+   * dessous — mesure en ajoutant la tuile Performance : a 700 x 800 px, rangee de 24 px, un pas de
+   * 112 px portait une tuile de 116 px et trois chevauchements apparaissaient d'un coup. Le plancher
+   * de la RANGEE doit donc decouler du plancher de la TUILE, pas d'une constante arbitraire.
+   */
+  const rowHeight = Math.max(
+    MIN_ROW_HEIGHT,
+    Math.round((usableHeight - V_GAP * (gridRows - 1)) / gridRows)
+  )
 
   return HOME_WIDGET_IDS.map((id) => {
     const entry = spec[id]
@@ -401,6 +430,76 @@ export function layoutFitsViewport(
   // (0,93 de la surface) et par la largeur de chaque tuile, tout en depassant le bord droit de 180 px.
   // Un debordement que PERSONNE n'a choisi n'est pas une disposition valide pour cette surface.
   return layout.every((box) => box.x + box.w <= viewport.width)
+}
+
+/**
+ * Cette disposition est-elle EXACTEMENT celle d'origine, pour UNE surface quelconque ?
+ *
+ * Sert a separer ce que l'utilisateur a POSE de ce que le code a DEDUIT. Un agencement pose fait
+ * autorite et ne bouge plus ; un agencement deduit n'en a aucune et doit suivre la surface reelle.
+ *
+ * Defaut mesure le 2026-09-17 en pilotant le rendu hors ecran : au premier rendu la surface n'est
+ * pas encore mesuree, l'agencement est donc deduit de la FENETRE (1584 x 935) alors que l'Accueil
+ * n'occupe que 1320 x 887 une fois la barre laterale deduite -- puis il est PERSISTE tel quel.
+ * Barre deployee il ne tient pas dans la surface, donc il ne s'affiche jamais et rien ne se voit.
+ * Barre REPLIEE la surface gagne 156 px, cet agencement trop large « tient » tout juste et
+ * s'affiche : tuiles de 445 px au lieu de 419, et rangee du bas a 902 px pour 887 px de haut, donc
+ * coupee. C'est le defaut rapporte par l'utilisateur ce jour-la.
+ *
+ * On compare la STRUCTURE, pas des pixels absolus : largeur de colonne, pas des rangees et haut
+ * reserve sont deduits de la tuile d'ancrage, et les six autres doivent tomber au pixel sur leur
+ * case. Deplacer ou redimensionner UNE seule tuile suffit a rendre faux -- c'est exactement voulu.
+ */
+export function estDispositionDOrigine(layout: HomeLayout): boolean {
+  if (layout.length !== HOME_WIDGET_IDS.length) return false
+  const parId = new Map(layout.map((box) => [box.id, box]))
+  if (parId.size !== HOME_WIDGET_IDS.length) return false
+  return suitLaGrille(parId, WIDE) || suitLaGrille(parId, MEDIUM) || suitLaColonneUnique(parId)
+}
+
+function suitLaGrille(
+  parId: Map<HomeWidgetId, HomeWidgetBox>,
+  spec: Readonly<Record<HomeWidgetId, RelativeSpec>>
+): boolean {
+  const ancre = parId.get('mails')
+  if (!ancre) return false
+  const colonne = ancre.w
+  const rangee = (ancre.h - V_GAP * (spec.mails.rowSpan - 1)) / spec.mails.rowSpan
+  const haut = ancre.y - spec.mails.row * (rangee + V_GAP)
+  if (colonne < MIN_WIDGET_WIDTH || rangee <= 0) return false
+  return HOME_WIDGET_IDS.every((id) => {
+    const box = parId.get(id)
+    if (!box) return false
+    const entry = spec[id]
+    const hauteur = Math.max(
+      MIN_WIDGET_HEIGHT,
+      rangee * entry.rowSpan + V_GAP * (entry.rowSpan - 1)
+    )
+    return (
+      box.x === PAD_X + entry.col * (colonne + GAP) &&
+      box.w === colonne * entry.colSpan + GAP * (entry.colSpan - 1) &&
+      Math.abs(box.y - (haut + entry.row * (rangee + V_GAP))) <= 1 &&
+      Math.abs(box.h - hauteur) <= 1
+    )
+  })
+}
+
+function suitLaColonneUnique(parId: Map<HomeWidgetId, HomeWidgetBox>): boolean {
+  const premier = parId.get(NARROW_ORDER[0])
+  const second = parId.get(NARROW_ORDER[1])
+  if (!premier || !second) return false
+  const pas = second.y - premier.y
+  if (pas <= 0) return false
+  return NARROW_ORDER.every((id, index) => {
+    const box = parId.get(id)
+    return Boolean(
+      box &&
+        box.x === PAD_X &&
+        box.w === premier.w &&
+        box.h === premier.h &&
+        Math.abs(box.y - (premier.y + index * pas)) <= 1
+    )
+  })
 }
 
 /**

@@ -22,11 +22,16 @@ export interface OrchestrationBudgetSettings {
   maxTotalTokens: number
 }
 
+/*
+ * DECISION UTILISATEUR DU 2026-09-12 : plus aucun plafond PAR DEFAUT ne coupe un travail en cours.
+ * Ces valeurs sont hors d'atteinte d'un usage reel. Le seul frein qui subsiste est celui que
+ * l'utilisateur pose LUI-MEME (`maxUsd`, `null` par defaut) : un plafond choisi reste respecte.
+ */
 export const DEFAULT_ORCHESTRATION_BUDGET: OrchestrationBudgetSettings = {
   maxUsd: null,
-  maxProviderCalls: 24,
-  maxChatProviderCalls: 400,
-  maxTotalTokens: 15_000_000
+  maxProviderCalls: 20_000,
+  maxChatProviderCalls: 50_000,
+  maxTotalTokens: 1_000_000_000
 }
 
 function isValidCap(value: unknown): value is number {

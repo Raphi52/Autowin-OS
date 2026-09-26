@@ -13,6 +13,9 @@ import type { OrchStep, ScopedLiveRun } from './chat-view-model'
 vi.mock('./SourceControlPane', () => ({
   SourceControlPane: () => <div data-testid="source-control-stub" />
 }))
+vi.mock('./ProjectPane', () => ({
+  ProjectPane: () => <div data-testid="project-pane-stub" />
+}))
 // Le stub PUBLIE une sélection, comme le vrai graphe : c'est par là que le panneau est piloté
 // depuis que les onglets ont disparu. Sans ce levier, aucun test ne pourrait descendre dans le
 // détail contextuel.
@@ -38,7 +41,6 @@ function baseProps(overrides: Partial<WorkflowsPanelProps> = {}): WorkflowsPanel
     runsPaneWidth: 320,
     messages: [],
     beginRunsResize: vi.fn(),
-    refreshRuns: vi.fn(),
     setShowRuns: vi.fn(),
     activeId: 'conv-1',
     send: vi.fn(),
@@ -46,12 +48,10 @@ function baseProps(overrides: Partial<WorkflowsPanelProps> = {}): WorkflowsPanel
     requestLabel: undefined,
     liveGraphActive: false,
     visibleLiveRuns: [],
-    checkpoints: [],
-    forkedCheckpoint: '',
-    setForkedCheckpoint: vi.fn(),
     runs: [],
     openRun: null,
     viewRun: vi.fn(),
+    relireRunOuvert: vi.fn(),
     setOpenRun: vi.fn(),
     setOpenTrace: vi.fn(),
     requestDeleteRun: vi.fn(),
@@ -115,19 +115,51 @@ describe('WorkflowsPanel', () => {
   }
 
   /**
-   * TROIS ONGLETS, PAS QUATRE, ET LE GRAPHE RESTE LA NAVIGATION DU DETAIL.
+   * CINQ ONGLETS, ET LE GRAPHE RESTE LA NAVIGATION DU DETAIL.
    *
    * Ce test remplace celui qui INTERDISAIT toute barre d'onglets. L'interdiction datait de la
    * substitution des quatre projections par le graphe ; l'utilisateur a redemande une separation
-   * le 2026-09-01, mais SEULEMENT entre les trois objets empiles (graphe, RUN.md, trace). Le
+   * le 2026-09-01 entre les trois objets empiles (graphe, RUN.md, trace), puis le 2026-09-12 deux
+   * objets de code : « Code » (fichiers modifies, diff colore) et « Projet » (arborescence +
+   * editeur). L'ordre et le libelle des onglets sont figes ici : c'est la barre que l'oeil lit. Le
    * drill-down du graphe n'est pas defait : il est verifie par les tests de selection plus bas.
    */
-  it('expose exactement trois onglets — Graph, Runs, Logs — et monte le graphe par defaut', () => {
+  /**
+   * L'ONGLET FILES. Demande de l'utilisateur le 2026-09-12 : un SEUL onglet de code, nomme
+   * « Files », qui porte a la fois l'arborescence editable et les fichiers modifies (diff
+   * colore). L'onglet « Projet » separe est supprime — d'ou l'absence de son libelle ici.
+   */
+  it('ouvre « Files » sur le panneau de code (arborescence en sous-onglet)', () => {
+    render(baseProps())
+    const onglet = (libelle: string): HTMLButtonElement =>
+      Array.from(container.querySelectorAll('button[role="tab"]')).find(
+        (b) => b.textContent?.trim() === libelle
+      ) as HTMLButtonElement
+
+    expect(onglet('Projet')).toBeUndefined()
+
+    act(() => onglet('Files').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelector('[data-testid="source-control-stub"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="graph-stub"]')).toBeNull()
+  })
+
+  // Demande du 2026-09-26 : « enleve le bouton rafraichir, tout doit se rafraichir tout seul ».
+  // Seul le bouton de fermeture reste dans la barre du panneau.
+  it('ne porte plus aucun bouton « Rafraîchir » : seule la fermeture reste en tête', () => {
+    render(baseProps())
+    const actions = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.workflow-panel-actions button')
+    ).map((b) => b.getAttribute('aria-label'))
+    expect(actions).toEqual(['Fermer les détails'])
+    expect(container.querySelector('[aria-label*="Rafraîchir"]')).toBeNull()
+  })
+
+  it('expose exactement cinq onglets — Graph, Runs, Logs, Files, Trace — et monte le graphe par defaut', () => {
     render(baseProps())
     const onglets = Array.from(container.querySelectorAll('button[role="tab"]')).map((b) =>
       b.textContent?.trim()
     )
-    expect(onglets).toEqual(['Graph', 'Runs', 'Logs'])
+    expect(onglets).toEqual(['Graph', 'Runs', 'Logs', 'Files'])
     expect(container.querySelector('[role="tablist"]')).not.toBeNull()
     // Le graphe est l'onglet d'accueil : le panneau s'ouvre sur l'execution, pas sur une liste.
     expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()
@@ -214,35 +246,19 @@ describe('WorkflowsPanel', () => {
   })
 
   /**
-   * LE FIL DES SOUS-AGENTS EST DANS L'ONGLET RUNS — demande utilisateur repetee (2026-09-01).
+   * CLIQUER UNE BRIQUE D'AGENT RESTE SUR LE GRAPHE (demande du 2026-09-23).
    *
-   * Il s'ouvrait SOUS le graphe, dans l'onglet Graph. Descendre sur un noeud d'agent bascule
-   * desormais sur Runs et y montre le fil du tour choisi ; le graphe redevient une navigation
-   * pure. Le retour au graphe se fait par son onglet.
+   * La bascule vers Runs laissait l'utilisateur sans détail pour une demande simple, qui n'écrit
+   * aucun RUN.md. Le prompt et le retour de l'étape s'affichent désormais sous le graphe.
    */
-  it('descendre sur un nœud agent bascule sur Runs et y ouvre le fil des sous-agents', () => {
+  it('descendre sur un nœud agent reste sur le graphe', () => {
     render(baseProps({ runs: [run()] }))
 
     act(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-agent"]')?.click())
     expect(
       container.querySelector('button[role="tab"][aria-selected="true"]')?.textContent?.trim()
-    ).toBe('Runs')
-    expect(
-      container.querySelector('[data-workflow-detail]')?.getAttribute('data-workflow-detail')
-    ).toBe('subagents')
-    expect(container.textContent).toContain('Aucun fil de sous-agents pour cette étape')
-    // Le graphe n'est plus a l'ecran : un objet par onglet, c'est tout le point de la separation.
-    expect(container.querySelector('[data-testid="graph-stub"]')).toBeNull()
-    // Les RUN.md restent sur le meme onglet, sous le fil.
-    expect(container.textContent).toContain('Audit du panneau')
-
-    const graphe = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
-    ).find((b) => b.textContent?.trim() === 'Graph')!
-    act(() => graphe.click())
+    ).toBe('Graph')
     expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()
-    // L'onglet Graph ne rend plus AUCUN fil : c'etait le doublon a supprimer.
-    expect(container.textContent).not.toContain('Aucun fil de sous-agents pour cette étape')
   })
 
   /** Le fil affiché est celui du TOUR sélectionné — le seul appariement réellement disponible. */
@@ -258,6 +274,11 @@ describe('WorkflowsPanel', () => {
     )
 
     act(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-agent"]')?.click())
+    // Le clic reste sur le graphe : on ouvre Runs soi-même, la sélection du tour y est gardée.
+    const runs = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
+    ).find((b) => b.textContent?.trim() === 'Runs')!
+    act(() => runs.click())
 
     expect(container.textContent).toContain('fil du tour vise')
     expect(container.textContent).not.toContain('fil d’un autre tour')
@@ -322,5 +343,74 @@ describe('WorkflowsPanel — ouverture d’un RUN.md', () => {
     const erreur = container.querySelector('[data-testid="run-detail-error"]')
     expect(erreur?.textContent).toContain('ENOENT')
     expect(container.querySelector('.run-inspector')).toBeNull()
+  })
+})
+
+// Demande du 2026-09-26 : « fais recharger automatiquement le RUN.md déplié quand son run avance,
+// sans bouton ». Le panneau compare la date du RUN.md chargé à celle de la liste relue.
+describe('WorkflowsPanel — le RUN.md déplié se relit seul quand son run avance', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  function render(props: WorkflowsPanelProps): void {
+    act(() => {
+      root.render(<WorkflowsPanel {...props} />)
+    })
+  }
+
+  it('relit UNE fois chaque nouvelle version du fichier, et jamais une version déjà chargée', () => {
+    const relire = vi.fn()
+    // Le parent recrée sa fonction à chaque rendu : on reproduit ce cas, qui relançait la lecture.
+    const props = (mtimeListe: number, mtimeCharge: number): WorkflowsPanelProps =>
+      baseProps({
+        runs: [run({ mtime: mtimeListe })],
+        openRun: { path: '/runs/one/RUN.md', content: '# v', mtime: mtimeCharge },
+        relireRunOuvert: (r) => relire(r)
+      })
+
+    render(props(1, 1))
+    expect(relire).not.toHaveBeenCalled()
+
+    // Le run avance : sa liste est relue avec une date plus récente.
+    render(props(2, 1))
+    expect(relire).toHaveBeenCalledTimes(1)
+    expect(relire.mock.calls[0][0]).toMatchObject({ path: '/runs/one/RUN.md', mtime: 2 })
+
+    // Liste relue encore une fois pendant la relecture, même date : pas de seconde lecture.
+    render(props(2, 1))
+    expect(relire).toHaveBeenCalledTimes(1)
+
+    // Relecture terminée : le détail porte la nouvelle date, plus rien à faire.
+    render(props(2, 2))
+    expect(relire).toHaveBeenCalledTimes(1)
+
+    // Étape suivante du run : nouvelle version, nouvelle relecture.
+    render(props(3, 2))
+    expect(relire).toHaveBeenCalledTimes(2)
+    expect(relire.mock.calls[1][0]).toMatchObject({ mtime: 3 })
+  })
+
+  it('ne relit rien tant que le run est replié ou que son ouverture est en cours', () => {
+    const relire = vi.fn()
+    render(baseProps({ runs: [run({ mtime: 5 })], openRun: null, relireRunOuvert: relire }))
+    render(
+      baseProps({
+        runs: [run({ mtime: 5 })],
+        openRun: { path: '/runs/one/RUN.md', content: '', pending: true },
+        relireRunOuvert: relire
+      })
+    )
+    expect(relire).not.toHaveBeenCalled()
   })
 })

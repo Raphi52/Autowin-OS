@@ -14,7 +14,13 @@ import { cheminDevToolsPort } from './racine-depot.mjs'
  *   1. `--port 1234` passe en argument (l'appelant sait ce qu'il vise)
  *   2. `AUTOWIN_CDP_PORT`
  *   3. le `DevToolsActivePort` REEL du depot courant
- *   4. `9223`, l'ancien defaut, pour ne casser aucun appel existant
+ *   4. plus rien : REFUS explicite.
+ *
+ * Le repli muet sur `9223` a ete retire (conv-611, saisie 2026-09-16T13:49:06.312Z,
+ * turnId 6856bcec-e943-424c-8e9f-25a19ea2881a : « mes travaux en parallele se parasitent »).
+ * Depuis une copie de travail qui n'a PAS lance son instance, ce repli faisait piloter la
+ * premiere application trouvee sur 9223 — celle de l'utilisateur, ou celle d'un autre travail.
+ * Une sonde sans cible propre doit s'arreter, pas viser au hasard.
  */
 export const PORT_PAR_DEFAUT = 9223
 
@@ -27,7 +33,11 @@ export function portCdp(argv = process.argv, env = process.env) {
     const premiereLigne = readFileSync(fichier, 'utf8').split('\n')[0].trim()
     if (/^\d+$/.test(premiereLigne)) return Number(premiereLigne)
   }
-  return PORT_PAR_DEFAUT
+  throw new Error(
+    "Aucune instance a piloter : ce depot n'a pas de DevToolsActivePort. Lance ta propre instance " +
+      '(node scripts/avec-instance-headless.mjs -- <ta sonde>) ou vise-la explicitement ' +
+      '(--port <n> / AUTOWIN_CDP_PORT). Sans cela la sonde pilote l application d un autre travail.'
+  )
 }
 
 /** L'URL du catalogue de cibles CDP pour ce port. */

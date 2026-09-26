@@ -456,3 +456,54 @@ describe('la date du message', () => {
     expect(formatMessageDate(null)).toBe('')
   })
 })
+
+describe('les pieces jointes RECUES traversent jusqu au message', () => {
+  it('rapporte les pieces d un message, nom et taille', () => {
+    const [contact] = groupByInterlocutor([
+      mail({
+        id: 'm-promeom',
+        sujet: 'TR: PROMEOM : Convocation(s)',
+        pieces: [
+          { nom: 'convocation individuelle - promeom v3.pdf', taille: 859_335 },
+          { nom: 'appointment_813649365.ics', taille: 685 }
+        ]
+      })
+    ])
+    expect(contact.messages[0].pieces).toEqual([
+      { nom: 'convocation individuelle - promeom v3.pdf', taille: 859_335 },
+      { nom: 'appointment_813649365.ics', taille: 685 }
+    ])
+  })
+
+  it('rend une liste VIDE quand le champ manque, sans casser les anciens instantanes', () => {
+    // Mesure du 2026-09-10 sur la vraie boite : les 10 messages ENVOYES de l'instantané n'ont pas
+    // du tout ce champ (seule la boîte de réception le porte), et un instantané mis en cache par
+    // une version antérieure du script n'en a nulle part. Si l'absence donnait `undefined`, chaque
+    // lecture à l'écran devrait s'en protéger — et celle qu'on oublierait afficherait un écran vide.
+    const [contact] = groupByInterlocutor([mail({ id: 'm-vieux' })])
+    expect(contact.messages[0].pieces).toEqual([])
+  })
+
+  it('ignore une piece sans nom plutot que d afficher une ligne vide', () => {
+    const [contact] = groupByInterlocutor([
+      mail({
+        id: 'm-bancal',
+        pieces: [
+          { nom: '   ', taille: 12 },
+          { nom: 'reel.pdf', taille: 4096 }
+        ]
+      })
+    ])
+    expect(contact.messages[0].pieces).toEqual([{ nom: 'reel.pdf', taille: 4096 }])
+  })
+
+  it('garde les pieces sur le message du FIL, pas seulement sur le contact', () => {
+    // Le rendu lit les pieces sur le message tel que `groupThreads` le rend : si le regroupement en
+    // fils reconstruisait les messages, les pieces se perdraient entre les deux etages.
+    const [contact] = groupByInterlocutor([
+      mail({ id: 'm-fil', conversation: 'cx', pieces: [{ nom: 'note.pdf', taille: 2048 }] })
+    ])
+    const [premierFil] = groupThreads(contact)
+    expect(premierFil.messages[0].pieces).toEqual([{ nom: 'note.pdf', taille: 2048 }])
+  })
+})

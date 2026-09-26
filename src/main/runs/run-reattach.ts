@@ -12,6 +12,7 @@ import {
 } from '../providers/claude'
 import type { ExecutionEvidence } from '../providers/types'
 import { normalizeClaudeUsage } from '../providers/claude'
+import { coutDuTourDepuisCumul } from '../providers/claude-session-cost'
 import { codexExecutionEvidenceFromItem, type CodexExecItem } from '../providers/codex'
 import { isSameProcessIdentity } from '../process-identity'
 
@@ -568,6 +569,8 @@ export interface RecoveredDetachedUsageSettlement {
   callId: string
   phase: OrchestrationRunState['phaseOutputs'][number]['phase']
   provider: string
+  /** Modèle de l'agent, quand le checkpoint le porte — jamais deviné. */
+  model?: string
   costUsd?: number
   inputTokens: number
   outputTokens: number
@@ -645,7 +648,19 @@ function detachedClaudeSuccess(
         : undefined
     if (!rawUsage) return undefined
     const hasReportedCost = Object.prototype.hasOwnProperty.call(event, 'total_cost_usd')
-    const usage = normalizeClaudeUsage(rawUsage, event.total_cost_usd, hasReportedCost)
+    /*
+     * MEME CUMUL QU'A LA SOURCE : `total_cost_usd` porte le total de la session CLI, pas le cout de
+     * ce tour-la. Une reprise de journal doit donc de-cumuler comme le fait l'adaptateur, sinon
+     * elle reinjecte un cumul dans les journaux de cout (cf. `providers/claude-session-cost.ts`).
+     */
+    const coutDuTour =
+      typeof event.total_cost_usd === 'number'
+        ? coutDuTourDepuisCumul(
+            typeof event.session_id === 'string' ? event.session_id : undefined,
+            event.total_cost_usd
+          )
+        : event.total_cost_usd
+    const usage = normalizeClaudeUsage(rawUsage, coutDuTour, hasReportedCost)
     if (!usage) return undefined
     return {
       text: (includeAssistantText ? assistantText : '') || event.result.trim(),
@@ -1027,6 +1042,9 @@ export function settleCompletedDetachedPhase(
       callId: `detached:${runId}:${attribution.agent.token}`,
       phase,
       provider: attribution.agent.provider,
+      // Le modèle vient du checkpoint de l'agent : sans lui la dépense réglée après coup est
+      // écrite « sans modèle » et sort de tout arbitrage (78 lignes, 131,69 $ au 2026-09-16).
+      ...(attribution.agent.model ? { model: attribution.agent.model } : {}),
       ...(success.costUsd === undefined ? {} : { costUsd: success.costUsd }),
       inputTokens: inputTokens - (prior.inputTokens ?? 0),
       outputTokens: outputTokens - (prior.outputTokens ?? 0),

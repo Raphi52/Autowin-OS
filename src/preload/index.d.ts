@@ -1,3 +1,11 @@
+import type { InventaireDisque } from '../main/store/inventaire-disque'
+import type {
+  EtatPhraseProd,
+  ReponseAutorisation as ReponseAutorisationProd,
+  ReponseDefinition as ReponseDefinitionPhrase
+} from '../main/prod-passphrase-ipc'
+import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
+import type { EtatPorteProd, NiveauProtectionProd } from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
@@ -8,6 +16,7 @@ import type {
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 import type {
@@ -54,6 +63,7 @@ import type { TraceEventV1 } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
+import type { BureauTv, ImageTv } from '../main/hdesk-tv'
 export interface ClaudeAccountEntry {
   id: string
   displayName: string
@@ -80,8 +90,29 @@ interface ChatApi {
     text?: string
     error?: string
   }>
+  identiteUtilisateur: () => Promise<string>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
+  hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>
+  hdeskTvImage: (id: string) => Promise<ImageTv>
+  hdeskTvArreter: () => Promise<void>
+  prodPassphraseEtat: () => Promise<EtatPhraseProd>
+  prodPassphraseDefinir: (
+    phrase: string,
+    phraseActuelle?: string
+  ) => Promise<ReponseDefinitionPhrase>
+  prodPorteEtat: () => Promise<EtatPorteProd>
+  prodPorteNiveau: (niveau: NiveauProtectionProd) => Promise<{ ok: boolean; erreur?: string }>
+  prodAutorisationConfirmer: (id: string) => Promise<{ ok: boolean }>
+  prodPassphraseAutoriser: (
+    phrase: string,
+    demande: { cible: string; operation: string }
+  ) => Promise<ReponseAutorisationProd>
+  onProdAutorisationDemandee: (cb: (demande: DemandeAutorisationProd) => void) => () => void
+  onProdAutorisationClose: (cb: (id: string) => void) => () => void
+  prodAutorisationDeposer: (id: string, jeton: string) => Promise<{ ok: boolean }>
+  prodAutorisationAnnuler: (id: string) => Promise<{ ok: boolean }>
+  prodAutorisationEnAttente: () => Promise<DemandeAutorisationProd[]>
   orchestrate: (
     task: string,
     conversationId?: string
@@ -129,11 +160,34 @@ interface ChatApi {
   ) => Promise<import('../shared/git-read').GitDiffResult>
   /** Historique git de la vue Worktrees — la frise de commits. Lecture seule. */
   getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
+  /**
+   * Le geste de glisser-deposer du graphe, traduit en commande git PAR le processus principal.
+   * Liste blanche de deux gestes en avant ; aucune reecriture d'histoire n'en sort.
+   */
+  runGitAction: (
+    demande:
+      | { type: 'merge'; source: string; cible: string }
+      | { type: 'cherry-pick'; commit: string; cible: string },
+    repoPath?: string
+  ) => Promise<{ ok: true; commande: string; sortie: string } | { ok: false; raison: string }>
   getGitDiff: (
     path: string,
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  /** Onglet « Projet » : racine du projet, arborescence par dossier, lecture/ecriture d'un fichier. */
+  projectRoot: (conversationId?: string) => Promise<string>
+  /** Ouvre tout le projet courant dans VS Code (commande `code`). */
+  openProjectInVscode: (conversationId?: string) => Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }>
+  /** Lecture seule : le fichier existe-t-il ? `null` = chemin relatif sans base connue. */
+  fichierExiste?: (path: string, base?: string) => Promise<boolean | null>
+  listProjectDir: (path?: string, conversationId?: string) => Promise<import('../main/project-files').ProjectListResult>
+  readProjectFile: (path: string, conversationId?: string) => Promise<import('../main/project-files').ProjectReadResult>
+  writeProjectFile: (
+    path: string,
+    content: string,
+    conversationId?: string
+  ) => Promise<import('../main/project-files').ProjectWriteResult>
   testProjects: () => Promise<
     Array<
       import('../shared/test-projects').TestProject & {
@@ -163,11 +217,17 @@ interface ChatApi {
   ) => Promise<
     import('../shared/perf-lag').RapportLatence & { disponible: boolean; source: string }
   >
+  /** Ce qu'Autowin occupe sur le disque, par famille, plus le menage deja fait au demarrage. */
+  osDiskUsage: () => Promise<InventaireDisque>
   perfGels: (
     derniers?: number
   ) => Promise<
     import('../shared/gel-detector').ResumeGels & { disponible: boolean; source: string }
   >
+  /** Duels d'arene deja mesures, agreges par nom de workflow. Aucun duel n'est rejoue. */
+  arenaDuelsParWorkflow: (
+    derniers?: number
+  ) => Promise<Record<string, import('../main/arena-duels').AgregatDuels>>
   getAutoClose: () => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   unfinishedTurns: () => Promise<
@@ -182,6 +242,11 @@ interface ChatApi {
     poseeA: number
   } | null>
   /** Couleur des boutons réduire / agrandir / fermer, que Windows peint hors de la page. */
+  signalerRunsVivants: (etat: {
+    runsActifs: number
+    etapesFaites: number
+    etapesTotales: number
+  }) => Promise<boolean>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   checkUpdate: () => Promise<{
     available: boolean
@@ -295,6 +360,8 @@ interface ChatApi {
     champion: { provider: string; model: string }
   ) => Promise<ShadowRouteResult>
   modelQuotas: (force?: boolean) => Promise<ModelQuotaSnapshot>
+  claudeResets: () => Promise<ClaudeResetsStatus>
+  claudeResetClaim: (grantId: string) => Promise<ClaudeResetClaimResult>
   profiles: () => Promise<AutowinProfile[]>
   saveProfile: (profile: unknown) => Promise<AutowinProfile[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
@@ -350,6 +417,10 @@ interface ChatApi {
     enabled: boolean
   ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
   chooseBehaviourWorkspace: () => Promise<string | null>
+  /** Les consignes tapees PENDANT un tour, avec le tour qu'elles ont inflechi. Lecture seule. */
+  orientationsDeConversation: (
+    conversationId: string
+  ) => Promise<Array<{ ts: number; texte: string; turnId?: string }>>
   executionWorkspace: () => Promise<ExecutionWorkspaceState>
   chooseExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
   resetExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
@@ -404,7 +475,24 @@ interface ChatApi {
   conversationsSetProject: (id: string, path?: string | null) => Promise<string | null>
   /** Pose (`true`) ou retire (`false`) le repère visuel d'une conversation. */
   conversationsSetHighlight: (id: string, on: boolean) => Promise<boolean>
+  /**
+   * Projets connus de claude.exe (profil CLI), déjà filtrés — pour la liste des dossiers du Chat.
+   * fix-ok: cause mesurée — le pont n'exposait aucun accès aux projets du profil CLI ; sans cette
+   * déclaration, ChatView ne pouvait pas typer l'appel (tsc rouge avant ajout, vert après).
+   */
+  dossiersClaudeCli: () => Promise<string[]>
+  conversationsSetInactive: (id: string, on: boolean) => Promise<boolean>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
+  /**
+   * Importe une session Claude Code de l'inventaire en conversation Autowin. Rend un résumé.
+   * fix-ok: cause mesurée des retouches — la signature a suivi le contrat réel du canal
+   * `os:conversations:importSession` (ref {id, project} puis résumé avec projectPath optionnel),
+   * calé sur le retour effectif de importSession() côté store après le test rouge→vert.
+   */
+  conversationsImportSession: (ref: {
+    id: string
+    project: string
+  }) => Promise<{ id: string; title: string; messageCount: number; projectPath?: string }>
   conversationsRemove: (id: string) => Promise<boolean>
   /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
   conversationsRemoveMany: (ids: readonly string[]) => Promise<string[]>
@@ -432,25 +520,53 @@ interface ChatApi {
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   outlookSnapshot: (force?: boolean) => Promise<unknown>
   outlookOuvrir: (id: string) => Promise<{ ok: boolean; erreur?: string }>
-  /** Envoie une réponse à un message Outlook. Irréversible : à confirmer avant l'appel. */
-  outlookRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  /**
+   * Envoie une réponse à un message Outlook, et ses pièces jointes éventuelles.
+   * Irréversible : à confirmer avant l'appel.
+   *
+   * Les pièces voyagent en CONTENU (base64), pas en chemin : un fichier glissé depuis Outlook
+   * n'existe pas sur le disque, et Electron ne rend plus `File.path`.
+   */
+  outlookRepondre: (
+    id: string,
+    corps: string,
+    pieces?: ReadonlyArray<{ nom: string; taille: number; contenuBase64: string }>
+  ) => Promise<{ ok: boolean; erreur?: string }>
   /** Marque des messages Outlook comme lus. Ecrit dans la boite : reserve a un geste utilisateur. */
   outlookMarquerLu: (ids: readonly string[]) => Promise<{ ok: boolean; erreur?: string }>
-  /** Envoie un message NEUF (adresse + objet + corps). Irréversible : à confirmer avant l'appel. */
+  /**
+   * Envoie un message NEUF (adresse + objet + corps, et ses pièces jointes éventuelles).
+   * Irréversible : à confirmer avant l'appel.
+   *
+   * Les pièces voyagent en CONTENU (base64), pas en chemin : un fichier glissé depuis Outlook
+   * n'existe pas sur le disque, et Electron ne rend plus `File.path`.
+   */
   outlookNouveauMessage: (
     adresse: string,
     objet: string,
-    corps: string
+    corps: string,
+    pieces?: ReadonlyArray<{ nom: string; taille: number; contenuBase64: string }>
   ) => Promise<{ ok: boolean; erreur?: string }>
   taskManagerCreate: (task: unknown) => Promise<ScheduledTask>
   taskManagerUpdate: (id: string, task: unknown) => Promise<ScheduledTask>
   taskManagerRemove: (id: string) => Promise<boolean>
   taskManagerAcknowledge: (alertId: string) => Promise<boolean>
   taskManagerRunNow: (id: string) => Promise<{ started: boolean }>
+  // fix-ok: mesure 2026-09-26 — sans ces deux declarations, `npm run typecheck:web` rend 2
+  // (TS2339 sur TaskManagerView.tsx:724 et :738) : l'ecran appelle ces deux fonctions du pont.
+  /** Coupe (`false`) ou retablit UNE personne d'une regle mails / Teams. */
+  taskManagerSetSender: (id: string, key: string, enabled: boolean) => Promise<ScheduledTask>
+  /** « Connecter Teams » : le code a saisir sur la page Microsoft, ou la raison de l'echec. */
+  taskManagerTeamsConnect: () => Promise<
+    | { ok: true; userCode: string; verificationUri: string; expiresAt: number }
+    | { ok: false; erreur: string }
+  >
   openFolder: (path: string) => Promise<void>
   /** Ouvre un fichier cite par un agent (`[a.ts:80](src/main/a.ts:80)`). Chemin resolu cote main. */
   revealFile: (path: string, line?: number) => Promise<{ ok: boolean; reason?: string }>
   appState: () => Promise<AppSnapshot>
+  detachView: (view: string, screenX: number, screenY: number) => Promise<{ ok: boolean }>
+  windowBounds: () => { x: number; y: number; width: number; height: number }
   appCommand: (name: string, args?: Record<string, unknown>) => Promise<CommandResult>
   pilotChat: (
     messages: Array<{
@@ -473,7 +589,8 @@ interface ChatApi {
   cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   injectDirective: (
     conversationId: string,
-    directive: string
+    directive: string,
+    attachments?: ChatAttachment[]
   ) => Promise<{ ok: boolean; messageId?: string }>
   /** Écrit le texte de l'utilisateur sur disque AVANT son envoi — filet contre les textes sans tour. */
   journaliserSaisie: (
@@ -525,6 +642,8 @@ interface ChatApi {
       note?: string
       /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
+      /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */
+      textes?: string[]
     }) => void
   ) => () => void
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>

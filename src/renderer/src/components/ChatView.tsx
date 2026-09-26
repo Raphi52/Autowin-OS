@@ -1,5 +1,18 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
+import { titreDepuisPremierMessage } from './titre-conversation'
 import { useBrancheCourante } from './branche-courante'
+import { presenceDepuisRunsVivants } from './run-presence'
+import { useClampDansFenetre } from './useClampDansFenetre'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './markdown-recommandation'
 import { mesurerMessagesRendus } from './chat-mesure-messages'
@@ -19,6 +32,7 @@ import {
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
+import { reclamerOuvertureConversation } from './pending-conversation-open'
 import { refreshesActiveConversation } from './chat-event-routing'
 import { pickRunForTrace } from './run-trace-target'
 import {
@@ -31,11 +45,17 @@ import {
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
+  densiteSuivante,
+  libelleDensite,
+  lireDensiteConversations,
+  traitsDensite,
+  type DensiteConversation,
   createLiveRunDeltaBatcher,
   deriveConversationState,
   hydrateStoredAssistant,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  suiviDuBasApresEnvoi,
   doitSuivreLeRoutage,
   compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
@@ -58,24 +78,32 @@ import {
   type StoredAssistantMessage,
   settleOrchestrationOnRunEnd,
   noterChoixDePipeline,
-  completerChoixDePipeline
+  completerChoixDePipeline,
+  texteDuPrompt
 } from './chat-view-model'
 import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
 import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
-import { moveQueueEntry } from './chat-queue-order'
-import { ChatQueuePanel } from './ChatQueuePanel'
+import { HdeskTv } from './HdeskTv'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
+// La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
+// de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
+import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
+import { rejouerOrientations } from './orientations-rejouees'
 import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import {
+  attenteFichierAReprendre,
   deciderRelanceAuto,
   dernierTourEstUnScout,
   premierPassageLaisseSortirLeTour,
-  signatureTour
+  signatureTour,
+  DELAI_SONDAGE_FICHIER,
+  DUREE_MAX_SONDAGE_FICHIER,
 } from './chat-auto-mode'
+import { titreSansHomonyme } from './titre-sans-homonyme'
 import { reprendreApresRedemarrage } from './chat-reprise'
 import type {
   AsstMsg,
@@ -121,15 +149,23 @@ import {
   groupesVisibles,
   grouperConversations,
   nomDeDossier,
-  ordonnerGroupes
+  ordonnerGroupes,
+  type ConversationGroupKind
 } from './conversation-groups'
-import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { estCheminDeDossier } from '../../../shared/project-path'
+import {
+  avecDossierRetire,
+  fusionnerDossiersImportes,
+  sansDossierRetire
+} from './chat-dossiers-import'
+import { OrchestratorModelSelector, type OrchestratorAccounts } from './OrchestratorModelSelector'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { ContextGaugeDetail } from './ContextGaugeIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
+import { fusionnerRelecture, relireRun } from './run-ouvert-a-jour'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   mergeLiveAndPersisted,
@@ -156,12 +192,14 @@ import type { InspectTurnTarget } from '../observatory-focus'
 // Types partagés : dans `chat-view-types.ts` depuis la découpe. Ré-exportés ici pour que les
 // importateurs historiques (`RunEntry`, `CheckpointEntry`) n'aient RIEN à changer.
 export type { RunEntry, CheckpointEntry } from './chat-view-types'
-import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
 import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-publie'
 import { TravauxNonPublies } from './TravauxNonPublies'
 import { ChatFindBar } from './ChatFindBar'
 import { Spinner } from './Spinner'
+import { VueMesuree } from './VueMesuree'
+import { useDebutProgressif } from './fil-progressif'
+import { flattenChatParts } from '../../../shared/chat-turn'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
@@ -177,10 +215,46 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 const CLE_JAUGES = 'autowin.context-gauges.v1'
 /** Dossiers de classement deja choisis, memorises entre les sessions. */
 const CLE_DOSSIERS_CONNUS = 'autowin.conv-folders.connus'
+/**
+ * Dossiers RETIRES par la croix — la memoire qui empeche l'import claude.exe de les ressusciter
+ * a chaque lancement. Distincte de la liste : « absent » ne dit pas si c'est « jamais vu » ou
+ * « retire expres », et l'import a besoin de cette difference.
+ */
+const CLE_DOSSIERS_RETIRES = 'autowin.conv-folders.retires'
+
+function lireDossiersRetires(): string[] {
+  try {
+    const lu = JSON.parse(window.localStorage.getItem(CLE_DOSSIERS_RETIRES) ?? '[]') as unknown
+    return Array.isArray(lu) ? lu.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return [] // mémoire illisible : au pire un dossier retiré revient UNE fois, la croix le range
+  }
+}
+
+function ecrireDossiersRetires(retires: string[]): void {
+  try {
+    window.localStorage.setItem(CLE_DOSSIERS_RETIRES, JSON.stringify(retires))
+  } catch (error) {
+    traceSilentFailure('dossiers-retires:persist', error)
+  }
+}
 /** Fils armes en mode auto (reglage PAR conversation ; `*` = ancien reglage global migre). */
-const CLE_MODE_AUTO_CONVS = 'autowin.chat.modeAuto.convs'
+import { CLE_MODE_AUTO_CONVS, EVT_ARMER_MODE_AUTO } from './chat-auto-convs'
 /** Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions. */
 const CLE_DOSSIER_NOUVEAU_FIL = 'autowin.chat.dossierNouveauFil'
+
+/**
+ * Peut-on DEPOSER une conversation sur l'en-tete de ce groupe ?
+ *
+ * Oui pour un rangement voulu par l'utilisateur — un dossier de travail, ou une categorie. Non pour
+ * un groupe DERIVE : « Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence de
+ * rangement, « Recent » est un raccourci qui duplique. Y trainer une conversation ne voudrait rien
+ * dire, et la cle du groupe n'est alors pas un rangement transmissible a `rangerDansDossier`.
+ * fix-ok: conv-81 — cause mesurée dans la vue : la clé du groupe servait de cible de dépôt, or un groupe dérivé (Divers, Récent, Auto-kaizen) n'a pas de rangement transmissible ; on ne laisse déposer que sur un dossier ou une catégorie.
+ */
+function deposable(kind: ConversationGroupKind): boolean {
+  return kind === 'dossier' || kind === 'categorie'
+}
 
 function lireJaugesMemorisees(): Record<string, ContextGauge> {
   try {
@@ -229,7 +303,176 @@ function TexteSurligne({ texte, terme }: { texte: string; terme: string }): Reac
   )
 }
 
-function ghostDuFil(fil: Msg[]): string | null {
+/**
+ * UNE LIGNE DE LA LISTE DES CONVERSATIONS, memorisee (heal gels vue chat, 2026-09-18).
+ * Mesure dans l'app (serveur de dev, 637 lignes) : changer de conversation recreait TOUTES les
+ * lignes (~430 ms par bascule, surtout de la creation d'elements). Une ligne ne se re-rend plus que
+ * si SES donnees changent : a la bascule, seules l'ancienne et la nouvelle ligne active bougent.
+ * Les actions passent par `actionsRef` (toujours les dernieres, sans invalider la memoire).
+ */
+type ActionsLigneConversation = {
+  loadConv: (c: Conv) => Promise<void>
+  basculerDansMosaique: (id: string) => Promise<void>
+  toggleConvSelection: (id: string) => void
+}
+const LigneConversation = memo(function LigneConversation({
+  c,
+  snippet,
+  depth,
+  actif,
+  occupe,
+  nonVue,
+  selectionnee,
+  mosaiqueOuverte,
+  convQuery,
+  convSelectionMode,
+  convViewMode,
+  actionsRef,
+  setConvMenu
+}: {
+  c: Conv
+  snippet?: string
+  depth: number
+  actif: boolean
+  occupe: boolean
+  nonVue: boolean
+  selectionnee: boolean
+  mosaiqueOuverte: boolean
+  convQuery: string
+  convSelectionMode: boolean
+  convViewMode: string
+  actionsRef: { readonly current: ActionsLigneConversation }
+  setConvMenu: Dispatch<SetStateAction<{ conv: Conv; top: number; left: number } | null>>
+}): React.JSX.Element {
+  const conversationState = deriveConversationState({
+    busy: occupe,
+    messageCount: c.messageCount ?? c.messages?.length ?? 0,
+    lastMessageRole:
+      c.lastMessageRole ??
+      // Même règle que la projection du store : une consigne écrite pendant un
+      // tour (`orientation`) ne porte pas d'attente de réponse (conv-61).
+      [...(c.messages ?? [])].reverse().find((m) => m.orientation !== true)?.role,
+    lastAssistantStatus: c.lastAssistantStatus,
+    asksUser: c.lastAssistantAsksUser === true,
+    // La conversation OUVERTE est lue par definition : elle ne doit jamais
+    // s'afficher « non lue » sous les yeux de celui qui la regarde.
+    unseen: nonVue
+  })
+  const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+  return (
+    <div
+      className={`conv-item${actif ? ' active' : ''}${c.surlignee ? ' surlignee' : ''}`}
+      style={{ marginLeft: depth * 14 }}
+      // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
+      // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
+      // ceux qui ne peuvent pas glisser.
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/autowin-conversation', c.id)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+    >
+      {convSelectionMode && convViewMode !== 'mosaic' && (
+        <input
+          type="checkbox"
+          className="conv-select-box"
+          checked={selectionnee}
+          onChange={() => actionsRef.current.toggleConvSelection(c.id)}
+          aria-label={`Sélectionner « ${c.title} »`}
+        />
+      )}
+      <button
+        className="conv-pick"
+        onClick={() =>
+          convViewMode === 'mosaic'
+            ? void actionsRef.current.basculerDansMosaique(c.id)
+            : void actionsRef.current.loadConv(c)
+        }
+      >
+        {/* EN COURS = le MEME atome que partout ailleurs : le composant
+            <Spinner/>. La pastille etait le dernier endroit a rendre l'ancien
+            atome CSS a bordures (.spinner), d'ou un indicateur qui ne
+            ressemblait a aucun autre. Les autres etats restent une pastille. */}
+        {conversationState.key === 'running' ? (
+          <Spinner
+            size={14}
+            className="conversation-state is-running"
+            label={`État de la conversation : ${stateDescription}`}
+            title={stateDescription}
+            data-conversation-state={conversationState.key}
+          />
+        ) : (
+          <span
+            className={`conversation-state is-${conversationState.key}`}
+            data-conversation-state={conversationState.key}
+            role="img"
+            aria-label={`État de la conversation : ${stateDescription}`}
+            title={stateDescription}
+          />
+        )}
+        <span className="conv-copy">
+          <span className="conv-label">
+            {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
+          </span>
+          {convQuery && snippet && (
+            <span className="conv-snippet">
+              <TexteSurligne texte={snippet} terme={convQuery} />
+            </span>
+          )}
+          {/* Le NUMERO reste visible pendant une recherche, et surligne quand il
+              correspond : taper « 171 » masquait la seule information qui prouve
+              qu'on a trouve la bonne conversation (2026-09-03). */}
+          <span className="conv-meta">
+            <span>{convQuery ? <TexteSurligne texte={c.id} terme={convQuery} /> : c.id}</span>
+            {!convQuery && <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>}
+          </span>
+        </span>
+        {convQuery && (
+          <span className="conv-count tnum">{c.messageCount ?? c.messages?.length ?? 0}</span>
+        )}
+        {/* En mosaique, la liste n'est plus une SELECTION mais un jeu
+            d'interrupteurs : l'etat ouvert/ferme se lit a droite du titre. */}
+        {convViewMode === 'mosaic' && (
+          <span
+            className={`conv-mosaic-toggle${mosaiqueOuverte ? ' is-open' : ''}`}
+            data-testid={`conv-mosaic-toggle-${c.id}`}
+            role="img"
+            aria-pressed={mosaiqueOuverte ? 'true' : 'false'}
+            aria-label={
+              mosaiqueOuverte
+                ? `« ${c.title} » ouverte en mosaïque — cliquer pour fermer`
+                : `« ${c.title} » fermée — cliquer pour ouvrir`
+            }
+            title={mosaiqueOuverte ? 'Ouverte' : 'Fermée'}
+          >
+            <span className="conv-mosaic-toggle-knob" aria-hidden="true" />
+          </span>
+        )}
+      </button>
+      <button
+        className="conv-menu-trigger"
+        title="Actions"
+        aria-label="Actions de la conversation"
+        onClick={(event) => {
+          event.stopPropagation()
+          const rect = event.currentTarget.getBoundingClientRect()
+          setConvMenu((current) =>
+            current?.conv.id === c.id ? null : { conv: c, top: rect.top, left: rect.right + 6 }
+          )
+        }}
+      >
+        ⋮
+      </button>
+    </div>
+  )
+})
+
+/**
+ * `depotPresent` : le dossier de travail est-il un depot git ? Sans depot, `/salvage` n'a ni
+ * branche ni remise de cote a trier -- la reecriture de la suite en ordre de tri est donc
+ * desactivee (trois relances utilisateur des 09 et 10/09/2026 sur un dossier sans `.git`).
+ */
+function ghostDuFil(fil: Msg[], depotPresent: boolean): string | null {
   const lastAssistant = [...fil].reverse().find((m) => m.role === 'assistant') as
     AsstMsg | undefined
   if (!lastAssistant) return null
@@ -242,12 +485,13 @@ function ghostDuFil(fil: Msg[]): string | null {
   const demandeDuTour = [...fil]
     .reverse()
     .find((m): m is UserMsg & { messageId?: string } => m.role === 'user')?.content
-  const suite = extrairePromptSuivant(text, demandeDuTour) ?? extractRecommendation(text)
+  const suite =
+    extrairePromptSuivant(text, demandeDuTour, depotPresent) ?? extractRecommendation(text)
   // Le repli sur la rubrique « Recommandé » obéit à la même règle : publier passe par /salvage —
   // et une publication que personne n'a demandée ne propose RIEN du tout.
   if (!suite) return suite
-  if (publicationJamaisDemandee(suite, demandeDuTour)) return null
-  return estPromptDePublication(suite, demandeDuTour) ? PROMPT_SALVAGE : suite
+  if (publicationJamaisDemandee(suite, demandeDuTour, depotPresent)) return null
+  return estPromptDePublication(suite, demandeDuTour, depotPresent) ? PROMPT_SALVAGE : suite
 }
 
 // Les suggestions d'accueil ne sont plus figées : elles se DÉRIVENT de l'état réel
@@ -302,16 +546,64 @@ type MessageStocke = Partial<StoredAssistantMessage> & {
   messageId?: string
   attachments?: UserMsg['attachments']
   done?: boolean
+  orientation?: boolean
+  coupeLaReponse?: number
+  ts?: number
+}
+
+/**
+ * LA SUITE DU TOUR SE RELIT SOUS LA CONSIGNE QUI L'A PROVOQUÉE (conv-717, 2026-09-19).
+ *
+ * Une consigne écrite pendant un tour est stockée APRÈS le message assistant du tour, qui porte
+ * TOUT le texte — y compris la réponse à cette consigne. Au rechargement, cette réponse remontait
+ * donc au-dessus de la question : « quand j'ai écrit fais tout ça a effacé ton message précédent ».
+ * Le store note sur la consigne combien de parts existaient déjà (`coupeLaReponse`) ; on coupe la
+ * bulle à cet endroit et la suite s'affiche sous la consigne. Tour encore en cours : rien ne bouge,
+ * l'affichage en direct a sa propre coupure (`.directive-receipt`).
+ */
+function couperAuxConsignes(messages: readonly MessageStocke[]): MessageStocke[] {
+  const out: MessageStocke[] = []
+  for (let i = 0; i < messages.length; i++) {
+    const assistant = messages[i]
+    const parts = assistant.role === 'assistant' ? assistant.parts : undefined
+    if (!parts || assistant.status === 'streaming') {
+      out.push(assistant)
+      continue
+    }
+    let debut = 0
+    let j = i + 1
+    const morceaux: MessageStocke[] = []
+    for (; j < messages.length; j++) {
+      const consigne = messages[j]
+      if (consigne.role !== 'user' || !consigne.orientation) break
+      const coupure = consigne.coupeLaReponse
+      if (typeof coupure === 'number' && coupure > debut && coupure < parts.length) {
+        const tranche = parts.slice(debut, coupure)
+        morceaux.push({ ...assistant, parts: tranche, content: flattenChatParts(tranche) })
+        debut = coupure
+      }
+      morceaux.push(consigne)
+    }
+    if (debut === 0) {
+      out.push(assistant, ...messages.slice(i + 1, j))
+    } else {
+      const reste = parts.slice(debut)
+      out.push(...morceaux, { ...assistant, parts: reste, content: flattenChatParts(reste) })
+    }
+    i = j - 1
+  }
+  return out
 }
 
 function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
-  return messages.map((m) =>
+  return couperAuxConsignes(messages).map((m) =>
     m.role === 'user'
       ? {
           role: 'user' as const,
           content: m.content,
           attachments: m.attachments,
-          messageId: m.messageId
+          messageId: m.messageId,
+          ts: m.ts
         }
       : { ...hydrateStoredAssistant(m as StoredAssistantMessage), messageId: m.messageId }
   )
@@ -388,6 +680,16 @@ export function ChatView({
   useEffect(() => {
     window.localStorage.setItem(CLE_MODE_AUTO_CONVS, JSON.stringify([...autoConvs]))
   }, [autoConvs])
+  // Un fil arme de l'exterieur (mode auto Tickets) rejoint l'ensemble sans etre ecrase.
+  useEffect(() => {
+    const armer = (e: Event): void => {
+      const id = (e as CustomEvent<unknown>).detail
+      if (typeof id === 'string' && id)
+        setAutoConvs((prev) => (prev.has(id) ? prev : new Set([...prev, id])))
+    }
+    window.addEventListener(EVT_ARMER_MODE_AUTO, armer)
+    return () => window.removeEventListener(EVT_ARMER_MODE_AUTO, armer)
+  }, [])
   const autoArmePour = useCallback(
     (id: string | null | undefined): boolean =>
       // `id`, PAS le fil affiche : cette fonction est appelee pour les fils d'ARRIERE-PLAN.
@@ -410,11 +712,15 @@ export function ChatView({
    * ne se choisissait que sur une conversation EXISTANTE (menu ⋮), donc le premier tour d'un fil
    * neuf tournait toujours dans le depot de repli. L'intention est gardee ici, puis posee sur la
    * conversation des sa creation — `dossierDeTravailDuTour` la lit alors des le premier tour.
+   *
+   * Un LIBELLE deja memorise ici est ignore (conv-81) : avant la separation, le menu proposait des
+   * categories parmi les dossiers, et en choisir une armait le prochain fil sur un dossier qui
+   * n'existe pas. La pastille du haut affichait alors ce libelle comme dossier de travail.
    */
   const [dossierNouveauFil, setDossierNouveauFil] = useState<string | null>(() => {
     try {
       const lu = window.localStorage.getItem(CLE_DOSSIER_NOUVEAU_FIL)
-      return lu && lu.trim() ? lu : null
+      return lu && estCheminDeDossier(lu) ? lu : null
     } catch {
       return null
     }
@@ -425,6 +731,19 @@ export function ChatView({
     if (dossierNouveauFil) window.localStorage.setItem(CLE_DOSSIER_NOUVEAU_FIL, dossierNouveauFil)
     else window.localStorage.removeItem(CLE_DOSSIER_NOUVEAU_FIL)
   }, [dossierNouveauFil])
+  /**
+   * RELANCES DIFFÉRÉES PROGRAMMÉES, PAR CONVERSATION (conv-826 : « faudrait que le mode auto gère ce
+   * cas au lieu de s'arrêter »). Le minuteur vit ici, pas dans l'effet du fil affiché : changer de
+   * fil ne le tue pas. `differees` = nombre de relances différées d'affilée (borne dans
+   * `deciderRelanceAuto`), remis à zéro au premier envoi ordinaire.
+   */
+  const autoProgrammeesRef = useRef(new Map<string, { minuteur: number; signature: string }>())
+  const autoDiffereesRef = useRef(new Map<string, number>())
+  const annulerRelanceProgrammee = useCallback((id: string): void => {
+    const p = autoProgrammeesRef.current.get(id)
+    if (p) window.clearTimeout(p.minuteur)
+    autoProgrammeesRef.current.delete(id)
+  }, [])
   /** Desarme un fil precis (le joker `*` disparait : eteindre ici eteint le reglage herite). */
   const desarmerAuto = useCallback((id: string | null | undefined): void => {
     setAutoConvs((precedent) => {
@@ -433,7 +752,9 @@ export function ChatView({
       if (id) suivant.delete(id)
       return suivant
     })
-  }, [])
+    // Éteindre le mode annule aussi la relance différée qui attendait son heure dans ce fil.
+    if (id) annulerRelanceProgrammee(id)
+  }, [annulerRelanceProgrammee])
   /**
    * L'avancement de la boucle, PAR CONVERSATION — `tour` = dernier tour déjà traité (un re-rendu du
    * même tour ne renvoie rien), `prompt` = dernier texte envoyé (la même suite deux fois = boucle).
@@ -505,7 +826,42 @@ export function ChatView({
    * adressé au lecteur (« passer en terrain »), donc la recopier ici donnait une phrase qu'il fallait
    * réécrire avant de l'envoyer. Le repli garantit qu'un tour sans prompt garde l'ancien comportement.
    */
-  const ghostRecommendation = useMemo(() => ghostDuFil(messages), [messages])
+  /*
+   * LE DOSSIER DE TRAVAIL EST-IL UN DEPOT GIT ? Lu une fois : le dossier actif est fige au
+   * demarrage cote main. `true` par defaut tant que la reponse n'est pas arrivee, pour ne jamais
+   * relacher le garde-fou de publication sur une simple latence de lecture.
+   */
+  const [depotPresent, setDepotPresent] = useState(true)
+  /**
+   * Le depot selectionne dans la barre du haut : il sert d'EN-TETE de repli pour les fils qui n'ont
+   * aucun rangement propre. Sans lui ils tombaient tous dans « Divers », alors qu'ils travaillent
+   * dans ce depot-la (demande du 2026-09-17). Vide tant que la lecture n'a pas repondu -> « Divers »,
+   * exactement le comportement d'avant.
+   */
+  const [dossierParDefaut, setDossierParDefaut] = useState('')
+  useEffect(() => {
+    // Canal ABSENT : on garde `true`, donc l'ancien comportement — jamais un relachement du
+    // garde-fou de publication sur une simple indisponibilite de lecture.
+    if (typeof window.api?.executionWorkspace !== 'function') return
+    let vivant = true
+    void window.api
+      .executionWorkspace()
+      .then((etat) => {
+        if (!vivant) return
+        setDepotPresent(etat.isGitRepo)
+        setDossierParDefaut(etat.path ?? '')
+      })
+      .catch(() => {
+        /* Lecture impossible : on garde le comportement d'avant, jamais un relachement. */
+      })
+    return () => {
+      vivant = false
+    }
+  }, [])
+  const ghostRecommendation = useMemo(
+    () => ghostDuFil(messages, depotPresent),
+    [messages, depotPresent]
+  )
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [appNotice, setAppNotice] = useState<AppNotice | null>(null)
@@ -673,10 +1029,29 @@ export function ChatView({
     conversation existante : la pastille de la barre du haut s'ouvre aussi quand aucun fil n'est
     ouvert, et le dossier choisi est alors garde puis pose sur la conversation des sa creation.
   */
+  const convMenuRef = useRef<HTMLDivElement | null>(null)
+  const brancheMenuRef = useRef<HTMLDivElement | null>(null)
+  const convFolderMenuRef = useRef<HTMLDivElement | null>(null)
   const [convFolderMenu, setConvFolderMenu] = useState<{
     conv: Conv | null
+    /**
+     * LOT de conversations cochées (mode sélection). Champ DISTINCT de `conv` : `conv: null` veut
+     * déjà dire « dossier du prochain fil » (voir `choisirDossier`) ; coder le lot par `null`
+     * rangerait en silence le prochain fil au lieu des conversations cochées.
+     */
+    ids?: string[]
     top: number
     left: number
+    /**
+     * QUEL des deux rangements ce menu sert.
+     *
+     * `categorie` = le classement de la barre laterale (un libelle libre). `dossier` = le
+     * repertoire de travail de l'agent (un vrai chemin). Les deux tenaient dans une seule liste :
+     * on choisissait sa categorie sous une pile de chemins de depots qui n'avaient rien a y faire
+     * (conv-79, 2026-09-17). Le choix se fait donc a l'etape D'AVANT — l'entree cliquee dans le
+     * menu de la conversation dit lequel des deux on veut — et ce menu-ci n'en montre qu'un.
+     */
+    mode: 'categorie' | 'dossier'
   } | null>(null)
   /*
    * Menu de choix de la branche, ouvert depuis la barre du haut du chat.
@@ -692,6 +1067,11 @@ export function ChatView({
     /** Motif de refus rendu par l'application (arbre sale, branche absente). Affiche tel quel. */
     refus?: string
   } | null>(null)
+  // Ces trois menus sont poses aux coordonnees de leur bouton : pres du bas ou du bord droit,
+  // une partie sortait de la fenetre et devenait inatteignable. On les y ramene.
+  useClampDansFenetre(convMenuRef, convMenu !== null)
+  useClampDansFenetre(convFolderMenuRef, convFolderMenu !== null)
+  useClampDansFenetre(brancheMenuRef, brancheMenu !== null)
   /**
    * Saisie du dossier en cours de creation, dans le sous-menu « Ranger dans un dossier ».
    *
@@ -701,9 +1081,44 @@ export function ChatView({
    * un dossier de conversations est une etiquette, pas un repertoire Windows.
    */
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
-  const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
-  const [steeringDirectives, setSteeringDirectives] = useState<Set<number>>(() => new Set())
+  // Elle n'a PLUS d'affichage (choix utilisateur du 2026-09-17 : le panneau ne servait à rien) —
+  // les messages en attente se drainent seuls à la fin du tour. L'état reste tenu ici parce que
+  // c'est lui que le drain lit.
   const [directiveReceipts, setDirectiveReceipts] = useState<Record<string, DirectiveReceipt[]>>({})
+  /*
+   * REJOUER LES CONSIGNES DU TOUR A L'OUVERTURE D'UNE CONVERSATION.
+   *
+   * Sans cela, une consigne tapee pendant un run disparaissait au premier changement de
+   * conversation : elle ne vivait que dans `directiveReceipts`, jamais relue du journal.
+   * On n'ECRASE JAMAIS des recus deja presents -- ceux du direct sont plus riches (ancre fine
+   * dans le flux, statut reel) ; on ne remplit que les fils encore vides.
+   */
+  useEffect(() => {
+    if (!activeId) return
+    // Canal ABSENT (preload plus ancien, ou harnais de test) : on ne rejoue rien plutot que de
+    // faire tomber tout le fil. Meme motif defensif que `PerfLagPanel` sur `perfGels`.
+    if (typeof window.api?.orientationsDeConversation !== 'function') return
+    let vivant = true
+    void window.api
+      .orientationsDeConversation(activeId)
+      .then((orientations) => {
+        if (!vivant || orientations.length === 0) return
+        setDirectiveReceipts((current) => {
+          if (current[activeId]?.length) return current
+          const rejoues = rejouerOrientations(orientations, messages)
+          return rejoues.length ? { ...current, [activeId]: rejoues } : current
+        })
+      })
+      .catch(() => {
+        /* Le journal est une trace de dernier recours : ne pas le lire n'est jamais une panne. */
+      })
+    return () => {
+      vivant = false
+    }
+    // `messages` volontairement hors dependances : la relecture se fait a l'OUVERTURE du fil, pas a
+    // chaque delta de flux -- sinon elle rejouerait a chaque token recu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
   const activeDirectiveReceipts = useMemo(
     () => (activeId ? (directiveReceipts[activeId] ?? []) : []),
     [activeId, directiveReceipts]
@@ -774,7 +1189,6 @@ export function ChatView({
       if (mosaicFils[id]) continue
       void ouvrirDansMosaique(id)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mosaicIds, mosaicFils])
   const [convViewMode, setConvViewMode] = useState<'list' | 'mosaic'>(() =>
     window.localStorage.getItem('autowin.chat.conversationsViewMode') === 'mosaic'
@@ -792,6 +1206,19 @@ export function ChatView({
     convViewModeRef.current = convViewMode
     window.localStorage.setItem('autowin.chat.conversationsViewMode', convViewMode)
   }, [convViewMode])
+  /**
+   * DENSITE de la liste — cran CHOISI, independant de la largeur de la colonne, et memorise comme
+   * elle. Avant ce reglage, le rendu serre n'etait atteignable qu'en tirant la colonne sous 170 px :
+   * on ne pouvait pas avoir a la fois des titres larges et des lignes serrees (demande du
+   * 2026-09-17). Le cran par defaut est celui d'AVANT, pour que personne ne voie sa liste changer
+   * sans l'avoir demande.
+   */
+  const [convDensity, setConvDensity] = useState<DensiteConversation>(() =>
+    lireDensiteConversations(window.localStorage.getItem('autowin.chat.conversationsDensity'))
+  )
+  useEffect(() => {
+    window.localStorage.setItem('autowin.chat.conversationsDensity', convDensity)
+  }, [convDensity])
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.conversationsPaneWidth'))
     return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 232)
@@ -809,8 +1236,6 @@ export function ChatView({
   // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
   const [runs, setRuns] = useState<RunEntry[]>([])
-  const [checkpoints, setCheckpoints] = useState<CheckpointEntry[]>([])
-  const [forkedCheckpoint, setForkedCheckpoint] = useState('')
   /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
   const runsRef = useRef<RunEntry[]>([])
   runsRef.current = runs
@@ -853,6 +1278,12 @@ export function ChatView({
     [runs, brouillonPresent]
   )
   const [openRun, setOpenRun] = useState<OpenRunState | null>(null)
+  // Chemin du run déplié à l'instant présent : une relecture en vol vérifie dessus que
+  // l'utilisateur n'a pas replié ou changé de run pendant qu'elle lisait le disque.
+  const openRunPathRef = useRef<string | null>(null)
+  useEffect(() => {
+    openRunPathRef.current = openRun?.path ?? null
+  })
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
   // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
   const [runDetailTab, setRunDetailTab] = useState<RunDetailTab>('trace')
@@ -919,7 +1350,6 @@ export function ChatView({
   const busyConversationsRef = useRef(new Set<string>())
   const interruptingConversationsRef = useRef(new Set<string>())
   const stoppedQueueDrainRef = useRef(new Set<string>())
-  const steeringRef = useRef(new Set<number>())
   const sendLocksRef = useRef(new Set<string>())
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
   const [draftsVersion, setDraftsVersion] = useState(0)
@@ -1121,10 +1551,26 @@ export function ChatView({
     // Differe d'une micro-tache et appel OPTIONNEL, comme dans Routage : un preload plus ancien
     // que le renderer ne doit pas produire de rejet non gere, et un `setState` atteint
     // synchronement depuis un effet declenche des rendus en cascade.
-    void Promise.resolve().then(async () => {
+    // UN SEUL ESSAI NE SUFFIT PAS. Vecu le 2026-09-12 : quand cet appel echoue au demarrage (main
+    // pas encore pret, preload plus ancien qu'un renderer recharge a chaud), la liste restait nulle
+    // POUR TOUTE LA SESSION et le bloc « Compte » disparaissait de la pop-up, sans aucun message.
+    let annule = false
+    let essais = 0
+    const charger = async (): Promise<void> => {
+      if (annule) return
       const payload = await window.api.claudeAccounts?.().catch(() => null)
-      if (payload) setComptesClaude(payload)
-    })
+      if (annule) return
+      if (payload && payload.accounts.length > 0) {
+        setComptesClaude(payload)
+        return
+      }
+      essais += 1
+      if (essais < 5) setTimeout(() => void charger(), 1000 * essais)
+    }
+    void Promise.resolve().then(charger)
+    return () => {
+      annule = true
+    }
   }, [])
 
   /**
@@ -1135,18 +1581,21 @@ export function ChatView({
    * main le re-applique de toute facon au depart de chaque tour : c'est lui qui tient la verite.
    */
   const choisirCompteDeConversation = async (accountId: string): Promise<void> => {
-    if (!activeId || compteBusy) return
+    if (compteBusy) return
     setCompteBusy(true)
     setCompteError(null)
     try {
-      await window.api.conversationSetClaudeAccount?.(activeId, accountId)
+      // Sans conversation ouverte, on bascule seulement le compte de l'application : il n'y a
+      // encore aucun fil sur lequel memoriser le choix.
+      if (activeId) await window.api.conversationSetClaudeAccount?.(activeId, accountId)
       const payload = await window.api.claudeAccountSwitch?.(accountId)
       if (payload) setComptesClaude(payload)
-      setConvs((courant) =>
-        courant.map((conv) =>
-          conv.id === activeId ? { ...conv, claudeAccountId: accountId } : conv
+      if (activeId)
+        setConvs((courant) =>
+          courant.map((conv) =>
+            conv.id === activeId ? { ...conv, claudeAccountId: accountId } : conv
+          )
         )
-      )
       window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
     } catch (error) {
       setCompteError(error instanceof Error ? error.message : String(error))
@@ -1186,6 +1635,27 @@ export function ChatView({
   }, [activeId])
 
   const busy = activeId ? busyConversations.has(activeId) : false
+  /**
+   * Le choix de compte Claude de la conversation ouverte, partagé par la pop-up de modèle ET la
+   * pop-up des quotas (demande du 2026-09-23) : un seul chemin, celui qui mémorise le compte sur le
+   * fil — une bascule seulement globale serait défaite au tour suivant (index.ts ré-applique le
+   * compte de la conversation au départ de chaque tour).
+   * Sans conversation ouverte (fil neuf pas encore créé), le bloc reste AFFICHÉ et se replie sur le
+   * compte actif de l'application : le faire disparaître donnait l'impression que la fonctionnalité
+   * avait été retirée.
+   */
+  const comptesDeConversation: OrchestratorAccounts | undefined = comptesClaude
+    ? {
+        accounts: comptesClaude.accounts,
+        selectedId: activeId
+          ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
+          : undefined,
+        activeId: comptesClaude.activeId,
+        busy: compteBusy || busy,
+        error: compteError,
+        onSelect: (accountId) => void choisirCompteDeConversation(accountId)
+      }
+    : undefined
   function setConversationBusy(id: string, value: boolean): void {
     if (value) busyConversationsRef.current.add(id)
     else busyConversationsRef.current.delete(id)
@@ -1195,12 +1665,6 @@ export function ChatView({
     if (value) interruptingConversationsRef.current.add(id)
     else interruptingConversationsRef.current.delete(id)
     setInterruptingConversations(new Set(interruptingConversationsRef.current))
-  }
-  /** Injection « Orienter » en vol, par DIRECTIVE (deux messages peuvent être orientés de suite). */
-  function setDirectiveSteering(directiveId: number, value: boolean): void {
-    if (value) steeringRef.current.add(directiveId)
-    else steeringRef.current.delete(directiveId)
-    setSteeringDirectives(new Set(steeringRef.current))
   }
   /**
    * FILET DE SÉCURITÉ : écrit le texte de l'utilisateur sur disque AVANT qu'il ne quitte le composer.
@@ -1473,7 +1937,6 @@ export function ChatView({
   function setConversationQueue(id: string, next: QueuedDirective[]): void {
     if (next.length) queueRef.current.set(id, next)
     else queueRef.current.delete(id)
-    if (activeRef.current === id) setPendingDirectives(next)
   }
   /**
    * `mode: 'btw'` = « celui-la passe EN DERNIER ». Il ne suffit pas de deplacer l'entree une fois :
@@ -1511,9 +1974,6 @@ export function ChatView({
     next.splice(insertAt, 0, entry)
     setConversationQueue(id, next)
   }
-  useEffect(() => {
-    setPendingDirectives(queueRef.current.get(activeId ?? '') ?? [])
-  }, [activeId])
   /**
    * Workflows affichés : ceux de la CONVERSATION ACTIVE, et rien d'autre. Le cadrage « tous »
    * a été retiré — cette barre montre le contexte courant, le global relève de l'Observatory.
@@ -1534,10 +1994,6 @@ export function ChatView({
       convId: activeRef.current
     }
     if (isRunRequestCurrent(request, currentRequest)) setRuns(nextRuns)
-    if (window.api.checkpointForks) {
-      const nextCheckpoints = await window.api.checkpointForks()
-      if (isRunRequestCurrent(request, currentRequest)) setCheckpoints(nextCheckpoints)
-    }
   }
   useEffect(() => {
     void Promise.resolve().then(refreshRuns)
@@ -1563,9 +2019,24 @@ export function ChatView({
       // de veille (et tout flux né hors du chat) sélectionne sa conversation PENDANT que cette vue
       // est démontée — l'événement de sélection n'a alors aucun auditeur, et la vue remontait sur
       // son ancienne sélection avec un panneau vide (mesuré le 14/08, conv-1164/1165).
+      // DEMANDE EXPLICITE D'ABORD : un autre écran (la bulle d'un ticket) a pu demander une
+      // conversation PENDANT que cette vue était démontée — l'événement n'avait alors aucun
+      // auditeur. Cette demande déposée est PRIORITAIRE sur l'alignement ci-dessous, qui ouvrirait
+      // la conversation active du main (la dernière créée) et volerait la sélection.
+      const demandee = reclamerOuvertureConversation()
+      let ouvertureHonoree = false
+      if (!disposed && demandee) {
+        const cible = convsRef.current.find((conversation) => conversation.id === demandee)
+        if (cible) {
+          await loadConv(cible)
+          ouvertureHonoree = true
+        }
+      }
       try {
-        const etat = (await window.api.appState()) as { activeConversationId?: string }
-        const cibleId = etat?.activeConversationId
+        const etat = ouvertureHonoree
+          ? {}
+          : ((await window.api.appState()) as { activeConversationId?: string })
+        const cibleId = (etat as { activeConversationId?: string })?.activeConversationId
         if (!disposed && cibleId && cibleId !== activeRef.current) {
           const cible = convsRef.current.find((conversation) => conversation.id === cibleId)
           if (cible) await loadConv(cible)
@@ -1615,10 +2086,70 @@ export function ChatView({
     )
     const offApp = window.api.onAppEvent((e) => {
       if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
+      /*
+       * LA LISTE DES RUNS SE RAFRAICHIT SEULE (demande du 2026-09-26 : « tout doit se rafraichir
+       * tout seul »). Le bouton « Rafraichir » du panneau Détails a disparu ; il couvrait un trou :
+       * le main n'emet `refresh/workflows` qu'en FIN de tour ou d'orchestration, alors que le RUN.md
+       * naît au démarrage (`orchestrate-start`) et avance à chaque phase. On relit donc la liste à
+       * ces battements, pour la seule conversation affichée. `refreshRuns` ignore d'elle-même une
+       * réponse périmée : deux relectures rapprochées ne se marchent pas dessus.
+       */
+      if (
+        (e.type === 'orchestrate-start' ||
+          e.type === 'orchestrate-phase' ||
+          e.type === 'orchestrate-step') &&
+        e.convId &&
+        e.convId === activeRef.current
+      ) {
+        void refreshRuns()
+      }
       if (e.type === 'toast') {
         if (e.text) {
           const text = e.text
           setAppNotice((current) => newestNotice(current, { text, noticeId: e.noticeId }))
+        }
+      } else if (e.type === 'directives-orphelines') {
+        /*
+         * ORIENTATION ARRIVEE TROP TARD : le tour s'est termine sans jamais la lire.
+         *
+         * Le tour la jetait en silence (`run-pilot-chat.ts`, finally). Elle revient maintenant ici
+         * et repart en FILE : le drain `busy→false` l'envoie comme un tour normal, donc elle finit
+         * traitee au lieu d'etre perdue. Une mention le dit, comme le chemin `/skill` le fait deja.
+         *
+         * STOP RESPECTE : `enqueueMessage` leve le gel one-shot pose par un Stop (c'est voulu pour
+         * un texte TAPE apres le Stop). Ici, personne n'a rien tape : reposer le gel garde la
+         * promesse du bouton — Stop ne doit pas se faire relancer par une phrase deja a l'ecran.
+         */
+        const convId = e.convId
+        const textes = (e.textes ?? []).filter((t) => typeof t === 'string' && t.trim())
+        if (convId && textes.length) {
+          const gele = stoppedQueueDrainRef.current.has(convId)
+          for (const texte of textes) enqueueMessage(convId, texte)
+          if (gele) stoppedQueueDrainRef.current.add(convId)
+          /*
+           * DRAIN IMMEDIAT : l'effet de drain se declenche sur la transition `busy→false`, or cet
+           * evenement arrive PRECISEMENT a la fin du tour — la transition peut etre deja passee.
+           * Sans ce coup de pouce, la file resterait dormante jusqu'au prochain tour, et l'oubli
+           * qu'on corrige se rejouerait sous une autre forme (message en attente que rien ne part).
+           */
+          if (!gele && convId === activeRef.current && !busyConversationsRef.current.has(convId)) {
+            const enFile = queueRef.current.get(convId) ?? []
+            const [tete, ...suite] = enFile
+            if (tete) {
+              setConversationQueue(convId, suite)
+              // `targetConversationId` EXPLICITE : ce handler est monte une fois et capture un
+              // `activeId` qui peut valoir null, alors que le fil vise bien cette conversation.
+              void send(tete.text, {
+                keepComposerDraft: true,
+                automatique: true,
+                targetConversationId: convId
+              })
+            }
+          }
+          const text = `⚠️ ${textes.length} orientation(s) arrivée(s) après la fin du tour : ${
+            gele ? 'gardée(s) en file (Stop demandé)' : 'renvoyée(s) comme nouveau message'
+          }.`
+          setAppNotice((current) => newestNotice(current, { text }))
         }
       } else if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
@@ -1652,10 +2183,8 @@ export function ChatView({
             task: e.task ?? 'tâche'
           })
         )
-        if (e.convId === activeRef.current) {
-          // Le panneau n’a plus de section à cadrer : l’ouvrir suffit, le graphe montre le run.
-          setShowRuns(true)
-        }
+        // Le panneau NE s’ouvre PAS tout seul au démarrage d’une orchestration (jugé invasif) :
+        // il reste à un clic, via « Détails » ou l’indicateur d’action en cours d’un message.
       } else if (e.type === 'orchestrate-phase' && e.phase && e.convId) {
         setLiveRuns((current) =>
           reduceScopedLiveRuns(current, {
@@ -1686,13 +2215,16 @@ export function ChatView({
           model?: string
           phase?: string
           step?: string
+          prompt?: OrchStep['prompt']
         }
         patchLast(e.convId, (m) => {
           m.parts = noterChoixDePipeline(m.parts, {
             phase: choix.phase ?? choix.step,
             role: choix.role,
             provider: choix.provider,
-            model: choix.model
+            model: choix.model,
+            // Le prompt voyage AVEC le démarrage de phase : la ligne ne l'attend plus jusqu'à la fin.
+            prompt: texteDuPrompt(choix.prompt)
           }) as typeof m.parts
         })
       } else if (
@@ -1743,6 +2275,21 @@ export function ChatView({
       } else if (e.type === 'orchestrate-end' && e.convId) {
         const convId = e.convId
         const runPath = e.runPath
+        /*
+         * LES SUPPOSITIONS MEURENT AVEC LE RUN QUI LES PORTAIT.
+         *
+         * Leur pied dit « Le run continue — rien n'attend ta réponse ». Tant que rien ne les
+         * effaçait, cette phrase survivait à la fin du run : sur conv-512, le run se termine à
+         * 16:31:43 (tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`) et la capture jointe à la saisie
+         * `ts` 1789233975928 (55 min plus tard) montre encore le bloc. L'utilisateur lisait donc
+         * « ça continue » devant une application à l'arrêt.
+         */
+        setHypothesesCadrage((current) => {
+          if (!current[convId]) return current
+          const suivant = { ...current }
+          delete suivant[convId]
+          return suivant
+        })
         setLiveRuns((current) =>
           reduceScopedLiveRuns(current, {
             type: 'end',
@@ -2062,11 +2609,19 @@ export function ChatView({
       gesteLecteurRef.current = false
       descenteEnVolRef.current = true
       dernierScrollTopRef.current = scroll.scrollTop
-      annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 40, (landed) => {
-        descenteEnVolRef.current = false
-        basculeConvRef.current = false
-        if (!landed) setHasNewActivity(true)
-      })
+      annulerDescente = scrollChatToBottom(
+        scroll,
+        requestAnimationFrame,
+        40,
+        (landed) => {
+          descenteEnVolRef.current = false
+          basculeConvRef.current = false
+          if (!landed) setHasNewActivity(true)
+        },
+        // Un recul SANS geste vient d'un re-rendu, pas du lecteur : la descente ne doit pas
+        // abandonner (defaut du 2026-09-12 en mode auto, bouton « derniere reponse » allume).
+        () => gesteLecteurRef.current
+      )
       setHasNewActivity(false)
       setScrolledAwayFromTail(false)
     })
@@ -2103,10 +2658,16 @@ export function ChatView({
     gesteLecteurRef.current = false
     descenteEnVolRef.current = true
     dernierScrollTopRef.current = scroll.scrollTop
-    const annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
-      descenteEnVolRef.current = false
-      if (!landed) setHasNewActivity(true)
-    })
+    const annulerDescente = scrollChatToBottom(
+      scroll,
+      requestAnimationFrame,
+      120,
+      (landed) => {
+        descenteEnVolRef.current = false
+        if (!landed) setHasNewActivity(true)
+      },
+      () => gesteLecteurRef.current
+    )
     return () => {
       descenteEnVolRef.current = false
       annulerDescente()
@@ -2136,10 +2697,16 @@ export function ChatView({
         gesteLecteurRef.current = false
         descenteEnVolRef.current = true
         dernierScrollTopRef.current = scroll.scrollTop
-        scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
-          descenteEnVolRef.current = false
-          if (!landed) setHasNewActivity(true)
-        })
+        scrollChatToBottom(
+          scroll,
+          requestAnimationFrame,
+          120,
+          (landed) => {
+            descenteEnVolRef.current = false
+            if (!landed) setHasNewActivity(true)
+          },
+          () => gesteLecteurRef.current
+        )
         return
       }
       const cible = compenserRetrecissementDuFil({
@@ -2573,11 +3140,24 @@ export function ChatView({
   // tour a été interrompu par la fermeture de l'app (son fil est rechargé depuis le store).
   useEffect(() => {
     const openConversation = (event: Event): void => {
-      const detail = (event as CustomEvent<{ conversationId?: string; turnId?: string }>).detail
+      // DEUX FORMES acceptées : l'objet `{ conversationId }` (bandeau de reprise) et l'id NU en
+      // chaîne, envoyé par l'écran des fiches et l'accueil. Avant, la chaîne tombait dans
+      // `detail?.conversationId === undefined` et l'ouverture était silencieusement ignorée : le
+      // chat restait sur la conversation courante, d'où l'impression d'« aller vers la dernière ».
+      const raw = (event as CustomEvent<{ conversationId?: string; turnId?: string } | string>)
+        .detail
+      const detail = typeof raw === 'string' ? { conversationId: raw } : raw
       const id = detail?.conversationId
       if (!id) return
-      const target = convsRef.current.find((conversation) => conversation.id === id)
-      if (target) void loadConv(target)
+      // La conversation demandée peut ne PAS être dans la liste en mémoire : celle créée depuis
+      // l'écran des fiches est plus récente que le dernier chargement. Sans ce rafraîchissement, la
+      // recherche échouait et le chat restait sur la conversation affichée — on croyait « atterrir
+      // sur la dernière ». Même garde que le chemin de pré-remplissage voisin.
+      void (async () => {
+        if (!convsRef.current.some((conversation) => conversation.id === id)) await refreshConvs()
+        const target = convsRef.current.find((conversation) => conversation.id === id)
+        if (target) await loadConv(target)
+      })()
       // REJEU du journal : l'app était fermée pendant le tour → le store n'a pas reçu ces événements,
       // seul le journal fichier les contient. On reconstruit le texte produit et on l'affiche.
       if (detail?.turnId) void replayTurnJournal(id, detail.turnId)
@@ -2762,6 +3342,7 @@ export function ChatView({
     await send(texte, {
       targetConversationId: cible,
       keepComposerDraft: true,
+      automatique: true,
       piecesJointesImposees: pieces,
       repriseSurcharge: reprise.tentative
     })
@@ -2777,37 +3358,14 @@ export function ChatView({
   function queueCurrentMessage(): void {
     if (!activeId) return
     const input = texteDuComposer()
-    if (!input.trim()) return
+    // IMAGE SEULE pendant un tour : `trim()` seul jetait le geste en silence — le composer gardait
+    // l'image, rien ne partait, et le message n'arrivait jamais (constate le 2026-09-17). Une piece
+    // jointe EST un message, meme sans texte : elle part en file avec le tour en cours.
+    if (!input.trim() && getComposerDraft(composerDraftKeyRef.current).attachments.length === 0)
+      return
     // Une question `ask` encore ouverte au bout du fil : ce texte y REPOND, meme tape a la main.
     // Sans ce test, seul le clic sur un bouton comptait comme reponse et le reçu disait « Orienté ».
     void submitBtw(input, 'normal', askEnAttente(liveMessagesRef.current.get(activeId) ?? []))
-  }
-
-  /**
-   * Interrompre le tour en cours → la file se draine depuis le début via l'effet `busy→false`
-   * (le message choisi + ses antérieurs partent d'abord ; les postérieurs suivent en auto-drain).
-   * Sert au bouton « Interrompre et envoyer tout » (en tête de file) ET aux boutons par-message.
-   */
-  /** `cible` : la mosaique arrete une fenetre NON active — sans elle, Stop viserait l'autre fil. */
-  function interruptAndFlushQueue(cible?: string): void {
-    const id = cible ?? activeRef.current
-    if (!id || interruptingConversationsRef.current.has(id)) return
-    // Rien à interrompre → ne PAS armer l'état « interruption en cours ». Sans cette garde, le
-    // drapeau n'est remis à false que par la transition `busy→false` de l'effet de drain : hors tour
-    // actif, cette transition n'arrive jamais et les boutons restent figés sur « ⏳ Interruption… »
-    // pour toujours, file bloquée. Constaté sur une file survivante à un changement de conversation.
-    if (!busyConversationsRef.current.has(id)) return
-    // Ce nouveau geste explicite remplace un éventuel Stop simple raté : la file doit désormais
-    // partir dès la fin du tour, même si le premier IPC avait laissé son gel one-shot armé.
-    stoppedQueueDrainRef.current.delete(id)
-    setConversationInterrupting(id, true)
-    void window.api
-      .cancelPilotChat(id)
-      .then((result) => {
-        if (result?.ok === false) libererTourFantome(id)
-        else armerReprisesStop(id)
-      })
-      .catch(() => setConversationInterrupting(id, false))
   }
 
   /**
@@ -2825,6 +3383,28 @@ export function ChatView({
    * actions sans issue deviennent `interrupted` et cessent de se lire « en cours ». L'issue ne
    * viendra jamais — le dire est la verite, la maquiller en echec constate (`ok: false`) serait faux.
    */
+  /**
+   * Le tour tourne-t-il ENCORE cote processus principal alors que sa promesse d'envoi est revenue ?
+   *
+   * Symptome vecu (conv-809, 2026-09-23) : « Reponse interrompue avant la fin » s'affichait, puis la
+   * reponse repartait toute seule. Cause : les `finally` d'envoi et de reprise marquaient le tour
+   * `interrupted` sur la seule fin de la promesse, sans demander a l'autorite (`pilotChatActive`)
+   * si le tour vivait encore — puis `resumed`/les deltas le rallumaient. Choix utilisateur : garder
+   * le tour « en cours » jusqu'a sa vraie fin. Un tour reellement mort est clos par la VEILLE
+   * (deux sondes negatives -> `libererTourFantome`). Sonde absente/en echec = pas de preuve de vie.
+   */
+  async function tourEncoreVivant(id: string): Promise<boolean> {
+    const dernier = [...(liveMessagesRef.current.get(id) ?? [])]
+      .reverse()
+      .find((message) => message.role === 'assistant') as AsstMsg | undefined
+    if (!dernier || dernier.done || dernier.status !== 'streaming') return false
+    try {
+      return (await window.api.pilotChatActive?.(id))?.active === true
+    } catch {
+      return false
+    }
+  }
+
   function libererTourFantome(id: string): void {
     setConversationInterrupting(id, false)
     if (!busyConversationsRef.current.has(id)) return
@@ -2914,6 +3494,23 @@ export function ChatView({
     }, STOP_REARMEMENT_MS)
   }
 
+  /**
+   * Remet les messages encore en file dans le composer de la conversation `id`, puis vide la file.
+   * Seule porte de sortie depuis que la file n'a plus d'affichage : appelee par Stop, qui gele le
+   * drain. Si la conversation visee n'est pas celle affichee, on laisse la file tranquille — elle
+   * repartira d'elle-meme au prochain tour.
+   */
+  function rendreLaFileAuComposer(id: string): void {
+    if (id !== activeRef.current) return
+    const enFile = queueRef.current.get(id) ?? []
+    if (enFile.length === 0) return
+    const draftKey = composerDraftKeyRef.current
+    const draft = getComposerDraft(draftKey).input
+    const textes = enFile.map((entree) => entree.text)
+    setDraftInput(draftKey, [draft, ...textes].filter(Boolean).join('\n\n'))
+    setConversationQueue(id, [])
+  }
+
   /** Stop simple : annule le tour sans transformer la file en relance automatique. */
   /** `cible` : en mosaique, Stop vise SA fenetre — sinon il couperait le tour de la conversation active. */
   function stopPilotTurn(cible?: string): void {
@@ -2925,6 +3522,25 @@ export function ChatView({
     )
       return
     stoppedQueueDrainRef.current.add(id)
+    // LA FILE N'A PLUS D'AFFICHAGE (panneau retire le 2026-09-17) : un Stop gele son drain, donc
+    // sans cette restitution les messages en attente deviendraient INATTEIGNABLES — invisibles et
+    // jamais envoyes. Ils reviennent donc dans le composer, ou l'utilisateur les voit et decide.
+    rendreLaFileAuComposer(id)
+    /*
+     * STOP DESARME AUSSI LA CHAINE AUTO — sinon le bouton relance ce qu'il vient de couper.
+     *
+     * Mesure du 2026-09-03 : quatre fils (conv-210, 214, 215, 221) portent mot pour mot « kaizen je
+     * click sur stop et ca fait que de relancer la task ». Ce geste ne posait qu'un gel sur la FILE
+     * des messages en attente ; l'interrupteur auto, lui, restait arme. Le tour coupe arrivait donc
+     * dans le fil comme un tour TERMINE, `deciderRelanceAuto` y lisait une suite a envoyer, et
+     * repartait — exactement la tache que l'utilisateur venait d'arreter.
+     *
+     * On eteint le fil VISE uniquement (`id`, pas le fil affiche) : les autres conversations armees
+     * gardent leur reglage, comme pour la branche d'arret naturel de la boucle.
+     */
+    autoSuiviesRef.current.delete(id)
+    autoEssaisRef.current.delete(id)
+    desarmerAuto(id)
     setConversationInterrupting(id, true)
     // Même si l'IPC perd la course avec la fin réelle du tour, le geste Stop garde la file.
     // En revanche, libère le feedback « Arrêt… » si aucune annulation n'a été prise en charge.
@@ -2951,89 +3567,6 @@ export function ChatView({
   }
 
   /**
-   * ORIENTER SANS INTERROMPRE : injecte le message comme directive dans le tour EN COURS
-   * (drainée à l'itération suivante du pilote) sans l'annuler, puis le retire de la file.
-   * Différent de « Interrompre et envoyer » qui coupe le tour.
-   */
-  async function steerWithoutInterrupt(entry: QueuedDirective): Promise<void> {
-    const id = activeRef.current
-    if (!id) return
-    const original = queueRef.current.get(id) ?? []
-    const originalIndex = original.findIndex((queued) => queued.id === entry.id)
-    if (originalIndex < 0) return
-    // L'injection est un aller-retour IPC : sans état d'attente, le clic ne rend RIEN de visible et
-    // rien n'empêche de recliquer (double injection de la même directive dans le tour).
-    if (steeringRef.current.has(entry.id)) return
-    setDirectiveSteering(entry.id, true)
-    followTailRef.current = true
-    setHasNewActivity(false)
-    setDirectiveReceipt(id, entry, 'sending')
-    const settle = (): void => setDirectiveSteering(entry.id, false)
-    setConversationQueue(
-      id,
-      original.filter((queued) => queued.id !== entry.id)
-    )
-    const restore = (): void => {
-      const current = queueRef.current.get(id) ?? []
-      if (current.some((queued) => queued.id === entry.id)) return
-      const next = current.slice()
-      next.splice(Math.min(originalIndex, next.length), 0, entry)
-      setConversationQueue(id, next)
-    }
-    let result: { ok: boolean }
-    try {
-      result = await window.api.injectDirective(id, entry.text)
-    } catch (error) {
-      traceSilentFailure('inject-directive', error)
-      restore()
-      setDirectiveReceipt(id, entry, 'failed')
-      settle()
-      return
-    }
-    if (!result.ok) {
-      restore()
-      setDirectiveReceipt(id, entry, 'failed')
-    } else {
-      setDirectiveReceipt(id, entry, issueDeLInjection(id))
-    }
-    settle()
-  }
-
-  function restoreQueuedMessageToDraft(entry: QueuedDirective): void {
-    const id = activeRef.current
-    if (!id) return
-    const draftKey = composerDraftKeyRef.current
-    const draft = getComposerDraft(draftKey).input
-    setDraftInput(draftKey, draft ? `${draft}\n\n${entry.text}` : entry.text)
-    const q = queueRef.current.get(id) ?? []
-    setConversationQueue(
-      id,
-      q.filter((queued) => queued.id !== entry.id)
-    )
-  }
-
-  /** Réordonne la file d'un cran. L'ordre de frappe n'est plus une fatalité. */
-  function moveQueuedMessage(entry: QueuedDirective, delta: -1 | 1): void {
-    const id = activeRef.current
-    if (!id) return
-    const q = queueRef.current.get(id) ?? []
-    const next = moveQueueEntry(q, entry.id, delta)
-    if (next === q) return
-    setConversationQueue(id, next)
-  }
-
-  function moveQueuedMessageToBtw(entry: QueuedDirective): void {
-    const id = activeRef.current
-    if (!id) return
-    const q = queueRef.current.get(id) ?? []
-    if (!q.some((queued) => queued.id === entry.id)) return
-    setConversationQueue(
-      id,
-      q.filter((queued) => queued.id !== entry.id).concat({ ...entry, mode: 'btw' })
-    )
-  }
-
-  /**
    * `/btw <texte>` — parité CLAUDE CODE : écrire pendant que l'agent travaille LIVRE le message
    * DANS LE TOUR EN COURS (drainé à l'itération suivante du pilote), sans l'interrompre. Ce n'est
    * donc PAS une mise en file : l'agent en tient compte immédiatement.
@@ -3057,22 +3590,28 @@ export function ChatView({
     const replimode: QueuedDirective['mode'] = repli === 'btw' ? 'btw' : undefined
     const text = body.trim()
     const cleDraft = cible ?? composerDraftKeyRef.current
-    if (!text) {
-      setDraftInput(cleDraft, '') // "/btw" seul → rien à injecter, on nettoie
-      return
-    }
     const id = cible ?? activeRef.current
     if (!id) return
     const occupe = cible ? busyConversationsRef.current.has(cible) : busy
-    // PIECES JOINTES : l'injection ne transporte qu'un texte. Injecter ici laisserait l'image dans
-    // le composer, donc jamais envoyee (constate le 2026-09-04). Le message part en file AVEC ses
-    // pieces jointes et le drain de fin de tour l'envoie en entier.
+    if (!text && getComposerDraft(cleDraft).attachments.length === 0) {
+      setDraftInput(cleDraft, '') // "/btw" seul → rien à injecter, on nettoie
+      return
+    }
+    // PIECES JOINTES : elles partent AVEC l'injection, dans le tour en cours (2026-09-23). Avant,
+    // le message attendait la fin du tour en file, et l'utilisateur voyait « rien envoye » pendant
+    // des minutes. Si l'injection est refusee, le repli reste la file AVEC les pieces jointes.
     const jointes = getComposerDraft(cleDraft).attachments
     if (occupe && jointes.length > 0) {
-      journaliserSaisie(id, text, 'message')
+      journaliserSaisie(id, text, 'orientation')
       setDraftInput(cleDraft, '')
       setDraftAttachments(cleDraft, () => [])
-      enqueueMessage(id, text, replimode, jointes)
+      let accepte = false
+      try {
+        accepte = (await window.api.injectDirective(id, text, jointes))?.ok === true
+      } catch (error) {
+        traceSilentFailure('inject-directive:pieces-jointes', error)
+      }
+      if (!accepte) enqueueMessage(id, text, replimode, jointes)
       return
     }
     if (!occupe) {
@@ -3136,6 +3675,7 @@ export function ChatView({
     // Le drain n'est PAS un geste de l'utilisateur : il ne doit rien prendre au composer.
     void send(nextMessage.text, {
       keepComposerDraft: true,
+      automatique: true,
       ...(nextMessage.attachments?.length ? { piecesJointesImposees: nextMessage.attachments } : {})
     })
     // `activeId` AUTANT que `busy` : une file remplie pendant le tour de A survit à un aller-retour
@@ -3160,6 +3700,106 @@ export function ChatView({
    * Rien n'est décidé ici : `deciderRelanceAuto` tranche, cet effet exécute. Un envoi automatique
    * coûte un tour payant : sa condition ne doit pas être éparpillée dans la vue.
    */
+  /*
+   * Ce que le minuteur relit AU MOMENT où il sonne (des heures plus tard) : jamais une valeur
+   * capturée à la programmation.
+   */
+  const autoArmePourRef = useRef(autoArmePour)
+  autoArmePourRef.current = autoArmePour
+  const activeIdAutoRef = useRef(activeId)
+  activeIdAutoRef.current = activeId
+  const messagesAfficheAutoRef = useRef(messages)
+  messagesAfficheAutoRef.current = messages
+  const sendAutoRef = useRef(send)
+  sendAutoRef.current = send
+
+  /**
+   * PROGRAMME une suite différée : elle part seule à son échéance, si rien n'a bougé entre-temps
+   * (mode toujours armé, aucun tour en cours, et le dernier tour du fil est TOUJOURS celui qui l'a
+   * proposée — un message de l'utilisateur entre-temps l'annule).
+   */
+  function programmerRelanceAuto(
+    id: string,
+    decision: { texte: string; signature: string; echeance: number; fichier?: string },
+    /** Re-sondage gratuit d'un fichier attendu : ne consomme PAS une relance payée. */
+    sondeDepuis?: number
+  ): void {
+    annulerRelanceProgrammee(id)
+    const etat = autoEtat(id)
+    etat.tour = decision.signature
+    if (sondeDepuis === undefined)
+      autoDiffereesRef.current.set(id, (autoDiffereesRef.current.get(id) ?? 0) + 1)
+    const minuteur = window.setTimeout(
+      () => {
+        autoProgrammeesRef.current.delete(id)
+        if (!autoArmePourRef.current(id)) return
+        if (busyConversationsRef.current.has(id)) return
+        const fil =
+          id === activeIdAutoRef.current
+            ? messagesAfficheAutoRef.current
+            : (liveMessagesRef.current.get(id) ?? [])
+        if (signatureTour(fil) !== decision.signature) return
+        // fix-ok: la relance « quand X existe » payait un tour même fichier absent (sendAutoRef appelé sans sonde) — on sonde fs:exists avant.
+        if (decision.fichier && !window.api.fichierExiste) {
+          // Sans vérificateur, « existe » est invérifiable : payer un tour pour le constater est le
+          // défaut mesuré conv-826 (14:38:57, fin.txt absent). On attend l'utilisateur, en le disant.
+          setAppNotice({
+            text: `Mode auto : je ne peux pas vérifier si ${decision.fichier} existe (vérificateur indisponible — redémarre l'app). La suite attend.`
+          })
+          return
+        }
+        if (decision.fichier && window.api.fichierExiste) {
+          /*
+           * « quand fin.txt existe » : sonde gratuite (lecture seule, processus principal) AVANT de
+           * payer un tour. Absent → on revient voir toutes les DELAI_SONDAGE_FICHIER, sans consommer
+           * de relance payée, jusqu'à DUREE_MAX_SONDAGE_FICHIER (48 h) : au-delà, on arrête et on le dit.
+           * SEUL un `true` envoie : `null` ou une erreur ne prouvent rien et ne paient donc pas de tour
+           * (conv-826 : la relance partait sur tout ce qui n'était pas `false`).
+           */
+          const base = convsRef.current.find((c) => c.id === id)?.projectPath?.trim() || undefined
+          const fichier = decision.fichier
+          void Promise.resolve(window.api.fichierExiste(fichier, base))
+            .catch(() => null)
+            .then((present) => {
+              if (present === true) return envoyer()
+              if (present !== false) console.warn('[mode-auto] vérification de fichier sans réponse', fichier, present)
+              // La sonde ne coûte rien : pas de plafond de relances, mais une borne de temps DITE.
+              const debut = sondeDepuis ?? Date.now()
+              if (Date.now() - debut >= DUREE_MAX_SONDAGE_FICHIER) {
+                setAppNotice({
+                  text: `Mode auto : ${fichier} n'existe toujours pas après ${Math.round(DUREE_MAX_SONDAGE_FICHIER / 3_600_000)} h de vérification. J'arrête d'attendre — relance la suite quand tu veux.`
+                })
+                return
+              }
+              programmerRelanceAuto(
+                id,
+                { ...decision, echeance: Date.now() + DELAI_SONDAGE_FICHIER },
+                debut
+              )
+            })
+          return
+        }
+        envoyer()
+      },
+      Math.max(0, decision.echeance - Date.now())
+    )
+    function envoyer(): void {
+        if (!autoArmePourRef.current(id)) return
+        if (busyConversationsRef.current.has(id)) return
+        etat.prompt = decision.texte
+        // Le fil est suivi : la fin de CE tour sera enchaînée, même s'il n'est pas affiché.
+        autoSuiviesRef.current.add(id)
+        void sendAutoRef.current(decision.texte, {
+          keepComposerDraft: true,
+          automatique: true,
+          targetConversationId: id
+        })
+    }
+    autoProgrammeesRef.current.set(id, { minuteur, signature: decision.signature })
+  }
+  const heureLisible = (t: number): string =>
+    new Date(t).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+
   /** L'avancement de la boucle pour CE fil — créé à la demande, jamais partagé entre fils. */
   function autoEtat(conversationId: string): { tour: string | null; prompt: string | null } {
     const connu = autoEtatsRef.current.get(conversationId)
@@ -3188,7 +3828,20 @@ export function ChatView({
       // l'envoyer. On ne fige donc pas ce tour, on le laisse passer la porte de décision.
       const allumageManuel = premierPassageLaisseSortirLeTour({
         allumageManuel: autoAllumageManuelRef.current,
-        repriseApresRedemarrage: autoRepriseApresRedemarrageRef.current
+        repriseApresRedemarrage: autoRepriseApresRedemarrageRef.current,
+        // ATTENTE DE FICHIER (conv-826, 2026-09-26) : un redémarrage tuait sa surveillance et ce gel la
+        // rendait définitive, ∞ affiché allumé. Déjà surveillée (fil rouvert) → on ne la relance pas.
+        attenteFichier:
+          !autoProgrammeesRef.current.has(activeId) &&
+          attenteFichierAReprendre({
+            depotPresent,
+            actif: true,
+            occupe: busy,
+            fil: messages,
+            brouillonPresent,
+            tourEstUnScout: dernierTourEstUnScout(messages),
+            relancesDifferees: autoDiffereesRef.current.get(activeId) ?? 0
+          }) !== null
       })
       autoAllumageManuelRef.current = false
       autoRepriseApresRedemarrageRef.current = false
@@ -3196,6 +3849,7 @@ export function ChatView({
       if (!allumageManuel) return
     }
     const decision = deciderRelanceAuto({
+      depotPresent,
       actif: true,
       occupe: busy,
       fil: messages,
@@ -3205,7 +3859,8 @@ export function ChatView({
       // Fil AFFICHÉ : une chaîne finie demande une nouvelle cible au lieu de couper l'interrupteur.
       proposerNouvelleCible: true,
       // APRES UN SCOUT : la suite ne part que si une ligne `CIBLE:` nomme UNE piste.
-      tourEstUnScout: dernierTourEstUnScout(messages)
+      tourEstUnScout: dernierTourEstUnScout(messages),
+      relancesDifferees: autoDiffereesRef.current.get(activeId) ?? 0
     })
     if (decision.action === 'attendre') {
       return
@@ -3213,12 +3868,24 @@ export function ChatView({
     if (decision.action === 'arreter') {
       // N'eteint QUE le fil affiche : les autres fils armes gardent leur reglage.
       desarmerAuto(activeId)
+      // L'arret DIT sa raison : sans elle, le bouton ∞ s'allumait puis s'eteignait sans un mot.
+      setAppNotice({ text: decision.message })
       return
     }
+    if (decision.action === 'programmer') {
+      programmerRelanceAuto(activeId, decision)
+      setAppNotice({
+        text: decision.fichier
+          ? `Mode auto : la suite proposée attend ${decision.fichier}. Je vérifie toutes les 5 min, sans frais, et je la relance seul dès qu'il existe (éteins ∞ ou écris un message pour annuler).`
+          : `Mode auto : la suite proposée attend son moment. Je la relance seul ${heureLisible(decision.echeance)} (éteins ∞ ou écris un message pour annuler).`
+      })
+      return
+    }
+    autoDiffereesRef.current.delete(activeId)
     etat.tour = decision.signature
     etat.prompt = decision.texte
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
-    void send(decision.texte, { keepComposerDraft: true })
+    void send(decision.texte, { keepComposerDraft: true, automatique: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoActif, activeId, busy, messages, brouillonPresent])
 
@@ -3248,13 +3915,15 @@ export function ChatView({
       if (id === activeId) continue
       const etat = autoEtat(id)
       const decision = deciderRelanceAuto({
+        depotPresent,
         actif: true,
         occupe: false,
         fil: liveMessagesRef.current.get(id) ?? [],
         dernierTourTraite: etat.tour,
         dernierPromptEnvoye: etat.prompt,
         brouillonPresent: false,
-        tourEstUnScout: dernierTourEstUnScout(liveMessagesRef.current.get(id) ?? [])
+        tourEstUnScout: dernierTourEstUnScout(liveMessagesRef.current.get(id) ?? []),
+        relancesDifferees: autoDiffereesRef.current.get(id) ?? 0
       })
       /*
        * UN FIL D'ARRIÈRE-PLAN NE COUPE PLUS L'INTERRUPTEUR GLOBAL (demande du 2026-09-02).
@@ -3265,6 +3934,11 @@ export function ChatView({
        */
       if (decision.action === 'arreter') {
         autoEssaisRef.current.delete(id)
+        continue
+      }
+      if (decision.action === 'programmer') {
+        autoEssaisRef.current.delete(id)
+        programmerRelanceAuto(id, decision)
         continue
       }
       if (decision.action !== 'envoyer') {
@@ -3285,9 +3959,14 @@ export function ChatView({
         continue
       }
       autoEssaisRef.current.delete(id)
+      autoDiffereesRef.current.delete(id)
       etat.tour = decision.signature
       etat.prompt = decision.texte
-      void send(decision.texte, { keepComposerDraft: true, targetConversationId: id })
+      void send(decision.texte, {
+        keepComposerDraft: true,
+        automatique: true,
+        targetConversationId: id
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConvs, autoArmePour, activeId, busyConversations, autoTic])
@@ -3328,11 +4007,12 @@ export function ChatView({
         autoSuiviesRef.current.delete(activeId)
         autoEssaisRef.current.delete(activeId)
       }
-      if (activeId) setAutoConvs((precedent) => {
-        const suivant = new Set(precedent)
-        suivant.delete(activeId)
-        return suivant
-      })
+      if (activeId)
+        setAutoConvs((precedent) => {
+          const suivant = new Set(precedent)
+          suivant.delete(activeId)
+          return suivant
+        })
       else desarmerAuto(activeId)
       return
     }
@@ -3366,6 +4046,53 @@ export function ChatView({
   // On la stabilise via un ref (même pattern que forkRef), ici comme pour la relance gratuite.
   const sendRef = useRef(send)
   sendRef.current = send
+  /**
+   * LES ATTENTES DE FICHIER DES FILS ARMÉS NON AFFICHÉS, reprises au démarrage (conv-826, 2026-09-26 :
+   * « après un redémarrage, ∞ reprend tout seul l'attente d'un fichier encore attendu »).
+   *
+   * La surveillance d'un « quand X existe » est un minuteur de l'écran : un redémarrage l'efface,
+   * alors que ∞ est relu du stockage et reste allumé. Le fil affiché la reprend à son premier passage
+   * (`attenteFichierAReprendre`) ; les autres fils armés, seulement ici. Une fois par démarrage, après
+   * le chargement de la liste. Rien n'est envoyé : on reprogramme la sonde GRATUITE, qui n'envoie la
+   * suite que si le fichier existe.
+   */
+  const attentesReprisesRef = useRef(false)
+  useEffect(() => {
+    if (attentesReprisesRef.current || convs.length === 0) return
+    attentesReprisesRef.current = true
+    for (const id of autoConvs) {
+      if (id === '*' || id === activeIdAutoRef.current || !convs.some((c) => c.id === id)) continue
+      void (async () => {
+        let fil = liveMessagesRef.current.get(id)
+        if (!fil || fil.length === 0) {
+          try {
+            const detail = (await window.api.conversation(id)) as Conv | null
+            fil = hydraterFilStocke(detail?.messages ?? [])
+          } catch {
+            return
+          }
+          // Un fil rempli entre-temps (tour lancé, fil ouvert) garde SA version.
+          const recent = liveMessagesRef.current.get(id)
+          if (recent && recent.length > 0) fil = recent
+          else liveMessagesRef.current.set(id, fil)
+        }
+        // Devenu le fil affiché entre-temps : son premier passage s'en charge.
+        if (id === activeIdAutoRef.current || !autoArmePourRef.current(id)) return
+        if (autoProgrammeesRef.current.has(id) || busyConversationsRef.current.has(id)) return
+        const decision = attenteFichierAReprendre({
+          depotPresent,
+          actif: true,
+          occupe: false,
+          fil,
+          brouillonPresent: false,
+          tourEstUnScout: dernierTourEstUnScout(fil),
+          relancesDifferees: autoDiffereesRef.current.get(id) ?? 0
+        })
+        if (decision) programmerRelanceAuto(id, decision)
+      })()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convs])
   /**
    * REPRISE APRES UN REDEMARRAGE DEMANDE PAR L'AGENT (`restart_app`).
    *
@@ -3523,7 +4250,15 @@ export function ChatView({
    */
   async function send(text?: string, options?: SendOptions): Promise<void> {
     const value = (text ?? texteDuComposer()).trim()
-    const sourceConversationId = options?.targetConversationId ?? activeId
+    /*
+     * `activeRef.current`, PAS `activeId` : la valeur du render est FIGEE dans la closure. Vecu le
+     * 2026-09-12 — le bouton « Traiter » du bandeau des travaux non publies ouvre une conversation
+     * neuve (activeRef remis a null, setActiveId(null)) puis envoie le `/salvage` a l'image
+     * suivante. Le `send` capture, lui, gardait l'ANCIEN id : le prompt partait dans la
+     * conversation ou l'on etait, et aucune conversation neuve n'apparaissait. Le ref est tenu a
+     * jour de facon synchrone partout ou l'active change, c'est donc la seule source fiable ici.
+     */
+    const sourceConversationId = options?.targetConversationId ?? activeRef.current
     const sendDraftKey = options?.targetConversationId ?? composerDraftKeyRef.current
     const keepComposerDraft = options?.keepComposerDraft === true
     const outgoingDraft = getComposerDraft(sendDraftKey)
@@ -3566,6 +4301,7 @@ export function ChatView({
       {
         role: 'user',
         content: value,
+        ts: Date.now(),
         attachments: outgoingAttachments.map(
           ({ name, mimeType, size, kind, content, thumbnail }) => ({
             name,
@@ -3603,7 +4339,10 @@ export function ChatView({
       setDraftAttachments(sendDraftKey, () => [])
       setDraftError(sendDraftKey, null)
     }
-    followTailRef.current = true
+    followTailRef.current = suiviDuBasApresEnvoi({
+      suivaitLeBas: followTailRef.current,
+      envoiAutomatique: options?.automatique === true
+    })
     /*
      * ENVOYER remet a zero les signaux d'alerte du fil : le lecteur veut voir sa reponse, pas un
      * bouton « il y a du nouveau » herite d'avant l'envoi. La DESCENTE elle-meme reste pilotee par
@@ -3619,6 +4358,7 @@ export function ChatView({
      * `ChatView.descente-envoi.test.tsx`.
      */
     if (
+      followTailRef.current &&
       scrollRef.current &&
       (!sourceConversationId || sourceConversationId === activeRef.current)
     ) {
@@ -3626,6 +4366,17 @@ export function ChatView({
       dernierScrollTopRef.current = scrollRef.current.scrollTop
       setHasNewActivity(false)
       setScrolledAwayFromTail(false)
+      /*
+       * ENVOYER VAUT DEMANDE D'ATTERRISSAGE. Deux trous restaient, tous deux vecus comme « ca me
+       * scroll pas sur mon message » :
+       *   - une REPRISE DE LECTURE encore en attente (on vient d'ouvrir le fil au milieu) : l'effet
+       *     de descente prenait sa branche de restauration et REMONTAIT au lieu de descendre ;
+       *   - un fil dont le tableau de messages ne change pas d'IDENTITE au moment de l'envoi :
+       *     l'effet, qui depend de `messages`, ne se rejouait jamais et personne ne descendait.
+       * Envoyer un message dit sans ambiguite ou le lecteur veut etre : en bas, sur ce qu'il envoie.
+       */
+      positionARestaurerRef.current = null
+      setAtterrissageDemande((tour) => tour + 1)
     }
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
 
@@ -3694,7 +4445,7 @@ export function ChatView({
       if (!convId) {
         const identity = await refreshRuntimeIdentity()
         const titleSource = value || outgoingAttachments[0].name
-        const title = titleSource.length > 42 ? `${titleSource.slice(0, 42)}…` : titleSource
+        const title = titreDepuisPremierMessage(titleSource)
         const c = await window.api.conversationsCreate({
           title,
           category: identity.provider,
@@ -3738,7 +4489,18 @@ export function ChatView({
         const existant = convsRef.current.find((c) => c.id === cibleRenommage)
         if (existant && existant.title === 'Nouvelle conversation') {
           const sourceTitre = value || outgoingAttachments[0]?.name || ''
-          const titre = sourceTitre.length > 42 ? `${sourceTitre.slice(0, 42)}…` : sourceTitre
+          /*
+           * ET SANS HOMONYME. Mesure du 2026-09-12 : 62 des 442 conversations partagent leur titre
+           * avec une autre (« Réparer la mise à jour » ×11, « /salvage… » ×14, « Jarvis » ×8) — la
+           * plainte « il faut que les conversations s'appellent autrement », ecrite six fois. Un
+           * lanceur repete produit mecaniquement le meme titre puisqu'on recopie les 42 premiers
+           * caracteres du message. On y ajoute le seul element qui distingue deux lancements du
+           * meme geste : le moment. Un titre libre, lui, ne bouge pas d'un caractere.
+           */
+          const titre = titreSansHomonyme(
+            sourceTitre,
+            convsRef.current.filter((c) => c.id !== cibleRenommage).map((c) => c.title)
+          )
           if (titre.trim()) {
             try {
               await window.api.conversationsRename(cibleRenommage, titre)
@@ -3757,6 +4519,7 @@ export function ChatView({
         {
           role: 'user',
           content: value,
+          ts: Date.now(),
           attachments: outgoingAttachments.map(
             ({ name, mimeType, size, kind, content, thumbnail }) => ({
               name,
@@ -3865,51 +4628,54 @@ export function ChatView({
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
         )
-        patchLast(convId, (m) => {
-          if (m.status === 'streaming') m.status = 'interrupted'
-          m.done = true
-          // Un tour annulé/interrompu porte désormais son propre libellé terminal (msg-terminal) :
-          // le remplissage « aucune réponse » ferait doublon et masquerait la vraie raison.
-          if (m.parts.length === 0 && m.status !== 'cancelled' && m.status !== 'interrupted')
-            m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
-        })
-        setConversationBusy(convId, false)
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-        )
-        const rendered = [...(liveMessagesRef.current.get(convId) ?? [])]
-          .reverse()
-          .find((message) => message.role === 'assistant') as AsstMsg | undefined
-        const renderedText =
-          rendered?.parts
-            .filter((part) => part.kind === 'text')
-            .map((part) => part.text)
-            .join('\n') ?? ''
-        if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
-        // Le tour s'est CLOS sans erreur, mais tout ce qu'il a rendu est l'incident du fournisseur :
-        // c'est la même perte qu'un échec, elle passait juste par un autre chemin. On la fait juger
-        // par la MÊME porte, avec le texte rendu — jamais par une règle parallèle.
-        if (!repriseApresSurcharge) {
-          const surTexte = deciderRepriseSurcharge({
-            ok: true,
-            cancelled: false,
-            texteRendu: renderedText,
-            tentativesDejaFaites: options?.repriseSurcharge ?? 0
+        // Toujours vivant cote main : rien a clore, la fin viendra par ses propres evenements.
+        if (!(await tourEncoreVivant(convId))) {
+          patchLast(convId, (m) => {
+            if (m.status === 'streaming') m.status = 'interrupted'
+            m.done = true
+            // Un tour annulé/interrompu porte désormais son propre libellé terminal (msg-terminal) :
+            // le remplissage « aucune réponse » ferait doublon et masquerait la vraie raison.
+            if (m.parts.length === 0 && m.status !== 'cancelled' && m.status !== 'interrupted')
+              m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
           })
-          if (surTexte.action === 'forker-et-reprendre') {
-            repriseApresSurcharge = {
-              tentative: surTexte.tentative,
-              attenteMs: surTexte.attenteMs,
-              ancre: ancreCopieSurcharge
-            }
-            patchLast(convId, (m) => {
-              m.status = 'failed'
-              m.parts.push({
-                kind: 'error',
-                cause: 'turn',
-                message: `${renderedText.trim()} — ${libelleReprise(surTexte.tentative)}`
-              })
+          setConversationBusy(convId, false)
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          )
+          const rendered = [...(liveMessagesRef.current.get(convId) ?? [])]
+            .reverse()
+            .find((message) => message.role === 'assistant') as AsstMsg | undefined
+          const renderedText =
+            rendered?.parts
+              .filter((part) => part.kind === 'text')
+              .map((part) => part.text)
+              .join('\n') ?? ''
+          if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
+          // Le tour s'est CLOS sans erreur, mais tout ce qu'il a rendu est l'incident du fournisseur :
+          // c'est la même perte qu'un échec, elle passait juste par un autre chemin. On la fait juger
+          // par la MÊME porte, avec le texte rendu — jamais par une règle parallèle.
+          if (!repriseApresSurcharge) {
+            const surTexte = deciderRepriseSurcharge({
+              ok: true,
+              cancelled: false,
+              texteRendu: renderedText,
+              tentativesDejaFaites: options?.repriseSurcharge ?? 0
             })
+            if (surTexte.action === 'forker-et-reprendre') {
+              repriseApresSurcharge = {
+                tentative: surTexte.tentative,
+                attenteMs: surTexte.attenteMs,
+                ancre: ancreCopieSurcharge
+              }
+              patchLast(convId, (m) => {
+                m.status = 'failed'
+                m.parts.push({
+                  kind: 'error',
+                  cause: 'turn',
+                  message: `${renderedText.trim()} — ${libelleReprise(surTexte.tentative)}`
+                })
+              })
+            }
           }
         }
       }
@@ -3941,6 +4707,14 @@ export function ChatView({
    */
   const [repriseQuotaProgres, setRepriseQuotaProgres] = useState<string | null>(null)
   const [repriseQuotaNotice, setRepriseQuotaNotice] = useState<string | null>(null)
+  /* Croix de fermeture (demande du 2026-09-15) : on retient la LISTE des fils coupes au moment du
+     clic. Le bloc revient de lui-meme si un nouveau fil est coupe — masquer pour toujours ferait
+     rater une coupure suivante. */
+  const [repriseQuotaMasqueePour, setRepriseQuotaMasqueePour] = useState<string | null>(null)
+  const cleRepriseQuota = convsCoupeesParQuota
+    .map((c) => c.id)
+    .sort()
+    .join('|')
   // Le compte-rendu de reprise est une information de l'INSTANT : lu, il n'a plus de raison
   // d'occuper la barre. Sans cette expiration, « 2 conversations reprises. » restait affiche
   // indefiniment alors qu'il n'y avait plus rien a reprendre.
@@ -3980,6 +4754,8 @@ export function ChatView({
       )
     }
   }
+  // Le minuteur est armé AVANT que la fonction ne soit définie (ordre des déclarations) : il passe
+  // par cette référence plutôt que par une capture, qui serait figée sur un état périmé.
 
   /**
    * Continue le fil sans recréer ni renvoyer le dernier message utilisateur.
@@ -4028,11 +4804,13 @@ export function ChatView({
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
       )
-      patchLast(conversationId, (message) => {
-        if (message.status === 'streaming') message.status = 'interrupted'
-        message.done = true
-      })
-      setConversationBusy(conversationId, false)
+      if (!(await tourEncoreVivant(conversationId))) {
+        patchLast(conversationId, (message) => {
+          if (message.status === 'streaming') message.status = 'interrupted'
+          message.done = true
+        })
+        setConversationBusy(conversationId, false)
+      }
     }
   }
 
@@ -4053,10 +4831,27 @@ export function ChatView({
     }
     try {
       const fichier = await window.api.readNodeFile(r.path)
-      setOpenRun({ path: fichier.path, content: fichier.content })
+      setOpenRun({ path: fichier.path, content: fichier.content, mtime: r.mtime })
     } catch (e) {
-      setOpenRun({ path: r.path, content: '', error: String(e) })
+      setOpenRun({ path: r.path, content: '', error: String(e), mtime: r.mtime })
     }
+  }
+
+  /**
+   * RELECTURE SILENCIEUSE du run déplié, déclenchée par le panneau quand la date de son RUN.md a
+   * bougé (demande du 2026-09-26 : « tout doit se rafraichir tout seul »).
+   *
+   * Différences avec `viewRun`, pour que la mise à jour ne se VOIE que par son contenu : pas
+   * d'état « Ouverture du RUN.md… », l'onglet choisi reste, et un échec de lecture garde le
+   * contenu affiché. Le détail et ses tests vivent dans `run-ouvert-a-jour.ts`.
+   * Si l'utilisateur a replié ou changé de run pendant la lecture, le résultat est jeté.
+   */
+  async function relireRunOuvert(r: RunEntry): Promise<void> {
+    const relu = await relireRun(window.api, r, openTrace, traceSilentFailure)
+    if (openRunPathRef.current !== r.path) return
+    setOpenTrace(relu.trace)
+    if (relu.montrerRunMd) setRunDetailTab('runmd')
+    setOpenRun((courant) => fusionnerRelecture(courant, r, relu.contenu))
   }
 
   /* --- rendu --- */
@@ -4067,10 +4862,18 @@ export function ChatView({
     .reverse()
     .find((message): message is AsstMsg => message.role === 'assistant')
   // Le composer y ajoute « et rien n'est tapé, aucune pièce jointe » : ces deux-là sont chez lui.
+  /**
+   * `failed` EST un cas de reprise — mesure du 2026-09-13 : 205 tours en echec contre 119 annules,
+   * et « reprend » retape a la main 78 fois, dont 63 juste apres un echec. Le seul geste offert sur
+   * un echec (« ↻ Renvoyer ») rejoue le prompt depuis zero et jette le travail partiel ; ce
+   * bouton-ci POURSUIT la session (`resumePilotChat`), ce qui est exactement le geste contourne.
+   */
   const resumeAvailable =
     !busy &&
     Boolean(activeId) &&
-    (latestAssistant?.status === 'cancelled' || latestAssistant?.status === 'interrupted')
+    (latestAssistant?.status === 'cancelled' ||
+      latestAssistant?.status === 'interrupted' ||
+      latestAssistant?.status === 'failed')
   // « Plus récentes » = là où L'UTILISATEUR a parlé en dernier, pas la dernière touche : ranger une
   // conversation dans un dossier bougeait `updatedAt` et la propulsait en tête (2026-08-18).
   /** Handles des composers de la mosaique — un par fenetre, pour vider le champ apres envoi. */
@@ -4112,7 +4915,7 @@ export function ChatView({
         attachmentCount={fichiers.length}
         mentionSources={mentionSources}
         skillCommands={skillCommands}
-        ghostRecommendation={ghostDuFil(mosaicFils[id] ?? [])}
+        ghostRecommendation={ghostDuFil(mosaicFils[id] ?? [], depotPresent)}
         placeholderPendantTour={occupe}
         onDraftInput={(value) => setDraftInput(id, value)}
         onDraftPresence={() => {}}
@@ -4130,7 +4933,7 @@ export function ChatView({
         }}
         onQueue={() => {
           const texte = getComposerDraft(id).input
-          if (!texte.trim()) return
+          if (!texte.trim() && getComposerDraft(id).attachments.length === 0) return
           viderComposerMosaique(id)
           void submitBtw(texte, 'normal', askEnAttente(mosaicFils[id] ?? []), id)
         }}
@@ -4310,14 +5113,30 @@ export function ChatView({
     }
   }, [convQuery])
 
-  const conversationHits = useMemo(
-    () =>
-      trierParRecenceUtilisateur(
-        searchConversations(convs, convQuery, undefined, correspondancesContenu),
-        conversationDateOrder
-      ),
-    [convs, convQuery, conversationDateOrder, correspondancesContenu]
+  /**
+   * FILTRE PAR STATUT (demande du 2026-09-23) : statut MANUEL posé par le menu « Marquer comme
+   * inactive/active » (`Conversation.inactive`, absent = active).
+   * Memorise comme la densite : c'est une preference d'affichage locale.
+   */
+  const [convStatusFilter, setConvStatusFilter] = useState<'toutes' | 'actives' | 'inactives'>(
+    () => {
+      const v = window.localStorage.getItem('autowin.chat.conversationsStatusFilter')
+      return v === 'actives' || v === 'inactives' ? v : 'toutes'
+    }
   )
+  useEffect(() => {
+    window.localStorage.setItem('autowin.chat.conversationsStatusFilter', convStatusFilter)
+  }, [convStatusFilter])
+
+  const conversationHits = useMemo(() => {
+    const hits = trierParRecenceUtilisateur(
+      searchConversations(convs, convQuery, undefined, correspondancesContenu),
+      conversationDateOrder
+    )
+    if (convStatusFilter === 'toutes') return hits
+    const veutActives = convStatusFilter === 'actives'
+    return hits.filter((h) => (h.conversation.inactive !== true) === veutActives)
+  }, [convs, convQuery, conversationDateOrder, correspondancesContenu, convStatusFilter])
 
   /**
    * Repli des groupes, PERSISTÉ. Le redéplier à chaque ouverture annulerait tout le bénéfice :
@@ -4358,13 +5177,20 @@ export function ChatView({
    * DISPARAITRE du menu -- il fallait re-parcourir le disque pour le retrouver. On persiste donc
    * les dossiers deja choisis, et on les retire seulement sur un geste EXPLICITE (la croix).
    * `localStorage` et non le store disque : c'est une preference d'affichage locale.
+   *
+   * SEULS DES CHEMINS Y ENTRENT (conv-81, 2026-09-16). La liste memorisait tout ce qui avait servi
+   * a classer, et classer ecrivait dans le meme champ que le dossier de travail : des libelles
+   * (« Perso », « Clients/Amitel ») se retrouvaient donc proposes comme dossiers de travail, et les
+   * choisir renvoyait le tour dans le depot d'Autowin. Le filtre est pose a la LECTURE autant qu'a
+   * l'ecriture : a la lecture il vide ce qui s'est deja installe (cette liste vit dans le stockage
+   * local, il n'y a pas de migration de fichier possible), a l'ecriture il empeche le retour.
    */
   const [dossiersMemorises, setDossiersMemorises] = useState<string[]>(() => {
     try {
       const brut = window.localStorage.getItem(CLE_DOSSIERS_CONNUS)
       const lu = brut ? (JSON.parse(brut) as unknown) : null
       if (Array.isArray(lu))
-        return lu.filter((x): x is string => typeof x === 'string' && !!x.trim())
+        return lu.filter((x): x is string => typeof x === 'string' && estCheminDeDossier(x))
     } catch {
       /* preference illisible : on repart des dossiers reellement utilises */
     }
@@ -4372,10 +5198,16 @@ export function ChatView({
   })
   const memoriserDossier = useCallback((chemin: string): void => {
     const propre = chemin.trim()
-    if (!propre) return
+    if (!estCheminDeDossier(propre)) return
+    // Un ajout MANUEL efface le retrait : l'utilisateur vient de dire le contraire de la croix,
+    // et l'import claude.exe redevient autorisé à maintenir ce dossier.
+    ecrireDossiersRetires(sansDossierRetire(lireDossiersRetires(), propre))
     setDossiersMemorises((connus) => (connus.includes(propre) ? connus : [...connus, propre]))
   }, [])
   const oublierDossier = useCallback((chemin: string): void => {
+    // Retrait EXPLICITE, mémorisé : sans cette trace, l'import claude.exe rejoué à chaque
+    // lancement ressusciterait le dossier et la croix serait un bouton mort.
+    ecrireDossiersRetires(avecDossierRetire(lireDossiersRetires(), chemin))
     setDossiersMemorises((connus) => connus.filter((connu) => connu !== chemin))
   }, [])
   useEffect(() => {
@@ -4401,6 +5233,34 @@ export function ChatView({
    * de le savoir. Un pont absent est un ÉTAT DE L'APPLICATION, pas un cas à ignorer : il se dit, et
    * il dit ce qui répare.
    */
+  const marquerInactive = useCallback(
+    async (conversationId: string, on: boolean): Promise<void> => {
+      const poser = window.api.conversationsSetInactive
+      if (!poser) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: 'Statut indisponible : redémarre Autowin OS pour activer « Marquer comme inactive ».'
+          })
+        )
+        return
+      }
+      try {
+        await poser(conversationId, on)
+      } catch (erreur) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: `Le statut n’a pas pu être enregistré : ${
+              erreur instanceof Error ? erreur.message : String(erreur)
+            }`
+          })
+        )
+        return
+      }
+      await refreshConvs()
+    },
+    [refreshConvs]
+  )
+
   const surligner = useCallback(
     async (conversationId: string, on: boolean): Promise<void> => {
       const poser = window.api.conversationsSetHighlight
@@ -4447,6 +5307,28 @@ export function ChatView({
     [rangerDans, memoriserDossier]
   )
   /**
+   * Aiguillage du menu de rangement : un LOT (mode sélection) est rangé conversation par
+   * conversation par le même canal que `rangerDans`, puis la liste n'est relue qu'UNE fois.
+   * Sans lot, c'est `choisirDossier` inchangé.
+   */
+  const appliquerRangement = useCallback(
+    (menu: { conv: Conv | null; ids?: string[] }, chemin: string | null): void => {
+      if (!menu.ids) {
+        choisirDossier(menu.conv, chemin)
+        return
+      }
+      const ids = menu.ids
+      void (async () => {
+        if (chemin) memoriserDossier(chemin)
+        for (const id of ids) await window.api.conversationsSetProject?.(id, chemin)
+        setConvSelectionMode(false)
+        setSelectedConvIds(new Set())
+        await refreshConvs()
+      })()
+    },
+    [choisirDossier, memoriserDossier, refreshConvs]
+  )
+  /**
    * AMORCAGE unique : au tout premier chargement, la memoire est vide alors que des conversations
    * sont deja rangees. On l'amorce avec ces dossiers-la. Ensuite la memoire fait autorite -- sinon
    * un dossier retire par la croix reviendrait tant qu'une conversation le porte encore.
@@ -4455,10 +5337,55 @@ export function ChatView({
   useEffect(() => {
     if (amorce.current || convs.length === 0) return
     amorce.current = true
-    const utilises = convs.map((conv) => conv.projectPath?.trim()).filter(Boolean) as string[]
-    if (utilises.length > 0)
-      setDossiersMemorises((connus) => [...new Set([...connus, ...utilises])])
+    // `projectPath` seulement, jamais `categorie` : un libellé de classement n'est pas un dossier
+    // de travail, et l'amorçage est justement par où ils entraient dans la liste (conv-81).
+    const utilises = convs
+      .map((conv) => conv.projectPath?.trim())
+      .filter((chemin): chemin is string => estCheminDeDossier(chemin))
+    // fix-ok: cause mesurée — cet amorçage ignorait la mémoire des retraits : un dossier ôté par
+    // la croix mais porté par une conversation (ex. scratch claude.exe importé) revenait à chaque
+    // lancement. Même fusion que l'import claude.exe, donc même respect des retraits.
+    if (utilises.length > 0) {
+      const retires = lireDossiersRetires()
+      setDossiersMemorises(
+        (connus) => fusionnerDossiersImportes(connus, utilises, retires) ?? connus
+      )
+    }
   }, [convs])
+
+  /**
+   * IMPORT claude.exe (conv-5, 2026-09-23) : les projets déjà ouverts dans le CLI Claude
+   * rejoignent la liste des dossiers de travail, À CHAQUE lancement — un projet commencé demain
+   * dans claude.exe arrivera seul. Le main lit et filtre le profil (`~/.claude.json`) ; ici on
+   * fusionne, et la mémoire des retraits garantit qu'un dossier ôté par la croix ne revient pas.
+   * fix-ok: cause mesurée — l'amorçage existant (effet ci-dessus) ne connaissait QUE les dossiers
+   * portés par des conversations passées ; les projets claude.exe n'y arrivaient jamais. Et comme
+   * cet amorçage ré-ajoute à chaque lancement, l'import a SA propre mémoire des retraits
+   * (autowin.conv-folders.retires), sinon la croix serait un bouton mort — prouvé par les 7 tests
+   * de chat-dossiers-import.test.ts.
+   */
+  useEffect(() => {
+    // Pont absent = version chargée avant redémarrage : l'import attendra le prochain démarrage.
+    // Pas de bandeau ici, contrairement au surlignage : rien n'a été CLIQUÉ, rien n'est perdu.
+    const lireProjetsClaude = window.api.dossiersClaudeCli
+    if (!lireProjetsClaude) return
+    let demonte = false
+    void lireProjetsClaude()
+      .then((importes) => {
+        if (demonte || !Array.isArray(importes) || importes.length === 0) return
+        const retires = lireDossiersRetires()
+        setDossiersMemorises(
+          (connus) => fusionnerDossiersImportes(connus, importes, retires) ?? connus
+        )
+      })
+      .catch((error) => {
+        // Profil illisible : la liste locale suffit, l'import est un confort, jamais une panne.
+        traceSilentFailure('import-dossiers-claude', error)
+      })
+    return () => {
+      demonte = true
+    }
+  }, [])
 
   const dossiersConversations = useMemo(
     () =>
@@ -4469,6 +5396,28 @@ export function ChatView({
   )
 
   /**
+   * Les CATEGORIES deja utilisees, lues sur les conversations elles-memes.
+   *
+   * Elles ne sont pas memorisees en local comme les dossiers : une categorie n'existe QUE portee
+   * par au moins un fil, donc la liste se deduit et ne peut pas se desynchroniser. Depuis la
+   * separation des deux roles (conv-81), le menu « Ranger dans… » ne proposait plus que des
+   * chemins : classer sous « Fiches Team » etait devenu impossible a la souris (conv-79).
+   */
+  const categoriesConnues = useMemo(
+    () =>
+      [
+        ...new Set(
+          convs
+            .map((conv) => conv.categorie?.trim())
+            .filter((libelle): libelle is string => !!libelle)
+        )
+      ].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })),
+    [convs]
+  )
+  /** Saisie en cours d'une categorie neuve dans le menu (null = le champ n'est pas ouvert). */
+  const [saisieCategorie, setSaisieCategorie] = useState<string | null>(null)
+
+  /**
    * Les résultats de recherche, groupés. On transporte le HIT entier (`snippet` compris) plutôt que
    * d'aplatir la conversation dedans : l'aplatissement faisait collisionner des champs homonymes et
    * rendait impossible de savoir, à la lecture, d'où venait chaque valeur.
@@ -4477,6 +5426,7 @@ export function ChatView({
     const entrees = conversationHits.map((hit) => ({
       id: hit.conversation.id,
       projectPath: hit.conversation.projectPath,
+      categorie: hit.conversation.categorie,
       autoKaizen: hit.conversation.autoKaizen,
       hit
     }))
@@ -4490,7 +5440,7 @@ export function ChatView({
       ...(recent ? [recent] : []),
       ...ordonnerGroupes(
         groupesVisibles(
-          grouperConversations(entrees),
+          grouperConversations(entrees, dossierParDefaut),
           // Pendant une recherche, aucun repli ne masque un resultat : chercher, c'est vouloir voir.
           convQuery.trim() ? {} : groupesReplies
         ),
@@ -4505,7 +5455,7 @@ export function ChatView({
         conversationDateOrder
       )
     ]
-  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery])
+  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery, dossierParDefaut])
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
@@ -4549,6 +5499,25 @@ export function ChatView({
     }
   }, [isActive, activeId, showRuns, liveRuns, active])
 
+  /**
+   * PRÉSENCE SYSTÈME : la fenêtre est le seul endroit qui sait quels runs tournent — elle le dit au
+   * process principal, qui pose la jauge de barre des tâches et le texte de l'icône de notification.
+   * Envoi best-effort : un pont absent (tests, fenêtre de question) ne doit rien casser.
+   */
+  useEffect(() => {
+    const pont = (
+      globalThis as {
+        api?: { signalerRunsVivants?: (e: ReturnType<typeof presenceDepuisRunsVivants>) => unknown }
+      }
+    ).api
+    if (!pont?.signalerRunsVivants) return
+    try {
+      void pont.signalerRunsVivants(presenceDepuisRunsVivants(liveRuns))
+    } catch (error) {
+      traceSilentFailure('presence-systeme', error)
+    }
+  }, [liveRuns])
+
   const visibleLiveRuns = mergeLiveAndPersisted<OrchStep>(
     visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, 'conv'),
     persistedRuns.filter((run) => run.convId === activeId)
@@ -4561,49 +5530,60 @@ export function ChatView({
    * `ChatView.frappe-cout.test.tsx`). D'où le gel à la frappe sur une conversation longue.
    * `input` n'est VOLONTAIREMENT pas une dépendance : le composer ne touche pas au fil.
    */
+  // Un long fil s'ouvre par sa fin puis se complète par tranches (fil-progressif.ts, cause des
+  // gels `vue-chat`) ; les index restent ceux du fil ENTIER, clés et balayages compris.
+  const debutFil = useDebutProgressif(activeId, messages.length)
   const filRendu = useMemo(
     () =>
-      messages.map((message, index) => (
-        <Fragment key={messageKey(message, index)}>
-          <ChatMessageRow
-            onPickSuggestion={pickSuggestion}
-            autoLancerCandidats={
-              message.role === 'assistant' &&
-              doitAutoLancerCandidats(
-                // La cle porte la conversation : `role:index` seul se RECOUVRE d'un fil a l'autre.
-                `${activeId ?? ''}#${messageKey(message, index)}`,
-                index === messages.length - 1,
-                message.done === true
-              )
-            }
-            onAnswerAsk={answerAsk}
-            /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
+      messages.slice(debutFil).map((message, rang) => {
+        const index = debutFil + rang
+        return (
+          <Fragment key={messageKey(message, index)}>
+            <ChatMessageRow
+              onPickSuggestion={pickSuggestion}
+              autoLancerCandidats={
+                message.role === 'assistant' &&
+                doitAutoLancerCandidats(
+                  // La cle porte la conversation : `role:index` seul se RECOUVRE d'un fil a l'autre.
+                  `${activeId ?? ''}#${messageKey(message, index)}`,
+                  index === messages.length - 1,
+                  message.done === true
+                )
+              }
+              onAnswerAsk={answerAsk}
+              /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
              question. Derive du fil, donc vrai apres un remontage comme apres un redemarrage.
              Se fermer sur n'importe quel message posterieur avalait le clic (conv-50). */
-            askRepondu={message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined}
-            message={message}
-            conversationId={activeId}
-            onInspectTurn={onInspectTurn}
-            onFork={handleFork}
-            onOpenImage={setOpenImage}
-            onOpenLiveAction={revealLiveAction}
-            retryPrompt={
-              message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
-            }
-            onResend={pickSuggestion}
-            onRefineResume={refineResumeDraft}
-            onLogin={ouvrirLogin}
-            directiveReceipts={
-              message.role === 'assistant' ? activeDirectiveReceiptsByMessage.get(index) : undefined
-            }
-          />
-          {message.role === 'user' &&
-            (activeDirectiveReceiptsByMessage.get(index) ?? []).map((receipt) => (
-              <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
-            ))}
-        </Fragment>
-      )),
+              askRepondu={
+                message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined
+              }
+              message={message}
+              conversationId={activeId}
+              onInspectTurn={onInspectTurn}
+              onFork={handleFork}
+              onOpenImage={setOpenImage}
+              onOpenLiveAction={revealLiveAction}
+              retryPrompt={
+                message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
+              }
+              onResend={pickSuggestion}
+              onRefineResume={refineResumeDraft}
+              onLogin={ouvrirLogin}
+              directiveReceipts={
+                message.role === 'assistant'
+                  ? activeDirectiveReceiptsByMessage.get(index)
+                  : undefined
+              }
+            />
+            {message.role === 'user' &&
+              (activeDirectiveReceiptsByMessage.get(index) ?? []).map((receipt) => (
+                <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
+              ))}
+          </Fragment>
+        )
+      }),
     [
+      debutFil,
       messages,
       doitAutoLancerCandidats,
       activeId,
@@ -4618,6 +5598,107 @@ export function ChatView({
     ]
   )
 
+  /**
+   * LES LIGNES DE LA LISTE, memorisees (heal gels vue chat, 2026-09-18). Sans cela, chaque morceau
+   * de texte recu pendant un tour re-rendait ChatView, et donc recreait les ~600 lignes de la liste
+   * alors que rien de ce qu'elles affichent n'avait change. Mesure (test profile, 600 conversations,
+   * 30 morceaux) : 3,1 s des 5 s passees dans le corps de ChatView venaient de ce seul bloc.
+   * Les actions qui ne sont pas stables passent par `actionsListeRef` : toujours les dernieres,
+   * sans invalider la memoire.
+   */
+  const actionsListeRef = useRef({
+    loadConv,
+    basculerDansMosaique,
+    toggleConvSelection,
+    rangerDans
+  })
+  actionsListeRef.current = { loadConv, basculerDansMosaique, toggleConvSelection, rangerDans }
+  const lignesListe = useMemo(
+    () =>
+      groupes.map((groupe) => {
+        // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
+        // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
+        const replie = !convQuery.trim() && estReplie(groupe.key, groupesReplies)
+        return (
+          <Fragment key={groupe.key}>
+            {/*
+                  L'en-tête est AUSSI la zone de dépôt : viser un titre est plus facile que viser un
+                  interstice, et ça évite d'inventer une cible invisible. On ne dépose pas sur un
+                  groupe dérivé (« Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence
+                  de dossier) — y traîner une conversation ne voudrait rien dire.
+                */}
+            <div
+              className={`conv-group${replie ? ' is-collapsed' : ''}${
+                surviole === groupe.key ? ' is-drop' : ''
+              }`}
+              data-testid={`conv-group-${groupe.key}`}
+              data-depth={groupe.depth}
+              onDragOver={(e) => {
+                if (!deposable(groupe.kind)) return
+                e.preventDefault()
+                setSurvole(groupe.key)
+              }}
+              onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
+              onDrop={(e) => {
+                e.preventDefault()
+                setSurvole(null)
+                const id = e.dataTransfer.getData('text/autowin-conversation')
+                if (id && deposable(groupe.kind))
+                  void actionsListeRef.current.rangerDans(id, groupe.key)
+              }}
+            >
+              <button
+                className="conv-group-head"
+                onClick={() => basculerGroupe(groupe.key, replie)}
+                aria-expanded={!replie}
+                title={deposable(groupe.kind) ? groupe.key : groupe.label}
+                style={{ paddingLeft: 8 + groupe.depth * 14 }}
+              >
+                <span className="conv-group-chevron" aria-hidden="true">
+                  {replie ? '▸' : '▾'}
+                </span>
+                <span className="conv-group-label">{groupe.label}</span>
+                <span className="conv-group-count tnum">{groupe.items.length}</span>
+              </button>
+            </div>
+            {!replie &&
+              groupe.items.map(({ hit: { conversation: c, snippet } }) => (
+                <LigneConversation
+                  key={c.id}
+                  c={c}
+                  snippet={snippet}
+                  depth={groupe.depth}
+                  actif={c.id === activeId}
+                  occupe={busyConversations.has(c.id)}
+                  nonVue={c.id !== activeId && estNonVue(c, conversationsVues)}
+                  selectionnee={selectedConvIds.has(c.id)}
+                  mosaiqueOuverte={mosaicIds.includes(c.id)}
+                  convQuery={convQuery}
+                  convSelectionMode={convSelectionMode}
+                  convViewMode={convViewMode}
+                  actionsRef={actionsListeRef}
+                  setConvMenu={setConvMenu}
+                />
+              ))}
+          </Fragment>
+        )
+      }),
+    [
+      groupes,
+      convQuery,
+      groupesReplies,
+      surviole,
+      busyConversations,
+      activeId,
+      conversationsVues,
+      convSelectionMode,
+      convViewMode,
+      selectedConvIds,
+      mosaicIds,
+      basculerGroupe
+    ]
+  )
+
   return (
     <div
       className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}${
@@ -4626,341 +5707,271 @@ export function ChatView({
       data-testid="chat-view"
       data-active-conversation-id={activeId ?? ''}
     >
+      {/* HARNAIS DE PROFILAGE (heal gels vue chat, 2026-09-18) : `vue-chat` seul ne disait pas QUELLE
+          zone tenait le fil d'affichage (1,3 a 2,8 s sur conv-680). Chaque zone signale son propre
+          rendu long sous `vue-chat-<zone>`, par le canal existant de `gels.jsonl`. */}
       {/* ---- Panneau gauche : conversations ---- */}
-      <aside
-        className="lisere-dessus conv-pane"
-        data-view-mode={convViewMode}
-        style={{ width: `${conversationsPaneWidth}px` }}
-      >
-        <div className="conv-head">
-          <ModuleHeader
-            eyebrow="Espace de travail"
-            title="Conversations"
-            actions={
-              <>
-                {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
-                  <button
-                    type="button"
-                    className="conv-mosaic-close-all"
-                    data-testid="conv-mosaic-close-all"
-                    title="Fermer toutes les fenêtres ouvertes"
-                    aria-label="Fermer toutes les fenêtres ouvertes"
-                    onClick={fermerToutesFenetresMosaique}
-                  >
-                    Tout fermer
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="conv-view-toggle"
-                  data-testid="conv-view-toggle"
-                  role="switch"
-                  aria-checked={convViewMode === 'mosaic'}
-                  aria-label="Vue mosaïque"
-                  title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
-                  onClick={() => setConvViewMode(convViewMode === 'mosaic' ? 'list' : 'mosaic')}
-                >
-                  <span className="conv-view-toggle-knob" aria-hidden="true" />
-                </button>
-              </>
-            }
-          />
-        </div>
-        <div className="conv-search">
-          <span aria-hidden="true">⌕</span>
-          <input
-            value={convQuery}
-            onChange={(event) => setConvQuery(event.target.value)}
-            placeholder="Rechercher partout…"
-            aria-label="Rechercher dans les conversations"
-          />
-          {convQuery && (
-            <button onClick={() => setConvQuery('')} title="Effacer la recherche">
-              ×
-            </button>
-          )}
-        </div>
-        {/*
+      <VueMesuree id="chat-liste">
+        <aside
+          className="lisere-dessus conv-pane"
+          data-view-mode={convViewMode}
+          data-density={convDensity}
+          // Une RECHERCHE en cours re-montre la ligne d'identifiant meme en cran serre : taper « 171 »
+          // doit continuer de prouver qu'on a trouve la bonne conversation (lecon du 2026-09-03).
+          data-recherche={convQuery.trim() ? 'oui' : undefined}
+          style={{ width: `${conversationsPaneWidth}px` }}
+        >
+          <div className="conv-head">
+            <ModuleHeader
+              eyebrow="Espace de travail"
+              title="Conversations"
+              actions={
+                <>
+                  {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
+                    <button
+                      type="button"
+                      className="conv-mosaic-close-all"
+                      data-testid="conv-mosaic-close-all"
+                      title="Fermer toutes les fenêtres ouvertes"
+                      aria-label="Fermer toutes les fenêtres ouvertes"
+                      onClick={fermerToutesFenetresMosaique}
+                    >
+                      Tout fermer
+                    </button>
+                  )}
+                </>
+              }
+            />
+          </div>
+          <div className="conv-search">
+            <span aria-hidden="true">⌕</span>
+            <input
+              value={convQuery}
+              onChange={(event) => setConvQuery(event.target.value)}
+              placeholder="Rechercher partout…"
+              aria-label="Rechercher dans les conversations"
+            />
+            {convQuery && (
+              <button onClick={() => setConvQuery('')} title="Effacer la recherche">
+                ×
+              </button>
+            )}
+          </div>
+          {/*
           La barre n'existe QUE pendant une sélection en cours : hors de ce moment elle n'offrait
           qu'un bouton « Sélectionner » vu toute la journée pour un geste rare. L'entrée est
           désormais dans le menu contextuel d'une conversation, au-dessus de « Supprimer ».
         */}
-        {convSelectionMode && convViewMode !== 'mosaic' && (
-          <div className="conv-bulk-bar">
-            <button type="button" className="conv-date-sort" onClick={() => quitterModeSelection()}>
-              Annuler la sélection
-            </button>
-            <button
-              type="button"
-              className="conv-date-sort"
-              disabled={selectedConvIds.size === 0}
-              onClick={() => setBulkDeleteAsking(true)}
-            >
-              Supprimer ({selectedConvIds.size})
-            </button>
-          </div>
-        )}
-        {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor.
+          {convSelectionMode && convViewMode !== 'mosaic' && (
+            <div className="conv-bulk-bar">
+              <button
+                type="button"
+                className="conv-date-sort"
+                onClick={() => quitterModeSelection()}
+              >
+                Annuler la sélection
+              </button>
+              {(() => {
+                // Si TOUT le lot est déjà inactif, le geste utile est l'inverse.
+                const lot = convs.filter((c) => selectedConvIds.has(c.id))
+                const toutInactif = lot.length > 0 && lot.every((c) => c.inactive)
+                return (
+                  <button
+                    type="button"
+                    className="conv-date-sort"
+                    data-testid="conv-bulk-inactive"
+                    disabled={selectedConvIds.size === 0}
+                    onClick={() => {
+                      const ids = [...selectedConvIds]
+                      quitterModeSelection()
+                      void (async () => {
+                        for (const id of ids) await marquerInactive(id, !toutInactif)
+                      })()
+                    }}
+                  >
+                    {toutInactif ? 'Marquer comme active' : 'Marquer comme inactive'}
+                  </button>
+                )
+              })()}
+              <button
+                type="button"
+                className="conv-date-sort"
+                data-testid="conv-bulk-category"
+                disabled={selectedConvIds.size === 0}
+                onClick={(event) => {
+                  const r = event.currentTarget.getBoundingClientRect()
+                  setSaisieCategorie(null)
+                  setConvFolderMenu({
+                    conv: null,
+                    ids: [...selectedConvIds],
+                    top: r.bottom + 4,
+                    left: r.left,
+                    mode: 'categorie'
+                  })
+                }}
+              >
+                Ranger dans une catégorie…
+              </button>
+              <button
+                type="button"
+                className="conv-date-sort conv-bulk-del"
+                disabled={selectedConvIds.size === 0}
+                onClick={() => setBulkDeleteAsking(true)}
+              >
+                Supprimer ({selectedConvIds.size})
+              </button>
+            </div>
+          )}
+          {/* MASQUE quand rien n'est coupe : un bouton « 0 » vu toute la journee devient du decor.
             MAIS reste VISIBLE tant qu'une reprise tourne : les fils repris sortent de la liste des
             coupes des qu'ils passent occupes, si bien que le bloc disparaissait au premier clic et
             emportait la progression avec lui — « ca n'en a repris qu'une sur 3 » (2026-09-05),
             alors que les deux autres attendaient leur tour, invisibles. */}
-        {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) && (
-          <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
-            {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
+          {(convsCoupeesParQuota.length > 0 || repriseQuotaEnCours || repriseQuotaNotice) &&
+            (repriseQuotaEnCours || repriseQuotaMasqueePour !== cleRepriseQuota) && (
+              <div className="conv-reprise-quota" data-testid="conv-reprise-quota">
+                {!repriseQuotaEnCours ? (
+                  <button
+                    type="button"
+                    className="conv-reprise-quota-fermer"
+                    data-testid="conv-reprise-quota-fermer"
+                    aria-label="Masquer"
+                    title="Masquer (réapparaît si une autre conversation est coupée)"
+                    onClick={() => setRepriseQuotaMasqueePour(cleRepriseQuota)}
+                  >
+                    ×
+                  </button>
+                ) : null}
+                {/* Le BOUTON lui-meme ne s'affiche que s'il a quelque chose a reprendre : apres une
                 reprise, la notice reste seule quelques secondes, sans un « (0) » qui n'offre
                 rien a cliquer. */}
-            {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
-              <button
-                type="button"
-                className="conv-date-sort"
-                data-testid="conv-reprise-quota-bouton"
-                disabled={repriseQuotaEnCours}
-                onClick={() => void reprendreConversationsCoupeesParQuota()}
-                title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
-              >
-                {repriseQuotaEnCours ? (
-                  <>
-                    <Spinner size={12} label="Reprise des conversations en cours" />
-                    {repriseQuotaProgres ?? 'Reprise en cours…'}
-                  </>
-                ) : (
-                  `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
-                )}
-              </button>
-            ) : null}
-            {repriseQuotaNotice ? (
-              <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
-                {repriseQuotaNotice}
-              </span>
-            ) : null}
-          </div>
-        )}
-        <div className="conv-list scroll-y">
-          <button
-            className={`conv-new-row${convViewMode !== 'mosaic' && activeId === null ? ' active' : ''}`}
-            onClick={() => {
-              // En mosaique, « Nouveau » doit OUVRIR UNE FENETRE de plus : vider le fil unique,
-              // masque derriere la grille, ne produisait aucun effet visible.
-              if (convViewMode === 'mosaic') void nouvelleFenetreMosaique()
-              else newConv()
-            }}
-            title="Démarrer une nouvelle conversation"
-            aria-current={activeId === null ? 'page' : undefined}
-          >
-            <span className="conv-new-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </span>
-            <span className="conv-new-title">Nouveau fil</span>
-          </button>
-          {convs.length === 0 && (
-            <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-              Aucune conversation — écris un message pour en démarrer une.
-            </div>
-          )}
-          {convs.length > 0 && conversationHits.length === 0 && (
-            <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
-          )}
-          {groupes.map((groupe) => {
-            // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
-            // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
-            const replie = !convQuery.trim() && estReplie(groupe.key, groupesReplies)
-            return (
-              <Fragment key={groupe.key}>
-                {/*
-                  L'en-tête est AUSSI la zone de dépôt : viser un titre est plus facile que viser un
-                  interstice, et ça évite d'inventer une cible invisible. On ne dépose pas sur un
-                  groupe dérivé (« Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence
-                  de dossier) — y traîner une conversation ne voudrait rien dire.
-                */}
-                <div
-                  className={`conv-group${replie ? ' is-collapsed' : ''}${
-                    surviole === groupe.key ? ' is-drop' : ''
-                  }`}
-                  data-testid={`conv-group-${groupe.key}`}
-                  data-depth={groupe.depth}
-                  onDragOver={(e) => {
-                    if (groupe.kind !== 'dossier') return
-                    e.preventDefault()
-                    setSurvole(groupe.key)
-                  }}
-                  onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    setSurvole(null)
-                    const id = e.dataTransfer.getData('text/autowin-conversation')
-                    if (id && groupe.kind === 'dossier') void rangerDans(id, groupe.key)
-                  }}
-                >
+                {convsCoupeesParQuota.length > 0 || repriseQuotaEnCours ? (
                   <button
-                    className="conv-group-head"
-                    onClick={() => basculerGroupe(groupe.key, replie)}
-                    aria-expanded={!replie}
-                    title={groupe.kind === 'dossier' ? groupe.key : groupe.label}
-                    style={{ paddingLeft: 8 + groupe.depth * 14 }}
+                    type="button"
+                    className="conv-date-sort"
+                    data-testid="conv-reprise-quota-bouton"
+                    disabled={repriseQuotaEnCours}
+                    onClick={() => void reprendreConversationsCoupeesParQuota()}
+                    title="Relance les conversations dont le dernier tour a ete coupe par un quota epuise"
                   >
-                    <span className="conv-group-chevron" aria-hidden="true">
-                      {replie ? '▸' : '▾'}
-                    </span>
-                    <span className="conv-group-label">{groupe.label}</span>
-                    <span className="conv-group-count tnum">{groupe.items.length}</span>
+                    {repriseQuotaEnCours ? (
+                      <>
+                        <Spinner size={12} label="Reprise des conversations en cours" />
+                        {repriseQuotaProgres ?? 'Reprise en cours…'}
+                      </>
+                    ) : (
+                      `Reprendre les conversations coupées par le quota (${convsCoupeesParQuota.length})`
+                    )}
                   </button>
-                </div>
-                {!replie &&
-                  groupe.items.map(({ hit: { conversation: c, snippet } }) => {
-                    const conversationState = deriveConversationState({
-                      busy: busyConversations.has(c.id),
-                      messageCount: c.messageCount ?? c.messages?.length ?? 0,
-                      lastMessageRole:
-                        c.lastMessageRole ??
-                        // Même règle que la projection du store : une consigne écrite pendant un
-                        // tour (`orientation`) ne porte pas d'attente de réponse (conv-61).
-                        [...(c.messages ?? [])].reverse().find((m) => m.orientation !== true)?.role,
-                      lastAssistantStatus: c.lastAssistantStatus,
-                      asksUser: c.lastAssistantAsksUser === true,
-                      // La conversation OUVERTE est lue par definition : elle ne doit jamais
-                      // s'afficher « non lue » sous les yeux de celui qui la regarde.
-                      unseen: c.id !== activeId && estNonVue(c, conversationsVues)
-                    })
-                    const stateDescription = `${conversationState.label} — ${conversationState.detail}`
-                    return (
-                      <div
-                        key={c.id}
-                        className={`conv-item${c.id === activeId ? ' active' : ''}${
-                          c.surlignee ? ' surlignee' : ''
-                        }`}
-                        style={{ marginLeft: groupe.depth * 14 }}
-                        // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
-                        // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
-                        // ceux qui ne peuvent pas glisser.
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/autowin-conversation', c.id)
-                          e.dataTransfer.effectAllowed = 'move'
-                        }}
-                      >
-                        {convSelectionMode && convViewMode !== 'mosaic' && (
-                          <input
-                            type="checkbox"
-                            className="conv-select-box"
-                            checked={selectedConvIds.has(c.id)}
-                            onChange={() => toggleConvSelection(c.id)}
-                            aria-label={`Sélectionner « ${c.title} »`}
-                          />
-                        )}
-                        <button
-                          className="conv-pick"
-                          onClick={() =>
-                            convViewMode === 'mosaic'
-                              ? void basculerDansMosaique(c.id)
-                              : void loadConv(c)
-                          }
-                        >
-                          {/* EN COURS = le MEME atome que partout ailleurs : le composant
-                              <Spinner/>. La pastille etait le dernier endroit a rendre l'ancien
-                              atome CSS a bordures (.spinner), d'ou un indicateur qui ne
-                              ressemblait a aucun autre. Les autres etats restent une pastille. */}
-                          {conversationState.key === 'running' ? (
-                            <Spinner
-                              size={14}
-                              className="conversation-state is-running"
-                              label={`État de la conversation : ${stateDescription}`}
-                              title={stateDescription}
-                              data-conversation-state={conversationState.key}
-                            />
-                          ) : (
-                            <span
-                              className={`conversation-state is-${conversationState.key}`}
-                              data-conversation-state={conversationState.key}
-                              role="img"
-                              aria-label={`État de la conversation : ${stateDescription}`}
-                              title={stateDescription}
-                            />
-                          )}
-                          <span className="conv-copy">
-                            <span className="conv-label">
-                              {convQuery ? (
-                                <TexteSurligne texte={c.title} terme={convQuery} />
-                              ) : (
-                                c.title
-                              )}
-                            </span>
-                            {convQuery && snippet && (
-                              <span className="conv-snippet">
-                                <TexteSurligne texte={snippet} terme={convQuery} />
-                              </span>
-                            )}
-                            {/* Le NUMERO reste visible pendant une recherche, et surligne quand il
-                                correspond : taper « 171 » masquait la seule information qui prouve
-                                qu'on a trouve la bonne conversation (2026-09-03). */}
-                            <span className="conv-meta">
-                              <span>
-                                {convQuery ? (
-                                  <TexteSurligne texte={c.id} terme={convQuery} />
-                                ) : (
-                                  c.id
-                                )}
-                              </span>
-                              {!convQuery && (
-                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
-                              )}
-                            </span>
-                          </span>
-                          {convQuery && (
-                            <span className="conv-count tnum">
-                              {c.messageCount ?? c.messages?.length ?? 0}
-                            </span>
-                          )}
-                          {/* En mosaique, la liste n'est plus une SELECTION mais un jeu
-                              d'interrupteurs : l'etat ouvert/ferme se lit a droite du titre. */}
-                          {convViewMode === 'mosaic' && (
-                            <span
-                              className={`conv-mosaic-toggle${mosaicIds.includes(c.id) ? ' is-open' : ''}`}
-                              data-testid={`conv-mosaic-toggle-${c.id}`}
-                              role="img"
-                              aria-pressed={mosaicIds.includes(c.id) ? 'true' : 'false'}
-                              aria-label={
-                                mosaicIds.includes(c.id)
-                                  ? `« ${c.title} » ouverte en mosaïque — cliquer pour fermer`
-                                  : `« ${c.title} » fermée — cliquer pour ouvrir`
-                              }
-                              title={mosaicIds.includes(c.id) ? 'Ouverte' : 'Fermée'}
-                            >
-                              <span className="conv-mosaic-toggle-knob" aria-hidden="true" />
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          className="conv-menu-trigger"
-                          title="Actions"
-                          aria-label="Actions de la conversation"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            const rect = event.currentTarget.getBoundingClientRect()
-                            setConvMenu((current) =>
-                              current?.conv.id === c.id
-                                ? null
-                                : { conv: c, top: rect.top, left: rect.right + 6 }
-                            )
-                          }}
-                        >
-                          ⋮
-                        </button>
-                      </div>
-                    )
-                  })}
-              </Fragment>
-            )
-          })}
-        </div>
-      </aside>
+                ) : null}
+                {repriseQuotaNotice ? (
+                  <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
+                    {repriseQuotaNotice}
+                  </span>
+                ) : null}
+              </div>
+            )}
+          <div className="conv-list scroll-y">
+            <button
+              className={`conv-new-row${convViewMode !== 'mosaic' && activeId === null ? ' active' : ''}`}
+              onClick={() => {
+                // En mosaique, « Nouveau » doit OUVRIR UNE FENETRE de plus : vider le fil unique,
+                // masque derriere la grille, ne produisait aucun effet visible.
+                if (convViewMode === 'mosaic') void nouvelleFenetreMosaique()
+                else newConv()
+              }}
+              title="Démarrer une nouvelle conversation"
+              aria-current={activeId === null ? 'page' : undefined}
+            >
+              <span className="conv-new-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+              <span className="conv-new-title">Nouveau fil</span>
+            </button>
+            {convs.length === 0 && (
+              <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
+                Aucune conversation — écris un message pour en démarrer une.
+              </div>
+            )}
+            {convs.length > 0 && conversationHits.length === 0 && (
+              <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
+            )}
+            {lignesListe}
+          </div>
+          {/* PIED DE LISTE (demande du 2026-09-23) : filtre de statut, densite et mosaique
+            vivent ici, plus dans l'en-tete. */}
+          <div className="conv-foot" data-testid="conv-foot">
+            <button
+              type="button"
+              className="conv-status-filter"
+              data-testid="conv-status-filter"
+              data-filter={convStatusFilter}
+              title={`Statut affiché : ${convStatusFilter} — cliquer pour changer`}
+              aria-label={`Filtrer par statut : ${convStatusFilter}`}
+              onClick={() =>
+                setConvStatusFilter((f) =>
+                  f === 'toutes' ? 'actives' : f === 'actives' ? 'inactives' : 'toutes'
+                )
+              }
+            >
+              {convStatusFilter === 'toutes'
+                ? 'Toutes'
+                : convStatusFilter === 'actives'
+                  ? '● Actives'
+                  : '○ Inactives'}
+            </button>
+            <span className="conv-foot-spacer" />
+        <button
+          type="button"
+          className="conv-density-toggle"
+          data-testid="conv-density-toggle"
+          data-density={convDensity}
+          title={`Densité de la liste : ${libelleDensite(convDensity)} — cliquer pour la rendre ${libelleDensite(densiteSuivante(convDensity))}`}
+          aria-label={`Densité de la liste : ${libelleDensite(convDensity)}`}
+          onClick={() => setConvDensity(densiteSuivante(convDensity))}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            {traitsDensite(convDensity).map((y) => (
+              <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
+            ))}
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="conv-view-toggle"
+          data-testid="conv-view-toggle"
+          role="switch"
+          aria-checked={convViewMode === 'mosaic'}
+          aria-label="Vue mosaïque"
+          title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
+          onClick={() => {
+            if (convViewMode === 'mosaic') {
+              setConvViewMode('list')
+              return
+            }
+            setConvViewMode('mosaic')
+            // La mosaique s'ouvre SUR ce qu'on regardait. Sans cette reprise, la bascule
+            // laissait la moitie droite VIDE alors qu'une conversation etait ouverte juste
+            // avant le clic (demande du 2026-09-17). On ne sert QUE la mosaique vide : si
+            // des fenetres sont deja ouvertes, l'utilisateur a deja choisi son plan de
+            // travail, et « Tout fermer » doit rester une mosaique vide.
+            if (mosaicIdsRef.current.length === 0 && activeId)
+              void ouvrirDansMosaique(activeId)
+          }}
+        >
+          <span className="conv-view-toggle-knob" aria-hidden="true" />
+        </button>
+          </div>
+        </aside>
+      </VueMesuree>
       {convMenu &&
         createPortal(
           <>
             <div className="conv-menu-backdrop" onClick={() => setConvMenu(null)} />
             <div
+              ref={convMenuRef}
               className="conv-menu-pop"
               role="menu"
               style={{ top: convMenu.top, left: convMenu.left }}
@@ -4988,15 +5999,25 @@ export function ChatView({
                 onClick={() => {
                   const { conv, top, left } = convMenu
                   setConvMenu(null)
-                  setConvFolderMenu({ conv, top, left })
+                  setConvFolderMenu({ conv, top, left, mode: 'categorie' })
                 }}
               >
                 <span className="conv-menu-ic" aria-hidden="true">
                   🗂
                 </span>
-                Ranger dans un dossier…
+                Ranger dans une catégorie…
               </button>
-              {convMenu.conv.projectPath && (
+              {/*
+                L'entree « Choisir le repertoire de travail… » a ete RETIREE de ce menu sur demande
+                (conv-674, 2026-09-17). Le choix du depot de travail reste entier : il se fait par la
+                pastille 📁 de la barre du haut (data-testid="chat-project-dot"), qui ouvre le meme
+                selecteur en mode 'dossier', et par le glisser-deposer.
+              */}
+              {/*
+                La categorie compte autant que le dossier : sans elle dans ce test, un fil range
+                sous un libelle n'avait plus AUCUN moyen d'en sortir depuis le menu (conv-81).
+              */}
+              {(convMenu.conv.projectPath || convMenu.conv.categorie) && (
                 <button
                   role="menuitem"
                   data-testid="conv-menu-clear-project"
@@ -5029,6 +6050,20 @@ export function ChatView({
                   ★
                 </span>
                 {convMenu.conv.surlignee ? 'Retirer le surlignage' : 'Surligner'}
+              </button>
+              <button
+                role="menuitem"
+                data-testid="conv-menu-inactive"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  void marquerInactive(conv.id, conv.inactive !== true)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  {convMenu.conv.inactive ? '●' : '○'}
+                </span>
+                {convMenu.conv.inactive ? 'Marquer comme active' : 'Marquer comme inactive'}
               </button>
               {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
@@ -5074,6 +6109,7 @@ export function ChatView({
           <>
             <div className="conv-menu-backdrop" onClick={() => setBrancheMenu(null)} />
             <div
+              ref={brancheMenuRef}
               className="conv-menu-pop"
               role="menu"
               aria-label="Branches du depot"
@@ -5149,12 +6185,46 @@ export function ChatView({
               }}
             />
             <div
+              ref={convFolderMenuRef}
               className="conv-menu-pop"
               role="menu"
-              aria-label="Dossiers de conversations"
+              aria-label={
+                convFolderMenu.mode === 'categorie'
+                  ? 'Catégories de conversations'
+                  : 'Répertoires de travail'
+              }
               style={{ top: convFolderMenu.top, left: convFolderMenu.left }}
             >
-              {dossiersConversations.length === 0 ? (
+              {/*
+                Le dossier de REPLI est ce que la pastille affiche quand aucun dossier n'est
+                assigne. Il n'entrait jamais dans la memoire des dossiers connus : l'utilisateur
+                lisait donc « RigApplication » sur l'en-tete sans le trouver dans ce menu
+                (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
+                choisissable comme les autres.
+              */}
+              {convFolderMenu.mode === 'dossier' &&
+                defaultWorkspace?.trim() &&
+                !dossiersConversations.includes(defaultWorkspace.trim()) && (
+                  <button
+                    role="menuitem"
+                    data-testid="conv-project-default"
+                    data-project-path={defaultWorkspace.trim()}
+                    title={defaultWorkspace.trim()}
+                    onClick={() => {
+                      const menu = convFolderMenu
+                      const repli = defaultWorkspace.trim()
+                      setConvFolderMenu(null)
+                      appliquerRangement(menu, repli)
+                    }}
+                  >
+                    <span className="conv-menu-ic" aria-hidden="true">
+                      🗂
+                    </span>
+                    {nomDeDossier(defaultWorkspace.trim())} · par défaut
+                  </button>
+                )}
+              {convFolderMenu.mode !== 'dossier' ? null : dossiersConversations.length === 0 &&
+                !defaultWorkspace?.trim() ? (
                 <span className="conv-menu-empty">Aucun dossier de conversations</span>
               ) : (
                 dossiersConversations.map((chemin) => (
@@ -5164,9 +6234,9 @@ export function ChatView({
                       data-testid="conv-project-choice"
                       data-project-path={chemin}
                       onClick={() => {
-                        const conv = convFolderMenu.conv
+                        const menu = convFolderMenu
                         setConvFolderMenu(null)
-                        choisirDossier(conv, chemin)
+                        appliquerRangement(menu, chemin)
                       }}
                     >
                       <span className="conv-menu-ic" aria-hidden="true">
@@ -5191,22 +6261,114 @@ export function ChatView({
                   </div>
                 ))
               )}
-              <button
-                role="menuitem"
-                data-testid="conv-project-pick"
-                onClick={() => {
-                  const conv = convFolderMenu.conv
-                  setConvFolderMenu(null)
-                  void window.api.pickGitRepo?.().then((chemin) => {
-                    if (chemin) choisirDossier(conv, chemin)
-                  })
-                }}
-              >
-                <span className="conv-menu-ic" aria-hidden="true">
-                  📁
-                </span>
-                Choisir un dossier…
-              </button>
+              {convFolderMenu.mode === 'dossier' && (
+                <button
+                  role="menuitem"
+                  data-testid="conv-project-pick"
+                  onClick={() => {
+                    const menu = convFolderMenu
+                    setConvFolderMenu(null)
+                    void window.api.pickGitRepo?.().then((chemin) => {
+                      if (chemin) appliquerRangement(menu, chemin)
+                    })
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    📁
+                  </span>
+                  Parcourir…
+                </button>
+              )}
+              {/*
+                CATEGORIES — l'autre moitie du geste « ranger ». Depuis que le dossier de travail
+                et le libelle de classement sont deux champs distincts (conv-81), ce menu ne
+                proposait plus que des chemins : « Fiches Team » etait devenu inatteignable a la
+                souris alors que des fils y vivaient toujours (conv-79). Le tri entre les deux se
+                fait plus bas, sur la FORME de la valeur — un libelle n'ecrase jamais le dossier.
+              */}
+              {/*
+                Les DOSSIERS sont aussi des categories dans la barre laterale (AUTOWINOS,
+                RIGV3DESKTOP…). Sans eux ici, le menu ouvert depuis la selection multiple etait
+                vide des qu'aucun libelle libre n'existait (conv-815, 2026-09-23).
+              */}
+              {convFolderMenu.mode === 'categorie' &&
+                (categoriesConnues.length > 0 || dossiersConversations.length > 0) && (
+                  <span className="conv-menu-titre">Catégories</span>
+                )}
+              {(convFolderMenu.mode === 'categorie' ? dossiersConversations : []).map((chemin) => (
+                <button
+                  key={`dossier:${chemin}`}
+                  role="menuitem"
+                  data-testid="conv-category-folder-choice"
+                  data-project-path={chemin}
+                  title={chemin}
+                  onClick={() => {
+                    const menu = convFolderMenu
+                    setConvFolderMenu(null)
+                    setSaisieCategorie(null)
+                    appliquerRangement(menu, chemin)
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    🗂
+                  </span>
+                  {nomDeDossier(chemin)}
+                </button>
+              ))}
+              {(convFolderMenu.mode === 'categorie' ? categoriesConnues : []).map((libelle) => (
+                <button
+                  key={libelle}
+                  role="menuitem"
+                  data-testid="conv-category-choice"
+                  data-category={libelle}
+                  onClick={() => {
+                    const menu = convFolderMenu
+                    setConvFolderMenu(null)
+                    setSaisieCategorie(null)
+                    appliquerRangement(menu, libelle)
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    🏷
+                  </span>
+                  {libelle}
+                </button>
+              ))}
+              {convFolderMenu.mode !== 'categorie' ? null : saisieCategorie === null ? (
+                <button
+                  role="menuitem"
+                  data-testid="conv-category-new"
+                  onClick={() => setSaisieCategorie('')}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    ＋
+                  </span>
+                  Nouvelle catégorie…
+                </button>
+              ) : (
+                <input
+                  className="conv-menu-saisie"
+                  data-testid="conv-category-input"
+                  aria-label="Nom de la nouvelle catégorie"
+                  placeholder="Nom de la catégorie"
+                  autoFocus
+                  value={saisieCategorie}
+                  onChange={(event) => setSaisieCategorie(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setSaisieCategorie(null)
+                      return
+                    }
+                    if (event.key !== 'Enter') return
+                    const libelle = saisieCategorie.trim()
+                    if (!libelle) return
+                    const menu = convFolderMenu
+                    setSaisieCategorie(null)
+                    setConvFolderMenu(null)
+                    appliquerRangement(menu, libelle)
+                  }}
+                />
+              )}
             </div>
           </>,
           document.body
@@ -5342,7 +6504,10 @@ Cliquer pour changer le dossier de travail.`}
                           setConvFolderMenu({
                             conv: active ?? null,
                             top: r.bottom + 4,
-                            left: r.left
+                            left: r.left,
+                            // La pastille de la barre du haut PARLE du repertoire de travail : elle
+                            // n'ouvre donc que celui-la, jamais le classement.
+                            mode: 'dossier'
                           })
                         }}
                       >
@@ -5695,14 +6860,15 @@ Cliquer pour choisir une autre branche.`}
                * donc de NOUS, exactement comme pendant une descente en vol, et se juge sur le SIGNE
                * du deplacement au lieu de la seule distance au bas.
                */
-              const suit = descenteEnVolRef.current || !gesteLecteurRef.current
-                ? doitSuivreLeBas({
-                    suivaitLeBas: followTailRef.current,
-                    precedentTop: dernierScrollTopRef.current,
-                    top: conteneur.scrollTop,
-                    nearBottom
-                  })
-                : nearBottom
+              const suit =
+                descenteEnVolRef.current || !gesteLecteurRef.current
+                  ? doitSuivreLeBas({
+                      suivaitLeBas: followTailRef.current,
+                      precedentTop: dernierScrollTopRef.current,
+                      top: conteneur.scrollTop,
+                      nearBottom
+                    })
+                  : nearBottom
               dernierScrollTopRef.current = conteneur.scrollTop
               followTailRef.current = suit
               setScrolledAwayFromTail(!suit)
@@ -5759,7 +6925,14 @@ Cliquer pour choisir une autre branche.`}
                 <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
               ))}
 
-            {filRendu}
+            <VueMesuree id="chat-fil" bloc>
+              {filRendu}
+            </VueMesuree>
+
+            {/* Petite TV du bureau cache (conv-528) : un BLOC DEDIE du fil, apres le dernier message
+                (demande du 2026-09-14 « la TV doit etre dans le fil dans un bloc dedie »). Rien
+                n'est rendu sans bureau cache vivant relie a ce fil ; `key` la remet a zero par fil. */}
+            <HdeskTv key={activeId ?? 'aucune'} conversationId={activeId} />
           </div>
 
           {(hasNewActivity || scrolledAwayFromTail) && (
@@ -5777,310 +6950,302 @@ Cliquer pour choisir une autre branche.`}
             </button>
           )}
 
-          <ChatQueuePanel
-            pendingDirectives={pendingDirectives}
-            busy={busy}
-            interrupting={interruptingConversations.has(activeId ?? '')}
-            steeringDirectives={steeringDirectives}
-            /* Enveloppe OBLIGATOIRE : passe directement, React lui donnerait l evenement
-               comme `cible` et le Stop viserait une conversation inexistante. */
-            interruptAndFlushQueue={() => interruptAndFlushQueue()}
-            steerWithoutInterrupt={(directive) => void steerWithoutInterrupt(directive)}
-            moveQueuedMessage={moveQueuedMessage}
-            moveQueuedMessageToBtw={moveQueuedMessageToBtw}
-            restoreQueuedMessageToDraft={restoreQueuedMessageToDraft}
-          />
-          <ChatComposer
-            ref={composerRef}
-            busy={busy}
-            hasActiveConversation={Boolean(activeId)}
-            resumeAvailable={resumeAvailable}
-            attachmentCount={attachments.length}
-            mentionSources={mentionSources}
-            skillCommands={skillCommands}
-            ghostRecommendation={ghostRecommendation}
-            placeholderPendantTour={busy && activeId !== null}
-            /* Le filet au-dessus du champ porte l'occupation de la fenetre du modele. Meme source
+          {/*
+           * LA DEMANDE D'AUTORISATION DE PRODUCTION VIT ICI, DANS LE FIL — pas en fenêtre flottante.
+           * Elle se pose au bas de la conversation, juste au-dessus de la file d'attente et de la
+           * zone de saisie : l'utilisateur lit la cible et l'opération SANS perdre de vue ce que
+           * l'agent venait de dire, et le reste de l'application reste utilisable pendant qu'il
+           * décide. La version précédente couvrait tout l'écran d'un voile translucide et rendait le
+           * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
+           */}
+          <ProdAutorisationHote conversationId={activeId} />
+          <VueMesuree id="chat-saisie" bloc>
+            <ChatComposer
+              ref={composerRef}
+              busy={busy}
+              hasActiveConversation={Boolean(activeId)}
+              resumeAvailable={resumeAvailable}
+              attachmentCount={attachments.length}
+              mentionSources={mentionSources}
+              skillCommands={skillCommands}
+              ghostRecommendation={ghostRecommendation}
+              placeholderPendantTour={busy && activeId !== null}
+              /* Le filet au-dessus du champ porte l'occupation de la fenetre du modele. Meme source
                que la jauge de l'en-tete : `contextGauges`, jamais un calcul refait ici. */
-            /* Le filet montre le MEME panneau que la barre de l en-tete au survol : deux vues
+              /* Le filet montre le MEME panneau que la barre de l en-tete au survol : deux vues
                de la meme donnee doivent repondre pareil au meme geste. */
-            contextPanelNode={(() => {
-              const j = jaugeCourante
-              if (!j) return undefined
-              return (
-                <ContextGaugeDetail
-                  gauge={j}
-                  busy={busy}
-                  onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
-                />
-              )
-            })()}
-            contextRatio={jaugeCourante?.ratio}
-            contextLevel={jaugeCourante?.level}
-            contextTitle={(() => {
-              const j = jaugeCourante
-              if (!j) return undefined
-              return (
-                `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +
-                `${j.limit.toLocaleString('fr-FR')} (${Math.round(j.ratio * 100)} %), dont ` +
-                `${j.cacheRead.toLocaleString('fr-FR')} relus du cache.`
-              )
-            })()}
-            onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
-            onDraftPresence={setBrouillonPresent}
-            onBtw={handleBtw}
-            onSend={() => send()}
-            onQueue={queueCurrentMessage}
-            onResume={() => void resumePilotTurn()}
-            onPaste={(files) => void addFiles(files)}
-            attachmentsNode={
-              attachments.length > 0 ? (
-                <div className="attachment-list pending">
-                  {attachments.map((file, fileIndex) => (
-                    <span
-                      className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
-                      key={`${file.name}-${fileIndex}`}
-                    >
-                      {file.kind === 'image' ? (
+              contextPanelNode={(() => {
+                const j = jaugeCourante
+                if (!j) return undefined
+                return (
+                  <ContextGaugeDetail
+                    gauge={j}
+                    busy={busy}
+                    onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
+                  />
+                )
+              })()}
+              contextRatio={jaugeCourante?.ratio}
+              contextLevel={jaugeCourante?.level}
+              contextTitle={(() => {
+                const j = jaugeCourante
+                if (!j) return undefined
+                return (
+                  `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +
+                  `${j.limit.toLocaleString('fr-FR')} (${Math.round(j.ratio * 100)} %), dont ` +
+                  `${j.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+                )
+              })()}
+              onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
+              onDraftPresence={setBrouillonPresent}
+              onBtw={handleBtw}
+              onSend={() => send()}
+              onQueue={queueCurrentMessage}
+              onResume={() => void resumePilotTurn()}
+              onPaste={(files) => void addFiles(files)}
+              attachmentsNode={
+                attachments.length > 0 ? (
+                  <div className="attachment-list pending">
+                    {attachments.map((file, fileIndex) => (
+                      <span
+                        className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
+                        key={`${file.name}-${fileIndex}`}
+                      >
+                        {file.kind === 'image' ? (
+                          <button
+                            type="button"
+                            className="attachment-thumb-button"
+                            aria-label={`Agrandir ${file.name}`}
+                            title="Agrandir"
+                            onClick={() =>
+                              setOpenImage({
+                                src: `data:${file.mimeType};base64,${file.content}`,
+                                name: file.name
+                              })
+                            }
+                          >
+                            <img
+                              className="attachment-thumb"
+                              src={`data:${file.mimeType};base64,${file.content}`}
+                              alt={file.name}
+                            />
+                          </button>
+                        ) : (
+                          <span aria-hidden="true">▤</span>
+                        )}
+                        <span className="attachment-name">{file.name}</span>
+                        <small>{formatFileSize(file.size)}</small>
                         <button
                           type="button"
-                          className="attachment-thumb-button"
-                          aria-label={`Agrandir ${file.name}`}
-                          title="Agrandir"
                           onClick={() =>
-                            setOpenImage({
-                              src: `data:${file.mimeType};base64,${file.content}`,
-                              name: file.name
-                            })
+                            setDraftAttachments(composerDraftKeyRef.current, (current) =>
+                              current.filter((_, index) => index !== fileIndex)
+                            )
                           }
+                          aria-label={`Retirer ${file.name}`}
+                          title="Retirer"
                         >
-                          <img
-                            className="attachment-thumb"
-                            src={`data:${file.mimeType};base64,${file.content}`}
-                            alt={file.name}
-                          />
+                          ×
                         </button>
-                      ) : (
-                        <span aria-hidden="true">▤</span>
-                      )}
-                      <span className="attachment-name">{file.name}</span>
-                      <small>{formatFileSize(file.size)}</small>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraftAttachments(composerDraftKeyRef.current, (current) =>
-                            current.filter((_, index) => index !== fileIndex)
-                          )
-                        }
-                        aria-label={`Retirer ${file.name}`}
-                        title="Retirer"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              ) : null
-            }
-            errorNode={
-              attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
-            }
-            cadrageNode={
-              /* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
+                      </span>
+                    ))}
+                  </div>
+                ) : null
+              }
+              errorNode={
+                attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
+              }
+              cadrageNode={
+                /* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
                tourne. Ne bloque rien ; un clic pré-remplit le composer pour corriger. */
-              activeId && hypothesesCadrage[activeId]?.length ? (
-                <CadrageHypotheses
-                  hypotheses={hypothesesCadrage[activeId]}
-                  onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
-                  onMasquer={() =>
-                    setHypothesesCadrage((current) => {
-                      const suivant = { ...current }
-                      delete suivant[activeId]
-                      return suivant
-                    })
-                  }
-                />
-              ) : null
-            }
-            frictionNode={
-              /* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
+                activeId && hypothesesCadrage[activeId]?.length ? (
+                  <CadrageHypotheses
+                    hypotheses={hypothesesCadrage[activeId]}
+                    onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
+                    onMasquer={() =>
+                      setHypothesesCadrage((current) => {
+                        const suivant = { ...current }
+                        delete suivant[activeId]
+                        return suivant
+                      })
+                    }
+                  />
+                ) : null
+              }
+              frictionNode={
+                /* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
                suivante. Ne bloque rien — la décision reste humaine. */
-              friction ? (
-                <div
-                  className="composer-friction"
-                  data-testid="friction-echecs-repetes"
-                  role="status"
-                >
-                  <span aria-hidden="true">⚠</span> {friction.message}
-                </div>
-              ) : null
-            }
-            leadingNode={
-              <>
-                {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
-                <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
-                {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
-                <button
-                  type="button"
-                  className={`btn composer-auto${
-                    (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
-                      ? ' actif'
-                      : ''
-                  }`}
-                  data-testid="composer-auto-toggle"
-                  aria-pressed={
-                    (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
-                  }
-                  aria-label={
-                    autoConvs.has(activeId ?? '')
-                      ? 'Arrêter le mode auto de cette conversation'
-                      : 'Mode auto de cette conversation'
-                  }
-                  onClick={() => basculerModeAuto()}
-                  title={
-                    autoConvs.has('*')
-                      ? 'Le mode auto est déjà actif sur TOUS les fils (bouton de la liste des conversations)'
-                      : autoConvs.has(activeId ?? '')
-                        ? 'Arrêter le mode auto de cette conversation'
-                        : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
-                  }
-                >
-                  {/* ROND 34 px comme le micro, glyphe INFINI : « ça continue sans moi ». */}
-                  <span aria-hidden="true">∞</span>
-                </button>
-                <button
-                  type="button"
-                  className="attachment-button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={busy}
-                  aria-label="Joindre des fichiers"
-                  title="Joindre des fichiers"
-                >
-                  <svg
-                    className="attachment-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden="true"
+                friction ? (
+                  <div
+                    className="composer-friction"
+                    data-testid="friction-echecs-repetes"
+                    role="status"
                   >
-                    <path
-                      d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="m7.55 15.45 7.16-7.16a1.25 1.25 0 0 1 1.77 1.77l-6.12 6.12"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                <input
-                  ref={fileInputRef}
-                  className="attachment-input"
-                  type="file"
-                  multiple
-                  onChange={(event) => {
-                    if (event.currentTarget.files) void addFiles(event.currentTarget.files)
-                    event.currentTarget.value = ''
-                  }}
-                  disabled={busy}
-                />
-              </>
-            }
-            stopNode={
-              /*
+                    <span aria-hidden="true">⚠</span> {friction.message}
+                  </div>
+                ) : null
+              }
+              leadingNode={
+                <>
+                  {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
+                  <ModelQuotaIndicator
+                    provider={runtimeIdentity?.provider}
+                    comptes={comptesDeConversation}
+                  />
+                  {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
+                  <button
+                    type="button"
+                    className={`btn composer-auto${
+                      (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
+                        ? ' actif'
+                        : ''
+                    }`}
+                    data-testid="composer-auto-toggle"
+                    aria-pressed={
+                      (activeId ? autoConvs.has(activeId) : autoNouveauFil) || autoConvs.has('*')
+                    }
+                    aria-label={
+                      autoConvs.has(activeId ?? '')
+                        ? 'Arrêter le mode auto de cette conversation'
+                        : 'Mode auto de cette conversation'
+                    }
+                    onClick={() => basculerModeAuto()}
+                    title={
+                      autoConvs.has('*')
+                        ? 'Le mode auto est déjà actif sur TOUS les fils (bouton de la liste des conversations)'
+                        : autoConvs.has(activeId ?? '')
+                          ? 'Arrêter le mode auto de cette conversation'
+                          : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
+                    }
+                  >
+                    {/* ROND 34 px comme le micro, glyphe INFINI : « ça continue sans moi ». */}
+                    <span aria-hidden="true">∞</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="attachment-button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={busy}
+                    aria-label="Joindre des fichiers"
+                    title="Joindre des fichiers"
+                  >
+                    <svg
+                      className="attachment-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="m7.55 15.45 7.16-7.16a1.25 1.25 0 0 1 1.77 1.77l-6.12 6.12"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    className="attachment-input"
+                    type="file"
+                    multiple
+                    onChange={(event) => {
+                      if (event.currentTarget.files) void addFiles(event.currentTarget.files)
+                      event.currentTarget.value = ''
+                    }}
+                    disabled={busy}
+                  />
+                </>
+              }
+              stopNode={
+                /*
               ARRÊTER ne doit dépendre de RIEN d'autre que « un tour est en cours » : ni du texte
               tapé, ni d'un état accessoire. Stop a donc son propre bouton, et il reste dans le
               parent — il ne dépend pas de la frappe.
             */
-              busy ? (
-                <button
-                  className="btn composer-stop"
-                  data-testid="composer-stop"
-                  onClick={() => stopPilotTurn()}
-                  disabled={!activeId || interruptingConversations.has(activeId ?? '')}
-                  aria-label="Arrêter la réponse"
-                  title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
-                >
-                  <span className="composer-btn-glyph" aria-hidden="true">
-                    ■
+                busy ? (
+                  <button
+                    className="btn composer-stop"
+                    data-testid="composer-stop"
+                    onClick={() => stopPilotTurn()}
+                    disabled={!activeId || interruptingConversations.has(activeId ?? '')}
+                    aria-label="Arrêter la réponse"
+                    title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
+                  >
+                    <span className="composer-btn-glyph" aria-hidden="true">
+                      ■
+                    </span>
+                    <span className="composer-btn-label">
+                      {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : 'Stop'}
+                    </span>
+                  </button>
+                ) : null
+              }
+              metaNode={
+                <div className="composer-meta">
+                  <span className="composer-hint">
+                    Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
                   </span>
-                  <span className="composer-btn-label">
-                    {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : 'Stop'}
-                  </span>
-                </button>
-              ) : null
-            }
-            metaNode={
-              <div className="composer-meta">
-                <span className="composer-hint">
-                  Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
-                </span>
-                <div className="composer-meta-actions">
-                  <OrchestratorModelSelector
-                    busy={busy}
-                    catalogLoaded={modelCatalogLoaded}
-                    models={modelCatalog}
-                    binding={orchestratorBinding}
-                    pending={modelChangePending}
-                    error={modelChangeError}
-                    onSelect={(option) => void changeOrchestratorModel(option)}
-                    comptes={
-                      comptesClaude && activeId
-                        ? {
-                            accounts: comptesClaude.accounts,
-                            selectedId: convs.find((conv) => conv.id === activeId)?.claudeAccountId,
-                            activeId: comptesClaude.activeId,
-                            busy: compteBusy || busy,
-                            error: compteError,
-                            onSelect: (accountId) => void choisirCompteDeConversation(accountId)
-                          }
-                        : undefined
-                    }
-                  />
+                  <div className="composer-meta-actions">
+                    <OrchestratorModelSelector
+                      busy={busy}
+                      catalogLoaded={modelCatalogLoaded}
+                      models={modelCatalog}
+                      binding={orchestratorBinding}
+                      pending={modelChangePending}
+                      error={modelChangeError}
+                      onSelect={(option) => void changeOrchestratorModel(option)}
+                      comptes={comptesDeConversation}
+                    />
+                  </div>
                 </div>
-              </div>
-            }
-          />
+              }
+            />
+          </VueMesuree>
         </section>
       )}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (
-        <WorkflowsPanel
-          runsPaneWidth={runsPaneWidth}
-          beginRunsResize={beginRunsResize}
-          refreshRuns={refreshRuns}
-          setShowRuns={setShowRuns}
-          activeId={activeId}
-          send={send}
-          isActive={isActive}
-          requestLabel={[...messages].reverse().find((message) => message.role === 'user')?.content}
-          messages={messages}
-          liveGraphActive={
-            Boolean(activeId && busyConversations.has(activeId)) ||
-            liveRuns[activeId ?? '']?.status === 'running'
-          }
-          visibleLiveRuns={visibleLiveRuns}
-          checkpoints={checkpoints}
-          forkedCheckpoint={forkedCheckpoint}
-          setForkedCheckpoint={setForkedCheckpoint}
-          runs={runs}
-          openRun={openRun}
-          viewRun={viewRun}
-          setOpenRun={setOpenRun}
-          setOpenTrace={setOpenTrace}
-          requestDeleteRun={requestDeleteRun}
-          openTrace={openTrace}
-          runDetailTab={runDetailTab}
-          setRunDetailTab={setRunDetailTab}
-          liveRunCardRef={liveRunCardRef}
-          {...(ongletPanneau ? { ongletDemande: ongletPanneau } : {})}
-        />
+        <VueMesuree id="chat-workflows" bloc>
+          <WorkflowsPanel
+            depotConversation={gitCwd}
+            runsPaneWidth={runsPaneWidth}
+            beginRunsResize={beginRunsResize}
+            setShowRuns={setShowRuns}
+            activeId={activeId}
+            send={send}
+            isActive={isActive}
+            requestLabel={
+              [...messages].reverse().find((message) => message.role === 'user')?.content
+            }
+            messages={messages}
+            liveGraphActive={
+              Boolean(activeId && busyConversations.has(activeId)) ||
+              liveRuns[activeId ?? '']?.status === 'running'
+            }
+            visibleLiveRuns={visibleLiveRuns}
+            runs={runs}
+            openRun={openRun}
+            viewRun={viewRun}
+            relireRunOuvert={(r) => void relireRunOuvert(r)}
+            setOpenRun={setOpenRun}
+            setOpenTrace={setOpenTrace}
+            requestDeleteRun={requestDeleteRun}
+            openTrace={openTrace}
+            runDetailTab={runDetailTab}
+            setRunDetailTab={setRunDetailTab}
+            liveRunCardRef={liveRunCardRef}
+            {...(ongletPanneau ? { ongletDemande: ongletPanneau } : {})}
+          />
+        </VueMesuree>
       )}
       {openImage &&
         createPortal(

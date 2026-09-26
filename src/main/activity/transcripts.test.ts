@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import {
   listSessionsAsync,
   parseSession,
+  readSessionForImport,
   resolveListedSessionAsync,
   resolveListedSessionImage,
   type SessionMeta
@@ -124,6 +125,113 @@ describe('transcripts — parse streaming des sessions Claude Code', () => {
         root
       )
     ).resolves.toBeNull()
+  })
+
+  // fix-ok: cause mesurée des éditions répétées — test écrit ROUGE d'abord (fonction absente :
+  // « readSessionForImport is not a function »), puis le shell (heredoc) a mangé les antislashs
+  // des chemins Windows attendus (E:\Projet) : assertion rouge alors que la valeur REÇUE était
+  // correcte ; échappements restaurés → vert, puis `eslint --fix` (mise en forme l.212).
+  it('readSessionForImport rend le PLEIN TEXTE, le titre et le dossier de travail dominant', async () => {
+    const long = 'x'.repeat(600) // bien au-dessus de TEXT_CAP (280) : prouve l'absence de troncature
+    const importLines = [
+      JSON.stringify({ type: 'queue-operation', operation: 'enqueue', content: 'pas un message' }),
+      JSON.stringify({ type: 'summary', summary: 'Titre de repli' }),
+      JSON.stringify({ type: 'custom-title', customTitle: 'SWLG v2  : Recherche' }),
+      // meta → sauté, même filtre que parseSession ; son cwd ne compte pas
+      JSON.stringify({
+        type: 'user',
+        isMeta: true,
+        timestamp: '2026-09-17T09:06:16.000Z',
+        cwd: 'C:\\Scratch',
+        message: { content: 'caveat meta' }
+      }),
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-09-17T09:06:20.000Z',
+        cwd: 'C:\\Scratch',
+        message: { content: 'première question' }
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-17T09:06:25.000Z',
+        cwd: 'E:\\Projet',
+        message: {
+          content: [
+            { type: 'text', text: long },
+            { type: 'tool_use', name: 'Read', input: { file_path: 'C:\\code\\a.ts' } }
+          ]
+        }
+      }),
+      // tool_result (événement user sans texte) → pas un message, mais son cwd compte
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-09-17T09:06:27.000Z',
+        cwd: 'E:\\Projet',
+        message: { content: [{ type: 'tool_result', content: 'ok' }] }
+      }),
+      // bloc assistant CONSÉCUTIF (même tour vécu) → fusionné dans le message précédent
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-17T09:06:30.000Z',
+        cwd: 'E:\\Projet',
+        message: { content: [{ type: 'text', text: 'suite du même tour' }] }
+      }),
+      // sidechain = sous-agent : ses « user » ne sont pas les mots de l'utilisateur
+      JSON.stringify({
+        type: 'user',
+        isSidechain: true,
+        timestamp: '2026-09-17T09:06:40.000Z',
+        cwd: 'E:\\Projet',
+        message: { content: 'prompt de sous-agent' }
+      }),
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-09-17T09:07:00.000Z',
+        cwd: 'E:\\Projet',
+        message: { content: 'seconde question' }
+      }),
+      'ligne{corrompue'
+    ]
+    // Dossier À PART : ne pas polluer l'inventaire que les tests de listing comptent.
+    const importDir = mkdtempSync(join(tmpdir(), 'aos-transcripts-import-'))
+    const importFile = join(importDir, 'import-1.jsonl')
+    writeFileSync(importFile, importLines.join('\n'), 'utf8')
+
+    const t = await readSessionForImport(importFile)
+
+    expect(t.title).toBe('SWLG v2  : Recherche') // custom-title l'emporte sur summary
+    expect(t.cwd).toBe('E:\\Projet') // dominant (3 occurrences) contre C:\Scratch (1, hors meta)
+    expect(t.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user'])
+    expect(t.messages[0]).toMatchObject({
+      content: 'première question',
+      ts: Date.parse('2026-09-17T09:06:20.000Z')
+    })
+    // plein texte : aucun « … » à 280 caractères, et les deux blocs du tour sont réunis
+    expect(t.messages[1].content).toBe(`${long}\n\nsuite du même tour`)
+    expect(t.messages[1].ts).toBe(Date.parse('2026-09-17T09:06:25.000Z'))
+    expect(t.messages[2].content).toBe('seconde question')
+  })
+
+  it('readSessionForImport sans custom-title : le dernier summary sert de titre', async () => {
+    const fallbackFile = join(
+      mkdtempSync(join(tmpdir(), 'aos-transcripts-import-')),
+      'import-2.jsonl'
+    )
+    writeFileSync(
+      fallbackFile,
+      [
+        JSON.stringify({ type: 'summary', summary: 'Résumé de session' }),
+        JSON.stringify({
+          type: 'user',
+          timestamp: '2026-09-17T10:00:00.000Z',
+          message: { content: 'bonjour' }
+        })
+      ].join('\n'),
+      'utf8'
+    )
+    const t = await readSessionForImport(fallbackFile)
+    expect(t.title).toBe('Résumé de session')
+    expect(t.messages).toHaveLength(1)
   })
 
   it('keeps the async inventory bounded and reuses its short-lived cache', async () => {

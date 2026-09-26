@@ -60,9 +60,10 @@ describe('récupération sur coupure du watchdog', () => {
     expect(issue.error.message).toContain('figé')
   })
 
-  it('distingue la coupure sur durée max de la coupure sur silence', () => {
-    const issue = salvageOnWatchdogTrip('total', { finalText: 'partiel', executionEvidence: [] })
+  it('nomme la SEULE cause de coupure restante : le silence', () => {
+    const issue = salvageOnWatchdogTrip('inactivity', { finalText: 'partiel', executionEvidence: [] })
     if (issue.kind !== 'salvaged') throw new Error('attendu salvaged')
-    expect(issue.result.text).toMatch(/durée max/i)
+    expect(issue.result.text).toMatch(/aucune sortie/i)
+    expect(issue.result.text).not.toMatch(/durée max/i)
   })
 })

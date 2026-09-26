@@ -37,12 +37,12 @@ describe('ChatMessageRow — signe de vie du fournisseur', () => {
       host.querySelector('.msg-meta .msg-provider-status'),
       'le statut ne doit plus vivre dans l’en-tête du message'
     ).toBeNull()
-    const bloc = host.querySelector('[data-testid="thinking-block"]')
-    expect(bloc, 'le bloc Réflexion doit exister même sans pensée, pour porter le statut').not.toBeNull()
-    expect(bloc!.querySelector('[data-testid="thinking-status"]')?.textContent).toBe(
+    const bloc = host.querySelector('[data-testid="action-block"]')
+    expect(bloc, 'le bloc Actions doit exister pour porter le signe de vie').not.toBeNull()
+    expect(bloc!.querySelector('[data-testid="action-block-status"]')?.textContent).toBe(
       'Bash en cours - 12 s'
     )
-    expect(host.querySelector('[data-testid="thinking-body"]')?.textContent).toContain(
+    expect(host.querySelector('[data-testid="action-block-body"]')?.textContent).toContain(
       'Bash en cours - 12 s'
     )
     await act(async () => root.unmount())

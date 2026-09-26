@@ -81,6 +81,38 @@ export interface BrainNavigation {
 /** Résultat d'une récupération Brain : contexte injecté + (si le serveur l'expose) sa navigation. */
 export type BrainRetrievalStatus = 'found' | 'empty' | 'invalid' | 'unavailable'
 
+/**
+ * POURQUOI le Brain est injoignable — mesure conv-586/conv-587 (2026-09-16). Quatre échecs
+ * techniquement distincts rendaient le MÊME `unavailable`, donc le message affiché ne pouvait
+ * qu'ÉNUMÉRER des hypothèses (« serveur arrêté, jeton absent ou réseau ») là où le code savait
+ * exactement lequel des quatre s'était produit. Il a fallu quatre sondes manuelles pour retrouver
+ * une information que l'appel détenait déjà.
+ *
+ * - `no-token` : aucun jeton de service lisible → aucune requête n'est partie.
+ * - `empty-query` : requête vide côté appelant → aucune requête n'est partie.
+ * - `challenge-refused` : `GET /challenge` a répondu non-ok (serveur vivant mais refusant).
+ * - `query-refused` : `POST /query-secure` a répondu non-ok (jeton rejeté, index dégradé…).
+ * - `network` : rien n'a répondu (serveur arrêté, délai dépassé, réseau).
+ * - `test-mode` : neutralisation Vitest, jamais une panne réelle.
+ */
+export type BrainUnavailableReason =
+  | 'no-token'
+  | 'empty-query'
+  | 'challenge-refused'
+  | 'query-refused'
+  | 'network'
+  | 'test-mode'
+
+/** Motif humain, une phrase, pour chaque cause d'indisponibilité. */
+export const BRAIN_UNAVAILABLE_REASON_LABEL: Record<BrainUnavailableReason, string> = {
+  'no-token': 'jeton de service absent ou illisible — aucune requête n’est partie',
+  'empty-query': 'requête vide côté appelant — aucune requête n’est partie',
+  'challenge-refused': 'le serveur a REFUSÉ le préalable d’authentification (GET /challenge non-ok)',
+  'query-refused': 'le serveur a REFUSÉ la requête (POST /query-secure non-ok)',
+  network: 'aucune réponse du serveur (arrêté, délai dépassé ou réseau)',
+  'test-mode': 'appel réseau neutralisé en test'
+}
+
 export interface BrainRetrievalResult {
   context: string
   navigation?: BrainNavigation
@@ -92,6 +124,8 @@ export interface BrainRetrievalResult {
     sources: ReadonlyArray<{ path: string; content: string }>
   }
   status: BrainRetrievalStatus
+  /** Renseigné UNIQUEMENT quand `status === 'unavailable'` : laquelle des causes s'est produite. */
+  unavailableReason?: BrainUnavailableReason
 }
 
 const MAX_NAVIGATION_CANDIDATES = 100
@@ -189,9 +223,15 @@ export async function retrieveBrainContext(
   if (opts.corpus && opts.corpus.length === 0) return { context: '', status: 'empty' }
   // Hygiène test : sous Vitest on ne touche jamais le réseau (le serveur peut être live sur la
   // machine de dev → appels réels lents/non déterministes). Les tests injectent un fetchFn explicite.
-  if (process.env.VITEST && !opts.fetchFn) return { context: '', status: 'unavailable' }
+  if (process.env.VITEST && !opts.fetchFn)
+    return { context: '', status: 'unavailable', unavailableReason: 'test-mode' }
   const token = brainServiceToken(opts.env)
-  if (!token || !query.trim()) return { context: '', status: 'unavailable' }
+  if (!token || !query.trim())
+    return {
+      context: '',
+      status: 'unavailable',
+      unavailableReason: token ? 'empty-query' : 'no-token'
+    }
   const corpus = (opts.corpus ?? []).map((fragment) => fragment.trim()).filter(Boolean)
   const doFetch = opts.fetchFn ?? fetch
   const controller = new AbortController()
@@ -212,7 +252,8 @@ export async function retrieveBrainContext(
       method: 'GET',
       signal: controller.signal
     })
-    if (!challengeResponse.ok) return { context: '', status: 'unavailable' }
+    if (!challengeResponse.ok)
+      return { context: '', status: 'unavailable', unavailableReason: 'challenge-refused' }
     let nonce: string
     try {
       const challenge = verifySignedBrainPayload(
@@ -241,7 +282,8 @@ export async function retrieveBrainContext(
       body: JSON.stringify(sealBrainRequest(requestPayload, token, nonce)),
       signal: controller.signal
     })
-    if (!res.ok) return { context: '', status: 'unavailable' }
+    if (!res.ok)
+      return { context: '', status: 'unavailable', unavailableReason: 'query-refused' }
     let verified: ReturnType<typeof verifySignedBrainPayload>
     try {
       const data = await readSignedBrainPayload(res)
@@ -281,7 +323,8 @@ export async function retrieveBrainContext(
     }
     return result
   } catch {
-    return { context: '', status: 'unavailable' } // serveur down / timeout / réseau
+    // serveur down / timeout / réseau
+    return { context: '', status: 'unavailable', unavailableReason: 'network' }
   } finally {
     clearTimeout(timer)
   }

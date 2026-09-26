@@ -1,8 +1,10 @@
+import { deciderDuPassage, traceDuPassage } from './boucle-reparation'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
+import { dodDuVerdict, verdictAvecObjectionsPortees, verdictPanelValide } from './objections-juge'
 
 /**
  * Le juge doit juger contre le contrat que le PRODUCTEUR a reçu.
@@ -35,9 +37,17 @@ import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-di
 const JUDGE_TOOLSET_CONTRACT =
   `OUTILLAGE DU PRODUCTEUR : in-app, il dispose de Read/Grep/Glob, et en phase de mutation de ` +
   `Bash/Edit/Write bornés au dossier de travail. Pas d'accès web, pas de sous-agents. Pour une ` +
-  `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui navigue ` +
-  `par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
+  `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui, par défaut, ` +
+  `ouvre une instance CACHÉE (écran de l'utilisateur intact), navigue par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
   `Une capture citée avec son exit-code 0 et son chemin EST une preuve recevable. ` +
+  // D'OU VIENT L'INTERFACE (2026-09-26, conv-863) : une capture verte de l'application empaquetee
+  // ne contient pas une modification non empaquetee ; le juge doit savoir la lire.
+  `Son JSON dit d'où vient l'interface capturée (\`interfaceCapturee\`) : \`application-empaquetee\` = ` +
+  `dernier empaquetage, qui ne contient PAS une modification d'interface non empaquetée (hors ` +
+  `styles injectés par \`--css\`, signalés par \`cssInjecte\`) ; avec l'option \`--code-dev\`, ` +
+  `\`code-dev\` = code en cours servi par le serveur de dev du dépôt principal, et \`code-construit\` = ` +
+  `copie de travail du producteur reconstruite puis lancée sur ses propres fichiers. Une capture ne ` +
+  `prouve donc un changement d'interface que si ce changement y est VISIBLE. ` +
   `Ne réclame aucun mécanisme absent de cet outillage — binaire packagé, relais planifié, outil ` +
   `tiers : leur absence n'est jamais un défaut du livrable. En revanche exige ce qui EST à portée ` +
   `— exit-code de test, lecture ciblée, capture par ce harnais — et une affirmation invérifiable ` +
@@ -56,13 +66,14 @@ import { defaultQuorumThreshold } from './quorum'
 import { withCostContext, type CostAggregator, type CostSink } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import {
-  arretDeLaReparation,
   evaluateClosure,
   plafondDurReparations,
   reparationsAutorisees
 } from './gates/stopgate'
+import { mesureBundlePerime } from './gates/bundle-perime'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
+import { fichiersTouchesGit, fichiersEditesParLeRun } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { loadTrustedLearningOracles } from './providers/learning-oracle-manifest'
 import {
@@ -124,6 +135,7 @@ import {
   type ModelChoice,
   type NodeVerdict
 } from './workflow-walk'
+import { phasesApresJugeHorsGraphe } from './task-regime'
 
 /**
  * Ce qui fait d'une sortie de phase un ROUGE. Marqueur en TÊTE uniquement : un compte rendu qui
@@ -361,7 +373,11 @@ import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-c
 import { convRunsRoot } from './runs/conv-runs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
-import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
+import {
+  retrieveBrainContext,
+  type BrainNavigation,
+  type BrainUnavailableReason
+} from './brain-retrieval'
 import { messageEmpreinteBrain } from './brain-empreinte-message'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
@@ -388,10 +404,17 @@ import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
 import { STYLE_TON } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
+import { consigneBureauCache } from './consigne-bureau-cache'
 import { evidenceDeLErreur } from './providers/evidence-portee-par-erreur'
-import { describeFanoutFailure, explainRoleFailure } from './provider-failure-diagnosis'
+import {
+  classifyProviderFailure,
+  describeFanoutFailure,
+  explainRoleFailure,
+  modeleDeRepliApresRefus
+} from './provider-failure-diagnosis'
 import { retryOnTransientOverload } from './transient-overload'
 import { alignReportWithDisk, dispositionPourIssue } from './worktree-path-rewrite'
+import { annonceCommitLocal } from './annonce-commit-local'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
 import type { ChatArtifact } from '../shared/artifacts'
 import type { RunLifecycleEvent } from '../shared/run-execution'
@@ -468,6 +491,8 @@ export interface RunAgentRef {
   token: string
   /** Décodeur du journal brut à employer après crash. */
   provider?: string
+  /** Modèle lancé — sans lui, la dépense réglée après coup n'est attribuable à aucun modèle. */
+  model?: string
   /** Attribution persistée : le graphe/devis ne suffit pas à redéduire la phase après un crash. */
   phase?: NodePhase
   /** Réservation provider non réglée ; reste vraie entre la sortie du PID et le règlement du stream. */
@@ -529,6 +554,12 @@ export interface OrchestrationPhase {
   reasoningEffort?: string
   /** A4 — phase du pipeline en cours (scout/frame/…) pour un libellé live précis (pas « sous-agent »). */
   phase?: NodePhase
+  /**
+   * Le prompt REELLEMENT envoye a cette phase, disponible DES le demarrage — l'enveloppe est
+   * construite juste avant cet evenement. Sans lui, la ligne de pipeline ne montrait le prompt
+   * qu'a la FIN de la phase (le step termine), donc « rien en preprompt » pendant tout l'appel.
+   */
+  prompt?: PromptEnvelope
   execution?: OrchestrationStep['execution']
 }
 
@@ -1367,18 +1398,18 @@ export class Orchestrator {
       spawnIntent: (
         token: string,
         active: boolean,
-        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>,
+        assignment: Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'>,
         reservationId?: string
       ) => void
       spawned: (
         token: string,
         pid: number,
-        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>
+        assignment: Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'>
       ) => void
       journal: (
         token: string,
         journalPath: string,
-        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>
+        assignment: Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'>
       ) => void
       reservationSettled: (reservationId: string) => void
     }
@@ -1467,6 +1498,15 @@ export class Orchestrator {
   }
 
   /** Commande de vérif à rejouer (verify-replay) : explicite > convention workspace > aucune (dormant). */
+  /**
+   * Les fichiers DEJA modifies dans le depot quand `run()` a demarre.
+   *
+   * Les garde-fous de preuve visuelle et de mouvement n'ont pas le diff du run : ils relisent
+   * `git status`. Sur un arbre partage deja sale, ils attribuaient au run le travail des autres
+   * sessions et refusaient un vert merite (mesure du 2026-09-12, conv-512 : 217 fichiers, dont
+   * 55 de rendu). Fige une fois par run, soustrait par les handlers.
+   */
+  private fichiersSalesAuDemarrage: readonly string[] = []
   private resolveVerifyCmd(cwd = this.deps.executionWorkspace): string | undefined {
     if (this.deps.verifyCmd) return this.deps.verifyCmd
     return this.deps.autoVerify ? resolveVerifyCmd(cwd) : undefined
@@ -1478,12 +1518,14 @@ export class Orchestrator {
     runId: string,
     phase: NodePhase,
     provider: string,
-    fanOut = false
+    fanOut = false,
+    model?: string
   ): NonNullable<SendOptions['execution']> {
     const observers = this.processObservers.get(runId)
     let executorProvider = provider
-    const assignment = (): Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'> => ({
+    const assignment = (): Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'> => ({
       provider: executorProvider,
+      ...(model ? { model } : {}),
       phase,
       fanOut
     })
@@ -1494,9 +1536,12 @@ export class Orchestrator {
       this.learningOraclesByRun.set(runId, learningOracles)
     }
     const providerTimeoutMs = this.deps.currentExecutionQuote?.()?.limits.maxDurationMs
+    const filDuRun = this.costContextByRun.get(runId)?.conversationId
     return {
       cwd,
       sandbox,
+      // Le fil du run, lisible par l'agent et ses scripts (hdesk-lancer.ps1 -> petite TV du fil).
+      ...(filDuRun ? { agentEnv: { AUTOWIN_CONVERSATION_ID: filDuRun } } : {}),
       // La phase, NOMMÉE pour qui doit la lire (voir `phaseAppelante` dans providers/types.ts).
       phaseAppelante: phase,
       ...(providerTimeoutMs ? { providerTimeoutMs } : {}),
@@ -1588,6 +1633,16 @@ export class Orchestrator {
      * ils faisaient remonter ce jet jusqu'ici et tuaient un run par ailleurs sain. On les protege
      * UNE fois, a leur entree dans le pipeline : meme contrat que `emitLifecycle` juste dessous.
      */
+    /*
+     * ETAT DE DEPART DU DEPOT — ce qui etait DEJA modifie avant que ce run commence.
+     *
+     * Mesure du 2026-09-12 (conv-512) : les garde-fous de preuve visuelle et de mouvement
+     * reconstruisent leur diff depuis `git status` du depot, faute de recevoir celui du run.
+     * Sur un arbre partage deja sale — 217 fichiers, dont 55 de rendu, laisses par d'autres
+     * sessions — ils attribuaient tout au run courant et refusaient un vert merite. On fige
+     * donc la saleté PREEXISTANTE ici, une fois, pour que les hooks la soustraient.
+     */
+    this.fichiersSalesAuDemarrage = await fichiersTouchesGit(this.deps.executionWorkspace)
     onStep = protegerRappel('onStep', onStep)
     onPhase = protegerRappel('onPhase', onPhase)
     onDelta = protegerRappel('onDelta', onDelta)
@@ -2250,6 +2305,14 @@ export class Orchestrator {
         produced.result = aligned.result
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
       }
+      // Le commit de transport est ANNONCÉ dans la réponse : il arrivait dans l'historique sans un mot
+      // et passait pour un commit fait en cachette malgré la consigne (conv-710).
+      const annonceCommit = produced ? annonceCommitLocal(finalized, runId, task) : undefined
+      if (produced && annonceCommit && !produced.result.includes(annonceCommit)) {
+        produced.result = `${produced.result.trimEnd()}
+
+${annonceCommit}`
+      }
       const publishedCommitSha =
         projectPublication?.publishedSha ??
         (typeof finalized === 'object' && finalized !== null
@@ -2427,13 +2490,22 @@ export class Orchestrator {
       requireProof: isMutationTask(task),
       evidenceOkCount: evidence.filter((item) => item.ok).length,
       evidence,
-      output: aggregate
+      output: aggregate,
+      editsByFile: fichiersEditesParLeRun(evidence, workCwd),
+      fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
     })
     const preGate = evaluateClosure({
-      status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
+      // fix-ok: conv-835 tour 8641812d-6401-4129-a6b0-13a64228e0bc — meme raccourci que 0014ffca :
+      // un hook bloquant AVEC sa raison forcait `red`, donc « Échec déjà déclaré » alors que rien ne
+      // l'etait. Test orchestrator.greedy rouge avant / vert apres. Sans raison du hook : `red` garde.
+      status:
+        evidenceOk && !(hookOutcome.blocked && hookOutcome.reasons.length === 0) ? 'green' : 'red',
       dod: [{ checked: evidenceOk, hasContent: true }]
     })
-    if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
+    if (hookOutcome.blocked) {
+      preGate.blocked = true
+      preGate.reasons.push(...hookOutcome.reasons)
+    }
     /**
      * ON N'INTERROMPT PLUS EN ROUTE — on CONSTATE, et on répare après coup.
      *
@@ -2483,7 +2555,7 @@ export class Orchestrator {
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 OBJECTIONS:
-- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
     const messages = [{ role: 'user' as const, content: judgePrompt }]
     const parts = [
@@ -2500,7 +2572,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       systemBlocks,
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort,
-      execution: this.executionOptions(workCwd, 'read-only', runId, 'judge', judgeProvider),
+      execution: this.executionOptions(
+        workCwd,
+        'read-only',
+        runId,
+        'judge',
+        judgeProvider,
+        false,
+        judgeBinding.model
+      ),
       signal,
       observePrompt: (observed) => {
         observed.systemBlocks = systemBlocks
@@ -2523,6 +2603,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       provider: judgeProvider,
       role: 'judge',
       model: judgeBinding.model,
+      prompt: envelope,
       execution: judgeExecution
     })
     const startedAt = performance.now()
@@ -2547,8 +2628,16 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     // Les preuves ont déjà passé le pré-gate : le juge tranche maintenant la substance.
     // UN SEUL lecteur : ce site testait `/^\s*valide/i` et jetait donc l'approbation d'un juge qui
     // n'ouvrait pas sa phrase par le mot. Cf. `lireVerdictJuge`.
-    const ok = lireVerdictJuge(verdictText)
-    trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
+    // Un VALIDE porteur d'objections concrètes n'est pas une clôture : il repart en réparation.
+    const ok = lireVerdictJuge(verdictAvecObjectionsPortees(verdictText))
+    // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
+    // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
+    trust.record({
+      judgeModel: judgeProvider,
+      verdict: ok ? 'green' : 'red',
+      runId,
+      conversationId: this.costContextByRun.get(runId)?.conversationId
+    })
     push({
       step: 'judge',
       provider: res.provider ?? judgeProvider,
@@ -2736,6 +2825,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
             this.phasePrompt(phase, withFoundation),
             // VARIABLE par sandbox — le plus volatile, donc en dernier.
             // Vide quand le run tourne dans le dépôt de base : rien n'est payé en contexte.
+            // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+            { name: 'bureauCache', text: consigneBureauCache(runId) },
             {
               name: 'workspaceIsolation',
               text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -2756,7 +2847,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 systemBlocks,
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
-                execution: this.executionOptions(workCwd, sandbox, runId, phase, subProvider, true),
+                execution: this.executionOptions(
+                  workCwd,
+                  sandbox,
+                  runId,
+                  phase,
+                  subProvider,
+                  true,
+                  phaseBinding.model
+                ),
                 signal,
                 observePrompt: (observed) => {
                   observed.systemBlocks = systemBlocks
@@ -2783,6 +2882,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
                 phase,
+                // L'enveloppe est construite juste au-dessus : la ligne de pipeline montre le prompt
+                // DES le demarrage (recidive « rien en preprompt », conv-587 du 2026-09-16).
+                prompt: envelope,
                 execution
               })
               const startedAt = performance.now()
@@ -2971,7 +3073,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               { name: 'style', text: STYLE_TON },
               { name: 'projectContext', text: projectContext }
             ]
+            let synthEnvelope: PromptEnvelope | undefined
+            const synthSystemBlocks = synthNodeParts
+              .filter((p) => p.text)
+              .map((p) => ({ name: p.name, chars: p.text.length }))
             const synthOptions: SendOptions = {
+              observePrompt: (observed) => {
+                observed.systemBlocks = synthSystemBlocks
+                synthEnvelope = observed
+              },
               system: synthNodeParts.map((p) => p.text).join(''),
               systemBlocks: synthNodeParts
                 .filter((p) => p.text)
@@ -2987,7 +3097,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 runId,
                 phase,
                 orchBinding.provider,
-                true
+                true,
+                orchBinding.model
               ),
               signal
             }
@@ -2999,6 +3110,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               dependencyIds: good.map((member) => member.agentId),
               attemptId: randomUUID()
             }
+            synthEnvelope = registry.describePrompt(
+              orchBinding.provider,
+              synthMessages,
+              synthOptions,
+              orchBinding.model
+            )
+            synthEnvelope.systemBlocks = synthSystemBlocks
             onPhase?.({
               step: 'exec',
               provider: orchBinding.provider,
@@ -3006,6 +3124,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               model: orchBinding.model,
               reasoningEffort: orchBinding.reasoningEffort,
               phase,
+              // Troisieme point d'annonce : la FUSION multi-modeles n'avait aucune enveloppe
+              // (meme recidive « rien en preprompt », conv-587, saisie ts=1789550244094).
+              prompt: synthEnvelope,
               execution: synthExecution
             })
             const synthStartedAt = performance.now()
@@ -3546,6 +3667,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        */
       const empreinteQuery = `empreinte du dépôt ${workspaceLabel(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`
       let empreinteStatut: BrainRetrievalEvent['status'] = 'unavailable'
+      // La CAUSE de l'indisponibilité, telle que `retrieveBrainContext` l'a constatée : sans elle le
+      // message de `think` ne peut qu'énumérer des hypothèses (mesure conv-586, 2026-09-16).
+      let empreinteMotif: BrainUnavailableReason | undefined
       let empreinteNavigation: BrainNavigation | undefined
       try {
         const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)(empreinteQuery, {
@@ -3553,10 +3677,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         })
         const empreinteScopee = scopeBrainRetrieval(chargee, brainCorpus)
         empreinteStatut = empreinteScopee.status
+        empreinteMotif = empreinteScopee.unavailableReason
         empreinteNavigation = empreinteScopee.navigation
         empreinteDepot = empreinteScopee.context.slice(0, 6_000)
       } catch {
-        // Le load est un confort de départ, jamais une raison d'échouer.
+        // Le load est un confort de départ, jamais une raison d'échouer. Une exception ici est un
+        // échec de transport : c'est exactement le cas « réseau ».
+        empreinteMotif = 'network'
       }
       try {
         onBrainRetrieved?.({
@@ -3577,7 +3704,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * Le STATUT decide du message, pas la taille du texte. Un Brain injoignable rendait « aucune
        * empreinte » — une panne annoncee comme un resultat de recherche (mesure conv-9, 2026-08-31).
        */
-      const empreinteMessage = messageEmpreinteBrain(empreinteStatut, empreinteDepot.length)
+      const empreinteMessage = messageEmpreinteBrain(
+        empreinteStatut,
+        empreinteDepot.length,
+        empreinteMotif
+      )
       push({
         step: 'exec',
         role: 'think',
@@ -3814,6 +3945,8 @@ ${empreinteDepot}`
           // VARIABLE par phase — d'où sa place ici, et non en position 2.
           this.phasePrompt(phase, true),
           // VARIABLE par sandbox : le plus volatile, donc en dernier.
+          // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+          { name: 'bureauCache', text: consigneBureauCache(runId) },
           {
             name: 'workspaceIsolation',
             text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -3824,8 +3957,13 @@ ${empreinteDepot}`
           .map((p) => ({ name: p.name, chars: p.text.length }))
         const fanSystem = parts.map((p) => p.text).join('')
         const sandbox = sandboxForPhase(task, phase)
-        const memberOutputs = await Promise.all(
-          fanMembers.map(async (member, rang) => {
+        const runMember = async (
+          member: (typeof fanMembers)[number],
+          rang: number
+        ): Promise<
+          | { member: (typeof fanMembers)[number]; text: string; ok: true; cause: undefined }
+          | { member: (typeof fanMembers)[number]; text: string; ok: false; cause: string }
+        > => {
             // L'identité prend la persona quand il y en a une, sinon le modèle. Le rang n'est ajouté
             // QUE s'il lève une ambiguïté réelle : trois membres sur le même modèle portaient
             // jusqu'ici le MÊME agentId et se télescopaient dans le suivi comme dans l'UI ; deux
@@ -3863,7 +4001,8 @@ ${empreinteDepot}`
                 runId,
                 phase,
                 member.provider,
-                fanMembers.length > 1
+                fanMembers.length > 1,
+                member.model
               ),
               signal
             }
@@ -3956,11 +4095,30 @@ ${empreinteDepot}`
                 cause: error instanceof Error ? error.message : String(error)
               }
             }
-          })
-        )
+          }
+        const memberOutputs = await Promise.all(fanMembers.map(runMember))
         // SYNTHÈSE par l'orchestrateur (le rôle le + capable) : union dédupliquée, PAS de re-décision.
         // Un modèle en échec (ok=false / texte vide) ne pollue pas la synthèse (filtré).
-        const good = memberOutputs.filter((o) => o.ok && o.text.trim())
+        let good = memberOutputs.filter((o) => o.ok && o.text.trim())
+        if (good.length === 0) {
+          // fix-ok: conv-540 tour 4dfe2821 — refus « safeguards flagged » du seul membre claude-opus-5, fan-out sans repli -> tour rouge
+          // REPLI APRÈS REFUS (conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4) : le seul membre
+          // build a été refusé par le filtre de sécurité du modèle et le tour a fini rouge sans rien
+          // tenter. Relancer le MÊME modèle échoue pareil : on rejoue UNE fois sur le modèle voisin.
+          const refuse = memberOutputs.find(
+            (o) => !o.ok && classifyProviderFailure(o.cause ?? '') === 'refused'
+          )
+          const repli = refuse ? modeleDeRepliApresRefus(refuse.member.model) : undefined
+          if (refuse && repli && !fanMembers.some((m) => m.model === repli)) {
+            onDelta?.(
+              'exec',
+              `\n[repli] ${refuse.member.model} a refusé le message — nouvel essai sur ${repli}\n`
+            )
+            const rescue = await runMember({ ...refuse.member, model: repli }, fanMembers.length)
+            memberOutputs.push(rescue)
+            good = [rescue].filter((o) => o.ok && o.text.trim())
+          }
+        }
         if (good.length === 0) {
           // Tous les modèles du fan-out ont échoué → échec de phase EXPLICITE (jamais une synthèse
           // fantôme sur du vide qui se propagerait comme un résultat valide). Aligne le comportement
@@ -4012,11 +4170,17 @@ ${empreinteDepot}`
           { name: 'style', text: STYLE_TON },
           { name: 'projectContext', text: projectContext }
         ]
+        let synthEnvelopePhase: PromptEnvelope | undefined
+        const synthPhaseBlocks = synthParts
+          .filter((p) => p.text)
+          .map((p) => ({ name: p.name, chars: p.text.length }))
         const synthOptions: SendOptions = {
+          observePrompt: (observed) => {
+            observed.systemBlocks = synthPhaseBlocks
+            synthEnvelopePhase = observed
+          },
           system: synthParts.map((p) => p.text).join(''),
-          systemBlocks: synthParts
-            .filter((p) => p.text)
-            .map((p) => ({ name: p.name, chars: p.text.length })),
+          systemBlocks: synthPhaseBlocks,
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
           execution: this.executionOptions(
@@ -4024,7 +4188,9 @@ ${empreinteDepot}`
             'read-only',
             runId,
             phase,
-            orchBinding.provider
+            orchBinding.provider,
+            false,
+            orchBinding.model
           ),
           signal
         }
@@ -4046,6 +4212,13 @@ ${empreinteDepot}`
           dependencyIds: good.map(({ member }) => `${phase}:${member.model ?? member.provider}`),
           attemptId: randomUUID()
         }
+        synthEnvelopePhase = registry.describePrompt(
+          orchBinding.provider,
+          synthMessages,
+          synthOptions,
+          orchBinding.model
+        )
+        synthEnvelopePhase.systemBlocks = synthPhaseBlocks
         onPhase?.({
           step: 'exec',
           provider: orchBinding.provider,
@@ -4053,6 +4226,9 @@ ${empreinteDepot}`
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
           phase,
+          // Fusion multi-modeles d'une phase : elle n'annoncait aucune enveloppe, le deplie
+          // « prompt envoye » restait vide (conv-587, saisie ts=1789550244094).
+          prompt: synthEnvelopePhase,
           execution: synthExecution
         })
         const synth = await this.sendWithRoleContext(
@@ -4180,6 +4356,8 @@ ${empreinteDepot}`
             // VARIABLE par phase.
             this.phasePrompt(phase, false),
             // VARIABLE par sandbox.
+            // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+            { name: 'bureauCache', text: consigneBureauCache(runId) },
             {
               name: 'workspaceIsolation',
               text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -4198,6 +4376,8 @@ ${empreinteDepot}`
             // VARIABLE par phase.
             this.phasePrompt(phase, true),
             // VARIABLE par sandbox — le plus volatile, donc en dernier.
+            // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+            { name: 'bureauCache', text: consigneBureauCache(runId) },
             {
               name: 'workspaceIsolation',
               text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -4316,7 +4496,9 @@ ${empreinteDepot}`
           phaseSandbox,
           runId,
           phase,
-          providerDeLaPhase
+          providerDeLaPhase,
+          false,
+          phaseBinding.model
         ),
         signal,
         /**
@@ -4368,6 +4550,7 @@ ${empreinteDepot}`
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
         phase,
+        prompt: execPrompt,
         execution
       })
       const phaseStartedAt = performance.now()
@@ -4753,7 +4936,9 @@ ${empreinteDepot}`
         requireProof: isMutationTask(task),
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
         evidence: exec.executionEvidence,
-        output: exec.text
+        output: exec.text,
+        editsByFile: fichiersEditesParLeRun(exec.executionEvidence, workCwd),
+        fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
       })
       // UN SEUL endroit calcule l'etat de cloture (`root-execution-contract.ts`) : cette decision
       // vivait ici en ligne, donc hors de portee des tests — une mutation de sa garde ne faisait
@@ -4769,11 +4954,18 @@ ${empreinteDepot}`
        * pre-gate est en prime moins cher : cela coupe AVANT de payer le juge.
        */
       const preGate = evaluateClosure({
-        status: hookOutcome.blocked ? 'red' : cloture.status,
+        // fix-ok: conv-835 tour 8641812d-6401-4129-a6b0-13a64228e0bc (activity 04:27:22.132Z) — un hook
+        // bloquant forcait `red`, donc le refus s'ouvrait sur « Échec déjà déclaré » alors que le run
+        // n'avait rien declare : seul le fix-gate bloquait, et il porte deja sa raison (meme defaut
+        // que 11f829ad au gate final). Sans raison du hook, on garde `red` pour ne pas bloquer muet.
+        status: hookOutcome.blocked && hookOutcome.reasons.length === 0 ? 'red' : cloture.status,
         dod: cloture.dod.map((check) => ({ ...check, hasContent: true })),
         travauxNonLivres: [...travauxNonLivres]
       })
-      if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
+      if (hookOutcome.blocked) {
+        preGate.blocked = true
+        preGate.reasons.push(...hookOutcome.reasons)
+      }
       if (preGate.blocked) {
         onPhase?.({ step: 'gate' })
         push({
@@ -4789,9 +4981,16 @@ ${empreinteDepot}`
       // Consommer ici l'occurrence restante évite de payer/rejouer exactement le même verdict.
       const resumedJudgeText = takePaidPhase('judge')
       if (resumedJudgeText !== undefined) {
-        const ok = evidenceOk && lireVerdictJuge(resumedJudgeText)
+        const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
         lastJudgeText = resumedJudgeText.trim()
-        trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
+        // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
+        // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
+        trust.record({
+          judgeModel: judgeProvider,
+          verdict: ok ? 'green' : 'red',
+          runId,
+          conversationId: conversationId
+        })
         push({
           step: 'judge',
           provider: judgeProvider,
@@ -4810,8 +5009,9 @@ ${empreinteDepot}`
         })
         onPhase?.({ step: 'gate' })
         const recoveredGate = evaluateClosure({
-          status: ok ? 'green' : 'red',
-          dod: [{ checked: ok, hasContent: true }],
+          // Le refus est porte par la DoD du verdict ; `red` y ajoutait un faux « Échec déjà déclaré ».
+          status: 'green',
+          dod: dodDuVerdict(ok, resumedJudgeText),
           // Meme raison qu'au pre-gate : un verdict REPRIS ne rend pas livre ce qui n'a pas ete livre.
           travauxNonLivres: [...travauxNonLivres]
         })
@@ -4879,7 +5079,7 @@ ${empreinteDepot}`
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 OBJECTIONS:
-- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
         : `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
           `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
@@ -4896,7 +5096,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 OBJECTIONS:
-- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
@@ -4914,7 +5114,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         systemBlocks: judgeBlocks,
         model: judgeBinding.model,
         reasoningEffort: judgeBinding.reasoningEffort,
-        execution: this.executionOptions(workCwd, 'read-only', runId, 'judge', judgeProvider),
+        execution: this.executionOptions(
+        workCwd,
+        'read-only',
+        runId,
+        'judge',
+        judgeProvider,
+        false,
+        judgeBinding.model
+      ),
         signal,
         observePrompt: (observed) => {
           observed.systemBlocks = judgeBlocks
@@ -4974,7 +5182,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 runId,
                 'judge',
                 member.provider,
-                true
+                true,
+                member.model
               )
             }
             const startedAt = performance.now()
@@ -5010,7 +5219,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                   costUsd: r.usage.costUsd
                 })
               }
-              const votesValide = lireVerdictJuge(r.text)
+              // Un membre qui valide EN LISTANT des écarts vote DEFAUT : ses objections rejoignent
+              // alors le verdict agrégé, donc le feedback de la réparation.
+              const votesValide = lireVerdictJuge(verdictAvecObjectionsPortees(r.text))
               push({
                 step: 'judge',
                 provider: r.provider ?? member.provider,
@@ -5063,7 +5274,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         // déjà ajouté par juge ci-dessus, n'est pas re-compté.
         verdict = {
           text: passes
-            ? 'VALIDE'
+            ? // Quorum atteint : les objections des membres RESTENT dans le verdict (conv-539,
+              // tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e) au lieu d'etre reduites au mot VALIDE.
+              verdictPanelValide(responders.map((r) => ({ text: r.text, ok: r.ok })))
             : votingN === 0
               ? 'DEFAUT: aucun juge n’a répondu (tous en échec)'
               : `DEFAUT: quorum non atteint (${valideVotes}/${votingN} VALIDE, seuil ${threshold})${reasons.length ? ` — ${reasons.join(' | ')}` : ''}`,
@@ -5126,9 +5339,16 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * (ligne 2522) l'utilisait deja ; les trois chemins du pipeline principal, non — le doublon
        * annonce comme resorbe ne l'etait que sur une lignee.
        */
-      const ok = evidenceOk && lireVerdictJuge(verdict.text)
+      const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(verdict.text))
       lastJudgeText = verdict.text.trim()
-      trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
+      // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
+      // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
+      trust.record({
+        judgeModel: judgeProvider,
+        verdict: ok ? 'green' : 'red',
+        runId,
+        conversationId: conversationId
+      })
       push({
         step: 'judge',
         provider: judgeMembers.length >= 2 ? undefined : (verdict.provider ?? judgeProvider),
@@ -5160,8 +5380,12 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // déjà franchi le pré-gate local. Le juge est read-only, le signal local n'a donc pas changé.
       onPhase?.({ step: 'gate' })
       const g = evaluateClosure({
-        status: ok ? 'green' : 'red',
-        dod: [{ checked: ok, hasContent: true }],
+        // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — pre-gate deja passe, donc `red` ne
+        // venait que du juge : il doublait chaque refus d'un faux « Échec déjà déclaré » (reparations 1-9).
+        // Le refus reste bloquant : dodDuVerdict(false) rend toujours au moins une case non cochee.
+        status: 'green',
+        // fix-ok: conv-539 tour 24e29815 — une case DoD muette cachait les objections du juge a la reparation et figeait le refus
+        dod: dodDuVerdict(ok, verdict.text),
         // Une sous-tache en echec ou sautee est du travail ANNONCE et non livre : elle bloque, et la
         // boucle de reparation ci-dessous s'en saisit comme de n'importe quel refus du gate.
         travauxNonLivres: [...travauxNonLivres]
@@ -5230,7 +5454,19 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     let learningAttestations: IndependentLearningAttestation[] = []
     /** Motifs du refus precedent : sert a reconnaitre un refus qu'un rejeu ne peut pas faire evoluer. */
     let motifsPrecedents: string[] = []
-    for (let attempt = 0; attempt <= PLAFOND_DUR; attempt++) {
+    /** Combien de fois DE SUITE le refus est revenu mot pour mot (conv-470, tour 52fbe05f : 4). */
+    let refusIdentiquesConsecutifs = 0
+    // conv-844 : choix utilisateur, on repare jusqu'a ce qu'il n'y ait plus de defaut. Seul un budget
+    // BLOQUANT (reparations accordees = 0) garde l'ancienne borne ; sinon on ne sort que sur un vert
+    // ou sur un code perime (`arretDeLaReparation`).
+    // Les tests d'orchestrateur gardent l'ancien plafond (tests/reinit-couts-session.ts).
+    const jusquAuVert =
+      politique.reparations > 0 && process.env.AUTOWIN_REPARATION_BORNEE !== '1'
+    for (
+      let attempt = 0;
+      attempt <= PLAFOND_DUR || jusquAuVert;
+      attempt++
+    ) {
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
         // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
@@ -5238,15 +5474,38 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           `reparation:${attempt}`,
           `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Objections du juge : ${lastJudgeText || '(verdict vide)'}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
+        // LE PASSAGE SE NOMME DANS LA TRACE : sans cette ligne, un run mort par epuisement ne
+        // permet pas de compter ses rejeus apres coup (objection du juge, conv-540).
+        const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR)
+        if (ligneDuPassage) push({ step: 'gate', role: 'gate', detail: ligneDuPassage })
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
         // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
         prevSessionId = undefined
-        await executePipelinePhase('build')
-        // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
-        // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
-        // codé en dur build → judge.
-        for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
-          await executePipelinePhase(phase)
+        /**
+         * UNE REPARATION QUI NE PEUT PLUS S'EXECUTER ARRETE LA BOUCLE, ELLE N'ANNULE PAS LE TOUR.
+         *
+         * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — le build de reparation a leve
+         * « Budget d'appels provider atteint : 42 appels ». L'exception traversait toute la boucle :
+         * `orchestrate` rendait ok:false, et TOUT le travail deja juge (4 verdicts, objections
+         * comprises) disparaissait de la reponse. L'utilisateur ne voyait qu'« echec du workflow ».
+         * Desormais l'echec du passage de reparation est un MOTIF de refus nomme : le verdict et les
+         * objections du dernier juge restent dans le resultat du run.
+         */
+        try {
+          await executePipelinePhase('build')
+          // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
+          // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
+          // codé en dur build → judge.
+          for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
+            await executePipelinePhase(phase)
+          }
+        } catch (erreur) {
+          const motif = `Réparation ${attempt} interrompue (${
+            erreur instanceof Error ? erreur.message : String(erreur)
+          }) — le verdict et les objections du dernier passage restent ci-dessous.`
+          gate.reasons.push(motif)
+          push({ step: 'gate', role: 'gate', detail: motif })
+          break
         }
         exec = buildExec()
       }
@@ -5272,7 +5531,12 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          *     faire echouer un travail valide parce que le Brain a hoquete serait un faux rouge.
          *     `valid` et `gate` ne sont plus touches apres ce point.
          */
-        const apresGate = graphePilote ? noeudsApresJuge(graphePilote) : []
+        // Sans graphe (run mono-phase) : cf. `phasesApresJugeHorsGraphe` (task-regime.ts).
+        const apresGate: NodePhase[] = graphePilote
+          ? noeudsApresJuge(graphePilote)
+              .map((id) => graphePilote.nodes.find((n) => n.id === id)?.phase)
+              .filter((phase): phase is NodePhase => phase !== undefined)
+          : phasesApresJugeHorsGraphe(task)
         // Un silence n'est pas une explication : quand la chaine ne se joue pas, la trace DIT laquelle
         // des deux causes a mordu (verdict non vert / aucun noeud learn declare).
         const motifSansChaine = motifChaineApresJugeNonJouee({
@@ -5280,16 +5544,14 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           gateBloque: false
         })
         if (motifSansChaine) push({ step: 'gate', role: 'gate', detail: motifSansChaine })
-        for (const idNoeud of apresGate) {
-          const noeud = graphePilote?.nodes.find((n) => n.id === idNoeud)
-          if (!noeud) continue
+        for (const phaseApresGate of apresGate) {
           try {
-            await executePipelinePhase(noeud.phase)
+            await executePipelinePhase(phaseApresGate)
           } catch (erreur) {
             push({
               step: 'exec',
               role: 'subagent',
-              detail: `${noeud.phase} impossible (${
+              detail: `${phaseApresGate} impossible (${
                 erreur instanceof Error ? erreur.message : String(erreur)
               }) — le verdict du run n'en est pas affecte`
             })
@@ -5307,15 +5569,21 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * qu'un run rendait « bloque » sans qu'on sache s'il avait renonce faute de progres ou faute de
        * tours.
        */
-      const arret = arretDeLaReparation({
-        tentative: attempt + 1,
+      const passage = deciderDuPassage({
+        attempt,
         reparationsAccordees: politique.reparations,
         plafondDur: PLAFOND_DUR,
         motifsCourants: gate.reasons,
-        motifsPrecedents
+        etat: { motifsPrecedents, refusIdentiquesConsecutifs },
+        // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — 14 reparations refusees
+        // parce que out/main/index.js (11:06) etait plus ancien que les correctifs commites
+        // (11:11-11:31) : le code qui jugeait n'etait pas celui qu'on reparait. La boucle le NOMME
+        // desormais au lieu de bruler un build et un panel de juge par passage.
+        bundlePerime: mesureBundlePerime(process.cwd()),
+        jusquAuVert
       })
-      if (arret) {
-        gate.reasons.push(arret)
+      if (passage.arret) {
+        gate.reasons.push(passage.arret)
         /**
          * LE MOTIF EST AUSSI POUSSE DANS LA TRACE, et pas seulement dans le resultat.
          *
@@ -5324,10 +5592,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          * du run mais JAMAIS la trace — la revendication « une borne qui mord doit se dire » n'etait
          * tenue qu'a moitie, et c'est precisement la moitie que l'on relit apres coup.
          */
-        push({ step: 'gate', role: 'gate', detail: arret })
+        push({ step: 'gate', role: 'gate', detail: passage.arret })
         break
       }
-      motifsPrecedents = [...gate.reasons]
+      refusIdentiquesConsecutifs = passage.etatSuivant.refusIdentiquesConsecutifs
+      motifsPrecedents = passage.etatSuivant.motifsPrecedents
     }
     if (gate.blocked) {
       const motifBloque = motifChaineApresJugeNonJouee({

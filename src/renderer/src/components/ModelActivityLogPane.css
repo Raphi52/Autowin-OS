@@ -35,7 +35,11 @@
 }
 
 .model-log-count {
-  font: 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    10px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 0.06em;
   color: #d4a94f;
   white-space: nowrap;
@@ -69,7 +73,11 @@
 }
 
 .model-log-time {
-  font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    10px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   font-variant-numeric: tabular-nums;
   text-align: right;
   color: rgba(169, 178, 196, 0.75);
@@ -91,7 +99,11 @@
    [data-log-kind] plus bas — une seule regle de forme, huit teintes. */
 .model-log-kind {
   flex: none;
-  font: 9px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    9px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0 5px;
@@ -119,7 +131,11 @@
    sauter des que le bloc est ouvert — sinon on deplie sur un texte toujours tronque. */
 .model-log-detail {
   margin-top: 2px;
-  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    11px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   color: #a9b2c4;
   word-break: break-word;
 }
@@ -229,7 +245,11 @@
    mention, pas un second chip qui concurrencerait la nature du geste. */
 .model-log-source {
   flex: none;
-  font: 9px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    9px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 0.05em;
   color: rgba(169, 178, 196, 0.6);
   white-space: nowrap;
@@ -267,7 +287,11 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  font: 9px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font:
+    9px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
   letter-spacing: 0.04em;
   color: rgba(169, 178, 196, 0.7);
 }
@@ -340,4 +364,156 @@
 .model-log-toggle.is-on {
   color: #e2685f;
   border-color: rgba(226, 104, 95, 0.45);
+}
+
+/* ============================================================================
+   PISTES PAR SOURCE — la trace reste UN seul flux chronologique (c'est le sens de lecture),
+   mais chaque origine occupe une VOIE à position fixe sur un rail de 5 px de large par source.
+   On lit donc l'origine à la POSITION du trait, sans lire le texte, et on voit d'un coup d'œil
+   quelles sources parlent en même temps. Coût DOM : UN nœud de plus par ligne (le rail), le reste
+   est en pseudo-éléments — la fenêtre de 300 lignes n'est pas alourdie.
+   ========================================================================== */
+
+/* Rail d'en-tête : la légende des voies, et le moyen d'isoler une source d'un clic. */
+.model-log-voies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  padding: 2px 0 4px;
+}
+
+.model-log-voie {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  font:
+    9px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.05em;
+  color: rgba(169, 178, 196, 0.75);
+}
+
+.model-log-voie:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.model-log-voie.is-seule {
+  border-color: rgba(212, 169, 79, 0.45);
+  color: #d4a94f;
+}
+
+.model-log-voie__trait {
+  width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--piste-tone, #8b93a6);
+}
+
+.model-log-voie__compte {
+  opacity: 0.6;
+}
+
+/* La ligne gagne une colonne de rail UNIQUEMENT en vue pistes. */
+.model-log-list[data-pistes='true'] .model-log-row {
+  grid-template-columns: calc(var(--piste-total, 1) * 5px) var(--log-gutter) 1fr;
+  column-gap: 6px;
+}
+
+.model-log-piste {
+  position: relative;
+  align-self: stretch;
+  min-height: 14px;
+}
+
+/* Les voies inoccupées restent visibles en filigrane : sans elles, un trait isolé ne dit pas
+   DE QUELLE voie il s'agit. */
+.model-log-piste::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.055) 0 1px,
+    transparent 1px 5px
+  );
+}
+
+.model-log-piste::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--piste, 0) * 5px);
+  width: 3px;
+  border-radius: 2px;
+  background: var(--piste-tone, #8b93a6);
+}
+
+/* NEUF TEINTES D'ORIGINE — volontairement désaturées : la couleur VIVE reste celle de la nature
+   du geste, l'origine ne doit pas entrer en concurrence avec elle. */
+[data-piste-source='thread'],
+[data-voie-source='thread'] {
+  --piste-tone: #8fa3bd;
+}
+[data-piste-source='prompts'],
+[data-voie-source='prompts'] {
+  --piste-tone: #d4a94f;
+}
+[data-piste-source='journal'],
+[data-voie-source='journal'] {
+  --piste-tone: #7fa6d8;
+}
+[data-piste-source='parts'],
+[data-voie-source='parts'] {
+  --piste-tone: #6fbf82;
+}
+[data-piste-source='causal'],
+[data-voie-source='causal'] {
+  --piste-tone: #a78bd0;
+}
+[data-piste-source='activity'],
+[data-voie-source='activity'] {
+  --piste-tone: #c98fb0;
+}
+[data-piste-source='brain'],
+[data-voie-source='brain'] {
+  --piste-tone: #5fb3ab;
+}
+[data-piste-source='bureaux'],
+[data-voie-source='bureaux'] {
+  --piste-tone: #b89b6a;
+}
+[data-piste-source='fichiers'],
+[data-voie-source='fichiers'] {
+  --piste-tone: #9aa0b8;
+}
+
+/* Panneau très étroit : le rail passe à 4 px par voie plutôt que de manger le label. */
+@container (max-width: 320px) {
+  .model-log-list[data-pistes='true'] .model-log-row {
+    grid-template-columns: calc(var(--piste-total, 1) * 4px) var(--log-gutter) 1fr;
+  }
+  .model-log-piste::before {
+    background: repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.055) 0 1px,
+      transparent 1px 4px
+    );
+  }
+  .model-log-piste::after {
+    left: calc(var(--piste, 0) * 4px);
+    width: 2px;
+  }
+}
+
+.model-log-toggle.is-piste {
+  color: #d4a94f;
+  border-color: rgba(212, 169, 79, 0.45);
 }

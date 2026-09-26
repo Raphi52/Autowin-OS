@@ -57,6 +57,32 @@ describe('listInboxCandidates — les candidats de inbox/ deviennent enfin actio
     expect(candidate.body).toContain('La promotion reste humaine.')
   })
 
+  it('ne compte pas le README.md de inbox/ comme un candidat', () => {
+    note(
+      'inbox/README.md',
+      `# Boîte de réception
+
+Déposez ici les candidats produits par remember.
+`
+    )
+    note(
+      'inbox/2026-09-16-vrai-candidat.md',
+      `---
+type: lesson
+scope: autowin-os
+source: git:src/main/index.ts@abc1234
+date: 2026-09-16
+---
+
+# Un vrai candidat
+
+Corps.
+`
+    )
+    const ids = listInboxCandidates(root, { now: new Date('2026-09-16T00:00:00Z') }).map((c) => c.id)
+    expect(ids).toEqual(['inbox/2026-09-16-vrai-candidat'])
+  })
+
   it('ignore ce qui n’est pas dans inbox/ — knowledge/ reste INTACT', () => {
     note('inbox/a.md', '# A\n')
     note('knowledge/b.md', '# B\n')

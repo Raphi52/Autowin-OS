@@ -6,6 +6,7 @@
  * l'IPC. C'est ce qui rend tenable l'invariant perf « composer change ≠ re-render des lignes »
  * (comparateur data-only en bas de fichier).
  */
+import { tourRefusePourAutoLancer } from './veille-candidats-message'
 import React, { Fragment, memo } from 'react'
 import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
@@ -14,9 +15,16 @@ import { AskDecisionBlock } from './AskDecision'
 import { JugesPanel } from './JugesPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { AssistantActivityGroup } from './ChatView.parts'
-import { ForkIcon, InspectIcon } from './chat-view-icons'
+import { clotureEnDernier } from './cloture-en-dernier'
+import { CheckIcon, CopyIcon, ForkIcon, InspectIcon } from './chat-view-icons'
 import { formatFileSize } from './chat-attachments'
-import { groupAssistantActivity, type ChatErrorPart, type ChatPart } from './chat-view-model'
+import { formaterHeureComplete, formaterHeureMessage } from './heure-message'
+import {
+  groupAssistantActivity,
+  libelleCoutDuTour,
+  type ChatErrorPart,
+  type ChatPart
+} from './chat-view-model'
 import { bilanDuTour, formaterBilan } from './bilan-tour'
 import { estErreurAuthExpiree } from './erreur-auth'
 import type { TerminalStatus } from './chat-resume-refine'
@@ -25,6 +33,46 @@ import type { InspectTurnTarget } from '../observatory-focus'
 import type { ChatArtifact } from '../../../shared/artifacts'
 import { Spinner } from './Spinner'
 import { ThinkingBlock } from './ThinkingBlock'
+
+/** Le texte COPIABLE d'un message : la bulle utilisateur, ou tout le texte rendu par l'agent. */
+function texteCopiable(message: Msg): string {
+  if (message.role === 'user') return message.content ?? ''
+  return message.parts
+    .filter((part): part is Extract<ChatPart, { kind: 'text' }> => part.kind === 'text')
+    .map((part) => part.text)
+    .join('\n')
+    .trim()
+}
+
+/**
+ * Bouton « copier ce message » — pose le texte du message dans le presse-papier et confirme par une
+ * coche pendant 1,5 s. Demande utilisateur du 2026-09-12 : il vit A COTE du bouton brancher.
+ */
+export function CopyMessageButton({ message }: { message: Msg }): React.JSX.Element | null {
+  const [copie, setCopie] = React.useState(false)
+  const texte = texteCopiable(message)
+  if (!texte) return null
+  return (
+    <button
+      type="button"
+      className="msg-turn-icon"
+      data-testid="copy-message"
+      title="Copier ce message dans le presse-papier"
+      aria-label="Copier ce message"
+      onClick={() => {
+        void navigator.clipboard?.writeText(texte).then(
+          () => {
+            setCopie(true)
+            setTimeout(() => setCopie(false), 1500)
+          },
+          () => setCopie(false)
+        )
+      }}
+    >
+      {copie ? <CheckIcon /> : <CopyIcon />}
+    </button>
+  )
+}
 
 export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
   return (
@@ -315,6 +363,11 @@ export const ChatMessageRow = memo(
         <div className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}>
           <div className="msg-meta">
             <span className="msg-role">Toi</span>
+            {message.ts ? (
+              <span className="msg-time" data-heure-complete={formaterHeureComplete(message.ts)}>
+                {formaterHeureMessage(message.ts)}
+              </span>
+            ) : null}
             {/* MESSAGE INJECTE EN COURS DE TOUR (conv-257, 2026-09-04). Le drapeau `orientation`
                 existait deja cote donnees, mais RIEN ne le montrait : un message tape pendant un
                 tour n'ouvre pas de nouveau tour, il rejoint celui qui court -- et l'utilisateur
@@ -367,21 +420,20 @@ export const ChatMessageRow = memo(
               })}
             </div>
           )}
-          {message.messageId && onFork && (
-            <div className="msg-turn-actions">
-              {onFork && (
-                <button
-                  type="button"
-                  className="msg-turn-icon"
-                  title="Créer une branche à partir de ce message"
-                  aria-label="Créer une branche à partir de ce message"
-                  onClick={() => onFork(message.messageId!)}
-                >
-                  <ForkIcon />
-                </button>
-              )}
-            </div>
-          )}
+          <div className="msg-turn-actions">
+            <CopyMessageButton message={message} />
+            {message.messageId && onFork && (
+              <button
+                type="button"
+                className="msg-turn-icon"
+                title="Créer une branche à partir de ce message"
+                aria-label="Créer une branche à partir de ce message"
+                onClick={() => onFork(message.messageId!)}
+              >
+                <ForkIcon />
+              </button>
+            )}
+          </div>
         </div>
       )
     }
@@ -389,13 +441,24 @@ export const ChatMessageRow = memo(
       <div className="msg assistant fade-in">
         <div className="msg-meta">
           <span className="msg-role">Agent</span>
+          {/* LE seul spinner du tour : une attente = un indicateur, ici et nulle part ailleurs
+              (demande du 2026-09-12 « met qu'un spinner sur la ligne agent »). */}
+          {!message.done && <Spinner size={14} label="Tour en cours" />}
         </div>
         {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense.
             L'attente AVANT le premier fragment de pensée passe par le MÊME bloc (corps vide) :
             l'ancien placeholder texte « réflexion… » etait un vestige qui court-circuitait le
             bloc depliable et donnait l'impression d'une retrogradation. */}
+        {/* LES DEUX BLOCS SURVIVENT A LA FIN DU TOUR (demande du 2026-09-12 : « les blocs action et
+            raisonnement doivent pas disparaitre a la fin du tour »). Avant, la condition exigeait
+            `message.reasoning` des que le tour etait clos : sur un modele dont la pensee arrive
+            chiffree (opus-5), tout le journal d'actions s'effacait a la seconde ou le tour finissait
+            et il n'en restait aucune trace lisible dans le fil. Le journal des actions suffit donc
+            desormais a garder les deux blocs. */}
         {(message.reasoning ||
-          (!message.done && (message.parts.length === 0 || message.providerStatus))) && (
+          message.providerStatusLog?.length ||
+          message.providerStatus ||
+          (!message.done && message.parts.length === 0)) && (
           <ThinkingBlock
             text={message.reasoning ?? ''}
             done={message.done}
@@ -404,7 +467,13 @@ export const ChatMessageRow = memo(
           />
         )}
         <div className="msg-turn">
-          {splitAssistantTimeline(message.parts, directiveReceipts ?? []).map(
+          {splitAssistantTimeline(
+            // TOUR TERMINE : le bloc de cloture se lit en DERNIER, meme si une action a ete
+            // declenchee apres son ecriture (demande du 2026-09-12). Pendant l'ecriture, on ne
+            // touche a rien : le texte doit apparaitre dans l'ordre ou il arrive.
+            message.done ? clotureEnDernier(message.parts) : message.parts,
+            directiveReceipts ?? []
+          ).map(
             (timelineItem, timelineIndex) =>
               timelineItem.kind === 'receipt' ? (
                 <DirectiveReceiptRow
@@ -453,7 +522,13 @@ export const ChatMessageRow = memo(
                         key={index}
                         candidats={part.candidats}
                         texteScout={part.texteScout}
-                        autoLancer={autoLancerCandidats}
+                        autoLancer={
+                          autoLancerCandidats === true &&
+                          !tourRefusePourAutoLancer(
+                            message.status,
+                            message.parts.flatMap((p) => (p.kind === 'text' ? [p.text] : []))
+                          )
+                        }
                         onPick={(prompt) => onPickSuggestion?.(prompt)}
                       />
                     ) : part.kind === 'error' ? (
@@ -558,6 +633,12 @@ export const ChatMessageRow = memo(
             )
           })()}
         <div className="msg-turn-actions">
+          <CopyMessageButton message={message} />
+          {libelleCoutDuTour((message as { coutUsd?: number }).coutUsd) && (
+            <span className="c-faint tnum msg-turn-cost" data-testid="msg-turn-cost">
+              {libelleCoutDuTour((message as { coutUsd?: number }).coutUsd)}
+            </span>
+          )}
           {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
             <button
               type="button"

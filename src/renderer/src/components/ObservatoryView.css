@@ -103,8 +103,12 @@
 .observatory-toolbar__analysis {
   flex-wrap: wrap;
 }
+/* Recherche + filtres rapides : sous 360 px restants, ce bloc passe SOUS « Chronologie » au lieu
+   d'etre ecrase a cote. Capture du 2026-09-22 (conv-785) : a ~60 px, chaque filtre prenait sa
+   propre ligne dans une colonne etroite, coupee au bord droit des que le texte grossit. */
 .observatory-toolbar__timeline {
-  flex: 1;
+  flex: 1 1 360px;
+  flex-wrap: wrap;
 }
 .observatory-toolbar__actions {
   padding-left: 10px;
@@ -115,7 +119,8 @@
   flex: 1 1 220px;
 }
 .observatory-quick-filters {
-  flex: none;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
 }
 .observatory-quick-filters button,
 .observatory-causal-controls button {
@@ -1680,4 +1685,25 @@
   .observatory-flightdeck {
     min-height: 300px;
   }
+}
+
+/* LIGNE DE RUN : le clic principal révèle le RUN.md, le second saute à la conversation qui l'a
+   produit. Deux boutons côte à côte — imbriquer le second dans le premier serait du HTML invalide. */
+.observatory-run-line {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.observatory-run-line > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.observatory-run-jump {
+  flex: 0 0 auto;
+  font-size: 10px;
+  white-space: nowrap;
+}
+/* BLOQUÉ : un run sans issue se voit sans lire son statut — liseré rouge, pas une nuance de doré. */
+.observatory-runs [data-run-blocked='true'] {
+  border-left: 2px solid #e06c5a;
 }

@@ -20,8 +20,11 @@ const source = readFileSync(join(__dirname, 'claude.ts'), 'utf8')
 
 /** Les branches d'outils du spawn, chacune avec son ancre dans le fichier. */
 const BRANCHES: Array<{ nom: string; ancre: string; fin: string }> = [
-  { nom: 'exécuteur', ancre: 'if (execution) {', fin: '} else if (materialized) {' },
-  { nom: 'artefact matérialisé', ancre: '} else if (materialized) {', fin: 'TOUR DE CHAT' },
+  { nom: 'exécuteur', ancre: 'if (execution) {', fin: 'TOUR DE CHAT' },
+  // La branche « artefact matérialisé » a été SUPPRIMÉE le 2026-09-17 (conv-650) : elle court-circuitait
+  // la branche chat dès qu'une pièce jointe existait — outils réduits et cwd perdu. Les pièces jointes
+  // sont désormais un `--add-dir` de plus dans la branche chat, elles n'ont plus de branche à elles.
+  { nom: 'pièces jointes sans workspace', ancre: 'outilsSansWorkspace', fin: 'MEMOIRE AUTO' },
   {
     nom: 'fond autonome (watchdog)',
     ancre: "toolProfile === 'watchdog-read-only'",

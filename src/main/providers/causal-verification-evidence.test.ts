@@ -189,6 +189,63 @@ describe('preuve causale provider → outcome learning', () => {
     expect(oracleMutation[1].oracleAttestation).toBeUndefined()
   })
 
+  it('atteste malgré une exploration bruyante ANTÉRIEURE au rouge : elle ne peut pas fabriquer le vert', () => {
+    const evidence: ExecutionEvidence[] = [
+      // Exploration typique d'un début de run : tube + substitution, donc jamais « strictement
+      // lecture seule ». Mesuré le 2026-09-12 : c'est ce bruit d'avant-rouge qui fermait le gate
+      // pour 1 820 vérifications et rendait la route `publish` inatteignable.
+      ...codexExecutionEvidenceFromItem({
+        type: 'command_execution',
+        status: 'completed',
+        command: 'git log --oneline | head -20',
+        exit_code: 0
+      }),
+      {
+        type: 'command_execution',
+        kind: 'verification',
+        status: 'failed',
+        ok: false,
+        summary: 'red',
+        command: TRUSTED_ORACLE.command,
+        exitCode: 1
+      },
+      {
+        type: 'workspace_delta',
+        kind: 'mutation',
+        status: 'completed',
+        ok: true,
+        summary: 'covered production mutation',
+        paths: ['src/main/x.ts'],
+        pathFingerprints: { 'src/main/x.ts': 'sha-after' }
+      },
+      {
+        type: 'command_execution',
+        kind: 'verification',
+        status: 'completed',
+        ok: true,
+        summary: 'green',
+        command: TRUSTED_ORACLE.command,
+        exitCode: 0
+      },
+      // Post-verte : ne peut pas avoir fabriqué un vert déjà observé.
+      ...codexExecutionEvidenceFromItem({
+        type: 'command_execution',
+        status: 'completed',
+        command: 'git status --short | wc -l',
+        exit_code: 0
+      })
+    ]
+
+    attestIsolatedVerificationEvidence(evidence, true, [TRUSTED_ORACLE])
+
+    const green = evidence.find((item) => item.summary === 'green')
+    expect(green?.oracleStable).toBe(true)
+    expect(green?.oracleAttestation).toBe(TRUSTED_ORACLE.attestation)
+    // Le rouge reste attesté : c'est lui qui prouve au superviseur que l'oracle était sain avant
+    // la mutation, donc que la chaîne rouge → verte est réelle.
+    expect(evidence.find((item) => item.summary === 'red')?.oracleStable).toBe(true)
+  })
+
   it('refuse une altération shell sans chemin même si oracle est restauré avant le snapshot final', () => {
     const evidence: ExecutionEvidence[] = [
       {

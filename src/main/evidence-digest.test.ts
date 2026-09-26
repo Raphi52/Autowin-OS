@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExecutionEvidence } from './providers/types'
 import {
   EVIDENCE_MAX_ITEMS,
+  EVIDENCE_TOTAL_CHARS,
   clampAggregateForJudge,
   clampMiddle,
   evidenceForJudge,
@@ -119,6 +120,32 @@ describe('evidence-digest', () => {
     const livrable = `## Ce qui a changé\n${'ligne utile\n'.repeat(200)}## Preuves\nexit 0`
     expect(clampAggregateForJudge(livrable)).toBe(livrable)
     expect(clampAggregateForJudge(undefined)).toBe('')
+  })
+
+  /**
+   * MESURE 2026-09-16 sur 348 prompts de juge reels (.autowin-data/autowin-os/prompt-observability) :
+   * message median = 119 007 caracteres, dont 93 169 (78 %) de PREUVES OUTILS, contre 15 533 de
+   * livrable et 4 836 de blocs systeme. Le plafond par ITEM (60 preuves) ne borne donc pas le
+   * volume : 60 preuves bornees chacune peuvent encore peser 90 k caracteres.
+   */
+  it('borne le VOLUME TOTAL des preuves, pas seulement leur nombre', () => {
+    const inspection = (i: number): ExecutionEvidence => ({
+      type: 'command_execution',
+      kind: 'inspection',
+      status: 'completed',
+      ok: true,
+      summary: `Lecture ${i}`,
+      command: `cat src/file-${i}.tsx`,
+      stdout: `${'ligne de contenu lu sans valeur de verdict\n'.repeat(2_000)}fin ${i}`
+    })
+    const lot = Array.from({ length: EVIDENCE_MAX_ITEMS }, (_, i) => inspection(i))
+    // Sans plafond de volume, ces 60 preuves deja bornees chacune pesaient encore > 70 k caracteres.
+    expect(JSON.stringify(lot.map(evidenceForJudge)).length).toBeGreaterThan(70_000)
+    const serialise = serializeEvidenceForJudge([verification, ...lot])
+    expect(serialise.length).toBeLessThanOrEqual(EVIDENCE_TOTAL_CHARS + 2_000)
+    // La preuve la plus porteuse (la verification avec son exit code) survit a la coupe.
+    expect(serialise).toContain('"exitCode":0')
+    expect(serialise).toContain('omises')
   })
 
   it('rend un tableau vide lisible', () => {

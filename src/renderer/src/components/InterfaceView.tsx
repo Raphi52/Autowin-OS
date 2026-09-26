@@ -39,8 +39,8 @@ export function InterfaceView(): React.JSX.Element {
         <div className="interface-row-text">
           <strong>Thème</strong>
           <p>
-            L’apparence de l’application : <strong>huit thèmes</strong>, quatre sombres et quatre
-            clairs. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas ne voit
+            L’apparence de l’application : <strong>dix thèmes</strong>, cinq sombres et cinq clairs,
+            dont deux <strong>Spécial malvoyant</strong> à très fort contraste. <strong>Sombre</strong> reste le réglage par défaut : qui n’y touche pas ne voit
             rien changer. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans
             redémarrage.
           </p>
@@ -62,6 +62,10 @@ export function InterfaceView(): React.JSX.Element {
           </select>
         </label>
       </div>
+      <p className="interface-reserve" data-testid="interface-zoom">
+        <strong>Pour agrandir tout l’écran</strong> (utile avec les thèmes Spécial malvoyant) :
+        Ctrl + molette, ou Ctrl + « + » / Ctrl + « - ». Ctrl + 0 revient à la taille normale.
+      </p>
       <p className="interface-reserve">
         <strong>Ce qui ne suit pas encore.</strong> Le thème choisi s’applique à presque tout
         l’écran : le menu, les panneaux, les textes, les champs, et les pages <strong>Chat</strong>,{' '}

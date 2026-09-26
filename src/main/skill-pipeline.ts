@@ -105,15 +105,67 @@ function dossiersDeSkills(roots: string[]): string[] {
   return noms
 }
 
+/**
+ * UN `/nom` QUI N'EXISTE PAS DOIT LE DIRE — c'est la contrepartie de `skillInstruction`.
+ *
+ * `skillInstruction` rend '' pour DEUX causes qu'on ne distinguait pas : « cette skill n'existe
+ * pas » et « son SKILL.md est vide ». Dans les deux cas le message partait comme du texte ordinaire
+ * et PERSONNE ne savait que la commande n'avait pas pris — ni l'utilisateur, ni l'agent. Le
+ * commentaire de `src/shared/skill-aliases.ts` posait pourtant la regle : « Un / mal tape doit
+ * porter, pas echouer sans bruit ».
+ *
+ * Mesure du 2026-09-16 sur `conversations.json` : 12 invocations REELLEMENT tapees n'ont charge
+ * aucune procedure — `/design` 6 fois (apres son retrait volontaire du 2026-09-03), `/skill` 3
+ * fois, puis `/usage`, `/front-converge`, `/ingest`.
+ *
+ * Rend `undefined` quand la skill EXISTE : l'appelant n'a alors rien a signaler.
+ */
+export function noteSkillInconnue(id: string, roots = skillRoots()): string | undefined {
+  if (!ID_SKILL_VALIDE.test(id)) return undefined
+  const connus = dossiersDeSkills(roots)
+  const cible = resolveSkillAlias(id)
+  if (connus.some((nom) => nom.toLowerCase() === cible.toLowerCase())) return undefined
+  if (corrigeSkillMalTapee(cible, connus)) return undefined
+  // Les plus PROCHES par prefixe partage : « /desi… » ramene « draft » plutot qu'une liste de 20.
+  const proches = connus
+    .map((nom) => ({ nom, score: prefixeCommun(nom.toLowerCase(), cible.toLowerCase()) }))
+    .filter((c) => c.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((c) => `/${c.nom}`)
+  const piste =
+    proches.length > 0
+      ? ` Les plus proches : ${proches.join(', ')}.`
+      : ` Les procédures disponibles : ${connus
+          .slice(0, 12)
+          .map((n) => `/${n}`)
+          .join(', ')}.`
+  return (
+    `
+=== COMMANDE INCONNUE ===
+` +
+    `L'utilisateur a tapé « /${id} », mais aucune procédure de ce nom n'existe : rien n'a été ` +
+    `chargé.${piste}
+Dis-le-lui en une ligne avant de répondre — sans quoi il croira que sa ` +
+    `commande a pris. Puis traite son message comme une demande ordinaire.
+`
+  )
+}
+
+/** Longueur du préfixe commun à deux noms — suffisant pour classer des candidats courts. */
+function prefixeCommun(a: string, b: string): number {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i += 1
+  return i
+}
+
 export function skillInstruction(id: string, roots = skillRoots()): string {
   // La garde reste EN TÊTE : on ne résout un alias que sur une entrée déjà bornée, jamais l'inverse
   // (résoudre d'abord rouvrirait la traversée par une clé d'alias forgée).
   if (!ID_SKILL_VALIDE.test(id)) return ''
   let cible = resolveSkillAlias(id)
   if (!ID_SKILL_VALIDE.test(cible)) return ''
-  let root = roots.find(
-    (candidate) => readIfExists(join(candidate, cible, 'SKILL.md')).length > 0
-  )
+  let root = roots.find((candidate) => readIfExists(join(candidate, cible, 'SKILL.md')).length > 0)
   // `/draf` au lieu de `/draft` : sans ce rattrapage, on rend '' et la skill n'est jamais chargee,
   // en silence (cf. `uneSeuleFauteDeFrappe`). On ne corrige que vers un candidat UNIQUE.
   if (!root) {

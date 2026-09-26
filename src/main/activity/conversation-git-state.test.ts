@@ -72,6 +72,34 @@ describe('conversation Git state', () => {
     expect(diffB.diff).toContain('modifié par B')
   })
 
+  // fix-ok: cause mesurée — un fichier commité sort de git status, perd son empreinte (sha256 du diff vs HEAD) et la liste de la conversation se vidait ; ce test rouge avant le correctif le prouve.
+  it('garde le fichier de la conversation une fois commité, avec le diff de son commit', async () => {
+    const repo = initRepo()
+    const spool = mkdtempSync(join(tmpdir(), 'autowin-committed-spool-'))
+    roots.push(spool)
+    writeFileSync(join(repo, 'foo.ts'), 'modifié puis commité\n', 'utf8')
+    await trace('conv-commit', repo, spool)
+    execFileSync('git', ['commit', '-am', 'run'], { cwd: repo })
+
+    expect((await readConversationGitState('conv-commit', repo, spool)).state?.changes).toEqual([
+      expect.objectContaining({ path: 'foo.ts', status: 'committed', staged: false })
+    ])
+    const diff = await readConversationGitDiff('conv-commit', 'foo.ts', repo, spool)
+    expect(diff.available, diff.error).toBe(true)
+    expect(diff.diff).toContain('+modifié puis commité')
+    expect(diff.diff).toContain('-initial')
+    expect((await readConversationGitState('conv-autre', repo, spool)).state?.changes).toEqual([])
+
+    rmSync(join(repo, 'foo.ts'))
+    writeFileSync(join(repo, 'foo.ts'), 'modifié puis commité\n', 'utf8')
+    expect((await readConversationGitState('conv-commit', repo, spool)).state?.changes).toEqual([
+      expect.objectContaining({ path: 'foo.ts', status: 'retouched' })
+    ])
+    const retouche = await readConversationGitDiff('conv-commit', 'foo.ts', repo, spool)
+    expect(retouche.available, retouche.error).toBe(true)
+    expect(retouche.note).toContain('retouché')
+  })
+
   it('lit le diff encore présent dans le vrai worktree du sous-agent', async () => {
     const repo = initRepo()
     const spool = mkdtempSync(join(tmpdir(), 'autowin-worktree-spool-'))
@@ -173,8 +201,12 @@ describe('conversation Git state', () => {
     execFileSync('git', ['restore', '--', 'foo.ts'], { cwd: repo })
     writeFileSync(join(repo, 'foo.ts'), 'état X\n', 'utf8')
 
-    expect((await readConversationGitState('conv-a', repo, spool)).state?.changes).toEqual([])
-    expect((await readConversationGitDiff('conv-a', 'foo.ts', repo, spool)).available).toBe(false)
+    expect((await readConversationGitState('conv-a', repo, spool)).state?.changes).toEqual([
+      expect.objectContaining({ path: 'foo.ts', status: 'retouched' })
+    ])
+    const retoucheA = await readConversationGitDiff('conv-a', 'foo.ts', repo, spool)
+    expect(retoucheA.available, retoucheA.error).toBe(true)
+    expect(retoucheA.note).toContain('retouché')
 
     const externalBase = await captureWorkspaceMutationSnapshot(repo)
     writeFileSync(join(repo, 'foo.ts'), 'état Y par B\n', 'utf8')
@@ -241,7 +273,9 @@ describe('conversation Git state', () => {
 
     execFileSync('git', ['restore', '--', 'dir/foo.ts'], { cwd: repo })
     rmSync(join(repo, 'dir', 'foo.ts'))
-    expect((await readConversationGitState('conv-delete', repo, spool)).state?.changes).toEqual([])
+    expect((await readConversationGitState('conv-delete', repo, spool)).state?.changes).toEqual([
+      expect.objectContaining({ path: 'dir/foo.ts', status: 'retouched' })
+    ])
   })
 
   it('rend une suppression non attribuable après une lacune entre deux processus', () => {
@@ -272,6 +306,9 @@ describe('conversation Git state', () => {
     ) as { before: string[]; after: string[] }
 
     expect(firstProcess.generationMarker).toMatch(/^missing:[0-9a-f-]+:0$/)
-    expect(secondProcess).toEqual({ before: [], after: [] })
+    expect(secondProcess).toEqual({
+      before: ['dir/foo.ts:retouched'],
+      after: ['dir/foo.ts:retouched']
+    })
   })
 })

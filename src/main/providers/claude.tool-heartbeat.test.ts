@@ -268,6 +268,58 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
     expect(statuts[0]).toContain('fond')
   })
 
+  /*
+   * UNE TACHE DE FOND TUEE A LA FIN DU TOUR NE REVIENDRA JAMAIS — il faut le DIRE dans la reponse.
+   * Mesure conv-528, turnId 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9 : `task_started` a 1789370085871,
+   * reponse « Le script tourne en fond. Je te rends le résultat dès qu'il se termine. », puis
+   * `task_notification` status `stopped` a 1789370094489 et `done` 263 ms apres. Aucun resultat
+   * n'est jamais revenu ; l'utilisateur a attendu 2 h 24 puis a lance /kaizen « cette conv a buggé ».
+   */
+  it('une tache de fond arretee ou encore ouverte a la fin du tour est signalee DANS la reponse', async () => {
+    const { ClaudeCliAdapter } = await import('./claude')
+    spawnCapture.stdoutEvents = [
+      { type: 'system', subtype: 'task_started', task_id: 'k1', description: 'node salvage.mjs' },
+      { type: 'system', subtype: 'task_started', task_id: 'k2', description: 'npx vitest run' },
+      {
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'Le script tourne en fond. Je te rends le résultat.' }] }
+      },
+      { type: 'system', subtype: 'task_notification', task_id: 'k1', status: 'stopped', summary: 'node salvage.mjs' },
+      succes
+    ]
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
+    let texte = ''
+    let step = await gen.next()
+    while (!step.done) {
+      texte += step.value.delta ?? ''
+      step = await gen.next()
+    }
+    expect(texte).toContain('node salvage.mjs')
+    expect(texte).toContain('npx vitest run')
+    expect(texte).toMatch(/ne reviendra pas/)
+    // k1 a recu `stopped`, k2 aucune notification : le message ne doit pas dire « arretee » pour k2.
+    expect(texte).toMatch(/arrêtée[^\n]*node salvage\.mjs/)
+    expect(texte).toMatch(/pas terminée[^\n]*npx vitest run/)
+    expect(texte).not.toMatch(/arrêtée[^\n]*npx vitest run/)
+  })
+
+  it('une tache de fond TERMINEE avant la fin du tour ne declenche aucun avertissement', async () => {
+    const { ClaudeCliAdapter } = await import('./claude')
+    spawnCapture.stdoutEvents = [
+      { type: 'system', subtype: 'task_started', task_id: 'k3', description: 'npx eslint' },
+      { type: 'system', subtype: 'task_notification', task_id: 'k3', status: 'completed', summary: 'npx eslint' },
+      succes
+    ]
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
+    let texte = ''
+    let step = await gen.next()
+    while (!step.done) {
+      texte += step.value.delta ?? ''
+      step = await gen.next()
+    }
+    expect(texte).not.toMatch(/ne reviendra pas/)
+  })
+
   it('une tache de fond en ECHEC le dit, au lieu de se taire', async () => {
     spawnCapture.stdoutEvents = [
       {
@@ -364,5 +416,41 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
     const reasoning = await drainStatus()
 
     expect(reasoning).toHaveLength(0)
+  })
+})
+
+/**
+ * FIN D'ACTION — le bloc Actions (frise C3, conv-831, 2026-09-24) colore chaque action selon son
+ * RESULTAT. Ce resultat n'existait que dans `executionEvidence` ; il voyage desormais aussi dans le
+ * canal status, sous une forme que `thinking-block-corps.ts` replie sur la ligne de l'outil.
+ */
+describe('ClaudeCliAdapter — la fin d’une action dit si elle a échoué', () => {
+  it('émet « outil échoué - durée » au résultat en erreur, « terminé » sinon', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test' } },
+            { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: 'src/a.ts' } }
+          ]
+        }
+      },
+      {
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 't1', is_error: true, content: '2 rouges' },
+            { type: 'tool_result', tool_use_id: 't2', content: 'ok' }
+          ]
+        }
+      },
+      succes
+    ]
+    const statuts = await drainStatus()
+
+    expect(statuts).toContain('Bash · npm test')
+    expect(statuts.find((s) => s.startsWith('Bash échoué'))).toMatch(/^Bash échoué - \d+ s$/)
+    expect(statuts.find((s) => s.startsWith('Read terminé'))).toMatch(/^Read terminé - \d+ s$/)
   })
 })

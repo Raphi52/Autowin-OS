@@ -1,17 +1,26 @@
-import { useState } from 'react'
-import type { RunEntry, CheckpointEntry } from './ChatView'
+import { useEffect, useRef, useState } from 'react'
+import type { RunEntry } from './ChatView'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
-import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
+import { WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
 import { StepThread } from './ChatView.parts'
+// Conflit resolu le 2026-09-15 (salvage) : le candidat importait AUSSI `RunProgress`, retire de
+// main depuis (le composant n'existe plus, seuls son CSS et son test subsistent). On ne garde donc
+// que `libelleRun`, qui rend le sujet d'un run lisible a l'affichage.
+import { libelleRun } from './run-label'
 import { RunInspector } from './RunInspector'
+import { runOuvertARelire } from './run-ouvert-a-jour'
 
-/** Les trois objets du panneau, chacun sur son onglet : le graphe, les RUN.md, la trace. */
-export type PanelTab = 'graph' | 'runs' | 'logs'
+/**
+ * Les objets du panneau, chacun sur son onglet : le graphe, les RUN.md, les journaux des modeles,
+ * les fichiers modifies ET l'arborescence editable, reunis sur un seul onglet (« Files »).
+ */
+export type PanelTab = 'graph' | 'runs' | 'logs' | 'code'
 
 const PANEL_TABS: ReadonlyArray<readonly [PanelTab, string]> = [
   ['graph', 'Graph'],
   ['runs', 'Runs'],
-  ['logs', 'Logs']
+  ['logs', 'Logs'],
+  ['code', 'Files']
 ]
 
 /** Onglets du détail d'un RUN. `trace` = fil des sous-agents, `runmd` = fichier produit. */
@@ -22,7 +31,14 @@ export type RunDetailTab = 'trace' | 'runmd'
  * contenu du RUN.md, SOIT un echec de lecture (`error`). L'echec ne passe plus par `content` :
  * il s'affichait alors comme si la pile d'erreur ETAIT le run.
  */
-export type OpenRunState = { path: string; content: string; pending?: boolean; error?: string }
+export type OpenRunState = {
+  path: string
+  content: string
+  pending?: boolean
+  error?: string
+  /** Date de modification du RUN.md lue au dernier chargement : la relecture se déclenche dessus. */
+  mtime?: number
+}
 
 import { SourceControlPane } from './SourceControlPane'
 import { WorkflowExecutionGraph, type ExecutionNodeSelection } from './WorkflowExecutionGraph'
@@ -60,9 +76,15 @@ function selectionParleDuDepot(selection: ExecutionNodeSelection | null): boolea
 }
 
 export type WorkflowsPanelProps = {
+  /**
+   * Depot de la CONVERSATION (meme valeur que le badge de branche du chat). La vue « Workspace »
+   * lisait un depot memorise dans le navigateur, sans lien avec le fil : elle annoncait RIG-V3 sur
+   * une conversation ouverte sur AutoWinOS. Un panneau qui nomme un autre depot que celui ou le
+   * travail se fait ment sur ce que « Push » et « Cloture auto » vont toucher.
+   */
+  depotConversation?: string
   runsPaneWidth: number
   beginRunsResize: (event: React.PointerEvent<HTMLDivElement>) => void
-  refreshRuns: () => void
   setShowRuns: (value: boolean) => void
   activeId: string | null
   send: (prompt: string) => void
@@ -70,12 +92,14 @@ export type WorkflowsPanelProps = {
   requestLabel: string | undefined
   liveGraphActive: boolean
   visibleLiveRuns: [string, ScopedLiveRun<OrchStep>][]
-  checkpoints: CheckpointEntry[]
-  forkedCheckpoint: string
-  setForkedCheckpoint: (id: string) => void
   runs: RunEntry[]
   openRun: OpenRunState | null
   viewRun: (r: RunEntry) => void
+  /**
+   * Relit EN SILENCE le run déplié quand son RUN.md a changé sur disque : ni état « Ouverture… »,
+   * ni changement d'onglet. Appelé par le panneau, une fois par nouvelle version du fichier.
+   */
+  relireRunOuvert: (r: RunEntry) => void
   setOpenRun: (value: OpenRunState | null) => void
   setOpenTrace: (value: OrchStep[] | null) => void
   requestDeleteRun: (run: RunEntry) => void
@@ -111,7 +135,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   const {
     runsPaneWidth,
     beginRunsResize,
-    refreshRuns,
     setShowRuns,
     activeId,
     send,
@@ -119,13 +142,12 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     requestLabel,
     liveGraphActive,
     visibleLiveRuns,
-    checkpoints,
-    forkedCheckpoint,
-    setForkedCheckpoint,
     runs,
     openRun,
     viewRun,
+    relireRunOuvert,
     setOpenRun,
+    depotConversation,
     setOpenTrace,
     requestDeleteRun,
     openTrace,
@@ -137,6 +159,23 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   } = props
 
   const [selection, setSelection] = useState<ExecutionNodeSelection | null>(null)
+
+  /**
+   * LE RUN.md DÉPLIÉ SE RELIT SEUL quand son fichier a bougé (voir `run-ouvert-a-jour.ts`).
+   *
+   * La clé `chemin@date` n'est demandée qu'UNE fois : pendant que la relecture est en vol, la liste
+   * peut être rechargée plusieurs fois avec la même date, et chaque rendu du parent recrée
+   * `relireRunOuvert`. Sans cette clé, chacun de ces rendus relancerait la même lecture.
+   */
+  const derniereRelecture = useRef<string | null>(null)
+  const aRelire = runOuvertARelire(openRun, runs)
+  const cleRelecture = aRelire ? `${aRelire.path}@${aRelire.mtime}` : null
+  useEffect(() => {
+    if (!aRelire || !cleRelecture || derniereRelecture.current === cleRelecture) return
+    derniereRelecture.current = cleRelecture
+    relireRunOuvert(aRelire)
+  }, [aRelire, cleRelecture, relireRunOuvert])
+
   const jeton = ongletDemande?.jeton
   const tabDemande = ongletDemande?.tab
   /**
@@ -204,8 +243,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
      * d'outil, devis, cloture, depot...) restent sur le graphe, ou leur panneau de detail s'ouvre
      * sous l'arbre — c'est la seule vue qui les detaille.
      */
-    if (suivant?.kind === 'agent') setPanelTab('runs')
-    else if (!suivant) setPanelTab('graph')
+    // Un nœud d'AGENT ne bascule PLUS vers Runs (demande du 2026-09-23) : son détail — prompt
+    // envoyé et retour de l'étape — s'ouvre sous le graphe, même sans RUN.md.
+    if (!suivant) setPanelTab('graph')
   }
 
   return (
@@ -236,15 +276,10 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               </button>
             ))}
           </div>
+          {/* Plus de bouton « Rafraîchir » (demande du 2026-09-26) : la liste des runs suit les
+              événements d'orchestration et de fin de tour, le graphe chaque écriture de trace,
+              l'onglet Files ses propres événements. Tout se met à jour seul. */}
           <div className="workflow-panel-actions">
-            <button
-              className="workflow-panel-action workflow-panel-refresh"
-              onClick={refreshRuns}
-              title="Rafraîchir"
-              aria-label="Rafraîchir les runs"
-            >
-              <WorkflowRefreshIcon />
-            </button>
             <button
               className="workflow-panel-action workflow-panel-close"
               onClick={() => setShowRuns(false)}
@@ -278,11 +313,29 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           style={{ gap: 'var(--s2)', minHeight: 0 }}
         >
           {depot && (
-            <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
+            <SourceControlPane
+              conversationId={activeId ?? undefined}
+              depotConversation={depotConversation}
+              onSendPrompt={send}
+            />
           )}
 
           </div>
           </>
+        )}
+        {/* ONGLET FILES : arborescence editable du projet + fichiers modifies (diff colore). */}
+        {panelTab === 'code' && (
+          <div
+            className="col grow workflow-panel-detail"
+            data-workflow-detail="source-control"
+            style={{ gap: 'var(--s2)', minHeight: 0 }}
+          >
+            <SourceControlPane
+              conversationId={activeId ?? undefined}
+              depotConversation={depotConversation}
+              onSendPrompt={send}
+            />
+          </div>
         )}
         {panelTab === 'runs' && (
           <div
@@ -405,30 +458,10 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             </div>
           ))}
           {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
-          {checkpoints.length > 0 && (
-            <section className="card checkpoint-forks">
-              <strong>Checkpoints persistants</strong>
-              {checkpoints.map((checkpoint) => (
-                <button
-                  key={checkpoint.id}
-                  className="btn btn-sm"
-                  onClick={() => {
-                    const forkId = `fork-${Date.now()}`
-                    void window.api
-                      .createCheckpointFork(checkpoint.id, forkId)
-                      .then(() => setForkedCheckpoint(forkId))
-                  }}
-                >
-                  Forker {checkpoint.runId}
-                </button>
-              ))}
-              {forkedCheckpoint && <small>Fork immuable préparé : {forkedCheckpoint}</small>}
-            </section>
-          )}
           {runs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               {activeId
-                ? 'Aucun RUN.md pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
+                ? "Aucun RUN.md pour cette conversation. C'est normal quand tout a été traité directement dans le chat : un tour de chat n'en crée pas, même long. Le déroulé de ces tours reste lisible dans l'onglet Graph ci-dessus et dans l'Observatory. Un RUN.md n'apparaît ici que si une tâche est orchestrée, ou si tu en attaches un."
                 : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'}
             </div>
           )}
@@ -455,7 +488,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                       <div className="row" style={{ justifyContent: 'space-between' }}>
                         <div className="row gap2" style={{ minWidth: 0 }}>
                           <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
-                          <span className="run-subject">{r.subject}</span>
+                          <span className="run-subject" title={r.subject}>
+                            {libelleRun(r.subject)}
+                          </span>
                         </div>
                         <span className="badge">{r.summary.status}</span>
                       </div>

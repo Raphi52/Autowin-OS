@@ -1,0 +1,177 @@
+{
+  "install.ps1": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "99dae244c4c5c76ceed02230fb5387a3",
+    "semantic_hash": "99dae244c4c5c76ceed02230fb5387a3"
+  },
+  "integrations/hermes-amitel-brain/__init__.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "95c5c7d43d2299b2f29a56fdbf782976",
+    "semantic_hash": "95c5c7d43d2299b2f29a56fdbf782976"
+  },
+  "integrations/windows/amitel-brain-hook.ps1": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "ecc9773d492672cf86bf4b9fbcfe7e13",
+    "semantic_hash": "ecc9773d492672cf86bf4b9fbcfe7e13"
+  },
+  "integrations/windows/hook-command.ps1": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "11ba5c3849edadd48d2b79e969c264d2",
+    "semantic_hash": "11ba5c3849edadd48d2b79e969c264d2"
+  },
+  "tooling/brain_attention.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "fe118fce51c76d8b2a5d231ffa001da0",
+    "semantic_hash": "fe118fce51c76d8b2a5d231ffa001da0"
+  },
+  "tooling/brain_auth.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "13f240add5447c0f658f0c3f897cc931",
+    "semantic_hash": "13f240add5447c0f658f0c3f897cc931"
+  },
+  "tooling/brain_candidate_policy.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "2d04f7d546ba8564439ef4cd797cad42",
+    "semantic_hash": "2d04f7d546ba8564439ef4cd797cad42"
+  },
+  "tooling/brain_context.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "cbb35fe9fe6c9fd2eaa2ef25a3d85c72",
+    "semantic_hash": "cbb35fe9fe6c9fd2eaa2ef25a3d85c72"
+  },
+  "tooling/brain_curate.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "e64715d57fa60dac25dcc93f7bb3d46b",
+    "semantic_hash": "e64715d57fa60dac25dcc93f7bb3d46b"
+  },
+  "tooling/brain_eval.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "a030f9f6109057ef3f9d134806e66470",
+    "semantic_hash": "a030f9f6109057ef3f9d134806e66470"
+  },
+  "tooling/brain_hook.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "e19c8a4db78720d9069bca143ab661cb",
+    "semantic_hash": "e19c8a4db78720d9069bca143ab661cb"
+  },
+  "tooling/brain_index.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "be5d499ff48c92144764efb3e594bf4d",
+    "semantic_hash": "be5d499ff48c92144764efb3e594bf4d"
+  },
+  "tooling/brain_propose.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "1a90de315d6eea7439ef5382b7c120e0",
+    "semantic_hash": "1a90de315d6eea7439ef5382b7c120e0"
+  },
+  "tooling/brain_query.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "03eb30a3ad58e9c7bf0b52f9191d7357",
+    "semantic_hash": "03eb30a3ad58e9c7bf0b52f9191d7357"
+  },
+  "tooling/brain_retrieval.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "d60f0d800c359e51cb093723f920e780",
+    "semantic_hash": "d60f0d800c359e51cb093723f920e780"
+  },
+  "tooling/brain_server.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "b7b6e01a587db570db36ed403f6a3772",
+    "semantic_hash": "b7b6e01a587db570db36ed403f6a3772"
+  },
+  "tooling/brain_singleton.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "a37af58915669b0464725f0ac3261781",
+    "semantic_hash": "a37af58915669b0464725f0ac3261781"
+  },
+  "tooling/brain_sync_code.sh": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "01cee962498f82f21ea05f45710c16cf",
+    "semantic_hash": "01cee962498f82f21ea05f45710c16cf"
+  },
+  "tooling/brain_trace.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "77c11cc593344046401b991b656c8962",
+    "semantic_hash": "77c11cc593344046401b991b656c8962"
+  },
+  "tooling/brain_validate.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "3cb98e29015c3c656767b9e4b65f340e",
+    "semantic_hash": "3cb98e29015c3c656767b9e4b65f340e"
+  },
+  "tooling/brain_verify.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "445a8e1bdb961e39bad2cd9219699ecb",
+    "semantic_hash": "445a8e1bdb961e39bad2cd9219699ecb"
+  },
+  "tooling/brain_watch.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "553ac2072a3813d14413f33cdc2e1419",
+    "semantic_hash": "553ac2072a3813d14413f33cdc2e1419"
+  },
+  "tooling/codex_trust_hook.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "c02e8a8db310efee611dbf49441fffe7",
+    "semantic_hash": "c02e8a8db310efee611dbf49441fffe7"
+  },
+  "tooling/eval/rag-golden.json": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "8fc349ca93d4e58e3ab5fe6c2229a870",
+    "semantic_hash": "8fc349ca93d4e58e3ab5fe6c2229a870"
+  },
+  "tooling/obsidian_graph.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "efb4612a2b0d862dadd133ed93c0b230",
+    "semantic_hash": "efb4612a2b0d862dadd133ed93c0b230"
+  },
+  "tooling/rig_coverage.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "7dc95994144fc104d664503855259dba",
+    "semantic_hash": "7dc95994144fc104d664503855259dba"
+  },
+  "tooling/rig_graph_navigation.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "38bf6c028d05cd8ca4c883efabd92e1b",
+    "semantic_hash": "38bf6c028d05cd8ca4c883efabd92e1b"
+  },
+  "tooling/tests/test_brain_automation.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "6bf298b2fb14e47837b407d0c4068ad5",
+    "semantic_hash": "6bf298b2fb14e47837b407d0c4068ad5"
+  },
+  "tooling/tests/test_brain_eval.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "e2e2416e73cef11b08f6584c1a6c2a6c",
+    "semantic_hash": "e2e2416e73cef11b08f6584c1a6c2a6c"
+  },
+  "tooling/tests/test_brain_validate.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "af67a974fcbf5b7c832a155c460516a3",
+    "semantic_hash": "af67a974fcbf5b7c832a155c460516a3"
+  },
+  "tooling/tests/test_obsidian_graph.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "f431ee7c72a6a358faa7a7a843074603",
+    "semantic_hash": "f431ee7c72a6a358faa7a7a843074603"
+  },
+  "tooling/tests/test_rig_coverage.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "d792d0c7c21d64c6a94fb5891b5b770d",
+    "semantic_hash": "d792d0c7c21d64c6a94fb5891b5b770d"
+  },
+  "tooling/tests/test_rig_coverage_security.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "894113e691821d062f899c8fe59a2b87",
+    "semantic_hash": "894113e691821d062f899c8fe59a2b87"
+  },
+  "tooling/tests/test_rig_graph_navigation.py": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "1c3f8e2279749a3283e17d983494ff20",
+    "semantic_hash": "1c3f8e2279749a3283e17d983494ff20"
+  },
+  "uninstall.ps1": {
+    "mtime": 1790087160.4446084,
+    "ast_hash": "8de7b1998e0395e3f28dde5088150958",
+    "semantic_hash": "8de7b1998e0395e3f28dde5088150958"
+  }
+}

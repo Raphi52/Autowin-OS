@@ -75,3 +75,31 @@
   color: var(--muted, #8b939f);
   padding: 4px 0;
 }
+
+/* STYLE « CONTRASTE FORT » (choix utilisateur du 2026-09-23, variante D) : fonds francs, texte
+   clair, en-tete de bloc sur fond or. Le contenu et le mecanisme ne changent pas. */
+.diff-line {
+  grid-template-columns: 100px minmax(0, 1fr);
+}
+.diff-gutter {
+  gap: 8px;
+}
+.diff-lineno {
+  min-width: 3.4em;
+}
+.diff-add {
+  color: var(--text, #e6e9ee);
+  background: color-mix(in srgb, var(--ok, #3ecb8f) 30%, transparent);
+}
+.diff-del {
+  color: var(--text, #e6e9ee);
+  background: color-mix(in srgb, var(--danger, #e6635b) 30%, transparent);
+}
+.diff-add .diff-gutter,
+.diff-del .diff-gutter {
+  color: var(--text, #e6e9ee);
+}
+.diff-hunk {
+  color: var(--text, #e6e9ee);
+  background: color-mix(in srgb, var(--gold, #d4a94f) 22%, transparent);
+}

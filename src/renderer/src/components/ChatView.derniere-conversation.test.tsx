@@ -44,14 +44,14 @@ describe('ChatView — reprise sur la derniere conversation ouverte', () => {
     })
 
   /**
-   * La conversation ACTIVE, une seule fois — quelle que soit sa place dans la barre laterale.
+   * TITRES DISTINCTS, pas lignes affichées. Le groupe « Récent » de la barre latérale est un
+   * RACCOURCI qui DUPLIQUE volontairement les fils déjà rangés ailleurs (`groupeRecent` dans
+   * `conversation-groups.ts`) : la conversation ouverte y apparaît donc deux fois, une fois sous
+   * « Récent » et une fois dans son groupe. Compter les lignes faisait échouer ces trois tests sur
+   * un comportement VOULU.
    *
-   * Le groupe « Recent » DUPLIQUE a dessein les fils deja ranges ailleurs (voir
-   * `groupeRecent` dans `conversation-groups.ts` : « un groupe qui duplique n'a pas sa place dans
-   * une fonction dont l'invariant est qu'une conversation appartient a UN groupe »). Un fil actif
-   * porte donc legitimement DEUX lignes `.conv-item.active`. Cette sonde demandait « qui est
-   * actif », pas « combien de lignes l'affichent » : elle dedoublonne par TITRE, sinon elle mesure
-   * la mise en page au lieu du comportement. Constate le 2026-09-17, rouge preexistant.
+   * Ce que le test prouve reste INTACT : il vérifie QUELLE conversation est active, et il échoue
+   * toujours si une AUTRE l'est aussi — deux titres distincts ne se dédupliquent pas.
    */
   const actives = (): string[] => [
     ...new Set(

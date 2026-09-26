@@ -19,6 +19,15 @@ export const CONTEXT_MESSAGE_LIMIT = 10
 /** Plafond de caractères par message repris. */
 export const CONTEXT_MESSAGE_CHARS = 600
 
+/**
+ * Plafond de la DERNIÈRE réponse de l'assistant reprise dans le contexte d'un run, en entier et avec
+ * ses retours à la ligne. Défaut mesuré sur conv-798 (tour d97a3d36-2502-4b43-9a4b-46caff94d312,
+ * saisie ts 1790161702779 « judge cette archi ») : l'objet à juger ÉTAIT la réponse précédente, coupée
+ * à 600 caractères sur « Format stock… » ; le run a jugé une moitié de stack et l'a avoué. La borne
+ * 600 reste celle du routeur (classification bon marché) ; le run, lui, doit lire l'objet désigné.
+ */
+export const CONTEXT_LAST_REPLY_CHARS = 12000
+
 /** Réduit un texte à une ligne bornée : espaces normalisés, coupe explicite par une ellipse. */
 export function clip(value: string, cap: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim()

@@ -15,8 +15,9 @@ const ws = 'C:/ws'
 
 describe('decideRead — les refus', () => {
   it('refuse hors workspace, traversée et zones interdites', () => {
+    // Un RELATIF qui sort par `..` reste refuse : « relatif a quoi ? » est une ambiguite, pas une
+    // intention. Pour viser un autre depot on donne son chemin ABSOLU (voir le bloc dedie plus bas).
     expect(decideRead({ path: '../secret.txt' }, ws)).toMatchObject({ allowed: false })
-    expect(decideRead({ path: 'C:/ailleurs/x.ts' }, ws)).toMatchObject({ allowed: false })
     expect(decideRead({ path: '.git/config' }, ws)).toMatchObject({
       allowed: false,
       reason: expect.stringContaining('protégé')
@@ -32,6 +33,33 @@ describe('decideRead — les refus', () => {
   it('accepte un chemin du workspace et borne la plage', () => {
     const d = decideRead({ path: 'src/a.ts', from: 10, lines: 100000 }, ws)
     expect(d).toMatchObject({ allowed: true, from: 10, count: RANGE_MAX })
+  })
+
+  /*
+   * LIRE OU L'ON PEUT DEJA ECRIRE — changement ASSUME le 2026-09-16.
+   *
+   * `C:/ailleurs/x.ts` etait refuse ici jusqu'a cette date, alors que `edit_file` l'acceptait depuis
+   * le 2026-09-02. Mesure (causal-trace) : quatre refus « chemin hors du workspace », dont le
+   * 2026-09-16 a 13h48 sur un fichier que la meme session EDITAIT — suivis de dix lectures de
+   * secours en PowerShell, qui echappent a toutes les bornes de ce module.
+   */
+  it('accepte un chemin ABSOLU externe, comme edit_file, et le cite en absolu', () => {
+    expect(decideRead({ path: 'D:/RigV3Desktop/Components/Pages/Home.razor' }, ws)).toMatchObject({
+      allowed: true,
+      relativePath: expect.stringContaining('Home.razor')
+    })
+  })
+
+  it('garde les zones interdites et les racines système FERMEES, dehors comme dedans', () => {
+    expect(decideRead({ path: 'D:/autre-depot/.git/config' }, ws)).toMatchObject({
+      allowed: false,
+      reason: expect.stringContaining('protégé')
+    })
+    expect(decideRead({ path: 'C:/Windows/System32/drivers/etc/hosts' }, ws)).toMatchObject({
+      allowed: false,
+      reason: expect.stringContaining('racine système')
+    })
+    expect(decideRead({ path: '/etc/shadow' }, ws)).toMatchObject({ allowed: false })
   })
 
   it('les traces de données restent lisibles : .autowin-data n’est pas une zone interdite', () => {

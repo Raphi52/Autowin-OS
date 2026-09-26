@@ -100,9 +100,19 @@ export const VERIFY_BATTEMENT_MS = 5_000
  */
 export function battementDOrchestration(
   dernierSigne: string | undefined,
-  ecouleMs: number
+  ecouleMs: number,
+  phase?: string
 ): string {
   const duree = dureeCourte(ecouleMs)
   const propre = dernierSigne ? sansSequencesAnsi(dernierSigne).replace(/\s+/g, ' ').trim() : ''
-  return bornerLigneDeVie(`${duree} · ${propre.length > 0 ? propre : 'travail en cours…'}`)
+  /*
+   * LA PHASE PASSE AVANT LE DERNIER FAIT, et ce n'est pas un gout de mise en page.
+   *
+   * Mesure du 2026-09-16 (conv-63) : le dernier fait connu etait « Bash · cd
+   * "C:/…/worktrees/846afeda47fa9e64/agent__run-c295e4061094-1" && cp /tmp/pee… ». Un chemin absolu
+   * mange a lui seul la largeur utile, donc TOUT ce qui le suivrait serait coupe. Le nom de la
+   * phase est le seul fait qui reponde a « ou en est-on ? » : il tient devant, ou il ne tient pas.
+   */
+  const tete = phase ? `${duree} · ${phase}` : duree
+  return bornerLigneDeVie(`${tete} · ${propre.length > 0 ? propre : 'travail en cours…'}`)
 }

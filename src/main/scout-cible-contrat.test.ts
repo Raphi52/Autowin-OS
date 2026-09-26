@@ -23,13 +23,13 @@ describe('la skill scout exige la ligne CIBLE: en sortie', () => {
 
   it('réclame explicitement une ligne CIBLE: obligatoire', () => {
     expect(scout).toMatch(/CIBLE:/)
-    expect(scout).toMatch(/MANDATORY closing line/i)
+    expect(scout).toMatch(/LIGNE DE CLÔTURE OBLIGATOIRE/i)
   })
 
   it('donne les deux formes que le lecteur machine sait interpréter', () => {
     // La piste engagée, et le cas « aucune piste défendable » — sans lui, la fin de chaîne
     // ne serait pas exprimable et le scout inventerait une cible pour satisfaire le format.
-    expect(scout).toContain('CIBLE: <the row you engage>')
+    expect(scout).toContain('CIBLE: <la ligne que tu engages>')
     expect(scout).toContain('CIBLE: aucune')
   })
 
@@ -38,7 +38,7 @@ describe('la skill scout exige la ligne CIBLE: en sortie', () => {
   })
 
   it('dit que la ligne est lue par la machine, pas seulement par un humain', () => {
-    expect(scout).toMatch(/READ BY MACHINE/i)
+    expect(scout).toMatch(/LUE PAR LA MACHINE/i)
     expect(scout).toContain('scout-cible.ts')
   })
 

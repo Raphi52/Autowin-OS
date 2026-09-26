@@ -1,0 +1,37 @@
+---
+name: build
+description: >-
+  La boucle nommée du PRODUCTEUR (frame → terrain → build → clean → judge) : amener un DÉFAUT jusqu'à
+  un état fonctionnellement VÉRIFIÉ. Invoquée par `judge` (qui renvoie les défauts priorisés) ET
+  directement par l'utilisateur avec un bug brut.
+  Déclencher sur "fix the bug / make it green / the test fails repair it / apply the judge's findings / it's still broken".
+  NE PAS utiliser pour : AUDITER un livrable → `judge` ; décider QUOI construire → `frame` ; préparer le harnais → `terrain`.
+---
+
+# build — six réflexes, du défaut au vert vérifié
+
+1. **AU MOMENT où un défaut arrive → REPRODUIS-LE EN ROUGE D'ABORD.** Joue le critère énoncé (test,
+   commande, code de sortie) avant de toucher quoi que ce soit, et colle sa sortie rouge. Un correctif sur un bug
+   non reproduit répare un peut-être-bug. Pas de rouge → le défaut n'est pas encore localisé, continue de chercher ; n'édite pas.
+2. **AU MOMENT où tu tiens le rouge → TRANSCRIS LE CONTRAT EN LISTE D'ASSERTIONS, AVANT D'ÉCRIRE UNE LIGNE.**
+   Ouvre ce que le critère EXIGE (l'énoncé, le fichier de contrôle, le schéma de sortie) et recopie-le en une liste
+   numérotée de conditions vérifiables, une par ligne : nom exact, forme exacte, valeur limite exacte, code de sortie
+   exact. Cette liste est ta spécification ; chaque ligne devra pouvoir être pointée du doigt dans le code final.
+   **LES CAS LIMITES SE LISENT, ILS NE SE DEVINENT PAS** : zéro élément, un seul élément, valeur inconnue (`null`
+   n'est pas `0`), entrée illisible, cible absente. Un contrat transcrit à moitié produit un code qui passe le chemin
+   heureux et rate exactement ce que le contrôle regarde.
+3. **AU MOMENT où la liste est écrite → ÉCRIS LE CODE LIGNE À LIGNE CONTRE ELLE, PAS DE MÉMOIRE.** Traite les
+   conditions dans l'ordre, sans en sauter une « évidente ». Aucun refactor opportuniste, aucun renommage, aucun
+   « tant que j'y suis ». Une garde qui CONTOURNE le défaut, une erreur avalée, une assertion desserrée, un timeout
+   élargi, une valeur mise en dur pour satisfaire le contrôle = FAUX VERT → refuse-le, ou étiquette-le
+   « rustine — cause réelle : X ».
+4. **AU MOMENT où tu dirais « fini » → REJOUE LE MÊME CRITÈRE et lis son code de sortie.** Un artefact
+   hors modèle, sinon ça n'a pas eu lieu : test rouge→vert, code de sortie, capture LUE, requête. Jamais un texte auto-déclaré.
+5. **AU MOMENT où le rejeu est encore rouge → RELIS LA CONDITION QUI ÉCHOUE DANS TA LISTE, PUIS CHANGE D'APPROCHE.**
+   Le contrôle nomme la condition ratée : reviens à sa ligne de contrat avant de toucher au code. Deux tentatives
+   identiques n'en font qu'une. Épuise 2 à 3 approches DISTINCTES par sous-objectif avant d'interrompre l'humain. Un
+   fichier, une fixture ou un outil manquant, c'est TOI qui le FABRIQUES quand c'est sûr, borné et réversible.
+6. **AU MOMENT où tu es tenté de rendre la main tôt → NE LE FAIS PAS.** Un rapport d'étape, « je continue ? », un plan
+   sans exécution coûtent un tour entier à l'utilisateur et ne produisent rien (mesuré : 23,54 $ sur 156,51 $ dépensés en
+   tours « reprend », 2026-09-02). Mène-le jusqu'au vert vérifié dans CETTE passe, ou nomme le blocage précis. Puis
+   reboucle vers `judge` : build corrige, build ne signe JAMAIS son propre verdict de qualité.

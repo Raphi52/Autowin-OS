@@ -61,36 +61,27 @@ describe('AutowinOS.chat — enveloppe commune', () => {
     })
   })
 
-  it('refuse le second appel du meme tour de chat avant le provider', async () => {
+  /*
+   * LES CAPS D'ENVIRONNEMENT N'EXISTENT PLUS. AUTOWIN_CHAT_CALL_CAP / _TOKEN_CAP / _USD_CAP ont ete
+   * supprimes avec le budget du tour de chat le 2026-09-16 : ce test prouve l'INVERSE de ce qu'il
+   * prouvait — poser la variable ne resserre plus rien, le plafond vient du seul reglage.
+   */
+  it('ignore AUTOWIN_CHAT_CALL_CAP : le plafond vient du reglage, pas de l’environnement', async () => {
     const supervisor = new ExecutionSupervisor()
-    const provider = new ChatProvider()
     const os = Object.create(AutowinOS.prototype) as AutowinOS
-    Object.defineProperties(os, {
-      executionSupervisor: { value: supervisor },
-      registry: { value: new ProviderRegistry(undefined, supervisor).register(provider) },
-      roles: {
-        value: new RoleModelConfig({
-          orchestrator: { provider: provider.id, model: 'chat-model' }
-        })
-      },
-      cost: { value: new CostAggregator() }
-    })
+    Object.defineProperty(os, 'executionSupervisor', { value: supervisor })
     const previousCap = process.env.AUTOWIN_CHAT_CALL_CAP
     process.env.AUTOWIN_CHAT_CALL_CAP = '1'
+    let plafondVu = 0
     try {
       await os.runChatTurn('bonjour', undefined, async () => {
-        await os.registry.send(provider.id, [{ role: 'user', content: 'premier' }])
-        await expect(
-          os.registry.send(provider.id, [{ role: 'user', content: 'second' }])
-        ).rejects.toThrow(/budget.*appels/i)
+        plafondVu = supervisor.currentQuote()?.limits.maxProviderCalls ?? 0
       })
     } finally {
       if (previousCap === undefined) delete process.env.AUTOWIN_CHAT_CALL_CAP
       else process.env.AUTOWIN_CHAT_CALL_CAP = previousCap
     }
-
-    expect(provider.calls).toBe(1)
-    expect(supervisor.lastSnapshot()).toMatchObject({ startedCalls: 1, completedCalls: 1 })
+    expect(plafondVu).toBeGreaterThan(1)
   })
 
   it("ne retombe pas sur le plafond d'appels du regime trivial (10 appels)", async () => {

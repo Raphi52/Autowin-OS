@@ -496,7 +496,14 @@ export const azureTicketProvider: TicketProviderAdapter = {
       ...(request.state ? [{ op: 'add', path: '/fields/System.State', value: request.state }] : []),
       ...(request.assignee
         ? [{ op: 'add', path: '/fields/System.AssignedTo', value: request.assignee }]
-        : [])
+        : []),
+      // Champs libres : le nom de référence vient de l'appelant, jamais d'une devinette ici.
+      // Azure refuse lui-même un nom inconnu, et son message remonte tel quel à l'agent.
+      ...Object.entries(request.fields ?? {}).map(([reference, value]) => ({
+        op: 'add',
+        path: `/fields/${reference}`,
+        value
+      }))
     ]
 
     let updated: AzureWorkItem | undefined

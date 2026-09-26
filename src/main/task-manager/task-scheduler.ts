@@ -286,6 +286,23 @@ export class TaskScheduler {
     }
     const next = resolveNextOccurrence(task.schedule, scheduledFor)
     this.store.setNextRunAt(task.id, task.enabled ? next : null)
+    /*
+     * PLUS AUCUNE OCCURRENCE = LA TACHE S'ETEINT.
+     *
+     * `resolveNextOccurrence` rend `null` pour deux fins de vie : une recurrence `none` qui vient de
+     * jouer son unique echeance, et une recurrence arrivee a sa date de fin. Dans les deux cas la
+     * tache ne se declenchera PLUS JAMAIS — mais `enabled` restait a `true`, et la vue affichait
+     * « Aucune échéance » a cote d'un interrupteur ON.
+     *
+     * Constat du 2026-09-16 dans `scheduled-tasks.json` : les 4 taches enregistrees sont des reprises
+     * apres quota des 31/08 et 01/09, toutes deja jouees (occurrences `completed` ou `cancelled`),
+     * toutes encore `enabled: true` et sans echeance — seize jours plus tard. La liste des taches
+     * montrait donc comme actif ce qui etait mort.
+     *
+     * On eteint sur la CAUSE (`next === null`) et non sur la seule recurrence `none` : c'est la meme
+     * fin de vie, ecrite par la meme ligne. Une tache deja eteinte par l'utilisateur ne change pas.
+     */
+    if (next === null && task.enabled) this.store.setEnabled(task.id, false)
   }
 
   private async markStartupMisses(): Promise<void> {

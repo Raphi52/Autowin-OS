@@ -116,6 +116,6 @@ $manifest = [ordered]@{
     repositories = $manifestRepos
 }
 $manifestPath = Join-Path $checkpointRoot 'manifest.json'
-$manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+$manifest | ConvertTo-Json -Depth 8 | ForEach-Object { [IO.File]::WriteAllText($manifestPath, $_, (New-Object Text.UTF8Encoding $false)) }
 Write-Output $manifestPath
 

@@ -1,4 +1,12 @@
-﻿# Signal de la skill `remake` — falsifiable, rejouable par le stop-gate (forme `powershell -File`).
+﻿# INERTE SUR CETTE MACHINE — mesure du 2026-09-12 en le lancant : ce script resout son kit
+# depuis $env:USERPROFILE.claude (plus bas), or ce dossier ne contient ni skills ni hooks, et
+# stop-gate.ps1 n existe nulle part dans le depot (le stop-gate vit en TypeScript,
+# src/main/gates/stopgate.ts). Il echoue donc sur « fichier absent » AVANT sa premiere assertion.
+# La part verifiable dans ce depot a ete portee en test vivant : src/main/kit-cliquets.test.ts
+# (regles du corps, re-derivations interdites, plafond de lignes, renvois croises). Ce fichier est
+# garde pour une machine ou le kit Claude Code externe EXISTE — il n y est pas a jour du francais.
+#
+# Signal de la skill `remake` — falsifiable, rejouable par le stop-gate (forme `powershell -File`).
 #
 # Il ne juge pas la prose. Il teste les deux classes de defaut que les audits ont trouvees :
 #   (1) une AFFIRMATION SUR UN AUTRE FICHIER du kit qui ne resout pas (chemin, chapitre, champ,
@@ -108,37 +116,37 @@ if ($gateTxt -notmatch 'AUTOWIN_RUN_ROOT') { Fail "AUTOWIN_RUN_ROOT n'est plus l
 $exigences = @{
     'forme rejouable recommandee (script)'   = 'signal.ps1'
     'forme alternative (prefix)'             = 'npm test --prefix'
-    'les DEUX contraintes du gate'           = 'TWO independent constraints'
+    'les DEUX contraintes du gate'           = 'DEUX contraintes indépendantes'
     'preuve d''armement du gate'             = 'REJEU signal-cmd ECHOUE'
-    'armement distinct du rouge'             = 'step 3 proves the gate is armed'
-    'regime minimum impose'                  = 'MINIMUM on the parent'
-    'etape 0 declaree ecrivante'             = 'Step 0 is NOT read-only'
-    'attribution PAR FICHIER, co-sale'       = 'co-dirty'
+    'armement distinct du rouge'             = 'étape 3 prouve que le contrôle est armé'
+    'regime minimum impose'                  = 'MINIMUM sur le parent'
+    'etape 0 declaree ecrivante'             = 'étape 0 n''est PAS en lecture seule'
+    'attribution PAR FICHIER, co-sale'       = 'co-sale'
     'operation tierce en cours'              = 'index.lock'
-    'ecrivains vivants avant sabotage'       = 'Inventory the live writers'
-    'trace avant la cassure'                 = 'Write the trace BEFORE the breakage'
+    'ecrivains vivants avant sabotage'       = 'Inventorie les écrivains vivants'
+    'trace avant la cassure'                 = 'Écris la trace AVANT la cassure'
     'restauration par commande'              = 'git checkout -- <file>'
-    'checkpoint bloquant apres restauration' = 'blocking checkpoint'
+    'checkpoint bloquant apres restauration' = 'point de contrôle bloquant'
     'handle verifie sur le CONTENU'          = 'git show --stat <hash>'
-    'nettoyage borne, prune interdit'        = 'never `git worktree prune`'
-    'historique partage non reecrit'         = 'commit from 0.a stays'
-    'commits etrangers avant revert'         = 'Check for foreign commits first'
+    'nettoyage borne, prune interdit'        = 'jamais `git worktree prune`'
+    'historique partage non reecrit'         = 'commit de 0.a reste'
+    'commits etrangers avant revert'         = 'Cherche d''abord les commits étrangers'
     'revert nomme et abort'                  = 'git revert --abort'
-    'rollback de donnees re-sonde'           = 'restoration is FORBIDDEN'
-    'copie hors git avec exclusions'         = 'enumerating what it EXCLUDES'
-    'copies par partition apres etape 2'     = 'per partition, after step 2'
-    'rejeus du gate dans le tally'           = 'one gate replay per RUN'
+    'rollback de donnees re-sonde'           = 'la restauration est INTERDITE'
+    'copie hors git avec exclusions'         = 'énumérant ce qu''elle EXCLUT'
+    'copies par partition apres etape 2'     = 'par partition, après l''étape 2'
+    'rejeus du gate dans le tally'           = 'un rejeu du contrôle par RUN'
     'terrain compte dans le tally'           = 'N `terrain` if armed'
-    'bracket d''agents du regime'            = 'agent bracket'
-    'fourchette pour l''indecidable'         = 'RANGE with its upper bound'
-    'timeout distingue d''une regression'    = 'Is it even a red?'
-    'bisection par partition'                = 'Bisect by PARTITION'
-    'dispatch : perimetre gradue'            = 'It is GRADUATED'
-    'exclusion draft'               = 'LOOK like (→ `draft`)'
-    'flaky hors signal-cmd'                  = 'Flaky signal'
-    'variante attestable a la cloture'       = 'FRESH attestation'
-    'cap : releve = perimetre gele'          = 'NOT an autonomous option'
-    'taille assumee et justifiee'            = 'long ON PURPOSE, and it is not split'
+    'bracket d''agents du regime'            = 'fourchette d''agents'
+    'fourchette pour l''indecidable'         = 'FOURCHETTE avec sa borne haute'
+    'timeout distingue d''une regression'    = 'Est-ce seulement un rouge ?'
+    'bisection par partition'                = 'Bissecte par PARTITION'
+    'dispatch : perimetre gradue'            = 'Il est GRADUÉ'
+    'exclusion draft'               = 'ALLURE d''un écran (→ `draft`)'
+    'flaky hors signal-cmd'                  = 'Signal instable'
+    'variante attestable a la cloture'       = 'attestation FRAÎCHE'
+    'cap : releve = perimetre gele'          = 'PAS une option autonome'
+    'taille assumee et justifiee'            = 'long EXPRÈS, et il n''est pas scindé'
 }
 foreach ($k in $exigences.Keys) {
     if ($corps -notmatch [regex]::Escape($exigences[$k])) { Fail "regle manquante : $k" }
@@ -147,14 +155,14 @@ foreach ($k in $exigences.Keys) {
 # Mecaniques canoniques ailleurs : la skill doit RENVOYER, pas re-deriver.
 $rederivations = @{
     'chemin de RUN re-derive (canonique ENGINE Ch.3)'  = 'runs\<session_id>'
-    'anti-fixation re-decrite (canonique ENGINE Ch.1)' = 'the stop-gate blocks a decision carrying fewer'
-    'discipline de cloture re-decrite (ENGINE Ch.3)'   = 'Each child ends `green` with its proof'
+    'anti-fixation re-decrite (canonique ENGINE Ch.1)' = 'le controle d''arret bloque une decision portant moins'
+    'discipline de cloture re-decrite (ENGINE Ch.3)'   = 'Chaque enfant se termine `green` avec sa preuve'
 }
 foreach ($k in $rederivations.Keys) {
     if ($corps -match [regex]::Escape($rederivations[$k])) { Fail "re-derivation a retirer : $k" }
 }
 
-$occurrences = ([regex]::Matches($corps, 'absolute child-RUN path')).Count
+$occurrences = ([regex]::Matches($corps, 'chemin absolu du RUN enfant')).Count
 if ($occurrences -gt 1) { Fail "le contrat de dispatch est encore ecrit $occurrences fois (une seule attendue)" }
 
 # --- Volume : PLAFOND assume, avec sa justification ecrite. ---

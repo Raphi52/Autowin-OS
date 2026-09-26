@@ -28,6 +28,12 @@ describe('sansSequencesAnsi', () => {
     expect(sansSequencesAnsi(ESC + ']0;titre' + BEL + 'apres')).toBe('apres')
   })
 
+  // Juge du banc arena panel-t1 (2026-09-21) : un CSI 8 bits TRONQUE laissait U+009B, invisible
+  // mais compte dans le budget de troncature.
+  it('retire un introducteur CSI 8 bits orphelin', () => {
+    expect(sansSequencesAnsi('X' + String.fromCharCode(0x9b) + '31')).toBe('X31')
+  })
+
   it('laisse un texte propre identique a lui-meme', () => {
     expect(sansSequencesAnsi('Tests 412/900')).toBe('Tests 412/900')
   })

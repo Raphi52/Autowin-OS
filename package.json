@@ -132,10 +132,12 @@
     "test:knowledge-circulaire": "node scripts/cdp-knowledge-circular-proof.mjs",
     "test:sondes-lecture": "node scripts/verifier-sondes-lecture.mjs",
     "test:trois-conversations": "node scripts/cdp-trois-conversations-proof.mjs",
-    "test:relance": "node scripts/cdp-relance-jusquau-vert-proof.mjs"
+    "test:relance": "node scripts/cdp-relance-jusquau-vert-proof.mjs",
+    "banc:orchestration": "node scripts/banc-orchestration-vs-nu.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
     "@napi-rs/keyring": "1.3.0",
     "fflate": "^0.8.3",
     "mdast-util-from-markdown": "^2.0.3",
@@ -164,6 +166,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "happy-dom": "^20.11.0",
+    "playwright-core": "^1.63.0",
     "prettier": "^3.7.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",

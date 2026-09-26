@@ -30,11 +30,12 @@
 :root[data-base='clair'] {
   color-scheme: light;
 
-  --bg-0: #f4f5f8;
-  --bg-1: rgba(255, 255, 255, 0.82);
-  --bg-2: rgba(255, 255, 255, 0.7);
+  /* Gris bleute (choix utilisateur 2026-09-23 : le blanc pique les yeux). */
+  --bg-0: #e4e8ee;
+  --bg-1: #e4e8ee;
+  --bg-2: #dde2e9;
   --bg-3: rgba(15, 20, 35, 0.06);
-  --bg-inset: rgba(255, 255, 255, 0.92);
+  --bg-inset: #eef1f5;
 
   --line: rgba(18, 24, 40, 0.16);
   --line-strong: rgba(18, 24, 40, 0.34);
@@ -46,6 +47,9 @@
 
   --text: #14192a;
   --text-dim: #4d5567;
+  /* Les boutons de fenetre suivent le texte : le decor est LAVE en mode clair (voir le voile en
+     fin de fichier), donc la bande du haut est claire elle aussi. Jeton lu par theme-mode.ts. */
+  --titlebar-symbol: #14192a;
   /* REMONTE le 2026-09-07 : #767f92 donnait 3,69, sous le seuil de 4,5. */
   --text-faint: #5f6879;
 
@@ -185,8 +189,6 @@
   --chat-sur-vif-survol:            var(--on-accent);   /* texte pose sur le bouton d envoi vif, au survol */
   --chat-dictee:                    var(--rose);   /* barre et bouton de dictee en cours */
   --chat-erreur-douce:              var(--err);   /* message d erreur des travaux non publies */
-  --chat-file-envoi:                var(--gold-clair);   /* consigne en file : envoi */
-  --chat-file-orienter:             var(--info);   /* consigne en file : orientation */
 
 }
 
@@ -720,14 +722,11 @@
    Réversible d'une ligne : c'est l'argument qui a fait préférer cette voie au
    chantier de shaders. */
 :root[data-base='clair'] .home-view::after {
-  background:
-    linear-gradient(
-      170deg,
-      rgba(250, 248, 243, 0.9) 0%,
-      rgba(246, 244, 239, 0.86) 45%,
-      rgba(243, 240, 234, 0.9) 100%
-    ),
-    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
+  /* ALLEGE le 2026-09-21 : le voile ivoire est passe sur le decor entier (fin de fichier), donc
+     ce calque-ci ferait un SECOND voile et sur-blanchirait l'Accueil. Il ne garde que l'eclairci
+     central, qui aide les tuiles a se detacher. L'assombrissement du sombre (HomeView.css) reste
+     neutralise : il n'a pas de sens sur un fond lave. */
+  background: radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.4), transparent 80%);
 }
 
 /* RETIRE le 2026-09-09 : un second jeu des quatre etats colores vivait ICI, en double des
@@ -1107,4 +1106,399 @@
   --container-border: rgba(120, 30, 70, 0.18);
   --container-border-strong: rgba(120, 30, 70, 0.34);
   --container-shadow: none;
+}
+
+/* ÉTAGES D'ACTION — le nom de l'outil (« edit_file ») restait en #b9cbdd
+   (`cosmic-outline.css` l.834), un bleu-gris pensé pour le fond noir : sur la
+   carte bleutée d'une action en cours, il se lisait à peine. Signalé avec
+   capture le 2026-09-16 : « edit file est trop clair, gris sur fond bleu ».
+   Le liséré de statut et le fond de la carte ne bougent pas. */
+:root[data-base='clair'] .cosmic-outline .activity-step {
+  color: #14192a;
+}
+:root[data-base='clair'] .cosmic-outline .activity-step-icon {
+  background: rgba(15, 20, 35, 0.1);
+}
+:root[data-base='clair'] .cosmic-outline .activity-step-link {
+  border-color: rgba(18, 24, 40, 0.3);
+  color: var(--text-dim);
+}
+
+/* VIGNETTE DE PIÈCE JOINTE — `ChatView.css` l.1331 peint `.attachment-chip` en
+   `rgba(8, 19, 28, 0.94)` EN DUR, avec un contour cyan de nuit : une plaque
+   noire dans un champ de saisie blanc. Signalé avec capture le 2026-09-16 :
+   « lorsque je copie une image, le fond de la vignette est tout noir ».
+   L'aperçu de l'image garde un fond neutre pour ne pas fausser sa couleur. */
+:root[data-base='clair'] .attachment-chip {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+:root[data-base='clair'] .attachment-thumb {
+  background: rgba(15, 20, 35, 0.06);
+}
+
+/* PANNEAUX FLOTTANTS — signalés avec capture le 2026-09-18 : « corrige le panneau
+   des quotas ». Deux popups restaient en couleurs de NUIT écrites en dur :
+   « Quotas fournisseurs » (`ModelQuotaIndicator.css` l.147, `rgba(0, 0, 0, 0.98)`)
+   et le menu « Orchestrateur » (`ChatView.css` l.3517, `rgba(8, 8, 10, 0.985)`).
+   Le second est le plus traître : ses libellés prennent les jetons de texte, qui
+   passent au SOMBRE en mode clair — donc sombre sur sombre, quasi invisible.
+   Comme pour les zones déjà traitées, la surcharge se pose ICI, jamais au point
+   d'usage : ce sélecteur pèse plus lourd que celui du thème, chargé après. */
+:root[data-base='clair'] .model-quota-popover {
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(15, 20, 35, 0.18);
+  color: var(--text);
+}
+:root[data-base='clair'] .model-quota-popover header,
+:root[data-base='clair'] .model-quota-popover footer {
+  border-bottom-color: var(--line);
+}
+:root[data-base='clair'] .model-quota-popover small,
+:root[data-base='clair'] .model-quota-popover footer,
+:root[data-base='clair'] .model-quota-values small,
+:root[data-base='clair'] .model-quota-unavailable {
+  color: #4d586b;
+}
+:root[data-base='clair'] .model-quota-window > strong {
+  color: #14192a;
+}
+:root[data-base='clair'] .model-quota-popover header button {
+  color: #1d6a58;
+}
+:root[data-base='clair'] .model-quota-scope {
+  border-color: rgba(150, 110, 20, 0.35);
+  color: #7a5a0c;
+}
+:root[data-base='clair'] .model-quota-meter {
+  background: rgba(15, 20, 35, 0.12);
+}
+:root[data-base='clair'] .model-quota-error {
+  background: rgba(200, 30, 80, 0.07);
+  color: #9c1f45;
+}
+:root[data-base='clair'] .model-select-menu {
+  background: #ffffff;
+  box-shadow: 0 24px 64px rgba(15, 20, 35, 0.22);
+}
+
+/* ============================================================================
+   LE VOILE DU MODE CLAIR COUVRE TOUT LE DECOR, et plus seulement l'Accueil.
+
+   Constat ecran du 2026-09-21 : en mode clair, les onglets « Accueil / Chat /
+   Settings » et les boutons reduire/agrandir/fermer etaient ecrits en SOMBRE
+   par-dessus une galaxie restee NOIRE. Illisible.
+
+   CAUSE REELLE, et elle n'est pas dans la bande du haut : le voile ivoire qui
+   lave le cosmos en mode clair (direction choisie le 2026-09-03) etait pose sur
+   `.home-view::after` — un element `absolute` INTERIEUR a la vue Accueil. Il ne
+   couvrait donc ni la bande de 28 px, ni les marges de la coque, ou le decor
+   continuait de s'effacer en noir opaque (home-decor-scene.ts, FOND_DECOR).
+
+   On pose le meme voile sur le DECOR lui-meme, qui est `fixed inset: 0` : toute
+   la surface est lavee, bande du haut comprise, et le texte sombre du theme
+   clair redevient lisible partout SANS bande opaque par-dessus la galaxie
+   (celle-ci avait ete essayee et refusee : « c'est tout le haut qui n'est pas
+   visible », et elle balafrait le decor). La galaxie reste visible, lavee comme
+   un ciel de jour — elle n'est ni cachee ni remplacee.
+   ============================================================================ */
+:root[data-base='clair'] .decor-de-fond::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      170deg,
+      rgba(250, 248, 243, 0.9) 0%,
+      rgba(246, 244, 239, 0.86) 45%,
+      rgba(243, 240, 234, 0.9) 100%
+    ),
+    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
+}
+
+/* SPECIAL MALVOYANT -- deux themes d accessibilite. Texte courant >= 7:1 (AAA), texte
+   secondaire et accents >= 4,5:1, fonds OPAQUES (une transparence baisse le contraste reel),
+   focus epais, bordures franches, texte agrandi ~1,25x sur la coque. */
+:root[data-theme='malvoyant-sombre'] {
+  color-scheme: dark;
+  --bg-0: #000000;
+  --bg-1: #0a0a0a;
+  --bg-2: #141414;
+  --bg-3: #1f1f1f;
+  --bg-inset: #000000;
+  --line: #9a9a9a;
+  --line-strong: #ffffff;
+  --text: #ffffff;
+  --text-dim: #e6e6e6;
+  --text-faint: #c8c8c8;
+  --gold: #ffd84a;
+  --gold-bright: #ffe680;
+  --gold-doux: #ffd84a;
+  --gold-clair: #ffe680;
+  --rose: #ff8cc6;
+  --rose-bright: #ffb3da;
+  --cyan: #6ee7ff;
+  --violet: #c9b8ff;
+  --accent: #ffd84a;
+  --accent-dim: #5c4a00;
+  --accent-soft: rgba(255, 216, 74, 0.2);
+  --ok: #7dff8a;
+  --warn: #ffd84a;
+  --err: #ff8a80;
+  --info: var(--cyan);
+  --voile-rgb: 0, 0, 0;
+  --focus-malvoyant: #ffd84a;
+}
+:root[data-theme='malvoyant-sombre'] .shell,
+:root[data-theme='malvoyant-sombre'] .shell.theme-serious {
+  --surface-page: #000000;
+  --surface-panel: #0a0a0a;
+  --surface-card: #141414;
+  --surface-inset: #000000;
+  --surface-hover: #2a2a2a;
+  --surface-selected: #3d3300;
+  --container-border: #9a9a9a;
+  --container-border-strong: #ffffff;
+  --container-shadow: none;
+}
+
+:root[data-theme='malvoyant-clair'] {
+  color-scheme: light;
+  /* Gris bleute (choix utilisateur 2026-09-23 : le blanc pur pique les yeux). */
+  --bg-0: #e4e8ee;
+  --bg-1: #eef1f5;
+  --bg-2: #e4e8ee;
+  --bg-3: #d8dde5;
+  --bg-inset: #eef1f5;
+  --line: #595959;
+  --line-strong: #000000;
+  --text: #000000;
+  --text-dim: #1f1f1f;
+  --text-faint: #404040;
+  --gold: #5c4200;
+  --gold-bright: #4a3500;
+  --gold-doux: #5c4200;
+  --gold-clair: #5c4200;
+  --rose: #8a0040;
+  --rose-bright: #6e0033;
+  --cyan: #004a66;
+  --violet: #3a1f99;
+  --accent: #0033aa;
+  --accent-dim: #c7d4f5;
+  --accent-soft: rgba(0, 51, 170, 0.12);
+  --ok: #1d5a14;
+  --warn: #6b4a00;
+  --err: #8f1a14;
+  --info: var(--cyan);
+  --voile-rgb: 0, 0, 0;
+  --focus-malvoyant: #0033aa;
+}
+:root[data-theme='malvoyant-clair'] .shell,
+:root[data-theme='malvoyant-clair'] .shell.theme-serious {
+  --surface-page: #ffffff;
+  --surface-panel: #ffffff;
+  --surface-card: #f5f5f5;
+  --surface-inset: #ffffff;
+  --surface-hover: #e0e0e0;
+  --surface-selected: #c7d4f5;
+  --container-border: #595959;
+  --container-border-strong: #000000;
+  --container-shadow: none;
+}
+
+/* Commun aux deux : texte plus grand, interlignage genereux, focus et bordures visibles. */
+:root[data-theme^='malvoyant-'] body {
+  font-size: 16px;
+  line-height: 1.6;
+}
+:root[data-theme^='malvoyant-'] .shell {
+  /* Retour utilisateur 2026-09-23 : ce qui aide, c'est le TEXTE plus grand, pas des cadres
+     autour de chaque bouton (retires). Un font-size en em n'atteignait que ~40 declarations : 813
+     tailles sont en px fixes. zoom agrandit TOUT ; la hauteur est compensee pour tenir a l'ecran. */
+  zoom: 1.5;
+  height: calc(100vh / 1.5);
+}
+/* Champs de saisie exclus (retour utilisateur 2026-09-23) : un champ texte declenche :focus-visible
+   meme au clic, d'ou un gros cadre bleu autour de la barre de prompt. Le curseur suffit a situer. */
+:root[data-theme^='malvoyant-'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
+  outline: 3px solid var(--focus-malvoyant) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 6px var(--bg-0) !important;
+}
+:root[data-theme^='malvoyant-'] a {
+  text-decoration: underline;
+}
+/* Le texte agrandi elargit les pastilles de l'en-tete du chat : sans retour a la ligne, le bloc
+   de gauche (min-width: 0) deborde sous « Details ». On laisse l'en-tete passer sur 2 lignes. */
+:root[data-theme^='malvoyant-'] .chat-head,
+:root[data-theme^='malvoyant-'] .chat-runtime {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+/* Les rubriques d'un ecran (Reglages, Agent Studio) debordaient a droite une fois le texte
+   agrandi : « Diagnostic » etait coupe par le bord. Elles passent a la ligne. */
+:root[data-theme^='malvoyant-'] .domain-tabs {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+/* Textes secondaires (aides, delais, legendes) : en malvoyant, le second niveau de gris n'a pas
+   lieu d'etre — il retombe sur la couleur de texte pleine. */
+:root[data-theme^='malvoyant-'] {
+  --text-faint: var(--text);
+  --text-dim: var(--text);
+}
+/* Texte d'aide des champs : le gris par defaut du navigateur est sous 7:1. */
+:root[data-theme^='malvoyant-'] input::placeholder,
+:root[data-theme^='malvoyant-'] textarea::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+/* Envoyer, meme inactif, doit rester reperable : trait plein et icone contrastee. */
+:root[data-theme^='malvoyant-'] .composer-send:disabled,
+:root[data-theme^='malvoyant-'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled {
+  opacity: 1;
+  color: var(--text-dim);
+  background: var(--bg-2);
+}
+/* Fond decoratif (image galaxie du body, decor 3D de l'Accueil) : du bruit visuel derriere le
+   texte. On le remplace par l'aplat du theme. */
+:root[data-theme^='malvoyant-'] body {
+  background: var(--bg-0);
+}
+:root[data-theme^='malvoyant-'] .decor-de-fond {
+  display: none;
+}
+
+/* Malvoyant clair — capture Accueil du 2026-09-22 : le widget Jarvis restait ivoire trame d'or
+   (surcharge data-base='clair' plus haut), bascule brun-dore, et l'etat « hors ligne » de l'anneau
+   ecrit a 6.5-9.5px. Aplat blanc, trait noir, texte noir et etat lisible. */
+:root[data-theme='malvoyant-clair'] .jarvis {
+  --jv-or: #000000;
+  background: #ffffff;
+  box-shadow: none;
+  color: #000000;
+}
+:root[data-theme='malvoyant-clair'] .jarvis__bascule,
+:root[data-theme='malvoyant-clair'] .jarvis__mute,
+:root[data-theme='malvoyant-clair'] .jarvis__anneau-texte > strong {
+  color: #000000;
+  background: #ffffff;
+}
+:root[data-theme='malvoyant-clair'] .jarvis__anneau-coeur {
+  fill: #ffffff;
+  stroke: #000000;
+}
+:root[data-theme^='malvoyant-'] .jarvis__anneau-texte > span {
+  font-size: clamp(9px, 2.4cqi, 12px);
+  font-weight: 700;
+  color: var(--text);
+}
+/* Reglages › Skills : le compteur des onglets (« Skills 17 ») est un gris en dur #a9b0c5
+   (CapabilitiesView.css), sous 2:1 sur le fond clair. */
+:root[data-theme^='malvoyant-'] .cockpit-tabs small,
+:root[data-theme^='malvoyant-'] .control-source-badge {
+  color: var(--text);
+}
+/* Reglages › Skills · Hooks · Tools : les libelles y sont en pixels FIXES de 7 a 11 px
+   (CapabilitiesView.css), donc insensibles au 1.25em du theme. Mesure au pixel sur capture du
+   2026-09-22 : texte fonce (45-61/255) mais si fin que le lissage le grise. Plancher a 13 px. */
+:root[data-theme^='malvoyant-'] :is(
+  .cockpit-toolbar label > span, .cockpit-inspector > h2, .cockpit-sources button b,
+  .cockpit-sources button strong, .cockpit-sources button small, .cockpit-tabs button,
+  .registry-heading, .control-row strong, .control-row p, .control-source-badge,
+  .control-hook-meta code, .control-empty, .inspector-hero p, .cockpit-inspector dl > div,
+  .inspector-impact, .control-error, .control-notice, .related-list > button b,
+  .related-list > button small, .related-list > p
+) {
+  font-size: 13px;
+  line-height: 1.45;
+}
+:root[data-theme^='malvoyant-'] :is(
+  .cockpit-toolbar label > span, .cockpit-inspector > h2, .cockpit-sources button small,
+  .registry-heading, .control-row p, .control-empty, .inspector-hero p,
+  .cockpit-inspector dl > div, .inspector-impact, .related-list > button small, .related-list > p
+) {
+  color: var(--text);
+}
+:root[data-theme^='malvoyant-'] .cockpit-sources button.is-future {
+  opacity: 1;
+}
+/* Contour des controles GARANTI. Des regles d'ecran plus precises l'ecrasaient : dans
+   l'Observatory, `.theme-serious .observatory-view .observatory-toolbar button` pose un blanc a
+   22 %, invisible sur le fond blanc du malvoyant clair (capture du 2026-09-22, conv-785). */
+:root[data-theme^='malvoyant-'] :is(button, input, select, textarea, summary) {
+  border-color: var(--line-strong) !important;
+}
+:root[data-theme^='malvoyant-'] button:disabled {
+  color: var(--text-dim);
+}
+
+/* Police des themes malvoyants : Atkinson Hyperlegible (Braille Institute), concue pour distinguer
+   les lettres confondables (I/l/1, O/0, b/d). Essai demande le 2026-09-23. Le code garde sa police. */
+:root[data-theme^='malvoyant-'] body,
+:root[data-theme^='malvoyant-'] .shell,
+:root[data-theme^='malvoyant-'] .shell *:not(code):not(pre):not(pre *):not(kbd):not(samp) {
+  font-family: 'Atkinson Hyperlegible', system-ui, sans-serif !important;
+}
+
+:root[data-theme^='malvoyant-'] :is(textarea, input, [contenteditable]):focus,
+:root[data-theme^='malvoyant-'] :is(textarea, input, [contenteditable]):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Clair + Malvoyant clair (choix utilisateur 2026-09-23) : la GALAXIE reste en fond d'ecran, non
+   lavee ; les panneaux sont des aplats gris bleu OPAQUES ecrits en noir. Passe apres les regles qui
+   aplatissaient le fond (clair) ou le masquaient (malvoyant). */
+:root[data-base='clair'] body {
+  background:
+    /* Voile ivoire : sur Chat & co le decor 3D n'est pas monte (App.tsx : accueil seulement),
+       c'est CETTE image qui est derriere la bande du haut -> elle doit etre lavee elle aussi,
+       sinon onglets et boutons sombres se posent sur du noir (regression 2026-09-23). */
+    linear-gradient(170deg, rgba(250, 248, 243, 0.9), rgba(246, 244, 239, 0.86) 45%, rgba(243, 240, 234, 0.9)),
+    url('./autowin-galaxy-bg-hq.png') center / cover fixed,
+    #05060c;
+}
+:root[data-base='clair'] .decor-de-fond { display: block; }
+:root[data-base='clair'] .shell,
+:root[data-base='clair'] .shell.theme-serious,
+:root[data-theme='malvoyant-clair'] .shell,
+:root[data-theme='malvoyant-clair'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: #e4e8ee;
+  --surface-card: #eef1f5;
+  --surface-inset: #eef1f5;
+}
+:root[data-base='clair'] .theme-serious .rail,
+:root[data-base='clair'] .cosmic-outline .conv-pane {
+  background: #e4e8ee;
+}
+:root[data-base='clair'] .theme-serious .brand {
+  background: #eef1f5;
+}
+
+/* Retour utilisateur 2026-09-23 (capture) : liste des conversations, fil et barre de prompt restaient
+   BLANCS. Gris bleu franc pour les panneaux, un cran plus clair pour les champs, texte noir. */
+:root[data-base='clair'] .shell,
+:root[data-base='clair'] .shell.theme-serious,
+:root[data-theme='malvoyant-clair'] .shell,
+:root[data-theme='malvoyant-clair'] .shell.theme-serious {
+  --surface-panel: #cfd6e0;
+  --surface-card: #dde2e9;
+  --surface-inset: #dde2e9;
+}
+:root[data-base='clair'] :is(.theme-serious .rail, .cosmic-outline .conv-pane, .cosmic-outline .chat,
+  .cosmic-outline .chat-layout .chat, .cosmic-outline .chat-head, .cosmic-outline .composer) {
+  background: #cfd6e0;
+}
+:root[data-base='clair'] :is(.theme-serious .brand, .cosmic-outline .composer-field,
+  .cosmic-outline .conv-search, .cosmic-outline .chat-suggest .btn) {
+  background: #dde2e9;
+}
+/* Cartes « image Read » / pieces jointes du fil : blanches, elles aussi en gris bleu (2026-09-23). */
+:root[data-base='clair'] .artifact-preview {
+  background: #dde2e9;
 }

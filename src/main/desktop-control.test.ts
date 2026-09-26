@@ -36,6 +36,26 @@ describe('desktop control validation', () => {
     ])
   })
 
+  it('accepte les noms usuels de touches en les ramenant a la table', () => {
+    expect(
+      parseDesktopActions([
+        { type: 'key', keys: ['Escape'] },
+        { type: 'key', keys: ['Control', 'Return'] },
+        { type: 'key', keys: ['ArrowLeft', 'PgDn'] }
+      ])
+    ).toEqual([
+      { type: 'key', keys: ['ESC'] },
+      { type: 'key', keys: ['CTRL', 'ENTER'] },
+      { type: 'key', keys: ['LEFT', 'PAGEDOWN'] }
+    ])
+  })
+
+  it('nomme les touches les plus proches quand le nom reste inconnu', () => {
+    expect(() => parseDesktopActions([{ type: 'key', keys: ['ESCAPPE'] }])).toThrow(
+      /Touche desktop inconnue: ESCAPPE\. Touches les plus proches : .*ESC/
+    )
+  })
+
   it.each([
     null,
     [],
@@ -221,5 +241,11 @@ describe('WindowsDesktopController', () => {
 
     const unsupported = new WindowsDesktopController({ platform: 'linux', run: vi.fn() })
     await expect(unsupported.observe()).rejects.toThrow(/Windows/i)
+  })
+})
+
+describe('keys en chaine (tour c4e319ca-783f-4b49-9b87-971cd6392c8e)', () => {
+  it("accepte 'ctrl+t' comme ['CTRL','T']", () => {
+    expect(parseDesktopActions([{ type: 'key', keys: 'ctrl+t' }])).toEqual([{ type: 'key', keys: ['CTRL', 'T'] }])
   })
 })

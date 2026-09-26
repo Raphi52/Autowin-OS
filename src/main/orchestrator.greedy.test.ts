@@ -155,7 +155,9 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     )
 
     expect(decompose).not.toHaveBeenCalled()
-    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['scout'])
+    // `learn` en queue : la capitalisation survit a une phase nommee (2026-09-13). Ce qui est
+    // garanti ici reste qu'AUCUNE autre phase d'execution n'est jouee, et qu'on ne decompose pas.
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['scout', 'learn'])
   })
 
   it('/judge lance uniquement le juge de closure', async () => {
@@ -183,7 +185,7 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     )
 
     expect(decompose).not.toHaveBeenCalled()
-    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['build'])
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['build', 'learn'])
   })
 
   it('conserve les phases standard autour de la frontière build parallélisée', async () => {
@@ -333,6 +335,29 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     expect(provider.contents).toHaveLength(2)
     expect(result.trace.some((step) => step.step === 'judge')).toBe(false)
     expect(result.gateBlocked).toBe(true)
+  })
+
+  // conv-835, tour 8641812d-6401-4129-a6b0-13a64228e0bc : le juge (VALIDE 86) a releve que le
+  // raccourci corrige par 0014ffca au pre-gate sequentiel restait ici. Preuve bonne + hook qui
+  // bloque AVEC sa raison : le refus ne doit pas s'ouvrir sur « Échec déjà déclaré ».
+  it('un hook pre-green bloquant du chemin greedy ne se double pas d’un faux « Échec déjà déclaré »', async () => {
+    const hooks = new HookBus().register('pre-green', () => ({
+      block: true,
+      reason: 'hook fix-gate: 6 édits de x.mjs sans cause vérifiée'
+    }))
+    const result = await makeGreedy(
+      new GreedyProvider(),
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['build'],
+      { hooks }
+    ).run('corrige le bug en plusieurs volets')
+
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons.join('\n')).toMatch(/hook fix-gate: 6 édits de x\.mjs/)
+    expect(result.gateReasons.join('\n')).not.toMatch(/Échec déjà déclaré/)
   })
 
   it('une sous-tâche qui ÉCHOUE conserve les actions déjà faites', async () => {
@@ -620,5 +645,103 @@ describe('une sous-tache reparee sort du registre et laisse la cloture se faire'
     // ET LE POINT : le registre s'est vide, donc la cloture n'est plus bloquee par « pas livré ».
     expect((result.gateReasons ?? []).join(' ')).not.toContain('pas livré')
     expect(result.gateBlocked).toBe(false)
+  })
+})
+
+/**
+ * UN REFUS QUI NE BOUGE PLUS ARRETE LA BOUCLE — au SITE D'APPEL, pas seulement dans la regle pure.
+ *
+ * Defaut vecu conv-470, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` (saisie `ts=1789192601300`) :
+ * quatre passages `[REPARATION 1..4]` pour le MEME refus mot pour mot. La regle existait mais ne
+ * mordait que sur un refus entierement hors de portee de build ; un refus MIXTE fige rejouait
+ * jusqu'au plafond dur, chaque tour payant un build complet et un panel de juge.
+ */
+class ProviderQuiEchoueToujours extends GreedyProvider {
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const contenu = String(messages[messages.length - 1]?.content ?? '')
+    if (/\[sous-tâche A\]/.test(contenu)) {
+      this.contents.push(contenu)
+      throw new Error('sous-agent en échec (simulé, toujours)')
+    }
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => {
+  it('ne rejoue pas indefiniment et DIT pourquoi il s’arrete', async () => {
+    const provider = new ProviderQuiEchoueToujours()
+    const result = await makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['frame', 'build']
+    ).run('analyse le projet en plusieurs volets')
+
+    expect(result.gateBlocked).toBe(true)
+    const passages = provider.contents.filter((c) => /\[sous-tâche A\]/.test(c)).length
+    // Sans la garde, la boucle va jusqu'au plafond dur (24 passages).
+    expect(passages).toBeLessThanOrEqual(4)
+    const dit = [...(result.gateReasons ?? []), ...result.trace.map((s) => s.detail ?? '')].join(
+      ' '
+    )
+    expect(dit).toMatch(/même refus est revenu \d+ fois de suite/)
+  })
+
+  /**
+   * RECIDIVE MESUREE (conv-587, saisie du 2026-09-16 ts=1789550244094 : « tu m'as pas ecris de
+   * preprompt » ; premiere occurrence conv-470, 2026-09-12 « j'ai rien en preprompt »).
+   *
+   * Le correctif de 2026-09-12 n'a branche le prompt sur l'evenement de demarrage que du chemin
+   * SEQUENTIEL (orchestrator.ts, `prompt: execPrompt`). Le chemin GREEDY — celui que prend un
+   * kaizen decompose en volets — construisait pourtant son enveloppe juste avant `onPhase`, et ne
+   * la passait pas : le deplie « prompt envoye » restait vide pendant toute la phase.
+   */
+  it('greedy annonce le prompt DES le demarrage de chaque phase et du juge', async () => {
+    const provider = new GreedyProvider()
+    const prompts: Array<string | undefined> = []
+    await makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'volet A' },
+        { id: 'B', deps: [], prompt: 'volet B' }
+      ],
+      () => ['build']
+    ).run('audit en plusieurs volets', undefined, (event) => {
+      if (event.step === 'exec' || event.step === 'judge') {
+        prompts.push(event.prompt?.messages?.[0]?.content)
+      }
+    })
+
+    expect(prompts).toHaveLength(3)
+    expect(prompts.filter((texte) => typeof texte === 'string' && texte.length > 0)).toHaveLength(3)
+  })
+
+  /**
+   * TROISIEME point d'annonce, laisse de cote par le correctif precedent (meme recidive, conv-587,
+   * saisie ts=1789550244094) : quand PLUSIEURS modeles traitent la meme sous-tache, leurs sorties
+   * sont fusionnees par un appel supplementaire a l'orchestrateur. Ce site annoncait sa phase sans
+   * aucune enveloppe : le deplie « prompt envoye » restait vide pour la fusion.
+   */
+  it('greedy annonce aussi le prompt de la FUSION multi-modeles', async () => {
+    const provider = new GreedyProvider()
+    const prompts: Array<string | undefined> = []
+    await makeGreedy(provider, async () => [{ id: 'A', deps: [], prompt: 'volet A' }], () => ['build'], {
+      phaseFanOut: () => [
+        { provider: provider.id, model: 'worker-1' },
+        { provider: provider.id, model: 'worker-2' }
+      ]
+    }).run('audit a deux modeles', undefined, (event) => {
+      if (event.step === 'exec' && event.role === 'orchestrator') {
+        prompts.push(event.prompt?.messages?.[0]?.content)
+      }
+    })
+
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toContain('Fusionne leurs sorties')
   })
 })

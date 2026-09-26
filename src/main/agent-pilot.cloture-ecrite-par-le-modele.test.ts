@@ -74,8 +74,8 @@ function pilote(): {
         { getBinding: () => ({ provider: 'codex', model: 'gpt-test' }) } as never,
         bus as never
         // maxIter FINI, obligatoire ici : CAP_ITERATIONS_TOUR est passe a l'infini le
-        // 2026-09-04 (agent-pilot.ts:87, demande utilisateur — le frein reel est le plafond
-        // de DEPENSE, AUTOWIN_CHAT_USD_CAP). Or ce faux modele renvoie TOUJOURS la meme
+        // 2026-09-04 (agent-pilot.ts:87, demande utilisateur — et depuis le 2026-09-16 il n'y a
+        // plus aucun plafond de depense cote chat). Or ce faux modele renvoie TOUJOURS la meme
         // commande : sans borne, le tour ne se termine jamais et le processus de test meurt
         // de saturation memoire (mesure du 2026-09-07 : OOM en 3,17 s). On borne le HARNAIS,
         // pas le produit.

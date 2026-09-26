@@ -10,7 +10,7 @@ describe('credential Azure DevOps via Azure CLI', () => {
     const run = vi.fn(async () => ({ stdout: 'token-secret\n', stderr: '' }))
 
     await expect(loadAzureDevOpsCliToken(run)).resolves.toBe('token-secret')
-    expect(run).toHaveBeenCalledWith('az.cmd', [
+    expect(run).toHaveBeenCalledWith('az', [
       'account',
       'get-access-token',
       '--resource',

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { portCdp, urlCiblesCdp, PORT_PAR_DEFAUT } from './cdp-port.mjs'
+import { portCdp, urlCiblesCdp } from './cdp-port.mjs'
 
 const aNettoyer = []
 afterEach(() => {
@@ -42,15 +42,15 @@ describe('cdp-port — joindre l_instance REELLE', () => {
    * Le repli garde l'ancien defaut : une sonde appelee comme avant, sur une machine sans instance
    * ouverte, doit se comporter comme avant — sinon le portage casse des appels qui marchaient.
    */
-  it('retombe sur 9223 quand rien n_est connu', () => {
+  it('refuse au lieu de viser 9223 quand rien n_est connu', () => {
     donneesAvecPort(null)
-    expect(portCdp([], {})).toBe(PORT_PAR_DEFAUT)
+    expect(() => portCdp([], {})).toThrow(/Aucune instance a piloter/)
   })
 
-  it('ignore un fichier illisible au lieu de rendre NaN', () => {
+  it('refuse aussi sur un fichier illisible, au lieu de rendre NaN', () => {
     const racine = donneesAvecPort(null)
     writeFileSync(join(racine, 'DevToolsActivePort'), 'pas-un-port\n')
-    expect(portCdp([], {})).toBe(PORT_PAR_DEFAUT)
+    expect(() => portCdp([], {})).toThrow(/Aucune instance a piloter/)
   })
 
   it('construit l_URL du catalogue de cibles sur ce port', () => {

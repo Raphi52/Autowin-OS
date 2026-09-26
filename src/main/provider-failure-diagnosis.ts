@@ -13,6 +13,13 @@
  */
 
 export type ProviderFailureKind =
+  /**
+   * Le modèle a émis un appel d'outil ILLISIBLE, et le CLI a déjà retenté une fois (« retry also
+   * failed »). Mesuré conv-737, tour `f0e1c2b0-a1c9-4140-8496-dc40709fcab9` : 0,10 USD payés,
+   * réponse vide, et aucun conseil affiché (classé `other`). Ni le provider ni la connexion ne sont en
+   * cause : c'est la sortie du modèle, à cet effort-là, qui a cassé.
+   */
+  | 'malformed-tool-call'
   /** Le CLI est là mais personne n'est connecté → une reconnexion suffit. */
   | 'auth'
   /** L'exécutable est introuvable → rien ne peut tourner tant qu'il n'est pas résolu. */
@@ -32,6 +39,12 @@ export type ProviderFailureKind =
   | 'cancelled'
   /** Le CLI est mort anormalement (tué, crash, arrêt de session Windows) → relancer a du sens. */
   | 'crashed'
+  /**
+   * Le filtre de securite du MODELE a refuse le message (conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 :
+   * « Opus 5's safeguards flagged this message … [reasoning_extraction] »). Terminal pour CE prompt :
+   * relancer a l'identique echoue pareil — classe `other`, aucun conseil n'etait donne.
+   */
+  | 'refused'
   /** Autre chose (timeout, watchdog, refus du modèle…) : on ne devine pas. */
   | 'other'
 
@@ -158,6 +171,8 @@ export function classifyProviderFailure(message: string): ProviderFailureKind {
   // Testé APRÈS `budget` À DESSEIN : un arrêt imposé par le devis porte « [abort] … interrompu :
   // Budget USD depasse (…) » et se classe `budget`, pas `cancelled` — la cause est le plafond,
   // l'interruption n'en est que le moyen.
+  if (/safeguards flagged|usage policy|\/legal\/aup/.test(text)) return 'refused'
+  if (/tool call could not be parsed/.test(text)) return 'malformed-tool-call'
   if (/\[abort\]/.test(text)) return 'cancelled'
   if (
     /codex exec annul[ée]|claude cli annul[ée]|kimi code annul[ée]|envoi gemini annul[ée]/.test(text)
@@ -193,6 +208,18 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
       "second lancement sur la même conversation n'a pas interrompu le premier."
     )
   }
+  if (kind === 'refused') {
+    return (
+      `Le filtre de sécurité de ${provider} a refusé ce message : le relancer à l'identique échouera pareil. ` +
+      'Change le modèle de ce rôle (Agent Studio) ou allège le prompt (dossier brut collé en entier).'
+    )
+  }
+  if (kind === 'malformed-tool-call') {
+    return (
+      `Le modèle de ${provider} a produit deux fois un appel d'outil illisible (le CLI a déjà retenté). ` +
+      "Relance la demande ; si ça se répète, monte l'effort de raisonnement ou change de modèle (Agent Studio)."
+    )
+  }
   if (kind === 'budget') {
     return (
       'Relève les plafonds du run (Settings › Budget) ou réduis le périmètre : ' +
@@ -206,6 +233,23 @@ export function diagnoseProviderFailure(failure: ProviderFailure): DiagnosedFail
   const kind = classifyProviderFailure(failure.message)
   const hint = repairHint(failure.provider, kind)
   return { ...failure, kind, ...(hint ? { hint } : {}) }
+}
+
+/**
+ * Message d'échec d'un TOUR DE CHAT direct : l'erreur brute, suivie du geste de réparation quand on
+ * en connaît un. Le message d'origine reste INTACT en tête — les détecteurs aval (reprise
+ * surcharge, session expirée, quota) le lisent par inclusion, jamais par égalité.
+ *
+ * Pourquoi ce helper existe : ce module n'était appelé que par l'orchestrateur et le watchdog, le
+ * chat direct rendait l'erreur brute et un message assistant vide. Mesuré conv-737 (tour
+ * f0e1c2b0-a1c9-4140-8496-dc40709fcab9, 2026-09-21), récidive conv-5 (tour
+ * d98b3e44-bc1c-4d37-8495-d64f4bea225a, 2026-09-23) : « The model's tool call could not be parsed
+ * (retry also failed) », 0,0956 USD payés, et l'écran n'offrait aucun geste alors que `repairHint`
+ * savait déjà conseiller de relancer / monter l'effort / changer de modèle.
+ */
+export function describeChatTurnFailure(failure: ProviderFailure): string {
+  const diagnosed = diagnoseProviderFailure(failure)
+  return diagnosed.hint ? `${failure.message}\n→ ${diagnosed.hint}` : failure.message
 }
 
 /**
@@ -285,4 +329,14 @@ export function explainRoleFailure(
     ? `${head}
 → ${diagnosed.hint}`
     : head
+}
+
+/**
+ * Modèle de REPLI quand le filtre de sécurité d'un modèle Claude refuse un message (conv-540, tour
+ * 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4). Opus → Sonnet de la même génération : présent dans le CLI
+ * installé (mesuré 2026-07-30, voir claude-cli-catalog.ts). Rien d'autre n'est deviné.
+ */
+export function modeleDeRepliApresRefus(model: string | undefined): string | undefined {
+  const m = /^claude-opus-(\d+(?:-\d+)?)$/.exec(model ?? '')
+  return m ? `claude-sonnet-${m[1]}` : undefined
 }

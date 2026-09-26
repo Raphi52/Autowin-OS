@@ -15,6 +15,44 @@ export function ForkIcon(): React.JSX.Element {
   )
 }
 
+/** Icône « copier » — deux feuillets superposés, monochrome via currentColor. */
+export function CopyIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <rect
+        x="5.4"
+        y="5.4"
+        width="8.2"
+        height="8.2"
+        rx="1.6"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M10.6 5.4V4a1.6 1.6 0 0 0-1.6-1.6H4A1.6 1.6 0 0 0 2.4 4v5a1.6 1.6 0 0 0 1.6 1.6h1.4"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+/** Icône « copié » — une coche, monochrome via currentColor. */
+export function CheckIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <path
+        d="M3 8.6 6.3 12 13 4.6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 /*
  * Icone « volet de details » — un cadre dont la colonne DROITE est detachee, exactement ce que le
  * bouton fait : ouvrir le panneau de droite (runs, etapes, RUN.md).
@@ -46,20 +84,6 @@ export function InspectIcon(): React.JSX.Element {
     <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="4.2" stroke="currentColor" strokeWidth="1.3" />
       <path d="M10.2 10.2 14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-export function WorkflowRefreshIcon(): React.JSX.Element {
-  return (
-    <svg className="workflow-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M13.2 5.2A5.6 5.6 0 1 0 13 11M13.2 2.5v2.8h-2.8"
-        stroke="currentColor"
-        strokeWidth="1.35"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   )
 }

@@ -50,6 +50,16 @@ export const OPERATION_SORTIE_DE_GEL = 'renderer:fenetre-revenue'
 export const OPERATION_PROCESSUS_DISPARU = 'renderer:processus-disparu'
 
 /**
+ * POURQUOI ON N'A PAS REANIME — le motif, pas le silence.
+ *
+ * `doitReanimer` rend deja `sous-le-seuil` ou `trop-recent`, mais `tenterReanimation` sortait sans
+ * rien ecrire : un journal qui porte des entrees en gel et zero reanimation etait indecidable
+ * entre « la regle a refuse » et « le minuteur n'a jamais tire ». Le motif est suffixe a
+ * l'operation, comme le fait deja `processus-disparu:<raison>`.
+ */
+export const OPERATION_REANIMATION_REFUSEE = 'renderer:fenetre-reanimation-refusee'
+
+/**
  * Branche l'ecoute et rend la fonction qui la retire.
  *
  * `journaliser` et `maintenant` ne sont injectes que pour rendre le test deterministe : la
@@ -64,6 +74,9 @@ export function surveillerFenetreInjoignable(
 ): () => void {
   let debut: number | undefined
   let derniereReanimation: number | undefined
+  // Un episode de gel = un seul minuteur. Sans ce temoin, chaque re-emission d'`unresponsive` en
+  // armerait un de plus, et la fenetre serait rechargee autant de fois qu'Electron a crie.
+  let minuteurArme = false
 
   // REANIMATION : le gel n'a plus besoin que l'utilisateur ferme l'application. Le processus
   // principal, lui, repond encore : passe le seuil, il recharge la fenetre, ce qui repart sur un
@@ -75,7 +88,26 @@ export function surveillerFenetreInjoignable(
       { gelDepuisMs: instant - debut, derniereReanimation, maintenant: instant },
       reglages
     )
-    if (!verdict.reanimer) return
+    minuteurArme = false
+    if (!verdict.reanimer) {
+      journaliser({
+        ts: new Date(instant).toISOString(),
+        blocageMs: instant - debut,
+        operation: `${OPERATION_REANIMATION_REFUSEE}:${verdict.motif}`,
+        cause: 'boucle-tenue'
+      })
+      // Le gel COURT toujours : on redonne sa chance a la regle au moment ou elle pourra dire oui,
+      // sinon un refus unique condamnerait l'episode entier a n'etre jamais reanime.
+      const attente =
+        verdict.motif === 'sous-le-seuil'
+          ? reglages.seuilMs - (instant - debut)
+          : reglages.delaiEntreDeuxMs - (instant - (derniereReanimation ?? instant))
+      if (attente > 0) {
+        minuteurArme = true
+        planifier(tenterReanimation, attente)
+      }
+      return
+    }
     derniereReanimation = instant
     journaliser({
       ts: new Date(instant).toISOString(),
@@ -87,10 +119,32 @@ export function surveillerFenetreInjoignable(
   }
 
   const surInjoignable = (): void => {
-    debut = maintenant()
-    planifier(tenterReanimation, reglages.seuilMs)
+    /*
+     * LE CHRONO PART A LA PREMIERE ALERTE, ET NE REPART PLUS.
+     *
+     * Electron RE-EMET `unresponsive` tant que la fenetre ne repond pas — mesure du 2026-09-08 :
+     * 10:40:43, 10:41:01, 10:41:19, 10:41:36, soit 17 a 19 s d'intervalle, tous SOUS le seuil de
+     * 20 s. Reposer `debut` a chaque cri remettait la duree de gel a zero : le seuil n'etait jamais
+     * franchi, `doitReanimer` repondait eternellement `sous-le-seuil`, et `gels.jsonl` a fini avec
+     * 14 entrees `fenetre-injoignable` pour ZERO `fenetre-reanimee`. C'est aussi ce qui a produit
+     * la duree aberrante de 5 933 781 ms journalisee comme un gel unique.
+     */
+    const armerSiBesoin = (): void => {
+      if (minuteurArme) return
+      minuteurArme = true
+      planifier(tenterReanimation, reglages.seuilMs)
+    }
+    // Les cris suivants du MEME episode ne sont pas des entrees en gel : les journaliser une
+    // seconde fois gonflerait le compte des gels sans qu'aucun gel de plus ait eu lieu.
+    if (debut !== undefined) {
+      armerSiBesoin()
+      return
+    }
+    const entree = maintenant()
+    debut = entree
+    armerSiBesoin()
     journaliser({
-      ts: new Date(debut).toISOString(),
+      ts: new Date(entree).toISOString(),
       // La duree n'est pas encore connue : Electron signale l'ENTREE dans le gel. Mentir ici
       // (inventer un seuil) polluerait les statistiques ; 0 dit exactement « pas encore mesuree ».
       blocageMs: 0,
@@ -110,6 +164,7 @@ export function surveillerFenetreInjoignable(
       cause: 'boucle-tenue'
     })
     debut = undefined
+    minuteurArme = false
   }
 
   const surDisparition = (...args: unknown[]): void => {
@@ -124,6 +179,7 @@ export function surveillerFenetreInjoignable(
       cause: 'boucle-tenue'
     })
     debut = undefined
+    minuteurArme = false
     /*
      * REMETTRE EN ROUTE. Mesure du 2026-09-08 17:13 : l'escalade a bien tue le processus d'affichage
      * (ligne `processus-disparu:crashed`) et la fenetre est restee MORTE — Electron ne recree pas

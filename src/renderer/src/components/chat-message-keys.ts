@@ -4,7 +4,7 @@
  */
 import type { Msg } from './chat-view-types'
 import { groupAssistantActivity, type ChatPart } from './chat-view-model'
-import { promptDeLOption, type AskDecision } from './ask-choices'
+import { parseAskDecision, promptDeLOption, type AskDecision } from './ask-choices'
 
 export function messageKey(message: Msg, index: number): string {
   return `${message.role}:${index}`
@@ -54,9 +54,15 @@ function estUneReponseAuBloc(texte: string, decision: AskDecision): boolean {
  */
 export function askDejaRepondu(messages: Msg[], index: number): boolean {
   const parts = (messages[index] as { parts?: ChatPart[] }).parts ?? []
-  const decisions = groupAssistantActivity(parts).flatMap((bloc) =>
-    bloc.kind === 'ask-decision' ? [bloc.decision] : []
-  )
+  // fix-ok: passer par `groupAssistantActivity` analysait TOUT le Markdown du message, pour chaque
+  // message assistant, a chaque delta de flux (gel `renderer:vue-chat`, heal du 2026-09-18). Un bloc
+  // `ask-decision` ne nait QUE d'une partie non-texte, transmise telle quelle par la coalescence :
+  // `parseAskDecision` sur ces parties rend exactement les memes decisions, sans analyse Markdown.
+  const decisions = parts.flatMap((part) => {
+    if (part.kind === 'text') return []
+    const decision = parseAskDecision(part)
+    return decision ? [decision] : []
+  })
   if (!decisions.length) return false
   for (let i = index + 1; i < messages.length; i += 1) {
     const message = messages[i]

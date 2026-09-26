@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot, commandResultSucceeded, type PilotEvent } from './agent-pilot'
 import type { PromptSnapshot } from './commands'
-import { shouldPersistClosingText } from './runs/turn-closing'
+import { resteADire } from './runs/turn-closing'
 
 const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   tab: 'chat',
@@ -79,7 +79,7 @@ describe('verite visible des actions', () => {
       bus as never
     // maxIter FINI, obligatoire ici : CAP_ITERATIONS_TOUR est passe a l'infini le
     // 2026-09-04 (agent-pilot.ts:87, demande utilisateur — le frein reel est le plafond
-    // de DEPENSE, AUTOWIN_CHAT_USD_CAP). Or ce faux modele renvoie TOUJOURS la meme
+    // de DEPENSE, supprime le 2026-09-16). Or ce faux modele renvoie TOUJOURS la meme
     // commande : sans borne, le tour ne se termine jamais et le processus de test meurt
     // de saturation memoire (mesure du 2026-09-07 : OOM en 3,17 s). On borne le HARNAIS,
     // pas le produit.
@@ -91,8 +91,9 @@ describe('verite visible des actions', () => {
       outcome: { status: 'failed', error: 'transport indisponible' }
     })
     expect(done?.text).toContain('transport indisponible')
-    expect(shouldPersistClosingText(true, done?.kind === 'done' ? done.outcome : undefined)).toBe(
-      true
+    // Cette cloture doit atteindre le fil meme apres un preambule deja diffuse : son texte est NEUF.
+    expect(resteADire(done?.kind === 'done' ? (done.text ?? '') : '', 'preambule deja diffuse')).toContain(
+      'transport indisponible'
     )
   })
 })

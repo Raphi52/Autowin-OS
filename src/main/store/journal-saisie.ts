@@ -208,3 +208,57 @@ export function saisieDuTour(
     return undefined
   }
 }
+
+/** Une consigne donnee PENDANT un tour, rendue avec le tour qu'elle a inflechi. */
+export interface OrientationRattachee {
+  /** Horodatage de la saisie : la cle de jointure, exacte et non approximative. */
+  ts: number
+  texte: string
+  /** Le tour infléchi. `undefined` = aucun lien n'a été posé (le tour n'a jamais démarré). */
+  turnId?: string
+}
+
+/**
+ * LES CONSIGNES DONNEES PENDANT UN TOUR, RELUES POUR LE FIL.
+ *
+ * Mesure du 2026-09-12 sur `saisies-utilisateur.jsonl` : 101 saisies de voie `orientation` et 1 563
+ * rattachements saisie -> tour. La donnee est complete et datee, mais cote ecran ces consignes ne
+ * vivaient que dans un etat React : changer de conversation ou recharger les effaçait, alors
+ * qu'elles portent la correction donnee en cours de route. Seul le contexte kaizen les relisait.
+ *
+ * Rend une liste vide sur toute defaillance : ce journal est une trace de dernier recours, le lire
+ * ne doit jamais faire echouer l'appelant.
+ */
+export function lireOrientationsRattachees(
+  conversationId: string,
+  racine?: string,
+  limite = 50
+): OrientationRattachee[] {
+  try {
+    const chemin = journalSaisiePath(racine)
+    if (!existsSync(chemin)) return []
+    const orientations: OrientationRattachee[] = []
+    // Le rattachement est ecrit APRES la saisie, dans une ligne SUPPLEMENTAIRE : on collecte donc
+    // les deux formes en un seul passage, puis on joint par `saisieTs`.
+    const tourParSaisie = new Map<number, string>()
+    for (const ligne of readFileSync(chemin, 'utf8').split(SEPARATEUR_LIGNE)) {
+      if (!ligne.trim()) continue
+      try {
+        const entree = JSON.parse(ligne) as SaisieJournalisee | RattachementDeSaisie
+        if (entree?.conversationId !== conversationId) continue
+        if (entree.schema === 'autowin.saisie-tour/v1')
+          tourParSaisie.set(entree.saisieTs, entree.turnId)
+        else if (entree.schema === 'autowin.saisie/v1' && entree.voie === 'orientation')
+          orientations.push({ ts: entree.ts, texte: entree.texte })
+      } catch {
+        /* ligne illisible : ignoree, comme partout dans ce journal */
+      }
+    }
+    return orientations.slice(-limite).map((orientation) => {
+      const turnId = tourParSaisie.get(orientation.ts)
+      return turnId ? { ...orientation, turnId } : orientation
+    })
+  } catch {
+    return []
+  }
+}

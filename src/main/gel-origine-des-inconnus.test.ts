@@ -47,9 +47,12 @@ describe('gel non declare — l’origine remonte au premier plan', () => {
     await new Promise((r) => setTimeout(r, 90))
     arreter()
 
-    const gel = captures.find((g) => g.operation === 'inconnu')
+    // Depuis le 2026-09-12, l'operation aussi est promue depuis l'accumulation : le gel n'est plus
+    // anonyme. L'appelant, lui, reste au premier plan — c'est ce que ce test garde.
+    const gel = captures.find((g) => g.operation === 'execFileSync powershell.exe')
     expect(gel).toBeDefined()
     expect(gel?.appelant).toBe('main/index.js:1:1 < worktree.js:2:2')
+    expect(captures.some((g) => g.operation === 'inconnu')).toBe(false)
   })
 
   it('CAS LIMITE — n’invente aucune origine quand aucun appelant n’a ete capture', async () => {
@@ -65,7 +68,9 @@ describe('gel non declare — l’origine remonte au premier plan', () => {
     await new Promise((r) => setTimeout(r, 90))
     arreter()
 
-    const gel = captures.find((g) => g.operation === 'inconnu')
+    // Le gel est NOMME par son unique contributeur, mais aucun appelant n'a ete capture : on ne
+    // remplit donc pas ce champ. Nommer l'API ne donne pas le droit d'inventer une pile d'appel.
+    const gel = captures.find((g) => g.operation === 'readFileSync')
     expect(gel).toBeDefined()
     expect(gel?.appelant).toBeUndefined()
   })

@@ -64,6 +64,11 @@ const MAX_DESCRIPTION_LENGTH = 100_000
 const MAX_ASSIGNEE_LENGTH = 320
 const MAX_UPDATE_COMMENT_LENGTH = 20_000
 const MAX_STATE_LENGTH = 100
+/** Champs libres : bornés en nombre et en taille, comme le reste des écritures sortantes. */
+const MAX_FIELDS = 20
+const MAX_FIELD_NAME_LENGTH = 128
+const MAX_FIELD_VALUE_LENGTH = 20_000
+const FIELD_REFERENCE = /^[A-Za-z][\w]*(\.[\w-]+)+$/
 /**
  * Le type de fiche est INTERPOLÉ DANS LE CHEMIN de l'URL de création. `encodeURIComponent` protège
  * déjà côté adaptateur ; on refuse néanmoins en amont tout ce qui n'a pas la forme d'un type réel
@@ -229,7 +234,11 @@ export class TicketService {
     const comment = typeof value?.comment === 'string' ? value.comment.trim() : ''
     const state = typeof value?.state === 'string' ? value.state.trim() : ''
     const assignee = typeof value?.assignee === 'string' ? value.assignee.trim() : ''
-    if (!comment && !state && !assignee) throw new Error('Au moins une modification est requise')
+    const fields = this.boundedFields(value?.fields)
+    const hasFields = Object.keys(fields).length > 0
+    if (!comment && !state && !assignee && !hasFields) {
+      throw new Error('Au moins une modification est requise')
+    }
     if (comment.length > MAX_UPDATE_COMMENT_LENGTH) {
       throw new Error(`Commentaire trop long (max ${MAX_UPDATE_COMMENT_LENGTH} caractères)`)
     }
@@ -246,11 +255,32 @@ export class TicketService {
           id,
           ...(comment ? { comment } : {}),
           ...(state ? { state } : {}),
-          ...(assignee ? { assignee } : {})
+          ...(assignee ? { assignee } : {}),
+          ...(hasFields ? { fields } : {})
         },
         { ...credential, ...(signal ? { signal } : {}) }
       )
     )
+  }
+
+  /**
+   * Champs libres retenus pour l'écriture : nom de référence plausible (`Custom.DLL`), valeur texte
+   * non vide, nombre et taille bornés. Une valeur vide est ÉCARTÉE plutôt qu'envoyée — effacer un
+   * champ métier n'est pas ce que demande un compte-rendu. Le nom vient toujours de l'appelant :
+   * on ne le devine pas, et un nom inconnu sera refusé par le fournisseur, pas maquillé ici.
+   */
+  private boundedFields(value: unknown): Record<string, string> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+    const retained: Record<string, string> = {}
+    for (const [reference, raw] of Object.entries(value as Record<string, unknown>)) {
+      if (Object.keys(retained).length >= MAX_FIELDS) break
+      const name = reference.trim()
+      const written = typeof raw === 'string' ? raw.trim() : ''
+      if (name.length > MAX_FIELD_NAME_LENGTH || !FIELD_REFERENCE.test(name)) continue
+      if (!written || written.length > MAX_FIELD_VALUE_LENGTH) continue
+      retained[name] = written
+    }
+    return retained
   }
 
   /**

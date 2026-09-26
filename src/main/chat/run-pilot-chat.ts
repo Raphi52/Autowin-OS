@@ -19,8 +19,7 @@ import {} from 'path'
 import { randomUUID } from 'node:crypto'
 import type { Message, ProviderAdapter, SendResult, StreamChunk } from '../providers/types'
 import { ProviderRegistry } from '../providers/registry'
-import { CostCircuitBreaker } from '../cost-circuit-breaker'
-import { chatTurnBudget, estCoupureBudget, CHAT_BUDGET_ABORT_PREFIX } from '../chat-turn-budget'
+import { ChatTurnCostRecorder } from './chat-cost-recording'
 import { motifInactivite, terminalDuTour } from '../chat-turn-arret'
 import { RoleModelConfig, type RoleBinding } from '../roles'
 import { AppCommandBus } from '../commands'
@@ -59,6 +58,7 @@ import {
   persistRecoveredChatProviderUsage
 } from '../activity/chat-usage-settlement'
 import { taskUsageMetricsFromExecution } from '../activity/task-usage-metrics'
+import { describeChatTurnFailure } from '../provider-failure-diagnosis'
 import { sameExecutionUsage, type ExecutionUsageSnapshot } from '../execution-supervisor'
 import { appendPromptCall } from '../activity/prompt-observability'
 import { promptCallToTraceEvents } from '../activity/prompt-call-trace'
@@ -189,7 +189,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     activeChatTurns,
     scheduledTasks,
     causalTrace,
-    ledger,
     pendingDirectives,
     turnJournalRoot,
     isolatedTestInstance,
@@ -233,18 +232,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     }
     // Correlation durable AVANT le spawn : apres un crash, le reglement peut retrouver l'occurrence.
     onLateTaskUsageSettlement?.({ conversationId, turnId })
-    /**
-     * Plafond d'un TOUR de chat. Réutilise le circuit-breaker déjà éprouvé sur l'orchestration
-     * (module pur, testé) avec un seuil PROPRE au chat : un tour conversationnel n'a pas le même
-     * ordre de grandeur qu'un run complet. Réglable via AUTOWIN_CHAT_USD_CAP ; défaut généreux
-     * (2 $) — assez haut pour ne jamais gêner un tour légitime, assez bas pour arrêter une boucle
-     * (le pire tour mesuré coûtait 2,109 $).
+    /*
+     * AUCUN BUDGET DE TOUR. Le plafond de tour de chat (`chat-turn-budget.ts`, ses deux
+     * coupe-circuits et les variables AUTOWIN_CHAT_*_CAP) a ete SUPPRIME le 2026-09-16 sur demande
+     * de l'utilisateur. Le cout reste mesure et ecrit (ledger, chat-usage, Observatory) ; plus rien
+     * n'arrete un tour sur un seuil de cout.
      */
-    // Politique extraite dans `chat-turn-budget.ts` : mesuré sur conv-1149 (13/08), le défaut
-    // câblé coupait une campagne légitime à 3 $ et la déguisait en `cancelled`. Sans cap explicite
-    // de l'utilisateur, le trip OBSERVE (ledger) mais ne coupe plus.
-    const budgetDuTour = chatTurnBudget(process.env)
-    const chatBreaker = new CostCircuitBreaker(budgetDuTour.limits)
     const spoken: string[] = []
     /**
      * Les etiquettes d'action, TENUES A PART du vrai texte — et c'est un COUPLE de garanties.
@@ -260,7 +253,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      */
     const etiquettesAction: string[] = []
     let streamedSpoken = recovery?.providerCall.streamedPrefix ?? ''
-    let durableResponseTextSeen = Boolean(streamedSpoken.trim())
     // Frontiere d'iteration : sert a savoir si le delta poursuit le MEME message ou en ouvre un
     // nouveau (cf. coller-texte-parle.ts). -1 = aucun delta recu encore.
     let iterationDuDernierDelta: number | undefined = -1
@@ -272,6 +264,15 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      * Meme patron que `streamedSpoken` — on accumule, on ecrit une fois.
      */
     let streamedReasoning = ''
+    /**
+     * JOURNAL DES ACTIONS du tour — mêmes lignes que le bloc « Actions » du fil, accumulées ici pour
+     * être écrites UNE FOIS à la clôture (même patron que `streamedReasoning`). Sans cette copie,
+     * ces lignes ne vivaient que le temps du stream : le bloc se vidait au rechargement de la
+     * conversation, alors qu'elles sont la seule trace lisible du travail quand la pensée du modèle
+     * arrive chiffrée. Une ligne répétée à l'identique n'est pas dupliquée (même règle que le fil
+     * vivant, `chat-view-model.ts`).
+     */
+    const streamedActions: string[] = []
     /**
      * Memoire du prompt SYSTEME deja journalise pour ce tour : il ne se reecrit que s'il CHANGE
      * (cf. `turn-journal-enrich.ts`), sinon chaque iteration recopierait le meme socle.
@@ -295,6 +296,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     let supervisedUsage: ExecutionUsageSnapshot | undefined
     let persistedSupervisedUsage: ExecutionUsageSnapshot | undefined
     let usagePersistenceReady = false
+    /**
+     * Le cout du tour de chat entre dans le MEME collecteur que l'orchestration : sans lui, le
+     * plafond et l'alerte a 80 % ne voyaient que la depense des RUN (mesure du 2026-09-11 :
+     * 644 USD comptes pour 3 075 USD reellement depenses).
+     */
+    const chatCostRecorder = new ChatTurnCostRecorder(os.cost)
     const persistSupervisedChatUsage = (usage: ExecutionUsageSnapshot): void => {
       if (!conversationId) return
       if (sameExecutionUsage(persistedSupervisedUsage, usage)) return
@@ -319,6 +326,21 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           undefined,
         traceStore: causalTrace
       })
+      chatCostRecorder.record(
+        {
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          cacheReadTokens: usage.cacheReadTokens,
+          cacheCreationTokens: usage.cacheCreationTokens,
+          costUsd: usage.knownCostUsd
+        },
+        {
+          provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
+          model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+          conversationId,
+          turnId
+        }
+      )
       broadcast({ type: 'refresh', scope: 'workflows' })
     }
     const onSupervisedUsageSettlement = (usage: ExecutionUsageSnapshot): void => {
@@ -374,8 +396,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
        * trompait sur ce qu'il voyait (mesure du 2026-08-27 : 3 bandes de couleur sur 4).
        */
       const metasParContenu = new Map<string, AttachmentMeta[]>()
+      /** Textes des consignes envoyees PENDANT un tour : le renderer n'envoie pas ce drapeau, le store l'a. */
+      const orientations = new Set<string>()
       if (conversationId) {
         for (const stocke of os.conversations.get(conversationId)?.messages ?? []) {
+          if (stocke.role === 'user' && stocke.orientation && typeof stocke.content === 'string') {
+            orientations.add(stocke.content)
+          }
           const parts = (stocke as { parts?: PersistedChatPart[] }).parts
           if (stocke.role === 'assistant' && parts?.length && typeof stocke.content === 'string') {
             partsParContenu.set(stocke.content, parts)
@@ -417,6 +444,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         return {
           role: m.role,
           content: guardString(pourLeModele, 'content'),
+          // fix-ok: sans ce drapeau, `orientationsDuTourPrecedent` (7459e8cd) ne voyait jamais une
+          // consigne envoyee pendant un tour : le renderer ne transmet pas le drapeau, on le relit dans le
+          // store (conv-844).
+          ...(m.role === 'user' && orientations.has(m.content) ? { orientation: true } : {}),
           ...(m.attachments?.length
             ? {
                 attachments: guardAttachments(
@@ -632,13 +663,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
            * fil vivant. Meme patron que la carte de livraison jetee ci-dessus, un cran plus loin — non
            * plus a la frontiere de persistance, mais a celle de l'AFFICHAGE.
            */
-          const livraison = closingTurnDelivery(
-            turnId,
-            pilotEvent.text,
-            durableResponseTextSeen,
-            pilotEvent.outcome,
-            streamedSpoken
-          )
+          const livraison = closingTurnDelivery(turnId, pilotEvent.text, streamedSpoken)
           if (livraison) {
             os.conversations.applyTurnEvent(conversationId, turnId, livraison.durable)
             emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
@@ -665,6 +690,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             os.conversations.applyTurnEvent(conversationId, turnId, {
               kind: 'reasoning',
               text: raisonnement
+            })
+          // ... et le JOURNAL DES ACTIONS avec lui, pour la même raison exactement : une seule
+          // écriture à la clôture, la vue ayant déjà son direct.
+          if (conversationId && streamedActions.length > 0)
+            os.conversations.applyTurnEvent(conversationId, turnId, {
+              kind: 'actions-log',
+              lines: streamedActions
             })
           if (conversationId && raisonnement) {
             try {
@@ -861,12 +893,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             iterationDuDernierDelta === pilotEvent.iteration
           )
           iterationDuDernierDelta = pilotEvent.iteration
-          durableResponseTextSeen = true
         }
         if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text
+        if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
+          if (streamedActions.at(-1) !== pilotEvent.text) streamedActions.push(pilotEvent.text)
+        }
         if (pilotEvent.kind === 'think' && pilotEvent.text) {
           spoken.push(pilotEvent.text)
-          durableResponseTextSeen = true
         }
         if (pilotEvent.kind === 'command' && pilotEvent.name)
           etiquettesAction.push(`[a exécuté ${pilotEvent.name}]`)
@@ -878,30 +911,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
         if (pilotEvent.kind === 'done' && pilotEvent.text?.trim())
           completedText = pilotEvent.text.trim()
-        // Budget du TOUR de chat : le circuit-breaker de coût ne protégeait que les runs
-        // orchestrés. Mesuré le 2026-07-28 : un seul tour a coûté 2,109 $ (40 itérations d'outils)
-        // sans qu'aucune borne n'existe côté chat. On compte chaque appel et on COUPE au seuil.
-        if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
-          const tripped = chatBreaker.observe({
-            step: 'exec',
-            detail: 'chat',
-            costUsd: pilotEvent.callUsage.costUsd,
-            tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
-          } as Parameters<typeof chatBreaker.observe>[0])
-          if (tripped) {
-            // Le dépassement reste TOUJOURS visible ; la coupure n'est armée que par un cap
-            // explicite (contrat utilisateur) — cf. chat-turn-budget.ts et conv-1149.
-            const coupe = budgetDuTour.enforcement === 'blocking'
-            ledger.append({
-              source: 'orchestrate',
-              name: 'chat-budget',
-              detail: coupe
-                ? `tour coupé — ${tripped.reason}`
-                : `seuil d'observation dépassé (mesure seule, aucun arrêt) — ${tripped.reason}`
-            })
-            if (coupe) controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : ${tripped.reason}`)
-          }
-        }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
           // L'OCCUPATION N'EST PAS LE CUMUL. `callUsage.inputTokens` est l'usage AGREGE que le
           // `result` du CLI porte pour tout l'appel de pilote : le lire ici rejouait exactement le
@@ -1467,6 +1476,20 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             durationMs: turnDurationMs,
             text: (streamedSpoken || spoken.join('\n') || etiquettesAction.join('\n')).slice(0, 600)
           })
+          if (turnUsage)
+            chatCostRecorder.record(
+              {
+                inputTokens: turnUsage.inputTokens,
+                outputTokens: turnUsage.outputTokens,
+                costUsd: turnUsage.costUsd
+              },
+              {
+                provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
+                model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+                conversationId,
+                turnId
+              }
+            )
         }
       }
       usagePersistenceReady = true
@@ -1494,13 +1517,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
        * pilote apres 2 tentatives ; le journal du tour s'arretait sur ['delta','stream-reset',
        * 'delta'] sans aucun evenement terminal. Un tour qui echoue doit se CONCLURE, pas disparaitre.
        */
-      // Un abort BUDGET n'est pas un stop volontaire : le classer `cancelled` l'excluait de la
-      // relance automatique et faisait porter le renoncement à l'utilisateur (conv-1149, 13/08).
-      const coupureBudget = controller.signal.aborted && estCoupureBudget(controller.signal.reason)
       /*
        * TOUT ARRET QUI PORTE UNE CAUSE MACHINE EST UN ECHEC, pas une annulation.
        *
-       * Seul le budget etait requalifie ; la coupure du VEILLEUR d'inactivite tombait donc dans
+       * Seule la coupure du VEILLEUR d'inactivite porte encore une cause machine ; elle tombait dans
        * `cancelled`, et son motif — pourtant redige — etait jete. Mesure conv-136 (2026-09-02) : un
        * run de 25 min, tour coupe a 20, fil reduit a « [a execute orchestrate] », ni reponse ni
        * erreur. La decision vit maintenant dans `terminalDuTour`, pure et testee.
@@ -1508,8 +1528,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const terminal = terminalDuTour({
         aborted: controller.signal.aborted,
         reason: controller.signal.reason,
-        erreur: e,
-        motivee: coupureBudget
+        erreur: e
       })
       const coupureMotivee = terminal.kind === 'failed' && controller.signal.aborted
       if (conversationId && os.conversations.get(conversationId)) {
@@ -1528,7 +1547,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
       usagePersistenceReady = true
       broadcast({ type: 'refresh', scope: 'workflows' })
-      // `coupureMotivee` couvre le budget ET le veilleur : le motif remonte a l'appelant, qui
+      // `coupureMotivee` couvre le veilleur d'inactivite : le motif remonte a l'appelant, qui
       // l'affiche, au lieu de repartir en « annule » avec pour seul texte les etiquettes d'action.
       if (coupureMotivee)
         return {
@@ -1552,11 +1571,27 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
           ...taskUsageMetricsFromExecution(supervisedUsage)
         }
+      /**
+       * fix-ok: le retour d'échec du chat direct rendait `e.message` BRUT sans passer par
+       * provider-failure-diagnosis — mesuré conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a
+       * (2026-09-23T09:41:45Z, « tool call could not be parsed », message assistant vide).
+       *
+       * DIAGNOSTIC AVANT AFFICHAGE. L'erreur brute seule laissait l'utilisateur sans geste :
+       * `provider-failure-diagnosis` n'était branché que sur l'orchestrateur et le watchdog, jamais
+       * sur le chat direct (mesuré conv-737 puis conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a :
+       * « tool call could not be parsed », 0,0956 USD, message assistant vide, aucun conseil).
+       * Le message d'origine reste en tête, intact : la reprise surcharge et la détection de
+       * session expirée le lisent par inclusion.
+       */
       return {
         ok: false,
         cancelled: false,
         turnId,
-        error: e instanceof Error ? e.message : String(e),
+        error: describeChatTurnFailure({
+          provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
+          model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+          message: e instanceof Error ? e.message : String(e)
+        }),
         ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
         ...taskUsageMetricsFromExecution(supervisedUsage)
       }
@@ -1569,9 +1604,24 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       if (conversationId) {
         activeChatTurns.delete(conversationId, controller)
         broadcast({ type: 'refresh', scope: 'conversations' })
+        /*
+         * ORIENTATIONS NON CONSOMMEES : rendues, jamais jetees.
+         *
+         * Avant, ce bloc les SUPPRIMAIT en qualifiant d'« obsoletes » des phrases que l'utilisateur
+         * venait d'ecrire. Une directive n'est lue qu'aux points d'iteration de la boucle pilote
+         * (`agent-pilot.ts`) : celle qui arrive pendant la redaction de la reponse finale n'en
+         * rencontre aucun. Elle disparaissait alors sans un mot, alors que son texte etait bien
+         * visible dans le fil — d'ou « quand j'oriente ca oublie parfois ».
+         *
+         * On les remonte a l'ecran, qui les remet en file : elles repartent comme un tour normal,
+         * exactement comme le chemin `/skill` annonce deja sa directive tardive au lieu de la taire.
+         */
+        const orphelines = pendingDirectives.get(conversationId) ?? []
         if (pendingDirectives.delete(conversationId)) {
-          // directives non consommées = obsolètes
           broadcast({ type: 'refresh', scope: 'directives' })
+        }
+        if (orphelines.length) {
+          broadcast({ type: 'directives-orphelines', convId: conversationId, textes: orphelines })
         }
       }
       resolveCompletion()

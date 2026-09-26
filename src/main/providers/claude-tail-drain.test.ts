@@ -70,36 +70,21 @@ afterEach(() => {
 })
 
 describe('Claude CLI — barrière de drain du journal', () => {
-  it('fait primer le devis orchestré sur la garde locale du transport', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-claude-quoted-timeout-'))
+  it('ne coupe plus un appel sur sa DURÉE : le drain va jusqu’à la dernière ligne', async () => {
+    // conv-729, turn aa90027e-01c1-4d39-9645-7e5d01619323 : l'ancien cap de durée tuait le tour
+    // (« claude CLI figé (durée max) ») alors qu'il produisait encore. Ce cap n'existe plus.
+    const root = mkdtempSync(join(tmpdir(), 'autowin-claude-sans-cap-'))
     roots.push(root)
     process.env.AUTOWIN_RUN_JOURNAL_ROOT = root
-    const stream = new ClaudeCliAdapter({ bin: 'claude-test', timeoutMs: 10 }).send(
+    relay.tailDelayMs = 60
+    const stream = new ClaudeCliAdapter({ bin: 'claude-test' }).send(
       [{ role: 'user', content: 'travaille longtemps' }],
-      {
-        execution: {
-          cwd: root,
-          sandbox: 'read-only',
-          providerTimeoutMs: 100
-        }
-      }
+      { execution: { cwd: root, sandbox: 'read-only', providerTimeoutMs: 1 } }
     )
 
     let step = await stream.next()
     while (!step.done) step = await stream.next()
     expect(step.value.text).toBe('dernière ligne Claude')
-  })
-
-  it('conserve sa garde locale sans devis orchestré', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-claude-local-timeout-'))
-    roots.push(root)
-    process.env.AUTOWIN_RUN_JOURNAL_ROOT = root
-    const stream = new ClaudeCliAdapter({ bin: 'claude-test', timeoutMs: 10 }).send(
-      [{ role: 'user', content: 'travaille trop longtemps' }],
-      { execution: { cwd: root, sandbox: 'read-only' } }
-    )
-
-    await expect(stream.next()).rejects.toThrow(/durée max/i)
   })
 
   it('attend la dernière ligne du tail même si close arrive avant elle', async () => {

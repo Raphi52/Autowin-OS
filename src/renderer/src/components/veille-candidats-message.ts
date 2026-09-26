@@ -290,11 +290,34 @@ function lireLignesCibles(texteScout: string): string | null {
     // Le corps de la section : jusqu'au titre suivant. Une section vide ne déclare rien.
     const corps: string[] = []
     for (let j = i + 1; j < lignes.length; j++) {
-      if (/^\s{0,3}#{1,6}\s+/u.test(lignes[j]!)) break
+      // fix-ok: le tableau qui suit la section n'est pas la declaration — ses chiffres (scores, l.3)
+      // cochaient tout (conv-690, saisie ts 1789715005953 : 5/5 envoyes pour « la piste 1 »).
+      if (/^\s{0,3}#{1,6}\s+/u.test(lignes[j]!) || /^\s*\|/u.test(lignes[j]!)) break
       corps.push(lignes[j]!)
     }
     const valeur = corps.join(' ').trim()
     if (valeur) morceaux.push(valeur)
   }
   return morceaux.length > 0 ? morceaux.join(' ; ') : null
+}
+
+/**
+ * LE CLIC AUTOMATIQUE NE PART PAS D'UN TOUR REFUSÉ.
+ *
+ * Défaut vécu (conv-690, tour `dc63d3ea-7d64-472b-a6db-773f81ee5d82`) : le juge a refusé deux fois
+ * (SCORE 60 puis 58, contrôle final rouge à 07:03:23), et 2,9 s plus tard le mode auto envoyait
+ * « Traite ENSEMBLE ces 5 candidats… » (saisie ts 1789715005953) jusqu'au COMMIT PUBLIÉ. Le panneau
+ * relisait le tableau scout reporté dans la bulle et cliquait sans rien savoir du verdict. Un tour
+ * échoué, ou dont l'en-tête dit que le juge/contrôle final a refusé, laisse le bouton à l'humain.
+ */
+export function tourRefusePourAutoLancer(
+  status: string | undefined,
+  textes: readonly string[]
+): boolean {
+  if (status === 'failed' || status === 'cancelled' || status === 'interrupted') return true
+  return textes.some((texte) =>
+    /(⛔ Workflow ARRÊTÉ|⛔ Travail NON intégré|⏳ Travail PAS ENCORE intégré|le juge a REFUSÉ)/u.test(
+      texte
+    )
+  )
 }

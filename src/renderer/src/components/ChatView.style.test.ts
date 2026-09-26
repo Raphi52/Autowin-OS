@@ -28,7 +28,9 @@ describe('chat message image attachments', () => {
 
     expect(thumbnail).toBeDefined()
     expect(thumbnail).toMatch(/max-width:\s*100%/)
-    expect(thumbnail).toMatch(/object-fit:\s*contain/)
+    // La vignette REMPLIT son carre (choix de l'utilisateur du 2026-09-16) : elle est
+    // agrandie puis rognee, au lieu d'etre logee entre deux bandes de fond.
+    expect(thumbnail).toMatch(/object-fit:\s*cover/)
     expect(css).not.toMatch(/\.attachment-chip button\s*{[^}]*width:\s*17px/s)
   })
 })
@@ -189,7 +191,7 @@ describe('chat image containment', () => {
 
     expect(thumb).toContain('max-width: 100%')
     expect(thumb).toContain('max-height: 100%')
-    expect(thumb).toContain('object-fit: contain')
+    expect(thumb).toContain('object-fit: cover')
     expect(thumbButton).toMatch(/width:\s*34px/)
     expect(thumbButton).toMatch(/height:\s*34px/)
     expect(thumbButton).toContain('overflow: hidden')
