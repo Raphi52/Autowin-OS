@@ -315,6 +315,56 @@ describe('issue métier — anti faux-vert dans la trace', () => {
   })
 })
 
+/**
+ * LIMITE DE TAILLE — mesurée le 2026-09-27 sur le vrai CLI (`scripts/probe-brain-read-taille.mts`) :
+ * une note de 120 000 caractères n'arrivait PAS dans la conversation (« exceeds maximum allowed
+ * tokens. Output has been saved to … », seuil par défaut ~50 000), et le fichier de repli tenait sur
+ * UNE ligne (JSON échappé), donc illisible par `Read`. Documentation :
+ * https://code.claude.com/docs/en/mcp — `_meta["anthropic/maxResultSizeChars"]`, jusqu'à 500 000.
+ */
+describe('taille des résultats — une note ouverte arrive entière et lisible', () => {
+  it('chaque outil publié déclare le plafond maximal documenté (500 000 caractères)', () => {
+    for (const outil of outilsPublies(lanceur())) {
+      expect(outil._meta).toEqual({ 'anthropic/maxResultSizeChars': 500_000 })
+    }
+  })
+
+  it('une note trouvée est rendue en TEXTE, ses lignes intactes — pas en JSON échappé', async () => {
+    const rep = await traiterMessageMcp(
+      {
+        method: 'tools/call',
+        id: 21,
+        params: { name: 'brain_read', arguments: { path: 'knowledge/a.md' } }
+      },
+      lanceur(async () => ({
+        ok: true,
+        data: { found: true, status: 'found', knowledge: '# Titre\nligne 2\nligne 3' }
+      }))
+    )
+    const r = (rep.corps as { result: { content: Array<{ text: string }> } }).result
+    expect(r.content[0]!.text).toBe('# Titre\nligne 2\nligne 3')
+  })
+
+  it('sans contenu (introuvable, panne), le résultat reste en JSON : le statut et la note se lisent', async () => {
+    const rep = await traiterMessageMcp(
+      {
+        method: 'tools/call',
+        id: 22,
+        params: { name: 'brain_read', arguments: { path: 'knowledge/x.md' } }
+      },
+      lanceur(async () => ({
+        ok: true,
+        data: { found: false, status: 'empty', knowledge: '', note: 'note not found' }
+      }))
+    )
+    const r = (rep.corps as { result: { content: Array<{ text: string }> } }).result
+    expect(JSON.parse(r.content[0]!.text)).toMatchObject({
+      found: false,
+      note: 'note not found'
+    })
+  })
+})
+
 describe('mesure de lecture — quelle note, combien de caractères', () => {
   it('brain_read remonte la note ouverte et la longueur rendue jusqu’à la trace', async () => {
     const vus: AppelMcpObserve[] = []
