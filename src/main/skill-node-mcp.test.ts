@@ -129,7 +129,10 @@ describe('appel d’outil', () => {
       {
         method: 'tools/call',
         id: 4,
-        params: { name: 'brain_graph', arguments: { entity: 'OrderService', direction: 'dependents' } }
+        params: {
+          name: 'brain_graph',
+          arguments: { entity: 'OrderService', direction: 'dependents' }
+        }
       },
       lanceur(async (name, args) => {
         vus.push({ name, args })
