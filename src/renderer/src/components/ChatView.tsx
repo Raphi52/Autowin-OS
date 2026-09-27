@@ -3792,6 +3792,7 @@ export function ChatView({
         void sendAutoRef.current(decision.texte, {
           keepComposerDraft: true,
           automatique: true,
+          suiteDuModeAuto: true,
           targetConversationId: id
         })
     }
@@ -3885,7 +3886,7 @@ export function ChatView({
     etat.tour = decision.signature
     etat.prompt = decision.texte
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
-    void send(decision.texte, { keepComposerDraft: true, automatique: true })
+    void send(decision.texte, { keepComposerDraft: true, automatique: true, suiteDuModeAuto: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoActif, activeId, busy, messages, brouillonPresent])
 
@@ -3965,6 +3966,7 @@ export function ChatView({
       void send(decision.texte, {
         keepComposerDraft: true,
         automatique: true,
+        suiteDuModeAuto: true,
         targetConversationId: id
       })
     }
@@ -4381,7 +4383,8 @@ export function ChatView({
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
 
     try {
-      if (convId) {
+      // Une suite du mode auto est l'etape suivante de CE fil : pas de routage (conv-19 -> conv-23).
+      if (convId && options?.suiteDuModeAuto !== true) {
         const sourceId = convId
         const route = await window.api.routeConversationMessage(
           sourceId,

@@ -37,6 +37,14 @@ export type SendOptions = {
   keepComposerDraft?: boolean
   /** Envoi que l'utilisateur n'a PAS fait (mode auto, file, reprise) : garde sa position de lecture. */
   automatique?: boolean
+  /**
+   * SUITE PROPOSEE PAR L'AGENT ET RENVOYEE PAR LE MODE AUTO : l'etape suivante de CE fil. Elle ne
+   * passe pas par le routeur de conversations. Mesure conv-19 -> conv-23 (2026-09-27 13:10:21.853) :
+   * jugee « new-topic » a 0,92, elle est partie dans un fil neuf sans dossier de travail ni mode
+   * auto — tour paye dans D:\Autowin, chaine arretee. `automatique` ne suffit pas a le dire : il
+   * couvre aussi la file d'attente, ecrite par l'utilisateur.
+   */
+  suiteDuModeAuto?: boolean
   targetConversationId?: string
   /**
    * Reprises DÉJÀ faites après une surcharge du modèle (529) — voir shared/reprise-surcharge.ts.
