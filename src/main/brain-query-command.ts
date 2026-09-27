@@ -67,9 +67,13 @@ export function decideBrainQuery(raw: unknown): BrainQueryDecision {
 }
 
 /**
- * Borne le savoir rendu a l'agent. Le Brain peut renvoyer beaucoup : sans plafond, une seule question
- * gonflerait le tour de plusieurs milliers de tokens — exactement le cout qu'on passe la journee a
- * reduire. On garde le DEBUT (le retriever classe par pertinence, le plus utile est en tete).
+ * Borne le savoir affiché par la RECHERCHE HUMAINE de la vue Knowledge (`brain-search-envelope.ts`),
+ * et elle seule.
+ *
+ * Les chemins de l'AGENT (`brain_query`, `brain_read`) n'y passent plus depuis le 2026-09-27. Règle
+ * posée par l'utilisateur : pas de budget, on récupère le nécessaire. `brain_query` rend une liste
+ * de candidates, `brain_read` la note entière, et c'est l'agent qui juge ce qu'il ouvre. Couper ici
+ * revenait à lui faire lire le début de ce qu'il avait choisi.
  */
 export function capBrainResult(raw: string, cap: number = BRAIN_RESULT_CAP): string {
   const text = raw.trim()
@@ -132,7 +136,8 @@ export function buildBrainOutcome(
   status: BrainRetrievalStatus = context.trim() ? 'found' : 'unavailable',
   unavailableReason?: BrainUnavailableReason
 ): BrainQueryOutcome {
-  const knowledge = capBrainResult(context)
+  // Aucune coupe : la liste de candidates arrive entière (voir `capBrainResult`).
+  const knowledge = context.trim()
   const effectiveStatus: BrainRetrievalStatus = knowledge || status !== 'found' ? status : 'empty'
   if (!knowledge) {
     const note =

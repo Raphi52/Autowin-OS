@@ -168,7 +168,7 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // ouvert l'URL par \`cmd start\` sur l'ecran reel, capture l'ecran reel puis clique sa barre des taches ;
   // l'utilisateur a annule et exige le bureau cache pour « ce genre de taches ».
   `ORDRE : d'abord le bureau cache — navigateur lance par \`scripts/hdesk-lancer.ps1 -Executable <navigateur> ` +
-  `-Arguments "<url>"\`, observe par hdesk-observe.ps1, clic + frappe par \`scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "<code>"] [-Entree]\` (coordonnees de la capture hdesk-observe ; re-capture pour verifier). Jamais \`start <url>\`, jamais un clic dans sa barre des ` +
+  `-Arguments "<url>"\`, observe par hdesk-observe.ps1, clic + frappe par \`scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "<code>"] [-Entree] [-Touches "28x15,0D"] [-SansClic]\` (coordonnees = pixels de la capture hdesk-observe, a toute echelle Windows ; re-capture pour verifier). Un menu Qt (Roblox Studio) s'OUVRE au clic mais ne s'ACTIVE qu'au clavier : \`-SansClic -Touches "28xN,0D"\` sur le menu ouvert ; une fenetre moteur de Studio reste unie a la capture, prouve alors par le journal de Studio (lignes \`[..]\` d'un plugin temporaire, « PublishSuccessful »). Jamais \`start <url>\`, jamais un clic dans sa barre des ` +
   `taches ni un focus de SA fenetre : c'est l'ecran de l'utilisateur. Si le bureau cache ne peut PAS faire le ` +
   `geste (hdesk-act.ps1 sans effet visible a la re-capture, session deja connectee requise), dis-le en une ligne et demande AVANT de toucher a son ecran. Ne rends la main que pour son mot de passe, son MFA ou son consentement — et ` +
   `dis alors quel geste EXACT reste a lui et pourquoi aucun outil ne l'atteint.

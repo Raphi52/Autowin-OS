@@ -115,7 +115,6 @@ import {
   worstCaseVisits,
   type WorkflowGraph
 } from './workflow-graph'
-import { porterSortieDePhase } from './phase-carry'
 import { sortieScoutAvecCible } from './scout-cible'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
 import {
@@ -373,16 +372,11 @@ import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-c
 import { convRunsRoot } from './runs/conv-runs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
-import {
-  retrieveBrainContext,
-  type BrainNavigation,
-  type BrainUnavailableReason
-} from './brain-retrieval'
-import { messageEmpreinteBrain } from './brain-empreinte-message'
+import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
 import type { BrainTrace } from './activity/brain-trace-spool'
-import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceLabel } from './brain-corpus-scope'
+import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import {
   ECHO_MAX_BLOCK_CHARS,
   evictedCount,
@@ -650,9 +644,9 @@ export interface BrainRetrievalEvent {
   injectedChars: number
   navigation?: BrainNavigation
   /**
-   * Nature de l'appel. Absente = `automatic`, la seule que ce canal transportait quand il n'existait
-   * qu'un appel Brain par run. Le run en fait DEUX : la récupération par tâche et l'empreinte du
-   * dépôt — les confondre sous un même libellé rendrait la seconde indiscernable de la première.
+   * Nature de l'appel. Absente = `automatic`. Le run en a fait DEUX jusqu'au 2026-09-27 (la
+   * récupération par tâche et l'empreinte du dépôt, retirée depuis) : les anciennes traces gardent
+   * donc le libellé `empreinte`, qui doit rester lisible.
    */
   kind?: BrainTrace['kind']
 }
@@ -1017,25 +1011,46 @@ export interface RunCloser {
   }): Promise<void>
 }
 
-/** B4 — plafond du texte d'une phase RÉINJECTÉ dans le contexte de la phase suivante. */
-const PHASE_CONTEXT_CAP = 2000
-
 /**
- * LE POINT UNIQUE du portage phase → phase. Il y en avait SIX, chacun faisant son propre
- * `slice(0, PHASE_CONTEXT_CAP)` suivi du même `…[tronqué]` muet — donc six endroits où corriger la
- * transmission, et cinq occasions d'en oublier un. La projection vit dans `phase-carry.ts` (pure,
- * testable sans provider) ; ici on ne fait plus que l'appeler.
+ * LE POINT UNIQUE du portage phase → phase — et il ne coupe plus rien (2026-09-27).
  *
- * Mesuré avant ce changement, sur 1280 sorties de phase réelles : 25,8 % étaient tronquées, dont
- * 62,5 % des `scout` et 46,7 % des `frame` — les phases dont le métier est justement de transmettre.
+ * Historique : il y avait six `slice(0, 2000)` muets, réunis ici puis remplacés par une projection
+ * par sections (`phase-carry.ts`) sous la même borne de 2 000 caractères. Mesuré alors sur 1280
+ * sorties réelles : 25,8 % tronquées, dont 62,5 % des `scout` et 46,7 % des `frame`. La projection
+ * choisissait mieux QUOI couper, mais coupait toujours.
+ *
+ * Règle posée par l'utilisateur le 2026-09-27 : pas de budget, on récupère le nécessaire. Une phase
+ * écrit ce que la suivante doit savoir ; la tronquer revient à décider à sa place, sur le seul
+ * critère du volume, ce qui ne l'était pas. La sortie passe donc ENTIÈRE. Le point unique reste, pour
+ * qu'aucune coupe locale ne réapparaisse ailleurs.
  */
 function porterVersPhaseSuivante(texte: string): string {
-  return porterSortieDePhase(texte, PHASE_CONTEXT_CAP).texte
+  return texte
+}
+
+/**
+ * LA CONSIGNE QUI ACCOMPAGNE LA LISTE DE CANDIDATES injectée en tête de run (2026-09-27).
+ *
+ * Le Brain ne rend plus d'extraits : il rend des titres, des chemins et des tailles. Sans cette
+ * consigne, une phase lirait la liste comme du savoir et s'arrêterait aux titres. Deux façons
+ * d'ouvrir, parce que toutes les phases n'ont pas les mêmes outils : un nœud skill a `brain_read`,
+ * une phase du pipeline lit le fichier elle-même (elle tourne avec les droits de lecture complets) —
+ * d'où la RACINE, sans laquelle un chemin `knowledge/…` ne mène nulle part hors du serveur.
+ */
+export function consigneCandidatesBrain(racine?: string): string {
+  const ouvrir = racine
+    ? `avec \`brain_read\` si tu l'as, sinon en lisant le fichier \`${racine}/<chemin>\``
+    : 'avec `brain_read`'
+  return (
+    `Ci-dessus : les notes CANDIDATES du Brain pour cette tâche (titre, chemin, taille), PAS leur contenu. ` +
+    `Ouvre EN ENTIER celles qui servent ta tâche, autant qu'il en faut, ${ouvrir}. ` +
+    `Ignore les autres ; ne fouille le dépôt que pour ce que ce savoir ne couvre pas.`
+  )
 }
 
 /**
  * #3 — plafond du texte d'UNE phase agrégé dans le livrable remis au JUGE. Le portage phase→phase
- * était déjà borné (PHASE_CONTEXT_CAP), mais l'agrégat juge (`buildExec`) concaténait les sorties
+ * était alors borné (il ne l'est plus depuis le 2026-09-27), mais l'agrégat juge (`buildExec`) concaténait les sorties
  * COMPLÈTES non tronquées → croissance linéaire du prompt juge avec le nb de phases. On borne chaque
  * bloc de phase (plus large que le portage : le juge doit voir la substance du livrable, pas juste
  * un aperçu). La sortie complète reste dans `phaseOutputs` + la trace des sous-agents.
@@ -3602,15 +3617,17 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      * conclure vert quand elle a effectivement repare.
      */
     const travauxNonLivres = new Set<string>()
-    // RAG Brain : 1×/run, on récupère du cerveau Amitel la connaissance pertinente (retriever
-    // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
-    // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
+    // RAG Brain : 1×/run, on récupère du cerveau Amitel la LISTE des notes pertinentes pour la
+    // tâche (titre, chemin, taille) et on l'injecte en tête de contexte. Plus d'extraits coupés à
+    // 2 000 caractères (2026-09-27) : chaque sous-agent ouvre EN ENTIER les notes qu'il juge
+    // nécessaires. Dégrade à '' si le serveur est absent.
     const brainCorpus = brainCorpusForWorkspace(this.deps.executionWorkspace)
     const brain =
       brainCorpus?.length === 0
         ? { context: '', status: 'empty' as const }
         : await (this.deps.retrieveBrain ?? retrieveBrainContext)(task, {
-            corpus: brainCorpus
+            corpus: brainCorpus,
+            mode: 'candidates'
           })
     const brainRetrievedAt = new Date().toISOString()
     const scopedBrain = scopeBrainRetrieval(brain, brainCorpus)
@@ -3640,84 +3657,16 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // L'observabilité Brain ne doit jamais faire échouer le run.
     }
     /**
-     * SKILL `think` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : en plus de la récupération
-     * par tâche ci-dessus, l'EMPREINTE DURABLE du dépôt (écrite par `/learn` : ce qu'il est, ce
-     * qu'il fait, architecture, décisions) est chargée à CHAQUE run, et l'action est VISIBLE comme
-     * step dans le fil de sous-agents — plus un geste implicite. Elle ne bloque jamais un run.
+     * PLUS D'« EMPREINTE DU DÉPÔT » (retirée le 2026-09-27, choix de l'utilisateur).
      *
-     * LES NOMS ÉTAIENT MORTS, signalé le 2026-08-25 : le fil affichait « load » et le message
-     * renvoyait vers une commande `save`, alors que ni `load` ni `save` n'existent dans `skills/` — seules
-     * `think` et `learn` sont sur disque. Un nom qui désigne une commande supprimée est un mensonge
-     * qui ne se voit qu'à l'usage ; `etape-think.test.ts` relie désormais ces noms au disque.
+     * Un second appel partait à chaque run avec une question FIGÉE (« empreinte du dépôt X — ce qu'il
+     * est, ce qu'il fait… »), et son résultat était injecté en tête de toutes les phases. Mesuré sur
+     * 335 runs : 12 notes distinctes seulement, et 82 % du temps la note qui décrit… cette empreinte
+     * elle-même, retenue pour le mot « empreinte » (similarité médiane 0,33). Aucune note ne décrivait
+     * réellement le dépôt : c'était ~2 000 caractères de bruit payés à chaque run. Le contexte du
+     * dépôt vient désormais de la liste de candidates de la tâche ci-dessus, et du nœud `think`, qui
+     * ouvre lui-même ce qu'il juge nécessaire.
      */
-    let empreinteDepot = ''
-    if (brainCorpus?.length !== 0) {
-      /**
-       * CE DEUXIÈME APPEL BRAIN N'ÉCRIVAIT AUCUNE TRACE (constaté le 2026-08-31).
-       *
-       * Il part à CHAQUE run, exactement comme la récupération par tâche juste au-dessus, et son
-       * résultat est injecté en tête du contexte de toutes les phases — mais seule la première
-       * appelait `onBrainRetrieved`. La liste Brain de l'Observatory montrait donc un appel là où le
-       * run en avait fait deux, ce qui est précisément le défaut qu'une vue d'observabilité ne peut
-       * pas se permettre : sous-compter en silence se lit comme un compte juste.
-       *
-       * Statut par DÉFAUT `unavailable` : si l'appel jette, on ne sait pas si le Brain était absent
-       * ou la requête invalide, et l'échec doit rester visible plutôt que de se confondre avec un
-       * « rien trouvé ».
-       */
-      const empreinteQuery = `empreinte du dépôt ${workspaceLabel(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`
-      let empreinteStatut: BrainRetrievalEvent['status'] = 'unavailable'
-      // La CAUSE de l'indisponibilité, telle que `retrieveBrainContext` l'a constatée : sans elle le
-      // message de `think` ne peut qu'énumérer des hypothèses (mesure conv-586, 2026-09-16).
-      let empreinteMotif: BrainUnavailableReason | undefined
-      let empreinteNavigation: BrainNavigation | undefined
-      try {
-        const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)(empreinteQuery, {
-          corpus: brainCorpus
-        })
-        const empreinteScopee = scopeBrainRetrieval(chargee, brainCorpus)
-        empreinteStatut = empreinteScopee.status
-        empreinteMotif = empreinteScopee.unavailableReason
-        empreinteNavigation = empreinteScopee.navigation
-        empreinteDepot = empreinteScopee.context.slice(0, 6_000)
-      } catch {
-        // Le load est un confort de départ, jamais une raison d'échouer. Une exception ici est un
-        // échec de transport : c'est exactement le cas « réseau ».
-        empreinteMotif = 'network'
-      }
-      try {
-        onBrainRetrieved?.({
-          timestamp: new Date().toISOString(),
-          kind: 'empreinte',
-          query: empreinteNavigation?.query || empreinteQuery,
-          found: empreinteDepot.length > 0,
-          status: empreinteStatut,
-          // La TRONCATURE à 6 000 est ce qui est réellement injecté : annoncer la taille récupérée
-          // ferait croire à du contexte que les phases n'ont jamais vu.
-          injectedChars: empreinteDepot.length,
-          ...(empreinteNavigation ? { navigation: empreinteNavigation } : {})
-        })
-      } catch {
-        // L'observabilité Brain ne doit jamais faire échouer le run.
-      }
-      /*
-       * Le STATUT decide du message, pas la taille du texte. Un Brain injoignable rendait « aucune
-       * empreinte » — une panne annoncee comme un resultat de recherche (mesure conv-9, 2026-08-31).
-       */
-      const empreinteMessage = messageEmpreinteBrain(
-        empreinteStatut,
-        empreinteDepot.length,
-        empreinteMotif
-      )
-      push({
-        step: 'exec',
-        role: 'think',
-        provider: 'brain',
-        text: empreinteMessage.text,
-        status: 'completed',
-        detail: empreinteMessage.detail
-      })
-    }
     const memoryEcho = sessionMemoryBlock(
       rememberedFacts(conversationId, this.deps.executionWorkspace),
       ECHO_MAX_BLOCK_CHARS,
@@ -3759,22 +3708,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const phaseContext: string[] = [
       ...(memoryEcho ? [contexteNomme('memoryEcho', memoryEcho)] : []),
       ...(causalMemory ? [contexteNomme('causalMemory', causalMemory)] : []),
-      ...(empreinteDepot
-        ? [
-            contexteNomme(
-              'empreinteDepot',
-              `EMPREINTE DU DÉPÔT (skill load) :
-${empreinteDepot}`
-            )
-          ]
-        : []),
       ...(brainContext
         ? [
             contexteNomme('brainContext', brainContext),
-            contexteNomme(
-              'brainPriorite',
-              `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
-            )
+            contexteNomme('brainPriorite', consigneCandidatesBrain(scopedBrain.navigation?.root))
           ]
         : []),
       contexteNomme('tache', taskContext),

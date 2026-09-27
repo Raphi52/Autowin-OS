@@ -249,6 +249,29 @@ export function normalizeClaudeUsage(
  * AUTOWIN_CONVERSATION_ID), puis NON_INTERACTIVE_ENV EN DERNIER — une variable du run ne peut pas
  * rouvrir un pager ou une invite d'identifiants.
  */
+/**
+ * PLAFOND DE SORTIE MCP DU CLI, LEVÉ POUR LES NŒUDS SKILL (2026-09-27).
+ *
+ * Claude Code coupe par défaut un résultat d'outil MCP à 25 000 tokens, réglable par
+ * `MAX_MCP_OUTPUT_TOKENS` (documentation officielle : https://code.claude.com/docs/en/mcp).
+ * Un nœud `think` qui ouvre une note avec `brain_read` la recevait donc amputée au-delà d'environ
+ * 100 Ko — le dernier plafond de la chaîne, après ceux retirés côté serveur et côté app. Règle de
+ * l'utilisateur : pas de budget, l'agent ouvre EN ENTIER ce qu'il juge nécessaire.
+ *
+ * Un million de tokens : au-dessus de la plus grosse note du Brain (809 430 octets, mesuré le
+ * 2026-09-27). La vraie limite devient la fenêtre du modèle, que l'agent anticipe grâce à la taille
+ * affichée dans la liste de candidates. Une valeur déjà posée par l'utilisateur garde le dernier mot.
+ */
+export const MCP_SORTIE_NOEUD_SKILL_TOKENS = '1000000'
+
+export function envSortieMcpNoeudSkill(
+  noeudOutille: boolean,
+  env: NodeJS.ProcessEnv
+): Record<string, string> {
+  if (!noeudOutille || env.MAX_MCP_OUTPUT_TOKENS) return {}
+  return { MAX_MCP_OUTPUT_TOKENS: MCP_SORTIE_NOEUD_SKILL_TOKENS }
+}
+
 export function environnementAgent(
   base: NodeJS.ProcessEnv,
   agentEnv?: Record<string, string>
@@ -1401,7 +1424,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
       // explicitement une variable garde le dernier mot.
       env: environnementAgent(
-        { ...withClaudeAccountEnv(process.env), ...(invocation.env ?? {}) },
+        {
+          ...withClaudeAccountEnv(process.env),
+          // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
+          ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
+          ...(invocation.env ?? {})
+        },
         execution?.agentEnv
       ),
       ...(journal

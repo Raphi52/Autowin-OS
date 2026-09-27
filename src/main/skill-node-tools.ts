@@ -111,9 +111,6 @@ export async function executerOutilsDuNoeud(
   return appels
 }
 
-/** Borne d'un resultat reinjecte : un `brain_query` genereux noierait le tour suivant. */
-const RESULTAT_MAX_CARACTERES = 4_000
-
 /**
  * Le message rendu au modèle après exécution. C'est ce qui transforme un appel en BOUCLE : sans le
  * résultat, `brain_query` ne servirait à rien — un nœud `think` ne pourrait pas lire ce qu'il a
@@ -126,11 +123,12 @@ export function compteRenduDesOutils(appels: readonly AppelOutil[]): string {
       return `- \`${appel.name}\` : REFUSÉ — indisponible depuis un nœud de workflow. L'appel n'a pas eu lieu.`
     }
     if (!appel.ok) return `- \`${appel.name}\` : ÉCHEC — ${appel.erreur ?? 'raison inconnue'}`
+    // Rendu ENTIER (2026-09-27) : il était coupé à 4 000 caractères, donc une note ouverte par
+    // `brain_read` arrivait amputée. Règle de l'utilisateur : pas de budget, on récupère le
+    // nécessaire — c'est le nœud qui choisit ce qu'il ouvre, pas une borne ici.
     const brut =
       typeof appel.resultat === 'string' ? appel.resultat : JSON.stringify(appel.resultat ?? null)
-    const borne =
-      brut.length > RESULTAT_MAX_CARACTERES ? `${brut.slice(0, RESULTAT_MAX_CARACTERES)}…` : brut
-    return `- \`${appel.name}\` : OK\n${borne}`
+    return `- \`${appel.name}\` : OK\n${brut}`
   })
   return `RÉSULTAT DE TES COMMANDES :\n${lignes.join('\n')}`
 }

@@ -1136,7 +1136,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'brain_query',
     description:
-      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis',
+      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis. Rend la LISTE des notes candidates classées par pertinence (titre, chemin, taille), sans leur contenu : ouvre ensuite EN ENTIER avec brain_read celles qui servent ta tâche, autant qu’il en faut',
     args: { question: 'la question, en langage naturel' },
     annotations: {
       readOnlyHint: true,
@@ -1165,7 +1165,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'brain_read',
     description:
-      'Relire EN ENTIER une note curée du Brain nommée par brain_query ou brain_graph — pour décider soi-même si elle est à jour, et la remplacer via remember (supersedes) si elle ne l’est plus',
+      'Ouvrir EN ENTIER, sans coupe, une note curée du Brain nommée par brain_query ou brain_graph — pour en lire le contenu, décider soi-même si elle est à jour, et la remplacer via remember (supersedes) si elle ne l’est plus',
     args: { path: 'chemin de la note, knowledge/…/nom.md' },
     annotations: {
       readOnlyHint: true,
@@ -5064,7 +5064,9 @@ export class AppCommandBus {
     const brain =
       corpus?.length === 0
         ? { context: '', status: 'empty' as const }
-        : await this.retrieveBrain(decision.query, { corpus })
+        : // La LISTE des notes candidates (titre, chemin, taille) : l'agent ouvre ensuite en entier,
+          // avec `brain_read`, celles qu'il juge nécessaires — aucune borne de taille ni de nombre.
+          await this.retrieveBrain(decision.query, { corpus, mode: 'candidates' })
     // MEME PORTEE que la voie poussee : le contexte, le statut et la navigation sont projetés ensemble.
     const scoped = scopeBrainRetrieval(brain, corpus)
     const outcome = buildBrainOutcome(

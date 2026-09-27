@@ -25,9 +25,22 @@ export interface VerifiedBrainPayload {
 
 const SERVICE = 'amitel-brain'
 const REQUEST_AAD = Buffer.from('amitel-brain/request-v1', 'utf8')
-const MAX_AUTHENTICATED_BYTES = 1024 * 1024
-export const MAX_BRAIN_CONTEXT_CHARS = 3_000
-export const MAX_SIGNED_BRAIN_RESPONSE_BYTES = 3 * 1024 * 1024
+/**
+ * GARDES DE TRANSPORT, PAS BUDGETS DE CONTENU (2026-09-27).
+ *
+ * Il existait ici une troisième borne, `MAX_BRAIN_CONTEXT_CHARS = 3_000`, qui refusait tout contexte
+ * plus long : c'était un budget de CONTENU déguisé en contrôle d'intégrité. Elle obligeait le
+ * serveur à couper chaque relecture de note à 3 000 caractères, et la recherche à tenir dans 2 000.
+ * Règle posée par l'utilisateur : pas de budget, on récupère le nécessaire. La recherche rend donc
+ * une LISTE de candidates, et l'agent ouvre en entier celles qu'il juge utiles.
+ *
+ * Restent deux gardes contre une réponse EMBALLÉE (serveur fou, flux sans fin), dimensionnées sur
+ * le réel : la plus grosse note du Brain fait 809 430 octets (`modele-ult.md`, mesuré le
+ * 2026-09-27). Encodée deux fois en JSON (corps signé, puis enveloppe), elle reste très loin de ces
+ * valeurs — aucune note réelle n'est refusée.
+ */
+export const MAX_AUTHENTICATED_BYTES = 16 * 1024 * 1024
+export const MAX_SIGNED_BRAIN_RESPONSE_BYTES = 40 * 1024 * 1024
 
 type BrainResponseLike = {
   headers?: { get(name: string): string | null }
@@ -56,13 +69,6 @@ export function sealBrainRequest(
     cipher.getAuthTag()
   ])
   return { nonce, ciphertext: encrypted.toString('base64') }
-}
-
-function assertContextBound(context: string): void {
-  // Protocole: caractères Unicode (points de code), identique à len(str) côté Python.
-  if (Array.from(context).length > MAX_BRAIN_CONTEXT_CHARS) {
-    throw new Error('Contexte Amitel Brain trop volumineux')
-  }
 }
 
 function parseCorpusAttestation(value: unknown): readonly string[] | undefined {
@@ -120,8 +126,6 @@ function parseStructuredContext(
     }
     return { path: source.path, content: source.content }
   })
-  const reconstructed = renderStructuredBrainContext({ preamble: structured.preamble, sources })
-  assertContextBound(reconstructed)
   return { preamble: structured.preamble, sources }
 }
 
@@ -263,7 +267,6 @@ export function verifySignedBrainPayload(
   if (payload.protocol === 1) {
     if (typeof payload.context !== 'string') throw new Error('Reponse Amitel Brain invalide')
     verifySignature(`${SERVICE}\n1\n${payload.context}`, payload.signature, token)
-    assertContextBound(payload.context)
     return { context: payload.context }
   }
 
@@ -286,7 +289,6 @@ export function verifySignedBrainPayload(
   }
   const body = decoded as Record<string, unknown>
   if (typeof body.context !== 'string') throw new Error('Reponse Amitel Brain invalide')
-  assertContextBound(body.context)
   const structuredContext = parseStructuredContext(body.structuredContext)
   const request = parseRequestBinding(body.request)
   if (structuredContext && renderStructuredBrainContext(structuredContext) !== body.context) {

@@ -1,6 +1,5 @@
 import { amitelBrainOrigin } from './amitel-paths'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
-import { capBrainResult } from './brain-query-command'
 
 /**
  * COMMANDES `brain_graph` et `brain_read` — la memoire que l'agent PILOTE lui-meme.
@@ -78,10 +77,12 @@ async function callBrain(
         note: "reponse Brain rejetee : identite ou integrite invalide - rien n'a ete utilise"
       }
     }
+    // Aucune coupe côté app (2026-09-27) : `brain_read` rend la note ENTIÈRE que l'agent a choisi
+    // d'ouvrir. Le graphe, lui, reste borné par le serveur (`/graph`), qui le dit (`truncated`).
     return {
       found: Boolean(context.trim()),
       status: context.trim() ? 'found' : 'empty',
-      knowledge: capBrainResult(context)
+      knowledge: context.trim()
     }
   } catch {
     return {
@@ -134,7 +135,7 @@ export async function runBrainGraph(
       }
     }
   } catch {
-    // Resultat tronque par capBrainResult : il reste lisible tel quel.
+    // Resultat non JSON (serveur ancien, coupe cote serveur) : il reste lisible tel quel.
   }
   return outcome
 }
@@ -148,6 +149,8 @@ export async function runBrainRead(
   if (!path) {
     return { found: false, status: 'not-requested', knowledge: '', note: 'chemin de note manquant' }
   }
-  return callBrain('/read', { path }, deps)
+  // `entier` : la note ENTIÈRE. Sans ce drapeau, le serveur garde l'ancienne coupe à 3 000
+  // caractères, réservée aux clients antérieurs au 2026-09-27 qui rejetaient tout contexte plus long.
+  return callBrain('/read', { path, entier: true }, deps)
 }
-// fix-ok: contexte borne a 3000 caracteres par assertContextBound (brain-protocol.ts) + avertissements lint sur mes lignes
+// fix-ok: plus de borne de contenu cote app (2026-09-27) ; seules les gardes de transport de brain-protocol.ts restent

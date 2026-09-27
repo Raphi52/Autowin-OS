@@ -61,13 +61,12 @@ describe('outils d’un nœud skill', () => {
     expect(compteRenduDesOutils(appels)).toContain('le dépôt est un cockpit Electron')
   })
 
-  it('borne un résultat généreux plutôt que de noyer le tour suivant', async () => {
-    const appels = await executerOutilsDuNoeud(cmd('brain_query', { query: 'x' }), {
-      exec: async () => ({ ok: true, data: 'a'.repeat(20_000) })
+  it('rend un résultat long EN ENTIER — une note ouverte n’arrive plus amputée', async () => {
+    const note = `${'a'.repeat(20_000)}FIN-DE-NOTE`
+    const appels = await executerOutilsDuNoeud(cmd('brain_read', { path: 'knowledge/x.md' }), {
+      exec: async () => ({ ok: true, data: note })
     })
-    const rendu = compteRenduDesOutils(appels)
-    expect(rendu.length).toBeLessThan(6_000)
-    expect(rendu).toContain('…')
+    expect(compteRenduDesOutils(appels)).toContain(note)
   })
 
   it('un texte sans commande ne déclenche aucun tour : la boucle est un no-op sans coût', () => {

@@ -187,18 +187,18 @@ describe('appel d’outil', () => {
     expect(rep.statut).toBe(200)
   })
 
-  it('borne un résultat généreux au lieu de noyer le contexte', async () => {
+  it('rend un résultat long EN ENTIER — une note ouverte n’arrive plus amputée', async () => {
+    const note = `${'z'.repeat(10_000)}FIN-DE-NOTE`
     const rep = await traiterMessageMcp(
       {
         method: 'tools/call',
         id: 5,
-        params: { name: 'brain_query', arguments: { question: 'x' } }
+        params: { name: 'brain_read', arguments: { path: 'knowledge/x.md' } }
       },
-      lanceur(async () => ({ ok: true, data: 'z'.repeat(10_000) }))
+      lanceur(async () => ({ ok: true, data: note }))
     )
     const r = (rep.corps as { result: { content: Array<{ text: string }> } }).result
-    expect(r.content[0]!.text.length).toBeLessThan(4_100)
-    expect(r.content[0]!.text.endsWith('…')).toBe(true)
+    expect(r.content[0]!.text).toBe(note)
   })
 
   it('une notification (sans id) ne rend aucun corps', async () => {

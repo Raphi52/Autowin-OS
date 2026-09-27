@@ -112,12 +112,22 @@ class EntityGraphTests(unittest.TestCase):
             Handler._handle_read(handler, json.dumps({"path": escape}).encode())
             self.assertIn(handler.sent[0], {400, 404}, escape)
 
-    def test_routes_stay_under_the_client_context_bound(self):
+    def test_read_returns_the_whole_note_and_graph_stays_bounded(self):
         big = self.root / "knowledge" / "domain" / "big.md"
-        big.write_text("x" * 10_000 + "".join(f"[[n{i}]]" for i in range(300)), encoding="utf-8")
+        big.write_text("x" * 10_000 + "".join(f"[[n{i}]]" for i in range(300)) + "FIN-DE-NOTE",
+                       encoding="utf-8")
         for i in range(300):
             (big.parent / f"n{i}.md").write_text("# n\n", encoding="utf-8")
         handler = FakeHandler(self.root)
+        Handler._handle_read(
+            handler, json.dumps({"path": "knowledge/domain/big.md", "entier": True}).encode()
+        )
+        # « Ouvrir » une note = la note ENTIÈRE, fin comprise : plus aucune coupe à 3 000.
+        read = verified_context(handler.sent[1], "t")
+        self.assertGreater(len(read), 10_000)
+        self.assertTrue(read.endswith("FIN-DE-NOTE"))
+        # Un client ANTÉRIEUR (sans le drapeau) rejette tout contexte > 3 000 : il garde l'ancienne
+        # coupe, sinon chaque relecture longue échouerait chez lui.
         Handler._handle_read(handler, json.dumps({"path": "knowledge/domain/big.md"}).encode())
         self.assertLessEqual(len(verified_context(handler.sent[1], "t")), 3_000)
         Handler._handle_graph(handler, json.dumps({"entity": "big", "direction": "dependencies"}).encode())

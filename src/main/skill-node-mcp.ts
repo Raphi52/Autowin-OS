@@ -62,9 +62,6 @@ export function porteLesOutilsNatifs(provider: string): boolean {
 /** Nom du serveur cote client. Les outils apparaissent donc en `mcp__autowin__<commande>`. */
 export const NOM_SERVEUR_MCP = 'autowin'
 
-/** Borne d'un resultat rendu : un `brain_query` genereux noierait le contexte du modele. */
-const RESULTAT_MAX_CARACTERES = 4_000
-
 /** Version de protocole rendue par defaut si le client n'en propose aucune. */
 const PROTOCOLE_DEFAUT = '2025-06-18'
 
@@ -173,10 +170,13 @@ export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
     }))
 }
 
-/** Borne un resultat avant de le rendre au modele. */
-function borner(valeur: unknown): string {
-  const brut = typeof valeur === 'string' ? valeur : JSON.stringify(valeur ?? null)
-  return brut.length > RESULTAT_MAX_CARACTERES ? `${brut.slice(0, RESULTAT_MAX_CARACTERES)}…` : brut
+/**
+ * Met un resultat en texte, ENTIER. Il etait coupe a 4 000 caracteres jusqu'au 2026-09-27 : une
+ * note ouverte par `brain_read` arrivait amputee. Regle de l'utilisateur : pas de budget, on
+ * recupere le necessaire — c'est le noeud qui choisit ce qu'il ouvre.
+ */
+function enTexte(valeur: unknown): string {
+  return typeof valeur === 'string' ? valeur : JSON.stringify(valeur ?? null)
 }
 
 /**
@@ -255,7 +255,7 @@ export async function traiterMessageMcp(
             {
               type: 'text',
               text: resultat.ok
-                ? borner(resultat.data)
+                ? enTexte(resultat.data)
                 : `ÉCHEC — ${resultat.error ?? 'raison inconnue'}`
             }
           ],
