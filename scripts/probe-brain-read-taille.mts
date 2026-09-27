@@ -18,12 +18,13 @@
  */
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+
 import { resolveClaudeBin } from '../src/main/providers/claude'
 import { claudeToolResultText } from '../src/main/providers/claude'
 import { demarrerServeurOutilsNoeudSkill } from '../src/main/skill-node-mcp'
 import type { LanceurCommandeSkill } from '../src/main/skill-node-tools'
 
-const TAILLES = [30_000, 120_000, 600_000]
+const TAILLES = (process.argv[2] ?? '30000,120000,600000').split(',').map(Number)
 
 function note(taille: number, temoin: string): string {
   const ligne = 'Ligne de note du Brain — contenu de remplissage pour mesurer la taille.\n'
@@ -33,7 +34,10 @@ function note(taille: number, temoin: string): string {
 
 function lancerCli(args: string[]): Promise<string> {
   return new Promise((resolve) => {
-    const enfant = spawn(resolveClaudeBin(), args, { shell: false, stdio: ['pipe', 'pipe', 'pipe'] })
+    const enfant = spawn(resolveClaudeBin(), args, {
+      shell: false,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
     let sortie = ''
     enfant.stdout.on('data', (c) => (sortie += String(c)))
     enfant.stderr.on('data', (c) => (sortie += String(c)))
@@ -112,18 +116,25 @@ for (const taille of TAILLES) {
     const entier = transmis?.includes(temoin) === true
     const persiste = transmis !== undefined && /saved|persist|exceeds|too large/i.test(transmis)
     // Au-delà du plafond documenté (500 000), la note ne PEUT PAS arriver entière : on l'attend.
+    // Elle doit alors rester LISIBLE depuis le fichier de repli, donc tenir sur plusieurs lignes.
     const attendu = taille <= 500_000
-    if (entier !== attendu) tousOk = false
+    // Au-delà du plafond, le CLI rangerait le résultat dans un `.json` d'UNE ligne (mesuré) : le
+    // serveur doit plutôt renvoyer vers le fichier .md de la note, qui a ses lignes.
+    const renvoiNote =
+      transmis !== undefined && /TROP GRAND/.test(transmis) && transmis.includes('knowledge/t.md')
+    if (attendu ? !entier : !renvoiNote) tousOk = false
     console.log(
       `${String(taille).padStart(7)} car. -> ${
         transmis === undefined
           ? 'AUCUN appel brain_read observé'
           : entier
             ? `ENTIÈRE dans la conversation (${transmis.length} car. transmis)`
-            : persiste
-              ? `NON transmise : remplacée par un renvoi vers un fichier (« ${transmis.slice(0, 110)}… »)`
-              : `NON transmise (${transmis.length} car., témoin absent)`
-      } — attendu : ${attendu ? 'entière' : 'renvoi fichier (au-delà de 500 000)'}`
+            : renvoiNote
+              ? `renvoi vers le fichier de la note (« ${transmis.split('\n')[0]!.slice(0, 90)}… »)`
+              : persiste
+                ? `rangée par le CLI dans un fichier (« ${transmis.slice(0, 90)}… »)`
+                : `NON transmise (${transmis.length} car., témoin absent)`
+      } — attendu : ${attendu ? 'entière' : 'renvoi vers le fichier de la note'}`
     )
   } finally {
     await serveur.arreter()

@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { OUTILS_NOEUD_SKILL, type LanceurCommandeSkill } from './skill-node-tools'
 import type { ExecutionEvidence } from './providers/types'
+import { amitelBrainRoot } from './amitel-paths'
 
 /**
  * Les outils d'un noeud SKILL, servis sur le canal NATIF du provider.
@@ -187,7 +188,10 @@ export function lecturesDirectesDuBrain(
       const note = sousLaRacine(preuve.path)
       if (note) lignes.push(`lecture directe Read (${phase}) : ${etat} — ${note}${car}`)
     } else if (/^(Grep|Glob)$/i.test(preuve.type)) {
-      const dossier = sousLaRacine(preuve.searchPath)
+      // Sans dossier, un Glob peut porter le chemin complet dans son MOTIF (`//ged2/…/knowledge/**`).
+      const dossier = preuve.searchPath
+        ? sousLaRacine(preuve.searchPath)
+        : sousLaRacine(preuve.pattern)
       if (dossier) {
         const motif = preuve.pattern ? `« ${preuve.pattern} » · ` : ''
         lignes.push(
@@ -248,10 +252,23 @@ export function schemaEntree(args: Record<string, unknown>): {
 }
 
 /** Les outils publies : la liste blanche, jamais le bus complet. */
+/**
+ * Plafond de taille d'un résultat d'outil que le CLI Claude met DANS la conversation.
+ *
+ * Sans déclaration, un résultat au-delà de ~50 000 caractères est remplacé par un renvoi vers un
+ * fichier. Mesuré le 2026-09-27 sur le vrai CLI (`scripts/probe-brain-read-taille.mts`) : une note
+ * de 120 000 caractères arrivait sous la forme « exceeds maximum allowed tokens. Output has been
+ * saved to … ». Le champ et son maximum viennent de la documentation officielle
+ * (https://code.claude.com/docs/en/mcp) : `_meta["anthropic/maxResultSizeChars"]`, « up to
+ * 500,000 characters ». Au-delà, le renvoi fichier reste inévitable — d'où `enTexte` ci-dessous.
+ */
+export const PLAFOND_RESULTAT_OUTIL_CAR = 500_000
+
 export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
   name: string
   description: string
   inputSchema: ReturnType<typeof schemaEntree>
+  _meta: { 'anthropic/maxResultSizeChars': number }
 }> {
   const specs = lanceur.catalogue?.() ?? []
   return specs
@@ -259,7 +276,8 @@ export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
     .map((s) => ({
       name: s.name,
       description: s.description,
-      inputSchema: schemaEntree(s.args)
+      inputSchema: schemaEntree(s.args),
+      _meta: { 'anthropic/maxResultSizeChars': PLAFOND_RESULTAT_OUTIL_CAR }
     }))
 }
 
@@ -267,9 +285,40 @@ export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
  * Met un resultat en texte, ENTIER. Il etait coupe a 4 000 caracteres jusqu'au 2026-09-27 : une
  * note ouverte par `brain_read` arrivait amputee. Regle de l'utilisateur : pas de budget, on
  * recupere le necessaire — c'est le noeud qui choisit ce qu'il ouvre.
+ *
+ * Une note TROUVÉE part en texte brut, lignes intactes, et non en JSON : le JSON échappait chaque
+ * retour à la ligne, si bien qu'une note trop grosse pour la conversation atterrissait dans un
+ * fichier d'UNE seule ligne (« 121 713 characters across 1 line »), que `Read` ne sait pas lire.
+ * Sans contenu (introuvable, panne), le JSON reste : c'est lui qui porte le statut et la note.
  */
+/**
+ * Ce que reçoit le modèle quand un résultat dépasse le plafond : la taille RÉELLE et le chemin du
+ * fichier de la note, qu'il lit par morceaux ou fouille. Sans ce renvoi, le CLI rangeait le
+ * résultat dans un `.json` où le texte tenait sur une seule ligne de 625 000 caractères (mesuré le
+ * 2026-09-27), que ni `Read` ni `Grep` ne savent exploiter. Le fichier `.md` d'origine a ses lignes.
+ */
+function renvoiNoteTropGrande(nom: string, args: Record<string, unknown>, taille: number): string {
+  const chemin = typeof args.path === 'string' ? args.path.trim().replace(/\\/g, '/') : ''
+  const racine = amitelBrainRoot().replace(/\\/g, '/').replace(/\/+$/, '')
+  const fichier = chemin ? (chemin.startsWith(racine) ? chemin : `${racine}/${chemin}`) : ''
+  return [
+    `RÉSULTAT TROP GRAND POUR ARRIVER EN UNE FOIS : ${taille} caractères, au-delà des ` +
+      `${PLAFOND_RESULTAT_OUTIL_CAR} qu'un outil peut transmettre dans la conversation.`,
+    fichier
+      ? `La note est intacte sur le disque : ${fichier}. Lis-la par morceaux (Read avec offset et ` +
+        `limit) ou fouille-la (Grep) plutôt que de la rouvrir par ${nom}.`
+      : `Précise ta demande : ${nom} ne peut pas rendre ce résultat en entier.`
+  ].join('\n')
+}
+
 function enTexte(valeur: unknown): string {
-  return typeof valeur === 'string' ? valeur : JSON.stringify(valeur ?? null)
+  if (typeof valeur === 'string') return valeur
+  const savoir =
+    valeur && typeof valeur === 'object' && !Array.isArray(valeur)
+      ? (valeur as Record<string, unknown>).knowledge
+      : undefined
+  if (typeof savoir === 'string' && savoir.trim()) return savoir
+  return JSON.stringify(valeur ?? null)
 }
 
 /**
@@ -335,7 +384,14 @@ export async function traiterMessageMcp(
       }
       try {
         const resultat = await lanceur.exec(nom, args)
-        const issue = issueMetier(resultat.data)
+        const texte = resultat.ok ? enTexte(resultat.data) : ''
+        const renvoi =
+          resultat.ok && texte.length > PLAFOND_RESULTAT_OUTIL_CAR
+            ? renvoiNoteTropGrande(nom, args, texte.length)
+            : undefined
+        const issue = renvoi
+          ? `trop grande pour la conversation (${texte.length} car.) — renvoyée vers son fichier`
+          : issueMetier(resultat.data)
         observer?.({
           outil: nom,
           refuse: false,
@@ -349,7 +405,7 @@ export async function traiterMessageMcp(
             {
               type: 'text',
               text: resultat.ok
-                ? enTexte(resultat.data)
+                ? (renvoi ?? texte)
                 : `ÉCHEC — ${resultat.error ?? 'raison inconnue'}`
             }
           ],

@@ -143,6 +143,33 @@ class EntityGraphTests(unittest.TestCase):
             Handler._handle_read(handler, json.dumps({"path": ferme}).encode())
             self.assertIn(handler.sent[0], {400, 404}, ferme)
 
+    def test_read_accepts_every_path_form_a_model_may_send(self):
+        """La consigne des candidates donne la RACINE du Brain au modèle : il peut rappeler une note
+        par son chemin absolu, avec des antislashs ou une autre casse. Ce qui désigne une note
+        servie doit s'ouvrir ; ce qui sort des racines reste fermé, même en absolu."""
+        obsidian = self.root / "projects" / "rig-demo" / "obsidian" / "decisions"
+        obsidian.mkdir(parents=True)
+        (obsidian / "Responsive.md").write_text("# R\nNOTE-PROJET", encoding="utf-8")
+        handler = FakeHandler(self.root)
+        handler.allowed_roots = [
+            (self.root / "knowledge").resolve(),
+            (self.root / "projects" / "rig-demo" / "obsidian").resolve(),
+        ]
+        racine = str(self.root)
+        for forme in (
+            "projects\\rig-demo\\obsidian\\decisions\\Responsive.md",
+            "PROJECTS/rig-demo/obsidian/decisions/responsive.md",
+            "  projects/rig-demo/obsidian/decisions/Responsive.md  ",
+            racine + "\\projects\\rig-demo\\obsidian\\decisions\\Responsive.md",
+            racine.replace("\\", "/") + "/projects/rig-demo/obsidian/decisions/Responsive.md",
+            racine + "\\knowledge\\domain\\a.md",
+        ):
+            Handler._handle_read(handler, json.dumps({"path": forme, "entier": True}).encode())
+            self.assertEqual(handler.sent[0], 200, forme)
+        for ferme in (racine + "\\inbox\\draft.md", racine + "\\secret.md", "C:\\Windows\\win.ini"):
+            Handler._handle_read(handler, json.dumps({"path": ferme}).encode())
+            self.assertIn(handler.sent[0], {400, 404}, ferme)
+
     def test_read_returns_the_whole_note_and_graph_stays_bounded(self):
         big = self.root / "knowledge" / "domain" / "big.md"
         big.write_text("x" * 10_000 + "".join(f"[[n{i}]]" for i in range(300)) + "FIN-DE-NOTE",

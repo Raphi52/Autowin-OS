@@ -12,6 +12,7 @@ import {
   type AppelMcpObserve
 } from './skill-node-mcp'
 import type { LanceurCommandeSkill, SpecCommandeSkill } from './skill-node-tools'
+import type { ExecutionEvidence } from './providers/types'
 
 /** Les specs REELLES des commandes, recopiees de `commands.ts` (arguments compris). */
 const SPECS: SpecCommandeSkill[] = [
@@ -345,6 +346,33 @@ describe('taille des résultats — une note ouverte arrive entière et lisible'
     expect(r.content[0]!.text).toBe('# Titre\nligne 2\nligne 3')
   })
 
+  it('au-delà de 500 000 caractères, brain_read renvoie vers le VRAI fichier de la note, pas vers un JSON d’une ligne', async () => {
+    // Mesuré le 2026-09-27 : au-delà du plafond, le CLI range le résultat dans un `.json` où le texte
+    // tient sur UNE ligne de 625 000 caractères. Deux notes du Brain dépassent ce plafond
+    // (modele-ult.md 809 Ko, modele-operation.md 744 Ko) : le fichier .md, lui, a ses lignes.
+    const vus: AppelMcpObserve[] = []
+    const rep = await traiterMessageMcp(
+      {
+        method: 'tools/call',
+        id: 23,
+        params: { name: 'brain_read', arguments: { path: 'knowledge/domain/modele-ult.md' } }
+      },
+      lanceur(async () => ({
+        ok: true,
+        data: { found: true, status: 'found', knowledge: 'x\n'.repeat(260_000) }
+      })),
+      (a) => vus.push(a)
+    )
+    const texte = (rep.corps as { result: { content: Array<{ text: string }> } }).result.content[0]!
+      .text
+    expect(texte.length).toBeLessThan(2_000)
+    expect(texte).toContain('520000 caractères')
+    expect(texte).toMatch(/knowledge\/domain\/modele-ult\.md/)
+    expect(texte).toMatch(/offset|Grep/)
+    // La trace le dit aussi : la note n'est PAS arrivée entière.
+    expect(vus[0]?.issue).toMatch(/trop grande/)
+  })
+
   it('sans contenu (introuvable, panne), le résultat reste en JSON : le statut et la note se lisent', async () => {
     const rep = await traiterMessageMcp(
       {
@@ -461,6 +489,42 @@ describe('mesure de lecture — quelle note, combien de caractères', () => {
     ])
     expect(lecturesDirectesDuBrain(undefined, racine, 'think')).toEqual([])
     expect(lecturesDirectesDuBrain([], '', 'think')).toEqual([])
+  })
+
+  it('lectures directes : casse et barre finale de la racine, Glob au chemin porté par le motif', () => {
+    const preuve = (o: Partial<ExecutionEvidence>): ExecutionEvidence => ({
+      type: 'Read',
+      kind: 'inspection',
+      status: 'completed',
+      ok: true,
+      summary: '',
+      ...o
+    })
+    expect(
+      lecturesDirectesDuBrain(
+        [
+          preuve({
+            path: '\\\\GED2\\rig\\projets ia\\AMITEL BRAIN\\knowledge\\a.md',
+            outputChars: 10
+          }),
+          // Un Glob sans dossier, dont le MOTIF porte le chemin complet sous le Brain.
+          preuve({
+            type: 'Glob',
+            pattern: '//ged2/rig/Projets IA/Amitel Brain/knowledge/**/*ult*.md',
+            outputChars: 5
+          }),
+          // Un Glob sans dossier ni chemin dans le motif : rien ne dit qu'il vise le Brain.
+          preuve({ type: 'Glob', pattern: '**/*.md', outputChars: 5 }),
+          preuve({ ok: false, path: '//ged2/rig/Projets IA/Amitel Brain/knowledge/absente.md' })
+        ],
+        '//ged2/rig/Projets IA/Amitel Brain/',
+        'think'
+      )
+    ).toEqual([
+      'lecture directe Read (think) : ok — knowledge/a.md · 10 car.',
+      'recherche directe Glob (think) : ok — « //ged2/rig/Projets IA/Amitel Brain/knowledge/**/*ult*.md » · knowledge/**/*ult*.md · 5 car.',
+      'lecture directe Read (think) : echec — knowledge/absente.md'
+    ])
   })
 
   it('le libellé historique reste inchangé quand rien n’est mesurable', () => {

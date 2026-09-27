@@ -124,6 +124,23 @@ def _normalized_knowledge_path(value):
     return normalized.removeprefix("./").removeprefix("/")
 
 
+def _relative_to_brain(relative, brain_root):
+    """Un chemin ABSOLU sous la racine du Brain redevient relatif (`projects/…`, `knowledge/…`).
+
+    La consigne des candidates donne la racine au modèle : il peut rappeler une note par son chemin
+    complet. `_normalized_knowledge_path` le rattrapait pour `knowledge/` seulement (repère
+    `/knowledge/`) ; une note `projects/*/obsidian/` en absolu était refusée (mesuré le 2026-09-27).
+    Les deux écritures de la racine sont essayées : telle que configurée, et résolue (forme courte
+    `RAPHAE~1.VIL` contre forme longue). Rien n'est élargi : le résultat repasse par les mêmes
+    contrôles de racine et de confinement que tout autre chemin.
+    """
+    for base in {str(brain_root), str(Path(brain_root).resolve())}:
+        prefix = _normalized_knowledge_path(base).rstrip("/")
+        if prefix and relative.startswith(prefix + "/"):
+            return relative[len(prefix) + 1:]
+    return relative
+
+
 def _path_in_corpus(path, corpus):
     if corpus is None:
         return True
@@ -464,7 +481,9 @@ class Handler(BaseHTTPRequestHandler):
         roots = roots or [brain / "knowledge"]
         try:
             payload = json.loads(body)
-            relative = _normalized_knowledge_path(str(payload.get("path", "")))
+            relative = _relative_to_brain(
+                _normalized_knowledge_path(str(payload.get("path", ""))), self.brain_root
+            )
             parts = relative.split("/")
             if not relative.endswith(".md") or any(part in {"", ".", ".."} for part in parts):
                 raise ValueError("path must name a note under an indexed root")
