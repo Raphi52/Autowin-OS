@@ -397,6 +397,7 @@ import {
   cheminJournalWatchdogTeams,
   creerBattementWatchdog,
   creerJournalWatchdog,
+  detailPilotage,
   empreinteConversation
 } from './task-manager/journal-watchdog-teams'
 import type { WatchdogAppEvent } from './task-manager/types'
@@ -3707,7 +3708,7 @@ Le fil reprend ensuite normalement.`
           mail: (adresse, objet, corps) => outlookGateway.sendNew(adresse, objet, corps),
           log: (ligne) => {
             console.warn(ligne)
-            journalTeams('pilotage', { detail: ligne.replace(/^[watchdog]s*/, '') })
+            journalTeams('pilotage', { detail: detailPilotage(ligne) })
           }
         })
       : undefined

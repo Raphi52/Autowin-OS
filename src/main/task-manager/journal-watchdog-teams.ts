@@ -73,6 +73,15 @@ export function creerJournalWatchdog(
 }
 
 /**
+ * Detail d'une ligne `pilotage` : la ligne de `TeamsLocalClient` sans son prefixe console `[watchdog]`
+ * (conv-770, 2026-09-27 : le motif ecrit en ligne dans index.ts avait perdu ses barres obliques,
+ * `/^[watchdog]s*\/`, et le prefixe restait dans le journal).
+ */
+export function detailPilotage(ligne: string): string {
+  return ligne.replace(/^\[watchdog\]\s*/, '')
+}
+
+/**
  * BATTEMENT « TOUJOURS ACTIF » (conv-770, 2026-09-26) : le journal n'ecrit rien tant que tout va
  * bien, donc un journal silencieux ne distinguait pas « aucun message » de « boucle de lecture morte ».
  * Rend une fonction a appeler a CHAQUE lecture Teams (ok ou en echec) : au plus une ligne
