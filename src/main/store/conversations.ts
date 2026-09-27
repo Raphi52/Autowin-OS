@@ -845,6 +845,20 @@ export class ConversationStore {
        * L'utilisateur voyait sa phrase en dernier, avec rien en dessous.
        */
       avantLaReponseEnCours?: boolean
+      /**
+       * AVIS DE L'APP SUR LE TOUR (rangement de la conversation) : il passe AU-DESSUS de la reponse
+       * du tour, que celle-ci soit vide, en cours d'ecriture ou deja terminee.
+       *
+       * Defaut mesure (conv-23, tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba, 2026-09-27) : le rangement
+       * differe ecrit son avis APRES la fin du tour, donc sous une reponse qui n'est plus vierge.
+       * `avantLaReponseEnCours` ne jouait pas, l'avis finissait DERNIER message de l'agent, et le
+       * champ pre-rempli comme le mode auto — qui lisent le dernier message de l'agent — perdaient la
+       * suite `AUTOWIN_PROMPT_V1` du tour. Chaine arretee sans un mot (saisie ts 1790525003939).
+       *
+       * Reserve aux avis de l'APP : une consigne de l'utilisateur garde la regle conv-544 ci-dessous
+       * (sous un brouillon deja lu).
+       */
+      auDessusDeLaReponseDuTour?: boolean
     }
   ): Conversation {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
@@ -884,8 +898,11 @@ export class ConversationStore {
       dernier.status === 'streaming' &&
       !dernier.content?.trim() &&
       !flattenChatParts(dernier.parts ?? []).trim()
+    // La reponse d'un tour porte son `turnId` des `beginTurn` : c'est ce qui la distingue d'un avis.
+    const reponseDuTourEnFin = dernier?.role === 'assistant' && Boolean(dernier.turnId)
     const rangReponseEnCours =
-      m.avantLaReponseEnCours === true && brouillonEnCoursEstVierge
+      (m.avantLaReponseEnCours === true && brouillonEnCoursEstVierge) ||
+      (m.auDessusDeLaReponseDuTour === true && reponseDuTourEnFin)
         ? conversation.messages.length - 1
         : -1
     const previous =

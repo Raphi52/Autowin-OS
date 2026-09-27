@@ -47,5 +47,9 @@ describe('rangement automatique au premier message', () => {
     const bloc = rangement.slice(0, rangement.indexOf('const runPilotChat'))
     expect(bloc).toContain('toujoursNonRangee: () =>')
     expect(bloc).toContain('avantLaReponseEnCours: true')
+    // conv-23 : ecrite APRES la fin du tour, l'annonce doit AUSSI passer au-dessus d'une reponse
+    // finie, sinon elle masque la suite proposee (effet joue dans
+    // store/conversations.avis-rangement-garde-la-suite.test.ts).
+    expect(bloc).toContain('auDessusDeLaReponseDuTour: true')
   })
 })

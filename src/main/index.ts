@@ -3122,12 +3122,15 @@ Le fil reprend ensuite normalement.`
         return Boolean(actuelle && !actuelle.projectPath?.trim() && !actuelle.categorie?.trim())
       },
       ranger: (chemin) => os.conversations.rangerDansDossier(conversationId, chemin),
-      // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse tant qu'elle est vierge.
+      // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse, vierge, en cours OU finie.
+      // Un rangement differe l'ecrit APRES la fin du tour : en fin de fil, elle masquait la suite
+      // proposee au champ pre-rempli et au mode auto (conv-23, tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba).
       annoncer: (message) =>
         os.conversations.append(conversationId, {
           role: 'assistant',
           content: message,
-          avantLaReponseEnCours: true
+          avantLaReponseEnCours: true,
+          auDessusDeLaReponseDuTour: true
         })
     })
     if (!applique) return
