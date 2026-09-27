@@ -300,7 +300,11 @@ export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
 function renvoiNoteTropGrande(nom: string, args: Record<string, unknown>, taille: number): string {
   const chemin = typeof args.path === 'string' ? args.path.trim().replace(/\\/g, '/') : ''
   const racine = amitelBrainRoot().replace(/\\/g, '/').replace(/\/+$/, '')
-  const fichier = chemin ? (chemin.startsWith(racine) ? chemin : `${racine}/${chemin}`) : ''
+  // Casse ignorée, comme `lecturesDirectesDuBrain` : `//GED2/RIG/…` est déjà sous `\\ged2\rig\…`.
+  const dejaSousLaRacine = cheminComparable(chemin)
+    .toLowerCase()
+    .startsWith(`${cheminComparable(racine).toLowerCase()}/`)
+  const fichier = chemin ? (dejaSousLaRacine ? chemin : `${racine}/${chemin}`) : ''
   return [
     `RÉSULTAT TROP GRAND POUR ARRIVER EN UNE FOIS : ${taille} caractères, au-delà des ` +
       `${PLAFOND_RESULTAT_OUTIL_CAR} qu'un outil peut transmettre dans la conversation.`,

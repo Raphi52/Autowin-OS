@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   NOM_SERVEUR_MCP,
   demarrerServeurOutilsNoeudSkill,
@@ -371,6 +371,66 @@ describe('taille des résultats — une note ouverte arrive entière et lisible'
     expect(texte).toMatch(/offset|Grep/)
     // La trace le dit aussi : la note n'est PAS arrivée entière.
     expect(vus[0]?.issue).toMatch(/trop grande/)
+  })
+
+  it('le bord est exact : 500 000 caractères passent ENTIERS, 500 001 sont renvoyés vers le fichier', async () => {
+    // Le seul test de dépassement portait sur 520 000 : un `>=` à la place du `>` passait inaperçu.
+    const lire = async (taille: number): Promise<string> => {
+      const rep = await traiterMessageMcp(
+        {
+          method: 'tools/call',
+          id: 24,
+          params: { name: 'brain_read', arguments: { path: 'knowledge/domain/bord.md' } }
+        },
+        lanceur(async () => ({
+          ok: true,
+          data: { found: true, status: 'found', knowledge: 'y'.repeat(taille) }
+        }))
+      )
+      return (rep.corps as { result: { content: Array<{ text: string }> } }).result.content[0]!.text
+    }
+    const auPlafond = await lire(500_000)
+    expect(auPlafond.length).toBe(500_000)
+    expect(auPlafond).toBe('y'.repeat(500_000))
+    const auDela = await lire(500_001)
+    expect(auDela).toContain('500001 caractères')
+    expect(auDela).toMatch(/knowledge\/domain\/bord\.md/)
+  })
+
+  it('un chemin absolu écrit dans une AUTRE casse que la racine n’est pas préfixé deux fois', async () => {
+    // Windows et le serveur du Brain ignorent la casse : `//GED2/RIG/…` désigne la même note que
+    // `\\ged2\rig\…`. Le renvoi ne doit pas fabriquer `//ged2/…/Amitel Brain///GED2/…`.
+    const renvoi = async (chemin: string): Promise<string> => {
+      const rep = await traiterMessageMcp(
+        {
+          method: 'tools/call',
+          id: 25,
+          params: { name: 'brain_read', arguments: { path: chemin } }
+        },
+        lanceur(async () => ({
+          ok: true,
+          data: { found: true, status: 'found', knowledge: 'z'.repeat(500_001) }
+        }))
+      )
+      return (rep.corps as { result: { content: Array<{ text: string }> } }).result.content[0]!.text
+    }
+    vi.stubEnv('AMITEL_BRAIN_ROOT', '\\\\ged2\\rig\\Projets IA\\Amitel Brain')
+    try {
+      for (const chemin of [
+        '//GED2/RIG/Projets IA/Amitel Brain/knowledge/domain/modele-ult.md',
+        '\\\\GED2\\rig\\projets ia\\amitel brain\\knowledge\\domain\\modele-ult.md'
+      ]) {
+        const texte = await renvoi(chemin)
+        expect(texte.match(/amitel brain/gi)).toHaveLength(1)
+        expect(texte).toContain(`${chemin.replace(/\\/g, '/')}.`)
+      }
+      // Un chemin RELATIF, lui, reçoit bien la racine une fois.
+      expect(await renvoi('knowledge/domain/modele-ult.md')).toContain(
+        '//ged2/rig/Projets IA/Amitel Brain/knowledge/domain/modele-ult.md.'
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('sans contenu (introuvable, panne), le résultat reste en JSON : le statut et la note se lisent', async () => {
