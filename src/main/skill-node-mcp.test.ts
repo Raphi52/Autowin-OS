@@ -6,6 +6,7 @@ import {
   schemaEntree,
   traiterMessageMcp,
   issueMetier,
+  lecturesDirectesDuBrain,
   libelleAppelObserve,
   porteLesOutilsNatifs,
   type AppelMcpObserve
@@ -350,6 +351,66 @@ describe('mesure de lecture — quelle note, combien de caractères', () => {
     expect(libelleAppelObserve(vus[0]!, 'think')).toBe(
       'outil natif brain_query (think) : ok — trouve · 5 car.'
     )
+  })
+
+  it('les lectures DIRECTES du Brain (Read, Grep) deviennent des lignes de trace', () => {
+    const racine = '//ged2/rig/Projets IA/Amitel Brain'
+    const lignes = lecturesDirectesDuBrain(
+      [
+        {
+          type: 'Read',
+          kind: 'inspection',
+          status: 'completed',
+          ok: true,
+          summary: 'Read',
+          path: '\\\\ged2\\rig\\Projets IA\\Amitel Brain\\knowledge\\domain\\guide-choix-ult.md',
+          outputChars: 18994
+        },
+        {
+          type: 'Grep',
+          kind: 'inspection',
+          status: 'completed',
+          ok: true,
+          summary: 'Grep',
+          searchPath: '\\\\ged2\\rig\\Projets IA\\Amitel Brain\\knowledge',
+          pattern: 'Ult_Heure',
+          outputChars: 300
+        },
+        // Hors du Brain, ou dans un dossier qui en PARTAGE seulement le début du nom : ignorés.
+        {
+          type: 'Read',
+          kind: 'inspection',
+          status: 'completed',
+          ok: true,
+          summary: '',
+          path: 'D:\\AutoWinOS\\src\\a.ts'
+        },
+        {
+          type: 'Read',
+          kind: 'inspection',
+          status: 'completed',
+          ok: true,
+          summary: '',
+          path: '\\\\ged2\\rig\\Projets IA\\Amitel Brain-copie\\knowledge\\x.md'
+        },
+        {
+          type: 'Edit',
+          kind: 'mutation',
+          status: 'completed',
+          ok: true,
+          summary: '',
+          path: '\\\\ged2\\rig\\Projets IA\\Amitel Brain\\x.md'
+        }
+      ],
+      racine,
+      'think'
+    )
+    expect(lignes).toEqual([
+      'lecture directe Read (think) : ok — knowledge/domain/guide-choix-ult.md · 18994 car.',
+      'recherche directe Grep (think) : ok — « Ult_Heure » · knowledge · 300 car.'
+    ])
+    expect(lecturesDirectesDuBrain(undefined, racine, 'think')).toEqual([])
+    expect(lecturesDirectesDuBrain([], '', 'think')).toEqual([])
   })
 
   it('le libellé historique reste inchangé quand rien n’est mesurable', () => {

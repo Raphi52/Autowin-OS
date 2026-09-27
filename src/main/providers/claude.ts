@@ -1519,6 +1519,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         name: string
         command: string
         filePath: string
+        /** Dossier et motif d'une recherche (Grep/Glob) : ce qu'elle a fouillé, pas un fichier touché. */
+        searchPath: string
+        pattern: string
         writtenLineFingerprints: string[]
         /** Heure de depart : la ligne de FIN d'action porte sa duree (frise C3 du bloc Actions). */
         startedAt: number
@@ -1762,10 +1765,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
             const filePath = String(part.input?.file_path ?? '')
             const command = String(part.input?.command ?? filePath)
+            const recherche = /^(Grep|Glob)$/i.test(part.name)
             pendingTools.set(part.id, {
               name: part.name,
               command,
               filePath,
+              searchPath: recherche ? String(part.input?.path ?? '') : '',
+              pattern: recherche ? String(part.input?.pattern ?? '') : '',
               writtenLineFingerprints: claudeWrittenLineFingerprints(part.input),
               startedAt: Date.now()
             })
@@ -1824,7 +1830,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             status: `${call.name} ${part.is_error ? 'échoué' : 'terminé'} - ${dureeOutil}`
           })
           // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
-          const output = claudeToolResultText(part.content).slice(-20_000)
+          const outputEntier = claudeToolResultText(part.content)
+          const output = outputEntier.slice(-20_000)
           collectArtifacts(part.content, call.name)
           const isFile = Boolean(call.filePath)
           executionEvidence.push({
@@ -1845,7 +1852,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               : call.command
                 ? { command: call.command }
                 : {}),
-            ...(output ? { stdout: output } : {})
+            ...(output ? { stdout: output, outputChars: outputEntier.length } : {}),
+            ...(call.searchPath ? { searchPath: call.searchPath } : {}),
+            ...(call.pattern ? { pattern: call.pattern } : {})
           })
         }
       } else if (t === 'result') {

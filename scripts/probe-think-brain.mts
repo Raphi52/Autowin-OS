@@ -31,7 +31,14 @@
  */
 import { spawn } from 'node:child_process'
 import { resolveClaudeBin } from '../src/main/providers/claude'
-import { demarrerServeurOutilsNoeudSkill, libelleAppelObserve } from '../src/main/skill-node-mcp'
+import {
+  demarrerServeurOutilsNoeudSkill,
+  lecturesDirectesDuBrain,
+  libelleAppelObserve
+} from '../src/main/skill-node-mcp'
+import type { ExecutionEvidence } from '../src/main/providers/types'
+import { claudeToolResultText } from '../src/main/providers/claude'
+import { amitelBrainRoot } from '../src/main/amitel-paths'
 import type { AppelMcpObserve } from '../src/main/skill-node-mcp'
 import { OUTILS_NOEUD_SKILL, promptOutilsNoeudSkill } from '../src/main/skill-node-tools'
 import type { LanceurCommandeSkill, SpecCommandeSkill } from '../src/main/skill-node-tools'
@@ -117,11 +124,23 @@ function lancerCli(args: string[]): Promise<{ code: number | null; sortie: strin
   })
 }
 
-/** Relève le texte final, le coût et les appels d'outils INTÉGRÉS dans le flux `stream-json`. */
-function lireFlux(sortie: string): { texte: string; cout: number; integres: string[] } {
+/**
+ * Relève le texte final, le coût et les appels d'outils INTÉGRÉS dans le flux `stream-json`, et
+ * rebâtit leurs preuves d'exécution avec les champs que pose `providers/claude.ts` (`path` d'un
+ * Read, `searchPath`/`pattern` d'une recherche, `outputChars`) : `lecturesDirectesDuBrain` les
+ * traduit alors exactement comme l'orchestrateur dans un vrai run.
+ */
+function lireFlux(sortie: string): {
+  texte: string
+  cout: number
+  integres: string[]
+  preuves: ExecutionEvidence[]
+} {
   let texte = ''
   let cout = Number.NaN
   const integres: string[] = []
+  const appelsEnCours = new Map<string, { nom: string; entree: Record<string, unknown> }>()
+  const preuves: ExecutionEvidence[] = []
   for (const ligne of sortie.split('\n')) {
     const brute = ligne.trim()
     if (!brute.startsWith('{')) continue
@@ -136,16 +155,35 @@ function lireFlux(sortie: string): { texte: string; cout: number; integres: stri
       cout = Number(ev.total_cost_usd)
     }
     const contenu = (ev.message as { content?: unknown } | undefined)?.content
+    if (ev.type === 'user' && Array.isArray(contenu)) {
+      for (const bloc of contenu as Array<Record<string, unknown>>) {
+        const appel = appelsEnCours.get(String(bloc.tool_use_id))
+        if (bloc.type !== 'tool_result' || !appel) continue
+        const recherche = /^(Grep|Glob)$/i.test(appel.nom)
+        preuves.push({
+          type: appel.nom,
+          kind: 'inspection',
+          status: bloc.is_error ? 'failed' : 'completed',
+          ok: bloc.is_error !== true,
+          summary: appel.nom,
+          ...(appel.entree.file_path ? { path: String(appel.entree.file_path) } : {}),
+          ...(recherche && appel.entree.path ? { searchPath: String(appel.entree.path) } : {}),
+          ...(recherche && appel.entree.pattern ? { pattern: String(appel.entree.pattern) } : {}),
+          outputChars: claudeToolResultText(bloc.content).length
+        })
+      }
+    }
     if (ev.type !== 'assistant' || !Array.isArray(contenu)) continue
     for (const bloc of contenu as Array<Record<string, unknown>>) {
       if (bloc.type !== 'tool_use' || String(bloc.name).startsWith('mcp__')) continue
       const entree = (bloc.input ?? {}) as Record<string, unknown>
+      appelsEnCours.set(String(bloc.id), { nom: String(bloc.name), entree })
       const cible = String(entree.file_path ?? entree.path ?? entree.pattern ?? entree.command ?? '')
       const motif = entree.pattern && (entree.path ?? entree.file_path) ? ` « ${String(entree.pattern)} »` : ''
       integres.push(`${String(bloc.name)} ${cible.split(/\s+/).join(' ').slice(0, 170)}${motif}`)
     }
   }
-  return { texte, cout, integres }
+  return { texte, cout, integres, preuves }
 }
 
 async function simuler(numero: number, t: Tache): Promise<void> {
@@ -191,7 +229,8 @@ async function simuler(numero: number, t: Tache): Promise<void> {
       'Glob',
       'Bash'
     ])
-    const { texte, cout, integres } = lireFlux(sortie)
+    const { texte, cout, integres, preuves } = lireFlux(sortie)
+    const traceDirecte = lecturesDirectesDuBrain(preuves, amitelBrainRoot(), 'think')
     const lectures = appels.filter((a) => a.outil === 'brain_read')
     const accesNotes = integres.filter((u) => /knowledge[\\/]/i.test(u))
     const ouverteMcp = t.attendue ? lectures.some((a) => a.cible?.includes(t.attendue!)) : null
@@ -204,7 +243,9 @@ async function simuler(numero: number, t: Tache): Promise<void> {
         (t.attendue ? ` · note attendue au rang ${rang || 'ABSENTE'}` : '')
     )
     for (const a of appels) console.log(`  ${libelleAppelObserve(a, 'think')}`)
-    for (const u of integres) console.log(`  outil intégré ${u}`)
+    // Les lignes que l'orchestrateur écrit désormais pour les lectures directes du Brain.
+    for (const ligne of traceDirecte) console.log(`  ${ligne}`)
+    for (const u of integres) console.log(`  (outil intégré ${u})`)
     console.log(
       `brain_query ${appels.filter((a) => a.outil === 'brain_query').length}` +
         ` · brain_read ${lectures.length} (${caracteres} car., hors liste ${horsListe})` +

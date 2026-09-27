@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { OUTILS_NOEUD_SKILL, type LanceurCommandeSkill } from './skill-node-tools'
+import type { ExecutionEvidence } from './providers/types'
 
 /**
  * Les outils d'un noeud SKILL, servis sur le canal NATIF du provider.
@@ -148,6 +149,56 @@ export function mesureAppel(
  * Le libellé de trace d'un appel natif : `outil natif <nom> (<phase>) : <état>[ — issue · cible · N car.]`.
  * Le préfixe est inchangé : `scripts/cdp-skill-node-brain-proof.mjs` le filtre par `startsWith`.
  */
+/** Chemin comparable : séparateurs unifiés et répétitions écrasées (`\\ged2\x` ≡ `//ged2/x`). */
+function cheminComparable(chemin: string): string {
+  return chemin.replace(/[\\/]+/g, '/').replace(/\/$/, '')
+}
+
+/**
+ * Les lectures DIRECTES du Brain d'une phase — `Read` d'une note, `Grep`/`Glob` sous sa racine —
+ * rendues en lignes de trace, à côté de celles des outils natifs (`libelleAppelObserve`).
+ *
+ * Mesure du 2026-09-27 (`scripts/probe-think-brain.mts`, 5 tâches réelles) : un nœud `think` ouvre
+ * les notes par `brain_read` MAIS AUSSI en lisant le fichier sous la racine du Brain, comme
+ * `consigneCandidatesBrain` l'y autorise. Sur la tâche « heure dans une OPE RIG », la note qui
+ * répondait n'a été lue QUE par `Read` : la trace « outil natif » n'en montrait rien.
+ */
+export function lecturesDirectesDuBrain(
+  preuves: readonly ExecutionEvidence[] | undefined,
+  racineBrain: string,
+  phase: string
+): string[] {
+  const racine = cheminComparable(racineBrain.trim())
+  if (!racine || !preuves?.length) return []
+  const sousLaRacine = (chemin: string | undefined): string | undefined => {
+    if (!chemin) return undefined
+    const comparable = cheminComparable(chemin)
+    if (comparable.toLowerCase() === racine.toLowerCase()) return '.'
+    // Le séparateur final est exigé : `Amitel Brain-copie` ne passe pas pour `Amitel Brain`.
+    if (!comparable.toLowerCase().startsWith(`${racine.toLowerCase()}/`)) return undefined
+    return comparable.slice(racine.length + 1)
+  }
+  const lignes: string[] = []
+  for (const preuve of preuves) {
+    const etat = preuve.ok ? 'ok' : 'echec'
+    const taille = preuve.outputChars ?? preuve.stdout?.length
+    const car = taille !== undefined ? ` · ${taille} car.` : ''
+    if (/^Read$/i.test(preuve.type)) {
+      const note = sousLaRacine(preuve.path)
+      if (note) lignes.push(`lecture directe Read (${phase}) : ${etat} — ${note}${car}`)
+    } else if (/^(Grep|Glob)$/i.test(preuve.type)) {
+      const dossier = sousLaRacine(preuve.searchPath)
+      if (dossier) {
+        const motif = preuve.pattern ? `« ${preuve.pattern} » · ` : ''
+        lignes.push(
+          `recherche directe ${preuve.type} (${phase}) : ${etat} — ${motif}${dossier}${car}`
+        )
+      }
+    }
+  }
+  return lignes
+}
+
 export function libelleAppelObserve(appel: AppelMcpObserve, phase: string): string {
   const etat = appel.refuse ? 'refuse' : appel.ok ? 'ok' : 'echec'
   const suite = [

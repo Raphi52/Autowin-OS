@@ -425,10 +425,12 @@ import {
 } from './skill-node-tools'
 import {
   demarrerServeurOutilsNoeudSkill,
+  lecturesDirectesDuBrain,
   libelleAppelObserve,
   porteLesOutilsNatifs,
   type ServeurOutilsNoeudSkill
 } from './skill-node-mcp'
+import { amitelBrainRoot } from './amitel-paths'
 import { protegerRappel } from './observabilite-non-bloquante'
 
 function canonicalCausalPath(root: string, path: string): string {
@@ -4638,6 +4640,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         execution
       })
       aggregatedEvidence.push(...(phaseRes.executionEvidence ?? []))
+      // Lectures DIRECTES du Brain (Read d'une note, Grep sous sa racine) : sans ces lignes, la trace
+      // ne montrait que les `brain_read` et taisait les notes lues comme fichiers (mesure 2026-09-27).
+      for (const detail of lecturesDirectesDuBrain(
+        phaseRes.executionEvidence,
+        amitelBrainRoot(),
+        phase
+      )) {
+        push({ step: 'exec', role: 'subagent', detail })
+      }
       lastExecText = phaseRes.text
       lastUsage = phaseRes.usage
       /**
