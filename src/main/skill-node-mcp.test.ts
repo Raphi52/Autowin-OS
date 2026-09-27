@@ -6,6 +6,7 @@ import {
   schemaEntree,
   traiterMessageMcp,
   issueMetier,
+  libelleAppelObserve,
   porteLesOutilsNatifs,
   type AppelMcpObserve
 } from './skill-node-mcp'
@@ -310,6 +311,54 @@ describe('issue métier — anti faux-vert dans la trace', () => {
     )
     expect(vus[0]?.ok).toBe(true)
     expect(vus[0]?.issue).toContain('RIEN ECRIT')
+  })
+})
+
+describe('mesure de lecture — quelle note, combien de caractères', () => {
+  it('brain_read remonte la note ouverte et la longueur rendue jusqu’à la trace', async () => {
+    const vus: AppelMcpObserve[] = []
+    await traiterMessageMcp(
+      {
+        method: 'tools/call',
+        id: 11,
+        params: { name: 'brain_read', arguments: { path: ' knowledge/domain/a.md ' } }
+      },
+      lanceur(async () => ({
+        ok: true,
+        data: { found: true, status: 'found', knowledge: 'x'.repeat(18994) }
+      })),
+      (a) => vus.push(a)
+    )
+    expect(vus[0]).toMatchObject({ cible: 'knowledge/domain/a.md', caracteres: 18994 })
+    expect(libelleAppelObserve(vus[0]!, 'think')).toBe(
+      'outil natif brain_read (think) : ok — trouve · knowledge/domain/a.md · 18994 car.'
+    )
+  })
+
+  it('brain_query mesure la longueur de la liste rendue, sans cible', async () => {
+    const vus: AppelMcpObserve[] = []
+    await traiterMessageMcp(
+      {
+        method: 'tools/call',
+        id: 12,
+        params: { name: 'brain_query', arguments: { question: 'q' } }
+      },
+      lanceur(async () => ({ ok: true, data: { found: true, knowledge: 'liste' } })),
+      (a) => vus.push(a)
+    )
+    expect(vus[0]?.cible).toBeUndefined()
+    expect(libelleAppelObserve(vus[0]!, 'think')).toBe(
+      'outil natif brain_query (think) : ok — trouve · 5 car.'
+    )
+  })
+
+  it('le libellé historique reste inchangé quand rien n’est mesurable', () => {
+    expect(libelleAppelObserve({ outil: 'remember', refuse: false, ok: true }, 'learn')).toBe(
+      'outil natif remember (learn) : ok'
+    )
+    expect(libelleAppelObserve({ outil: 'orchestrate', refuse: true, ok: false }, 'think')).toBe(
+      'outil natif orchestrate (think) : refuse'
+    )
   })
 })
 

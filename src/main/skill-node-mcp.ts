@@ -94,6 +94,14 @@ export interface AppelMcpObserve {
    * quand rien n'a ete ni ecrit ni lu est un faux vert dans l'artefact meme qui sert de preuve.
    */
   issue?: string
+  /**
+   * La note OUVERTE par `brain_read` (son argument `path`). Sans elle, la trace disait seulement
+   * « brain_read : ok — trouve » : impossible de savoir QUELLES notes un nœud `think` lit, ni de
+   * comparer ce choix à la liste de candidates qu'il avait reçue (constat du 2026-09-27).
+   */
+  cible?: string
+  /** Longueur du texte (`knowledge`) rendu au nœud : ce qu'il a réellement reçu, pas ce qu'il cite. */
+  caracteres?: number
   erreur?: string
 }
 
@@ -114,6 +122,40 @@ export function issueMetier(donnees: unknown): string | undefined {
   if (d.found === true) return 'trouve'
   if (typeof d.status === 'string' && d.status !== 'ok') return `statut ${d.status}`
   return undefined
+}
+
+/**
+ * Ce qu'un appel a LU : la note ouverte (`brain_read` seulement) et la longueur du texte rendu.
+ * Même prudence que `issueMetier` : on ne mesure que les champs observés (`path`, `knowledge`).
+ */
+export function mesureAppel(
+  nom: string,
+  args: Record<string, unknown>,
+  donnees: unknown
+): Pick<AppelMcpObserve, 'cible' | 'caracteres'> {
+  const mesure: Pick<AppelMcpObserve, 'cible' | 'caracteres'> = {}
+  if (nom === 'brain_read' && typeof args.path === 'string' && args.path.trim()) {
+    mesure.cible = args.path.trim()
+  }
+  if (donnees && typeof donnees === 'object' && !Array.isArray(donnees)) {
+    const texte = (donnees as Record<string, unknown>).knowledge
+    if (typeof texte === 'string') mesure.caracteres = texte.length
+  }
+  return mesure
+}
+
+/**
+ * Le libellé de trace d'un appel natif : `outil natif <nom> (<phase>) : <état>[ — issue · cible · N car.]`.
+ * Le préfixe est inchangé : `scripts/cdp-skill-node-brain-proof.mjs` le filtre par `startsWith`.
+ */
+export function libelleAppelObserve(appel: AppelMcpObserve, phase: string): string {
+  const etat = appel.refuse ? 'refuse' : appel.ok ? 'ok' : 'echec'
+  const suite = [
+    appel.issue,
+    appel.cible,
+    appel.caracteres !== undefined ? `${appel.caracteres} car.` : undefined
+  ].filter((part): part is string => Boolean(part))
+  return `outil natif ${appel.outil} (${phase}) : ${etat}${suite.length ? ` — ${suite.join(' · ')}` : ''}`
 }
 
 /**
@@ -248,6 +290,7 @@ export async function traiterMessageMcp(
           refuse: false,
           ok: resultat.ok,
           ...(issue ? { issue } : {}),
+          ...mesureAppel(nom, args, resultat.data),
           ...(resultat.error ? { erreur: resultat.error } : {})
         })
         return repondre({

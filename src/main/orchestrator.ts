@@ -425,6 +425,7 @@ import {
 } from './skill-node-tools'
 import {
   demarrerServeurOutilsNoeudSkill,
+  libelleAppelObserve,
   porteLesOutilsNatifs,
   type ServeurOutilsNoeudSkill
 } from './skill-node-mcp'
@@ -4381,11 +4382,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                  * L'ISSUE METIER est dite, pas seulement le transport. Mesure du 2026-08-20 sur
                  * conv-1346 : cette ligne affichait `remember : ok` pendant que le Brain refusait
                  * l'ecriture (`stored: false`). Un artefact de preuve qui annonce « ok » sur un
-                 * no-op est pire qu'une absence de trace.
+                 * no-op est pire qu'une absence de trace. Depuis le 2026-09-27, la ligne porte aussi
+                 * la note ouverte et la longueur lue (`libelleAppelObserve`).
                  */
-                detail: `outil natif ${appel.outil} (${phase}) : ${
-                  appel.refuse ? 'refuse' : appel.ok ? 'ok' : 'echec'
-                }${appel.issue ? ` — ${appel.issue}` : ''}`
+                detail: libelleAppelObserve(appel, phase)
               })
           })
           push({
