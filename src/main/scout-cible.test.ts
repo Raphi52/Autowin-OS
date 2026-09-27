@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { enteteCibleManquante, lireCibleScout, sortieScoutAvecCible } from './scout-cible'
-import { porterSortieDePhase } from './phase-carry'
 
 const TABLEAU = `## Constats\n| # | Score | Type | What |\n| 1 | 82 | fix | corriger X |\n| 2 | 40 | fix | corriger Y |`
 
@@ -34,7 +33,7 @@ describe('cible engagée par un scout', () => {
     expect(sortieScoutAvecCible(texte)).toBe(texte)
   })
 
-  it('la cible SURVIT au portage vers la phase suivante', () => {
+  it('la cible reste lisible dans une sortie longue, désormais portée entière', () => {
     const gros = `## Cible
 ligne 1 — corriger X
 
@@ -43,8 +42,6 @@ ${'détail. '.repeat(200)}
 
 ## Défauts
 ${'reste. '.repeat(200)}`
-    const porte = porterSortieDePhase(gros, 2000)
-    expect(porte.texte.length).toBeLessThanOrEqual(2000)
-    expect(lireCibleScout(porte.texte)).toContain('ligne 1')
+    expect(lireCibleScout(gros)).toContain('ligne 1')
   })
 })

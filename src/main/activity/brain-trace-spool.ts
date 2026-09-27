@@ -116,7 +116,8 @@ export interface BrainTrace {
    * l'Observatory présentait une chronologie Brain incomplète en la donnant pour complète.
    *  - `automatic`  : contexte préchargé au démarrage d'un run ;
    *  - `query`      : commande `brain_query` explicite du modèle ;
-   *  - `empreinte`  : chargement de l'empreinte du dépôt (skill `think`), 1×/run ;
+   *  - `empreinte`  : ancien chargement de l'empreinte du dépôt, 1×/run — RETIRÉ le 2026-09-27,
+   *    la valeur reste pour lire les traces historiques ;
    *  - `recherche`  : recherche lancée par l'HUMAIN depuis la vue Knowledge ;
    *  - `depot`      : ÉCRITURE — dépôt d'un fait en `inbox/` par la commande `remember`.
    *  - `pousse`     : contexte Brain poussé dans le prompt d'un tour de chat, HORS run (arrivée le

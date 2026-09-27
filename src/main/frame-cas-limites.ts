@@ -123,8 +123,8 @@ export function enteteCasLimitesManquants(texte: string): string | undefined {
 
 /**
  * La sortie de `frame` telle qu'elle doit etre ENREGISTREE et portee a la suite.
- * Inchangee quand les cas limites sont la. Sinon le refus est mis en TETE : le seul endroit qui
- * survit a la projection de `phase-carry.ts` ET a la troncature.
+ * Inchangee quand les cas limites sont la. Sinon le refus est mis en TETE, la ou la phase suivante
+ * le lit en premier (la sortie ne lui est plus tronquee depuis le 2026-09-27).
  */
 /** Vrai quand une sortie de `frame` ENREGISTREE porte en tete le refus des cas limites. */
 export function cadrageRefuse(texte: string): boolean {

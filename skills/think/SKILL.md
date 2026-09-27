@@ -42,9 +42,17 @@ filtre qui empêche `think` de devenir un déballage.
 
 ### 2. Va chercher, aux deux sources
 
-- **La mémoire durable** (`brain_query`) — pour les décisions, les motifs et les pièges. Une seule
-  question ne couvre pas un domaine : si le retour est maigre, re-questionne sur un angle précis
-  plutôt que de conclure au vide.
+- **La mémoire durable** — pour les décisions, les motifs et les pièges. `brain_query` ne rend PAS
+  de savoir : il rend la LISTE des notes candidates, classées par pertinence (titre, chemin,
+  taille). C'est à toi de juger lesquelles servent la tâche, puis de les ouvrir **en entier** avec
+  `brain_read` — autant qu'il en faut, sans plafond de taille ni de nombre. Une note qu'on n'ouvre
+  pas ne coûte rien ; une note ouverte arrive complète, jamais coupée. La taille affichée te dit ce
+  que coûte l'ouverture : une note de plusieurs centaines de Ko ne s'ouvre que si elle est vraiment
+  la réponse. Une seule question ne couvre pas un domaine : si la liste ne contient rien d'utile,
+  re-questionne sur un angle précis plutôt que de conclure au vide.
+  Pourquoi ce n'est pas le serveur qui choisit : mesuré le 2026-09-27, son seuil de ressemblance
+  laisse passer 319 à 1247 notes sur 1300 par question, et la bonne note n'est première que 15 fois
+  sur 24. Seul un lecteur sait ce qui est nécessaire.
 - **Le code lui-même** — pour l'état ACTUEL. La mémoire dit où regarder et pourquoi ; elle ne dit pas
   ce que le fichier contient aujourd'hui.
 
@@ -82,22 +90,12 @@ préférence de mise en page :
 ## Trous           ce que tu n'as PAS trouvé
 ```
 
-**Pourquoi ces titres et pas d'autres.** Ta sortie ne parvient pas telle quelle à l'étape suivante :
-elle passe par un portage BORNÉ (2000 caractères). Ce portage reconnaît certains titres et transmet
-ces sections ENTIÈRES, dans l'ordre, en NOMMANT celles qui n'ont pas tenu. Les cinq premiers
-ci-dessus en font partie. Sans titres reconnus, le portage retombe sur un repli qui garde les deux
-bords et jette le MILIEU — or un briefing n'a pas de conclusion à sauver : sa substance est partout.
-Un briefing sans ces titres arrive donc ampute en silence, et personne ne le sait.
-
-**L'ORDRE est un ordre de PRIORITÉ, pas une mise en page.** Le portage empile les sections dans
-l'ordre du texte jusqu'à la borne : ce qui est écrit en dernier est ce qui saute. Mets donc en tête
-ce dont CETTE tâche a le plus besoin — l'ordre ci-dessus est un défaut raisonnable, pas une règle.
-Vérifié par mesure : sur un briefing de 5000 caractères, la troisième section était déjà omise.
-
-Corollaire sur le VOLUME : le total utile vise la borne. Au-delà, tu n'écris pas pour l'étape
-suivante — tu écris pour rien.
-`## Trous` n'est pas un titre reconnu : place-le en dernier, en sachant qu'il sera le premier omis,
-et qu'il sera alors nommé comme absent plutôt que coupé.
+**Ta sortie arrive ENTIÈRE à l'étape suivante.** Jusqu'au 2026-09-27, elle passait par un portage
+borné à 2 000 caractères, qui imposait d'écrire court et dans un ordre de survie. Ce portage n'existe
+plus. Règle de l'utilisateur : pas de budget, on récupère le nécessaire. Écris donc ce que l'étape
+suivante doit savoir, ni coupé pour tenir, ni délayé pour remplir. Les titres ci-dessus restent,
+parce qu'ils permettent à l'étape suivante de trouver d'un coup d'œil ce qu'elle cherche. Mets en
+tête ce dont CETTE tâche a le plus besoin : l'ordre ci-dessus est un défaut raisonnable, pas une règle.
 
 Chaque affirmation garde son ancrage. Sans lui, l'étape suivante ne peut pas vérifier, et le doute la
 fera tout relire — le coût que `think` existait pour éviter.

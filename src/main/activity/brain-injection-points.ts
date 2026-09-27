@@ -68,23 +68,12 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
       }
     ],
     trace: { file: 'src/main/orchestrator.ts', anchor: 'onBrainRetrieved?.({' },
-    pourquoi: 'Savoir curé injecté en tête de contexte de chaque phase du run.'
+    pourquoi:
+      "Liste des notes candidates (titre, chemin, taille) injectée en tête de contexte de chaque phase du run ; chaque phase ouvre en entier celles qu'elle juge nécessaires."
   },
-  {
-    id: 'orchestration-empreinte-depot',
-    label: 'Run · empreinte du dépôt (skill think)',
-    kind: 'empreinte',
-    injecte: true,
-    emission: 'spool',
-    sites: [
-      {
-        file: 'src/main/orchestrator.ts',
-        anchor: 'const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)('
-      }
-    ],
-    trace: { file: 'src/main/orchestrator.ts', anchor: "kind: 'empreinte'" },
-    pourquoi: "Chargée à CHAQUE run et injectée en tête de contexte : une seconde injection Brain, invisible tant qu'elle n'était pas tracée."
-  },
+  // `orchestration-empreinte-depot` RETIRÉ le 2026-09-27 : sa question figée ramenait les mêmes
+  // notes hors sujet à chaque run. Ses traces historiques (kind `empreinte`) restent lisibles, mais
+  // ne se rattachent plus à aucun point vivant — elles comptent parmi les traces non rattachées.
   {
     id: 'command-brain-query',
     label: 'Commande · brain_query',
@@ -94,7 +83,7 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     sites: [
       {
         file: 'src/main/commands.ts',
-        anchor: ': await this.retrieveBrain(decision.query, { corpus })'
+        anchor: "await this.retrieveBrain(decision.query, { corpus, mode: 'candidates' })"
       }
     ],
     trace: { file: 'src/main/commands.ts', anchor: "kind: 'query'" },
