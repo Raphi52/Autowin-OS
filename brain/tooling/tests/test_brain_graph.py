@@ -112,6 +112,37 @@ class EntityGraphTests(unittest.TestCase):
             Handler._handle_read(handler, json.dumps({"path": escape}).encode())
             self.assertIn(handler.sent[0], {400, 404}, escape)
 
+    def test_read_opens_every_note_the_candidate_list_can_name(self):
+        """Mesuré le 2026-09-27 (sonde think, tâche 4) : la liste de candidates proposait
+        `projects/rig-tv/obsidian/decisions/testviewer-responsive.md` — une racine INDEXÉE — et
+        `/read` la refusait (« path must name a note under knowledge/ »). Ce que la liste nomme doit
+        pouvoir s'ouvrir ; ce qu'elle ne peut pas nommer (inbox/, hors racine) reste fermé."""
+        obsidian = self.root / "projects" / "rig-demo" / "obsidian" / "decisions"
+        obsidian.mkdir(parents=True)
+        (obsidian / "Responsive.md").write_text("# R\nNOTE-PROJET", encoding="utf-8")
+        (self.root / "inbox" / "draft.md").write_text("brouillon", encoding="utf-8")
+        handler = FakeHandler(self.root)
+        handler.allowed_roots = [
+            (self.root / "knowledge").resolve(),
+            (self.root / "projects" / "rig-demo" / "obsidian").resolve(),
+        ]
+        Handler._handle_read(
+            handler,
+            json.dumps({"path": "projects/rig-demo/obsidian/decisions/Responsive.md", "entier": True}).encode(),
+        )
+        self.assertEqual(handler.sent[0], 200)
+        self.assertIn("NOTE-PROJET", verified_context(handler.sent[1], "t"))
+        Handler._handle_read(handler, json.dumps({"path": "knowledge/domain/a.md"}).encode())
+        self.assertEqual(handler.sent[0], 200)
+        for ferme in (
+            "inbox/draft.md",
+            "projects/rig-demo/graphify-out/graph.json",
+            "projects/rig-demo/obsidian/../../../secret.md",
+            "projects/autre/obsidian/x.md",
+        ):
+            Handler._handle_read(handler, json.dumps({"path": ferme}).encode())
+            self.assertIn(handler.sent[0], {400, 404}, ferme)
+
     def test_read_returns_the_whole_note_and_graph_stays_bounded(self):
         big = self.root / "knowledge" / "domain" / "big.md"
         big.write_text("x" * 10_000 + "".join(f"[[n{i}]]" for i in range(300)) + "FIN-DE-NOTE",

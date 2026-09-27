@@ -451,27 +451,43 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, signed_context_payload(text[:MAX_CONTEXT_CHARS], self.token))
 
     def _handle_read(self, body):
-        """POST /read — relire UNE note curee, confinee a knowledge/ (jamais inbox/ ni ailleurs)."""
+        """POST /read — relire UNE note curee, confinee aux racines INDEXEES (jamais inbox/ ni ailleurs).
+
+        Les racines sont celles que sert la liste de candidates (`allowed_roots`, lues dans le
+        manifeste de l'index et deja passees par `_acceptable_root` : ni inbox/, ni remontee, ni
+        jonction detournee). Mesure du 2026-09-27 : `/read` etait fige sur `knowledge/`, alors que la
+        liste proposait aussi `projects/*/obsidian/...` — une note nommee par la liste etait refusee
+        a l'ouverture. Meme defaut que `render_hits` le 2026-08-04 (brain_context.py), cote lecture.
+        """
+        brain = Path(self.brain_root).resolve()
+        roots = [Path(item).resolve() for item in (getattr(self, "allowed_roots", None) or [])]
+        roots = roots or [brain / "knowledge"]
         try:
             payload = json.loads(body)
             relative = _normalized_knowledge_path(str(payload.get("path", "")))
             parts = relative.split("/")
-            if (
-                not relative.startswith("knowledge/") or not relative.endswith(".md")
-                or any(part in {"", ".", ".."} for part in parts)
-            ):
-                raise ValueError("path must name a note under knowledge/")
+            if not relative.endswith(".md") or any(part in {"", ".", ".."} for part in parts):
+                raise ValueError("path must name a note under an indexed root")
+            # La racine qui PREFIXE le chemin demande ; aucune autre n'est parcourue.
+            root = next(
+                (
+                    candidate for candidate in roots
+                    if relative.startswith(candidate.relative_to(brain).as_posix().lower() + "/")
+                ),
+                None,
+            )
+            if root is None:
+                raise ValueError("path must name a note under an indexed root")
             corpus = _validated_corpus(payload.get("corpus"))
             if not _path_in_corpus(relative, corpus):
                 raise ValueError("path is outside the requested corpus")
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self._json(400, {"error": str(exc)})
             return
-        root = (Path(self.brain_root) / "knowledge").resolve()
         # Le chemin est normalise en minuscules : on retrouve le fichier reel sans suivre de lien sortant.
         target = next(
             (path for path in root.rglob("*.md")
-             if path.relative_to(root.parent).as_posix().lower() == relative),
+             if path.relative_to(brain).as_posix().lower() == relative),
             None,
         )
         if target is None or root not in target.resolve().parents:
