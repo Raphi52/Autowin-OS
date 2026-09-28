@@ -794,8 +794,8 @@ export function claudeTransportEnvelope(
 function basesNonProdDeclarees(): string[] {
   try {
     return chargerAutoriteProd(autowinAppDataRoot())
-      .autorite.entrees.filter((e) => e.nature === 'base' && e.classe === 'non-prod')
-      .map((e) => e.nom)
+      .autorite.entrees.filter((e) => (e.nature === 'base' || e.nature === 'serveur') && e.classe === 'non-prod')
+      .map((e) => (e.nature === 'serveur' ? `serveur:${e.nom}` : e.nom))
   } catch {
     return []
   }

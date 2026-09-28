@@ -220,6 +220,18 @@ export function refusSqlAgent(ligne: string, basesNonProd: readonly string[]): s
   }
   const nom = (base ?? '').replace(/^\[|\]$/g, '').trim().toLowerCase()
   if (nom && basesNonProd.some((b) => String(b).trim().toLowerCase() === nom)) return undefined
+  // Serveur déclaré non-prod (entrée `nature: serveur`, transmise préfixée `serveur:`) : toutes ses
+  // bases le sont. Avant, seul `-d` comptait — conv-106, tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf :
+  // un SELECT vers RIG_DEV sur SQL-DEV\DEV refusé alors que le serveur entier est de dev.
+  let serveur: string | undefined
+  for (let i = 0; i < jetons.length - 1; i++) {
+    if (['-s', '/s', '-serverinstance'].includes(jetons[i].toLowerCase())) {
+      serveur = jetons[i + 1]
+      break
+    }
+  }
+  const nomServeur = (serveur ?? '').replace(/^tcp:/i, '').split(',')[0].trim().toLowerCase()
+  if (nomServeur && basesNonProd.some((b) => String(b).trim().toLowerCase() === 'serveur:' + nomServeur)) return undefined
   return (
     `${client} vers la base « ${nom || 'inconnue'} » refusé : elle n'est pas déclarée non-prod, ` +
     `donc traitée comme de la production. Un agent ne touche pas la prod depuis son terminal ; ` +

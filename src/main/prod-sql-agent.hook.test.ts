@@ -81,4 +81,10 @@ describe('hook des agents — SQL vers la production', () => {
       /scriptHookGardes\(refusReglageProd, refusSqlAgent, /
     )
   })
+  it('laisse passer un serveur déclaré non-prod (conv-106, tour 41d5a982)', () => {
+    const ligne = 'sqlcmd -S SQL-DEV\DEV -d RIG_DEV -Q "select 1"'
+    expect(garde.refusSqlAgent(ligne, ['serveur:SQL-DEV\DEV'])).toBeUndefined()
+    expect(garde.refusSqlAgent(ligne, [])).toMatch(/refusé/)
+    expect(garde.refusSqlAgent('sqlcmd -S SQL-PROD\PROD -d RIG_DEV -Q "select 1"', ['serveur:SQL-DEV\DEV'])).toMatch(/refusé/)
+  })
 })
