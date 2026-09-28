@@ -196,6 +196,7 @@ export class PorteProd {
     const cible: Cible = { nature: geste.nature, nom: geste.nom }
     const verdict = classerCible(cible, this.ports.autorite())
     if (!verdict.estBloquant) return { autorise: true }
+    // fix-ok: la porte ne classait que la base (nature 'base'), une déclaration 'serveur' non-prod n'y comptait jamais — mesuré : sql-read-command.porte-prod-serveur.test.ts rouge sans ce bloc (exit 1, 1/5), vert avec (tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf)
     if (verdict.classe === 'inconnu' && geste.serveur) {
       const serveur: Cible = { nature: 'serveur', nom: geste.serveur }
       if (!classerCible(serveur, this.ports.autorite()).estBloquant) return { autorise: true }

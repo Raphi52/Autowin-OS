@@ -113,6 +113,7 @@ export async function runSqlRead(
   // LE POINT DE PASSAGE EST ICI, DANS LA FONCTION, et pas chez l'appelant : un garde placé sur le
   // site d'appel se contourne en ajoutant un second appelant. La base retenue est celle de la
   // DÉCISION, jamais l'argument brut du modèle — celui-ci a pu être normalisé ou refusé entre-temps.
+  // fix-ok: runSqlRead ne transmettait que decision.database à la porte, jamais decision.server — donc SQL-DEV\DEV déclaré non-prod restait refusé ; mesuré rouge (exit 1) puis vert par sql-read-command.porte-prod-serveur.test.ts (tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf)
   if (deps.porteProd) {
     const verdict = deps.porteProd.verifier({
       nature: 'base',
