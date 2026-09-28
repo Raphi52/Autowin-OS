@@ -486,6 +486,12 @@
   color: var(--text, #e6e9ee);
   border-color: var(--danger, #e6635b);
 }
+/* Survol de « Arrêter » : teinte rouge légère. Sans cette règle, le survol de « Lancer » (or plein)
+   s'appliquait aussi, texte clair sur or — vu sur la capture réelle du 2026-09-28, juste après le
+   clic, la souris étant restée sur le bouton. */
+.sc-lancement-bouton.is-on:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger, #e6635b) 22%, transparent);
+}
 .sc-lancement-commande {
   min-width: 0;
   overflow: hidden;
