@@ -768,3 +768,152 @@ describe('etapesGit', () => {
     expect(etapesGit({ branch: 'main', ahead: 0, behind: 0, changes: [] })).toEqual([])
   })
 })
+
+describe('SourceControlPane — relecture ligne à ligne envoyée à l’agent', () => {
+  const DIFF_REL = 'diff --git a/x b/x\n@@ -5,2 +5,2 @@\n garde()\n-ancien()\n+nouveau()'
+  const par = (id: string): HTMLElement | null =>
+    container.querySelector(`[data-testid="${id}"]`) as HTMLElement | null
+
+  async function ouvrirPremierDiff(): Promise<void> {
+    await act(async () => {
+      ;(par('sc-file') as HTMLDivElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+  function commenterDerniereLigne(texte: string): void {
+    const boutons = container.querySelectorAll<HTMLButtonElement>('[data-testid="diff-commenter"]')
+    act(() => boutons[boutons.length - 1].click())
+    const zone = par('diff-editeur-texte') as HTMLTextAreaElement
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+        zone,
+        texte
+      )
+      zone.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => (par('diff-editeur-ajouter') as HTMLButtonElement).click())
+  }
+
+  it('un commentaire posé apparaît dans la barre ; « Envoyer » part en UN message fichier:ligne + texte cité', async () => {
+    mockApi(GIT, DIFF_REL)
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    expect(par('sc-relecture')).toBeNull()
+    await ouvrirPremierDiff()
+    commenterDerniereLigne('renomme en nouveauNom()')
+    expect(par('sc-relecture')?.textContent).toContain('1 commentaire sur 1 fichier')
+    expect(par('diff-comment')?.textContent).toContain('renomme en nouveauNom()')
+    expect(onSendPrompt).not.toHaveBeenCalled()
+    act(() => (par('sc-relecture-envoyer') as HTMLButtonElement).click())
+    expect(onSendPrompt).toHaveBeenCalledTimes(1)
+    const message = String(onSendPrompt.mock.calls[0][0])
+    expect(message).toContain('1. src/main/index.ts:6\n')
+    expect(message).toContain('+nouveau()    ⟵ ici')
+    expect(message).toContain('Commentaire : renomme en nouveauNom()')
+    // Le lot envoyé quitte le brouillon, mais reste récupérable si l'agent n'a rien reçu.
+    expect(par('sc-relecture')).toBeNull()
+    act(() => (par('sc-relecture-remettre') as HTMLButtonElement).click())
+    expect(par('sc-relecture')?.textContent).toContain('1 commentaire')
+  })
+
+  it('la relecture survit au démontage du panneau (changement d’onglet) et reste propre à SA conversation', async () => {
+    mockApi(GIT, DIFF_REL)
+    await render(vi.fn(), 'conv-a')
+    await ouvrirPremierDiff()
+    commenterDerniereLigne('à revoir')
+    act(() => root.unmount())
+    root = createRoot(container)
+    await render(vi.fn(), 'conv-a')
+    expect(par('sc-relecture')?.textContent).toContain('1 commentaire')
+    await render(vi.fn(), 'conv-b')
+    expect(par('sc-relecture')).toBeNull()
+  })
+
+  it('« Tout effacer » demande un second clic avant de perdre les commentaires', async () => {
+    mockApi(GIT, DIFF_REL)
+    await render(vi.fn())
+    await ouvrirPremierDiff()
+    commenterDerniereLigne('x')
+    const effacer = (): HTMLButtonElement => par('sc-relecture-effacer') as HTMLButtonElement
+    act(() => effacer().click())
+    expect(par('sc-relecture')).not.toBeNull()
+    expect(effacer().textContent).toContain('Confirmer')
+    act(() => effacer().click())
+    expect(par('sc-relecture')).toBeNull()
+  })
+
+  /** Branche l'écoute des événements du tour et rend de quoi en émettre un. */
+  function brancherEvenements(): { emettre: (e: unknown) => Promise<void> } {
+    let recu: ((e: unknown) => void) | null = null
+    ;(window as unknown as { api: { onPilotEvent: unknown } }).api.onPilotEvent = (
+      cb: (e: unknown) => void
+    ) => {
+      recu = cb
+      return () => {}
+    }
+    return {
+      emettre: async (e) => {
+        await act(async () => {
+          recu?.(e)
+          for (let i = 0; i < 4; i++) await Promise.resolve()
+        })
+      }
+    }
+  }
+
+  it('une relecture PENDANT le tour garde le diff ouvert, le met à jour et garde le commentaire en cours', async () => {
+    mockApi(GIT, DIFF_REL)
+    const { emettre } = brancherEvenements()
+    await render(vi.fn())
+    await ouvrirPremierDiff()
+    const boutons = container.querySelectorAll<HTMLButtonElement>('[data-testid="diff-commenter"]')
+    act(() => boutons[boutons.length - 1].click())
+    const zone = par('diff-editeur-texte') as HTMLTextAreaElement
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+        zone,
+        'brouillon en cours'
+      )
+      zone.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // L'agent retouche le fichier : le diff relu porte une ligne de plus.
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.conversationGitDiff = (conversationId: string, path: string, workspaceRoot: string) => {
+      calls.conversationDiffArgs.push([conversationId, path, workspaceRoot])
+      return Promise.resolve({
+        available: true,
+        diff: 'diff --git a/x b/x\n@@ -5,2 +5,3 @@\n garde()\n-ancien()\n+nouveau()\n+encore()'
+      })
+    }
+    await emettre({ conversationId: 'conv-a', kind: 'done' })
+    expect(calls.conversationArgs).toEqual(['conv-a', 'conv-a'])
+    expect(par('diff-view')).not.toBeNull()
+    expect(par('diff-view')?.textContent).toContain('+encore()')
+    expect(calls.conversationDiffArgs).toHaveLength(2)
+    expect((par('diff-editeur-texte') as HTMLTextAreaElement | null)?.value).toBe(
+      'brouillon en cours'
+    )
+  })
+
+  it('un fichier qui SORT de la liste à la relecture referme son diff', async () => {
+    mockApi(GIT, DIFF_REL)
+    const { emettre } = brancherEvenements()
+    await render(vi.fn())
+    await ouvrirPremierDiff()
+    expect(par('diff-view')).not.toBeNull()
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.conversationGitState = () =>
+      Promise.resolve({ ...GIT, state: { ...GIT.state!, changes: GIT.state!.changes.slice(1) } })
+    await emettre({ conversationId: 'conv-a', kind: 'done' })
+    expect(par('diff-view')).toBeNull()
+  })
+
+  it('sans canal vers l’agent, le diff reste en lecture seule', async () => {
+    mockApi(GIT, DIFF_REL)
+    await render(undefined)
+    await ouvrirPremierDiff()
+    expect(par('diff-view')).not.toBeNull()
+    expect(par('diff-commenter')).toBeNull()
+  })
+})

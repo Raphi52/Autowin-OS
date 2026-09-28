@@ -4,6 +4,12 @@ import { ProjectPane } from './ProjectPane'
 import { DiffView } from './DiffView'
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
+import {
+  composerRelecture,
+  type CommentaireRelecture,
+  type RepereLigne
+} from '../../../shared/relecture-diff'
+import { ecrireRelecture, lireRelecture, nouvelIdCommentaire } from './relecture-stockage'
 import './SourceControlPane.css'
 import { Spinner } from './Spinner'
 
@@ -95,6 +101,25 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
 /** Delai de regroupement des relectures git pendant un tour (signes de vie d'outil, texte). */
 export const RELIRE_PENDANT_TOUR_MS = 1500
 
+/** Identité d'un fichier modifié dans la liste : même chemin sous deux racines = deux fichiers. */
+function cleFichier(change: GitChange): string {
+  return `${change.workspaceRoot ?? ''}\0${change.path}`
+}
+
+/** Lit le diff d'un fichier : celui de la conversation dans la vue Fichiers, sinon celui du dépôt. */
+function demanderDiff(
+  view: PaneView,
+  conversationId: string | undefined,
+  repoPath: string,
+  change: GitChange
+): Promise<GitDiffResult> {
+  const request =
+    view === 'project' && conversationId && change.workspaceRoot
+      ? window.api.conversationGitDiff(conversationId, change.path, change.workspaceRoot)
+      : window.api.getGitDiff(change.path, repoPath || undefined)
+  return request.then((value) => value as GitDiffResult)
+}
+
 /** Actions hors flux : uniquement celles qu'aucune étape ne couvre déjà. */
 function actionsGit(nbChanges: number): Array<{ label: string; prompt: string }> {
   return [
@@ -142,9 +167,35 @@ export function SourceControlPane({
    * des changements reste sur le disque (voir la demande envoyee a l'agent).
    */
   const [annules, setAnnules] = useState<string[]>([])
+  /**
+   * RELECTURE LIGNE À LIGNE (2026-09-28, voir `shared/relecture-diff.ts`) : commentaires posés sur
+   * les diffs de la conversation, envoyés à l'agent en UN seul message. Conservés par conversation
+   * dans le stockage local : le panneau se démonte à chaque changement d'onglet.
+   */
+  const [relecture, setRelecture] = useState<CommentaireRelecture[]>(() =>
+    lireRelecture(conversationId)
+  )
+  /** Dernier lot envoyé : si l'agent était occupé, l'envoi a pu ne rien produire — on peut le remettre. */
+  const [relectureEnvoyee, setRelectureEnvoyee] = useState<CommentaireRelecture[] | null>(null)
+  /** « Tout effacer » perd du texte tapé : un premier clic arme, le second efface. */
+  const [effacerArme, setEffacerArme] = useState(false)
+  const relectureConversationRef = useRef(conversationId)
+  useEffect(() => {
+    if (relectureConversationRef.current === conversationId) return
+    relectureConversationRef.current = conversationId
+    setRelecture(lireRelecture(conversationId))
+    setRelectureEnvoyee(null)
+    setEffacerArme(false)
+  }, [conversationId])
   const [view, setView] = useState<PaneView>('project')
   const scope = `${view}:${conversationId ?? ''}:${view === 'workspace' ? repoPath : ''}`
   const [loadedScope, setLoadedScope] = useState('')
+  /** Portée réellement chargée et fichier ouvert, lus par les relectures sans relancer l'effet. */
+  const loadedScopeRef = useRef('')
+  const openFileRef = useRef<string | null>(null)
+  useEffect(() => {
+    openFileRef.current = openFile
+  }, [openFile])
 
   useEffect(() => {
     // L'activité des bureaux vit dans l'onglet Worktrees ; ici, l'événement sert seulement à relire
@@ -162,15 +213,40 @@ export function SourceControlPane({
 
     const finishGit = (value: GitReadResult): void => {
       if (dataRequestRef.current !== requestId) return
+      const simpleRelecture = loadedScopeRef.current === scope
+      loadedScopeRef.current = scope
       setGit(value)
       setBrainTraces([])
       setBrainUnavailable(false)
+      setLoadedScope(scope)
+      /*
+       * SIMPLE RELECTURE DANS LA MÊME VUE (pendant ou en fin de tour) : le diff ouvert RESTE ouvert
+       * et se met à jour. Le refermer à chaque relecture — toutes les 1,5 s pendant un tour depuis
+       * 7791c387 — empêchait de lire ou de commenter pendant que l'agent travaille (2026-09-28).
+       * Un changement de vue ou de conversation, lui, referme toujours.
+       */
+      const ouvert = openFileRef.current
+      const toujoursLa = ouvert
+        ? value.state?.changes.find((change) => cleFichier(change) === ouvert)
+        : undefined
+      if (simpleRelecture && toujoursLa) {
+        const diffId = ++diffRequestRef.current
+        void demanderDiff(view, conversationId, repoPath, toujoursLa)
+          .then((relu) => {
+            if (diffRequestRef.current === diffId) setDiff(relu)
+          })
+          .catch(() => {
+            // fix-ok: relecture de FOND ratée : le dernier diff lu reste affiché ; l'ouverture
+            // explicite d'un fichier, elle, affiche toujours son erreur.
+          })
+        return
+      }
       setOpenFile(null)
       setDiff(null)
-      setLoadedScope(scope)
     }
     const finishBrain = (value: BrainTrace[], unavailable = false): void => {
       if (dataRequestRef.current !== requestId) return
+      loadedScopeRef.current = scope
       setBrainTraces(value)
       setBrainUnavailable(unavailable)
       setGit(null)
@@ -286,6 +362,22 @@ export function SourceControlPane({
     else setView(next)
   }
   const propose = (text: string): void => onSendPrompt?.(text)
+  const majRelecture = (suivante: CommentaireRelecture[]): void => {
+    setRelecture(suivante)
+    setEffacerArme(false)
+    ecrireRelecture(conversationId, suivante)
+  }
+  const ajouterCommentaire = (chemin: string, repere: RepereLigne, texte: string): void => {
+    const id = nouvelIdCommentaire()
+    majRelecture([...relecture, { id, chemin, ...repere, texte }])
+  }
+  const envoyerRelecture = (): void => {
+    const message = composerRelecture(relecture)
+    if (!message || !onSendPrompt) return
+    propose(message)
+    setRelectureEnvoyee(relecture)
+    majRelecture([])
+  }
   const toggleDiff = (change: GitChange): void => {
     const key = `${change.workspaceRoot ?? ''}\0${change.path}`
     if (openFile === key) {
@@ -296,13 +388,9 @@ export function SourceControlPane({
     const requestId = ++diffRequestRef.current
     setOpenFile(key)
     setDiff(null)
-    const request =
-      view === 'project' && conversationId && change.workspaceRoot
-        ? window.api.conversationGitDiff(conversationId, change.path, change.workspaceRoot)
-        : window.api.getGitDiff(change.path, repoPath || undefined)
-    void request
+    void demanderDiff(view, conversationId, repoPath, change)
       .then((value) => {
-        if (diffRequestRef.current === requestId) setDiff(value as GitDiffResult)
+        if (diffRequestRef.current === requestId) setDiff(value)
       })
       .catch(() => {
         // fix-ok: une erreur obsolète ne doit ni bloquer le chargement ni écraser un diff plus récent.
@@ -316,6 +404,16 @@ export function SourceControlPane({
   const visibleGit = scopeLoaded ? git : null
   const visibleBrainTraces = scopeLoaded ? brainTraces : []
   const changes = visibleGit?.state?.changes ?? []
+  /*
+   * Chemin CITÉ à l'agent : relatif quand la conversation ne touche qu'un dépôt ; préfixé de sa
+   * racine dès qu'elle en touche plusieurs, sinon « src/index.ts » désignerait deux fichiers.
+   */
+  const plusieursRacines = new Set(changes.map((c) => c.workspaceRoot ?? '')).size > 1
+  const cheminCite = (change: GitChange): string =>
+    plusieursRacines && change.workspaceRoot
+      ? `${change.workspaceRoot.replace(/[\\/]+$/, '')}/${change.path}`
+      : change.path
+  const fichiersCommentes = new Set(relecture.map((c) => c.chemin)).size
   const paneLabel =
     view === 'tree'
       ? 'Arborescence du projet'
@@ -389,6 +487,49 @@ export function SourceControlPane({
         {view === 'project' && visibleGit?.state && (
           <section className="sc-sect">
             <header className="sc-h">Modifiés par cette conversation · {changes.length}</header>
+            {relecture.length > 0 && (
+              <div className="sc-relecture" data-testid="sc-relecture">
+                <span className="sc-relecture-compte">
+                  <b>Relecture</b> · {relecture.length} commentaire{relecture.length > 1 ? 's' : ''}{' '}
+                  sur {fichiersCommentes} fichier{fichiersCommentes > 1 ? 's' : ''}
+                </span>
+                <button
+                  className="sc-btn sc-relecture-envoyer"
+                  data-testid="sc-relecture-envoyer"
+                  disabled={!onSendPrompt}
+                  title="Envoie tous les commentaires à l'agent en un seul message, avec fichier, ligne et texte cité"
+                  onClick={envoyerRelecture}
+                >
+                  Envoyer à l’agent
+                </button>
+                <button
+                  className={`sc-btn${effacerArme ? ' is-armed' : ''}`}
+                  data-testid="sc-relecture-effacer"
+                  onClick={() => (effacerArme ? majRelecture([]) : setEffacerArme(true))}
+                >
+                  {effacerArme ? 'Confirmer : tout effacer' : 'Tout effacer'}
+                </button>
+              </div>
+            )}
+            {relectureEnvoyee && relecture.length === 0 && (
+              <div className="sc-relecture is-envoyee" data-testid="sc-relecture-envoyee">
+                <span className="sc-relecture-compte">
+                  Relecture envoyée à l’agent · {relectureEnvoyee.length} commentaire
+                  {relectureEnvoyee.length > 1 ? 's' : ''}
+                </span>
+                <button
+                  className="sc-btn"
+                  data-testid="sc-relecture-remettre"
+                  title="Si l'agent était occupé et n'a rien reçu : remet ces commentaires en brouillon"
+                  onClick={() => {
+                    majRelecture([...relectureEnvoyee, ...relecture])
+                    setRelectureEnvoyee(null)
+                  }}
+                >
+                  Remettre en brouillon
+                </button>
+              </div>
+            )}
             {changes.length === 0 ? (
               <div className="sc-clean">Aucun fichier modifié par cette conversation.</div>
             ) : (
@@ -420,6 +561,14 @@ export function SourceControlPane({
                             <span className="sc-diff-title" title={change.path}>
                               {change.path}
                             </span>
+                            {onSendPrompt && (
+                              <span
+                                className="sc-diff-astuce"
+                                title="Survolez un numéro de ligne puis cliquez « + » : le commentaire rejoint la relecture envoyée à l'agent"
+                              >
+                                + sur une ligne : commenter
+                              </span>
+                            )}
                             <span className="sc-diff-wrap-mode">Retour ligne</span>
                           </div>
                           <div className="sc-diff-content">
@@ -430,7 +579,21 @@ export function SourceControlPane({
                             ) : diff.available ? (
                               <>
                                 {diff.note ? <div className="sc-clean">{diff.note}</div> : null}
-                                <DiffView diff={diff.diff ?? ''} />
+                                <DiffView
+                                  diff={diff.diff ?? ''}
+                                  commentaires={relecture.filter(
+                                    (c) => c.chemin === cheminCite(change)
+                                  )}
+                                  onAjouter={
+                                    onSendPrompt
+                                      ? (repere, texte) =>
+                                          ajouterCommentaire(cheminCite(change), repere, texte)
+                                      : undefined
+                                  }
+                                  onRetirer={(id) =>
+                                    majRelecture(relecture.filter((c) => c.id !== id))
+                                  }
+                                />
                               </>
                             ) : (
                               <div className="sc-clean">Diff indisponible{diff.error ? ` : ${diff.error}` : '.'}</div>

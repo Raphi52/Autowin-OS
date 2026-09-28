@@ -103,3 +103,86 @@
   color: var(--text, #e6e9ee);
   background: color-mix(in srgb, var(--gold, #d4a94f) 22%, transparent);
 }
+
+/* RELECTURE (2026-09-28) : « + » dans la gouttière, visible au survol de la ligne ou au clavier.
+   Positionné en absolu dans la gouttière (déjà `sticky`, donc bloc conteneur) : il ne décale pas
+   les numéros de ligne. */
+.diff-gutter {
+  position: sticky;
+}
+.diff-commenter {
+  position: absolute;
+  left: 2px;
+  top: 1px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--gold, #d4a94f);
+  border-radius: 4px;
+  background: var(--surface, #14171c);
+  color: var(--gold, #d4a94f);
+  font:
+    700 12px/14px ui-monospace,
+    Consolas,
+    monospace;
+  cursor: pointer;
+  opacity: 0;
+}
+.diff-line:hover .diff-commenter,
+.diff-commenter:focus-visible {
+  opacity: 1;
+}
+.diff-commentee .diff-gutter {
+  box-shadow: inset 3px 0 0 var(--gold, #d4a94f);
+}
+.diff-comment,
+.diff-editeur {
+  margin: 0 6px 4px 100px;
+  padding: 5px 8px;
+  border-left: 2px solid var(--gold, #d4a94f);
+  background: color-mix(in srgb, var(--gold, #d4a94f) 8%, transparent);
+  color: var(--text, #e6e9ee);
+  font-family: inherit;
+  white-space: normal;
+}
+.diff-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.diff-comment-texte {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff-comment-retirer {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted, #8b939f);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.diff-comment-retirer:hover {
+  color: var(--danger, #e6635b);
+}
+.diff-editeur-texte {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 3.2em;
+  padding: 4px 6px;
+  border: 1px solid var(--line, #262b33);
+  border-radius: 4px;
+  background: var(--surface, #14171c);
+  color: var(--text, #e6e9ee);
+  font: inherit;
+  resize: vertical;
+}
+.diff-editeur-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}

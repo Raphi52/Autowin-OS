@@ -407,3 +407,47 @@
   color: var(--muted, #8b939f);
   text-decoration: line-through;
 }
+
+/* RELECTURE LIGNE À LIGNE (2026-09-28) : barre du lot en cours, sous l'en-tête des fichiers. */
+.sc-relecture {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--gold, #d4a94f);
+  background: color-mix(in srgb, var(--gold, #d4a94f) 8%, transparent);
+  font-size: 11.5px;
+}
+.sc-relecture-compte {
+  flex: 1;
+  min-width: 0;
+  color: var(--text, #e6e9ee);
+}
+.sc-relecture-compte b {
+  color: var(--gold, #d4a94f);
+}
+.sc-relecture.is-envoyee .sc-relecture-compte {
+  color: var(--muted, #8b939f);
+}
+.sc-diff-astuce {
+  flex: 0 0 auto;
+  color: var(--muted, #8b939f);
+  font-size: 9.5px;
+}
+/* L'envoi est l'action principale de la barre : or plein, comme le bouton du bloc des changements. */
+.sc-relecture-envoyer {
+  background: var(--gold, #d4a94f);
+  border-color: var(--gold, #d4a94f);
+  color: var(--bg-0, #000);
+  font-weight: 700;
+}
+.sc-relecture-envoyer:hover:not(:disabled) {
+  background: var(--gold-bright, #e3ba55);
+}
+.sc-relecture .is-armed {
+  background: var(--danger, #e6635b);
+  border-color: var(--danger, #e6635b);
+  color: var(--text, #e6e9ee);
+}
