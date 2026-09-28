@@ -98,4 +98,17 @@ describe('hook des agents — SQL vers la production', () => {
     expect(refuse(hook(ligne, ['serveur:SQL-DEVDEV']))).toBe(true)
     expect(refuse(hook(`sqlcmd -S SQL-PROD${barre}PROD -d RIG_DEV -Q "select 1"`, [`serveur:${devDev}`]))).toBe(true)
   })
+  // Pour sqlcmd/osql, -s (minuscule) est le SÉPARATEUR de colonnes, -S (majuscule) le serveur.
+  // Entrée qui ferait échouer ce test si le garde confondait les deux : `-s SQL-DEV<barre>DEV -S SQL-PROD<barre>PROD`
+  // — le séparateur ressemble au serveur déclaré, mais la commande vise la PROD : elle doit être refusée.
+  it('ne prend pas le séparateur -s pour le serveur -S, lit -S collé, et ne donne rien sans -S', () => {
+    const decl = [`serveur:${devDev}`]
+    expect(refuse(hook(`sqlcmd -s ${devDev} -S SQL-PROD${barre}PROD -d RIG_DEV -Q "select 1"`, decl))).toBe(true)
+    expect(refuse(hook(`sqlcmd -S ${devDev} -S SQL-PROD${barre}PROD -d RIG_DEV -Q "select 1"`, decl))).toBe(true)
+    expect(hook(`sqlcmd -S${devDev} -d RIG_DEV -Q "select 1"`, decl)).toBe('')
+    expect(hook(`Invoke-Sqlcmd -ServerInstance "${devDev}" -Database RIG_DEV -Query "select 1"`, decl)).toBe('')
+    expect(hook(`Invoke-Sqlcmd -ServerInstance "${devDev}" -SuppressProviderContextWarning -Database RIG_DEV -Query "select 1"`, decl)).toBe('')
+    // sans -S, sqlcmd vise le serveur LOCAL (ou SQLCMDSERVER) : une déclaration serveur n'y donne rien.
+    expect(refuse(hook(`sqlcmd -d RIG_DEV -Q "select 1"`, decl))).toBe(true)
+  })
 })
