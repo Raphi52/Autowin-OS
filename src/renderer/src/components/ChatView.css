@@ -4897,16 +4897,16 @@ button.chat-project-dot:disabled {
   align-self: stretch;
   width: 100%;
   padding: 5px 10px;
-  border-left: 2px solid var(--accent, #d4a94f);
+  border-left: 2px solid var(--accent);
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(var(--voile-rgb), 0.035);
   color: var(--text);
   font-size: 11.5px;
   text-align: left;
 }
 .conv-bulk-bar .conv-date-sort:hover:not(:disabled),
 .conv-bulk-bar .conv-date-sort:focus-visible {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--voile-rgb), 0.08);
 }
 .conv-bulk-bar .conv-date-sort:disabled {
   opacity: 0.45;
@@ -4917,16 +4917,16 @@ button.chat-project-dot:disabled {
   color: var(--danger);
 }
 /* Un liseré de couleur par action (conv-815) : rose, doré, bleu ; Supprimer reste rouge. */
-.conv-bulk-bar .conv-date-sort:nth-child(1) { border-left-color: #e87fb0; }
-.conv-bulk-bar .conv-date-sort:nth-child(2) { border-left-color: #d4a94f; }
-.conv-bulk-bar .conv-date-sort:nth-child(3) { border-left-color: #5b9cf0; }
+.conv-bulk-bar .conv-date-sort:nth-child(1) { border-left-color: var(--chat-lot-rose); }
+.conv-bulk-bar .conv-date-sort:nth-child(2) { border-left-color: var(--gold-doux); }
+.conv-bulk-bar .conv-date-sort:nth-child(3) { border-left-color: var(--chat-lot-bleu); }
 .conv-bulk-bar .conv-date-sort.conv-bulk-del { border-left-color: var(--danger); }
 
 /* Bloc Actions — variante C3 « frise » (2026-09-24) : barre de temps puis frise a pastilles.
    Icones, pastilles et « … » en CSS : le texte du corps reste les lignes d'action. */
 .thinking-block > summary .thinking-bilan {
   margin-left: 6px;
-  color: #e3ba55;
+  color: var(--gold-clair);
   font-size: 12px;
   /* Ne se laisse pas ecraser par le signe de vie voisin : sans ca, « 7.3 s » passait a un
      caractere par ligne (capture conv-836, 2026-09-24). C'est le statut qui se tronque. */
@@ -4946,16 +4946,16 @@ button.chat-project-dot:disabled {
   flex-basis: 0;
   min-width: 3px;
   border-radius: 2px;
-  background: #7fc98f;
+  background: var(--chat-frise-ok);
 }
 .thinking-frise-barre > span[data-etat='ko'] {
-  background: #e07a6a;
+  background: var(--chat-frise-ko);
 }
 .thinking-frise-barre > span[data-etat='encours'] {
-  background: #e3ba55;
+  background: var(--gold-clair);
 }
 .thinking-frise-liste {
-  border-left: 1px solid rgba(255, 255, 255, 0.13);
+  border-left: 1px solid rgba(var(--voile-rgb), 0.13);
   margin-left: 6px;
   padding-left: 12px;
 }
@@ -4973,20 +4973,20 @@ button.chat-project-dot:disabled {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #7fc98f;
+  background: var(--chat-frise-ok);
 }
 .thinking-frise-ligne[data-etat='ko'] {
-  color: #e07a6a;
+  color: var(--chat-frise-ko);
 }
 .thinking-frise-ligne[data-etat='ko']::before {
-  background: #e07a6a;
+  background: var(--chat-frise-ko);
 }
 .thinking-frise-ligne[data-etat='encours']::before {
-  background: #e3ba55;
+  background: var(--gold-clair);
 }
 .thinking-frise-ligne[data-etat='encours']::after {
   content: '…';
-  color: #e3ba55;
+  color: var(--gold-clair);
 }
 .thinking-frise-icone {
   display: inline-block;

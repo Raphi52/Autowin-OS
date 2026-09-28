@@ -228,6 +228,7 @@
 :root[data-theme^='malvoyant-'] .run-detail-tab,
 :root[data-theme^='malvoyant-'] .chat-find-count,
 :root[data-theme^='malvoyant-'] .msg-meta,
+:root[data-theme^='malvoyant-'] .msg-time:hover::after,
 :root[data-theme^='malvoyant-'] .directive-receipt-status,
 :root[data-theme^='malvoyant-'] .composer-input-row > .composer-send,
 :root[data-theme^='malvoyant-'] .attachment-chip,
@@ -271,7 +272,6 @@
 :root[data-theme^='malvoyant-'] .activity-step-link,
 :root[data-theme^='malvoyant-'] .thinking-block > summary .thinking-status,
 :root[data-theme^='malvoyant-'] .thinking-block--actions .thinking-body,
-:root[data-theme^='malvoyant-'] .thinking-block > summary .thinking-bilan,
 :root[data-theme^='malvoyant-'] .conv-mosaic-close-all,
 :root[data-theme^='malvoyant-'] .msg-provider-status,
 :root[data-theme^='malvoyant-'] .composer-dictee-message,
@@ -279,7 +279,8 @@
 :root[data-theme^='malvoyant-'] .conv-auto-notice,
 :root[data-theme^='malvoyant-'] .conv-pane[data-density='compact'] .conv-label,
 :root[data-theme^='malvoyant-'] .conv-status-filter,
-:root[data-theme^='malvoyant-'] .conv-bulk-bar .conv-date-sort {
+:root[data-theme^='malvoyant-'] .conv-bulk-bar .conv-date-sort,
+:root[data-theme^='malvoyant-'] .thinking-frise-icone[data-famille='commande']::before {
   font-size: 13px;
 }
 
@@ -877,6 +878,7 @@
 :root[data-theme^='malvoyant-'] .sc-h,
 :root[data-theme^='malvoyant-'] .sc-ab,
 :root[data-theme^='malvoyant-'] .sc-btn,
+:root[data-theme^='malvoyant-'] .sc-flux-detail,
 :root[data-theme^='malvoyant-'] .sc-chev,
 :root[data-theme^='malvoyant-'] .sc-diff-title,
 :root[data-theme^='malvoyant-'] .sc-diff-wrap-mode,
@@ -1001,7 +1003,11 @@
 :root[data-theme^='malvoyant-'] .rail-update-count,
 :root[data-theme^='malvoyant-'] .rail-update-error,
 :root[data-theme^='malvoyant-'] .rail-update-repair,
-:root[data-theme^='malvoyant-'] .rail-update-choice {
+:root[data-theme^='malvoyant-'] .rail-update-choice,
+:root[data-theme^='malvoyant-'] .rail-update-commit,
+:root[data-theme^='malvoyant-'] .rail-update-commit-when,
+:root[data-theme^='malvoyant-'] .rail-update-commit-files,
+:root[data-theme^='malvoyant-'] .rail-update-commit-more {
   font-size: 13px;
 }
 
@@ -1176,14 +1182,4 @@
 /* assets/theme.css — gris en dur */
 :root[data-theme^='malvoyant-'] .btn-accent {
   color: var(--text);
-}
-
-/* Bloc Actions, frise C3 (2026-09-24) : barre et pastilles plus epaisses, l'etat reste lisible. */
-:root[data-theme^='malvoyant-'] .thinking-frise-barre {
-  height: 10px;
-}
-:root[data-theme^='malvoyant-'] .thinking-frise-ligne::before {
-  width: 10px;
-  height: 10px;
-  left: -17px;
 }
