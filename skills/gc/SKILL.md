@@ -6,7 +6,7 @@ description: >-
   `.autowin-data`, repère les DÉCHETS prouvés — satellites de conversations supprimées, sorties de
   runs anciennes, fichiers temporaires à la racine — et les DÉPLACE en corbeille datée
   (réversible). Ne supprime jamais définitivement sans demande explicite de l'utilisateur.
-  Distinct de `residus` (code mort dans `src/`) et de `salvage` (travail non publié).
+  PAS pour le code mort de `src/` (c'est `residus`) ni pour le travail non publié (c'est `salvage`).
 ---
 
 # gc — le ramasse-miettes des données d'Autowin OS
