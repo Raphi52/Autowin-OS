@@ -175,6 +175,25 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  /**
+   * Bouton « Lancer » (panneau Fichiers) : état, démarrage, arrêt du lancement déclaré pour le
+   * dossier de la conversation, et mises à jour poussées pendant qu'il tourne.
+   */
+  lancementEtat: (
+    conversationId: string
+  ) => Promise<import('../shared/scripts-copie').EtatLancement>
+  lancementDemarrer: (
+    conversationId: string
+  ) => Promise<import('../shared/scripts-copie').EtatLancement>
+  lancementArreter: (
+    conversationId: string
+  ) => Promise<import('../shared/scripts-copie').EtatLancement>
+  onLancement: (
+    cb: (maj: {
+      conversationId: string
+      etat: import('../shared/scripts-copie').EtatLancement
+    }) => void
+  ) => () => void
   /** Onglet « Projet » : racine du projet, arborescence par dossier, lecture/ecriture d'un fichier. */
   projectRoot: (conversationId?: string) => Promise<string>
   /** Ouvre tout le projet courant dans VS Code (commande `code`). */

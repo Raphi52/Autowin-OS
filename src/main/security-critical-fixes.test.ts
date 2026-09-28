@@ -521,7 +521,19 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     `guardString` puis `GRANT_ID.test` dans `claimClaudeReset` avant tout appel reseau, envoye dans
     //     un corps JSON (jamais une ligne de commande).
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(207)
+    // MISE A JOUR 2026-09-28 (conv-877) — 207 -> 210. TROIS canaux du bouton « Lancer » du panneau
+    //   Fichiers (`src/main/ipc/lancement.ts`), mesures : 210 au lancement de ce test, exactement ces
+    //   trois en plus. Tous gardes des leur PREMIERE ligne par `assertTrustedRendererSender` :
+    //   `lancement:etat` ('LancementEtat') — LECTURE : l'etat du lancement et la commande declaree.
+    //   `lancement:demarrer` ('LancementDemarrer') — EXECUTE une commande, mais le renderer n'en
+    //     fournit NI la ligne NI le dossier : son seul argument est l'identifiant de conversation
+    //     (`guardString`) ; le dossier est deduit cote principal (`dossierDeTravailDuTour`, meme regle
+    //     que `project:*`), la commande est lue dans la declaration de ce dossier
+    //     (`.autowin/scripts.json`, sinon `.conductor/settings.toml`, sinon `package.json`).
+    //   `lancement:arreter` ('LancementArreter') — arrete l'arbre de processus lance par CE bouton pour
+    //     CETTE conversation, et lui seul (`taskkill /T` sur son propre PID).
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(210)
     expect(unguarded).toEqual([])
   })
 

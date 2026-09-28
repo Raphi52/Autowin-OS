@@ -23,6 +23,7 @@ import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
 import { registerGitIpc } from './ipc/git'
 import { registerProjectFilesIpc } from './ipc/project-files'
+import { registerLancementIpc } from './ipc/lancement'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
@@ -1614,6 +1615,8 @@ function registerIdentiteIpc(): void {
 
 /** Petite TV du bureau cache (conv-528) : lecture seule, processus de capture cree a la demande. */
 let capteurHdesk: CapteurHdesk | null = null
+/** Processus lancés par le bouton « Lancer » : arrêtés, eux seuls, à la fermeture de l’app. */
+let lancementIpc: { arreterTout: () => Promise<void> } | null = null
 function registerHdeskTvIpc(): void {
   const capteur = (): CapteurHdesk =>
     (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath())))
@@ -2276,6 +2279,8 @@ Le fil reprend ensuite normalement.`
   registerGitIpc({ os, pickDirectory })
   // Les canaux « Projet » (arborescence + éditeur) vivent dans src/main/ipc/project-files.ts.
   registerProjectFilesIpc({ os })
+  // Le bouton « Lancer » du panneau Fichiers vit dans src/main/ipc/lancement.ts.
+  lancementIpc = registerLancementIpc({ os })
   // Les canaux de la vue Tests vivent dans src/main/ipc/tests-view.ts.
   registerTestsViewIpc({ os, pickDirectory })
   // Les canaux de l'onglet Latence vivent dans src/main/ipc/perf.ts.
@@ -4962,6 +4967,7 @@ app.whenReady().then(async () => {
 let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
   capteurHdesk?.detruire()
+  void lancementIpc?.arreterTout()
   capteurHdesk = null
   // Un raccourci global laissé posé continue de capter la combinaison pour toute la session.
   raccourciCapture?.desinstaller()

@@ -88,6 +88,10 @@ supprimable ; il n'est posé qu'une fois, à la création du fichier de profils.
   historique) où chaque action **pré-remplit un prompt** envoyé à l'agent plutôt que d'exécuter du git
   en dur ; dépôt configurable (multi-repo).
 - **Worktrees isolés** — chaque agent peut travailler dans une copie git isolée, fusionnée en fin de run.
+- **Scripts de copie** — `.autowin/scripts.json` du dépôt déclare `preparation` (jouée à la création
+  de chaque copie d'agent), `lancement` (bouton « Lancer » du panneau Fichiers) et `copier` (fichiers
+  locaux ignorés par git, comme `.env`). `$AUTOWIN_PORT` donne un port propre à chaque copie. Un
+  `.conductor/settings.toml` existant est lu tel quel.
 - **Observabilité** — trace des sous-agents (sortant / réponse / thinking / échecs), coût par modèle,
   couleurs par type d'action.
 - **Brain / RAG** — interrogation d'un service Python (`brain_server`) lancé en process **détaché**

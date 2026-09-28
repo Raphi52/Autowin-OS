@@ -121,6 +121,7 @@ import {
   type ProcessIdentity,
   type RecoveredDetachedUsageSettlement
 } from './runs/run-reattach'
+import { preparerCopie } from './scripts-copie-main'
 import type { LanceurCommandeSkill } from './skill-node-tools'
 import {
   executionWorkspacePreferenceFile,
@@ -463,6 +464,18 @@ export class AutowinOS {
            * l'ont fait le meme jour. On sonne sur l'ABANDON seulement, jamais sur un refus
            * ordinaire : 1649 refus sont traces, en notifier une fraction noierait le signal.
            */
+          /*
+           * SCRIPTS DE COPIE (2026-09-28) : fichiers locaux et préparation déclarés dans
+           * `.autowin/scripts.json` du dépôt, joués à la création de chaque copie d'agent. Voir
+           * `scripts-copie-main.ts` ; rien de déclaré = rien de joué, aucune ligne de trace.
+           */
+          preparerCopie: async (copie, signaler) =>
+            (
+              await preparerCopie(
+                { depot: copie.depot, chemin: copie.chemin, nom: copie.runId },
+                { auDebut: signaler }
+              )
+            )?.resume,
           onAbandon: ({ tache, runId }) => {
             try {
               if (!Notification.isSupported()) return

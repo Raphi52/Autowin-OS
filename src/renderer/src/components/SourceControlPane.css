@@ -451,3 +451,103 @@
   border-color: var(--danger, #e6635b);
   color: var(--text, #e6e9ee);
 }
+
+/* BOUTON « LANCER » (2026-09-28) : la commande déclarée, son état, son adresse, sa sortie. */
+.sc-lancement {
+  margin: 0 0 10px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--line2, #31373f);
+  font-size: 11.5px;
+}
+.sc-lancement[data-statut='en-cours'] {
+  border-left-color: var(--ok, #3ecb8f);
+}
+.sc-lancement[data-statut='echec'] {
+  border-left-color: var(--danger, #e6635b);
+}
+.sc-lancement-ligne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sc-lancement-bouton {
+  flex: 0 0 auto;
+  background: var(--gold, #d4a94f);
+  border-color: var(--gold, #d4a94f);
+  color: var(--bg-0, #000);
+  font-weight: 700;
+}
+.sc-lancement-bouton:hover:not(:disabled) {
+  background: var(--gold-bright, #e3ba55);
+}
+.sc-lancement-bouton.is-on {
+  background: transparent;
+  color: var(--text, #e6e9ee);
+  border-color: var(--danger, #e6635b);
+}
+.sc-lancement-commande {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 5px;
+  border: 1px solid var(--line2, #31373f);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.045);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+.sc-lancement-source {
+  flex: 0 0 auto;
+  color: var(--muted, #8b939f);
+  font-size: 10px;
+}
+.sc-lancement-info {
+  margin-top: 5px;
+  color: var(--muted, #8b939f);
+  overflow-wrap: anywhere;
+}
+.sc-lancement-info code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color: var(--text, #e6e9ee);
+}
+.sc-lancement-info a {
+  color: var(--gold-bright, #e3ba55);
+}
+.sc-lancement-info.is-echec {
+  color: var(--danger, #e6635b);
+}
+.sc-lancement-point {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok, #3ecb8f);
+  vertical-align: middle;
+}
+.sc-lancement-sortie {
+  margin-top: 5px;
+}
+.sc-lancement-sortie summary {
+  color: var(--muted, #8b939f);
+  cursor: pointer;
+}
+.sc-lancement-sortie pre {
+  max-height: 180px;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border: 1px solid var(--line, #262b33);
+  border-radius: 6px;
+  background: var(--surface, #14171c);
+  color: var(--text, #e6e9ee);
+  font:
+    10.5px/1.45 ui-monospace,
+    'SF Mono',
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

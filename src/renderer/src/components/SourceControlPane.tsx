@@ -10,6 +10,7 @@ import {
   type RepereLigne
 } from '../../../shared/relecture-diff'
 import { ecrireRelecture, lireRelecture, nouvelIdCommentaire } from './relecture-stockage'
+import { LancementBarre } from './LancementBarre'
 import './SourceControlPane.css'
 import { Spinner } from './Spinner'
 
@@ -479,6 +480,11 @@ export function SourceControlPane({
         </div>
 
         {view === 'tree' && <ProjectPane conversationId={conversationId} racine={repoPath} />}
+
+        {/* « Lancer » ne dépend pas de git : il s'affiche même hors dépôt. */}
+        {view === 'project' && conversationId && (
+          <LancementBarre key={conversationId} conversationId={conversationId} />
+        )}
 
         {view !== 'brain' && view !== 'tree' && visibleGit && !visibleGit.available && (
           <div className="sc-empty">Dépôt Git introuvable ici (lecture indisponible).</div>

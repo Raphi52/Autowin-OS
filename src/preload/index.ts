@@ -204,6 +204,32 @@ const api = {
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
+  // Bouton « Lancer » du panneau Fichiers : le principal choisit le dossier ET la commande.
+  lancementEtat: (
+    conversationId: string
+  ): Promise<import('../shared/scripts-copie').EtatLancement> =>
+    ipcRenderer.invoke('lancement:etat', conversationId),
+  lancementDemarrer: (
+    conversationId: string
+  ): Promise<import('../shared/scripts-copie').EtatLancement> =>
+    ipcRenderer.invoke('lancement:demarrer', conversationId),
+  lancementArreter: (
+    conversationId: string
+  ): Promise<import('../shared/scripts-copie').EtatLancement> =>
+    ipcRenderer.invoke('lancement:arreter', conversationId),
+  onLancement: (
+    cb: (maj: {
+      conversationId: string
+      etat: import('../shared/scripts-copie').EtatLancement
+    }) => void
+  ): (() => void) => {
+    const handler = (
+      _e: unknown,
+      maj: { conversationId: string; etat: import('../shared/scripts-copie').EtatLancement }
+    ): void => cb(maj)
+    ipcRenderer.on('lancement:maj', handler)
+    return () => ipcRenderer.removeListener('lancement:maj', handler)
+  },
   // Onglet « Projet » : arborescence + editeur. Chemins RELATIFS ; la racine vit cote principal.
   // `conversationId` : la racine devient le CWD de cette conversation (resolu cote principal).
   projectRoot: (conversationId?: string): Promise<string> =>

@@ -909,6 +909,33 @@ describe('SourceControlPane — relecture ligne à ligne envoyée à l’agent',
     expect(par('diff-view')).toBeNull()
   })
 
+  it('le bouton « Lancer » est monté dans la vue Fichiers, et seulement là', async () => {
+    mockApi(GIT, DIFF_REL)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    const etats: string[] = []
+    api.lancementEtat = (id: string) => {
+      etats.push(id)
+      return Promise.resolve({
+        statut: 'arrete',
+        lignes: [],
+        commande: 'npm run dev',
+        source: 'autowin'
+      })
+    }
+    api.onLancement = () => () => {}
+    await render(vi.fn(), 'conv-lance')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(etats).toEqual(['conv-lance'])
+    expect(par('sc-lancement-commande')?.textContent).toBe('npm run dev')
+    await act(async () => {
+      ;(par('sc-view-workspace') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+    expect(par('sc-lancement')).toBeNull()
+  })
+
   it('sans canal vers l’agent, le diff reste en lecture seule', async () => {
     mockApi(GIT, DIFF_REL)
     await render(undefined)
