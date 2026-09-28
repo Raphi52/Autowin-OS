@@ -101,6 +101,7 @@ describe('hook des agents — SQL vers la production', () => {
   // Pour sqlcmd/osql, -s (minuscule) est le SÉPARATEUR de colonnes, -S (majuscule) le serveur.
   // Entrée qui ferait échouer ce test si le garde confondait les deux : `-s SQL-DEV<barre>DEV -S SQL-PROD<barre>PROD`
   // — le séparateur ressemble au serveur déclaré, mais la commande vise la PROD : elle doit être refusée.
+  // fix-ok: prod-run-guard comparait les options en minuscules, donc -s (séparateur) était lu comme -S (serveur) ; ce test rouge sur 600c3347 (exit 1, l.106), vert sur bd648475 (exit 0) — source tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf
   it('ne prend pas le séparateur -s pour le serveur -S, lit -S collé, et ne donne rien sans -S', () => {
     const decl = [`serveur:${devDev}`]
     expect(refuse(hook(`sqlcmd -s ${devDev} -S SQL-PROD${barre}PROD -d RIG_DEV -Q "select 1"`, decl))).toBe(true)
