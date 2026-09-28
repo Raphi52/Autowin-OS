@@ -68,6 +68,44 @@ const causalEvidence = [
   }
 ]
 
+/**
+ * Éléments de PREMIER NIVEAU de la liste entre parenthèses ouverte à `ouverture` — arguments d'un
+ * appel ou paramètres d'un constructeur —, commentaires retirés, chaînes respectées.
+ */
+function elementsDeListe(texte: string, ouverture: number): string[] {
+  const elements: string[] = []
+  let courant = ''
+  let profondeur = 0
+  let chaine: string | null = null
+  for (let i = ouverture; i < texte.length; i++) {
+    const c = texte[i]
+    if (chaine) {
+      courant += c
+      if (c === '\\') courant += texte[++i]
+      else if (c === chaine) chaine = null
+      continue
+    }
+    if (c === '/' && (texte[i + 1] === '/' || texte[i + 1] === '*')) {
+      const fin = texte[i + 1] === '/' ? texte.indexOf('\n', i) : texte.indexOf('*/', i + 2) + 1
+      if (fin <= i) break
+      i = fin
+      continue
+    }
+    if (c === "'" || c === '"' || c === '`') chaine = c
+    else if ('([{'.includes(c) && ++profondeur === 1) continue
+    else if (')]}'.includes(c) && --profondeur === 0) {
+      elements.push(courant.trim())
+      return elements.filter(Boolean)
+    } else if (c === ',' && profondeur === 1) {
+      elements.push(courant.trim())
+      courant = ''
+      continue
+    }
+    courant += c
+  }
+  throw new Error(`liste non fermée à partir de ${ouverture}`)
+}
+
 describe('outcome learning — contrat visible par les modèles', () => {
   it('branche le ledger durable, le kill switch et le promoteur réel au démarrage', () => {
     // La ZONE du process principal, pas un chemin : les canaux du Brain ont quitte `index.ts`
@@ -79,7 +117,25 @@ describe('outcome learning — contrat visible par les modèles', () => {
     expect(source).toContain(
       'promoteOutcomeLearningCandidate(amitelBrainRoot(), candidateId, scope)'
     )
-    expect(source).toMatch(/new AppCommandBus\([\s\S]*?outcomeLearning\s*\)/u)
+    // Le superviseur doit arriver à SON rang dans le constructeur (positionnel), pas seulement en
+    // DERNIER : l'ancienne forme (`outcomeLearning\s*\)`) rougissait dès qu'un paramètre était ajouté
+    // après lui (`porteProd`, `guichetProd`, conv-738), sans que le câblage ait changé
+    // (conv-770, 2026-09-28).
+    const commandes = readFileSync(join(process.cwd(), 'src/main/commands.ts'), 'utf8')
+    const constructeur = commandes.indexOf(
+      'constructor(',
+      commandes.indexOf('export class AppCommandBus')
+    )
+    const parametres = elementsDeListe(commandes, constructeur + 'constructor'.length)
+    const rang = parametres.findIndex((p) =>
+      /\boutcomeLearning\?:\s*OutcomeLearningSupervisor\b/u.test(p)
+    )
+    expect(rang).toBeGreaterThan(0)
+    const appel = source.indexOf('new AppCommandBus(')
+    expect(appel).toBeGreaterThanOrEqual(0)
+    expect(elementsDeListe(source, appel + 'new AppCommandBus'.length)[rang]).toBe(
+      'outcomeLearning'
+    )
     expect(source).toContain("ipcMain.handle('os:retractKnowledge'")
     expect(source).toContain("'os:supersedeKnowledge'")
     expect(source).toContain("ipcMain.handle('os:outcomeLearning:setMode'")
