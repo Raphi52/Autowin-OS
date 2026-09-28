@@ -85,6 +85,7 @@ describe('hook des agents — SQL vers la production', () => {
   // Objection du juge : écrit sans double barre, le littéral devenait « SQL-DEVDEV » et ne prouvait
   // rien. Ici la VRAIE barre oblique inverse, des deux côtés, à travers le VRAI script de hook
   // (liste non-prod sérialisée dans le script comprise).
+  // fix-ok: littéral TS 'SQL-DEV\DEV' à barre simple = « SQL-DEVDEV » (barre avalée, mesuré) ; test rouge sur le garde de dece44cf^ (exit 1), vert avec dece44cf (exit 0)
   const barre = String.fromCharCode(92) // vraie barre oblique inverse, sans piège d'échappement
   const devDev = `SQL-DEV${barre}DEV`
   it('laisse passer -S SQL-DEV<barre>DEV quand ce serveur est déclaré non-prod (hook réel)', () => {
