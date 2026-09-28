@@ -185,8 +185,21 @@ describe('devis face à un workflow plus large que le régime', () => {
 describe('allocateExecutionTopology — un fan-out lance un agent PAR MEMBRE', () => {
   it('provisionne assez de places pour que le juge final ne se refuse pas lui-meme', () => {
     const quote = compileExecutionQuote('place la scrollbar tout en bas du panneau')
-    expect(quote.limits.maxAgents).toBe(5)
-    expect(quote.limits.maxConcurrency).toBe(3)
+    // Le provisionnement ne joue qu'en mesure seule : c'est le mode par défaut, on l'exige.
+    expect(quote.limits.spendEnforcement).toBe('metering-only')
+    /*
+     * La situation de conv-46 est REPRODUITE À LA MAIN (conv-770, 2026-09-28). Ce test exigeait
+     * `maxAgents === 5` du régime, mais la décision utilisateur du 2026-09-12 (ceef36f8) avait déjà
+     * relevé le régime standard à 500 têtes : il n'est jamais passé sur main. Et avec 500 places, les
+     * deux assertions finales (> 5) passaient avec ou sans provisionnement — elles ne prouvaient plus
+     * rien. Plafond serré posé ici : 5 têtes, 24 appels, panel de 3, UNE réparation — soit 5 appels
+     * obligatoires pour 5 places, exactement le « tout juste » du run tué. Sans provisionnement,
+     * `maxAgents` reste 5 ; avec, il monte à 9.
+     */
+    quote.limits.maxAgents = 5
+    quote.limits.maxProviderCalls = 24
+    quote.limits.maxConcurrency = 3
+    quote.limits.maxRecoveries = 1
 
     allocateExecutionTopology(quote, {
       phases: quote.phases,
