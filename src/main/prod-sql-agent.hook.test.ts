@@ -81,10 +81,20 @@ describe('hook des agents — SQL vers la production', () => {
       /scriptHookGardes\(refusReglageProd, refusSqlAgent, /
     )
   })
-  it('laisse passer un serveur déclaré non-prod (conv-106, tour 41d5a982)', () => {
-    const ligne = 'sqlcmd -S SQL-DEV\DEV -d RIG_DEV -Q "select 1"'
-    expect(garde.refusSqlAgent(ligne, ['serveur:SQL-DEV\DEV'])).toBeUndefined()
-    expect(garde.refusSqlAgent(ligne, [])).toMatch(/refusé/)
-    expect(garde.refusSqlAgent('sqlcmd -S SQL-PROD\PROD -d RIG_DEV -Q "select 1"', ['serveur:SQL-DEV\DEV'])).toMatch(/refusé/)
+  // conv-106, tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf : SELECT vers RIG_DEV sur SQL-DEV<barre>DEV refusé.
+  // Objection du juge : écrit sans double barre, le littéral devenait « SQL-DEVDEV » et ne prouvait
+  // rien. Ici la VRAIE barre oblique inverse, des deux côtés, à travers le VRAI script de hook
+  // (liste non-prod sérialisée dans le script comprise).
+  const barre = String.fromCharCode(92) // vraie barre oblique inverse, sans piège d'échappement
+  const devDev = `SQL-DEV${barre}DEV`
+  it('laisse passer -S SQL-DEV<barre>DEV quand ce serveur est déclaré non-prod (hook réel)', () => {
+    const ligne = `sqlcmd -S ${devDev} -d RIG_DEV -Q "select 1"`
+    expect(ligne).toContain('SQL-DEV' + barre + 'DEV')
+    expect(garde.refusSqlAgent(ligne, [`serveur:${devDev}`])).toBeUndefined()
+    expect(hook(ligne, [`serveur:${devDev}`])).toBe('')
+    expect(hook(`sqlcmd -S tcp:sql-dev${barre}dev,1433 -d RIG_RECETTE -Q "select 1"`, [`serveur:${devDev}`])).toBe('')
+    expect(refuse(hook(ligne, []))).toBe(true)
+    expect(refuse(hook(ligne, ['serveur:SQL-DEVDEV']))).toBe(true)
+    expect(refuse(hook(`sqlcmd -S SQL-PROD${barre}PROD -d RIG_DEV -Q "select 1"`, [`serveur:${devDev}`]))).toBe(true)
   })
 })
