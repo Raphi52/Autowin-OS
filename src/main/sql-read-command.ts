@@ -117,6 +117,7 @@ export async function runSqlRead(
     const verdict = deps.porteProd.verifier({
       nature: 'base',
       nom: decision.database,
+      serveur: decision.server,
       operation: 'sql-read',
       ...(deps.conversationId ? { conversationId: deps.conversationId } : {}),
       ...(deps.jetonProd ? { jeton: deps.jetonProd } : {})
@@ -141,6 +142,7 @@ export async function runSqlRead(
       const reprise = deps.porteProd.verifier({
         nature: 'base',
         nom: decision.database,
+        serveur: decision.server,
         operation: 'sql-read',
       ...(deps.conversationId ? { conversationId: deps.conversationId } : {}),
         ...(reponse.type === 'jeton' ? { jeton: reponse.valeur } : { confirme: true })

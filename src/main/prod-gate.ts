@@ -37,6 +37,13 @@ export interface GesteProd {
   nom: string
   /** Ce que l'outil s'apprête à faire, en un mot stable (ex. `sql-read`, `sql-write`). */
   operation: string
+  /**
+   * Le serveur qui héberge la base, quand l'outil le connaît. Une base NON DÉCLARÉE passe si ce
+   * serveur est déclaré `nature: serveur` non-prod ; une base déclarée prod reste bloquée. conv-106,
+   * tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf : RIG_DEV sur SQL-DEV\DEV refusée faute de
+   * déclaration base par base, alors que le serveur entier est de dev.
+   */
+  serveur?: string
   /** Le jeton obtenu par l'écran de saisie, s'il y en a un (niveau `phrase`). */
   jeton?: string
   /**
@@ -189,6 +196,10 @@ export class PorteProd {
     const cible: Cible = { nature: geste.nature, nom: geste.nom }
     const verdict = classerCible(cible, this.ports.autorite())
     if (!verdict.estBloquant) return { autorise: true }
+    if (verdict.classe === 'inconnu' && geste.serveur) {
+      const serveur: Cible = { nature: 'serveur', nom: geste.serveur }
+      if (!classerCible(serveur, this.ports.autorite()).estBloquant) return { autorise: true }
+    }
 
     const demande = { cible: nommerCible(cible), operation: geste.operation }
     const refus = (motif: string): VerdictPorte => ({
