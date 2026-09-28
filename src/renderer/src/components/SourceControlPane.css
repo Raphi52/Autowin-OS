@@ -465,10 +465,14 @@
 .sc-lancement[data-statut='echec'] {
   border-left-color: var(--danger, #e6635b);
 }
+/* La ligne passe à la ligne : dans un panneau étroit, la commande descend sous le bouton au lieu
+   d'être écrasée. Vu sur la capture réelle du 2026-09-28 (fenêtre de 540 px, panneau de 230 px) :
+   la provenance ne rétrécissait jamais et la commande tombait à « n », illisible avant le clic. */
 .sc-lancement-ligne {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   min-width: 0;
 }
 .sc-lancement-bouton {
@@ -492,11 +496,11 @@
 .sc-lancement-bouton.is-on:hover:not(:disabled) {
   background: color-mix(in srgb, var(--danger, #e6635b) 22%, transparent);
 }
+/* La commande se lit EN ENTIER avant le clic : elle passe à la ligne plutôt que d'être coupée. */
 .sc-lancement-commande {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   padding: 1px 5px;
   border: 1px solid var(--line2, #31373f);
   border-radius: 4px;
@@ -505,7 +509,11 @@
   font-size: 11px;
 }
 .sc-lancement-source {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted, #8b939f);
   font-size: 10px;
 }
