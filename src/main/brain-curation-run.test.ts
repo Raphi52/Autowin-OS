@@ -59,6 +59,42 @@ describe('déclencheur de curation Brain', () => {
     expect(spawnFn).not.toHaveBeenCalled()
   })
 
+  it('la curation attend la fin de python, puis appelle la suite (réindexation) à TOUTE fin', () => {
+    // Mesuré le 2026-09-29 : des notes promues par `--apply` laissaient l'index périmé (503) —
+    // rien n'enchaînait la reconstruction après la curation. `cmd /c start /wait` rend 0 même
+    // quand python échoue : le code ne dit donc rien, et une curation interrompue a pu promouvoir
+    // des notes. La suite (sonde de santé) décide seule s'il faut reconstruire.
+    const { root, tooling, python } = fauxBrain(['a.md'])
+    const env = {
+      AMITEL_BRAIN_ROOT: root,
+      AUTOWIN_BRAIN_TOOLING: tooling,
+      AMITEL_BRAIN_PYTHON: python
+    }
+    const fins: ((code: number) => void)[] = []
+    const appels: string[][] = []
+    const spawnFn = (_bin: string, args: readonly string[]) => {
+      appels.push([...args])
+      return {
+        unref: vi.fn(),
+        once: (ev: string, cb: (...a: unknown[]) => void) => {
+          if (ev === 'exit') fins.push(cb as (code: number) => void)
+        }
+      }
+    }
+    const apres = vi.fn()
+    expect(startBrainCuration(env, spawnFn as never, apres).status).toBe('launched')
+    if (process.platform === 'win32') expect(appels[0]).toContain('/wait')
+    expect(apres).not.toHaveBeenCalled()
+    fins[0](0)
+    expect(apres).toHaveBeenCalledTimes(1)
+
+    resetBrainCurationAttempt()
+    const apresEchec = vi.fn()
+    startBrainCuration(env, spawnFn as never, apresEchec)
+    fins[1](2)
+    expect(apresEchec).toHaveBeenCalledTimes(1)
+  })
+
   it('ne relance pas une deuxième fois dans la même session', () => {
     const { root, tooling, python } = fauxBrain(['a.md'])
     const spawnFn = vi.fn(() => ({ unref: vi.fn() }))

@@ -6,8 +6,25 @@ import {
   ensureBrainIndexFresh,
   needsIndexRebuild,
   readBrainHealth,
+  reindexerApresMutation,
   resetBrainIndexRefreshAttempt
 } from './brain-index-refresh'
+
+/** Doublure de `spawn` dont on déclenche la FIN à la main : `fins[n](code)` clôt le n-ième lancement. */
+function spawnPilotable(): {
+  spawnFn: never
+  fins: ((code: number) => void)[]
+  lancements: () => number
+} {
+  const fins: ((code: number) => void)[] = []
+  const spawnFn = () => ({
+    unref: vi.fn(),
+    once: (ev: string, cb: (...a: unknown[]) => void) => {
+      if (ev === 'exit') fins.push(cb as (code: number) => void)
+    }
+  })
+  return { spawnFn: spawnFn as never, fins, lancements: () => fins.length }
+}
 
 function fauxBrain(): { env: NodeJS.ProcessEnv; tooling: string; root: string } {
   const root = mkdtempSync(join(tmpdir(), 'index-refresh-'))
@@ -240,6 +257,107 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
     await ensureBrainIndexFresh({ env, readHealth: async () => DEGRADE, spawnFn: spawnFn as never })
     finsExit[0](0) // succès
     expect(lancements).toBe(1)
+  })
+
+  it('après une réindexation RÉUSSIE, une nouvelle péremption réindexe à nouveau', async () => {
+    // Défaut mesuré le 2026-09-29 : un « déjà tenté » booléen bloquait toute réindexation après
+    // celle du démarrage. Des notes promues à 08:32 ont laissé le Brain muet (503) toute la session.
+    const { env } = fauxBrain()
+    const { spawnFn, fins, lancements } = spawnPilotable()
+    const deps = { env, spawnFn, readHealth: async () => DEGRADE }
+    expect((await ensureBrainIndexFresh(deps)).status).toBe('launched')
+    fins[0](0) // succès
+    expect((await reindexerApresMutation(deps)).status).toBe('launched')
+    expect(lancements()).toBe(2)
+  })
+
+  it('après deux essais ÉCHOUÉS, plus aucune réindexation dans la session', async () => {
+    const { env } = fauxBrain()
+    const { spawnFn, fins, lancements } = spawnPilotable()
+    let lu = 0
+    const deps = {
+      env,
+      spawnFn,
+      readHealth: async () => {
+        lu++
+        return DEGRADE
+      }
+    }
+    await ensureBrainIndexFresh(deps)
+    fins[0](1)
+    fins[1](1) // second essai échoué : la limite d'origine tient
+    const lectures = lu
+    const r = await reindexerApresMutation(deps)
+    expect(r.status).toBe('not-needed')
+    expect(r.detail).toMatch(/échou/)
+    expect(lancements()).toBe(2)
+    expect(lu).toBe(lectures) // même pas de sonde : la session a renoncé
+  })
+
+  it('une demande PENDANT une reconstruction en programme UNE autre à sa fin, pas en parallèle', async () => {
+    // Une note promue pendant le parcours du corpus peut échapper à la reconstruction en cours.
+    const { env } = fauxBrain()
+    const { spawnFn, fins, lancements } = spawnPilotable()
+    const deps = { env, spawnFn, readHealth: async () => DEGRADE }
+    await ensureBrainIndexFresh(deps)
+    expect((await reindexerApresMutation(deps)).status).toBe('not-needed')
+    expect((await reindexerApresMutation(deps)).status).toBe('not-needed')
+    expect(lancements()).toBe(1) // jamais deux reconstructions en même temps
+    fins[0](0)
+    expect(lancements()).toBe(2) // une seule reprise, même pour deux demandes
+    fins[1](0)
+    expect(lancements()).toBe(2)
+  })
+
+  it('après une mutation, un Brain encore vu sain est resondé jusqu’à voir la péremption', async () => {
+    // La surveillance du serveur peut ne pas avoir encore vu le fichier déplacé sur le partage.
+    const { env } = fauxBrain()
+    // Sain (changement pas encore vu), puis muet (sonde expirée pendant le recalcul), puis périmé.
+    const suite = [{ state: 'healthy', reasons: [] }, null, DEGRADE]
+    let lu = 0
+    const { spawnFn, lancements } = spawnPilotable()
+    const r = await reindexerApresMutation({
+      env,
+      spawnFn,
+      sleepFn: async () => {},
+      readHealth: async () => (lu < suite.length ? suite[lu++] : DEGRADE)
+    })
+    expect(r.status).toBe('launched')
+    expect(lu).toBe(3)
+    expect(lancements()).toBe(1)
+  })
+
+  it('une mutation qui ne touche pas le savoir laisse le Brain sain : sondage borné, aucune reconstruction', async () => {
+    const { env } = fauxBrain()
+    let lu = 0
+    const { spawnFn, lancements } = spawnPilotable()
+    const r = await reindexerApresMutation({
+      env,
+      spawnFn,
+      sleepFn: async () => {},
+      readHealth: async () => {
+        lu++
+        return { state: 'healthy', reasons: [] }
+      }
+    })
+    expect(r.status).toBe('not-needed')
+    expect(lu).toBe(5)
+    expect(lancements()).toBe(0)
+  })
+
+  it('au démarrage, un Brain sain n’est PAS resondé (le mode après-mutation est seul à insister)', async () => {
+    const { env } = fauxBrain()
+    let lu = 0
+    await ensureBrainIndexFresh({
+      env,
+      spawnFn: vi.fn(),
+      sleepFn: async () => {},
+      readHealth: async () => {
+        lu++
+        return { state: 'healthy', reasons: [] }
+      }
+    })
+    expect(lu).toBe(1)
   })
 
   it('un service injoignable ne déclenche rien (ce n’est pas un index périmé)', () => {

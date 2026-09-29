@@ -119,7 +119,14 @@ export function buildBrainLaunchCommand(
   tooling: string,
   python: string,
   script: string,
-  platform: string = process.platform
+  platform: string = process.platform,
+  /**
+   * `true` : `cmd` ATTEND la fin du programme (`start /wait`) au lieu de rendre la main en ~50 ms.
+   * Pour un traitement court dont l'appelant doit connaître la fin (la curation, suivie d'une
+   * réindexation), jamais pour le serveur, qui doit rester détaché. Mesuré le 2026-09-29 : le code
+   * de sortie n'est PAS transmis (`cmd` rend 0) — seule la fin est fiable.
+   */
+  attendre = false
 ): BrainLaunchCommand | null {
   // brain_server fait lui-même os.chdir(AMITEL_BRAIN_ROOT) : aucun cwd n'est nécessaire ici, on
   // n'en impose un que s'il est LOCAL (un cwd UNC ferait repartir cmd.exe de C:\Windows).
@@ -128,7 +135,8 @@ export function buildBrainLaunchCommand(
   if (CMD_UNSAFE.test(python) || CMD_UNSAFE.test(script)) return null
   // `/d` : ignore les AutoRun du registre (HKCU\...\Command Processor\AutoRun s'exécuterait sinon
   // dans notre cmd). Titre vide `''` : sinon `start` prend le chemin cité comme TITRE de fenêtre.
-  return { bin: 'cmd.exe', args: ['/d', '/c', 'start', '', '/b', python, script], cwd }
+  const lancement = attendre ? ['/b', '/wait'] : ['/b']
+  return { bin: 'cmd.exe', args: ['/d', '/c', 'start', '', ...lancement, python, script], cwd }
 }
 
 /**

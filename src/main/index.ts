@@ -106,7 +106,7 @@ import { estDansUnDepotGit } from './depot-git'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
-import { ensureBrainIndexFresh } from './brain-index-refresh'
+import { ensureBrainIndexFresh, reindexerApresMutation } from './brain-index-refresh'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
 import {
@@ -568,6 +568,20 @@ const brainSearchWorker = new BrainWorkerClient(brainWorkerPath)
 const brainInboxWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchCoordinator = new BrainSearchCoordinator()
 jalonDemarrage('clients Brain crees')
+/*
+ * Le savoir vient de changer (promotion, retrait, restauration, remplacement) ou un rafraîchissement
+ * est demandé. Le serveur Brain détecte alors un index périmé mais NE LE RECONSTRUIT PAS : il
+ * refuse toute question (503) jusqu'à la prochaine reconstruction. Mesuré le 2026-09-29 : notes
+ * promues à 08:32, Brain muet ensuite, car la réindexation ne partait qu'au démarrage. En tâche de
+ * fond : l'appelant n'attend ni la sonde ni les minutes de reconstruction.
+ */
+const reindexerEnFond = (origine: string): void => {
+  void reindexerApresMutation()
+    .then((r) => {
+      if (r.status !== 'not-needed') console.log('[brain-index]', origine, r.status, '—', r.detail)
+    })
+    .catch((erreur) => console.warn('[brain-index]', origine, 'sonde impossible —', String(erreur)))
+}
 const invalidateBrainRuntime = async (): Promise<void> => {
   brainSearchCoordinator.invalidate()
   await Promise.all([
@@ -575,6 +589,7 @@ const invalidateBrainRuntime = async (): Promise<void> => {
     brainSearchWorker.invalidate(),
     brainInboxWorker.invalidate()
   ])
+  reindexerEnFond('après modification du savoir')
 }
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 // SORTIE DE L'ÉTAT D'ATTENTE. Un tour laissé `streaming` sur disque appartient à un run mort avec
@@ -4891,7 +4906,10 @@ app.whenReady().then(async () => {
     // #1 bis - la file de candidats Brain se VIDE toute seule au demarrage. Sans ce declencheur,
     // rien dans l'app n'executait l'etape 3 du protocole (inbox/README.md) : 109 candidats
     // dormants mesures le 2026-09-02, dont 67 deposes le jour meme. Ne promeut que le mecanique.
-    const curation = startBrainCuration()
+    // Sa FIN enchaîne la réindexation : `--apply` promeut des notes, donc périme l'index.
+    const curation = startBrainCuration(process.env, undefined, () =>
+      reindexerEnFond('après la curation de démarrage')
+    )
     if (curation.status === 'launched') console.log('[brain-curation]', curation.detail)
     // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
     // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera

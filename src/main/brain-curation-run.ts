@@ -56,7 +56,15 @@ export function startBrainCuration(
     bin: string,
     args: readonly string[],
     options: Record<string, unknown>
-  ) => Pick<ChildProcess, 'unref'> = spawn as never
+  ) => Pick<ChildProcess, 'unref'> & {
+    once?: (evenement: 'exit', rappel: (code: number | null) => void) => unknown
+  } = spawn as never,
+  /**
+   * Appelée quand la curation se TERMINE. `--apply` promeut des notes dans `knowledge/` : sans
+   * reconstruction derrière, l'index devient périmé et le Brain refuse toute question (503) —
+   * mesuré le 2026-09-29. L'appelant y branche la réindexation.
+   */
+  apresCuration?: () => void
 ): CurationLaunch {
   if (attempted) return { status: 'nothing-to-do', detail: 'curation déjà tentée cette session' }
   const runtime = resolveBrainRuntime(env)
@@ -70,7 +78,9 @@ export function startBrainCuration(
   }
   const pending = pendingCandidateCount(brainRoot)
   if (pending === 0) return { status: 'nothing-to-do', detail: 'aucun candidat en attente' }
-  const command = buildBrainLaunchCommand(tooling, python, script)
+  // `attendre` : sans `/wait`, `cmd` se termine en ~50 ms, AVANT la moindre promotion — la
+  // réindexation branchée sur sa fin partirait trop tôt et ne verrait rien de périmé.
+  const command = buildBrainLaunchCommand(tooling, python, script, process.platform, true)
   if (!command) return { status: 'unavailable', detail: 'chemin du tooling refusé (fail-closed)' }
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
@@ -81,6 +91,9 @@ export function startBrainCuration(
     [...command.args, '--apply', '--reviewer', CURATION_REVIEWER],
     { cwd: command.cwd, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
   )
+  // À TOUTE fin : `cmd /c start /wait` rend 0 même quand python échoue, et une curation
+  // interrompue a pu promouvoir une partie des notes. La suite sonde la santé et décide seule.
+  if (apresCuration) child.once?.('exit', () => apresCuration())
   child.unref?.()
   return { status: 'launched', detail: `curation lancée sur ${pending} candidat(s) en attente` }
 }

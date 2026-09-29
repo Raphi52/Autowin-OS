@@ -141,6 +141,30 @@ describe('ensureBrainServerStarted', () => {
     }
   })
 
+  it('buildBrainLaunchCommand : `/wait` seulement quand l’appelant doit connaître la FIN', () => {
+    // Mesuré le 2026-09-29 : `cmd /c start /b` rend la main en ~50 ms, AVANT la fin du programme.
+    // Le serveur doit rester détaché ; la curation, elle, doit être suivie d'une réindexation.
+    const serveur = buildBrainLaunchCommand('C:\\t', 'C:\\t\\python.exe', 'C:\\t\\s.py', 'win32')
+    expect(serveur?.args).not.toContain('/wait')
+    const court = buildBrainLaunchCommand(
+      'C:\\t',
+      'C:\\t\\python.exe',
+      'C:\\t\\c.py',
+      'win32',
+      true
+    )
+    expect(court?.args).toEqual([
+      '/d',
+      '/c',
+      'start',
+      '',
+      '/b',
+      '/wait',
+      'C:\\t\\python.exe',
+      'C:\\t\\c.py'
+    ])
+  })
+
   it('buildBrainLaunchCommand : fail-closed sur métacaractère, cwd UNC non imposé', () => {
     expect(buildBrainLaunchCommand('C:\\t & x', 'C:\\t & x\\python.exe', 'C:\\t & x\\s.py', 'win32')).toBeNull()
     // cmd.exe REFUSE un cwd UNC (« UNC paths are not supported. Defaulting to Windows directory ») :
