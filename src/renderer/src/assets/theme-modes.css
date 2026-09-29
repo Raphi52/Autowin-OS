@@ -712,7 +712,10 @@
    (HomeView.css l.1116-1134) : noirs au milieu d'un widget devenu pâle. */
 :root[data-base='clair'] .jarvis__audio-champ select,
 :root[data-base='clair'] .jarvis__audio-champ input[type='text'],
-:root[data-base='clair'] .jarvis__audio-champ select option {
+:root[data-base='clair'] .jarvis__audio-champ select option,
+/* Même défaut sur la liste « Mode » de la transcription (HomeView.css l.1453, #14120d en dur). */
+:root[data-base='clair'] .enregistrements__champ select,
+:root[data-base='clair'] .enregistrements__champ select option {
   background: #ffffff;
   color: var(--text);
   border-color: rgba(140, 100, 18, 0.3);

@@ -889,7 +889,9 @@
 :root[data-theme^='malvoyant-'] .sc-brain-call > footer,
 :root[data-theme^='malvoyant-'] .sc-brain-call > p,
 :root[data-theme^='malvoyant-'] .sc-brain-sources li,
-:root[data-theme^='malvoyant-'] .sc-annule-path {
+:root[data-theme^='malvoyant-'] .sc-annule-path,
+:root[data-theme^='malvoyant-'] .sc-relecture,
+:root[data-theme^='malvoyant-'] .sc-diff-astuce {
   font-size: 13px;
 }
 
