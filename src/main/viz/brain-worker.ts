@@ -16,11 +16,13 @@ import {
   searchVaultBrainNotesAsync
 } from './fs-brains'
 import type { BrainWorkerRequest } from './brain-worker-contract'
+import { CacheParSignature } from './brain-worker-cache'
 
 if (!parentPort) throw new Error('brain-worker doit être exécuté dans un Worker')
 
-const graphCache = new Map<string, ReturnType<typeof loadBrainGraph>>()
-const neighborhoodCache = new Map<string, ReturnType<typeof loadBrainNeighborhood>>()
+// Indexés par la signature du fichier lu : un graph.json reconstruit est relu (voir brain-worker-cache.ts).
+const graphCache = new CacheParSignature<ReturnType<typeof loadBrainGraph>>()
+const neighborhoodCache = new CacheParSignature<ReturnType<typeof loadBrainNeighborhood>>()
 
 /*
  * BATTEMENT DU WORKER — mesure du 2026-09-08 : la premiere lecture du Brain sur un partage RESEAU
@@ -51,11 +53,9 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
       case 'loadGraph': {
         const [path, lod, community, corpus] = request.args
         const key = `${path}\u0000${lod ?? 300}\u0000${community ?? ''}\u0000${JSON.stringify(corpus)}`
-        value = graphCache.get(key)
-        if (!value) {
-          value = await loadBrainGraphAsync(path, lod, community, corpus)
-          graphCache.set(key, value as ReturnType<typeof loadBrainGraph>)
-        }
+        value = await graphCache.obtenir(key, path, () =>
+          loadBrainGraphAsync(path, lod, community, corpus)
+        )
         break
       }
       case 'loadThemes':
@@ -67,11 +67,9 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
       case 'loadNeighborhood': {
         const [path, nodeId, corpus] = request.args
         const key = `${path}\u0000${nodeId}\u0000${JSON.stringify(corpus)}`
-        value = neighborhoodCache.get(key)
-        if (!value) {
-          value = loadBrainNeighborhood(path, nodeId, corpus)
-          neighborhoodCache.set(key, value as ReturnType<typeof loadBrainNeighborhood>)
-        }
+        value = await neighborhoodCache.obtenir(key, path, () =>
+          loadBrainNeighborhood(path, nodeId, corpus)
+        )
         break
       }
       case 'readNodeFile':
