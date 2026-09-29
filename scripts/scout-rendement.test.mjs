@@ -213,3 +213,35 @@ describe('scout-rendement — la contre-epreuve ne vaut que pour l occurrence qu
     expect(r.rows[0].tours_detail[1].extraitReprise).toBe('faux')
   })
 })
+
+/*
+ * Mesure du 2026-09-29 (/maintenance, conv-38) : le rapport comptait 18 conversations quand l'app en
+ * avait 22 — `conversations.json` n'est reecrit qu'a certains moments, les creations recentes ne
+ * vivent que dans `conversations.json.journal.jsonl`. La sonde quotidienne ratait donc le jour meme.
+ */
+describe('scout-rendement — rejoue le journal des conversations', () => {
+  it('compte une conversation creee apres la derniere reecriture du fichier, et oublie une supprimee', () => {
+    const data = corpus()
+    const schema = 'autowin.conversation-change/v1'
+    const neuve = { id: 'conv-2', title: 'neuve', provider: 'claude', messages: [], createdAt: 3000 }
+    const journal = [
+      { schema, op: 'upsert', conversation: neuve },
+      {
+        schema,
+        op: 'append-messages',
+        id: 'conv-2',
+        messages: [{ role: 'user', content: 'fais Y', ts: 3100 }],
+        updatedAt: 3100
+      },
+      { schema, op: 'upsert', conversation: { ...neuve, id: 'conv-3' } },
+      { schema, op: 'delete', id: 'conv-3' }
+    ]
+    writeFileSync(
+      join(data, 'conversations.json.journal.jsonl'),
+      journal.map((l) => JSON.stringify(l)).join('\n') + '\n'
+    )
+    const r = rapport(data)
+    expect(r.rows.map((row) => row.id).sort()).toEqual(['conv-1', 'conv-2'])
+    expect(r.rows.find((row) => row.id === 'conv-2').tours).toBe(1)
+  })
+})

@@ -35,7 +35,22 @@ const readJsonl = (p) => {
   } catch { return [] }
 }
 
-const corpus = readJson(path.join(DATA, 'conversations.json'), [])
+// Le fichier SEUL est en retard : les creations/suppressions recentes ne vivent que dans son journal
+// (mesure du 2026-09-29 : 18 conversations lues contre 22 vivantes). On le rejoue DANS L'ORDRE, comme
+// applyConversationJournal (src/main/store/conversations-disk.ts). `turn-event` n'est pas rejoue :
+// il ne porte que le texte en flux des reponses, jamais un tour utilisateur ni un turnId nouveau.
+const lireCorpus = () => {
+  const base = readJson(path.join(DATA, 'conversations.json'), [])
+  if (!Array.isArray(base)) return base
+  const parId = new Map(base.map((c) => [c.id, c]))
+  for (const r of readJsonl(path.join(DATA, 'conversations.json.journal.jsonl'))) {
+    if (r.op === 'upsert' && r.conversation?.id) parId.set(r.conversation.id, r.conversation)
+    else if (r.op === 'delete') parId.delete(r.id)
+    else if (r.op === 'append-messages' && Array.isArray(r.messages)) parId.get(r.id)?.messages?.push(...r.messages)
+  }
+  return [...parId.values()]
+}
+const corpus = lireCorpus()
 if (!Array.isArray(corpus) || corpus.length === 0) {
   console.error(`Aucune conversation lisible sous ${DATA}`)
   process.exit(2)
