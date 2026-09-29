@@ -338,7 +338,10 @@
   z-index: 40;
   width: 300px;
   border: 1px solid color-mix(in srgb, var(--gold, #e9bd4e) 40%, var(--line));
-  background: var(--surface-raised, var(--bg-1, #0b0b12));
+  /* OPAQUE : elle flotte PAR-DESSUS le rail. `--surface-raised` (= `--bg-2`, noir à 42 %)
+     laissait lire les icônes du rail à travers le texte — constat utilisateur du 2026-09-29.
+     `--bg-0` est opaque dans tous les thèmes (même peau que `.delete-confirm-card`). */
+  background: var(--bg-0);
 }
 
 .rail-update-commit {
