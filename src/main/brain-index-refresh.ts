@@ -261,5 +261,9 @@ export async function ensureBrainIndexFresh(deps?: {
 export function reindexerApresMutation(
   deps?: Parameters<typeof ensureBrainIndexFresh>[0]
 ): Promise<BrainIndexRefresh> {
-  return ensureBrainIndexFresh({ ...deps, apresMutation: true })
+  // FENÊTRE D'ATTENTE mesurée le 2026-09-29 : après une promotion, le serveur relit tout le corpus
+  // sur le partage et répond « unavailable » SANS raison pendant ~80 s (promotion 08:57:24,
+  // cause nommée 08:58:46). 5 sondes à 2 s (le défaut du démarrage) abandonnaient au bout de 8 s.
+  // On sonde toutes les 10 s pendant 5 minutes au plus : la tâche est de fond, rien n'attend.
+  return ensureBrainIndexFresh({ essais: 30, delaiMs: 10_000, ...deps, apresMutation: true })
 }

@@ -341,8 +341,42 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
       }
     })
     expect(r.status).toBe('not-needed')
-    expect(lu).toBe(5)
+    expect(lu).toBe(30) // 30 sondes à 10 s : borné à 5 minutes (fenêtre après mutation)
     expect(lancements()).toBe(0)
+  })
+
+  it('après une mutation, attend la fin du recalcul de fraîcheur du serveur (plus d’une minute)', async () => {
+    // Mesuré le 2026-09-29 : après la promotion de 08:57:24, le serveur a répondu « unavailable »
+    // SANS raison pendant plus d'une minute (il relit tout le corpus sur le partage). 5 sondes à
+    // 2 s abandonnaient au bout de 8 s : aucune réindexation, Brain muet.
+    const { env } = fauxBrain()
+    let lu = 0
+    let attendu = 0
+    const { spawnFn, lancements } = spawnPilotable()
+    const r = await reindexerApresMutation({
+      env,
+      spawnFn,
+      sleepFn: async (ms) => void (attendu += ms),
+      readHealth: async () => (++lu <= 12 ? INDETERMINE : DEGRADE)
+    })
+    expect(r.status).toBe('launched')
+    expect(lancements()).toBe(1)
+    expect(attendu).toBeGreaterThanOrEqual(90_000)
+  })
+
+  it('après une mutation, l’attente reste bornée (5 minutes au plus)', async () => {
+    const { env } = fauxBrain()
+    let attendu = 0
+    const { spawnFn, lancements } = spawnPilotable()
+    const r = await reindexerApresMutation({
+      env,
+      spawnFn,
+      sleepFn: async (ms) => void (attendu += ms),
+      readHealth: async () => INDETERMINE
+    })
+    expect(r.status).toBe('not-needed')
+    expect(lancements()).toBe(0)
+    expect(attendu).toBeLessThanOrEqual(300_000)
   })
 
   it('au démarrage, un Brain sain n’est PAS resondé (le mode après-mutation est seul à insister)', async () => {
