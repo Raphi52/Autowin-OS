@@ -27,8 +27,10 @@ import {
  *  1. par ses LIGNES : chaque ligne ajoutée de son diff a été écrite par un outil d'édition du fil ;
  *  2. à défaut (édition en ligne de commande, suppression, renommage) : il était propre au début du
  *     tour ET aucun autre fil ne l'a touché depuis.
- * Le reste est LAISSÉ en attente et nommé dans le rapport. Un faux négatif laisse un fichier non
- * publié, visible dans le panneau ; un faux positif pousserait le travail d'un autre fil sans lui.
+ * Le reste est LAISSÉ en attente et nommé dans le rapport, avec le nombre de lignes que le fil ne
+ * réclame pas (les réécrire avec l'outil d'édition suffit à le publier). Un faux négatif laisse un
+ * fichier non publié, visible dans le panneau ; un faux positif pousserait le travail d'un autre fil
+ * sans lui.
  */
 
 /** Travail propre au chat. `subagent` en est exclu : une tâche d'agent publie elle-même son travail. */
@@ -147,20 +149,24 @@ async function lignesAjoutees(repo: string, gitPath: string, runGit: GitRunner):
   return ajoutees
 }
 
-async function prouveParLignes(
+/**
+ * Lignes ajoutées que le fil ne réclame pas. `0` : fichier PROUVÉ par ses lignes. `undefined` :
+ * aucune preuve possible (aucune ligne ajoutée, diff illisible) — la règle de repli décide.
+ * Le compte est rendu au rapport : mesuré le 2026-09-29, un fichier est resté écarté tour après
+ * tour pour 2 lignes sur 146 écrites hors outil d'édition, sans que rien dise ce qui manquait.
+ */
+async function lignesNonReclamees(
   repo: string,
   gitPath: string,
   revendiquees: ReadonlySet<string> | undefined,
   runGit: GitRunner
-): Promise<boolean> {
-  if (!revendiquees?.size) return false
+): Promise<number | undefined> {
   try {
     const ajoutees = await lignesAjoutees(repo, gitPath, runGit)
-    return (
-      ajoutees.length > 0 && ajoutees.every((line) => revendiquees.has(exactLineFingerprint(line)))
-    )
+    if (ajoutees.length === 0) return undefined
+    return ajoutees.filter((line) => !revendiquees?.has(exactLineFingerprint(line))).length
   } catch {
-    return false
+    return undefined
   }
 }
 
@@ -245,9 +251,13 @@ export async function publierTourDeChat(input: {
   const exclus: Exclusion[] = []
   for (const gitPath of enAttente) {
     const key = cle(resolve(repo, gitPath))
-    if (await prouveParLignes(repo, gitPath, revendiquees.get(key), runGit)) publier.push(gitPath)
-    else if (salesAuDepart.has(key)) exclus.push({ path: gitPath, motif: 'modifie-avant-le-tour' })
-    else if (concurrents.has(key)) exclus.push({ path: gitPath, motif: 'touche-par-un-autre-fil' })
+    const nonReclamees = await lignesNonReclamees(repo, gitPath, revendiquees.get(key), runGit)
+    const detail = nonReclamees ? { lignesNonReclamees: nonReclamees } : {}
+    if (nonReclamees === 0) publier.push(gitPath)
+    else if (salesAuDepart.has(key))
+      exclus.push({ path: gitPath, motif: 'modifie-avant-le-tour', ...detail })
+    else if (concurrents.has(key))
+      exclus.push({ path: gitPath, motif: 'touche-par-un-autre-fil', ...detail })
     else publier.push(gitPath)
   }
   // GARDE-FOU : `autoCloseRun` sans chemins publierait TOUT l'arbre (`add -A`).

@@ -891,7 +891,10 @@
 :root[data-theme^='malvoyant-'] .sc-brain-sources li,
 :root[data-theme^='malvoyant-'] .sc-annule-path,
 :root[data-theme^='malvoyant-'] .sc-relecture,
-:root[data-theme^='malvoyant-'] .sc-diff-astuce {
+:root[data-theme^='malvoyant-'] .sc-diff-astuce,
+:root[data-theme^='malvoyant-'] .sc-lancement,
+:root[data-theme^='malvoyant-'] .sc-lancement-commande,
+:root[data-theme^='malvoyant-'] .sc-lancement-source {
   font-size: 13px;
 }
 

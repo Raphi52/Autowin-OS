@@ -275,7 +275,12 @@ describe('SourceControlPane (prompt-first)', () => {
           at: '2026-09-26T12:00:00.000Z',
           source: 'chat',
           project: { status: 'pushed', branch: 'main', files: 2, mode: 'direct' },
-          exclus: [{ path: 'src/partage.ts', motif: 'touche-par-un-autre-fil' }]
+          exclus: [
+            { path: 'src/partage.ts', motif: 'touche-par-un-autre-fil' },
+            // Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que rien le dise.
+            { path: 'src/b.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 2 },
+            { path: 'src/c.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 1 }
+          ]
         }
       })
     await render()
@@ -286,7 +291,9 @@ describe('SourceControlPane (prompt-first)', () => {
     // Un tour de chat ne publie jamais le Brain : aucune ligne ne doit le laisser croire.
     expect(last).not.toContain('Brain')
     expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
-      'Laissé en attente · src/partage.ts (touché aussi par un autre fil)'
+      'Laissé en attente · src/partage.ts (touché aussi par un autre fil), ' +
+        'src/b.ts (déjà modifié avant le tour, 2 lignes non réclamées), ' +
+        'src/c.ts (déjà modifié avant le tour, 1 ligne non réclamée)'
     )
     const toggle = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
     expect(toggle.title).toContain('chaque tour de chat')

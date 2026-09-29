@@ -60,13 +60,29 @@ interface AutoCloseViewState {
     brain?: AutoCloseViewResult
     at: string
     source?: 'chat'
-    exclus?: Array<{ path: string; motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' }>
+    exclus?: Exclusion[]
   }
+}
+
+interface Exclusion {
+  path: string
+  motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil'
+  /** Lignes que le fil ne réclame pas : les réécrire avec l'outil d'édition publie le fichier. */
+  lignesNonReclamees?: number
 }
 
 const MOTIFS_EXCLUSION: Record<string, string> = {
   'modifie-avant-le-tour': 'déjà modifié avant le tour',
   'touche-par-un-autre-fil': 'touché aussi par un autre fil'
+}
+
+/** Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que le panneau le dise. */
+function libelleExclusion(item: Exclusion): string {
+  const motif = MOTIFS_EXCLUSION[item.motif] ?? item.motif
+  const n = item.lignesNonReclamees
+  if (!n) return `${item.path} (${motif})`
+  const s = n > 1 ? 's' : ''
+  return `${item.path} (${motif}, ${n} ligne${s} non réclamée${s})`
 }
 
 function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): string {
@@ -810,9 +826,7 @@ export function SourceControlPane({
                 )}
                 {autoClose.last.exclus?.length ? (
                   <span data-testid="sc-autoclose-exclus">
-                    {`Laissé en attente · ${autoClose.last.exclus
-                      .map((item) => `${item.path} (${MOTIFS_EXCLUSION[item.motif] ?? item.motif})`)
-                      .join(', ')}`}
+                    {`Laissé en attente · ${autoClose.last.exclus.map(libelleExclusion).join(', ')}`}
                   </span>
                 ) : null}
               </div>

@@ -474,7 +474,12 @@ export interface AutoCloseReport {
   /** `chat` : fin d'un tour de chat ; absent : fin d'une tâche d'agent. */
   source?: 'chat'
   /** Fichiers du tour LAISSÉS en attente faute de preuve qu'ils appartiennent à ce fil. */
-  exclus?: Array<{ path: string; motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' }>
+  exclus?: Array<{
+    path: string
+    motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil'
+    /** Lignes ajoutées que le fil ne réclame pas : ce qui a fait échouer la preuve par lignes. */
+    lignesNonReclamees?: number
+  }>
 }
 
 /**

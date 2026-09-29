@@ -157,6 +157,75 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     })
   })
 
+  it('nomme le nombre de lignes non réclamées d’un fichier écarté, sans l’assouplir', async () => {
+    // Mesuré le 2026-09-29 : brain-curation-run.test.ts portait 146 lignes ajoutées, dont 144 écrites
+    // par l'outil d'édition du fil et 2 reformatées en ligne de commande. La preuve par lignes est en
+    // tout ou rien : il est resté écarté tour après tour, sans que rien dise ce qui manquait.
+    const { repo } = await depot()
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 0\nexport const b = 1\n')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
+    writeFileSync(
+      join(repo, 'partage.ts'),
+      'export const partage = 0\nexport const b = 1\nexport const c = 2\nexport const d = 3\n'
+    )
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute c et d',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          paths: ['partage.ts'],
+          pathLineFingerprints: { 'partage.ts': lignes('export const c = 2', 'export const d = 3') }
+        })
+      ]
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'skipped', reason: 'unattributed' },
+      exclus: [{ path: 'partage.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 1 }]
+    })
+    expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
+  })
+
+  it('publie un fichier déjà modifié avant le tour dès que TOUTES ses lignes sont réclamées, même par un tour précédent', async () => {
+    // Le rattrapage d'un fichier bloqué : réécrire avec l'outil d'édition ses lignes non réclamées.
+    const { repo, remote } = await depot()
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 0\nexport const b = 1\n')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(
+      join(repo, 'partage.ts'),
+      'export const partage = 0\nexport const b = 1\nexport const c = 2\n'
+    )
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute c',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          timestamp: AVANT,
+          turnId: 'tour-A-0000',
+          paths: ['partage.ts'],
+          pathLineFingerprints: { 'partage.ts': lignes('export const b = 1') }
+        }),
+        trace(repo, {
+          paths: ['partage.ts'],
+          pathLineFingerprints: { 'partage.ts': lignes('export const c = 2') }
+        })
+      ]
+    })
+
+    expect(report).toMatchObject({ project: { status: 'pushed', files: 1 } })
+    expect(report?.exclus).toBeUndefined()
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['partage.ts'])
+  })
+
   it('publie une édition en ligne de commande quand personne d’autre n’a touché au fichier', async () => {
     const { repo, remote } = await depot()
     const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
