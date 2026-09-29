@@ -58,15 +58,15 @@ describe('sql_query : serveur déclaré non-prod', () => {
     expect(resultat.ok).toBe(false) // le témoin jette : preuve que la porte a laissé passer
   })
 
-  it('refuse sans aucune déclaration', async () => {
+  // conv-554 (2026-09-29) : l'utilisateur veut des SELECT sur TOUTES les bases de SQL-DEV\DEV sans
+  // autorisation, même quand la liste sur disque ne les déclare pas.
+  it('laisse passer RIG_DEV sur SQL-DEV\\DEV sans aucune déclaration', async () => {
     const { lancer } = await lire(SQL_DEV, 'RIG_DEV', [])
-    expect(lancer).not.toHaveBeenCalled()
+    expect(lancer).toHaveBeenCalled()
   })
 
-  it('refuse une déclaration sans barre (SQL-DEVDEV)', async () => {
-    const { lancer } = await lire(SQL_DEV, 'RIG_DEV', [
-      { nature: 'serveur', nom: 'SQL-DEVDEV', classe: 'non-prod' }
-    ])
+  it('refuse sans déclaration un serveur qui ne s’appelle pas exactement SQL-DEV\\DEV', async () => {
+    const { lancer } = await lire('SQL-DEVDEV', 'RIG_DEV', [])
     expect(lancer).not.toHaveBeenCalled()
   })
 
