@@ -17,7 +17,13 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 « rien à collecter — <taille totale> » et s'arrêter : une passe vide doit coûter peu.
 
 ## Racines (ce qui est VIVANT — ne jamais y toucher)
-- `conversations.json` : la liste des ids de conversations vivantes = la racine de marquage.
+- **Conversations vivantes = `get_state`** (son champ `conversations`) : c'est la racine de marquage.
+  JAMAIS `conversations.json` seul : sur disque, il n'est réécrit qu'à certains moments, et les
+  créations/suppressions récentes ne vivent que dans `conversations.json.journal.jsonl` (le
+  2026-09-29 : 18 ids dans le fichier contre 20 vivantes, dont la conversation GC en cours).
+  Sans `get_state` : rejouer ce journal DANS L'ORDRE sur le fichier (`upsert` ajoute
+  `conversation.id`, `delete` retire `id`) ; si ni l'un ni l'autre ne se lit → garde-fou « sonde
+  qui échoue » : aucun satellite collecté ce jour-là.
 - `get_state` : runs en cours, `travauxNonPublies`, copies de travail (`run_status`).
 - Hors périmètre ABSOLU : `claude-accounts/` (identités, secrets), `Cache/`, `Code Cache/`,
   `GPUCache/`, `Local Storage/`, `Session Storage/`, `Network/`, fichiers `*-wal` (propriété
@@ -32,7 +38,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 2. **Marquer** — chaque candidat doit porter une PREUVE de mort, sinon il reste :
    | Catégorie | Preuve de mort |
    |---|---|
-   | Satellites orphelins (`activity/`, `causal-trace/`, `chat-artifacts/`, `turn-journals/`, `prompt-observability/`) | l'id de conversation dans le nom n'existe PAS dans `conversations.json` |
+   | Satellites orphelins (`activity/`, `causal-trace/`, `chat-artifacts/`, `turn-journals/`, `prompt-observability/`) | l'id de conversation dans le nom n'existe PAS dans la liste vivante (`get_state`, cf. Racines — jamais `conversations.json` seul) |
    | Sorties de runs (`runs/`, `run-state/`) | run terminé depuis > 30 jours ET absent des runs en cours / bloqués / non publiés de `get_state` |
    | Rétention `prompt-observability/` et `run-stdout/` (fichiers directs, pas le sous-dossier `systems/`) | fichier NON MODIFIÉ depuis > 14 jours (mtime) ET, pour `run-stdout/`, son run absent des runs en cours / bloqués de `get_state` — l'âge suffit : ces données sont des journaux, pas un état |
    | Racine `.autowin-data/` : `*.log` > 5 Mo, `tmp/`, captures `tmp-*.png`, `vitest-*.txt` | non modifié depuis > 7 jours et non référencé par un process vivant (`DevToolsActivePort` exclu) |
