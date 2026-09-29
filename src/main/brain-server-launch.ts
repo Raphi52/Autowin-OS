@@ -32,8 +32,10 @@ export interface BrainLaunchResult {
  * arguments contenant espace/tabulation/guillemet : ceux-ci passeraient NUS au shell. Comme le
  * Un override de tooling non fiable nommé `Brain & payload` suffirait à couper la ligne et à
  * exécuter la suite au démarrage de l'app. On REFUSE donc plutôt que d'échapper.
+ * Exporté : la curation (`brain-curation-run.ts`) passe aussi la RACINE du Brain à cmd.exe et
+ * applique la même garde.
  */
-const CMD_UNSAFE = /[&|^<>()"%!\r\n]/
+export const CMD_UNSAFE: RegExp = /[&|^<>()"%!\r\n]/
 
 /** Un cwd UNC est REFUSÉ par cmd.exe (« UNC paths are not supported ») → il repart de C:\Windows. */
 function isUncPath(path: string): boolean {
