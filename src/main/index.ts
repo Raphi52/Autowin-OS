@@ -4914,7 +4914,10 @@ app.whenReady().then(async () => {
       () => reindexerEnFond('après la curation de démarrage'),
       isolatedTestInstance
     )
-    if (curation.status === 'launched') console.log('[brain-curation]', curation.detail)
+    // `busy` : une passe /curate tient inbox/.curation.lock — le renoncement doit se lire au journal.
+    if (curation.status === 'launched' || curation.status === 'busy') {
+      console.log('[brain-curation]', curation.detail)
+    }
     // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
     // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
     // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
