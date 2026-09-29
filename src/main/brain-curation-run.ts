@@ -16,7 +16,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { buildBrainLaunchCommand, resolveBrainRuntime } from './brain-server-launch'
+import { buildBrainLaunchCommand, CMD_UNSAFE, resolveBrainRuntime } from './brain-server-launch'
 
 /** Identité de revue : DOIT différer de la famille d'agent auteur (`autowin-os`), sinon
  *  `brain_curate._promote` refuse la promotion (« reviewer must belong to a distinct family »). */
@@ -82,13 +82,30 @@ export function startBrainCuration(
   // réindexation branchée sur sa fin partirait trop tôt et ne verrait rien de périmé.
   const command = buildBrainLaunchCommand(tooling, python, script, process.platform, true)
   if (!command) return { status: 'unavailable', detail: 'chemin du tooling refusé (fail-closed)' }
+  // La racine passe elle aussi par cmd.exe : même garde fail-closed que le tooling.
+  if (process.platform === 'win32' && CMD_UNSAFE.test(brainRoot)) {
+    return { status: 'unavailable', detail: 'racine du Brain refusée (fail-closed)' }
+  }
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
   childEnv.AMITEL_BRAIN_ROOT = brainRoot
   attempted = true
   const child = spawnFn(
     command.bin,
-    [...command.args, '--apply', '--reviewer', CURATION_REVIEWER],
+    [
+      ...command.args,
+      // Sans `--brain`/`--index`, brain_curate.py prend le PARENT de son propre dossier. Depuis que
+      // le code est installé en local (%LOCALAPPDATA%\AmitelBrain\tooling), ce parent n'a pas
+      // d'inbox/ : la curation ne voyait aucun candidat (mesuré le 2026-09-29). L'index est celui
+      // que le serveur sert (`brain_server.py` lit `racine/tooling/index`).
+      '--brain',
+      brainRoot,
+      '--index',
+      join(brainRoot, 'tooling', 'index'),
+      '--apply',
+      '--reviewer',
+      CURATION_REVIEWER
+    ],
     { cwd: command.cwd, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
   )
   // À TOUTE fin : `cmd /c start /wait` rend 0 même quand python échoue, et une curation
