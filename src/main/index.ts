@@ -4907,8 +4907,12 @@ app.whenReady().then(async () => {
     // rien dans l'app n'executait l'etape 3 du protocole (inbox/README.md) : 109 candidats
     // dormants mesures le 2026-09-02, dont 67 deposes le jour meme. Ne promeut que le mecanique.
     // Sa FIN enchaîne la réindexation : `--apply` promeut des notes, donc périme l'index.
-    const curation = startBrainCuration(process.env, undefined, () =>
-      reindexerEnFond('après la curation de démarrage')
+    // Une instance de TEST ne touche pas au Brain partagé (garde dans la fonction).
+    const curation = startBrainCuration(
+      process.env,
+      undefined,
+      () => reindexerEnFond('après la curation de démarrage'),
+      isolatedTestInstance
     )
     if (curation.status === 'launched') console.log('[brain-curation]', curation.detail)
     // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
@@ -4931,7 +4935,7 @@ app.whenReady().then(async () => {
      * à la main. On lit donc /health et on réindexe, une seule fois par session, en tâche de fond.
      */
     if (brainCheck?.ok) {
-      void ensureBrainIndexFresh().then((r) => {
+      void ensureBrainIndexFresh({ instanceDeTest: isolatedTestInstance }).then((r) => {
         if (r.status !== 'not-needed') console.log('[brain-index]', r.status, '—', r.detail)
       })
     }

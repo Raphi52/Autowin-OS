@@ -64,8 +64,17 @@ export function startBrainCuration(
    * reconstruction derrière, l'index devient périmé et le Brain refuse toute question (503) —
    * mesuré le 2026-09-29. L'appelant y branche la réindexation.
    */
-  apresCuration?: () => void
+  apresCuration?: () => void,
+  /**
+   * Instance de TEST isolée (`--isolated-test-instance`) : elle partage le Brain de production et
+   * ne doit pas le modifier. Mesuré le 2026-09-29 : une instance lancée par un autre fil a démarré
+   * sa propre maintenance du Brain en parallèle de l'app principale.
+   */
+  instanceDeTest = false
 ): CurationLaunch {
+  if (instanceDeTest) {
+    return { status: 'nothing-to-do', detail: 'instance de test : le Brain partagé n’est pas curé' }
+  }
   if (attempted) return { status: 'nothing-to-do', detail: 'curation déjà tentée cette session' }
   const runtime = resolveBrainRuntime(env)
   const { tooling, python, brainRoot } = runtime
@@ -108,9 +117,14 @@ export function startBrainCuration(
     ],
     { cwd: command.cwd, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
   )
-  // À TOUTE fin : `cmd /c start /wait` rend 0 même quand python échoue, et une curation
-  // interrompue a pu promouvoir une partie des notes. La suite sonde la santé et décide seule.
-  if (apresCuration) child.once?.('exit', () => apresCuration())
+  // Le code de sortie ne dit rien (`cmd /c start /wait` rend 0 même quand python échoue). Le
+  // signal fiable est la BOÎTE : une promotion en sort le candidat ; une fusion proposée ou un
+  // rejet l'y laissent, et ne justifient pas une reconstruction de plusieurs minutes.
+  if (apresCuration) {
+    child.once?.('exit', () => {
+      if (pendingCandidateCount(brainRoot) < pending) apresCuration()
+    })
+  }
   child.unref?.()
   return { status: 'launched', detail: `curation lancée sur ${pending} candidat(s) en attente` }
 }

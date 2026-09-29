@@ -379,6 +379,18 @@ describe('réindexation automatique au démarrage sur Brain dégradé', () => {
     expect(attendu).toBeLessThanOrEqual(300_000)
   })
 
+  it('une instance de TEST ne reconstruit jamais l’index du Brain partagé au démarrage', async () => {
+    // Mesuré le 2026-09-29 : une instance isolée (conv-881, 09:04:21) a lancé une 2e reconstruction
+    // de l'index de production en parallèle de celle de l'app principale (09:03:05).
+    const { env } = fauxBrain()
+    const readHealth = vi.fn(async () => DEGRADE)
+    const { spawnFn, lancements } = spawnPilotable()
+    const r = await ensureBrainIndexFresh({ env, spawnFn, readHealth, instanceDeTest: true })
+    expect(r.status).toBe('not-needed')
+    expect(readHealth).not.toHaveBeenCalled()
+    expect(lancements()).toBe(0)
+  })
+
   it('au démarrage, un Brain sain n’est PAS resondé (le mode après-mutation est seul à insister)', async () => {
     const { env } = fauxBrain()
     let lu = 0

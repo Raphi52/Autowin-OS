@@ -228,7 +228,16 @@ export async function ensureBrainIndexFresh(deps?: {
    * conclure trop tôt qu'il n'y a rien à reconstruire.
    */
   apresMutation?: boolean
+  /**
+   * Instance de TEST isolée : elle partage le Brain de production et ne le reconstruit pas au
+   * démarrage (mesuré le 2026-09-29 : deux reconstructions parallèles, l'une venant d'une
+   * instance de test lancée par un autre fil).
+   */
+  instanceDeTest?: boolean
 }): Promise<BrainIndexRefresh> {
+  if (deps?.instanceDeTest) {
+    return { status: 'not-needed', detail: 'instance de test : index du Brain partagé non touché' }
+  }
   // Session qui a déjà renoncé : inutile de solliciter le serveur.
   if (etat === 'echec') return startBrainIndexRebuild(deps?.env, deps?.spawnFn)
   const env = deps?.env ?? process.env
