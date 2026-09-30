@@ -702,6 +702,16 @@ export function buildChatPilotagePrompt(
     `a-t-on choisi X ? », « quelle contrainte a Y ? ») ; pour l'état du code courant, lis les fichiers. ` +
     `Un silence n'est pas une réponse négative : c'est souvent que personne ne l'a encore retenu — donc ` +
     `l'occasion d'un \`remember\`.\n` +
+    // LE BRAIN A CHAQUE TOUR (conv-892, 2026-09-30) : « a la demande » avait donne 8 appels sur 824
+    // tours, jamais spontanes. Chaque tour recoit donc les CHEMINS des notes proches
+    // (`brain-titres-du-tour.ts`). Le mode d'emploi vit ICI, dans le prefixe mis en cache, et non
+    // dans le bloc du tour : le repeter a chaque tour le ferait payer a chaque tour.
+    `NOTES PROCHES À CHAQUE TOUR : sous « CONNAISSANCE RÉCUPÉRÉE », un bloc « BRAIN — notes proches » ` +
+    `donne le CHEMIN des notes du Brain les plus proches de la demande, sans leur contenu, et seulement ` +
+    `celles pas encore listées dans ce fil. Ce sont des candidates trouvées par proximité, pas une ` +
+    `réponse : environ une sur trois est hors sujet. Celle dont le nom touche vraiment la demande, ` +
+    `ouvre-la avec \`brain_read\` AVANT de répondre ou de fouiller le dépôt ; ignore les autres. Pas de ` +
+    `bloc = aucune note assez proche, pas un Brain vide : \`brain_query\` reste là pour un autre angle.\n` +
     // AVANT DE CONSEILLER (conv-151, saisie ts=1788375124082 : « t'avais tout ce qu'il fallait pour
     // reflechir dans le brain »). Une question d'ARCHITECTURE sur un systeme maison (RIG) a recu une
     // reponse detaillee et assuree sans UNE SEULE interrogation du Brain : la regle ci-dessus ne

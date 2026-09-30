@@ -1440,9 +1440,15 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await type('keep me')
       await click('.composer-send')
 
-      // Le recu dit l'echec, et le message n'est pas perdu : il part au drain de fin de tour.
+      // Le recu dit que le message ATTEND (un refus n'est pas une panne, conv-891) ; seule une vraie
+      // erreur d'envoi le dit. Et le message n'est pas perdu : il part au drain de fin de tour.
       expect(container!.querySelector('.directive-receipt .msg-body')?.textContent).toBe('keep me')
-      expect(container!.querySelector('.directive-receipt-status')?.textContent).toContain('Échec')
+      expect(container!.querySelector('.directive-receipt-status')?.textContent).toContain(
+        testCase === 'a refused injection' ? 'Attend la fin du tour' : 'Erreur d’envoi'
+      )
+      expect(container!.querySelector('.directive-receipt-status')?.textContent).not.toContain(
+        'Échec'
+      )
       await act(async () => {
         pilot.resolve({ ok: true })
         await flushAnimationFrames()

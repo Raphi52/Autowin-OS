@@ -74,6 +74,18 @@ export function CopyMessageButton({ message }: { message: Msg }): React.JSX.Elem
   )
 }
 
+/**
+ * Un texte MIS DE CÔTÉ dit qu'il attend, et POURQUOI (conv-891) : le refus d'injection est voulu,
+ * jamais un échec. Sans motif (app principale plus ancienne), on dit seulement ce qui est sûr.
+ */
+function libelleAttente(receipt: DirectiveReceipt): string {
+  if (receipt.attenteMotif === 'commande' && receipt.commande)
+    return `⏸ Attend la fin du tour — lu comme la commande « ${receipt.commande} », qui ne s’ajoute pas à un tour en cours`
+  if (receipt.attenteMotif === 'hors-tour')
+    return '⏸ Attend la fin du tour — le tour se terminait, il partira juste après'
+  return '⏸ Attend la fin du tour — il ne pouvait pas s’ajouter au tour en cours, il partira juste après'
+}
+
 export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
   return (
     <div className={`msg user directive-receipt is-${receipt.status}`}>
@@ -92,8 +104,10 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
             )
           ) : receipt.status === 'differee' ? (
             '⏸ Reçue — l’agent la lira à la phase suivante du run'
+          ) : receipt.status === 'attente' ? (
+            libelleAttente(receipt)
           ) : (
-            '⚠ Échec — remis en file'
+            '⚠ Erreur d’envoi — il attend la fin du tour et partira juste après'
           )}
         </span>
       </div>

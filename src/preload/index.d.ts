@@ -610,7 +610,14 @@ interface ChatApi {
     conversationId: string,
     directive: string,
     attachments?: ChatAttachment[]
-  ) => Promise<{ ok: boolean; messageId?: string }>
+  ) => Promise<{
+    ok: boolean
+    messageId?: string
+    /** Refus : pourquoi le texte n'a pas rejoint le tour (il repart en file, rien n'est perdu). */
+    motif?: 'vide' | 'commande' | 'hors-tour'
+    /** Commande de skill reconnue (`scout`, `judge`…) quand `motif` vaut `commande`. */
+    commande?: string
+  }>
   /** Écrit le texte de l'utilisateur sur disque AVANT son envoi — filet contre les textes sans tour. */
   journaliserSaisie: (
     conversationId: string,

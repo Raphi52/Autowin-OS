@@ -73,6 +73,19 @@ const EXPLANATION_REQUEST =
 const QUESTION_PREFIX =
   /^\s*(?:est-ce que|quel(?:le)?s?\b|(?:ou|où)(?:\s|$)|qui\b|quoi\b|quand\b|combien\b)/i
 
+/**
+ * La COMMANDE DE SKILL que porte un texte, s'il en porte une — `scout`, `judge`, `look`...
+ *
+ * Une commande ne s'ajoute jamais a un tour en cours (`os:pilotChat:inject`) : elle doit repartir
+ * en message normal pour que la skill soit chargee. Ce refus est VOLONTAIRE ; le rendre sans motif
+ * faisait afficher « ⚠ Échec » a l'ecran (conv-891, 2026-09-30). Le nom rendu ici sert au reçu.
+ */
+export function commandeNonInjectable(directive: string): string | undefined {
+  const route = routeSkillRequest(directive)
+  if (route?.reason !== 'explicit-skill') return undefined
+  return route.skill ?? route.explicitPhase
+}
+
 function isActionClause(text: string): boolean {
   return DIRECT_ACTION.test(text) || POLITE_ACTION.test(text) || OBLIGATION_ACTION.test(text)
 }

@@ -104,6 +104,19 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
       "Voie poussée du chat (`sources: ['brain']`) : injecte un bloc Brain dans le prompt sans passer par le run."
   },
   {
+    id: 'chat-titres-du-tour',
+    label: 'Chat · chemins des notes proches, à chaque tour',
+    kind: 'push',
+    injecte: true,
+    emission: 'spool',
+    sites: [
+      { file: 'src/main/brain-titres-du-tour.ts', anchor: 'const brut = await retrieve(requete, {' }
+    ],
+    trace: { file: 'src/main/brain-titres-du-tour.ts', anchor: 'point: POINT_TITRES_DU_TOUR' },
+    pourquoi:
+      "Chaque tour de chat reçoit le chemin des 3 notes les plus proches au plus (jamais leur contenu), rien quand aucune n'est proche ; le modèle ouvre les utiles avec `brain_read`."
+  },
+  {
     id: 'ui-brain-search',
     label: 'Interface · recherche Brain manuelle',
     kind: 'search',
