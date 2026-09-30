@@ -309,8 +309,28 @@ export function lireCorpus(dir) {
   const fichier = join(dir, 'conversations.json')
   if (!existsSync(fichier)) return { conversations: [], fichier }
   const brut = JSON.parse(readFileSync(fichier, 'utf8'))
-  const conversations = Array.isArray(brut) ? brut : (brut.conversations ?? [])
-  return { conversations, fichier }
+  const base = Array.isArray(brut) ? brut : (brut.conversations ?? [])
+  // Le fichier SEUL est en retard : les fils recents ne vivent que dans son journal (mesure du
+  // 2026-09-29 : 18 conversations lues contre 23 vivantes). On le rejoue DANS L'ORDRE, comme
+  // applyConversationJournal (src/main/store/conversations-disk.ts). `turn-event` n'est pas rejoue :
+  // il ne porte que le texte en flux des reponses, jamais une demande de l'utilisateur.
+  const journal = `${fichier}.journal.jsonl`
+  if (!existsSync(journal)) return { conversations: base, fichier }
+  const parId = new Map(base.map((c) => [c.id, c]))
+  for (const ligne of readFileSync(journal, 'utf8').split(/\r?\n/)) {
+    if (!ligne) continue
+    let r
+    try {
+      r = JSON.parse(ligne)
+    } catch {
+      continue // ligne tronquee par une ecriture en cours : ignoree, comme au chargement de l'app
+    }
+    if (r.op === 'upsert' && r.conversation?.id) parId.set(r.conversation.id, r.conversation)
+    else if (r.op === 'delete') parId.delete(r.id)
+    else if (r.op === 'append-messages' && Array.isArray(r.messages))
+      parId.get(r.id)?.messages?.push(...r.messages)
+  }
+  return { conversations: [...parId.values()], fichier }
 }
 
 export function analyser(conversations) {
