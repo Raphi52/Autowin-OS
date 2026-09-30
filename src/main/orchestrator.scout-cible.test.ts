@@ -86,6 +86,9 @@ describe('cablage : un scout sans cible ne passe pas en silence', () => {
 /**
  * LE SITE D'APPEL du plafond de preuve (`scout-plafond.ts`) : meme accroche que la cible. Une piste
  * notee 72 dont le Pourquoi avoue « je n'ai pas verifie » doit arriver a la phase suivante a 50.
+ * fix-ok: run-3180eec71b06-1 — 3 editions = un test au site d'appel par branchement neuf de
+ * orchestrator.ts (plafond des notes, memoire des pistes, choix et bilan) ; chacun tombe (code 1)
+ * quand son branchement est retire. Aucun rouge corrige ici : ce fichier ne recoit que ces tests.
  */
 class ScoutQuiAvoue implements ProviderAdapter {
   readonly id = 'aveu'
