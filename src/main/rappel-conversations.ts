@@ -196,6 +196,23 @@ export function rappelDesEchangesPasses(
   if (!terme) return ''
   if (!fournisseurCourant) return ''
 
+  /*
+   * COUPER A 3 PUIS CLOISONNER, et non l'inverse -- choix MESURE, pas oubli (conv-889, 2026-09-30).
+   *
+   * Une conversation d'un autre dossier (ou la courante) qui entre dans les 3 premieres fait perdre
+   * sa place : en moyenne 1,00 conversation rappelee par tour, et 34 % des tours sans rappel.
+   * Cloisonner AVANT de couper a ete mesure (`scripts/mesure-rappel-selectif.mts`, 134 cas a verite
+   * connue, filtre PROCHE_DU_MEILLEUR applique partout) :
+   *
+   *   ordre                       cible trouvee   justes montres   conversations / tour
+   *   couper puis cloisonner          36/134       37/162 (23 %)          1,00
+   *   cloisonner puis couper          44/134       55/274 (20 %)          2,00
+   *   combler les seuls tours vides   38/134       39/179 (22 %)         ~1,23
+   *
+   * +8 cibles pour un volume DOUBLE, et les ajouts ne sont justes que 18 fois sur 112 (16 %) : moins
+   * bien que le rappel actuel. Or un extrait faux ne se contente pas d'occuper la place -- il egare
+   * (conv-889 : un rappel hors sujet a ete pris pour l'intention de l'utilisateur). Non retenu.
+   */
   const trouvees = conversations
     .search(terme, { limite: 3, extraitsParConversation: 2, budgetMs: BUDGET_MS })
     .filter((conversation) => conversation.id !== conversationCouranteId)
