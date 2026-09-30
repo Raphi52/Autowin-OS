@@ -141,7 +141,6 @@ Ne t'en sers pas pour éviter un travail difficile — seulement quand la suite 
 ou hors sujet.
 `
 
-/** Les personas proposables pour une phase. Vide = fan-out sans angle imposé, ce qui reste licite. */
 /**
  * Un angle par membre d'un panel SCOUT réglé dans la topologie (`agent-topology.json`).
  *
@@ -177,6 +176,7 @@ export function anglesDuPanelScout<T extends { persona?: string }>(membres: read
   })
 }
 
+/** Les personas proposables pour une phase. Vide = fan-out sans angle imposé, ce qui reste licite. */
 export function personasFor(phase: NodePhase): Persona[] {
   // Un noeud SKILL n'a pas d'angles pre-ecrits : le selecteur reste vide plutot que d'en inventer.
   return PERSONAS[phase as PipelinePhase] ?? []
