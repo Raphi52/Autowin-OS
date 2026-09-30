@@ -53,6 +53,15 @@ filtre qui empêche `think` de devenir un déballage.
   Pourquoi ce n'est pas le serveur qui choisit : mesuré le 2026-09-27, son seuil de ressemblance
   laisse passer 319 à 1247 notes sur 1300 par question, et la bonne note n'est première que 15 fois
   sur 24. Seul un lecteur sait ce qui est nécessaire.
+  **Le bloc « BRAIN — notes proches » du tour de chat.** Quand tu tournes dans le chat (`/think`
+  tapé par l'utilisateur), le tour porte peut-être déjà ce bloc, sous « CONNAISSANCE RÉCUPÉRÉE » :
+  au plus 3 chemins, trouvés à partir de la phrase entière, avec un seuil strict — et les notes déjà
+  listées plus haut dans le fil n'y reviennent pas. Ouvre d'abord celles qui répondent à une de tes
+  questions de l'étape 1 : tu les as déjà. Relis aussi les blocs précédents du fil. Puis lance un
+  `brain_query` par question que ces chemins ne couvrent pas. Un bloc absent ou court ne prouve
+  jamais que le Brain est vide : mesuré le 2026-09-30, la bonne note n'y figure que 15 fois sur 24
+  (`src/main/brain-titres-du-tour.ts`). Dans un run, ce bloc n'existe pas : la liste des candidates
+  de la tâche, en tête de ton contexte, est plus large.
 - **Le code lui-même** — pour l'état ACTUEL. La mémoire dit où regarder et pourquoi ; elle ne dit pas
   ce que le fichier contient aujourd'hui.
 
