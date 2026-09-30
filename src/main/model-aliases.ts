@@ -19,8 +19,14 @@ export interface ModelAlias {
 /**
  * Regex canonique des identifiants Claude versionnés — source UNIQUE, partagée
  * avec `labelClaudeModel` (models.ts) pour éviter toute duplication.
+ *
+ * La mineure refuse un segment FINAL de 8 chiffres : c'est la date d'un snapshot sans mineure
+ * (`claude-opus-4-20250514`, relevé dans Claude Code 2.1.284 le 2026-09-30). Sans cette garde, la
+ * mineure avalait la date — libellé « Opus 4.20250514 », classé plus récent qu'`opus-4-8`. L'ensemble
+ * des ids acceptés est inchangé : seul leur découpage change.
  */
-export const CLAUDE_MODEL_RE = /^claude-(fable|haiku|opus|sonnet)-(\d+)(?:-(\d+))?(?:-(\d{8}))?$/
+export const CLAUDE_MODEL_RE =
+  /^claude-(fable|haiku|opus|sonnet)-(\d+)(?:-(?!\d{8}$)(\d+))?(?:-(\d{8}))?$/
 
 const CLAUDE_FAMILIES = ['fable', 'haiku', 'opus', 'sonnet'] as const
 

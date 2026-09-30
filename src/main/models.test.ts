@@ -175,6 +175,11 @@ describe('catalogue Agents dynamique', () => {
     expect(models.find((model) => model.model === 'sonnet')).toBeUndefined()
     // GPT-6.1 Sol (Codex 0.159.1) n'y figure pas : Codex est retiré (routed-providers.ts).
     expect(models.some((model) => model.provider === 'codex')).toBe(false)
+    // Un id daté SANS mineure s'affiche avec sa date entre parenthèses, comme les autres snapshots.
+    const libelle = (id: string): string | undefined => models.find((m) => m.model === id)?.label
+    expect(libelle('claude-opus-4-20250514')).toBe('Claude Opus 4 (20250514) · CLI')
+    expect(libelle('claude-sonnet-4-20250514')).toBe('Claude Sonnet 4 (20250514) · CLI')
+    expect(libelle('claude-haiku-4-5-20251001')).toBe('Claude Haiku 4.5 (20251001) · CLI')
   })
 })
 
