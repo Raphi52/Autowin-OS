@@ -93,6 +93,45 @@ class LifecycleGreedyProvider extends GreedyProvider {
   }
 }
 
+/** Un scout qui demande a enchainer (`SUITE: frame`), et un juge qui peut refuser. */
+// fix-ok: trace runs/conv-767 — le `/scout` nomme a fini par `SUITE: frame`, le cadrage a ete joue,
+// puis « Reparation 1/120 — nouveau passage de build » ; ces 3 tests sont rouges sur l'ancien code.
+class ScoutQuiDevie extends GreedyProvider {
+  constructor(private readonly options: { jugeRefuse?: boolean } = {}) {
+    super()
+  }
+
+  // eslint-disable-next-line require-yield
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const content = String(messages[messages.length - 1]?.content ?? '')
+    this.contents.push(content)
+    const usage = { inputTokens: 4, outputTokens: 2, costUsd: 0.001 }
+    const systemInjected = Boolean(options.system)
+    if (/juge|VALIDE ou/i.test(content)) {
+      return {
+        text: this.options.jugeRefuse ? 'DEFAUT: liste non verifiee\n\nSCORE: 35' : 'VALIDE',
+        provider: this.id,
+        usage,
+        systemInjected
+      }
+    }
+    if (/phase SCOUT/u.test(`${options.system ?? ''}\n${content}`)) {
+      return {
+        text:
+          '## Cible\nligne 1 — reprise de run\n\n| Score | Type | What | Why | How |\n|---|---|---|---|---|\n' +
+          '| 1 | 82 | 🔧 fix | reprise de run | refait tout | commands.ts:598 |\n\nSUITE: frame',
+        provider: this.id,
+        usage,
+        systemInjected
+      }
+    }
+    return { text: 'autre phase', provider: this.id, usage, systemInjected }
+  }
+}
+
 function makeGreedy(
   provider: GreedyProvider,
   decompose: (task: string) => Promise<GreedyTaskNode[]>,
@@ -158,6 +197,43 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     // `learn` en queue : la capitalisation survit a une phase nommee (2026-09-13). Ce qui est
     // garanti ici reste qu'AUCUNE autre phase d'execution n'est jouee, et qu'on ne decompose pas.
     expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['scout', 'learn'])
+  })
+
+  /*
+   * CAS REEL conv-767 (trace `runs/conv-767/scout-task-toujours-pratique-etre-mubg4x51-workspace`) :
+   * un `/scout` nomme a fini sa sortie par `SUITE: frame`, et le run a joue scout → frame → juge
+   * DEFAUT → « Réparation 1/120 — nouveau passage de build » → build, qui a cree une ref git et une
+   * copie dans un autre depot. Deux portes laissaient passer : la branche SANS graphe suivait le
+   * `SUITE:` du modele, et la reparation rejouait `build` quelle que soit la phase nommee.
+   */
+  it('un /scout nomme qui ecrit SUITE: frame ne joue aucune autre phase', async () => {
+    const provider = new ScoutQuiDevie()
+    const result = await makeGreedy(provider, vi.fn(), () => ['scout']).run('/scout audite le repo')
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['scout', 'learn'])
+    expect(result.trace.some((step) => /SUITE: frame.*ignor/iu.test(step.detail ?? ''))).toBe(true)
+  })
+
+  it('un /scout nomme refuse par le juge se repare en scout, jamais en build', async () => {
+    const provider = new ScoutQuiDevie({ jugeRefuse: true })
+    const result = await makeGreedy(provider, vi.fn(), () => ['scout']).run('/scout audite le repo')
+    const phases = result.phaseOutputs.map((output) => output.phase)
+    expect(phases).not.toContain('build')
+    expect(phases).not.toContain('frame')
+    expect(phases.filter((phase) => phase === 'scout').length).toBeGreaterThan(1)
+    // La trace nomme ce qui est REJOUE : « nouveau passage de build » mentirait ici.
+    const passages = result.trace
+      .map((step) => step.detail ?? '')
+      .filter((d) => /^Réparation \d+\//u.test(d))
+    expect(passages.length).toBeGreaterThan(0)
+    for (const passage of passages) expect(passage).toMatch(/nouveau passage de scout/u)
+  })
+
+  it('un /judge nomme qui refuse ne declenche aucun build de reparation', async () => {
+    const provider = new ScoutQuiDevie({ jugeRefuse: true })
+    const result = await makeGreedy(provider, vi.fn(), () => []).run('/judge audite le repo')
+    expect(result.phaseOutputs).toEqual([])
+    const motif = /aucune réparation : la demande nomme le juge/u
+    expect(result.trace.some((step) => motif.test(step.detail ?? ''))).toBe(true)
   })
 
   it('/judge lance uniquement le juge de closure', async () => {

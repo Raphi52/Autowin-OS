@@ -30,9 +30,15 @@ export type PassageDeReparation = {
 }
 
 /** Ce que la boucle pousse dans la trace en entrant dans le passage `attempt` (0 = premier build). */
-export function traceDuPassage(attempt: number, plafondDur: number): string | undefined {
+// fix-ok: le libelle figeait « build » (stopgate.ts) alors que la reparation rejoue l'etape nommee :
+// test rouge (« …de build. » recu pour un scout), vert apres.
+export function traceDuPassage(
+  attempt: number,
+  plafondDur: number,
+  phase?: string
+): string | undefined {
   if (attempt <= 0) return undefined
-  return libelleDuPassageDeReparation(attempt, plafondDur)
+  return libelleDuPassageDeReparation(attempt, plafondDur, phase)
 }
 
 /** La decision de fin de passage : rejouer, ou s'arreter en nommant le motif. */

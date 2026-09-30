@@ -116,6 +116,8 @@ import {
   type WorkflowGraph
 } from './workflow-graph'
 import { sortieScoutAvecCible } from './scout-cible'
+import { lecteurAncrageDepuisDisque, plafonnerNotesScout } from './scout-plafond'
+import { blocPistesDejaConnues } from './scout-memoire'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
 import {
   briefArbitrage,
@@ -370,7 +372,11 @@ import { GARDE_TACHE, phaseBrief } from './phase-briefs'
 import { contratDeLaConversation, noteContratPourJuge } from './conversation-task-contract'
 import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-confiance'
 import { convRunsRoot } from './runs/conv-runs'
-import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
+import {
+  anglesDuPanelScout,
+  personaInstruction,
+  WORKFLOW_IS_A_TOOL_INSTRUCTION
+} from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
@@ -677,6 +683,18 @@ export interface OrchestratorCollaboratorDeps {
   retrieveBrain?: typeof retrieveBrainContext
   /** Résumé metadata-only des décisions reliées à leurs issues observées dans cette conversation. */
   causalMemoryFor?: (conversationId: string) => string
+  /**
+   * Les pistes que les scouts précédents ont déjà proposées sur un dépôt (`scout-memoire.ts`).
+   * `connues` est lu UNE fois au début du run, `sauf` = ce run ; `noter` à la fin de chaque scout.
+   */
+  memoireScout?: {
+    connues: (depot: string, sauf: string) => string[]
+    noter: (depot: string, texteScout: string, run: string) => void
+    /** Les pistes prises/laissées, lues dans la demande du run (message de sélection). */
+    choisir?: (depot: string, demande: string) => void
+    /** Le bilan des choix réels sur ce dépôt ; '' tant qu'il y a trop peu de pistes jugées. */
+    bilan?: (depot: string) => string
+  }
 }
 
 /**
@@ -1265,9 +1283,14 @@ export class Orchestrator {
     const graph = this.workflowDuRun()?.graph
     const composes = graph ? agentsForPhase(graph, phase) : undefined
     const fallback = bindingDeRepliPourPhase(phase, this.deps.roles, runtimeSnapshot)
+    const topologie = runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? []
+    // Un panel scout de la topologie n'a pas d'angle (`FanMember`, os.ts) : sans cette répartition,
+    // ses N membres recevaient la MÊME consigne (piste 6 de conv-890). Le canevas, lui, pose les siens.
     const resolved = composes
       ? resolveWorkflowAgents(composes, fallback)
-      : (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
+      : phase === 'scout'
+        ? anglesDuPanelScout(topologie)
+        : topologie
     return resolved
       .filter((member) => member && member.provider)
       .slice(
@@ -3330,6 +3353,33 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       trace.push(s)
       onStep?.(s)
     }
+    /**
+     * LES PISTES DEJA PROPOSEES sur ce depot (`scout-memoire.ts`), lues UNE fois, avant tout scout du
+     * run : une reparation du scout ne doit pas se voir interdire sa propre liste. Une memoire
+     * illisible ne bloque pas le run, mais se DIT dans la trace.
+     */
+    let blocPistesConnues = ''
+    try {
+      // D'abord les CHOIX : une demande de sélection dit quelles pistes du scout précédent ont été
+      // prises et lesquelles laissées (piste 7 de conv-890) ; le bilan suit, dans la même consigne.
+      this.deps.memoireScout?.choisir?.(this.deps.executionWorkspace, task)
+      blocPistesConnues = blocPistesDejaConnues(
+        this.deps.memoireScout?.connues(this.deps.executionWorkspace, runId) ?? [],
+        this.deps.memoireScout?.bilan?.(this.deps.executionWorkspace) ?? ''
+      )
+    } catch (erreur) {
+      push({
+        step: 'gate',
+        role: 'gate',
+        detail: `mémoire des pistes du scout illisible (${erreur instanceof Error ? erreur.message : String(erreur)}) — le scout part sans elle`
+      })
+    }
+    const consigneDePhase = (phase: NodePhase, withFoundation: boolean): PhasePromptBlock => {
+      const consigne = this.phasePrompt(phase, withFoundation)
+      return phase === 'scout' && blocPistesConnues
+        ? { ...consigne, text: `${consigne.text}\n\n${blocPistesConnues}` }
+        : consigne
+    }
 
     // 1. Le sous-agent EXÉCUTE la tâche via la PIPELINE de phases (1 skill du kit par phase,
     //    provider-agnostique). Défaut ['build'] = exec simple ; prod = ['frame','build'] etc.
@@ -3389,6 +3439,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      */
     const PLAFOND_BIFURCATIONS = 3
     let bifurcations = 0
+    /** La phase que la demande NOMME (`/scout`, « scout … »), ou rien. */
+    const phaseNommee = routeSkillRequest(task)?.explicitPhase
     /**
      * Le souhait du modèle est-il une BIFURCATION à décompter, ou un simple pas dans le graphe ?
      *
@@ -3421,6 +3473,21 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           if (!voulu) continue
           if (voulu.kind === 'stop') return
           if (voulu.kind === 'phase' && isPipelinePhase(voulu.phase)) {
+            /*
+             * UNE PHASE NOMMEE EST UNE COMMANDE ICI AUSSI (conv-767) : `graphePourTache` ecartait deja
+             * le graphe pour un `/scout`, mais cette branche suivait encore le `SUITE: frame` du
+             * modele, et le scout demande en lecture seule finissait en build dans un autre depot.
+             * Seul le retour vers la MEME phase reste permis : c'est par lui qu'un cadrage refuse
+             * (`frame-cas-limites.ts`) est refait.
+             */
+            if (phaseNommee && voulu.phase !== phaseNommee) {
+              push({
+                step: 'gate',
+                role: 'gate',
+                detail: `SUITE: ${voulu.phase} ignorée — la phase « ${phaseNommee} » a été nommée par la demande, aucune autre ne s'enchaîne.`
+              })
+              continue
+            }
             if (bifurcations >= PLAFOND_BIFURCATIONS) continue
             bifurcations += 1
             yield voulu.phase
@@ -3535,8 +3602,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      * suivante n'est pas `phaseOutputs` mais le texte pousse dans le contexte par l'appelant.
      * Elle est donc appliquee sur la variable que LES DEUX chemins lisent.
      */
+    // Le PLAFOND DE PREUVE passe au meme endroit, et pour la meme raison : les deux chemins lisent
+    // ce texte. Idempotent (une note deja a 50 ne bouge plus). Voir `scout-plafond.ts`.
+    const lireAncrages = lecteurAncrageDepuisDisque(this.deps.executionWorkspace)
     const garderCibleScout = (phase: NodePhase, texte: string): string =>
-      phase === 'scout' ? sortieScoutAvecCible(texte) : texte
+      phase === 'scout' ? sortieScoutAvecCible(plafonnerNotesScout(texte, lireAncrages)) : texte
 
     /**
      * MEME ACCROCHE, autre defaut mesure : un cadrage qui decrit une ENTREE utilisateur sans
@@ -3571,6 +3641,19 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // est un outil, et l'agent qui vient de travailler sait mieux que le plan si l'étape prévue a
       // encore un sens. Silence = le graphe décide, ce qui reste le cas courant.
       souhaitModele = readModelChoice(texte)
+      // Les pistes de CE scout rejoignent la memoire des suivants (`scout-memoire.ts`). Une ecriture
+      // ratee ne casse pas le run, mais se dit : un scout suivant refera alors ce travail.
+      if (phase === 'scout' && this.deps.memoireScout) {
+        try {
+          this.deps.memoireScout.noter(this.deps.executionWorkspace, texte, runId)
+        } catch (erreur) {
+          push({
+            step: 'gate',
+            role: 'gate',
+            detail: `pistes du scout non mémorisées (${erreur instanceof Error ? erreur.message : String(erreur)})`
+          })
+        }
+      }
       const alreadyAttributed = new Set(
         phaseOutputs.flatMap((output) => (output.agentToken ? [output.agentToken] : []))
       )
@@ -3883,7 +3966,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           // Constant par workspace, donc encore devant la phase.
           { name: 'projectContext', text: projectContext },
           // VARIABLE par phase — d'où sa place ici, et non en position 2.
-          this.phasePrompt(phase, true),
+          consigneDePhase(phase, true),
           // VARIABLE par sandbox : le plus volatile, donc en dernier.
           // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
           { name: 'bureauCache', text: consigneBureauCache(runId) },
@@ -4294,7 +4377,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         ? [
             { name: 'style', text: STYLE_TON },
             // VARIABLE par phase.
-            this.phasePrompt(phase, false),
+            consigneDePhase(phase, false),
             // VARIABLE par sandbox.
             // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
             { name: 'bureauCache', text: consigneBureauCache(runId) },
@@ -4314,7 +4397,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
             // Constant par workspace.
             { name: 'projectContext', text: projectContext },
             // VARIABLE par phase.
-            this.phasePrompt(phase, true),
+            consigneDePhase(phase, true),
             // VARIABLE par sandbox — le plus volatile, donc en dernier.
             // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
             { name: 'bureauCache', text: consigneBureauCache(runId) },
@@ -5416,15 +5499,30 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       attempt++
     ) {
       if (attempt > 0) {
-        // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
-        // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
+        /*
+         * UNE REPARATION REJOUE LA PHASE NOMMEE, pas `build` (conv-767 : un `/scout` refuse par le
+         * juge a ete « repare » par un build qui a ecrit dans un autre depot). Un `/judge` nomme n'a
+         * rien a rejouer : son verdict EST la reponse demandee.
+         */
+        if (phaseNommee === 'judge') {
+          push({
+            step: 'gate',
+            role: 'gate',
+            detail:
+              'aucune réparation : la demande nomme le juge seul, son verdict est la réponse — aucune autre phase ne se joue.'
+          })
+          break
+        }
+        const phaseDeReparation: NodePhase = phaseNommee ?? 'build'
+        // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud (build,
+        // ou la phase nommée), donc son panel, sa synthèse, sa concurrence et sa télémétrie.
         pousserContexte(
           `reparation:${attempt}`,
           `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Objections du juge : ${lastJudgeText || '(verdict vide)'}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
         // LE PASSAGE SE NOMME DANS LA TRACE : sans cette ligne, un run mort par epuisement ne
         // permet pas de compter ses rejeus apres coup (objection du juge, conv-540).
-        const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR)
+        const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR, phaseDeReparation)
         if (ligneDuPassage) push({ step: 'gate', role: 'gate', detail: ligneDuPassage })
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
         // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
@@ -5440,10 +5538,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          * objections du dernier juge restent dans le resultat du run.
          */
         try {
-          await executePipelinePhase('build')
+          await executePipelinePhase(phaseDeReparation)
           // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
           // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
-          // codé en dur build → judge.
+          // codé en dur build → judge. Une phase nommée n'a pas de graphe (`graphePourTache`) : elle
+          // est seule rejouée.
           for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
             await executePipelinePhase(phase)
           }

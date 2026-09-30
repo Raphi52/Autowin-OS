@@ -1247,7 +1247,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
       pilotChat,
-      injectDirective: injectFailingThen(1, () => injection.promise)
+      // 0 et non 1 : l'injection du `/btw` doit rester EN ATTENTE, puis echouer loin de A. Avec 1, elle
+      // echouait tout de suite, `injection.promise` n'etait rendue a personne, et son rejet plus bas
+      // sortait en « Unhandled Rejection » — ce qui faisait rendre 1 a `npm test` (mesure du 30/09).
+      injectDirective: injectFailingThen(0, () => injection.promise)
     })
     await mount(mockApi)
     const picks = (): NodeListOf<Element> => container!.querySelectorAll('.conv-pick')

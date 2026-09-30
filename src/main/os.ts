@@ -122,6 +122,14 @@ import {
   type RecoveredDetachedUsageSettlement
 } from './runs/run-reattach'
 import { preparerCopie } from './scripts-copie-main'
+import {
+  cleDepot,
+  noterPistesScout,
+  noterChoixScout,
+  bilanDesChoix,
+  pistesDejaConnues,
+  titresStockVeilleAutowin
+} from './scout-memoire'
 import type { LanceurCommandeSkill } from './skill-node-tools'
 import {
   executionWorkspacePreferenceFile,
@@ -570,6 +578,24 @@ export class AutowinOS {
       trust: this.trust,
       executionWorkspace,
       causalMemoryFor: (conversationId) => this.causalMemoryRetriever?.(conversationId) ?? '',
+      // Pistes deja proposees par les scouts precedents (`scout-memoire.ts`). Le stock de la veille ne
+      // vaut que pour le depot que la veille analyse : `executionWorkspace` (`index.ts`, `racineDepot`).
+      // fix-ok: sans ce branchement, `memoireScout` restait vide en production : le test au site d'appel
+      // (orchestrator.scout-cible.test.ts) tombe quand la memoire n'est plus lue.
+      memoireScout: {
+        connues: (depot, sauf) =>
+          pistesDejaConnues({
+            depot,
+            sauf,
+            stockVeille:
+              cleDepot(depot) === cleDepot(executionWorkspace) ? titresStockVeilleAutowin() : []
+          }),
+        noter: (depot, texteScout, run) =>
+          noterPistesScout({ depot, texte: texteScout, run, maintenant: new Date().toISOString() }),
+        choisir: (depot, demande) =>
+          noterChoixScout({ depot, demande, maintenant: new Date().toISOString() }),
+        bilan: (depot) => bilanDesChoix({ depot })
+      },
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.
       drainDirectives: (conversationId) => this.directivesEnAttente?.(conversationId) ?? [],

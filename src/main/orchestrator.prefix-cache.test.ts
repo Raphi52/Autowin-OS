@@ -39,6 +39,18 @@ import { describe, expect, it } from 'vitest'
  * PAYLOAD par run, pas son préambule ; le levier est le plafond de volume des preuves
  * (`EVIDENCE_TOTAL_CHARS`, src/main/evidence-digest.ts).
  */
+/**
+ * La consigne de phase s'appelle directement (`this.phasePrompt(`) ou via `consigneDePhase(`, qui
+ * l'enrichit des pistes deja proposees pour un scout (`scout-memoire.ts`). Chercher un seul des deux
+ * noms laissait un site passer en silence (`if (phase === -1) return`).
+ */
+function indexConsigneDePhase(texte: string): number {
+  const positions = ['this.phasePrompt(', 'consigneDePhase(']
+    .map((nom) => texte.indexOf(nom))
+    .filter((p) => p !== -1)
+  return positions.length ? Math.min(...positions) : -1
+}
+
 describe('ordre des blocs système — préfixe cachable', () => {
   const source = readFileSync(join(process.cwd(), 'src', 'main', 'orchestrator.ts'), 'utf8')
   const ANCRE = 'text: CONSTITUTION }'
@@ -59,7 +71,7 @@ describe('ordre des blocs système — préfixe cachable', () => {
       // Fenêtre volontairement courte : on ne juge que le voisinage immédiat, donc aucune dépendance
       // à un découpage d'expression. `phasePrompt` a le droit d'être plus loin — pas juste après.
       const voisinage = source.slice(position, position + 260)
-      const phase = voisinage.indexOf('this.phasePrompt(')
+      const phase = indexConsigneDePhase(voisinage)
       if (phase === -1) return // ce site ne porte pas de consigne de phase : rien à garder ici
 
       const constantsAvant = [
@@ -82,7 +94,7 @@ describe('ordre des blocs système — préfixe cachable', () => {
     expect(debut).toBeGreaterThan(-1)
     // Branche `resuming` uniquement : elle s'arrête au `: [` qui ouvre la branche complète.
     const branche = source.slice(debut, source.indexOf(': [', debut))
-    const phase = branche.indexOf('this.phasePrompt(')
+    const phase = indexConsigneDePhase(branche)
     const style = branche.indexOf('STYLE_TON')
     expect(phase).toBeGreaterThan(-1)
     expect(style).toBeGreaterThan(-1)

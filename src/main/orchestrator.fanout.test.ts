@@ -62,7 +62,7 @@ class RecordingProvider implements ProviderAdapter {
 function makeOrchestrator(
   provider: RecordingProvider,
   cost: CostAggregator,
-  phase: 'frame' | 'terrain' = 'frame'
+  phase: 'frame' | 'terrain' | 'scout' = 'frame'
 ): Orchestrator {
   const registry = new ProviderRegistry().register(provider)
   const roles = new RoleModelConfig({
@@ -190,6 +190,40 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(new Set(terrainSteps.map((step) => step.execution?.agentId))).toEqual(
       new Set(['terrain:m1', 'terrain:m2'])
     )
+  })
+
+  /*
+   * Piste 6 de conv-890 : un panel scout réglé dans `agent-topology.json` n'a pas d'angle (`FanMember`
+   * n'a pas de champ `persona`, `os.ts`), donc `personaInstruction(undefined)` rendait '' et les N
+   * membres recevaient la MÊME consigne — N fois le prix pour N fois le même avis. Seul le workflow
+   * « Exploration » posait des angles. Chaque membre scout sans angle reçoit désormais le sien.
+   */
+  it('un panel scout de la topologie donne un angle DIFFÉRENT à chaque membre', async () => {
+    const provider = new RecordingProvider()
+    const result = await makeOrchestrator(provider, new CostAggregator(), 'scout').run(
+      'scout améliorations du module de cache'
+    )
+    const membres = provider.calls.filter((call) => call.model === 'm1' || call.model === 'm2')
+    expect(membres).toHaveLength(2)
+    const angles = membres.map(
+      (call) => /=== ANGLE IMPOSÉ À CE MEMBRE ===\n([^\n]+)/u.exec(call.system ?? '')?.[1]
+    )
+    expect(angles[0]).toBeTruthy()
+    expect(angles[1]).toBeTruthy()
+    expect(angles[0]).not.toBe(angles[1])
+    // L'identité suit l'angle : deux membres sur deux modèles ne se confondent pas dans le suivi.
+    const ids = result.trace
+      .filter((step) => step.execution?.groupId === 'scout:fanout')
+      .map((step) => step.execution?.agentId)
+    expect(new Set(ids).size).toBe(2)
+  })
+
+  it('un panel frame de la topologie reste sans angle imposé (hors du périmètre scout)', async () => {
+    const provider = new RecordingProvider()
+    await makeOrchestrator(provider, new CostAggregator(), 'frame').run('cadre la page de réglages')
+    const membres = provider.calls.filter((call) => call.model === 'm1' || call.model === 'm2')
+    expect(membres.length).toBeGreaterThan(0)
+    for (const call of membres) expect(call.system ?? '').not.toContain('ANGLE IMPOSÉ')
   })
 
   it('conserve les membres Terrain quand la phase est décomposée en sous-tâches greedy', async () => {

@@ -50,6 +50,14 @@ export const PERSONAS: Partial<Record<PipelinePhase, Persona[]>> = {
       label: 'Rupture de prémisse',
       instruction:
         'Tu remets en cause la PRÉMISSE : et si ce module ne devait pas exister sous cette forme ? Propose la ré-imagination la plus ambitieuse défendable, pas l’amélioration incrémentale.'
+    },
+    {
+      // Piste 6 de conv-890 : l'angle « web » manquait au catalogue ; mesuré sur 31 runs avec un
+      // scout, 2 recherches web lancées et 0 URL citée.
+      id: 'externe',
+      label: 'Veille externe',
+      instruction:
+        'Tu pars de CE QUI SE FAIT AILLEURS : outils, frameworks, pratiques publiés ces 30 à 90 derniers jours. Recherche web DATÉE, URL citée dans le Why, rattachée à un point précis du code. Tu ignores ce qu’aucune source externe n’appuie — un autre membre le couvre.'
     }
   ],
   frame: [
@@ -134,6 +142,41 @@ ou hors sujet.
 `
 
 /** Les personas proposables pour une phase. Vide = fan-out sans angle imposé, ce qui reste licite. */
+/**
+ * Un angle par membre d'un panel SCOUT réglé dans la topologie (`agent-topology.json`).
+ *
+ * Ces membres n'ont pas de persona (`FanMember`, `os.ts`) : `personaInstruction(undefined)` rendait
+ * '' et les N membres recevaient la MÊME consigne — N fois le prix pour N fois le même avis. Seul le
+ * workflow « Exploration » posait des angles. Chaque membre SANS angle reçoit ici le prochain angle
+ * scout non encore pris (on reboucle au-delà) ; un angle déjà posé est gardé. Un membre seul n'a
+ * personne avec qui se partager le terrain : il reste tel quel.
+ * ORDRE : d'abord ce que la consigne de base couvre le MOINS — le web (0 URL citée sur 31 runs avec
+ * un scout, conv-890), la rupture, l'usage ; la dette et la fragilité sont déjà dans ses « Angles ».
+ */
+export const ORDRE_ANGLES_PANEL_SCOUT = [
+  'externe',
+  'rupture',
+  'usage',
+  'fragilite',
+  'dette'
+] as const
+
+export function anglesDuPanelScout<T extends { persona?: string }>(membres: readonly T[]): T[] {
+  if (membres.length < 2) return [...membres]
+  const connus = new Set((PERSONAS.scout ?? []).map((p) => p.id))
+  const catalogue = ORDRE_ANGLES_PANEL_SCOUT.filter((id) => connus.has(id))
+  const pris = new Set(membres.map((m) => m.persona).filter((p): p is string => Boolean(p?.trim())))
+  const libres = catalogue.filter((id) => !pris.has(id))
+  let rang = 0
+  return membres.map((membre) => {
+    if (membre.persona?.trim()) return membre
+    const source = libres.length > 0 ? libres : catalogue
+    const persona = source[rang % source.length]
+    rang += 1
+    return persona ? { ...membre, persona } : membre
+  })
+}
+
 export function personasFor(phase: NodePhase): Persona[] {
   // Un noeud SKILL n'a pas d'angles pre-ecrits : le selecteur reste vide plutot que d'en inventer.
   return PERSONAS[phase as PipelinePhase] ?? []
