@@ -1,3 +1,5 @@
+import { sansBaliseMessageUtilisateur } from '../../../shared/balise-message-utilisateur'
+
 /**
  * Extraction du message HUMAIN d'un contenu de tour COMPOSÉ.
  *
@@ -15,7 +17,11 @@ export function extractHumanMessage(content: string, max = 100): string {
   let human: string
   if (utilisateur.length) {
     // Le DERNIER segment : un tour peut en empiler plusieurs, c'est le plus récent qui est la demande.
-    human = utilisateur[utilisateur.length - 1].replace(/^\s*UTILISATEUR\s*:\s*/, '')
+    // Les mots sont encadres depuis conv-889 (`<message_utilisateur>…`) : la balise est une marque
+    // pour le modele, pas une partie de la demande.
+    human = sansBaliseMessageUtilisateur(
+      utilisateur[utilisateur.length - 1].replace(/^\s*UTILISATEUR\s*:\s*/, '')
+    )
   } else if (/^\s*(ÉTAT|ETAT)\b/.test(content ?? '')) {
     // Préfixe d'état SANS marqueur `UTILISATEUR:` : on prend le premier segment qui n'est ni l'entête,
     // ni du JSON, ni une aparté. À défaut, on le DIT plutôt que d'afficher le blob.
