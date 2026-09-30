@@ -60,6 +60,15 @@ export class ActiveChatTurns {
   }
 
   /**
+   * Toutes les conversations dont une reponse est en cours, preparation comprise. Lu par la
+   * publication auto d'un tour de chat : un tour encore en cours n'a peut-etre rien ecrit au journal
+   * des fichiers (voir `chat-turn-publication.ts`).
+   */
+  inFlightConversations(): string[] {
+    return [...new Set([...this.turns.keys(), ...this.preparing.keys()])]
+  }
+
+  /**
    * Attend la courte course renderer -> IPC -> enregistrement du tour.
    * fix-ok: sans cette barriere bornee, « Orienter » echoue si le clic devance `set()` de quelques ms.
    */

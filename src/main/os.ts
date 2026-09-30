@@ -756,11 +756,17 @@ export class AutowinOS {
     turnId: string
     request: string
     debut: ChatTurnStart
+    /** Dossiers de travail des tours d'AUTRES fils en cours, relus au moment de publier. */
+    autresToursEnCours?: () => readonly string[]
   }): Promise<AutoCloseReport | undefined> {
+    const { autresToursEnCours, ...tour } = input
     const next = this.chatTurnPublications.then(async () => {
       if (!this.autoClose) return undefined
+      // Relevé AVANT la lecture du journal : un tour fini entre les deux y a déjà tout écrit.
+      const enCours = autresToursEnCours?.() ?? []
       const report = await publierTourDeChat({
-        ...input,
+        ...tour,
+        autresToursEnCours: enCours,
         traces: await readRecentConversationFileTraces()
       })
       if (report) {

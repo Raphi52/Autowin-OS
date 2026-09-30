@@ -476,7 +476,7 @@ export interface AutoCloseReport {
   /** Fichiers du tour LAISSÉS en attente faute de preuve qu'ils appartiennent à ce fil. */
   exclus?: Array<{
     path: string
-    motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil'
+    motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' | 'autre-fil-en-cours'
     /** Lignes ajoutées que le fil ne réclame pas : ce qui a fait échouer la preuve par lignes. */
     lignesNonReclamees?: number
   }>

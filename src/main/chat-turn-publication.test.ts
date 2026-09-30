@@ -254,6 +254,67 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['partage.ts'])
   })
 
+  it('laisse en attente un fichier sans preuve par lignes tant qu’un autre fil a un tour en cours dans le dépôt', async () => {
+    // Mesuré le 2026-09-30 (commits 5fb0730d, bb8e6c0c) : conv-889 crée un fichier PENDANT le tour de
+    // conv-891. Ses traces ne sont écrites qu'à la fin de son appel au modèle (10:51:52), après la
+    // publication de conv-891 (10:32:31) : aucune trace concurrente, donc le repli publiait au nom de
+    // conv-891 le travail de conv-889. Le fichier prouvé par ses lignes, lui, part quand même.
+    const { repo, remote } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
+    writeFileSync(join(repo, 'mesure.mts'), 'console.log("conv-B")\n')
+    writeFileSync(join(repo, 'mine.ts'), 'export const a = 1\n')
+    mkdirSync(join(repo, 'src'))
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'pourquoi ?',
+      debut,
+      runGit: realGit,
+      // Le tour de conv-B tourne encore, rangé dans un sous-dossier du même dépôt.
+      autresToursEnCours: [join(repo, 'src')],
+      traces: [
+        // Comparaison avant/après de conv-A : elle voit le fichier de conv-B changer, sans lignes.
+        trace(repo, { paths: ['mesure.mts'] }),
+        trace(repo, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ]
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'pushed', files: 1 },
+      exclus: [{ path: 'mesure.mts', motif: 'autre-fil-en-cours' }]
+    })
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
+    expect((await run('git', ['rev-parse', 'HEAD~1'], { cwd: repo })).stdout).toBe(headAvant)
+    expect(await enAttente(repo)).toContain('mesure.mts')
+  })
+
+  it('un tour en cours dans un AUTRE dépôt ne retient pas le repli', async () => {
+    const { repo, remote } = await depot()
+    const ailleurs = mkdtempSync(join(tmpdir(), 'autowin-chat-pub-ailleurs-'))
+    dirs.push(ailleurs)
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 4\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      autresToursEnCours: [ailleurs],
+      traces: [trace(repo, { paths: ['partage.ts'] })]
+    })
+
+    expect(report).toMatchObject({ project: { status: 'pushed', files: 1 } })
+    expect(report?.exclus).toBeUndefined()
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['partage.ts'])
+  })
+
   it('ne rend aucun rapport et ne commite rien quand le tour n’a modifié aucun fichier', async () => {
     const { repo } = await depot()
     const debut = await photographierDebutDeTour(repo, realGit, DEBUT)

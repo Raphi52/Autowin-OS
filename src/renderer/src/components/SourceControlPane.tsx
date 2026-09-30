@@ -66,14 +66,15 @@ interface AutoCloseViewState {
 
 interface Exclusion {
   path: string
-  motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil'
+  motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' | 'autre-fil-en-cours'
   /** Lignes que le fil ne réclame pas : les réécrire avec l'outil d'édition publie le fichier. */
   lignesNonReclamees?: number
 }
 
 const MOTIFS_EXCLUSION: Record<string, string> = {
   'modifie-avant-le-tour': 'déjà modifié avant le tour',
-  'touche-par-un-autre-fil': 'touché aussi par un autre fil'
+  'touche-par-un-autre-fil': 'touché aussi par un autre fil',
+  'autre-fil-en-cours': 'un autre fil tournait encore dans ce dossier'
 }
 
 /** Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que le panneau le dise. */

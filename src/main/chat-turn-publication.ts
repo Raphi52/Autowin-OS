@@ -26,7 +26,11 @@ import {
  * donc publié que s'il est PROUVÉ au fil :
  *  1. par ses LIGNES : chaque ligne ajoutée de son diff a été écrite par un outil d'édition du fil ;
  *  2. à défaut (édition en ligne de commande, suppression, renommage) : il était propre au début du
- *     tour ET aucun autre fil ne l'a touché depuis.
+ *     tour ET aucun autre fil ne l'a touché depuis ET aucun autre fil n'a de tour EN COURS dans le
+ *     dépôt. Un tour en cours n'a encore rien écrit au journal : `agent-pilot.ts` n'y trace les
+ *     éditions du modèle qu'à la FIN de son appel. Mesuré le 2026-09-30 (5fb0730d, bb8e6c0c) : conv-889
+ *     écrit ses fichiers pendant les tours de conv-891, ses traces arrivent à 10:51:52, après les deux
+ *     publications de conv-891 (10:32:31, 10:49:54) — qui ont donc commité son travail.
  * Le reste est LAISSÉ en attente et nommé dans le rapport, avec le nombre de lignes que le fil ne
  * réclame pas (les réécrire avec l'outil d'édition suffit à le publier). Un faux négatif laisse un
  * fichier non publié, visible dans le panneau ; un faux positif pousserait le travail d'un autre fil
@@ -84,6 +88,15 @@ async function cheminsReels(dossiers: Iterable<string>): Promise<Map<string, str
 function dansLeDepot(repo: string, absolu: string): boolean {
   const rel = relative(repo, absolu)
   return Boolean(rel) && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/** Le dossier d'un tour peut écrire dans le dépôt : il est le dépôt, en est un sous-dossier, ou le contient. */
+function partageLeDepot(repo: string, dossier: string): boolean {
+  const contient = (parent: string, enfant: string): boolean => {
+    const rel = relative(parent, enfant)
+    return !rel.startsWith('..') && !isAbsolute(rel)
+  }
+  return contient(repo, dossier) || contient(dossier, repo)
 }
 
 /**
@@ -188,19 +201,30 @@ export async function publierTourDeChat(input: {
   request: string
   debut: ChatTurnStart
   traces: readonly ConversationFileTrace[]
+  /**
+   * Dossiers de travail des tours d'AUTRES fils encore en cours, relevés AVANT de lire `traces` :
+   * un tour fini avant ce relevé a déjà tout écrit au journal, un tour encore en cours n'y a peut-être
+   * rien écrit. Absent = aucun.
+   */
+  autresToursEnCours?: readonly string[]
   runGit?: GitRunner
   openPr?: PrOpener
 }): Promise<AutoCloseReport | undefined> {
   const { conversationId, turnId, debut } = input
   if (!debut.repo) return undefined
   const runGit = input.runGit ?? (await defaultGitRunner())
+  const autresToursEnCours = (input.autresToursEnCours ?? []).filter((dossier) => dossier.trim())
   const racines = await cheminsReels([
     debut.repo,
+    ...autresToursEnCours,
     ...input.traces
       .map((trace) => trace.workspaceRoot)
       .filter((root): root is string => typeof root === 'string' && Boolean(root.trim()))
   ])
   const repo = racines.get(debut.repo) ?? debut.repo
+  const autreFilEnCours = autresToursEnCours.some((dossier) =>
+    partageLeDepot(repo, racines.get(dossier) ?? dossier)
+  )
 
   const duTour = new Set<string>()
   const revendiquees = new Map<string, Set<string>>()
@@ -258,6 +282,7 @@ export async function publierTourDeChat(input: {
       exclus.push({ path: gitPath, motif: 'modifie-avant-le-tour', ...detail })
     else if (concurrents.has(key))
       exclus.push({ path: gitPath, motif: 'touche-par-un-autre-fil', ...detail })
+    else if (autreFilEnCours) exclus.push({ path: gitPath, motif: 'autre-fil-en-cours', ...detail })
     else publier.push(gitPath)
   }
   // GARDE-FOU : `autoCloseRun` sans chemins publierait TOUT l'arbre (`add -A`).
