@@ -40,6 +40,18 @@ const AVEU_NON_VERIFIE =
   /je n['’]ai pas (?:encore )?(?:v[ée]rifi|mesur|ouvert|lu\b|test)\p{L}*|n['’](?:est|sont) pas (?:encore )?v[ée]rifi\p{L}*|non v[ée]rifi\p{L}*|pas encore v[ée]rifi\p{L}*|sans l['’]avoir v[ée]rifi\p{L}*|(?:^|\s)[àa] v[ée]rifier(?![\p{L}])|\(\s*pas v[ée]rifi\p{L}*|(?:^|[—([]\s*)suppos[ée]\p{L}*|sous r[ée]serve|c['’]est une d[ée]duction|par d[ée]duction/iu
 
 /**
+ * L'EXCEPTION QUE LA CONSIGNE ÉCRIT ET QUE LA GARDE IGNORAIT : « plafonné à 50 TANT QUE les chemins
+ * fermés ne sont pas nommés » (`phase-briefs.ts`, règle 4). Un Pourquoi qui dit où il a cherché —
+ * « vérifié dans `gates/hooks.ts` » — a nommé ses chemins : son aveu ne le plafonne plus. Il faut un
+ * CHEMIN (entre accents graves, ou avec `/` ou une extension) : « vérifié dans le code » ne nomme rien.
+ * Une forme NIÉE (« je n'ai pas vérifié dans `a.ts` ») est un aveu, pas un chemin fermé.
+ * fix-ok: vrai scout du 30/09 (demande de conv-382), piste 4 ramenée de 70 à 50 alors que son
+ * Pourquoi nomme `gates/hooks.ts`, `orchestrator.ts` et `hooks/` : la règle 4 n'était codée qu'à moitié.
+ */
+const CHEMINS_FERMES =
+  /(?<!(?:pas|non|jamais|ni)\s+(?:encore\s+)?)(?<![\p{L}])(?:v[ée]rifi[ée]e?s?|cherch[ée]e?s?|relu|lu)\s+(?:dans|sur)\s+(?:`[^`]+`|[\w.-]*[\\/][\w./\\-]*|[\w-]+\.\w+)/iu
+
+/**
  * `chemin/fichier.ext:123` (une plage `:18-27` donne sa première ligne). Les URL sont retirées avant.
  * Extensions CONNUES seulement : sur les sorties réelles, `Economie.sauver:170` (une méthode Lua)
  * passait pour un fichier introuvable.
@@ -91,7 +103,7 @@ export function plafonnerNotesScout(
     const nom = iNum >= 0 ? `ligne ${cellules[iNum]}` : `« ${cellules[tableau.colonnes.what]} »`
     let raison: string | undefined
     const aveu = AVEU_NON_VERIFIE.exec(pourquoi)
-    if (aveu) raison = `le Pourquoi dit « ${aveu[0].trim()} »`
+    if (aveu && !CHEMINS_FERMES.test(pourquoi)) raison = `le Pourquoi dit « ${aveu[0].trim()} »`
     const estCorrectif = /🔧|\bfix\b|correctif/iu.test(iType >= 0 ? (cellules[iType] ?? '') : '')
     if (!raison && estCorrectif) {
       // What compris : le scout réel du 30/09 y mettait son seul ancrage de code (piste 4).

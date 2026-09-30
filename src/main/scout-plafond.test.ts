@@ -70,6 +70,26 @@ describe('plafond de preuve appliqué en code sur la sortie du scout', () => {
     expect(plafonnerNotesScout(texte)).toBe(texte)
   })
 
+  it('garde la note quand le Pourquoi NOMME ses chemins fermés, comme le dit la consigne (règle 4)', () => {
+    // Piste 4 du vrai scout du 30/09 (demande de conv-382), recopiée de artifacts/scout-reel-382-resultat.md.
+    // Son « Non vérifié » porte sur un point annexe ; l'absence qu'elle affirme est « vérifié[e] dans
+    // `gates/hooks.ts`, `orchestrator.ts` et `hooks/` ». La garde la ramenait de 70 à 50.
+    const conv382 =
+      "| 4 | 70 | 🔧 fix | Empêcher un agent de BUILD d'affaiblir le test qui le juge | `verify-replay-hook.ts:19` rejoue la vérification dans le dossier de l'agent, donc sur des tests qu'il a pu modifier. Aucune détection de `.skip`/`.only` ni d'assertion supprimée : vérifié dans `gates/hooks.ts` (qui lit déjà le diff à `:128-133`), `orchestrator.ts` et `hooks/`. L'interdiction n'existe qu'en texte (`constitution.ts:52`). Non vérifié : le juge, qui lui est un modèle, peut parfois le repérer. | Dans `gates/hooks.ts`, bloquer le passage au vert si le diff d'un `*.test.*` retire des `expect` ou ajoute `skip`/`only`. C'est fait quand un test simulé où le build ajoute `it.skip` est bien refusé. |\n"
+    expect(parseScoutTable(plafonnerNotesScout(ENTETE + conv382))![0]!.score).toBe(70)
+  })
+
+  it('un chemin NIÉ n est pas un chemin fermé : « je n ai pas vérifié dans a.ts » reste plafonné', () => {
+    for (const aveu of [
+      "je n'ai pas vérifié dans `a.ts` ni ailleurs",
+      "C'est une déduction : pas encore cherché dans `src/main/`",
+      'non vérifié dans `b.ts`'
+    ]) {
+      const sortie = plafonnerNotesScout(`${ENTETE}| 1 | 80 | 🆕 new | X | ${aveu} | a faire |\n`)
+      expect(parseScoutTable(sortie)![0]!.score, aveu).toBe(50)
+    }
+  })
+
   it('une note déjà à 50 ou moins ne bouge pas ; un texte sans tableau non plus', () => {
     const bas = `${ENTETE}| 1 | 45 | 🔧 fix | X | non vérifié | a.ts:3 |\n`
     expect(plafonnerNotesScout(bas)).toBe(bas)
