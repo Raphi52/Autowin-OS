@@ -73,11 +73,43 @@ import type { ConversationStore } from './store/conversations'
  *
  * CE QUI RESTE OUVERT, a ne pas maquiller : le rappel vise juste ~16 % du temps. Cinq rappels sur
  * six restent inutiles. Le cout est borne (60 ms, 3 000 caracteres) et la place de prompt est le
- * vrai prix. Un filtre RELATIF (garder les resultats proches du meilleur de la recherche courante)
- * serait la piste suivante ; elle n'est pas livree parce que l'oracle utilise ici -- « ce tour
- * re-pose-t-il une demande deja faite ? » -- ne sait pas mesurer la qualite du 2e et du 3e extrait,
- * qui est precisement ce qu'un filtre relatif ameliorerait. Mesurer d'abord l'oracle qu'il faut.
+ * vrai prix. Le filtre RELATIF (garder les resultats proches du meilleur de la recherche courante)
+ * est livre le 2026-09-30 avec la mesure du 2e et du 3e extrait qui manquait : voir
+ * `PROCHE_DU_MEILLEUR`.
  */
+
+/**
+ * Une conversation apres la 1re n'est rappelee que si son score atteint 80 % de celui de la 1re.
+ *
+ * RELATIF, jamais absolu : le score ne se compare pas d'un corpus a l'autre (facteur ~400 entre 1 et
+ * 41 conversations, voir plus haut). Le rapport au meilleur de la MEME recherche, lui, si.
+ *
+ * Mesure du 2026-09-30 (conv-889), `scripts/mesure-rappel-selectif.mts`, corpus reel de 790
+ * conversations et 3 907 messages humains. Verite etablie SANS le score : 85 messages qui CITENT une
+ * conversation (`conv-N`, retiree de la requete) et 49 qui REPOSENT une demande d'un autre fil.
+ *
+ *   rang montre   justes
+ *        1        31/113  (27 %)
+ *        2         7/78   ( 9 %)
+ *        3         0/7
+ *
+ *   seuil | justes 2-3 gardes | inutiles 2-3 retires | cible trouvee | conversations / tour
+ *    0    |       7/7         |        0/78          |    37/134     |   1,16   (avant)
+ *    0,5  |       7/7         |        9/78          |    37/134     |   1,14
+ *    0,7  |       6/7         |       26/78          |    36/134     |   1,08
+ *    0,8  |       6/7         |       35/78          |    36/134     |   1,00   <- retenu
+ *    0,9  |       6/7         |       43/78          |    36/134     |   0,91
+ *    1    |       5/7         |       66/78          |    35/134     |   0,76
+ *
+ * 0,8 et non 0,9, qui semble dominer : une conversation JUSTE a un rapport de 0,93, et 7 cas ne
+ * permettent pas de regler au centieme. 0,8 laisse cette marge et retire deja 45 % des 2e et 3e
+ * inutiles, pour UNE cible perdue sur 37 (rapport 0,58).
+ *
+ * CE QUE CE FILTRE NE FAIT PAS, et qui pese plus : le 1er rappele est faux trois fois sur quatre
+ * (27 % de justes), et un filtre relatif ne peut pas le toucher. « Inutile » veut dire ici « n'est
+ * pas la cible connue » : un extrait voisin peut rester utile sans etre celui que le message citait.
+ */
+const PROCHE_DU_MEILLEUR = 0.8
 
 /** Plafond du bloc : un rappel qui noie le tour vaut le bruit qu'il remplace. */
 const PLAFOND = 3_000
@@ -173,9 +205,14 @@ export function rappelDesEchangesPasses(
     // message. Un filtre qui refuse tout ressemble a un filtre qui marche.
     .filter((conversation) => canonicalProjectPath(conversation.projectPath) === projetVoulu)
   if (trouvees.length === 0) return ''
+  // Le 1er montre reste TOUJOURS : un filtre relatif ne juge que les suivants (voir PROCHE_DU_MEILLEUR).
+  const meilleur = trouvees[0].score
+  const retenues = trouvees.filter(
+    (conversation, rang) => rang === 0 || conversation.score >= PROCHE_DU_MEILLEUR * meilleur
+  )
 
   const lignes: string[] = [EN_TETE]
-  for (const conversation of trouvees) {
+  for (const conversation of retenues) {
     lignes.push(`— ${conversation.id} « ${conversation.title} »`)
     for (const extrait of conversation.extraits) {
       // Format DELIBEREMENT distinct du vrai tour (`UTILISATEUR:` / `TOI:`) : un extrait qui imite
