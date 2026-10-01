@@ -199,51 +199,6 @@ describe('vérification avant publication — le vrai runner, dans un vrai dép�
     expect(verdict.testsEnEchec).toEqual(['lecteur.test.ts'])
   })
 
-  /*
-   * Mesuré le 2026-10-01 (conv-770, tour 532299a4) : 194 tests citaient les fichiers du tour, la
-   * commande faisait 9 121 caractères ; par `cmd.exe /c` (limite 8 191) : « La ligne de commande est
-   * trop longue », exit 1, aucun rapport, publication bloquée en « tests-rouges ». Ici, 60 tests à
-   * chemin long citent `sujet.ts` : environ 9 000 caractères de chemins.
-   */
-  it.runIf(process.platform === 'win32')(
-    'tient sous la limite de cmd.exe quand la portée est longue : la vérification aboutit',
-    async () => {
-      const repo = depot()
-      const dossier = 'un-dossier-de-tests-aux-noms-volontairement-tres-longs-pour-la-limite-cmd'
-      mkdirSync(join(repo, dossier))
-      const nombre = 60
-      for (let i = 0; i < nombre; i++) {
-        writeFileSync(
-          join(
-            repo,
-            dossier,
-            `cite-sujet-numero-${String(i).padStart(3, '0')}-avec-un-nom-encore-allonge-pour-le-banc.test.ts`
-          ),
-          [
-            "import { expect, it } from 'vitest'",
-            "it('cite sujet.ts sans l’importer', () => expect(1).toBe(1))",
-            ''
-          ].join(SAUT),
-          'utf8'
-        )
-      }
-      execFileSync('git', ['add', '-A'], { cwd: repo })
-      execFileSync('git', ['commit', '-q', '-m', 'tests citants'], { cwd: repo })
-      writeFileSync(
-        join(repo, 'sujet.ts'),
-        `// commentaire${SAUT}export const valeur = (): number => 1${SAUT}`,
-        'utf8'
-      )
-
-      const verdict = await bus(repo).verifierAvantPublication(repo, ['sujet.ts'])
-
-      expect(verdict).toMatchObject({ statut: 'vert' })
-      if (verdict.statut !== 'vert') return
-      // `sujet.test.ts`, `lecteur.test.ts` et les 60 tests citants : tous joués, aucun perdu.
-      expect(verdict.testsJoues).toBe(nombre + 2)
-    }
-  )
-
   it('un texte qu’aucun test ne cite n’est pas vérifiable : il le dit, sans lancer la suite', async () => {
     const repo = depot()
     writeFileSync(join(repo, 'notes.md'), `# notes${SAUT}`, 'utf8')

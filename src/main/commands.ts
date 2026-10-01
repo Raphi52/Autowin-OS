@@ -29,7 +29,6 @@ import {
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import { refusEcriturePythonCrlf } from '../shared/garde-python-crlf'
-import { sansHeredocsDeDonnees } from '../shared/heredocs'
 import {
   decideRead,
   enumererFichiersLisibles,
@@ -77,9 +76,6 @@ import {
   scriptVitestUnique,
   echecsDuRapport,
   lectureBruteDuRapport,
-  decouperEnLots,
-  fusionnerRapportsVitest,
-  BUDGET_CHEMINS_PAR_LANCEMENT,
   verdictDifferentiel,
   noteDeDifferentiel,
   verifyTimeoutMs,
@@ -3594,19 +3590,16 @@ export class AppCommandBus {
         // ecran, qu'il demandait nommement. Le bureau cache (scripts/hdesk-lancer.ps1) reste la voie
         // par defaut, portee par la CONSIGNE du prompt de pilotage — plus par un blocage.
         // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
-        // Même lecture que le hook du CLI : le corps d'un heredoc de simple texte n'est pas du shell
-        // (rejeu du 2026-10-01 sur 29 371 commandes, `src/shared/heredocs.ts`).
-        const shell = sansHeredocsDeDonnees(ligne)
-        const refusGit = refusGitDestructeur(shell)
+        const refusGit = refusGitDestructeur(ligne)
         if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
         // Même garde que le hook du CLI (2026-10-01) : Python en mode texte passe un fichier en CRLF.
         const refusPython = refusEcriturePythonCrlf(ligne)
         if (refusPython) return { lance: false, detail: `Commande refusée : ${refusPython}` }
         // Porte de production (conv-738) : `run` ne coupe pas la protection et ne contourne pas
         // `sql_query` en lançant lui-même un client SQL. Même verdict, même fenêtre, une reprise.
-        const refusReglage = refusReglageProd(shell)
+        const refusReglage = refusReglageProd(ligne)
         if (refusReglage) return { lance: false, detail: `Commande refusée : ${refusReglage}` }
-        const cibleSql = cibleSqlDeCommande(shell)
+        const cibleSql = cibleSqlDeCommande(ligne)
         // Sans porte branchée, un client SQL ne part PAS sans contrôle : refus par défaut (conv-738).
         if (cibleSql && !this.porteProd)
           return { lance: false, detail: 'Commande refusée : la protection de production n’est pas disponible, aucun client SQL ne part sans elle.' }
@@ -4685,7 +4678,7 @@ export class AppCommandBus {
       (isAbsolute(chemin) ? relative(repo, chemin) : chemin).split(sep).join('/')
     const fichierExiste = (chemin: string): boolean =>
       existsSync(isAbsolute(chemin) ? chemin : join(repo, chemin))
-    const mesure = await this.mesurerParLots(repo, portee, binDuDepot)
+    const mesure = await this.mesurerAvecRapport(repo, portee, binDuDepot)
     if (!mesure.allowed) {
       return { statut: 'non-verifie', raison: mesure.reason ?? 'vérification indisponible' }
     }
@@ -4719,7 +4712,7 @@ export class AppCommandBus {
     const brut = lectureBruteDuRapport(mesure.rapport)
     const suites = [...new Set((brut?.suitesEnEchec ?? []).map(versRelatif))]
     if (suites.length > 0 && decideRelatedVerify(repo, suites).allowed) {
-      const seules = await this.mesurerParLots(repo, suites, binDuDepot)
+      const seules = await this.mesurerAvecRapport(repo, suites, binDuDepot)
       if (seules.allowed && seules.exitCode !== null) {
         const rapportSeules = echecsDuRapport(seules.rapport, fichierExiste)
         if (seules.ok && rapportSeules.concluant && rapportSeules.testsJoues > 0) {
@@ -4753,38 +4746,6 @@ export class AppCommandBus {
         ? `${rapport.echecs.size} test(s) en échec`
         : `code de sortie ${mesure.exitCode}${rapport.raison ? ` — ${rapport.raison.slice(0, 200)}` : ''}`,
       testsEnEchec
-    }
-  }
-
-  /**
-   * La même mesure, en LOTS qui tiennent dans une ligne de `cmd.exe` (8 191 caractères), lancés l'un
-   * après l'autre puis fusionnés. Mesuré le 2026-10-01 (conv-770, tour 532299a4) : 194 tests
-   * citaient les fichiers du tour, la commande unique faisait 9 121 caractères, `cmd.exe` la
-   * refusait, aucun rapport n'était produit et la publication restait bloquée.
-   */
-  private async mesurerParLots(
-    workspaceRoot: string,
-    cible: readonly string[],
-    binDir?: string
-  ): Promise<MesureVerifiee> {
-    const lots = decouperEnLots(cible, BUDGET_CHEMINS_PAR_LANCEMENT)
-    if (lots.length <= 1) return await this.mesurerAvecRapport(workspaceRoot, cible, binDir)
-    const mesures: MesureVerifiee[] = []
-    for (const lot of lots) mesures.push(await this.mesurerAvecRapport(workspaceRoot, lot, binDir))
-    const refus = mesures.find((m) => !m.allowed)
-    if (refus) return refus
-    const rapport = fusionnerRapportsVitest(mesures.map((m) => m.rapport))
-    return {
-      allowed: true,
-      // Un lot coupé au plafond rend la mesure entière coupée : aucun artefact n'est complet.
-      ok: mesures.every((m) => m.ok),
-      exitCode: mesures.some((m) => m.exitCode === null)
-        ? null
-        : (mesures.find((m) => m.exitCode !== 0)?.exitCode ?? 0),
-      command: `${mesures[0].command} (${lots.length} lancements)`,
-      output: mesures.map((m) => m.output).join('\n'),
-      parPortee: mesures.every((m) => m.parPortee),
-      ...(rapport ? { rapport } : {})
     }
   }
 
