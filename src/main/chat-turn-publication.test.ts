@@ -388,3 +388,132 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
   })
 })
+
+/**
+ * LES TESTS DES FICHIERS DU TOUR SONT REJOUÉS AVANT DE POUSSER.
+ *
+ * Mesuré le 2026-10-01 : le commit automatique `b6d2a3fc` (conv-892) a poussé une modification de
+ * `src/main/index.ts` sans rejouer aucun test, et `chat-ipc-contract.test.ts` est resté rouge sur
+ * main pendant 20 h — son correctif dormait dans la copie de travail d'un autre run.
+ */
+describe('enchaînement auto du chat — vérification avant de pousser', () => {
+  async function tourQuiModifieMine(): Promise<{
+    repo: string
+    remote: string
+    debut: Awaited<ReturnType<typeof photographierDebutDeTour>>
+    traces: ConversationFileTrace[]
+  }> {
+    const { repo, remote } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'mine.ts'), 'export const a = 1\n')
+    const traces = [
+      trace(repo, {
+        paths: ['mine.ts'],
+        pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+      })
+    ]
+    return { repo, remote, debut, traces }
+  }
+
+  it('tests ROUGES : rien n’est commité ni poussé, et chaque fichier est nommé avec le test en échec', async () => {
+    const { repo, remote, debut, traces } = await tourQuiModifieMine()
+    const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
+    const verifier = vi.fn(async () => ({
+      statut: 'echec' as const,
+      commande: 'vitest related mine.ts --run',
+      detail: '1 test en échec',
+      testsEnEchec: ['mine.test.ts']
+    }))
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute a',
+      debut,
+      runGit: realGit,
+      traces,
+      verifierAvantPublication: verifier
+    })
+
+    // La vérification porte sur les fichiers QUE le tour allait publier, dans le vrai dépôt (chemin
+    // RÉEL : sous Windows, le dossier temporaire arrive en nom court, git le rend en nom long).
+    expect(verifier).toHaveBeenCalledTimes(1)
+    const [depotVerifie, fichiersVerifies] = verifier.mock.calls[0] as unknown as [string, string[]]
+    expect(realpathSync.native(depotVerifie)).toBe(realpathSync.native(repo))
+    expect(fichiersVerifies).toEqual(['mine.ts'])
+    expect(report).toMatchObject({
+      project: { status: 'skipped', reason: 'tests-rouges' },
+      exclus: [{ path: 'mine.ts', motif: 'tests-rouges', testsEnEchec: ['mine.test.ts'] }],
+      verification: { statut: 'echec' }
+    })
+    expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['base.txt', 'partage.ts'])
+    expect(await enAttente(repo)).toContain('mine.ts')
+  })
+
+  it('tests VERTS : publication comme avant, et le rapport dit ce qui a été rejoué', async () => {
+    const { remote, debut, traces } = await tourQuiModifieMine()
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute a',
+      debut,
+      runGit: realGit,
+      traces,
+      verifierAvantPublication: async () => ({
+        statut: 'vert' as const,
+        commande: 'vitest related mine.ts --run',
+        testsJoues: 3
+      })
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'pushed', files: 1 },
+      verification: { statut: 'vert', testsJoues: 3 }
+    })
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
+  })
+
+  it('aucun test ciblable : publication comme avant, mais le rapport le dit au lieu de se taire', async () => {
+    const { remote, debut, traces } = await tourQuiModifieMine()
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute a',
+      debut,
+      runGit: realGit,
+      traces,
+      verifierAvantPublication: async () => ({
+        statut: 'non-verifie' as const,
+        raison: 'aucun test ciblable pour notes.md'
+      })
+    })
+
+    expect(report).toMatchObject({
+      project: { status: 'pushed', files: 1 },
+      verification: { statut: 'non-verifie', raison: 'aucun test ciblable pour notes.md' }
+    })
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
+  })
+
+  it('n’appelle pas la vérification quand le tour n’a rien à publier', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    const verifier = vi.fn()
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'rien',
+      debut,
+      runGit: realGit,
+      traces: [],
+      verifierAvantPublication: verifier
+    })
+
+    expect(report).toBeUndefined()
+    expect(verifier).not.toHaveBeenCalled()
+  })
+})

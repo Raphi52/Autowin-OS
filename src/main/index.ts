@@ -3200,7 +3200,11 @@ Le fil reprend ensuite normalement.`
                 activeChatTurns
                   .inFlightConversations()
                   .filter((id) => id !== conversationId)
-                  .map((id) => dossierDuTour(id))
+                  .map((id) => dossierDuTour(id)),
+              // Les tests des fichiers du tour sont rejoués AVANT de pousser : `b6d2a3fc` (conv-892)
+              // a été poussé sans test et a laissé main rouge 20 h (mesuré le 2026-10-01).
+              verifierAvantPublication: (repo, fichiers) =>
+                bus.verifierAvantPublication(repo, fichiers)
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
         }

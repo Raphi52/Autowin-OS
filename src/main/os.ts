@@ -59,7 +59,8 @@ import {
   type CloseBaseline,
   closeGreenRunOnDisk,
   projectPublicationNeedsRetry,
-  type AutoCloseReport
+  type AutoCloseReport,
+  type VerificationAvantPublication
 } from './run-autoclose'
 import { publierTourDeChat, type ChatTurnStart } from './chat-turn-publication'
 import { amitelBrainRoot } from './amitel-context'
@@ -784,6 +785,11 @@ export class AutowinOS {
     debut: ChatTurnStart
     /** Dossiers de travail des tours d'AUTRES fils en cours, relus au moment de publier. */
     autresToursEnCours?: () => readonly string[]
+    /** Tests des fichiers du tour, rejoués AVANT de pousser (voir `chat-turn-publication.ts`). */
+    verifierAvantPublication?: (
+      repo: string,
+      fichiers: readonly string[]
+    ) => Promise<VerificationAvantPublication>
   }): Promise<AutoCloseReport | undefined> {
     const { autresToursEnCours, ...tour } = input
     const next = this.chatTurnPublications.then(async () => {

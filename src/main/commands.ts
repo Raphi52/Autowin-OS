@@ -69,6 +69,7 @@ import {
   VERIFY_TEXTE_ANGLE_MORT,
   estUneFeuilleDeStyle,
   estUnTexteDerivable,
+  porteeAvantPublication,
   porteeDUneEdition,
   porteeDerivableDesChangements,
   scriptVitestUnique,
@@ -96,6 +97,7 @@ import {
   VERIFY_SANS_ISOLATION
 } from './verification-isolee'
 import { readLastCommitFiles, readTestsCitant } from './git-read-main'
+import type { VerificationAvantPublication } from './run-autoclose'
 import { nativeSkills } from './native-registry'
 
 /**
@@ -4641,9 +4643,82 @@ export class AppCommandBus {
   /** Ecriture de fichier, remplacable par un test pour prouver la branche « non restaure ». */
   private ecrireFichier: (chemin: string, contenu: Buffer) => void = writeFileSync
 
+  /**
+   * Rejoue, dans le dépôt RÉEL, les tests des fichiers qu'un tour de chat va publier — appelé par le
+   * commit automatique AVANT de pousser (`chat-turn-publication.ts`).
+   *
+   * Mesuré le 2026-10-01 : `b6d2a3fc` (conv-892) a été poussé sans aucun test et a laissé main rouge
+   * 20 h. La portée est celle d'`edit_file`, plus les tests qui CITENT un fichier de code
+   * (`porteeAvantPublication`) : c'est ce qui rejoue `chat-ipc-contract.test.ts`, qui LIT `index.ts`.
+   *
+   * JAMAIS de repli sur la suite complète ici : à chaque fin de tour, elle coûterait plusieurs minutes
+   * et bloquerait toute publication sur le moindre rouge préexistant du dépôt. Sans portée, la
+   * publication part comme avant et le rapport dit `non-verifie`, avec sa raison.
+   */
+  async verifierAvantPublication(
+    repo: string,
+    fichiers: readonly string[]
+  ): Promise<VerificationAvantPublication> {
+    const portee = await porteeAvantPublication(
+      fichiers,
+      async (motif) => await readTestsCitant(repo, motif)
+    )
+    if (!portee) {
+      return { statut: 'non-verifie', raison: `aucun test ciblable pour ${fichiers.join(', ')}` }
+    }
+    const decision = decideRelatedVerify(repo, portee)
+    if (!decision.allowed) return { statut: 'non-verifie', raison: decision.reason }
+    const mesure = await this.mesurerAvecRapport(repo, portee, join(repo, 'node_modules', '.bin'))
+    if (!mesure.allowed) {
+      return { statut: 'non-verifie', raison: mesure.reason ?? 'vérification indisponible' }
+    }
+    if (mesure.exitCode === null) {
+      return {
+        statut: 'echec',
+        commande: mesure.command,
+        detail: 'tests coupés au plafond de temps',
+        testsEnEchec: []
+      }
+    }
+    const rapport = echecsDuRapport(mesure.rapport, (chemin) =>
+      existsSync(isAbsolute(chemin) ? chemin : join(repo, chemin))
+    )
+    if (mesure.ok) {
+      // Un exit 0 sans test joué n'est pas un vert : rien n'a été mesuré.
+      if (!rapport.concluant || rapport.testsJoues === 0) {
+        return {
+          statut: 'non-verifie',
+          raison: rapport.raison ?? `aucun test joué par ${mesure.command}`
+        }
+      }
+      return { statut: 'vert', commande: mesure.command, testsJoues: rapport.testsJoues }
+    }
+    // Identité d'un échec : `<fichier> > <nom> :: <empreinte>` (voir `RapportDeTests`).
+    const testsEnEchec = [
+      ...new Set(
+        [...rapport.echecs].map((echec) => {
+          const fichier = echec.split(' > ')[0]
+          const relatif = isAbsolute(fichier) ? relative(repo, fichier) : fichier
+          return relatif.split(sep).join('/')
+        })
+      )
+    ]
+    return {
+      statut: 'echec',
+      commande: mesure.command,
+      // Un rapport non concluant (suite qui ne charge pas…) bloque AUSSI : rien n'a prouvé le vert.
+      detail: rapport.concluant
+        ? `${rapport.echecs.size} test(s) en échec`
+        : `code de sortie ${mesure.exitCode}${rapport.raison ? ` — ${rapport.raison.slice(0, 200)}` : ''}`,
+      testsEnEchec
+    }
+  }
+
   private async mesurerAvecRapport(
     workspaceRoot: string,
-    cible: readonly string[]
+    cible: readonly string[],
+    /** Binaires du dépôt mesuré (voir `spawnVerify`) ; défaut : ceux du dossier du tour. */
+    binDir?: string
   ): Promise<MesureVerifiee> {
     /*
      * UN DOSSIER A NOM ALEATOIRE, PAS UN NOM DERIVE DU PID.
@@ -4695,7 +4770,14 @@ export class AppCommandBus {
       etiquette = globale.command
     }
     try {
-      const issue = await this.spawnVerify(argv, workspaceRoot, etiquette)
+      const issue = await this.spawnVerify(
+        argv,
+        workspaceRoot,
+        etiquette,
+        undefined,
+        undefined,
+        binDir
+      )
       /*
        * PAS DE FICHIER = PAS DE DIFFERENTIEL. C'est exactement le cas du plafond de temps : le
        * process est tue, aucun rapport complet n'est ecrit. La v1 lisait alors la sortie PARTIELLE,
@@ -5372,12 +5454,14 @@ export class AppCommandBus {
     cwd: string,
     label: string,
     onProgress?: (text: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** Dossier des binaires à mettre en tête du PATH ; défaut : celui du dossier du tour. */
+    binDir?: string
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const [file, ...rest] = argv
-    const sharedBin = this.workspaceDuTour
-      ? join(this.workspaceDuTour, 'node_modules', '.bin')
-      : undefined
+    const sharedBin =
+      binDir ??
+      (this.workspaceDuTour ? join(this.workspaceDuTour, 'node_modules', '.bin') : undefined)
     const env =
       sharedBin && existsSync(sharedBin)
         ? {

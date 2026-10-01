@@ -9,7 +9,8 @@ import {
   parsePorcelainPaths,
   type AutoCloseReport,
   type GitRunner,
-  type PrOpener
+  type PrOpener,
+  type VerificationAvantPublication
 } from './run-autoclose'
 
 /**
@@ -207,6 +208,15 @@ export async function publierTourDeChat(input: {
    * rien écrit. Absent = aucun.
    */
   autresToursEnCours?: readonly string[]
+  /**
+   * Rejoue les tests des fichiers que le tour va publier, dans le VRAI dépôt, AVANT le commit.
+   * Mesuré le 2026-10-01 : `b6d2a3fc` (conv-892) a été poussé sans aucun test et a laissé main
+   * rouge 20 h. Absent = comportement d'avant (aucune vérification).
+   */
+  verifierAvantPublication?: (
+    repo: string,
+    fichiers: readonly string[]
+  ) => Promise<VerificationAvantPublication>
   runGit?: GitRunner
   openPr?: PrOpener
 }): Promise<AutoCloseReport | undefined> {
@@ -288,6 +298,22 @@ export async function publierTourDeChat(input: {
   // GARDE-FOU : `autoCloseRun` sans chemins publierait TOUT l'arbre (`add -A`).
   if (publier.length === 0)
     return rapport(input, { status: 'skipped', reason: 'unattributed' }, exclus)
+  // Un rouge (ou un plafond de temps) ne se pousse pas : les fichiers restent en attente, nommés
+  // avec les tests en échec. Un fichier qu'aucun test ne juge part comme avant, mais le rapport le dit.
+  const verification = await input.verifierAvantPublication?.(repo, publier)
+  if (verification?.statut === 'echec') {
+    const rouges = publier.map<Exclusion>((path) => ({
+      path,
+      motif: 'tests-rouges',
+      testsEnEchec: verification.testsEnEchec
+    }))
+    return rapport(
+      input,
+      { status: 'skipped', reason: 'tests-rouges', detail: verification.detail },
+      [...exclus, ...rouges],
+      verification
+    )
+  }
   const project = await autoCloseRun({
     repo,
     branch: brancheDuTour(conversationId, turnId),
@@ -297,7 +323,7 @@ export async function publierTourDeChat(input: {
     direct: true,
     ...(input.openPr ? { openPr: input.openPr } : {})
   })
-  return rapport(input, project, exclus)
+  return rapport(input, project, exclus, verification)
 }
 
 function brancheDuTour(conversationId: string, turnId: string): string {
@@ -307,7 +333,8 @@ function brancheDuTour(conversationId: string, turnId: string): string {
 function rapport(
   input: { conversationId: string; turnId: string },
   project: AutoCloseReport['project'],
-  exclus: Exclusion[] = []
+  exclus: Exclusion[] = [],
+  verification?: VerificationAvantPublication
 ): AutoCloseReport {
   return {
     runId: `${input.conversationId} · tour ${input.turnId.slice(0, 8)}`,
@@ -315,6 +342,7 @@ function rapport(
     project,
     at: new Date().toISOString(),
     source: 'chat',
-    ...(exclus.length ? { exclus } : {})
+    ...(exclus.length ? { exclus } : {}),
+    ...(verification ? { verification } : {})
   }
 }

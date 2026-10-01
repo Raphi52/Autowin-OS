@@ -299,6 +299,89 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(toggle.title).toContain('chaque tour de chat')
   })
 
+  it('un tour bloqué par des tests ROUGES dit lesquels, et rien n’est annoncé comme poussé', async () => {
+    // Mesuré le 2026-10-01 : `b6d2a3fc` a été poussé sans test et a laissé main rouge 20 h. Les tests
+    // sont désormais rejoués avant de pousser ; le panneau doit dire pourquoi rien n'est parti.
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-892 · tour b6d2a3fc',
+          branch: 'auto/conv-892-b6d2a3fc',
+          at: '2026-10-01T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'skipped', reason: 'tests-rouges', detail: '2 test(s) en échec' },
+          exclus: [
+            {
+              path: 'src/main/index.ts',
+              motif: 'tests-rouges',
+              testsEnEchec: ['src/main/chat-ipc-contract.test.ts']
+            }
+          ],
+          verification: {
+            statut: 'echec',
+            commande: 'vitest related src/main/index.ts --run',
+            detail: '2 test(s) en échec',
+            testsEnEchec: ['src/main/chat-ipc-contract.test.ts']
+          }
+        }
+      })
+    await render()
+    await openWorkspaceView()
+
+    const last = container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent ?? ''
+    expect(last).toContain('Projet · non publié · tests rouges')
+    expect(last).not.toContain('poussé')
+    expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
+      'Laissé en attente · src/main/index.ts (tests rouges : src/main/chat-ipc-contract.test.ts)'
+    )
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests rejoués avant de pousser · 2 test(s) en échec'
+    )
+  })
+
+  it('un tour publié dit combien de tests ont été rejoués, ou pourquoi aucun ne l’a été', async () => {
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    let verification: Record<string, unknown> = {
+      statut: 'vert',
+      commande: 'vitest related src/a.ts --run',
+      testsJoues: 12
+    }
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-1 · tour aaaaaaaa',
+          branch: 'auto/conv-1-aaaaaaaa',
+          at: '2026-10-01T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'pushed', branch: 'main', files: 1, mode: 'direct' },
+          verification
+        }
+      })
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests rejoués avant de pousser · 12 verts'
+    )
+
+    // Second rendu, sur une racine neuve (même préparation que le `beforeEach`).
+    act(() => root.unmount())
+    container.remove()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    verification = { statut: 'non-verifie', raison: 'aucun test ciblable pour notes.md' }
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests non rejoués · aucun test ciblable pour notes.md'
+    )
+  })
+
   it('rafraichit le resultat auto-close quand une publication differee se termine', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api

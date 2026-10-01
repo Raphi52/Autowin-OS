@@ -61,25 +61,47 @@ interface AutoCloseViewState {
     at: string
     source?: 'chat'
     exclus?: Exclusion[]
+    /** Tour de chat : les tests rejoués avant de pousser (absent = aucune vérification). */
+    verification?: Verification
   }
 }
 
 interface Exclusion {
   path: string
-  motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' | 'autre-fil-en-cours'
+  motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' | 'autre-fil-en-cours' | 'tests-rouges'
   /** Lignes que le fil ne réclame pas : les réécrire avec l'outil d'édition publie le fichier. */
   lignesNonReclamees?: number
+  /** Motif `tests-rouges` : les fichiers de test en échec. */
+  testsEnEchec?: string[]
 }
+
+type Verification =
+  | { statut: 'vert'; commande: string; testsJoues: number }
+  | { statut: 'echec'; commande: string; detail: string; testsEnEchec: string[] }
+  | { statut: 'non-verifie'; raison: string }
 
 const MOTIFS_EXCLUSION: Record<string, string> = {
   'modifie-avant-le-tour': 'déjà modifié avant le tour',
   'touche-par-un-autre-fil': 'touché aussi par un autre fil',
-  'autre-fil-en-cours': 'un autre fil tournait encore dans ce dossier'
+  'autre-fil-en-cours': 'un autre fil tournait encore dans ce dossier',
+  'tests-rouges': 'tests rouges'
+}
+
+/** Mesuré le 2026-10-01 : `b6d2a3fc` poussé sans test a laissé main rouge 20 h. */
+function libelleVerification(verification: Verification): string {
+  if (verification.statut === 'vert') {
+    const s = verification.testsJoues > 1 ? 's' : ''
+    return `Tests rejoués avant de pousser · ${verification.testsJoues} vert${s}`
+  }
+  if (verification.statut === 'echec')
+    return `Tests rejoués avant de pousser · ${verification.detail}`
+  return `Tests non rejoués · ${verification.raison}`
 }
 
 /** Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que le panneau le dise. */
 function libelleExclusion(item: Exclusion): string {
   const motif = MOTIFS_EXCLUSION[item.motif] ?? item.motif
+  if (item.testsEnEchec?.length) return `${item.path} (${motif} : ${item.testsEnEchec.join(', ')})`
   const n = item.lignesNonReclamees
   if (!n) return `${item.path} (${motif})`
   const s = n > 1 ? 's' : ''
@@ -105,7 +127,8 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
     'secret-detected': 'secret détecté',
     'concurrent-commits': 'commits concurrents',
     'invalid-publication-range': 'plage Git non vérifiable',
-    unattributed: 'aucun fichier du tour prouvé à ce fil'
+    unattributed: 'aucun fichier du tour prouvé à ce fil',
+    'tests-rouges': 'tests rouges'
   }
   return `${scope} · non publié · ${reasons[result.reason] ?? result.reason}`
 }
@@ -825,6 +848,11 @@ export function SourceControlPane({
                 {autoClose.last.brain && (
                   <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
                 )}
+                {autoClose.last.verification ? (
+                  <span data-testid="sc-autoclose-verification">
+                    {libelleVerification(autoClose.last.verification)}
+                  </span>
+                ) : null}
                 {autoClose.last.exclus?.length ? (
                   <span data-testid="sc-autoclose-exclus">
                     {`Laissé en attente · ${autoClose.last.exclus.map(libelleExclusion).join(', ')}`}
