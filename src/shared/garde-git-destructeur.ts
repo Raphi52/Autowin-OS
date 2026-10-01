@@ -1,4 +1,7 @@
 // fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
+// Le MODULE importe ; les fonctions de garde, elles, restent autoportées (sérialisées dans le hook).
+import { refusEcriturePythonCrlf } from './garde-python-crlf'
+
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
  *
@@ -229,6 +232,9 @@ export function refusGitDestructeur(commande: string): string | undefined {
  * stdout (https://code.claude.com/docs/en/hooks). Mesure 2026-09-13 : avec exit 2 + stderr, l'appel
  * etait bien bloque mais l'agent recevait un resultat VIDE, sans le motif ni la voie a suivre.
  *
+ * Porte aussi, depuis le 2026-10-01, l'écriture Python en mode texte qui passe un fichier en CRLF
+ * (`refusEcriturePythonCrlf`, garde-python-crlf.ts : 47 fichiers du dépôt réécrits ainsi).
+ *
  * NE PORTE PLUS QUE L'EFFACEMENT DE TRAVAIL (conv-587). Le refus des lancements graphiques au
  * premier plan a ete RETIRE le 2026-09-17 sur demande explicite de l'utilisateur (conv-631) : il
  * bloquait l'ouverture d'un simple fichier sur son propre ecran, qu'il demandait nommement, et
@@ -245,6 +251,7 @@ export function scriptHookGardes(
   basesNonProd: readonly string[] = []
 ): string {
   return `const refusGitDestructeur = ${refusGitDestructeur.toString()};
+const refusEcriturePythonCrlf = ${refusEcriturePythonCrlf.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
 const basesNonProd = ${JSON.stringify(basesNonProd)};
@@ -259,7 +266,7 @@ process.stdin.on('end', () => {
     cmd = t.command || '';
     chemin = t.file_path || t.notebook_path || '';
   } catch {}
-  const motif = refusGitDestructeur(cmd) || refusReglageProd(cmd) || refusReglageProd(chemin) || refusSqlAgent(cmd, basesNonProd);
+  const motif = refusGitDestructeur(cmd) || refusEcriturePythonCrlf(cmd) || refusReglageProd(cmd) || refusReglageProd(chemin) || refusSqlAgent(cmd, basesNonProd);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

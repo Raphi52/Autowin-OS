@@ -28,6 +28,7 @@ import {
 } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
+import { refusEcriturePythonCrlf } from '../shared/garde-python-crlf'
 import {
   decideRead,
   enumererFichiersLisibles,
@@ -3591,6 +3592,9 @@ export class AppCommandBus {
         // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
         const refusGit = refusGitDestructeur(ligne)
         if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
+        // Même garde que le hook du CLI (2026-10-01) : Python en mode texte passe un fichier en CRLF.
+        const refusPython = refusEcriturePythonCrlf(ligne)
+        if (refusPython) return { lance: false, detail: `Commande refusée : ${refusPython}` }
         // Porte de production (conv-738) : `run` ne coupe pas la protection et ne contourne pas
         // `sql_query` en lançant lui-même un client SQL. Même verdict, même fenêtre, une reprise.
         const refusReglage = refusReglageProd(ligne)
