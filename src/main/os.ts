@@ -98,8 +98,11 @@ import type {
   WorktreeConflictResolutionResult,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { promisify } from 'node:util'
+import { sansThinkPerime } from './think-briefing'
 import { ensureAutowinAppData } from './app-data'
 import { loadAutoClose, saveAutoClose } from './autoclose-store'
 import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../shared/app-identity'
@@ -1421,17 +1424,36 @@ export class AutowinOS {
    * libellé de la demande a changé entre deux tours. Ne reprend AUCUN checkpoint : uniquement des
    * textes de phase, que l'orchestrateur saute alors au lieu de les repayer.
    */
-  acquiredAnalysisForConversation(
+  async acquiredAnalysisForConversation(
     task: string,
     conversationId: string | undefined,
-    nowMs = Date.now()
-  ): Array<{ phase: NodePhase; text: string }> {
+    nowMs = Date.now(),
+    /** Tour et dossier du NOUVEAU run : `think` n'est repris que pour la même demande, à jour. */
+    contexte: { turnId?: string; workspace?: string } = {}
+  ): Promise<Array<{ phase: NodePhase; text: string; codeSha?: string }>> {
     const acquis = pickAcquiredAnalysis(loadOrchestrationStates(this.orchestrationStateRoot), {
       task,
       conversationId,
-      nowMs
+      nowMs,
+      ...(contexte.turnId ? { turnId: contexte.turnId } : {})
     })
-    return acquis.length > 0 ? acquis : []
+    // Un briefing `think` pointe des lignes : repris seulement si aucun fichier qu'il cite n'a
+    // changé depuis le commit qu'il a lu. `git diff` ASYNCHRONE — un appel synchrone fige la fenêtre
+    // (`depot-git.ts`). Échec ou dossier inconnu → `think` est rejoué, jamais repris à l'aveugle.
+    const workspace = contexte.workspace ?? this.executionWorkspace
+    const garde = await sansThinkPerime(acquis, async (sha) => {
+      try {
+        const r = await promisify(execFile)('git', ['diff', '--name-only', sha, '--'], {
+          cwd: workspace,
+          windowsHide: true,
+          timeout: 15_000
+        })
+        return r.stdout.split(/\r?\n/).filter((ligne) => ligne.trim())
+      } catch {
+        return undefined
+      }
+    })
+    return garde.length > 0 ? garde : []
   }
 
   /** Abandonne explicitement un état reprenable (l'utilisateur ne veut pas le reprendre). */

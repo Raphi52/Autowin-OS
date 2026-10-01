@@ -9,7 +9,9 @@ import {
   fichiersCites,
   mediane,
   mesurerRun,
+  mesurerTrous,
   runsDuMessage,
+  runsExclus,
   section
 } from './mesure-valeur-think.mjs'
 
@@ -101,5 +103,56 @@ describe('règle de décision « sauter think »', () => {
     expect(mediane([3, 1, 2])).toBe(2)
     expect(mediane([1, 2, 3, 4])).toBe(2.5)
     expect(mediane([])).toBe(null)
+  })
+})
+
+/*
+ * Objection du juge (run-85d8e7f57af2-1, réparation 2) : la mesure ne disait rien des « Trous », et
+ * comptait le run qui l'a écrite. Deux signaux sans modèle, nommés pour ce qu'ils sont : un trou
+ * qui portait sur un fichier modifié ensuite, et un trou repris par une étape suivante du même run.
+ */
+describe('« Trous » du briefing, sans modèle', () => {
+  const avecTrous = [
+    '## Localisation',
+    '- `src/main/orchestrator.ts:3643`',
+    '## Trous',
+    '- je n’ai pas lu `src/main/commands.ts` ni vérifié `pickResumeForTask`',
+    '- Brain indisponible'
+  ].join('\n')
+
+  it('compte les trous portant sur un fichier modifié ensuite', () => {
+    const m = mesurerTrous({
+      briefing: avecTrous,
+      modifies: ['src/main/commands.ts', 'src/main/orchestrator.ts'],
+      suite: ''
+    })
+    expect(m.fichiersTrouModifies).toEqual(['src/main/commands.ts'])
+  })
+
+  it('compte les repères d’un trou repris par une étape suivante', () => {
+    const m = mesurerTrous({
+      briefing: avecTrous,
+      modifies: [],
+      suite: '## Confiance\n- NON VÉRIFIÉ : pourquoi `pickResumeForTask` a rendu null'
+    })
+    expect(m.reperes).toBe(2)
+    expect(m.reprisPlusTard).toEqual(['pickResumeForTask'])
+  })
+
+  it('un briefing sans section Trous ne compte rien', () => {
+    const m = mesurerTrous({
+      briefing: '## Localisation\n- a.ts',
+      modifies: ['a.ts'],
+      suite: 'a.ts'
+    })
+    expect(m).toEqual({ reperes: 0, reprisPlusTard: [], fichiersTrouModifies: [] })
+  })
+})
+
+describe('runs exclus de l’échantillon', () => {
+  it('lit chaque --exclure, et rien d’autre', () => {
+    const exclus = runsExclus(['--exclure', 'run-a', '--data', 'x', '--exclure', 'run-b', '--json'])
+    expect([...exclus].sort()).toEqual(['run-a', 'run-b'])
+    expect(runsExclus(['--data', 'x']).size).toBe(0)
   })
 })

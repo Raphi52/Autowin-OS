@@ -15,7 +15,7 @@
  * mieux. L'avertissement en TETE suffit a ce qu'un texte qui n'est pas un briefing ne soit pas lu
  * comme tel.
  *
- * PUR : pas d'horloge, pas de provider, aucune E/S.
+ * PUR : pas d'horloge, pas de provider, aucune E/S (git est passe en parametre a `sansThinkPerime`).
  */
 
 /** Les six titres de `skills/think/SKILL.md` §5, normalises (sans accent, sans casse). */
@@ -75,4 +75,46 @@ export function sortieThinkAvecForme(texte: string): string {
     'toi-même ce dont ta tâche dépend.\n\n' +
     (texte ?? '')
   )
+}
+
+/**
+ * LE PREMIER FICHIER CITE PAR LE BRIEFING QUI A CHANGE, ou `undefined`.
+ *
+ * Un briefing repris pointe des lignes (`Localisation`) : si l'un des fichiers qu'il cite a change
+ * depuis le commit qu'il a lu, ses reperes peuvent etre faux. Un fichier compte comme cite si son
+ * chemin complet OU son nom seul apparait : un briefing ecrit souvent `workflow-walk.ts:76` sans le
+ * dossier. Le nom seul peut rejeter a tort (deux `index.ts`) — l'erreur coute alors un `think`
+ * rejoue, jamais un briefing perime repris.
+ */
+export function fichierCiteModifie(
+  briefing: string,
+  modifies: readonly string[]
+): string | undefined {
+  const texte = (briefing ?? '').replace(/\\/g, '/')
+  return modifies.find((chemin) => {
+    const propre = chemin.replace(/\\/g, '/').trim()
+    if (!propre) return false
+    if (texte.includes(propre)) return true
+    const nom = propre.split('/').pop() ?? ''
+    const echappe = nom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return nom.length > 0 && new RegExp(`(^|[^\\w.-])${echappe}(?![\\w-])`, 'u').test(texte)
+  })
+}
+
+/**
+ * L'acquis repris, SANS le briefing `think` quand il est perime ou qu'on ne peut pas le savoir.
+ *
+ * `fichiersModifiesDepuis(sha)` rend les fichiers changes entre ce commit et le code d'aujourd'hui,
+ * ou `undefined` s'il ne sait pas (commit inconnu, git en echec). Le doute rejoue `think` : c'est
+ * l'etat d'avant la reprise, jamais un briefing faux. Les autres phases passent telles quelles.
+ */
+export async function sansThinkPerime<T extends { phase: string; text: string; codeSha?: string }>(
+  acquis: readonly T[],
+  fichiersModifiesDepuis: (sha: string) => Promise<readonly string[] | undefined>
+): Promise<T[]> {
+  const think = acquis.find((output) => output.phase === 'think')
+  if (!think) return [...acquis]
+  const modifies = think.codeSha ? await fichiersModifiesDepuis(think.codeSha) : undefined
+  const perime = !modifies || fichierCiteModifie(think.text, modifies) !== undefined
+  return perime ? acquis.filter((output) => output !== think) : [...acquis]
 }

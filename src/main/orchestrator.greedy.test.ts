@@ -927,3 +927,111 @@ describe('un briefing `think` qui ecrit SUITE: fin n’arrete pas le run', () =>
     )
   })
 })
+
+/**
+ * LE FILTRE `think` NE COUPE PAS LA PAROLE A L'ARBITRE DE DERIVE.
+ *
+ * Objection du juge (run-85d8e7f57af2-1, reparation 2) : l'arbitre ecrit sa decision en ajoutant
+ * `SUITE: fin` ou `SUITE: <phase>` a la sortie de la phase (`orchestrator.ts`, bloc « [dérive] »),
+ * donc par la MEME ligne que le filtre `think` ignore. Un arret arbitre juste apres `think` etait
+ * donc ignore lui aussi, et le plan continuait. Seule la ligne du MODELE doit l'etre.
+ */
+class ThinkQuiDerive extends ThinkQuiArrete {
+  constructor(private readonly route: string) {
+    super()
+  }
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const content = String(messages[messages.length - 1]?.content ?? '')
+    const usage = { inputTokens: 4, outputTokens: 2, costUsd: 0.001 }
+    if (content === 'Tranche maintenant.') {
+      this.contents.push(content)
+      return {
+        text: `ROUTE: ${this.route}`,
+        provider: this.id,
+        usage,
+        systemInjected: Boolean(options.system)
+      }
+    }
+    if (this.phaseCourante === 'think') {
+      // Trois fois la meme erreur dans le flux : le detecteur de derive se declenche.
+      for (const n of [1, 2, 3]) {
+        yield { delta: `Error: ECONNREFUSED sur /srv/${n} ligne ${n}\nje reessaie\n` }
+      }
+    }
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('l’arbitre de dérive garde la main juste apres `think`', () => {
+  const lancer = async (route: string) => {
+    const provider = new ThinkQuiDerive(route)
+    const phases: string[] = []
+    const orchestrator = makeGreedy(
+      provider,
+      vi.fn().mockResolvedValue([]),
+      () => ['frame', 'build'],
+      { currentWorkflow: () => ({ phases: ['think', 'frame', 'build'], explicit: true }) as never }
+    )
+    const result = await orchestrator.run('corrige le calcul dans src/a.ts', undefined, ((event: {
+      step: string
+      phase?: string
+    }) => {
+      if (event.step !== 'exec' || !event.phase) return
+      provider.phaseCourante = event.phase
+      phases.push(event.phase)
+    }) as never)
+    return { result, phases, provider }
+  }
+
+  it('un arret decide par l’arbitre apres `think` arrete le run', async () => {
+    const { result, phases, provider } = await lancer('fin')
+    expect(provider.contents).toContain('Tranche maintenant.')
+    expect(phases).toContain('think')
+    expect(phases).not.toContain('frame')
+    // fix-ok: les `build` restants sont ceux de la boucle de reparation du controle final (trace :
+    // « Réparation 1/24 — nouveau passage de build »), pas du plan : un par reparation, aucun autre.
+    const reparations = result.trace.filter((step) =>
+      /^Réparation \d+\/\d+ — nouveau passage de build/u.test(step.detail ?? '')
+    ).length
+    expect(phases.filter((phase) => phase === 'build').length).toBe(reparations)
+    expect(result.trace.some((step) => /ignorée.*think/iu.test(step.detail ?? ''))).toBe(false)
+  })
+
+  it('une route decidee par l’arbitre apres `think` est suivie', async () => {
+    const { phases } = await lancer('build')
+    expect(phases.slice(0, 2)).toEqual(['think', 'build'])
+  })
+})
+
+/*
+ * Le briefing `think` enregistre le commit du code qu'il a lu : sans lui, sa reprise est refusee
+ * (`pickAcquiredAnalysis`) et la verification « fichiers cites inchanges » n'a pas de point de depart.
+ */
+describe('un briefing `think` joue enregistre le commit du code lu', () => {
+  it('pose `codeSha` sur `think`, et seulement sur lui', async () => {
+    const { shaHeadSurDisque } = await import('./depot-git')
+    const depot = process.cwd()
+    const attendu = shaHeadSurDisque(depot)
+    expect(attendu).toMatch(/^[0-9a-f]{40}$/)
+    const provider = new ThinkQuiArrete()
+    const orchestrator = makeGreedy(provider, vi.fn().mockResolvedValue([]), () => ['frame'], {
+      executionWorkspace: depot,
+      worktrees: makeTestWorktrees(depot),
+      currentWorkflow: () => ({ phases: ['think', 'frame'], explicit: true }) as never
+    })
+    const result = await orchestrator.run('corrige le calcul dans src/a.ts', undefined, ((event: {
+      step: string
+      phase?: string
+    }) => {
+      if (event.step === 'exec' && event.phase) provider.phaseCourante = event.phase
+    }) as never)
+    const think = result.phaseOutputs.find((output) => output.phase === 'think')
+    const frame = result.phaseOutputs.find((output) => output.phase === 'frame')
+    expect((think as { codeSha?: string } | undefined)?.codeSha).toBe(attendu)
+    expect(frame && 'codeSha' in frame).toBe(false)
+  })
+})

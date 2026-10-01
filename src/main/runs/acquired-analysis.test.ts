@@ -83,16 +83,61 @@ describe('acquis d’analyse réutilisable dans une conversation', () => {
   // fix-ok: run-85d8e7f57af2-1 — les éditions répétées de ce test ne corrigeaient pas le code : le
   // heredoc Python d'insertion a changé les `\n` des chaînes TS en vrais retours à la ligne (test non
   // compilable, rétabli par 2 Edit), puis Prettier a demandé de couper le `toEqual([])` trop long.
-  it('réutilise le briefing `think` déjà payé dans la même conversation', () => {
+  it('réutilise le briefing `think` déjà payé pour la même demande relancée', () => {
     const avecThink = etat({
+      turnId: '386f4c48',
       phaseOutputs: [
-        { phase: 'think', text: '## Localisation\n- src/main/orchestrator.ts:3643' },
+        {
+          phase: 'think',
+          text: '## Localisation\n- src/main/orchestrator.ts:3643',
+          codeSha: 'a'.repeat(40)
+        },
         { phase: 'frame', text: '## Besoin\nfiltrer SUITE' }
       ]
     })
-    const acquis = pickAcquiredAnalysis([avecThink], base)
+    const acquis = pickAcquiredAnalysis([avecThink], { ...base, turnId: '386f4c48' })
     expect(acquis.map((o) => o.phase)).toEqual(['think', 'frame'])
     expect(acquis[0].text).toContain('orchestrator.ts:3643')
+    // Le commit du code lu suit le briefing : c'est lui qui permet de savoir s'il est périmé.
+    expect(acquis[0].codeSha).toBe('a'.repeat(40))
+  })
+
+  /*
+   * Objection du juge (run-85d8e7f57af2-1, réparation 2) : le scout demandait « même fil, même
+   * commit, tâche proche ». Un briefing pointe des lignes de code et parle d'UNE demande : pour une
+   * autre demande du même fil, ou sans commit connu, il est rejoué. Le cadrage, lui, garde sa règle.
+   */
+  it('rejoue `think` pour une AUTRE demande du même fil, sans toucher au cadrage', () => {
+    const avecThink = etat({
+      turnId: 'tour-ancien',
+      phaseOutputs: [
+        { phase: 'think', text: '## Localisation\n- a.ts', codeSha: 'a'.repeat(40) },
+        { phase: 'frame', text: '## Besoin\nautre chose' }
+      ]
+    })
+    const acquis = pickAcquiredAnalysis([avecThink], { ...base, turnId: 'tour-nouveau' })
+    expect(acquis.map((o) => o.phase)).toEqual(['frame'])
+  })
+
+  it('reprend `think` pour la même tâche mot pour mot, même sur un autre tour', () => {
+    const avecThink = etat({
+      turnId: 'tour-ancien',
+      phaseOutputs: [{ phase: 'think', text: '## Localisation\n- a.ts', codeSha: 'a'.repeat(40) }]
+    })
+    const acquis = pickAcquiredAnalysis([avecThink], {
+      ...base,
+      task: '  scout des améliorations   de la vue Chat ',
+      turnId: 'tour-nouveau'
+    })
+    expect(acquis.map((o) => o.phase)).toEqual(['think'])
+  })
+
+  it('rejoue un briefing `think` dont le commit lu n’est pas connu', () => {
+    const sansCommit = etat({
+      turnId: '386f4c48',
+      phaseOutputs: [{ phase: 'think', text: '## Localisation\n- a.ts' }]
+    })
+    expect(pickAcquiredAnalysis([sansCommit], { ...base, turnId: '386f4c48' })).toEqual([])
   })
 
   it('rejoue `think` quand l’utilisateur le redemande avec /think', () => {

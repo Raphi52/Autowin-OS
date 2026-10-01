@@ -11,11 +11,13 @@
  *     avait donne.
  * Et il rend la mediane du cout de `think` avant et apres le 2026-09-27 (fin des extraits de notes).
  *
- * CE QU'IL NE MESURE PAS : si les « Trous » annonces ont ete rencontres plus tard. Le juger
- * demanderait de lire le sens des textes, donc un modele ; c'est hors de ce script, a dessein.
+ * LES « TROUS », par deux signaux sans modele (`mesurerTrous`) : un trou qui citait un fichier
+ * modifie ensuite, et un repere du trou repris par une etape suivante du meme run. CE QU'IL NE MESURE
+ * PAS : si le trou a reellement gene le travail. Le juger demande de lire le sens, donc un modele.
  *
- * Usage : node scripts/mesure-valeur-think.mjs [--data <racine de donnees>] [--json]
- *   --data  defaut : `$AUTOWIN_DATA_ROOT`, sinon `<depot>/.autowin-data/autowin-os`.
+ * Usage : node scripts/mesure-valeur-think.mjs [--data <racine>] [--exclure <runId>]... [--json]
+ *   --data     defaut : `$AUTOWIN_DATA_ROOT`, sinon `<depot>/.autowin-data/autowin-os`.
+ *   --exclure  retire un run de l'echantillon (ex. le run qui a ecrit ce script, qui se mesurerait).
  * Sortie 0 = mesure rendue ; 2 = racine de donnees introuvable.
  */
 import { execFileSync } from 'node:child_process'
@@ -113,6 +115,39 @@ export function mesurerRun({ tache, briefing, modifies }) {
   }
 }
 
+/**
+ * Les « Trous » d'un briefing, mesures SANS modele — deux signaux, nommes pour ce qu'ils sont :
+ *  - `fichiersTrouModifies` : les fichiers modifies ensuite que la section `## Trous` citait ; le
+ *    trou portait donc sur le chemin reel du travail ;
+ *  - `reprisPlusTard` : les reperes `entre accents graves` du trou qu'une etape suivante du MEME run
+ *    repete. Une mention n'est pas la preuve que le trou a gene.
+ * fix-ok: objection du juge (reparation 2, run-85d8e7f57af2-1) — la mesure ne disait rien des Trous
+ * et comptait le run qui l'a ecrite ; mesure-valeur-think.test.mjs rouge (4 cas) avant.
+ */
+export function mesurerTrous({ briefing, modifies, suite }) {
+  const trous = section(briefing, 'trous')
+  const reperes = [...new Set([...trous.matchAll(/`([^`\n]{3,})`/gu)].map((m) => m[1].trim()))]
+  const cites = fichiersCites(trous)
+  const fichiersTrouModifies = [...new Set((modifies ?? []).map(normaliserChemin))].filter((f) =>
+    estCite(f, cites)
+  )
+  const texteSuite = suite ?? ''
+  return {
+    reperes: reperes.length,
+    reprisPlusTard: reperes.filter((repere) => texteSuite.includes(repere)),
+    fichiersTrouModifies
+  }
+}
+
+/** Les runs a retirer de l'echantillon : chaque `--exclure <runId>`. */
+export function runsExclus(argv) {
+  const exclus = new Set()
+  argv.forEach((arg, i) => {
+    if (arg === '--exclure' && argv[i + 1]) exclus.add(argv[i + 1])
+  })
+  return exclus
+}
+
 export function mediane(valeurs) {
   const v = [...valeurs].sort((a, b) => a - b)
   if (!v.length) return null
@@ -179,7 +214,7 @@ function fichiersParRun(depot) {
 }
 
 /** Les lignes de cout `think` de `activity/*.jsonl`, et le total des couts rattaches a un run. */
-function coutsThink(racine) {
+function coutsThink(racine, exclus = new Set()) {
   const dossier = join(racine, 'activity')
   const think = []
   let totalRuns = 0
@@ -192,7 +227,7 @@ function coutsThink(racine) {
       } catch {
         continue
       }
-      if (typeof l.costUsd !== 'number' || !l.runId) continue
+      if (typeof l.costUsd !== 'number' || !l.runId || exclus.has(l.runId)) continue
       totalRuns += l.costUsd
       if (l.phase === 'think') think.push({ ts: Date.parse(l.ts), cout: l.costUsd, runId: l.runId })
     }
@@ -210,9 +245,16 @@ function briefings(racine) {
     } catch {
       continue
     }
-    const think = (etat.phaseOutputs ?? []).find((o) => o.phase === 'think')
+    const sorties = etat.phaseOutputs ?? []
+    const rang = sorties.findIndex((o) => o.phase === 'think')
+    const think = sorties[rang]
     if (!think || typeof think.text !== 'string' || !think.text.trim()) continue
-    sortie.push({ runId: etat.runId, tache: String(etat.task ?? ''), briefing: think.text })
+    // Ce que les etapes SUIVANTES du meme run ont ecrit : la ou un trou peut etre repris.
+    const suite = sorties
+      .slice(rang + 1)
+      .map((o) => (typeof o.text === 'string' ? o.text : ''))
+      .join('\n')
+    sortie.push({ runId: etat.runId, tache: String(etat.task ?? ''), briefing: think.text, suite })
   }
   return sortie
 }
@@ -232,12 +274,29 @@ function principal(argv) {
   }
 
   const parRun = fichiersParRun(depot)
-  const lus = briefings(racine)
+  const exclus = runsExclus(argv)
+  const lus = briefings(racine).filter((b) => !exclus.has(b.runId))
   const runs = lus
     .filter((b) => parRun.has(b.runId))
     .map((b) => ({ runId: b.runId, ...mesurerRun({ ...b, modifies: [...parRun.get(b.runId)] }) }))
+  const trous = lus.map((b) => ({
+    runId: b.runId,
+    avecCommit: parRun.has(b.runId),
+    ...mesurerTrous({ ...b, modifies: [...(parRun.get(b.runId) ?? [])] })
+  }))
+  const avecReperes = trous.filter((t) => t.reperes > 0)
+  const trousResume = {
+    briefingsAvecReperes: avecReperes.length,
+    reperes: avecReperes.reduce((s, t) => s + t.reperes, 0),
+    reprisPlusTard: avecReperes.reduce((s, t) => s + t.reprisPlusTard.length, 0),
+    briefingsDontUnTrouEstRepris: avecReperes.filter((t) => t.reprisPlusTard.length > 0).length,
+    runsAvecCommit: trous.filter((t) => t.avecCommit).length,
+    runsDontUnTrouCiteUnFichierModifie: trous.filter((t) => t.fichiersTrouModifies.length > 0)
+      .length
+  }
 
-  const { think, totalRuns } = coutsThink(racine)
+  const couts = coutsThink(racine, exclus)
+  const { think, totalRuns } = couts
   const coutThink = think.reduce((s, l) => s + l.cout, 0)
   const avant = mediane(think.filter((l) => l.ts < BASCULE).map((l) => l.cout))
   const apres = think.filter((l) => l.ts >= BASCULE).map((l) => l.cout)
@@ -259,6 +318,8 @@ function principal(argv) {
     medianeAvant: avant,
     apres,
     decisionSaut: decision,
+    exclus: [...exclus],
+    trous: trousResume,
     runs
   }
   if (argv.includes('--json')) {
@@ -267,7 +328,8 @@ function principal(argv) {
   }
 
   console.log(
-    `Briefings think complets : ${lus.length} ; dont rattaches a un commit : ${runs.length}`
+    `Briefings think complets : ${lus.length} ; dont rattaches a un commit : ${runs.length}` +
+      (exclus.size ? ` (exclus : ${[...exclus].join(', ')})` : '')
   )
   console.log('')
   console.log(
@@ -286,6 +348,17 @@ function principal(argv) {
   )
   console.log(
     `Runs ou la Localisation cite un fichier modifie que la tache ne nommait pas : ${resultat.runsOuLocalisationApporte}/${runs.length}`
+  )
+  console.log('')
+  const t = trousResume
+  console.log(
+    `Trous : ${t.briefingsAvecReperes}/${lus.length} briefings y nomment des reperes ; ` +
+      `${t.reprisPlusTard}/${t.reperes} reperes repris par une etape suivante ` +
+      `(${t.briefingsDontUnTrouEstRepris} briefings) ; ` +
+      `${t.runsDontUnTrouCiteUnFichierModifie}/${t.runsAvecCommit} runs a commit dont un trou citait un fichier modifie ensuite`
+  )
+  console.log(
+    '  (mention ou fichier touche — pas la preuve que le trou a gene : cela demanderait un modele)'
   )
   console.log('')
   console.log(

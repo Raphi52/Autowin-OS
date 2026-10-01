@@ -117,6 +117,7 @@ import {
 } from './workflow-graph'
 import { sortieScoutAvecCible } from './scout-cible'
 import { sortieThinkAvecForme } from './think-briefing'
+import { shaHeadSurDisque } from './depot-git'
 import { lecteurAncrageDepuisDisque, plafonnerNotesScout } from './scout-plafond'
 import { blocPistesDejaConnues } from './scout-memoire'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
@@ -799,6 +800,8 @@ export interface OrchestratorLifecycleDeps {
       text: string
       agentToken?: string
       executionEvidence?: ExecutionEvidence[]
+      /** Commit du code lu par `think` : sa reprise exige que les fichiers cités n'aient pas changé. */
+      codeSha?: string
     }[]
     executionQuote?: ExecutionQuote
     usage?: ExecutionUsageSnapshot
@@ -3631,7 +3634,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const recordPhase = (
       phase: NodePhase,
       text: string,
-      executionEvidence: ExecutionEvidence[] = []
+      executionEvidence: ExecutionEvidence[] = [],
+      /** `true` quand la ligne `SUITE:` finale vient de l'arbitre de dérive, pas du modèle. */
+      suiteDeLArbitre = false
     ): void => {
       // Point d'accroche UNIQUE du verdict : tous les chemins de phase (séquentiel, fan-out, greedy)
       // passent par ici. Le brancher ailleurs laisserait une branche muette, donc un retour jamais pris.
@@ -3656,7 +3661,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // SAUF `think` : il redige un briefing, il ne choisit pas la suite. L'invitation « LE WORKFLOW
       // EST UN OUTIL » lui est donnee comme a tout noeud, et un `SUITE: fin` de sa part a coupe
       // conv-1340 avant 2 etapes sur 3. Ignore ICI, le seul point par lequel passent tous les chemins.
-      if (phase === 'think' && souhaitModele) {
+      // fix-ok: l'arbitre de derive ecrit sa decision par la MEME ligne `SUITE:` (bloc « [dérive] »),
+      // son arret apres `think` etait donc ignore aussi — orchestrator.greedy.test.ts rouge (2/2) avant.
+      if (phase === 'think' && souhaitModele && !suiteDeLArbitre) {
         const ecrit =
           souhaitModele.kind === 'stop'
             ? 'fin'
@@ -3694,10 +3701,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           !alreadyAttributed.has(agent.token)
       )
       const agentToken = attributableAgents.length === 1 ? attributableAgents[0].token : undefined
+      // Le commit du code que `think` vient de lire : une reprise ne réutilise son briefing que si
+      // les fichiers qu'il cite n'ont pas changé depuis (`think-briefing.ts`, `sansThinkPerime`).
+      // Une phase reprise ne repasse pas ici (`dejaPayee`) : elle garde le commit de SON briefing.
+      const codeSha = phase === 'think' ? shaHeadSurDisque(workCwd) : ''
       phaseOutputs.push({
         phase,
         text: texte,
         ...(agentToken ? { agentToken } : {}),
+        ...(codeSha ? { codeSha } : {}),
         ...(executionEvidence.length > 0 ? { executionEvidence: [...executionEvidence] } : {})
       })
       try {
@@ -4872,6 +4884,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        * ouvert survivrait au noeud qui le justifiait.
        */
       await fermerOutilsNatifs('fin de phase')
+      // La ligne `SUITE:` ajoutee plus bas est celle de l'ARBITRE : `recordPhase` doit la distinguer
+      // de celle du modele, qu'il ignore pour `think`.
+      let suiteArbitree = false
       if (derive) {
         const constat = `dérive détectée (${derive.signal}) — ${derive.detail}`
         onDelta?.(
@@ -4936,12 +4951,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
               : 'le plan prévu reprend'
         onDelta?.('exec', `[dérive] ${decision}\n`)
         texteDePhase = `${phaseRes.text}\n\n[dérive] ${constat} — ${decision}.${suite}`
+        suiteArbitree = suite !== ''
       }
       texteDePhase = garderCasLimitesFrame(
         phase,
         garderCibleScout(phase, garderFormeThink(phase, texteDePhase))
       )
-      recordPhase(phase, texteDePhase, aggregatedEvidence.slice(evidenceStart))
+      recordPhase(phase, texteDePhase, aggregatedEvidence.slice(evidenceStart), suiteArbitree)
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.
       const carried = porterVersPhaseSuivante(texteDePhase)
