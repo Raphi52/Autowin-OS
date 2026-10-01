@@ -1,6 +1,7 @@
 // fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
 // Le MODULE importe ; les fonctions de garde, elles, restent autoportées (sérialisées dans le hook).
 import { refusEcriturePythonCrlf } from './garde-python-crlf'
+import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
 
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
@@ -250,7 +251,11 @@ export function scriptHookGardes(
   refusSqlAgent?: (texte: string, basesNonProd: readonly string[]) => string | undefined,
   basesNonProd: readonly string[] = []
 ): string {
-  return `const refusGitDestructeur = ${refusGitDestructeur.toString()};
+  // Le découpage des heredocs est PASSÉ aux fonctions qui en ont besoin, jamais appelé par nom :
+  // vitest et les bundlers réécrivent un appel importé (voir src/shared/heredocs.ts).
+  return `const decouperHeredocs = ${decouperHeredocs.toString()};
+const sansHeredocsDeDonnees = ${sansHeredocsDeDonnees.toString()};
+const refusGitDestructeur = ${refusGitDestructeur.toString()};
 const refusEcriturePythonCrlf = ${refusEcriturePythonCrlf.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
@@ -266,7 +271,9 @@ process.stdin.on('end', () => {
     cmd = t.command || '';
     chemin = t.file_path || t.notebook_path || '';
   } catch {}
-  const motif = refusGitDestructeur(cmd) || refusEcriturePythonCrlf(cmd) || refusReglageProd(cmd) || refusReglageProd(chemin) || refusSqlAgent(cmd, basesNonProd);
+  // Le corps d'un heredoc de simple texte n'est pas du shell (rejeu du 2026-10-01, heredocs.ts).
+  const shell = sansHeredocsDeDonnees(cmd, decouperHeredocs);
+  const motif = refusGitDestructeur(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

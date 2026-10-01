@@ -78,7 +78,9 @@ describe('refusGitDestructeur', () => {
   it('est cable aux DEUX points d execution : le hook du CLI et la commande run interne', () => {
     const src = (p: string) => readFileSync(join(__dirname, p), 'utf8')
     expect(src('./garde-git-destructeur.ts')).toMatch(/scriptHookGardes/)
-    expect(src('../main/commands.ts')).toMatch(/refusGitDestructeur\(ligne\)/)
+    // La commande run lit la ligne SANS le texte de ses heredocs (rejeu du 2026-10-01, heredocs.ts).
+    expect(src('../main/commands.ts')).toMatch(/const shell = sansHeredocsDeDonnees\(ligne\)/)
+    expect(src('../main/commands.ts')).toMatch(/refusGitDestructeur\(shell\)/)
   })
 })
 

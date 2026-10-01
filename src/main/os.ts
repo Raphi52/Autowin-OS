@@ -102,7 +102,12 @@ import type {
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
-import { loadAutoClose, saveAutoClose } from './autoclose-store'
+import {
+  loadAutoClose,
+  loadLastAutoCloseReport,
+  saveAutoClose,
+  saveLastAutoCloseReport
+} from './autoclose-store'
 import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../shared/app-identity'
 import type { RapportRetention } from '../shared/rapport-retention'
 import { ExecutionSupervisor, type ExecutionUsageSnapshot } from './execution-supervisor'
@@ -753,8 +758,21 @@ export class AutowinOS {
   private autoClose = loadAutoClose()
   /** Photo de l'arbre par run en cours (projet + Brain), prise au démarrage. */
   private readonly closeBaselines = new Map<string, Promise<CloseBaseline>>()
-  /** Dernier résultat de clôture — remonté à l'UI pour dire ce qui a réellement été publié. */
-  private lastAutoClose: AutoCloseReport | undefined
+  /**
+   * Dernier résultat de clôture — remonté à l'UI pour dire ce qui a réellement été publié, ou
+   * pourquoi rien ne l'a été. PERSISTÉ et relu au démarrage : le 2026-10-01 (conv-770), le motif du
+   * non-commit du tour 235b91bd a disparu au redémarrage, faute d'exister ailleurs qu'en mémoire.
+   */
+  private dernierRapport: AutoCloseReport | undefined = loadLastAutoCloseReport()
+  private get lastAutoClose(): AutoCloseReport | undefined {
+    return this.dernierRapport
+  }
+  private set lastAutoClose(report: AutoCloseReport | undefined) {
+    this.dernierRapport = report
+    if (report && !saveLastAutoCloseReport(report)) {
+      console.warn('[cloture auto] dernier rapport non persisté : il ne survivra pas au redémarrage')
+    }
+  }
 
   setAutoClose(enabled: boolean): void {
     if (!saveAutoClose(enabled)) {
@@ -803,6 +821,15 @@ export class AutowinOS {
       })
       if (report) {
         this.lastAutoClose = report
+        // Le panneau ne garde que le DERNIER rapport : le journal garde chaque issue, motif compris.
+        const laisses = (report.exclus ?? []).map((e) => `${e.path} (${e.motif})`).join(', ')
+        console.log(
+          '[enchainement chat]',
+          report.runId,
+          '→',
+          JSON.stringify(report.project).slice(0, 400),
+          laisses ? `; laissés en attente : ${laisses}` : ''
+        )
         // Même signal que la fin d'une tâche d'agent : le panneau Git relit le dernier rapport.
         this.worktreeActivityListener?.(this.getWorktreeActivity())
       }

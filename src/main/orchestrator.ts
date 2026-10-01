@@ -4,7 +4,12 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
-import { dodDuVerdict, verdictAvecObjectionsPortees, verdictPanelValide } from './objections-juge'
+import {
+  CONTRAT_OBJECTIONS,
+  dodDuVerdict,
+  verdictAvecObjectionsPortees,
+  verdictPanelValide
+} from './objections-juge'
 
 /**
  * Le juge doit juger contre le contrat que le PRODUCTEUR a reçu.
@@ -83,6 +88,7 @@ import {
   parseAttestedLearningProposal,
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
+import { agregerPhasesPourLeJuge } from './agregat-juge'
 import {
   PIPELINE_PHASES,
   type PipelinePhase,
@@ -2596,9 +2602,7 @@ ${annonceCommit}`
       `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
-OBJECTIONS:
-- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
-Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
+${CONTRAT_OBJECTIONS}`
     const messages = [{ role: 'user' as const, content: judgePrompt }]
     const parts = [
       this.phasePrompt('judge', true),
@@ -4969,19 +4973,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       usage: Usage | undefined
       executionEvidence: ExecutionEvidence[]
     } => ({
+      // #3 — chaque bloc de phase est borné avant agrégation pour le juge (l'agrégat n'est plus la
+      // concaténation des sorties COMPLÈTES). Sortie intégrale = phaseOutputs.
       text:
         phaseOutputs.length > 1
-          ? phaseOutputs
-              .map((p) => {
-                // #3 — chaque bloc de phase est borné avant agrégation pour le juge (l'agrégat
-                // n'est plus la concaténation des sorties COMPLÈTES). Sortie intégrale = phaseOutputs.
-                const body =
-                  p.text.length > JUDGE_PHASE_CAP
-                    ? `${p.text.slice(0, JUDGE_PHASE_CAP)}\n…[tronqué — voir le fil des sous-agents]`
-                    : p.text
-                return `[phase ${p.phase}]\n${body}`
-              })
-              .join('\n\n')
+          ? agregerPhasesPourLeJuge(phaseOutputs, JUDGE_PHASE_CAP)
           : lastExecText,
       usage: lastUsage,
       executionEvidence: aggregatedEvidence
@@ -5154,9 +5150,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
-OBJECTIONS:
-- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
-Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
+${CONTRAT_OBJECTIONS}`
         : `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
           `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
           `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
@@ -5171,9 +5165,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
-OBJECTIONS:
-- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
-Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
+${CONTRAT_OBJECTIONS}`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
