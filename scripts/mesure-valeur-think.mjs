@@ -11,9 +11,10 @@
  *     avait donne.
  * Et il rend la mediane du cout de `think` avant et apres le 2026-09-27 (fin des extraits de notes).
  *
- * LES « TROUS », par deux signaux sans modele (`mesurerTrous`) : un trou qui citait un fichier
- * modifie ensuite, et un repere du trou repris par une etape suivante du meme run. CE QU'IL NE MESURE
- * PAS : si le trou a reellement gene le travail. Le juger demande de lire le sens, donc un modele.
+ * LES « TROUS » : chaque trou annonce est classe rencontre plus tard, pas rencontre, ou sans repere
+ * verifiable (`trousRencontres`) ; deux signaux d'ensemble completent (`mesurerTrous`). CE QU'IL NE
+ * MESURE PAS : le sens d'un trou sans repere, ni s'il a gene le travail — il faudrait un modele.
+ * Piste 5 : `thinkParFilEtJour` compte les runs qui paient `think` par conversation et par jour.
  *
  * Les briefings viennent de `run-state/` et, pour les runs que l'app y a effaces, des traces de
  * session Claude Code (`briefingDeSession`). Piste 2 : `suiviProfondeur` rend le cout de `think`
@@ -146,6 +147,56 @@ export function mesurerTrous({ briefing, modifies, suite }) {
   }
 }
 
+/** Une puce de premier niveau (au plus un espace de retrait) ouvre un nouveau trou. */
+const PUCE_TROU = /^\s?(?:[-*•]|\d+[.)])\s+/u
+/** « - rien », « - aucun » : la forme du vide, pas un trou. */
+const TROU_VIDE = /^(?:rien|aucune?|neant|n\/a)\b/iu
+
+/**
+ * CHAQUE TROU ANNONCE, RENCONTRE PLUS TARD OU NON — la question de la piste 1, tranchee sans modele,
+ * puce par puce de la section `## Trous` (une sous-puce appartient a son trou) :
+ *  - `rencontre` : une etape suivante du meme run repete un repere du trou (`entre accents graves`),
+ *    ou un fichier que le trou cite a ete modifie ensuite ;
+ *  - `pas-rencontre` : le trou nomme des reperes, et aucun ne revient ;
+ *  - `sans-repere` : le trou ne nomme rien de verifiable ; le classer demanderait de lire son sens.
+ * fix-ok: objection du juge, reparation 6 de run-85d8e7f57af2-1 — la mesure comptait des reperes, pas
+ * des trous : elle ne disait pas lesquels des trous annonces avaient ete rencontres (test rouge, 2 cas).
+ */
+export function trousRencontres({ briefing, modifies, suite }) {
+  const texteTrous = section(briefing, 'trous')
+  const trous = []
+  for (const ligne of texteTrous.split('\n')) {
+    if (PUCE_TROU.test(ligne)) trous.push(ligne.replace(PUCE_TROU, '').trim())
+    else if (trous.length && ligne.trim()) trous[trous.length - 1] += `\n${ligne.trim()}`
+  }
+  // Sans aucune puce, la section est ecrite en paragraphes : un paragraphe = un trou.
+  if (!trous.length) trous.push(...texteTrous.split(/\n\s*\n/u).map((p) => p.trim()))
+  const texteSuite = suite ?? ''
+  const touches = [...new Set((modifies ?? []).map(normaliserChemin))]
+  const detail = trous
+    .filter((trou) => trou && !TROU_VIDE.test(trou.normalize('NFD').replace(/[̀-ͯ]/g, '')))
+    .map((trou) => {
+      const reperes = [...trou.matchAll(/`([^`\n]{3,})`/gu)].map((m) => m[1].trim())
+      const cites = fichiersCites(trou)
+      const statut =
+        reperes.some((repere) => texteSuite.includes(repere)) ||
+        touches.some((fichier) => estCite(fichier, cites))
+          ? 'rencontre'
+          : reperes.length || cites.length
+            ? 'pas-rencontre'
+            : 'sans-repere'
+      return { trou: trou.split('\n')[0].slice(0, 120), statut }
+    })
+  const compte = (statut) => detail.filter((t) => t.statut === statut).length
+  return {
+    annonces: detail.length,
+    rencontres: compte('rencontre'),
+    pasRencontres: compte('pas-rencontre'),
+    sansRepere: compte('sans-repere'),
+    detail
+  }
+}
+
 /** Les runs a retirer de l'echantillon : chaque `--exclure <runId>`. */
 export function runsExclus(argv) {
   const exclus = new Set()
@@ -236,7 +287,11 @@ function coutsThink(racine, exclus = new Set()) {
       }
       if (typeof l.costUsd !== 'number' || !l.runId || exclus.has(l.runId)) continue
       totalRuns += l.costUsd
-      if (l.phase === 'think') think.push({ ts: Date.parse(l.ts), cout: l.costUsd, runId: l.runId })
+      // Le fil : `activity/<conversation>.jsonl` (les lignes de cout ne portent pas la conversation).
+      const conv = nom.startsWith('conv-') ? nom.slice(0, -'.jsonl'.length) : undefined
+      if (l.phase === 'think') {
+        think.push({ ts: Date.parse(l.ts), cout: l.costUsd, runId: l.runId, conv })
+      }
     }
   }
   return { think, totalRuns }
@@ -414,6 +469,43 @@ export function suiviProfondeur(think, depuis, attendus = 10) {
   }
 }
 
+/**
+ * LE NOMBRE DE `think` PAYES PAR FIL ET PAR JOUR — la mesure demandee par la piste 5.
+ * Un couple = une conversation et une date (UTC) ; on y compte les runs DISTINCTS qui paient `think`.
+ * Deux runs d'un meme couple ne sont pas forcement un doublon : deux demandes differentes paient
+ * chacune leur briefing. `coutApresLePremier` = ce que ces couples ont paye apres leur premier run.
+ */
+export function thinkParFilEtJour(think) {
+  const couples = new Map()
+  for (const l of [...think].sort((a, b) => a.ts - b.ts)) {
+    if (!l.conv || !Number.isFinite(l.ts)) continue
+    const jour = new Date(l.ts).toISOString().slice(0, 10)
+    const cle = `${l.conv}|${jour}`
+    const couple = couples.get(cle) ?? { conv: l.conv, jour, parRun: new Map() }
+    couple.parRun.set(l.runId, (couple.parRun.get(l.runId) ?? 0) + l.cout)
+    couples.set(cle, couple)
+  }
+  const liste = [...couples.values()].map(({ conv, jour, parRun }) => {
+    const couts = [...parRun.values()]
+    return {
+      conv,
+      jour,
+      runs: couts.length,
+      cout: couts.reduce((s, c) => s + c, 0),
+      apresLePremier: couts.slice(1).reduce((s, c) => s + c, 0)
+    }
+  })
+  const aPlusieursRuns = liste
+    .filter((c) => c.runs >= 2)
+    .sort((a, b) => b.runs - a.runs || b.cout - a.cout)
+  return {
+    couples: liste.length,
+    maxRuns: liste.reduce((m, c) => Math.max(m, c.runs), 0),
+    aPlusieursRuns,
+    coutApresLePremier: aPlusieursRuns.reduce((s, c) => s + c.apresLePremier, 0)
+  }
+}
+
 const dollars = (v) => (v == null ? '—' : `${v.toFixed(2)} $`)
 
 /**
@@ -491,6 +583,16 @@ function principal(argv) {
     runsDontUnTrouCiteUnFichierModifie: trous.filter((t) => t.fichiersTrouModifies.length > 0)
       .length
   }
+  const parTrou = lus.map((b) =>
+    trousRencontres({ ...b, modifies: [...(parRun.get(b.runId) ?? [])] })
+  )
+  const trousAnnonces = {
+    briefings: parTrou.filter((t) => t.annonces > 0).length,
+    annonces: parTrou.reduce((s, t) => s + t.annonces, 0),
+    rencontres: parTrou.reduce((s, t) => s + t.rencontres, 0),
+    pasRencontres: parTrou.reduce((s, t) => s + t.pasRencontres, 0),
+    sansRepere: parTrou.reduce((s, t) => s + t.sansRepere, 0)
+  }
 
   const couts = coutsThink(racine, exclus)
   const { think, totalRuns } = couts
@@ -501,6 +603,7 @@ function principal(argv) {
     think,
     miseEnServiceProfondeur(depotPrincipalDe(depot) ?? depot)
   )
+  const filJour = thinkParFilEtJour(think)
 
   const nommant = runs.filter((r) => r.tacheNommeUnFichier)
   const decision = decisionSaut(nommant)
@@ -522,7 +625,9 @@ function principal(argv) {
     exclus: [...exclus],
     sources,
     profondeur,
+    thinkParFilEtJour: filJour,
     trous: trousResume,
+    trousAnnonces,
     runs
   }
   if (argv.includes('--json')) {
@@ -561,8 +666,15 @@ function principal(argv) {
       `(${t.briefingsDontUnTrouEstRepris} briefings) ; ` +
       `${t.runsDontUnTrouCiteUnFichierModifie}/${t.runsAvecCommit} runs a commit dont un trou citait un fichier modifie ensuite`
   )
+  const ta = trousAnnonces
   console.log(
-    '  (mention ou fichier touche — pas la preuve que le trou a gene : cela demanderait un modele)'
+    `Trous annonces : ${ta.annonces} dans ${ta.briefings} briefings ; rencontres plus tard : ${ta.rencontres} ` +
+      `(repere repris par une etape suivante, ou fichier cite modifie ensuite) ; pas rencontres : ` +
+      `${ta.pasRencontres} ; sans repere verifiable : ${ta.sansRepere}`
+  )
+  console.log(
+    '  (les « sans repere » ne se classent qu’en lisant leur sens, et savoir si un trou a gene le travail' +
+      ' aussi : cela demanderait un modele, exclu ici)'
   )
   console.log('')
   console.log(
@@ -580,6 +692,15 @@ function principal(argv) {
       : `Niveaux de profondeur (piste 2) : pas encore sur la branche du depot principal — ` +
           `0/${profondeur.attendus} runs, la mesure demarre a la fusion`
   )
+  const plusieurs = filJour.aPlusieursRuns
+  console.log(
+    `Think payes par fil et par jour (piste 5) : ${filJour.couples} couples fil/jour ; ` +
+      `${plusieurs.length} ou au moins 2 runs paient think (max ${filJour.maxRuns}) ; ` +
+      `${dollars(filJour.coutApresLePremier)} payes apres le premier run du couple`
+  )
+  for (const c of plusieurs.slice(0, 5)) {
+    console.log(`  ${c.conv} ${c.jour} : ${c.runs} runs, ${dollars(c.cout)}`)
+  }
   console.log('')
   console.log(
     `Sauter think quand la tache nomme son fichier : ${decision.construire ? 'OUI' : 'NON'} — ${decision.raison}`

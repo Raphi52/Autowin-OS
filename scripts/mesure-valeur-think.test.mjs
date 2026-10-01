@@ -15,7 +15,9 @@ import {
   racineDeDonnees,
   runsDuMessage,
   runsExclus,
-  section
+  section,
+  thinkParFilEtJour,
+  trousRencontres
 } from './mesure-valeur-think.mjs'
 
 const BRIEFING = [
@@ -281,5 +283,84 @@ describe('suivi du coût de think depuis les niveaux de profondeur (piste 2)', (
       runs: 1,
       complet: true
     })
+  })
+})
+
+/*
+ * fix-ok: objection du juge, reparation 6 de run-85d8e7f57af2-1 — la sortie ne donnait pas « le nombre
+ * de think payes par fil et par jour » (mesure demandee par la piste 5), et ne classait pas chaque trou
+ * annonce : rencontre plus tard, pas rencontre, ou sans repere verifiable. Cas ecrits AVANT le script.
+ */
+describe('think payés par fil et par jour (piste 5)', () => {
+  const l = (ts, runId, conv, cout) => ({ ts: Date.parse(ts), runId, conv, cout })
+  const passages = [
+    l('2026-09-30T10:36:57Z', 'run-3180', 'conv-890', 1.98),
+    l('2026-09-30T13:42:34Z', 'run-66d6', 'conv-890', 1.9),
+    l('2026-09-30T13:50:00Z', 'run-66d6', 'conv-890', 0.1),
+    l('2026-09-30T09:00:00Z', 'run-c', 'conv-798', 0.4),
+    l('2026-10-01T09:00:00Z', 'run-d', 'conv-798', 0.3),
+    l('2026-10-01T09:30:00Z', 'run-e', undefined, 5)
+  ]
+
+  it('un couple fil/jour par fil et date, les runs distincts qui y paient think', () => {
+    const r = thinkParFilEtJour(passages)
+    expect(r.couples).toBe(3)
+    expect(r.maxRuns).toBe(2)
+    expect(r.aPlusieursRuns).toHaveLength(1)
+    expect(r.aPlusieursRuns[0]).toMatchObject({ conv: 'conv-890', jour: '2026-09-30', runs: 2 })
+    expect(r.aPlusieursRuns[0].cout).toBeCloseTo(3.98)
+    // Ce qui a ete paye apres le premier run du couple : ici tout run-66d6.
+    expect(r.coutApresLePremier).toBeCloseTo(2)
+  })
+
+  it('un passage sans fil connu n’entre dans aucun couple', () => {
+    expect(thinkParFilEtJour([passages[5]])).toMatchObject({ couples: 0, maxRuns: 0 })
+  })
+})
+
+describe('chaque trou annoncé : rencontré plus tard ou non, sans modèle', () => {
+  const briefing = [
+    '## Trous',
+    '- je n’ai pas vérifié `pickResumeForTask`',
+    '  - ni son appelant `os.ts:1385`',
+    '- `src/main/commands.ts` non lu',
+    '- le chiffre `9,6 %` non revérifié',
+    '- Brain indisponible',
+    '## Autre',
+    '- `ailleurs`'
+  ].join('\n')
+
+  it('classe chaque puce : repère repris, fichier modifié, aucun retour, rien de vérifiable', () => {
+    const r = trousRencontres({
+      briefing,
+      modifies: ['src/main/commands.ts'],
+      suite: 'NON VÉRIFIÉ : pourquoi `pickResumeForTask` a rendu null'
+    })
+    expect(r).toMatchObject({ annonces: 4, rencontres: 2, pasRencontres: 1, sansRepere: 1 })
+    expect(r.detail.map((t) => t.statut)).toEqual([
+      'rencontre',
+      'rencontre',
+      'pas-rencontre',
+      'sans-repere'
+    ])
+  })
+
+  it('sans puce, chaque paragraphe de la section est un trou (9 briefings de run-state sont ainsi)', () => {
+    const r = trousRencontres({
+      briefing:
+        '## Trous\nNon vérifié : si `ChatView.tsx` laisse passer un champ.\n\nBrain injoignable.',
+      modifies: [],
+      suite: ''
+    })
+    expect(r.detail.map((t) => t.statut)).toEqual(['pas-rencontre', 'sans-repere'])
+  })
+
+  it('« - rien » et l’absence de section ne sont pas des trous', () => {
+    expect(
+      trousRencontres({ briefing: '## Trous\n- rien', modifies: [], suite: '' }).annonces
+    ).toBe(0)
+    expect(
+      trousRencontres({ briefing: '## Localisation\n- a.ts', modifies: [], suite: '' }).annonces
+    ).toBe(0)
   })
 })
