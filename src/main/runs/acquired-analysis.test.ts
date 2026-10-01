@@ -74,6 +74,31 @@ describe('acquis d’analyse réutilisable dans une conversation', () => {
     expect(pickAcquiredAnalysis([verrouille], base)).toEqual([])
   })
 
+  /*
+   * conv-890, 2026-09-30 : `run-3180eec71b06-1` est refusé au contrôle final à 13:32:48Z, puis le
+   * tour de chat restauré après le redémarrage lance `run-66d6d5bdfc5a-1` sur le même tour. Son
+   * `frame` est repris, mais son `think` est REJOUÉ de 13:36:25Z à 13:42:34Z pour 1,94 $, alors que
+   * `run-state/run-3180eec71b06-1.json` porte encore le briefing (13 372 caractères).
+   */
+  it('réutilise le briefing `think` déjà payé dans la même conversation', () => {
+    const avecThink = etat({
+      phaseOutputs: [
+        { phase: 'think', text: '## Localisation\n- src/main/orchestrator.ts:3643' },
+        { phase: 'frame', text: '## Besoin\nfiltrer SUITE' }
+      ]
+    })
+    const acquis = pickAcquiredAnalysis([avecThink], base)
+    expect(acquis.map((o) => o.phase)).toEqual(['think', 'frame'])
+    expect(acquis[0].text).toContain('orchestrator.ts:3643')
+  })
+
+  it('rejoue `think` quand l’utilisateur le redemande avec /think', () => {
+    const avecThink = etat({ phaseOutputs: [{ phase: 'think', text: '## Localisation\n- a.ts' }] })
+    expect(pickAcquiredAnalysis([avecThink], { ...base, task: '/think relis le Brain' })).toEqual(
+      []
+    )
+  })
+
   it('prend le plus récent quand plusieurs acquis coexistent', () => {
     const ancien = etat({
       runId: 'run-0',

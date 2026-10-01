@@ -68,6 +68,21 @@ filtre qui empêche `think` de devenir un déballage.
 Les deux, pas l'une ou l'autre : la mémoire sans le code est datée, le code sans la mémoire a perdu
 ses motifs.
 
+**Choisis la profondeur AVANT de chercher.** Elle borne l'exploration du **code**. La profondeur ne
+limite pas les notes : une note utile s'ouvre en entier quel que soit le niveau (règle du 2026-09-27).
+
+- **rapide** — la tâche nomme déjà son fichier ou sa fonction, et le changement reste local. Ouvre ce
+  fichier, son test et ses appelants directs, rien d'autre.
+- **moyen** — le défaut. La tâche nomme un comportement ou un module, pas le fichier. Localise par
+  recherche ciblée (le texte visible, le symbole), puis lis les fichiers trouvés et leurs appelants.
+- **approfondi** — la tâche traverse plusieurs modules, touche un état persisté ou une reprise, ou
+  revient sur une décision passée. Suis la chaîne d'appel au-delà du premier niveau.
+
+Écris le niveau et sa raison en une ligne, en tête de `## Localisation`. Un besoin découvert en
+route fait monter d'un cran, en le disant ; ne descends jamais en silence. Mesuré le 2026-09-30 sur
+`run-3180eec71b06-1` : sans niveau, un seul briefing a lu 2,6 M de tokens pour 1,98 $, contre une
+médiane de 0,43 $ avant le 2026-09-27.
+
 ### 3. N'invente rien, et distingue les deux registres
 
 Un fait que tu n'as pas lu quelque part n'est pas un fait. Marque chaque élément :

@@ -57,3 +57,31 @@ describe('les noms d’étape affichés correspondent à des skills RÉELLES', (
     }
   })
 })
+
+describe('la profondeur de `think` borne le code, jamais les notes', () => {
+  /*
+   * Mesuré le 2026-09-30 (`activity/conv-890.jsonl`) : le `think` de `run-3180eec71b06-1` a lu
+   * 2 596 743 tokens pour 1,98 $, contre une médiane de 0,43 $ sur les 177 passages d'avant le
+   * 2026-09-27. Les niveaux de profondeur de §2 répondent à ce coût, SANS toucher à la règle du
+   * 2026-09-27 (pas de plafond de notes) : c'est cette phrase que la garde tient.
+   */
+  // Blancs ramenés à une espace : re-découper le paragraphe ne doit pas casser la garde.
+  const skill = readFileSync(join(RACINE, 'skills', 'think', 'SKILL.md'), 'utf8').replace(
+    /\s+/g,
+    ' '
+  )
+
+  it('§2 donne trois niveaux de profondeur', () => {
+    for (const niveau of ['**rapide**', '**moyen**', '**approfondi**']) {
+      expect(skill).toContain(niveau)
+    }
+  })
+
+  it('§2 dit que la profondeur ne limite pas les notes', () => {
+    expect(skill).toContain('La profondeur ne limite pas les notes')
+  })
+
+  it('la règle « pas de budget » du 2026-09-27 reste écrite', () => {
+    expect(skill).toContain('pas de budget, on récupère le nécessaire')
+  })
+})

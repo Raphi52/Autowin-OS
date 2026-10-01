@@ -1112,8 +1112,11 @@ export function admitAutomaticResumeRuntime(
  * Phases dont l'acquis est un TEXTE, donc réutilisable tel quel dans la même conversation.
  * `build` et `clean` en sont exclues par nature : leur acquis vit sur le disque, le workspace a pu
  * bouger depuis, et les rejouer est la seule façon honnête de savoir où en est le code.
+ *
+ * `think` en fait partie : son briefing est un texte, et l'en exclure le faisait repayer seul alors
+ * que le `frame` bâti dessus était repris (conv-890, `run-66d6d5bdfc5a-1`, 1,94 $ le 2026-09-30).
  */
-const PHASES_ANALYSE_REUTILISABLES: readonly NodePhase[] = ['scout', 'frame', 'terrain']
+const PHASES_ANALYSE_REUTILISABLES: readonly NodePhase[] = ['think', 'scout', 'frame', 'terrain']
 
 /**
  * Acquis d'analyse déjà produit DANS LA MÊME CONVERSATION, réutilisable même si le libellé de la

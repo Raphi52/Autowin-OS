@@ -116,6 +116,7 @@ import {
   type WorkflowGraph
 } from './workflow-graph'
 import { sortieScoutAvecCible } from './scout-cible'
+import { sortieThinkAvecForme } from './think-briefing'
 import { lecteurAncrageDepuisDisque, plafonnerNotesScout } from './scout-plafond'
 import { blocPistesDejaConnues } from './scout-memoire'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
@@ -3618,6 +3619,14 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const garderCasLimitesFrame = (phase: NodePhase, texte: string): string =>
       phase === 'frame' ? sortieFrameAvecCasLimites(texte) : texte
 
+    /**
+     * MEME ACCROCHE pour le briefing `think` : sans les six titres de `skills/think/SKILL.md` §5, il
+     * part AVERTI en tete, sans relance (`think` ignore `SUITE:`). Voir `think-briefing.ts`.
+     */
+    // fix-ok: 5 sorties `think` sur 34 (run-state, 2026-10-01) sans les six titres, aucune garde n'existait — branchee aux memes points que les deux autres.
+    const garderFormeThink = (phase: NodePhase, texte: string): string =>
+      phase === 'think' ? sortieThinkAvecForme(texte) : texte
+
     /** Enregistre une phase terminée ET notifie l'appelant pour qu'il persiste l'acquis. */
     const recordPhase = (
       phase: NodePhase,
@@ -3635,12 +3644,32 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // personne ne choisit, et la phase suivante repart du tableau entier — donc de rien de precis.
       // La garde est de FORME (une cible declaree existe, ou non), la seule verifiable quand le
       // producteur et le juge sont le meme modele. Voir `scout-cible.ts`.
-      const texte = garderCasLimitesFrame(phase, garderCibleScout(phase, text))
+      const texte = garderCasLimitesFrame(
+        phase,
+        garderCibleScout(phase, garderFormeThink(phase, text))
+      )
       dernierVerdict = verdictDePhase(phase, texte)
       // Le souhait du modèle pour la suite, s'il s'est prononcé. Il PRIME sur le graphe : un workflow
       // est un outil, et l'agent qui vient de travailler sait mieux que le plan si l'étape prévue a
       // encore un sens. Silence = le graphe décide, ce qui reste le cas courant.
       souhaitModele = readModelChoice(texte)
+      // SAUF `think` : il redige un briefing, il ne choisit pas la suite. L'invitation « LE WORKFLOW
+      // EST UN OUTIL » lui est donnee comme a tout noeud, et un `SUITE: fin` de sa part a coupe
+      // conv-1340 avant 2 etapes sur 3. Ignore ICI, le seul point par lequel passent tous les chemins.
+      if (phase === 'think' && souhaitModele) {
+        const ecrit =
+          souhaitModele.kind === 'stop'
+            ? 'fin'
+            : souhaitModele.kind === 'phase'
+              ? souhaitModele.phase
+              : souhaitModele.id
+        push({
+          step: 'gate',
+          role: 'gate',
+          detail: `SUITE: ${ecrit} ignorée — le briefing \`think\` ne choisit pas la suite du run.`
+        })
+        souhaitModele = undefined
+      }
       // Les pistes de CE scout rejoignent la memoire des suivants (`scout-memoire.ts`). Une ecriture
       // ratee ne casse pas le run, mais se dit : un scout suivant refera alors ce travail.
       if (phase === 'scout' && this.deps.memoireScout) {
@@ -3913,7 +3942,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         lastExecText = greedy.aggregate
         const agregatGreedy = garderCasLimitesFrame(
           phase,
-          garderCibleScout(phase, greedy.aggregate)
+          garderCibleScout(phase, garderFormeThink(phase, greedy.aggregate))
         )
         recordPhase(phase, agregatGreedy, aggregatedEvidence.slice(evidenceStart))
         pousserContexte(
@@ -4170,7 +4199,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         if (good.length === 1) {
           // Un seul survivant → rien à agréger : on réutilise sa sortie directement, sans appel de
           // synthèse (inutile + risque de reformulation d'un texte unique).
-          const solo = garderCasLimitesFrame(phase, garderCibleScout(phase, good[0].text))
+          const solo = garderCasLimitesFrame(
+            phase,
+            garderCibleScout(phase, garderFormeThink(phase, good[0].text))
+          )
           lastExecText = solo
           recordPhase(phase, solo, aggregatedEvidence.slice(evidenceStart))
           pousserContexte(
@@ -4292,7 +4324,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         })
         lastExecText = synth.text
         lastUsage = synth.usage
-        const texteSynth = garderCasLimitesFrame(phase, garderCibleScout(phase, synth.text))
+        const texteSynth = garderCasLimitesFrame(
+          phase,
+          garderCibleScout(phase, garderFormeThink(phase, synth.text))
+        )
         recordPhase(phase, texteSynth, aggregatedEvidence.slice(evidenceStart))
         pousserContexte(
           `acquisPhase:${phase}`,
@@ -4902,7 +4937,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         onDelta?.('exec', `[dérive] ${decision}\n`)
         texteDePhase = `${phaseRes.text}\n\n[dérive] ${constat} — ${decision}.${suite}`
       }
-      texteDePhase = garderCasLimitesFrame(phase, garderCibleScout(phase, texteDePhase))
+      texteDePhase = garderCasLimitesFrame(
+        phase,
+        garderCibleScout(phase, garderFormeThink(phase, texteDePhase))
+      )
       recordPhase(phase, texteDePhase, aggregatedEvidence.slice(evidenceStart))
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.
