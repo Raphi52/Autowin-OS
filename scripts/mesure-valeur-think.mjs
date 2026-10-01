@@ -15,13 +15,20 @@
  * modifie ensuite, et un repere du trou repris par une etape suivante du meme run. CE QU'IL NE MESURE
  * PAS : si le trou a reellement gene le travail. Le juger demande de lire le sens, donc un modele.
  *
- * Usage : node scripts/mesure-valeur-think.mjs [--data <racine>] [--exclure <runId>]... [--json]
- *   --data     defaut : `$AUTOWIN_DATA_ROOT`, sinon `<depot>/.autowin-data/autowin-os`.
- *   --exclure  retire un run de l'echantillon (ex. le run qui a ecrit ce script, qui se mesurerait).
+ * Les briefings viennent de `run-state/` et, pour les runs que l'app y a effaces, des traces de
+ * session Claude Code (`briefingDeSession`). Piste 2 : `suiviProfondeur` rend le cout de `think`
+ * sur les 10 runs qui suivent la mise en service des niveaux de profondeur.
+ *
+ * Usage : node scripts/mesure-valeur-think.mjs [--data <racine>] [--sessions <dossier>]
+ *         [--exclure <runId>]... [--json]
+ *   --data      defaut : `$AUTOWIN_DATA_ROOT`, sinon `<depot>/.autowin-data/autowin-os`.
+ *   --sessions  defaut : `~/.claude/projects` (traces de session des copies `agent__run-*`).
+ *   --exclure   retire un run de l'echantillon (ex. le run qui a ecrit ce script, qui se mesurerait).
  * Sortie 0 = mesure rendue ; 2 = racine de donnees introuvable.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -259,6 +266,154 @@ function briefings(racine) {
   return sortie
 }
 
+/*
+ * LES BRIEFINGS QUE run-state/ A PERDUS, RELUS DANS LES TRACES DE SESSION.
+ *
+ * fix-ok: objection du juge, reparation 5 de run-85d8e7f57af2-1 — l'echantillon ne lisait que
+ * run-state/ (33 briefings), que l'app efface a la fin de chaque run (`clearOrchestrationState`,
+ * src/main/runs/orchestration-state.ts). Les traces `~/.claude/projects/*agent--run-*` gardent 56
+ * briefings, dont les 11 qui existent aussi dans run-state/ sont identiques (prototype du 2026-10-01).
+ * Une session est `think` si l'instantane de son prompt systeme porte la consigne `think`, ou, pour
+ * les sessions plus anciennes sans instantane, si sa sortie a les titres Localisation ET Trous.
+ */
+const MARQUE_THINK = '=== SKILL THINK (kit) ==='
+
+function texteDe(contenu) {
+  if (typeof contenu === 'string') return contenu
+  if (!Array.isArray(contenu)) return ''
+  return contenu
+    .filter((p) => p?.type === 'text')
+    .map((p) => p.text ?? '')
+    .join('\n')
+}
+
+function texteAssistant(objets) {
+  const textes = []
+  for (const o of objets) {
+    if (o?.type !== 'assistant' || !Array.isArray(o.message?.content)) continue
+    for (const b of o.message.content) if (b?.type === 'text' && b.text) textes.push(b.text)
+  }
+  return textes.join('\n\n')
+}
+
+/** Le briefing `think` d'une session (lignes JSONL deja parsees), ou `undefined`. */
+export function briefingDeSession(objets) {
+  let marque = false
+  let premier
+  for (const o of objets) {
+    const prompt = o?.type === 'attachment' ? o.attachment?.systemPrompt : undefined
+    if ([].concat(prompt ?? []).some((p) => typeof p === 'string' && p.includes(MARQUE_THINK))) {
+      marque = true
+    }
+    if (o?.type === 'user' && premier === undefined) premier = texteDe(o.message?.content)
+  }
+  const briefing = texteAssistant(objets)
+  const forme = /^##\s+Localisation/imu.test(briefing) && /^##\s+Trous/imu.test(briefing)
+  if (!briefing.trim() || !(marque || forme)) return undefined
+  const brut = premier ?? ''
+  const i = brut.search(/T[ÂA]CHE\s*:/u)
+  const tache =
+    i < 0
+      ? ''
+      : brut
+          .slice(i)
+          .replace(/^T[ÂA]CHE\s*:\s*/u, '')
+          .split('\n[COLLECTE DE CONTEXTE')[0]
+  return { tache: tache.trim(), briefing }
+}
+
+function debutDe(objets) {
+  for (const o of objets) {
+    const t = Date.parse(o?.timestamp ?? '')
+    if (Number.isFinite(t)) return t
+  }
+  return Infinity
+}
+
+/** Un briefing par run, lu dans `<projets>/*agent--run-<id>/*.jsonl` ; la suite = sessions posterieures. */
+function briefingsDesSessions(projets) {
+  if (!projets || !existsSync(projets)) return []
+  const sortie = []
+  for (const nom of readdirSync(projets)) {
+    const m = /agent--(run-[0-9a-f]{12}-\d+)$/u.exec(nom)
+    if (!m) continue
+    const sessions = []
+    for (const f of readdirSync(join(projets, nom)).filter((n) => n.endsWith('.jsonl'))) {
+      const objets = []
+      for (const ligne of readFileSync(join(projets, nom, f), 'utf8').split('\n')) {
+        if (!ligne) continue
+        try {
+          objets.push(JSON.parse(ligne))
+        } catch {
+          /* ligne coupee en cours d'ecriture */
+        }
+      }
+      sessions.push({ debut: debutDe(objets), objets })
+    }
+    sessions.sort((a, b) => a.debut - b.debut)
+    const rang = sessions.findIndex((s) => briefingDeSession(s.objets))
+    if (rang < 0) continue
+    const suite = sessions
+      .slice(rang + 1)
+      .map((s) => texteAssistant(s.objets))
+      .join('\n')
+    sortie.push({ runId: m[1], ...briefingDeSession(sessions[rang].objets), suite })
+  }
+  return sortie
+}
+
+/*
+ * PISTE 2 : LE COUT DE `think` SUR LES 10 RUNS QUI SUIVENT LES NIVEAUX DE PROFONDEUR.
+ * La mise en service est la date du commit qui ajoute la marque a skills/think/SKILL.md sur la
+ * branche courante du DEPOT PRINCIPAL : l'app lit sa skill dans le depot (`skillRoots`,
+ * src/main/native-registry.ts), et une fusion reecrit la date de commit (mesure : les 3 commits
+ * de run-3180eec71b06-1 portent tous 2026-09-30T15:48:06, l'heure de leur arrivee sur main).
+ */
+export const MARQUE_PROFONDEUR = 'Choisis la profondeur AVANT de chercher'
+
+function miseEnServiceProfondeur(depot) {
+  try {
+    const sortie = execFileSync(
+      'git',
+      [
+        'log',
+        '--reverse',
+        '--format=%cI',
+        '-S',
+        MARQUE_PROFONDEUR,
+        'HEAD',
+        '--',
+        'skills/think/SKILL.md'
+      ],
+      { cwd: depot, encoding: 'utf8' }
+    )
+    const t = Date.parse(sortie.split('\n')[0] ?? '')
+    return Number.isFinite(t) ? t : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Un cout `think` par run (somme de ses passages) apres `depuis`, sur les `attendus` premiers runs. */
+export function suiviProfondeur(think, depuis, attendus = 10) {
+  if (depuis == null) {
+    return { enService: false, depuis: null, runs: 0, attendus, mediane: null, complet: false }
+  }
+  const parRun = new Map()
+  for (const l of [...think].filter((p) => p.ts >= depuis).sort((a, b) => a.ts - b.ts)) {
+    parRun.set(l.runId, (parRun.get(l.runId) ?? 0) + l.cout)
+  }
+  const couts = [...parRun.values()].slice(0, attendus)
+  return {
+    enService: true,
+    depuis: new Date(depuis).toISOString(),
+    runs: couts.length,
+    attendus,
+    mediane: mediane(couts),
+    complet: couts.length >= attendus
+  }
+}
+
 const dollars = (v) => (v == null ? '—' : `${v.toFixed(2)} $`)
 
 /**
@@ -307,7 +462,17 @@ function principal(argv) {
 
   const parRun = fichiersParRun(depot)
   const exclus = runsExclus(argv)
-  const lus = briefings(racine).filter((b) => !exclus.has(b.runId))
+  const iSessions = argv.indexOf('--sessions')
+  const projets =
+    iSessions >= 0 ? resolve(argv[iSessions + 1]) : join(homedir(), '.claude', 'projects')
+  const deRunState = briefings(racine)
+  const connus = new Set(deRunState.map((b) => b.runId))
+  const deSessions = briefingsDesSessions(projets).filter((b) => !connus.has(b.runId))
+  const lus = [...deRunState, ...deSessions].filter((b) => !exclus.has(b.runId))
+  const sources = {
+    runState: deRunState.filter((b) => !exclus.has(b.runId)).length,
+    sessions: deSessions.filter((b) => !exclus.has(b.runId)).length
+  }
   const runs = lus
     .filter((b) => parRun.has(b.runId))
     .map((b) => ({ runId: b.runId, ...mesurerRun({ ...b, modifies: [...parRun.get(b.runId)] }) }))
@@ -332,6 +497,10 @@ function principal(argv) {
   const coutThink = think.reduce((s, l) => s + l.cout, 0)
   const avant = mediane(think.filter((l) => l.ts < BASCULE).map((l) => l.cout))
   const apres = think.filter((l) => l.ts >= BASCULE).map((l) => l.cout)
+  const profondeur = suiviProfondeur(
+    think,
+    miseEnServiceProfondeur(depotPrincipalDe(depot) ?? depot)
+  )
 
   const nommant = runs.filter((r) => r.tacheNommeUnFichier)
   const decision = decisionSaut(nommant)
@@ -351,6 +520,8 @@ function principal(argv) {
     apres,
     decisionSaut: decision,
     exclus: [...exclus],
+    sources,
+    profondeur,
     trous: trousResume,
     runs
   }
@@ -360,7 +531,8 @@ function principal(argv) {
   }
 
   console.log(
-    `Briefings think complets : ${lus.length} ; dont rattaches a un commit : ${runs.length}` +
+    `Briefings think complets : ${lus.length} (run-state : ${sources.runState} ; traces de session : ` +
+      `${sources.sessions}) ; dont rattaches a un commit : ${runs.length}` +
       (exclus.size ? ` (exclus : ${[...exclus].join(', ')})` : '')
   )
   console.log('')
@@ -399,6 +571,14 @@ function principal(argv) {
   )
   console.log(
     `Mediane avant le 2026-09-27 : ${dollars(avant)} ; apres : ${apres.map(dollars).join(' / ') || '—'}`
+  )
+  console.log(
+    profondeur.enService
+      ? `Niveaux de profondeur (piste 2), en service depuis ${profondeur.depuis} : ` +
+          `${profondeur.runs}/${profondeur.attendus} runs, mediane ${dollars(profondeur.mediane)}` +
+          (profondeur.complet ? '' : ' (mesure incomplete)')
+      : `Niveaux de profondeur (piste 2) : pas encore sur la branche du depot principal — ` +
+          `0/${profondeur.attendus} runs, la mesure demarre a la fusion`
   )
   console.log('')
   console.log(

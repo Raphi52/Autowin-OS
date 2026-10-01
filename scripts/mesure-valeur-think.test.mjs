@@ -4,8 +4,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  briefingDeSession,
   decisionSaut,
   estCite,
+  suiviProfondeur,
   fichiersCites,
   mediane,
   mesurerRun,
@@ -201,5 +203,83 @@ describe('racine de données par défaut', () => {
       existe: () => false
     })
     expect(sep(racine)).toBe('D:/a/.autowin-data/autowin-os')
+  })
+})
+
+/*
+ * fix-ok: objection du juge, reparation 5 de run-85d8e7f57af2-1 — l'echantillon ne lisait que
+ * run-state/ (33 briefings), que l'app efface a la fin de chaque run (clearOrchestrationState). Les
+ * traces de session ~/.claude/projects/*agent--run-* en gardent 56, dont 11 identiques a run-state
+ * (prototype du 2026-10-01). Ces cas etaient rouges avant briefingDeSession et suiviProfondeur.
+ */
+describe('briefing think lu dans une trace de session', () => {
+  const snapshot = (texte) => ({
+    type: 'attachment',
+    timestamp: '2026-10-01T06:47:55.691Z',
+    attachment: { type: 'prompt_snapshot', systemPrompt: [texte] }
+  })
+  const user = (texte) => ({ type: 'user', message: { content: texte } })
+  const dit = (texte) => ({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: texte }] }
+  })
+  const tache =
+    'TÂCHE: corrige `src/main/x.ts`\n\n[COLLECTE DE CONTEXTE — effectuée avant RUN.md]\n`autre.ts`'
+
+  it('reconnaît la consigne think dans l’instantané du prompt et coupe la tâche avant la collecte', () => {
+    const b = briefingDeSession([
+      snapshot('…\n=== SKILL THINK (kit) ===\n# Think'),
+      user(tache),
+      dit('Je lis.'),
+      dit('Rien de structuré')
+    ])
+    expect(b).toEqual({
+      tache: 'corrige `src/main/x.ts`',
+      briefing: 'Je lis.\n\nRien de structuré'
+    })
+  })
+
+  it('reconnaît un briefing sans instantané par ses titres Localisation et Trous', () => {
+    const b = briefingDeSession([user(tache), dit(BRIEFING)])
+    expect(b?.briefing).toBe(BRIEFING)
+  })
+
+  it('ignore une autre étape, même si un résultat d’outil cite la consigne think', () => {
+    const outil = {
+      type: 'user',
+      message: { content: [{ type: 'tool_result', content: '=== SKILL THINK (kit) ===' }] }
+    }
+    expect(briefingDeSession([user(tache), outil, dit('## Besoin\n- x')])).toBeUndefined()
+  })
+})
+
+describe('suivi du coût de think depuis les niveaux de profondeur (piste 2)', () => {
+  const l = (ts, runId, cout) => ({ ts: Date.parse(ts), runId, cout })
+  const passages = [
+    l('2026-10-01T08:00:00Z', 'run-a', 2),
+    l('2026-10-02T08:00:00Z', 'run-b', 0.3),
+    l('2026-10-02T09:00:00Z', 'run-b', 0.1),
+    l('2026-10-03T08:00:00Z', 'run-c', 0.6)
+  ]
+
+  it('sans mise en service sur le dépôt, ne mesure rien et le dit', () => {
+    expect(suiviProfondeur(passages, undefined)).toEqual({
+      enService: false,
+      depuis: null,
+      runs: 0,
+      attendus: 10,
+      mediane: null,
+      complet: false
+    })
+  })
+
+  it('après la mise en service : un coût par run, les 10 premiers runs, leur médiane', () => {
+    const s = suiviProfondeur(passages, Date.parse('2026-10-02T00:00:00Z'))
+    expect(s).toMatchObject({ enService: true, runs: 2, attendus: 10, complet: false })
+    expect(s.mediane).toBeCloseTo(0.5)
+    expect(suiviProfondeur(passages, Date.parse('2026-10-02T00:00:00Z'), 1)).toMatchObject({
+      runs: 1,
+      complet: true
+    })
   })
 })
