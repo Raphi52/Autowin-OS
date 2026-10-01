@@ -245,3 +245,46 @@ describe('scout-rendement — rejoue le journal des conversations', () => {
     expect(r.rows.find((row) => row.id === 'conv-2').tours).toBe(1)
   })
 })
+
+/*
+ * Mesure du 2026-10-01 (/maintenance, conv-38) : un tour de conv-31 lance a 06:12Z et clos 17 min plus
+ * tard affichait 275,6 min. `chat-usage` porte le temps ECOULE depuis le debut du tour a chaque releve
+ * (src/main/chat/run-pilot-chat.ts:323), alors que tokens et cout y sont des ECARTS : additionner
+ * les releves d'un meme tour multiplie sa duree par le nombre de releves.
+ */
+describe('scout-rendement — duree des releves chat-usage', () => {
+  it('prend la duree ATTEINTE par un tour, pas la somme de ses releves cumules', () => {
+    const data = mkdtempSync(join(tmpdir(), 'rendement-duree-'))
+    mkdirSync(join(data, 'activity'), { recursive: true })
+    writeFileSync(
+      join(data, 'conversations.json'),
+      JSON.stringify([
+        {
+          id: 'conv-1',
+          title: 'duree',
+          messages: [
+            { role: 'user', content: 'fais X', ts: 1000 },
+            { role: 'assistant', content: 'ok', ts: 1100, turnId: 'T1' }
+          ]
+        }
+      ])
+    )
+    const minute = 60_000
+    const lignes = [
+      { ts: new Date(1200).toISOString(), kind: 'chat-usage', costUsd: 1, turnId: 'T1', durationMs: minute },
+      { ts: new Date(1300).toISOString(), kind: 'chat-usage', costUsd: 1, turnId: 'T1', durationMs: 2 * minute },
+      { ts: new Date(1400).toISOString(), kind: 'chat-usage', costUsd: 1, turnId: 'T1', durationMs: 3 * minute },
+      // Un sous-agent porte SA propre duree : elle s'ajoute, elle ne se confond pas avec le tour.
+      { ts: new Date(1500).toISOString(), kind: 'exec', label: 'subagent', costUsd: 2, turnId: 'T1', durationMs: minute }
+    ]
+    writeFileSync(
+      join(data, 'activity', 'conv-1.jsonl'),
+      lignes.map((l) => JSON.stringify(l)).join('\n') + '\n'
+    )
+    const row = rapport(data).rows[0]
+    const tour = row.tours_detail[0]
+    expect(tour.coutUsd).toBe(5) // les couts restent des ecarts : ils s'additionnent
+    expect(tour.minutes).toBe(4) // 3 min atteintes par le tour + 1 min de sous-agent, pas 7
+    expect(row.modeleMin).toBe(4) // la colonne « min modele » de la conversation suit la meme regle
+  })
+})
