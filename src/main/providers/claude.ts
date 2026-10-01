@@ -259,6 +259,29 @@ export function normalizeClaudeUsage(
  * AUTOWIN_CONVERSATION_ID), puis NON_INTERACTIVE_ENV EN DERNIER — une variable du run ne peut pas
  * rouvrir un pager ou une invite d'identifiants.
  */
+/**
+ * PLAFOND DE SORTIE MCP DU CLI, LEVÉ POUR LES NŒUDS SKILL (2026-09-27).
+ *
+ * Claude Code coupe par défaut un résultat d'outil MCP à 25 000 tokens, réglable par
+ * `MAX_MCP_OUTPUT_TOKENS` (documentation officielle : https://code.claude.com/docs/en/mcp).
+ * Un nœud `think` qui ouvre une note avec `brain_read` la recevait donc amputée au-delà d'environ
+ * 100 Ko — le dernier plafond de la chaîne, après ceux retirés côté serveur et côté app. Règle de
+ * l'utilisateur : pas de budget, l'agent ouvre EN ENTIER ce qu'il juge nécessaire.
+ *
+ * Un million de tokens : au-dessus de la plus grosse note du Brain (809 430 octets, mesuré le
+ * 2026-09-27). La vraie limite devient la fenêtre du modèle, que l'agent anticipe grâce à la taille
+ * affichée dans la liste de candidates. Une valeur déjà posée par l'utilisateur garde le dernier mot.
+ */
+export const MCP_SORTIE_NOEUD_SKILL_TOKENS = '1000000'
+
+export function envSortieMcpNoeudSkill(
+  noeudOutille: boolean,
+  env: NodeJS.ProcessEnv
+): Record<string, string> {
+  if (!noeudOutille || env.MAX_MCP_OUTPUT_TOKENS) return {}
+  return { MAX_MCP_OUTPUT_TOKENS: MCP_SORTIE_NOEUD_SKILL_TOKENS }
+}
+
 export function environnementAgent(
   base: NodeJS.ProcessEnv,
   agentEnv?: Record<string, string>
@@ -781,8 +804,8 @@ export function claudeTransportEnvelope(
 function basesNonProdDeclarees(): string[] {
   try {
     return chargerAutoriteProd(autowinAppDataRoot())
-      .autorite.entrees.filter((e) => e.nature === 'base' && e.classe === 'non-prod')
-      .map((e) => e.nom)
+      .autorite.entrees.filter((e) => (e.nature === 'base' || e.nature === 'serveur') && e.classe === 'non-prod')
+      .map((e) => (e.nature === 'serveur' ? `serveur:${e.nom}` : e.nom))
   } catch {
     return []
   }
@@ -1411,7 +1434,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
       // explicitement une variable garde le dernier mot.
       env: environnementAgent(
-        { ...withClaudeAccountEnv(process.env), ...(invocation.env ?? {}) },
+        {
+          ...withClaudeAccountEnv(process.env),
+          // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
+          ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
+          ...(invocation.env ?? {})
+        },
         execution?.agentEnv
       ),
       ...(journal
@@ -1501,6 +1529,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         name: string
         command: string
         filePath: string
+        /** Dossier et motif d'une recherche (Grep/Glob) : ce qu'elle a fouillé, pas un fichier touché. */
+        searchPath: string
+        pattern: string
         writtenLineFingerprints: string[]
         /** Heure de depart : la ligne de FIN d'action porte sa duree (frise C3 du bloc Actions). */
         startedAt: number
@@ -1744,10 +1775,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
             const filePath = String(part.input?.file_path ?? '')
             const command = String(part.input?.command ?? filePath)
+            const recherche = /^(Grep|Glob)$/i.test(part.name)
             pendingTools.set(part.id, {
               name: part.name,
               command,
               filePath,
+              searchPath: recherche ? String(part.input?.path ?? '') : '',
+              pattern: recherche ? String(part.input?.pattern ?? '') : '',
               writtenLineFingerprints: claudeWrittenLineFingerprints(part.input),
               startedAt: Date.now()
             })
@@ -1806,7 +1840,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             status: `${call.name} ${part.is_error ? 'échoué' : 'terminé'} - ${dureeOutil}`
           })
           // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
-          const output = claudeToolResultText(part.content).slice(-20_000)
+          const outputEntier = claudeToolResultText(part.content)
+          const output = outputEntier.slice(-20_000)
           collectArtifacts(part.content, call.name)
           const isFile = Boolean(call.filePath)
           executionEvidence.push({
@@ -1827,7 +1862,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               : call.command
                 ? { command: call.command }
                 : {}),
-            ...(output ? { stdout: output } : {})
+            ...(output ? { stdout: output, outputChars: outputEntier.length } : {}),
+            ...(call.searchPath ? { searchPath: call.searchPath } : {}),
+            ...(call.pattern ? { pattern: call.pattern } : {})
           })
         }
       } else if (t === 'result') {

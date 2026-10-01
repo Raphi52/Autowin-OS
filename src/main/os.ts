@@ -59,7 +59,8 @@ import {
   type CloseBaseline,
   closeGreenRunOnDisk,
   projectPublicationNeedsRetry,
-  type AutoCloseReport
+  type AutoCloseReport,
+  type VerificationAvantPublication
 } from './run-autoclose'
 import { publierTourDeChat, type ChatTurnStart } from './chat-turn-publication'
 import { amitelBrainRoot } from './amitel-context'
@@ -121,6 +122,15 @@ import {
   type ProcessIdentity,
   type RecoveredDetachedUsageSettlement
 } from './runs/run-reattach'
+import { preparerCopie } from './scripts-copie-main'
+import {
+  cleDepot,
+  noterPistesScout,
+  noterChoixScout,
+  bilanDesChoix,
+  pistesDejaConnues,
+  titresStockVeilleAutowin
+} from './scout-memoire'
 import type { LanceurCommandeSkill } from './skill-node-tools'
 import {
   executionWorkspacePreferenceFile,
@@ -463,6 +473,18 @@ export class AutowinOS {
            * l'ont fait le meme jour. On sonne sur l'ABANDON seulement, jamais sur un refus
            * ordinaire : 1649 refus sont traces, en notifier une fraction noierait le signal.
            */
+          /*
+           * SCRIPTS DE COPIE (2026-09-28) : fichiers locaux et préparation déclarés dans
+           * `.autowin/scripts.json` du dépôt, joués à la création de chaque copie d'agent. Voir
+           * `scripts-copie-main.ts` ; rien de déclaré = rien de joué, aucune ligne de trace.
+           */
+          preparerCopie: async (copie, signaler) =>
+            (
+              await preparerCopie(
+                { depot: copie.depot, chemin: copie.chemin, nom: copie.runId },
+                { auDebut: signaler }
+              )
+            )?.resume,
           onAbandon: ({ tache, runId }) => {
             try {
               if (!Notification.isSupported()) return
@@ -557,6 +579,24 @@ export class AutowinOS {
       trust: this.trust,
       executionWorkspace,
       causalMemoryFor: (conversationId) => this.causalMemoryRetriever?.(conversationId) ?? '',
+      // Pistes deja proposees par les scouts precedents (`scout-memoire.ts`). Le stock de la veille ne
+      // vaut que pour le depot que la veille analyse : `executionWorkspace` (`index.ts`, `racineDepot`).
+      // fix-ok: sans ce branchement, `memoireScout` restait vide en production : le test au site d'appel
+      // (orchestrator.scout-cible.test.ts) tombe quand la memoire n'est plus lue.
+      memoireScout: {
+        connues: (depot, sauf) =>
+          pistesDejaConnues({
+            depot,
+            sauf,
+            stockVeille:
+              cleDepot(depot) === cleDepot(executionWorkspace) ? titresStockVeilleAutowin() : []
+          }),
+        noter: (depot, texteScout, run) =>
+          noterPistesScout({ depot, texte: texteScout, run, maintenant: new Date().toISOString() }),
+        choisir: (depot, demande) =>
+          noterChoixScout({ depot, demande, maintenant: new Date().toISOString() }),
+        bilan: (depot) => bilanDesChoix({ depot })
+      },
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.
       drainDirectives: (conversationId) => this.directivesEnAttente?.(conversationId) ?? [],
@@ -743,11 +783,22 @@ export class AutowinOS {
     turnId: string
     request: string
     debut: ChatTurnStart
+    /** Dossiers de travail des tours d'AUTRES fils en cours, relus au moment de publier. */
+    autresToursEnCours?: () => readonly string[]
+    /** Tests des fichiers du tour, rejoués AVANT de pousser (voir `chat-turn-publication.ts`). */
+    verifierAvantPublication?: (
+      repo: string,
+      fichiers: readonly string[]
+    ) => Promise<VerificationAvantPublication>
   }): Promise<AutoCloseReport | undefined> {
+    const { autresToursEnCours, ...tour } = input
     const next = this.chatTurnPublications.then(async () => {
       if (!this.autoClose) return undefined
+      // Relevé AVANT la lecture du journal : un tour fini entre les deux y a déjà tout écrit.
+      const enCours = autresToursEnCours?.() ?? []
       const report = await publierTourDeChat({
-        ...input,
+        ...tour,
+        autresToursEnCours: enCours,
         traces: await readRecentConversationFileTraces()
       })
       if (report) {

@@ -62,7 +62,7 @@ class RecordingProvider implements ProviderAdapter {
 function makeOrchestrator(
   provider: RecordingProvider,
   cost: CostAggregator,
-  phase: 'frame' | 'terrain' = 'frame'
+  phase: 'frame' | 'terrain' | 'scout' = 'frame'
 ): Orchestrator {
   const registry = new ProviderRegistry().register(provider)
   const roles = new RoleModelConfig({
@@ -190,6 +190,40 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(new Set(terrainSteps.map((step) => step.execution?.agentId))).toEqual(
       new Set(['terrain:m1', 'terrain:m2'])
     )
+  })
+
+  /*
+   * Piste 6 de conv-890 : un panel scout réglé dans `agent-topology.json` n'a pas d'angle (`FanMember`
+   * n'a pas de champ `persona`, `os.ts`), donc `personaInstruction(undefined)` rendait '' et les N
+   * membres recevaient la MÊME consigne — N fois le prix pour N fois le même avis. Seul le workflow
+   * « Exploration » posait des angles. Chaque membre scout sans angle reçoit désormais le sien.
+   */
+  it('un panel scout de la topologie donne un angle DIFFÉRENT à chaque membre', async () => {
+    const provider = new RecordingProvider()
+    const result = await makeOrchestrator(provider, new CostAggregator(), 'scout').run(
+      'scout améliorations du module de cache'
+    )
+    const membres = provider.calls.filter((call) => call.model === 'm1' || call.model === 'm2')
+    expect(membres).toHaveLength(2)
+    const angles = membres.map(
+      (call) => /=== ANGLE IMPOSÉ À CE MEMBRE ===\n([^\n]+)/u.exec(call.system ?? '')?.[1]
+    )
+    expect(angles[0]).toBeTruthy()
+    expect(angles[1]).toBeTruthy()
+    expect(angles[0]).not.toBe(angles[1])
+    // L'identité suit l'angle : deux membres sur deux modèles ne se confondent pas dans le suivi.
+    const ids = result.trace
+      .filter((step) => step.execution?.groupId === 'scout:fanout')
+      .map((step) => step.execution?.agentId)
+    expect(new Set(ids).size).toBe(2)
+  })
+
+  it('un panel frame de la topologie reste sans angle imposé (hors du périmètre scout)', async () => {
+    const provider = new RecordingProvider()
+    await makeOrchestrator(provider, new CostAggregator(), 'frame').run('cadre la page de réglages')
+    const membres = provider.calls.filter((call) => call.model === 'm1' || call.model === 'm2')
+    expect(membres.length).toBeGreaterThan(0)
+    for (const call of membres) expect(call.system ?? '').not.toContain('ANGLE IMPOSÉ')
   })
 
   it('conserve les membres Terrain quand la phase est décomposée en sous-tâches greedy', async () => {
@@ -582,5 +616,78 @@ describe('Orchestrator — refus du filtre de sécurité (conv-540, tour 4dfe282
         (step) => step.role === 'subagent' && step.model === 'claude-sonnet-5' && step.status === 'completed'
       )
     ).toBe(true)
+  })
+})
+
+/**
+ * conv-890, 2026-09-30 13:42 : l'étape build, sur le SEUL modèle du rôle subagent (claude-opus-5-5,
+ * aucun membre de panel), a été refusée par le filtre de sécurité. Le repli ci-dessus n'existait que
+ * pour le lancement en parallèle : sur ce chemin, l'étape échouait sans nouvel essai, et le run
+ * finissait rouge dans un tour à 46,88 $.
+ */
+class RefusingEverythingProvider extends RecordingProvider {
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    if (options.model === 'claude-opus-5' || options.model === 'claude-sonnet-5') {
+      this.calls.push(options)
+      throw new Error(
+        `API Error: ${options.model}'s safeguards flagged this message (https://www.anthropic.com/legal/aup). Details: \`[reasoning_extraction]\``
+      )
+    }
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('Orchestrator — refus du filtre de sécurité sur le chemin à un seul modèle (conv-890)', () => {
+  const orchestrateurSansPanel = (provider: RecordingProvider): Orchestrator =>
+    new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        orchestrator: { provider: provider.id, model: 'claude-opus-5' },
+        subagent: { provider: provider.id, model: 'claude-opus-5' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      execPhases: ['frame']
+      // AUCUN `phaseFanOut` : l'étape tourne sur le binding du rôle subagent, comme en conv-890.
+    })
+
+  it('rejoue l’étape une fois sur le modèle voisin et trace le modèle qui a vraiment répondu', async () => {
+    const provider = new RefusingProvider()
+
+    const result = await orchestrateurSansPanel(provider).run('cadre les pistes du projet')
+
+    const models = provider.calls.map((call) => call.model)
+    expect(models.filter((m) => m === 'claude-opus-5')).toHaveLength(1)
+    expect(models.filter((m) => m === 'claude-sonnet-5')).toHaveLength(1)
+    // Le refus reste VISIBLE dans la trace, puis l'étape aboutit sur le modèle de repli.
+    const etape = (model: string, status: string): boolean =>
+      result.trace.some(
+        (step) => step.role === 'subagent' && step.model === model && step.status === status
+      )
+    expect(etape('claude-opus-5', 'failed')).toBe(true)
+    expect(etape('claude-sonnet-5', 'completed')).toBe(true)
+  })
+
+  it('ne rejoue qu’UNE fois : si le modèle voisin refuse aussi, l’étape échoue sans boucler', async () => {
+    const provider = new RefusingEverythingProvider()
+
+    let echec: unknown
+    try {
+      const result = await orchestrateurSansPanel(provider).run('cadre les pistes du projet')
+      echec = result.valid ? undefined : result
+    } catch (error) {
+      echec = error
+    }
+
+    const models = provider.calls.map((call) => call.model)
+    expect(models.filter((m) => m === 'claude-opus-5')).toHaveLength(1)
+    expect(models.filter((m) => m === 'claude-sonnet-5')).toHaveLength(1)
+    expect(echec).toBeDefined()
   })
 })

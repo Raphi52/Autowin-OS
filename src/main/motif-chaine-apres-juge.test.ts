@@ -26,6 +26,18 @@ describe('motif de non-jeu de la chaine apres-juge', () => {
     expect(orchestrateur).toContain('motifChaineApresJugeNonJouee({')
     expect(orchestrateur).toContain('gateBloque: true')
     expect(orchestrateur).toContain('gateBloque: false')
-    expect(orchestrateur.match(/push\(\{ step: 'gate', role: 'gate', detail: motif/g)?.length).toBe(2)
+    // Chaque motif CALCULÉ est POUSSÉ — une sortie par état du verdict. L'ancien compte du préfixe
+    // `detail: motif` (2) attrapait aussi le `motif` de « Réparation interrompue » ajouté par
+    // 82522eec (2026-09-15) et rougissait sans défaut (conv-770, 2026-09-28).
+    const calcules = [
+      ...orchestrateur.matchAll(
+        /const (\w+) = motifChaineApresJugeNonJouee\(\{[^}]*gateBloque: (true|false)/g
+      )
+    ]
+    expect(calcules.map((appel) => appel[2]).sort()).toEqual(['false', 'true'])
+    for (const [, variable] of calcules)
+      expect(orchestrateur).toContain(
+        `if (${variable}) push({ step: 'gate', role: 'gate', detail: ${variable} })`
+      )
   })
 })

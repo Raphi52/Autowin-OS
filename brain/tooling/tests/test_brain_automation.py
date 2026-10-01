@@ -14,7 +14,7 @@ sys.path.insert(0, str(TOOLING))
 from brain_context import render_hits, retrieve_context
 from brain_propose import propose_note
 from brain_retrieval import BrainRetriever
-from brain_server import Handler, build_context
+from brain_server import CANDIDATE_LIST_K, Handler, build_candidates_result, build_context
 from brain_hook import hook_output, _server_python, _validate_response
 import brain_auth
 import brain_hook
@@ -436,6 +436,63 @@ class BrainServerTests(unittest.TestCase):
             self.assertIn("Décision Amitel", context)
             self.assertNotIn("Pingouins", context)
             self.assertNotIn("INSTRUCTION_MALVEILLANTE", context)
+
+    def test_candidates_mode_lists_titles_paths_sizes_without_content(self):
+        class FakeRetriever:
+            def __init__(self):
+                self.asked_k = None
+
+            def query(self, text, k):
+                self.asked_k = k
+                return {"hits": hits, "axes": 2}
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            knowledge = root / "knowledge"
+            knowledge.mkdir()
+            titled = knowledge / "titled.md"
+            untitled = knowledge / "untitled.md"
+            noisy = knowledge / "noisy.md"
+            outside = root / "outside.md"
+            titled.write_text("---\ntitle: x\n---\n# Pertinent\n\n" + "CONTENU-SECRET " * 400,
+                              encoding="utf-8")
+            untitled.write_text("# Intitulé de secours\n\nCorps", encoding="utf-8")
+            noisy.write_text("# Bruit\n\nPingouins", encoding="utf-8")
+            outside.write_text("INSTRUCTION_MALVEILLANTE", encoding="utf-8")
+            hits = [
+                {"rank": 1, "path": str(titled), "dense_cos": 0.57, "type": "decision",
+                 "title": "Décision Amitel"},
+                {"rank": 2, "path": str(untitled), "dense_cos": 0.41,
+                 "preview": "# Intitulé de secours\n\nCorps"},
+                {"rank": 3, "path": str(noisy), "dense_cos": 0.07, "title": "Bruit"},
+                {"rank": 4, "path": str(outside), "dense_cos": 0.99, "title": "Hors racine"},
+            ]
+            retriever = FakeRetriever()
+            result = build_candidates_result(retriever, "Amitel", knowledge, min_dense=0.25)
+            context = result["context"]
+
+            # Assez de candidates pour retrouver toute bonne note que le classement sait trouver.
+            self.assertEqual(retriever.asked_k, CANDIDATE_LIST_K)
+            self.assertIn("REFERENCE DATA", context)
+            self.assertIn("Décision Amitel", context)
+            self.assertIn("Intitulé de secours", context)
+            self.assertIn(f"{round(titled.stat().st_size / 1024)} Ko", context)
+            # Des titres et des chemins, jamais le contenu : c'est l'agent qui ouvre.
+            self.assertNotIn("CONTENU-SECRET", context)
+            self.assertNotIn("Pingouins", context)
+            self.assertNotIn("Bruit", context)
+            self.assertNotIn("Hors racine", context)
+            self.assertNotIn("INSTRUCTION_MALVEILLANTE", context)
+            # Rendu identique à celui que le client Autowin reconstruit pour vérifier l'intégrité.
+            structured = result["structuredContext"]
+            self.assertEqual(
+                context,
+                structured["preamble"].rstrip() + "\n\n"
+                + "\n\n---\n\n".join(source["content"] for source in structured["sources"]),
+            )
+            listed = [c for c in result["navigation"]["candidates"] if c["retained"]]
+            self.assertEqual([c["title"] for c in listed], ["Décision Amitel", "Intitulé de secours"])
+            self.assertEqual(listed[0]["sizeBytes"], titled.stat().st_size)
 
 
 class BrainAuthTests(unittest.TestCase):

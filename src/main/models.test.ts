@@ -119,6 +119,68 @@ describe('catalogue Agents dynamique', () => {
     ])
     expect(models.some((model) => model.provider === 'codex')).toBe(false)
   })
+
+  it('propose Claude Sonnet 5.5 à partir des ids réels du CLI Claude Code 2.1.284', async () => {
+    // Relevé le 2026-09-30 par `claudeCliModelIds(resolveClaudeBin())` sur le binaire installé de
+    // Claude Code 2.1.284, la version dont le changelog annonce « Claude Sonnet 5.5 » comme Sonnet
+    // par défaut. Aucun id n'est écrit à la main dans le catalogue : il vient du binaire.
+    const idsDuCli2_1_284 = (): string[] => [
+      'claude-fable-5',
+      'claude-fable-5-1',
+      'claude-haiku-3-5',
+      'claude-haiku-3-55',
+      'claude-haiku-4-5',
+      'claude-haiku-4-5-20251001',
+      'claude-opus-4',
+      'claude-opus-4-0',
+      'claude-opus-4-1',
+      'claude-opus-4-1-20250805',
+      'claude-opus-4-20250514',
+      'claude-opus-4-5',
+      'claude-opus-4-5-20251101',
+      'claude-opus-4-6',
+      'claude-opus-4-7',
+      'claude-opus-4-8',
+      'claude-opus-5',
+      'claude-opus-5-5',
+      'claude-sonnet-3-7',
+      'claude-sonnet-4',
+      'claude-sonnet-4-0',
+      'claude-sonnet-4-20250514',
+      'claude-sonnet-4-5',
+      'claude-sonnet-4-5-20250929',
+      'claude-sonnet-4-6',
+      'claude-sonnet-5',
+      'claude-sonnet-5-5'
+    ]
+    const fetchFn = vi.fn(async () => {
+      throw new Error('service local absent')
+    })
+
+    const models = await discoverImportedModels(
+      fetchFn as unknown as typeof fetch,
+      undefined,
+      idsDuCli2_1_284
+    )
+
+    const sonnet55 = models.find((model) => model.id === 'claude/claude-sonnet-5-5')
+    expect(sonnet55).toMatchObject({
+      provider: 'claude',
+      model: 'claude-sonnet-5-5',
+      label: 'Claude Sonnet 5.5 · CLI',
+      defaultReasoningEffort: 'high'
+    })
+    expect(sonnet55?.reasoningEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    // Une version nommée de la famille est connue : l'alias « sonnet » ne double plus l'entrée.
+    expect(models.find((model) => model.model === 'sonnet')).toBeUndefined()
+    // GPT-6.1 Sol (Codex 0.159.1) n'y figure pas : Codex est retiré (routed-providers.ts).
+    expect(models.some((model) => model.provider === 'codex')).toBe(false)
+    // Un id daté SANS mineure s'affiche avec sa date entre parenthèses, comme les autres snapshots.
+    const libelle = (id: string): string | undefined => models.find((m) => m.model === id)?.label
+    expect(libelle('claude-opus-4-20250514')).toBe('Claude Opus 4 (20250514) · CLI')
+    expect(libelle('claude-sonnet-4-20250514')).toBe('Claude Sonnet 4 (20250514) · CLI')
+    expect(libelle('claude-haiku-4-5-20251001')).toBe('Claude Haiku 4.5 (20251001) · CLI')
+  })
 })
 
 describe('cache disque du dernier catalogue vu', () => {

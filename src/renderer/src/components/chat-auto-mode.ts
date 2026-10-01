@@ -271,36 +271,97 @@ const SAUT_ANCRAGE = String.fromCharCode(10)
 /** Au-dela, l'ancrage noie le prompt qu'il accompagne : on le borne. */
 const TACHE_ANCRAGE_MAX = 240
 
+const borner = (texte: string): string =>
+  texte.length > TACHE_ANCRAGE_MAX ? `${texte.slice(0, TACHE_ANCRAGE_MAX).trimEnd()}…` : texte
+
+/** « go », « ok », « continue »… : accepte une suite sans la nommer. Compare sur la forme repliee. */
+const ACCORD_NU =
+  /^(?:go|ok|okay|oki|oui|ouais|yes|vas[- ]?y|continue|continues|poursuis|reprends?|reprendre|fais[- ]le|d'?accord|dac|c'?est parti|on y va|valide|parfait|super|top|merci)$/
+
+/** « 2 3 4 », « 1 », « 2 et 3 », « 2,4 » : un choix entre les options d'une question. */
+const CHOIX_PAR_NUMEROS = /^\d{1,2}(?:\s*(?:[,;+&/]|\bet\b|\s)\s*\d{1,2})*$/
+
+function replierAccord(texte: string): string {
+  return texte
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[’ʼ]/gu, "'")
+    .replace(/[\s.!?;:]+$/u, '')
+    .trim()
+}
+
+/** Les options designees par leurs numeros, dans la question posee JUSTE avant ce message. */
+function optionsChoisies(fil: readonly Msg[], rang: number, choix: string): string | null {
+  let question: AsstMsg | undefined
+  for (let i = rang - 1; i >= 0 && !question; i--)
+    if (fil[i].role === 'assistant') question = fil[i] as AsstMsg
+  if (!question) return null
+  const decisions = (question.parts ?? []).flatMap((part) => {
+    if (part.kind === 'text') return []
+    const d = parseAskDecision(part as { kind: string })
+    return d ? [d] : []
+  })
+  const decision = decisions[decisions.length - 1]
+  if (!decision) return null
+  const numeros = [...choix.matchAll(/\d{1,2}/g)].map((m) => Number(m[0]))
+  const options = numeros.map((n) => decision.options[n - 1])
+  if (options.some((o) => !o)) return null
+  return options.map((o) => promptDeLOption(o).trim()).join(' · ')
+}
+
 /**
- * LA TACHE INITIALE DU FIL — le PREMIER message que l'utilisateur a ecrit.
+ * LA DEMANDE D'ANCRAGE — la DERNIERE demande que l'utilisateur a faite LUI-MEME (conv-889,
+ * 2026-09-30).
  *
- * Un message d'ORIENTATION est ecarte : il est tape PENDANT un tour et ne fonde pas la demande.
+ * REMPLACE « le PREMIER message du fil ». Demande utilisateur : « ancre le mode auto sur ma derniere
+ * demande tapee a la main, pas sur le premier message du fil ». Constat sur conv-889 : parti de
+ * « c'est quoi chatgpt dots », le fil a change de sujet plusieurs fois par des messages TAPES, et
+ * chaque maillon automatique rappelait encore les Dots — l'ancre signalait une derive la ou
+ * l'utilisateur avait lui-meme choisi le sujet. La derive a borner est celle que la machine produit
+ * SANS lui, donc depuis sa derniere intervention.
+ *
+ * On remonte le fil depuis la fin, et on saute ce qui n'est pas une demande :
+ *  - une ORIENTATION tapee pendant un tour : elle precise la demande en cours, elle n'en fonde pas ;
+ *  - le tour de releve `PROMPT_NOUVELLE_CIBLE`, envoye sans ancre ;
+ *  - un accord nu (« go », « ok », « continue ») : il accepte une suite, il ne la nomme pas.
+ * Un choix par NUMEROS (« 2 3 4 ») est resolu en texte des options de la question qui le precede.
+ *
+ * UN ENVOI DU MODE AUTO porte l'ancre (voir `ancrerSurLaDemande`) : l'ancre qu'il porte EST la
+ * reponse, et elle prime sur tout message plus ancien. Mesure conv-470 (saisie ts=1789159231523) :
+ * lue sur la fenetre de messages CHARGEE, la tache devenait un maillon intermediaire des que la
+ * fenetre ne commencait pas au debut du fil. Une ancre deja ecrite a ete calculee quand la fenetre
+ * etait plus large : on la relit.
  */
-export function tacheInitiale(fil: readonly Msg[]): string | null {
-  let premier: string | null = null
-  for (const m of fil) {
+export function derniereDemandeHumaine(fil: readonly Msg[]): string | null {
+  for (let rang = fil.length - 1; rang >= 0; rang--) {
+    const m = fil[rang]
     if (m.role !== 'user') continue
     const user = m as Extract<Msg, { role: 'user' }>
     if (user.orientation) continue
     const nu = (user.content ?? '').trim()
     if (!nu) continue
-    /*
-     * L'ANCRE DEJA ECRITE PRIME SUR LE HAUT DE LA FENETRE. Mesure conv-470 (saisie ts=1789159231523) :
-     * la chaine a envoye « Applique la piece 3 » ancre sur « Applique la piece 2 », alors que les
-     * cinq autres envois du meme fil citaient « Voici un besoin observe... ». Cause : la tache se
-     * lisait sur la liste de messages CHARGEE ; des qu'elle ne commence pas au premier message du
-     * fil, l'ancre devient un maillon intermediaire et la derive qu'elle devait bloquer est actee.
-     * Une ancre deja portee par un message a ete calculee sur une fenetre plus large : on la relit.
-     */
     const relue = ANCRE_DEJA_ECRITE.exec(nu)?.[1]?.trim()
     if (relue) return relue
-    premier ??= nu.length > TACHE_ANCRAGE_MAX ? `${nu.slice(0, TACHE_ANCRAGE_MAX).trimEnd()}…` : nu
+    if (nu.startsWith(PROMPT_NOUVELLE_CIBLE)) continue
+    if (ACCORD_NU.test(replierAccord(nu))) continue
+    if (CHOIX_PAR_NUMEROS.test(nu)) {
+      const resolu = optionsChoisies(fil, rang, nu)
+      if (resolu) return borner(resolu)
+      continue
+    }
+    return borner(nu)
   }
-  return premier
+  return null
 }
 
-/** Relit la tache citee par un ancrage precedent. Doit rester le miroir de `ancrerSurLaTacheInitiale`. */
-const ANCRE_DEJA_ECRITE = /\(Mode auto — tâche initiale de ce fil : « ([\s\S]*?) »\./
+/**
+ * Relit la demande citee par un ancrage precedent. Doit rester le miroir de `ancrerSurLaDemande`.
+ * L'ancienne formule (« tâche initiale de ce fil », avant le 2026-09-30) reste lue : elle vit dans
+ * les fils deja ecrits.
+ */
+const ANCRE_DEJA_ECRITE =
+  /\(Mode auto — (?:tâche initiale de ce fil|dernière demande de l'utilisateur) : « ([\s\S]*?) »\./
 
 /**
  * ANCRAGE ANTI-DERIVE — demande utilisateur du 2026-09-02 : « le mode auto doit pas trop trop
@@ -312,17 +373,18 @@ const ANCRE_DEJA_ECRITE = /\(Mode auto — tâche initiale de ce fil : « ([\s\S
  * librement (mesure sur conv-138 : partie de « juge la qualite de mon prompting », la chaine est
  * arrivee au shader du nuage d'accueil, six tours plus loin).
  *
- * Chaque envoi automatique porte donc la tache initiale AVEC lui, et l'ordre de s'arreter plutot
+ * Chaque envoi automatique porte donc la demande d'ancrage AVEC lui (depuis le 2026-09-30 : la
+ * derniere demande de l'utilisateur, voir `derniereDemandeHumaine`), et l'ordre de s'arreter plutot
  * que de s'en eloigner. L'ancrage est ajoute au texte ENVOYE, jamais a la condition d'arret.
  */
-export function ancrerSurLaTacheInitiale(texte: string, tache: string | null): string {
-  if (!tache) return texte
-  // La suite EST la tache initiale (premier maillon) : l'ancrage ferait un doublon inutile.
-  if (texte.trim() === tache.trim()) return texte
+export function ancrerSurLaDemande(texte: string, demande: string | null): string {
+  if (!demande) return texte
+  // La suite EST la demande (premier maillon) : l'ancrage ferait un doublon inutile.
+  if (texte.trim() === demande.trim()) return texte
   return [
     texte,
     '',
-    `(Mode auto — tâche initiale de ce fil : « ${tache} ». Si cette suite s'en éloigne, dis-le et`,
+    `(Mode auto — dernière demande de l'utilisateur : « ${demande} ». Si cette suite s'en éloigne, dis-le et`,
     'arrête la chaîne au lieu de dériver.)'
   ].join(SAUT_ANCRAGE)
 }
@@ -658,7 +720,17 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   if (entree.brouillonPresent) return { action: 'attendre', raison: 'brouillon' }
   // Une question `ask` ouverte : le mode auto choisit l'option recommandee a la place de l'humain.
   const reponseAsk = reponseAutoAuDernierAsk(entree.fil)
-  if (reponseAsk) return { action: 'envoyer', texte: reponseAsk, signature }
+  /*
+   * La reponse choisie SEULE est ancree comme les autres envois automatiques. Sans ancre, elle se lirait
+   * plus tard comme un choix de l'utilisateur, et l'option recommandee par l'agent deviendrait la
+   * demande d'ancrage : la machine redefinirait elle-meme ce dont elle ne doit pas s'eloigner.
+   */
+  if (reponseAsk)
+    return {
+      action: 'envoyer',
+      texte: ancrerSurLaDemande(reponseAsk, derniereDemandeHumaine(entree.fil)),
+      signature
+    }
   const texteReponse = texteDernierAssistant(entree.fil) ?? ''
   /*
    * APRES UN SCOUT — la porte lit la ligne `CIBLE:` AVANT tout le reste du raisonnement de suite.
@@ -762,7 +834,7 @@ ${suite}`
         ? `CIBLE RETENUE : ${choixScout.cible}
 ${suite}`
         : suite
-  const texte = ancrerSurLaTacheInitiale(suiteCiblee, tacheInitiale(entree.fil))
+  const texte = ancrerSurLaDemande(suiteCiblee, derniereDemandeHumaine(entree.fil))
   /*
    * DIFFÉRÉE : programmée AVANT le garde-fou « même suite » — « quand fin.txt existe » revient
    * forcément identique d'une vérification à l'autre. La borne est `MAX_RELANCES_DIFFEREES`.

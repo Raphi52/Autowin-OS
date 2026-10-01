@@ -45,6 +45,13 @@ export interface BrainRetrievalOptions {
   traceId?: () => string
   /** Identités/préfixes de chemins ancrés autorisés, dérivés du workspace courant. */
   corpus?: readonly string[]
+  /**
+   * `candidates` : le serveur rend la LISTE des notes pertinentes (titre, chemin, taille), sans
+   * contenu ni borne de caractères — l'agent ouvre ensuite EN ENTIER celles qu'il juge nécessaires
+   * (`brain_read`). Absent : mode historique (extraits bornés), gardé pour la recherche humaine de
+   * la vue Knowledge et pour les crochets hors Autowin.
+   */
+  mode?: 'candidates'
 }
 
 /** Un candidat parcouru par le retriever : rang fusionné, chemin, score dense, retenu ou écarté. */
@@ -64,6 +71,10 @@ export interface BrainNavigationCandidate {
   fusedScore?: number
   relations?: BrainRelation[]
   retained: boolean
+  /** Mode `candidates` : titre de la note listée (déclaré, sinon son premier intitulé). */
+  title?: string
+  /** Mode `candidates` : taille de la note entière, pour que l'agent sache ce que coûte de l'ouvrir. */
+  sizeBytes?: number
   /** Tranche OCTETS (fichier brut) du chunk retenu — permet de surligner le passage réellement injecté. */
   chunkByteStart?: number
   chunkByteEnd?: number
@@ -188,6 +199,12 @@ function parseNavigation(raw: unknown): BrainNavigation | undefined {
           : {}),
         ...(relations.length > 0 ? { relations } : {}),
         retained: Boolean(c.retained),
+        ...(typeof c.title === 'string' && c.title.trim()
+          ? { title: c.title.slice(0, MAX_NAVIGATION_TEXT) }
+          : {}),
+        ...(typeof c.sizeBytes === 'number' && Number.isFinite(c.sizeBytes) && c.sizeBytes >= 0
+          ? { sizeBytes: c.sizeBytes }
+          : {}),
         chunkByteStart:
           typeof c.chunkByteStart === 'number' && Number.isFinite(c.chunkByteStart)
             ? c.chunkByteStart
@@ -274,7 +291,8 @@ export async function retrieveBrainContext(
       trace_id: Array.from(opts.traceId?.() ?? randomUUID())
         .slice(0, 128)
         .join(''),
-      ...(corpus.length > 0 ? { corpus } : {})
+      ...(corpus.length > 0 ? { corpus } : {}),
+      ...(opts.mode ? { mode: opts.mode } : {})
     }
     const res = await doFetch(`${origin}/query-secure`, {
       method: 'POST',

@@ -12,6 +12,11 @@ import { dirname, join, resolve } from 'node:path'
  * poste et qui est (ou est contenu dans) une racine `.git`, fait basculer. Une mention par nom de
  * projet ne suffit pas — ce serait une supposition, et basculer a tort est pire que ne pas basculer.
  *
+ * Un depot IMBRIQUE dans le depot de travail ne fait pas basculer non plus. Mesure du 2026-09-28
+ * (conv-770) : une consigne de reprise citait `git -C D:/AutoWinOS/.autowin-data/essai-garde stash`,
+ * un depot jetable ; la conversation est partie travailler DEDANS, puis a rebascule au tour suivant.
+ * Meme risque pour une copie de travail d'agent (`.autowin-data/autowin-os/worktrees/…`, `.git` fichier).
+ *
  * Aucun redemarrage n'est requis : le dossier est resolu A CHAQUE tour depuis la conversation.
  */
 
@@ -29,12 +34,20 @@ function racineDepot(depart: string, existe: (chemin: string) => boolean): strin
   }
 }
 
+const normaliser = (chemin: string): string =>
+  resolve(chemin)
+    .replace(/[\\/]+$/, '')
+    .toLowerCase()
+
 function memeDossier(a: string, b: string): boolean {
-  const normaliser = (chemin: string): string =>
-    resolve(chemin)
-      .replace(/[\\/]+$/, '')
-      .toLowerCase()
   return normaliser(a) === normaliser(b)
+}
+
+/** `enfant` est STRICTEMENT sous `parent` — `D:\AutoWinOS2` n'est pas sous `D:\AutoWinOS`. */
+function estDedans(enfant: string, parent: string): boolean {
+  const e = normaliser(enfant)
+  const p = normaliser(parent)
+  return e.length > p.length && e.startsWith(p) && /[\\/]/.test(e.charAt(p.length))
 }
 
 /**
@@ -49,6 +62,7 @@ export function depotCiteDansLeMessage(
   existe: (chemin: string) => boolean = existsSync
 ): string | null {
   if (!message.trim()) return null
+  const depotActif = dossierActif.trim() ? racineDepot(dossierActif, existe) : undefined
   for (const brut of message.match(CHEMIN_ABSOLU) ?? []) {
     // La ponctuation de fin de phrase colle au chemin : « travaille dans D:\Foo. » -> `D:\Foo.`
     const chemin = brut.replace(/[.,;:!?)\]]+$/, '')
@@ -56,6 +70,10 @@ export function depotCiteDansLeMessage(
     const racine = racineDepot(chemin, existe)
     if (!racine) continue
     if (dossierActif.trim() && memeDossier(racine, dossierActif)) continue
+    // Un depot IMBRIQUE dans le depot de travail (depot jetable, copie de travail d'un agent sous
+    // .autowin-data) fait partie de CE depot : ce n'est pas l'autre projet que l'utilisateur aurait
+    // oublie de ranger. Un dossier parent SANS depot (D:\GIT) continue, lui, de basculer vers ses projets.
+    if (depotActif && estDedans(racine, depotActif)) continue
     return racine
   }
   return null

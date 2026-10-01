@@ -68,7 +68,9 @@ const FAMILLE_ROSE = [
   '--chat-cran-vif',
   '--chat-cran-focus',
   '--chat-envoi-rose',
-  '--chat-dictee'
+  '--chat-dictee',
+  // Liseré rose de la barre de sélection multiple (conv-815), rattaché le 2026-09-28 (conv-770).
+  '--chat-lot-rose'
 ] as const
 
 const FAMILLE_OR = [

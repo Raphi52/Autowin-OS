@@ -83,6 +83,40 @@ describe('parseScoutTable', () => {
     expect(rows![0]).toMatchObject({ impact: 'g', what: 'Reprise de run coupé' })
   })
 
+  /*
+   * L'EN-TETE QUE LA SKILL IMPOSE (skills/scout/SKILL.md, section « Ce que ça produit ») :
+   * `# | Note | Type | Quoi | Pourquoi | Comment`. Il ne portait ni « Score » ni « Impact » : le
+   * panneau rendait `null` et retombait en Markdown mort. Et la colonne « Comment » (le premier pas,
+   * avec son `file:line`) n'etait lue par aucun mot-cle.
+   * fix-ok: sonde tsx (exit 0) — l'en-tete de SKILL.md l.40 rendait `null` ; rouge avant, vert apres.
+   */
+  it('reconnaît l en-tête de la skill « # | Note | Type | Quoi | Pourquoi | Comment »', () => {
+    const md = `| # | Note | Type | Quoi | Pourquoi | Comment |
+|---|---|---|---|---|---|
+| 1 | 82 | 🔧 correctif | Reprise de run coupé | crash → on refait tout | commands.ts:598 |
+`
+    const rows = parseScoutTable(md)
+    expect(rows).not.toBeNull()
+    expect(rows![0]).toMatchObject({
+      num: '1',
+      score: 82,
+      impact: 'g',
+      type: 'fix',
+      what: 'Reprise de run coupé',
+      why: 'crash → on refait tout',
+      how: 'commands.ts:598'
+    })
+  })
+
+  it('une colonne « Commentaire » n est pas le « Comment » ; « Score » prime sur « Note »', () => {
+    const md = `| Score | Note | Type | What | Why | Commentaire | How |
+|---|---|---|---|---|---|---|
+| 64 | 90 | 🆕 new | Mémoire des pistes | refaites 3 fois | à discuter | scout-memoire.ts |
+`
+    const rows = parseScoutTable(md)
+    expect(rows![0]).toMatchObject({ score: 64, how: 'scout-memoire.ts' })
+  })
+
   // MINEUR 3b : risque INVERSE — un tableau ETRANGER etait capture a tort ; `what`/`why`/`how` absents,
   // toutes les colonnes sauf la 2e etaient jetees et le contenu re-presente comme une shortlist.
   it('un tableau etranger « Dimension | Score | Type | Note » → null', () => {

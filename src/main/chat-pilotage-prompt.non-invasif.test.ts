@@ -19,6 +19,10 @@ describe('pilotage non invasif par defaut', () => {
     // sans outil de clic/frappe cache, le chat cliquait l'ecran reel pour saisir un code.
     expect(prompt).toContain('scripts/hdesk-act.ps1')
     expect(existsSync('scripts/hdesk-act.ps1')).toBe(true)
+    // kaizen conv-873 (2026-09-27) : sans touches postables (et avec des clics decales a 200 %), les
+    // menus de Roblox Studio paraissaient impilotables en cache : le chat est passe sur l'ecran reel.
+    expect(prompt).toContain('-Touches')
+    expect(existsSync('scripts/hdesk-act.echelle.test.ps1')).toBe(true)
   })
 
   // kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2 : un crash n'autorise plus la bascule.

@@ -168,7 +168,7 @@ export const REGLES_ECRAN_UTILISATEUR: string =
   // ouvert l'URL par \`cmd start\` sur l'ecran reel, capture l'ecran reel puis clique sa barre des taches ;
   // l'utilisateur a annule et exige le bureau cache pour « ce genre de taches ».
   `ORDRE : d'abord le bureau cache — navigateur lance par \`scripts/hdesk-lancer.ps1 -Executable <navigateur> ` +
-  `-Arguments "<url>"\`, observe par hdesk-observe.ps1, clic + frappe par \`scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "<code>"] [-Entree]\` (coordonnees de la capture hdesk-observe ; re-capture pour verifier). Jamais \`start <url>\`, jamais un clic dans sa barre des ` +
+  `-Arguments "<url>"\`, observe par hdesk-observe.ps1, clic + frappe par \`scripts/hdesk-act.ps1 -InstanceId <id> -X <x> -Y <y> [-Texte "<code>"] [-Entree] [-Touches "28x15,0D"] [-SansClic]\` (coordonnees = pixels de la capture hdesk-observe, a toute echelle Windows ; re-capture pour verifier). Un menu Qt (Roblox Studio) s'OUVRE au clic mais ne s'ACTIVE qu'au clavier : \`-SansClic -Touches "28xN,0D"\` sur le menu ouvert ; une fenetre moteur de Studio reste unie a la capture, prouve alors par le journal de Studio (lignes \`[..]\` d'un plugin temporaire, « PublishSuccessful »). Jamais \`start <url>\`, jamais un clic dans sa barre des ` +
   `taches ni un focus de SA fenetre : c'est l'ecran de l'utilisateur. Si le bureau cache ne peut PAS faire le ` +
   `geste (hdesk-act.ps1 sans effet visible a la re-capture, session deja connectee requise), dis-le en une ligne et demande AVANT de toucher a son ecran. Ne rends la main que pour son mot de passe, son MFA ou son consentement — et ` +
   `dis alors quel geste EXACT reste a lui et pourquoi aucun outil ne l'atteint.
@@ -702,6 +702,16 @@ export function buildChatPilotagePrompt(
     `a-t-on choisi X ? », « quelle contrainte a Y ? ») ; pour l'état du code courant, lis les fichiers. ` +
     `Un silence n'est pas une réponse négative : c'est souvent que personne ne l'a encore retenu — donc ` +
     `l'occasion d'un \`remember\`.\n` +
+    // LE BRAIN A CHAQUE TOUR (conv-892, 2026-09-30) : « a la demande » avait donne 8 appels sur 824
+    // tours, jamais spontanes. Chaque tour recoit donc les CHEMINS des notes proches
+    // (`brain-titres-du-tour.ts`). Le mode d'emploi vit ICI, dans le prefixe mis en cache, et non
+    // dans le bloc du tour : le repeter a chaque tour le ferait payer a chaque tour.
+    `NOTES PROCHES À CHAQUE TOUR : sous « CONNAISSANCE RÉCUPÉRÉE », un bloc « BRAIN — notes proches » ` +
+    `donne le CHEMIN des notes du Brain les plus proches de la demande, sans leur contenu, et seulement ` +
+    `celles pas encore listées dans ce fil. Ce sont des candidates trouvées par proximité, pas une ` +
+    `réponse : environ une sur trois est hors sujet. Celle dont le nom touche vraiment la demande, ` +
+    `ouvre-la avec \`brain_read\` AVANT de répondre ou de fouiller le dépôt ; ignore les autres. Pas de ` +
+    `bloc = aucune note assez proche, pas un Brain vide : \`brain_query\` reste là pour un autre angle.\n` +
     // AVANT DE CONSEILLER (conv-151, saisie ts=1788375124082 : « t'avais tout ce qu'il fallait pour
     // reflechir dans le brain »). Une question d'ARCHITECTURE sur un systeme maison (RIG) a recu une
     // reponse detaillee et assuree sans UNE SEULE interrogation du Brain : la regle ci-dessus ne

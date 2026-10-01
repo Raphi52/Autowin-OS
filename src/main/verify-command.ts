@@ -474,6 +474,44 @@ export async function porteeDUneEdition(
   return portee
 }
 
+/**
+ * LA PORTEE D'UNE PUBLICATION — ce que le commit automatique du chat rejoue AVANT de pousser.
+ *
+ * Mesure du 2026-10-01 : le commit automatique `b6d2a3fc` (conv-892) a poussé une modification de
+ * `src/main/index.ts` sans rejouer aucun test, et `chat-ipc-contract.test.ts` est resté rouge sur
+ * main pendant 20 h. Ce test LIT `index.ts` au lieu de l'importer : la portée de `porteeDUneEdition`
+ * (graphe d'imports pour du code) ne l'aurait pas rejoué — c'est `VERIFY_RELATED_ANGLE_MORT`. Avant de
+ * POUSSER, on ferme cet angle mort pour le code aussi : les tests qui CITENT le nom du fichier sont
+ * ajoutés. Le surcoût est quelques tests en trop, jamais un vert qui n'a rien regardé.
+ *
+ * `undefined` dès qu'UN fichier n'a pas de portée ou que la recherche n'a pas pu conclure : une
+ * portée partielle présentée comme un verdict serait exactement le faux vert qu'on évite.
+ */
+export async function porteeAvantPublication(
+  fichiers: readonly string[],
+  testsQuiCitent: (motif: string) => Promise<readonly string[] | undefined>
+): Promise<readonly string[] | undefined> {
+  if (fichiers.length === 0) return undefined
+  const portee: string[] = []
+  const ajouter = (chemins: readonly string[]): void => {
+    for (const brut of chemins) {
+      const chemin = brut.split(ANTISLASH).join('/')
+      if (chemin.trim() && !portee.includes(chemin)) portee.push(chemin)
+    }
+  }
+  for (const fichier of fichiers) {
+    const sienne = await porteeDUneEdition(fichier, testsQuiCitent)
+    if (!sienne) return undefined
+    ajouter(sienne)
+    const normalise = fichier.split(ANTISLASH).join('/')
+    if (!EXTENSIONS_DE_CODE.test(normalise)) continue
+    const lecteurs = await testsQuiCitent(normalise.slice(normalise.lastIndexOf('/') + 1))
+    if (!lecteurs) return undefined
+    ajouter(lecteurs)
+  }
+  return portee
+}
+
 /** Sortie d'une verification, telle qu'elle est rendue a l'agent. */
 export interface VerifyOutcome {
   ok: boolean
@@ -800,6 +838,38 @@ function empreinteDeRaison(messages: unknown): string {
   }
   if (!tete) return 'sans-message'
   return lieu ? `${tete} @ ${lieu}` : tete
+}
+
+/**
+ * Les SUITES en échec d'un rapport vitest JSON, et le nombre de tests joués — même quand
+ * `echecsDuRapport` le déclare non concluant (échec de niveau suite, sans assertion nommée).
+ *
+ * Mesuré le 2026-10-01 : dans la portée de `src/main/index.ts` (1 555 tests),
+ * `moteur-perime-cablage.test.ts` échoue au niveau de la suite et passe seul ; le rapport, non
+ * concluant, ne nommait rien. Le commit automatique a besoin de ces noms pour rejouer les suites
+ * isolées. Rien n'est deviné : une forme inattendue rend `undefined`.
+ */
+export function lectureBruteDuRapport(
+  brut: string | undefined
+): { suitesEnEchec: string[]; testsJoues: number } | undefined {
+  if (!brut?.trim()) return undefined
+  let rapport: unknown
+  try {
+    rapport = JSON.parse(brut)
+  } catch {
+    return undefined
+  }
+  const { testResults, numTotalTests } = (rapport ?? {}) as {
+    testResults?: unknown
+    numTotalTests?: unknown
+  }
+  if (!Array.isArray(testResults) || typeof numTotalTests !== 'number') return undefined
+  const suitesEnEchec: string[] = []
+  for (const suite of testResults as Array<{ name?: unknown; status?: unknown }>) {
+    if (typeof suite?.name !== 'string' || !suite.name.trim()) return undefined
+    if (suite.status === 'failed') suitesEnEchec.push(suite.name)
+  }
+  return { suitesEnEchec, testsJoues: numTotalTests }
 }
 
 export function echecsDuRapport(

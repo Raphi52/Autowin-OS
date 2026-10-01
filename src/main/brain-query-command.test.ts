@@ -82,9 +82,10 @@ describe('buildBrainOutcome — distingue « rien trouvé » d’une panne', () 
     expect(outcome.note).toContain('indisponible')
   })
 
-  it('borne aussi le savoir rendu par le chemin complet', () => {
-    const outcome = buildBrainOutcome('q', 'w'.repeat(BRAIN_RESULT_CAP * 3))
-    expect(outcome.knowledge.length).toBeLessThanOrEqual(BRAIN_RESULT_CAP)
+  it('rend le savoir de l’agent ENTIER — plus de coupe au-delà de l’ancienne borne', () => {
+    const liste = `${'w'.repeat(BRAIN_RESULT_CAP * 3)}DERNIERE-CANDIDATE`
+    const outcome = buildBrainOutcome('q', liste)
+    expect(outcome.knowledge).toBe(liste)
   })
 })
 

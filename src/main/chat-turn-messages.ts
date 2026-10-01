@@ -12,6 +12,7 @@
  */
 
 import { COMPACT_REQUEST } from '../shared/context-gauge'
+import { BALISE_MESSAGE_UTILISATEUR } from '../shared/balise-message-utilisateur'
 import { type EtatPrompt, blocEtatSuivant } from './etat-diff'
 
 export interface TurnMessageParts {
@@ -381,52 +382,6 @@ export interface TurnMessageBlock {
  * dériverait de la première à la prochaine évolution du format.
  */
 /**
- * LE BESOIN INITIAL DE LA CONVERSATION, RAPPELE A CHAQUE TOUR.
- *
- * DEFAUT MESURE le 2026-09-04 (conv-257). Demande d'ouverture : « un bouton envoyer meilleur que
- * cette merde ». Trois tours plus tard, l'agent corrigeait le routage des slash mal tapes et
- * cloturait sur « Recommande : lance /salvage » — sujet sans AUCUN rapport. Verdict de
- * l'utilisateur : « tu as oublie mon besoin initial ». La tache avait ete REMPLACEE, pas oubliee.
- *
- * Le garde-fou existait deja, mais ne pouvait pas mordre ici, pour trois raisons verifiees par
- * lecture : `conversation-task-contract.ts` ne se nourrit que des `RUN.md` (donc des tours
- * ORCHESTRES — un tour de chat n'en ecrit aucun) ; son unique consommateur est le prompt du JUGE
- * (`orchestrator.ts:4806`), jamais le chat ; et il exige un ancrage `chemin:ligne` qu'une demande
- * en langage naturel ne porte presque jamais (31 conversations sur 1086).
- *
- * Le chat — le chemin que l'utilisateur emprunte le plus — n'avait donc AUCUN rappel de sa propre
- * demande d'ouverture. Pire dans le cas vecu : la session CLI etant reprise, seul le DERNIER
- * message repart, et le premier tour du fil sort du contexte. D'ou l'injection dans les DEUX
- * branches ci-dessous.
- *
- * INFORME, NE BLOQUE PAS — c'est la leçon deja payee et ecrite dans `conversation-task-contract.ts`
- * (l.15-17) : une premiere version heuristique et bloquante avait produit onze faux blocages sur du
- * travail legitime. Une conversation a parfaitement le droit de changer de sujet ; ce qu'on refuse,
- * c'est qu'elle en change SANS LE DIRE.
- */
-const LONGUEUR_BESOIN_RAPPELE = 300
-
-export function besoinInitialDuFil(history: TurnMessageParts['history']): string {
-  const demandes = history.filter((m) => m.role === 'user')
-  // Un seul tour : le besoin initial EST le message courant, le rappeler serait du bruit.
-  if (demandes.length < 2) return ''
-  const premier = (demandes[0]?.content ?? '').trim()
-  if (!premier) return ''
-  const borne =
-    premier.length <= LONGUEUR_BESOIN_RAPPELE
-      ? premier
-      : `${premier.slice(0, LONGUEUR_BESOIN_RAPPELE)}…`
-  return (
-    `BESOIN INITIAL DE CETTE CONVERSATION (rappel injecte par l'app, l'utilisateur ne l'a pas ` +
-    `re-tape) : « ${borne} »\n` +
-    `Ce rappel INFORME, il n'ordonne rien : un fil a le droit de changer de sujet. Mais AVANT de ` +
-    `clore, verifie que ce que tu livres et ce que tu recommandes se rattachent encore a ce ` +
-    `besoin. Si tu t'en eloignes, DIS-LE explicitement dans ta reponse — un travail de bonne ` +
-    `qualite sur autre chose ne vaut pas la demande.`
-  )
-}
-
-/**
  * LES CONSIGNES DU TOUR PRECEDENT, REMISES A UNE SESSION REPRISE (conv-844, 2026-09-24).
  *
  * fix-ok: session reprise = seul `lastUserMessage` part ; une orientation posee pendant un tour
@@ -457,6 +412,45 @@ export function orientationsDuTourPrecedent(history: TurnMessageParts['history']
   )
 }
 
+/**
+ * LES MOTS DE L'UTILISATEUR, ENCADRES (conv-889, 2026-09-30).
+ *
+ * Tout le tour part dans UN seul message de role `user` : etat de l'app, echo de memoire, rappel
+ * d'anciennes conversations, relances automatiques ET la demande. Seul le prefixe `UTILISATEUR:`
+ * distinguait la demande du reste, sans aucune marque de FIN : un mail ou un log colle se fondait dans
+ * ce que l'app ajoute. Anthropic recommande d'envelopper chaque type de contenu dans sa balise
+ * (https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/use-xml-tags).
+ *
+ * Le prefixe `UTILISATEUR:` RESTE, sur la meme ligne : l'extracteur de l'interface
+ * (`renderer/.../human-message.ts`) s'y accroche pour retrouver la demande dans un tour compose.
+ *
+ * Une balise que le texte peut refermer n'encadre rien : un `</message_utilisateur>` present DANS
+ * les mots (colle depuis ce fichier, ou ecrit expres) est neutralise, pour que la fin de la demande
+ * soit toujours celle posee par l'app.
+ */
+const BALISE_DANS_LE_TEXTE = new RegExp(`<(/?)${BALISE_MESSAGE_UTILISATEUR}>`, 'gi')
+
+export function motsUtilisateur(contenu: string): string {
+  const neutre = contenu.replace(BALISE_DANS_LE_TEXTE, `&lt;$1${BALISE_MESSAGE_UTILISATEUR}&gt;`)
+  return `<${BALISE_MESSAGE_UTILISATEUR}>${neutre}</${BALISE_MESSAGE_UTILISATEUR}>`
+}
+
+/**
+ * Les relances automatiques (« SYSTÈME: … ») encadrees a leur tour, au moment de l'envoi.
+ *
+ * Elles sont poussees depuis une quinzaine d'endroits (`agent-pilot.ts`, `chat-turn-messages.ts`,
+ * `shared/outil-pretendu-absent.ts`) : les baliser a la source aurait touche chaque texte et chaque
+ * test qui les cite. Elles s'ouvrent toutes par `SYSTÈME:` ou `SYSTÈME —` (annonces de budget du
+ * tour), donc un seul point d'envoi suffit.
+ */
+export const BALISE_RELANCE_AUTOMATIQUE = 'relance_automatique'
+const OUVERTURE_RELANCE = /^\s*SYSTÈME(\s*:|\s+—)/
+
+export function baliserRelanceAutomatique(segment: string): string {
+  if (!OUVERTURE_RELANCE.test(segment)) return segment
+  return `<${BALISE_RELANCE_AUTOMATIQUE}>\n${segment}\n</${BALISE_RELANCE_AUTOMATIQUE}>`
+}
+
 export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBlock[] {
   const nonVu = parts.compteRenduNonVu?.trim()
   /**
@@ -481,7 +475,10 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
             : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`
         },
         { name: 'orientationsDuTourPrecedent', text: orientationsDuTourPrecedent(parts.history) },
-        { name: 'messageUtilisateur', text: `UTILISATEUR: ${parts.lastUserMessage ?? ''}` }
+        {
+          name: 'messageUtilisateur',
+          text: `UTILISATEUR: ${motsUtilisateur(parts.lastUserMessage ?? '')}`
+        }
       ]
     : [
         { name: 'etatDeLApp', text: `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}` },
@@ -491,7 +488,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'skillBody', text: parts.skillBody ?? '' },
         ...parts.history.map((m, rang) => ({
           name: `historique:${m.role === 'user' ? 'utilisateur' : 'agent'}:${rang}`,
-          text: `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}${nommerPiecesJointes(m.attachments)}`
+          text: `${m.role === 'user' ? `UTILISATEUR: ${motsUtilisateur(m.content)}` : `TOI: ${m.content}`}${nommerPiecesJointes(m.attachments)}`
         }))
       ]
   return nommes.filter((bloc) => bloc.text.trim().length > 0)

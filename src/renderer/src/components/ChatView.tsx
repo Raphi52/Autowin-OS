@@ -866,6 +866,22 @@ export function ChatView({
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [appNotice, setAppNotice] = useState<AppNotice | null>(null)
   /**
+   * ARRÊTS DU MODE AUTO, FIL PAR FIL (conv-891, 2026-09-30). Ils passaient par `appNotice`, un
+   * emplacement UNIQUE pour tout l'écran : la pause levée par conv-885 le 29/09 à 10:47 s'affichait
+   * encore 26 h plus tard au-dessus de conv-890, qui n'attendait rien, sans dire d'où elle venait.
+   * Clé = id de la conversation qui l'a levée ; effacée par ×, par un message de l'utilisateur dans
+   * ce fil, ou par le rallumage du mode auto sur ce fil.
+   */
+  const [arretsAuto, setArretsAuto] = useState<Record<string, string>>({})
+  function effacerArretAuto(conversationId: string): void {
+    setArretsAuto((courant) => {
+      if (!(conversationId in courant)) return courant
+      const suivant = { ...courant }
+      delete suivant[conversationId]
+      return suivant
+    })
+  }
+  /**
    * TRAVAIL FINI, JAMAIS PUBLIE. Mesure du 2026-08-23 : trois travaux termines et prouves ont ete
    * perdus de vue le meme jour, chacun sur une branche que personne n'a fusionnee -- pendant que
    * l'utilisateur ecrivait « T'as toujours pas fais le fond d'ecran de l'accueuil ». Pire : un run
@@ -1696,7 +1712,9 @@ export function ChatView({
     status: DirectiveReceipt['status'],
     // Une REPONSE a une question `ask` emprunte le meme transport qu'une orientation, mais ce
     // n'en est pas une : sans ce drapeau, le fil affichait « ✓ Orienté » sur une reponse.
-    reponse?: boolean
+    reponse?: boolean,
+    /** Pourquoi le texte attend (statut `attente`) — dit par l'app principale quand elle le sait. */
+    attente?: Pick<DirectiveReceipt, 'attenteMotif' | 'commande'>
   ): void {
     // L'ancre doit porter sur le fil TEL QU'AFFICHE : sans ce vidage, les deltas encore en tampon
     // manquaient a l'appel, et le recu se posait AVANT le texte deja lu (un seul bloc au rendu).
@@ -1715,7 +1733,7 @@ export function ChatView({
       const next =
         existing >= 0
           ? receipts.map((receipt, index) =>
-              index === existing ? { ...receipt, status } : receipt
+              index === existing ? { ...receipt, status, ...attente } : receipt
             )
           : [
               ...receipts,
@@ -1723,12 +1741,30 @@ export function ChatView({
                 id: entry.id,
                 text: entry.text,
                 status,
+                ...attente,
                 ...(reponse ? { reponse: true as const } : {}),
                 afterMessageIndex,
                 afterPartIndex,
                 ...(anchorPart?.kind === 'text' ? { afterTextOffset: anchorPart.text.length } : {})
               }
             ]
+      return { ...current, [conversationId]: next }
+    })
+  }
+  /** Retire les reçus « mis de côté » dont le texte vient de quitter la file (voir `setConversationQueue`). */
+  function retirerRecusEnAttente(conversationId: string, textes: string[]): void {
+    const partis = new Set(textes)
+    setDirectiveReceipts((current) => {
+      const receipts = current[conversationId]
+      if (!receipts?.length) return current
+      const next = receipts.filter(
+        (receipt) =>
+          !(
+            (receipt.status === 'attente' || receipt.status === 'failed') &&
+            partis.has(receipt.text)
+          )
+      )
+      if (next.length === receipts.length) return current
       return { ...current, [conversationId]: next }
     })
   }
@@ -1935,8 +1971,16 @@ export function ChatView({
   const nextQueueEntryIdRef = useRef(0)
   const queueRef = useRef<Map<string, QueuedDirective[]>>(new Map())
   function setConversationQueue(id: string, next: QueuedDirective[]): void {
+    const avant = queueRef.current.get(id) ?? []
     if (next.length) queueRef.current.set(id, next)
     else queueRef.current.delete(id)
+    // UN TEXTE QUI QUITTE LA FILE N'ATTEND PLUS RIEN — parti en message, ou rendu au composer par
+    // Stop. Son reçu « Attend la fin du tour » mentirait alors, et doublait le vrai message dans le
+    // fil (conv-890 : message parti à 12:26:29, reçu toujours affiché). Point UNIQUE : les trois
+    // sorties de la file passent toutes par ici.
+    const restants = new Set(next.map((entree) => entree.text))
+    const sortis = avant.filter((entree) => !restants.has(entree.text)).map((e) => e.text)
+    if (sortis.length) retirerRecusEnAttente(id, sortis)
   }
   /**
    * `mode: 'btw'` = « celui-la passe EN DERNIER ». Il ne suffit pas de deplacer l'entree une fois :
@@ -3635,13 +3679,21 @@ export function ChatView({
     // C'est ce qui manquait : le recu ne vivait qu'en memoire de l'ecran, un rechargement l'effacait
     // et le texte disparaissait (conv-38, 2026-09-01).
     let messageEcrit = false
+    // REFUS VOULU ≠ PANNE (conv-891) : l'app principale refuse EXPRÈS d'ajouter une commande de skill
+    // à un tour en cours, et le dit. Seule une exception de l'IPC est une vraie erreur d'envoi.
+    let erreurDEnvoi = false
+    let attente: Pick<DirectiveReceipt, 'attenteMotif' | 'commande'> = {}
     try {
       const issue = await window.api.injectDirective(id, text)
       injected = issue?.ok === true
       messageEcrit = typeof issue?.messageId === 'string' && issue.messageId.length > 0
+      if (!injected && issue?.motif === 'commande' && issue.commande)
+        attente = { attenteMotif: 'commande', commande: issue.commande }
+      else if (!injected && issue?.motif === 'hors-tour') attente = { attenteMotif: 'hors-tour' }
     } catch (error) {
       traceSilentFailure('inject-directive:btw', error)
       injected = false
+      erreurDEnvoi = true
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
     if (!injected) enqueueMessage(id, text, replimode)
@@ -3650,7 +3702,13 @@ export function ChatView({
       retirerDirectiveReceipt(id, entry.id)
       return
     }
-    setDirectiveReceipt(id, entry, injected ? issueDeLInjection(id) : 'failed', reponse)
+    setDirectiveReceipt(
+      id,
+      entry,
+      injected ? issueDeLInjection(id) : erreurDEnvoi ? 'failed' : 'attente',
+      reponse,
+      attente
+    )
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
   function handleBtw(): boolean {
@@ -3870,7 +3928,8 @@ export function ChatView({
       // N'eteint QUE le fil affiche : les autres fils armes gardent leur reglage.
       desarmerAuto(activeId)
       // L'arret DIT sa raison : sans elle, le bouton ∞ s'allumait puis s'eteignait sans un mot.
-      setAppNotice({ text: decision.message })
+      // Rangé dans CE fil : affiché seulement quand il est à l'écran (conv-891).
+      setArretsAuto((courant) => ({ ...courant, [activeId]: decision.message }))
       return
     }
     if (decision.action === 'programmer') {
@@ -4027,6 +4086,8 @@ export function ChatView({
     // est justement celui que ce clic demande d'enchaîner, pas un vieux tour rouvert.
     autoFilAmorceRef.current = null
     autoAllumageManuelRef.current = true
+    // Rallumer = repartir : l'ancien arrêt de ce fil ne décrit plus rien.
+    if (activeId) effacerArretAuto(activeId)
     if (activeId) setAutoConvs((precedent) => new Set(precedent).add(activeId))
   }
 
@@ -4277,6 +4338,8 @@ export function ChatView({
     )
       return
     sendLocksRef.current.add(sendLockKey)
+    // L'utilisateur répond lui-même dans ce fil : la pause du mode auto qui l'y invitait est levée.
+    if (sourceConversationId && !options?.automatique) effacerArretAuto(sourceConversationId)
     // Même filet que l'orientation : le composer va être vidé, ce texte doit exister sur disque
     // AVANT — y compris si la création de la conversation ou l'envoi échoue juste après.
     if (value) journaliserSaisie(sourceConversationId ?? 'nouvelle-conversation', value, 'message')
@@ -6602,6 +6665,20 @@ Cliquer pour choisir une autre branche.`}
                 type="button"
                 onClick={() => setAppNotice(null)}
                 aria-label="Fermer l’avertissement"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {activeId && arretsAuto[activeId] && (
+            <div className="chat-workflow-notice" data-testid="chat-auto-arret" role="alert">
+              <span>
+                {`« ${convs.find((c) => c.id === activeId)?.title || activeId} » — ${arretsAuto[activeId]}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => effacerArretAuto(activeId)}
+                aria-label="Fermer l’avertissement du mode auto"
               >
                 ×
               </button>

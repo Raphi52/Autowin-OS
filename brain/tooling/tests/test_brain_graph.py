@@ -112,12 +112,80 @@ class EntityGraphTests(unittest.TestCase):
             Handler._handle_read(handler, json.dumps({"path": escape}).encode())
             self.assertIn(handler.sent[0], {400, 404}, escape)
 
-    def test_routes_stay_under_the_client_context_bound(self):
+    def test_read_opens_every_note_the_candidate_list_can_name(self):
+        """Mesuré le 2026-09-27 (sonde think, tâche 4) : la liste de candidates proposait
+        `projects/rig-tv/obsidian/decisions/testviewer-responsive.md` — une racine INDEXÉE — et
+        `/read` la refusait (« path must name a note under knowledge/ »). Ce que la liste nomme doit
+        pouvoir s'ouvrir ; ce qu'elle ne peut pas nommer (inbox/, hors racine) reste fermé."""
+        obsidian = self.root / "projects" / "rig-demo" / "obsidian" / "decisions"
+        obsidian.mkdir(parents=True)
+        (obsidian / "Responsive.md").write_text("# R\nNOTE-PROJET", encoding="utf-8")
+        (self.root / "inbox" / "draft.md").write_text("brouillon", encoding="utf-8")
+        handler = FakeHandler(self.root)
+        handler.allowed_roots = [
+            (self.root / "knowledge").resolve(),
+            (self.root / "projects" / "rig-demo" / "obsidian").resolve(),
+        ]
+        Handler._handle_read(
+            handler,
+            json.dumps({"path": "projects/rig-demo/obsidian/decisions/Responsive.md", "entier": True}).encode(),
+        )
+        self.assertEqual(handler.sent[0], 200)
+        self.assertIn("NOTE-PROJET", verified_context(handler.sent[1], "t"))
+        Handler._handle_read(handler, json.dumps({"path": "knowledge/domain/a.md"}).encode())
+        self.assertEqual(handler.sent[0], 200)
+        for ferme in (
+            "inbox/draft.md",
+            "projects/rig-demo/graphify-out/graph.json",
+            "projects/rig-demo/obsidian/../../../secret.md",
+            "projects/autre/obsidian/x.md",
+        ):
+            Handler._handle_read(handler, json.dumps({"path": ferme}).encode())
+            self.assertIn(handler.sent[0], {400, 404}, ferme)
+
+    def test_read_accepts_every_path_form_a_model_may_send(self):
+        """La consigne des candidates donne la RACINE du Brain au modèle : il peut rappeler une note
+        par son chemin absolu, avec des antislashs ou une autre casse. Ce qui désigne une note
+        servie doit s'ouvrir ; ce qui sort des racines reste fermé, même en absolu."""
+        obsidian = self.root / "projects" / "rig-demo" / "obsidian" / "decisions"
+        obsidian.mkdir(parents=True)
+        (obsidian / "Responsive.md").write_text("# R\nNOTE-PROJET", encoding="utf-8")
+        handler = FakeHandler(self.root)
+        handler.allowed_roots = [
+            (self.root / "knowledge").resolve(),
+            (self.root / "projects" / "rig-demo" / "obsidian").resolve(),
+        ]
+        racine = str(self.root)
+        for forme in (
+            "projects\\rig-demo\\obsidian\\decisions\\Responsive.md",
+            "PROJECTS/rig-demo/obsidian/decisions/responsive.md",
+            "  projects/rig-demo/obsidian/decisions/Responsive.md  ",
+            racine + "\\projects\\rig-demo\\obsidian\\decisions\\Responsive.md",
+            racine.replace("\\", "/") + "/projects/rig-demo/obsidian/decisions/Responsive.md",
+            racine + "\\knowledge\\domain\\a.md",
+        ):
+            Handler._handle_read(handler, json.dumps({"path": forme, "entier": True}).encode())
+            self.assertEqual(handler.sent[0], 200, forme)
+        for ferme in (racine + "\\inbox\\draft.md", racine + "\\secret.md", "C:\\Windows\\win.ini"):
+            Handler._handle_read(handler, json.dumps({"path": ferme}).encode())
+            self.assertIn(handler.sent[0], {400, 404}, ferme)
+
+    def test_read_returns_the_whole_note_and_graph_stays_bounded(self):
         big = self.root / "knowledge" / "domain" / "big.md"
-        big.write_text("x" * 10_000 + "".join(f"[[n{i}]]" for i in range(300)), encoding="utf-8")
+        big.write_text("x" * 10_000 + "".join(f"[[n{i}]]" for i in range(300)) + "FIN-DE-NOTE",
+                       encoding="utf-8")
         for i in range(300):
             (big.parent / f"n{i}.md").write_text("# n\n", encoding="utf-8")
         handler = FakeHandler(self.root)
+        Handler._handle_read(
+            handler, json.dumps({"path": "knowledge/domain/big.md", "entier": True}).encode()
+        )
+        # « Ouvrir » une note = la note ENTIÈRE, fin comprise : plus aucune coupe à 3 000.
+        read = verified_context(handler.sent[1], "t")
+        self.assertGreater(len(read), 10_000)
+        self.assertTrue(read.endswith("FIN-DE-NOTE"))
+        # Un client ANTÉRIEUR (sans le drapeau) rejette tout contexte > 3 000 : il garde l'ancienne
+        # coupe, sinon chaque relecture longue échouerait chez lui.
         Handler._handle_read(handler, json.dumps({"path": "knowledge/domain/big.md"}).encode())
         self.assertLessEqual(len(verified_context(handler.sent[1], "t")), 3_000)
         Handler._handle_graph(handler, json.dumps({"entity": "big", "direction": "dependencies"}).encode())

@@ -454,3 +454,64 @@ describe('ClaudeCliAdapter — la fin d’une action dit si elle a échoué', ()
     expect(statuts.find((s) => s.startsWith('Read terminé'))).toMatch(/^Read terminé - \d+ s$/)
   })
 })
+
+/**
+ * CE QU'UNE LECTURE A RENDU — mesure du 2026-09-27 (sonde `probe-think-brain.mts`) : un nœud `think`
+ * lit des notes du Brain par `Read` et fouille le Brain par `Grep`. La preuve gardait les 20 000
+ * DERNIERS caractères du résultat et rien du `Grep` (ni dossier, ni motif) : impossible de dire ce
+ * qui avait été lu, ni combien.
+ */
+describe('ClaudeCliAdapter — une lecture garde sa longueur totale, une recherche son dossier et son motif', () => {
+  it('outputChars = longueur ENTIÈRE du résultat ; Grep porte searchPath et pattern', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'r1',
+              name: 'Read',
+              input: { file_path: 'K:\\b\\knowledge\\a.md' }
+            },
+            {
+              type: 'tool_use',
+              id: 'g1',
+              name: 'Grep',
+              input: { pattern: 'Ult_Heure', path: 'K:\\b\\knowledge' }
+            }
+          ]
+        }
+      },
+      {
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 'r1', content: 'x'.repeat(25_000) },
+            { type: 'tool_result', tool_use_id: 'g1', content: 'a.md:3: Ult_Heure' }
+          ]
+        }
+      },
+      succes
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+    // Les preuves voyagent dans la valeur FINALE du générateur (`return`), pas dans un morceau.
+    const preuves = ((step.value as { executionEvidence?: Array<Record<string, unknown>> })
+      .executionEvidence ?? []) as Array<Record<string, unknown>>
+    const lecture = preuves.find((p) => p.type === 'Read')
+    const recherche = preuves.find((p) => p.type === 'Grep')
+    expect(lecture).toMatchObject({ path: 'K:\\b\\knowledge\\a.md', outputChars: 25_000 })
+    expect(String(lecture?.stdout).length).toBe(20_000)
+    expect(recherche).toMatchObject({
+      searchPath: 'K:\\b\\knowledge',
+      pattern: 'Ult_Heure',
+      outputChars: 17
+    })
+    // La recherche ne devient PAS un fichier touché : aucun `path`/`paths` pour un Grep.
+    expect(recherche?.path).toBeUndefined()
+    expect(recherche?.paths).toBeUndefined()
+  })
+})

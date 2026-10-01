@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PERSONAS, personaInstruction, personasFor } from './persona'
+import { anglesDuPanelScout, PERSONAS, personaInstruction, personasFor } from './persona'
 
 /**
  * Le piège que ces tests existent pour fermer : une persona AFFICHÉE mais jamais injectée. On aurait
@@ -46,6 +46,27 @@ describe('injection de la persona', () => {
       .flat()
       .map((p) => p.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('un panel scout reçoit un angle distinct par membre, le web en premier', () => {
+    const panel = anglesDuPanelScout([{ model: 'a' }, { model: 'b' }, { model: 'c' }])
+    expect(panel.map((m) => m.persona)).toEqual(['externe', 'rupture', 'usage'])
+    // Le web existe comme angle, et son bloc dit de citer une URL datée.
+    expect(personaInstruction('externe')).toMatch(/URL/u)
+    expect(personaInstruction('externe')).toMatch(/30 à 90/u)
+  })
+
+  it('un angle déjà posé est gardé et n’est pas redistribué ; un membre seul reste tel quel', () => {
+    const panel = anglesDuPanelScout([{ persona: 'externe' }, {}, {}])
+    expect(panel.map((m) => m.persona)).toEqual(['externe', 'rupture', 'usage'])
+    expect(anglesDuPanelScout([{ model: 'seul' }])).toEqual([{ model: 'seul' }])
+    expect(anglesDuPanelScout([])).toEqual([])
+  })
+
+  it('au-delà du catalogue, la répartition reboucle sans laisser de membre sans angle', () => {
+    const panel = anglesDuPanelScout(Array.from({ length: 7 }, () => ({})))
+    expect(panel.every((m) => Boolean(m.persona))).toBe(true)
+    expect(new Set(panel.slice(0, 5).map((m) => m.persona)).size).toBe(5)
   })
 
   it('une phase sans catalogue rend une liste vide, jamais une erreur', () => {

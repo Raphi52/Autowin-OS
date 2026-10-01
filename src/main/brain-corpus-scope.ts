@@ -40,7 +40,6 @@ import { basename } from 'node:path'
 import { renderStructuredBrainContext } from './brain-protocol'
 import { retrieveBrainContext, type BrainRetrievalResult } from './brain-retrieval'
 import type { BrainNoteSearchResult } from './viz/fs-brains'
-/** En-tête d'une source : `### Source N — <chemin>`. */
 
 let invalidOverrideWarningEmitted = false
 
@@ -62,21 +61,14 @@ function warnInvalidCorpusOverride(): void {
   })
 }
 
-/** Slug comparable d'un chemin de workspace : dernier segment, minuscules, espaces en tirets. */
 /**
- * NOM DU DÉPÔT TEL QU'IL S'ÉCRIT — pour PARLER au Brain, pas pour nommer un fichier.
+ * Slug comparable d'un chemin de workspace : dernier segment, minuscules, espaces en tirets.
  *
- * MESURE 2026-09-09 : la requête d'empreinte de `think` partait avec le slug aplati `autowinos`
- * (dossier `D:\AutoWinOS`). Ce mot n'existe dans AUCUNE note du Brain — elles écrivent
- * « Autowin OS » ou « autowin-os » — donc la recherche sémantique ne remontait aucun candidat
- * au-dessus du seuil et l'empreinte revenait VIDE : 60 vides sur 195 appels, et plus une seule
- * trouvée après le 05/09. Rejoué à l'identique, `AutoWinOS` et `autowin-os` remontent la note de
- * cap produit ; seul `autowinos` échoue. Le slug reste bon pour NOMMER, jamais pour INTERROGER.
+ * Bon pour NOMMER, jamais pour INTERROGER le Brain : mesuré le 2026-09-09, le slug aplati
+ * `autowinos` n'existe dans aucune note (elles écrivent « Autowin OS » ou « autowin-os ») et une
+ * question qui le portait ne remontait rien. (`workspaceLabel`, qui servait à la question
+ * d'empreinte, a disparu avec elle le 2026-09-27.)
  */
-export function workspaceLabel(workspacePath: string): string {
-  return basename(workspacePath.replace(/[\\/]+$/, '')).trim()
-}
-
 export function workspaceSlug(workspacePath: string): string {
   const name = basename(workspacePath.replace(/[\\/]+$/, ''))
   return name

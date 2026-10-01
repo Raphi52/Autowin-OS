@@ -28,10 +28,10 @@ import type { WorkflowProfile } from './workflow-profiles'
  * un pipeline ». Lui ajouter deux nœuds contredirait la seule chose qu'il dit faire. Le coût est réel
  * et assumé ailleurs : deux appels fournisseur de plus par run, pour du travail substantiel.
  *
- * Le `think` en tête RECOUVRE PARTIELLEMENT le chargement d'empreinte déjà câblé dans chaque run
- * (`orchestrator.ts`, rôle `think`). Ce n'est pas un doublon : le câblage récupère l'empreinte
- * DURABLE du dépôt, la skill va chercher le contexte de LA TÂCHE — mémoire, code, décisions passées.
- * Le recouvrement est nommé ici plutôt que découvert plus tard.
+ * Le `think` en tête recouvrait partiellement un chargement d'« empreinte du dépôt » câblé dans
+ * chaque run. Ce chargement a été RETIRÉ le 2026-09-27 : sa question figée ramenait les mêmes notes
+ * hors sujet. Le contexte de la tâche vient désormais de la liste de candidates injectée en tête de
+ * run et de ce nœud, qui ouvre en entier ce qu'il juge nécessaire.
  */
 
 const agentStudio = (persona?: string): { persona?: string } => ({

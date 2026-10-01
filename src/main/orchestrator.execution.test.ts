@@ -1,7 +1,11 @@
-import { createHmac } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { CostAggregator } from './dashboards/cost'
-import { bindingDePhaseValide, instantaneAssaini, Orchestrator } from './orchestrator'
+import {
+  bindingDePhaseValide,
+  consigneCandidatesBrain,
+  instantaneAssaini,
+  Orchestrator
+} from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
 import type {
   ExecutionEvidence,
@@ -17,7 +21,6 @@ import { TrustLedger } from './trust/ledger'
 import { STYLE_CLOTURE_CHAT, STYLE_TON } from './response-style'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 import { forgetEcho, noteRemembered } from './session-memory-echo'
-import { retrieveBrainContext } from './brain-retrieval'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
@@ -283,24 +286,24 @@ describe('Orchestrator execution contract', () => {
     expect(prompt).toContain('AUTOWIN_SOURCE_INTERDITE')
   })
 
-  it('n injecte aucun caractère quand un contexte signé dépasse le budget', async () => {
-    const token = 'orchestrator-brain-budget-token'.repeat(2)
-    const context = `oversized-marker-${'x'.repeat(3_001)}`
-    const authenticated = JSON.stringify({ context, navigation: null })
-    const fetchFn = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            service: 'amitel-brain',
-            protocol: 2,
-            authenticated,
-            signature: createHmac('sha256', token)
-              .update(`amitel-brain\n2\n${authenticated}`, 'utf8')
-              .digest('hex')
-          }),
-          { status: 200 }
-        )
-    ) as unknown as typeof fetch
+  it('injecte la LISTE de candidates entière et dit comment ouvrir les notes', async () => {
+    /*
+     * Règle de l'utilisateur (2026-09-27) : pas de budget, on récupère le nécessaire. Le run demande
+     * donc la liste des notes candidates (`mode: 'candidates'`), l'injecte ENTIÈRE — même au-delà de
+     * l'ancienne borne de 2 000 / 3 000 caractères — et dit à chaque phase comment ouvrir les notes :
+     * `brain_read`, ou le fichier sous la RACINE du Brain. Et il ne fait plus qu'UN appel : l'empreinte
+     * à question figée a disparu.
+     */
+    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\nNotes candidates.\n\n'
+    const sources = Array.from({ length: 20 }, (_, i) => ({
+      path: `knowledge/domain/note-${i}.md`,
+      content: `### Candidate ${i + 1} — Note ${i} ${'intitulé '.repeat(15)}\n\`knowledge/domain/note-${i}.md\` · 3 Ko`
+    }))
+    sources[19].content += ' DERNIERE_CANDIDATE'
+    const context = preamble + sources.map((s) => s.content).join('\n\n---\n\n')
+    expect(context.length).toBeGreaterThan(3_000)
+    const racine = '\\\\ged2\\rig\\Projets IA\\Amitel Brain'
+    const vus: Array<{ query: string; mode?: string }> = []
     const provider = new CapturingProvider()
     const brainEvents: Array<{ kind?: string; status: string; injectedChars: number }> = []
     const orchestrator = new Orchestrator({
@@ -312,41 +315,45 @@ describe('Orchestrator execution contract', () => {
       cost: new CostAggregator(),
       trust: new TrustLedger(),
       executionWorkspace: process.cwd(),
-      retrieveBrain: (query, options) =>
-        retrieveBrainContext(query, {
-          ...options,
-          env: { AMITEL_BRAIN_TOKEN: token } as NodeJS.ProcessEnv,
-          fetchFn
-        })
+      retrieveBrain: async (query, options) => {
+        vus.push({ query, mode: options?.mode })
+        return {
+          context,
+          status: 'found',
+          structuredContext: { preamble, sources },
+          navigation: { query, minDense: 0.25, root: racine, candidates: [] }
+        }
+      }
     })
 
     await orchestrator.run(
-      'analyse le budget Brain en lecture seule sans le modifier',
+      'analyse la mémoire en lecture seule sans la modifier',
       undefined,
       undefined,
       undefined,
       undefined,
       '',
       [],
-      'conv-brain-budget',
+      'conv-brain-liste',
       undefined,
       (event) => brainEvents.push(event)
     )
 
     const prompt = provider.messages[0].map((message) => message.content).join('\n')
-    expect(prompt).not.toContain('oversized-marker')
-    /*
-     * DEUX appels Brain, pas un. Ce test attendait `toHaveLength(1)` et il avait tort : le run en
-     * emet deux — la recuperation par tache, puis l'empreinte du depot (skill `think`). Le second
-     * partait deja sur le reseau, il n'etait simplement notifie a personne, si bien que l'assertion
-     * epinglait le SOUS-COMPTE au lieu de le detecter. On verifie donc les deux, par leur `kind`
-     * plutot que par leur rang.
-     */
-    expect(brainEvents.map((event) => event.kind)).toEqual(['automatic', 'empreinte'])
-    expect(brainEvents.find((event) => event.kind === 'automatic')).toMatchObject({
-      status: 'invalid',
-      injectedChars: 0
-    })
+    expect(vus).toHaveLength(1)
+    expect(vus[0].mode).toBe('candidates')
+    expect(prompt).toContain('DERNIERE_CANDIDATE')
+    expect(prompt).toContain(consigneCandidatesBrain(racine))
+    expect(prompt).not.toContain('EMPREINTE DU DÉPÔT')
+    expect(brainEvents.map((event) => event.kind)).toEqual(['automatic'])
+    expect(brainEvents[0]).toMatchObject({ status: 'found', injectedChars: context.length })
+  })
+
+  it('la consigne donne la racine quand elle est connue, et brain_read seul sinon', () => {
+    expect(consigneCandidatesBrain('\\\\ged2\\Brain')).toContain('`\\\\ged2\\Brain/<chemin>`')
+    expect(consigneCandidatesBrain('\\\\ged2\\Brain')).toContain('EN ENTIER')
+    expect(consigneCandidatesBrain(undefined)).toContain('`brain_read`')
+    expect(consigneCandidatesBrain(undefined)).not.toContain('<chemin>')
   })
 
   it('notifie la récupération Brain avant une erreur ultérieure du provider', async () => {
@@ -378,9 +385,9 @@ describe('Orchestrator execution contract', () => {
       )
     ).rejects.toThrow('échec provider après récupération Brain')
 
-    // La recuperation par tache ET l'empreinte du depot sont toutes deux notifiees AVANT que le
-    // provider echoue : c'est ce que ce test garantit — l'echec ne doit effacer aucun des deux.
-    expect(brainEvents.map((event) => event.kind)).toEqual(['automatic', 'empreinte'])
+    // La recuperation par tache est notifiee AVANT que le provider echoue : l'echec ne doit pas
+    // l'effacer. (L'empreinte du depot, second appel jusqu'au 2026-09-27, a ete retiree.)
+    expect(brainEvents.map((event) => event.kind)).toEqual(['automatic'])
     expect(brainEvents.every((event) => event.injectedChars >= 0)).toBe(true)
   })
 

@@ -20,10 +20,12 @@ Si la cible n'est pas la bonne, remplace uniquement les deux chemins de la premi
 
 ## Pourquoi ces phrases
 
+Un scout lancé par l'app ne lit pas `SKILL.md` : il reçoit la consigne de `src/main/phase-briefs.ts`. Chaque levier doit donc exister dans les deux (`src/main/scout-orientation.test.ts`).
+
 | Phrase | Effet réel | Où c'est écrit |
 |---|---|---|
-| « fresh vision » | fait passer le quota de pistes ambitieuses de ~30 % à ≥50 % | `SKILL.md`, « Coverage dial » |
-| « refais un tour si rien de fort ne survit » | déclenche l'élargissement — le remède direct à « pas convaincant » | `SKILL.md`, règle 2b |
-| « 30 à 90 jours, avec la source » | active la lentille prior-art, sinon optionnelle | `SKILL.md`, lentille web |
-| « `fichier:ligne` réellement ouvert » | supprime les pistes déduites, plafonnées à 50 | `SKILL.md`, plafond de preuve |
+| « fresh vision » | fait passer le quota de pistes ambitieuses de ~30 % à ≥50 % | `SKILL.md`, « Coverage dial » ; dans l'app, `src/main/phase-briefs.ts` (Angles) |
+| « refais un tour si rien de fort ne survit » | déclenche l'élargissement — le remède direct à « pas convaincant » | `SKILL.md`, règle 2b ; dans l'app, `phase-briefs.ts` (Angles) |
+| « 30 à 90 jours, avec la source » | active la lentille prior-art, sinon optionnelle | `SKILL.md`, lentille web ; dans l'app, `phase-briefs.ts` (recherche web datée) |
+| « `fichier:ligne` réellement ouvert » | supprime les pistes déduites, plafonnées à 50 | `SKILL.md`, plafond de preuve ; dans l'app, aussi appliqué en code (`src/main/scout-plafond.ts`) |
 | « une seule ligne `CIBLE:` » | la machine ne lit que la première ; sans elle rien n'est repris | `src/main/scout-cible.ts` |

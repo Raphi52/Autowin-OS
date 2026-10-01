@@ -60,7 +60,12 @@ describe('workflow sidebar header', () => {
     )
     // Le titre a ete retire du balisage : sa regle ne doit pas survivre en CSS mort.
     expect(css).not.toMatch(/\.workflow-panel-title/)
-    expect(css).toMatch(/\.workflow-panel-actions\s*{[^}]*width:\s*56px;[^}]*flex:\s*none/s)
+    // 56 -> 28 px (conv-770, 2026-09-28) : la barre portait DEUX boutons de 28 px ; le bouton
+    // « Rafraîchir » est parti sur demande du 2026-09-26 (WorkflowsPanel.test.tsx : seule la
+    // fermeture reste). La largeur fixe doit valoir UNE colonne, exactement celle de la grille.
+    expect(css).toMatch(
+      /\.workflow-panel-actions\s*{[^}]*width:\s*28px;[^}]*flex:\s*none;[^}]*grid-template-columns:\s*28px;/s
+    )
     // Les onglets, eux, ont bien leur traitement : souligne actif, aucun fond opaque.
     // Le souligne actif est rattache au jeton or (plus jamais #d4a94f en dur) :
     // il suit ainsi les huit themes au lieu de rester fige en sombre.

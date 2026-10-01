@@ -458,11 +458,13 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
 export function libelleDuPassageDeReparation(
   rang: number,
   plafond: number,
-  jusquAuVert = false
+  jusquAuVert = false,
+  // La phase REJOUEE : `build` d'ordinaire, la phase nommee quand la demande en nomme une (conv-767).
+  phase = 'build'
 ): string {
   // conv-35 : en mode « jusqu'au vert » (conv-844) le plafond ne borne PAS la boucle ; afficher
   // « 98/24 (dernier autorise) » mentait. On affiche alors le rang seul.
-  if (jusquAuVert) return `Réparation ${rang} — nouveau passage de build (jusqu'au vert, sans plafond).`
+  if (jusquAuVert) return `Réparation ${rang} — nouveau passage de ${phase} (jusqu'au vert, sans plafond).`
   const suffixe = rang >= plafond ? ' (dernier autorise)' : ''
-  return `Réparation ${rang}/${plafond} — nouveau passage de build${suffixe}.`
+  return `Réparation ${rang}/${plafond} — nouveau passage de ${phase}${suffixe}.`
 }

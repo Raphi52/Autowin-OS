@@ -275,7 +275,12 @@ describe('SourceControlPane (prompt-first)', () => {
           at: '2026-09-26T12:00:00.000Z',
           source: 'chat',
           project: { status: 'pushed', branch: 'main', files: 2, mode: 'direct' },
-          exclus: [{ path: 'src/partage.ts', motif: 'touche-par-un-autre-fil' }]
+          exclus: [
+            { path: 'src/partage.ts', motif: 'touche-par-un-autre-fil' },
+            // Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que rien le dise.
+            { path: 'src/b.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 2 },
+            { path: 'src/c.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 1 }
+          ]
         }
       })
     await render()
@@ -286,10 +291,125 @@ describe('SourceControlPane (prompt-first)', () => {
     // Un tour de chat ne publie jamais le Brain : aucune ligne ne doit le laisser croire.
     expect(last).not.toContain('Brain')
     expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
-      'Laissé en attente · src/partage.ts (touché aussi par un autre fil)'
+      'Laissé en attente · src/partage.ts (touché aussi par un autre fil), ' +
+        'src/b.ts (déjà modifié avant le tour, 2 lignes non réclamées), ' +
+        'src/c.ts (déjà modifié avant le tour, 1 ligne non réclamée)'
     )
     const toggle = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
     expect(toggle.title).toContain('chaque tour de chat')
+  })
+
+  it('un tour bloqué par des tests ROUGES dit lesquels, et rien n’est annoncé comme poussé', async () => {
+    // Mesuré le 2026-10-01 : `b6d2a3fc` a été poussé sans test et a laissé main rouge 20 h. Les tests
+    // sont désormais rejoués avant de pousser ; le panneau doit dire pourquoi rien n'est parti.
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-892 · tour b6d2a3fc',
+          branch: 'auto/conv-892-b6d2a3fc',
+          at: '2026-10-01T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'skipped', reason: 'tests-rouges', detail: '2 test(s) en échec' },
+          exclus: [
+            {
+              path: 'src/main/index.ts',
+              motif: 'tests-rouges',
+              testsEnEchec: ['src/main/chat-ipc-contract.test.ts']
+            }
+          ],
+          verification: {
+            statut: 'echec',
+            commande: 'vitest related src/main/index.ts --run',
+            detail: '2 test(s) en échec',
+            testsEnEchec: ['src/main/chat-ipc-contract.test.ts']
+          }
+        }
+      })
+    await render()
+    await openWorkspaceView()
+
+    const last = container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent ?? ''
+    expect(last).toContain('Projet · non publié · tests rouges')
+    expect(last).not.toContain('poussé')
+    expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
+      'Laissé en attente · src/main/index.ts (tests rouges : src/main/chat-ipc-contract.test.ts)'
+    )
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests rejoués avant de pousser · 2 test(s) en échec'
+    )
+  })
+
+  it('un tour publié dit combien de tests ont été rejoués, ou pourquoi aucun ne l’a été', async () => {
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    let verification: Record<string, unknown> = {
+      statut: 'vert',
+      commande: 'vitest related src/a.ts --run',
+      testsJoues: 12
+    }
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-1 · tour aaaaaaaa',
+          branch: 'auto/conv-1-aaaaaaaa',
+          at: '2026-10-01T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'pushed', branch: 'main', files: 1, mode: 'direct' },
+          verification
+        }
+      })
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests rejoués avant de pousser · 12 verts'
+    )
+
+    // Second rendu, sur une racine neuve (même préparation que le `beforeEach`).
+    act(() => root.unmount())
+    container.remove()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    verification = { statut: 'non-verifie', raison: 'aucun test ciblable pour notes.md' }
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests non rejoués · aucun test ciblable pour notes.md'
+    )
+  })
+
+  it('une suite rouge sous charge mais verte seule est NOMMÉE, jamais tue', async () => {
+    // Mesuré le 2026-10-01 : `moteur-perime-cablage.test.ts` échoue dans les 1 555 tests de la portée
+    // de `index.ts` et passe seul. La publication part ; le panneau doit le dire.
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-1 · tour bbbbbbbb',
+          branch: 'auto/conv-1-bbbbbbbb',
+          at: '2026-10-01T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'pushed', branch: 'main', files: 1, mode: 'direct' },
+          verification: {
+            statut: 'vert',
+            commande: 'vitest related src/main/index.ts --run',
+            testsJoues: 1555,
+            instablesSousCharge: ['src/main/moteur-perime-cablage.test.ts']
+          }
+        }
+      })
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests rejoués avant de pousser · 1555 verts — rouge sous charge, vert seul : ' +
+        'src/main/moteur-perime-cablage.test.ts'
+    )
   })
 
   it('rafraichit le resultat auto-close quand une publication differee se termine', async () => {
@@ -766,5 +886,181 @@ describe('etapesGit', () => {
   it('main propre et synchronisé : aucune étape', async () => {
     const { etapesGit } = await import('./etapes-git')
     expect(etapesGit({ branch: 'main', ahead: 0, behind: 0, changes: [] })).toEqual([])
+  })
+})
+
+describe('SourceControlPane — relecture ligne à ligne envoyée à l’agent', () => {
+  const DIFF_REL = 'diff --git a/x b/x\n@@ -5,2 +5,2 @@\n garde()\n-ancien()\n+nouveau()'
+  const par = (id: string): HTMLElement | null =>
+    container.querySelector(`[data-testid="${id}"]`) as HTMLElement | null
+
+  async function ouvrirPremierDiff(): Promise<void> {
+    await act(async () => {
+      ;(par('sc-file') as HTMLDivElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+  function commenterDerniereLigne(texte: string): void {
+    const boutons = container.querySelectorAll<HTMLButtonElement>('[data-testid="diff-commenter"]')
+    act(() => boutons[boutons.length - 1].click())
+    const zone = par('diff-editeur-texte') as HTMLTextAreaElement
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+        zone,
+        texte
+      )
+      zone.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => (par('diff-editeur-ajouter') as HTMLButtonElement).click())
+  }
+
+  it('un commentaire posé apparaît dans la barre ; « Envoyer » part en UN message fichier:ligne + texte cité', async () => {
+    mockApi(GIT, DIFF_REL)
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    expect(par('sc-relecture')).toBeNull()
+    await ouvrirPremierDiff()
+    commenterDerniereLigne('renomme en nouveauNom()')
+    expect(par('sc-relecture')?.textContent).toContain('1 commentaire sur 1 fichier')
+    expect(par('diff-comment')?.textContent).toContain('renomme en nouveauNom()')
+    expect(onSendPrompt).not.toHaveBeenCalled()
+    act(() => (par('sc-relecture-envoyer') as HTMLButtonElement).click())
+    expect(onSendPrompt).toHaveBeenCalledTimes(1)
+    const message = String(onSendPrompt.mock.calls[0][0])
+    expect(message).toContain('1. src/main/index.ts:6\n')
+    expect(message).toContain('+nouveau()    ⟵ ici')
+    expect(message).toContain('Commentaire : renomme en nouveauNom()')
+    // Le lot envoyé quitte le brouillon, mais reste récupérable si l'agent n'a rien reçu.
+    expect(par('sc-relecture')).toBeNull()
+    act(() => (par('sc-relecture-remettre') as HTMLButtonElement).click())
+    expect(par('sc-relecture')?.textContent).toContain('1 commentaire')
+  })
+
+  it('la relecture survit au démontage du panneau (changement d’onglet) et reste propre à SA conversation', async () => {
+    mockApi(GIT, DIFF_REL)
+    await render(vi.fn(), 'conv-a')
+    await ouvrirPremierDiff()
+    commenterDerniereLigne('à revoir')
+    act(() => root.unmount())
+    root = createRoot(container)
+    await render(vi.fn(), 'conv-a')
+    expect(par('sc-relecture')?.textContent).toContain('1 commentaire')
+    await render(vi.fn(), 'conv-b')
+    expect(par('sc-relecture')).toBeNull()
+  })
+
+  it('« Tout effacer » demande un second clic avant de perdre les commentaires', async () => {
+    mockApi(GIT, DIFF_REL)
+    await render(vi.fn())
+    await ouvrirPremierDiff()
+    commenterDerniereLigne('x')
+    const effacer = (): HTMLButtonElement => par('sc-relecture-effacer') as HTMLButtonElement
+    act(() => effacer().click())
+    expect(par('sc-relecture')).not.toBeNull()
+    expect(effacer().textContent).toContain('Confirmer')
+    act(() => effacer().click())
+    expect(par('sc-relecture')).toBeNull()
+  })
+
+  /** Branche l'écoute des événements du tour et rend de quoi en émettre un. */
+  function brancherEvenements(): { emettre: (e: unknown) => Promise<void> } {
+    let recu: ((e: unknown) => void) | null = null
+    ;(window as unknown as { api: { onPilotEvent: unknown } }).api.onPilotEvent = (
+      cb: (e: unknown) => void
+    ) => {
+      recu = cb
+      return () => {}
+    }
+    return {
+      emettre: async (e) => {
+        await act(async () => {
+          recu?.(e)
+          for (let i = 0; i < 4; i++) await Promise.resolve()
+        })
+      }
+    }
+  }
+
+  it('une relecture PENDANT le tour garde le diff ouvert, le met à jour et garde le commentaire en cours', async () => {
+    mockApi(GIT, DIFF_REL)
+    const { emettre } = brancherEvenements()
+    await render(vi.fn())
+    await ouvrirPremierDiff()
+    const boutons = container.querySelectorAll<HTMLButtonElement>('[data-testid="diff-commenter"]')
+    act(() => boutons[boutons.length - 1].click())
+    const zone = par('diff-editeur-texte') as HTMLTextAreaElement
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+        zone,
+        'brouillon en cours'
+      )
+      zone.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // L'agent retouche le fichier : le diff relu porte une ligne de plus.
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.conversationGitDiff = (conversationId: string, path: string, workspaceRoot: string) => {
+      calls.conversationDiffArgs.push([conversationId, path, workspaceRoot])
+      return Promise.resolve({
+        available: true,
+        diff: 'diff --git a/x b/x\n@@ -5,2 +5,3 @@\n garde()\n-ancien()\n+nouveau()\n+encore()'
+      })
+    }
+    await emettre({ conversationId: 'conv-a', kind: 'done' })
+    expect(calls.conversationArgs).toEqual(['conv-a', 'conv-a'])
+    expect(par('diff-view')).not.toBeNull()
+    expect(par('diff-view')?.textContent).toContain('+encore()')
+    expect(calls.conversationDiffArgs).toHaveLength(2)
+    expect((par('diff-editeur-texte') as HTMLTextAreaElement | null)?.value).toBe(
+      'brouillon en cours'
+    )
+  })
+
+  it('un fichier qui SORT de la liste à la relecture referme son diff', async () => {
+    mockApi(GIT, DIFF_REL)
+    const { emettre } = brancherEvenements()
+    await render(vi.fn())
+    await ouvrirPremierDiff()
+    expect(par('diff-view')).not.toBeNull()
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.conversationGitState = () =>
+      Promise.resolve({ ...GIT, state: { ...GIT.state!, changes: GIT.state!.changes.slice(1) } })
+    await emettre({ conversationId: 'conv-a', kind: 'done' })
+    expect(par('diff-view')).toBeNull()
+  })
+
+  it('le bouton « Lancer » est monté dans la vue Fichiers, et seulement là', async () => {
+    mockApi(GIT, DIFF_REL)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    const etats: string[] = []
+    api.lancementEtat = (id: string) => {
+      etats.push(id)
+      return Promise.resolve({
+        statut: 'arrete',
+        lignes: [],
+        commande: 'npm run dev',
+        source: 'autowin'
+      })
+    }
+    api.onLancement = () => () => {}
+    await render(vi.fn(), 'conv-lance')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(etats).toEqual(['conv-lance'])
+    expect(par('sc-lancement-commande')?.textContent).toBe('npm run dev')
+    await act(async () => {
+      ;(par('sc-view-workspace') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+    expect(par('sc-lancement')).toBeNull()
+  })
+
+  it('sans canal vers l’agent, le diff reste en lecture seule', async () => {
+    mockApi(GIT, DIFF_REL)
+    await render(undefined)
+    await ouvrirPremierDiff()
+    expect(par('diff-view')).not.toBeNull()
+    expect(par('diff-commenter')).toBeNull()
   })
 })

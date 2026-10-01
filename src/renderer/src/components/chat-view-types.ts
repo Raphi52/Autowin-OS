@@ -198,7 +198,16 @@ export type DirectiveReceipt = {
    * a oriente pendant un run et « rien ne se passe » — a l'epoque, litteralement, rien ne pouvait
    * lire sa directive.
    */
-  status: 'sending' | 'sent' | 'differee' | 'failed'
+  /**
+   * `attente` : le texte n'a PAS rejoint le tour en cours, il attend sa fin en file et partira seul
+   * juste après. Ce n'est pas une panne : « ⚠ Échec — remis en file » le disait pourtant, en rouge,
+   * sur un refus voulu (conv-891, 2026-09-30). `failed` ne sert plus qu'à une vraie erreur d'envoi.
+   */
+  status: 'sending' | 'sent' | 'differee' | 'attente' | 'failed'
+  /** Pourquoi le texte attend, quand l'app principale l'a dit (`attente` seulement). */
+  attenteMotif?: 'commande' | 'hors-tour'
+  /** La commande de skill lue dans le texte (`scout`…), quand `attenteMotif` vaut `commande`. */
+  commande?: string
   afterMessageIndex: number
   afterPartIndex: number
   afterTextOffset?: number

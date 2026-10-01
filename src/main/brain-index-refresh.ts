@@ -11,7 +11,11 @@
  * - on ne réindexe QUE sur un état `degraded` dont une raison parle de fraîcheur d'index (une autre
  *   panne ne se répare pas en reconstruisant un index, et reconstruire coûte plusieurs minutes sur
  *   le partage réseau) ;
- * - une seule tentative par session (`resetBrainIndexRefreshAttempt` remet à zéro, pour les tests).
+ * - une seule reconstruction à la fois, et plus aucune dans la session après deux échecs d'affilée
+ *   (`resetBrainIndexRefreshAttempt` remet à zéro, pour les tests). Une reconstruction RÉUSSIE,
+ *   elle, n'empêche pas la suivante : toute modification du savoir en cours de session passe par
+ *   `reindexerApresMutation` (mesuré le 2026-09-29 : sans cela, le Brain restait muet jusqu'au
+ *   prochain démarrage).
  *
  * `brain_index.py` est lancé SANS shell : ses arguments contiennent des espaces (« Projets IA/Amitel
  * Brain ») et passer par `cmd /c start` coupait la ligne au premier espace — l'essai à la main du
@@ -101,19 +105,44 @@ export function needsIndexRebuild(health: BrainHealth | null): boolean {
   )
 }
 
-let attempted = false
+/*
+ * ÉTAT de la réindexation pour CETTE session. Mesure du 2026-09-29 : un simple « déjà tentée »
+ * booléen interdisait toute reconstruction après celle du démarrage. Des notes promues à 08:32 ont
+ * laissé le Brain muet (503 « index freshness mismatch ») pour le reste de la session.
+ * - `libre`    : aucune reconstruction en cours ; la dernière, s'il y en a eu une, a RÉUSSI.
+ * - `en-cours` : une reconstruction tourne. Une nouvelle demande est MÉMORISÉE et repart à sa fin
+ *   (une note promue pendant le parcours du corpus a pu lui échapper), jamais en parallèle.
+ * - `echec`    : les deux essais d'une reconstruction ont échoué. Plus AUCUN essai de la session :
+ *   c'est la limite d'origine, gardée telle quelle (une cause durable — corpus illisible, disque
+ *   plein — ne se répare pas en réessayant).
+ */
+let etat: 'libre' | 'en-cours' | 'echec' = 'libre'
+let redemandee = false
 
-/** Remise à zéro de la tentative unique — réservée aux tests. */
+/** Remise à zéro de l'état de session — réservée aux tests. */
 export function resetBrainIndexRefreshAttempt(): void {
-  attempted = false
+  etat = 'libre'
+  redemandee = false
 }
 
-/** Lance `brain_index.py` en tâche de fond, une seule fois par session. */
+/**
+ * Lance `brain_index.py` en tâche de fond. Une seule reconstruction à la fois ; après une réussite,
+ * la suivante redevient possible ; après deux échecs d'affilée, plus rien de la session.
+ */
 export function startBrainIndexRebuild(
   env: NodeJS.ProcessEnv = process.env,
   spawnFn: SpawnLike = spawn as never
 ): BrainIndexRefresh {
-  if (attempted) return { status: 'not-needed', detail: 'réindexation déjà tentée cette session' }
+  if (etat === 'echec') {
+    return {
+      status: 'not-needed',
+      detail: 'réindexation échouée deux fois cette session — pas de nouvel essai'
+    }
+  }
+  if (etat === 'en-cours') {
+    redemandee = true
+    return { status: 'not-needed', detail: 'réindexation déjà en cours — une autre suivra sa fin' }
+  }
   const { tooling, python, brainRoot } = resolveBrainRuntime(env)
   if (!tooling || !python || !brainRoot) {
     return { status: 'unavailable', detail: 'runtime Brain local non configuré' }
@@ -130,32 +159,52 @@ export function startBrainIndexRebuild(
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
   childEnv.AMITEL_BRAIN_ROOT = brainRoot
-  attempted = true
+  etat = 'en-cours'
   const args = [script, '--knowledge', join(brainRoot, 'knowledge'), '--out', outDir]
   const options = { cwd: tooling, env: childEnv, detached: true, stdio: 'ignore', windowsHide: true }
 
   const lancer = (essaiFinal: boolean): void => {
     const child = spawnFn(python, args, options)
-    // Sans cette écoute, un échec passait pour un succès : `launched` était rendu dès le lancement,
-    // et le Brain restait dégradé jusqu'au prochain démarrage de l'app sans que rien ne le dise.
-    child.once?.('error', (erreur) => {
-      console.warn('[brain-index] lancement impossible —', String(erreur))
-      if (!essaiFinal) lancer(true)
-    })
-    child.once?.('exit', (code) => {
-      if (code === 0) {
-        console.log('[brain-index] réindexation terminée —', outDir)
-        return
-      }
-      console.warn('[brain-index] réindexation échouée (code', String(code), ')')
+    // Node peut émettre `error` PUIS `exit` pour le même processus : sans ce verrou, un échec
+    // compterait deux fois et lancerait deux « seconds essais ».
+    let regle = false
+    const echouer = (): void => {
+      if (regle) return
+      regle = true
       // UN seul deuxième essai : une reconstruction coûte plusieurs minutes sur le partage, et une
       // cause durable (corpus illisible, disque plein) ne se répare pas en réessayant en boucle.
       if (essaiFinal) {
         console.warn('[brain-index] second essai également échoué — Brain laissé dégradé')
+        etat = 'echec'
+        redemandee = false
         return
       }
       console.log('[brain-index] second et dernier essai')
       lancer(true)
+    }
+    // Sans cette écoute, un échec passait pour un succès : `launched` était rendu dès le lancement,
+    // et le Brain restait dégradé jusqu'au prochain démarrage de l'app sans que rien ne le dise.
+    child.once?.('error', (erreur) => {
+      console.warn('[brain-index] lancement impossible —', String(erreur))
+      echouer()
+    })
+    child.once?.('exit', (code) => {
+      if (code !== 0) {
+        console.warn('[brain-index] réindexation échouée (code', String(code), ')')
+        echouer()
+        return
+      }
+      if (regle) return
+      regle = true
+      console.log('[brain-index] réindexation terminée —', outDir)
+      etat = 'libre'
+      if (redemandee) {
+        redemandee = false
+        console.log(
+          '[brain-index] savoir modifié pendant la reconstruction — nouvelle réindexation'
+        )
+        startBrainIndexRebuild(env, spawnFn)
+      }
     })
     child.unref?.()
   }
@@ -173,16 +222,36 @@ export async function ensureBrainIndexFresh(deps?: {
   /** Nombre total de sondes, la première comprise. 5 sondes × 2 s couvrent la fenêtre de ~6 s. */
   essais?: number
   delaiMs?: number
+  /**
+   * Le savoir VIENT de changer. Un Brain encore vu sain (ou muet) peut simplement ne pas avoir
+   * encore reçu l'avis de changement du partage : on resonde aussi dans ce cas, au lieu de
+   * conclure trop tôt qu'il n'y a rien à reconstruire.
+   */
+  apresMutation?: boolean
+  /**
+   * Instance de TEST isolée : elle partage le Brain de production et ne le reconstruit pas au
+   * démarrage (mesuré le 2026-09-29 : deux reconstructions parallèles, l'une venant d'une
+   * instance de test lancée par un autre fil).
+   */
+  instanceDeTest?: boolean
 }): Promise<BrainIndexRefresh> {
+  if (deps?.instanceDeTest) {
+    return { status: 'not-needed', detail: 'instance de test : index du Brain partagé non touché' }
+  }
+  // Session qui a déjà renoncé : inutile de solliciter le serveur.
+  if (etat === 'echec') return startBrainIndexRebuild(deps?.env, deps?.spawnFn)
   const env = deps?.env ?? process.env
   const lire = deps?.readHealth ?? (() => readBrainHealth(fetch, env))
   const attendre = deps?.sleepFn ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))) // sleep-ok: laisse le Brain finir d'évaluer la fraîcheur
   const essais = deps?.essais ?? 5
   const delaiMs = deps?.delaiMs ?? 2000
+  const aResonder = (h: BrainHealth | null): boolean =>
+    isCauseUndetermined(h) ||
+    (deps?.apresMutation === true && (h === null || h.state === 'healthy'))
 
   let health = await lire()
   // Tant que la cause n'est pas NOMMÉE, on resonde : la réponse utile arrive ~6 s plus tard.
-  for (let i = 1; i < essais && isCauseUndetermined(health); i++) {
+  for (let i = 1; i < essais && aResonder(health); i++) {
     await attendre(delaiMs)
     health = await lire()
   }
@@ -190,4 +259,20 @@ export async function ensureBrainIndexFresh(deps?: {
     return { status: 'not-needed', detail: `état du Brain : ${health?.state ?? 'injoignable'}` }
   }
   return startBrainIndexRebuild(env, deps?.spawnFn)
+}
+
+/**
+ * À appeler après TOUTE modification du savoir (promotion, retrait, restauration, remplacement,
+ * curation) ou un rafraîchissement demandé. Sans reconstruction, le serveur détecte la péremption
+ * mais refuse de servir (503) : il ne rebâtit jamais l'index lui-même. Même garde que le démarrage
+ * (on ne reconstruit que sur un index PÉRIMÉ), en insistant le temps que le changement soit vu.
+ */
+export function reindexerApresMutation(
+  deps?: Parameters<typeof ensureBrainIndexFresh>[0]
+): Promise<BrainIndexRefresh> {
+  // FENÊTRE D'ATTENTE mesurée le 2026-09-29 : après une promotion, le serveur relit tout le corpus
+  // sur le partage et répond « unavailable » SANS raison pendant ~80 s (promotion 08:57:24,
+  // cause nommée 08:58:46). 5 sondes à 2 s (le défaut du démarrage) abandonnaient au bout de 8 s.
+  // On sonde toutes les 10 s pendant 5 minutes au plus : la tâche est de fond, rien n'attend.
+  return ensureBrainIndexFresh({ essais: 30, delaiMs: 10_000, ...deps, apresMutation: true })
 }

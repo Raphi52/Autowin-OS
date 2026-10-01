@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  MAX_BRAIN_CONTEXT_CHARS,
+  MAX_AUTHENTICATED_BYTES,
   MAX_SIGNED_BRAIN_RESPONSE_BYTES,
   readSignedBrainPayload,
   renderStructuredBrainContext,
@@ -110,13 +110,11 @@ describe('protocole Brain v2', () => {
     }
   })
 
-  it('compte la borne de contexte en points de code comme le serveur Python', () => {
-    expect(verifySignedBrainPayload(signedV2('😀'.repeat(3000), null), TOKEN).context).toHaveLength(
-      6000
-    )
-    expect(() => verifySignedBrainPayload(signedV2('😀'.repeat(3001), null), TOKEN)).toThrow(
-      'volumineux'
-    )
+  it('ne borne plus le contexte : au-delà des 3 000 points de code d’avant, il arrive intact', () => {
+    // La borne de contenu a été retirée le 2026-09-27 (règle : pas de budget, on récupère le
+    // nécessaire). Des caractères hors BMP le prouvent sans ambiguïté d'unité de compte.
+    const contexte = '😀'.repeat(3001)
+    expect(verifySignedBrainPayload(signedV2(contexte, null), TOKEN).context).toBe(contexte)
   })
 
   it('rejette des frontières signées qui ne reconstruisent pas exactement le contexte signé', () => {
@@ -205,7 +203,7 @@ describe('protocole Brain v2', () => {
   })
 
   it.each(['v1', 'v2'] as const)(
-    'accepte exactement la borne de contexte et rejette +1 en %s',
+    'rend une note ENTIÈRE de la taille de la plus grosse note réelle en %s — plus de borne à 3 000',
     (version) => {
       const payload = (context: string): SignedBrainPayload => {
         if (version === 'v2') return signedV2(context, null)
@@ -218,21 +216,23 @@ describe('protocole Brain v2', () => {
             .digest('hex')
         }
       }
-
-      expect(
-        verifySignedBrainPayload(payload('x'.repeat(MAX_BRAIN_CONTEXT_CHARS)), TOKEN).context
-      ).toHaveLength(MAX_BRAIN_CONTEXT_CHARS)
-      expect(() =>
-        verifySignedBrainPayload(payload('x'.repeat(MAX_BRAIN_CONTEXT_CHARS + 1)), TOKEN)
-      ).toThrow('Contexte Amitel Brain trop volumineux')
+      // 809 430 octets : `modele-ult.md`, la plus grosse note du Brain mesurée le 2026-09-27.
+      const note = `${'x'.repeat(809_430)}FIN`
+      expect(verifySignedBrainPayload(payload(note), TOKEN).context).toBe(note)
     }
   )
+
+  it('garde la borne de TRANSPORT : un corps signé démesuré reste refusé', () => {
+    expect(() =>
+      verifySignedBrainPayload(signedV2('x'.repeat(MAX_AUTHENTICATED_BYTES + 1), null), TOKEN)
+    ).toThrow('Reponse Amitel Brain trop volumineuse')
+  })
 
   it('refuse un corps HTTP surdimensionné avant de le lire', async () => {
     const text = vi.fn()
     await expect(
       readSignedBrainPayload({
-        headers: new Headers({ 'content-length': String(4 * 1024 * 1024) }),
+        headers: new Headers({ 'content-length': String(MAX_SIGNED_BRAIN_RESPONSE_BYTES + 1) }),
         text
       })
     ).rejects.toThrow('Réponse Amitel Brain trop volumineuse')

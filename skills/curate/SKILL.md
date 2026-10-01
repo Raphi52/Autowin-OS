@@ -30,7 +30,7 @@ description: >-
    indexations simultanées ont fait planter l'une d'elles sur un fichier disparu. Prendre le verrou :
    `mkdir "<brainRoot>/inbox/.curation.lock"` — atomique, y compris sur le partage réseau : une seule
    passe réussit (vérifié le 2026-09-26 : le second `mkdir` rend le code 1, « File exists »).
-   - Réussi → la passe est à toi. Rafraîchis-le avec `touch` avant chaque réindexation (étape 6).
+   - Réussi → la passe est à toi. Rafraîchis-le avec `touch` avant chaque réindexation (étape 7).
    - Échec → une autre passe tourne : **STOP**, ne lis ni n'écris rien dans le Brain, et rends un bilan
      « passe déjà en cours depuis <heure> » (heure lue par `stat -c %y` sur le dossier). Ce n'est pas un
      échec de la tâche : la file sera vidée par l'autre passe.
@@ -65,20 +65,33 @@ description: >-
    citant la note qui le couvre.
 5. `reject` — lire la raison. « source locator is not verifiable » se corrige (`git:<chemin>@<sha>`,
    `session:<id>`) ; un secret ou une donnée personnelle détecté se SUPPRIME.
-6. Réindexer : `python tooling/brain_index.py --knowledge <brainRoot>/knowledge --out <brainRoot>/tooling/index`
-   (les deux arguments sont obligatoires). La sortie DOIT être `<brainRoot>/tooling/index` : c'est le seul
-   dossier que le Brain relit (il y publie `CURRENT` + `generations/`). Mesuré le 2026-09-06 : indexer vers
-   `<brainRoot>/index` réussit, dure ~20 min sur le partage réseau, et n'est JAMAIS lu — les notes promues
-   restent introuvables par la recherche.
-7. `python tooling/brain_validate.py --root <brainRoot>` doit rendre `"status": "valid"` avec
+6. **Inventaire Obsidian — APRÈS la dernière écriture dans `knowledge/`, AVANT la réindexation.**
+   `python tooling/obsidian_graph.py --root <brainRoot> --refresh-indexes --reviewer <agent>` doit rendre
+   `"errors": []`. Pourquoi cet ordre (mesuré le 2026-09-29) : l'inventaire généré
+   `knowledge/_maps/vault-inventory.md` liste TOUS les `.md` visibles du Brain, **y compris les candidats de
+   `inbox/`** ; et il vit sous `knowledge/`, que `brain_index.py` indexe en entier (`collect_note_paths` prend
+   chaque `*.md`, `_maps/` compris). Le régénérer APRÈS la réindexation modifie donc le savoir indexé :
+   l'index publié est périmé aussitôt, et le Brain répond 503 « index freshness mismatch » jusqu'à une
+   nouvelle réindexation. Ordre obligatoire : promotions, fusions et rejets, PUIS inventaire, PUIS
+   réindexation — jamais l'inverse.
+7. Réindexer : `python tooling/brain_index.py --knowledge <brainRoot>/knowledge --out <brainRoot>/tooling/index`
+   (les deux arguments sont obligatoires), après un `touch` du verrou. La sortie DOIT être
+   `<brainRoot>/tooling/index` : c'est le seul dossier que le Brain relit (il y publie `CURRENT` +
+   `generations/`). Mesuré le 2026-09-06 : indexer vers `<brainRoot>/index` réussit, dure ~20 min sur le
+   partage réseau, et n'est JAMAIS lu — les notes promues restent introuvables par la recherche.
+8. `python tooling/brain_validate.py --root <brainRoot>` doit rendre `"status": "valid"` avec
    `errors: []` (l'option est `--root`, PAS `--brain`, qui est refusé ; le statut est `valid`, pas `ok`).
-   Le warning « legacy curated notes remain valid » est normal. Pièges connus : un candidat déposé
-   à la RACINE de `knowledge/` (interdit — il doit vivre dans `inbox/` ou dans `knowledge/<type>/`),
-   et l'index Obsidian généré devenu périmé après promotion — l'erreur `stale generated Obsidian index
-   knowledge/_maps/vault-inventory.md` se corrige avec
-   `python tooling/obsidian_graph.py --root <brainRoot> --refresh-indexes --reviewer <agent>`, puis on revalide.
-8. Commit dans le dépôt Brain, message `curation: <n> promus, <m> fusionnés, <k> rejetés`.
-9. Rendre le verrou : `rmdir "<brainRoot>/inbox/.curation.lock"`, APRÈS le commit — et aussi quand la
+   Le warning « legacy curated notes remain valid » est normal. Piège connu : un candidat déposé
+   à la RACINE de `knowledge/` (interdit — il doit vivre dans `inbox/` ou dans `knowledge/<type>/`).
+   Cas à part, l'erreur « stale generated Obsidian index knowledge/_maps/vault-inventory.md: N missing »
+   avec, en `degree-zero`, des candidats de `inbox/` déposés APRÈS l'étape 6 : ce ne sont pas des fautes
+   de la passe, mais des dépôts `remember` d'autres sessions arrivés pendant qu'elle tournait (le
+   2026-09-29 : 2 candidats, 28 s après la régénération). Ne régénère PAS l'inventaire pour les absorber :
+   chaque régénération rend l'index périmé et impose une nouvelle réindexation (jusqu'à ~25 min sur le
+   partage). Commite, et nomme ces candidats dans le bilan : la passe suivante les traitera. Si en
+   revanche l'inventaire manque une note de `knowledge/`, reviens à l'étape 6, puis refais l'étape 7.
+9. Commit dans le dépôt Brain, message `curation: <n> promus, <m> fusionnés, <k> rejetés`.
+10. Rendre le verrou : `rmdir "<brainRoot>/inbox/.curation.lock"`, APRÈS le commit — et aussi quand la
    passe s'arrête avant (blocage, erreur, interruption). Un verrou oublié bloque toutes les passes
    pendant 4 h. Le bilan dit que le verrou est rendu.
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
 import {
-  ancrerSurLaTacheInitiale,
+  ancrerSurLaDemande,
   blocFaitDitRien,
   deciderRelanceAuto,
-  tacheInitiale,
+  derniereDemandeHumaine,
   recommandationDitRien,
   signatureTour,
   texteDernierAssistant,
@@ -76,11 +76,15 @@ describe('blocFaitDitRien — le bloc « Fait » vide (précision utilisateur du
 
 describe('deciderRelanceAuto — envoi', () => {
   it('envoie le PROMPT du modèle, pas la rubrique', () => {
-    const d = deciderRelanceAuto({ ...base, fil: [humain('go'), agent(REPONSE_AVEC_SUITE)] })
-    // Le prompt du modele, ANCRE sur la tache initiale du fil — le texte reellement envoye.
+    const d = deciderRelanceAuto({
+      ...base,
+      fil: [humain('prépare le chantier X'), agent(REPONSE_AVEC_SUITE)]
+    })
+    // Le prompt du modele, ANCRE sur la derniere demande de l'utilisateur — le texte reellement envoye.
+    // (« go » n'est plus une demande depuis le 2026-09-30 : c'est un accord nu, saute par l'ancrage.)
     expect(d).toMatchObject({
       action: 'envoyer',
-      texte: ancrerSurLaTacheInitiale('lance le terrain sur X', 'go')
+      texte: ancrerSurLaDemande('lance le terrain sur X', 'prépare le chantier X')
     })
   })
   it('retombe sur la rubrique quand aucun prompt n’est écrit', () => {
@@ -254,11 +258,14 @@ describe('fin de chaîne — « Reste à faire : rien » éteint la boucle', () 
       '⏳ Reste à faire : rien.',
       '⏳ Reste à faire : clean → judge.'
     ).replace('👉 Recommandé : passer à la prochaine demande.', '👉 Recommandé : lancer clean.')
-    const decision = deciderRelanceAuto({ ...base, fil: [humain('go'), agent(suite)] })
+    const decision = deciderRelanceAuto({
+      ...base,
+      fil: [humain('répare le bouton'), agent(suite)]
+    })
     expect(decision).toEqual({
       action: 'envoyer',
-      // La suite part ANCREE sur la tache initiale du fil (« go ») : c'est le texte reellement envoye.
-      texte: ancrerSurLaTacheInitiale('lancer clean.', 'go'),
+      // La suite part ANCREE sur la derniere demande de l'utilisateur : c'est le texte reellement envoye.
+      texte: ancrerSurLaDemande('lancer clean.', 'répare le bouton'),
       signature: expect.any(String)
     })
   })
@@ -284,14 +291,20 @@ describe('le mode auto reste accroché à la tâche initiale', () => {
   const demande = (texte: string, orientation?: boolean): Msg =>
     ({ role: 'user', content: texte, ...(orientation ? { orientation: true } : {}) }) as unknown as Msg
 
-  it('prend le PREMIER message de l’utilisateur, pas le dernier', () => {
+  // Depuis le 2026-09-30 (conv-889) : la DERNIERE demande tapee, pas la premiere. La derive que
+  // l'ancre borne est celle des envois AUTOMATIQUES (conv-138), qui portent l'ancre sans la changer.
+  it('prend la DERNIÈRE demande tapée par l’utilisateur, pas la première', () => {
     expect(
-      tacheInitiale([demande('juge la qualité de mon prompting'), reponse('x'), demande('et le nuage ?')])
-    ).toBe('juge la qualité de mon prompting')
+      derniereDemandeHumaine([
+        demande('juge la qualité de mon prompting'),
+        reponse('x'),
+        demande('et le nuage ?')
+      ])
+    ).toBe('et le nuage ?')
   })
 
   it('ignore une orientation tapée PENDANT un tour', () => {
-    expect(tacheInitiale([demande('arrête-toi', true), demande('la vraie demande')])).toBe(
+    expect(derniereDemandeHumaine([demande('arrête-toi', true), demande('la vraie demande')])).toBe(
       'la vraie demande'
     )
   })
@@ -343,7 +356,7 @@ describe('le mode auto reste accroché à la tâche initiale', () => {
   })
 
   it('le premier maillon n’est pas ancré sur lui-même', () => {
-    expect(ancrerSurLaTacheInitiale('fais X', 'fais X')).toBe('fais X')
+    expect(ancrerSurLaDemande('fais X', 'fais X')).toBe('fais X')
   })
 })
 

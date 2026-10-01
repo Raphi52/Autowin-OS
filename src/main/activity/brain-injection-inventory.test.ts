@@ -26,8 +26,8 @@ describe('inventaire des appels Brain', () => {
       [
         trace({ point: 'orchestration-task-rag', kind: 'automatic', injectedChars: 100 }),
         trace({
-          point: 'orchestration-empreinte-depot',
-          kind: 'empreinte',
+          point: 'command-brain-query',
+          kind: 'query',
           injectedChars: 40,
           timestamp: '2026-08-31T11:00:00.000Z'
         }),
@@ -45,13 +45,20 @@ describe('inventaire des appels Brain', () => {
     expect(rag.appelsTotal).toBe(2)
     expect(rag.appelsConversation).toBe(1)
     expect(rag.caracteresConversation).toBe(100)
-    const empreinte = inventaire.points.find((p) => p.id === 'orchestration-empreinte-depot')!
-    expect(empreinte.appelsConversation).toBe(1)
-    expect(empreinte.dernierAppel).toBe('2026-08-31T11:00:00.000Z')
+    const requete = inventaire.points.find((p) => p.id === 'command-brain-query')!
+    expect(requete.appelsConversation).toBe(1)
+    expect(requete.dernierAppel).toBe('2026-08-31T11:00:00.000Z')
     const ui = inventaire.points.find((p) => p.id === 'ui-brain-search')!
     expect(ui.appelsTotal).toBe(1)
     expect(ui.appelsConversation).toBe(0)
     expect(inventaire.totalTraces).toBe(4)
+  })
+
+  it('une trace de l’empreinte RETIRÉE ne se rattache plus à aucun point vivant', () => {
+    // 335 traces historiques portent `kind: 'empreinte'` : elles restent lisibles, mais le point
+    // qui les émettait n'existe plus depuis le 2026-09-27 — les attribuer serait mentir.
+    expect(pointDeTrace({ kind: 'empreinte' })).toBeUndefined()
+    expect(pointDeTrace({ point: 'orchestration-empreinte-depot', kind: 'empreinte' })).toBeUndefined()
   })
 
   it('rattache une trace historique par son kind quand il est sans ambiguïté', () => {

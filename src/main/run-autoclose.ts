@@ -74,6 +74,8 @@ export type AutoCloseResult =
         | 'concurrent-commits'
         /** Tour de chat : aucun de ses fichiers n'est prouvé à ce fil (voir chat-turn-publication). */
         | 'unattributed'
+        /** Tour de chat : les tests de ses fichiers, rejoués avant de pousser, ne sont pas verts. */
+        | 'tests-rouges'
       detail?: string
     }
   | { status: 'failed'; error: string }
@@ -474,8 +476,39 @@ export interface AutoCloseReport {
   /** `chat` : fin d'un tour de chat ; absent : fin d'une tâche d'agent. */
   source?: 'chat'
   /** Fichiers du tour LAISSÉS en attente faute de preuve qu'ils appartiennent à ce fil. */
-  exclus?: Array<{ path: string; motif: 'modifie-avant-le-tour' | 'touche-par-un-autre-fil' }>
+  exclus?: Array<{
+    path: string
+    motif:
+      'modifie-avant-le-tour' | 'touche-par-un-autre-fil' | 'autre-fil-en-cours' | 'tests-rouges'
+    /** Lignes ajoutées que le fil ne réclame pas : ce qui a fait échouer la preuve par lignes. */
+    lignesNonReclamees?: number
+    /** Motif `tests-rouges` : les fichiers de test en échec. */
+    testsEnEchec?: string[]
+  }>
+  /** Tour de chat : les tests rejoués AVANT de pousser (absent = aucune vérification branchée). */
+  verification?: VerificationAvantPublication
 }
+
+/**
+ * Verdict des tests rejoués par le commit automatique du chat avant de pousser.
+ *  - `vert`        : la portée a joué au moins un test, tous verts → on publie ;
+ *  - `echec`       : rouge, ou coupé au plafond de temps → rien n'est commité ;
+ *  - `non-verifie` : aucune portée dérivable (aucun test ne juge ces fichiers) → on publie comme
+ *    avant, et le rapport le DIT au lieu de se taire.
+ */
+export type VerificationAvantPublication =
+  | {
+      statut: 'vert'
+      commande: string
+      testsJoues: number
+      /**
+       * Suites rouges dans la portée complète, vertes rejouées SEULES (demande utilisateur du
+       * 2026-10-01) : on publie, et le panneau les NOMME — un vert obtenu ainsi ne se tait pas.
+       */
+      instablesSousCharge?: string[]
+    }
+  | { statut: 'echec'; commande: string; detail: string; testsEnEchec: string[] }
+  | { statut: 'non-verifie'; raison: string }
 
 /**
  * Une publication Git locale deja fusionnee ne peut etre acquittee tant que sa copie distante reste

@@ -331,6 +331,35 @@ function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecher
 const SEUIL_RACINE = 6
 
 /**
+ * Une conversation dont un message porte au moins cette part des mots demandes -- ET le mot porteur
+ * -- est une demande DEJA POSEE : elle passe devant le re-classement par mot porteur (fin de
+ * `search`).
+ *
+ * Mesure du 2026-09-30 (conv-889), `scripts/mesure-rappel-selectif.mts --verites-seules
+ * --diagnostic`, corpus reel de 795 conversations, 139 messages a verite connue (89 citent une
+ * conversation, 50 reposent une demande d'un autre fil) :
+ *
+ *   reglage              rang 1 juste   cible montree   citations 1res   reposees 1res
+ *   sans la priorite         33/118         39/139            4               30
+ *   100 % des mots           40/118         47/139            4               36
+ *    90 %                    40/120         48/139            4               36   <- retenu
+ *    80 %                    40/121         47/139            4               36
+ *    70 %                    40/120         46/139            4               36
+ *   80 % SANS mot porteur    39/121         44/139            3               36
+ *
+ * Le resultat est PLAT de 70 a 100 % : le reglage ne decide presque rien, la condition du mot
+ * porteur si (sans elle, les citations perdent un rang 1). 90 % : meilleur total montre, et le moins
+ * de promotions -- donc le moins de risque sur les demandes que ce banc ne couvre pas.
+ *
+ * LIMITE A DIRE : la verite « demande reposee » est definie par 80 % de mots communs, un critere
+ * voisin de celui-ci. Le gain sur cette colonne est donc en partie construit par la definition ; la
+ * colonne « citations », independante, dit seulement que rien n'a ete perdu.
+ */
+const COUVERTURE_REPOSEE = 0.9
+/** En dessous, « presque tous les mots » ne veut rien dire : deux mots sur deux suffiraient. */
+const MOTS_MIN_DEMANDE_REPOSEE = 4
+
+/**
  * La RACINE d'un mot : ses premieres lettres.
  *
  * « pastilles » ne trouvait pas « pastille », ni « couleurs » « couleur » : une demande est
@@ -1330,6 +1359,8 @@ export class ConversationStore {
       Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
     )
     const trouvees: Array<ConversationRecherche & { score: number }> = []
+    // Tenue A PART des resultats : c'est un critere de classement, pas une donnee a exposer.
+    const masquesReposesParId = new Map<string, number[]>()
     // La pre-selection porte sur les mots DEMANDES et AJOUTES : une conversation absente de l'index
     // pour tous ces mots ne peut pas correspondre, il est inutile de la relire.
     const candidates = this.indexInverse().candidates([...demandes, ...elargis])
@@ -1373,6 +1404,8 @@ export class ConversationStore {
        * sont ENSEMBLE : c'est la proximite qui fait le sens, pas la presence.
        */
       let meilleurScore = 0
+      /** Messages qui portent presque tous les mots DEMANDES : un bit par mot demande porte. */
+      const masquesReposes: number[] = []
       for (const [rang, message] of conversation.messages.entries()) {
         if (typeof message.content !== 'string') continue
         messagesParcourus += 1
@@ -1392,18 +1425,26 @@ export class ConversationStore {
          * « conversations » est omnipresent ici et « notifier » est rare : c'est la rarete du mot
          * TROUVE qui les separe, et elle ne dependait pas du seuil.
          */
-        const peser = (racineCherchee: string, poids: number): void => {
+        const peser = (racineCherchee: string, poids: number): boolean => {
           const trouve = motCorrespondant(motsDuMessage, racineCherchee)
-          if (!trouve) return
+          if (!trouve) return false
           const position = replie.indexOf(racineCherchee)
           motsIci += poids * index.rarete(racine(trouve)) * index.rarete(trouve)
           if (position >= 0 && (premierePosition < 0 || position < premierePosition)) {
             premierePosition = position
           }
+          return true
         }
-        for (const mot of demandes) peser(mot, POIDS_DEMANDE)
+        let masque = 0
+        let couverts = 0
+        for (const [i, mot] of demandes.entries()) {
+          if (!peser(mot, POIDS_DEMANDE)) continue
+          masque |= 1 << i
+          couverts += 1
+        }
         for (const mot of elargis) peser(mot, 1)
         if (premierePosition < 0) continue
+        if (couverts / demandes.length >= COUVERTURE_REPOSEE) masquesReposes.push(masque)
         /*
          * NORMALISE PAR LA LONGUEUR.
          *
@@ -1506,6 +1547,7 @@ export class ConversationStore {
         extraits,
         score: meilleurScore
       })
+      if (masquesReposes.length) masquesReposesParId.set(conversation.id, masquesReposes)
     }
     // Classe par NOMBRE DE MOTS retrouves avant la recence : une conversation qui porte trois mots
     // de la demande l'eclaire mieux qu'une plus recente qui n'en porte qu'un.
@@ -1761,7 +1803,40 @@ export class ConversationStore {
     }
     const marques = candidats.map((c) => ({ c, porte: porte(c.id) }))
     marques.sort((a, b) => b.porte - a.porte)
-    return marques.slice(0, limite).map(({ c }) => c)
+    /*
+     * UNE DEMANDE DEJA POSEE PASSE DEVANT LE MOT PORTEUR (conv-889, 2026-09-30).
+     *
+     * Le re-classement par mot porteur sert la demande qui NOMME un sujet parmi des mots d'adresse
+     * (« rappelle-moi ce qu'on a dit a propos de X ») : le score, sac de mots, y noie X. Il ne sert
+     * pas la demande qu'on REPOSE : un message d'un autre fil qui porte deja presque tous ses mots
+     * EST cette demande, deja faite. Or le compte d'occurrences du porteur (plafonne a 6) favorise
+     * les longues conversations qui repetent le mot, et faisait reculer le fil de la demande
+     * d'origine.
+     *
+     * Mesure `scripts/mesure-rappel-selectif.mts --verites-seules --diagnostic`, corpus reel (795
+     * conversations), 42 demandes reposees dont le fil d'origine est atteignable : ce fil est 1er
+     * 30 fois apres re-classement, 35 fois au score seul, 36 avec cette priorite. Reglage et mesure :
+     * COUVERTURE_REPOSEE.
+     *
+     * LE MESSAGE REPRIS DOIT PORTER LE MOT PORTEUR. Sans cette condition, « rappelle-moi ce qu'on a
+     * dit a propos de Y » couvre 4 mots sur 5 de « rappelle-moi ce qu'on a dit a propos de X » sans
+     * parler de X, et repasserait devant : exactement l'echec que le re-classement corrige.
+     */
+    const rangPorteur = demandes.indexOf(racine(porteur))
+    const bitPorteur = rangPorteur >= 0 ? 1 << rangPorteur : 0
+    const reposees =
+      demandes.length >= MOTS_MIN_DEMANDE_REPOSEE && bitPorteur
+        ? marques.filter(({ c }) =>
+            (masquesReposesParId.get(c.id) ?? []).some((masque) => (masque & bitPorteur) !== 0)
+          )
+        : []
+    const ordre = reposees.length
+      ? [
+          ...[...reposees].sort((a, b) => b.c.score - a.c.score),
+          ...marques.filter((m) => !reposees.includes(m))
+        ]
+      : marques
+    return ordre.slice(0, limite).map(({ c }) => c)
   }
 
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */

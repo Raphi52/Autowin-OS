@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { PHASE_BRIEFS } from './phase-briefs'
+// fix-ok: ce test ne lisait que SKILL.md, que le pipeline in-app n'envoie jamais (`corpsSkill` vide
+// pour une phase du pipeline, orchestrator.ts) : il restait vert sans rien garder de la consigne reelle.
 
 const racine = resolve(__dirname, '..', '..')
 const demande = resolve(racine, 'skills/scout/ORIENTER-UN-SCOUT.md')
@@ -34,5 +37,39 @@ describe('demande d orientation d un scout', () => {
     // levier 5 : la ligne finale lue par la machine
     expect(t).toContain('CIBLE:'.toLowerCase())
     expect(s).toContain('exactly one `cible:` line')
+  })
+
+  // SKILL.md renvoyait vers `file:///C:/Amitel/Autowin%20OS/...scout-table.ts:143` : un dossier qui
+  // n'existe plus, et une ligne 143 qui designe desormais la colonne Impact, pas la note.
+  it('les liens de SKILL.md menent a des fichiers du depot, sans numero de ligne perime', () => {
+    const s = readFileSync(skill, 'utf8')
+    const liens = [...s.matchAll(/\]\(([^)\s]+)\)/gu)].map((m) => m[1]!)
+    expect(liens.length).toBeGreaterThan(0)
+    for (const lien of liens) {
+      if (/^https?:/u.test(lien)) continue
+      expect(lien, lien).not.toMatch(/^file:/u)
+      expect(lien, lien).not.toMatch(/:\d+$/u)
+      expect(existsSync(resolve(racine, 'skills/scout', decodeURI(lien))), lien).toBe(true)
+    }
+  })
+
+  /*
+   * SKILL.md n'est PAS ce que recoit un scout lance par l'app : le pipeline in-app ne lit que
+   * `PHASE_BRIEFS.scout` (`orchestrator.ts`, `phasePrompt`). Le premier test restait vert alors
+   * qu'aucune de ces formules n'agissait sur une regle dans l'app (conv-890). Les memes leviers
+   * doivent donc exister dans la consigne reellement envoyee.
+   */
+  it('active les memes leviers dans la consigne que l app envoie reellement', () => {
+    const b = PHASE_BRIEFS.scout.toLowerCase()
+    // levier 1 : bascule du quota de pistes ambitieuses
+    expect(b).toContain('« fresh vision » → ≥ 50 % de 🆕')
+    // levier 2 : elargissement quand la moisson est tiede
+    expect(b).toMatch(/refais un tour/)
+    // levier 3 : recherche web datee 30-90 jours
+    expect(b).toMatch(/30 [àa] 90 derniers jours/)
+    // levier 4 : plafond des pistes deduites
+    expect(b).toMatch(/plafonne a 50/)
+    // levier 5 : la cible lue par la machine
+    expect(b).toMatch(/## cible|cible:/)
   })
 })

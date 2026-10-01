@@ -58,8 +58,38 @@ describe('isolation du workflow entre conversations', () => {
      * jusqu'à ce que quelqu'un la desserre pour de mauvaises raisons.
      */
     expect(os).toMatch(/const orchestrator = this\.orchestrateurPour\(workflowDuRun[,)]/)
-    expect(os).toMatch(
-      /orchestrateurPour\(workflow\?: WorkflowRunOverride[^)]*\)[\s\S]{0,1600}currentWorkflow: \(\) => workflow/
+    /*
+     * Le CORPS entier de la fabrique, pas une signature sur une ligne ni une fenêtre de N caractères
+     * (conv-770, 2026-09-28) : depuis cba6e809 (2026-09-17), l'ajout du paramètre `workspace` a mis la
+     * signature sur plusieurs lignes — l'ancien motif `orchestrateurPour\(workflow\?:` ne la trouvait
+     * plus —, et deux commentaires ont repoussé la closure à 1 814 caractères, au-delà de la fenêtre
+     * de 1 600. L'invariant, lui, n'avait pas changé. Et c'est CHAQUE orchestrateur construit
+     * par la fabrique qui doit porter la closure — la branche fixture comprise —, pas « au moins
+     * une occurrence quelque part après la signature ».
+     */
+    const code = os.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+    const signature = code.search(
+      /orchestrateurPour\(\s*workflow\?: WorkflowRunOverride[^)]*\)[^{]*\{/
     )
+    expect(signature).toBeGreaterThanOrEqual(0)
+    const fermeture = (texte: string, depuis: number, ouvre: string, ferme: string): number => {
+      let profondeur = 0
+      for (let i = depuis; i < texte.length; i++) {
+        if (texte[i] === ouvre) profondeur++
+        else if (texte[i] === ferme && --profondeur === 0) return i
+      }
+      throw new Error(`${ouvre} non fermé à partir de ${depuis}`)
+    }
+    const ouverture = code.indexOf('{', signature)
+    const corps = code.slice(ouverture, fermeture(code, ouverture, '{', '}') + 1)
+    const constructions: string[] = []
+    let i = corps.indexOf('new Orchestrator(')
+    while (i >= 0) {
+      const debut = i + 'new Orchestrator'.length
+      constructions.push(corps.slice(debut, fermeture(corps, debut, '(', ')') + 1))
+      i = corps.indexOf('new Orchestrator(', debut)
+    }
+    expect(constructions.length).toBeGreaterThan(0)
+    for (const args of constructions) expect(args).toContain('currentWorkflow: () => workflow')
   })
 })

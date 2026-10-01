@@ -41,6 +41,40 @@ describe('refusGitDestructeur', () => {
     expect(refusGitDestructeur('git log -S "reset --hard"')).toBeUndefined()
   })
 
+  // conv-770, 2026-09-28 : la ligne etait coupee sur `|` `;` MEME ENTRE GUILLEMETS. Un grep dont le
+  // motif nommait `git stash` a ete refuse pendant la maintenance du jour. Seul un APPEL est refuse.
+  it.each([
+    "grep -o 'x\\|git stash [a-z]\\+' trace.jsonl",
+    'git commit -m "fix; git reset --hard n est plus propose"',
+    'echo "git clean -fd"',
+    'rg -n "git checkout -- ." docs',
+    'git log --grep "stash|reset --hard"',
+    "Select-String -Pattern 'git stash drop' notes.md",
+    "echo '$(git stash)'"
+  ])('laisse passer une simple MENTION : %s', (c) => {
+    expect(refusGitDestructeur(c)).toBeUndefined()
+  })
+
+  it.each([
+    'bash -c "cd repo; git reset --hard"',
+    'bash -c "git reset --hard"',
+    'cmd /c git clean -fd',
+    'powershell -NoProfile -Command "git stash"',
+    'echo "$(git stash pop)"',
+    'echo `git checkout .`',
+    'sudo git reset --hard',
+    'sudo -i git reset --hard',
+    'GIT_DIR=.git git stash drop',
+    '"C:\\Program Files\\Git\\bin\\git.exe" reset --hard',
+    '& git checkout .',
+    'cd repo && git clean -fdx',
+    'find . -name x | xargs git checkout .',
+    'Start-Process git -ArgumentList "stash"',
+    'git stash push -m "guillemet non ferme'
+  ])('refuse toujours un APPEL : %s', (c) => {
+    expect(refusGitDestructeur(c)).toBeTruthy()
+  })
+
   it('est cable aux DEUX points d execution : le hook du CLI et la commande run interne', () => {
     const src = (p: string) => readFileSync(join(__dirname, p), 'utf8')
     expect(src('./garde-git-destructeur.ts')).toMatch(/scriptHookGardes/)
@@ -68,5 +102,16 @@ describe('hook reel du CLI', () => {
       encoding: 'utf8'
     })
     expect(ok.stdout).toBe('')
+    // La lecture « comme un shell » (fonctions internes) survit a la serialisation dans le script :
+    // une MENTION passe, un APPEL cache derriere `bash -c` est refuse (conv-770, 2026-09-28).
+    const passe = (commande: string): string =>
+      spawnSync(process.execPath, [script], {
+        input: JSON.stringify({ tool_input: { command: commande } }),
+        encoding: 'utf8'
+      }).stdout
+    expect(passe("grep -o 'x\\|git stash [a-z]\\+' trace.jsonl")).toBe('')
+    expect(
+      JSON.parse(passe('bash -c "git reset --hard"')).hookSpecificOutput.permissionDecision
+    ).toBe('deny')
   })
 })

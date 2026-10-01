@@ -13,18 +13,17 @@
  *     FORME, jamais par la qualité du choix : producteur et juge étant le même modèle, seule une
  *     vérification de forme est falsifiable.
  *
- * POURQUOI UNE SECTION ET PAS UNE LIGNE EN TÊTE : ce qui passe à la phase suivante est projeté par
- * `phase-carry.ts`, qui — dès qu'une sortie porte des titres `##` — ne transmet QUE des sections
- * porteuses et jette le texte hors section. Une ligne `CIBLE:` posée avant le premier titre
- * disparaîtrait donc exactement dans le cas qu'elle doit couvrir. `cible` est pour cela déclarée
- * porteuse là-bas.
+ * POURQUOI UNE SECTION ET PAS UNE LIGNE EN TÊTE : jusqu'au 2026-09-27, ce qui passait à la phase
+ * suivante était projeté par `phase-carry.ts` (sections porteuses seulement, sous 2 000 caractères),
+ * et une ligne `CIBLE:` hors section disparaissait. La sortie passe désormais ENTIÈRE, mais la
+ * section reste la forme que la phase suivante sait lire (`lireCibleScout`).
  *
  * PUR : pas d'horloge, pas de provider, aucune E/S.
  */
 
 import { decisionDepuisPiste, LIGNE_CIBLE, type DecisionScout } from '../shared/scout-cible-lecture'
 
-/** Le titre de section attendu, sans accent ni casse. Aligné sur `normaliserTitre` de phase-carry. */
+/** Le titre de section attendu, sans accent ni casse. */
 const TITRE_CIBLE = 'cible'
 
 function normaliser(titre: string): string {

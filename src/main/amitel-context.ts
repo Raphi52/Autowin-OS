@@ -349,6 +349,9 @@ export function createAmitelContextProvider(
         conversationId: meta.conversationId,
         ...(meta.turnId ? { turnId: meta.turnId } : {}),
         kind: 'pousse',
+        // Deux points de registre sont de nature `push` depuis `chat-titres-du-tour` (2026-09-30) :
+        // sans son identifiant, la trace ne serait plus rattachée à aucun des deux.
+        point: 'chat-context-push',
         query: boundedQuery.slice(0, 300),
         found: Boolean(brainContext),
         status: scoped.status,

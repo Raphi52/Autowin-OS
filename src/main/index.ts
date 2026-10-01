@@ -1,4 +1,4 @@
-import { routeSkillRequest } from './skill-routing'
+import { commandeNonInjectable } from './skill-routing'
 import { isAppDestination } from '../shared/view-tabs'
 import { observerLeMoteur } from './observer-les-sources'
 import { registerProdPassphraseIpc } from './prod-passphrase-ipc'
@@ -23,6 +23,7 @@ import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
 import { registerGitIpc } from './ipc/git'
 import { registerProjectFilesIpc } from './ipc/project-files'
+import { registerLancementIpc } from './ipc/lancement'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
@@ -105,7 +106,7 @@ import { estDansUnDepotGit } from './depot-git'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
-import { ensureBrainIndexFresh } from './brain-index-refresh'
+import { ensureBrainIndexFresh, reindexerApresMutation } from './brain-index-refresh'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
 import {
@@ -363,6 +364,7 @@ import { ProviderStateStore } from './provider-state-store'
 import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
+import { createBrainTitresDuTour } from './brain-titres-du-tour'
 import {
   automationAppIdentity,
   resolveAutomationInstanceMode,
@@ -399,6 +401,7 @@ import {
   cheminJournalWatchdogTeams,
   creerBattementWatchdog,
   creerJournalWatchdog,
+  detailPilotage,
   empreinteConversation
 } from './task-manager/journal-watchdog-teams'
 import type { WatchdogAppEvent } from './task-manager/types'
@@ -568,6 +571,20 @@ const brainSearchWorker = new BrainWorkerClient(brainWorkerPath)
 const brainInboxWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchCoordinator = new BrainSearchCoordinator()
 jalonDemarrage('clients Brain crees')
+/*
+ * Le savoir vient de changer (promotion, retrait, restauration, remplacement) ou un rafraîchissement
+ * est demandé. Le serveur Brain détecte alors un index périmé mais NE LE RECONSTRUIT PAS : il
+ * refuse toute question (503) jusqu'à la prochaine reconstruction. Mesuré le 2026-09-29 : notes
+ * promues à 08:32, Brain muet ensuite, car la réindexation ne partait qu'au démarrage. En tâche de
+ * fond : l'appelant n'attend ni la sonde ni les minutes de reconstruction.
+ */
+const reindexerEnFond = (origine: string): void => {
+  void reindexerApresMutation()
+    .then((r) => {
+      if (r.status !== 'not-needed') console.log('[brain-index]', origine, r.status, '—', r.detail)
+    })
+    .catch((erreur) => console.warn('[brain-index]', origine, 'sonde impossible —', String(erreur)))
+}
 const invalidateBrainRuntime = async (): Promise<void> => {
   brainSearchCoordinator.invalidate()
   await Promise.all([
@@ -575,6 +592,7 @@ const invalidateBrainRuntime = async (): Promise<void> => {
     brainSearchWorker.invalidate(),
     brainInboxWorker.invalidate()
   ])
+  reindexerEnFond('après modification du savoir')
 }
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 // SORTIE DE L'ÉTAT D'ATTENTE. Un tour laissé `streaming` sur disque appartient à un run mort avec
@@ -1068,37 +1086,51 @@ const dossierDuTour = (conversationId?: string): string =>
     conversationId ? os.conversations.get(conversationId)?.projectPath : undefined,
     os.executionWorkspace
   )
+/**
+ * LE BRAIN À CHAQUE TOUR, AU PLUS BAS COÛT (conv-892, 2026-09-30). Mesure du 18/09 au 30/09 : 8 tours
+ * de chat sur 824 ont lancé `brain_query`, jamais de leur propre initiative — « à la demande » voulait
+ * dire « quand l'utilisateur y pense ». Choix de l'utilisateur : « a chaque tour mais via un mecanisme
+ * qui coute le moins de token possible ». Chaque tour reçoit donc le CHEMIN des 3 notes les plus
+ * proches au plus (rang ≤ 3, score ≥ 0,40), jamais leur contenu, et RIEN quand aucune n'est proche
+ * (détail et mesure : `brain-titres-du-tour.ts`).
+ */
+const titresBrainDuTour = createBrainTitresDuTour({
+  workspace: (conversationId?: string) => dossierDuTour(conversationId)
+})
+const contexteGrapheDuTour = createAmitelContextProvider({
+  graphEvidence: (raw, query, limit) =>
+    brainWorker.request('graphifyEvidence', raw, query, limit),
+  // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc RIG, donc une question Autowin ramenait
+  // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
+  // pas ecrit en dur : dans un workspace RIG, la doc RIG est exactement ce qu'il faut.
+  // Cette voie ne pousse plus d'EXTRAITS Brain. MESURE 2026-07-29 : l'appel coutait ~430 ms de
+  // mediane a chaque tour (jusqu'a 1 500 ms, son timeout) alors que 73 % des tours n'en tiraient
+  // AUCUNE source utile. Le Brain revient a chaque tour le 2026-09-30, mais en CHEMINS seuls et par
+  // `titresBrainDuTour` ci-dessus : « a la demande » avait donne 8 appels sur 824 tours.
+  // POIDS MORT RETIRE (conv-703, mesure 2026-09-18) : le graphe poussait ~900 car. de noms de
+  // fichiers sans rapport (« 0. Etat des lieux », `app-data.ts`...) sur 3 questions d'avis sur 3,
+  // payes plein tarif a chaque tour. Pour une question sur le code, seule la recherche texte a la demande
+  // (`find_in_files`) reste : ce n'est PAS la carte de structure du graphe (perte non evaluee).
+  // fix-ok: graphe injecte a chaque tour de chat = 877/812/813 car. hors cache sur 3 questions d avis, 0 apres (createAmitelContextProvider reel)
+  sources: [],
+  // RESOLU PAR TOUR : le corpus autorise derive du dossier RANGE sur la conversation, pas d'un global fige.
+  workspace: (conversationId?: string) => dossierDuTour(conversationId),
+  onScope: ({ kept, dropped, corpus }) => {
+    if (dropped > 0) {
+      console.info(
+        `[brain-scope] corpus ${corpus.join('|')} : ${kept} source(s) gardee(s), ${dropped} hors corpus ecartee(s)`
+      )
+    }
+  }
+})
 const pilot = new AgentPilot(
   os.registry,
   os.roles,
   bus,
-  createAmitelContextProvider({
-    graphEvidence: (raw, query, limit) =>
-      brainWorker.request('graphifyEvidence', raw, query, limit),
-    // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc RIG, donc une question Autowin ramenait
-    // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
-    // pas ecrit en dur : dans un workspace RIG, la doc RIG est exactement ce qu'il faut.
-    // Le chat ne POUSSE plus que le graphe de code. MESURE 2026-07-29 : l'appel Brain coute ~430 ms de
-    // mediane a chaque tour (jusqu'a 1 500 ms, son timeout) alors que 73 % des tours n'en ont tire
-    // AUCUNE source utile ; le graphe coute 7 ms. Le Brain reste atteignable A LA DEMANDE, par la
-    // commande `brain_query` que le prompt recommande deja — on passe d'un contexte pousse a une
-    // capacite disponible.
-    // POIDS MORT RETIRE (conv-703, mesure 2026-09-18) : le graphe poussait ~900 car. de noms de
-    // fichiers sans rapport (« 0. Etat des lieux », `app-data.ts`...) sur 3 questions d'avis sur 3,
-    // payes plein tarif a chaque tour. Pour une question sur le code, seule la recherche texte a la demande
-    // (`find_in_files`) reste : ce n'est PAS la carte de structure du graphe (perte non evaluee).
-    // fix-ok: graphe injecte a chaque tour de chat = 877/812/813 car. hors cache sur 3 questions d avis, 0 apres (createAmitelContextProvider reel)
-    sources: [],
-    // RESOLU PAR TOUR : le corpus autorise derive du dossier RANGE sur la conversation, pas d'un global fige.
-    workspace: (conversationId?: string) => dossierDuTour(conversationId),
-    onScope: ({ kept, dropped, corpus }) => {
-      if (dropped > 0) {
-        console.info(
-          `[brain-scope] corpus ${corpus.join('|')} : ${kept} source(s) gardee(s), ${dropped} hors corpus ecartee(s)`
-        )
-      }
-    }
-  }),
+  async (query, meta) =>
+    (await Promise.all([titresBrainDuTour(query, meta), contexteGrapheDuTour(query, meta)]))
+      .filter(Boolean)
+      .join('\n\n'),
   // MÊME source de contexte projet que les phases orchestrées (fold du CLAUDE.md/AGENTS.md du workspace).
   // RESOLU PAR TOUR : c'est l'AGENTS.md du dossier RANGE sur la conversation qui doit être lu.
   (conversationId?: string) => projectContextBlock(dossierDuTour(conversationId)),
@@ -1632,6 +1664,8 @@ function registerIdentiteIpc(): void {
 
 /** Petite TV du bureau cache (conv-528) : lecture seule, processus de capture cree a la demande. */
 let capteurHdesk: CapteurHdesk | null = null
+/** Processus lancés par le bouton « Lancer » : arrêtés, eux seuls, à la fermeture de l’app. */
+let lancementIpc: { arreterTout: () => Promise<void> } | null = null
 function registerHdeskTvIpc(): void {
   const capteur = (): CapteurHdesk =>
     (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath())))
@@ -2304,6 +2338,8 @@ Le fil reprend ensuite normalement.`
   registerGitIpc({ os, pickDirectory })
   // Les canaux « Projet » (arborescence + éditeur) vivent dans src/main/ipc/project-files.ts.
   registerProjectFilesIpc({ os })
+  // Le bouton « Lancer » du panneau Fichiers vit dans src/main/ipc/lancement.ts.
+  lancementIpc = registerLancementIpc({ os })
   // Les canaux de la vue Tests vivent dans src/main/ipc/tests-view.ts.
   registerTestsViewIpc({ os, pickDirectory })
   // Les canaux de l'onglet Latence vivent dans src/main/ipc/perf.ts.
@@ -3190,7 +3226,17 @@ Le fil reprend ensuite normalement.`
               conversationId,
               turnId: resultat.turnId,
               request: demande,
-              debut: debutPublication
+              debut: debutPublication,
+              // Un autre fil encore en cours n'a peut-être rien écrit au journal des fichiers.
+              autresToursEnCours: () =>
+                activeChatTurns
+                  .inFlightConversations()
+                  .filter((id) => id !== conversationId)
+                  .map((id) => dossierDuTour(id)),
+              // Les tests des fichiers du tour sont rejoués AVANT de pousser : `b6d2a3fc` (conv-892)
+              // a été poussé sans test et a laissé main rouge 20 h (mesuré le 2026-10-01).
+              verifierAvantPublication: (repo, fichiers) =>
+                bus.verifierAvantPublication(repo, fichiers)
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
         }
@@ -3756,7 +3802,7 @@ Le fil reprend ensuite normalement.`
           mail: (adresse, objet, corps) => outlookGateway.sendNew(adresse, objet, corps),
           log: (ligne) => {
             console.warn(ligne)
-            journalTeams('pilotage', { detail: ligne.replace(/^[watchdog]s*/, '') })
+            journalTeams('pilotage', { detail: detailPilotage(ligne) })
           }
         })
       : undefined
@@ -4059,17 +4105,19 @@ Le fil reprend ensuite normalement.`
       const conversationId = guardString(rawConversationId, 'conversationId')
       const directive = guardString(rawDirective, 'directive').trim()
       const jointes = guardAttachments(rawAttachments)
-      if (!directive && jointes.length === 0) return { ok: false }
+      if (!directive && jointes.length === 0) return { ok: false, motif: 'vide' as const }
       // UNE COMMANDE DE SKILL NE S'INJECTE PAS EN TEXTE (conv-843, turn 6d0e352f-0624-4c9a-b2f5-c6aabf57d310,
       // saisie ts 1790275118313) : « /judge mon watchdog » envoye pendant un tour a ete colle dans le
       // fil comme simple phrase ; la skill judge n'a jamais ete chargee et le modele a juge lui-meme.
       // Refus -> le renderer met le texte en FILE, il repart en message normal, donc route par
       // `routeSkillRequest` comme n'importe quel `/judge`.
-      if (jointes.length === 0 && routeSkillRequest(directive)?.reason === 'explicit-skill')
-        return { ok: false }
+      // Le refus porte son MOTIF : sans lui, l'ecran affichait « ⚠ Échec » sur un refus voulu (conv-891).
+      const commande = jointes.length === 0 ? commandeNonInjectable(directive) : undefined
+      if (commande) return { ok: false, motif: 'commande' as const, commande }
       // Le renderer passe busy avant que l'IPC `pilotChat` ait fini d'enregistrer son controleur.
       // Une attente courte absorbe cette course de demarrage sans accepter de directive hors tour.
-      if (!(await activeChatTurns.waitForActive(conversationId, 500))) return { ok: false }
+      if (!(await activeChatTurns.waitForActive(conversationId, 500)))
+        return { ok: false, motif: 'hors-tour' as const }
       // PIECES JOINTES EN COURS DE TOUR (2026-09-23) : elles attendaient la fin du tour, parfois
       // plusieurs minutes (« j'ai envoye un message avec une image et ca n'a rien envoye »). Elles
       // sont ecrites sur disque comme pour un message normal, et leurs chemins suivent le texte.
@@ -4934,8 +4982,18 @@ app.whenReady().then(async () => {
     // #1 bis - la file de candidats Brain se VIDE toute seule au demarrage. Sans ce declencheur,
     // rien dans l'app n'executait l'etape 3 du protocole (inbox/README.md) : 109 candidats
     // dormants mesures le 2026-09-02, dont 67 deposes le jour meme. Ne promeut que le mecanique.
-    const curation = startBrainCuration()
-    if (curation.status === 'launched') console.log('[brain-curation]', curation.detail)
+    // Sa FIN enchaîne la réindexation : `--apply` promeut des notes, donc périme l'index.
+    // Une instance de TEST ne touche pas au Brain partagé (garde dans la fonction).
+    const curation = startBrainCuration(
+      process.env,
+      undefined,
+      () => reindexerEnFond('après la curation de démarrage'),
+      isolatedTestInstance
+    )
+    // `busy` : une passe /curate tient inbox/.curation.lock — le renoncement doit se lire au journal.
+    if (curation.status === 'launched' || curation.status === 'busy') {
+      console.log('[brain-curation]', curation.detail)
+    }
     // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
     // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
     // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
@@ -4956,7 +5014,7 @@ app.whenReady().then(async () => {
      * à la main. On lit donc /health et on réindexe, une seule fois par session, en tâche de fond.
      */
     if (brainCheck?.ok) {
-      void ensureBrainIndexFresh().then((r) => {
+      void ensureBrainIndexFresh({ instanceDeTest: isolatedTestInstance }).then((r) => {
         if (r.status !== 'not-needed') console.log('[brain-index]', r.status, '—', r.detail)
       })
     }
@@ -5010,6 +5068,7 @@ app.whenReady().then(async () => {
 let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
   capteurHdesk?.detruire()
+  void lancementIpc?.arreterTout()
   capteurHdesk = null
   // Un raccourci global laissé posé continue de capter la combinaison pour toute la session.
   raccourciCapture?.desinstaller()

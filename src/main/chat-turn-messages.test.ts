@@ -140,7 +140,10 @@ describe('buildTurnMessages', () => {
       memoryEcho: '   ',
       history: [{ role: 'user', content: 'salut' }]
     })
-    expect(entries).toEqual([`ÉTAT DE L'APP:\n${JSON.stringify({})}`, 'UTILISATEUR: salut'])
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      'UTILISATEUR: <message_utilisateur>salut</message_utilisateur>'
+    ])
   })
 
   it("conserve le contexte Brain et l'echo memoire quand ils sont non vides, dans l'ordre", () => {
@@ -170,7 +173,7 @@ describe('buildTurnMessages', () => {
     })
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      'UTILISATEUR: question',
+      'UTILISATEUR: <message_utilisateur>question</message_utilisateur>',
       'TOI: reponse',
       'TOI: note systeme'
     ])
@@ -184,7 +187,10 @@ describe('buildTurnMessages', () => {
       history: [{ role: 'user', content: 'A' }],
       lastUserMessage: 'B ne doit pas apparaitre seul'
     })
-    expect(entries).toEqual([`ÉTAT DE L'APP:\n${JSON.stringify({})}`, 'UTILISATEUR: A'])
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      'UTILISATEUR: <message_utilisateur>A</message_utilisateur>'
+    ])
   })
 
   it("avec resumeSessionId, ignore tout l'historique et ne rend que le dernier message utilisateur", () => {
@@ -207,7 +213,7 @@ describe('buildTurnMessages', () => {
         'conversation_search sur les mots de la demande, puis conversation_read sur ' +
         "l'identifiant rendu. L'identifiant de la conversation courante est " +
         "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
-      'UTILISATEUR: dernier message'
+      'UTILISATEUR: <message_utilisateur>dernier message</message_utilisateur>'
     ])
   })
 
@@ -275,7 +281,7 @@ describe('buildTurnMessages', () => {
         'conversation_search sur les mots de la demande, puis conversation_read sur ' +
         "l'identifiant rendu. L'identifiant de la conversation courante est " +
         "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
-      'UTILISATEUR: ok'
+      'UTILISATEUR: <message_utilisateur>ok</message_utilisateur>'
     ])
   })
 
@@ -287,7 +293,7 @@ describe('buildTurnMessages', () => {
       history: [],
       resumeSessionId: 'sess-123'
     })
-    // 'UTILISATEUR: ' + '' a un contenu non vide (le prefixe) : PAS filtre.
+    // Demande absente : la balise vide reste (contenu non vide), la place de la demande est visible.
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
       "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
@@ -296,7 +302,7 @@ describe('buildTurnMessages', () => {
         'conversation_search sur les mots de la demande, puis conversation_read sur ' +
         "l'identifiant rendu. L'identifiant de la conversation courante est " +
         "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
-      'UTILISATEUR: '
+      'UTILISATEUR: <message_utilisateur></message_utilisateur>'
     ])
   })
 
@@ -317,7 +323,7 @@ describe('buildTurnMessages', () => {
         'conversation_search sur les mots de la demande, puis conversation_read sur ' +
         "l'identifiant rendu. L'identifiant de la conversation courante est " +
         "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
-      'UTILISATEUR: ok'
+      'UTILISATEUR: <message_utilisateur>ok</message_utilisateur>'
     ])
   })
 

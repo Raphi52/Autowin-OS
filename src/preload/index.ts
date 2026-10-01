@@ -207,6 +207,32 @@ const api = {
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
+  // Bouton « Lancer » du panneau Fichiers : le principal choisit le dossier ET la commande.
+  lancementEtat: (
+    conversationId: string
+  ): Promise<import('../shared/scripts-copie').EtatLancement> =>
+    ipcRenderer.invoke('lancement:etat', conversationId),
+  lancementDemarrer: (
+    conversationId: string
+  ): Promise<import('../shared/scripts-copie').EtatLancement> =>
+    ipcRenderer.invoke('lancement:demarrer', conversationId),
+  lancementArreter: (
+    conversationId: string
+  ): Promise<import('../shared/scripts-copie').EtatLancement> =>
+    ipcRenderer.invoke('lancement:arreter', conversationId),
+  onLancement: (
+    cb: (maj: {
+      conversationId: string
+      etat: import('../shared/scripts-copie').EtatLancement
+    }) => void
+  ): (() => void) => {
+    const handler = (
+      _e: unknown,
+      maj: { conversationId: string; etat: import('../shared/scripts-copie').EtatLancement }
+    ): void => cb(maj)
+    ipcRenderer.on('lancement:maj', handler)
+    return () => ipcRenderer.removeListener('lancement:maj', handler)
+  },
   // Onglet « Projet » : arborescence + editeur. Chemins RELATIFS ; la racine vit cote principal.
   // `conversationId` : la racine devient le CWD de cette conversation (resolu cote principal).
   projectRoot: (conversationId?: string): Promise<string> =>
@@ -805,8 +831,14 @@ const api = {
     conversationId: string,
     directive: string,
     attachments?: ChatAttachment[]
-  ): Promise<{ ok: boolean; messageId?: string }> =>
-    ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive, attachments),
+  ): Promise<{
+    ok: boolean
+    messageId?: string
+    /** Refus : pourquoi le texte n'a pas rejoint le tour (il repart en file, rien n'est perdu). */
+    motif?: 'vide' | 'commande' | 'hors-tour'
+    /** Commande de skill reconnue (`scout`, `judge`…) quand `motif` vaut `commande`. */
+    commande?: string
+  }> => ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive, attachments),
   /**
    * Écrit le texte de l'utilisateur sur disque AVANT qu'il ne parte. Filet de dernier recours : un
    * texte qui ne produit aucun tour (orientation, file d'attente) reste retrouvable malgré tout.
