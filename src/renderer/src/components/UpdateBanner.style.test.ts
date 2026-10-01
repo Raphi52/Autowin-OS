@@ -14,6 +14,15 @@ describe('bouton de mise à jour — direction Or royal', () => {
     expect(css).toContain('background: transparent')
   })
 
+  it('pose la liste flottante des commits sur un fond OPAQUE (rail replié)', () => {
+    // Constat utilisateur du 2026-09-29 : la liste s'ouvrait par-dessus le rail sur
+    // `--surface-raised` = `--bg-2` = rgba(0,0,0,.42) — on lisait l'œil, « Actives » et les
+    // pastilles du rail À TRAVERS le texte. `--bg-0` est opaque dans tous les thèmes.
+    const bloc = css.match(/\.rail-update-incoming\.is-floating\s*\{([^}]*)\}/)?.[1] ?? ''
+    const fonds = [...bloc.matchAll(/^\s*background\s*:\s*([^;]+);/gm)].map((m) => m[1].trim())
+    expect(fonds).toEqual(['var(--bg-0)'])
+  })
+
   it('réserve le violet au survol et au focus', () => {
     expect(css).toContain('var(--violet')
     expect(css).toMatch(/rail-update-btn:(?:hover|focus-visible)[\s\S]*var\(--violet/)

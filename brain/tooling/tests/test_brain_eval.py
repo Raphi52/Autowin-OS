@@ -8,7 +8,7 @@ TOOLING = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLING))
 
 from brain_eval import evaluate_cases, index_freshness
-from brain_index import knowledge_fingerprint, write_index_snapshot
+from brain_index import META_FIELDS, knowledge_fingerprint, write_index_snapshot
 
 
 class FakeRetriever:
@@ -62,9 +62,13 @@ class BrainEvaluationTests(unittest.TestCase):
             note = knowledge / "note.md"
             note.write_text("# Version 1\n", encoding="utf-8")
             fingerprint = knowledge_fingerprint([note], relative_to=root)
+            # A row shaped like the real indexer's: the manifest records the OBSERVED row shape,
+            # so a path-only row would rightly read as "built by another version of the code".
+            row = {field: "" for field in META_FIELDS}
+            row["path"] = "knowledge/note.md"
             snapshot = write_index_snapshot(
                 root / "index",
-                [{"path": "knowledge/note.md"}],
+                [row],
                 ["# Version 1"],
                 np.array([[1.0]], dtype=np.float32),
                 generation_id="gen-one",

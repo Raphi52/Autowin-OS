@@ -59,7 +59,8 @@ import {
   type CloseBaseline,
   closeGreenRunOnDisk,
   projectPublicationNeedsRetry,
-  type AutoCloseReport
+  type AutoCloseReport,
+  type VerificationAvantPublication
 } from './run-autoclose'
 import { publierTourDeChat, type ChatTurnStart } from './chat-turn-publication'
 import { amitelBrainRoot } from './amitel-context'
@@ -101,7 +102,12 @@ import type {
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
-import { loadAutoClose, saveAutoClose } from './autoclose-store'
+import {
+  loadAutoClose,
+  loadLastAutoCloseReport,
+  saveAutoClose,
+  saveLastAutoCloseReport
+} from './autoclose-store'
 import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../shared/app-identity'
 import type { RapportRetention } from '../shared/rapport-retention'
 import { ExecutionSupervisor, type ExecutionUsageSnapshot } from './execution-supervisor'
@@ -121,6 +127,15 @@ import {
   type ProcessIdentity,
   type RecoveredDetachedUsageSettlement
 } from './runs/run-reattach'
+import { preparerCopie } from './scripts-copie-main'
+import {
+  cleDepot,
+  noterPistesScout,
+  noterChoixScout,
+  bilanDesChoix,
+  pistesDejaConnues,
+  titresStockVeilleAutowin
+} from './scout-memoire'
 import type { LanceurCommandeSkill } from './skill-node-tools'
 import {
   executionWorkspacePreferenceFile,
@@ -463,6 +478,18 @@ export class AutowinOS {
            * l'ont fait le meme jour. On sonne sur l'ABANDON seulement, jamais sur un refus
            * ordinaire : 1649 refus sont traces, en notifier une fraction noierait le signal.
            */
+          /*
+           * SCRIPTS DE COPIE (2026-09-28) : fichiers locaux et préparation déclarés dans
+           * `.autowin/scripts.json` du dépôt, joués à la création de chaque copie d'agent. Voir
+           * `scripts-copie-main.ts` ; rien de déclaré = rien de joué, aucune ligne de trace.
+           */
+          preparerCopie: async (copie, signaler) =>
+            (
+              await preparerCopie(
+                { depot: copie.depot, chemin: copie.chemin, nom: copie.runId },
+                { auDebut: signaler }
+              )
+            )?.resume,
           onAbandon: ({ tache, runId }) => {
             try {
               if (!Notification.isSupported()) return
@@ -557,6 +584,24 @@ export class AutowinOS {
       trust: this.trust,
       executionWorkspace,
       causalMemoryFor: (conversationId) => this.causalMemoryRetriever?.(conversationId) ?? '',
+      // Pistes deja proposees par les scouts precedents (`scout-memoire.ts`). Le stock de la veille ne
+      // vaut que pour le depot que la veille analyse : `executionWorkspace` (`index.ts`, `racineDepot`).
+      // fix-ok: sans ce branchement, `memoireScout` restait vide en production : le test au site d'appel
+      // (orchestrator.scout-cible.test.ts) tombe quand la memoire n'est plus lue.
+      memoireScout: {
+        connues: (depot, sauf) =>
+          pistesDejaConnues({
+            depot,
+            sauf,
+            stockVeille:
+              cleDepot(depot) === cleDepot(executionWorkspace) ? titresStockVeilleAutowin() : []
+          }),
+        noter: (depot, texteScout, run) =>
+          noterPistesScout({ depot, texte: texteScout, run, maintenant: new Date().toISOString() }),
+        choisir: (depot, demande) =>
+          noterChoixScout({ depot, demande, maintenant: new Date().toISOString() }),
+        bilan: (depot) => bilanDesChoix({ depot })
+      },
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.
       drainDirectives: (conversationId) => this.directivesEnAttente?.(conversationId) ?? [],
@@ -713,8 +758,21 @@ export class AutowinOS {
   private autoClose = loadAutoClose()
   /** Photo de l'arbre par run en cours (projet + Brain), prise au démarrage. */
   private readonly closeBaselines = new Map<string, Promise<CloseBaseline>>()
-  /** Dernier résultat de clôture — remonté à l'UI pour dire ce qui a réellement été publié. */
-  private lastAutoClose: AutoCloseReport | undefined
+  /**
+   * Dernier résultat de clôture — remonté à l'UI pour dire ce qui a réellement été publié, ou
+   * pourquoi rien ne l'a été. PERSISTÉ et relu au démarrage : le 2026-10-01 (conv-770), le motif du
+   * non-commit du tour 235b91bd a disparu au redémarrage, faute d'exister ailleurs qu'en mémoire.
+   */
+  private dernierRapport: AutoCloseReport | undefined = loadLastAutoCloseReport()
+  private get lastAutoClose(): AutoCloseReport | undefined {
+    return this.dernierRapport
+  }
+  private set lastAutoClose(report: AutoCloseReport | undefined) {
+    this.dernierRapport = report
+    if (report && !saveLastAutoCloseReport(report)) {
+      console.warn('[cloture auto] dernier rapport non persisté : il ne survivra pas au redémarrage')
+    }
+  }
 
   setAutoClose(enabled: boolean): void {
     if (!saveAutoClose(enabled)) {
@@ -743,15 +801,35 @@ export class AutowinOS {
     turnId: string
     request: string
     debut: ChatTurnStart
+    /** Dossiers de travail des tours d'AUTRES fils en cours, relus au moment de publier. */
+    autresToursEnCours?: () => readonly string[]
+    /** Tests des fichiers du tour, rejoués AVANT de pousser (voir `chat-turn-publication.ts`). */
+    verifierAvantPublication?: (
+      repo: string,
+      fichiers: readonly string[]
+    ) => Promise<VerificationAvantPublication>
   }): Promise<AutoCloseReport | undefined> {
+    const { autresToursEnCours, ...tour } = input
     const next = this.chatTurnPublications.then(async () => {
       if (!this.autoClose) return undefined
+      // Relevé AVANT la lecture du journal : un tour fini entre les deux y a déjà tout écrit.
+      const enCours = autresToursEnCours?.() ?? []
       const report = await publierTourDeChat({
-        ...input,
+        ...tour,
+        autresToursEnCours: enCours,
         traces: await readRecentConversationFileTraces()
       })
       if (report) {
         this.lastAutoClose = report
+        // Le panneau ne garde que le DERNIER rapport : le journal garde chaque issue, motif compris.
+        const laisses = (report.exclus ?? []).map((e) => `${e.path} (${e.motif})`).join(', ')
+        console.log(
+          '[enchainement chat]',
+          report.runId,
+          '→',
+          JSON.stringify(report.project).slice(0, 400),
+          laisses ? `; laissés en attente : ${laisses}` : ''
+        )
         // Même signal que la fin d'une tâche d'agent : le panneau Git relit le dernier rapport.
         this.worktreeActivityListener?.(this.getWorktreeActivity())
       }

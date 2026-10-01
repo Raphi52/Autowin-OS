@@ -81,4 +81,35 @@ describe('hook des agents — SQL vers la production', () => {
       /scriptHookGardes\(refusReglageProd, refusSqlAgent, /
     )
   })
+  // conv-106, tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf : SELECT vers RIG_DEV sur SQL-DEV<barre>DEV refusé.
+  // Objection du juge : écrit sans double barre, le littéral devenait « SQL-DEVDEV » et ne prouvait
+  // rien. Ici la VRAIE barre oblique inverse, des deux côtés, à travers le VRAI script de hook
+  // (liste non-prod sérialisée dans le script comprise).
+  // fix-ok: littéral TS 'SQL-DEV\DEV' à barre simple = « SQL-DEVDEV » (barre avalée, mesuré) ; test rouge sur le garde de dece44cf^ (exit 1), vert avec dece44cf (exit 0)
+  const barre = String.fromCharCode(92) // vraie barre oblique inverse, sans piège d'échappement
+  const devDev = `SQL-DEV${barre}DEV`
+  it('laisse passer -S SQL-DEV<barre>DEV quand ce serveur est déclaré non-prod (hook réel)', () => {
+    const ligne = `sqlcmd -S ${devDev} -d RIG_DEV -Q "select 1"`
+    expect(ligne).toContain('SQL-DEV' + barre + 'DEV')
+    expect(garde.refusSqlAgent(ligne, [`serveur:${devDev}`])).toBeUndefined()
+    expect(hook(ligne, [`serveur:${devDev}`])).toBe('')
+    expect(hook(`sqlcmd -S tcp:sql-dev${barre}dev,1433 -d RIG_RECETTE -Q "select 1"`, [`serveur:${devDev}`])).toBe('')
+    expect(refuse(hook(ligne, []))).toBe(true)
+    expect(refuse(hook(ligne, ['serveur:SQL-DEVDEV']))).toBe(true)
+    expect(refuse(hook(`sqlcmd -S SQL-PROD${barre}PROD -d RIG_DEV -Q "select 1"`, [`serveur:${devDev}`]))).toBe(true)
+  })
+  // Pour sqlcmd/osql, -s (minuscule) est le SÉPARATEUR de colonnes, -S (majuscule) le serveur.
+  // Entrée qui ferait échouer ce test si le garde confondait les deux : `-s SQL-DEV<barre>DEV -S SQL-PROD<barre>PROD`
+  // — le séparateur ressemble au serveur déclaré, mais la commande vise la PROD : elle doit être refusée.
+  // fix-ok: prod-run-guard comparait les options en minuscules, donc -s (séparateur) était lu comme -S (serveur) ; ce test rouge sur 600c3347 (exit 1, l.106), vert sur bd648475 (exit 0) — source tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf
+  it('ne prend pas le séparateur -s pour le serveur -S, lit -S collé, et ne donne rien sans -S', () => {
+    const decl = [`serveur:${devDev}`]
+    expect(refuse(hook(`sqlcmd -s ${devDev} -S SQL-PROD${barre}PROD -d RIG_DEV -Q "select 1"`, decl))).toBe(true)
+    expect(refuse(hook(`sqlcmd -S ${devDev} -S SQL-PROD${barre}PROD -d RIG_DEV -Q "select 1"`, decl))).toBe(true)
+    expect(hook(`sqlcmd -S${devDev} -d RIG_DEV -Q "select 1"`, decl)).toBe('')
+    expect(hook(`Invoke-Sqlcmd -ServerInstance "${devDev}" -Database RIG_DEV -Query "select 1"`, decl)).toBe('')
+    expect(hook(`Invoke-Sqlcmd -ServerInstance "${devDev}" -SuppressProviderContextWarning -Database RIG_DEV -Query "select 1"`, decl)).toBe('')
+    // sans -S, sqlcmd vise le serveur LOCAL (ou SQLCMDSERVER) : une déclaration serveur n'y donne rien.
+    expect(refuse(hook(`sqlcmd -d RIG_DEV -Q "select 1"`, decl))).toBe(true)
+  })
 })

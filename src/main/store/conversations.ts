@@ -331,6 +331,35 @@ function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecher
 const SEUIL_RACINE = 6
 
 /**
+ * Une conversation dont un message porte au moins cette part des mots demandes -- ET le mot porteur
+ * -- est une demande DEJA POSEE : elle passe devant le re-classement par mot porteur (fin de
+ * `search`).
+ *
+ * Mesure du 2026-09-30 (conv-889), `scripts/mesure-rappel-selectif.mts --verites-seules
+ * --diagnostic`, corpus reel de 795 conversations, 139 messages a verite connue (89 citent une
+ * conversation, 50 reposent une demande d'un autre fil) :
+ *
+ *   reglage              rang 1 juste   cible montree   citations 1res   reposees 1res
+ *   sans la priorite         33/118         39/139            4               30
+ *   100 % des mots           40/118         47/139            4               36
+ *    90 %                    40/120         48/139            4               36   <- retenu
+ *    80 %                    40/121         47/139            4               36
+ *    70 %                    40/120         46/139            4               36
+ *   80 % SANS mot porteur    39/121         44/139            3               36
+ *
+ * Le resultat est PLAT de 70 a 100 % : le reglage ne decide presque rien, la condition du mot
+ * porteur si (sans elle, les citations perdent un rang 1). 90 % : meilleur total montre, et le moins
+ * de promotions -- donc le moins de risque sur les demandes que ce banc ne couvre pas.
+ *
+ * LIMITE A DIRE : la verite « demande reposee » est definie par 80 % de mots communs, un critere
+ * voisin de celui-ci. Le gain sur cette colonne est donc en partie construit par la definition ; la
+ * colonne « citations », independante, dit seulement que rien n'a ete perdu.
+ */
+const COUVERTURE_REPOSEE = 0.9
+/** En dessous, « presque tous les mots » ne veut rien dire : deux mots sur deux suffiraient. */
+const MOTS_MIN_DEMANDE_REPOSEE = 4
+
+/**
  * La RACINE d'un mot : ses premieres lettres.
  *
  * « pastilles » ne trouvait pas « pastille », ni « couleurs » « couleur » : une demande est
@@ -538,6 +567,12 @@ export class ConversationStore {
     options?: {
       resumableTurnIds?: ReadonlySet<string>
       /**
+       * Appel de chat direct dont le CLI a survécu : posée pour les seuls tours restés `streaming`,
+       * avec la conversation qui situe leur journal. Remplace un inventaire COMPLET des journaux
+       * fait avant le chargement (8951 ms de gel, gels.jsonl 2026-09-26T09:30).
+       */
+      appelChatReprenable?: (conversationId: string, turnId: string) => boolean
+      /**
        * Issue d'un run DÉJÀ TERMINÉ, lue dans son état persisté. Absente de `resumableTurnIds` pour
        * la raison inverse de l'interruption : plus rien ne reprend parce que tout est fini. Sans
        * elle, le fil annonçait « interrompu » sur un travail vert et publié, et n'en disait rien
@@ -614,7 +649,11 @@ export class ConversationStore {
           // réellement prendre la main. Conserver l'état streaming intact évite deux mensonges :
           // afficher « interrompu » pendant que le CLI travaille encore, et marquer ses actions en
           // vol comme définitivement interrompues avant que leur résultat récupéré soit réinjecté.
-          if (message.turnId && resumable?.has(message.turnId)) return message
+          if (
+            message.turnId &&
+            (resumable?.has(message.turnId) || options?.appelChatReprenable?.(c.id, message.turnId))
+          )
+            return message
           const interrupted: Msg = {
             ...message,
             status: 'interrupted' as const,
@@ -835,6 +874,20 @@ export class ConversationStore {
        * L'utilisateur voyait sa phrase en dernier, avec rien en dessous.
        */
       avantLaReponseEnCours?: boolean
+      /**
+       * AVIS DE L'APP SUR LE TOUR (rangement de la conversation) : il passe AU-DESSUS de la reponse
+       * du tour, que celle-ci soit vide, en cours d'ecriture ou deja terminee.
+       *
+       * Defaut mesure (conv-23, tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba, 2026-09-27) : le rangement
+       * differe ecrit son avis APRES la fin du tour, donc sous une reponse qui n'est plus vierge.
+       * `avantLaReponseEnCours` ne jouait pas, l'avis finissait DERNIER message de l'agent, et le
+       * champ pre-rempli comme le mode auto — qui lisent le dernier message de l'agent — perdaient la
+       * suite `AUTOWIN_PROMPT_V1` du tour. Chaine arretee sans un mot (saisie ts 1790525003939).
+       *
+       * Reserve aux avis de l'APP : une consigne de l'utilisateur garde la regle conv-544 ci-dessous
+       * (sous un brouillon deja lu).
+       */
+      auDessusDeLaReponseDuTour?: boolean
     }
   ): Conversation {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
@@ -874,8 +927,11 @@ export class ConversationStore {
       dernier.status === 'streaming' &&
       !dernier.content?.trim() &&
       !flattenChatParts(dernier.parts ?? []).trim()
+    // La reponse d'un tour porte son `turnId` des `beginTurn` : c'est ce qui la distingue d'un avis.
+    const reponseDuTourEnFin = dernier?.role === 'assistant' && Boolean(dernier.turnId)
     const rangReponseEnCours =
-      m.avantLaReponseEnCours === true && brouillonEnCoursEstVierge
+      (m.avantLaReponseEnCours === true && brouillonEnCoursEstVierge) ||
+      (m.auDessusDeLaReponseDuTour === true && reponseDuTourEnFin)
         ? conversation.messages.length - 1
         : -1
     const previous =
@@ -1303,6 +1359,8 @@ export class ConversationStore {
       Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
     )
     const trouvees: Array<ConversationRecherche & { score: number }> = []
+    // Tenue A PART des resultats : c'est un critere de classement, pas une donnee a exposer.
+    const masquesReposesParId = new Map<string, number[]>()
     // La pre-selection porte sur les mots DEMANDES et AJOUTES : une conversation absente de l'index
     // pour tous ces mots ne peut pas correspondre, il est inutile de la relire.
     const candidates = this.indexInverse().candidates([...demandes, ...elargis])
@@ -1346,6 +1404,8 @@ export class ConversationStore {
        * sont ENSEMBLE : c'est la proximite qui fait le sens, pas la presence.
        */
       let meilleurScore = 0
+      /** Messages qui portent presque tous les mots DEMANDES : un bit par mot demande porte. */
+      const masquesReposes: number[] = []
       for (const [rang, message] of conversation.messages.entries()) {
         if (typeof message.content !== 'string') continue
         messagesParcourus += 1
@@ -1365,18 +1425,26 @@ export class ConversationStore {
          * « conversations » est omnipresent ici et « notifier » est rare : c'est la rarete du mot
          * TROUVE qui les separe, et elle ne dependait pas du seuil.
          */
-        const peser = (racineCherchee: string, poids: number): void => {
+        const peser = (racineCherchee: string, poids: number): boolean => {
           const trouve = motCorrespondant(motsDuMessage, racineCherchee)
-          if (!trouve) return
+          if (!trouve) return false
           const position = replie.indexOf(racineCherchee)
           motsIci += poids * index.rarete(racine(trouve)) * index.rarete(trouve)
           if (position >= 0 && (premierePosition < 0 || position < premierePosition)) {
             premierePosition = position
           }
+          return true
         }
-        for (const mot of demandes) peser(mot, POIDS_DEMANDE)
+        let masque = 0
+        let couverts = 0
+        for (const [i, mot] of demandes.entries()) {
+          if (!peser(mot, POIDS_DEMANDE)) continue
+          masque |= 1 << i
+          couverts += 1
+        }
         for (const mot of elargis) peser(mot, 1)
         if (premierePosition < 0) continue
+        if (couverts / demandes.length >= COUVERTURE_REPOSEE) masquesReposes.push(masque)
         /*
          * NORMALISE PAR LA LONGUEUR.
          *
@@ -1479,6 +1547,7 @@ export class ConversationStore {
         extraits,
         score: meilleurScore
       })
+      if (masquesReposes.length) masquesReposesParId.set(conversation.id, masquesReposes)
     }
     // Classe par NOMBRE DE MOTS retrouves avant la recence : une conversation qui porte trois mots
     // de la demande l'eclaire mieux qu'une plus recente qui n'en porte qu'un.
@@ -1734,7 +1803,40 @@ export class ConversationStore {
     }
     const marques = candidats.map((c) => ({ c, porte: porte(c.id) }))
     marques.sort((a, b) => b.porte - a.porte)
-    return marques.slice(0, limite).map(({ c }) => c)
+    /*
+     * UNE DEMANDE DEJA POSEE PASSE DEVANT LE MOT PORTEUR (conv-889, 2026-09-30).
+     *
+     * Le re-classement par mot porteur sert la demande qui NOMME un sujet parmi des mots d'adresse
+     * (« rappelle-moi ce qu'on a dit a propos de X ») : le score, sac de mots, y noie X. Il ne sert
+     * pas la demande qu'on REPOSE : un message d'un autre fil qui porte deja presque tous ses mots
+     * EST cette demande, deja faite. Or le compte d'occurrences du porteur (plafonne a 6) favorise
+     * les longues conversations qui repetent le mot, et faisait reculer le fil de la demande
+     * d'origine.
+     *
+     * Mesure `scripts/mesure-rappel-selectif.mts --verites-seules --diagnostic`, corpus reel (795
+     * conversations), 42 demandes reposees dont le fil d'origine est atteignable : ce fil est 1er
+     * 30 fois apres re-classement, 35 fois au score seul, 36 avec cette priorite. Reglage et mesure :
+     * COUVERTURE_REPOSEE.
+     *
+     * LE MESSAGE REPRIS DOIT PORTER LE MOT PORTEUR. Sans cette condition, « rappelle-moi ce qu'on a
+     * dit a propos de Y » couvre 4 mots sur 5 de « rappelle-moi ce qu'on a dit a propos de X » sans
+     * parler de X, et repasserait devant : exactement l'echec que le re-classement corrige.
+     */
+    const rangPorteur = demandes.indexOf(racine(porteur))
+    const bitPorteur = rangPorteur >= 0 ? 1 << rangPorteur : 0
+    const reposees =
+      demandes.length >= MOTS_MIN_DEMANDE_REPOSEE && bitPorteur
+        ? marques.filter(({ c }) =>
+            (masquesReposesParId.get(c.id) ?? []).some((masque) => (masque & bitPorteur) !== 0)
+          )
+        : []
+    const ordre = reposees.length
+      ? [
+          ...[...reposees].sort((a, b) => b.c.score - a.c.score),
+          ...marques.filter((m) => !reposees.includes(m))
+        ]
+      : marques
+    return ordre.slice(0, limite).map(({ c }) => c)
   }
 
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */

@@ -266,4 +266,23 @@ describe('ARRÊT DÉLIBÉRÉ — cliquer sur Stop n est pas une erreur a kaizene
     expect(turns.wasDeliberatelyStopped('conv-a')).toBe(true)
     expect(turns.wasDeliberatelyStopped('conv-b')).toBe(false)
   })
+
+  it('liste les conversations en cours, préparation comprise, et les oublie à la fin', async () => {
+    // Lu par la publication auto : un tour qui tourne encore n'a peut-être rien écrit au journal.
+    const turns = new ActiveChatTurns()
+    const controller = new AbortController()
+    turns.set('conv-tour', controller, Promise.resolve())
+    let finirPreparation!: () => void
+    const preparation = turns.trackPreparation(
+      'conv-prepa',
+      () => new Promise<void>((resolve) => (finirPreparation = resolve))
+    )
+
+    expect(turns.inFlightConversations().sort()).toEqual(['conv-prepa', 'conv-tour'])
+
+    turns.delete('conv-tour', controller)
+    finirPreparation()
+    await preparation
+    expect(turns.inFlightConversations()).toEqual([])
+  })
 })

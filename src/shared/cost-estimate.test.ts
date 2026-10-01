@@ -102,6 +102,59 @@ describe('estimation de coût des appels non chiffrés', () => {
     ).toBeCloseTo(6.25, 6)
   })
 
+  /**
+   * DUREE DE VIE 1 H (2026-09-26) : le CLI Claude ecrit son cache pour 1 h, facture 2x l'entree
+   * (https://platform.claude.com/docs/en/build-with-claude/prompt-caching). Au taux fixe de 1,25x,
+   * l'estimation de secours sous-evaluait chaque ecriture de 37,5 %.
+   */
+  it('facture a 2x la part ecrite pour 1 h, et 1,25x le reste de l ecriture', () => {
+    // Tout ecrit pour 1 h : 1M x 5 $ x 2 = 10 $.
+    expect(
+      estimateCostUsd({
+        inputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        cacheCreation1hTokens: 1_000_000,
+        model: 'claude-opus-5'
+      })
+    ).toBeCloseTo(10, 6)
+    // Mixte : 600k en 1 h (6 $) + 400k en 5 min (2,50 $).
+    expect(
+      estimateCostUsd({
+        inputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        cacheCreation1hTokens: 600_000,
+        model: 'claude-opus-5'
+      })
+    ).toBeCloseTo(8.5, 6)
+  })
+
+  it('reproduit au centime pres le montant que le CLI calcule lui-meme', () => {
+    // Oracle hors modele : `.arena/banc-heal/out-a.json`, modelUsage « claude-opus-5 », costUSD
+    // 0,8698835 $ pour 26 frais + 37 288 ecrits (tous en 1 h) + 487 297 relus + 10 129 sortis.
+    expect(
+      estimateCostUsd({
+        inputTokens: 26 + 37_288 + 487_297,
+        cacheCreationTokens: 37_288,
+        cacheCreation1hTokens: 37_288,
+        cacheReadTokens: 487_297,
+        outputTokens: 10_129,
+        model: 'claude-opus-5'
+      })
+    ).toBeCloseTo(0.8698835, 7)
+  })
+
+  it('une part 1 h plus grande que l ecriture est bornee a l ecriture, jamais ajoutee', () => {
+    // Compteur incoherent : 1h (900k) > ecriture (100k). Seuls les 100k ecrits comptent, a 2x.
+    expect(
+      estimateCostUsd({
+        inputTokens: 1_000_000,
+        cacheCreationTokens: 100_000,
+        cacheCreation1hTokens: 900_000,
+        model: 'claude-opus-5'
+      })
+    ).toBeCloseTo(0.9 * 5 + 0.1 * 5 * 2, 6)
+  })
+
   it('additionne lecture et ecriture de cache sans jamais doubler l entree', () => {
     // 200k frais x 5 + 300k ecrits x 6,25 + 500k relus x 0,50 = 1 + 1,875 + 0,25.
     expect(

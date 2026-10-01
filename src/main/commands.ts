@@ -28,6 +28,8 @@ import {
 } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
+import { refusEcriturePythonCrlf } from '../shared/garde-python-crlf'
+import { sansHeredocsDeDonnees } from '../shared/heredocs'
 import {
   decideRead,
   enumererFichiersLisibles,
@@ -69,10 +71,15 @@ import {
   VERIFY_TEXTE_ANGLE_MORT,
   estUneFeuilleDeStyle,
   estUnTexteDerivable,
+  porteeAvantPublication,
   porteeDUneEdition,
   porteeDerivableDesChangements,
   scriptVitestUnique,
   echecsDuRapport,
+  lectureBruteDuRapport,
+  decouperEnLots,
+  fusionnerRapportsVitest,
+  BUDGET_CHEMINS_PAR_LANCEMENT,
   verdictDifferentiel,
   noteDeDifferentiel,
   verifyTimeoutMs,
@@ -96,6 +103,7 @@ import {
   VERIFY_SANS_ISOLATION
 } from './verification-isolee'
 import { readLastCommitFiles, readTestsCitant } from './git-read-main'
+import type { VerificationAvantPublication } from './run-autoclose'
 import { nativeSkills } from './native-registry'
 
 /**
@@ -1136,7 +1144,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'brain_query',
     description:
-      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis',
+      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis. Rend la LISTE des notes candidates classées par pertinence (titre, chemin, taille), sans leur contenu : ouvre ensuite EN ENTIER avec brain_read celles qui servent ta tâche, autant qu’il en faut',
     args: { question: 'la question, en langage naturel' },
     annotations: {
       readOnlyHint: true,
@@ -1165,7 +1173,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'brain_read',
     description:
-      'Relire EN ENTIER une note curée du Brain nommée par brain_query ou brain_graph — pour décider soi-même si elle est à jour, et la remplacer via remember (supersedes) si elle ne l’est plus',
+      'Ouvrir EN ENTIER, sans coupe, une note curée du Brain nommée par brain_query ou brain_graph — pour en lire le contenu, décider soi-même si elle est à jour, et la remplacer via remember (supersedes) si elle ne l’est plus',
     args: { path: 'chemin de la note, knowledge/…/nom.md' },
     annotations: {
       readOnlyHint: true,
@@ -3586,13 +3594,19 @@ export class AppCommandBus {
         // ecran, qu'il demandait nommement. Le bureau cache (scripts/hdesk-lancer.ps1) reste la voie
         // par defaut, portee par la CONSIGNE du prompt de pilotage — plus par un blocage.
         // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
-        const refusGit = refusGitDestructeur(ligne)
+        // Même lecture que le hook du CLI : le corps d'un heredoc de simple texte n'est pas du shell
+        // (rejeu du 2026-10-01 sur 29 371 commandes, `src/shared/heredocs.ts`).
+        const shell = sansHeredocsDeDonnees(ligne)
+        const refusGit = refusGitDestructeur(shell)
         if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
+        // Même garde que le hook du CLI (2026-10-01) : Python en mode texte passe un fichier en CRLF.
+        const refusPython = refusEcriturePythonCrlf(ligne)
+        if (refusPython) return { lance: false, detail: `Commande refusée : ${refusPython}` }
         // Porte de production (conv-738) : `run` ne coupe pas la protection et ne contourne pas
         // `sql_query` en lançant lui-même un client SQL. Même verdict, même fenêtre, une reprise.
-        const refusReglage = refusReglageProd(ligne)
+        const refusReglage = refusReglageProd(shell)
         if (refusReglage) return { lance: false, detail: `Commande refusée : ${refusReglage}` }
-        const cibleSql = cibleSqlDeCommande(ligne)
+        const cibleSql = cibleSqlDeCommande(shell)
         // Sans porte branchée, un client SQL ne part PAS sans contrôle : refus par défaut (conv-738).
         if (cibleSql && !this.porteProd)
           return { lance: false, detail: 'Commande refusée : la protection de production n’est pas disponible, aucun client SQL ne part sans elle.' }
@@ -4641,9 +4655,144 @@ export class AppCommandBus {
   /** Ecriture de fichier, remplacable par un test pour prouver la branche « non restaure ». */
   private ecrireFichier: (chemin: string, contenu: Buffer) => void = writeFileSync
 
+  /**
+   * Rejoue, dans le dépôt RÉEL, les tests des fichiers qu'un tour de chat va publier — appelé par le
+   * commit automatique AVANT de pousser (`chat-turn-publication.ts`).
+   *
+   * Mesuré le 2026-10-01 : `b6d2a3fc` (conv-892) a été poussé sans aucun test et a laissé main rouge
+   * 20 h. La portée est celle d'`edit_file`, plus les tests qui CITENT un fichier de code
+   * (`porteeAvantPublication`) : c'est ce qui rejoue `chat-ipc-contract.test.ts`, qui LIT `index.ts`.
+   *
+   * JAMAIS de repli sur la suite complète ici : à chaque fin de tour, elle coûterait plusieurs minutes
+   * et bloquerait toute publication sur le moindre rouge préexistant du dépôt. Sans portée, la
+   * publication part comme avant et le rapport dit `non-verifie`, avec sa raison.
+   */
+  async verifierAvantPublication(
+    repo: string,
+    fichiers: readonly string[]
+  ): Promise<VerificationAvantPublication> {
+    const portee = await porteeAvantPublication(
+      fichiers,
+      async (motif) => await readTestsCitant(repo, motif)
+    )
+    if (!portee) {
+      return { statut: 'non-verifie', raison: `aucun test ciblable pour ${fichiers.join(', ')}` }
+    }
+    const decision = decideRelatedVerify(repo, portee)
+    if (!decision.allowed) return { statut: 'non-verifie', raison: decision.reason }
+    const binDuDepot = join(repo, 'node_modules', '.bin')
+    const versRelatif = (chemin: string): string =>
+      (isAbsolute(chemin) ? relative(repo, chemin) : chemin).split(sep).join('/')
+    const fichierExiste = (chemin: string): boolean =>
+      existsSync(isAbsolute(chemin) ? chemin : join(repo, chemin))
+    const mesure = await this.mesurerParLots(repo, portee, binDuDepot)
+    if (!mesure.allowed) {
+      return { statut: 'non-verifie', raison: mesure.reason ?? 'vérification indisponible' }
+    }
+    if (mesure.exitCode === null) {
+      return {
+        statut: 'echec',
+        commande: mesure.command,
+        detail: 'tests coupés au plafond de temps',
+        testsEnEchec: []
+      }
+    }
+    const rapport = echecsDuRapport(mesure.rapport, fichierExiste)
+    if (mesure.ok) {
+      // Un exit 0 sans test joué n'est pas un vert : rien n'a été mesuré.
+      if (!rapport.concluant || rapport.testsJoues === 0) {
+        return {
+          statut: 'non-verifie',
+          raison: rapport.raison ?? `aucun test joué par ${mesure.command}`
+        }
+      }
+      return { statut: 'vert', commande: mesure.command, testsJoues: rapport.testsJoues }
+    }
+    /*
+     * ROUGE SOUS CHARGE, VERT SEUL — choix de l'utilisateur du 2026-10-01. Mesuré le même jour : dans
+     * la portée de `src/main/index.ts` (1 555 tests), `moteur-perime-cablage.test.ts` échouait alors
+     * qu'il passe seul, et aurait bloqué toute publication touchant `index.ts`. On rejoue UNE fois les
+     * SEULES suites en échec, isolées : toutes vertes → on publie, et le rapport les NOMME ; une seule
+     * encore rouge → on bloque en ne nommant que celles qui restent rouges. Ce n'est pas un réessai à
+     * l'aveugle : la condition change (isolées), et le résultat est dit dans le panneau.
+     */
+    const brut = lectureBruteDuRapport(mesure.rapport)
+    const suites = [...new Set((brut?.suitesEnEchec ?? []).map(versRelatif))]
+    if (suites.length > 0 && decideRelatedVerify(repo, suites).allowed) {
+      const seules = await this.mesurerParLots(repo, suites, binDuDepot)
+      if (seules.allowed && seules.exitCode !== null) {
+        const rapportSeules = echecsDuRapport(seules.rapport, fichierExiste)
+        if (seules.ok && rapportSeules.concluant && rapportSeules.testsJoues > 0) {
+          return {
+            statut: 'vert',
+            commande: mesure.command,
+            testsJoues: brut?.testsJoues ?? rapportSeules.testsJoues,
+            instablesSousCharge: suites
+          }
+        }
+        const encoreRouges = lectureBruteDuRapport(seules.rapport)?.suitesEnEchec.map(versRelatif)
+        if (encoreRouges?.length) {
+          return {
+            statut: 'echec',
+            commande: mesure.command,
+            detail: `${encoreRouges.length} suite(s) rouge(s), même rejouée(s) seule(s)`,
+            testsEnEchec: [...new Set(encoreRouges)]
+          }
+        }
+      }
+    }
+    // Identité d'un échec : `<fichier> > <nom> :: <empreinte>` (voir `RapportDeTests`).
+    const testsEnEchec = [
+      ...new Set([...rapport.echecs].map((echec) => versRelatif(echec.split(' > ')[0])))
+    ]
+    return {
+      statut: 'echec',
+      commande: mesure.command,
+      // Un rapport non concluant (suite qui ne charge pas…) bloque AUSSI : rien n'a prouvé le vert.
+      detail: rapport.concluant
+        ? `${rapport.echecs.size} test(s) en échec`
+        : `code de sortie ${mesure.exitCode}${rapport.raison ? ` — ${rapport.raison.slice(0, 200)}` : ''}`,
+      testsEnEchec
+    }
+  }
+
+  /**
+   * La même mesure, en LOTS qui tiennent dans une ligne de `cmd.exe` (8 191 caractères), lancés l'un
+   * après l'autre puis fusionnés. Mesuré le 2026-10-01 (conv-770, tour 532299a4) : 194 tests
+   * citaient les fichiers du tour, la commande unique faisait 9 121 caractères, `cmd.exe` la
+   * refusait, aucun rapport n'était produit et la publication restait bloquée.
+   */
+  private async mesurerParLots(
+    workspaceRoot: string,
+    cible: readonly string[],
+    binDir?: string
+  ): Promise<MesureVerifiee> {
+    const lots = decouperEnLots(cible, BUDGET_CHEMINS_PAR_LANCEMENT)
+    if (lots.length <= 1) return await this.mesurerAvecRapport(workspaceRoot, cible, binDir)
+    const mesures: MesureVerifiee[] = []
+    for (const lot of lots) mesures.push(await this.mesurerAvecRapport(workspaceRoot, lot, binDir))
+    const refus = mesures.find((m) => !m.allowed)
+    if (refus) return refus
+    const rapport = fusionnerRapportsVitest(mesures.map((m) => m.rapport))
+    return {
+      allowed: true,
+      // Un lot coupé au plafond rend la mesure entière coupée : aucun artefact n'est complet.
+      ok: mesures.every((m) => m.ok),
+      exitCode: mesures.some((m) => m.exitCode === null)
+        ? null
+        : (mesures.find((m) => m.exitCode !== 0)?.exitCode ?? 0),
+      command: `${mesures[0].command} (${lots.length} lancements)`,
+      output: mesures.map((m) => m.output).join('\n'),
+      parPortee: mesures.every((m) => m.parPortee),
+      ...(rapport ? { rapport } : {})
+    }
+  }
+
   private async mesurerAvecRapport(
     workspaceRoot: string,
-    cible: readonly string[]
+    cible: readonly string[],
+    /** Binaires du dépôt mesuré (voir `spawnVerify`) ; défaut : ceux du dossier du tour. */
+    binDir?: string
   ): Promise<MesureVerifiee> {
     /*
      * UN DOSSIER A NOM ALEATOIRE, PAS UN NOM DERIVE DU PID.
@@ -4695,7 +4844,14 @@ export class AppCommandBus {
       etiquette = globale.command
     }
     try {
-      const issue = await this.spawnVerify(argv, workspaceRoot, etiquette)
+      const issue = await this.spawnVerify(
+        argv,
+        workspaceRoot,
+        etiquette,
+        undefined,
+        undefined,
+        binDir
+      )
       /*
        * PAS DE FICHIER = PAS DE DIFFERENTIEL. C'est exactement le cas du plafond de temps : le
        * process est tue, aucun rapport complet n'est ecrit. La v1 lisait alors la sortie PARTIELLE,
@@ -5064,7 +5220,9 @@ export class AppCommandBus {
     const brain =
       corpus?.length === 0
         ? { context: '', status: 'empty' as const }
-        : await this.retrieveBrain(decision.query, { corpus })
+        : // La LISTE des notes candidates (titre, chemin, taille) : l'agent ouvre ensuite en entier,
+          // avec `brain_read`, celles qu'il juge nécessaires — aucune borne de taille ni de nombre.
+          await this.retrieveBrain(decision.query, { corpus, mode: 'candidates' })
     // MEME PORTEE que la voie poussee : le contexte, le statut et la navigation sont projetés ensemble.
     const scoped = scopeBrainRetrieval(brain, corpus)
     const outcome = buildBrainOutcome(
@@ -5370,12 +5528,14 @@ export class AppCommandBus {
     cwd: string,
     label: string,
     onProgress?: (text: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** Dossier des binaires à mettre en tête du PATH ; défaut : celui du dossier du tour. */
+    binDir?: string
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const [file, ...rest] = argv
-    const sharedBin = this.workspaceDuTour
-      ? join(this.workspaceDuTour, 'node_modules', '.bin')
-      : undefined
+    const sharedBin =
+      binDir ??
+      (this.workspaceDuTour ? join(this.workspaceDuTour, 'node_modules', '.bin') : undefined)
     const env =
       sharedBin && existsSync(sharedBin)
         ? {

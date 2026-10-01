@@ -249,6 +249,10 @@
   --chat-sur-vif-survol:            #001018;   /* texte pose sur le bouton d envoi vif, au survol */
   --chat-dictee:                    #ff8a96;   /* barre et bouton de dictee en cours */
   --chat-erreur-douce:              #e08b8b;   /* message d erreur des travaux non publies */
+  --chat-lot-rose:                  #e87fb0;   /* liseré de la 1re action de la barre de sélection multiple (conv-815) */
+  --chat-lot-bleu:                  #5b9cf0;   /* liseré de la 3e action de la barre de sélection multiple (conv-815) */
+  --chat-frise-ok:                  #7fc98f;   /* frise du bloc Actions : action réussie */
+  --chat-frise-ko:                  #e07a6a;   /* frise du bloc Actions : action en échec */
   --chat-surlignage-texte:          #10121a;   /* texte de l occurrence trouvee, pose sur un aplat or FIXE : reste sombre dans les deux modes */
   --chat-depot-texte:               #e9f8ff;   /* texte du voile de depot de fichier, pose sur un fond sombre FIXE */
   --chat-depot-detail:              #7f9bad;   /* detail du voile de depot de fichier, pose sur un fond sombre FIXE */

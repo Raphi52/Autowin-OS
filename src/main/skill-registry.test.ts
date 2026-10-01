@@ -2,10 +2,17 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  defaultSkillProviders,
   discoverSkillProviders,
-  discoverConfiguredSkillRegistry,
-  type SkillRegistryRoots
+  discoverConfiguredSkillRegistry
 } from './skill-registry'
+
+/** Trois racines jetables, pour éprouver la découverte multi-source sur des sources explicites. */
+interface SkillRegistryRoots {
+  codex: string
+  claude: string
+  autowin: string
+}
 
 function put(
   root: string,
@@ -110,10 +117,25 @@ describe('registre multi-source des skills (souverain de Native)', () => {
       JSON.stringify({ sources: [{ id: 'windsurf', label: 'Windsurf', root: windsurf }] })
     )
 
-    const items = await discoverConfiguredSkillRegistry(configPath, configured)
+    const items = await discoverConfiguredSkillRegistry(configPath, configuredProviders(configured))
 
     expect(items).toContainEqual(
       expect.objectContaining({ id: 'windsurf:custom', sourceLabel: 'Windsurf' })
     )
+  })
+
+  /**
+   * Décision utilisateur du 2026-09-26 (conv-16) : « je garde que les skills d'autowin ». Par défaut,
+   * l'écran Skills ne lit plus que les racines Autowin — ni `~/.claude` ni `~/.codex`.
+   */
+  it('par défaut, seules les racines Autowin sont des sources (ni ~/.claude ni ~/.codex)', () => {
+    expect(defaultSkillProviders(['R:/depot/skills', 'R:/local/skills'])).toEqual([
+      { id: 'autowin', label: 'Autowin', root: 'R:/depot/skills' },
+      { id: 'autowin-2', label: 'Autowin', root: 'R:/local/skills' }
+    ])
+    const reelles = defaultSkillProviders()
+    expect(reelles.length).toBeGreaterThan(0)
+    expect(reelles.map((source) => source.label)).toEqual(reelles.map(() => 'Autowin'))
+    expect(reelles.filter((source) => /[/\\]\.(claude|codex)[/\\]/u.test(source.root))).toEqual([])
   })
 })

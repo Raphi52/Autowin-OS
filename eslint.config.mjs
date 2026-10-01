@@ -24,6 +24,10 @@ export default defineConfig(
       // Copies de bras extraites pour la notation juge (ex. juge-t4/bras/, non suivies par git) :
       // meme nature generee que essais/, 8 erreurs de lint le 2026-09-26.
       '.arena/**/bras/**',
+      // Banc arenagame SORTI du depot le 2026-09-26 (commit e889422f, .gitignore:81) : usage personnel,
+      // garde sur le disque local mais plus suivi. Le lint du depot ne doit pas le noter : ses
+      // nouveaux dossiers (juge-iso/, hd/) rendaient le lint rouge le 2026-09-27 (2 erreurs).
+      '.arena/arenagame/**',
       '**/node_modules',
       '**/dist',
       '**/out',

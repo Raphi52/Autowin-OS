@@ -341,3 +341,127 @@ export class CapteurHdesk {
     })
   }
 }
+
+/**
+ * TV INTERACTIVE (conv-35, 2026-10-01) : « switcher vers les hdesk pour interagir avec ce qui s'y
+ * passe ». Un geste de l'utilisateur dans la TV = un appel de scripts/hdesk-act.ps1 (messages fenêtre,
+ * jamais la vraie souris ni le vrai clavier). Le script fait toujours un clic, puis la frappe éventuelle.
+ */
+export interface GesteTv {
+  id: string
+  x: number
+  y: number
+  texte?: string
+  entree?: boolean
+  /** conv-35 : touche nommée (liste TOUCHES_TV), crans de molette (+ = haut), frappe sans reclic. */
+  touche?: string
+  molette?: number
+  sansClic?: boolean
+}
+
+/** Touches reconnues par scripts/hdesk-act.cs (dictionnaire Touches) — garder les deux listes alignées. */
+export const TOUCHES_TV = [
+  'Tab', 'Echap', 'Retour', 'Entree', 'Suppr', 'Haut', 'Bas', 'Gauche', 'Droite', 'Debut', 'Fin',
+  'PageHaut', 'PageBas', 'CtrlA', 'CtrlC', 'CtrlV', 'CtrlX', 'CtrlZ'
+] as const
+
+/** Arguments PowerShell d'un geste ; lève si l'identifiant ou les coordonnées sont invalides. */
+export function argumentsAct(racine: string, g: GesteTv): string[] {
+  if (typeof g?.id !== 'string' || !ID_BUREAU.test(g.id)) throw new Error('Identifiant de bureau invalide.')
+  if (!Number.isFinite(g.x) || !Number.isFinite(g.y) || g.x < 0 || g.y < 0)
+    throw new Error('Coordonnées invalides.')
+  const args = [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    join(racine, 'scripts', 'hdesk-act.ps1'),
+    '-InstanceId',
+    g.id,
+    '-X',
+    String(Math.round(g.x)),
+    '-Y',
+    String(Math.round(g.y))
+  ]
+  if (typeof g.texte === 'string' && g.texte) args.push('-Texte', g.texte)
+  if (g.entree === true) args.push('-Entree')
+  if (g.touche !== undefined) {
+    if (!(TOUCHES_TV as readonly string[]).includes(g.touche)) throw new Error('Touche inconnue.')
+    args.push('-Touche', g.touche)
+  }
+  if (g.molette !== undefined) {
+    if (!Number.isInteger(g.molette) || g.molette === 0 || Math.abs(g.molette) > 20)
+      throw new Error('Molette invalide.')
+    args.push('-Molette', String(g.molette))
+  }
+  if (g.sansClic === true) args.push('-SansClic')
+  return args
+}
+
+export type ActionHdesk = { instanceId?: string; x?: number; y?: number; cible?: string; messages?: unknown }
+export type ResultatGeste = { ok: true; action?: ActionHdesk } | { ok: false; message: string }
+
+// hdesk-act.ps1 ecrit son JSON {instanceId,x,y,cible,messages} sur la derniere ligne JSON de stdout.
+export function resultatAct(out: string): ResultatGeste {
+  const lignes = String(out || '').split(/\r?\n/).reverse()
+  for (const l of lignes) {
+    const t = l.trim()
+    if (!t.startsWith('{')) continue
+    try {
+      return { ok: true, action: JSON.parse(t) as ActionHdesk }
+    } catch {
+      /* ligne non JSON : on continue */
+    }
+  }
+  return { ok: true }
+}
+
+export function agirHdesk(racine: string, g: GesteTv): Promise<ResultatGeste> {
+  let args: string[]
+  try {
+    args = argumentsAct(racine, g)
+  } catch (e) {
+    return Promise.resolve({ ok: false, message: (e as Error).message })
+  }
+  return new Promise((resolve) => {
+    execFile('powershell.exe', args, { windowsHide: true, timeout: 20000 }, (err, out, errOut) => {
+      if (err) resolve({ ok: false, message: String(errOut || err.message).trim() })
+      else resolve(resultatAct(String(out)))
+    })
+  })
+}
+
+/**
+ * BASCULE DE L'ECRAN REEL (conv-35, option) : scripts/hdesk-basculer.ps1 porte lui-meme les trois
+ * sorties (fenetre « Revenir », Ctrl+Alt+Origine, minuterie). Lance DETACHE : un arret ou un
+ * plantage d'Autowin ne doit jamais laisser l'utilisateur sur le bureau cache.
+ */
+export const BASCULE_MAX_SECONDES = 120
+
+export function argumentsBascule(racine: string, id: string, maxSecondes = BASCULE_MAX_SECONDES): string[] {
+  if (typeof id !== 'string' || !ID_BUREAU.test(id)) throw new Error('Identifiant de bureau invalide.')
+  const max = Math.min(600, Math.max(5, Math.round(Number(maxSecondes) || BASCULE_MAX_SECONDES)))
+  return [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    join(racine, 'scripts', 'hdesk-basculer.ps1'),
+    '-InstanceId',
+    id,
+    '-MaxSecondes',
+    String(max)
+  ]
+}
+
+export function basculerHdesk(racine: string, id: string): { ok: true } | { ok: false; message: string } {
+  let args: string[]
+  try {
+    args = argumentsBascule(racine, id)
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
+  const p = spawn('powershell.exe', args, { detached: true, stdio: 'ignore', windowsHide: true })
+  p.unref()
+  return { ok: true }
+}

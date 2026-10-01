@@ -34,7 +34,61 @@ const DEFAULT_BRAIN_ORIGIN = 'http://127.0.0.1:8765'
  */
 export const DEFAULT_AMITEL_WORKSPACES: readonly string[] = ['C:\\Amitel', 'C:\\Code RIG']
 
+/** Dossier d'etat du Brain PROPRE a Autowin, sous %LOCALAPPDATA% — voir `autowinOwnBrainRoot`. */
+export const AUTOWIN_OWN_BRAIN_STATE_DIR = 'AutowinBrain'
+
+/**
+ * Racine du Brain PROPRE a Autowin, lue dans `%LOCALAPPDATA%\AutowinBrain\config.json` (`brain_root`).
+ *
+ * CONSTATE LE 2026-09-25 (conv-3) : sur un poste qui heberge AUSSI un Brain personnel (Hermes-Brain),
+ * l'installateur de celui-ci pose `AMITEL_BRAIN_ROOT` dans les variables UTILISATEUR. Autowin en
+ * heritait : il lisait ce Brain, y deposait ses lecons (`remember`, POST /ingest) et sa cloture
+ * automatique y commitait. Ce dossier donne a Autowin son propre Brain : sa racine prime alors sur la
+ * variable heritee, et son `config.json` porte aussi le port (cf. `origineDepuisInstallation`).
+ * Absent, illisible ou sans `brain_root` (cas des postes de l'equipe) : rien ne change.
+ * `AUTOWIN_BRAIN_STATE_ROOT`, reglage explicite, garde la main et sa regle d'origine.
+ *
+ * Seule la variable HERITEE est ecartee, et on la reconnait : elle REPETE le `brain_root` de
+ * l'installation partagee (`%LOCALAPPDATA%\AmitelBrain\config.json`), puisque c'est cet installateur
+ * qui l'a posee. Toute autre valeur a ete choisie pour CE process (un test, un lancement dedie) et
+ * garde la priorite de l'environnement, comme partout ailleurs dans ce module.
+ */
+export function autowinOwnBrainRoot(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (env.AUTOWIN_BRAIN_STATE_ROOT?.trim()) return undefined
+  const localAppData = env.LOCALAPPDATA?.trim()
+  if (!localAppData) return undefined
+  const own = brainRootOfInstallation(join(localAppData, AUTOWIN_OWN_BRAIN_STATE_DIR))
+  if (!own) return undefined
+  const inherited = env.AMITEL_BRAIN_ROOT?.trim()
+  if (inherited) {
+    const shared = brainRootOfInstallation(join(localAppData, 'AmitelBrain'))
+    if (!shared || !sameRoot(inherited, shared)) return undefined
+  }
+  return own
+}
+
+function brainRootOfInstallation(stateRoot: string): string | undefined {
+  try {
+    const config = JSON.parse(readFileSync(join(stateRoot, 'config.json'), 'utf8')) as {
+      brain_root?: unknown
+    }
+    const root = typeof config.brain_root === 'string' ? config.brain_root.trim() : ''
+    return root || undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Meme dossier Windows, quelle que soit l'ecriture : barres obliques, casse, barre finale. */
+function sameRoot(left: string, right: string): boolean {
+  const normalize = (value: string): string =>
+    value.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
+  return normalize(left) === normalize(right)
+}
+
 export function amitelBrainRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const own = autowinOwnBrainRoot(env)
+  if (own) return own
   const configured = env.AMITEL_BRAIN_ROOT?.trim()
   if (configured) return configured
   return racineDepuisInstallation(env) ?? DEFAULT_BRAIN_ROOT
@@ -147,7 +201,10 @@ export function amitelBrainStateRoot(env: NodeJS.ProcessEnv = process.env): stri
   const configured = env.AUTOWIN_BRAIN_STATE_ROOT?.trim()
   if (configured) return configured
   const localAppData = env.LOCALAPPDATA?.trim()
-  return localAppData ? join(localAppData, 'AmitelBrain') : ''
+  if (!localAppData) return ''
+  // Le Brain propre a Autowin porte son port dans SON config.json : l'etat le suit.
+  if (autowinOwnBrainRoot(env)) return join(localAppData, AUTOWIN_OWN_BRAIN_STATE_DIR)
+  return join(localAppData, 'AmitelBrain')
 }
 
 /** Racine du runtime Python LOCAL. Elle ne dérive jamais du partage de données du Brain. */

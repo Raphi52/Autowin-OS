@@ -63,7 +63,7 @@ import type { TraceEventV1 } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
-import type { BureauTv, ImageTv } from '../main/hdesk-tv'
+import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/hdesk-tv'
 export interface ClaudeAccountEntry {
   id: string
   displayName: string
@@ -96,6 +96,8 @@ interface ChatApi {
   hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>
   hdeskTvImage: (id: string) => Promise<ImageTv>
   hdeskTvArreter: () => Promise<void>
+  hdeskTvAct: (geste: GesteTv) => Promise<ResultatGeste>
+  hdeskTvBasculer: (id: string) => Promise<{ ok: boolean; message?: string }>
   prodPassphraseEtat: () => Promise<EtatPhraseProd>
   prodPassphraseDefinir: (
     phrase: string,
@@ -175,6 +177,25 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  /**
+   * Bouton « Lancer » (panneau Fichiers) : état, démarrage, arrêt du lancement déclaré pour le
+   * dossier de la conversation, et mises à jour poussées pendant qu'il tourne.
+   */
+  lancementEtat: (
+    conversationId: string
+  ) => Promise<import('../shared/scripts-copie').EtatLancement>
+  lancementDemarrer: (
+    conversationId: string
+  ) => Promise<import('../shared/scripts-copie').EtatLancement>
+  lancementArreter: (
+    conversationId: string
+  ) => Promise<import('../shared/scripts-copie').EtatLancement>
+  onLancement: (
+    cb: (maj: {
+      conversationId: string
+      etat: import('../shared/scripts-copie').EtatLancement
+    }) => void
+  ) => () => void
   /** Onglet « Projet » : racine du projet, arborescence par dossier, lecture/ecriture d'un fichier. */
   projectRoot: (conversationId?: string) => Promise<string>
   /** Ouvre tout le projet courant dans VS Code (commande `code`). */
@@ -591,7 +612,14 @@ interface ChatApi {
     conversationId: string,
     directive: string,
     attachments?: ChatAttachment[]
-  ) => Promise<{ ok: boolean; messageId?: string }>
+  ) => Promise<{
+    ok: boolean
+    messageId?: string
+    /** Refus : pourquoi le texte n'a pas rejoint le tour (il repart en file, rien n'est perdu). */
+    motif?: 'vide' | 'commande' | 'hors-tour'
+    /** Commande de skill reconnue (`scout`, `judge`…) quand `motif` vaut `commande`. */
+    commande?: string
+  }>
   /** Écrit le texte de l'utilisateur sur disque AVANT son envoi — filet contre les textes sans tour. */
   journaliserSaisie: (
     conversationId: string,

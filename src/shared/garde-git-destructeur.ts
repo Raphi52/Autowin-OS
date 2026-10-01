@@ -1,4 +1,8 @@
 // fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
+// Le MODULE importe ; les fonctions de garde, elles, restent autoportées (sérialisées dans le hook).
+import { refusEcriturePythonCrlf } from './garde-python-crlf'
+import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
+
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
  *
@@ -28,12 +32,11 @@ export function refusGitDestructeur(commande: string): string | undefined {
     `Voie récupérable : ${voie}. ` +
     `Si l'effacement large est vraiment voulu, demande-le à l'utilisateur en nommant ce qui disparaît.`
 
-  for (const brut of c.split(/;|&&|\|\||\||\r?\n/)) {
-    const seg = brut.trim().replace(/^&\s*/, '')
-    if (!/^git\b/i.test(seg)) continue
+  /** Un APPEL de git (mots de la commande, `mots[0]` = git) : efface-t-il le travail en cours ? */
+  const jugerGit = (appel: string[]): string | undefined => {
     // La SOUS-COMMANDE, pas un mot quelconque de la ligne : `git log -S "reset --hard"` cherche du
     // texte, il n'efface rien. Les options globales (-C <chemin>, -c k=v, --no-pager) sont sautees.
-    const mots = seg.split(/\s+/).slice(1)
+    const mots = appel.slice(1)
     let i = 0
     while (i < mots.length && /^-/.test(mots[i])) {
       i += /^(-C|-c|--git-dir|--work-tree|--exec-path)$/i.test(mots[i]) ? 2 : 1
@@ -72,14 +75,166 @@ export function refusGitDestructeur(commande: string): string | undefined {
     if (sous === 'clean' && a(/^-[a-z]*f/i) && !a(/^(-n|--dry-run)$/i)) {
       return motif('git clean', "git clean -n d'abord, puis supprime nommément ce que tu as vérifié")
     }
+    return undefined
   }
-  return undefined
+
+  /*
+   * SEUL UN APPEL EST REFUSE, jamais une simple MENTION (conv-770, 2026-09-28). L'ancienne lecture
+   * coupait la ligne sur `;` `|` `&&` MEME ENTRE GUILLEMETS : `grep -o 'x\|git stash [a-z]' f` y
+   * devenait un segment `git stash [a-z]'` et etait refuse, comme `git commit -m "a; git reset
+   * --hard"`. Elle laissait pourtant passer de vrais appels : `bash -c "git reset --hard"`,
+   * `cmd /c git clean -fd`, `"C:\…\git.exe" reset --hard`, `sudo git stash`.
+   * On lit donc la ligne comme un shell : guillemets respectes, sous-commandes `$(…)` et `` `…` ``,
+   * code passe a `bash -c` / `cmd /c` / `powershell -Command` / `eval`, prefixes (`sudo`, `env`,
+   * `xargs`, `VAR=x`…). DANS LE DOUTE — guillemet non ferme, imbrication trop profonde —
+   * l'ancienne lecture s'applique : elle coupe partout, donc elle refuse PLUS, jamais moins.
+   * Meme construction que `refusSqlAgent` (src/main/prod-run-guard.ts). Limite : le texte d'un
+   * heredoc est lu ligne a ligne comme avant (refus en trop possible, jamais en moins).
+   */
+  const lectureLarge = (texte: string): string | undefined => {
+    for (const brut of texte.split(/;|&&|\|\||\||\r?\n/)) {
+      const seg = brut.trim().replace(/^&\s*/, '')
+      if (!/^git\b/i.test(seg)) continue
+      const refus = jugerGit(seg.split(/\s+/))
+      if (refus) return refus
+    }
+    return undefined
+  }
+  const nomDe = (mot: string): string =>
+    (mot.split(/[\\/]/).pop() ?? '').toLowerCase().replace(/\.(exe|cmd|bat)$/, '')
+  const prefixes =
+    /^(sudo|exec|env|time|nohup|command|builtin|call|start|start-process|xargs|timeout|nice)$/
+  const optionAValeur = /^(-u|-g|-c|-s|-k|-i|--user|--group|--chdir|--signal|--kill-after)$/
+  const coquilles = /^(bash|sh|zsh|dash|cmd|powershell|pwsh|eval|iex|invoke-expression)$/
+  const analyser = (mots: string[], profondeur: number): string | undefined => {
+    let k = 0
+    while (k < mots.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(mots[k])) k++
+    for (let tour = 0; tour < 8 && k < mots.length; tour++) {
+      const nom = nomDe(mots[k])
+      if (nom === 'git') return jugerGit(mots.slice(k))
+      if (prefixes.test(nom)) {
+        k++
+        while (k < mots.length) {
+          const m = mots[k].toLowerCase()
+          // `sudo -i git …` : `-i` est un drapeau ici, pas une option a valeur. Une option ne mange
+          // donc jamais le mot suivant quand c'est git, un shell ou un autre prefixe.
+          const suivant = nomDe(mots[k + 1] ?? '')
+          const mange = suivant !== 'git' && !coquilles.test(suivant) && !prefixes.test(suivant)
+          if (optionAValeur.test(m) && mange) k += 2
+          else if (
+            m.startsWith('-') ||
+            /^\d+[smhd]?$/.test(m) ||
+            /^[A-Za-z_][A-Za-z0-9_]*=/.test(m)
+          )
+            k++
+          else break
+        }
+        continue
+      }
+      if (coquilles.test(nom)) {
+        const reste = mots.slice(k + 1)
+        const i = reste.findIndex((m) => /^(-c|-command|\/c|\/k)$/i.test(m))
+        const code = (i >= 0 ? reste.slice(i + 1) : reste.filter((m) => !m.startsWith('-'))).join(
+          ' '
+        )
+        return code ? chercher(code, profondeur + 1) : undefined
+      }
+      return undefined
+    }
+    return undefined
+  }
+  function chercher(source: string, profondeur: number): string | undefined {
+    if (profondeur > 4) return lectureLarge(source)
+    const commandes: string[][] = [[]]
+    const imbriques: string[] = []
+    let mot = ''
+    let ouvert = false
+    let q: string | null = null
+    const finMot = (): void => {
+      if (ouvert) commandes[commandes.length - 1].push(mot)
+      mot = ''
+      ouvert = false
+    }
+    for (let i = 0; i < source.length; i++) {
+      const ch = source[i]
+      if (q === "'") {
+        if (ch === "'") q = null
+        else mot += ch
+        continue
+      }
+      if (ch === '$' && source[i + 1] === '(') {
+        // Sous-commande `$(…)` : executee, meme entre guillemets doubles.
+        let prof = 0
+        let fin = -1
+        for (let j = i + 1; j < source.length; j++) {
+          if (source[j] === '(') prof++
+          else if (source[j] === ')' && --prof === 0) {
+            fin = j
+            break
+          }
+        }
+        if (fin < 0) return lectureLarge(source)
+        imbriques.push(source.slice(i + 2, fin))
+        i = fin
+        ouvert = true
+        continue
+      }
+      if (ch === '`') {
+        if (q === '"' && source[i + 1] === '"') {
+          mot += '"'
+          i++
+          continue
+        }
+        const fin = source.indexOf('`', i + 1)
+        if (fin > i) {
+          imbriques.push(source.slice(i + 1, fin))
+          i = fin
+          ouvert = true
+          continue
+        }
+      }
+      if (q === '"') {
+        if (ch === '"') q = null
+        else if (ch === '\\' && source[i + 1] === '"') {
+          mot += '"'
+          i++
+        } else mot += ch
+        continue
+      }
+      if (ch === "'" || ch === '"') {
+        q = ch
+        ouvert = true
+      } else if (ch === ' ' || ch === '\t') finMot()
+      else if ('\r\n;|&(){}'.includes(ch)) {
+        finMot()
+        commandes.push([])
+      } else {
+        mot += ch
+        ouvert = true
+      }
+    }
+    if (q) return lectureLarge(source)
+    finMot()
+    for (const code of imbriques) {
+      const refus = chercher(code, profondeur + 1)
+      if (refus) return refus
+    }
+    for (const mots of commandes) {
+      const refus = analyser(mots, profondeur)
+      if (refus) return refus
+    }
+    return undefined
+  }
+  return chercher(c, 0)
 }
 
 /**
  * Corps du script de hook PreToolUse (Bash) du CLI. Refus = JSON `permissionDecision: deny` sur
  * stdout (https://code.claude.com/docs/en/hooks). Mesure 2026-09-13 : avec exit 2 + stderr, l'appel
  * etait bien bloque mais l'agent recevait un resultat VIDE, sans le motif ni la voie a suivre.
+ *
+ * Porte aussi, depuis le 2026-10-01, l'écriture Python en mode texte qui passe un fichier en CRLF
+ * (`refusEcriturePythonCrlf`, garde-python-crlf.ts : 47 fichiers du dépôt réécrits ainsi).
  *
  * NE PORTE PLUS QUE L'EFFACEMENT DE TRAVAIL (conv-587). Le refus des lancements graphiques au
  * premier plan a ete RETIRE le 2026-09-17 sur demande explicite de l'utilisateur (conv-631) : il
@@ -96,7 +251,12 @@ export function scriptHookGardes(
   refusSqlAgent?: (texte: string, basesNonProd: readonly string[]) => string | undefined,
   basesNonProd: readonly string[] = []
 ): string {
-  return `const refusGitDestructeur = ${refusGitDestructeur.toString()};
+  // Le découpage des heredocs est PASSÉ aux fonctions qui en ont besoin, jamais appelé par nom :
+  // vitest et les bundlers réécrivent un appel importé (voir src/shared/heredocs.ts).
+  return `const decouperHeredocs = ${decouperHeredocs.toString()};
+const sansHeredocsDeDonnees = ${sansHeredocsDeDonnees.toString()};
+const refusGitDestructeur = ${refusGitDestructeur.toString()};
+const refusEcriturePythonCrlf = ${refusEcriturePythonCrlf.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
 const basesNonProd = ${JSON.stringify(basesNonProd)};
@@ -111,7 +271,9 @@ process.stdin.on('end', () => {
     cmd = t.command || '';
     chemin = t.file_path || t.notebook_path || '';
   } catch {}
-  const motif = refusGitDestructeur(cmd) || refusReglageProd(cmd) || refusReglageProd(chemin) || refusSqlAgent(cmd, basesNonProd);
+  // Le corps d'un heredoc de simple texte n'est pas du shell (rejeu du 2026-10-01, heredocs.ts).
+  const shell = sansHeredocsDeDonnees(cmd, decouperHeredocs);
+  const motif = refusGitDestructeur(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

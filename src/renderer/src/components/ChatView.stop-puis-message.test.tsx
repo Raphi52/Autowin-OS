@@ -20,17 +20,30 @@ describe('ChatView — message tape juste apres un Stop', () => {
 
   it('part bien en tour une fois le tour precedent termine', async () => {
     let finirLeTour: (() => void) | undefined
+    /*
+     * Le processus principal SIMULE dit la verite : un tour vit tant que sa promesse n'est pas
+     * revenue, et plus apres. Depuis f128d0f3 (2026-09-23, conv-809), le renderer ne clot un tour
+     * qu'apres avoir demande a `pilotChatActive` s'il vit encore ; un faux qui repondait « actif »
+     * POUR TOUJOURS gardait donc le premier tour ouvert a jamais, la file ne partait plus, et ce
+     * test rougissait sans que Stop ait regresse (conv-770, 2026-09-28).
+     */
+    let tourEnVol = false
     const pilotChat = vi.fn(() => {
+      tourEnVol = true
       if (pilotChat.mock.calls.length === 1)
         return new Promise((resolve) => {
-          finirLeTour = () => resolve({ ok: true, messages: [] })
+          finirLeTour = () => {
+            tourEnVol = false
+            resolve({ ok: true, messages: [] })
+          }
         })
+      tourEnVol = false
       return Promise.resolve({ ok: true, messages: [] })
     })
     harness = await mountChat(
       chatApi({
         capabilityControls: vi.fn().mockResolvedValue([]),
-        pilotChatActive: vi.fn().mockResolvedValue({ active: true }),
+        pilotChatActive: vi.fn(async () => ({ active: tourEnVol })),
         pilotChat,
         // Le tour est en cours d'annulation : plus rien n'est injectable.
         injectDirective: vi.fn().mockResolvedValue({ ok: false }),
@@ -50,5 +63,9 @@ describe('ChatView — message tape juste apres un Stop', () => {
       await new Promise((r) => setTimeout(r, 50))
     })
     expect(pilotChat).toHaveBeenCalledTimes(2)
+    // Et c'est bien le texte tape APRES le Stop qui part, pas une relance de l'ancien.
+    expect(JSON.stringify((pilotChat.mock.calls[1] as unknown[])[0])).toContain(
+      'et maintenant fais ceci'
+    )
   }, 20_000)
 })

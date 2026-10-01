@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { applyBrainRetrievalScores } from './viz/fs-brains'
 import {
@@ -6,7 +5,6 @@ import {
   brainScopeForWorkspace,
   brainSourcePathAllowed,
   scopeBrainRetrieval,
-  workspaceLabel,
   workspaceSlug
 } from './brain-corpus-scope'
 
@@ -458,24 +456,3 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
   })
 })
 
-/**
- * GARDE-FOU DU CORRECTIF 2e594943 - la question d'empreinte doit porter le nom du depot TEL QU'IL
- * S'ECRIT. Mesure : avec le nom aplati `autowinos`, 60 empreintes vides sur 195 (ce mot n'existe
- * dans aucune note, aucun candidat ne passait le seuil). Sans ce test, reinjecter `workspaceSlug`
- * dans `empreinteQuery` laisse la suite VERTE - le defaut revient en silence.
- */
-describe("workspaceLabel - parler au Brain avec le nom lisible du depot", () => {
-  it("garde la casse et n'aplatit pas le nom", () => {
-    expect(workspaceLabel('D:\\AutoWinOS')).toBe('AutoWinOS')
-    expect(workspaceLabel('D:\\AutoWinOS')).not.toBe(workspaceSlug('D:\\AutoWinOS'))
-    expect(workspaceLabel('/home/x/Autowin OS')).toBe('Autowin OS')
-  })
-
-  it("la question d'empreinte de l'orchestrateur est batie sur le label, pas sur le slug", () => {
-    const source = readFileSync(new URL('./orchestrator.ts', import.meta.url), 'utf-8')
-    const ligne = source.split(/\r?\n/).find((l) => l.includes('const empreinteQuery'))
-    expect(ligne, "la ligne `const empreinteQuery` a disparu d'orchestrator.ts").toBeTruthy()
-    expect(ligne).toContain('workspaceLabel(')
-    expect(ligne).not.toContain('workspaceSlug(')
-  })
-})

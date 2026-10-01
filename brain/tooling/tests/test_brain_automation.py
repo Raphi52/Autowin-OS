@@ -14,7 +14,7 @@ sys.path.insert(0, str(TOOLING))
 from brain_context import render_hits, retrieve_context
 from brain_propose import propose_note
 from brain_retrieval import BrainRetriever
-from brain_server import Handler, build_context
+from brain_server import CANDIDATE_LIST_K, Handler, build_candidates_result, build_context
 from brain_hook import hook_output, _server_python, _validate_response
 import brain_auth
 import brain_hook
@@ -26,18 +26,47 @@ from brain_index import write_index_snapshot
 
 
 class BrainIndexCliTests(unittest.TestCase):
-    def test_relative_knowledge_argument_stores_absolute_note_paths(self):
+    def test_relative_knowledge_argument_stores_brain_relative_note_paths(self):
+        # Index rows hold paths RELATIVE to the Brain root (index format `paths_relative`; on
+        # 2026-08-04 the live index still carried absolute UNC paths and recall sat at 0.0,
+        # see observed_index_format_signature / index_freshness). A relative --knowledge
+        # argument must still land on the real note.
         import contextlib
         import io
         import json
+        import re
         import types
 
-        class FakeEmbedding:
-            def __init__(self, model_name):
-                self.model_name = model_name
+        class FakeEncoding:
+            def __init__(self, text):
+                self.offsets = [match.span() for match in re.finditer(r"\S+", text)]
 
-            def embed(self, bodies):
-                return [[1.0, 0.0] for _ in bodies]
+        class FakeTokenizer:
+            # The slice of tokenizers.Tokenizer that brain_index uses to chunk bodies.
+            @classmethod
+            def from_str(cls, _serialized):
+                return cls()
+
+            def to_str(self):
+                return "fake-tokenizer"
+
+            def enable_truncation(self, max_length):
+                self.max_length = max_length
+
+            def no_truncation(self):
+                self.max_length = None
+
+            def encode(self, text):
+                return FakeEncoding(text)
+
+        class FakeEmbedding:
+            # Same call shape as fastembed.TextEmbedding in brain_index.main().
+            def __init__(self, model_name, threads=None):
+                self.model_name = model_name
+                self.model = types.SimpleNamespace(tokenizer=FakeTokenizer())
+
+            def embed(self, bodies, batch_size=None, parallel=None):
+                return iter([[1.0, 0.0] for _ in bodies])
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -58,9 +87,9 @@ class BrainIndexCliTests(unittest.TestCase):
 
             generation = (root / "index" / "CURRENT").read_text(encoding="ascii").strip()
             meta_line = (root / "index" / "generations" / generation / "meta.jsonl").read_text(encoding="utf-8")
-            stored = Path(json.loads(meta_line)["path"])
-            self.assertTrue(stored.is_absolute())
-            self.assertEqual(stored.resolve(), note.resolve())
+            stored = json.loads(meta_line.splitlines()[0])["path"]
+            self.assertEqual(stored, "knowledge/note.md")
+            self.assertEqual((root / stored).resolve(), note.resolve())
 
 
 class RenderHitsTests(unittest.TestCase):
@@ -308,7 +337,7 @@ class BrainServerTests(unittest.TestCase):
             def server_close(self):
                 events.append(("close",))
 
-        def fake_retriever(index):
+        def fake_retriever(index, **_options):
             events.append(("retriever", Path(index)))
             return object()
 
@@ -317,13 +346,18 @@ class BrainServerTests(unittest.TestCase):
             return "token"
 
         with tempfile.TemporaryDirectory() as td:
-            with (
-                patch.dict(os.environ, {"AMITEL_BRAIN_ROOT": td, "AMITEL_BRAIN_PORT": "18765"}),
-                patch.object(brain_server, "LocalThreadingHTTPServer", FakeServer),
-                patch.object(brain_server, "BrainRetriever", side_effect=fake_retriever),
-                patch.object(brain_server, "service_token", side_effect=fake_token),
-            ):
-                brain_server.main()
+            # main() chdirs into the brain root (render_hits resolves relative paths from it).
+            previous = os.getcwd()
+            try:
+                with (
+                    patch.dict(os.environ, {"AMITEL_BRAIN_ROOT": td, "AMITEL_BRAIN_PORT": "18765"}),
+                    patch.object(brain_server, "LocalThreadingHTTPServer", FakeServer),
+                    patch.object(brain_server, "BrainRetriever", side_effect=fake_retriever),
+                    patch.object(brain_server, "service_token", side_effect=fake_token),
+                ):
+                    brain_server.main()
+            finally:
+                os.chdir(previous)
 
         self.assertEqual(
             [event[0] for event in events],
@@ -337,9 +371,16 @@ class BrainServerTests(unittest.TestCase):
         from urllib.error import HTTPError
         from urllib.request import Request, urlopen
 
+        class HealthyRetriever:
+            # /health reports the index state (protocol v2) next to the signed root.
+            def status(self):
+                return {"state": "healthy", "reasons": []}
+
         token = "service-test-token"
         Handler.token = token
         Handler.root_id = "C:/brain/current"
+        previous_retriever = Handler.retriever
+        Handler.retriever = HealthyRetriever()
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -365,6 +406,7 @@ class BrainServerTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+            Handler.retriever = previous_retriever
 
     def test_build_context_filters_confines_and_marks_reference_data(self):
         class FakeRetriever:
@@ -394,6 +436,63 @@ class BrainServerTests(unittest.TestCase):
             self.assertIn("Décision Amitel", context)
             self.assertNotIn("Pingouins", context)
             self.assertNotIn("INSTRUCTION_MALVEILLANTE", context)
+
+    def test_candidates_mode_lists_titles_paths_sizes_without_content(self):
+        class FakeRetriever:
+            def __init__(self):
+                self.asked_k = None
+
+            def query(self, text, k):
+                self.asked_k = k
+                return {"hits": hits, "axes": 2}
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            knowledge = root / "knowledge"
+            knowledge.mkdir()
+            titled = knowledge / "titled.md"
+            untitled = knowledge / "untitled.md"
+            noisy = knowledge / "noisy.md"
+            outside = root / "outside.md"
+            titled.write_text("---\ntitle: x\n---\n# Pertinent\n\n" + "CONTENU-SECRET " * 400,
+                              encoding="utf-8")
+            untitled.write_text("# Intitulé de secours\n\nCorps", encoding="utf-8")
+            noisy.write_text("# Bruit\n\nPingouins", encoding="utf-8")
+            outside.write_text("INSTRUCTION_MALVEILLANTE", encoding="utf-8")
+            hits = [
+                {"rank": 1, "path": str(titled), "dense_cos": 0.57, "type": "decision",
+                 "title": "Décision Amitel"},
+                {"rank": 2, "path": str(untitled), "dense_cos": 0.41,
+                 "preview": "# Intitulé de secours\n\nCorps"},
+                {"rank": 3, "path": str(noisy), "dense_cos": 0.07, "title": "Bruit"},
+                {"rank": 4, "path": str(outside), "dense_cos": 0.99, "title": "Hors racine"},
+            ]
+            retriever = FakeRetriever()
+            result = build_candidates_result(retriever, "Amitel", knowledge, min_dense=0.25)
+            context = result["context"]
+
+            # Assez de candidates pour retrouver toute bonne note que le classement sait trouver.
+            self.assertEqual(retriever.asked_k, CANDIDATE_LIST_K)
+            self.assertIn("REFERENCE DATA", context)
+            self.assertIn("Décision Amitel", context)
+            self.assertIn("Intitulé de secours", context)
+            self.assertIn(f"{round(titled.stat().st_size / 1024)} Ko", context)
+            # Des titres et des chemins, jamais le contenu : c'est l'agent qui ouvre.
+            self.assertNotIn("CONTENU-SECRET", context)
+            self.assertNotIn("Pingouins", context)
+            self.assertNotIn("Bruit", context)
+            self.assertNotIn("Hors racine", context)
+            self.assertNotIn("INSTRUCTION_MALVEILLANTE", context)
+            # Rendu identique à celui que le client Autowin reconstruit pour vérifier l'intégrité.
+            structured = result["structuredContext"]
+            self.assertEqual(
+                context,
+                structured["preamble"].rstrip() + "\n\n"
+                + "\n\n---\n\n".join(source["content"] for source in structured["sources"]),
+            )
+            listed = [c for c in result["navigation"]["candidates"] if c["retained"]]
+            self.assertEqual([c["title"] for c in listed], ["Décision Amitel", "Intitulé de secours"])
+            self.assertEqual(listed[0]["sizeBytes"], titled.stat().st_size)
 
 
 class BrainAuthTests(unittest.TestCase):
@@ -439,7 +538,21 @@ class BrainHookTests(unittest.TestCase):
         shutdown.assert_called_once_with()
         wait_for_shutdown.assert_called_once_with()
         spawn.assert_called_once_with()
-        request_context.assert_called_once_with("question")
+        request_context.assert_called_once_with("question", harness=None)
+
+    def test_keeps_querying_a_server_that_predates_root_identification(self):
+        # An empty signed root cannot be compared: stopping that server would leave the hook
+        # refusing forever (its /shutdown does not exist), so it keeps today's behaviour.
+        with (
+            patch.object(brain_hook, "_request_health", return_value=""),
+            patch.object(brain_hook, "_shutdown_server") as shutdown,
+            patch.object(brain_hook, "_spawn_server") as spawn,
+            patch.object(brain_hook, "_request_context", return_value="REFERENCE") as request_context,
+        ):
+            self.assertEqual(brain_hook.query_service("question"), "REFERENCE")
+        shutdown.assert_not_called()
+        spawn.assert_not_called()
+        request_context.assert_called_once_with("question", harness=None)
 
     def test_emits_official_user_prompt_submit_context_shape(self):
         output = hook_output(
@@ -616,7 +729,8 @@ class ProposeNoteTests(unittest.TestCase):
     def test_validates_source_locator_by_scheme(self):
         invalid_sources = (
             "session:x", "file:not-a-real-path", "url:not-a-url",
-            "git:repo@not-a-commit", "email:not-a-message-id",
+            # email: takes an opaque provider id only; an ADDRESS is PII (brain_candidate_policy).
+            "git:repo@not-a-commit", "email:alice@example.org", "email:short",
             "ticket:none", "meeting:yesterday",
         )
         for source in invalid_sources:

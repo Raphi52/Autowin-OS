@@ -281,6 +281,12 @@ export class ConversationRouteCoordinator {
       title: decision.title || fallbackTitle,
       provider: source.provider
     })
+    // LE DOSSIER DE TRAVAIL SUIT LE NOUVEAU SUJET (conv-19 -> conv-23, 2026-09-27 13:10:21.853) :
+    // cree avec un titre seul, le fil neuf a fait son premier tour (819 s, 3,26 $) dans le dossier
+    // par defaut, D:\Autowin, au lieu du projet d'ou venait le message. Un chemin cite dans le
+    // message garde sa bascule (`alignerDossierSurLaDemande`, index.ts), qui passe avant le tour.
+    const dossierSource = source.projectPath?.trim()
+    if (dossierSource) this.conversations.rangerDansDossier(target.id, dossierSource)
     return {
       sourceConversationId,
       conversationId: target.id,

@@ -6,6 +6,7 @@ import {
   cheminJournalWatchdogTeams,
   creerBattementWatchdog,
   creerJournalWatchdog,
+  detailPilotage,
   empreinteConversation,
   type ValeurJournal
 } from './journal-watchdog-teams'
@@ -64,6 +65,24 @@ describe('journal du watchdog Teams', () => {
       e
     )
     expect(empreinteConversation('teams:19:cccc@unq.gbl.spaces:1')).not.toBe(e)
+  })
+})
+
+describe('ligne « pilotage » du journal', () => {
+  // conv-770, 2026-09-27 : le motif ecrit en ligne dans index.ts avait perdu ses barres obliques
+  // (`/^[watchdog]s*/`, une classe de caracteres) : le prefixe `[watchdog]` restait dans le journal.
+  it('retire le prefixe [watchdog] des vraies lignes de watchdog-teams-local.ts', () => {
+    expect(detailPilotage('[watchdog] réponse Teams impossible : fenêtre introuvable')).toBe(
+      'réponse Teams impossible : fenêtre introuvable'
+    )
+    expect(detailPilotage('[watchdog] réponse envoyée par mail à la place de Teams')).toBe(
+      'réponse envoyée par mail à la place de Teams'
+    )
+  })
+
+  it('ne touche pas une ligne sans prefixe, ni un [watchdog] au milieu', () => {
+    expect(detailPilotage('wdog actif')).toBe('wdog actif')
+    expect(detailPilotage('voir [watchdog] plus haut')).toBe('voir [watchdog] plus haut')
   })
 })
 

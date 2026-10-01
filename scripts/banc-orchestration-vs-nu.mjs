@@ -18,15 +18,23 @@
  * tout seul (6 bancs residus, gagnant inverse a configuration identique, 2026-09-06) : ici
  * c'est un code de sortie.
  *
- * Usage :
+ * BASE FIGEE (choix utilisateur, conv-770, 2026-09-28) : le bras part de 3106a10d lui-meme, jamais
+ * de la tete du depot. Depuis b94b6ce6 (2026-09-18), qui a retouche les memes fichiers, annuler le
+ * correctif sur la tete ne s'appliquait plus : `--preparer` aurait plante. Sur sa propre base,
+ * l'annulation est exacte par construction, et le bras recoit un depot COHERENT (l'etat de 3106a10d
+ * avec, pour les 4 fichiers de code, celui d'avant le correctif). Depuis cette base, package.json
+ * n'a fait qu'AJOUTER deux dependances : le node_modules courant la sert.
+ *
+ * Usage (la racine est une COPIE : clone ou worktree propre, jamais le depot principal) :
  *   node scripts/banc-orchestration-vs-nu.mjs --preparer <racine-du-bras>
  *   node scripts/banc-orchestration-vs-nu.mjs --oracle   <racine-du-bras> [--json]
  * Exit 0 = oracle vert | 1 = oracle rouge | 2 = entrees illisibles.
  */
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, writeFileSync, rmSync } from 'node:fs'
+import { existsSync, realpathSync, writeFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /** Le correctif reel annule pour reseamer le defaut. */
 export const COMMIT_CORRECTIF = '3106a10d'
@@ -62,15 +70,41 @@ export function patchDuCorrectif(racine) {
   return git(racine, ['show', COMMIT_CORRECTIF, '--', ...FICHIERS_CODE])
 }
 
-/** Resseme le defaut dans la copie du bras et retire l'oracle de sa vue. */
+/** La base figee du bras : le commit du correctif, ou son annulation est exacte (voir l'en-tete). */
+export const BASE = COMMIT_CORRECTIF
+
+/** Le depot qui porte ce script : le banc ne le prepare JAMAIS, il ne travaille que sur une copie. */
+const DEPOT_DU_BANC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// Chemins REELS : sous Windows, le dossier temporaire arrive sous son nom court (RAPHAE~1.VIL)
+// alors que git rend le nom long — compares tels quels, deux ecritures du meme dossier different.
+const reel = (p) => realpathSync.native(path.resolve(p)).toLowerCase()
+const memeChemin = (a, b) => reel(a) === reel(b)
+
+/**
+ * Place la copie du bras sur la base figee, y resseme le defaut et retire l'oracle de sa vue.
+ * Deux refus AVANT tout geste, parce que la preparation deplace HEAD et reecrit des fichiers :
+ *  - la racine doit etre la racine de SA copie git — un dossier ordinaire rangé dans le depot
+ *    principal ferait agir git sur le depot principal — et jamais le depot du banc lui-meme ;
+ *  - la copie doit etre propre : un travail local y serait melange au defaut, ou ecrase.
+ */
 export function preparer(racine) {
+  const niveau = git(racine, ['rev-parse', '--show-toplevel']).trim()
+  if (!memeChemin(niveau, racine) || memeChemin(niveau, DEPOT_DU_BANC))
+    throw new Error(
+      `refus : ${racine} n'est pas une copie du bras (racine git : ${niveau}). Le banc ne prepare ` +
+        `qu'un clone ou un worktree dedie, jamais le depot principal.`
+    )
+  if (git(racine, ['status', '--porcelain']).trim())
+    throw new Error(`refus : la copie ${racine} porte du travail local (git status non vide).`)
+  git(racine, ['checkout', '--quiet', '--detach', BASE])
   const patch = path.join(racine, '.banc-correctif.patch')
   writeFileSync(patch, patchDuCorrectif(racine))
   git(racine, ['apply', '-R', patch])
   rmSync(patch)
   for (const f of FICHIERS_ORACLE) rmSync(path.join(racine, f), { force: true })
   writeFileSync(path.join(racine, 'TACHE.md'), `${ENONCE}\n`)
-  return { defautResseme: FICHIERS_CODE, oracleRetire: FICHIERS_ORACLE }
+  return { base: BASE, defautResseme: FICHIERS_CODE, oracleRetire: FICHIERS_ORACLE }
 }
 
 /** Remet l'oracle depuis git sur la racine du bras et le rejoue. Vrai = le bras a corrige. */

@@ -47,7 +47,9 @@ import {
   statutComplet,
   RELANCE_QUESTION_SANS_LECTURE,
   exigeUneConclusion,
-  compactionsAbouties
+  compactionsAbouties,
+  motsUtilisateur,
+  baliserRelanceAutomatique
 } from './chat-turn-messages'
 import { invokedSkillId, noteSkillInconnue, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
@@ -1495,8 +1497,8 @@ export class AgentPilot {
      * qu'il ignore quelque chose : « remake les pastilles de couleurs » se lit comme une demande
      * complete. Attendre qu'il s'en avise, c'est reconduire conv-1407 en esperant mieux.
      *
-     * Ne se declenche que sur une demande BREVE, et exclut la conversation courante : voir les
-     * bornes dans `rappel-conversations.ts`.
+     * Se declenche sur toute demande non vide (le seuil de brievete a ete retire), et exclut la
+     * conversation courante : voir les bornes dans `rappel-conversations.ts`.
      */
     // Dependance OPTIONNELLE, et assumee comme telle : un rappel est un CONFORT. Un tour qui
     // echouerait faute de rappel ferait dependre chaque message d'une commodite -- et les bus
@@ -1862,7 +1864,9 @@ export class AgentPilot {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
       for (const directive of drainDirectives?.() ?? []) {
-        convo.push(`UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${directive}`)
+        convo.push(
+          `UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${motsUtilisateur(directive)}`
+        )
       }
       /**
        * CAP RÉINJECTÉ COMME CONSIGNE DE CLÔTURE FORCÉE (conv-1485).
@@ -1931,7 +1935,7 @@ export class AgentPilot {
       const messages: Message[] = [
         {
           role: 'user',
-          content: `${segmentsAEnvoyer.join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`,
+          content: `${segmentsAEnvoyer.map(baliserRelanceAutomatique).join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`,
           ...(iterationAttachments.length ? { attachments: iterationAttachments } : {})
         }
       ]
@@ -2346,7 +2350,7 @@ export class AgentPilot {
       if (lateDirectives.length) {
         for (const directive of lateDirectives) {
           convo.push(
-            `UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${directive}`
+            `UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${motsUtilisateur(directive)}`
           )
         }
         if (successfulStreamedPrefix && !directivePorteLaReponse) {
@@ -2381,7 +2385,7 @@ export class AgentPilot {
       if (question && ask) {
         const answer = await waitForAnswer(ask(question), signal)
         convo.push(`TOI: ${text}`)
-        convo.push(`UTILISATEUR: ${answer}`)
+        convo.push(`UTILISATEUR: ${motsUtilisateur(answer)}`)
         continue
       }
       if (!question && rejectedQuestion) {

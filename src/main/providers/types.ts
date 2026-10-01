@@ -248,6 +248,11 @@ export interface Usage {
    */
   cacheCreationTokens?: number
   /**
+   * Part de `cacheCreationTokens` écrite pour 1 HEURE (`cache_creation.ephemeral_1h_input_tokens`
+   * chez Claude) — sous-ensemble, jamais un ajout. Facturée 2× l'entrée au lieu de 1,25×.
+   */
+  cacheCreation1hTokens?: number
+  /**
    * OCCUPATION DE LA FENETRE au DERNIER appel du tour, cache inclus — a ne pas confondre avec
    * `inputTokens`, qui est le CUMUL de tous les appels du tour.
    *
@@ -307,6 +312,15 @@ export interface ExecutionEvidence {
   exitCode?: number
   /** Sortie brute agrégée (stdout+stderr) — pour affichage lisible inline, plus large que `summary`. */
   stdout?: string
+  /**
+   * Longueur ENTIÈRE du résultat de l'outil, quand `stdout` n'en garde qu'une fin : c'est ce que
+   * l'agent a réellement reçu (mesure de lecture du Brain, 2026-09-27).
+   */
+  outputChars?: number
+  /** Dossier FOUILLÉ par une recherche (Grep/Glob) — jamais un fichier touché, donc hors `path`. */
+  searchPath?: string
+  /** Motif d'une recherche (Grep/Glob). */
+  pattern?: string
   /** Diff / changements d'un file_change, prêt à afficher. */
   diff?: string
   /** Chemin(s) du fichier touché (file_change). */

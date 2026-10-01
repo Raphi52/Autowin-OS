@@ -189,6 +189,10 @@
   --chat-sur-vif-survol:            var(--on-accent);   /* texte pose sur le bouton d envoi vif, au survol */
   --chat-dictee:                    var(--rose);   /* barre et bouton de dictee en cours */
   --chat-erreur-douce:              var(--err);   /* message d erreur des travaux non publies */
+  --chat-lot-rose:                  var(--rose);   /* liseré de la 1re action de la barre de sélection multiple */
+  --chat-lot-bleu:                  var(--info);   /* liseré de la 3e action de la barre de sélection multiple */
+  --chat-frise-ok:                  var(--ok);   /* frise du bloc Actions : action réussie */
+  --chat-frise-ko:                  var(--err);   /* frise du bloc Actions : action en échec */
 
 }
 
@@ -708,7 +712,10 @@
    (HomeView.css l.1116-1134) : noirs au milieu d'un widget devenu pâle. */
 :root[data-base='clair'] .jarvis__audio-champ select,
 :root[data-base='clair'] .jarvis__audio-champ input[type='text'],
-:root[data-base='clair'] .jarvis__audio-champ select option {
+:root[data-base='clair'] .jarvis__audio-champ select option,
+/* Même défaut sur la liste « Mode » de la transcription (HomeView.css l.1453, #14120d en dur). */
+:root[data-base='clair'] .enregistrements__champ select,
+:root[data-base='clair'] .enregistrements__champ select option {
   background: #ffffff;
   color: var(--text);
   border-color: rgba(140, 100, 18, 0.3);

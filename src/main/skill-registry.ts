@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { type CapabilityItem } from './capability-controls'
-import { providerCapabilities } from './provider-capabilities'
+import { skillRoots } from './native-registry'
 
 export interface SkillRegistryItem extends CapabilityItem {
   source: string
@@ -19,36 +19,31 @@ interface SkillSourcesConfig {
   sources?: SkillDiscoveryProvider[]
 }
 
-export interface SkillRegistryRoots {
-  codex: string
-  claude: string
-  autowin: string
-}
-
 const MAX_DEPTH = 6
 const MAX_FILES_PER_SOURCE = 500
 const METADATA_BYTES = 16_384
 
-function defaultSkillRegistryRoots(): SkillRegistryRoots {
-  // Racines dérivées de la SOURCE UNIQUE (provider-capabilities) — plus de hardcoding dupliqué.
-  const byId = Object.fromEntries(providerCapabilities().map((p) => [p.id, p.skillsRoot]))
-  return { codex: byId.codex, claude: byId.claude, autowin: byId.autowin }
-}
-
-function providersFromRoots(roots: SkillRegistryRoots): SkillDiscoveryProvider[] {
-  const labelById = new Map(providerCapabilities().map((p) => [p.id, p.label]))
-  return [
-    { id: 'codex', label: labelById.get('codex') ?? 'Codex', root: roots.codex },
-    { id: 'claude', label: labelById.get('claude') ?? 'Claude', root: roots.claude },
-    { id: 'autowin', label: labelById.get('autowin') ?? 'Autowin', root: roots.autowin }
-  ]
+/**
+ * Sources par défaut de l'écran Skills : les MÊMES racines que la palette `/` et l'état du modèle
+ * (`skillRoots`, native-registry) — uniquement Autowin, le dépôt d'abord.
+ *
+ * Décision utilisateur du 2026-09-26 (conv-16) : « je garde que les skills d'autowin ». Avant, l'écran
+ * listait `~/.codex/skills` et `~/.claude/skills`, et sa source « Autowin » pointait vers
+ * `%LOCALAPPDATA%/autowin-os/skills` seul — les skills du dépôt n'y figuraient même pas. Une source
+ * supplémentaire reste possible, mais seulement si l'utilisateur la déclare dans `skill-sources.json`.
+ */
+export function defaultSkillProviders(roots: string[] = skillRoots()): SkillDiscoveryProvider[] {
+  return roots.map((root, index) => ({
+    id: index === 0 ? 'autowin' : `autowin-${index + 1}`,
+    label: 'Autowin',
+    root
+  }))
 }
 
 function loadConfiguredProviders(
   configPath: string,
-  roots: SkillRegistryRoots = defaultSkillRegistryRoots()
+  defaults: SkillDiscoveryProvider[] = defaultSkillProviders()
 ): SkillDiscoveryProvider[] {
-  const defaults = providersFromRoots(roots)
   if (!existsSync(configPath)) return defaults
   try {
     const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as SkillSourcesConfig
@@ -124,9 +119,9 @@ function metadata(path: string): { label: string; description: string } | null {
 
 export async function discoverConfiguredSkillRegistry(
   configPath: string,
-  roots: SkillRegistryRoots = defaultSkillRegistryRoots()
+  defaults: SkillDiscoveryProvider[] = defaultSkillProviders()
 ): Promise<SkillRegistryItem[]> {
-  return discoverSkillProviders(loadConfiguredProviders(configPath, roots))
+  return discoverSkillProviders(loadConfiguredProviders(configPath, defaults))
 }
 
 // Souverain : plus d'état enabled récupéré via un binaire externe. Un skill présent

@@ -153,3 +153,77 @@ describe('origine du Brain — le port vient de l installation, pas d un shell',
     expect(amitelBrainRoot(avecInstallation({ brain_root: 42 }))).toBe(DEFAULT_BRAIN_ROOT)
   })
 })
+
+/**
+ * BRAIN PROPRE A AUTOWIN — constate le 2026-09-25 (conv-3). Sur un poste qui heberge AUSSI un Brain
+ * personnel, l'installateur de celui-ci pose `AMITEL_BRAIN_ROOT` dans les variables UTILISATEUR :
+ * Autowin en heritait, et ses lecons (`remember`, POST /ingest) partaient dans le Brain personnel.
+ * `%LOCALAPPDATA%\AutowinBrain\config.json` donne a Autowin son propre Brain ; absent, rien ne change.
+ */
+describe('Brain propre a Autowin — il prime sur la racine heritee d un autre Brain', () => {
+  const postes: string[] = []
+  afterAll(() => {
+    for (const dir of postes) rmSync(dir, { recursive: true, force: true })
+  })
+  const poste = (autowin?: Record<string, unknown>): NodeJS.ProcessEnv => {
+    const localAppData = mkdtempSync(join(tmpdir(), 'brain-autowin-'))
+    postes.push(localAppData)
+    mkdirSync(join(localAppData, 'AmitelBrain'), { recursive: true })
+    writeFileSync(
+      join(localAppData, 'AmitelBrain', 'config.json'),
+      JSON.stringify({ brain_root: 'C:\\Perso\\Hermes-Brain' })
+    )
+    if (autowin) {
+      mkdirSync(join(localAppData, 'AutowinBrain'), { recursive: true })
+      writeFileSync(join(localAppData, 'AutowinBrain', 'config.json'), JSON.stringify(autowin))
+    }
+    return { LOCALAPPDATA: localAppData, AMITEL_BRAIN_ROOT: 'C:\\Perso\\Hermes-Brain' }
+  }
+
+  it('sa racine, son etat et son port priment sur AMITEL_BRAIN_ROOT herite', () => {
+    const env = poste({ brain_root: 'C:\\Perso\\Autowin-Brain', port: 8766 })
+    expect(amitelBrainRoot(env)).toBe('C:\\Perso\\Autowin-Brain')
+    expect(amitelBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AutowinBrain'))
+    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8766')
+  })
+
+  it('sans ce dossier, rien ne change : la variable historique decide', () => {
+    const env = poste()
+    expect(amitelBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
+    expect(amitelBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
+    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8765')
+  })
+
+  it('une configuration SANS racine n est pas un Brain : elle ne detourne rien', () => {
+    const env = poste({ port: 8766 })
+    expect(amitelBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
+    expect(amitelBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
+  })
+
+  it('seule la variable qui REPETE l installation partagee est ecartee : un choix explicite garde la main', () => {
+    // L'installateur du Brain personnel pose AMITEL_BRAIN_ROOT = son propre brain_root. Toute AUTRE
+    // valeur a ete choisie pour ce process (un test, un lancement dedie) : elle prime, comme avant.
+    const env: NodeJS.ProcessEnv = {
+      ...poste({ brain_root: 'C:\\Perso\\Autowin-Brain', port: 8766 }),
+      AMITEL_BRAIN_ROOT: 'D:\\autre'
+    }
+    expect(amitelBrainRoot(env)).toBe('D:\\autre')
+    expect(amitelBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
+    // Meme racine partagee ecrite autrement (barres, casse) : c'est toujours l'heritage, ecarte.
+    const echo = { ...env, AMITEL_BRAIN_ROOT: 'c:/perso/hermes-brain' }
+    expect(amitelBrainRoot(echo)).toBe('C:\\Perso\\Autowin-Brain')
+    // Aucune variable : le Brain d'Autowin s'applique.
+    const muet: NodeJS.ProcessEnv = { ...env }
+    delete muet.AMITEL_BRAIN_ROOT
+    expect(amitelBrainRoot(muet)).toBe('C:\\Perso\\Autowin-Brain')
+  })
+
+  it('AUTOWIN_BRAIN_STATE_ROOT explicite garde la main, avec sa regle d origine', () => {
+    const env = {
+      ...poste({ brain_root: 'C:\\Perso\\Autowin-Brain' }),
+      AUTOWIN_BRAIN_STATE_ROOT: 'E:\\etat'
+    }
+    expect(amitelBrainStateRoot(env)).toBe('E:\\etat')
+    expect(amitelBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
+  })
+})

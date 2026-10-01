@@ -209,19 +209,8 @@ def _read_confined_prefix(
         os.close(fd)
 
 
-def render_hits(hits: list[dict], max_chars: int, allowed_root=None, *, base=None) -> str:
-    """Render confined notes without reading beyond the output-derived byte cap.
-
-    `allowed_root` accepts ONE root or a sequence of them (see `indexed_note_roots`). `base`
-    is what relative index paths resolve against — the Brain root, since that is what
-    `brain_index` makes them relative to. The two are DISTINCT: conflating them is what
-    silently dropped every graph note (resolution wanted the Brain root, confinement wanted
-    `knowledge/`, and one variable served both).
-    """
-    budget = max(0, int(max_chars))
-    if not budget:
-        return ""
-    rendered = ""
+def _roots_and_base(allowed_root, base):
+    """Allowed roots + the base relative index paths resolve against (shared by both renderers)."""
     if allowed_root is None:
         roots = ()
     elif isinstance(allowed_root, (str, Path)):
@@ -236,6 +225,86 @@ def render_hits(hits: list[dict], max_chars: int, allowed_root=None, *, base=Non
         resolution_base = Path(os.path.commonpath([str(item) for item in roots]))
     else:
         resolution_base = None
+    return roots, resolution_base
+
+
+def _size_label(size: int) -> str:
+    if size < 1024:
+        return f"{size} o"
+    if size < 1024 * 1024:
+        return f"{round(size / 1024)} Ko"
+    return f"{size / (1024 * 1024):.1f} Mo".replace(".", ",")
+
+
+def _candidate_title(hit: dict, note: Path) -> str:
+    """Le titre déclaré, sinon le premier intitulé `# ` de l'aperçu, sinon le nom du fichier."""
+    title = hit.get("title")
+    if isinstance(title, str) and title.strip():
+        return " ".join(title.split())
+    preview = hit.get("preview")
+    if isinstance(preview, str):
+        for line in preview.splitlines():
+            if line.startswith("# ") and line[2:].strip():
+                return " ".join(line[2:].split())
+    return note.stem
+
+
+def describe_candidates(hits: list[dict], allowed_root=None, *, base=None) -> list[dict]:
+    """Décrit chaque note candidate SANS en lire le contenu : titre, chemin, taille.
+
+    C'est la liste que l'agent parcourt pour décider lui-même quelles notes ouvrir EN ENTIER
+    (route /read). Aucune borne de caractères ici : la pertinence ne se juge pas au volume.
+    Mesure du 2026-09-27 : le seuil de similarité laisse passer 319 à 1247 notes sur 1300 par
+    question, donc seul un lecteur peut trancher ce qui est nécessaire — le serveur ne fait que
+    proposer. Même confinement que `render_hits` : une note hors racine autorisée n'est jamais
+    listée, pas plus qu'elle ne serait servie.
+    """
+    roots, resolution_base = _roots_and_base(allowed_root, base)
+    described = []
+    for hit in hits:
+        if not isinstance(hit, dict):
+            continue
+        path_value = hit.get("path")
+        if not isinstance(path_value, str) or not path_value:
+            continue
+        note = Path(path_value)
+        if resolution_base is not None and not note.is_absolute():
+            note = resolution_base / note
+        if roots and not _confined(note, roots):
+            continue
+        try:
+            if not note.is_file():
+                continue
+            size = note.stat().st_size
+        except OSError:
+            continue
+        title = _candidate_title(hit, note)
+        kind = str(hit.get("type", "")).strip()
+        rank = hit.get("rank", len(described) + 1)
+        details = " · ".join(part for part in (_size_label(size), kind) if part)
+        described.append({
+            "path": path_value,
+            "title": title,
+            "sizeBytes": size,
+            "content": f"### Candidate {rank} — {title}\n`{_portable(path_value)}` · {details}",
+        })
+    return described
+
+
+def render_hits(hits: list[dict], max_chars: int, allowed_root=None, *, base=None) -> str:
+    """Render confined notes without reading beyond the output-derived byte cap.
+
+    `allowed_root` accepts ONE root or a sequence of them (see `indexed_note_roots`). `base`
+    is what relative index paths resolve against — the Brain root, since that is what
+    `brain_index` makes them relative to. The two are DISTINCT: conflating them is what
+    silently dropped every graph note (resolution wanted the Brain root, confinement wanted
+    `knowledge/`, and one variable served both).
+    """
+    budget = max(0, int(max_chars))
+    if not budget:
+        return ""
+    rendered = ""
+    roots, resolution_base = _roots_and_base(allowed_root, base)
     for hit in hits:
         if not isinstance(hit, dict):
             continue

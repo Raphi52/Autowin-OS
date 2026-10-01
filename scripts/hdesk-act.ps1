@@ -23,12 +23,19 @@ param(
   [Parameter(Mandatory = $true)][int]$X,
   [Parameter(Mandatory = $true)][int]$Y,
   [string]$Texte = '',
-  [switch]$Entree
+  [switch]$Entree,
+  # conv-35 : touche nommee (Tab, Echap, Retour, Suppr, Haut, Bas, Gauche, Droite, Debut, Fin, PageHaut,
+  # PageBas, CtrlA, CtrlC, CtrlV, CtrlX, CtrlZ), crans de molette (+ = haut), et frappe sans reclic.
+  [string]$Touche = '',
+  [ValidateRange(-20, 20)][int]$Molette = 0,
+  # Touches virtuelles en hexadecimal, « 28x15,0D » = 15 x Fleche bas puis Entree (menus Qt de Studio).
+  [string]$Touches = '',
+  [switch]$SansClic
 )
 $ErrorActionPreference = 'Stop'
 trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
 Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'hdesk-act.cs'))
-$r = [AutowinHdeskAct]::Run("AutowinTest_$InstanceId", $X, $Y, $Texte, [bool]$Entree)
+$r = [AutowinHdeskAct]::Run("AutowinTest_$InstanceId", $X, $Y, $Texte, [bool]$Entree, $Touche, $Molette, $Touches, [bool]$SansClic)
 if ($r.Error) { throw $r.Error }
 [pscustomobject]@{ instanceId = $InstanceId; x = $X; y = $Y; cible = $r.Cible; messages = $r.Envoyes } | ConvertTo-Json -Compress
 exit 0

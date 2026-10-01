@@ -49,11 +49,22 @@ function aUneRepriseClaire(themeModes: string, classe: string): boolean {
     )
 }
 
+/*
+ * LA réserve, pas le premier paragraphe qui en porte la classe (conv-770, 2026-09-28) : depuis
+ * 3517698a (2026-09-22), un paragraphe « Pour agrandir tout l'écran » (`data-testid="interface-zoom"`)
+ * reprend la classe `interface-reserve` et passe AVANT. Le test lisait ce paragraphe-là et
+ * déclarait absents « Chat », « Memory » et « topologie », pourtant bien nommés dans la réserve.
+ * On exige qu'il en reste EXACTEMENT une hors zoom : un troisième paragraphe ambigu refera rougir.
+ */
 function texteDeLaReserve(): string {
   const source = readFileSync(join(COMPONENTS, 'InterfaceView.tsx'), 'utf8')
-  const debut = source.indexOf('interface-reserve')
-  expect(debut, 'la réserve doit exister dans InterfaceView.tsx').toBeGreaterThan(-1)
-  return source.slice(debut, source.indexOf('</p>', debut))
+  const paragraphes = [
+    ...source.matchAll(/<p className="interface-reserve"([^>]*)>([\s\S]*?)<\/p>/g)
+  ]
+  expect(paragraphes.length, 'la réserve doit exister dans InterfaceView.tsx').toBeGreaterThan(0)
+  const reserves = paragraphes.filter((p) => !p[1].includes('data-testid="interface-zoom"'))
+  expect(reserves, 'une seule réserve des écrans restés sombres, hors aide au zoom').toHaveLength(1)
+  return reserves[0][2]
 }
 
 describe('réserve du mode clair', () => {

@@ -57,6 +57,19 @@ export const DEV_TARGETS: readonly SqlTarget[] = [
   { server: 'SQL-DEV\\DEV', database: 'RIG_RECETTE' }
 ]
 
+/**
+ * SERVEURS DE DÉVELOPPEMENT dont TOUTES les bases sont lisibles (demande utilisateur du 2026-09-29,
+ * conv-554 : « tu devrais pouvoir effectuer des requêtes SELECT sur toutes les bases de SQL-DEV\DEV »).
+ * Aucun greffe exploité n'y vit. Le garde lecture seule de `sql-read-guard.ts` s'applique toujours.
+ */
+export const DEV_SERVERS: readonly string[] = ['SQL-DEV\\DEV']
+
+export function estServeurDev(server: string | undefined): boolean {
+  if (typeof server !== 'string') return false
+  const s = server.trim().toLowerCase()
+  return DEV_SERVERS.some((d) => d.toLowerCase() === s)
+}
+
 export interface SqlTargetCatalog {
   /** Le couple (serveur, base) est-il autorisé ? Comparaison insensible à la casse. */
   has: (server: string, database: string) => boolean
@@ -87,7 +100,7 @@ export function buildSqlTargetCatalog(
     has: (server, database) =>
       typeof server === 'string' &&
       typeof database === 'string' &&
-      index.has(cle(server, database)),
+      (index.has(cle(server, database)) || (estServeurDev(server) && database.trim().length > 0)),
     servers: () => [...new Set([...index.values()].map((t) => t.server))].sort(),
     databasesFor: (server) =>
       [...index.values()]

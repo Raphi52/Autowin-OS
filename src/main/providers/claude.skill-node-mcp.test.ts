@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ClaudeCliAdapter, argumentsMcpNoeudSkill } from './claude'
+import {
+  ClaudeCliAdapter,
+  MCP_SORTIE_NOEUD_SKILL_TOKENS,
+  argumentsMcpNoeudSkill,
+  envSortieMcpNoeudSkill
+} from './claude'
 import type { SendOptions } from './types'
 
 /**
@@ -96,5 +101,26 @@ describe('observabilité du prompt', () => {
       OUTILS.allowedTools
     )
     expect(enveloppe({ execution })).not.toHaveProperty('skillNodeTools')
+  })
+})
+
+describe('plafond de sortie MCP du CLI — levé pour un nœud skill', () => {
+  /*
+   * Claude Code coupe un résultat MCP à 25 000 tokens par défaut (MAX_MCP_OUTPUT_TOKENS,
+   * https://code.claude.com/docs/en/mcp). Un brain_read d'une longue note arrivait amputé.
+   */
+  it('pose MAX_MCP_OUTPUT_TOKENS pour un nœud outillé, jamais pour une phase du pipeline', () => {
+    expect(envSortieMcpNoeudSkill(true, {})).toEqual({
+      MAX_MCP_OUTPUT_TOKENS: MCP_SORTIE_NOEUD_SKILL_TOKENS
+    })
+    expect(envSortieMcpNoeudSkill(false, {})).toEqual({})
+  })
+
+  it('laisse le dernier mot à une valeur déjà posée par l’utilisateur', () => {
+    expect(envSortieMcpNoeudSkill(true, { MAX_MCP_OUTPUT_TOKENS: '50000' })).toEqual({})
+  })
+
+  it('dépasse la plus grosse note du Brain (809 430 octets)', () => {
+    expect(Number(MCP_SORTIE_NOEUD_SKILL_TOKENS)).toBeGreaterThan(809_430)
   })
 })

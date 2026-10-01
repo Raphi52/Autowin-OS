@@ -37,6 +37,14 @@ export type SendOptions = {
   keepComposerDraft?: boolean
   /** Envoi que l'utilisateur n'a PAS fait (mode auto, file, reprise) : garde sa position de lecture. */
   automatique?: boolean
+  /**
+   * SUITE PROPOSEE PAR L'AGENT ET RENVOYEE PAR LE MODE AUTO : l'etape suivante de CE fil. Elle ne
+   * passe pas par le routeur de conversations. Mesure conv-19 -> conv-23 (2026-09-27 13:10:21.853) :
+   * jugee « new-topic » a 0,92, elle est partie dans un fil neuf sans dossier de travail ni mode
+   * auto — tour paye dans D:\Autowin, chaine arretee. `automatique` ne suffit pas a le dire : il
+   * couvre aussi la file d'attente, ecrite par l'utilisateur.
+   */
+  suiteDuModeAuto?: boolean
   targetConversationId?: string
   /**
    * Reprises DÉJÀ faites après une surcharge du modèle (529) — voir shared/reprise-surcharge.ts.
@@ -190,7 +198,16 @@ export type DirectiveReceipt = {
    * a oriente pendant un run et « rien ne se passe » — a l'epoque, litteralement, rien ne pouvait
    * lire sa directive.
    */
-  status: 'sending' | 'sent' | 'differee' | 'failed'
+  /**
+   * `attente` : le texte n'a PAS rejoint le tour en cours, il attend sa fin en file et partira seul
+   * juste après. Ce n'est pas une panne : « ⚠ Échec — remis en file » le disait pourtant, en rouge,
+   * sur un refus voulu (conv-891, 2026-09-30). `failed` ne sert plus qu'à une vraie erreur d'envoi.
+   */
+  status: 'sending' | 'sent' | 'differee' | 'attente' | 'failed'
+  /** Pourquoi le texte attend, quand l'app principale l'a dit (`attente` seulement). */
+  attenteMotif?: 'commande' | 'hors-tour'
+  /** La commande de skill lue dans le texte (`scout`…), quand `attenteMotif` vaut `commande`. */
+  commande?: string
   afterMessageIndex: number
   afterPartIndex: number
   afterTextOffset?: number

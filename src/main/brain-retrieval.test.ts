@@ -319,6 +319,70 @@ describe('retrieveBrainContext', () => {
     ])
   })
 
+  it('demande la LISTE de candidates et la rend entière, titres et tailles compris', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    // Une liste plus longue que l'ancienne borne de 3 000 caractères : elle doit arriver entière.
+    const cartes = Array.from(
+      { length: 20 },
+      (_, i) => `### Candidate ${i + 1} — Note ${i + 1} ${'titre long '.repeat(12)}\n\`knowledge/n${i}.md\` · 4 Ko`
+    )
+    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\nNotes candidates.\n\n'
+    const context = preamble + cartes.join('\n\n---\n\n')
+    expect(context.length).toBeGreaterThan(3_000)
+    const fetchFn = withChallenge(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(openRequest(init?.body))
+      return textResponse(
+        boundSignedPayload(
+          {
+            context,
+            navigation: {
+              query: 'question',
+              minDense: 0.25,
+              root: '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+              candidates: [
+                {
+                  rank: 1,
+                  path: 'knowledge/n0.md',
+                  type: 'decision',
+                  denseCos: 0.5,
+                  retained: true,
+                  title: 'Note 1',
+                  sizeBytes: 4096
+                }
+              ]
+            }
+          },
+          init?.body
+        )
+      )
+    })
+
+    const res = await retrieveBrainContext('question', {
+      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      fetchFn,
+      mode: 'candidates',
+      traceId: () => 'trace-liste'
+    })
+
+    expect(bodies[0]).toMatchObject({ query: 'question', mode: 'candidates' })
+    expect(res.status).toBe('found')
+    expect(res.context).toBe(context)
+    expect(res.navigation?.candidates[0]).toMatchObject({ title: 'Note 1', sizeBytes: 4096 })
+  })
+
+  it('ne demande aucun mode quand on ne lui en donne pas (recherche humaine, crochets)', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    const fetchFn = withChallenge(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(openRequest(init?.body))
+      return textResponse(boundSignedPayload({ context: '[BRAIN] extrait' }, init?.body))
+    })
+    await retrieveBrainContext('question', {
+      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      fetchFn
+    })
+    expect(bodies[0]).not.toHaveProperty('mode')
+  })
+
   it('refuse un contexte non lié cryptographiquement au corpus demandé', async () => {
     const env = { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
     const missing = await retrieveBrainContext('sans-attestation', {

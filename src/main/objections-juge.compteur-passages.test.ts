@@ -23,6 +23,12 @@ describe('compteur de passages de reparation', () => {
     )
   })
 
+  it('ne montre pas de plafond fictif en mode jusqu au vert (conv-35 : 98/24)', () => {
+    const l = libelleDuPassageDeReparation(98, 24, true)
+    expect(l).toBe("Réparation 98 — nouveau passage de build (jusqu'au vert, sans plafond).")
+    expect(traceDuPassage(98, 24, true)).toBe(l)
+  })
+
   /*
    * Objection du juge (tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f) : ce test LISAIT le texte de
    * orchestrator.ts (`expect(source).toContain(...)`). Il ne prouvait aucune execution et cassait au

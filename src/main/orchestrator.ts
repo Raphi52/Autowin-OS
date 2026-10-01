@@ -4,7 +4,13 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
-import { dodDuVerdict, verdictAvecObjectionsPortees, verdictPanelValide } from './objections-juge'
+import { noteVerdictPrecedentPourJuge, reservesMineuresFigees, verdictPanelPourMemoire } from './memoire-juge'
+import {
+  CONTRAT_OBJECTIONS,
+  dodDuVerdict,
+  verdictAvecObjectionsPortees,
+  verdictPanelValide
+} from './objections-juge'
 
 /**
  * Le juge doit juger contre le contrat que le PRODUCTEUR a reçu.
@@ -83,6 +89,7 @@ import {
   parseAttestedLearningProposal,
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
+import { agregerPhasesPourLeJuge } from './agregat-juge'
 import {
   PIPELINE_PHASES,
   type PipelinePhase,
@@ -115,8 +122,9 @@ import {
   worstCaseVisits,
   type WorkflowGraph
 } from './workflow-graph'
-import { porterSortieDePhase } from './phase-carry'
 import { sortieScoutAvecCible } from './scout-cible'
+import { lecteurAncrageDepuisDisque, plafonnerNotesScout } from './scout-plafond'
+import { blocPistesDejaConnues } from './scout-memoire'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
 import {
   briefArbitrage,
@@ -371,18 +379,17 @@ import { GARDE_TACHE, phaseBrief } from './phase-briefs'
 import { contratDeLaConversation, noteContratPourJuge } from './conversation-task-contract'
 import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-confiance'
 import { convRunsRoot } from './runs/conv-runs'
-import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
-import type { DecompositionOutcome } from './greedy-decompose'
 import {
-  retrieveBrainContext,
-  type BrainNavigation,
-  type BrainUnavailableReason
-} from './brain-retrieval'
-import { messageEmpreinteBrain } from './brain-empreinte-message'
+  anglesDuPanelScout,
+  personaInstruction,
+  WORKFLOW_IS_A_TOOL_INSTRUCTION
+} from '../shared/persona'
+import type { DecompositionOutcome } from './greedy-decompose'
+import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
 import type { BrainTrace } from './activity/brain-trace-spool'
-import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceLabel } from './brain-corpus-scope'
+import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import {
   ECHO_MAX_BLOCK_CHARS,
   evictedCount,
@@ -394,6 +401,7 @@ import type {
   ExecutionEvidence,
   PromptEnvelope,
   SendOptions,
+  SendResult,
   TrustedLearningOracle,
   Usage
 } from './providers/types'
@@ -431,9 +439,12 @@ import {
 } from './skill-node-tools'
 import {
   demarrerServeurOutilsNoeudSkill,
+  lecturesDirectesDuBrain,
+  libelleAppelObserve,
   porteLesOutilsNatifs,
   type ServeurOutilsNoeudSkill
 } from './skill-node-mcp'
+import { amitelBrainRoot } from './amitel-paths'
 import { protegerRappel } from './observabilite-non-bloquante'
 
 function canonicalCausalPath(root: string, path: string): string {
@@ -650,9 +661,9 @@ export interface BrainRetrievalEvent {
   injectedChars: number
   navigation?: BrainNavigation
   /**
-   * Nature de l'appel. Absente = `automatic`, la seule que ce canal transportait quand il n'existait
-   * qu'un appel Brain par run. Le run en fait DEUX : la récupération par tâche et l'empreinte du
-   * dépôt — les confondre sous un même libellé rendrait la seconde indiscernable de la première.
+   * Nature de l'appel. Absente = `automatic`. Le run en a fait DEUX jusqu'au 2026-09-27 (la
+   * récupération par tâche et l'empreinte du dépôt, retirée depuis) : les anciennes traces gardent
+   * donc le libellé `empreinte`, qui doit rester lisible.
    */
   kind?: BrainTrace['kind']
 }
@@ -680,6 +691,18 @@ export interface OrchestratorCollaboratorDeps {
   retrieveBrain?: typeof retrieveBrainContext
   /** Résumé metadata-only des décisions reliées à leurs issues observées dans cette conversation. */
   causalMemoryFor?: (conversationId: string) => string
+  /**
+   * Les pistes que les scouts précédents ont déjà proposées sur un dépôt (`scout-memoire.ts`).
+   * `connues` est lu UNE fois au début du run, `sauf` = ce run ; `noter` à la fin de chaque scout.
+   */
+  memoireScout?: {
+    connues: (depot: string, sauf: string) => string[]
+    noter: (depot: string, texteScout: string, run: string) => void
+    /** Les pistes prises/laissées, lues dans la demande du run (message de sélection). */
+    choisir?: (depot: string, demande: string) => void
+    /** Le bilan des choix réels sur ce dépôt ; '' tant qu'il y a trop peu de pistes jugées. */
+    bilan?: (depot: string) => string
+  }
 }
 
 /**
@@ -1017,25 +1040,46 @@ export interface RunCloser {
   }): Promise<void>
 }
 
-/** B4 — plafond du texte d'une phase RÉINJECTÉ dans le contexte de la phase suivante. */
-const PHASE_CONTEXT_CAP = 2000
-
 /**
- * LE POINT UNIQUE du portage phase → phase. Il y en avait SIX, chacun faisant son propre
- * `slice(0, PHASE_CONTEXT_CAP)` suivi du même `…[tronqué]` muet — donc six endroits où corriger la
- * transmission, et cinq occasions d'en oublier un. La projection vit dans `phase-carry.ts` (pure,
- * testable sans provider) ; ici on ne fait plus que l'appeler.
+ * LE POINT UNIQUE du portage phase → phase — et il ne coupe plus rien (2026-09-27).
  *
- * Mesuré avant ce changement, sur 1280 sorties de phase réelles : 25,8 % étaient tronquées, dont
- * 62,5 % des `scout` et 46,7 % des `frame` — les phases dont le métier est justement de transmettre.
+ * Historique : il y avait six `slice(0, 2000)` muets, réunis ici puis remplacés par une projection
+ * par sections (`phase-carry.ts`) sous la même borne de 2 000 caractères. Mesuré alors sur 1280
+ * sorties réelles : 25,8 % tronquées, dont 62,5 % des `scout` et 46,7 % des `frame`. La projection
+ * choisissait mieux QUOI couper, mais coupait toujours.
+ *
+ * Règle posée par l'utilisateur le 2026-09-27 : pas de budget, on récupère le nécessaire. Une phase
+ * écrit ce que la suivante doit savoir ; la tronquer revient à décider à sa place, sur le seul
+ * critère du volume, ce qui ne l'était pas. La sortie passe donc ENTIÈRE. Le point unique reste, pour
+ * qu'aucune coupe locale ne réapparaisse ailleurs.
  */
 function porterVersPhaseSuivante(texte: string): string {
-  return porterSortieDePhase(texte, PHASE_CONTEXT_CAP).texte
+  return texte
+}
+
+/**
+ * LA CONSIGNE QUI ACCOMPAGNE LA LISTE DE CANDIDATES injectée en tête de run (2026-09-27).
+ *
+ * Le Brain ne rend plus d'extraits : il rend des titres, des chemins et des tailles. Sans cette
+ * consigne, une phase lirait la liste comme du savoir et s'arrêterait aux titres. Deux façons
+ * d'ouvrir, parce que toutes les phases n'ont pas les mêmes outils : un nœud skill a `brain_read`,
+ * une phase du pipeline lit le fichier elle-même (elle tourne avec les droits de lecture complets) —
+ * d'où la RACINE, sans laquelle un chemin `knowledge/…` ne mène nulle part hors du serveur.
+ */
+export function consigneCandidatesBrain(racine?: string): string {
+  const ouvrir = racine
+    ? `avec \`brain_read\` si tu l'as, sinon en lisant le fichier \`${racine}/<chemin>\``
+    : 'avec `brain_read`'
+  return (
+    `Ci-dessus : les notes CANDIDATES du Brain pour cette tâche (titre, chemin, taille), PAS leur contenu. ` +
+    `Ouvre EN ENTIER celles qui servent ta tâche, autant qu'il en faut, ${ouvrir}. ` +
+    `Ignore les autres ; ne fouille le dépôt que pour ce que ce savoir ne couvre pas.`
+  )
 }
 
 /**
  * #3 — plafond du texte d'UNE phase agrégé dans le livrable remis au JUGE. Le portage phase→phase
- * était déjà borné (PHASE_CONTEXT_CAP), mais l'agrégat juge (`buildExec`) concaténait les sorties
+ * était alors borné (il ne l'est plus depuis le 2026-09-27), mais l'agrégat juge (`buildExec`) concaténait les sorties
  * COMPLÈTES non tronquées → croissance linéaire du prompt juge avec le nb de phases. On borne chaque
  * bloc de phase (plus large que le portage : le juge doit voir la substance du livrable, pas juste
  * un aperçu). La sortie complète reste dans `phaseOutputs` + la trace des sous-agents.
@@ -1247,9 +1291,14 @@ export class Orchestrator {
     const graph = this.workflowDuRun()?.graph
     const composes = graph ? agentsForPhase(graph, phase) : undefined
     const fallback = bindingDeRepliPourPhase(phase, this.deps.roles, runtimeSnapshot)
+    const topologie = runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? []
+    // Un panel scout de la topologie n'a pas d'angle (`FanMember`, os.ts) : sans cette répartition,
+    // ses N membres recevaient la MÊME consigne (piste 6 de conv-890). Le canevas, lui, pose les siens.
     const resolved = composes
       ? resolveWorkflowAgents(composes, fallback)
-      : (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
+      : phase === 'scout'
+        ? anglesDuPanelScout(topologie)
+        : topologie
     return resolved
       .filter((member) => member && member.provider)
       .slice(
@@ -2554,9 +2603,7 @@ ${annonceCommit}`
       `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
-OBJECTIONS:
-- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
-Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
+${CONTRAT_OBJECTIONS}`
     const messages = [{ role: 'user' as const, content: judgePrompt }]
     const parts = [
       this.phasePrompt('judge', true),
@@ -3312,6 +3359,33 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       trace.push(s)
       onStep?.(s)
     }
+    /**
+     * LES PISTES DEJA PROPOSEES sur ce depot (`scout-memoire.ts`), lues UNE fois, avant tout scout du
+     * run : une reparation du scout ne doit pas se voir interdire sa propre liste. Une memoire
+     * illisible ne bloque pas le run, mais se DIT dans la trace.
+     */
+    let blocPistesConnues = ''
+    try {
+      // D'abord les CHOIX : une demande de sélection dit quelles pistes du scout précédent ont été
+      // prises et lesquelles laissées (piste 7 de conv-890) ; le bilan suit, dans la même consigne.
+      this.deps.memoireScout?.choisir?.(this.deps.executionWorkspace, task)
+      blocPistesConnues = blocPistesDejaConnues(
+        this.deps.memoireScout?.connues(this.deps.executionWorkspace, runId) ?? [],
+        this.deps.memoireScout?.bilan?.(this.deps.executionWorkspace) ?? ''
+      )
+    } catch (erreur) {
+      push({
+        step: 'gate',
+        role: 'gate',
+        detail: `mémoire des pistes du scout illisible (${erreur instanceof Error ? erreur.message : String(erreur)}) — le scout part sans elle`
+      })
+    }
+    const consigneDePhase = (phase: NodePhase, withFoundation: boolean): PhasePromptBlock => {
+      const consigne = this.phasePrompt(phase, withFoundation)
+      return phase === 'scout' && blocPistesConnues
+        ? { ...consigne, text: `${consigne.text}\n\n${blocPistesConnues}` }
+        : consigne
+    }
 
     // 1. Le sous-agent EXÉCUTE la tâche via la PIPELINE de phases (1 skill du kit par phase,
     //    provider-agnostique). Défaut ['build'] = exec simple ; prod = ['frame','build'] etc.
@@ -3371,6 +3445,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      */
     const PLAFOND_BIFURCATIONS = 3
     let bifurcations = 0
+    /** La phase que la demande NOMME (`/scout`, « scout … »), ou rien. */
+    const phaseNommee = routeSkillRequest(task)?.explicitPhase
     /**
      * Le souhait du modèle est-il une BIFURCATION à décompter, ou un simple pas dans le graphe ?
      *
@@ -3403,6 +3479,21 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           if (!voulu) continue
           if (voulu.kind === 'stop') return
           if (voulu.kind === 'phase' && isPipelinePhase(voulu.phase)) {
+            /*
+             * UNE PHASE NOMMEE EST UNE COMMANDE ICI AUSSI (conv-767) : `graphePourTache` ecartait deja
+             * le graphe pour un `/scout`, mais cette branche suivait encore le `SUITE: frame` du
+             * modele, et le scout demande en lecture seule finissait en build dans un autre depot.
+             * Seul le retour vers la MEME phase reste permis : c'est par lui qu'un cadrage refuse
+             * (`frame-cas-limites.ts`) est refait.
+             */
+            if (phaseNommee && voulu.phase !== phaseNommee) {
+              push({
+                step: 'gate',
+                role: 'gate',
+                detail: `SUITE: ${voulu.phase} ignorée — la phase « ${phaseNommee} » a été nommée par la demande, aucune autre ne s'enchaîne.`
+              })
+              continue
+            }
             if (bifurcations >= PLAFOND_BIFURCATIONS) continue
             bifurcations += 1
             yield voulu.phase
@@ -3517,8 +3608,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      * suivante n'est pas `phaseOutputs` mais le texte pousse dans le contexte par l'appelant.
      * Elle est donc appliquee sur la variable que LES DEUX chemins lisent.
      */
+    // Le PLAFOND DE PREUVE passe au meme endroit, et pour la meme raison : les deux chemins lisent
+    // ce texte. Idempotent (une note deja a 50 ne bouge plus). Voir `scout-plafond.ts`.
+    const lireAncrages = lecteurAncrageDepuisDisque(this.deps.executionWorkspace)
     const garderCibleScout = (phase: NodePhase, texte: string): string =>
-      phase === 'scout' ? sortieScoutAvecCible(texte) : texte
+      phase === 'scout' ? sortieScoutAvecCible(plafonnerNotesScout(texte, lireAncrages)) : texte
 
     /**
      * MEME ACCROCHE, autre defaut mesure : un cadrage qui decrit une ENTREE utilisateur sans
@@ -3553,6 +3647,19 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // est un outil, et l'agent qui vient de travailler sait mieux que le plan si l'étape prévue a
       // encore un sens. Silence = le graphe décide, ce qui reste le cas courant.
       souhaitModele = readModelChoice(texte)
+      // Les pistes de CE scout rejoignent la memoire des suivants (`scout-memoire.ts`). Une ecriture
+      // ratee ne casse pas le run, mais se dit : un scout suivant refera alors ce travail.
+      if (phase === 'scout' && this.deps.memoireScout) {
+        try {
+          this.deps.memoireScout.noter(this.deps.executionWorkspace, texte, runId)
+        } catch (erreur) {
+          push({
+            step: 'gate',
+            role: 'gate',
+            detail: `pistes du scout non mémorisées (${erreur instanceof Error ? erreur.message : String(erreur)})`
+          })
+        }
+      }
       const alreadyAttributed = new Set(
         phaseOutputs.flatMap((output) => (output.agentToken ? [output.agentToken] : []))
       )
@@ -3602,15 +3709,17 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      * conclure vert quand elle a effectivement repare.
      */
     const travauxNonLivres = new Set<string>()
-    // RAG Brain : 1×/run, on récupère du cerveau Amitel la connaissance pertinente (retriever
-    // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
-    // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
+    // RAG Brain : 1×/run, on récupère du cerveau Amitel la LISTE des notes pertinentes pour la
+    // tâche (titre, chemin, taille) et on l'injecte en tête de contexte. Plus d'extraits coupés à
+    // 2 000 caractères (2026-09-27) : chaque sous-agent ouvre EN ENTIER les notes qu'il juge
+    // nécessaires. Dégrade à '' si le serveur est absent.
     const brainCorpus = brainCorpusForWorkspace(this.deps.executionWorkspace)
     const brain =
       brainCorpus?.length === 0
         ? { context: '', status: 'empty' as const }
         : await (this.deps.retrieveBrain ?? retrieveBrainContext)(task, {
-            corpus: brainCorpus
+            corpus: brainCorpus,
+            mode: 'candidates'
           })
     const brainRetrievedAt = new Date().toISOString()
     const scopedBrain = scopeBrainRetrieval(brain, brainCorpus)
@@ -3640,84 +3749,16 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // L'observabilité Brain ne doit jamais faire échouer le run.
     }
     /**
-     * SKILL `think` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : en plus de la récupération
-     * par tâche ci-dessus, l'EMPREINTE DURABLE du dépôt (écrite par `/learn` : ce qu'il est, ce
-     * qu'il fait, architecture, décisions) est chargée à CHAQUE run, et l'action est VISIBLE comme
-     * step dans le fil de sous-agents — plus un geste implicite. Elle ne bloque jamais un run.
+     * PLUS D'« EMPREINTE DU DÉPÔT » (retirée le 2026-09-27, choix de l'utilisateur).
      *
-     * LES NOMS ÉTAIENT MORTS, signalé le 2026-08-25 : le fil affichait « load » et le message
-     * renvoyait vers une commande `save`, alors que ni `load` ni `save` n'existent dans `skills/` — seules
-     * `think` et `learn` sont sur disque. Un nom qui désigne une commande supprimée est un mensonge
-     * qui ne se voit qu'à l'usage ; `etape-think.test.ts` relie désormais ces noms au disque.
+     * Un second appel partait à chaque run avec une question FIGÉE (« empreinte du dépôt X — ce qu'il
+     * est, ce qu'il fait… »), et son résultat était injecté en tête de toutes les phases. Mesuré sur
+     * 335 runs : 12 notes distinctes seulement, et 82 % du temps la note qui décrit… cette empreinte
+     * elle-même, retenue pour le mot « empreinte » (similarité médiane 0,33). Aucune note ne décrivait
+     * réellement le dépôt : c'était ~2 000 caractères de bruit payés à chaque run. Le contexte du
+     * dépôt vient désormais de la liste de candidates de la tâche ci-dessus, et du nœud `think`, qui
+     * ouvre lui-même ce qu'il juge nécessaire.
      */
-    let empreinteDepot = ''
-    if (brainCorpus?.length !== 0) {
-      /**
-       * CE DEUXIÈME APPEL BRAIN N'ÉCRIVAIT AUCUNE TRACE (constaté le 2026-08-31).
-       *
-       * Il part à CHAQUE run, exactement comme la récupération par tâche juste au-dessus, et son
-       * résultat est injecté en tête du contexte de toutes les phases — mais seule la première
-       * appelait `onBrainRetrieved`. La liste Brain de l'Observatory montrait donc un appel là où le
-       * run en avait fait deux, ce qui est précisément le défaut qu'une vue d'observabilité ne peut
-       * pas se permettre : sous-compter en silence se lit comme un compte juste.
-       *
-       * Statut par DÉFAUT `unavailable` : si l'appel jette, on ne sait pas si le Brain était absent
-       * ou la requête invalide, et l'échec doit rester visible plutôt que de se confondre avec un
-       * « rien trouvé ».
-       */
-      const empreinteQuery = `empreinte du dépôt ${workspaceLabel(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`
-      let empreinteStatut: BrainRetrievalEvent['status'] = 'unavailable'
-      // La CAUSE de l'indisponibilité, telle que `retrieveBrainContext` l'a constatée : sans elle le
-      // message de `think` ne peut qu'énumérer des hypothèses (mesure conv-586, 2026-09-16).
-      let empreinteMotif: BrainUnavailableReason | undefined
-      let empreinteNavigation: BrainNavigation | undefined
-      try {
-        const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)(empreinteQuery, {
-          corpus: brainCorpus
-        })
-        const empreinteScopee = scopeBrainRetrieval(chargee, brainCorpus)
-        empreinteStatut = empreinteScopee.status
-        empreinteMotif = empreinteScopee.unavailableReason
-        empreinteNavigation = empreinteScopee.navigation
-        empreinteDepot = empreinteScopee.context.slice(0, 6_000)
-      } catch {
-        // Le load est un confort de départ, jamais une raison d'échouer. Une exception ici est un
-        // échec de transport : c'est exactement le cas « réseau ».
-        empreinteMotif = 'network'
-      }
-      try {
-        onBrainRetrieved?.({
-          timestamp: new Date().toISOString(),
-          kind: 'empreinte',
-          query: empreinteNavigation?.query || empreinteQuery,
-          found: empreinteDepot.length > 0,
-          status: empreinteStatut,
-          // La TRONCATURE à 6 000 est ce qui est réellement injecté : annoncer la taille récupérée
-          // ferait croire à du contexte que les phases n'ont jamais vu.
-          injectedChars: empreinteDepot.length,
-          ...(empreinteNavigation ? { navigation: empreinteNavigation } : {})
-        })
-      } catch {
-        // L'observabilité Brain ne doit jamais faire échouer le run.
-      }
-      /*
-       * Le STATUT decide du message, pas la taille du texte. Un Brain injoignable rendait « aucune
-       * empreinte » — une panne annoncee comme un resultat de recherche (mesure conv-9, 2026-08-31).
-       */
-      const empreinteMessage = messageEmpreinteBrain(
-        empreinteStatut,
-        empreinteDepot.length,
-        empreinteMotif
-      )
-      push({
-        step: 'exec',
-        role: 'think',
-        provider: 'brain',
-        text: empreinteMessage.text,
-        status: 'completed',
-        detail: empreinteMessage.detail
-      })
-    }
     const memoryEcho = sessionMemoryBlock(
       rememberedFacts(conversationId, this.deps.executionWorkspace),
       ECHO_MAX_BLOCK_CHARS,
@@ -3759,22 +3800,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const phaseContext: string[] = [
       ...(memoryEcho ? [contexteNomme('memoryEcho', memoryEcho)] : []),
       ...(causalMemory ? [contexteNomme('causalMemory', causalMemory)] : []),
-      ...(empreinteDepot
-        ? [
-            contexteNomme(
-              'empreinteDepot',
-              `EMPREINTE DU DÉPÔT (skill load) :
-${empreinteDepot}`
-            )
-          ]
-        : []),
       ...(brainContext
         ? [
             contexteNomme('brainContext', brainContext),
-            contexteNomme(
-              'brainPriorite',
-              `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
-            )
+            contexteNomme('brainPriorite', consigneCandidatesBrain(scopedBrain.navigation?.root))
           ]
         : []),
       contexteNomme('tache', taskContext),
@@ -3943,7 +3972,7 @@ ${empreinteDepot}`
           // Constant par workspace, donc encore devant la phase.
           { name: 'projectContext', text: projectContext },
           // VARIABLE par phase — d'où sa place ici, et non en position 2.
-          this.phasePrompt(phase, true),
+          consigneDePhase(phase, true),
           // VARIABLE par sandbox : le plus volatile, donc en dernier.
           // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
           { name: 'bureauCache', text: consigneBureauCache(runId) },
@@ -4354,7 +4383,7 @@ ${empreinteDepot}`
         ? [
             { name: 'style', text: STYLE_TON },
             // VARIABLE par phase.
-            this.phasePrompt(phase, false),
+            consigneDePhase(phase, false),
             // VARIABLE par sandbox.
             // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
             { name: 'bureauCache', text: consigneBureauCache(runId) },
@@ -4374,7 +4403,7 @@ ${empreinteDepot}`
             // Constant par workspace.
             { name: 'projectContext', text: projectContext },
             // VARIABLE par phase.
-            this.phasePrompt(phase, true),
+            consigneDePhase(phase, true),
             // VARIABLE par sandbox — le plus volatile, donc en dernier.
             // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
             { name: 'bureauCache', text: consigneBureauCache(runId) },
@@ -4444,11 +4473,10 @@ ${empreinteDepot}`
                  * L'ISSUE METIER est dite, pas seulement le transport. Mesure du 2026-08-20 sur
                  * conv-1346 : cette ligne affichait `remember : ok` pendant que le Brain refusait
                  * l'ecriture (`stored: false`). Un artefact de preuve qui annonce « ok » sur un
-                 * no-op est pire qu'une absence de trace.
+                 * no-op est pire qu'une absence de trace. Depuis le 2026-09-27, la ligne porte aussi
+                 * la note ouverte et la longueur lue (`libelleAppelObserve`).
                  */
-                detail: `outil natif ${appel.outil} (${phase}) : ${
-                  appel.refuse ? 'refuse' : appel.ok ? 'ok' : 'echec'
-                }${appel.issue ? ` — ${appel.issue}` : ''}`
+                detail: libelleAppelObserve(appel, phase)
               })
           })
           push({
@@ -4567,14 +4595,16 @@ ${empreinteDepot}`
         forward: (delta) => onDelta?.('exec', delta)
       })
       let phaseRes
-      try {
-        // Surcharge API transitoire (529/503) : on rejoue la MÊME phase au lieu de perdre le run
-        // (incident ak-9d3fa074346ba9da). Le réessai est annoncé dans le flux, jamais silencieux.
-        // La supervision mi-phase de HEAD est CONSERVÉE : elle vit dans le callback de flux, donc
-        // elle continue de recevoir les deltas de la tentative qui aboutit.
-        phaseRes = await this.sendSurvivingOverload(
+      // Modèle qui a VRAIMENT répondu : celui du binding, ou son voisin après un refus du filtre.
+      let modeleDeLaPhase = phaseBinding.model
+      // Surcharge API transitoire (529/503) : on rejoue la MÊME phase au lieu de perdre le run
+      // (incident ak-9d3fa074346ba9da). Le réessai est annoncé dans le flux, jamais silencieux.
+      // La supervision mi-phase de HEAD est CONSERVÉE : elle vit dans le callback de flux, donc
+      // elle continue de recevoir les deltas de la tentative qui aboutit.
+      const envoyer = (options: SendOptions): Promise<SendResult> =>
+        this.sendSurvivingOverload(
           () =>
-            registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) => {
+            registry.send(providerDeLaPhase, phaseMessages, options, (c) => {
               supervision.onDelta(c.delta)
               if (c.reasoning) onDelta?.('exec', '', c.reasoning)
               /*
@@ -4599,6 +4629,48 @@ ${empreinteDepot}`
           (note) => onDelta?.('exec', `\n${note}\n`),
           signal
         )
+      try {
+        try {
+          phaseRes = await envoyer(subOptions)
+        } catch (error) {
+          /*
+           * REPLI APRÈS REFUS, comme le lancement en parallèle (plus haut, conv-540). Mesuré en
+           * conv-890 (2026-09-30 13:42) : l'étape build, sur le SEUL modèle du rôle subagent
+           * (claude-opus-5-5), a été refusée par le filtre de sécurité, et le run a fini rouge sans
+           * rien tenter. Relancer le MÊME modèle échoue pareil : on rejoue UNE fois sur le voisin,
+           * avec la même session (sur une reprise, le message ne porte que « continue »).
+           */
+          const cause = error instanceof Error ? error.message : String(error)
+          const repli =
+            classifyProviderFailure(cause) === 'refused'
+              ? modeleDeRepliApresRefus(subOptions.model)
+              : undefined
+          if (!repli || repli === subOptions.model) throw error
+          push({
+            step: 'exec',
+            provider: providerDeLaPhase,
+            role: roleDeLaPhase,
+            model: subOptions.model,
+            text: '',
+            prompt: execPrompt,
+            status: 'failed',
+            evidence: evidenceDeLErreur(error),
+            error: explainRoleFailure(
+              `Phase ${phase}`,
+              roleDeLaPhase,
+              { provider: providerDeLaPhase, model: subOptions.model, message: cause },
+              roles.getBinding(roleDeLaPhase).provider
+            ),
+            durationMs: performance.now() - phaseStartedAt,
+            execution
+          })
+          onDelta?.(
+            'exec',
+            `\n[repli] ${subOptions.model} a refusé le message — nouvel essai sur ${repli}\n`
+          )
+          modeleDeLaPhase = repli
+          phaseRes = await envoyer({ ...subOptions, model: repli })
+        }
       } catch (error) {
         supervision.dispose()
         // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.
@@ -4615,7 +4687,7 @@ ${empreinteDepot}`
           roleDeLaPhase,
           {
             provider: providerDeLaPhase,
-            ...(subOptions.model ? { model: subOptions.model } : {}),
+            ...(modeleDeLaPhase ? { model: modeleDeLaPhase } : {}),
             message: error instanceof Error ? error.message : String(error)
           },
           roles.getBinding(roleDeLaPhase).provider
@@ -4672,7 +4744,7 @@ ${empreinteDepot}`
           // local) — pas le demandé, sinon trace/coût mentent sur qui a vraiment tourné.
           provider: phaseRes.provider ?? subProvider,
           role: 'subagent',
-          model: phaseRes.model ?? phaseBinding.model,
+          model: phaseRes.model ?? modeleDeLaPhase,
           inputTokens: phaseRes.usage.inputTokens,
           outputTokens: phaseRes.usage.outputTokens,
           cacheReadTokens: phaseRes.usage.cacheReadTokens,
@@ -4684,7 +4756,7 @@ ${empreinteDepot}`
         step: 'exec',
         provider: phaseRes.provider ?? subProvider,
         role: 'subagent',
-        model: phaseRes.model ?? phaseBinding.model,
+        model: phaseRes.model ?? modeleDeLaPhase,
         text: phaseRes.text,
         thinking: phaseRes.thinking,
         tokens: phaseRes.usage
@@ -4701,6 +4773,15 @@ ${empreinteDepot}`
         execution
       })
       aggregatedEvidence.push(...(phaseRes.executionEvidence ?? []))
+      // Lectures DIRECTES du Brain (Read d'une note, Grep sous sa racine) : sans ces lignes, la trace
+      // ne montrait que les `brain_read` et taisait les notes lues comme fichiers (mesure 2026-09-27).
+      for (const detail of lecturesDirectesDuBrain(
+        phaseRes.executionEvidence,
+        amitelBrainRoot(),
+        phase
+      )) {
+        push({ step: 'exec', role: 'subagent', detail })
+      }
       lastExecText = phaseRes.text
       lastUsage = phaseRes.usage
       /**
@@ -4893,25 +4974,19 @@ ${empreinteDepot}`
       usage: Usage | undefined
       executionEvidence: ExecutionEvidence[]
     } => ({
+      // #3 — chaque bloc de phase est borné avant agrégation pour le juge (l'agrégat n'est plus la
+      // concaténation des sorties COMPLÈTES). Sortie intégrale = phaseOutputs.
       text:
         phaseOutputs.length > 1
-          ? phaseOutputs
-              .map((p) => {
-                // #3 — chaque bloc de phase est borné avant agrégation pour le juge (l'agrégat
-                // n'est plus la concaténation des sorties COMPLÈTES). Sortie intégrale = phaseOutputs.
-                const body =
-                  p.text.length > JUDGE_PHASE_CAP
-                    ? `${p.text.slice(0, JUDGE_PHASE_CAP)}\n…[tronqué — voir le fil des sous-agents]`
-                    : p.text
-                return `[phase ${p.phase}]\n${body}`
-              })
-              .join('\n\n')
+          ? agregerPhasesPourLeJuge(phaseOutputs, JUDGE_PHASE_CAP)
           : lastExecText,
       usage: lastUsage,
       executionEvidence: aggregatedEvidence
     })
     let exec = buildExec()
     let lastJudgeText = ''
+    /** Verdict tel que les juges l'ont RENDU (panel : reconstruit depuis les membres) — memoire du juge. */
+    let lastJudgeMemoire = ''
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
     const judgeBinding =
@@ -4983,6 +5058,7 @@ ${empreinteDepot}`
       if (resumedJudgeText !== undefined) {
         const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
         lastJudgeText = resumedJudgeText.trim()
+        lastJudgeMemoire = lastJudgeText
         // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
         // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
         trust.record({
@@ -5078,9 +5154,7 @@ ${empreinteDepot}`
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
-OBJECTIONS:
-- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
-Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
+${CONTRAT_OBJECTIONS}`
         : `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
           `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
           `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
@@ -5090,14 +5164,14 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           JUDGE_TOOLSET_CONTRACT +
           noteContrat +
           noteHypotheses +
+          // conv-35 : a partir du 2e passage, `lastJudgeMemoire` est encore le verdict PRECEDENT.
+          noteVerdictPrecedentPourJuge(lastJudgeMemoire) +
           `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
-OBJECTIONS:
-- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <réserve non bloquante> | OK: <constat vérifié>
-Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
+${CONTRAT_OBJECTIONS}`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
@@ -5158,6 +5232,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       }
       const judgeStartedAt = performance.now()
       let verdict
+      let memoirePanel = ''
       // FAN-OUT JUGE : ≥2 modèles dans le bloc topology judge → N juges en parallèle puis QUORUM
       // de vote MÉCANIQUE (compter les VALIDE ; majorité = pass). Agréger ≠ re-décider : aucun juge
       // supplémentaire ne tranche, on compte les voix. <2 ou absent → un seul juge (rétrocompat).
@@ -5272,6 +5347,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         const reasons = responders.filter((r) => !r.ok && r.text).map((r) => r.text)
         // Verdict AGRÉGÉ synthétique consommé par le gate ci-dessous. usage=undefined → le coût,
         // déjà ajouté par juge ci-dessus, n'est pas re-compté.
+        memoirePanel = verdictPanelPourMemoire(
+          responders.map((r) => r.text),
+          ''
+        )
         verdict = {
           text: passes
             ? // Quorum atteint : les objections des membres RESTENT dans le verdict (conv-539,
@@ -5341,6 +5420,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
        */
       const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(verdict.text))
       lastJudgeText = verdict.text.trim()
+      lastJudgeMemoire = memoirePanel.trim() || lastJudgeText
       // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
       // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
       trust.record({
@@ -5468,15 +5548,30 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       attempt++
     ) {
       if (attempt > 0) {
-        // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
-        // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
+        /*
+         * UNE REPARATION REJOUE LA PHASE NOMMEE, pas `build` (conv-767 : un `/scout` refuse par le
+         * juge a ete « repare » par un build qui a ecrit dans un autre depot). Un `/judge` nomme n'a
+         * rien a rejouer : son verdict EST la reponse demandee.
+         */
+        if (phaseNommee === 'judge') {
+          push({
+            step: 'gate',
+            role: 'gate',
+            detail:
+              'aucune réparation : la demande nomme le juge seul, son verdict est la réponse — aucune autre phase ne se joue.'
+          })
+          break
+        }
+        const phaseDeReparation: NodePhase = phaseNommee ?? 'build'
+        // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud (build,
+        // ou la phase nommée), donc son panel, sa synthèse, sa concurrence et sa télémétrie.
         pousserContexte(
           `reparation:${attempt}`,
           `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Objections du juge : ${lastJudgeText || '(verdict vide)'}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
         // LE PASSAGE SE NOMME DANS LA TRACE : sans cette ligne, un run mort par epuisement ne
         // permet pas de compter ses rejeus apres coup (objection du juge, conv-540).
-        const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR)
+        const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR, jusquAuVert, phaseDeReparation)
         if (ligneDuPassage) push({ step: 'gate', role: 'gate', detail: ligneDuPassage })
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
         // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
@@ -5492,10 +5587,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          * objections du dernier juge restent dans le resultat du run.
          */
         try {
-          await executePipelinePhase('build')
+          await executePipelinePhase(phaseDeReparation)
           // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
           // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
-          // codé en dur build → judge.
+          // codé en dur build → judge. Une phase nommée n'a pas de graphe (`graphePourTache`) : elle
+          // est seule rejouée.
           for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
             await executePipelinePhase(phase)
           }
@@ -5509,6 +5605,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         }
         exec = buildExec()
       }
+      const verdictDuPassagePrecedent = attempt > 0 ? lastJudgeMemoire : ''
       const r = await judgeAndGate()
       valid = r.valid
       gate = r.gate
@@ -5580,7 +5677,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         // (11:11-11:31) : le code qui jugeait n'etait pas celui qu'on reparait. La boucle le NOMME
         // desormais au lieu de bruler un build et un panel de juge par passage.
         bundlePerime: mesureBundlePerime(process.cwd()),
-        jusquAuVert
+        jusquAuVert,
+        // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
+        reservesMineuresFigees: reservesMineuresFigees(
+          attempt,
+          lastJudgeMemoire,
+          verdictDuPassagePrecedent
+        )
       })
       if (passage.arret) {
         gate.reasons.push(passage.arret)

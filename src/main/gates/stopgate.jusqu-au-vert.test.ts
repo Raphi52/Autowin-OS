@@ -14,4 +14,15 @@ describe('reparation jusqu au vert', () => {
     const bundlePerime = { bundleMs: 1, sourceMs: 2, bundle: 'out/main/index.js' }
     expect(arretDeLaReparation({ ...base, tentative: 1, jusquAuVert: true, bundlePerime })).toMatch(/périmé/)
   })
+  // conv-35 : ~107 passages sur 109 apres validation, memes reserves MINEUR a chaque tour.
+  it('memes reserves mineures deux passages de suite : arret nomme, meme jusqu au vert', () => {
+    expect(arretDeLaReparation({ ...base, tentative: 3, jusquAuVert: true, reservesMineuresFigees: true })).toMatch(/mêmes réserves mineures/)
+  })
+  it('reserves mineures qui bougent : on continue jusqu au vert', () => {
+    expect(arretDeLaReparation({ ...base, tentative: 3, jusquAuVert: true, reservesMineuresFigees: false })).toBeUndefined()
+  })
+  it('le code perime reste prioritaire', () => {
+    const bundlePerime = { bundleMs: 1, sourceMs: 2, bundle: 'out/main/index.js' }
+    expect(arretDeLaReparation({ ...base, tentative: 1, jusquAuVert: true, bundlePerime, reservesMineuresFigees: true })).toMatch(/périmé/)
+  })
 })

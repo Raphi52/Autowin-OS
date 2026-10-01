@@ -183,9 +183,11 @@ describe('exhaustivité des appels au Brain', () => {
     expect(codeSeulementDuProcessPrincipal()).toMatch(/kind: 'recherche'/)
   })
 
-  it("l'empreinte du dépôt chargée à chaque run laisse une trace", () => {
-    // Deuxième appel Brain du run. Il partait déjà sur le réseau ; personne n'en était notifié, si
-    // bien que la liste Brain montrait un appel là où le run en faisait deux.
-    expect(codeSeulement('orchestrator.ts')).toMatch(/kind: 'empreinte'/)
+  it("l'empreinte à question figée n'est plus chargée à chaque run", () => {
+    // Retirée le 2026-09-27 : sa question figée ramenait 82 % du temps la même note hors sujet. Si
+    // elle revenait, ce serait de nouveau ~2 000 caractères de bruit en tête de chaque phase.
+    const code = codeSeulement('orchestrator.ts')
+    expect(code).not.toMatch(/kind: 'empreinte'/)
+    expect(code).not.toMatch(/empreinteQuery/)
   })
 })

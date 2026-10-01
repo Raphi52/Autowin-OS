@@ -474,6 +474,44 @@ export async function porteeDUneEdition(
   return portee
 }
 
+/**
+ * LA PORTEE D'UNE PUBLICATION — ce que le commit automatique du chat rejoue AVANT de pousser.
+ *
+ * Mesure du 2026-10-01 : le commit automatique `b6d2a3fc` (conv-892) a poussé une modification de
+ * `src/main/index.ts` sans rejouer aucun test, et `chat-ipc-contract.test.ts` est resté rouge sur
+ * main pendant 20 h. Ce test LIT `index.ts` au lieu de l'importer : la portée de `porteeDUneEdition`
+ * (graphe d'imports pour du code) ne l'aurait pas rejoué — c'est `VERIFY_RELATED_ANGLE_MORT`. Avant de
+ * POUSSER, on ferme cet angle mort pour le code aussi : les tests qui CITENT le nom du fichier sont
+ * ajoutés. Le surcoût est quelques tests en trop, jamais un vert qui n'a rien regardé.
+ *
+ * `undefined` dès qu'UN fichier n'a pas de portée ou que la recherche n'a pas pu conclure : une
+ * portée partielle présentée comme un verdict serait exactement le faux vert qu'on évite.
+ */
+export async function porteeAvantPublication(
+  fichiers: readonly string[],
+  testsQuiCitent: (motif: string) => Promise<readonly string[] | undefined>
+): Promise<readonly string[] | undefined> {
+  if (fichiers.length === 0) return undefined
+  const portee: string[] = []
+  const ajouter = (chemins: readonly string[]): void => {
+    for (const brut of chemins) {
+      const chemin = brut.split(ANTISLASH).join('/')
+      if (chemin.trim() && !portee.includes(chemin)) portee.push(chemin)
+    }
+  }
+  for (const fichier of fichiers) {
+    const sienne = await porteeDUneEdition(fichier, testsQuiCitent)
+    if (!sienne) return undefined
+    ajouter(sienne)
+    const normalise = fichier.split(ANTISLASH).join('/')
+    if (!EXTENSIONS_DE_CODE.test(normalise)) continue
+    const lecteurs = await testsQuiCitent(normalise.slice(normalise.lastIndexOf('/') + 1))
+    if (!lecteurs) return undefined
+    ajouter(lecteurs)
+  }
+  return portee
+}
+
 /** Sortie d'une verification, telle qu'elle est rendue a l'agent. */
 export interface VerifyOutcome {
   ok: boolean
@@ -800,6 +838,155 @@ function empreinteDeRaison(messages: unknown): string {
   }
   if (!tete) return 'sans-message'
   return lieu ? `${tete} @ ${lieu}` : tete
+}
+
+/**
+ * Les SUITES en échec d'un rapport vitest JSON, et le nombre de tests joués — même quand
+ * `echecsDuRapport` le déclare non concluant (échec de niveau suite, sans assertion nommée).
+ *
+ * Mesuré le 2026-10-01 : dans la portée de `src/main/index.ts` (1 555 tests),
+ * `moteur-perime-cablage.test.ts` échoue au niveau de la suite et passe seul ; le rapport, non
+ * concluant, ne nommait rien. Le commit automatique a besoin de ces noms pour rejouer les suites
+ * isolées. Rien n'est deviné : une forme inattendue rend `undefined`.
+ */
+export function lectureBruteDuRapport(
+  brut: string | undefined
+): { suitesEnEchec: string[]; testsJoues: number } | undefined {
+  if (!brut?.trim()) return undefined
+  let rapport: unknown
+  try {
+    rapport = JSON.parse(brut)
+  } catch {
+    return undefined
+  }
+  const { testResults, numTotalTests } = (rapport ?? {}) as {
+    testResults?: unknown
+    numTotalTests?: unknown
+  }
+  if (!Array.isArray(testResults) || typeof numTotalTests !== 'number') return undefined
+  const suitesEnEchec: string[] = []
+  for (const suite of testResults as Array<{ name?: unknown; status?: unknown }>) {
+    if (typeof suite?.name !== 'string' || !suite.name.trim()) return undefined
+    if (suite.status === 'failed') suitesEnEchec.push(suite.name)
+  }
+  return { suitesEnEchec, testsJoues: numTotalTests }
+}
+
+/**
+ * LA PORTÉE EN LOTS QUI TIENNENT DANS UNE LIGNE DE COMMANDE.
+ *
+ * Mesuré le 2026-10-01 (conv-770, tour 532299a4) : 194 tests citaient les fichiers du tour, la
+ * commande `vitest related …` faisait 9 121 caractères. Sous Windows elle passe par `cmd.exe /c`,
+ * dont la limite est 8 191 : « La ligne de commande est trop longue », exit 1, aucun rapport, et la
+ * publication était bloquée comme si les tests étaient rouges. Chaque chemin compte sa longueur plus
+ * 3 (séparateur et guillemets éventuels) ; l'ordre est gardé ; un chemin plus long que le budget part
+ * seul plutôt que d'être perdu.
+ */
+export function decouperEnLots(chemins: readonly string[], budget: number): string[][] {
+  const lots: string[][] = []
+  let courant: string[] = []
+  let taille = 0
+  for (const chemin of chemins) {
+    const cout = chemin.length + 3
+    if (courant.length && taille + cout > budget) {
+      lots.push(courant)
+      courant = []
+      taille = 0
+    }
+    courant.push(chemin)
+    taille += cout
+  }
+  if (courant.length) lots.push(courant)
+  return lots
+}
+
+/**
+ * Budget des CHEMINS d'un lancement : 8 191 (limite de `cmd.exe`) moins une marge pour
+ * `cmd.exe /c vitest related`, `--run`, les reporters et le chemin du rapport JSON.
+ */
+export const BUDGET_CHEMINS_PAR_LANCEMENT = 7_000
+
+/**
+ * FUSIONNE LES RAPPORTS JSON DE PLUSIEURS LANCEMENTS de vitest en un seul, lisible par
+ * `echecsDuRapport` et `lectureBruteDuRapport`.
+ *
+ * Les comptes ANNONCÉS par vitest sont ADDITIONNÉS, jamais recalculés depuis les suites : la lecture
+ * croisée d'`echecsDuRapport` (échecs annoncés contre échecs relus) garde ainsi tout son pouvoir.
+ * Une suite jouée par deux lots (liée à des fichiers de deux lots) n'est gardée qu'UNE fois, dans sa
+ * version la PIRE, et ses comptes sont retirés des totaux. Un lot sans rapport lisible rend la fusion
+ * SANS rapport : « on ne sait pas » refuse, jamais un vert par défaut.
+ */
+export function fusionnerRapportsVitest(
+  bruts: ReadonlyArray<string | undefined>
+): string | undefined {
+  if (bruts.length === 1) return bruts[0]
+  type Assertion = { status?: unknown }
+  type Suite = { name?: unknown; status?: unknown; assertionResults?: unknown }
+  const objets: Array<Record<string, unknown>> = []
+  for (const brut of bruts) {
+    if (!brut?.trim()) return undefined
+    try {
+      const o = JSON.parse(brut) as unknown
+      if (!o || typeof o !== 'object' || Array.isArray(o)) return undefined
+      objets.push(o as Record<string, unknown>)
+    } catch {
+      return undefined
+    }
+  }
+  const nombre = (o: Record<string, unknown>, cle: string): number =>
+    typeof o[cle] === 'number' ? (o[cle] as number) : 0
+  const assertionsDe = (s: Suite): Assertion[] =>
+    Array.isArray(s.assertionResults) ? (s.assertionResults as Assertion[]) : []
+  const echecsDe = (s: Suite): number => assertionsDe(s).filter((a) => a.status === 'failed').length
+  const COMPTES = [
+    'numTotalTests',
+    'numFailedTests',
+    'numPassedTests',
+    'numPendingTests',
+    'numTodoTests',
+    'numTotalTestSuites',
+    'numFailedTestSuites',
+    'numPassedTestSuites',
+    'numPendingTestSuites'
+  ]
+  const totaux: Record<string, number> = {}
+  for (const cle of COMPTES) totaux[cle] = objets.reduce((n, o) => n + nombre(o, cle), 0)
+  // Une suite en double : on retire des totaux la contribution de la version ÉCARTÉE.
+  const retirer = (s: Suite): void => {
+    const assertions = assertionsDe(s)
+    const echecs = echecsDe(s)
+    totaux.numTotalTests -= assertions.length
+    totaux.numFailedTests -= echecs
+    totaux.numPassedTests -= assertions.filter((a) => a.status === 'passed').length
+    totaux.numTotalTestSuites -= 1
+    if (s.status === 'failed') totaux.numFailedTestSuites -= 1
+    else if (s.status === 'passed') totaux.numPassedTestSuites -= 1
+  }
+  const parNom = new Map<string, Suite>()
+  const sansNom: Suite[] = []
+  for (const o of objets) {
+    for (const s of (Array.isArray(o.testResults) ? o.testResults : []) as Suite[]) {
+      if (typeof s?.name !== 'string') {
+        sansNom.push(s)
+        continue
+      }
+      const deja = parNom.get(s.name)
+      if (!deja) {
+        parNom.set(s.name, s)
+        continue
+      }
+      const pire = s.status === 'failed' && deja.status !== 'failed' ? s : deja
+      retirer(pire === s ? deja : s)
+      parNom.set(s.name, pire)
+    }
+  }
+  const fusion: Record<string, unknown> = {
+    ...objets[0],
+    ...totaux,
+    success: objets.every((o) => o.success === true),
+    testResults: [...parNom.values(), ...sansNom]
+  }
+  return JSON.stringify(fusion)
 }
 
 export function echecsDuRapport(

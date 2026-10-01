@@ -360,6 +360,26 @@ describe('réconciliation au chargement des tours interrompus', () => {
     expect(message.parts?.[0]).not.toHaveProperty('interrupted')
   })
 
+  it('un appel de chat reprenable est reconnu TOUR PAR TOUR, sans inventaire préalable', () => {
+    // gels.jsonl 2026-09-26T09:30 : 8951 ms au chargement, dont l'inventaire COMPLET des journaux
+    // de tours. Seuls les messages restés « en cours » ont besoin de la réponse : on la demande
+    // pour eux, avec la conversation qui situe leur journal.
+    const store = new ConversationStore(makeClock())
+    const demandes: string[] = []
+    store.hydrate(zombie(), {
+      resumableTurnIds: new Set(),
+      appelChatReprenable: (conversationId, turnId) => {
+        demandes.push(`${conversationId}/${turnId}`)
+        return true
+      }
+    })
+
+    const message = store.get('conv-1056')!.messages.at(-1)!
+    expect(demandes).toEqual(['conv-1056/turn-zombie'])
+    expect(message.status).toBe('streaming')
+    expect(message.content).not.toContain('interrompu')
+  })
+
   it('un second chargement ne réempile pas l’avis', () => {
     const store = new ConversationStore(makeClock())
     store.hydrate(zombie())

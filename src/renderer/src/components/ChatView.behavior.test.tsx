@@ -1247,7 +1247,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
       pilotChat,
-      injectDirective: injectFailingThen(1, () => injection.promise)
+      // 0 et non 1 : l'injection du `/btw` doit rester EN ATTENTE, puis echouer loin de A. Avec 1, elle
+      // echouait tout de suite, `injection.promise` n'etait rendue a personne, et son rejet plus bas
+      // sortait en « Unhandled Rejection » — ce qui faisait rendre 1 a `npm test` (mesure du 30/09).
+      injectDirective: injectFailingThen(0, () => injection.promise)
     })
     await mount(mockApi)
     const picks = (): NodeListOf<Element> => container!.querySelectorAll('.conv-pick')
@@ -1440,9 +1443,15 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await type('keep me')
       await click('.composer-send')
 
-      // Le recu dit l'echec, et le message n'est pas perdu : il part au drain de fin de tour.
+      // Le recu dit que le message ATTEND (un refus n'est pas une panne, conv-891) ; seule une vraie
+      // erreur d'envoi le dit. Et le message n'est pas perdu : il part au drain de fin de tour.
       expect(container!.querySelector('.directive-receipt .msg-body')?.textContent).toBe('keep me')
-      expect(container!.querySelector('.directive-receipt-status')?.textContent).toContain('Échec')
+      expect(container!.querySelector('.directive-receipt-status')?.textContent).toContain(
+        testCase === 'a refused injection' ? 'Attend la fin du tour' : 'Erreur d’envoi'
+      )
+      expect(container!.querySelector('.directive-receipt-status')?.textContent).not.toContain(
+        'Échec'
+      )
       await act(async () => {
         pilot.resolve({ ok: true })
         await flushAnimationFrames()

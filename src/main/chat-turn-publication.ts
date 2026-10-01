@@ -9,7 +9,8 @@ import {
   parsePorcelainPaths,
   type AutoCloseReport,
   type GitRunner,
-  type PrOpener
+  type PrOpener,
+  type VerificationAvantPublication
 } from './run-autoclose'
 
 /**
@@ -26,9 +27,15 @@ import {
  * donc publié que s'il est PROUVÉ au fil :
  *  1. par ses LIGNES : chaque ligne ajoutée de son diff a été écrite par un outil d'édition du fil ;
  *  2. à défaut (édition en ligne de commande, suppression, renommage) : il était propre au début du
- *     tour ET aucun autre fil ne l'a touché depuis.
- * Le reste est LAISSÉ en attente et nommé dans le rapport. Un faux négatif laisse un fichier non
- * publié, visible dans le panneau ; un faux positif pousserait le travail d'un autre fil sans lui.
+ *     tour ET aucun autre fil ne l'a touché depuis ET aucun autre fil n'a de tour EN COURS dans le
+ *     dépôt. Un tour en cours n'a encore rien écrit au journal : `agent-pilot.ts` n'y trace les
+ *     éditions du modèle qu'à la FIN de son appel. Mesuré le 2026-09-30 (5fb0730d, bb8e6c0c) : conv-889
+ *     écrit ses fichiers pendant les tours de conv-891, ses traces arrivent à 10:51:52, après les deux
+ *     publications de conv-891 (10:32:31, 10:49:54) — qui ont donc commité son travail.
+ * Le reste est LAISSÉ en attente et nommé dans le rapport, avec le nombre de lignes que le fil ne
+ * réclame pas (les réécrire avec l'outil d'édition suffit à le publier). Un faux négatif laisse un
+ * fichier non publié, visible dans le panneau ; un faux positif pousserait le travail d'un autre fil
+ * sans lui.
  */
 
 /** Travail propre au chat. `subagent` en est exclu : une tâche d'agent publie elle-même son travail. */
@@ -82,6 +89,15 @@ async function cheminsReels(dossiers: Iterable<string>): Promise<Map<string, str
 function dansLeDepot(repo: string, absolu: string): boolean {
   const rel = relative(repo, absolu)
   return Boolean(rel) && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/** Le dossier d'un tour peut écrire dans le dépôt : il est le dépôt, en est un sous-dossier, ou le contient. */
+function partageLeDepot(repo: string, dossier: string): boolean {
+  const contient = (parent: string, enfant: string): boolean => {
+    const rel = relative(parent, enfant)
+    return !rel.startsWith('..') && !isAbsolute(rel)
+  }
+  return contient(repo, dossier) || contient(dossier, repo)
 }
 
 /**
@@ -147,20 +163,24 @@ async function lignesAjoutees(repo: string, gitPath: string, runGit: GitRunner):
   return ajoutees
 }
 
-async function prouveParLignes(
+/**
+ * Lignes ajoutées que le fil ne réclame pas. `0` : fichier PROUVÉ par ses lignes. `undefined` :
+ * aucune preuve possible (aucune ligne ajoutée, diff illisible) — la règle de repli décide.
+ * Le compte est rendu au rapport : mesuré le 2026-09-29, un fichier est resté écarté tour après
+ * tour pour 2 lignes sur 146 écrites hors outil d'édition, sans que rien dise ce qui manquait.
+ */
+async function lignesNonReclamees(
   repo: string,
   gitPath: string,
   revendiquees: ReadonlySet<string> | undefined,
   runGit: GitRunner
-): Promise<boolean> {
-  if (!revendiquees?.size) return false
+): Promise<number | undefined> {
   try {
     const ajoutees = await lignesAjoutees(repo, gitPath, runGit)
-    return (
-      ajoutees.length > 0 && ajoutees.every((line) => revendiquees.has(exactLineFingerprint(line)))
-    )
+    if (ajoutees.length === 0) return undefined
+    return ajoutees.filter((line) => !revendiquees?.has(exactLineFingerprint(line))).length
   } catch {
-    return false
+    return undefined
   }
 }
 
@@ -182,19 +202,39 @@ export async function publierTourDeChat(input: {
   request: string
   debut: ChatTurnStart
   traces: readonly ConversationFileTrace[]
+  /**
+   * Dossiers de travail des tours d'AUTRES fils encore en cours, relevés AVANT de lire `traces` :
+   * un tour fini avant ce relevé a déjà tout écrit au journal, un tour encore en cours n'y a peut-être
+   * rien écrit. Absent = aucun.
+   */
+  autresToursEnCours?: readonly string[]
+  /**
+   * Rejoue les tests des fichiers que le tour va publier, dans le VRAI dépôt, AVANT le commit.
+   * Mesuré le 2026-10-01 : `b6d2a3fc` (conv-892) a été poussé sans aucun test et a laissé main
+   * rouge 20 h. Absent = comportement d'avant (aucune vérification).
+   */
+  verifierAvantPublication?: (
+    repo: string,
+    fichiers: readonly string[]
+  ) => Promise<VerificationAvantPublication>
   runGit?: GitRunner
   openPr?: PrOpener
 }): Promise<AutoCloseReport | undefined> {
   const { conversationId, turnId, debut } = input
   if (!debut.repo) return undefined
   const runGit = input.runGit ?? (await defaultGitRunner())
+  const autresToursEnCours = (input.autresToursEnCours ?? []).filter((dossier) => dossier.trim())
   const racines = await cheminsReels([
     debut.repo,
+    ...autresToursEnCours,
     ...input.traces
       .map((trace) => trace.workspaceRoot)
       .filter((root): root is string => typeof root === 'string' && Boolean(root.trim()))
   ])
   const repo = racines.get(debut.repo) ?? debut.repo
+  const autreFilEnCours = autresToursEnCours.some((dossier) =>
+    partageLeDepot(repo, racines.get(dossier) ?? dossier)
+  )
 
   const duTour = new Set<string>()
   const revendiquees = new Map<string, Set<string>>()
@@ -245,14 +285,35 @@ export async function publierTourDeChat(input: {
   const exclus: Exclusion[] = []
   for (const gitPath of enAttente) {
     const key = cle(resolve(repo, gitPath))
-    if (await prouveParLignes(repo, gitPath, revendiquees.get(key), runGit)) publier.push(gitPath)
-    else if (salesAuDepart.has(key)) exclus.push({ path: gitPath, motif: 'modifie-avant-le-tour' })
-    else if (concurrents.has(key)) exclus.push({ path: gitPath, motif: 'touche-par-un-autre-fil' })
+    const nonReclamees = await lignesNonReclamees(repo, gitPath, revendiquees.get(key), runGit)
+    const detail = nonReclamees ? { lignesNonReclamees: nonReclamees } : {}
+    if (nonReclamees === 0) publier.push(gitPath)
+    else if (salesAuDepart.has(key))
+      exclus.push({ path: gitPath, motif: 'modifie-avant-le-tour', ...detail })
+    else if (concurrents.has(key))
+      exclus.push({ path: gitPath, motif: 'touche-par-un-autre-fil', ...detail })
+    else if (autreFilEnCours) exclus.push({ path: gitPath, motif: 'autre-fil-en-cours', ...detail })
     else publier.push(gitPath)
   }
   // GARDE-FOU : `autoCloseRun` sans chemins publierait TOUT l'arbre (`add -A`).
   if (publier.length === 0)
     return rapport(input, { status: 'skipped', reason: 'unattributed' }, exclus)
+  // Un rouge (ou un plafond de temps) ne se pousse pas : les fichiers restent en attente, nommés
+  // avec les tests en échec. Un fichier qu'aucun test ne juge part comme avant, mais le rapport le dit.
+  const verification = await input.verifierAvantPublication?.(repo, publier)
+  if (verification?.statut === 'echec') {
+    const rouges = publier.map<Exclusion>((path) => ({
+      path,
+      motif: 'tests-rouges',
+      testsEnEchec: verification.testsEnEchec
+    }))
+    return rapport(
+      input,
+      { status: 'skipped', reason: 'tests-rouges', detail: verification.detail },
+      [...exclus, ...rouges],
+      verification
+    )
+  }
   const project = await autoCloseRun({
     repo,
     branch: brancheDuTour(conversationId, turnId),
@@ -262,7 +323,7 @@ export async function publierTourDeChat(input: {
     direct: true,
     ...(input.openPr ? { openPr: input.openPr } : {})
   })
-  return rapport(input, project, exclus)
+  return rapport(input, project, exclus, verification)
 }
 
 function brancheDuTour(conversationId: string, turnId: string): string {
@@ -272,7 +333,8 @@ function brancheDuTour(conversationId: string, turnId: string): string {
 function rapport(
   input: { conversationId: string; turnId: string },
   project: AutoCloseReport['project'],
-  exclus: Exclusion[] = []
+  exclus: Exclusion[] = [],
+  verification?: VerificationAvantPublication
 ): AutoCloseReport {
   return {
     runId: `${input.conversationId} · tour ${input.turnId.slice(0, 8)}`,
@@ -280,6 +342,7 @@ function rapport(
     project,
     at: new Date().toISOString(),
     source: 'chat',
-    ...(exclus.length ? { exclus } : {})
+    ...(exclus.length ? { exclus } : {}),
+    ...(verification ? { verification } : {})
   }
 }

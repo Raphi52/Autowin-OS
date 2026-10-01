@@ -490,6 +490,15 @@ async function readTurnJournalAsync(path: string): Promise<TurnJournalEvent[]> {
   return out
 }
 
+/** Version non bloquante de `readTurnJournal` : mêmes tampons mémoire recollés au disque. */
+export function readTurnJournalByIdAsync(
+  root: string,
+  conversationId: string,
+  turnId: string
+): Promise<TurnJournalEvent[]> {
+  return readTurnJournalAsync(turnJournalPath(root, conversationId, turnId))
+}
+
 /** Version non bloquante de `listUnfinishedTurns` : même résultat, aucune E/S synchrone. */
 export async function listUnfinishedTurnsAsync(root: string): Promise<UnfinishedTurn[]> {
   flushAllTurnJournals()

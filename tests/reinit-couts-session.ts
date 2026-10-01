@@ -1,5 +1,28 @@
-import { beforeEach } from 'vitest'
-import { reinitialiserMagasinCoutsDeSession } from '../src/main/providers/claude-session-cost'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { threadId } from 'node:worker_threads'
+import { afterAll, beforeEach } from 'vitest'
+import {
+  imposerCheminMagasinCoutsDeSession,
+  reinitialiserMagasinCoutsDeSession
+} from '../src/main/providers/claude-session-cost'
+
+/**
+ * UN MAGASIN PAR THREAD. Les fichiers de test tournent en parallèle sur la même racine de données :
+ * le `beforeEach` ci-dessous, joué dans CHAQUE fichier, effaçait le magasin d'un AUTRE fichier en
+ * plein test (course reproduite le 30/09 : `claude.decumul-session.test.ts` rendait 4,3822 au lieu
+ * de 0,1322). Dans un même thread, les fichiers passent l'un après l'autre : plus de course.
+ */
+imposerCheminMagasinCoutsDeSession(
+  join(
+    process.env.APPDATA ?? tmpdir(),
+    'autowin-couts-session-par-thread',
+    `${process.pid}-${threadId}.json`
+  )
+)
+afterAll(() => {
+  reinitialiserMagasinCoutsDeSession()
+})
 
 /**
  * Le coût d'un tour se déduit du CUMUL de session rendu par le CLI, donc d'un magasin PERSISTANT

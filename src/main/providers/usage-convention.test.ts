@@ -45,6 +45,37 @@ describe("convention d'usage — claude ramené à l'input TOTAL", () => {
     expect(u?.outputTokens).toBe(20)
   })
 
+  it('transporte la part du cache ecrite pour 1 h, detaillee par le CLI', () => {
+    // Forme relue dans la sortie reelle du CLI (`.arena/banc-heal/out-a.json`).
+    const u = normalizeClaudeUsage({
+      input_tokens: 26,
+      output_tokens: 10_129,
+      cache_read_input_tokens: 487_297,
+      cache_creation_input_tokens: 37_288,
+      cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 37_288 }
+    })
+    expect(u?.cacheCreationTokens).toBe(37_288)
+    expect(u?.cacheCreation1hTokens).toBe(37_288)
+  })
+
+  it("n'invente aucune part 1 h sans detail, et la borne a l'ecriture totale", () => {
+    const sansDetail = normalizeClaudeUsage({
+      input_tokens: 1,
+      output_tokens: 1,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 40
+    })
+    expect(sansDetail?.cacheCreation1hTokens).toBeUndefined()
+    const incoherent = normalizeClaudeUsage({
+      input_tokens: 1,
+      output_tokens: 1,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 40,
+      cache_creation: { ephemeral_1h_input_tokens: 90 }
+    })
+    expect(incoherent?.cacheCreation1hTokens).toBe(40)
+  })
+
   it("respecte l'invariant cacheRead <= inputTokens (celui que le superviseur suppose)", () => {
     const u = normalizeClaudeUsage({
       input_tokens: 6,

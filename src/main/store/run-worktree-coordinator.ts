@@ -118,6 +118,16 @@ export interface RunWorktreeCoordinatorDeps {
    * notifier une fraction noierait le signal.
    */
   onAbandon?: (info: { runId: string; tache?: string; raison?: string }) => void
+  /**
+   * PRÉPARER une copie d'agent FRAÎCHE (2026-09-28, `scripts-copie-main.ts`) : fichiers locaux et
+   * script déclarés dans `.autowin/scripts.json` du dépôt. Joué ICI, sur le fil principal en
+   * asynchrone, et non dans le Worker git : son délai (~34 s par opération) couperait un `npm ci`.
+   * Rend une phrase pour la trace, ou `undefined` quand rien n'est déclaré. Ne bloque jamais le run.
+   */
+  preparerCopie?: (
+    copie: { runId: string; depot: string; chemin: string },
+    signaler: (texte: string) => void
+  ) => Promise<string | undefined>
   onRefusIntegration?: (refus: {
     cause: string
     agentId: string
@@ -294,6 +304,7 @@ export class RunWorktreeCoordinator {
   private readonly now: () => number
   private readonly onActivity?: (a: WorktreeAgentActivity[]) => void
   private readonly onAbandon?: RunWorktreeCoordinatorDeps['onAbandon']
+  private readonly preparerCopie?: RunWorktreeCoordinatorDeps['preparerCopie']
   private readonly onRefusIntegration?: RunWorktreeCoordinatorDeps['onRefusIntegration']
   private readonly onRecoveredPublication?: RunWorktreeCoordinatorDeps['onRecoveredPublication']
   private readonly stateStore?: WorktreeRunStateStore
@@ -335,6 +346,7 @@ export class RunWorktreeCoordinator {
     this.onActivity = deps.onActivity
     this.onRefusIntegration = deps.onRefusIntegration
     this.onAbandon = deps.onAbandon
+    this.preparerCopie = deps.preparerCopie
     this.onRecoveredPublication = deps.onRecoveredPublication
     this.stateStore = deps.stateStore
     /*
@@ -771,8 +783,10 @@ export class RunWorktreeCoordinator {
         total: tracked.excludedDirtyFileCount,
         tronquee: tracked.excludedDirtyFilesTruncated
       })
-      if (avertissement) tracked.detail = avertissement
-      this.persist(tracked, 'running', 'not-requested', avertissement || undefined)
+      const preparation = await this.jouerPreparation(tracked, prepared, avertissement)
+      const detail = [avertissement, preparation].filter(Boolean).join('\n')
+      tracked.detail = detail || undefined
+      this.persist(tracked, 'running', 'not-requested', detail || undefined)
       this.emit()
       return prepared.path
     } catch (error) {
@@ -788,6 +802,33 @@ export class RunWorktreeCoordinator {
       }
       this.emit()
       throw error
+    }
+  }
+
+  /**
+   * Joue la préparation d'une copie FRAÎCHE d'agent. Pas pour `role: 'command'` : les copies de
+   * `run`, `verify`, `edit_file` sont jetables et courtes, un `npm ci` à chacune doublerait le coût
+   * de chaque vérification. Pas non plus à la reprise d'une copie existante (autre chemin) : elle a
+   * déjà été préparée. Pendant qu'elle tourne, la trace le DIT ; une préparation qui jette est
+   * rapportée comme telle, jamais propagée : le run démarre quand même.
+   */
+  private async jouerPreparation(
+    tracked: Tracked,
+    prepared: { context: { workspacePath: string }; path: string },
+    avertissement: string
+  ): Promise<string | undefined> {
+    if (!this.preparerCopie || tracked.role === 'command') return undefined
+    const signaler = (texte: string): void => {
+      tracked.detail = [avertissement, texte].filter(Boolean).join('\n')
+      this.emit()
+    }
+    try {
+      return await this.preparerCopie(
+        { runId: tracked.runId, depot: prepared.context.workspacePath, chemin: prepared.path },
+        signaler
+      )
+    } catch (erreur) {
+      return `Préparation de la copie impossible : ${erreur instanceof Error ? erreur.message : String(erreur)}`
     }
   }
 

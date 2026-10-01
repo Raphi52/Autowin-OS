@@ -62,6 +62,15 @@ describe('brain_read', () => {
     expect(refused).toMatchObject({ found: false, status: 'unavailable' })
     expect(refused.note).toContain('knowledge/')
   })
+
+  it('demande la note ENTIÈRE et la rend sans coupe, même très longue', async () => {
+    const note = `# Longue\n${'x'.repeat(50_000)}FIN-DE-NOTE`
+    const fetchFn = reply(signed(note))
+    const out = await runBrainRead({ path: 'knowledge/domain/longue.md' }, deps(fetchFn))
+    const [, init] = (fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(JSON.parse(init.body)).toEqual({ path: 'knowledge/domain/longue.md', entier: true })
+    expect(out.knowledge).toBe(note)
+  })
 })
 
 describe('remember supersedes', () => {

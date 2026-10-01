@@ -104,6 +104,50 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     ).toBeGreaterThan(60)
   })
 
+  /*
+   * LA CONSIGNE QUE L'APP ENVOIE ETAIT AMPUTEE (conv-890, 2026-09-30). Le pipeline in-app ne lit
+   * jamais skills/scout/SKILL.md (`orchestrator.ts`, `phasePrompt` : `corpsSkill` vaut '' pour une
+   * phase du pipeline) : ce brief est le SEUL texte qui arrive au modele. Il notait en
+   * « valeur × faisabilite » — l'inverse de la regle de la skill (« l'impact domine ») — et ne
+   * connaissait ni la recherche web, ni la demande « comment faire X », ni le doublon contre
+   * l'existant. Mesure sur 31 runs avec un scout : 0 URL citee, 2 recherches web lancees.
+   * fix-ok: rouge sur le brief d'origine (valeur × faisabilite, ni web ni DOUBLON), vert apres ; brief
+   * mesure a 2 930 caracteres (etape REFUTE comprise), sous la borne de 3 000 de ce fichier.
+   */
+  it('la consigne scout porte les regles de la skill qui n arrivaient jamais au modele', () => {
+    const scout = PHASE_BRIEFS.scout
+    // L'impact prime, la faisabilite ne degonfle plus la note.
+    expect(scout).not.toMatch(/valeur\s*×\s*faisabilit/iu)
+    expect(scout).toMatch(/IMPACT prime/u)
+    // Recherche web DATEE, source citee, quand la cible a un equivalent externe.
+    expect(scout).toMatch(/web/iu)
+    expect(scout).toMatch(/30 [àa] 90/u)
+    expect(scout).toMatch(/URL/u)
+    // La demande est LUE avant de chercher : « comment faire X » n'attend pas une liste d'ameliorations.
+    expect(scout).toMatch(/comment faire/iu)
+    expect(scout).toMatch(/trouve une t[âa]che/iu)
+    // Doublon contre ce qui EXISTE, pas seulement a l'interieur de la liste.
+    expect(scout).toMatch(/DOUBLON/u)
+    expect(scout).toMatch(/EXISTE/u)
+  })
+
+  /*
+   * LA RÉFUTATION AVANT LA LISTE. conv-602 a noté 88 une piste dont l'ancrage (`Program.cs:300-304`)
+   * disait lui-même que la classe citée avait disparu : l'étape suivante l'a découvert, après l'avoir
+   * payée (trace du run « traite-ensemble » de conv-602). Un contrôle en code ne voit que la FORME
+   * (`scout-plafond.ts`) : une piste fausse mais bien ancrée le passe. Pratique externe retenue :
+   * Chain-of-Verification (Dhuliawala et al., ACL Findings 2024) — le MÊME modèle pose la question qui
+   * tuerait sa réponse et y répond par une lecture séparée ; mesurée sur des réponses EN LISTE.
+   */
+  it('la consigne scout fait réfuter chaque piste haute par une lecture neuve avant de rendre', () => {
+    const scout = PHASE_BRIEFS.scout
+    expect(scout).toMatch(/REFUTE/u)
+    expect(scout).toMatch(/> 50/u)
+    expect(scout).toMatch(/lecture NEUVE/u)
+    // La réfutation se VOIT : le Why dit ce qui a été cherché, sinon la piste sort.
+    expect(scout).toMatch(/ce que tu as cherche/u)
+  })
+
   it('phaseBrief enveloppe la consigne avec un en-tête de phase', () => {
     expect(phaseBrief('scout')).toContain('=== CONSIGNE SCOUT ===')
     expect(phaseBrief('scout')).toContain('SCOUT')

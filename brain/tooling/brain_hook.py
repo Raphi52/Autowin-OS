@@ -17,9 +17,9 @@ from brain_singleton import ProcessMutex
 DEFAULT_PORT = 8765
 
 
-def _endpoint():
+def _endpoint(path="/query"):
     port = int(os.environ.get("AMITEL_BRAIN_PORT", DEFAULT_PORT))
-    return f"http://127.0.0.1:{port}/query"
+    return f"http://127.0.0.1:{port}{path}"
 
 
 def _port():
@@ -69,6 +69,59 @@ def _request_context(prompt, timeout=1.0, harness=None):
     return _validate_response(payload, token)
 
 
+def _configured_root():
+    default = Path(__file__).resolve().parents[1]
+    return str(Path(os.environ.get("AMITEL_BRAIN_ROOT", default)).resolve())
+
+
+def _same_root(left, right):
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(os.path.normpath(right))
+
+
+def _request_health(timeout=1.0):
+    """Root the listening server serves, read from its SIGNED /health context.
+
+    The listener proves it owns the local secret (challenge) before it receives the bearer.
+    503 is the normal answer of a loading or degraded index; its body still names the root.
+    A server older than root identification answers an empty root.
+    """
+    token = service_token()
+    _authenticate_service(token, timeout)
+    request = Request(_endpoint("/health"), headers={"Authorization": f"Bearer {token}"}, method="GET")
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            raw = response.read(65_536)
+    except HTTPError as exc:
+        if exc.code != 503:
+            raise
+        raw = exc.read(65_536)
+    return _validate_response(json.loads(raw), token)
+
+
+def _shutdown_server(timeout=1.0):
+    token = service_token()
+    _authenticate_service(token, timeout)
+    request = Request(
+        _endpoint("/shutdown"), data=b"{}",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout) as response:
+        payload = json.loads(response.read(65_536))
+    _validate_response(payload, token)
+
+
+def _wait_for_shutdown(timeout=2.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            _request_health(timeout=0.2)
+        except (URLError, TimeoutError, OSError):
+            return
+        time.sleep(0.05)
+    raise TimeoutError("brain service did not stop")
+
+
 def _server_python():
     configured = os.environ.get("AMITEL_BRAIN_PYTHON")
     if configured:
@@ -101,6 +154,22 @@ def _spawn_server():
 
 
 def query_service(prompt, startup_timeout=8.0, harness=None):
+    # A server started for ANOTHER root (reinstall with a new -BrainRoot, switch between two
+    # brains) would otherwise keep answering from the old corpus, silently. Lost when the repo
+    # was aligned on protocol v2 (PR #1, 2026-09-02); restored here on top of the challenge.
+    expected_root = _configured_root()
+    try:
+        active_root = _request_health()
+    except HTTPError:
+        return ""  # Occupied port or unauthenticated response: never inject and never retry.
+    except (ValueError, json.JSONDecodeError):
+        return ""  # Occupied port or unauthenticated response: never inject and never retry.
+    except (URLError, TimeoutError, OSError):
+        active_root = None  # Nobody listening yet: the startup path below decides.
+    # An empty root is a server older than root identification: it cannot be checked, so it
+    # keeps today's behaviour instead of being refused forever.
+    if active_root and not _same_root(active_root, expected_root):
+        return _restart_on_configured_root(prompt, startup_timeout, harness, expected_root)
     try:
         return _request_context(prompt, harness=harness)
     except HTTPError as exc:
@@ -135,10 +204,29 @@ def query_service(prompt, startup_timeout=8.0, harness=None):
     return _wait_for_service(prompt, startup_timeout, harness)
 
 
-def _wait_for_service(prompt, startup_timeout, harness):
+def _restart_on_configured_root(prompt, startup_timeout, harness, expected_root):
+    startup_mutex = ProcessMutex.try_acquire(f"startup-{_port()}")
+    if startup_mutex is None:
+        # Another hook is already restarting it: wait for the RIGHT root, never inject the old one.
+        return _wait_for_service(prompt, startup_timeout, harness, expected_root)
+    try:
+        try:
+            _shutdown_server()
+            _wait_for_shutdown()
+            _spawn_server()
+        except (HTTPError, ValueError, json.JSONDecodeError, URLError, TimeoutError, OSError):
+            return ""
+        return _wait_for_service(prompt, startup_timeout, harness, expected_root)
+    finally:
+        startup_mutex.close()
+
+
+def _wait_for_service(prompt, startup_timeout, harness, expected_root=None):
     deadline = time.monotonic() + startup_timeout
     while time.monotonic() < deadline:
         try:
+            if expected_root is not None and not _same_root(_request_health(), expected_root):
+                return ""
             return _request_context(prompt, harness=harness)
         except HTTPError as exc:
             if exc.code != 503:

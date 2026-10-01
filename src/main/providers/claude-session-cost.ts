@@ -78,8 +78,22 @@ export function purgeSessionCostStates(
  * d'après-redémarrage le cumul entier de la session — exactement le défaut qu'on corrige.
  */
 
+let cheminImpose: string | undefined
+
+/**
+ * POUR LES TESTS : un magasin par thread de test. La suite tourne en threads parallèles sur UNE
+ * racine de données commune (`vitest.config.ts`, `APPDATA`), et `tests/reinit-couts-session.ts`
+ * vide le magasin avant chaque test de CHAQUE fichier : un fichier qui démarrait entre deux tours de
+ * `claude.decumul-session.test.ts` effaçait son cumul, et le 2e tour rendait 4,3822 au lieu de
+ * 0,1322 (course reproduite le 30/09 avec un second fichier qui vide le magasin en boucle).
+ * `undefined` rend le chemin de production.
+ */
+export function imposerCheminMagasinCoutsDeSession(chemin: string | undefined): void {
+  cheminImpose = chemin
+}
+
 function cheminMagasin(): string {
-  return join(ensureAutowinAppData(), 'claude-session-cost.json')
+  return cheminImpose ?? join(ensureAutowinAppData(), 'claude-session-cost.json')
 }
 
 function lireMagasin(chemin: string): Record<string, SessionCostState> {

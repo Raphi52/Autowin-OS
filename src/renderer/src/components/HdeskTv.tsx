@@ -7,12 +7,38 @@
  * qu'on regarde -> on le dit (et on bascule s'il en reste) ; capture unie -> on le dit.
  */
 import { useEffect, useRef, useState } from 'react'
-import type { BureauTv, ImageTv } from '../../../main/hdesk-tv'
+import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../../../main/hdesk-tv'
+
+/**
+ * Touche du champ de la TV -> touche nommée de hdesk-act. Entrée reste le « valider » du formulaire.
+ * Ctrl+A/C/V/X/Z ne partent au bureau caché que si le champ de la TV est VIDE : sinon ils agissent sur
+ * le champ lui-même (corriger sa frappe avant l'envoi).
+ */
+export function toucheTv(e: { key: string; ctrlKey?: boolean; currentTarget?: unknown; target?: unknown }, champVide = true): string | null {
+  const directes: Record<string, string> = {
+    Tab: 'Tab', Escape: 'Echap', Delete: 'Suppr', ArrowUp: 'Haut', ArrowDown: 'Bas', ArrowLeft: 'Gauche',
+    ArrowRight: 'Droite', Home: 'Debut', End: 'Fin', PageUp: 'PageHaut', PageDown: 'PageBas'
+  }
+  if (e.ctrlKey) {
+    const k = e.key.toLowerCase()
+    return champVide && ['a', 'c', 'v', 'x', 'z'].includes(k) ? `Ctrl${k.toUpperCase()}` : null
+  }
+  if (e.key === 'Backspace') return champVide ? 'Retour' : null
+  const d = directes[e.key]
+  if (!d) return null
+  // Flèches/Début/Fin dans un champ non vide : édition locale du champ de la TV.
+  if (!champVide && ['Gauche', 'Droite', 'Debut', 'Fin', 'Suppr'].includes(d)) return null
+  return d
+}
 
 export interface HdeskTvApi {
   hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>
   hdeskTvImage: (id: string) => Promise<ImageTv>
   hdeskTvArreter: () => Promise<void>
+  /** TV interactive (conv-35) : clic puis frappe éventuelle, envoyés au bureau caché. */
+  hdeskTvAct?: (geste: GesteTv) => Promise<ResultatGeste>
+  /** Option (conv-35) : bascule l'écran réel vers le bureau caché, retour garanti par le script. */
+  hdeskTvBasculer?: (id: string) => Promise<{ ok: boolean; message?: string }>
 }
 
 interface Props {
@@ -83,7 +109,75 @@ export function HdeskTv({
   const [ferme, setFerme] = useState<BureauTv | null>(null)
   const [masquee, setMasquee] = useState(() => bureauxMasques.has(cleMasquage(conversationId)))
   const [grand, setGrand] = useState(false)
+  const [dernierClic, setDernierClic] = useState<{ id: string; x: number; y: number } | null>(null)
+  const [texte, setTexte] = useState('')
+  const [retourGeste, setRetourGeste] = useState<string | null>(null)
   const choisiRef = useRef<string | null>(null)
+  const apiAct = (): HdeskTvApi['hdeskTvAct'] =>
+    (api ?? (window as unknown as { api?: Partial<HdeskTvApi> }).api)?.hdeskTvAct
+  // File des gestes : un geste attend la fin du précédent, sinon deux hdesk-act se chevauchent
+  // dans le même bureau (clic du second pendant la frappe du premier).
+  const fileRef = useRef<Promise<void>>(Promise.resolve())
+  const rafraichirRef = useRef<(() => void) | null>(null)
+  const envoyer = (geste: GesteTv): Promise<void> => {
+    const agir = apiAct()
+    if (!agir) return Promise.resolve()
+    fileRef.current = fileRef.current.then(async () => {
+      const r = await agir(geste).catch((e: unknown) => ({ ok: false as const, message: String(e) }))
+      setRetourGeste(r.ok ? null : `Action refusée : ${r.message}`)
+      // Rafraîchir tout de suite : sans cela l'effet du geste n'apparaît qu'au tour suivant de la boucle.
+      rafraichirRef.current?.()
+    })
+    return fileRef.current
+  }
+  const apiBasculer = (): HdeskTvApi['hdeskTvBasculer'] =>
+    (api ?? (window as unknown as { api?: Partial<HdeskTvApi> }).api)?.hdeskTvBasculer
+  // Geste sur l'ÉCRAN RÉEL : confirmation explicite à chaque fois.
+  const basculer = async (): Promise<void> => {
+    const f = apiBasculer()
+    if (!f || !choisi) return
+    const ok = window.confirm(
+      'Ton écran va afficher le bureau caché.\n' +
+        'Pour revenir : bouton « Revenir à mon bureau », Ctrl+Alt+Origine, ou automatiquement après 2 minutes.\n' +
+        'Continuer ?'
+    )
+    if (!ok) return
+    const r = await f(choisi).catch((e: unknown) => ({ ok: false, message: String(e) }))
+    setRetourGeste(r.ok ? null : `Bascule refusée : ${r.message ?? ''}`)
+  }
+  // Le clic dans l'image réduite est ramené aux coordonnées de la capture (x * largeur / largeur affichée).
+  // fix-ok: cause mesurée — le clic sortait sur `statut !== 'ok'` alors qu'une page web sort unie (test image unie rouge→vert) ; la frappe remontait au chat faute de stopPropagation ; deux gestes se chevauchaient sans file (tests rouges reproduits puis verts).
+  const cliquerImage = (e: React.MouseEvent<HTMLImageElement>): void => {
+    if (image?.statut !== 'ok' && image?.statut !== 'uni') return
+    // Une capture unie (page web) ne porte pas sa taille : on prend celle de l'image reçue.
+    const largeur = image.statut === 'ok' ? image.width : e.currentTarget.naturalWidth
+    const hauteur = image.statut === 'ok' ? image.height : e.currentTarget.naturalHeight
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (!rect.width || !rect.height || !largeur || !hauteur) return
+    const x = Math.round(((e.clientX - rect.left) * largeur) / rect.width)
+    const y = Math.round(((e.clientY - rect.top) * hauteur) / rect.height)
+    setDernierClic({ id: image.id, x, y })
+    void envoyer({ id: image.id, x, y })
+  }
+  // La frappe vise la fenêtre du dernier point cliqué SANS recliquer : un reclic déplacerait le curseur
+  // posé par les flèches ou Début/Fin entre deux frappes.
+  const taper = (entree: boolean): void => {
+    if (!dernierClic || (!texte && !entree)) return
+    void envoyer({ ...dernierClic, texte, entree, sansClic: true })
+    setTexte('')
+  }
+  // Molette sur l'image : 1 cran par tranche de 100 px de deltaY (bas = négatif, comme Windows).
+  const molette = (e: React.WheelEvent<HTMLImageElement>): void => {
+    if (image?.statut !== 'ok' && image?.statut !== 'uni') return
+    const largeur = image.statut === 'ok' ? image.width : e.currentTarget.naturalWidth
+    const hauteur = image.statut === 'ok' ? image.height : e.currentTarget.naturalHeight
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (!rect.width || !rect.height || !largeur || !hauteur || !e.deltaY) return
+    const crans = Math.max(-20, Math.min(20, -Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 100))))
+    const x = Math.round(((e.clientX - rect.left) * largeur) / rect.width)
+    const y = Math.round(((e.clientY - rect.top) * hauteur) / rect.height)
+    void envoyer({ id: image.id, x, y, molette: crans })
+  }
   const connusRef = useRef<BureauTv[]>([])
 
   useEffect(() => {
@@ -154,12 +248,28 @@ export function HdeskTv({
       setImage(img)
     }
 
+    let enCours = false
+    let encore = false
     const boucle = async (): Promise<void> => {
+      if (enCours) {
+        encore = true
+        return
+      }
+      enCours = true
+      if (minuterie) clearTimeout(minuterie)
+      minuterie = null
       await tour()
-      if (actif) minuterie = setTimeout(() => void boucle(), intervalleMs)
+      enCours = false
+      if (!actif) return
+      if (encore) {
+        encore = false
+        void boucle()
+      } else minuterie = setTimeout(() => void boucle(), intervalleMs)
     }
+    rafraichirRef.current = () => void boucle()
     void boucle()
     return () => {
+      rafraichirRef.current = null
       actif = false
       if (minuterie) clearTimeout(minuterie)
     }
@@ -244,6 +354,18 @@ export function HdeskTv({
             </span>
           )}
           <span style={{ flex: 1 }} />
+          {apiBasculer() && choisi ? (
+            <button
+              type="button"
+              onClick={() => void basculer()}
+              style={BOUTON_TV}
+              aria-label="Basculer mon écran sur ce bureau"
+              title="Basculer mon écran sur ce bureau (retour : bouton Revenir, Ctrl+Alt+Origine ou 2 min)"
+              data-testid="hdesk-tv-basculer"
+            >
+              ⇄
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setGrand((g) => !g)}
@@ -288,9 +410,62 @@ export function HdeskTv({
               display: 'block',
               marginTop: 6,
               borderRadius: 4,
-              opacity: image.statut === 'uni' ? 0.5 : 1
+              opacity: image.statut === 'uni' ? 0.5 : 1,
+              cursor: apiAct() ? 'crosshair' : undefined
             }}
+            onClick={cliquerImage}
+            onWheel={molette}
           />
+        )}
+        {(image?.statut === 'ok' || image?.statut === 'uni') && apiAct() && (
+          <form
+            data-testid="hdesk-tv-saisie"
+            onSubmit={(e) => {
+              e.preventDefault()
+              taper(true)
+            }}
+            // La frappe destinée au bureau caché ne doit pas déclencher les raccourcis du chat.
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              const t = toucheTv(e, !texte)
+              if (!t || !dernierClic || dernierClic.id !== image.id) return
+              // Touche spéciale : le texte en cours part d'abord, la touche ensuite (ordre de frappe).
+              e.preventDefault()
+              if (texte) {
+                void envoyer({ ...dernierClic, texte, sansClic: true })
+                setTexte('')
+              }
+              void envoyer({ ...dernierClic, touche: t, sansClic: true })
+            }}
+            style={{ display: 'flex', gap: 4, marginTop: 4 }}
+          >
+            <input
+              data-testid="hdesk-tv-texte"
+              value={texte}
+              onChange={(e) => setTexte(e.target.value)}
+              disabled={!dernierClic || dernierClic.id !== image.id}
+              placeholder={
+                dernierClic && dernierClic.id === image.id
+                  ? 'Texte à taper au point cliqué (Entrée = valider)'
+                  : "Clique d'abord dans l'image pour viser un champ"
+              }
+              style={{ flex: 1, fontSize: 12 }}
+            />
+            <button
+              type="button"
+              style={BOUTON_TV}
+              data-testid="hdesk-tv-taper"
+              disabled={!dernierClic || dernierClic.id !== image.id || !texte}
+              onClick={() => taper(false)}
+            >
+              Taper
+            </button>
+          </form>
+        )}
+        {retourGeste && (
+          <p data-testid="hdesk-tv-geste-erreur" style={{ margin: '4px 0' }}>
+            {retourGeste}
+          </p>
         )}
       </div>
     </section>

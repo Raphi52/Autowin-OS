@@ -138,6 +138,41 @@ describe('récupération des tokens auprès du CLI', () => {
     )
   })
 
+  it('tarife à 2x la part écrite pour 1 h que le transcript détaille', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-cli-usage-1h-'))
+    const projet = join(root, 'C--Sources-AutoWinOS')
+    mkdirSync(projet, { recursive: true })
+    // Forme relue sur un transcript réel du 2026-09-26 : `cache_creation` détaille la durée de vie.
+    writeFileSync(
+      join(projet, 'sess-1.jsonl'),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-09-02T12:00:00.000Z',
+        requestId: 'req-1h',
+        message: {
+          model: 'claude-opus-5',
+          usage: {
+            input_tokens: 4,
+            cache_read_input_tokens: 1000,
+            cache_creation_input_tokens: 200,
+            cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 200 },
+            output_tokens: 100
+          }
+        }
+      }) + '\n',
+      'utf8'
+    )
+    const usage = recoverUnpricedCallsUsage([appelTue()], { projectsRoots: [root] }).get(
+      'call-tue'
+    ) as RecoveredCallUsage
+    expect(usage.cacheCreationTokens).toBe(200)
+    // 4 frais + 200 écrits pour 1 h (2x) + 1000 relus (0,1x) + 100 sortis.
+    expect(usage.estimatedUsd).toBeCloseTo(
+      (4 * 5 + 200 * 5 * 2 + 1000 * 5 * 0.1 + 100 * 25) / 1_000_000,
+      9
+    )
+  })
+
   it("borne la fenêtre à l'appel PRÉCÉDENT quand la durée mesurée est absurde", () => {
     const root = transcriptRoot()
     // Vécu sur conv-1 : le watchdog a écrit `durationMs` = 32 940 076 ms (9 h). Sans borne, la

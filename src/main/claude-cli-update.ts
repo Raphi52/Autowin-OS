@@ -11,9 +11,9 @@
 // binaire est memoise sur sa TAILLE et sa DATE (`claude-cli-catalog.ts`), qui changent toutes deux a
 // la mise a jour — le rafraichisseur de catalogue (60 s) reprend donc les nouveaux ids tout seul.
 
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { resolveClaudeBin, signalerMiseAJourClaudeCli } from './providers/claude'
 
 /** Fenetre entre deux tentatives : assez courte pour suivre les publications, assez large pour ne pas payer un spawn a chaque demarrage. */
@@ -44,8 +44,11 @@ function writeStamp(stampPath: string, attemptedAt: number): void {
 }
 
 export interface ClaudeCliUpdateResult {
-  /** 'updated' : le CLI a repondu OK · 'skipped' : fenetre non ecoulee · 'failed' : tentative KO. */
-  outcome: 'updated' | 'skipped' | 'failed'
+  /**
+   * 'updated' : le CLI a repondu OK · 'skipped' : fenetre non ecoulee · 'failed' : tentative KO ·
+   * 'postponed' : binaire en cours d'utilisation, rien lance ni marque (a retenter plus tard).
+   */
+  outcome: 'updated' | 'skipped' | 'failed' | 'postponed'
   /** Sortie utile du CLI (derniere ligne significative), pour la tracer sans dumper. */
   detail?: string
 }
@@ -61,18 +64,33 @@ export async function maybeUpdateClaudeCli(
     windowMs?: number
     run?: (bin: string) => Promise<{ code: number | null; output: string }>
     bin?: string
+    /**
+     * Le binaire tourne-t-il deja (agent survivant, autre session Claude Code) ? Vecu le 2026-10-01 :
+     * « Update failed because claude.exe is in use », et le marqueur bloquait ensuite 12 h. Absent =
+     * jamais en usage (comportement d'avant) ; le demarrage branche `claudeExeEnCours`.
+     */
+    binaireEnUsage?: (bin: string) => Promise<boolean>
   } = {}
 ): Promise<ClaudeCliUpdateResult> {
   const now = options.now ?? Date.now()
   const windowMs = options.windowMs ?? CLAUDE_CLI_UPDATE_WINDOW_MS
   const stamp = readStamp(stampPath)
   if (stamp && now - stamp.attemptedAt < windowMs) return { outcome: 'skipped' }
+  const bin = options.bin ?? resolveClaudeBin()
+  // Binaire occupe : la mise a jour echouerait a coup sur. On ne lance rien et on ne MARQUE rien,
+  // pour que la tentative suivante n'attende pas la fenetre entiere.
+  if (await (options.binaireEnUsage?.(bin) ?? Promise.resolve(false)).catch(() => false)) {
+    return {
+      outcome: 'postponed',
+      detail: 'binaire du CLI en cours d’utilisation (agents ou sessions ouvertes)'
+    }
+  }
   // Marqueur ECRIT AVANT la tentative : un echec repete (hors ligne) ne doit pas relancer un spawn
   // a chaque demarrage.
   writeStamp(stampPath, now)
   const run = options.run ?? runClaudeUpdate
   try {
-    const enCours = run(options.bin ?? resolveClaudeBin())
+    const enCours = run(bin)
     // Les tours Claude lances pendant la mise a jour l'attendent (le paquet npm est recree).
     signalerMiseAJourClaudeCli(enCours)
     const { code, output } = await enCours
@@ -86,6 +104,31 @@ export async function maybeUpdateClaudeCli(
   } catch (erreur) {
     return { outcome: 'failed', detail: erreur instanceof Error ? erreur.message : String(erreur) }
   }
+}
+
+/** Une ligne CSV de `tasklist` commence par le nom de l'image entre guillemets. */
+export function imageEnCours(sortieTasklist: string, image: string): boolean {
+  const attendu = `"${image.toLowerCase()}"`
+  return sortieTasklist
+    .split(/\r?\n/)
+    .some((ligne) => ligne.trim().toLowerCase().startsWith(attendu))
+}
+
+/**
+ * Sous Windows, un exe en cours d'execution ne peut pas etre remplace : `claude update` echoue.
+ * Lecture seule (`tasklist`), bornee a 10 s ; ailleurs ou en cas de doute : pas en usage.
+ */
+export function claudeExeEnCours(bin: string): Promise<boolean> {
+  if (process.platform !== 'win32') return Promise.resolve(false)
+  const image = /\.exe$/i.test(basename(bin)) ? basename(bin) : 'claude.exe'
+  return new Promise((resolve) => {
+    execFile(
+      'tasklist',
+      ['/FO', 'CSV', '/NH', '/FI', `IMAGENAME eq ${image}`],
+      { windowsHide: true, timeout: 10_000 },
+      (erreur, sortie) => resolve(!erreur && imageEnCours(String(sortie), image))
+    )
+  })
 }
 
 function runClaudeUpdate(bin: string): Promise<{ code: number | null; output: string }> {

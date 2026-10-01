@@ -56,7 +56,7 @@ describe('le pilote sait exploiter la réponse de repli', () => {
     const askBranch = pilot.slice(pilot.indexOf('if (question && ask)'))
     // La reponse est consommee puis la boucle continue : aucune sortie prematuree.
     // (On borne par POSITION, pas par la premiere accolade : `${answer}` en contient une.)
-    const injected = askBranch.indexOf('UTILISATEUR: ${answer}')
+    const injected = askBranch.indexOf('UTILISATEUR: ${motsUtilisateur(answer)}')
     const resumed = askBranch.indexOf('continue')
     expect(injected).toBeGreaterThan(-1)
     expect(resumed).toBeGreaterThan(injected)

@@ -67,6 +67,29 @@ describe('alias de familles', () => {
     expect(parseClaudeVersion('gpt-5.6-terra')).toBeNull()
   })
 
+  it('une date sans version mineure est une DATE, pas une mineure', () => {
+    // Relevé le 2026-09-30 dans le binaire de Claude Code 2.1.284 : `claude-opus-4-20250514` et
+    // `claude-sonnet-4-20250514`. Le groupe mineure avalait la date : « Opus 4.20250514 », classé
+    // plus récent qu'`opus-4-8`.
+    expect(parseClaudeVersion('claude-opus-4-20250514')).toEqual({
+      family: 'opus',
+      major: 4,
+      minor: 0,
+      date: '20250514'
+    })
+    const v = (s: string) => parseClaudeVersion(s)!
+    expect(
+      compareClaudeVersions(v('claude-opus-4-8'), v('claude-opus-4-20250514'))
+    ).toBeGreaterThan(0)
+    // Une mineure suivie d'une date reste lue comme avant.
+    expect(parseClaudeVersion('claude-opus-4-1-20250805')).toEqual({
+      family: 'opus',
+      major: 4,
+      minor: 1,
+      date: '20250805'
+    })
+  })
+
   it('ordonne major → minor → non-daté préféré au snapshot daté', () => {
     const v = (s: string) => parseClaudeVersion(s)!
     expect(compareClaudeVersions(v('claude-opus-4-6'), v('claude-opus-4-5'))).toBeGreaterThan(0)

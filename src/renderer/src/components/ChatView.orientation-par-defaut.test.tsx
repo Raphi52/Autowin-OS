@@ -70,9 +70,10 @@ describe('ChatView — pendant un tour, un message ordinaire ORIENTE (pas de fil
     await soumettre('décale les icônes de 4 px')
 
     expect(injecte).toHaveBeenCalled()
-    // Repli en file : plus aucun affichage, mais le texte reste visible via son reçu d'échec.
+    // Repli en file : plus aucun affichage, mais le texte reste visible via son reçu. Un refus n'est
+    // pas une panne : le reçu dit qu'il attend la fin du tour (conv-891), plus « Échec ».
     expect(harness!.container.querySelector('.directive-receipt-status')?.textContent).toContain(
-      'Échec'
+      'Attend la fin du tour'
     )
   })
 })

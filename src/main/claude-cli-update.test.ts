@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { maybeUpdateClaudeCli } from './claude-cli-update'
+import { imageEnCours, maybeUpdateClaudeCli } from './claude-cli-update'
 
 /**
  * Banc de la mise a jour du CLI Claude — la SOURCE de la liste de modeles. Cas reel du 2026-09-09 :
@@ -58,5 +58,56 @@ describe('mise a jour automatique du CLI Claude', () => {
     const result = await maybeUpdateClaudeCli(stamp(), { run, now: 1 })
 
     expect(result).toEqual({ outcome: 'failed', detail: 'CLI introuvable' })
+  })
+
+  /*
+   * Vécu le 2026-10-01 au redémarrage de 11:40 : « Update failed because claude.exe is in use » —
+   * des agents survivants tournaient. Le marqueur, écrit AVANT la tentative, bloquait ensuite toute
+   * nouvelle tentative pendant 12 h.
+   */
+  it('REPORTE sans rien lancer ni marquer tant que le binaire est en cours d’utilisation', async () => {
+    const run = vi.fn(async () => ({ code: 0, output: 'ok' }))
+    const path = stamp()
+
+    const result = await maybeUpdateClaudeCli(path, {
+      run,
+      bin: 'C:/x/claude.exe',
+      now: 5,
+      binaireEnUsage: async () => true
+    })
+
+    expect(run).not.toHaveBeenCalled()
+    expect(result.outcome).toBe('postponed')
+    // Aucun marqueur : la tentative suivante n'attend pas 12 h.
+    expect(() => readFileSync(path, 'utf8')).toThrow()
+    const ensuite = await maybeUpdateClaudeCli(path, {
+      run,
+      bin: 'C:/x/claude.exe',
+      now: 6,
+      binaireEnUsage: async () => false
+    })
+    expect(ensuite.outcome).toBe('updated')
+  })
+
+  it('lit la sortie de tasklist : une ligne CSV de l’image = en cours ; le message « aucune tâche » = libre', () => {
+    expect(
+      imageEnCours(
+        '"claude.exe","23836","","2","77 520 Ko"\r\n"claude.exe","14896","","2","1 Ko"',
+        'claude.exe'
+      )
+    ).toBe(true)
+    expect(
+      imageEnCours(
+        'Information : aucune tâche en service ne correspond aux critères spécifiés.',
+        'claude.exe'
+      )
+    ).toBe(false)
+    expect(imageEnCours('"autre.exe","1","","2","1 Ko"', 'claude.exe')).toBe(false)
+  })
+
+  it('le démarrage branche la détection et réessaie plus tard sur un report', () => {
+    const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+    expect(source).toMatch(/binaireEnUsage: claudeExeEnCours/)
+    expect(source).toMatch(/resultat\.outcome === 'postponed'/)
   })
 })

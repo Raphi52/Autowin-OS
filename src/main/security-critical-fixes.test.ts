@@ -509,7 +509,31 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   conversation Autowin ; la reference est resolue par `resolveListedSessionAsync` (inventaire,
     //   jamais un chemin forge par le renderer). `unguarded` reste VIDE.
     //   203 + 1 = 204 : les deux ajouts (VS Code / dossiers CLI sur main, importSession de run-37a45ad99156-1) cumulés au salvage.
-    expect(handlers).toHaveLength(204)
+    // MISE A JOUR 2026-09-28 (conv-770, maintenance) — 204 -> 207. ATTRIBUTION MESUREE avant de toucher
+    //   le compte : la liste des canaux de src/main hors tests, a 4e4e0a61 (commit qui a fige 204) puis
+    //   a HEAD, differe d'EXACTEMENT trois canaux, arrives sans reprise du compte (fil-piege rouge
+    //   depuis le 23/09). Relus un par un, tous gardes des leur PREMIERE ligne :
+    //   `fs:exists` (ipc/project-files.ts, bee67fa4) — `assertTrustedRendererSender(event, 'FsExists')`,
+    //     chemin et base par `guardString` ; rend seulement si le chemin existe (`stat`), jamais son
+    //     contenu, aucune ecriture.
+    //   `os:claude:resets` (ipc/models.ts, 287cf4af) — garde `'Claude resets'`, aucun argument, lecture.
+    //   `os:claude:resets:claim` (ipc/models.ts, 287cf4af) — garde `'Claude reset claim'`, `grantId` par
+    //     `guardString` puis `GRANT_ID.test` dans `claimClaudeReset` avant tout appel reseau, envoye dans
+    //     un corps JSON (jamais une ligne de commande).
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-09-28 (conv-877) — 207 -> 210. TROIS canaux du bouton « Lancer » du panneau
+    //   Fichiers (`src/main/ipc/lancement.ts`), mesures : 210 au lancement de ce test, exactement ces
+    //   trois en plus. Tous gardes des leur PREMIERE ligne par `assertTrustedRendererSender` :
+    //   `lancement:etat` ('LancementEtat') — LECTURE : l'etat du lancement et la commande declaree.
+    //   `lancement:demarrer` ('LancementDemarrer') — EXECUTE une commande, mais le renderer n'en
+    //     fournit NI la ligne NI le dossier : son seul argument est l'identifiant de conversation
+    //     (`guardString`) ; le dossier est deduit cote principal (`dossierDeTravailDuTour`, meme regle
+    //     que `project:*`), la commande est lue dans la declaration de ce dossier
+    //     (`.autowin/scripts.json`, sinon `.conductor/settings.toml`, sinon `package.json`).
+    //   `lancement:arreter` ('LancementArreter') — arrete l'arbre de processus lance par CE bouton pour
+    //     CETTE conversation, et lui seul (`taskkill /T` sur son propre PID).
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(210)
     expect(unguarded).toEqual([])
   })
 

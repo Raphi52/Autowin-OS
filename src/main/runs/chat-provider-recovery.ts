@@ -1,9 +1,17 @@
 import { statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import type { Attachment, SendResult } from '../providers/types'
 import { guardAttachments } from '../ipc-guards'
 import { recoverDetachedProviderResult } from './run-reattach'
-import { survivableExitCode } from './stdout-journal'
-import { listUnfinishedTurns, readTurnJournal, type TurnJournalEvent } from './turn-journal'
+import { survivableExitCode, survivableExitCodeAsync } from './stdout-journal'
+import {
+  isTurnFinished,
+  listUnfinishedTurnsAsync,
+  readTurnJournal,
+  readTurnJournalByIdAsync,
+  turnJournalPath,
+  type TurnJournalEvent
+} from './turn-journal'
 
 /** Apres le plafond reel des appels directs (40 min), un journal muet sans recu est orphelin. */
 const MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS = 2 * 60 * 60_000
@@ -150,82 +158,137 @@ function providerLink(
 /**
  * Ne considère que les tours sans clôture et prend leur DERNIER spawn : un premier essai peut avoir
  * échoué puis avoir été retenté. Rejouer l'ancien journal exécuterait une réponse obsolète.
+ *
+ * Analyse PURE d'un journal déjà lu : aucune E/S ici, pour que la question par tour (chargement,
+ * synchrone) et l'inventaire complet (après `whenReady`, non bloquant) rendent le même verdict.
  */
-export function listRecoverableChatProviderCalls(
+function derniereReprisePossible(
+  turn: { conversationId: string; turnId: string; updatedAt: number },
+  events: readonly TurnJournalEvent[]
+): RecoverableChatProviderCall | undefined {
+  let latest: RecoverableChatProviderCall | undefined
+  let commands = new Map<string, string>()
+  let settledActions = new Map<string, RecoveredChatActionResult>()
+  for (const event of events) {
+    if (event.kind === 'provider-journal') {
+      const candidate = providerLink(event, turn)
+      // Ne jamais retomber sur un essai plus ancien : un journal provider plus recent corrompu
+      // rend toute la chaine de reprise ambigue, donc le tour entier est refuse.
+      if (!candidate) return undefined
+      latest = candidate
+      // Une action n'est causée que par le dernier appel provider. Le provider-journal suivant
+      // ouvre une nouvelle frontière et rend les acquittements précédents hors périmètre.
+      commands = new Map()
+      settledActions = new Map()
+      continue
+    }
+    if (!latest) continue
+    if (event.kind === 'command' && nonEmptyString(event.actionId) && nonEmptyString(event.name)) {
+      commands.set(event.actionId, event.name)
+      continue
+    }
+    if (
+      event.kind === 'result' &&
+      nonEmptyString(event.actionId) &&
+      nonEmptyString(event.name) &&
+      typeof event.ok === 'boolean' &&
+      commands.get(event.actionId) === event.name
+    ) {
+      let attachments: Attachment[] | undefined
+      if (Object.prototype.hasOwnProperty.call(event, 'attachments')) {
+        try {
+          const guarded = guardAttachments(event.attachments)
+          if (guarded.length > 0) attachments = guarded
+        } catch {
+          // Une piece jointe illisible rend l'acquittement incomplet. Refuser toute la chaine
+          // evite de choisir arbitrairement entre la perdre et rejouer une action non idempotente.
+          return undefined
+        }
+      }
+      settledActions.set(event.actionId, {
+        actionId: event.actionId,
+        name: event.name,
+        ok: event.ok,
+        ...(Object.prototype.hasOwnProperty.call(event, 'data') ? { data: event.data } : {}),
+        ...(attachments ? { attachments } : {})
+      })
+    }
+  }
+  if (!latest) return undefined
+  return {
+    ...latest,
+    ...(settledActions.size > 0 ? { settledActions: [...settledActions.values()] } : {})
+  }
+}
+
+interface OptionsReprise {
+  now?: number
+  maxUncertifiedAgeMs?: number
+}
+
+/**
+ * CE tour est-il un appel de chat à reprendre ? Question posée au CHARGEMENT, pour les seuls
+ * messages restés « en cours » : elle ne lit que le journal de ce tour, jamais l'arborescence.
+ *
+ * fix-ok: gels.jsonl 2026-09-26T09:30, 8951 ms pendant « corps du module terminé » dont `openSync`
+ * 3438 ms — l'inventaire COMPLET des journaux tournait là en synchrone, alors que l'hydratation
+ * n'a besoin de la réponse que pour les tours restés `streaming` (zéro à deux en pratique).
+ */
+export function recoverableChatProviderCallForTurn(
   root: string,
-  options: { now?: number; maxUncertifiedAgeMs?: number } = {}
-): RecoverableChatProviderCall[] {
+  conversationId: string,
+  turnId: string,
+  options: OptionsReprise = {}
+): RecoverableChatProviderCall | undefined {
+  let updatedAt: number
+  let events: TurnJournalEvent[]
+  try {
+    // Chemin, date et contenu sous le MÊME garde : cette question est posée PENDANT l'hydratation,
+    // où une exception ferait écarter tout le store des conversations comme illisible. Un journal
+    // illisible ne prouve aucun appel vivant — l'inventaire async le lit aussi comme vide.
+    updatedAt = statSync(turnJournalPath(root, conversationId, turnId)).mtimeMs
+    events = readTurnJournal(root, conversationId, turnId)
+  } catch {
+    return undefined
+  }
+  if (events.length === 0 || isTurnFinished(events)) return undefined
+  const call = derniereReprisePossible({ conversationId, turnId, updatedAt }, events)
+  if (!call) return undefined
+  const now = options.now ?? Date.now()
+  const maxUncertifiedAgeMs = options.maxUncertifiedAgeMs ?? MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS
+  const uncertifiedAndStale =
+    survivableExitCode(call.journalPath) === undefined &&
+    now - providerJournalActivityAt(call.journalPath, call.updatedAt) > maxUncertifiedAgeMs
+  return uncertifiedAndStale ? undefined : call
+}
+
+/**
+ * Tous les appels de chat à reprendre, les plus récents d'abord — SANS E/S synchrone.
+ *
+ * Remplace l'inventaire synchrone lancé au chargement du module (voir le fix-ok ci-dessus) : il
+ * est désormais attendu par la boucle de reprise, après `whenReady`, fenêtre déjà ouverte.
+ */
+export async function listRecoverableChatProviderCallsAsync(
+  root: string,
+  options: OptionsReprise = {}
+): Promise<RecoverableChatProviderCall[]> {
   const calls: RecoverableChatProviderCall[] = []
   const now = options.now ?? Date.now()
   const maxUncertifiedAgeMs = options.maxUncertifiedAgeMs ?? MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS
-  for (const turn of listUnfinishedTurns(root)) {
-    const events = readTurnJournal(root, turn.conversationId, turn.turnId)
-    let latest: RecoverableChatProviderCall | undefined
-    let invalidProviderJournal = false
-    let commands = new Map<string, string>()
-    let settledActions = new Map<string, RecoveredChatActionResult>()
-    for (const event of events) {
-      if (event.kind === 'provider-journal') {
-        const candidate = providerLink(event, turn)
-        if (!candidate) {
-          // Ne jamais retomber sur un essai plus ancien : un journal provider plus recent corrompu
-          // rend toute la chaine de reprise ambigue, donc le tour entier est refuse.
-          invalidProviderJournal = true
-          break
-        }
-        latest = candidate
-        // Une action n'est causée que par le dernier appel provider. Le provider-journal suivant
-        // ouvre une nouvelle frontière et rend les acquittements précédents hors périmètre.
-        commands = new Map()
-        settledActions = new Map()
-        continue
-      }
-      if (!latest) continue
-      if (
-        event.kind === 'command' &&
-        nonEmptyString(event.actionId) &&
-        nonEmptyString(event.name)
-      ) {
-        commands.set(event.actionId, event.name)
-        continue
-      }
-      if (
-        event.kind === 'result' &&
-        nonEmptyString(event.actionId) &&
-        nonEmptyString(event.name) &&
-        typeof event.ok === 'boolean' &&
-        commands.get(event.actionId) === event.name
-      ) {
-        let attachments: Attachment[] | undefined
-        if (Object.prototype.hasOwnProperty.call(event, 'attachments')) {
-          try {
-            const guarded = guardAttachments(event.attachments)
-            if (guarded.length > 0) attachments = guarded
-          } catch {
-            // Une piece jointe illisible rend l'acquittement incomplet. Refuser toute la chaine
-            // evite de choisir arbitrairement entre la perdre et rejouer une action non idempotente.
-            invalidProviderJournal = true
-            break
-          }
-        }
-        settledActions.set(event.actionId, {
-          actionId: event.actionId,
-          name: event.name,
-          ok: event.ok,
-          ...(Object.prototype.hasOwnProperty.call(event, 'data') ? { data: event.data } : {}),
-          ...(attachments ? { attachments } : {})
-        })
-      }
+  for (const { conversationId, turnId, updatedAt } of await listUnfinishedTurnsAsync(root)) {
+    const events = await readTurnJournalByIdAsync(root, conversationId, turnId)
+    // Le compteur `events` de l'inventaire n'est PAS recopié : il fuyait dans l'appel sans que
+    // personne le lise, et rendait l'objet différent de celui de la question par tour.
+    const call = derniereReprisePossible({ conversationId, turnId, updatedAt }, events)
+    if (!call) continue
+    if ((await survivableExitCodeAsync(call.journalPath)) === undefined) {
+      const activite = await stat(call.journalPath).then(
+        (etat) => Math.max(call.updatedAt, etat.mtimeMs),
+        () => call.updatedAt
+      )
+      if (now - activite > maxUncertifiedAgeMs) continue
     }
-    const uncertifiedAndStale =
-      latest &&
-      survivableExitCode(latest.journalPath) === undefined &&
-      now - providerJournalActivityAt(latest.journalPath, latest.updatedAt) > maxUncertifiedAgeMs
-    if (!invalidProviderJournal && latest && !uncertifiedAndStale)
-      calls.push({
-        ...latest,
-        ...(settledActions.size > 0 ? { settledActions: [...settledActions.values()] } : {})
-      })
+    calls.push(call)
   }
   return calls.sort((a, b) => b.updatedAt - a.updatedAt)
 }

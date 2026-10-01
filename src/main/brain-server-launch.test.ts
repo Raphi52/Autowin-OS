@@ -141,6 +141,30 @@ describe('ensureBrainServerStarted', () => {
     }
   })
 
+  it('buildBrainLaunchCommand : `/wait` seulement quand l’appelant doit connaître la FIN', () => {
+    // Mesuré le 2026-09-29 : `cmd /c start /b` rend la main en ~50 ms, AVANT la fin du programme.
+    // Le serveur doit rester détaché ; la curation, elle, doit être suivie d'une réindexation.
+    const serveur = buildBrainLaunchCommand('C:\\t', 'C:\\t\\python.exe', 'C:\\t\\s.py', 'win32')
+    expect(serveur?.args).not.toContain('/wait')
+    const court = buildBrainLaunchCommand(
+      'C:\\t',
+      'C:\\t\\python.exe',
+      'C:\\t\\c.py',
+      'win32',
+      true
+    )
+    expect(court?.args).toEqual([
+      '/d',
+      '/c',
+      'start',
+      '',
+      '/b',
+      '/wait',
+      'C:\\t\\python.exe',
+      'C:\\t\\c.py'
+    ])
+  })
+
   it('buildBrainLaunchCommand : fail-closed sur métacaractère, cwd UNC non imposé', () => {
     expect(buildBrainLaunchCommand('C:\\t & x', 'C:\\t & x\\python.exe', 'C:\\t & x\\s.py', 'win32')).toBeNull()
     // cmd.exe REFUSE un cwd UNC (« UNC paths are not supported. Defaulting to Windows directory ») :
@@ -234,6 +258,41 @@ describe('ensureBrainServerStarted', () => {
   it('resolveBrainRuntime : env tooling prioritaire sinon vide', () => {
     expect(resolveBrainRuntime({ AUTOWIN_BRAIN_TOOLING: 'X:/t' }).tooling).toBe('X:/t')
     expect(resolveBrainRuntime({}).tooling).toBe('')
+  })
+
+  it('le serveur lance par Autowin sert SON Brain, pas la racine heritee d un Brain personnel', () => {
+    // Constate le 2026-09-25 (conv-3) : `AMITEL_BRAIN_ROOT`, pose par l'installateur du Brain
+    // personnel, primait et le serveur d'Autowin servait (et recevait les lecons de) ce Brain-la.
+    const localAppData = mkdtempSync(join(tmpdir(), 'brain-autowin-launch-'))
+    // L'installation partagee du Brain personnel, dont l'installateur a pose AMITEL_BRAIN_ROOT.
+    mkdirSync(join(localAppData, 'AmitelBrain'), { recursive: true })
+    writeFileSync(
+      join(localAppData, 'AmitelBrain', 'config.json'),
+      JSON.stringify({ brain_root: 'C:\\Perso\\Hermes-Brain' })
+    )
+    mkdirSync(join(localAppData, 'AutowinBrain'), { recursive: true })
+    writeFileSync(
+      join(localAppData, 'AutowinBrain', 'config.json'),
+      JSON.stringify({
+        brain_root: 'C:\\Perso\\Autowin-Brain',
+        code_root: 'C:\\rt\\tooling',
+        python: 'C:\\rt\\python.exe',
+        port: 8766
+      })
+    )
+    try {
+      const runtime = resolveBrainRuntime({
+        LOCALAPPDATA: localAppData,
+        AMITEL_BRAIN_ROOT: 'C:\\Perso\\Hermes-Brain'
+      })
+      expect(runtime).toMatchObject({
+        brainRoot: 'C:\\Perso\\Autowin-Brain',
+        tooling: 'C:\\rt\\tooling',
+        python: 'C:\\rt\\python.exe'
+      })
+    } finally {
+      rmSync(localAppData, { recursive: true, force: true })
+    }
   })
 
   it('resout le runtime INSTALLE localement sans jamais executer le tooling du partage GED', () => {
