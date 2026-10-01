@@ -618,3 +618,76 @@ describe('Orchestrator — refus du filtre de sécurité (conv-540, tour 4dfe282
     ).toBe(true)
   })
 })
+
+/**
+ * conv-890, 2026-09-30 13:42 : l'étape build, sur le SEUL modèle du rôle subagent (claude-opus-5-5,
+ * aucun membre de panel), a été refusée par le filtre de sécurité. Le repli ci-dessus n'existait que
+ * pour le lancement en parallèle : sur ce chemin, l'étape échouait sans nouvel essai, et le run
+ * finissait rouge dans un tour à 46,88 $.
+ */
+class RefusingEverythingProvider extends RecordingProvider {
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    if (options.model === 'claude-opus-5' || options.model === 'claude-sonnet-5') {
+      this.calls.push(options)
+      throw new Error(
+        `API Error: ${options.model}'s safeguards flagged this message (https://www.anthropic.com/legal/aup). Details: \`[reasoning_extraction]\``
+      )
+    }
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('Orchestrator — refus du filtre de sécurité sur le chemin à un seul modèle (conv-890)', () => {
+  const orchestrateurSansPanel = (provider: RecordingProvider): Orchestrator =>
+    new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        orchestrator: { provider: provider.id, model: 'claude-opus-5' },
+        subagent: { provider: provider.id, model: 'claude-opus-5' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      execPhases: ['frame']
+      // AUCUN `phaseFanOut` : l'étape tourne sur le binding du rôle subagent, comme en conv-890.
+    })
+
+  it('rejoue l’étape une fois sur le modèle voisin et trace le modèle qui a vraiment répondu', async () => {
+    const provider = new RefusingProvider()
+
+    const result = await orchestrateurSansPanel(provider).run('cadre les pistes du projet')
+
+    const models = provider.calls.map((call) => call.model)
+    expect(models.filter((m) => m === 'claude-opus-5')).toHaveLength(1)
+    expect(models.filter((m) => m === 'claude-sonnet-5')).toHaveLength(1)
+    // Le refus reste VISIBLE dans la trace, puis l'étape aboutit sur le modèle de repli.
+    const etape = (model: string, status: string): boolean =>
+      result.trace.some(
+        (step) => step.role === 'subagent' && step.model === model && step.status === status
+      )
+    expect(etape('claude-opus-5', 'failed')).toBe(true)
+    expect(etape('claude-sonnet-5', 'completed')).toBe(true)
+  })
+
+  it('ne rejoue qu’UNE fois : si le modèle voisin refuse aussi, l’étape échoue sans boucler', async () => {
+    const provider = new RefusingEverythingProvider()
+
+    let echec: unknown
+    try {
+      const result = await orchestrateurSansPanel(provider).run('cadre les pistes du projet')
+      echec = result.valid ? undefined : result
+    } catch (error) {
+      echec = error
+    }
+
+    const models = provider.calls.map((call) => call.model)
+    expect(models.filter((m) => m === 'claude-opus-5')).toHaveLength(1)
+    expect(models.filter((m) => m === 'claude-sonnet-5')).toHaveLength(1)
+    expect(echec).toBeDefined()
+  })
+})

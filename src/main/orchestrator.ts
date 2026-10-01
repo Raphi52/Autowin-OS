@@ -394,6 +394,7 @@ import type {
   ExecutionEvidence,
   PromptEnvelope,
   SendOptions,
+  SendResult,
   TrustedLearningOracle,
   Usage
 } from './providers/types'
@@ -4589,14 +4590,16 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         forward: (delta) => onDelta?.('exec', delta)
       })
       let phaseRes
-      try {
-        // Surcharge API transitoire (529/503) : on rejoue la MÊME phase au lieu de perdre le run
-        // (incident ak-9d3fa074346ba9da). Le réessai est annoncé dans le flux, jamais silencieux.
-        // La supervision mi-phase de HEAD est CONSERVÉE : elle vit dans le callback de flux, donc
-        // elle continue de recevoir les deltas de la tentative qui aboutit.
-        phaseRes = await this.sendSurvivingOverload(
+      // Modèle qui a VRAIMENT répondu : celui du binding, ou son voisin après un refus du filtre.
+      let modeleDeLaPhase = phaseBinding.model
+      // Surcharge API transitoire (529/503) : on rejoue la MÊME phase au lieu de perdre le run
+      // (incident ak-9d3fa074346ba9da). Le réessai est annoncé dans le flux, jamais silencieux.
+      // La supervision mi-phase de HEAD est CONSERVÉE : elle vit dans le callback de flux, donc
+      // elle continue de recevoir les deltas de la tentative qui aboutit.
+      const envoyer = (options: SendOptions): Promise<SendResult> =>
+        this.sendSurvivingOverload(
           () =>
-            registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) => {
+            registry.send(providerDeLaPhase, phaseMessages, options, (c) => {
               supervision.onDelta(c.delta)
               if (c.reasoning) onDelta?.('exec', '', c.reasoning)
               /*
@@ -4621,6 +4624,48 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           (note) => onDelta?.('exec', `\n${note}\n`),
           signal
         )
+      try {
+        try {
+          phaseRes = await envoyer(subOptions)
+        } catch (error) {
+          /*
+           * REPLI APRÈS REFUS, comme le lancement en parallèle (plus haut, conv-540). Mesuré en
+           * conv-890 (2026-09-30 13:42) : l'étape build, sur le SEUL modèle du rôle subagent
+           * (claude-opus-5-5), a été refusée par le filtre de sécurité, et le run a fini rouge sans
+           * rien tenter. Relancer le MÊME modèle échoue pareil : on rejoue UNE fois sur le voisin,
+           * avec la même session (sur une reprise, le message ne porte que « continue »).
+           */
+          const cause = error instanceof Error ? error.message : String(error)
+          const repli =
+            classifyProviderFailure(cause) === 'refused'
+              ? modeleDeRepliApresRefus(subOptions.model)
+              : undefined
+          if (!repli || repli === subOptions.model) throw error
+          push({
+            step: 'exec',
+            provider: providerDeLaPhase,
+            role: roleDeLaPhase,
+            model: subOptions.model,
+            text: '',
+            prompt: execPrompt,
+            status: 'failed',
+            evidence: evidenceDeLErreur(error),
+            error: explainRoleFailure(
+              `Phase ${phase}`,
+              roleDeLaPhase,
+              { provider: providerDeLaPhase, model: subOptions.model, message: cause },
+              roles.getBinding(roleDeLaPhase).provider
+            ),
+            durationMs: performance.now() - phaseStartedAt,
+            execution
+          })
+          onDelta?.(
+            'exec',
+            `\n[repli] ${subOptions.model} a refusé le message — nouvel essai sur ${repli}\n`
+          )
+          modeleDeLaPhase = repli
+          phaseRes = await envoyer({ ...subOptions, model: repli })
+        }
       } catch (error) {
         supervision.dispose()
         // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.
@@ -4637,7 +4682,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           roleDeLaPhase,
           {
             provider: providerDeLaPhase,
-            ...(subOptions.model ? { model: subOptions.model } : {}),
+            ...(modeleDeLaPhase ? { model: modeleDeLaPhase } : {}),
             message: error instanceof Error ? error.message : String(error)
           },
           roles.getBinding(roleDeLaPhase).provider
@@ -4694,7 +4739,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           // local) — pas le demandé, sinon trace/coût mentent sur qui a vraiment tourné.
           provider: phaseRes.provider ?? subProvider,
           role: 'subagent',
-          model: phaseRes.model ?? phaseBinding.model,
+          model: phaseRes.model ?? modeleDeLaPhase,
           inputTokens: phaseRes.usage.inputTokens,
           outputTokens: phaseRes.usage.outputTokens,
           cacheReadTokens: phaseRes.usage.cacheReadTokens,
@@ -4706,7 +4751,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         step: 'exec',
         provider: phaseRes.provider ?? subProvider,
         role: 'subagent',
-        model: phaseRes.model ?? phaseBinding.model,
+        model: phaseRes.model ?? modeleDeLaPhase,
         text: phaseRes.text,
         thinking: phaseRes.thinking,
         tokens: phaseRes.usage
