@@ -168,7 +168,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
     id: 'exploration',
     name: 'Exploration',
     description:
-      'On ne sait pas encore quoi faire. Quatre éclaireurs aux angles décorrélés, puis un cadrage, puis on garde la décision. Aucun build : le but est de décider.',
+      'On ne sait pas encore quoi faire. Cinq éclaireurs aux angles décorrélés, dont la veille externe, puis un cadrage, puis on garde la décision. Aucun build : le but est de décider.',
     graph: {
       entry: 'think-1',
       nodes: [
@@ -180,7 +180,9 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
             agentStudio('dette'),
             agentStudio('fragilite'),
             agentStudio('usage'),
-            agentStudio('rupture')
+            agentStudio('rupture'),
+            // Piste 6 de conv-890 : l'angle web du catalogue n'était lancé par aucun workflow livré.
+            agentStudio('externe')
           ]
         },
         { id: 'frame-1', phase: 'frame', agents: [agentStudio('contraintes')] },

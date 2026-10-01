@@ -229,9 +229,11 @@ describe('renderer chat IPC contract', () => {
     expect(empile).toBeGreaterThan(ecriture)
     expect(handler.slice(empile)).toContain('+ suffixe)')
     // Une image SANS texte est un message : elle ne doit pas etre refusee comme vide.
-    // Le refus porte un motif depuis b6d2a3fc (conv-892) : `{ ok: false, motif: 'vide' }`. On garde
-    // la CONDITION, pas la fin de l'objet rendu — c'est elle qui laisse passer l'image seule.
-    expect(handler).toMatch(/if \(!directive && jointes\.length === 0\) return \{ ok: false\b/)
+    // Le refus porte un motif depuis b6d2a3fc (conv-892). L'instruction ENTIÈRE est figée, comme
+    // avant b6d2a3fc : une version qui ne gardait que la condition laissait passer un mauvais motif.
+    expect(handler).toContain(
+      "if (!directive && jointes.length === 0) return { ok: false, motif: 'vide' as const }"
+    )
   })
 
   it('refuse d injecter une commande de skill en texte (conv-843, turn 6d0e352f)', () => {
@@ -240,9 +242,17 @@ describe('renderer chat IPC contract', () => {
     // Depuis b6d2a3fc (conv-892), le test `routeSkillRequest(...)?.reason === 'explicit-skill'` vit
     // dans `commandeNonInjectable` (skill-routing.ts, couvert par son propre test). Ce contrat garde
     // ce que ce test-la ne peut pas voir : le refus est RENDU, et avant la mise en file.
-    // fix-ok: 2 rouges sur main 26c58dcd — ces deux assertions cherchaient le texte d'avant b6d2a3fc.
-    const refus = handler.indexOf('commandeNonInjectable(directive)')
-    const rendu = handler.indexOf('if (commande) return { ok: false', refus)
+    // fix-ok: 2 rouges sur main 26c58dcd (texte d'avant b6d2a3fc), puis une version trop lâche qui
+    // restait verte (16/16) avec un mauvais motif et sans la garde des pièces jointes réinjectés.
+    // Instructions ENTIÈRES : la lecture de la commande ne vaut que sans pièce jointe, et le refus
+    // rend son motif et la commande lue.
+    const refus = handler.indexOf(
+      'const commande = jointes.length === 0 ? commandeNonInjectable(directive) : undefined'
+    )
+    const rendu = handler.indexOf(
+      "if (commande) return { ok: false, motif: 'commande' as const, commande }",
+      refus
+    )
     expect(refus).toBeGreaterThanOrEqual(0)
     expect(rendu).toBeGreaterThan(refus)
     expect(rendu).toBeLessThan(handler.indexOf('queued.push('))

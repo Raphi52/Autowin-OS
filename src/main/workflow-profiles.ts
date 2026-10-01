@@ -16,7 +16,7 @@ import { DEFAULT_WORKFLOWS } from './workflow-defaults'
  */
 export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowProfilesFile {
   const charge = loadWorkflowProfiles(path)
-  const actuel = migrateLegacyProviderLockedDefaults(charge)
+  const actuel = migrerExplorationSansVeilleExterne(migrateLegacyProviderLockedDefaults(charge))
   // Semé une fois, tracé par MARQUEUR et non par l'existence du fichier : une installation qui
   // possédait déjà un profil n'aurait JAMAIS reçu le catalogue (constaté en réel — un seul profil
   // présent, six livrés invisibles). Le marqueur permet aussi de ne pas ressusciter au démarrage
@@ -36,6 +36,41 @@ export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowPro
   }
   saveWorkflowProfiles(fichier, path)
   return fichier
+}
+
+/** Description d'Exploration semée avant l'ajout de l'angle « externe » (conv-890). */
+const DESCRIPTION_EXPLORATION_SANS_VEILLE =
+  'On ne sait pas encore quoi faire. Quatre éclaireurs aux angles décorrélés, puis un cadrage, puis on garde la décision. Aucun build : le but est de décider.'
+
+/**
+ * Piste 6 de conv-890 : l'angle « externe » (web daté) a rejoint les éclaireurs d'Exploration. Le
+ * catalogue n'est semé qu'une fois : sans cette migration, une installation existante garderait les
+ * quatre angles d'avant. Seule l'empreinte EXACTE de l'ancien défaut est remplacée ; un Exploration
+ * modifié par l'utilisateur reste tel quel.
+ */
+function migrerExplorationSansVeilleExterne(file: WorkflowProfilesFile): WorkflowProfilesFile {
+  const courant = DEFAULT_WORKFLOWS.find((candidate) => candidate.id === 'exploration')
+  if (!courant?.graph) return file
+  const ancien: WorkflowProfile = {
+    ...courant,
+    description: DESCRIPTION_EXPLORATION_SANS_VEILLE,
+    graph: {
+      ...courant.graph,
+      nodes: courant.graph.nodes.map((node) =>
+        node.phase === 'scout' && node.agents
+          ? { ...node, agents: node.agents.filter((agent) => agent.persona !== 'externe') }
+          : node
+      )
+    }
+  }
+  const empreinte = JSON.stringify(ancien)
+  let changed = false
+  const profiles = file.profiles.map((profile) => {
+    if (profile.id !== 'exploration' || JSON.stringify(profile) !== empreinte) return profile
+    changed = true
+    return { ...courant }
+  })
+  return changed ? { ...file, profiles } : file
 }
 
 /** Migre uniquement l'empreinte exacte des anciens profils livres qui imposaient Claude. */

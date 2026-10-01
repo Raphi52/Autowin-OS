@@ -105,6 +105,41 @@ describe('semis du catalogue', () => {
     const porteurUtilisateur = utilisateur.graph?.nodes.find((node) => node.agents?.length)
     expect(porteurUtilisateur?.agents?.[0].provider).toBe('claude')
   })
+
+  it('ajoute la veille externe à un Exploration livré INTACT, sans toucher une variante (piste 6, conv-890)', () => {
+    const p = chemin()
+    const courant = DEFAULT_WORKFLOWS.find((profile) => profile.id === 'exploration')!
+    // L'Exploration semé avant conv-890, tel qu'il est encore sur le disque de l'utilisateur
+    // (comparé au fichier réel le 2026-10-01) : quatre éclaireurs, sans l'angle « externe ».
+    const avant: WorkflowProfile = {
+      ...courant,
+      description:
+        'On ne sait pas encore quoi faire. Quatre éclaireurs aux angles décorrélés, puis un cadrage, puis on garde la décision. Aucun build : le but est de décider.',
+      graph: {
+        ...courant.graph!,
+        nodes: courant.graph!.nodes.map((node) =>
+          node.phase === 'scout'
+            ? { ...node, agents: node.agents!.filter((agent) => agent.persona !== 'externe') }
+            : node
+        )
+      }
+    }
+    // fix-ok: le catalogue n'est semé qu'une fois, donc l'angle ajouté n'atteignait pas une
+    // installation existante ; activeId visait un profil absent du jeu d'essai, remis à null.
+    const variante: WorkflowProfile = { ...avant, id: 'mon-exploration', name: 'La mienne' }
+    saveWorkflowProfiles({ seeded: true, activeId: 'exploration', profiles: [avant, variante] }, p)
+
+    const apres = seedDefaultWorkflows(p)
+    const anglesDe = (id: string): Array<string | undefined> =>
+      apres.profiles
+        .find((profile) => profile.id === id)!
+        .graph!.nodes.find((node) => node.phase === 'scout')!
+        .agents!.map((agent) => agent.persona)
+
+    expect(anglesDe('exploration')).toContain('externe')
+    expect(anglesDe('mon-exploration')).not.toContain('externe')
+    expect(apres.activeId).toBe('exploration')
+  })
 })
 
 describe('workflows livrés d’origine', () => {
@@ -253,6 +288,16 @@ describe('workflows livrés d’origine', () => {
         }
       }
     }
+  })
+
+  it('Exploration lance TOUS les angles scout du catalogue — sinon un angle n’est lancé par aucun workflow livré', () => {
+    // Piste 6 de conv-890 : l'angle « externe » (web daté) avait rejoint le catalogue, mais aucun
+    // workflow livré ne le lançait, et `agent-topology.json` est vide par défaut.
+    const exploration = DEFAULT_WORKFLOWS.find((profil) => profil.id === 'exploration')!
+    const scout = exploration.graph!.nodes.find((node) => node.phase === 'scout')!
+    expect(new Set(scout.agents!.map((agent) => agent.persona))).toEqual(
+      new Set(PERSONAS.scout!.map((persona) => persona.id))
+    )
   })
 
   it('un panel de plusieurs agents leur donne des angles DIFFÉRENTS', () => {
