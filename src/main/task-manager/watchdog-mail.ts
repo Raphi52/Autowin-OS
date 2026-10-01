@@ -65,6 +65,20 @@ export function mailWatchdogSeed(): ScheduledTaskInput {
   }
 }
 
+/**
+ * La regle PERSONNELLE (elle lit la boite de l'utilisateur et repond en son nom) ne se pose jamais
+ * dans une instance de TEST isolee (`--isolated-test-instance`), meme reglage pose : ce reglage est
+ * relu dans HKCU, que l'instance herite comme toute autre.
+ * fix-ok: copie cachee du 30/09 (`%TEMP%/awi/scoutsrep5b`, profil vierge) : regles mails + Teams
+ * posees a 16:47:24 par ce seul reglage, puis 2 declenchements sur des messages Teams reels.
+ */
+export function reglesMailsPersoAutorisees(entree: {
+  instanceIsolee: boolean
+  reglagePose: () => boolean
+}): boolean {
+  return !entree.instanceIsolee && entree.reglagePose()
+}
+
 /** Pose la regle une seule fois : supprimee par l'utilisateur, elle ne revient pas. */
 export function seedMailWatchdogTask(store: TaskStore): string | undefined {
   if (store.hasSeed(MAIL_WATCHDOG_SEED_ID)) return undefined

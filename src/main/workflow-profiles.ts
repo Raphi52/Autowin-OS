@@ -63,14 +63,39 @@ function migrerExplorationSansVeilleExterne(file: WorkflowProfilesFile): Workflo
       )
     }
   }
-  const empreinte = JSON.stringify(ancien)
+  // fix-ok: comparer le TEXTE JSON faisait dependre la mise a jour de l'ordre des champs (test
+  // rouge sur le meme Exploration ecrit dans l'ordre inverse) ; on compare donc le CONTENU.
+  const empreinte = empreinteCanonique(ancien)
   let changed = false
   const profiles = file.profiles.map((profile) => {
-    if (profile.id !== 'exploration' || JSON.stringify(profile) !== empreinte) return profile
+    if (profile.id !== 'exploration') return profile
+    if (empreinteCanonique(profile) !== empreinte) {
+      const angles = profile.graph?.nodes.flatMap((node) => node.agents ?? []) ?? []
+      if (!angles.some((agent) => agent.persona === 'externe'))
+        console.log(
+          "[workflows] Exploration modifié par l'utilisateur : la veille externe (angle web) n'y est pas ajoutée"
+        )
+      return profile
+    }
     changed = true
     return { ...courant }
   })
   return changed ? { ...file, profiles } : file
+}
+
+/** Le contenu d'un profil, independant de l'ordre de ses champs (l'ordre des listes compte). */
+function empreinteCanonique(valeur: unknown): string {
+  const trier = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(trier)
+      : v && typeof v === 'object'
+        ? Object.fromEntries(
+            Object.keys(v as Record<string, unknown>)
+              .sort()
+              .map((cle) => [cle, trier((v as Record<string, unknown>)[cle])])
+          )
+        : v
+  return JSON.stringify(trier(valeur))
 }
 
 /** Migre uniquement l'empreinte exacte des anciens profils livres qui imposaient Claude. */

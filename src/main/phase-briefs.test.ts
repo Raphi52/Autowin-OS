@@ -264,6 +264,19 @@ ${n}. `)
     expect(juge).toMatch(/couverture partielle/i)
   })
 
+  // fix-ok: rouge sur l’ancien brief juge (aucune réfutation par piste), vert après.
+  // Piste 3 de conv-890 : un VÉRIFICATEUR SÉPARÉ qui cherche à réfuter chaque piste avant la liste
+  // finale. conv-602 : une piste notée 88 était fausse (`Program.cs:300` est un commentaire), et seul
+  // le run suivant l'a vu. Le juge est déjà un appel distinct du scout : c'est lui qui réfute.
+  it('le brief juge fait réfuter CHAQUE piste d’un scout en relisant son ancrage', () => {
+    const juge = PHASE_BRIEFS.judge
+    expect(juge).toMatch(/V[ÉE]RIFICATEUR s[ée]par[ée]/u)
+    expect(juge).toMatch(/CHAQUE piste not[ée]e > 50/u)
+    expect(juge).toMatch(/R[ÉE]FUTE/u)
+    expect(juge).toMatch(/fichier:ligne/u)
+    expect(juge).toMatch(/MAJEUR[^\n]*r[ée]fut[ée]e/u)
+  })
+
   /*
    * La consigne PARI est la SEULE cause d'existence d'un pari : supprimee, tout l'appareil de mesure
    * (parse, journal, liaison, lecteur) tourne a vide EN SILENCE, puisque le dispositif est fail-open

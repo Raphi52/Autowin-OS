@@ -428,6 +428,7 @@ import {
   liftLegacyMailWatchdogCaps,
   listeningChannels,
   mailDiagnostics,
+  reglesMailsPersoAutorisees,
   retargetTeamsWatchdogPrompt,
   splitMailWatchdogByChannel,
   seedMailWatchdogTask
@@ -4217,7 +4218,14 @@ Le fil reprend ensuite normalement.`
           return false // variable absente : regle non posee, c'est le cas normal des autres postes
         }
       }
-      if (mailsPerso() && seedMailWatchdogTask(scheduledTasks))
+      // fix-ok: copie de test du 30/09 : règles mails + Teams posées par le seul réglage HKCU.
+      if (
+        reglesMailsPersoAutorisees({
+          instanceIsolee: isolatedTestInstance,
+          reglagePose: mailsPerso
+        }) &&
+        seedMailWatchdogTask(scheduledTasks)
+      )
         console.log('[watchdog] règle Assistant mails posée')
       if (splitMailWatchdogByChannel(scheduledTasks))
         console.log('[watchdog] règle mails séparée en Outlook + Teams')

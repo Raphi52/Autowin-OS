@@ -220,6 +220,39 @@ export function bilanDesChoix(entree: { depot: string; chemin?: string }): strin
   )
 }
 
+/** En dessous, le taux de prise d'UN type est du bruit : ce type garde la note du modèle. */
+export const MIN_PISTES_PAR_TYPE = 3
+
+export type FacteursChoix = Partial<Record<'fix' | 'new', number>>
+
+/**
+ * LA NOTE AJUSTÉE SUR CE QUE L'UTILISATEUR PREND (piste 7 de conv-890, à la lettre) : pour chaque
+ * type, son taux de prise rapporté au taux global, tous deux lissés (+1 / +2) pour qu'un petit
+ * échantillon ne pèse pas comme un grand. Borné à [0,5 ; 1,5] ; un écart de moins de 5 % est omis.
+ * Tout pris, ou rien : les choix ne départagent rien, aucun facteur.
+ * fix-ok: le bilan (`bilanDesChoix`) n'était qu'un texte remis au modèle : la note restait SON avis
+ * (objection du juge, conv-890) ; ce facteur est appliqué en code par `ajusterNotesSurChoix`.
+ */
+export function facteursDesChoix(entree: { depot: string; chemin?: string }): FacteursChoix {
+  const depot = cleDepot(entree.depot)
+  const jugees = lireMemoireScout(entree.chemin ?? cheminMemoireScout()).entrees.filter(
+    (e) => e.depot === depot && e.choix
+  )
+  const prises = jugees.filter((e) => e.choix === 'prise').length
+  if (jugees.length < MIN_PISTES_JUGEES || prises === 0 || prises === jugees.length) return {}
+  const lisse = (pris: number, total: number): number => (pris + 1) / (total + 2)
+  const global = lisse(prises, jugees.length)
+  const facteurs: FacteursChoix = {}
+  for (const type of ['fix', 'new'] as const) {
+    const du = jugees.filter((e) => e.type === type)
+    if (du.length < MIN_PISTES_PAR_TYPE) continue
+    const brut = lisse(du.filter((e) => e.choix === 'prise').length, du.length) / global
+    const facteur = Math.round(Math.min(1.5, Math.max(0.5, brut)) * 100) / 100
+    if (Math.abs(facteur - 1) >= 0.05) facteurs[type] = facteur
+  }
+  return facteurs
+}
+
 /**
  * Les titres déjà proposés sur CE dépôt, le plus récent d'abord, doublons retirés, puis le stock de
  * la veille ; au plus `MAX_PISTES_CONNUES`. `sauf` retire les pistes du run en cours : une

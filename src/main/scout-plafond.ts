@@ -23,6 +23,7 @@ import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { localiserTableauScout, scoreSur100 } from '../shared/scout-table'
+import type { FacteursChoix } from './scout-memoire'
 
 export const PLAFOND_PREUVE = 50
 
@@ -125,12 +126,74 @@ export function plafonnerNotesScout(
     raisons.push(`${nom} — ${raison}`)
   }
   if (raisons.length === 0) return texte
+  return reecrireNotes(
+    tableau,
+    cellulesPlafonnees,
+    notes,
+    `> Note ramenée à ${PLAFOND_PREUVE} par Autowin (plafond de preuve) : ${raisons.join(' ; ')}.`
+  )
+}
 
+/** Repère de la ligne écrite sous le tableau : une sortie déjà ajustée ne l'est pas deux fois. */
+const MARQUE_AJUSTEMENT = 'Note ajustée sur tes choix réels par Autowin'
+
+/**
+ * LA NOTE AJUSTÉE SUR LES CHOIX RÉELS (piste 7 de conv-890) : chaque note est multipliée par le
+ * facteur de son type (`facteursDesChoix`, `scout-memoire.ts`), bornée à 0-100, puis le tableau est
+ * retrié et le facteur écrit dessous. À appliquer AVANT le plafond de preuve : un aveu reste à 50.
+ * fix-ok: sans cette réécriture, le bilan des choix n'était qu'un texte que le modèle pouvait ignorer.
+ */
+export function ajusterNotesSurChoix(texte: string, facteurs: FacteursChoix): string {
+  if (!facteurs.fix && !facteurs.new) return texte
+  if ((texte ?? '').includes(MARQUE_AJUSTEMENT)) return texte
+  const tableau = localiserTableauScout(texte ?? '')
+  if (!tableau || tableau.colonnes.score < 0 || tableau.colonnes.type < 0) return texte
+  const { score: iScore, type: iType } = tableau.colonnes
+  const notes = new Map<number, number>()
+  const cellulesAjustees = new Map<number, string[]>()
+  for (const { index, cellules } of tableau.lignes) {
+    const note = scoreSur100(cellules[iScore] ?? '')
+    if (note === undefined) continue
+    notes.set(index, note)
+    const typeCellule = cellules[iType] ?? ''
+    const type = /🔧|\bfix\b|correctif/iu.test(typeCellule)
+      ? 'fix'
+      : /🆕|\bnew\b|nouveau/iu.test(typeCellule)
+        ? 'new'
+        : undefined
+    const facteur = type ? facteurs[type] : undefined
+    if (!facteur) continue
+    const ajustee = Math.min(100, Math.max(0, Math.round(note * facteur)))
+    if (ajustee === note) continue
+    const nouvelles = [...cellules]
+    nouvelles[iScore] = String(ajustee)
+    cellulesAjustees.set(index, nouvelles)
+    notes.set(index, ajustee)
+  }
+  if (cellulesAjustees.size === 0) return texte
+  const libelle = (cle: 'fix' | 'new', nom: string): string | undefined =>
+    facteurs[cle] ? `${nom} ×${String(facteurs[cle]).replace('.', ',')}` : undefined
+  const detail = [libelle('fix', '🔧 fix'), libelle('new', '🆕 new')].filter(Boolean).join(', ')
+  return reecrireNotes(
+    tableau,
+    cellulesAjustees,
+    notes,
+    `> ${MARQUE_AJUSTEMENT} : ${detail} (taux de prise de chaque type rapporté au taux global, sur tes pistes déjà jugées).`
+  )
+}
+
+/** Réécrit les lignes modifiées, retrie par note décroissante et ajoute l'explication dessous. */
+function reecrireNotes(
+  tableau: NonNullable<ReturnType<typeof localiserTableauScout>>,
+  cellulesModifiees: Map<number, string[]>,
+  notes: Map<number, number>,
+  explication: string
+): string {
   const lignes = [...tableau.lignesTexte]
   const positions = tableau.lignes.map((l) => l.index)
   const contenus = positions.map((index) => {
-    const plafonnee = cellulesPlafonnees.get(index)
-    return { index, texte: plafonnee ? reconstruire(plafonnee) : lignes[index]! }
+    const modifiee = cellulesModifiees.get(index)
+    return { index, texte: modifiee ? reconstruire(modifiee) : lignes[index]! }
   })
   // Tri STABLE par note décroissante ; une ligne sans note lisible garde son rang relatif en fin.
   const tries = [...contenus].sort(
@@ -141,12 +204,7 @@ export function plafonnerNotesScout(
   })
   let fin = Math.max(...positions)
   while ((lignes[fin + 1] ?? '').trim().startsWith('|')) fin += 1
-  lignes.splice(
-    fin + 1,
-    0,
-    '',
-    `> Note ramenée à ${PLAFOND_PREUVE} par Autowin (plafond de preuve) : ${raisons.join(' ; ')}.`
-  )
+  lignes.splice(fin + 1, 0, '', explication)
   return lignes.join('\n')
 }
 

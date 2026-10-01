@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseScoutTable } from '../shared/scout-table'
-import { lecteurAncrageDepuisDisque, plafonnerNotesScout, type EtatAncrage } from './scout-plafond'
+import {
+  ajusterNotesSurChoix,
+  lecteurAncrageDepuisDisque,
+  plafonnerNotesScout,
+  type EtatAncrage
+} from './scout-plafond'
 
 // Ce poste a un dépôt git dans C:/Users/User (le dossier personnel), au-dessus du dossier temporaire.
 // Sans plafond, git y remonte : il voit ce dépôt et peut même y écrire ses commits de test.
@@ -170,6 +175,38 @@ describe('plafond de preuve appliqué en code sur la sortie du scout', () => {
       '| # | Note | Type | Quoi | Pourquoi | Comment |\n|---|---|---|---|---|---|\n' +
       '| 1 | 90 | 🔧 correctif | X | non vérifié | a.ts:3 |\n'
     expect(parseScoutTable(plafonnerNotesScout(texte))![0]!.score).toBe(50)
+  })
+})
+
+// fix-ok: rouge avant (ajusterNotesSurChoix absent) ; le plafond doit passer APRÈS l’ajustement.
+describe('note ajustée sur les choix réels de l’utilisateur (piste 7, conv-890)', () => {
+  const tableau =
+    ENTETE + '| 1 | 80 | 🆕 new | A | mesuré | x |\n| 2 | 70 | 🔧 fix | B | relu | a.ts:3 |\n'
+
+  it('chaque note suit le facteur de son type ; tableau retrié, raison écrite', () => {
+    const sortie = ajusterNotesSurChoix(tableau, { new: 0.5 })
+    expect(parseScoutTable(sortie)!.map((l) => [l.what, l.score])).toEqual([
+      ['B', 70],
+      ['A', 40]
+    ])
+    expect(sortie).toMatch(/Note ajustée sur tes choix réels par Autowin : 🆕 new ×0,5/u)
+  })
+
+  it('sans facteur, ou déjà ajusté : texte inchangé', () => {
+    expect(ajusterNotesSurChoix(tableau, {})).toBe(tableau)
+    const une = ajusterNotesSurChoix(tableau, { new: 0.5 })
+    expect(ajusterNotesSurChoix(une, { new: 0.5 })).toBe(une)
+  })
+
+  it('borné à 100, et le plafond de preuve passe APRÈS : un aveu reste à 50', () => {
+    const texte =
+      ENTETE +
+      "| 1 | 80 | 🆕 new | A | je n'ai pas vérifié | x |\n| 2 | 90 | 🆕 new | B | mesuré | x |\n"
+    const sortie = plafonnerNotesScout(ajusterNotesSurChoix(texte, { new: 1.5 }))
+    expect(parseScoutTable(sortie)!.map((l) => [l.what, l.score])).toEqual([
+      ['B', 100],
+      ['A', 50]
+    ])
   })
 })
 

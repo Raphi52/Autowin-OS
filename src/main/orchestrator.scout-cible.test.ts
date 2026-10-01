@@ -247,4 +247,47 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     expect(ordre.slice(0, 2)).toEqual(['choisir', 'connues'])
     expect(consigneScout).toContain('TES CHOIX RÉELS sur ce dépôt (6 pistes jugées)')
   })
+
+  // fix-ok: rouge avant le branchement (72 au lieu de 36), vert après.
+  // Piste 7 de conv-890, à la lettre : la NOTE du tableau suit les choix réels, en code. Le facteur
+  // est lu une fois au début du run et appliqué au texte que la phase suivante reçoit.
+  it('le facteur des choix réels réécrit la note dans le texte enregistré du scout', async () => {
+    const provider = new ScoutQuiAvoue()
+    const depots: string[] = []
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'ouvrier' },
+        judge: { provider: provider.id, model: 'juge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\base',
+      classifyPhases: () => ['scout'],
+      worktrees: makeTestWorktrees('C:\base'),
+      execPhases: [],
+      memoireScout: {
+        connues: () => [],
+        noter: () => undefined,
+        facteurs: (depot) => {
+          depots.push(depot)
+          return { fix: 0.5 }
+        }
+      }
+    })
+    const result = await orch.run(
+      'améliore la vue Knowledge',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
+    const scout = result.phaseOutputs.find((output) => output.phase === 'scout')?.text ?? ''
+    // 72 × 0,5 = 36 : sous le plafond de preuve, qui ne le remonte pas.
+    expect(scout).toMatch(/\| 1 \| 36 \|/u)
+    expect(scout).toContain('Note ajustée sur tes choix réels par Autowin : 🔧 fix ×0,5')
+    expect(depots).toEqual(['C:\base'])
+  })
 })

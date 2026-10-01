@@ -139,6 +139,7 @@ import {
   noterPistesScout,
   noterChoixScout,
   bilanDesChoix,
+  facteursDesChoix,
   pistesDejaConnues,
   titresStockVeilleAutowin
 } from './scout-memoire'
@@ -607,7 +608,9 @@ export class AutowinOS {
           noterPistesScout({ depot, texte: texteScout, run, maintenant: new Date().toISOString() }),
         choisir: (depot, demande) =>
           noterChoixScout({ depot, demande, maintenant: new Date().toISOString() }),
-        bilan: (depot) => bilanDesChoix({ depot })
+        bilan: (depot) => bilanDesChoix({ depot }),
+        // fix-ok: sans cette ligne, la note ajustee sur les choix reels restait vide en production.
+        facteurs: (depot) => facteursDesChoix({ depot })
       },
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.

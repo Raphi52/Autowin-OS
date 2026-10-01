@@ -6,6 +6,7 @@ import {
   MAX_PISTES_CONNUES,
   bilanDesChoix,
   blocPistesDejaConnues,
+  facteursDesChoix,
   lireMemoireScout,
   noterChoixScout,
   noterPistesScout,
@@ -256,5 +257,40 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
     expect(bilan).toMatch(/laissées 55/u)
     expect(bilan).toMatch(/🔧 fix 2\/3/u)
     expect(bilan).toMatch(/🆕 new 1\/2/u)
+  })
+
+  // fix-ok: rouge avant (facteursDesChoix absent) ; la note restait l’avis du modèle.
+  // Piste 7 de conv-890, à la lettre : la NOTE elle-même suit ce que l'utilisateur prend, type par type.
+  const septPistes =
+    ENTETE +
+    '| 1 | 80 | 🔧 fix | A | p | a.ts:1 |\n| 2 | 80 | 🔧 fix | B | p | a.ts:1 |\n' +
+    '| 3 | 80 | 🔧 fix | C | p | a.ts:1 |\n| 4 | 80 | 🔧 fix | D | p | a.ts:1 |\n' +
+    '| 5 | 60 | 🆕 new | E | p | x |\n| 6 | 60 | 🆕 new | F | p | x |\n| 7 | 60 | 🆕 new | G | p | x |\n'
+
+  it('le facteur d’un type = son taux de prise lissé, rapporté au taux global', () => {
+    const chemin = fichier()
+    noterPistesScout({ depot: 'D:/w', texte: septPistes, run: 'r1', maintenant: 't1', chemin })
+    expect(facteursDesChoix({ depot: 'D:/w', chemin })).toEqual({})
+    noterChoixScout({
+      depot: 'D:/w',
+      demande: selection('A', 'E', 'F', 'G'),
+      maintenant: 't2',
+      chemin
+    })
+    // fix 1/4, new 3/3, global 4/7 ; lissés (+1/+2) : 2/6, 4/5, 5/9 → fix ×0,6, new ×1,44.
+    expect(facteursDesChoix({ depot: 'D:/w', chemin })).toEqual({ fix: 0.6, new: 1.44 })
+    expect(facteursDesChoix({ depot: 'D:/autre', chemin })).toEqual({})
+  })
+
+  it('tout pris (ou rien) : les choix ne départagent rien, aucun facteur', () => {
+    const chemin = fichier()
+    noterPistesScout({ depot: 'D:/w', texte: septPistes, run: 'r1', maintenant: 't1', chemin })
+    noterChoixScout({
+      depot: 'D:/w',
+      demande: selection('A', 'B', 'C', 'D', 'E', 'F', 'G'),
+      maintenant: 't2',
+      chemin
+    })
+    expect(facteursDesChoix({ depot: 'D:/w', chemin })).toEqual({})
   })
 })

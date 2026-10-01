@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   removeWorkflowProfile,
   saveWorkflowProfiles,
@@ -139,6 +139,57 @@ describe('semis du catalogue', () => {
     expect(anglesDe('exploration')).toContain('externe')
     expect(anglesDe('mon-exploration')).not.toContain('externe')
     expect(apres.activeId).toBe('exploration')
+  })
+
+  it('reconnaît l’Exploration livré même écrit dans un autre ordre de champs, et dit quand il le laisse', () => {
+    // fix-ok: rouge mesuré avant le correctif (4 angles au lieu de 5 sur le même profil en désordre).
+    // Objection du juge (conv-890) : la comparaison portait sur le TEXTE JSON, donc un fichier écrit
+    // par une version qui ordonnait autrement les champs n'était jamais mis à jour, sans un mot.
+    const p = chemin()
+    const courant = DEFAULT_WORKFLOWS.find((profile) => profile.id === 'exploration')!
+    const avant = {
+      ...courant,
+      description:
+        'On ne sait pas encore quoi faire. Quatre éclaireurs aux angles décorrélés, puis un cadrage, puis on garde la décision. Aucun build : le but est de décider.',
+      graph: {
+        ...courant.graph!,
+        nodes: courant.graph!.nodes.map((node) =>
+          node.phase === 'scout'
+            ? { ...node, agents: node.agents!.filter((agent) => agent.persona !== 'externe') }
+            : node
+        )
+      }
+    }
+    const inverser = (valeur: unknown): unknown =>
+      Array.isArray(valeur)
+        ? valeur.map(inverser)
+        : valeur && typeof valeur === 'object'
+          ? Object.fromEntries(
+              Object.entries(valeur as Record<string, unknown>)
+                .reverse()
+                .map(([cle, v]) => [cle, inverser(v)])
+            )
+          : valeur
+    const desordre = inverser(avant) as WorkflowProfile
+    expect(JSON.stringify(desordre)).not.toBe(JSON.stringify(avant))
+    const modifie: WorkflowProfile = { ...avant, id: 'exploration', name: 'Exploration (à moi)' }
+    saveWorkflowProfiles({ seeded: true, activeId: null, profiles: [desordre] }, p)
+    const anglesExploration = (fichier: ReturnType<typeof seedDefaultWorkflows>): unknown[] =>
+      fichier.profiles
+        .find((profile) => profile.id === 'exploration')!
+        .graph!.nodes.find((node) => node.phase === 'scout')!
+        .agents!.map((agent) => agent.persona)
+    expect(anglesExploration(seedDefaultWorkflows(p))).toContain('externe')
+
+    const p2 = chemin()
+    saveWorkflowProfiles({ seeded: true, activeId: null, profiles: [modifie] }, p2)
+    const journal = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    try {
+      expect(anglesExploration(seedDefaultWorkflows(p2))).not.toContain('externe')
+      expect(journal.mock.calls.flat().join(' ')).toMatch(/Exploration.*modifi.*veille externe/iu)
+    } finally {
+      journal.mockRestore()
+    }
   })
 })
 

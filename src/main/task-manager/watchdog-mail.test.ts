@@ -1,4 +1,5 @@
 // fix-ok: 3e édition = typage du runtime simulé (erreur tsc mesurée, typecheck:node exit 0 après) + reconversion CRLF->LF
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { ScheduledChatDispatcher, type ScheduledChatRuntime } from './chat-dispatch'
 import { TaskStore } from './task-store'
@@ -9,6 +10,7 @@ import {
   NewUnreadMailDetector,
   extractMailReply,
   mailWatchdogSeed,
+  reglesMailsPersoAutorisees,
   seedMailWatchdogTask
 } from './watchdog-mail'
 import type { ScheduledTask, TaskOccurrence } from './types'
@@ -143,5 +145,31 @@ describe('Watchdog mail — agent en mode auto puis réponse au mail', () => {
       source: 'outlook-mail',
       mail: { itemId: 'ABCDEF0123456789' }
     })
+  })
+})
+
+/**
+ * fix-ok: rouge avant (porte absente, index.ts sans le drapeau), vert après : 10 tests.
+ * Mesuré le 30/09 (conv-890) : une copie de TEST cachée, lancée sur un profil vierge
+ * (`%TEMP%/awi/scoutsrep5b`), a posé elle-même « Assistant mails Outlook » et « Assistant Teams »
+ * à 16:47:24, puis a déclenché 2 fois sur des messages Teams de l'utilisateur. Cause : le réglage
+ * personnel est relu dans HKCU, que l'instance isolée hérite comme toute autre.
+ */
+describe('Watchdog mail — une instance de test isolée ne pose pas la règle personnelle', () => {
+  it('isolée : refus, sans même lire le réglage ; sinon le réglage décide', () => {
+    const reglagePose = vi.fn(() => true)
+    expect(reglesMailsPersoAutorisees({ instanceIsolee: true, reglagePose })).toBe(false)
+    expect(reglagePose).not.toHaveBeenCalled()
+    expect(reglesMailsPersoAutorisees({ instanceIsolee: false, reglagePose })).toBe(true)
+    expect(reglesMailsPersoAutorisees({ instanceIsolee: false, reglagePose: () => false })).toBe(
+      false
+    )
+  })
+
+  it('index.ts pose la règle par cette porte, avec le drapeau de l’instance isolée', () => {
+    const index = readFileSync(new URL('../index.ts', import.meta.url), 'utf8')
+    expect(index).toMatch(
+      /reglesMailsPersoAutorisees\(\{\s*instanceIsolee:\s*isolatedTestInstance,\s*reglagePose:\s*mailsPerso\s*\}\)\s*&&\s*seedMailWatchdogTask\(/
+    )
   })
 })

@@ -129,8 +129,12 @@ import {
 import { sortieScoutAvecCible } from './scout-cible'
 import { sortieThinkAvecForme } from './think-briefing'
 import { shaHeadSurDisque } from './depot-git'
-import { lecteurAncrageDepuisDisque, plafonnerNotesScout } from './scout-plafond'
-import { blocPistesDejaConnues } from './scout-memoire'
+import {
+  ajusterNotesSurChoix,
+  lecteurAncrageDepuisDisque,
+  plafonnerNotesScout
+} from './scout-plafond'
+import { blocPistesDejaConnues, type FacteursChoix } from './scout-memoire'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
 import {
   briefArbitrage,
@@ -709,6 +713,8 @@ export interface OrchestratorCollaboratorDeps {
     choisir?: (depot: string, demande: string) => void
     /** Le bilan des choix réels sur ce dépôt ; '' tant qu'il y a trop peu de pistes jugées. */
     bilan?: (depot: string) => string
+    /** Le facteur de note par type, tiré des choix réels (`facteursDesChoix`) ; {} sans mesure. */
+    facteurs?: (depot: string) => FacteursChoix
   }
 }
 
@@ -3434,6 +3440,7 @@ ${CONTRAT_OBJECTIONS}`
      * illisible ne bloque pas le run, mais se DIT dans la trace.
      */
     let blocPistesConnues = ''
+    let facteursChoix: FacteursChoix = {}
     try {
       // D'abord les CHOIX : une demande de sélection dit quelles pistes du scout précédent ont été
       // prises et lesquelles laissées (piste 7 de conv-890) ; le bilan suit, dans la même consigne.
@@ -3442,6 +3449,7 @@ ${CONTRAT_OBJECTIONS}`
         this.deps.memoireScout?.connues(this.deps.executionWorkspace, runId) ?? [],
         this.deps.memoireScout?.bilan?.(this.deps.executionWorkspace) ?? ''
       )
+      facteursChoix = this.deps.memoireScout?.facteurs?.(this.deps.executionWorkspace) ?? {}
     } catch (erreur) {
       push({
         step: 'gate',
@@ -3685,8 +3693,15 @@ ${CONTRAT_OBJECTIONS}`
     // Le PLAFOND DE PREUVE passe au meme endroit, et pour la meme raison : les deux chemins lisent
     // ce texte. Idempotent (une note deja a 50 ne bouge plus). Voir `scout-plafond.ts`.
     const lireAncrages = lecteurAncrageDepuisDisque(this.deps.executionWorkspace)
+    // La note ajustee sur les choix reels passe AVANT le plafond : un aveu reste a 50.
+    // fix-ok: le facteur des choix (piste 7, conv-890) n'atteignait pas la note sans ce branchement :
+    // orchestrator.scout-cible.test.ts rend 72 au lieu de 36 quand il manque.
     const garderCibleScout = (phase: NodePhase, texte: string): string =>
-      phase === 'scout' ? sortieScoutAvecCible(plafonnerNotesScout(texte, lireAncrages)) : texte
+      phase === 'scout'
+        ? sortieScoutAvecCible(
+            plafonnerNotesScout(ajusterNotesSurChoix(texte, facteursChoix), lireAncrages)
+          )
+        : texte
 
     /**
      * MEME ACCROCHE, autre defaut mesure : un cadrage qui decrit une ENTREE utilisateur sans
