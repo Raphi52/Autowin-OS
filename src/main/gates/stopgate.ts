@@ -1,3 +1,4 @@
+import { MOTIF_RESERVES_MINEURES_FIGEES } from '../memoire-juge'
 // Reproduction TS pure, model-agnostic, du "stop-gate" du kit autowin.
 // Fonction pure évaluant si une clôture "done/green" est légitime.
 
@@ -293,6 +294,12 @@ export function arretDeLaReparation(entree: {
    * car aucune réparation ne peut alors changer le verdict.
    */
   jusquAuVert?: boolean
+  /**
+   * conv-35 (2026-09-30) : le juge a VALIDE en rendant exactement les memes reserves MINEUR qu'au
+   * passage precedent (`memesReservesMineures`). Constat de CODE, pas du juge : mord meme jusqu'au vert.
+   */
+  // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
+  reservesMineuresFigees?: boolean
 }): string | undefined {
   const b = entree.bundlePerime
   // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — comparer le bundle a la seule
@@ -305,6 +312,7 @@ export function arretDeLaReparation(entree: {
   if (b && b.sourceMs > b.bundleMs) {
     return `Réparation interrompue : le code exécuté est périmé — ${b.bundle} est plus ancien que la source du contrôle. Recompiler et relancer l'application avant de rejouer.`
   }
+  if (entree.reservesMineuresFigees) return MOTIF_RESERVES_MINEURES_FIGEES
   if (entree.jusquAuVert) return undefined
   if (entree.tentative >= entree.plafondDur) {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`

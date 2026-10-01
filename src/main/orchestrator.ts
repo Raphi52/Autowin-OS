@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
+import { noteVerdictPrecedentPourJuge, reservesMineuresFigees, verdictPanelPourMemoire } from './memoire-juge'
 import {
   CONTRAT_OBJECTIONS,
   dodDuVerdict,
@@ -4984,6 +4985,8 @@ ${CONTRAT_OBJECTIONS}`
     })
     let exec = buildExec()
     let lastJudgeText = ''
+    /** Verdict tel que les juges l'ont RENDU (panel : reconstruit depuis les membres) — memoire du juge. */
+    let lastJudgeMemoire = ''
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
     const judgeBinding =
@@ -5055,6 +5058,7 @@ ${CONTRAT_OBJECTIONS}`
       if (resumedJudgeText !== undefined) {
         const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
         lastJudgeText = resumedJudgeText.trim()
+        lastJudgeMemoire = lastJudgeText
         // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
         // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
         trust.record({
@@ -5160,6 +5164,8 @@ ${CONTRAT_OBJECTIONS}`
           JUDGE_TOOLSET_CONTRACT +
           noteContrat +
           noteHypotheses +
+          // conv-35 : a partir du 2e passage, `lastJudgeMemoire` est encore le verdict PRECEDENT.
+          noteVerdictPrecedentPourJuge(lastJudgeMemoire) +
           `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
@@ -5226,6 +5232,7 @@ ${CONTRAT_OBJECTIONS}`
       }
       const judgeStartedAt = performance.now()
       let verdict
+      let memoirePanel = ''
       // FAN-OUT JUGE : ≥2 modèles dans le bloc topology judge → N juges en parallèle puis QUORUM
       // de vote MÉCANIQUE (compter les VALIDE ; majorité = pass). Agréger ≠ re-décider : aucun juge
       // supplémentaire ne tranche, on compte les voix. <2 ou absent → un seul juge (rétrocompat).
@@ -5340,6 +5347,10 @@ ${CONTRAT_OBJECTIONS}`
         const reasons = responders.filter((r) => !r.ok && r.text).map((r) => r.text)
         // Verdict AGRÉGÉ synthétique consommé par le gate ci-dessous. usage=undefined → le coût,
         // déjà ajouté par juge ci-dessus, n'est pas re-compté.
+        memoirePanel = verdictPanelPourMemoire(
+          responders.map((r) => r.text),
+          ''
+        )
         verdict = {
           text: passes
             ? // Quorum atteint : les objections des membres RESTENT dans le verdict (conv-539,
@@ -5409,6 +5420,7 @@ ${CONTRAT_OBJECTIONS}`
        */
       const ok = evidenceOk && lireVerdictJuge(verdictAvecObjectionsPortees(verdict.text))
       lastJudgeText = verdict.text.trim()
+      lastJudgeMemoire = memoirePanel.trim() || lastJudgeText
       // Rattachement au run et a la conversation : sans eux, aucun verdict n'est re-etiquetable
       // apres coup par l'humain, et calibration() reste a accuracy:null (186 lignes muettes).
       trust.record({
@@ -5593,6 +5605,7 @@ ${CONTRAT_OBJECTIONS}`
         }
         exec = buildExec()
       }
+      const verdictDuPassagePrecedent = attempt > 0 ? lastJudgeMemoire : ''
       const r = await judgeAndGate()
       valid = r.valid
       gate = r.gate
@@ -5664,7 +5677,13 @@ ${CONTRAT_OBJECTIONS}`
         // (11:11-11:31) : le code qui jugeait n'etait pas celui qu'on reparait. La boucle le NOMME
         // desormais au lieu de bruler un build et un panel de juge par passage.
         bundlePerime: mesureBundlePerime(process.cwd()),
-        jusquAuVert
+        jusquAuVert,
+        // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
+        reservesMineuresFigees: reservesMineuresFigees(
+          attempt,
+          lastJudgeMemoire,
+          verdictDuPassagePrecedent
+        )
       })
       if (passage.arret) {
         gate.reasons.push(passage.arret)
