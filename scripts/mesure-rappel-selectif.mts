@@ -104,16 +104,31 @@ interface Montre {
   id: string
   score: number
 }
-function rappel(r: Requete, terme: string): Montre[] {
+/**
+ * DEUX ORDRES, UNE SEULE RECHERCHE (2e mesure du 2026-09-30).
+ *  - `montres`   : l'ordre de production — couper a 3, PUIS exclure courante / autre fournisseur /
+ *                  autre dossier. Une conversation exclue coute une place.
+ *  - `montresB`  : cloisonner d'abord, couper ensuite. Memes exclusions, donc aucune fuite de plus.
+ */
+function rappel(
+  r: Requete,
+  terme: string
+): { montres: Montre[]; montresB: Montre[]; admises: Montre[] } {
   const projet = canonicalProjectPath(r.conv.projectPath)
-  return store
+  const admise = (c: { id: string; provider: string; projectPath?: string }): boolean =>
+    c.id !== r.conv.id &&
+    c.provider === r.conv.provider &&
+    canonicalProjectPath(c.projectPath) === projet
+  const passees = store
     .search(terme, { limite: 50, extraitsParConversation: 2 })
     .filter((c) => (creeLe.get(c.id) ?? Infinity) <= r.ts || c.id === r.conv.id)
-    .slice(0, 3)
-    .filter((c) => c.id !== r.conv.id)
-    .filter((c) => c.provider === r.conv.provider)
-    .filter((c) => canonicalProjectPath(c.projectPath) === projet)
-    .map((c) => ({ id: c.id, score: c.score }))
+  const court = (c: { id: string; score: number }): Montre => ({ id: c.id, score: c.score })
+  return {
+    montres: passees.slice(0, 3).filter(admise).map(court),
+    montresB: passees.filter(admise).slice(0, 3).map(court),
+    // Pour le diagnostic : toutes les admises, dans l'ordre final de `search`.
+    admises: passees.filter(admise).map(court)
+  }
 }
 
 /* ---------- Collecte ---------- */
@@ -121,6 +136,9 @@ interface Ligne {
   verite: 'citation' | 'redite' | 'aucune'
   cibles: Set<string>
   montres: Montre[]
+  montresB: Montre[]
+  admises: Montre[]
+  source: Conv
 }
 const lignes: Ligne[] = []
 const debut = Date.now()
@@ -130,16 +148,27 @@ for (const [i, { r, mots }] of signatures.entries()) {
     .filter((id) => id !== r.conv.id && parId.has(id) && (creeLe.get(id) ?? Infinity) <= r.ts)
   if (cites.length) {
     const terme = r.texte.replace(/conv-\d+/g, ' ').trim()
-    if (terme) lignes.push({ verite: 'citation', cibles: new Set(cites), montres: rappel(r, terme) })
+    if (terme)
+      lignes.push({
+        verite: 'citation',
+        cibles: new Set(cites),
+        source: r.conv,
+        ...rappel(r, terme)
+      })
     continue
   }
   const redites = ciblesRedite(r, mots)
+  // `--verites-seules` : ne rejoue que les messages a verite connue (~1 min au lieu de ~20). Les
+  // sections qui comptent le volume sur TOUS les tours deviennent alors sans objet.
+  if (!redites.size && process.argv.includes('--verites-seules')) continue
   lignes.push({
     verite: redites.size ? 'redite' : 'aucune',
     cibles: redites,
-    montres: rappel(r, r.texte)
+    source: r.conv,
+    ...rappel(r, r.texte)
   })
-  if (i % 500 === 0) process.stderr.write(`  ${i}/${signatures.length} (${Date.now() - debut} ms)\n`)
+  if (i % 500 === 0)
+    process.stderr.write(`  ${i}/${signatures.length} (${Date.now() - debut} ms)\n`)
 }
 
 /* ---------- Rapport ---------- */
@@ -181,7 +210,9 @@ console.log(`  justes   : ${quantiles(justes23)}`)
 console.log(`  inutiles : ${quantiles(inutiles23)}`)
 
 console.log('\n3. FILTRE RELATIF : garder le rang k>=2 si score_k >= alpha * score_1')
-console.log('  alpha | justes 2-3 gardes | inutiles 2-3 retires | cible trouvee | convs montrees / tour (tous tours)')
+console.log(
+  '  alpha | justes 2-3 gardes | inutiles 2-3 retires | cible trouvee | convs montrees / tour (tous tours)'
+)
 for (const alpha of [0, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1]) {
   const garde = (l: Ligne) => l.montres.filter((_, k) => k === 0 || ratio(l, k) >= alpha)
   const gJ = justes23.filter((x) => x >= alpha).length
@@ -191,5 +222,81 @@ for (const alpha of [0, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1]) {
   console.log(
     `  ${alpha.toFixed(1).padStart(5)} | ${`${gJ}/${justes23.length}`.padStart(17)} | ${`${rI}/${inutiles23.length}`.padStart(20)} | ${`${cible}/${avecVerite.length}`.padStart(13)} | ${volume.toFixed(2)}`
   )
+}
+console.log('\n4. ORDRE : couper puis cloisonner (production) contre cloisonner puis couper')
+console.log('   (filtre relatif a 0,8 applique aux deux, comme en production depuis le 2026-09-30)')
+const garde08 = (montres: Montre[]): Montre[] =>
+  montres.filter((m, k) => k === 0 || (montres[0].score > 0 && m.score >= 0.8 * montres[0].score))
+/** Variante C : l'ordre de production ; s'il ne montre RIEN, le 1er admis apres cloisonnement. */
+const combler = (l: Ligne): Montre[] => {
+  const a = garde08(l.montres)
+  return a.length ? a : l.montresB.slice(0, 1)
+}
+for (const [nom, choisir] of [
+  ['couper puis cloisonner', (l: Ligne) => garde08(l.montres)],
+  ['cloisonner puis couper', (l: Ligne) => garde08(l.montresB)],
+  ['combler les tours vides', combler]
+] as const) {
+  const vus = lignes.map((l) => ({ l, m: choisir(l) }))
+  const avec = vus.filter(({ l }) => l.verite !== 'aucune')
+  const cible = avec.filter(({ l, m }) => m.some((x) => l.cibles.has(x.id))).length
+  const montresTot = avec.reduce((s, { m }) => s + m.length, 0)
+  const justesTot = avec.reduce((s, { l, m }) => s + m.filter((x) => l.cibles.has(x.id)).length, 0)
+  const vide = vus.filter(({ m }) => m.length === 0).length
+  const volume = vus.reduce((s, { m }) => s + m.length, 0) / vus.length
+  console.log(
+    `  ${nom.padEnd(24)} | cible trouvee ${cible}/${avec.length} | justes ${justesTot}/${montresTot} (${pct(justesTot, montresTot)}) | tours sans rappel ${pct(vide, vus.length)} | convs / tour ${volume.toFixed(2)}`
+  )
+}
+if (process.argv.includes('--diagnostic')) {
+  console.log('\n5. DIAGNOSTIC DU RANG 1 (cas a verite connue, conversations admises seulement)')
+  const rangDe = (liste: Montre[], cibles: Set<string>): number =>
+    liste.findIndex((m) => cibles.has(m.id))
+  for (const type of ['citation', 'redite'] as const) {
+    const cas = lignes.filter((l) => l.verite === type)
+    const absente = cas.filter((l) => rangDe(l.admises, l.cibles) < 0).length
+    const final1 = cas.filter((l) => rangDe(l.admises, l.cibles) === 0).length
+    const parScore = cas.filter((l) => {
+      const tri = [...l.admises].sort((a, b) => b.score - a.score)
+      return rangDe(tri, l.cibles) === 0
+    }).length
+    const rangs = cas
+      .map((l) => rangDe(l.admises, l.cibles))
+      .filter((x) => x >= 0)
+      .sort((a, b) => a - b)
+    console.log(
+      `  ${type.padEnd(8)} n=${cas.length} | cible absente des admises : ${absente} | rang 1 ordre final : ${final1} | rang 1 si tri par score seul : ${parScore} | rangs de la cible : ${rangs.join(' ')}`
+    )
+  }
+  console.log('  pourquoi la cible est absente des admises :')
+  for (const type of ['citation', 'redite'] as const) {
+    const raisons: Record<string, number> = {}
+    for (const l of lignes.filter((x) => x.verite === type && rangDe(x.admises, x.cibles) < 0)) {
+      const atteignables = [...l.cibles]
+        .map((id) => parId.get(id))
+        .filter((c): c is Conv => Boolean(c))
+      const raison = atteignables.every((c) => c.provider !== l.source.provider)
+        ? 'autre fournisseur'
+        : atteignables.every(
+              (c) =>
+                c.provider !== l.source.provider ||
+                canonicalProjectPath(c.projectPath) !== canonicalProjectPath(l.source.projectPath)
+            )
+          ? 'autre dossier'
+          : 'non trouvee par la recherche'
+      raisons[raison] = (raisons[raison] ?? 0) + 1
+    }
+    console.log(`    ${type.padEnd(8)} ${JSON.stringify(raisons)}`)
+  }
+  console.log('  divergences tri final / tri par score (rang 1) :')
+  for (const l of lignes.filter((x) => x.verite !== 'aucune')) {
+    const S = [...l.admises].sort((a, b) => b.score - a.score)
+    const F = l.admises
+    if (!S[0] || !F[0] || S[0].id === F[0].id) continue
+    const r = (a: number, b: number | undefined) => (b ? (a / b).toFixed(2) : '∞')
+    console.log(
+      `    ${l.verite.padEnd(8)} score1=${l.cibles.has(S[0].id) ? 'CIBLE' : 'autre'} final1=${l.cibles.has(F[0].id) ? 'CIBLE' : 'autre'} | score1/score2=${r(S[0].score, S[1]?.score)} score1/final1=${r(S[0].score, F[0].score)} | rang final de score1=${F.findIndex((m) => m.id === S[0].id)}`
+    )
+  }
 }
 console.log(`\nduree : ${Date.now() - debut} ms`)
