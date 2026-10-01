@@ -80,6 +80,9 @@ describe('acquis d’analyse réutilisable dans une conversation', () => {
    * `frame` est repris, mais son `think` est REJOUÉ de 13:36:25Z à 13:42:34Z pour 1,94 $, alors que
    * `run-state/run-3180eec71b06-1.json` porte encore le briefing (13 372 caractères).
    */
+  // fix-ok: run-85d8e7f57af2-1 — les éditions répétées de ce test ne corrigeaient pas le code : le
+  // heredoc Python d'insertion a changé les `\n` des chaînes TS en vrais retours à la ligne (test non
+  // compilable, rétabli par 2 Edit), puis Prettier a demandé de couper le `toEqual([])` trop long.
   it('réutilise le briefing `think` déjà payé dans la même conversation', () => {
     const avecThink = etat({
       phaseOutputs: [

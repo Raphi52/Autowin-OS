@@ -151,6 +151,9 @@ export function runsDuMessage(sujet) {
  * Fichiers modifies par run, lus dans tous les commits (toutes branches) dont le message NOMME le
  * run : `agent run-<id>`, `agent run-<id>: …`, `salvage(run-<id>)`, « travail préservé de la copie
  * run-<id> » — les quatre formes relevees le 2026-10-01.
+ * fix-ok: run-85d8e7f57af2-1 — la 1re version exigeait `agent run-<id>:` avec deux-points et ne
+ * rattachait qu'UN run a un commit (contre 16 annonces) : les vrais messages n'ont souvent pas ce
+ * deux-points. Autre reprise : `URL.pathname` rendait `/D:/...` sous Windows, remplace par fileURLToPath.
  */
 function fichiersParRun(depot) {
   const sortie = execFileSync(

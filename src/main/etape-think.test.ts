@@ -66,6 +66,9 @@ describe('la profondeur de `think` borne le code, jamais les notes', () => {
    * 2026-09-27 (pas de plafond de notes) : c'est cette phrase que la garde tient.
    */
   // Blancs ramenés à une espace : re-découper le paragraphe ne doit pas casser la garde.
+  // fix-ok: run-85d8e7f57af2-1 — la 1re version attendait « La profondeur ne\nlimite pas les notes »,
+  // collée au retour à la ligne de SKILL.md §2 : la garde aurait cassé à tout re-découpage. D'où la
+  // normalisation des blancs ; l'autre réécriture échangeait l'ancienne skill pour voir le rouge (2 échecs).
   const skill = readFileSync(join(RACINE, 'skills', 'think', 'SKILL.md'), 'utf8').replace(
     /\s+/g,
     ' '
