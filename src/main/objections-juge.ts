@@ -13,6 +13,23 @@
  * fix-ok: conv-539 tour 24e29815-0cbd-4310-8cda-93207e237015 — juge « VALIDE SCORE 68 » avec objections
  * jamais remises a la reparation ; puis « Aucune capture... » jete comme liste vide (e8da1596, a1243dbe).
  */
+
+/**
+ * LE CONTRAT DES OBJECTIONS, ÉCRIT UNE SEULE FOIS, À CÔTÉ DE LA RÈGLE QUI LE LIT.
+ *
+ * fix-ok: run-85d8e7f57af2-1 (conv-892, 2026-10-01) — trois VALIDE (84, 86, 88) ont chacun relancé
+ * une réparation. Cause : le contrat était recopié à quatre endroits (phase-briefs.ts, trois prompts
+ * d'orchestrator.ts), qui définissait MINEUR comme une « réserve non bloquante », alors que depuis conv-844 (2026-09-24)
+ * `objectionsDuJuge` bloque sur tout MINEUR (seul OK passe) : aucune copie n'avait suivi. Les juges y
+ * rangeaient des réserves qu'aucune réparation ne lève (publication faite par l'app APRÈS le VALIDE,
+ * mesure qui attend 10 runs après la fusion). Le texte et la règle vivent donc ici, ensemble.
+ * Les puces OK restent affichées : panneau des juges (`lireContratEtendu`) et RUN.md (`judgeText`).
+ */
+export const CONTRAT_OBJECTIONS = `OBJECTIONS:
+- MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <défaut que le producteur peut encore corriger dans CE run — il BLOQUE la clôture et relance une réparation> | OK: <constat vérifié> | OK: hors run — <réserve qu'aucune réparation ne peut lever (publication faite par l'app après ton VALIDE, mesure qui attend des runs futurs, geste ou accord de l'utilisateur) et qui la lèvera>
+Un défaut corrigeable dans ce run n'est jamais OK. Une puce OK ne bloque pas et reste affichée à l'utilisateur.
+Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
+
 const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 /** Une section suivante du contrat du juge (SCORE:, VERDICT:, …) ferme la liste. */
 const AUTRE_SECTION = /^\s*[A-ZÉÈÀ_ ]{3,}\s*:/
