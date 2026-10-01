@@ -1276,6 +1276,28 @@ export class AutowinOS {
   }
 
   /**
+   * Le run que ce process execute DEJA pour ce tour de cette conversation, s'il y en a un.
+   *
+   * fix-ok: conv-890, 2026-09-30 (objection du juge, reparation 4 de run-85d8e7f57af2-1) — au
+   * redemarrage, run-3180eec71b06-1 repart a 13:36:17.850 sur le tour 386f4c48 ; le tour de chat
+   * restaure relance `orchestrate` avec une tache REECRITE, la reprise stricte (meme texte) ne le
+   * reconnait pas, et run-66d6d5bdfc5a-1 part a 13:36:21.030 sur le MEME tour : `think` rejoue,
+   * 1,94 $. Le tour est le signal fiable ; le texte de la tache ne l'est pas.
+   */
+  liveOrchestrationForTurn(
+    conversationId: string | undefined,
+    turnId: string | undefined
+  ): string | undefined {
+    if (!conversationId || !turnId || this.liveOrchestrationRunIds.size === 0) return undefined
+    return loadOrchestrationStates(this.orchestrationStateRoot).find(
+      (state) =>
+        this.liveOrchestrationRunIds.has(state.runId) &&
+        state.conversationId === conversationId &&
+        state.turnId === turnId
+    )?.runId
+  }
+
+  /**
    * SURVIE NIVEAU 3 — run d'orchestration interrompu par la mort du process, s'il en reste un.
    * `null` = rien à reprendre (cas normal). Lecture seule : c'est l'appelant (démarrage de l'app)
    * qui décide de relancer, via `runTask(..., state.phaseOutputs)`.

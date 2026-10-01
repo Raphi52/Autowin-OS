@@ -10,6 +10,7 @@ import {
   mediane,
   mesurerRun,
   mesurerTrous,
+  racineDeDonnees,
   runsDuMessage,
   runsExclus,
   section
@@ -156,5 +157,49 @@ describe('runs exclus de l’échantillon', () => {
     const exclus = runsExclus(['--exclure', 'run-a', '--data', 'x', '--exclure', 'run-b', '--json'])
     expect([...exclus].sort()).toEqual(['run-a', 'run-b'])
     expect(runsExclus(['--data', 'x']).size).toBe(0)
+  })
+})
+
+/*
+ * fix-ok: objection du juge, reparation 4 de run-85d8e7f57af2-1 — lance sans `--data` depuis une
+ * copie de travail, le script rendait 2 (« Racine de donnees introuvable ») : il cherchait
+ * `.autowin-data` a cote de la copie, alors que les donnees vivent a cote du depot principal.
+ */
+describe('racine de données par défaut', () => {
+  const sep = (p) => p.replace(/\\/g, '/')
+  const existe =
+    (...presents) =>
+    (p) =>
+      presents.map(sep).includes(sep(p))
+
+  it('depuis une copie de travail, prend les données du dépôt principal', () => {
+    const racine = racineDeDonnees({
+      argv: [],
+      env: {},
+      depot: 'D:/AutoWinOS/.autowin-data/autowin-os/worktrees/x/agent__run-1',
+      depotPrincipal: 'D:/AutoWinOS',
+      existe: existe('D:/AutoWinOS/.autowin-data/autowin-os/run-state')
+    })
+    expect(sep(racine)).toBe('D:/AutoWinOS/.autowin-data/autowin-os')
+  })
+
+  it('garde l’ordre : --data, puis AUTOWIN_DATA_ROOT, puis le dépôt lui-même', () => {
+    const base = { depot: 'D:/a', depotPrincipal: 'D:/b', existe: () => true }
+    expect(sep(racineDeDonnees({ ...base, argv: ['--data', 'D:/x'], env: {} }))).toBe('D:/x')
+    expect(racineDeDonnees({ ...base, argv: [], env: { AUTOWIN_DATA_ROOT: 'D:/y' } })).toBe('D:/y')
+    expect(sep(racineDeDonnees({ ...base, argv: [], env: {} }))).toBe(
+      'D:/a/.autowin-data/autowin-os'
+    )
+  })
+
+  it('sans données nulle part, nomme le dossier du dépôt (message d’erreur)', () => {
+    const racine = racineDeDonnees({
+      argv: [],
+      env: {},
+      depot: 'D:/a',
+      depotPrincipal: undefined,
+      existe: () => false
+    })
+    expect(sep(racine)).toBe('D:/a/.autowin-data/autowin-os')
   })
 })

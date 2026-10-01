@@ -22,7 +22,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 /** Date ou le run a cesse de fournir des extraits de notes a `think` (choix utilisateur). */
@@ -261,13 +261,45 @@ function briefings(racine) {
 
 const dollars = (v) => (v == null ? '—' : `${v.toFixed(2)} $`)
 
+/**
+ * La racine des donnees de l'app : `--data`, puis `$AUTOWIN_DATA_ROOT`, puis celle du depot, puis
+ * celle du DEPOT PRINCIPAL. Une copie de travail (worktree) n'a pas de `.autowin-data` : les donnees
+ * vivent a cote du depot principal, que `depotPrincipal` designe.
+ * fix-ok: objection du juge, reparation 4 de run-85d8e7f57af2-1 — lance sans `--data` depuis la
+ * copie de travail, le script rendait 2 ; mesure-valeur-think.test.mjs rouge (3/16) avant.
+ */
+export function racineDeDonnees({ argv, env, depot, depotPrincipal, existe = existsSync }) {
+  const iData = argv.indexOf('--data')
+  if (iData >= 0) return resolve(argv[iData + 1])
+  if (env.AUTOWIN_DATA_ROOT) return env.AUTOWIN_DATA_ROOT
+  const candidates = [depot, depotPrincipal]
+    .filter(Boolean)
+    .map((d) => join(d, '.autowin-data', 'autowin-os'))
+  return candidates.find((c) => existe(join(c, 'run-state'))) ?? candidates[0]
+}
+
+/** Le dossier du depot principal (parent du `.git` commun), ou `undefined` hors git. */
+function depotPrincipalDe(depot) {
+  try {
+    const commun = execFileSync(
+      'git',
+      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { cwd: depot, encoding: 'utf8' }
+    ).trim()
+    return commun ? dirname(commun) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function principal(argv) {
   const depot = fileURLToPath(new URL('..', import.meta.url))
-  const iData = argv.indexOf('--data')
-  const racine =
-    iData >= 0
-      ? resolve(argv[iData + 1])
-      : process.env.AUTOWIN_DATA_ROOT || join(depot, '.autowin-data', 'autowin-os')
+  const racine = racineDeDonnees({
+    argv,
+    env: process.env,
+    depot,
+    depotPrincipal: depotPrincipalDe(depot)
+  })
   if (!existsSync(join(racine, 'run-state')) || !existsSync(join(racine, 'activity'))) {
     console.error(`Racine de donnees introuvable (run-state/ et activity/ attendus) : ${racine}`)
     return 2

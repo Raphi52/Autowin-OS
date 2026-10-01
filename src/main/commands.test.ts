@@ -2084,6 +2084,88 @@ describe('AppCommandBus command execution policy', () => {
     expect(runTask).not.toHaveBeenCalled()
   })
 
+  it('rejoint le run vivant du MEME tour meme quand la tache a ete reecrite (conv-890)', async () => {
+    // Mesure conv-890 (2026-09-30) : au redemarrage, run-3180eec71b06-1 repart a 13:36:17.850 sur le
+    // tour 386f4c48 ; le tour de chat restaure relance `orchestrate` avec une tache REECRITE
+    // (« Depot : D:\AutoWinOS (...). Traite ENSEMBLE... » contre « raite ENSEMBLE... »). La reprise
+    // stricte compare les textes, ne trouve rien, et run-66d6d5bdfc5a-1 part a 13:36:21.030 sur le
+    // meme tour : think rejoue, 6 min et 1,94 $. Le tour commun suffit a reconnaitre la relance.
+    // fix-ok: objection du juge (reparation 4, run-85d8e7f57af2-1) — « un redemarrage ne relance
+    // aucun think » n'etait pas garanti ; rouge avant le rattachement par tour, vert apres.
+    const os = fakeOs()
+    const runTask = vi.fn()
+    os.resumableOrchestrationForTask = () => null
+    os.liveOrchestrationForTurn = (conv: string, turn: string) =>
+      conv === 'conv-1' && turn === 'turn-890' ? 'run-3180' : undefined
+    os.runTask = runTask
+
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: 'Dépôt : D:\\AutoWinOS. Traite ENSEMBLE ces 8 candidats' },
+      'conv-1',
+      undefined,
+      'turn-890'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { runId: 'run-3180', status: 'running', reused: true }
+    })
+    expect(runTask).not.toHaveBeenCalled()
+  })
+
+  it('un AUTRE tour de la conversation ne rejoint pas le run vivant', async () => {
+    const os = fakeOs()
+    os.resumableOrchestrationForTask = () => null
+    os.liveOrchestrationForTurn = (conv: string, turn: string) =>
+      conv === 'conv-1' && turn === 'turn-890' ? 'run-3180' : undefined
+    os.runTask = async () => {
+      throw new Error('stop')
+    }
+
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      'turn-suivant'
+    )
+
+    expect(JSON.stringify(result)).not.toContain('run-3180')
+  })
+
+  it('demande la reprise de think avec le tour et le dossier du nouveau run', async () => {
+    // Le branchement de `commands.ts` : sans le tour, `think` n'est repris que pour une tache
+    // identique mot pour mot ; sans le dossier, le `git diff` des fichiers cites part au hasard.
+    const os = fakeOs()
+    const acquis = vi.fn(async () => [])
+    os.resumableOrchestrationForTask = () => null
+    os.acquiredAnalysisForConversation = acquis
+    os.runTask = async () => {
+      throw new Error('stop')
+    }
+
+    await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      undefined,
+      'turn-1'
+    )
+
+    expect(acquis).toHaveBeenCalledTimes(1)
+    const [tache, conv, , contexte] = acquis.mock.calls[0] as unknown as [
+      string,
+      string,
+      number,
+      { turnId?: string; workspace?: string }
+    ]
+    expect(tache).toBe('/build corrige la typo')
+    expect(conv).toBe('conv-1')
+    expect(contexte.turnId).toBe('turn-1')
+    expect(typeof contexte.workspace).toBe('string')
+  })
+
   it("oublie l'ancien checkpoint seulement apres l'admission effective de la reprise", async () => {
     const os = fakeOs()
     const forget = vi.fn()
