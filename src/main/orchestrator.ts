@@ -3601,6 +3601,11 @@ ${CONTRAT_OBJECTIONS}`
     /** `true` = occurrence déjà payée, donc aucun appel provider à rejouer. */
     const dejaPayee = (phase: NodePhase): boolean => takePaidPhase(phase) !== undefined
     /**
+     * Combien de phases ce run a RÉELLEMENT jouées (hors occurrences reprises via `dejaPayee`). La
+     * boucle de réparation le relit : un passage qui n'a rien joué n'a rien changé à juger.
+     */
+    let phasesJouees = 0
+    /**
      * LA GARDE « un scout engage une cible » (`scout-cible.ts`), appliquee AU TEXTE DE PHASE.
      *
      * Appliquee dans `recordPhase` SEULE, elle ne servait a rien : ce qui part vers la phase
@@ -3890,6 +3895,7 @@ ${CONTRAT_OBJECTIONS}`
       // SURVIE NIVEAU 3 : phase déjà terminée avant l'interruption → on ne la refait pas. Compté par
       // occurrence : une visite ULTÉRIEURE du même nœud, via une arête de retour, doit bien s'exécuter.
       if (dejaPayee(phase)) return
+      phasesJouees += 1
       absorberLesDirectives()
       const evidenceStart = aggregatedEvidence.length
       // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
@@ -5564,6 +5570,7 @@ ${CONTRAT_OBJECTIONS}`
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
         // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
         prevSessionId = undefined
+        const phasesJoueesAvantLePassage = phasesJouees
         /**
          * UNE REPARATION QUI NE PEUT PLUS S'EXECUTER ARRETE LA BOUCLE, ELLE N'ANNULE PAS LE TOUR.
          *
@@ -5592,6 +5599,25 @@ ${CONTRAT_OBJECTIONS}`
           break
         }
         exec = buildExec()
+        /*
+         * UNE RÉPARATION DÉJÀ PAYÉE NE REPAIE PAS SON JUGE.
+         *
+         * fix-ok: run-85d8e7f57af2-1 (conv-892, redémarrage du 2026-10-01 12:54) — `phaseOutputs` est
+         * pré-rempli avec les 15 étapes reprises : le juge du premier passage voit déjà le texte
+         * final. Chaque réparation rejouée sortait ensuite par `dejaPayee` sans rien jouer, et
+         * `judgeAndGate` repayait un juge sur un texte IDENTIQUE (3 juges constatés, `phaseOutputs`
+         * resté à 15). Les verdicts intermédiaires ne sont pas des acquis : rien ne les rendait.
+         * Un passage qui n'a joué aucune phase garde donc le verdict courant, sans juge ni décompte
+         * de refus (il n'a rien tenté). Fini : chaque passage consomme au moins un acquis.
+         */
+        if (phasesJouees === phasesJoueesAvantLePassage) {
+          push({
+            step: 'gate',
+            role: 'gate',
+            detail: `Réparation ${attempt} déjà payée avant l’interruption : reprise de ses étapes, texte inchangé — aucun nouveau juge.`
+          })
+          continue
+        }
       }
       const r = await judgeAndGate()
       valid = r.valid
