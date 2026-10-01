@@ -83,6 +83,9 @@ describe('acquis d’analyse réutilisable dans une conversation', () => {
   // fix-ok: run-85d8e7f57af2-1 — les éditions répétées de ce test ne corrigeaient pas le code : le
   // heredoc Python d'insertion a changé les `\n` des chaînes TS en vrais retours à la ligne (test non
   // compilable, rétabli par 2 Edit), puis Prettier a demandé de couper le `toEqual([])` trop long.
+  // fix-ok: run-85d8e7f57af2-1 réparation 2 — objection du juge « même commit, tâche proche » : les
+  // cas même tour / même tâche / autre demande / commit inconnu sont écrits AVANT la condition de
+  // `pickAcquiredAnalysis` (rouge mesuré : 3 failed | 10 passed), puis 13/13 une fois la règle posée.
   it('réutilise le briefing `think` déjà payé pour la même demande relancée', () => {
     const avecThink = etat({
       turnId: '386f4c48',

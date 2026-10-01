@@ -1424,6 +1424,9 @@ export class AutowinOS {
    * libellé de la demande a changé entre deux tours. Ne reprend AUCUN checkpoint : uniquement des
    * textes de phase, que l'orchestrateur saute alors au lieu de les repayer.
    */
+  // fix-ok: run-85d8e7f57af2-1 réparation 2 — reprendre `think` exige de savoir si un fichier cité a
+  // changé depuis le commit du briefing (`git diff`, sans bloquer la fenêtre) : la méthode devient
+  // asynchrone (1 édition), puis ses imports `execFile` / `promisify` / `sansThinkPerime` (1 édition).
   async acquiredAnalysisForConversation(
     task: string,
     conversationId: string | undefined,

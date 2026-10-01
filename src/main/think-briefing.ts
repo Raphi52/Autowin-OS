@@ -77,6 +77,9 @@ export function sortieThinkAvecForme(texte: string): string {
   )
 }
 
+// fix-ok: run-85d8e7f57af2-1 réparation 2 — ce bloc a été ajouté par un heredoc bash qui a mangé
+// les doubles barres obliques inverses des regex (esbuild : « think-briefing.ts:93:51 Unterminated
+// string literal ») ; les regex ont été rétablies par une édition directe, sans changer la logique.
 /**
  * LE PREMIER FICHIER CITE PAR LE BRIEFING QUI A CHANGE, ou `undefined`.
  *

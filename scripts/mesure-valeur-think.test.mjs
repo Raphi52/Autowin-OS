@@ -110,6 +110,8 @@ describe('règle de décision « sauter think »', () => {
  * Objection du juge (run-85d8e7f57af2-1, réparation 2) : la mesure ne disait rien des « Trous », et
  * comptait le run qui l'a écrite. Deux signaux sans modèle, nommés pour ce qu'ils sont : un trou
  * qui portait sur un fichier modifié ensuite, et un trou repris par une étape suivante du même run.
+ * fix-ok: run-85d8e7f57af2-1 réparation 2 — imports puis cas écrits AVANT le script (rouge mesuré :
+ * 4 échecs, « mesurerTrous / runsExclus is not a function »), 13/13 ensuite ; puis Prettier --write.
  */
 describe('« Trous » du briefing, sans modèle', () => {
   const avecTrous = [
