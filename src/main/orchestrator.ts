@@ -5476,7 +5476,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         )
         // LE PASSAGE SE NOMME DANS LA TRACE : sans cette ligne, un run mort par epuisement ne
         // permet pas de compter ses rejeus apres coup (objection du juge, conv-540).
-        const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR)
+        const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR, jusquAuVert)
         if (ligneDuPassage) push({ step: 'gate', role: 'gate', detail: ligneDuPassage })
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
         // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.

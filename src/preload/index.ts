@@ -92,7 +92,7 @@ import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
-import type { BureauTv, ImageTv } from '../main/hdesk-tv'
+import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/hdesk-tv'
 
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
@@ -112,6 +112,9 @@ const api = {
     ipcRenderer.invoke('hdesk:tv:bureaux', conversationId),
   hdeskTvImage: (id: string): Promise<ImageTv> => ipcRenderer.invoke('hdesk:tv:image', id),
   hdeskTvArreter: (): Promise<void> => ipcRenderer.invoke('hdesk:tv:arreter'),
+  hdeskTvAct: (geste: GesteTv): Promise<ResultatGeste> => ipcRenderer.invoke('hdesk:tv:act', geste),
+  hdeskTvBasculer: (id: string): Promise<{ ok: boolean; message?: string }> =>
+    ipcRenderer.invoke('hdesk:tv:basculer', id),
   // Phrase de passe de production. Elle part de l'ecran vers le processus principal et n'en revient
   // JAMAIS : aucune de ces trois fonctions ne rend la phrase, seulement un etat, un refus ou un
   // jeton opaque borne a une cible, une operation et cinq minutes.

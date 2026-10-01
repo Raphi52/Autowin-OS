@@ -115,7 +115,7 @@ import {
   supersedeKnowledgeCandidate
 } from './brain-inbox'
 import { installCrashHandlers } from './crash-handlers'
-import { CapteurHdesk, racineScriptsHorsArchive } from './hdesk-tv'
+import { CapteurHdesk, racineScriptsHorsArchive, agirHdesk, basculerHdesk, type GesteTv } from './hdesk-tv'
 import { invalidateModelQuotaCache } from './model-quotas'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
@@ -1644,6 +1644,16 @@ function registerHdeskTvIpc(): void {
   ipcMain.handle('hdesk:tv:image', (event, id: string) => {
     assertTrustedRendererSender(event, 'Petite TV du bureau caché')
     return capteur().image(String(id))
+  })
+  ipcMain.handle('hdesk:tv:act', (event, geste: GesteTv) => {
+    assertTrustedRendererSender(event, 'Petite TV du bureau caché')
+    if (process.platform !== 'win32') return { ok: false, message: 'Windows uniquement.' }
+    return agirHdesk(racineScriptsHorsArchive(app.getAppPath()), geste)
+  })
+  ipcMain.handle('hdesk:tv:basculer', (event, id: string) => {
+    assertTrustedRendererSender(event, 'Petite TV du bureau caché')
+    if (process.platform !== 'win32') return { ok: false, message: 'Windows uniquement.' }
+    return basculerHdesk(racineScriptsHorsArchive(app.getAppPath()), String(id))
   })
   ipcMain.handle('hdesk:tv:arreter', (event) => {
     assertTrustedRendererSender(event, 'Petite TV du bureau caché')

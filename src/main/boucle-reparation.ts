@@ -30,9 +30,13 @@ export type PassageDeReparation = {
 }
 
 /** Ce que la boucle pousse dans la trace en entrant dans le passage `attempt` (0 = premier build). */
-export function traceDuPassage(attempt: number, plafondDur: number): string | undefined {
+export function traceDuPassage(
+  attempt: number,
+  plafondDur: number,
+  jusquAuVert = false
+): string | undefined {
   if (attempt <= 0) return undefined
-  return libelleDuPassageDeReparation(attempt, plafondDur)
+  return libelleDuPassageDeReparation(attempt, plafondDur, jusquAuVert)
 }
 
 /** La decision de fin de passage : rejouer, ou s'arreter en nommant le motif. */
@@ -57,7 +61,7 @@ export function deciderDuPassage(entree: {
     bundlePerime: entree.bundlePerime,
     jusquAuVert: entree.jusquAuVert
   })
-  const trace = traceDuPassage(attempt, plafondDur)
+  const trace = traceDuPassage(attempt, plafondDur, entree.jusquAuVert)
   if (arret) return { ...(trace ? { trace } : {}), arret, etatSuivant: etat }
   return {
     ...(trace ? { trace } : {}),

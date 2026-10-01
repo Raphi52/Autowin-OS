@@ -455,7 +455,14 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
  * poussait un motif que lorsqu'elle s'ARRETAIT. Un passage muet est un passage non mesurable ;
  * c'est exactement ce que le juge a reproche au raisonnement « 4 passages -> plafond ».
  */
-export function libelleDuPassageDeReparation(rang: number, plafond: number): string {
+export function libelleDuPassageDeReparation(
+  rang: number,
+  plafond: number,
+  jusquAuVert = false
+): string {
+  // conv-35 : en mode « jusqu'au vert » (conv-844) le plafond ne borne PAS la boucle ; afficher
+  // « 98/24 (dernier autorise) » mentait. On affiche alors le rang seul.
+  if (jusquAuVert) return `Réparation ${rang} — nouveau passage de build (jusqu'au vert, sans plafond).`
   const suffixe = rang >= plafond ? ' (dernier autorise)' : ''
   return `Réparation ${rang}/${plafond} — nouveau passage de build${suffixe}.`
 }

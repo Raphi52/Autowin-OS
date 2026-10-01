@@ -45,7 +45,7 @@ describe('petite TV — application installée', () => {
 
   it('les trois fichiers de capture sont extraits de l’archive au packaging', () => {
     const config = readFileSync(join(process.cwd(), 'electron-builder.yml'), 'utf8')
-    for (const f of ['scripts/hdesk-tv.ps1', 'scripts/hdesk-observe.ps1', 'scripts/hdesk-shot.cs'])
+    for (const f of ['scripts/hdesk-tv.ps1', 'scripts/hdesk-observe.ps1', 'scripts/hdesk-shot.cs', 'scripts/hdesk-act.ps1', 'scripts/hdesk-act.cs', 'scripts/hdesk-basculer.ps1'])
       expect(config).toContain(`- ${f}`)
   })
 })
@@ -217,5 +217,72 @@ describe('fusionnerBureaux — application morte', () => {
   it('processusVivant : vrai pour ce processus, faux pour un pid inexistant', () => {
     expect(processusVivant(process.pid)).toBe(true)
     expect(processusVivant(2 ** 30)).toBe(false)
+  })
+})
+
+import { argumentsAct, agirHdesk, TOUCHES_TV } from './hdesk-tv'
+describe('TV interactive — geste vers hdesk-act', () => {
+  it('construit l’appel de hdesk-act.ps1 avec clic arrondi, texte et Entrée', () => {
+    const a = argumentsAct('R', { id: 'run-1', x: 10.6, y: 4.2, texte: 'abc', entree: true })
+    expect(a.slice(5)).toEqual(['-InstanceId', 'run-1', '-X', '11', '-Y', '4', '-Texte', 'abc', '-Entree'])
+    expect(a[4]).toBe(join('R', 'scripts', 'hdesk-act.ps1'))
+  })
+  it('refuse un identifiant hors ^[a-zA-Z0-9_-]+$ sans rien lancer', async () => {
+    expect(() => argumentsAct('R', { id: 'a b;calc', x: 1, y: 1 })).toThrow(/invalide/)
+    expect(await agirHdesk('R', { id: '../x', x: 1, y: 1 })).toEqual({
+      ok: false,
+      message: 'Identifiant de bureau invalide.'
+    })
+  })
+  it('refuse des coordonnées non finies ou négatives', () => {
+    expect(() => argumentsAct('R', { id: 'a', x: NaN, y: 1 })).toThrow()
+    expect(() => argumentsAct('R', { id: 'a', x: -1, y: 1 })).toThrow()
+  })
+})
+
+import { resultatAct } from './hdesk-tv'
+describe('TV interactive — retour de hdesk-act', () => {
+  it('rend le JSON de hdesk-act (cible, messages) au lieu d’un simple ok', () => {
+    const out = 'bruit\n{"instanceId":"a","x":1,"y":2,"cible":"RICHEDIT50W","messages":3}\n'
+    expect(resultatAct(out)).toEqual({
+      ok: true,
+      action: { instanceId: 'a', x: 1, y: 2, cible: 'RICHEDIT50W', messages: 3 }
+    })
+  })
+  it('reste ok sans JSON lisible', () => {
+    expect(resultatAct('rien')).toEqual({ ok: true })
+  })
+})
+
+import { argumentsBascule, basculerHdesk } from './hdesk-tv'
+describe('bascule de l’écran réel vers un bureau caché', () => {
+  it('appelle hdesk-basculer.ps1 avec l’id et une minuterie de retour bornée', () => {
+    const a = argumentsBascule('R', 'run-1')
+    expect(a[4]).toBe(join('R', 'scripts', 'hdesk-basculer.ps1'))
+    expect(a.slice(5)).toEqual(['-InstanceId', 'run-1', '-MaxSecondes', '120'])
+    expect(argumentsBascule('R', 'a', 99999).at(-1)).toBe('600')
+    expect(argumentsBascule('R', 'a', 1).at(-1)).toBe('5')
+  })
+  it('refuse un identifiant invalide sans rien lancer', () => {
+    expect(basculerHdesk('R', 'x;calc')).toEqual({ ok: false, message: 'Identifiant de bureau invalide.' })
+  })
+})
+
+describe('TV interactive — touches et molette (conv-35)', () => {
+  it('transmet une touche nommée, la molette et -SansClic', () => {
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 2, touche: 'CtrlV', sansClic: true }).slice(9)).toEqual([
+      '-Y', '2', '-Touche', 'CtrlV', '-SansClic'
+    ])
+    expect(argumentsAct('R', { id: 'a', x: 1, y: 2, molette: -3 }).slice(-2)).toEqual(['-Molette', '-3'])
+  })
+  it('refuse une touche hors liste et une molette hors bornes', () => {
+    expect(() => argumentsAct('R', { id: 'a', x: 1, y: 1, touche: 'F13; calc' })).toThrow(/Touche/)
+    expect(() => argumentsAct('R', { id: 'a', x: 1, y: 1, molette: 21 })).toThrow(/Molette/)
+    expect(() => argumentsAct('R', { id: 'a', x: 1, y: 1, molette: 0.5 })).toThrow(/Molette/)
+  })
+  it('la liste des touches est alignée sur hdesk-act.cs', () => {
+    const cs = readFileSync(join(process.cwd(), 'scripts', 'hdesk-act.cs'), 'utf8')
+    const dansCs = [...cs.matchAll(/\{"(\w+)", new\[\]/g)].map((m) => m[1]).sort()
+    expect(dansCs).toEqual([...TOUCHES_TV].sort())
   })
 })

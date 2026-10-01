@@ -34,6 +34,10 @@ asarUnpack:
   - scripts/hdesk-tv.ps1
   - scripts/hdesk-observe.ps1
   - scripts/hdesk-shot.cs
+  # TV interactive et bascule (conv-35) : lancés par agirHdesk / basculerHdesk via racineScriptsHorsArchive.
+  - scripts/hdesk-act.ps1
+  - scripts/hdesk-act.cs
+  - scripts/hdesk-basculer.ps1
 win:
   executableName: autowin-os
   icon: build/icon.ico
