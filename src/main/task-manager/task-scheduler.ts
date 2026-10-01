@@ -81,6 +81,7 @@ export class TaskScheduler {
     multipleInstances: 'IgnoreNew'
   }
   private lastRelayKey: string | undefined
+  private unsubscribeStore: (() => void) | undefined
 
   constructor(
     private readonly store: TaskStore,
@@ -106,10 +107,26 @@ export class TaskScheduler {
     if (requestedOccurrenceId) await this.runOccurrence(requestedOccurrenceId)
     await this.markStartupMisses()
     await this.plan()
+    /*
+     * REPLANIFIER A CHAQUE CHANGEMENT DU STORE — constat du 2026-09-29 : le minuteur n'etait arme
+     * que par start() et par les appels explicites a refresh() de l'IPC. Les semis du demarrage
+     * (/maintenance, /gc, /curate, index.ts) creent leurs taches APRES start() et n'appelaient pas
+     * refresh() : l'app lancee le 26/09 a 19:29:41 a pose ses 3 taches a 19:29:58 et n'en a execute
+     * aucune en trois jours. S'abonner au store couvre TOUT createur de tache, present ou futur.
+     * Pendant processLiveDue, son `finally` replanifie deja : on n'y ajoute pas de replanification.
+     */
+    this.unsubscribeStore ??= this.store.subscribe(() => {
+      if (!this.running || this.processing) return
+      this.plan().catch((error: unknown) => {
+        console.error('[task-manager] replanification apres changement de tache impossible', error)
+      })
+    })
   }
 
   async stop(): Promise<void> {
     this.running = false
+    this.unsubscribeStore?.()
+    this.unsubscribeStore = undefined
     if (this.timer !== undefined) this.clock.clearTimer(this.timer)
     this.timer = undefined
     await this.syncRelay(null, null)

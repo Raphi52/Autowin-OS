@@ -73,12 +73,29 @@ afterEach(() => {
   while (roots.length) rmSync(roots.pop()!, { recursive: true, force: true })
 })
 
+/** Candidat au format déposé par `remember` : la promotion le range dans `knowledge/lessons/`. */
+const CANDIDAT = [
+  '---',
+  'schema: amitel-brain/candidate-v1',
+  'type: lesson',
+  'scope: "autowin-os"',
+  'author_agent: "autowin-os"',
+  'model: "claude-opus-5-5"',
+  'created: 2026-09-29',
+  'status: candidate',
+  'source: "session:conv-1"',
+  '---',
+  '',
+  '# candidat',
+  ''
+].join('\n')
+
 function brainRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'brain-inbox-race-'))
   roots.push(root)
   mkdirSync(join(root, 'inbox'), { recursive: true })
   mkdirSync(join(root, 'knowledge'), { recursive: true })
-  writeFileSync(join(root, 'inbox', 'a.md'), '# candidat\n', 'utf8')
+  writeFileSync(join(root, 'inbox', 'a.md'), CANDIDAT, 'utf8')
   return root
 }
 
@@ -86,14 +103,16 @@ describe('promotion Brain — réservation sans écrasement', () => {
   it('conserve une création concurrente et réserve le suffixe suivant', () => {
     const root = brainRoot()
     race.kind = 'collision'
-    race.target = join(root, 'knowledge', 'a.md')
+    race.target = join(root, 'knowledge', 'lessons', 'candidat.md')
     race.armed = true
 
     const moved = promoteInboxCandidate(root, 'inbox/a')
 
-    expect(moved.to).toBe('knowledge/a-2')
-    expect(readFileSync(join(root, 'knowledge', 'a.md'), 'utf8')).toBe('# concurrent\n')
-    expect(readFileSync(join(root, 'knowledge', 'a-2.md'), 'utf8')).toBe('# candidat\n')
+    expect(moved.to).toBe('knowledge/lessons/candidat-2')
+    expect(readFileSync(race.target, 'utf8')).toBe('# concurrent\n')
+    const promue = readFileSync(join(root, 'knowledge', 'lessons', 'candidat-2.md'), 'utf8')
+    expect(promue).toContain('schema: amitel-brain/v1\n')
+    expect(promue).toContain('\n# candidat\n')
   })
 
   it('ne copie aucun octet candidat si la destination est repointée avant sa réservation', () => {
@@ -101,13 +120,13 @@ describe('promotion Brain — réservation sans écrasement', () => {
     const outside = mkdtempSync(join(tmpdir(), 'brain-inbox-race-outside-'))
     roots.push(outside)
     race.kind = 'junction'
-    race.destination = join(root, 'knowledge')
-    race.target = join(race.destination, 'a.md')
+    race.destination = join(root, 'knowledge', 'lessons')
+    race.target = join(race.destination, 'candidat.md')
     race.outside = outside
     race.armed = true
 
     expect(() => promoteInboxCandidate(root, 'inbox/a')).toThrow(/hors périmètre/)
-    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toBe('# candidat\n')
+    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toBe(CANDIDAT)
     for (const entry of readdirSync(outside)) {
       expect(readFileSync(join(outside, entry), 'utf8')).not.toContain('# candidat')
     }
@@ -118,29 +137,29 @@ describe('promotion Brain — réservation sans écrasement', () => {
     const outside = mkdtempSync(join(tmpdir(), 'brain-inbox-post-race-outside-'))
     roots.push(outside)
     race.kind = 'post-junction'
-    race.destination = join(root, 'knowledge')
-    race.target = join(race.destination, 'a.md')
+    race.destination = join(root, 'knowledge', 'lessons')
+    race.target = join(race.destination, 'candidat.md')
     race.outside = outside
     race.armed = true
 
     expect(() => promoteInboxCandidate(root, 'inbox/a')).toThrow(/hors périmètre|EPERM|EBUSY/)
-    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toBe('# candidat\n')
+    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toBe(CANDIDAT)
     expect(readdirSync(outside)).toEqual([])
-    if (existsSync(`${race.destination}-secured/a.md`)) {
-      expect(readFileSync(`${race.destination}-secured/a.md`, 'utf8')).toBe('')
+    if (existsSync(`${race.destination}-secured/candidat.md`)) {
+      expect(readFileSync(`${race.destination}-secured/candidat.md`, 'utf8')).toBe('')
     } else {
-      expect(readFileSync(join(race.destination, 'a.md'), 'utf8')).toBe('')
+      expect(readFileSync(race.target, 'utf8')).toBe('')
     }
   })
 
   it('met une cible partielle en quarantaine si fsync échoue', () => {
     const root = brainRoot()
     race.kind = 'fsync'
-    race.target = join(root, 'knowledge', 'a.md')
+    race.target = join(root, 'knowledge', 'lessons', 'candidat.md')
     race.armed = true
 
     expect(() => promoteInboxCandidate(root, 'inbox/a')).toThrow(/disk full/)
-    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toBe('# candidat\n')
-    expect(readFileSync(join(root, 'knowledge', 'a.md'), 'utf8')).toBe('')
+    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toBe(CANDIDAT)
+    expect(readFileSync(race.target, 'utf8')).toBe('')
   })
 })

@@ -117,6 +117,35 @@ describe('Task Manager — ordonnanceur durable', () => {
     expect(h.dispatched).toHaveLength(1)
   })
 
+  it('arme une tâche créée APRÈS le démarrage, sans appel explicite à refresh()', async () => {
+    // Constat du 2026-09-29 : l'app a démarré le 26/09 à 19:29:41 (planification sur une liste VIDE),
+    // puis les semis /maintenance, /gc et /curate ont créé leurs tâches à 19:29:58 sans réarmer
+    // personne — trois jours sans une seule exécution, ni même une échéance marquée manquée.
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(due - 60_000)
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+    const task = h.store.create(input('active-only'))
+    await h.advanceTo(due)
+
+    expect(h.dispatched).toEqual([`${task.id}@${due}`])
+    expect(h.store.getTask(task.id)?.nextRunAt).toBe(Date.parse('2026-08-04T07:30:00.000Z'))
+  })
+
+  it('ne réarme plus rien une fois arrêté', async () => {
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(due - 60_000)
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+    await scheduler.stop()
+    h.store.create(input('active-only'))
+    await h.advanceTo(due)
+
+    expect(h.dispatched).toEqual([])
+  })
+
   it('agrège au démarrage les échéances passées sans les rattraper', async () => {
     const firstDue = Date.parse('2026-08-03T07:30:00.000Z')
     const h = harness(Date.parse('2026-08-03T07:00:00.000Z'))

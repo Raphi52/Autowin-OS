@@ -73,6 +73,36 @@ const KNOWLEDGE_DIR = 'knowledge'
 const TRASH_DIR = '.trash'
 
 /**
+ * Dossier canonique de chaque type de fiche — miroir de `TYPE_DIRS` dans
+ * `brain/tooling/brain_curate.py`. Une fiche promue vit dans `knowledge/<dossier>/` : la racine de
+ * `knowledge/` est refusée par `brain_validate.py`.
+ */
+const KNOWLEDGE_TYPE_DIRS: Readonly<Record<string, string>> = {
+  lesson: 'lessons',
+  decision: 'decisions',
+  domain: 'domain',
+  preference: 'preferences'
+}
+
+/** Champs sans lesquels `brain_curate._audit` refuse un candidat : la promotion de l'app exige les mêmes. */
+const PROMOTION_REQUIRED_FIELDS = [
+  'type',
+  'scope',
+  'author_agent',
+  'model',
+  'created',
+  'status',
+  'source'
+] as const
+
+/**
+ * Relecteur inscrit dans une fiche promue depuis l'app. Même identité que `CURATION_REVIEWER`
+ * (`brain-curation-run.ts`) : `brain_validate.py` exige une famille d'agent distincte de l'auteur
+ * (`autowin-os`), sinon la fiche est invalide.
+ */
+export const APP_PROMOTION_REVIEWER = 'autowin-app-curation'
+
+/**
  * Seuil d'alerte du quasi-jumeau. Aligné sur le `NEAR_DUP_DENSE = 0.82` du serveur cité par
  * `brain-remember.ts` (l. 368) pour que la revue humaine parle du même ordre de grandeur que le garde
  * canonique — sans prétendre calculer la même chose (voir l'en-tête : cosinus lexical, pas dense).
@@ -610,6 +640,13 @@ function markSourceMoved(descriptor: number, originalSize: number, targetId: str
   fsyncSync(descriptor)
 }
 
+function writeDescriptor(target: number, content: Buffer): void {
+  let written = 0
+  while (written < content.length) {
+    written += writeSync(target, content, written, content.length - written)
+  }
+}
+
 function copyDescriptor(source: number, target: number): void {
   const buffer = Buffer.allocUnsafe(64 * 1024)
   let position = 0
@@ -678,13 +715,24 @@ function replayedMove(
   return { ok: true, from: idOf(root, from), to: idOf(root, target), replayed: true }
 }
 
+/**
+ * Fiche à écrire À LA PLACE de la copie octet pour octet : sous-dossier de `destinationDir`, nom et
+ * contenu, tous dérivés des octets lus par le descripteur déjà validé (jamais d'une relecture par chemin).
+ */
+interface RenderedNote {
+  subdirectory: string
+  basename: string
+  content: Buffer
+}
+
 function move(
   root: string,
   id: string,
   destinationDir: string,
   sourceDir = INBOX_DIR,
   replaceSource = false,
-  targetBasename?: string
+  targetBasename?: string,
+  render?: (source: Buffer) => RenderedNote
 ): InboxMove {
   const from =
     sourceDir === INBOX_DIR
@@ -709,12 +757,38 @@ function move(
     const replay = replayedMove(root, from, sourceProbe.subarray(0, sourceBytes), destinationDir)
     if (replay) return replay
 
-    const target = reserveTarget(root, directory, realDirectory, basename)
+    const rendered = render?.(sourceProbe.subarray(0, sourceBytes))
+    if (rendered && rendered.content.length > MAX_INBOX_FILE_BYTES) {
+      throw new Error(`fiche Brain trop volumineuse (limite ${MAX_INBOX_FILE_BYTES} octets)`)
+    }
+    const targetDirectory = rendered ? join(directory, rendered.subdirectory) : directory
+    if (rendered) mkdirSync(targetDirectory, { recursive: true })
+    const realTargetDirectory = rendered
+      ? assertRealMutationPath(
+          root,
+          targetDirectory,
+          undefined,
+          `${destinationDir}/${rendered.subdirectory}`
+        )
+      : realDirectory
+    const target = reserveTarget(
+      root,
+      targetDirectory,
+      realTargetDirectory,
+      rendered?.basename ?? basename
+    )
     let sourceMarked = false
     try {
-      copyDescriptor(sourceDescriptor, target.descriptor)
+      if (rendered) writeDescriptor(target.descriptor, rendered.content)
+      else copyDescriptor(sourceDescriptor, target.descriptor)
       fsyncSync(target.descriptor)
-      assertReservedTarget(root, directory, realDirectory, target.path, target.descriptor)
+      assertReservedTarget(
+        root,
+        targetDirectory,
+        realTargetDirectory,
+        target.path,
+        target.descriptor
+      )
       if (!sameFileIdentity(sourceDescriptor, from)) {
         throw new Error('candidat hors périmètre autorisé — identité changée')
       }
@@ -728,7 +802,13 @@ function move(
         markSourceMoved(sourceDescriptor, sourceStats.size, idOf(root, target.path))
       }
       sourceMarked = true
-      assertReservedTarget(root, directory, realDirectory, target.path, target.descriptor)
+      assertReservedTarget(
+        root,
+        targetDirectory,
+        realTargetDirectory,
+        target.path,
+        target.descriptor
+      )
       return { ok: true, from: idOf(root, from), to: idOf(root, target.path) }
     } catch (error) {
       if (sourceMarked) {
@@ -761,12 +841,199 @@ function move(
   }
 }
 
-/** PROMOUVOIR : primitive no-clobber ; l'autorité reste chez l'appelant humain ou causalement attesté. */
-export function promoteInboxCandidate(root: string, id: string): InboxMove {
-  return move(root, id, KNOWLEDGE_DIR)
+const CANDIDATE_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/u
+
+/** Lecture de l'en-tête — miroir de `brain_curate._frontmatter` (clé `[A-Za-z_]+`, guillemets doubles ôtés). */
+function candidateFields(block: string): Map<string, string> {
+  const fields = new Map<string, string>()
+  for (const line of block.split(/\r?\n/u)) {
+    const colon = line.indexOf(':')
+    if (colon < 0) continue
+    const key = line.slice(0, colon).trim()
+    if (!/^[A-Za-z_]+$/u.test(key)) continue
+    fields.set(
+      key,
+      line
+        .slice(colon + 1)
+        .trim()
+        .replace(/^"+|"+$/gu, '')
+    )
+  }
+  return fields
 }
 
-/** Promotion automatique bornée au corpus `knowledge/domain/<scope>-*` du workspace. */
+function unquoted(value: string): string {
+  return value.trim().replace(/^['"]+|['"]+$/gu, '')
+}
+
+/** Miroir de `brain_curate._slug` : même nom de fichier, même segment d'uid. */
+function knowledgeSlug(text: string): string {
+  const ascii = text.normalize('NFKD').replace(/[^\p{ASCII}]/gu, '')
+  return (
+    ascii
+      .replace(/[^A-Za-z0-9]+/gu, '-')
+      .replace(/^-+|-+$/gu, '')
+      .toLowerCase()
+      .slice(0, 80) || 'note'
+  )
+}
+
+/** Miroir de `brain_curate._list_field` : liste en ligne JSON de chaînes, sinon refus. */
+function inlineList(raw: string | undefined, field: string): string[] {
+  if (!raw) return []
+  let value: unknown
+  try {
+    value = JSON.parse(raw)
+  } catch {
+    throw new Error(`candidat invalide — ${field} n'est pas une liste en ligne : ${raw}`)
+  }
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new Error(`candidat invalide — ${field} n'est pas une liste de chaînes : ${raw}`)
+  }
+  return value as string[]
+}
+
+/** Même rendu que `json.dumps(list, ensure_ascii=False)` : les fiches déjà promues restent homogènes. */
+function inlineListText(items: readonly string[]): string {
+  return `[${items.map((item) => JSON.stringify(item)).join(', ')}]`
+}
+
+function isoDay(now: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+function defaultTheme(scope: string): string {
+  const folded = scope.toLowerCase()
+  if (folded.includes('autowin')) return 'theme/autowin-os'
+  if (folded === 'rig' || folded.startsWith('rig-') || folded.startsWith('rig/')) return 'theme/rig'
+  return 'theme/gouvernance'
+}
+
+function defaultMocs(scope: string): string[] {
+  const folded = scope.toLowerCase()
+  if (folded.includes('autowin')) return ['knowledge/_maps/autowin-os']
+  if (folded === 'rig' || folded.startsWith('rig-') || folded.startsWith('rig/')) {
+    return ['knowledge/_maps/rig']
+  }
+  return ['knowledge/_maps/brain']
+}
+
+const CONFIDENCE_V1: Readonly<Record<string, string>> = {
+  low: 'hypothesis',
+  medium: 'derived',
+  high: 'derived'
+}
+
+/**
+ * Convertit un candidat `amitel-brain/candidate-v1` en fiche `amitel-brain/v1`, champ pour champ
+ * comme `brain_curate._promote` : même dossier par type, même nom tiré du titre, même en-tête.
+ * Refuse plutôt que d'écrire une fiche que `brain_validate.py` rejetterait.
+ */
+function renderPromotedNote(source: Buffer, reviewer: string, today: string): RenderedNote {
+  const decoded = source.toString('utf8')
+  // Une marque d'ordre des octets (U+FEFF) en tête masquerait l'en-tête `---`.
+  const text = decoded.charCodeAt(0) === 0xfeff ? decoded.slice(1) : decoded
+  const match = CANDIDATE_RE.exec(text)
+  if (!match) throw new Error('candidat sans en-tête — promotion refusée')
+  const meta = candidateFields(match[1])
+  const body = match[2]
+  for (const field of PROMOTION_REQUIRED_FIELDS) {
+    if (!meta.get(field)?.trim()) {
+      throw new Error(`candidat incomplet — champ ${field} manquant, promotion refusée`)
+    }
+  }
+  const status = unquoted(meta.get('status') as string)
+  if (status !== 'candidate') {
+    throw new Error(`candidat au statut ${status} — seul un statut candidate se promeut`)
+  }
+  const type = unquoted(meta.get('type') as string)
+  if (!Object.hasOwn(KNOWLEDGE_TYPE_DIRS, type)) {
+    throw new Error(`type de candidat non pris en charge : ${type}`)
+  }
+  const heading = /^#\s+(.+)$/mu.exec(body)?.[1]?.trim()
+  if (!body.trim() || !body.trimStart().startsWith('#') || !heading) {
+    throw new Error('candidat sans titre « # » — promotion refusée')
+  }
+  const author = unquoted(meta.get('author_agent') as string)
+  const family = (agent: string): string => (agent.split(':')[0] as string).trim().toLowerCase()
+  if (family(reviewer) === family(author)) {
+    throw new Error("le relecteur doit appartenir à une autre famille d'agent que l'auteur")
+  }
+  const scope = unquoted(meta.get('scope') as string)
+  const kind = unquoted(meta.get('kind') ?? '') || (type === 'domain' ? 'concept' : type)
+  const tags = inlineList(meta.get('tags'), 'tags')
+  if (!tags.some((tag) => tag.startsWith('theme/'))) tags.push(defaultTheme(scope))
+  const mocs = inlineList(meta.get('mocs'), 'mocs')
+  const confidenceKey = unquoted(meta.get('confidence') ?? 'medium')
+  const confidence = Object.hasOwn(CONFIDENCE_V1, confidenceKey)
+    ? CONFIDENCE_V1[confidenceKey]
+    : 'hypothesis'
+  const lines = [
+    '---',
+    'schema: amitel-brain/v1',
+    `uid: ${knowledgeSlug(scope)}/${knowledgeSlug(kind)}/${knowledgeSlug(heading)}`,
+    `type: ${type}`,
+    `kind: ${kind}`,
+    `scope: ${JSON.stringify(scope)}`,
+    `author_agent: ${JSON.stringify(author)}`,
+    `model: ${meta.get('model')}`,
+    `created: ${meta.get('created')}`,
+    `updated: ${today}`,
+    'status: active',
+    `confidence: ${confidence}`,
+    `sources: ${inlineListText([unquoted(meta.get('source') as string)])}`,
+    `supersedes: ${inlineListText(inlineList(meta.get('supersedes'), 'supersedes'))}`,
+    `reviewed_by: ${inlineListText([reviewer])}`,
+    `reviewed_at: ${today}`,
+    `mocs: ${inlineListText(mocs.length > 0 ? mocs : defaultMocs(scope))}`,
+    `tags: ${inlineListText(tags)}`,
+    '---'
+  ]
+  return {
+    subdirectory: KNOWLEDGE_TYPE_DIRS[type] as string,
+    basename: knowledgeSlug(heading),
+    content: Buffer.from(`${lines.join('\n')}\n\n${body.trimStart()}`, 'utf8')
+  }
+}
+
+export interface PromoteInboxOptions {
+  /** Injectable pour des dates `updated` / `reviewed_at` déterministes en test. */
+  now?: Date
+  reviewer?: string
+}
+
+/**
+ * PROMOUVOIR : primitive no-clobber ; l'autorité reste chez l'appelant humain ou causalement attesté.
+ *
+ * Pourquoi (2026-09-29) : la promotion copiait le candidat TEL QUEL à la racine de `knowledge/`, et
+ * laissait dans `inbox/` l'original entier suivi du marqueur « déplacé ». Deux défauts constatés à la
+ * curation du jour : `brain_validate.py` refuse une fiche à la racine de `knowledge/` au format
+ * candidat, et `brain_curate.py` ne lit pas le marqueur — il reprenait l'original comme une
+ * proposition en attente. Cinq doublons ont dû être retirés à la main.
+ *
+ * Désormais la fiche est écrite au format v1 dans `knowledge/<type>/`, et le candidat est RÉDUIT à
+ * la seule ligne-marqueur : sans en-tête ni contenu, il n'est plus vu comme candidat par la revue,
+ * `brain_curate.py` ni `brain_validate.py`, et il garde la reprise sans doublon après un plantage.
+ */
+export function promoteInboxCandidate(
+  root: string,
+  id: string,
+  { now = new Date(), reviewer = APP_PROMOTION_REVIEWER }: PromoteInboxOptions = {}
+): InboxMove {
+  const today = isoDay(now)
+  return move(root, id, KNOWLEDGE_DIR, INBOX_DIR, true, undefined, (source) =>
+    renderPromotedNote(source, reviewer, today)
+  )
+}
+
+/**
+ * Promotion automatique bornée au corpus `knowledge/domain/<scope>-*` du workspace.
+ *
+ * Le candidat est copié à l'identique vers `knowledge/domain/`, puis RÉDUIT à sa ligne-marqueur dans
+ * `inbox/` (même raison que `promoteInboxCandidate`) : laissé entier, il gardait son en-tête
+ * `status: candidate` et `brain_curate.py` le reprenait comme une proposition encore en attente.
+ */
 export function promoteOutcomeLearningCandidate(
   root: string,
   id: string,
@@ -783,19 +1050,20 @@ export function promoteOutcomeLearningCandidate(
     throw new Error('portée locale invalide pour auto-publication')
   }
   const candidate = (id.split('/').at(-1) as string).replace(/\.md$/iu, '')
-  return move(
-    root,
-    id,
-    join(KNOWLEDGE_DIR, 'domain'),
-    INBOX_DIR,
-    false,
-    `${scopeSlug}-${candidate}`
-  )
+  return move(root, id, join(KNOWLEDGE_DIR, 'domain'), INBOX_DIR, true, `${scopeSlug}-${candidate}`)
 }
 
-/** REJETER : le candidat part en `.trash/`. Réversible — rien n'est supprimé. */
+/**
+ * REJETER : le candidat part en `.trash/`. Réversible — rien n'est supprimé : la copie complète vit
+ * dans `.trash/`, et `inbox/` n'en garde que la ligne-marqueur.
+ *
+ * Pourquoi (2026-09-29) : le rejet laissait dans `inbox/` le candidat entier, marqueur ajouté À LA
+ * FIN. Son en-tête `status: candidate` restait en tête, et `brain_curate.py` (qui ne lit pas le
+ * marqueur) le reprenait comme proposition en attente — la curation automatique lancée à chaque
+ * session (`brain-curation-run.ts`, `--apply`) pouvait donc republier un candidat rejeté.
+ */
 export function rejectInboxCandidate(root: string, id: string): InboxMove {
-  return move(root, id, TRASH_DIR)
+  return move(root, id, TRASH_DIR, INBOX_DIR, true)
 }
 
 /** Retire une connaissance canonique sans l'effacer : copie en trash puis neutralise la source. */
