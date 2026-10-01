@@ -801,6 +801,14 @@ function basesNonProdDeclarees(): string[] {
   }
 }
 
+/**
+ * Le script de garde COURANT, tel qu'écrit au lancement d'un agent — et réécrit au démarrage de l'app
+ * chez les agents déjà lancés (`rafraichirGardesDesAgents`, conv-770 du 2026-10-01) : une seule source.
+ */
+export function scriptDesGardesCourant(): string {
+  return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees())
+}
+
 export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
   const q = (v: string): string => `"${v.split('\\').join('/')}"`
   return {
@@ -1277,7 +1285,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // qui detruisent l'arbre de travail entier (git reset --hard & co).
       // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
       const hookGarde = join(settingsDir, 'garde-git-destructeur.mjs')
-      writeFileSync(hookGarde, scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees()), 'utf8')
+      writeFileSync(hookGarde, scriptDesGardesCourant(), 'utf8')
       writeFileSync(
         settingsFile,
         JSON.stringify(reglagesCliAutowin(hookGarde)),

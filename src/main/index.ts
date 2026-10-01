@@ -243,7 +243,7 @@ import {
 } from './ipc-senders'
 import { createWindowing } from './window'
 import { ModelQuestionHub, type ModelQuestion } from './model-questions'
-import { maybeUpdateClaudeCli } from './claude-cli-update'
+import { claudeExeEnCours, maybeUpdateClaudeCli } from './claude-cli-update'
 import {
   discoverImportedModels,
   findModel,
@@ -291,7 +291,9 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { materializeClaudeAttachments } from './providers/claude'
+import { materializeClaudeAttachments, scriptDesGardesCourant } from './providers/claude'
+import { rafraichirGardesDesAgents } from './providers/rafraichir-gardes'
+import { tmpdir } from 'node:os'
 import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
@@ -1317,17 +1319,28 @@ const agentModelsReady = modelCatalog.refresh(true)
 // le binaire installe restait en 2.1.251. On ne bloque PAS le demarrage dessus ; quand la mise a jour
 // aboutit, la taille/date du binaire changent, donc le rafraichissement suivant du catalogue rescanne
 // et les nouveaux modeles apparaissent sans redemarrer l'app.
-void maybeUpdateClaudeCli(join(app.getPath('userData'), 'claude-cli-update.json'))
-  .then((resultat) => {
-    if (resultat.outcome === 'skipped') return
-    console.log(
-      `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
-    )
-    if (resultat.outcome === 'updated') void modelCatalog.refresh(true)
+// Binaire occupe (agents survivants, autre session Claude Code) : la mise a jour echouait a coup sur
+// et bloquait 12 h (vecu le 2026-10-01). Elle est REPORTEE et retentee toutes les 15 min.
+const REESSAI_MISE_A_JOUR_CLI_MS = 15 * 60_000
+const tenterMiseAJourCli = (): void => {
+  void maybeUpdateClaudeCli(join(app.getPath('userData'), 'claude-cli-update.json'), {
+    binaireEnUsage: claudeExeEnCours
   })
-  .catch(() => {
-    // Deja neutralise dans le module : rien a faire ici.
-  })
+    .then((resultat) => {
+      if (resultat.outcome === 'skipped') return
+      console.log(
+        `[cli-claude] mise a jour ${resultat.outcome}${resultat.detail ? ` — ${resultat.detail}` : ''}`
+      )
+      if (resultat.outcome === 'postponed') {
+        setTimeout(tenterMiseAJourCli, REESSAI_MISE_A_JOUR_CLI_MS).unref()
+      }
+      if (resultat.outcome === 'updated') void modelCatalog.refresh(true)
+    })
+    .catch(() => {
+      // Deja neutralise dans le module : rien a faire ici.
+    })
+}
+tenterMiseAJourCli()
 const fabricNodesReady = agentModelsReady.then(() => refreshFabricNodes())
 os.setTaskReadiness(
   Promise.all([agentModelsReady, fabricNodesReady]).then(() =>
@@ -4594,6 +4607,20 @@ app.whenReady().then(async () => {
   // échoue et pousse CHAQUE transition — dont la récupération ok qui efface la bannière. On ne pousse
   // que sur CHANGEMENT (ok-ness + set d'échecs) pour ne pas écraser un dismiss utilisateur inutilement.
   let lastPreflightSignature: string | null = null
+  // LES AGENTS QUI ONT SURVÉCU AU REDÉMARRAGE CHARGENT LA GARDE COURANTE (conv-770, 2026-10-01) :
+  // leur script de hook était figé à leur lancement, donc l'ancienne garde restait active chez eux.
+  try {
+    const gardes = rafraichirGardesDesAgents({ racine: tmpdir(), script: scriptDesGardesCourant() })
+    if (gardes.rafraichis.length || gardes.echecs.length) {
+      console.log(
+        '[gardes] scripts de hook des agents vivants :',
+        `${gardes.rafraichis.length} mis à jour, ${gardes.aJour.length} déjà à jour,`,
+        `${gardes.echecs.length} non remplaçables`
+      )
+    }
+  } catch (error) {
+    console.warn('[gardes] rafraîchissement impossible :', error)
+  }
   // SURVIE NIVEAU 3 — reprise AUTOMATIQUE au démarrage (choix explicite de l'utilisateur : pas de
   // bouton, pas de question). Un run d'orchestration tué avec la mort du process main laisse son
   // acquis persisté ; on relance ICI à la phase suivante, en réinjectant les livrables déjà produits

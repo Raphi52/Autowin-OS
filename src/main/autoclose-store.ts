@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
+import type { AutoCloseReport } from './run-autoclose'
 
 /**
  * Persistance disque de l'interrupteur « clôture automatique d'un run vert ».
@@ -27,6 +28,49 @@ export function loadAutoClose(path = autoClosePath()): boolean {
     return (JSON.parse(raw) as { enabled?: unknown }).enabled === true
   } catch {
     return false // fichier corrompu : on retombe sur le défaut sûr, jamais sur « publie »
+  }
+}
+
+/**
+ * LE DERNIER RAPPORT DE PUBLICATION SURVIT AU REDÉMARRAGE.
+ *
+ * Vécu le 2026-10-01 (conv-770) : le commit automatique du tour 235b91bd n'a pas publié le correctif
+ * du garde Python, et le POURQUOI (tests rouges, autre fil, fichier non revendiqué…) a disparu au
+ * redémarrage suivant : le rapport ne vivait qu'en mémoire. Le panneau Git relit ce fichier au
+ * démarrage. Fichier : %APPDATA%\autowin-os\autoclose-last.json.
+ */
+function lastReportPath(): string {
+  return join(ensureAutowinAppData(), 'autoclose-last.json')
+}
+
+/** Le dernier rapport persisté, ou `undefined` (absent, illisible ou de forme inattendue). */
+export function loadLastAutoCloseReport(path = lastReportPath()): AutoCloseReport | undefined {
+  if (!existsSync(path)) return undefined
+  try {
+    const brut = readFileSync(path, 'utf8')
+    // BOM retiré, comme pour l'interrupteur (Notepad, PowerShell en ajoutent un).
+    const value = JSON.parse(brut.charCodeAt(0) === 0xfeff ? brut.slice(1) : brut) as unknown
+    if (!value || typeof value !== 'object') return undefined
+    const r = value as Record<string, unknown>
+    const project = r.project as Record<string, unknown> | undefined
+    if (typeof r.runId !== 'string' || typeof r.branch !== 'string' || typeof r.at !== 'string')
+      return undefined
+    if (!project || typeof project !== 'object' || typeof project.status !== 'string')
+      return undefined
+    return value as AutoCloseReport
+  } catch {
+    return undefined
+  }
+}
+
+/** Écrit le rapport ; `false` si le disque ne le porte pas (le rapport reste alors en mémoire). */
+export function saveLastAutoCloseReport(report: AutoCloseReport, path = lastReportPath()): boolean {
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify(report, null, 2), 'utf8')
+    return true
+  } catch {
+    return false
   }
 }
 
