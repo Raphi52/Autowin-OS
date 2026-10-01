@@ -382,6 +382,36 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  it('une suite rouge sous charge mais verte seule est NOMMÉE, jamais tue', async () => {
+    // Mesuré le 2026-10-01 : `moteur-perime-cablage.test.ts` échoue dans les 1 555 tests de la portée
+    // de `index.ts` et passe seul. La publication part ; le panneau doit le dire.
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'conv-1 · tour bbbbbbbb',
+          branch: 'auto/conv-1-bbbbbbbb',
+          at: '2026-10-01T12:00:00.000Z',
+          source: 'chat',
+          project: { status: 'pushed', branch: 'main', files: 1, mode: 'direct' },
+          verification: {
+            statut: 'vert',
+            commande: 'vitest related src/main/index.ts --run',
+            testsJoues: 1555,
+            instablesSousCharge: ['src/main/moteur-perime-cablage.test.ts']
+          }
+        }
+      })
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
+      'Tests rejoués avant de pousser · 1555 verts — rouge sous charge, vert seul : ' +
+        'src/main/moteur-perime-cablage.test.ts'
+    )
+  })
+
   it('rafraichit le resultat auto-close quand une publication differee se termine', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api

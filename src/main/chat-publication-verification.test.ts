@@ -58,7 +58,7 @@ afterEach(() => {
  * Un dépôt à trois tests : `sujet.test.ts` IMPORTE `sujet.ts`, `lecteur.test.ts` le LIT (comme
  * `chat-ipc-contract.test.ts` lit `index.ts`), `etranger.test.ts` est DÉJÀ rouge et sans rapport.
  */
-function depot(): string {
+function depot(options: { avecInstable?: boolean } = {}): string {
   mkdirSync(RACINE, { recursive: true })
   const repo = mkdtempSync(join(RACINE, 'repo-'))
   temporaires.push(repo)
@@ -103,6 +103,28 @@ function depot(): string {
     ].join(SAUT),
     'utf8'
   )
+  if (options.avecInstable) {
+    /*
+     * ROUGE SOUS CHARGE, VERT SEUL — comme `moteur-perime-cablage.test.ts` le 2026-10-01 dans la
+     * portée de `index.ts`. Rendu DÉTERMINISTE par un témoin : rouge au premier passage, vert au
+     * suivant. Il cite `sujet.ts`, donc il est dans la portée d'une modification de `sujet.ts`.
+     */
+    writeFileSync(
+      join(repo, 'instable.test.ts'),
+      [
+        "import { existsSync, writeFileSync } from 'node:fs'",
+        "import { expect, it } from 'vitest'",
+        "it('sujet.ts : rouge au premier passage, vert ensuite', () => {",
+        "  const temoin = new URL('./.deja-joue', import.meta.url)",
+        '  const premier = !existsSync(temoin)',
+        "  writeFileSync(temoin, 'x')",
+        '  expect(premier).toBe(false)',
+        '})',
+        ''
+      ].join(SAUT),
+      'utf8'
+    )
+  }
   git('init', '-q', '-b', 'main')
   git('config', 'user.email', 't@t')
   git('config', 'user.name', 'T')
@@ -146,6 +168,35 @@ describe('vérification avant publication — le vrai runner, dans un vrai dép�
     if (verdict.statut !== 'vert') return
     // `sujet.test.ts` et `lecteur.test.ts` ; jamais `etranger.test.ts`, hors portée.
     expect(verdict.testsJoues).toBe(2)
+  })
+
+  it('publie quand la seule suite rouge passe SEULE, et le dit (rouge sous charge, vert seul)', async () => {
+    const repo = depot({ avecInstable: true })
+    writeFileSync(
+      join(repo, 'sujet.ts'),
+      `// commentaire${SAUT}export const valeur = (): number => 1${SAUT}`,
+      'utf8'
+    )
+
+    const verdict = await bus(repo).verifierAvantPublication(repo, ['sujet.ts'])
+
+    expect(verdict).toMatchObject({ statut: 'vert', instablesSousCharge: ['instable.test.ts'] })
+  })
+
+  it('bloque quand une suite reste rouge, même SEULE, et ne nomme qu’elle', async () => {
+    const repo = depot({ avecInstable: true })
+    // `lecteur.test.ts` casse VRAIMENT ; `instable.test.ts` est rouge au premier passage seulement.
+    writeFileSync(
+      join(repo, 'sujet.ts'),
+      `export const valeur = (): number => 1${SAUT}export const autre = 2${SAUT}`,
+      'utf8'
+    )
+
+    const verdict = await bus(repo).verifierAvantPublication(repo, ['sujet.ts'])
+
+    expect(verdict.statut).toBe('echec')
+    if (verdict.statut !== 'echec') return
+    expect(verdict.testsEnEchec).toEqual(['lecteur.test.ts'])
   })
 
   it('un texte qu’aucun test ne cite n’est pas vérifiable : il le dit, sans lancer la suite', async () => {

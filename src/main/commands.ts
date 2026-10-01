@@ -74,6 +74,7 @@ import {
   porteeDerivableDesChangements,
   scriptVitestUnique,
   echecsDuRapport,
+  lectureBruteDuRapport,
   verdictDifferentiel,
   noteDeDifferentiel,
   verifyTimeoutMs,
@@ -4668,7 +4669,12 @@ export class AppCommandBus {
     }
     const decision = decideRelatedVerify(repo, portee)
     if (!decision.allowed) return { statut: 'non-verifie', raison: decision.reason }
-    const mesure = await this.mesurerAvecRapport(repo, portee, join(repo, 'node_modules', '.bin'))
+    const binDuDepot = join(repo, 'node_modules', '.bin')
+    const versRelatif = (chemin: string): string =>
+      (isAbsolute(chemin) ? relative(repo, chemin) : chemin).split(sep).join('/')
+    const fichierExiste = (chemin: string): boolean =>
+      existsSync(isAbsolute(chemin) ? chemin : join(repo, chemin))
+    const mesure = await this.mesurerAvecRapport(repo, portee, binDuDepot)
     if (!mesure.allowed) {
       return { statut: 'non-verifie', raison: mesure.reason ?? 'vérification indisponible' }
     }
@@ -4680,9 +4686,7 @@ export class AppCommandBus {
         testsEnEchec: []
       }
     }
-    const rapport = echecsDuRapport(mesure.rapport, (chemin) =>
-      existsSync(isAbsolute(chemin) ? chemin : join(repo, chemin))
-    )
+    const rapport = echecsDuRapport(mesure.rapport, fichierExiste)
     if (mesure.ok) {
       // Un exit 0 sans test joué n'est pas un vert : rien n'a été mesuré.
       if (!rapport.concluant || rapport.testsJoues === 0) {
@@ -4693,15 +4697,42 @@ export class AppCommandBus {
       }
       return { statut: 'vert', commande: mesure.command, testsJoues: rapport.testsJoues }
     }
+    /*
+     * ROUGE SOUS CHARGE, VERT SEUL — choix de l'utilisateur du 2026-10-01. Mesuré le même jour : dans
+     * la portée de `src/main/index.ts` (1 555 tests), `moteur-perime-cablage.test.ts` échouait alors
+     * qu'il passe seul, et aurait bloqué toute publication touchant `index.ts`. On rejoue UNE fois les
+     * SEULES suites en échec, isolées : toutes vertes → on publie, et le rapport les NOMME ; une seule
+     * encore rouge → on bloque en ne nommant que celles qui restent rouges. Ce n'est pas un réessai à
+     * l'aveugle : la condition change (isolées), et le résultat est dit dans le panneau.
+     */
+    const brut = lectureBruteDuRapport(mesure.rapport)
+    const suites = [...new Set((brut?.suitesEnEchec ?? []).map(versRelatif))]
+    if (suites.length > 0 && decideRelatedVerify(repo, suites).allowed) {
+      const seules = await this.mesurerAvecRapport(repo, suites, binDuDepot)
+      if (seules.allowed && seules.exitCode !== null) {
+        const rapportSeules = echecsDuRapport(seules.rapport, fichierExiste)
+        if (seules.ok && rapportSeules.concluant && rapportSeules.testsJoues > 0) {
+          return {
+            statut: 'vert',
+            commande: mesure.command,
+            testsJoues: brut?.testsJoues ?? rapportSeules.testsJoues,
+            instablesSousCharge: suites
+          }
+        }
+        const encoreRouges = lectureBruteDuRapport(seules.rapport)?.suitesEnEchec.map(versRelatif)
+        if (encoreRouges?.length) {
+          return {
+            statut: 'echec',
+            commande: mesure.command,
+            detail: `${encoreRouges.length} suite(s) rouge(s), même rejouée(s) seule(s)`,
+            testsEnEchec: [...new Set(encoreRouges)]
+          }
+        }
+      }
+    }
     // Identité d'un échec : `<fichier> > <nom> :: <empreinte>` (voir `RapportDeTests`).
     const testsEnEchec = [
-      ...new Set(
-        [...rapport.echecs].map((echec) => {
-          const fichier = echec.split(' > ')[0]
-          const relatif = isAbsolute(fichier) ? relative(repo, fichier) : fichier
-          return relatif.split(sep).join('/')
-        })
-      )
+      ...new Set([...rapport.echecs].map((echec) => versRelatif(echec.split(' > ')[0])))
     ]
     return {
       statut: 'echec',

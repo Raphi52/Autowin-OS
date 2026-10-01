@@ -76,7 +76,13 @@ interface Exclusion {
 }
 
 type Verification =
-  | { statut: 'vert'; commande: string; testsJoues: number }
+  | {
+      statut: 'vert'
+      commande: string
+      testsJoues: number
+      /** Suites rouges dans la portée complète, vertes rejouées seules : publiées, et NOMMÉES. */
+      instablesSousCharge?: string[]
+    }
   | { statut: 'echec'; commande: string; detail: string; testsEnEchec: string[] }
   | { statut: 'non-verifie'; raison: string }
 
@@ -91,7 +97,11 @@ const MOTIFS_EXCLUSION: Record<string, string> = {
 function libelleVerification(verification: Verification): string {
   if (verification.statut === 'vert') {
     const s = verification.testsJoues > 1 ? 's' : ''
-    return `Tests rejoués avant de pousser · ${verification.testsJoues} vert${s}`
+    const verts = `Tests rejoués avant de pousser · ${verification.testsJoues} vert${s}`
+    const instables = verification.instablesSousCharge ?? []
+    return instables.length
+      ? `${verts} — rouge sous charge, vert seul : ${instables.join(', ')}`
+      : verts
   }
   if (verification.statut === 'echec')
     return `Tests rejoués avant de pousser · ${verification.detail}`

@@ -840,6 +840,38 @@ function empreinteDeRaison(messages: unknown): string {
   return lieu ? `${tete} @ ${lieu}` : tete
 }
 
+/**
+ * Les SUITES en échec d'un rapport vitest JSON, et le nombre de tests joués — même quand
+ * `echecsDuRapport` le déclare non concluant (échec de niveau suite, sans assertion nommée).
+ *
+ * Mesuré le 2026-10-01 : dans la portée de `src/main/index.ts` (1 555 tests),
+ * `moteur-perime-cablage.test.ts` échoue au niveau de la suite et passe seul ; le rapport, non
+ * concluant, ne nommait rien. Le commit automatique a besoin de ces noms pour rejouer les suites
+ * isolées. Rien n'est deviné : une forme inattendue rend `undefined`.
+ */
+export function lectureBruteDuRapport(
+  brut: string | undefined
+): { suitesEnEchec: string[]; testsJoues: number } | undefined {
+  if (!brut?.trim()) return undefined
+  let rapport: unknown
+  try {
+    rapport = JSON.parse(brut)
+  } catch {
+    return undefined
+  }
+  const { testResults, numTotalTests } = (rapport ?? {}) as {
+    testResults?: unknown
+    numTotalTests?: unknown
+  }
+  if (!Array.isArray(testResults) || typeof numTotalTests !== 'number') return undefined
+  const suitesEnEchec: string[] = []
+  for (const suite of testResults as Array<{ name?: unknown; status?: unknown }>) {
+    if (typeof suite?.name !== 'string' || !suite.name.trim()) return undefined
+    if (suite.status === 'failed') suitesEnEchec.push(suite.name)
+  }
+  return { suitesEnEchec, testsJoues: numTotalTests }
+}
+
 export function echecsDuRapport(
   brut: string | undefined,
   /** Existence d'un fichier de test cite, RELATIVE au bureau. Absent = pas de controle de sanite. */

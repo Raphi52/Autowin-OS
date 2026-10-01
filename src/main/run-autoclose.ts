@@ -497,7 +497,16 @@ export interface AutoCloseReport {
  *    avant, et le rapport le DIT au lieu de se taire.
  */
 export type VerificationAvantPublication =
-  | { statut: 'vert'; commande: string; testsJoues: number }
+  | {
+      statut: 'vert'
+      commande: string
+      testsJoues: number
+      /**
+       * Suites rouges dans la portée complète, vertes rejouées SEULES (demande utilisateur du
+       * 2026-10-01) : on publie, et le panneau les NOMME — un vert obtenu ainsi ne se tait pas.
+       */
+      instablesSousCharge?: string[]
+    }
   | { statut: 'echec'; commande: string; detail: string; testsEnEchec: string[] }
   | { statut: 'non-verifie'; raison: string }
 
