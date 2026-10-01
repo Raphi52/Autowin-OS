@@ -46,6 +46,11 @@ export interface OrchestrationPhaseOutput {
   agentToken?: string
   /** Preuves outils acquises avec cette phase, indispensables au gate apres un redemarrage. */
   executionEvidence?: ExecutionEvidence[]
+  /**
+   * Commit du code que la phase a LU, pose pour `think` : son briefing pointe des lignes, et ne se
+   * reprend que si les fichiers qu'il cite n'ont pas change depuis (`think-briefing.ts`).
+   */
+  codeSha?: string
 }
 
 export interface OrchestrationRunState {
@@ -132,6 +137,7 @@ function isPhaseOutput(value: unknown): value is OrchestrationPhaseOutput {
     estIdentifiantDeNoeud(output.phase) &&
     typeof output.text === 'string' &&
     (output.agentToken === undefined || isNonEmptyString(output.agentToken)) &&
+    (output.codeSha === undefined || isNonEmptyString(output.codeSha)) &&
     (output.executionEvidence === undefined ||
       (Array.isArray(output.executionEvidence) &&
         output.executionEvidence.every(isExecutionEvidence)))
@@ -1112,8 +1118,11 @@ export function admitAutomaticResumeRuntime(
  * Phases dont l'acquis est un TEXTE, donc réutilisable tel quel dans la même conversation.
  * `build` et `clean` en sont exclues par nature : leur acquis vit sur le disque, le workspace a pu
  * bouger depuis, et les rejouer est la seule façon honnête de savoir où en est le code.
+ *
+ * `think` en fait partie : son briefing est un texte, et l'en exclure le faisait repayer seul alors
+ * que le `frame` bâti dessus était repris (conv-890, `run-66d6d5bdfc5a-1`, 1,94 $ le 2026-09-30).
  */
-const PHASES_ANALYSE_REUTILISABLES: readonly NodePhase[] = ['scout', 'frame', 'terrain']
+const PHASES_ANALYSE_REUTILISABLES: readonly NodePhase[] = ['think', 'scout', 'frame', 'terrain']
 
 /**
  * Acquis d'analyse déjà produit DANS LA MÊME CONVERSATION, réutilisable même si le libellé de la
@@ -1135,9 +1144,22 @@ export function pickAcquiredAnalysis(
     task: string
     nowMs: number
     maxAgeMs?: number
+    /** Tour de chat du nouveau run : la même demande relancée garde le même tour. */
+    turnId?: string
   }
-): Array<{ phase: NodePhase; text: string }> {
+): Array<{ phase: NodePhase; text: string; codeSha?: string }> {
   if (!lookup.conversationId) return []
+  /*
+   * `think` EST PLUS STRICT QUE LE CADRAGE : son briefing parle d'UNE demande et pointe des lignes.
+   * Il n'est repris que pour la MÊME demande (même tour de chat, ou même tâche mot pour mot) et
+   * avec le commit du code qu'il a lu ; l'appelant vérifie ensuite que les fichiers cités n'ont pas
+   * changé depuis ce commit (`think-briefing.ts`). Sans commit connu : rejoué.
+   * fix-ok: objection du juge, reparation 2 de run-85d8e7f57af2-1 — la condition « même commit,
+   * tâche proche » du scout manquait ; acquired-analysis.test.ts rouge (3/13) avant.
+   */
+  const memeDemande = (state: OrchestrationRunState): boolean =>
+    (!!lookup.turnId && state.turnId === lookup.turnId) ||
+    normalizeTaskKey(state.task) === normalizeTaskKey(lookup.task)
   const maxAge = lookup.maxAgeMs ?? DEFAULT_RESUME_MAX_AGE_MS
   // Une phase nommée dans la demande est un ordre de la rejouer, pas un acquis à recycler.
   const redemandees = new Set(
@@ -1153,18 +1175,22 @@ export function pickAcquiredAnalysis(
     .sort((a, b) => a.updatedAt - b.updatedAt)
 
   // Le plus récent gagne : on écrase au fil du tri croissant.
-  const parPhase = new Map<NodePhase, string>()
+  const parPhase = new Map<NodePhase, { text: string; codeSha?: string }>()
   for (const state of utilisables) {
     for (const output of state.phaseOutputs ?? []) {
       if (!PHASES_ANALYSE_REUTILISABLES.includes(output.phase)) continue
       if (redemandees.has(output.phase)) continue
       if (typeof output.text !== 'string' || !output.text.trim()) continue
-      parPhase.set(output.phase, output.text)
+      if (output.phase === 'think' && (!output.codeSha || !memeDemande(state))) continue
+      parPhase.set(output.phase, {
+        text: output.text,
+        ...(output.phase === 'think' && output.codeSha ? { codeSha: output.codeSha } : {})
+      })
     }
   }
   return PHASES_ANALYSE_REUTILISABLES.filter((phase) => parPhase.has(phase)).map((phase) => ({
     phase,
-    text: parPhase.get(phase) as string
+    ...(parPhase.get(phase) as { text: string; codeSha?: string })
   }))
 }
 

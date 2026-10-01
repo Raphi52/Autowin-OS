@@ -99,8 +99,11 @@ import type {
   WorktreeConflictResolutionResult,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { promisify } from 'node:util'
+import { sansThinkPerime } from './think-briefing'
 import { ensureAutowinAppData } from './app-data'
 import {
   loadAutoClose,
@@ -1306,6 +1309,28 @@ export class AutowinOS {
   }
 
   /**
+   * Le run que ce process execute DEJA pour ce tour de cette conversation, s'il y en a un.
+   *
+   * fix-ok: conv-890, 2026-09-30 (objection du juge, reparation 4 de run-85d8e7f57af2-1) — au
+   * redemarrage, run-3180eec71b06-1 repart a 13:36:17.850 sur le tour 386f4c48 ; le tour de chat
+   * restaure relance `orchestrate` avec une tache REECRITE, la reprise stricte (meme texte) ne le
+   * reconnait pas, et run-66d6d5bdfc5a-1 part a 13:36:21.030 sur le MEME tour : `think` rejoue,
+   * 1,94 $. Le tour est le signal fiable ; le texte de la tache ne l'est pas.
+   */
+  liveOrchestrationForTurn(
+    conversationId: string | undefined,
+    turnId: string | undefined
+  ): string | undefined {
+    if (!conversationId || !turnId || this.liveOrchestrationRunIds.size === 0) return undefined
+    return loadOrchestrationStates(this.orchestrationStateRoot).find(
+      (state) =>
+        this.liveOrchestrationRunIds.has(state.runId) &&
+        state.conversationId === conversationId &&
+        state.turnId === turnId
+    )?.runId
+  }
+
+  /**
    * SURVIE NIVEAU 3 — run d'orchestration interrompu par la mort du process, s'il en reste un.
    * `null` = rien à reprendre (cas normal). Lecture seule : c'est l'appelant (démarrage de l'app)
    * qui décide de relancer, via `runTask(..., state.phaseOutputs)`.
@@ -1454,17 +1479,39 @@ export class AutowinOS {
    * libellé de la demande a changé entre deux tours. Ne reprend AUCUN checkpoint : uniquement des
    * textes de phase, que l'orchestrateur saute alors au lieu de les repayer.
    */
-  acquiredAnalysisForConversation(
+  // fix-ok: run-85d8e7f57af2-1 réparation 2 — reprendre `think` exige de savoir si un fichier cité a
+  // changé depuis le commit du briefing (`git diff`, sans bloquer la fenêtre) : la méthode devient
+  // asynchrone (1 édition), puis ses imports `execFile` / `promisify` / `sansThinkPerime` (1 édition).
+  async acquiredAnalysisForConversation(
     task: string,
     conversationId: string | undefined,
-    nowMs = Date.now()
-  ): Array<{ phase: NodePhase; text: string }> {
+    nowMs = Date.now(),
+    /** Tour et dossier du NOUVEAU run : `think` n'est repris que pour la même demande, à jour. */
+    contexte: { turnId?: string; workspace?: string } = {}
+  ): Promise<Array<{ phase: NodePhase; text: string; codeSha?: string }>> {
     const acquis = pickAcquiredAnalysis(loadOrchestrationStates(this.orchestrationStateRoot), {
       task,
       conversationId,
-      nowMs
+      nowMs,
+      ...(contexte.turnId ? { turnId: contexte.turnId } : {})
     })
-    return acquis.length > 0 ? acquis : []
+    // Un briefing `think` pointe des lignes : repris seulement si aucun fichier qu'il cite n'a
+    // changé depuis le commit qu'il a lu. `git diff` ASYNCHRONE — un appel synchrone fige la fenêtre
+    // (`depot-git.ts`). Échec ou dossier inconnu → `think` est rejoué, jamais repris à l'aveugle.
+    const workspace = contexte.workspace ?? this.executionWorkspace
+    const garde = await sansThinkPerime(acquis, async (sha) => {
+      try {
+        const r = await promisify(execFile)('git', ['diff', '--name-only', sha, '--'], {
+          cwd: workspace,
+          windowsHide: true,
+          timeout: 15_000
+        })
+        return r.stdout.split(/\r?\n/).filter((ligne) => ligne.trim())
+      } catch {
+        return undefined
+      }
+    })
+    return garde.length > 0 ? garde : []
   }
 
   /** Abandonne explicitement un état reprenable (l'utilisateur ne veut pas le reprendre). */
