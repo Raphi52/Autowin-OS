@@ -465,11 +465,13 @@ function inline(line: string): React.ReactNode[] {
     } else if (m[4] !== undefined) {
       out.push(<code key={k++}>{m[4]}</code>)
     } else if (m[5] !== undefined) {
-      out.push(<strong key={k++}>{m[5]}</strong>)
+      // conv-61 : le contenu d une mise en forme repasse par inline(), sinon une adresse en gras
+      // (`**https://…**`) s affichait en texte brut, sans lien.
+      out.push(<strong key={k++}>{inline(m[5])}</strong>)
     } else if (m[6] !== undefined) {
-      out.push(<del key={k++}>{m[6]}</del>)
+      out.push(<del key={k++}>{inline(m[6])}</del>)
     } else {
-      out.push(<em key={k++}>{m[7]}</em>)
+      out.push(<em key={k++}>{inline(m[7])}</em>)
     }
     last = m.index + m[0].length
   }
