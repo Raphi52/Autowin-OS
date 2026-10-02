@@ -10,7 +10,9 @@ import {
   dodDuVerdict,
   verdictAvecObjectionsPortees,
   verdictPanelValide,
-  consigneTestsDuJuge
+  consigneTestsDuJuge,
+  empreintesTestsDuJuge,
+  motifsTestModifie
 } from './objections-juge'
 
 /**
@@ -5539,6 +5541,9 @@ ${CONTRAT_OBJECTIONS}`
     let motifsPrecedents: string[] = []
     /** Combien de fois DE SUITE le refus est revenu mot pour mot (conv-470, tour 52fbe05f : 4). */
     let refusIdentiquesConsecutifs = 0
+    /** Empreintes des fichiers TEST: du juge prises avant la reparation, et le verdict qui les designe. */
+    let empreintesAvantReparation: Record<string, string | null> = {}
+    let texteJugeAvantReparation = ''
     // conv-844 : choix utilisateur, on repare jusqu'a ce qu'il n'y ait plus de defaut. Seul un budget
     // BLOQUANT (reparations accordees = 0) garde l'ancienne borne ; sinon on ne sort que sur un vert
     // ou sur un code perime (`arretDeLaReparation`).
@@ -5589,6 +5594,9 @@ ${CONTRAT_OBJECTIONS}`
          * Desormais l'echec du passage de reparation est un MOTIF de refus nomme : le verdict et les
          * objections du dernier juge restent dans le resultat du run.
          */
+        // Le fichier TEST: du juge est fige pendant la reparation (piste 2 /build, conv-44).
+        texteJugeAvantReparation = lastJudgeText
+        empreintesAvantReparation = empreintesTestsDuJuge(lastJudgeText, this.deps.executionWorkspace)
         try {
           await executePipelinePhase(phaseDeReparation)
           // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
@@ -5612,6 +5620,15 @@ ${CONTRAT_OBJECTIONS}`
       const r = await judgeAndGate()
       valid = r.valid
       gate = r.gate
+      // Une reparation qui a retouche le test designe par le juge ne clot jamais en vert.
+      // fix-ok: lastJudgeText est remplacé par le nouveau jugement, donc on garde le texte d'avant réparation ; le refus doit tomber entre gate = r.gate et if (!gate.blocked), seul point de décision du vert.
+      const motifsTest = motifsTestModifie(empreintesAvantReparation, empreintesTestsDuJuge(texteJugeAvantReparation, this.deps.executionWorkspace))
+      if (motifsTest.length > 0) {
+        valid = false
+        gate = { ...gate, blocked: true, reasons: [...gate.reasons, ...motifsTest] }
+        for (const motif of motifsTest) push({ step: 'gate', role: 'gate', detail: motif })
+      }
+      empreintesAvantReparation = {}
       learningAttestations = r.learningAttestations
       if (!gate.blocked) {
         /*
