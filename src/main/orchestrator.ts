@@ -12,6 +12,7 @@ import {
   verdictPanelValide,
   consigneTestsDuJuge,
   empreintesTestsDuJuge,
+  empreintesDesFichiers,
   motifsTestModifie
 } from './objections-juge'
 
@@ -5541,9 +5542,12 @@ ${CONTRAT_OBJECTIONS}`
     let motifsPrecedents: string[] = []
     /** Combien de fois DE SUITE le refus est revenu mot pour mot (conv-470, tour 52fbe05f : 4). */
     let refusIdentiquesConsecutifs = 0
-    /** Empreintes des fichiers TEST: du juge prises avant la reparation, et le verdict qui les designe. */
-    let empreintesAvantReparation: Record<string, string | null> = {}
-    let texteJugeAvantReparation = ''
+    /**
+     * Empreintes d'ORIGINE de chaque fichier TEST: designe par un juge, accumulees sur TOUT le run :
+     * jamais videes, un nouveau TEST: s'ajoute, un fichier deja releve garde sa premiere empreinte
+     * (juge independant conv-44 : une passe propre ou un 2e TEST: levaient la protection).
+     */
+    const empreintesProtegees: Record<string, string | null> = {}
     // conv-844 : choix utilisateur, on repare jusqu'a ce qu'il n'y ait plus de defaut. Seul un budget
     // BLOQUANT (reparations accordees = 0) garde l'ancienne borne ; sinon on ne sort que sur un vert
     // ou sur un code perime (`arretDeLaReparation`).
@@ -5595,10 +5599,9 @@ ${CONTRAT_OBJECTIONS}`
          * objections du dernier juge restent dans le resultat du run.
          */
         // Le fichier TEST: du juge est fige pendant la reparation (piste 2 /build, conv-44).
-        // fix-ok: conv-44 — le refus « test modifié » était levé au passage suivant : son juge (VALIDE, sans TEST:) ne désignait plus rien. On garde les empreintes d'origine tant que le fichier n'est pas rendu intact.
-        if (Object.keys(empreintesAvantReparation).length === 0) {
-          texteJugeAvantReparation = lastJudgeText
-          empreintesAvantReparation = empreintesTestsDuJuge(lastJudgeText, workCwd)
+        // fix-ok: conv-44 — juge independant (2 MAJEUR) : vider apres une passe propre, ou ne relever qu'a vide, laissait passer un test retouche. On accumule ; un fichier absent (null) peut etre releve plus tard.
+        for (const [cle, empreinte] of Object.entries(empreintesTestsDuJuge(lastJudgeText, workCwd))) {
+          if (empreintesProtegees[cle] == null) empreintesProtegees[cle] = empreinte
         }
         try {
           await executePipelinePhase(phaseDeReparation)
@@ -5625,13 +5628,12 @@ ${CONTRAT_OBJECTIONS}`
       gate = r.gate
       // Une reparation qui a retouche le test designe par le juge ne clot jamais en vert.
       // fix-ok: lastJudgeText est remplacé par le nouveau jugement, donc on garde le texte d'avant réparation ; le refus doit tomber entre gate = r.gate et if (!gate.blocked), seul point de décision du vert.
-      const motifsTest = motifsTestModifie(empreintesAvantReparation, empreintesTestsDuJuge(texteJugeAvantReparation, workCwd))
+      const motifsTest = motifsTestModifie(empreintesProtegees, empreintesDesFichiers(Object.keys(empreintesProtegees)))
       if (motifsTest.length > 0) {
         valid = false
         gate = { ...gate, blocked: true, reasons: [...gate.reasons, ...motifsTest] }
         for (const motif of motifsTest) push({ step: 'gate', role: 'gate', detail: motif })
       }
-      if (motifsTest.length === 0) empreintesAvantReparation = {}
       learningAttestations = r.learningAttestations
       if (!gate.blocked) {
         /*

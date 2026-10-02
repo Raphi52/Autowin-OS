@@ -159,9 +159,13 @@ function cleDuTest(fichier: string, racine: string): string {
  */
 // fix-ok: la consigne « SANS modifier le fichier de test » (consigneTestsDuJuge) n'était qu'une phrase de prompt ; aucun code ne la faisait respecter (grep testsDuJuge = 1 seul site). Empreinte sha256 avant/après la réparation.
 export function empreintesTestsDuJuge(text: string, racine: string): Record<string, string | null> {
+  return empreintesDesFichiers(testsDuJuge(text).map(({ fichier }) => cleDuTest(fichier, racine)))
+}
+
+/** Empreinte sha256 de chaque chemin ABSOLU donné (clés de `empreintesTestsDuJuge`) ; `null` si absent. */
+export function empreintesDesFichiers(cles: string[]): Record<string, string | null> {
   const empreintes: Record<string, string | null> = {}
-  for (const { fichier } of testsDuJuge(text)) {
-    const cle = cleDuTest(fichier, racine)
+  for (const cle of cles) {
     try {
       empreintes[cle] = createHash('sha256').update(readFileSync(cle)).digest('hex')
     } catch {

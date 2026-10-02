@@ -55,7 +55,9 @@ describe('le fichier TEST: du juge est protégé pendant la réparation', () => 
   })
   it('est branché dans la boucle entre le verdict et la décision de clore en vert', () => {
     const src = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
-    expect(src).toMatch(/gate = r\.gate\s*\n[\s\S]{0,600}?motifsTestModifie\(empreintesAvantReparation, [\s\S]{0,600}?if \(!gate\.blocked\)/)
-    expect(src).toMatch(/empreintesAvantReparation = empreintesTestsDuJuge\(lastJudgeText/)
+    // Le comportement sur plusieurs passages est prouvé de bout en bout par
+    // orchestrator.test-protection-tout-le-run.test.ts ; ici, seulement la place du contrôle.
+    expect(src).toMatch(/gate = r\.gate\s*\n[\s\S]{0,600}?motifsTestModifie\(empreintesProtegees, [\s\S]{0,600}?if \(!gate\.blocked\)/)
+    expect(src).toMatch(/empreintesTestsDuJuge\(lastJudgeText, workCwd\)/)
   })
 })
