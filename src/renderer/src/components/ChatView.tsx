@@ -2185,6 +2185,7 @@ export function ChatView({
            * (sans affichage), elle est partie seule a `ts 1790960868134` (tour b9f32631), alors que
            * l'utilisateur l'avait corrigee entre-temps (`ts 1790960608859`) : « ca a envoyé 2 fois ».
            */
+          // fix-ok: le gel Stop etait consomme a la fin du tour 11229cd2, avant le retour des orientations non lues -> drain auto (tour b9f32631) ; test ChatView.orientation-orpheline-apres-stop rouge->vert
           if (gele) rendreLaFileAuComposer(convId)
           /*
            * DRAIN IMMEDIAT : l'effet de drain se declenche sur la transition `busy→false`, or cet
