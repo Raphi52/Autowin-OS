@@ -678,3 +678,13 @@ ${MARQUEUR_FIN}
 
   return `${entete}${JSON.stringify(snapshot)}${pied}`
 }
+
+/**
+ * Conversation NOMMEE dans `/kaizen conv-61 …`. Sans elle, le dossier etait construit sur la
+ * conversation ou la commande est tapee : conv-63, tour 93905e01-f715-4aab-aff8-40c7216dfc0c
+ * (2026-10-02), a recu le dossier de conv-63 elle-meme (promptCalls, turnEvents, saisies vides)
+ * au lieu de celui de conv-61 vise par l'utilisateur.
+ */
+export function kaizenNamedConversationId(task: string): string | undefined {
+  return /^\/kaizen\s+(conv-\d+)\b/i.exec(task.trim())?.[1]?.toLowerCase()
+}
