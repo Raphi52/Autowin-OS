@@ -9,7 +9,8 @@ import {
   CONTRAT_OBJECTIONS,
   dodDuVerdict,
   verdictAvecObjectionsPortees,
-  verdictPanelValide
+  verdictPanelValide,
+  consigneTestsDuJuge
 } from './objections-juge'
 
 /**
@@ -5569,7 +5570,7 @@ ${CONTRAT_OBJECTIONS}`
         // ou la phase nommée), donc son panel, sa synthèse, sa concurrence et sa télémétrie.
         pousserContexte(
           `reparation:${attempt}`,
-          `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Objections du juge : ${lastJudgeText || '(verdict vide)'}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
+          `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Objections du juge : ${lastJudgeText || '(verdict vide)'}.${consigneTestsDuJuge(lastJudgeText)} Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
         // LE PASSAGE SE NOMME DANS LA TRACE : sans cette ligne, un run mort par epuisement ne
         // permet pas de compter ses rejeus apres coup (objection du juge, conv-540).
