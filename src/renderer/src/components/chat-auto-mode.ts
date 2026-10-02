@@ -419,6 +419,8 @@ export type RaisonArret =
   /* conv-38 (2026-10-02) — garde-fou de la chaîne : quota hebdomadaire Claude, tours auto d'affilée. */
   | 'quota-hebdo'
   | 'tours-auto-max'
+  /* conv-42 — tour coupé avec une tâche de fond en vol, sans suite proposée : attente muette. */
+  | 'tache-de-fond-coupee'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -599,8 +601,18 @@ const MESSAGES_ARRET: Record<string, string> = {
   'suite-attend-utilisateur':
     'Mode auto en pause : la suite proposée attend des informations que toi seul peux donner (identifiants, clés, choix). Écris-les dans ton message pour continuer.',
   'suite-differee':
-    'Mode auto en pause : la suite attend toujours son moment après plusieurs relances programmées. Relance-la toi-même le moment venu.'
+    'Mode auto en pause : la suite attend toujours son moment après plusieurs relances programmées. Relance-la toi-même le moment venu.',
+  'tache-de-fond-coupee':
+    'Mode auto en pause : le dernier tour s’est fini pendant une tâche de fond, sans proposer de suite. Son résultat est perdu — relance-la toi-même.'
 }
+
+/**
+ * conv-42, tour 8268dddb-dfcc-4415-92d8-764b812603eb : l'agent lance 6 essais en arrière-plan, le
+ * tour se termine, `providers/claude.ts` ajoute l'avis « Tâche de fond … à la fin de ce tour » et
+ * aucune ligne AUTOWIN_PROMPT_V1 n'est écrite. Le mode auto attendait alors (`aucun-prompt`), 5
+ * essais puis silence : « le mode auto stagne » sans un mot (saisie ts 1790932156905).
+ */
+const AVIS_TACHE_DE_FOND = /⚠️ Tâche de fond (pas terminée|arrêtée) à la fin de ce tour/
 
 /**
  * UNE SUITE ECRITE A LA PLACE DE L'UTILISATEUR (« Voici les identifiants… », « je te donne… »).
@@ -920,6 +932,12 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
         ? PROMPT_SALVAGE
         : brut
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
+  if (!suite && AVIS_TACHE_DE_FOND.test(texteReponse))
+    return {
+      action: 'arreter',
+      raison: 'tache-de-fond-coupee',
+      message: MESSAGES_ARRET['tache-de-fond-coupee']
+    }
   if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
   if (suiteAttendUneDonneeUtilisateur(suite))
     return {
