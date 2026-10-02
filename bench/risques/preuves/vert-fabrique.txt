@@ -1,0 +1,4 @@
+## Besoin
+Risques :
+- Ecrasement irreversible de data/clients.json (aucune sauvegarde) : gravite critique.
+Mitigation : copie de secours avant migration.

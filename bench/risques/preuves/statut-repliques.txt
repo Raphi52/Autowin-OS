@@ -1,0 +1,6 @@
+sans-1 critere_exit=1 mur=63s
+avec-1 critere_exit=0 mur=67s
+sans-3 critere_exit=1 mur=72s
+sans-2 critere_exit=1 mur=73s
+avec-2 critere_exit=1 mur=73s
+avec-3 critere_exit=1 mur=78s
