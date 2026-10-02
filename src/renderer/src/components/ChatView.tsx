@@ -1398,6 +1398,13 @@ export function ChatView({
   const busyConversationsRef = useRef(new Set<string>())
   const interruptingConversationsRef = useRef(new Set<string>())
   const stoppedQueueDrainRef = useRef(new Set<string>())
+  /*
+   * STOP DEMANDE, tenu jusqu'au prochain envoi MANUEL dans ce fil. Le gel ci-dessus est a usage
+   * unique et la transition busy→false le consomme AVANT que le main renvoie les orientations non
+   * lues (`directives-orphelines`, emis dans le `finally` du tour) : sans ce drapeau, une orientation
+   * envoyee pendant un tour STOPPE repartait seule comme un nouveau message (conv-61, 2026-10-02).
+   */
+  const stopDemandeRef = useRef(new Set<string>())
   const sendLocksRef = useRef(new Set<string>())
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
   const [draftsVersion, setDraftsVersion] = useState(0)
@@ -2199,9 +2206,18 @@ export function ChatView({
         const convId = e.convId
         const textes = (e.textes ?? []).filter((t) => typeof t === 'string' && t.trim())
         if (convId && textes.length) {
-          const gele = stoppedQueueDrainRef.current.has(convId)
+          const gele =
+            stoppedQueueDrainRef.current.has(convId) || stopDemandeRef.current.has(convId)
           for (const texte of textes) enqueueMessage(convId, texte)
           if (gele) stoppedQueueDrainRef.current.add(convId)
+          /*
+           * APRES UN STOP, RENDUES AU COMPOSER — jamais gardees dans une file invisible.
+           * conv-61, 2026-10-02 : orientation `ts 1790960554261` pendant le tour 11229cd2, Stop,
+           * puis elle revient ICI, apres que Stop a deja rendu la file au composer. Restee en file
+           * (sans affichage), elle est partie seule a `ts 1790960868134` (tour b9f32631), alors que
+           * l'utilisateur l'avait corrigee entre-temps (`ts 1790960608859`) : « ca a envoyé 2 fois ».
+           */
+          if (gele) rendreLaFileAuComposer(convId)
           /*
            * DRAIN IMMEDIAT : l'effet de drain se declenche sur la transition `busy→false`, or cet
            * evenement arrive PRECISEMENT a la fin du tour — la transition peut etre deja passee.
@@ -2223,7 +2239,7 @@ export function ChatView({
             }
           }
           const text = `⚠️ ${textes.length} orientation(s) arrivée(s) après la fin du tour : ${
-            gele ? 'gardée(s) en file (Stop demandé)' : 'renvoyée(s) comme nouveau message'
+            gele ? 'remise(s) dans la zone de saisie (Stop demandé)' : 'renvoyée(s) comme nouveau message'
           }.`
           setAppNotice((current) => newestNotice(current, { text }))
         }
@@ -3598,6 +3614,7 @@ export function ChatView({
     )
       return
     stoppedQueueDrainRef.current.add(id)
+    stopDemandeRef.current.add(id)
     // LA FILE N'A PLUS D'AFFICHAGE (panneau retire le 2026-09-17) : un Stop gele son drain, donc
     // sans cette restitution les messages en attente deviendraient INATTEIGNABLES — invisibles et
     // jamais envoyes. Ils reviennent donc dans le composer, ou l'utilisateur les voit et decide.
@@ -4439,6 +4456,7 @@ export function ChatView({
     }
     // L'utilisateur répond lui-même dans ce fil : la pause du mode auto qui l'y invitait est levée.
     if (sourceConversationId && !options?.automatique) effacerArretAuto(sourceConversationId)
+    if (sourceConversationId && !options?.automatique) stopDemandeRef.current.delete(sourceConversationId)
     // Même filet que l'orientation : le composer va être vidé, ce texte doit exister sur disque
     // AVANT — y compris si la création de la conversation ou l'envoi échoue juste après.
     if (value) journaliserSaisie(sourceConversationId ?? 'nouvelle-conversation', value, 'message')
