@@ -219,6 +219,7 @@ import { dedupliquerDossier, paginerDossier, resumerAppelsOutils } from './retro
 import {
   buildAutowinKaizenTask,
   collectAutowinKaizenEvidence,
+  kaizenNamedConversationId,
   PLAFONDS_AMPLES
 } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
@@ -2606,8 +2607,12 @@ export class AppCommandBus {
         const phasePrefix = modelPhaseAllowed ? `/${requestedPhase} ` : ''
         const requestedTask = `${phasePrefix}${authoritativeTask}`
         const conversation = this.os.conversations.get(convId)
-        const kaizenEvidenceConversation =
-          conversation?.autoKaizen?.role === 'analysis'
+        // `/kaizen conv-61 …` vise conv-61, pas la conversation ou la commande est tapee.
+        const kaizenNamedId = kaizenNamedConversationId(authoritativeTask)
+        const kaizenNamed = kaizenNamedId ? this.os.conversations.get(kaizenNamedId) : undefined
+        const kaizenEvidenceConversation = kaizenNamed
+          ? kaizenNamed
+          : conversation?.autoKaizen?.role === 'analysis'
             ? (this.os.conversations.get(conversation.autoKaizen.sourceConversationId) ??
               conversation)
             : conversation
