@@ -95,8 +95,13 @@ import { rejouerOrientations } from './orientations-rejouees'
 import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import {
+  arretChaineAuto,
   attenteFichierAReprendre,
   deciderRelanceAuto,
+  lireSeuilsChaine,
+  quotaHebdoClaude,
+  toursAutoDAffilee,
+  CLE_SEUILS_CHAINE_AUTO,
   dernierTourEstUnScout,
   premierPassageLaisseSortirLeTour,
   signatureTour,
@@ -240,6 +245,8 @@ function ecrireDossiersRetires(retires: string[]): void {
 }
 /** Fils armes en mode auto (reglage PAR conversation ; `*` = ancien reglage global migre). */
 import { CLE_MODE_AUTO_CONVS, EVT_ARMER_MODE_AUTO } from './chat-auto-convs'
+import { lireArretsChaine, noterArretChaine, oublierArretChaine } from './arrets-chaine-persistes'
+import { ecrireToursAuto, lireToursAuto } from './tours-auto-persistes'
 /** Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions. */
 const CLE_DOSSIER_NOUVEAU_FIL = 'autowin.chat.dossierNouveauFil'
 
@@ -765,6 +772,26 @@ export function ChatView({
    * que le fil affiché. Un état par conversation est la condition pour enchaîner les autres.
    */
   const autoEtatsRef = useRef(new Map<string, { tour: string | null; prompt: string | null }>())
+  /*
+   * GARDE-FOU DE LA CHAÎNE ∞ (conv-38, 2026-10-02) : quota hebdomadaire Claude relevé (cache 60 s
+   * côté main) et tours automatiques d'affilée comptés par fil. La DÉCISION reste dans
+   * `deciderRelanceAuto` : ici on ne fait que lui fournir ces deux chiffres et les seuils réglés.
+   */
+  const quotaHebdoRef = useRef<number | null>(null)
+  /** Faux tant qu'aucun relevé n'a donné le quota : le fil le dit quand ∞ est allumé (cadrage conv-38). */
+  const [quotaHebdoConnu, setQuotaHebdoConnu] = useState(false)
+  const toursAutoRef = useRef(lireToursAuto(window.localStorage))
+  function gardeChaine(id: string): {
+    quotaHebdoPct: number | null
+    toursAutoDAffilee: number
+    seuilsChaine: ReturnType<typeof lireSeuilsChaine>
+  } {
+    return {
+      quotaHebdoPct: quotaHebdoRef.current,
+      toursAutoDAffilee: toursAutoRef.current.get(id) ?? 0,
+      seuilsChaine: lireSeuilsChaine(window.localStorage.getItem(CLE_SEUILS_CHAINE_AUTO))
+    }
+  }
   /**
    * Fils dont un tour a été VU tourner pendant que l'interrupteur est armé. C'est ce qui distingue
    * « un tour vient de finir sous mon autorité » (à enchaîner, même si l'écran est ailleurs) d'une
@@ -872,8 +899,13 @@ export function ChatView({
    * Clé = id de la conversation qui l'a levée ; effacée par ×, par un message de l'utilisateur dans
    * ce fil, ou par le rallumage du mode auto sur ce fil.
    */
-  const [arretsAuto, setArretsAuto] = useState<Record<string, string>>({})
+  // Les arrêts du garde-fou de la chaîne ∞ sont relus du disque : ils survivent au redémarrage.
+  // fix-ok: arrêt et compte des tours ∞ perdus au redémarrage (tests de remontage rouges) → gardés sur le poste.
+  const [arretsAuto, setArretsAuto] = useState<Record<string, string>>(() =>
+    lireArretsChaine(window.localStorage)
+  )
   function effacerArretAuto(conversationId: string): void {
+    oublierArretChaine(window.localStorage, conversationId)
     setArretsAuto((courant) => {
       if (!(conversationId in courant)) return courant
       const suivant = { ...courant }
@@ -3842,17 +3874,34 @@ export function ChatView({
       Math.max(0, decision.echeance - Date.now())
     )
     function envoyer(): void {
-        if (!autoArmePourRef.current(id)) return
-        if (busyConversationsRef.current.has(id)) return
-        etat.prompt = decision.texte
-        // Le fil est suivi : la fin de CE tour sera enchaînée, même s'il n'est pas affiché.
-        autoSuiviesRef.current.add(id)
-        void sendAutoRef.current(decision.texte, {
-          keepComposerDraft: true,
-          automatique: true,
-          suiteDuModeAuto: true,
-          targetConversationId: id
-        })
+      if (!autoArmePourRef.current(id)) return
+      if (busyConversationsRef.current.has(id)) return
+      // Le minuteur sonne parfois des heures plus tard : le garde-fou de la chaîne est relu ICI.
+      const g = gardeChaine(id)
+      const fil =
+        id === activeIdAutoRef.current
+          ? messagesAfficheAutoRef.current
+          : (liveMessagesRef.current.get(id) ?? [])
+      const arret = arretChaineAuto({
+        quotaHebdoPct: g.quotaHebdoPct,
+        toursAutoDAffilee: Math.max(g.toursAutoDAffilee, toursAutoDAffilee(fil)),
+        seuils: g.seuilsChaine
+      })
+      if (arret) {
+        desarmerAuto(id)
+        noterArretChaine(window.localStorage, id, arret.message)
+        setArretsAuto((courant) => ({ ...courant, [id]: arret.message }))
+        return
+      }
+      etat.prompt = decision.texte
+      // Le fil est suivi : la fin de CE tour sera enchaînée, même s'il n'est pas affiché.
+      autoSuiviesRef.current.add(id)
+      void sendAutoRef.current(decision.texte, {
+        keepComposerDraft: true,
+        automatique: true,
+        suiteDuModeAuto: true,
+        targetConversationId: id
+      })
     }
     autoProgrammeesRef.current.set(id, { minuteur, signature: decision.signature })
   }
@@ -3919,7 +3968,8 @@ export function ChatView({
       proposerNouvelleCible: true,
       // APRES UN SCOUT : la suite ne part que si une ligne `CIBLE:` nomme UNE piste.
       tourEstUnScout: dernierTourEstUnScout(messages),
-      relancesDifferees: autoDiffereesRef.current.get(activeId) ?? 0
+      relancesDifferees: autoDiffereesRef.current.get(activeId) ?? 0,
+      ...gardeChaine(activeId)
     })
     if (decision.action === 'attendre') {
       return
@@ -3929,6 +3979,8 @@ export function ChatView({
       desarmerAuto(activeId)
       // L'arret DIT sa raison : sans elle, le bouton ∞ s'allumait puis s'eteignait sans un mot.
       // Rangé dans CE fil : affiché seulement quand il est à l'écran (conv-891).
+      if (decision.raison === 'quota-hebdo' || decision.raison === 'tours-auto-max')
+        noterArretChaine(window.localStorage, activeId, decision.message)
       setArretsAuto((courant) => ({ ...courant, [activeId]: decision.message }))
       return
     }
@@ -3948,6 +4000,35 @@ export function ChatView({
     void send(decision.texte, { keepComposerDraft: true, automatique: true, suiteDuModeAuto: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoActif, activeId, busy, messages, brouillonPresent])
+
+  /*
+   * RELEVÉ DU QUOTA HEBDOMADAIRE CLAUDE pour le garde-fou ∞ : à l'ouverture, à chaque fin de tour et
+   * toutes les 60 s — AVANT tout allumage de ∞, sinon le premier tour partirait quota inconnu. Coût
+   * nul : l'indicateur de quotas relève déjà toutes les 60 s et le main garde 60 s en cache.
+   * Un relevé en échec laisse la dernière valeur connue ; jamais relevé = inconnu, seul le compte de
+   * tours peut alors arrêter la chaîne.
+   */
+  useEffect(() => {
+    if (typeof window.api?.modelQuotas !== 'function') return
+    let vivant = true
+    const relever = (): void => {
+      void Promise.resolve(window.api.modelQuotas())
+        .then((snapshot) => {
+          const pct = quotaHebdoClaude(snapshot)
+          if (vivant && pct !== null) {
+            quotaHebdoRef.current = pct
+            setQuotaHebdoConnu(true)
+          }
+        })
+        .catch(() => undefined)
+    }
+    relever()
+    const minuteur = window.setInterval(relever, 60_000)
+    return () => {
+      vivant = false
+      window.clearInterval(minuteur)
+    }
+  }, [busyConversations])
 
   /**
    * LES AUTRES FILS — la boucle ne doit pas s'arrêter parce qu'on regarde ailleurs.
@@ -3983,7 +4064,8 @@ export function ChatView({
         dernierPromptEnvoye: etat.prompt,
         brouillonPresent: false,
         tourEstUnScout: dernierTourEstUnScout(liveMessagesRef.current.get(id) ?? []),
-        relancesDifferees: autoDiffereesRef.current.get(id) ?? 0
+        relancesDifferees: autoDiffereesRef.current.get(id) ?? 0,
+        ...gardeChaine(id)
       })
       /*
        * UN FIL D'ARRIÈRE-PLAN NE COUPE PLUS L'INTERRUPTEUR GLOBAL (demande du 2026-09-02).
@@ -3994,6 +4076,12 @@ export function ChatView({
        */
       if (decision.action === 'arreter') {
         autoEssaisRef.current.delete(id)
+        // Garde-fou de la chaîne : CE fil est désarmé et l'arrêt est rangé dans CE fil, comme au premier plan.
+        if (decision.raison === 'quota-hebdo' || decision.raison === 'tours-auto-max') {
+          desarmerAuto(id)
+          noterArretChaine(window.localStorage, id, decision.message)
+          setArretsAuto((courant) => ({ ...courant, [id]: decision.message }))
+        }
         continue
       }
       if (decision.action === 'programmer') {
@@ -4149,7 +4237,8 @@ export function ChatView({
           fil,
           brouillonPresent: false,
           tourEstUnScout: dernierTourEstUnScout(fil),
-          relancesDifferees: autoDiffereesRef.current.get(id) ?? 0
+          relancesDifferees: autoDiffereesRef.current.get(id) ?? 0,
+          ...gardeChaine(id)
         })
         if (decision) programmerRelanceAuto(id, decision)
       })()
@@ -4338,6 +4427,16 @@ export function ChatView({
     )
       return
     sendLocksRef.current.add(sendLockKey)
+    // Tours automatiques d'affilée (garde-fou ∞) : +1 pour une suite du mode auto, 0 pour tout autre envoi.
+    if (sourceConversationId) {
+      if (options?.suiteDuModeAuto === true)
+        toursAutoRef.current.set(
+          sourceConversationId,
+          (toursAutoRef.current.get(sourceConversationId) ?? 0) + 1
+        )
+      else toursAutoRef.current.delete(sourceConversationId)
+      ecrireToursAuto(window.localStorage, toursAutoRef.current)
+    }
     // L'utilisateur répond lui-même dans ce fil : la pause du mode auto qui l'y invitait est levée.
     if (sourceConversationId && !options?.automatique) effacerArretAuto(sourceConversationId)
     // Même filet que l'orientation : le composer va être vidé, ce texte doit exister sur disque
@@ -6682,6 +6781,14 @@ Cliquer pour choisir une autre branche.`}
               >
                 ×
               </button>
+            </div>
+          )}
+
+          {activeId && autoActif && !quotaHebdoConnu && (
+            <div className="chat-workflow-notice" data-testid="chat-auto-quota-inconnu" role="status">
+              <span>
+                {`Mode auto : le quota hebdomadaire Claude n'a pas pu être lu. Seul le seuil de ${lireSeuilsChaine(window.localStorage.getItem(CLE_SEUILS_CHAINE_AUTO)).toursAutoMax} tours automatiques d'affilée peut arrêter la chaîne.`}
+              </span>
             </div>
           )}
 
