@@ -124,7 +124,42 @@ function justificationApresEtiquette(cellule: string): string | undefined {
  * hypotheses. Une ligne ETIQUETEE verifiee ou attribuee a l'utilisateur n'est jamais reprise : elle
  * a une autorite, contrairement a une deduction.
  */
-export function hypothesesDuCadrage(texte: unknown): HypotheseDeCadrage[] {
+/**
+ * Dit si une citation `chemin:ligne` d'une ligne VERIFIE est INTROUVABLE (fichier absent ou ligne
+ * au-dela de sa fin). Injecte par l'appelant : ce module partage n'a pas acces au disque.
+ */
+export type CitationIntrouvable = (chemin: string, ligne?: number) => boolean
+
+/*
+ * Etiquette VERIFIE positive : toute forme NON VERIFIE est retiree AVANT, donc « NON VÉRIFIÉ » ne
+ * peut jamais etre lu comme une preuve.
+ */
+const ETIQUETTE_VERIFIE = /(?<!\p{L})V[EÉ]RIFI[EÉ]E?S?(?!\p{L})/iu
+const ETIQUETTE_NON_VERIFIE_G = new RegExp(ETIQUETTE_NON_VERIFIE.source, 'giu')
+/** `src/a.ts:12`, `SKILL.md:64-68` : un chemin a extension, suivi ou non d'un numero de ligne. */
+const CITATION = /([\w./\-]+\.(?:md|tsx?|m?js|json|ps1|ya?ml))(?::(\d+))?/giu
+
+/**
+ * SKILL.md (frame) exige pour chaque VERIFIE un fichier:ligne reellement lu, et rappelle que la
+ * certitude declaree par le modele ne prouve rien. Mesure du 2026-10-02 : aucun code ne controlait
+ * ces citations. Une ligne VERIFIE dont une citation est introuvable est donc RECLASSEE en
+ * hypothese : elle suit le circuit deja en place vers le juge.
+ */
+function citationsIntrouvables(ligne: string, introuvable: CitationIntrouvable): string[] {
+  const sansNon = ligne.replace(ETIQUETTE_NON_VERIFIE_G, ' ')
+  if (!ETIQUETTE_VERIFIE.test(sansNon)) return []
+  const manquantes: string[] = []
+  for (const m of sansNon.matchAll(CITATION)) {
+    const numero = m[2] ? Number(m[2]) : undefined
+    if (introuvable(m[1], numero)) manquantes.push(m[2] ? `${m[1]}:${m[2]}` : m[1])
+  }
+  return manquantes
+}
+
+export function hypothesesDuCadrage(
+  texte: unknown,
+  options: { citationIntrouvable?: CitationIntrouvable } = {}
+): HypotheseDeCadrage[] {
   if (typeof texte !== 'string' || !texte.trim()) return []
   const trouvees: HypotheseDeCadrage[] = []
   const vues = new Set<string>()
@@ -147,8 +182,17 @@ export function hypothesesDuCadrage(texte: unknown): HypotheseDeCadrage[] {
     let affirmation: string | undefined
     let justification: string | undefined
 
+    const manquantes =
+      sectionCourante === 'confiance' && options.citationIntrouvable
+        ? citationsIntrouvables(ligne, options.citationIntrouvable)
+        : []
     const cellules = cellulesDeTableau(ligne)
-    if (cellules) {
+    if (manquantes.length) {
+      affirmation = nettoyerAffirmation(
+        cellules ? cellules[0] : ligne.replace(new RegExp(ETIQUETTE_VERIFIE.source, 'giu'), ' ')
+      )
+      justification = `marquée VÉRIFIÉ mais citation introuvable : ${manquantes.join(', ')}`
+    } else if (cellules) {
       // Forme TABLEAU : l'affirmation est la premiere cellule, l'etiquette et sa raison vivent dans
       // une autre. Une ligne d'en-tete (« Affirmation | Statut ») ne porte aucune etiquette.
       const cellulEtiquetee = cellules.find((cellule) => ETIQUETTE_NON_VERIFIE.test(cellule))

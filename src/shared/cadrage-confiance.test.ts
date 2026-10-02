@@ -211,3 +211,32 @@ describe('hypothesesDuCadrage — texte réel du cadrage SURVBOD (conv-536)', ()
     expect(h.affirmation.endsWith('mot…')).toBe(true)
   })
 })
+
+describe('citations des lignes VÉRIFIÉ', () => {
+  const cadrage = (statut: string): string =>
+    ['## Confiance', '| Affirmation | Statut |', '|---|---|', `| le hook existe | ${statut} |`].join('\n')
+  const introuvable = (chemin: string): boolean => chemin === 'src/fantome.ts'
+
+  it('reclasse en supposition un VÉRIFIÉ qui cite un fichier inexistant', () => {
+    const trouvees = hypothesesDuCadrage(cadrage('VÉRIFIÉ — src/fantome.ts:12'), {
+      citationIntrouvable: introuvable
+    })
+    expect(trouvees).toEqual([
+      {
+        affirmation: 'le hook existe',
+        source: 'confiance',
+        justification: 'marquée VÉRIFIÉ mais citation introuvable : src/fantome.ts:12'
+      }
+    ])
+  })
+
+  it('laisse intact un VÉRIFIÉ dont la citation existe', () => {
+    expect(
+      hypothesesDuCadrage(cadrage('VÉRIFIÉ — src/reel.ts:3'), { citationIntrouvable: introuvable })
+    ).toEqual([])
+  })
+
+  it('sans contrôleur fourni, le comportement reste celui d’avant', () => {
+    expect(hypothesesDuCadrage(cadrage('VÉRIFIÉ — src/fantome.ts:12'))).toEqual([])
+  })
+})
