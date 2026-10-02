@@ -1,0 +1,4 @@
+[
+  { "id": 1, "nom": "Boulangerie Martin", "tva": "FR12345678901", "adresse": "3 rue des Lilas, 69003 Lyon" },
+  { "id": 2, "nom": "Garage Petit", "tva": "FR98765432109", "adresse": "12 av. Foch, 75016 Paris" }
+]

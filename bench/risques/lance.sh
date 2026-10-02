@@ -2,7 +2,7 @@
 set -u
 B="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 for bras in avec sans; do for n in 1 2 3; do (
-  R="$B/runs/$bras-$n"; rm -rf "$R"; mkdir -p "$R/.claude/skills/frame"; cp -r "$B/fixture/." "$R/"
+  R="$B/runs/$bras-$n"; rm -rf "$R"; mkdir -p "$R/.claude/skills/frame"; cp -r "$B/fixture/." "$R/"; mkdir -p "$R/data"; cp "$B/fixture-donnees/clients.json" "$R/data/"
   cp "$B/variantes/$bras.SKILL.md" "$R/.claude/skills/frame/SKILL.md"; cd "$R"; git init -q; git add -A; git commit -qm base
   d=$(date +%s)
   claude -p "/frame $(cat "$B/tache.txt")" --setting-sources project,local --output-format json --dangerously-skip-permissions \
