@@ -5596,7 +5596,7 @@ ${CONTRAT_OBJECTIONS}`
          */
         // Le fichier TEST: du juge est fige pendant la reparation (piste 2 /build, conv-44).
         texteJugeAvantReparation = lastJudgeText
-        empreintesAvantReparation = empreintesTestsDuJuge(lastJudgeText, this.deps.executionWorkspace)
+        empreintesAvantReparation = empreintesTestsDuJuge(lastJudgeText, workCwd)
         try {
           await executePipelinePhase(phaseDeReparation)
           // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
@@ -5622,7 +5622,7 @@ ${CONTRAT_OBJECTIONS}`
       gate = r.gate
       // Une reparation qui a retouche le test designe par le juge ne clot jamais en vert.
       // fix-ok: lastJudgeText est remplacé par le nouveau jugement, donc on garde le texte d'avant réparation ; le refus doit tomber entre gate = r.gate et if (!gate.blocked), seul point de décision du vert.
-      const motifsTest = motifsTestModifie(empreintesAvantReparation, empreintesTestsDuJuge(texteJugeAvantReparation, this.deps.executionWorkspace))
+      const motifsTest = motifsTestModifie(empreintesAvantReparation, empreintesTestsDuJuge(texteJugeAvantReparation, workCwd))
       if (motifsTest.length > 0) {
         valid = false
         gate = { ...gate, blocked: true, reasons: [...gate.reasons, ...motifsTest] }
