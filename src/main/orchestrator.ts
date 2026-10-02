@@ -5595,8 +5595,11 @@ ${CONTRAT_OBJECTIONS}`
          * objections du dernier juge restent dans le resultat du run.
          */
         // Le fichier TEST: du juge est fige pendant la reparation (piste 2 /build, conv-44).
-        texteJugeAvantReparation = lastJudgeText
-        empreintesAvantReparation = empreintesTestsDuJuge(lastJudgeText, workCwd)
+        // fix-ok: conv-44 — le refus « test modifié » était levé au passage suivant : son juge (VALIDE, sans TEST:) ne désignait plus rien. On garde les empreintes d'origine tant que le fichier n'est pas rendu intact.
+        if (Object.keys(empreintesAvantReparation).length === 0) {
+          texteJugeAvantReparation = lastJudgeText
+          empreintesAvantReparation = empreintesTestsDuJuge(lastJudgeText, workCwd)
+        }
         try {
           await executePipelinePhase(phaseDeReparation)
           // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
@@ -5628,7 +5631,7 @@ ${CONTRAT_OBJECTIONS}`
         gate = { ...gate, blocked: true, reasons: [...gate.reasons, ...motifsTest] }
         for (const motif of motifsTest) push({ step: 'gate', role: 'gate', detail: motif })
       }
-      empreintesAvantReparation = {}
+      if (motifsTest.length === 0) empreintesAvantReparation = {}
       learningAttestations = r.learningAttestations
       if (!gate.blocked) {
         /*
