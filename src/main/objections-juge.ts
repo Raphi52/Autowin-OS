@@ -27,6 +27,7 @@
  */
 export const CONTRAT_OBJECTIONS = `OBJECTIONS:
 - MAJEUR: <écart qui empêche de livrer : preuve manquante, où vérifier> | MINEUR: <défaut que le producteur peut encore corriger dans CE run — il BLOQUE la clôture et relance une réparation> | OK: <constat vérifié> | OK: hors run — <réserve qu'aucune réparation ne peut lever (publication faite par l'app après ton VALIDE, mesure qui attend des runs futurs, geste ou accord de l'utilisateur) et qui la lèvera>
+Facultatif, en fin d'une puce MAJEUR ou MINEUR : « | TEST: <fichier de test> | <commande> » — le test qui échoue aujourd'hui et que la réparation doit faire passer sans le modifier.
 Un défaut corrigeable dans ce run n'est jamais OK. Une puce OK ne bloque pas et reste affichée à l'utilisateur.
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
 
@@ -115,6 +116,31 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
     objections.push(etiquette ? contenu.slice(etiquette[0].length).trim() : contenu)
   }
   return objections
+}
+
+const SUFFIXE_TEST = /\|?\s*\bTEST:\s*([^|]+?)\s*\|\s*(.+?)\s*$/
+
+/**
+ * Les tests exécutables joints par le juge (`| TEST: <fichier> | <commande>`) à ses objections
+ * BLOQUANTES seulement : le `TEST:` d'une puce OK ne relance rien. Piste 2 /build (conv-44) :
+ * la réparation repartait d'une prose ; elle reçoit désormais l'échec à faire passer.
+ */
+export function testsDuJuge(text: string): { fichier: string; commande: string }[] {
+  const tests: { fichier: string; commande: string }[] = []
+  for (const objection of objectionsDuJuge(text)) {
+    const m = SUFFIXE_TEST.exec(objection)
+    if (m) tests.push({ fichier: m[1].trim(), commande: m[2].trim() })
+  }
+  return tests
+}
+
+/** La consigne de réparation tirée de `testsDuJuge` ; chaîne vide sans test (comportement inchangé). */
+export function consigneTestsDuJuge(text: string): string {
+  const tests = testsDuJuge(text)
+  if (tests.length === 0) return ''
+  return ` Tests du juge à faire passer SANS modifier le fichier de test : ${tests
+    .map((t) => `\`${t.commande}\` (fichier ${t.fichier})`)
+    .join(' ; ')}.`
 }
 
 /**
