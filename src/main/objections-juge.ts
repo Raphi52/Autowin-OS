@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { isAbsolute, resolve } from 'node:path'
+
 /**
  * LES OBJECTIONS DU JUGE NE SE PERDENT PAS DANS UN VERT.
  *
@@ -141,6 +145,49 @@ export function consigneTestsDuJuge(text: string): string {
   return ` Tests du juge à faire passer SANS modifier le fichier de test : ${tests
     .map((t) => `\`${t.commande}\` (fichier ${t.fichier})`)
     .join(' ; ')}.`
+}
+
+/** Clé stable d'un fichier `TEST:` : relatif ou absolu, `\` ou `/`, même clé (piège conv-539). */
+function cleDuTest(fichier: string, racine: string): string {
+  const abs = isAbsolute(fichier) ? fichier : resolve(racine, fichier)
+  return abs.replace(/\\/g, '/').replace(/^([a-z]):/, (_, l: string) => `${l.toUpperCase()}:`)
+}
+
+/**
+ * Empreinte (sha256) de chaque fichier `TEST:` désigné par le juge ; `null` si le fichier n'existe pas.
+ * Piste 2 /build (conv-44) : la consigne « SANS modifier le fichier de test » n'était qu'une phrase.
+ */
+// fix-ok: la consigne « SANS modifier le fichier de test » (consigneTestsDuJuge) n'était qu'une phrase de prompt ; aucun code ne la faisait respecter (grep testsDuJuge = 1 seul site). Empreinte sha256 avant/après la réparation.
+export function empreintesTestsDuJuge(text: string, racine: string): Record<string, string | null> {
+  const empreintes: Record<string, string | null> = {}
+  for (const { fichier } of testsDuJuge(text)) {
+    const cle = cleDuTest(fichier, racine)
+    try {
+      empreintes[cle] = createHash('sha256').update(readFileSync(cle)).digest('hex')
+    } catch {
+      empreintes[cle] = null
+    }
+  }
+  return empreintes
+}
+
+/**
+ * Motifs de refus : un fichier `TEST:` qui EXISTAIT avant la réparation et a changé après.
+ * Un fichier absent avant n'est pas protégé : le créer peut être le travail demandé.
+ */
+export function motifsTestModifie(
+  avant: Record<string, string | null>,
+  apres: Record<string, string | null>
+): string[] {
+  const motifs: string[] = []
+  for (const [cle, empreinte] of Object.entries(avant)) {
+    if (empreinte === null) continue
+    if (cle in apres && apres[cle] === empreinte) continue
+    motifs.push(
+      `Réparation refusée : le fichier de test désigné par le juge a été modifié (${cle}) — il fallait le faire passer sans le toucher.`
+    )
+  }
+  return motifs
 }
 
 /**
