@@ -1,0 +1,4 @@
+{
+  "description": "Mods d'Autowin OS",
+  "modules": ["./register.js"]
+}

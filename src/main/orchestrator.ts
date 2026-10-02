@@ -416,7 +416,7 @@ import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
 import { STYLE_TON } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
-import { consigneBureauCache } from './consigne-bureau-cache'
+import { consigneBureauCache, identifiantBureauCache } from './consigne-bureau-cache'
 import { evidenceDeLErreur } from './providers/evidence-portee-par-erreur'
 import {
   classifyProviderFailure,
@@ -1594,7 +1594,11 @@ export class Orchestrator {
       cwd,
       sandbox,
       // Le fil du run, lisible par l'agent et ses scripts (hdesk-lancer.ps1 -> petite TV du fil).
-      ...(filDuRun ? { agentEnv: { AUTOWIN_CONVERSATION_ID: filDuRun } } : {}),
+      // Et son bureau caché (AUTOWIN_HDESK_ID) : le mod Autowin y redirige une app graphique (conv-58).
+      agentEnv: {
+        ...(filDuRun ? { AUTOWIN_CONVERSATION_ID: filDuRun } : {}),
+        AUTOWIN_HDESK_ID: identifiantBureauCache(runId)
+      },
       // La phase, NOMMÉE pour qui doit la lire (voir `phaseAppelante` dans providers/types.ts).
       phaseAppelante: phase,
       ...(providerTimeoutMs ? { providerTimeoutMs } : {}),

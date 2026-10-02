@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { argumentsModsAutowin } from './claude'
 
 /**
  * REGIME DE CONTEXTE du spawn CLI — ce qu'on refuse de payer a chaque appel.
@@ -44,6 +45,18 @@ describe('spawn CLI — regime de contexte', () => {
 
   it('desactive les slash-commands et skills du CLI (jamais utilisees ici)', () => {
     expect(source).toContain("'--disable-slash-commands'")
+  })
+
+  it('charge les mods d’Autowin, et eux seuls, à chaque appel (conv-58)', () => {
+    // Dans la liste d'arguments de TOUS les appels, pas dans une branche.
+    expect(source).toMatch(/'--disable-slash-commands',\s*\n(\s*\/\/[^\n]*\n)*\s*\.\.\.argumentsModsAutowin\(\)\s*\n\s*\]/)
+    // Le vrai dossier du dépôt est un mod complet.
+    const dossier = join(__dirname, '..', '..', '..', 'mods', 'autowin')
+    // fix-ok: 3 edits — mesure : retirer --plugin-dir de claude.ts rend ce test rouge
+    expect(argumentsModsAutowin(dossier)).toEqual(['--plugin-dir', dossier])
+    // Non fixé ou absent du disque : aucun argument, le run part comme avant.
+    expect(argumentsModsAutowin(undefined)).toEqual([])
+    expect(argumentsModsAutowin('Z:/nulle-part', () => false)).toEqual([])
   })
 
   it('ne charge AUCUNE source de reglages (user/project/local)', () => {

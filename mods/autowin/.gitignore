@@ -1,0 +1,3 @@
+# Écrits par Claude Code à chaque chargement du mod (--plugin-dir) : propres à la version installée.
+.claude-plugin/types/
+tsconfig.json

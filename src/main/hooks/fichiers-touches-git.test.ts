@@ -65,3 +65,26 @@ describe('default-gate-hooks — aucun git bloquant sur le fil principal', () =>
     expect(Array.isArray(await resultat)).toBe(true)
   })
 })
+
+/**
+ * DEFAUT MESURE le 2026-10-02 (run-2cf57a8a0dcf-1) : le controle final a refuse avec
+ * « EISDIR: illegal operation on a directory, read ». Un DOSSIER entierement non suivi
+ * (`mods/`) sort de `git status --porcelain` replie en `?? mods/` : le garde-fou lisait
+ * ensuite ce chemin comme un fichier. Il faut lister les FICHIERS, jamais le dossier.
+ */
+describe('fichiersTouchesGit — dossier non suivi', () => {
+  it('liste les fichiers d un dossier non suivi, pas le dossier', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { execFileSync } = await import('node:child_process')
+    const { fichiersTouchesGit } = await import('./default-gate-hooks')
+    const d = mkdtempSync(join(tmpdir(), 'ftg-'))
+    execFileSync('git', ['init', '-q'], { cwd: d })
+    mkdirSync(join(d, 'mods', 'autowin'), { recursive: true })
+    writeFileSync(join(d, 'mods', 'autowin', 'a.js'), 'x\n')
+    const touches = await fichiersTouchesGit(d)
+    expect(touches).toContain('mods/autowin/a.js')
+    expect(touches.some((f) => f.endsWith('/'))).toBe(false)
+  })
+})

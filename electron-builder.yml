@@ -32,6 +32,9 @@ asarUnpack:
   - scripts/outlook-local-corps.ps1
   # Même contrainte pour la petite TV du bureau caché (src/main/hdesk-tv.ts).
   - scripts/hdesk-tv.ps1
+  # Mods d'Autowin (conv-58) : chargés par le CLI via --plugin-dir, et le lanceur qu'ils appellent.
+  - mods/**
+  - scripts/hdesk-lancer.ps1
   - scripts/hdesk-observe.ps1
   - scripts/hdesk-shot.cs
   # TV interactive et bascule (conv-35) : lancés par agirHdesk / basculerHdesk via racineScriptsHorsArchive.

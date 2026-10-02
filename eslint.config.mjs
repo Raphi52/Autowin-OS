@@ -20,6 +20,9 @@ export default defineConfig(
      */
     ignores: [
       'bench/runs/**',
+      // Déclarations que Claude Code écrit dans un mod à chaque chargement (--plugin-dir), propres à
+      // la version installée et non suivies (mods/autowin/.gitignore) : pas du code d'Autowin.
+      'mods/*/.claude-plugin/types/**',
       '.arena/**/essais/**',
       // Copies de bras extraites pour la notation juge (ex. juge-t4/bras/, non suivies par git) :
       // meme nature generee que essais/, 8 erreurs de lint le 2026-09-26.
@@ -78,7 +81,8 @@ export default defineConfig(
   },
   {
     // Configuration et utilitaires JavaScript : TypeScript ne peut pas y garantir les annotations de retour.
-    files: ['**/*.mjs'],
+    // Les mods (mods/*/hooks/*.js) sont des modules ES du même genre : le CLI les charge tels quels.
+    files: ['**/*.mjs', 'mods/**/*.js'],
     /*
      * DECLARER LE LANGAGE, plutot que de faire taire la regle qui s'en plaint.
      *

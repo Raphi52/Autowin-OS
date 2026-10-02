@@ -315,7 +315,8 @@ export async function fichiersTouchesGit(cwd: string): Promise<readonly string[]
       .map((l) => (brut ? l : l.trim()))
       .filter(Boolean)
   const [status, diff] = await Promise.all([
-    gitHorsFil(cwd, ['status', '--porcelain']),
+    // fix-ok: run-2cf57a8a0dcf-1 — un dossier non suivi sortait replie en « ?? mods/ » et le controle final le lisait comme un fichier (EISDIR)
+    gitHorsFil(cwd, ['status', '--porcelain', '--untracked-files=all']),
     gitHorsFil(cwd, ['diff', '--name-only', 'HEAD'])
   ])
   const porcelain = lignes(status, true).map(cheminPorcelain).filter(Boolean)
