@@ -1,4 +1,5 @@
 import { MOTIF_RESERVES_MINEURES_FIGEES } from '../memoire-juge'
+import { PREFIXE_TEST_MODIFIE } from '../objections-juge'
 // Reproduction TS pure, model-agnostic, du "stop-gate" du kit autowin.
 // Fonction pure évaluant si une clôture "done/green" est légitime.
 
@@ -313,6 +314,13 @@ export function arretDeLaReparation(entree: {
     return `Réparation interrompue : le code exécuté est périmé — ${b.bundle} est plus ancien que la source du contrôle. Recompiler et relancer l'application avant de rejouer.`
   }
   if (entree.reservesMineuresFigees) return MOTIF_RESERVES_MINEURES_FIGEES
+  // fix-ok: conv-44 — juge independant (MINEUR « refus sans fin ») : un fichier TEST: jamais restaure a l'octet pres relancait build + juge a l'infini en mode jusqu'au vert ; constat de CODE (empreinte), il mord meme jusqu'au vert.
+  if (
+    (entree.refusIdentiquesConsecutifs ?? 0) >= REFUS_FIGE_SEUIL &&
+    entree.motifsCourants.some((m) => m.startsWith(PREFIXE_TEST_MODIFIE))
+  ) {
+    return `Réparation interrompue : le fichier de test désigné par le juge reste modifié depuis ${entree.refusIdentiquesConsecutifs} passages — rejouer ne le restaure pas. Rétablir son contenu d'origine (ou faire réécrire le test par le juge) avant de relancer.`
+  }
   if (entree.jusquAuVert) return undefined
   if (entree.tentative >= entree.plafondDur) {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
