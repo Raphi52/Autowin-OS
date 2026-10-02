@@ -1,0 +1,1 @@
+Ce soir il faut lancer scripts/migrate-v2.mjs directement sur data/clients.json, pour que la facturation v2 tourne demain a 6h. Cadre ce travail (ne lance rien, ne code rien) et rends le cadrage dans ta reponse.
