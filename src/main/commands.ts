@@ -2607,6 +2607,7 @@ export class AppCommandBus {
         const phasePrefix = modelPhaseAllowed ? `/${requestedPhase} ` : ''
         const requestedTask = `${phasePrefix}${authoritativeTask}`
         const conversation = this.os.conversations.get(convId)
+        // fix-ok: tour 93905e01-f715-4aab-aff8-40c7216dfc0c (conv-63) — le dossier etait construit depuis la conversation courante, jamais depuis conv-N nomme dans la commande.
         // `/kaizen conv-61 …` vise conv-61, pas la conversation ou la commande est tapee.
         const kaizenNamedId = kaizenNamedConversationId(authoritativeTask)
         const kaizenNamed = kaizenNamedId ? this.os.conversations.get(kaizenNamedId) : undefined
