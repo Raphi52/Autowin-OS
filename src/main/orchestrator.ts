@@ -1,6 +1,6 @@
 import { deciderDuPassage, traceDuPassage } from './boucle-reparation'
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
@@ -5140,7 +5140,9 @@ ${CONTRAT_OBJECTIONS}`
       // `phaseOutputs.length === 0`, donc aucun cadrage a lire et une note toujours vide — l'y
       // injecter aurait ete une ligne qui fait semblant d'agir.
       const noteHypotheses = noteHypothesesPourJuge(
-        hypothesesDuCadrage(phaseOutputs.find((sortie) => sortie.phase === 'frame')?.text)
+        hypothesesDuCadrage(phaseOutputs.find((sortie) => sortie.phase === 'frame')?.text, {
+          citationIntrouvable: (chemin, ligne) => citationIntrouvableSurDisque(workCwd, chemin, ligne)
+        })
       )
       const jugeSeul = phaseOutputs.length === 0 && !exec.text.trim()
       const judgePrompt = jugeSeul
@@ -5735,5 +5737,22 @@ ${CONTRAT_OBJECTIONS}`
       failedTasks,
       skippedTasks
     }
+  }
+}
+
+/**
+ * Une citation `chemin:ligne` d'un cadrage est-elle introuvable dans le workspace ? Lecture seule.
+ * Un chemin absolu ou hors du workspace n'est pas juge (non resoluble ici) : jamais reclasse.
+ */
+export function citationIntrouvableSurDisque(racine: string, chemin: string, ligne?: number): boolean {
+  if (isAbsolute(chemin)) return false
+  const absolu = resolve(racine, chemin)
+  if (relative(racine, absolu).startsWith('..')) return false
+  try {
+    if (!statSync(absolu).isFile()) return true
+    if (ligne === undefined) return false
+    return readFileSync(absolu, 'utf8').split(String.fromCharCode(10)).length < ligne
+  } catch {
+    return true
   }
 }

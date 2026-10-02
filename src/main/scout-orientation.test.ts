@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { PHASE_BRIEFS } from './phase-briefs'
+import { parseScoutTable } from '../shared/scout-table'
 // fix-ok: ce test ne lisait que SKILL.md, que le pipeline in-app n'envoie jamais (`corpsSkill` vide
 // pour une phase du pipeline, orchestrator.ts) : il restait vert sans rien garder de la consigne reelle.
 
@@ -71,5 +72,43 @@ describe('demande d orientation d un scout', () => {
     expect(b).toMatch(/plafonne a 50/)
     // levier 5 : la cible lue par la machine
     expect(b).toMatch(/## cible|cible:/)
+  })
+
+  // Candidats scout conv-41 : la skill se contredisait, et ne disait pas la meme chose que le brief.
+  describe('SKILL.md coherente avec elle-meme et avec le brief de l app', () => {
+    const brut = () => readFileSync(skill, 'utf8')
+    it('n interdit plus la note /100 qu elle exige', () => {
+      expect(brut().toLowerCase()).not.toMatch(/émettre un \*\*\/100/)
+    })
+    it('reste un sommaire : les longs blocs vivent dans references/', () => {
+      expect(Buffer.byteLength(brut(), 'utf8')).toBeLessThan(17500)
+      expect(brut()).toContain('](references/recherche-externe.md)')
+      expect(brut()).toContain('](references/preuve-avant-inscription.md)')
+    })
+    it('meme tableau que le brief : # | Score | ... a 6 colonnes, lisible par scout-table', () => {
+      const entete = (t: string) => t.match(/# \| Score \| Type \|[^`\n]*/)?.[0]
+      const hSkill = entete(brut())
+      const hBrief = entete(PHASE_BRIEFS.scout)
+      expect(hSkill, 'en-tete skill').toBeTruthy()
+      expect(hBrief, 'en-tete brief').toBeTruthy()
+      const cellules = (h: string) => h.split('|').map((c) => c.trim()).filter(Boolean)
+      expect(cellules(hSkill!)).toHaveLength(6)
+      expect(cellules(hBrief!)).toHaveLength(6)
+      for (const h of [hSkill!, hBrief!]) {
+        const md = `| ${cellules(h).join(' | ')} |\n|---|---|---|---|---|---|\n| 1 | 82 | 🔧 fix | a | b | c |`
+        expect(parseScoutTable(md)?.[0]?.score, h).toBe(82)
+      }
+    })
+    it('connait ## Cible en tete, CIBLE: en fin et SUITE: fin', () => {
+      const s = brut()
+      expect(s).toContain('`## Cible` en tête')
+      expect(s).toContain('`SUITE: fin`')
+    })
+    it('dit quoi faire sans sous-agents', () => {
+      expect(brut()).toContain('sinon, joue les lentilles une par une')
+    })
+    it('ORIENTER-UN-SCOUT renvoie au nom actuel de la section', () => {
+      expect(readFileSync(demande, 'utf8')).not.toContain('Coverage dial')
+    })
   })
 })

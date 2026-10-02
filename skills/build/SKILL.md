@@ -1,7 +1,7 @@
 ---
 name: build
 description: >-
-  La boucle nommée du PRODUCTEUR (frame → terrain → build → clean → judge) : amener un DÉFAUT jusqu'à
+  La boucle de réparation (reproduire en rouge → corriger au minimum → rejouer le critère) : amener un DÉFAUT jusqu'à
   un état fonctionnellement VÉRIFIÉ. Invoquée par `judge` (qui renvoie les défauts priorisés) ET
   directement par l'utilisateur avec un bug brut.
   Déclencher sur "fix the bug / make it green / the test fails repair it / apply the judge's findings / it's still broken".
@@ -9,6 +9,8 @@ description: >-
 ---
 
 # build — sept réflexes, du défaut au vert vérifié
+
+Propre à cette skill : la règle 4 bis (jumeau d'acceptation, mesurée). Les autres reprennent la constitution et le brief BUILD de l'app ; leur retrait attend une mesure `/arena /build` avant/après.
 
 1. **AU MOMENT où un défaut arrive → REPRODUIS-LE EN ROUGE D'ABORD.** Joue le critère énoncé (test,
    commande, code de sortie) avant de toucher quoi que ce soit, et colle sa sortie rouge. Un correctif sur un bug
