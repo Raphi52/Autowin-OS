@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { arretDeLaReparation } from './stopgate'
+import { PREFIXE_TEST_MODIFIE } from '../objections-juge'
 
 // conv-844 (2026-09-24) : « que ça s'arrête que quand y a plus de défauts ».
 describe('reparation jusqu au vert', () => {
@@ -20,6 +21,24 @@ describe('reparation jusqu au vert', () => {
   })
   it('reserves mineures qui bougent : on continue jusqu au vert', () => {
     expect(arretDeLaReparation({ ...base, tentative: 3, jusquAuVert: true, reservesMineuresFigees: false })).toBeUndefined()
+  })
+  // conv-44 (juge independant, MINEUR « refus sans fin ») : un fichier TEST: jamais restaure a
+  // l'octet pres relancait build + juge a l'infini en mode jusqu'au vert.
+  const testModifie = `${PREFIXE_TEST_MODIFIE} (D:/r/a.test.ts) — il fallait le faire passer sans le toucher.`
+  it('meme refus « fichier de test modifie » repete : arret nomme, meme jusqu au vert', () => {
+    const m = [testModifie]
+    expect(
+      arretDeLaReparation({ ...base, motifsCourants: m, motifsPrecedents: m, tentative: 3, refusIdentiquesConsecutifs: 2, jusquAuVert: true })
+    ).toMatch(/fichier de test/)
+  })
+  it('jumeau : un premier refus « test modifie » laisse encore une chance de restaurer', () => {
+    const m = [testModifie]
+    expect(
+      arretDeLaReparation({ ...base, motifsCourants: m, motifsPrecedents: [], tentative: 1, refusIdentiquesConsecutifs: 1, jusquAuVert: true })
+    ).toBeUndefined()
+  })
+  it('jumeau : un autre refus repete continue jusqu au vert', () => {
+    expect(arretDeLaReparation({ ...base, tentative: 3, refusIdentiquesConsecutifs: 2, jusquAuVert: true })).toBeUndefined()
   })
   it('le code perime reste prioritaire', () => {
     const bundlePerime = { bundleMs: 1, sourceMs: 2, bundle: 'out/main/index.js' }

@@ -147,6 +147,9 @@ export function consigneTestsDuJuge(text: string): string {
     .join(' ; ')}.`
 }
 
+/** Début du motif de refus « test du juge retouché » — reconnu par `arretDeLaReparation` (stopgate). */
+export const PREFIXE_TEST_MODIFIE = 'Réparation refusée : le fichier de test désigné par le juge a été modifié'
+
 /** Clé stable d'un fichier `TEST:` : relatif ou absolu, `\` ou `/`, même clé (piège conv-539). */
 function cleDuTest(fichier: string, racine: string): string {
   const abs = isAbsolute(fichier) ? fichier : resolve(racine, fichier)
@@ -187,9 +190,7 @@ export function motifsTestModifie(
   for (const [cle, empreinte] of Object.entries(avant)) {
     if (empreinte === null) continue
     if (cle in apres && apres[cle] === empreinte) continue
-    motifs.push(
-      `Réparation refusée : le fichier de test désigné par le juge a été modifié (${cle}) — il fallait le faire passer sans le toucher.`
-    )
+    motifs.push(`${PREFIXE_TEST_MODIFIE} (${cle}) — il fallait le faire passer sans le toucher.`)
   }
   return motifs
 }
