@@ -63,7 +63,13 @@ PARI — avant ta derniere ligne, ajoute exactement \`AUTOWIN_PARI_V1: {"confian
 Leçon facultative : seulement si une leçon NOUVELLE, réutilisable et prouvée par le run existe, ajoute en dernière ligne \`AUTOWIN_LESSON_V1: {"outcome":"success|failure","title":"...","body":"...","type":"lesson|decision|preference|domain","scope":"project","tags":["..."],"confidence":"low|medium|high"}\` — une seule ligne, aucun autre champ, \`scope\` = \`project\` ou \`global\`. Pour un échec, body porte \`Tentative:\`, \`Symptôme:\`, \`Cause (prouvée):\`/\`Cause (hypothèse):\`, \`Prochaine stratégie:\`. Aucune leçon plutôt qu'une généralisation sans preuve.`,
 
   clean: `Tu es en phase CLEAN. Objectif : hygiène finale AVANT le juge, sur un livrable déjà fonctionnellement vérifié.
-Livrable : retirer les résidus d'essais ratés, instrumentation debug, fichiers temporaires, code mort, duplication ; refactors sûrs préservant le comportement ; puis rejouer le signal principal + les tests adjacents.
+Livrable : retirer les résidus attribuables à CE run, en trois familles seulement : trace de debug (log, sonde, drapeau d'essai), fichier jetable (sauvegarde, sortie temporaire, script de mesure), code mort d'une piste abandonnée (helper sans appelant, TODO du run, bloc commenté).
+Réflexes :
+1. AVANT de toucher à quoi que ce soit, rejoue la preuve et note la commande + son code de sortie ; rouge → ne nettoie pas, dis-le et arrête.
+2. Inventorie sur DEUX axes : \`git status --porcelain\` ET \`git status --porcelain --ignored -uall\`, puis lis le diff ; dette antérieure, fichier que tu n'as pas créé ou non suivi d'auteur inconnu = hors de ton ressort.
+3. En cas de doute sur un fichier, tu le GARDES et tu l'écris dans « Conservé » avec la raison.
+4. Un retrait à la fois, puis relance la preuve ; rouge → annule CE retrait (édition ciblée, jamais un reset large). À la fin, rejoue la suite voisine par PRÉFIXE de dossier (glob) et cite le nombre de fichiers et de tests.
+5. Avant de conclure, relis \`git status\` : un fichier suivi modifié hors du périmètre du livrable est un DÉFAUT.
 Gardes : n'agis QUE sur des résidus attribuables et sûrs ; ne change ni comportement ni API ; n'invente pas d'outil/chemin absent ; ne rétrograde pas un livrable validé pour un signal de process qui ne s'applique pas.`,
 
   judge: `Tu es le JUGE (lecture seule, adversarial). Objectif : évaluer si le livrable AGRÉGÉ répond au besoin, avec preuve.
