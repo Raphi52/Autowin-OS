@@ -335,3 +335,16 @@ describe('fusion : la regle « tache donnee » vit dans la constitution, la cons
     expect(GARDE_TACHE.length).toBeLessThan(300)
   })
 })
+
+describe('contrat FRAME — la skill et la consigne exigent les mêmes sections', () => {
+  // Deux rédactions séparées (skills/frame/SKILL.md et PHASE_BRIEFS.frame) : ce test casse dès
+  // qu'une section exigée disparaît d'un côté seulement.
+  const SECTIONS = ['## Besoin', '## Contraintes', '## Confiance', '## Options']
+  it.each(SECTIONS)('%s figure dans les deux sources', (section) => {
+    const kit = readFileSync('skills/frame/SKILL.md', 'utf8')
+    // Le titre exact : « ## Confiances » ou « ## ConfianceX » ne comptent pas.
+    const exact = new RegExp(`${section}(?!\\p{L})`, 'u')
+    expect(kit).toMatch(exact)
+    expect(PHASE_BRIEFS.frame).toMatch(exact)
+  })
+})
