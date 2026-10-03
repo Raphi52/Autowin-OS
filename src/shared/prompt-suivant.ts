@@ -247,7 +247,25 @@ export function publicationJamaisDemandee(
   // Sans depot, `estPromptDePublication` rend deja `false` : aucune suite n'est supprimee, elle
   // passe intacte. Le drapeau est passe explicitement pour que la regle vive a UN seul endroit.
   if (!estPromptDePublication(prompt, demandeDuTour, depotPresent)) return false
-  return !mentionneUnActeDePublication(demandeDuTour)
+  return !mentionneUnActeDePublication(sansInterdictions(demandeDuTour))
+}
+
+/*
+ * UNE INTERDICTION N'EST PAS UNE DEMANDE. Vécu le 2026-10-01 (conv-770), deux fois : la consigne du
+ * tour disait « Ne publie rien : aucun commit, aucun push », et ces mots comptaient comme une demande
+ * de publication — la suite proposée était réécrite en `/salvage` et envoyée par le mode auto.
+ * Avant de lire la demande, on écarte chaque MEMBRE de phrase (coupé sur . ; ! ? , saut de ligne et
+ * « mais ») qui porte une négation : « ne / n' … rien | pas | jamais | plus », ou « aucun(e) ».
+ * « n'oublie pas » est une consigne positive : elle ne compte pas comme négation.
+ */
+const NEGATION =
+  /(?:\bne\s+|\bn['’])[^.;!?,\n]*?\b(?:rien|pas|jamais|plus)\b|\baucun(?:e|s|es)?\b/iu
+
+function sansInterdictions(texte: string): string {
+  return texte
+    .split(/[.;!?,\n]|\bmais\b/iu)
+    .filter((membre) => !NEGATION.test(membre.replace(/\bn['’]oubliez?\s+pas\b/giu, '')))
+    .join(' . ')
 }
 
 /**
