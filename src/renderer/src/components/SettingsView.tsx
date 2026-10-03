@@ -6,6 +6,7 @@ import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
 import { ProdProtectionSettings } from './ProdProtectionSettings'
 import { InterfaceView } from './InterfaceView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
+import { ModeAutoSeuilsSettings } from './ModeAutoSeuilsSettings'
 import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
 import { ViewTopBar } from './ViewTopBar'
 import './ViewPage.css'
@@ -187,6 +188,7 @@ export function SettingsView({
         {section === 'budget' && (
           <>
             <OrchestrationBudgetSettings />
+            <ModeAutoSeuilsSettings />
             <ShadowRoutingPilotSettings />
           </>
         )}

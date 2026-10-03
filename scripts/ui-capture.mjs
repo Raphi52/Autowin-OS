@@ -183,11 +183,22 @@ export const verdictCapture = (mesures) => {
     // preuve montrerait autre chose que ce qu'elle affirme, et le juge la croirait.
     if (!mesures.declencheurTrouve) {
       echecs.push(`declencheur-absent(${mesures.declencheur})`)
-    } else if ((mesures.elementsAvantClic ?? 0) >= (mesures.elements ?? 0)) {
+    } else if ((mesures.elementsAvantClic ?? 0) === (mesures.elements ?? 0)) {
       // Le declencheur existe, le clic part, et rien ne s'ouvre — deja ouvert, clic absorbe,
       // handler non pose. Sans cette garde le verdict dirait « prouve » sur une vue inchangee.
       // Le DELTA est ce qui rend le clic falsifiable ; « j'ai clique » ne l'est pas.
+      // fix-ok: cause mesurée 2026-10-02 — la garde exigeait une HAUSSE (>=) ; un onglet REMPLACE la
+      // vue (Budget : 521 -> 354 elements, panneau visible) et etait refuse. Delta nul = inerte ; une
+      // baisse n'est recevable qu'avec une cible --scroll retrouvee apres le clic (garde suivante).
       echecs.push(`clic-sans-effet(${mesures.declencheur})`)
+    } else if (
+      (mesures.elementsAvantClic ?? 0) > (mesures.elements ?? 0) &&
+      !mesures.defilementVers
+    ) {
+      // Une BAISSE peut etre un onglet qui remplace la vue... ou un menu qui se FERME, une vue qui
+      // casse. Elle n'est recevable que si `--scroll` a retrouve la cible nommee APRES le clic
+      // (absente => exit 9 avant ce verdict). Objection du juge du 2026-10-02.
+      echecs.push(`clic-reduit-vue-sans-cible(${mesures.declencheur})`)
     }
   }
   if ((mesures.octetsPng ?? 0) < SEUILS.octetsPng) echecs.push('png-trop-petit')

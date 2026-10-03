@@ -3,7 +3,10 @@
  * dise qu'il ne reste RIEN à faire.
  *
  * Cadrage utilisateur (2026-09-02) : l'interrupteur vit dans la barre de gauche et reste ACTIF
- * jusqu'à désactivation — pas de plafond de tours, pas de remise à zéro au changement de fil.
+ * jusqu'à désactivation, pas de remise à zéro au changement de fil.
+ * Révision (2026-10-02, après conv-44) : la chaîne d'un fil s'arrête désormais toute seule quand le
+ * quota hebdomadaire Claude atteint un seuil (80 % par défaut) OU après N tours automatiques
+ * d'affilée sans message de l'utilisateur (6 par défaut) — seuils réglables, voir garde-fou 4.
  *
  * Chaque tour coûte de l'argent réel. Toute la décision vit donc ICI, pure et testable, plutôt que
  * noyée dans la vue : ce qui décide d'envoyer un tour payant doit pouvoir être lu d'un coup.
@@ -16,8 +19,10 @@
  * 2. UN TOUR TRAITÉ UNE SEULE FOIS — la décision porte une signature du tour ; le même tour ne peut
  *    pas déclencher deux envois, même si la vue se redessine dix fois.
  * 3. ANTI-BOUCLE — la même suite proposée deux fois d'affilée arrête tout.
+ * 4. GARDE DE CHAÎNE — quota hebdomadaire Claude ou nombre de tours auto d'affilée (voir plus bas).
  */
 import type { Msg, AsstMsg } from './chat-view-types'
+import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
 import type { ChatPart } from './chat-view-model'
 import {
   extrairePromptSuivant,
@@ -411,6 +416,9 @@ export type RaisonArret =
   | 'suite-attend-utilisateur'
   /* conv-767 — la suite ne peut avancer qu'à un moment donné (heure, « demain », « quand X existe »). */
   | 'suite-differee'
+  /* conv-38 (2026-10-02) — garde-fou de la chaîne : quota hebdomadaire Claude, tours auto d'affilée. */
+  | 'quota-hebdo'
+  | 'tours-auto-max'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */
@@ -452,6 +460,107 @@ export interface EntreeDecisionAuto {
   relancesDifferees?: number
   /** Horloge injectable (tests). Absent = `Date.now()`. */
   maintenant?: number
+  /** Quota hebdomadaire Claude utilisé, en % (null/absent = inconnu : ce seuil ne joue pas). */
+  quotaHebdoPct?: number | null
+  /**
+   * Tours automatiques d'affilée comptés EN MÉMOIRE par la vue (secours : le fil chargé peut ne pas
+   * montrer les ancres). La porte retient le plus grand de ce compte et de celui lu dans le fil.
+   */
+  toursAutoDAffilee?: number
+  /** Seuils réglés par l'utilisateur. Absent = `SEUILS_CHAINE_DEFAUT`. */
+  seuilsChaine?: SeuilsChaineAuto
+}
+
+/**
+ * GARDE-FOU DE LA CHAÎNE ∞ (demande du 2026-10-02, conv-38). Mesure : conv-44 a consommé 226 M
+ * tokens d'entrée en tours enchaînés juste avant le plafond hebdomadaire de Claude du 30/09. Rien
+ * ne bornait une chaîne qui ne disait jamais « rien ». La chaîne s'arrête désormais quand le quota
+ * hebdomadaire Claude atteint `quotaHebdoPct`, OU après `toursAutoMax` tours automatiques d'affilée
+ * sans message de l'utilisateur.
+ */
+export interface SeuilsChaineAuto {
+  quotaHebdoPct: number
+  toursAutoMax: number
+}
+export const SEUILS_CHAINE_DEFAUT: SeuilsChaineAuto = { quotaHebdoPct: 80, toursAutoMax: 6 }
+export const CLE_SEUILS_CHAINE_AUTO = 'autowin.chat.modeAuto.seuils'
+
+/** Relit le réglage stocké ; une valeur absente ou illisible rend les défauts, une valeur absurde est bornée. */
+export function lireSeuilsChaine(brut: string | null): SeuilsChaineAuto {
+  if (!brut) return { ...SEUILS_CHAINE_DEFAUT }
+  let lu: unknown
+  try {
+    lu = JSON.parse(brut)
+  } catch {
+    return { ...SEUILS_CHAINE_DEFAUT }
+  }
+  const r = (lu && typeof lu === 'object' ? lu : {}) as Record<string, unknown>
+  const nombre = (v: unknown, min: number, max: number, defaut: number): number =>
+    typeof v === 'number' && Number.isFinite(v)
+      ? Math.min(max, Math.max(min, Math.round(v)))
+      : defaut
+  return {
+    quotaHebdoPct: nombre(r.quotaHebdoPct, 1, 100, SEUILS_CHAINE_DEFAUT.quotaHebdoPct),
+    toursAutoMax: nombre(r.toursAutoMax, 1, 1000, SEUILS_CHAINE_DEFAUT.toursAutoMax)
+  }
+}
+
+/** Un message utilisateur envoyé PAR le mode auto (ancre posée par `ancrerSurLaDemande`, ou relève). */
+function estEnvoiDuModeAuto(texte: string): boolean {
+  const nu = texte.trim()
+  return ANCRE_DEJA_ECRITE.test(nu) || nu.startsWith(PROMPT_NOUVELLE_CIBLE)
+}
+
+/** Tours automatiques envoyés depuis le dernier message ÉCRIT par l'utilisateur (orientations ignorées). */
+export function toursAutoDAffilee(fil: readonly Msg[]): number {
+  let n = 0
+  for (let rang = fil.length - 1; rang >= 0; rang--) {
+    const m = fil[rang]
+    if (m.role !== 'user') continue
+    const user = m as Extract<Msg, { role: 'user' }>
+    if (user.orientation) continue
+    if (!estEnvoiDuModeAuto(user.content ?? '')) break
+    n++
+  }
+  return n
+}
+
+/** Le % utilisé de la fenêtre 7 j de Claude (le plus haut si plusieurs modèles), null si inconnu. */
+export function quotaHebdoClaude(
+  snapshot: Pick<ModelQuotaSnapshot, 'models'> | null | undefined
+): number | null {
+  let pire: number | null = null
+  for (const model of snapshot?.models ?? []) {
+    if (model?.provider !== 'claude') continue
+    for (const w of model.windows ?? []) {
+      if (w?.id !== 'seven-day' || w.limitKnown === false) continue
+      if (!Number.isFinite(w.usedPercent)) continue
+      pire = pire === null ? w.usedPercent : Math.max(pire, w.usedPercent)
+    }
+  }
+  return pire
+}
+
+/** Le garde-fou seul : null = la chaîne peut continuer. Relu aussi par le minuteur des suites différées. */
+export function arretChaineAuto(entree: {
+  quotaHebdoPct?: number | null
+  toursAutoDAffilee: number
+  seuils?: SeuilsChaineAuto
+}): { raison: RaisonArret; message: string } | null {
+  // fix-ok: les messages promettaient une reprise que le code n'offre pas (« rallume ∞ » seul : compte de tours inchangé ; « reprendra quand le quota repassera sous le seuil » : ∞ éteint, rien ne le rallume) ; ils ne citent plus que les gestes réels.
+  const seuils = entree.seuils ?? SEUILS_CHAINE_DEFAUT
+  const quota = entree.quotaHebdoPct
+  if (typeof quota === 'number' && Number.isFinite(quota) && quota >= seuils.quotaHebdoPct)
+    return {
+      raison: 'quota-hebdo',
+      message: `Mode auto arrêté : le quota hebdomadaire Claude est à ${Math.round(quota)} % (seuil réglé : ${seuils.quotaHebdoPct} %). ∞ est éteint sur ce fil : rallume ∞ quand le quota sera repassé sous le seuil, ou relève ce seuil dans Settings › Budget puis rallume ∞.`
+    }
+  if (entree.toursAutoDAffilee >= seuils.toursAutoMax)
+    return {
+      raison: 'tours-auto-max',
+      message: `Mode auto arrêté : ${entree.toursAutoDAffilee} tours automatiques d'affilée sans message de ta part (seuil réglé : ${seuils.toursAutoMax}). ∞ est éteint sur ce fil : écris un message (le compte repart de zéro) puis rallume ∞, ou relève ce seuil dans Settings › Budget puis rallume ∞.`
+    }
+  return null
 }
 
 export type DecisionAuto =
@@ -711,6 +820,18 @@ export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
 
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
 export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
+  const decision = deciderSuiteAuto(entree)
+  // Le garde-fou de la chaîne ne retient que ce qui PAIERAIT un tour : envoi immédiat ou programmé.
+  if (decision.action !== 'envoyer' && decision.action !== 'programmer') return decision
+  const arret = arretChaineAuto({
+    quotaHebdoPct: entree.quotaHebdoPct,
+    toursAutoDAffilee: Math.max(toursAutoDAffilee(entree.fil), entree.toursAutoDAffilee ?? 0),
+    seuils: entree.seuilsChaine
+  })
+  return arret ? { action: 'arreter', ...arret } : decision
+}
+
+function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
   if (!entree.actif) return { action: 'attendre', raison: 'inactif' }
   if (entree.occupe) return { action: 'attendre', raison: 'tour-en-cours' }
   const signature = signatureTour(entree.fil)
