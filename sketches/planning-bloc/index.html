@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f3d5e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bloc Accord">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Bloc Accord — planning opératoire</title>
+<style>
+:root{--bg:#f3f6f9;--card:#fff;--ink:#14212b;--mute:#5d6b78;--line:#e2e8ee;--pri:#0f3d5e;--pri2:#1b6ca8;
+--ok:#1f9d61;--okbg:#e5f6ee;--wait:#b7791f;--waitbg:#fdf3e1;--no:#c53b3b;--nobg:#fdeaea;--ctr:#6b46c1;--ctrbg:#f0eafc;--r:16px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+button,select,input{font:inherit}
+header{position:sticky;top:0;z-index:5;background:linear-gradient(135deg,#0f3d5e,#1b6ca8);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:19px;margin:0;letter-spacing:.2px}
+.sub{font-size:12px;opacity:.85}
+.who{margin-top:10px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.who button{flex:0 0 auto;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#fff;border-radius:999px;padding:8px 12px;min-height:40px;display:flex;align-items:center;gap:6px}
+.who button.on{background:#fff;color:var(--pri);font-weight:600}
+.av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;font-size:11px;font-weight:700;color:#fff}
+.fict{background:#fff8e1;color:#7a5b00;font-size:12px;text-align:center;padding:6px 12px;border-bottom:1px solid #f1e2a8}
+main{padding:12px 12px calc(96px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+.days{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+.day{flex:0 0 52px;border:0;background:var(--card);border-radius:14px;padding:8px 0;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.05);position:relative;min-height:60px}
+.day b{display:block;font-size:18px}.day small{color:var(--mute);font-size:11px;text-transform:uppercase}
+.day.on{background:var(--pri);color:#fff}.day.on small{color:#cfe3f3}
+.dot{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);display:flex;gap:2px}.dot i{width:5px;height:5px;border-radius:50%}
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:10px 4px 6px}
+.sec h2{font-size:15px;margin:0}.sec span{font-size:12px;color:var(--mute)}
+.card{background:var(--card);border-radius:var(--r);padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(16,40,60,.07);border-left:5px solid var(--wait);cursor:pointer}
+.card.ok{border-left-color:var(--ok)}.card.no{border-left-color:var(--no)}.card.ctr{border-left-color:var(--ctr)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.time{font-weight:700;font-size:16px}.title{font-weight:600;margin:4px 0 2px}
+.meta{color:var(--mute);font-size:13px}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.p-ok{background:var(--okbg);color:var(--ok)}.p-wait{background:var(--waitbg);color:var(--wait)}.p-no{background:var(--nobg);color:var(--no)}.p-ctr{background:var(--ctrbg);color:var(--ctr)}
+.ppl{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:5px;font-size:12px;background:#f4f7fa;border-radius:999px;padding:3px 8px 3px 3px}
+.chip .av{width:20px;height:20px;font-size:10px}
+.conf{margin-top:8px;background:var(--nobg);color:var(--no);border-radius:10px;padding:6px 10px;font-size:13px;font-weight:600}
+.empty{text-align:center;color:var(--mute);padding:28px 10px;background:var(--card);border-radius:var(--r)}
+.fab{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:6;border:0;background:var(--pri2);color:#fff;border-radius:999px;padding:0 20px;height:54px;font-weight:700;box-shadow:0 6px 18px rgba(27,108,168,.4)}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:6;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:10px 0 12px;color:var(--mute);font-size:12px;min-height:58px;position:relative}
+nav button.on{color:var(--pri);font-weight:700}
+nav .ic{display:block;font-size:20px;line-height:1.2}
+.badge{position:absolute;top:6px;left:calc(50% + 6px);background:var(--no);color:#fff;border-radius:999px;font-size:10px;min-width:18px;padding:1px 5px;font-weight:700}
+.sheet-bg{position:fixed;inset:0;background:rgba(10,25,40,.45);z-index:10;display:none;align-items:flex-end;justify-content:center}
+.sheet-bg.open{display:flex}
+.sheet{background:#fff;width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom));animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.grab{width:40px;height:5px;background:#d5dde5;border-radius:3px;margin:4px auto 12px}
+.sheet h3{margin:0 0 4px;font-size:18px}
+label{display:block;font-size:12px;color:var(--mute);margin:12px 0 4px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+input,select{width:100%;border:1px solid var(--line);background:#f8fafc;border-radius:12px;padding:11px 12px;min-height:46px;color:var(--ink)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:block;width:100%;border:0;border-radius:14px;min-height:50px;font-weight:700;margin-top:10px;font-size:15px}
+.b-pri{background:var(--pri2);color:#fff}.b-ok{background:var(--ok);color:#fff}.b-no{background:#fff;color:var(--no);border:1.5px solid var(--no)}.b-ctr{background:#fff;color:var(--ctr);border:1.5px solid var(--ctr)}.b-ghost{background:#eef2f6;color:var(--ink)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}.acts .btn{margin-top:8px}
+.tl{margin:12px 0 0;padding:0;list-style:none;border-left:2px solid var(--line)}
+.tl li{position:relative;padding:0 0 10px 14px;font-size:13px}.tl li:before{content:"";position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--pri2)}
+.tl time{color:var(--mute);font-size:11px;display:block}
+.resp{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.resp:last-child{border:0}
+.note{font-size:12px;color:var(--ctr);margin-top:2px}
+.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#14212b;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
+.kpi{background:var(--card);border-radius:14px;padding:10px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.kpi b{display:block;font-size:22px}.kpi small{color:var(--mute);font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><div><h1>Bloc Accord</h1><div class="sub">Planning opératoire partagé</div></div><button id="reset" class="who" style="margin:0;border:0;background:none;color:#fff;font-size:12px;opacity:.85;min-height:40px" title="Remettre la démo à zéro">↺ Démo</button></div>
+  <div class="who" id="who"></div>
+</header>
+<div class="fict" data-testid="fictif">⚠︎ Démonstration — données entièrement fictives, aucune donnée patient</div>
+<main id="main"></main>
+<button class="fab" id="fab">＋ Proposer</button>
+<nav id="nav">
+  <button data-tab="planning" class="on"><span class="ic">📅</span>Planning</button>
+  <button data-tab="todo"><span class="ic">✋</span>À traiter<span class="badge" id="badge" hidden></span></button>
+  <button data-tab="lieux"><span class="ic">🏥</span>Salles</button>
+</nav>
+<div class="sheet-bg" id="sheetBg"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ===== Données de référence (fictives) ===== */
+const PEOPLE = {
+  chir:{id:"chir",name:"Dr Martin",role:"Chirurgien",ini:"JM",color:"#1b6ca8"},
+  an1:{id:"an1",name:"Dr Lefèvre",role:"Anesthésiste",ini:"CL",color:"#1f9d61"},
+  an2:{id:"an2",name:"Dr Benali",role:"Anesthésiste",ini:"SB",color:"#6b46c1"},
+  an3:{id:"an3",name:"Dr Rossi",role:"Anesthésiste",ini:"AR",color:"#c0702b"}
+};
+const ANES = ["an1","an2","an3"];
+const SITES = {
+  "Clinique Saint-Roch":["Salle 1","Salle 2","Salle 3"],
+  "Hôpital Privé Est":["Bloc A","Bloc B"],
+  "Centre Ambulatoire Nord":["Salle Ambu 1"]
+};
+const INTERVENTIONS = ["Prothèse totale de hanche","Prothèse totale de genou","Arthroscopie du genou","Ligamentoplastie LCA","Canal carpien","Coiffe des rotateurs"];
+
+/* ===== Stockage : une seule interface, remplaçable par un serveur plus tard ===== */
+const Store = {
+  KEY:"blocaccord.v1",
+  load(){ try{ return JSON.parse(localStorage.getItem(this.KEY)); }catch(e){ return null; } },
+  save(s){ localStorage.setItem(this.KEY, JSON.stringify(s)); }
+};
+
+const pad = n => String(n).padStart(2,"0");
+const iso = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const toMin = t => { const [h,m]=t.split(":").map(Number); return h*60+m; };
+const fromMin = m => pad(Math.floor(m/60))+":"+pad(m%60);
+const DOW = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+const MON = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+const fmtDay = s => { const d=new Date(s+"T12:00"); return DOW[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()]; };
+const nowTxt = () => { const d=new Date(); return d.getDate()+" "+MON[d.getMonth()]+" "+pad(d.getHours())+":"+pad(d.getMinutes()); };
+let seq = 1; const uid = () => "op"+Date.now().toString(36)+(seq++);
+
+function nextWorkday(d){ while(d.getDay()===0||d.getDay()===6) d=addDays(d,1); return d; }
+function seed(){
+  const d0 = nextWorkday(addDays(new Date(),1)), d1 = nextWorkday(addDays(d0,1)), d2 = nextWorkday(addDays(d1,1));
+  const mk = (date,start,dur,site,room,label,anes,resp,state) => ({id:uid(),date:iso(date),start,dur,site,room,label,anes,
+    resp:Object.fromEntries(anes.map((a,i)=>[a,{s:resp[i]}])),
+    log:[{t:"il y a 2 j",w:"chir",m:"Proposition créée"}],state});
+  return { me:"chir", ops:[
+    mk(d0,"08:00",120,"Clinique Saint-Roch","Salle 2","Prothèse totale de hanche",["an1"],["ok"]),
+    mk(d0,"10:30",45,"Clinique Saint-Roch","Salle 2","Arthroscopie du genou",["an1"],["ok"]),
+    mk(d0,"14:00",90,"Hôpital Privé Est","Bloc A","Ligamentoplastie LCA",["an3"],["wait"]),
+    mk(d1,"08:30",30,"Centre Ambulatoire Nord","Salle Ambu 1","Canal carpien",["an2"],["no"]),
+    mk(d2,"09:00",150,"Clinique Saint-Roch","Salle 1","Prothèse totale de genou",["an1","an2"],["ok","wait"])
+  ], day:iso(d0), tab:"planning" };
+}
+let S = Store.load() || seed();
+const save = () => Store.save(S);
+save();
+
+/* ===== Logique métier ===== */
+function status(op){
+  const r = op.anes.map(a=>op.resp[a].s);
+  if(op.counter) return "ctr";
+  if(r.some(s=>s==="no")) return "no";
+  if(r.every(s=>s==="ok")) return "ok";
+  return "wait";
+}
+const LABEL = {ok:"Validé",wait:"En attente",no:"Refusé",ctr:"Contre-proposition"};
+function conflicts(op){
+  if(status(op)==="no") return [];
+  const a0=toMin(op.start), a1=a0+op.dur;
+  return S.ops.filter(o=>o.id!==op.id && status(o)!=="no" && o.date===op.date && o.site===op.site && o.room===op.room &&
+    toMin(o.start)<a1 && a0<toMin(o.start)+o.dur);
+}
+function anesBusy(op){ // même anesthésiste sur deux créneaux qui se chevauchent
+  const a0=toMin(op.start), a1=a0+op.dur;
+  return S.ops.filter(o=>o.id!==op.id && status(o)!=="no" && o.date===op.date && o.anes.some(x=>op.anes.includes(x)) &&
+    toMin(o.start)<a1 && a0<toMin(o.start)+o.dur && !(o.site===op.site&&o.room===op.room));
+}
+function needsMe(op){
+  if(S.me==="chir") return !!op.counter || status(op)==="no";
+  return op.anes.includes(S.me) && op.resp[S.me].s==="wait" && !op.counter;
+}
+
+/* ===== Rendu ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const av = p => `<span class="av" style="background:${p.color}">${p.ini}</span>`;
+
+function renderWho(){
+  $("#who").innerHTML = Object.values(PEOPLE).map(p=>`<button data-me="${p.id}" class="${S.me===p.id?"on":""}">${av(p)}${p.name}</button>`).join("");
+}
+function card(op){
+  const st=status(op), cf=conflicts(op), busy=anesBusy(op);
+  const chips = op.anes.map(a=>{const r=op.resp[a].s;const ic={ok:"✓",wait:"…",no:"✕"}[r];return `<span class="chip">${av(PEOPLE[a])}${PEOPLE[a].name} ${ic}</span>`}).join("");
+  return `<div class="card ${st}" data-op="${op.id}">
+    <div class="row"><span class="time">${op.start} – ${fromMin(toMin(op.start)+op.dur)}</span><span class="pill p-${st}">${LABEL[st]}</span></div>
+    <div class="title">${esc(op.label)}</div>
+    <div class="meta">📍 ${esc(op.site)} · ${esc(op.room)}</div>
+    ${op.counter?`<div class="note">↻ ${PEOPLE[op.counter.by].name} propose ${fmtDay(op.counter.date)} ${op.counter.start} · ${esc(op.counter.site)} · ${esc(op.counter.room)}</div>`:""}
+    <div class="ppl">${chips}</div>
+    ${cf.length?`<div class="conf" data-testid="conflit">⚠︎ Conflit de salle avec « ${esc(cf[0].label)} » (${cf[0].start})</div>`:""}
+    ${busy.length?`<div class="conf">⚠︎ ${PEOPLE[busy[0].anes.find(x=>op.anes.includes(x))].name} déjà pris à ${busy[0].start}</div>`:""}
+  </div>`;
+}
+function renderPlanning(){
+  const days=[]; let d=nextWorkday(new Date());
+  for(let i=0;i<10;i++){ days.push(iso(d)); d=nextWorkday(addDays(d,1)); }
+  S.ops.forEach(o=>{ if(!days.includes(o.date)) days.push(o.date); }); days.sort();
+  if(!days.includes(S.day)) S.day=days[0];
+  const strip = days.map(x=>{const dd=new Date(x+"T12:00");const ops=S.ops.filter(o=>o.date===x);
+    const dots=ops.slice(0,4).map(o=>`<i style="background:var(--${{ok:"ok",wait:"wait",no:"no",ctr:"ctr"}[status(o)]})"></i>`).join("");
+    return `<button class="day ${x===S.day?"on":""}" data-day="${x}"><small>${DOW[dd.getDay()]}</small><b>${dd.getDate()}</b><span class="dot">${dots}</span></button>`}).join("");
+  const ops=S.ops.filter(o=>o.date===S.day).sort((a,b)=>toMin(a.start)-toMin(b.start));
+  const all=S.ops, k={ok:all.filter(o=>status(o)==="ok").length, w:all.filter(o=>["wait","ctr"].includes(status(o))).length, c:all.filter(o=>conflicts(o).length).length};
+  return `<div class="kpis"><div class="kpi"><b style="color:var(--ok)">${k.ok}</b><small>validées</small></div><div class="kpi"><b style="color:var(--wait)">${k.w}</b><small>en discussion</small></div><div class="kpi"><b style="color:var(--no)">${k.c}</b><small>conflits</small></div></div>
+  <div class="days">${strip}</div>
+  <div class="sec"><h2>${fmtDay(S.day)}</h2><span>${ops.length} intervention${ops.length>1?"s":""}</span></div>
+  ${ops.length?ops.map(card).join(""):`<div class="empty">Aucune intervention ce jour.<br>Touchez « Proposer » pour en planifier une.</div>`}`;
+}
+function renderTodo(){
+  const ops=S.ops.filter(needsMe).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
+  return `<div class="sec"><h2>À traiter — ${PEOPLE[S.me].name}</h2><span>${ops.length}</span></div>
+  ${ops.length?ops.map(o=>`<div class="meta" style="margin:8px 4px 4px">${fmtDay(o.date)}</div>`+card(o)).join(""):`<div class="empty">✓ Rien à traiter. Tout est à jour.</div>`}`;
+}
+function renderLieux(){
+  return Object.entries(SITES).map(([site,rooms])=>`<div class="sec"><h2>🏥 ${esc(site)}</h2></div>`+rooms.map(room=>{
+    const ops=S.ops.filter(o=>o.site===site&&o.room===room&&status(o)!=="no"&&o.date===S.day).sort((a,b)=>toMin(a.start)-toMin(b.start));
+    return `<div class="card ok" style="border-left-color:var(--pri);cursor:default"><div class="row"><b>${esc(room)}</b><span class="meta">${fmtDay(S.day)}</span></div>
+    <div class="meta" style="margin-top:4px">${ops.length?ops.map(o=>`${o.start}–${fromMin(toMin(o.start)+o.dur)} ${esc(o.label)}${conflicts(o).length?" ⚠︎":""}`).join("<br>"):"Libre toute la journée"}</div></div>`}).join("")).join("");
+}
+function render(){
+  renderWho();
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===S.tab));
+  $("#main").innerHTML = S.tab==="todo"?renderTodo():S.tab==="lieux"?renderLieux():renderPlanning();
+  const n=S.ops.filter(needsMe).length, b=$("#badge"); b.hidden=!n; b.textContent=n;
+  $("#fab").style.display = S.me==="chir"?"":"none";
+  save();
+}
+
+/* ===== Feuilles (détail / formulaires) ===== */
+function openSheet(html){ $("#sheet").innerHTML='<div class="grab"></div>'+html; $("#sheetBg").classList.add("open"); }
+function closeSheet(){ $("#sheetBg").classList.remove("open"); }
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2200); }
+const opts = (arr,v) => arr.map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("");
+
+function slotFields(o){
+  const site=o.site||Object.keys(SITES)[0];
+  return `<div class="two"><div><label>Date</label><input type="date" name="date" value="${o.date}"></div>
+  <div><label>Début</label><input type="time" name="start" value="${o.start}" step="900"></div></div>
+  <label>Site</label><select name="site">${opts(Object.keys(SITES),site)}</select>
+  <label>Salle</label><select name="room">${opts(SITES[site],o.room)}</select>`;
+}
+function formVals(){ const f={}; $("#sheet").querySelectorAll("[name]").forEach(e=>f[e.name]=e.value); return f; }
+
+function openNew(){
+  openSheet(`<h3>Nouvelle proposition</h3><div class="meta">Les anesthésistes choisis recevront la demande.</div>
+  <label>Intervention</label><select name="label">${opts(INTERVENTIONS,INTERVENTIONS[0])}</select>
+  ${slotFields({date:S.day,start:"08:00"})}
+  <label>Durée</label><select name="dur">${[30,45,60,90,120,150,180].map(m=>`<option value="${m}" ${m===90?"selected":""}>${m>=60?Math.floor(m/60)+" h"+(m%60?" "+m%60:""):m+" min"}</option>`).join("")}</select>
+  <label>Anesthésiste(s)</label>${ANES.map((a,i)=>`<label style="display:flex;align-items:center;gap:10px;text-transform:none;font-size:15px;color:var(--ink);font-weight:500;min-height:44px;margin:0"><input type="checkbox" name="an_${a}" value="1" ${i===0?"checked":""} style="width:22px;min-height:22px">${av(PEOPLE[a])}${PEOPLE[a].name}</label>`).join("")}
+  <div id="live"></div>
+  <button class="btn b-pri" data-act="create">Envoyer la proposition</button><button class="btn b-ghost" data-act="close">Annuler</button>`);
+  liveCheck();
+}
+function liveCheck(){
+  const el=$("#live"); if(!el) return; const f=formVals(); if(!f.date||!f.start) return;
+  const probe={id:"_",date:f.date,start:f.start,dur:+(f.dur||60),site:f.site,room:f.room,anes:[],resp:{}};
+  const cf=conflicts(probe); el.innerHTML=cf.length?`<div class="conf">⚠︎ ${esc(f.room)} déjà occupée : ${esc(cf[0].label)} à ${cf[0].start}</div>`:"";
+}
+function openDetail(id){
+  const op=S.ops.find(o=>o.id===id); if(!op) return; const st=status(op), me=S.me, isChir=me==="chir", mine=op.anes.includes(me);
+  let acts="";
+  if(op.counter && isChir) acts=`<div class="acts"><button class="btn b-ok" data-act="acceptCtr">Accepter la contre-proposition</button><button class="btn b-no" data-act="rejectCtr">Garder mon créneau</button></div>`;
+  else if(op.counter && !isChir) acts=`<div class="meta" style="margin-top:12px">En attente de la réponse du Dr Martin à la contre-proposition.</div>`;
+  else if(mine && op.resp[me].s!=="ok") acts=`<button class="btn b-ok" data-act="accept">✓ J'accepte ce créneau</button><div class="acts"><button class="btn b-ctr" data-act="counter">↻ Proposer autre chose</button><button class="btn b-no" data-act="decline">✕ Indisponible</button></div>`;
+  else if(mine) acts=`<button class="btn b-ctr" data-act="counter">↻ Proposer autre chose</button>`;
+  else if(isChir) acts=`<button class="btn b-ctr" data-act="move">Modifier le créneau</button><button class="btn b-no" data-act="cancel">Annuler l'intervention</button>`;
+  openSheet(`<div class="row"><h3>${esc(op.label)}</h3><span class="pill p-${st}">${LABEL[st]}</span></div>
+  <div class="meta">🗓 ${fmtDay(op.date)} · ${op.start} – ${fromMin(toMin(op.start)+op.dur)}<br>📍 ${esc(op.site)} · ${esc(op.room)}<br>🩺 ${PEOPLE.chir.name}</div>
+  ${conflicts(op).map(c=>`<div class="conf">⚠︎ Conflit de salle : ${esc(c.label)} ${c.start}–${fromMin(toMin(c.start)+c.dur)}</div>`).join("")}
+  ${op.counter?`<div class="conf" style="background:var(--ctrbg);color:var(--ctr)">↻ ${PEOPLE[op.counter.by].name} propose : ${fmtDay(op.counter.date)} à ${op.counter.start}<br>${esc(op.counter.site)} · ${esc(op.counter.room)}</div>`:""}
+  <label>Réponses</label>${op.anes.map(a=>`<div class="resp"><span style="display:flex;gap:8px;align-items:center">${av(PEOPLE[a])}${PEOPLE[a].name}</span><span class="pill p-${op.resp[a].s}">${{ok:"Accepté",wait:"En attente",no:"Indisponible"}[op.resp[a].s]}</span></div>`).join("")}
+  ${acts}
+  <label>Historique</label><ul class="tl">${op.log.slice().reverse().map(l=>`<li><time>${l.t}</time><b>${PEOPLE[l.w].name}</b> — ${esc(l.m)}</li>`).join("")}</ul>
+  <button class="btn b-ghost" data-act="close">Fermer</button>`);
+  $("#sheet").dataset.op=id;
+}
+function openCounter(id, move){
+  const op=S.ops.find(o=>o.id===id);
+  openSheet(`<h3>${move?"Modifier le créneau":"Proposer autre chose"}</h3><div class="meta">${esc(op.label)} — actuellement ${fmtDay(op.date)} ${op.start}, ${esc(op.room)}</div>
+  ${slotFields(op)}<div id="live"></div>
+  <button class="btn b-pri" data-act="${move?"doMove":"sendCtr"}">${move?"Enregistrer et redemander l'accord":"Envoyer au Dr Martin"}</button><button class="btn b-ghost" data-act="close">Annuler</button>`);
+  $("#sheet").dataset.op=id; liveCheck();
+}
+function applySlot(op,f){ op.date=f.date; op.start=f.start; op.site=f.site; op.room=f.room; }
+
+/* ===== Actions ===== */
+const log = (op,m) => op.log.push({t:nowTxt(),w:S.me,m});
+const ACT = {
+  close:closeSheet,
+  create(){ const f=formVals(); const anes=ANES.filter(a=>f["an_"+a]&&$(`[name=an_${a}]`).checked);
+    if(!anes.length) return toast("Choisissez au moins un anesthésiste");
+    const op={id:uid(),date:f.date,start:f.start,dur:+f.dur,site:f.site,room:f.room,label:f.label,anes,resp:Object.fromEntries(anes.map(a=>[a,{s:"wait"}])),log:[]};
+    log(op,"Proposition créée"); S.ops.push(op); S.day=op.date; S.tab="planning"; closeSheet(); render();
+    toast(conflicts(op).length?"⚠︎ Envoyé — attention, conflit de salle":"Proposition envoyée"); },
+  accept(op){ op.resp[S.me].s="ok"; log(op,"Accepte le créneau"); closeSheet(); render(); toast(status(op)==="ok"?"✓ Créneau validé par tous":"Réponse enregistrée"); },
+  decline(op){ op.resp[S.me].s="no"; log(op,"Indisponible"); closeSheet(); render(); toast("Le Dr Martin est prévenu"); },
+  counter(op){ openCounter(op.id,false); },
+  move(op){ openCounter(op.id,true); },
+  sendCtr(op){ const f=formVals(); op.counter={by:S.me,...f}; log(op,`Contre-proposition : ${fmtDay(f.date)} ${f.start}, ${f.room}`); closeSheet(); render(); toast("Contre-proposition envoyée"); },
+  doMove(op){ applySlot(op,formVals()); op.anes.forEach(a=>op.resp[a].s="wait"); log(op,`Créneau modifié : ${fmtDay(op.date)} ${op.start}, ${op.room}`); S.day=op.date; closeSheet(); render(); toast("Nouvel accord demandé"); },
+  acceptCtr(op){ const c=op.counter; applySlot(op,c); delete op.counter;
+    op.anes.forEach(a=>op.resp[a].s = a===c.by?"ok":"wait"); log(op,"Accepte la contre-proposition"); S.day=op.date; closeSheet(); render();
+    toast(status(op)==="ok"?"✓ Créneau validé par tous":"Créneau mis à jour — reconfirmation demandée aux autres"); },
+  rejectCtr(op){ delete op.counter; op.anes.forEach(a=>{ if(op.resp[a].s!=="ok") op.resp[a].s="wait"; }); log(op,"Maintient le créneau initial"); closeSheet(); render(); toast("Créneau initial maintenu"); },
+  cancel(op){ if(!confirm("Annuler cette intervention ?")) return; S.ops=S.ops.filter(o=>o.id!==op.id); closeSheet(); render(); toast("Intervention annulée"); }
+};
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-me],[data-tab],[data-day],[data-op],[data-act],#fab,#reset,#sheetBg");
+  if(!t) return;
+  if(t.id==="sheetBg"){ if(e.target===t) closeSheet(); return; }
+  if(t.id==="fab") return openNew();
+  if(t.id==="reset"){ if(confirm("Remettre la démonstration à zéro ?")){ S=seed(); render(); toast("Démo réinitialisée"); } return; }
+  if(t.dataset.me){ S.me=t.dataset.me; render(); return toast("Vous êtes "+PEOPLE[S.me].name+" ("+PEOPLE[S.me].role.toLowerCase()+")"); }
+  if(t.dataset.tab){ S.tab=t.dataset.tab; render(); return; }
+  if(t.dataset.day){ S.day=t.dataset.day; render(); return; }
+  if(t.dataset.act){ const op=S.ops.find(o=>o.id===$("#sheet").dataset.op); return ACT[t.dataset.act](op); }
+  if(t.dataset.op) return openDetail(t.dataset.op);
+});
+document.addEventListener("change",e=>{
+  if(e.target.name==="site"){ const r=$("[name=room]"); r.innerHTML=opts(SITES[e.target.value]); }
+  liveCheck();
+});
+render();
+if("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
