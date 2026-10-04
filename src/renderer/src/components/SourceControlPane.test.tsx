@@ -1029,7 +1029,7 @@ describe('SourceControlPane — relecture ligne à ligne envoyée à l’agent',
     expect(par('diff-view')).toBeNull()
   })
 
-  it('le bouton « Lancer » est monté dans la vue Fichiers, et seulement là', async () => {
+  it('le bouton « Lancer » est monté dans la vue Projet, et seulement là', async () => {
     mockApi(GIT, DIFF_REL)
     const api = (window as unknown as { api: Record<string, unknown> }).api
     const etats: string[] = []
@@ -1043,7 +1043,25 @@ describe('SourceControlPane — relecture ligne à ligne envoyée à l’agent',
       })
     }
     api.onLancement = () => () => {}
+    api.listProjectDir = () =>
+      Promise.resolve({
+        ok: true,
+        path: '',
+        entries: [
+          { name: 'src', path: 'src', kind: 'dir' },
+          { name: 'README.md', path: 'README.md', kind: 'file' }
+        ]
+      })
     await render(vi.fn(), 'conv-lance')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Vue Fichiers (défaut) : plus de « Lancer » ici.
+    expect(par('sc-lancement')).toBeNull()
+    await act(async () => {
+      ;(par('sc-view-tree') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
     await act(async () => {
       await Promise.resolve()
     })

@@ -60,6 +60,26 @@ async function monter(): Promise<void> {
 }
 
 describe('ProjectPane', () => {
+  /** Demande conv-72 : l'arbre surligne les fichiers modifiés par la conversation ET leurs dossiers. */
+  it('surligne les fichiers modifies par la conversation et leurs dossiers parents', async () => {
+    listProjectDir.mockResolvedValue({
+      ok: true,
+      path: '',
+      entries: [
+        { name: 'src', path: 'src', kind: 'dir' },
+        { name: 'a.ts', path: 'a.ts', kind: 'file' },
+        { name: 'b.ts', path: 'b.ts', kind: 'file' }
+      ]
+    })
+    await act(async () => {
+      root = createRoot(host)
+      root.render(<ProjectPane conversationId="conv-1" modifies={['a.ts', 'src/x/y.ts']} />)
+    })
+    expect(q('pp-noeud-a.ts').classList.contains('is-modifie')).toBe(true)
+    expect(q('pp-noeud-src').classList.contains('is-modifie')).toBe(true)
+    expect(q('pp-noeud-b.ts').classList.contains('is-modifie')).toBe(false)
+  })
+
   /**
    * CHANGER DE CWD CHANGE LE CONTENU. Demande du 2026-09-24 : l'onglet lisait toujours le dossier
    * global et ne se rechargeait jamais. Il transmet la conversation (le principal en deduit le CWD)

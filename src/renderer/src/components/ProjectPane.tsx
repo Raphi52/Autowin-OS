@@ -13,8 +13,11 @@ import './ProjectPane.css'
  */
 export function ProjectPane({
   conversationId,
-  racine
+  racine,
+  modifies = []
 }: {
+  /** Chemins relatifs modifiés par la conversation : surlignés dans l'arbre (et leurs dossiers). */
+  modifies?: readonly string[]
   /** Conversation dont le CWD sert de racine (resolu cote principal). */
   conversationId?: string
   /** CWD courant : quand il CHANGE, l'arbre se recharge et l'editeur se referme. */
@@ -29,6 +32,15 @@ export function ProjectPane({
   const [etat, setEtat] = useState<string>('')
   const [erreur, setErreur] = useState<string>('')
   const [vscodeEnCours, setVscodeEnCours] = useState(false)
+
+  const fichiersModifies = new Set(modifies)
+  const dossiersModifies = new Set<string>()
+  for (const m of modifies) {
+    const parts = m.split('/')
+    for (let i = 1; i < parts.length; i++) dossiersModifies.add(parts.slice(0, i).join('/'))
+  }
+  const estModifie = (entry: ProjectEntry): boolean =>
+    entry.kind === 'dir' ? dossiersModifies.has(entry.path) : fichiersModifies.has(entry.path)
 
   const lister = useCallback(async (chemin: string): Promise<ProjectEntry[]> => {
     const r = await window.api.listProjectDir(chemin, conversationId)
@@ -159,7 +171,10 @@ export function ProjectPane({
     <div key={entry.path}>
       <button
         type="button"
-        className={`pp-noeud${fichier === entry.path ? ' is-active' : ''}`}
+        className={`pp-noeud${fichier === entry.path ? ' is-active' : ''}${
+          estModifie(entry) ? ' is-modifie' : ''
+        }`}
+        title={estModifie(entry) ? 'Modifié par cette conversation' : undefined}
         style={{ paddingLeft: 6 + niveau * 12 }}
         data-testid={`pp-noeud-${entry.path}`}
         onClick={() => void (entry.kind === 'dir' ? basculer(entry) : ouvrir(entry))}

@@ -135,3 +135,12 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* Fichiers (et dossiers parents) modifiés par la conversation : surlignés dans l'arbre. */
+.project-pane .pp-noeud.is-modifie .pp-nom {
+  color: #e3ba55;
+  font-weight: 600;
+}
+.project-pane .pp-noeud.is-modifie {
+  box-shadow: inset 2px 0 0 #d4a94f;
+}

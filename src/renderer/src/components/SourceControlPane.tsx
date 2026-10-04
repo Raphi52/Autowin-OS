@@ -118,6 +118,15 @@ function libelleExclusion(item: Exclusion): string {
   return `${item.path} (${motif}, ${n} ligne${s} non réclamée${s})`
 }
 
+const normRacine = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+/** Chemins (relatifs à la racine affichée) modifiés par la conversation, pour l'arbre Projet. */
+function cheminsModifies(changes: GitChange[], racine?: string): string[] {
+  return changes
+    .filter((c) => !racine || !c.workspaceRoot || normRacine(c.workspaceRoot) === normRacine(racine))
+    .map((c) => c.path.replace(/\\/g, '/'))
+}
+
 function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): string {
   if (result.status === 'pushed') {
     if (result.mode === 'direct') return `${scope} · poussé sur ${result.branch}`
@@ -306,10 +315,8 @@ export function SourceControlPane({
       setLoadedScope(scope)
     }
 
-    if (view === 'tree') {
-      // L'arborescence charge elle-meme par ses propres canaux : aucune lecture git a faire ici.
-      finishGit(EMPTY_GIT)
-    } else if (view === 'project') {
+    if (view === 'project' || view === 'tree') {
+      // « Projet » (tree) lit AUSSI les fichiers de la conversation : l'arbre les surligne.
       if (!conversationId) finishGit(EMPTY_GIT)
       else {
         void window.api
@@ -529,11 +536,17 @@ export function SourceControlPane({
           </button>
         </div>
 
-        {view === 'tree' && <ProjectPane conversationId={conversationId} racine={repoPath} />}
-
-        {/* « Lancer » ne dépend pas de git : il s'affiche même hors dépôt. */}
-        {view === 'project' && conversationId && (
+        {/* « Lancer » vit dans l'onglet Projet (demande conv-72) ; il ne dépend pas de git. */}
+        {view === 'tree' && conversationId && (
           <LancementBarre key={conversationId} conversationId={conversationId} />
+        )}
+
+        {view === 'tree' && (
+          <ProjectPane
+            conversationId={conversationId}
+            racine={repoPath}
+            modifies={cheminsModifies(changes, repoPath)}
+          />
         )}
 
         {view !== 'brain' && view !== 'tree' && visibleGit && !visibleGit.available && (
