@@ -204,7 +204,7 @@ export function parseCatalogRows(rows: Record<string, unknown>[]): SqlTarget[] {
   return cibles
 }
 
-/** Durée de validité du catalogue en mémoire : un greffe n'entre pas en exploitation tous les jours. */
+/** Durée de validité du catalogue en mémoire : une base n'entre pas en exploitation tous les jours. */
 const CACHE_TTL_MS = 30 * 60 * 1000
 
 interface CacheEntry {
@@ -224,7 +224,7 @@ export interface CatalogDeps extends SqlcmdDeps {
 }
 
 /**
- * Rend le catalogue : les greffes exploités lus dans l'autorité, plus les cibles fixes de
+ * Rend le catalogue : les bases exploités lus dans l'autorité, plus les cibles fixes de
  * développement. Si l'autorité est injoignable, le catalogue est marqué `degraded` et ne contient que
  * les cibles fixes — donc aucune base de production. Défaut FERMÉ, et visible.
  */

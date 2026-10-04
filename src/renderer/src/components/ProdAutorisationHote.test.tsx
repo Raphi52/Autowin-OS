@@ -14,7 +14,7 @@ let racine: Root
 
 const DEMANDE = {
   id: 'd1',
-  cible: 'base:APP_AMIENS',
+  cible: 'base:DB_ALPHA',
   operation: 'sql-read',
   raison: 'Production déclarée : base de production',
   niveau: 'phrase' as const
@@ -94,7 +94,7 @@ describe('ProdAutorisationHote', () => {
       publier()
     })
     expect(hote.querySelector('.ppg')).not.toBeNull()
-    expect(hote.textContent).toContain('base:APP_AMIENS')
+    expect(hote.textContent).toContain('base:DB_ALPHA')
     expect(hote.textContent).toContain('sql-read')
     expect(hote.textContent).toContain('base de production')
   })
@@ -159,15 +159,15 @@ describe('ProdAutorisationHote', () => {
     await rendre()
     await act(async () => {
       publier()
-      publier({ ...DEMANDE, id: 'd2', cible: 'base:APP_LYON' })
+      publier({ ...DEMANDE, id: 'd2', cible: 'base:DB_BETA' })
     })
     expect(hote.querySelectorAll('.ppg')).toHaveLength(1)
-    expect(hote.textContent).toContain('base:APP_AMIENS')
+    expect(hote.textContent).toContain('base:DB_ALPHA')
     await act(async () => {
       ;(hote.querySelector('.ppg-annuler') as HTMLButtonElement).click()
     })
     expect(api.prodAutorisationAnnuler).toHaveBeenCalledWith('d1')
-    expect(hote.textContent).toContain('base:APP_LYON')
+    expect(hote.textContent).toContain('base:DB_BETA')
   })
 
   it('ne casse rien si le shell n’expose pas ces canaux', async () => {
@@ -189,7 +189,7 @@ describe('fenêtre de confirmation', () => {
       publier(DEMANDE_CONFIRMATION)
     })
     expect(hote.textContent).toContain('Voulez-vous continuer')
-    expect(hote.textContent).toContain('base:APP_AMIENS')
+    expect(hote.textContent).toContain('base:DB_ALPHA')
     expect(hote.querySelector('#ppg-champ')).toBeNull()
   })
 

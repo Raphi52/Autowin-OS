@@ -32,9 +32,9 @@ describe('hook des agents — SQL vers la production', () => {
   it.each([
     'sqlcmd -S srv-prod -d Ventes -Q "DELETE FROM clients"',
     'SQLCMD.EXE -S srv-prod -Q "select 1"',
-    'osql -S srv -d Greffe75 -Q "update t set a=1"',
-    'bcp Greffe75.dbo.t out x.dat -S srv',
-    'powershell -c "Invoke-Sqlcmd -ServerInstance srv -Database Greffe75 -Query \'delete t\'"',
+    'osql -S srv -d Base75 -Q "update t set a=1"',
+    'bcp Base75.dbo.t out x.dat -S srv',
+    'powershell -c "Invoke-Sqlcmd -ServerInstance srv -Database Base75 -Query \'delete t\'"',
     'Invoke-Sqlcmd -ServerInstance srv -Query "select 1"'
   ])('refuse %s (base prod ou inconnue)', (c) => {
     expect(refuse(hook(c))).toBe(true)

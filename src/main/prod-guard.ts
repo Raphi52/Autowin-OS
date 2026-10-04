@@ -17,14 +17,14 @@
  * choix que `sql-read-guard.ts` : refus par défaut. Conséquence assumée — une cible non déclarée
  * demandera une autorisation ; c'est le prix pour qu'un oubli de déclaration ne crée pas un trou.
  *
- * PAS DE MOTIF DE NOM, JAMAIS. `sql-read-catalog.ts` a déjà payé cette leçon : `RIG_LE_PUY_MARTIN`
- * ressemble à un greffe et n'en est pas un. Un nom qui contient « prod » ne prouve rien, et un nom
- * qui n'en contient pas ne prouve rien non plus (`RIG_AMIENS` est une base de production).
+ * PAS DE MOTIF DE NOM, JAMAIS. `sql-read-catalog.ts` a déjà payé cette leçon : `DB_EPSILON_COPIE`
+ * ressemble à une base et n'en est pas une. Un nom qui contient « prod » ne prouve rien, et un nom
+ * qui n'en contient pas ne prouve rien non plus (`DB_ALPHA` est une base de production).
  * L'autorité est donc une LISTE DÉCLARÉE, passée en paramètre — jamais une expression régulière
  * devinée ici.
  *
  * L'APPARIEMENT EST EXACT, après normalisation. Un préfixe ou une inclusion de texte rouvriraient la
- * porte au faux positif du nom : `RIG_AMIENS_TEST` n'est pas `RIG_AMIENS`, et doit tomber en
+ * porte au faux positif du nom : `DB_ALPHA_TEST` n'est pas `DB_ALPHA`, et doit tomber en
  * `inconnu` (donc bloquant) plutôt que d'hériter du classement d'un voisin. Seule exception : les
  * chemins de fichiers, comparés par SEGMENTS, parce qu'un dossier déclaré couvre réellement ce
  * qu'il contient.

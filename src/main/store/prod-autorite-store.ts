@@ -3,7 +3,7 @@
  * pas. Lue au démarrage depuis un fichier de déclaration, écrit par un HUMAIN.
  *
  * POURQUOI UN FICHIER, ET PAS DU CODE. Le classifieur (`prod-guard.ts`) refuse toute règle de nom,
- * et il a raison : `RIG_LE_PUY_MARTIN` ressemble à un greffe et n'en est pas un, `RIG_AMIENS` ne
+ * et il a raison : `DB_EPSILON_COPIE` ressemble à une base et n'en est pas une, `DB_ALPHA` ne
  * contient pas le mot « prod » et c'est une base de production. Seule une DÉCLARATION explicite peut
  * trancher. Ce fichier est cette déclaration ; il n'est jamais écrit par l'application ni par le
  * modèle.
@@ -21,8 +21,8 @@
  *
  * FORME DU FICHIER — JSON, un tableau d'entrées ou un objet `{ "entrees": [...] }` :
  *   [
- *     { "nature": "base", "nom": "RIG_AMIENS", "classe": "prod", "motif": "greffe exploité" },
- *     { "nature": "base", "nom": "RIG_MAQUETTE", "classe": "non-prod" },
+ *     { "nature": "base", "nom": "DB_ALPHA", "classe": "prod", "motif": "base exploité" },
+ *     { "nature": "base", "nom": "APP_MAQUETTE", "classe": "non-prod" },
  *     { "nature": "chemin", "nom": "D:/Deploiement/Prod", "classe": "prod" }
  *   ]
  * Natures acceptées : base · serveur · chemin · branche · service. Classes : prod · non-prod.

@@ -23,7 +23,7 @@
  * conversation, donc dans le contexte du modèle au tour suivant.
  *
  * LE JETON EST BORNÉ TROIS FOIS, parce qu'une autorisation qui traîne est une autorisation volée :
- *   1. À UNE CIBLE ET UNE OPÉRATION. Autoriser un UPDATE sur `RIG_AMIENS` n'autorise rien d'autre.
+ *   1. À UNE CIBLE ET UNE OPÉRATION. Autoriser un UPDATE sur `DB_ALPHA` n'autorise rien d'autre.
  *   2. DANS LE TEMPS. Cinq minutes par défaut. Au-delà, il faut ressaisir.
  *   3. À UN SEUL USAGE. Consommé, il est mort. Sinon une boucle du modèle rejouerait le même jeton.
  *
@@ -67,7 +67,7 @@ export interface EmpreintePhrase {
 
 /** Ce que l'appelant veut faire, et sur quoi. Le jeton est lié exactement à ce couple. */
 export interface Demande {
-  /** La cible, telle que `prod-guard.ts` l'a classée (ex. `base:RIG_AMIENS`). */
+  /** La cible, telle que `prod-guard.ts` l'a classée (ex. `base:DB_ALPHA`). */
   cible: string
   /** L'opération, nommée par l'appelant (ex. `sql-write`, `deploiement`). */
   operation: string

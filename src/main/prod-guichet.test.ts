@@ -18,7 +18,7 @@ describe('GuichetProd', () => {
   it('publie la demande vers l’écran puis rend le jeton déposé', async () => {
     const { guichet, publiees, retirees } = montage()
     const attente = guichet.demander({
-      cible: 'base:APP_AMIENS',
+      cible: 'base:DB_ALPHA',
       operation: 'sql-read',
       niveau: 'phrase' as const,
       raison: 'r'
@@ -26,7 +26,7 @@ describe('GuichetProd', () => {
     expect(publiees).toEqual([
       {
         id: 'd1',
-        cible: 'base:APP_AMIENS',
+        cible: 'base:DB_ALPHA',
         operation: 'sql-read',
         raison: 'r',
         niveau: 'phrase' as const

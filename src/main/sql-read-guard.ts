@@ -3,14 +3,14 @@
  * Garde de LECTURE SQL sur les bases SQL — la première couche de défense, purement décisionnelle.
  *
  * POURQUOI ELLE EST AUSSI STRICTE. La connexion se fait en authentification Windows intégrée, donc
- * avec le compte de l'utilisateur. Mesuré sur le poste de référence (2026-08-06, base RIG_AMIENS) :
+ * avec le compte de l'utilisateur. Mesuré sur le poste de référence (2026-08-06, base DB_ALPHA) :
  *
  *   IS_SRVROLEMEMBER('sysadmin') = 0    IS_MEMBER('db_owner') = 0
  *   IS_MEMBER('db_datawriter')   = 1    DELETE = 1    UPDATE = 1
  *
- * Le compte PEUT écrire dans les bases de PRODUCTION des greffes. La protection ne peut donc pas
+ * Le compte PEUT écrire dans les bases de PRODUCTION. La protection ne peut donc pas
  * venir des droits SQL : elle doit être ici, avant que quoi que ce soit n'atteigne le serveur. Un
- * modèle qui se trompe de requête ne doit pas pouvoir modifier un greffe.
+ * modèle qui se trompe de requête ne doit pas pouvoir modifier une base.
  *
  * DÉFENSE EN PROFONDEUR — ce module est la première couche, pas la seule. L'exécution ajoute une
  * transaction systématiquement annulée, un délai borné et un plafond de lignes. Mais on ne compte
@@ -18,12 +18,12 @@
  * a quand même pris des verrous sur une base de production.
  *
  * CHOIX ASSUMÉ, décidé par l'utilisateur le 2026-08-06 : le périmètre couvre TOUTES les tables des
- * bases RIG, pas seulement le paramétrage. Conséquence explicite : des données nominatives de greffe
+ * bases RIG, pas seulement le paramétrage. Conséquence explicite : des données nominatives de base
  * peuvent entrer dans le contexte du modèle, donc quitter le poste. Ce n'est pas un oubli.
  *
  * QUELLES BASES : ce module ne le décide plus. L’autorité est la table catalogue configurée
  * (`sql-catalog.json`), lue par `sql-read-catalog.ts` et passée ici en paramètre. Un motif de nom ne
- * peut pas trancher — `RIG_LE_PUY_MARTIN` ressemble à un greffe et n'en est pas un.
+ * peut pas trancher — `DB_EPSILON_COPIE` ressemble à une base et n'en est pas une.
  */
 import { estBaseCatalogue, getSqlCatalogConfig, type SqlTargetCatalog } from './sql-read-catalog'
 
@@ -50,7 +50,7 @@ const LOCAL_SCHEMAS = ['dbo', 'sys', 'information_schema']
  * Vues et fonctions système à portée SERVEUR : elles sont visibles depuis n'importe quelle base et
  * renseignent donc sur ce qui est HORS du périmètre annoncé (liste des bases, serveurs liés,
  * comptes). Les métadonnées de la base courante (`sys.tables`, `sys.columns`) restent autorisées :
- * elles sont utiles pour explorer un greffe et ne débordent pas.
+ * elles sont utiles pour explorer une base et ne débordent pas.
  */
 const SERVER_SCOPED_VIEWS = [
   'databases',
@@ -68,7 +68,7 @@ const SERVER_SCOPED_VIEWS = [
 /**
  * Vues de COMPATIBILITÉ : elles vivent dans le schéma `sys` mais sont résolubles SANS qualification,
  * si bien que chercher `sys.<vue>` ne les voyait pas. Vérifié en réel le 2026-08-07 :
- * `SELECT name FROM sysdatabases` énumérait toutes les bases du serveur depuis une base greffe.
+ * `SELECT name FROM sysdatabases` énumérait toutes les bases du serveur depuis une base.
  * Cherchées ici en mot entier, préfixe `sys.` optionnel.
  */
 const COMPAT_SERVER_VIEWS = [
@@ -83,8 +83,8 @@ const COMPAT_SERVER_VIEWS = [
   'sysconfigures',
   // fix-ok: cause reproduite hors modèle (cf. RUN.md, CausalHypothesis du 4ᵉ audit). Ajoutées ici
   // parce que ce sont les équivalents COMPAT de DMV DÉJÀ interdites, et que par elles passaient les
-  // deux fuites les plus graves de la série, constatées sur des données réelles d'AUTRES greffes
-  // depuis RIG_AMIENS :
+  // deux fuites les plus graves de la série, constatées sur des données réelles d'AUTRES bases
+  // depuis DB_ALPHA :
   //   `syscacheobjects` → 55 948 plans d'autres bases AVEC leurs littéraux, donc du contenu
   //                       applicatif (« … WHERE ETP_IDDMD=355878 ») ; compat de
   //                       dm_exec_cached_plans + dm_exec_sql_text, tous deux déjà interdits ;
@@ -125,13 +125,13 @@ const SERVER_SCOPED_VARIABLES = [
 ]
 
 /**
- * Fonctions et familles de vues qui renseignent HORS du greffe ciblé sans nommer aucune table :
+ * Fonctions et familles de vues qui renseignent HORS de la base ciblé sans nommer aucune table :
  * `DB_NAME(5)` donne le nom d'une autre base, `SERVERPROPERTY` la machine, `SUSER_SNAME` le compte,
  * et les vues de gestion dynamique `dm_exec_*` exposent jusqu'au TEXTE des requêtes des autres
  * utilisateurs — donc des données d'autres bases. Toutes constatées passantes au 3ᵉ audit.
  *
  * LIMITE ASSUMÉE : `OBJECT_NAME`/`OBJECT_ID` restent autorisées, car leur usage à un seul argument
- * est le moyen normal d'explorer les métadonnées du greffe. Leur seconde forme peut nommer un objet
+ * est le moyen normal d'explorer les métadonnées de la base. Leur seconde forme peut nommer un objet
  * d'une autre base : fuite de NOMS d'objets, sans accès aux données. Compromis retenu sciemment.
  */
 const SERVER_SCOPED_FUNCTIONS = [
@@ -149,7 +149,7 @@ const SERVER_SCOPED_FUNCTIONS = [
   'fn_get_audit_file',
   'fn_virtualfilestats',
   'fn_servershareddrives',
-  // Ajoutées au 4ᵉ audit : elles renseignent hors du greffe sans nommer aucune table.
+  // Ajoutées au 4ᵉ audit : elles renseignent hors de la base sans nommer aucune table.
   // `DATABASEPROPERTYEX('master','Status')` confirme n'importe quelle base par son nom, et survivait
   // donc à l'interdiction de `sys.databases`.
   'databasepropertyex',
@@ -174,7 +174,7 @@ const DYNAMIC_MANAGEMENT_PREFIX = /\bdm_[a-z]+_/
  * Indices de verrouillage. Un indice de table est PRIORITAIRE sur le niveau d'isolation posé par
  * l'enveloppe : `WITH (TABLOCKX, HOLDLOCK)` prend un verrou exclusif de table, tenu jusqu'au
  * `ROLLBACK`. `SET LOCK_TIMEOUT` protège NOTRE session, pas les greffiers qui écrivent en face.
- * Aucune écriture, mais une base de greffe bloquée — précisément ce qu'on veut éviter.
+ * Aucune écriture, mais une base bloquée — précisément ce qu'on veut éviter.
  */
 const LOCK_HINTS = [
   'tablockx',
@@ -267,7 +267,7 @@ const SQLCMD_DIRECTIVE = /^[ \t]*(?:go\b|:)/im
  * Préfixes de procédures système, cherchés en DÉBUT DE JETON uniquement (`\b`). Les chercher en
  * SOUS-CHAÎNE — ce que faisait la version auditée — rejetait des colonnes de production réelles
  * (`R_ACTIVITESP_VALEUR`, `BDCRCX_BOITE_POSTALE_SP_X`, `MNTSP_ID_MNTSP`, vérifiées existantes dans
- * RIG_AMIENS) sans rien sécuriser de plus : `EXEC`/`EXECUTE` interdisent déjà l'appel de procédure.
+ * DB_ALPHA) sans rien sécuriser de plus : `EXEC`/`EXECUTE` interdisent déjà l'appel de procédure.
  */
 const PROCEDURE_PREFIXES = /\b(?:sp|xp)_/
 

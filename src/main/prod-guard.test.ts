@@ -10,9 +10,9 @@ import { classerCible, construireAutoriteProd, type EntreeAutorite } from './pro
  * n'est pas explicitement déclaré hors production BLOQUE.
  */
 const DECLARATIONS: EntreeAutorite[] = [
-  { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+  { nature: 'base', nom: 'DB_ALPHA', classe: 'prod', motif: 'base exploité' },
   { nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' },
-  { nature: 'serveur', nom: 'SRV-POLYNESIE', classe: 'prod' },
+  { nature: 'serveur', nom: 'SRV-EXT-A', classe: 'prod' },
   { nature: 'chemin', nom: 'D:\\Deploiement\\Prod', classe: 'prod' },
   { nature: 'chemin', nom: 'D:/Deploiement/Prod/bac-a-sable', classe: 'non-prod' },
   { nature: 'branche', nom: 'main', classe: 'prod' },
@@ -23,10 +23,10 @@ const AUTORITE = construireAutoriteProd(DECLARATIONS)
 
 describe('classerCible', () => {
   it('classe prod une cible déclarée prod, et le dit avec son motif', () => {
-    const verdict = classerCible({ nature: 'base', nom: 'APP_AMIENS' }, AUTORITE)
+    const verdict = classerCible({ nature: 'base', nom: 'DB_ALPHA' }, AUTORITE)
     expect(verdict.classe).toBe('prod')
     expect(verdict.estBloquant).toBe(true)
-    expect(verdict.raison).toContain('greffe exploité')
+    expect(verdict.raison).toContain('base exploité')
   })
 
   it('laisse passer une cible déclarée hors production', () => {
@@ -52,22 +52,22 @@ describe('classerCible', () => {
   })
 
   it('ignore la casse et les espaces autour du nom', () => {
-    expect(classerCible({ nature: 'base', nom: '  app_amiens  ' }, AUTORITE).classe).toBe('prod')
+    expect(classerCible({ nature: 'base', nom: '  db_alpha  ' }, AUTORITE).classe).toBe('prod')
   })
 
   /**
-   * Le piège nommé dans l'en-tête du module : un nom VOISIN n'hérite de rien. `APP_AMIENS_TEST`
-   * n'est pas `APP_AMIENS` — et il tombe du côté prudent, pas du côté permissif.
+   * Le piège nommé dans l'en-tête du module : un nom VOISIN n'hérite de rien. `DB_ALPHA_TEST`
+   * n'est pas `DB_ALPHA` — et il tombe du côté prudent, pas du côté permissif.
    */
   it('ne fait AUCUN appariement par préfixe sur un nom voisin', () => {
-    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS_TEST' }, AUTORITE).classe).toBe(
+    expect(classerCible({ nature: 'base', nom: 'DB_ALPHA_TEST' }, AUTORITE).classe).toBe(
       'inconnu'
     )
   })
 
   it('ne confond pas deux natures qui portent le même nom', () => {
-    expect(classerCible({ nature: 'serveur', nom: 'APP_AMIENS' }, AUTORITE).classe).toBe('inconnu')
-    expect(classerCible({ nature: 'serveur', nom: 'SRV-POLYNESIE' }, AUTORITE).classe).toBe(
+    expect(classerCible({ nature: 'serveur', nom: 'DB_ALPHA' }, AUTORITE).classe).toBe('inconnu')
+    expect(classerCible({ nature: 'serveur', nom: 'SRV-EXT-A' }, AUTORITE).classe).toBe(
       'prod'
     )
   })
@@ -155,8 +155,8 @@ describe('construireAutoriteProd', () => {
 describe('pureté', () => {
   it('rend le même verdict pour les mêmes entrées, sans modifier l’autorité', () => {
     const avant = JSON.stringify(AUTORITE)
-    const premier = classerCible({ nature: 'base', nom: 'APP_AMIENS' }, AUTORITE)
-    const second = classerCible({ nature: 'base', nom: 'APP_AMIENS' }, AUTORITE)
+    const premier = classerCible({ nature: 'base', nom: 'DB_ALPHA' }, AUTORITE)
+    const second = classerCible({ nature: 'base', nom: 'DB_ALPHA' }, AUTORITE)
     expect(second).toEqual(premier)
     expect(JSON.stringify(AUTORITE)).toBe(avant)
   })

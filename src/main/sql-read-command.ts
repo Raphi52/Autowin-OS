@@ -68,7 +68,7 @@ export function buildReadOnlyBatch(query: string, maxRows: number): string {
   return [
     'SET NOCOUNT ON',
     // La garde traite `"…"` comme un IDENTIFIANT délimité. Or sous `sqlcmd -Q`, QUOTED_IDENTIFIER est
-    // OFF (mesuré : `SESSIONPROPERTY('QUOTED_IDENTIFIER')` = 0 sur RIG_AMIENS), donc `"…"` serait une
+    // OFF (mesuré : `SESSIONPROPERTY('QUOTED_IDENTIFIER')` = 0 sur DB_ALPHA), donc `"…"` serait une
     // CHAÎNE. La sécurité tenait quand même — un contenu délimité est inerte dans les deux lectures —
     // mais elle tenait par accident, sur une prémisse fausse. On aligne le runtime sur le modèle de la
     // garde plutôt que de laisser une évolution future partir d'un raisonnement erroné (4ᵉ audit).
@@ -113,7 +113,7 @@ export async function runSqlRead(
   // LE POINT DE PASSAGE EST ICI, DANS LA FONCTION, et pas chez l'appelant : un garde placé sur le
   // site d'appel se contourne en ajoutant un second appelant. La base retenue est celle de la
   // DÉCISION, jamais l'argument brut du modèle — celui-ci a pu être normalisé ou refusé entre-temps.
-  // fix-ok: runSqlRead ne transmettait que decision.database à la porte, jamais decision.server — donc SQL-DEV\DEV déclaré non-prod restait refusé ; mesuré rouge (exit 1) puis vert par sql-read-command.porte-prod-serveur.test.ts (tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf)
+  // fix-ok: runSqlRead ne transmettait que decision.database à la porte, jamais decision.server — donc SRV-DEV\DEV déclaré non-prod restait refusé ; mesuré rouge (exit 1) puis vert par sql-read-command.porte-prod-serveur.test.ts (tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf)
   if (deps.porteProd) {
     const verdict = deps.porteProd.verifier({
       nature: 'base',

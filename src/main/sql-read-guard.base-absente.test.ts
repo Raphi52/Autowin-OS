@@ -15,7 +15,7 @@ import { buildSqlTargetCatalog } from './sql-read-catalog'
  * l'aveugle. Un aller-retour entier paye pour une information que le garde connait deja.
  */
 const CATALOGUE = buildSqlTargetCatalog([
-  { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
+  { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' },
   { server: 'SRV-DEV\\DEV', database: 'APP_DEV' }
 ])
 

@@ -13,7 +13,7 @@ import { buildSqlTargetCatalog } from './sql-read-catalog'
 import type { OutputFileAccess } from './sqlcmd-runner'
 
 /** Catalogue de test : la cible est autorisée, pour que ces tests portent sur l'EXÉCUTION. */
-const CATALOGUE = buildSqlTargetCatalog([{ server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }])
+const CATALOGUE = buildSqlTargetCatalog([{ server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }])
 
 /**
  * L'enveloppe d'exécution est la COUCHE 2 de la défense : même si une écriture franchissait la garde,
@@ -73,7 +73,7 @@ function fakeChild(): EventEmitter & {
 /**
  * Le résultat de sqlcmd arrive par un FICHIER, pas par le pipe — c'est le seul chemin qui produise de
  * l'UTF-8 (`-o` + `-f 65001`), mesuré le 2026-08-07. Ce double simule donc le fichier, et permet en
- * plus de vérifier qu'il est bien SUPPRIMÉ : il contient des données de greffe.
+ * plus de vérifier qu'il est bien SUPPRIMÉ : il contient des données de base.
  */
 function fakeFile(contenu: string | Buffer): OutputFileAccess & { removed: () => boolean } {
   const octets = Buffer.isBuffer(contenu) ? contenu : Buffer.from(contenu, 'utf8')
@@ -88,7 +88,7 @@ function fakeFile(contenu: string | Buffer): OutputFileAccess & { removed: () =>
   }
 }
 
-const cible = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS x' }
+const cible = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA', query: 'SELECT 1 AS x' }
 
 /** Monte le décor complet : un fils simulé, un fichier de sortie simulé, un chemin déterministe. */
 function lancer(
@@ -153,7 +153,7 @@ describe('runSqlRead — invocation de sqlcmd', () => {
     expect(opts.shell).toBe(false)
     expect(args).toContain('-E')
     expect(args[args.indexOf('-S') + 1]).toBe('SRV-PROD\\PROD')
-    expect(args[args.indexOf('-d') + 1]).toBe('APP_AMIENS')
+    expect(args[args.indexOf('-d') + 1]).toBe('DB_ALPHA')
   })
 
   /**
@@ -248,7 +248,7 @@ describe('runSqlRead — lecture du résultat', () => {
   it('ignore un crochet présent dans un message sqlcmd avant le JSON', async () => {
     // Régression (3ᵉ audit) : on repartait du PREMIER crochet, donc un message d'information
     // contenant « [ » rendait la réponse illisible.
-    const out = await lancer('Changed database context to [APP_AMIENS].\n[{"a":1}]').resultat
+    const out = await lancer('Changed database context to [DB_ALPHA].\n[{"a":1}]').resultat
     expect(out.ok).toBe(true)
     if (out.ok) expect(out.rows).toEqual([{ a: 1 }])
   })
@@ -266,7 +266,7 @@ describe('runSqlRead — lecture du résultat', () => {
   /**
    * LE défaut le plus grave du 4ᵉ audit, et le seul que la preuve réelle ait tranché contre le
    * raisonnement : sqlcmd écrit la codepage OEM (CP850) sur le pipe, `é` = 0x82. Lu en UTF-8, cela
-   * rendait un U+FFFD par accent — dans un JSON PARFAITEMENT VALIDE. Les libellés de greffe
+   * rendait un U+FFFD par accent — dans un JSON PARFAITEMENT VALIDE. Les libellés de base
    * arrivaient corrompus à l'agent, sans aucune trace. Seul `-o` + `-f 65001` produit de l'UTF-8.
    */
   it('rend les accents intacts, sans caractère de remplacement', async () => {
@@ -280,7 +280,7 @@ describe('runSqlRead — lecture du résultat', () => {
   })
 
   /**
-   * Le fichier contient des données de greffe : il ne doit jamais rester sur le disque, quel que soit
+   * Le fichier contient des données de base : il ne doit jamais rester sur le disque, quel que soit
    * le chemin de sortie.
    */
   it('supprime le fichier de sortie, en succès comme en échec', async () => {

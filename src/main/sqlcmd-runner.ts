@@ -2,7 +2,7 @@
  * Exécuteur `sqlcmd` bas niveau — le SEUL endroit du code qui sait comment parler à sqlcmd.
  *
  * Pourquoi ce module existe séparément : deux appelants en ont besoin (la lecture demandée par
- * l'agent, et la résolution du catalogue des bases greffes), et chacune des options ci-dessous est la
+ * l'agent, et la résolution du catalogue des bases), et chacune des options ci-dessous est la
  * conclusion d'un audit qui a coûté cher. Les dupliquer, c'est garantir qu'une copie divergera.
  *
  * POURQUOI LA SORTIE PASSE PAR UN FICHIER ET NON PAR LE PIPE — mesuré le 2026-08-07, et c'est la
@@ -17,7 +17,7 @@
  *
  * Lu en UTF-8, le pipe rendait un U+FFFD par accent : « Adjonction d'activité » devenait
  * « Adjonction d'activit<>é » dans un JSON PARFAITEMENT VALIDE. L'agent recevait des libellés de
- * greffe corrompus sans aucune trace. Décoder le pipe en CP850 aurait « marché » sur ce poste, mais la
+ * base corrompus sans aucune trace. Décoder le pipe en CP850 aurait « marché » sur ce poste, mais la
  * codepage OEM dépend de la machine : `-f 65001` est explicite et ne dépend d'aucune locale.
  *
  * Effet de bord assumé : le résultat touche brièvement le disque, dans le répertoire temporaire de

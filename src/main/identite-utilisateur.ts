@@ -7,7 +7,7 @@
  * src/preload : zero occurrence hors tests). Ce module la fournit, et une seule fois.
  *
  * On lit le compte Windows, pas un nom saisi : c'est deja le compte utilise pour se connecter aux
- * bases des greffes (cf. sql-read-command.ts), donc le seul identifiant qui pourra ensuite etre
+ * bases des bases (cf. sql-read-command.ts), donc le seul identifiant qui pourra ensuite etre
  * rapproche des lignes de production.
  */
 import os from 'node:os'

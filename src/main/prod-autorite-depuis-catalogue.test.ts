@@ -15,8 +15,8 @@ import { classerCible } from './prod-guard'
  * réellement relisible par le chargeur, sans une seule ligne écartée.
  */
 const EXPLOITEES = [
-  { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
-  { server: 'SRV-POLYNESIE', database: 'APP_PAPEETE' }
+  { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' },
+  { server: 'SRV-EXT-A', database: 'DB_PAPA' }
 ]
 const DEV = [
   { server: 'SRV-DEV\\DEV', database: 'APP_DEV' },
@@ -100,7 +100,7 @@ describe('le fichier produit est réellement utilisable', () => {
 
   it('rend les bases exploitées BLOQUANTES et les cibles de dev libres', () => {
     const autorite = chargerAutoriteProd(racineAvecFichier()).autorite
-    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS' }, autorite).estBloquant).toBe(true)
+    expect(classerCible({ nature: 'base', nom: 'DB_ALPHA' }, autorite).estBloquant).toBe(true)
     expect(classerCible({ nature: 'base', nom: 'APP_RECETTE' }, autorite).estBloquant).toBe(false)
   })
 

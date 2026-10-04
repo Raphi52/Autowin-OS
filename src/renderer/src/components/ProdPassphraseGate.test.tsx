@@ -15,9 +15,9 @@ let hote: HTMLDivElement
 let racine: Root
 
 const DEMANDE = {
-  cible: 'base:APP_AMIENS',
+  cible: 'base:DB_ALPHA',
   operation: 'sql-write',
-  raison: 'Production déclarée : greffe exploité'
+  raison: 'Production déclarée : base exploité'
 }
 
 interface ApiSimulee {
@@ -98,9 +98,9 @@ async function cliquer(selecteur: string) {
 describe('ce que l’écran montre', () => {
   it('affiche la cible, l’opération et la raison du blocage AVANT toute saisie', async () => {
     await monter({})
-    expect(hote.textContent).toContain('base:APP_AMIENS')
+    expect(hote.textContent).toContain('base:DB_ALPHA')
     expect(hote.textContent).toContain('sql-write')
-    expect(hote.textContent).toContain('greffe exploité')
+    expect(hote.textContent).toContain('base exploité')
   })
 
   it('dit que l’autorisation est bornée', async () => {

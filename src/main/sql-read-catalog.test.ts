@@ -69,11 +69,11 @@ describe('parseSqlCatalogConfig', () => {
  * en dur, qui était à la fois trop large et trop étroite :
  *
  *  - trop large : le préfixe ouvrait des maquettes, des copies figées d'avant changement de structure
- *    et des bases de service. Aucune heuristique ne pouvait trancher — `APP_LE_PUY_MARTIN` ressemble à
- *    un greffe et n'en est pas un (vérifié : `COL_IS_EXPLOIT = 0`) ;
- *  - trop étroite : `SRV-POLYNESIE` manquait, alors qu'il héberge `APP_PAPEETE`, greffe exploité.
+ *    et des bases de service. Aucune heuristique ne pouvait trancher — `DB_EPSILON_COPIE` ressemble à
+ *    une base et n'en est pas une (vérifié : `COL_IS_EXPLOIT = 0`) ;
+ *  - trop étroite : `SRV-EXT-A` manquait, alors qu'il héberge `DB_PAPA`, base exploité.
  *
- * Mesuré le 2026-08-07 dans `CATALOGUE.dbo.BASES` : 40 greffes exploités sur 4 serveurs, sur 274
+ * Mesuré le 2026-08-07 dans `CATALOGUE.dbo.BASES` : 40 bases exploités sur 4 serveurs, sur 274
  * lignes au total.
  */
 describe('CATALOG_QUERY — la requête qui lit l’autorité', () => {
@@ -90,7 +90,7 @@ describe('CATALOG_QUERY — la requête qui lit l’autorité', () => {
     }
   })
 
-  it('filtre sur les greffes EXPLOITÉS', () => {
+  it('filtre sur les bases EXPLOITÉS', () => {
     expect(CATALOG_QUERY).toContain('COL_IS_EXPLOIT = 1')
   })
 
@@ -104,19 +104,19 @@ describe('parseCatalogRows', () => {
   it('traduit les lignes en couples serveur/base', () => {
     expect(
       parseCatalogRows([
-        { d: 'APP_AMIENS', s: 'SRV-PROD\\PROD' },
-        { d: 'APP_PAPEETE', s: 'SRV-POLYNESIE' }
+        { d: 'DB_ALPHA', s: 'SRV-PROD\\PROD' },
+        { d: 'DB_PAPA', s: 'SRV-EXT-A' }
       ])
     ).toEqual([
-      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
-      { server: 'SRV-POLYNESIE', database: 'APP_PAPEETE' }
+      { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' },
+      { server: 'SRV-EXT-A', database: 'DB_PAPA' }
     ])
   })
 
   it('IGNORE une ligne incomplète au lieu de la compléter', () => {
     expect(
       parseCatalogRows([
-        { d: 'APP_AMIENS', s: null },
+        { d: 'DB_ALPHA', s: null },
         { d: '', s: 'SRV-PROD\\PROD' },
         { d: '  ', s: '  ' },
         { s: 'SRV-PROD\\PROD' }
@@ -127,36 +127,36 @@ describe('parseCatalogRows', () => {
 
 describe('buildSqlTargetCatalog', () => {
   const catalogue = buildSqlTargetCatalog([
-    { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
-    { server: 'SRV-POLYNESIE', database: 'APP_PAPEETE' },
+    { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' },
+    { server: 'SRV-EXT-A', database: 'DB_PAPA' },
     { server: 'SRV-DEV\\DEV', database: 'APP_DEV' }
   ])
 
   it('reconnaît un couple présent', () => {
-    expect(catalogue.has('SRV-PROD\\PROD', 'APP_AMIENS')).toBe(true)
-    expect(catalogue.has('SRV-POLYNESIE', 'APP_PAPEETE')).toBe(true)
+    expect(catalogue.has('SRV-PROD\\PROD', 'DB_ALPHA')).toBe(true)
+    expect(catalogue.has('SRV-EXT-A', 'DB_PAPA')).toBe(true)
   })
 
-  /** Le COUPLE compte : un greffe n'est exploité que sur son serveur. */
+  /** Le COUPLE compte : une base n'est exploité que sur son serveur. */
   it('refuse une base présente mais sur un autre serveur', () => {
-    expect(catalogue.has('SRV-PROD\\PROD', 'APP_PAPEETE')).toBe(false)
-    expect(catalogue.has('SRV-POLYNESIE', 'APP_AMIENS')).toBe(false)
+    expect(catalogue.has('SRV-PROD\\PROD', 'DB_PAPA')).toBe(false)
+    expect(catalogue.has('SRV-EXT-A', 'DB_ALPHA')).toBe(false)
   })
 
   it('compare sans tenir compte de la casse ni des espaces autour', () => {
-    expect(catalogue.has('srv-prod\\prod', 'app_amiens')).toBe(true)
-    expect(catalogue.has('  SRV-PROD\\PROD  ', '  APP_AMIENS  ')).toBe(true)
+    expect(catalogue.has('srv-prod\\prod', 'db_alpha')).toBe(true)
+    expect(catalogue.has('  SRV-PROD\\PROD  ', '  DB_ALPHA  ')).toBe(true)
   })
 
   it('refuse ce qui n’y est pas, y compris la base des mots de passe', () => {
-    for (const base of ['APP_LE_PUY_MARTIN', 'APP_PUY_MAQUETTE', 'CATALOGUE', 'master']) {
+    for (const base of ['DB_EPSILON_COPIE', 'DB_EPSILON_MAQUETTE', 'CATALOGUE', 'master']) {
       expect(catalogue.has('SRV-PROD\\PROD', base), `accepté à tort : ${base}`).toBe(false)
     }
   })
 
   it('sait énumérer ce qu’il autorise, pour un message de refus utile', () => {
-    expect(catalogue.servers()).toEqual(['SRV-DEV\\DEV', 'SRV-POLYNESIE', 'SRV-PROD\\PROD'])
-    expect(catalogue.databasesFor('SRV-PROD\\PROD')).toEqual(['APP_AMIENS'])
+    expect(catalogue.servers()).toEqual(['SRV-DEV\\DEV', 'SRV-EXT-A', 'SRV-PROD\\PROD'])
+    expect(catalogue.databasesFor('SRV-PROD\\PROD')).toEqual(['DB_ALPHA'])
     expect(catalogue.size()).toBe(3)
   })
 
@@ -171,7 +171,7 @@ describe('buildSqlTargetCatalog', () => {
 
 describe('devTargets', () => {
   /**
-   * Ces bases sont `COL_IS_EXPLOIT = 0` — normal, ce ne sont pas des greffes exploités. Elles sont
+   * Ces bases sont `COL_IS_EXPLOIT = 0` — normal, ce ne sont pas des bases exploités. Elles sont
    * donc énumérées explicitement, plutôt que d'affaiblir le critère `IS_EXPLOIT` pour les faire
    * entrer. Noms vérifiés dans l'autorité : `APP_RECETTE`, et non `APP_RECETE`.
    */
@@ -233,20 +233,20 @@ describe('resolveSqlTargets', () => {
   }
 
   it('interroge CATALOGUE sur le serveur de production', async () => {
-    const { promesse, args } = lancer('[{"d":"APP_AMIENS","s":"SRV-PROD\\\\PROD"}]')
+    const { promesse, args } = lancer('[{"d":"DB_ALPHA","s":"SRV-PROD\\\\PROD"}]')
     await promesse
     expect(args[args.indexOf('-S') + 1]).toBe(CATALOG_SERVER)
     expect(args[args.indexOf('-d') + 1]).toBe(CATALOG_DATABASE)
   })
 
-  it('rend les greffes exploités ET les cibles de développement', async () => {
+  it('rend les bases exploités ET les cibles de développement', async () => {
     const { promesse } = lancer(
-      '[{"d":"APP_AMIENS","s":"SRV-PROD\\\\PROD"},{"d":"APP_PAPEETE","s":"SRV-POLYNESIE"}]'
+      '[{"d":"DB_ALPHA","s":"SRV-PROD\\\\PROD"},{"d":"DB_PAPA","s":"SRV-EXT-A"}]'
     )
     const c = await promesse
     expect(c.degraded).toBe(false)
-    expect(c.has('SRV-PROD\\PROD', 'APP_AMIENS')).toBe(true)
-    expect(c.has('SRV-POLYNESIE', 'APP_PAPEETE')).toBe(true)
+    expect(c.has('SRV-PROD\\PROD', 'DB_ALPHA')).toBe(true)
+    expect(c.has('SRV-EXT-A', 'DB_PAPA')).toBe(true)
     expect(c.has('SRV-DEV\\DEV', 'APP_DEV')).toBe(true)
     expect(c.has('SRV-DEV\\DEV', 'APP_RECETTE')).toBe(true)
     expect(c.has('SRV-PROD\\PROD', 'CATALOGUE')).toBe(true)
@@ -262,7 +262,7 @@ describe('resolveSqlTargets', () => {
     const { promesse } = lancer('Msg 4060, Level 11\nCannot open database CATALOGUE.', 1)
     const c = await promesse
     expect(c.degraded).toBe(true)
-    expect(c.has('SRV-PROD\\PROD', 'APP_AMIENS')).toBe(false)
+    expect(c.has('SRV-PROD\\PROD', 'DB_ALPHA')).toBe(false)
     expect(c.has('SRV-DEV\\DEV', 'APP_DEV')).toBe(true)
   })
 
@@ -272,7 +272,7 @@ describe('resolveSqlTargets', () => {
     const deps = {
       spawnFn: spawnFn as never,
       sqlcmdPath: 'sqlcmd.exe',
-      outputFile: fakeFile('[{"d":"APP_AMIENS","s":"SRV-PROD\\\\PROD"}]'),
+      outputFile: fakeFile('[{"d":"DB_ALPHA","s":"SRV-PROD\\\\PROD"}]'),
       outputPath: 'T:\\cat.json',
       now: () => 1_000
     }

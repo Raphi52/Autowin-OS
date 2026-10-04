@@ -15,9 +15,9 @@ import { buildSqlTargetCatalog } from './sql-read-catalog'
  *   IS_SRVROLEMEMBER('sysadmin') = 0   IS_MEMBER('db_owner') = 0
  *   IS_MEMBER('db_datawriter')   = 1   DELETE = 1   UPDATE = 1
  *
- * Autrement dit le compte PEUT écrire dans les bases de production des greffes. La protection ne
+ * Autrement dit le compte PEUT écrire dans les bases de production des bases. La protection ne
  * peut donc PAS venir des droits : elle doit être ici, dans le code, avant que quoi que ce soit
- * n'atteigne le serveur. Un modèle qui se trompe de requête ne doit pas pouvoir modifier un greffe.
+ * n'atteigne le serveur. Un modèle qui se trompe de requête ne doit pas pouvoir modifier une base.
  *
  * Défense en profondeur : ce validateur est la PREMIÈRE couche. L'exécution ajoute une transaction
  * systématiquement annulée, un délai borné et un plafond de lignes — mais on ne compte pas sur elles
@@ -25,19 +25,19 @@ import { buildSqlTargetCatalog } from './sql-read-catalog'
  */
 /**
  * Catalogue de test, calqué sur la réalité mesurée le 2026-08-07 dans `CATALOGUE.dbo.BASES` :
- * 40 greffes exploités répartis sur 4 serveurs, plus les deux cibles fixes de développement.
- * On en garde un échantillon représentatif — dont `SRV-POLYNESIE`, que la liste codée en dur
- * précédente omettait alors qu'il héberge un greffe VIVANT.
+ * 40 bases exploités répartis sur 4 serveurs, plus les deux cibles fixes de développement.
+ * On en garde un échantillon représentatif — dont `SRV-EXT-A`, que la liste codée en dur
+ * précédente omettait alors qu'il héberge une base VIVANTE.
  */
 const CATALOGUE = buildSqlTargetCatalog([
-  { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
-  { server: 'SRV-PROD\\PROD', database: 'APP_LYON' },
-  { server: 'SRV-PROD\\PROD', database: 'APP_LE_PUY' },
-  { server: 'SRV-PROD\\PROD', database: 'APP_GRENOBLE' },
-  { server: 'SRV-PROD\\PROD', database: 'APP_AURILLAC' },
-  { server: 'SRV-ANTILLES', database: 'APP_POINTE_A_PITRE' },
-  { server: 'SRV-POLYNESIE', database: 'APP_PAPEETE' },
-  { server: 'SRV-REUNION', database: 'APP_MAMOUDZOU' },
+  { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' },
+  { server: 'SRV-PROD\\PROD', database: 'DB_BETA' },
+  { server: 'SRV-PROD\\PROD', database: 'DB_EPSILON' },
+  { server: 'SRV-PROD\\PROD', database: 'DB_LAMBDA' },
+  { server: 'SRV-PROD\\PROD', database: 'DB_NU' },
+  { server: 'SRV-EXT-B', database: 'DB_ZETA' },
+  { server: 'SRV-EXT-A', database: 'DB_PAPA' },
+  { server: 'SRV-EXT-C', database: 'DB_ETA' },
   { server: 'SRV-DEV\\DEV', database: 'APP_DEV' },
   { server: 'SRV-DEV\\DEV', database: 'APP_RECETTE' }
 ])
@@ -46,7 +46,7 @@ const decide = (args: SqlReadArgs): ReturnType<typeof decideSqlRead> =>
   decideSqlRead(args, CATALOGUE)
 
 describe('decideSqlRead — seule une lecture unique passe', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('accepte un SELECT simple', () => {
     const d = decide({
@@ -90,7 +90,7 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
       'EXECUTE sp_who',
       "SELECT * FROM OPENROWSET('SQLNCLI','','SELECT 1')",
       'GRANT SELECT ON T TO public',
-      "BACKUP DATABASE APP_AMIENS TO DISK='x'",
+      "BACKUP DATABASE DB_ALPHA TO DISK='x'",
       'SHUTDOWN'
     ]
     for (const query of ecritures) {
@@ -118,7 +118,7 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
   })
 
   it('REFUSE ce qui ne commence pas par SELECT ou WITH', () => {
-    for (const query of ['', '   ', 'sp_help T', 'USE APP_LYON', 'SET NOCOUNT ON']) {
+    for (const query of ['', '   ', 'sp_help T', 'USE DB_BETA', 'SET NOCOUNT ON']) {
       expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
@@ -156,16 +156,16 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
  *
  * La version précédente définissait le périmètre par `^APP_…` plus une liste de serveurs codée en
  * dur. Elle était à la fois trop large (maquettes, copies figées, bases de service) et trop étroite
- * (`SRV-POLYNESIE` manquait, alors qu'il héberge `APP_PAPEETE`, greffe exploité). L'autorité est
+ * (`SRV-EXT-A` manquait, alors qu'il héberge `DB_PAPA`, base exploité). L'autorité est
  * `CATALOGUE.dbo.BASES` avec `COL_IS_EXPLOIT = 1`.
  */
 describe('decideSqlRead — la cible vient du catalogue, pas d’un motif de nom', () => {
   it('accepte tout couple présent au catalogue, sur les 4 serveurs', () => {
     for (const [server, database] of [
-      ['SRV-PROD\\PROD', 'APP_AMIENS'],
-      ['SRV-ANTILLES', 'APP_POINTE_A_PITRE'],
-      ['SRV-POLYNESIE', 'APP_PAPEETE'],
-      ['SRV-REUNION', 'APP_MAMOUDZOU']
+      ['SRV-PROD\\PROD', 'DB_ALPHA'],
+      ['SRV-EXT-B', 'DB_ZETA'],
+      ['SRV-EXT-A', 'DB_PAPA'],
+      ['SRV-EXT-C', 'DB_ETA']
     ]) {
       expect(
         decide({ server, database, query: 'SELECT 1 AS a' }).allowed,
@@ -185,19 +185,19 @@ describe('decideSqlRead — la cible vient du catalogue, pas d’un motif de nom
 
   /**
    * Ces bases existent, portent le préfixe `APP_`, et sont `COL_IS_EXPLOIT = 0` — vérifié dans
-   * l'autorité. Aucune heuristique de nom ne pouvait les distinguer d'un greffe : c'est bien pour ça
+   * l'autorité. Aucune heuristique de nom ne pouvait les distinguer d'une base : c'est bien pour ça
    * que le catalogue remplace le motif.
    */
   it('REFUSE les bases APP_ qui ne sont PAS exploitées', () => {
     for (const database of [
-      'APP_LE_PUY_MARTIN',
-      'APP_GRENOBLE_SCP',
-      'APP_AURILLAC_BECHONNET',
-      'APP_DUNKERQUE_AVANT_SELARL',
-      'APP_PUY_MAQUETTE',
+      'DB_EPSILON_COPIE',
+      'DB_LAMBDA_SCP',
+      'DB_NU_ANCIEN',
+      'DB_MU_AVANT_FUSION',
+      'DB_EPSILON_MAQUETTE',
       'APP_WS_TARIF_PAP',
-      'APP_ANTIBES_FORMATION',
-      'APP_QUIMPER_RECETTE'
+      'DB_XI_FORMATION',
+      'DB_KAPPA_RECETTE'
     ]) {
       expect(
         decide({ server: 'SRV-PROD\\PROD', database, query: 'SELECT 1 AS a' }).allowed,
@@ -206,18 +206,18 @@ describe('decideSqlRead — la cible vient du catalogue, pas d’un motif de nom
     }
   })
 
-  /** Un greffe exploité ne l'est que sur SON serveur : le couple compte, pas la base seule. */
-  it('REFUSE un greffe exploité mais sur le MAUVAIS serveur', () => {
+  /** Une base exploité ne l'est que sur SON serveur : le couple compte, pas la base seule. */
+  it('REFUSE une base exploité mais sur le MAUVAIS serveur', () => {
     expect(
-      decide({ server: 'SRV-PROD\\PROD', database: 'APP_PAPEETE', query: 'SELECT 1 AS a' }).allowed
+      decide({ server: 'SRV-PROD\\PROD', database: 'DB_PAPA', query: 'SELECT 1 AS a' }).allowed
     ).toBe(false)
     expect(
-      decide({ server: 'SRV-ANTILLES', database: 'APP_AMIENS', query: 'SELECT 1 AS a' }).allowed
+      decide({ server: 'SRV-EXT-B', database: 'DB_ALPHA', query: 'SELECT 1 AS a' }).allowed
     ).toBe(false)
   })
 
   it('REFUSE un serveur inconnu, et liste les serveurs disponibles', () => {
-    const d = decide({ server: 'SERVEUR-PIRATE', database: 'APP_AMIENS', query: 'SELECT 1 AS a' })
+    const d = decide({ server: 'SERVEUR-PIRATE', database: 'DB_ALPHA', query: 'SELECT 1 AS a' })
     expect(d.allowed).toBe(false)
     if (!d.allowed) {
       expect(d.reason).toMatch(/serveur/i)
@@ -243,7 +243,7 @@ describe('decideSqlRead — la cible vient du catalogue, pas d’un motif de nom
     }
     for (const server of ['SRV-PROD\\PROD; DROP', 'SQL PROD', 'SQL$(x)']) {
       expect(
-        decide({ server, database: 'APP_AMIENS', query: 'SELECT 1 AS a' }).allowed,
+        decide({ server, database: 'DB_ALPHA', query: 'SELECT 1 AS a' }).allowed,
         `accepté à tort : ${server}`
       ).toBe(false)
     }
@@ -256,7 +256,7 @@ describe('decideSqlRead — la cible vient du catalogue, pas d’un motif de nom
   it('catalogue dégradé : la production est refusée, et le message le dit', () => {
     const degrade = buildSqlTargetCatalog([{ server: 'SRV-DEV\\DEV', database: 'APP_DEV' }], true)
     const prod = decideSqlRead(
-      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS a' },
+      { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA', query: 'SELECT 1 AS a' },
       degrade
     )
     expect(prod.allowed).toBe(false)
@@ -288,7 +288,7 @@ describe('decideSqlRead — la cible vient du catalogue, pas d’un motif de nom
  * réaligne l'analyse sur ce que le serveur exécutera vraiment.
  */
 describe('decideSqlRead — contournements par identifiant délimité', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE le contournement exact rapporté par l’audit', () => {
     const attaque = "SELECT 1 AS [x'a] ; COMMIT TRANSACTION ; DELETE FROM CODE_EVENEMENT_RCS ; --'"
@@ -346,7 +346,7 @@ describe('decideSqlRead — contournements par identifiant délimité', () => {
  * S'y ajoutait `commit`/`rollback` absents des mots interdits, donc l'enveloppe restait refermable.
  */
 describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE GO, qui sépare les instructions sans point-virgule', () => {
     for (const query of [
@@ -425,7 +425,7 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
  *     n'en contient jamais légitimement, et c'est ce qui rend le masquage possible.
  */
 describe('decideSqlRead — directive sqlcmd cachée dans une région délimitée', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE un GO dissimulé dans un identifiant ou un littéral multi-lignes', () => {
     for (const query of [
@@ -462,14 +462,14 @@ describe('decideSqlRead — directive sqlcmd cachée dans une région délimité
  * PÉRIMÈTRE, suite du troisième audit. Trois évasions distinctes, toutes constatées `allowed` :
  *  - les vues de COMPATIBILITÉ (`sysdatabases`) sont dans le schéma `sys` mais résolubles SANS
  *    qualification : chercher `sys.<vue>` ne les voyait pas. Vérifié en réel : `sysdatabases`
- *    énumérait toutes les bases du serveur depuis une base greffe ;
+ *    énumérait toutes les bases du serveur depuis une base ;
  *  - les FONCTIONS système (`DB_NAME`, `SERVERPROPERTY`, `SUSER_SNAME`) renseignent hors périmètre
  *    sans nommer aucune vue ;
  *  - les vues de gestion dynamique `sys.dm_exec_*` exposent jusqu'au texte des requêtes d'autres
  *    utilisateurs, donc des données d'autres bases.
  */
 describe('decideSqlRead — évasions du périmètre sans nom qualifié', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE les vues de compatibilité non qualifiées', () => {
     for (const query of [
@@ -515,21 +515,21 @@ describe('decideSqlRead — évasions du périmètre sans nom qualifié', () => 
 
 /**
  * 4ᵉ audit, volet PÉRIMÈTRE — les deux fuites les plus graves de toute la série, et les seules
- * constatées sur des données réelles d'AUTRES greffes.
+ * constatées sur des données réelles d'AUTRES bases.
  *
  * Cause commune : le cycle 3 a interdit les DMV (`dm_exec_*`) et les vues modernes (`sys.databases`)
  * mais PAS leurs équivalents de COMPATIBILITÉ, résolubles sans qualification. `sysdatabases` avait
  * été bouché, ses voisins non.
  *
- * Constaté en réel depuis `APP_AMIENS` :
+ * Constaté en réel depuis `DB_ALPHA` :
  *  - `syscacheobjects` → 55 948 plans d'autres bases AVEC leurs littéraux, donc du contenu
- *    applicatif d'autres greffes (`… WHERE ETP_IDDMD=355878`). C'est l'équivalent compat de
+ *    applicatif d'autres bases (`… WHERE ETP_IDDMD=355878`). C'est l'équivalent compat de
  *    `dm_exec_cached_plans` + `dm_exec_sql_text`, tous deux déjà interdits ;
  *  - `sysperfinfo` → énumère les 334 bases du serveur ;
  *  - `syslockinfo` → activité de verrouillage de 135 bases.
  */
-describe('decideSqlRead — vues de compatibilité qui exposent les autres greffes', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+describe('decideSqlRead — vues de compatibilité qui exposent les autres bases', () => {
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE les vues compat équivalentes aux DMV interdites', () => {
     for (const query of [
@@ -544,7 +544,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres greff
     }
   })
 
-  it('REFUSE les fonctions et variables qui renseignent hors du greffe', () => {
+  it('REFUSE les fonctions et variables qui renseignent hors de la base', () => {
     for (const query of [
       "SELECT DATABASEPROPERTYEX('master','Status') AS s",
       'SELECT @@SERVERNAME AS s',
@@ -554,7 +554,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres greff
       'SELECT APP_NAME() AS a',
       'SELECT ORIGINAL_LOGIN() AS l',
       "SELECT IS_SRVROLEMEMBER('sysadmin') AS r",
-      "SELECT HAS_PERMS_BY_NAME('APP_LYON','DATABASE','SELECT') AS p",
+      "SELECT HAS_PERMS_BY_NAME('DB_BETA','DATABASE','SELECT') AS p",
       "SELECT LOGINPROPERTY('x','IsLocked') AS p"
     ]) {
       expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
@@ -606,12 +606,12 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres greff
 /**
  * 4ᵉ audit, FAUX REFUS le seul bloquant : la règle « 3 parties » comptait les segments sans regarder
  * ce qu'ils NOMMENT. `dbo.INS_INFOGREFFE.[date insc]` est du T-SQL valide et strictement local —
- * vérifié, il retourne des lignes sur `APP_AMIENS`. C'est la forme que produisent les générateurs SQL
+ * vérifié, il retourne des lignes sur `DB_ALPHA`. C'est la forme que produisent les générateurs SQL
  * et les LLM. Le danger vient de la PREMIÈRE partie quand elle nomme une base ou un serveur, pas du
  * nombre de segments.
  */
 describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('accepte schéma.table.colonne, qui est local', () => {
     for (const query of [
@@ -627,8 +627,8 @@ describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () =
   it('REFUSE toujours ce qui nomme une autre base ou un serveur', () => {
     for (const query of [
       'SELECT name FROM master.sys.databases',
-      'SELECT * FROM APP_PARIS.dbo.CODE_EVENEMENT_RCS',
-      'SELECT * FROM APP_PARIS..CODE_EVENEMENT_RCS',
+      'SELECT * FROM DB_PAPI.dbo.CODE_EVENEMENT_RCS',
+      'SELECT * FROM DB_PAPI..CODE_EVENEMENT_RCS',
       'SELECT * FROM [SOMELINK].master.sys.databases',
       'SELECT * FROM [SOMELINK].[master].[sys].[databases]',
       'SELECT RIGBD5.APP_X.dbo.T.col FROM RIGBD5.APP_X.dbo.T'
@@ -641,7 +641,7 @@ describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () =
 /**
  * (Le bloc « bases hors périmètre malgré le préfixe APP_ » a été retiré : le catalogue a remplacé
  * l'heuristique de nom, et ces cas sont désormais couverts par « la cible vient du catalogue » —
- * y compris `APP_PUY_MAQUETTE` et les bases de service, refusées parce qu'elles ne sont pas
+ * y compris `DB_EPSILON_MAQUETTE` et les bases de service, refusées parce qu'elles ne sont pas
  * `COL_IS_EXPLOIT = 1`, et non parce que leur nom y ressemble.)
  */
 
@@ -653,7 +653,7 @@ describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () =
  * éviter : « une écriture annulée a quand même pris des verrous ».
  */
 describe('decideSqlRead — pas de verrou imposé à une base de production', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE les indices de verrouillage', () => {
     for (const query of [
@@ -688,7 +688,7 @@ describe('decideSqlRead — pas de verrou imposé à une base de production', ()
  * une garantie affichée aussi fort ne doit pas dépendre d'un seul filet.
  */
 describe('decideSqlRead — juxtaposition d’instructions sans séparateur', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE une seconde instruction à effet, même sans point-virgule ni GO', () => {
     for (const query of [
@@ -706,17 +706,17 @@ describe('decideSqlRead — juxtaposition d’instructions sans séparateur', ()
 
 /**
  * PÉRIMÈTRE — second défaut de l'audit. Seul le nom passé à `-d` était validé, alors qu'un nom
- * d'objet qualifié traverse les bases : la garde promettait « une seule base greffe, jamais master »
+ * d'objet qualifié traverse les bases : la garde promettait « une seule base, jamais master »
  * et ne la tenait pas.
  */
 describe('decideSqlRead — le périmètre annoncé est réellement tenu', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('REFUSE de sortir de la base ciblée par un nom qualifié', () => {
     for (const query of [
       'SELECT name FROM master.sys.databases',
-      'SELECT * FROM APP_PARIS.dbo.CODE_EVENEMENT_RCS',
-      'SELECT * FROM APP_PARIS..CODE_EVENEMENT_RCS',
+      'SELECT * FROM DB_PAPI.dbo.CODE_EVENEMENT_RCS',
+      'SELECT * FROM DB_PAPI..CODE_EVENEMENT_RCS',
       'SELECT * FROM [SOMELINK].master.sys.databases',
       'SELECT * FROM [SOMELINK].[master].[sys].[databases]'
     ]) {
@@ -756,11 +756,11 @@ describe('decideSqlRead — le périmètre annoncé est réellement tenu', () =>
 /**
  * FAUX REFUS — troisième défaut de l'audit. `sp_`/`xp_` étaient cherchés en SOUS-CHAÎNE, ce qui
  * rejetait des colonnes de production réelles. Les noms ci-dessous ont été vérifiés existants dans
- * APP_AMIENS. `EXEC`/`EXECUTE` interdisent déjà l'appel de procédure : chercher le préfixe ailleurs
+ * DB_ALPHA. `EXEC`/`EXECUTE` interdisent déjà l'appel de procédure : chercher le préfixe ailleurs
  * qu'en début de jeton n'apportait aucune sécurité et coûtait des familles entières de colonnes.
  */
 describe('decideSqlRead — pas de faux refus sur des colonnes réelles', () => {
-  const base = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }
+  const base = { server: 'SRV-PROD\\PROD', database: 'DB_ALPHA' }
 
   it('accepte les colonnes de production contenant sp/xp au milieu d’un nom', () => {
     for (const query of [
@@ -789,7 +789,7 @@ describe('decideSqlRead — CATALOGUE lisible, secrets exclus (décision du 2026
   const lire = (query: string): ReturnType<typeof decideSqlRead> =>
     decideSqlRead({ server: 'SRV-PROD\\PROD', database: 'CATALOGUE', query }, avecCommun)
 
-  it('laisse lire la liste des greffes exploités', () => {
+  it('laisse lire la liste des bases exploités', () => {
     expect(
       lire('SELECT COL_NOMBASE_BD, COL_SERVEUR_BD FROM dbo.BASES WHERE COL_IS_EXPLOIT = 1').allowed
     ).toBe(true)
@@ -818,7 +818,7 @@ describe('decideSqlRead — CATALOGUE lisible, secrets exclus (décision du 2026
     }
   })
 
-  it('ne touche pas aux bases greffe : * y reste permis', () => {
-    expect(decide({ server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT * FROM dbo.GREFFIER' }).allowed).toBe(true)
+  it('ne touche pas aux bases : * y reste permis', () => {
+    expect(decide({ server: 'SRV-PROD\\PROD', database: 'DB_ALPHA', query: 'SELECT * FROM dbo.GREFFIER' }).allowed).toBe(true)
   })
 })

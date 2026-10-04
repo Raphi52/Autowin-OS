@@ -17,7 +17,7 @@ const PHRASE = 'phrase-de-passe-de-reference'
 const EMPREINTE = definirPhrase(PHRASE, 1_000)
 
 const AUTORITE = construireAutoriteProd([
-  { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+  { nature: 'base', nom: 'DB_ALPHA', classe: 'prod', motif: 'base exploité' },
   { nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' }
 ])
 
@@ -46,14 +46,14 @@ describe('refus d’un geste de production', () => {
   it('REFUSE un geste sur une base de production quand aucun jeton n’est présenté', () => {
     const verdict = porte().porte.verifier({
       nature: 'base',
-      nom: 'APP_AMIENS',
+      nom: 'DB_ALPHA',
       operation: 'sql-write'
     })
     expect(verdict.autorise).toBe(false)
     if (verdict.autorise) return
-    expect(verdict.motif).toContain('greffe exploité')
+    expect(verdict.motif).toContain('base exploité')
     expect(verdict.demande).toEqual({
-      cible: 'base:APP_AMIENS',
+      cible: 'base:DB_ALPHA',
       operation: 'sql-write',
       raison: expect.stringContaining('Production déclarée')
     })
@@ -62,7 +62,7 @@ describe('refus d’un geste de production', () => {
   it('REFUSE un jeton inventé', () => {
     const verdict = porte().porte.verifier({
       nature: 'base',
-      nom: 'APP_AMIENS',
+      nom: 'DB_ALPHA',
       operation: 'sql-write',
       jeton: 'jeton-invente'
     })
@@ -83,10 +83,10 @@ describe('refus d’un geste de production', () => {
 
   it('REFUSE un jeton obtenu pour une AUTRE cible', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:APP_LILLE', 'sql-write')
+    const jeton = jetonPour(coffre, 'base:DB_THETA', 'sql-write')
     const verdict = p.verifier({
       nature: 'base',
-      nom: 'APP_AMIENS',
+      nom: 'DB_ALPHA',
       operation: 'sql-write',
       jeton
     })
@@ -95,10 +95,10 @@ describe('refus d’un geste de production', () => {
 
   it('REFUSE un jeton obtenu pour une AUTRE opération', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-read')
+    const jeton = jetonPour(coffre, 'base:DB_ALPHA', 'sql-read')
     const verdict = p.verifier({
       nature: 'base',
-      nom: 'APP_AMIENS',
+      nom: 'DB_ALPHA',
       operation: 'sql-write',
       jeton
     })
@@ -118,17 +118,17 @@ describe('ce qui passe', () => {
 
   it('laisse passer un geste de production muni du bon jeton', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-write')
+    const jeton = jetonPour(coffre, 'base:DB_ALPHA', 'sql-write')
     expect(
-      p.verifier({ nature: 'base', nom: 'APP_AMIENS', operation: 'sql-write', jeton })
+      p.verifier({ nature: 'base', nom: 'DB_ALPHA', operation: 'sql-write', jeton })
     ).toEqual({ autorise: true })
   })
 
   /** Le jeton est à usage unique : le second geste identique doit repasser par la saisie. */
   it('ne laisse pas REJOUER le même jeton', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-write')
-    const geste = { nature: 'base', nom: 'APP_AMIENS', operation: 'sql-write', jeton } as const
+    const jeton = jetonPour(coffre, 'base:DB_ALPHA', 'sql-write')
+    const geste = { nature: 'base', nom: 'DB_ALPHA', operation: 'sql-write', jeton } as const
     expect(p.verifier(geste).autorise).toBe(true)
     expect(p.verifier(geste).autorise).toBe(false)
   })
@@ -136,10 +136,10 @@ describe('ce qui passe', () => {
   /** Un jeton présenté de travers est brûlé : on ne peut pas tâtonner sans coût. */
   it('brûle le jeton même quand il a été présenté pour la mauvaise cible', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-write')
+    const jeton = jetonPour(coffre, 'base:DB_ALPHA', 'sql-write')
     p.verifier({ nature: 'base', nom: 'APP_AUTRE', operation: 'sql-write', jeton })
     expect(
-      p.verifier({ nature: 'base', nom: 'APP_AMIENS', operation: 'sql-write', jeton }).autorise
+      p.verifier({ nature: 'base', nom: 'DB_ALPHA', operation: 'sql-write', jeton }).autorise
     ).toBe(false)
   })
 })
@@ -151,7 +151,7 @@ describe('l’interrupteur', () => {
    */
   it('laisse tout passer tant qu’aucune phrase n’est définie', () => {
     const { porte: p } = porte({ phraseDefinie: false })
-    expect(p.verifier({ nature: 'base', nom: 'APP_AMIENS', operation: 'sql-write' })).toEqual({
+    expect(p.verifier({ nature: 'base', nom: 'DB_ALPHA', operation: 'sql-write' })).toEqual({
       autorise: true
     })
     expect(p.verifier({ nature: 'base', nom: 'APP_JAMAIS_VUE', operation: 'sql-write' })).toEqual({
@@ -259,8 +259,8 @@ describe('niveau confirmation', () => {
 
 describe('accord groupé des lectures (conv-113, 2026-09-23)', () => {
   const AUTORITE2 = construireAutoriteProd([
-    { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
-    { nature: 'base', nom: 'APP_LYON', classe: 'prod', motif: 'greffe exploité' }
+    { nature: 'base', nom: 'DB_ALPHA', classe: 'prod', motif: 'base exploité' },
+    { nature: 'base', nom: 'DB_BETA', classe: 'prod', motif: 'base exploité' }
   ])
   function porteHorloge(niveau: 'confirmation' | 'phrase' = 'confirmation') {
     const temps = { t: 0 }
@@ -280,39 +280,39 @@ describe('accord groupé des lectures (conv-113, 2026-09-23)', () => {
     ...(conversationId ? { conversationId } : {})
   })
 
-  it('UNE confirmation couvre les lectures suivantes du même fil, sur les autres greffes', () => {
+  it('UNE confirmation couvre les lectures suivantes du même fil, sur les autres bases', () => {
     const { p } = porteHorloge()
-    expect(p.verifier(lecture('APP_AMIENS', 'conv-1')).autorise).toBe(false)
-    expect(p.verifier({ ...lecture('APP_AMIENS', 'conv-1'), confirme: true }).autorise).toBe(true)
-    expect(p.verifier(lecture('APP_LYON', 'conv-1')).autorise).toBe(true)
+    expect(p.verifier(lecture('DB_ALPHA', 'conv-1')).autorise).toBe(false)
+    expect(p.verifier({ ...lecture('DB_ALPHA', 'conv-1'), confirme: true }).autorise).toBe(true)
+    expect(p.verifier(lecture('DB_BETA', 'conv-1')).autorise).toBe(true)
   })
 
   it('ne couvre PAS une autre conversation, ni un geste sans conversation', () => {
     const { p } = porteHorloge()
-    p.verifier({ ...lecture('APP_AMIENS', 'conv-1'), confirme: true })
-    expect(p.verifier(lecture('APP_LYON', 'conv-2')).autorise).toBe(false)
-    expect(p.verifier(lecture('APP_LYON')).autorise).toBe(false)
+    p.verifier({ ...lecture('DB_ALPHA', 'conv-1'), confirme: true })
+    expect(p.verifier(lecture('DB_BETA', 'conv-2')).autorise).toBe(false)
+    expect(p.verifier(lecture('DB_BETA')).autorise).toBe(false)
   })
 
   it('ne couvre PAS un client SQL lancé par run (peut écrire)', () => {
     const { p } = porteHorloge()
-    p.verifier({ nature: 'base', nom: 'APP_AMIENS', operation: 'run-sqlcmd', conversationId: 'conv-1', confirme: true })
+    p.verifier({ nature: 'base', nom: 'DB_ALPHA', operation: 'run-sqlcmd', conversationId: 'conv-1', confirme: true })
     expect(
-      p.verifier({ nature: 'base', nom: 'APP_LYON', operation: 'run-sqlcmd', conversationId: 'conv-1' }).autorise
+      p.verifier({ nature: 'base', nom: 'DB_BETA', operation: 'run-sqlcmd', conversationId: 'conv-1' }).autorise
     ).toBe(false)
   })
 
   it('expire après la durée bornée', () => {
     const { p, temps } = porteHorloge()
-    p.verifier({ ...lecture('APP_AMIENS', 'conv-1'), confirme: true })
+    p.verifier({ ...lecture('DB_ALPHA', 'conv-1'), confirme: true })
     temps.t = 15 * 60_000 + 1
-    expect(p.verifier(lecture('APP_LYON', 'conv-1')).autorise).toBe(false)
+    expect(p.verifier(lecture('DB_BETA', 'conv-1')).autorise).toBe(false)
   })
 
   it('ne s’applique pas au niveau phrase de passe', () => {
     const { p } = porteHorloge('phrase')
-    p.verifier({ ...lecture('APP_AMIENS', 'conv-1'), confirme: true })
-    expect(p.verifier(lecture('APP_LYON', 'conv-1')).autorise).toBe(false)
+    p.verifier({ ...lecture('DB_ALPHA', 'conv-1'), confirme: true })
+    expect(p.verifier(lecture('DB_BETA', 'conv-1')).autorise).toBe(false)
   })
 })
 

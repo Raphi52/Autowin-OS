@@ -71,7 +71,7 @@ export const REMEMBER_TAG_MAX = 40
  *
  * La VALEUR doit ressembler à un secret, pas à un identifiant : ≥16 caractères, avec une minuscule ET un
  * chiffre. Sans cette exigence, des faits techniques parfaitement légitimes étaient refusés —
- * `csrf_token_header: X-CSRF-Token`, `db_password_env: RIG_DB_PASSWORD`, `refresh_token_ttl = 3600000000`
+ * `csrf_token_header: X-CSRF-Token`, `db_password_env: APP_DB_PASSWORD`, `refresh_token_ttl = 3600000000`
  * (faux positifs relevés par l'audit du 2026-07-30 ; un faux refus bloque une mémoire valide, ce qui coûte
  * plus cher que l'inverse ici puisqu'un second garde tourne derrière).
  * Pas de drapeau `i` : les lookaheads distingueraient sinon plus la casse.
@@ -106,7 +106,7 @@ function valueLooksLikeSecret(value: string): boolean {
   // « /var/lib/rig/session2/token.json », « C:\… », « https://… ».
   if (/^(\.{0,2}[\\/]|~[\\/]|[A-Za-z]:[\\/])/.test(value) || value.includes('://')) return false
   // Un secret réel mélange les casses ET les chiffres. Un identifiant ne le fait pas :
-  // « RIG_DB_PASSWORD » (pas de minuscule), « exemple0non0valide » (pas de majuscule).
+  // « APP_DB_PASSWORD » (pas de minuscule), « exemple0non0valide » (pas de majuscule).
   return /[a-z]/.test(value) && /[A-Z]/.test(value) && /[0-9]/.test(value)
 }
 

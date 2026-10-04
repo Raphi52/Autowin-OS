@@ -27,7 +27,7 @@ afterAll(() => {
 })
 
 const DECLARATION = JSON.stringify([
-  { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+  { nature: 'base', nom: 'DB_ALPHA', classe: 'prod', motif: 'base exploité' },
   { nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' },
   { nature: 'chemin', nom: 'D:/Deploiement/Prod', classe: 'prod' }
 ])
@@ -37,7 +37,7 @@ describe('une déclaration correcte', () => {
     const { autorite, retenues, anomalies } = chargerAutoriteProd(racineNeuve(DECLARATION))
     expect(retenues).toBe(3)
     expect(anomalies).toEqual([])
-    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS' }, autorite).classe).toBe('prod')
+    expect(classerCible({ nature: 'base', nom: 'DB_ALPHA' }, autorite).classe).toBe('prod')
     expect(classerCible({ nature: 'base', nom: 'APP_MAQUETTE' }, autorite).classe).toBe('non-prod')
     expect(
       classerCible({ nature: 'chemin', nom: 'D:/Deploiement/Prod/app' }, autorite).classe
@@ -46,8 +46,8 @@ describe('une déclaration correcte', () => {
 
   it('conserve le motif, pour que le refus dise POURQUOI', () => {
     const { autorite } = chargerAutoriteProd(racineNeuve(DECLARATION))
-    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS' }, autorite).raison).toContain(
-      'greffe exploité'
+    expect(classerCible({ nature: 'base', nom: 'DB_ALPHA' }, autorite).raison).toContain(
+      'base exploité'
     )
   })
 
@@ -108,7 +108,7 @@ describe('déclarations partiellement abîmées', () => {
   it('garde les entrées valides, écarte les autres, et NOMME chaque rejet', () => {
     const racine = racineNeuve(
       JSON.stringify([
-        { nature: 'base', nom: 'APP_AMIENS', classe: 'prod' },
+        { nature: 'base', nom: 'DB_ALPHA', classe: 'prod' },
         { nature: 'base_de_donnees', nom: 'X', classe: 'prod' },
         { nature: 'base', nom: '   ', classe: 'prod' },
         { nature: 'base', nom: 'APP_Y', classe: 'ouvert' },
@@ -123,7 +123,7 @@ describe('déclarations partiellement abîmées', () => {
     expect(anomalies.join(' ')).toContain('nom manquant ou vide')
     expect(anomalies.join(' ')).toContain('classe « ouvert » invalide')
     expect(anomalies.join(' ')).toContain("ce n'est pas un objet")
-    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS' }, autorite).classe).toBe('prod')
+    expect(classerCible({ nature: 'base', nom: 'DB_ALPHA' }, autorite).classe).toBe('prod')
     expect(classerCible({ nature: 'base', nom: 'APP_Y' }, autorite).classe).toBe('inconnu')
   })
 

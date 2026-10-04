@@ -42,7 +42,7 @@ export interface GesteProd {
   /**
    * Le serveur qui héberge la base, quand l'outil le connaît. Une base NON DÉCLARÉE passe si ce
    * serveur est déclaré `nature: serveur` non-prod ; une base déclarée prod reste bloquée. conv-106,
-   * tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf : RIG_DEV sur SQL-DEV\DEV refusée faute de
+   * tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf : APP_DEV sur SRV-DEV\DEV refusée faute de
    * déclaration base par base, alors que le serveur entier est de dev.
    */
   serveur?: string
@@ -57,7 +57,7 @@ export interface GesteProd {
   /**
    * La conversation d'où part le geste. Sert à l'ACCORD GROUPÉ : une lecture confirmée une fois vaut
    * pour les lectures suivantes du même fil pendant `DUREE_ACCORD_LECTURE_MS` (demande du
-   * 2026-09-23, conv-113 : 39 greffes = 39 fenêtres pour une même requête répétée).
+   * 2026-09-23, conv-113 : 39 bases = 39 fenêtres pour une même requête répétée).
    */
   conversationId?: string
 }
