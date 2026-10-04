@@ -130,7 +130,7 @@ describe('rangement au premier message — effet reel', () => {
         JSON.stringify({ rangement: AUTOWIN, confiance: 0.95, motif: 'bureaux virtuels' })
     })
     expect(r.applique).toBe(AUTOWIN)
-    expect(r.annonces[0]).toContain("n'était rangée nulle part")
+    expect(r.annonces).toEqual([])
   })
 
   it('n ecrase pas un rangement pose pendant l appel au modele', async () => {

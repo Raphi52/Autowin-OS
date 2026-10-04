@@ -203,7 +203,7 @@ describe('dossier deja actif par simple repli', () => {
     })
     expect(applique).toBe(AUTOWIN)
     expect(ranges).toEqual([AUTOWIN])
-    expect(annonces[0]).toContain("n'était rangée nulle part")
+    expect(annonces).toEqual([])
   })
 })
 

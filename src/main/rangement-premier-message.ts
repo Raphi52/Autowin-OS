@@ -168,15 +168,14 @@ export async function rangerConversationSurLePremierMessage(
   if (deps.toujoursNonRangee && !deps.toujoursNonRangee()) return null
   try {
     deps.ranger(deduit)
+    // Meme dossier que le dossier de travail : le rangement ne fait qu'enregistrer ce qui etait deja
+    // vrai. L'annoncer laissait croire a une decision (conv-49, 2026-10-02) : on se tait.
+    if (isAbsolute(deduit) && !deplaceLeTravail) return deduit
     deps.annoncer(
       !isAbsolute(deduit)
         ? `📂 Ta demande porte sur « ${deduit} » : je range cette conversation dans ce dossier de la ` +
             `liste. Le dossier de travail ne change pas. Si ce n'est pas le bon, change-le dans la liste des conversations.`
-        : !deplaceLeTravail
-          ? `📂 Cette conversation n'était rangée nulle part : je la range dans ${deduit}, ` +
-            `le dossier sur lequel porte ta demande. Le dossier de travail ne change pas. ` +
-            `Si ce n'est pas le bon, change-le dans la liste des conversations.`
-          : differe
+        : differe
             ? `📂 Ta demande parle de ${deduit}, et cette conversation n'était pas encore rangée : ` +
               `cette première réponse a travaillé dans ${deps.dossierActif}. Je la range dans ${deduit} ` +
               `pour la suite — tes prochains messages y travailleront, avec son AGENTS.md. ` +
