@@ -342,8 +342,8 @@ export function buildBehaviourComposition(
       {
         label: 'preuves Graphify',
         value:
-          "Le même provider RAG interroge en parallèle le Brain et Graphify. Graphify fournit jusqu'à 6 preuves structurelles marquées non fiables, avec timeout 1,5 s et cache du graphe 30 s ; chaque branche possède un fallback indépendant à vide.",
-        source: 'src/main/amitel-context.ts:175'
+          "Le même provider RAG interroge en parallèle Brain et Graphify. Graphify fournit jusqu'à 6 preuves structurelles marquées non fiables, avec timeout 1,5 s et cache du graphe 30 s ; chaque branche possède un fallback indépendant à vide.",
+        source: 'src/main/brain-context.ts:175'
       }
     ],
     turnContext: [

@@ -53,7 +53,7 @@ describe('déménagement du dossier de données', () => {
     ecrireEtat(
       racine,
       runId,
-      `C:\\Users\\raphael.vilain\\AppData\\Roaming\\autowin-os\\worktrees\\68fe8b086ee864a1\\agent__${runId}`
+      `C:\\Users\\prenom.nom\\AppData\\Roaming\\autowin-os\\worktrees\\68fe8b086ee864a1\\agent__${runId}`
     )
     const store = new WorktreeRunStateStore(racine, 'depot-test')
     const lu = store.get(runId)

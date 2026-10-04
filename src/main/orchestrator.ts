@@ -448,7 +448,7 @@ import {
   porteLesOutilsNatifs,
   type ServeurOutilsNoeudSkill
 } from './skill-node-mcp'
-import { amitelBrainRoot } from './amitel-paths'
+import { sharedBrainRoot } from './brain-paths'
 import { protegerRappel } from './observabilite-non-bloquante'
 
 function canonicalCausalPath(root: string, path: string): string {
@@ -3717,7 +3717,7 @@ ${CONTRAT_OBJECTIONS}`
      * conclure vert quand elle a effectivement repare.
      */
     const travauxNonLivres = new Set<string>()
-    // RAG Brain : 1×/run, on récupère du cerveau Amitel la LISTE des notes pertinentes pour la
+    // RAG Brain : 1×/run, on récupère du cerveau la LISTE des notes pertinentes pour la
     // tâche (titre, chemin, taille) et on l'injecte en tête de contexte. Plus d'extraits coupés à
     // 2 000 caractères (2026-09-27) : chaque sous-agent ouvre EN ENTIER les notes qu'il juge
     // nécessaires. Dégrade à '' si le serveur est absent.
@@ -4785,7 +4785,7 @@ ${CONTRAT_OBJECTIONS}`
       // ne montrait que les `brain_read` et taisait les notes lues comme fichiers (mesure 2026-09-27).
       for (const detail of lecturesDirectesDuBrain(
         phaseRes.executionEvidence,
-        amitelBrainRoot(),
+        sharedBrainRoot(),
         phase
       )) {
         push({ step: 'exec', role: 'subagent', detail })

@@ -24,7 +24,7 @@ import { codexExecutionEvidenceKind } from '../providers/codex'
  */
 const CASES: Array<[string, 'mutation' | 'verification' | 'inspection']> = [
   // Mutations d'état, dont le cas de l'incident fondateur.
-  ['git -C "C:/Amitel/Autowin OS" stash push -u -m wip', 'mutation'],
+  ['git -C "C:/Travail/Autowin OS" stash push -u -m wip', 'mutation'],
   ['git stash push -u', 'mutation'],
   ['git commit -m "wip"', 'mutation'],
   ['git checkout -- .', 'mutation'],
@@ -80,7 +80,7 @@ describe('parité de classement entre les providers', () => {
   })
 
   it('classe le cas de l’incident fondateur comme une mutation des DEUX côtés', () => {
-    const command = 'git -C "C:/Amitel/Autowin OS" stash push -u -m autowin-pre-update'
+    const command = 'git -C "C:/Travail/Autowin OS" stash push -u -m autowin-pre-update'
     expect(claudeToolEvidenceKind('Bash', command)).toBe('mutation')
     expect(codexExecutionEvidenceKind({ type: 'command_execution', command })).toBe('mutation')
   })

@@ -1,3 +1,4 @@
+// fix-ok: chemins, variables et marqueur propres à un employeur écrits en dur (mesuré par grep) ; neutralisés, anciens noms lus en secours (tests rouge→vert).
 import { createHmac } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -115,7 +116,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
     expect(source).toContain("join(outcomeLearningDirectory, 'mode.txt')")
     expect(source).toContain('process.env.AUTOWIN_OUTCOME_LEARNING_MODE')
     expect(source).toContain(
-      'promoteOutcomeLearningCandidate(amitelBrainRoot(), candidateId, scope)'
+      'promoteOutcomeLearningCandidate(sharedBrainRoot(), candidateId, scope)'
     )
     // Le superviseur doit arriver à SON rang dans le constructeur (positionnel), pas seulement en
     // DERNIER : l'ancienne forme (`outcomeLearning\s*\)`) rougissait dès qu'un paramètre était ajouté
@@ -319,7 +320,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
     // Le `corpus` reste passe DELIBEREMENT, et on ASSERTE sa valeur : le laisser sans assertion en
     // faisait un parametre inerte laissant croire a une couverture inexistante (releve par l'audit).
     // Ainsi, si un filtrage derive du workspace revenait un jour, ce test le dirait.
-    const corpus = brainCorpusForWorkspace('C:/Amitel/Autowin OS')
+    const corpus = brainCorpusForWorkspace('C:/Travail/Autowin OS')
     expect(corpus, 'plus aucun corpus derive du workspace').toBeUndefined()
     const before = await searchVaultBrainNotesAsync(root, discriminant, {
       allowedRoot: root,
@@ -381,7 +382,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
       confidence: 'high'
     } satisfies AttestedLearningProposal
     const os = {
-      executionWorkspace: 'C:/Amitel/Autowin OS',
+      executionWorkspace: 'C:/Travail/Autowin OS',
       conversations: {
         get: (id: string) => (id === 'conv-1' ? conversation : undefined),
         list: () => [conversation]
@@ -466,7 +467,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
       )
       expect(postedBody?.body).toEqual(
         expect.stringMatching(
-          /Provenance Autowin \(v1\):[\s\S]*- run: .+[\s\S]*- workspace: C:\/Amitel\/Autowin OS[\s\S]*proposal-sha256: [a-f0-9]{64}[\s\S]*proof-sha256: [a-f0-9]{64}/u
+          /Provenance Autowin \(v1\):[\s\S]*- run: .+[\s\S]*- workspace: C:\/Travail\/Autowin OS[\s\S]*proposal-sha256: [a-f0-9]{64}[\s\S]*proof-sha256: [a-f0-9]{64}/u
         )
       )
       expect(ledger.read().events.find(({ kind }) => kind === 'proposal')).toMatchObject({

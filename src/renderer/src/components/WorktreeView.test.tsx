@@ -14,7 +14,7 @@ import { couleurDeBranche } from './git-graph-couleurs'
 
 const snapshot = {
   available: true as const,
-  repoPath: 'C:\\Amitel\\Autowin OS',
+  repoPath: 'C:\\Travail\\Autowin OS',
   repositoryName: 'Autowin OS',
   head: '46285c3',
   branch: 'main',
@@ -37,14 +37,14 @@ const snapshot = {
   ],
   worktrees: [
     {
-      path: 'C:\\Amitel\\Autowin OS',
+      path: 'C:\\Travail\\Autowin OS',
       head: '46285c3full',
       branch: 'main',
       detached: false,
       locked: false
     },
     {
-      path: 'C:\\Amitel\\wt\\cockpit',
+      path: 'C:\\Travail\\wt\\cockpit',
       head: '5d5cc22full',
       branch: 'feat/cockpit',
       detached: false,
@@ -79,7 +79,7 @@ const activity: WorktreeAgentActivity[] = [
     agentName: 'Builder',
     role: 'build',
     task: 'Construire le cockpit',
-    worktreePath: 'C:\\Amitel\\wt\\cockpit',
+    worktreePath: 'C:\\Travail\\wt\\cockpit',
     state: 'working',
     verdict: 'running',
     publication: 'not-requested',

@@ -267,7 +267,7 @@ describe('contratDepuisRuns — bornes mesurées sur le corpus réel', () => {
     const besoin = [
       'traite src/main/commands.ts:12',
       'et 20os/.autowin-data/autowin-os/worktrees/68fe8b086ee864a1/agent__run-d56aee422bde-1/src/main/commands.ts:12',
-      'et users/raphael.vilain/appdata/roaming/autowin-os/worktrees/x/agent__run-2/vitest.config.ts:3'
+      'et users/prenom.nom/appdata/roaming/autowin-os/worktrees/x/agent__run-2/vitest.config.ts:3'
     ].join(' ')
     expect(
       contratDepuisRuns([{ path: 'a/RUN.md', content: runMd('red', besoin) }])?.cibles

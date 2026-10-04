@@ -4,7 +4,7 @@
  * `preflight:recheck` du wizard first-run (#5) — une seule définition, pas de divergence.
  */
 import { existsSync } from 'node:fs'
-import { amitelBrainOrigin } from './amitel-paths'
+import { sharedBrainOrigin } from './brain-paths'
 import { delimiter, join } from 'node:path'
 import { spawn } from 'node:child_process'
 import {
@@ -63,12 +63,12 @@ export function appPreflightProbes(): PreflightProbes {
          * MESURE DU 2026-09-03 (conv-8) : ce ping visait `127.0.0.1:8765` en dur alors que le
          * service a jour ecoutait 8766 (c'est lui qui porte l'echange de defi du protocole 2). La
          * sonde voyait donc le cerveau ETEINT en permanence — meme quand la lecture du savoir, elle,
-         * fonctionnait par `amitelBrainOrigin()`. Consequence observee dans `dev-app-stdout.log` :
+         * fonctionnait par `sharedBrainOrigin()`. Consequence observee dans `dev-app-stdout.log` :
          * l'app relancait des serveurs inutiles, qui se posaient sur 8765 et n'y servaient personne.
          * C'est le MEME defaut que celui corrige le 2026-09-02 dans `brain-retrieval` : deux chemins
          * vers le meme service, un seul qui lisait la configuration.
          */
-        const res = await fetch(`${amitelBrainOrigin()}/`, { signal: ctrl.signal })
+        const res = await fetch(`${sharedBrainOrigin()}/`, { signal: ctrl.signal })
         await res.arrayBuffer()
         return true
       } catch {

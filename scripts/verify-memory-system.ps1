@@ -37,7 +37,7 @@ try {
                 src/main/brain-remember.test.ts `
                 src/main/session-memory-echo.test.ts `
                 src/main/brain-corpus-scope.test.ts `
-                src/main/amitel-context.test.ts `
+                src/main/brain-context.test.ts `
                 src/main/brain-server-launch.test.ts `
                 src/main/viz/fs-brains.test.ts `
                 src/renderer/src/components/GraphView.refresh.test.tsx

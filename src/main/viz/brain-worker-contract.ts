@@ -48,7 +48,7 @@ export interface BrainWorkerContract {
   }
   graphifyEvidence: {
     args: [raw: string, query: string, limit: number]
-    result: ReturnType<typeof import('../amitel-context').graphifyEvidence>
+    result: ReturnType<typeof import('../brain-context').graphifyEvidence>
   }
   listInbox: {
     args: [root: string, workspaces: string[]]

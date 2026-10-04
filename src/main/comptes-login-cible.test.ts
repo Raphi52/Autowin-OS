@@ -59,7 +59,7 @@ describe('describeAccounts — deux comptes REELLEMENT identiques', () => {
   it('quand email, niveau ET organisation coincident, l’id tranche', () => {
     const base = {
       addedAt: 'x',
-      email: 'raphael.vilain@amitel.fr',
+      email: 'prenom.nom@example.com',
       subscriptionType: 'team',
       orgName: 'Amitel'
     }

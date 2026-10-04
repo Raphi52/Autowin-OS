@@ -23,7 +23,7 @@ try {
     src/main/brain-remember.test.ts `
     src/main/brain-inbox.test.ts `
     src/main/brain-inbox-race.test.ts `
-    src/main/amitel-context.test.ts `
+    src/main/brain-context.test.ts `
     src/renderer/src/components/BehaviourView.test.tsx `
     src/renderer/src/components/GraphView.panels.test.tsx
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

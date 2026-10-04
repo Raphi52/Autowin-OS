@@ -36,7 +36,7 @@ $repositories = @(
             'src/main/commands.ts',
             'src/main/commands.test.ts',
             'src/main/index.ts',
-            'src/main/amitel-paths.ts',
+            'src/main/brain-paths.ts',
             'src/main/brain-server-launch.ts',
             'src/main/brain-server-launch.test.ts',
             'src/main/viz/fs-brains.ts',

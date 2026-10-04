@@ -34,7 +34,7 @@ export function ObservatoryRagCausalStep({
 }): React.JSX.Element | null {
   if (event.kind !== 'injection') return null
   const rag = summarizeRagTrace({ system: event.content })
-  if (rag.status !== 'injected' || rag.engine !== 'Amitel Brain') return null
+  if (rag.status !== 'injected' || rag.engine !== 'Brain') return null
   const turn = scopedTurns.find((candidate) => candidate.id === turnId)
   const callForEvent = (candidate: HarnessTimelineEvent): PromptCallLike | undefined =>
     currentCalls.find((callCandidate) => candidate.id.startsWith(`${callCandidate.id}:`))
@@ -47,7 +47,7 @@ export function ObservatoryRagCausalStep({
   const firstRagEvent = turn?.events.find((candidate) => {
     if (candidate.kind !== 'injection') return false
     const summary = summarizeRagTrace({ system: candidate.content })
-    if (summary.status !== 'injected' || summary.engine !== 'Amitel Brain') return false
+    if (summary.status !== 'injected' || summary.engine !== 'Brain') return false
     return call?.brainTraceId ? callForEvent(candidate)?.brainTraceId === call.brainTraceId : true
   })
   const isFirstDelivery = firstRagEvent?.id === event.id

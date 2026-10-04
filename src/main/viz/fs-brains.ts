@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { readFile, readdir, realpath as realpathAsync, stat as statAsync } from 'node:fs/promises'
 import { dirname, extname, join, posix, relative, resolve, win32 } from 'node:path'
-import { amitelBrainRoot, amitelWorkspaces } from '../amitel-paths'
+import { sharedBrainRoot, teamWorkspaces } from '../brain-paths'
 import { brainSourcePathAllowed } from '../brain-corpus-scope'
 import type { BrainNavigation } from '../brain-retrieval'
 import { openVaultNoteDescriptor, readVaultNote, readVaultNoteSync } from './brain-file-reader'
@@ -237,7 +237,7 @@ function retrievalRootsMatch(navigationRoot: string, expectedRoot: string): bool
 /** Frontière synchrone commune à toutes les lectures renderer d'un vault. */
 function assertAuthorizedBrainVaultSync(
   requestedRoot: string,
-  allowedRoot = AMITEL_BRAIN_ROOT
+  allowedRoot = SHARED_BRAIN_ROOT
 ): string {
   let requestedRealRoot: string
   let allowedRealRoot: string
@@ -296,7 +296,7 @@ async function retrievalRootsMatchAsync(
 /** Autorise un vault avant tout appel au retrieval global, avec la même identité disque que la fusion. */
 export async function assertAuthorizedBrainVaultAsync(
   requestedRoot: string,
-  allowedRoot = AMITEL_BRAIN_ROOT
+  allowedRoot = SHARED_BRAIN_ROOT
 ): Promise<string> {
   let requestedRealRoot: string
   let allowedRealRoot: string
@@ -425,9 +425,9 @@ export async function applyBrainRetrievalScoresAsync(
   )
 }
 
-/** Racine du Brain — SOURCE UNIQUE dans `amitel-paths.ts`, surchargeable par `AMITEL_BRAIN_ROOT`. */
-export const AMITEL_BRAIN_ROOT = amitelBrainRoot()
-export const AMITEL_BRAIN_THEMES: BrainTheme[] = [
+/** Racine du Brain — SOURCE UNIQUE dans `brain-paths.ts`, surchargeable par `AUTOWIN_BRAIN_ROOT` (secours : `AMITEL_BRAIN_ROOT`). */
+export const SHARED_BRAIN_ROOT = sharedBrainRoot()
+export const BRAIN_THEMES: BrainTheme[] = [
   { id: 'category/brain', label: 'Brain' },
   { id: 'category/rig', label: 'Comprendre l’application métier' },
   { id: 'category/documentation', label: 'Documentation source' },
@@ -454,13 +454,13 @@ export const AMITEL_BRAIN_THEMES: BrainTheme[] = [
 
 /** Racines par défaut où chercher des graphes graphify. */
 function defaultBrainRoots(): string[] {
-  return [join(AMITEL_BRAIN_ROOT, 'projects'), join(process.env.USERPROFILE ?? '.', '.graphify')]
+  return [join(SHARED_BRAIN_ROOT, 'projects'), join(process.env.USERPROFILE ?? '.', '.graphify')]
 }
 
 /** Découvre les graphes graphify-out/graph.json sous les roots donnés. */
 export function scanBrainGraphs(
   roots: string[] = defaultBrainRoots(),
-  vaultRoot = AMITEL_BRAIN_ROOT,
+  vaultRoot = SHARED_BRAIN_ROOT,
   includeVaultThemes = true
 ): BrainGraphRef[] {
   const found: BrainGraphRef[] = []
@@ -474,7 +474,7 @@ export function scanBrainGraphs(
       // Le catalogue fixe garde les catégories historiques ; les tags YAML
       // permettent aux nouveaux domaines (ex. theme/autowin-os) d'apparaître
       // sans nouvelle livraison de l'application.
-      themes: includeVaultThemes ? vaultThemeCatalog(vaultRoot) : AMITEL_BRAIN_THEMES
+      themes: includeVaultThemes ? vaultThemeCatalog(vaultRoot) : BRAIN_THEMES
     })
   }
   for (const root of roots) {
@@ -520,7 +520,7 @@ export function loadBrainGraph(path: string, lod = 300, community?: number): Viz
   // Confinement (défense en profondeur, audit sécu #3) : un graphe FICHIER doit vivre sous une racine
   // de graphes légitime (defaultBrainRoots) ou le vault — sinon lecture de fichier arbitraire via IPC.
   const realFile = realpathSync.native(resolve(path))
-  const underAllowedGraphRoot = [...defaultBrainRoots(), AMITEL_BRAIN_ROOT].some((root) =>
+  const underAllowedGraphRoot = [...defaultBrainRoots(), SHARED_BRAIN_ROOT].some((root) =>
     realPathIsWithinRoot(realFile, root)
   )
   if (!underAllowedGraphRoot) throw new Error('graphe hors périmètre autorisé')
@@ -752,7 +752,7 @@ export async function searchVaultBrainNotesAsync(
     corpus?: readonly string[]
   } = {}
 ): Promise<BrainNoteSearchResult[]> {
-  const { limit = 40, allowedRoot = AMITEL_BRAIN_ROOT, corpus } = options
+  const { limit = 40, allowedRoot = SHARED_BRAIN_ROOT, corpus } = options
   const normalized = normalizeSearchText(query)
   const tokens = normalized.split(/[^a-z0-9_.-]+/).filter((token) => token.length >= 2)
   if (!normalized || tokens.length === 0 || limit <= 0 || corpus?.length === 0) return []
@@ -973,7 +973,7 @@ function vaultThemeCatalog(root: string, corpus?: readonly string[]): BrainTheme
 export function loadBrainThemes(
   path: string,
   corpus?: readonly string[],
-  allowedRoot = AMITEL_BRAIN_ROOT
+  allowedRoot = SHARED_BRAIN_ROOT
 ): BrainTheme[] {
   if (corpus?.length === 0) return []
   if (!existsSync(path) || !statSync(path).isDirectory()) return []
@@ -998,13 +998,13 @@ export function loadBrainThemes(
 }
 
 function themeCatalog(records: readonly Pick<VaultNoteRecord, 'themes'>[]): BrainTheme[] {
-  const known = new Set(AMITEL_BRAIN_THEMES.map((theme) => theme.id))
+  const known = new Set(BRAIN_THEMES.map((theme) => theme.id))
   const dynamic = new Set<string>()
   for (const record of records) {
     for (const theme of record.themes) if (!known.has(theme)) dynamic.add(theme)
   }
   return [
-    ...AMITEL_BRAIN_THEMES,
+    ...BRAIN_THEMES,
     ...[...dynamic]
       .sort((left, right) => left.localeCompare(right))
       .map((id) => ({ id, label: themeLabel(id) }))
@@ -1123,7 +1123,7 @@ function noteThemes(id: string, content: string): string[] {
     add(`project/${project}`, normalizedId.startsWith(`projects/${project}/`))
   }
 
-  const order = new Map(AMITEL_BRAIN_THEMES.map((theme, index) => [theme.id, index]))
+  const order = new Map(BRAIN_THEMES.map((theme, index) => [theme.id, index]))
   return [...categories].sort(
     (left, right) =>
       (order.get(left) ?? 999) - (order.get(right) ?? 999) || left.localeCompare(right)
@@ -1167,7 +1167,7 @@ function allowedReadRoots(): string[] {
   // `C:\Nouveau dossier` a ete RETIRE de cette liste le 2026-07-29. Ce n'etait pas un simple residu
   // de bricolage : c'est une liste blanche ANTI-TRAVERSAL, donc un nom de dossier generique y offrait
   // un droit de LECTURE sur tout ce que quiconque y deposerait. Les racines d'entreprise viennent
-  // maintenant de la source unique `amitel-paths.ts`, surchargeable par environnement.
+  // maintenant de la source unique `brain-paths.ts`, surchargeable par environnement.
   // La racine de donnees EFFECTIVE peut etre deplacee hors de %APPDATA% (mode portable :
   // `<workspace>/.autowin-data/autowin-os`). Le main process la publie dans
   // `AUTOWIN_APP_DATA_ROOT`, heritee par le worker Brain. Sans elle, les RUN.md reellement ecrits
@@ -1179,13 +1179,13 @@ function allowedReadRoots(): string[] {
   // l'utilisateur venait justement de designer. Constate le 2026-09-17 dans l'app reelle.
   const executionWorkspace = process.env.AUTOWIN_OS_WORKSPACE?.trim()
   return [
-    amitelBrainRoot(),
+    sharedBrainRoot(),
     join(home, '.graphify'),
     join(home, '.claude', 'runs'), // RUN.md du pipeline (vue Workflow)
     join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
     ...(effectiveAppDataRoot ? [join(effectiveAppDataRoot, 'runs')] : []),
     ...(executionWorkspace ? [executionWorkspace] : []),
-    ...amitelWorkspaces()
+    ...teamWorkspaces()
   ]
 }
 
@@ -1200,7 +1200,7 @@ export function readNodeFile(
   path: string,
   vaultRoot?: string,
   corpus?: readonly string[],
-  allowedVaultRoot = AMITEL_BRAIN_ROOT,
+  allowedVaultRoot = SHARED_BRAIN_ROOT,
   openDescriptor: (canonicalPath: string) => number = openVaultNoteDescriptor
 ): { path: string; content: string } {
   if (!existsSync(path)) throw new Error('fichier introuvable')

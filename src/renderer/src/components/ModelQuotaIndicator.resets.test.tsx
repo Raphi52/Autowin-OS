@@ -126,7 +126,7 @@ describe('popup quotas : resets offerts et compte', () => {
       {
         comptes: {
           accounts: [
-            { id: 'default', displayName: 'raphael.vilain@amitel.fr', tier: 'TEAM' },
+            { id: 'default', displayName: 'prenom.nom@example.com', tier: 'TEAM' },
             { id: 'compte-3', displayName: 'raphi5269@gmail.com', tier: 'MAX' }
           ],
           selectedId: 'compte-3',

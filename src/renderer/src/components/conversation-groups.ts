@@ -73,7 +73,7 @@ export interface ConversationGroup<T extends ConversationLike> {
 /**
  * Le nom lisible d'un dossier : son dernier segment.
  *
- * `C:\Amitel\Autowin OS` → `Autowin OS`. Afficher le chemin entier ferait déborder la barre latérale
+ * `C:\Travail\Autowin OS` → `Autowin OS`. Afficher le chemin entier ferait déborder la barre latérale
  * et noierait le seul mot qui distingue deux dossiers. Le chemin complet reste la CLÉ, donc deux
  * dossiers homonymes ne fusionnent pas — ils s'affichent juste pareil, et l'infobulle les départage.
  */

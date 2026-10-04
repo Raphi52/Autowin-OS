@@ -17,7 +17,7 @@ import { structuredEvidenceFields } from './codex'
  * copiee d'une trace de production.
  */
 describe('codex file_change — la forme REELLE est un tableau', () => {
-  const cwd = 'C:\\Amitel\\Autowin OS\\.autowin-data\\autowin-os\\worktrees\\abc\\agent__run-1'
+  const cwd = 'C:\\Travail\\Autowin OS\\.autowin-data\\autowin-os\\worktrees\\abc\\agent__run-1'
   const fichier = `${cwd}\\src\\main\\task-regime.test.ts`
 
   it('un tableau [{path, kind}] rend le CHEMIN, jamais un indice', () => {

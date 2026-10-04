@@ -39,7 +39,7 @@ describe('protocole Brain v2', () => {
   const navigation = {
     query: 'architecture',
     minDense: 0.2,
-    root: '\\\\srv1\\rig\\Projets IA\\Amitel Brain',
+    root: '\\\\nas1\\partage\\Projets IA\\Team Brain',
     candidates: [
       {
         rank: 1,

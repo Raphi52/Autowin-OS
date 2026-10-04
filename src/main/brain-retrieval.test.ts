@@ -160,7 +160,7 @@ describe('parseNavigation — offsets de chunk + root', () => {
         navigation: {
           query: 'q',
           minDense: 0.25,
-          root: '\\\\srv1\\rig\\Projets IA\\Amitel Brain',
+          root: '\\\\nas1\\partage\\Projets IA\\Team Brain',
           candidates: [
             {
               rank: 1,
@@ -180,7 +180,7 @@ describe('parseNavigation — offsets de chunk + root', () => {
         }
       })
     })
-    expect(res.navigation?.root).toBe('\\\\srv1\\rig\\Projets IA\\Amitel Brain')
+    expect(res.navigation?.root).toBe('\\\\nas1\\partage\\Projets IA\\Team Brain')
     expect(res.navigation?.candidates[0].chunkByteStart).toBe(3111)
     expect(res.navigation?.candidates[0].chunkByteEnd).toBe(3907)
     expect(res.navigation?.candidates[0].graphScore).toBe(0.55)
@@ -338,7 +338,7 @@ describe('retrieveBrainContext', () => {
             navigation: {
               query: 'question',
               minDense: 0.25,
-              root: '\\\\srv1\\rig\\Projets IA\\Amitel Brain',
+              root: '\\\\nas1\\partage\\Projets IA\\Team Brain',
               candidates: [
                 {
                   rank: 1,

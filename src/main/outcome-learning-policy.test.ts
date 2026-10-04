@@ -37,7 +37,7 @@ const observed = (patch: Partial<OutcomeObservedV1> = {}): OutcomeObservedV1 => 
   conversationId: 'conv-1',
   turnId: 'turn-1',
   runId: 'run-1',
-  workspace: 'C:/Amitel/Autowin OS',
+  workspace: 'C:/Travail/Autowin OS',
   createdAt: '2026-08-11T10:01:00.000Z',
   status: 'succeeded',
   valid: true,

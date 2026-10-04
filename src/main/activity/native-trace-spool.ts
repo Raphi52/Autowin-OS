@@ -13,7 +13,7 @@ import { NATIVE_TRACE_SOURCE, type NativePreflightWireV1 } from '../../shared/na
  * Ainsi l'Observatory (preuve d'injection + traçabilité RAG
  * « Brain ») se peuple sur les VRAIES requêtes envoyées par les providers d'Autowin.
  *
- * Le `system` (qui porte le marqueur RAG de référence Brain + le contexte projet)
+ * Le `system` (qui porte le marqueur RAG « [BRAIN REFERENCE DATA] » + le contexte projet)
  * est inclus comme 1er message → `summarizeRagTrace` le détecte comme pour une trace native.
  * Secrets redcatés via `redactTrace` (même politique que la lecture). Rotation simple à ~4 Mo.
  */

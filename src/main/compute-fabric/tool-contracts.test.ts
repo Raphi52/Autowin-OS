@@ -192,7 +192,7 @@ describe('contrats du gateway d outils local', () => {
     })
 
     it('REFUSE un chemin absolu et un chemin UNC (backslash ET slash)', () => {
-      for (const mauvais of ['C:\\Windows', '\\\\srv1\\rig', '//srv1/rig', '/etc/passwd']) {
+      for (const mauvais of ['C:\\Windows', '\\\\nas1\\partage', '//nas1/partage', '/etc/passwd']) {
         expect(() => parseToolCall({ ...callBase, args: { path: mauvais } })).toThrow(
           /chemin absolu|UNC/i
         )
@@ -778,7 +778,7 @@ describe('contrats du gateway d outils local', () => {
     })
 
     it('ACCEPTE un chemin absolu, un UNC et un traversal', () => {
-      for (const chemin of ['C:\\Windows\\system32', '\\\\srv1\\rig', '../../secrets']) {
+      for (const chemin of ['C:\\Windows\\system32', '\\\\nas1\\partage', '../../secrets']) {
         expect(parseToolCall({ ...callBase, args: { path: chemin } }).args.path).toBe(chemin)
       }
     })

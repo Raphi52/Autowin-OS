@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { devLaunchCommand, restartApplication, type RestartableApp } from './app-restart'
 
 function app(isPackaged: boolean): RestartableApp {
-  return { isPackaged, getAppPath: () => 'C:/Amitel/Autowin OS', relaunch: vi.fn(), quit: vi.fn() }
+  return { isPackaged, getAppPath: () => 'C:/Travail/Autowin OS', relaunch: vi.fn(), quit: vi.fn() }
 }
 
 describe('restartApplication', () => {
@@ -13,7 +13,7 @@ describe('restartApplication', () => {
 
     restartApplication(target, launchDev)
 
-    expect(launchDev).toHaveBeenCalledWith('C:/Amitel/Autowin OS')
+    expect(launchDev).toHaveBeenCalledWith('C:/Travail/Autowin OS')
     expect(target.relaunch).not.toHaveBeenCalled()
     expect(target.quit).toHaveBeenCalledOnce()
   })
@@ -32,14 +32,14 @@ describe('devLaunchCommand — le chemin RÉEL, celui que les mocks ne testaient
   it('vise le lanceur Python, plus le PowerShell', () => {
     // Le raccourci du bureau et cette relance doivent viser le MÊME script : deux lanceurs pour un
     // seul geste, c'est celui qu'on corrige et celui qu'on oublie.
-    const { args } = devLaunchCommand('C:/Amitel/Autowin OS', () => false)
+    const { args } = devLaunchCommand('C:/Travail/Autowin OS', () => false)
 
     expect(args[0]).toContain('launch_dev.py')
     expect(args[0]).not.toContain('launch-dev.ps1')
   })
 
   it('utilise un interpréteur GRAPHIQUE — sinon une console surgit à chaque redémarrage', () => {
-    const { interpreter } = devLaunchCommand('C:/Amitel/Autowin OS', () => false)
+    const { interpreter } = devLaunchCommand('C:/Travail/Autowin OS', () => false)
 
     expect(interpreter).toMatch(/(pyw|pythonw)(\.exe)?$/)
     expect(interpreter).not.toMatch(/(^|\|\/)(py|python)\.exe$/)
@@ -47,8 +47,8 @@ describe('devLaunchCommand — le chemin RÉEL, celui que les mocks ne testaient
 
   it('préfère un CPython EMBARQUÉ quand il est livré avec le dépôt', () => {
     // Décision `python-runtime` du Brain : un runtime embarqué ne dépend d'aucune installation.
-    const { interpreter } = devLaunchCommand('C:/Amitel/Autowin OS', () => true)
+    const { interpreter } = devLaunchCommand('C:/Travail/Autowin OS', () => true)
 
-    expect(interpreter).toBe(join('C:/Amitel/Autowin OS', 'resources', 'python', 'pythonw.exe'))
+    expect(interpreter).toBe(join('C:/Travail/Autowin OS', 'resources', 'python', 'pythonw.exe'))
   })
 })

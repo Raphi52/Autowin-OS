@@ -38,7 +38,7 @@ import {
 } from '../src/main/skill-node-mcp'
 import type { ExecutionEvidence } from '../src/main/providers/types'
 import { claudeToolResultText } from '../src/main/providers/claude'
-import { amitelBrainRoot } from '../src/main/amitel-paths'
+import { sharedBrainRoot } from '../src/main/brain-paths'
 import type { AppelMcpObserve } from '../src/main/skill-node-mcp'
 import { OUTILS_NOEUD_SKILL, promptOutilsNoeudSkill } from '../src/main/skill-node-tools'
 import type { LanceurCommandeSkill, SpecCommandeSkill } from '../src/main/skill-node-tools'
@@ -230,7 +230,7 @@ async function simuler(numero: number, t: Tache): Promise<void> {
       'Bash'
     ])
     const { texte, cout, integres, preuves } = lireFlux(sortie)
-    const traceDirecte = lecturesDirectesDuBrain(preuves, amitelBrainRoot(), 'think')
+    const traceDirecte = lecturesDirectesDuBrain(preuves, sharedBrainRoot(), 'think')
     const lectures = appels.filter((a) => a.outil === 'brain_read')
     const accesNotes = integres.filter((u) => /knowledge[\\/]/i.test(u))
     const ouverteMcp = t.attendue ? lectures.some((a) => a.cible?.includes(t.attendue!)) : null
