@@ -9,7 +9,7 @@ import {
 } from './graph-tree-layout'
 import type { GraphNode } from './graph-view-model'
 
-const RACINE_UNC = '//ged2/rig/Projets IA/Amitel Brain/'
+const RACINE_UNC = '//srv1/rig/Projets IA/Amitel Brain/'
 
 /** Fabrique une fiche avec un chemin réaliste — le chemin EST la lignée, donc il porte tout le test. */
 function fiche(chemin: string): GraphNode {

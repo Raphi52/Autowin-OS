@@ -23,7 +23,7 @@ function item(id: string, title: string): TicketItem {
     type: 'Fiche Team',
     title,
     state: 'En cours',
-    url: `https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/${id}`,
+    url: `https://dev.azure.com/org/projet/_workitems/edit/${id}`,
     updatedAt: '2026-08-06T10:00:00.000Z',
     fields: {}
   }

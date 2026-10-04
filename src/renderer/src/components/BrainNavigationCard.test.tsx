@@ -146,7 +146,7 @@ describe('BrainNavigationCard — dépli + surlignage du passage retenu', () => 
       navigation: {
         query: 'q',
         minDense: 0.25,
-        root: '//ged2/rig/Projets IA/Amitel Brain',
+        root: '//srv1/rig/Projets IA/Amitel Brain',
         candidates: [
           {
             rank: 1,
@@ -172,8 +172,8 @@ describe('BrainNavigationCard — dépli + surlignage du passage retenu', () => 
     })
 
     expect(readNodeFile).toHaveBeenCalledWith(
-      '//ged2/rig/Projets IA/Amitel Brain/knowledge/a.md',
-      '//ged2/rig/Projets IA/Amitel Brain'
+      '//srv1/rig/Projets IA/Amitel Brain/knowledge/a.md',
+      '//srv1/rig/Projets IA/Amitel Brain'
     )
     const mark = host!.querySelector('.brain-nav-highlight')
     expect(mark).toBeTruthy()
@@ -192,7 +192,7 @@ describe('BrainNavigationCard — dépli + surlignage du passage retenu', () => 
       navigation: {
         query: 'q',
         minDense: 0.25,
-        root: '//ged2/x',
+        root: '//srv1/x',
         candidates: [{ rank: 1, path: 'a.md', type: 'domain', denseCos: 0.5, retained: true }]
       }
     })

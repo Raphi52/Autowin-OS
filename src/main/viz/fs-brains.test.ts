@@ -44,11 +44,11 @@ describe('Amitel Brain graph', () => {
     const [result] = applyBrainRetrievalScores(local, {
       query: 'decision',
       minDense: 0.2,
-      root: '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+      root: '\\\\srv1\\rig\\Projets IA\\Amitel Brain',
       candidates: [
         {
           rank: 1,
-          path: '//ged2/rig/Projets IA/Amitel Brain/knowledge/decision.md',
+          path: '//srv1/rig/Projets IA/Amitel Brain/knowledge/decision.md',
           type: 'decision',
           denseCos: 0.81,
           denseScore: 0.72,
@@ -1667,7 +1667,7 @@ describe('Amitel Brain graph', () => {
 
     expect(scanBrainGraphs([join(root, 'projects')], root)[0]).toMatchObject({
       id: 'amitel-brain',
-      label: 'Amitel Brain',
+      label: 'Brain',
       path: root,
       kind: 'vault',
       themes: AMITEL_BRAIN_THEMES

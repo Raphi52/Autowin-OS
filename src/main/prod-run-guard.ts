@@ -224,7 +224,7 @@ export function refusSqlAgent(ligne: string, basesNonProd: readonly string[]): s
   // bases le sont. Avant, seul `-d` comptait — conv-106, tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf :
   // un SELECT vers RIG_DEV sur SQL-DEV\DEV refusé alors que le serveur entier est de dev.
   // fix-ok: pour sqlcmd/osql, `-s` minuscule est le séparateur de colonnes ; le comparer en minuscules
-  // faisait passer `-s SQL-DEV\DEV -S SQL-PROD\PROD` (mesuré : test rouge, commande PROD acceptée).
+  // faisait passer `-s SQL-DEV\DEV -S SRV-PROD\PROD` (mesuré : test rouge, commande PROD acceptée).
   // Donc `-S`/`/S` sensibles à la casse (collé ou non), `-ServerInstance` insensible (PowerShell),
   // et TOUS les serveurs cités doivent être déclarés.
   const serveurs: string[] = []

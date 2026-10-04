@@ -10,9 +10,9 @@ import { classerCible, construireAutoriteProd, type EntreeAutorite } from './pro
  * n'est pas explicitement déclaré hors production BLOQUE.
  */
 const DECLARATIONS: EntreeAutorite[] = [
-  { nature: 'base', nom: 'RIG_AMIENS', classe: 'prod', motif: 'greffe exploité' },
-  { nature: 'base', nom: 'RIG_MAQUETTE', classe: 'non-prod' },
-  { nature: 'serveur', nom: 'RIGBD-POLYNESIE', classe: 'prod' },
+  { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+  { nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' },
+  { nature: 'serveur', nom: 'SRV-POLYNESIE', classe: 'prod' },
   { nature: 'chemin', nom: 'D:\\Deploiement\\Prod', classe: 'prod' },
   { nature: 'chemin', nom: 'D:/Deploiement/Prod/bac-a-sable', classe: 'non-prod' },
   { nature: 'branche', nom: 'main', classe: 'prod' },
@@ -23,21 +23,21 @@ const AUTORITE = construireAutoriteProd(DECLARATIONS)
 
 describe('classerCible', () => {
   it('classe prod une cible déclarée prod, et le dit avec son motif', () => {
-    const verdict = classerCible({ nature: 'base', nom: 'RIG_AMIENS' }, AUTORITE)
+    const verdict = classerCible({ nature: 'base', nom: 'APP_AMIENS' }, AUTORITE)
     expect(verdict.classe).toBe('prod')
     expect(verdict.estBloquant).toBe(true)
     expect(verdict.raison).toContain('greffe exploité')
   })
 
   it('laisse passer une cible déclarée hors production', () => {
-    const verdict = classerCible({ nature: 'base', nom: 'RIG_MAQUETTE' }, AUTORITE)
+    const verdict = classerCible({ nature: 'base', nom: 'APP_MAQUETTE' }, AUTORITE)
     expect(verdict.classe).toBe('non-prod')
     expect(verdict.estBloquant).toBe(false)
   })
 
   /** La propriété centrale : l'absence d'information n'est pas une permission. */
   it('bloque une cible NON déclarée — inconnu vaut prod', () => {
-    const verdict = classerCible({ nature: 'base', nom: 'RIG_INCONNUE' }, AUTORITE)
+    const verdict = classerCible({ nature: 'base', nom: 'APP_INCONNUE' }, AUTORITE)
     expect(verdict.classe).toBe('inconnu')
     expect(verdict.estBloquant).toBe(true)
     expect(verdict.raison).toContain('non déclarée')
@@ -52,22 +52,22 @@ describe('classerCible', () => {
   })
 
   it('ignore la casse et les espaces autour du nom', () => {
-    expect(classerCible({ nature: 'base', nom: '  rig_amiens  ' }, AUTORITE).classe).toBe('prod')
+    expect(classerCible({ nature: 'base', nom: '  app_amiens  ' }, AUTORITE).classe).toBe('prod')
   })
 
   /**
-   * Le piège nommé dans l'en-tête du module : un nom VOISIN n'hérite de rien. `RIG_AMIENS_TEST`
-   * n'est pas `RIG_AMIENS` — et il tombe du côté prudent, pas du côté permissif.
+   * Le piège nommé dans l'en-tête du module : un nom VOISIN n'hérite de rien. `APP_AMIENS_TEST`
+   * n'est pas `APP_AMIENS` — et il tombe du côté prudent, pas du côté permissif.
    */
   it('ne fait AUCUN appariement par préfixe sur un nom voisin', () => {
-    expect(classerCible({ nature: 'base', nom: 'RIG_AMIENS_TEST' }, AUTORITE).classe).toBe(
+    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS_TEST' }, AUTORITE).classe).toBe(
       'inconnu'
     )
   })
 
   it('ne confond pas deux natures qui portent le même nom', () => {
-    expect(classerCible({ nature: 'serveur', nom: 'RIG_AMIENS' }, AUTORITE).classe).toBe('inconnu')
-    expect(classerCible({ nature: 'serveur', nom: 'RIGBD-POLYNESIE' }, AUTORITE).classe).toBe(
+    expect(classerCible({ nature: 'serveur', nom: 'APP_AMIENS' }, AUTORITE).classe).toBe('inconnu')
+    expect(classerCible({ nature: 'serveur', nom: 'SRV-POLYNESIE' }, AUTORITE).classe).toBe(
       'prod'
     )
   })
@@ -145,7 +145,7 @@ describe('construireAutoriteProd', () => {
 
   it('une autorité VIDE bloque tout — jamais l’inverse', () => {
     const vide = construireAutoriteProd([])
-    expect(classerCible({ nature: 'base', nom: 'RIG_MAQUETTE' }, vide).estBloquant).toBe(true)
+    expect(classerCible({ nature: 'base', nom: 'APP_MAQUETTE' }, vide).estBloquant).toBe(true)
     expect(classerCible({ nature: 'chemin', nom: 'D:/Deploiement/Prod' }, vide).estBloquant).toBe(
       true
     )
@@ -155,8 +155,8 @@ describe('construireAutoriteProd', () => {
 describe('pureté', () => {
   it('rend le même verdict pour les mêmes entrées, sans modifier l’autorité', () => {
     const avant = JSON.stringify(AUTORITE)
-    const premier = classerCible({ nature: 'base', nom: 'RIG_AMIENS' }, AUTORITE)
-    const second = classerCible({ nature: 'base', nom: 'RIG_AMIENS' }, AUTORITE)
+    const premier = classerCible({ nature: 'base', nom: 'APP_AMIENS' }, AUTORITE)
+    const second = classerCible({ nature: 'base', nom: 'APP_AMIENS' }, AUTORITE)
     expect(second).toEqual(premier)
     expect(JSON.stringify(AUTORITE)).toBe(avant)
   })

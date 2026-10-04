@@ -32,7 +32,7 @@ function fixture() {
       type: 'Fiche Team',
       title: "[REFUS FORMALITE] Mettre en place l'envoi mail automatique",
       state: 'Ouvert',
-      url: 'https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/1227',
+      url: 'https://dev.azure.com/org/projet/_workitems/edit/1227',
       updatedAt: '2026-08-06T10:00:00.000Z',
       fields: {}
     }))

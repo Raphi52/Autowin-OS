@@ -170,14 +170,14 @@ describe('ensureBrainServerStarted', () => {
     // cmd.exe REFUSE un cwd UNC (« UNC paths are not supported. Defaulting to Windows directory ») :
     // on n'en impose aucun, et le script absolu rend le cwd inutile.
     const unc = buildBrainLaunchCommand(
-      '\\\\ged2\\rig\\tooling',
-      '\\\\ged2\\rig\\tooling\\python.exe',
-      '\\\\ged2\\rig\\tooling\\brain_server.py',
+      '\\\\srv1\\rig\\tooling',
+      '\\\\srv1\\rig\\tooling\\python.exe',
+      '\\\\srv1\\rig\\tooling\\brain_server.py',
       'win32'
     )
     expect(unc).not.toBeNull()
     expect(unc?.cwd).toBeUndefined()
-    expect(unc?.args.at(-1)).toBe('\\\\ged2\\rig\\tooling\\brain_server.py')
+    expect(unc?.args.at(-1)).toBe('\\\\srv1\\rig\\tooling\\brain_server.py')
     expect(unc?.args).toContain('/d')
   })
 
@@ -304,7 +304,7 @@ describe('ensureBrainServerStarted', () => {
     writeFileSync(
       join(stateRoot, 'config.json'),
       JSON.stringify({
-        brain_root: '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+        brain_root: '\\\\srv1\\rig\\Projets IA\\Amitel Brain',
         code_root: codeRoot,
         python
       })

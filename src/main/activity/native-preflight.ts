@@ -13,7 +13,7 @@ import {
  * Traces de PRÉ-REQUÊTE NATIVES d'Autowin (schéma neutre, indépendant de toute source externe).
  *
  * Autowin écrit lui-même ses traces (voir native-trace-spool) au format ci-dessous et les relit ici
- * pour peupler l'Observatory (preuve d'injection + traçabilité RAG « Amitel Brain »). Aucun couplage
+ * pour peupler l'Observatory (preuve d'injection + traçabilité RAG « Brain »). Aucun couplage
  * à un spool externe : le lecteur ne lit que le spool natif dont on lui passe la racine.
  */
 export const PREFLIGHT_SCHEMA = NATIVE_PREFLIGHT_SCHEMA

@@ -1,37 +1,89 @@
+// fix-ok: valeurs propres à entreprise (serveur, base, table, colonnes du catalogue) écrites en dur — mesuré par grep; remplacées par la config sql-catalog.json, fermée par défaut (tests sql-read-catalog/guard rouge si on rouvre)
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { configureSqlCatalog as configurerCatalogueTest } from './sql-read-catalog'
+import { TEST_SQL_CATALOG } from './sql-catalog.test-fixture'
+
+configurerCatalogueTest(TEST_SQL_CATALOG)
 import {
-  CATALOG_DATABASE,
-  CATALOG_QUERY,
-  CATALOG_SERVER,
-  DEV_TARGETS,
+  buildCatalogQuery,
   buildSqlTargetCatalog,
   clearSqlTargetCache,
+  configureSqlCatalog,
+  devTargets,
+  estBaseCatalogue,
+  estServeurDev,
   parseCatalogRows,
+  parseSqlCatalogConfig,
   resolveSqlTargets
 } from './sql-read-catalog'
 
+const CATALOG_QUERY = buildCatalogQuery(TEST_SQL_CATALOG)
+const CATALOG_SERVER = TEST_SQL_CATALOG.server
+const CATALOG_DATABASE = TEST_SQL_CATALOG.database
+
 /**
- * L'AUTORITÉ du périmètre. Elle a remplacé un motif de nom (`^RIG_…`) plus une liste de serveurs codée
+ * PLUS AUCUNE VALEUR D'ENTREPRISE DANS LE CODE : sans `sql-catalog.json`, rien n'est lisible.
+ * La protection reste FERMÉE par défaut — rendre le code générique ne doit pas l'ouvrir.
+ */
+describe('sans configuration — défaut fermé', () => {
+  it('aucune base, aucun serveur de dev, catalogue dégradé, aucune interrogation', async () => {
+    configureSqlCatalog()
+    try {
+      const spawnFn = vi.fn()
+      const c = await resolveSqlTargets({ spawnFn: spawnFn as never })
+      expect(spawnFn).not.toHaveBeenCalled()
+      expect(c.degraded).toBe(true)
+      expect(c.size()).toBe(0)
+      expect(c.has('SRV-DEV\\DEV', 'APP_DEV')).toBe(false)
+      expect(estServeurDev('SRV-DEV\\DEV')).toBe(false)
+      expect(estBaseCatalogue('CATALOGUE')).toBe(false)
+      expect(devTargets()).toEqual([])
+    } finally {
+      configureSqlCatalog(TEST_SQL_CATALOG)
+    }
+  })
+})
+
+describe('parseSqlCatalogConfig', () => {
+  it('accepte une configuration complète', () => {
+    expect(parseSqlCatalogConfig(TEST_SQL_CATALOG)).toEqual(TEST_SQL_CATALOG)
+  })
+
+  it('refuse un identifiant qui injecterait du SQL dans la requête du catalogue', () => {
+    for (const champ of ['table', 'databaseColumn', 'serverColumn', 'exploitColumn']) {
+      const v = { ...TEST_SQL_CATALOG, [champ]: 'x; DROP TABLE y' }
+      expect(parseSqlCatalogConfig(v), `accepté à tort : ${champ}`).toBeUndefined()
+    }
+  })
+
+  it('refuse une configuration incomplète ou absente', () => {
+    expect(parseSqlCatalogConfig(undefined)).toBeUndefined()
+    expect(parseSqlCatalogConfig({ ...TEST_SQL_CATALOG, server: '' })).toBeUndefined()
+  })
+})
+
+/**
+ * L'AUTORITÉ du périmètre. Elle a remplacé un motif de nom (`^APP_…`) plus une liste de serveurs codée
  * en dur, qui était à la fois trop large et trop étroite :
  *
  *  - trop large : le préfixe ouvrait des maquettes, des copies figées d'avant changement de structure
- *    et des bases de service. Aucune heuristique ne pouvait trancher — `RIG_LE_PUY_MARTIN` ressemble à
- *    un greffe et n'en est pas un (vérifié : `GRF_IS_EXPLOIT = 0`) ;
- *  - trop étroite : `RIGBD-POLYNESIE` manquait, alors qu'il héberge `RIG_PAPEETE`, greffe exploité.
+ *    et des bases de service. Aucune heuristique ne pouvait trancher — `APP_LE_PUY_MARTIN` ressemble à
+ *    un greffe et n'en est pas un (vérifié : `COL_IS_EXPLOIT = 0`) ;
+ *  - trop étroite : `SRV-POLYNESIE` manquait, alors qu'il héberge `APP_PAPEETE`, greffe exploité.
  *
- * Mesuré le 2026-08-07 dans `COMMUN_RIG.dbo.GREFFE` : 40 greffes exploités sur 4 serveurs, sur 274
+ * Mesuré le 2026-08-07 dans `CATALOGUE.dbo.BASES` : 40 greffes exploités sur 4 serveurs, sur 274
  * lignes au total.
  */
 describe('CATALOG_QUERY — la requête qui lit l’autorité', () => {
   /**
-   * La table voisine des SECRETS : `GRF_PWD_BD`, `GRF_INFOGREFFE_PASSWORD`, `GRF_DOCVERIF_PASSWORD`,
-   * `GRF_WS_IDNUM_CLEF_API`. On ne lit donc que deux colonnes, et jamais `SELECT *`.
+   * La table voisine des SECRETS : `COL_PWD_BD`, `COL_INFOGREFFE_PASSWORD`, `COL_DOCVERIF_PASSWORD`,
+   * `COL_WS_IDNUM_CLEF_API`. On ne lit donc que deux colonnes, et jamais `SELECT *`.
    */
   it('ne lit QUE le nom de base et le serveur, jamais un secret', () => {
-    expect(CATALOG_QUERY).toContain('GRF_NOMBASE_BD')
-    expect(CATALOG_QUERY).toContain('GRF_SERVEUR_BD')
+    expect(CATALOG_QUERY).toContain('COL_NOMBASE_BD')
+    expect(CATALOG_QUERY).toContain('COL_SERVEUR_BD')
     expect(CATALOG_QUERY).not.toMatch(/select\s+\*/i)
     for (const secret of ['PWD', 'PASSWORD', 'CLEF_API', 'LOGIN']) {
       expect(CATALOG_QUERY, `la requête ne doit pas toucher ${secret}`).not.toContain(secret)
@@ -39,12 +91,12 @@ describe('CATALOG_QUERY — la requête qui lit l’autorité', () => {
   })
 
   it('filtre sur les greffes EXPLOITÉS', () => {
-    expect(CATALOG_QUERY).toContain('GRF_IS_EXPLOIT = 1')
+    expect(CATALOG_QUERY).toContain('COL_IS_EXPLOIT = 1')
   })
 
   it('écarte les lignes sans base ni serveur, plutôt que de les deviner', () => {
-    expect(CATALOG_QUERY).toContain('GRF_NOMBASE_BD IS NOT NULL')
-    expect(CATALOG_QUERY).toContain('GRF_SERVEUR_BD IS NOT NULL')
+    expect(CATALOG_QUERY).toContain('COL_NOMBASE_BD IS NOT NULL')
+    expect(CATALOG_QUERY).toContain('COL_SERVEUR_BD IS NOT NULL')
   })
 })
 
@@ -52,22 +104,22 @@ describe('parseCatalogRows', () => {
   it('traduit les lignes en couples serveur/base', () => {
     expect(
       parseCatalogRows([
-        { d: 'RIG_AMIENS', s: 'SQL-PROD\\PROD' },
-        { d: 'RIG_PAPEETE', s: 'RIGBD-POLYNESIE' }
+        { d: 'APP_AMIENS', s: 'SRV-PROD\\PROD' },
+        { d: 'APP_PAPEETE', s: 'SRV-POLYNESIE' }
       ])
     ).toEqual([
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' },
-      { server: 'RIGBD-POLYNESIE', database: 'RIG_PAPEETE' }
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
+      { server: 'SRV-POLYNESIE', database: 'APP_PAPEETE' }
     ])
   })
 
   it('IGNORE une ligne incomplète au lieu de la compléter', () => {
     expect(
       parseCatalogRows([
-        { d: 'RIG_AMIENS', s: null },
-        { d: '', s: 'SQL-PROD\\PROD' },
+        { d: 'APP_AMIENS', s: null },
+        { d: '', s: 'SRV-PROD\\PROD' },
         { d: '  ', s: '  ' },
-        { s: 'SQL-PROD\\PROD' }
+        { s: 'SRV-PROD\\PROD' }
       ])
     ).toEqual([])
   })
@@ -75,58 +127,58 @@ describe('parseCatalogRows', () => {
 
 describe('buildSqlTargetCatalog', () => {
   const catalogue = buildSqlTargetCatalog([
-    { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' },
-    { server: 'RIGBD-POLYNESIE', database: 'RIG_PAPEETE' },
-    { server: 'SQL-DEV\\DEV', database: 'RIG_DEV' }
+    { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
+    { server: 'SRV-POLYNESIE', database: 'APP_PAPEETE' },
+    { server: 'SRV-DEV\\DEV', database: 'APP_DEV' }
   ])
 
   it('reconnaît un couple présent', () => {
-    expect(catalogue.has('SQL-PROD\\PROD', 'RIG_AMIENS')).toBe(true)
-    expect(catalogue.has('RIGBD-POLYNESIE', 'RIG_PAPEETE')).toBe(true)
+    expect(catalogue.has('SRV-PROD\\PROD', 'APP_AMIENS')).toBe(true)
+    expect(catalogue.has('SRV-POLYNESIE', 'APP_PAPEETE')).toBe(true)
   })
 
   /** Le COUPLE compte : un greffe n'est exploité que sur son serveur. */
   it('refuse une base présente mais sur un autre serveur', () => {
-    expect(catalogue.has('SQL-PROD\\PROD', 'RIG_PAPEETE')).toBe(false)
-    expect(catalogue.has('RIGBD-POLYNESIE', 'RIG_AMIENS')).toBe(false)
+    expect(catalogue.has('SRV-PROD\\PROD', 'APP_PAPEETE')).toBe(false)
+    expect(catalogue.has('SRV-POLYNESIE', 'APP_AMIENS')).toBe(false)
   })
 
   it('compare sans tenir compte de la casse ni des espaces autour', () => {
-    expect(catalogue.has('sql-prod\\prod', 'rig_amiens')).toBe(true)
-    expect(catalogue.has('  SQL-PROD\\PROD  ', '  RIG_AMIENS  ')).toBe(true)
+    expect(catalogue.has('srv-prod\\prod', 'app_amiens')).toBe(true)
+    expect(catalogue.has('  SRV-PROD\\PROD  ', '  APP_AMIENS  ')).toBe(true)
   })
 
   it('refuse ce qui n’y est pas, y compris la base des mots de passe', () => {
-    for (const base of ['RIG_LE_PUY_MARTIN', 'RIG_PUY_MAQUETTE', 'COMMUN_RIG', 'master']) {
-      expect(catalogue.has('SQL-PROD\\PROD', base), `accepté à tort : ${base}`).toBe(false)
+    for (const base of ['APP_LE_PUY_MARTIN', 'APP_PUY_MAQUETTE', 'CATALOGUE', 'master']) {
+      expect(catalogue.has('SRV-PROD\\PROD', base), `accepté à tort : ${base}`).toBe(false)
     }
   })
 
   it('sait énumérer ce qu’il autorise, pour un message de refus utile', () => {
-    expect(catalogue.servers()).toEqual(['RIGBD-POLYNESIE', 'SQL-DEV\\DEV', 'SQL-PROD\\PROD'])
-    expect(catalogue.databasesFor('SQL-PROD\\PROD')).toEqual(['RIG_AMIENS'])
+    expect(catalogue.servers()).toEqual(['SRV-DEV\\DEV', 'SRV-POLYNESIE', 'SRV-PROD\\PROD'])
+    expect(catalogue.databasesFor('SRV-PROD\\PROD')).toEqual(['APP_AMIENS'])
     expect(catalogue.size()).toBe(3)
   })
 
   it('ignore une entrée incomplète sans exploser', () => {
     const c = buildSqlTargetCatalog([
-      { server: '', database: 'RIG_X' },
+      { server: '', database: 'APP_X' },
       { server: 'S', database: '' }
     ])
     expect(c.size()).toBe(0)
   })
 })
 
-describe('DEV_TARGETS', () => {
+describe('devTargets', () => {
   /**
-   * Ces bases sont `GRF_IS_EXPLOIT = 0` — normal, ce ne sont pas des greffes exploités. Elles sont
+   * Ces bases sont `COL_IS_EXPLOIT = 0` — normal, ce ne sont pas des greffes exploités. Elles sont
    * donc énumérées explicitement, plutôt que d'affaiblir le critère `IS_EXPLOIT` pour les faire
-   * entrer. Noms vérifiés dans l'autorité : `RIG_RECETTE`, et non `RIG_RECETE`.
+   * entrer. Noms vérifiés dans l'autorité : `APP_RECETTE`, et non `APP_RECETE`.
    */
-  it('couvre RIG_DEV et RIG_RECETTE sur SQL-DEV\\DEV', () => {
-    expect(DEV_TARGETS).toEqual([
-      { server: 'SQL-DEV\\DEV', database: 'RIG_DEV' },
-      { server: 'SQL-DEV\\DEV', database: 'RIG_RECETTE' }
+  it('couvre APP_DEV et APP_RECETTE sur SRV-DEV\\DEV', () => {
+    expect(devTargets()).toEqual([
+      { server: 'SRV-DEV\\DEV', database: 'APP_DEV' },
+      { server: 'SRV-DEV\\DEV', database: 'APP_RECETTE' }
     ])
   })
 })
@@ -180,8 +232,8 @@ describe('resolveSqlTargets', () => {
     return { promesse, args }
   }
 
-  it('interroge COMMUN_RIG sur le serveur de production', async () => {
-    const { promesse, args } = lancer('[{"d":"RIG_AMIENS","s":"SQL-PROD\\\\PROD"}]')
+  it('interroge CATALOGUE sur le serveur de production', async () => {
+    const { promesse, args } = lancer('[{"d":"APP_AMIENS","s":"SRV-PROD\\\\PROD"}]')
     await promesse
     expect(args[args.indexOf('-S') + 1]).toBe(CATALOG_SERVER)
     expect(args[args.indexOf('-d') + 1]).toBe(CATALOG_DATABASE)
@@ -189,15 +241,15 @@ describe('resolveSqlTargets', () => {
 
   it('rend les greffes exploités ET les cibles de développement', async () => {
     const { promesse } = lancer(
-      '[{"d":"RIG_AMIENS","s":"SQL-PROD\\\\PROD"},{"d":"RIG_PAPEETE","s":"RIGBD-POLYNESIE"}]'
+      '[{"d":"APP_AMIENS","s":"SRV-PROD\\\\PROD"},{"d":"APP_PAPEETE","s":"SRV-POLYNESIE"}]'
     )
     const c = await promesse
     expect(c.degraded).toBe(false)
-    expect(c.has('SQL-PROD\\PROD', 'RIG_AMIENS')).toBe(true)
-    expect(c.has('RIGBD-POLYNESIE', 'RIG_PAPEETE')).toBe(true)
-    expect(c.has('SQL-DEV\\DEV', 'RIG_DEV')).toBe(true)
-    expect(c.has('SQL-DEV\\DEV', 'RIG_RECETTE')).toBe(true)
-    expect(c.has('SQL-PROD\\PROD', 'COMMUN_RIG')).toBe(true)
+    expect(c.has('SRV-PROD\\PROD', 'APP_AMIENS')).toBe(true)
+    expect(c.has('SRV-POLYNESIE', 'APP_PAPEETE')).toBe(true)
+    expect(c.has('SRV-DEV\\DEV', 'APP_DEV')).toBe(true)
+    expect(c.has('SRV-DEV\\DEV', 'APP_RECETTE')).toBe(true)
+    expect(c.has('SRV-PROD\\PROD', 'CATALOGUE')).toBe(true)
     expect(c.size()).toBe(5)
   })
 
@@ -207,11 +259,11 @@ describe('resolveSqlTargets', () => {
    * silence. Ici aucune base de PRODUCTION n'est autorisée, et `degraded` le dit.
    */
   it('autorité injoignable → dégradé, aucune base de production', async () => {
-    const { promesse } = lancer('Msg 4060, Level 11\nCannot open database COMMUN_RIG.', 1)
+    const { promesse } = lancer('Msg 4060, Level 11\nCannot open database CATALOGUE.', 1)
     const c = await promesse
     expect(c.degraded).toBe(true)
-    expect(c.has('SQL-PROD\\PROD', 'RIG_AMIENS')).toBe(false)
-    expect(c.has('SQL-DEV\\DEV', 'RIG_DEV')).toBe(true)
+    expect(c.has('SRV-PROD\\PROD', 'APP_AMIENS')).toBe(false)
+    expect(c.has('SRV-DEV\\DEV', 'APP_DEV')).toBe(true)
   })
 
   it('met le catalogue en cache : une seule interrogation', async () => {
@@ -220,7 +272,7 @@ describe('resolveSqlTargets', () => {
     const deps = {
       spawnFn: spawnFn as never,
       sqlcmdPath: 'sqlcmd.exe',
-      outputFile: fakeFile('[{"d":"RIG_AMIENS","s":"SQL-PROD\\\\PROD"}]'),
+      outputFile: fakeFile('[{"d":"APP_AMIENS","s":"SRV-PROD\\\\PROD"}]'),
       outputPath: 'T:\\cat.json',
       now: () => 1_000
     }

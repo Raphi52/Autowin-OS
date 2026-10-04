@@ -98,9 +98,9 @@ describe('depotCiteDansLeMessage', () => {
   })
 
   it('accepte un partage reseau', () => {
-    const existe = disque('\\\\ged2\\rig\\Brain', '\\\\ged2\\rig\\Brain\\.git')
-    expect(depotCiteDansLeMessage('va dans \\\\ged2\\rig\\Brain', ACTIF, existe)).toBe(
-      '\\\\ged2\\rig\\Brain'
+    const existe = disque('\\\\srv1\\rig\\Brain', '\\\\srv1\\rig\\Brain\\.git')
+    expect(depotCiteDansLeMessage('va dans \\\\srv1\\rig\\Brain', ACTIF, existe)).toBe(
+      '\\\\srv1\\rig\\Brain'
     )
   })
 })

@@ -75,7 +75,7 @@ export function ObservatoryRagCausalStep({
         <div>
           <strong>
             {isFirstDelivery && brainTrace
-              ? 'Autowin interroge Amitel Brain'
+              ? 'Autowin interroge le Brain'
               : 'Autowin remet le contexte Brain au modèle'}
           </strong>
           <small>

@@ -19,7 +19,7 @@ import {
 const PHRASE = 'phrase-de-passe-de-reference'
 const EMPREINTE = definirPhrase(PHRASE, 1_000)
 const T0 = 10_000
-const DEMANDE = { cible: 'base:RIG_AMIENS', operation: 'sql-write' }
+const DEMANDE = { cible: 'base:APP_AMIENS', operation: 'sql-write' }
 
 describe('empreinte de la phrase', () => {
   it('ne conserve nulle part la phrase en clair', () => {
@@ -111,7 +111,7 @@ describe('bornes du jeton', () => {
     if (!ouverture.accorde) throw new Error('ouverture attendue')
     const autreCible = coffre.consommer(
       ouverture.jeton.valeur,
-      { cible: 'base:RIG_LILLE', operation: 'sql-write' },
+      { cible: 'base:APP_LILLE', operation: 'sql-write' },
       T0 + 10
     )
     expect(autreCible.autorise).toBe(false)

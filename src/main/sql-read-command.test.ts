@@ -1,15 +1,19 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
+import { configureSqlCatalog as configurerCatalogueTest } from './sql-read-catalog'
+import { TEST_SQL_CATALOG } from './sql-catalog.test-fixture'
+
+configurerCatalogueTest(TEST_SQL_CATALOG)
 // fix-ok: adaptation à la nouvelle direction de l'utilisateur (l'autorité du périmètre devient
-// COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) — refactor demandé, pas un correctif à l'aveugle.
+// CATALOGUE.dbo.BASES, COL_IS_EXPLOIT = 1) — refactor demandé, pas un correctif à l'aveugle.
 // L'exécution de sqlcmd vit désormais dans `sqlcmd-runner`, d'où provient `OutputFileAccess`.
 import { buildReadOnlyBatch, runSqlRead, type SqlReadCommandDeps } from './sql-read-command'
 import { buildSqlTargetCatalog } from './sql-read-catalog'
 import type { OutputFileAccess } from './sqlcmd-runner'
 
 /** Catalogue de test : la cible est autorisée, pour que ces tests portent sur l'EXÉCUTION. */
-const CATALOGUE = buildSqlTargetCatalog([{ server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' }])
+const CATALOGUE = buildSqlTargetCatalog([{ server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' }])
 
 /**
  * L'enveloppe d'exécution est la COUCHE 2 de la défense : même si une écriture franchissait la garde,
@@ -84,7 +88,7 @@ function fakeFile(contenu: string | Buffer): OutputFileAccess & { removed: () =>
   }
 }
 
-const cible = { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS x' }
+const cible = { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS x' }
 
 /** Monte le décor complet : un fils simulé, un fichier de sortie simulé, un chemin déterministe. */
 function lancer(
@@ -148,8 +152,8 @@ describe('runSqlRead — invocation de sqlcmd', () => {
     expect(bin).toBe('C:\\bin\\sqlcmd.exe')
     expect(opts.shell).toBe(false)
     expect(args).toContain('-E')
-    expect(args[args.indexOf('-S') + 1]).toBe('SQL-PROD\\PROD')
-    expect(args[args.indexOf('-d') + 1]).toBe('RIG_AMIENS')
+    expect(args[args.indexOf('-S') + 1]).toBe('SRV-PROD\\PROD')
+    expect(args[args.indexOf('-d') + 1]).toBe('APP_AMIENS')
   })
 
   /**
@@ -244,7 +248,7 @@ describe('runSqlRead — lecture du résultat', () => {
   it('ignore un crochet présent dans un message sqlcmd avant le JSON', async () => {
     // Régression (3ᵉ audit) : on repartait du PREMIER crochet, donc un message d'information
     // contenant « [ » rendait la réponse illisible.
-    const out = await lancer('Changed database context to [RIG_AMIENS].\n[{"a":1}]').resultat
+    const out = await lancer('Changed database context to [APP_AMIENS].\n[{"a":1}]').resultat
     expect(out.ok).toBe(true)
     if (out.ok) expect(out.rows).toEqual([{ a: 1 }])
   })

@@ -17,7 +17,7 @@ import {
  */
 const PHRASE = 'phrase-de-passe-de-reference'
 const EMPREINTE = definirPhrase(PHRASE, 4_242)
-const DEMANDE = { cible: 'base:RIG_AMIENS', operation: 'sql-write' }
+const DEMANDE = { cible: 'base:APP_AMIENS', operation: 'sql-write' }
 
 function montage(options: { avecPhrase?: boolean } = {}) {
   // Reproduit la frontière variadique d'Electron pour un registre en mémoire.

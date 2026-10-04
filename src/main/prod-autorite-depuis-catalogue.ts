@@ -1,16 +1,17 @@
+// fix-ok: valeurs propres à entreprise (serveur, base, table, colonnes du catalogue) écrites en dur — mesuré par grep; remplacées par la config sql-catalog.json, fermée par défaut (tests sql-read-catalog/guard rouge si on rouvre)
 /**
  * BÂTIR LA LISTE DE DÉCLARATION À PARTIR DU CATALOGUE SQL.
  *
  * POURQUOI PAS UN MOTIF DE NOM. La tentation est d'écrire « tout ce qui contient MAQUETTE ou RECETTE
  * est hors production ». `sql-read-catalog.ts` explique pourquoi c'est faux, et le dit d'expérience :
- * `RIG_LE_PUY_MARTIN` ressemble à un greffe et n'en est pas un. Une base nommée `RIG_MAQUETTE_2024`
+ * une base peut ressembler à de la production sans en être. Une base nommée `X_MAQUETTE_2024`
  * pourrait très bien être exploitée ; à l'inverse, un nom anodin peut désigner de la production.
  * Classer sur le nom, c'est reprendre exactement le défaut que ce catalogue a corrigé.
  *
  * LA RÈGLE RETENUE, STRUCTURELLE :
- *   - une base EXPLOITÉE selon `COMMUN_RIG.dbo.GREFFE` (`GRF_IS_EXPLOIT = 1`) → **production** ;
- *   - une cible de DÉVELOPPEMENT déclarée en clair dans le code (`DEV_TARGETS` : `RIG_DEV`,
- *     `RIG_RECETTE`) → **hors production** ;
+ *   - une base EXPLOITÉE selon la table catalogue configurée (`sql-catalog.json`) → **production** ;
+ *   - une cible de DÉVELOPPEMENT déclarée dans cette configuration (`devTargets`) → **hors
+ *     production** ;
  *   - tout le reste n'est PAS écrit dans le fichier, et reste donc « inconnu », donc traité comme de
  *     la production. C'est voulu : une base absente de l'autorité est une base dont personne ne peut
  *     dire qu'elle est sûre.
@@ -51,7 +52,7 @@ export function declarationsDepuisCatalogue(options: OptionsDeclaration): Entree
       nature: 'base',
       nom,
       classe: 'non-prod',
-      motif: `Cible de développement déclarée dans le code (${cible.server})`
+      motif: `Cible de développement déclarée dans la configuration (${cible.server})`
     })
   }
 
@@ -62,7 +63,7 @@ export function declarationsDepuisCatalogue(options: OptionsDeclaration): Entree
       nature: 'base',
       nom,
       classe: 'prod',
-      motif: `Base exploitée selon COMMUN_RIG.dbo.GREFFE (${cible.server})`
+      motif: `Base exploitée selon le catalogue configuré (${cible.server})`
     })
   }
 

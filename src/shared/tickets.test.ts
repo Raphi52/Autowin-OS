@@ -11,26 +11,26 @@ import {
 } from './tickets'
 
 describe('contrat partag? Tickets', () => {
-  it('initialise RigApplication sur tous les Work Items du projet RIG', () => {
+  it('initialise depot sur tous les Work Items du projet', () => {
     expect(DEFAULT_TICKET_SOURCE).toEqual({
-      id: 'azure:AmitelGTC:RIG:RigApplication',
-      label: 'AmitelGTC / RIG / RigApplication',
+      id: 'azure:org:projet:depot',
+      label: 'org / projet / depot',
       provider: 'azure',
-      organization: 'AmitelGTC',
-      project: 'RIG',
-      repository: 'RigApplication'
+      organization: 'org',
+      project: 'projet',
+      repository: 'depot'
     })
   })
 
   it.each([
     [
       {
-        id: 'azure:AmitelGTC:RIG:RigApplication',
-        label: 'RigApplication',
+        id: 'azure:org:projet:depot',
+        label: 'depot',
         provider: 'azure',
-        organization: 'AmitelGTC',
-        project: 'RIG',
-        repository: 'RigApplication'
+        organization: 'org',
+        project: 'projet',
+        repository: 'depot'
       }
     ],
     [
@@ -57,7 +57,7 @@ describe('contrat partag? Tickets', () => {
   })
 
   it('rejette les profils incomplets, inconnus ou contenant un secret', () => {
-    expect(parseTicketSourceProfile({ provider: 'azure', project: 'RIG' })).toBeNull()
+    expect(parseTicketSourceProfile({ provider: 'azure', project: 'projet' })).toBeNull()
     expect(parseTicketSourceProfile({ provider: 'bitbucket', repository: 'repo' })).toBeNull()
     expect(
       parseTicketSourceProfile({
@@ -94,7 +94,7 @@ describe('contrat partag? Tickets', () => {
         type: 'Fiche Team',
         title: 'Une fiche',
         state: 'En cours',
-        url: 'https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/17536',
+        url: 'https://dev.azure.com/org/projet/_workitems/edit/17536',
         updatedAt: '2026-07-23T10:00:00.000Z',
         fields: {}
       },
@@ -104,7 +104,7 @@ describe('contrat partag? Tickets', () => {
         type: 'Tache',
         title: 'Une t?che',
         state: 'A faire',
-        url: 'https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/17537',
+        url: 'https://dev.azure.com/org/projet/_workitems/edit/17537',
         updatedAt: '2026-07-23T10:00:00.000Z',
         fields: {}
       },
@@ -114,7 +114,7 @@ describe('contrat partag? Tickets', () => {
         type: 'Bug',
         title: 'Un autre type',
         state: 'Closed',
-        url: 'https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/17538',
+        url: 'https://dev.azure.com/org/projet/_workitems/edit/17538',
         updatedAt: '2026-07-23T10:00:00.000Z',
         fields: {}
       }
@@ -126,7 +126,7 @@ describe('contrat partag? Tickets', () => {
       ['Tache', 'A faire'],
       ['Bug', 'Closed']
     ])
-    expect(canonicalTicketId(items[0])).toBe('azure:AmitelGTC:RIG:RigApplication::17536')
+    expect(canonicalTicketId(items[0])).toBe('azure:org:projet:depot::17536')
   })
 })
 
@@ -163,7 +163,7 @@ describe('#2 contexte d’exécution déclaré sur la source', () => {
   })
 
   it('dépôt cible canonique par fournisseur', () => {
-    expect(ticketTargetRepository(DEFAULT_TICKET_SOURCE)).toBe('RigApplication')
+    expect(ticketTargetRepository(DEFAULT_TICKET_SOURCE)).toBe('depot')
     expect(
       ticketTargetRepository({
         id: 'g',

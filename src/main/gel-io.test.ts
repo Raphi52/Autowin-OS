@@ -13,16 +13,16 @@ import type { Gel } from '../shared/gel-detector'
  *
  * Le temoin a prouve que les gels sont des `entree-sortie-bloquante` : la boucle est tenue par un
  * appel synchrone qui ne brule pas de CPU. Reste a le NOMMER — quel appel, sur quel chemin, et
- * s'il part vers le partage reseau (//ged2) ou vers le disque local.
+ * s'il part vers le partage reseau (//srv1) ou vers le disque local.
  */
 describe('nommerAccesBloquant — nommer le coupable, pas seulement le constater', () => {
   it('distingue un acces RESEAU d’un acces disque local', () => {
-    expect(nommerAccesBloquant('readFileSync', '//ged2/rig/Projets IA/x.md')).toBe(
-      'io:reseau:readFileSync //ged2/rig/…/x.md'
+    expect(nommerAccesBloquant('readFileSync', '//srv1/rig/Projets IA/x.md')).toBe(
+      'io:reseau:readFileSync //srv1/rig/…/x.md'
     )
     // Chemin UNC Windows, ecrit sans litteral echappe pour rester lisible.
     const b = String.fromCharCode(92)
-    expect(nommerAccesBloquant('readFileSync', `${b}${b}ged2${b}rig${b}x.md`)).toContain(
+    expect(nommerAccesBloquant('readFileSync', `${b}${b}srv1${b}rig${b}x.md`)).toContain(
       'io:reseau:'
     )
     expect(nommerAccesBloquant('readFileSync', `C:${b}Amitel${b}Autowin OS${b}package.json`)).toBe(
@@ -42,7 +42,7 @@ describe('instrumenterAccesBloquants — mesure DIRECTE du segment synchrone', (
       lire(chemin: string): string {
         const fin = Date.now() + dureeMs
         while (Date.now() < fin) {
-          /* on TIENT la boucle, exactement comme un readFileSync sur //ged2 */
+          /* on TIENT la boucle, exactement comme un readFileSync sur //srv1 */
         }
         return `contenu:${chemin}`
       }
@@ -54,10 +54,10 @@ describe('instrumenterAccesBloquants — mesure DIRECTE du segment synchrone', (
     const gels: Gel[] = []
     const hote = hoteFactice(40)
     const defaire = instrumenterAccesBloquants(hote, ['lire'], 20, (g) => gels.push(g))
-    expect(hote.lire('//ged2/rig/a.md')).toBe('contenu://ged2/rig/a.md')
+    expect(hote.lire('//srv1/rig/a.md')).toBe('contenu://srv1/rig/a.md')
     defaire()
     expect(gels).toHaveLength(1)
-    expect(gels[0]?.operation).toBe('io:reseau:lire //ged2/rig/a.md')
+    expect(gels[0]?.operation).toBe('io:reseau:lire //srv1/rig/a.md')
     expect(gels[0]?.cause).toBe('entree-sortie-bloquante')
     expect(gels[0]?.blocageMs).toBeGreaterThanOrEqual(20)
   })

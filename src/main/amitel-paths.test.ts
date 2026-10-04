@@ -1,3 +1,4 @@
+// fix-ok: amitel-paths.ts codait en dur le partage srv1/rig/Projets IA/Amitel Brain et les dossiers C:/Amitel, C:/Code RIG par defaut (mesure : grep srv1 hors tests) ; ce test garde l'absence de chemin d'entreprise par defaut.
 import { afterAll, describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,6 +26,12 @@ describe('amitel-paths — source unique et surchargeable', () => {
     expect(amitelBrainOrigin({})).toBe('http://127.0.0.1:8765')
   })
 
+  it('aucun chemin d’entreprise par defaut : ni partage reseau, ni workspace', () => {
+    expect(amitelBrainRoot({})).not.toMatch(/srv1|amitel/i)
+    expect(amitelBrainRoot({}).startsWith('\\\\')).toBe(false)
+    expect(amitelWorkspaces({})).toEqual([])
+  })
+
   it('respecte les noms de variables HISTORIQUES (les renommer serait une regression silencieuse)', () => {
     expect(amitelBrainRoot({ AMITEL_BRAIN_ROOT: 'D:\\brain' })).toBe('D:\\brain')
     expect(amitelBrainOrigin({ AMITEL_BRAIN_ORIGIN: 'http://localhost:9000' })).toBe(
@@ -48,7 +55,7 @@ describe('amitel-paths — source unique et surchargeable', () => {
     expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain', AUTOWIN_BRAIN_TOOLING: 'E:\\t' })).toBe(
       'E:\\t'
     )
-    expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: '\\\\ged2\\brain' })).toBe('')
+    expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: '\\\\srv1\\brain' })).toBe('')
   })
 
   it('une valeur VIDE ou en espaces ne masque pas le defaut', () => {

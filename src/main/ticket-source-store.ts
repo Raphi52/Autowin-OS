@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
-  DEFAULT_TICKET_SOURCE,
   parseTicketSourceProfile,
   type TicketSourceProfile
 } from '../shared/tickets'
@@ -37,14 +36,12 @@ export class TicketSourceStore {
   constructor(private readonly path: string) {}
 
   list(): TicketSourceProfile[] {
-    if (!existsSync(this.path)) return [{ ...DEFAULT_TICKET_SOURCE }]
+    // Aucune source imposée : chaque utilisateur déclare la sienne (plus de source d'entreprise en dur).
+    if (!existsSync(this.path)) return []
     try {
       const raw = readFileSync(this.path)
       if (raw.byteLength > MAX_FILE_BYTES) throw new Error('Fichier de profils trop volumineux')
-      const profiles = parseProfiles(JSON.parse(raw.toString('utf8')))
-      return profiles.some(({ id }) => id === DEFAULT_TICKET_SOURCE.id)
-        ? profiles
-        : [{ ...DEFAULT_TICKET_SOURCE }, ...profiles]
+      return parseProfiles(JSON.parse(raw.toString('utf8')))
     } catch (cause) {
       throw new TicketSourceStoreCorruptionError(this.path, cause)
     }
@@ -66,7 +63,6 @@ export class TicketSourceStore {
   }
 
   remove(id: string): TicketSourceProfile[] {
-    if (id === DEFAULT_TICKET_SOURCE.id) throw new Error('La source Tickets initiale est requise')
     const next = this.list().filter((profile) => profile.id !== id)
     this.write(next)
     return next

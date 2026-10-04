@@ -136,7 +136,7 @@ export function PerformanceWidget({
             aria-pressed={mode === 'greffier'}
             onClick={() => setMode('greffier')}
           >
-            Tout le greffe
+            Toute l’équipe
           </button>
         </div>
         <button
@@ -207,7 +207,7 @@ export function PerformanceWidget({
         <section className="perf-widget__seuils" data-testid="perf-seuils">
           <p className="home-hint">
             Vert / jaune / orange : chaque nombre est le PLANCHER de sa couleur, à régler selon la
-            taille du greffe. En dessous du dernier, c’est rouge.
+            taille de l’équipe. En dessous du dernier, c’est rouge.
           </p>
           <ul>
             {indicateursDuGroupe('rcs')

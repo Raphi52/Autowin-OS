@@ -6,7 +6,7 @@ import { searchTicketsFromCommand } from './ticket-search-command'
  * LE CUL-DE-SAC DE PAGINATION — constaté en réel le 2026-08-06, et reproduit au chiffre près.
  *
  * Un agent cherchait le work item 1227 dans un projet qui en compte 780 (id max 1278). Il a conclu
- * « les IDs du projet RIG vont de 1 à 175 » et déclaré la fiche introuvable.
+ * « les IDs du projet vont de 1 à 175 » et déclaré la fiche introuvable.
  *
  * Sa conclusion était FAUSSE mais LOGIQUE : l'adaptateur rend bien `cursor: '175'` avec
  * `hasMore: true`, mais la commande agent ne transmettait QUE `hasMore`. Le modèle savait donc qu'il
@@ -23,7 +23,7 @@ function item(id: string): TicketItem {
     type: 'Fiche Team',
     title: `Fiche ${id}`,
     state: 'Ouvert',
-    url: `https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/${id}`,
+    url: `https://dev.azure.com/org/projet/_workitems/edit/${id}`,
     updatedAt: '2026-08-06T10:00:00.000Z',
     fields: {}
   }

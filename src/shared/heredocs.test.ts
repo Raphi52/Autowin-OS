@@ -25,7 +25,7 @@ describe('sansHeredocsDeDonnees — le texte d’un heredoc n’est pas du shell
       'SQL : un test ajouté par cat >> qui nomme sqlcmd',
       [
         "cat >> src/main/sql-read-command.porte-prod.test.ts <<'EOF'",
-        'sqlcmd -S \'SQL-PROD\\PROD\' -d COMMUN_RIG -Q "SELECT 1"',
+        'sqlcmd -S \'SRV-PROD\\PROD\' -d CATALOGUE -Q "SELECT 1"',
         'EOF'
       ].join(SAUT),
       (c: string) => refusSqlAgent(c, [])
@@ -35,7 +35,7 @@ describe('sansHeredocsDeDonnees — le texte d’un heredoc n’est pas du shell
       [
         "cd /d/AutoWinOS; git add t.test.ts && git commit -q -F - <<'EOF'",
         'test(sqlcmd): verrouiller les drapeaux',
-        'sqlcmd -S x -d COMMUN_RIG -Q "SELECT 1"',
+        'sqlcmd -S x -d CATALOGUE -Q "SELECT 1"',
         'EOF'
       ].join(SAUT),
       (c: string) => refusSqlAgent(c, [])
@@ -91,7 +91,7 @@ describe('sansHeredocsDeDonnees — le texte d’un heredoc n’est pas du shell
 
   it('le client SQL qui LIT le heredoc reste vu (sqlcmd <<E)', () => {
     const commande = [
-      "sqlcmd -S 'SQL-PROD\\PROD' -d COMMUN_RIG <<'E'",
+      "sqlcmd -S 'SRV-PROD\\PROD' -d CATALOGUE <<'E'",
       'UPDATE t SET x = 1',
       'E'
     ].join(SAUT)

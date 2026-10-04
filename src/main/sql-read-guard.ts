@@ -1,5 +1,6 @@
+// fix-ok: valeurs propres à entreprise (serveur, base, table, colonnes du catalogue) écrites en dur — mesuré par grep; remplacées par la config sql-catalog.json, fermée par défaut (tests sql-read-catalog/guard rouge si on rouvre)
 /**
- * Garde de LECTURE SQL sur les bases RIG — la première couche de défense, purement décisionnelle.
+ * Garde de LECTURE SQL sur les bases SQL — la première couche de défense, purement décisionnelle.
  *
  * POURQUOI ELLE EST AUSSI STRICTE. La connexion se fait en authentification Windows intégrée, donc
  * avec le compte de l'utilisateur. Mesuré sur le poste de référence (2026-08-06, base RIG_AMIENS) :
@@ -20,18 +21,18 @@
  * bases RIG, pas seulement le paramétrage. Conséquence explicite : des données nominatives de greffe
  * peuvent entrer dans le contexte du modèle, donc quitter le poste. Ce n'est pas un oubli.
  *
- * QUELLES BASES : ce module ne le décide plus. L'autorité est `COMMUN_RIG.dbo.GREFFE`
- * (`GRF_IS_EXPLOIT = 1`), lue par `sql-read-catalog.ts` et passée ici en paramètre. Un motif de nom ne
+ * QUELLES BASES : ce module ne le décide plus. L’autorité est la table catalogue configurée
+ * (`sql-catalog.json`), lue par `sql-read-catalog.ts` et passée ici en paramètre. Un motif de nom ne
  * peut pas trancher — `RIG_LE_PUY_MARTIN` ressemble à un greffe et n'en est pas un.
  */
-import type { SqlTargetCatalog } from './sql-read-catalog'
+import { estBaseCatalogue, getSqlCatalogConfig, type SqlTargetCatalog } from './sql-read-catalog'
 
 /** Une requête plus longue n'est plus relisible par un humain, et sent l'accident. */
 const MAX_QUERY_LENGTH = 4000
 
 /**
  * Formes acceptables pour les cibles. Ce ne sont PAS elles qui définissent le périmètre — l'autorité
- * est le catalogue (`sql-read-catalog.ts`, `GRF_IS_EXPLOIT = 1`). Ces motifs sont une seconde couche,
+ * est le catalogue (`sql-read-catalog.ts`, `sql-catalog.json`). Ces motifs sont une seconde couche,
  * pour la seule raison que le serveur et la base partent dans la LIGNE DE COMMANDE de `sqlcmd`
  * (options `-S` et `-d`) : tout ce qui pourrait y être interprété est refusé, même si une entrée
  * corrompue de l'autorité le proposait.
@@ -397,24 +398,24 @@ function outOfScopeName(nomme: string): string | undefined {
     // routine par les générateurs SQL et les modèles. Le danger vient de ce que la PREMIÈRE partie
     // NOMME (une base, un serveur lié), pas du nombre de segments.
     if (parties.length === 3 && LOCAL_SCHEMAS.includes(parties[0])) continue
-    return 'Nom d’objet qualifié hors de la base ciblée : la lecture doit rester dans le greffe.'
+    return 'Nom d’objet qualifié hors de la base ciblée : la lecture doit rester dans la base ciblée.'
   }
   // Vues interdites cherchées sur `nomme`, où le contenu des identifiants est conservé : sinon
   // `sys.[databases]` passait, le nom ayant été remplacé par un jeton neutre (second audit).
   for (const vue of [...SERVER_SCOPED_VIEWS, ...SERVER_SCOPED_VIEWS_EXTRA]) {
     if (new RegExp(`\\bsys\\s*\\.\\s*${vue}\\b`).test(nomme)) {
-      return `Vue système à portée serveur interdite : « sys.${vue} » sort du périmètre du greffe.`
+      return `Vue système à portée serveur interdite : « sys.${vue} » sort du périmètre de la base ciblée.`
     }
   }
   // Vues de compatibilité : le préfixe `sys.` est OPTIONNEL, elles se résolvent sans qualification.
   for (const vue of COMPAT_SERVER_VIEWS) {
     if (new RegExp(`\\b(?:sys\\s*\\.\\s*)?${vue}\\b`).test(nomme)) {
-      return `Vue système à portée serveur interdite : « ${vue} » sort du périmètre du greffe.`
+      return `Vue système à portée serveur interdite : « ${vue} » sort du périmètre de la base ciblée.`
     }
   }
   for (const variable of SERVER_SCOPED_VARIABLES) {
     if (new RegExp(`@@\\s*${variable}\\b`).test(nomme)) {
-      return `Variable à portée serveur interdite : « @@${variable} » sort du périmètre du greffe.`
+      return `Variable à portée serveur interdite : « @@${variable} » sort du périmètre de la base ciblée.`
     }
   }
   return undefined
@@ -467,15 +468,14 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
     if (catalogue.degraded) {
       return {
         allowed: false,
-        reason:
-          'Liste des greffes indisponible (COMMUN_RIG injoignable) : seules les bases de développement sont lisibles pour l’instant. Réessaie, ou vérifie l’accès à SQL-PROD\\PROD.'
+        reason: catalogueIndisponible()
       }
     }
     const connues = catalogue.databasesFor(server)
     return {
       allowed: false,
       reason: connues.length
-        ? `Base hors périmètre : « ${database} » n’est pas un greffe exploité sur ${server}. Bases disponibles : ${connues.slice(0, 8).join(', ')}${connues.length > 8 ? `, … (${connues.length} au total)` : ''}.`
+        ? `Base hors périmètre : « ${database} » n’est pas une base exploitée sur ${server}. Bases disponibles : ${connues.slice(0, 8).join(', ')}${connues.length > 8 ? `, … (${connues.length} au total)` : ''}.`
         : `Serveur hors périmètre : « ${server} ». Serveurs disponibles : ${catalogue.servers().join(', ')}.`
     }
   }
@@ -552,7 +552,7 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
     if (new RegExp(`\\b${fonction}\\b`).test(normalise)) {
       return {
         allowed: false,
-        reason: `Fonction à portée serveur interdite : « ${fonction} » sort du périmètre du greffe.`
+        reason: `Fonction à portée serveur interdite : « ${fonction} » sort du périmètre de la base ciblée.`
       }
     }
   }
@@ -569,7 +569,7 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
   if (/\binto\b/.test(normalise)) {
     return { allowed: false, reason: 'Clause INTO interdite : elle créerait une table.' }
   }
-  if (database.toLowerCase() === 'commun_rig') {
+  if (estBaseCatalogue(database)) {
     const secret = secretColumnViolation(sansLitteraux)
     if (secret) return { allowed: false, reason: secret }
   }
@@ -578,26 +578,34 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
 }
 
 /**
- * Colonnes SECRÈTES de `COMMUN_RIG` — la base commune porte des mots de passe et des clés
- * (`GRF_PWD_BD`, `GRF_INFOGREFFE_PASSWORD`, `GRF_DOCVERIF_PASSWORD`, `GRF_WS_IDNUM_CLEF_API`).
+ * Colonnes SECRÈTES de la base catalogue configurée (`sql-catalog.json`) — elle peut porter des
+ * mots de passe et des clés, quel que soit son nom.
  * Décision utilisateur du 2026-09-23 (conv-113) : la base est lisible, mais toute requête qui NOMME
  * une colonne de ce type, ou qui utilise `*` (qui les ramènerait sans les nommer), est refusée.
  * Motif cherché en SOUS-CHAÎNE d'identifiant, sur la forme qui conserve le contenu des `[…]` et
- * vide les littéraux (chercher `'GRF_PWD_BD'` comme valeur dans `sys.columns` reste permis : c'est
+ * vide les littéraux (chercher `'X_PWD'` comme valeur dans `sys.columns` reste permis : c'est
  * un nom, pas le secret). LIMITE ASSUMÉE : une vue qui renommerait une colonne secrète sans ces mots
  * échapperait au motif ; aucune n'est connue.
  */
 const SECRET_COLUMN_PATTERN =
   /(pwd|passw|mot_?de_?passe|mdp|secret|clef|cle_api|api_?key|apikey|token|jeton|credential)/
 
+function catalogueIndisponible(): string {
+  const config = getSqlCatalogConfig()
+  if (!config) {
+    return 'Aucun catalogue SQL configuré (fichier sql-catalog.json absent ou invalide) : aucune base n’est lisible.'
+  }
+  return `Liste des bases exploitées indisponible (${config.database} injoignable) : seules les bases de développement sont lisibles pour l’instant. Réessaie, ou vérifie l’accès à ${config.server}.`
+}
+
 function secretColumnViolation(stripped: StrippedQuery): string | undefined {
   const sansCount = stripped.masked.replace(/\bcount(?:_big)?\s*\(\s*\*\s*\)/gi, 'count(1)')
   if (sansCount.includes('*')) {
-    return 'COMMUN_RIG : « * » interdit (il ramènerait les colonnes de mots de passe) — nomme les colonnes voulues. COUNT(*) reste permis.'
+    return 'Base catalogue : « * » interdit (il ramènerait les colonnes de mots de passe) — nomme les colonnes voulues. COUNT(*) reste permis.'
   }
   const trouve = stripped.named.toLowerCase().match(SECRET_COLUMN_PATTERN)
   if (trouve) {
-    return `COMMUN_RIG : colonne secrète interdite (motif « ${trouve[1]} ») — mots de passe et clés ne sont pas lisibles.`
+    return `Base catalogue : colonne secrète interdite (motif « ${trouve[1]} ») — mots de passe et clés ne sont pas lisibles.`
   }
   return undefined
 }

@@ -1,5 +1,5 @@
 /**
- * Client du service de retrieval Amitel Brain (brain_server.py, loopback).
+ * Client du service de retrieval Brain (brain_server.py, loopback).
  *
  * L'origine vient de `amitelBrainOrigin()` (env `AMITEL_BRAIN_ORIGIN`, defaut 127.0.0.1:8765), jamais
  * d'une constante locale : une adresse ecrite en dur ici envoyait les requetes sur un autre port que

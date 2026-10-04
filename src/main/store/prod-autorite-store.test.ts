@@ -27,8 +27,8 @@ afterAll(() => {
 })
 
 const DECLARATION = JSON.stringify([
-  { nature: 'base', nom: 'RIG_AMIENS', classe: 'prod', motif: 'greffe exploité' },
-  { nature: 'base', nom: 'RIG_MAQUETTE', classe: 'non-prod' },
+  { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+  { nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' },
   { nature: 'chemin', nom: 'D:/Deploiement/Prod', classe: 'prod' }
 ])
 
@@ -37,8 +37,8 @@ describe('une déclaration correcte', () => {
     const { autorite, retenues, anomalies } = chargerAutoriteProd(racineNeuve(DECLARATION))
     expect(retenues).toBe(3)
     expect(anomalies).toEqual([])
-    expect(classerCible({ nature: 'base', nom: 'RIG_AMIENS' }, autorite).classe).toBe('prod')
-    expect(classerCible({ nature: 'base', nom: 'RIG_MAQUETTE' }, autorite).classe).toBe('non-prod')
+    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS' }, autorite).classe).toBe('prod')
+    expect(classerCible({ nature: 'base', nom: 'APP_MAQUETTE' }, autorite).classe).toBe('non-prod')
     expect(
       classerCible({ nature: 'chemin', nom: 'D:/Deploiement/Prod/app' }, autorite).classe
     ).toBe('prod')
@@ -46,7 +46,7 @@ describe('une déclaration correcte', () => {
 
   it('conserve le motif, pour que le refus dise POURQUOI', () => {
     const { autorite } = chargerAutoriteProd(racineNeuve(DECLARATION))
-    expect(classerCible({ nature: 'base', nom: 'RIG_AMIENS' }, autorite).raison).toContain(
+    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS' }, autorite).raison).toContain(
       'greffe exploité'
     )
   })
@@ -58,7 +58,7 @@ describe('une déclaration correcte', () => {
 
   it('laisse bloquante une cible absente de la déclaration', () => {
     const { autorite } = chargerAutoriteProd(racineNeuve(DECLARATION))
-    const verdict = classerCible({ nature: 'base', nom: 'RIG_JAMAIS_DECLAREE' }, autorite)
+    const verdict = classerCible({ nature: 'base', nom: 'APP_JAMAIS_DECLAREE' }, autorite)
     expect(verdict.classe).toBe('inconnu')
     expect(verdict.estBloquant).toBe(true)
   })
@@ -73,7 +73,7 @@ describe('fichier absent ou illisible', () => {
     expect(anomalies).toHaveLength(1)
     expect(anomalies[0]).toContain('Aucun fichier de déclaration')
     expect(anomalies[0]).toContain(cheminAutoriteProd(racine))
-    expect(classerCible({ nature: 'base', nom: 'RIG_MAQUETTE' }, autorite).estBloquant).toBe(true)
+    expect(classerCible({ nature: 'base', nom: 'APP_MAQUETTE' }, autorite).estBloquant).toBe(true)
   })
 
   it('rend une liste VIDE sur du JSON invalide, sans lever', () => {
@@ -82,7 +82,7 @@ describe('fichier absent ou illisible', () => {
     )
     expect(retenues).toBe(0)
     expect(anomalies[0]).toContain('illisible')
-    expect(classerCible({ nature: 'base', nom: 'RIG_MAQUETTE' }, autorite).estBloquant).toBe(true)
+    expect(classerCible({ nature: 'base', nom: 'APP_MAQUETTE' }, autorite).estBloquant).toBe(true)
   })
 
   it('rend une liste VIDE quand le contenu n’est pas une liste d’entrées', () => {
@@ -108,12 +108,12 @@ describe('déclarations partiellement abîmées', () => {
   it('garde les entrées valides, écarte les autres, et NOMME chaque rejet', () => {
     const racine = racineNeuve(
       JSON.stringify([
-        { nature: 'base', nom: 'RIG_AMIENS', classe: 'prod' },
+        { nature: 'base', nom: 'APP_AMIENS', classe: 'prod' },
         { nature: 'base_de_donnees', nom: 'X', classe: 'prod' },
         { nature: 'base', nom: '   ', classe: 'prod' },
-        { nature: 'base', nom: 'RIG_Y', classe: 'ouvert' },
+        { nature: 'base', nom: 'APP_Y', classe: 'ouvert' },
         'pas un objet',
-        { nature: 'base', nom: 'RIG_MAQUETTE', classe: 'non-prod' }
+        { nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' }
       ])
     )
     const { autorite, retenues, anomalies } = chargerAutoriteProd(racine)
@@ -123,20 +123,20 @@ describe('déclarations partiellement abîmées', () => {
     expect(anomalies.join(' ')).toContain('nom manquant ou vide')
     expect(anomalies.join(' ')).toContain('classe « ouvert » invalide')
     expect(anomalies.join(' ')).toContain("ce n'est pas un objet")
-    expect(classerCible({ nature: 'base', nom: 'RIG_AMIENS' }, autorite).classe).toBe('prod')
-    expect(classerCible({ nature: 'base', nom: 'RIG_Y' }, autorite).classe).toBe('inconnu')
+    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS' }, autorite).classe).toBe('prod')
+    expect(classerCible({ nature: 'base', nom: 'APP_Y' }, autorite).classe).toBe('inconnu')
   })
 
   it('signale un doublon ou un conflit, et tranche vers prod', () => {
     const racine = racineNeuve(
       JSON.stringify([
-        { nature: 'base', nom: 'RIG_X', classe: 'non-prod' },
-        { nature: 'base', nom: 'RIG_X', classe: 'prod' }
+        { nature: 'base', nom: 'APP_X', classe: 'non-prod' },
+        { nature: 'base', nom: 'APP_X', classe: 'prod' }
       ])
     )
     const { autorite, retenues, anomalies } = chargerAutoriteProd(racine)
     expect(retenues).toBe(1)
     expect(anomalies.join(' ')).toContain('double ou en conflit')
-    expect(classerCible({ nature: 'base', nom: 'RIG_X' }, autorite).classe).toBe('prod')
+    expect(classerCible({ nature: 'base', nom: 'APP_X' }, autorite).classe).toBe('prod')
   })
 })

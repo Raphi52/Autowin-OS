@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { configureSqlCatalog as configurerCatalogueTest } from './sql-read-catalog'
+import { TEST_SQL_CATALOG } from './sql-catalog.test-fixture'
+
+configurerCatalogueTest(TEST_SQL_CATALOG)
 import { contenuAutoriteProd, declarationsDepuisCatalogue } from './prod-autorite-depuis-catalogue'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,12 +15,12 @@ import { classerCible } from './prod-guard'
  * réellement relisible par le chargeur, sans une seule ligne écartée.
  */
 const EXPLOITEES = [
-  { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' },
-  { server: 'RIGBD-POLYNESIE', database: 'RIG_PAPEETE' }
+  { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
+  { server: 'SRV-POLYNESIE', database: 'APP_PAPEETE' }
 ]
 const DEV = [
-  { server: 'SQL-DEV\\DEV', database: 'RIG_DEV' },
-  { server: 'SQL-DEV\\DEV', database: 'RIG_RECETTE' }
+  { server: 'SRV-DEV\\DEV', database: 'APP_DEV' },
+  { server: 'SRV-DEV\\DEV', database: 'APP_RECETTE' }
 ]
 
 describe('déclarations depuis le catalogue', () => {
@@ -24,20 +28,20 @@ describe('déclarations depuis le catalogue', () => {
     const lignes = declarationsDepuisCatalogue({ exploitees: EXPLOITEES, developpement: [] })
     expect(lignes).toHaveLength(2)
     expect(lignes.every((l) => l.classe === 'prod')).toBe(true)
-    expect(lignes[0]?.motif).toContain('COMMUN_RIG.dbo.GREFFE')
+    expect(lignes[0]?.motif).toContain('catalogue configuré')
   })
 
   it('classe les cibles de DÉVELOPPEMENT hors production', () => {
     const lignes = declarationsDepuisCatalogue({ exploitees: [], developpement: DEV })
     expect(lignes.map((l) => [l.nom, l.classe])).toEqual([
-      ['RIG_DEV', 'non-prod'],
-      ['RIG_RECETTE', 'non-prod']
+      ['APP_DEV', 'non-prod'],
+      ['APP_RECETTE', 'non-prod']
     ])
   })
 
   it('ne classe PAS sur le nom : une base « maquette » exploitée reste de la production', () => {
     const lignes = declarationsDepuisCatalogue({
-      exploitees: [{ server: 'SQL-PROD\\PROD', database: 'RIG_MAQUETTE_2024' }],
+      exploitees: [{ server: 'SRV-PROD\\PROD', database: 'APP_MAQUETTE_2024' }],
       developpement: []
     })
     expect(lignes[0]?.classe).toBe('prod')
@@ -45,10 +49,10 @@ describe('déclarations depuis le catalogue', () => {
 
   it('tranche vers la PRODUCTION quand un nom apparaît des deux côtés', () => {
     const lignes = declarationsDepuisCatalogue({
-      exploitees: [{ server: 'SQL-PROD\\PROD', database: 'RIG_RECETTE' }],
+      exploitees: [{ server: 'SRV-PROD\\PROD', database: 'APP_RECETTE' }],
       developpement: DEV
     })
-    expect(lignes.find((l) => l.nom === 'RIG_RECETTE')?.classe).toBe('prod')
+    expect(lignes.find((l) => l.nom === 'APP_RECETTE')?.classe).toBe('prod')
   })
 
   it('ignore les lignes sans nom de base', () => {
@@ -62,12 +66,12 @@ describe('déclarations depuis le catalogue', () => {
   it('trie par nom : un fichier relu par un humain doit être stable', () => {
     const noms = declarationsDepuisCatalogue({
       exploitees: [
-        { server: 'S', database: 'RIG_ZZZ' },
-        { server: 'S', database: 'RIG_AAA' }
+        { server: 'S', database: 'APP_ZZZ' },
+        { server: 'S', database: 'APP_AAA' }
       ],
       developpement: []
     }).map((l) => l.nom)
-    expect(noms).toEqual(['RIG_AAA', 'RIG_ZZZ'])
+    expect(noms).toEqual(['APP_AAA', 'APP_ZZZ'])
   })
 })
 
@@ -96,12 +100,12 @@ describe('le fichier produit est réellement utilisable', () => {
 
   it('rend les bases exploitées BLOQUANTES et les cibles de dev libres', () => {
     const autorite = chargerAutoriteProd(racineAvecFichier()).autorite
-    expect(classerCible({ nature: 'base', nom: 'RIG_AMIENS' }, autorite).estBloquant).toBe(true)
-    expect(classerCible({ nature: 'base', nom: 'RIG_RECETTE' }, autorite).estBloquant).toBe(false)
+    expect(classerCible({ nature: 'base', nom: 'APP_AMIENS' }, autorite).estBloquant).toBe(true)
+    expect(classerCible({ nature: 'base', nom: 'APP_RECETTE' }, autorite).estBloquant).toBe(false)
   })
 
   it('laisse une base ABSENTE bloquante : l’ignorance n’est pas une permission', () => {
     const autorite = chargerAutoriteProd(racineAvecFichier()).autorite
-    expect(classerCible({ nature: 'base', nom: 'RIG_JAMAIS_VUE' }, autorite).estBloquant).toBe(true)
+    expect(classerCible({ nature: 'base', nom: 'APP_JAMAIS_VUE' }, autorite).estBloquant).toBe(true)
   })
 })

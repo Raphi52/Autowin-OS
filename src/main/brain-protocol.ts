@@ -59,7 +59,7 @@ export function sealBrainRequest(
   token: string,
   nonce: string
 ): { nonce: string; ciphertext: string } {
-  if (!/^[0-9a-f]{24}$/.test(nonce)) throw new Error('Nonce Amitel Brain invalide')
+  if (!/^[0-9a-f]{24}$/.test(nonce)) throw new Error('Nonce Brain invalide')
   const key = createHash('sha256').update(token, 'utf8').digest()
   const cipher = createCipheriv('aes-256-gcm', key, Buffer.from(nonce, 'hex'))
   cipher.setAAD(REQUEST_AAD)
@@ -74,7 +74,7 @@ export function sealBrainRequest(
 function parseCorpusAttestation(value: unknown): readonly string[] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value) || value.length > 8) {
-    throw new Error('Attestation de corpus Amitel Brain invalide')
+    throw new Error('Attestation de corpus Brain invalide')
   }
   return value.map((entry) => {
     if (
@@ -91,7 +91,7 @@ function parseCorpusAttestation(value: unknown): readonly string[] | undefined {
         .split('/')
         .some((part) => !part || part === '.' || part === '..')
     ) {
-      throw new Error('Attestation de corpus Amitel Brain invalide')
+      throw new Error('Attestation de corpus Brain invalide')
     }
     return entry
   })
@@ -102,18 +102,18 @@ function parseStructuredContext(
 ): VerifiedBrainPayload['structuredContext'] | undefined {
   if (value === undefined) return undefined
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Contexte structuré Amitel Brain invalide')
+    throw new Error('Contexte structuré Brain invalide')
   }
   const structured = value as Record<string, unknown>
   if (typeof structured.preamble !== 'string' || !Array.isArray(structured.sources)) {
-    throw new Error('Contexte structuré Amitel Brain invalide')
+    throw new Error('Contexte structuré Brain invalide')
   }
   if (structured.sources.length > 100) {
-    throw new Error('Contexte structuré Amitel Brain invalide')
+    throw new Error('Contexte structuré Brain invalide')
   }
   const sources = structured.sources.map((entry) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      throw new Error('Contexte structuré Amitel Brain invalide')
+      throw new Error('Contexte structuré Brain invalide')
     }
     const source = entry as Record<string, unknown>
     if (
@@ -122,7 +122,7 @@ function parseStructuredContext(
       source.path.length > 4096 ||
       typeof source.content !== 'string'
     ) {
-      throw new Error('Contexte structuré Amitel Brain invalide')
+      throw new Error('Contexte structuré Brain invalide')
     }
     return { path: source.path, content: source.content }
   })
@@ -132,7 +132,7 @@ function parseStructuredContext(
 function parseRequestBinding(value: unknown): VerifiedBrainPayload['request'] | undefined {
   if (value === undefined) return undefined
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Liaison de requête Amitel Brain invalide')
+    throw new Error('Liaison de requête Brain invalide')
   }
   const request = value as Record<string, unknown>
   if (
@@ -144,7 +144,7 @@ function parseRequestBinding(value: unknown): VerifiedBrainPayload['request'] | 
     !request.trace_id ||
     Array.from(request.trace_id).length > 128
   ) {
-    throw new Error('Liaison de requête Amitel Brain invalide')
+    throw new Error('Liaison de requête Brain invalide')
   }
   return { query: request.query, traceId: request.trace_id }
 }
@@ -191,7 +191,7 @@ export async function readSignedBrainPayload(
 ): Promise<SignedBrainPayload> {
   const declared = Number(response.headers?.get('content-length'))
   if (Number.isFinite(declared) && (declared < 0 || declared > MAX_SIGNED_BRAIN_RESPONSE_BYTES)) {
-    throw new Error('Réponse Amitel Brain trop volumineuse')
+    throw new Error('Réponse Brain trop volumineuse')
   }
 
   let decoded: unknown
@@ -210,7 +210,7 @@ export async function readSignedBrainPayload(
         } catch {
           // La réponse est déjà rejetée ; une erreur de cancel ne doit pas masquer la borne franchie.
         }
-        throw new Error('Réponse Amitel Brain trop volumineuse')
+        throw new Error('Réponse Brain trop volumineuse')
       }
       chunks.push(Buffer.from(value))
     }
@@ -218,30 +218,30 @@ export async function readSignedBrainPayload(
     try {
       decoded = JSON.parse(raw)
     } catch {
-      throw new Error('Réponse Amitel Brain invalide')
+      throw new Error('Réponse Brain invalide')
     }
   } else if (typeof response.text === 'function') {
     const raw = await response.text()
     if (Buffer.byteLength(raw, 'utf8') > MAX_SIGNED_BRAIN_RESPONSE_BYTES) {
-      throw new Error('Réponse Amitel Brain trop volumineuse')
+      throw new Error('Réponse Brain trop volumineuse')
     }
     try {
       decoded = JSON.parse(raw)
     } catch {
-      throw new Error('Réponse Amitel Brain invalide')
+      throw new Error('Réponse Brain invalide')
     }
   } else {
-    throw new Error('Réponse Amitel Brain invalide')
+    throw new Error('Réponse Brain invalide')
   }
 
   if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
-    throw new Error('Réponse Amitel Brain invalide')
+    throw new Error('Réponse Brain invalide')
   }
   return decoded as SignedBrainPayload
 }
 
 function verifySignature(message: string, signature: unknown, token: string): void {
-  if (typeof signature !== 'string') throw new Error('Reponse Amitel Brain invalide')
+  if (typeof signature !== 'string') throw new Error('Reponse Brain invalide')
   const expected = createHmac('sha256', token).update(message, 'utf8').digest('hex')
   const actualBuffer = Buffer.from(signature, 'utf8')
   const expectedBuffer = Buffer.from(expected, 'utf8')
@@ -249,7 +249,7 @@ function verifySignature(message: string, signature: unknown, token: string): vo
     actualBuffer.length !== expectedBuffer.length ||
     !timingSafeEqual(actualBuffer, expectedBuffer)
   ) {
-    throw new Error('Signature Amitel Brain invalide')
+    throw new Error('Signature Brain invalide')
   }
 }
 
@@ -259,22 +259,22 @@ export function verifySignedBrainPayload(
   token: string
 ): VerifiedBrainPayload {
   if (payload.service !== SERVICE) {
-    throw new Error('Identite du service Amitel Brain invalide')
+    throw new Error('Identite du service Brain invalide')
   }
 
   // Compatibilité avec un runtime v1 : son contexte reste authentifié, mais ses champs additionnels
   // ne l'étaient pas. Ils sont donc volontairement écartés plutôt que présentés comme fiables.
   if (payload.protocol === 1) {
-    if (typeof payload.context !== 'string') throw new Error('Reponse Amitel Brain invalide')
+    if (typeof payload.context !== 'string') throw new Error('Reponse Brain invalide')
     verifySignature(`${SERVICE}\n1\n${payload.context}`, payload.signature, token)
     return { context: payload.context }
   }
 
   if (payload.protocol !== 2 || typeof payload.authenticated !== 'string') {
-    throw new Error('Identite du service Amitel Brain invalide')
+    throw new Error('Identite du service Brain invalide')
   }
   if (Buffer.byteLength(payload.authenticated, 'utf8') > MAX_AUTHENTICATED_BYTES) {
-    throw new Error('Reponse Amitel Brain trop volumineuse')
+    throw new Error('Reponse Brain trop volumineuse')
   }
   verifySignature(`${SERVICE}\n2\n${payload.authenticated}`, payload.signature, token)
 
@@ -282,17 +282,17 @@ export function verifySignedBrainPayload(
   try {
     decoded = JSON.parse(payload.authenticated)
   } catch {
-    throw new Error('Reponse Amitel Brain invalide')
+    throw new Error('Reponse Brain invalide')
   }
   if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
-    throw new Error('Reponse Amitel Brain invalide')
+    throw new Error('Reponse Brain invalide')
   }
   const body = decoded as Record<string, unknown>
-  if (typeof body.context !== 'string') throw new Error('Reponse Amitel Brain invalide')
+  if (typeof body.context !== 'string') throw new Error('Reponse Brain invalide')
   const structuredContext = parseStructuredContext(body.structuredContext)
   const request = parseRequestBinding(body.request)
   if (structuredContext && renderStructuredBrainContext(structuredContext) !== body.context) {
-    throw new Error('Les frontières du contexte Amitel Brain sont incohérentes')
+    throw new Error('Les frontières du contexte Brain sont incohérentes')
   }
   return {
     context: body.context,

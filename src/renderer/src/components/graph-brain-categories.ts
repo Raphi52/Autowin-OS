@@ -33,7 +33,7 @@ export function brainSubjectOf(node: Pick<GraphNode, 'id' | 'file' | 'themes'>):
   const segments = pathSegments(chemin)
 
   if (chemin.includes('autowin')) return 'Autowin OS'
-  if (chemin.includes('portail') || chemin.includes('fiche_nouveau')) return 'Portail Amitel'
+  if (chemin.includes('portail') || chemin.includes('fiche_nouveau')) return 'Portail'
   if (chemin.includes('rig-tv') || chemin.includes('rigtv') || chemin.includes('testviewer'))
     return 'RIG-TV'
   if (has(themes, 'kit', 'process') || segments[0] === 'governance')

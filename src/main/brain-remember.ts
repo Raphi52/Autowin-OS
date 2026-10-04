@@ -280,7 +280,7 @@ export function repairSourceLocator(
 /** Décrit le problème du locator, ou `undefined` s'il est conforme. */
 export function sourceLocatorProblem(source: string): string | undefined {
   // Un chemin SANS préfixe : lecteur Windows (`C:\…`, lu comme le schéma « c »), UNC en antislashes, UNC
-  // en slashes (`//ged2/rig/…`, l'écriture de la GED ici). Testé AVANT le deux-points, car une UNC n'en
+  // en slashes (`//serveur/partage/…`, l'écriture de la GED ici). Testé AVANT le deux-points, car une UNC n'en
   // contient aucun et retombait donc dans le message générique — le contraire de ce que ce garde annonce.
   // Cas d'autant plus probable que `file:` réclame précisément ce format en argument.
   if (/^([A-Za-z]:[\\/]|\\\\|\/\/)/.test(source)) {
@@ -512,7 +512,7 @@ const UNKNOWN_DEPOSIT = '[etat-inconnu]'
  * PLAFOND D'ATTENTE DU DEPOT — genereux ET reglable, jamais fige.
  *
  * DEFAUT VECU le 2026-09-02 (conv-143) : le plafond etait de 2 s en dur. Or le depot ecrit sur un
- * partage RESEAU (`\ged2\...\inbox`) apres un calcul d'embedding : deux secondes ne suffisent pas
+ * partage RESEAU (`\serveur\...\inbox`) apres un calcul d'embedding : deux secondes ne suffisent pas
  * toujours. Un depot legitime est donc ressorti « delai depasse », et comme cet etat est INCONNU
  * (le serveur a peut-etre ecrit), il marque durablement le fait dans le journal local et BLOQUE
  * tout nouvel essai jusqu'au redemarrage de l'app. Trop court ici ne coute pas une attente : il

@@ -1,3 +1,4 @@
+// fix-ok: les libelles de categories du graphe (lignes ~431-445) citaient en dur le nom de l application metier et son vocabulaire ; constate par grep "label: .*(RIG|greffe)" hors tests, desormais vide.
 import {
   closeSync,
   existsSync,
@@ -26,7 +27,7 @@ import { foldWindowsOrdinalCase } from './windows-ordinal-case'
 /**
  * Accès DISQUE aux graphes de connaissance réels (graphify) — côté main uniquement.
  * Scanne les dossiers `projects/<repo>/graphify-out/graph.json` d'un ou plusieurs
- * roots (ex. le partage Amitel Brain) et charge un graphe en le CAPANT en LOD
+ * roots (ex. le partage Brain) et charge un graphe en le CAPANT en LOD
  * (un graphe de 56 Mo / ~45k nœuds tuerait la visu 3D — on ne renvoie que le
  * top-N par degré).
  */
@@ -428,21 +429,21 @@ export async function applyBrainRetrievalScoresAsync(
 export const AMITEL_BRAIN_ROOT = amitelBrainRoot()
 export const AMITEL_BRAIN_THEMES: BrainTheme[] = [
   { id: 'category/brain', label: 'Brain' },
-  { id: 'category/rig', label: 'Comprendre RIG' },
-  { id: 'category/documentation', label: 'Documentation source RIG' },
-  { id: 'category/procedures', label: 'Parcours et procédures des greffes' },
+  { id: 'category/rig', label: 'Comprendre l’application métier' },
+  { id: 'category/documentation', label: 'Documentation source' },
+  { id: 'category/procedures', label: 'Parcours et procédures métier' },
   { id: 'category/justice', label: 'Justice et dossiers judiciaires' },
   { id: 'category/rcs', label: 'Registre du commerce et entreprises' },
   { id: 'category/facturation', label: 'Facturation, encaissement et éditions' },
   { id: 'category/moteur-ui', label: 'Moteur d’application et écrans' },
   { id: 'category/donnees', label: 'Données et paramétrage métier' },
   { id: 'category/echanges-services', label: 'Échanges, services et traitements automatiques' },
-  { id: 'category/build-diagnostic', label: 'Développer, livrer et diagnostiquer RIG' },
+  { id: 'category/build-diagnostic', label: 'Développer, livrer et diagnostiquer' },
   { id: 'category/decisions', label: 'Décisions' },
   { id: 'category/runbooks', label: 'Runbooks' },
   { id: 'category/standards', label: 'Standards et contribution' },
-  { id: 'project/rig-tv', label: 'Projet · RIG-TV' },
-  { id: 'project/rig-processus', label: 'Projet · RIG Processus' },
+  { id: 'project/rig-tv', label: 'Projet · TV' },
+  { id: 'project/rig-processus', label: 'Projet · Processus' },
   { id: 'project/rig-etapercs', label: 'Projet · Étapes RCS' },
   { id: 'project/rig-etapejudiciaire', label: 'Projet · Étapes judiciaires' },
   { id: 'project/rig-etapefacture', label: 'Projet · Étapes facture' },
@@ -466,7 +467,7 @@ export function scanBrainGraphs(
   if (existsSync(vaultRoot)) {
     found.push({
       id: 'amitel-brain',
-      label: 'Amitel Brain',
+      label: 'Brain',
       path: vaultRoot,
       sizeMb: 0,
       kind: 'vault',

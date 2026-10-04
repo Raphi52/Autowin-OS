@@ -304,14 +304,14 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
-  it('affiche RigApplication, tous les types et le détail sélectionné', async () => {
+  it('affiche depot, tous les types et le détail sélectionné', async () => {
     api()
     const { root, container } = await render()
 
     expect(container.querySelector('[data-testid="tickets-source"]')?.textContent).toContain(
-      'AmitelGTC / RIG / RigApplication'
+      'org / projet / depot'
     )
-    expect(container.textContent).toContain('Projet RIG')
+    expect(container.textContent).toContain('Projet projet')
     expect(container.querySelectorAll('[data-testid="ticket-row"]')).toHaveLength(3)
     expect(container.textContent).toContain('Bug')
     await act(async () => {

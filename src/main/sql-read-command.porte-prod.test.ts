@@ -2,6 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { configureSqlCatalog as configurerCatalogueTest } from './sql-read-catalog'
+import { TEST_SQL_CATALOG } from './sql-catalog.test-fixture'
+
+configurerCatalogueTest(TEST_SQL_CATALOG)
 import { chargerAutoriteProd, cheminAutoriteProd } from './store/prod-autorite-store'
 import { buildSqlTargetCatalog } from './sql-read-catalog'
 import { runSqlRead } from './sql-read-command'
@@ -21,16 +25,16 @@ import { CoffreAutorisationProd, definirPhrase } from './prod-passphrase'
  * l'appel se fait ici directement, sans passer par `commands.ts`.
  */
 const CATALOGUE = buildSqlTargetCatalog([
-  { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' },
-  { server: 'SQL-PROD\\PROD', database: 'RIG_MAQUETTE' }
+  { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
+  { server: 'SRV-PROD\\PROD', database: 'APP_MAQUETTE' }
 ])
 
 const PHRASE = 'phrase-de-passe-de-reference'
 const EMPREINTE = definirPhrase(PHRASE, 1_000)
 
 const AUTORITE = construireAutoriteProd([
-  { nature: 'base', nom: 'RIG_AMIENS', classe: 'prod', motif: 'greffe exploité' },
-  { nature: 'base', nom: 'RIG_MAQUETTE', classe: 'non-prod' }
+  { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+  { nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' }
 ])
 
 function montage(options: { phraseDefinie?: boolean } = {}) {
@@ -59,7 +63,7 @@ describe('sql_query sur une base de PRODUCTION', () => {
   it('REFUSE la requête sans jeton, et ne lance AUCUN processus', async () => {
     const { porteProd, lancer } = montage()
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       { catalog: CATALOGUE, porteProd, spawnFn: lancer as never, sqlcmdPath: 'sqlcmd' }
     )
     expect(resultat.ok).toBe(false)
@@ -72,7 +76,7 @@ describe('sql_query sur une base de PRODUCTION', () => {
   it('REFUSE un jeton inventé par l’appelant', async () => {
     const { porteProd, lancer } = montage()
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd,
@@ -87,9 +91,9 @@ describe('sql_query sur une base de PRODUCTION', () => {
 
   it('REFUSE un jeton obtenu pour une autre base', async () => {
     const { coffre, porteProd, lancer } = montage()
-    const jeton = jetonPour(coffre, 'base:RIG_MAQUETTE', 'sql-read')
+    const jeton = jetonPour(coffre, 'base:APP_MAQUETTE', 'sql-read')
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd,
@@ -106,10 +110,10 @@ describe('sql_query sur une base de PRODUCTION', () => {
   it('REFUSE une base absente de la liste d’autorité', async () => {
     const { porteProd, lancer } = montage()
     const catalogue = buildSqlTargetCatalog([
-      { server: 'SQL-PROD\\PROD', database: 'RIG_NON_DECLAREE' }
+      { server: 'SRV-PROD\\PROD', database: 'APP_NON_DECLAREE' }
     ])
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_NON_DECLAREE', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_NON_DECLAREE', query: 'SELECT 1 AS n' },
       { catalog: catalogue, porteProd, spawnFn: lancer as never, sqlcmdPath: 'sqlcmd' }
     )
     expect(resultat.ok).toBe(false)
@@ -128,7 +132,7 @@ describe('ce que la porte laisse passer', () => {
   it('laisse partir une requête sur une base déclarée hors production', async () => {
     const { porteProd, lancer } = montage()
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_MAQUETTE', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_MAQUETTE', query: 'SELECT 1 AS n' },
       { catalog: CATALOGUE, porteProd, spawnFn: lancer as never, sqlcmdPath: 'sqlcmd' }
     )
     expect(lancer).toHaveBeenCalled()
@@ -139,9 +143,9 @@ describe('ce que la porte laisse passer', () => {
 
   it('laisse partir une requête de production munie du bon jeton', async () => {
     const { coffre, porteProd, lancer } = montage()
-    const jeton = jetonPour(coffre, 'base:RIG_AMIENS', 'sql-read')
+    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-read')
     await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd,
@@ -160,7 +164,7 @@ describe('ce que la porte laisse passer', () => {
   it('ne change rien quand aucune porte n’est fournie', async () => {
     const { lancer } = montage()
     await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       { catalog: CATALOGUE, spawnFn: lancer as never, sqlcmdPath: 'sqlcmd' }
     )
     expect(lancer).toHaveBeenCalled()
@@ -170,7 +174,7 @@ describe('ce que la porte laisse passer', () => {
   it('laisse tout passer tant qu’aucune phrase de passe n’est définie', async () => {
     const { porteProd, lancer } = montage({ phraseDefinie: false })
     await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       { catalog: CATALOGUE, porteProd, spawnFn: lancer as never, sqlcmdPath: 'sqlcmd' }
     )
     expect(lancer).toHaveBeenCalled()
@@ -205,13 +209,13 @@ describe('du fichier de déclaration au refus', () => {
 
   it('refuse une base DÉCLARÉE production dans le fichier', async () => {
     const racine = racineNeuve(
-      JSON.stringify([{ nature: 'base', nom: 'RIG_AMIENS', classe: 'prod', motif: 'greffe' }])
+      JSON.stringify([{ nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe' }])
     )
     const lancer = vi.fn(() => {
       throw new Error('temoin de lancement')
     })
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd: porteDepuis(racine),
@@ -225,13 +229,13 @@ describe('du fichier de déclaration au refus', () => {
 
   it('laisse passer une base DÉCLARÉE hors production dans le fichier', async () => {
     const racine = racineNeuve(
-      JSON.stringify([{ nature: 'base', nom: 'RIG_MAQUETTE', classe: 'non-prod' }])
+      JSON.stringify([{ nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' }])
     )
     const lancer = vi.fn(() => {
       throw new Error('temoin de lancement')
     })
     await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_MAQUETTE', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_MAQUETTE', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd: porteDepuis(racine),
@@ -248,7 +252,7 @@ describe('du fichier de déclaration au refus', () => {
       throw new Error('temoin de lancement')
     })
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_MAQUETTE', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_MAQUETTE', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd: porteDepuis(racineNeuve()),
@@ -267,7 +271,7 @@ describe('du fichier de déclaration au refus', () => {
       throw new Error('temoin de lancement')
     })
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_MAQUETTE', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_MAQUETTE', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd: porteDepuis(racineNeuve('{ pas du json')),
@@ -284,15 +288,15 @@ describe('du fichier de déclaration au refus', () => {
     const racine = racineNeuve('[]')
     const porte = porteDepuis(racine)
     expect(
-      porte.verifier({ nature: 'base', nom: 'RIG_MAQUETTE', operation: 'sql-read' }).autorise
+      porte.verifier({ nature: 'base', nom: 'APP_MAQUETTE', operation: 'sql-read' }).autorise
     ).toBe(false)
     writeFileSync(
       cheminAutoriteProd(racine),
-      JSON.stringify([{ nature: 'base', nom: 'RIG_MAQUETTE', classe: 'non-prod' }]),
+      JSON.stringify([{ nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' }]),
       'utf8'
     )
     expect(
-      porte.verifier({ nature: 'base', nom: 'RIG_MAQUETTE', operation: 'sql-read' }).autorise
+      porte.verifier({ nature: 'base', nom: 'APP_MAQUETTE', operation: 'sql-read' }).autorise
     ).toBe(true)
   })
 
@@ -327,7 +331,7 @@ describe('le refus ouvre l’écran de saisie et rejoue le geste', () => {
     const { coffre, porteProd, lancer } = montage()
     const { guichet, vues } = guichetQui((d) => jetonPour(coffre, d.cible, d.operation))
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd,
@@ -338,7 +342,7 @@ describe('le refus ouvre l’écran de saisie et rejoue le geste', () => {
     )
     expect(vues).toEqual([
       {
-        cible: 'base:RIG_AMIENS',
+        cible: 'base:APP_AMIENS',
         operation: 'sql-read',
         raison: 'Production déclarée : greffe exploité',
         niveau: 'phrase'
@@ -354,7 +358,7 @@ describe('le refus ouvre l’écran de saisie et rejoue le geste', () => {
     const { porteProd, lancer } = montage()
     const { guichet, vues } = guichetQui(() => undefined)
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd,
@@ -370,9 +374,9 @@ describe('le refus ouvre l’écran de saisie et rejoue le geste', () => {
 
   it('ne rejoue QU’UNE fois : un jeton qui ne convient pas ne rouvre pas l’écran', async () => {
     const { coffre, porteProd, lancer } = montage()
-    const { guichet, vues } = guichetQui(() => jetonPour(coffre, 'base:RIG_MAQUETTE', 'sql-read'))
+    const { guichet, vues } = guichetQui(() => jetonPour(coffre, 'base:APP_MAQUETTE', 'sql-read'))
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd,
@@ -390,7 +394,7 @@ describe('le refus ouvre l’écran de saisie et rejoue le geste', () => {
     const { porteProd, lancer } = montage()
     const { guichet, vues } = guichetQui(() => 'jamais')
     await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_MAQUETTE', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_MAQUETTE', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd,
@@ -431,7 +435,7 @@ describe('confirmation avant toute requête sur une base de production', () => {
       }
     } as never
     await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd: porteConfirmation(),
@@ -452,7 +456,7 @@ describe('confirmation avant toute requête sur une base de production', () => {
     })
     const guichet = { demander: async () => undefined } as never
     const resultat = await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd: porteConfirmation(),
@@ -479,7 +483,7 @@ describe('confirmation avant toute requête sur une base de production', () => {
       }
     } as never
     await runSqlRead(
-      { server: 'SQL-PROD\\PROD', database: 'RIG_MAQUETTE', query: 'SELECT 1 AS n' },
+      { server: 'SRV-PROD\\PROD', database: 'APP_MAQUETTE', query: 'SELECT 1 AS n' },
       {
         catalog: CATALOGUE,
         porteProd: porteConfirmation(),
