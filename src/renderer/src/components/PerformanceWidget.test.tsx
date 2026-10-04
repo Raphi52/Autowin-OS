@@ -121,6 +121,14 @@ describe('mode utilisateur et mode greffier', () => {
     expect(hote.querySelector('[data-testid="perf-personne-Zoe"]')).toBeTruthy()
     expect(hote.querySelector('[data-testid="perf-personne-moi"]')).toBeTruthy()
   })
+
+  it('parle de l equipe, sans vocabulaire metier propre a un client', () => {
+    monter({ mesures: MESURES, utilisateur: 'moi', storage: memoire() })
+    expect(hote.querySelector('[data-testid="perf-mode-greffier"]')?.textContent).toBe('Toute l’équipe')
+    cliquer('perf-ouvrir-seuils')
+    expect(hote.textContent).toContain('taille de l’équipe')
+    expect(hote.textContent?.toLowerCase()).not.toContain('greffe')
+  })
 })
 
 describe('le code couleur se regle', () => {

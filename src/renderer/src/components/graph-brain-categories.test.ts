@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { brainSubjectOf } from './graph-brain-categories'
 import type { GraphNode } from './graph-view-model'
 
-const RACINE = '//ged2/rig/Projets IA/Amitel Brain/'
+const RACINE = '//srv1/rig/Projets IA/Amitel Brain/'
 const fiche = (chemin: string, themes: string[] = []): GraphNode => ({
   id: chemin,
   label: chemin.split('/').pop() ?? chemin,
@@ -14,7 +14,7 @@ const fiche = (chemin: string, themes: string[] = []): GraphNode => ({
 describe('axe SUJET — celui que la campagne d’architecture a désigné', () => {
   it('range chaque produit sous son nom', () => {
     expect(brainSubjectOf(fiche('projects/autowin-os/obsidian/autowin-os.md'))).toBe('Autowin OS')
-    expect(brainSubjectOf(fiche('knowledge/decisions/portail-amitel.md'))).toBe('Portail Amitel')
+    expect(brainSubjectOf(fiche('knowledge/decisions/portail-amitel.md'))).toBe('Portail')
     expect(brainSubjectOf(fiche('projects/rig-tv/obsidian/areas/a.md'))).toBe('RIG-TV')
     // RIG porte 454 fiches sur 628 : il est le seul sujet subdivisé, d'où les deux niveaux ici.
     expect(brainSubjectOf(fiche('knowledge/domain/rig-edi.md'))).toBe('RIG/savoir général')

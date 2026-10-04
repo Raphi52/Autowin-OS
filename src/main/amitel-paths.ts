@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 /**
@@ -12,8 +13,8 @@ import { join } from 'node:path'
  *   (c) un residu de bricolage (`C:\Nouveau dossier`) tranait dans la liste blanche ANTI-TRAVERSAL
  *       de `fs-brains`, ou il ouvrait un droit de lecture sur un dossier arbitraire.
  *
- * Ce que ce module NE fait PAS : retirer le defaut Amitel. Il fonctionne sur les postes de l'equipe
- * et le retirer casserait leur usage. Le but est la source UNIQUE et la SURCHARGEABILITE — chaque
+ * Depuis le 2026-10-04, plus aucun defaut d'entreprise : sans configuration, le Brain vit dans un dossier
+ * local generique et aucun workspace n'est connu. Le but reste la source UNIQUE et la SURCHARGEABILITE — chaque
  * valeur reste pilotable par variable d'environnement, avec les MEMES noms qu'avant (toute
  * renomination serait une regression silencieuse pour qui les utilise deja).
  *
@@ -22,7 +23,8 @@ import { join } from 'node:path'
  */
 
 /** Racine du Brain partage. Surcharge : `AMITEL_BRAIN_ROOT` (nom historique, preserve). */
-export const DEFAULT_BRAIN_ROOT = '\\\\ged2\\rig\\Projets IA\\Amitel Brain'
+// Defaut GENERIQUE (2026-10-04) : un dossier local de l'utilisateur, plus aucun partage d'entreprise.
+export const DEFAULT_BRAIN_ROOT = join(homedir(), 'Autowin Brain')
 
 /** Origine du service RAG local. Surcharge : `AMITEL_BRAIN_ORIGIN` (nom historique, preserve). */
 const DEFAULT_BRAIN_ORIGIN = 'http://127.0.0.1:8765'
@@ -32,7 +34,8 @@ const DEFAULT_BRAIN_ORIGIN = 'http://127.0.0.1:8765'
  * un nom de dossier generique dans une liste blanche de securite est un droit de lecture offert a
  * n'importe quel contenu qu'on y depose.
  */
-export const DEFAULT_AMITEL_WORKSPACES: readonly string[] = ['C:\\Amitel', 'C:\\Code RIG']
+// Aucun workspace d'entreprise par defaut (2026-10-04) : la liste vient de AUTOWIN_AMITEL_WORKSPACES.
+export const DEFAULT_AMITEL_WORKSPACES: readonly string[] = []
 
 /** Dossier d'etat du Brain PROPRE a Autowin, sous %LOCALAPPDATA% — voir `autowinOwnBrainRoot`. */
 export const AUTOWIN_OWN_BRAIN_STATE_DIR = 'AutowinBrain'
@@ -124,7 +127,7 @@ export function requireLoopbackBrainOrigin(value: string): string {
   try {
     parsed = new URL(value)
   } catch {
-    throw new Error('Origine Amitel Brain invalide : loopback HTTP requis')
+    throw new Error('Origine Brain invalide : loopback HTTP requis')
   }
   const loopbackHosts = new Set(['127.0.0.1', 'localhost', '[::1]'])
   if (
@@ -136,7 +139,7 @@ export function requireLoopbackBrainOrigin(value: string): string {
     parsed.search ||
     parsed.hash
   ) {
-    throw new Error('Origine Amitel Brain invalide : loopback HTTP requis')
+    throw new Error('Origine Brain invalide : loopback HTTP requis')
   }
   return parsed.origin
 }

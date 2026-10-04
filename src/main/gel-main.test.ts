@@ -320,7 +320,7 @@ describe('mesure DIRECTE du segment synchrone d’un canal IPC', () => {
 describe('temoin ordonnance — un blocage SANS CPU n’est plus excuse en contention machine', () => {
   /*
    * FALSIFICATION NOMMEE : `Atomics.wait` tient le thread principal SANS bruler un cycle CPU —
-   * exactement la signature d'un `readFileSync` sur le partage reseau //ged2. C'est l'entree qui
+   * exactement la signature d'un `readFileSync` sur le partage reseau //srv1. C'est l'entree qui
    * ressortait `process-prive-de-cpu` (« pas notre code ») dans le journal de conv-1539. Si le
    * temoin n'existait pas, ou s'il etait lu apres coup, ce test resterait rouge.
    */

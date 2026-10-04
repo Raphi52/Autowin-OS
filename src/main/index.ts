@@ -1,3 +1,4 @@
+// fix-ok: valeurs propres à entreprise (serveur, base, table, colonnes du catalogue) écrites en dur — mesuré par grep; remplacées par la config sql-catalog.json, fermée par défaut (tests sql-read-catalog/guard rouge si on rouvre)
 import { commandeNonInjectable } from './skill-routing'
 import { isAppDestination } from '../shared/view-tabs'
 import { observerLeMoteur } from './observer-les-sources'
@@ -84,6 +85,7 @@ import { app, shell, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage
 import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { loadSqlCatalogConfigFile } from './sql-read-catalog'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import type { ExecutionEvidence, Message, ProviderAdapter } from './providers/types'
@@ -1589,6 +1591,8 @@ const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json')
  */
 const demarrageDuMoteurMs = Date.now()
 const orchestrationBudgetPath = join(app.getPath('userData'), 'orchestration-budget.json')
+// Catalogue SQL propre à l'utilisateur : sans ce fichier, aucune base n'est lisible.
+loadSqlCatalogConfigFile(join(app.getPath('userData'), 'sql-catalog.json'))
 const ticketSources = new TicketSourceStore(join(app.getPath('userData'), 'ticket-sources.json'))
 const ticketCredentials = createTicketCredentialStore()
 const tickets = new TicketService({

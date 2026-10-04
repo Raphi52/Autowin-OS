@@ -21,7 +21,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
           value: [
             {
               id: 11,
-              url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/workItems/11',
+              url: 'https://dev.azure.com/org/projet/_apis/wit/workItems/11',
               fields: {
                 'System.WorkItemType': 'Fiche Team',
                 'System.Title': 'Première fiche',
@@ -31,7 +31,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
             },
             {
               id: 12,
-              url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/workItems/12',
+              url: 'https://dev.azure.com/org/projet/_apis/wit/workItems/12',
               fields: {
                 'System.WorkItemType': 'Bug',
                 'System.Title': 'Un bug fermé',
@@ -50,7 +50,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
 
     const [wiqlUrl, wiqlInit] = fetchFn.mock.calls[0]
     expect(wiqlUrl).toBe(
-      'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/wiql?$top=3&api-version=7.1'
+      'https://dev.azure.com/org/projet/_apis/wit/wiql?$top=3&api-version=7.1'
     )
     expect(wiqlInit).toEqual(
       expect.objectContaining({
@@ -116,7 +116,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
       relations: [
         {
           rel: 'System.LinkTypes.Hierarchy-Reverse',
-          url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/workItems/42',
+          url: 'https://dev.azure.com/org/projet/_apis/wit/workItems/42',
           attributes: { name: 'Parent' }
         }
       ]
@@ -146,7 +146,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
       type: 'Type personnalisé',
       title: 'Élément 1',
       state: 'État personnalisé',
-      url: 'https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/1',
+      url: 'https://dev.azure.com/org/projet/_workitems/edit/1',
       updatedAt: '2026-07-23T10:00:00.000Z',
       createdAt: '2026-07-22T10:00:00.000Z',
       assignee: 'Ada Lovelace',
@@ -157,7 +157,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
         {
           kind: 'System.LinkTypes.Hierarchy-Reverse',
           target: '42',
-          url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/workItems/42'
+          url: 'https://dev.azure.com/org/projet/_apis/wit/workItems/42'
         }
       ]
     })
@@ -212,12 +212,12 @@ describe('annuaire des collaborateurs Azure (listAzurePeople)', () => {
       )
 
     const people = await listAzurePeople(
-      { organization: 'AmitelGTC', project: 'RIG' },
+      { organization: 'org', project: 'projet' },
       { token: 't', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
     )
 
     expect(people).toEqual(['Alice Martin', 'sam@amitel.fr', 'Zoé Bernard'])
-    expect(String(fetchFn.mock.calls[0][0])).toContain('/_apis/projects/RIG/teams?api-version=')
+    expect(String(fetchFn.mock.calls[0][0])).toContain('/_apis/projects/projet/teams?api-version=')
     expect(String(fetchFn.mock.calls[1][0])).toContain('/teams/team-a/members')
     expect(String(fetchFn.mock.calls[2][0])).toContain('/teams/team-b/members')
   })
@@ -226,7 +226,7 @@ describe('annuaire des collaborateurs Azure (listAzurePeople)', () => {
     const fetchFn = vi.fn().mockResolvedValueOnce(json({ nope: true }))
     await expect(
       listAzurePeople(
-        { organization: 'AmitelGTC', project: 'RIG' },
+        { organization: 'org', project: 'projet' },
         { token: 't', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
       )
     ).rejects.toBeInstanceOf(TicketProviderError)

@@ -832,7 +832,7 @@ describe('audit 2026-07-30 — les échecs silencieux', () => {
     expect(probleme).toBeDefined()
     expect(probleme).not.toMatch(/sch[ée]ma/i)
     expect(probleme).toMatch(/pr[ée]fixe/i)
-    expect(sourceLocatorProblem('\\\\ged2\\rig\\note.md')).toMatch(/pr[ée]fixe/i)
+    expect(sourceLocatorProblem('\\\\srv1\\rig\\note.md')).toMatch(/pr[ée]fixe/i)
   })
 })
 
@@ -859,7 +859,7 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
     // Les 3 entrées nommées par l'audit : un en-tête, un nom de variable d'environnement, un TTL.
     for (const legitime of [
       'csrf_token_header: X-CSRF-Token',
-      'db_password_env: RIG_DB_PASSWORD',
+      'db_password_env: APP_DB_PASSWORD',
       'refresh_token_ttl = 3600000000'
     ]) {
       expect(likelySecretShape(legitime)).toBeUndefined()
@@ -973,7 +973,7 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
       // Celle-ci est l'exemple officiel de la documentation AWS, donc sans ambiguïté.
       'clé AKIAIOSFODNN7EXAMPLE trouvée dans le fichier',
       // Casse MIXTE : le garde exige désormais minuscule + MAJUSCULE + chiffre dans la valeur, pour ne
-      // plus refuser `RIG_DB_PASSWORD` ni `/api/v2/oauth/token`. Le placeholder doit donc en porter.
+      // plus refuser `APP_DB_PASSWORD` ni `/api/v2/oauth/token`. Le placeholder doit donc en porter.
       'aws_secret_access_key=Exemple0NonValide0ANePasUtiliser'
     ]) {
       expect(likelySecretShape(fuite)).toBeDefined()
@@ -1035,8 +1035,8 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
 
   it('une UNC sans préfixe enseigne le préfixe dans LES DEUX écritures', () => {
     // Une UNC ne contient aucun deux-points : le garde devait passer AVANT ce test, sinon il ne servait à rien.
-    expect(sourceLocatorProblem('//ged2/rig/Projets IA/note.md')).toMatch(/pr[ée]fixe manquant/i)
-    expect(sourceLocatorProblem('\\\\ged2\\rig\\note.md')).toMatch(/pr[ée]fixe manquant/i)
+    expect(sourceLocatorProblem('//srv1/rig/Projets IA/note.md')).toMatch(/pr[ée]fixe manquant/i)
+    expect(sourceLocatorProblem('\\\\srv1\\rig\\note.md')).toMatch(/pr[ée]fixe manquant/i)
     // Contre-controle : une url legitime n'est pas affectee.
     expect(sourceLocatorProblem('url:https://exemple.fr/x')).toBeUndefined()
   })
@@ -1061,7 +1061,7 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
   })
 
   it('une UNC en slashes sans préfixe enseigne le préfixe — c’est la forme de la GED ici', () => {
-    expect(sourceLocatorProblem('//ged2/rig/Projets IA/note.md')).toMatch(/pr[ée]fixe/i)
+    expect(sourceLocatorProblem('//srv1/rig/Projets IA/note.md')).toMatch(/pr[ée]fixe/i)
   })
 })
 

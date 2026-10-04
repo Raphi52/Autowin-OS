@@ -29,12 +29,12 @@ describe('keyring Tickets', () => {
       return entry
     })
 
-    store.set('azure:AmitelGTC:RIG:RigApplication', 'secret-token')
+    store.set('azure:org:projet:depot', 'secret-token')
 
-    expect(store.get('azure:AmitelGTC:RIG:RigApplication')).toBe('secret-token')
+    expect(store.get('azure:org:projet:depot')).toBe('secret-token')
     expect([...entries.values()][0].value).toBe('secret-token')
-    expect(store.has('azure:AmitelGTC:RIG:RigApplication')).toBe(true)
-    expect(store.delete('azure:AmitelGTC:RIG:RigApplication')).toBe(true)
+    expect(store.has('azure:org:projet:depot')).toBe(true)
+    expect(store.delete('azure:org:projet:depot')).toBe(true)
   })
 
   it.each(['', ' x ', 'x\nsecret', 'x'.repeat(4097)])('rejette un token invalide', (token) => {

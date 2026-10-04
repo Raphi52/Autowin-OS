@@ -167,7 +167,7 @@ describe('Observatory RAG causal trace', () => {
       observedAt: '2026-07-24T10:00:00.500Z',
       timeKind: 'retrieval'
     })
-    expect(step.textContent).toContain('Autowin interroge Amitel Brain')
+    expect(step.textContent).toContain('Autowin interroge le Brain')
     expect(step.textContent).toContain('Pourquoi le cache ?')
     expect(step.textContent).toContain('knowledge/domain/cache.md')
     expect(step.textContent).toContain(`${ragBlock.length}`)
@@ -225,7 +225,7 @@ describe('Observatory RAG causal trace', () => {
 
     expect(steps).toHaveLength(2)
     expect(steps[0].dataset.evidence).toBe('retrieval')
-    expect(steps[0].textContent).toContain('Autowin interroge Amitel Brain')
+    expect(steps[0].textContent).toContain('Autowin interroge le Brain')
     expect(steps[1].dataset.evidence).toBe('injection')
     expect(steps[1].textContent).toContain('Autowin remet le contexte Brain au modèle')
     expect(view.querySelectorAll('.observatory-rag-causal-step .brain-nav-card')).toHaveLength(1)

@@ -113,7 +113,7 @@ describe('classerGel — distinguer la boucle TENUE du process PRIVE de CPU', ()
  *
  * Journal du 2026-08-30 : cinq gels de 11,7 a 14,9 s, espaces d'environ une minute, tous rendus
  * `process-prive-de-cpu` donc « pas notre code ». Une lecture SYNCHRONE sur le partage reseau
- * //ged2 produit EXACTEMENT cette signature : la boucle est tenue par NOUS, sans brûler un cycle.
+ * //srv1 produit EXACTEMENT cette signature : la boucle est tenue par NOUS, sans brûler un cycle.
  * Le CPU seul ne peut pas trancher ; un TEMOIN ordonnance en parallele le peut. S'il s'est reveille
  * A L'HEURE pendant que le main etait en retard, la machine nous ordonnancait bien : c'est le
  * thread principal qui etait coince dans un appel bloquant.

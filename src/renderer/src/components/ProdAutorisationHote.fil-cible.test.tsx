@@ -66,7 +66,7 @@ async function rendre(
 
 const demande = (over: Partial<DemandeTest> = {}): DemandeTest => ({
   id: 'd1',
-  cible: 'base:RIG_AMIENS',
+  cible: 'base:APP_AMIENS',
   operation: 'sql-read',
   raison: 'Production declaree',
   niveau: 'confirmation',
@@ -80,28 +80,28 @@ afterEach(() => {
 describe("l'ecran d'autorisation n'apparait que dans le fil qui l'a declenche", () => {
   it('affiche la demande dans SON fil', async () => {
     const hote = await rendre([demande({ conversationId: 'conv-626' })], 'conv-626')
-    expect(hote.textContent).toContain('RIG_AMIENS')
+    expect(hote.textContent).toContain('APP_AMIENS')
   })
 
   it("n'affiche RIEN dans une autre conversation", async () => {
     const hote = await rendre([demande({ conversationId: 'conv-626' })], 'conv-999')
-    expect(hote.textContent).not.toContain('RIG_AMIENS')
+    expect(hote.textContent).not.toContain('APP_AMIENS')
   })
 
   it('ne laisse pas une demande etrangere masquer celle du fil courant', async () => {
     const hote = await rendre(
       [
-        demande({ id: 'ailleurs', cible: 'base:RIG_ANNECY', conversationId: 'conv-999' }),
-        demande({ id: 'ici', cible: 'base:RIG_AMIENS', conversationId: 'conv-626' })
+        demande({ id: 'ailleurs', cible: 'base:APP_ANNECY', conversationId: 'conv-999' }),
+        demande({ id: 'ici', cible: 'base:APP_AMIENS', conversationId: 'conv-626' })
       ],
       'conv-626'
     )
-    expect(hote.textContent).toContain('RIG_AMIENS')
-    expect(hote.textContent).not.toContain('RIG_ANNECY')
+    expect(hote.textContent).toContain('APP_AMIENS')
+    expect(hote.textContent).not.toContain('APP_ANNECY')
   })
 
   it('affiche partout une demande SANS origine connue — jamais invisible', async () => {
     const hote = await rendre([demande()], 'conv-999')
-    expect(hote.textContent).toContain('RIG_AMIENS')
+    expect(hote.textContent).toContain('APP_AMIENS')
   })
 })

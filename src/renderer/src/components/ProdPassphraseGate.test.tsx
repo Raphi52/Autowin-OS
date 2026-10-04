@@ -15,7 +15,7 @@ let hote: HTMLDivElement
 let racine: Root
 
 const DEMANDE = {
-  cible: 'base:RIG_AMIENS',
+  cible: 'base:APP_AMIENS',
   operation: 'sql-write',
   raison: 'Production déclarée : greffe exploité'
 }
@@ -98,7 +98,7 @@ async function cliquer(selecteur: string) {
 describe('ce que l’écran montre', () => {
   it('affiche la cible, l’opération et la raison du blocage AVANT toute saisie', async () => {
     await monter({})
-    expect(hote.textContent).toContain('base:RIG_AMIENS')
+    expect(hote.textContent).toContain('base:APP_AMIENS')
     expect(hote.textContent).toContain('sql-write')
     expect(hote.textContent).toContain('greffe exploité')
   })

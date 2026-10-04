@@ -401,8 +401,8 @@ describe('taille des résultats — une note ouverte arrive entière et lisible'
   })
 
   it('un chemin absolu écrit dans une AUTRE casse que la racine n’est pas préfixé deux fois', async () => {
-    // Windows et le serveur du Brain ignorent la casse : `//GED2/RIG/…` désigne la même note que
-    // `\\ged2\rig\…`. Le renvoi ne doit pas fabriquer `//ged2/…/Amitel Brain///GED2/…`.
+    // Windows et le serveur du Brain ignorent la casse : `//SRV1/RIG/…` désigne la même note que
+    // `\\srv1\rig\…`. Le renvoi ne doit pas fabriquer `//srv1/…/Amitel Brain///SRV1/…`.
     const renvoi = async (chemin: string): Promise<string> => {
       const rep = await traiterMessageMcp(
         {
@@ -417,11 +417,11 @@ describe('taille des résultats — une note ouverte arrive entière et lisible'
       )
       return (rep.corps as { result: { content: Array<{ text: string }> } }).result.content[0]!.text
     }
-    vi.stubEnv('AMITEL_BRAIN_ROOT', '\\\\ged2\\rig\\Projets IA\\Amitel Brain')
+    vi.stubEnv('AMITEL_BRAIN_ROOT', '\\\\srv1\\rig\\Projets IA\\Amitel Brain')
     try {
       for (const chemin of [
-        '//GED2/RIG/Projets IA/Amitel Brain/knowledge/domain/modele-ult.md',
-        '\\\\GED2\\rig\\projets ia\\amitel brain\\knowledge\\domain\\modele-ult.md'
+        '//SRV1/RIG/Projets IA/Amitel Brain/knowledge/domain/modele-ult.md',
+        '\\\\SRV1\\rig\\projets ia\\amitel brain\\knowledge\\domain\\modele-ult.md'
       ]) {
         const texte = await renvoi(chemin)
         expect(texte.match(/amitel brain/gi)).toHaveLength(1)
@@ -429,7 +429,7 @@ describe('taille des résultats — une note ouverte arrive entière et lisible'
       }
       // Un chemin RELATIF, lui, reçoit bien la racine une fois.
       expect(await renvoi('knowledge/domain/modele-ult.md')).toContain(
-        '//ged2/rig/Projets IA/Amitel Brain/knowledge/domain/modele-ult.md.'
+        '//srv1/rig/Projets IA/Amitel Brain/knowledge/domain/modele-ult.md.'
       )
     } finally {
       vi.unstubAllEnvs()
@@ -495,7 +495,7 @@ describe('mesure de lecture — quelle note, combien de caractères', () => {
   })
 
   it('les lectures DIRECTES du Brain (Read, Grep) deviennent des lignes de trace', () => {
-    const racine = '//ged2/rig/Projets IA/Amitel Brain'
+    const racine = '//srv1/rig/Projets IA/Amitel Brain'
     const lignes = lecturesDirectesDuBrain(
       [
         {
@@ -504,7 +504,7 @@ describe('mesure de lecture — quelle note, combien de caractères', () => {
           status: 'completed',
           ok: true,
           summary: 'Read',
-          path: '\\\\ged2\\rig\\Projets IA\\Amitel Brain\\knowledge\\domain\\guide-choix-ult.md',
+          path: '\\\\srv1\\rig\\Projets IA\\Amitel Brain\\knowledge\\domain\\guide-choix-ult.md',
           outputChars: 18994
         },
         {
@@ -513,7 +513,7 @@ describe('mesure de lecture — quelle note, combien de caractères', () => {
           status: 'completed',
           ok: true,
           summary: 'Grep',
-          searchPath: '\\\\ged2\\rig\\Projets IA\\Amitel Brain\\knowledge',
+          searchPath: '\\\\srv1\\rig\\Projets IA\\Amitel Brain\\knowledge',
           pattern: 'Ult_Heure',
           outputChars: 300
         },
@@ -532,7 +532,7 @@ describe('mesure de lecture — quelle note, combien de caractères', () => {
           status: 'completed',
           ok: true,
           summary: '',
-          path: '\\\\ged2\\rig\\Projets IA\\Amitel Brain-copie\\knowledge\\x.md'
+          path: '\\\\srv1\\rig\\Projets IA\\Amitel Brain-copie\\knowledge\\x.md'
         },
         {
           type: 'Edit',
@@ -540,7 +540,7 @@ describe('mesure de lecture — quelle note, combien de caractères', () => {
           status: 'completed',
           ok: true,
           summary: '',
-          path: '\\\\ged2\\rig\\Projets IA\\Amitel Brain\\x.md'
+          path: '\\\\srv1\\rig\\Projets IA\\Amitel Brain\\x.md'
         }
       ],
       racine,
@@ -567,25 +567,25 @@ describe('mesure de lecture — quelle note, combien de caractères', () => {
       lecturesDirectesDuBrain(
         [
           preuve({
-            path: '\\\\GED2\\rig\\projets ia\\AMITEL BRAIN\\knowledge\\a.md',
+            path: '\\\\SRV1\\rig\\projets ia\\AMITEL BRAIN\\knowledge\\a.md',
             outputChars: 10
           }),
           // Un Glob sans dossier, dont le MOTIF porte le chemin complet sous le Brain.
           preuve({
             type: 'Glob',
-            pattern: '//ged2/rig/Projets IA/Amitel Brain/knowledge/**/*ult*.md',
+            pattern: '//srv1/rig/Projets IA/Amitel Brain/knowledge/**/*ult*.md',
             outputChars: 5
           }),
           // Un Glob sans dossier ni chemin dans le motif : rien ne dit qu'il vise le Brain.
           preuve({ type: 'Glob', pattern: '**/*.md', outputChars: 5 }),
-          preuve({ ok: false, path: '//ged2/rig/Projets IA/Amitel Brain/knowledge/absente.md' })
+          preuve({ ok: false, path: '//srv1/rig/Projets IA/Amitel Brain/knowledge/absente.md' })
         ],
-        '//ged2/rig/Projets IA/Amitel Brain/',
+        '//srv1/rig/Projets IA/Amitel Brain/',
         'think'
       )
     ).toEqual([
       'lecture directe Read (think) : ok — knowledge/a.md · 10 car.',
-      'recherche directe Glob (think) : ok — « //ged2/rig/Projets IA/Amitel Brain/knowledge/**/*ult*.md » · knowledge/**/*ult*.md · 5 car.',
+      'recherche directe Glob (think) : ok — « //srv1/rig/Projets IA/Amitel Brain/knowledge/**/*ult*.md » · knowledge/**/*ult*.md · 5 car.',
       'lecture directe Read (think) : echec — knowledge/absente.md'
     ])
   })

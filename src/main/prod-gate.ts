@@ -1,3 +1,4 @@
+// fix-ok: valeurs propres à entreprise (serveur, base, table, colonnes du catalogue) écrites en dur — mesuré par grep; remplacées par la config sql-catalog.json, fermée par défaut (tests sql-read-catalog/guard rouge si on rouvre)
 /**
  * LE POINT DE PASSAGE — la seule pièce qui REFUSE réellement quelque chose.
  *
@@ -28,7 +29,7 @@
  * Un module de décision qui ouvrirait des fenêtres ne serait plus testable.
  */
 import { classerCible, type AutoriteProd, type Cible, type NatureCible } from './prod-guard'
-import { estServeurDev } from './sql-read-catalog'
+import { estBaseCatalogue, estServeurDev } from './sql-read-catalog'
 import type { CoffreAutorisationProd, Demande } from './prod-passphrase'
 import type { NiveauProtectionProd } from '../shared/prod-protection'
 
@@ -74,25 +75,18 @@ export const DUREE_ACCORD_LECTURE_MS = 15 * 60_000
 const OPERATIONS_GROUPABLES = new Set(['sql-read'])
 
 /**
- * LECTURES DISPENSÉES DE CONFIRMATION (demande utilisateur du 2026-09-24, conv-117). La base commune
- * `COMMUN_RIG` est lue en permanence (catalogue des greffes, paramétrage), et l'utilisateur a décidé le
+ * LECTURES DISPENSÉES DE CONFIRMATION (demande utilisateur du 2026-09-24, conv-117). La base catalogue
+ * configurée (`sql-catalog.json`) est lue en permanence (liste des bases exploitées), et l'utilisateur a décidé le
  * 2026-09-23 (conv-113) que l'agent peut y faire des SELECT. Seule l'opération `sql-read` est
  * dispensée : elle n'est émise que par `sql_query`, déjà bridé (un seul SELECT, enveloppe ROLLBACK,
  * pas de `SELECT *`, colonnes de mot de passe et de clé refusées par `sql-read-guard.ts`). Tout autre
  * geste sur la même base (`run-sqlcmd`, écriture) garde sa confirmation. La dispense ne vaut qu'au
  * niveau `confirmation` : le niveau `phrase`, choisi exprès, reste entier. Appariement EXACT après
- * normalisation, comme `prod-guard.ts` : `COMMUN_RIG_TEST` n'est pas couvert.
+ * normalisation, comme `prod-guard.ts` : `<catalogue>_TEST` n'est pas couvert.
  */
-const LECTURES_DISPENSEES: ReadonlyArray<{ nature: NatureCible; nom: string; operation: string }> = [
-  { nature: 'base', nom: 'commun_rig', operation: 'sql-read' }
-]
-
 function lectureDispensee(geste: GesteProd): boolean {
-  const nom = geste.nom.trim().toLowerCase()
-  return LECTURES_DISPENSEES.some(
-    (dispense) =>
-      dispense.nature === geste.nature && dispense.nom === nom && dispense.operation === geste.operation
-  )
+  // La base dispensée est la base catalogue CONFIGURÉE (`sql-catalog.json`), plus un nom en dur.
+  return geste.nature === 'base' && geste.operation === 'sql-read' && estBaseCatalogue(geste.nom)
 }
 
 export type VerdictPorte =

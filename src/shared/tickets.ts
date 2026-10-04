@@ -102,13 +102,14 @@ export interface TicketListRequest {
   titleContains?: string
 }
 
+/** Profil d'EXEMPLE (tests, documentation). Il n'est plus injecté d'office dans les sources. */
 export const DEFAULT_TICKET_SOURCE: AzureTicketSource = {
-  id: 'azure:AmitelGTC:RIG:RigApplication',
-  label: 'AmitelGTC / RIG / RigApplication',
+  id: 'azure:org:projet:depot',
+  label: 'org / projet / depot',
   provider: 'azure',
-  organization: 'AmitelGTC',
-  project: 'RIG',
-  repository: 'RigApplication'
+  organization: 'org',
+  project: 'projet',
+  repository: 'depot'
 }
 
 /** Clés du contexte d'exécution, communes aux trois fournisseurs. */

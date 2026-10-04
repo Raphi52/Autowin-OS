@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { configureSqlCatalog as configurerCatalogueTest } from './sql-read-catalog'
+import { TEST_SQL_CATALOG } from './sql-catalog.test-fixture'
+
+configurerCatalogueTest(TEST_SQL_CATALOG)
 import { construireAutoriteProd } from './prod-guard'
 import { CoffreAutorisationProd, definirPhrase } from './prod-passphrase'
 import { PorteProd } from './prod-gate'
@@ -13,8 +17,8 @@ const PHRASE = 'phrase-de-passe-de-reference'
 const EMPREINTE = definirPhrase(PHRASE, 1_000)
 
 const AUTORITE = construireAutoriteProd([
-  { nature: 'base', nom: 'RIG_AMIENS', classe: 'prod', motif: 'greffe exploité' },
-  { nature: 'base', nom: 'RIG_MAQUETTE', classe: 'non-prod' }
+  { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+  { nature: 'base', nom: 'APP_MAQUETTE', classe: 'non-prod' }
 ])
 
 function porte(options: { phraseDefinie?: boolean } = {}) {
@@ -42,14 +46,14 @@ describe('refus d’un geste de production', () => {
   it('REFUSE un geste sur une base de production quand aucun jeton n’est présenté', () => {
     const verdict = porte().porte.verifier({
       nature: 'base',
-      nom: 'RIG_AMIENS',
+      nom: 'APP_AMIENS',
       operation: 'sql-write'
     })
     expect(verdict.autorise).toBe(false)
     if (verdict.autorise) return
     expect(verdict.motif).toContain('greffe exploité')
     expect(verdict.demande).toEqual({
-      cible: 'base:RIG_AMIENS',
+      cible: 'base:APP_AMIENS',
       operation: 'sql-write',
       raison: expect.stringContaining('Production déclarée')
     })
@@ -58,7 +62,7 @@ describe('refus d’un geste de production', () => {
   it('REFUSE un jeton inventé', () => {
     const verdict = porte().porte.verifier({
       nature: 'base',
-      nom: 'RIG_AMIENS',
+      nom: 'APP_AMIENS',
       operation: 'sql-write',
       jeton: 'jeton-invente'
     })
@@ -69,7 +73,7 @@ describe('refus d’un geste de production', () => {
   it('REFUSE une base non déclarée, faute de savoir ce qu’elle est', () => {
     const verdict = porte().porte.verifier({
       nature: 'base',
-      nom: 'RIG_JAMAIS_VUE',
+      nom: 'APP_JAMAIS_VUE',
       operation: 'sql-write'
     })
     expect(verdict.autorise).toBe(false)
@@ -79,10 +83,10 @@ describe('refus d’un geste de production', () => {
 
   it('REFUSE un jeton obtenu pour une AUTRE cible', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:RIG_LILLE', 'sql-write')
+    const jeton = jetonPour(coffre, 'base:APP_LILLE', 'sql-write')
     const verdict = p.verifier({
       nature: 'base',
-      nom: 'RIG_AMIENS',
+      nom: 'APP_AMIENS',
       operation: 'sql-write',
       jeton
     })
@@ -91,10 +95,10 @@ describe('refus d’un geste de production', () => {
 
   it('REFUSE un jeton obtenu pour une AUTRE opération', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:RIG_AMIENS', 'sql-read')
+    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-read')
     const verdict = p.verifier({
       nature: 'base',
-      nom: 'RIG_AMIENS',
+      nom: 'APP_AMIENS',
       operation: 'sql-write',
       jeton
     })
@@ -106,7 +110,7 @@ describe('ce qui passe', () => {
   it('laisse passer un geste sur une base déclarée hors production, sans rien demander', () => {
     const verdict = porte().porte.verifier({
       nature: 'base',
-      nom: 'RIG_MAQUETTE',
+      nom: 'APP_MAQUETTE',
       operation: 'sql-write'
     })
     expect(verdict).toEqual({ autorise: true })
@@ -114,17 +118,17 @@ describe('ce qui passe', () => {
 
   it('laisse passer un geste de production muni du bon jeton', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:RIG_AMIENS', 'sql-write')
+    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-write')
     expect(
-      p.verifier({ nature: 'base', nom: 'RIG_AMIENS', operation: 'sql-write', jeton })
+      p.verifier({ nature: 'base', nom: 'APP_AMIENS', operation: 'sql-write', jeton })
     ).toEqual({ autorise: true })
   })
 
   /** Le jeton est à usage unique : le second geste identique doit repasser par la saisie. */
   it('ne laisse pas REJOUER le même jeton', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:RIG_AMIENS', 'sql-write')
-    const geste = { nature: 'base', nom: 'RIG_AMIENS', operation: 'sql-write', jeton } as const
+    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-write')
+    const geste = { nature: 'base', nom: 'APP_AMIENS', operation: 'sql-write', jeton } as const
     expect(p.verifier(geste).autorise).toBe(true)
     expect(p.verifier(geste).autorise).toBe(false)
   })
@@ -132,10 +136,10 @@ describe('ce qui passe', () => {
   /** Un jeton présenté de travers est brûlé : on ne peut pas tâtonner sans coût. */
   it('brûle le jeton même quand il a été présenté pour la mauvaise cible', () => {
     const { coffre, porte: p } = porte()
-    const jeton = jetonPour(coffre, 'base:RIG_AMIENS', 'sql-write')
-    p.verifier({ nature: 'base', nom: 'RIG_AUTRE', operation: 'sql-write', jeton })
+    const jeton = jetonPour(coffre, 'base:APP_AMIENS', 'sql-write')
+    p.verifier({ nature: 'base', nom: 'APP_AUTRE', operation: 'sql-write', jeton })
     expect(
-      p.verifier({ nature: 'base', nom: 'RIG_AMIENS', operation: 'sql-write', jeton }).autorise
+      p.verifier({ nature: 'base', nom: 'APP_AMIENS', operation: 'sql-write', jeton }).autorise
     ).toBe(false)
   })
 })
@@ -147,10 +151,10 @@ describe('l’interrupteur', () => {
    */
   it('laisse tout passer tant qu’aucune phrase n’est définie', () => {
     const { porte: p } = porte({ phraseDefinie: false })
-    expect(p.verifier({ nature: 'base', nom: 'RIG_AMIENS', operation: 'sql-write' })).toEqual({
+    expect(p.verifier({ nature: 'base', nom: 'APP_AMIENS', operation: 'sql-write' })).toEqual({
       autorise: true
     })
-    expect(p.verifier({ nature: 'base', nom: 'RIG_JAMAIS_VUE', operation: 'sql-write' })).toEqual({
+    expect(p.verifier({ nature: 'base', nom: 'APP_JAMAIS_VUE', operation: 'sql-write' })).toEqual({
       autorise: true
     })
   })
@@ -255,8 +259,8 @@ describe('niveau confirmation', () => {
 
 describe('accord groupé des lectures (conv-113, 2026-09-23)', () => {
   const AUTORITE2 = construireAutoriteProd([
-    { nature: 'base', nom: 'RIG_AMIENS', classe: 'prod', motif: 'greffe exploité' },
-    { nature: 'base', nom: 'RIG_LYON', classe: 'prod', motif: 'greffe exploité' }
+    { nature: 'base', nom: 'APP_AMIENS', classe: 'prod', motif: 'greffe exploité' },
+    { nature: 'base', nom: 'APP_LYON', classe: 'prod', motif: 'greffe exploité' }
   ])
   function porteHorloge(niveau: 'confirmation' | 'phrase' = 'confirmation') {
     const temps = { t: 0 }
@@ -278,41 +282,41 @@ describe('accord groupé des lectures (conv-113, 2026-09-23)', () => {
 
   it('UNE confirmation couvre les lectures suivantes du même fil, sur les autres greffes', () => {
     const { p } = porteHorloge()
-    expect(p.verifier(lecture('RIG_AMIENS', 'conv-1')).autorise).toBe(false)
-    expect(p.verifier({ ...lecture('RIG_AMIENS', 'conv-1'), confirme: true }).autorise).toBe(true)
-    expect(p.verifier(lecture('RIG_LYON', 'conv-1')).autorise).toBe(true)
+    expect(p.verifier(lecture('APP_AMIENS', 'conv-1')).autorise).toBe(false)
+    expect(p.verifier({ ...lecture('APP_AMIENS', 'conv-1'), confirme: true }).autorise).toBe(true)
+    expect(p.verifier(lecture('APP_LYON', 'conv-1')).autorise).toBe(true)
   })
 
   it('ne couvre PAS une autre conversation, ni un geste sans conversation', () => {
     const { p } = porteHorloge()
-    p.verifier({ ...lecture('RIG_AMIENS', 'conv-1'), confirme: true })
-    expect(p.verifier(lecture('RIG_LYON', 'conv-2')).autorise).toBe(false)
-    expect(p.verifier(lecture('RIG_LYON')).autorise).toBe(false)
+    p.verifier({ ...lecture('APP_AMIENS', 'conv-1'), confirme: true })
+    expect(p.verifier(lecture('APP_LYON', 'conv-2')).autorise).toBe(false)
+    expect(p.verifier(lecture('APP_LYON')).autorise).toBe(false)
   })
 
   it('ne couvre PAS un client SQL lancé par run (peut écrire)', () => {
     const { p } = porteHorloge()
-    p.verifier({ nature: 'base', nom: 'RIG_AMIENS', operation: 'run-sqlcmd', conversationId: 'conv-1', confirme: true })
+    p.verifier({ nature: 'base', nom: 'APP_AMIENS', operation: 'run-sqlcmd', conversationId: 'conv-1', confirme: true })
     expect(
-      p.verifier({ nature: 'base', nom: 'RIG_LYON', operation: 'run-sqlcmd', conversationId: 'conv-1' }).autorise
+      p.verifier({ nature: 'base', nom: 'APP_LYON', operation: 'run-sqlcmd', conversationId: 'conv-1' }).autorise
     ).toBe(false)
   })
 
   it('expire après la durée bornée', () => {
     const { p, temps } = porteHorloge()
-    p.verifier({ ...lecture('RIG_AMIENS', 'conv-1'), confirme: true })
+    p.verifier({ ...lecture('APP_AMIENS', 'conv-1'), confirme: true })
     temps.t = 15 * 60_000 + 1
-    expect(p.verifier(lecture('RIG_LYON', 'conv-1')).autorise).toBe(false)
+    expect(p.verifier(lecture('APP_LYON', 'conv-1')).autorise).toBe(false)
   })
 
   it('ne s’applique pas au niveau phrase de passe', () => {
     const { p } = porteHorloge('phrase')
-    p.verifier({ ...lecture('RIG_AMIENS', 'conv-1'), confirme: true })
-    expect(p.verifier(lecture('RIG_LYON', 'conv-1')).autorise).toBe(false)
+    p.verifier({ ...lecture('APP_AMIENS', 'conv-1'), confirme: true })
+    expect(p.verifier(lecture('APP_LYON', 'conv-1')).autorise).toBe(false)
   })
 })
 
-describe('lectures de COMMUN_RIG dispensées (conv-117, 2026-09-24)', () => {
+describe('lectures de CATALOGUE dispensées (conv-117, 2026-09-24)', () => {
   function porte(niveau: 'confirmation' | 'phrase') {
     return new PorteProd({
       autorite: () => construireAutoriteProd([]),
@@ -322,19 +326,19 @@ describe('lectures de COMMUN_RIG dispensées (conv-117, 2026-09-24)', () => {
     })
   }
 
-  it('laisse passer un sql-read sur COMMUN_RIG sans confirmation, quelle que soit la casse', () => {
-    expect(porte('confirmation').verifier({ nature: 'base', nom: 'COMMUN_RIG', operation: 'sql-read' }).autorise).toBe(true)
-    expect(porte('confirmation').verifier({ nature: 'base', nom: ' commun_rig ', operation: 'sql-read' }).autorise).toBe(true)
+  it('laisse passer un sql-read sur CATALOGUE sans confirmation, quelle que soit la casse', () => {
+    expect(porte('confirmation').verifier({ nature: 'base', nom: 'CATALOGUE', operation: 'sql-read' }).autorise).toBe(true)
+    expect(porte('confirmation').verifier({ nature: 'base', nom: ' catalogue ', operation: 'sql-read' }).autorise).toBe(true)
   })
 
-  it('garde la confirmation pour tout autre geste sur COMMUN_RIG', () => {
-    expect(porte('confirmation').verifier({ nature: 'base', nom: 'COMMUN_RIG', operation: 'run-sqlcmd' }).autorise).toBe(false)
-    expect(porte('confirmation').verifier({ nature: 'base', nom: 'COMMUN_RIG', operation: 'sql-write' }).autorise).toBe(false)
+  it('garde la confirmation pour tout autre geste sur CATALOGUE', () => {
+    expect(porte('confirmation').verifier({ nature: 'base', nom: 'CATALOGUE', operation: 'run-sqlcmd' }).autorise).toBe(false)
+    expect(porte('confirmation').verifier({ nature: 'base', nom: 'CATALOGUE', operation: 'sql-write' }).autorise).toBe(false)
   })
 
   it('ne couvre pas une base voisine, ni le niveau phrase de passe', () => {
-    expect(porte('confirmation').verifier({ nature: 'base', nom: 'COMMUN_RIG_TEST', operation: 'sql-read' }).autorise).toBe(false)
-    expect(porte('confirmation').verifier({ nature: 'serveur', nom: 'COMMUN_RIG', operation: 'sql-read' }).autorise).toBe(false)
-    expect(porte('phrase').verifier({ nature: 'base', nom: 'COMMUN_RIG', operation: 'sql-read' }).autorise).toBe(false)
+    expect(porte('confirmation').verifier({ nature: 'base', nom: 'CATALOGUE_TEST', operation: 'sql-read' }).autorise).toBe(false)
+    expect(porte('confirmation').verifier({ nature: 'serveur', nom: 'CATALOGUE', operation: 'sql-read' }).autorise).toBe(false)
+    expect(porte('phrase').verifier({ nature: 'base', nom: 'CATALOGUE', operation: 'sql-read' }).autorise).toBe(false)
   })
 })

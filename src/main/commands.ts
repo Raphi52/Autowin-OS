@@ -206,6 +206,7 @@ import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
 import { runSqlRead } from './sql-read-command'
+import { getSqlCatalogConfig } from './sql-read-catalog'
 import type { PorteProd } from './prod-gate'
 import type { GuichetProd } from './prod-guichet'
 import { cibleSqlDeCommande, refusReglageProd } from './prod-run-guard'
@@ -1207,12 +1208,12 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'sql_query',
     description:
-      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seuls les greffes EXPLOITÉS sont lisibles (la liste vient de COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) : les maquettes, copies figées et bases de formation sont refusées. La base commune COMMUN_RIG (SQL-PROD\\PROD) est AUSSI lisible — ex. la liste des greffes exploités : SELECT GRF_NOMBASE_BD, GRF_SERVEUR_BD FROM dbo.GREFFE WHERE GRF_IS_EXPLOIT = 1 — mais « * » et toute colonne de mot de passe ou de clé y sont refusés. Toute écriture est refusée avant d’atteindre le serveur.',
+      'Consulter les bases SQL en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seules les bases EXPLOITÉES listées par le catalogue configuré (sql-catalog.json) et les bases de développement déclarées sont lisibles ; les autres sont refusées. La base catalogue est AUSSI lisible, mais « * » et toute colonne de mot de passe ou de clé y sont refusés. Toute écriture est refusée avant d’atteindre le serveur.',
     args: {
       query: 'un SELECT unique, sans point-virgule ni commentaire (obligatoire)',
-      database: 'la base greffe visée, ex. RIG_AMIENS (obligatoire)',
+      database: 'la base visée (obligatoire)',
       server:
-        'facultatif — défaut SQL-PROD\\PROD (métropole) ; RIGBD-ANTILLES, RIGBD-REUNION ou RIGBD-POLYNESIE pour les DROM ; SQL-DEV\\DEV pour RIG_DEV et RIG_RECETTE. En cas de refus, le message liste les bases disponibles sur le serveur visé.'
+        'facultatif — défaut : le serveur du catalogue configuré. En cas de refus, le message liste les serveurs et les bases disponibles.'
     },
     annotations: {
       // Lecture stricte : l'enveloppe annule systématiquement sa transaction. Mais `openWorldHint` —
@@ -3737,7 +3738,8 @@ export class AppCommandBus {
         // jamais d'après les arguments bruts : le compte Windows utilisé PEUT écrire en production.
         return await runSqlRead(
           {
-            server: typeof a.server === 'string' && a.server ? a.server : 'SQL-PROD\\PROD',
+            server:
+              typeof a.server === 'string' && a.server ? a.server : (getSqlCatalogConfig()?.server ?? ''),
             database: a.database,
             query: a.query
           },

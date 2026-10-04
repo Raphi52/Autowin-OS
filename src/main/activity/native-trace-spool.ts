@@ -11,9 +11,9 @@ import { NATIVE_TRACE_SOURCE, type NativePreflightWireV1 } from '../../shared/na
  * Autowin écrit LUI-MÊME ses traces de pré-requête (au format `autowin.native-preflight/v1`, lu tel
  * quel par `readNativePreflight`), sans dépendre d'un spool externe
  * Ainsi l'Observatory (preuve d'injection + traçabilité RAG
- * « Amitel Brain ») se peuple sur les VRAIES requêtes envoyées par les providers d'Autowin.
+ * « Brain ») se peuple sur les VRAIES requêtes envoyées par les providers d'Autowin.
  *
- * Le `system` (qui porte le marqueur RAG « [AMITEL BRAIN REFERENCE DATA] » + le contexte projet)
+ * Le `system` (qui porte le marqueur RAG de référence Brain + le contexte projet)
  * est inclus comme 1er message → `summarizeRagTrace` le détecte comme pour une trace native.
  * Secrets redcatés via `redactTrace` (même politique que la lecture). Rotation simple à ~4 Mo.
  */

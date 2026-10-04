@@ -20,7 +20,7 @@ function json(value: unknown, status = 200): Response {
 
 const fiche1227 = {
   id: 1227,
-  url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/workItems/1227',
+  url: 'https://dev.azure.com/org/projet/_apis/wit/workItems/1227',
   fields: {
     'System.WorkItemType': 'Fiche Team',
     'System.Title': "[REFUS FORMALITE] Mettre en place l'envoi mail automatique",
@@ -93,11 +93,11 @@ describe('adaptateur Azure — lecture par id', () => {
               relations: [
                 {
                   rel: 'System.LinkTypes.Dependency-Forward',
-                  url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/workItems/1300'
+                  url: 'https://dev.azure.com/org/projet/_apis/wit/workItems/1300'
                 },
                 {
                   rel: 'AttachedFile',
-                  url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/attachments/a',
+                  url: 'https://dev.azure.com/org/projet/_apis/wit/attachments/a',
                   attributes: { name: 'preuve.png' }
                 }
               ]

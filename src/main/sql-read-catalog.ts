@@ -1,28 +1,24 @@
+// fix-ok: valeurs propres à entreprise (serveur, base, table, colonnes du catalogue) écrites en dur — mesuré par grep; remplacées par la config sql-catalog.json, fermée par défaut (tests sql-read-catalog/guard rouge si on rouvre)
 /**
  * Catalogue des cibles SQL autorisées — la liste blanche, et son AUTORITÉ.
  *
- * POURQUOI CE MODULE EXISTE. La version précédente définissait le périmètre par un motif de nom
- * (`^RIG_…`) plus une liste de serveurs codée en dur. Deux défauts, tous deux constatés :
+ * POURQUOI CE MODULE EXISTE. Un périmètre défini par un motif de nom de base plus une liste de
+ * serveurs écrite dans le code s'est révélé à la fois TROP LARGE (il ouvrait des maquettes et des
+ * copies figées qui « ressemblaient » à des bases de production) et TROP ÉTROIT (un serveur oublié
+ * rendait une base vivante injoignable). Aucune heuristique de nom ne tranche.
  *
- *  - TROP LARGE : le préfixe `RIG_` ne dit rien de l'exploitation. Il ouvrait des maquettes, des
- *    copies figées d'avant changement de structure et des bases de service. Aucune heuristique de nom
- *    ne pouvait trancher : `RIG_LE_PUY_MARTIN` ressemble à un greffe, et n'en est pas un.
- *  - TROP ÉTROITE : la liste des serveurs omettait `RIGBD-POLYNESIE`, qui héberge `RIG_PAPEETE` — un
- *    greffe VIVANT, donc injoignable par erreur.
+ * L'autorité est donc une TABLE de catalogue, lue telle quelle : une colonne dit si la base est
+ * exploitée, deux autres donnent le couple exact (base, serveur). Où vit cette table, et comment
+ * s'appellent ses colonnes, dépend de chaque installation : c'est `sql-catalog.json` qui le dit.
  *
- * L'autorité n'était pas dans le code : elle est dans `COMMUN_RIG.dbo.GREFFE`, où `GRF_IS_EXPLOIT = 1`
- * désigne les greffes exploités, et où `GRF_NOMBASE_BD` / `GRF_SERVEUR_BD` donnent le couple exact.
- * On lit donc la vérité au lieu de la deviner. Mesuré le 2026-08-07 : 40 greffes exploités sur 4
- * serveurs, contre 274 lignes au total.
- *
- * ATTENTION — CETTE TABLE CONTIENT DES SECRETS : `GRF_PWD_BD`, `GRF_INFOGREFFE_PASSWORD`,
- * `GRF_DOCVERIF_PASSWORD`, `GRF_WS_IDNUM_CLEF_API`. D'où deux règles qui ne doivent pas bouger :
- *   1. la requête ci-dessous est FIXE et ne sélectionne que le nom de base et le serveur ;
- *   2. `COMMUN_RIG` est lisible par l'agent (décision utilisateur du 2026-09-23, conv-113 : sans elle,
- *      il ne pouvait pas connaître la liste des greffes), MAIS sous une garde dédiée
- *      (`sql-read-guard.ts`, `secretColumnViolation`) : `*` et toute colonne de mot de passe / clé
- *      sont refusés avant d'atteindre le serveur.
+ * ATTENTION — UNE TELLE TABLE PEUT CONTENIR DES SECRETS (mots de passe, clés). D'où deux règles :
+ *   1. la requête est construite depuis la configuration VALIDÉE et ne sélectionne que le nom de
+ *      base et le serveur ;
+ *   2. la base catalogue est lisible par l'agent, MAIS sous une garde dédiée (`sql-read-guard.ts`,
+ *      `secretColumnViolation`) : `*` et toute colonne de mot de passe / clé sont refusés avant
+ *      d'atteindre le serveur.
  */
+import { existsSync, readFileSync } from 'node:fs'
 import { runSqlcmdJson, type SqlcmdDeps } from './sqlcmd-runner'
 
 export interface SqlTarget {
@@ -30,44 +26,129 @@ export interface SqlTarget {
   database: string
 }
 
-/** Où vit l'autorité. Lisible par l'agent, colonnes secrètes exclues (cf. en-tête). */
-export const CATALOG_SERVER = 'SQL-PROD\\PROD'
-export const CATALOG_DATABASE = 'COMMUN_RIG'
+/**
+ * CONFIGURATION DU CATALOGUE — plus aucune valeur d'entreprise dans le code. Le serveur, la base, la
+ * table et les colonnes de l'autorité viennent d'un fichier propre à chaque utilisateur
+ * (`<userData>/sql-catalog.json`, chargé au démarrage par `index.ts`). SANS configuration, le
+ * catalogue est VIDE et marqué `degraded` : aucune base n'est lisible. Défaut FERMÉ.
+ */
+export interface SqlCatalogConfig {
+  /** Serveur qui héberge la base catalogue (ex. `SRV\\INSTANCE`). */
+  server: string
+  /** Base catalogue — lisible par l'agent, colonnes secrètes exclues (`sql-read-guard.ts`). */
+  database: string
+  /** Table qui liste les bases de production (ex. `dbo.BASES`). */
+  table: string
+  /** Colonne du nom de base. */
+  databaseColumn: string
+  /** Colonne du serveur. */
+  serverColumn: string
+  /** Colonne booléenne : 1 = base exploitée (production). */
+  exploitColumn: string
+  /** Cibles de développement lisibles, hors autorité. */
+  devTargets: SqlTarget[]
+  /** Serveurs de développement dont TOUTES les bases sont lisibles. */
+  devServers: string[]
+}
 
-/** La base commune comme cible de lecture — ajoutée au catalogue quand l'autorité est joignable. */
-export const COMMUN_TARGET: SqlTarget = { server: CATALOG_SERVER, database: CATALOG_DATABASE }
+const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/
+const TABLE = /^[A-Za-z_][A-Za-z0-9_]{0,127}(\.[A-Za-z_][A-Za-z0-9_]{0,127})?$/
+const NOM_CIBLE = /^[A-Za-z0-9_\-\\.]{1,128}$/
+
+const chaine = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
 
 /**
- * Requête FIXE, jamais influencée par l'agent, et volontairement minimale : deux colonnes, aucune
- * autre. La table voisine des mots de passe — on n'en lit pas une de plus que nécessaire.
+ * Valide un fichier de configuration. Les identifiants entrent dans une requête SQL : ils sont
+ * vérifiés par motif strict, jamais interpolés tels quels. Invalide → `undefined` (donc fermé).
  */
-export const CATALOG_QUERY = [
-  'SET NOCOUNT ON',
-  'SELECT GRF_NOMBASE_BD AS d, GRF_SERVEUR_BD AS s FROM dbo.GREFFE WHERE GRF_IS_EXPLOIT = 1 AND GRF_NOMBASE_BD IS NOT NULL AND GRF_SERVEUR_BD IS NOT NULL FOR JSON PATH'
-].join(';\n')
+export function parseSqlCatalogConfig(value: unknown): SqlCatalogConfig | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const v = value as Record<string, unknown>
+  const server = chaine(v.server)
+  const database = chaine(v.database)
+  const table = chaine(v.table)
+  const databaseColumn = chaine(v.databaseColumn)
+  const serverColumn = chaine(v.serverColumn)
+  const exploitColumn = chaine(v.exploitColumn)
+  if (!NOM_CIBLE.test(server) || !NOM_CIBLE.test(database) || !TABLE.test(table)) return undefined
+  if (![databaseColumn, serverColumn, exploitColumn].every((c) => IDENT.test(c))) return undefined
+  const devTargets: SqlTarget[] = []
+  for (const t of Array.isArray(v.devTargets) ? v.devTargets : []) {
+    const r = (t ?? {}) as Record<string, unknown>
+    const s = chaine(r.server)
+    const d = chaine(r.database)
+    if (!NOM_CIBLE.test(s) || !NOM_CIBLE.test(d)) return undefined
+    devTargets.push({ server: s, database: d })
+  }
+  const devServers: string[] = []
+  for (const s of Array.isArray(v.devServers) ? v.devServers : []) {
+    const n = chaine(s)
+    if (!NOM_CIBLE.test(n)) return undefined
+    devServers.push(n)
+  }
+  return { server, database, table, databaseColumn, serverColumn, exploitColumn, devTargets, devServers }
+}
+
+let configuration: SqlCatalogConfig | undefined
 
 /**
- * Cibles de DÉVELOPPEMENT, demandées explicitement et absentes de l'autorité (elles sont
- * `GRF_IS_EXPLOIT = 0`, ce qui est normal : ce ne sont pas des greffes exploités). Elles sont donc
- * énumérées ici, en clair, plutôt que d'affaiblir le critère `IS_EXPLOIT` pour les faire entrer.
- * Noms vérifiés dans `COMMUN_RIG.dbo.GREFFE` le 2026-08-07 : `RIG_RECETTE`, et non `RIG_RECETE`.
+ * Charge `sql-catalog.json`. Fichier absent, illisible ou invalide → aucune configuration (fermé).
  */
-export const DEV_TARGETS: readonly SqlTarget[] = [
-  { server: 'SQL-DEV\\DEV', database: 'RIG_DEV' },
-  { server: 'SQL-DEV\\DEV', database: 'RIG_RECETTE' }
-]
+export function loadSqlCatalogConfigFile(path: string): SqlCatalogConfig | undefined {
+  let config: SqlCatalogConfig | undefined
+  try {
+    if (existsSync(path)) config = parseSqlCatalogConfig(JSON.parse(readFileSync(path, 'utf8')))
+  } catch {
+    config = undefined
+  }
+  configureSqlCatalog(config)
+  return config
+}
+
+/** Installe (ou retire, sans argument) la configuration. Vide le cache. */
+export function configureSqlCatalog(config?: SqlCatalogConfig): void {
+  configuration = config
+  cache = undefined
+}
+
+export function getSqlCatalogConfig(): SqlCatalogConfig | undefined {
+  return configuration
+}
+
+/** La base catalogue comme cible de lecture — `undefined` sans configuration. */
+export function catalogTarget(): SqlTarget | undefined {
+  return configuration ? { server: configuration.server, database: configuration.database } : undefined
+}
+
+/** La base visée est-elle la base catalogue configurée (celle qui porte les secrets) ? */
+export function estBaseCatalogue(database: string | undefined): boolean {
+  return (
+    !!configuration &&
+    typeof database === 'string' &&
+    database.trim().toLowerCase() === configuration.database.toLowerCase()
+  )
+}
 
 /**
- * SERVEURS DE DÉVELOPPEMENT dont TOUTES les bases sont lisibles (demande utilisateur du 2026-09-29,
- * conv-554 : « tu devrais pouvoir effectuer des requêtes SELECT sur toutes les bases de SQL-DEV\DEV »).
- * Aucun greffe exploité n'y vit. Le garde lecture seule de `sql-read-guard.ts` s'applique toujours.
+ * Requête construite depuis la configuration validée, jamais influencée par l'agent, et minimale :
+ * deux colonnes, aucune autre. La table peut porter des mots de passe — on n'en lit pas une de plus.
  */
-export const DEV_SERVERS: readonly string[] = ['SQL-DEV\\DEV']
+export function buildCatalogQuery(c: SqlCatalogConfig): string {
+  return [
+    'SET NOCOUNT ON',
+    `SELECT ${c.databaseColumn} AS d, ${c.serverColumn} AS s FROM ${c.table} WHERE ${c.exploitColumn} = 1 AND ${c.databaseColumn} IS NOT NULL AND ${c.serverColumn} IS NOT NULL FOR JSON PATH`
+  ].join(';\n')
+}
+
+/** Cibles de développement configurées (vide sans configuration). */
+export function devTargets(): readonly SqlTarget[] {
+  return configuration?.devTargets ?? []
+}
 
 export function estServeurDev(server: string | undefined): boolean {
-  if (typeof server !== 'string') return false
+  if (typeof server !== 'string' || !configuration) return false
   const s = server.trim().toLowerCase()
-  return DEV_SERVERS.some((d) => d.toLowerCase() === s)
+  return configuration.devServers.some((d) => d.toLowerCase() === s)
 }
 
 export interface SqlTargetCatalog {
@@ -151,10 +232,13 @@ export async function resolveSqlTargets(deps: CatalogDeps = {}): Promise<SqlTarg
   const maintenant = (deps.now ?? Date.now)()
   if (cache && cache.expire > maintenant) return cache.catalogue
 
-  const resultat = await runSqlcmdJson(CATALOG_SERVER, CATALOG_DATABASE, CATALOG_QUERY, deps)
+  const config = configuration
+  if (!config) return buildSqlTargetCatalog([], true)
+  const commun = { server: config.server, database: config.database }
+  const resultat = await runSqlcmdJson(config.server, config.database, buildCatalogQuery(config), deps)
   const catalogue = resultat.ok
-    ? buildSqlTargetCatalog([...parseCatalogRows(resultat.rows), COMMUN_TARGET, ...DEV_TARGETS])
-    : buildSqlTargetCatalog(DEV_TARGETS, true)
+    ? buildSqlTargetCatalog([...parseCatalogRows(resultat.rows), commun, ...config.devTargets])
+    : buildSqlTargetCatalog(config.devTargets, true)
 
   // Un catalogue dégradé n'est PAS mis en cache pour 30 minutes : on retentera au prochain appel,
   // sinon une panne réseau passagère priverait l'agent de la production une demi-heure.

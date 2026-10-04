@@ -357,7 +357,7 @@ export function BehaviourView(): React.JSX.Element {
         <div className="behaviour-anatomy">
           <p className="behaviour-path-note">
             Le chat principal visible passe par AgentPilot : il reçoit la CONSTITUTION, le contexte
-            projet et un RAG dynamique Amitel Brain + preuves Graphify avant de pouvoir piloter
+            projet et un RAG dynamique Brain + preuves Graphify avant de pouvoir piloter
             l’application.
           </p>
           <Category

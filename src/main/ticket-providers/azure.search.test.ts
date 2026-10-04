@@ -31,7 +31,7 @@ function fetchStub(): ReturnType<typeof vi.fn> {
         value: [
           {
             id: 1227,
-            url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/workItems/1227',
+            url: 'https://dev.azure.com/org/projet/_apis/wit/workItems/1227',
             fields: {
               'System.WorkItemType': 'Fiche Team',
               'System.Title': 'Facture retour client',

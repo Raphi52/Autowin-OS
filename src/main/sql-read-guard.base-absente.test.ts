@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { configureSqlCatalog as configurerCatalogueTest } from './sql-read-catalog'
+import { TEST_SQL_CATALOG } from './sql-catalog.test-fixture'
+
+configurerCatalogueTest(TEST_SQL_CATALOG)
 import { decideSqlRead } from './sql-read-guard'
 import { buildSqlTargetCatalog } from './sql-read-catalog'
 
@@ -11,27 +15,27 @@ import { buildSqlTargetCatalog } from './sql-read-catalog'
  * l'aveugle. Un aller-retour entier paye pour une information que le garde connait deja.
  */
 const CATALOGUE = buildSqlTargetCatalog([
-  { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' },
-  { server: 'SQL-DEV\\DEV', database: 'RIG_DEV' }
+  { server: 'SRV-PROD\\PROD', database: 'APP_AMIENS' },
+  { server: 'SRV-DEV\\DEV', database: 'APP_DEV' }
 ])
 
 describe('garde SQL — argument de cible absent', () => {
   it('nomme la base manquante et liste les bases du serveur', () => {
     const refus = decideSqlRead(
-      { server: 'SQL-DEV\\DEV', query: 'SELECT 1 AS n' },
+      { server: 'SRV-DEV\\DEV', query: 'SELECT 1 AS n' },
       CATALOGUE
     )
     expect(refus.allowed).toBe(false)
     const reason = refus.allowed ? '' : refus.reason
     expect(reason).toContain('database')
-    expect(reason).toContain('RIG_DEV')
+    expect(reason).toContain('APP_DEV')
   })
 
   it('nomme le serveur manquant et liste les serveurs connus', () => {
-    const refus = decideSqlRead({ database: 'RIG_DEV', query: 'SELECT 1 AS n' }, CATALOGUE)
+    const refus = decideSqlRead({ database: 'APP_DEV', query: 'SELECT 1 AS n' }, CATALOGUE)
     expect(refus.allowed).toBe(false)
     const reason = refus.allowed ? '' : refus.reason
     expect(reason).toContain('server')
-    expect(reason).toContain('SQL-DEV\\DEV')
+    expect(reason).toContain('SRV-DEV\\DEV')
   })
 })
