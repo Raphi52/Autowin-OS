@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { type CapabilityItem } from './capability-controls'
-import { skillRoots } from './native-registry'
+import { descriptionDuFrontMatter, skillRoots } from './native-registry'
 
 export interface SkillRegistryItem extends CapabilityItem {
   source: string
@@ -109,8 +109,7 @@ function metadata(path: string): { label: string; description: string } | null {
     const fallback = basename(dirname(path))
     return {
       label: /^name:\s*["']?([^\r\n"']+)/m.exec(header)?.[1].trim() || fallback,
-      description:
-        /^description:\s*["']?([^\r\n"']+)/m.exec(header)?.[1].trim() || 'Sans description'
+      description: descriptionDuFrontMatter(header) || 'Sans description'
     }
   } catch {
     return null

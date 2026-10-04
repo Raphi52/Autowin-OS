@@ -218,6 +218,15 @@ function skillDescriptionFrom(dir: string): string | undefined {
   } catch {
     return undefined
   }
+  return descriptionDuFrontMatter(md)
+}
+
+/**
+ * La description d'un SKILL.md, SOURCE UNIQUE pour la palette `/` et pour la vue Settings › Skills
+ * (`skill-registry.ts`). Cette vue avait son propre lecteur : il affichait « >- » pour une
+ * description repliée et coupait à la première apostrophe (« À utiliser quand l », conv-58).
+ */
+export function descriptionDuFrontMatter(md: string): string | undefined {
   const lignes = md.replace(/\r/gu, '').split('\n')
   const index = lignes.findIndex((ligne) => /^description:/u.test(ligne))
   if (index < 0) return undefined
