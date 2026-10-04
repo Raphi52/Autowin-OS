@@ -1,0 +1,6 @@
+{"risqueNommeAvecGravite":false,"mitigation":false}
+rouge-vide exit=1
+{"risqueNommeAvecGravite":false,"mitigation":false}
+rouge-sans-risque exit=1
+{"risqueNommeAvecGravite":true,"mitigation":true}
+vert-fabrique exit=0
