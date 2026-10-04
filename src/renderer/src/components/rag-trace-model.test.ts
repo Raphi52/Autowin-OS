@@ -1,3 +1,4 @@
+// fix-ok: chemins, variables et marqueur propres à un employeur écrits en dur (mesuré par grep) ; neutralisés, anciens noms lus en secours (tests rouge→vert).
 import { describe, expect, it } from 'vitest'
 import { summarizeRagTrace } from './rag-trace-model'
 
@@ -25,7 +26,7 @@ describe('RAG trace summary', () => {
 
     expect(summary).toMatchObject({
       status: 'injected',
-      engine: 'Amitel Brain',
+      engine: 'Brain',
       query: 'Comment fonctionne le RAG ?',
       injectedCharacters: brainContext.length,
       sources: [
@@ -51,6 +52,18 @@ describe('RAG trace summary', () => {
     expect(summary.injectedText).toContain('[AMITEL BRAIN REFERENCE DATA')
     expect(summary.sources[0].text).toContain('Contenu utile.')
     expect(summary.sources[1].text).toContain('Autre contenu.')
+  })
+
+  it('reconnaît le marqueur NEUTRE comme l’historique, sans faux positif', () => {
+    const neutre = brainContext.replace('[AMITEL BRAIN REFERENCE DATA', '[BRAIN REFERENCE DATA')
+    const summary = summarizeRagTrace({
+      body: { messages: [{ role: 'user', content: `Question ?\n\n${neutre}` }] }
+    })
+    expect(summary).toMatchObject({ status: 'injected', engine: 'Brain', query: 'Question ?' })
+    expect(summary.sources).toHaveLength(2)
+    expect(
+      summarizeRagTrace({ body: { messages: [{ role: 'user', content: 'BRAIN REFERENCE sans crochet' }] } })
+    ).toMatchObject({ status: 'not-injected' })
   })
 
   it('distinguishes a request without RAG from an unavailable trace', () => {
@@ -104,7 +117,7 @@ describe('RAG trace summary', () => {
     ).toMatchObject({ status: 'unparseable', query: 'Question', sources: [] })
   })
 
-  it('unifies duplicate Amitel Brain sources by logical path', () => {
+  it('unifies duplicate Brain sources by logical path', () => {
     const duplicatedContext = `[AMITEL BRAIN REFERENCE DATA]
 
 ### Source 1 - file:knowledge/domain/RIGAPPLICATION-DOCUMENTATION/reference/90-transverse/habilitation-permissions.md

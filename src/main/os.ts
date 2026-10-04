@@ -63,7 +63,7 @@ import {
   type VerificationAvantPublication
 } from './run-autoclose'
 import { publierTourDeChat, type ChatTurnStart } from './chat-turn-publication'
-import { amitelBrainRoot } from './amitel-context'
+import { sharedBrainRoot } from './brain-context'
 import { regimePhases } from './task-regime'
 import type { NodePhase } from './skill-pipeline'
 import {
@@ -510,7 +510,7 @@ export class AutowinOS {
                 direct: true,
                 task: publication.task ?? 'Run récupéré',
                 projectRepo: executionWorkspace,
-                brainRepo: amitelBrainRoot(),
+                brainRepo: sharedBrainRoot(),
                 projectPublication: {
                   baseSha: publication.baseSha,
                   publishedSha: publication.agentSha
@@ -721,7 +721,7 @@ export class AutowinOS {
           if (!this.autoClose) return
           this.closeBaselines.set(
             runId,
-            captureCloseBaseline(executionWorkspace, amitelBrainRoot())
+            captureCloseBaseline(executionWorkspace, sharedBrainRoot())
           )
         },
         close: async ({ runId, task, projectPublication }) => {
@@ -733,7 +733,7 @@ export class AutowinOS {
             direct: true,
             task,
             projectRepo: executionWorkspace,
-            brainRepo: amitelBrainRoot(),
+            brainRepo: sharedBrainRoot(),
             baseline: await baselinePromise,
             projectPublication
           })
@@ -1512,7 +1512,7 @@ export class AutowinOS {
   // --- Graphe 3D / brain (données réelles disque) ---
   listBrains(): BrainGraphRef[] {
     // PAS de catalogue de themes ici. Le construire ouvre et lit les ~845 fiches du vault sur le
-    // partage reseau \ged2 : 6,5 s MESUREES, en lecture bloquante dans le processus principal,
+    // partage reseau \nas1 : 6,5 s MESUREES, en lecture bloquante dans le processus principal,
     // donc toute l'application gele pendant ce temps. Le seul appelant (`commands.ts`, commande
     // `load_graph`) ne cherche qu'un brain par son id et n'utilise jamais `themes`.
     // La vue Memory, elle, passe deja par le worker et demande ses themes a part.

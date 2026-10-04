@@ -751,7 +751,7 @@ describe('AgentPilot turn contract', () => {
     )
   })
 
-  it('injects Amitel Brain and Graphify evidence into the exact provider prompt', async () => {
+  it('injects Brain and Graphify evidence into the exact provider prompt', async () => {
     const send = vi.fn().mockResolvedValue({ text: 'Réponse finale', provider: 'codex' })
     const registry = {
       send,
@@ -857,7 +857,7 @@ describe('AgentPilot turn contract', () => {
         bus as never,
         undefined,
         () => '',
-        () => 'C:\\Amitel\\Autowin OS'
+        () => 'C:\\Travail\\Autowin OS'
       ).chat(
         [{ role: 'user', content: 'Continue ici' }],
         () => undefined,

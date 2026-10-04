@@ -42,7 +42,7 @@ const ev = (
 describe('classification des mutations faites par commande', () => {
   it('classe git stash comme une mutation, pas comme une inspection', () => {
     expect(
-      claudeToolEvidenceKind('Bash', 'git -C "C:/Amitel/Autowin OS" stash push -u -m wip')
+      claudeToolEvidenceKind('Bash', 'git -C "C:/Travail/Autowin OS" stash push -u -m wip')
     ).toBe('mutation')
   })
 
@@ -95,8 +95,8 @@ describe('un gate satisfiable pour une mutation d’état', () => {
 
   it('accepte un oracle d’état quand la mutation EST un état — le cas de l’incident', () => {
     const evidence = [
-      ev('mutation', 'git -C "C:/Amitel/Autowin OS" stash push -u -m autowin-pre-update'),
-      ev('inspection', 'git -C "C:/Amitel/Autowin OS" status --porcelain')
+      ev('mutation', 'git -C "C:/Travail/Autowin OS" stash push -u -m autowin-pre-update'),
+      ev('inspection', 'git -C "C:/Travail/Autowin OS" status --porcelain')
     ]
     expect(evidenceSatisfiesTask(task, evidence)).toBe(true)
   })
@@ -237,7 +237,7 @@ describe('la commande est reconnue quelle que soit sa forme d’appel', () => {
     'env FOO=1 git stash push -u',
     'pwsh -c "git stash push -u"',
     "bash -c 'git stash push -u'",
-    'git -C "C:/Amitel/Autowin OS" stash push -u -m wip'
+    'git -C "C:/Travail/Autowin OS" stash push -u -m wip'
   ])('« %s » reste une mutation', (command) => {
     expect(claudeToolEvidenceKind('Bash', command)).toBe('mutation')
   })

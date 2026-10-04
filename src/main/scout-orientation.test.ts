@@ -40,7 +40,7 @@ describe('demande d orientation d un scout', () => {
     expect(s).toContain('exactly one `cible:` line')
   })
 
-  // SKILL.md renvoyait vers `file:///C:/Amitel/Autowin%20OS/...scout-table.ts:143` : un dossier qui
+  // SKILL.md renvoyait vers `file:///C:/Travail/Autowin%20OS/...scout-table.ts:143` : un dossier qui
   // n'existe plus, et une ligne 143 qui designe desormais la colonne Impact, pas la note.
   it('les liens de SKILL.md menent a des fichiers du depot, sans numero de ligne perime', () => {
     const s = readFileSync(skill, 'utf8')

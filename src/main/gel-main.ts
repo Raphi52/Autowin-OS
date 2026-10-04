@@ -415,7 +415,7 @@ export function demarrerDetecteurDeGel(
  *
  * Mesure conv-1539 (2026-08-30) : cinq gels de 11,7 a 14,9 s, espaces d'environ une minute, tous
  * classes `process-prive-de-cpu` — donc « pas notre code ». Or une lecture SYNCHRONE sur le partage
- * reseau //ged2 produit exactement cette signature : la boucle est tenue par nous, sans bruler un
+ * reseau //nas1 produit exactement cette signature : la boucle est tenue par nous, sans bruler un
  * cycle. Le CPU seul ne peut pas trancher. Un second thread, lui, le peut : s'il bat A L'HEURE
  * pendant que le main est en retard, l'ordonnanceur nous servait bien — le main etait bloque.
  *

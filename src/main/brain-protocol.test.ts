@@ -39,7 +39,7 @@ describe('protocole Brain v2', () => {
   const navigation = {
     query: 'architecture',
     minDense: 0.2,
-    root: '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+    root: '\\\\nas1\\partage\\Projets IA\\Team Brain',
     candidates: [
       {
         rank: 1,
@@ -225,7 +225,7 @@ describe('protocole Brain v2', () => {
   it('garde la borne de TRANSPORT : un corps signé démesuré reste refusé', () => {
     expect(() =>
       verifySignedBrainPayload(signedV2('x'.repeat(MAX_AUTHENTICATED_BYTES + 1), null), TOKEN)
-    ).toThrow('Reponse Amitel Brain trop volumineuse')
+    ).toThrow('Reponse Brain trop volumineuse')
   })
 
   it('refuse un corps HTTP surdimensionné avant de le lire', async () => {
@@ -235,7 +235,7 @@ describe('protocole Brain v2', () => {
         headers: new Headers({ 'content-length': String(MAX_SIGNED_BRAIN_RESPONSE_BYTES + 1) }),
         text
       })
-    ).rejects.toThrow('Réponse Amitel Brain trop volumineuse')
+    ).rejects.toThrow('Réponse Brain trop volumineuse')
     expect(text).not.toHaveBeenCalled()
   })
 
@@ -252,7 +252,7 @@ describe('protocole Brain v2', () => {
         body: { getReader: () => ({ read, cancel }) },
         text
       })
-    ).rejects.toThrow('Réponse Amitel Brain trop volumineuse')
+    ).rejects.toThrow('Réponse Brain trop volumineuse')
     expect(cancel).toHaveBeenCalledOnce()
     expect(text).not.toHaveBeenCalled()
   })

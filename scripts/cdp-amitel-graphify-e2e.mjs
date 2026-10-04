@@ -110,7 +110,7 @@ const proof = await evaluate(`(async () => {
     brainMarker: system.includes('[AMITEL BRAIN REFERENCE DATA'),
     brainSource: /knowledge[\\/]/i.test(system),
     graphifyMarker: system.includes('[GRAPHIFY CODE EVIDENCE'),
-    graphifySource: /src[\\/]main[\\/](agent-pilot|amitel-context)/i.test(system),
+    graphifySource: /src[\\/]main[\\/](agent-pilot|brain-context)/i.test(system),
     graphifyProvenance: system.includes(${JSON.stringify(
       `source_graph: ${sharedGraphResolvedPath}`
     )}),

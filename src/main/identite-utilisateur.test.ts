@@ -3,8 +3,8 @@ import { nomUtilisateurCourant } from './identite-utilisateur'
 
 describe('nomUtilisateurCourant', () => {
   it('rend le compte Windows du poste', () => {
-    expect(nomUtilisateurCourant({ userInfo: () => ({ username: 'raphael.vilain' }) })).toBe(
-      'raphael.vilain'
+    expect(nomUtilisateurCourant({ userInfo: () => ({ username: 'prenom.nom' }) })).toBe(
+      'prenom.nom'
     )
   })
 

@@ -170,14 +170,14 @@ describe('ensureBrainServerStarted', () => {
     // cmd.exe REFUSE un cwd UNC (« UNC paths are not supported. Defaulting to Windows directory ») :
     // on n'en impose aucun, et le script absolu rend le cwd inutile.
     const unc = buildBrainLaunchCommand(
-      '\\\\ged2\\rig\\tooling',
-      '\\\\ged2\\rig\\tooling\\python.exe',
-      '\\\\ged2\\rig\\tooling\\brain_server.py',
+      '\\\\nas1\\partage\\tooling',
+      '\\\\nas1\\partage\\tooling\\python.exe',
+      '\\\\nas1\\partage\\tooling\\brain_server.py',
       'win32'
     )
     expect(unc).not.toBeNull()
     expect(unc?.cwd).toBeUndefined()
-    expect(unc?.args.at(-1)).toBe('\\\\ged2\\rig\\tooling\\brain_server.py')
+    expect(unc?.args.at(-1)).toBe('\\\\nas1\\partage\\tooling\\brain_server.py')
     expect(unc?.args).toContain('/d')
   })
 
@@ -304,7 +304,7 @@ describe('ensureBrainServerStarted', () => {
     writeFileSync(
       join(stateRoot, 'config.json'),
       JSON.stringify({
-        brain_root: '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+        brain_root: '\\\\nas1\\partage\\Projets IA\\Team Brain',
         code_root: codeRoot,
         python
       })
@@ -312,7 +312,7 @@ describe('ensureBrainServerStarted', () => {
     try {
       const runtime = resolveBrainRuntime({ LOCALAPPDATA: localAppData })
       expect(runtime).toMatchObject({ tooling: codeRoot, python })
-      expect(runtime.brainRoot).toContain('Amitel Brain')
+      expect(runtime.brainRoot).toContain('Team Brain')
       expect(runtime.tooling.startsWith('\\\\')).toBe(false)
       expect(runtime.python.startsWith('\\\\')).toBe(false)
     } finally {

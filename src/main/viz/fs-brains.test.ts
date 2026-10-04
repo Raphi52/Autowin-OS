@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, win32 } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  AMITEL_BRAIN_THEMES,
+  BRAIN_THEMES,
   applyBrainRetrievalScores,
   applyBrainRetrievalScoresAsync,
   loadBrainGraph,
@@ -29,7 +29,7 @@ import {
   searchVaultBrainNotesAsync
 } from './fs-brains'
 
-describe('Amitel Brain graph', () => {
+describe('Brain graph', () => {
   it('fusionne les quatre canaux signes du retriever avec les fiches locales', () => {
     const local = [
       {
@@ -44,11 +44,11 @@ describe('Amitel Brain graph', () => {
     const [result] = applyBrainRetrievalScores(local, {
       query: 'decision',
       minDense: 0.2,
-      root: '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+      root: '\\\\nas1\\partage\\Projets IA\\Team Brain',
       candidates: [
         {
           rank: 1,
-          path: '//ged2/rig/Projets IA/Amitel Brain/knowledge/decision.md',
+          path: '//nas1/partage/Projets IA/Team Brain/knowledge/decision.md',
           type: 'decision',
           denseCos: 0.81,
           denseScore: 0.72,
@@ -113,7 +113,7 @@ describe('Amitel Brain graph', () => {
         {
           id: 'knowledge/shared',
           label: 'Shared',
-          file: 'C:\\Amitel\\Brain\\knowledge\\shared.md',
+          file: 'C:\\Travail\\Brain\\knowledge\\shared.md',
           themes: [],
           score: 12,
           relations: []
@@ -122,11 +122,11 @@ describe('Amitel Brain graph', () => {
       {
         query: 'shared',
         minDense: 0.2,
-        root: 'c:/amitel/brain/',
+        root: 'c:/travail/brain/',
         candidates: [
           {
             rank: 1,
-            path: 'c:/amitel/brain/knowledge/shared.md',
+            path: 'c:/travail/brain/knowledge/shared.md',
             type: 'domain',
             denseCos: 0.9,
             fusedScore: 0.88,
@@ -134,7 +134,7 @@ describe('Amitel Brain graph', () => {
           }
         ]
       },
-      'C:\\AMITEL\\BRAIN'
+      'C:\\TRAVAIL\\BRAIN'
     )
 
     expect(result.fusedScore).toBe(0.88)
@@ -1661,19 +1661,19 @@ describe('Amitel Brain graph', () => {
     ).rejects.toThrow(/hors périmètre autorisé/)
   })
 
-  it('discovers Amitel Brain with a broad multi-category catalog', () => {
+  it('discovers Brain with a broad multi-category catalog', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-brain-'))
     mkdirSync(join(root, 'projects'))
 
     expect(scanBrainGraphs([join(root, 'projects')], root)[0]).toMatchObject({
       id: 'amitel-brain',
-      label: 'Amitel Brain',
+      label: 'Brain',
       path: root,
       kind: 'vault',
-      themes: AMITEL_BRAIN_THEMES
+      themes: BRAIN_THEMES
     })
-    expect(AMITEL_BRAIN_THEMES).toHaveLength(22)
-    expect(AMITEL_BRAIN_THEMES.map((theme) => theme.id)).toEqual(
+    expect(BRAIN_THEMES).toHaveLength(22)
+    expect(BRAIN_THEMES.map((theme) => theme.id)).toEqual(
       expect.arrayContaining([
         'category/brain',
         'category/procedures',

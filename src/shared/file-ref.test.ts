@@ -19,8 +19,8 @@ describe('parseFileRef — une cible de lien markdown est-elle un fichier ?', ()
   })
 
   it('reconnaît un chemin Windows absolu', () => {
-    expect(parseFileRef('C:/Amitel/Autowin OS/src/main/index.ts:12')).toEqual({
-      path: 'C:/Amitel/Autowin OS/src/main/index.ts',
+    expect(parseFileRef('C:/Travail/Autowin OS/src/main/index.ts:12')).toEqual({
+      path: 'C:/Travail/Autowin OS/src/main/index.ts',
       line: 12
     })
   })

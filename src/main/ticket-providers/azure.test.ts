@@ -196,7 +196,7 @@ describe('annuaire des collaborateurs Azure (listAzurePeople)', () => {
       .mockResolvedValueOnce(
         json({
           value: [
-            { identity: { displayName: 'Zoé Bernard', uniqueName: 'zoe@amitel.fr' } },
+            { identity: { displayName: 'Zoé Bernard', uniqueName: 'zoe@example.com' } },
             { identity: { displayName: 'Alice Martin' } }
           ]
         })
@@ -205,7 +205,7 @@ describe('annuaire des collaborateurs Azure (listAzurePeople)', () => {
         json({
           value: [
             { identity: { displayName: 'Alice Martin' } }, // doublon inter-équipes
-            { identity: { uniqueName: 'sam@amitel.fr' } }, // pas de displayName → uniqueName
+            { identity: { uniqueName: 'sam@example.com' } }, // pas de displayName → uniqueName
             {} // membre sans identité → ignoré
           ]
         })
@@ -216,7 +216,7 @@ describe('annuaire des collaborateurs Azure (listAzurePeople)', () => {
       { token: 't', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
     )
 
-    expect(people).toEqual(['Alice Martin', 'sam@amitel.fr', 'Zoé Bernard'])
+    expect(people).toEqual(['Alice Martin', 'sam@example.com', 'Zoé Bernard'])
     expect(String(fetchFn.mock.calls[0][0])).toContain('/_apis/projects/RIG/teams?api-version=')
     expect(String(fetchFn.mock.calls[1][0])).toContain('/teams/team-a/members')
     expect(String(fetchFn.mock.calls[2][0])).toContain('/teams/team-b/members')

@@ -1,3 +1,4 @@
+// fix-ok: chemins, variables et marqueur propres à un employeur écrits en dur (mesuré par grep) ; neutralisés, anciens noms lus en secours (tests rouge→vert).
 /**
  * SE SOUVENIR — la commande `remember`, et la seule régression mécanique face à claude.exe.
  *
@@ -26,7 +27,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { shaHeadSurDisque } from './depot-git'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
-import { amitelBrainOrigin } from './amitel-paths'
+import { sharedBrainOrigin } from './brain-paths'
 import { memoryWorkspaceIdentity } from './session-memory-echo'
 
 /** Types acceptés par le garde du Brain (`brain_propose.ALLOWED_TYPES`). Liste FERMÉE. */
@@ -175,7 +176,7 @@ const LOCATOR_RULES: Array<{
     scheme: 'git',
     // Ancrée aux DEUX bouts (sans `^`, un locator multiligne ne validait que sa dernière ligne) — mais
     // `.` et NON `\S` : mon premier ancrage interdisait l'espace, donc refusait
-    // `git:C:/Amitel/Autowin OS/src/x.ts@sha`. Le dépôt de cette machine porte un espace dans son nom :
+    // `git:C:/Travail/Autowin OS/src/x.ts@sha`. Le dépôt de cette machine porte un espace dans son nom :
     // le resserrement avait transformé le cas le plus courant en faux refus (audit du 2026-07-30).
     test: (l) => /^.+@[0-9a-fA-F]{7,64}$/.test(l),
     expected: 'git:<chemin>@<sha> (ex. git:src/main/x.ts@9218eaf)'
@@ -280,7 +281,7 @@ export function repairSourceLocator(
 /** Décrit le problème du locator, ou `undefined` s'il est conforme. */
 export function sourceLocatorProblem(source: string): string | undefined {
   // Un chemin SANS préfixe : lecteur Windows (`C:\…`, lu comme le schéma « c »), UNC en antislashes, UNC
-  // en slashes (`//ged2/rig/…`, l'écriture de la GED ici). Testé AVANT le deux-points, car une UNC n'en
+  // en slashes (`//nas1/partage/…`, l'écriture de la GED ici). Testé AVANT le deux-points, car une UNC n'en
   // contient aucun et retombait donc dans le message générique — le contraire de ce que ce garde annonce.
   // Cas d'autant plus probable que `file:` réclame précisément ce format en argument.
   if (/^([A-Za-z]:[\\/]|\\\\|\/\/)/.test(source)) {
@@ -356,7 +357,7 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
 
   if (
     (args.learningOutcome === 'success' || args.learningOutcome === 'failure') &&
-    /(?:ignore|oublie|contourne).{0,40}(?:instruction|prompt|règle)|(?:system|developer)\s+prompt|<\/?(?:script|tool_call)|\btu\s+es\s+(?:maintenant|désormais)\b|\[(?:BEGIN|END)\s+AMITEL\s+BRAIN/iu.test(
+    /(?:ignore|oublie|contourne).{0,40}(?:instruction|prompt|règle)|(?:system|developer)\s+prompt|<\/?(?:script|tool_call)|\btu\s+es\s+(?:maintenant|désormais)\b|\[(?:BEGIN|END)\s+(?:AMITEL\s+)?BRAIN/iu.test(
       rawBody
     )
   ) {
@@ -512,7 +513,7 @@ const UNKNOWN_DEPOSIT = '[etat-inconnu]'
  * PLAFOND D'ATTENTE DU DEPOT — genereux ET reglable, jamais fige.
  *
  * DEFAUT VECU le 2026-09-02 (conv-143) : le plafond etait de 2 s en dur. Or le depot ecrit sur un
- * partage RESEAU (`\ged2\...\inbox`) apres un calcul d'embedding : deux secondes ne suffisent pas
+ * partage RESEAU (`\nas1\...\inbox`) apres un calcul d'embedding : deux secondes ne suffisent pas
  * toujours. Un depot legitime est donc ressorti « delai depasse », et comme cet etat est INCONNU
  * (le serveur a peut-etre ecrit), il marque durablement le fait dans le journal local et BLOQUE
  * tout nouvel essai jusqu'au redemarrage de l'app. Trop court ici ne coute pas une attente : il
@@ -719,7 +720,7 @@ async function depositCandidate(
     return {
       allowed: true,
       stored: false,
-      detail: 'jeton du Brain absent — rien n’a été écrit (définir AMITEL_BRAIN_TOKEN)'
+      detail: 'jeton du Brain absent — rien n’a été écrit (définir AUTOWIN_BRAIN_TOKEN)'
     }
   }
   const deposited = deps.deposited ?? depositedThisSession
@@ -773,8 +774,8 @@ async function performDepositCandidate(
 ): Promise<DepositOutcome> {
   const token = deps.token ?? ''
   /*
-   * Origine CONFIGUREE (`AMITEL_BRAIN_ORIGIN`) : une adresse ecrite en dur envoyait le candidat sur
-   * un service qui n'est pas celui que l'app interroge en lecture. `amitelBrainOrigin` REFUSE une
+   * Origine CONFIGUREE (`AUTOWIN_BRAIN_ORIGIN`) : une adresse ecrite en dur envoyait le candidat sur
+   * un service qui n'est pas celui que l'app interroge en lecture. `sharedBrainOrigin` REFUSE une
    * origine non loopback ; ce refus ne doit pas remonter en exception, car `rememberFact` promet de
    * ne jamais throw — il devient donc un depot impossible, dit explicitement.
    */
@@ -783,13 +784,13 @@ async function performDepositCandidate(
     origin = deps.origin
   } else {
     try {
-      origin = amitelBrainOrigin()
+      origin = sharedBrainOrigin()
     } catch {
       return {
         allowed: true,
         stored: false,
         detail:
-          "depot IMPOSSIBLE : l'origine du Brain configuree (AMITEL_BRAIN_ORIGIN) n'est pas une " +
+          "depot IMPOSSIBLE : l'origine du Brain configuree (AUTOWIN_BRAIN_ORIGIN) n'est pas une " +
           'adresse loopback HTTP valide - rien n a ete envoye, c est la configuration qu il faut corriger'
       }
     }

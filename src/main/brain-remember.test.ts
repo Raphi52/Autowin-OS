@@ -1,3 +1,4 @@
+// fix-ok: chemins, variables et marqueur propres à un employeur écrits en dur (mesuré par grep) ; neutralisés, anciens noms lus en secours (tests rouge→vert).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -145,7 +146,7 @@ describe('depot — l origine est CONFIGUREE, jamais ecrite en dur', () => {
         { token: 'jeton', fetchFn }
       )
       expect(res.stored).toBe(false)
-      expect(res.detail).toMatch(/AMITEL_BRAIN_ORIGIN/u)
+      expect(res.detail).toMatch(/AUTOWIN_BRAIN_ORIGIN/u)
       expect(vi.mocked(fetchFn)).not.toHaveBeenCalled()
     } finally {
       vi.unstubAllEnvs()
@@ -285,7 +286,7 @@ describe('idempotence atomique de remember', () => {
       const outcome = await rememberFact(FAIT_VALIDE, {
         token: 'jeton',
         fetchFn,
-        workspace: 'C:\\Amitel\\Autowin OS'
+        workspace: 'C:\\Travail\\Autowin OS'
       })
 
       expect(outcome.stored).toBe(true)
@@ -832,7 +833,7 @@ describe('audit 2026-07-30 — les échecs silencieux', () => {
     expect(probleme).toBeDefined()
     expect(probleme).not.toMatch(/sch[ée]ma/i)
     expect(probleme).toMatch(/pr[ée]fixe/i)
-    expect(sourceLocatorProblem('\\\\ged2\\rig\\note.md')).toMatch(/pr[ée]fixe/i)
+    expect(sourceLocatorProblem('\\\\nas1\\partage\\note.md')).toMatch(/pr[ée]fixe/i)
   })
 })
 
@@ -847,7 +848,7 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
     // Mon premier ancrage (`^[^\s]+@`) interdisait l'espace : le cas le plus courant de cette machine
     // devenait un refus, et aucun test ne l'attrapait puisqu'ils utilisaient tous un chemin sans espace.
     expect(
-      sourceLocatorProblem('git:C:/Amitel/Autowin OS/src/main/brain-remember.ts@ce4a595')
+      sourceLocatorProblem('git:C:/Travail/Autowin OS/src/main/brain-remember.ts@ce4a595')
     ).toBeUndefined()
     // L'ancrage doit tout de même mordre : un sha trop court reste refusé.
     expect(sourceLocatorProblem('git:src/main/x.ts@abc')).toBeDefined()
@@ -1035,8 +1036,8 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
 
   it('une UNC sans préfixe enseigne le préfixe dans LES DEUX écritures', () => {
     // Une UNC ne contient aucun deux-points : le garde devait passer AVANT ce test, sinon il ne servait à rien.
-    expect(sourceLocatorProblem('//ged2/rig/Projets IA/note.md')).toMatch(/pr[ée]fixe manquant/i)
-    expect(sourceLocatorProblem('\\\\ged2\\rig\\note.md')).toMatch(/pr[ée]fixe manquant/i)
+    expect(sourceLocatorProblem('//nas1/partage/Projets IA/note.md')).toMatch(/pr[ée]fixe manquant/i)
+    expect(sourceLocatorProblem('\\\\nas1\\partage\\note.md')).toMatch(/pr[ée]fixe manquant/i)
     // Contre-controle : une url legitime n'est pas affectee.
     expect(sourceLocatorProblem('url:https://exemple.fr/x')).toBeUndefined()
   })
@@ -1061,7 +1062,7 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
   })
 
   it('une UNC en slashes sans préfixe enseigne le préfixe — c’est la forme de la GED ici', () => {
-    expect(sourceLocatorProblem('//ged2/rig/Projets IA/note.md')).toMatch(/pr[ée]fixe/i)
+    expect(sourceLocatorProblem('//nas1/partage/Projets IA/note.md')).toMatch(/pr[ée]fixe/i)
   })
 })
 

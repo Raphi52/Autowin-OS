@@ -23,7 +23,7 @@ const JOUR = 86_400_000
 function mail(over: Partial<OutlookRawMail>): OutlookRawMail {
   return {
     id: 'm1',
-    adresse: 'jean.dupont@amitel.fr',
+    adresse: 'jean.dupont@example.com',
     nom: 'Jean Dupont',
     sujet: 'Sujet',
     recuLe: new Date(NOW).toISOString(),
@@ -68,8 +68,8 @@ describe('regroupement par interlocuteur', () => {
 
   it('ignore la casse de l adresse', () => {
     const fils = groupByInterlocutor([
-      mail({ id: 'a', adresse: 'Jean.Dupont@Amitel.FR' }),
-      mail({ id: 'b', adresse: 'jean.dupont@amitel.fr' })
+      mail({ id: 'a', adresse: 'Jean.Dupont@Example.COM' }),
+      mail({ id: 'b', adresse: 'jean.dupont@example.com' })
     ])
     expect(fils).toHaveLength(1)
   })
@@ -244,21 +244,21 @@ describe('une personne n est pas un automate', () => {
   // ecrit depuis un domaine inattendu. C est un fait verifiable -- les adresses auxquelles
   // l utilisateur a ECRIT.
   const messages = [
-    mail({ id: 'p', adresse: 'collegue@amitel.fr', nom: 'Collegue', nonLu: false,
+    mail({ id: 'p', adresse: 'collegue@example.com', nom: 'Collegue', nonLu: false,
       recuLe: new Date(NOW - 5 * JOUR).toISOString() }),
     mail({ id: 'r', adresse: 'otp@notifications.example', nom: 'Codes', nonLu: true,
       recuLe: new Date(NOW).toISOString() })
   ]
 
   it('place la PERSONNE devant l automate, meme quand l automate a du non lu et est plus recent', () => {
-    const fils = groupByInterlocutor(messages, ['collegue@amitel.fr'])
-    expect(fils.map((f) => f.cle)).toEqual(['collegue@amitel.fr', 'otp@notifications.example'])
+    const fils = groupByInterlocutor(messages, ['collegue@example.com'])
+    expect(fils.map((f) => f.cle)).toEqual(['collegue@example.com', 'otp@notifications.example'])
     expect(fils[0].echange).toBe(true)
     expect(fils[1].echange).toBe(false)
   })
 
   it('ignore la casse de l adresse dans la comparaison', () => {
-    const fils = groupByInterlocutor(messages, ['  COLLEGUE@Amitel.FR '])
+    const fils = groupByInterlocutor(messages, ['  COLLEGUE@Example.COM '])
     expect(fils[0].echange).toBe(true)
   })
 
@@ -276,9 +276,9 @@ describe('une personne n est pas un automate', () => {
 
   it('separe les deux populations pour l affichage', () => {
     const { personnes, automates, indistinct } = splitByExchange(
-      groupByInterlocutor(messages, ['collegue@amitel.fr'])
+      groupByInterlocutor(messages, ['collegue@example.com'])
     )
-    expect(personnes.map((f) => f.cle)).toEqual(['collegue@amitel.fr'])
+    expect(personnes.map((f) => f.cle)).toEqual(['collegue@example.com'])
     expect(automates.map((f) => f.cle)).toEqual(['otp@notifications.example'])
     expect(indistinct).toBe(false)
   })
@@ -350,19 +350,19 @@ describe('fils de conversation d un interlocuteur', () => {
   it('range les interlocuteurs par NOM quand on le demande', () => {
     // La demande de l utilisateur est une liste « par nom » : l ordre par activite est un autre tri.
     const fils = groupByInterlocutor([
-      mail({ id: 'a', adresse: 'zoe@amitel.fr', nom: 'Zoe Martin' }),
-      mail({ id: 'b', adresse: 'anne@amitel.fr', nom: 'anne bernard' })
+      mail({ id: 'a', adresse: 'zoe@example.com', nom: 'Zoe Martin' }),
+      mail({ id: 'b', adresse: 'anne@example.com', nom: 'anne bernard' })
     ])
     expect(sortByName(fils).map((f) => f.nom)).toEqual(['anne bernard', 'Zoe Martin'])
   })
 
   it('remonte en tete ceux qui ont un nouveau message', () => {
     const fils = groupByInterlocutor([
-      mail({ id: 'a', adresse: 'anne@amitel.fr', nom: 'Anne Bernard' }),
-      mail({ id: 'b', adresse: 'bruno@amitel.fr', nom: 'Bruno Colin' }),
+      mail({ id: 'a', adresse: 'anne@example.com', nom: 'Anne Bernard' }),
+      mail({ id: 'b', adresse: 'bruno@example.com', nom: 'Bruno Colin' }),
       mail({
         id: 'c',
-        adresse: 'zoe@amitel.fr',
+        adresse: 'zoe@example.com',
         nom: 'Zoe Martin',
         nonLu: true,
         recuLe: new Date(NOW).toISOString()
@@ -377,8 +377,8 @@ describe('fils de conversation d un interlocuteur', () => {
 
   it('compte les fils qui ont du nouveau', () => {
     const fils = groupByInterlocutor([
-      mail({ id: 'a', adresse: 'anne@amitel.fr', nom: 'Anne Bernard' }),
-      mail({ id: 'b', adresse: 'zoe@amitel.fr', nom: 'Zoe Martin', nonLu: true })
+      mail({ id: 'a', adresse: 'anne@example.com', nom: 'Anne Bernard' }),
+      mail({ id: 'b', adresse: 'zoe@example.com', nom: 'Zoe Martin', nonLu: true })
     ])
     expect(compterFilsNonLus(fils)).toBe(1)
   })
@@ -397,19 +397,19 @@ describe('cle de fil et nom du contact, tels que la vraie boite les rend', () =>
 
   it('garde le nom RECU du contact, pas celui qu Outlook met sur un envoi', () => {
     // Mesure du 2026-09-03 : cote Elements envoyes, le nom du destinataire arrive comme
-    // "'raphael.vilain@amitel.fr'" -- entre apostrophes. Le laisser gagner parce qu'il est le plus
+    // "'prenom.nom@example.com'" -- entre apostrophes. Le laisser gagner parce qu'il est le plus
     // recent remplacerait "Raphael VILAIN" par cette chaine dans la liste des interlocuteurs.
     const [fil] = groupByInterlocutor([
       mail({
         id: 'recu',
-        adresse: 'raphael.vilain@amitel.fr',
+        adresse: 'prenom.nom@example.com',
         nom: 'Raphael VILAIN',
         recuLe: new Date(NOW - 3600_000).toISOString()
       }),
       mail({
         id: 'envoye',
-        adresse: 'raphael.vilain@amitel.fr',
-        nom: "'raphael.vilain@amitel.fr'",
+        adresse: 'prenom.nom@example.com',
+        nom: "'prenom.nom@example.com'",
         deMoi: true,
         recuLe: new Date(NOW).toISOString()
       })
@@ -419,9 +419,9 @@ describe('cle de fil et nom du contact, tels que la vraie boite les rend', () =>
 
   it('retire les apostrophes d un nom quand c est tout ce qu on a', () => {
     const [fil] = groupByInterlocutor([
-      mail({ id: 'a', adresse: 'zoe@amitel.fr', nom: "'zoe@amitel.fr'", deMoi: true })
+      mail({ id: 'a', adresse: 'zoe@example.com', nom: "'zoe@example.com'", deMoi: true })
     ])
-    expect(fil.nom).toBe('zoe@amitel.fr')
+    expect(fil.nom).toBe('zoe@example.com')
   })
 })
 
@@ -430,9 +430,9 @@ describe('le corps affiché ne contient que le message écrit', () => {
     const corps = [
       'Reponse au test',
       '',
-      'De : Arthur LEPLEY <arthur.lepley@amitel.fr>',
+      'De : Arthur MARTIN <collegue.un@example.com>',
       'Envoyé : jeudi 3 septembre 2026 14:50',
-      'À : raphael.vilain@amitel.fr',
+      'À : prenom.nom@example.com',
       'Objet : test widget',
       '',
       '1er message pour le test widget'

@@ -13,8 +13,8 @@ import { workspaceIsolationNotice } from '../orchestrator'
  * l'endroit où il se trouve. C'est le rôle de ce bloc, et de ces tests.
  */
 describe('le bloc « où tu travailles »', () => {
-  const BASE = 'C:/Amitel/Autowin OS'
-  const WORKTREE = 'C:/Amitel/Autowin OS/.../worktrees/68fe/agent__run-73d5-1'
+  const BASE = 'C:/Travail/Autowin OS'
+  const WORKTREE = 'C:/Travail/Autowin OS/.../worktrees/68fe/agent__run-73d5-1'
 
   it('reste VIDE quand le run tourne dans le dépôt de base', () => {
     // Sinon on paierait ce texte en contexte sur la majorité des runs, pour rien.

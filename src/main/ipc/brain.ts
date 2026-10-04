@@ -24,7 +24,7 @@
  */
 import { ipcMain } from 'electron'
 import { brainScopeForWorkspace } from '../brain-corpus-scope'
-import { AMITEL_BRAIN_ROOT } from '../viz/fs-brains'
+import { SHARED_BRAIN_ROOT } from '../viz/fs-brains'
 import { buildBrainSearchEnvelope } from '../brain-search-envelope'
 import {
   assertBrainVaultRoot,
@@ -34,7 +34,7 @@ import {
   retractKnowledgeCandidate,
   supersedeKnowledgeCandidate
 } from '../brain-inbox'
-import { amitelWorkspaces } from '../amitel-paths'
+import { teamWorkspaces } from '../brain-paths'
 import { executeCurationTransaction } from '../outcome-learning-curation-transaction'
 import { appendBrainTrace, readBrainTraces } from '../activity/brain-trace-spool'
 import { buildBrainInjectionInventory } from '../activity/brain-injection-inventory'
@@ -201,17 +201,17 @@ export function registerBrainIpc({
   // l'humain. Ces trois canaux sont cette main humaine, et ils sont bornés à la racine Brain autorisée.
   ipcMain.handle('os:listInbox', async (event, path: string) => {
     assertTrustedRendererSender(event, 'BrainInbox')
-    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const root = assertBrainVaultRoot(guardString(path, 'path'), SHARED_BRAIN_ROOT)
     return brainInboxWorker.requestWithTimeout(
       BRAIN_INBOX_BOUNDARY_TIMEOUT_MS,
       'listInbox',
       root,
-      amitelWorkspaces()
+      teamWorkspaces()
     )
   })
   ipcMain.handle('os:readInboxCandidateBody', async (event, path: string, id: string) => {
     assertTrustedRendererSender(event, 'BrainInboxBody')
-    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const root = assertBrainVaultRoot(guardString(path, 'path'), SHARED_BRAIN_ROOT)
     return brainInboxWorker.requestWithTimeout(
       BRAIN_INBOX_BOUNDARY_TIMEOUT_MS,
       'readInboxCandidateBody',
@@ -221,7 +221,7 @@ export function registerBrainIpc({
   })
   ipcMain.handle('os:promoteInbox', async (event, path: string, id: string) => {
     assertTrustedRendererSender(event, 'BrainInboxPromote')
-    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const root = assertBrainVaultRoot(guardString(path, 'path'), SHARED_BRAIN_ROOT)
     const moved = promoteInboxCandidate(root, guardString(id, 'id'))
     // Le fichier a changé de dossier : sans réindexation, le graphe montrerait encore l'ancien nœud.
     await invalidateBrainRuntime()
@@ -229,14 +229,14 @@ export function registerBrainIpc({
   })
   ipcMain.handle('os:rejectInbox', async (event, path: string, id: string) => {
     assertTrustedRendererSender(event, 'BrainInboxReject')
-    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const root = assertBrainVaultRoot(guardString(path, 'path'), SHARED_BRAIN_ROOT)
     const moved = rejectInboxCandidate(root, guardString(id, 'id'))
     await invalidateBrainRuntime()
     return moved
   })
   ipcMain.handle('os:retractKnowledge', async (event, path: string, id: string) => {
     assertTrustedRendererSender(event, 'BrainKnowledgeRetract')
-    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const root = assertBrainVaultRoot(guardString(path, 'path'), SHARED_BRAIN_ROOT)
     const knowledgeId = guardString(id, 'id')
     await curationRecoveryReady
     return executeCurationTransaction(
@@ -256,7 +256,7 @@ export function registerBrainIpc({
     'os:supersedeKnowledge',
     async (event, path: string, obsoleteId: string, replacementId: string) => {
       assertTrustedRendererSender(event, 'BrainKnowledgeSupersede')
-      const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+      const root = assertBrainVaultRoot(guardString(path, 'path'), SHARED_BRAIN_ROOT)
       const oldId = guardString(obsoleteId, 'obsoleteId')
       const requestedTargetId = guardString(replacementId, 'replacementId')
       await curationRecoveryReady

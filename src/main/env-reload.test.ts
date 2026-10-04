@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { lecteurWindows, rechargerEnv, VARIABLES_RECHARGEABLES } from './env-reload'
 import { verifyTimeoutMs, VERIFY_TIMEOUT_MS } from './verify-command'
-import { amitelBrainOrigin } from './amitel-paths'
+import { sharedBrainOrigin } from './brain-paths'
 
 /**
  * CE QUE CE TEST PROUVE : le plafond de `verify` change SANS redemarrage.
@@ -70,11 +70,11 @@ describe('reload_env — recharger une variable a chaud', () => {
    *
    * ENTREE QUI FAIT ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : une origine persistee (8766)
    * differente de celle du processus (8765). Sans l'ajout a la liste blanche, `rechargerEnv` leve
-   * « Variable non rechargeable » et `amitelBrainOrigin` reste sur 8765.
+   * « Variable non rechargeable » et `sharedBrainOrigin` reste sur 8765.
    */
   it('rebranche le canal Brain a chaud quand le port persiste diverge du processus', () => {
     const env = { AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8765' } as NodeJS.ProcessEnv
-    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8765')
+    expect(sharedBrainOrigin(env)).toBe('http://127.0.0.1:8765')
 
     const issue = rechargerEnv('AMITEL_BRAIN_ORIGIN', {
       env,
@@ -82,7 +82,7 @@ describe('reload_env — recharger une variable a chaud', () => {
     })
 
     expect(issue.change).toBe(true)
-    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8766')
+    expect(sharedBrainOrigin(env)).toBe('http://127.0.0.1:8766')
   })
 
 

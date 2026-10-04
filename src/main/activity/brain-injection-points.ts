@@ -96,10 +96,10 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     injecte: true,
     emission: 'spool',
     sites: [
-      { file: 'src/main/amitel-context.ts', anchor: '? retrieveBrain(boundedQuery, meta?.conversationId)' },
-      { file: 'src/main/amitel-context.ts', anchor: '${origin}/query`' }
+      { file: 'src/main/brain-context.ts', anchor: '? retrieveBrain(boundedQuery, meta?.conversationId)' },
+      { file: 'src/main/brain-context.ts', anchor: '${origin}/query`' }
     ],
-    trace: { file: 'src/main/amitel-context.ts', anchor: "kind: 'pousse'" },
+    trace: { file: 'src/main/brain-context.ts', anchor: "kind: 'pousse'" },
     pourquoi:
       "Voie poussée du chat (`sources: ['brain']`) : injecte un bloc Brain dans le prompt sans passer par le run."
   },

@@ -27,7 +27,7 @@ describe('activeMentionQuery', () => {
     expect(activeMentionQuery('corrige @work')).toEqual({ start: 8, query: 'work' })
   })
   it('ignore un @ collé à un mot (email)', () => {
-    expect(activeMentionQuery('raphael@amitel.fr')).toBeNull()
+    expect(activeMentionQuery('raphael@example.com')).toBeNull()
   })
   it('ferme la mention dès un blanc', () => {
     expect(activeMentionQuery('@run bidule')).toBeNull()

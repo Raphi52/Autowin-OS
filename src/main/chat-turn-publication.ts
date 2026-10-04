@@ -75,7 +75,7 @@ function absoluDeTrace(racine: string, path: string): string {
 }
 
 /**
- * Chemin RÉEL d'un dossier : git rend la forme longue (`raphael.vilain`), un dossier temporaire
+ * Chemin RÉEL d'un dossier : git rend la forme longue (`prenom.nom`), un dossier temporaire
  * Windows peut arriver en nom court (`RAPHAE~1.VIL`). Sans cette résolution, le même fichier aurait
  * deux clés et le tour ne reconnaîtrait pas le sien.
  */

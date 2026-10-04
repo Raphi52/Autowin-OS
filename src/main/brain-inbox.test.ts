@@ -228,10 +228,10 @@ Corps.
   })
 
   it('signale un locator NON traçable sans le réécrire', () => {
-    note('inbox/a.md', `---\nsource: C:\\ged2\\note.md\n---\n\n# A\n`)
+    note('inbox/a.md', `---\nsource: C:\\nas1\\note.md\n---\n\n# A\n`)
     const [candidate] = listInboxCandidates(root)
     expect(candidate.source?.problem).toMatch(/préfixe manquant/)
-    expect(candidate.source?.locator).toBe('C:\\ged2\\note.md')
+    expect(candidate.source?.locator).toBe('C:\\nas1\\note.md')
   })
 
   it('un sha absent du locator n’est ni « à jour » ni « obsolète »', () => {

@@ -671,7 +671,7 @@ describe('SourceControlPane (prompt-first)', () => {
       await Promise.resolve()
     })
     expect(calls.brainArgs).toContain('conv-a')
-    expect(calls.repoArgs.some((p) => String(p).includes('Amitel Brain'))).toBe(false)
+    expect(calls.repoArgs.some((p) => String(p).includes('Team Brain'))).toBe(false)
     expect(container.textContent).toContain('décision architecture')
     expect(container.textContent).toContain('420')
     expect(container.textContent).toContain('Tour turn-a')

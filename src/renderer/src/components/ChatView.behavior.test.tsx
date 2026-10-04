@@ -197,8 +197,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
         .fn()
         .mockResolvedValue([
           conversation('A'),
-          { ...conversation('B'), projectPath: 'C:\\Amitel\\Projet Alpha' },
-          { ...conversation('C'), projectPath: 'C:\\Amitel\\Projet Beta' }
+          { ...conversation('B'), projectPath: 'C:\\Travail\\Projet Alpha' },
+          { ...conversation('C'), projectPath: 'C:\\Travail\\Projet Beta' }
         ]),
       conversationsSetProject
     })
@@ -209,13 +209,13 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(conversationsSetProject).not.toHaveBeenCalled()
     const choice = [
       ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
-    ].find((button) => button.dataset.projectPath === 'C:\\Amitel\\Projet Alpha')
+    ].find((button) => button.dataset.projectPath === 'C:\\Travail\\Projet Alpha')
     expect(choice).toBeDefined()
     await act(async () => {
       choice!.click()
       await Promise.resolve()
     })
-    expect(conversationsSetProject).toHaveBeenCalledWith('A', 'C:\\Amitel\\Projet Alpha')
+    expect(conversationsSetProject).toHaveBeenCalledWith('A', 'C:\\Travail\\Projet Alpha')
     expect(conversationsSetProject).not.toHaveBeenCalledWith('A', undefined)
   })
 
@@ -266,7 +266,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi
         .fn()
-        .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\\Amitel\\Projet Alpha' }]),
+        .mockResolvedValue([{ ...conversation('A'), projectPath: 'C:\\Travail\\Projet Alpha' }]),
       conversationsSetProject
     })
     window.localStorage.removeItem('autowin.conv-folders.connus')
@@ -299,7 +299,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
   it('retire de la liste des dossiers les libelles de categorie, et n’en reprend aucun', async () => {
     window.localStorage.setItem(
       'autowin.conv-folders.connus',
-      JSON.stringify(['C:\\Amitel\\Projet Alpha', 'Perso', 'Clients/Amitel', '\\\\srv\\part\\P'])
+      JSON.stringify(['C:\\Travail\\Projet Alpha', 'Perso', 'Clients/Amitel', '\\\\srv\\part\\P'])
     )
     await mount(
       api({
@@ -312,10 +312,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const proposes = [
       ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
     ].map((bouton) => bouton.dataset.projectPath!)
-    expect(proposes).toEqual(['\\\\srv\\part\\P', 'C:\\Amitel\\Projet Alpha'])
+    expect(proposes).toEqual(['\\\\srv\\part\\P', 'C:\\Travail\\Projet Alpha'])
     // Le stockage est REECRIT propre : sinon les libelles reviendraient au prochain lancement.
     expect(JSON.parse(window.localStorage.getItem('autowin.conv-folders.connus')!)).toEqual([
-      'C:\\Amitel\\Projet Alpha',
+      'C:\\Travail\\Projet Alpha',
       '\\\\srv\\part\\P'
     ])
     // La categorie de la conversation ne s'invite pas non plus dans la liste par l'amorcage.
@@ -341,7 +341,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
             projectPath: 'D:\\GIT\\RigApplication'
           }
         ]),
-        defaultWorkspace: vi.fn().mockResolvedValue('C:\\Amitel\\Autowin OS')
+        defaultWorkspace: vi.fn().mockResolvedValue('C:\\Travail\\Autowin OS')
       })
     )
 

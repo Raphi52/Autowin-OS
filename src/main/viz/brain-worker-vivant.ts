@@ -3,7 +3,7 @@
  *
  * Mesure du 2026-09-08 (conv-353) : la vue Memory n'affichait plus AUCUN noeud et repetait
  * « Impossible de charger le graphe de connaissances ». Cause reelle : le Brain vit sur un partage
- * RESEAU (\ged2\...), et sa premiere lecture depasse le delai fixe de 30 s — mesure : 17 220 ms
+ * RESEAU (\nas1\...), et sa premiere lecture depasse le delai fixe de 30 s — mesure : 17 220 ms
  * rien que pour les themes, puis 40 ms au rappel suivant grace au cache du worker.
  *
  * Le defaut n'est donc pas la lenteur : c'est que le delai TUE le worker au lieu de l'attendre. Le

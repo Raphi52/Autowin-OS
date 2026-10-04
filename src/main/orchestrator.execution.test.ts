@@ -302,7 +302,7 @@ describe('Orchestrator execution contract', () => {
     sources[19].content += ' DERNIERE_CANDIDATE'
     const context = preamble + sources.map((s) => s.content).join('\n\n---\n\n')
     expect(context.length).toBeGreaterThan(3_000)
-    const racine = '\\\\ged2\\rig\\Projets IA\\Amitel Brain'
+    const racine = '\\\\nas1\\partage\\Projets IA\\Team Brain'
     const vus: Array<{ query: string; mode?: string }> = []
     const provider = new CapturingProvider()
     const brainEvents: Array<{ kind?: string; status: string; injectedChars: number }> = []
@@ -350,8 +350,8 @@ describe('Orchestrator execution contract', () => {
   })
 
   it('la consigne donne la racine quand elle est connue, et brain_read seul sinon', () => {
-    expect(consigneCandidatesBrain('\\\\ged2\\Brain')).toContain('`\\\\ged2\\Brain/<chemin>`')
-    expect(consigneCandidatesBrain('\\\\ged2\\Brain')).toContain('EN ENTIER')
+    expect(consigneCandidatesBrain('\\\\nas1\\Brain')).toContain('`\\\\nas1\\Brain/<chemin>`')
+    expect(consigneCandidatesBrain('\\\\nas1\\Brain')).toContain('EN ENTIER')
     expect(consigneCandidatesBrain(undefined)).toContain('`brain_read`')
     expect(consigneCandidatesBrain(undefined)).not.toContain('<chemin>')
   })

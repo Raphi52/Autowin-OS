@@ -334,7 +334,7 @@ export function buildBehaviourComposition(
     ],
     retrievedContext: [
       {
-        label: 'Amitel Brain signé',
+        label: 'Brain signé',
         value:
           'Une récupération est lancée au début de chaque tour cockpit sur le dernier message utilisateur. La réponse Brain est vérifiée par signature, bornée, et une panne dégrade ce bloc à vide.',
         source: 'src/main/agent-pilot.ts:216'
@@ -342,8 +342,8 @@ export function buildBehaviourComposition(
       {
         label: 'preuves Graphify',
         value:
-          "Le même provider RAG interroge en parallèle Amitel Brain et Graphify. Graphify fournit jusqu'à 6 preuves structurelles marquées non fiables, avec timeout 1,5 s et cache du graphe 30 s ; chaque branche possède un fallback indépendant à vide.",
-        source: 'src/main/amitel-context.ts:175'
+          "Le même provider RAG interroge en parallèle Brain et Graphify. Graphify fournit jusqu'à 6 preuves structurelles marquées non fiables, avec timeout 1,5 s et cache du graphe 30 s ; chaque branche possède un fallback indépendant à vide.",
+        source: 'src/main/brain-context.ts:175'
       }
     ],
     turnContext: [

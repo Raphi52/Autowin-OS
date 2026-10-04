@@ -1,7 +1,7 @@
 /**
- * Client du service de retrieval Amitel Brain (brain_server.py, loopback).
+ * Client du service de retrieval Brain (brain_server.py, loopback).
  *
- * L'origine vient de `amitelBrainOrigin()` (env `AMITEL_BRAIN_ORIGIN`, defaut 127.0.0.1:8765), jamais
+ * L'origine vient de `sharedBrainOrigin()` (env `AUTOWIN_BRAIN_ORIGIN`, defaut 127.0.0.1:8765), jamais
  * d'une constante locale : une adresse ecrite en dur ici envoyait les requetes sur un autre port que
  * celui reellement configure, donc sur un autre service — jeton different, reponse rejetee `invalid`.
  *
@@ -18,13 +18,16 @@ import {
   sealBrainRequest,
   verifySignedBrainPayload
 } from './brain-protocol'
-import { amitelBrainOrigin } from './amitel-paths'
+import { lireReglage, sharedBrainOrigin } from './brain-paths'
 
 type FetchLike = typeof fetch
 
-/** Token de service : env AMITEL_BRAIN_TOKEN, sinon %LOCALAPPDATA%\AmitelBrain\service-token. */
+/**
+ * Token de service : env AUTOWIN_BRAIN_TOKEN (secours historique : AMITEL_BRAIN_TOKEN), sinon le fichier
+ * de l'installation partagee, dont le dossier garde son nom HISTORIQUE sur disque : %LOCALAPPDATA%\AmitelBrain\service-token. */
 export function brainServiceToken(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.AMITEL_BRAIN_TOKEN) return env.AMITEL_BRAIN_TOKEN
+  const configured = lireReglage(env, 'AUTOWIN_BRAIN_TOKEN', 'AMITEL_BRAIN_TOKEN')
+  if (configured) return configured
   const base = env.LOCALAPPDATA
     ? join(env.LOCALAPPDATA, 'AmitelBrain', 'service-token')
     : join(env.HOME ?? '', '.amitel-brain', 'service-token')
@@ -37,7 +40,7 @@ export function brainServiceToken(env: NodeJS.ProcessEnv = process.env): string 
 
 export interface BrainRetrievalOptions {
   timeoutMs?: number
-  /** Surcharge de test/diagnostic. Absent = origine CONFIGUREE (`AMITEL_BRAIN_ORIGIN`). */
+  /** Surcharge de test/diagnostic. Absent = origine CONFIGUREE (`AUTOWIN_BRAIN_ORIGIN`). */
   port?: number
   fetchFn?: FetchLike
   env?: NodeJS.ProcessEnv
@@ -256,7 +259,7 @@ export async function retrieveBrainContext(
   try {
     const origin = opts.port
       ? `http://127.0.0.1:${opts.port}`
-      : amitelBrainOrigin(opts.env ?? process.env)
+      : sharedBrainOrigin(opts.env ?? process.env)
     /*
      * LE NONCE EST EMIS PAR LE SERVEUR, pas par nous. Mesure du 2026-09-02 sur le service vivant :
      * `GET /challenge` REFUSE toute chaine de requete (`if parsed.query: 400`) et rend son propre

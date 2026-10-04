@@ -1,38 +1,56 @@
+// fix-ok: chemins, variables et marqueur propres à un employeur écrits en dur (mesuré par grep) ; neutralisés, anciens noms lus en secours (tests rouge→vert).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
- * SOURCE UNIQUE des chemins d'entreprise (Amitel) du main process.
+ * SOURCE UNIQUE des chemins du Brain et des workspaces d'equipe du main process.
  *
  * Pourquoi ce module existe : la meme racine UNC etait ecrite en dur dans QUATRE fichiers
- * (`amitel-context.ts`, `brain-server-launch.ts`, `viz/fs-brains.ts` a deux endroits,
+ * (`brain-context.ts`, `brain-server-launch.ts`, `viz/fs-brains.ts` a deux endroits,
  * `behaviour-files.ts`). Trois consequences cumulees, constatees par audit le 2026-07-29 :
  *   (a) NON PORTABLE — sur une autre machine, ou hors VPN, ces chemins n'existent pas ;
  *   (b) AUCUNE source unique — corriger un site laissait les trois autres mentir ;
  *   (c) un residu de bricolage (`C:\Nouveau dossier`) tranait dans la liste blanche ANTI-TRAVERSAL
  *       de `fs-brains`, ou il ouvrait un droit de lecture sur un dossier arbitraire.
  *
- * Ce que ce module NE fait PAS : retirer le defaut Amitel. Il fonctionne sur les postes de l'equipe
- * et le retirer casserait leur usage. Le but est la source UNIQUE et la SURCHARGEABILITE — chaque
- * valeur reste pilotable par variable d'environnement, avec les MEMES noms qu'avant (toute
- * renomination serait une regression silencieuse pour qui les utilise deja).
+ * Aucun defaut propre a une entreprise (2026-10-04) : la racine partagee et les workspaces d'equipe
+ * ecrits en dur ont ete retires, chaque poste les REGLE. Noms de reglage neutres (`AUTOWIN_BRAIN_*`,
+ * `AUTOWIN_WORKSPACES`) lus EN PREMIER ; les noms historiques (`AMITEL_BRAIN_*`,
+ * `AUTOWIN_AMITEL_WORKSPACES`) restent lus en SECOURS — les retirer serait une regression silencieuse
+ * pour les postes qui les ont deja poses (installateur Hermes-Brain compris).
  *
  * Toutes les fonctions prennent `env` en parametre (defaut `process.env`) : c'est ce qui les rend
  * testables sans toucher a l'environnement du process de test.
  */
 
-/** Racine du Brain partage. Surcharge : `AMITEL_BRAIN_ROOT` (nom historique, preserve). */
-export const DEFAULT_BRAIN_ROOT = '\\\\ged2\\rig\\Projets IA\\Amitel Brain'
+/** Lit un reglage : le nom NEUTRE d'abord, le nom HISTORIQUE en secours. Vide ou blanc = absent. */
+export function lireReglage(
+  env: NodeJS.ProcessEnv,
+  neutre: string,
+  historique: string
+): string | undefined {
+  return env[neutre]?.trim() || env[historique]?.trim() || undefined
+}
 
-/** Origine du service RAG local. Surcharge : `AMITEL_BRAIN_ORIGIN` (nom historique, preserve). */
+/**
+ * Racine du Brain quand RIEN n'est regle : un dossier LOCAL propre a Autowin, jamais un partage
+ * d'entreprise. Absent tant qu'on ne l'a pas cree — les lecteurs le traitent comme un Brain vide,
+ * exactement comme l'ancien partage UNC hors VPN.
+ */
+export function defaultBrainRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const base = env.LOCALAPPDATA?.trim() || env.HOME?.trim() || env.USERPROFILE?.trim() || '.'
+  return join(base, AUTOWIN_OWN_BRAIN_STATE_DIR, 'brain')
+}
+
+/** Origine du service RAG local. Surcharge : `AUTOWIN_BRAIN_ORIGIN` (secours : `AMITEL_BRAIN_ORIGIN`). */
 const DEFAULT_BRAIN_ORIGIN = 'http://127.0.0.1:8765'
 
 /**
- * Workspaces d'entreprise consultes en LECTURE quand ils existent. `C:\Nouveau dossier` a ete RETIRE :
- * un nom de dossier generique dans une liste blanche de securite est un droit de lecture offert a
- * n'importe quel contenu qu'on y depose.
+ * Workspaces d'equipe consultes en LECTURE quand ils existent. VIDE par defaut : un dossier ecrit en
+ * dur dans une liste blanche de securite est un droit de lecture offert a n'importe quel contenu
+ * qu'on y depose (`C:\Nouveau dossier`, retire le 2026-07-29). Chaque poste regle les siens.
  */
-export const DEFAULT_AMITEL_WORKSPACES: readonly string[] = ['C:\\Amitel', 'C:\\Code RIG']
+export const DEFAULT_TEAM_WORKSPACES: readonly string[] = []
 
 /** Dossier d'etat du Brain PROPRE a Autowin, sous %LOCALAPPDATA% — voir `autowinOwnBrainRoot`. */
 export const AUTOWIN_OWN_BRAIN_STATE_DIR = 'AutowinBrain'
@@ -59,8 +77,11 @@ export function autowinOwnBrainRoot(env: NodeJS.ProcessEnv = process.env): strin
   if (!localAppData) return undefined
   const own = brainRootOfInstallation(join(localAppData, AUTOWIN_OWN_BRAIN_STATE_DIR))
   if (!own) return undefined
+  // Une racine posee sous le nom NEUTRE est un choix explicite pour CE poste : elle garde la main.
+  if (env.AUTOWIN_BRAIN_ROOT?.trim()) return undefined
   const inherited = env.AMITEL_BRAIN_ROOT?.trim()
   if (inherited) {
+    // Nom de dossier HISTORIQUE de l'installation partagee : c'est la qu'elle est posee sur disque.
     const shared = brainRootOfInstallation(join(localAppData, 'AmitelBrain'))
     if (!shared || !sameRoot(inherited, shared)) return undefined
   }
@@ -86,11 +107,11 @@ function sameRoot(left: string, right: string): boolean {
   return normalize(left) === normalize(right)
 }
 
-export function amitelBrainRoot(env: NodeJS.ProcessEnv = process.env): string {
+export function sharedBrainRoot(env: NodeJS.ProcessEnv = process.env): string {
   const own = autowinOwnBrainRoot(env)
   if (own) return own
-  const configured = env.AMITEL_BRAIN_ROOT?.trim()
-  return configured ? configured : DEFAULT_BRAIN_ROOT
+  const configured = lireReglage(env, 'AUTOWIN_BRAIN_ROOT', 'AMITEL_BRAIN_ROOT')
+  return configured ? configured : defaultBrainRoot(env)
 }
 
 export function requireLoopbackBrainOrigin(value: string): string {
@@ -98,7 +119,7 @@ export function requireLoopbackBrainOrigin(value: string): string {
   try {
     parsed = new URL(value)
   } catch {
-    throw new Error('Origine Amitel Brain invalide : loopback HTTP requis')
+    throw new Error('Origine Brain invalide : loopback HTTP requis')
   }
   const loopbackHosts = new Set(['127.0.0.1', 'localhost', '[::1]'])
   if (
@@ -110,7 +131,7 @@ export function requireLoopbackBrainOrigin(value: string): string {
     parsed.search ||
     parsed.hash
   ) {
-    throw new Error('Origine Amitel Brain invalide : loopback HTTP requis')
+    throw new Error('Origine Brain invalide : loopback HTTP requis')
   }
   return parsed.origin
 }
@@ -132,7 +153,7 @@ export function requireLoopbackBrainOrigin(value: string): string {
  * exporte. `origin` est prioritaire ; `port` est accepte comme raccourci.
  */
 function origineDepuisInstallation(env: NodeJS.ProcessEnv): string | undefined {
-  const stateRoot = amitelBrainStateRoot(env)
+  const stateRoot = sharedBrainStateRoot(env)
   if (!stateRoot) return undefined
   let config: { origin?: unknown; port?: unknown }
   try {
@@ -154,9 +175,9 @@ function origineDepuisInstallation(env: NodeJS.ProcessEnv): string | undefined {
   return port > 0 && port < 65536 ? `http://127.0.0.1:${port}` : undefined
 }
 
-export function amitelBrainOrigin(env: NodeJS.ProcessEnv = process.env): string {
-  const parEnv = env.AMITEL_BRAIN_ORIGIN?.trim()
-  const parPort = env.AMITEL_BRAIN_PORT?.trim()
+export function sharedBrainOrigin(env: NodeJS.ProcessEnv = process.env): string {
+  const parEnv = lireReglage(env, 'AUTOWIN_BRAIN_ORIGIN', 'AMITEL_BRAIN_ORIGIN')
+  const parPort = lireReglage(env, 'AUTOWIN_BRAIN_PORT', 'AMITEL_BRAIN_PORT')
   const configured =
     parEnv || (/^\d{1,5}$/.test(parPort ?? '') ? `http://127.0.0.1:${parPort}` : '')
   return requireLoopbackBrainOrigin(
@@ -165,44 +186,50 @@ export function amitelBrainOrigin(env: NodeJS.ProcessEnv = process.env): string 
 }
 
 /** Port du service, derive de la MEME origine : le serveur lance ne peut plus viser un autre port. */
-export function amitelBrainPort(env: NodeJS.ProcessEnv = process.env): string {
-  const { port } = new URL(amitelBrainOrigin(env))
+export function sharedBrainPort(env: NodeJS.ProcessEnv = process.env): string {
+  const { port } = new URL(sharedBrainOrigin(env))
   return port || '80'
 }
 
 /** Etat et runtime installes localement par Hermes-Brain. Le partage ne contient que les donnees. */
-export function amitelBrainStateRoot(env: NodeJS.ProcessEnv = process.env): string {
+export function sharedBrainStateRoot(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.AUTOWIN_BRAIN_STATE_ROOT?.trim()
   if (configured) return configured
   const localAppData = env.LOCALAPPDATA?.trim()
   if (!localAppData) return ''
   // Le Brain propre a Autowin porte son port dans SON config.json : l'etat le suit.
   if (autowinOwnBrainRoot(env)) return join(localAppData, AUTOWIN_OWN_BRAIN_STATE_DIR)
+  // Nom de dossier HISTORIQUE de l'installation partagee (Hermes-Brain) : il existe deja sur les postes.
   return join(localAppData, 'AmitelBrain')
 }
 
 /** Racine du runtime Python LOCAL. Elle ne dérive jamais du partage de données du Brain. */
-export function amitelBrainTooling(env: NodeJS.ProcessEnv = process.env): string {
+export function sharedBrainTooling(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.AUTOWIN_BRAIN_TOOLING?.trim()
   if (configured) return configured
-  const installed = env.AMITEL_BRAIN_CODE_ROOT?.trim()
+  const installed = lireReglage(env, 'AUTOWIN_BRAIN_CODE_ROOT', 'AMITEL_BRAIN_CODE_ROOT')
   if (installed) return installed
-  const stateRoot = amitelBrainStateRoot(env)
+  const stateRoot = sharedBrainStateRoot(env)
   return stateRoot ? join(stateRoot, 'tooling') : ''
 }
 
 /**
- * Workspaces d'entreprise, surchargeables par `AUTOWIN_AMITEL_WORKSPACES` (liste separee par `;`).
+ * Workspaces d'equipe, regles par `AUTOWIN_WORKSPACES` (secours : `AUTOWIN_AMITEL_WORKSPACES`), liste
+ * separee par `;` ; entrees vides et doublons ignores.
  * Sert au repli de `defaultBehaviourWorkspace` et aux racines de lecture autorisees.
  */
-export function amitelWorkspaces(env: NodeJS.ProcessEnv = process.env): string[] {
-  const configured = env.AUTOWIN_AMITEL_WORKSPACES?.trim()
+export function teamWorkspaces(env: NodeJS.ProcessEnv = process.env): string[] {
+  const configured = lireReglage(env, 'AUTOWIN_WORKSPACES', 'AUTOWIN_AMITEL_WORKSPACES')
   if (configured) {
-    const parsed = configured
-      .split(';')
-      .map((entry) => entry.trim())
-      .filter(Boolean)
+    const parsed = [
+      ...new Set(
+        configured
+          .split(';')
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      )
+    ]
     if (parsed.length > 0) return parsed
   }
-  return [...DEFAULT_AMITEL_WORKSPACES]
+  return [...DEFAULT_TEAM_WORKSPACES]
 }

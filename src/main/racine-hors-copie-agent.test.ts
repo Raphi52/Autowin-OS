@@ -15,29 +15,29 @@ import { portableAppDataBase, racineHorsCopieAgent } from './app-data'
 
 describe('la racine de données ne se réplique pas dans les copies agent', () => {
   it('laisse un chemin de dépôt normal intact', () => {
-    expect(racineHorsCopieAgent('C:/Amitel/Autowin OS')).toBe('C:/Amitel/Autowin OS')
+    expect(racineHorsCopieAgent('C:/Travail/Autowin OS')).toBe('C:/Travail/Autowin OS')
   })
 
   it('remonte hors d’une copie agent — le cas mesuré', () => {
     const dansUneCopie =
-      'C:/Amitel/Autowin OS/.autowin-data/autowin-os/worktrees/68fe8b086ee864a1/agent__run-ee040823ca71-1'
+      'C:/Travail/Autowin OS/.autowin-data/autowin-os/worktrees/68fe8b086ee864a1/agent__run-ee040823ca71-1'
 
-    expect(racineHorsCopieAgent(dansUneCopie)).toBe('C:/Amitel/Autowin OS')
+    expect(racineHorsCopieAgent(dansUneCopie)).toBe('C:/Travail/Autowin OS')
   })
 
   it('remonte au dépôt RÉEL même sur une imbrication de plusieurs niveaux', () => {
     // C'est le cas trouvé sur le disque : une copie contenant sa propre racine de données, elle-même
     // contenant une copie. Couper au PREMIER marqueur est ce qui rend le vrai dépôt.
     const imbrique =
-      'C:/Amitel/Autowin OS/.autowin-data/a/worktrees/h/agent__x/.autowin-data/b/worktrees/h/agent__y'
+      'C:/Travail/Autowin OS/.autowin-data/a/worktrees/h/agent__x/.autowin-data/b/worktrees/h/agent__y'
 
-    expect(racineHorsCopieAgent(imbrique)).toBe('C:/Amitel/Autowin OS')
+    expect(racineHorsCopieAgent(imbrique)).toBe('C:/Travail/Autowin OS')
   })
 
   it('gère les séparateurs Windows', () => {
-    const windows = 'C:\\Amitel\\Autowin OS\\.autowin-data\\autowin-os\\worktrees\\h\\agent__z'
+    const windows = 'C:\\Travail\\Autowin OS\\.autowin-data\\autowin-os\\worktrees\\h\\agent__z'
 
-    expect(racineHorsCopieAgent(windows)).toBe('C:\\Amitel\\Autowin OS')
+    expect(racineHorsCopieAgent(windows)).toBe('C:\\Travail\\Autowin OS')
   })
 
   it('ne coupe PAS sur un dossier qui ressemble sans en être un', () => {
@@ -49,7 +49,7 @@ describe('la racine de données ne se réplique pas dans les copies agent', () =
   })
 
   it('la racine calculée pointe hors de la copie, pas dedans', () => {
-    const dansUneCopie = 'C:/Amitel/Autowin OS/.autowin-data/autowin-os/worktrees/h/agent__q'
+    const dansUneCopie = 'C:/Travail/Autowin OS/.autowin-data/autowin-os/worktrees/h/agent__q'
 
     const base = portableAppDataBase(dansUneCopie, '/ignore', false)
 

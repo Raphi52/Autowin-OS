@@ -36,8 +36,8 @@ import {
 
 describe('la portée d’une leçon a UNE seule définition', () => {
   const COPIE =
-    'C:/Amitel/Autowin OS/.autowin-data/autowin-os/worktrees/68fe/agent__run-d66740cfa68e-1'
-  const DEPOT = 'C:/Amitel/Autowin OS'
+    'C:/Travail/Autowin OS/.autowin-data/autowin-os/worktrees/68fe/agent__run-d66740cfa68e-1'
+  const DEPOT = 'C:/Travail/Autowin OS'
 
   it('rend la portée du DÉPÔT, jamais celle de la copie agent', () => {
     // Le cas mesuré : c'est cette divergence qui vidait les 256 observations.
@@ -91,8 +91,8 @@ describe('les deux côtés appellent bien cette définition', () => {
  */
 describe('l’attestation d’un run ISOLÉ survit à sa vérification', () => {
   const COPIE_AGENT =
-    'C:/Amitel/Autowin OS/.autowin-data/autowin-os/worktrees/68fe/agent__run-d66740cfa68e-1'
-  const DEPOT = 'C:/Amitel/Autowin OS'
+    'C:/Travail/Autowin OS/.autowin-data/autowin-os/worktrees/68fe/agent__run-d66740cfa68e-1'
+  const DEPOT = 'C:/Travail/Autowin OS'
 
   const lecon = {
     outcome: 'success' as const,

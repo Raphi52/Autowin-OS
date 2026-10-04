@@ -321,7 +321,7 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
  *
  * Le temoin prouve QUE le main est coince dans une entree-sortie ; il ne dit pas LAQUELLE. Un
  * nom utile doit repondre a deux questions : quel appel, et surtout — disque local ou partage
- * RESEAU. Un `readFileSync` sur `//ged2` peut tenir la boucle des secondes quand le partage rame ;
+ * RESEAU. Un `readFileSync` sur `//nas1` peut tenir la boucle des secondes quand le partage rame ;
  * le meme appel sur `C:` coute des millisecondes. Le chemin est CONDENSE (racine + fichier) :
  * l'agregation par operation doit regrouper les acces d'un meme partage, pas les eparpiller.
  */

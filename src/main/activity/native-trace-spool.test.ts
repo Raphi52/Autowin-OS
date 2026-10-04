@@ -27,7 +27,7 @@ describe('native-trace-spool (Chantier 3 — spool de traces natif Autowin)', ()
     })
     const body = (rec.request as { body: { messages: Array<{ role: string; content: string }> } }).body
     expect(body.messages[0].role).toBe('system')
-    expect(body.messages[0].content).toContain('AMITEL BRAIN')
+    expect(body.messages[0].content).toContain('BRAIN REFERENCE DATA')
     expect(body.messages).toHaveLength(2)
     expect(rec).toMatchObject({
       schema: 'autowin.native-preflight/v1',

@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { OUTILS_NOEUD_SKILL, type LanceurCommandeSkill } from './skill-node-tools'
 import type { ExecutionEvidence } from './providers/types'
-import { amitelBrainRoot } from './amitel-paths'
+import { sharedBrainRoot } from './brain-paths'
 
 /**
  * Les outils d'un noeud SKILL, servis sur le canal NATIF du provider.
@@ -150,7 +150,7 @@ export function mesureAppel(
  * Le libellé de trace d'un appel natif : `outil natif <nom> (<phase>) : <état>[ — issue · cible · N car.]`.
  * Le préfixe est inchangé : `scripts/cdp-skill-node-brain-proof.mjs` le filtre par `startsWith`.
  */
-/** Chemin comparable : séparateurs unifiés et répétitions écrasées (`\\ged2\x` ≡ `//ged2/x`). */
+/** Chemin comparable : séparateurs unifiés et répétitions écrasées (`\\nas1\x` ≡ `//nas1/x`). */
 function cheminComparable(chemin: string): string {
   return chemin.replace(/[\\/]+/g, '/').replace(/\/$/, '')
 }
@@ -175,7 +175,7 @@ export function lecturesDirectesDuBrain(
     if (!chemin) return undefined
     const comparable = cheminComparable(chemin)
     if (comparable.toLowerCase() === racine.toLowerCase()) return '.'
-    // Le séparateur final est exigé : `Amitel Brain-copie` ne passe pas pour `Amitel Brain`.
+    // Le séparateur final est exigé : `Team Brain-copie` ne passe pas pour `Brain`.
     if (!comparable.toLowerCase().startsWith(`${racine.toLowerCase()}/`)) return undefined
     return comparable.slice(racine.length + 1)
   }
@@ -188,7 +188,7 @@ export function lecturesDirectesDuBrain(
       const note = sousLaRacine(preuve.path)
       if (note) lignes.push(`lecture directe Read (${phase}) : ${etat} — ${note}${car}`)
     } else if (/^(Grep|Glob)$/i.test(preuve.type)) {
-      // Sans dossier, un Glob peut porter le chemin complet dans son MOTIF (`//ged2/…/knowledge/**`).
+      // Sans dossier, un Glob peut porter le chemin complet dans son MOTIF (`//nas1/…/knowledge/**`).
       const dossier = preuve.searchPath
         ? sousLaRacine(preuve.searchPath)
         : sousLaRacine(preuve.pattern)
@@ -299,8 +299,8 @@ export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
  */
 function renvoiNoteTropGrande(nom: string, args: Record<string, unknown>, taille: number): string {
   const chemin = typeof args.path === 'string' ? args.path.trim().replace(/\\/g, '/') : ''
-  const racine = amitelBrainRoot().replace(/\\/g, '/').replace(/\/+$/, '')
-  // Casse ignorée, comme `lecturesDirectesDuBrain` : `//GED2/RIG/…` est déjà sous `\\ged2\rig\…`.
+  const racine = sharedBrainRoot().replace(/\\/g, '/').replace(/\/+$/, '')
+  // Casse ignorée, comme `lecturesDirectesDuBrain` : `//NAS1/PARTAGE/…` est déjà sous `\\nas1\partage\…`.
   const dejaSousLaRacine = cheminComparable(chemin)
     .toLowerCase()
     .startsWith(`${cheminComparable(racine).toLowerCase()}/`)

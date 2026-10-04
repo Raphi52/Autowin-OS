@@ -60,7 +60,7 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
   it('décrit le RAG Brain + Graphify du chat cockpit visible', () => {
     const cockpit = build().cockpit
     expect(cockpit.retrievedContext.map(({ label }) => label)).toEqual([
-      'Amitel Brain signé',
+      'Brain signé',
       'preuves Graphify'
     ])
     expect(JSON.stringify(cockpit)).toContain('dernier message utilisateur')

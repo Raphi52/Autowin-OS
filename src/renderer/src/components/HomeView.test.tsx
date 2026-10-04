@@ -47,7 +47,7 @@ function outlookSnapshot() {
     mails: [
       {
         id: 'm1',
-        adresse: 'julien.mercier@amitel.fr',
+        adresse: 'julien.mercier@example.com',
         nom: 'Julien Mercier',
         sujet: 'RE: bon de commande RIG',
         recuLe: new Date(NOW_MS - 600_000).toISOString(),
@@ -56,7 +56,7 @@ function outlookSnapshot() {
       },
       {
         id: 'm2',
-        adresse: 'JULIEN.MERCIER@amitel.fr',
+        adresse: 'JULIEN.MERCIER@example.com',
         nom: 'MERCIER Julien',
         sujet: 'Devis signé',
         recuLe: new Date(NOW_MS - 7200_000).toISOString(),
@@ -65,7 +65,7 @@ function outlookSnapshot() {
       },
       {
         id: 'm3',
-        adresse: 'sophie.bernard@amitel.fr',
+        adresse: 'sophie.bernard@example.com',
         nom: 'Sophie Bernard',
         sujet: 'Planning de la recette',
         recuLe: new Date(NOW_MS - 300_000).toISOString(),

@@ -11,7 +11,7 @@ import { clesCandidat, type CandidatVeille } from './candidats'
  * laisse jamais un fichier à moitié écrit.
  *
  * Pourquoi PAS le Brain partagé, qui aurait pu paraître le bon endroit pour de la connaissance : il vit
- * sur un partage réseau (`//ged2/...`), et sa latence a déjà été mesurée coûteuse dans ce dépôt — le
+ * sur un partage réseau (`//nas1/...`), et sa latence a déjà été mesurée coûteuse dans ce dépôt — le
  * serveur Brain met ~30-40 s à répondre au démarrage à cause de ce partage. Un stock que la vue Tickets
  * relit à chaque ouverture n'a rien à faire derrière SMB.
  *
