@@ -37,7 +37,9 @@ let racine: string
 beforeEach(() => {
   racine = mkdtempSync(join(tmpdir(), 'autowin-prompt-obs-'))
 })
-afterEach(() => {
+afterEach(async () => {
+  // Une ecriture encore en vol recree le dossier pendant sa suppression (ENOTEMPTY).
+  await attendreEcrituresPromptCalls()
   rmSync(racine, { recursive: true, force: true })
 })
 
@@ -60,9 +62,11 @@ describe('prompt systeme range a part', () => {
     expect(relus[0].system).toBe(SYSTEME)
   })
 
-  it("rend l'appel avec son `system` en clair a l'appelant, sans attendre le disque", () => {
+  it("rend l'appel avec son `system` en clair a l'appelant, sans attendre le disque", async () => {
     const rendu = appendPromptCall(appel('conv-3', SYSTEME), racine)
     expect(rendu.system).toBe(SYSTEME)
+    // Laisser finir l'ecriture en vol : sinon afterEach supprime le dossier pendant qu'elle y ecrit (ENOTEMPTY).
+    await attendreEcrituresPromptCalls()
   })
 
   it('laisse un petit prompt en clair : deduplicater couterait plus cher que recopier', async () => {
@@ -77,5 +81,16 @@ describe('prompt systeme range a part', () => {
     await attendreEcrituresPromptCalls()
     expect(loadPromptCalls('conv-5', racine)[0].system).toBeUndefined()
     expect(readdirSync(racine).filter((n) => n === 'systems')).toHaveLength(0)
+  })
+
+  it('ne relit PAS le prompt systeme quand le lecteur n en a pas besoin (cout) — gel du 2026-10-04', async () => {
+    appendPromptCall(appel('conv-6', SYSTEME), racine)
+    await attendreEcrituresPromptCalls()
+    const relus = loadPromptCalls('conv-6', racine, { systeme: false })
+    expect(relus).toHaveLength(1)
+    expect(relus[0].system).toBeUndefined()
+    expect(relus[0].systemRef).toBeTruthy()
+    // Le lecteur par defaut, lui, rend toujours le prompt en clair.
+    expect(loadPromptCalls('conv-6', racine)[0].system).toBe(SYSTEME)
   })
 })
