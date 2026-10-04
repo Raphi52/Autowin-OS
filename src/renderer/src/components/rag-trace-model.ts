@@ -13,7 +13,7 @@ export interface RagSourceTrace {
 
 export interface RagTraceSummary {
   status: RagTraceStatus
-  engine: 'Amitel Brain' | 'Contexte projet'
+  engine: 'Brain' | 'Contexte projet'
   query: string
   injectedCharacters: number
   sources: RagSourceTrace[]
@@ -21,7 +21,13 @@ export interface RagTraceSummary {
   injectedText: string
 }
 
-const MARKER = '[AMITEL BRAIN REFERENCE DATA'
+/**
+ * Marqueur RAG du Brain : forme NEUTRE, et forme HISTORIQUE encore produite par les serveurs Brain
+ * deja installes et presente dans les traces existantes — les deux restent reconnues.
+ */
+const MARKERS = ['[BRAIN REFERENCE DATA', '[AMITEL BRAIN REFERENCE DATA'] as const
+const markerIndexIn = (value: string): number =>
+  Math.min(...MARKERS.map((marker) => value.indexOf(marker)).filter((index) => index >= 0))
 // Canal fichier de contexte projet (context-files.ts:79 → `=== CONTEXTE PROJET (<fichier>) ===`).
 // Distinct du RAG Brain mais c'est bien du contexte INJECTÉ : sans cette détection, la carte
 // affichait un faux « Non utilisé » alors qu'un CLAUDE.md/AGENTS.md était bien transmis au modèle.
@@ -40,7 +46,7 @@ function stringsIn(value: unknown, found: string[] = []): string[] {
 
 function empty(
   status: RagTraceStatus,
-  engine: RagTraceSummary['engine'] = 'Amitel Brain'
+  engine: RagTraceSummary['engine'] = 'Brain'
 ): RagTraceSummary {
   return {
     status,
@@ -88,11 +94,11 @@ function canonicalRagSourcePath(path: string): string {
 
 export function summarizeRagTrace(request: unknown): RagTraceSummary {
   if (!request || typeof request !== 'object') return empty('unavailable')
-  const marked = stringsIn(request).find((value) => value.includes(MARKER))
+  const marked = stringsIn(request).find((value) => MARKERS.some((marker) => value.includes(marker)))
   // Pas de RAG Brain → replier sur le canal contexte projet avant de conclure « non injecté ».
   if (!marked) return summarizeProjectContext(request) ?? empty('not-injected')
 
-  const markerIndex = marked.indexOf(MARKER)
+  const markerIndex = markerIndexIn(marked)
   const query = marked.slice(0, markerIndex).trim()
   const context = marked.slice(markerIndex)
   const matches = [...context.matchAll(SOURCE)]
@@ -125,7 +131,7 @@ export function summarizeRagTrace(request: unknown): RagTraceSummary {
 
   return {
     status: sources.length > 0 ? 'injected' : 'unparseable',
-    engine: 'Amitel Brain',
+    engine: 'Brain',
     query,
     injectedCharacters: context.length,
     sources,

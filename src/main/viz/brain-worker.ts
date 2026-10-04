@@ -1,5 +1,5 @@
 import { parentPort } from 'node:worker_threads'
-import { graphifyEvidence } from '../amitel-context'
+import { graphifyEvidence } from '../brain-context'
 import { listInboxCandidates, readInboxCandidateBody } from '../brain-inbox'
 import { resolveHeadShas } from '../brain-source-sha'
 import {

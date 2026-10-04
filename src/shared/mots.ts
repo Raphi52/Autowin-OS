@@ -2,7 +2,7 @@
  * PLIER ET DECOUPER UN TEXTE EN MOTS — la seule source.
  *
  * Cette normalisation et ce decoupage existaient en DEUX exemplaires : `replier`/`motsCherchables`
- * dans `store/conversations.ts` et `normalized`/`motsDe`/`queryTokens` dans `amitel-context.ts`.
+ * dans `store/conversations.ts` et `normalized`/`motsDe`/`queryTokens` dans `brain-context.ts`.
  * Meme normalisation NFD, meme regex, meme seuil de longueur -- entretenus separement, donc voues
  * a diverger. L'audit l'a releve ; c'est ici que ca vit desormais.
  *

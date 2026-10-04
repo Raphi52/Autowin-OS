@@ -13,8 +13,8 @@ import {
  * plus — je vérifie si le résultat a été rapatrié dans le workspace. » Le run écrit dans une copie
  * isolée, rédige son rapport avec ces chemins, puis la fin de run fusionne et SUPPRIME la copie.
  */
-const WT = 'C:\\Amitel\\Autowin OS\\Audit\\worktrees\\agent__run-4c7fb67f6eee-1'
-const BASE = 'C:\\Amitel\\Autowin OS'
+const WT = 'C:\\Travail\\Autowin OS\\Audit\\worktrees\\agent__run-4c7fb67f6eee-1'
+const BASE = 'C:\\Travail\\Autowin OS'
 
 describe('rewriteWorktreePaths — les chemins pointent là où les fichiers SONT', () => {
   it('réécrit un chemin Windows vers le workspace de base', () => {

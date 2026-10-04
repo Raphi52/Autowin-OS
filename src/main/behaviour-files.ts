@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { readBoundedUtf8FileWithin } from './bounded-file-read'
 import { AUTOWIN_WORKSPACE_ENV, legacyWorkspaceEnvName } from '../shared/app-identity'
-import { amitelWorkspaces } from './amitel-paths'
+import { teamWorkspaces } from './brain-paths'
 
 export type BehaviourEngine = 'codex' | 'claude' | 'autowin'
 export type BehaviourState = 'active' | 'conditional' | 'shadowed' | 'declared' | 'injected'
@@ -55,10 +55,10 @@ export function defaultBehaviourWorkspace(): string {
   const configured = process.env[AUTOWIN_WORKSPACE_ENV] ?? process.env[legacyWorkspaceEnvName()]
   if (configured && existsSync(configured)) return resolve(configured)
   // Repli d'entreprise : le PREMIER workspace connu qui existe reellement sur cette machine. La liste
-  // vient de la source unique `amitel-paths.ts` (surchargeable) — avant, `C:\Code RIG` etait ecrit en
-  // dur ici, donc l'app n'avait aucun repli utilisable ailleurs qu'a Amitel.
-  const amitelWorkspace = amitelWorkspaces().find((candidate) => existsSync(candidate))
-  return amitelWorkspace ?? process.cwd()
+  // vient de la source unique `brain-paths.ts` (surchargeable) — avant, `C:\Code Projet` etait ecrit en
+  // dur ici, donc l'app n'avait aucun repli utilisable ailleurs que sur les postes d'origine.
+  const teamWorkspace = teamWorkspaces().find((candidate) => existsSync(candidate))
+  return teamWorkspace ?? process.cwd()
 }
 
 function normalizeQuery(query?: string | BehaviourQuery): Required<BehaviourQuery> {

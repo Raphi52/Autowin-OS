@@ -166,7 +166,7 @@ export async function runPreflight(
       id: 'brain-token',
       label: 'token Brain',
       ok: token,
-      detail: token ? undefined : 'absent — définir AMITEL_BRAIN_TOKEN'
+      detail: token ? undefined : 'absent — définir AUTOWIN_BRAIN_TOKEN'
     },
     cliCheck('claude', 'CLI claude', claude, 'introuvable — installer claude'),
     standby.has('claude')

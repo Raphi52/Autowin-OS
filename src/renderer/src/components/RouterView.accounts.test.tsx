@@ -66,7 +66,7 @@ describe('RouterView — comptes Claude', () => {
       claudeAccounts: async () => ({
         activeId: 'default',
         accounts: [
-          { id: 'default', displayName: 'raphael.vilain@amitel.fr', tier: 'team', active: true },
+          { id: 'default', displayName: 'prenom.nom@example.com', tier: 'team', active: true },
           { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: false }
         ]
       })
@@ -75,7 +75,7 @@ describe('RouterView — comptes Claude', () => {
     await flush()
 
     expect(chips().map((chip) => chip.textContent)).toEqual([
-      'raphael.vilain@amitel.frteam',
+      'prenom.nom@example.comteam',
       'perso@gmail.commax'
     ])
     // L'actif est signalé ET non cliquable : rebasculer sur soi-même ne doit rien déclencher.
@@ -88,7 +88,7 @@ describe('RouterView — comptes Claude', () => {
     const claudeAccountSwitch = vi.fn(async () => ({
       activeId: 'compte-2',
       accounts: [
-        { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: false },
+        { id: 'default', displayName: 'pro@example.com', tier: 'team', active: false },
         { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: true }
       ]
     }))
@@ -100,7 +100,7 @@ describe('RouterView — comptes Claude', () => {
       claudeAccounts: async () => ({
         activeId: 'default',
         accounts: [
-          { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: true },
+          { id: 'default', displayName: 'pro@example.com', tier: 'team', active: true },
           { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: false }
         ]
       }),
@@ -138,14 +138,14 @@ describe('RouterView — comptes Claude', () => {
       claudeAccounts: async () => ({
         activeId: 'default',
         accounts: [
-          { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: true },
+          { id: 'default', displayName: 'pro@example.com', tier: 'team', active: true },
           { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: false }
         ]
       }),
       claudeAccountSwitch: async () => ({
         activeId: 'compte-2',
         accounts: [
-          { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: false },
+          { id: 'default', displayName: 'pro@example.com', tier: 'team', active: false },
           { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: true }
         ]
       })
@@ -170,14 +170,14 @@ describe('RouterView — comptes Claude', () => {
     const claudeAccountAdd = vi.fn(async () => ({
       activeId: 'default',
       accounts: [
-        { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: true },
+        { id: 'default', displayName: 'pro@example.com', tier: 'team', active: true },
         { id: 'compte-2', displayName: 'compte-2', tier: '', active: false }
       ]
     }))
     mountWith({
       claudeAccounts: async () => ({
         activeId: 'default',
-        accounts: [{ id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: true }]
+        accounts: [{ id: 'default', displayName: 'pro@example.com', tier: 'team', active: true }]
       }),
       claudeAccountAdd
     })
@@ -199,7 +199,7 @@ describe('RouterView — comptes Claude', () => {
       claudeAccounts: async () => ({
         activeId: 'default',
         accounts: [
-          { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: true },
+          { id: 'default', displayName: 'pro@example.com', tier: 'team', active: true },
           { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: false }
         ]
       })
@@ -219,7 +219,7 @@ describe('RouterView — comptes Claude', () => {
       claudeAccounts: async () => ({
         activeId: 'default',
         accounts: [
-          { id: 'default', displayName: 'pro@amitel.fr', tier: 'team', active: true },
+          { id: 'default', displayName: 'pro@example.com', tier: 'team', active: true },
           { id: 'compte-2', displayName: 'perso@gmail.com', tier: 'max', active: false }
         ]
       }),
@@ -257,13 +257,13 @@ describe('RouterView — comptes Claude', () => {
         accounts: [
           {
             id: 'default',
-            displayName: 'raphael.vilain@amitel.fr',
+            displayName: 'prenom.nom@example.com',
             tier: 'team',
             active: true
           },
           {
             id: 'compte-2',
-            displayName: 'raphael.vilain@amitel.fr',
+            displayName: 'prenom.nom@example.com',
             tier: 'max',
             active: false
           }

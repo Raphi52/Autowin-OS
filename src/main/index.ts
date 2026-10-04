@@ -368,7 +368,7 @@ import { buildBehaviourComposition } from './behaviour-composition'
 import { ProviderStateStore } from './provider-state-store'
 import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
-import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
+import { sharedBrainRoot, createBrainContextProvider } from './brain-context'
 import { createBrainTitresDuTour } from './brain-titres-du-tour'
 import {
   automationAppIdentity,
@@ -902,7 +902,7 @@ const outcomeLearning = new OutcomeLearningSupervisor({
     process.env.AUTOWIN_OUTCOME_LEARNING_MODE ?? persistedOutcomeLearningMode
   ),
   promote: (candidateId, scope) =>
-    promoteOutcomeLearningCandidate(amitelBrainRoot(), candidateId, scope),
+    promoteOutcomeLearningCandidate(sharedBrainRoot(), candidateId, scope),
   invalidate: invalidateBrainRuntime
 })
 void outcomeLearning.reconcilePending()
@@ -913,8 +913,8 @@ const curationRecoveryReady = reconcileCurationIntents(
       const event = outcomeLearning.eventById(intent.requestedTargetId.slice('undo:'.length))
       if (!event || event.kind !== 'curation') throw new Error('curation undo introuvable')
       const compensation = compensateOutcomeCuration(event.value, {
-        restore: (id) => restoreTrashedKnowledge(amitelBrainRoot(), id),
-        retract: (id) => retractKnowledgeCandidate(amitelBrainRoot(), id)
+        restore: (id) => restoreTrashedKnowledge(sharedBrainRoot(), id),
+        retract: (id) => retractKnowledgeCandidate(sharedBrainRoot(), id)
       })
       return {
         moved: compensation.moved,
@@ -925,12 +925,12 @@ const curationRecoveryReady = reconcileCurationIntents(
       }
     }
     if (intent.action === 'retract') {
-      const moved = retractKnowledgeCandidate(amitelBrainRoot(), intent.knowledgeId)
+      const moved = retractKnowledgeCandidate(sharedBrainRoot(), intent.knowledgeId)
       return { moved, knowledgeId: intent.knowledgeId, targetId: moved.to }
     }
     if (intent.action === 'restore') {
       const previous = outcomeLearning.latestCurationForStoredId(intent.knowledgeId)
-      const moved = restoreTrashedKnowledge(amitelBrainRoot(), intent.knowledgeId)
+      const moved = restoreTrashedKnowledge(sharedBrainRoot(), intent.knowledgeId)
       return {
         moved,
         knowledgeId: previous?.value.knowledgeId ?? moved.to,
@@ -941,7 +941,7 @@ const curationRecoveryReady = reconcileCurationIntents(
     }
     if (!intent.requestedTargetId) throw new Error('supersession sans remplacement demandé')
     const result = supersedeKnowledgeCandidate(
-      amitelBrainRoot(),
+      sharedBrainRoot(),
       intent.knowledgeId,
       intent.requestedTargetId
     )
@@ -1102,7 +1102,7 @@ const dossierDuTour = (conversationId?: string): string =>
 const titresBrainDuTour = createBrainTitresDuTour({
   workspace: (conversationId?: string) => dossierDuTour(conversationId)
 })
-const contexteGrapheDuTour = createAmitelContextProvider({
+const contexteGrapheDuTour = createBrainContextProvider({
   graphEvidence: (raw, query, limit) =>
     brainWorker.request('graphifyEvidence', raw, query, limit),
   // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc RIG, donc une question Autowin ramenait
@@ -1116,7 +1116,7 @@ const contexteGrapheDuTour = createAmitelContextProvider({
   // fichiers sans rapport (« 0. Etat des lieux », `app-data.ts`...) sur 3 questions d'avis sur 3,
   // payes plein tarif a chaque tour. Pour une question sur le code, seule la recherche texte a la demande
   // (`find_in_files`) reste : ce n'est PAS la carte de structure du graphe (perte non evaluee).
-  // fix-ok: graphe injecte a chaque tour de chat = 877/812/813 car. hors cache sur 3 questions d avis, 0 apres (createAmitelContextProvider reel)
+  // fix-ok: graphe injecte a chaque tour de chat = 877/812/813 car. hors cache sur 3 questions d avis, 0 apres (createBrainContextProvider reel)
   sources: [],
   // RESOLU PAR TOUR : le corpus autorise derive du dossier RANGE sur la conversation, pas d'un global fige.
   workspace: (conversationId?: string) => dossierDuTour(conversationId),
@@ -2353,7 +2353,7 @@ Le fil reprend ensuite normalement.`
         events: causalTrace.readConversationBestEffort(conversationId),
         brainTraces: readBrainTraces(conversationId)
       },
-      { base: app.getPath('userData'), brainRoot: amitelBrainRoot() }
+      { base: app.getPath('userData'), brainRoot: sharedBrainRoot() }
     )
   })
   // Les canaux du diagnostic de prérequis vivent dans src/main/ipc/preflight.ts.
@@ -2882,7 +2882,7 @@ Le fil reprend ensuite normalement.`
     await curationRecoveryReady
     const curation = outcomeLearning.eventById(eventId)
     if (!curation || curation.kind !== 'curation') throw new Error('curation introuvable')
-    const root = amitelBrainRoot()
+    const root = sharedBrainRoot()
     const inverseAction = curation.value.action === 'restore' ? 'retract' : 'restore'
     const inverseSource =
       curation.value.action === 'retract'

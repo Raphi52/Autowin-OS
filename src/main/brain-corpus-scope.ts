@@ -111,7 +111,7 @@ export function brainCorpusForWorkspace(
   // AUCUNE restriction derivee du workspace. Une exception « isolation RigApplication » a existe ici
   // du 2026-08-13 au meme jour : elle n'a JAMAIS pu se declencher. Le workspace vient de
   // `resolveExecutionWorkspace` → `gitWorkspaceFrom` (`os.ts:109`), qui exige `.git` ET
-  // `package.json` dans le meme dossier ; `C:\Code RIG\RigApplication` est un depot .NET sans
+  // `package.json` dans le meme dossier ; `C:\Code Projet\RigApplication` est un depot .NET sans
   // `package.json`, donc le slug ne valait jamais `rigapplication`. Elle affichait une protection
   // inexistante — pire qu'aucune protection.
   //

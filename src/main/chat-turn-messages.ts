@@ -655,7 +655,7 @@ export function signatureDEchec(nom: string, erreur: string): string {
     .toLowerCase()
     .replace(/[a-z]:\\[^\s'"]*/g, '<chemin>')
     .replace(/\/[^\s'"]*\//g, '<chemin>')
-    // Un chemin Windows contient des ESPACES (`C:\Amitel\Autowin OS\...`) : la regle de chemin
+    // Un chemin Windows contient des ESPACES (`C:\Travail\Autowin OS\...`) : la regle de chemin
     // s'arrete au premier, laissant le nom de fichier — qui est justement ce qui varie d'une
     // occurrence a l'autre du MEME mur. On le neutralise donc a part.
     .replace(/[^\s'"/]*\.[a-z0-9]{1,5}\b/g, '<fichier>')

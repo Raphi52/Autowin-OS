@@ -21,7 +21,7 @@
           "src/main/brain-protocol.ts",
           "src/main/brain-remember.ts",
           "src/main/brain-inbox.ts",
-          "src/main/amitel-context.ts",
+          "src/main/brain-context.ts",
           "src/main/phase-briefs.ts",
           "src/main/viz/fs-brains.ts",
           "src/shared/run-learning.ts",
@@ -46,7 +46,7 @@
           "src/main/brain-remember.test.ts",
           "src/main/brain-inbox.test.ts",
           "src/main/brain-inbox-race.test.ts",
-          "src/main/amitel-context.test.ts",
+          "src/main/brain-context.test.ts",
           "src/shared/orchestration-outcome.test.ts",
           "src/renderer/src/components/BehaviourView.test.tsx",
           "src/renderer/src/components/GraphView.panels.test.tsx"

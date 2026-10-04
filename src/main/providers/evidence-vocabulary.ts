@@ -317,7 +317,7 @@ function tokensOf(segment: string): string[] {
 }
 
 /**
- * Découpe en tokens en RESPECTANT les guillemets : `-C "C:/Amitel/Autowin OS"` est UN argument.
+ * Découpe en tokens en RESPECTANT les guillemets : `-C "C:/Travail/Autowin OS"` est UN argument.
  * Sans cela, un chemin contenant un espace décalait tous les tokens suivants et le verbe réel
  * (`stash`) devenait invisible — la commande EXACTE de l'incident fondateur retombait en
  * `inspection`, ce que le premier jeu de tests a immédiatement révélé.

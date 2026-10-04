@@ -20,7 +20,7 @@ import { execFileSync } from 'node:child_process'
  * que dans le shell ou elle avait ete tapee. Le service ecoutait 8766, le processus principal
  * retombait sur le defaut 8765, et chaque `brain_query` rendait « indisponible » en 15 ms
  * (connexion refusee) — cerveau muet, sans autre issue qu'un redemarrage de l'app.
- * `amitelBrainOrigin()` relit `process.env` a CHAQUE appel : recharger la variable suffit donc a
+ * `sharedBrainOrigin()` relit `process.env` a CHAQUE appel : recharger la variable suffit donc a
  * rebrancher le canal a chaud. La valeur reste validee loopback par `requireLoopbackBrainOrigin`.
  */
 /*
@@ -35,6 +35,8 @@ import { execFileSync } from 'node:child_process'
 export const VARIABLES_RECHARGEABLES = [
   'AUTOWIN_VERIFY_TIMEOUT_MS',
   'AUTOWIN_BRAIN_TIMEOUT_MS',
+  'AUTOWIN_BRAIN_ORIGIN',
+  // Nom historique, toujours lu en secours par `sharedBrainOrigin`.
   'AMITEL_BRAIN_ORIGIN',
   'AUTOWIN_SQLCMD_BIN'
 ] as const

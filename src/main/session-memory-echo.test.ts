@@ -72,7 +72,7 @@ describe('persistance locale de la memoire provisoire', () => {
       configureSessionMemoryEcho(store)
 
       expect(
-        rememberedFacts('conv-shared', 'C:\\Amitel\\Autowin OS').map((fact) => fact.title)
+        rememberedFacts('conv-shared', 'C:\\Travail\\Autowin OS').map((fact) => fact.title)
       ).toEqual(['Partage explicite'])
       expect(
         rememberedFacts('conv-shared', 'D:\\DevSrc\\RigApplication').map((fact) => fact.title)
@@ -104,8 +104,8 @@ describe('persistance locale de la memoire provisoire', () => {
       configureSessionMemoryEcho(store)
 
       expect(rememberedFacts('conv-v1')).toHaveLength(1)
-      expect(rememberedFacts('conv-v1', 'C:\\Amitel\\Autowin OS')).toEqual([])
-      expect(evictedCount('conv-v1', 'C:\\Amitel\\Autowin OS')).toBe(0)
+      expect(rememberedFacts('conv-v1', 'C:\\Travail\\Autowin OS')).toEqual([])
+      expect(evictedCount('conv-v1', 'C:\\Travail\\Autowin OS')).toBe(0)
     } finally {
       configureSessionMemoryEcho()
       rmSync(root, { recursive: true, force: true })
@@ -142,7 +142,7 @@ describe('l’écho rend ce qui a été retenu — dans CE fil seulement', () =>
       scope: 'global',
       workspace: 'global'
     })
-    expect(rememberedFacts('conv-1', 'C:\\Amitel\\Autowin OS').map((fact) => fact.title)).toEqual([
+    expect(rememberedFacts('conv-1', 'C:\\Travail\\Autowin OS').map((fact) => fact.title)).toEqual([
       'Global'
     ])
   })

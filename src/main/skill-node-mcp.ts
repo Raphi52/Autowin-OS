@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { OUTILS_NOEUD_SKILL, type LanceurCommandeSkill } from './skill-node-tools'
 import type { ExecutionEvidence } from './providers/types'
-import { amitelBrainRoot } from './amitel-paths'
+import { sharedBrainRoot } from './brain-paths'
 
 /**
  * Les outils d'un noeud SKILL, servis sur le canal NATIF du provider.
@@ -299,7 +299,7 @@ export function outilsPublies(lanceur: LanceurCommandeSkill): Array<{
  */
 function renvoiNoteTropGrande(nom: string, args: Record<string, unknown>, taille: number): string {
   const chemin = typeof args.path === 'string' ? args.path.trim().replace(/\\/g, '/') : ''
-  const racine = amitelBrainRoot().replace(/\\/g, '/').replace(/\/+$/, '')
+  const racine = sharedBrainRoot().replace(/\\/g, '/').replace(/\/+$/, '')
   // Casse ignorée, comme `lecturesDirectesDuBrain` : `//serveur/partage/…` est déjà sous `\\serveur\rig\…`.
   const dejaSousLaRacine = cheminComparable(chemin)
     .toLowerCase()

@@ -29,8 +29,8 @@ function jouer(
 
 describe('normaliserLigne', () => {
   it('efface ce qui varie pour que la même erreur se compte comme une', () => {
-    const a = normaliserLigne('Error: cannot read C:\\Amitel\\Autowin OS\\src\\a.ts line 41')
-    const b = normaliserLigne('Error: cannot read C:\\Amitel\\Autowin OS\\src\\a.ts line 87')
+    const a = normaliserLigne('Error: cannot read C:\\Travail\\Autowin OS\\src\\a.ts line 41')
+    const b = normaliserLigne('Error: cannot read C:\\Travail\\Autowin OS\\src\\a.ts line 87')
     expect(a).toBe(b)
   })
 

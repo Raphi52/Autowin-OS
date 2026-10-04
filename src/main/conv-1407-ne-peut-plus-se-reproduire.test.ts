@@ -131,7 +131,7 @@ describe('conv-1407 : une demande de quatre mots retrouve son sens', () => {
   })
 
   it('la connaissance injectee ne remplit plus sa place de bruit', async () => {
-    const { graphifyEvidence } = await import('./amitel-context')
+    const { graphifyEvidence } = await import('./brain-context')
     const graphe = JSON.stringify({
       nodes: [{ id: 'n1', label: '.all()', source_file: 'src/main/roles.ts' }]
     })

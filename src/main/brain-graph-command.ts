@@ -1,4 +1,4 @@
-import { amitelBrainOrigin } from './amitel-paths'
+import { sharedBrainOrigin } from './brain-paths'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
 
 /**
@@ -37,13 +37,13 @@ async function callBrain(
 ): Promise<BrainMemoryOutcome> {
   let origin: string
   try {
-    origin = deps.origin ?? amitelBrainOrigin()
+    origin = deps.origin ?? sharedBrainOrigin()
   } catch {
     return {
       found: false,
       status: 'unavailable',
       knowledge: '',
-      note: "origine du Brain (AMITEL_BRAIN_ORIGIN) invalide - rien n'a ete envoye"
+      note: "origine du Brain (AUTOWIN_BRAIN_ORIGIN) invalide - rien n'a ete envoye"
     }
   }
   const controller = new AbortController()

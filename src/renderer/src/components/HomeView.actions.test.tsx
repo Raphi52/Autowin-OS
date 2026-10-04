@@ -46,7 +46,7 @@ function outlookSnapshot(over: Record<string, unknown> = {}) {
     mails: [
       {
         id: 'm1',
-        adresse: 'collegue@amitel.fr',
+        adresse: 'collegue@example.com',
         nom: 'Collègue',
         sujet: 'RE: bon de commande',
         recuLe: new Date(NOW - 600_000).toISOString(),
@@ -65,7 +65,7 @@ function outlookSnapshot(over: Record<string, unknown> = {}) {
         recurrent: false
       }
     ],
-    adressesEchangees: ['collegue@amitel.fr'],
+    adressesEchangees: ['collegue@example.com'],
     ...over
   }
 }
@@ -443,7 +443,7 @@ describe('le compteur des mails compte les personnes', () => {
           mails: [
             {
               id: 'p1',
-              adresse: 'collegue@amitel.fr',
+              adresse: 'collegue@example.com',
               nom: 'Collegue',
               sujet: 'Question',
               recuLe: new Date(NOW).toISOString(),
@@ -573,7 +573,7 @@ describe('la vue agit : ouvrir une conversation qui n existe pas encore', () => 
     // Le quatrieme argument porte les PIECES JOINTES, vide ici : depuis le 2026-09-08 un fichier
     // peut etre glisse dans cet ecran (InterlocuteursWidget.pieces.test.tsx).
     expect(api().outlookNouveauMessage).toHaveBeenCalledWith(
-      'collegue@amitel.fr',
+      'collegue@example.com',
       'Bon de commande 2027',
       'Bonjour, pouvez-vous me le confirmer ?',
       []

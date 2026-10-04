@@ -13,7 +13,7 @@ describe('semantic temporal IPC contract', () => {
     expect(start).toBeGreaterThan(0)
     expect(handler).toContain("assertTrustedRendererSender(event, 'Semantic timeline')")
     expect(handler).toContain('causalTrace.readConversationBestEffort(conversationId)')
-    expect(handler).toContain('brainRoot: amitelBrainRoot()')
+    expect(handler).toContain('brainRoot: sharedBrainRoot()')
     expect(preload).toContain("ipcRenderer.invoke('os:semanticTimeline', conversationId)")
   })
 })

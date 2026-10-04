@@ -162,6 +162,7 @@ export function startBrainCuration(
   }
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
+  // Nom HISTORIQUE lu par les scripts Python de Hermes-Brain (hors de ce depot).
   childEnv.AMITEL_BRAIN_ROOT = brainRoot
   attempted = true
   let rendu = false

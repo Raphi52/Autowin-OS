@@ -26,7 +26,7 @@ function render(
   agents: WorktreeAgentActivity[],
   status: WorktreeRuntimeStatus = {
     available: true,
-    workspacePath: 'C:\\Amitel\\Autowin OS',
+    workspacePath: 'C:\\Travail\\Autowin OS',
     repoId: 'repo-a'
   },
   onResolveConflict?: (agentId: string) => void,
@@ -97,7 +97,7 @@ describe('WorktreeActivityView — A2 Hub', () => {
     render(offices)
 
     expect(container.querySelector('[data-testid="wt-main-office"]')?.textContent).toContain(
-      'C:\\Amitel\\Autowin OS'
+      'C:\\Travail\\Autowin OS'
     )
     expect(container.querySelectorAll('[data-testid="wt-agent-office"]')).toHaveLength(3)
     expect(container.textContent).toContain('TON WORKSPACE')

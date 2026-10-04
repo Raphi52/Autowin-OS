@@ -95,9 +95,9 @@ describe('ClaudeAccountsStore', () => {
   it('enregistre l’identité observée et l’utilise comme nom affiché', () => {
     const { store } = makeStore()
     const added = store.add()
-    store.setIdentity(added.id, { email: 'autre@amitel.fr', subscriptionType: 'max' })
+    store.setIdentity(added.id, { email: 'autre@example.com', subscriptionType: 'max' })
     const account = store.find(added.id)!
-    expect(accountDisplayName(account)).toBe('autre@amitel.fr')
+    expect(accountDisplayName(account)).toBe('autre@example.com')
     expect(account.subscriptionType).toBe('max')
   })
 
@@ -153,16 +153,16 @@ describe('accountEnv', () => {
 describe('describeAccounts — deux comptes, MÊME email, niveaux différents', () => {
   const base = { addedAt: 'x' }
   const sameMail = [
-    { ...base, id: 'default', email: 'raphael.vilain@amitel.fr', subscriptionType: 'team' },
-    { ...base, id: 'compte-2', email: 'raphael.vilain@amitel.fr', subscriptionType: 'max' }
+    { ...base, id: 'default', email: 'prenom.nom@example.com', subscriptionType: 'team' },
+    { ...base, id: 'compte-2', email: 'prenom.nom@example.com', subscriptionType: 'max' }
   ]
 
   it('les distingue par le NIVEAU, sans alourdir le nom', () => {
     const described = describeAccounts(sameMail, 'default')
     // Le nom reste l'email pour les deux : c'est la pastille de niveau qui tranche.
     expect(described.map((account) => account.displayName)).toEqual([
-      'raphael.vilain@amitel.fr',
-      'raphael.vilain@amitel.fr'
+      'prenom.nom@example.com',
+      'prenom.nom@example.com'
     ])
     expect(described.map((account) => account.tier)).toEqual(['team', 'max'])
     // Et le couple (nom, niveau) est bien unique — c'est ce qui rend les puces utilisables.
@@ -202,13 +202,13 @@ describe('describeAccounts — deux comptes, MÊME email, niveaux différents', 
   it('n’ajoute AUCUN suffixe quand les comptes sont déjà distincts', () => {
     const described = describeAccounts(
       [
-        { ...base, id: 'default', email: 'pro@amitel.fr', subscriptionType: 'team' },
+        { ...base, id: 'default', email: 'pro@example.com', subscriptionType: 'team' },
         { ...base, id: 'compte-2', email: 'perso@gmail.com', subscriptionType: 'max' }
       ],
       'default'
     )
     expect(described.map((account) => account.displayName)).toEqual([
-      'pro@amitel.fr',
+      'pro@example.com',
       'perso@gmail.com'
     ])
   })
@@ -221,14 +221,14 @@ describe('parseIdentity', () => {
         JSON.stringify({
           loggedIn: true,
           authMethod: 'claude.ai',
-          email: 'raphael.vilain@amitel.fr',
+          email: 'prenom.nom@example.com',
           orgId: '1b869168',
           orgName: 'Amitel',
           subscriptionType: 'team'
         })
       )
     ).toEqual({
-      email: 'raphael.vilain@amitel.fr',
+      email: 'prenom.nom@example.com',
       orgName: 'Amitel',
       subscriptionType: 'team'
     })

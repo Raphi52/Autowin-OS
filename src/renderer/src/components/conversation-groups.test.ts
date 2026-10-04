@@ -30,8 +30,8 @@ describe('à quel groupe appartient une conversation', () => {
   })
 
   it('avec un dossier, le groupe EST le dossier', () => {
-    expect(groupeDe(conv('a', { projectPath: 'C:\\Amitel\\Autowin OS' }))).toMatchObject({
-      key: 'C:\\Amitel\\Autowin OS',
+    expect(groupeDe(conv('a', { projectPath: 'C:\\Travail\\Autowin OS' }))).toMatchObject({
+      key: 'C:\\Travail\\Autowin OS',
       label: 'Autowin OS',
       kind: 'dossier'
     })
@@ -39,7 +39,7 @@ describe('à quel groupe appartient une conversation', () => {
 
   it('une conversation Auto-Kaizen part chez les Auto-Kaizen MÊME si elle porte un dossier', () => {
     // La ranger sous son projet la remettrait exactement là où elle dérange : au milieu du travail.
-    const c = conv('a', { projectPath: 'C:\\Amitel\\Autowin OS', autoKaizen: { sourceId: 'x' } })
+    const c = conv('a', { projectPath: 'C:\\Travail\\Autowin OS', autoKaizen: { sourceId: 'x' } })
     expect(groupeDe(c)).toMatchObject({ key: GROUPE_KAIZEN, kind: 'kaizen' })
   })
 
@@ -51,12 +51,12 @@ describe('à quel groupe appartient une conversation', () => {
 
 describe('le nom lisible d’un dossier', () => {
   it('garde le dernier segment, pas le chemin entier qui ferait déborder la barre', () => {
-    expect(nomDeDossier('C:\\Amitel\\Autowin OS')).toBe('Autowin OS')
+    expect(nomDeDossier('C:\\Travail\\Autowin OS')).toBe('Autowin OS')
     expect(nomDeDossier('/home/raph/projets/rig')).toBe('rig')
   })
 
   it('tolère un séparateur final', () => {
-    expect(nomDeDossier('C:\\Amitel\\Autowin OS\\')).toBe('Autowin OS')
+    expect(nomDeDossier('C:\\Travail\\Autowin OS\\')).toBe('Autowin OS')
   })
 
   it('deux dossiers homonymes restent DEUX groupes — la clé est le chemin, pas le libellé', () => {
@@ -115,7 +115,7 @@ describe('l’ordre des groupes', () => {
     const groupes = grouperConversations([
       conv('k', { autoKaizen: { sourceId: 'x' } }),
       conv('d'),
-      conv('p', { projectPath: 'C:\\Amitel\\Autowin OS' })
+      conv('p', { projectPath: 'C:\\Travail\\Autowin OS' })
     ])
     expect(groupes.map((g) => g.kind)).toEqual(['dossier', 'divers', 'kaizen'])
   })
@@ -151,7 +151,7 @@ describe('l’état replié', () => {
   it('tous les autres sont ouverts par défaut', () => {
     // Un groupe fermé qu'on n'a pas fermé soi-même cache des conversations sans le dire.
     expect(estReplie(GROUPE_DIVERS, {})).toBe(false)
-    expect(estReplie('C:\\Amitel\\Autowin OS', {})).toBe(false)
+    expect(estReplie('C:\\Travail\\Autowin OS', {})).toBe(false)
   })
 
   it('un choix explicite gagne toujours sur le défaut, dans les DEUX sens', () => {
@@ -371,8 +371,8 @@ describe('repli sur le depot de la barre du haut (2026-09-17)', () => {
 
   it('un dossier de travail EXPLICITE gagne contre le depot par defaut', () => {
     expect(
-      groupeDe(conv('a', { projectPath: 'C:/Amitel/Autre' }), 'D:/RigV3Desktop')
-    ).toMatchObject({ key: 'C:/Amitel/Autre', kind: 'dossier' })
+      groupeDe(conv('a', { projectPath: 'C:/Travail/Autre' }), 'D:/RigV3Desktop')
+    ).toMatchObject({ key: 'C:/Travail/Autre', kind: 'dossier' })
   })
 
   it('une CATEGORIE explicite gagne aussi : le classement reste cosmetique et libre', () => {

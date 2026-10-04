@@ -128,7 +128,7 @@ export function describeAccounts(
   const byName = countBy((entry) => entry.name)
   // L’organisation ne tranche que si elle DISTINGUE : deux comptes de meme email, meme
   // niveau ET meme organisation (cas reel du 2026-09-01, deux fois
-  // « raphael.vilain@amitel.fr (Amitel) TEAM ») produisaient deux puces jumelles.
+  // « prenom.nom@example.com (Organisation) TEAM ») produisaient deux puces jumelles.
   const byNameTierOrg = countBy(
     (entry) => `${entry.name}\u0000${entry.tier}\u0000${entry.account.orgName?.trim() ?? ''}`
   )

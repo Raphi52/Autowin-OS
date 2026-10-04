@@ -41,11 +41,11 @@ describe('spawnLoginTerminal', () => {
   })
   it('passe cwd quand fourni (codex → racine repo pour npm run)', () => {
     const spawnFn = vi.fn(() => ({ unref: vi.fn() })) as unknown as typeof import('node:child_process').spawn
-    spawnLoginTerminal('npm run codex:login', { spawnFn, cwd: 'C:\\Amitel\\Autowin OS' })
+    spawnLoginTerminal('npm run codex:login', { spawnFn, cwd: 'C:\\Travail\\Autowin OS' })
     expect(spawnFn).toHaveBeenCalledWith(
       'cmd.exe',
       expect.any(Array),
-      expect.objectContaining({ cwd: 'C:\\Amitel\\Autowin OS' })
+      expect.objectContaining({ cwd: 'C:\\Travail\\Autowin OS' })
     )
   })
 })

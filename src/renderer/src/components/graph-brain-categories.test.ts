@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { brainSubjectOf } from './graph-brain-categories'
 import type { GraphNode } from './graph-view-model'
 
-const RACINE = '//srv1/rig/Projets IA/Amitel Brain/'
+const RACINE = '//nas1/partage/Projets IA/Team Brain/'
 const fiche = (chemin: string, themes: string[] = []): GraphNode => ({
   id: chemin,
   label: chemin.split('/').pop() ?? chemin,

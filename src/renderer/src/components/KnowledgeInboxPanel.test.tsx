@@ -285,7 +285,7 @@ describe('KnowledgeInboxPanel — la promotion humaine a enfin une surface', () 
       listInbox: vi.fn().mockResolvedValue([
         candidate({
           source: {
-            locator: 'C:\\srv1\\note.md',
+            locator: 'C:\\nas1\\note.md',
             problem: 'préfixe manquant devant un chemin',
             shaState: 'absent'
           }

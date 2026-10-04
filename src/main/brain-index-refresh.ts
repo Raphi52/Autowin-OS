@@ -24,7 +24,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
-import { amitelBrainOrigin } from './amitel-paths'
+import { sharedBrainOrigin } from './brain-paths'
 import { brainServiceToken } from './brain-retrieval'
 import { resolveBrainRuntime } from './brain-server-launch'
 
@@ -64,7 +64,7 @@ export async function readBrainHealth(
   const t = setTimeout(() => ctrl.abort(), timeoutMs) // sleep-ok: borne la latence du fetch
   try {
     const token = brainServiceToken(env)
-    const res = await fetchFn(`${amitelBrainOrigin(env)}/health`, {
+    const res = await fetchFn(`${sharedBrainOrigin(env)}/health`, {
       signal: ctrl.signal,
       headers: token ? { authorization: `Bearer ${token}` } : {}
     })
@@ -158,6 +158,7 @@ export function startBrainIndexRebuild(
   const outDir = join(brainRoot, 'tooling', 'index')
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
+  // Nom HISTORIQUE lu par les scripts Python de Hermes-Brain (hors de ce depot).
   childEnv.AMITEL_BRAIN_ROOT = brainRoot
   etat = 'en-cours'
   const args = [script, '--knowledge', join(brainRoot, 'knowledge'), '--out', outDir]

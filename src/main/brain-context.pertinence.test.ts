@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { graphifyEvidence } from './amitel-context'
+import { graphifyEvidence } from './brain-context'
 
 /**
  * DEFAUT VECU conv-1407 (2026-08-26), troisieme volet.

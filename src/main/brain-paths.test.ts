@@ -1,18 +1,19 @@
-// fix-ok: amitel-paths.ts codait en dur le partage srv1/rig/Projets IA/Amitel Brain et les dossiers C:/Amitel, C:/Code RIG par defaut (mesure : grep srv1 hors tests) ; ce test garde l'absence de chemin d'entreprise par defaut.
+// fix-ok: chemins, variables et marqueur propres à un employeur écrits en dur (mesuré par grep) ; neutralisés, anciens noms lus en secours (tests rouge→vert).
 import { afterAll, describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  amitelBrainOrigin,
-  amitelBrainPort,
-  amitelBrainRoot,
-  amitelBrainStateRoot,
-  amitelBrainTooling,
-  amitelWorkspaces,
-  DEFAULT_AMITEL_WORKSPACES,
-  DEFAULT_BRAIN_ROOT
-} from './amitel-paths'
+  sharedBrainOrigin,
+  sharedBrainPort,
+  sharedBrainRoot,
+  sharedBrainStateRoot,
+  sharedBrainTooling,
+  teamWorkspaces,
+  DEFAULT_TEAM_WORKSPACES,
+  defaultBrainRoot,
+  lireReglage
+} from './brain-paths'
 
 /**
  * Ces chemins etaient ecrits en dur dans QUATRE fichiers du main process (audit 2026-07-29). Ce que
@@ -20,65 +21,113 @@ import {
  * et le residu `C:\Nouveau dossier` — qui trainait dans une liste blanche ANTI-TRAVERSAL — ne revient
  * jamais.
  */
-describe('amitel-paths — source unique et surchargeable', () => {
-  it('rend le defaut Amitel quand rien n’est configure', () => {
-    expect(amitelBrainRoot({})).toBe(DEFAULT_BRAIN_ROOT)
-    expect(amitelBrainOrigin({})).toBe('http://127.0.0.1:8765')
+describe('brain-paths — source unique et surchargeable', () => {
+  it('sans reglage : aucun partage d’entreprise, un dossier LOCAL propre a Autowin', () => {
+    expect(sharedBrainRoot({})).toBe(defaultBrainRoot({}))
+    expect(sharedBrainRoot({ LOCALAPPDATA: 'L' })).toBe(join('L', 'AutowinBrain', 'brain'))
+    expect(sharedBrainRoot({ LOCALAPPDATA: 'L' })).not.toMatch(/^[\\/]{2}/)
+    expect(sharedBrainOrigin({})).toBe('http://127.0.0.1:8765')
   })
 
   it('aucun chemin d’entreprise par defaut : ni partage reseau, ni workspace', () => {
-    expect(amitelBrainRoot({})).not.toMatch(/srv1|amitel/i)
-    expect(amitelBrainRoot({}).startsWith('\\\\')).toBe(false)
-    expect(amitelWorkspaces({})).toEqual([])
+    expect(sharedBrainRoot({})).not.toMatch(/srv1|amitel/i)
+    expect(sharedBrainRoot({}).startsWith('\\\\')).toBe(false)
+    expect(teamWorkspaces({})).toEqual([])
   })
 
   it('respecte les noms de variables HISTORIQUES (les renommer serait une regression silencieuse)', () => {
-    expect(amitelBrainRoot({ AMITEL_BRAIN_ROOT: 'D:\\brain' })).toBe('D:\\brain')
-    expect(amitelBrainOrigin({ AMITEL_BRAIN_ORIGIN: 'http://localhost:9000' })).toBe(
+    expect(sharedBrainRoot({ AMITEL_BRAIN_ROOT: 'D:\\brain' })).toBe('D:\\brain')
+    expect(sharedBrainOrigin({ AMITEL_BRAIN_ORIGIN: 'http://localhost:9000' })).toBe(
       'http://localhost:9000'
     )
-    expect(amitelBrainTooling({ AUTOWIN_BRAIN_TOOLING: 'D:\\t' })).toBe('D:\\t')
+    expect(sharedBrainTooling({ AUTOWIN_BRAIN_TOOLING: 'D:\\t' })).toBe('D:\\t')
   })
 
   it('refuse une origine Brain distante avant tout envoi de token ou requête', () => {
     expect(() =>
-      amitelBrainOrigin({ AMITEL_BRAIN_ORIGIN: 'https://remote.example.invalid:9443' })
+      sharedBrainOrigin({ AMITEL_BRAIN_ORIGIN: 'https://remote.example.invalid:9443' })
     ).toThrow(/loopback/)
   })
 
   it('le tooling SUIT la racine du Brain — avant, les deux litteraux pouvaient diverger', () => {
     // Le partage fournit les donnees, jamais du code executable.
-    expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain', LOCALAPPDATA: 'C:\\Local' })).toBe(
+    expect(sharedBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain', LOCALAPPDATA: 'C:\\Local' })).toBe(
       'C:\\Local\\AmitelBrain\\tooling'
     )
-    expect(amitelBrainStateRoot({ LOCALAPPDATA: 'C:\\Local' })).toBe('C:\\Local\\AmitelBrain')
-    expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain', AUTOWIN_BRAIN_TOOLING: 'E:\\t' })).toBe(
+    expect(sharedBrainStateRoot({ LOCALAPPDATA: 'C:\\Local' })).toBe('C:\\Local\\AmitelBrain')
+    expect(sharedBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain', AUTOWIN_BRAIN_TOOLING: 'E:\\t' })).toBe(
       'E:\\t'
     )
-    expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: '\\\\srv1\\brain' })).toBe('')
+    expect(sharedBrainTooling({ AMITEL_BRAIN_ROOT: '\\\\nas1\\brain' })).toBe('')
   })
 
   it('une valeur VIDE ou en espaces ne masque pas le defaut', () => {
     // Piege classique : `AMITEL_BRAIN_ROOT=` (vide) faisait rendre '' avec un `??`, donc un chemin
     // relatif silencieux. On retombe sur le defaut.
-    expect(amitelBrainRoot({ AMITEL_BRAIN_ROOT: '' })).toBe(DEFAULT_BRAIN_ROOT)
-    expect(amitelBrainRoot({ AMITEL_BRAIN_ROOT: '   ' })).toBe(DEFAULT_BRAIN_ROOT)
+    expect(sharedBrainRoot({ AMITEL_BRAIN_ROOT: '' })).toBe(defaultBrainRoot({}))
+    expect(sharedBrainRoot({ AMITEL_BRAIN_ROOT: '   ' })).toBe(defaultBrainRoot({}))
   })
 
   it('les workspaces sont surchargeables en liste, et NE CONTIENNENT PLUS le residu de bricolage', () => {
-    expect(amitelWorkspaces({})).toEqual([...DEFAULT_AMITEL_WORKSPACES])
-    expect(amitelWorkspaces({})).not.toContain('C:\\Nouveau dossier')
-    expect(DEFAULT_AMITEL_WORKSPACES).not.toContain('C:\\Nouveau dossier')
-    expect(amitelWorkspaces({ AUTOWIN_AMITEL_WORKSPACES: 'D:\\a ; D:\\b' })).toEqual([
+    expect(teamWorkspaces({})).toEqual([...DEFAULT_TEAM_WORKSPACES])
+    expect(teamWorkspaces({})).not.toContain('C:\\Nouveau dossier')
+    expect(DEFAULT_TEAM_WORKSPACES).not.toContain('C:\\Nouveau dossier')
+    expect(teamWorkspaces({ AUTOWIN_AMITEL_WORKSPACES: 'D:\\a ; D:\\b' })).toEqual([
       'D:\\a',
       'D:\\b'
     ])
   })
 
+  it('aucun workspace d’equipe n’est autorise d’office (liste vide par defaut)', () => {
+    expect(DEFAULT_TEAM_WORKSPACES).toEqual([])
+    expect(teamWorkspaces({})).toEqual([])
+  })
+
   it('une liste de workspaces vide ou faite de separateurs retombe sur le defaut', () => {
-    expect(amitelWorkspaces({ AUTOWIN_AMITEL_WORKSPACES: '  ;  ;' })).toEqual([
-      ...DEFAULT_AMITEL_WORKSPACES
+    expect(teamWorkspaces({ AUTOWIN_AMITEL_WORKSPACES: '  ;  ;' })).toEqual([
+      ...DEFAULT_TEAM_WORKSPACES
     ])
+  })
+})
+
+/**
+ * NOMS NEUTRES (2026-10-04) : `AUTOWIN_BRAIN_*` / `AUTOWIN_WORKSPACES` priment ; les noms historiques
+ * `AMITEL_BRAIN_*` / `AUTOWIN_AMITEL_WORKSPACES` restent lus en secours, sans rien changer aux postes
+ * qui les ont deja poses.
+ */
+describe('brain-paths — noms de reglage neutres, anciens noms en secours', () => {
+  it('le nom neutre gagne quand les deux sont poses', () => {
+    expect(sharedBrainRoot({ AUTOWIN_BRAIN_ROOT: 'D:\\neuf', AMITEL_BRAIN_ROOT: 'D:\\ancien' })).toBe(
+      'D:\\neuf'
+    )
+    expect(
+      sharedBrainOrigin({
+        AUTOWIN_BRAIN_ORIGIN: 'http://127.0.0.1:9001',
+        AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:9002'
+      })
+    ).toBe('http://127.0.0.1:9001')
+    expect(sharedBrainPort({ AUTOWIN_BRAIN_PORT: '9003', AMITEL_BRAIN_PORT: '9004' })).toBe('9003')
+    expect(
+      teamWorkspaces({ AUTOWIN_WORKSPACES: 'D:\\neuf', AUTOWIN_AMITEL_WORKSPACES: 'D:\\ancien' })
+    ).toEqual(['D:\\neuf'])
+  })
+
+  it('le nom historique seul marche toujours (usage actuel inchange)', () => {
+    expect(sharedBrainRoot({ AMITEL_BRAIN_ROOT: 'D:\\ancien' })).toBe('D:\\ancien')
+    expect(sharedBrainPort({ AMITEL_BRAIN_PORT: '9004' })).toBe('9004')
+    expect(teamWorkspaces({ AUTOWIN_AMITEL_WORKSPACES: 'D:\\ancien' })).toEqual(['D:\\ancien'])
+  })
+
+  it('un nom neutre vide ou blanc compte comme absent : le nom historique prend le relais', () => {
+    expect(sharedBrainRoot({ AUTOWIN_BRAIN_ROOT: '  ', AMITEL_BRAIN_ROOT: 'D:\\ancien' })).toBe(
+      'D:\\ancien'
+    )
+    expect(lireReglage({ A: '', B: ' ' }, 'A', 'B')).toBeUndefined()
+    expect(lireReglage({}, 'A', 'B')).toBeUndefined()
+  })
+
+  it('les doublons et les entrees vides de la liste de workspaces sont ignores', () => {
+    expect(teamWorkspaces({ AUTOWIN_WORKSPACES: 'D:\\a;;D:\\a; ;D:\\b' })).toEqual(['D:\\a', 'D:\\b'])
   })
 })
 
@@ -107,32 +156,32 @@ describe('origine du Brain — le port vient de l installation, pas d un shell',
 
   it('lit `origin` du config.json quand l environnement est muet', () => {
     const env = avecInstallation({ origin: 'http://127.0.0.1:8766' })
-    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8766')
-    expect(amitelBrainPort(env)).toBe('8766')
+    expect(sharedBrainOrigin(env)).toBe('http://127.0.0.1:8766')
+    expect(sharedBrainPort(env)).toBe('8766')
   })
 
   it('accepte `port` comme raccourci', () => {
-    expect(amitelBrainOrigin(avecInstallation({ port: 8790 }))).toBe('http://127.0.0.1:8790')
-    expect(amitelBrainOrigin(avecInstallation({ port: '8791' }))).toBe('http://127.0.0.1:8791')
+    expect(sharedBrainOrigin(avecInstallation({ port: 8790 }))).toBe('http://127.0.0.1:8790')
+    expect(sharedBrainOrigin(avecInstallation({ port: '8791' }))).toBe('http://127.0.0.1:8791')
   })
 
   it('l environnement reste PRIORITAIRE sur l installation', () => {
     const env = avecInstallation({ origin: 'http://127.0.0.1:8766' })
-    expect(amitelBrainOrigin({ ...env, AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8700' })).toBe(
+    expect(sharedBrainOrigin({ ...env, AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8700' })).toBe(
       'http://127.0.0.1:8700'
     )
-    expect(amitelBrainOrigin({ ...env, AMITEL_BRAIN_PORT: '8701' })).toBe('http://127.0.0.1:8701')
+    expect(sharedBrainOrigin({ ...env, AMITEL_BRAIN_PORT: '8701' })).toBe('http://127.0.0.1:8701')
   })
 
   it('une valeur ILLISIBLE retombe sur le defaut plutot que de faire echouer la lecture', () => {
-    expect(amitelBrainOrigin(avecInstallation({ port: 'huit-mille' }))).toBe(
+    expect(sharedBrainOrigin(avecInstallation({ port: 'huit-mille' }))).toBe(
       'http://127.0.0.1:8765'
     )
-    expect(amitelBrainOrigin(avecInstallation({ port: 99999 }))).toBe('http://127.0.0.1:8765')
+    expect(sharedBrainOrigin(avecInstallation({ port: 99999 }))).toBe('http://127.0.0.1:8765')
   })
 
   it('une origine NON loopback est refusee — jamais une adresse distante en silence', () => {
-    expect(() => amitelBrainOrigin(avecInstallation({ origin: 'http://10.0.0.9:8766' }))).toThrow(
+    expect(() => sharedBrainOrigin(avecInstallation({ origin: 'http://10.0.0.9:8766' }))).toThrow(
       /loopback/i
     )
   })
@@ -140,24 +189,28 @@ describe('origine du Brain — le port vient de l installation, pas d un shell',
   /*
    * LA RACINE SUIT LA MEME REGLE QUE LE PORT — defaut vecu le 2026-09-10 (conv-2) : le moteur de
    * requete lisait `brain_root` du config.json pendant que la vue Knowledge ne lisait que
-   * l'environnement et retombait sur le partage \\ged2, inexistant hors VPN. Resultat : les
+   * l'environnement et retombait sur le partage reseau, inexistant hors VPN. Resultat : les
    * requetes marchaient, AUCUN coffre de savoir affiche. Ces tests figent la resolution unique.
    */
   it('lit `brain_root` du config.json quand l environnement est muet', () => {
-    expect(amitelBrainRoot(avecInstallation({ brain_root: 'C:/Brain/Local' }))).toBe(
+    expect(sharedBrainRoot(avecInstallation({ brain_root: 'C:/Brain/Local' }))).toBe(
       'C:/Brain/Local'
     )
   })
 
   it('l environnement reste PRIORITAIRE sur le `brain_root` installe', () => {
     const env = avecInstallation({ brain_root: 'C:/Brain/Local' })
-    expect(amitelBrainRoot({ ...env, AMITEL_BRAIN_ROOT: 'D:\\brain' })).toBe('D:\\brain')
+    expect(sharedBrainRoot({ ...env, AMITEL_BRAIN_ROOT: 'D:\\brain' })).toBe('D:\\brain')
   })
 
   it('un `brain_root` absent, vide ou illisible retombe sur le defaut', () => {
-    expect(amitelBrainRoot(avecInstallation({}))).toBe(DEFAULT_BRAIN_ROOT)
-    expect(amitelBrainRoot(avecInstallation({ brain_root: '   ' }))).toBe(DEFAULT_BRAIN_ROOT)
-    expect(amitelBrainRoot(avecInstallation({ brain_root: 42 }))).toBe(DEFAULT_BRAIN_ROOT)
+    for (const env of [
+      avecInstallation({}),
+      avecInstallation({ brain_root: '   ' }),
+      avecInstallation({ brain_root: 42 })
+    ]) {
+      expect(sharedBrainRoot(env)).toBe(defaultBrainRoot(env))
+    }
   })
 })
 
@@ -189,22 +242,22 @@ describe('Brain propre a Autowin — il prime sur la racine heritee d un autre B
 
   it('sa racine, son etat et son port priment sur AMITEL_BRAIN_ROOT herite', () => {
     const env = poste({ brain_root: 'C:\\Perso\\Autowin-Brain', port: 8766 })
-    expect(amitelBrainRoot(env)).toBe('C:\\Perso\\Autowin-Brain')
-    expect(amitelBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AutowinBrain'))
-    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8766')
+    expect(sharedBrainRoot(env)).toBe('C:\\Perso\\Autowin-Brain')
+    expect(sharedBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AutowinBrain'))
+    expect(sharedBrainOrigin(env)).toBe('http://127.0.0.1:8766')
   })
 
   it('sans ce dossier, rien ne change : la variable historique decide', () => {
     const env = poste()
-    expect(amitelBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
-    expect(amitelBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
-    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8765')
+    expect(sharedBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
+    expect(sharedBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
+    expect(sharedBrainOrigin(env)).toBe('http://127.0.0.1:8765')
   })
 
   it('une configuration SANS racine n est pas un Brain : elle ne detourne rien', () => {
     const env = poste({ port: 8766 })
-    expect(amitelBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
-    expect(amitelBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
+    expect(sharedBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
+    expect(sharedBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
   })
 
   it('seule la variable qui REPETE l installation partagee est ecartee : un choix explicite garde la main', () => {
@@ -214,15 +267,15 @@ describe('Brain propre a Autowin — il prime sur la racine heritee d un autre B
       ...poste({ brain_root: 'C:\\Perso\\Autowin-Brain', port: 8766 }),
       AMITEL_BRAIN_ROOT: 'D:\\autre'
     }
-    expect(amitelBrainRoot(env)).toBe('D:\\autre')
-    expect(amitelBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
+    expect(sharedBrainRoot(env)).toBe('D:\\autre')
+    expect(sharedBrainStateRoot(env)).toBe(join(env.LOCALAPPDATA as string, 'AmitelBrain'))
     // Meme racine partagee ecrite autrement (barres, casse) : c'est toujours l'heritage, ecarte.
     const echo = { ...env, AMITEL_BRAIN_ROOT: 'c:/perso/hermes-brain' }
-    expect(amitelBrainRoot(echo)).toBe('C:\\Perso\\Autowin-Brain')
+    expect(sharedBrainRoot(echo)).toBe('C:\\Perso\\Autowin-Brain')
     // Aucune variable : le Brain d'Autowin s'applique.
     const muet: NodeJS.ProcessEnv = { ...env }
     delete muet.AMITEL_BRAIN_ROOT
-    expect(amitelBrainRoot(muet)).toBe('C:\\Perso\\Autowin-Brain')
+    expect(sharedBrainRoot(muet)).toBe('C:\\Perso\\Autowin-Brain')
   })
 
   it('AUTOWIN_BRAIN_STATE_ROOT explicite garde la main, avec sa regle d origine', () => {
@@ -230,7 +283,7 @@ describe('Brain propre a Autowin — il prime sur la racine heritee d un autre B
       ...poste({ brain_root: 'C:\\Perso\\Autowin-Brain' }),
       AUTOWIN_BRAIN_STATE_ROOT: 'E:\\etat'
     }
-    expect(amitelBrainStateRoot(env)).toBe('E:\\etat')
-    expect(amitelBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
+    expect(sharedBrainStateRoot(env)).toBe('E:\\etat')
+    expect(sharedBrainRoot(env)).toBe('C:\\Perso\\Hermes-Brain')
   })
 })

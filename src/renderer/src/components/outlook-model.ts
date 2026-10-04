@@ -177,7 +177,7 @@ export interface Interlocuteur {
  * Le nom d'un contact, débarrassé des apostrophes qu'Outlook ajoute autour d'une adresse.
  *
  * Mesuré le 2026-09-03 : un destinataire d'un message envoyé arrive sous la forme
- * `'raphael.vilain@amitel.fr'`. Ces apostrophes sont un artefact d'affichage d'Outlook, pas une
+ * `'prenom.nom@example.com'`. Ces apostrophes sont un artefact d'affichage d'Outlook, pas une
  * partie du nom, et elles se lisent comme une coquille dans la liste.
  */
 function nettoyerNom(nom: string): string {
@@ -243,7 +243,7 @@ export function groupByInterlocutor(
       // Le nom suit le message REÇU le plus récent : c'est la graphie la plus à jour du contact.
       //
       // Et JAMAIS un message envoyé. Mesuré le 2026-09-03 : côté Éléments envoyés, Outlook rend le
-      // destinataire sous la forme « 'raphael.vilain@amitel.fr' », entre apostrophes. Laisser cette
+      // destinataire sous la forme « 'prenom.nom@example.com' », entre apostrophes. Laisser cette
       // graphie gagner parce qu'elle est la plus récente remplaçait « Raphaël VILAIN » par une
       // adresse entre guillemets dans la liste des interlocuteurs.
       if (!deMoi && nom !== '' && instant !== null && instant >= existant.dernierNomRecu) {
