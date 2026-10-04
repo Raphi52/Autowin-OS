@@ -213,3 +213,78 @@ describe('scout-rendement — la contre-epreuve ne vaut que pour l occurrence qu
     expect(r.rows[0].tours_detail[1].extraitReprise).toBe('faux')
   })
 })
+
+/*
+ * Mesure du 2026-09-29 (/maintenance, conv-38) : le rapport comptait 18 conversations quand l'app en
+ * avait 22 — `conversations.json` n'est reecrit qu'a certains moments, les creations recentes ne
+ * vivent que dans `conversations.json.journal.jsonl`. La sonde quotidienne ratait donc le jour meme.
+ */
+describe('scout-rendement — rejoue le journal des conversations', () => {
+  it('compte une conversation creee apres la derniere reecriture du fichier, et oublie une supprimee', () => {
+    const data = corpus()
+    const schema = 'autowin.conversation-change/v1'
+    const neuve = { id: 'conv-2', title: 'neuve', provider: 'claude', messages: [], createdAt: 3000 }
+    const journal = [
+      { schema, op: 'upsert', conversation: neuve },
+      {
+        schema,
+        op: 'append-messages',
+        id: 'conv-2',
+        messages: [{ role: 'user', content: 'fais Y', ts: 3100 }],
+        updatedAt: 3100
+      },
+      { schema, op: 'upsert', conversation: { ...neuve, id: 'conv-3' } },
+      { schema, op: 'delete', id: 'conv-3' }
+    ]
+    writeFileSync(
+      join(data, 'conversations.json.journal.jsonl'),
+      journal.map((l) => JSON.stringify(l)).join('\n') + '\n'
+    )
+    const r = rapport(data)
+    expect(r.rows.map((row) => row.id).sort()).toEqual(['conv-1', 'conv-2'])
+    expect(r.rows.find((row) => row.id === 'conv-2').tours).toBe(1)
+  })
+})
+
+/*
+ * Mesure du 2026-10-01 (/maintenance, conv-38) : un tour de conv-31 lance a 06:12Z et clos 17 min plus
+ * tard affichait 275,6 min. `chat-usage` porte le temps ECOULE depuis le debut du tour a chaque releve
+ * (src/main/chat/run-pilot-chat.ts:323), alors que tokens et cout y sont des ECARTS : additionner
+ * les releves d'un meme tour multiplie sa duree par le nombre de releves.
+ */
+describe('scout-rendement — duree des releves chat-usage', () => {
+  it('prend la duree ATTEINTE par un tour, pas la somme de ses releves cumules', () => {
+    const data = mkdtempSync(join(tmpdir(), 'rendement-duree-'))
+    mkdirSync(join(data, 'activity'), { recursive: true })
+    writeFileSync(
+      join(data, 'conversations.json'),
+      JSON.stringify([
+        {
+          id: 'conv-1',
+          title: 'duree',
+          messages: [
+            { role: 'user', content: 'fais X', ts: 1000 },
+            { role: 'assistant', content: 'ok', ts: 1100, turnId: 'T1' }
+          ]
+        }
+      ])
+    )
+    const minute = 60_000
+    const lignes = [
+      { ts: new Date(1200).toISOString(), kind: 'chat-usage', costUsd: 1, turnId: 'T1', durationMs: minute },
+      { ts: new Date(1300).toISOString(), kind: 'chat-usage', costUsd: 1, turnId: 'T1', durationMs: 2 * minute },
+      { ts: new Date(1400).toISOString(), kind: 'chat-usage', costUsd: 1, turnId: 'T1', durationMs: 3 * minute },
+      // Un sous-agent porte SA propre duree : elle s'ajoute, elle ne se confond pas avec le tour.
+      { ts: new Date(1500).toISOString(), kind: 'exec', label: 'subagent', costUsd: 2, turnId: 'T1', durationMs: minute }
+    ]
+    writeFileSync(
+      join(data, 'activity', 'conv-1.jsonl'),
+      lignes.map((l) => JSON.stringify(l)).join('\n') + '\n'
+    )
+    const row = rapport(data).rows[0]
+    const tour = row.tours_detail[0]
+    expect(tour.coutUsd).toBe(5) // les couts restent des ecarts : ils s'additionnent
+    expect(tour.minutes).toBe(4) // 3 min atteintes par le tour + 1 min de sous-agent, pas 7
+    expect(row.modeleMin).toBe(4) // la colonne « min modele » de la conversation suit la meme regle
+  })
+})

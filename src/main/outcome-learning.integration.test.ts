@@ -275,11 +275,28 @@ describe('outcome learning — contrat visible par les modèles', () => {
   it('rejoue une promotion après crash sans créer une seconde note', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-learning-promote-'))
     mkdirSync(join(root, 'inbox'))
-    writeFileSync(join(root, 'inbox', 'lesson.md'), '# leçon', 'utf8')
+    writeFileSync(
+      join(root, 'inbox', 'lesson.md'),
+      [
+        '---',
+        'type: lesson',
+        'scope: "autowin-os"',
+        'author_agent: "autowin-os"',
+        'model: "claude-opus-5-5"',
+        'created: 2026-09-29',
+        'status: candidate',
+        'source: "session:turn-1"',
+        '---',
+        '',
+        '# leçon'
+      ].join('\n'),
+      'utf8'
+    )
 
     const first = promoteInboxCandidate(root, 'inbox/lesson')
     const replay = promoteInboxCandidate(root, 'inbox/lesson')
 
+    expect(first.to).toBe('knowledge/lessons/lecon')
     expect(replay.to).toBe(first.to)
   })
 

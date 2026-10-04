@@ -1,4 +1,4 @@
-status: degraded-closed
+status: closed
 CausalHypothesis: `ChatView.tsx` rend `openRun.content` dans un `<pre>` brut ; l'inspecteur doit réutiliser `BrainMarkdown` et exposer les sections et compteurs déjà disponibles.
 CausalHypothesis: `src/main/models.ts` réécrit un cache inchangé après indisponibilité ; la sauvegarde doit être conditionnée à une différence réelle.
 session: local-scout-2026-07-21
@@ -118,6 +118,38 @@ Décision : **A**. Elle répond au besoin réel avec les données et le renderer
 [2026-07-27] BUILD-VERIFIED : test rouge d'import `RunInspector` absent, puis `npx vitest run src/renderer/src/components/RunInspector.test.tsx` vert (3 tests) ; `npm run typecheck` et `npm run build` sortent 0.
 [2026-07-27] CLEAN-BLOCKED : le signal global `npm test && npm run typecheck` reste rouge hors périmètre : `src/main/models.test.ts` échoue isolément (cache offline) et `renderer-storage-migration.test.ts` ne démarre pas (Electron absent). Preuve CDP indisponible pour le même Electron absent.
 [2026-07-27] BUILD-VERIFIED : `src/main/models.ts` évite la réécriture du cache inchangé ; `npm rebuild electron` a restauré le binaire. `npm test && npm run typecheck` : exit code 0.
+[2026-09-17] DoD 3 OBTENUE — preuve visuelle enfin prise dans l'app REELLE (Electron lance, depot de
+travail = ce depot). Capture du panneau « Details » > onglet RUNS, carte `autowin-os` depliee. Ce que
+la capture MONTRE, et non ce que le code ferait : la barre d'etat `degraded-closed` + `standard`, les
+compteurs `DoD 0/0`, `Journal 6`, `Defauts 4` affiches cote a cote ; le Besoin rendu en Markdown
+FORMATE (gras sur « Workflows ») et non en `<pre>` brut ; la section « RESTE A COCHER » et la section
+« DEFAUTS » listant les trois lignes datees du 2026-07-27. Les DoD 1 et 2 sont donc re-constatees a
+l'ecran par la meme capture.
+  DEUX DEFAUTS REELS ont ete trouves EN VOULANT prendre cette preuve, et corriges a leur source :
+  - `src/shared/navigation.ts` : « Workflows » est une SECTION d'Agent Studio et n'avait AUCUNE
+    adresse. Demander cette vue retombait en SILENCE sur `chat` (`reconnu: false`), donc un agent
+    croyait avoir navigue. Alias `workflows`/`workflow`/`runs`/`run` ajoutes, 3 cas dans
+    `src/shared/navigation.test.ts` constates rouges puis verts.
+  - `src/main/viz/fs-brains.ts` : `allowedReadRoots()` ne listait que les dossiers `runs/` de
+    donnees, JAMAIS le depot de travail choisi. L'inspecteur repondait donc « fichier hors perimetre
+    autorise » sur un RUN.md a la RACINE du depot — exactement le cas de CE fichier. Le depot de
+    travail est desormais une racine de lecture ; test rouge puis vert dans
+    `src/main/viz/fs-brains.test.ts` (55/55 dans ce fichier), le voisin hors depot reste refuse.
+  RESERVE : la preuve visuelle est une capture d'ecran RELUE, pas une assertion automatique.
+[2026-09-17] SIGNAL GLOBAL VERT — `npm test` : 837/837, 133 fichiers, exit code 0. Le statut passe
+donc de `degraded-closed` a `closed` : les trois DoD sont tenues ET le signal declare par le RUN
+sort a 0, ce qui manquait depuis le 2026-07-27 (`CLEAN-BLOCKED`).
+  Le rouge qui restait n'etait PAS une regression : 4 tests de la barre laterale
+  (`ChatView.derniere-conversation`, `ChatView.remontee-envoi`) lisaient TOUS les `.conv-label` du
+  panneau. Or le groupe « Recent » DUPLIQUE a dessein les fils deja ranges ailleurs — l'invariant est
+  ecrit dans `conversation-groups.ts` (`groupeRecent`) : « un groupe qui duplique n'a pas sa place
+  dans une fonction dont l'invariant est qu'une conversation appartient a UN groupe ». La SONDE
+  mesurait donc la mise en page au lieu du comportement, et echouait des l'etat de DEPART, avant
+  meme l'action testee. Corrigee en dedoublonnant par titre ; les assertions attendues sont
+  INCHANGEES. Sabotage verifie : ordre attendu inverse -> rouge, restaure -> vert, donc la sonde
+  discrimine toujours le tri qu'elle est censee prouver.
+  Preexistence etablie par mise de cote temporaire (`git stash push` des seuls fichiers edites) :
+  meme rouge sans mes modifications.
 
 ## Reprise
 

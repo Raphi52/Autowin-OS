@@ -50,7 +50,10 @@ describe('registre canonique des destinations Autowin', () => {
     ['router', { destination: 'agent-studio', section: 'routing' }],
     ['models', { destination: 'agent-studio', section: 'topology' }],
     ['capabilities', { destination: 'settings', section: 'capabilities' }],
-    ['behaviour', { destination: 'settings', section: 'behaviour' }]
+    ['behaviour', { destination: 'settings', section: 'behaviour' }],
+    ['workflows', { destination: 'agent-studio', section: 'workflows' }],
+    ['workflow', { destination: 'agent-studio', section: 'workflows' }],
+    ['runs', { destination: 'agent-studio', section: 'workflows' }]
   ] as const)('préserve la sous-section visée par l’alias %s', (input, expected) => {
     expect(resolveAppLocation(input)).toEqual(expected)
   })

@@ -10,8 +10,12 @@ import {
   analyser,
   citationsCode,
   ouvragesDuDocument,
-  grosOeuvre
+  grosOeuvre,
+  lireCorpus
 } from './pilote-prompts.mjs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 describe('sonde pilote — lecture du style reel', () => {
   it('ecarte les relances nues qui ne portent aucune demande', () => {
@@ -141,5 +145,34 @@ describe('sonde pilote — le gros oeuvre du projet', () => {
       expect(o.document.endsWith('.md')).toBe(true)
       expect(o.ligne).toBeGreaterThan(0)
     }
+  })
+})
+
+/*
+ * Meme cause que scout-rendement (corrige le 2026-09-29) : `conversations.json` n'est reecrit qu'a
+ * certains moments, les fils recents ne vivent que dans `conversations.json.journal.jsonl`. La sonde
+ * pilote profilait donc le style de l'utilisateur SANS ses demandes du jour.
+ */
+describe('sonde pilote — rejoue le journal des conversations', () => {
+  it('lit un fil cree apres la derniere reecriture du fichier, et oublie un fil supprime', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pilote-journal-'))
+    const schema = 'autowin.conversation-change/v1'
+    const ancien = { id: 'conv-1', title: 'ancien', messages: [{ role: 'user', content: 'fais X' }] }
+    writeFileSync(join(dir, 'conversations.json'), JSON.stringify([ancien]))
+    const neuf = { id: 'conv-2', title: 'neuf', messages: [] }
+    const journal = [
+      { schema, op: 'upsert', conversation: neuf },
+      { schema, op: 'append-messages', id: 'conv-2', messages: [{ role: 'user', content: 'fais Y' }] },
+      { schema, op: 'upsert', conversation: { ...neuf, id: 'conv-3' } },
+      { schema, op: 'delete', id: 'conv-3' }
+    ]
+    writeFileSync(
+      join(dir, 'conversations.json.journal.jsonl'),
+      // Derniere ligne TRONQUEE (ecriture en cours) : elle doit etre ignoree, pas faire echouer la lecture.
+      journal.map((l) => JSON.stringify(l)).join('\n') + '\n{"op":"upsert","conversa'
+    )
+    const { conversations } = lireCorpus(dir)
+    expect(conversations.map((c) => c.id).sort()).toEqual(['conv-1', 'conv-2'])
+    expect(conversations.find((c) => c.id === 'conv-2').messages[0].content).toBe('fais Y')
   })
 })

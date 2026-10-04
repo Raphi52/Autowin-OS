@@ -36,6 +36,30 @@ function note(relative: string, content: string): void {
   writeFileSync(file, content, 'utf8')
 }
 
+/** Candidat tel que `remember` le dépose (`brain-remember.ts`, schéma candidate-v1). */
+function candidat(title: string, corps = 'corps', entete: Record<string, string> = {}): string {
+  const champs: Record<string, string> = {
+    schema: 'amitel-brain/candidate-v1',
+    type: 'lesson',
+    kind: 'lesson',
+    scope: '"autowin-os"',
+    author_agent: '"autowin-os"',
+    model: '"claude-opus-5-5"',
+    created: '2026-09-29',
+    status: 'candidate',
+    supersedes: '[]',
+    tags: '["brain"]',
+    mocs: '[]',
+    source: '"git:src/main/brain-inbox.ts@abc1234"',
+    confidence: '"high"',
+    ...entete
+  }
+  const lignes = Object.entries(champs)
+    .filter(([, valeur]) => valeur !== '')
+    .map(([cle, valeur]) => `${cle}: ${valeur}`)
+  return `---\n${lignes.join('\n')}\n---\n\n# ${title}\n\n${corps}\n`
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'brain-inbox-'))
   mkdirSync(join(root, 'inbox'), { recursive: true })
@@ -428,6 +452,25 @@ describe('promouvoir / rejeter — primitives no-clobber et réversibles', () =>
     )
   })
 
+  it('la promotion automatique ne laisse pas le candidat entier dans inbox/', () => {
+    const contenu = candidat('Leçon automatique')
+    note('inbox/lesson.md', contenu)
+
+    const moved = promoteOutcomeLearningCandidate(root, 'inbox/lesson', 'autowin-os')
+
+    expect(readFileSync(join(root, 'knowledge/domain/autowin-os-lesson.md'), 'utf8')).toBe(contenu)
+    // Plus d'en-tête `status: candidate` : `brain_curate.py` ne le reprend plus comme en attente.
+    expect(readFileSync(join(root, 'inbox', 'lesson.md'), 'utf8')).toBe(
+      '\n<!-- autowin-inbox-moved:knowledge/domain/autowin-os-lesson -->\n'
+    )
+    expect(listInboxCandidates(root)).toEqual([])
+    expect(promoteOutcomeLearningCandidate(root, 'inbox/lesson', 'autowin-os')).toEqual({
+      ...moved,
+      replayed: true
+    })
+    expect(readdirSync(join(root, 'knowledge/domain'))).toEqual(['autowin-os-lesson.md'])
+  })
+
   it('rétracte puis restaure une connaissance sans perdre son historique', () => {
     note('knowledge/fausse.md', '# Fausse leçon\n\nContenu à retirer du RAG.\n')
     const retracted = retractKnowledgeCandidate(root, 'knowledge/fausse')
@@ -459,36 +502,142 @@ describe('promouvoir / rejeter — primitives no-clobber et réversibles', () =>
   })
 
   it('accepte les noms légaux commençant par deux points sans autoriser ../', () => {
-    note('inbox/..note.md', '# Note\n\ncorps\n')
+    note('inbox/..note.md', candidat('Note'))
     note('inbox/..rejet.md', '# Rejet\n\ncorps\n')
 
     expect(readInboxCandidateBody(root, 'inbox/..note').body).toBe('corps')
-    expect(promoteInboxCandidate(root, 'inbox/..note').to).toBe('knowledge/..note')
+    expect(promoteInboxCandidate(root, 'inbox/..note').to).toBe('knowledge/lessons/note')
     expect(rejectInboxCandidate(root, 'inbox/..rejet').to).toBe('.trash/..rejet')
   })
-  it('promouvoir déplace le candidat de inbox/ vers knowledge/', () => {
-    note('inbox/a.md', '# A\n\ncorps\n')
-    const moved = promoteInboxCandidate(root, 'inbox/a')
-    expect(moved.to).toBe('knowledge/a')
+  it('promouvoir range une fiche v1 dans knowledge/<type>/ et ne laisse aucun double dans inbox/', () => {
+    note('inbox/a.md', candidat('Une leçon Brain', 'Le corps de la leçon.'))
+    const moved = promoteInboxCandidate(root, 'inbox/a', { now: new Date(2026, 8, 30, 12) })
+
+    expect(moved).toEqual({ ok: true, from: 'inbox/a', to: 'knowledge/lessons/une-lecon-brain' })
+    // Rien à la racine de knowledge/ : `brain_validate.py` y refuse toute fiche.
+    expect(readdirSync(join(root, 'knowledge'))).toEqual(['lessons'])
+    expect(readFileSync(join(root, 'knowledge/lessons/une-lecon-brain.md'), 'utf8')).toBe(
+      [
+        '---',
+        'schema: amitel-brain/v1',
+        'uid: autowin-os/lesson/une-lecon-brain',
+        'type: lesson',
+        'kind: lesson',
+        'scope: "autowin-os"',
+        'author_agent: "autowin-os"',
+        'model: claude-opus-5-5',
+        'created: 2026-09-29',
+        'updated: 2026-09-30',
+        'status: active',
+        'confidence: derived',
+        'sources: ["git:src/main/brain-inbox.ts@abc1234"]',
+        'supersedes: []',
+        'reviewed_by: ["autowin-app-curation"]',
+        'reviewed_at: 2026-09-30',
+        'mocs: ["knowledge/_maps/autowin-os"]',
+        'tags: ["brain", "theme/autowin-os"]',
+        '---',
+        '',
+        '# Une leçon Brain',
+        '',
+        'Le corps de la leçon.',
+        ''
+      ].join('\n')
+    )
+    // Le candidat n'est plus qu'une ligne-marqueur : ni en-tête `status: candidate` que
+    // `brain_curate.py` reprendrait comme proposition en attente, ni copie du contenu.
+    const reste = readFileSync(join(root, 'inbox', 'a.md'), 'utf8')
+    expect(reste).toBe('\n<!-- autowin-inbox-moved:knowledge/lessons/une-lecon-brain -->\n')
     expect(listInboxCandidates(root)).toEqual([])
-    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toContain('autowin-inbox-moved')
-    expect(readdirSync(join(root, 'knowledge'))).toEqual(['a.md'])
+  })
+
+  it('range chaque type dans son dossier et garde les mocs et le thème déclarés', () => {
+    note(
+      'inbox/d.md',
+      candidat('Décision tranchée', 'corps', {
+        type: 'decision',
+        kind: '',
+        scope: '"global"',
+        tags: '["theme/ia"]',
+        mocs: '["knowledge/_maps/ia"]',
+        confidence: '"low"'
+      })
+    )
+    note('inbox/f.md', candidat('Un fait', 'corps', { type: 'domain', kind: '' }))
+    note('inbox/p.md', candidat('Un goût', 'corps', { type: 'preference', kind: 'preference' }))
+
+    expect(promoteInboxCandidate(root, 'inbox/d').to).toBe('knowledge/decisions/decision-tranchee')
+    expect(promoteInboxCandidate(root, 'inbox/f').to).toBe('knowledge/domain/un-fait')
+    expect(promoteInboxCandidate(root, 'inbox/p').to).toBe('knowledge/preferences/un-gout')
+    const decision = readFileSync(join(root, 'knowledge/decisions/decision-tranchee.md'), 'utf8')
+    expect(decision).toContain('uid: global/decision/decision-tranchee\n')
+    expect(decision).toContain('confidence: hypothesis\n')
+    expect(decision).toContain('mocs: ["knowledge/_maps/ia"]\n')
+    expect(decision).toContain('tags: ["theme/ia"]\n')
+    expect(readFileSync(join(root, 'knowledge/domain/un-fait.md'), 'utf8')).toContain(
+      'kind: concept\n'
+    )
+  })
+
+  it('promeut un candidat enregistré avec une marque d’ordre des octets (U+FEFF)', () => {
+    note('inbox/a.md', `${String.fromCharCode(0xfeff)}${candidat('Avec marque')}`)
+    expect(promoteInboxCandidate(root, 'inbox/a').to).toBe('knowledge/lessons/avec-marque')
+  })
+
+  it('rejoue une promotion déjà faite sans créer de seconde fiche', () => {
+    note('inbox/a.md', candidat('Rejouée'))
+    const first = promoteInboxCandidate(root, 'inbox/a')
+    const replay = promoteInboxCandidate(root, 'inbox/a')
+    expect(replay).toEqual({ ...first, replayed: true })
+    expect(readdirSync(join(root, 'knowledge/lessons'))).toEqual(['rejouee.md'])
+  })
+
+  it.each([
+    ['sans en-tête', '# A\n\ncorps\n', /sans en-tête/],
+    ['sans type', candidat('A', 'corps', { type: '' }), /champ type manquant/],
+    ['sans source', candidat('A', 'corps', { source: '' }), /champ source manquant/],
+    ['au type inconnu', candidat('A', 'corps', { type: 'note' }), /type de candidat non pris/],
+    ['déjà actif', candidat('A', 'corps', { status: 'active' }), /statut active/],
+    [
+      'relu par sa propre famille',
+      candidat('A', 'corps', { author_agent: 'autowin-app-curation' }),
+      /famille/
+    ]
+  ])('refuse un candidat %s sans rien écrire ni toucher inbox/', (_label, contenu, erreur) => {
+    note('inbox/a.md', contenu)
+    expect(() => promoteInboxCandidate(root, 'inbox/a')).toThrow(erreur)
+    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toBe(contenu)
+    expect(readdirSync(join(root, 'knowledge'))).toEqual([])
   })
 
   it('promouvoir ne PIÉTINE pas une fiche canonique homonyme', () => {
-    note('inbox/a.md', '# candidat\n')
-    note('knowledge/a.md', '# canonique\n')
+    note('inbox/a.md', candidat('A'))
+    note('knowledge/lessons/a.md', '# canonique\n')
     const moved = promoteInboxCandidate(root, 'inbox/a')
-    expect(moved.to).toBe('knowledge/a-2')
-    expect(readdirSync(join(root, 'knowledge')).sort()).toEqual(['a-2.md', 'a.md'])
+    expect(moved.to).toBe('knowledge/lessons/a-2')
+    expect(readdirSync(join(root, 'knowledge/lessons')).sort()).toEqual(['a-2.md', 'a.md'])
+    expect(readFileSync(join(root, 'knowledge/lessons/a.md'), 'utf8')).toBe('# canonique\n')
   })
 
   it('rejeter déplace vers .trash/ — jamais de suppression définitive', () => {
-    note('inbox/a.md', '# A\n')
+    const contenu = candidat('A rejeter')
+    note('inbox/a.md', contenu)
     const moved = rejectInboxCandidate(root, 'inbox/a')
     expect(moved.to).toBe('.trash/a')
     expect(listInboxCandidates(root)).toEqual([])
-    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toContain('autowin-inbox-moved')
+    // La copie COMPLÈTE est dans .trash/ ; inbox/ ne garde que la ligne-marqueur, sans l'en-tête
+    // `status: candidate` que `brain_curate.py --apply` republiait.
+    expect(readFileSync(join(root, '.trash', 'a.md'), 'utf8')).toBe(contenu)
+    expect(readFileSync(join(root, 'inbox', 'a.md'), 'utf8')).toBe(
+      '\n<!-- autowin-inbox-moved:.trash/a -->\n'
+    )
+    expect(readdirSync(join(root, '.trash'))).toEqual(['a.md'])
+  })
+
+  it('rejouer un rejet ne crée pas de seconde copie dans .trash/', () => {
+    note('inbox/a.md', candidat('A rejeter'))
+    const moved = rejectInboxCandidate(root, 'inbox/a')
+    expect(rejectInboxCandidate(root, 'inbox/a')).toEqual({ ...moved, replayed: true })
     expect(readdirSync(join(root, '.trash'))).toEqual(['a.md'])
   })
 
@@ -560,7 +709,10 @@ describe('assertBrainVaultRoot — un canal IPC accepte n’importe quelle chaî
     symlinkSync(vault, alias, process.platform === 'win32' ? 'junction' : 'dir')
 
     const authorized = assertBrainVaultRoot(alias, vault)
-    rmSync(alias, { force: true })
+    // `recursive` requis depuis Node 24 : sans lui, rmSync refuse une junction Windows
+    // (« Path is a directory », ERR_FS_EISDIR). Il retire le LIEN seul — la cible reste intacte
+    // (sonde locale du 2026-09-10, Node v24.12.0).
+    rmSync(alias, { recursive: true, force: true })
     symlinkSync(outside, alias, process.platform === 'win32' ? 'junction' : 'dir')
 
     expect(authorized).toBe(realpathSync.native(vault))

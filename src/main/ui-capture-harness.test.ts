@@ -146,6 +146,23 @@ describe('verdict quand la preuve exige un clic', () => {
     expect(verdict.echecs).toContain('clic-sans-effet([data-testid="quota-indicator"])')
   })
 
+  it('accepte un ONGLET qui REMPLACE la vue par moins d elements — un delta, meme negatif, est un effet', () => {
+    // fix-ok: cause mesurée — verdictCapture exigeait une hausse du nombre d'éléments (>=) ; ce test, rouge avant le correctif de scripts/ui-capture.mjs, est vert après.
+    // 2026-10-02 : clic sur l'onglet Budget des reglages, 521 elements -> 354, panneau visible sur
+    // l'image, et pourtant « clic-sans-effet » (code 5) : la garde exigeait une HAUSSE.
+    expect(
+      verdictCapture({ ...ouvert, elementsAvantClic: 400, defilementVers: '.mode-auto-seuils' })
+    ).toEqual({ ok: true, echecs: [] })
+  })
+
+  it('refuse un clic qui REDUIT la vue sans cible nommee — fermer un menu ou casser la vue n est pas une preuve', () => {
+    // Objection du juge 2026-10-02 : accepter tout delta non nul laisse passer un clic qui FERME.
+    // Une baisse n'est recevable que si `--scroll` a retrouve la cible APRES le clic (sinon exit 9).
+    const verdict = verdictCapture({ ...ouvert, elementsAvantClic: 400 })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.echecs).toContain('clic-reduit-vue-sans-cible([data-testid="quota-indicator"])')
+  })
+
   it('laisse INTACTES les captures sans clic', () => {
     // Sans `--click`, aucune des deux gardes ne doit mordre : le comportement d'origine est le
     // contrat de tous les appels existants.
