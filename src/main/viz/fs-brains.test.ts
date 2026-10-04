@@ -2064,17 +2064,19 @@ tags: [${theme}]
       symlinkSync(allowed, alias, linkType)
 
       const previewPending = isolated.loadBrainGraphPreviewAsync(alias, 100)
-      rmSync(alias, { force: true })
+      // `recursive` requis depuis Node 24 : rmSync sans lui refuse une junction Windows (EISDIR).
+      // Il retire le LIEN seul — la cible et ses fichiers restent intacts (sonde du 2026-09-10).
+      rmSync(alias, { recursive: true, force: true })
       symlinkSync(outside, alias, linkType)
       const preview = await previewPending
 
       expect(preview.nodes).toHaveLength(100)
       expect(preview.nodes.every(({ label }) => label.startsWith('INSIDE-'))).toBe(true)
 
-      rmSync(alias, { force: true })
+      rmSync(alias, { recursive: true, force: true })
       symlinkSync(allowed, alias, linkType)
       const graphPending = isolated.loadBrainGraphAsync(alias, 100)
-      rmSync(alias, { force: true })
+      rmSync(alias, { recursive: true, force: true })
       symlinkSync(outside, alias, linkType)
       const graph = await graphPending
 
@@ -2119,6 +2121,31 @@ tags: [${theme}]
       expect(() => readNodeFile(sibling)).toThrow('fichier hors périmètre autorisé')
     } finally {
       process.env.APPDATA = previousAppData
+    }
+  })
+
+  it('reads a RUN.md at the ROOT of the chosen execution workspace', () => {
+    // Un RUN.md vit couramment A LA RACINE du depot sur lequel on travaille (c'est le cas du RUN.md
+    // d'Autowin lui-meme). La liste blanche ne connaissait que les dossiers `runs/` de donnees : la
+    // vue Workflows refusait donc de lire le RUN.md du depot CHOISI par l'utilisateur, avec un
+    // « hors perimetre autorise » incomprehensible. Constate le 2026-09-17 dans l'app reelle.
+    const workspace = mkdtempSync(join(tmpdir(), 'autowin-os-workspace-'))
+    const runFile = join(workspace, 'RUN.md')
+    writeFileSync(runFile, '# Depot workflow')
+    const outside = mkdtempSync(join(tmpdir(), 'autowin-os-outside-'))
+    const sibling = join(outside, 'secret.md')
+    writeFileSync(sibling, '# Secret')
+    const previous = process.env.AUTOWIN_OS_WORKSPACE
+    process.env.AUTOWIN_OS_WORKSPACE = workspace
+    try {
+      expect(readNodeFile(runFile).content).toBe('# Depot workflow')
+      // Le depot autorise ne doit RIEN ouvrir de plus : un voisin reste refuse.
+      expect(() => readNodeFile(sibling)).toThrow('fichier hors périmètre autorisé')
+    } finally {
+      if (previous === undefined) delete process.env.AUTOWIN_OS_WORKSPACE
+      else process.env.AUTOWIN_OS_WORKSPACE = previous
+      rmSync(workspace, { recursive: true, force: true })
+      rmSync(outside, { recursive: true, force: true })
     }
   })
 

@@ -129,6 +129,29 @@ describe('origine du Brain — le port vient de l installation, pas d un shell',
       /loopback/i
     )
   })
+
+  /*
+   * LA RACINE SUIT LA MEME REGLE QUE LE PORT — defaut vecu le 2026-09-10 (conv-2) : le moteur de
+   * requete lisait `brain_root` du config.json pendant que la vue Knowledge ne lisait que
+   * l'environnement et retombait sur le partage \\ged2, inexistant hors VPN. Resultat : les
+   * requetes marchaient, AUCUN coffre de savoir affiche. Ces tests figent la resolution unique.
+   */
+  it('lit `brain_root` du config.json quand l environnement est muet', () => {
+    expect(amitelBrainRoot(avecInstallation({ brain_root: 'C:/Brain/Local' }))).toBe(
+      'C:/Brain/Local'
+    )
+  })
+
+  it('l environnement reste PRIORITAIRE sur le `brain_root` installe', () => {
+    const env = avecInstallation({ brain_root: 'C:/Brain/Local' })
+    expect(amitelBrainRoot({ ...env, AMITEL_BRAIN_ROOT: 'D:\\brain' })).toBe('D:\\brain')
+  })
+
+  it('un `brain_root` absent, vide ou illisible retombe sur le defaut', () => {
+    expect(amitelBrainRoot(avecInstallation({}))).toBe(DEFAULT_BRAIN_ROOT)
+    expect(amitelBrainRoot(avecInstallation({ brain_root: '   ' }))).toBe(DEFAULT_BRAIN_ROOT)
+    expect(amitelBrainRoot(avecInstallation({ brain_root: 42 }))).toBe(DEFAULT_BRAIN_ROOT)
+  })
 })
 
 /**

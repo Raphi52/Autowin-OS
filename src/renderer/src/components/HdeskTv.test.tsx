@@ -8,7 +8,8 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { HdeskTv, toucheTv, type HdeskTvApi } from './HdeskTv'
+import { HdeskTv, type HdeskTvApi } from './HdeskTv'
+import { toucheTv } from './hdesk-tv-touches'
 import type { BureauTv, ImageTv } from '../../../main/hdesk-tv'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

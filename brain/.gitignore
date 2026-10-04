@@ -19,3 +19,10 @@ Thumbs.db
 # Candidate notes are local until reviewed
 inbox/*.md
 !inbox/README.md
+
+# Private notes: indexed locally, never published (both GitHub repos are public).
+# Rule decided on 2026-09-25 in Raphi52/Hermes-Brain (knowledge/brain/depot-public-et-notes-privees.md).
+knowledge/local/
+
+# Notes set aside by curation passes (merged, corrected or false): local recovery only.
+.trash/

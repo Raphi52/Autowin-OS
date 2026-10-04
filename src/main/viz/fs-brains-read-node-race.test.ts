@@ -19,7 +19,8 @@ vi.mock('node:fs', async (importOriginal) => {
     const result = fs.realpathSync.native(path)
     if (race.armed && String(path) === race.target) {
       race.armed = false
-      fs.rmSync(race.alias, { force: true })
+      // `recursive` requis depuis Node 24 : rmSync sans lui refuse une junction Windows (EISDIR).
+      fs.rmSync(race.alias, { recursive: true, force: true })
       fs.symlinkSync(race.outside, race.alias, process.platform === 'win32' ? 'junction' : 'dir')
     }
     return result

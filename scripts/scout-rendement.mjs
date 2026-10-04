@@ -35,7 +35,22 @@ const readJsonl = (p) => {
   } catch { return [] }
 }
 
-const corpus = readJson(path.join(DATA, 'conversations.json'), [])
+// Le fichier SEUL est en retard : les creations/suppressions recentes ne vivent que dans son journal
+// (mesure du 2026-09-29 : 18 conversations lues contre 22 vivantes). On le rejoue DANS L'ORDRE, comme
+// applyConversationJournal (src/main/store/conversations-disk.ts). `turn-event` n'est pas rejoue :
+// il ne porte que le texte en flux des reponses, jamais un tour utilisateur ni un turnId nouveau.
+const lireCorpus = () => {
+  const base = readJson(path.join(DATA, 'conversations.json'), [])
+  if (!Array.isArray(base)) return base
+  const parId = new Map(base.map((c) => [c.id, c]))
+  for (const r of readJsonl(path.join(DATA, 'conversations.json.journal.jsonl'))) {
+    if (r.op === 'upsert' && r.conversation?.id) parId.set(r.conversation.id, r.conversation)
+    else if (r.op === 'delete') parId.delete(r.id)
+    else if (r.op === 'append-messages' && Array.isArray(r.messages)) parId.get(r.id)?.messages?.push(...r.messages)
+  }
+  return [...parId.values()]
+}
+const corpus = lireCorpus()
 if (!Array.isArray(corpus) || corpus.length === 0) {
   console.error(`Aucune conversation lisible sous ${DATA}`)
   process.exit(2)
@@ -108,7 +123,9 @@ for (const c of convs) {
   const users = msgs.filter((m) => m.role === 'user')
   const acts = readJsonl(path.join(DATA, 'activity', `${id}.jsonl`))
   const costUsd = acts.reduce((s, a) => s + (Number(a.costUsd) || 0), 0)
-  const durationMs = acts.reduce((s, a) => s + (Number(a.durationMs) || 0), 0)
+  // Hors `chat-usage` seulement : la duree de chat (un NIVEAU par tour) est ajoutee plus bas, apres
+  // le rattachement aux tours, avec la meme regle que la colonne par tour.
+  let durationMs = acts.reduce((s, a) => s + (a.kind === 'chat-usage' ? 0 : Number(a.durationMs) || 0), 0)
   // ETAPES D'ORCHESTRATION : les etiquettes REELLEMENT ecrites par l'app (commands.ts, type
   // OrchestrationStep). L'ancien filtre cherchait `run`/`agent`, deux mots qu'aucune ligne ne
   // porte : la colonne affichait donc 0 partout, y compris sur des conversations de 30 etapes.
@@ -154,6 +171,10 @@ for (const c of convs) {
       if (m.turnId && dernierUser >= 0 && !tourParId.has(m.turnId)) tourParId.set(m.turnId, dernierUser)
     }
   }
+  // `chat-usage` porte le temps ECOULE depuis le debut de son tour a chaque releve
+  // (src/main/chat/run-pilot-chat.ts:323) — un NIVEAU, quand tokens et cout y sont des ECARTS. On garde
+  // donc la duree MAXIMALE atteinte par tour (cle : turnId, sinon le tour utilisateur), jamais la somme.
+  const dureeChat = new Map()
   for (const a of acts) {
     let k = a.turnId !== undefined && tourParId.has(a.turnId) ? tourParId.get(a.turnId) : -1
     if (k < 0) {
@@ -163,8 +184,12 @@ for (const c of convs) {
     }
     if (k < 0 || k >= turns.length) continue
     turns[k].coutUsd += Number(a.costUsd) || 0
-    turns[k].minutes += (Number(a.durationMs) || 0) / 60000
+    const ms = Number(a.durationMs) || 0
+    if (a.kind !== 'chat-usage') { turns[k].minutes += ms / 60000; continue }
+    const cle = `${k}|${a.turnId ?? ''}`
+    dureeChat.set(cle, { k, ms: Math.max(ms, dureeChat.get(cle)?.ms ?? 0) })
   }
+  for (const { k, ms } of dureeChat.values()) { turns[k].minutes += ms / 60000; durationMs += ms }
   for (const t of turns) { t.coutUsd = Number(t.coutUsd.toFixed(4)); t.minutes = Number(t.minutes.toFixed(1)) }
 
   // --- BIFURCATION : premier tour ou le cout DECOLLE sans que le livrable avance.

@@ -5,8 +5,9 @@ description: >-
   main sur « /maintenance », « fais la maintenance », « état de santé de l'app »). Balaye QUATRE axes
   avec les sondes existantes — bugs, lenteurs/coûts, retard sur les concurrents, travail inachevé —,
   déduplique contre la passe précédente, corrige AU PLUS UN défaut borné preuve rouge→vert à l'appui,
-  et rend un bulletin court et classé. Ne publie rien (ni commit, ni push, ni fiche). PAS pour un
-  chantier ou une correction demandée (c'est `build`), ni pour trier du travail non publié (`salvage`).
+  et rend un bulletin court et classé. Ne publie rien (ni commit, ni push, ni fiche). Ne pas utiliser
+  pour un défaut déjà nommé ni un chantier de plusieurs correctifs (→ `build` / `heal`), ni pour
+  trier ou publier du travail non publié (→ `salvage`).
 ---
 
 # maintenance — la passe quotidienne de santé d'Autowin OS

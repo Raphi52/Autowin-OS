@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
@@ -18,7 +19,15 @@ import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
  * contenu reel. ROUGE avant correction : « texte a remplacer introuvable ».
  */
 const SAUT = String.fromCharCode(10)
-const RACINE = join(process.cwd(), '.autowin-data', 'tests-desync')
+/*
+ * LA RACINE DES FIXTURES VIT HORS DU DEPOT MESURE — meme motif que `edit-file-portee.test.ts`.
+ *
+ * DEFAUT VECU (2026-09-10) : sous `process.cwd()`, les depots jetables et leurs bureaux isoles se
+ * creaient DANS le bureau qui verifie ce fichier ; le chemin cumule depassait la limite Windows et
+ * `git worktree add` echouait en `fatal: '$GIT_DIR' too big` — un rouge d'environnement qui bloquait
+ * toute edition du cone, sans rapport avec la logique testee ici.
+ */
+const RACINE = realpathSync.native(mkdtempSync(join(tmpdir(), 'autowin-desync-')))
 
 const temporaires: string[] = []
 afterEach(() => {

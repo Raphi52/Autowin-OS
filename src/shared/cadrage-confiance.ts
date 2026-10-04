@@ -137,7 +137,7 @@ export type CitationIntrouvable = (chemin: string, ligne?: number) => boolean
 const ETIQUETTE_VERIFIE = /(?<!\p{L})V[EÉ]RIFI[EÉ]E?S?(?!\p{L})/iu
 const ETIQUETTE_NON_VERIFIE_G = new RegExp(ETIQUETTE_NON_VERIFIE.source, 'giu')
 /** `src/a.ts:12`, `SKILL.md:64-68` : un chemin a extension, suivi ou non d'un numero de ligne. */
-const CITATION = /([\w./\-]+\.(?:md|tsx?|m?js|json|ps1|ya?ml))(?::(\d+))?/giu
+const CITATION = /([\w./-]+\.(?:md|tsx?|m?js|json|ps1|ya?ml))(?::(\d+))?/giu
 
 /**
  * SKILL.md (frame) exige pour chaque VERIFIE un fichier:ligne reellement lu, et rappelle que la
