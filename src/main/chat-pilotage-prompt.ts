@@ -628,8 +628,8 @@ export function buildChatPilotagePrompt(
     `CHANGER ? Non -> tu lis et tu reponds. Un pipeline lance pour LIRE fait attendre des minutes et ` +
     `peut ne rien rendre du tout.\n` +
     // CHANGER n'est pas seulement une ecriture de FICHIER. Mesure conv-69, saisie ts=1789550619709
-    // (« fait toi-meme la regeneration sur les greffes restants ») : 354 s, 2,91 $, 29 Kbis
-    // REGENERES dans les bases de 15 greffes de PRODUCTION -- mutation massive et non annulable,
+    // (« fait toi-meme la regeneration sur les bases restants ») : 354 s, 2,91 $, 29 Kbis
+    // REGENERES dans les bases de 15 bases de PRODUCTION -- mutation massive et non annulable,
     // menee entierement en chat direct. Aucun fichier du depot n'ayant change, le critere ci-dessus
     // l'exemptait mot pour mot : zero RUN.md, zero juge, aucune trace de workflow. A la saisie
     // ts=1789551433032 l'utilisateur constate le trou : « je ne vois pas de RUN.MD ».

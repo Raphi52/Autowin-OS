@@ -38,7 +38,7 @@ describe('chat-pilotage-prompt — le mot « scout » ne commande pas une orches
   })
 
   /*
-    conv-69 (2026-09-16), saisie ts=1789550619709 : 29 Kbis regeneres dans les bases de 15 greffes de
+    conv-69 (2026-09-16), saisie ts=1789550619709 : 29 Kbis regeneres dans les bases de 15 bases de
     production, en chat direct, sans qu'aucun fichier ne change -- donc zero RUN.md, et l'utilisateur
     constate le trou a la saisie ts=1789551433032. Le critere doit nommer la mutation EXTERNE.
   */

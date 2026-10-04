@@ -67,6 +67,16 @@ import { dirname, parse, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cheminDevToolsPort, racineDepot } from './racine-depot.mjs'
 
+// Node 20 n'expose WebSocket qu'avec --experimental-websocket (global par défaut depuis Node 22).
+// Mesuré 2026-10-02 sur Node 20.20.2 : « ReferenceError: WebSocket is not defined » au branchement
+// CDP. Le script se relance lui-même avec l'option, au lieu d'exiger NODE_OPTIONS de l'appelant.
+if (typeof globalThis.WebSocket !== 'function' && !process.execArgv.includes('--experimental-websocket')) {
+  const relance = spawnSync(process.execPath, ['--experimental-websocket', ...process.argv.slice(1)], {
+    stdio: 'inherit'
+  })
+  process.exit(relance.status ?? 1)
+}
+
 /** Identifiants réels du catalogue applicatif (src/shared/navigation.ts). */
 export const VUES_CONNUES = [
   // 'accueil' MANQUAIT alors que c'est la premiere vue du catalogue (src/shared/navigation.ts:2) :

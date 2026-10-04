@@ -5,6 +5,11 @@ import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { readGitGraph } from './git-graph-main'
 
+// Ce poste a un dépôt git dans C:/Users/User (le dossier personnel), au-dessus du dossier temporaire.
+// Sans plafond, git y remonte : il voit ce dépôt et peut même y écrire ses commits de test.
+// GIT_CEILING_DIRECTORIES interdit à git de chercher un dépôt dans tmpdir() ou au-dessus.
+process.env.GIT_CEILING_DIRECTORIES = tmpdir()
+
 let root = ''
 let repo = ''
 

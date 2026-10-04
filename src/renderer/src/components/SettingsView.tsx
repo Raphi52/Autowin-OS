@@ -166,7 +166,7 @@ export function SettingsView({
         onSelect={onSectionChange}
         tabs={[
           { id: 'budget', label: 'Budget' },
-          { id: 'capabilities', label: 'Skills · Hooks · Tools' },
+          { id: 'capabilities', label: 'Skills · Hooks · Gates · Mods · Tools' },
           { id: 'behaviour', label: 'Behaviour' },
           { id: 'interface', label: 'Interface' },
           { id: 'providers', label: 'Providers' },

@@ -1016,7 +1016,7 @@ export function ObservatoryView({
               <button
                 type="button"
                 onClick={() => onOpenCapabilities?.()}
-                title="Éditer les capacités injectées dans le prompt (Skills · Hooks · Tools)"
+                title="Éditer les capacités injectées dans le prompt (Skills · Hooks · Gates · Mods · Tools)"
               >
                 Capacités du prompt
               </button>

@@ -51,7 +51,23 @@ export class VisibleStreamFilter {
     while (this.buffer) {
       if (this.active) {
         const { open, close, control } = this.active
-        const end = this.buffer.toLowerCase().indexOf(close)
+        const lower = this.buffer.toLowerCase()
+        const end = lower.indexOf(close)
+        // Une NOUVELLE ouverture avant toute fermeture = la commande courante est orpheline (jamais
+        // fermée, ex. terminée par `</parameter></invoke>` d'un autre format). Sans cette coupure, la
+        // fermeture de la commande SUIVANTE est capturée, le contenu combiné n'est pas du JSON et TOUT
+        // le markup s'affiche brut (bloc moche conv-66).
+        const reopen = lower.indexOf(open)
+        if (reopen >= 0 && (end < 0 || reopen < end)) {
+          const orphan = this.buffer.slice(0, reopen)
+          const head = orphan.trimStart()
+          if (control === 'question' || head === '' || head.startsWith('{') || head.startsWith('['))
+            segments.push({ kind: 'control', control })
+          else segments.push({ kind: 'text', text: open + orphan })
+          this.buffer = this.buffer.slice(reopen)
+          this.active = null
+          continue
+        }
         if (end < 0) break // pas encore fermé → on bufferise, on attend la suite
         const inner = this.buffer.slice(0, end)
         if (control === 'question' || isSuppressibleCommand(inner))

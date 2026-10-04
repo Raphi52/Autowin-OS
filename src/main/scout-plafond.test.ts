@@ -6,6 +6,11 @@ import { describe, expect, it } from 'vitest'
 import { parseScoutTable } from '../shared/scout-table'
 import { lecteurAncrageDepuisDisque, plafonnerNotesScout, type EtatAncrage } from './scout-plafond'
 
+// Ce poste a un dépôt git dans C:/Users/User (le dossier personnel), au-dessus du dossier temporaire.
+// Sans plafond, git y remonte : il voit ce dépôt et peut même y écrire ses commits de test.
+// GIT_CEILING_DIRECTORIES interdit à git de chercher un dépôt dans tmpdir() ou au-dessus.
+process.env.GIT_CEILING_DIRECTORIES = tmpdir()
+
 const ENTETE = '| # | Score | Type | What | Why | How |\n|---|---|---|---|---|---|\n'
 
 function lecteur(etats: Record<string, EtatAncrage>) {

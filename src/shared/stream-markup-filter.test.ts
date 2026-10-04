@@ -59,4 +59,11 @@ describe('VisibleStreamFilter', () => {
       'Avant  après.'
     )
   })
+
+  it('hides an orphan command (foreign closing tags) followed by a real one (conv-66)', () => {
+    const cmd = '{"name":"orchestrate","args":{"task":"x"}}'
+    expect(
+      visible([`Je lance.\n<cmd>${cmd}</parameter>\n</invoke>\n<cmd>${cmd}</cmd>\nSuite.`])
+    ).toBe('Je lance.\n\nSuite.')
+  })
 })
