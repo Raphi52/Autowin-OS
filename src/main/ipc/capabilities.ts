@@ -36,9 +36,9 @@ export function registerCapabilitiesIpc({
 }: CapabilitiesIpcDeps): void {
   ipcMain.handle(
     'os:capabilities:list',
-    (event, kind: 'skills' | 'hooks' | 'tools' | 'plugins') => {
+    (event, kind: 'skills' | 'hooks' | 'tools' | 'plugins' | 'gates') => {
       assertTrustedRendererSender(event, 'Capabilities')
-      if (!['skills', 'hooks', 'tools', 'plugins'].includes(kind))
+      if (!['skills', 'hooks', 'tools', 'plugins', 'gates'].includes(kind))
         throw new Error('Vue de capacités inconnue')
       return listCapabilities(kind)
     }

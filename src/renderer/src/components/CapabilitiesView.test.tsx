@@ -43,7 +43,7 @@ describe('Capabilities plugins wiring', () => {
       await Promise.resolve()
     })
     const plugins = [...container.querySelectorAll('[role="tab"]')].find((node) =>
-      node.textContent?.includes('Plugins')
+      node.textContent?.includes('Mods')
     ) as HTMLButtonElement
     await act(async () => {
       plugins.click()

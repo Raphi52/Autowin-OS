@@ -396,7 +396,7 @@ interface ChatApi {
   claudeAccountRemove: (id: string) => Promise<ClaudeAccountsPayload>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
-  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<CapabilityItem[]>
+  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins' | 'gates') => Promise<CapabilityItem[]>
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId: string) => Promise<PromptCallRecord[]>
   // fix-ok: golden test src/main/activity/cost-breakdown.test.ts asserts this file's source text

@@ -3,7 +3,7 @@ import './CapabilitiesView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { Spinner } from './Spinner'
 
-type Kind = 'skills' | 'hooks' | 'tools' | 'plugins'
+type Kind = 'skills' | 'hooks' | 'gates' | 'tools' | 'plugins'
 type HookModel = 'claude' | 'codex'
 
 interface Item {
@@ -24,8 +24,9 @@ type RelatedItem = Item & { relationKind: 'hook' | 'tool'; relationSource: strin
 const META: Record<Kind, { title: string; empty: string }> = {
   skills: { title: 'Skills', empty: 'Aucune skill trouvée.' },
   hooks: { title: 'Hooks', empty: 'Aucun hook configuré.' },
+  gates: { title: 'Gates', empty: 'Aucun contrôle de fin de run.' },
   tools: { title: 'Tools', empty: 'Aucun toolset trouvé.' },
-  plugins: { title: 'Plugins', empty: 'Aucun plugin enregistré.' }
+  plugins: { title: 'Mods', empty: 'Aucun mod ni plugin enregistré.' }
 }
 
 const HOOK_SOURCES: Array<{ id: HookModel; label: string }> = [
@@ -246,8 +247,8 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
       <header className="cockpit-header">
         <ModuleHeader
           eyebrow="Capacités connectées"
-          title="Skills · Hooks · Tools"
-          description="Gère les skills, hooks et outils accessibles aux agents."
+          title="Skills · Hooks · Gates · Mods · Tools"
+          description="Ce qui est chargé dans chaque run : skills, hooks, contrôles de fin de run (gates), mods et outils."
         />
         <div className="cockpit-toolbar">
           <input
@@ -327,9 +328,11 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
             </>
           ) : (
             <button className="is-active">
-              <b>Registre local</b>
+              <b>{kind === 'gates' ? 'Autowin' : 'Registre local'}</b>
               <strong>{items.length}</strong>
-              <small>Plugins installés et déclarés</small>
+              <small>
+                {kind === 'gates' ? 'Contrôles de fin de run (code)' : 'Mods et plugins installés et déclarés'}
+              </small>
             </button>
           )}
 
@@ -352,7 +355,7 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
 
         <main className="cockpit-registry">
           <div className="cockpit-tabs" role="tablist" aria-label="Registre des capacités">
-            {(['skills', 'hooks', 'tools', 'plugins'] as const).map((candidate) => (
+            {(['skills', 'hooks', 'gates', 'plugins', 'tools'] as const).map((candidate) => (
               <button
                 key={candidate}
                 role="tab"

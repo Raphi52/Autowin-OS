@@ -2,6 +2,7 @@
 // Le MODULE importe ; les fonctions de garde, elles, restent autoportées (sérialisées dans le hook).
 import { refusEcriturePythonCrlf } from './garde-python-crlf'
 import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
+import { refusArretHote, refusBoucle } from './garde-hote-et-boucle'
 
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
@@ -229,6 +230,46 @@ export function refusGitDestructeur(commande: string): string | undefined {
 }
 
 /**
+ * INVENTAIRE des gardes portées par le script de hook — ce que la vue Settings › Hooks affiche
+ * (conv-58). Un test vérifie que cette liste et la ligne `const motif = …` du script nomment
+ * EXACTEMENT les mêmes fonctions : ajouter une garde sans l'inscrire ici fait échouer le test.
+ * `tousOutils` : la garde voit aussi les outils hors terminal/édition (2e entrée du réglage).
+ */
+export const GARDES_DU_HOOK: readonly { fn: string; label: string; description: string; tousOutils?: true }[] = [
+  {
+    fn: 'refusBoucle',
+    label: 'Détecteur de boucle',
+    description: "Refuse le 3e appel d'outil identique d'affilée (même outil, mêmes arguments) dans une même session.",
+    tousOutils: true
+  },
+  {
+    fn: 'refusArretHote',
+    label: "Arrêt de l'app hôte",
+    description: "Refuse l'arrêt d'Electron/node PAR NOM (taskkill /IM, Stop-Process -Name, pkill…) : il tuerait Autowin. Un arrêt par PID reste libre."
+  },
+  {
+    fn: 'refusGitDestructeur',
+    label: 'Effacement de travail git',
+    description: "Refuse git reset --hard, checkout/restore de tout l'arbre, clean -f et stash : ils détruisent du travail non commité."
+  },
+  {
+    fn: 'refusEcriturePythonCrlf',
+    label: 'Écriture Python en CRLF',
+    description: 'Refuse une écriture Python en mode texte qui passerait un fichier du dépôt en fins de ligne CRLF.'
+  },
+  {
+    fn: 'refusReglageProd',
+    label: 'Réglages de la protection de prod',
+    description: "Refuse toute écriture des fichiers de la protection de prod, par le terminal comme par les outils d'édition."
+  },
+  {
+    fn: 'refusSqlAgent',
+    label: 'Client SQL vers la prod',
+    description: 'Refuse un client SQL lancé par un agent, sauf vers une base déclarée non-prod.'
+  }
+]
+
+/**
  * Corps du script de hook PreToolUse (Bash) du CLI. Refus = JSON `permissionDecision: deny` sur
  * stdout (https://code.claude.com/docs/en/hooks). Mesure 2026-09-13 : avec exit 2 + stderr, l'appel
  * etait bien bloque mais l'agent recevait un resultat VIDE, sans le motif ni la voie a suivre.
@@ -257,6 +298,8 @@ export function scriptHookGardes(
 const sansHeredocsDeDonnees = ${sansHeredocsDeDonnees.toString()};
 const refusGitDestructeur = ${refusGitDestructeur.toString()};
 const refusEcriturePythonCrlf = ${refusEcriturePythonCrlf.toString()};
+const refusArretHote = ${refusArretHote.toString()};
+const refusBoucle = ${refusBoucle.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
 const basesNonProd = ${JSON.stringify(basesNonProd)};
@@ -265,15 +308,33 @@ process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
   let cmd = '';
   let chemin = '';
+  let j = {};
   try {
-    const j = JSON.parse(d);
+    j = JSON.parse(d);
     const t = j.tool_input || {};
     cmd = t.command || '';
     chemin = t.file_path || t.notebook_path || '';
   } catch {}
   // Le corps d'un heredoc de simple texte n'est pas du shell (rejeu du 2026-10-01, heredocs.ts).
   const shell = sansHeredocsDeDonnees(cmd, decouperHeredocs);
-  const motif = refusGitDestructeur(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd);
+  // Détecteur de boucle (conv-58) : historique PAR SESSION, à côté du script (dossier temporaire du
+  // run, nettoyé avec lui). Sans session_id, aucun état : le garde se tait.
+  let motifBoucle;
+  try {
+    const sid = String(j.session_id || '').replace(/[^A-Za-z0-9_-]/g, '');
+    if (sid) {
+      // Script .mjs : pas de require ; getBuiltinModule existe depuis Node 20.16.
+      const fs = process.getBuiltinModule('node:fs');
+      const path = process.getBuiltinModule('node:path');
+      const p = path.join(path.dirname(process.argv[1]), 'boucle-' + sid + '.json');
+      let h = [];
+      try { h = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+      const cle = String(j.tool_name || '') + ' ' + JSON.stringify(j.tool_input || {});
+      motifBoucle = refusBoucle(h, cle);
+      fs.writeFileSync(p, JSON.stringify(h.concat([cle]).slice(-20)));
+    }
+  } catch {}
+  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

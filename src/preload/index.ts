@@ -501,7 +501,7 @@ const api = {
   topology: (): Promise<AgentTopology> => ipcRenderer.invoke('os:topology:get'),
   setTopology: (topology: AgentTopology): Promise<AgentTopology> =>
     ipcRenderer.invoke('os:topology:set', topology),
-  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins'): Promise<CapabilityItem[]> =>
+  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins' | 'gates'): Promise<CapabilityItem[]> =>
     ipcRenderer.invoke('os:capabilities:list', kind),
   skills: (): Promise<SkillRegistryItem[]> => ipcRenderer.invoke('skills:registry:list'),
   promptCalls: (conversationId: string): Promise<PromptCallRecord[]> =>
