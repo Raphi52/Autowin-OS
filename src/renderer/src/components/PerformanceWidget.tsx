@@ -20,13 +20,13 @@ import {
   type PerfSeuils,
   type PerfSeuilsParIndicateur,
   type PerfTotaux
-} from './performance-greffe-model'
+} from './performance-base-model'
 
 /**
- * La tuile « Performance » : ce que le greffe a produit, en deux lectures.
+ * La tuile « Performance » : ce que la base a produit, en deux lectures.
  *
  *  - mode UTILISATEUR : mes chiffres à moi ;
- *  - mode GREFFIER : le total du greffe, et le détail personne par personne — c'est le responsable
+ *  - mode GREFFIER : le total de la base, et le détail personne par personne — c'est le responsable
  *    qui doit voir la production de tout le monde.
  *
  * Les cinq compteurs sont ceux dictés par l'utilisateur : RCS (formalités validées, DCA, DAS) et RSM
@@ -34,10 +34,10 @@ import {
  *
  * L'APPARENCE n'est pas le sujet ici — « je drafterais plus tard l'apparence ». Ce qui devait exister
  * dès maintenant, c'est la structure des compteurs, les deux modes, et surtout des seuils de couleur
- * RÉGLABLES : un seuil en dur mettrait un petit greffe « tout en rouge tout le temps ». Le bouton
+ * RÉGLABLES : un seuil en dur mettrait une petite base « tout en rouge tout le temps ». Le bouton
  * « Seuils » ouvre la saisie, et le réglage est retenu d'une session à l'autre.
  *
- * Le comptage, le regroupement et le choix de la couleur vivent dans `performance-greffe-model.ts`,
+ * Le comptage, le regroupement et le choix de la couleur vivent dans `performance-base-model.ts`,
  * testés à part : ce fichier ne fait que les afficher.
  */
 
@@ -79,7 +79,7 @@ export function PerformanceWidget({
       setSeuils((courants) => {
         const suivants = majSeuil(courants, id, champ, valeur)
         // On écrit tout de suite : un réglage perdu au rechargement obligerait à le retaper, et
-        // c'est justement le réglage qui rend la tuile utilisable dans un petit greffe.
+        // c'est justement le réglage qui rend la tuile utilisable dans une petite base.
         if (memoire) ecrireSeuilsPerf(memoire, suivants)
         return suivants
       })

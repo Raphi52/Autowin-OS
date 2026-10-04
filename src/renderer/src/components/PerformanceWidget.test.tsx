@@ -6,7 +6,7 @@
  *
  * Ce que ce fichier protège, et qui casserait sans bruit :
  *  - les CINQ compteurs demandés sont affichés, RCS et RSM, les trois actes du RSM sur une ligne ;
- *  - le mode greffier montre tout le greffe ET le détail par personne ; le mode utilisateur non ;
+ *  - le mode greffier montre tout la base ET le détail par personne ; le mode utilisateur non ;
  *  - baisser un seuil REPEINT la ligne sans changer le chiffre — c'est la demande centrale (« ils
  *    verraient tout en rouge tout le temps »), et le réglage survit à une réouverture.
  */
@@ -14,7 +14,7 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PerformanceWidget } from './PerformanceWidget'
-import { CLE_SEUILS_PERF, type PerfMesure } from './performance-greffe-model'
+import { CLE_SEUILS_PERF, type PerfMesure } from './performance-base-model'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -114,7 +114,7 @@ describe('mode utilisateur et mode greffier', () => {
     expect(hote.querySelector('[data-testid="perf-personne-Zoe"]')).toBeNull()
   })
 
-  it('bascule sur tout le greffe et detaille personne par personne', () => {
+  it('bascule sur tout la base et detaille personne par personne', () => {
     monter({ mesures: MESURES, utilisateur: 'moi', storage: memoire() })
     cliquer('perf-mode-greffier')
     expect(ligne('rcs-formalites-validees').querySelector('strong')?.textContent).toBe('100')
