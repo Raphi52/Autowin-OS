@@ -1,0 +1,6 @@
+{
+  "name": "autowin-mods",
+  "version": "0.1.0",
+  "description": "Mods d'Autowin OS chargés à chaque run (--plugin-dir) : redirection des apps graphiques vers le bureau caché, retrait du compte à rebours de tokens, règle du bureau caché dans la description du shell.",
+  "author": { "name": "Autowin OS" }
+}

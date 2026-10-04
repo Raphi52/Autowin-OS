@@ -104,6 +104,19 @@ describe('le fil voyage jusqu’à l’agent orchestré', () => {
       expect(o.execution?.agentEnv?.AUTOWIN_CONVERSATION_ID).toBeUndefined()
   })
 
+  // fix-ok: 3 edits — test ajoute au site d appel ; mesure : retirer AUTOWIN_HDESK_ID de orchestrator.ts le rend rouge
+  it('chaque appel exécutant porte AUTOWIN_HDESK_ID = le bureau caché de SON run (mod Autowin, conv-58)', async () => {
+    const { espion, orch } = harnais()
+    await orch.run('corrige le filtre')
+    const executants = espion.vus.filter((o) => o.execution)
+    expect(executants.length).toBeGreaterThan(0)
+    const ids = new Set(executants.map((o) => o.execution?.agentEnv?.AUTOWIN_HDESK_ID))
+    expect(ids.size).toBe(1)
+    const [id] = [...ids]
+    expect(id).toMatch(/^run-[a-z0-9-]+$/)
+    expect(id).not.toBe('run-sans-id')
+  })
+
   it('le processus claude reçoit la variable, sans qu’elle écrase les garde-fous non interactifs', () => {
     const env = environnementAgent(
       { PATH: 'x' },

@@ -421,6 +421,8 @@ export type RaisonArret =
   /* conv-38 (2026-10-02) — garde-fou de la chaîne : quota hebdomadaire Claude, tours auto d'affilée. */
   | 'quota-hebdo'
   | 'tours-auto-max'
+  /* conv-42 — tour coupé avec une tâche de fond en vol, sans suite proposée : attente muette. */
+  | 'tache-de-fond-coupee'
 
 export interface EntreeDecisionAuto {
   /** Le mode auto est-il armé ? */

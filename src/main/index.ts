@@ -293,7 +293,7 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { materializeClaudeAttachments, scriptDesGardesCourant } from './providers/claude'
+import { definirDossierModsAutowin, materializeClaudeAttachments, scriptDesGardesCourant } from './providers/claude'
 import { rafraichirGardesDesAgents } from './providers/rafraichir-gardes'
 import { tmpdir } from 'node:os'
 import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
@@ -4502,6 +4502,8 @@ app.whenReady().then(async () => {
       : Promise.resolve({ values: {}, canWriteMarker: dejaMigre })
   registerStorageMigrationIpc(lectureHistorique)
   registerHdeskTvIpc()
+  // Mods d'Autowin chargés par chaque run (conv-58) : hors archive, comme les scripts du bureau caché.
+  definirDossierModsAutowin(join(racineScriptsHorsArchive(app.getAppPath()), 'mods', 'autowin'))
   registerProdPassphraseIpc(ipcMain, {
     lireEmpreinte: () => lireEmpreinteProd(ensureAutowinAppData(appDataRoot)),
     // La phrase entre ici et n'en ressort pas : on la transforme aussitot en empreinte, on l'ecrit,

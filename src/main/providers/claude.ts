@@ -778,6 +778,35 @@ export function claudeTransportEnvelope(
 }
 
 /**
+ * MODS D'AUTOWIN (conv-58, 2026-10-02) — `mods/autowin`, chargé à chaque appel par `--plugin-dir`.
+ *
+ * Ils agissent sur ce que le modèle lit et exécute, au moment où il en a besoin : app graphique
+ * redirigée vers le bureau caché du run, compte à rebours de tokens retiré, règle du bureau caché
+ * dans la description du shell (voir mods/autowin/hooks/regles.js).
+ *
+ * Mesuré le 2026-10-02 (CLI 2.1.287) : un mod passé par `--plugin-dir` se charge MALGRÉ `-p`,
+ * `--setting-sources ''` et `--disable-slash-commands` — le CLI le liste `…@inline` dans son
+ * événement `init`. On charge le SEUL dossier d'Autowin : un mod a tous les droits du CLI.
+ *
+ * Le dossier est fixé au démarrage (`definirDossierModsAutowin`, index.ts). Non fixé ou absent du
+ * disque : aucun argument, le run part comme avant.
+ */
+let dossierModsAutowin: string | undefined
+
+export function definirDossierModsAutowin(dossier: string | undefined): void {
+  dossierModsAutowin = dossier
+}
+
+export function argumentsModsAutowin(
+  dossier: string | undefined = dossierModsAutowin,
+  existe: (chemin: string) => boolean = existsSync
+): string[] {
+  if (!dossier || !existe(join(dossier, '.claude-plugin', 'plugin.json'))) return []
+  // fix-ok: claude.ts edite 5 fois pour construire le branchement (import, fonction pure, argument, commentaire) ; mesure : sans cet argument le CLI ne liste pas autowin-mods@inline dans init.plugins
+  return ['--plugin-dir', dossier]
+}
+
+/**
  * Les arguments MCP d'un appel — la SEULE decision de ce fichier sur les outils d'un noeud skill.
  *
  * Extraite en fonction PURE parce que la garantie qu'elle porte est une ABSENCE : « une phase du
@@ -1051,7 +1080,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // injecte lui-meme ses consignes de phase (blocs `skill:*` du system prompt). Mesure du
       // 2026-07-28 : le CLI en declarait 45 et 18 malgre `--setting-sources ''`, qui ne les couvre
       // pas. Elles etaient donc payees a chaque appel sans jamais etre utilisees.
-      '--disable-slash-commands'
+      '--disable-slash-commands',
+      // Les mods d'Autowin, et eux seuls (voir `argumentsModsAutowin`).
+      ...argumentsModsAutowin()
     ]
     let mcpConfigDir: { chemin: string; nettoyer: () => Promise<void> } | undefined
     if (argsMcp.mcp.length > 0) {
