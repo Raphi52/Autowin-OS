@@ -138,6 +138,7 @@ import { captureElectronDesktop } from './electron-desktop-capture'
 import { AgentPilot } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { createRunPilotChat } from './chat/run-pilot-chat'
+import { lancerSansAttendre } from './chat/lancer-sans-attendre'
 import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { buildContinuationProviderHistory } from './chat-continuation'
@@ -1216,6 +1217,12 @@ configureClaudeActiveAccountId(() => claudeAccounts.active().id)
 // Rotation d'abonnement : quand le quota du compte actif est epuise, le registre demande une bascule
 // vers un compte encore vivant. Sans ce cablage, la rotation existerait sans jamais se declencher.
 configureClaudeAccountRotation((walled) => claudeAccounts.rotateAwayFrom(walled))
+// Tout changement du compte actif (interface, depart d'un tour, rotation) rend le quota memorise
+// faux et la liste des comptes de l'interface perimee : on jette l'un et on previent l'autre.
+claudeAccounts.onActiveChange(() => {
+  invalidateModelQuotaCache()
+  broadcast({ type: 'refresh', scope: 'claudeAccounts' })
+})
 // Le cache est chargé AVANT la topologie : un bridge momentanément incomplet ne rase pas les bindings existants.
 let agentModels = loadCachedImportedModels(modelCatalogCachePath)
 jalonDemarrage('catalogue de modeles relu')
@@ -3575,14 +3582,22 @@ Le fil reprend ensuite normalement.`
   // MEME autorite que la sonde `os:pilotChat:active` du renderer : l'agent du chat doit pouvoir
   // repondre « est-ce que ca tourne encore ? » sans deviner en lisant des journaux de fin de tour.
   bus.tourDeChatActif = (conversationId) => activeChatTurns.isInFlight(conversationId)
-  bus.lancerDansConversation = async (conversationId, prompt, binding) => {
-    const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
-    return {
-      ok: resultat.ok,
-      ...(resultat.turnId ? { turnId: resultat.turnId } : {}),
-      ...(resultat.error ? { error: resultat.error } : {})
-    }
-  }
+  // Rend la main des que le tour DEMARRE dans le fil cible, pas a sa fin : sinon un agent qui ouvre
+  // N fils les lance un par un (conv-40, 2026-10-02). Voir chat/lancer-sans-attendre.ts.
+  bus.lancerDansConversation = (conversationId, prompt, binding) =>
+    lancerSansAttendre(
+      async () => {
+        const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
+        return {
+          ok: resultat.ok,
+          ...(resultat.turnId ? { turnId: resultat.turnId } : {}),
+          ...(resultat.error ? { error: resultat.error } : {})
+        }
+      },
+      () => activeChatTurns.waitForActive(conversationId, 120_000),
+      (erreur) =>
+        console.warn(`[chat_send] tour de ${conversationId} en echec apres son envoi :`, erreur)
+    )
   const taskDispatcher = new ScheduledChatDispatcher(scheduledChatRuntime)
   const relay = new PowerShellWindowsRelay({
     scriptPath: relayScriptPath,
