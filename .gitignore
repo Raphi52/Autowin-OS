@@ -79,3 +79,6 @@ factures/
 # Skill arenagame et son banc Roblox : usage personnel, hors depot (gardes sur le disque local)
 skills/arenagame/
 .arena/arenagame/
+
+# Généré par Claude Code à chaque chargement d un mod (--plugin-dir), pointe vers .claude-plugin/types/ (ignoré)
+mods/*/tsconfig.json

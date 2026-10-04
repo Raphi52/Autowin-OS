@@ -848,6 +848,29 @@ export function scriptDesGardesCourant(): string {
   return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees())
 }
 
+/**
+ * Dossier du MOD Autowin (`mods/autowin`, conv-58 du 2026-10-02), passé au CLI par `--plugin-dir`.
+ * Cherché en REMONTANT depuis chaque point de départ, parce que `__dirname` varie selon le morceau du
+ * bundle (`out/main` ou `out/main/chunks`). Le mod doit rester dans le dépôt Autowin : il appelle
+ * `../../scripts/hdesk-lancer.ps1`. Introuvable -> `undefined`, et le run part sans mod.
+ */
+export function dossierModAutowin(
+  departs: readonly (string | undefined)[],
+  existe: (chemin: string) => boolean = existsSync
+): string | undefined {
+  for (const depart of departs) {
+    let d = depart
+    for (let i = 0; d && i < 6; i++) {
+      const candidat = join(d, 'mods', 'autowin')
+      if (existe(join(candidat, '.claude-plugin', 'plugin.json'))) return candidat
+      const parent = join(d, '..')
+      if (parent === d) break
+      d = parent
+    }
+  }
+  return undefined
+}
+
 export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
   const q = (v: string): string => `"${v.split('\\').join('/')}"`
   return {
@@ -857,6 +880,12 @@ export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
         {
           // Edit/Write/MultiEdit/NotebookEdit : les réglages de la protection de prod (conv-738, faille 2).
           matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit',
+          hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
+        },
+        {
+          // Les AUTRES outils, pour le seul détecteur de boucle (conv-58) : matchers DISJOINTS du
+          // premier, sinon un appel shell passerait deux fois et compterait double.
+          matcher: 'Read|Grep|Glob|WebFetch|WebSearch|Task|Agent|Monitor|mcp__.*',
           hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
         }
       ]
@@ -1084,6 +1113,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // Les mods d'Autowin, et eux seuls (voir `argumentsModsAutowin`).
       ...argumentsModsAutowin()
     ]
+    // Mod Autowin (conv-58) : redirection des apps graphiques vers le bureau caché et règles posées
+    // dans la description des outils terminal. Chargé même avec `--setting-sources ""` (mesuré
+    // 2026-10-02, CLI 2.1.287, `-p`).
+    const modAutowin = dossierModAutowin([
+      typeof __dirname === 'string' ? __dirname : undefined,
+      process.env[AUTOWIN_WORKSPACE_ENV],
+      process.cwd()
+    ])
+    if (modAutowin) args.push('--plugin-dir', modAutowin)
     let mcpConfigDir: { chemin: string; nettoyer: () => Promise<void> } | undefined
     if (argsMcp.mcp.length > 0) {
       /**

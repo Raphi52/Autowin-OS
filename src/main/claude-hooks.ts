@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { findProviderCapabilities } from './provider-capabilities'
+import { gardesInjecteesAutowin } from './inventaire-runs-autowin'
 
 export interface ClaudeHookItem {
   id: string
@@ -74,7 +75,9 @@ function listProviderHooks(providerId: string, projectRoot = process.cwd()): Cla
 
 /** Wrappers de compat (API stable) — délèguent au générique ci-dessus. */
 export function listClaudeHooks(projectRoot = process.cwd()): ClaudeHookItem[] {
-  return listProviderHooks('claude', projectRoot)
+  // Les gardes qu'Autowin INJECTE dans ses runs d'abord : ce sont les seuls hooks qui tournent
+  // vraiment dans un run (le settings.json utilisateur n'y est pas chargé, conv-58).
+  return [...gardesInjecteesAutowin(), ...listProviderHooks('claude', projectRoot)]
 }
 
 export function listCodexHooks(projectRoot = process.cwd()): ClaudeHookItem[] {
