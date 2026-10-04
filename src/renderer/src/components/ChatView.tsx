@@ -2248,6 +2248,16 @@ export function ChatView({
         if (e.scope === 'conversations') refreshConvs()
         if (e.scope === 'workflows') refreshRuns()
         if (e.scope === 'roles') refreshRuntimeIdentity()
+        // Le compte Claude actif a change COTE MAIN (depart d'un tour, rotation sur quota epuise) :
+        // la puce « compte actif » et la barre de quota parlaient encore de l'ancien.
+        if (e.scope === 'claudeAccounts') {
+          void window.api.claudeAccounts?.()
+            .then((payload) => {
+              if (payload && payload.accounts.length > 0) setComptesClaude(payload)
+            })
+            .catch((error: unknown) => traceSilentFailure('claude-accounts-refresh', error))
+          window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
+        }
         if (refreshesActiveConversation(e, activeRef.current)) {
           const id = activeRef.current!
           // Le fil affiché est GARDÉ comme repli : la relecture qui suit peut rendre un fil vide

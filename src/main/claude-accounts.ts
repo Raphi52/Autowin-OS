@@ -350,7 +350,32 @@ export class ClaudeAccountsStore {
    */
   persistError: string | null = null
 
+  /**
+   * Prévenu à CHAQUE changement du compte actif, quel que soit le chemin : bascule demandée par
+   * l'interface, compte de la conversation ré-appliqué au départ d'un tour, rotation sur quota
+   * épuisé, retrait du compte actif. Sans ce signal, seule la bascule faite depuis l'interface
+   * rafraîchissait la barre de quota : les autres laissaient afficher le quota de l'ANCIEN compte.
+   */
+  private activeChangeListener: ((activeId: string) => void) | undefined
+  private lastNotifiedActiveId: string | undefined
+
+  onActiveChange(listener: (activeId: string) => void): void {
+    this.activeChangeListener = listener
+    this.lastNotifiedActiveId = this.state.activeId
+  }
+
+  private notifyActiveChange(): void {
+    if (!this.activeChangeListener || this.state.activeId === this.lastNotifiedActiveId) return
+    this.lastNotifiedActiveId = this.state.activeId
+    try {
+      this.activeChangeListener(this.state.activeId)
+    } catch (error) {
+      console.error('[claude-accounts] signal de changement de compte en echec:', error)
+    }
+  }
+
   private persist(): void {
+    this.notifyActiveChange()
     try {
       this.deps.makeDir(dirname(this.statePath))
       this.deps.writeFile(this.statePath, JSON.stringify(this.state, null, 2))

@@ -383,3 +383,27 @@ describe('rotation d’abonnement — choisir le compte suivant', () => {
     void avant
   })
 })
+
+describe('ClaudeAccountsStore.onActiveChange', () => {
+  it('previent a chaque changement du compte actif, et seulement alors', () => {
+    const files = new Map<string, string>()
+    const store = new ClaudeAccountsStore('/s/state.json', '/s/accounts', {
+      readFile: (p) => {
+        const v = files.get(p)
+        if (v === undefined) throw new Error('absent')
+        return v
+      },
+      writeFile: (p, d) => void files.set(p, d),
+      makeDir: () => undefined,
+      removeDir: () => undefined
+    })
+    const second = store.add('B')
+    const vus: string[] = []
+    store.onActiveChange((id) => vus.push(id))
+    store.switchTo(second.id)
+    store.switchTo(second.id)
+    store.rotateAwayFrom(second.id)
+    store.add('C')
+    expect(vus).toEqual([second.id, 'default'])
+  })
+})
