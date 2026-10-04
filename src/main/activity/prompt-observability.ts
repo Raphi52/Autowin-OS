@@ -325,10 +325,17 @@ export function appendPromptCall(
   return record
 }
 
+/**
+ * `systeme: false` laisse `systemRef` sans relire le prompt systeme : le calcul des couts n'en a
+ * pas besoin, et cette relecture synchrone gelait la fenetre (mesure 2026-10-04, `gels.jsonl`,
+ * `ipc:os:costBreakdown` : 1714 ms dont 1653 ms dans 15 `readFileSync`).
+ */
 export function loadPromptCalls(
   conversationId: string,
-  root = promptObservabilityRoot()
+  root = promptObservabilityRoot(),
+  options: { systeme?: boolean } = {}
 ): PromptCallRecord[] {
+  const avecSysteme = options.systeme !== false
   try {
     const path = fileFor(conversationId, root)
     // Une ligne encore EN VOL vers le disque fait PARTIE du journal : l'omettre rendrait
@@ -343,7 +350,8 @@ export function loadPromptCalls(
         try {
           // Le prompt systeme range a part est RECONSTITUE ici : aucun lecteur (Observatory,
           // trace d'appel, contexte kaizen) n'a a connaitre ce rangement.
-          return [rehydraterLeSysteme(JSON.parse(line) as PromptCallRecord, root)]
+          const record = JSON.parse(line) as PromptCallRecord
+          return [avecSysteme ? rehydraterLeSysteme(record, root) : record]
         } catch {
           return []
         }
@@ -353,7 +361,10 @@ export function loadPromptCalls(
   }
 }
 
-export function loadAllPromptCalls(root = promptObservabilityRoot()): PromptCallRecord[] {
+export function loadAllPromptCalls(
+  root = promptObservabilityRoot(),
+  options: { systeme?: boolean } = {}
+): PromptCallRecord[] {
   try {
     const surDisque = existsSync(root) ? readdirSync(root) : []
     const enMemoire = [...enVol.keys()]
@@ -363,7 +374,7 @@ export function loadAllPromptCalls(root = promptObservabilityRoot()): PromptCall
       .filter((name) => name.endsWith('.jsonl'))
       .flatMap((name) => {
         const conversationId = name.slice(0, -'.jsonl'.length)
-        return loadPromptCalls(conversationId, root)
+        return loadPromptCalls(conversationId, root, options)
       })
       .sort((a, b) => b.ts.localeCompare(a.ts))
   } catch {

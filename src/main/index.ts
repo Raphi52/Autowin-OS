@@ -4276,7 +4276,10 @@ Le fil reprend ensuite normalement.`
       const allowed = ['actor', 'model', 'provider'] as const
       const dim = allowed.includes(dimension as (typeof allowed)[number]) ? dimension : 'actor'
       const id = convId ? guardString(convId, 'convId') : undefined
-      const calls = id ? loadPromptCalls(id) : loadAllPromptCalls()
+      // Le cout n'a pas besoin du prompt systeme : ne pas le relire (gel mesure, voir loadPromptCalls).
+      const calls = id
+        ? loadPromptCalls(id, undefined, { systeme: false })
+        : loadAllPromptCalls(undefined, { systeme: false })
       // LES DEUX journaux : les sous-agents les plus couteux n'existent que dans l'activite
       // (mesure conv-75 : 2,83 $ vus contre ~20,70 $ reels). costSamplesFrom deduplique.
       const activity = id ? loadConvActivity(id) : []
