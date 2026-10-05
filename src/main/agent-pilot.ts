@@ -786,7 +786,7 @@ function replierSurLaMiniature(piece: PieceJointeDuFil | undefined): PieceJointe
  * Un tour qui se joue dans conv-A pendant que l'utilisateur regarde conv-B faisait donc lire au
  * modele l'id de conv-B : il se croyait dans un autre fil, declarait son historique vide, et pouvait
  * partir chercher « le vrai fil » avec `conversation_search` — alors que l'historique, lui, etait
- * correctement transmis. Mesure du 2026-09-14 (conv-526) : reponse « cet echange arrive dans un fil
+ * correctement transmis. Mesure (conv-526) : reponse « cet echange arrive dans un fil
  * different (conv-533)… ce fil-ci est vide » rendue DANS conv-526.
  */
 export function snapshotDuTour<T extends { activeConversationId?: string }>(
@@ -852,7 +852,7 @@ export class AgentPilot {
    *
    * Sert a n'envoyer QUE le changement quand la session du modele est reprise : cet etat part
    * cote MESSAGE, il change a chaque tour, donc il nest jamais mis en cache et se repaie PLEIN
-   * TARIF. Mesure du 2026-09-16 (conv-614) : 3 043 caracteres par tour, dont 2 821 pour la seule
+   * TARIF. Mesure (conv-614) : 3 043 caracteres par tour, dont 2 821 pour la seule
    * liste des skills, identique dun tour a lautre.
    */
   private readonly dernierEtatPousse = new Map<string, unknown>()
@@ -1320,7 +1320,7 @@ export class AgentPilot {
                 'ta sortie ENTIERE doit etre exactement X, sans note, explication ni mise en forme en plus. ' +
                 'EXPRESSION VISUELLE : hors format strict demande, des que ta reponse a une STRUCTURE ' +
                 '(comparaison, etapes, statuts, chiffres, recapitulatif), prefere un bloc ferme ' +
-                '```html-render en DIRECTION « transparence totale » (choix utilisateur du 14/08) : aucun ' +
+                '```html-render en DIRECTION « transparence totale » (choix utilisateur) : aucun ' +
                 'panneau ni fond opaque, typographie sur le fond sombre de l’app, filets fins degrades or ' +
                 '(rgba(212,169,79,.55) vers .06), accents or #d4a94f-#e3ba55 pour kickers mono et chiffres ' +
                 'cles, texte #dde3ee, chips monospace discretes, mise en page COMPACTE (interlignes 1.45-1.55, ' +
@@ -1701,7 +1701,7 @@ export class AgentPilot {
      */
     const artefactsDejaEmis = new Set<string>()
     /**
-     * Une QUESTION a-t-elle ete posee ce tour ? Mesure du 2026-08-25 (conv-1399) : une question a
+     * Une QUESTION a-t-elle ete posee ce tour ? Mesure (conv-1399) : une question a
      * quatre options posee sans avoir lu un seul fichier, dont une option DEJA implementee et
      * committee. L'utilisateur a attendu pour une reponse qui etait a portee de lecture.
      */
@@ -2147,7 +2147,7 @@ export class AgentPilot {
           /*
            * SESSION EMPOISONNEE PAR UN PROMPT TROP LONG — on l'ABANDONNE au lieu de la rejouer.
            *
-           * Mesure du 2026-09-06 (conv-312) : une injection de 2,86 Mo a fait exploser un tour en
+           * Mesure (conv-312) : une injection de 2,86 Mo a fait exploser un tour en
            * « Prompt is too long ». Le tour SUIVANT ne pesait que 65 k caracteres et echouait
            * pourtant a l'identique — parce qu'il reprenait la meme session (`--resume`), qui porte
            * encore le prompt geant cote fournisseur. La conversation devenait un CUL-DE-SAC :
@@ -2332,7 +2332,7 @@ export class AgentPilot {
       /**
        * UNE DIRECTIVE TARDIVE INVALIDE DU TEXTE, JAMAIS DES ACTIONS.
        *
-       * Mesure du 2026-09-01 (conv-65) : l'utilisateur repond pendant que le tour finit, et sa
+       * Mesure (conv-65) : l'utilisateur repond pendant que le tour finit, et sa
        * reponse jetait la reponse ENTIERE du modele — y compris les `<cmd>` qu'elle portait. Le tour
        * contenait un `ask` : la question n'a donc JAMAIS ete posee, aucun bouton n'est apparu, et
        * l'utilisateur a vecu « quand je reponds ca marche pas ». Un `remember` du meme souffle a
@@ -2348,13 +2348,21 @@ export class AgentPilot {
         lateDirectives.length > 0 &&
         parseOrderedPilotTokens(res.text ?? '').some((token) => token.kind === 'command')
       if (lateDirectives.length) {
+        /*
+         * LE BLOC DÉJÀ ÉCRIT N'EST PAS EFFACÉ (conv-99, tour 5ef60fbb-1b39-45c9-a173-418feb595345,
+         * saisie ts 1791186255017) : une réponse complète et vérifiée était retirée de l'écran
+         * (`stream-reset`) dès qu'une consigne arrivait, et le modèle ne la revoyait pas non plus.
+         * Si la consigne rate, ce qu'elle a remplacé est perdu. Le texte reste affiché, il est rendu
+         * au modèle comme SA réponse, et la réponse à la consigne s'ajoute après.
+         */
+        if (!directivePorteLaReponse) {
+          const dejaEcrit = (res.text ?? '').trim()
+          if (dejaEcrit) convo.push(`TOI (écrit avant la consigne ci-dessous): ${dejaEcrit}`)
+        }
         for (const directive of lateDirectives) {
           convo.push(
             `UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${motsUtilisateur(directive)}`
           )
-        }
-        if (successfulStreamedPrefix && !directivePorteLaReponse) {
-          emit({ kind: 'stream-reset', streamId: `${i}:${successfulAttempt}`, iteration: i })
         }
         if (rallongesDirectiveTardiveRestantes > 0) {
           rallongesDirectiveTardiveRestantes -= 1
