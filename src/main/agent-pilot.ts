@@ -2330,7 +2330,7 @@ export class AgentPilot {
       // peut s'intercaler : l'ACK immédiat reste donc sans fenêtre de perte en fin de tour.
       const lateDirectives = drainDirectives?.() ?? []
       /**
-       * UNE DIRECTIVE TARDIVE INVALIDE DU TEXTE, JAMAIS DES ACTIONS.
+       * UNE DIRECTIVE TARDIVE NE JETTE RIEN : NI LE TEXTE, NI LES ACTIONS.
        *
        * Mesure (conv-65) : l'utilisateur repond pendant que le tour finit, et sa
        * reponse jetait la reponse ENTIERE du modele — y compris les `<cmd>` qu'elle portait. Le tour
@@ -2338,8 +2338,10 @@ export class AgentPilot {
        * l'utilisateur a vecu « quand je reponds ca marche pas ». Un `remember` du meme souffle a
        * disparu pareil. Trace : aucun `tool-call` pour ces deux commandes dans conv-65.jsonl.
        *
-       * Regle : le TEXTE peut etre perime (il ne connait pas la directive), une ACTION deja decidee
-       * ne l'est pas. On execute donc l'iteration, la directive entrant au point d'iteration suivant.
+       * Regle : une ACTION deja decidee s'execute, la directive entrant au point d'iteration suivant.
+       * Le TEXTE deja ecrit n'est pas efface non plus (conv-99, tour
+       * 5ef60fbb-1b39-45c9-a173-418feb595345) : il reste affiche et il est rendu au modele ; la
+       * reponse a la directive s'y AJOUTE, elle ne le remplace pas.
        *
        * Et si l'iteration portait un `ask`, cette directive EST la reponse : on ne repose pas la
        * question (elle attendrait un clic deja donne) et on ne clot pas le tour dessus.
