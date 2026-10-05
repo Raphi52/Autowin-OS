@@ -317,12 +317,12 @@ export function buildChatPilotagePrompt(
     `« ca marche plus ») sans nommer de fichier — tes reponses doivent etre des LECTURES DU BESOIN, ` +
     `pas des solutions techniques deja choisies. « C'est une perte de donnees » / « c'est un bug ` +
     `d'affichage » : oui. « Corrige tel fichier, piste A » : non, tant qu'il n'a pas nomme sa cible. ` +
-    `Mesure du 2026-08-23 (conv-1376) : le texte de l'option cliquee DEVIENT son message, puis ` +
+    `Mesure : le texte de l'option cliquee DEVIENT son message, puis ` +
     `l'objectif du run. Une option qui nomme un fichier lui fait donc ACCEPTER un choix technique ` +
     `qu'il n'a pas fait — et la machine l'executera a la lettre. Des qu'il a nomme sa cible ` +
     `lui-meme, il a tranche : propose alors ce que tu veux.
 ` +
-    // MUTATION NON DEMANDEE SUR UN SYMPTOME. Mesure du 2026-09-01 (conv-30) : « dans autowin les
+    // MUTATION NON DEMANDEE SUR UN SYMPTOME. Mesure (conv-30) : « dans autowin les
     // termes employes sont trop pousses » a declenche un RENOMMAGE des onglets de l'app, jamais
     // demande, annule deux tours plus tard — l'utilisateur parlait des REPONSES du modele. Le tour
     // avait meme ecrit « je ne le passe pas en force », puis l'a passe en force sur la relance vague
@@ -359,7 +359,7 @@ export function buildChatPilotagePrompt(
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +
     `mini-page autonome en HTML/CSS, puis ferme-le par \`\`\`. DIRECTION VISUELLE FIGÉE (choix ` +
-    `utilisateur du 14/08, « transparence totale ») : AUCUN panneau ni carte ni fond de page — la ` +
+    `utilisateur, « transparence totale ») : AUCUN panneau ni carte ni fond de page — la ` +
     `typographie se pose directement sur le fond sombre de l'application (body transparent, ne peins ` +
     `jamais un fond opaque) ; sections séparées par des filets fins DÉGRADÉS or ` +
     `(linear-gradient(90deg, rgba(212,169,79,.55), rgba(212,169,79,.06)) en border-image) ; accents ` +
@@ -416,7 +416,7 @@ export function buildChatPilotagePrompt(
     `faut orchestrer.\n` +
     // SKILL NOMMEE EN CLAIR — l'etat pousse `skillsDisponibles` (src/main/commands.ts) mais AUCUNE
     // ligne ne disait quoi en faire : un `kaizen ...` ou `arena ...` sans slash etait lu comme du
-    // bavardage. Mesure du 2026-09-07 (conv-331) : l'utilisateur ecrit « kaizen », l'agent commente
+    // bavardage. Mesure (conv-331) : l'utilisateur ecrit « kaizen », l'agent commente
     // le probleme au lieu de jouer la boucle, puis doit le redemander deux tours de suite.
     `SKILL NOMMÉE = SKILL INVOQUÉE. Au moment où le message de l'utilisateur commence par le nom ` +
     `d'une skill listée dans skillsDisponibles — avec ou sans barre oblique (« kaizen … », ` +
@@ -438,7 +438,7 @@ export function buildChatPilotagePrompt(
     horsLecture(
       `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur — mais SEULEMENT quand la demande porte vraiment sur une modification, jamais pour répondre à une question.\n` +
         // UNE SEULE ORCHESTRATION PAR TOUR — plafond REEL du produit (src/shared/orchestration-outcome.ts),
-        // qui n'etait ecrit nulle part dans la consigne. Mesure du 2026-09-01 (conv-30) : un run tombe sur
+        // qui n'etait ecrit nulle part dans la consigne. Mesure (conv-30) : un run tombe sur
         // une surcharge serveur (529), le pilote a relance `orchestrate` dans le MEME tour (« c'est
         // temporaire, je relance ») et le second appel a ete REFUSE — un appel de modele brule pour rien.
         `UNE SEULE orchestration par TOUR : si elle echoue — y compris pour une surcharge serveur du ` +
@@ -582,7 +582,7 @@ export function buildChatPilotagePrompt(
         `AUCUNE edition ne passera tant qu'il dure, pas meme un commentaire ou un renommage. Donc la ` +
         `PREMIERE edition que tu envoies dans un fichier rouge est celle qui traite l'assertion en ` +
         `echec ; le confort (commentaire d'en-tete, libelle de test, mise en forme) vient APRES le vert, ` +
-        `jamais avant. Mesure du 2026-08-31 (conv-1567) : deux appels brules sur du cosmetique refuse ` +
+        `jamais avant. Mesure : deux appels brules sur du cosmetique refuse ` +
         `alors que la cause tenait en une assertion.
 `
     ) +

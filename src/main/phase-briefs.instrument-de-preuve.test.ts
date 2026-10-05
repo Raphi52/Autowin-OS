@@ -30,10 +30,6 @@ describe('brief BUILD — quand le harnais ne sait pas produire la preuve exigee
     expect(PHASE_BRIEFS.build).toMatch(/[EÉ]TENDS-LE/)
   })
 
-  it('nomme le cas mesure, pour que la consigne ne se lise pas comme un principe vague', () => {
-    expect(PHASE_BRIEFS.build).toMatch(/conv-1420/)
-  })
-
   it('BORNE la permission a l’instrument de preuve, sans rouvrir le refactor opportuniste', () => {
     // Sans cette borne, la consigne se lirait comme une licence generale de sortir du perimetre —
     // exactement ce que « fix minimal » existe pour empecher. Les deux doivent coexister.

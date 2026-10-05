@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { exigeFaireLeGeste, RELANCE_FAIRE_LE_GESTE } from './chat-turn-messages'
+import { exigeFaireLeGeste } from './chat-turn-messages'
 
 // Cas réel : tour c4e319ca-783f-4b49-9b87-971cd6392c8e (conv-843, saisie ts 1790275899514
 // « fais le »), iteration 4 : après desktop_act/desktop_observe, le chat a rendu la saisie du code.
@@ -20,9 +20,6 @@ describe('exigeFaireLeGeste', () => {
   })
   it('laisse passer le mot de passe, vraie limite', () => {
     expect(exigeFaireLeGeste('À faire : saisis ton mot de passe Microsoft.', true)).toBe(false)
-  })
-  it('la relance cite le cas mesuré', () => {
-    expect(RELANCE_FAIRE_LE_GESTE).toContain('c4e319ca')
   })
   it('mord aussi sur une tournure sans rubrique « À faire » (objection du juge)', () => {
     expect(exigeFaireLeGeste('Il te reste à entrer le code CAP56FNHZ dans Brave.', true)).toBe(true)

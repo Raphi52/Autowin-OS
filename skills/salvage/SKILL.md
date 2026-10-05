@@ -127,7 +127,7 @@ l'assertion.
   isole ses vraies modifications récentes. Code **3** : il modifie des fichiers qu'une annulation récente a
   touchés → ouvre chaque annulation citée (`git show <commit>`), vérifie qu'il ne remet pas ce qu'elle
   retirait, et écris ta décision dans ta réponse. Seul le code **0** autorise un report sans relecture.
-  MESURÉ le 2026-09-19 (conv-719) : un /salvage a cherry-pické la copie préservée a93c3b61 ; elle réécrivait
+  MESURÉ : un /salvage a cherry-pické la copie préservée a93c3b61 ; elle réécrivait
   les onglets que l'utilisateur avait fait retirer par le revert e4413ce3 deux jours plus tôt, et ils sont
   revenus sur `main`. `git cherry` ne pouvait pas le voir : le patch était bien « nouveau ». Deux annulations
   « Revert "salvage(decor)…" » du même mois portent la même signature.
@@ -139,7 +139,7 @@ l'assertion.
   Un index partagé mélange ton changement avec tout ce qui est indexé par ailleurs, et le conflit d'un autre bloque
   ton commit. **Place cette copie HORS du dépôt** : `git worktree add ../<nom> <base>`, ou
   sous la racine de copies de travail de l'app, jamais un chemin relatif qui atterrit dans la copie courante.
-  MESURÉ le 2026-09-09 : cette ligne disait `git worktree add <tmp> <base>` sans dire OÙ, et un
+  MESURÉ : cette ligne disait `git worktree add <tmp> <base>` sans dire OÙ, et un
   run a résolu `<tmp>` en `.verif` à la racine du dépôt — une copie imbriquée de 200 Mo, non ignorée, qu'un
   simple `git add .` aurait commitée. Un chemin non contraint n'est pas un détail : un chemin relatif
   atterrit dans l'arbre que tu essayais justement de ne pas déranger. Retire la copie quand tu as fini
@@ -212,17 +212,16 @@ Ne publie que ce que le tri a couvert, et seulement après que les contrôles ci
 (branche protégée, hook de pre-push), applique l'exception qu'il nomme et dis-le ; si la publication n'est vraiment
 pas à toi de la faire — la branche de quelqu'un d'autre, un distant que tu ne possèdes pas —, dis-le plutôt que de laisser
 le travail en local en silence. Ne termine jamais un salvage en demandant à l'humain de pousser : cette demande est exactement
-la boucle que cette étape supprime (retour utilisateur, 2026-09-03 : « salvage doit push »).
+la boucle que cette étape supprime (retour utilisateur : « salvage doit push »).
 
 
 **Puis retire les porteurs devenus vides — un salvage qui laisse la flotte de branches derrière lui
 n'a pas fini.** Ce que l'utilisateur regarde après un salvage, ce n'est pas `git status`, c'est le
 sélecteur de branches : s'il y voit encore les branches de secours, de run et de chantier, le ménage
-n'a pas eu lieu pour lui. Mesuré le 2026-09-16 (conv-81, saisie `ts` 1789563993034, tour
-`c6746e12-5f10-4d65-99f4-9a18cd1b925f`, « /salvage tout sur main ») : le contenu des 5 branches
+n'a pas eu lieu pour lui. Mesuré (« /salvage tout sur main ») : le contenu des 5 branches
 locales était bien fusionné et poussé sur `origin/main`, mais les 5 branches sont restées, le `main`
 local était 191 commits en retard, et HEAD était encore sur `feat/themes-selecteur-et-voiles` —
-d'où la reprise en conv-84 : « il n'y aurait dû rester plus que la branche main ».
+d'où une reprise : « il n'y aurait dû rester plus que la branche main ».
 
 ```bash
 git fetch origin                                   # mesurer contre le distant, pas contre un main perime

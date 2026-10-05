@@ -15,7 +15,7 @@ description: >-
 
 # curate — vider la file des candidats Brain
 
-## Pré-requis (mesuré le 2026-09-04)
+## Pré-requis
 - Interpréteur : le venv par machine, PAS le `python` du PATH (`numpy` absent ailleurs) —
   `%LOCALAPPDATA%\AmitelBrain\.venv\Scripts\python.exe`, ou `AMITEL_BRAIN_PYTHON`.
 - Outillage : `<brainRoot>/tooling`. Racine par défaut : `\ged2\rig\Projets IA\Amitel Brain`.
@@ -25,11 +25,11 @@ description: >-
 
 ## Procédure
 0. **Verrou — AVANT toute lecture de la file.** Deux passes peuvent viser la même `inbox/` en même temps
-   (la tâche quotidienne de 08:30 et une passe lancée à la main). Mesuré le 2026-09-26 : la seconde passe
-   a trouvé 9 candidats sur 10 déjà déplacés entre son rapport et son application. Le 2026-09-23, deux
+   (la tâche quotidienne de 08:30 et une passe lancée à la main). Mesuré : la seconde passe
+   a trouvé 9 candidats sur 10 déjà déplacés entre son rapport et son application. Une autre fois, deux
    indexations simultanées ont fait planter l'une d'elles sur un fichier disparu. Prendre le verrou :
    `mkdir "<brainRoot>/inbox/.curation.lock"` — atomique, y compris sur le partage réseau : une seule
-   passe réussit (vérifié le 2026-09-26 : le second `mkdir` rend le code 1, « File exists »).
+   passe réussit (vérifié : le second `mkdir` rend le code 1, « File exists »).
    - Réussi → la passe est à toi. Rafraîchis-le avec `touch` avant chaque réindexation (étape 7).
    - Échec → une autre passe tourne : **STOP**, ne lis ni n'écris rien dans le Brain, et rends un bilan
      « passe déjà en cours depuis <heure> » (heure lue par `stat -c %y` sur le dossier). Ce n'est pas un
@@ -46,7 +46,7 @@ description: >-
    `{candidates:[{verdict, reason, merge_with}]}`. `--brain` est OBLIGATOIRE : par défaut le script vise le
    dossier parent de son propre `tooling/` (la copie locale `%LOCALAPPDATA%\AmitelBrain`), où l'`inbox/` est
    vide — il rend alors `candidates: []` sans erreur, ce qui se lit à tort comme « file déjà vide »
-   (mesuré le 2026-09-06 : 0 rapporté alors que 18 candidats attendaient).
+   (mesuré : 0 rapporté alors que 18 candidats attendaient).
    Redirige vers un fichier, le modèle d'embedding pollue stderr de barres de progression.
 2 bis. **Filtre de pertinence — AVANT toute promotion.** Le Brain ne garde que ce qui sert le
    TRAVAIL : le métier (greffes, RIG, SQL, clients), le code et l'architecture des projets, les
@@ -67,7 +67,7 @@ description: >-
    `session:<id>`) ; un secret ou une donnée personnelle détecté se SUPPRIME.
 6. **Inventaire Obsidian — APRÈS la dernière écriture dans `knowledge/`, AVANT la réindexation.**
    `python tooling/obsidian_graph.py --root <brainRoot> --refresh-indexes --reviewer <agent>` doit rendre
-   `"errors": []`. Pourquoi cet ordre (mesuré le 2026-09-29) : l'inventaire généré
+   `"errors": []`. Pourquoi cet ordre : l'inventaire généré
    `knowledge/_maps/vault-inventory.md` liste TOUS les `.md` visibles du Brain, **y compris les candidats de
    `inbox/`** ; et il vit sous `knowledge/`, que `brain_index.py` indexe en entier (`collect_note_paths` prend
    chaque `*.md`, `_maps/` compris). Le régénérer APRÈS la réindexation modifie donc le savoir indexé :
@@ -77,7 +77,7 @@ description: >-
 7. Réindexer : `python tooling/brain_index.py --knowledge <brainRoot>/knowledge --out <brainRoot>/tooling/index`
    (les deux arguments sont obligatoires), après un `touch` du verrou. La sortie DOIT être
    `<brainRoot>/tooling/index` : c'est le seul dossier que le Brain relit (il y publie `CURRENT` +
-   `generations/`). Mesuré le 2026-09-06 : indexer vers `<brainRoot>/index` réussit, dure ~20 min sur le
+   `generations/`). Mesuré : indexer vers `<brainRoot>/index` réussit, dure ~20 min sur le
    partage réseau, et n'est JAMAIS lu — les notes promues restent introuvables par la recherche.
 8. `python tooling/brain_validate.py --root <brainRoot>` doit rendre `"status": "valid"` avec
    `errors: []` (l'option est `--root`, PAS `--brain`, qui est refusé ; le statut est `valid`, pas `ok`).
@@ -85,8 +85,8 @@ description: >-
    à la RACINE de `knowledge/` (interdit — il doit vivre dans `inbox/` ou dans `knowledge/<type>/`).
    Cas à part, l'erreur « stale generated Obsidian index knowledge/_maps/vault-inventory.md: N missing »
    avec, en `degree-zero`, des candidats de `inbox/` déposés APRÈS l'étape 6 : ce ne sont pas des fautes
-   de la passe, mais des dépôts `remember` d'autres sessions arrivés pendant qu'elle tournait (le
-   2026-09-29 : 2 candidats, 28 s après la régénération). Ne régénère PAS l'inventaire pour les absorber :
+   de la passe, mais des dépôts `remember` d'autres sessions arrivés pendant qu'elle tournait (mesuré :
+   2 candidats, 28 s après la régénération). Ne régénère PAS l'inventaire pour les absorber :
    chaque régénération rend l'index périmé et impose une nouvelle réindexation (jusqu'à ~25 min sur le
    partage). Commite, et nomme ces candidats dans le bilan : la passe suivante les traitera. Si en
    revanche l'inventaire manque une note de `knowledge/`, reviens à l'étape 6, puis refais l'étape 7.

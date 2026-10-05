@@ -27,9 +27,9 @@ Propre à cette skill : la règle 4 bis (jumeau d'acceptation, mesurée). Les au
    « le cas légal le plus proche est accepté » (même borne, de l'autre côté). Un refus trop large casse autant qu'un
    refus manquant, et une restriction inventée (achat « unique », limite par jour) casse l'appelant qui suit le contrat.
    Mesuré sur le banc arenagame : une emprise fermée (`<=` au lieu de `<`) refusait la rangée du fond et a fait perdre
-   deux règles d'élixir pourtant justes (nuit-2026-09-25 m3) ; avec le jumeau, 35/35 aux trois manches suivantes. Un
-   refus inventé dans la boutique a coûté un cas caché à 2 bras sur 4 (nuit-2026-09-22 m1), puis au seul bras sans
-   cette consigne (appel nu, nuit-2026-09-25 m5).
+   deux règles d'élixir pourtant justes (nuit, m3) ; avec le jumeau, 35/35 aux trois manches suivantes. Un
+   refus inventé dans la boutique a coûté un cas caché à 2 bras sur 4 (nuit, m1), puis au seul bras sans
+   cette consigne (appel nu, nuit, m5).
 5. **AU MOMENT où tu dirais « fini » → REJOUE LE MÊME CRITÈRE et lis son code de sortie.** Un artefact
    hors modèle, sinon ça n'a pas eu lieu : test rouge→vert, code de sortie, capture LUE, requête. Jamais un texte auto-déclaré.
 6. **AU MOMENT où le rejeu est encore rouge → CHANGE D'APPROCHE, ne répète pas.** Deux tentatives identiques n'en font
@@ -37,5 +37,5 @@ Propre à cette skill : la règle 4 bis (jumeau d'acceptation, mesurée). Les au
    ou un outil manquant, c'est TOI qui le FABRIQUES quand c'est sûr, borné et réversible — ça ne se demande pas.
 7. **AU MOMENT où tu es tenté de rendre la main tôt → NE LE FAIS PAS.** Un rapport d'étape, « je continue ? », un plan
    sans exécution coûtent un tour entier à l'utilisateur et ne produisent rien (mesuré : 23,54 $ sur 156,51 $ dépensés en
-   tours « reprend », 2026-09-02). Mène-le jusqu'au vert vérifié dans CETTE passe, ou nomme le blocage précis. Puis
+   tours « reprend »). Mène-le jusqu'au vert vérifié dans CETTE passe, ou nomme le blocage précis. Puis
    reboucle vers `judge` : build corrige, build ne signe JAMAIS son propre verdict de qualité.

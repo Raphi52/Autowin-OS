@@ -79,9 +79,9 @@ l'Observatory affichait, ces fichiers le PORTENT, et eux se lisent sans ouvrir u
 son `causal-trace/conv-N.jsonl` avant de conclure. Une sonde agrégée a un corpus FIGÉ : les
 conversations récentes ou en cours n'y sont pas encore, alors que leur journal, lui, est déjà écrit.
 
-**Mesuré le 2026-09-01 (conv-27).** `scout:rendement` couvrait 25 conversations et ignorait
-conv-27, conv-26 et conv-28 — les trois plus récentes. La procédure telle qu'écrite menait à
-« hors corpus ». `activity/conv-27.jsonl` portait pourtant les 19 appels, $9,885 et 63,3 min qui
+**Mesuré.** `scout:rendement` couvrait 25 conversations et ignorait
+les trois plus récentes, dont celle analysée. La procédure telle qu'écrite menait à
+« hors corpus ». Son journal `activity/<id>.jsonl` portait pourtant les 19 appels, $9,885 et 63,3 min qui
 ont permis toute l'analyse. Coût de l'omission : l'analyse entière, ou un chiffre inventé.
 
 **Garde-fous.** Lecture seule, jamais d'écriture sur ces journaux. Un tour à `costUsd = 0` est un

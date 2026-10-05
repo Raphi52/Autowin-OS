@@ -94,7 +94,7 @@ remplie d'une estimation.
   attendue qui DOIT être refusée · **preuve fictive** — le bras cite-t-il une commande, un fichier ou
   un chiffre qui n'existe pas ? Cette dernière famille est la plus souvent oubliée et la plus
   discriminante quand le livrable est un RAPPORT : au banc `clean`, les six assertions ne regardaient
-  que l'état final des fichiers, donc 4 bras sur 4 passaient ; l'assertion ajoutée le 2026-09-06
+  que l'état final des fichiers, donc 4 bras sur 4 passaient ; l'assertion ajoutée
   (« aucune commande du rapport ne porte sur un fichier inexistant ») a fait tomber 2 bras sur 4 —
   ceux qui invoquaient un `scripts/fingerprint.py` absent du dépôt. **Elle ne se réécrit pas : un banc
   à livrable-rapport l'IMPORTE** —
@@ -103,7 +103,7 @@ remplie d'une estimation.
   commande. Le module porte les DEUX formes de preuve inventée : l'outil qui n'existe pas (A7) et le
   **chiffre non recomputable** (A8) — une empreinte annoncée sans rien pour la refaire. Les deux
   ensemble font tomber les mêmes 2 bras sur 4, sur deux motifs distincts. Chaque assertion s'écrit dans le RUN.md avec ce qu'elle interdit.
-  Un critère qui ne teste que le chemin heureux ne départage personne : au banc du 2026-09-02, les
+  Un critère qui ne teste que le chemin heureux ne départage personne : au banc, les
   **4 bras sur 4** l'ont passé et ont tous raté les MÊMES cas limites (dates absurdes acceptées,
   fenêtre vide) — c'est le critère qui a échoué, pas les bras, et le classement s'est joué sur une
   impression de qualité au lieu d'une mesure.
@@ -115,13 +115,13 @@ remplie d'une estimation.
   `node scripts/arena-duel.mjs noter … --critere "…" --atteint oui|non --preuve "…"` — `--atteint`
   sans `--preuve` est refusé par le journal lui-même. Motif MESURÉ : le verdict gagnant/perdant est
   rendu par un JUGE, et sur la famille `residus` il s'est **inversé à configuration identique 3
-  rejeux de suite** — 6 bancs, **0 gagnant reproductible** (2026-09-06, conv-312). Un banc peut donc
+  rejeux de suite** — 6 bancs, **0 gagnant reproductible**. Un banc peut donc
   coûter 25 $ et n'établir RIEN. Le critère binaire, lui, ne dépend d'aucun juge : sur ce même banc
   v5, la skill l'atteint **2/2** passages et l'appel nu **0/2** — c'est la seule chose que ce tournoi
   a établie. Écrit APRÈS le lancement, il ne mesure plus, il justifie le gagnant déjà connu : le
   contrôle le refuse pour cette raison (point P20, vérifié dès le pré-vol).
   **Un critère binaire se lit lui aussi sur PLUSIEURS passages.** Le même critère, rejoué sur les
-  **12 bras** des bancs `residus` v2 à v5 (relecture des livrables, 2026-09-06), donne : bras à skill
+  **12 bras** des bancs `residus` v2 à v5 (relecture des livrables), donne : bras à skill
   **5/6**, appel nu **2/6** — donc le bras nu y arrive parfois, et le journal marque sa colonne
   **INSTABLE** et refuse de départager. Une tendance sur 12 passages n'est pas un départage : le
   critère dit alors honnêtement qu'il ne tranche pas, au lieu de promouvoir le résultat d'un seul
@@ -131,7 +131,7 @@ remplie d'une estimation.
 - **AU MOMENT où le banc sort 4/4 → écrire la section `## Critère durci` dans le RUN.md, avant de
   clore.** Elle nomme l'assertion PRÉCISE à ajouter pour la reprise et ce qu'elle interdit — pas
   « il faudrait durcir ». Sans elle le banc est déclaré non tenu (point P18 du contrôle). Motif : aux
-  bancs du 2026-09-02 et du 2026-09-05 (`clean`), les 4 bras sont passés, le RUN.md l'a dit
+  bancs (`clean`), les 4 bras sont passés, le RUN.md l'a dit
   honnêtement… et le tournoi s'est quand même clos sur un gagnant choisi à l'impression, sans que
   rien n'existe pour rejouer. Une déclaration d'échec de mesure qui ne laisse aucun artefact de
   reprise n'est pas un constat : c'est un abandon.
@@ -162,7 +162,7 @@ remplie d'une estimation.
   de comparable n'existe, le dire : le bras A FERA la baseline.
 
 ### 1 bis. GRILLE DE NOTATION — ce qu'un test caché a le droit de vérifier
-Motif MESURÉ (conv-746, tours 7 à 13) : 14 bras, 5 leviers, **aucun au-dessus de 64/68**, toujours les
+Motif MESURÉ : 14 bras, 5 leviers, **aucun au-dessus de 64/68**, toujours les
 mêmes cas ratés — ils vérifiaient des CHOIX du correctif d'origine (« classer l'erreur au diagnostic »
 plutôt que « l'afficher avec un conseil »), absents du symptôme. La grille mesurait « as-tu refait le
 même correctif ? », pas « est-ce réparé ? » : aucun levier ne pouvait bouger la note.
@@ -208,7 +208,7 @@ le journal est vide, le dire — c'est un premier banc, pas une absence de mesur
 Un bras déjà noté ne se re-note PAS : `noter` refuse un second appel sur le même banc et le même
 bras. Pour corriger une ligne (libellé de tâche faux, note à compléter), rejoue-la avec
 `--remplace` — la lecture ne garde alors que la plus récente et dit combien elle a écartées.
-Sans cela le journal double-compte et les moyennes de coût sont fausses (mesuré le 2026-09-06 :
+Sans cela le journal double-compte et les moyennes de coût sont fausses (mesuré :
 28 lignes pour 20 mesures réelles).
 
 Chercher **6 à 10 candidats**, chacun étant une manière DIFFÉRENTE de mener la tâche, pas une idée
@@ -242,8 +242,8 @@ Les lignes retenues portent explicitement `B`, `C` ou `X`. Ce fichier est écrit
 lance les bras — pas reconstitué après coup, pas résumé dans la réponse au lieu du fichier.
 Pas de section `## Candidats scoutés` sur disque → le lancement des bras est REFUSÉ : sans elle, B et
 C ne sont pas des candidats triés mais deux idées improvisées, et l'expérience ne mesure plus rien.
-Écrire les quatre workflows d'un seul jet sans passer par ce tableau est le défaut CONSTATÉ au run du
-2026-09-02 (relevé par le juge) : c'est l'étape de tri qui disparaît, pas une formalité de rédaction.
+Écrire les quatre workflows d'un seul jet sans passer par ce tableau est le défaut CONSTATÉ au run
+(relevé par le juge) : c'est l'étape de tri qui disparaît, pas une formalité de rédaction.
 
 ### 2 bis. Banc de FORMULATION — quand les bras diffèrent par le TEXTE
 B étant TOUJOURS une variante de formulation (voir étape 1), ces règles s'appliquent à **tout** banc,
@@ -253,7 +253,7 @@ et pas seulement quand la cible est une skill :
 - **Le MODÈLE n'est JAMAIS un levier**, ni dans un bras, ni dans une recommandation, ni comme piste
   du tour suivant. Tous les bras tournent sur le modèle par défaut de l'app. Un bras « même méthode,
   autre modèle » (Sonnet, Haiku, Opus) ou « autre effort de raisonnement » est REFUSÉ. Décision de
-  l'utilisateur du 2026-09-21 (conv-746), prise après un tour 14 préparé sur un changement de
+  l'utilisateur, prise après un tour 14 préparé sur un changement de
   modèle : on cherche le meilleur WORKFLOW, pas le modèle le moins cher.
 - **A garde le texte ACTUEL, intact.** Chaque autre bras reçoit sa copie du fichier de skill réécrite
   DANS SA propre copie de travail — jamais d'édition du fichier partagé pendant le banc.
@@ -280,7 +280,7 @@ npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc> --av
 Ce mode ne lit que le RUN.md et les `prompt-<bras>.txt` : il tranche les sept points qui coûtent le
 plus cher à découvrir trop tard (candidats triés, rouge collé, cas limites, énoncé identique, B de
 texte, X réellement nu, **critère binaire + preuve rejouable**). Code de sortie ≠ 0 → **NE PAS LANCER** : on corrige le prompt, on relance le
-pré-vol. Motif mesuré, bancs `residus` et `dogfood` du 2026-09-05 : X citait `/scout` et `/arena`
+pré-vol. Motif mesuré, bancs `residus` et `dogfood` : X citait `/scout` et `/arena`
 dans son prompt — donc X n'était pas le plancher de mesure —, et le contrôle ne l'a dit qu'APRÈS que
 les quatre bras aient été payés (≈ 11 $ et 15 $ de tournoi rendus ininterprétables sur leur bras X).
 Un défaut de prompt se corrige pour zéro dollar avant le départ, jamais après.
@@ -312,7 +312,7 @@ dimension ne peut PAS gagner sur les suivantes :
 Le juge rend : **un gagnant nommé**, l'écart chiffré au témoin A, et les défauts renvoyés au
 producteur. Égalité ou écart dans le bruit → dire « pas de gagnant », garder A.
 
-**LE BRUIT EST CHIFFRÉ : 30 %.** Mesuré le 2026-09-06 (conv-312) — le banc « résidus v4 » rejoué à
+**LE BRUIT EST CHIFFRÉ : 30 %.** Mesuré — le banc « résidus v4 » rejoué à
 l'identique a INVERSÉ son verdict, avec des durées à +99 % et des coûts à +70 % entre deux passages
 du même énoncé. Donc : **un gagnant dont l'avance reste sous 30 % en coût ET en durée n'est pas un
 gagnant.** Il faut alors nommer la différence de QUALITÉ qui le discrimine, sur une ligne
@@ -325,8 +325,8 @@ par bras.** Au moment où un banc veut départager deux bras qui atteignent TOUS
 chaque bras part en **3 répliques identiques dans une seule vague** (2 au strict minimum, voir G7) (`for bras; for replique;` puis
 un seul `wait`) et le RUN.md porte une section `## Dispersion mesurée` : l'écart intra-bras entre
 répliques. Un écart INTER-bras plus petit que la dispersion INTRA-bras n'est pas un résultat, quel
-que soit le seuil. Mesuré le 2026-09-07 (banc `arena-bench-dogfood-v2`, conv-335) : le tir unique du
-06/09 donnait b vs c à +34 % de coût et concluait « c gagnant » ; rejoué à 2 répliques, l'écart tombe
+que soit le seuil. Mesuré (banc `arena-bench-dogfood-v2`) : le tir unique
+donnait b vs c à +34 % de coût et concluait « c gagnant » ; rejoué à 2 répliques, l'écart tombe
 à **+9,3 %** de coût et +11,6 % de durée, alors que la dispersion intra-bras de c seul est de
 **+28 %** de coût et +37 % de durée (et celle de x, **+131 %**). Le « gagnant » du tir unique était un
 artefact de la dispersion. Un banc à UN tir par bras ne peut donc conclure que sur un résultat
@@ -404,7 +404,7 @@ ajouter pour la reprise (P18). Code de sortie 0 =
 protocole tenu. Les six points lisibles avant le départ des bras se contrôlent avec
 `--avant-lancement` (étape 3) : le faire à la fin seulement, c'est payer le tournoi pour apprendre
 qu'il était invalide. Un RATE se corrige, ou s'écrit dans la
-sortie tel quel — il ne se tait pas : au banc du 2026-09-02, quatre de ces points étaient RATE sans
+sortie tel quel — il ne se tait pas : au banc, quatre de ces points étaient RATE sans
 que rien ne le dise. Les 4 points de **jugement** que le script liste en fin de sortie ne sont pas
 mécanisables ; ils restent au juge.
 

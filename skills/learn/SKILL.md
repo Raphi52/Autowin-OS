@@ -45,7 +45,7 @@ précédentes ont produit t'est transmis — la tâche, puis chaque sortie de ph
 `[phase <nom>]`. C'est là que vivent le chemin des fichiers touchés, la cause établie, le diff et
 les preuves.
 
-Lis-les AVANT de conclure que tu n'as rien. Mesuré le 2026-08-20 sur le run `conv-1339` : un nœud
+Lis-les AVANT de conclure que tu n'as rien. Mesuré sur un run : un nœud
 `learn` a déclaré « je n'ai ni diff, ni fichier à ancrer » alors que son contexte contenait le
 chemin exact du fichier ET le diff complet. Il a refusé d'écrire pour une bonne raison appliquée à
 une prémisse fausse — le pire des refus, parce qu'il a l'air rigoureux.

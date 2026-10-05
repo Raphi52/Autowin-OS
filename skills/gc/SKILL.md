@@ -20,8 +20,8 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 ## Racines (ce qui est VIVANT — ne jamais y toucher)
 - **Conversations vivantes = `get_state`** (son champ `conversations`) : c'est la racine de marquage.
   JAMAIS `conversations.json` seul : sur disque, il n'est réécrit qu'à certains moments, et les
-  créations/suppressions récentes ne vivent que dans `conversations.json.journal.jsonl` (le
-  2026-09-29 : 18 ids dans le fichier contre 20 vivantes, dont la conversation GC en cours).
+  créations/suppressions récentes ne vivent que dans `conversations.json.journal.jsonl` (mesuré :
+  18 ids dans le fichier contre 20 vivantes, dont la conversation GC en cours).
   Sans `get_state` : rejouer ce journal DANS L'ORDRE sur le fichier (`upsert` ajoute
   `conversation.id`, `delete` retire `id`) ; si ni l'un ni l'autre ne se lit → garde-fou « sonde
   qui échoue » : aucun satellite collecté ce jour-là.
@@ -50,8 +50,8 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
    Un nom dont l'id ne se lit pas sans ambiguïté → NON collecté, rapporté en « à vérifier ».
 2 bis. **Signaler sans déplacer — gestes git.** Ces restes ne se déplacent PAS : les bouger casse
    git. Ils vont au bilan dans « À purger », avec la commande exacte, et attendent l'accord :
-   - **Copies de travail git orphelines** (`git worktree list`) : `bench/runs/*` (déjà **5,3 Go**
-     le 2026-09-21), `autowin-os/worktrees/panel*`, `autowin-os/worktrees/<hash>/agent__run-*`.
+   - **Copies de travail git orphelines** (`git worktree list`) : `bench/runs/*` (déjà **5,3 Go**),
+     `autowin-os/worktrees/panel*`, `autowin-os/worktrees/<hash>/agent__run-*`.
      Candidate si : HEAD détachée, aucune modification (`git -C <copie> status --short` vide),
      aucun fichier modifié depuis > 7 jours, et absente des runs en cours et de `travauxNonPublies`.
      Proposer `git worktree remove <copie>`. Une copie avec des modifications → `/salvage`, pas `/gc`.

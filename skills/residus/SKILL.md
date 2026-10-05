@@ -22,7 +22,7 @@ AU MOMENT où un script sort 0 → vérifie qu'il a vraiment fait quelque chose.
 n'apparie rien est ignoré **en silence** : cinq cibles, quatre fichiers joués, exit 0 quand même. La
 couverture perdue ne fait aucun bruit — c'est la ligne qui est morte, pas le fichier.
 
-Mesuré aux bancs /arena des 2026-09-05 et 2026-09-06 : `assert-package-content.ps1` et
+Mesuré aux bancs /arena : `assert-package-content.ps1` et
 `assert-ui-package-fresh.ps1` pointaient une racine disparue et sortaient exit 1, entraînant deux
 `verify-*.ps1` vivants avec eux. C'est la SEULE contribution de cette skill qui, sur deux passages
 successifs du même banc, a battu le balayage direct sans skill : le reste de la procédure d'origine
@@ -38,8 +38,8 @@ du rejet). Le `file:line` désigne un fichier et une ligne RÉELS.
   qui ne se recompute pas compte contre le rapport.
 - Le signal de retrait doit NOMMER le fichier retiré : AU MOMENT où tu invoques un test comme signal
   → **ouvre le test** et vérifie qu'il cite ce fichier. Sinon il restera vert après
-  le retrait et ne discrimine rien. Même chose pour un signal servi DEUX FOIS dans ta table. Mesuré au banc du
-  2026-09-06 : `cdp-proof-validation.test.mjs` servi douze fois alors qu'il ne nomme que trois
+  le retrait et ne discrimine rien. Même chose pour un signal servi DEUX FOIS dans ta table. Mesuré au banc :
+  `cdp-proof-validation.test.mjs` servi douze fois alors qu'il ne nomme que trois
   fichiers (l.73-75) — les douze retraits étaient non prouvés. À défaut : « aucun signal automatique
   — retrait à valider à la main ».
 - Ne jamais toucher à ce que la demande n'a pas nommé (réflexe 9) ; passer la main à `clean` pour

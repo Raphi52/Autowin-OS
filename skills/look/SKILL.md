@@ -82,7 +82,7 @@ Ce cas est la seule exception à l'interdit « pas de verdict en transition ».
 La capture prend TOUT l'écran, pas la fenêtre visée. Si une autre application (messagerie, navigateur,
 explorateur) recouvre en tout ou partie la zone à observer, la capture est `CAPTURE OCCULTÉE` : elle ne
 porte AUCUN verdict, même partiel, et surtout elle ne prouve pas qu'un changement n'a pas eu lieu.
-Mesuré le 2026-09-04 (conv-257) : trois captures d'affilée conclues « inchangé » alors qu'une fenêtre
+Mesuré : trois captures d'affilée conclues « inchangé » alors qu'une fenêtre
 Teams couvrait le composer — trois tours perdus et un faux constat d'échec rendu à l'utilisateur.
 
 Procédure obligatoire, dans cet ordre, sans demander la permission (geste sûr et réversible) :

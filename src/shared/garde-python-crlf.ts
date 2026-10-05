@@ -163,7 +163,7 @@ export function refusEcriturePythonCrlf(
   if (fautif.length === 0) return undefined
   return (
     `Écriture de fichier par Python en mode texte refusée (${fautif[0]} sans newline=) : sous Windows, ` +
-    `Python remplace chaque \\n par \\r\\n à l'écriture. Mesuré le 2026-10-01 : 47 fichiers de ` +
+    `Python remplace chaque \\n par \\r\\n à l'écriture. Mesuré : 47 fichiers de ` +
     `D:\\AutoWinOS réécrits ainsi en CRLF, invisibles à git status, et un test rouge ` +
     `(moteur-perime-cablage.test.ts sur App.tsx). Voie à suivre : modifie le fichier avec l'outil ` +
     `d'édition (Edit / Write), qui garde ses fins de ligne. Si Python est indispensable : ` +

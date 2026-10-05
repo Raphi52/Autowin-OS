@@ -23,7 +23,7 @@ export interface TurnMessageParts {
    *
    * Fourni, le bloc d'état devient un DIFF : la session du provider porte deja l'état complet, le
    * repousser entier le fait repayer PLEIN TARIF a chaque message (il change, donc il n'est jamais
-   * mis en cache). Mesure du 2026-09-16 (conv-614) : 3 043 caracteres d'état a chaque tour, dont
+   * mis en cache). Mesure (conv-614) : 3 043 caracteres d'état a chaque tour, dont
    * 2 821 (93 %) pour la seule liste des skills, qui ne bouge jamais.
    *
    * `diffEtat` existait, teste, depuis le 2026-08-31 — mais n'etait appele NULLE PART.
@@ -1063,7 +1063,7 @@ function lecturePure(commande: string): boolean {
 /**
  * UN OUTIL NATIF QUI AGIT compte comme une action — pendant de `statusEstUneLecture`.
  *
- * Mesure du 2026-09-22 (conv-782) : un tour qui avait cree un script (Write), modifie une skill
+ * Mesure (conv-782) : un tour qui avait cree un script (Write), modifie une skill
  * (Edit) et joue des tests (Bash) a recu « tu as ANNONCE ce que tu allais faire, sans rien faire ».
  * `anyActionExecuted` n'est leve que par un `<cmd>` Autowin ; les outils natifs passent par
  * `chunk.status`. Est une action : un ecrivain natif, ou un `Bash` qui n'est pas une lecture PURE.
@@ -1084,8 +1084,8 @@ export function statusEstUneAction(status: string | undefined): boolean {
 /** Ce qu'on renvoie a l'agent : l'ordre de REGARDER, puis de decider lui-meme si possible. */
 export const RELANCE_QUESTION_SANS_LECTURE =
   'SYSTÈME: tu viens de poser une question à l’utilisateur SANS avoir lu un seul fichier. ' +
-  'Une partie de ce que tu demandes est peut-être déjà dans le code — mesuré le 25/08 sur ' +
-  'conv-1399, où une des options proposées était déjà implémentée et committée. Appelle ' +
+  'Une partie de ce que tu demandes est peut-être déjà dans le code — mesuré : ' +
+  'une fois, une des options proposées était déjà implémentée et committée. Appelle ' +
   'MAINTENANT `list_files` / `read_file` / `find_in_files` sur la zone concernée, puis : si la ' +
   'lecture répond, avance sur une hypothèse énoncée (« je suppose X — corrige-moi ») au lieu de ' +
   'demander ; si un vrai choix subsiste (goût, arbitrage que seul l’utilisateur possède), repose ' +
@@ -1145,8 +1145,8 @@ export function exigePreuveAvantDePromettre(reponse: string, uneActionAEuLieu: b
 export const RELANCE_PREUVE_AVANT_DE_PROMETTRE =
   'SYSTÈME: ta clôture PROMET un compte-rendu ultérieur — « je te rends le résultat », « je ' +
   'reviens avec », « je te tiens au courant ». Ce message est le DERNIER du tour : ce futur ' +
-  'n’existe pas, aucun second message ne partira, et l’utilisateur attendra pour rien. Mesuré le ' +
-  '31/08 : un run lancé puis promis a fini `degraded-closed`, son travail est resté dans un ' +
+  'n’existe pas, aucun second message ne partira, et l’utilisateur attendra pour rien. Mesuré : ' +
+  'un run lancé puis promis a fini `degraded-closed`, son travail est resté dans un ' +
   'worktree isolé jamais fusionné, et l’utilisateur a dû le refaire ailleurs. Donc MAINTENANT, au ' +
   'choix : (1) va chercher le résultat dans CE tour — sonde l’état réel (`get_state`, ' +
   '`retrospective`, `run`, `verify`, lecture de fichier) et rends compte de ce que tu OBSERVES ; ' +
@@ -1225,6 +1225,6 @@ export function exigeFaireLeGeste(reponse: string, bureauUtilise: boolean): bool
 
 export const RELANCE_FAIRE_LE_GESTE =
   'SYSTÈME: ta clôture confie à l’utilisateur un geste d’écran (ouvrir, cliquer, saisir) alors ' +
-  'que tu as piloté le bureau dans CE tour — cas mesuré c4e319ca (conv-843). Fais le geste ' +
+  'que tu as piloté le bureau dans CE tour. Fais le geste ' +
   'MAINTENANT avec desktop_act puis vérifie par desktop_observe. Ne le rends que s’il exige un ' +
   'secret que tu n’as pas (mot de passe, MFA) : nomme alors CE geste précis et pourquoi.'

@@ -29,7 +29,7 @@ export function refusGitDestructeur(commande: string): string | undefined {
   const motif = (quoi: string, voie: string): string =>
     `Effacement du travail en cours refusé (${quoi}) : cette commande porte sur TOUT l'arbre de travail ` +
     `et supprime définitivement les fichiers modifiés non commités, y compris ceux qui n'ont rien à voir ` +
-    `avec ta tâche (mesuré conv-587 : 3 fichiers perdus, irrécupérables). ` +
+    `avec ta tâche (mesuré : 3 fichiers perdus, irrécupérables). ` +
     `Voie récupérable : ${voie}. ` +
     `Si l'effacement large est vraiment voulu, demande-le à l'utilisateur en nommant ce qui disparaît.`
 

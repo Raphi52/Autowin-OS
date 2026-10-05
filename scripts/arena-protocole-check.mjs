@@ -576,7 +576,7 @@ export function verifierProtocole({
   /*
    * P19 - Un ecart SOUS LE BRUIT ne designe pas de gagnant.
    *
-   * Mesure du 2026-09-06 (conv-312) : le banc « residus v4 » rejoue A L'IDENTIQUE a INVERSE son
+   * Mesure (conv-312) : le banc « residus v4 » rejoue A L'IDENTIQUE a INVERSE son
    * verdict. Entre les deux passages du meme enonce, les durees ont varie de +99 % et les couts de
    * +70 %. Un ecart plus etroit que ce bruit ne mesure donc rien : il designe le hasard du moment.
    *
@@ -605,7 +605,7 @@ export function verifierProtocole({
       ? true
       : `gagnant declare alors que l'ecart de cout ET de duree avec un perdant reste sous ${Math.round(
           SEUIL_BRUIT * 100
-        )} % (le bruit mesure entre deux rejeux identiques, conv-312) : nommer la difference de QUALITE sur une ligne \`Écart hors bruit :\`, ou clore le banc en « non concluant »`
+        )} % (le bruit mesure entre deux rejeux identiques) : nommer la difference de QUALITE sur une ligne \`Écart hors bruit :\`, ou clore le banc en « non concluant »`
   })
 
   /*
@@ -661,7 +661,7 @@ export function verifierProtocole({
     }
     return manque.length
       ? manque.join(' ; ') +
-          ' — un bras qui ignore le critere mesure son ignorance, pas le workflow (banc du 2026-09-07 : sans critere 9/28 rouges, avec critere 28/28)'
+          ' — un bras qui ignore le critere mesure son ignorance, pas le workflow (banc : sans critere 9/28 rouges, avec critere 28/28)'
       : true
   })
 
