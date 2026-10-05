@@ -14,6 +14,19 @@ const bloc = source.slice(
   source.indexOf("kind: 'conversation-route'") + 900
 )
 
+/**
+ * FAUX « Reponse interrompue avant la fin » pendant le tri (conv-98, 2026-10-05) : l'ecran est
+ * « en cours » des l'envoi, mais le principal ne repondait « oui » a la sonde qu'a l'arrivee de
+ * `pilotChat`, APRES ce tri qui interroge un modele (mediane 6 s). Le tri doit compter.
+ */
+describe('le tri compte comme une reponse en cours', () => {
+  it('enveloppe l’appel au routeur dans trackPreparation', () => {
+    const handler = source.slice(source.indexOf("'os:conversations:routeMessage'"))
+    const avantRoute = handler.slice(0, handler.indexOf('conversationRouteCoordinator.route('))
+    expect(avantRoute).toContain('activeChatTurns.trackPreparation(conversationId')
+  })
+})
+
 describe('journal du tri de conversation', () => {
   it('ecrit la part de cache lue ET ecrite de l’appel de classement', () => {
     expect(bloc).toContain('cacheReadTokens: decision.usage?.cacheReadTokens')

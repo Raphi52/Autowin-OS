@@ -125,10 +125,16 @@ export function registerConversationsIpc({
       const attachmentNames = rawAttachmentNames.map((name, index) =>
         guardString(name, `attachmentNames[${index}]`)
       )
-      const result = await conversationRouteCoordinator.route(
-        conversationId,
-        message,
-        attachmentNames
+      /*
+       * LE TRI COMPTE COMME « REPONSE EN COURS » (2026-10-05, conv-98 : « reponse interrompue »
+       * affiche pendant que le modele prepare sa reponse, alors que tout va bien).
+       * L'ecran passe la conversation en cours AVANT d'appeler ce tri (ChatView `send`), puis sonde
+       * `os:pilotChat:active` toutes les 4 s : deux « non » et il declare la reponse interrompue.
+       * Or ce tri interroge un modele — mesure sur 234 tris : mediane 6,0 s, p90 9,0 s, 32 au-dela
+       * de 8 s — et `pilotChat` n'est appele qu'apres. Pendant ce trou, rien n'etait « en cours ».
+       */
+      const result = await activeChatTurns.trackPreparation(conversationId, () =>
+        conversationRouteCoordinator.route(conversationId, message, attachmentNames)
       )
       const decision = result.decision
       appendConvActivity(conversationId, {
