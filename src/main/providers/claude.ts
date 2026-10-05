@@ -871,7 +871,13 @@ export function dossierModAutowin(
   return undefined
 }
 
-export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
+/**
+ * `hookNpm` : `scripts/garde-npm-modules.mjs` du dépôt (2026-10-05). Refuse un `npm install`/`ci`/…
+ * qui réécrirait le `node_modules` d'un Electron en cours d'exécution : un tel install a échoué en
+ * EBUSY au milieu et laissé l'app sans dépendances. Les agents tournent avec `--setting-sources ''` :
+ * le `.claude/settings.json` du dépôt, qui porte le même garde, ne les atteint pas.
+ */
+export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<string, unknown> {
   const q = (v: string): string => `"${v.split('\\').join('/')}"`
   return {
     autoMemoryDirectory: '',
@@ -880,7 +886,10 @@ export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
         {
           // Edit/Write/MultiEdit/NotebookEdit : les réglages de la protection de prod (conv-738, faille 2).
           matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit',
-          hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
+          hooks: [
+            { type: 'command', command: `node ${q(hookGarde)}` },
+            ...(hookNpm ? [{ type: 'command', command: `node ${q(hookNpm)}` }] : [])
+          ]
         },
         {
           // Les AUTRES outils, pour le seul détecteur de boucle (conv-58) : matchers DISJOINTS du
@@ -891,6 +900,16 @@ export function reglagesCliAutowin(hookGarde: string): Record<string, unknown> {
       ]
     }
   }
+}
+
+/** Le garde npm du dépôt, à côté du mod (`<dépôt>/mods/autowin` → `<dépôt>/scripts`). Absent → `undefined`. */
+export function gardeNpmDuDepot(
+  modAutowin: string | undefined,
+  existe: (chemin: string) => boolean = existsSync
+): string | undefined {
+  if (!modAutowin) return undefined
+  const script = join(modAutowin, '..', '..', 'scripts', 'garde-npm-modules.mjs')
+  return existe(script) ? script : undefined
 }
 
 export function argumentsMcpNoeudSkill(opts: SendOptions): {
@@ -1367,7 +1386,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       writeFileSync(hookGarde, scriptDesGardesCourant(), 'utf8')
       writeFileSync(
         settingsFile,
-        JSON.stringify(reglagesCliAutowin(hookGarde)),
+        JSON.stringify(reglagesCliAutowin(hookGarde, gardeNpmDuDepot(modAutowin))),
         'utf8'
       )
       args.push('--settings', settingsFile)

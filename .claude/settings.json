@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/garde-npm-modules.mjs\"",
+            "statusMessage": "Garde npm (node_modules d'une app ouverte ?)"
+          }
+        ]
+      }
+    ]
+  }
+}

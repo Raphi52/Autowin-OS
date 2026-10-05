@@ -43,6 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from launch_dev_phases import decider_mise_a_jour, libelle_mise_a_jour
+from launch_dev_dependances import dependances_manquantes, electron_verrouille
 from launch_dev_splash import Splash  # noqa: E402 - le chemin doit etre pose avant l'import
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -535,9 +536,61 @@ def main() -> int:
             )
             journaliser(f"maj: merge ff-only refuse ({detail})")
 
+    def reparer_dependances() -> None:
+        """Complete `node_modules` AVANT `npm run dev`, quand il est a moitie vide.
+
+        Sans elle, deux lancements (2026-10-02, 2026-10-05) finissaient sur « 'electron-vite' n'est
+        pas reconnu » puis « bundle perime », sans jamais reparer. Detail et causes :
+        launch_dev_dependances.py. `--no-save` : la reference `package-lock.json` reste intacte
+        (npm 10.8 le reecrit sinon, mesure). Jamais si une app tourne encore sur ces modules : c'est
+        precisement l'install sous EBUSY qui les avait vides.
+        """
+        manquants = dependances_manquantes(RACINE)
+        if not manquants:
+            return
+        journaliser(f"dependances: incompletes ({', '.join(manquants[:3])}…)")
+        if electron_verrouille(RACINE):
+            splash.pousser(
+                "[demarrage] dépendances incomplètes, mais une app Electron tourne encore dessus : "
+                "réparation impossible sans risque — ferme-la et relance\n"
+            )
+            journaliser("dependances: electron.exe verrouille — reparation sautee")
+            return
+        splash.pousser(f"[demarrage] dépendances incomplètes ({manquants[0]}) : réinstallation, ~1 min\n")
+        code = -1
+        try:
+            JOURNAL.parent.mkdir(parents=True, exist_ok=True)
+            with JOURNAL.open("a", encoding="utf-8") as sortie:
+                processus = subprocess.Popen(  # noqa: S603 - arguments fixes, cwd resolu
+                    [commande, "install", "--no-save", "--no-audit", "--no-fund"],
+                    cwd=str(RACINE),
+                    stdout=sortie,
+                    stderr=sortie,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                limite = time.monotonic() + 600
+                while processus.poll() is None and time.monotonic() < limite:
+                    # Le veilleur de silence couperait a 75 s une reinstallation qui travaille.
+                    parole["dernier"] = time.monotonic()
+                    time.sleep(1.0)  # sleep-ok: attente bornee d'un processus externe
+                if processus.poll() is None:
+                    processus.kill()
+                code = processus.returncode if processus.returncode is not None else -1
+        except OSError as erreur:
+            journaliser(f"dependances: npm install impossible ({erreur})")
+        reste = dependances_manquantes(RACINE)
+        journaliser(f"dependances: npm install code={code}, encore manquantes={len(reste)}")
+        splash.pousser(
+            "[demarrage] dépendances réparées\n"
+            if not reste
+            else f"[demarrage] dépendances toujours incomplètes ({reste[0]}) — voir {JOURNAL}\n"
+        )
+
     def travailler() -> None:
         try:
             mettre_a_jour()
+            # APRES la mise a jour : un pull qui ajoute une dependance est repare du meme geste.
+            reparer_dependances()
             JOURNAL.parent.mkdir(parents=True, exist_ok=True)
             with JOURNAL.open("a", encoding="utf-8") as sortie:
                 # L'app ecrit dans SON fichier, pas dans un tube qui mourrait avec nous : c'est la
