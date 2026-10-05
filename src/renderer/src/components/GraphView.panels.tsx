@@ -104,7 +104,8 @@ export function NodePanel({
   deuxiemeSaut,
   onRetry,
   onRetract,
-  onSupersede
+  onSupersede,
+  onClose
 }: {
   node: GraphNode
   file: { path: string; content: string } | null
@@ -118,6 +119,8 @@ export function NodePanel({
   onRetry?: () => void
   onRetract?: () => void
   onSupersede?: () => void
+  /** Ferme le panneau de droite (désélectionne le nœud). */
+  onClose?: () => void
 }): React.JSX.Element {
   // Les liens d'une fiche fournie se comptent par dizaines et melangent toutes les relations :
   // sans ce filtre, retrouver « qui me cite » revenait a lire la liste entiere a l'oeil.
@@ -187,6 +190,17 @@ export function NodePanel({
         )}
       </nav>
       <article className="node-content">
+        {onClose && (
+          <button
+            type="button"
+            className="node-panel__close"
+            aria-label="Fermer le panneau"
+            title="Fermer"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        )}
 
         <span className="node-panel__theme">{nodeThemeIds(node).join(' · ')}</span>
         <h2>{node.label}</h2>

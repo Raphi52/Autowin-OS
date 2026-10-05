@@ -2411,6 +2411,7 @@ export function GraphView({
                 linkedNodes={linkedNodes}
                 degre={degreNoeud}
                 deuxiemeSaut={sautsDeux}
+                onClose={clearNodeSelection}
                 onRetry={() => void openNode(node)}
                 onNavigate={(nextNode) => openNode(nextNode)}
                 onRetract={
