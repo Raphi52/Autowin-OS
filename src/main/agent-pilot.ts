@@ -35,6 +35,7 @@ import {
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
+  estUneLectureDuHarnais,
   exigePreuveAvantDePromettre,
   RELANCE_PREUVE_AVANT_DE_PROMETTRE,
   exigeFaireLeGeste,
@@ -2060,6 +2061,10 @@ export class AgentPilot {
               }
               if (!chunk.delta) return
             }
+            // Une LECTURE faite par un outil du harnais (Read, Grep, Bash…) compte comme lecture :
+            // sans ce relevé, les gardes « chiffre non vérifié » et « question sans lecture »
+            // relançaient un tour qui avait pourtant observé le monde (conv-103, 2026-09-23→25).
+            if (chunk.toolName && estUneLectureDuHarnais(chunk.toolName)) anyReadExecuted = true
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
             if (chunk.status) {
               /*

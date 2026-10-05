@@ -512,6 +512,29 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
  * réclame un compte, la réponse contient un nombre, et aucune lecture n'a eu lieu. Un faux positif
  * coûterait une itération inutile ; on préfère le faux négatif.
  */
+/**
+ * Les outils du HARNAIS (SDK Claude) qui OBSERVENT réellement le monde : lectures de fichiers,
+ * recherches, commandes shell, requêtes web. Une réponse appuyée sur l'un d'eux n'est pas une
+ * supposition, même si aucune commande `<cmd>` de lecture n'a été appelée.
+ *
+ * MESURÉ les 2026-09-23→25 (conv-103) : la quête quotidienne « LISTER MES PR » lisait l'API Azure
+ * DevOps via Bash/curl — quatre relances « chiffre non vérifié » à tort, une par tour, parce que
+ * `anyReadExecuted` ne comptait que `list_files`/`read_file`/`find_in_files`. Les outils MUTANTS
+ * (Edit, Write, NotebookEdit) restent exclus : écrire n'atteste aucune lecture.
+ */
+const OUTILS_HARNAIS_QUI_OBSERVENT = new Set([
+  'Read',
+  'Grep',
+  'Glob',
+  'Bash',
+  'WebFetch',
+  'WebSearch'
+])
+
+export function estUneLectureDuHarnais(toolName: string): boolean {
+  return OUTILS_HARNAIS_QUI_OBSERVENT.has(toolName)
+}
+
 export function exigeUnChiffreVerifie(
   question: string | undefined,
   reponse: string,

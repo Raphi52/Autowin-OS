@@ -218,6 +218,15 @@ export interface StreamChunk {
    * Absent quand la cible tient déjà en entier dans `status`.
    */
   statusTarget?: string
+  /**
+   * Nom STRUCTURÉ de l'outil dont ce chunk relaie l'appel (Read, Grep, Bash…), quand le `status`
+   * est un signe de vie d'outil. Le consommateur en a besoin pour savoir qu'une LECTURE réelle a eu
+   * lieu : le garde « chiffre non vérifié » du pilote ne voyait que ses trois commandes `<cmd>` de
+   * lecture, et relançait à tort un tour qui avait pourtant observé le monde via les outils du
+   * harnais (mesuré les 2026-09-23→25, conv-103 : 4 relances sur des nombres lus sur l'API Azure
+   * DevOps). Parser le texte de `status` serait une rustine : c'est un libellé d'affichage.
+   */
+  toolName?: string
   /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */
   artifacts?: ChatArtifact[]
 }

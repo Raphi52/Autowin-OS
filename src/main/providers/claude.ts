@@ -1805,9 +1805,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // texte y inseraient des lignes vides et casseraient l'en-tete (constat du 2026-09-01).
             // La coupure reste donc, mais elle ne decide plus de ce que la TRACE garde : `statusTarget`
             // emporte la cible entiere quand le libelle l'a rognee (moignons mesures sur conv-130).
+            // `toolName` structure a cote : le pilote compte les LECTURES reelles sans parser l'affichage.
             queue.push({
               delta: '',
               status: `${part.name}${cible ? ` · ${cible}` : ''}`,
+              toolName: part.name,
               ...(cible.length < cibleEntiere.length ? { statusTarget: cibleEntiere } : {})
             })
           }
