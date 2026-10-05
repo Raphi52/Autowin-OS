@@ -14,9 +14,10 @@ import { TrustLedger } from './trust/ledger'
 import { HookBus } from './hooks/hook-bus'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { supprimerArbre } from './fs-supprimer'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
@@ -357,8 +358,8 @@ describe('Orchestrator — flip live worktree', () => {
       expect(existsSync(join(base, 'app.log'))).toBe(true)
       expect(existsSync(join(worktree, 'app.log'))).toBe(false)
     } finally {
-      rmSync(base, { recursive: true, force: true })
-      rmSync(worktreeRoot, { recursive: true, force: true })
+      supprimerArbre(base)
+      supprimerArbre(worktreeRoot)
     }
   })
 
@@ -482,8 +483,8 @@ describe('Orchestrator — flip live worktree', () => {
         result.causalMutationEvidence?.[0].writtenLineFingerprintsByPath?.['future.log']
       ).toHaveLength(1)
     } finally {
-      rmSync(base, { recursive: true, force: true })
-      rmSync(worktreeRoot, { recursive: true, force: true })
+      supprimerArbre(base)
+      supprimerArbre(worktreeRoot)
     }
   })
 
@@ -608,8 +609,8 @@ describe('Orchestrator — flip live worktree', () => {
         }
       })
     } finally {
-      rmSync(base, { recursive: true, force: true })
-      rmSync(worktreeRoot, { recursive: true, force: true })
+      supprimerArbre(base)
+      supprimerArbre(worktreeRoot)
     }
   })
 

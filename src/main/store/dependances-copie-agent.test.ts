@@ -3,7 +3,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
-  rmSync,
   statSync,
   unlinkSync,
   writeFileSync
@@ -11,6 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { supprimerArbre } from '../fs-supprimer'
 import { delierLesDependances, lierLesDependances, messageLiaison } from './dependances-copie-agent'
 
 /**
@@ -29,8 +29,8 @@ import { delierLesDependances, lierLesDependances, messageLiaison } from './depe
 
 // Chaque bac est un dossier jetable dans TEMP. Mesure du 2026-09-02 : 546 dossiers
 // `copie-agent-*` s'etaient accumules la (~340 Mo) parce que rien ne les retirait. On les retire
-// donc apres chaque test. Un effacement recursif ne traverse PAS la jonction (fait verrouille plus
-// bas) : les faux modules du bac partent, rien d'autre. Un echec de retrait n'est jamais fatal --
+// donc apres chaque test, avec `supprimerArbre`, qui ne traverse jamais une jonction (fait verrouille
+// plus bas) : les faux modules du bac partent, rien d'autre. Un echec de retrait n'est jamais fatal --
 // le nettoyage ne doit pas pouvoir faire rougir un test.
 const bacsAJeter: string[] = []
 
@@ -49,7 +49,7 @@ afterEach(() => {
     const racine = bacsAJeter.pop()
     if (racine === undefined) continue
     try {
-      rmSync(racine, { recursive: true, force: true })
+      supprimerArbre(racine)
     } catch {
       // residu laisse : sans effet sur le resultat du test
     }
@@ -155,14 +155,17 @@ describe('le lien est retiré avant qu’une copie ne soit supprimée', () => {
  * CE QUE CE TEST TRANCHE, et pourquoi il existe.
  *
  * Un cadrage du 2026-09-02 (conv-133) affirmait comme PROUVÉ qu'un effacement récursif d'une copie
- * agent « détruirait les 836 Mo de modules du dépôt réel » à travers la jonction. Personne ne
- * l'avait mesuré. Mesure faite : c'est FAUX. Une jonction NTFS n'est pas suivie par un effacement
- * récursif — ni `fs.rmSync({recursive})`, ni `rm -rf`, ni `rmdir /s` : la jonction part, sa cible
- * reste. Le vrai motif du retrait du lien avant nettoyage est ailleurs, et il est écrit dans
- * `dependances-copie-agent.ts` : `git worktree remove --force` rend 0 mais laisse un dossier
- * fantôme contenant encore la jonction.
+ * agent « détruirait les modules du dépôt réel » à travers la jonction. Mesuré ce jour-là sous
+ * Node 22 (Electron 39) : c'était faux, `fs.rmSync({recursive})` retirait la jonction sans suivre.
  *
- * Ce test verrouille le fait mesuré, pour qu'aucun futur cadrage ne réinvente le danger.
+ * CE FAIT N'EST PLUS VRAI SOUS NODE 24, mesuré le 2026-10-05 avec Electron 44.5.1 (conv-108) :
+ * `fs.rmSync({recursive})` TRAVERSE la jonction et VIDE sa cible (3 essais sur 3). C'est pourquoi
+ * toute suppression récursive de l'app passe par `supprimerArbre` (`src/main/fs-supprimer.ts`), qui
+ * lit chaque entrée avec `lstat` et retire un lien sans jamais le suivre. Ce test verrouille CE
+ * comportement-là : remis sur un `rmSync` brut, il rougit sous Node 24.
+ *
+ * Le motif du retrait du lien AVANT nettoyage reste celui écrit dans `dependances-copie-agent.ts` :
+ * `git worktree remove --force` rend 0 mais laisse un dossier fantôme contenant encore la jonction.
  */
 describe('effacer une copie ne traverse pas la jonction', () => {
   it('laisse INTACTS les modules du dépôt après un effacement récursif de la copie', () => {
@@ -174,7 +177,7 @@ describe('effacer une copie ne traverse pas la jonction', () => {
     // Le lien est réellement traversable : sans ça, la mesure ne prouverait rien.
     expect(existsSync(join(copie, 'node_modules', 'un-paquet', 'index.js'))).toBe(true)
 
-    rmSync(copie, { recursive: true, force: true })
+    supprimerArbre(copie)
 
     expect(existsSync(copie)).toBe(false)
     expect(existsSync(join(base, 'node_modules', 'un-paquet', 'index.js'))).toBe(true)

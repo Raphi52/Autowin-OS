@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { checkoutBranch } from './git-checkout-main'
+import { supprimerArbre } from './fs-supprimer'
 
 /**
  * La bascule de branche est la SEULE action git qu'un bouton peut declencher : ces tests fixent sa
@@ -24,7 +25,7 @@ describe('checkoutBranch', () => {
     git('commit', '-m', 'init')
     git('branch', 'autre')
   })
-  afterEach(() => rmSync(repo, { recursive: true, force: true }))
+  afterEach(() => supprimerArbre(repo))
 
   it('bascule sur une branche locale quand le depot est propre', async () => {
     const r = await checkoutBranch(repo, 'autre')

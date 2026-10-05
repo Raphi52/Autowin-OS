@@ -3,7 +3,6 @@ import {
   mkdtempSync,
   mkdirSync,
   realpathSync,
-  rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -28,6 +27,7 @@ import {
   scanBrainGraphs,
   searchVaultBrainNotesAsync
 } from './fs-brains'
+import { supprimerArbre } from '../fs-supprimer'
 
 describe('Brain graph', () => {
   it('fusionne les quatre canaux signes du retriever avec les fiches locales', () => {
@@ -2066,17 +2066,17 @@ tags: [${theme}]
       const previewPending = isolated.loadBrainGraphPreviewAsync(alias, 100)
       // `recursive` requis depuis Node 24 : rmSync sans lui refuse une junction Windows (EISDIR).
       // Il retire le LIEN seul — la cible et ses fichiers restent intacts (sonde du 2026-09-10).
-      rmSync(alias, { recursive: true, force: true })
+      supprimerArbre(alias)
       symlinkSync(outside, alias, linkType)
       const preview = await previewPending
 
       expect(preview.nodes).toHaveLength(100)
       expect(preview.nodes.every(({ label }) => label.startsWith('INSIDE-'))).toBe(true)
 
-      rmSync(alias, { recursive: true, force: true })
+      supprimerArbre(alias)
       symlinkSync(allowed, alias, linkType)
       const graphPending = isolated.loadBrainGraphAsync(alias, 100)
-      rmSync(alias, { recursive: true, force: true })
+      supprimerArbre(alias)
       symlinkSync(outside, alias, linkType)
       const graph = await graphPending
 
@@ -2086,7 +2086,7 @@ tags: [${theme}]
       if (previousRoot === undefined) delete process.env.AMITEL_BRAIN_ROOT
       else process.env.AMITEL_BRAIN_ROOT = previousRoot
       vi.resetModules()
-      rmSync(parent, { recursive: true, force: true })
+      supprimerArbre(parent)
     }
   })
 
@@ -2144,8 +2144,8 @@ tags: [${theme}]
     } finally {
       if (previous === undefined) delete process.env.AUTOWIN_OS_WORKSPACE
       else process.env.AUTOWIN_OS_WORKSPACE = previous
-      rmSync(workspace, { recursive: true, force: true })
-      rmSync(outside, { recursive: true, force: true })
+      supprimerArbre(workspace)
+      supprimerArbre(outside)
     }
   })
 
@@ -2165,7 +2165,7 @@ tags: [${theme}]
     } finally {
       if (previousRoot === undefined) delete process.env.AUTOWIN_APP_DATA_ROOT
       else process.env.AUTOWIN_APP_DATA_ROOT = previousRoot
-      rmSync(portable, { recursive: true, force: true })
+      supprimerArbre(portable)
     }
   })
 })

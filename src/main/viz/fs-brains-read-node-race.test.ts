@@ -1,8 +1,9 @@
 import * as actualFs from 'node:fs'
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { supprimerArbre } from '../fs-supprimer'
 
 const race = vi.hoisted(() => ({
   alias: '',
@@ -20,7 +21,7 @@ vi.mock('node:fs', async (importOriginal) => {
     if (race.armed && String(path) === race.target) {
       race.armed = false
       // `recursive` requis depuis Node 24 : rmSync sans lui refuse une junction Windows (EISDIR).
-      fs.rmSync(race.alias, { recursive: true, force: true })
+      supprimerArbre(race.alias)
       fs.symlinkSync(race.outside, race.alias, process.platform === 'win32' ? 'junction' : 'dir')
     }
     return result
@@ -36,7 +37,7 @@ afterEach(() => {
   race.alias = ''
   race.target = ''
   race.outside = ''
-  while (roots.length) rmSync(roots.pop()!, { recursive: true, force: true })
+  while (roots.length) supprimerArbre(roots.pop()!)
 })
 
 describe('readNodeFile — identité autorisée stable', () => {

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
@@ -7,6 +7,7 @@ import { signalerInterfaceVisible } from './startup-gate'
 import type { AutowinOS } from './os'
 import type { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import type { ProviderAdapter } from './providers/types'
+import { supprimerArbre } from './fs-supprimer'
 
 /**
  * HARNAIS du e2e de chaine complete — le montage, et rien que le montage.
@@ -151,5 +152,5 @@ export async function demonterOs(
   if (appDataPrecedent === undefined) delete process.env.APPDATA
   else process.env.APPDATA = appDataPrecedent
   appDataPrecedent = undefined
-  if (jetable) rmSync(jetable.racine, { recursive: true, force: true })
+  if (jetable) supprimerArbre(jetable.racine)
 }

@@ -12,10 +12,11 @@
 import { expect } from 'vitest'
 
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
+import { supprimerArbre } from '../fs-supprimer'
 
 /** Les dossiers temporaires à supprimer après chaque test. Certains tests en enregistrent eux-mêmes. */
 export const roots: string[] = []
@@ -95,5 +96,5 @@ export function detachedCommit(
 
 /** Nettoyage commun : chaque suite l'appelle dans son `afterEach`. */
 export function nettoyerRacines(): void {
-  for (const d of roots.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of roots.splice(0)) supprimerArbre(d)
 }

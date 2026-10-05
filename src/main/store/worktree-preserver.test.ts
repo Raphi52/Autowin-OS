@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * PRÉSERVER PUIS LIBÉRER — récupérer le disque sans jamais perdre de travail.
@@ -19,7 +20,7 @@ import { WorktreeManager } from './worktree-manager'
  */
 const racines: string[] = []
 afterEach(() => {
-  for (const r of racines.splice(0)) rmSync(r, { recursive: true, force: true })
+  for (const r of racines.splice(0)) supprimerArbre(r)
 })
 
 const git = (cwd: string, ...args: string[]): string =>

@@ -11,14 +11,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { WorktreeManager } from './worktree-manager'
+import { supprimerArbre } from '../fs-supprimer'
 
 const roots: string[] = []
 afterEach(() => {
-  for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true })
+  for (const dir of roots.splice(0)) supprimerArbre(dir)
 })
 
 function git(dir: string, ...args: string[]): string {

@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { gitLogShaBatchExec, resolveHeadShas } from './brain-source-sha'
 import { sourceLocatorProblem } from './brain-remember'
+import { supprimerArbre } from './fs-supprimer'
 
 let workspace = ''
 
@@ -118,4 +119,4 @@ describe('resolveHeadShas — resolution groupee pour la revue inbox', () => {
     expect(resolved.get(locatorPath)).toBe('abcdef1234567890')
   })
 })
-afterEach(() => rmSync(workspace, { recursive: true, force: true }))
+afterEach(() => supprimerArbre(workspace))

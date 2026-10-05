@@ -1,6 +1,7 @@
 import { ESSAIS_MAX } from './delai-de-reprise'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * Vrais dépôts git en tmp : le budget vitest par défaut (5 s) ne couvre pas ces cas.
@@ -79,7 +80,7 @@ function authorizeGreenRecovery(
 }
 
 afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  for (const root of roots.splice(0)) supprimerArbre(root)
 })
 
 describe('récupération des worktrees après redémarrage', () => {
@@ -217,7 +218,7 @@ describe('récupération des worktrees après redémarrage', () => {
     git(repo, 'commit', '-q', '-m', 'concurrent base')
     const publicationBaseSha = git(repo, 'rev-parse', 'HEAD')
     const integrationPath = mkdtempSync(join(tmpdir(), 'autowin-recovery-integration-'))
-    rmSync(integrationPath, { recursive: true, force: true })
+    supprimerArbre(integrationPath)
     roots.push(integrationPath)
     git(repo, 'worktree', 'add', '--detach', integrationPath, publicationBaseSha)
     git(integrationPath, '-c', 'commit.gpgsign=false', 'merge', '--no-edit', agentSha)

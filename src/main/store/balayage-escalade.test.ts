@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+  existsSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -145,5 +153,53 @@ describe('balayerLeChemin escalade au lieu d’echouer en silence', () => {
     opts.forceReussit = true
     expect(prive(wm).balayerLeChemin(chemin)).toBe(true)
     expect(wm.blocagesDeBalayage()).toHaveLength(0)
+  })
+})
+
+/**
+ * UNE JONCTION QUE `delierLesDependances` NE CONNAÎT PAS, mesuré le 2026-10-05 (conv-108).
+ *
+ * Le `node_modules` du HAUT de la copie est délié par `cleanupWorktree` avant toute suppression
+ * (`delierLesDependances`, appelé dès le retrait doux). Mais une jonction posée PLUS BAS — un
+ * paquet lié par un agent, un `node_modules` imbriqué — reste dans la copie jusqu'au `removeDirFn`.
+ * Sous Node 24 (Electron 44), l'ancien défaut `rmSync({ recursive })` traversait cette jonction et
+ * vidait sa cible. Ce test passe par le `removeDirFn` PAR DÉFAUT (aucune injection) : il garde le
+ * branchement sur `supprimerArbre`, pas seulement l'outil.
+ */
+describe('le balayage d’une copie ne traverse pas une jonction imbriquée', () => {
+  it('retire la copie et laisse INTACTS les modules du dépôt', () => {
+    const repo = tempRepo()
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-escalade-jonction-'))
+    roots.push(racine)
+    const modulesDuDepot = join(racine, 'modules-du-depot')
+    mkdirSync(join(modulesDuDepot, 'un-paquet'), { recursive: true })
+    writeFileSync(join(modulesDuDepot, 'un-paquet', 'index.js'), 'module.exports=1')
+    const chemin = copie(racine)
+    mkdirSync(join(chemin, 'paquet-lie'))
+    symlinkSync(
+      modulesDuDepot,
+      join(chemin, 'paquet-lie', 'node_modules'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
+    // Le lien est réellement traversable : sans ça, le test ne prouverait rien.
+    expect(existsSync(join(chemin, 'paquet-lie', 'node_modules', 'un-paquet', 'index.js'))).toBe(
+      true
+    )
+
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: racine,
+      // Registre git vide : la copie n'est PAS enregistrée. `worktree remove` échoue (git ne la
+      // connaît pas) : le balayage escalade jusqu'au `removeDirFn` par défaut.
+      tryGitFn: (_repo, args) =>
+        args[0] === 'worktree' && args[1] === 'remove'
+          ? { code: 1, stdout: '', stderr: 'is not a working tree' }
+          : { code: 0, stdout: '', stderr: '' }
+    })
+
+    expect(prive(wm).balayerLeChemin(chemin)).toBe(true)
+    expect(existsSync(chemin)).toBe(false)
+    expect(readdirSync(modulesDuDepot)).toEqual(['un-paquet'])
+    expect(existsSync(join(modulesDuDepot, 'un-paquet', 'index.js'))).toBe(true)
   })
 })

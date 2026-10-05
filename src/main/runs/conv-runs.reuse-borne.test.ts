@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * Ce que ce test attrape et qu'un test de RÉSULTAT ne peut PAS attraper.
@@ -48,7 +49,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true })
+  supprimerArbre(root)
 })
 
 describe('reuseOrCreateConvRun — la recherche de workflow réutilisable est BORNÉE', () => {

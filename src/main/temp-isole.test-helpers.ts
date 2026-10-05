@@ -1,6 +1,7 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { supprimerArbre } from './fs-supprimer'
 
 /**
  * UN DOSSIER TEMPORAIRE RIEN QU'A CE TEST.
@@ -49,7 +50,7 @@ export function isolerTemp(
         if (valeur === undefined) delete process.env[nom]
         else process.env[nom] = valeur
       }
-      rmSync(racine, { recursive: true, force: true })
+      supprimerArbre(racine)
     }
   }
 }

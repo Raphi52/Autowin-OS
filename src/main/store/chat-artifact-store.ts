@@ -4,7 +4,6 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
-  rmSync,
   statSync,
   writeFileSync
 } from 'node:fs'
@@ -13,6 +12,7 @@ import { basename, extname, isAbsolute, join, relative, resolve } from 'node:pat
 import type { ArtifactEncoding, ChatArtifact } from '../../shared/artifacts'
 import type { Conversation } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
+import { supprimerArbre } from '../fs-supprimer'
 
 const MAX_PERSISTED_ARTIFACT_BYTES = 256 * 1024 * 1024
 export const MAX_ARTIFACT_PREVIEW_BYTES = 16 * 1024 * 1024
@@ -287,7 +287,7 @@ export function removeConversationArtifacts(conversationId: string, base?: strin
   const target = resolve(root, safeSegment(conversationId, 'conversation'))
   const rel = relative(root, target)
   if (!rel || rel.startsWith('..') || isAbsolute(rel)) return
-  rmSync(target, { recursive: true, force: true })
+  supprimerArbre(target)
 }
 
 /** Plafond du binaire rechargé pour le modèle : au-delà, la miniature reste le bon compromis. */

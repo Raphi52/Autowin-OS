@@ -14,9 +14,10 @@
  *  (d) `error` et `cancelled` vident aussi le tampon — pas seulement `done`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { supprimerArbre } from '../fs-supprimer'
 
 vi.mock('node:fs', async (importOriginal) => {
   const real = await importOriginal<typeof import('node:fs')>()
@@ -37,7 +38,7 @@ beforeEach(() => {
   vi.mocked(fs.mkdirSync).mockClear()
   vi.mocked(fs.appendFileSync).mockClear()
 })
-afterEach(() => rmSync(root, { recursive: true, force: true }))
+afterEach(() => supprimerArbre(root))
 
 describe('turn-journal — écriture par LOTS', () => {
   it('300 deltas + done : tout est relu, mkdirSync == 1, appendFileSync <= 10', () => {

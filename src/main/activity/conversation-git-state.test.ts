@@ -10,6 +10,7 @@ import {
 } from '../providers/workspace-mutation-evidence'
 import { appendConversationFileTrace } from './conversation-file-trace-spool'
 import { readConversationGitDiff, readConversationGitState } from './conversation-git-state'
+import { supprimerArbre } from '../fs-supprimer'
 
 const roots: string[] = []
 
@@ -48,7 +49,7 @@ async function trace(
 }
 
 afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  for (const root of roots.splice(0)) supprimerArbre(root)
 })
 
 describe('conversation Git state', () => {

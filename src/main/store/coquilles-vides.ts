@@ -1,5 +1,6 @@
-import { readdirSync, rmSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * LA VRAIE USINE A RESIDUS : `git worktree remove` laisse la coquille derriere lui.
@@ -70,7 +71,7 @@ export function balayerCoquillesVides(racine: string): string[] {
     try {
       if (!statSync(chemin).isDirectory()) continue
       if (!estCoquilleVide(chemin)) continue
-      rmSync(chemin, { recursive: true, force: true })
+      supprimerArbre(chemin)
       supprimes.push(nom)
     } catch {
       // Une coquille qu'on n'a pas pu retirer reste en place : elle sera revue au prochain passage.

@@ -4,15 +4,16 @@
  * Ce test rejoue ce scénario : un candidat né AVANT un revert sur main doit être signalé.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { detecterResurrection } from './salvage-resurrection.mjs'
+import { supprimerArbre } from '../src/main/fs-supprimer'
 
 const aNettoyer = []
 afterEach(() => {
-  while (aNettoyer.length) rmSync(aNettoyer.pop(), { recursive: true, force: true })
+  while (aNettoyer.length) supprimerArbre(aNettoyer.pop())
 })
 
 function depot() {

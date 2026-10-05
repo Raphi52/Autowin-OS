@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { AppCommandBus, isolateWatchdogPromptPaths } from './commands'
 import { APP_DESTINATIONS } from '../shared/navigation'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -16,6 +16,7 @@ import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import { TraceStore } from './activity/trace-store'
 import type { BrainRetrievalOptions } from './brain-retrieval'
 import type { OrchestrationStep } from './orchestrator'
+import { supprimerArbre } from './fs-supprimer'
 
 /*
  * RACINE APP-DATA PROPRE A CE FICHIER.
@@ -49,7 +50,7 @@ beforeAll(() => {
 afterAll(() => {
   if (appDataPrecedent === undefined) delete process.env.APPDATA
   else process.env.APPDATA = appDataPrecedent
-  rmSync(racineAppData, { recursive: true, force: true })
+  supprimerArbre(racineAppData)
 })
 
 function fakeOs(): any {
@@ -375,7 +376,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       ).toBe(true)
       expect(events.some((event) => event.run?.stage === 'closure')).toBe(true)
     } finally {
-      rmSync(root, { recursive: true, force: true })
+      supprimerArbre(root)
     }
   })
 
@@ -431,7 +432,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     } finally {
       releaseRunTask()
       await execution
-      if (runPath) rmSync(dirname(runPath), { recursive: true, force: true })
+      if (runPath) supprimerArbre(dirname(runPath))
     }
   })
 
@@ -917,7 +918,7 @@ describe('AppCommandBus command execution policy', () => {
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
-      rmSync(appData, { recursive: true, force: true })
+      supprimerArbre(appData)
     }
   })
 
@@ -964,7 +965,7 @@ describe('AppCommandBus command execution policy', () => {
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
-      rmSync(appData, { recursive: true, force: true })
+      supprimerArbre(appData)
     }
   })
 
@@ -1032,8 +1033,8 @@ describe('AppCommandBus command execution policy', () => {
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
-      rmSync(appData, { recursive: true, force: true })
-      rmSync(workspace, { recursive: true, force: true })
+      supprimerArbre(appData)
+      supprimerArbre(workspace)
     }
   })
 
@@ -1072,8 +1073,8 @@ describe('AppCommandBus command execution policy', () => {
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
-      rmSync(appData, { recursive: true, force: true })
-      rmSync(workspace, { recursive: true, force: true })
+      supprimerArbre(appData)
+      supprimerArbre(workspace)
     }
   })
 
@@ -1158,9 +1159,9 @@ describe('AppCommandBus command execution policy', () => {
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
-      rmSync(appData, { recursive: true, force: true })
-      rmSync(workspace, { recursive: true, force: true })
-      rmSync(worktree, { recursive: true, force: true })
+      supprimerArbre(appData)
+      supprimerArbre(workspace)
+      supprimerArbre(worktree)
     }
   })
 
@@ -1218,8 +1219,8 @@ describe('AppCommandBus command execution policy', () => {
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
-      rmSync(appData, { recursive: true, force: true })
-      rmSync(workspace, { recursive: true, force: true })
+      supprimerArbre(appData)
+      supprimerArbre(workspace)
     }
   })
 
@@ -1239,7 +1240,7 @@ describe('AppCommandBus command execution policy', () => {
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
-      rmSync(appData, { recursive: true, force: true })
+      supprimerArbre(appData)
     }
   })
 
@@ -1282,7 +1283,7 @@ describe('AppCommandBus command execution policy', () => {
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
-      rmSync(appData, { recursive: true, force: true })
+      supprimerArbre(appData)
     }
   })
 
@@ -1448,8 +1449,8 @@ describe('AppCommandBus command execution policy', () => {
       )
       expect(os.worktrees.end).toHaveBeenCalledWith(expect.any(String), { merge: true })
     } finally {
-      rmSync(base, { recursive: true, force: true })
-      rmSync(copy, { recursive: true, force: true })
+      supprimerArbre(base)
+      supprimerArbre(copy)
     }
   })
 
@@ -1493,8 +1494,8 @@ describe('AppCommandBus command execution policy', () => {
       expect(os.worktrees.end).toHaveBeenCalledWith(expect.any(String), { merge: false })
       expect(os.worktrees.end).not.toHaveBeenCalledWith(expect.any(String), { merge: true })
     } finally {
-      rmSync(base, { recursive: true, force: true })
-      rmSync(copy, { recursive: true, force: true })
+      supprimerArbre(base)
+      supprimerArbre(copy)
     }
   })
 
@@ -1550,8 +1551,8 @@ describe('AppCommandBus command execution policy', () => {
         'export const ='
       )
     } finally {
-      rmSync(repo, { recursive: true, force: true })
-      rmSync(wtRoot, { recursive: true, force: true })
+      supprimerArbre(repo)
+      supprimerArbre(wtRoot)
     }
   })
 
@@ -1607,8 +1608,8 @@ describe('AppCommandBus command execution policy', () => {
       expect(coordinator.activity()[0].worktreePath).toBeTruthy()
       expect(existsSync(coordinator.activity()[0].worktreePath!)).toBe(false)
     } finally {
-      rmSync(repo, { recursive: true, force: true })
-      rmSync(wtRoot, { recursive: true, force: true })
+      supprimerArbre(repo)
+      supprimerArbre(wtRoot)
     }
     /*
      * BUDGET PROPORTIONNE A CE QUE CE TEST FAIT REELLEMENT, et non a une moyenne de suite.
@@ -1674,7 +1675,7 @@ describe('AppCommandBus command execution policy', () => {
       os.worktrees = {
         begin: () => copy,
         end: () => {
-          rmSync(copy, { recursive: true, force: true })
+          supprimerArbre(copy)
           return { outcome: 'nothing', agentId: 'command' }
         }
       }
@@ -1690,9 +1691,9 @@ describe('AppCommandBus command execution policy', () => {
       expect(existsSync(copy)).toBe(false)
     } finally {
       vi.unstubAllEnvs()
-      rmSync(base, { recursive: true, force: true })
-      rmSync(copy, { recursive: true, force: true })
-      rmSync(appData, { recursive: true, force: true })
+      supprimerArbre(base)
+      supprimerArbre(copy)
+      supprimerArbre(appData)
     }
   })
 
@@ -1927,7 +1928,7 @@ describe('AppCommandBus command execution policy', () => {
         expect.objectContaining({ type: 'orchestrate-usage', convId: 'conv-1' })
       )
     } finally {
-      rmSync(root, { recursive: true, force: true })
+      supprimerArbre(root)
     }
   })
 

@@ -117,9 +117,11 @@ export type RetraitDependances =
  *
  * CE QUE COUTE `stat` A LA PLACE, mesure le 2026-09-02 (test « avec `stat` au lieu de `lstat` ») :
  * `stat` suit la jonction et repond « dossier », donc la garde croit voir de VRAIS modules et REFUSE
- * d'y toucher -- le lien survit, et avec lui la coquille orpheline. Ce n'est PAS une destruction :
- * mesure le meme jour, un effacement recursif (`fs.rmSync({recursive})`, `rm -rf`, `rmdir /s`) NE
- * TRAVERSE PAS une jonction NTFS ; la jonction part, sa cible reste intacte.
+ * d'y toucher -- le lien survit, et avec lui la coquille orpheline. Ce n'etait PAS une destruction
+ * sous Node 22 (mesure le meme jour : `fs.rmSync({recursive})` ne traversait pas la jonction).
+ * ATTENTION, mesure le 2026-10-05 sous Electron 44.5.1 (Node 24) : `fs.rmSync({recursive})`
+ * TRAVERSE desormais la jonction et VIDE sa cible. Toute suppression recursive passe donc par
+ * `supprimerArbre` (`src/main/fs-supprimer.ts`), qui retire un lien sans jamais le suivre.
  */
 export function delierLesDependances(
   worktreePath: string,

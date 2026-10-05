@@ -39,6 +39,7 @@ import {
   messageLiaison,
   type LiaisonDependances
 } from './dependances-copie-agent'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * Moteur worktree "par défaut, sans intervention" (volet B du cockpit worktree).
@@ -964,8 +965,7 @@ export class WorktreeManager {
     this.worktreeRoot = opts.worktreeRoot
     this.git = opts.git ?? defaultGit
     this.tryGitFn = opts.tryGitFn ?? tryGit
-    this.removeDirFn =
-      opts.removeDirFn ?? ((path) => rmSync(path, { recursive: true, force: true }))
+    this.removeDirFn = opts.removeDirFn ?? ((path) => supprimerArbre(path))
     this.linkFileFn = opts.linkFileFn ?? linkSync
     this.removeIndexLockFn = opts.removeIndexLockFn ?? ((path) => rmSync(path, { force: true }))
     this.configuredBaseBranch = opts.baseBranch
@@ -2715,7 +2715,7 @@ export class WorktreeManager {
     }
     rmSync(leasePath, { force: true })
     if (existsSync(leaseDir) && readdirSync(leaseDir).length === 0) {
-      rmSync(leaseDir, { recursive: true, force: true })
+      supprimerArbre(leaseDir)
     }
   }
 
@@ -2773,7 +2773,7 @@ export class WorktreeManager {
       }
       const pid = Number(entry.name)
       if (!entry.isFile() || !Number.isSafeInteger(pid) || pid <= 0) {
-        rmSync(join(leaseDir, entry.name), { recursive: entry.isDirectory(), force: true })
+        supprimerArbre(join(leaseDir, entry.name))
         continue
       }
       const leasePath = join(leaseDir, entry.name)
@@ -2813,7 +2813,7 @@ export class WorktreeManager {
       }
     }
     if (!active && existsSync(leaseDir) && readdirSync(leaseDir).length === 0) {
-      rmSync(leaseDir, { recursive: true, force: true })
+      supprimerArbre(leaseDir)
     }
     return active
   }
@@ -3435,7 +3435,7 @@ exit 0
       }
     }
     if (readdirSync(patchRoot).length === 0) {
-      rmSync(patchRoot, { recursive: true, force: true })
+      supprimerArbre(patchRoot)
     }
   }
 
@@ -4616,7 +4616,7 @@ exit 0
       rmSync(patchPath, { force: true })
       rmSync(indexSnapshotPath, { force: true })
       if (existsSync(patchRoot) && readdirSync(patchRoot).length === 0) {
-        rmSync(patchRoot, { recursive: true, force: true })
+        supprimerArbre(patchRoot)
       }
     }
   }
@@ -5734,7 +5734,7 @@ exit 0
     } catch {
       return false
     } finally {
-      rmSync(bac, { recursive: true, force: true })
+      supprimerArbre(bac)
     }
   }
 

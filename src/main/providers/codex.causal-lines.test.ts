@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { exactLineFingerprint } from '../exact-line-fingerprint'
+import { supprimerArbre } from '../fs-supprimer'
 
 vi.mock('../runs/survivable-spawn', () => ({
   spawnSurvivable: (input: { cwd: string }) => {
@@ -54,7 +55,7 @@ const roots: string[] = []
 const previousBin = process.env.CODEX_BIN
 
 afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  for (const root of roots.splice(0)) supprimerArbre(root)
   if (previousBin === undefined) delete process.env.CODEX_BIN
   else process.env.CODEX_BIN = previousBin
 })

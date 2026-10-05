@@ -15,6 +15,7 @@ import { spawn, execFile, type ChildProcessWithoutNullStreams } from 'node:child
 import { existsSync, readdirSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
+import { supprimerArbre } from './fs-supprimer'
 
 /**
  * Racine des scripts de capture. Installée, l'app vit dans `app.asar`, que PowerShell ne sait pas
@@ -143,7 +144,7 @@ export function purgerDossiersOrphelins(racine: string): number {
   try {
     for (const nom of readdirSync(racine)) {
       if (!nom.startsWith(PREFIXE_DOSSIER)) continue
-      rmSync(join(racine, nom), { recursive: true, force: true })
+      supprimerArbre(join(racine, nom))
       n++
     }
   } catch {
@@ -164,7 +165,7 @@ export function purgerBureauxFermes(dossier: string, vivants: readonly string[])
   for (const e of lireRegistre(dossier)) {
     if (enVie.has(e.id)) continue
     try {
-      rmSync(join(dossier, 'webview2', e.id), { recursive: true, force: true })
+      supprimerArbre(join(dossier, 'webview2', e.id))
       rmSync(join(dossier, `${e.id}.json`), { force: true })
       effaces.push(e.id)
     } catch {
@@ -234,7 +235,7 @@ export class CapteurHdesk {
 
   detruire(): void {
     this.arreter()
-    rmSync(this.dossierImages, { recursive: true, force: true })
+    supprimerArbre(this.dossierImages)
   }
 
   private demander(commande: string): Promise<Reponse> {

@@ -1,9 +1,10 @@
-import { rmSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
 import { git, roots, tempRepo } from './worktree-manager.test-helpers'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * LE DÉFAUT, mesuré le 2026-08-29 (conv-1521).
@@ -23,7 +24,7 @@ import { git, roots, tempRepo } from './worktree-manager.test-helpers'
 afterEach(() => {
   for (const d of roots.splice(0)) {
     try {
-      rmSync(d, { recursive: true, force: true })
+      supprimerArbre(d)
     } catch {
       // Un verrou Windows sur un dossier de test ne doit pas faire échouer la suite.
     }

@@ -105,6 +105,7 @@ import {
 import { readLastCommitFiles, readTestsCitant } from './git-read-main'
 import type { VerificationAvantPublication } from './run-autoclose'
 import { nativeSkills } from './native-registry'
+import { supprimerArbre } from './fs-supprimer'
 
 /**
  * Longueur du declencheur remis au modele : assez pour reconnaitre le MOMENT, pas le contrat.
@@ -4880,7 +4881,7 @@ export class AppCommandBus {
       return { ...issue, command: etiquette, parPortee, ...(rapport ? { rapport } : {}) }
     } finally {
       try {
-        rmSync(dossierDeRapport, { recursive: true, force: true })
+        supprimerArbre(dossierDeRapport)
       } catch {
         /* Un rapport qui traine dans le dossier temporaire ne change aucun verdict. */
       }

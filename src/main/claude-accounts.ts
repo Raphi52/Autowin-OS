@@ -1,5 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { supprimerArbre } from './fs-supprimer'
 
 /**
  * Plusieurs comptes Claude sur la même machine, avec bascule en un clic — comme claude.exe.
@@ -307,7 +308,7 @@ export class ClaudeAccountsStore {
       readFile: deps.readFile ?? ((path) => readFileSync(path, 'utf8')),
       writeFile: deps.writeFile ?? ((path, data) => writeFileSync(path, data, 'utf8')),
       makeDir: deps.makeDir ?? ((path) => void mkdirSync(path, { recursive: true })),
-      removeDir: deps.removeDir ?? ((path) => rmSync(path, { recursive: true, force: true })),
+      removeDir: deps.removeDir ?? ((path) => supprimerArbre(path)),
       now: deps.now ?? (() => new Date().toISOString())
     }
     this.state = this.load()

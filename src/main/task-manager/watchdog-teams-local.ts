@@ -6,7 +6,6 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
-  rmSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,6 +14,7 @@ import { latestValues, readLog, readTable, type LevelEntry } from './leveldb-lit
 import { decodeIndexedDbValue } from './v8-value-lite'
 import type { InboxMail } from './watchdog-mail'
 import { parseTeamsItemId, stripHtml, teamsItemId } from './watchdog-teams'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * Teams SANS connexion Microsoft (demande conv-854, 2026-09-25 : l'utilisateur ne peut pas se
@@ -196,7 +196,7 @@ export function readLocalTeamsStore(dir: string = teamsLocalStoreDir()): LocalTe
     return localValuesToSnapshot(decoded)
   } finally {
     // Le contenu des messages ne traine pas sur le disque.
-    rmSync(copy, { recursive: true, force: true })
+    supprimerArbre(copy)
   }
 }
 
@@ -370,7 +370,7 @@ export class TeamsLocalClient {
         erreur: LOCAL_REPLY_FAILURES[code] ?? `échec du pilotage Teams (code ${code})`
       }
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      supprimerArbre(dir)
     }
   }
 }

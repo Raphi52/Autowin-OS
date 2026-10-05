@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -8,6 +8,7 @@ import {
   outcomeToTraceEvent
 } from './orchestration-outcome-trace'
 import { TraceStore } from './trace-store'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * MANQUE CONSTATE LE 2026-08-07 : l'issue d'une orchestration (`OrchestrationOutcome`) etait rendue
@@ -87,7 +88,7 @@ describe('outcomeToTraceEvent', () => {
 describe('appendObservedOrchestrationOutcome', () => {
   const roots: string[] = []
   afterEach(() => {
-    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+    for (const root of roots.splice(0)) supprimerArbre(root)
   })
 
   it('relie une vraie décision routée à son issue et rend cette expérience réutilisable', () => {

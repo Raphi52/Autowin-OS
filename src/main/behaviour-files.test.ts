@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { listBehaviourFiles, readBehaviourFileFromManifest } from './behaviour-files'
+import { supprimerArbre } from './fs-supprimer'
 
 vi.mock('./capability-controls', () => ({
   listCapabilities: vi.fn(async (kind: string) =>
@@ -49,7 +50,7 @@ function select(files: Instruction[], engine: Instruction['engine']): Instructio
 }
 
 afterEach(() => {
-  for (const path of sandboxes.splice(0)) rmSync(path, { recursive: true, force: true })
+  for (const path of sandboxes.splice(0)) supprimerArbre(path)
 })
 
 describe('behaviour instruction map', () => {

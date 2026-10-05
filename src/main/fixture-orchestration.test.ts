@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -21,6 +21,7 @@ import {
 } from './fixture-orchestration'
 import { doitArreterLaReparation } from './gates/stopgate'
 import { lireVerdictJuge } from './orchestrator'
+import { supprimerArbre } from './fs-supprimer'
 
 const aNettoyer: string[] = []
 const dossierTemporaire = (): string => {
@@ -29,7 +30,7 @@ const dossierTemporaire = (): string => {
   return chemin
 }
 afterEach(() => {
-  while (aNettoyer.length) rmSync(aNettoyer.pop() as string, { recursive: true, force: true })
+  while (aNettoyer.length) supprimerArbre(aNettoyer.pop() as string)
 })
 
 describe('dépôt jetable de la fixture d’orchestration', () => {

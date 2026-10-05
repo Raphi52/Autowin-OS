@@ -1,11 +1,19 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
+import { supprimerArbre } from './fs-supprimer'
 
 /**
  * DEFAUT VECU le 2026-08-25 (conv-1404) : TROIS `edit_file` sur QUATRE ont rendu
@@ -43,7 +51,7 @@ const temporaires: string[] = []
 afterEach(() => {
   for (const chemin of temporaires.splice(0)) {
     try {
-      rmSync(chemin, { recursive: true, force: true })
+      supprimerArbre(chemin)
     } catch {
       /* Windows relache ses verrous en differe — le menage est un confort, pas le verdict */
     }

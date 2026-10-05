@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { gestesDeVerification, VERIFY_SANS_ISOLATION } from './verification-isolee'
+import { supprimerArbre } from './fs-supprimer'
 
 /**
  * UN VERDICT RENDU DANS UN DOSSIER PARTAGÉ NE PROUVE RIEN.
@@ -20,7 +21,7 @@ import { gestesDeVerification, VERIFY_SANS_ISOLATION } from './verification-isol
 
 const aNettoyer: string[] = []
 afterEach(() => {
-  for (const chemin of aNettoyer.splice(0)) rmSync(chemin, { recursive: true, force: true })
+  for (const chemin of aNettoyer.splice(0)) supprimerArbre(chemin)
 })
 
 function git(cwd: string, ...args: string[]): void {

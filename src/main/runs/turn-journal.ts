@@ -12,6 +12,7 @@ import {
 } from 'node:fs'
 import { appendFile, open, readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * Journal de TOUR (append-only, une ligne JSON par événement) — socle de la survie niveau 2 :
@@ -677,7 +678,7 @@ function planifierMenage(
 export function removeConversationTurnJournals(root: string, conversationId: string): boolean {
   const dir = join(root, safeSegment(conversationId))
   if (!existsSync(dir)) return false
-  rmSync(dir, { recursive: true, force: true })
+  supprimerArbre(dir)
   return true
 }
 

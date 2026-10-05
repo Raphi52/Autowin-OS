@@ -1,8 +1,9 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
+import { supprimerArbre } from '../fs-supprimer'
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
@@ -58,7 +59,7 @@ function managerDecaleDeHeures(repo: string, heures: number): WorktreeManager {
 }
 
 afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  for (const root of roots.splice(0)) supprimerArbre(root)
 })
 
 describe('balayage des copies agent abandonnées', () => {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * Tests joués contre de VRAIS dépôts git en tmp (init, worktree, merge) : sous la charge parallèle
@@ -751,7 +752,7 @@ exit 0
     const wm = manager(repo)
     const copie = wm.acquire('etranger')
     // On remplace la copie par un dépôt INDÉPENDANT : son HEAD n'existe pas dans la base.
-    rmSync(copie, { recursive: true, force: true })
+    supprimerArbre(copie)
     mkdirSync(copie, { recursive: true })
     git(copie, 'init', '-q', '-b', 'main')
     git(copie, 'config', 'user.email', 't@t')

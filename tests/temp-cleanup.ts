@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { supprimerArbre } from '../src/main/fs-supprimer'
 
 /**
  * NETTOYAGE DES DOSSIERS TEMPORAIRES DE LA SUITE DE TESTS.
@@ -204,7 +205,7 @@ export function nettoyerDossiersTemporairesDeTest(
       continue
     }
     try {
-      rmSync(chemin, { recursive: true, force: true })
+      supprimerArbre(chemin)
       resultat.supprimes.push(nom)
     } catch {
       // Un verrou Windows sur un fichier encore ouvert ne doit pas rendre la suite rouge.
@@ -262,7 +263,7 @@ export function purgerDossiersTemporairesAnciens(
       continue
     }
     try {
-      rmSync(chemin, { recursive: true, force: true })
+      supprimerArbre(chemin)
       resultat.supprimes.push(nom)
     } catch {
       resultat.echecs.push(nom)

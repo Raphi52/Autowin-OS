@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * COPIES ORPHELINES — des dossiers que git ne connaît plus, et que rien ne pouvait supprimer.
@@ -19,7 +20,7 @@ import { WorktreeManager } from './worktree-manager'
  */
 const racines: string[] = []
 afterEach(() => {
-  for (const r of racines.splice(0)) rmSync(r, { recursive: true, force: true })
+  for (const r of racines.splice(0)) supprimerArbre(r)
 })
 
 const git = (cwd: string, ...args: string[]): string =>
@@ -121,7 +122,7 @@ describe('balayage des copies abandonnées', () => {
     // impossible en cassant l'administration git : la copie doit alors survivre.
     const { base, worktreeRoot, copie } = depotAvecCopie()
     writeFileSync(join(copie, 'a.txt'), 'travail en cours\n')
-    rmSync(join(base, '.git', 'worktrees'), { recursive: true, force: true })
+    supprimerArbre(join(base, '.git', 'worktrees'))
 
     manager(base, worktreeRoot).reconcileResidues()
     expect(existsSync(copie)).toBe(true)

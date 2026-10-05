@@ -14,6 +14,7 @@ import {
   projectPublicationNeedsRetry,
   type GitRunner
 } from './run-autoclose'
+import { supprimerArbre } from './fs-supprimer'
 
 /** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
@@ -24,7 +25,7 @@ const realGit: GitRunner = async (args, cwd) => (await run('git', args, { cwd })
 
 const dirs: string[] = []
 afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of dirs.splice(0)) supprimerArbre(d)
 })
 
 describe('acquittement de publication projet', () => {

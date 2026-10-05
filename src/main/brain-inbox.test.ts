@@ -5,7 +5,6 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
-  rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -27,6 +26,7 @@ import {
   supersedeKnowledgeCandidate
 } from './brain-inbox'
 import { resolveHeadShas } from './brain-source-sha'
+import { supprimerArbre } from './fs-supprimer'
 
 let root = ''
 
@@ -65,7 +65,7 @@ beforeEach(() => {
   mkdirSync(join(root, 'inbox'), { recursive: true })
   mkdirSync(join(root, 'knowledge'), { recursive: true })
 })
-afterEach(() => rmSync(root, { recursive: true, force: true }))
+afterEach(() => supprimerArbre(root))
 
 describe('listInboxCandidates — les candidats de inbox/ deviennent enfin actionnables', () => {
   it('liste les candidats avec titre, type, portée et corps', () => {
@@ -119,12 +119,12 @@ Corps.
       const outside = mkdtempSync(join(tmpdir(), 'brain-inbox-read-outside-'))
       try {
         writeFileSync(join(outside, 'secret.md'), '# SECRET EXTERNE\nDONNEE-HORS-VAULT\n', 'utf8')
-        rmSync(join(root, zone), { recursive: true, force: true })
+        supprimerArbre(join(root, zone))
         symlinkSync(outside, join(root, zone), 'junction')
 
         expect(() => listInboxCandidates(root)).toThrow(/hors périmètre/)
       } finally {
-        rmSync(outside, { recursive: true, force: true })
+        supprimerArbre(outside)
       }
     }
   )
@@ -137,7 +137,7 @@ Corps.
 
       expect(() => listInboxCandidates(root)).toThrow(/hors périmètre/)
     } finally {
-      rmSync(outside, { recursive: true, force: true })
+      supprimerArbre(outside)
     }
   })
 
@@ -661,14 +661,14 @@ describe('promouvoir / rejeter — primitives no-clobber et réversibles', () =>
   ])('refuse de %s depuis une inbox junction externe', (_label, moveCandidate) => {
     const outside = mkdtempSync(join(tmpdir(), 'brain-inbox-outside-'))
     try {
-      rmSync(join(root, 'inbox'), { recursive: true, force: true })
+      supprimerArbre(join(root, 'inbox'))
       writeFileSync(join(outside, 'secret.md'), '# EXTERNE\n', 'utf8')
       symlinkSync(outside, join(root, 'inbox'), 'junction')
 
       expect(() => moveCandidate(root, 'inbox/secret')).toThrow(/hors périmètre/)
       expect(readFileSync(join(outside, 'secret.md'), 'utf8')).toBe('# EXTERNE\n')
     } finally {
-      rmSync(outside, { recursive: true, force: true })
+      supprimerArbre(outside)
     }
   })
 
@@ -679,14 +679,14 @@ describe('promouvoir / rejeter — primitives no-clobber et réversibles', () =>
     const outside = mkdtempSync(join(tmpdir(), 'brain-inbox-destination-'))
     try {
       note('inbox/a.md', '# A\n')
-      rmSync(join(root, destination), { recursive: true, force: true })
+      supprimerArbre(join(root, destination))
       symlinkSync(outside, join(root, destination), 'junction')
 
       expect(() => moveCandidate(root, 'inbox/a')).toThrow(/hors périmètre/)
       expect(existsSync(join(root, 'inbox', 'a.md'))).toBe(true)
       expect(readdirSync(outside)).toEqual([])
     } finally {
-      rmSync(outside, { recursive: true, force: true })
+      supprimerArbre(outside)
     }
   })
 })
@@ -712,7 +712,7 @@ describe('assertBrainVaultRoot — un canal IPC accepte n’importe quelle chaî
     // `recursive` requis depuis Node 24 : sans lui, rmSync refuse une junction Windows
     // (« Path is a directory », ERR_FS_EISDIR). Il retire le LIEN seul — la cible reste intacte
     // (sonde locale du 2026-09-10, Node v24.12.0).
-    rmSync(alias, { recursive: true, force: true })
+    supprimerArbre(alias)
     symlinkSync(outside, alias, process.platform === 'win32' ? 'junction' : 'dir')
 
     expect(authorized).toBe(realpathSync.native(vault))
@@ -735,7 +735,7 @@ describe('assertBrainVaultRoot — un canal IPC accepte n’importe quelle chaî
       mkdirSync(kelvin)
       expect(() => assertBrainVaultRoot(kelvin, ascii)).toThrow(/hors périmètre/)
     } finally {
-      rmSync(parent, { recursive: true, force: true })
+      supprimerArbre(parent)
     }
   })
 })

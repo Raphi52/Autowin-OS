@@ -1,5 +1,6 @@
-import { readdirSync, rmSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * BALAYAGE DES TEMPORAIRES D'APPEL ORPHELINS.
@@ -50,7 +51,7 @@ export function balayerTemporairesOrphelins(
       const infos = statSync(chemin)
       if (!infos.isDirectory()) continue
       if (maintenant - infos.mtimeMs < ageMiniMs) continue
-      rmSync(chemin, { recursive: true, force: true })
+      supprimerArbre(chemin)
       resultat.supprimes.push(nom)
     } catch {
       resultat.echecs.push(nom)

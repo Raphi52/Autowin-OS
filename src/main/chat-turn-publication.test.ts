@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -8,6 +8,7 @@ import type { ConversationFileTrace } from './activity/conversation-file-trace-s
 import { photographierDebutDeTour, publierTourDeChat } from './chat-turn-publication'
 import { exactLineFingerprint } from './exact-line-fingerprint'
 import type { GitRunner } from './run-autoclose'
+import { supprimerArbre } from './fs-supprimer'
 
 /** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
@@ -17,7 +18,7 @@ const realGit: GitRunner = async (args, cwd) => (await run('git', args, { cwd })
 
 const dirs: string[] = []
 afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+  for (const d of dirs.splice(0)) supprimerArbre(d)
 })
 
 /** Dépôt de travail sur la branche `travail` + un « distant » local (bare) pour observer le push. */

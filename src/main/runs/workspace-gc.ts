@@ -1,5 +1,6 @@
-import { closeSync, openSync, readSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { closeSync, openSync, readSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * Ramasse-miettes DATÉ des workspaces de runs de conversation
@@ -211,7 +212,7 @@ export function collectRunWorkspaces(
   const paths: string[] = []
   for (const dossier of plan.doomed) {
     try {
-      rmSync(dossier, { recursive: true, force: true })
+      supprimerArbre(dossier)
       paths.push(dossier)
     } catch {
       /* verrouillé ou déjà parti : la prochaine passe s'en chargera */

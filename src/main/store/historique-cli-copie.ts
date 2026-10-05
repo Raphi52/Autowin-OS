@@ -1,6 +1,7 @@
-import { readdirSync, rmSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { supprimerArbre } from '../fs-supprimer'
 
 /**
  * Suppression de l'HISTORIQUE CLI laissé derrière une copie de travail effacée.
@@ -106,7 +107,7 @@ export function supprimerHistoriqueCli(
     for (const nom of planHistoriqueCliASupprimer(cheminCopie, noms, cheminsPreserves)) {
       const cible = join(racine, nom)
       try {
-        rmSync(cible, { recursive: true, force: true })
+        supprimerArbre(cible)
         supprimes.push(cible)
       } catch {
         /* verrouillé : la copie est partie quand même, on ne fait pas échouer pour ça */
