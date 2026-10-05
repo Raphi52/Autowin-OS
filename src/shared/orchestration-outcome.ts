@@ -657,6 +657,40 @@ function removeExistingStructuredClosingBlock(
   return [...lines.slice(0, start), ...facts, ...lines.slice(end)].join('\n').trimEnd()
 }
 
+/**
+ * Les FAITS concrets que le worker a lui-meme listes sous son « ✅ Fait », une ligne par fait.
+ *
+ * DEFAUT RAPPORTE le 2026-10-05 : « dans Fait ca me met juste la demande a ete traitee, c'est de
+ * la merde — j'aimerais une liste numerotee de ce qui a ete fait ». Le pied d'un travail livre
+ * etait un gabarit d'UNE ligne generique ; le contenu reel existait deja dans le rapport du worker
+ * mais n'etait jamais repris dans la rubrique. On le relit ici, sans rien inventer : pas de bloc
+ * complet, pas de faits.
+ */
+export function faitsDuRapport(report: string | undefined, max = 8): string[] {
+  if (!report) return []
+  const protectedLines = markdownCodeLineProtection([report])[0]
+  const lines = report.split(/\r?\n/u)
+  let start = -1
+  let now = -1
+  for (const [index, line] of lines.entries()) {
+    if (protectedLines.has(index + 1)) continue
+    const marker = structuredClosingMarker(line)
+    if (marker === 'fait') {
+      start = index
+      now = -1
+    } else if (marker === 'maintenant' && start >= 0 && now < 0) now = index
+  }
+  if (start < 0 || now < 0) return []
+  const inline = sansDecorationDeCloture(lines[start])
+    .replace(/^✅\s*Fait\s*(?:[:：—–-]\s*)?/u, '')
+    .trim()
+  return [inline, ...lines.slice(start + 1, now)]
+    .map((line) => sansDecorationDeCloture(line).replace(/^\[[ xX]\]\s+/u, '').trim())
+    .filter((line) => line.length > 0 && line !== '---')
+    .map((line) => (line.length > 220 ? `${line.slice(0, 219).trimEnd()}…` : line))
+    .slice(0, max)
+}
+
 interface OpenFence {
   marker: '`' | '~'
   length: number
@@ -1064,8 +1098,17 @@ export function phasesAbouties(outcome: OrchestrationOutcome | undefined): strin
  * Une phase d'ANALYSE rend un livrable, elle ne realise pas le besoin. Le bloc nomme donc la phase
  * jouee et ce qui reste de la chaine, au lieu d'inviter a passer a autre chose.
  */
-function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
+function deliveredClosingBlock(outcome?: OrchestrationOutcome, faits: string[] = []): string[] {
   const phases = phasesJouees(outcome)
+  /*
+   * LISTE NUMEROTEE de ce qui a ete fait : les faits concrets du worker d'abord, la ligne de
+   * validation en DERNIER (elle reste la signature que `authoritativeDeliveredClosingBlockSpan`
+   * reconnait, ou qu'elle soit dans la liste).
+   */
+  const liste = (validation: string): string[] => [
+    ...faits.map((fait, index) => `${index + 1}. ${fait}`),
+    `${faits.length + 1}. ${validation}`
+  ]
   /*
    * DE QUOI parle cette cloture — defaut rapporte le 23/08 (conv-1376) : « ce bloc est trop
    * generique il ne me donne pas d'info sur la task ». Le sujet du travail est deja porte par
@@ -1094,7 +1137,7 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
     return [
       '---',
       '✅ Fait',
-      `1. Le résultat demandé a été produit et validé${surSujet}.`,
+      ...liste(`Le résultat demandé a été produit et validé${surSujet}.`),
       "📍 Maintenant : AUCUNE étape d'exécution n'a été jouée — ce verdict porte sur ce qui a été lu, pas sur un besoin réalisé.",
       '⏳ Reste à faire : inconnu ici — rien ne prouve que le besoin est fait.',
       "👉 Recommandé : faire exécuter le travail si le besoin n'est pas encore réalisé."
@@ -1122,9 +1165,11 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
     return [
       '---',
       '✅ Fait',
-      analyse
-        ? `1. Le livrable de la phase ${phases.join(', ')} a été produit et validé${surSujet}.`
-        : `1. Le résultat demandé a été produit et validé${surSujet}.`,
+      ...liste(
+        analyse
+          ? `Le livrable de la phase ${phases.join(', ')} a été produit et validé${surSujet}.`
+          : `Le résultat demandé a été produit et validé${surSujet}.`
+      ),
       analyse
         ? "📍 Maintenant : cette phase est rendue — le besoin lui-même n'est PAS réalisé, rien n'a été muté."
         : `📍 Maintenant : la phase ${phases.join(', ')} est rendue — la suite de la chaîne n'est pas encore jouée.`,
@@ -1135,7 +1180,7 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
   return [
     '---',
     '✅ Fait',
-    `1. Le résultat demandé a été produit et validé${surSujet}.`,
+    ...liste(`Le résultat demandé a été produit et validé${surSujet}.`),
     '📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.',
     '⏳ Reste à faire : rien.',
     '👉 Recommandé : passer à la prochaine demande.'
@@ -1152,21 +1197,32 @@ function authoritativeDeliveredClosingBlockSpan(
     protectedLines.has(index + 1) ? undefined : line.trim()
   )
   const fact = visible.indexOf('✅ Fait')
-  const factLine = visible[fact + 1]
+  /*
+   * La ligne de validation est le DERNIER element de la liste numerotee (les faits du worker la
+   * precedent depuis le 2026-10-05) ; l'ancienne forme, ou elle etait seule en 1., reste reconnue.
+   */
+  let factLineIndex = fact + 1
+  while (
+    fact >= 0 &&
+    /^\d+\.\s/u.test(visible[factLineIndex] ?? '') &&
+    /^\d+\.\s/u.test(visible[factLineIndex + 1] ?? '')
+  )
+    factLineIndex += 1
+  const factLine = visible[factLineIndex]
   /*
    * La forme d'ANALYSE SEULE nomme la phase jouee, donc sa premiere ligne varie. Sans elle ici, le
    * bloc honnete n'etait pas reconnu comme celui d'Autowin — et `reconcileClosedOrchestrationText`
    * le RETIRAIT au rechargement, faisant disparaitre la cloture corrigee. C'est la regression que
    * le correctif du gabarit portait sans le dire : un bloc qu'on ecrit doit aussi etre relu.
    */
-  const formeAnalyse = /^1\. Le livrable de la phase .+ a été produit et validé( — sujet : .+)?\.$/u
+  const formeAnalyse = /^\d+\. Le livrable de la phase .+ a été produit et validé( — sujet : .+)?\.$/u
   /*
    * Le SUJET du travail est desormais suffixe a cette premiere ligne (« … validé — sujet : « X ». »),
    * parce qu'un pied identique pour tout travail ne disait pas de QUOI il parlait (conv-1376, 23/08).
    * Une egalite stricte ne reconnaitrait plus le bloc enrichi et `reconcileClosedOrchestrationText`
    * le RETIRERAIT au rechargement — exactement la regression deja vecue le 21/08.
    */
-  const formeLivree = /^1\. Le résultat demandé a été produit et validé( — sujet : .+)?\.$/u
+  const formeLivree = /^\d+\. Le résultat demandé a été produit et validé( — sujet : .+)?\.$/u
   if (
     fact < 0 ||
     (factLine !== '1. Workflow livré : gate validé et RUN fermé green.' &&
@@ -1414,7 +1470,7 @@ export function formatOrchestrationOutcome(
       boundedMarkdownResult(visibleResult, 4_000, asString(outcome.runPath) ?? undefined)
     )
   if (closingNotice?.trim()) lines.push('', closingNotice.trim())
-  if (delivered) lines.push('', ...deliveredClosingBlock(data))
+  if (delivered) lines.push('', ...deliveredClosingBlock(data, faitsDuRapport(result)))
   /*
    * UN ARRET REND LA MAIN, IL NE COUPE PAS LA CHAINE.
    *

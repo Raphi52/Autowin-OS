@@ -364,8 +364,8 @@ export function commandResultSucceeded(result: CommandResult): boolean {
  *  chemins de cloture : la branche sans commande ET le raccourci `remember` auxiliaire. */
 const RELANCE_CONCLUSION_ABSENTE =
   'SYSTÈME: ta réponse ne CONCLUT pas. Reformule-la MAINTENANT, SANS aucune commande, en ' +
-  'terminant par ce bloc, court et concret : « ✅ Fait » (ce que tu as établi, avec le ' +
-  'résultat), puis l’état en trois lignes — 📍 Maintenant / ⏳ Reste à faire / 👉 ' +
+  'terminant par ce bloc, court et concret : « ✅ Fait » (liste NUMÉROTÉE 1., 2., 3. de ce ' +
+  'que tu as réellement fait, une ligne par action avec son résultat), puis l’état en trois lignes — 📍 Maintenant / ⏳ Reste à faire / 👉 ' +
   'Recommandé. N’écris aucune étiquette technique du type « [a exécuté … ] » et ' +
   'n’annonce pas ce que tu vas faire : le travail est déjà fait, dis ce qu’il a donné. ' +
   'N’écris PAS le mot « rien » seul dans une rubrique pour la remplir : ce mot éteint le mode ' +
