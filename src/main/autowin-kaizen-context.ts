@@ -160,6 +160,8 @@ interface KaizenSaisie {
   ts: number
   voie: string
   texte: string
+  /** `mode-auto` = envoyé seul par ∞, pas tapé (conv-113). Absent = tapé par l'utilisateur. */
+  origine?: string
 }
 
 interface KaizenRun {
@@ -216,7 +218,12 @@ function compactCausalEvent(event: TraceEventV1, cap = 900): KaizenCausalEvent {
 
 function compactSaisie(saisie: SaisieJournalisee, cap = SAISIE_CAP): KaizenSaisie {
   // Rédigé : conv-854 saisie ts 1790334398650 a recopié un mot de passe en clair dans le dossier kaizen.
-  return { ts: saisie.ts, voie: saisie.voie, texte: redactTrace(clipped(saisie.texte, cap)) as string }
+  return {
+    ts: saisie.ts,
+    voie: saisie.voie,
+    ...(saisie.origine ? { origine: saisie.origine } : {}),
+    texte: redactTrace(clipped(saisie.texte, cap)) as string
+  }
 }
 
 function readNativeRuns(

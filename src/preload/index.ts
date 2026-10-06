@@ -846,9 +846,10 @@ const api = {
   journaliserSaisie: (
     conversationId: string,
     texte: string,
-    voie: 'message' | 'orientation'
+    voie: 'message' | 'orientation',
+    origine?: 'mode-auto'
   ): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('os:saisie:journaliser', conversationId, texte, voie),
+    ipcRenderer.invoke('os:saisie:journaliser', conversationId, texte, voie, origine),
   markResponseDisplayed: (
     conversationId: string,
     content: string

@@ -1735,10 +1735,15 @@ export function ChatView({
   function journaliserSaisie(
     conversationId: string,
     texte: string,
-    voie: 'message' | 'orientation'
+    voie: 'message' | 'orientation',
+    origine?: 'mode-auto'
   ): void {
     try {
-      void window.api.journaliserSaisie?.(conversationId, texte, voie)?.catch((error: unknown) => {
+      // L'origine n'est transmise que si elle existe : un texte tapé garde l'appel d'origine à 3 arguments.
+      const ecrit = origine
+        ? window.api.journaliserSaisie?.(conversationId, texte, voie, origine)
+        : window.api.journaliserSaisie?.(conversationId, texte, voie)
+      void ecrit?.catch((error: unknown) => {
         traceSilentFailure('journal-saisie', error)
       })
     } catch (error) {
@@ -4470,7 +4475,14 @@ export function ChatView({
     if (sourceConversationId && !options?.automatique) stopDemandeRef.current.delete(sourceConversationId)
     // Même filet que l'orientation : le composer va être vidé, ce texte doit exister sur disque
     // AVANT — y compris si la création de la conversation ou l'envoi échoue juste après.
-    if (value) journaliserSaisie(sourceConversationId ?? 'nouvelle-conversation', value, 'message')
+    // conv-113 (saisies ts 1791317725882 vs 1791317691042) : un envoi de ∞ se distingue d'un texte tapé.
+    if (value)
+      journaliserSaisie(
+        sourceConversationId ?? 'nouvelle-conversation',
+        value,
+        'message',
+        options?.suiteDuModeAuto === true ? 'mode-auto' : undefined
+      )
 
     let convId = sourceConversationId
     let messageCommitted = false

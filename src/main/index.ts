@@ -4188,7 +4188,7 @@ Le fil reprend ensuite normalement.`
    */
   ipcMain.handle(
     'os:saisie:journaliser',
-    (event, rawConversationId: string, rawTexte: string, rawVoie: string) => {
+    (event, rawConversationId: string, rawTexte: string, rawVoie: string, rawOrigine?: unknown) => {
       assertTrustedRendererSender(event, 'User input journal')
       const conversationId = guardString(rawConversationId, 'conversationId')
       const texte = guardString(rawTexte, 'texte')
@@ -4196,7 +4196,9 @@ Le fil reprend ensuite normalement.`
       if (voie !== 'message' && voie !== 'orientation') {
         return { ok: false }
       }
-      return { ok: journaliserSaisie({ conversationId, texte, voie }) }
+      // conv-113 : un envoi du mode auto doit se distinguer d'un texte tapé (seule valeur admise).
+      const origine = rawOrigine === 'mode-auto' ? ('mode-auto' as const) : undefined
+      return { ok: journaliserSaisie({ conversationId, texte, voie, ...(origine ? { origine } : {}) }) }
     }
   )
 

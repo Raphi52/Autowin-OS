@@ -342,6 +342,42 @@ describe('dossier de preuve /kaizen — ce que les journaux portent déjà', () 
     }
   })
 
+  // conv-113 : le dossier montrait la saisie automatique ts 1791317725882 et la saisie tapée
+  // ts 1791317691042 avec la même `voie: "message"` — kaizen ne pouvait pas trancher « il était pas coché ».
+  it('distingue dans le dossier une saisie envoyée par le mode auto d’une saisie tapée', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-origine-'))
+    writeFileSync(
+      join(appData, 'saisies-utilisateur.jsonl'),
+      [
+        JSON.stringify({
+          schema: 'autowin.saisie/v1',
+          ts: 1791317691042,
+          conversationId: 'conv-113',
+          texte: "ou t'as mis le projet paper trading ?",
+          voie: 'message'
+        }),
+        JSON.stringify({
+          schema: 'autowin.saisie/v1',
+          ts: 1791317725882,
+          conversationId: 'conv-113',
+          texte: 'Reprends la mesure du tri des urgences',
+          voie: 'message',
+          origine: 'mode-auto'
+        })
+      ].join('\n') + '\n'
+    )
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        { id: 'conv-113', title: 'x', provider: 'claude', messages: [], createdAt: 1, updatedAt: 1 },
+        appData
+      )
+      expect((evidence.saisies ?? []).map((s) => s.origine)).toEqual([undefined, 'mode-auto'])
+      expect(buildAutowinKaizenTask('/kaizen', evidence)).toContain('"origine":"mode-auto"')
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
   it("joint les saisies de la conversation ciblée, et seulement les siennes", () => {
     const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-saisies-'))
     writeFileSync(

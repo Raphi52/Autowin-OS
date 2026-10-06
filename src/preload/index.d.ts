@@ -624,7 +624,9 @@ interface ChatApi {
   journaliserSaisie: (
     conversationId: string,
     texte: string,
-    voie: 'message' | 'orientation'
+    voie: 'message' | 'orientation',
+    /** Absent = tapé par l'utilisateur ; `mode-auto` = envoyé seul par ∞ (conv-113). */
+    origine?: 'mode-auto'
   ) => Promise<{ ok: boolean }>
 
   markResponseDisplayed: (

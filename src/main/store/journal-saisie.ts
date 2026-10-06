@@ -36,10 +36,20 @@ export type VoieDeSaisie =
   /** Tapé pendant un tour en cours : ne créera JAMAIS de tour à lui, donc invisible dans l'historique. */
   | 'orientation'
 
+/**
+ * QUI a fait partir le texte, quand ce n'est pas l'utilisateur. Absent = tapé (ou cliqué) par lui.
+ *
+ * Mesure conv-113 (2026-10-06) : la saisie ts 1791317725882, envoyée SEULE par le mode auto, et la
+ * saisie TAPÉE ts 1791317691042 étaient deux lignes `voie: "message"` identiques. L'utilisateur
+ * affirmait « il était pas coché » : ce journal ne permettait pas de trancher.
+ */
+export type OrigineDeSaisie = 'mode-auto'
+
 export interface SaisieUtilisateur {
   conversationId: string
   texte: string
   voie: VoieDeSaisie
+  origine?: OrigineDeSaisie
 }
 
 export interface SaisieJournalisee extends SaisieUtilisateur {
@@ -84,7 +94,8 @@ export function journaliserSaisie(saisie: SaisieUtilisateur, racine?: string): b
     ts: Date.now(),
     conversationId: saisie.conversationId,
     texte,
-    voie: saisie.voie
+    voie: saisie.voie,
+    ...(saisie.origine === 'mode-auto' ? { origine: saisie.origine } : {})
   }
   try {
     appendFileSync(journalSaisiePath(racine), `${JSON.stringify(enregistrement)}\n`, 'utf8')

@@ -31,6 +31,20 @@ describe('journal des saisies utilisateur', () => {
       .filter(Boolean)
       .map((ligne) => JSON.parse(ligne) as SaisieJournalisee)
 
+  // conv-113 : saisie ts 1791317725882 (envoyée par le mode auto) et ts 1791317691042 (tapée)
+  // étaient deux lignes identiques — impossible de dire laquelle venait de la machine.
+  it('écrit l’origine « mode-auto » d’un envoi automatique, et rien pour un texte tapé', () => {
+    journaliserSaisie(
+      { conversationId: 'conv-113', texte: 'Reprends la mesure', voie: 'message', origine: 'mode-auto' },
+      racine
+    )
+    journaliserSaisie({ conversationId: 'conv-113', texte: 'ou t’as mis le projet ?', voie: 'message' }, racine)
+    const [auto, tape] = lire()
+    expect(auto.origine).toBe('mode-auto')
+    expect('origine' in tape).toBe(false)
+    expect(lireSaisies('conv-113', racine).map((s) => s.origine)).toEqual(['mode-auto', undefined])
+  })
+
   it('retrouve un texte injecté qui n’a jamais créé de tour', () => {
     expect(journaliserSaisie({ conversationId: 'conv-30', texte: 'mon texte perdu', voie: 'orientation' }, racine)).toBe(true)
     const [entree] = lire()
