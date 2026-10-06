@@ -198,8 +198,8 @@ export async function jetonsDeCauseParFichier(
 }
 
 /**
- * Les lignes AJOUTEES par le dernier changement d'un fichier : d'abord ce qui n'est pas encore
- * commite, sinon le dernier commit qui le touche. Sert a dater un jeton de cause.
+ * Les lignes AJOUTEES par le dernier changement d'un fichier : ce qui n'est pas encore commite ET
+ * le dernier commit qui le touche. Sert a dater un jeton de cause.
  */
 async function lignesAjouteesAuDernierChangement(fichier: string): Promise<string[]> {
   // fix-ok: gels.jsonl — 17 gels du process principal venaient de ce `execFileSync('git')` (jusqu a
@@ -228,13 +228,16 @@ async function lignesAjouteesAuDernierChangement(fichier: string): Promise<strin
       .split(/\r?\n/)
       .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
       .map((l) => l.slice(1))
+  // fix-ok: kaizen conv-113 reparation 2 — on s'arretait aux lignes NON COMMITEES des qu'il y en
+  // avait : celles d'un AUTRE agent dans le meme fichier cachaient le `fix-ok:` que le run venait de
+  // commiter seul (ChatView.tsx, bb3c7ca6 : credite avant commit, `{}` et 1 refus apres). L'attente
+  // ET le dernier commit forment ensemble le dernier changement : on lit les deux.
   const enCours = ajoutees(await git(['diff', 'HEAD', '--', cible]))
-  if (enCours.length) return enCours
   // fix-ok: run-36461be778d0-1 reparations 1-3 — un fichier NON SUIVI (deplace, `??`) n'apparait
   // ni dans `git diff HEAD` ni dans `git log` : son `fix-ok:` restait invisible. Toutes ses lignes
   // sont nouvelles, donc toutes comptent comme ajoutees.
   if (surDisque && (await git(['ls-files', '--others', '--exclude-standard', '--', cible])).trim())
-    return readFileSync(surDisque, 'utf8').split(/\r?\n/)
+    return [...enCours, ...readFileSync(surDisque, 'utf8').split(/\r?\n/)]
   const shas = new Set(
     await Promise.all([
       git(['log', '-1', '--format=%H', '--', cible]).then((o) => o.trim()),
@@ -244,7 +247,7 @@ async function lignesAjouteesAuDernierChangement(fichier: string): Promise<strin
   const diffs = await Promise.all(
     [...shas].filter(Boolean).map((sha) => git(['show', sha, '--format=', '--', cible]))
   )
-  return diffs.flatMap(ajoutees)
+  return [...enCours, ...diffs.flatMap(ajoutees)]
 }
 
 /**
