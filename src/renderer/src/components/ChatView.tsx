@@ -290,6 +290,30 @@ function memoriserJauges(jauges: Record<string, ContextGauge>): void {
  * Extrait du composant pour que la MOSAIQUE l'obtienne aussi, par conversation (2026-08-30).
  */
 /**
+ * SIGNE INFINI DU ROND « MODE AUTO » — un TRACÉ, pas le caractère ∞ (conv-118, 2026-10-06).
+ *
+ * Le caractère de police se pose à une hauteur qui SAUTE avec le zoom Ctrl+molette (2,2 px trop
+ * bas à 100 %, ~1,3 px à 150-300 %) : le `translateY(-2px)` réglé à 100 % le rendait trop haut
+ * sur 21 crans de zoom sur 26 (mesuré dans Electron, 50-300 %). Ce tracé est symétrique autour
+ * du centre de sa boîte (x 2-22, y 8-16) : le centrage flex du bouton suffit, à tout zoom.
+ * Taille réglée en CSS (`.composer-auto > svg`) sur celle de l'ancien caractère (~10 × 5 px).
+ */
+function IconeInfini(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/**
  * SURLIGNE dans un libelle les portions qui correspondent au terme cherche.
  *
  * Une liste filtree qui ne montre pas POURQUOI chaque ligne est la oblige a ouvrir chaque
@@ -5176,7 +5200,7 @@ export function ChatView({
             onClick={() => basculerModeAutoPour(id)}
             title="Mode auto de CETTE conversation : renvoie tout seul la suite proposée."
           >
-            <span aria-hidden="true">∞</span>
+            <IconeInfini />
           </button>
         }
         attachmentsNode={
@@ -7366,8 +7390,8 @@ Cliquer pour choisir une autre branche.`}
                           : "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
                     }
                   >
-                    {/* ROND 34 px comme le micro, glyphe INFINI : « ça continue sans moi ». */}
-                    <span aria-hidden="true">∞</span>
+                    {/* Rond du mode auto, signe INFINI : « ça continue sans moi ». */}
+                    <IconeInfini />
                   </button>
                   <button
                     type="button"

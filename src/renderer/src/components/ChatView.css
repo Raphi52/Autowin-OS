@@ -4694,16 +4694,19 @@ button.chat-project-dot:disabled {
   min-height: 24px;
   padding: 0;
   border-radius: 50%;
-  font-size: 13px;
   line-height: 1;
   opacity: 0.72;
 }
-/* CENTRAGE OPTIQUE DU GLYPHE : la boite de la police pose le ∞ sur la ligne de base, donc bas
-   dans le cercle meme avec un centrage flex parfait. On le remonte de 1 px (constat utilisateur
-   du 2026-09-07 : « faut remonter l'icone infini », puis « remonte de 1 px encore »). */
-.composer-auto > span {
+/* LE ∞ EST UN TRACÉ SVG CENTRÉ PAR LA GÉOMÉTRIE (conv-118, 2026-10-06). L'ancien caractère de
+   police, remonté de 2 px à l'œil au zoom 100 % (demandes du 2026-09-07), sortait TROP HAUT sur
+   21 crans de zoom Ctrl+molette sur 26 : la police le pose à une hauteur qui varie avec le zoom,
+   aucun décalage fixe ne tient. Aucun `translate` ici : le centrage flex du bouton suffit.
+   12 px = la taille de l'ancien caractère (~10 × 5 px d'encre). Vérifié par
+   ChatView.composer-auto.glyphe.test.tsx. */
+.composer-auto > svg {
   display: block;
-  transform: translateY(-2px);
+  width: 12px;
+  height: 12px;
 }
 /* ALLUME = DORE (choix utilisateur du 2026-09-07), pas le rose d'accent. */
 .composer-auto.actif {
@@ -4719,7 +4722,10 @@ button.chat-project-dot:disabled {
     min-width: 22px;
     height: 22px;
     min-height: 22px;
-    font-size: 12px;
+  }
+  .composer-input-row > .composer-auto > svg {
+    width: 11px;
+    height: 11px;
   }
 }
 
