@@ -611,8 +611,10 @@ const MESSAGES_ARRET: Record<string, string> = {
     'Mode auto en pause : la suite proposée attend des informations que toi seul peux donner (identifiants, clés, choix). Écris-les dans ton message pour continuer.',
   'suite-differee':
     'Mode auto en pause : la suite attend toujours son moment après plusieurs relances programmées. Relance-la toi-même le moment venu.',
+  // conv-113, tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 : « en pause » alors que ∞ venait d'être
+  // ÉTEINT ; vu décoché ensuite, il a fait croire qu'il n'avait jamais été allumé.
   'tache-de-fond-coupee':
-    'Mode auto en pause : le dernier tour s’est fini pendant une tâche de fond, sans proposer de suite. Son résultat est perdu — relance-la toi-même.'
+    'Mode auto arrêté — ∞ était allumé sur ce fil et vient de s’éteindre : le dernier tour s’est fini pendant une tâche de fond, sans proposer de suite. Son résultat est perdu — relance-la toi-même, puis rallume ∞ si tu veux que la chaîne reprenne.'
 }
 
 /**

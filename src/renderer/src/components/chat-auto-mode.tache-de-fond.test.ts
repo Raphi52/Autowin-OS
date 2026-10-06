@@ -25,6 +25,22 @@ describe('mode auto — tour coupé pendant une tâche de fond (conv-42)', () =>
     const texte = REPONSE_CONV42 + '\nAUTOWIN_PROMPT_V1: relance les 6 essais du banc risques-rejeu au premier plan'
     expect(deciderRelanceAuto({ ...base, fil: [agent(texte)] })).toMatchObject({ action: 'envoyer' })
   })
+  /*
+   * conv-113, tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 (fin réelle ci-dessous) : cette décision a
+   * ÉTEINT ∞ à 20:18:54 (`desarmerAuto` au premier plan), mais disait « en pause ». Neuf minutes plus
+   * tard, l'utilisateur a vu ∞ décoché et a conclu « ça a enchaîné alors qu'il était pas coché ».
+   */
+  it('dit que ∞ était allumé et vient de s’éteindre, pas « en pause »', () => {
+    const finConv113 =
+      'Les quatre contrôles avec le modèle tournent en arrière-plan.\n\n' +
+      '⚠️ Tâche de fond pas terminée à la fin de ce tour : `Run the four model coverage checks sequentially`. ' +
+      'Son résultat ne reviendra pas tout seul — relance la demande pour la refaire.'
+    const d = deciderRelanceAuto({ ...base, fil: [agent(finConv113)] })
+    expect(d).toMatchObject({ action: 'arreter', raison: 'tache-de-fond-coupee' })
+    const message = (d as { message?: string }).message ?? ''
+    expect(message).toContain('∞ était allumé sur ce fil et vient de s’éteindre')
+    expect(message).not.toContain('en pause')
+  })
   it('sans avis ni suite : attente inchangée', () => {
     expect(deciderRelanceAuto({ ...base, fil: [agent('Je regarde.')] })).toMatchObject({ raison: 'aucun-prompt' })
   })
