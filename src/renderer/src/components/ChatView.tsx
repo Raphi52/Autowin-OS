@@ -247,7 +247,10 @@ function ecrireDossiersRetires(retires: string[]): void {
 import { CLE_MODE_AUTO_CONVS, EVT_ARMER_MODE_AUTO } from './chat-auto-convs'
 import { lireArretsChaine, noterArretChaine, oublierArretChaine } from './arrets-chaine-persistes'
 import { ecrireToursAuto, lireToursAuto } from './tours-auto-persistes'
-/** Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions. */
+/**
+ * Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions JUSQU'A ce que ce
+ * fil naisse : il est alors vide (`consommerDossierNouveauFil`), il ne sert qu'une fois.
+ */
 const CLE_DOSSIER_NOUVEAU_FIL = 'autowin.chat.dossierNouveauFil'
 
 /**
@@ -738,6 +741,16 @@ export function ChatView({
     if (dossierNouveauFil) window.localStorage.setItem(CLE_DOSSIER_NOUVEAU_FIL, dossierNouveauFil)
     else window.localStorage.removeItem(CLE_DOSSIER_NOUVEAU_FIL)
   }, [dossierNouveauFil])
+  /**
+   * Le dossier arme sert au fil qui NAIT, puis se vide — comme ∞ arme sur un fil neuf. Il n'etait
+   * jamais vide (kaizen conv-113) : `conv-113`, ne d'un lien vers PaperTrading, a recu a sa creation
+   * `D:\Chirurgien\AssistantChirurgien`, arme des semaines plus tot pour un autre fil, et toute la
+   * suite du fil a derive vers ce depot.
+   */
+  function consommerDossierNouveauFil(): void {
+    dossierNouveauFilRef.current = null
+    setDossierNouveauFil(null)
+  }
   /**
    * RELANCES DIFFÉRÉES PROGRAMMÉES, PAR CONVERSATION (conv-826 : « faudrait que le mode auto gère ce
    * cas au lieu de s'arrêter »). Le minuteur vit ici, pas dans l'effet du fil affiché : changer de
@@ -3038,7 +3051,10 @@ export function ChatView({
     })
     // Le dossier de travail choisi pour un fil neuf se pose AVANT le premier tour.
     const dossierArme = dossierNouveauFilRef.current
-    if (dossierArme) await window.api.conversationsSetProject?.(creee.id, dossierArme)
+    if (dossierArme) {
+      await window.api.conversationsSetProject?.(creee.id, dossierArme)
+      consommerDossierNouveauFil()
+    }
     setConvs((courant) =>
       courant.some((c) => c.id === creee.id)
         ? courant
@@ -4662,6 +4678,7 @@ export function ChatView({
         // `dossierDeTravailDuTour` lit le rangement de la conversation, il doit donc etre pose avant.
         if (dossierNouveauFilRef.current) {
           await window.api.conversationsSetProject?.(c.id, dossierNouveauFilRef.current)
+          consommerDossierNouveauFil()
         }
         const shouldAdoptCreatedConversation =
           activeRef.current === null &&

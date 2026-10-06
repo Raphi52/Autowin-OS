@@ -68,4 +68,53 @@ describe('ChatView — dossier de travail du prochain fil', () => {
     expect(conversationsCreate).toHaveBeenCalled()
     expect(conversationsSetProject).toHaveBeenCalledWith('neuf', 'D:/Projets/Cible')
   })
+
+  /**
+   * DEFAUT VECU (kaizen conv-113, 2026-10-06) : « la conversation a dévié vers le CWD sans
+   * raison ». `conv-113` est ne avec un lien GitHub vers PaperTrading et a recu, a la creation,
+   * `D:\Chirurgien\AssistantChirurgien` — le dossier arme des semaines plus tot pour un AUTRE fil
+   * (conv-111/112). Le dossier du « prochain fil » n'etait jamais vide apres usage : il restait
+   * dans `autowin.chat.dossierNouveauFil` et se posait sur CHAQUE fil neuf, session apres session.
+   * Il doit servir au fil qu'il vise, un seul, comme ∞ arme sur un fil neuf.
+   */
+  it("ne sert qu'au fil qui nait : le fil suivant n'herite pas du dossier", async () => {
+    const conversationsSetProject = vi.fn().mockResolvedValue('D:/Projets/Cible')
+    const conversationsCreate = vi
+      .fn()
+      .mockResolvedValueOnce(conversation('premier'))
+      .mockResolvedValueOnce(conversation('second'))
+    harness = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue([]),
+        conversation: vi.fn().mockResolvedValue({ id: 'premier', messages: [] }),
+        pickGitRepo: vi.fn().mockResolvedValue('D:/Projets/Cible'),
+        conversationsSetProject,
+        conversationsCreate
+      })
+    )
+
+    await harness.click('[data-testid="chat-project-dot"]')
+    await act(async () => {
+      document.querySelector<HTMLElement>('[data-testid="conv-project-pick"]')!.click()
+    })
+    await harness.type('premier tour')
+    await harness.click('.composer-send')
+    expect(conversationsSetProject).toHaveBeenCalledWith('premier', 'D:/Projets/Cible')
+
+    // Le dossier arme a servi : rien ne doit en rester pour la session suivante.
+    expect(window.localStorage.getItem('autowin.chat.dossierNouveauFil')).toBeNull()
+
+    await harness.click('.conv-new-row')
+    // Sur un fil neuf, la pastille ne doit plus annoncer le dossier du fil precedent.
+    expect(
+      harness.container
+        .querySelector('[data-testid="chat-project-dot"]')
+        ?.getAttribute('aria-label')
+    ).not.toContain('Cible')
+
+    await harness.type('second tour')
+    await harness.click('.composer-send')
+    expect(conversationsCreate).toHaveBeenCalledTimes(2)
+    expect(conversationsSetProject).not.toHaveBeenCalledWith('second', expect.anything())
+  })
 })
