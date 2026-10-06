@@ -742,6 +742,9 @@ export function ChatView({
     else window.localStorage.removeItem(CLE_DOSSIER_NOUVEAU_FIL)
   }, [dossierNouveauFil])
   /**
+   * fix-ok: kaizen conv-113 — cause mesuree : `autowin.chat.dossierNouveauFil` n'etait jamais vide
+   * apres usage (journal des conversations : conv-113 recoit ce dossier a sa creation, 08:15:43) ;
+   * ChatView.dossier-nouveau-fil.test.tsx rouge (garde 'D:/Projets/Cible') puis vert.
    * Le dossier arme sert au fil qui NAIT, puis se vide — comme ∞ arme sur un fil neuf. Il n'etait
    * jamais vide (kaizen conv-113) : `conv-113`, ne d'un lien vers PaperTrading, a recu a sa creation
    * `D:\Chirurgien\AssistantChirurgien`, arme des semaines plus tot pour un autre fil, et toute la
