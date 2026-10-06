@@ -5153,12 +5153,27 @@ ${CONTRAT_OBJECTIONS}`
         })
       )
       const jugeSeul = phaseOutputs.length === 0 && !exec.text.trim()
+      /*
+       * LE FIL DE LA CONVERSATION, POUR LE JUGE SEUL. Les phases le reçoivent (`phaseContext`,
+       * `collectedContext`) ; le juge seul, UNIQUE agent du run, ne recevait que la TÂCHE nue.
+       * fix-ok: conv-113, run « judge-projet-ameliore-boucle-objectif-muwn6zvy » — « Judge le Projet »
+       * dans un fil consacré à PaperTrading2 mais rangé dans D:\Chirurgien\AssistantChirurgien : la
+       * trace du juge contient 0 mention de PaperTrading, seul le CLAUDE.md du dossier (« # Projet :
+       * assistant patients… ») nommait un projet. Il a jugé le dossier, et la chaîne a suivi.
+       */
+      const filPourJugeSeul =
+        jugeSeul && collectedContext.trim()
+          ? `${collectedContext.trim()}\n` +
+            `[FIN DU FIL — « le projet », « ça » dans la TÂCHE renvoient à CE fil. S'il désigne un autre ` +
+            `dossier que ton dossier de travail, inspecte celui qu'il désigne ou dis l'écart, au lieu de juger le mauvais.]\n`
+          : ''
       const judgePrompt = jugeSeul
         ? `Tu es un juge outillé en lecture seule, et tu es le SEUL agent de ce run : AUCUNE phase d’exécution ` +
           `n’a tourné avant toi, il n’existe donc ni livrable agrégé ni preuve d’outil préalable — ce n’est pas un défaut. ` +
           `Inspecte TOI-MÊME le workspace avec tes outils de lecture et fonde ton verdict sur ce que tu as réellement lu ; ` +
           `n’affirme rien que ton inspection n’établit pas.\n` +
           `IMPORTANT (in-app Autowin OS) : n'exige jamais de RUN.md physique, d'empreinte SHA-256 ni de chemin kit.\n` +
+          filPourJugeSeul +
           noteContrat +
           `TÂCHE: ${task}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".

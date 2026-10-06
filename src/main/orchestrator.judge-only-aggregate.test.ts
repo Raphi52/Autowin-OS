@@ -43,6 +43,23 @@ class CapturingProvider implements ProviderAdapter {
   }
 }
 
+function harnaisOrch() {
+  const provider = new CapturingProvider()
+  const orch = new Orchestrator({
+    registry: new ProviderRegistry().register(provider),
+    roles: new RoleModelConfig({
+      subagent: { provider: provider.id, model: 'ouvrier' },
+      judge: { provider: provider.id, model: 'juge-dedie' }
+    }),
+    cost: new CostAggregator(),
+    trust: new TrustLedger(),
+    executionWorkspace: 'C:\\base',
+    worktrees: makeTestWorktrees('C:\\base'),
+    execPhases: []
+  })
+  return { provider, orch }
+}
+
 function harnais() {
   const provider = new CapturingProvider()
   const orch = new Orchestrator({
@@ -81,6 +98,27 @@ describe('juge sans phase d’exécution : le prompt ne réclame pas un agrégat
     expect(promptDuJuge).toContain('AUCUNE phase d’exécution')
     // Et il ne présente pas un vide comme le livrable à juger.
     expect(promptDuJuge).not.toContain('livrable agrégé de TOUTES les phases) : \n')
+  })
+
+  /**
+   * conv-113 (2026-10-06, run « judge-projet-ameliore-boucle-objectif-muwn6zvy ») : « Judge le Projet
+   * et améliore le en boucle ». Toute la conversation portait sur PaperTrading2, mais le fil était
+   * rangé dans D:\Chirurgien\AssistantChirurgien. Le juge SEUL a reçu la TÂCHE nue et le CLAUDE.md de
+   * ce dossier (« # Projet : assistant patients… ») — sa trace contient ZÉRO mention de PaperTrading.
+   * Il a jugé le dossier, et la chaîne du mode auto a suivi ses objections pendant des heures.
+   */
+  it('reçoit le fil qui a produit la demande : « le Projet » se lit dans la conversation', async () => {
+    const { provider, orch } = harnaisOrch()
+    const collecte = [
+      '[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation]',
+      'Échanges récents (le fil qui a produit la demande — sa lettre ne dit pas tout) :',
+      '  UTILISATEUR: Ajoute à PaperTrading2 une validation sur plusieurs fenêtres glissantes'
+    ].join('\n')
+    await orch.run('Judge le Projet', undefined, undefined, undefined, undefined, collecte, [])
+    const promptDuJuge = provider.prompts.filter((t) => t.includes('Tu es un juge')).at(-1) ?? ''
+    expect(promptDuJuge).toContain('Ajoute à PaperTrading2 une validation')
+    // Le fil précède la TÂCHE : le juge sait de quoi parle « le Projet » avant de lire l'énoncé.
+    expect(promptDuJuge.indexOf('PaperTrading2')).toBeLessThan(promptDuJuge.indexOf('TÂCHE:'))
   })
 
   it('un run AVEC phases garde le contrat de preuve d’origine', async () => {
