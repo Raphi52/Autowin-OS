@@ -386,10 +386,17 @@ export function ancrerSurLaDemande(texte: string, demande: string | null): strin
   if (!demande) return texte
   // La suite EST la demande (premier maillon) : l'ancrage ferait un doublon inutile.
   if (texte.trim() === demande.trim()) return texte
+  /*
+   * L'AUTEUR RÉEL EST DIT. Mesure conv-113 : saisie ts 1791317725882 envoyée seule après une simple
+   * question ; le tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 a vu l'écart puis a continué (« The user
+   * explicitly sent the prompt… the user's real choice »). Un message au rôle utilisateur se lit
+   * comme un choix de l'utilisateur tant que rien ne dit le contraire. La phrase vient APRÈS « ». » :
+   * `ANCRE_DEJA_ECRITE` et `toursAutoDAffilee` relisent ainsi anciens et nouveaux fils à l'identique.
+   */
   return [
     texte,
     '',
-    `(Mode auto — dernière demande de l'utilisateur : « ${demande} ». Si cette suite s'en éloigne, dis-le et`,
+    `(Mode auto — dernière demande de l'utilisateur : « ${demande} ». Ce message n'a PAS été tapé par l'utilisateur : l'agent l'a écrit et le mode auto l'a envoyé seul. Si cette suite s'en éloigne, dis-le et`,
     'arrête la chaîne au lieu de dériver.)'
   ].join(SAUT_ANCRAGE)
 }

@@ -86,6 +86,35 @@ describe('derniereDemandeHumaine', () => {
   })
 })
 
+/**
+ * conv-113 (2026-10-06) — saisie ts 1791317725882, envoyée SEULE 0,6 s après le tour
+ * 0b93aa21-54c3-4be3-99f4-a23bbcb00bc4 qui répondait à « ou t'as mis le projet paper trading ? ».
+ * La suite partait sur AssistantChirurgien. Le tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 a VU
+ * l'écart (« even though their last question had been about where the PaperTrading project was »)
+ * puis a continué : « The user explicitly sent the prompt… this counts as the user's real choice ».
+ * L'ancre ne disait nulle part que la machine, et non l'utilisateur, avait écrit et envoyé ce texte.
+ */
+describe('l’envoi automatique dit qu’il n’a PAS été tapé par l’utilisateur', () => {
+  it('le texte envoyé nomme son auteur réel', () => {
+    const envoye = ancrerSurLaDemande(
+      "Reprends la mesure du tri des urgences d'AssistantChirurgien",
+      "ou t'as mis le projet paper trading ?"
+    )
+    expect(envoye).toContain("Ce message n'a PAS été tapé par l'utilisateur")
+    expect(envoye).toContain('le mode auto l’a envoyé seul'.replace('’', "'"))
+    // La relecture de l'ancre est intacte : la demande citée reste la demande d'ancrage.
+    expect(derniereDemandeHumaine([demande(envoye)])).toBe("ou t'as mis le projet paper trading ?")
+  })
+
+  it('la formule réellement envoyée le 2026-10-06 se relit toujours', () => {
+    const saisie1791317725882 =
+      "Reprends la mesure du tri des urgences d'AssistantChirurgien là où la limite de session l'a coupée : relance les tests, termine les mesures et liste les urgences manquées\n\n(Mode auto — dernière demande de l'utilisateur : « ou t'as mis le projet paper trading ? ». Si cette suite s'en éloigne, dis-le et\narrête la chaîne au lieu de dériver.)"
+    expect(derniereDemandeHumaine([demande(saisie1791317725882)])).toBe(
+      "ou t'as mis le projet paper trading ?"
+    )
+  })
+})
+
 describe('la réponse choisie seule par le mode auto est ancrée', () => {
   it('sinon l’option recommandée par l’agent deviendrait la demande d’ancrage', () => {
     const fil = [demande('Répare le bouton mode auto'), question(['Voie A', 'Voie B'])]
