@@ -202,6 +202,17 @@ describe('un tableau de capacites qui coche « non » vaut declaration d’absen
     expect(outilsFaussementAbsents(texte, catalogue)).toEqual([])
   })
 
+  it('ne declenche PAS sur un tableau de constats ou l’outil est un mot d’une commande citee (bulletin maintenance 2026-10-03/04)', () => {
+    // Faux positif mesure deux jours de suite : « aucune » est l'ACTION proposee, et `run` n'est
+    // qu'un mot de la commande `npm run typecheck` citee en preuve — aucun outil n'est nie.
+    const texte = [
+      '| Axe | Constat | Preuve | Statut vs hier | Action proposée |',
+      '|---|---|---|---|---|',
+      '| Bugs | Typage **vert**, lint **0 erreur** | `npm run typecheck` exit 0 · `eslint` exit 0 | toujours là (vert) | aucune |'
+    ].join('\n')
+    expect(outilsFaussementAbsents(texte, [...catalogue, 'run'])).toEqual([])
+  })
+
   it('ne declenche PAS sur une prose ordinaire contenant « non »', () => {
     const texte = 'J’ai utilisé `edit_file`, non sans mal, et la vérification passe.'
     expect(outilsFaussementAbsents(texte, catalogue)).toEqual([])
