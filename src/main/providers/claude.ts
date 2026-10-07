@@ -53,6 +53,7 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { coutDuTourDepuisCumul } from './claude-session-cost'
+import { commandeRecupereeApresAppelIllisible } from './claude-cmd-recuperee'
 import { abortFailure } from './abort-diagnostic'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
@@ -2044,6 +2045,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             ((normalizedUsage.costUsd ?? 0) === 0 &&
               (normalizedUsage.inputTokens ?? 0) === 0 &&
               (normalizedUsage.outputTokens ?? 0) === 0)
+          // Appel illisible mais commande `<cmd>` complete dans le texte : on l'execute au lieu de
+          // jeter le tour (conv-121, tour 080f524d-01eb-4fa6-b5a8-fcf1a347f8dc) — voir le module.
+          const recuperee = /tool call could not be parsed/.test(reported)
+            ? commandeRecupereeApresAppelIllisible(text)
+            : undefined
+          if (recuperee) {
+            text = recuperee
+            return
+          }
           errored = new ProviderCallError(`Claude a interrompu l'appel : ${detail}`, {
             code,
             retryable: code === 'error_during_execution' && rienConsomme,
