@@ -2255,6 +2255,7 @@ export function GraphView({
               brainPath={selected}
               onIndexChangeStarted={resetBrainSearchResults}
               onIndexChanged={reloadAfterInboxDecision}
+              onPendingCountChange={setInboxPending}
             />
             <BrainRetrievalBench
               brainPath={selected}

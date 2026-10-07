@@ -79,11 +79,19 @@ async function promptCurate(pending: number): Promise<void> {
 export function KnowledgeInboxPanel({
   brainPath,
   onIndexChangeStarted,
-  onIndexChanged
+  onIndexChanged,
+  onPendingCountChange
 }: {
   brainPath: string
   onIndexChangeStarted?: () => void
   onIndexChanged?: (brainPath: string) => void | Promise<void>
+  /**
+   * Compte RELU par le panneau. La pastille du bouton ✦ ne lit la file qu'au chargement de la vue :
+   * une curation faite hors écran (`/curate` en ligne de commande) la laissait à « 12 » pendant que
+   * ce panneau affichait « 0 candidats » (constaté le 2026-10-06, conv-583). Le panneau porte la
+   * lecture la plus fraîche : il la remonte pour qu'un seul chiffre s'affiche.
+   */
+  onPendingCountChange?: (count: number) => void
 }): React.JSX.Element {
   const [candidates, setCandidates] = useState<InboxCandidateView[]>([])
   const [error, setError] = useState('')
@@ -96,6 +104,8 @@ export function KnowledgeInboxPanel({
   const scopeGenerationRef = useRef(0)
   const readGenerationRef = useRef(0)
   const brainPathRef = useRef(brainPath)
+  /** Vrai seulement après une lecture RÉUSSIE de ce brain : avant, `candidates` vaut [] par défaut. */
+  const listReadRef = useRef(false)
   const busyIdsRef = useRef<Set<string>>(new Set())
   const bodyCacheRef = useRef<Map<string, string>>(new Map())
   const bodyLoadsRef = useRef<Set<string>>(new Set())
@@ -135,6 +145,7 @@ export function KnowledgeInboxPanel({
       return
     }
     const requestedBrainPath = brainPath
+    listReadRef.current = false
     const scopeGeneration = scopeGenerationRef.current
     const readGeneration = ++readGenerationRef.current
     const isCurrent = (): boolean =>
@@ -153,6 +164,7 @@ export function KnowledgeInboxPanel({
       .listInbox(brainPath)
       .then((found) => {
         if (!isCurrent()) return
+        listReadRef.current = true
         setCandidates(found)
         setError('')
       })
@@ -164,6 +176,13 @@ export function KnowledgeInboxPanel({
         if (isCurrent()) setLoading(false)
       })
   }, [brainPath])
+
+  // Une lecture en cours ou en échec ne dit rien du compte : seule une liste effectivement lue (ou
+  // réduite par une décision prise ici) est remontée.
+  useEffect(() => {
+    if (loading || error || !listReadRef.current) return
+    onPendingCountChange?.(candidates.length)
+  }, [candidates.length, error, loading, onPendingCountChange])
 
   // Le montage doit LIRE la boîte : `reload` pose un état de chargement puis résout hors du rendu.
   // Même dérogation que la recherche de GraphView, pour la même raison — la donnée vit côté main.
