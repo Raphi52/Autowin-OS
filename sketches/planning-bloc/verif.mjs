@@ -1,4 +1,6 @@
 // Vérification de bout en bout en format téléphone (Edge installé, aucun téléchargement).
+// `S` est l'état de la page testée (index.html), lu DANS le navigateur par p.evaluate(() => S.day).
+/* global S */
 import { chromium } from "playwright-core";
 import { pathToFileURL } from "node:url";
 const url = pathToFileURL(new URL("./index.html", import.meta.url).pathname.replace(/^\/([A-Z]:)/,"$1")).href;
