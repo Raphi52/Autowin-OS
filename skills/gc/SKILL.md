@@ -17,7 +17,10 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 « rien à collecter — <taille totale> » et s'arrêter : une passe vide doit coûter peu.
 
 ## Racines (ce qui est VIVANT — ne jamais y toucher)
-- `conversations.json` : la liste des ids de conversations vivantes = la racine de marquage.
+- `conversations.json` + `conversations.json.journal.jsonl` : les ids vivants = la racine de
+  marquage. Le fichier de base n'est réécrit que de loin en loin (constaté le 2026-10-05 : figé au
+  02/10, les conversations créées depuis n'existaient QUE dans le journal). Un id présent dans
+  l'un OU l'autre est vivant.
 - `get_state` : runs en cours, `travauxNonPublies`, copies de travail (`run_status`).
 - Hors périmètre ABSOLU : `claude-accounts/` (identités, secrets), `Cache/`, `Code Cache/`,
   `GPUCache/`, `Local Storage/`, `Session Storage/`, `Network/`, fichiers `*-wal` (propriété
@@ -32,7 +35,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 2. **Marquer** — chaque candidat doit porter une PREUVE de mort, sinon il reste :
    | Catégorie | Preuve de mort |
    |---|---|
-   | Satellites orphelins (`activity/`, `causal-trace/`, `chat-artifacts/`, `turn-journals/`, `prompt-observability/`) | l'id de conversation dans le nom n'existe PAS dans `conversations.json` |
+   | Satellites orphelins (`activity/`, `causal-trace/`, `chat-artifacts/`, `turn-journals/`, `prompt-observability/`) | l'id de conversation dans le nom n'existe NI dans `conversations.json` NI dans `conversations.json.journal.jsonl` |
    | Sorties de runs (`runs/`, `run-state/`) | run terminé depuis > 30 jours ET absent des runs en cours / bloqués / non publiés de `get_state` |
    | Rétention `prompt-observability/` et `run-stdout/` (fichiers directs, pas le sous-dossier `systems/`) | fichier NON MODIFIÉ depuis > 14 jours (mtime) ET, pour `run-stdout/`, son run absent des runs en cours / bloqués de `get_state` — l'âge suffit : ces données sont des journaux, pas un état |
    | Racine `.autowin-data/` : `*.log` > 5 Mo, `tmp/`, captures `tmp-*.png`, `vitest-*.txt` | non modifié depuis > 7 jours et non référencé par un process vivant (`DevToolsActivePort` exclu) |
