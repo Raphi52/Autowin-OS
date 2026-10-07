@@ -117,7 +117,7 @@ export function HdeskTv({
     if (!f || !choisi) return
     const ok = window.confirm(
       'Ton écran va afficher le bureau caché.\n' +
-        'Pour revenir : bouton « Revenir à mon bureau », Ctrl+Alt+Origine, ou automatiquement après 2 minutes.\n' +
+        'Pour revenir : bouton « Revenir à mon bureau », Échap, ou automatiquement après 2 minutes.\n' +
         'Continuer ?'
     )
     if (!ok) return
@@ -339,7 +339,7 @@ export function HdeskTv({
               onClick={() => void basculer()}
               style={BOUTON_TV}
               aria-label="Basculer mon écran sur ce bureau"
-              title="Basculer mon écran sur ce bureau (retour : bouton Revenir, Ctrl+Alt+Origine ou 2 min)"
+              title="Basculer mon écran sur ce bureau (retour : bouton Revenir, Échap ou 2 min)"
               data-testid="hdesk-tv-basculer"
             >
               ⇄

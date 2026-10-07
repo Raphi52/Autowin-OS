@@ -5,7 +5,7 @@
   Le bureau cache n'a ni barre des taches ni Explorer : sans sortie, l'utilisateur serait coince.
   Ce script porte donc lui-meme les trois sorties, sur le bureau cache :
     1. une fenetre « Revenir a mon bureau » toujours au premier plan ;
-    2. le raccourci Ctrl+Alt+Origine (enregistre sur le thread du bureau cache, sinon il ne se declenche pas) ;
+    2. le raccourci Echap (enregistre sur le thread du bureau cache, sinon il ne se declenche pas) ;
     3. une minuterie de retour automatique (-MaxSecondes, 120 par defaut, plafond 600).
   Le retour vers « Default » est fait dans un finally : une exception le declenche aussi.
   Limite : un arret BRUTAL de ce processus (kill) saute le finally — d'ou un processus detache qui ne
@@ -33,14 +33,14 @@ public static class AutowinHdeskBascule {
   [DllImport("user32.dll", SetLastError = true)] static extern bool SetThreadDesktop(IntPtr h);
   [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr w, int id, uint mod, uint vk);
   const uint GENERIC_ALL = 0x10000000;
-  const uint MOD_ALT = 1, MOD_CONTROL = 2, VK_HOME = 0x24;
+  const uint MOD_NONE = 0, VK_ESCAPE = 0x1B;
 
   class Garde : Form {
     public string Motif = "minuterie";
     public Garde(int max) {
       Text = "Autowin"; TopMost = true; FormBorderStyle = FormBorderStyle.FixedToolWindow;
       StartPosition = FormStartPosition.Manual; Location = new Point(20, 20); ClientSize = new Size(300, 70);
-      var b = new Button { Text = "Revenir a mon bureau  (Ctrl+Alt+Origine)", Dock = DockStyle.Fill };
+      var b = new Button { Text = "Revenir a mon bureau  (Echap)", Dock = DockStyle.Fill };
       b.Click += (s, e) => { Motif = "bouton"; Close(); };
       Controls.Add(b);
       var t = new System.Windows.Forms.Timer { Interval = max * 1000 };
@@ -49,7 +49,7 @@ public static class AutowinHdeskBascule {
     }
     protected override void OnHandleCreated(EventArgs e) {
       base.OnHandleCreated(e);
-      RegisterHotKey(Handle, 1, MOD_CONTROL | MOD_ALT, VK_HOME);
+      RegisterHotKey(Handle, 1, MOD_NONE, VK_ESCAPE);
     }
     protected override void WndProc(ref Message m) {
       if (m.Msg == 0x0312) { Motif = "raccourci"; Close(); return; }

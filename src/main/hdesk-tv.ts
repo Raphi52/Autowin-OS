@@ -434,7 +434,7 @@ export function agirHdesk(racine: string, g: GesteTv): Promise<ResultatGeste> {
 
 /**
  * BASCULE DE L'ECRAN REEL (conv-35, option) : scripts/hdesk-basculer.ps1 porte lui-meme les trois
- * sorties (fenetre « Revenir », Ctrl+Alt+Origine, minuterie). Lance DETACHE : un arret ou un
+ * sorties (fenetre « Revenir », Échap, minuterie). Lance DETACHE : un arret ou un
  * plantage d'Autowin ne doit jamais laisser l'utilisateur sur le bureau cache.
  */
 export const BASCULE_MAX_SECONDES = 120
