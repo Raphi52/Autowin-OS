@@ -93,12 +93,16 @@ describe('une lecture NATIVE compte comme une lecture', () => {
     expect(statusEstUneLecture('Read · src/main/agent-pilot.ts')).toBe(true)
     expect(statusEstUneLecture('Grep · questionPoseeSansAvoirLu')).toBe(true)
     expect(statusEstUneLecture('Glob · **/*.tsx')).toBe(true)
+    expect(statusEstUneLecture('WebFetch · https://exemple.test')).toBe(true)
+    expect(statusEstUneLecture('WebSearch · version electron')).toBe(true)
   })
 
   it('reconnaît un `Bash` de lecture', () => {
     expect(statusEstUneLecture('Bash · cat src/main/skill-pipeline.ts')).toBe(true)
     expect(statusEstUneLecture('Bash · sed -n 1,60p fichier.ts')).toBe(true)
     expect(statusEstUneLecture('Bash · grep -n motif src')).toBe(true)
+    // conv-103 : des chiffres lus sur l'API Azure DevOps via curl.
+    expect(statusEstUneLecture('Bash · curl -s https://dev.azure.com/x/_apis/git/pullrequests')).toBe(true)
   })
 
   /* La liste est FERMÉE : un `Bash` quelconque n'est pas une lecture, sinon le garde ne mord plus. */

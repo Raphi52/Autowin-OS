@@ -12,7 +12,6 @@ import {
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
-  estUneLectureDuHarnais,
   exigePreuveAvantDePromettre,
   blocVisuelNonFerme,
   nommerPiecesJointes
@@ -373,18 +372,6 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
 
   it('ne mord PAS sur une réponse vide', () => {
     expect(exigeUnChiffreVerifie(Q, '   ', false)).toBe(false)
-  })
-})
-
-describe('estUneLectureDuHarnais — les outils SDK qui observent comptent comme lectures', () => {
-  // MESURÉ les 2026-09-23→25 (conv-103) : quatre relances « chiffre non vérifié » à tort sur des
-  // nombres pourtant lus via Bash/curl — le pilote ne comptait que ses commandes <cmd> de lecture.
-  it.each(['Read', 'Grep', 'Glob', 'Bash', 'WebFetch', 'WebSearch'])('compte %s', (outil) => {
-    expect(estUneLectureDuHarnais(outil)).toBe(true)
-  })
-
-  it.each(['Edit', 'Write', 'NotebookEdit'])('ne compte PAS %s : écrire n’atteste rien', (outil) => {
-    expect(estUneLectureDuHarnais(outil)).toBe(false)
   })
 })
 

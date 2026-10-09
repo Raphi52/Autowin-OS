@@ -405,28 +405,6 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
   })
 
   /*
-   * NOM STRUCTURE A COTE DU LIBELLE — le pilote compte les LECTURES reelles (garde « chiffre non
-   * verifie ») sur `chunk.toolName`, jamais en parsant le texte d'affichage de `status`. Mesure des
-   * 2026-09-23→25 (conv-103) : sans ce champ, quatre relances a tort sur des nombres pourtant lus.
-   */
-  it('porte le nom de l’outil en champ structuré, pour compter les lectures réelles', async () => {
-    spawnCapture.stdoutEvents = [
-      appelOutil('t1', 'Bash', { command: 'curl -s https://exemple.test' }),
-      succes
-    ]
-    const { ClaudeCliAdapter } = await import('./claude')
-    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
-    const toolNames: string[] = []
-    let step = await gen.next()
-    while (!step.done) {
-      if (step.value.toolName) toolNames.push(step.value.toolName)
-      step = await gen.next()
-    }
-
-    expect(toolNames).toEqual(['Bash'])
-  })
-
-  /*
    * CONTROLE DISCRIMINANT — l'entree qui DOIT laisser le test a zero. Sans lui, un relais qui
    * pousse sur n'importe quel evenement passerait le test ci-dessus sans rien prouver.
    */

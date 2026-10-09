@@ -512,29 +512,6 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
  * réclame un compte, la réponse contient un nombre, et aucune lecture n'a eu lieu. Un faux positif
  * coûterait une itération inutile ; on préfère le faux négatif.
  */
-/**
- * Les outils du HARNAIS (SDK Claude) qui OBSERVENT réellement le monde : lectures de fichiers,
- * recherches, commandes shell, requêtes web. Une réponse appuyée sur l'un d'eux n'est pas une
- * supposition, même si aucune commande `<cmd>` de lecture n'a été appelée.
- *
- * MESURÉ les 2026-09-23→25 (conv-103) : la quête quotidienne « LISTER MES PR » lisait l'API Azure
- * DevOps via Bash/curl — quatre relances « chiffre non vérifié » à tort, une par tour, parce que
- * `anyReadExecuted` ne comptait que `list_files`/`read_file`/`find_in_files`. Les outils MUTANTS
- * (Edit, Write, NotebookEdit) restent exclus : écrire n'atteste aucune lecture.
- */
-const OUTILS_HARNAIS_QUI_OBSERVENT = new Set([
-  'Read',
-  'Grep',
-  'Glob',
-  'Bash',
-  'WebFetch',
-  'WebSearch'
-])
-
-export function estUneLectureDuHarnais(toolName: string): boolean {
-  return OUTILS_HARNAIS_QUI_OBSERVENT.has(toolName)
-}
-
 export function exigeUnChiffreVerifie(
   question: string | undefined,
   reponse: string,
@@ -924,14 +901,17 @@ export function questionPoseeSansAvoirLu(
  * On ne reconnait que des lecteurs SURS. Un `Bash` quelconque (npm, git commit, rm) n'est pas une
  * lecture : la liste est fermee, pas heuristique.
  */
-const LECTEURS_NATIFS = /^(Read|Grep|Glob)\b/
+// WebFetch / WebSearch OBSERVENT le monde comme Read : un chiffre lu sur le web n'est pas devine.
+const LECTEURS_NATIFS = /^(Read|Grep|Glob|WebFetch|WebSearch)\b/
 // fix-ok: turn 852bb2fd-25e4-40dd-a959-57d9337b084c (conv-844) -- `cd D:/x; sed -n ...` n'etait pas
 // reconnu (ancre sur le 1er mot) : relance « question sans lecture » a tort, question affichee 2x.
 // MEME DEFAUT, AUTRES FORMES (conv-861, 2026-09-25) : `cd X; date; tail ...`, `N=...; tail ...` et
 // `git -C X log` -- trois relances a tort dans le meme fil. On ne regarde donc plus le 1er mot : la
 // commande est DECOUPEE en segments (hors guillemets) et chaque segment est classe sur une liste
 // FERMEE. Le patch par forme (un `cd` ici, un `date` la) ne finissait jamais.
-const LECTEUR_BASH = /^(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type)$/
+// `curl` lit une API : conv-103 (2026-09-23→25), 4 relances « chiffre non verifie » a tort sur des
+// nombres lus via curl sur l'API Azure DevOps.
+const LECTEUR_BASH = /^(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|curl)$/
 const SOUS_COMMANDE_GIT_LECTRICE = /^(log|show|diff|status)$/
 /** Ne lit ni n'ecrit rien : n'empeche pas une lecture d'etre « pure ». */
 const NEUTRE_BASH =
