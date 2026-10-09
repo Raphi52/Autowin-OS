@@ -47,7 +47,7 @@ describe('theme Nebuleuse doree', () => {
 
   it('donne a la zone de saisie le degrade or clair -> noir et garde les couleurs d etat', () => {
     const main = lire('./theme-nebuleuse-doree.css')
-    expect(main).toContain('linear-gradient(135deg, rgba(240, 207, 122, 0.42), rgba(10, 8, 6, 0.92) 58%)')
+    expect(main).toContain('linear-gradient(315deg, rgba(240, 207, 122, 0.42), rgba(10, 8, 6, 0.92) 58%)')
     expect(main).toContain('--ok: #4fd1a5')
     expect(main).toContain('--warn: #ffb547')
   })
