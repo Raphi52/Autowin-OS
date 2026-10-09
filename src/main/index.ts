@@ -3626,6 +3626,13 @@ Le fil reprend ensuite normalement.`
     })
   })
   scheduledTaskScheduler = new TaskScheduler(scheduledTasks, dispatcherVeille, relay)
+  // `task_create` de l'agent : MÊME chemin que le bouton « Créer » du Task Manager (conv-114).
+  const schedulerPourAgent = scheduledTaskScheduler
+  bus.taskManager = {
+    create: (input) => scheduledTasks.create(input),
+    refresh: () => schedulerPourAgent.refresh(),
+    onChanged: () => broadcast({ type: 'refresh', scope: 'task-manager' })
+  }
   // Le moteur de réveil OBSERVE et délègue à ce même scheduler : il n'y a qu'un chemin d'exécution.
   watchdogEngine = new WatchdogEngine(
     () => scheduledTasks.listTasks(),

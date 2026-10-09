@@ -115,5 +115,10 @@ describe('hook reel du CLI', () => {
     expect(
       JSON.parse(passe('bash -c "git reset --hard"')).hookSpecificOutput.permissionDecision
     ).toBe('deny')
+    // Demande conv-114 : rien de créé que l'utilisateur ne pourrait supprimer dans le Task Manager.
+    const tache = JSON.parse(passe('schtasks /create /tn X /tr notepad.exe /sc daily'))
+    expect(tache.hookSpecificOutput.permissionDecision).toBe('deny')
+    expect(tache.hookSpecificOutput.permissionDecisionReason).toMatch(/task_create/)
+    expect(passe('schtasks /query /fo list')).toBe('')
   })
 })
