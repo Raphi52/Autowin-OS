@@ -54,6 +54,8 @@ import './assets/theme-clair-gris.css'
 import './assets/ui-system.css'
 import './assets/theme-nebuleuse-verre.genere.css'
 import './assets/theme-nebuleuse-verre.css'
+import './assets/theme-nebuleuse-doree.genere.css'
+import './assets/theme-nebuleuse-doree.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 

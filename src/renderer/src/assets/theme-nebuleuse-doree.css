@@ -1,0 +1,1054 @@
+/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nebuleuse-doree, depuis
+   theme-nebuleuse-verre.css -- ne pas modifier a la main (modifier la source, puis regenerer). */
+
+/* ===========================================================================
+   NEBULEUSE DE VERRE -- theme choisi le 2026-10-09 (conv-124) sur maquette :
+   direction « 5 · Messagerie », variante « 5.1 · Colonne en verre », validee
+   par l'utilisateur (« le 5.1 est parfait fais un theme qui fait toute l'appli
+   comme ca »). Maquette de reference : bloc html-render de conv-124, rendu et
+   capture par le filtre reel du fil avant validation.
+
+   SON PARTI PRIS
+   - Fond : une encre violette (rgb(23, 19, 11)) eclairee par DEUX nappes, violet en
+     haut a gauche, magenta en bas a droite. Le decor 3D reste, teinte dans la
+     meme famille (jetons --decor-*).
+   - Verre : chaque panneau est une plaque translucide (blanc 4-6 %), flou de
+     fond 18 px, bord blanc 11 %, reflet d'un pixel en haut, rayon 16 px.
+   - Accent : UN degrade rose -> violet (rgb(231, 190, 85) -> rgb(212, 160, 83)), reserve a ce qui
+     est actif ou a envoyer : element du menu ouvert, bulle de l'utilisateur,
+     bouton d'envoi, onglet choisi. Ce theme n'a pas d'or.
+   - Etats : vert menthe = termine, rose = en cours (seule lueur qui bat),
+     violet = au repos / en attente, rouge = echec, ambre = interrompu.
+   - Lueur = information (gout de l'utilisateur, skills/draft/design-glossary.html :
+     « decor sans mesure » refuse) : une lueur ne pose qu'une valeur ou un etat
+     (actif, en cours, focus), jamais un ornement.
+
+   PORTEE : tout est prefixe par :root[data-theme='nebuleuse-doree']. Rien ne
+   change pour les autres themes. Specificite volontairement superieure aux
+   regles .cosmic-outline (chat) : ce fichier gagne quel que soit l'ordre.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   1. JETONS DE BASE
+   --------------------------------------------------------------------------- */
+:root[data-theme='nebuleuse-doree'] {
+  --bg-0: rgb(23, 19, 11);
+  --bg-1: rgba(255, 255, 255, 0.05);
+  --bg-2: rgba(255, 255, 255, 0.04);
+  --bg-3: rgba(255, 255, 255, 0.075);
+  --bg-inset: rgba(19, 15, 9, 0.55);
+
+  --line: rgba(255, 255, 255, 0.11);
+  --line-strong: rgba(255, 255, 255, 0.2);
+
+  /* Texte lilas tres clair, pas blanc pur : il se pose sur du verre teinte. */
+  --text: rgb(234, 210, 173);
+  --text-dim: rgb(212, 201, 178);
+  /* 5,6:1 sur --bg-0 (WCAG) : reste lisible en petit corps. */
+  --text-faint: rgb(173, 161, 137);
+
+  /* Pas d'or dans ce theme : la famille « gold » (soulignes, onglets actifs,
+     reperes) devient un rose clair, pour que tout ce qui designait l'or
+     designe l'accent de ce theme. */
+  --gold: rgb(241, 216, 154);
+  --gold-bright: rgb(246, 229, 188);
+  --gold-doux: rgb(233, 196, 101);
+  --gold-clair: rgb(243, 223, 171);
+  --rose: rgb(231, 190, 85);
+  --rose-bright: rgb(237, 205, 125);
+  --accent: rgb(231, 190, 85);
+  --accent-dim: rgb(148, 112, 21);
+  --accent-soft: rgba(231, 190, 85, 0.14);
+  --violet: rgb(212, 160, 83);
+  --cyan: rgb(221, 179, 118);
+  --info: rgb(221, 179, 118);
+
+  --ok: #4fd1a5;
+  --warn: #ffb547;
+  --err: #ff5a6e;
+
+  --on-accent: #ffffff;
+  --voile-rgb: 255, 255, 255;
+  --ombre-rgb: 6, 4, 20;
+
+  /* Titres en sans-serif : la maquette n'a aucun empattement. */
+  --font: 'Segoe UI Variable Text', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --display: 'Segoe UI Variable Display', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'Cascadia Mono', 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  /* Plus rond partout : 10 / 14 / 18. */
+  --r1: 10px;
+  --r2: 14px;
+  --r3: 18px;
+
+  /* Boutons systeme de la fenetre (min / max / fermer) accordes au texte. */
+  --titlebar-symbol: rgb(234, 210, 173);
+
+  /* Decor 3D (home-decor-scene.ts) : nebuleuse violette, filaments magenta. */
+  --decor-nuage: rgb(102, 71, 25);
+  --decor-nuage-2: rgb(212, 160, 83);
+  --decor-accent: rgb(231, 190, 85);
+  --decor-froid: rgb(212, 160, 82);
+  --decor-chaud: rgb(235, 201, 115);
+
+  /* Le degrade signature, reutilise partout. */
+  --nv-degrade: linear-gradient(135deg, rgb(231, 190, 85), rgb(212, 160, 83));
+  --nv-degrade-doux: linear-gradient(135deg, rgba(231, 190, 85, 0.22), rgba(212, 160, 83, 0.18));
+  --nv-verre: rgba(255, 255, 255, 0.05);
+  --nv-verre-fort: rgba(255, 255, 255, 0.075);
+  --nv-bord: rgba(255, 255, 255, 0.11);
+  --nv-reflet: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  /* REFLETS DORES (variante 6.4 choisie le 2026-10-09, conv-124) : l'or vit DANS le
+     verre -- un reflet d'un pixel en haut de chaque plaque, un voile chaud qui
+     s'efface vers le bas. Le fond, les boutons et les couleurs d'etat n'en recoivent
+     jamais. Une seule teinte par degrade (regle de l'utilisateur : jamais de bouton a
+     triple degrade). Le voile s'arrete a 240 px : un long panneau ne devient pas ambre. */
+  --nv-reflet-dore: inset 0 1px 0 rgba(255, 214, 140, 0.55);
+  --nv-bord-dore: rgba(255, 214, 140, 0.45);
+  --nv-voile-dore: linear-gradient(
+    180deg,
+    rgba(255, 206, 120, 0.13),
+    rgba(255, 206, 120, 0) min(45%, 240px)
+  );
+  --nv-orbe-reflet: inset 0 1px 2px rgba(255, 236, 190, 0.7);
+  --nv-flou: blur(18px) saturate(1.25);
+  --nv-flottant: rgba(42, 34, 20, 0.92);
+  --nv-lueur-rose: 0 0 18px rgba(231, 190, 85, 0.45);
+  --nv-rond: 16px;
+
+  /* ---- Jetons du chat (theme.css l.147-258) ---- */
+  --chat-recherche-fond: rgba(255, 255, 255, 0.045);
+  --chat-recherche-fond-vue: rgba(255, 255, 255, 0.045);
+  --chat-conv-survol: rgba(255, 255, 255, 0.06);
+  --chat-conv-filet-active: rgb(231, 190, 85);
+  --chat-conv-titre: rgb(234, 210, 173);
+  --chat-conv-meta: rgb(173, 161, 137);
+  --chat-conv-separateur: rgb(212, 160, 83);
+  --chat-liste-bouton: rgb(243, 223, 171);
+  --chat-neuf-titre: rgb(234, 210, 173);
+  --chat-bulle-texte: rgb(234, 210, 173);
+  --chat-fond-page: transparent;
+  --chat-tete-kicker: rgb(212, 201, 178);
+  --chat-tete-titre: #ffffff;
+  --chat-tete-bouton-fond: rgba(255, 255, 255, 0.05);
+  --chat-suggestion-fond: rgba(255, 255, 255, 0.05);
+  --chat-signal-rose: rgb(231, 190, 85);
+  --chat-signal-cyan: rgb(212, 160, 83);
+  --chat-ascenseur: rgba(255, 255, 255, 0.16);
+  --chat-wf-action: rgb(194, 182, 159);
+  --chat-wf-fermer-survol: #ff6b8a;
+  --chat-wf-onglet-survol: rgb(234, 210, 173);
+  --chat-wf-bascule: rgb(226, 192, 140);
+  --chat-wf-bascule-active: #ffffff;
+  --chat-wf-trait-rose: rgb(231, 190, 85);
+  --chat-wf-trait-or: rgb(212, 160, 83);
+  --chat-wf-icone: rgb(194, 182, 159);
+  --chat-wf-icone-active: rgb(239, 211, 140);
+  --chat-etat-defaut: rgb(219, 176, 112);
+  --chat-etat-fini: #4fd1a5;
+  --chat-etat-echec: #ff5a6e;
+  --chat-etat-interrompu: #ffb547;
+  --chat-etat-attente: rgb(219, 176, 112);
+  --chat-etat-question: #ffcf5a;
+  --chat-etat-non-lu: rgb(239, 211, 140);
+  --chat-etat-annule: rgb(173, 161, 137);
+  --chat-piece-jointe-survol: rgb(247, 234, 201);
+  --chat-suppr-orbite: rgb(239, 211, 140);
+  --chat-suppr-kicker: rgb(243, 223, 171);
+  --chat-suppr-titre: rgb(247, 234, 201);
+  --chat-suppr-fort: rgb(247, 234, 201);
+  --chat-suppr-bouton: rgb(209, 158, 30);
+  --chat-suppr-bouton-survol: rgb(228, 182, 65);
+  --chat-renommer-texte: rgb(234, 210, 173);
+  --chat-md-h6: rgb(226, 191, 139);
+  --chat-md-citation: rgb(226, 191, 139);
+  --chat-md-bon: #4fd1a5;
+  --chat-md-alerte: #ffcf5a;
+  --chat-md-mauvais: #ff8a9b;
+  --chat-md-ref: rgb(194, 182, 159);
+  --chat-md-ref-survol: rgb(247, 234, 201);
+  --chat-consigne-filet: rgba(255, 255, 255, 0.11);
+  --chat-consigne-fond: rgba(255, 255, 255, 0.035);
+  --chat-consigne-titre: rgb(227, 194, 144);
+  --chat-consigne-meta-filet: rgba(212, 160, 83, 0.35);
+  --chat-consigne-meta: rgb(227, 194, 144);
+  --chat-consigne-limite: #ffcf5a;
+  --chat-consigne-bloc-filet: rgba(255, 255, 255, 0.09);
+  --chat-consigne-bloc-fond: rgba(19, 15, 9, 0.55);
+  --chat-consigne-bloc-texte: rgb(226, 192, 140);
+  --chat-consigne-sys-titre: rgb(234, 210, 173);
+  --chat-consigne-note: rgb(194, 182, 159);
+  --chat-role-agent: rgb(227, 194, 144);
+  --chat-role-vous: rgb(243, 223, 171);
+  --chat-corps: rgb(232, 205, 164);
+  --chat-corps-vous: #ffffff;
+  --chat-accueil-titre: #ffffff;
+  --chat-modele-texte: rgb(234, 210, 173);
+  --chat-modele-note: rgb(184, 172, 148);
+  --chat-modele-chevron: rgb(194, 182, 159);
+  --chat-modele-groupe: rgb(173, 161, 137);
+  --chat-modele-groupe-teinte: rgb(212, 201, 178);
+  --chat-modele-option: rgb(232, 205, 164);
+  --chat-modele-option-note: rgb(173, 161, 137);
+  --chat-modele-option-choisie: #ffffff;
+  --chat-modele-option-chevron: rgb(173, 161, 137);
+  --chat-modele-etat-fond: rgba(231, 190, 85, 0.1);
+  --chat-modele-etat-texte: rgb(247, 234, 201);
+  --chat-effort-texte: rgb(212, 201, 178);
+  --chat-effort-fond: rgba(42, 34, 20, 0.96);
+  --chat-effort-actif: #ffffff;
+  --chat-effort-icone: rgb(226, 192, 140);
+  --chat-matrice-ouvrir: rgb(227, 194, 144);
+  --chat-matrice-ouvrir-focus: #ffffff;
+  --chat-matrice-fond: rgba(42, 34, 20, 0.96);
+  --chat-matrice-titre: rgb(234, 210, 173);
+  --chat-matrice-groupe: rgb(219, 176, 112);
+  --chat-matrice-colonnes: rgb(173, 161, 137);
+  --chat-matrice-nom: rgb(234, 210, 173);
+  --chat-cran-fond: rgba(255, 255, 255, 0.1);
+  --chat-cran-texte: rgb(173, 161, 137);
+  --chat-cran-rempli: rgb(231, 190, 85);
+  --chat-cran-vif: rgb(239, 211, 140);
+  --chat-cran-reco: #4fd1a5;
+  --chat-cran-focus: rgb(247, 234, 201);
+  --chat-saisie-fond: transparent;
+  --chat-saisie-invite: rgb(173, 161, 137);
+  --chat-envoi-rose: #ffffff;
+  --chat-envoi-vert: rgb(231, 190, 85);
+  --chat-envoi-bleu: rgb(212, 160, 83);
+  --chat-envoi-vert-survol: rgb(235, 200, 112);
+  --chat-envoi-bleu-survol: rgb(217, 171, 102);
+  --chat-sur-vif: #ffffff;
+  --chat-sur-vif-survol: #ffffff;
+  --chat-dictee: rgb(239, 211, 140);
+  --chat-erreur-douce: #ff8a9b;
+  --chat-lot-rose: rgb(231, 190, 85);
+  --chat-lot-bleu: rgb(212, 160, 83);
+  --chat-frise-ok: #4fd1a5;
+  --chat-frise-ko: #ff5a6e;
+  --chat-surlignage-texte: rgb(26, 22, 16);
+  --chat-depot-texte: rgb(235, 210, 173);
+  --chat-depot-detail: rgb(194, 182, 159);
+}
+
+/* SURFACES -- posees sur .shell (ui-system.css), pas sur la racine. */
+:root[data-theme='nebuleuse-doree'] .shell,
+:root[data-theme='nebuleuse-doree'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 255, 255, 0.045);
+  --surface-card: rgba(255, 255, 255, 0.055);
+  --surface-inset: rgba(19, 15, 9, 0.5);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --surface-selected: rgba(231, 190, 85, 0.14);
+  --container-border: rgba(255, 255, 255, 0.11);
+  --container-border-strong: rgba(255, 255, 255, 0.2);
+  --container-radius-page: 20px;
+  --container-radius-panel: 16px;
+  --container-radius-card: 12px;
+  /* Reflet dore des grands panneaux de chaque vue (.view-page, Agent Studio, Memory,
+     Router, fenetres de la mosaique... -- tous lisent ce jeton). */
+  --container-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.55);
+  /* Le filet du haut des vues (ViewPage.css) : rose -> or d'origine ; ici un seul or. */
+  --lisere-degrade: linear-gradient(
+    90deg,
+    rgba(255, 214, 140, 0.65),
+    rgba(255, 214, 140, 0.25) 50%,
+    rgba(255, 214, 140, 0.65)
+  );
+  --container-blur: 18px;
+  --module-title-font: var(--display);
+  --module-title-color: #ffffff;
+  --module-eyebrow-color: rgb(173, 161, 137);
+}
+
+/* ---------------------------------------------------------------------------
+   2. FOND : encre violette + deux nappes. L'image de galaxie est retiree ;
+   le grain anime (body::before) est garde, sans sa nappe or.
+   --------------------------------------------------------------------------- */
+:root[data-theme='nebuleuse-doree'] body {
+  background:
+    radial-gradient(70vw 60vh at 96% 100%, rgba(228, 182, 67, 0.42), transparent 70%),
+    radial-gradient(60vw 55vh at 0% 0%, rgba(210, 157, 76, 0.4), transparent 70%),
+    radial-gradient(45vw 40vh at 55% 40%, rgba(206, 147, 58, 0.12), transparent 70%), rgb(23, 19, 11);
+  color: var(--text);
+}
+:root[data-theme='nebuleuse-doree'] body::before {
+  opacity: 0.05;
+}
+:root[data-theme='nebuleuse-doree'] .decor-de-fond {
+  opacity: 0.6;
+}
+:root[data-theme='nebuleuse-doree'] ::selection {
+  background: rgba(231, 190, 85, 0.38);
+  color: #ffffff;
+}
+:root[data-theme='nebuleuse-doree'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
+  outline: 2px solid rgba(239, 211, 140, 0.85);
+  outline-offset: 2px;
+}
+:root[data-theme='nebuleuse-doree'] textarea,
+:root[data-theme='nebuleuse-doree'] input {
+  caret-color: rgb(239, 211, 140);
+}
+:root[data-theme='nebuleuse-doree'] ::placeholder {
+  color: rgb(173, 161, 137);
+  opacity: 1;
+}
+
+/* Ascenseurs : fins, translucides, rose au survol. */
+:root[data-theme='nebuleuse-doree'] * {
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+:root[data-theme='nebuleuse-doree'] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+:root[data-theme='nebuleuse-doree'] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+:root[data-theme='nebuleuse-doree'] ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16) padding-box;
+}
+:root[data-theme='nebuleuse-doree'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(231, 190, 85, 0.55) padding-box;
+}
+
+/* ---------------------------------------------------------------------------
+   3. RAIL (menu de gauche) : colonne de verre flottante.
+   --------------------------------------------------------------------------- */
+:root[data-theme='nebuleuse-doree'] .theme-serious .rail {
+  /* Haut et bas : la marge des blocs (var(--s5), app-shell.css). Gauche : 10 px. */
+  margin: var(--s5) 0 var(--s5) 10px;
+  border: 1px solid var(--nv-bord);
+  border-top-color: var(--nv-bord-dore);
+  border-radius: 18px;
+  background: var(--nv-voile-dore), rgba(255, 255, 255, 0.045);
+  backdrop-filter: var(--nv-flou);
+  box-shadow: var(--nv-reflet-dore);
+}
+:root[data-theme='nebuleuse-doree'] .theme-serious .brand {
+  border-color: var(--nv-bord);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+:root[data-theme='nebuleuse-doree'] .brand::after {
+  background: var(--nv-degrade);
+}
+:root[data-theme='nebuleuse-doree'] .brand-name {
+  text-shadow: 0 0 10px rgba(231, 190, 85, 0.35);
+}
+:root[data-theme='nebuleuse-doree'] .rail-toggle {
+  border-color: var(--nv-bord);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+:root[data-theme='nebuleuse-doree'] .rail-toggle:hover {
+  border-color: rgba(231, 190, 85, 0.6);
+}
+:root[data-theme='nebuleuse-doree'] .nav-item {
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+:root[data-theme='nebuleuse-doree'] .nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+/* L'element ouvert : la pastille degradee de la maquette (fond doux + bord rose
+   + une lueur, parce que c'est l'etat « ici »). */
+:root[data-theme='nebuleuse-doree'] .nav-item.active {
+  border: 1px solid rgba(231, 190, 85, 0.5);
+  background: var(--nv-degrade-doux);
+  box-shadow: 0 0 16px rgba(231, 190, 85, 0.22);
+  color: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
+   4. BRIQUES COMMUNES : cartes, boutons, champs, badges.
+   --------------------------------------------------------------------------- */
+:root[data-theme='nebuleuse-doree'] .card,
+:root[data-theme='nebuleuse-doree'] .surface-panel {
+  border-color: var(--nv-bord);
+  border-top-color: var(--nv-bord-dore);
+  background: var(--nv-voile-dore), var(--nv-verre);
+  backdrop-filter: var(--nv-flou);
+  box-shadow: var(--nv-reflet-dore);
+}
+/* Le grand panneau de chaque vue : le filet dore du haut + le voile chaud. */
+:root[data-theme='nebuleuse-doree'] .view-page {
+  background: var(--lisere-haut), var(--nv-voile-dore), var(--surface-panel);
+}
+:root[data-theme='nebuleuse-doree'] .btn {
+  border-color: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgb(234, 210, 173);
+}
+:root[data-theme='nebuleuse-doree'] .btn:hover:not(:disabled) {
+  border-color: rgba(231, 190, 85, 0.55);
+  background: rgba(231, 190, 85, 0.1);
+}
+:root[data-theme='nebuleuse-doree'] .btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+:root[data-theme='nebuleuse-doree'] .btn-accent,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .btn-accent {
+  border-color: transparent;
+  background: var(--nv-degrade);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(231, 190, 85, 0.35);
+}
+:root[data-theme='nebuleuse-doree'] .btn-accent:hover:not(:disabled),
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .btn-accent:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgb(235, 200, 112), rgb(217, 171, 102));
+  border-color: transparent;
+}
+:root[data-theme='nebuleuse-doree'] .btn-danger {
+  border-color: rgba(255, 90, 110, 0.55);
+  background: rgba(255, 90, 110, 0.16);
+  color: #ffc2cb;
+}
+:root[data-theme='nebuleuse-doree'] .input,
+:root[data-theme='nebuleuse-doree'] .select,
+:root[data-theme='nebuleuse-doree'] textarea.input,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline :where(.input, .select, textarea.input) {
+  border-color: rgba(255, 255, 255, 0.13);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgb(234, 210, 173);
+}
+:root[data-theme='nebuleuse-doree'] .input:focus,
+:root[data-theme='nebuleuse-doree'] .select:focus,
+:root[data-theme='nebuleuse-doree'] textarea.input:focus,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline :where(.input, .select, textarea.input):focus {
+  border-color: rgba(231, 190, 85, 0.6);
+  box-shadow: 0 0 0 3px rgba(231, 190, 85, 0.14);
+}
+:root[data-theme='nebuleuse-doree'] .select option {
+  background: rgb(42, 34, 20);
+  color: rgb(234, 210, 173);
+}
+:root[data-theme='nebuleuse-doree'] .badge {
+  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgb(226, 192, 140);
+}
+:root[data-theme='nebuleuse-doree'] code,
+:root[data-theme='nebuleuse-doree'] .mono {
+  font-family: var(--mono);
+}
+
+/* Vue Tests : ses deux boutons d'en-tete n'ont AUCUN style dans l'app (gris par
+   defaut du navigateur, quel que soit le theme). Ici : pilule de verre, et le
+   degrade pour l'action principale. */
+:root[data-theme='nebuleuse-doree'] :is([data-testid='tests-add'], .tests-run) {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgb(234, 210, 173);
+  font: 600 12px/1 var(--font);
+  cursor: pointer;
+}
+:root[data-theme='nebuleuse-doree'] .tests-run:not(:disabled) {
+  border-color: transparent;
+  background: var(--nv-degrade);
+  box-shadow: 0 0 14px rgba(231, 190, 85, 0.35);
+}
+:root[data-theme='nebuleuse-doree'] .tests-run:disabled {
+  color: rgb(173, 161, 137);
+  cursor: not-allowed;
+}
+
+/* Fenetres flottantes (menus, popovers, palette /) : verre fonce, plus opaque
+   pour rester lisibles au-dessus du contenu. */
+:root[data-theme='nebuleuse-doree']
+  :is(
+    .conv-menu-pop,
+    .model-select-menu,
+    .model-quota-popover,
+    .slash-palette,
+    .model-question-popup,
+    .graph-settings-popover
+  ) {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top-color: var(--nv-bord-dore);
+  border-radius: 14px;
+  background: var(--nv-voile-dore), var(--nv-flottant);
+  backdrop-filter: var(--nv-flou);
+  box-shadow:
+    0 18px 50px rgba(16, 13, 8, 0.6),
+    var(--nv-reflet-dore);
+}
+
+/* ---------------------------------------------------------------------------
+   5. CHAT -- les quatre colonnes de verre de la maquette 5.1.
+   --------------------------------------------------------------------------- */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-layout {
+  gap: 10px;
+  /* Pas de marge verticale : les colonnes du chat s'alignent en haut et en bas sur les
+     blocs des autres vues et sur le menu de gauche (marge de `.main`). */
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  /* Ce cadre n'est pas une plaque : sans cela il porterait le reflet dore
+     (--container-shadow) en travers du haut des colonnes. */
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane) {
+  border: 1px solid var(--nv-bord);
+  border-top-color: var(--nv-bord-dore);
+  border-radius: var(--nv-rond);
+  background: var(--nv-voile-dore), var(--nv-verre);
+  backdrop-filter: var(--nv-flou);
+  box-shadow: var(--nv-reflet-dore);
+}
+/* LA COLONNE DU FIL S'ASSOMBRIT (variante 3 « Pose sur le fil », choisie le 2026-10-09,
+   conv-124, apres « les blocs de ta reponse ne sont pas hyper lisibles car trop clairs »).
+   Le verre blanc a 5 % + voile dore devenait un mauve laiteux sur la nebuleuse : contraste
+   mesure 7,5:1 au pire endroit. Fond encre a 86 % : 15,7:1 sur la maquette. */
+/* TOUS LES BLOCS COMME LE FIL (conv-136, 2026-10-10 : « je veux juste que tous les blocs
+   ressemblent a celui du milieu ou j'ecris ») : la liste des conversations, le panneau Details
+   et le menu de gauche prennent le meme fond encre que le fil, au lieu du verre violet sature. */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline :is(.chat, .conv-pane, .runs-pane),
+:root[data-theme='nebuleuse-doree'] .theme-serious .rail {
+  border-top-color: rgba(255, 214, 140, 0.35);
+  background: rgba(20, 16, 9, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.35);
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-head {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: transparent;
+}
+
+/* Liste des fils */
+:root[data-theme='nebuleuse-doree'] .conv-search,
+:root[data-theme='nebuleuse-doree'] .conv-search .input {
+  border-radius: 12px;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-item {
+  border: 1px solid transparent;
+  border-radius: 14px;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-item.active {
+  border-color: rgba(231, 190, 85, 0.45);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: var(--nv-reflet);
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-meta {
+  overflow: hidden;
+  gap: 5px;
+  margin-top: 3px;
+  font-family: var(--font);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-meta span + span::before {
+  margin-right: 5px;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-label {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* PAS D'ORBE PAR FIL (retire le 2026-10-09, conv-124 : « remet les anciens icones de
+   conversations sans les grosses boules colorees »). La liste garde la pastille d'etat
+   d'origine (ChatView.css, `.conversation-state`), a sa place et a sa taille : sa FORME
+   porte le sens (points qui sautillent = question, atome = en cours). Seule sa couleur suit
+   les jetons --chat-etat-* de ce theme. */
+/* PASTILLE = ORBE DORE (demande du 2026-10-10, conv-139 : « la meme boule [que l'Agent] a gauche
+   des convs a la place des points lumineux »). Seuls les etats en DISQUE la prennent : l'atome
+   (en cours) et les trois points (question / attente) gardent leur forme, qui porte le sens.
+   Le halo reste a la couleur de l'etat (currentColor) pour ne pas perdre echec / non lu. */
+:root[data-theme='nebuleuse-doree'] .conversation-state:not(.is-running):not(.is-waiting):not(.is-asking) {
+  width: 11px;
+  height: 11px;
+  /* L'orbe prend la COULEUR DE L'ETAT (vert fini, rouge echec...) : en or uni, tous les fils
+     se ressemblaient (« j'ai que du jaune j'ai plu de vert », 2026-10-10). */
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, currentColor 30%, #fff),
+    currentColor 45%,
+    color-mix(in srgb, currentColor 45%, #000) 90%
+  );
+  box-shadow:
+    var(--nv-orbe-reflet),
+    0 0 6px currentColor;
+}
+@keyframes nv-pouls {
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgba(231, 190, 85, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(231, 190, 85, 0.9);
+  }
+}
+
+/* En-tete du fil : le titre perd ses capitales a empattement, gagne la
+   sobriete de la maquette ; le signal de vie devient un orbe. */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-head-kicker,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-conv-title,
+:root[data-theme='nebuleuse-doree'] .chat-head-kicker {
+  font-family: var(--display);
+  letter-spacing: 0;
+  text-transform: none;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-head-signal {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  align-self: center;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgb(247, 234, 201), rgb(231, 190, 85) 45%, rgb(207, 148, 61) 90%);
+  box-shadow:
+    var(--nv-orbe-reflet),
+    0 0 12px rgba(231, 190, 85, 0.45);
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-runtime > span {
+  font-family: var(--mono);
+}
+
+/* Bouton Details de l'en-tete : une pastille, rose quand le panneau est ouvert. */
+:root[data-theme='nebuleuse-doree'] .workflow-toggle {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 11px;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-toggle::after,
+:root[data-theme='nebuleuse-doree'] .workflow-toggle.is-active::after {
+  display: none;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-toggle.is-active {
+  border-color: rgba(231, 190, 85, 0.6);
+  background: rgba(231, 190, 85, 0.16);
+  color: #ffffff;
+}
+
+/* Messages : bulle degradee pour l'utilisateur, plaque de verre pour l'agent. */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .msg.user .msg-body,
+:root[data-theme='nebuleuse-doree'] .msg.user .msg-body {
+  border: 0;
+  border-radius: 18px 18px 4px 18px;
+  background: linear-gradient(135deg, rgb(231, 190, 85), rgb(212, 160, 83));
+  color: #ffffff;
+  box-shadow: none;
+}
+/* La reponse de l'agent n'a plus de plaque : son texte se pose sur la colonne sombre du fil,
+   signale par un filet rose a gauche (variante 3, voir `.chat` plus haut). */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .msg.assistant .msg-body,
+:root[data-theme='nebuleuse-doree'] .msg.assistant .msg-body {
+  padding: 2px 4px 2px 16px;
+  border: 0;
+  border-left: 2px solid rgba(231, 190, 85, 0.55);
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  color: rgb(235, 210, 173);
+}
+:root[data-theme='nebuleuse-doree'] .msg.assistant .msg-role::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+  vertical-align: -2px;
+  border-radius: 50%;
+  /* Orbe et libelle « Agent » DORES (demande du 2026-10-10, conv-139). */
+  background: radial-gradient(circle at 35% 30%, #fff1c4, #e3ba55 45%, #8a6420 90%);
+  box-shadow:
+    var(--nv-orbe-reflet),
+    0 0 8px rgba(227, 186, 85, 0.45);
+}
+:root[data-theme='nebuleuse-doree'] .msg.assistant .msg-role,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .msg.assistant .msg-role {
+  color: #e3ba55;
+}
+
+/* BLOC DE FIN DE TOUR (Fait / Maintenant / Reste a faire / Recommande) : DORE (demande du
+   2026-10-09, conv-124 : « le bloc fait maintenant a faire doit etre dore »). Cadre or, voile or
+   tres leger sur la colonne sombre, intertitres en or plus bas (typo). Une seule teinte : la
+   regle « jamais de triple degrade » n'est pas en jeu. Le texte reste clair : le fond reste sombre. */
+:root[data-theme='nebuleuse-doree'] .md-final-summary {
+  border: 1px solid rgba(227, 186, 85, 0.55);
+  background: linear-gradient(145deg, rgba(227, 186, 85, 0.12), rgba(227, 186, 85, 0.04));
+  box-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.35);
+}
+
+/* QUESTION A L'UTILISATEUR (AskDecision) EN OR (conv-136, 2026-10-10 : « les blocs comme ASK
+   qui demandent des actions utilisateur, mets-les en doré ») : dans ce theme, --gold* vaut du
+   rose ; on rend au bloc l'or d'Autowin pour que ce qui attend un geste ressorte du reste. */
+:root[data-theme='nebuleuse-doree'] .askd {
+  --gold: #d4a94f;
+  --gold-bright: #e3ba55;
+  --gold-doux: #b8913f;
+  --gold-clair: #e3ba55;
+}
+:root[data-theme='nebuleuse-doree'] .askd-item {
+  border-color: rgba(212, 169, 79, 0.4);
+  border-radius: 14px;
+  background: rgba(212, 169, 79, 0.07);
+}
+:root[data-theme='nebuleuse-doree'] .askd-item:hover {
+  border-color: rgba(212, 169, 79, 0.75);
+  background: rgba(212, 169, 79, 0.13);
+}
+
+/* ZONE DE SAISIE : UN SEUL BLOC (demande du 2026-10-09, conv-124 : « ya 2 blocs l'un dans
+   l'autre dans la barre de prompt, garde que celui du milieu fonce et agrandis-le pour qu'il
+   ait la taille du dore et violet »). Trois couches s'empilaient, relevees au rendu par des
+   contours de sonde : `.composer` (cadre exterieur, verre a bord DORE), `.composer-field`
+   (le bloc fonce) et le `textarea` (un petit cadre clair, que la regle generale `.input` de
+   ce theme lui imposait). Le cadre exterieur devient invisible et SANS marge : le bloc fonce
+   en prend toute la place. Pas de doré sur ce bloc : il genait. */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer {
+  /* 10 px sous le bloc : sans eux il touchait le bord du panneau (double trait en bas). */
+  padding: 0 0 10px;
+  border: 0;
+  border-radius: 22px;
+  /* DEGRADE OR -> NOIR sur TOUT le bloc (demande du 2026-10-10, conv-139, variante B1 eclaircie).
+     Fond seul : la jauge de quota (::before / ::after) n'est pas touchee. */
+  /* Sur CE theme, le degrade est ROSE et part d'en bas a droite (le dore « ne va pas avec le
+     reste » ; il devient un theme a part entiere, demande du 2026-10-10). */
+  background: linear-gradient(135deg, rgba(240, 207, 122, 0.42), rgba(10, 8, 6, 0.92) 58%);
+  backdrop-filter: none;
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer:focus-within {
+  border: 0;
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-field {
+  gap: 7px;
+  padding: 14px 18px 12px;
+  border: 1px solid transparent; /* aucun cadre (demande du 2026-10-10) */
+  border-radius: 22px;
+  background: transparent; /* le degrade du bloc .composer passe a travers */
+  backdrop-filter: none;
+  box-shadow: var(--nv-reflet);
+}
+/* Focus : le bord passe au rose, SANS halo autour. Le halo de 3 px se lisait, sur le haut
+   du bloc, comme une seconde ligne au-dessus du bord (capture du 2026-10-09). */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-field:focus-within {
+  /* Plus de bord rose au focus (demande du 2026-10-10, conv-139 : « enleve le cadre rose »). */
+  border-color: transparent;
+  box-shadow: var(--nv-reflet);
+  outline: none;
+}
+/* Le texte se pose directement dans le bloc fonce : plus de cadre a lui, ni au focus. */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-field textarea,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-field textarea:focus {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+/* LE FILET DU HAUT = LA JAUGE DE CONTEXTE (ChatView.css, `.composer::after` = rail gris,
+   `.composer[data-context-level]::before` = remplissage). Le cadre exterieur n'ayant plus de
+   marge, ce filet tombait PILE sur le bord du bloc fonce : 2 px de gris peints par-dessus le
+   bord d'1 px, lu comme une double ligne (constate a la capture du 2026-10-09). Ici le BORD du
+   bloc fonce sert de rail : le rail gris en double disparait, le remplissage reste, pose sur le
+   bord, retenu hors des coins arrondis. Occupation inconnue = aucun remplissage, comme avant. */
+:root[data-theme='nebuleuse-doree'] .composer::after {
+  display: none;
+}
+:root[data-theme='nebuleuse-doree'] .composer[data-context-level]::before {
+  right: 22px;
+  left: 22px;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-send {
+  border: 0;
+  border-radius: 999px;
+  background: var(--nv-degrade);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(231, 190, 85, 0.45);
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-send:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgb(235, 200, 112), rgb(217, 171, 102));
+  color: #ffffff;
+}
+/* LE BOUTON D'ENVOI AU REPOS. ChatView.css le peint avec un selecteur plus precis
+   (`:not(.is-resume):not(.is-stop):not(:disabled)`) : un degrade rose a TROIS nuances
+   et un relief, que la couche generee reprenait. A specificite moindre, la regle
+   ci-dessus perdait, et le bouton n'etait pas celui de la maquette (constate le
+   2026-10-09 par le test « jamais de bouton a triple degrade »). Meme selecteur,
+   ecrit apres : c'est ce fichier qui gagne. */
+:root[data-theme='nebuleuse-doree']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
+  border: 0;
+  background: var(--nv-degrade);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(231, 190, 85, 0.45);
+}
+:root[data-theme='nebuleuse-doree']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
+  border: 0;
+  background: linear-gradient(135deg, rgb(235, 200, 112), rgb(217, 171, 102));
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-send:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  color: rgb(173, 161, 137);
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-send.is-stop {
+  background: rgba(255, 90, 110, 0.22);
+  box-shadow: 0 0 0 1px rgba(255, 90, 110, 0.6);
+  color: #ffd2d8;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-send.is-resume {
+  background: rgba(79, 209, 165, 0.2);
+  box-shadow: 0 0 0 1px rgba(79, 209, 165, 0.6);
+  color: #d4fff0;
+}
+/* Quota du modele : sa couleur DIT le niveau (large / attention / critique).
+   On garde ce sens, on accorde seulement les teintes au theme. */
+:root[data-theme='nebuleuse-doree'] .model-quota-trigger.is-healthy {
+  --quota-color: #4fd1a5;
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-trigger.is-warning {
+  --quota-color: #ffb547;
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-trigger.is-critical {
+  --quota-color: #ff5a6e;
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-trigger.is-unknown {
+  --quota-color: rgb(173, 161, 137);
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-bar {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+/* Memes paliers que l'original (12 / 30-42 / 56-68 / 86 %), teintes du theme. */
+:root[data-theme='nebuleuse-doree'] .model-quota-bar-fill {
+  background-image: linear-gradient(
+    90deg,
+    #ff5a6e 0%,
+    #ff5a6e 12%,
+    #ff8a5c 30%,
+    #ff8a5c 42%,
+    #ffcf5a 56%,
+    #ffcf5a 68%,
+    #4fd1a5 86%,
+    #4fd1a5 100%
+  );
+}
+:root[data-theme='nebuleuse-doree'] .chat-context-gauge-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme='nebuleuse-doree'] .chat-context-gauge-fill {
+  background: linear-gradient(90deg, rgb(212, 160, 83), rgb(231, 190, 85));
+}
+
+/* ---------------------------------------------------------------------------
+   6. PANNEAU DETAILS -- onglets en pastilles, arbre a points d'etat.
+   --------------------------------------------------------------------------- */
+:root[data-theme='nebuleuse-doree'] .workflow-section-tabs {
+  gap: 4px;
+  align-items: center;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-section-tab {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  color: rgb(194, 182, 159);
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-section-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+:root[data-theme='nebuleuse-doree'] .workflow-section-tab.is-active {
+  border: 0;
+  background: var(--nv-degrade);
+  color: #ffffff;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-panel-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Fenetre etroite (< 1180 px) : Details passe en TIROIR par-dessus le fil
+   (ChatView.css). Un verre a 5 % y laissait lire le fil a travers : on epaissit
+   le verre et on pose l'ombre, comme la maquette 5.3. */
+@media (max-width: 1180px) {
+  :root[data-theme='nebuleuse-doree'] .cosmic-outline .runs-pane {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(42, 34, 20, 0.9);
+    box-shadow:
+      -30px 0 60px rgba(16, 13, 8, 0.6),
+      var(--nv-reflet);
+  }
+}
+
+/* Arbre du graphe. Le TYPE d'etape garde sa couleur (agent, skill, depot, git,
+   cloture : un sens, WorkflowExecutionGraph.css) mais en liseré fin sur du verre ;
+   seule l'etape choisie s'encadre de rose, comme dans la maquette. */
+:root[data-theme='nebuleuse-doree'] .workflow-execution-summary {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node,
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node.is-request,
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node.is-phase,
+:root[data-theme='nebuleuse-doree']
+  .workflow-execution-node:is(.is-workspace, .is-skill, .is-agent, .is-git, .is-closure) {
+  border-color: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node.is-request {
+  box-shadow: inset 2px 0 0 rgb(231, 190, 85);
+}
+:root[data-theme='nebuleuse-doree']
+  .workflow-execution-node:is(.is-workspace, .is-skill, .is-agent, .is-git, .is-closure) {
+  box-shadow: inset 2px 0 0 var(--execution-kind-color);
+}
+/* L'or (depot) devenait le meme rose que l'agent : on lui rend une teinte a lui. */
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node.is-workspace {
+  --execution-kind-color: #ffc28a;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node:hover,
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node:focus-visible {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node.is-selected {
+  border-color: rgba(231, 190, 85, 0.45);
+  background: rgba(231, 190, 85, 0.1);
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node.is-running .workflow-execution-dot {
+  background: rgb(231, 190, 85);
+  animation: nv-pouls 1.6s ease-in-out infinite;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-node.is-pending .workflow-execution-dot {
+  background: rgb(219, 176, 112);
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-edge {
+  --execution-edge-color: rgba(212, 160, 83, 0.45);
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-detail {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+/* ---------------------------------------------------------------------------
+   6 bis. TYPO MODERNE (variante 7.4 choisie le 2026-10-09, conv-124) : titres un
+   peu plus grands et serres, fin des petites capitales espacees, metadonnees plus
+   lisibles. Le code et les chemins dans les messages gardent leur chasse fixe.
+   --------------------------------------------------------------------------- */
+:root[data-theme='nebuleuse-doree'] :is(.module-header > h1, .module-header-line > h1) {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+:root[data-theme='nebuleuse-doree'] .module-header > span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+/* Liste des fils : « Récent » et les groupes en casse normale. */
+:root[data-theme='nebuleuse-doree'] .conv-group-head {
+  color: rgb(194, 182, 159);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-label {
+  font-weight: 550;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-meta {
+  color: rgb(184, 172, 148);
+  font-size: 10.5px;
+}
+/* En-tete du fil : titre serre, ligne « Claude · Fable 5 · CLI… » en casse normale. */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-head-kicker,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-conv-title {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-transform: none;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-runtime {
+  flex-wrap: wrap;
+  row-gap: 2px;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* En casse normale la ligne est plus large : en fenetre etroite, le nom du dossier se
+   coupait en deux (« autowin- / os »). La ligne passe a la suivante ENTRE deux elements,
+   jamais au milieu d'un mot ; seul un element plus large que toute la ligne finit en « … ». */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-runtime > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-runtime > span {
+  font-family: var(--font);
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-runtime-provider {
+  font-weight: 600;
+}
+/* Corps des messages : un cran plus grand, interligne plus serre. */
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .msg-body,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .msg.assistant .msg-body,
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .msg.user .msg-body {
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+/* Intertitres du bloc de fin de tour, en or (le bloc est dore). Ecrits « 📍 **Maintenant** »,
+   ils sont rendus en LIGNE de texte (`span`, Markdown.tsx) avec un mot en gras, pas en titre :
+   on vise le gras des lignes de texte. Le contenu du bloc est en listes (`li`), non touche. */
+:root[data-theme='nebuleuse-doree'] .md-final-summary :is(h1, h2, h3, h4, h5, h6),
+:root[data-theme='nebuleuse-doree'] .md-final-summary span > strong {
+  color: #f0cf7a;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+/* Panneau Details. */
+:root[data-theme='nebuleuse-doree'] .workflow-section-tab {
+  font-weight: 500;
+}
+:root[data-theme='nebuleuse-doree'] .workflow-execution-summary strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+/* ---------------------------------------------------------------------------
+   7. MOUVEMENT REDUIT : la seule lueur qui bat s'arrete.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='nebuleuse-doree'] .workflow-execution-node.is-running .workflow-execution-dot {
+    animation: none;
+    box-shadow: 0 0 12px rgba(231, 190, 85, 0.7);
+  }
+}

@@ -31,11 +31,16 @@ import postcss from 'postcss'
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url))
 const SOURCES = ['src/renderer/src/components', 'src/renderer/src/assets']
-const SORTIE = 'src/renderer/src/assets/theme-nebuleuse-verre.genere.css'
-const PREFIXE = ":root[data-theme='nebuleuse-verre']"
+// fix-ok: le nom du theme etait ecrit en dur (prefixe + fichier de sortie) ; mesure : sans argument la sortie nebuleuse-verre est identique octet par octet (cmp exit 0), avec nebuleuse-doree 0 #ff3d9a/#7b5cff (test 6/6).
+// Deux themes partagent ce generateur : « nebuleuse-verre » (rose/violet, par defaut) et
+// « nebuleuse-doree » (or et noir, conv-139). Choix : node scripts/theme-nebuleuse-verre.mjs [id]
+const THEME = process.argv[2] === 'nebuleuse-doree' ? 'nebuleuse-doree' : 'nebuleuse-verre'
+const DORE = THEME === 'nebuleuse-doree'
+const SORTIE = `src/renderer/src/assets/theme-${THEME}.genere.css`
+const PREFIXE = `:root[data-theme='${THEME}']`
 // AskDecision.css garde son OR (conv-136, 2026-10-10 : « les blocs comme ASK qui demandent des
 // actions utilisateur, mets-les en doré ») : le bloc qui attend l'utilisateur ressort du rose.
-const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|AskDecision.css/
+const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-nebuleuse-doree|AskDecision.css/
 
 /** L'or d'Autowin, tel qu'il est ecrit dans les feuilles (rgb sans alpha). */
 const ORS = new Set([
@@ -152,6 +157,7 @@ const borne = (v, a, b) => Math.min(b, Math.max(a, v))
 function transposer(rgb, enFond) {
   const cle = `${rgb.r},${rgb.g},${rgb.b}`
   const { h, s, l } = rgbVersHsl(rgb)
+  if (DORE) return transposerDore(cle, h, s, l, enFond)
   if (ORS.has(cle)) {
     // L'or parait plus clair qu'un rose de meme luminosite HSL : on remonte d'un cran.
     return hslVersRgb({ h: 330, s: borne(s + 0.35, 0.75, 1), l: borne(l + 0.1, 0.18, 0.86) })
@@ -166,6 +172,19 @@ function transposer(rgb, enFond) {
     // Encre violette du theme (#0b0a18 = 11,10,24), a l'opacite d'origine.
     return { r: 14, g: 11, b: 32 }
   }
+  return null
+}
+
+/** Variante or et noir : l'or reste, cyans et roses passent a l'or, fonds au noir chaud. */
+function transposerDore(cle, h, s, l, enFond) {
+  if (ORS.has(cle)) return null
+  if (h >= 185 && h <= 212 && s >= 0.45 && l >= 0.18) {
+    return hslVersRgb({ h: 43, s: borne(s, 0.6, 0.85), l: borne(l, 0.3, 0.82) })
+  }
+  if (h >= 318 && h <= 342 && s >= 0.5 && l >= 0.2) {
+    return hslVersRgb({ h: 43, s: 0.72, l: borne(l, 0.3, 0.8) })
+  }
+  if (enFond && l < 0.09) return { r: 12, g: 10, b: 6 }
   return null
 }
 
@@ -251,6 +270,12 @@ export function generer() {
       )
     }
   }
+  if (DORE) {
+    const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nebuleuse-doree -- ne pas modifier.
+   Theme « Nebuleuse doree » : cyan et rose -> or, noirs de fond -> noir chaud.
+   ${regles} regles, ${declarations} declarations. */\n\n`
+    return { css: entete + blocs.join('\n\n') + '\n', regles, declarations }
+  }
   const entete = `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette).
@@ -262,4 +287,48 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const { css, regles, declarations } = generer()
   writeFileSync(join(RACINE, SORTIE), css)
   console.log(`${SORTIE} : ${regles} regles, ${declarations} declarations`)
+  if (DORE) {
+    writeFileSync(join(RACINE, 'src/renderer/src/assets/theme-nebuleuse-doree.css'), genererMainDoree())
+    console.log(`theme-nebuleuse-doree.css : derive de theme-nebuleuse-verre.css`)
+  }
+}
+
+
+
+/**
+ * Nebuleuse doree = la feuille ecrite a la main de Nebuleuse de verre (une seule source, les
+ * deux themes ne divergent pas), recolorée : roses -> or, violets/bleus -> bronze, textes lilas
+ * -> ivoire, encres violettes -> noir chaud. Verts, rouges et ambres d'etat restent.
+ * La zone de saisie reprend le degrade or clair -> noir (« B1 plus clair », conv-139).
+ */
+export function genererMainDoree() {
+  const source = readFileSync(join(RACINE, 'src/renderer/src/assets/theme-nebuleuse-verre.css'), 'utf8')
+  const recolorer = (rgb) => {
+    const { h, s, l } = rgbVersHsl(rgb)
+    if (h >= 300 && h <= 345 && s >= 0.5) return hslVersRgb({ h: 43, s: 0.75, l: borne(l, 0.3, 0.88) })
+    if (h >= 215 && h < 300 && s >= 0.35 && l >= 0.15) return hslVersRgb({ h: 36, s: 0.6, l: borne(l * 0.85, 0.25, 0.8) })
+    if (h >= 215 && h < 300 && l >= 0.6) return hslVersRgb({ h: 40, s, l })
+    if (h >= 215 && h < 300 && l < 0.2) return hslVersRgb({ h: 38, s: borne(s, 0, 0.35), l })
+    return null
+  }
+  const css = source
+    .replace(
+      /linear-gradient\(315deg, rgba\(255, 61, 154, 0\.32\), rgba\(10, 8, 18, 0\.92\) 58%\)/,
+      'linear-gradient(135deg, rgba(240, 207, 122, 0.42), rgba(10, 8, 6, 0.92) 58%)'
+    )
+    .replace(COULEUR, (brut) => {
+      if (brut.startsWith('#') && ![4, 5, 7, 9].includes(brut.length)) return brut
+      const rgb = brut.startsWith('#')
+        ? hexVersRgb(brut)
+        : (() => {
+            const n = brut.match(/[\d.]+/g).map(Number)
+            return { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 }
+          })()
+      const t = recolorer(rgb)
+      if (!t) return brut
+      return rgb.a === 1 ? `rgb(${t.r}, ${t.g}, ${t.b})` : `rgba(${t.r}, ${t.g}, ${t.b}, ${rgb.a})`
+    })
+    .replaceAll("data-theme='nebuleuse-verre'", "data-theme='nebuleuse-doree'")
+  return `/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nebuleuse-doree, depuis
+   theme-nebuleuse-verre.css -- ne pas modifier a la main (modifier la source, puis regenerer). */\n\n${css}`
 }

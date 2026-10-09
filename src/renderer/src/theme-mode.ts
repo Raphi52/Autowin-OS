@@ -56,6 +56,8 @@ export const THEMES: readonly Theme[] = [
   // les formes (serif, losanges) -- ce theme ne porte que son chromatisme.
   { id: 'black-versailles', libelle: 'Black Versailles', base: 'sombre' },
   { id: 'nebuleuse-verre', libelle: 'Nébuleuse de verre', base: 'sombre' },
+  // Variante or et noir de Nebuleuse (conv-139) : feuilles derivees par scripts/theme-nebuleuse-verre.mjs.
+  { id: 'nebuleuse-doree', libelle: 'Nébuleuse dorée', base: 'sombre' },
   // TROIS CLAIRS DE PLUS, chacun pendant d un sombre. Base CLAIRE : c est elle qui
   // commande la variante d accent, les teintes de nuit etant illisibles sur fond clair.
   // Aucune maquette maison n en proposait (les douze sont sombres, mesure du 2026-09-07) :
