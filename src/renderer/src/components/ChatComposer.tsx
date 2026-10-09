@@ -54,6 +54,7 @@ function gainMemorise(): number {
 interface ApiWhisper {
   whisperTranscrire?: (w: Uint8Array) => Promise<string>
   whisperEtat?: () => Promise<{ installe: boolean }>
+  whisperInstaller?: () => Promise<{ installe: boolean }>
 }
 const apiWhisper = (): ApiWhisper | undefined => (window as unknown as { api?: ApiWhisper }).api
 
@@ -80,8 +81,7 @@ async function whisperInstalle(): Promise<boolean | null> {
 }
 
 /** Le texte affiché quand la reconnaissance vocale n'est pas installée sur le poste. */
-const DICTEE_NON_INSTALLEE =
-  'Reconnaissance vocale non installée — installez-la depuis les enregistrements parlés.'
+const DICTEE_NON_INSTALLEE = 'Installer la reconnaissance vocale (Whisper local)'
 
 /**
  * ICÔNES DU MICRO — dessinées, pas des emojis.
@@ -351,14 +351,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const dicteeRef = useRef<Dictee | null>(null)
     // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.
     const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)
+    const [dicteeInstallation, setDicteeInstallation] = useState(false)
     // Démonter la vue ne doit pas laisser un micro ouvert.
     useEffect(() => () => dicteeRef.current?.annuler(), [])
     useEffect(() => {
       let vivant = true
       void whisperInstalle().then((etat) => {
         if (!vivant) return
+        // Pas de message sous la barre : le bouton lui-même propose l'installation.
         setDicteeInstallee(etat)
-        if (etat === false) setDicteeErreur(DICTEE_NON_INSTALLEE)
       })
       return () => {
         vivant = false
@@ -384,8 +385,33 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       })
     }
 
+    async function installerDictee(): Promise<void> {
+      const api = apiWhisper()
+      if (!api?.whisperInstaller) {
+        setDicteeErreur('Installation de la reconnaissance vocale indisponible.')
+        return
+      }
+      setDicteeErreur(null)
+      setDicteeInstallation(true)
+      try {
+        const etat = await api.whisperInstaller()
+        setDicteeInstallee(etat.installe === true)
+        if (etat.installe !== true) setDicteeErreur('Installation de la reconnaissance vocale échouée.')
+      } catch (cause) {
+        setDicteeErreur(
+          `Installation échouée : ${cause instanceof Error ? cause.message : String(cause)}`
+        )
+      } finally {
+        setDicteeInstallation(false)
+      }
+    }
+
     async function basculerDictee(): Promise<void> {
-      if (dicteeEtat === 'transcription') return
+      if (dicteeEtat === 'transcription' || dicteeInstallation) return
+      if (dicteeEtat === 'inactif' && dicteeInstallee === false) {
+        await installerDictee()
+        return
+      }
       if (dicteeEtat === 'ecoute') {
         setDicteeEtat('transcription')
         const dictee = dicteeRef.current
@@ -410,10 +436,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       // Re-lecture au clic : l'installation a pu se faire depuis l'ouverture de la vue.
       const installee = await whisperInstalle()
       setDicteeInstallee(installee)
-      if (installee === false) {
-        setDicteeErreur(DICTEE_NON_INSTALLEE)
-        return
-      }
+      if (installee === false) return
       const dictee = new Dictee(
         dependancesDicteeNavigateur(
           transcrire,
@@ -687,17 +710,23 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               }`}
               data-testid="composer-dictee"
               onClick={() => void basculerDictee()}
-              disabled={dicteeEtat === 'transcription' || dicteeInstallee === false}
+              disabled={dicteeEtat === 'transcription' || dicteeInstallation}
               aria-pressed={dicteeEtat === 'ecoute'}
               aria-label={
                 dicteeEtat === 'ecoute'
                   ? 'Arrêter la dictée et transcrire'
                   : dicteeEtat === 'transcription'
                     ? 'Transcription en cours'
-                    : 'Dicter au micro'
+                    : dicteeInstallation
+                      ? 'Installation de la reconnaissance vocale en cours'
+                      : dicteeInstallee === false
+                        ? DICTEE_NON_INSTALLEE
+                        : 'Dicter au micro'
               }
               title={
-                dicteeInstallee === false
+                dicteeInstallation
+                  ? 'Installation de la reconnaissance vocale en cours…'
+                  : dicteeInstallee === false
                   ? DICTEE_NON_INSTALLEE
                   : (dicteeErreur ??
                     (dicteeEtat === 'ecoute'
@@ -705,7 +734,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                       : 'Dicter au micro (Whisper local)'))
               }
             >
-              {dicteeEtat === 'transcription' ? (
+              {dicteeEtat === 'transcription' || dicteeInstallation ? (
                 <IconeTranscription />
               ) : dicteeEtat === 'ecoute' ? (
                 <IconeArret />

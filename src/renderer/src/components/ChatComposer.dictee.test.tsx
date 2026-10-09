@@ -136,12 +136,14 @@ describe('ChatComposer — dictée', () => {
  * et l'utilisateur recevait « Rien n'a été reconnu », un message trompeur.
  */
 describe('ChatComposer — dictée sans Whisper installé', () => {
-  it('n’ouvre aucun micro, désactive le bouton et affiche la raison', async () => {
+  it('garde le micro actif, sans message, et propose l’installation au clic', async () => {
     const transcrire = vi.fn(async (_wav: Uint8Array) => 'ne devrait jamais arriver')
     const { micros } = brancherAudio(transcrire)
+    const installer = vi.fn(async () => ({ installe: true }))
     ;(window as never as Record<string, unknown>).api = {
       whisperTranscrire: transcrire,
-      whisperEtat: vi.fn(async () => ({ installe: false }))
+      whisperEtat: vi.fn(async () => ({ installe: false })),
+      whisperInstaller: installer
     }
     const hote = document.createElement('div')
     document.body.appendChild(hote)
@@ -155,18 +157,20 @@ describe('ChatComposer — dictée sans Whisper installé', () => {
 
     const micro = hote.querySelector<HTMLButtonElement>('[data-testid="composer-dictee"]')
     expect(micro).not.toBeNull()
-    expect(micro!.disabled).toBe(true)
+    expect(micro!.disabled).toBe(false)
+    expect(micro!.title).toContain('Installer')
+    expect(hote.querySelector('[data-testid="composer-dictee-message"]')).toBeNull()
 
     await act(async () => {
       micro!.click()
       await Promise.resolve()
+      await Promise.resolve()
     })
 
+    expect(installer).toHaveBeenCalledTimes(1)
     expect(micros()).toBe(0)
     expect(transcrire).not.toHaveBeenCalled()
-    expect(micro!.className).not.toContain('is-recording')
-    const message = hote.querySelector('[data-testid="composer-dictee-message"]')
-    expect(message?.textContent ?? '').toContain('non installée')
+    expect(micro!.title).not.toContain('Installer')
 
     await act(async () => {
       root.unmount()
