@@ -215,9 +215,12 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
     )
   }
   if (kind === 'malformed-tool-call') {
+    // Plus de « monte l'effort » : conv-120, tour 3e00e0a5-5602-46e9-adb3-0d9c7a162b21, l'effort
+    // était DÉJÀ xhigh et la cause était une commande `<cmd>` refermée par `</parameter></invoke>`
+    // (syntaxe des outils natifs) — un défaut de format, pas de profondeur de raisonnement.
     return (
       `Le modèle de ${provider} a produit deux fois un appel d'outil illisible (le CLI a déjà retenté). ` +
-      "Relance la demande ; si ça se répète, monte l'effort de raisonnement ou change de modèle (Agent Studio)."
+      'Relance la demande ; si ça se répète, change de modèle pour ce rôle (Agent Studio).'
     )
   }
   if (kind === 'budget') {

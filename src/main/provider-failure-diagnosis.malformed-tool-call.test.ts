@@ -13,4 +13,11 @@ describe('appel d’outil illisible (conv-737)', () => {
     const d = diagnoseProviderFailure({ provider: 'claude', message: REEL })
     expect(d.hint).toMatch(/illisible/)
   })
+  // conv-120, tour 3e00e0a5-5602-46e9-adb3-0d9c7a162b21 : l'effort etait DEJA `xhigh` et la cause
+  // etait une commande `<cmd>` refermee par `</parameter></invoke>` — « monte l'effort » etait faux.
+  it('ne conseille pas de monter l’effort de raisonnement', () => {
+    const d = diagnoseProviderFailure({ provider: 'claude', message: REEL })
+    expect(d.hint).not.toMatch(/effort/)
+    expect(d.hint).toMatch(/change de modèle/)
+  })
 })
