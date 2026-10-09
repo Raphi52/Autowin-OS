@@ -25,6 +25,18 @@ describe('mode auto — tour coupé pendant une tâche de fond (conv-42)', () =>
     const texte = REPONSE_CONV42 + '\nAUTOWIN_PROMPT_V1: relance les 6 essais du banc risques-rejeu au premier plan'
     expect(deciderRelanceAuto({ ...base, fil: [agent(texte)] })).toMatchObject({ action: 'envoyer' })
   })
+  it('commande shell reprise par Autowin : PAS de pause — le tour de reprise arrive tout seul', () => {
+    // Texte exact émis par providers/claude.ts quand le tour de chat relance la commande.
+    const texte = [
+      'Les tests tournent en fond.',
+      '',
+      '🔁 Tâche de fond reprise par Autowin hors de ce tour : `npx vitest run`. Son résultat reviendra dans ce fil, dans un tour de reprise automatique.'
+    ].join('\n')
+    expect(deciderRelanceAuto({ ...base, fil: [agent(texte)] })).toMatchObject({
+      action: 'attendre',
+      raison: 'aucun-prompt'
+    })
+  })
   it('sans avis ni suite : attente inchangée', () => {
     expect(deciderRelanceAuto({ ...base, fil: [agent('Je regarde.')] })).toMatchObject({ raison: 'aucun-prompt' })
   })

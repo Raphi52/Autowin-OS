@@ -16,6 +16,7 @@ import {
   type PromptEnvelope,
   type SendOptions,
   type SendResult,
+  type TacheDeFondARelancer,
   type Usage
 } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
@@ -232,6 +233,8 @@ export type PilotEventVariant =
       name: string
       data: { actionId: string; cible: string }[]
     }
+  /** Commandes shell coupees par le CLI en fin de tour, que le tour de chat va RELANCER. */
+  | { kind: 'taches-de-fond'; iteration: number; data: TacheDeFondARelancer[] }
   | { kind: 'retry'; iteration: number; name: string; text: string; data: unknown }
   | { kind: 'cancellation'; iteration: number; name: string; text: string; data: unknown }
   | {
@@ -1981,6 +1984,9 @@ export class AgentPilot {
          * lui-même proposée deux tours plus tôt. Test : `agent-pilot.session-intra-tour.test.ts`.
          */
         ...(sessionEnCours ? { resumeSessionId: sessionEnCours } : {}),
+        // Un tour de CHAT sait rouvrir un tour de reprise dans sa conversation : le provider peut
+        // donc confier ses commandes de fond coupees au lieu de dire « relance la demande ».
+        ...(conversationId ? { relancerTachesDeFond: true } : {}),
         observePrompt: (observed) => {
           observed.systemBlocks = systemBlocks
           observed.contextBlocks = contextBlocks
@@ -2379,6 +2385,8 @@ export class AgentPilot {
         artefactsDejaEmis.add(artifact.id)
         emit({ kind: 'artifact', artifact, iteration: i })
       }
+      if (conversationId && res.tachesDeFondARelancer?.length)
+        emit({ kind: 'taches-de-fond', iteration: i, data: res.tachesDeFondARelancer })
       /**
        * Le texte du provider, NORMALISE une fois pour toutes.
        *

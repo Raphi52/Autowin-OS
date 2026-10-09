@@ -337,6 +337,128 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
   })
 })
 
+/*
+ * UNE COMMANDE SHELL COUPEE EN FIN DE TOUR EST RELANCEE PAR L'APP, PAS PERDUE.
+ *
+ * Quand l'appelant (le tour de chat) annonce `relancerTachesDeFond`, la commande `local_bash` encore
+ * ouverte part dans `tachesDeFondARelancer` et la reponse dit qu'elle REVIENDRA — au lieu de
+ * « relance la demande ». Un agent ou une surveillance n'a qu'une phrase : jamais executee.
+ */
+describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', () => {
+  async function envoyer(
+    options: { relancerTachesDeFond?: boolean } = { relancerTachesDeFond: true }
+  ): Promise<{ texte: string; res: import('./types').SendResult }> {
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send(
+      [{ role: 'user', content: 'Salut' }],
+      options
+    )
+    let texte = ''
+    let step = await gen.next()
+    while (!step.done) {
+      texte += step.value.delta ?? ''
+      step = await gen.next()
+    }
+    return { texte, res: step.value }
+  }
+  const bash = (id: string, commande: string): Record<string, unknown> => ({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: id,
+    task_type: 'local_bash',
+    description: `cd "$(pwd)" && ${commande}`
+  })
+
+  it('cas 1 — aucune tache : ni liste ni avis', async () => {
+    spawnCapture.stdoutEvents = [succes]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).not.toMatch(/Tâche de fond/)
+  })
+
+  it('cas 2 — tache finie a temps : rien a relancer', async () => {
+    spawnCapture.stdoutEvents = [
+      bash('f1', 'npx eslint'),
+      { type: 'system', subtype: 'task_notification', task_id: 'f1', status: 'completed' },
+      succes
+    ]
+    const { res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+  })
+
+  it('cas 3 — commande shell arretee : listee, sans « relance la demande »', async () => {
+    spawnCapture.stdoutEvents = [
+      bash('b1', './node_modules/.bin/vitest run 2>&1 | tail -6'),
+      { type: 'system', subtype: 'task_notification', task_id: 'b1', status: 'stopped' },
+      succes
+    ]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toEqual([
+      { id: 'b1', commande: './node_modules/.bin/vitest run 2>&1 | tail -6', cwd: expect.any(String) }
+    ])
+    expect(texte).not.toMatch(/relance la demande/)
+    expect(texte).not.toMatch(/⚠️ Tâche de fond/)
+    expect(texte).toMatch(/reviendra dans ce fil/)
+  })
+
+  it('jumeau du cas 3 — sans le drapeau de l appelant, l avis historique reste', async () => {
+    spawnCapture.stdoutEvents = [bash('b1', 'npx vitest run'), succes]
+    const { texte, res } = await envoyer({})
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).toMatch(/relance la demande/)
+  })
+
+  it('cas 4 — commande vide : rien a relancer, avis historique garde', async () => {
+    spawnCapture.stdoutEvents = [
+      { type: 'system', subtype: 'task_started', task_id: 'v1', task_type: 'local_bash', description: '  ' },
+      succes
+    ]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).toMatch(/relance la demande/)
+  })
+
+  it('cas 5 — un agent (pas local_bash) n est jamais execute', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_id: 'a1',
+        task_type: 'local_agent',
+        description: 'Run the 6 bench replicas on reconstructed data'
+      },
+      succes
+    ]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).toMatch(/⚠️ Tâche de fond pas terminée[^\n]*Run the 6 bench/)
+  })
+
+  it('cas 6 — meme task_id signale deux fois, plus une seconde : chacune une seule fois', async () => {
+    spawnCapture.stdoutEvents = [
+      bash('d1', 'node a.mjs'),
+      { type: 'system', subtype: 'task_notification', task_id: 'd1', status: 'stopped' },
+      { type: 'system', subtype: 'task_notification', task_id: 'd1', status: 'stopped' },
+      bash('d2', 'node b.mjs'),
+      succes
+    ]
+    const { res } = await envoyer()
+    expect(res.tachesDeFondARelancer?.map((t) => t.id)).toEqual(['d1', 'd2'])
+  })
+
+  it('melange shell + agent : le shell est relance, l agent garde son avis', async () => {
+    spawnCapture.stdoutEvents = [
+      bash('m1', 'node a.mjs'),
+      { type: 'system', subtype: 'task_started', task_id: 'm2', task_type: 'local_agent', description: 'Explore' },
+      succes
+    ]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer?.map((t) => t.commande)).toEqual(['node a.mjs'])
+    expect(texte).toMatch(/⚠️ Tâche de fond pas terminée[^\n]*Explore/)
+    expect(texte).not.toMatch(/⚠️[^\n]*node a\.mjs/)
+  })
+})
+
 /**
  * UNE RAFALE DE LECTURES MUETTE PASSE POUR UNE APP MORTE.
  *

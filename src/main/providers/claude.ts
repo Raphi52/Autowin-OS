@@ -44,6 +44,7 @@ import {
   type PromptEnvelope,
   type ProviderAdapter,
   type SendOptions,
+  type TacheDeFondARelancer,
   type SendResult,
   type StreamChunk,
   type Usage
@@ -1618,7 +1619,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       wake()
     }
     /** Taches de fond lancees et pas terminees (id -> commande lisible, vue arretee ?). Voir `task_started`. */
-    const tachesDeFond = new Map<string, { commande: string; arretee: boolean }>()
+    const tachesDeFond = new Map<
+      string,
+      {
+        commande: string
+        arretee: boolean
+        /** Commande shell EXECUTABLE (`local_bash`, non vide) ; vide = seulement une description. */
+        executable: string
+      }
+    >()
+    /** Commandes shell coupees que l'appelant relancera (voir `SendOptions.relancerTachesDeFond`). */
+    const tachesDeFondARelancer: TacheDeFondARelancer[] = []
     const pendingTools = new Map<
       string,
       {
@@ -1773,15 +1784,25 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
         // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
         const idTache = String(o['task_id'] ?? commande ?? '')
-        if (demarre) tachesDeFond.set(idTache, { commande: commande || 'commande sans description', arretee: false })
+        if (demarre)
+          tachesDeFond.set(idTache, {
+            commande: commande || 'commande sans description',
+            arretee: false,
+            // Seule une tache `local_bash` porte une VRAIE commande dans `description` ; un agent ou
+            // une surveillance n'y met qu'une phrase (conv-42 : « Run the 6 bench replicas… »).
+            executable: o['task_type'] === 'local_bash' ? commande : ''
+          })
         else {
           const st = String(o['status'] ?? '').toLowerCase()
           if (st === 'completed' || st === 'failed') tachesDeFond.delete(idTache)
-          else
+          else {
+            const connue = tachesDeFond.get(idTache)
             tachesDeFond.set(idTache, {
-              commande: commande || tachesDeFond.get(idTache)?.commande || 'commande sans description',
-              arretee: true
+              commande: commande || connue?.commande || 'commande sans description',
+              arretee: true,
+              executable: connue?.executable ?? ''
             })
+          }
         }
         if (demarre) {
           queue.push({
@@ -1965,6 +1986,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
+        if (tachesDeFond.size > 0) {
+          /*
+           * RELANCEE PAR L'APPELANT, PAS PERDUE. Quand le tour de chat sait relancer une commande
+           * shell (`relancerTachesDeFond`), elle part dans `tachesDeFondARelancer` et la reponse
+           * dit qu'elle REVIENDRA. Le reste (agent, surveillance, commande vide) garde l'avis
+           * historique : aucune phrase n'est jamais executee comme une commande.
+           */
+          for (const [id, tache] of tachesDeFond) {
+            if (!opts.relancerTachesDeFond || !tache.executable) continue
+            tachesDeFondARelancer.push({
+              id,
+              commande: tache.executable,
+              cwd: execution?.cwd ?? readOnlyCwd ?? process.cwd()
+            })
+            tachesDeFond.delete(id)
+          }
+          if (tachesDeFondARelancer.length > 0) {
+            const note = `\n\n🔁 Tâche de fond reprise par Autowin hors de ce tour : ${tachesDeFondARelancer
+              .map((x) => `\`${x.commande}\``)
+              .join(', ')}. Son résultat reviendra dans ce fil, dans un tour de reprise automatique.`
+            text += note
+            queue.push({ delta: note })
+          }
+        }
         if (tachesDeFond.size > 0) {
           // fix-ok: le message disait « arrêtée » meme pour une tache sans notification `stopped` (objection juge, conv-528 tour 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9)
           const lister = (arretee: boolean): string =>
@@ -2291,7 +2336,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       executionEvidence: executionEvidence.length ? executionEvidence : undefined,
       thinking: joinThinking(reasoningFragments),
       model: resolvedModel,
-      artifacts: artifacts.length ? artifacts : undefined
+      artifacts: artifacts.length ? artifacts : undefined,
+      ...(tachesDeFondARelancer.length ? { tachesDeFondARelancer } : {})
     }
   }
 }

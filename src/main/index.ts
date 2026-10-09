@@ -148,6 +148,7 @@ import { AgentPilot } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { createRunPilotChat } from './chat/run-pilot-chat'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
+import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from './chat/relance-taches-de-fond'
 import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { buildContinuationProviderHistory } from './chat-continuation'
@@ -3044,6 +3045,8 @@ Le fil reprend ensuite normalement.`
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
   // Le corps du tour vit dans src/main/chat/run-pilot-chat.ts : il ne capturait rien d'autre que
   // les valeurs listees ici, qui lui sont desormais passees explicitement.
+  /** Assigné plus bas, une fois `scheduledChatRuntime` construit (il ouvre le tour de reprise). */
+  const relanceTachesDeFond: { relanceur?: RelanceurTachesDeFond } = {}
   const lancerTour = createRunPilotChat({
     os,
     pilot,
@@ -3059,7 +3062,17 @@ Le fil reprend ensuite normalement.`
     drainPendingDirectives,
     askModelQuestion,
     notifyWatchdogWorkflowIncident,
-    watchdogEngine: () => watchdogEngine
+    watchdogEngine: () => watchdogEngine,
+    relancerTachesDeFond: (conversationId, taches) => {
+      const relanceur = relanceTachesDeFond.relanceur
+      if (!relanceur) {
+        console.warn('[taches de fond] relanceur pas encore prêt : relance perdue', conversationId)
+        return
+      }
+      void relanceur
+        .relancer(conversationId, taches)
+        .catch((erreur) => console.warn('[taches de fond] relance en échec :', erreur))
+    }
   })
   /**
    * SILENCE INTERDIT : un rangement qui ne pilote PAS le dossier de travail doit le DIRE.
@@ -3627,6 +3640,29 @@ Le fil reprend ensuite normalement.`
       (erreur) =>
         console.warn(`[chat_send] tour de ${conversationId} en echec apres son envoi :`, erreur)
     )
+  /*
+   * TACHES DE FOND COUPEES EN FIN DE TOUR (conv-528, conv-42) : relancees hors du tour, puis UN tour
+   * de reprise rend leur resultat dans la meme conversation. Hors du devis du tour appelant, comme
+   * `chat_send` ci-dessus. Les lots restes sur disque (app fermee pendant la commande) reprennent ici.
+   */
+  const relanceurTachesDeFond = creerRelanceurSurDisque({
+    dossier: join(app.getPath('userData'), 'taches-de-fond'),
+    conversationOccupee: (conversationId) => activeChatTurns.isInFlight(conversationId),
+    envoyerTour: async (conversationId, prompt) => {
+      const resultat = await os.executionSupervisor.runOutsideCurrent(() =>
+        scheduledChatRuntime.runPrompt(conversationId, prompt)
+      )
+      if (!resultat.ok)
+        console.warn(
+          `[taches de fond] tour de reprise en echec dans ${conversationId} :`,
+          resultat.error
+        )
+    }
+  })
+  relanceTachesDeFond.relanceur = relanceurTachesDeFond
+  void relanceurTachesDeFond
+    .reprendreAuDemarrage()
+    .catch((erreur) => console.warn('[taches de fond] reprise au demarrage impossible :', erreur))
   const taskDispatcher = new ScheduledChatDispatcher(scheduledChatRuntime)
   const relay = new PowerShellWindowsRelay({
     scriptPath: relayScriptPath,

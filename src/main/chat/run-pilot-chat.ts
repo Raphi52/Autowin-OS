@@ -87,6 +87,7 @@ import type { TraceLedger } from '../activity/ledger'
 import type { AppEvent } from '../commands'
 import type { ModelQuestion } from '../model-questions'
 import { collerTexteParle } from './coller-texte-parle'
+import type { TacheDeFondARelancer } from '../providers/types'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {
@@ -115,6 +116,12 @@ export type RunPilotChatDeps = {
   ) => void
   /** Lecteur, pas valeur : `watchdogEngine` est assigné après le démarrage. */
   watchdogEngine: () => WatchdogEngine | undefined
+  /**
+   * Relance HORS DU TOUR les commandes shell que le CLI a coupées en fin de tour, puis rouvre un tour
+   * de reprise dans la même conversation (`chat/relance-taches-de-fond.ts`). Sans elle, le résultat
+   * était perdu et l'utilisateur devait relancer lui-même (conv-528, conv-42).
+   */
+  relancerTachesDeFond?: (conversationId: string, taches: TacheDeFondARelancer[]) => void
 }
 
 /**
@@ -864,6 +871,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             // module invisible. On ne la réécrit pas, on la BRANCHE.
             void notifyWatchdogWorkflowIncident(structuredIncident, conversationId)
           }
+        }
+        if (pilotEvent.kind === 'taches-de-fond') {
+          // Consommé ici, jamais diffusé : la réponse porte déjà la phrase « reviendra dans ce fil ».
+          // La relance part tout de suite ; le tour de reprise, lui, attend que le fil soit libre.
+          if (conversationId && Array.isArray(pilotEvent.data) && deps.relancerTachesDeFond)
+            deps.relancerTachesDeFond(conversationId, pilotEvent.data as TacheDeFondARelancer[])
+          return
         }
         if (
           pilotEvent.kind === 'result' &&
