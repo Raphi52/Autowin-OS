@@ -7,6 +7,7 @@ import {
   settleCompletedDetachedPhase,
   preparePersistedRunForRelaunch,
   resumeActionFor,
+  runJournalProgressMark,
   runLiveness,
   terminalizeInterruptedPersistedRun,
   waitUntilRunCanResume
@@ -2643,6 +2644,148 @@ describe('surveillance continue apres rattachement', () => {
 
     expect(result).toBe('ignorer')
     expect(waits).toBe(2)
+  })
+
+  /*
+   * LE PLAFOND MESURE UN SILENCE, PAS UNE DURÉE (conv-115, 2026-10-09).
+   *
+   * Après le redémarrage de 09:46, l'app s'est rattachée à run-9d787439fb32-1 (pid 16944) et à son
+   * doublon run-6343a3697aa2-1 (pid 16232). Dix minutes plus tard, elle a journalisé « Rattachement
+   * expiré sans preuve de fin » et le graphe a tout affiché « interrompu », alors que les deux
+   * journaux étaient encore écrits à 10:13 puis à 10:34. Les 600 sondes étaient comptées depuis le
+   * début de l'attente, même pendant que l'agent produisait.
+   */
+  it("n'abandonne pas un agent dont le journal avance encore au-delà du plafond", async () => {
+    let ecritA = 1_000
+    let reads = 0
+    let waits = 0
+
+    const result = await waitUntilRunCanResume(
+      () => (reads++ < 6 ? 'rattacher' : 'relancer'),
+      async () => {
+        waits += 1
+        ecritA += 1_000 // le journal a été réécrit pendant la pause
+      },
+      2,
+      () => ecritA
+    )
+
+    expect(result).toBe('relancer')
+    expect(waits).toBe(6)
+  })
+
+  it('un journal qui ne bouge plus épuise toujours le plafond', async () => {
+    let waits = 0
+
+    const result = await waitUntilRunCanResume(
+      () => 'rattacher',
+      async () => {
+        waits += 1
+        if (waits > 2) throw new Error('attente non bornée')
+      },
+      2,
+      () => 1_000
+    )
+
+    expect(result).toBe('ignorer')
+    expect(waits).toBe(2)
+  })
+
+  it('le silence se compte depuis la DERNIÈRE écriture, pas depuis le début', async () => {
+    let ecritA = 1_000
+    let waits = 0
+
+    const result = await waitUntilRunCanResume(
+      () => 'rattacher',
+      async () => {
+        waits += 1
+        if (waits <= 3) ecritA += 1_000 // trois écritures, puis plus rien
+        if (waits > 5) throw new Error('attente non bornée')
+      },
+      2,
+      () => ecritA
+    )
+
+    expect(result).toBe('ignorer')
+    // 3 pauses suivies d'une écriture, puis 2 pauses muettes = le plafond.
+    expect(waits).toBe(5)
+  })
+
+  it('une sonde de journal illisible ne vaut pas preuve de production', async () => {
+    let waits = 0
+
+    const result = await waitUntilRunCanResume(
+      () => 'rattacher',
+      async () => {
+        waits += 1
+        if (waits > 2) throw new Error('attente non bornée')
+      },
+      2,
+      () => undefined
+    )
+
+    expect(result).toBe('ignorer')
+    expect(waits).toBe(2)
+  })
+})
+
+describe('runJournalProgressMark — le témoin de production suivi pendant le rattachement', () => {
+  const ecritures: Record<string, number | undefined> = {
+    'a.jsonl': 5_000,
+    'b.jsonl': 9_000,
+    'inactif.jsonl': 99_000
+  }
+  const lastWriteMs = (chemin: string): number | undefined => ecritures[chemin]
+
+  it('rend la dernière écriture parmi les agents ACTIFS', () => {
+    expect(
+      runJournalProgressMark(
+        {
+          agents: [
+            { token: 'a', provider: 'claude', active: true, fanOut: false, journalPath: 'a.jsonl' },
+            { token: 'b', provider: 'claude', active: true, fanOut: false, journalPath: 'b.jsonl' },
+            {
+              token: 'c',
+              provider: 'claude',
+              active: false,
+              fanOut: false,
+              journalPath: 'inactif.jsonl'
+            }
+          ]
+        },
+        lastWriteMs
+      )
+    ).toBe(9_000)
+  })
+
+  it("rend undefined quand rien n'est mesurable, et survit à une sonde qui jette", () => {
+    expect(runJournalProgressMark({ agents: [] }, lastWriteMs)).toBeUndefined()
+    expect(runJournalProgressMark(undefined, lastWriteMs)).toBeUndefined()
+    expect(
+      runJournalProgressMark(
+        {
+          agents: [
+            { token: 'x', provider: 'claude', active: true, fanOut: false, journalPath: 'x.jsonl' }
+          ]
+        },
+        () => {
+          throw new Error('EBUSY')
+        }
+      )
+    ).toBeUndefined()
+  })
+})
+
+describe('câblage : les deux attentes de rattachement suivent le journal', () => {
+  it('chaque appel de waitUntilRunCanResume dans index.ts passe runJournalProgressMark', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const appels = source.split('waitUntilRunCanResume(').slice(1)
+    // Le run élu ET son doublon : les deux étaient lâchés au bout de 10 min le 2026-10-09.
+    expect(appels.length).toBeGreaterThanOrEqual(2)
+    for (const appel of appels) {
+      const corps = appel.slice(0, appel.indexOf('.then('))
+      expect(corps).toContain('runJournalProgressMark(')
+    }
   })
 })
 

@@ -55,6 +55,7 @@ export const THEMES: readonly Theme[] = [
   // black-versailles. Attention : la maquette d origine changeait aussi la typographie et
   // les formes (serif, losanges) -- ce theme ne porte que son chromatisme.
   { id: 'black-versailles', libelle: 'Black Versailles', base: 'sombre' },
+  { id: 'nebuleuse-verre', libelle: 'Nébuleuse de verre', base: 'sombre' },
   // TROIS CLAIRS DE PLUS, chacun pendant d un sombre. Base CLAIRE : c est elle qui
   // commande la variante d accent, les teintes de nuit etant illisibles sur fond clair.
   // Aucune maquette maison n en proposait (les douze sont sombres, mesure du 2026-09-07) :
@@ -122,6 +123,26 @@ export function appliquerThemeMode(mode: ThemeId): void {
   if (base === THEME_MODE_PAR_DEFAUT) racine.removeAttribute('data-base')
   else racine.setAttribute('data-base', base)
   accorderBoutonsDeFenetre(racine, base)
+  accorderSchemaDeCouleurs(base)
+}
+
+/**
+ * CE QUE REPOND `prefers-color-scheme` — la base du theme Autowin, pas le reglage de Windows.
+ *
+ * Electron repond par defaut la preference du SYSTEME. Mesure du 2026-10-08 (conv-111) : Windows
+ * en mode clair (`AppsUseLightTheme = 1`) + Autowin en sombre = `prefers-color-scheme: light` dans
+ * le fil, et le HTML du modele, qui suit cette requete comme le lui demande sa consigne, ecrivait
+ * en bleu marine sur noir. On transmet donc la base au processus principal, qui pose
+ * `nativeTheme.themeSource`.
+ *
+ * Silencieux hors d'Electron (test, navigateur) : le pont n'existe pas, ce n'est pas une panne.
+ */
+function accorderSchemaDeCouleurs(base: ThemeBase): void {
+  const pont = (globalThis as { api?: { setColorScheme?: (s: 'dark' | 'light') => unknown } }).api
+  if (!pont?.setColorScheme) return
+  void Promise.resolve(pont.setColorScheme(base === 'clair' ? 'light' : 'dark')).catch(() => {
+    // Processus principal plus ancien que ce canal : la requete garde la preference du systeme.
+  })
 }
 
 /**

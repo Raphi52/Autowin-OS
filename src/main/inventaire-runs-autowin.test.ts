@@ -27,9 +27,9 @@ describe('vue Hooks — gardes réellement injectées dans les runs', () => {
     const appelees = new Set([...corps.matchAll(/\b(refus\w+)\(/g)].map((m) => m[1]))
     expect(new Set(GARDES_DU_HOOK.map((g) => g.fn))).toEqual(appelees)
   })
-  it('listClaudeHooks commence par les 6 gardes Autowin, avec leur matcher', () => {
+  it('listClaudeHooks commence par les 7 gardes Autowin, avec leur matcher', () => {
     const h = listClaudeHooks()
-    expect(h.slice(0, 6).map((x) => x.id)).toEqual(gardesInjecteesAutowin().map((x) => x.id))
+    expect(h.slice(0, 7).map((x) => x.id)).toEqual(gardesInjecteesAutowin().map((x) => x.id))
     expect(h.find((x) => x.id === 'autowin-garde-refusBoucle')!.matcher).toContain('Read')
     expect(h.find((x) => x.id === 'autowin-garde-refusArretHote')!.matcher).toContain('PowerShell')
   })

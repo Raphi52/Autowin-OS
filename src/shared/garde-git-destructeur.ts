@@ -3,6 +3,7 @@
 import { refusEcriturePythonCrlf } from './garde-python-crlf'
 import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
 import { refusArretHote, refusBoucle } from './garde-hote-et-boucle'
+import { refusTacheWindows } from './garde-tache-windows'
 
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
@@ -253,6 +254,11 @@ export const GARDES_DU_HOOK: readonly { fn: string; label: string; description: 
     description: "Refuse git reset --hard, checkout/restore de tout l'arbre, clean -f et stash : ils détruisent du travail non commité."
   },
   {
+    fn: 'refusTacheWindows',
+    label: 'Tâche Windows invisible',
+    description: "Refuse la création ou la modification d'une tâche du Planificateur Windows (schtasks /create, Register-ScheduledTask…) : elle n'apparaîtrait pas dans le Task Manager d'Autowin. La voie est task_create."
+  },
+  {
     fn: 'refusEcriturePythonCrlf',
     label: 'Écriture Python en CRLF',
     description: 'Refuse une écriture Python en mode texte qui passerait un fichier du dépôt en fins de ligne CRLF.'
@@ -300,6 +306,7 @@ const refusGitDestructeur = ${refusGitDestructeur.toString()};
 const refusEcriturePythonCrlf = ${refusEcriturePythonCrlf.toString()};
 const refusArretHote = ${refusArretHote.toString()};
 const refusBoucle = ${refusBoucle.toString()};
+const refusTacheWindows = ${refusTacheWindows.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
 const basesNonProd = ${JSON.stringify(basesNonProd)};
@@ -334,7 +341,7 @@ process.stdin.on('end', () => {
       fs.writeFileSync(p, JSON.stringify(h.concat([cle]).slice(-20)));
     }
   } catch {}
-  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd);
+  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));

@@ -165,7 +165,7 @@ function principal() {
   let entree = {}
   try {
     // Un BOM en tête (pipe PowerShell 5.1, mesuré) faisait échouer JSON.parse : garde muet.
-    entree = JSON.parse(readFileSync(0, 'utf8').replace(/^﻿/, '') || '{}')
+    entree = JSON.parse(readFileSync(0, 'utf8').replace(/^\uFEFF/, '') || '{}')
   } catch {
     return
   }

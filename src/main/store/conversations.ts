@@ -788,12 +788,18 @@ export class ConversationStore {
     title: string
     provider: string
     autoKaizen?: AutoKaizenConversationLink
+    /**
+     * Dossier de travail dès la création (tâche planifiée « nouvelle conversation »). Même
+     * invariant que le champ : seul un CHEMIN est retenu, un libellé est ignoré ici.
+     */
+    projectPath?: string
   }): Conversation {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
     // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
     // principal -- le poste dominant du gel de l'interface.
     const ts = this.now()
     const id = this.nextUniqueConversationId()
+    const dossier = estCheminDeDossier(p.projectPath) ? canonicalProjectPath(p.projectPath) : undefined
     const conversation: Conversation = {
       schemaVersion: 3,
       id,
@@ -801,6 +807,7 @@ export class ConversationStore {
       provider: p.provider,
       messages: [],
       ...(p.autoKaizen ? { autoKaizen: p.autoKaizen } : {}),
+      ...(dossier ? { projectPath: dossier } : {}),
       createdAt: ts,
       updatedAt: ts
     }

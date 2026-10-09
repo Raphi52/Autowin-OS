@@ -28,6 +28,7 @@ import {
 } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
+import { refusTacheWindows } from '../shared/garde-tache-windows'
 import { refusEcriturePythonCrlf } from '../shared/garde-python-crlf'
 import { sansHeredocsDeDonnees } from '../shared/heredocs'
 import {
@@ -203,6 +204,11 @@ import {
 } from './providers/workspace-mutation-evidence'
 import { appendConvActivity } from './activity/conv-activity'
 import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
+import {
+  createTaskFromCommand,
+  listTasksFromCommand,
+  type TaskCreateDeps
+} from './task-manager/task-create-command'
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
@@ -1207,6 +1213,35 @@ export const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'task_create',
+    description:
+      'Créer une tâche programmée (horaire) ou une règle de surveillance (réveil sur événement) dans le Task Manager d’Autowin — elle y est visible et l’utilisateur peut la désactiver ou la supprimer. C’est la SEULE voie : une tâche du Planificateur Windows (schtasks, Register-ScheduledTask) est refusée.',
+    args: {
+      task:
+        'objet JSON de la tâche, même forme que l’écran Task Manager : { "title", "prompt", "enabled": true|false, "mode": "active-only"|"windows", "destination": { "kind": "existing", "conversationId" } ou { "kind": "new", "title", "category", "provider" }, "action"?: "chat"|"veille", et SOIT "schedule": { "startDate": "AAAA-MM-JJ", "time": "HH:MM", "timeZone": "Europe/Paris", "recurrence": { "unit": "none"|"minute"|"hour"|"day"|"week"|"month", "interval": 1 } } (recurrence obligatoire ; "none" = une seule fois) SOIT "watchdog": { "source", "guards", "action" } }'
+    },
+    annotations: {
+      readOnlyHint: false,
+      // On ajoute, on ne supprime rien ; deux appels créent DEUX tâches. L'effet reste dans l'app.
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'task_list',
+    description:
+      'Lister les tâches programmées et les règles de surveillance du Task Manager d’Autowin (id, titre, type, activée, mode, prochaine échéance, conversation visée) — à appeler AVANT task_create pour ne pas créer de doublon. Lecture seule.',
+    args: {},
+    annotations: {
+      // Relecture du stockage de l'écran : rien n'est écrit, le minuteur n'est pas touché.
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'sql_query',
     description:
       'Consulter les bases SQL en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seules les bases EXPLOITÉES listées par le catalogue configuré (sql-catalog.json) et les bases de développement déclarées sont lisibles ; les autres sont refusées. La base catalogue est AUSSI lisible, mais « * » et toute colonne de mot de passe ou de clé y sont refusés. Toute écriture est refusée avant d’atteindre le serveur.',
@@ -1951,6 +1986,12 @@ export class AppCommandBus {
    * verifier).
    */
   tourDeChatActif?: (conversationId: string) => boolean
+
+  /**
+   * Le Task Manager (stockage, minuteur, rafraîchissement de l'écran), câblé TARDIVEMENT depuis
+   * index.ts : le minuteur n'existe qu'après la construction du bus. Absent -> `task_create` refuse.
+   */
+  taskManager?: TaskCreateDeps
 
   constructor(
     private readonly os: AutowinOS,
@@ -3607,6 +3648,9 @@ export class AppCommandBus {
         const shell = sansHeredocsDeDonnees(ligne)
         const refusGit = refusGitDestructeur(shell)
         if (refusGit) return { lance: false, detail: `Commande refusée : ${refusGit}` }
+        // Même garde que le hook du CLI : pas de tâche Windows invisible dans le Task Manager.
+        const refusTache = refusTacheWindows(shell)
+        if (refusTache) return { lance: false, detail: `Commande refusée : ${refusTache}` }
         // Même garde que le hook du CLI (2026-10-01) : Python en mode texte passe un fichier en CRLF.
         const refusPython = refusEcriturePythonCrlf(ligne)
         if (refusPython) return { lance: false, detail: `Commande refusée : ${refusPython}` }
@@ -3734,6 +3778,12 @@ export class AppCommandBus {
           listSources: this.listTicketSources,
           ...(this.createTicket ? { create: this.createTicket } : {})
         })
+      case 'task_create':
+        // Même chemin que le bouton « Créer » de l'écran : rien qui échappe au bouton « Supprimer ».
+        return await createTaskFromCommand(a as { task?: unknown }, this.taskManager)
+      case 'task_list':
+        // Le stockage que l'écran affiche : ce que l'agent lit est ce que l'utilisateur peut supprimer.
+        return listTasksFromCommand(this.taskManager)
       case 'sql_query':
         // La cible et la nature de la requête sont décidées hors du modèle (`sql-read-guard.ts`),
         // jamais d'après les arguments bruts : le compte Windows utilisé PEUT écrire en production.

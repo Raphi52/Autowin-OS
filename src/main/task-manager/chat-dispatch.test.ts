@@ -5,6 +5,7 @@ import {
   type ScheduledChatRuntime
 } from './chat-dispatch'
 import type { ScheduledTask, TaskOccurrence } from './types'
+import { ConversationStore, canonicalProjectPath } from '../store/conversations'
 
 function task(overrides: Partial<ScheduledTask> = {}): ScheduledTask {
   return {
@@ -145,6 +146,53 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     })
     expect(first.conversationId).toBe('conv-new')
     expect(second.conversationId).toBe('conv-new')
+  })
+
+  // fix-ok: mesuré le 2026-10-09 (conv-113) — une tâche « nouvelle conversation » dont la catégorie
+  // était le chemin d'un projet tournait dans le dossier global d'Autowin : la catégorie n'atteignait
+  // jamais la conversation créée (ConversationStore.create ne lisait que title et provider).
+  it('une tâche « nouvelle conversation » dont la catégorie est un CHEMIN y travaille (dossier de travail)', async () => {
+    const store = new ConversationStore()
+    // Même câblage que le runtime de `src/main/index.ts` : l'entrée est remise TELLE QUELLE au store.
+    const target = runtime({ createConversation: (input) => store.create(input) })
+    const dispatcher = new ScheduledChatDispatcher(target)
+
+    const result = await dispatcher.run(
+      task({
+        destination: {
+          kind: 'new',
+          title: 'Audit projet',
+          category: 'D:\\GIT\\Projet',
+          provider: 'claude'
+        }
+      }),
+      occurrence
+    )
+
+    expect(store.get(result.conversationId as string)?.projectPath).toBe(
+      canonicalProjectPath('D:\\GIT\\Projet')
+    )
+  })
+
+  it('une catégorie qui n’est PAS un chemin (doublon du moteur, libellé) ne pose aucun dossier de travail', async () => {
+    const store = new ConversationStore()
+    const target = runtime({ createConversation: (input) => store.create(input) })
+    const dispatcher = new ScheduledChatDispatcher(target)
+
+    const viaFormulaire = await dispatcher.run(
+      task({ destination: { kind: 'new', title: 'A', category: 'claude', provider: 'claude' } }),
+      occurrence
+    )
+    const viaSemis = await dispatcher.run(
+      task({ destination: { kind: 'new', title: 'B', category: 'Qualite', provider: 'claude' } }),
+      { ...occurrence, id: 'task-1@next', scheduledFor: occurrence.scheduledFor + 1 }
+    )
+
+    for (const result of [viaFormulaire, viaSemis]) {
+      const created = store.get(result.conversationId as string)
+      expect(created?.projectPath).toBeUndefined()
+      expect(created?.categorie).toBeUndefined()
+    }
   })
 
   it('resout Agents Studio model (default) au moment du run et cree la conversation avec ce provider', async () => {

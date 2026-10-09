@@ -44,6 +44,7 @@ import {
   type PromptEnvelope,
   type ProviderAdapter,
   type SendOptions,
+  type TacheDeFondARelancer,
   type SendResult,
   type StreamChunk,
   type Usage
@@ -53,7 +54,6 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { coutDuTourDepuisCumul } from './claude-session-cost'
-import { commandeRecupereeApresAppelIllisible } from './claude-cmd-recuperee'
 import { abortFailure } from './abort-diagnostic'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
@@ -1560,6 +1560,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
     let buffer = ''
     let text = ''
+    // Texte de CHAQUE message assistant reel, avec sa position dans `text` : sert a retrouver la
+    // derniere tentative quand le CLI abandonne sur un appel d'outil illisible (voir
+    // `recupererCmdFermeeEnOutilNatif`).
+    const textesMessages: MessageTexte[] = []
     // Surcharge API : derniere tentative annoncee par le CLI + presence d'un event `result`. Les deux
     // servent a distinguer un tour REELLEMENT vide d'un tour mort sur retries epuises.
     let lastRetry: { attempt: number; maxRetries: number; status: string } | null = null
@@ -1619,7 +1623,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       wake()
     }
     /** Taches de fond lancees et pas terminees (id -> commande lisible, vue arretee ?). Voir `task_started`. */
-    const tachesDeFond = new Map<string, { commande: string; arretee: boolean }>()
+    const tachesDeFond = new Map<
+      string,
+      {
+        commande: string
+        arretee: boolean
+        /** `task_type` du CLI : seul `local_bash` est une commande shell. */
+        type: string
+        /** Appel d'outil qui l'a lancee : la commande EXACTE y vit, jamais dans `description`. */
+        toolUseId: string
+        /** Lancee en ARRIERE-PLAN : son resultat n'atteint pas le modele si le tour finit avant. */
+        enFond: boolean
+      }
+    >()
+    /**
+     * Appels `Bash` du tour (id -> commande exacte, demandee en arriere-plan ?).
+     *
+     * Mesure du 2026-10-09 (`run-stdout/790829d2-….stdout.jsonl` l.2287-2307) : `task_started` porte
+     * `description` = la PHRASE du modele (« Run app settings test and workspace check in
+     * background ») et `tool_use_id`. La commande executable n'existe QUE dans `input.command` de cet
+     * appel. Relancer `description` executait `bash -c "Run app settings test…"`.
+     */
+    const appelsShell = new Map<string, { commande: string; enFond: boolean }>()
+    /** Commandes shell coupees que l'appelant relancera (voir `SendOptions.relancerTachesDeFond`). */
+    const tachesDeFondARelancer: TacheDeFondARelancer[] = []
     const pendingTools = new Map<
       string,
       {
@@ -1774,15 +1801,32 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
         // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
         const idTache = String(o['task_id'] ?? commande ?? '')
-        if (demarre) tachesDeFond.set(idTache, { commande: commande || 'commande sans description', arretee: false })
-        else {
+        if (demarre) {
+          const toolUseId = String(o['tool_use_id'] ?? '')
+          tachesDeFond.set(idTache, {
+            // `description` sert a l'AFFICHAGE seulement : c'est une phrase, meme pour `local_bash`.
+            commande: commande || 'commande sans description',
+            arretee: false,
+            type: String(o['task_type'] ?? ''),
+            toolUseId,
+            // Le CLI le dit (`is_backgrounded`) ; a defaut, l'appel `Bash` le demandait.
+            enFond:
+              o['is_backgrounded'] === true ||
+              (o['is_backgrounded'] === undefined && appelsShell.get(toolUseId)?.enFond === true)
+          })
+        } else {
           const st = String(o['status'] ?? '').toLowerCase()
           if (st === 'completed' || st === 'failed') tachesDeFond.delete(idTache)
-          else
+          else {
+            const connue = tachesDeFond.get(idTache)
             tachesDeFond.set(idTache, {
-              commande: commande || tachesDeFond.get(idTache)?.commande || 'commande sans description',
-              arretee: true
+              commande: commande || connue?.commande || 'commande sans description',
+              arretee: true,
+              type: connue?.type ?? '',
+              toolUseId: connue?.toolUseId ?? '',
+              enFond: connue?.enFond ?? false
             })
+          }
         }
         if (demarre) {
           queue.push({
@@ -1828,6 +1872,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (t === 'assistant') {
         const msg = o['message'] as
           | {
+              id?: string
               model?: string
               content?: Array<{
                 type: string
@@ -1841,7 +1886,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               }>
             }
           | undefined
-        if (msg?.model) resolvedModel = msg.model // modèle RÉEL rapporté par Claude
+        // modèle RÉEL rapporté par Claude. `<synthetic>` est le message que le CLI FABRIQUE lui-même
+        // (texte d'erreur, 0 token) : l'adopter effaçait le vrai modèle — conv-120, appel du tour
+        // 3e00e0a5-5602-46e9-adb3-0d9c7a162b21, resolvedModel « <synthetic> » pour 0,37 USD facturés.
+        if (msg?.model && msg.model !== '<synthetic>') resolvedModel = msg.model
         const usageAppel = normalizeClaudeUsage((msg as { usage?: unknown } | undefined)?.usage)
         if (usageAppel) {
           derniereEntree = usageAppel.inputTokens
@@ -1859,6 +1907,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * une divergence entre les deux rejouerait le collage sur l'un des deux chemins.
              */
             const separation = separationEntreBlocsTexte(text, part.text)
+            if (msg?.model !== '<synthetic>') {
+              const id = msg?.id ?? ''
+              const dernier = textesMessages[textesMessages.length - 1]
+              if (dernier && dernier.id === id) dernier.texte += separation + part.text
+              else textesMessages.push({ id, debut: text.length, texte: part.text })
+            }
             text += separation + part.text
             queue.push({ delta: separation + part.text })
           } else if (part.type === 'thinking' && part.thinking) {
@@ -1873,6 +1927,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             const filePath = String(part.input?.file_path ?? '')
             const command = String(part.input?.command ?? filePath)
             const recherche = /^(Grep|Glob)$/i.test(part.name)
+            if (part.name === 'Bash' && typeof part.input?.command === 'string')
+              appelsShell.set(part.id, {
+                commande: part.input.command,
+                enFond: part.input.run_in_background === true
+              })
             pendingTools.set(part.id, {
               name: part.name,
               command,
@@ -1925,6 +1984,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           | undefined
         for (const part of msg?.content ?? []) {
           if (part.type !== 'tool_result' || !part.tool_use_id) continue
+          // Une commande de PREMIER plan recoit ici son vrai resultat, meme coupee (« Exit code 137 »,
+          // `bcdda33b-….stdout.jsonl` l.1753) : le modele l'a lu, rien a signaler ni a relancer.
+          for (const [id, tache] of tachesDeFond)
+            if (!tache.enFond && tache.toolUseId === part.tool_use_id) tachesDeFond.delete(id)
           const call = pendingTools.get(part.tool_use_id)
           if (!call) continue
           pendingTools.delete(part.tool_use_id)
@@ -1966,6 +2029,32 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
+        if (tachesDeFond.size > 0) {
+          /*
+           * RELANCEE PAR L'APPELANT, PAS PERDUE. Quand le tour de chat sait relancer une commande
+           * shell (`relancerTachesDeFond`), elle part dans `tachesDeFondARelancer` et la reponse
+           * dit qu'elle REVIENDRA. Le reste (agent, surveillance, commande vide) garde l'avis
+           * historique : aucune phrase n'est jamais executee comme une commande.
+           *
+           * Relancable = commande SHELL, lancee en ARRIERE-PLAN, dont l'appel `Bash` est connu, dans
+           * le dossier du tour. Sans dossier connu, rien ne part dans celui de l'app (`process.cwd()`).
+           */
+          const cwdDuTour = execution?.cwd ?? readOnlyCwd
+          for (const [id, tache] of tachesDeFond) {
+            const appel = appelsShell.get(tache.toolUseId)
+            if (!opts.relancerTachesDeFond || !cwdDuTour) continue
+            if (tache.type !== 'local_bash' || !tache.enFond || !appel?.commande.trim()) continue
+            tachesDeFondARelancer.push({ id, commande: appel.commande, cwd: cwdDuTour })
+            tachesDeFond.delete(id)
+          }
+          if (tachesDeFondARelancer.length > 0) {
+            const note = `\n\n🔁 Tâche de fond reprise par Autowin hors de ce tour : ${tachesDeFondARelancer
+              .map((x) => `\`${x.commande}\``)
+              .join(', ')}. Son résultat reviendra dans ce fil, dans un tour de reprise automatique.`
+            text += note
+            queue.push({ delta: note })
+          }
+        }
         if (tachesDeFond.size > 0) {
           // fix-ok: le message disait « arrêtée » meme pour une tache sans notification `stopped` (objection juge, conv-528 tour 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9)
           const lister = (arretee: boolean): string =>
@@ -2040,20 +2129,24 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // (saisie ts 1789562253947, « /kaizen cette erreur et reprend »). Rien n'ayant ete
           // facture, le rejouer ne « repaie » rien et ne contourne aucune borne ; AgentPilot le
           // borne de toute facon a 2 tentatives, et reprend la session CLI en cours.
+          const recuperee =
+            normalizedUsage &&
+            (o['terminal_reason'] === 'malformed_tool_use_exhausted' ||
+              /tool call could not be parsed/i.test(reported))
+              ? recupererCmdFermeeEnOutilNatif(textesMessages)
+              : null
+          if (recuperee) {
+            // La commande etait COMPLETE : on la rend refermee, sans les tentatives jetees par le
+            // CLI ni son message d'erreur synthetique. Le chemin normal du pilote l'execute.
+            const avant = text.slice(0, recuperee.debut).trimEnd()
+            text = avant ? `${avant}\n\n${recuperee.texte}` : recuperee.texte
+            return
+          }
           const rienConsomme =
             !normalizedUsage ||
             ((normalizedUsage.costUsd ?? 0) === 0 &&
               (normalizedUsage.inputTokens ?? 0) === 0 &&
               (normalizedUsage.outputTokens ?? 0) === 0)
-          // Appel illisible mais commande `<cmd>` complete dans le texte : on l'execute au lieu de
-          // jeter le tour (conv-121, tour 080f524d-01eb-4fa6-b5a8-fcf1a347f8dc) — voir le module.
-          const recuperee = /tool call could not be parsed/.test(reported)
-            ? commandeRecupereeApresAppelIllisible(text)
-            : undefined
-          if (recuperee) {
-            text = recuperee
-            return
-          }
           errored = new ProviderCallError(`Claude a interrompu l'appel : ${detail}`, {
             code,
             retryable: code === 'error_during_execution' && rienConsomme,
@@ -2301,10 +2394,79 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       executionEvidence: executionEvidence.length ? executionEvidence : undefined,
       thinking: joinThinking(reasoningFragments),
       model: resolvedModel,
-      artifacts: artifacts.length ? artifacts : undefined
+      artifacts: artifacts.length ? artifacts : undefined,
+      ...(tachesDeFondARelancer.length ? { tachesDeFondARelancer } : {})
     }
   }
 }
+/** Texte d'un message assistant reel et sa position de depart dans le texte cumule de l'appel. */
+export interface MessageTexte {
+  id: string
+  debut: number
+  texte: string
+}
+
+const FERMETURES_OUTIL_NATIF = /^(?:\s*<\/(?:parameter|invoke|function_calls|antml:[a-z_]+)>)+\s*$/
+
+/**
+ * `<cmd>` REFERME PAR LA SYNTAXE DES OUTILS NATIFS — conv-120, appel du tour
+ * 3e00e0a5-5602-46e9-adb3-0d9c7a162b21 (2026-10-09), recidive flux 1848f898 le meme jour.
+ *
+ * fix-ok: le modele ecrit `<cmd>{json complet}` puis `</parameter></invoke>` au lieu de `</cmd>` ;
+ * l'API y lit un appel d'outil natif casse, le CLI retente une fois a l'identique puis abandonne
+ * (`malformed_tool_use_exhausted`) et le tour entier etait jete. `agent-pilot.normaliserFermeturesCmd`
+ * repare deja cette fermeture quand elle arrive en texte ; ici elle n'y arrivait jamais.
+ *
+ * Recuperation STRICTE, sinon l'echec reste : la DERNIERE tentative doit etre faite de texte, d'UN
+ * `<cmd>` dont l'objet JSON est equilibre, parsable et nomme, puis UNIQUEMENT de fermetures natives.
+ * Les tentatives precedentes (meme signature, jetees par la retentative du CLI) sont ecartees : on
+ * rend `debut` = debut de la premiere d'entre elles, pour ne jamais executer deux fois la commande.
+ */
+export function recupererCmdFermeeEnOutilNatif(
+  messages: readonly MessageTexte[]
+): { debut: number; texte: string } | null {
+  const derniere = messages[messages.length - 1]
+  if (!derniere) return null
+  const ouverture = derniere.texte.indexOf('<cmd>')
+  if (ouverture < 0 || derniere.texte.indexOf('<cmd>', ouverture + 5) >= 0) return null
+  let j = ouverture + 5
+  while (j < derniere.texte.length && /\s/.test(derniere.texte[j])) j++
+  if (derniere.texte[j] !== '{') return null
+  const fin = finObjetJsonTexte(derniere.texte, j)
+  if (fin < 0) return null
+  const json = derniere.texte.slice(j, fin)
+  try {
+    const parsed = JSON.parse(json) as { name?: unknown }
+    if (typeof parsed.name !== 'string' || !parsed.name.trim()) return null
+  } catch {
+    return null
+  }
+  if (!FERMETURES_OUTIL_NATIF.test(derniere.texte.slice(fin))) return null
+  const signature = (m: MessageTexte): boolean =>
+    m.texte.includes('<cmd>') && /<\/(?:parameter|invoke)>/.test(m.texte)
+  let premiere = messages.length - 1
+  while (premiere > 0 && signature(messages[premiere - 1])) premiere--
+  return {
+    debut: messages[premiere].debut,
+    texte: `${derniere.texte.slice(0, ouverture)}<cmd>${json}</cmd>`
+  }
+}
+
+function finObjetJsonTexte(raw: string, debut: number): number {
+  let profondeur = 0
+  let dansChaine = false
+  for (let k = debut; k < raw.length; k++) {
+    const c = raw[k]
+    if (dansChaine) {
+      if (c === '\\') k++
+      else if (c === '"') dansChaine = false
+    } else if (c === '"') dansChaine = true
+    else if (c === '{') profondeur++
+    else if (c === '}' && --profondeur === 0) return k + 1
+  }
+  return -1
+}
+
 function base64Fingerprint(content: string): string {
   return createHash('sha256').update(Buffer.from(content, 'base64')).digest('hex')
 }

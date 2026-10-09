@@ -307,6 +307,9 @@ const api = {
   }): Promise<boolean> => ipcRenderer.invoke('os:presence', etat),
   setTitlebarSymbolColor: (couleur: string): Promise<boolean> =>
     ipcRenderer.invoke('app:titlebar-symbol-color', couleur),
+  // Ce que repond `prefers-color-scheme` dans l'app : la base du theme Autowin, pas celle de Windows.
+  setColorScheme: (schema: 'dark' | 'light'): Promise<boolean> =>
+    ipcRenderer.invoke('app:color-scheme', schema),
   // Auto-update git au démarrage.
   checkUpdate: (): Promise<{
     available: boolean

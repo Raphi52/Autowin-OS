@@ -13,6 +13,7 @@ import {
   AGENT_STUDIO_DEFAULT_MODEL_LABEL,
   usesAgentStudioDefault
 } from '../../shared/task-provider'
+import { estCheminDeDossier } from '../../shared/project-path'
 
 type ScheduledTaskRoleBinding = {
   provider: string
@@ -24,7 +25,13 @@ export interface ScheduledChatRuntime {
   /** Résout le rôle orchestrateur Agent Studio au moment de CHAQUE run planifié. */
   agentStudioBinding?(): ScheduledTaskRoleBinding
   hasConversation(conversationId: string): boolean
-  createConversation(input: { title: string; category: string; provider: string }): { id: string }
+  createConversation(input: {
+    title: string
+    category: string
+    provider: string
+    /** Dossier de travail de la conversation créée ; absent = dossier global d'Autowin. */
+    projectPath?: string
+  }): { id: string }
   bindConversation(taskId: string, conversationId: string): void
   isConversationBusy(conversationId: string): boolean
   interruptAndWait(conversationId: string, reason: string): Promise<boolean>
@@ -364,10 +371,17 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
     ) {
       return task.destination.conversationId
     }
+    const category = task.destination.category
     const created = this.runtime.createConversation({
       title: task.destination.title,
-      category: task.destination.category,
-      provider: binding?.provider ?? task.destination.provider
+      category,
+      provider: binding?.provider ?? task.destination.provider,
+      // La catégorie d'une tâche « nouvelle conversation » porte, selon son origine, un libellé
+      // (semis : « Qualite »), le doublon historique du moteur (formulaire : « claude ») ou un
+      // chemin de projet. Seul le CHEMIN désigne sans ambiguïté un dossier de travail : c'est la
+      // même frontière de forme que le rangement d'une conversation (`estCheminDeDossier`).
+      // fix-ok: mesuré le 2026-10-09 (conv-113) — la catégorie n'atteignait jamais la conversation créée, qui tournait donc dans le dossier global d'Autowin au lieu du projet demandé.
+      ...(estCheminDeDossier(category) ? { projectPath: category.trim() } : {})
     })
     this.runtime.bindConversation(task.id, created.id)
     return created.id

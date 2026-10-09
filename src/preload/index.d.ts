@@ -269,6 +269,7 @@ interface ChatApi {
     etapesTotales: number
   }) => Promise<boolean>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
+  setColorScheme: (schema: 'dark' | 'light') => Promise<boolean>
   checkUpdate: () => Promise<{
     available: boolean
     behind: number

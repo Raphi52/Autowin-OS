@@ -39,3 +39,8 @@ export type PilotEventKind =
    * « abandonne » soit un fait, et non l'absence d'une ligne de rattrapage.
    */
   | 'echecs-abandonnes'
+  /**
+   * Commandes shell que le CLI a coupées en fin de tour et que l'app RELANCE hors du tour
+   * (`src/main/chat/relance-taches-de-fond.ts`). Consommé par le main ; jamais affiché tel quel.
+   */
+  | 'taches-de-fond'

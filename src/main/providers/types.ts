@@ -106,6 +106,15 @@ export interface SendOptions {
    * réinjecter, après redémarrage, le résultat déjà payé au lieu de relancer le même appel.
    */
   onJournal?: (token: string, journalPath: string) => void
+  /**
+   * L'APPELANT sait relancer une commande shell que le CLI a coupée en fin de tour.
+   *
+   * Le CLI `-p` arrête les tâches de fond à la fin du tour (conv-528, conv-42) : leur résultat était
+   * perdu et l'utilisateur devait relancer lui-même. Seul le tour de CHAT sait rouvrir un tour de
+   * reprise dans la même conversation ; ce drapeau le dit. Absent, le provider garde l'avertissement
+   * « relance la demande » : il ne promet jamais une reprise que personne ne fera.
+   */
+  relancerTachesDeFond?: boolean
   /** Mode agentique local, réservé à l'étape d'exécution d'une orchestration. */
   execution?: {
     cwd: string
@@ -380,6 +389,22 @@ export interface SendResult {
   model?: string
   /** Images/fichiers produits pendant ce tour, normalisés indépendamment du supplier. */
   artifacts?: ChatArtifact[]
+  /**
+   * Commandes shell coupées en fin de tour, que l'appelant a promis de relancer
+   * (`SendOptions.relancerTachesDeFond`). Seules les tâches `local_bash` à commande non vide y
+   * figurent : un agent ou une surveillance n'a qu'une DESCRIPTION, jamais exécutable.
+   */
+  tachesDeFondARelancer?: TacheDeFondARelancer[]
+}
+
+/** Une commande shell que le CLI a arrêtée à la fin du tour, telle qu'il l'avait lancée. */
+export interface TacheDeFondARelancer {
+  /** `task_id` du CLI : une tâche signalée deux fois n'est relancée qu'une fois. */
+  id: string
+  /** Commande shell, sans le préfixe `cd "$(pwd)" &&` du CLI (le dossier est porté par `cwd`). */
+  commande: string
+  /** Dossier où le CLI tournait : la commande y est relancée. */
+  cwd: string
 }
 
 /**

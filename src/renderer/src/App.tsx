@@ -52,6 +52,8 @@ import '@fontsource/atkinson-hyperlegible/700.css'
 import './assets/theme-malvoyant-planchers.css'
 import './assets/theme-clair-gris.css'
 import './assets/ui-system.css'
+import './assets/theme-nebuleuse-verre.genere.css'
+import './assets/theme-nebuleuse-verre.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 

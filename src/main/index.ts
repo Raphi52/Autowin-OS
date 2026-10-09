@@ -81,7 +81,16 @@ import {
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation
 } from './claude-accounts'
-import { app, shell, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  nativeTheme,
+  safeStorage
+} from 'electron'
 import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -139,6 +148,7 @@ import { AgentPilot } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { createRunPilotChat } from './chat/run-pilot-chat'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
+import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from './chat/relance-taches-de-fond'
 import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { buildContinuationProviderHistory } from './chat-continuation'
@@ -290,6 +300,12 @@ import { configureTurnTiming } from './turn-timing'
 import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain } from './gel-main'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
 import {
+  aligneRaccourciDemarrerDev,
+  cheminRaccourciDemarrerDev,
+  DEV_TOAST_ACTIVATOR_CLSID,
+  iconeRaccourciDev
+} from './raccourci-demarrer-dev'
+import {
   createStorageMigrationReadHandler,
   isRendererStorageMigrationComplete,
   markRendererStorageMigrationComplete,
@@ -331,7 +347,12 @@ import { BrainSearchCoordinator } from './viz/brain-search-coordinator'
 import { filterNativePreflight, readNativePreflight } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
-import { resumeActionFor, runIsProducing, waitUntilRunCanResume } from './runs/run-reattach'
+import {
+  resumeActionFor,
+  runIsProducing,
+  runJournalProgressMark,
+  waitUntilRunCanResume
+} from './runs/run-reattach'
 import {
   activeWorkflowProfile,
   seedDefaultWorkflows,
@@ -1804,6 +1825,20 @@ function registerChatIpc(): void {
       return false
     }
   })
+  /*
+   * `prefers-color-scheme` suit le THEME AUTOWIN, pas celui de Windows. Sans ce reglage, Electron
+   * repond la preference du systeme (`themeSource: 'system'`) : un Windows en mode clair faisait
+   * matcher `prefers-color-scheme: light` dans une app SOMBRE, et le HTML rendu dans le fil
+   * appliquait ses couleurs de theme clair -- texte bleu marine sur fond noir (conv-111,
+   * 2026-10-08, `AppsUseLightTheme = 1`). Doc : https://www.electronjs.org/docs/latest/api/native-theme
+   * Seules deux valeurs passent : `system` reviendrait exactement au defaut corrige ici.
+   */
+  ipcMain.handle('app:color-scheme', (event, schema: unknown) => {
+    assertTrustedRendererSender(event, 'Schema de couleurs')
+    if (schema !== 'dark' && schema !== 'light') return false
+    nativeTheme.themeSource = schema
+    return true
+  })
   ipcMain.handle('update:check', (event) => {
     assertTrustedRendererSender(event, 'Update')
     return checkForUpdate(os.executionWorkspace)
@@ -3021,6 +3056,8 @@ Le fil reprend ensuite normalement.`
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
   // Le corps du tour vit dans src/main/chat/run-pilot-chat.ts : il ne capturait rien d'autre que
   // les valeurs listees ici, qui lui sont desormais passees explicitement.
+  /** Assigné plus bas, une fois `scheduledChatRuntime` construit (il ouvre le tour de reprise). */
+  const relanceTachesDeFond: { relanceur?: RelanceurTachesDeFond } = {}
   const lancerTour = createRunPilotChat({
     os,
     pilot,
@@ -3036,7 +3073,17 @@ Le fil reprend ensuite normalement.`
     drainPendingDirectives,
     askModelQuestion,
     notifyWatchdogWorkflowIncident,
-    watchdogEngine: () => watchdogEngine
+    watchdogEngine: () => watchdogEngine,
+    relancerTachesDeFond: (conversationId, taches) => {
+      const relanceur = relanceTachesDeFond.relanceur
+      if (!relanceur) {
+        console.warn('[taches de fond] relanceur pas encore prêt : relance perdue', conversationId)
+        return
+      }
+      void relanceur
+        .relancer(conversationId, taches)
+        .catch((erreur) => console.warn('[taches de fond] relance en échec :', erreur))
+    }
   })
   /**
    * SILENCE INTERDIT : un rangement qui ne pilote PAS le dossier de travail doit le DIRE.
@@ -3587,7 +3634,13 @@ Le fil reprend ensuite normalement.`
   bus.lancerDansConversation = (conversationId, prompt, binding) =>
     lancerSansAttendre(
       async () => {
-        const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
+        // HORS du devis du tour appelant : sinon le tour cible hérite de ses compteurs, dont l'appel
+        // est déjà actif, et il est annulé sur « Budget de concurrence atteint (1) » alors que
+        // chat_send a déjà répondu « envoyé » (conv-53 -> conv-93, 2026-10-05). Même isolement que
+        // le réveil des watchdogs plus bas.
+        const resultat = await os.executionSupervisor.runOutsideCurrent(() =>
+          scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
+        )
         return {
           ok: resultat.ok,
           ...(resultat.turnId ? { turnId: resultat.turnId } : {}),
@@ -3598,6 +3651,29 @@ Le fil reprend ensuite normalement.`
       (erreur) =>
         console.warn(`[chat_send] tour de ${conversationId} en echec apres son envoi :`, erreur)
     )
+  /*
+   * TACHES DE FOND COUPEES EN FIN DE TOUR (conv-528, conv-42) : relancees hors du tour, puis UN tour
+   * de reprise rend leur resultat dans la meme conversation. Hors du devis du tour appelant, comme
+   * `chat_send` ci-dessus. Les lots restes sur disque (app fermee pendant la commande) reprennent ici.
+   */
+  const relanceurTachesDeFond = creerRelanceurSurDisque({
+    dossier: join(app.getPath('userData'), 'taches-de-fond'),
+    conversationOccupee: (conversationId) => activeChatTurns.isInFlight(conversationId),
+    envoyerTour: async (conversationId, prompt) => {
+      const resultat = await os.executionSupervisor.runOutsideCurrent(() =>
+        scheduledChatRuntime.runPrompt(conversationId, prompt)
+      )
+      if (!resultat.ok)
+        console.warn(
+          `[taches de fond] tour de reprise en echec dans ${conversationId} :`,
+          resultat.error
+        )
+    }
+  })
+  relanceTachesDeFond.relanceur = relanceurTachesDeFond
+  void relanceurTachesDeFond
+    .reprendreAuDemarrage()
+    .catch((erreur) => console.warn('[taches de fond] reprise au demarrage impossible :', erreur))
   const taskDispatcher = new ScheduledChatDispatcher(scheduledChatRuntime)
   const relay = new PowerShellWindowsRelay({
     scriptPath: relayScriptPath,
@@ -3626,6 +3702,14 @@ Le fil reprend ensuite normalement.`
     })
   })
   scheduledTaskScheduler = new TaskScheduler(scheduledTasks, dispatcherVeille, relay)
+  // `task_create` de l'agent : MÊME chemin que le bouton « Créer » du Task Manager (conv-114).
+  const schedulerPourAgent = scheduledTaskScheduler
+  bus.taskManager = {
+    create: (input) => scheduledTasks.create(input),
+    list: () => scheduledTasks.listTasks(),
+    refresh: () => schedulerPourAgent.refresh(),
+    onChanged: () => broadcast({ type: 'refresh', scope: 'task-manager' })
+  }
   // Le moteur de réveil OBSERVE et délègue à ce même scheduler : il n'y a qu'un chemin d'exécution.
   watchdogEngine = new WatchdogEngine(
     () => scheduledTasks.listTasks(),
@@ -4494,6 +4578,25 @@ app.whenReady().then(async () => {
   jalonDemarrage('app.whenReady')
   // Set app user model id for windows
   electronApp.setAppUserModelId(automationAppIdentity(AUTOWIN_APP_ID, automationInstanceMode))
+  // En dev, Electron pose un raccourci menu Démarrer sans icône pour cette identité, et la barre
+  // des tâches lui prend son icône : on le pose nous-mêmes, icône Autowin et CLSID fixe.
+  if (process.platform === 'win32' && !app.isPackaged) {
+    try {
+      app.setToastActivatorCLSID(DEV_TOAST_ACTIVATOR_CLSID)
+      const raccourci = aligneRaccourciDemarrerDev({
+        shell,
+        existe: existsSync,
+        chemin: cheminRaccourciDemarrerDev(app.getPath('appData')),
+        executable: process.execPath,
+        identite: process.execPath,
+        clsid: DEV_TOAST_ACTIVATOR_CLSID,
+        icone: iconeRaccourciDev(app.getAppPath(), process.env['AUTOWIN_OS_DEV'] === '1')
+      })
+      if (raccourci.etat === 'echec') console.warn('[icone barre des taches dev]', raccourci.raison)
+    } catch (erreur) {
+      console.warn('[icone barre des taches dev]', erreur)
+    }
+  }
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -4858,14 +4961,31 @@ app.whenReady().then(async () => {
         continue
       }
 
-      void waitUntilRunCanResume(() => {
-        const latest = os
-          .resumableOrchestrations()
-          .find((candidate) => candidate.runId === resumableRun.runId)
-        return latest
-          ? resumeActionFor(latest, defaultProcessIdentity, Date.now(), persistedJournalLastWriteMs)
-          : 'ignorer'
-      }).then((action) => {
+      void waitUntilRunCanResume(
+        () => {
+          const latest = os
+            .resumableOrchestrations()
+            .find((candidate) => candidate.runId === resumableRun.runId)
+          return latest
+            ? resumeActionFor(
+                latest,
+                defaultProcessIdentity,
+                Date.now(),
+                persistedJournalLastWriteMs
+              )
+            : 'ignorer'
+        },
+        undefined,
+        undefined,
+        // Le plafond compte le SILENCE du journal : un doublon qui écrit encore reste observé.
+        () =>
+          runJournalProgressMark(
+            os
+              .resumableOrchestrations()
+              .find((candidate) => candidate.runId === resumableRun.runId),
+            persistedJournalLastWriteMs
+          )
+      ).then((action) => {
         const latest = os
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
@@ -4977,14 +5097,32 @@ app.whenReady().then(async () => {
       continue
     }
     if (reprise === 'rattacher') {
-      void waitUntilRunCanResume(() => {
-        const latest = os
-          .resumableOrchestrations()
-          .find((candidate) => candidate.runId === resumableRun.runId)
-        return latest
-          ? resumeActionFor(latest, defaultProcessIdentity, Date.now(), persistedJournalLastWriteMs)
-          : 'ignorer'
-      }).then(async (action) => {
+      void waitUntilRunCanResume(
+        () => {
+          const latest = os
+            .resumableOrchestrations()
+            .find((candidate) => candidate.runId === resumableRun.runId)
+          return latest
+            ? resumeActionFor(
+                latest,
+                defaultProcessIdentity,
+                Date.now(),
+                persistedJournalLastWriteMs
+              )
+            : 'ignorer'
+        },
+        undefined,
+        undefined,
+        // Le plafond compte le SILENCE du journal, pas la durée de l'étape : une construction de
+        // plus de 10 min n'est plus déclarée « interrompue » en plein travail (conv-115, 2026-10-09).
+        () =>
+          runJournalProgressMark(
+            os
+              .resumableOrchestrations()
+              .find((candidate) => candidate.runId === resumableRun.runId),
+            persistedJournalLastWriteMs
+          )
+      ).then(async (action) => {
         const latest = os
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
