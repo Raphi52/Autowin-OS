@@ -33,7 +33,9 @@ const RACINE = fileURLToPath(new URL('..', import.meta.url))
 const SOURCES = ['src/renderer/src/components', 'src/renderer/src/assets']
 const SORTIE = 'src/renderer/src/assets/theme-nebuleuse-verre.genere.css'
 const PREFIXE = ":root[data-theme='nebuleuse-verre']"
-const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre/
+// AskDecision.css garde son OR (conv-136, 2026-10-10 : « les blocs comme ASK qui demandent des
+// actions utilisateur, mets-les en doré ») : le bloc qui attend l'utilisateur ressort du rose.
+const EXCLUS = /theme-clair|theme-malvoyant|theme-nebuleuse-verre|AskDecision.css/
 
 /** L'or d'Autowin, tel qu'il est ecrit dans les feuilles (rgb sans alpha). */
 const ORS = new Set([

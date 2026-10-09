@@ -506,7 +506,11 @@
    conv-124, apres « les blocs de ta reponse ne sont pas hyper lisibles car trop clairs »).
    Le verre blanc a 5 % + voile dore devenait un mauve laiteux sur la nebuleuse : contraste
    mesure 7,5:1 au pire endroit. Fond encre a 86 % : 15,7:1 sur la maquette. */
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat {
+/* TOUS LES BLOCS COMME LE FIL (conv-136, 2026-10-10 : « je veux juste que tous les blocs
+   ressemblent a celui du milieu ou j'ecris ») : la liste des conversations, le panneau Details
+   et le menu de gauche prennent le meme fond encre que le fil, au lieu du verre violet sature. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline :is(.chat, .conv-pane, .runs-pane),
+:root[data-theme='nebuleuse-verre'] .theme-serious .rail {
   border-top-color: rgba(255, 214, 140, 0.35);
   background: rgba(9, 7, 22, 0.86);
   box-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.35);
@@ -558,6 +562,25 @@
    d'origine (ChatView.css, `.conversation-state`), a sa place et a sa taille : sa FORME
    porte le sens (points qui sautillent = question, atome = en cours). Seule sa couleur suit
    les jetons --chat-etat-* de ce theme. */
+/* PASTILLE = ORBE DORE (demande du 2026-10-10, conv-139 : « la meme boule [que l'Agent] a gauche
+   des convs a la place des points lumineux »). Seuls les etats en DISQUE la prennent : l'atome
+   (en cours) et les trois points (question / attente) gardent leur forme, qui porte le sens.
+   Le halo reste a la couleur de l'etat (currentColor) pour ne pas perdre echec / non lu. */
+:root[data-theme='nebuleuse-verre'] .conversation-state:not(.is-running):not(.is-waiting):not(.is-asking) {
+  width: 11px;
+  height: 11px;
+  /* L'orbe prend la COULEUR DE L'ETAT (vert fini, rouge echec...) : en or uni, tous les fils
+     se ressemblaient (« j'ai que du jaune j'ai plu de vert », 2026-10-10). */
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, currentColor 30%, #fff),
+    currentColor 45%,
+    color-mix(in srgb, currentColor 45%, #000) 90%
+  );
+  box-shadow:
+    var(--nv-orbe-reflet),
+    0 0 6px currentColor;
+}
 @keyframes nv-pouls {
   0%,
   100% {
@@ -642,10 +665,15 @@
   margin-right: 7px;
   vertical-align: -2px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffd0ec, #ff3d9a 45%, #5b3cff 90%);
+  /* Orbe et libelle « Agent » DORES (demande du 2026-10-10, conv-139). */
+  background: radial-gradient(circle at 35% 30%, #fff1c4, #e3ba55 45%, #8a6420 90%);
   box-shadow:
     var(--nv-orbe-reflet),
-    0 0 8px rgba(255, 61, 154, 0.45);
+    0 0 8px rgba(227, 186, 85, 0.45);
+}
+:root[data-theme='nebuleuse-verre'] .msg.assistant .msg-role,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .msg.assistant .msg-role {
+  color: #e3ba55;
 }
 
 /* BLOC DE FIN DE TOUR (Fait / Maintenant / Reste a faire / Recommande) : DORE (demande du
@@ -658,15 +686,23 @@
   box-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.35);
 }
 
-/* Choix cliquables d'une question (AskDecision) : bord rose, comme la maquette. */
+/* QUESTION A L'UTILISATEUR (AskDecision) EN OR (conv-136, 2026-10-10 : « les blocs comme ASK
+   qui demandent des actions utilisateur, mets-les en doré ») : dans ce theme, --gold* vaut du
+   rose ; on rend au bloc l'or d'Autowin pour que ce qui attend un geste ressorte du reste. */
+:root[data-theme='nebuleuse-verre'] .askd {
+  --gold: #d4a94f;
+  --gold-bright: #e3ba55;
+  --gold-doux: #b8913f;
+  --gold-clair: #e3ba55;
+}
 :root[data-theme='nebuleuse-verre'] .askd-item {
-  border-color: rgba(255, 61, 154, 0.4);
+  border-color: rgba(212, 169, 79, 0.4);
   border-radius: 14px;
-  background: rgba(255, 61, 154, 0.07);
+  background: rgba(212, 169, 79, 0.07);
 }
 :root[data-theme='nebuleuse-verre'] .askd-item:hover {
-  border-color: rgba(255, 61, 154, 0.75);
-  background: rgba(255, 61, 154, 0.13);
+  border-color: rgba(212, 169, 79, 0.75);
+  background: rgba(212, 169, 79, 0.13);
 }
 
 /* ZONE DE SAISIE : UN SEUL BLOC (demande du 2026-10-09, conv-124 : « ya 2 blocs l'un dans
@@ -681,7 +717,11 @@
   padding: 0 0 10px;
   border: 0;
   border-radius: 22px;
-  background: transparent;
+  /* DEGRADE OR -> NOIR sur TOUT le bloc (demande du 2026-10-10, conv-139, variante B1 eclaircie).
+     Fond seul : la jauge de quota (::before / ::after) n'est pas touchee. */
+  /* Sur CE theme, le degrade est ROSE et part d'en bas a droite (le dore « ne va pas avec le
+     reste » ; il devient un theme a part entiere, demande du 2026-10-10). */
+  background: linear-gradient(315deg, rgba(255, 61, 154, 0.32), rgba(10, 8, 18, 0.92) 58%);
   backdrop-filter: none;
   box-shadow: none;
 }
@@ -692,17 +732,19 @@
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-field {
   gap: 7px;
   padding: 14px 18px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid transparent; /* aucun cadre (demande du 2026-10-10) */
   border-radius: 22px;
-  background: rgba(10, 8, 26, 0.62);
-  backdrop-filter: var(--nv-flou);
+  background: transparent; /* le degrade du bloc .composer passe a travers */
+  backdrop-filter: none;
   box-shadow: var(--nv-reflet);
 }
 /* Focus : le bord passe au rose, SANS halo autour. Le halo de 3 px se lisait, sur le haut
    du bloc, comme une seconde ligne au-dessus du bord (capture du 2026-10-09). */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-field:focus-within {
-  border-color: rgba(255, 61, 154, 0.5);
+  /* Plus de bord rose au focus (demande du 2026-10-10, conv-139 : « enleve le cadre rose »). */
+  border-color: transparent;
   box-shadow: var(--nv-reflet);
+  outline: none;
 }
 /* Le texte se pose directement dans le bloc fonce : plus de cadre a lui, ni au focus. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-field textarea,

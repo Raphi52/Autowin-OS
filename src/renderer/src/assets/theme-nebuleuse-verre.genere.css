@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette).
-   504 regles, 693 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   497 regles, 686 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -95,43 +95,6 @@
 }
 :root[data-theme='nebuleuse-verre'] .artifact-preview__toggle:hover {
     color: rgb(255, 114, 185)
-}
-
-/* ---- src/renderer/src/components/AskDecision.css ---- */
-:root[data-theme='nebuleuse-verre'] .askd {
-    border-image: linear-gradient(
-      90deg,
-      rgba(251, 91, 171, 0.18),
-      rgba(255, 108, 182, 0.95) 42%,
-      rgba(255, 108, 182, 0.95) 58%,
-      rgba(251, 91, 171, 0.18)
-    )
-    1
-}
-:root[data-theme='nebuleuse-verre'] .askd::after {
-    background: linear-gradient(
-    90deg,
-    transparent 0%,
-    transparent 38%,
-    rgb(255, 184, 219) 50%,
-    transparent 62%,
-    transparent 100%
-  )
-}
-:root[data-theme='nebuleuse-verre'] .askd::before {
-    background: linear-gradient(180deg, rgba(251, 91, 171, 0.075), rgba(251, 91, 171, 0))
-}
-:root[data-theme='nebuleuse-verre'] .askd-item::before {
-    background: linear-gradient(180deg, var(--gold-doux), rgba(251, 91, 171, 0.12))
-}
-:root[data-theme='nebuleuse-verre'] .askd-item:focus-within .askd-ligne {
-    box-shadow: inset 0 0 0 1px rgba(251, 91, 171, 0.22)
-}
-:root[data-theme='nebuleuse-verre'] .askd-pied {
-    border-image: linear-gradient(90deg, rgba(251, 91, 171, 0.55), rgba(251, 91, 171, 0.06)) 1
-}
-:root[data-theme='nebuleuse-verre'] .askd.est-repondu .askd-choix[data-choisi='oui'] .askd-libelle::after {
-    color: rgb(255, 108, 182)
 }
 
 /* ---- src/renderer/src/components/BehaviourView.css ---- */
