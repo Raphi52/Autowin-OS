@@ -62,6 +62,8 @@ export const THEMES: readonly Theme[] = [
   { id: 'ardoise', libelle: 'Ardoise', base: 'clair' },
   { id: 'parchemin', libelle: 'Parchemin', base: 'clair' },
   { id: 'rose-poudre', libelle: 'Rose poudre', base: 'clair' },
+  // Vert phosphore sur noir, chasse fixe, copie d Internet Typewriter (writer.bighugelabs.com).
+  { id: 'machine-a-ecrire', libelle: 'Machine à écrire', base: 'sombre' },
   // SPECIAL MALVOYANT : contraste AAA (7:1) sur le texte courant, focus epais, bordures nettes,
   // texte agrandi. Une base de chaque cote pour heriter des corrections de lisibilite existantes.
   { id: 'malvoyant-sombre', libelle: 'Spécial malvoyant — sombre', base: 'sombre' },
