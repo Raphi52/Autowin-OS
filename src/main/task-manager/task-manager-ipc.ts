@@ -200,7 +200,8 @@ function hasOwn(value: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(value, key)
 }
 
-function parseTaskInput(raw: unknown): ScheduledTaskInput {
+/** Validation de l'écran Task Manager — partagée avec la commande agent `task_create`, jamais dupliquée. */
+export function parseTaskInput(raw: unknown): ScheduledTaskInput {
   const value = object(raw, 'tâche')
   return {
     title: requiredString(value.title, 'title'),
