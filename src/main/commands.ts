@@ -203,7 +203,11 @@ import {
 } from './providers/workspace-mutation-evidence'
 import { appendConvActivity } from './activity/conv-activity'
 import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
-import { createTaskFromCommand, type TaskCreateDeps } from './task-manager/task-create-command'
+import {
+  createTaskFromCommand,
+  listTasksFromCommand,
+  type TaskCreateDeps
+} from './task-manager/task-create-command'
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
@@ -1220,6 +1224,19 @@ export const CATALOG: CommandSpec[] = [
       // On ajoute, on ne supprime rien ; deux appels créent DEUX tâches. L'effet reste dans l'app.
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'task_list',
+    description:
+      'Lister les tâches programmées et les règles de surveillance du Task Manager d’Autowin (id, titre, type, activée, mode, prochaine échéance, conversation visée) — à appeler AVANT task_create pour ne pas créer de doublon. Lecture seule.',
+    args: {},
+    annotations: {
+      // Relecture du stockage de l'écran : rien n'est écrit, le minuteur n'est pas touché.
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: false
     }
   },
@@ -3763,6 +3780,9 @@ export class AppCommandBus {
       case 'task_create':
         // Même chemin que le bouton « Créer » de l'écran : rien qui échappe au bouton « Supprimer ».
         return await createTaskFromCommand(a as { task?: unknown }, this.taskManager)
+      case 'task_list':
+        // Le stockage que l'écran affiche : ce que l'agent lit est ce que l'utilisateur peut supprimer.
+        return listTasksFromCommand(this.taskManager)
       case 'sql_query':
         // La cible et la nature de la requête sont décidées hors du modèle (`sql-read-guard.ts`),
         // jamais d'après les arguments bruts : le compte Windows utilisé PEUT écrire en production.

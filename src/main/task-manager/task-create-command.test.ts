@@ -25,7 +25,12 @@ function banc(): {
   const store = new TaskStore()
   const refresh = vi.fn(async () => {})
   const onChanged = vi.fn()
-  return { store, refresh, onChanged, deps: { create: (i) => store.create(i), refresh, onChanged } }
+  return {
+    store,
+    refresh,
+    onChanged,
+    deps: { create: (i) => store.create(i), list: () => store.listTasks(), refresh, onChanged }
+  }
 }
 
 describe('task_create — rien que l’utilisateur ne puisse supprimer dans le Task Manager', () => {

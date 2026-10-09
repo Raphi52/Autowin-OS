@@ -17,8 +17,49 @@ import { parseTaskInput } from './task-manager-ipc'
 /** Ce que le bus fournit, câblé depuis index.ts. Les mêmes objets que l'écran. */
 export interface TaskCreateDeps {
   create(input: ScheduledTaskInput): ScheduledTask
+  /** Les tâches telles que l'écran les liste (`store.listTasks`) : lue par `task_list`. */
+  list(): ScheduledTask[]
   refresh(): Promise<void>
   onChanged(): void
+}
+
+/** Une ligne de `task_list` : de quoi reconnaître un doublon avant de créer, sans le prompt entier. */
+export interface TaskListItem {
+  id: string
+  title: string
+  kind: 'horaire' | 'surveillance'
+  enabled: boolean
+  mode: ScheduledTask['mode']
+  /** Prochaine échéance en ISO ; `null` = aucune (tâche ponctuelle passée, désactivée, surveillance). */
+  nextRunAt: string | null
+  /** Conversation visée, quand elle est déjà connue. */
+  conversationId?: string
+}
+
+export type TaskListResult =
+  { ok: true; count: number; tasks: TaskListItem[] } | { ok: false; reason: string }
+
+/**
+ * Commande agent « task_list » — LECTURE SEULE du Task Manager, pour vérifier qu'une tâche n'existe
+ * pas déjà avant `task_create`. Ni `create`, ni `refresh`, ni `onChanged` ne sont appelés ici.
+ */
+export function listTasksFromCommand(deps: TaskCreateDeps | undefined): TaskListResult {
+  if (!deps) {
+    return { ok: false, reason: 'Task Manager indisponible dans ce processus : aucune tâche lue.' }
+  }
+  const tasks = deps.list().map((task): TaskListItem => {
+    const conversationId = task.destination.conversationId
+    return {
+      id: task.id,
+      title: task.title,
+      kind: task.watchdog ? 'surveillance' : 'horaire',
+      enabled: task.enabled,
+      mode: task.mode,
+      nextRunAt: task.nextRunAt === null ? null : new Date(task.nextRunAt).toISOString(),
+      ...(conversationId ? { conversationId } : {})
+    }
+  })
+  return { ok: true, count: tasks.length, tasks }
 }
 
 export type TaskCreateResult =

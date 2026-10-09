@@ -3659,6 +3659,7 @@ Le fil reprend ensuite normalement.`
   const schedulerPourAgent = scheduledTaskScheduler
   bus.taskManager = {
     create: (input) => scheduledTasks.create(input),
+    list: () => scheduledTasks.listTasks(),
     refresh: () => schedulerPourAgent.refresh(),
     onChanged: () => broadcast({ type: 'refresh', scope: 'task-manager' })
   }
