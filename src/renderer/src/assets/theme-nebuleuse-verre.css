@@ -548,49 +548,16 @@
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-meta span + span::before {
   margin-right: 5px;
 }
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pick {
-  gap: 8px;
-  padding-left: 8px;
-  padding-right: 6px;
-}
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-label {
   font-size: 12.5px;
   font-weight: 600;
 }
 
-/* L'ORBE DE CHAQUE FIL. La pastille d'etat existante est gardee telle quelle
-   (sa FORME porte un sens : points qui sautillent = question, atome = en cours)
-   et vient se poser en coin de l'orbe, comme une pastille sur un avatar.
-   La couleur de l'orbe redit l'etat en grand : rose = en cours, violet = au
-   repos, rouge = echec, ambre = interrompu, vert = termine. */
-:root[data-theme='nebuleuse-verre'] .conv-pick::before {
-  content: '';
-  order: -1;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  margin-right: -14px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #d9d0ff, #7b5cff 50%, #2a1f70);
-  box-shadow: var(--nv-orbe-reflet);
-}
-:root[data-theme='nebuleuse-verre'] .conv-pick > .conversation-state {
-  align-self: flex-end;
-  margin: 0 4px 8px 0;
-}
-:root[data-theme='nebuleuse-verre'] .conv-pick:has(.conversation-state.is-running)::before {
-  background: radial-gradient(circle at 35% 30%, #ffd0ec, #ff3d9a 50%, #5b3cff);
-  animation: nv-pouls-orbe 1.6s ease-in-out infinite;
-}
-:root[data-theme='nebuleuse-verre'] .conv-pick:has(.conversation-state.is-failed)::before {
-  background: radial-gradient(circle at 35% 30%, #ffd6d6, #ff5a6e 50%, #5a1f2f);
-}
-:root[data-theme='nebuleuse-verre'] .conv-pick:has(.conversation-state.is-interrupted)::before {
-  background: radial-gradient(circle at 35% 30%, #ffe9c4, #ffb547 50%, #6b3a12);
-}
-:root[data-theme='nebuleuse-verre'] .conv-pick:has(.conversation-state.is-completed)::before {
-  background: radial-gradient(circle at 35% 30%, #d4fff0, #4fd1a5 50%, #12493a);
-}
+/* PAS D'ORBE PAR FIL (retire le 2026-10-09, conv-124 : « remet les anciens icones de
+   conversations sans les grosses boules colorees »). La liste garde la pastille d'etat
+   d'origine (ChatView.css, `.conversation-state`), a sa place et a sa taille : sa FORME
+   porte le sens (points qui sautillent = question, atome = en cours). Seule sa couleur suit
+   les jetons --chat-etat-* de ce theme. */
 @keyframes nv-pouls {
   0%,
   100% {
@@ -598,21 +565,6 @@
   }
   50% {
     box-shadow: 0 0 18px rgba(255, 61, 154, 0.9);
-  }
-}
-/* Le meme pouls, en gardant le reflet dore de l'orbe (l'animation remplace
-   box-shadow en entier : sans ce double, l'orbe en cours perdait son reflet). */
-@keyframes nv-pouls-orbe {
-  0%,
-  100% {
-    box-shadow:
-      inset 0 1px 2px rgba(255, 236, 190, 0.7),
-      0 0 6px rgba(255, 61, 154, 0.4);
-  }
-  50% {
-    box-shadow:
-      inset 0 1px 2px rgba(255, 236, 190, 0.7),
-      0 0 18px rgba(255, 61, 154, 0.9);
   }
 }
 
@@ -1050,14 +1002,8 @@
    7. MOUVEMENT REDUIT : la seule lueur qui bat s'arrete.
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  :root[data-theme='nebuleuse-verre'] .conv-pick:has(.conversation-state.is-running)::before,
   :root[data-theme='nebuleuse-verre'] .workflow-execution-node.is-running .workflow-execution-dot {
     animation: none;
     box-shadow: 0 0 12px rgba(255, 61, 154, 0.7);
-  }
-  :root[data-theme='nebuleuse-verre'] .conv-pick:has(.conversation-state.is-running)::before {
-    box-shadow:
-      var(--nv-orbe-reflet),
-      0 0 12px rgba(255, 61, 154, 0.7);
   }
 }
