@@ -51,6 +51,9 @@
  *         [--state attention] [--state-selector <sel>] force un etat DOM (defaut
  *                                    `.chat-mosaic-window`) que la navigation seule ne produit pas.
  *                                    Zero element touche = echec nomme (code 7).
+ *         [--largeur <px>] [--hauteur <px>] emule une fenetre de cette taille (defaut hauteur =
+ *                                    largeur x 9/16) : l'instance cachee s'ouvre en 900 x 670, ou
+ *                                    les vues larges (chat en colonnes) ne se voient pas.
  *         [--motion <selecteur CSS>] [--reduced-motion | --full-motion] PROUVE QUE CA BOUGE. Capture N frames de chaque occurrence du
  *                                    selecteur, a sa taille de rendu REELLE, et rend la fraction de
  *                                    pixels qui change entre frames. Un element immobile est un
@@ -544,6 +547,22 @@ const main = async () => {
   await envoyer('Runtime.enable')
   await envoyer('Log.enable')
 
+  // --largeur <px> [--hauteur <px>] : REGARDER UNE MISE EN PAGE LARGE. L'instance cachee s'ouvre
+  // toujours en 900 x 670 (src/main/window.ts) : sous 1180 px, le chat replie le panneau Details
+  // en tiroir et la disposition en colonnes, celle d'un ecran 1920 px, n'etait jamais capturable
+  // (constate le 2026-10-09, conv-124). On emule la taille demandee sur la page elle-meme : les
+  // media queries et la mise en page voient cette largeur, la capture la rend a l'echelle 1.
+  const largeurDemandee = Number(argument('--largeur') ?? 0)
+  if (largeurDemandee > 0) {
+    const hauteurDemandee = Number(argument('--hauteur') ?? Math.round((largeurDemandee * 9) / 16))
+    await envoyer('Emulation.setDeviceMetricsOverride', {
+      width: Math.round(largeurDemandee),
+      height: Math.round(hauteurDemandee),
+      deviceScaleFactor: 1,
+      mobile: false
+    })
+  }
+
   // fix-ok: scripts/ui-capture.mjs — une instance cachee neuve repond au debogueur AVANT que React
   // ait rendu la navigation : le bouton etait cherche trop tot (code 4 bouton-nav-absent). On
   // attend l'apparition des boutons (borne 30 s) ; absents apres ce delai, le code 4 reste du.
@@ -654,6 +673,12 @@ const main = async () => {
   // Appelee sur CHAQUE sortie posterieure a la navigation, y compris les echecs : une capture qui
   // echoue n'a pas moins deplace l'utilisateur qu'une capture qui reussit.
   const restaurerVue = async () => {
+    // La taille emulee par --largeur ne survit JAMAIS a la capture : sur une fenetre reelle
+    // (--port, --fenetre-reelle), elle laisserait l'app de l'utilisateur mise en page a une
+    // largeur qui n'est pas celle de son ecran. Toutes les sorties passent par ici.
+    if (largeurDemandee > 0) {
+      await envoyer('Emulation.clearDeviceMetricsOverride').catch(() => {})
+    }
     if (!aRestaurer) return
     try {
       await evaluer(

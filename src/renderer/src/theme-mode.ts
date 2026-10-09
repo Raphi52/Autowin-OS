@@ -55,6 +55,7 @@ export const THEMES: readonly Theme[] = [
   // black-versailles. Attention : la maquette d origine changeait aussi la typographie et
   // les formes (serif, losanges) -- ce theme ne porte que son chromatisme.
   { id: 'black-versailles', libelle: 'Black Versailles', base: 'sombre' },
+  { id: 'nebuleuse-verre', libelle: 'Nébuleuse de verre', base: 'sombre' },
   // TROIS CLAIRS DE PLUS, chacun pendant d un sombre. Base CLAIRE : c est elle qui
   // commande la variante d accent, les teintes de nuit etant illisibles sur fond clair.
   // Aucune maquette maison n en proposait (les douze sont sombres, mesure du 2026-09-07) :
