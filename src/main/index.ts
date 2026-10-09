@@ -81,7 +81,16 @@ import {
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation
 } from './claude-accounts'
-import { app, shell, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  nativeTheme,
+  safeStorage
+} from 'electron'
 import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -1803,6 +1812,20 @@ function registerChatIpc(): void {
       // Plateforme sans overlay de barre de titre (macOS, Linux) : ce n'est pas une panne.
       return false
     }
+  })
+  /*
+   * `prefers-color-scheme` suit le THEME AUTOWIN, pas celui de Windows. Sans ce reglage, Electron
+   * repond la preference du systeme (`themeSource: 'system'`) : un Windows en mode clair faisait
+   * matcher `prefers-color-scheme: light` dans une app SOMBRE, et le HTML rendu dans le fil
+   * appliquait ses couleurs de theme clair -- texte bleu marine sur fond noir (conv-111,
+   * 2026-10-08, `AppsUseLightTheme = 1`). Doc : https://www.electronjs.org/docs/latest/api/native-theme
+   * Seules deux valeurs passent : `system` reviendrait exactement au defaut corrige ici.
+   */
+  ipcMain.handle('app:color-scheme', (event, schema: unknown) => {
+    assertTrustedRendererSender(event, 'Schema de couleurs')
+    if (schema !== 'dark' && schema !== 'light') return false
+    nativeTheme.themeSource = schema
+    return true
   })
   ipcMain.handle('update:check', (event) => {
     assertTrustedRendererSender(event, 'Update')
@@ -3587,7 +3610,13 @@ Le fil reprend ensuite normalement.`
   bus.lancerDansConversation = (conversationId, prompt, binding) =>
     lancerSansAttendre(
       async () => {
-        const resultat = await scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
+        // HORS du devis du tour appelant : sinon le tour cible hérite de ses compteurs, dont l'appel
+        // est déjà actif, et il est annulé sur « Budget de concurrence atteint (1) » alors que
+        // chat_send a déjà répondu « envoyé » (conv-53 -> conv-93, 2026-10-05). Même isolement que
+        // le réveil des watchdogs plus bas.
+        const resultat = await os.executionSupervisor.runOutsideCurrent(() =>
+          scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
+        )
         return {
           ok: resultat.ok,
           ...(resultat.turnId ? { turnId: resultat.turnId } : {}),

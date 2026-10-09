@@ -533,7 +533,15 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `lancement:arreter` ('LancementArreter') — arrete l'arbre de processus lance par CE bouton pour
     //     CETTE conversation, et lui seul (`taskkill /T` sur son propre PID).
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(210)
+    // MISE A JOUR 2026-10-08 (conv-111) — 210 -> 213. ATTRIBUTION MESUREE avant de toucher le compte :
+    //   ce test etait DEJA rouge a 212 avant ce changement. Les DEUX canaux non inscrits viennent du
+    //   commit 853d8b64 (TV du bureau cache), relus : `hdesk:tv:act` et `hdesk:tv:basculer`
+    //   (`src/main/index.ts`), gardes des leur PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Petite TV du bureau caché')`.
+    //   UN canal ajoute par ce tour : `app:color-scheme` ('Schema de couleurs') — pose
+    //   `nativeTheme.themeSource` pour que `prefers-color-scheme` suive le theme Autowin. N'accepte
+    //   que `dark` ou `light` ; rien d'autre n'est lu ni ecrit. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(213)
     expect(unguarded).toEqual([])
   })
 

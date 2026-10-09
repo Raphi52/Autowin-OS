@@ -63,6 +63,28 @@ describe('mode d’affichage sombre / clair', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('obsidian-nebula')
     expect(document.documentElement.hasAttribute('data-base')).toBe(false)
   })
+  /*
+   * `prefers-color-scheme` doit suivre la BASE du theme Autowin, pas Windows. Defaut constate le
+   * 2026-10-08 (conv-111) : Windows clair + Autowin sombre -> le HTML du fil ecrivait en bleu marine
+   * sur noir. ENTREE QUI DOIT FAIRE ECHOUER CE CAS : ne plus appeler `setColorScheme`, ou envoyer
+   * `light` pour un theme sombre NOMME (obsidian-nebula) ou `dark` pour un clair NOMME (ardoise).
+   */
+  it('annonce au processus principal le schema de couleurs de la BASE du theme', function () {
+    const recus: string[] = []
+    const g = globalThis as { api?: unknown }
+    const avant = g.api
+    g.api = { setColorScheme: (s: string) => (recus.push(s), Promise.resolve(true)) }
+    try {
+      appliquerThemeMode('sombre')
+      appliquerThemeMode('ardoise')
+      appliquerThemeMode('obsidian-nebula')
+      appliquerThemeMode('malvoyant-clair')
+    } finally {
+      g.api = avant
+    }
+    expect(recus).toEqual(['dark', 'light', 'dark', 'light'])
+  })
+
   it('ne casse pas si le document est absent', () => {
     expect(() => appliquerThemeMode('clair')).not.toThrow()
   })
