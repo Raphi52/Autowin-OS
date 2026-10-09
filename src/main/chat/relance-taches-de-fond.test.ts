@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   argumentsBash,
   composerPromptDeReprise,
+  creerRelanceurSurDisque,
   creerRelanceurTachesDeFond,
   magasinLotsSurDisque,
   resoudreBash,
@@ -306,5 +307,74 @@ describe('relance réelle (bash + lancement survivable)', () => {
     expect(envois[0]).toContain('bonjour-relance')
     expect(envois[0]).toContain('erreur')
     expect(envois[0]).toContain('ÉCHEC — code de sortie 3')
+  }, 60_000)
+
+  /*
+   * UNE COMMANDE MUETTE GARDE SON CODE. Mesure du 2026-10-09 : quand la commande n'ecrit RIEN (sortie
+   * redirigee vers un fichier, `sleep`, `exit 4`), `spawnSurvivable` efface a la fermeture son journal
+   * vide ET sa preuve `.exit.json` (`discardEmptyJournal`, runs/survivable-spawn.ts). Le relanceur ne
+   * lisait le code QUE dans cette preuve : il attendait sa duree maximale (2 h) puis disait « duree
+   * depassee » au lieu du vrai code.
+   */
+  it('le cablage reel rend le code d’une commande qui n’ecrit rien, sans attendre la duree maximale', async () => {
+    dossier = mkdtempSync(join(tmpdir(), 'relance-muette-'))
+    const envois: string[] = []
+    const relanceur = creerRelanceurSurDisque({
+      dossier,
+      conversationOccupee: () => false,
+      envoyerTour: async (_c, prompt) => void envois.push(prompt)
+    })
+    const fini = relanceur.relancer('conv-m', [{ id: 'm1', commande: 'exit 4', cwd: dossier }])
+    await Promise.race([fini, new Promise((resolve) => setTimeout(resolve, 20_000))])
+    expect(envois).toHaveLength(1)
+    expect(envois[0]).toContain('ÉCHEC — code de sortie 4')
+  }, 60_000)
+
+  /*
+   * PID PEUT-ETRE REATTRIBUE : on ne tue que ce qu'on a lance. Apres un redemarrage (poste rebooté
+   * pendant la commande), le lot sur disque porte le pid du relais d'une AUTRE session ; ce numero a pu
+   * etre donne a n'importe quel processus. Le tuer au-dela de la duree maximale pouvait abattre un
+   * programme de l'utilisateur. Ici, un processus inoffensif tient le role du « pid reattribue ».
+   */
+  it('au demarrage, un lot depasse ne tue JAMAIS un pid lance par une autre session — et le dit', async () => {
+    const { spawn } = await import('node:child_process')
+    dossier = mkdtempSync(join(tmpdir(), 'relance-pid-'))
+    const temoin = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+      stdio: 'ignore'
+    })
+    const vivant = (): boolean => {
+      try {
+        process.kill(temoin.pid!, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
+    try {
+      magasinLotsSurDisque(join(dossier, 'lots')).ecrire('lot-ancien', [
+        {
+          lot: 'lot-ancien',
+          conversationId: 'conv-p',
+          id: 'p1',
+          commande: 'npx vitest run',
+          cwd: dossier,
+          debut: Date.now() - 3 * 60 * 60 * 1000,
+          journalPath: join(dossier, 'journaux', 'absent.stdout.jsonl'),
+          pid: temoin.pid
+        }
+      ])
+      const envois: string[] = []
+      await creerRelanceurSurDisque({
+        dossier,
+        conversationOccupee: () => false,
+        envoyerTour: async (_c, prompt) => void envois.push(prompt)
+      }).reprendreAuDemarrage()
+      expect(vivant()).toBe(true)
+      expect(envois).toHaveLength(1)
+      expect(envois[0]).toContain('NON arrêtée')
+      expect(envois[0]).not.toContain('ARRÊTÉE —')
+    } finally {
+      temoin.kill()
+    }
   }, 60_000)
 })

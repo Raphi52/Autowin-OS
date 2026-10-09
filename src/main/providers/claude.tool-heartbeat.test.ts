@@ -346,7 +346,11 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
  */
 describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', () => {
   async function envoyer(
-    options: { relancerTachesDeFond?: boolean } = { relancerTachesDeFond: true }
+    // Un tour de chat a toujours un dossier de travail (`dossierDeTravailDuTour`).
+    options: { relancerTachesDeFond?: boolean; workspaceCwd?: string } = {
+      relancerTachesDeFond: true,
+      workspaceCwd: process.cwd()
+    }
   ): Promise<{ texte: string; res: import('./types').SendResult }> {
     const { ClaudeCliAdapter } = await import('./claude')
     const gen = new ClaudeCliAdapter({ bin: 'claude' }).send(
@@ -361,13 +365,32 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
     }
     return { texte, res: step.value }
   }
-  const bash = (id: string, commande: string): Record<string, unknown> => ({
-    type: 'system',
-    subtype: 'task_started',
-    task_id: id,
-    task_type: 'local_bash',
-    description: `cd "$(pwd)" && ${commande}`
-  })
+  // FORME REELLE (mesure du 2026-10-09) : l'appel `Bash` porte la commande, `task_started` porte une
+  // PHRASE dans `description`, le lien `tool_use_id` et `is_backgrounded`.
+  const bash = (id: string, commande: string): Array<Record<string, unknown>> => [
+    {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: `toolu_${id}`,
+            name: 'Bash',
+            input: { command: commande, run_in_background: true }
+          }
+        ]
+      }
+    },
+    {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: id,
+      tool_use_id: `toolu_${id}`,
+      is_backgrounded: true,
+      task_type: 'local_bash',
+      description: `Run ${id} in background`
+    }
+  ]
 
   it('cas 1 — aucune tache : ni liste ni avis', async () => {
     spawnCapture.stdoutEvents = [succes]
@@ -378,7 +401,7 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
 
   it('cas 2 — tache finie a temps : rien a relancer', async () => {
     spawnCapture.stdoutEvents = [
-      bash('f1', 'npx eslint'),
+      ...bash('f1', 'npx eslint'),
       { type: 'system', subtype: 'task_notification', task_id: 'f1', status: 'completed' },
       succes
     ]
@@ -388,7 +411,7 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
 
   it('cas 3 — commande shell arretee : listee, sans « relance la demande »', async () => {
     spawnCapture.stdoutEvents = [
-      bash('b1', './node_modules/.bin/vitest run 2>&1 | tail -6'),
+      ...bash('b1', './node_modules/.bin/vitest run 2>&1 | tail -6'),
       { type: 'system', subtype: 'task_notification', task_id: 'b1', status: 'stopped' },
       succes
     ]
@@ -402,7 +425,7 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
   })
 
   it('jumeau du cas 3 — sans le drapeau de l appelant, l avis historique reste', async () => {
-    spawnCapture.stdoutEvents = [bash('b1', 'npx vitest run'), succes]
+    spawnCapture.stdoutEvents = [...bash('b1', 'npx vitest run'), succes]
     const { texte, res } = await envoyer({})
     expect(res.tachesDeFondARelancer).toBeUndefined()
     expect(texte).toMatch(/relance la demande/)
@@ -436,10 +459,10 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
 
   it('cas 6 — meme task_id signale deux fois, plus une seconde : chacune une seule fois', async () => {
     spawnCapture.stdoutEvents = [
-      bash('d1', 'node a.mjs'),
+      ...bash('d1', 'node a.mjs'),
       { type: 'system', subtype: 'task_notification', task_id: 'd1', status: 'stopped' },
       { type: 'system', subtype: 'task_notification', task_id: 'd1', status: 'stopped' },
-      bash('d2', 'node b.mjs'),
+      ...bash('d2', 'node b.mjs'),
       succes
     ]
     const { res } = await envoyer()
@@ -448,7 +471,7 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
 
   it('melange shell + agent : le shell est relance, l agent garde son avis', async () => {
     spawnCapture.stdoutEvents = [
-      bash('m1', 'node a.mjs'),
+      ...bash('m1', 'node a.mjs'),
       { type: 'system', subtype: 'task_started', task_id: 'm2', task_type: 'local_agent', description: 'Explore' },
       succes
     ]
@@ -456,6 +479,92 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
     expect(res.tachesDeFondARelancer?.map((t) => t.commande)).toEqual(['node a.mjs'])
     expect(texte).toMatch(/⚠️ Tâche de fond pas terminée[^\n]*Explore/)
     expect(texte).not.toMatch(/⚠️[^\n]*node a\.mjs/)
+  })
+
+  /*
+   * FORME REELLE DU CLI (mesure du 2026-10-09, `run-stdout/790829d2-….stdout.jsonl` l.2287-2307) :
+   * `description` est la PHRASE que le modele donne a l'outil (« Run app settings test and workspace
+   * check in background »), pas la commande. La commande vit dans l'appel `Bash` que `tool_use_id`
+   * designe. Executer `description` lancait `bash -c "Run app settings test…"`.
+   */
+  const COMMANDE_REELLE = 'cd "$(pwd)" && npx vitest run src/a.test.ts 2>&1 | tail -6'
+  const appelBash = (id: string, input: Record<string, unknown>): Record<string, unknown> => ({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id, name: 'Bash', input }] }
+  })
+  const demarrageReel = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 'b19nec3ym',
+    tool_use_id: 'toolu_fond',
+    description: 'Run app settings test and workspace check in background',
+    is_backgrounded: true,
+    task_type: 'local_bash',
+    ...extra
+  })
+
+  it('forme reelle : relance la commande de l’appel Bash, JAMAIS la phrase de `description`', async () => {
+    spawnCapture.stdoutEvents = [
+      appelBash('toolu_fond', { command: COMMANDE_REELLE, run_in_background: true }),
+      demarrageReel(),
+      { type: 'system', subtype: 'task_notification', task_id: 'b19nec3ym', status: 'stopped' },
+      succes
+    ]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toEqual([
+      { id: 'b19nec3ym', commande: COMMANDE_REELLE, cwd: process.cwd() }
+    ])
+    expect(texte).toMatch(/reviendra dans ce fil/)
+  })
+
+  it('forme reelle : sans appel Bash relie, la phrase n’est jamais executee — avis historique garde', async () => {
+    spawnCapture.stdoutEvents = [demarrageReel(), succes]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).toMatch(/relance la demande/)
+  })
+
+  it('premier plan coupe en cours de tour : son resultat est arrive (Exit code 137), rien a relancer ni a signaler', async () => {
+    // `bcdda33b-….stdout.jsonl` l.1647-1753 : `is_backgrounded: false`, `stopped`, puis tool_result.
+    spawnCapture.stdoutEvents = [
+      appelBash('toolu_fond', { command: COMMANDE_REELLE }),
+      demarrageReel({ is_backgrounded: false }),
+      { type: 'system', subtype: 'task_notification', task_id: 'b19nec3ym', status: 'stopped' },
+      {
+        type: 'user',
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu_fond',
+              content: 'Exit code 137',
+              is_error: true
+            }
+          ]
+        }
+      },
+      succes
+    ]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).not.toMatch(/Tâche de fond/)
+  })
+
+  it('sans dossier du tour connu, rien ne part dans le dossier de l’app — avis historique garde', async () => {
+    // L'app pose ce dossier global au demarrage : sans lui ni `workspaceCwd`, aucun dossier n'est connu.
+    vi.stubEnv('AUTOWIN_OS_WORKSPACE', '')
+    spawnCapture.stdoutEvents = [
+      appelBash('toolu_fond', { command: COMMANDE_REELLE, run_in_background: true }),
+      demarrageReel(),
+      succes
+    ]
+    try {
+      const { texte, res } = await envoyer({ relancerTachesDeFond: true, workspaceCwd: undefined })
+      expect(res.tachesDeFondARelancer).toBeUndefined()
+      expect(texte).toMatch(/relance la demande/)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })
 

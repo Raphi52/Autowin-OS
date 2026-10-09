@@ -59,7 +59,12 @@ export interface TacheRelancee {
 
 export type IssueTacheRelancee =
   | { type: 'sortie'; code: number }
-  | { type: 'duree-depassee'; limiteMs: number }
+  | {
+      type: 'duree-depassee'
+      limiteMs: number
+      /** Faux quand rien n'a ete arrete : pid d'une autre session, peut-etre reattribue depuis. */
+      arretee: boolean
+    }
   | { type: 'non-demarree'; erreur: string }
 
 export interface ResultatTacheRelancee {
@@ -85,7 +90,8 @@ export interface DependancesRelance {
   codeDeSortie(journalPath: string): number | undefined
   /** Fin de la sortie (stdout + stderr fusionnés). */
   lireSortie(journalPath: string): string
-  arreter(pid: number | undefined): void
+  /** Rend `false` quand elle n'arrete RIEN (processus pas lance par cette session). */
+  arreter(pid: number | undefined): boolean | void
   conversationOccupee(conversationId: string): boolean
   envoyerTour(conversationId: string, prompt: string): Promise<unknown>
   magasin: MagasinLots
@@ -120,12 +126,13 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
     const code = deps.codeDeSortie(tache.journalPath)
     if (code !== undefined) return { type: 'sortie', code }
     if (maintenant() - tache.debut >= limiteMs) {
+      let arretee = false
       try {
-        deps.arreter(tache.pid)
+        arretee = deps.arreter(tache.pid) !== false
       } catch (erreur) {
         journaliser(`[taches de fond] arrêt impossible de « ${tache.commande} »`, erreur)
       }
-      return { type: 'duree-depassee', limiteMs }
+      return { type: 'duree-depassee', limiteMs, arretee }
     }
     return undefined
   }
@@ -224,7 +231,9 @@ export function composerPromptDeReprise(resultats: readonly ResultatTacheRelance
           ? 'terminée — code de sortie 0 (succès)'
           : `ÉCHEC — code de sortie ${r.issue.code}`
         : r.issue.type === 'duree-depassee'
-          ? `ARRÊTÉE — durée maximale dépassée (${Math.round(r.issue.limiteMs / 60_000)} min), résultat incomplet`
+          ? r.issue.arretee
+            ? `ARRÊTÉE — durée maximale dépassée (${Math.round(r.issue.limiteMs / 60_000)} min), résultat incomplet`
+            : `durée maximale dépassée (${Math.round(r.issue.limiteMs / 60_000)} min) — NON arrêtée : lancée avant le redémarrage d’Autowin, son numéro de processus a pu être réattribué ; résultat incomplet`
           : `NON DÉMARRÉE — ${r.issue.erreur}`
     const sortie =
       r.sortie.length > FIN_DE_SORTIE_CARACTERES
@@ -329,6 +338,8 @@ export function creerRelanceurSurDisque(entree: {
   envoyerTour: (conversationId: string, prompt: string) => Promise<unknown>
 }): RelanceurTachesDeFond {
   const journaux = join(entree.dossier, 'journaux')
+  /** Pids des relais lances par CETTE session : les seuls qu'on peut arreter sans risque. */
+  const lancesIci = new Set<number>()
   return creerRelanceurTachesDeFond({
     lancer: ({ commande, cwd, jeton }) => {
       const run = spawnSurvivable({
@@ -351,13 +362,32 @@ export function creerRelanceurSurDisque(entree: {
           /* la durée maximale finira par le dire */
         }
       })
+      // UNE COMMANDE MUETTE GARDE SON CODE. `discardEmptyJournal` (ecoute posee AVANT celle-ci dans
+      // `spawnSurvivable`) efface a la fermeture le journal vide ET sa preuve `.exit.json` : le code
+      // n'existait plus nulle part, et le lot attendait sa duree maximale (mesure du 2026-10-09,
+      // test « commande qui n'ecrit rien »). Le code du processus est alors la seule source : on le
+      // reecrit. Apres un redemarrage, personne n'efface rien : la preuve du relais reste.
+      run.child.once('close', (code) => {
+        if (survivableExitCode(journalPath) !== undefined) return
+        try {
+          writeSurvivableExit(journalPath, typeof code === 'number' && code >= 0 ? code : 1)
+        } catch (erreur) {
+          console.warn('[taches de fond] preuve de sortie non reecrite :', erreur)
+        }
+      })
       run.release()
+      if (run.pid) lancesIci.add(run.pid)
       return { journalPath, ...(run.pid ? { pid: run.pid } : {}) }
     },
     codeDeSortie: (journalPath) => survivableExitCode(journalPath),
-    lireSortie: (journalPath) => lireFinDeFichier(journalPath),
+    // Journal efface parce que VIDE : la commande n'a rien ecrit, ce n'est pas une sortie illisible.
+    lireSortie: (journalPath) => (existsSync(journalPath) ? lireFinDeFichier(journalPath) : ''),
+    // Un pid lu sur disque apres un redemarrage a pu etre donne a un AUTRE programme : on ne tue que
+    // ce que cette session a lance (test « ne tue JAMAIS un pid lance par une autre session »).
     arreter: (pid) => {
-      if (pid) process.kill(pid)
+      if (!pid || !lancesIci.has(pid)) return false
+      process.kill(pid)
+      return true
     },
     conversationOccupee: entree.conversationOccupee,
     envoyerTour: entree.envoyerTour,

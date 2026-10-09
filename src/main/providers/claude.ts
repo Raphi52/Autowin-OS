@@ -1624,10 +1624,23 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       {
         commande: string
         arretee: boolean
-        /** Commande shell EXECUTABLE (`local_bash`, non vide) ; vide = seulement une description. */
-        executable: string
+        /** `task_type` du CLI : seul `local_bash` est une commande shell. */
+        type: string
+        /** Appel d'outil qui l'a lancee : la commande EXACTE y vit, jamais dans `description`. */
+        toolUseId: string
+        /** Lancee en ARRIERE-PLAN : son resultat n'atteint pas le modele si le tour finit avant. */
+        enFond: boolean
       }
     >()
+    /**
+     * Appels `Bash` du tour (id -> commande exacte, demandee en arriere-plan ?).
+     *
+     * Mesure du 2026-10-09 (`run-stdout/790829d2-….stdout.jsonl` l.2287-2307) : `task_started` porte
+     * `description` = la PHRASE du modele (« Run app settings test and workspace check in
+     * background ») et `tool_use_id`. La commande executable n'existe QUE dans `input.command` de cet
+     * appel. Relancer `description` executait `bash -c "Run app settings test…"`.
+     */
+    const appelsShell = new Map<string, { commande: string; enFond: boolean }>()
     /** Commandes shell coupees que l'appelant relancera (voir `SendOptions.relancerTachesDeFond`). */
     const tachesDeFondARelancer: TacheDeFondARelancer[] = []
     const pendingTools = new Map<
@@ -1784,15 +1797,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
         // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
         const idTache = String(o['task_id'] ?? commande ?? '')
-        if (demarre)
+        if (demarre) {
+          const toolUseId = String(o['tool_use_id'] ?? '')
           tachesDeFond.set(idTache, {
+            // `description` sert a l'AFFICHAGE seulement : c'est une phrase, meme pour `local_bash`.
             commande: commande || 'commande sans description',
             arretee: false,
-            // Seule une tache `local_bash` porte une VRAIE commande dans `description` ; un agent ou
-            // une surveillance n'y met qu'une phrase (conv-42 : « Run the 6 bench replicas… »).
-            executable: o['task_type'] === 'local_bash' ? commande : ''
+            type: String(o['task_type'] ?? ''),
+            toolUseId,
+            // Le CLI le dit (`is_backgrounded`) ; a defaut, l'appel `Bash` le demandait.
+            enFond:
+              o['is_backgrounded'] === true ||
+              (o['is_backgrounded'] === undefined && appelsShell.get(toolUseId)?.enFond === true)
           })
-        else {
+        } else {
           const st = String(o['status'] ?? '').toLowerCase()
           if (st === 'completed' || st === 'failed') tachesDeFond.delete(idTache)
           else {
@@ -1800,7 +1818,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             tachesDeFond.set(idTache, {
               commande: commande || connue?.commande || 'commande sans description',
               arretee: true,
-              executable: connue?.executable ?? ''
+              type: connue?.type ?? '',
+              toolUseId: connue?.toolUseId ?? '',
+              enFond: connue?.enFond ?? false
             })
           }
         }
@@ -1893,6 +1913,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             const filePath = String(part.input?.file_path ?? '')
             const command = String(part.input?.command ?? filePath)
             const recherche = /^(Grep|Glob)$/i.test(part.name)
+            if (part.name === 'Bash' && typeof part.input?.command === 'string')
+              appelsShell.set(part.id, {
+                commande: part.input.command,
+                enFond: part.input.run_in_background === true
+              })
             pendingTools.set(part.id, {
               name: part.name,
               command,
@@ -1945,6 +1970,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           | undefined
         for (const part of msg?.content ?? []) {
           if (part.type !== 'tool_result' || !part.tool_use_id) continue
+          // Une commande de PREMIER plan recoit ici son vrai resultat, meme coupee (« Exit code 137 »,
+          // `bcdda33b-….stdout.jsonl` l.1753) : le modele l'a lu, rien a signaler ni a relancer.
+          for (const [id, tache] of tachesDeFond)
+            if (!tache.enFond && tache.toolUseId === part.tool_use_id) tachesDeFond.delete(id)
           const call = pendingTools.get(part.tool_use_id)
           if (!call) continue
           pendingTools.delete(part.tool_use_id)
@@ -1992,14 +2021,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
            * shell (`relancerTachesDeFond`), elle part dans `tachesDeFondARelancer` et la reponse
            * dit qu'elle REVIENDRA. Le reste (agent, surveillance, commande vide) garde l'avis
            * historique : aucune phrase n'est jamais executee comme une commande.
+           *
+           * Relancable = commande SHELL, lancee en ARRIERE-PLAN, dont l'appel `Bash` est connu, dans
+           * le dossier du tour. Sans dossier connu, rien ne part dans celui de l'app (`process.cwd()`).
            */
+          const cwdDuTour = execution?.cwd ?? readOnlyCwd
           for (const [id, tache] of tachesDeFond) {
-            if (!opts.relancerTachesDeFond || !tache.executable) continue
-            tachesDeFondARelancer.push({
-              id,
-              commande: tache.executable,
-              cwd: execution?.cwd ?? readOnlyCwd ?? process.cwd()
-            })
+            const appel = appelsShell.get(tache.toolUseId)
+            if (!opts.relancerTachesDeFond || !cwdDuTour) continue
+            if (tache.type !== 'local_bash' || !tache.enFond || !appel?.commande.trim()) continue
+            tachesDeFondARelancer.push({ id, commande: appel.commande, cwd: cwdDuTour })
             tachesDeFond.delete(id)
           }
           if (tachesDeFondARelancer.length > 0) {
