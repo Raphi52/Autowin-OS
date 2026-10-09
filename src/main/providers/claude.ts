@@ -1560,6 +1560,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
     let buffer = ''
     let text = ''
+    // Texte de CHAQUE message assistant reel, avec sa position dans `text` : sert a retrouver la
+    // derniere tentative quand le CLI abandonne sur un appel d'outil illisible (voir
+    // `recupererCmdFermeeEnOutilNatif`).
+    const textesMessages: MessageTexte[] = []
     // Surcharge API : derniere tentative annoncee par le CLI + presence d'un event `result`. Les deux
     // servent a distinguer un tour REELLEMENT vide d'un tour mort sur retries epuises.
     let lastRetry: { attempt: number; maxRetries: number; status: string } | null = null
@@ -1868,6 +1872,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (t === 'assistant') {
         const msg = o['message'] as
           | {
+              id?: string
               model?: string
               content?: Array<{
                 type: string
@@ -1902,6 +1907,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * une divergence entre les deux rejouerait le collage sur l'un des deux chemins.
              */
             const separation = separationEntreBlocsTexte(text, part.text)
+            if (msg?.model !== '<synthetic>') {
+              const id = msg?.id ?? ''
+              const dernier = textesMessages[textesMessages.length - 1]
+              if (dernier && dernier.id === id) dernier.texte += separation + part.text
+              else textesMessages.push({ id, debut: text.length, texte: part.text })
+            }
             text += separation + part.text
             queue.push({ delta: separation + part.text })
           } else if (part.type === 'thinking' && part.thinking) {
@@ -2118,6 +2129,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // (saisie ts 1789562253947, « /kaizen cette erreur et reprend »). Rien n'ayant ete
           // facture, le rejouer ne « repaie » rien et ne contourne aucune borne ; AgentPilot le
           // borne de toute facon a 2 tentatives, et reprend la session CLI en cours.
+          const recuperee =
+            normalizedUsage &&
+            (o['terminal_reason'] === 'malformed_tool_use_exhausted' ||
+              /tool call could not be parsed/i.test(reported))
+              ? recupererCmdFermeeEnOutilNatif(textesMessages)
+              : null
+          if (recuperee) {
+            // La commande etait COMPLETE : on la rend refermee, sans les tentatives jetees par le
+            // CLI ni son message d'erreur synthetique. Le chemin normal du pilote l'execute.
+            const avant = text.slice(0, recuperee.debut).trimEnd()
+            text = avant ? `${avant}\n\n${recuperee.texte}` : recuperee.texte
+            return
+          }
           const rienConsomme =
             !normalizedUsage ||
             ((normalizedUsage.costUsd ?? 0) === 0 &&
@@ -2375,6 +2399,74 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
   }
 }
+/** Texte d'un message assistant reel et sa position de depart dans le texte cumule de l'appel. */
+export interface MessageTexte {
+  id: string
+  debut: number
+  texte: string
+}
+
+const FERMETURES_OUTIL_NATIF = /^(?:\s*<\/(?:parameter|invoke|function_calls|antml:[a-z_]+)>)+\s*$/
+
+/**
+ * `<cmd>` REFERME PAR LA SYNTAXE DES OUTILS NATIFS — conv-120, appel du tour
+ * 3e00e0a5-5602-46e9-adb3-0d9c7a162b21 (2026-10-09), recidive flux 1848f898 le meme jour.
+ *
+ * fix-ok: le modele ecrit `<cmd>{json complet}` puis `</parameter></invoke>` au lieu de `</cmd>` ;
+ * l'API y lit un appel d'outil natif casse, le CLI retente une fois a l'identique puis abandonne
+ * (`malformed_tool_use_exhausted`) et le tour entier etait jete. `agent-pilot.normaliserFermeturesCmd`
+ * repare deja cette fermeture quand elle arrive en texte ; ici elle n'y arrivait jamais.
+ *
+ * Recuperation STRICTE, sinon l'echec reste : la DERNIERE tentative doit etre faite de texte, d'UN
+ * `<cmd>` dont l'objet JSON est equilibre, parsable et nomme, puis UNIQUEMENT de fermetures natives.
+ * Les tentatives precedentes (meme signature, jetees par la retentative du CLI) sont ecartees : on
+ * rend `debut` = debut de la premiere d'entre elles, pour ne jamais executer deux fois la commande.
+ */
+export function recupererCmdFermeeEnOutilNatif(
+  messages: readonly MessageTexte[]
+): { debut: number; texte: string } | null {
+  const derniere = messages[messages.length - 1]
+  if (!derniere) return null
+  const ouverture = derniere.texte.indexOf('<cmd>')
+  if (ouverture < 0 || derniere.texte.indexOf('<cmd>', ouverture + 5) >= 0) return null
+  let j = ouverture + 5
+  while (j < derniere.texte.length && /\s/.test(derniere.texte[j])) j++
+  if (derniere.texte[j] !== '{') return null
+  const fin = finObjetJsonTexte(derniere.texte, j)
+  if (fin < 0) return null
+  const json = derniere.texte.slice(j, fin)
+  try {
+    const parsed = JSON.parse(json) as { name?: unknown }
+    if (typeof parsed.name !== 'string' || !parsed.name.trim()) return null
+  } catch {
+    return null
+  }
+  if (!FERMETURES_OUTIL_NATIF.test(derniere.texte.slice(fin))) return null
+  const signature = (m: MessageTexte): boolean =>
+    m.texte.includes('<cmd>') && /<\/(?:parameter|invoke)>/.test(m.texte)
+  let premiere = messages.length - 1
+  while (premiere > 0 && signature(messages[premiere - 1])) premiere--
+  return {
+    debut: messages[premiere].debut,
+    texte: `${derniere.texte.slice(0, ouverture)}<cmd>${json}</cmd>`
+  }
+}
+
+function finObjetJsonTexte(raw: string, debut: number): number {
+  let profondeur = 0
+  let dansChaine = false
+  for (let k = debut; k < raw.length; k++) {
+    const c = raw[k]
+    if (dansChaine) {
+      if (c === '\\') k++
+      else if (c === '"') dansChaine = false
+    } else if (c === '"') dansChaine = true
+    else if (c === '{') profondeur++
+    else if (c === '}' && --profondeur === 0) return k + 1
+  }
+  return -1
+}
+
 function base64Fingerprint(content: string): string {
   return createHash('sha256').update(Buffer.from(content, 'base64')).digest('hex')
 }
