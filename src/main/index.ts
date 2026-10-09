@@ -341,7 +341,12 @@ import { BrainSearchCoordinator } from './viz/brain-search-coordinator'
 import { filterNativePreflight, readNativePreflight } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
-import { resumeActionFor, runIsProducing, waitUntilRunCanResume } from './runs/run-reattach'
+import {
+  resumeActionFor,
+  runIsProducing,
+  runJournalProgressMark,
+  waitUntilRunCanResume
+} from './runs/run-reattach'
 import {
   activeWorkflowProfile,
   seedDefaultWorkflows,
@@ -4929,14 +4934,31 @@ app.whenReady().then(async () => {
         continue
       }
 
-      void waitUntilRunCanResume(() => {
-        const latest = os
-          .resumableOrchestrations()
-          .find((candidate) => candidate.runId === resumableRun.runId)
-        return latest
-          ? resumeActionFor(latest, defaultProcessIdentity, Date.now(), persistedJournalLastWriteMs)
-          : 'ignorer'
-      }).then((action) => {
+      void waitUntilRunCanResume(
+        () => {
+          const latest = os
+            .resumableOrchestrations()
+            .find((candidate) => candidate.runId === resumableRun.runId)
+          return latest
+            ? resumeActionFor(
+                latest,
+                defaultProcessIdentity,
+                Date.now(),
+                persistedJournalLastWriteMs
+              )
+            : 'ignorer'
+        },
+        undefined,
+        undefined,
+        // Le plafond compte le SILENCE du journal : un doublon qui écrit encore reste observé.
+        () =>
+          runJournalProgressMark(
+            os
+              .resumableOrchestrations()
+              .find((candidate) => candidate.runId === resumableRun.runId),
+            persistedJournalLastWriteMs
+          )
+      ).then((action) => {
         const latest = os
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
@@ -5048,14 +5070,32 @@ app.whenReady().then(async () => {
       continue
     }
     if (reprise === 'rattacher') {
-      void waitUntilRunCanResume(() => {
-        const latest = os
-          .resumableOrchestrations()
-          .find((candidate) => candidate.runId === resumableRun.runId)
-        return latest
-          ? resumeActionFor(latest, defaultProcessIdentity, Date.now(), persistedJournalLastWriteMs)
-          : 'ignorer'
-      }).then(async (action) => {
+      void waitUntilRunCanResume(
+        () => {
+          const latest = os
+            .resumableOrchestrations()
+            .find((candidate) => candidate.runId === resumableRun.runId)
+          return latest
+            ? resumeActionFor(
+                latest,
+                defaultProcessIdentity,
+                Date.now(),
+                persistedJournalLastWriteMs
+              )
+            : 'ignorer'
+        },
+        undefined,
+        undefined,
+        // Le plafond compte le SILENCE du journal, pas la durée de l'étape : une construction de
+        // plus de 10 min n'est plus déclarée « interrompue » en plein travail (conv-115, 2026-10-09).
+        () =>
+          runJournalProgressMark(
+            os
+              .resumableOrchestrations()
+              .find((candidate) => candidate.runId === resumableRun.runId),
+            persistedJournalLastWriteMs
+          )
+      ).then(async (action) => {
         const latest = os
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)

@@ -223,8 +223,35 @@ function agentSilenceMs(
  * qu'on avait — coûte une attente sans fin.
  */
 export const SILENCE_TOLERE_MS = 10 * 60_000
-/** Même horizon pour une reprise dont aucune preuve de processus ou de sortie n'arrive. */
+/**
+ * Même horizon pour une reprise dont aucune preuve de processus ou de sortie n'arrive. Ce sont des
+ * sondes CONSÉCUTIVES SANS ÉCRITURE du journal : un silence, jamais une durée totale (voir
+ * `waitUntilRunCanResume`).
+ */
 const MAX_REATTACH_PROBES = Math.ceil(SILENCE_TOLERE_MS / 1_000)
+
+/**
+ * Date de la dernière écriture des journaux des agents ACTIFS d'un run : le témoin de production que
+ * `waitUntilRunCanResume` suit pour ne décompter que le silence. `undefined` = rien de mesurable
+ * (pas de journal, sonde en échec), ce qui ne vaut jamais preuve de production.
+ */
+export function runJournalProgressMark(
+  state: Pick<OrchestrationRunState, 'agents'> | null | undefined,
+  lastWriteMs: (path: string) => number | undefined
+): number | undefined {
+  let derniere: number | undefined
+  for (const agent of state?.agents ?? []) {
+    if (agent.active === false || !agent.journalPath) continue
+    let ecritA: number | undefined
+    try {
+      ecritA = lastWriteMs(agent.journalPath)
+    } catch {
+      continue // sonde en échec : on ne sait pas, on ne crédite rien
+    }
+    if (ecritA !== undefined && (derniere === undefined || ecritA > derniere)) derniere = ecritA
+  }
+  return derniere
+}
 
 /**
  * Cet agent produit-il encore, pour de bon ?
@@ -1066,19 +1093,36 @@ function pauseBeforeLivenessProbe(): Promise<void> {
  * Attend qu'un agent détaché se termine puis rend immédiatement la prochaine action. Sans cette
  * surveillance, une app rouverte pendant que le CLI vit encore reste bloquée jusqu'au redémarrage
  * suivant : elle s'est « rattachée » une fois, mais personne ne reprend la suite du workflow.
+ *
+ * Le plafond `maxRattacherProbes` compte les sondes depuis la DERNIÈRE avancée de
+ * `readProgressMark` (la date d'écriture du journal), pas depuis le début de l'attente. Sans cela,
+ * une étape de construction de plus de dix minutes était lâchée en plein travail : le 2026-10-09
+ * (conv-115), run-9d787439fb32-1 et son doublon ont été déclarés « interrompus » à l'expiration
+ * alors que leurs journaux avançaient encore vingt minutes plus tard, et plus personne ne
+ * reprenait leur résultat. Sans témoin (`readProgressMark` absent ou muet), le plafond reste
+ * absolu, comme avant.
  */
 export async function waitUntilRunCanResume(
   readAction: () => ResumeAction,
   pause: () => Promise<void> = pauseBeforeLivenessProbe,
-  maxRattacherProbes = MAX_REATTACH_PROBES
+  maxRattacherProbes = MAX_REATTACH_PROBES,
+  readProgressMark?: () => number | undefined
 ): Promise<Exclude<ResumeAction, 'rattacher'>> {
   if (!Number.isSafeInteger(maxRattacherProbes) || maxRattacherProbes < 1) {
     throw new Error('nombre maximal de sondes invalide')
   }
   let probes = 0
+  let derniereEcriture: number | undefined
   for (;;) {
     const action = readAction()
     if (action !== 'rattacher') return action
+    const ecritA = readProgressMark?.()
+    if (ecritA !== undefined) {
+      // Le journal a bougé depuis la sonde précédente : l'agent produit, le silence repart de zéro.
+      // La première mesure n'est qu'un point de départ, elle ne prouve encore aucune avancée.
+      if (derniereEcriture !== undefined && ecritA > derniereEcriture) probes = 0
+      if (derniereEcriture === undefined || ecritA > derniereEcriture) derniereEcriture = ecritA
+    }
     // Expirer l'ATTENTE ne vaut jamais preuve de mort : on rend `ignorer`, donc aucun provider
     // n'est relancé. L'appel actif reste dans son checkpoint et le démarrage publie un échec durable.
     if (probes >= maxRattacherProbes) return 'ignorer'
