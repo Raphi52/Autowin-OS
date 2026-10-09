@@ -1881,7 +1881,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               }>
             }
           | undefined
-        if (msg?.model) resolvedModel = msg.model // modèle RÉEL rapporté par Claude
+        // modèle RÉEL rapporté par Claude. `<synthetic>` est le message que le CLI FABRIQUE lui-même
+        // (texte d'erreur, 0 token) : l'adopter effaçait le vrai modèle — conv-120, appel du tour
+        // 3e00e0a5-5602-46e9-adb3-0d9c7a162b21, resolvedModel « <synthetic> » pour 0,37 USD facturés.
+        if (msg?.model && msg.model !== '<synthetic>') resolvedModel = msg.model
         const usageAppel = normalizeClaudeUsage((msg as { usage?: unknown } | undefined)?.usage)
         if (usageAppel) {
           derniereEntree = usageAppel.inputTokens
