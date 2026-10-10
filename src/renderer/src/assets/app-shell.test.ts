@@ -86,6 +86,15 @@ describe('collapsed navigation rail', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
     expect(css).not.toMatch(/\.space-toy-icon\s*{[^}]*transform:\s*translate/s)
   })
+
+  // conv-198 : un émoji (23,35 px à 17 px) déborde sa case de 18 px. Sans centrage de la piste,
+  // il ne déborde qu'à droite : 2,7 px à droite du rond, alors que les icônes SVG restent centrées.
+  it('centres the overflowing emoji glyph in its box when the rail is collapsed', () => {
+    const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
+    expect(css).toMatch(
+      /\.rail\.is-collapsed \.space-toy-icon\s*{[^}]*place-content:\s*center\s*;/s
+    )
+  })
 })
 
 describe('nappe de bruit organique (or/anthracite)', () => {
