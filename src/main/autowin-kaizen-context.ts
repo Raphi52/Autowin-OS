@@ -691,7 +691,16 @@ ${MARQUEUR_FIN}
  * conversation ou la commande est tapee : conv-63, tour 93905e01-f715-4aab-aff8-40c7216dfc0c
  * (2026-10-02), a recu le dossier de conv-63 elle-meme (promptCalls, turnEvents, saisies vides)
  * au lieu de celui de conv-61 vise par l'utilisateur.
+ *
+ * La cible s'ecrit comme on PARLE, pas seulement `conv-N` colle a la commande : conv-152, tour
+ * 1dd28b24-4274-44a4-a9f5-2a36005f6afd (saisie ts 2026-10-10T08:26:55.163Z), « /kaizen dans le
+ * dernier tour de la conv 150 … » a recu le dossier de conv-152 (promptCalls, turnEvents, saisies
+ * vides). On prend la PREMIERE mention `conv N` / `conv-N` / `conversation N` de la phrase ;
+ * l'appelant retombe sur la conversation courante si elle n'existe pas.
  */
 export function kaizenNamedConversationId(task: string): string | undefined {
-  return /^\/kaizen\s+(conv-\d+)\b/i.exec(task.trim())?.[1]?.toLowerCase()
+  const tache = task.trim()
+  if (!/^\/kaizen(?=\s|$)/i.test(tache)) return undefined
+  const numero = /\bconv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?(\d+)\b/i.exec(tache)?.[1]
+  return numero ? `conv-${numero}` : undefined
 }
