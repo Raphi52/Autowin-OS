@@ -62,9 +62,11 @@ export const THEMES: readonly Theme[] = [
   // Affiche « Holographique doré » depuis le 2026-10-10 (conv-212), en pendant de « Holographique ».
   // L id reste `nebuleuse-doree` : c est la valeur memorisee sur le poste.
   { id: 'nebuleuse-doree', libelle: 'Holographique doré', base: 'sombre' },
-  // Pendant CLAIR d Holographique (conv-212, 2026-10-10) : meme degrade bleu -> rose sur une
-  // nacre argentee. Feuille : assets/theme-holographique-clair.css.
-  { id: 'holographique-clair', libelle: 'Holographique clair', base: 'clair' },
+  // Pendant BLANC d Holographique (conv-212, 2026-10-10, /draft « go le plus blanc ») : feuille
+  // DERIVEE d Holographique noir par scripts/theme-nebuleuse-verre.mjs holographique-clair
+  // (nacre #f8f7fb sur fond #f6f5f9, lisere irise, coins bleu et rose, lumiere de la souris).
+  // L id reste `holographique-clair` : c est la valeur memorisee si la premiere version a ete choisie.
+  { id: 'holographique-clair', libelle: 'Holographique blanc', base: 'clair' },
   // TROIS CLAIRS DE PLUS, chacun pendant d un sombre. Base CLAIRE : c est elle qui
   // commande la variante d accent, les teintes de nuit etant illisibles sur fond clair.
   // Aucune maquette maison n en proposait (les douze sont sombres, mesure du 2026-09-07) :
