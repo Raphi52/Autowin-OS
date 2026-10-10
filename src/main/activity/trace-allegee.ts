@@ -44,8 +44,29 @@ export function extraitDemandeUtilisateur(contenu: string): string {
 }
 
 /**
+ * Longueur gardée de la CAUSE d'un échec. La carte d'un sous-agent en échec l'écrit sur une ligne
+ * coupée (« checkpoint orchestration causalement invalide : … », 82 caractères sur conv-163) ; le
+ * texte entier reste lisible au clic, par `chargesDesEvenements`.
+ */
+const EXTRAIT_CAUSE_MAX = 300
+
+/** Genres qui portent la cause d'un échec — ceux que lit `failureCause` côté écran. */
+const GENRES_DE_CAUSE = new Set(['error', 'model-response'])
+
+/** Un appel d'outil en échec porte aussi une charge `error` : ce n'est pas la cause d'une étape. */
+const TYPES_OUTIL = new Set(['tool-call', 'tool-result'])
+
+function contenuAllege(event: TraceEventV1, charge: TracePayload): string {
+  if (event.type === 'message') return extraitDemandeUtilisateur(charge.content)
+  if (event.status === 'failed' && !TYPES_OUTIL.has(event.type) && GENRES_DE_CAUSE.has(charge.kind))
+    return charge.content.slice(0, EXTRAIT_CAUSE_MAX)
+  return ''
+}
+
+/**
  * La trace sans ses contenus : chaque charge garde son genre, son nom et son type, contenu vidé.
- * Seuls les `message` gardent l'extrait de la demande humaine, dont le sélecteur de tours a besoin.
+ * Deux exceptions bornées : un `message` garde l'extrait de la demande humaine (sélecteur de tours),
+ * et une étape EN ÉCHEC garde l'extrait de sa cause (carte du sous-agent, constaté vide le 2026-10-10).
  */
 export function allegerTracePourGraphe(events: readonly TraceEventV1[]): TraceEventV1[] {
   return events.map((event) => ({
@@ -54,7 +75,7 @@ export function allegerTracePourGraphe(events: readonly TraceEventV1[]): TraceEv
       kind: charge.kind,
       ...(charge.name !== undefined ? { name: charge.name } : {}),
       ...(charge.mediaType !== undefined ? { mediaType: charge.mediaType } : {}),
-      content: event.type === 'message' ? extraitDemandeUtilisateur(charge.content) : ''
+      content: contenuAllege(event, charge)
     }))
   }))
 }

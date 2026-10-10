@@ -8,6 +8,7 @@ import {
 } from './harness-timeline-model'
 import { LatestRequestGate } from './observatory-reliability'
 import {
+  distinctNodePayloads,
   NODE_PAYLOAD_KINDS,
   projectLatestRequestExecution,
   type RequestTurnOption
@@ -345,7 +346,13 @@ function ExecutionNodeContents({
     window.api
       .causalTraceCharges(conversation, ids, GENRES_DU_DETAIL)
       .then((parEvenement) => {
-        if (vivant) setLu({ cle, charges: ids.flatMap((id) => parEvenement[id] ?? []) })
+        // Dédoublonnées comme dans la projection : le relais d'un sous-agent recopie la réponse
+        // du modèle, qui s'afficherait sinon deux fois.
+        if (vivant)
+          setLu({
+            cle,
+            charges: distinctNodePayloads(ids.flatMap((id) => parEvenement[id] ?? []))
+          })
       })
       .catch((raison: unknown) => {
         if (vivant)
@@ -814,6 +821,17 @@ export function WorkflowExecutionGraph({
                       offsetMs={offsetFromStart(node.event.timestamp, baseMs)}
                     />
                   </span>
+                  {/* POURQUOI L'ÉTAPE A ÉCHOUÉ, LISIBLE SANS CLIC (2026-10-10) : six échecs de
+                      `scout:dette` (conv-163) s'affichaient sans la cause que la trace écrivait. */}
+                  {node.event.display?.failure && (
+                    <span
+                      className="workflow-execution-node-failure"
+                      data-execution-failure
+                      title={node.event.display.failure}
+                    >
+                      {node.event.display.failure}
+                    </span>
+                  )}
                 </span>
               </button>
               {/* LA BRIQUE SE DÉPLIE SUR PLACE (demande du 2026-09-23) : le détail vit sous la

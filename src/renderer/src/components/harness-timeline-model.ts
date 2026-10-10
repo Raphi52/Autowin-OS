@@ -89,6 +89,8 @@ export interface HarnessTimelineEvent {
     payloadEventIds?: string[]
     dependencyIds?: string[]
     limitation?: string
+    /** Cause d'échec d'un sous-agent de run, telle que la trace l'a écrite. Absente = aucune écrite. */
+    failure?: string
     workflow?: 'autowin' | 'direct'
     skillName?: string
     skillIdentity?: 'phase-alias'
