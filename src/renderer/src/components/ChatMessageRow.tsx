@@ -91,8 +91,8 @@ function libelleAttente(receipt: DirectiveReceipt): string {
 export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
   return (
     <div className={`msg user directive-receipt is-${receipt.status}`}>
+      {/* Plus de libelle « Toi » (conv-227, 2026-10-11) ; l'etat de l'envoi, lui, reste. */}
       <div className="msg-meta">
-        <span className="msg-role">Toi</span>
         <span className="directive-receipt-status" role="status">
           {receipt.status === 'sending' ? (
             <>
@@ -387,26 +387,23 @@ export const ChatMessageRow = memo(
     if (message.role === 'user') {
       return (
         <div className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}>
-          <div className="msg-meta">
-            <span className="msg-role">Toi</span>
-            {message.ts ? (
-              <span className="msg-time" data-heure-complete={formaterHeureComplete(message.ts)}>
-                {formaterHeureMessage(message.ts)}
-              </span>
-            ) : null}
-            {/* MESSAGE INJECTE EN COURS DE TOUR (conv-257, 2026-09-04). Le drapeau `orientation`
-                existait deja cote donnees, mais RIEN ne le montrait : un message tape pendant un
-                tour n'ouvre pas de nouveau tour, il rejoint celui qui court -- et l'utilisateur
-                concluait qu'il etait perdu (« mon dernier msg a pas lance de tour »). */}
-            {message.orientation ? (
+          {/* PLUS DE LIGNE « TOI » au-dessus des messages de l'utilisateur, dans aucun theme
+              (conv-227, 2026-10-11, apres la ligne « Agent »). L'en-tete ne reste que pour porter
+              l'etiquette d'orientation ; l'heure passe dans la rangee de boutons sous la bulle. */}
+          {/* MESSAGE INJECTE EN COURS DE TOUR (conv-257, 2026-09-04). Le drapeau `orientation`
+              existait deja cote donnees, mais RIEN ne le montrait : un message tape pendant un
+              tour n'ouvre pas de nouveau tour, il rejoint celui qui court -- et l'utilisateur
+              concluait qu'il etait perdu (« mon dernier msg a pas lance de tour »). */}
+          {message.orientation ? (
+            <div className="msg-meta">
               <span
                 className="msg-orientation-tag"
                 title="Envoyé pendant un tour en cours : ce texte a rejoint la réponse en cours au lieu d’ouvrir un nouveau tour"
               >
                 orienté en cours de tour
               </span>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
           {message.content &&
             (() => {
               const entete = decouperSkill(message.content, skills)
@@ -461,6 +458,12 @@ export const ChatMessageRow = memo(
             </div>
           )}
           <div className="msg-turn-actions">
+            {/* Heure d'ecriture, toujours visible au seul survol du message (`.msg:hover .msg-time`). */}
+            {message.ts ? (
+              <span className="msg-time" data-heure-complete={formaterHeureComplete(message.ts)}>
+                {formaterHeureMessage(message.ts)}
+              </span>
+            ) : null}
             <CopyMessageButton message={message} />
             {message.messageId && onFork && (
               <button
@@ -479,14 +482,11 @@ export const ChatMessageRow = memo(
     }
     return (
       <div className="msg assistant fade-in">
-        {/* `is-live` tant que le tour tourne : la capsule « Agent » du theme Nebuleuse de verre
-            (Fumé net · Agent assorti, conv-173) palit avec les capsules Raisonnement/Actions. */}
-        <div className={message.done ? 'msg-meta' : 'msg-meta is-live'}>
-          <span className="msg-role">Agent</span>
-          {/* LE seul spinner du tour : une attente = un indicateur, ici et nulle part ailleurs
-              (demande du 2026-09-12 « met qu'un spinner sur la ligne agent »). */}
-          {!message.done && <Spinner size={14} label="Tour en cours" />}
-        </div>
+        {/* PLUS DE LIGNE « AGENT » au-dessus de la reponse, dans aucun theme (conv-227, 2026-10-11 :
+            « enleve carrement cette ligne de tous les themes elle pollue pour rien »). Son spinner
+            part avec elle : le tour en cours se lit aux capsules Raisonnement / Actions et au bouton
+            d'arret de la saisie. Les styles `.msg.assistant > .msg-meta` restent : l'en-tete
+            « Bureau cache » de HdeskTv.tsx porte le meme balisage. */}
         {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense.
             L'attente AVANT le premier fragment de pensée passe par le MÊME bloc (corps vide) :
             l'ancien placeholder texte « réflexion… » etait un vestige qui court-circuitait le
