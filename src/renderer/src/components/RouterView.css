@@ -4,17 +4,20 @@
   height: 100%;
   min-height: 0;
   overflow: auto;
-  padding: 16px 18px;
+  /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
+     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
+  padding: 16px 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
-  border: 0;
-  border-radius: var(--container-radius-page);
-  background: var(--surface-page);
-  box-shadow: var(--container-shadow);
-  backdrop-filter: blur(var(--container-blur));
+  /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
+     ni rayon de page, ni reflet, ni flou. Elle recopiait le cadre de `.view-page` et apparaissait
+     comme une page dans la page. Le cadre est peint une fois, par `.view-page`. */
   color: #e7edf5;
+}
+.router-view > .module-header {
+  /* Texte du titre au meme retrait que celui de la page : `--view-head-retrait` (ViewPage.css). */
+  padding-inline: var(--view-head-retrait);
 }
 .router-default,
 .router-provider {

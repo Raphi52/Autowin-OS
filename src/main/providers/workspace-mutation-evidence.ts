@@ -2,7 +2,13 @@ import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { realpathSync, watch, type FSWatcher } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { readGitDiff, readGitState } from '../git-read-main'
+import {
+  readGitDiff,
+  readGitDiffHeadBatch,
+  readGitState,
+  readNoIndexGitDiff
+} from '../git-read-main'
+import type { GitDiffResult } from '../../shared/git-read'
 import type { ExecutionEvidence } from './types'
 import {
   addedLineFingerprintsFromUnifiedDiff,
@@ -151,11 +157,156 @@ function multisetDifference(before: readonly string[], after: readonly string[])
   })
 }
 
-export async function captureWorkspaceMutationSnapshot(
+/**
+ * LA PHOTO NE DOIT PAS GROSSIR AVEC LE NOMBRE DE CONVERSATIONS (mesure 2026-10-10, conv-172).
+ *
+ * Le chat la prend avant ET apres chaque reponse. Elle lancait un `git diff` PAR fichier modifie
+ * (deux par fichier non suivi), tous a la fois : 308 fichiers non commites = 175 processus git par
+ * photo. L'attente avant envoi est passee de ~1 s (un fil) a 7-22 s (2-3 fils), et trois photos
+ * rejouees ensemble sur le meme dossier prenaient ~150 s chacune. Trois corrections, sans changer
+ * d'un octet les empreintes (l'onglet Fichiers les compare a celles deja enregistrees) :
+ *  1. un seul `git diff HEAD` pour tous les fichiers suivis (`diffsDuLot`) ;
+ *  2. au plus `PARALLELE_MAX` processus en vol pour ce qui reste fichier par fichier ;
+ *  3. les demandes SIMULTANEES sur le meme dossier partagent une photo (`captureMutualisee`).
+ */
+const PARALLELE_MAX = 8
+
+/**
+ * Au-dela, la portion part par l'ancien chemin unitaire : `readGitDiff` a le `maxBuffer` par defaut
+ * (1 Mo) et TRONQUE un tres gros diff — le lot, lui, le rendrait entier, donc une autre empreinte.
+ */
+const PORTION_LOT_OCTETS_MAX = 512 * 1024
+
+/** Un chemin qui contient un joker est un MOTIF pour git : seul, il ramene d'autres fichiers. */
+const CHEMIN_NON_LITTERAL = /[*?[\\]|^:/
+
+type DiffsDuLot = {
+  /** Texte exact que `git diff HEAD -- chemin` aurait rendu seul. */
+  portions: Map<string, string>
+  /** Chemins dont `git diff HEAD -- chemin` est PROUVE vide : il ne reste que l'etape `--no-index`. */
+  vides: Set<string>
+}
+
+/**
+ * Decoupe un lot `git diff --no-renames` par son entete `diff --git a/P b/P`. Sans renommage, les
+ * deux cotes sont le MEME chemin : on le retrouve sans ambiguite meme s'il contient des espaces.
+ * Un entete cite (`"a/..."`, caracteres speciaux) rend `undefined` : on ne sait plus attribuer.
+ */
+function cheminDeLEntete(bloc: string): string | undefined {
+  const finDeLigne = bloc.indexOf('\n')
+  const entete = finDeLigne === -1 ? bloc : bloc.slice(0, finDeLigne)
+  if (!entete.startsWith('a/')) return undefined
+  const reste = entete.slice(2)
+  const longueur = (reste.length - 3) / 2
+  if (!Number.isInteger(longueur) || longueur <= 0) return undefined
+  const chemin = reste.slice(0, longueur)
+  return reste.slice(longueur) === ` b/${chemin}` ? chemin : undefined
+}
+
+async function diffsDuLot(
+  cwd: string,
+  chemins: readonly string[]
+): Promise<DiffsDuLot | undefined> {
+  const litteraux = chemins.filter((chemin) => !CHEMIN_NON_LITTERAL.test(chemin))
+  if (litteraux.length === 0) return undefined
+  const sorties = await readGitDiffHeadBatch(cwd, litteraux)
+  if (!sorties) return undefined
+  const demandes = new Set(litteraux)
+  const portions = new Map<string, string>()
+  const tropGros = new Set<string>()
+  let blocNonAttribue = false
+  for (const sortie of sorties) {
+    for (const bloc of sortie.split(/^diff --git /m).slice(1)) {
+      const chemin = cheminDeLEntete(bloc)
+      if (!chemin || !demandes.has(chemin) || portions.has(chemin) || tropGros.has(chemin)) {
+        blocNonAttribue = true
+        continue
+      }
+      const portion = `diff --git ${bloc}`
+      if (Buffer.byteLength(portion, 'utf8') > PORTION_LOT_OCTETS_MAX) tropGros.add(chemin)
+      else portions.set(chemin, portion)
+    }
+  }
+  // Un seul bloc non attribue suffit a ne plus rien PROUVER vide : ces chemins repartent par
+  // `readGitDiff` entier, exactement comme avant.
+  const vides = blocNonAttribue
+    ? new Set<string>()
+    : new Set(litteraux.filter((chemin) => !portions.has(chemin) && !tropGros.has(chemin)))
+  return { portions, vides }
+}
+
+/** Meme resultat que `readGitDiff(cwd, chemin)`, sans relancer ce que le lot a deja lu. */
+async function diffDuChemin(
+  cwd: string,
+  chemin: string,
+  lot: DiffsDuLot | undefined
+): Promise<GitDiffResult> {
+  const portion = lot?.portions.get(chemin)
+  if (portion !== undefined) return { available: true, diff: portion }
+  if (lot?.vides.has(chemin))
+    return { available: true, diff: await readNoIndexGitDiff(cwd, chemin) }
+  return readGitDiff(cwd, chemin)
+}
+
+async function enParalleleBorne<T, R>(
+  elements: readonly T[],
+  limite: number,
+  tache: (element: T) => Promise<R>
+): Promise<R[]> {
+  const resultats = new Array<R>(elements.length)
+  let suivant = 0
+  const ouvrier = async (): Promise<void> => {
+    while (suivant < elements.length) {
+      const index = suivant++
+      resultats[index] = await tache(elements[index] as T)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limite, elements.length) }, ouvrier))
+  return resultats
+}
+
+type FileDeCapture = {
+  enCours: Promise<WorkspaceMutationSnapshot>
+  suivante?: Promise<WorkspaceMutationSnapshot>
+}
+const capturesParDossier = new Map<string, FileDeCapture>()
+
+function lancerCapture(
+  cle: string,
+  capturer: () => Promise<WorkspaceMutationSnapshot>
+): Promise<WorkspaceMutationSnapshot> {
+  const file: FileDeCapture = { enCours: capturer() }
+  capturesParDossier.set(cle, file)
+  const liberer = (): void => {
+    if (capturesParDossier.get(cle) === file && !file.suivante) capturesParDossier.delete(cle)
+  }
+  file.enCours.then(liberer, liberer)
+  return file.enCours
+}
+
+/**
+ * Photos SIMULTANEES d'un meme dossier : au plus une en cours et une en attente, quel que soit le
+ * nombre de conversations. On ne rejoint JAMAIS la photo deja en cours — elle a pu lire le disque
+ * AVANT la demande et manquer une ecriture du tour qui la demande. On rejoint la SUIVANTE, qui
+ * demarre forcement apres : chaque demandeur recoit une photo prise apres sa demande.
+ */
+function captureMutualisee(
+  cle: string,
+  capturer: () => Promise<WorkspaceMutationSnapshot>
+): Promise<WorkspaceMutationSnapshot> {
+  const file = capturesParDossier.get(cle)
+  if (!file) return lancerCapture(cle, capturer)
+  if (!file.suivante) {
+    const relancer = (): Promise<WorkspaceMutationSnapshot> => lancerCapture(cle, capturer)
+    file.suivante = file.enCours.then(relancer, relancer)
+  }
+  return file.suivante
+}
+
+export function captureWorkspaceMutationSnapshot(
   cwd: string,
   observedPaths: readonly string[] = []
 ): Promise<WorkspaceMutationSnapshot> {
-  const git = await readGitState(cwd, 0)
   const normalizedObserved = [
     ...new Set(
       observedPaths.flatMap((path) => {
@@ -164,39 +315,46 @@ export async function captureWorkspaceMutationSnapshot(
       })
     )
   ]
+  const cle = [filesystemPathKey(cwd), ...[...normalizedObserved].sort()].join('\u0000')
+  return captureMutualisee(cle, () => capturerMaintenant(cwd, normalizedObserved))
+}
+
+async function capturerMaintenant(
+  cwd: string,
+  normalizedObserved: readonly string[]
+): Promise<WorkspaceMutationSnapshot> {
+  const git = await readGitState(cwd, 0)
   const observedTails = new Map(
     await Promise.all(
       normalizedObserved.map(async (path) => [path, await beginAtEnd(resolve(cwd, path))] as const)
     )
   )
   if (!git.available || !git.state) return workspaceMutationSnapshot([], observedTails)
-  const paths = [
-    ...new Set([
-      ...git.state.changes.map((change) => change.path.replaceAll('\\', '/')),
-      ...normalizedObserved
-    ])
-  ]
-  const entries = await Promise.all(
-    paths.map(async (path) => {
-      const diff = await readGitDiff(cwd, path)
-      const generationMarker = await captureWorkspacePathGenerationMarker(cwd, path)
-      const fingerprint = createHash('sha256')
-        .update(
-          JSON.stringify({
-            diff: diff.available ? (diff.diff ?? '') : `unavailable:${diff.error ?? ''}`,
-            generationMarker
-          }),
-          'utf8'
-        )
-        .digest('hex')
-      return [
-        path,
-        fingerprint,
-        generationMarker,
-        diff.available ? addedLineFingerprintsFromUnifiedDiff(diff.diff ?? '') : []
-      ] as const
-    })
-  )
+  const cheminsDuStatut = git.state.changes.map((change) => change.path.replaceAll('\\', '/'))
+  const paths = [...new Set([...cheminsDuStatut, ...normalizedObserved])]
+  // Le lot ne porte QUE les entrees du statut : ce sont des fichiers (ou des dossiers non suivis
+  // entiers). Un chemin seulement OBSERVE peut etre un dossier aux fichiers suivis : seul, son diff
+  // les englobe tous — il garde donc l'ancien chemin unitaire.
+  const lot = await diffsDuLot(cwd, [...new Set(cheminsDuStatut)])
+  const entries = await enParalleleBorne(paths, PARALLELE_MAX, async (path) => {
+    const diff = await diffDuChemin(cwd, path, lot)
+    const generationMarker = await captureWorkspacePathGenerationMarker(cwd, path)
+    const fingerprint = createHash('sha256')
+      .update(
+        JSON.stringify({
+          diff: diff.available ? (diff.diff ?? '') : `unavailable:${diff.error ?? ''}`,
+          generationMarker
+        }),
+        'utf8'
+      )
+      .digest('hex')
+    return [
+      path,
+      fingerprint,
+      generationMarker,
+      diff.available ? addedLineFingerprintsFromUnifiedDiff(diff.diff ?? '') : []
+    ] as const
+  })
   return workspaceMutationSnapshot(entries, observedTails)
 }
 

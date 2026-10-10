@@ -17,7 +17,9 @@ import {
 } from './chat-view-model'
 import './ChatView.css'
 import './Evidence.css'
+import './ChatView.capsule-orchestration.css'
 import {
+  decouperBattement,
   failedTask,
   iconeFamille,
   interruptedTask,
@@ -104,6 +106,63 @@ function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element 
         </>
       )}
     </li>
+  )
+}
+
+/** Cible : l'icone de famille d'`orchestrate`, dessinee en SVG comme celles des capsules. */
+const ICONE_ORCHESTRATION = (
+  <svg viewBox="0 0 16 16" focusable="false">
+    <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="8" cy="8" r="3.1" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    <circle cx="8" cy="8" r="1.1" fill="currentColor" />
+  </svg>
+)
+
+/**
+ * UNE PHASE dans le corps de la capsule d'orchestration : QUI la joue, le prompt qui lui a ete
+ * envoye, puis ce qu'elle a rendu — tout visible des que la capsule est ouverte (capsule 2, conv-194).
+ * Les regles des lignes depliables restent : rien d'invente (un champ absent n'est pas affiche),
+ * et le controle final rend sa « décision et motif ». Le seul texte d'attente, « pas encore », est
+ * reserve a la phase qui TOURNE : c'est un etat vrai, pas un depliage vide.
+ */
+function PhaseDeLaCapsule({
+  choix,
+  enCours
+}: {
+  choix: PipelineChoice
+  enCours: boolean
+}): React.JSX.Element {
+  // La PHASE nomme l'etape ; le role vient a part, apres un point median, et seulement s'il dit
+  // autre chose qu'elle. Colle au nom, il donnait « prompt envoyé à scout subagent » (capture du
+  // 2026-10-10, conv-194) — une phase qui n'existe pas.
+  const nom = choix.phase ?? choix.role ?? 'étape'
+  const role = choix.role && choix.role !== nom ? choix.role : undefined
+  const estControle = choix.phase === 'gate' || choix.role === 'gate'
+  const qui = choix.model ?? choix.provider
+  return (
+    <section className="orch-section" data-testid="activity-pipeline-line">
+      <div className="orch-titre">
+        {[choix.prompt ? `prompt envoyé à ${nom}` : nom, role, qui].filter(Boolean).join(' · ')}
+      </div>
+      {choix.prompt && (
+        <pre className="orch-texte" data-testid="activity-pipeline-prompt">
+          {choix.prompt}
+        </pre>
+      )}
+      {(choix.outcome || enCours) && (
+        <div className="orch-titre">{estControle ? 'décision et motif' : 'rendu'}</div>
+      )}
+      {choix.outcome ? (
+        <pre
+          className={`orch-texte${choix.ok === false ? ' failed' : ''}`}
+          data-testid="activity-pipeline-outcome"
+        >
+          {choix.outcome}
+        </pre>
+      ) : enCours ? (
+        <div className="orch-attente">pas encore — s’affiche ici quand {nom} finit</div>
+      ) : null}
+    </section>
   )
 }
 
@@ -586,6 +645,219 @@ export function AssistantActivityGroup({
   const resumable = retryable?.task
   const retryVerb = retryable?.verb ?? 'Reprendre'
   const retryGerund = retryable?.gerund ?? 'Reprise'
+  // Les deux boutons arretent le clic : dans la capsule d'orchestration, ils vivent DANS l'en-tete
+  // depliable, et un clic sur ↗ ou Relancer ne doit pas plier/deplier le bloc au passage.
+  const boutonRun = runConsultable ? (
+    <button
+      type="button"
+      className="activity-open-run"
+      data-testid="activity-open-run"
+      title="Voir la trace complète dans Workflows"
+      // Annule le depliage DES LA CAPTURE : un moteur qui deplie le <details> pendant la remontee
+      // du clic (avant le gestionnaire de React, pose a la racine) ne le ferait plus.
+      onClickCapture={(event) => event.preventDefault()}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
+      }}
+    >
+      ↗
+    </button>
+  ) : null
+  const boutonReprise = resumable ? (
+    <button
+      type="button"
+      className={`activity-resume${resumeError ? ' failed' : ''}`}
+      data-testid="activity-resume"
+      disabled={resumePending}
+      aria-busy={resumePending}
+      {...(resumeError ? { 'data-resume-error': resumeError } : {})}
+      title={
+        resumePending
+          ? `${retryGerund} en cours : ${resumable}`
+          : resumeError
+            ? `${retryGerund} échouée : ${resumeError} — cliquer pour réessayer`
+            : `${retryVerb} : ${resumable}`
+      }
+      onClickCapture={(event) => event.preventDefault()}
+      onClick={async (event) => {
+        event.stopPropagation()
+        if (resumePending) return
+        setResumePending(true)
+        setResumeError(null)
+        try {
+          const outcome = await onResume?.(resumable)
+          if (outcome && outcome.ok === false) {
+            setResumeError(outcome.error || 'reprise refusée')
+          }
+        } catch (error) {
+          setResumeError(error instanceof Error ? error.message : String(error))
+        } finally {
+          setResumePending(false)
+        }
+      }}
+    >
+      {resumePending ? `↻ ${retryGerund}…` : resumeError ? '↻ Réessayer' : `↻ ${retryVerb}`}
+    </button>
+  ) : null
+  /*
+   * CAPSULE D'ORCHESTRATION (conv-194, 2026-10-10 — /draft sur maquettes, choix « Capsule » puis
+   * « Go sur la capsule 2 · Phase dans la capsule »). SYMPTOME : « j'arrive pas a me rendre compte
+   * de comment voir le detail » — le prompt envoye vivait a DEUX clics (pastille de la tache, puis
+   * le ▶ de chaque phase) et l'en-tete ne disait que « 1 action en cours · Orchestration ».
+   *
+   * Un groupe fait UNIQUEMENT d'orchestrations devient donc le meme bloc que « Actions » (classes
+   * `thinking-block` / `thinking-capsule` : rond degrade, pastille de duree, chevron, signe de vie a
+   * droite, barre de temps dessous), avec la PHASE en cours ecrite dans la capsule et un corps qui
+   * montre directement le prompt envoye a chaque phase. « 1 action en cours » quitte l'ecran : l'etat
+   * se lit au reflet (vivant / eteint) et a la couleur du segment ; la phrase reste en infobulle.
+   * Un groupe MIXTE (orchestration + verify…) garde la barre d'actions ci-dessous.
+   */
+  if (actions.length > 0 && actions.every((action) => action.name === 'orchestrate')) {
+    const pipeline = actions.flatMap((action) => action.pipeline ?? [])
+    const derniere = pipeline[pipeline.length - 1]
+    const phaseCourante = derniere?.phase ?? derniere?.role
+    const decoupe = battement ? decouperBattement(battement, phaseCourante) : undefined
+    // PLIEE par defaut, en cours comme finie, echec compris : « replié par défaut : le fil reste
+    // lisible » (ChatView.parts.pourquoi.test.tsx). Un echec se lit deja sans clic — segment rouge
+    // et issue en rouge a droite de la capsule ; son pourquoi entier est a un clic.
+    const capsuleOuverte = pliManuel ?? false
+    const etatDeFin = failed ? 'ko' : interruptedCount > 0 ? 'interrompu' : 'ok'
+    const segments = pipeline.length
+      ? pipeline.map((choix, index) =>
+          choix.ok === false
+            ? 'ko'
+            : index < pipeline.length - 1
+              ? 'ok'
+              : running
+                ? 'encours'
+                : etatDeFin
+        )
+      : [running ? 'encours' : etatDeFin]
+    const taches = actions
+      .map((action) => (action.args as { task?: unknown } | undefined)?.task)
+      .filter((task): task is string => typeof task === 'string' && task.trim().length > 0)
+      .map((task) => task.trim())
+    // Le resultat du run, SEULEMENT quand aucune phase n'a parle (tour relu apres redemarrage : les
+    // phases ne sont pas conservees). Sinon il redisait la tache, deja dans le prompt, et le statut,
+    // deja a droite de la capsule (capture du 2026-10-10, conv-194). Un echec montre deja sa cause
+    // dans le pourquoi : la repeter dessous la ferait lire deux fois.
+    const resultats =
+      why.length || pipeline.length
+        ? []
+        : actions
+            .map((action) => localActionDetail(action))
+            .filter((detail): detail is NonNullable<typeof detail> => Boolean(detail))
+    const vie = running ? (decoupe?.fait ?? ligneEtat) : undefined
+    return (
+      <details
+        className={`thinking-block thinking-block--orchestration${running ? ' is-live' : ' is-done'}`}
+        data-state={
+          failed ? 'failed' : running ? 'running' : interruptedCount > 0 ? 'interrupted' : 'done'
+        }
+        open={capsuleOuverte}
+      >
+        <summary
+          data-testid="activity-group"
+          aria-expanded={capsuleOuverte}
+          onClick={(event) => {
+            event.preventDefault()
+            setPliManuel(!capsuleOuverte)
+          }}
+        >
+          <span className="thinking-capsule" data-testid="activity-capsule" title={status}>
+            <span className="thinking-capsule-icone" aria-hidden="true">
+              {ICONE_ORCHESTRATION}
+            </span>
+            <span className="thinking-label">Orchestration</span>
+            {(running || phaseCourante) && (
+              <>
+                <span className="orch-sep" aria-hidden="true">
+                  ·
+                </span>
+                <span className="orch-phase">{phaseCourante ?? 'en cours'}</span>
+              </>
+            )}
+            {decoupe?.duree && (
+              <span className="thinking-duree" data-testid="activity-duree">
+                {decoupe.duree}
+              </span>
+            )}
+          </span>
+          {boutonRun}
+          {boutonReprise}
+          {vie ? (
+            <span className="thinking-status" data-testid="activity-progress" title={vie}>
+              {vie}
+            </span>
+          ) : outcome ? (
+            <span
+              className="thinking-status orch-issue"
+              data-etat={outcome.state}
+              data-testid="activity-outcome"
+              title={outcome.label}
+            >
+              {outcome.label}
+            </span>
+          ) : failed || interruptedCount > 0 ? (
+            // Sans resume chiffre, la phrase d'etat reste le seul verdict : « 1 action avec erreur »,
+            // « 1 action interrompue ». Ne rien ecrire laisserait un echec muet.
+            <span
+              className="thinking-status orch-issue"
+              data-etat={failed ? 'failed' : 'interrompu'}
+              title={status}
+            >
+              {status}
+            </span>
+          ) : null}
+          <span className="thinking-frise-barre" aria-hidden="true">
+            {segments.map((etat, index) => (
+              <span key={index} data-etat={etat} style={{ flexGrow: 1 }} />
+            ))}
+          </span>
+        </summary>
+        {/* Rendu SEULEMENT ouvert : un prompt fait des milliers de caracteres, et rien de cache
+            ne doit trainer dans le fil replie. */}
+        {capsuleOuverte && (
+          <div className="thinking-body orch-corps" data-testid="activity-steps">
+            {pipeline.length > 0
+              ? pipeline.map((choix, index) => (
+                  <PhaseDeLaCapsule
+                    key={`${choix.phase ?? ''}-${choix.model ?? ''}-${index}`}
+                    choix={choix}
+                    enCours={running && index === pipeline.length - 1}
+                  />
+                ))
+              : resultats.length === 0 &&
+                taches.length > 0 && (
+                  <section className="orch-section">
+                    <div className="orch-titre">travail demandé</div>
+                    <pre className="orch-texte">{taches.join('\n\n')}</pre>
+                  </section>
+                )}
+            {resultats.map((detail, index) => (
+              <section className="orch-section" key={`resultat-${index}`}>
+                <div className="orch-titre">demande et résultat du run</div>
+                <pre
+                  className={`orch-texte${detail.ok ? '' : ' failed'}`}
+                  data-testid="activity-step-detail"
+                >
+                  {detail.text}
+                </pre>
+              </section>
+            ))}
+            {why.length > 0 && (
+              <div className="activity-why" data-testid="activity-why">
+                {why.map((ligne, index) => (
+                  <p key={index}>{ligne}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </details>
+    )
+  }
   return (
     <>
       {/* La barre est un CONTENEUR : « voir » et « reprendre » y cohabitent sans s'imbriquer
@@ -676,53 +948,8 @@ export function AssistantActivityGroup({
         )}
         {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,
             sinon deplier couterait l'acces a la trace complete. */}
-        {runConsultable && (
-          <button
-            type="button"
-            className="activity-open-run"
-            data-testid="activity-open-run"
-            title="Voir la trace complète dans Workflows"
-            onClick={() =>
-              onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
-            }
-          >
-            ↗
-          </button>
-        )}
-        {resumable && (
-          <button
-            type="button"
-            className={`activity-resume${resumeError ? ' failed' : ''}`}
-            data-testid="activity-resume"
-            disabled={resumePending}
-            aria-busy={resumePending}
-            {...(resumeError ? { 'data-resume-error': resumeError } : {})}
-            title={
-              resumePending
-                ? `${retryGerund} en cours : ${resumable}`
-                : resumeError
-                  ? `${retryGerund} échouée : ${resumeError} — cliquer pour réessayer`
-                  : `${retryVerb} : ${resumable}`
-            }
-            onClick={async () => {
-              if (resumePending) return
-              setResumePending(true)
-              setResumeError(null)
-              try {
-                const outcome = await onResume?.(resumable)
-                if (outcome && outcome.ok === false) {
-                  setResumeError(outcome.error || 'reprise refusée')
-                }
-              } catch (error) {
-                setResumeError(error instanceof Error ? error.message : String(error))
-              } finally {
-                setResumePending(false)
-              }
-            }}
-          >
-            {resumePending ? `↻ ${retryGerund}…` : resumeError ? '↻ Réessayer' : `↻ ${retryVerb}`}
-          </button>
-        )}
+        {boutonRun}
+        {boutonReprise}
         {/* ETAGES (design converge) : une sous-ligne par action, reliees par un trait POINTILLE,
             chacune avec sa pastille de famille et, quand une regle s'applique, l'etiquette L4 qui
             NOMME la raison de l'enchainement. La ligne d'en-tete ne dit que « A · B » : elle perd

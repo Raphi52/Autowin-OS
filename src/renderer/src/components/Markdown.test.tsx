@@ -291,6 +291,29 @@ describe('Markdown', () => {
     expect(summary?.textContent).not.toContain('Réponse détaillée.')
   })
 
+  it('frames EVERY final summary of a text, not only the last one', () => {
+    const bloc = (n: string): string =>
+      `✅ Fait
+1. Etape ${n}.
+
+📍 Maintenant : ok.
+⏳ Reste à faire : x.
+👉 Recommandé : y${n}.`
+    render(`Premier tour.
+
+${bloc('A')}
+
+Second tour.
+
+${bloc('B')}`, true)
+
+    const blocs = container.querySelectorAll('.md-final-summary')
+    expect(blocs).toHaveLength(2)
+    expect(blocs[0].textContent).toContain('Etape A')
+    expect(blocs[1].textContent).toContain('Etape B')
+    expect(blocs[0].textContent).not.toContain('Second tour.')
+  })
+
   it('groups final-summary labels written as Markdown headings', () => {
     render(
       '## ✅ Fait\nCorrectif appliqué.\n\n## 📍 Maintenant\nVérifié.\n\n## ⏳ Reste à faire\nRien.\n\n## 👉 Recommandé\nTester.',

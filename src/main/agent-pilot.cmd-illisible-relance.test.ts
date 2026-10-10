@@ -11,9 +11,13 @@ import type { Message, SendOptions, SendResult } from './providers/types'
  * `command`). Le bloc brut s'affichait, RIEN ne s'exécutait, et le tour se cloturait sur
  * « Je lance la fusion en build. » : l'utilisateur devait retaper « go ».
  */
+// DEUX accolades manquent : aucune lecture unique, le bloc reste inexploitable. Le bloc a UNE
+// accolade manquante de conv-1472 est desormais repare (conv-159, voir plus bas).
 const CMD_TRONQUE =
-  '<cmd>{"name":"orchestrate","args":{"task":"Fusionner le travail non publié","phase":"build"}' +
+  '<cmd>{"name":"orchestrate","args":{"task":"Fusionner le travail non publié","phase":"build"' +
   '</cmd>\n\nJe lance la fusion en build.'
+const CMD_UNE_ACCOLADE_MANQUANTE =
+  '<cmd>{"name":"get_state","args":{"tab":"chat"}</cmd>\n\nJe relis l’état.'
 
 function pilot(responses: string[]) {
   const sent: string[] = []
@@ -62,6 +66,18 @@ describe('un <cmd> inexploitable RELANCE le tour au lieu de le clore', () => {
     const { pilot: p, sent } = pilot([CMD_TRONQUE, CMD_TRONQUE, CMD_TRONQUE])
     await p.chat(history, () => {}, undefined, 6, 'conv-P').catch(() => undefined)
     expect(sent.filter((c) => c.includes('ton bloc <cmd> est INEXPLOITABLE'))).toHaveLength(1)
+  })
+
+  it('conv-159 (tour b60bf535) : UNE accolade manquante → exécutée tout de suite, sans relance', async () => {
+    const { pilot: p, sent } = pilot([CMD_UNE_ACCOLADE_MANQUANTE, 'État relu, rien à changer.'])
+    const events: { kind: string; name?: string; ok?: boolean; reparation?: string }[] = []
+    await p.chat(history, (e) => events.push(e as never), undefined, 6, 'conv-P')
+    expect(sent.some((c) => c.includes('ton bloc <cmd> est INEXPLOITABLE'))).toBe(false)
+    expect(events.some((e) => e.kind === 'result' && e.name === 'commande illisible')).toBe(false)
+    expect(events.some((e) => e.kind === 'result' && e.name === 'get_state')).toBe(true)
+    // La reparation reste lisible dans le journal du tour.
+    const commande = events.find((e) => e.kind === 'command' && e.name === 'get_state')
+    expect(commande?.reparation).toMatch(/accolade/)
   })
 
   it('une commande VALIDE ne déclenche aucune relance (zéro appel superflu)', async () => {

@@ -72,8 +72,9 @@ describe('les etages disent ce que le modele fait, un par un', () => {
   })
 
   it('un outil sans cible lisible reste affiche par son libelle, sans mentir', () => {
-    render([action({ name: 'orchestrate', ok: true, args: {} })])
-    expect(etages()[0]?.textContent).toContain('Orchestration')
+    // Une orchestration seule est une capsule depuis conv-194 : l'etage se teste sur un autre outil.
+    render([action({ name: 'get_state', ok: true, args: {} })])
+    expect(etages()[0]?.textContent).toContain('Lecture d’état')
   })
 })
 

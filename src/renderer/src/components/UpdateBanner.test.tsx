@@ -750,6 +750,23 @@ describe('qui a poussé quoi — décider AVANT de fusionner', () => {
     expect(container.querySelector('[data-testid="update-incoming"]')).toBeNull()
   })
 
+  it('l’œil est FERMÉ tant que la liste est repliée et s’OUVRE avec elle (A5, conv-182)', async () => {
+    api({
+      checkUpdate: vi.fn().mockResolvedValue({ available: true, behind: 1, branch: 'main', incoming })
+    })
+    await render()
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-testid="update-incoming-toggle"]'
+    )!
+    const oeil = (): string | null =>
+      toggle.querySelector('svg')?.getAttribute('data-oeil') ?? null
+    expect(oeil()).toBe('ferme')
+    await act(async () => toggle.click())
+    expect(oeil()).toBe('ouvert')
+    await act(async () => toggle.click())
+    expect(oeil()).toBe('ferme')
+  })
+
   it('sans liste lue (ancien processus principal, git en échec) → aucun bouton vide', async () => {
     api({
       checkUpdate: vi.fn().mockResolvedValue({ available: true, behind: 2, branch: 'main' })

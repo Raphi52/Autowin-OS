@@ -8,6 +8,7 @@ import type {
 import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../../../shared/claude-resets'
 import { quotaGradientColor } from './quota-gradient'
 import type { OrchestratorAccounts } from './OrchestratorModelSelector'
+import { createPortal } from 'react-dom'
 import './ModelQuotaIndicator.css'
 
 const providerLabels: Record<string, string> = {
@@ -266,6 +267,7 @@ export function ModelQuotaIndicator({
   const [error, setError] = useState<string>()
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLElement>(null)
   const [ancrage, setAncrage] = useState<{ left: number; bottom: number; width: number }>()
   const requestSequenceRef = useRef(0)
 
@@ -373,7 +375,8 @@ export function ModelQuotaIndicator({
   useEffect(() => {
     if (!open) return
     const close = (event: PointerEvent): void => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      const cible = event.target as Node
+      if (!rootRef.current?.contains(cible) && !popoverRef.current?.contains(cible)) setOpen(false)
     }
     const escape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') setOpen(false)
@@ -485,9 +488,15 @@ Il sera consommé.`)) return
           <span className="model-quota-tip-hint">{tipResetLabel(summary?.resetsAt)}</span>
         </span>
       </button>
-      {open && (
+      {/* PORTAIL VERS <body> (2026-10-10, « j'ai plu ma popup quand je click sur ma barre de
+         quota ») : le theme Nebuleuse de verre pose `backdrop-filter` sur `.chat` et
+         `.composer-field`. Un ancetre filtre devient le repere des `position: fixed` : la popup,
+         placee en coordonnees FENETRE, partait hors du panneau et etait decoupee. Rendue dans
+         <body>, aucun ancetre ne peut plus la capturer, quel que soit le theme. */}
+      {open && createPortal(
         <section
-          className="model-quota-popover"
+          ref={popoverRef}
+          className="model-quota-popover is-flottant"
           data-testid="model-quota-popover"
           aria-label="Quotas par fournisseur"
           style={
@@ -672,7 +681,8 @@ Il sera consommé.`)) return
             </div>
           )}
           <footer>Capacité restante · la barre suit le fournisseur sélectionné ci-dessus</footer>
-        </section>
+        </section>,
+        document.body
       )}
     </div>
   )

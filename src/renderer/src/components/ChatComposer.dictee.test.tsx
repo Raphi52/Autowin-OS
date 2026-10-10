@@ -96,7 +96,9 @@ describe('ChatComposer — dictée', () => {
     const micro = hote.querySelector<HTMLButtonElement>('[data-testid="composer-dictee"]')
     expect(micro).not.toBeNull()
     // L'icone est DESSINEE (demande du 2026-09-02 : l'emoji etait moche et dependait de la police).
-    expect(micro!.querySelector('svg')).not.toBeNull()
+    // Depuis le 2026-10-10 le trace est un masque CSS qui remplit le bouton (centrage a tous les
+    // zooms, cf. ChatComposer.dictee.centrage.test.ts), plus un <svg> enfant.
+    expect(micro!.querySelector('.composer-dictee-trait')).not.toBeNull()
     expect(micro!.textContent ?? '').not.toContain('\u{1F3A4}')
 
     await act(async () => {

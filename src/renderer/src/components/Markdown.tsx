@@ -39,23 +39,35 @@ export const Markdown = memo(function Markdown({
    */
   const brut = continuationPrefix ? `${continuationPrefix}\n${text}` : text
   const source = retirerLignePromptSuivant(brut)
-  const finalSummary = highlightFinalSummary ? splitFinalSummary(source) : null
   return (
     <div className="md">
-      {finalSummary ? (
-        <>
-          {finalSummary.before && renderMarkdownBlocks(finalSummary.before, 'before')}
-          <section className="md-final-summary" aria-label="Résumé final du modèle">
-            {renderMarkdownBlocks(finalSummary.summary, 'summary')}
-          </section>
-          {finalSummary.after && renderMarkdownBlocks(finalSummary.after, 'after')}
-        </>
-      ) : (
-        renderMarkdownBlocks(source, 'body')
-      )}
+      {highlightFinalSummary ? renderAvecClotures(source, 0) : renderMarkdownBlocks(source, 'body')}
     </div>
   )
 })
+
+/**
+ * TOUS les blocs de cloture d'un texte sont encadres, pas seulement le dernier (2026-10-10).
+ * Signale par l'utilisateur : un tour qui recoit une consigne en cours de route ecrit DEUX blocs
+ * dans le meme texte, et seul le second etait entoure. `splitFinalSummary` isole le DERNIER bloc
+ * complet ; on recommence donc sur ce qui le precede.
+ */
+function renderAvecClotures(source: string, rang: number): React.ReactNode[] {
+  const finalSummary = splitFinalSummary(source)
+  if (!finalSummary) return renderMarkdownBlocks(source, rang === 0 ? 'body' : `body-${rang}`)
+  const suffixe = rang === 0 ? '' : `-${rang}`
+  return [
+    ...(finalSummary.before ? renderAvecClotures(finalSummary.before, rang + 1) : []),
+    <section
+      key={`final-summary${suffixe}`}
+      className="md-final-summary"
+      aria-label="Résumé final du modèle"
+    >
+      {renderMarkdownBlocks(finalSummary.summary, `summary${suffixe}`)}
+    </section>,
+    ...(finalSummary.after ? renderMarkdownBlocks(finalSummary.after, `after${suffixe}`) : [])
+  ]
+}
 
 
 function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[] {

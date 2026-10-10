@@ -1550,7 +1550,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => {
       ;(container!.querySelectorAll('.conv-pick')[0] as HTMLElement).click()
     })
-    await click('button[title="Détails de l’exécution"]')
+    await click('summary[title="Détails de l’exécution"]')
     // Le fil des sous-agents vit dans l'onglet Runs depuis le 2026-09-01 (demande utilisateur) :
     // le panneau s'ouvre sur le graphe, il faut donc y aller.
     await ouvrirOngletRuns()
@@ -1596,7 +1596,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('button[title="Détails de l’exécution"]')
+    await click('summary[title="Détails de l’exécution"]')
 
     const pane = container!.querySelector('.runs-pane')
     expect(pane).toBeTruthy()
@@ -1642,7 +1642,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('button[title="Détails de l’exécution"]')
+    await click('summary[title="Détails de l’exécution"]')
     // Les RUN.md ont leur propre onglet depuis le 2026-09-01 : il faut l'ouvrir pour les lire.
     await click('button[role="tab"]:nth-of-type(2)')
 
@@ -1707,7 +1707,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ])
     await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]), causalTrace }))
     await click('.conv-pick')
-    await click('button[title="Détails de l’exécution"]')
+    await click('summary[title="Détails de l’exécution"]')
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -1763,7 +1763,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // Montage + sélection de conversation : rien n'est lu tant que le panneau reste fermé.
     expect(causalTrace).not.toHaveBeenCalled()
 
-    await click('button[title="Détails de l’exécution"]')
+    await click('summary[title="Détails de l’exécution"]')
     // Le graphe n’est plus derrière un onglet : ouvrir le panneau SUFFIT à le monter, donc à lire
     // la trace. La paresse tient désormais à l’ouverture du panneau, seule garde encore réelle.
     await act(async () => {
@@ -1858,7 +1858,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
 
     expect(
-      container!.querySelector('button[title="Détails de l’exécution"]')?.textContent
+      container!.querySelector('summary[title="Détails de l’exécution"]')?.textContent
     ).toContain('1 green')
   })
 
@@ -2283,19 +2283,22 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    const sentImage = container!.querySelector('.msg.user .artifact-preview')
+    // Image envoyée = capsule, comme Raisonnement / Actions (conv-178).
+    const sentImage = container!.querySelector('.msg.user .artifact-capsule')
     expect(sentImage).toBeTruthy()
-    expect(sentImage?.querySelector('.artifact-preview__header strong')?.textContent).toBe(
-      'image envoyée'
+    expect(sentImage?.querySelector('.artifact-capsule__provenance')?.textContent).toBe(
+      'Image envoyée'
     )
+    // « image envoyée » en petit ne ferait que redire le libellé « Image envoyée » (conv-195).
+    expect(sentImage?.querySelector('.artifact-capsule__nom')).toBeNull()
+    expect(container!.querySelector('.msg.user .attachment-chip')).toBeNull()
+    // Les visuels sont repliés par défaut : seule la capsule est visible avant dépliage.
+    expect(sentImage?.querySelector('img')).toBeNull()
+    await click('.msg.user .artifact-capsule__entete')
     expect(sentImage?.querySelector('.artifact-preview__footer')?.textContent).toContain('Envoyée')
     expect(sentImage?.querySelector('.artifact-preview__footer')?.textContent).toContain(
       'image/png'
     )
-    expect(container!.querySelector('.msg.user .attachment-chip')).toBeNull()
-    // Les visuels sont repliés par défaut : seul le bandeau est visible avant dépliage.
-    expect(sentImage?.querySelector('img')).toBeNull()
-    await click('.msg.user .artifact-preview__toggle')
     expect(sentImage?.querySelector('img')?.getAttribute('src')).toBe(fullImage)
     expect(readChatArtifact).toHaveBeenCalledWith('A', 'turn-user-image', 'user-image-1')
 
@@ -2344,7 +2347,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A', history)]) }))
     await click('.conv-pick')
 
-    const sentImage = container!.querySelector('.msg.user .artifact-preview')
+    const sentImage = container!.querySelector('.msg.user .artifact-capsule')
     expect(sentImage).toBeTruthy()
     expect(sentImage?.querySelector('.artifact-preview__blocked')?.textContent).toBe(
       'Image originale non conservée · stockage indisponible'
@@ -2383,7 +2386,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
 
     expect(container!.querySelector('[data-artifact-kind="image"]')).not.toBeNull()
-    await click('.artifact-preview__toggle')
+    await click('.artifact-capsule__entete')
     expect(container!.querySelector('img.artifact-preview__image')).not.toBeNull()
     expect(container!.textContent).toContain('gpt-test')
   })

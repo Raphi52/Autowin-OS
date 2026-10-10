@@ -19,13 +19,11 @@
      retrait partage (`--view-head-pad`). Un decalage regle a l'oeil devient faux des que la reference
      bouge — et personne ne repasse verifier. */
   color: #e8edf4;
-  background: var(--surface-panel);
-  /* Pas de cadre blanc ici : le cadre de page (`.view-page`, lisere rose) entoure deja Memory.
-     Les deux bords empiles faisaient un double liseré blanc + rose (choix utilisateur du 03/09 :
-     garder le colore, retirer le blanc). */
-  border: 0;
-  border-radius: var(--container-radius-page);
-  box-shadow: var(--container-shadow);
+  /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN. Elle
+     recopiait le cadre de page (fond, rayon de page, reflet) : Memory apparaissait comme une page
+     noire posee dans le cadre dore. Le cadre est `.view-page` ; l'en-tete se pose dessus, comme
+     partout, et chaque colonne est un PANNEAU separe par la meme gouttiere que Task Manager. */
+  gap: 12px;
 }
 
 .graph-observatory.is-detail-open {
@@ -57,10 +55,8 @@
   gap: 20px;
   /* Etait `0 18px` : le titre montait de 9 px par rapport aux autres vues. */
   padding: var(--view-head-pad, 18px 20px 0);
-  /* Le retrait partage finit a 0 en bas : la derniere ligne du titre collait alors la barre de
-     separation. Ici l'en-tete porte une description, il lui faut ce souffle. */
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--container-border);
+  /* Pose a meme le cadre, comme `ViewTopBar` : ni bande peinte, ni trait de separation — la
+     gouttiere de la grille separe l'en-tete des panneaux. */
   background: transparent;
 }
 
@@ -270,6 +266,8 @@
 .theme-sidebar,
 .visibility-sidebar {
   min-height: 0;
+  /* Des PANNEAUX du gabarit : rayon de panneau, jamais celui de la page. */
+  border-radius: var(--container-radius-panel);
   background: var(--surface-panel);
 }
 
@@ -279,7 +277,7 @@
   display: flex;
   flex-direction: column;
   padding: 15px 11px;
-  border-right: 1px solid #202936;
+  overflow: hidden;
 }
 
 .sidebar-heading,
@@ -462,6 +460,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  border-radius: var(--container-radius-panel);
   background: var(--surface-inset);
 }
 
@@ -838,7 +837,6 @@
 .visibility-sidebar {
   grid-column: 3;
   grid-row: 2;
-  border-left: 1px solid #202936;
   overflow: auto;
 }
 
@@ -1150,19 +1148,6 @@
   white-space: pre-wrap;
 }
 
-.graph-observatory--galaxy {
-  border-color: #38306b;
-  background: #040510;
-  box-shadow:
-    0 0 0 1px rgba(114, 87, 255, 0.08),
-    0 18px 70px rgba(3, 1, 22, 0.48);
-}
-
-.graph-observatory--galaxy .graph-toolbar {
-  border-bottom-color: #2d2855;
-  background: linear-gradient(90deg, rgba(16, 9, 35, 0.98), rgba(8, 10, 28, 0.98)), #080a18;
-}
-
 .graph-observatory--galaxy .graph-stage__heading span,
 .graph-observatory--galaxy .sidebar-heading,
 .graph-observatory--galaxy .settings-section__heading {
@@ -1347,7 +1332,8 @@
 
   .graph-toolbar {
     gap: 8px;
-    padding: 0 10px;
+    /* Etait `0 10px` : en ecran etroit, le titre de Memory sortait du retrait commun des en-tetes. */
+    padding: 0 var(--view-head-retrait);
   }
 
   .graph-toolbar select {
@@ -1372,14 +1358,7 @@
 /* Black Versailles Galaxy — chrome du Brain ; les couleurs des nœuds restent sémantiques. */
 .graph-observatory {
   color: var(--text);
-  background: var(--bg-0);
-  border-color: var(--line-strong);
-  border-radius: var(--r3);
-  box-shadow:
-    inset 0 0 0 3px var(--bg-0),
-    inset 0 0 0 4px rgba(201, 167, 93, 0.1);
 }
-.graph-toolbar,
 .theme-sidebar,
 .visibility-sidebar {
   background: rgba(8, 8, 7, 0.97);

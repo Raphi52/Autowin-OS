@@ -200,3 +200,57 @@ describe("l'usine a copies abandonnees : une copie SANS ENJEU n'attend plus 24 h
     )
   })
 })
+
+/**
+ * LE RETRAIT D'UNE COPIE NE TIENT PLUS LA BOUCLE — heal conv-204, mesure du 2026-10-10.
+ *
+ * Premier balayage horaire de la journee (`gels.jsonl`, 10:07, une heure apres le demarrage) :
+ * trois copies retirees par `git worktree remove` SYNCHRONE, 1 747, 1 444 et 4 253 ms de fenetre
+ * figee. Rendre la main ENTRE deux copies ne suffisait pas : c'est le retrait de CHAQUE copie qui
+ * tenait la boucle. Le balayage asynchrone doit donc confier ce retrait a git sans l'attendre.
+ */
+describe('balayage asynchrone : retrait sans git synchrone', () => {
+  it('retire la copie par le git ASYNCHRONE, jamais par le git synchrone', async () => {
+    const repo = tempRepo()
+    const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-sweeproot-'))
+    roots.push(worktreeRoot)
+    const retraitsSynchrones: string[][] = []
+    const retraitsAsynchrones: string[][] = []
+    const executerGit = (
+      dir: string,
+      args: string[]
+    ): { code: number; stdout: string; stderr: string } => {
+      try {
+        const stdout = execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
+        return { code: 0, stdout, stderr: '' }
+      } catch (e) {
+        const err = e as { status?: number; stdout?: unknown; stderr?: unknown }
+        return {
+          code: err.status ?? 1,
+          stdout: String(err.stdout ?? ''),
+          stderr: String(err.stderr ?? '')
+        }
+      }
+    }
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot,
+      nowFn: () => Date.now() + 2 * DAY_MS,
+      tryGitFn: (dir, args) => {
+        if (args.includes('remove')) retraitsSynchrones.push(args)
+        return executerGit(dir, args)
+      },
+      tryGitAsyncFn: async (dir, args) => {
+        if (args.includes('remove')) retraitsAsynchrones.push(args)
+        return executerGit(dir, args)
+      }
+    })
+    const path = wm.acquire('run-horaire')
+
+    expect(await wm.sweepAbandonedAgentCopiesAsync()).toEqual(['run-horaire'])
+    expect(existsSync(path)).toBe(false)
+    expect(git(repo, 'worktree', 'list')).not.toContain('run-horaire')
+    expect(retraitsAsynchrones.length).toBeGreaterThan(0)
+    expect(retraitsSynchrones).toEqual([])
+  })
+})

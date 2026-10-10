@@ -664,6 +664,26 @@ def main() -> int:
     threading.Thread(target=veiller, daemon=True).start()
     splash.attendre()
 
+    # ECRAN FERME AVANT LA FIN (vecu le 2026-10-06) : l'ecran d'attente a disparu pendant le build,
+    # 6 s apres le debut de `electron-vite dev`, sans erreur, sans fenetre et sans silence — donc de
+    # l'exterieur (Echap ou fenetre fermee). Le `join(5)` ci-dessous concluait alors « bundle
+    # perime », alors que le build a fini et que l'app s'est affichee 30 s plus tard. On poursuit
+    # donc la surveillance SANS ecran : la fenetre de l'app, une issue du thread de travail, ou le
+    # silence, comme `veiller`.
+    if not splash.suivi.fermer() and "code" not in resultat and ouvrier.is_alive():
+        journaliser("ecran d'attente ferme avant la fin — surveillance poursuivie sans ecran")
+        limite_sans_ecran = time.monotonic() + ATTENTE_TOTALE_S
+        while ouvrier.is_alive() and "code" not in resultat and time.monotonic() < limite_sans_ecran:
+            if fenetres_app() - deja_ouvertes:
+                splash.suivi.voir_fenetre(True)
+                journaliser("fenetre application detectee (sans ecran d'attente)")
+                break
+            if time.monotonic() - parole["dernier"] > SILENCE_MAX_S:
+                journaliser(f"silence de plus de {SILENCE_MAX_S} s (sans ecran d'attente)")
+                resultat.setdefault("code", 6)
+                break
+            time.sleep(1.0)  # sleep-ok: cadence de veille sur un processus externe
+
     # COURSE CORRIGEE (mesuree le 2026-08-12 a 17:46:08) : `attendre()` rend la main des que la
     # fenetre se ferme — donc des que l'application s'affiche, ce qui est le SUCCES. Mais le thread de
     # travail n'avait pas encore ecrit son verdict, et un defaut a 6 alertait « bundle perime » sur un

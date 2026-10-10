@@ -56,8 +56,7 @@
 :root[data-base='clair'] .artifact-archive__entry small,
 :root[data-base='clair'] .artifact-slide,
 :root[data-base='clair'] .artifact-slide > span,
-:root[data-base='clair'] .artifact-preview__reveal,
-:root[data-base='clair'] .artifact-preview__toggle {
+:root[data-base='clair'] .artifact-preview__reveal {
   color: var(--text-dim);
 }
 
@@ -286,6 +285,8 @@
 :root[data-base='clair'] .model-quota-window > strong,
 :root[data-base='clair'] .model-quota-values small,
 :root[data-base='clair'] .model-quota-unavailable,
+:root[data-base='clair'] .model-quota-tip,
+:root[data-base='clair'] .model-quota-tip-hint,
 :root[data-base='clair'] .model-quota-reset button,
 :root[data-base='clair'] .model-quota-reset-message {
   color: var(--text-dim);

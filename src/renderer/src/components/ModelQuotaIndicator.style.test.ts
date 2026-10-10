@@ -27,12 +27,17 @@ describe('barre de quota cliquable', () => {
   it('garde le dégradé rouge → orange → jaune → vert dans ce sens, calé sur la barre entière', () => {
     // Paliers PLATS (deux arrets par teinte) : chaque couleur tient une plage lisible au lieu de
     // fondre dans la suivante. Retirer un palier ou reordonner les teintes fait echouer ceci.
+    // Les teintes sont des VARIABLES (conv-197) : la pastille lit les memes que la barre, et un
+    // theme les change en un seul endroit. Leurs valeurs de base restent verrouillees ci-dessous.
     expect(styles).toMatch(
-      /\.model-quota-bar-fill\s*{[^}]*linear-gradient\(\s*90deg,\s*#b8201a 0%,\s*#b8201a 12%,\s*#e0641e 30%,\s*#e0641e 42%,\s*#efc023 56%,\s*#efc023 68%,\s*#35d07f 86%,\s*#35d07f 100%\s*\);/s
+      /\.model-quota-bar-fill\s*{[^}]*linear-gradient\(\s*90deg,\s*var\(--quota-rouge\) 0%,\s*var\(--quota-rouge\) 12%,\s*var\(--quota-orange\) 30%,\s*var\(--quota-orange\) 42%,\s*var\(--quota-jaune\) 56%,\s*var\(--quota-jaune\) 68%,\s*var\(--quota-vert\) 86%,\s*var\(--quota-vert\) 100%\s*\);/s
+    )
+    expect(styles).toMatch(
+      /\.model-quota-trigger\s*{[^}]*--quota-rouge: #b8201a;\s*--quota-orange: #e0641e;\s*--quota-jaune: #efc023;\s*--quota-vert: #35d07f;/s
     )
     // Le vert n'arrive qu'a 86 % : le defaut nomme en conv-240 etait un basculement au vert des
     // 62 %, qui faisait passer un quota entame pour sain.
-    expect(styles).not.toMatch(/#35d07f (?:[0-7]\d|8[0-5])%/)
+    expect(styles).not.toMatch(/var\(--quota-vert\) (?:[0-7]\d|8[0-5])%/)
     // Le restant DÉCOUPE le dégradé au lieu de le compresser : à 10 % restant il ne reste que du
     // rouge, alors qu'une largeur portée par l'élément laisserait du vert au bord droit.
     expect(styles).toMatch(
@@ -83,5 +88,48 @@ describe('barre de quota cliquable', () => {
   it('conserve le popover existant, désormais ouvert par la barre', () => {
     expect(component).toContain('model-quota-popover')
     expect(component).toContain('Quotas fournisseurs')
+  })
+
+  /**
+   * POPUP INVISIBLE AU CLIC (2026-10-10). Rendue dans <body> par un portail, la popup n'avait plus
+   * de z-index : `#root` (`z-index: 1`, theme.css) la recouvrait entierement. Elle s'ouvrait donc
+   * sous l'app. Retirer la classe ou le z-index fait echouer ceci.
+   */
+  it('peint la popup rendue dans <body> au-dessus de l’app', () => {
+    expect(component).toMatch(/className="model-quota-popover is-flottant"/)
+    expect(component).toContain('document.body')
+    const bloc = styles.match(/\.model-quota-popover\.is-flottant\s*{([^}]*)}/s)
+    expect(bloc, 'regle .model-quota-popover.is-flottant absente').not.toBeNull()
+    const z = Number(bloc?.[1].match(/z-index:\s*(\d+)/)?.[1] ?? 0)
+    // Au-dessus de #root (1) ; le menu Orchestrateur, autre popup du composer, est a 9000.
+    expect(z).toBeGreaterThanOrEqual(9000)
+  })
+
+  /**
+   * BULLE TRANSPARENTE AU SURVOL (2026-10-10, « elle devrait avoir un fond noir »). Le fond venait
+   * du jeton `--surface-panel`, qui vaut un verre a 4,5 % dans le theme Nebuleuse de verre. La
+   * bulle porte desormais un noir opaque en dur, repris tel quel par les themes generes.
+   */
+  it('donne à la bulle de survol un fond noir opaque, indépendant des jetons de panneau', () => {
+    // Commentaires retires : celui de la regle CITE le jeton abandonne pour expliquer le choix.
+    const bloc = (styles.match(/\.model-quota-tip\s*{([^}]*)}/s)?.[1] ?? '').replace(
+      /\/\*[\s\S]*?\*\//g,
+      ''
+    )
+    expect(bloc).not.toContain('--surface-panel')
+    const fond = bloc.match(/background:\s*rgba\(0, 0, 0, (0?\.\d+|1)\)/)
+    expect(fond, 'fond noir rgba(0, 0, 0, a) absent').not.toBeNull()
+    expect(Number(fond?.[1])).toBeGreaterThanOrEqual(0.9)
+    for (const theme of ['nebuleuse-verre', 'nebuleuse-doree']) {
+      const genere = readFileSync(
+        new URL(`../assets/theme-${theme}.genere.css`, import.meta.url),
+        'utf8'
+      )
+      const regle = genere.match(
+        new RegExp(`:root\\[data-theme='${theme}'\\] \\.model-quota-tip\\s*{([^}]*)}`, 's')
+      )?.[1]
+      expect(regle, `bulle absente du theme genere ${theme}`).toBeDefined()
+      expect(regle).not.toContain('--surface-panel')
+    }
   })
 })

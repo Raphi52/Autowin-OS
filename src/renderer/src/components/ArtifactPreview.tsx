@@ -46,6 +46,40 @@ function kindLabel(artifact: ChatArtifact): string {
   return `${base} générée`
 }
 
+/**
+ * Un nom qui ne fait que REDIRE le libellé de la capsule n'est pas affiché à côté d'elle
+ * (conv-195 : « image-Read » en petit à côté de « Image · Read », « image envoyée » à côté de
+ * « Image envoyée »). Les nouveaux artefacts lus portent le nom du fichier (claude.ts), mais ceux
+ * déjà enregistrés gardent leur nom fabriqué : on compare donc sans casse ni séparateurs.
+ */
+function nomRepeteLeLibelle(nom: string, libelle: string): boolean {
+  const aplatir = (texte: string): string =>
+    texte
+      .toLowerCase()
+      .replace(/[\s·_-]+/g, ' ')
+      .trim()
+  return aplatir(nom) === aplatir(libelle)
+}
+
+/** Cadre photo (soleil + montagnes) : l'icône de la capsule d'image, au trait des icônes
+ *  Raisonnement / Actions de ThinkingBlock.tsx (16 × 16, `currentColor`). */
+const ICONE_IMAGE = (
+  <svg viewBox="0 0 16 16" focusable="false">
+    <rect
+      x="1.75"
+      y="2.75"
+      width="12.5"
+      height="10.5"
+      rx="1.75"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <circle cx="5.6" cy="6.2" r="1.35" fill="currentColor" />
+    <path d="M2.6 12.4 L6.4 8.6 L8.9 11 L10.9 9 L13.4 11.5 V12.4 Z" fill="currentColor" />
+  </svg>
+)
+
 function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
@@ -273,7 +307,8 @@ export function ArtifactPreview({
   displayName,
   sourceLabel,
   provenanceLabel,
-  previewError
+  previewError,
+  live = false
 }: {
   artifact: ChatArtifact
   conversationId?: string | null
@@ -284,11 +319,15 @@ export function ArtifactPreview({
   /** Libellé de provenance imposé par l'appelant (ex. « Image envoyée »). Prime sur l'inférence. */
   provenanceLabel?: string
   previewError?: string
+  /** Tour encore en cours : la capsule d'image reste vive, comme Raisonnement / Actions ; tour fini,
+   *  elle pâlit avec elles. */
+  live?: boolean
 }): React.JSX.Element {
-  const cardRef = useRef<HTMLElement>(null)
+  const cardRef = useRef<HTMLElement | null>(null)
   // Les aperçus visuels mangeaient tout le fil : repliés par défaut, dépliables à la demande.
   const isCollapsible = artifact.kind === 'image' || artifact.kind === 'vector'
-  const [isExpanded, setIsExpanded] = useState(false)
+  // Une image qu'on ne peut pas montrer s'ouvre sur son message d'erreur : replié, il serait caché.
+  const [isExpanded, setIsExpanded] = useState(() => isCollapsible && Boolean(previewError))
   const [loadState, setLoadState] = useState<{
     key: string
     artifact?: ChatArtifact
@@ -354,73 +393,116 @@ export function ArtifactPreview({
   const loaded = activeLoadState?.artifact
   const loadError = activeLoadState?.error
   const resolved = loaded ?? artifact
+  const setCardRef = (element: HTMLElement | null): void => {
+    cardRef.current = element
+  }
+
+  const body = (
+    <div className="artifact-preview__body">
+      {previewError ? (
+        <div className="artifact-preview__blocked">{previewError}</div>
+      ) : mustLoad && !isNearViewport ? (
+        <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
+      ) : mustLoad && !loaded && !loadError ? (
+        <div className="artifact-preview__placeholder" role="status">
+          <Spinner /> Chargement de l’aperçu…
+        </div>
+      ) : loadError ? (
+        <div className="artifact-preview__blocked">{loadError}</div>
+      ) : (
+        <ArtifactBody artifact={resolved} onOpenImage={onOpenImage} />
+      )}
+    </div>
+  )
+
+  const footer = (
+    <footer className="artifact-preview__footer">
+      <span>{resolved.mimeType}</span>
+      <span>
+        {sourceLabel ??
+          `${resolved.source.provider}${resolved.source.model ? ` · ${resolved.source.model}` : ''}`}
+      </span>
+      {artifact.path && conversationId && turnId && (
+        <button
+          type="button"
+          className="artifact-preview__reveal"
+          onClick={(event) => {
+            // Sans ce retour, un fichier déplacé/supprimé donnait un clic totalement muet :
+            // rien ne s'ouvre, aucune explication. On reporte l'échec sur le bouton lui-même.
+            const button = event.currentTarget
+            void Promise.resolve(
+              window.api?.revealChatArtifact?.(conversationId, turnId, artifact.id)
+            ).catch((error: unknown) => {
+              button.textContent = '⚠ Fichier introuvable'
+              button.title = error instanceof Error ? error.message : String(error)
+            })
+          }}
+        >
+          Afficher le fichier
+        </button>
+      )}
+    </footer>
+  )
+
+  /* IMAGE EN CAPSULE (conv-178, 2026-10-10 : « les blocs images lues / image envoyée, mets-leur
+     la même gueule que les capsules Action et Raisonnement »). Ce n'est PAS une copie de leur
+     style : on reprend leur BALISAGE et leurs classes (`thinking-block`, `thinking-capsule`…),
+     donc ChatView.css et chaque thème les dessinent à l'identique, et toute retouche future des
+     capsules s'applique aussi aux images. Libellé de provenance dans la capsule, poids dans la
+     pastille sombre, nom du fichier dehors en gris, à la place du signe de vie.
+     Replié = plus AUCUN pixel d'aperçu (choix utilisateur du 27/08) : le corps n'est rendu
+     qu'ouvert. L'ouverture est pilotée ici (clic intercepté) : l'image ne se charge qu'à la
+     demande, et l'état reste juste au clavier comme à la souris. */
+  if (isCollapsible) {
+    const libelle = provenanceLabel ?? kindLabel(resolved)
+    const nomVisible = displayName ?? artifact.name
+    return (
+      <details
+        ref={setCardRef}
+        className={`thinking-block artifact-capsule${live ? ' is-live' : ' is-done'}`}
+        data-artifact-kind={artifact.kind}
+        data-collapsed={isExpanded ? undefined : 'true'}
+        open={isExpanded}
+      >
+        <summary
+          className="artifact-capsule__entete"
+          onClick={(event) => {
+            event.preventDefault()
+            setIsExpanded((current) => !current)
+          }}
+        >
+          <span className="thinking-capsule">
+            <span className="thinking-capsule-icone" aria-hidden="true">
+              {ICONE_IMAGE}
+            </span>
+            <span className="thinking-label artifact-capsule__provenance">{libelle}</span>
+            <span className="thinking-duree">{fileSize(artifact.size)}</span>
+          </span>
+          {!nomRepeteLeLibelle(nomVisible, libelle) && (
+            <span className="thinking-status artifact-capsule__nom" title={artifact.name}>
+              {nomVisible}
+            </span>
+          )}
+        </summary>
+        {isExpanded && (
+          <div className="artifact-capsule__corps">
+            {body}
+            {footer}
+          </div>
+        )}
+      </details>
+    )
+  }
 
   return (
-    <article
-      ref={cardRef}
-      className="artifact-preview"
-      data-artifact-kind={artifact.kind}
-      data-collapsed={isCollapsible && !isExpanded ? 'true' : undefined}
-    >
+    <article ref={setCardRef} className="artifact-preview" data-artifact-kind={artifact.kind}>
       <header className="artifact-preview__header">
         <span className="artifact-preview__kind">{provenanceLabel ?? kindLabel(resolved)}</span>
         <strong title={artifact.name}>{displayName ?? artifact.name}</strong>
         <span>{fileSize(artifact.size)}</span>
-        {isCollapsible && (
-          <button
-            type="button"
-            className="artifact-preview__toggle"
-            aria-expanded={isExpanded}
-            onClick={() => setIsExpanded((current) => !current)}
-          >
-            {isExpanded ? 'Réduire' : 'Déplier'}
-          </button>
-        )}
       </header>
-      {/* Replié = plus AUCUN pixel d'aperçu : seul le bandeau reste (choix utilisateur du 27/08). */}
-      {isCollapsible && !isExpanded && !previewError ? null : (
-        <div className="artifact-preview__body">
-          {previewError ? (
-            <div className="artifact-preview__blocked">{previewError}</div>
-          ) : mustLoad && !isNearViewport ? (
-            <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
-          ) : mustLoad && !loaded && !loadError ? (
-            <div className="artifact-preview__placeholder" role="status">
-              <Spinner /> Chargement de l’aperçu…
-            </div>
-          ) : loadError ? (
-            <div className="artifact-preview__blocked">{loadError}</div>
-          ) : (
-            <ArtifactBody artifact={resolved} onOpenImage={onOpenImage} />
-          )}
-        </div>
-      )}
-      <footer className="artifact-preview__footer" hidden={isCollapsible && !isExpanded}>
-        <span>{resolved.mimeType}</span>
-        <span>
-          {sourceLabel ??
-            `${resolved.source.provider}${resolved.source.model ? ` · ${resolved.source.model}` : ''}`}
-        </span>
-        {artifact.path && conversationId && turnId && (
-          <button
-            type="button"
-            className="artifact-preview__reveal"
-            onClick={(event) => {
-              // Sans ce retour, un fichier déplacé/supprimé donnait un clic totalement muet :
-              // rien ne s'ouvre, aucune explication. On reporte l'échec sur le bouton lui-même.
-              const button = event.currentTarget
-              void Promise.resolve(
-                window.api?.revealChatArtifact?.(conversationId, turnId, artifact.id)
-              ).catch((error: unknown) => {
-                button.textContent = '⚠ Fichier introuvable'
-                button.title = error instanceof Error ? error.message : String(error)
-              })
-            }}
-          >
-            Afficher le fichier
-          </button>
-        )}
-      </footer>
+      {body}
+      {footer}
     </article>
   )
 }

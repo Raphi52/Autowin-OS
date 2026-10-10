@@ -190,6 +190,8 @@ export type PilotEventVariant =
        * donc ete ABANDONNE — c'est exactement ce qu'on veut pouvoir lire.
        */
       repriseProbableDe?: string
+      /** Bloc `<cmd>` casse puis repare sans ambiguite : la trace dit QUOI a ete corrige. */
+      reparation?: string
     }
   /** Signe de vie d'une action LONGUE encore en cours : ne resout rien, remplace le precedent. */
   | { kind: 'action-progress'; actionId: string; text: string }
@@ -409,7 +411,13 @@ const REJECTED_QUESTION_MARKER = '[question modèle refusée et masquée]'
 
 export type OrderedPilotToken =
   | { kind: 'text'; text: string }
-  | { kind: 'command'; name: string; args: Record<string, unknown> }
+  | {
+      kind: 'command'
+      name: string
+      args: Record<string, unknown>
+      /** Le bloc recu etait casse et a ete repare SANS ambiguite (voir `reparerAccoladeFinaleManquante`). */
+      reparation?: string
+    }
   /**
    * Bloc `<cmd>` PRESENT mais inexploitable (JSON invalide, ou valide sans `name`). Avant, ces deux
    * cas etaient avales silencieusement : le modele croyait avoir agi, l'utilisateur recevait une
@@ -654,6 +662,72 @@ function finObjetJson(raw: string, debut: number): number {
   return -1
 }
 
+/** Un objet `{name, args?}` que le dispatch sait executer. */
+function commandeExploitable(valeur: unknown): boolean {
+  if (!valeur || typeof valeur !== 'object' || Array.isArray(valeur)) return false
+  const { name, args } = valeur as { name?: unknown; args?: unknown }
+  if (typeof name !== 'string' || !name.trim()) return false
+  return args === undefined || (!!args && typeof args === 'object' && !Array.isArray(args))
+}
+
+/** Au-dela, essayer chaque position couterait trop : le bloc reste `invalid` et la relance agit. */
+const REPARATION_BUDGET_CARACTERES = 20_000_000
+
+/**
+ * `<cmd>` A UNE ACCOLADE FERMANTE PRES — mesure conv-159, tour
+ * `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (2026-10-10, journal `run-stdout/a18bb1fb…`) : le modele
+ * ecrit `<cmd>{"name":"brain_query","args":{"question":"…"}</cmd>`, deux `{` pour une seule `}`.
+ * Rejete en « JSON illisible ». La relance unique (posee pour conv-1472, tour `c73fd638`, MEME
+ * defaut) n'a pas suffi : le modele a attribue la position de l'erreur aux accents (raisonnement de
+ * l'iteration 1), a re-emis la MEME forme en ASCII, et le tour s'est clos sur « renvoie ton message ».
+ * Lapsus RECURRENT du modele : la cause est hors depot.
+ *
+ * Ce que fait Autowin : quand UNE seule `}` manque et qu'il n'existe qu'UNE facon de la placer qui
+ * donne une commande executable, l'intention est univoque — on l'execute, comme
+ * `commandeRecupereeApresAppelIllisible`. On essaie CHAQUE position hors chaine : deux lectures
+ * differentes (une `}` oubliee au milieu d'`args` imbriques) = ambigu -> `undefined`, le bloc reste
+ * `invalid` et la relance s'en charge. Rien d'autre n'est repare (guillemet, virgule, `]`).
+ */
+export function reparerAccoladeFinaleManquante(bloc: string): string | undefined {
+  const texte = bloc.trim()
+  if (!texte.startsWith('{')) return undefined
+  const positions: number[] = []
+  const pile: string[] = []
+  let dansChaine = false
+  for (let k = 0; k < texte.length; k++) {
+    const c = texte[k]
+    if (dansChaine) {
+      if (c === '\\') k++
+      else if (c === '"') dansChaine = false
+      continue
+    }
+    positions.push(k)
+    if (c === '"') dansChaine = true
+    else if (c === '{') pile.push('}')
+    else if (c === '[') pile.push(']')
+    else if ((c === '}' || c === ']') && pile.pop() !== c) return undefined
+  }
+  // Seule la racine reste ouverte : exactement UNE `}` manque, aucun `]`, aucune chaine ouverte.
+  if (dansChaine || pile.length !== 1 || pile[0] !== '}') return undefined
+  positions.push(texte.length)
+  if (positions.length * texte.length > REPARATION_BUDGET_CARACTERES) return undefined
+  const lectures = new Map<string, string>()
+  for (const position of positions) {
+    const candidat = `${texte.slice(0, position)}}${texte.slice(position)}`
+    let lu: unknown
+    try {
+      lu = JSON.parse(candidat)
+    } catch {
+      continue // cette position ne donne pas de JSON : on essaie la suivante
+    }
+    if (!commandeExploitable(lu)) continue
+    const cle = JSON.stringify(lu)
+    if (!lectures.has(cle)) lectures.set(cle, candidat)
+    if (lectures.size > 1) return undefined
+  }
+  return lectures.size === 1 ? [...lectures.values()][0] : undefined
+}
+
 /**
  * conv-686, tours `6185f7e7-88fa-4add-bf84-c51741d1b8b0` et `30876029-68c5-43c8-948c-59786b28a081`
  * (saisies ts 1789711890089 et 1789712145048) : le modele a emis une commande `<cmd>` illisible,
@@ -678,8 +752,27 @@ export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
     if (visible) tokens.push({ kind: 'text', text: visible })
     if (match[1] === 'cmd') {
       const rawBlock = match[2]
+      let lisible = rawBlock
+      let reparation: string | undefined
       try {
-        const parsed = JSON.parse(rawBlock) as {
+        JSON.parse(rawBlock)
+      } catch (erreurDeLecture) {
+        const repare = reparerAccoladeFinaleManquante(rawBlock)
+        if (repare) {
+          lisible = repare
+          reparation = 'accolade fermante manquante ajoutée (une seule lecture possible)'
+        } else {
+          tokens.push({
+            kind: 'invalid',
+            raw: rawBlock,
+            reason: `JSON illisible : ${erreurDeLecture instanceof Error ? erreurDeLecture.message : String(erreurDeLecture)}`
+          })
+          cursor = match.index + match[0].length
+          continue
+        }
+      }
+      try {
+        const parsed = JSON.parse(lisible) as {
           name?: string
           args?: Record<string, unknown>
         }
@@ -694,7 +787,9 @@ export function parseOrderedPilotTokens(input: string): OrderedPilotToken[] {
             parsed.args && typeof parsed.args === 'object' && !Array.isArray(parsed.args)
               ? parsed.args
               : {}
-          tokens.push({ kind: 'command', name, args })
+          tokens.push(
+            reparation ? { kind: 'command', name, args, reparation } : { kind: 'command', name, args }
+          )
         } else {
           // JSON valide mais sans `name` exploitable : deuxieme trou silencieux du parseur d'origine.
           tokens.push({
@@ -2934,7 +3029,14 @@ export class AgentPilot {
         const settledAction = recoveredHere?.settledActions?.find(
           (action) => action.actionId === actionId && action.name === token.name
         )
-        if (!settledAction) emit({ kind: 'command', actionId, name: token.name, args: token.args })
+        if (!settledAction)
+          emit({
+            kind: 'command',
+            actionId,
+            name: token.name,
+            args: token.args,
+            ...(token.reparation ? { reparation: token.reparation } : {})
+          })
         if (token.name === 'orchestrate' && orchestrationIssued) {
           const refusal = ORCHESTRATION_ALREADY_ISSUED_REFUSAL
           emit({

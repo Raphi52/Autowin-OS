@@ -72,6 +72,7 @@ export interface RunWorktreeCoordinatorDeps {
         | 'apercuTravauxNonPublies'
         | 'patchTravailNonPublie'
         | 'restaurerCopieDepuisSecours'
+        | 'restaurerCopieDepuisSecoursAsync'
         // Ranger une copie en PRESERVANT son travail. Absent de cette liste, l'appel compilait
         // quand meme (`?.()`) mais `npm run typecheck` le refusait -- vitest ne typecheck pas, la
         // suite etait donc verte sur du code qui ne compilait pas.
@@ -1387,7 +1388,11 @@ export class RunWorktreeCoordinator {
     // ce correctif : la restauration ne se déclenchait jamais, et la reprise repartait en
     // `merge-failed` sans que rien ne l'explique.
     if (!copiePresente(tracked.worktreePath)) {
-      this.manager.restaurerCopieDepuisSecours?.(runId)
+      if (this.manager.restaurerCopieDepuisSecoursAsync) {
+        await this.manager.restaurerCopieDepuisSecoursAsync(runId)
+      } else {
+        this.manager.restaurerCopieDepuisSecours?.(runId)
+      }
     }
     const active = this.manager.hasActiveProcessesAsync
       ? await this.manager.hasActiveProcessesAsync(runId)
@@ -1791,7 +1796,11 @@ export class RunWorktreeCoordinator {
      * `worktreeAvailable` n'est calculé qu'à l'affichage et vaut `undefined` ici.
      */
     if (!copiePresente(tracked.worktreePath)) {
-      this.manager.restaurerCopieDepuisSecours?.(runId)
+      if (this.manager.restaurerCopieDepuisSecoursAsync) {
+        await this.manager.restaurerCopieDepuisSecoursAsync(runId)
+      } else {
+        this.manager.restaurerCopieDepuisSecours?.(runId)
+      }
     }
     // Les SHA de conflit décrivent l'état BLOQUÉ. `isRecord` ne les autorise QU'avec
     // `publication: 'blocked'` ; les garder en passant à `integrating` faisait échouer le tout

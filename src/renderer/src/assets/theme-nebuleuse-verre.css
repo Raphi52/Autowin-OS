@@ -6,14 +6,15 @@
    capture par le filtre reel du fil avant validation.
 
    SON PARTI PRIS
-   - Fond : une encre violette (#0b0a18) eclairee par DEUX nappes, violet en
-     haut a gauche, magenta en bas a droite. Le decor 3D reste, teinte dans la
-     meme famille (jetons --decor-*).
+   - Fond : NOIR PUR (#000) uni, sans halo, sans filet ni grain (conv-184,
+     section 2). Le decor 3D de l'Accueil reste, teinte dans la meme famille
+     (jetons --decor-*).
    - Verre : chaque panneau est une plaque translucide (blanc 4-6 %), flou de
      fond 18 px, bord blanc 11 %, reflet d'un pixel en haut, rayon 16 px.
-   - Accent : UN degrade rose -> violet (#ff3d9a -> #7b5cff), reserve a ce qui
-     est actif ou a envoyer : element du menu ouvert, bulle de l'utilisateur,
-     bouton d'envoi, onglet choisi. Ce theme n'a pas d'or.
+   - Accent : UN degrade rose -> violet (#e63ca0 -> #3c6eeb), reserve a ce qui
+     est actif : element du menu ouvert, bulle de l'utilisateur, onglet choisi.
+   - Saisie : noir profond a cadre OR, bouton d'envoi rond qui s'allume en or
+     (conv-155). Le coin bas-droit pince n'appartient qu'aux bulles de message.
    - Etats : vert menthe = termine, rose = en cours (seule lueur qui bat),
      violet = au repos / en attente, rouge = echec, ambre = interrompu.
    - Lueur = information (gout de l'utilisateur, skills/draft/design-glossary.html :
@@ -29,11 +30,11 @@
    1. JETONS DE BASE
    --------------------------------------------------------------------------- */
 :root[data-theme='nebuleuse-verre'] {
-  --bg-0: #0b0a18;
+  --bg-0: #0a0a0a;
   --bg-1: rgba(255, 255, 255, 0.05);
   --bg-2: rgba(255, 255, 255, 0.04);
   --bg-3: rgba(255, 255, 255, 0.075);
-  --bg-inset: rgba(8, 6, 22, 0.55);
+  --bg-inset: rgba(7, 7, 7, 0.55);
 
   --line: rgba(255, 255, 255, 0.11);
   --line-strong: rgba(255, 255, 255, 0.2);
@@ -51,18 +52,18 @@
   --gold-bright: #ffb3dc;
   --gold-doux: #e46aa8;
   --gold-clair: #ff9fd0;
-  --rose: #ff3d9a;
+  --rose: #e63ca0;
   --rose-bright: #ff6bb5;
-  --accent: #ff3d9a;
+  --accent: #e63ca0;
   --accent-dim: #8a1f57;
-  --accent-soft: rgba(255, 61, 154, 0.14);
-  --violet: #7b5cff;
+  --accent-soft: rgba(230, 60, 160, 0.14);
+  --violet: #3c6eeb;
   --cyan: #8fa8ff;
   --info: #8fa8ff;
 
-  --ok: #4fd1a5;
+  --ok: #00ff55;
   --warn: #ffb547;
-  --err: #ff5a6e;
+  --err: #e8302a; /* rouge franc, pas rose : bouton Stop (conv-139) */
 
   --on-accent: #ffffff;
   --voile-rgb: 255, 255, 255;
@@ -83,71 +84,93 @@
 
   /* Decor 3D (home-decor-scene.ts) : nebuleuse violette, filaments magenta. */
   --decor-nuage: #2a1d6b;
-  --decor-nuage-2: #7b5cff;
-  --decor-accent: #ff3d9a;
+  --decor-nuage-2: #3c6eeb;
+  --decor-accent: #e63ca0;
   --decor-froid: #5b6dff;
   --decor-chaud: #ff5fa8;
 
   /* Le degrade signature, reutilise partout. */
-  --nv-degrade: linear-gradient(135deg, #ff3d9a, #7b5cff);
-  --nv-degrade-doux: linear-gradient(135deg, rgba(255, 61, 154, 0.22), rgba(123, 92, 255, 0.18));
+  /* C1 · D6 (choix du 2026-10-10, conv-139 : « go D6 ») : le degrade signature EST celui des
+     messages de l'utilisateur (cosmic-outline.css, `.msg-bulle` : bleu -> rose a 85 %). UN seul
+     bleu (#3c6eeb), toujours PLEIN : un bleu dilue sur du noir devenait bleu marine (« ce bleu
+     fonce il m'enerve »), donc aucun voile bleu dans ce theme -- les voiles sont roses. */
+  /* conv-182 (2026-10-10) : « Le même bleu plein partout — le repos s'atténue autrement (texte,
+     reflet), pas la couleur ». Le 85 % qui restait ici donnait un bleu de plus a l'ecran. Le
+     degrade est donc PLEIN au repos ; le survol se marque par le REFLET bombe des capsules. */
+  --nv-degrade: linear-gradient(135deg, #3c6eeb, #e63ca0);
+  --nv-degrade-survol:
+    radial-gradient(
+      55% 85% at 50% 0%,
+      rgba(255, 255, 255, 0.4),
+      rgba(255, 255, 255, 0.1) 55%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+  --nv-degrade-doux: linear-gradient(135deg, rgba(230, 60, 160, 0.22), rgba(230, 60, 160, 0.12));
+  /* Capsules des blocs Raisonnement / Actions (R5, conv-162, 2026-10-10) : bord bleu a gauche ->
+     rose a droite, les deux couleurs PLEINES des bulles de l'utilisateur. ChatView.css s'en sert ;
+     sans elles, la capsule prend le cyan et l'or de la marque. */
+  --thinking-capsule-froid: #3c6eeb;
+  --thinking-capsule-chaud: #e63ca0;
+  /* LE COIN BAS-DROIT PINCE EST RESERVE AUX BULLES DE MESSAGE (conv-155, 2026-10-10 : il « faisait
+     sens pour la bulle de chat mais pas pour les boutons et les highlights »). L'ancien jeton
+     --nv-forme-toi, qui le pretait a la selection du menu, a l'onglet actif et au bouton d'envoi,
+     est retire ; ces trois-la ont des coins reguliers. */
+  /* OR NEON (variante N6) : l'or signale ce qui attend une decision. */
+  --nv-filet-or: inset 0 2px 0 -1px rgba(227, 186, 85, 0.75);
+  --nv-lueur-or: 0 0 24px rgba(227, 186, 85, 0.25);
   --nv-verre: rgba(255, 255, 255, 0.05);
   --nv-verre-fort: rgba(255, 255, 255, 0.075);
   --nv-bord: rgba(255, 255, 255, 0.11);
   --nv-reflet: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   /* REFLETS DORES (variante 6.4 choisie le 2026-10-09, conv-124) : l'or vit DANS le
-     verre -- un reflet d'un pixel en haut de chaque plaque, un voile chaud qui
-     s'efface vers le bas. Le fond, les boutons et les couleurs d'etat n'en recoivent
-     jamais. Une seule teinte par degrade (regle de l'utilisateur : jamais de bouton a
-     triple degrade). Le voile s'arrete a 240 px : un long panneau ne devient pas ambre. */
+     verre -- un reflet d'un pixel en haut de chaque plaque. Le fond, les boutons et les
+     couleurs d'etat n'en recoivent jamais. Une seule teinte par degrade (regle de
+     l'utilisateur : jamais de bouton a triple degrade).
+     PLUS DE VOILE CHAUD (retire le 2026-10-10, conv-169 : « plein de views ont un degrade
+     or qui part du sommet, enleve-le ») : le jeton --nv-voile-dore (180deg, or 13 % -> 0 a
+     240 px) peignait le haut des vues, cartes, rail, popovers et colonnes du chat. */
   --nv-reflet-dore: inset 0 1px 0 rgba(255, 214, 140, 0.55);
   --nv-bord-dore: rgba(255, 214, 140, 0.45);
-  --nv-voile-dore: linear-gradient(
-    180deg,
-    rgba(255, 206, 120, 0.13),
-    rgba(255, 206, 120, 0) min(45%, 240px)
-  );
   --nv-orbe-reflet: inset 0 1px 2px rgba(255, 236, 190, 0.7);
   --nv-flou: blur(18px) saturate(1.25);
-  --nv-flottant: rgba(22, 18, 44, 0.92);
-  --nv-lueur-rose: 0 0 18px rgba(255, 61, 154, 0.45);
+  --nv-flottant: rgba(20, 20, 20, 0.92);
+  --nv-lueur-rose: 0 0 18px rgba(230, 60, 160, 0.45);
   --nv-rond: 16px;
 
   /* ---- Jetons du chat (theme.css l.147-258) ---- */
   --chat-recherche-fond: rgba(255, 255, 255, 0.045);
   --chat-recherche-fond-vue: rgba(255, 255, 255, 0.045);
   --chat-conv-survol: rgba(255, 255, 255, 0.06);
-  --chat-conv-filet-active: #ff3d9a;
+  --chat-conv-filet-active: #e63ca0;
   --chat-conv-titre: #ece8f7;
   --chat-conv-meta: #8f89ad;
-  --chat-conv-separateur: #7b5cff;
+  --chat-conv-separateur: #3c6eeb;
   --chat-liste-bouton: #ff9fd0;
   --chat-neuf-titre: #ece8f7;
   --chat-bulle-texte: #ece8f7;
   --chat-fond-page: transparent;
-  --chat-tete-kicker: #b9b2d4;
+  --chat-tete-kicker: #ffffff; /* titre en haut du fil — blanc, demande utilisateur conv-174 (2026-10-10) */
   --chat-tete-titre: #ffffff;
   --chat-tete-bouton-fond: rgba(255, 255, 255, 0.05);
   --chat-suggestion-fond: rgba(255, 255, 255, 0.05);
-  --chat-signal-rose: #ff3d9a;
-  --chat-signal-cyan: #7b5cff;
+  --chat-signal-rose: #e63ca0;
+  --chat-signal-cyan: #3c6eeb;
   --chat-ascenseur: rgba(255, 255, 255, 0.16);
   --chat-wf-action: #a59fc2;
   --chat-wf-fermer-survol: #ff6b8a;
   --chat-wf-onglet-survol: #ece8f7;
-  --chat-wf-bascule: #cfc9e6;
-  --chat-wf-bascule-active: #ffffff;
-  --chat-wf-trait-rose: #ff3d9a;
-  --chat-wf-trait-or: #7b5cff;
-  --chat-wf-icone: #a59fc2;
-  --chat-wf-icone-active: #ff7cbf;
   --chat-etat-defaut: #a78bfa;
-  --chat-etat-fini: #4fd1a5;
-  --chat-etat-echec: #ff5a6e;
+  /* Tour fini = le BLEU du theme, plein (debut de `--nv-degrade`) : demande conv-205
+     (2026-10-10), « les pastilles vertes met les bleu a la place » — en tete du fil et liste. */
+  --chat-etat-fini: #3c6eeb;
+  /* Pastilles VIVES (conv-197, 2026-10-10) : rouge du bouton Stop
+     (`.composer-send.is-stop`), non lu = couleur de la FIN des degrades (`--nv-degrade`). */
+  --chat-etat-echec: #eb2828;
   --chat-etat-interrompu: #ffb547;
   --chat-etat-attente: #a78bfa;
   --chat-etat-question: #ffcf5a;
-  --chat-etat-non-lu: #ff7cbf;
+  --chat-etat-non-lu: #e63ca0;
   --chat-etat-annule: #8f89ad;
   --chat-piece-jointe-survol: #ffd2ea;
   --chat-suppr-orbite: #ff7cbf;
@@ -159,7 +182,7 @@
   --chat-renommer-texte: #ece8f7;
   --chat-md-h6: #c9c1ec;
   --chat-md-citation: #c9c1ec;
-  --chat-md-bon: #4fd1a5;
+  --chat-md-bon: #00ff55;
   --chat-md-alerte: #ffcf5a;
   --chat-md-mauvais: #ff8a9b;
   --chat-md-ref: #a59fc2;
@@ -167,11 +190,11 @@
   --chat-consigne-filet: rgba(255, 255, 255, 0.11);
   --chat-consigne-fond: rgba(255, 255, 255, 0.035);
   --chat-consigne-titre: #c9b6ff;
-  --chat-consigne-meta-filet: rgba(123, 92, 255, 0.35);
+  --chat-consigne-meta-filet: rgba(230, 60, 160, 0.35); /* pas de bleu dilue (C1) */
   --chat-consigne-meta: #c9b6ff;
   --chat-consigne-limite: #ffcf5a;
   --chat-consigne-bloc-filet: rgba(255, 255, 255, 0.09);
-  --chat-consigne-bloc-fond: rgba(8, 6, 22, 0.55);
+  --chat-consigne-bloc-fond: rgba(7, 7, 7, 0.55);
   --chat-consigne-bloc-texte: #cfc9e6;
   --chat-consigne-sys-titre: #ece8f7;
   --chat-consigne-note: #a59fc2;
@@ -189,40 +212,40 @@
   --chat-modele-option-note: #8f89ad;
   --chat-modele-option-choisie: #ffffff;
   --chat-modele-option-chevron: #8f89ad;
-  --chat-modele-etat-fond: rgba(255, 61, 154, 0.1);
+  --chat-modele-etat-fond: rgba(230, 60, 160, 0.1);
   --chat-modele-etat-texte: #ffd2ea;
   --chat-effort-texte: #b9b2d4;
-  --chat-effort-fond: rgba(22, 18, 44, 0.96);
+  --chat-effort-fond: rgba(20, 20, 20, 0.96);
   --chat-effort-actif: #ffffff;
   --chat-effort-icone: #cfc9e6;
   --chat-matrice-ouvrir: #c9b6ff;
   --chat-matrice-ouvrir-focus: #ffffff;
-  --chat-matrice-fond: rgba(22, 18, 44, 0.96);
+  --chat-matrice-fond: rgba(20, 20, 20, 0.96);
   --chat-matrice-titre: #ece8f7;
   --chat-matrice-groupe: #a78bfa;
   --chat-matrice-colonnes: #8f89ad;
   --chat-matrice-nom: #ece8f7;
   --chat-cran-fond: rgba(255, 255, 255, 0.1);
   --chat-cran-texte: #8f89ad;
-  --chat-cran-rempli: #ff3d9a;
+  --chat-cran-rempli: #e63ca0;
   --chat-cran-vif: #ff7cbf;
-  --chat-cran-reco: #4fd1a5;
+  --chat-cran-reco: #00ff55;
   --chat-cran-focus: #ffd2ea;
   --chat-saisie-fond: transparent;
   --chat-saisie-invite: #8f89ad;
   --chat-envoi-rose: #ffffff;
-  --chat-envoi-vert: #ff3d9a;
-  --chat-envoi-bleu: #7b5cff;
-  --chat-envoi-vert-survol: #ff5cab;
-  --chat-envoi-bleu-survol: #9378ff;
+  --chat-envoi-vert: #e63ca0;
+  --chat-envoi-bleu: #3c6eeb;
+  --chat-envoi-vert-survol: #ee5cb0;
+  --chat-envoi-bleu-survol: #5a88f0;
   --chat-sur-vif: #ffffff;
   --chat-sur-vif-survol: #ffffff;
   --chat-dictee: #ff7cbf;
   --chat-erreur-douce: #ff8a9b;
-  --chat-lot-rose: #ff3d9a;
-  --chat-lot-bleu: #7b5cff;
-  --chat-frise-ok: #4fd1a5;
-  --chat-frise-ko: #ff5a6e;
+  --chat-lot-rose: #e63ca0;
+  --chat-lot-bleu: #3c6eeb;
+  --chat-frise-ok: #00ff55;
+  --chat-frise-ko: #eb2828;
   --chat-surlignage-texte: #10121a;
   --chat-depot-texte: #f4f0ff;
   --chat-depot-detail: #a59fc2;
@@ -234,9 +257,9 @@
   --surface-page: transparent;
   --surface-panel: rgba(255, 255, 255, 0.045);
   --surface-card: rgba(255, 255, 255, 0.055);
-  --surface-inset: rgba(8, 6, 22, 0.5);
+  --surface-inset: rgba(7, 7, 7, 0.5);
   --surface-hover: rgba(255, 255, 255, 0.07);
-  --surface-selected: rgba(255, 61, 154, 0.14);
+  --surface-selected: rgba(230, 60, 160, 0.14);
   --container-border: rgba(255, 255, 255, 0.11);
   --container-border-strong: rgba(255, 255, 255, 0.2);
   --container-radius-page: 20px;
@@ -258,17 +281,32 @@
   --module-eyebrow-color: #8f89ad;
 }
 
+/* FOND-PROPRE:DEBUT -- propre a Nebuleuse de verre. genererMainDoree (scripts/theme-nebuleuse-verre.mjs,
+   FOND_DOREE) remplace tout ce bloc, marqueurs compris, par le fond de Nebuleuse doree. */
 /* ---------------------------------------------------------------------------
-   2. FOND : encre violette + deux nappes. L'image de galaxie est retiree ;
-   le grain anime (body::before) est garde, sans sa nappe or.
+   2. FOND NOIR PUR (2026-10-10, conv-184) : l'utilisateur a compare son fond
+   « liseré · halo haut » (conv-159 : halo azur en haut, halo rose en bas,
+   filets de 3 px) a un apercu tout noir, et a tranche : « met le noir, oublie
+   le rose et bleu, c'est moche ». Fond #000 uni, rien d'autre :
+   - plus aucun halo ni filet ;
+   - le grain anime (body::before) est coupe : l'apercu valide n'en avait pas ;
+   - le voile de bord de theme.css (body::after) reste coupe -- une fois
+     transpose par la couche generee, il est VIOLET et vignette les bords.
+   Les panneaux gardent leur encre a 86 % (environ 7,7,7 a l'ecran) : ce sont
+   leurs cadres qui les detachent du noir.
    --------------------------------------------------------------------------- */
 :root[data-theme='nebuleuse-verre'] body {
-  background:
-    radial-gradient(70vw 60vh at 96% 100%, rgba(255, 40, 140, 0.42), transparent 70%),
-    radial-gradient(60vw 55vh at 0% 0%, rgba(112, 82, 255, 0.4), transparent 70%),
-    radial-gradient(45vw 40vh at 55% 40%, rgba(56, 90, 255, 0.12), transparent 70%), #0b0a18;
+  background: #000;
   color: var(--text);
 }
+:root[data-theme='nebuleuse-verre'] body::before {
+  display: none;
+}
+:root[data-theme='nebuleuse-verre'] body::after {
+  background: none;
+  box-shadow: none;
+}
+/* FOND-PROPRE:FIN */
 :root[data-theme='nebuleuse-verre'] body::before {
   opacity: 0.05;
 }
@@ -276,7 +314,7 @@
   opacity: 0.6;
 }
 :root[data-theme='nebuleuse-verre'] ::selection {
-  background: rgba(255, 61, 154, 0.38);
+  background: rgba(230, 60, 160, 0.38);
   color: #ffffff;
 }
 :root[data-theme='nebuleuse-verre'] :focus-visible:not(textarea):not(input):not([contenteditable]) {
@@ -309,7 +347,7 @@
   background: rgba(255, 255, 255, 0.16) padding-box;
 }
 :root[data-theme='nebuleuse-verre'] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 61, 154, 0.55) padding-box;
+  background: rgba(230, 60, 160, 0.55) padding-box;
 }
 
 /* ---------------------------------------------------------------------------
@@ -321,7 +359,7 @@
   border: 1px solid var(--nv-bord);
   border-top-color: var(--nv-bord-dore);
   border-radius: 18px;
-  background: var(--nv-voile-dore), rgba(255, 255, 255, 0.045);
+  background: rgba(255, 255, 255, 0.045);
   backdrop-filter: var(--nv-flou);
   box-shadow: var(--nv-reflet-dore);
 }
@@ -334,7 +372,7 @@
   background: var(--nv-degrade);
 }
 :root[data-theme='nebuleuse-verre'] .brand-name {
-  text-shadow: 0 0 10px rgba(255, 61, 154, 0.35);
+  text-shadow: 0 0 10px rgba(230, 60, 160, 0.35);
 }
 :root[data-theme='nebuleuse-verre'] .rail-toggle {
   border-color: var(--nv-bord);
@@ -342,21 +380,30 @@
   background: rgba(255, 255, 255, 0.06);
 }
 :root[data-theme='nebuleuse-verre'] .rail-toggle:hover {
-  border-color: rgba(255, 61, 154, 0.6);
+  border-color: rgba(230, 60, 160, 0.6);
 }
+/* Capsule (conv-187) : le survol prend la forme de l'element selectionne. */
 :root[data-theme='nebuleuse-verre'] .nav-item {
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 999px;
 }
 :root[data-theme='nebuleuse-verre'] .nav-item:hover {
   background: rgba(255, 255, 255, 0.06);
 }
-/* L'element ouvert : la pastille degradee de la maquette (fond doux + bord rose
-   + une lueur, parce que c'est l'etat « ici »). */
+/* L'element ouvert : la pastille degradee de la maquette (fond doux + bord rose).
+   SANS halo autour (conv-198, 2026-10-10 : « enleve le halo autour de ce que j'ai selectionne »). */
+/* D6 : la pastille prend le degrade des bulles de l'utilisateur, mais PAS leur coin pince
+   (conv-155). Forme CAPSULE, bouts en demi-cercle (conv-187 : « une belle capsule et pas un
+   rectangle a bord rond ») ; replie, l'item 36x36 devient un rond (app-shell.css). Le degrade part du
+   bord EXTERIEUR et ne se repete pas : cale sur l'interieur, il reapparaissait sous le bord
+   transparent d'1 px -- un lisere rose a gauche et bleu a droite (« c moche », conv-139). */
 :root[data-theme='nebuleuse-verre'] .nav-item.active {
-  border: 1px solid rgba(255, 61, 154, 0.5);
-  background: var(--nv-degrade-doux);
-  box-shadow: 0 0 16px rgba(255, 61, 154, 0.22);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--nv-degrade);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  box-shadow: none;
   color: #ffffff;
 }
 
@@ -367,13 +414,13 @@
 :root[data-theme='nebuleuse-verre'] .surface-panel {
   border-color: var(--nv-bord);
   border-top-color: var(--nv-bord-dore);
-  background: var(--nv-voile-dore), var(--nv-verre);
+  background: var(--nv-verre);
   backdrop-filter: var(--nv-flou);
   box-shadow: var(--nv-reflet-dore);
 }
-/* Le grand panneau de chaque vue : le filet dore du haut + le voile chaud. */
+/* Le grand panneau de chaque vue : le filet dore du haut, sans voile. */
 :root[data-theme='nebuleuse-verre'] .view-page {
-  background: var(--lisere-haut), var(--nv-voile-dore), var(--surface-panel);
+  background: var(--lisere-haut), var(--surface-panel);
 }
 :root[data-theme='nebuleuse-verre'] .btn {
   border-color: rgba(255, 255, 255, 0.14);
@@ -382,8 +429,8 @@
   color: #ece8f7;
 }
 :root[data-theme='nebuleuse-verre'] .btn:hover:not(:disabled) {
-  border-color: rgba(255, 61, 154, 0.55);
-  background: rgba(255, 61, 154, 0.1);
+  border-color: rgba(230, 60, 160, 0.55);
+  background: rgba(230, 60, 160, 0.1);
 }
 :root[data-theme='nebuleuse-verre'] .btn-ghost {
   border-color: transparent;
@@ -394,11 +441,11 @@
   border-color: transparent;
   background: var(--nv-degrade);
   color: #ffffff;
-  box-shadow: 0 0 14px rgba(255, 61, 154, 0.35);
+  box-shadow: 0 0 14px rgba(230, 60, 160, 0.35);
 }
 :root[data-theme='nebuleuse-verre'] .btn-accent:hover:not(:disabled),
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .btn-accent:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ff5cab, #9378ff);
+  background: var(--nv-degrade-survol);
   border-color: transparent;
 }
 :root[data-theme='nebuleuse-verre'] .btn-danger {
@@ -419,8 +466,8 @@
 :root[data-theme='nebuleuse-verre'] .select:focus,
 :root[data-theme='nebuleuse-verre'] textarea.input:focus,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline :where(.input, .select, textarea.input):focus {
-  border-color: rgba(255, 61, 154, 0.6);
-  box-shadow: 0 0 0 3px rgba(255, 61, 154, 0.14);
+  border-color: rgba(230, 60, 160, 0.6);
+  box-shadow: 0 0 0 3px rgba(230, 60, 160, 0.14);
 }
 :root[data-theme='nebuleuse-verre'] .select option {
   background: #16122c;
@@ -452,7 +499,7 @@
 :root[data-theme='nebuleuse-verre'] .tests-run:not(:disabled) {
   border-color: transparent;
   background: var(--nv-degrade);
-  box-shadow: 0 0 14px rgba(255, 61, 154, 0.35);
+  box-shadow: 0 0 14px rgba(230, 60, 160, 0.35);
 }
 :root[data-theme='nebuleuse-verre'] .tests-run:disabled {
   color: #8f89ad;
@@ -473,10 +520,10 @@
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-top-color: var(--nv-bord-dore);
   border-radius: 14px;
-  background: var(--nv-voile-dore), var(--nv-flottant);
+  background: var(--nv-flottant);
   backdrop-filter: var(--nv-flou);
   box-shadow:
-    0 18px 50px rgba(6, 4, 20, 0.6),
+    0 18px 50px rgba(5, 5, 5, 0.6),
     var(--nv-reflet-dore);
 }
 
@@ -498,7 +545,7 @@
   border: 1px solid var(--nv-bord);
   border-top-color: var(--nv-bord-dore);
   border-radius: var(--nv-rond);
-  background: var(--nv-voile-dore), var(--nv-verre);
+  background: var(--nv-verre);
   backdrop-filter: var(--nv-flou);
   box-shadow: var(--nv-reflet-dore);
 }
@@ -511,9 +558,82 @@
    et le menu de gauche prennent le meme fond encre que le fil, au lieu du verre violet sature. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline :is(.chat, .conv-pane, .runs-pane),
 :root[data-theme='nebuleuse-verre'] .theme-serious .rail {
-  border-top-color: rgba(255, 214, 140, 0.35);
-  background: rgba(9, 7, 22, 0.86);
-  box-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.35);
+  /* Filet du haut en OR NEON (N6) : un trait de 1 px plus vif, sur un bord transparent. */
+  border-top-color: transparent;
+  background: rgba(8, 8, 8, 0.86);
+  box-shadow: var(--nv-filet-or), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+/* LE FIL S'ARRETE AU-DESSUS DE LA SAISIE (conv-150) : la mecanique est commune a tous les themes
+   (cosmic-outline.css, `.cosmic-outline .chat`). Ici, seulement la PEINTURE : le panneau (encre,
+   bord, flou de verre) passe de `.chat` a `.chat::after`. Le bord de `.chat` devient transparent
+   SANS changer d'epaisseur : rien ne bouge a l'interieur de la colonne. Le flou part avec le
+   panneau, sinon il voilait aussi l'ecart sous le fil. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat {
+  --chat-saisie-ecart: 10px; /* l'ecart entre les colonnes du chat (.chat-layout) */
+  border-color: transparent;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat::after {
+  border: 1px solid var(--nv-bord);
+  border-top-color: transparent;
+  background: rgba(8, 8, 8, 0.86);
+  backdrop-filter: var(--nv-flou);
+  box-shadow: var(--nv-filet-or);
+}
+/* CADRE « OR QUI COULE VERS LE BLANC » (conv-168, 2026-10-10 : « un cadre a mettre autour de mes
+   containers sur les cotes et en bas », direction « 1 · Or qui coule » choisie sur maquette ;
+   d'abord vers le rose du degrade bleu -> rose, puis « finalement fais un or qui coule vers le
+   blanc et pareil pour le prompt panel »). L'or du haut descend le long des cotes, s'adoucit, puis
+   vire au BLANC en bas. La saisie porte le meme cadre (regle `.chat > .composer`, plus bas).
+   Un FOND ne peut pas porter ce cadre : les panneaux sont translucides (encre a 86 %), un degrade
+   pose sous eux se verrait au travers. Il est donc dessine par un calque EVIDE par masque (meme
+   technique que `.artifact-preview::before`) :
+   - liste, fil et panneau de droite : leur `::before` (le lisere du haut, ViewPage.css) devient le
+     cadre entier ; il garde sa place au-dessus des enfants opaques (z-index 3) ;
+   - le fil : le cadre s'arrete au-dessus de la saisie, comme son panneau `.chat::after` ;
+   - le menu de gauche : son `::before` est libre.
+   Le bord blanc d'1 px de chaque panneau devient transparent SANS changer d'epaisseur : rien ne
+   bouge a l'interieur. */
+:root[data-theme='nebuleuse-verre'] {
+  --nv-cadre-coule: linear-gradient(
+    180deg,
+    rgba(227, 186, 85, 0.85),
+    rgba(227, 186, 85, 0.4) 40%,
+    rgba(255, 255, 255, 0.85)
+  );
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline :is(.conv-pane, .runs-pane),
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat::after,
+:root[data-theme='nebuleuse-verre'] .theme-serious .rail {
+  border-color: transparent;
+}
+:root[data-theme='nebuleuse-verre'] .theme-serious .rail {
+  position: relative;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)::before,
+:root[data-theme='nebuleuse-verre'] .theme-serious .rail::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  height: auto;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--nv-cadre-coule);
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+/* Le fil : meme bas que son panneau (cosmic-outline.css, `.cosmic-outline .chat::after`). */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat::before {
+  bottom: calc(
+    anchor(--chat-saisie top, calc(-1 * var(--chat-saisie-ecart))) + var(--chat-saisie-ecart)
+  );
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .chat-head {
   border-color: rgba(255, 255, 255, 0.08);
@@ -525,6 +645,39 @@
 :root[data-theme='nebuleuse-verre'] .conv-search .input {
   border-radius: 12px;
 }
+/* RECHERCHE-GROSSE:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
+   la doree garde son champ de recherche d'origine. */
+/* CHAMP « RECHERCHER PARTOUT… » EN GROS (conv-185, 2026-10-10 : « ce bloc je le veux en gros avec
+   contour gris et contour blanc quand j'ecris dedans »). Gris neutre au repos, BLANC pendant la
+   saisie, sans halo. Specificite (0,4,0) / (0,5,0) chargee APRES la couche generee : prime sur son
+   bord violet et son focus rose. La colonne tres etroite (@container convpane <= 170px) garde la
+   version compacte de ChatView.css : la taille ne s'applique qu'au-dela. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-search {
+  border-color: rgba(160, 160, 168, 0.55);
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-search:focus-within {
+  border-color: #ffffff;
+  box-shadow: none;
+}
+@container convpane (min-width: 171px) {
+  :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-search {
+    min-height: 48px;
+    gap: 10px;
+    padding: 0 15px;
+  }
+  :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-search > span {
+    font-size: 18px;
+  }
+  /* Le champ occupe toute la hauteur : un clic n'importe ou dans le bloc place le curseur. */
+  :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-search input {
+    align-self: stretch;
+    font-size: 14px;
+  }
+  :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-search button {
+    font-size: 18px;
+  }
+}
+/* RECHERCHE-GROSSE:FIN */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-item {
   border: 1px solid transparent;
   border-radius: 14px;
@@ -533,10 +686,24 @@
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.05);
 }
+/* Fil ouvert : CADRE degrade bleu -> rose de 1,5 px sur fond d'encre, SANS voile ni lueur
+   (D2-6 « Capsule », /draft conv-171 : « j'aime pas comment la conv selectionnee est entouree » ;
+   le voile rose etait le meme que celui de « Nouveau fil », on voyait deux selections). Le cadre
+   passe par le double fond padding-box / border-box : une border-image perdrait les coins ronds.
+   Deux teintes, bleu a gauche et rose a droite (conv-157). */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-item.active {
-  border-color: rgba(255, 61, 154, 0.45);
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: var(--nv-reflet);
+  border: 1.5px solid transparent;
+  border-radius: 18px;
+  background:
+    linear-gradient(#100e17, #100e17) padding-box,
+    linear-gradient(135deg, #3c6eeb, #e63ca0) border-box;
+  box-shadow: none;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-item.active .conv-label {
+  color: #ffffff;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-item.active .conv-meta {
+  color: #ff8cc8;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-meta {
   overflow: hidden;
@@ -573,21 +740,24 @@
      se ressemblaient (« j'ai que du jaune j'ai plu de vert », 2026-10-10). */
   background: radial-gradient(
     circle at 35% 30%,
-    color-mix(in srgb, currentColor 30%, #fff),
-    currentColor 45%,
-    color-mix(in srgb, currentColor 45%, #000) 90%
+    color-mix(in srgb, currentColor 55%, #fff),
+    currentColor 40%,
+    color-mix(in srgb, currentColor 80%, #000) 95%
   );
+  /* PLUS FLASHY (conv-139, 2026-10-10) : couleur pleine, peu assombrie, double halo vif. */
+  filter: saturate(1.5) brightness(1.1);
   box-shadow:
     var(--nv-orbe-reflet),
-    0 0 6px currentColor;
+    0 0 4px currentColor,
+    0 0 10px currentColor;
 }
 @keyframes nv-pouls {
   0%,
   100% {
-    box-shadow: 0 0 6px rgba(255, 61, 154, 0.4);
+    box-shadow: 0 0 6px rgba(230, 60, 160, 0.4);
   }
   50% {
-    box-shadow: 0 0 18px rgba(255, 61, 154, 0.9);
+    box-shadow: 0 0 18px rgba(230, 60, 160, 0.9);
   }
 }
 
@@ -607,50 +777,39 @@
   align-self: center;
   border: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffd0ec, #ff3d9a 45%, #5b3cff 90%);
+  /* Bord de l'orbe : LE bleu des messages (#3c6eeb), pas un bleu nuit (C1). */
+  background: radial-gradient(circle at 35% 30%, #ffd0ec, #e63ca0 50%, #3c6eeb 100%);
   box-shadow:
     var(--nv-orbe-reflet),
-    0 0 12px rgba(255, 61, 154, 0.45);
+    0 0 14px rgba(230, 60, 160, 0.45);
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .chat-runtime > span {
   font-family: var(--mono);
 }
 
-/* Bouton Details de l'en-tete : une pastille, rose quand le panneau est ouvert. */
-:root[data-theme='nebuleuse-verre'] .workflow-toggle {
-  height: 28px;
-  padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.045);
-  font-size: 11px;
-}
-:root[data-theme='nebuleuse-verre'] .workflow-toggle::after,
-:root[data-theme='nebuleuse-verre'] .workflow-toggle.is-active::after {
-  display: none;
-}
-:root[data-theme='nebuleuse-verre'] .workflow-toggle.is-active {
-  border-color: rgba(255, 61, 154, 0.6);
-  background: rgba(255, 61, 154, 0.16);
-  color: #ffffff;
-}
-
-/* Messages : bulle degradee pour l'utilisateur, plaque de verre pour l'agent. */
+/* Messages : bulle degradee pour l'utilisateur, plaque de verre pour l'agent.
+   Les bulles ORDINAIRES sont peintes par cosmic-outline.css (`.msg-body.msg-bulle`, selecteur plus
+   fort). Cette regle-ci peint ce qui n'a PAS `msg-bulle` : les messages envoyes PENDANT un tour
+   (ChatMessageRow.tsx, `DirectiveReceiptRow`). Elle portait rose -> bleu, l'inverse des autres
+   bulles ; alignee sur cosmic-outline.css (conv-157, 2026-10-10), bleu a gauche, rose a droite --
+   le test compare les deux valeurs. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .msg.user .msg-body,
 :root[data-theme='nebuleuse-verre'] .msg.user .msg-body {
   border: 0;
   border-radius: 18px 18px 4px 18px;
-  background: linear-gradient(135deg, #ff3d9a, #8a5cff);
+  background: linear-gradient(135deg, #3c6eeb, #e63ca0);
   color: #ffffff;
   box-shadow: none;
 }
-/* La reponse de l'agent n'a plus de plaque : son texte se pose sur la colonne sombre du fil,
-   signale par un filet rose a gauche (variante 3, voir `.chat` plus haut). */
+/* La reponse de l'agent n'a plus de plaque : son texte se pose sur la colonne sombre du fil.
+   SANS filet a gauche ni retrait (conv-161, 2026-10-10 : « enleve le liserai rose a gauche des
+   textes il prend de la place pour rien ») : `border: 0` couvre le bord gauche que les couches
+   generees et cosmic-outline.css posent, et le retrait gauche de 16 px qui l'accompagnait part
+   avec lui. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .msg.assistant .msg-body,
 :root[data-theme='nebuleuse-verre'] .msg.assistant .msg-body {
-  padding: 2px 4px 2px 16px;
+  padding: 2px 4px 2px 0;
   border: 0;
-  border-left: 2px solid rgba(255, 61, 154, 0.55);
   border-radius: 0;
   background: transparent;
   backdrop-filter: none;
@@ -669,11 +828,40 @@
   background: radial-gradient(circle at 35% 30%, #fff1c4, #e3ba55 45%, #8a6420 90%);
   box-shadow:
     var(--nv-orbe-reflet),
-    0 0 8px rgba(227, 186, 85, 0.45);
+    0 0 12px rgba(227, 186, 85, 0.8); /* or neon (N6) */
 }
 :root[data-theme='nebuleuse-verre'] .msg.assistant .msg-role,
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .msg.assistant .msg-role {
   color: #e3ba55;
+}
+/* LIGNE « AGENT » EN CAPSULE (« Fumé net · Agent assorti », choix sur maquettes, conv-173,
+   2026-10-10 : « Agent assorti implémente c magnifique ») : l'orbe, le mot et le spinner dans le
+   même verre fumé que les capsules Raisonnement / Actions, mais à bord OR — la couleur d'Agent.
+   Le mot suit la maquette approuvée : « Agent » à 12 px, sans capitales forcées (la règle
+   `.cosmic-outline .msg-meta` le mettait à 9 px en capitales). `fit-content` : dans la colonne
+   flex du message, la capsule ne s'étire pas sur toute la largeur. Tour fini (pas de `is-live`) :
+   le bord, le voile et la lueur de l'orbe pâlissent avec le reste. */
+:root[data-theme='nebuleuse-verre'] .msg.assistant > .msg-meta {
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  gap: 7px;
+  padding: 2px 10px 2px 3px;
+  border: 1.5px solid rgba(227, 186, 85, 0.8);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+:root[data-theme='nebuleuse-verre'] .msg.assistant > .msg-meta:not(.is-live) {
+  border-color: rgba(227, 186, 85, 0.4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+:root[data-theme='nebuleuse-verre'] .msg.assistant > .msg-meta:not(.is-live) .msg-role::before {
+  box-shadow: var(--nv-orbe-reflet);
 }
 
 /* BLOC DE FIN DE TOUR (Fait / Maintenant / Reste a faire / Recommande) : DORE (demande du
@@ -686,23 +874,443 @@
   box-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.35);
 }
 
-/* QUESTION A L'UTILISATEUR (AskDecision) EN OR (conv-136, 2026-10-10 : « les blocs comme ASK
-   qui demandent des actions utilisateur, mets-les en doré ») : dans ce theme, --gold* vaut du
-   rose ; on rend au bloc l'or d'Autowin pour que ce qui attend un geste ressorte du reste. */
-:root[data-theme='nebuleuse-verre'] .askd {
+/* QUESTION A L'UTILISATEUR (AskDecision) EN HOLO « REFLET FIN » DANS UN CADRE (conv-202,
+   2026-10-10, /draft des capsules ASK en 4 tours : « Irisé mais holographique bleu rose argent »,
+   puis « t'as oublié le haut tu l'as laissé doré », puis « go cadre c parfait »). Remplace, pour
+   ce bloc, l'or de conv-136. Tout le bloc tient dans un CADRE holo arrondi ; chaque reponse est une
+   capsule ENTIERE (bord sur les quatre cotes, 6 px d'air) au bord en bandes bleu > rose > argent >
+   rose clair, repetees tous les 240 px. Bleu #3c6eeb toujours PLEIN (conv-182) : aucun voile bleu,
+   les fonds sont des gris neutres. Une reponse cochee ou choisie prend le degrade de la bulle de
+   l'utilisateur, bord blanc : elle s'allume, elle ne fonce pas (conv-201). Maquettes :
+   artifacts/draft-ask-capsules/tour4.html, onglet « 6 · Cadre ».
+   Le bloc des suppositions du cadrage (`.askd.cadrage-hyp`) reutilise ces classes : il garde l'or
+   de conv-136, plus bas. L'encre posee sur le degrade passe par --nv-askd-encre-bulle, que
+   Nebuleuse doree remet en noir chaud (son degrade est or). */
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) {
+  --gold: #ff8cc8;
+  --gold-bright: #ffffff;
+  --gold-doux: #d9d9d9;
+  --gold-clair: #ffffff;
+  --nv-askd-encre-bulle: #ffffff;
+  --nv-askd-holo: repeating-linear-gradient(
+    100deg,
+    #3c6eeb 0,
+    #e63ca0 60px,
+    #d9d9d9 120px,
+    #ff8cc8 180px,
+    #3c6eeb 240px
+  );
+  --nv-askd-holo-vif: repeating-linear-gradient(
+    100deg,
+    #3c6eeb 0,
+    #ff6bb5 60px,
+    #ffffff 120px,
+    #ff8cc8 180px,
+    #3c6eeb 240px
+  );
+  padding: 12px 10px 10px;
+  border: 1.5px solid transparent;
+  border-image: none;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, #232323, #1e1e1e 90px) padding-box,
+    var(--nv-askd-holo) border-box;
+}
+/* Le voile or derriere la question disparait : le fond gris du cadre le remplace. */
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp)::before {
+  content: none;
+}
+/* Le lustre qui balaie le haut glisse sur le bord du cadre, entre les deux coins arrondis. */
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp)::after {
+  left: 14px;
+  right: 14px;
+  top: -1.5px;
+  height: 1.5px;
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-tete {
+  padding-left: 2px;
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-badge {
+  color: var(--nv-askd-encre-bulle);
+  background: var(--nv-degrade);
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-item {
+  padding-left: 0;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(#202020, #202020) padding-box,
+    var(--nv-askd-holo) border-box;
+}
+/* Le liseré or de gauche n'a plus lieu d'etre : c'est le bord de la capsule qui s'allume. */
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-item::before {
+  content: none;
+}
+/* Survol, focus clavier et reponse recommandee : bandes plus claires, bord de 2 px. La marge
+   negative rend le demi-pixel gagne par le bord : le texte ne bouge pas. */
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp):not(.est-repondu) .askd-item:hover,
+:root[data-theme='nebuleuse-verre']
+  .askd:not(.cadrage-hyp):not(.est-repondu)
+  .askd-item:focus-within,
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp):not(.est-repondu) .askd-item.est-reco {
+  border-width: 2px;
+  margin: -0.5px;
+  background:
+    linear-gradient(180deg, #2c2c2c, #222222) padding-box,
+    var(--nv-askd-holo-vif) border-box;
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-ligne {
+  padding: 11px 12px 12px;
+}
+/* Le lavis et l'anneau carres de la ligne debordaient des coins arrondis : la capsule s'en charge. */
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-item:hover .askd-ligne,
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-item:focus-within .askd-ligne {
+  background: none;
+  box-shadow: none;
+}
+/* Aucune reponse depliable : la colonne du triangle (16 px vides) disparait, la case colle au bord. */
+:root[data-theme='nebuleuse-verre']
+  .askd:not(.cadrage-hyp):not(:has(.askd-tri[aria-expanded]))
+  .askd-ligne {
+  grid-template-columns: 1fr auto;
+}
+:root[data-theme='nebuleuse-verre']
+  .askd:not(.cadrage-hyp):not(:has(.askd-tri[aria-expanded]))
+  .askd-tri {
+  display: none;
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-item .askd-touche {
+  color: #8a8a8a;
+}
+:root[data-theme='nebuleuse-verre']
+  .askd:not(.cadrage-hyp):not(.est-repondu)
+  .askd-item:is(:hover, :focus-within, .est-reco)
+  .askd-touche {
+  color: #ffffff;
+}
+/* La case : bord argent, cochee = blanche avec une coche bleue. Elle reste une vraie case a cocher
+   (seule son apparence change) : son etat se lit toujours au lecteur d'ecran. */
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-coche input {
+  appearance: none;
+  border: 1.5px solid #cfcfcf;
+  border-radius: 3px;
+  background: transparent;
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-coche input:checked {
+  border-color: #ffffff;
+  background: #ffffff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 5.2 4.2 7.4 8 2.8' fill='none' stroke='rgb(60, 110, 235)' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 10px no-repeat;
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-coche input:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+/* Reponse cochee (choix multiple) ou retenue (bloc repondu) : le degrade de la bulle, bord blanc. */
+:root[data-theme='nebuleuse-verre']
+  .askd:not(.cadrage-hyp)
+  .askd-item:has(.askd-coche input:checked),
+:root[data-theme='nebuleuse-verre']
+  .askd.est-repondu:not(.cadrage-hyp)
+  .askd-item:has(.askd-choix[data-choisi='oui']) {
+  border-width: 1.5px;
+  margin: 0;
+  background:
+    var(--nv-degrade) padding-box,
+    linear-gradient(#f2f2f2, #f2f2f2) border-box;
+}
+:root[data-theme='nebuleuse-verre']
+  .askd:not(.cadrage-hyp)
+  .askd-item:has(.askd-coche input:checked)
+  :is(.askd-libelle, .askd-consequence, .askd-touche, .askd-tri, .askd-tag),
+:root[data-theme='nebuleuse-verre']
+  .askd.est-repondu:not(.cadrage-hyp)
+  .askd-item:has(.askd-choix[data-choisi='oui'])
+  :is(.askd-libelle, .askd-consequence, .askd-touche, .askd-tri, .askd-tag),
+:root[data-theme='nebuleuse-verre']
+  .askd.est-repondu:not(.cadrage-hyp)
+  .askd-choix[data-choisi='oui']
+  .askd-libelle::after {
+  color: var(--nv-askd-encre-bulle);
+}
+/* Le pied : filet argent, bouton Envoyer au degrade de la bulle (desactive, il garde son contour). */
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-pied {
+  margin-top: 10px;
+  padding: 10px 2px 0;
+  border-image: linear-gradient(90deg, #9a9a9a, #3a3a3a) 1;
+}
+:root[data-theme='nebuleuse-verre'] .askd:not(.cadrage-hyp) .askd-envoyer:not(:disabled) {
+  color: var(--nv-askd-encre-bulle);
+  background: var(--nv-degrade);
+}
+/* SUPPOSITIONS DU CADRAGE (CadrageHypotheses) : memes classes `askd-*`, l'OR de conv-136 inchange
+   (« les blocs comme ASK qui demandent des actions utilisateur, mets-les en doré »). Dans ce theme
+   --gold* vaut du rose ; on lui rend l'or d'Autowin. */
+:root[data-theme='nebuleuse-verre'] .cadrage-hyp {
   --gold: #d4a94f;
   --gold-bright: #e3ba55;
   --gold-doux: #b8913f;
   --gold-clair: #e3ba55;
 }
-:root[data-theme='nebuleuse-verre'] .askd-item {
+:root[data-theme='nebuleuse-verre'] .cadrage-hyp .askd-item {
   border-color: rgba(212, 169, 79, 0.4);
   border-radius: 14px;
   background: rgba(212, 169, 79, 0.07);
 }
-:root[data-theme='nebuleuse-verre'] .askd-item:hover {
+:root[data-theme='nebuleuse-verre'] .cadrage-hyp .askd-item:hover {
   border-color: rgba(212, 169, 79, 0.75);
   background: rgba(212, 169, 79, 0.13);
+}
+/* OR NEON (N6) : le bloc de fin de tour BRILLE -- l'or signale ce qui attend ta decision. */
+:root[data-theme='nebuleuse-verre'] .cadrage-hyp .askd-item.est-reco {
+  border-color: rgba(227, 186, 85, 0.85);
+  box-shadow: 0 0 12px rgba(227, 186, 85, 0.45);
+}
+:root[data-theme='nebuleuse-verre'] .md-final-summary {
+  border-color: rgba(227, 186, 85, 0.75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 214, 140, 0.35),
+    var(--nv-lueur-or);
+}
+/* CARTES DE FICHIER DU FIL (image lue, document, page HTML -- ArtifactPreview.css) : BORD BLANC
+   depuis conv-161 (voir le calque `::before`). Historique : bord au DEGRADE DES BULLES DE
+   L'UTILISATEUR, rose -> bleu (conv-157, 2026-10-10 : « met des borders
+   degrade bleu et violet sur les elements du chat qui ont un cadre comme ca », sur la capture de
+   la carte « IMAGE · READ », precise aussitot : « bleu et rose, ca doit etre les memes couleurs
+   que mes messages dans le chat », puis « le bleu est a gauche et le rose a droite »). La bulle
+   AFFICHEE est peinte par cosmic-outline.css (`.msg-body.msg-bulle`, selecteur plus fort), PAS par
+   la regle `.msg.user .msg-body` de ce fichier, qui est ecrasee : on reprend donc la valeur EXACTE
+   de cosmic-outline.css, bleu en haut a gauche -> rose en bas a droite, et le test la compare.
+   C'est la seule carte du fil a porter ce cadre : `.html-render-preview` y est toujours imbrique
+   SANS bord (ArtifactPreview.tsx, `embedded`). `border-image` ignore les coins arrondis, et un fond
+   `border-box` transparaitrait sous le voile a 94 % de la carte : le bord est donc un calque
+   `::before` evide par masque, qui garde le rayon et la transparence. `isolation` confine son
+   z-index a la carte. */
+:root[data-theme='nebuleuse-verre'] .artifact-preview {
+  position: relative;
+  isolation: isolate;
+  border: 0;
+}
+:root[data-theme='nebuleuse-verre'] .artifact-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 1px;
+  border-radius: inherit;
+  /* BLANC (conv-161, 2026-10-10 : « ce cadre met le en blanc aussi ca rendra mieux », sur la
+     carte « IMAGE · READ », juste apres le lisere blanc des bulles de skill). Remplace le degrade
+     bleu -> rose des bulles demande en conv-157. */
+  background: #ffffff;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+/* « Nouveau fil » : PILULE pleine en degrade diagonal bleu -> rose, « + » dans un rond blanc a
+   DROITE (D2-6 « Capsule », /draft conv-171). Le « + » precede le titre dans le balisage : c'est
+   `order` qui le passe a droite. Sur un fil vide (`.active`), il BRILLE au lieu de s'assombrir
+   (2026-10-10, conv-201 : « tu as rendu le bouton nouveau fil plus fonce mais au contraire
+   j'aimerais qu'il soit plus shiny ou avec une animation ») : meme degrade plein qu'au repos, un
+   reflet bombe en haut, et un ECLAT blanc qui balaie la pilule toutes les 3,2 s, sous le texte.
+   Le bleu reste plein ; seul le blanc du reflet est dose. Mouvement reduit : reflet sans eclat. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row {
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 7px 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3c6eeb, #e63ca0);
+  color: #ffffff;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row:hover {
+  background: linear-gradient(135deg, #5583f2, #ef5cb1);
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row.active {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 75% 60% at 35% 0%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0)),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row.active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    105deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  transform: translateX(-110%);
+  animation: nv-eclat-nouveau 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes nv-eclat-nouveau {
+  0% {
+    transform: translateX(-110%);
+  }
+  45%,
+  100% {
+    transform: translateX(110%);
+  }
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-title {
+  flex: 1;
+  min-width: 0;
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-icon {
+  order: 2;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #c2348f;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-icon svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.6;
+}
+
+/* PIED DE LISTE : UNE capsule a trois cases egales -- filtre, densite, vue --, chacune avec son
+   icone et son libelle (D2-6 « Capsule », /draft conv-171). Icones et libelles sont masques par
+   defaut (ChatView.css) : les autres themes gardent leur pied.
+   RIEN NE S'Y ALLUME (2026-10-10, /draft du pied : « ils doivent pas s'allumer », puis « texte
+   blanc et liseré bleu et rose au survol », puis « le 3 comme apparence par defaut et le 2 au
+   survol, en gros au survol ca laisse qu'un bouton allume »). Texte et icones BLANCS, aucun fond :
+   ni le voile clair du survol, ni le degrade qui remplissait une case dont le reglage avait change
+   (le mot suffit : Actives, Compacte, Mosaique). Au repos, la capsule entiere porte un liseré
+   bleu -> rose (« 3 · Capsule entiere ») ; au survol il redevient gris et SEULE la case survolee
+   porte le sien, jusqu'au bord de la capsule (« 2 · Case pleine »). Les liserés sont des anneaux
+   ::before decoupes par masque : l'interieur reste transparent sur le panneau. Le pied n'a plus
+   de bordure (l'anneau la dessine en dedans) : les cases font toute sa hauteur. Maquette :
+   artifacts/draft-pied/tour2.md. */
+:root[data-theme='nebuleuse-verre'] .conv-foot {
+  position: relative;
+  gap: 0;
+  height: 28px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot::before,
+:root[data-theme='nebuleuse-verre'] .conv-foot > button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3c6eeb, #e63ca0);
+  pointer-events: none;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot::before {
+  padding: 1px;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot:has(> button:hover)::before {
+  background: #2a2733;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot > button::before {
+  display: none;
+  padding: 1.5px;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot > button:hover::before {
+  display: block;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot-spacer,
+:root[data-theme='nebuleuse-verre'] .conv-view-toggle-knob {
+  display: none;
+}
+/* Base `auto` et non 0 : a parts egales, « Compacte » ou « Mosaique » etaient tronques dans une
+   colonne de 200 px pendant que « Liste » flottait dans sa case. Chaque case part de son contenu. */
+:root[data-theme='nebuleuse-verre'] .conv-foot > button {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  width: auto;
+  height: 100%;
+  min-height: 0;
+  padding: 0 3px;
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 1;
+  text-box: normal;
+  white-space: nowrap;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot > button:not(:first-child) {
+  border-left: 1px solid #2a2733;
+}
+/* Les deux bouts : la case survolee suit l'arrondi de la capsule (seule exception nommee au test
+   « reserve le coin pince aux bulles » : une moitie de capsule, pas un coin pince). */
+:root[data-theme='nebuleuse-verre'] .conv-foot > button:first-child {
+  border-radius: 999px 0 0 999px;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot > button:last-child {
+  border-radius: 0 999px 999px 0;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot > button:hover {
+  background: transparent;
+  color: #ffffff;
+}
+/* La couche generee voile la case Mosaique de rose (`.conv-view-toggle[aria-checked='true']`,
+   plus precise que `.conv-foot > button`) : sans cette regle, elle s'allumait encore. */
+:root[data-theme='nebuleuse-verre'] .conv-foot > .conv-view-toggle[aria-checked='true'] {
+  background: transparent;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot-icone {
+  display: block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+:root[data-theme='nebuleuse-verre'] .conv-view-toggle .conv-foot-icone {
+  stroke-width: 1.3;
+}
+/* L'icone ne cede JAMAIS sa place : dans une case etroite, « Compacte » la reduisait a un point
+   (capture du 2026-10-10). C'est le libelle qui se tronque. */
+:root[data-theme='nebuleuse-verre'] .conv-foot .conv-density-toggle svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+:root[data-theme='nebuleuse-verre'] .conv-foot-libelle {
+  display: inline;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
 }
 
 /* ZONE DE SAISIE : UN SEUL BLOC (demande du 2026-10-09, conv-124 : « ya 2 blocs l'un dans
@@ -716,18 +1324,55 @@
   /* 10 px sous le bloc : sans eux il touchait le bord du panneau (double trait en bas). */
   padding: 0 0 10px;
   border: 0;
-  border-radius: 22px;
+  /* Coins du BAS au rayon du panneau (--nv-rond moins son bord de 1 px) : a 22 px, le coin du
+     panneau depassait en croissant sombre en bas a droite (conv-139, 2026-10-10). */
+  border-radius: calc(var(--nv-rond) - 1px); /* memes coins en haut qu'en bas (conv-139) */
   /* DEGRADE OR -> NOIR sur TOUT le bloc (demande du 2026-10-10, conv-139, variante B1 eclaircie).
      Fond seul : la jauge de quota (::before / ::after) n'est pas touchee. */
   /* Sur CE theme, le degrade est ROSE et part d'en bas a droite (le dore « ne va pas avec le
      reste » ; il devient un theme a part entiere, demande du 2026-10-10). */
-  background: linear-gradient(315deg, rgba(255, 61, 154, 0.32), rgba(10, 8, 18, 0.92) 58%);
+  /* PLUS DE ROSE (conv-155, 2026-10-10, « enlever ce rose », variante « B · S'allume, rond »
+     choisie sur maquette) : un NOIR PROFOND UNI. Ecrit comme un degrade d'une seule teinte pour
+     rester une couche d'image : la saisie detachee du fil le pose sur son encre (plus bas).
+     En VARIABLE, ecrite UNE seule fois : le generateur de Nebuleuse doree remplace cette ligne
+     par SON degrade or -> noir (scripts/theme-nebuleuse-verre.mjs, SAISIE_DOREE). */
+  --nv-saisie-degrade: linear-gradient(#09090a, #09090a);
+  background: var(--nv-saisie-degrade);
   backdrop-filter: none;
   box-shadow: none;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer:focus-within {
   border: 0;
   box-shadow: none;
+}
+/* LA SAISIE DETACHEE DU FIL GARDE SES COULEURS (conv-150, 2026-10-10 : « ya un truc chelou avec
+   les couleurs »). Sortie du panneau, elle n'avait plus l'encre du fil derriere elle : son degrade
+   translucide se posait sur la nebuleuse, quasi noir a gauche et magenta vif en bas a droite, et
+   son bord se fondait dans le decor. L'encre du panneau (rgba(8, 8, 8, 0.86), plus haut) repasse
+   SOUS le degrade : memes couleurs qu'avant la separation. Le bord reste le meme au focus. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer:focus-within {
+  /* CADRE « OR QUI COULE VERS LE BLANC » (conv-168, « pareil pour le prompt panel ») : le meme
+     degrade que les panneaux (--nv-cadre-coule), a la place du cadre or uni de conv-155.
+     Le bloc est OPAQUE (--nv-saisie-degrade = #09090a plein) : le cadre est donc un FOND pose sur
+     la boite du bord, et le noir du bloc, rogne a l'interieur (padding-box), le recouvre ailleurs.
+     Les deux pseudo-elements sont deja pris par la jauge de contexte, qui recouvre le haut.
+     Nebuleuse doree garde sa saisie (SAISIE_DOREE) : bord blanc fin, aucun cadre, degrade non
+     rogne -- trois lignes remplacees ci-dessous. */
+  --nv-saisie-bord: transparent;
+  --nv-saisie-cadre: var(--nv-cadre-coule);
+  --nv-saisie-boite: padding-box;
+  border: 1px solid var(--nv-saisie-bord);
+  border-radius: var(--nv-rond);
+  background:
+    var(--nv-saisie-degrade) var(--nv-saisie-boite),
+    var(--nv-saisie-cadre) border-box,
+    rgba(8, 8, 8, 0.86);
+  /* Le degrade part du BORD exterieur : cale par defaut sur l'interieur, il se repetait SOUS le bord
+     d'1 px, qui montrait alors le cote OPPOSE du degrade — un lisere quasi noir a droite et en bas
+     (conv-150 : « ya un liserai noir a droite du bloc de prompt »). Apres `background`, qui le remet
+     a zero. */
+  background-origin: border-box;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-field {
   gap: 7px;
@@ -736,14 +1381,14 @@
   border-radius: 22px;
   background: transparent; /* le degrade du bloc .composer passe a travers */
   backdrop-filter: none;
-  box-shadow: var(--nv-reflet);
+  box-shadow: none; /* le reflet du haut laissait un arc remanent en haut a droite (conv-139) */
 }
 /* Focus : le bord passe au rose, SANS halo autour. Le halo de 3 px se lisait, sur le haut
    du bloc, comme une seconde ligne au-dessus du bord (capture du 2026-10-09). */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-field:focus-within {
   /* Plus de bord rose au focus (demande du 2026-10-10, conv-139 : « enleve le cadre rose »). */
   border-color: transparent;
-  box-shadow: var(--nv-reflet);
+  box-shadow: none;
   outline: none;
 }
 /* Le texte se pose directement dans le bloc fonce : plus de cadre a lui, ni au focus. */
@@ -768,56 +1413,652 @@
   right: 22px;
   left: 22px;
 }
+/* LA JAUGE EPOUSE LE HAUT DU CADRE OR (conv-156, 2026-10-10 : « epaissis la barre de contexte pour
+   qu'elle recouvre le cadre en or », puis « elle doit etre courbee au debut et a la fin pour suivre
+   le contour du bloc ou je prompt » ; variante « A · Arc » choisie sur maquette, forme fixee par la
+   capture jointe : un filet qui s'AMINCIT en entrant dans les deux coins du haut).
+   Avant : 2 px poses SOUS le bord or d'1 px, retenus a 22 px des coins -- deux traits colles.
+   Ici, sur la saisie au cadre or seulement : deux calques couvrent la boite du bord (inset -1px),
+   arrondis comme elle, evides par masque. Le retrait 3 px EN HAUT et 0 SUR LES COTES donne a
+   l'evidement des coins elliptiques : la bande fait 3 px au sommet et s'affine jusqu'a rien en
+   descendant les arrondis, la ou le filet or reprend. `::after` = la piste (voile du rail de
+   ChatView.css, rendu opaque sur l'encre du bloc pour masquer l'or) ; `::before` = le remplissage,
+   meme decoupe que ChatView.css, opaque lui aussi, teinte OR (regle plus bas).
+   Occupation inconnue (pas de [data-context-level]) : aucun calque, le cadre or reste entier. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer[data-context-level]::after,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer[data-context-level]::before {
+  display: block;
+  content: '';
+  position: absolute;
+  inset: -1px;
+  height: auto;
+  box-sizing: border-box;
+  padding: 3px 0 0;
+  border-radius: var(--nv-rond);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer[data-context-level]::after {
+  z-index: 1;
+  background: linear-gradient(rgba(var(--voile-rgb), 0.14), rgba(var(--voile-rgb), 0.14)), #09090a;
+}
+/* REMPLISSAGE OR (conv-156 : « en fait F pas A », variante « F · Or courbe ») : or eteint -> or
+   clair -> blanc chaud, cale sur la largeur TOTALE comme le degrade de ChatView.css (meme decoupe
+   par clip-path) : chaque point garde sa teinte, la pointe s'eclaircit a mesure que le fil se
+   remplit. La piste reste sombre. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer[data-context-level]::before {
+  z-index: 2;
+  background-image: linear-gradient(90deg, #6b5527 0%, #b8913f 45%, #e3ba55 80%, #fff1c9 100%);
+  background-color: #09090a;
+  opacity: 1;
+}
+/* BOUTON D'ENVOI = UN ROND QUI S'ALLUME (conv-155, 2026-10-10, variante « B · S'allume, rond »
+   choisie sur maquette). Il quitte la forme de bulle -- le coin pince est reserve aux messages
+   (« ca faisait sens pour la bulle de chat mais pas pour les boutons ») -- et le degrade
+   bleu -> rose : un ROND de 38 px, comme les trois ronds de sa rangee. Champ vide : contour or
+   eteint. Message pret : OR PLEIN, avion fonce -- l'or dit « ca peut partir ». Aucune lueur.
+   Les couleurs passent par les jetons --nv-envoi-* : Nebuleuse doree, generee depuis ce
+   fichier, y remet sa pastille degradee or (scripts/theme-nebuleuse-verre.mjs, SAISIE_DOREE). */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send {
+  --nv-envoi-fond: #d9ae52;
+  --nv-envoi-fond-survol: #e3ba55;
+  --nv-envoi-bord: 1.5px solid #d9ae52;
+  --nv-envoi-texte: #16110a;
+  --nv-envoi-lueur: none;
+  --nv-envoi-vide-fond: transparent;
+  --nv-envoi-vide-bord: 1.5px solid #d4a94f;
+  --nv-envoi-vide-texte: #e3ba55;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
   border: 0;
-  border-radius: 999px;
-  background: var(--nv-degrade);
+  border-radius: 50%;
+  background-origin: border-box;
+  background-repeat: no-repeat;
   color: #ffffff;
-  box-shadow: 0 0 16px rgba(255, 61, 154, 0.45);
+  box-shadow: none;
 }
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ff5cab, #9378ff);
-  color: #ffffff;
-}
-/* LE BOUTON D'ENVOI AU REPOS. ChatView.css le peint avec un selecteur plus precis
+/* LE BOUTON D'ENVOI PRET. ChatView.css le peint avec un selecteur plus precis
    (`:not(.is-resume):not(.is-stop):not(:disabled)`) : un degrade rose a TROIS nuances
-   et un relief, que la couche generee reprenait. A specificite moindre, la regle
-   ci-dessus perdait, et le bouton n'etait pas celui de la maquette (constate le
-   2026-10-09 par le test « jamais de bouton a triple degrade »). Meme selecteur,
-   ecrit apres : c'est ce fichier qui gagne. */
+   et un relief, que la couche generee reprenait. Meme selecteur, ecrit apres : c'est ce
+   fichier qui gagne (constate le 2026-10-09 par le test « jamais de bouton a triple degrade »). */
 :root[data-theme='nebuleuse-verre']
   .cosmic-outline
   .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
-  border: 0;
-  background: var(--nv-degrade);
-  color: #ffffff;
-  box-shadow: 0 0 16px rgba(255, 61, 154, 0.45);
+  border: var(--nv-envoi-bord);
+  background: var(--nv-envoi-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  color: var(--nv-envoi-texte);
+  box-shadow: var(--nv-envoi-lueur);
 }
 :root[data-theme='nebuleuse-verre']
   .cosmic-outline
   .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
-  border: 0;
-  background: linear-gradient(135deg, #ff5cab, #9378ff);
+  border: var(--nv-envoi-bord);
+  background: var(--nv-envoi-fond-survol);
 }
+/* Rien a envoyer : le MEME rond, en simple contour or a demi transparent -- l'etat se lit a
+   l'intensite, et le remplissage n'arrive qu'avec un message a envoyer. */
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send:disabled {
-  background: rgba(255, 255, 255, 0.08);
+  border: var(--nv-envoi-vide-bord);
+  background: var(--nv-envoi-vide-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
   box-shadow: none;
-  color: #8f89ad;
+  color: var(--nv-envoi-vide-texte);
+  opacity: 0.45;
+}
+/* ARRETER et REPRENDRE gardent leur couleur au survol. Sans ces deux regles, le survol de la
+   couche generee (`.composer-send:hover:not(:disabled)`, un rose translucide, plus precise que
+   `.is-stop`) repeignait le bouton rouge en rose. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send.is-stop:hover:not(:disabled) {
+  background: rgba(235, 40, 40, 0.95);
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send.is-resume:hover:not(:disabled) {
+  background: rgba(0, 255, 85, 0.3);
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send.is-stop {
-  background: rgba(255, 90, 110, 0.22);
-  box-shadow: 0 0 0 1px rgba(255, 90, 110, 0.6);
-  color: #ffd2d8;
+  /* ROUGE franc, pas rose (conv-139, 2026-10-10 : « paraissent rose au lieu de rouge »). */
+  background: rgba(235, 40, 40, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 70, 60, 0.9);
+  color: #ffffff;
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer-send.is-resume {
-  background: rgba(79, 209, 165, 0.2);
-  box-shadow: 0 0 0 1px rgba(79, 209, 165, 0.6);
-  color: #d4fff0;
+  background: rgba(0, 255, 85, 0.2);
+  box-shadow: 0 0 0 1px rgba(0, 255, 85, 0.6);
+  color: #ccffdd;
+}
+/* RELIEF-PERLE:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
+   la doree garde sa pastille degradee (conv-155). */
+/* ENVOYER ET STOP EN PERLE (2026-10-10, variante « C4 · Perle » choisie sur maquette parmi six
+   dosages du dome : « PERLE implémente »). Les deux ronds sortaient plats ; ils deviennent un DOME
+   (degrade radial clair au centre -> sombre au bord) coiffe d'un REFLET OVALE net en haut. Survol :
+   le reflet s'avive. Appui : le reflet s'eteint et l'ombre se raccourcit -- l'appui se lit au
+   reflet, le bouton ne retrecit plus (`transform: none` annule le scale(0.94) de cosmic-outline.css
+   et ChatView.css). Aucune lueur : ombres NOIRES et courtes. Deux teintes par degrade (conv-124).
+   Le bord garde son epaisseur (l'icone ne bouge pas) mais devient transparent, et le fond passe
+   dessous (`background-origin: border-box`, repose apres chaque raccourci `background`).
+   Le Stop garde son rouge franc (conv-139) : reflet rouge-orange, jamais blanc, qui le rendrait
+   rose ; maquette : artifacts/draft-relief/tour2.md. Envoyer (et « Orienter », le meme bouton) a
+   quitte la perle or pour le gel bleu-rose ci-dessous (conv-200). Ses regles suivent celles
+   d'Envoyer pret (meme selecteur, ecrites apres : elles gagnent). */
+/* ENVOYER EN GEL FONDU BLEU-ROSE (conv-200, 2026-10-10, /draft « une version bleu et violet comme
+   le reste de mon theme » : « E · Gel » puis « implémente E4 »). La perle or d'Envoyer cede la
+   place au degrade du theme, celui de « Nouveau fil » et de l'icone active du menu, avion BLANC, et
+   un reflet blanc qui s'efface SANS ligne jusqu'au milieu. Il repeint, pour ce theme seulement, l'or
+   des jetons --nv-envoi-* poses plus haut (ces jetons restent : la doree derivee les reprend).
+   L'etat se lit au reflet et a l'avion, jamais a la couleur (conv-182 : le bleu reste plein) :
+   survol = reflet plus fort, appui = reflet eteint sans retrecir, rien a envoyer = le meme rond,
+   reflet faible et avion a 50 % -- plus de contour or ni d'`opacity`. « Orienter » est le meme
+   bouton : meme gel. Maquette : artifacts/draft-envoi-bleu-violet/tour2.html. */
+:root[data-theme='nebuleuse-verre']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  color: #ffffff;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme='nebuleuse-verre']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0) 64%),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):active {
+  transform: none;
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme='nebuleuse-verre']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):disabled {
+  border-color: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(135deg, #3c6eeb, #e63ca0);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  color: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+  opacity: 1;
+}
+:root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-stop:not(:disabled) {
+  border-color: transparent;
+  background:
+    radial-gradient(ellipse 52% 28% at 50% 19%, rgba(255, 150, 110, 0.6), rgba(255, 150, 110, 0)),
+    radial-gradient(circle at 50% 42%, #e8352c, #a51812 80%);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-stop:not(:disabled):hover {
+  border-color: transparent;
+  background:
+    radial-gradient(ellipse 52% 28% at 50% 19%, rgba(255, 150, 110, 0.8), rgba(255, 150, 110, 0)),
+    radial-gradient(circle at 50% 42%, #f03c30, #b01a14 80%);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+:root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-stop:not(:disabled):active {
+  transform: none;
+  border-color: transparent;
+  background: radial-gradient(circle at 50% 55%, #d82b22, #9e1712 80%);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+/* RELIEF-PERLE:FIN */
+/* BANDEAUX DU HAUT DU CHAT EN PERLE D'OR (conv-179, 2026-10-10 : « les bandeaux en haut de chat
+   font pas dore ils font orange », puis « inspire-toi du bouton Perle envoyer »). ChatView.css les
+   peint en var(--warn) : l'or dans le theme par defaut, l'ambre #ffb547 ici -- mesure dans l'app
+   vivante, rgb(255, 181, 71). Le bandeau prend donc l'or de la perle d'Envoyer (#e2b65a -> #a27326),
+   en voile : deux teintes, un reflet blanc ovale en haut, l'ombre noire courte, aucune lueur.
+   --warn n'est redefini que sur le bandeau : le jeton du theme reste l'ambre des ETATS (interrompu,
+   refuse). Hors du bloc de la perle : Nebuleuse doree en herite a l'identique. */
+:root[data-theme='nebuleuse-verre'] .chat-workflow-notice {
+  --warn: #e2b65a;
+  color: #e9c069;
+  border: 1px solid rgba(226, 182, 90, 0.55);
+  background:
+    radial-gradient(ellipse 60% 80% at 50% -20%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)),
+    linear-gradient(180deg, rgba(226, 182, 90, 0.2), rgba(162, 115, 38, 0.1));
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.6);
+}
+/* « Travail non publie » porte la meme classe : meme perle, mais son texte reste ivoire (une
+   information, pas une alarme -- ChatView.css), et son liseré gauche passe du rose a l'or. */
+:root[data-theme='nebuleuse-verre'] .chat-travail-non-publie {
+  border-left: 2px solid rgba(226, 182, 90, 0.85);
+  color: rgba(232, 226, 214, 0.92);
+}
+:root[data-theme='nebuleuse-verre'] .chat-travail-non-publie button {
+  border: 1px solid rgba(226, 182, 90, 0.45);
+}
+:root[data-theme='nebuleuse-verre'] .chat-travail-non-publie button:hover {
+  border-color: rgba(226, 182, 90, 0.85);
+}
+/* La croix reste SANS cadre (ChatView.css, `.chat-travail-non-publie__fermer`) : la regle `button`
+   du theme, plus precise, lui rendait un bord. */
+:root[data-theme='nebuleuse-verre'] .chat-travail-non-publie button.chat-travail-non-publie__fermer,
+:root[data-theme='nebuleuse-verre'] .chat-travail-non-publie button.chat-travail-non-publie__fermer:hover {
+  border-color: transparent;
+}
+/* LA JAUGE DE CONTEXTE SOUS L'EN-TETE, BLANCHE SUR GRIS (conv-189, 2026-10-10 : « je veux pas
+   qu'elle soit doree, je veux qu'elle soit blanche sur gris, ca sera plus discret »). Elle etait en
+   or depuis conv-179, puis jugee « trop orange ». ChatView.css la pose sur le filet du bas de
+   l'en-tete (`.chat-context-rule`) et ecrit le mot « contexte » au bout du remplissage. Ici :
+   3 px, l'epaisseur demandee pour la jauge (conv-156) ; un rail gris (voile a 16 %) ; un
+   remplissage BLANC uni, sans degrade ni or. Meme decoupe par clip-path que ChatView.css.
+   Hors des blocs propres a ce theme (perle, chanfrein) : Nebuleuse doree en herite a l'identique. */
+:root[data-theme='nebuleuse-verre'] .chat-context-rule::after,
+:root[data-theme='nebuleuse-verre'] .chat-context-rule::before {
+  top: 4px;
+  height: 3px;
+  border-radius: 2px;
+}
+:root[data-theme='nebuleuse-verre'] .chat-context-rule::after {
+  background: rgba(255, 255, 255, 0.16);
+}
+:root[data-theme='nebuleuse-verre'] .chat-context-rule::before {
+  background-image: none;
+  background-color: #ffffff;
+  opacity: 0.9;
+}
+/* CADRE-CHANFREIN:DEBUT -- bloc retire de Nebuleuse doree par scripts/theme-nebuleuse-verre.mjs :
+   la doree garde le cadre « or qui coule vers le blanc » (conv-168) et ses coins arrondis. */
+/* CADRE CHANFREIN PLATINE, « COINS SEULS » (conv-177, 2026-10-10 : « /draft des Border de container
+   styles », puis « j'adore le 3 » -- Chanfrein --, « Platine », et « coins seuls implemente » ;
+   reglage 2 du tour 3 choisi sur maquette). Les coins HAUT GAUCHE et BAS DROIT sont COUPES a 45 deg
+   (14 px) au lieu d'etre arrondis ; les deux autres coins sont droits. Seuls les deux pans coupes
+   s'allument -- blanc en haut, argent en bas, prolonges de 14 px le long des bords -- ; le reste du
+   contour tombe a blanc 7 %. Trait d'1 px, aucune lueur. Il REMPLACE, sur ce theme seul, le cadre
+   « or qui coule » et le filet or du haut, sur les memes surfaces : liste, fil, panneau de droite,
+   menu de gauche et saisie.
+   Trois facons de couper, selon ce que chaque surface contient :
+   - liste et panneau de droite : `clip-path` sur le panneau. Sans risque : ils ont deja
+     `overflow: hidden` ET un flou de fond, donc rien de ce qu'ils contiennent n'en sort aujourd'hui ;
+   - menu de gauche : `clip-path` aussi, mais la forme deborde de 400 px A DROITE, la ou sort l'encart
+     flottant de mise a jour du menu replie (UpdateBanner.css, `.rail-update-incoming.is-floating`) ;
+   - fil : `.chat` contient la saisie, ses menus et la modale de suppression : il n'est PAS coupe.
+     Seuls son panneau (`::after`) et son cadre (`::before`) le sont ;
+   - saisie : elle porte des menus qui sortent AU-DESSUS d'elle (palette `/`, mentions, etat du
+     modele) qu'un `clip-path` rognerait. Ses coins sont donc PEINTS : chaque couche de fond est un
+     degrade a 135 deg, transparent au-dela de la coupe. Ses deux pseudo-elements (la jauge de
+     contexte, en haut) sont, eux, coupes.
+   Le cadre des panneaux est leur `::before` (deja pose plus haut, au-dessus des enfants) : un
+   ANNEAU decoupe par `clip-path` en regle « evenodd » -- le contour du panneau, moins le meme
+   contour rentre d'1 px. Sur la diagonale, la coupe interieure est decalee de 0,414 px
+   (= racine de 2 - 1) pour que le trait garde 1 px d'epaisseur perpendiculaire. */
+:root[data-theme='nebuleuse-verre'] {
+  --nv-chanfrein: 14px;
+  /* Longueur allumee de chaque pan, apres la coupe, le long des deux bords. */
+  --nv-chanfrein-pan: 14px;
+  --nv-chanfrein-pans: calc(var(--nv-chanfrein) + var(--nv-chanfrein-pan));
+  --nv-chanfrein-haut: #ffffff;
+  --nv-chanfrein-bas: #c9d4e6;
+  --nv-chanfrein-cotes: rgba(255, 255, 255, 0.07);
+  /* Position de la coupe le long d'un degrade a 135 deg : la diagonale x + y = 14 px s'y trouve a
+     14 / racine de 2 du coin. */
+  --nv-chanfrein-a: calc(var(--nv-chanfrein) * 0.7071);
+  --nv-chanfrein-forme: polygon(
+    var(--nv-chanfrein) 0,
+    100% 0,
+    100% calc(100% - var(--nv-chanfrein)),
+    calc(100% - var(--nv-chanfrein)) 100%,
+    0 100%,
+    0 var(--nv-chanfrein)
+  );
+  --nv-chanfrein-forme-menu: polygon(
+    var(--nv-chanfrein) 0,
+    calc(100% + 400px) 0,
+    calc(100% + 400px) 100%,
+    100% 100%,
+    100% calc(100% - var(--nv-chanfrein)),
+    calc(100% - var(--nv-chanfrein)) 100%,
+    0 100%,
+    0 var(--nv-chanfrein)
+  );
+  --nv-chanfrein-anneau: polygon(
+    evenodd,
+    var(--nv-chanfrein) 0,
+    100% 0,
+    100% calc(100% - var(--nv-chanfrein)),
+    calc(100% - var(--nv-chanfrein)) 100%,
+    0 100%,
+    0 var(--nv-chanfrein),
+    var(--nv-chanfrein) 0,
+    calc(var(--nv-chanfrein) + 0.414px) 1px,
+    calc(100% - 1px) 1px,
+    calc(100% - 1px) calc(100% - var(--nv-chanfrein) - 0.414px),
+    calc(100% - var(--nv-chanfrein) - 0.414px) calc(100% - 1px),
+    1px calc(100% - 1px),
+    1px calc(var(--nv-chanfrein) + 0.414px),
+    calc(var(--nv-chanfrein) + 0.414px) 1px
+  );
+  --nv-chanfrein-trait:
+    linear-gradient(var(--nv-chanfrein-haut), var(--nv-chanfrein-haut)) left top /
+      var(--nv-chanfrein-pans) var(--nv-chanfrein-pans) no-repeat,
+    linear-gradient(var(--nv-chanfrein-bas), var(--nv-chanfrein-bas)) right bottom /
+      var(--nv-chanfrein-pans) var(--nv-chanfrein-pans) no-repeat,
+    linear-gradient(var(--nv-chanfrein-cotes), var(--nv-chanfrein-cotes));
+  /* Le noir de la saisie (--nv-saisie-degrade, plus haut), ici en couleur pleine. */
+  --nv-chanfrein-encre: #09090a;
+  /* SATIN GRIS PARALLELE (conv-191, 2026-10-10 : « /draft un moyen que mes blocs paraissent un
+     peu en relief », puis « il faut toucher au fond pas au border », « faut un effet leger »,
+     « Satin Argent Froid Parallele » et enfin « un plus haut et un parallele plus leger plus bas »).
+     Le relief vient du FOND des panneaux, jamais du cadre : deux reflets a 135 deg, donc
+     PARALLELES aux coins coupes -- un reflet net pres du coin blanc, puis un second, plus faible et
+     plus bas. GRIS NEUTRE, R = G = B : la premiere version « argent froid » (#1f232b, #17191f)
+     tirait sur le bleu -- « trop bleu ce que t'as mis je veux pas etre dans les teintes bleu juste
+     gris ». Les reperes sont en % de la diagonale de chaque panneau : la lumiere se repartit pareil
+     sur le menu (890 px de haut) et sur la saisie (185 px). Couleurs opaques, deja composees sur le
+     fond #000 du theme (l'encre a 86 % y valait environ #070707).
+     UN SEUL SATIN POUR TOUTE LA PAGE (conv-191 : « ca fait trop bizarre que chaque bloc ait son propre
+     satin il faut un satin qui fait toute la page mais qui est visible que sur les cards ») : chaque
+     panneau le pose en `fixed`, cale sur l'ECRAN et non sur sa propre boite. Les reperes en % se
+     lisent donc sur la diagonale de la fenetre : le reflet net traverse le haut gauche (menu, liste),
+     le second le bas droit (fil, saisie, panneau de droite), et chaque panneau en montre sa part. */
+  --nv-satin-reflets:
+    #0c0c0c 0%, #222222 18%, #080808 42%, #080808 48%, #1a1a1a 64%, #080808 80%;
+  --nv-satin: linear-gradient(135deg, var(--nv-satin-reflets));
+  /* BALAYAGE « CROISEMENT » A LA SOURIS (conv-191, 2026-10-10 : « une animation pour donner un cote
+     brillant a nos panels et pk pas une reponse a la souris », puis « Un balayage en fonction de la
+     position de la souris qui va d'avant en arriere », « 4 5 6 » et « go 6 »). Deux bandes de reflet
+     GRISES, a 135 deg comme le satin et les coins coupes, posees PAR-DESSUS le satin : la seconde,
+     plus faible, passe SOUS le curseur, la premiere au point OPPOSE de l'ecran ; elles se croisent au
+     centre. UN SEUL REFLET POUR LA PAGE (« un seul reflet pour toute la page, qui suit la souris
+     partout et ne se voit que dans les panneaux ») : comme le satin, chaque bande est calee sur
+     l'ECRAN (`fixed`), et le script `panneaux-balai.ts` pose la MEME position sur les cinq panneaux
+     (`--nv-balai-1` / `--nv-balai-2` : l'abscisse, en largeurs d'ecran, ou la bande coupe la
+     mi-hauteur). L'inertie est la transition ci-dessous (1,4 s et 2,2 s). Chaque bande est un calque
+     de 300 % de l'ecran : son centre tombe a l'abscisse u quand sa position vaut (1,5 - u) / 2. Au
+     repos (-0,45), elles attendent hors de l'ecran, a gauche. */
+  --nv-balai-bande-1: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 44%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0) 56%
+  );
+  --nv-balai-bande-2: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 46%,
+    rgba(255, 255, 255, 0.055) 50%,
+    rgba(255, 255, 255, 0) 54%
+  );
+  --nv-balai-transition:
+    --nv-balai-1 1.4s cubic-bezier(0.2, 0.8, 0.2, 1), --nv-balai-2 2.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Enregistrees en NOMBRES pour pouvoir glisser (une propriete libre saute d'une valeur a l'autre).
+   Non heritees : le fil les recoit sur `.chat`, et seul son panneau peint (`::after`) les reprend --
+   les messages ne recalculent rien quand la souris bouge. */
+@property --nv-balai-1 {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: -0.45;
+}
+@property --nv-balai-2 {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: -0.45;
+}
+/* Les panneaux : coins coupes, plus de filet or ni de reflet (le cadre les remplace).
+   Liste, panneau de droite et menu gardent un bord TRANSPARENT d'1 px, sous lequel leur fond est
+   peint ; leur cadre (`::before`, `inset: 0`) commence a l'INTERIEUR de ce bord. Coupes sur leur
+   boite exterieure, ils montraient donc 1 px de fond sombre hors du trait, cotes et diagonale
+   compris (mesure a la capture du 2026-10-10). Ils sont coupes sur leur boite INTERIEURE
+   (`padding-box`) : la coupe tombe pile sur le trait. Le panneau du fil (`::after`) partage deja
+   la boite de son cadre : il garde la reference par defaut. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline :is(.conv-pane, .runs-pane) {
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: var(--nv-chanfrein-forme) padding-box;
+  background:
+    var(--nv-balai-bande-1) calc((1.5 - var(--nv-balai-1)) * 50%) 50% / 300% 300% no-repeat fixed,
+    var(--nv-balai-bande-2) calc((1.5 - var(--nv-balai-2)) * 50%) 50% / 300% 300% no-repeat fixed,
+    var(--nv-satin) fixed;
+  transition: var(--nv-balai-transition);
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat::after {
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: var(--nv-chanfrein-forme);
+  /* Le script pose les positions sur `.chat` (un pseudo-element n'a pas de style propre) ; le panneau
+     peint les reprend et c'est LUI qui glisse. */
+  --nv-balai-1: inherit;
+  --nv-balai-2: inherit;
+  background:
+    var(--nv-balai-bande-1) calc((1.5 - var(--nv-balai-1)) * 50%) 50% / 300% 300% no-repeat fixed,
+    var(--nv-balai-bande-2) calc((1.5 - var(--nv-balai-2)) * 50%) 50% / 300% 300% no-repeat fixed,
+    var(--nv-satin) fixed;
+  transition: var(--nv-balai-transition);
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat {
+  border-radius: 0;
+}
+:root[data-theme='nebuleuse-verre'] .theme-serious .rail {
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: var(--nv-chanfrein-forme-menu) padding-box;
+  background:
+    var(--nv-balai-bande-1) calc((1.5 - var(--nv-balai-1)) * 50%) 50% / 300% 300% no-repeat fixed,
+    var(--nv-balai-bande-2) calc((1.5 - var(--nv-balai-2)) * 50%) 50% / 300% 300% no-repeat fixed,
+    var(--nv-satin) fixed;
+  /* Le menu se replie en glissant (app-shell.css, `.rail` : largeur et marges en 180 ms) : ces deux
+     transitions sont REPRISES ici, sinon le balayage les ecraserait. */
+  transition:
+    width 180ms var(--ease),
+    padding 180ms var(--ease),
+    var(--nv-balai-transition);
+}
+/* Le cadre : le `::before` de chaque panneau devient l'anneau. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline :is(.conv-pane, .chat, .runs-pane)::before,
+:root[data-theme='nebuleuse-verre'] .theme-serious .rail::before {
+  padding: 0;
+  border-radius: 0;
+  background: var(--nv-chanfrein-trait);
+  -webkit-mask: none;
+  mask: none;
+  clip-path: var(--nv-chanfrein-anneau);
+}
+/* Le bas du fil remonte de la hauteur de la coupe : la fleche basse de l'ascenseur restait sinon
+   dans le coin coupe du panneau (meme cause que conv-150, `.cosmic-outline .chat > .chat-scroll`). */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .chat-scroll {
+  margin-bottom: var(--nv-chanfrein);
+}
+/* La saisie : coins PEINTS (voir plus haut pourquoi elle n'est pas coupee). Du haut vers le bas :
+   le noir (rogne a l'interieur du bord, et 1 px apres la coupe), le pan blanc, le pan argent, puis
+   les cotes a 7 %. Les transitions d'un pixel adoucissent l'escalier de la diagonale. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer:focus-within {
+  border-radius: 0;
+  /* La saisie n'est pas coupee (ses menus sortent au-dessus) : le satin de la PAGE et les deux bandes
+     du balayage, poses sur toute sa boite, peindraient ses coins coupes. Du haut vers le bas :
+     1. le noir du fond (#000, le fond du theme) repeint les deux triangles coupes ;
+     2-3. les deux traits de la diagonale (blanc en haut, argent en bas), redessines PAR-DESSUS le
+          satin -- avant, le satin etait rogne et laissait voir les pans en dessous ;
+     4-5. les deux bandes du balayage ; 6. le satin de la page, accroche a l'ecran (`fixed`) ;
+     puis, sous le bord, les pans et les cotes du cadre. */
+  background:
+    linear-gradient(
+        135deg,
+        #000 calc(var(--nv-chanfrein-a) - 0.4px),
+        transparent calc(var(--nv-chanfrein-a) - 0.4px),
+        transparent calc(100% - var(--nv-chanfrein-a) + 0.4px),
+        #000 calc(100% - var(--nv-chanfrein-a) + 0.4px)
+      )
+      padding-box,
+    linear-gradient(
+        135deg,
+        transparent calc(var(--nv-chanfrein-a) - 0.4px),
+        var(--nv-chanfrein-haut) calc(var(--nv-chanfrein-a) + 0.4px),
+        var(--nv-chanfrein-haut) calc(var(--nv-chanfrein-a) + 0.6px),
+        transparent calc(var(--nv-chanfrein-a) + 1.4px)
+      )
+      left top / var(--nv-chanfrein-pans) var(--nv-chanfrein-pans) no-repeat padding-box,
+    linear-gradient(
+        135deg,
+        transparent calc(100% - var(--nv-chanfrein-a) - 1.4px),
+        var(--nv-chanfrein-bas) calc(100% - var(--nv-chanfrein-a) - 0.6px),
+        var(--nv-chanfrein-bas) calc(100% - var(--nv-chanfrein-a) - 0.4px),
+        transparent calc(100% - var(--nv-chanfrein-a) + 0.4px)
+      )
+      right bottom / var(--nv-chanfrein-pans) var(--nv-chanfrein-pans) no-repeat padding-box,
+    var(--nv-balai-bande-1) calc((1.5 - var(--nv-balai-1)) * 50%) 50% / 300% 300% no-repeat fixed
+      padding-box,
+    var(--nv-balai-bande-2) calc((1.5 - var(--nv-balai-2)) * 50%) 50% / 300% 300% no-repeat fixed
+      padding-box,
+    var(--nv-satin) fixed padding-box,
+    linear-gradient(
+        135deg,
+        transparent calc(var(--nv-chanfrein-a) - 0.4px),
+        var(--nv-chanfrein-haut) calc(var(--nv-chanfrein-a) + 0.4px)
+      )
+      left top / var(--nv-chanfrein-pans) var(--nv-chanfrein-pans) no-repeat border-box,
+    linear-gradient(
+        135deg,
+        var(--nv-chanfrein-bas) calc(100% - var(--nv-chanfrein-a) - 0.4px),
+        transparent calc(100% - var(--nv-chanfrein-a) + 0.4px)
+      )
+      right bottom / var(--nv-chanfrein-pans) var(--nv-chanfrein-pans) no-repeat border-box,
+    linear-gradient(
+        135deg,
+        transparent calc(var(--nv-chanfrein-a) - 0.4px),
+        var(--nv-chanfrein-cotes) calc(var(--nv-chanfrein-a) + 0.4px),
+        var(--nv-chanfrein-cotes) calc(100% - var(--nv-chanfrein-a) - 0.4px),
+        transparent calc(100% - var(--nv-chanfrein-a) + 0.4px)
+      )
+      border-box;
+  background-origin: border-box;
+  transition: var(--nv-balai-transition);
+}
+/* La jauge de contexte, bande de 3 px posee sur le haut de la saisie (piste `::after`, remplissage
+   `::before`) : plus d'arrondi, et elle COMMENCE APRES LE PAN BLANC -- un masque de plus, avant
+   l'evidement deja en place, efface ses 28 premiers pixels. Le pan reste visible comme sur la
+   maquette, et la bande ne deborde plus dans le coin coupe. PAS de `clip-path` : celui du
+   remplissage porte l'occupation (ChatView.css, `inset(0 calc(100% - var(--context-fill)) 0 0)`,
+   avec sa transition). Une premiere version l'ecrasait par une forme a largeur minimale de 14 px :
+   a 0 % d'occupation, la jauge montrait un point dore dans le coin (capture du 2026-10-10). */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer[data-context-level]::after,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer[data-context-level]::before {
+  border-radius: 0;
+  mask:
+    linear-gradient(
+      90deg,
+      transparent calc(var(--nv-chanfrein-pans) - 0.5px),
+      #000 calc(var(--nv-chanfrein-pans) + 0.5px)
+    ),
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: intersect, exclude;
+}
+/* ONGLETS DU PANNEAU DE DROITE EN LISERE (conv-180, 2026-10-10 : « remplace la capsule par un
+   liseré et enlève le liseré rose en dessous, du coup la capsule ça va pas bien avec le border
+   très angulaire »). Sous le cadre a coins coupes, la pastille arrondie de l'onglet actif (section 6)
+   jurait : l'onglet actif devient un texte blanc souligne d'un trait de 2 px bleu -> rose, a la
+   largeur du mot, sans fond ni lueur. Le survol pose le meme trait en blanc 22 % au lieu d'une
+   pastille. Le filet rose sous toute la barre (couche generee, `.workflow-panel-head`) disparait :
+   le trait de l'onglet actif le remplace. Selecteurs sous `.cosmic-outline .runs-pane` : ils
+   passent devant la section 6 et ne valent que la ou le cadre est coupe. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .runs-pane .workflow-panel-head {
+  border-image: none;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .runs-pane .workflow-section-tab,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .runs-pane .workflow-section-tab:hover,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .runs-pane .workflow-section-tab.is-active {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  background-origin: content-box;
+  background-clip: content-box;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 2px;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .runs-pane .workflow-section-tab:hover {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.22) 0 0);
+  color: #dcd8ee;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .runs-pane .workflow-section-tab.is-active {
+  background-image: linear-gradient(90deg, #3c6eeb, #e63ca0);
+  color: #ffffff;
+}
+/* PIED DE LISTE : UN SEUL TRAIT EN HAUT (conv-190, 2026-10-10 : « dans ce bloc de buttons en fait
+   laisse qu'un liseré top », sur une capture de la capsule a coins coupes de conv-188). Le cadre
+   complet du pied disparait : plus de cotes, plus de bas, plus de coins coupes, plus de filets
+   entre les cases. Il ne reste qu'un trait d'1 px tout en haut, sur toute la largeur, bleu -> rose
+   au repos. Le comportement du survol est garde, ramene a ce seul trait : le trait redevient gris
+   et SEULE la portion au-dessus de la case survolee reprend le bleu -> rose (une case allumee a la
+   fois, demande du /draft du pied). Les anneaux decoupes deviennent de simples bandes d'1 px
+   collees en haut : aucun masque, aucun `clip-path`. Nebuleuse doree, a coins arrondis, garde sa
+   capsule entiere : ce reglage vit dans le bloc du chanfrein, que la derivation ne reprend pas. */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot {
+  border-radius: 0;
+  clip-path: none;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot::before,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot > button::before {
+  inset: 0 0 auto;
+  height: 1px;
+  padding: 0;
+  border-radius: 0;
+  mask: none;
+  clip-path: none;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot > button,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot > button:first-child,
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot > button:last-child {
+  border-radius: 0;
+}
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-pane .conv-foot > button:not(:first-child) {
+  border-left: 0;
+}
+/* CADRE-CHANFREIN:FIN */
+/* MODE AUTO ALLUME = DORE (choix utilisateur du 2026-09-07, ChatView.css `.composer-auto.actif`).
+   La couche generee transposait cet or en rose comme un or decoratif ; la saisie n'a plus de rose
+   (conv-155) et l'or y signale ce qui est actif. Le jeton --gold-clair de ce theme etant rose, la
+   couleur du glyphe est ecrite ici (Nebuleuse doree remet son --gold-clair, SAISIE_DOREE). */
+:root[data-theme='nebuleuse-verre'] .composer-auto.actif {
+  --nv-auto-glyphe: #e3ba55;
+  border-color: rgba(212, 169, 79, 0.75);
+  background: rgba(212, 169, 79, 0.16);
+  color: var(--nv-auto-glyphe);
+}
+/* « ↓ DERNIER MESSAGE » EN OR (conv-157, 2026-10-10 : « ce bouton met le en dore », capture de la
+   pastille rose). Elle est doree a l'origine (cosmic-outline.css `.chat-jump-latest`) ; la couche
+   generee transposait cet or en rose. On lui rend l'or de la saisie juste en dessous. La pastille
+   de la mosaique suit : ChatMosaic.css impose la MEME pastille dans les deux vues (« un style
+   different par vue faisait lire deux boutons », retour utilisateur du 30/08). */
+:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat-jump-latest,
+:root[data-theme='nebuleuse-verre'] .chat-mosaic-window-jump {
+  border: 1px solid rgba(212, 169, 79, 0.6);
+  background: rgba(10, 10, 10, 0.9);
+  color: #e3ba55;
 }
 /* Quota du modele : sa couleur DIT le niveau (large / attention / critique).
    On garde ce sens, on accorde seulement les teintes au theme. */
 :root[data-theme='nebuleuse-verre'] .model-quota-trigger.is-healthy {
-  --quota-color: #4fd1a5;
+  --quota-color: #00ff55;
 }
 :root[data-theme='nebuleuse-verre'] .model-quota-trigger.is-warning {
   --quota-color: #ffb547;
@@ -832,25 +2073,20 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
 }
-/* Memes paliers que l'original (12 / 30-42 / 56-68 / 86 %), teintes du theme. */
-:root[data-theme='nebuleuse-verre'] .model-quota-bar-fill {
-  background-image: linear-gradient(
-    90deg,
-    #ff5a6e 0%,
-    #ff5a6e 12%,
-    #ff8a5c 30%,
-    #ff8a5c 42%,
-    #ffcf5a 56%,
-    #ffcf5a 68%,
-    #4fd1a5 86%,
-    #4fd1a5 100%
-  );
+/* Memes paliers que l'original (12 / 30-42 / 56-68 / 86 %), teintes du theme. Posees en
+   VARIABLES : la barre et sa pastille les lisent toutes deux (quota-gradient.ts), la pastille ne
+   recopie plus le vert de base (conv-197). */
+:root[data-theme='nebuleuse-verre'] .model-quota-trigger {
+  --quota-rouge: #e8302a; /* rouge franc (conv-139) */
+  --quota-orange: #ff8a5c;
+  --quota-jaune: #ffcf5a;
+  --quota-vert: #00ff55;
 }
 :root[data-theme='nebuleuse-verre'] .chat-context-gauge-track {
   background: rgba(255, 255, 255, 0.08);
 }
 :root[data-theme='nebuleuse-verre'] .chat-context-gauge-fill {
-  background: linear-gradient(90deg, #7b5cff, #ff3d9a);
+  background: linear-gradient(90deg, #3c6eeb, #e63ca0);
 }
 
 /* ---------------------------------------------------------------------------
@@ -877,7 +2113,11 @@
 }
 :root[data-theme='nebuleuse-verre'] .workflow-section-tab.is-active {
   border: 0;
+  border-radius: 999px; /* la pastille des onglets voisins, sans coin pince (conv-155) */
   background: var(--nv-degrade);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 14px rgba(230, 60, 160, 0.45);
   color: #ffffff;
 }
 :root[data-theme='nebuleuse-verre'] .workflow-panel-close {
@@ -893,9 +2133,9 @@
 @media (max-width: 1180px) {
   :root[data-theme='nebuleuse-verre'] .cosmic-outline .runs-pane {
     border-color: rgba(255, 255, 255, 0.18);
-    background: rgba(22, 18, 44, 0.9);
+    background: rgba(20, 20, 20, 0.9);
     box-shadow:
-      -30px 0 60px rgba(6, 4, 20, 0.6),
+      -30px 0 60px rgba(5, 5, 5, 0.6),
       var(--nv-reflet);
   }
 }
@@ -916,7 +2156,7 @@
   background: rgba(255, 255, 255, 0.035);
 }
 :root[data-theme='nebuleuse-verre'] .workflow-execution-node.is-request {
-  box-shadow: inset 2px 0 0 #ff3d9a;
+  box-shadow: inset 2px 0 0 #e63ca0;
 }
 :root[data-theme='nebuleuse-verre']
   .workflow-execution-node:is(.is-workspace, .is-skill, .is-agent, .is-git, .is-closure) {
@@ -932,11 +2172,11 @@
   background: rgba(255, 255, 255, 0.06);
 }
 :root[data-theme='nebuleuse-verre'] .workflow-execution-node.is-selected {
-  border-color: rgba(255, 61, 154, 0.45);
-  background: rgba(255, 61, 154, 0.1);
+  border-color: rgba(230, 60, 160, 0.45);
+  background: rgba(230, 60, 160, 0.1);
 }
 :root[data-theme='nebuleuse-verre'] .workflow-execution-node.is-running .workflow-execution-dot {
-  background: #ff3d9a;
+  background: #e63ca0;
   animation: nv-pouls 1.6s ease-in-out infinite;
 }
 :root[data-theme='nebuleuse-verre'] .workflow-execution-node.is-pending .workflow-execution-dot {
@@ -944,7 +2184,7 @@
   box-shadow: none;
 }
 :root[data-theme='nebuleuse-verre'] .workflow-execution-edge {
-  --execution-edge-color: rgba(123, 92, 255, 0.45);
+  --execution-edge-color: rgba(230, 60, 160, 0.45); /* pas de bleu dilue (C1) */
 }
 :root[data-theme='nebuleuse-verre'] .workflow-execution-detail {
   border-color: rgba(255, 255, 255, 0.1);
@@ -1046,6 +2286,18 @@
 @media (prefers-reduced-motion: reduce) {
   :root[data-theme='nebuleuse-verre'] .workflow-execution-node.is-running .workflow-execution-dot {
     animation: none;
-    box-shadow: 0 0 12px rgba(255, 61, 154, 0.7);
+    box-shadow: 0 0 12px rgba(230, 60, 160, 0.7);
+  }
+  :root[data-theme='nebuleuse-verre'] .cosmic-outline .conv-new-row.active::after {
+    animation: none;
+    display: none;
+  }
+  /* Le balayage des panneaux (conv-191) s'efface : bandes vides, aucun glissement. Les transitions
+     restent une LISTE de durees nulles -- `none` ne peut pas s'y glisser, il annulerait aussi le
+     repli du menu. */
+  :root[data-theme='nebuleuse-verre'] {
+    --nv-balai-bande-1: linear-gradient(transparent, transparent);
+    --nv-balai-bande-2: linear-gradient(transparent, transparent);
+    --nv-balai-transition: --nv-balai-1 0s, --nv-balai-2 0s;
   }
 }

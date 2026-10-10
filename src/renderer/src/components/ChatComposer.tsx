@@ -90,23 +90,18 @@ const DICTEE_NON_INSTALLEE = 'Installer la reconnaissance vocale (Whisper local)
  * rendu par la police du système : couleur imposée, trait épais, taille imprévisible. Ces tracés
  * suivent `currentColor` (donc la couleur du bouton : neutre au repos, rouge en écoute) et restent
  * nets à 15 px comme à 13 px en mosaïque.
+ *
+ * LE MICRO EST UN MASQUE CSS, PAS UN <svg> ENFANT (2026-10-10, « quand je fais ctrl+molette ya
+ * certains zoom où le micro est pas centré »). Chromium arrondit au pixel la boîte d'un <svg>
+ * enfant INDÉPENDAMMENT de celle du rond : selon le zoom et la position du bouton, les deux tombent
+ * sur des tailles de parité différente et le tracé glisse d'un demi-pixel, jusqu'à 2 px avec
+ * l'ancien `translateX(-0.5px)`. Ce <span> remplit tout le bouton, donc il est arrondi COMME le
+ * rond ; le tracé y est peint par `mask` (ChatView.css, `.composer-dictee-trait`). Mesuré dans
+ * Electron 44 sur les 26 crans de zoom × 40 positions : 847/1040 décalés de ≥ 0,5 px avant,
+ * 0/1040 après (pire écart 0,2 px).
  */
 function IconeMicroTrait(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
-      <g
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="9" y="2" width="6" height="11" rx="3" />
-        <path d="M5 11a7 7 0 0 0 14 0" />
-        <path d="M12 18v3" />
-      </g>
-    </svg>
-  )
+  return <span className="composer-dictee-trait" aria-hidden="true" />
 }
 
 /** ENVOYER : un avion en plein, lisible sur le bouton de couleur vive. */
@@ -118,8 +113,10 @@ function IconeEnvoyer(): React.JSX.Element {
       height="19"
       /* RECENTRAGE OPTIQUE (conv-257, 2026-09-04) : la masse de l avion penche vers le haut
          gauche, donc le centre GEOMETRIQUE ne tombe pas sur le centre PERCU du cercle.
-         1 px vers le bas et vers la droite, demande par l utilisateur apres observation. */
-      style={{ transform: 'translate(1px, 1px)' }}
+         1 px vers le bas et vers la droite, demande par l utilisateur apres observation.
+         Puis 1 px de plus vers la droite (conv-203, 2026-10-10 : « decale la fleche dans le
+         bouton envoyer de 1 px a droite »). */
+      style={{ transform: 'translate(2px, 1px)' }}
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -194,26 +191,6 @@ export interface ChatComposerProps {
   errorNode?: ReactNode
   cadrageNode?: ReactNode
   frictionNode?: ReactNode
-  /**
-   * LA JAUGE DE CONTEXTE, PEINTE SUR LE FILET AU-DESSUS DU CHAMP (demande utilisateur conv-240,
-   * « joindre l'utile a l'agreable », reference claude.exe). Part occupee de la fenetre du modele,
-   * entre 0 et 1. `undefined` = on ne SAIT pas (fenetre non declaree, entree non mesuree) : le
-   * filet reste alors gris, il ne montre PAS 0 % — ce serait affirmer que le fil est vide.
-   */
-  contextRatio?: number
-  /** Palier deja decide par `contextGauge()` : la vue peint, elle ne juge pas. */
-  contextLevel?: 'ok' | 'tendu' | 'critique'
-  /** Libelle de survol, ecrit par le parent qui detient les nombres. */
-  contextTitle?: string
-
-  /**
-   * LE PANNEAU DE DETAIL, montre au SURVOL du filet (demande utilisateur du 2026-09-08).
-   *
-   * Le filet portait une simple bulle de texte ; l en-tete, lui, ouvrait un panneau complet.
-   * Deux affichages de la MEME donnee repondaient differemment au meme geste. Le noeud est
-   * fabrique par le parent, seul detenteur des nombres et de l action Compacter.
-   */
-  contextPanelNode?: ReactNode
   leadingNode?: ReactNode
   stopNode?: ReactNode
   metaNode?: ReactNode
@@ -247,31 +224,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [mentionIndex, setMentionIndex] = useState(0)
     const [mentionDismissed, setMentionDismissed] = useState(false)
     const inputRef = useRef<HTMLTextAreaElement>(null)
-    /** Survol du filet : ouvre le panneau de detail, comme la barre de l en-tete. */
-    const [filetSurvole, setFiletSurvole] = useState(false)
-    /*
-     CLIC = OUVERTURE FIGEE (signale le 2026-09-08 : « je peux pas cliquer sur Compacter »).
-     Le survol seul ne suffit pas : viser un bouton DANS un panneau qui se ferme des qu on quitte
-     sa zone est un piege. Le clic sur le filet fige donc l ouverture jusqu au clic ailleurs.
-    */
-    const [filetFige, setFiletFige] = useState(false)
-    const zoneFiletRef = useRef<HTMLDivElement>(null)
-    useEffect(() => {
-      if (!filetFige) return
-      const fermer = (event: PointerEvent): void => {
-        if (!zoneFiletRef.current?.contains(event.target as Node)) setFiletFige(false)
-      }
-      const echap = (event: KeyboardEvent): void => {
-        if (event.key === 'Escape') setFiletFige(false)
-      }
-      document.addEventListener('pointerdown', fermer)
-      document.addEventListener('keydown', echap)
-      return () => {
-        document.removeEventListener('pointerdown', fermer)
-        document.removeEventListener('keydown', echap)
-      }
-    }, [filetFige])
-
     useImperativeHandle(ref, () => ({
       setInput: (value: string) => setInput(value),
       focus: () => inputRef.current?.focus(),
@@ -480,41 +432,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     )
 
     return (
-      <div
-        className="composer"
-        /* Le filet qui separe le fil du champ EST la jauge : aucun element ajoute, aucune place
-           prise. La var reste absente quand l'occupation est inconnue -> filet gris inchange. */
-        style={
-          props.contextRatio != null
-            ? ({
-                '--context-fill': `${Math.min(100, Math.max(0, props.contextRatio * 100))}%`
-              } as React.CSSProperties)
-            : undefined
-        }
-        data-context-level={props.contextRatio != null ? (props.contextLevel ?? 'ok') : undefined}
-        data-testid="composer-context-rule"
-      >
-        {/* INFOBULLE DU FILET : une bande de survol fine posee SUR le filet — la tooltip ne se
-           declenche qu'au-dessus de la jauge, pas partout dans la zone de saisie. */}
-        {props.contextRatio != null && props.contextTitle ? (
-          <div
-            ref={zoneFiletRef}
-            className="composer-context-tip"
-            data-testid="composer-context-tip"
-            title={props.contextPanelNode ? undefined : props.contextTitle}
-            onPointerEnter={() => setFiletSurvole(true)}
-            onPointerLeave={() => setFiletSurvole(false)}
-            onClick={() => setFiletFige((fige) => !fige)}
-          >
-            {props.contextPanelNode && (filetSurvole || filetFige) ? (
-              props.contextPanelNode
-            ) : props.contextPanelNode ? null : (
-              <span className="composer-context-tip-bulle" role="tooltip">
-                {props.contextTitle}
-              </span>
-            )}
-          </div>
-        ) : null}
+      <div className="composer">
         <div className="composer-field">
           {props.attachmentsNode}
           {props.errorNode}

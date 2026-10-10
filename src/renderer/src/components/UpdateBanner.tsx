@@ -337,54 +337,75 @@ export function UpdateBanner({
             title={whoLabel}
             onClick={() => setIncomingOpen((open) => !open)}
           >
+            {/* A5 « Œil qui s'ouvre » (conv-182) : FERMÉ (paupière et trois cils) tant que la liste
+                est repliée, OUVERT quand elle est dépliée — le dessin dit l'état. Le rond qui
+                l'entoure est dessiné par `.rail-update-who` (UpdateBanner.css). */}
             <svg
               viewBox="0 0 24 24"
-              width="16"
-              height="16"
+              width="12"
+              height="12"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
+              data-oeil={incomingOpen ? 'ouvert' : 'ferme'}
             >
-              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
-              <circle cx="12" cy="12" r="3" />
+              {incomingOpen ? (
+                <>
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </>
+              ) : (
+                <>
+                  <path d="M2.5 8c2.7 3.8 6 5.6 9.5 5.6s6.8-1.8 9.5-5.6" />
+                  <path d="M5.6 11.4l-1.7 2.1" />
+                  <path d="M12 13.7v2.7" />
+                  <path d="M18.4 11.4l1.7 2.1" />
+                </>
+              )}
             </svg>
           </button>
         )}
         <button
           type="button"
-          className={`rail-update-btn${buttonState}`}
+          className={`rail-update-btn capsule-bouton${buttonState}`}
           data-testid="update-apply"
           disabled={applying !== null}
           aria-label={actionLabel}
           title={actionLabel}
           onClick={() => void apply(primary)}
         >
-          <span className="rail-update-icon" aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              width="17"
-              height="17"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M4.5 9A8 8 0 0 1 18 5.5" />
-              <path d="M18 2.5v3h-3.5" />
-              <path d="M19.5 15A8 8 0 0 1 6 18.5" />
-              <path d="M6 21.5v-3h3.5" />
-            </svg>
-          </span>
-          {!collapsed && (
-            <span className="rail-update-label">
-              {applying ? 'Mise à jour…' : UPDATE_STRATEGY_LABELS[primary]}
-              <span className="rail-update-count">+{info.behind}</span>
+          {/* MÊME GUEULE QUE DÉTAILS (conv-181) : le balisage de la capsule, dessiné par les règles
+              `.capsule-bouton` de ChatView.css. Le nombre de commits va dans la pastille sombre. */}
+          <span className="thinking-capsule">
+            <span className="thinking-capsule-icone rail-update-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4.5 9A8 8 0 0 1 18 5.5" />
+                <path d="M18 2.5v3h-3.5" />
+                <path d="M19.5 15A8 8 0 0 1 6 18.5" />
+                <path d="M6 21.5v-3h3.5" />
+              </svg>
             </span>
-          )}
+            {!collapsed && (
+              <>
+                <span className="thinking-label rail-update-label">
+                  {applying ? 'Mise à jour…' : UPDATE_STRATEGY_LABELS[primary]}
+                </span>
+                <span className="thinking-duree rail-update-count">+{info.behind}</span>
+              </>
+            )}
+          </span>
         </button>
       </div>
       {incomingOpen && incoming.length > 0 && (
@@ -470,13 +491,31 @@ export function UpdateBanner({
           {/* Le geste que l'utilisateur refaisait à chaque blocage : on l'automatise (pré-rempli). */}
           <button
             type="button"
-            className={`rail-update-repair${collapsed ? ' is-glyph' : ''}`}
+            className={`rail-update-repair capsule-bouton${collapsed ? ' is-glyph' : ''}`}
             data-testid="update-repair"
             aria-label="Faire réparer le blocage de mise à jour"
             onClick={() => void reparerBlocageUpdate(applyError)}
             title="Ouvre une conversation et pré-remplit un prompt pour que l'agent résolve ce blocage, puis relance la mise à jour"
           >
-            {collapsed ? <span aria-hidden="true">🔧</span> : '🔧 Faire réparer'}
+            {/* Capsule comme Détails (conv-181) : la clé est DESSINÉE (trait blanc dans le rond
+                dégradé, comme l'icône de Détails), plus l'emoji clé en couleur. */}
+            <span className="thinking-capsule">
+              <span className="thinking-capsule-icone" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                </svg>
+              </span>
+              {!collapsed && <span className="thinking-label">Faire réparer</span>}
+            </span>
           </button>
         </>
       )}

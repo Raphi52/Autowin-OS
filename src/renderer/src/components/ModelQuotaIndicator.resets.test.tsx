@@ -55,7 +55,7 @@ async function monter(
   await act(async () => {
     root.render(createElement(ModelQuotaIndicator, props))
   })
-  const trigger = container.querySelector('[data-testid="model-quota-trigger"]') as HTMLElement
+  const trigger = document.body.querySelector('[data-testid="model-quota-trigger"]') as HTMLElement
   await act(async () => {
     trigger.click()
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -74,15 +74,15 @@ describe('popup quotas : resets offerts et compte', () => {
 
   it('affiche le reset offert avec son bouton, et ne le consomme PAS sans confirmation', async () => {
     const claudeResetClaim = vi.fn(async () => ({ result: 'reset' }))
-    const container = await monter({
+    await monter({
       modelQuotas: vi.fn(async () => snapshot),
       claudeResets: vi.fn(async () => resets),
       claudeResetClaim
     })
-    const carte = container.querySelector('[data-testid="model-quota-resets"]')
+    const carte = document.body.querySelector('[data-testid="model-quota-resets"]')
     expect(carte?.textContent).toContain('Opus 5.5 launch reset')
     expect(carte?.textContent).toContain('1 sur 1 restant')
-    const bouton = container.querySelector(
+    const bouton = document.body.querySelector(
       '[data-testid="model-quota-reset-opus55-launch"]'
     ) as HTMLButtonElement
     expect(bouton.disabled).toBe(false)
@@ -105,7 +105,7 @@ describe('popup quotas : resets offerts et compte', () => {
   })
 
   it('un reset non utilisable a son bouton désactivé', async () => {
-    const container = await monter({
+    await monter({
       modelQuotas: vi.fn(async () => snapshot),
       claudeResets: vi.fn(async () => ({
         ...resets,
@@ -113,7 +113,7 @@ describe('popup quotas : resets offerts et compte', () => {
       })),
       claudeResetClaim: vi.fn()
     })
-    const bouton = container.querySelector(
+    const bouton = document.body.querySelector(
       '[data-testid="model-quota-reset-opus55-launch"]'
     ) as HTMLButtonElement
     expect(bouton.disabled).toBe(true)
@@ -121,7 +121,7 @@ describe('popup quotas : resets offerts et compte', () => {
 
   it('montre les comptes et bascule par le chemin de la conversation', async () => {
     const onSelect = vi.fn()
-    const container = await monter(
+    await monter(
       { modelQuotas: vi.fn(async () => snapshot), claudeResets: vi.fn(async () => resets) },
       {
         comptes: {
@@ -137,11 +137,11 @@ describe('popup quotas : resets offerts et compte', () => {
         }
       }
     )
-    const actif = container.querySelector(
+    const actif = document.body.querySelector(
       '[data-testid="model-quota-account-compte-3"]'
     ) as HTMLButtonElement
     expect(actif.getAttribute('aria-pressed')).toBe('true')
-    const autre = container.querySelector(
+    const autre = document.body.querySelector(
       '[data-testid="model-quota-account-default"]'
     ) as HTMLButtonElement
     await act(async () => {

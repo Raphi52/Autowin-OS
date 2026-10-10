@@ -1,10 +1,12 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs nebuleuse-doree -- ne pas modifier.
-   Theme « Nebuleuse doree » : cyan et rose -> or, noirs de fond -> noir chaud.
-   290 regles, 384 declarations. */
+   Theme « Nebuleuse doree » : cyan et rose -> or, noirs de fond -> noir chaud, verts -> #00ff55.
+   371 regles, 506 declarations. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-doree'] .topology-state {
-    background: rgb(12, 10, 6)
+    border: 1px solid rgb(0, 119, 40);
+    background: rgb(12, 10, 6);
+    color: rgb(0, 255, 85)
 }
 :root[data-theme='nebuleuse-doree'] .topology-state.is-saving {
     background: rgb(12, 10, 6)
@@ -37,6 +39,9 @@
 :root[data-theme='nebuleuse-doree'] .topology-slot > button {
     background: rgb(12, 10, 6)
 }
+:root[data-theme='nebuleuse-doree'] .topology-slot > em {
+    color: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .topology-assign-button:hover:not(:disabled) {
     border-color: rgb(242, 201, 98);
     color: rgb(248, 226, 170)
@@ -57,6 +62,9 @@
 }
 :root[data-theme='nebuleuse-doree'] .artifact-preview__image, :root[data-theme='nebuleuse-doree'] .artifact-preview__video {
     background: rgb(12, 10, 6)
+}
+:root[data-theme='nebuleuse-doree'] .artifact-preview__source.is-diff {
+    color: rgb(0, 255, 85)
 }
 :root[data-theme='nebuleuse-doree'] .artifact-slide {
     background: linear-gradient(145deg, #181b24, rgb(12, 10, 6))
@@ -100,6 +108,44 @@
     background: rgb(12, 10, 6)
 }
 
+/* ---- src/renderer/src/components/CandidatsPickPanel.css ---- */
+:root[data-theme='nebuleuse-doree'] .cpick-dot-g {
+    background: rgb(0, 255, 85)
+}
+
+/* ---- src/renderer/src/components/CapabilitiesView.css ---- */
+:root[data-theme='nebuleuse-doree'] .cockpit-sources .is-green {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .control-status.is-on {
+    background: rgb(0, 255, 85);
+    box-shadow: 0 0 8px rgba(0, 255, 85, 0.8)
+}
+:root[data-theme='nebuleuse-doree'] .control-source-badge.is-codex {
+    border-color: rgba(0, 255, 85, 0.42);
+    background: rgba(0, 255, 85, 0.1);
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .control-toggle.is-on {
+    border-color: rgb(0, 170, 57);
+    background: rgb(0, 77, 26)
+}
+:root[data-theme='nebuleuse-doree'] .control-toggle.is-on i {
+    background: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .inspector-impact {
+    border: 1px solid rgba(0, 255, 85, 0.28);
+    background: rgba(0, 255, 85, 0.06)
+}
+:root[data-theme='nebuleuse-doree'] .inspector-impact b {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .control-notice {
+    border: 1px solid rgba(0, 255, 85, 0.3);
+    background: rgba(0, 255, 85, 0.08);
+    color: rgb(0, 255, 85)
+}
+
 /* ---- src/renderer/src/components/ChatMosaic.css ---- */
 :root[data-theme='nebuleuse-doree'] .chat-mosaic-window-jump {
     background: rgba(12, 10, 6, 0.9)
@@ -120,8 +166,14 @@
     background: rgba(12, 10, 6, 0.3);
     color: rgba(238, 221, 181, 0.74)
 }
+:root[data-theme='nebuleuse-doree'] .attachment-button:hover:not(:disabled) {
+    border-color: rgba(0, 255, 85, 0.48);
+    background: rgba(0, 255, 85, 0.09)
+}
+:root[data-theme='nebuleuse-doree'] .attachment-button:focus-visible {
+    outline: 2px solid rgba(0, 255, 85, 0.72)
+}
 :root[data-theme='nebuleuse-doree'] .attachment-chip {
-    border: 1px solid rgba(243, 206, 111, 0.3);
     background: rgba(12, 10, 6, 0.94)
 }
 :root[data-theme='nebuleuse-doree'] .image-lightbox {
@@ -137,6 +189,10 @@
     border: 2px dashed rgba(243, 206, 111, 0.82);
     background: rgba(12, 10, 6, 0.92);
     box-shadow: inset 0 0 42px rgba(235, 183, 51, 0.12)
+}
+:root[data-theme='nebuleuse-doree'] .md-badge-good {
+    border-color: rgba(0, 255, 85, 0.35);
+    background: rgba(0, 255, 85, 0.12)
 }
 :root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-layout {
     border: 1px solid rgba(237, 221, 182, 0.2);
@@ -224,6 +280,12 @@
     box-shadow: 0 0 0 4px rgba(236, 209, 141, 0.18),
     0 0 16px rgba(236, 209, 141, 0.7)
 }
+:root[data-theme='nebuleuse-doree'] .effort-matrix-row .effort-cran.is-recommended i {
+    box-shadow: 0 0 7px rgba(0, 255, 85, 0.8)
+}
+:root[data-theme='nebuleuse-doree'] .effort-matrix-row.is-active .effort-cran.is-recommended i {
+    box-shadow: 0 0 7px rgba(0, 255, 85, 0.8)
+}
 :root[data-theme='nebuleuse-doree'] .effort-cran:hover i {
     box-shadow: 0 0 12px rgba(236, 209, 141, 0.6)
 }
@@ -238,8 +300,14 @@
     ),
     rgba(12, 10, 6, 0.985)
 }
-:root[data-theme='nebuleuse-doree'] .composer-context-tip-bulle {
+:root[data-theme='nebuleuse-doree'] .thinking-block > summary .thinking-secondes, :root[data-theme='nebuleuse-doree'] .thinking-block > summary .thinking-duree, :root[data-theme='nebuleuse-doree'] .capsule-bouton .thinking-duree {
+    background: rgba(12, 10, 6, 0.5)
+}
+:root[data-theme='nebuleuse-doree'] .chat-context-rule-bulle {
     background: rgba(12, 10, 6, 0.97)
+}
+:root[data-theme='nebuleuse-doree'] .composer-input-row > .composer-send, :root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-input-row > .composer-send {
+    border: 1px solid rgba(0, 255, 85, 0.85)
 }
 
 /* ---- src/renderer/src/components/ConversationCostIndicator.css ---- */
@@ -257,8 +325,15 @@
 }
 
 /* ---- src/renderer/src/components/DiffView.css ---- */
+:root[data-theme='nebuleuse-doree'] .diff-add {
+    color: var(--ok, rgb(0, 255, 85));
+    background: color-mix(in srgb, var(--ok, rgb(0, 255, 85)) 10%, transparent)
+}
 :root[data-theme='nebuleuse-doree'] .diff-hunk {
     color: var(--accent, rgb(242, 198, 89))
+}
+:root[data-theme='nebuleuse-doree'] .diff-add {
+    background: color-mix(in srgb, var(--ok, rgb(0, 255, 85)) 30%, transparent)
 }
 
 /* ---- src/renderer/src/components/DomainShell.css ---- */
@@ -269,6 +344,13 @@
 /* ---- src/renderer/src/components/Evidence.css ---- */
 :root[data-theme='nebuleuse-doree'] .evidence-item {
     background: rgba(12, 10, 6, 0.28)
+}
+:root[data-theme='nebuleuse-doree'] .evidence-item .evidence-exit.st-ok {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .evidence-diff .diff-add {
+    color: rgb(0, 255, 85);
+    background: rgba(0, 255, 85, 0.12)
 }
 :root[data-theme='nebuleuse-doree'] .run-cost-recap {
     background: rgba(12, 10, 6, 0.2)
@@ -287,6 +369,9 @@
 }
 :root[data-theme='nebuleuse-doree'] .frw-card {
     background: var(--surface-panel, rgba(12, 10, 6, 0.96))
+}
+:root[data-theme='nebuleuse-doree'] .frw-checks li.ok .frw-icon {
+    color: var(--success, rgb(0, 255, 85))
 }
 :root[data-theme='nebuleuse-doree'] .frw-actions button:hover:not(:disabled) {
     border-color: var(--rose, rgb(226, 183, 76))
@@ -321,7 +406,12 @@
     0 0 0 2px rgba(245, 211, 127, 0.55)
 }
 :root[data-theme='nebuleuse-doree'] .graph-clean-memory {
-    background: rgba(12, 10, 6, 0.34)
+    border: 1px solid rgba(0, 255, 85, 0.52);
+    background: rgba(12, 10, 6, 0.34);
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .graph-clean-memory:hover {
+    background: rgba(0, 255, 85, 0.12)
 }
 :root[data-theme='nebuleuse-doree'] .graph-toolbar__stats strong {
     color: rgb(237, 221, 182)
@@ -399,17 +489,14 @@
 :root[data-theme='nebuleuse-doree'] .node-links button:hover {
     color: rgb(248, 226, 170)
 }
+:root[data-theme='nebuleuse-doree'] .node-panel__theme {
+    color: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .node-panel h2 {
     color: rgb(237, 221, 182)
 }
 :root[data-theme='nebuleuse-doree'] .node-panel pre {
     background: rgb(12, 10, 6)
-}
-:root[data-theme='nebuleuse-doree'] .graph-observatory--galaxy {
-    background: rgb(12, 10, 6)
-}
-:root[data-theme='nebuleuse-doree'] .graph-observatory--galaxy .graph-toolbar {
-    background: linear-gradient(90deg, rgba(12, 10, 6, 0.98), rgba(12, 10, 6, 0.98)), rgb(12, 10, 6)
 }
 :root[data-theme='nebuleuse-doree'] .graph-observatory--galaxy .theme-sidebar, :root[data-theme='nebuleuse-doree'] .graph-observatory--galaxy .visibility-sidebar {
     background: linear-gradient(180deg, rgba(12, 10, 6, 0.98), rgba(12, 10, 6, 0.98))
@@ -440,7 +527,7 @@
 :root[data-theme='nebuleuse-doree'] .graph-observatory--galaxy .node-panel pre {
     background: rgba(12, 10, 6, 0.92)
 }
-:root[data-theme='nebuleuse-doree'] .graph-toolbar, :root[data-theme='nebuleuse-doree'] .theme-sidebar, :root[data-theme='nebuleuse-doree'] .visibility-sidebar {
+:root[data-theme='nebuleuse-doree'] .theme-sidebar, :root[data-theme='nebuleuse-doree'] .visibility-sidebar {
     background: rgba(12, 10, 6, 0.97)
 }
 :root[data-theme='nebuleuse-doree'] .graph-stage {
@@ -479,8 +566,16 @@
 :root[data-theme='nebuleuse-doree'] .knowledge-inbox__meta code {
     color: rgb(248, 225, 166)
 }
+:root[data-theme='nebuleuse-doree'] .knowledge-inbox__meta dd[data-sha-state='current'] .knowledge-inbox__sha {
+    color: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .knowledge-inbox__body {
     background: rgba(12, 10, 6, 0.45)
+}
+:root[data-theme='nebuleuse-doree'] .knowledge-inbox__actions .is-promote {
+    border: 1px solid rgb(0, 172, 57);
+    background: rgba(0, 172, 57, 0.24);
+    color: rgb(0, 255, 85)
 }
 :root[data-theme='nebuleuse-doree'] .brain-bench__head {
     color: rgb(237, 221, 182)
@@ -574,17 +669,51 @@
 :root[data-theme='nebuleuse-doree'] .home-chat__depot-calque {
     background: rgba(12, 10, 6, 0.92)
 }
+:root[data-theme='nebuleuse-doree'] [data-couleur='vert'] {
+    border-left-color: rgb(0, 255, 85);
+    color: rgb(0, 255, 85)
+}
 
 /* ---- src/renderer/src/components/HumanJson.css ---- */
 :root[data-theme='nebuleuse-doree'] .human-json__toggle {
-    background: rgba(12, 10, 6, 0.72)
+    border: 1px solid rgba(0, 255, 85, 0.38);
+    background: rgba(12, 10, 6, 0.72);
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .human-json__toggle:hover {
+    background: rgba(0, 255, 85, 0.14)
 }
 :root[data-theme='nebuleuse-doree'] .human-json__tree {
     background: rgba(12, 10, 6, 0.62);
     color: rgb(237, 221, 182)
 }
+:root[data-theme='nebuleuse-doree'] .human-json__group summary {
+    color: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .human-json__string {
     color: rgb(242, 223, 176)
+}
+:root[data-theme='nebuleuse-doree'] .human-json__boolean {
+    color: rgb(0, 255, 85)
+}
+
+/* ---- src/renderer/src/components/JugesPanel.css ---- */
+:root[data-theme='nebuleuse-doree'] .jpan-vote.is-valide {
+    color: rgb(0, 255, 85)
+}
+
+/* ---- src/renderer/src/components/ModelActivityLogPane.css ---- */
+:root[data-theme='nebuleuse-doree'] .model-log-row[data-log-kind='action'] {
+    --log-tone: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .model-log-row[data-log-kind='done'] {
+    --log-tone: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] [data-piste-source='parts'], :root[data-theme='nebuleuse-doree'] [data-voie-source='parts'] {
+    --piste-tone: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] [data-piste-source='brain'], :root[data-theme='nebuleuse-doree'] [data-voie-source='brain'] {
+    --piste-tone: rgb(0, 255, 85)
 }
 
 /* ---- src/renderer/src/components/ModelQuestionPopup.css ---- */
@@ -609,8 +738,19 @@
 }
 
 /* ---- src/renderer/src/components/ModelQuotaIndicator.css ---- */
+:root[data-theme='nebuleuse-doree'] .model-quota-trigger {
+    --quota-vert: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .model-quota-bar-value {
-    background: color-mix(in srgb, var(--quota-teinte, var(--quota-color, #35d07f)) 16%, rgb(12, 10, 6))
+    border: 1px solid color-mix(in srgb, var(--quota-teinte, var(--quota-color, rgb(0, 255, 85))) 45%, transparent);
+    background: color-mix(in srgb, var(--quota-teinte, var(--quota-color, rgb(0, 255, 85))) 16%, rgb(12, 10, 6));
+    color: var(--quota-teinte, var(--quota-color, rgb(0, 255, 85)))
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-trigger.is-healthy {
+    --quota-color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-trigger:focus-visible .model-quota-bar {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--quota-color, rgb(0, 255, 85)) 32%, transparent)
 }
 :root[data-theme='nebuleuse-doree'] .model-quota-popover {
     border: 1px solid rgba(237, 221, 182, 0.2);
@@ -619,20 +759,40 @@
 :root[data-theme='nebuleuse-doree'] .model-quota-popover header, :root[data-theme='nebuleuse-doree'] .model-quota-popover footer {
     border-bottom: 1px solid rgba(237, 221, 182, 0.1)
 }
+:root[data-theme='nebuleuse-doree'] .model-quota-popover header button {
+    color: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .model-quota-row {
     border-bottom: 1px solid rgba(237, 221, 182, 0.08)
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-window > strong {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-meter i {
+    background: linear-gradient(90deg, #b8201a 0%, #f0a020 45%, rgb(0, 255, 85) 100%)
 }
 :root[data-theme='nebuleuse-doree'] .model-quota-popover footer {
     border-top: 1px solid rgba(237, 221, 182, 0.1)
 }
+:root[data-theme='nebuleuse-doree'] .quota-context-gauge-fill {
+    background: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .model-quota-tip {
-    background: var(--surface-panel, rgba(12, 10, 6, 0.98))
+    background: rgba(12, 10, 6, 0.96)
 }
 :root[data-theme='nebuleuse-doree'] .model-quota-resets {
     border-bottom: 1px solid rgba(237, 221, 182, 0.08)
 }
 :root[data-theme='nebuleuse-doree'] .model-quota-reset {
     border: 1px solid rgba(237, 221, 182, 0.12)
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-reset button {
+    border: 1px solid rgba(0, 255, 85, 0.35);
+    background: rgba(0, 255, 85, 0.08);
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .model-quota-reset-message {
+    color: rgb(0, 255, 85)
 }
 :root[data-theme='nebuleuse-doree'] .model-quota-popover .router-accounts {
     border-bottom: 1px solid rgba(237, 221, 182, 0.08)
@@ -648,6 +808,26 @@
 }
 :root[data-theme='nebuleuse-doree'] .observatory-native-diagnostics {
     border: 1px solid rgba(243, 203, 101, 0.28)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-rag-causal-step {
+    border: 1px solid rgba(0, 255, 85, 0.42);
+    background: linear-gradient(90deg, rgba(0, 255, 85, 0.09), transparent 58%), var(--surface-inset)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-rag-causal-step > header > span {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-rag-causal-step > header > b {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-rag-node-badge {
+    color: rgb(0, 255, 85) !important;
+    border-color: rgba(0, 255, 85, 0.42) !important
+}
+:root[data-theme='nebuleuse-doree'] .rag-trace-card.is-injected {
+    border-color: rgba(0, 255, 85, 0.45)
+}
+:root[data-theme='nebuleuse-doree'] .rag-trace-card.is-injected > header strong {
+    color: rgb(0, 255, 85)
 }
 :root[data-theme='nebuleuse-doree'] .observatory-conversations > button.is-active {
     border-color: rgb(243, 203, 101)
@@ -667,6 +847,24 @@
 }
 :root[data-theme='nebuleuse-doree'] .observatory-event.is-compared {
     box-shadow: inset 3px 0 rgb(243, 203, 101)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-event.is-response-displayed {
+    box-shadow: inset 3px 0 rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-event.is-response-displayed > i, :root[data-theme='nebuleuse-doree'] .observatory-event.is-response-displayed > span:nth-child(2) b, :root[data-theme='nebuleuse-doree'] .observatory-event.is-response-displayed p strong {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-event.is-tool-call {
+    box-shadow: inset 3px 0 rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-event.is-tool-call > i, :root[data-theme='nebuleuse-doree'] .observatory-event.is-tool-call > span:nth-child(2) b, :root[data-theme='nebuleuse-doree'] .observatory-event.is-tool-call p strong {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-event.is-tool-result {
+    box-shadow: inset 3px 0 rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .observatory-event.is-tool-result > i, :root[data-theme='nebuleuse-doree'] .observatory-event.is-tool-result > span:nth-child(2) b, :root[data-theme='nebuleuse-doree'] .observatory-event.is-tool-result p strong {
+    color: rgb(0, 255, 85)
 }
 :root[data-theme='nebuleuse-doree'] .observatory-event.is-gate {
     box-shadow: inset 3px 0 rgb(226, 183, 76)
@@ -698,11 +896,23 @@
 :root[data-theme='nebuleuse-doree'] .observatory-diff tr[data-change='changed'], :root[data-theme='nebuleuse-doree'] .observatory-diff tr[data-change='added'], :root[data-theme='nebuleuse-doree'] .observatory-diff tr[data-change='removed'] {
     background: rgba(243, 203, 101, 0.06)
 }
+:root[data-theme='nebuleuse-doree'] .observatory-decision-ledger article, :root[data-theme='nebuleuse-doree'] .observatory-authority-ledger article {
+    border-left: 3px solid rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .observatory-authority-ledger article {
     border-left-color: rgb(243, 203, 101)
 }
+:root[data-theme='nebuleuse-doree'] .observatory-decision-ledger article > header > b {
+    color: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .observatory-event:focus-visible {
     outline: 2px solid rgb(243, 203, 101)
+}
+:root[data-theme='nebuleuse-doree'] .brain-nav-candidates > li.is-retained {
+    background: rgba(0, 255, 85, 0.1)
+}
+:root[data-theme='nebuleuse-doree'] .brain-nav-candidates > li.is-retained .brain-nav-badge {
+    color: var(--ok, rgb(0, 255, 85))
 }
 :root[data-theme='nebuleuse-doree'] .brain-nav-note {
     background: rgba(12, 10, 6, 0.25)
@@ -714,12 +924,31 @@
     border-color: rgb(243, 203, 101)
 }
 
+/* ---- src/renderer/src/components/OrchestrationBudgetSettings.css ---- */
+:root[data-theme='nebuleuse-doree'] .orchestration-budget-message {
+    color: rgb(0, 255, 85) !important
+}
+
+/* ---- src/renderer/src/components/ProdProtectionSettings.css ---- */
+:root[data-theme='nebuleuse-doree'] .settings-prod-protection .prod-etat-active {
+    color: rgb(0, 255, 85);
+    border-color: rgba(0, 255, 85, 0.45)
+}
+:root[data-theme='nebuleuse-doree'] .settings-prod-protection .prod-message-ok {
+    color: rgb(0, 255, 85)
+}
+
 /* ---- src/renderer/src/components/ProjectPane.css ---- */
 :root[data-theme='nebuleuse-doree'] .project-pane .pp-zone {
     background: rgba(12, 10, 6, 0.28)
 }
 
 /* ---- src/renderer/src/components/RouterView.css ---- */
+:root[data-theme='nebuleuse-doree'] .router-badge.is-authenticated {
+    color: rgb(0, 255, 85);
+    border-color: rgba(0, 255, 85, 0.4);
+    background: rgba(0, 255, 85, 0.12)
+}
 :root[data-theme='nebuleuse-doree'] .router-badge.is-standby {
     color: rgb(232, 211, 159);
     border-color: rgba(222, 194, 123, 0.38)
@@ -732,10 +961,24 @@
     background: var(--surface-card, rgba(12, 10, 6, 0.46))
 }
 
+/* ---- src/renderer/src/components/RunBilanCard.css ---- */
+:root[data-theme='nebuleuse-doree'] .run-bilan[data-verdict='vert'] .run-bilan__verdict {
+    color: rgb(0, 255, 85)
+}
+
 /* ---- src/renderer/src/components/RunInspector.css ---- */
 :root[data-theme='nebuleuse-doree'] .run-inspector__nav button {
     background: rgb(12, 10, 6);
     color: rgb(236, 221, 181)
+}
+
+/* ---- src/renderer/src/components/RunProgress.css ---- */
+:root[data-theme='nebuleuse-doree'] .run-progress__step {
+    border-left: 2px solid var(--ok, rgb(0, 255, 85));
+    background: color-mix(in srgb, var(--ok, rgb(0, 255, 85)) 6%, transparent)
+}
+:root[data-theme='nebuleuse-doree'] .run-progress__dot {
+    background: var(--ok, rgb(0, 255, 85))
 }
 
 /* ---- src/renderer/src/components/SandboxedHtmlPreview.css ---- */
@@ -771,6 +1014,14 @@
 :root[data-theme='nebuleuse-doree'] .sc-repo {
     background: var(--surface-panel, rgb(12, 10, 6))
 }
+:root[data-theme='nebuleuse-doree'] .sc-toggle.is-on {
+    border-color: rgba(0, 255, 85, 0.75);
+    color: rgb(0, 255, 85);
+    background: rgba(0, 255, 85, 0.14)
+}
+:root[data-theme='nebuleuse-doree'] .sc-toggle.is-on .sc-toggle-dot {
+    box-shadow: 0 0 6px rgba(0, 255, 85, 0.9)
+}
 :root[data-theme='nebuleuse-doree'] .sc-branch {
     color: var(--accent, rgb(242, 198, 89))
 }
@@ -786,8 +1037,20 @@
 :root[data-theme='nebuleuse-doree'] .sc-file-open {
     color: var(--accent, rgb(242, 198, 89))
 }
+:root[data-theme='nebuleuse-doree'] .sc-m-added {
+    color: var(--ok, rgb(0, 255, 85))
+}
 :root[data-theme='nebuleuse-doree'] .sc-m-renamed {
     color: var(--accent, rgb(242, 198, 89))
+}
+:root[data-theme='nebuleuse-doree'] .sc-m-committed {
+    color: var(--ok, rgb(0, 255, 85))
+}
+:root[data-theme='nebuleuse-doree'] .sc-lancement[data-statut='en-cours'] {
+    border-left-color: var(--ok, rgb(0, 255, 85))
+}
+:root[data-theme='nebuleuse-doree'] .sc-lancement-point {
+    background: var(--ok, rgb(0, 255, 85))
 }
 
 /* ---- src/renderer/src/components/SuggestionGrid.css ---- */
@@ -799,12 +1062,28 @@
 }
 
 /* ---- src/renderer/src/components/TaskManagerView.css ---- */
+:root[data-theme='nebuleuse-doree'] .task-manager-health.is-ok {
+    color: rgb(0, 255, 85)
+}
 :root[data-theme='nebuleuse-doree'] .task-manager-primary {
     color: var(--rose-bright, rgb(234, 204, 127)) !important
 }
 :root[data-theme='nebuleuse-doree'] .task-manager-dot.mode-active-only, :root[data-theme='nebuleuse-doree'] .task-manager-mode.mode-active-only {
     color: rgb(244, 210, 123);
     background-color: rgb(244, 210, 123)
+}
+:root[data-theme='nebuleuse-doree'] .task-manager-occurrence .status-completed {
+    color: rgb(0, 255, 85)
+}
+:root[data-theme='nebuleuse-doree'] .watchdog-outcome.is-neutral {
+    color: rgb(0, 255, 85);
+    border-color: rgba(0, 255, 85, 0.35);
+    background: rgba(0, 255, 85, 0.12)
+}
+
+/* ---- src/renderer/src/components/TestsView.css ---- */
+:root[data-theme='nebuleuse-doree'] .tests-summary .ok {
+    color: rgb(0, 255, 85)
 }
 
 /* ---- src/renderer/src/components/TicketsView.css ---- */
@@ -814,6 +1093,10 @@
 :root[data-theme='nebuleuse-doree'] .ticket-open-conversation.is-prepared, :root[data-theme='nebuleuse-doree'] .ticket-open-conversation.is-running {
     border-color: color-mix(in srgb, var(--rose, rgb(232, 199, 114)) 70%, transparent);
     background: color-mix(in srgb, var(--rose, rgb(232, 199, 114)) 18%, transparent)
+}
+:root[data-theme='nebuleuse-doree'] .ticket-open-conversation.is-succeeded {
+    border-color: var(--success, rgb(0, 255, 85));
+    background: color-mix(in srgb, var(--success, rgb(0, 255, 85)) 18%, transparent)
 }
 
 /* ---- src/renderer/src/components/WorkflowProfilesView.css ---- */
@@ -846,6 +1129,9 @@
 /* ---- src/renderer/src/components/WorktreeView.css ---- */
 :root[data-theme='nebuleuse-doree'] .wt-geste code {
     background: rgba(12, 10, 6, 0.35)
+}
+:root[data-theme='nebuleuse-doree'] .wt-geste-resultat.is-ok {
+    border-left-color: var(--ok, rgb(0, 255, 85))
 }
 
 /* ---- src/renderer/src/assets/app-shell.css ---- */
@@ -883,7 +1169,7 @@
     border-color: rgb(241, 220, 167);
     box-shadow: 0 0 18px rgba(226, 183, 76, 0.24)
 }
-:root[data-theme='nebuleuse-doree'] .graph-observatory, :root[data-theme='nebuleuse-doree'] .graph-toolbar, :root[data-theme='nebuleuse-doree'] .theme-sidebar, :root[data-theme='nebuleuse-doree'] .visibility-sidebar, :root[data-theme='nebuleuse-doree'] .graph-stage {
+:root[data-theme='nebuleuse-doree'] .theme-sidebar, :root[data-theme='nebuleuse-doree'] .visibility-sidebar, :root[data-theme='nebuleuse-doree'] .graph-stage {
     background-color: rgba(12, 10, 6, 0.96)
 }
 :root[data-theme='nebuleuse-doree'] .theme-filter, :root[data-theme='nebuleuse-doree'] .node-search-result, :root[data-theme='nebuleuse-doree'] .settings-section, :root[data-theme='nebuleuse-doree'] .node-links button {
@@ -906,6 +1192,9 @@
 }
 :root[data-theme='nebuleuse-doree'] .model-question-options button:hover {
     background: rgba(226, 183, 76, 0.09)
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .chat > .composer {
+    background: linear-gradient(rgba(12, 10, 6, 0.42), rgba(12, 10, 6, 0.42)), var(--surface-panel)
 }
 :root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-item, :root[data-theme='nebuleuse-doree'] .cosmic-outline .conv-item:hover {
     background: rgba(12, 10, 6, 0.24)
@@ -934,6 +1223,10 @@
 :root[data-theme='nebuleuse-doree'] .cosmic-outline .composer > .btn {
     border-color: rgba(228, 188, 87, 0.62);
     background: rgba(132, 100, 21, 0.74)
+}
+:root[data-theme='nebuleuse-doree'] .cosmic-outline .composer-send.is-resume {
+    border-color: rgba(0, 255, 85, 0.74);
+    background: rgba(0, 129, 43, 0.86)
 }
 :root[data-theme='nebuleuse-doree'] .cosmic-outline .chat-head-signal {
     background: linear-gradient(180deg, rgb(230, 194, 103), #ffd45a 58%, rgb(242, 199, 91))
@@ -975,10 +1268,11 @@
   )
 }
 :root[data-theme='nebuleuse-doree'] .cosmic-outline .activity-group[data-state='done'] {
+    border-left-color: rgb(0, 255, 85);
     background: linear-gradient(
     100deg,
-    rgba(78, 201, 165, 0.2) 0%,
-    rgba(78, 201, 165, 0.06) 45%,
+    rgba(0, 255, 85, 0.2) 0%,
+    rgba(0, 255, 85, 0.06) 45%,
     rgba(12, 10, 6, 0.3) 85%
   )
 }
@@ -1052,9 +1346,10 @@
     --chat-conv-filet-active: rgb(227, 187, 84);
     --chat-signal-rose: rgb(228, 189, 90);
     --chat-signal-cyan: rgb(241, 196, 81);
-    --chat-wf-trait-rose: rgb(228, 188, 87);
-    --chat-wf-icone-active: rgb(230, 194, 103);
     --chat-etat-defaut: rgb(240, 190, 64);
+    --chat-etat-fini: rgb(0, 255, 85);
+    --chat-piece-jointe-survol: rgb(0, 255, 85);
+    --chat-md-bon: rgb(0, 255, 85);
     --chat-md-ref-survol: rgb(239, 222, 179);
     --chat-role-agent: rgb(237, 202, 114);
     --chat-role-vous: rgb(233, 201, 121);
@@ -1062,11 +1357,15 @@
     --chat-modele-texte: rgb(248, 226, 170);
     --chat-cran-rempli: rgb(236, 209, 141);
     --chat-cran-vif: rgb(241, 220, 167);
+    --chat-cran-reco: rgb(0, 255, 85);
     --chat-cran-focus: rgb(241, 220, 167);
     --chat-envoi-rose: rgb(241, 220, 167);
+    --chat-envoi-vert: rgb(0, 255, 85);
     --chat-envoi-bleu: rgb(237, 180, 36);
+    --chat-envoi-vert-survol: rgb(0, 255, 85);
     --chat-envoi-bleu-survol: rgb(242, 198, 89);
     --chat-lot-rose: rgb(234, 203, 125);
+    --chat-frise-ok: rgb(0, 255, 85);
     --chat-depot-texte: rgb(248, 226, 170)
 }
 :root[data-theme='nebuleuse-doree'] body {
@@ -1090,6 +1389,15 @@
 }
 :root[data-theme='nebuleuse-doree'] .spinner::after {
     border-top-color: rgb(226, 183, 75)
+}
+:root[data-theme='nebuleuse-doree'] .aw-atom__trail--1 {
+    background: conic-gradient(
+    from 0deg,
+    rgba(0, 245, 255, 0) 0 16%,
+    rgba(0, 255, 85, 0.6) 58%,
+    rgba(0, 245, 255, 1) 99%,
+    transparent 100%
+  )
 }
 :root[data-theme='nebuleuse-doree'] .aw-atom__trail--2 {
     background: conic-gradient(

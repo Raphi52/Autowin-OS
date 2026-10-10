@@ -604,4 +604,15 @@ describe('claudeContentArtifacts — un artefact d’outil n’est pas « géné
   it('ne dit « générée » que pour une sortie directe du modèle', () => {
     expect(claudeContentArtifacts(imageBlock)[0].name).toBe('image-générée')
   })
+
+  it('nomme une image lue par Read d’après le fichier lu, pas « image-Read » (conv-195)', () => {
+    expect(
+      claudeContentArtifacts(imageBlock, 'Read', 'C:\\Users\\User\\Temp\\1-image.png')[0].name
+    ).toBe('1-image.png')
+    expect(claudeContentArtifacts(imageBlock, 'Read', '/tmp/capture.png')[0].name).toBe(
+      'capture.png'
+    )
+    // Un outil sans fichier garde le repli par nom d'outil.
+    expect(claudeContentArtifacts(imageBlock, 'Read', '')[0].name).toBe('image-Read')
+  })
 })

@@ -61,6 +61,11 @@ AGENTS.md
 # d ecran prises pour prouver un rendu (4 PNG a ce jour). Elles servent a REGARDER pendant un
 # tour, pas a vivre dans l historique : un `git add .` distrait les embarquait toutes.
 /.autowin-preuve/
+# Brouillons de session, ajoute le 2026-10-10 (salvage conv-207) : `.autowin-tmp/` recueille les
+# captures, apercus et maquettes ecrits pendant les tours (557 fichiers, 67 Mo ce jour-la). Meme
+# famille que `.autowin-preuve/` : ils servent pendant un tour, pas dans l historique partage.
+# Les 9 fichiers deja suivis le restent (un ignore ne retire rien de l index).
+/.autowin-tmp/
 
 # Sorties de compilation TypeScript ECRITES A COTE DES SOURCES, ajoutees le 2026-09-15.
 # Constate sur conv-540 (tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f, objection du juge sur la

@@ -67,7 +67,7 @@ describe('indicateur de quotas modèles', () => {
       await Promise.resolve()
     })
 
-    const trigger = container.querySelector(
+    const trigger = document.body.querySelector(
       '[data-testid="model-quota-trigger"]'
     ) as HTMLButtonElement
     expect(trigger.textContent).toContain('28')
@@ -77,10 +77,10 @@ describe('indicateur de quotas modèles', () => {
     expect(barre).not.toBeNull()
     expect(trigger.style.getPropertyValue('--quota-fill')).toBe('28%')
     // Et c'est bien un clic sur cette barre qui ouvre la popup.
-    expect(container.querySelector('[data-testid="model-quota-popover"]')).toBeNull()
+    expect(document.body.querySelector('[data-testid="model-quota-popover"]')).toBeNull()
     await act(async () => barre.click())
 
-    const popover = container.querySelector('[data-testid="model-quota-popover"]')
+    const popover = document.body.querySelector('[data-testid="model-quota-popover"]')
     expect(popover?.textContent).toContain('Claude')
     expect(popover?.textContent).toContain('ChatGPT')
     expect(popover?.textContent).not.toContain('Claude Opus')
@@ -101,7 +101,7 @@ describe('indicateur de quotas modèles', () => {
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     })
-    expect(container.querySelector('[data-testid="model-quota-popover"]')).toBeNull()
+    expect(document.body.querySelector('[data-testid="model-quota-popover"]')).toBeNull()
     await act(async () => root.unmount())
   })
 
@@ -143,7 +143,7 @@ describe('indicateur de quotas modèles', () => {
         await Promise.resolve()
       })
       const texte =
-        container.querySelector('.model-quota-tip-hint')?.textContent ?? '(aucune ligne)'
+        document.body.querySelector('.model-quota-tip-hint')?.textContent ?? '(aucune ligne)'
       await act(async () => root.unmount())
       return texte
     }
@@ -233,10 +233,10 @@ describe('indicateur de quotas modèles', () => {
     })
 
     await act(async () => {
-      ;(container.querySelector('[data-testid="model-quota-trigger"]') as HTMLButtonElement).click()
+      ;(document.body.querySelector('[data-testid="model-quota-trigger"]') as HTMLButtonElement).click()
     })
 
-    const popover = container.querySelector('[data-testid="model-quota-popover"]')
+    const popover = document.body.querySelector('[data-testid="model-quota-popover"]')
     expect(popover?.querySelectorAll('.model-quota-row')).toHaveLength(1)
     expect(popover?.querySelectorAll('.model-quota-window')).toHaveLength(2)
     expect(popover?.textContent).toContain('ChatGPT')
@@ -273,7 +273,7 @@ describe('indicateur de quotas modèles', () => {
       await Promise.resolve()
     })
     expect(modelQuotas).toHaveBeenCalledTimes(2)
-    expect(container.querySelector('[data-testid="model-quota-trigger"]')?.textContent).toContain(
+    expect(document.body.querySelector('[data-testid="model-quota-trigger"]')?.textContent).toContain(
       '0'
     )
     await act(async () => root.unmount())
@@ -292,12 +292,12 @@ describe('indicateur de quotas modèles', () => {
       root.render(createElement(ModelQuotaIndicator))
     })
 
-    const trigger = container.querySelector(
+    const trigger = document.body.querySelector(
       '[data-testid="model-quota-trigger"]'
     ) as HTMLButtonElement
     await act(async () => trigger.click())
 
-    const popover = container.querySelector('[data-testid="model-quota-popover"]')
+    const popover = document.body.querySelector('[data-testid="model-quota-popover"]')
     expect(popover?.textContent).toContain('Redémarrage requis')
     expect(popover?.textContent).not.toContain('Lecture en cours')
     await act(async () => root.unmount())
@@ -344,12 +344,12 @@ describe('indicateur de quotas modèles', () => {
       await Promise.resolve()
     })
 
-    const trigger = container.querySelector(
+    const trigger = document.body.querySelector(
       '[data-testid="model-quota-trigger"]'
     ) as HTMLButtonElement
     await act(async () => trigger.click())
 
-    const popover = container.querySelector('[data-testid="model-quota-popover"]')
+    const popover = document.body.querySelector('[data-testid="model-quota-popover"]')
     expect(popover?.textContent).toContain('Indisponible')
     expect(popover?.textContent).toContain('Provider temporairement indisponible')
     expect(popover?.textContent).not.toContain('Lecture en cours')
@@ -386,7 +386,7 @@ describe('indicateur de quotas modèles', () => {
     await act(async () => {
       root.render(createElement(ModelQuotaIndicator))
     })
-    const trigger = container.querySelector(
+    const trigger = document.body.querySelector(
       '[data-testid="model-quota-trigger"]'
     ) as HTMLButtonElement
     await act(async () => trigger.click())
@@ -469,13 +469,13 @@ describe('indicateur de quotas modèles', () => {
       root.render(createElement(ModelQuotaIndicator, { provider: 'codex' }))
       await Promise.resolve()
     })
-    const trigger = container.querySelector(
+    const trigger = document.body.querySelector(
       '[data-testid="model-quota-trigger"]'
     ) as HTMLButtonElement
     expect(trigger.textContent).toContain('25')
 
     await act(async () => trigger.click())
-    const chip = container.querySelector(
+    const chip = document.body.querySelector(
       '[data-testid="model-quota-provider-codex"]'
     ) as HTMLButtonElement
     expect(chip.getAttribute('aria-pressed')).toBe('false')
@@ -523,7 +523,7 @@ describe('indicateur de quotas modèles', () => {
       root.render(createElement(ModelQuotaIndicator, { provider: 'claude' }))
       await Promise.resolve()
     })
-    const trigger = container.querySelector(
+    const trigger = document.body.querySelector(
       '[data-testid="model-quota-trigger"]'
     ) as HTMLButtonElement
     expect(trigger.textContent).toContain('12')

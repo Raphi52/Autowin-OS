@@ -211,6 +211,14 @@ function isConversationMessage(value: unknown): boolean {
   ) {
     return false
   }
+  if (
+    value.reasoningMs !== undefined &&
+    (typeof value.reasoningMs !== 'number' ||
+      !Number.isFinite(value.reasoningMs) ||
+      value.reasoningMs < 0)
+  ) {
+    return false
+  }
   if (value.runtime !== undefined && !isChatTurnRuntime(value.runtime)) return false
   if (
     value.parts !== undefined &&

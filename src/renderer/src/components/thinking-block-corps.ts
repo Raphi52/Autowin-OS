@@ -137,21 +137,67 @@ export function actionsDuTour(
   return sortie
 }
 
-/** Bilan de l'en-tete C3 : `6 · 1 échec · 44 s`. */
+/** `17 s`, `1 min`, `2 min 5 s` — une duree en secondes, telle que les en-tetes l'affichent. */
+export function dureeLisible(secondes: number): string {
+  return secondes >= 60
+    ? `${Math.floor(secondes / 60)} min${secondes % 60 ? ` ${secondes % 60} s` : ''}`
+    : `${secondes} s`
+}
+
+/** Somme des durees connues des actions — la duree affichee dans la capsule Actions. */
+export function secondesDesActions(actions: readonly ActionFrise[]): number {
+  return actions.reduce((s, a) => s + (a.secondes ?? 0), 0)
+}
+
+/**
+ * Bilan complet des actions : `6 · 1 échec · 44 s`. Depuis la capsule R5 (conv-162, 2026-10-10)
+ * l'en-tete n'ECRIT plus que le nombre et la duree ; les echecs se lisent en rouge dans la barre.
+ * Ce bilan reste l'infobulle de la capsule : le nombre d'echecs n'est jamais perdu.
+ */
 export function bilanDesActions(actions: readonly ActionFrise[]): string {
   const echecs = actions.filter((a) => a.etat === 'ko').length
-  const total = actions.reduce((s, a) => s + (a.secondes ?? 0), 0)
-  const duree =
-    total >= 60
-      ? `${Math.floor(total / 60)} min${total % 60 ? ` ${total % 60} s` : ''}`
-      : `${total} s`
+  const total = secondesDesActions(actions)
   return [
     String(actions.length),
     echecs ? `${echecs} échec${echecs > 1 ? 's' : ''}` : '',
-    total ? duree : ''
+    total ? dureeLisible(total) : ''
   ]
     .filter(Boolean)
     .join(' · ')
+}
+
+/**
+ * CHRONO DU RAISONNEMENT — le compteur de secondes de la capsule « Raisonnement » (variante R5,
+ * conv-162 : « pas les mots de raisonnement, seulement un compteur de secondes »).
+ *
+ * PENDANT le tour, le chrono est MESURE A L'ECRAN, de l'apparition du bloc jusqu'a la fin du tour.
+ * A la cloture, le processus principal enregistre la meme mesure avec le tour (`reasoningMs` de
+ * `ChatTurnState`, run-pilot-chat.ts) : un tour relu sans chrono en memoire affiche cette valeur.
+ * Un tour ancien qui n'a ni l'un ni l'autre n'affiche aucun compteur plutot qu'un chiffre invente.
+ *
+ * Le bloc peut etre DEMONTE puis remonte pendant le tour (changement de conversation, liste
+ * virtualisee) : le debut est donc memorise par tour (`turnId`) pour ne pas repartir de zero.
+ */
+export type Chrono = { debut: number; fin?: number }
+
+const CHRONOS = new Map<string, Chrono>()
+const CHRONOS_MAX = 200
+
+export function chronoMemorise(cle: string | undefined): Chrono | null {
+  return (cle && CHRONOS.get(cle)) || null
+}
+
+export function memoriserChrono(cle: string, chrono: Chrono): void {
+  CHRONOS.delete(cle)
+  CHRONOS.set(cle, chrono)
+  // Borne : on oublie le plus ancien tour, jamais le courant (il vient d'etre re-insere en dernier).
+  if (CHRONOS.size > CHRONOS_MAX) CHRONOS.delete(CHRONOS.keys().next().value!)
+}
+
+/** Secondes ecoulees : jusqu'a la fin memorisee si elle existe, sinon jusqu'a `maintenant`. */
+export function secondesDuChrono(chrono: Chrono | null, maintenant: number): number | null {
+  if (!chrono) return null
+  return Math.max(0, Math.floor(((chrono.fin ?? maintenant) - chrono.debut) / 1000))
 }
 
 export function corpsDesActions(

@@ -32,6 +32,8 @@ import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
 import type { ChatArtifact } from '../../../shared/artifacts'
 import { Spinner } from './Spinner'
+import { decouperSkill } from './skill-entete'
+import type { SkillInstallee } from './useSkillsInventory'
 import { ThinkingBlock } from './ThinkingBlock'
 
 /** Le texte COPIABLE d'un message : la bulle utilisateur, ou tout le texte rendu par l'agent. */
@@ -345,9 +347,19 @@ export const ChatMessageRow = memo(
     onLogin,
     askRepondu,
     autoLancerCandidats,
-    onAnswerAsk
+    onAnswerAsk,
+    skills,
+    tourEnCours
   }: {
     message: Msg
+    /**
+     * Message utilisateur dont le tour court encore (`tourDuMessageEnCours`) : sa capsule
+     * « Image envoyée » est alors allumée, comme l'image lue et Raisonnement / Actions du même
+     * tour (conv-178) ; tour fini, elle pâlit avec elles.
+     */
+    tourEnCours?: boolean
+    /** Skills installees : un message `/<skill>` affiche son bandeau (draft G1). */
+    skills?: readonly SkillInstallee[] | null
     conversationId: string | null
     /** Prompt utilisateur à l'origine de ce tour — ce qu'on renvoie ou reprend. */
     retryPrompt?: string
@@ -395,11 +407,24 @@ export const ChatMessageRow = memo(
               </span>
             ) : null}
           </div>
-          {message.content && (
-            <div className="msg-body" dir="auto">
-              {message.content}
-            </div>
-          )}
+          {message.content &&
+            (() => {
+              const entete = decouperSkill(message.content, skills)
+              if (!entete)
+                return (
+                  <div className="msg-body msg-bulle" dir="auto">
+                    {message.content}
+                  </div>
+                )
+              return (
+                <div className="msg-body msg-bulle avec-skill" dir="auto">
+                  <div className="msg-skill-entete">
+                    <span className="msg-skill-nom">{entete.skill}</span>
+                  </div>
+                  {entete.reste ? <div className="msg-skill-texte">{entete.reste}</div> : null}
+                </div>
+              )
+            })()}
           {message.attachments && message.attachments.length > 0 && (
             <div
               className={`attachment-list sent${
@@ -423,6 +448,7 @@ export const ChatMessageRow = memo(
                     conversationId={conversationId}
                     turnId={file.turnId}
                     onOpenImage={onOpenImage}
+                    live={tourEnCours === true}
                   />
                 ) : (
                   <span className="attachment-chip" key={`${file.name}-${fileIndex}`}>
@@ -453,7 +479,9 @@ export const ChatMessageRow = memo(
     }
     return (
       <div className="msg assistant fade-in">
-        <div className="msg-meta">
+        {/* `is-live` tant que le tour tourne : la capsule « Agent » du theme Nebuleuse de verre
+            (Fumé net · Agent assorti, conv-173) palit avec les capsules Raisonnement/Actions. */}
+        <div className={message.done ? 'msg-meta' : 'msg-meta is-live'}>
           <span className="msg-role">Agent</span>
           {/* LE seul spinner du tour : une attente = un indicateur, ici et nulle part ailleurs
               (demande du 2026-09-12 « met qu'un spinner sur la ligne agent »). */}
@@ -478,6 +506,8 @@ export const ChatMessageRow = memo(
             done={message.done}
             {...(message.providerStatus ? { status: message.providerStatus } : {})}
             {...(message.providerStatusLog?.length ? { statusLog: message.providerStatusLog } : {})}
+            {...(message.turnId ? { turnId: message.turnId } : {})}
+            {...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {})}
           />
         )}
         <div className="msg-turn">
@@ -562,6 +592,7 @@ export const ChatMessageRow = memo(
                         conversationId={conversationId}
                         turnId={message.turnId}
                         onOpenImage={onOpenImage}
+                        live={!message.done}
                       />
                     ) : (
                       <AssistantActivityGroup
@@ -695,5 +726,6 @@ export const ChatMessageRow = memo(
     prev.conversationId === next.conversationId &&
     prev.retryPrompt === next.retryPrompt &&
     prev.askRepondu === next.askRepondu &&
-    prev.directiveReceipts === next.directiveReceipts
+    prev.directiveReceipts === next.directiveReceipts &&
+    prev.tourEnCours === next.tourEnCours
 )

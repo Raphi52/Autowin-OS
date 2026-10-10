@@ -327,6 +327,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         label: activityLabel,
         ...(derniereEntree !== undefined ? { derniereEntree } : {}),
         ...(derniereEntreeCache !== undefined ? { derniereEntreeCache } : {}),
+        // Meme arbitre que l'etat terminal du tour : Stop = annule, veilleur d'inactivite = echec.
+        arretVoulu:
+          controller.signal.aborted &&
+          terminalDuTour({ aborted: true, reason: controller.signal.reason }).kind === 'cancelled',
         durationMs: Math.round(performance.now() - turnStartedAtMs),
         text:
           (streamedSpoken || spoken.join('\n') || etiquettesAction.join('\n')).slice(0, 600) ||
@@ -704,6 +708,16 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             os.conversations.applyTurnEvent(conversationId, turnId, {
               kind: 'actions-log',
               lines: streamedActions
+            })
+          // ... et la DUREE DU RAISONNEMENT, que la capsule « Raisonnement » affiche en secondes
+          // (R5, conv-162) : la meme mesure que son compteur en direct, du debut du tour a sa
+          // cloture. Sans elle, un tour relu montrait « Raisonnement terminé » sans aucun chiffre.
+          // Ecrite meme sans texte de pensee : sur un modele dont la pensee arrive chiffree, la
+          // capsule compte quand meme. Un tour REPRIS apres un crash compte depuis sa reprise.
+          if (conversationId)
+            os.conversations.applyTurnEvent(conversationId, turnId, {
+              kind: 'reasoning-duration',
+              ms: performance.now() - turnStartedAtMs
             })
           if (conversationId && raisonnement) {
             try {

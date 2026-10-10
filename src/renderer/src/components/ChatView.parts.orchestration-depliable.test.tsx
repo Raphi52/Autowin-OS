@@ -32,18 +32,16 @@ const enCours = (over: Partial<Action> = {}): Action =>
   ({ kind: 'action', name: 'orchestrate', args: { task: 'ma tache' }, ...over }) as Action
 
 describe('le bloc orchestration se deplie et nomme les skills/agents choisis', () => {
-  it('affiche un chevron sur une orchestration EN COURS porteuse de choix', () => {
+  it('nomme la phase EN COURS dans la capsule, et ses agents en un clic', () => {
     const action = enCours({
       pipeline: [{ phase: 'scout', role: 'subagent', provider: 'claude', model: 'opus-4' }]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    const toggle = container.querySelector<HTMLButtonElement>(
-      '[data-testid="activity-step-toggle"]'
-    )
-    expect(toggle).not.toBeNull()
-    expect(container.querySelector('[data-testid="activity-step-pipeline"]')).toBeNull()
-    act(() => toggle!.click())
-    const liste = container.querySelector('[data-testid="activity-step-pipeline"]')
+    // Capsule 2 (conv-194, 2026-10-10) : la phase jouee est ecrite dans la capsule, sans clic.
+    expect(container.querySelector('.thinking-capsule .orch-phase')?.textContent).toBe('scout')
+    expect(container.querySelector('[data-testid="activity-steps"]')).toBeNull()
+    act(() => container.querySelector<HTMLElement>('[data-testid="activity-group"]')!.click())
+    const liste = container.querySelector('[data-testid="activity-steps"]')
     expect(liste).not.toBeNull()
     expect(liste!.textContent).toContain('scout')
     expect(liste!.textContent).toContain('subagent')

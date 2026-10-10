@@ -32,7 +32,10 @@ type Action = Parameters<typeof AssistantActivityGroup>[0]['actions'][number]
 function render(actions: Action[]): void {
   act(() => root.render(createElement(AssistantActivityGroup, { actions })))
 }
-const carte = (): HTMLElement | null => container.querySelector('.activity-group')
+// Une orchestration seule est une CAPSULE depuis conv-194 (2026-10-10) : elle porte le meme
+// `data-state` que la carte, c'est lui que le theme et ces tests lisent.
+const carte = (): HTMLElement | null =>
+  container.querySelector('.activity-group, .thinking-block--orchestration')
 
 const action = (over: Partial<Action>): Action =>
   ({ kind: 'action', name: 'orchestrate', args: { task: 't' }, ...over }) as Action

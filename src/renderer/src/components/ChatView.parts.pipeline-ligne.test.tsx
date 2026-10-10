@@ -42,7 +42,7 @@ const orchestration = (over: Partial<Action> = {}): Action =>
   ({ kind: 'action', name: 'orchestrate', args: { task: 'ma tache' }, ...over }) as Action
 
 describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () => {
-  it('montre le prompt REELLEMENT envoye a la ligne, apres clic sur SON chevron', () => {
+  it('montre le prompt REELLEMENT envoye, sur SA ligne, des l ouverture de la capsule', () => {
     const action = orchestration({
       pipeline: [
         {
@@ -54,18 +54,17 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
       ]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    act(() =>
-      container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
-    )
-    const chevrons = container.querySelectorAll<HTMLButtonElement>(
-      '[data-testid="activity-pipeline-toggle"]'
-    )
-    expect(chevrons).toHaveLength(1)
+    // CAPSULE 2 (conv-194, 2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration
+    // seule est une capsule ; UN clic sur son en-tete montre chaque phase avec son prompt et son
+    // rendu — plus de chevron par etage ni par ligne (« j'arrive pas a me rendre compte de comment
+    // voir le detail »).
+    // Pliee, le prompt ne noie pas le fil.
     expect(container.querySelector('[data-testid="activity-pipeline-prompt"]')).toBeNull()
-    act(() => chevrons[0].click())
-    expect(
-      container.querySelector('[data-testid="activity-pipeline-prompt"]')!.textContent
-    ).toContain('fais X')
+    act(() => container.querySelector<HTMLElement>('[data-testid="activity-group"]')!.click())
+    const ligne = container.querySelector('[data-testid="activity-pipeline-line"]')!
+    expect(ligne.querySelector('[data-testid="activity-pipeline-prompt"]')!.textContent).toContain(
+      'fais X'
+    )
   })
 
   it('la ligne du controle final rend sa DECISION et son motif', () => {
@@ -73,14 +72,7 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
       pipeline: [{ phase: 'gate', role: 'gate', outcome: 'BLOQUE: tests rouges', ok: false }]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    act(() =>
-      container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
-    )
-    act(() =>
-      container
-        .querySelector<HTMLButtonElement>('[data-testid="activity-pipeline-toggle"]')!
-        .click()
-    )
+    act(() => container.querySelector<HTMLElement>('[data-testid="activity-group"]')!.click())
     const rendu = container.querySelector('[data-testid="activity-pipeline-outcome"]')!
     expect(rendu.textContent).toContain('BLOQUE: tests rouges')
     expect(rendu.className).toContain('failed')
@@ -94,7 +86,7 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
    * l'etape sans prompt ni resultat ne promet plus rien, donc elle n'a plus de fleche — et le
    * message de vide n'a plus lieu d'exister, meme apres clic, puisqu'il n'y a plus rien a cliquer.
    */
-  it('une etape sans prompt ni resultat ne montre AUCUNE fleche, ni message de vide', () => {
+  it('une etape sans prompt ni resultat ne montre que son nom, sans message de vide', () => {
     const action = orchestration({
       pipeline: [
         { phase: 'frame', role: 'subagent' },
@@ -102,24 +94,19 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
       ]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    act(() =>
-      container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
-    )
-    // Les DEUX lignes sont rendues : seule la fleche disparait, pas l'etape elle-meme.
+    // CAPSULE 2 (conv-194, 2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration
+    // seule est une capsule ; UN clic sur son en-tete montre chaque phase avec son prompt et son
+    // rendu — plus de chevron par etage ni par ligne (« j'arrive pas a me rendre compte de comment
+    // voir le detail »).
+    act(() => container.querySelector<HTMLElement>('[data-testid="activity-group"]')!.click())
+    // Les DEUX lignes sont rendues : l'etape vide garde son nom, et rien d'autre.
     const lignes = container.querySelectorAll('[data-testid="activity-pipeline-line"]')
     expect(lignes).toHaveLength(2)
     expect(lignes[0].textContent).toContain('frame')
-    // Une seule fleche, et elle est sur la ligne qui porte le prompt.
-    const chevrons = container.querySelectorAll<HTMLButtonElement>(
-      '[data-testid="activity-pipeline-toggle"]'
-    )
-    expect(chevrons).toHaveLength(1)
-    expect(lignes[1].contains(chevrons[0])).toBe(true)
-    // Plus aucun panneau de vide, ni avant ni apres ouverture de la seule fleche restante.
+    expect(lignes[0].querySelector('[data-testid="activity-pipeline-prompt"]')).toBeNull()
+    expect(lignes[0].querySelector('.orch-attente')).toBeNull()
     expect(container.querySelector('[data-testid="activity-pipeline-vide"]')).toBeNull()
-    act(() => chevrons[0].click())
-    expect(container.querySelector('[data-testid="activity-pipeline-vide"]')).toBeNull()
-    expect(container.querySelector('[data-testid="activity-pipeline-prompt"]')!.textContent).toContain(
+    expect(lignes[1].querySelector('[data-testid="activity-pipeline-prompt"]')!.textContent).toContain(
       'fais X'
     )
   })

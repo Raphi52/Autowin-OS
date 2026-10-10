@@ -81,7 +81,9 @@ describe('Autowin UI contract', () => {
       if (coupe < 0) continue
       const selecteur = bloc.slice(0, coupe).trim()
       const declarations = bloc.slice(coupe + 1)
-      if (!/\.(conv-pane|chat|runs-pane)$/m.test(selecteur)) continue
+      // `.chat::after` compte : c'est LUI qui peint le panneau du fil depuis que la saisie en est
+      // detachee (conv-150) — `.chat` est transparent.
+      if (!/\.(conv-pane|chat|runs-pane)(::after)?$/m.test(selecteur)) continue
       // Toute regle qui repose un `background` sur un de ces panneaux doit conserver la couche.
       // `transparent` est exclu : c'est un fond volontairement absent, pas un cadre a decorer.
       if (/background\s*:/.test(declarations) && !/transparent/.test(declarations)) {

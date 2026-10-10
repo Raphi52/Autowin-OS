@@ -214,3 +214,40 @@ describe('lecture réelle des ancrages sur le disque', () => {
     expect(sansGit('Program.cs', 1)).toBe('incontrolable')
   })
 })
+
+/**
+ * LA LISTE DES FICHIERS SE LIT SANS GIT SYNCHRONE — heal conv-204, mesure du 2026-10-10.
+ *
+ * `gels.jsonl`, 12:30:43 : `git ls-files --cached --others` lance en `execFileSync` depuis ce
+ * lecteur, 1 502 ms de fenetre figee. Le lecteur est cree au debut de l'orchestration et ne sert
+ * qu'a la fin d'une phase scout : il a tout le temps de lire la liste en tache de fond.
+ */
+describe('liste des fichiers du dépôt : pré-lecture asynchrone', () => {
+  it('une fois la pré-lecture revenue, un nom nu se résout sans aucun appel synchrone', async () => {
+    let appelsSynchrones = 0
+    const lire = lecteurAncrageDepuisDisque(dossier(false), {
+      sync: () => {
+        appelsSynchrones += 1
+        return null
+      },
+      async: async () => ['src/a.ts', 'src/profond/Program.cs']
+    })
+    await lire.pret
+    expect(lire('Program.cs', 1)).toBe('code')
+    expect(appelsSynchrones).toBe(0)
+  })
+
+  it('si la pré-lecture n’est pas encore revenue, le secours synchrone répond comme avant', () => {
+    let appelsSynchrones = 0
+    const lire = lecteurAncrageDepuisDisque(dossier(false), {
+      sync: () => {
+        appelsSynchrones += 1
+        return ['src/profond/Program.cs']
+      },
+      async: () => new Promise<string[] | null>(() => {})
+    })
+    expect(lire('Program.cs', 1)).toBe('code')
+    expect(lire('profond/Program.cs', 1)).toBe('code')
+    expect(appelsSynchrones).toBe(1)
+  })
+})

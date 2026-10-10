@@ -686,6 +686,29 @@ export function instrumenterEntreesSortiesDuMain(
       /* observabilite best-effort : un module absent ne doit jamais casser le demarrage */
     }
   }
+  /*
+   * LA CREATION DE PROCESSUS — angle mort comble le 2026-10-10 (heal conv-204).
+   *
+   * 982 gels sur 1 234 sortis en `inconnu` en un jour : 264 processus `git` crees par photo du
+   * depot tenaient la boucle 4,6 s, et aucun appel ci-dessus ne les voyait — `execFile` est
+   * asynchrone, la CREATION du processus ne l'est pas. Toutes les creations (spawn, execFile, exec)
+   * passent par `ChildProcess.prototype.spawn` : une seule couture, sur le PROTOTYPE, ce qui ne
+   * touche ni `execFile` ni son `util.promisify.custom`. Chaque appel reste sous le seuil ; c'est
+   * leur CUMUL (`spawn git diff` x264) qui nomme le gel.
+   */
+  try {
+    const { ChildProcess } = requiert('node:child_process') as typeof import('node:child_process')
+    defaires.push(
+      instrumenterAccesBloquants(
+        ChildProcess.prototype as unknown as Record<string, unknown>,
+        ['spawn'],
+        seuilMs,
+        ecrire
+      )
+    )
+  } catch {
+    /* observabilite best-effort, comme ci-dessus */
+  }
   return () => {
     for (const defaire of defaires) defaire()
   }

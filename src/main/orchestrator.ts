@@ -1263,6 +1263,15 @@ function hasVerifiedExternalGitMutation(
   })
 }
 
+/**
+ * Jeton d'attente d'un appel ADMIS dont l'adaptateur n'a pas encore annoncé son agent. Il porte la
+ * réservation jusqu'à `spawnIntent` (qui le remplace par le vrai jeton) ou jusqu'au règlement de
+ * l'appel (qui le supprime) : la liste des agents actifs égale ainsi toujours celle des appels réservés.
+ */
+function jetonDeReservation(reservationId: string): string {
+  return `reservation:${reservationId}`
+}
+
 export class Orchestrator {
   private readonly causalWatchPathsByRun = new Map<string, readonly string[]>()
   /**
@@ -1448,6 +1457,10 @@ export class Orchestrator {
     string,
     {
       process: (pid: number, active: boolean) => void
+      reserved: (
+        reservationId: string,
+        assignment: Pick<RunAgentRef, 'provider' | 'model' | 'phase' | 'fanOut'>
+      ) => void
       spawnIntent: (
         token: string,
         active: boolean,
@@ -1521,10 +1534,19 @@ export class Orchestrator {
     const entry = [...byToken.entries()].find(([, agent]) => agent.reservationId === reservationId)
     if (!entry) return
     const [token, agent] = entry
-    const historical = { ...agent }
-    delete historical.reservationId
-    byToken.set(token, { ...historical, active: false })
-    if (!this.terminalRunsAwaitingProviderSettlement.has(runId)) return
+    if (token === jetonDeReservation(reservationId)) {
+      // Appel réglé sans que l'adaptateur ait jamais annoncé d'agent : il n'y a rien d'historique à
+      // garder, et une occurrence inactive de cette phase serait attribuable comme auteur du livrable.
+      byToken.delete(token)
+    } else {
+      const historical = { ...agent }
+      delete historical.reservationId
+      byToken.set(token, { ...historical, active: false })
+    }
+    if (!this.terminalRunsAwaitingProviderSettlement.has(runId)) {
+      if (byToken.size === 0) this.runAgents.delete(runId)
+      return
+    }
     const stillActive = [...byToken.values()].some(
       (candidate) => candidate.active === true || Boolean(candidate.reservationId)
     )
@@ -1609,6 +1631,9 @@ export class Orchestrator {
       onExecutorResolved: (resolvedProvider) => {
         executorProvider = resolvedProvider
       },
+      onReservation: observers
+        ? (reservationId) => observers.reserved(reservationId, assignment())
+        : undefined,
       onSpawnIntent: observers
         ? (token, active, reservationId) =>
             observers.spawnIntent(token, active, assignment(), reservationId)
@@ -2038,11 +2063,23 @@ export class Orchestrator {
         }
         if (isMut) this.deps.worktrees?.process?.(runId, pid, active)
       },
+      reserved: (reservationId, assignment) =>
+        // L'appel est admis : son agent compte comme actif dès maintenant, sous un jeton d'attente,
+        // pour que le compteur d'appels réservés et la liste des agents actifs restent égaux à chaque
+        // sauvegarde, même pendant les attentes de l'adaptateur avant `spawnIntent`.
+        this.rememberAgent(runId, jetonDeReservation(reservationId), {
+          ...assignment,
+          active: true,
+          reservationId
+        }),
       spawnIntent: (token, active, assignment, reservationId) => {
         // L'intention est émise AVANT le spawn. À cet instant la réservation provider porte déjà
         // activeCalls=1 : checkpoint-er le token maintenant ferme la fenêtre où un CLI détaché
         // pouvait naître avant que son PID/journal ne soit persisté. Un spawn avorté retire ce pending.
         if (active) {
+          // Le vrai jeton REMPLACE l'inscription d'attente dans la MÊME écriture : deux occurrences
+          // portant la même réservation seraient elles aussi refusées par le contrôle de cohérence.
+          if (reservationId) this.runAgents.get(runId)?.delete(jetonDeReservation(reservationId))
           this.rememberAgent(runId, token, {
             ...assignment,
             active: true,

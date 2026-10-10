@@ -109,6 +109,11 @@ export interface HydratedAssistantMessage {
    * Transitoire comme `providerStatus` : jamais persiste.
    */
   providerStatusLog?: string[]
+  /**
+   * Durée du raisonnement CONSERVÉE par le tour (ms), relue du disque. Le direct ne la porte pas :
+   * pendant le tour, la capsule compte elle-même ; ce chiffre sert quand ce compteur n'existe plus.
+   */
+  reasoningMs?: number
 }
 
 export interface StoredAssistantMessage {
@@ -122,6 +127,8 @@ export interface StoredAssistantMessage {
   reasoning?: string
   /** Journal des actions conservé par le tour : c'est lui qui rend le bloc « Actions » relisible. */
   actionsLog?: string[]
+  /** Durée du raisonnement (ms) conservée par le tour : le compteur de la capsule après rechargement. */
+  reasoningMs?: number
 }
 
 export type ConversationStateKey =
@@ -675,7 +682,10 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     // reprend la DERNIÈRE ligne, exactement ce que montrait le direct à la fin du tour.
     ...(message.actionsLog?.length
       ? { providerStatusLog: message.actionsLog, providerStatus: message.actionsLog.at(-1)! }
-      : {})
+      : {}),
+    // La DURÉE DU RAISONNEMENT survit de la même façon : sans elle, la capsule d'un tour relu
+    // disait « Raisonnement terminé » sans compteur (R5, conv-162).
+    ...(typeof message.reasoningMs === 'number' ? { reasoningMs: message.reasoningMs } : {})
   }
 }
 

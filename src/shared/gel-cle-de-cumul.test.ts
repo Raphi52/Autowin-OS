@@ -26,6 +26,29 @@ describe('cleDeCumul', () => {
     expect(cleDeCumul('openSync', ['/tmp/a.json'])).toBe('openSync')
   })
 
+  /*
+   * Mesure du 2026-10-10 (heal conv-204) : 982 gels « inconnu » en un jour. Le coupable etait la
+   * CREATION de 264 processus `git` par photo — un `execFile` asynchrone, dont la creation du
+   * processus reste pourtant synchrone. Elle passe par `ChildProcess.prototype.spawn`, qui recoit
+   * UN objet d'options normalise par Node : `file`, et `args` = argv complet, argv0 compris.
+   */
+  it('nomme une CREATION de processus (ChildProcess.spawn) par programme et sous-commande', () => {
+    const options = {
+      file: 'git',
+      args: ['git', 'diff', '--no-color', '--no-index', '--', '/dev/null', 'a.ts']
+    }
+    expect(cleDeCumul('spawn', [options])).toBe('spawn git diff')
+    expect(
+      cleDeCumul('spawn', [
+        {
+          file: String.raw`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`,
+          args: ['powershell.exe', '-NoProfile', '-File', 'x.ps1']
+        }
+      ])
+    ).toBe('spawn powershell.exe')
+    expect(cleDeCumul('spawn', [undefined])).toBe('spawn')
+  })
+
   it('sans sous-commande lisible, garde au moins le programme', () => {
     expect(cleDeCumul('execFileSync', ['ps', ['-p', '12']])).toBe('execFileSync ps')
     expect(cleDeCumul('execFileSync', [undefined])).toBe('execFileSync')

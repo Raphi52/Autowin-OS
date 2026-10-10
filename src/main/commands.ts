@@ -59,6 +59,7 @@ import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { suivreArbre, tuerArbre } from './verify-extinction'
+import { decoderSortieConsole, pageDeCodeConsole } from './console-encoding'
 import {
   capVerifyOutput,
   decideRelatedVerify,
@@ -1127,7 +1128,9 @@ export const CATALOG: CommandSpec[] = [
     description:
       "Poser une QUESTION a l'utilisateur avec des reponses cliquables — a utiliser quand une " +
       'decision lui appartient vraiment (un choix entre approches, une autorisation) plutot que de ' +
-      'terminer par une question en prose, qui l’oblige a retaper sa reponse',
+      'terminer par une question en prose, qui l’oblige a retaper sa reponse. ATTENTION : `ask` ' +
+      'CLOT TON TOUR, tu ne reprends pas la main apres — ce que l’utilisateur doit voir pour ' +
+      'choisir (maquettes, comparaison) va EN ENTIER dans le MEME message, jamais « a suivre »',
     args: {
       question: 'la question, en une phrase',
       options:
@@ -5602,6 +5605,8 @@ export class AppCommandBus {
             PATH: `${sharedBin}${delimiter}${process.env.PATH ?? ''}`
           }
         : process.env
+    // Lue une fois par session (`chcp`, meme invocation `cmd.exe /c` que ci-dessous) ; hors Windows : UTF-8.
+    const pageOem = await pageDeCodeConsole()
     return await new Promise((resolve) => {
       // Windows : depuis le correctif CVE-2024-27980, Node REFUSE de spawner un `.cmd` sans shell
       // (`spawn EINVAL`) — constate en essai reel, l'agent recevait un echec d'environnement alors
@@ -5626,10 +5631,16 @@ export class AppCommandBus {
        * `npm -> cmd -> node` survivantes depuis la veille, ~267 Mo, Autowin meme pas lance).
        */
       const oublierLArbre = suivreArbre(child.pid)
-      let output = ''
+      /*
+       * OCTETS BRUTS, decodes une seule fois (voir `console-encoding.ts`). Decoder chaque morceau en
+       * UTF-8 rendait « ex�cutable » (conv-92) et « re�us » (conv-129) : `cmd.exe` ecrit en
+       * page OEM (850 sur un poste francais), et un caractere pouvait etre coupe entre deux morceaux.
+       */
+      const morceaux: Buffer[] = []
       const collect = (chunk: Buffer): void => {
-        output += chunk.toString('utf8')
+        morceaux.push(chunk)
       }
+      const sortie = (): string => decoderSortieConsole(Buffer.concat(morceaux), pageOem)
       child.stdout?.on('data', collect)
       child.stderr?.on('data', collect)
       /*
@@ -5647,7 +5658,7 @@ export class AppCommandBus {
       const debut = Date.now()
       const battement = onProgress
         ? setInterval(
-            () => onProgress(battementDeVerification(output, Date.now() - debut)),
+            () => onProgress(battementDeVerification(sortie(), Date.now() - debut)),
             VERIFY_BATTEMENT_MS
           )
         : undefined
@@ -5663,7 +5674,7 @@ export class AppCommandBus {
         else child.kill('SIGKILL')
         // La sortie deja collectee part AVEC le verdict : le plafond borne l'attente, il n'efface
         // pas ce que la suite avait prouve avant d'etre coupee (conv-1400, 2026-08-25).
-        resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond, output) })
+        resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond, sortie()) })
       }, plafond)
       horloge.unref?.()
       /*
@@ -5689,7 +5700,7 @@ export class AppCommandBus {
           exitCode: null,
           command: label,
           output: capVerifyOutput(
-            `${output}
+            `${sortie()}
 [arret demande] ${label} — interrompu par l'utilisateur (Stop).`,
             undefined,
             archiverSortie
@@ -5725,7 +5736,7 @@ export class AppCommandBus {
             ok: code === 0,
             exitCode: code,
             command: label,
-            output: capVerifyOutput(output, undefined, archiverSortie)
+            output: capVerifyOutput(sortie(), undefined, archiverSortie)
           }))
       )
     })

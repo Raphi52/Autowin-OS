@@ -196,7 +196,15 @@ function ExecutionNodeMeta({
     <>
       {skillLabel(event) && (
         <>
-          <span className="workflow-execution-skill">{skillLabel(event)}</span>
+          <span
+            className={
+              event.display?.workflow === 'direct' && !event.display?.skillName
+                ? 'workflow-execution-skill is-absent'
+                : 'workflow-execution-skill'
+            }
+          >
+            {skillLabel(event)}
+          </span>
           {event.display?.workflow === 'direct' && (
             <>
               <span aria-hidden="true">·</span>

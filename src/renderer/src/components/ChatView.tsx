@@ -92,7 +92,13 @@ import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
-import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
+import {
+  askDejaRepondu,
+  askEnAttente,
+  lastUserPromptBefore,
+  messageKey,
+  tourDuMessageEnCours
+} from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import {
   arretChaineAuto,
@@ -168,6 +174,7 @@ import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { ContextGaugeDetail } from './ContextGaugeIndicator'
+import { ChatContextRule } from './ChatContextRule'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type OpenRunState, type RunDetailTab } from './WorkflowsPanel'
 import { fusionnerRelecture, relireRun } from './run-ouvert-a-jour'
@@ -338,6 +345,67 @@ function TexteSurligne({ texte, terme }: { texte: string; terme: string }): Reac
 }
 
 /**
+ * PERLE D'ETAT DE L'EN-TETE (conv-158, 2026-10-10, variante « Jumeau »).
+ *
+ * Elle remplace l'ancienne boule de 26 px (`.chat-head-signal`) : trop grosse et toujours rose,
+ * elle ne disait rien de la conversation. C'est desormais la JUMELLE de la pastille de la liste des
+ * fils — meme case fixe de 18 px (`.conv-state-slot`), meme perle d'etat, meme <Spinner/> de 18 px
+ * quand la conversation travaille — posee au debut de la ligne d'infos (« claude · Opus… »), a la
+ * demande de l'utilisateur. Le balisage est RECOPIE de `LigneConversation` (et non partage) : un
+ * test fige le balisage de la liste (ChatView.pastilles.test.ts).
+ *
+ * Memorisee sur des valeurs simples : l'en-tete se re-rend a chaque morceau de texte recu pendant
+ * un tour, et l'etat ne doit pas etre recalcule a chaque fois
+ * (ChatView.liste-stable-pendant-tour.test.tsx compte ces calculs). La case est un <div>, pas un
+ * <span> : la ligne d'infos ecrit un « · » entre deux <span> voisins, la perle n'en veut pas.
+ */
+const PastilleEnTete = memo(function PastilleEnTete({
+  occupe,
+  messageCount,
+  lastMessageRole,
+  lastAssistantStatus,
+  asksUser
+}: {
+  occupe: boolean
+  messageCount: number
+  lastMessageRole?: 'user' | 'assistant'
+  lastAssistantStatus?: Conv['lastAssistantStatus']
+  asksUser: boolean
+}): React.JSX.Element {
+  // La conversation affichee est lue par definition : jamais « non lue » (meme regle que la liste).
+  const conversationState = deriveConversationState({
+    busy: occupe,
+    messageCount,
+    lastMessageRole,
+    lastAssistantStatus,
+    asksUser,
+    unseen: false
+  })
+  const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+  return (
+    <div className="conv-state-slot chat-runtime-etat" data-testid="chat-runtime-etat">
+      {conversationState.key === 'running' ? (
+        <Spinner
+          size={18}
+          className="conversation-state is-running"
+          label={`État de la conversation : ${stateDescription}`}
+          title={stateDescription}
+          data-conversation-state={conversationState.key}
+        />
+      ) : (
+        <span
+          className={`conversation-state is-${conversationState.key}`}
+          data-conversation-state={conversationState.key}
+          role="img"
+          aria-label={`État de la conversation : ${stateDescription}`}
+          title={stateDescription}
+        />
+      )}
+    </div>
+  )
+})
+
+/**
  * UNE LIGNE DE LA LISTE DES CONVERSATIONS, memorisee (heal gels vue chat, 2026-09-18).
  * Mesure dans l'app (serveur de dev, 637 lignes) : changer de conversation recreait TOUTES les
  * lignes (~430 ms par bascule, surtout de la creation d'elements). Une ligne ne se re-rend plus que
@@ -426,24 +494,29 @@ const LigneConversation = memo(function LigneConversation({
         {/* EN COURS = le MEME atome que partout ailleurs : le composant
             <Spinner/>. La pastille etait le dernier endroit a rendre l'ancien
             atome CSS a bordures (.spinner), d'ou un indicateur qui ne
-            ressemblait a aucun autre. Les autres etats restent une pastille. */}
-        {conversationState.key === 'running' ? (
-          <Spinner
-            size={14}
-            className="conversation-state is-running"
-            label={`État de la conversation : ${stateDescription}`}
-            title={stateDescription}
-            data-conversation-state={conversationState.key}
-          />
-        ) : (
-          <span
-            className={`conversation-state is-${conversationState.key}`}
-            data-conversation-state={conversationState.key}
-            role="img"
-            aria-label={`État de la conversation : ${stateDescription}`}
-            title={stateDescription}
-          />
-        )}
+            ressemblait a aucun autre. Les autres etats restent une pastille.
+            CASE FIXE (.conv-state-slot, largeur = taille du spinner) : spinner 18px,
+            pastille 7/11px et points 15px y sont CENTRES sur le meme axe, et le titre
+            demarre au meme x sur toutes les lignes (2026-10-10, conv-144). */}
+        <span className="conv-state-slot">
+          {conversationState.key === 'running' ? (
+            <Spinner
+              size={18}
+              className="conversation-state is-running"
+              label={`État de la conversation : ${stateDescription}`}
+              title={stateDescription}
+              data-conversation-state={conversationState.key}
+            />
+          ) : (
+            <span
+              className={`conversation-state is-${conversationState.key}`}
+              data-conversation-state={conversationState.key}
+              role="img"
+              aria-label={`État de la conversation : ${stateDescription}`}
+              title={stateDescription}
+            />
+          )}
+        </span>
         <span className="conv-copy">
           <span className="conv-label">
             {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
@@ -5150,6 +5223,62 @@ export function ChatView({
     setDraftInput(id, '')
   }
 
+  /**
+   * Pièces jointes EN ATTENTE d'un composer — UN seul rendu pour le chat plein et la mosaïque.
+   * Deux copies avaient divergé : la mosaïque montrait l'icône ▤ pour une image collée, là où le
+   * chat plein montre sa miniature cliquable (demande du 2026-10-10, conv-167).
+   * `retirer` reçoit l'index du fichier à enlever du brouillon de CE composer.
+   */
+  function rendrePiecesJointesEnAttente(
+    fichiers: ChatAttachment[],
+    retirer: (index: number) => void
+  ): React.ReactNode {
+    if (fichiers.length === 0) return null
+    return (
+      <div className="attachment-list pending">
+        {fichiers.map((file, fileIndex) => (
+          <span
+            className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
+            key={`${file.name}-${fileIndex}`}
+          >
+            {file.kind === 'image' ? (
+              <button
+                type="button"
+                className="attachment-thumb-button"
+                aria-label={`Agrandir ${file.name}`}
+                title="Agrandir"
+                onClick={() =>
+                  setOpenImage({
+                    src: `data:${file.mimeType};base64,${file.content}`,
+                    name: file.name
+                  })
+                }
+              >
+                <img
+                  className="attachment-thumb"
+                  src={`data:${file.mimeType};base64,${file.content}`}
+                  alt={file.name}
+                />
+              </button>
+            ) : (
+              <span aria-hidden="true">▤</span>
+            )}
+            <span className="attachment-name">{file.name}</span>
+            <small>{formatFileSize(file.size)}</small>
+            <button
+              type="button"
+              onClick={() => retirer(fileIndex)}
+              aria-label={`Retirer ${file.name}`}
+              title="Retirer"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+    )
+  }
+
   function rendreComposerMosaique(id: string): React.ReactNode {
     const occupe = busyConversations.has(id)
     const fichiers = piecesJointesMosaique[id] ?? []
@@ -5203,34 +5332,9 @@ export function ChatView({
             <IconeInfini />
           </button>
         }
-        attachmentsNode={
-          fichiers.length > 0 ? (
-            <div className="attachment-list pending">
-              {fichiers.map((file, fileIndex) => (
-                <span
-                  className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
-                  key={`${file.name}-${fileIndex}`}
-                >
-                  <span aria-hidden="true">▤</span>
-                  <span className="attachment-name">{file.name}</span>
-                  <small>{formatFileSize(file.size)}</small>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraftAttachments(id, (current) =>
-                        current.filter((_, index) => index !== fileIndex)
-                      )
-                    }
-                    aria-label={`Retirer ${file.name}`}
-                    title="Retirer"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null
-        }
+        attachmentsNode={rendrePiecesJointesEnAttente(fichiers, (fileIndex) =>
+          setDraftAttachments(id, (current) => current.filter((_, index) => index !== fileIndex))
+        )}
         errorNode={
           getComposerDraft(id).error ? (
             <div className="attachment-error">{getComposerDraft(id).error}</div>
@@ -5808,6 +5912,10 @@ export function ChatView({
                 message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined
               }
               message={message}
+              skills={skillsInstallees}
+              tourEnCours={
+                message.role === 'user' ? tourDuMessageEnCours(messages, index, busy) : undefined
+              }
               conversationId={activeId}
               onInspectTurn={onInspectTurn}
               onFork={handleFork}
@@ -5835,6 +5943,7 @@ export function ChatView({
     [
       debutFil,
       messages,
+      busy,
       doitAutoLancerCandidats,
       activeId,
       activeDirectiveReceiptsByMessage,
@@ -6166,6 +6275,13 @@ export function ChatView({
                 )
               }
             >
+              {/* Icone et libelles du pied : MASQUES par defaut (ChatView.css), montres par le
+                theme qui les dessine (Nebuleuse de verre, capsule D2-6 choisie en conv-171). */}
+              {convStatusFilter === 'toutes' && (
+                <svg className="conv-foot-icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M4 5h16l-6 7v6l-4 2v-8z" />
+                </svg>
+              )}
               {convStatusFilter === 'toutes'
                 ? 'Toutes'
                 : convStatusFilter === 'actives'
@@ -6187,6 +6303,7 @@ export function ChatView({
               <rect key={y} x="2" y={y} width="12" height="1.5" rx="0.75" />
             ))}
           </svg>
+          <span className="conv-foot-libelle">{libelleDensite(convDensity)}</span>
         </button>
         <button
           type="button"
@@ -6211,6 +6328,13 @@ export function ChatView({
               void ouvrirDansMosaique(activeId)
           }}
         >
+          <svg className="conv-foot-icone" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
+            <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
+            <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" />
+            <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
+          </svg>
+          <span className="conv-foot-libelle">{convViewMode === 'mosaic' ? 'Mosaïque' : 'Chat'}</span>
           <span className="conv-view-toggle-knob" aria-hidden="true" />
         </button>
           </div>
@@ -6681,12 +6805,26 @@ export function ChatView({
           )}
           <header className="chat-head row">
             <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
-              <span className="chat-head-signal" aria-hidden="true" />
               <div className="col" style={{ gap: 1, minWidth: 0 }}>
                 <span className="chat-head-kicker">
                   {active ? active.title : 'Nouvelle conversation'}
                 </span>
                 <div className="chat-runtime" data-testid="chat-runtime-identity">
+                  {/* La perle d'etat remplace l'ancienne boule de 26 px (conv-158) : meme case,
+                      meme perle, meme spinner que la liste des fils. */}
+                  <PastilleEnTete
+                    occupe={busy}
+                    messageCount={active ? (active.messageCount ?? active.messages?.length ?? 0) : 0}
+                    lastMessageRole={
+                      active
+                        ? (active.lastMessageRole ??
+                          [...(active.messages ?? [])].reverse().find((m) => m.orientation !== true)
+                            ?.role)
+                        : undefined
+                    }
+                    lastAssistantStatus={active?.lastAssistantStatus}
+                    asksUser={active?.lastAssistantAsksUser === true}
+                  />
                   <span
                     className={`chat-runtime-provider is-${runtimeIdentity?.provider ?? 'loading'}`}
                   >
@@ -6792,17 +6930,66 @@ Cliquer pour choisir une autre branche.`}
               </div>
             </div>
             <div className="row gap2 chat-head-actions">
-              <button
-                type="button"
-                className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
-                onClick={() => setShowRuns((v) => !v)}
-                title="Détails de l’exécution"
+              {/* DÉTAILS EN CAPSULE (conv-178, 2026-10-10 : « pareil pour Détails » — la même gueule
+                  que les capsules Raisonnement / Actions). Même balisage et mêmes classes que
+                  ThinkingBlock (`thinking-block`, `thinking-capsule`…) : ChatView.css et chaque
+                  thème le dessinent à l'identique, comme les images lues / envoyées. Panneau
+                  ouvert = capsule allumée (`is-live`), fermé = capsule de tour fini (`is-done`).
+                  Le clic est intercepté : c'est `showRuns` qui ouvre le panneau, pas le <details>. */}
+              <details
+                className={`thinking-block workflow-capsule${showRuns ? ' is-live' : ' is-done'}`}
+                open={showRuns}
               >
-                <PanelIcon />
-                Détails{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
-                {greenRunsCount > 0 ? ` · ${greenRunsCount} green` : ''}
-              </button>
+                <summary
+                  className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    setShowRuns((v) => !v)
+                  }}
+                  title="Détails de l’exécution"
+                >
+                  <span className="thinking-capsule">
+                    <span className="thinking-capsule-icone" aria-hidden="true">
+                      <PanelIcon />
+                    </span>
+                    <span className="thinking-label">Détails</span>
+                    {openRunsCount > 0 ? (
+                      <span className="thinking-duree">{openRunsCount} open</span>
+                    ) : null}
+                    {greenRunsCount > 0 ? (
+                      <span className="thinking-duree">{greenRunsCount} green</span>
+                    ) : null}
+                  </span>
+                </summary>
+              </details>
             </div>
+            {/* LA JAUGE DE CONTEXTE EST LE SEPARATEUR ENTRE L'EN-TETE ET LE FIL (conv-179) : posee sur
+               le filet du bas de l'en-tete. Meme source que tout le reste : `jaugeCourante`. Au survol,
+               le panneau de detail et son action Compacter. */}
+            <ChatContextRule
+              ratio={jaugeCourante?.ratio}
+              level={jaugeCourante?.level}
+              title={(() => {
+                const j = jaugeCourante
+                if (!j) return undefined
+                return (
+                  `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +
+                  `${j.limit.toLocaleString('fr-FR')} (${Math.round(j.ratio * 100)} %), dont ` +
+                  `${j.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+                )
+              })()}
+              panelNode={(() => {
+                const j = jaugeCourante
+                if (!j) return undefined
+                return (
+                  <ContextGaugeDetail
+                    gauge={j}
+                    busy={busy}
+                    onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
+                  />
+                )
+              })()}
+            />
           </header>
 
           {travailNonPublie && travailNonPublie !== messageNonPublieMasque && (
@@ -7242,32 +7429,6 @@ Cliquer pour choisir une autre branche.`}
               skillCommands={skillCommands}
               ghostRecommendation={ghostRecommendation}
               placeholderPendantTour={busy && activeId !== null}
-              /* Le filet au-dessus du champ porte l'occupation de la fenetre du modele. Meme source
-               que la jauge de l'en-tete : `contextGauges`, jamais un calcul refait ici. */
-              /* Le filet montre le MEME panneau que la barre de l en-tete au survol : deux vues
-               de la meme donnee doivent repondre pareil au meme geste. */
-              contextPanelNode={(() => {
-                const j = jaugeCourante
-                if (!j) return undefined
-                return (
-                  <ContextGaugeDetail
-                    gauge={j}
-                    busy={busy}
-                    onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
-                  />
-                )
-              })()}
-              contextRatio={jaugeCourante?.ratio}
-              contextLevel={jaugeCourante?.level}
-              contextTitle={(() => {
-                const j = jaugeCourante
-                if (!j) return undefined
-                return (
-                  `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +
-                  `${j.limit.toLocaleString('fr-FR')} (${Math.round(j.ratio * 100)} %), dont ` +
-                  `${j.cacheRead.toLocaleString('fr-FR')} relus du cache.`
-                )
-              })()}
               onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
               onDraftPresence={setBrouillonPresent}
               onBtw={handleBtw}
@@ -7275,55 +7436,13 @@ Cliquer pour choisir une autre branche.`}
               onQueue={queueCurrentMessage}
               onResume={() => void resumePilotTurn()}
               onPaste={(files) => void addFiles(files)}
-              attachmentsNode={
-                attachments.length > 0 ? (
-                  <div className="attachment-list pending">
-                    {attachments.map((file, fileIndex) => (
-                      <span
-                        className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
-                        key={`${file.name}-${fileIndex}`}
-                      >
-                        {file.kind === 'image' ? (
-                          <button
-                            type="button"
-                            className="attachment-thumb-button"
-                            aria-label={`Agrandir ${file.name}`}
-                            title="Agrandir"
-                            onClick={() =>
-                              setOpenImage({
-                                src: `data:${file.mimeType};base64,${file.content}`,
-                                name: file.name
-                              })
-                            }
-                          >
-                            <img
-                              className="attachment-thumb"
-                              src={`data:${file.mimeType};base64,${file.content}`}
-                              alt={file.name}
-                            />
-                          </button>
-                        ) : (
-                          <span aria-hidden="true">▤</span>
-                        )}
-                        <span className="attachment-name">{file.name}</span>
-                        <small>{formatFileSize(file.size)}</small>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDraftAttachments(composerDraftKeyRef.current, (current) =>
-                              current.filter((_, index) => index !== fileIndex)
-                            )
-                          }
-                          aria-label={`Retirer ${file.name}`}
-                          title="Retirer"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : null
-              }
+              attachmentsNode={rendrePiecesJointesEnAttente(attachments, (fileIndex) =>
+                // Clé lue AU CLIC, comme avant la mise en commun : le brouillon courant peut avoir
+                // changé depuis le rendu.
+                setDraftAttachments(composerDraftKeyRef.current, (current) =>
+                  current.filter((_, index) => index !== fileIndex)
+                )
+              )}
               errorNode={
                 attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
               }

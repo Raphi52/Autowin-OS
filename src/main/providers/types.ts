@@ -157,6 +157,13 @@ export interface SendOptions {
     onProcess?: (pid: number, active: boolean) => void
     /** Route d'exécution réellement retenue après fallback (ex. Gemini demandé → Codex). */
     onExecutorResolved?: (provider: string) => void
+    /**
+     * L'appel vient d'être ADMIS : son agent compte comme actif dès cet instant, dans la même section
+     * synchrone que la réservation. Sans lui, l'adaptateur attendait (instantané du dépôt, mise à jour
+     * du CLI) avant `onSpawnIntent`, et toute sauvegarde d'un agent voisin pendant cette attente voyait
+     * un appel réservé SANS agent — refusée (« liens de reservation incoherents », conv-163).
+     */
+    onReservation?: (reservationId: string) => void
     /** Barrière durable posée avant spawn, levée seulement après enregistrement du PID enfant. */
     onSpawnIntent?: (token: string, active: boolean, reservationId?: string) => void
     /** La réservation est réglée en mémoire ; son agent devient historique au prochain checkpoint. */

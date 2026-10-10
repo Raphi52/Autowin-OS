@@ -23,9 +23,8 @@
   box-shadow: 0 0 18px rgba(239, 63, 145, 0.24);
 }
 
-/* Memory */
-.graph-observatory,
-.graph-toolbar,
+/* Memory : la racine et l'en-tete ne peignent rien (gabarit des vues, conv-160) ; les colonnes
+   sont des panneaux. */
 .theme-sidebar,
 .visibility-sidebar,
 .graph-stage {
@@ -39,19 +38,9 @@
   border-color: var(--line-strong);
 }
 
-.graph-observatory--galaxy {
-  border-color: #000;
-  background: var(--bg-0);
-}
-
-.graph-observatory--galaxy .graph-toolbar,
 .graph-observatory--galaxy .theme-sidebar,
 .graph-observatory--galaxy .visibility-sidebar {
   background: var(--bg-0);
-}
-
-.graph-observatory--galaxy .graph-toolbar {
-  border-bottom-color: #000;
 }
 
 .graph-observatory--galaxy .theme-sidebar {
@@ -81,9 +70,9 @@
 }
 
 /* Chat, Controls, Behaviour */
-.chat-layout,
-.behaviour-view {
-  /* Page uniforme (--surface-panel), comme Models : cosmique seulement au contour (.main). */
+.chat-layout {
+  /* Page uniforme (--surface-panel) : cosmique seulement au contour (.main). Behaviour n'y est plus :
+     sa racine ne repeint pas le cadre de page (gabarit des vues, conv-160). */
   background: var(--surface-panel);
 }
 
@@ -173,12 +162,6 @@
   background: transparent;
   box-shadow: none;
 }
-/* Mode serious : page uniforme (--surface-panel) comme les autres vues (galaxy reste transparent). */
-.cosmic-outline .graph-observatory--serious {
-  background: var(--surface-panel);
-}
-
-.cosmic-outline .graph-observatory--galaxy .graph-toolbar,
 .cosmic-outline .graph-observatory--galaxy .theme-sidebar,
 .cosmic-outline .graph-observatory--galaxy .visibility-sidebar {
   background: var(--surface-panel);
@@ -258,11 +241,58 @@
 }
 /* Fenetre "conversation active" : carte autonome (fond 95% propre, plus dependante de
    chat-layout) bordee arrondie comme les autres panneaux. */
+/* LA SAISIE EST UN BLOC A PART, SOUS LE FIL — DANS TOUS LES THEMES (conv-150, 2026-10-10 : « le
+   container noir du chat doit pas deborder sur celui du bloc de prompt, je veux que le bord arrondi
+   bottom right de la chat box soit situe au dessus du bord top right du bloc de prompting », puis
+   « la meme separation partout »). La saisie est le DERNIER enfant de `.chat` : peint sur `.chat`,
+   le fond du panneau passait derriere elle et se voyait dans ses coins arrondis.
+   Le panneau est donc peint par `::after`, dont le bas est ACCROCHE au haut de la saisie (ancre CSS,
+   Chromium >= 125 ; Electron 44 l'embarque) ; la saisie descend de `--chat-saisie-ecart`, l'ecart
+   entre colonnes. `::before` reste au lisere du haut (.lisere-dessus, ViewPage.css).
+   UN THEME NE REPEINT QUE `::after` (le panneau) et `.chat > .composer` (la saisie) : `.chat` reste
+   transparent, sinon le defaut revient. */
 .cosmic-outline .chat {
+  --chat-saisie-ecart: var(--s2);
+  isolation: isolate; /* le panneau en z-index -1 reste DANS la colonne, sous ses enfants */
   border: 0;
   border-radius: var(--container-radius-panel);
   overflow: hidden;
+  background: transparent;
+}
+.cosmic-outline .chat::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  /* Saisie absente (ancre introuvable) : repli -ecart + ecart = 0, le panneau prend la colonne. */
+  bottom: calc(
+    anchor(--chat-saisie top, calc(-1 * var(--chat-saisie-ecart))) + var(--chat-saisie-ecart)
+  );
+  border-radius: inherit;
   background: var(--lisere-haut), var(--surface-panel);
+  pointer-events: none;
+}
+/* La saisie garde EXACTEMENT ses couleurs d'avant : son voile translucide est pose sur le fond du
+   panneau qu'elle avait derriere elle, au lieu de laisser passer le decor. */
+.cosmic-outline .chat > .composer {
+  anchor-name: --chat-saisie;
+  margin-top: var(--chat-saisie-ecart);
+  border-radius: var(--container-radius-panel);
+  background: linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), var(--surface-panel);
+}
+/* LA FLECHE BASSE DE L'ASCENSEUR RESTE DANS LE PANNEAU (conv-150 : « la fleche de la barre de
+   scroll depasse en bas maintenant, faut la remonter un peu »). Le bas du fil tombe desormais sur
+   le coin ARRONDI du panneau : la fleche, au bout de la barre, depassait de la courbe. Le fil
+   s'arrete une demi-courbure plus haut. */
+.cosmic-outline .chat > .chat-scroll {
+  anchor-name: --chat-fil; /* bas du fil : ancre de « ↓ Dernier message » (.chat-jump-latest) */
+  margin-bottom: calc(var(--container-radius-panel) / 2);
+}
+/* Le filet du haut (rail, ChatView.css) se retient hors des coins arrondis. La jauge de contexte
+   n'y est plus : elle est le separateur sous l'en-tete du chat depuis conv-179. */
+.cosmic-outline .chat > .composer::after {
+  right: var(--container-radius-panel);
+  left: var(--container-radius-panel);
 }
 
 .cosmic-outline .chat-head {
@@ -729,11 +759,17 @@
   white-space: nowrap;
 }
 
+/* « ↓ Dernier message » SE POSE AU BAS DU FIL, DANS LE PANNEAU (conv-154 : « le badge dernier
+   message doit etre plus haut (en bas du container du chat) »). Un `bottom: 106px` fixe se mesurait
+   depuis le bas de TOUTE la colonne : la saisie et sa jauge de contexte ont une hauteur variable,
+   et la pastille tombait a cheval sur la jonction fil/saisie. Elle est donc ACCROCHEE au bas du fil
+   (ancre CSS `--chat-fil`, meme mecanique que le panneau sur `--chat-saisie`). Repli sans ancre :
+   94 + 12 = l'ancien 106px. */
 .cosmic-outline .chat-jump-latest {
   position: absolute;
   z-index: 8;
   right: 50%;
-  bottom: 106px;
+  bottom: calc(anchor(--chat-fil bottom, 94px) + 12px);
   translate: 50% 0;
   padding: 7px 12px;
   border: 1px solid rgba(255, 212, 90, 0.5);
@@ -807,21 +843,22 @@
   }
 }
 
-/* Memory : le CHÂSSIS (root + sous-panneaux) est IDENTIQUE en mode sombre ET galaxy — seul le
-   RENDU DU GRAPHE (nœuds étoiles WebGL) change en galaxy. Le root porte l'unique couche 0.95,
-   les sous-panneaux sont transparents (pas d'empilement, pas de blur galaxy, pas de fond bleu
-   du cosmique qui transparaît). Une seule couche 95% uniforme, y compris le milieu (graphe). */
+/* Memory : le CHÂSSIS est IDENTIQUE en mode sombre ET galaxy — seul le RENDU DU GRAPHE (nœuds
+   étoiles WebGL) change en galaxy. GABARIT DES VUES (conv-160) : la racine et l'en-tete ne peignent
+   rien, le cadre de page `.view-page` s'en charge ; l'unique couche 0.95 passe sur CHAQUE colonne,
+   qui devient un panneau (pas d'empilement, pas de blur galaxy, pas de fond bleu qui transparaît).
+   Avant, la racine portait cette couche : une page noire dans le cadre de page. */
 .cosmic-outline .graph-observatory,
-.cosmic-outline .graph-observatory--galaxy {
-  background: var(--surface-panel);
+.cosmic-outline .graph-observatory--galaxy,
+.cosmic-outline .graph-observatory .graph-toolbar,
+.cosmic-outline .graph-observatory .graph-canvas {
+  background: transparent;
   backdrop-filter: none;
 }
 .cosmic-outline .graph-observatory .graph-stage,
-.cosmic-outline .graph-observatory .graph-canvas,
-.cosmic-outline .graph-observatory .graph-toolbar,
 .cosmic-outline .graph-observatory .theme-sidebar,
 .cosmic-outline .graph-observatory .visibility-sidebar {
-  background: transparent;
+  background: var(--surface-panel);
   backdrop-filter: none;
 }
 
@@ -907,4 +944,95 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     inset 0 -1px 0 rgba(0, 0, 0, 0.28);
   opacity: 1;
+}
+
+/*
+ * Bulle envoyee — draft G1 (2026-10-10). Degrade ROSE -> BLEU en diagonale pour TOUS les messages
+ * envoyes (themes sombres). Un message qui lance une skill (`/draft …`) gagne en plus un LISERE BLANC
+ * en haut et un bandeau : nom en petites capitales a gauche, description a droite ; le prefixe
+ * est retire du texte (ChatMessageRow + skill-entete.ts). Selecteur volontairement fort : il doit
+ * passer devant les surcharges `:root[data-theme=…]` des themes sombres.
+ */
+:root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user .msg-body.msg-bulle {
+  border: 1px solid transparent;
+  border-radius: 12px 12px 3px 12px;
+  /* Bleu et rose PLEINS (conv-182 : « le même bleu plein partout ») : a 85 % sur le noir, le
+     bleu devenait un bleu de plus, plus sombre que celui des capsules et de l'onglet actif. */
+  background: linear-gradient(135deg, #3c6eeb, #e63ca0);
+  /* Le degrade part du bord EXTERIEUR : sinon il se repete sous la bordure transparente et
+     son debut rose reapparait en lisere a droite (vu le 2026-10-10). */
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  color: #ffffff;
+  box-shadow: none;
+  /* Ancre la lueur « Brume » ci-dessous. */
+  position: relative;
+}
+/*
+ * Lueur « Brume » autour de la bulle envoyee (draft conv-199, 2026-10-10). Le relief passe par une
+ * lumiere AUTOUR (« nan essaye plutot avec des shadows autour »), qui suit le degrade (« Néon mais
+ * faut que la couleur suive le dégradé »), sans bord lumineux (« go Brume »). Une ombre CSS n'a
+ * qu'UNE couleur : la lueur est donc une COPIE FLOUTEE du fond de la bulle (`background: inherit`),
+ * posee derriere elle. Elle suit le degrade de chaque theme sombre, or en Nebuleuse doree.
+ * `isolation` sur la ligne du message : sans elle, le calque a z-index -1 tomberait sous le fond du
+ * fil, qui le cacherait.
+ */
+:root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user {
+  isolation: isolate;
+}
+:root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user .msg-body.msg-bulle::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(22px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+/* Theme NEBULEUSE DOREE : pas de rose ni de bleu (conv-139, 2026-10-10). Meme bulle, degrade
+   or -> noir chaud qui part d'en bas a droite comme la zone de saisie. */
+:root[data-theme='nebuleuse-doree']:not([data-base='clair']) .cosmic-outline .msg.user .msg-body.msg-bulle {
+  /* Ni liseré (le border-left-color dore du theme genere teintait le bord gauche) ni rose : le
+     MEME degrade que la zone de saisie (conv-139, 2026-10-10). */
+  border: 0;
+  background: linear-gradient(315deg, rgba(240, 207, 122, 0.42), rgba(10, 8, 6, 0.92) 58%);
+}
+:root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user .msg-body.msg-bulle.avec-skill {
+  padding: 0;
+  /* Blanc comme le nom de skill (demande conv-161, 2026-10-10 ; remplace l'or #e3ba55). Regle
+     limitee aux themes sombres : le blanc en dur n'y disparait jamais. */
+  border-top: 2px solid #ffffff;
+}
+.msg.user .msg-body.avec-skill .msg-skill-entete {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 16px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+.msg.user .msg-body.avec-skill .msg-skill-nom {
+  flex-shrink: 0;
+  /* Blanc et gras (demande conv-161, 2026-10-10 ; remplace l'or #ffd77a). `inherit` = la couleur
+     du texte de la bulle : #ffffff sur les themes sombres, et reste lisible sur la bulle rose
+     pale du theme clair, ou un blanc en dur disparaitrait. */
+  color: inherit;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.msg.user .msg-body.avec-skill .msg-skill-desc {
+  overflow: hidden;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg.user .msg-body.avec-skill .msg-skill-texte {
+  padding: 0 16px 9px;
+  white-space: pre-wrap;
 }

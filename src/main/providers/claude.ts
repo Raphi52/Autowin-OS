@@ -283,6 +283,35 @@ export function envSortieMcpNoeudSkill(
   return { MAX_MCP_OUTPUT_TOKENS: MCP_SORTIE_NOEUD_SKILL_TOKENS }
 }
 
+/**
+ * FILET ELECTRON DES AGENTS (conv-149, 2026-10-10). Un banc Electron lancé par un agent depuis bash
+ * a ouvert, SUR L'ÉCRAN DE L'UTILISATEUR, la boîte « A JavaScript error occurred in the main
+ * process » (faute de syntaxe dans le script) et il est resté bloqué dessus. `NODE_OPTIONS` fait
+ * charger `mods/autowin/runtime/electron-sans-fenetre-erreur.cjs` par chaque processus de l'agent :
+ * dans le processus principal d'Electron, l'erreur part sur stderr avec le code 1, sans fenêtre.
+ * Ailleurs, il n'a aucun effet (voir l'en-tête du fichier). Comme NON_INTERACTIVE_ENV, il agit sur le
+ * PROCESSUS FILS : il tient quelle que soit la forme de la commande (enchaînée, script npm, timeout…).
+ *
+ * Chemin en barres OBLIQUES et entre guillemets : Node lit `\` comme un échappement dans les
+ * guillemets de NODE_OPTIONS. Fichier absent (pas de mod) -> rien : un `--require` vers un fichier
+ * manquant ferait échouer TOUT processus node de l'agent. Un NODE_OPTIONS déjà posé est conservé.
+ */
+export const FILET_ELECTRON_AGENT = join('runtime', 'electron-sans-fenetre-erreur.cjs')
+
+export function envFiletElectronAgent(
+  modAutowin: string | undefined,
+  env: NodeJS.ProcessEnv,
+  existe: (chemin: string) => boolean = existsSync
+): Record<string, string> {
+  if (!modAutowin) return {}
+  const fichier = join(modAutowin, FILET_ELECTRON_AGENT)
+  if (!existe(fichier)) return {}
+  const chemin = fichier.split('\\').join('/')
+  const actuel = (env.NODE_OPTIONS ?? '').trim()
+  if (actuel.includes(chemin)) return {}
+  return { NODE_OPTIONS: `${actuel} --require "${chemin}"`.trim() }
+}
+
 export function environnementAgent(
   base: NodeJS.ProcessEnv,
   agentEnv?: Record<string, string>
@@ -403,7 +432,11 @@ export function claudeWrittenLineFingerprints(
  * « généré » est un mensonge d'affichage. On dérive donc le libellé de l'outil réel,
  * et « généré » ne reste que pour une sortie directe du modèle (aucun outil).
  */
-function untitledArtifactName(blockType?: string, tool?: string): string {
+function untitledArtifactName(blockType?: string, tool?: string, sourcePath?: string): string {
+  // Le fichier lu (`Read`) a un nom : c'est lui qu'on montre. « image-Read » ne faisait que
+  // répéter le libellé « Image · Read » de la capsule, juste à côté (conv-195).
+  const fichier = sourcePath?.split(/[\\/]/).pop()?.trim()
+  if (fichier) return fichier
   const isImage = blockType === 'image'
   const base = isImage ? 'image' : 'document'
   if (!tool) return isImage ? 'image-générée' : 'document-généré'
@@ -414,7 +447,9 @@ function untitledArtifactName(blockType?: string, tool?: string): string {
 /** Images/documents structurés éventuellement remontés par Claude ou un résultat d'outil. */
 export function claudeContentArtifacts(
   content: unknown,
-  tool?: string
+  tool?: string,
+  /** Fichier que l'outil a lu (`file_path` de `Read`), quand il y en a un. */
+  sourcePath?: string
 ): ProviderArtifactCandidate[] {
   if (!Array.isArray(content)) return []
   const artifacts: ProviderArtifactCandidate[] = []
@@ -433,7 +468,7 @@ export function claudeContentArtifacts(
       typeof block.source.data === 'string'
     ) {
       artifacts.push({
-        name: block.name ?? block.filename ?? untitledArtifactName(block.type, tool),
+        name: block.name ?? block.filename ?? untitledArtifactName(block.type, tool, sourcePath),
         mimeType:
           block.source.media_type ??
           (block.type === 'image' ? 'image/png' : 'application/octet-stream'),
@@ -443,7 +478,7 @@ export function claudeContentArtifacts(
       })
     } else if (block.file && typeof block.file.data === 'string') {
       artifacts.push({
-        name: block.file.name ?? untitledArtifactName('file', tool),
+        name: block.file.name ?? untitledArtifactName('file', tool, sourcePath),
         mimeType: block.file.media_type ?? 'application/octet-stream',
         encoding: 'base64',
         content: block.file.data,
@@ -996,6 +1031,24 @@ function dureeLisible(secondes: number): string {
   const minutes = Math.floor(total / 60)
   const reste = total % 60
   return reste ? `${minutes} min ${reste} s` : `${minutes} min`
+}
+
+/**
+ * APRES SON EVENT `result`, LE CLI N'A PLUS RIEN A DIRE — combien de temps on attend qu'il sorte.
+ *
+ * Mesure conv-159, tour `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (promptCalls ts
+ * 2026-10-10T12:00:20.721Z, iteration 0) : rejet « claude CLI figé (aucune sortie) — tué par le
+ * watchdog » apres 600 464 ms. Le journal `run-stdout/f7fbf3a2-…` finit pourtant par un `result`
+ * `success` (0,95 USD, commande valide) ecrit 300 s pile avant le kill, sans `.exit.json` : le
+ * processus n'est jamais sorti. La fin d'appel n'etait decidee que sur `close` ; la reponse complete
+ * a ete jetee, l'appel compte « non chiffre », le travail refait de zero. Meme signature le meme jour
+ * sur `44f0ca6a`, `3841b95d`. Pourquoi le CLI reste en vie apres `result` : non localise, hors depot.
+ * Ce que fait Autowin : la reponse est terminale des `result` ; passe ce delai, on arrete le
+ * processus et on la rend. 30 s = 7x le maximum mesure (4,1 s sur 173 journaux, mediane 0,9 s).
+ */
+export function delaiFinApresResultatMs(env: NodeJS.ProcessEnv = process.env): number {
+  const brut = Number(env.AUTOWIN_CLAUDE_FIN_APRES_RESULTAT_MS)
+  return Number.isFinite(brut) && brut > 0 ? brut : 30_000
 }
 
 export class ClaudeCliAdapter implements ProviderAdapter {
@@ -1558,6 +1611,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           ...withClaudeAccountEnv(process.env),
           // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
           ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
+          // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
+          ...envFiletElectronAgent(modAutowin, process.env),
           ...(invocation.env ?? {})
         },
         execution?.agentEnv
@@ -1615,8 +1670,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         .filter((attachment) => attachment.kind === 'image')
         .map((attachment) => base64Fingerprint(attachment.content))
     )
-    const collectArtifacts = (content: unknown, tool?: string): void => {
-      const nouveaux = claudeContentArtifacts(content, tool).filter(
+    const collectArtifacts = (content: unknown, tool?: string, sourcePath?: string): void => {
+      const nouveaux = claudeContentArtifacts(content, tool, sourcePath).filter(
         (artifact) =>
           !artifact.mimeType?.startsWith('image/') ||
           artifact.encoding !== 'base64' ||
@@ -1722,6 +1777,21 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       killEscalate(child)
       forceSettle(abortFailure('claude CLI', opts.signal))
     })
+    // Voir `delaiFinApresResultatMs` : un CLI encore en vie apres son `result` est arrete et sa
+    // reponse RENDUE (ou son erreur terminale levee), au lieu d'attendre le detecteur de silence.
+    let finApresResultat: ReturnType<typeof setTimeout> | undefined
+    const armerFinApresResultat = (): void => {
+      if (finApresResultat || childClosed) return
+      finApresResultat = setTimeout(() => {
+        if (childClosed || done) return
+        watchdog.dispose()
+        killEscalate(child)
+        if (relayCompletionPoll) clearInterval(relayCompletionPoll)
+        done = true
+        wake()
+      }, delaiFinApresResultatMs())
+      finApresResultat.unref?.()
+    }
 
     /*
      * Le resume d'une commande de fond. Toutes commencent par `cd "$(pwd)" && `, qui n'apprend rien
@@ -1891,7 +1961,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
         return
       }
-      if (t === 'result') resultSeen = true
+      if (t === 'result') {
+        resultSeen = true
+        armerFinApresResultat()
+      }
       if (t === 'assistant') {
         const msg = o['message'] as
           | {
@@ -2025,7 +2098,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
           const outputEntier = claudeToolResultText(part.content)
           const output = outputEntier.slice(-20_000)
-          collectArtifacts(part.content, call.name)
+          collectArtifacts(part.content, call.name, call.filePath)
           const isFile = Boolean(call.filePath)
           executionEvidence.push({
             type: call.name,
@@ -2251,6 +2324,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       await materialized?.cleanup()
     }
     child.on('error', async (e) => {
+      if (finApresResultat) clearTimeout(finApresResultat)
       if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
@@ -2285,6 +2359,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     })
     child.once('close', async (code) => {
       childClosed = true
+      if (finApresResultat) clearTimeout(finApresResultat)
       if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       const tailError = await tailSettled
       watchdog.dispose()

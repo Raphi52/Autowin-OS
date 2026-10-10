@@ -18,20 +18,39 @@
   container-type: inline-size;
 }
 
-/* La barre de filtre reste visible pendant le defilement : on filtre en lisant. */
+/* La barre de filtre reste visible pendant le defilement : on filtre en lisant.
+   Elle PASSE A LA LIGNE (conv-180, 2026-10-10 : « dans Logs les elements au sommet sont pas bien
+   responsive »). Sur une seule ligne, le panneau a sa largeur minimale (280 px, barre de 248 px)
+   devait loger 399 px : la recherche tombait a 22 px -- une capsule vide --, « Toutes sources »
+   etait coupe et Pistes, Exporter et le compte sortaient du cadre (mesure dans l'app). */
 .model-log-filter {
   position: sticky;
   top: 0;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
 }
 
+/* Base de 180 px : en dessous, la recherche prend toute la premiere ligne au lieu de s'ecraser ;
+   au-dessus, elle s'etire a cote des filtres. */
 .model-log-filter input {
-  flex: 1;
+  flex: 1 1 180px;
   min-width: 0;
   font-size: 12px;
+}
+
+/* UNE hauteur pour toute la barre (conv-180, 2026-10-10 : « aligne la hauteur du champ de
+   recherche, des deux listes et des boutons »). Aucune hauteur n'etait fixee : chacun la tirait de
+   son remplissage -- 8 px autour de la recherche (`.input`, 36 px), 2 px pour les listes (22 px),
+   0 pour les boutons (18 px), mesure dans l'app. 26 px, la hauteur des onglets du panneau ; le
+   texte reste centre, le remplissage vertical tombe a 0. */
+.model-log-filter :is(input, select, .model-log-toggle) {
+  box-sizing: border-box;
+  height: 26px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .model-log-count {
@@ -255,10 +274,11 @@
   white-space: nowrap;
 }
 
-/* Les deux selecteurs de filtre restent compacts : la recherche garde la place. */
+/* Les deux selecteurs de filtre gardent la largeur de leur libelle : la barre passe a la ligne,
+   le plafond de 30 % ne servait plus qu'a couper « Toutes sources ». */
 .model-log-filter select {
   flex: none;
-  max-width: 30%;
+  max-width: 100%;
   font-size: 11px;
   padding: 2px 4px;
 }

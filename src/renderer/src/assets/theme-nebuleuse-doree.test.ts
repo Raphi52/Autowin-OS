@@ -48,7 +48,8 @@ describe('theme Nebuleuse doree', () => {
   it('donne a la zone de saisie le degrade or clair -> noir et garde les couleurs d etat', () => {
     const main = lire('./theme-nebuleuse-doree.css')
     expect(main).toContain('linear-gradient(315deg, rgba(240, 207, 122, 0.42), rgba(10, 8, 6, 0.92) 58%)')
-    expect(main).toContain('--ok: #4fd1a5')
+    // Le vert d'etat = LE vert des themes Nebuleuse, « bien flashy » (conv-197).
+    expect(main).toContain('--ok: #00ff55')
     expect(main).toContain('--warn: #ffb547')
   })
 
@@ -76,5 +77,40 @@ describe('theme Nebuleuse doree', () => {
   it('est a jour avec sa source : regenerer ne change rien', async () => {
     const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
     expect(genererMainDoree()).toBe(lire('./theme-nebuleuse-doree.css'))
+  })
+
+  /**
+   * Le fond « liseré · halo haut » (conv-159) appartient a Nebuleuse de verre seule. Sans le bloc
+   * FOND-PROPRE de la derivation, la doree heritait d'un filet BLEU en haut et d'un halo or en bas
+   * (mesure du 2026-10-10 : la derivation sortait #8ccaff et rgba(47, 139, 255, ...)).
+   */
+  it('garde ses deux nappes or : le fond de Nebuleuse de verre ne passe pas dans la doree', async () => {
+    const { genererMainDoree } = await import('../../../../scripts/theme-nebuleuse-verre.mjs')
+    const derivee = genererMainDoree()
+    expect(derivee).not.toMatch(/#8ccaff|47, 139, 255|FOND-PROPRE|liseré · halo haut/)
+    expect(derivee).toContain(
+      'radial-gradient(70vw 60vh at 96% 100%, rgba(228, 182, 67, 0.42), transparent 70%)'
+    )
+    expect(derivee).toContain(
+      'radial-gradient(60vw 55vh at 0% 0%, rgba(227, 181, 63, 0.12), transparent 70%), #0a0a0a;'
+    )
+  })
+
+  /**
+   * LES BANDEAUX DU HAUT DU CHAT SONT EN PERLE D'OR (conv-179, 2026-10-10). La regle est ecrite
+   * dans theme-nebuleuse-verre.css, hors du bloc RELIEF-PERLE : la derivation la garde telle quelle
+   * (or et blanc ne sont pas recolores). Le jeton --warn du theme reste l'ambre des etats.
+   */
+  it('peint les bandeaux du haut du chat en perle d or, sans toucher l ambre d etat', () => {
+    const main = lire('./theme-nebuleuse-doree.css')
+    const valeurs: string[] = []
+    postcss.parse(main).walkRules((regle) => {
+      if (!regle.selectors.some((s) => s.trim() === `${PREFIXE} .chat-workflow-notice`)) return
+      regle.walkDecls('--warn', (decl) => {
+        valeurs.push(decl.value)
+      })
+    })
+    expect(valeurs).toEqual(['#e2b65a'])
+    expect(main).toContain('--warn: #ffb547')
   })
 })

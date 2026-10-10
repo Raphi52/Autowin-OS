@@ -34,6 +34,12 @@ describe('nommerAccesBloquant — nommer le coupable, pas seulement le constater
     expect(nommerAccesBloquant('readFileSync')).toBe('io:disque:readFileSync')
     expect(nommerAccesBloquant('readSync', 12)).toBe('io:disque:readSync')
   })
+
+  it('nomme une creation de PROCESSUS par programme et sous-commande, pas comme un disque', () => {
+    expect(nommerAccesBloquant('spawn', { file: 'git', args: ['git', 'diff', '--', 'a.ts'] })).toBe(
+      'io:processus:spawn git diff'
+    )
+  })
 })
 
 describe('instrumenterAccesBloquants — mesure DIRECTE du segment synchrone', () => {
@@ -102,6 +108,38 @@ describe('instrumenterEntreesSortiesDuMain — cablage sur les vrais modules', (
     expect(gels.some((g) => g.operation.startsWith('io:disque:readFileSync'))).toBe(true)
     expect(gels.every((g) => g.cause === 'entree-sortie-bloquante')).toBe(true)
     expect(fs.readFileSync).toBe(avant)
+  })
+
+  /*
+   * ANGLE MORT DU 2026-10-10 (heal conv-204) : 982 gels sur 1 234 sortis en `inconnu` en un jour.
+   * Un profil CPU du main a montre 264 creations de processus `git` par photo du depot, 4,6 s de
+   * boucle tenue. `execFile` est asynchrone, mais la CREATION du processus ne l'est pas — et
+   * aucun appel instrumente ne la couvrait. Toutes passent par `ChildProcess.prototype.spawn`.
+   */
+  it('capte la CREATION reelle d’un processus lance par execFile, sans amputer son API', async () => {
+    const { instrumenterEntreesSortiesDuMain } = await import('./gel-main')
+    const { createRequire } = await import('node:module')
+    const { promisify } = await import('node:util')
+    const cp = createRequire(import.meta.url)(
+      'node:child_process'
+    ) as typeof import('node:child_process')
+    // `spawn` existe sur le prototype a l'execution, mais les types de Node ne le declarent pas.
+    const prototype = cp.ChildProcess.prototype as unknown as { spawn: unknown }
+    const avant = prototype.spawn
+    const gels: Gel[] = []
+    const defaire = instrumenterEntreesSortiesDuMain(0, (g) => gels.push(g))
+    let sortie: { stdout: string; stderr: string }
+    try {
+      sortie = await promisify(cp.execFile)('git', ['rev-parse', '--is-inside-work-tree'], {
+        windowsHide: true
+      })
+    } finally {
+      defaire()
+    }
+    // `promisify(execFile)` rend toujours { stdout, stderr } : observer n'a rien change.
+    expect(sortie.stdout.trim()).toBe('true')
+    expect(gels.some((g) => g.operation === 'io:processus:spawn git rev-parse')).toBe(true)
+    expect(prototype.spawn).toBe(avant)
   })
 
   it('preserve les SOUS-FONCTIONS de l’API patchee (realpathSync.native)', async () => {

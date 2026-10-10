@@ -54,6 +54,14 @@
  *         [--largeur <px>] [--hauteur <px>] emule une fenetre de cette taille (defaut hauteur =
  *                                    largeur x 9/16) : l'instance cachee s'ouvre en 900 x 670, ou
  *                                    les vues larges (chat en colonnes) ne se voient pas.
+ *         [--attendre <selecteur CSS>] ATTEND (20 s max) qu'un element de la vue CHARGEE existe
+ *                                    avant de declencher, mesurer et capturer. Delai depasse =
+ *                                    echec nomme, code 9.
+ *         [--retraits]               MESURE le retrait horizontal du contenu dans le cadre de page
+ *                                    (`.view-page` de la vue active) : distance entre le bord du
+ *                                    cadre et le bloc peint (fond ou bord visible) le plus a gauche,
+ *                                    puis le plus a droite, avec l'element temoin. Le JSON porte
+ *                                    `retraits` ; aucune vue a cadre active = `retraits: null`.
  *         [--motion <selecteur CSS>] [--reduced-motion | --full-motion] PROUVE QUE CA BOUGE. Capture N frames de chaque occurrence du
  *                                    selecteur, a sa taille de rendu REELLE, et rend la fraction de
  *                                    pixels qui change entre frames. Un element immobile est un
@@ -70,15 +78,8 @@ import { dirname, parse, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cheminDevToolsPort, racineDepot } from './racine-depot.mjs'
 
-// Node 20 n'expose WebSocket qu'avec --experimental-websocket (global par défaut depuis Node 22).
-// Mesuré 2026-10-02 sur Node 20.20.2 : « ReferenceError: WebSocket is not defined » au branchement
-// CDP. Le script se relance lui-même avec l'option, au lieu d'exiger NODE_OPTIONS de l'appelant.
-if (typeof globalThis.WebSocket !== 'function' && !process.execArgv.includes('--experimental-websocket')) {
-  const relance = spawnSync(process.execPath, ['--experimental-websocket', ...process.argv.slice(1)], {
-    stdio: 'inherit'
-  })
-  process.exit(relance.status ?? 1)
-}
+/** Vrai quand ce fichier est LANCE en CLI, faux quand un test l'importe pour ses fonctions pures. */
+const lanceEnCli = Boolean(process.argv[1] && process.argv[1].endsWith('ui-capture.mjs'))
 
 /** Identifiants réels du catalogue applicatif (src/shared/navigation.ts). */
 export const VUES_CONNUES = [
@@ -758,6 +759,27 @@ const main = async () => {
     mesuresDom = await mesurerDom()
   }
 
+  // --attendre (conv-160) : une vue qui charge ses donnees (Worktrees : « Lecture… ») etait mesuree
+  // et capturee sur son indicateur de chargement. On attend l'element qui n'existe qu'une fois la
+  // vue chargee ; absent au bout du delai = echec nomme, jamais une capture du chargement.
+  const cibleAttendue = argument('--attendre')
+  if (cibleAttendue) {
+    const delaiMs = 20_000
+    const debut = Date.now()
+    let presente = false
+    while (!presente && Date.now() - debut < delaiMs) {
+      presente = await evaluer(`Boolean(document.querySelector(${JSON.stringify(cibleAttendue)}))`)
+      if (!presente) await new Promise((r) => setTimeout(r, 250))
+    }
+    if (!presente) {
+      await restaurerVue()
+      socket.close()
+      rendre({ ok: false, echecs: [`attente-expiree(${cibleAttendue}, ${delaiMs} ms)`], vue }, 9)
+    }
+    await new Promise((r) => setTimeout(r, 300))
+    mesuresDom = await mesurerDom()
+  }
+
   const declencheur = argument('--click')
   let declencheurTrouve
   let elementsAvantClic
@@ -812,6 +834,62 @@ const main = async () => {
     await new Promise((r) => setTimeout(r, 400))
     mesuresDom = await mesurerDom()
   }
+
+  // --retraits (conv-160) : le retrait du contenu se MESURE au rendu, il ne se lit pas a l'oeil sur
+  // une capture — deux vues a 18 et 38 px du bord se ressemblent, et c'est cet ecart qui derivait.
+  const retraits = drapeau('--retraits')
+    ? await evaluer(`(() => {
+        const cadre = document.querySelector('.view-slot.is-active .view-page')
+        if (!cadre) return null
+        const c = cadre.getBoundingClientRect()
+        // Sans regex : ce code vit dans un gabarit de chaine, ou chaque antislash serait mange.
+        const transparent = (v) => v === 'transparent' || v.replaceAll(' ', '').endsWith(',0)')
+        const nomSimple = (el) =>
+          el.tagName.toLowerCase() + (el.classList.length ? '.' + [...el.classList].join('.') : '')
+        // Un element sans classe ne se retrouve pas dans le code : on nomme aussi son parent.
+        const nom = (el) =>
+          el.classList.length || !el.parentElement
+            ? nomSimple(el)
+            : nomSimple(el.parentElement) + ' > ' + nomSimple(el)
+        let gauche = { px: Infinity, temoin: null }
+        let droite = { px: Infinity, temoin: null }
+        for (const el of cadre.querySelectorAll('*')) {
+          const r = el.getBoundingClientRect()
+          if (r.width < 2 || r.height < 2) continue
+          if (r.right <= c.left || r.left >= c.right || r.bottom <= c.top || r.top >= c.bottom) continue
+          const st = getComputedStyle(el)
+          if (st.visibility === 'hidden' || Number(st.opacity) === 0) continue
+          // Le contenu d'un <details> FERME a une geometrie (Chromium le met en
+          // content-visibility: hidden) mais n'est pas peint : il passait pour un bloc hors cadre.
+          if (el.checkVisibility && !el.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true })) continue
+          const fond = !transparent(st.backgroundColor) || st.backgroundImage !== 'none'
+          const bord = ['Left', 'Right', 'Top', 'Bottom'].some(
+            (k) =>
+              parseFloat(st['border' + k + 'Width']) > 0 &&
+              st['border' + k + 'Style'] !== 'none' &&
+              !transparent(st['border' + k + 'Color'])
+          )
+          if (!fond && !bord) continue
+          // La partie VISIBLE seulement : un bloc rogne par un ancetre qui coupe ce qui deborde
+          // (overflow autre que visible) ne compte que jusqu'au bord de cet ancetre. Sans cela, un
+          // tiroir hors ecran ou une liste defilee horizontalement passait pour un retrait negatif.
+          let gaucheVue = r.left
+          let droiteVue = r.right
+          for (let a = el.parentElement; a && a !== cadre.parentElement; a = a.parentElement) {
+            if (getComputedStyle(a).overflowX === 'visible') continue
+            const ra = a.getBoundingClientRect()
+            gaucheVue = Math.max(gaucheVue, ra.left)
+            droiteVue = Math.min(droiteVue, ra.right)
+          }
+          if (droiteVue - gaucheVue < 2) continue
+          const g = Math.round((gaucheVue - c.left) * 10) / 10
+          const d = Math.round((c.right - droiteVue) * 10) / 10
+          if (g < gauche.px) gauche = { px: g, temoin: nom(el) }
+          if (d < droite.px) droite = { px: d, temoin: nom(el) }
+        }
+        return { cadre: nom(cadre), gauche, droite }
+      })()`)
+    : undefined
 
   // --------------------------------------------------------------------
   // MOUVEMENT — la seule chose qu'une capture fixe ne peut pas prouver.
@@ -993,7 +1071,8 @@ const main = async () => {
     interfaceCapturee: interfaceCapturee(mesuresDom.adressePage ?? page.url, racineDepot()),
     ...(drapeau('--code-dev') ? { codeDevExige: true } : {}),
     ...(cibleDefilement ? { defilementVers: cibleDefilement } : {}),
-    ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {})
+    ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {}),
+    ...(retraits !== undefined ? { retraits } : {})
   }
   const verdict = verdictCapture(mesures)
   rendre(
@@ -1020,6 +1099,20 @@ const main = async () => {
 }
 
 // N'exécute le pilotage que lancé en CLI : les tests importent les fonctions pures.
-if (process.argv[1] && process.argv[1].endsWith('ui-capture.mjs')) {
+if (lanceEnCli) {
+  // Node 20 n'expose WebSocket qu'avec --experimental-websocket (global par défaut depuis Node 22).
+  // Mesuré 2026-10-02 sur Node 20.20.2 : « ReferenceError: WebSocket is not defined » au branchement
+  // CDP. Le script se relance lui-même avec l'option, au lieu d'exiger NODE_OPTIONS de l'appelant.
+  // Cette relance vivait en TETE de module, donc s'executait aussi a l'IMPORT : sous Node 20, chaque
+  // fichier de test qui importait une fonction pure relancait un process puis appelait
+  // `process.exit`, et Vitest tuait le fichier (« process.exit unexpectedly called with "1" »).
+  // Mesure 2026-10-10 (conv-160) : 4 fichiers de test sur 4 sans aucun test execute. Elle n'a de
+  // sens qu'au lancement en CLI, juste avant `main()` — le seul code qui ouvre un WebSocket.
+  if (typeof globalThis.WebSocket !== 'function' && !process.execArgv.includes('--experimental-websocket')) {
+    const relance = spawnSync(process.execPath, ['--experimental-websocket', ...process.argv.slice(1)], {
+      stdio: 'inherit'
+    })
+    process.exit(relance.status ?? 1)
+  }
   await main()
 }

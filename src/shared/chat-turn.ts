@@ -138,6 +138,14 @@ export interface ChatTurnState {
    * c'est la seule trace lisible de ce que l'agent a fait quand la pensée du modèle arrive chiffrée.
    */
   actionsLog?: string[]
+  /**
+   * DURÉE DU RAISONNEMENT, en millisecondes : le chiffre de la capsule « Raisonnement » du fil
+   * (variante R5, conv-162). Même mesure que le compteur en direct — du début du tour à sa clôture
+   * — pour que le chiffre ne change pas d'un rechargement à l'autre. Conservée avec le tour pour la
+   * même raison que `reasoning` : sans elle, un tour relu affichait « Raisonnement terminé » sans
+   * aucun compteur. Absente sur les tours antérieurs : la capsule n'invente alors aucun chiffre.
+   */
+  reasoningMs?: number
 }
 
 /** Plafond du raisonnement conservé par tour — aligné sur ce que le fil affiche en direct. */
@@ -153,6 +161,8 @@ export type ChatTurnEvent =
   | { kind: 'reasoning'; text: string }
   /** Journal des actions du tour, écrit EN UNE FOIS à la clôture (comme `reasoning`). */
   | { kind: 'actions-log'; lines: string[] }
+  /** Durée du raisonnement (début du tour -> clôture), écrite EN UNE FOIS à la clôture. */
+  | { kind: 'reasoning-duration'; ms: number }
   | { kind: 'stream-reset'; streamId: string }
   | { kind: 'resumed' }
   | {
@@ -278,6 +288,13 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
       .filter((ligne) => ligne !== '')
     if (lignes.length === 0) return state
     return { ...state, actionsLog: lignes.slice(-ACTIONS_LOG_MAX) }
+  }
+
+  if (event.kind === 'reasoning-duration') {
+    // Statut INCHANGÉ, comme `reasoning` et `actions-log` : la durée arrive à la clôture, un tour
+    // déjà clos qui la reçoit reste clos. Une valeur qui n'est pas une durée est ignorée.
+    if (!Number.isFinite(event.ms) || event.ms < 0) return state
+    return { ...state, reasoningMs: Math.round(event.ms) }
   }
 
   if (event.kind === 'delta') {

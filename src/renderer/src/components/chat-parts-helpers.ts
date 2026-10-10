@@ -141,3 +141,25 @@ export function ligneEtatLancement(actions: ChatActionPart[]): string | undefine
       : ''
   return `Travail lancé${quoi} — dans une copie de travail séparée, résultat vérifié avant de revenir ici.`
 }
+
+/**
+ * BATTEMENT D'UNE ORCHESTRATION, decoupe pour la capsule (conv-194, 2026-10-10, capsule 2 « Phase
+ * dans la capsule »). Le processus principal l'ecrit `<duree> · <phase> · <dernier fait>`
+ * (`battementDOrchestration`, src/main/verify-battement.ts), la duree au format de `dureeCourte` :
+ * « 45 s », « 3 min », « 4 min 12 s ».
+ *
+ * La capsule affiche deja la duree (pastille) et la phase (en rose) : les laisser en tete de la
+ * ligne de vie les ecrirait DEUX fois cote a cote. On ne retire la phase que si elle est CONNUE
+ * (`phase`, lue dans les choix du pipeline) : le second segment peut aussi etre un nom d'outil
+ * (« Bash »), et deviner la phase sur un mot ferait disparaitre une vraie information.
+ */
+export function decouperBattement(
+  battement: string,
+  phase?: string
+): { duree?: string; fait: string } {
+  const tete = /^(\d+ s|\d+ min(?: \d+ s)?) · (.*)$/.exec(battement)
+  if (!tete) return { fait: battement }
+  const reste = tete[2]
+  const fait = phase && reste.startsWith(`${phase} · `) ? reste.slice(phase.length + 3) : reste
+  return { duree: tete[1], fait }
+}

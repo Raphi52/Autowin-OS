@@ -206,6 +206,11 @@ export function tryGitAsync(
   })
 }
 
+/** `git worktree remove` d'une copie — une seule source, partagee par le retrait sync et async. */
+function argsDeRetraitDeCopie(path: string, force: boolean): string[] {
+  return ['worktree', 'remove', ...(force ? ['--force'] : []), path]
+}
+
 /** Les refs que le balayage de retention examine — une seule source, partagee sync/async. */
 export const ARGS_REFS_RETENTION = [
   'for-each-ref',
@@ -423,6 +428,12 @@ export interface WorktreeManagerOptions {
   git?: GitRunner
   /** tryGit injectable (tests) ; défaut = wrapper execFileSync non-jetant. */
   tryGitFn?: typeof tryGit
+  /**
+   * Pendant ASYNCHRONE de `tryGitFn`, pour les gestes qui ne doivent pas tenir la boucle (retrait
+   * d'une copie par le balayage horaire). Défaut : `tryGitAsync` — sauf si un `tryGitFn` a été
+   * injecté seul, auquel cas c'est LUI qui répond : un test qui simule git le simule partout.
+   */
+  tryGitAsyncFn?: typeof tryGitAsync
   /** Suppression disque injectable pour simuler les verrous Windows dans les tests. */
   removeDirFn?: (path: string) => void
   /** Publication atomique du verrou index, injectable pour les tests de crash. */
@@ -936,6 +947,7 @@ export class WorktreeManager {
   private baseCommonDir?: { valeur: string | undefined }
   private readonly git: GitRunner
   private readonly tryGitFn: typeof tryGit
+  private readonly tryGitAsyncFn: typeof tryGitAsync
   private readonly removeDirFn: (path: string) => void
   private readonly linkFileFn: (existingPath: string, newPath: string) => void
   private readonly removeIndexLockFn: (path: string) => void
@@ -965,6 +977,10 @@ export class WorktreeManager {
     this.worktreeRoot = opts.worktreeRoot
     this.git = opts.git ?? defaultGit
     this.tryGitFn = opts.tryGitFn ?? tryGit
+    const tryGitInjecte = opts.tryGitFn
+    this.tryGitAsyncFn =
+      opts.tryGitAsyncFn ??
+      (tryGitInjecte ? async (repo, args) => tryGitInjecte(repo, args) : tryGitAsync)
     this.removeDirFn = opts.removeDirFn ?? ((path) => supprimerArbre(path))
     this.linkFileFn = opts.linkFileFn ?? linkSync
     this.removeIndexLockFn = opts.removeIndexLockFn ?? ((path) => rmSync(path, { force: true }))
@@ -2151,6 +2167,32 @@ export class WorktreeManager {
     }
   }
 
+  /**
+   * Meme geste que `restaurerCopieDepuisSecours`, sans tenir le thread principal.
+   * Mesure (`gels.jsonl`, 2026-10-10 06:58) : la forme synchrone de `git worktree add` a fige
+   * l'app 6 416 ms puis 2 460 et 2 982 ms, appelee depuis les chemins async du coordinateur.
+   */
+  async restaurerCopieDepuisSecoursAsync(
+    agentId: string,
+    executer: (
+      repo: string,
+      args: string[]
+    ) => Promise<{ code: number; stdout: string }> = tryGitAsync
+  ): Promise<boolean> {
+    if (!SAFE_ID.test(agentId)) return false
+    const chemin = join(this.worktreeRoot, `agent__${agentId}`)
+    if (existsSync(chemin)) return true
+    const r = await executer(this.baseRepo, [
+      '-c',
+      'core.longpaths=true',
+      'worktree',
+      'add',
+      chemin,
+      `autowin/recovery/${agentId}`
+    ])
+    return r.code === 0 && existsSync(chemin)
+  }
+
   listAgentIds(): string[] {
     const directories = existsSync(this.worktreeRoot)
       ? readdirSync(this.worktreeRoot, { withFileTypes: true })
@@ -2446,6 +2488,29 @@ export class WorktreeManager {
    * seulement le nombre d'appels évités.
    */
   private balayerUneCopie(entry: Dirent): string | undefined {
+    const decision = this.deciderBalayageDUneCopie(entry)
+    if (decision?.etape !== 'retirer') return decision?.agentId
+    return this.balayerLeChemin(decision.path) ? decision.agentId : undefined
+  }
+
+  /** `balayerUneCopie` du balayage horaire : memes verdicts, retrait git sans tenir la boucle. */
+  private async balayerUneCopieAsync(entry: Dirent): Promise<string | undefined> {
+    const decision = this.deciderBalayageDUneCopie(entry)
+    if (decision?.etape !== 'retirer') return decision?.agentId
+    return (await this.balayerLeCheminAsync(decision.path)) ? decision.agentId : undefined
+  }
+
+  /**
+   * TOUTES les gardes du balayage, sans le retrait final — partagees par la forme sync et async.
+   * `fait` : la copie est deja traitee (preservee puis liberee) ; `retirer` : il ne reste qu'a la
+   * supprimer ; `undefined` : on n'y touche pas.
+   */
+  private deciderBalayageDUneCopie(
+    entry: Dirent
+  ):
+    | { etape: 'fait'; agentId: string }
+    | { etape: 'retirer'; agentId: string; path: string }
+    | undefined {
     if (!entry.isDirectory() || !entry.name.startsWith('agent__')) return undefined
     const agentId = entry.name.slice('agent__'.length)
     if (!SAFE_ID.test(agentId)) return undefined
@@ -2488,7 +2553,7 @@ export class WorktreeManager {
       if (!(ageMs >= ABANDONED_AGENT_MIN_AGE_MS)) return undefined
       const preserve = this.preserverEtLiberer(agentId)
       return preserve.outcome === 'preserve-et-libere' || preserve.outcome === 'libere'
-        ? agentId
+        ? { etape: 'fait', agentId }
         : undefined
     }
 
@@ -2523,7 +2588,7 @@ export class WorktreeManager {
       }
     }
 
-    return this.balayerLeChemin(path) ? agentId : undefined
+    return { etape: 'retirer', agentId, path }
   }
 
   /**
@@ -2555,7 +2620,20 @@ export class WorktreeManager {
     if (this.estWorktreeEnregistree(path) && this.cleanupWorktree(path, true).ok) {
       return this.oublierEchecDeBalayage(path)
     }
+    return this.finirBalayageParLeDisque(path)
+  }
 
+  /** `balayerLeChemin` dont les retraits git ne tiennent pas la boucle (balayage horaire). */
+  private async balayerLeCheminAsync(path: string): Promise<boolean> {
+    if ((await this.cleanupWorktreeAsync(path, false)).ok) return this.oublierEchecDeBalayage(path)
+    if (this.estWorktreeEnregistree(path) && (await this.cleanupWorktreeAsync(path, true)).ok) {
+      return this.oublierEchecDeBalayage(path)
+    }
+    return this.finirBalayageParLeDisque(path)
+  }
+
+  /** Dernier recours commun aux deux formes : le disque, puis `worktree prune`, puis l'echec VISIBLE. */
+  private finirBalayageParLeDisque(path: string): boolean {
     let detail = ''
     try {
       this.removeDirFn(path)
@@ -2690,7 +2768,7 @@ export class WorktreeManager {
   async sweepAbandonedAgentCopiesAsync(): Promise<string[]> {
     const swept: string[] = []
     for (const entry of this.copiesCandidates()) {
-      const balayee = this.balayerUneCopie(entry)
+      const balayee = await this.balayerUneCopieAsync(entry)
       if (balayee) swept.push(balayee)
       // `setImmediate` et non `setTimeout(0)` : on repasse par la boucle d'événements — donc les IPC
       // en attente sont servis — sans ajouter de délai par copie.
@@ -5060,6 +5138,29 @@ exit 0
   }
 
   private cleanupWorktree(path: string, force = true): { ok: boolean; detail?: string } {
+    const voisines = this.preparerRetraitDeCopie(path)
+    const remove = this.tryGitFn(this.baseRepo, argsDeRetraitDeCopie(path, force))
+    return this.conclureRetraitDeCopie(path, force, remove, voisines)
+  }
+
+  /**
+   * LE MEME RETRAIT, SANS TENIR LA BOUCLE PENDANT `git worktree remove` — heal conv-204.
+   *
+   * Mesure du 2026-10-10 (`gels.jsonl`, 10:07) : le premier balayage horaire a retire trois copies
+   * par la forme synchrone — 1 747, 1 444 et 4 253 ms de fenetre figee. Seul l'appel a git change
+   * de forme : la preparation et la conclusion (coquille, historique CLI, escalade) sont PARTAGEES,
+   * donc aucune protection du retrait ne peut diverger entre les deux chemins.
+   */
+  private async cleanupWorktreeAsync(
+    path: string,
+    force = true
+  ): Promise<{ ok: boolean; detail?: string }> {
+    const voisines = this.preparerRetraitDeCopie(path)
+    const remove = await this.tryGitAsyncFn(this.baseRepo, argsDeRetraitDeCopie(path, force))
+    return this.conclureRetraitDeCopie(path, force, remove, voisines)
+  }
+
+  private preparerRetraitDeCopie(path: string): string[] {
     /*
      * Les copies encore presentes sont relevees AVANT toute suppression : elles servent a proteger
      * leur propre historique CLI, et apres coup la copie visee aurait deja disparu de la liste.
@@ -5076,12 +5177,15 @@ exit 0
      * `delierLesDependances` refuse de toucher à un VRAI dossier de modules : seul un lien part.
      */
     delierLesDependances(path)
-    const remove = this.tryGitFn(this.baseRepo, [
-      'worktree',
-      'remove',
-      ...(force ? ['--force'] : []),
-      path
-    ])
+    return voisines
+  }
+
+  private conclureRetraitDeCopie(
+    path: string,
+    force: boolean,
+    remove: { code: number; stdout: string; stderr: string },
+    voisines: string[]
+  ): { ok: boolean; detail?: string } {
     if (remove.code === 0) {
       /*
        * GIT A RENDU 0 — CA NE PROUVE PAS QUE LE DOSSIER EST PARTI.

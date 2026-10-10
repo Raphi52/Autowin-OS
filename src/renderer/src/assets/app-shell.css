@@ -112,6 +112,11 @@
   flex: none;
   display: grid;
   place-items: center;
+  /* SANS MARGE INTÉRIEURE (2026-10-10). La marge par défaut d'un bouton (6 px à gauche et à
+     droite) ne laissait que 13 px pour un chevron de 15 px : la grille débordait VERS LA DROITE et
+     poussait le chevron de ~0,7 px à droite dès 100 % (« cette flèche aussi devrait être un chouya
+     à gauche »). À zéro, le tracé `.rail-toggle-trait` occupe les 25 px intérieurs. */
+  padding: 0;
   border: 1px solid var(--line-strong);
   border-radius: var(--r1);
   background: rgba(1, 2, 10, 0.42);
@@ -122,10 +127,32 @@
   color: var(--text);
   border-color: var(--gold);
 }
+/* LE CHEVRON, CENTRÉ À TOUS LES ZOOMS (2026-10-10). Le tracé remplit TOUTE la boîte intérieure
+   du bouton et y est peint par un masque étiré à 100 % : il est arrondi au pixel exactement comme
+   le rond. L'ancien <svg> de 15 px, centré par la grille, était arrondi à part et glissait
+   jusqu'à 1,1 px selon le zoom (mesuré dans Electron, 26 crans × 40 positions : 526/1040
+   décalées de ≥ 0,5 px avant, 0/1040 après).
+   - TAILLE dans la viewBox : 24 unités sur 40 = 15 px dans les 25 px intérieurs du bouton de 27 px.
+   - TRACÉ RECENTRÉ : l'ancien « ‹ » allait de x=8 à x=15 (centre 11,5) ; il va désormais de 8,5
+     à 15,5, centré sur 12. Même chose en miroir pour le « › » du rail replié.
+   JAMAIS de `translate` ici : un décalage fixe réglé à un zoom est faux aux autres. */
+.rail-toggle-trait {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-8 -8 40 40'%3E%3Cpath d='M15.5 5l-7 7 7 7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+}
+.rail.is-collapsed .rail-toggle-trait {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-8 -8 40 40'%3E%3Cpath d='M8.5 5l7 7-7 7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
 
 .rail.is-collapsed {
   width: 54px;
-  padding-inline: 9px;
+  /* 8 px et non 9 (2026-10-10, conv-198) : 54 - 2 x 8 - 2 x 1 px de bord (le cadre des thèmes
+     Nébuleuse) = 36 px, la largeur d'un item rond. À 9 px la piste ne faisait que 34 px. */
+  padding-inline: 8px;
 }
 .rail.is-collapsed .brand {
   justify-content: center;
@@ -143,20 +170,30 @@
 .rail.is-collapsed .rail-foot {
   display: none;
 }
-/* Piste utile du rail replie : 54px - 2 x 9px de padding-inline = 36px.
-   33px + 3px de marge droite = ces 36px : l'item remplit la piste tout en
-   liberant les 3px que .space-toy-icon utilise via translateX(-3px), sans debordement.
-   max-width: 36px reste le plafond de securite si la piste change. */
+/* RAIL REPLIÉ : UN CARRÉ CENTRÉ, L'ICÔNE AU MILIEU (2026-10-10, conv-198 : « l'icône de worktrees
+   est pas centrée et le rond est pas parfaitement rond »). Avant : item de 33 x 36 collé à gauche
+   (margin 0 3px) et icône poussée de translateX(-3px). Dans un thème à bord en capsule (999px),
+   33 x 36 dessinait un OVALE ; l'icône tombait 3 px à gauche du centre de ce rond, et 3,6 px à
+   gauche du bouton de repli. Mesuré dans l'app (Nébuleuse de verre) : rond 33 x 36 centré à
+   26,4 px, icône à 23,4 px, menu à 27 px. Après : 36 x 36, rond, icône et bouton à 27 px.
+   JAMAIS de translate sur l'icône : un décalage fixe défait le centrage que la flexbox donne. */
 .rail.is-collapsed .nav-item {
-  width: 33px;
-  max-width: 36px;
+  width: 36px;
   height: 36px;
-  margin-inline: 0 3px;
+  margin-inline: auto;
   justify-content: center;
   padding: 0;
 }
+/* L'ÉMOJI DÉBORDE SA CASE, DES DEUX CÔTÉS À PARTS ÉGALES (2026-10-10, conv-198 : « des icônes trop
+   à droite par rapport au cercle, tous sauf worktrees et task planner »). Un émoji à 17 px fait
+   23,35 px de large dans la case de 18 px : la grille le posait au bord gauche, il ne débordait
+   qu'à DROITE et son centre tombait à 29,7 px pour un rond centré à 27 (mesuré dans l'app). Les
+   deux icônes SVG (Worktrees, Task Manager) tiennent dans la case et restaient, elles, centrées.
+   `place-content: center` centre la piste trop large : les dix icônes tombent à 27 px.
+   C'est ce débordement que l'ancien translateX(-3px) compensait — en décalant aussi les SVG.
+   Menu déployé non concerné : l'émoji y reste calé à gauche, loin du bord arrondi de la pastille. */
 .rail.is-collapsed .space-toy-icon {
-  transform: translateX(-3px);
+  place-content: center;
 }
 .rail.is-collapsed .rail-toggle {
   margin-inline: auto;
@@ -219,8 +256,14 @@
   line-height: 1;
   filter: saturate(1.15);
 }
-.nav-item > span:not(.space-toy-icon) {
+/* Seul le LIBELLE s'etire. Le badge d'alerte (« ! » de Settings) est un cercle de 17px
+   (.domain-badge-alert) : pris dans ce flex: 1, il s'etirait sur toute la moitie droite de
+   l'item et son border-radius: 50% en faisait une longue ellipse rouge. */
+.nav-item > span:not(.space-toy-icon):not(.nav-alert-badge) {
   flex: 1;
+}
+.nav-item > .nav-alert-badge {
+  flex: none;
 }
 .rail-foot {
   font-size: 11px;

@@ -58,8 +58,6 @@ const RESTENT_SOMBRES = [
 const FAMILLE_ROSE = [
   '--chat-conv-filet-active',
   '--chat-signal-rose',
-  '--chat-wf-trait-rose',
-  '--chat-wf-icone-active',
   '--chat-suppr-orbite',
   '--chat-suppr-kicker',
   '--chat-suppr-bouton-survol',
@@ -76,7 +74,6 @@ const FAMILLE_ROSE = [
 const FAMILLE_OR = [
   '--chat-conv-separateur',
   '--chat-liste-bouton',
-  '--chat-wf-trait-or',
   '--chat-etat-question',
   '--chat-etat-non-lu',
   '--chat-consigne-limite',
@@ -154,7 +151,10 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
     // Ce nombre ne doit pas remonter par ajout de couleurs en dur -- il peut descendre encore si
     // d'autres jetons se reduisent a un alias. Descendu a 108 le 2026-09-17 : --chat-file-envoi et
     // --chat-file-orienter sont partis avec le panneau de file d'attente, retire de l'interface.
-    expect(definis.size).toBeGreaterThanOrEqual(108)
+    // Descendu a 106 le 2026-10-10 (conv-178) : les six --chat-wf-bascule*/trait-*/icone* sont
+    // partis avec le soulignement du bouton Details, desormais dessine par la capsule
+    // Raisonnement / Actions.
+    expect(definis.size).toBeGreaterThanOrEqual(106)
     const mauvais = [...definis].filter(([, valeur]) => !/^#[0-9a-fA-F]{3,8}$/.test(valeur))
     expect(
       mauvais.map(([nom, valeur]) => `${nom} = ${valeur}`),

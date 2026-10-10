@@ -165,12 +165,6 @@
   --chat-wf-action:                 #6f7986;   /* boutons d action du volet des enchainements */
   --chat-wf-fermer-survol:          #ff7187;   /* croix de fermeture du volet, au survol */
   --chat-wf-onglet-survol:          #c3cbda;   /* onglet du volet au survol */
-  --chat-wf-bascule:                #a8b1ba;   /* bouton Details de l entete */
-  --chat-wf-bascule-active:         #f3f6f8;   /* bouton Details allume */
-  --chat-wf-trait-rose:             #ff3cac;   /* debut du soulignement du bouton Details allume */
-  --chat-wf-trait-or:               #ffd45a;   /* fin du soulignement du bouton Details allume */
-  --chat-wf-icone:                  #778696;   /* icone du bouton Details */
-  --chat-wf-icone-active:           #ff4eae;   /* icone du bouton Details allume */
   --chat-etat-defaut:               #38bdf8;   /* pastille d etat, teinte par defaut */
   --chat-etat-fini:                 #2fd47a;   /* pastille d etat : tour termine */
   --chat-etat-echec:                #ff4057;   /* pastille d etat : tour en echec */
@@ -253,6 +247,8 @@
   --chat-lot-bleu:                  #5b9cf0;   /* liseré de la 3e action de la barre de sélection multiple (conv-815) */
   --chat-frise-ok:                  #7fc98f;   /* frise du bloc Actions : action réussie */
   --chat-frise-ko:                  #e07a6a;   /* frise du bloc Actions : action en échec */
+  --chat-icone-tour:                #9a9a9a;   /* icones sous un message (copier, inspecter, brancher) au repos : gris NEUTRE, aucune teinte (conv-203) */
+  --chat-icone-tour-survol:         #ffffff;   /* les memes au survol : blanc pur (conv-203) */
   --chat-surlignage-texte:          #10121a;   /* texte de l occurrence trouvee, pose sur un aplat or FIXE : reste sombre dans les deux modes */
   --chat-depot-texte:               #e9f8ff;   /* texte du voile de depot de fichier, pose sur un fond sombre FIXE */
   --chat-depot-detail:              #7f9bad;   /* detail du voile de depot de fichier, pose sur un fond sombre FIXE */

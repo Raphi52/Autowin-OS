@@ -69,7 +69,7 @@ describe('ArtifactPreview', () => {
         content: 'YWJj'
       })
     )
-    act(() => container.querySelector<HTMLButtonElement>('.artifact-preview__toggle')!.click())
+    act(() => container.querySelector<HTMLElement>('.artifact-capsule__entete')!.click())
     expect(container.querySelector('img.artifact-preview__image')).not.toBeNull()
 
     render(
@@ -435,7 +435,7 @@ A`
       }
     )
     // Les visuels sont repliés par défaut : il faut déplier avant de cliquer l'image.
-    act(() => container.querySelector<HTMLButtonElement>('.artifact-preview__toggle')!.click())
+    act(() => container.querySelector<HTMLElement>('.artifact-capsule__entete')!.click())
     act(() =>
       container.querySelector<HTMLButtonElement>('.artifact-preview__image-button')?.click()
     )
@@ -463,7 +463,9 @@ A`
         source: { provider: 'claude', tool: 'ui-capture' }
       })
     )
-    expect(container.querySelector('.artifact-preview__kind')?.textContent).toBe('Image · ui-capture')
+    expect(container.querySelector('.artifact-capsule__provenance')?.textContent).toBe(
+      'Image · ui-capture'
+    )
     act(() => root.unmount())
     root = createRoot(container)
     render(
@@ -476,7 +478,9 @@ A`
         content: 'aW1n'
       })
     )
-    expect(container.querySelector('.artifact-preview__kind')?.textContent).toBe('Image générée')
+    expect(container.querySelector('.artifact-capsule__provenance')?.textContent).toBe(
+      'Image générée'
+    )
   })
 
   it('n annonce pas « générée » pour une image envoyée par l utilisateur', () => {
@@ -491,7 +495,9 @@ A`
       }),
       { provenanceLabel: 'Image envoyée' }
     )
-    expect(container.querySelector('.artifact-preview__kind')?.textContent).toBe('Image envoyée')
+    expect(container.querySelector('.artifact-capsule__provenance')?.textContent).toBe(
+      'Image envoyée'
+    )
   })
 
   it('ne charge un fichier durable qu’à proximité du viewport', async () => {
@@ -571,20 +577,64 @@ describe('ArtifactPreview — aperçus visuels repliés par défaut', () => {
     const root = createRoot(container)
     act(() => root.render(<ArtifactPreview artifact={artifact} />))
 
-    const card = container.querySelector('.artifact-preview')!
+    // MÊME GUEULE que Raisonnement / Actions (conv-178) : un <details> `thinking-block` dont
+    // l'en-tête est la capsule, poids dans la pastille, nom du fichier dehors.
+    const card = container.querySelector<HTMLDetailsElement>(
+      'details.thinking-block.artifact-capsule'
+    )!
     expect(card.getAttribute('data-collapsed')).toBe('true')
-    const toggle = container.querySelector<HTMLButtonElement>('.artifact-preview__toggle')!
-    expect(toggle.textContent).toBe('Déplier')
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    // Replié : aucune image dans le DOM, pied masqué — seul le bandeau reste.
+    expect(card.open).toBe(false)
+    expect(card.classList.contains('is-done')).toBe(true)
+    const toggle = container.querySelector<HTMLElement>('summary.artifact-capsule__entete')!
+    expect(toggle.querySelector('.thinking-capsule .thinking-capsule-icone svg')).not.toBe(null)
+    expect(toggle.querySelector('.thinking-capsule .thinking-label')?.textContent).toBe(
+      'Image générée'
+    )
+    expect(toggle.querySelector('.thinking-capsule .thinking-duree')?.textContent).toBe('12 o')
+    expect(toggle.querySelector('.thinking-status')?.textContent).toBe('capture-écran')
+    // Replié : aucune image dans le DOM, ni corps ni pied — seule la capsule reste.
     expect(container.querySelector('.artifact-preview__body')).toBe(null)
     expect(container.querySelector('img')).toBe(null)
-    expect(container.querySelector<HTMLElement>('.artifact-preview__footer')!.hidden).toBe(true)
+    expect(container.querySelector('.artifact-preview__footer')).toBe(null)
 
     act(() => toggle.click())
     expect(card.getAttribute('data-collapsed')).toBe(null)
+    expect(card.open).toBe(true)
     expect(container.querySelector('img')).not.toBe(null)
-    expect(container.querySelector('.artifact-preview__toggle')!.textContent).toBe('Réduire')
+    expect(container.querySelector('.artifact-preview__footer')?.textContent).toContain('image/png')
+
+    act(() => toggle.click())
+    expect(card.open).toBe(false)
+    expect(container.querySelector('img')).toBe(null)
+
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('n’écrit pas à côté de la capsule un nom qui redit son libellé (conv-195)', () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const imageLue = (name: string): ChatArtifact =>
+      ({
+        id: `img-${name}`,
+        kind: 'image',
+        name,
+        mimeType: 'image/png',
+        size: 12,
+        encoding: 'base64',
+        content: 'AAAA',
+        source: { provider: 'claude', tool: 'Read' }
+      }) as ChatArtifact
+
+    // Ancien artefact enregistré avec un nom fabriqué : « image-Read » à côté de « Image · Read ».
+    act(() => root.render(<ArtifactPreview artifact={imageLue('image-Read')} />))
+    expect(container.querySelector('.thinking-label')?.textContent).toBe('Image · Read')
+    expect(container.querySelector('.artifact-capsule__nom')).toBe(null)
+
+    // Un vrai nom de fichier, lui, reste affiché.
+    act(() => root.render(<ArtifactPreview artifact={imageLue('1-image.png')} />))
+    expect(container.querySelector('.artifact-capsule__nom')?.textContent).toBe('1-image.png')
 
     act(() => root.unmount())
     container.remove()
@@ -606,7 +656,8 @@ describe('ArtifactPreview — aperçus visuels repliés par défaut', () => {
     const root = createRoot(container)
     act(() => root.render(<ArtifactPreview artifact={artifact} />))
     expect(container.querySelector('.artifact-preview')!.getAttribute('data-collapsed')).toBe(null)
-    expect(container.querySelector('.artifact-preview__toggle')).toBe(null)
+    expect(container.querySelector('.artifact-capsule')).toBe(null)
+    expect(container.querySelector('.artifact-preview__body')?.textContent).toBe('abcd')
     act(() => root.unmount())
     container.remove()
   })

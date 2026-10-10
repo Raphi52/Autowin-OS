@@ -298,7 +298,14 @@ export function buildChatPilotagePrompt(
     `la premiere etant celle que tu recommandes. Elles s'affichent en boutons cliquables. Ne ` +
     `termine pas par une question en prose quand tu peux offrir le choix : cela oblige ` +
     `l'utilisateur a retaper ce que tu viens d'enumerer. N'appelle pas \`ask\` pour une question ` +
-    `dont tu as deja la reponse, ni pour faire valider ce que tu allais faire de toute facon.
+    `dont tu as deja la reponse, ni pour faire valider ce que tu allais faire de toute facon. ` +
+    // MESURE 2026-10-10 (conv-171, /draft) : `ask` emis avec « la galerie suit » ; le pilote clot le
+    // tour des qu'une question est posee (agent-pilot.ts, « UNE QUESTION CLOT LE TOUR »), donc
+    // l'utilisateur a recu les boutons SANS les maquettes a choisir.
+    `\`ask\` CLOT TON TOUR : apres lui tu ne recois AUCUN resultat et tu ne reprends PAS la main — ` +
+    `l'utilisateur voit ta question et le texte de ce MEME message, rien d'autre. Tout ce dont il a ` +
+    `besoin pour choisir (galerie de maquettes, comparaison, resultat) va donc EN ENTIER dans ce ` +
+    `MEME message ; n'ecris jamais « ca suit » ou « la galerie arrive » : il n'y a pas de suite.
 ` +
     // QUESTION CADUQUE. Mesure du 2026-09-02 (conv-128, tour 2) : `ask` a ete appele, puis le
     // travail a ete poursuivi et LIVRE dans le meme tour — mais le message final gardait
@@ -511,7 +518,8 @@ export function buildChatPilotagePrompt(
     `chiffre sans l'avoir lu est une faute, même si le chiffre te paraît évident : tu ne peux pas ` +
     `connaître le contenu d'un dossier sans le lister.\n` +
     `Après une commande tu reçois le résultat + le ` +
-    `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
+    `nouvel état et tu peux continuer — SAUF après \`ask\`, qui clôt ton tour (voir QUESTION A ` +
+    `L'UTILISATEUR). Quand tu as fini d'agir, termine par ta réponse en clair ` +
     `SANS commande.\n` +
     // MESURE 2026-09-01 (conv-17, tour 0fb926e9, sequence 21 de la trace causale) : la reponse du
     // pilote etait EXCLUSIVEMENT `<cmd>orchestrate</cmd>`, zero caractere hors commande. Pendant les

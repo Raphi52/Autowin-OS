@@ -10,6 +10,20 @@ export function messageKey(message: Msg, index: number): string {
   return `${message.role}:${index}`
 }
 
+/**
+ * Le tour LANCÉ par le message utilisateur `index` tourne-t-il encore ? (conv-178, 2026-10-10)
+ *
+ * Sa réponse est le message agent qui le suit : en cours tant qu'elle n'est pas `done`. Pas encore
+ * de réponse : le tour démarre si la conversation est occupée. Suivi d'un AUTRE message de
+ * l'utilisateur : ce n'est pas lui que l'agent est en train de traiter.
+ * Sert à allumer la capsule « Image envoyée » exactement quand l'image lue du même tour l'est.
+ */
+export function tourDuMessageEnCours(messages: Msg[], index: number, occupe: boolean): boolean {
+  const suivant = messages[index + 1]
+  if (!suivant) return occupe
+  return suivant.role === 'assistant' && suivant.done !== true
+}
+
 export function lastUserPromptBefore(messages: Msg[], index: number): string | undefined {
   for (let i = index - 1; i >= 0; i -= 1) {
     const candidate = messages[i]

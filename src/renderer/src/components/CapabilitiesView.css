@@ -3,13 +3,12 @@
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  padding: 18px 20px 20px;
-  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
-  border: 0;
-  border-radius: var(--container-radius-page);
-  background: var(--surface-panel);
-  box-shadow: var(--container-shadow);
-  backdrop-filter: blur(var(--container-blur));
+  /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
+     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
+  padding: 18px 0 20px;
+  /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
+     ni rayon de page, ni reflet, ni flou. Elle recopiait le cadre de `.view-page` et apparaissait
+     comme une page dans la page. Le cadre est peint une fois, par `.view-page`. */
   color: var(--text);
 }
 .cockpit-header {
@@ -17,7 +16,8 @@
   justify-content: space-between;
   align-items: center;
   min-height: 66px;
-  padding: 0 2px 14px;
+  /* Texte du titre au meme retrait que celui de la page : `--view-head-retrait` (ViewPage.css). */
+  padding: 0 var(--view-head-retrait) 14px;
 }
 .cockpit-toolbar {
   display: flex;

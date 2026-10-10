@@ -26,22 +26,77 @@ export async function readGitDiff(cwd: string, path: string): Promise<GitDiffRes
       windowsHide: true
     })
     let diff = r.stdout
-    if (!diff.trim()) {
-      try {
-        const u = await run('git', ['diff', '--no-color', '--no-index', '--', '/dev/null', path], {
-          cwd,
-          windowsHide: true
-        })
-        diff = u.stdout
-      } catch (e) {
-        diff = stdoutOf(e) // --no-index sort exit 1 QUAND il y a des différences → stdout valide
-      }
-    }
+    if (!diff.trim()) diff = await readNoIndexGitDiff(cwd, path)
     return { available: true, diff }
   } catch (error) {
     const stdout = stdoutOf(error)
     if (stdout.trim()) return { available: true, diff: stdout }
     return { available: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/**
+ * Seconde moitie de `readGitDiff` : le diff d'un chemin NON SUIVI contre /dev/null (`--no-index`).
+ *
+ * Exposee seule pour l'appelant qui SAIT deja, par un lot `git diff HEAD` lu juste avant, que
+ * `git diff HEAD -- path` est vide : il economise un processus git par fichier sans changer d'un
+ * octet le texte rendu (c'est exactement la branche que `readGitDiff` prendrait).
+ */
+export async function readNoIndexGitDiff(cwd: string, path: string): Promise<string> {
+  const run = promisify(execFile)
+  try {
+    const u = await run('git', ['diff', '--no-color', '--no-index', '--', '/dev/null', path], {
+      cwd,
+      windowsHide: true
+    })
+    return u.stdout
+  } catch (e) {
+    return stdoutOf(e) // --no-index sort exit 1 QUAND il y a des différences → stdout valide
+  }
+}
+
+/** Longueur cumulee des chemins par appel : la ligne de commande Windows plafonne a 32 767. */
+const LOT_DIFF_CARACTERES_MAX = 8000
+
+/**
+ * `git diff HEAD` de PLUSIEURS chemins, en un processus par paquet au lieu d'un par fichier.
+ *
+ * `--no-renames` est OBLIGATOIRE : seul, un chemin ne peut jamais etre apparie a un autre en
+ * renommage ; en lot, si — et la portion rendue ne serait plus celle de l'appel unitaire.
+ * Rend les sorties brutes par paquet, ou `undefined` des qu'un paquet echoue : l'appelant retombe
+ * alors sur `readGitDiff`, fichier par fichier, comme avant.
+ */
+export async function readGitDiffHeadBatch(
+  cwd: string,
+  paths: readonly string[]
+): Promise<string[] | undefined> {
+  const run = promisify(execFile)
+  const paquets: string[][] = []
+  let courant: string[] = []
+  let longueur = 0
+  for (const path of paths) {
+    if (courant.length > 0 && longueur + path.length > LOT_DIFF_CARACTERES_MAX) {
+      paquets.push(courant)
+      courant = []
+      longueur = 0
+    }
+    courant.push(path)
+    longueur += path.length + 1
+  }
+  if (courant.length > 0) paquets.push(courant)
+  try {
+    const sorties: string[] = []
+    for (const paquet of paquets) {
+      const r = await run('git', ['diff', '--no-color', '--no-renames', 'HEAD', '--', ...paquet], {
+        cwd,
+        windowsHide: true,
+        maxBuffer: 64 * 1024 * 1024
+      })
+      sorties.push(r.stdout)
+    }
+    return sorties
+  } catch {
+    return undefined
   }
 }
 

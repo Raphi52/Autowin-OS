@@ -202,14 +202,16 @@
   box-shadow: 0 0 8px color-mix(in srgb, var(--warn) 50%, transparent);
 }
 
-/* Interrompu : ni un succès (vert) ni un échec constaté (rouge) — une issue qui ne viendra jamais. */
-.workflow-execution-node.is-interrupted .workflow-execution-dot {
+/* Interrompu : ni un succès (vert) ni un échec constaté (rouge) — une issue qui ne viendra jamais.
+   Annulé : même famille — c'est un arrêt VOULU (bouton Stop), pas une panne. En rouge, un Stop se
+   lisait comme une alarme (conv-191, 2026-10-10). */
+.workflow-execution-node.is-interrupted .workflow-execution-dot,
+.workflow-execution-node.is-cancelled .workflow-execution-dot {
   background: var(--text-faint);
   box-shadow: none;
 }
 
-.workflow-execution-node.is-failed .workflow-execution-dot,
-.workflow-execution-node.is-cancelled .workflow-execution-dot {
+.workflow-execution-node.is-failed .workflow-execution-dot {
   background: var(--err);
   box-shadow: 0 0 8px color-mix(in srgb, var(--err) 50%, transparent);
 }
@@ -284,6 +286,13 @@
   color: var(--accent);
   font-weight: 800;
   letter-spacing: 0.01em;
+}
+
+/* « aucune skill » : un chat direct sans skill est NORMAL. L'absence se dit en discret ; dans
+   l'accent gras d'un vrai nom de skill, elle se lisait comme une alerte (2026-10-10). */
+.workflow-execution-skill.is-absent {
+  color: var(--text-dim);
+  font-weight: 500;
 }
 
 .workflow-execution-request-label {

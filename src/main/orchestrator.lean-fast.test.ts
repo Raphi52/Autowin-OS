@@ -815,13 +815,17 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     const supervisor = new ExecutionSupervisor()
     const quote = compileExecutionQuote('modifie un fichier')
     let checkpointAtIntent: ReturnType<typeof loadOrchestrationStates>[number] | undefined
+    // Capturé AU MOMENT où la phase build se clôt. Lire le disque en fin de run ne le donne plus :
+    // l'appel du juge qui suit est inscrit dès sa réservation (conv-163) et sa sauvegarde, juge
+    // encore en vol, arrive après celle-ci.
+    let completedCheckpoint: ReturnType<typeof loadOrchestrationStates>[number] | undefined
     const provider = new SpawnIntentProvider()
     const orch = makeOrchestrator(provider, {
       classifyPhases: () => ['build'],
       executionSupervisor: supervisor,
       currentExecutionQuote: () => supervisor.currentQuote(),
       currentExecutionUsage: () => supervisor.currentSnapshot(),
-      onPhaseCompleted: (info) =>
+      onPhaseCompleted: (info) => {
         saveOrchestrationState(root, {
           runId: info.runId,
           task: info.task,
@@ -831,7 +835,11 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
           ...(info.agents?.length ? { agents: info.agents } : {}),
           startedAt: 1,
           updatedAt: 1
-        }),
+        })
+        if (!completedCheckpoint && info.phaseOutputs.some((output) => output.phase === 'build')) {
+          completedCheckpoint = loadOrchestrationStates(root)[0]
+        }
+      },
       onAgentsChanged: (runId, agents) => {
         saveOrchestrationAgentCheckpoint(root, runId, agents, supervisor.currentSnapshot(), 2)
         if (!agents[0]?.pid) checkpointAtIntent = loadOrchestrationStates(root)[0]
@@ -862,7 +870,6 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
       expect(checkpointAtIntent?.agents?.[0]?.reservationId).toBe(
         checkpointAtIntent?.usage?.activeReservationIds?.[0]
       )
-      const completedCheckpoint = loadOrchestrationStates(root)[0]
       expect(completedCheckpoint).toMatchObject({
         phaseOutputs: [{ phase: 'build', text: 'livrable', agentToken: 'tok-pending' }],
         usage: { activeCalls: 0, activeReservationIds: [] },

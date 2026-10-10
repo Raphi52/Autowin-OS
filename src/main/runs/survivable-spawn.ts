@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { closeSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 import {
   openStdoutJournal,
   openStderrJournal,
@@ -523,15 +524,19 @@ export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
       return await new Promise<TailResult>((resolve) => {
         let buffered = ''
         let offset = 0
+        // Le CLI écrit du JSON en UTF-8 : c'est le bon codec. Mais un caractère multi-octets peut
+        // être COUPÉ entre deux morceaux du pipe ; décodé morceau par morceau, « é » devenait deux
+        // U+FFFD. Le décodeur en flux garde la fin incomplète pour le morceau suivant.
+        const decodeur = new StringDecoder('utf8')
         child.stdout?.on('data', (chunk: Buffer) => {
-          const text = chunk.toString('utf8')
-          offset += Buffer.byteLength(text)
-          buffered += text
+          offset += chunk.length
+          buffered += decodeur.write(chunk)
           const parts = buffered.split('\n')
           buffered = parts.pop() ?? ''
           for (const line of parts) if (line.trim()) onLine(line)
         })
         child.on('close', () => {
+          buffered += decodeur.end()
           if (buffered.trim()) onLine(buffered.trim())
           resolve({ offset, stopped: false })
         })

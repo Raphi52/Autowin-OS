@@ -97,8 +97,7 @@
 :root[data-theme^='malvoyant-'] .artifact-office-document,
 :root[data-theme^='malvoyant-'] .artifact-slide,
 :root[data-theme^='malvoyant-'] .artifact-slide > span,
-:root[data-theme^='malvoyant-'] .artifact-preview__reveal,
-:root[data-theme^='malvoyant-'] .artifact-preview__toggle {
+:root[data-theme^='malvoyant-'] .artifact-preview__reveal {
   color: var(--text);
 }
 
@@ -255,6 +254,7 @@
 :root[data-theme^='malvoyant-'] .cosmic-outline .conv-snippet,
 :root[data-theme^='malvoyant-'] .model-select-status:not(:empty),
 :root[data-theme^='malvoyant-'] .cosmic-outline .msg-meta,
+:root[data-theme^='malvoyant-'] .chat-context-rule-libelle,
 :root[data-theme^='malvoyant-'] .msg-terminal-text,
 :root[data-theme^='malvoyant-'] .msg-terminal-action,
 :root[data-theme^='malvoyant-'] .cosmic-outline .composer-field > span,
@@ -721,6 +721,8 @@
 :root[data-theme^='malvoyant-'] .model-quota-window > strong,
 :root[data-theme^='malvoyant-'] .model-quota-values small,
 :root[data-theme^='malvoyant-'] .model-quota-unavailable,
+:root[data-theme^='malvoyant-'] .model-quota-tip,
+:root[data-theme^='malvoyant-'] .model-quota-tip-hint,
 :root[data-theme^='malvoyant-'] .model-quota-reset button,
 :root[data-theme^='malvoyant-'] .model-quota-reset-message {
   color: var(--text);
@@ -1005,9 +1007,10 @@
 }
 
 /* components/UpdateBanner.css — tailles */
-:root[data-theme^='malvoyant-'] .rail-update-count,
+:root[data-theme^='malvoyant-'] .rail-update-btn.capsule-bouton,
+:root[data-theme^='malvoyant-'] .rail-update-repair.capsule-bouton,
+:root[data-theme^='malvoyant-'] .rail-update-who,
 :root[data-theme^='malvoyant-'] .rail-update-error,
-:root[data-theme^='malvoyant-'] .rail-update-repair,
 :root[data-theme^='malvoyant-'] .rail-update-choice,
 :root[data-theme^='malvoyant-'] .rail-update-commit,
 :root[data-theme^='malvoyant-'] .rail-update-commit-when,
@@ -1152,7 +1155,8 @@
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-go,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-title,
 :root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-tools,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-progress {
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-progress,
+:root[data-theme^='malvoyant-'] .msg.user .msg-body.avec-skill .msg-skill-entete {
   font-size: 13px;
 }
 

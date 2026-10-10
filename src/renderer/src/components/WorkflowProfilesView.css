@@ -6,7 +6,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--s3, 12px);
-  padding: var(--s3, 12px);
+  /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
+     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
+  padding: var(--s3, 12px) 0;
   /* La vue occupe sa hauteur et NE grandit PAS au-delà : sans cela la liste poussait le bas de page
      hors de l'écran et les derniers workflows devenaient inatteignables — il n'y avait aucune barre
      de défilement parce que rien ne débordait au sens CSS, tout dépassait simplement. */

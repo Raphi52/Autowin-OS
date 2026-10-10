@@ -19,7 +19,7 @@
  * fix-ok: `grep plafon src/main` hors tests ne trouvait que phase-briefs.ts (du texte) : aucun code
  * ne tenait la regle ; la regle « aucun ancrage vivant » vient de l'essai sur orchestrator.ts:1371.
  */
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { localiserTableauScout, scoreSur100 } from '../shared/scout-table'
@@ -170,26 +170,28 @@ function prefixesCommentaire(chemin: string): string[] {
  * sous-dossier se résout par la liste des fichiers du dépôt (`git ls-files`) ; sans elle, ou quand le
  * nom est ambigu, l'ancrage est INCONTRÔLABLE — on ne plafonne pas ce qu'on ne sait pas lire.
  */
-export function lecteurAncrageDepuisDisque(racine: string): LecteurAncrage {
+export function lecteurAncrageDepuisDisque(
+  racine: string,
+  listeur: ListeurDeFichiers = listeurGit
+): LecteurAncrage & { pret: Promise<void> } {
   const base = resolve(racine)
   let index: string[] | null | undefined
-  const fichiersDuDepot = (): string[] | null => {
-    if (index !== undefined) return index
-    try {
-      index = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
-        cwd: base,
-        encoding: 'utf8',
-        timeout: 5000,
-        maxBuffer: 32 * 1024 * 1024,
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'ignore']
-      })
-        .split('\n')
-        .map((ligne) => ligne.trim())
-        .filter(Boolean)
-    } catch {
-      index = null
+  /*
+   * PRE-LECTURE ASYNCHRONE — heal conv-204, mesure du 2026-10-10 (`gels.jsonl`, 12:30:43) :
+   * `git ls-files` en `execFileSync` a fige l'app 1 502 ms. Le lecteur est cree au debut de
+   * l'orchestration et ne sert qu'a la fin d'une phase scout : la liste arrive donc bien avant.
+   * Le synchrone ne reste qu'en SECOURS, si elle n'est pas encore revenue — meme reponse qu'avant.
+   */
+  const pret = listeur.async(base).then(
+    (liste) => {
+      if (index === undefined) index = liste
+    },
+    () => {
+      /* le secours synchrone repondra, exactement comme avant */
     }
+  )
+  const fichiersDuDepot = (): string[] | null => {
+    if (index === undefined) index = listeur.sync(base)
     return index
   }
   const dansLaRacine = (absolu: string): boolean => {
@@ -207,7 +209,7 @@ export function lecteurAncrageDepuisDisque(racine: string): LecteurAncrage {
     if (candidats.length === 1) return join(base, candidats[0]!)
     return candidats.length === 0 ? 'absent' : 'incontrolable'
   }
-  return (chemin, ligne) => {
+  const lecteur: LecteurAncrage = (chemin, ligne) => {
     const fichier = resoudre(chemin)
     if (fichier === 'absent' || fichier === 'incontrolable') return fichier
     let contenu: string
@@ -223,4 +225,49 @@ export function lecteurAncrageDepuisDisque(racine: string): LecteurAncrage {
     if (!texte) return 'vide'
     return prefixesCommentaire(fichier).some((p) => texte.startsWith(p)) ? 'commentaire' : 'code'
   }
+  return Object.assign(lecteur, { pret })
+}
+
+/** Comment obtenir la liste des fichiers du depot : en tache de fond, et en secours synchrone. */
+export type ListeurDeFichiers = {
+  sync: (base: string) => string[] | null
+  async: (base: string) => Promise<string[] | null>
+}
+
+const ARGS_LISTE_FICHIERS = ['ls-files', '--cached', '--others', '--exclude-standard']
+const optionsListeFichiers = (
+  base: string
+): { cwd: string; encoding: 'utf8'; timeout: number; maxBuffer: number; windowsHide: boolean } => ({
+  cwd: base,
+  encoding: 'utf8',
+  timeout: 5000,
+  maxBuffer: 32 * 1024 * 1024,
+  windowsHide: true
+})
+const lignesDeFichiers = (sortie: string): string[] =>
+  sortie
+    .split('\n')
+    .map((ligne) => ligne.trim())
+    .filter(Boolean)
+
+/** `git ls-files` : memes arguments et memes bornes dans les deux formes. Un echec rend `null`. */
+export const listeurGit: ListeurDeFichiers = {
+  sync: (base) => {
+    try {
+      return lignesDeFichiers(
+        execFileSync('git', ARGS_LISTE_FICHIERS, {
+          ...optionsListeFichiers(base),
+          stdio: ['ignore', 'pipe', 'ignore']
+        })
+      )
+    } catch {
+      return null
+    }
+  },
+  async: (base) =>
+    new Promise((resoudreListe) => {
+      execFile('git', ARGS_LISTE_FICHIERS, optionsListeFichiers(base), (erreur, stdout) =>
+        resoudreListe(erreur ? null : lignesDeFichiers(String(stdout)))
+      )
+    })
 }

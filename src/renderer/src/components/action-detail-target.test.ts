@@ -106,7 +106,7 @@ describe('cablage du bloc d’activite', () => {
   })
 
   it('le bouton d’ouverture du run n’existe que s’il y a un run à ouvrir', () => {
-    expect(parts()).toContain('{runConsultable && (')
+    expect(parts()).toContain('const boutonRun = runConsultable ? (')
   })
 
   it('le detail local est rendu dans le fil, par ETAGE (plus de second bloc en doublon)', () => {

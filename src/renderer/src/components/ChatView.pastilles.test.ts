@@ -119,6 +119,24 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
     expect(css).toMatch(/\.conversation-state\s*\{[^}]*width:\s*7px/s)
   })
 
+  it('pastille et spinner partagent une CASE FIXE de la largeur du spinner (titres alignés)', () => {
+    // Defaut vecu (conv-144, 2026-10-10) : chaque indicateur prenait sa largeur propre — le
+    // spinner 18px, la pastille 11px — donc le titre ne demarrait pas au meme x, et le spinner,
+    // cale a gauche, avait son centre ~3,5px a droite de celui des pastilles.
+    // ENTREE QUI DOIT FAIRE ECHOUER : retirer la case, ou changer `size` du spinner sans elle.
+    const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    const taille = /<Spinner\s+size=\{(\d+)\}\s+className="conversation-state is-running"/.exec(tsx)?.[1]
+    expect(taille, 'taille du spinner « en cours » introuvable').toBeDefined()
+    // Les DEUX branches (spinner et pastille) vivent dans la case.
+    expect(tsx).toMatch(
+      /<span className="conv-state-slot">\s*\{conversationState\.key === 'running' \?[\s\S]*?<Spinner[\s\S]*?: \([\s\S]*?className=\{`conversation-state is-/
+    )
+    const bloc = css.match(/\.conv-state-slot\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(bloc).toMatch(/place-items:\s*center/)
+    expect(bloc).toMatch(/flex:\s*none/)
+    expect(bloc).toMatch(new RegExp(`width:\\s*${taille}px`))
+  })
+
   it('chaque clé produite par le modèle a une couleur (aucun état orphelin)', () => {
     const cles = new Set(
       [

@@ -352,6 +352,19 @@ export class ProviderRegistry {
       else reservation.complete(usage)
       route.opts.execution?.onReservationSettled?.(reservation.id)
     }
+    // INSCRIRE L'AGENT DANS LA MÊME SECTION SYNCHRONE QUE SA RÉSERVATION. L'adaptateur attend avant
+    // d'annoncer son agent (`claude.ts` : instantané du dépôt, mise à jour du CLI) ; si l'inscription
+    // attendait aussi, la sauvegarde obligatoire d'un membre voisin comptait 1 agent pour 2 appels
+    // réservés et tuait son lancement (« liens de reservation incoherents », conv-163, conv-44 à 47).
+    // Aucun `await` entre `reserveProviderCall` et cet appel : aucun autre agent ne peut s'intercaler.
+    if (reservation && route.opts.execution?.onReservation) {
+      try {
+        route.opts.execution.onReservation(reservation.id)
+      } catch (error) {
+        settleReservation(true)
+        throw error
+      }
+    }
     const execution = route.opts.execution
       ? {
           ...route.opts.execution,

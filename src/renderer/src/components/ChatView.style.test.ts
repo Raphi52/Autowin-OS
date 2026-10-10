@@ -77,37 +77,56 @@ describe('workflow sidebar header', () => {
 })
 
 describe('workflow header toggle', () => {
-  it('uses the approved linear-tab treatment without changing the workflow label', () => {
+  /*
+   * DÉTAILS = CAPSULE RAISONNEMENT / ACTIONS (conv-178, 2026-10-10 : « pareil pour Détails »).
+   * L'ancien soulignement rose -> or (et la pastille de chaque thème) est remplacé : le bouton
+   * reprend le BALISAGE de ThinkingBlock, donc ses règles. Entrées qui doivent faire échouer :
+   * un style propre qui revient sur `.workflow-toggle` (il se battrait avec la capsule), ou un
+   * thème qui le repeint en pastille.
+   */
+  it('dessine le bouton Détails avec la capsule Raisonnement / Actions, sans style propre', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
     const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
 
+    expect(source).toMatch(
+      /className=\{`thinking-block workflow-capsule\$\{showRuns \? ' is-live' : ' is-done'\}`\}/
+    )
     expect(source).toMatch(/workflow-toggle\$\{showRuns \? ' is-active' : ''\}/)
-    expect(source).toContain('Détails{openRunsCount > 0')
-    expect(css).toMatch(
-      /\.workflow-toggle\s*{[^}]*position:\s*relative;[^}]*border:\s*0;[^}]*background:\s*transparent/s
+    expect(source).toContain('<span className="thinking-label">Détails</span>')
+    // Plus rien ne peint `.workflow-toggle` lui-même, hors l'anneau de focus clavier.
+    const sansCommentaires = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    const regles = [...sansCommentaires.matchAll(/([^{}]*\.workflow-toggle[^{}]*)\{/g)].map((m) =>
+      m[1].trim()
     )
-    /*
-     * LE DEGRADE ROSE -> OR PASSE PAR DEUX JETONS, PLUS PAR DEUX HEX EN DUR.
-     *
-     * `#ff3cac` et `#ffd45a` etaient figes ici : le soulignement gardait donc les teintes de NUIT
-     * sur une page claire. Ce test verrouillait ces deux hex, ce qui EMPECHAIT la reparation.
-     *
-     * Ce qui compte n'a jamais ete « ces deux codes-la », c'est « du rose vers l'or, dans cet
-     * ordre ». On l'exige donc en deux temps, sans rien relacher : le degrade appelle les deux
-     * jetons dans le bon ordre, ET theme.css leur donne bien la teinte de nuit d'origine. Entree
-     * qui doit faire echouer : inverser les deux, ou changer une valeur dans theme.css.
-     */
-    expect(css).toMatch(
-      /\.workflow-toggle\.is-active::after\s*{[^}]*height:\s*2px;[^}]*linear-gradient\(\s*90deg,\s*var\(--chat-wf-trait-rose\),\s*var\(--chat-wf-trait-or\)\s*\)/s
+    expect(regles).toEqual(['.workflow-toggle:focus-visible'])
+    for (const nom of ['theme-modes.css', 'theme-nebuleuse-doree.css', 'theme-nebuleuse-verre.css']) {
+      const theme = readFileSync(new URL(`../assets/${nom}`, import.meta.url), 'utf8')
+      expect(theme, nom).not.toMatch(/\.workflow-toggle(?!:focus-visible)/)
+    }
+  })
+
+  /*
+   * LA FLÈCHE DE DÉTAILS POINTE À GAUCHE PANNEAU OUVERT (conv-177, 2026-10-10 : « la fleche doit
+   * pointer vers la gauche pas vers le haut quand le paneau est ouvert »). Le panneau s'ouvre sur le
+   * côté : fermé, la flèche pointe à droite (-45deg, règle commune) ; ouvert, à gauche (135deg).
+   * Les capsules Raisonnement / Actions, qui se déplient vers le bas, gardent leur flèche vers le
+   * haut (-135deg). Entrées qui doivent faire échouer : la règle propre à Détails absente, ou la
+   * rotation commune changée pour toutes les capsules.
+   */
+  it('fait pointer la flèche de Détails à gauche quand le panneau est ouvert', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      ''
     )
-    const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
-    expect(theme).toMatch(/--chat-wf-trait-rose:\s*#ff3cac;/)
-    expect(theme).toMatch(/--chat-wf-trait-or:\s*#ffd45a;/)
-    // OR ET ROSE RATTACHES, JAMAIS ALTERES (decision produit du 2026-09-06) : en theme clair les
-    // deux bouts partent vers la famille rose et la famille or, jamais vers un gris.
-    const modes = readFileSync(new URL('../assets/theme-modes.css', import.meta.url), 'utf8')
-    expect(modes).toMatch(/--chat-wf-trait-rose:\s*var\(--rose\w*\);/)
-    expect(modes).toMatch(/--chat-wf-trait-or:\s*var\(--gold[\w-]*\);/)
+    const rotation = (selecteur: string): string | undefined => {
+      const echappe = selecteur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return css.match(new RegExp(`(?:^|})\\s*${echappe}\\s*\\{[^}]*transform:\\s*([^;]+);`))?.[1]
+    }
+    expect(rotation('.thinking-block.workflow-capsule[open] > summary .thinking-capsule::after')).toBe(
+      'rotate(135deg)'
+    )
+    expect(rotation('.thinking-block[open] > summary .thinking-capsule::after')).toBe('rotate(-135deg)')
+    expect(rotation('.thinking-block > summary .thinking-capsule::after')).toBe('rotate(-45deg)')
   })
 })
 
@@ -219,5 +238,30 @@ describe('chat image containment', () => {
     expect(lightboxImage).toContain('max-width: min(calc(100vw - 64px), 1800px)')
     expect(lightboxImage).toContain('max-height: calc(100vh - 64px)')
     expect(lightboxImage).toContain('object-fit: contain')
+  })
+})
+
+/**
+ * VIGNETTE D'IMAGE DU CHAMP DE SAISIE — bordure et croix BLANCHES (demande du 2026-10-10,
+ * conv-186, capture à l'appui : « le border […] je le veux blanc pas bleu et pareil pour la
+ * couleur de la croix »). La bordure était un cyan `rgba(104, 207, 250, 0.3)` que les thèmes
+ * Nébuleuse transposaient en violet ou en or ; la croix suivait `--text-dim`, bleuté en verre.
+ *
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : remettre une couleur teintée sur la bordure ou la
+ * croix, ou laisser une couche de thème générée repeindre la bordure.
+ */
+describe('vignette de pièce jointe du champ de saisie — bordure et croix blanches', () => {
+  it('peint la bordure et la croix en blanc, sans repeinte par les thèmes Nébuleuse', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const chip = css.match(/\n\.attachment-chip\s*{([^}]*)}/s)?.[1]
+    const croix = css.match(/\.attachment-chip > button:not\(\.attachment-thumb-button\)\s*{([^}]*)}/s)?.[1]
+
+    expect(chip).toMatch(/border:\s*1px solid #ffffff/)
+    expect(croix).toMatch(/color:\s*#ffffff/)
+    for (const theme of ['nebuleuse-verre', 'nebuleuse-doree']) {
+      const couche = readFileSync(new URL(`../assets/theme-${theme}.genere.css`, import.meta.url), 'utf8')
+      const regle = couche.match(/\.attachment-chip\s*{([^}]*)}/s)?.[1] ?? ''
+      expect(regle, `${theme} repeint la bordure`).not.toMatch(/border/)
+    }
   })
 })

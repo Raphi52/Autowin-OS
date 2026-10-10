@@ -103,6 +103,31 @@ describe('persistChatUsageSettlement', () => {
     expect(() => readFileSync(join(traceRoot, 'conv-usage.jsonl'))).toThrow()
   })
 
+  /*
+   * UN STOP N'EST PAS UN ECHEC. Mesure conv-191, tour 4929e6b0 (2026-10-10 19:22:18) : bouton Stop
+   * apres 11,35 s → le superviseur compte l'appel coupe dans `failedCalls`, et son etape s'affichait
+   * « echec » avec une pastille rouge, a cote de l'etape « annule ». L'utilisateur y a lu une alarme.
+   */
+  it('marque annule, pas echec, un appel coupe par le Stop de l utilisateur', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-chat-usage-stop-'))
+    const traceStore = new TraceStore(join(root, 'trace'))
+    const coupe = usage({ activeCalls: 0, failedCalls: 1, unpricedCalls: 1, unmeteredCalls: 1 })
+    const commun = {
+      usage: coupe,
+      provider: 'claude',
+      label: 'tour agent',
+      activityRoot: join(root, 'activity'),
+      traceStore
+    }
+
+    persistChatUsageSettlement({ ...commun, conversationId: 'conv-stop', turnId: 't', arretVoulu: true })
+    persistChatUsageSettlement({ ...commun, conversationId: 'conv-panne', turnId: 't' })
+
+    expect(traceStore.readConversation('conv-stop')[0].status).toBe('cancelled')
+    // Sans arret voulu, un appel rate reste un echec : la correction ne doit rien masquer d'autre.
+    expect(traceStore.readConversation('conv-panne')[0].status).toBe('failed')
+  })
+
   it('ne duplique pas un snapshot deja persiste', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-chat-usage-dedupe-'))
     const activityRoot = join(root, 'activity')

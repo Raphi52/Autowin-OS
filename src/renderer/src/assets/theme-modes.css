@@ -105,12 +105,6 @@
   --chat-wf-action:                 var(--text-faint);   /* boutons d action du volet des enchainements */
   --chat-wf-fermer-survol:          var(--err);   /* croix de fermeture du volet, au survol */
   --chat-wf-onglet-survol:          var(--text);   /* onglet du volet au survol */
-  --chat-wf-bascule:                var(--text-dim);   /* bouton Details de l entete */
-  --chat-wf-bascule-active:         var(--text);   /* bouton Details allume */
-  --chat-wf-trait-rose:             var(--rose);   /* debut du soulignement du bouton Details allume */
-  --chat-wf-trait-or:               var(--gold-bright);   /* fin du soulignement du bouton Details allume */
-  --chat-wf-icone:                  var(--text-faint);   /* icone du bouton Details */
-  --chat-wf-icone-active:           var(--rose);   /* icone du bouton Details allume */
   --chat-etat-defaut:               var(--info);   /* pastille d etat, teinte par defaut */
   --chat-etat-fini:                 var(--ok);   /* pastille d etat : tour termine */
   --chat-etat-echec:                var(--err);   /* pastille d etat : tour en echec */
@@ -193,6 +187,8 @@
   --chat-lot-bleu:                  var(--info);   /* liseré de la 3e action de la barre de sélection multiple */
   --chat-frise-ok:                  var(--ok);   /* frise du bloc Actions : action réussie */
   --chat-frise-ko:                  var(--err);   /* frise du bloc Actions : action en échec */
+  --chat-icone-tour:                #6e6e6e;   /* icones sous un message au repos : gris neutre sur fond clair (conv-203) */
+  --chat-icone-tour-survol:         #111111;   /* au survol : le noir tient le role du blanc (conv-203) */
 
 }
 
@@ -537,9 +533,6 @@
 }
 :root[data-base='clair'] .cosmic-outline .chat-conv-title {
   color: var(--text);
-}
-:root[data-base='clair'] .workflow-toggle {
-  color: var(--text-dim);
 }
 :root[data-base='clair'] .cosmic-outline .chat-head .btn {
   background: #ffffff;
@@ -1497,8 +1490,13 @@
   --surface-card: #dde2e9;
   --surface-inset: #dde2e9;
 }
-:root[data-base='clair'] :is(.theme-serious .rail, .cosmic-outline .conv-pane, .cosmic-outline .chat,
-  .cosmic-outline .chat-layout .chat, .cosmic-outline .chat-head, .cosmic-outline .composer) {
+/* `.chat` n'est plus dans la liste : son fond est peint par `.chat::after`, qui s'arrete au-dessus
+   de la saisie (cosmic-outline.css, conv-150). Peint sur `.chat`, le gris repassait derriere elle. */
+:root[data-base='clair'] :is(.theme-serious .rail, .cosmic-outline .conv-pane,
+  .cosmic-outline .chat-head, .cosmic-outline .composer) {
+  background: #cfd6e0;
+}
+:root[data-base='clair'] .cosmic-outline .chat::after {
   background: #cfd6e0;
 }
 :root[data-base='clair'] :is(.theme-serious .brand, .cosmic-outline .composer-field,

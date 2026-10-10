@@ -101,11 +101,24 @@
   }
 }
 /* MEME pastille que le fil unique (`.chat-jump-latest`) : CENTREE et OR. Un style different par
-   vue faisait lire deux boutons la ou il n en existe qu un (retour utilisateur du 30/08). */
+   vue faisait lire deux boutons la ou il n en existe qu un (retour utilisateur du 30/08).
+   ELLE SE POSE AU BAS DU FIL, PAS SUR LA SAISIE (conv-165, 2026-10-10 : « en mode mosaique ce
+   bouton doit etre plus haut, tout en bas de la partie chat »). Un `bottom: 72px` fixe se mesurait
+   depuis le bas de TOUTE la fenetre : la saisie a deux etages depasse 72 px, et la pastille tombait
+   sur le champ. Elle est donc ACCROCHEE au bas du fil (ancre `--mosaic-fil`, meme mecanique que
+   `.chat-jump-latest` sur `--chat-fil`). L'ancre est BORNEE a chaque fenetre (`anchor-scope`) :
+   N fenetres portent N fils du meme nom, chaque pastille doit lire le sien. Repli sans ancre :
+   60 + 12 = l'ancien 72px. */
+.chat-mosaic-window {
+  anchor-scope: --mosaic-fil;
+}
+.chat-mosaic-window-thread {
+  anchor-name: --mosaic-fil;
+}
 .chat-mosaic-window-jump {
   position: absolute;
   right: 50%;
-  bottom: 72px;
+  bottom: calc(anchor(--mosaic-fil bottom, 60px) + 12px);
   z-index: 2;
   translate: 50% 0;
   padding: 7px 12px;
@@ -181,12 +194,42 @@
   border-top: 1px solid var(--container-border);
   padding: 6px;
 }
-/* Deux étages (direction C) : en tuile le champ reste bas mais pleine largeur. */
+/* Deux étages (direction C) : en tuile le champ reste bas. */
 .chat-mosaic-window-composer .composer textarea {
   min-height: 30px;
 }
+/* MÊMES BOUTONS QU'EN CHAT PLEIN (demande du 2026-10-10, conv-166 : « refais les boutons comme
+   il faut en mode mosaique »). Le chat plein pose Envoyer SUR la ligne d'écriture, à droite du
+   texte (ChatView.css, « COMPOSER PLUS BAS »), et laisse ∞ et le micro seuls, à gauche, sur la
+   rangée du dessous. Ici l'ancien `width: 100%` du champ — reste de la saisie « tout sur deux
+   étages » — prenait toute la ligne : Envoyer retombait en dessous, poussé à droite par sa
+   `margin-left: auto`, et entraînait ∞ et le micro DERRIÈRE lui. Base de flex à 0 : le champ
+   prend la place qui reste à côté d'Envoyer, quelle que soit la largeur de la tuile. */
+.chat-mosaic-window-composer .composer-input-row > textarea {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+/* RETOUR À LA LIGNE AVANT ∞. En chat plein, c'est la barre de quotas (en tête de rangée,
+   `flex-basis: 100%`) qui renvoie ∞ et le micro sous la ligne d'écriture ; la tuile n'en a pas,
+   donc ∞ et le micro remontaient À DROITE d'Envoyer. Ce pseudo-élément tient son rôle : premier
+   enfant de la rangée, `order: 0` comme les outils, il passe juste après le champ et Envoyer
+   (`order: -1`) et ouvre la ligne suivante. Hauteur nulle : seul l'écart entre lignes reste. */
+.chat-mosaic-window-composer .composer-input-row {
+  row-gap: 2px;
+}
+.chat-mosaic-window-composer .composer-input-row::before {
+  content: '';
+  order: 0;
+  flex: 1 0 100%;
+  height: 0;
+}
+/* Stop (pendant un tour) va à DROITE, sous Envoyer, comme en chat plein où la ligne modèle
+   l'y pousse. */
+.chat-mosaic-window-composer .composer-input-row > .composer-stop {
+  margin-left: auto;
+}
 .chat-mosaic-window-composer textarea {
-  width: 100%;
   resize: none;
   border: 1px solid var(--container-border);
   border-radius: 6px;
@@ -197,12 +240,20 @@
   font-size: 13px;
 }
 
-/* En mosaïque la rangée est étroite : le micro reste une icône, un peu plus petite qu'en plein
-   écran, et ne prend jamais la place du texte. */
-.chat-mosaic-window-composer .composer-dictee {
-  width: 28px;
-  min-width: 28px;
+/* ∞ ET MICRO, DEUX RONDS DE MÊME TAILLE, comme en chat plein (24 px, ChatView.css). L'ancienne
+   règle mosaïque élargissait le micro à 28 px, et la tuile étroite (@container ≤ 320 px)
+   ramenait ∞ à 22 px : deux pastilles voisines de tailles différentes. */
+.chat-mosaic-window-composer .composer-input-row > .composer-auto,
+.chat-mosaic-window-composer .composer-input-row > .composer-dictee {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
   font-size: 13px;
+}
+.chat-mosaic-window-composer .composer-input-row > .composer-auto > svg {
+  width: 12px;
+  height: 12px;
 }
 /* En mosaïque le tracé rétrécit avec le bouton, sans changer d'épaisseur. */
 .chat-mosaic-window-composer .composer-dictee svg {

@@ -326,6 +326,25 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
  * l'agregation par operation doit regrouper les acces d'un meme partage, pas les eparpiller.
  */
 /**
+ * LA CREATION D'UN PROCESSUS — l'angle mort mesure le 2026-10-10 (heal conv-204).
+ *
+ * 982 gels sur 1 234 sortaient en `inconnu` en un jour. Un profil CPU du main a montre la cause :
+ * 264 processus `git` crees par photo du depot, 4,6 s de boucle tenue. `execFile` est asynchrone,
+ * mais la CREATION du processus ne l'est pas, et elle passe par `ChildProcess.prototype.spawn`
+ * (spawn, execFile, exec), qui recoit UN objet d'options normalise : `file` et `args` (argv entier).
+ * Rend ces options quand l'appel est bien cette creation, `undefined` sinon.
+ */
+function optionsDeCreation(
+  api: string,
+  cible: unknown
+): { file: string; args?: readonly unknown[] } | undefined {
+  if (api !== 'spawn' || !cible || typeof cible !== 'object') return undefined
+  const { file, args } = cible as { file?: unknown; args?: unknown }
+  if (typeof file !== 'string' || !file) return undefined
+  return { file, args: Array.isArray(args) ? args : undefined }
+}
+
+/**
  * LA CLE DE CUMUL D'UN APPEL — assez fine pour nommer un coupable, assez grosse pour agreger.
  *
  * Mesure du 2026-09-03 (`gels.jsonl`, 536 gels) : `execFileSync` porte a lui seul 348 s de fenetre
@@ -336,11 +355,13 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
  * chemins et des SHA et feraient exploser le nombre de cles pour aucune information de plus.
  */
 export function cleDeCumul(api: string, args: readonly unknown[]): string {
-  if (!/^(execFile|spawn|exec)Sync$/.test(api)) return api
-  const programme = args[0]
+  const creation = optionsDeCreation(api, args[0])
+  if (!creation && !/^(execFile|spawn|exec)Sync$/.test(api)) return api
+  const programme = creation ? creation.file : args[0]
   if (typeof programme !== 'string' || !programme) return api
   const nom = programme.split(/[\\/]/).pop() || programme
-  const suite = args[1]
+  // `ChildProcess.prototype.spawn` porte argv EN ENTIER : son premier element est argv0.
+  const suite = creation ? creation.args?.slice(1) : args[1]
   /*
    * La sous-commande est un MOT (`diff`, `cherry`, `for-each-ref`) : ni une option, ni sa valeur
    * (`-C /repo`), ni un chemin, ni un SHA. Le filtre garde donc les seuls jetons alphabetiques.
@@ -401,6 +422,7 @@ export function appelantApplicatif(pile: string | undefined, maxFrames = 3): str
 }
 
 export function nommerAccesBloquant(api: string, cible?: unknown): string {
+  if (optionsDeCreation(api, cible)) return `io:processus:${cleDeCumul(api, [cible])}`
   if (typeof cible !== 'string' || !cible) return `io:disque:${api}`
   const normalise = cible.split(String.fromCharCode(92)).join('/')
   const reseau = normalise.startsWith('//')

@@ -37,32 +37,27 @@ type Action = Parameters<typeof AssistantActivityGroup>[0]['actions'][number]
 const enCours = (over: Partial<Action> = {}): Action =>
   ({ kind: 'action', name: 'orchestrate', args: { task: 'ma tache' }, ...over }) as Action
 
+/*
+ * CAPSULE 2 (conv-194, 2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration seule
+ * n'a plus d'etage « Orchestration » avec sa cible. L'exigence reste la meme — la tache n'est pas
+ * ecrite deux fois cote a cote — et se verifie sur la capsule : une fois dans l'en-tete plie (ligne
+ * de lancement) ; ouverte, le corps montre les prompts des phases, pas une seconde fois la tache.
+ */
+const occurrences = (texte: string, motif: string): number => texte.split(motif).length - 1
+
 describe('defaut 1 — la cible n est plus ecrite deux fois', () => {
-  it('rend UNE seule cible, et c est celle du bas (cliquable, hors en-tete)', () => {
-    const action = enCours({ pipeline: [{ phase: 'scout', model: 'opus-4' }] })
-    act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    const cibles = container.querySelectorAll('[data-testid="activity-step-target"]')
-    expect(cibles).toHaveLength(1)
-    /*
-     * ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : supprimer l'occurrence du
-     * BAS au lieu de celle de l'en-tete laisse bien UNE cible — le compte ci-dessus passerait. Les
-     * deux assertions suivantes sont la pour ca : la survivante doit etre HORS de `.activity-step-head`
-     * et etre le bouton de depliage, pas le `<span>` inerte de l'en-tete.
-     */
-    expect(
-      container.querySelector('.activity-step-head [data-testid="activity-step-target"]')
-    ).toBeNull()
-    expect(cibles[0].tagName).toBe('BUTTON')
-    expect(cibles[0].getAttribute('aria-expanded')).toBe('false')
-    expect(cibles[0].textContent).toContain('ma tache')
+  it('pliee, l en-tete ne nomme la tache qu UNE fois', () => {
+    act(() => root.render(createElement(AssistantActivityGroup, { actions: [enCours()] })))
+    expect(occurrences(container.textContent ?? '', 'ma tache')).toBe(1)
   })
 
-  it('rend encore UNE cible quand l etape n a rien a deplier (texte inerte)', () => {
-    act(() => root.render(createElement(AssistantActivityGroup, { actions: [enCours()] })))
-    const cibles = container.querySelectorAll('[data-testid="activity-step-target"]')
-    expect(cibles).toHaveLength(1)
-    expect(cibles[0].tagName).toBe('SPAN')
-    expect(cibles[0].textContent).toContain('ma tache')
+  it('des qu une phase a parle, le corps montre ses prompts, pas une seconde fois la tache', () => {
+    const action = enCours({ pipeline: [{ phase: 'scout', model: 'opus-4' }] })
+    act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
+    act(() => container.querySelector<HTMLElement>('[data-testid="activity-group"]')!.click())
+    const corps = container.querySelector('[data-testid="activity-steps"]')!
+    expect(corps.textContent).not.toContain('ma tache')
+    expect(corps.textContent).toContain('scout')
   })
 })
 
@@ -91,20 +86,13 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
       ]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    act(() =>
-      container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
-    )
-    // Repere ACTUEL de l'interface : un chevron par ligne depliable, et le prompt en <pre>.
-    const chevrons = container.querySelectorAll<HTMLButtonElement>(
-      '[data-testid="activity-pipeline-toggle"]'
-    )
-    // UNE seule ligne porte un prompt : la phase `scout` n'en a pas recu, elle ne promet donc rien.
-    expect(chevrons).toHaveLength(1)
     // Replie par defaut : le prompt ne doit pas noyer le fil tant qu'on ne l'ouvre pas.
     expect(container.querySelector('[data-testid="activity-pipeline-prompt"]')).toBeNull()
+    // Capsule 2 (conv-194) : UN clic sur l'en-tete montre chaque phase avec son prompt.
+    act(() => container.querySelector<HTMLElement>('[data-testid="activity-group"]')!.click())
     const lignes = container.querySelectorAll('[data-testid="activity-pipeline-line"]')
-    expect(lignes[1].contains(chevrons[0])).toBe(true)
-    act(() => chevrons[0].click())
+    // UNE seule ligne porte un prompt : la phase `scout` n'en a pas recu, elle ne promet donc rien.
+    expect(lignes[0].querySelector('[data-testid="activity-pipeline-prompt"]')).toBeNull()
     const prompt = lignes[1].querySelector('[data-testid="activity-pipeline-prompt"]')!
     expect(prompt.textContent).toContain('SYSTEME BUILD')
     expect(prompt.textContent).toContain('MESSAGE BUILD')

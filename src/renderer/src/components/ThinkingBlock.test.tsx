@@ -29,11 +29,16 @@ afterEach(() => {
 
 describe('bloc Raisonnement', () => {
   // 2026-09-01 : le pave de pensee arrive PLIE, meme en cours — seul l'en-tete dit que ca pense.
-  it('est PLIÉ mais étiqueté « en cours » tant que le tour stream', () => {
+  // Depuis R5 (conv-162) l'en-tete en cours ne porte plus « … » : c'est la capsule allumee et son
+  // compteur de secondes qui disent que ca pense.
+  it('est PLIÉ mais marqué « en cours » tant que le tour stream', () => {
     const el = render({ text: 'je pèse les options', done: false })
     const details = el.querySelector<HTMLDetailsElement>('[data-testid="thinking-block"]')!
     expect(details.open).toBe(false)
-    expect(details.textContent).toContain('Raisonnement…')
+    expect(details.classList.contains('is-live')).toBe(true)
+    expect(el.querySelector('[data-testid="thinking-block-capsule"]')!.textContent).toMatch(
+      /^Raisonnement\d+ s$/
+    )
     expect(el.querySelector('[data-testid="thinking-block-body"]')!.textContent).toBe(
       'je pèse les options'
     )
@@ -107,8 +112,9 @@ describe('chevron du bloc Réflexion', () => {
    * doit verrouiller reste entier — un chevron DESSINÉ (bordures + content vide), jamais un
    * glyphe de police — mais aux tailles réellement retenues.
    */
+  // R5 (conv-162, 2026-10-10) : le chevron vit DANS la capsule de l'en-tete, plus en fin de ligne.
   it('est DESSINÉ (bordures), pas un glyphe minuscule', () => {
-    const regle = corps('.thinking-block > summary::after')
+    const regle = corps('.thinking-block > summary .thinking-capsule::after')
     expect(regle).toMatch(/content:\s*''/)
     expect(regle).toMatch(/border-right:\s*1\.25px solid/)
     expect(regle).toMatch(/border-bottom:\s*1\.25px solid/)
@@ -116,9 +122,15 @@ describe('chevron du bloc Réflexion', () => {
   })
 
   it('pointe à DROITE fermé et vers le HAUT ouvert', () => {
-    expect(corps('.thinking-block > summary::after')).toMatch(/transform:\s*rotate\(-45deg\)/)
-    expect(corps('.thinking-block[open] > summary::after')).toMatch(
+    expect(corps('.thinking-block > summary .thinking-capsule::after')).toMatch(
+      /transform:\s*rotate\(-45deg\)/
+    )
+    expect(corps('.thinking-block[open] > summary .thinking-capsule::after')).toMatch(
       /transform:\s*rotate\(-135deg\)/
     )
+  })
+
+  it("n'a plus de chevron en fin de ligne (il serait dessiné deux fois)", () => {
+    expect(css).not.toContain('.thinking-block > summary::after {')
   })
 })

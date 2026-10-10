@@ -11,7 +11,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px 14px;
+  /* Texte du titre au meme retrait que celui de la page : `--view-head-retrait` (ViewPage.css). */
+  padding: 18px var(--view-head-retrait) 14px;
   border-bottom: 1px solid var(--container-border);
 }
 .cockpit-path {
@@ -42,7 +43,9 @@
 .cockpit-scroll {
   min-height: 0;
   overflow: auto;
-  padding: 16px 20px 28px;
+  /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
+     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
+  padding: 16px 0 28px;
 }
 .project-strip {
   display: grid;

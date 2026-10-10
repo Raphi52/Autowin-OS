@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
+import { existsSync, realpathSync, statSync } from 'node:fs'
+import { readdir, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { readBoundedUtf8FileWithin } from './bounded-file-read'
@@ -196,12 +197,17 @@ function cappedBehaviourFiles(groups: BehaviourFile[][]): BehaviourFile[] {
   return selected
 }
 
-function discover(root: string, names: ReadonlySet<string>): string[] {
+/**
+ * Parcours ASYNCHRONE du workspace. Mesure (`gels.jsonl`, 2026-10-10 06:55) : la version
+ * `readdirSync` a tenu le thread principal 2 860 ms pour 240 dossiers, pendant
+ * `os:behaviourComposition` — l'app entiere figee. Memes bornes, meme ordre de visite.
+ */
+async function discover(root: string, names: ReadonlySet<string>): Promise<string[]> {
   if (!existsSync(root)) return []
   const normalizedNames = new Set([...names].map((name) => name.toLowerCase()))
   const files: string[] = []
   let visitedDirectories = 0
-  const visit = (dir: string, depth: number): void => {
+  const visit = async (dir: string, depth: number): Promise<void> => {
     if (
       files.length >= MAX_FILES ||
       visitedDirectories >= MAX_DIRECTORIES ||
@@ -212,23 +218,23 @@ function discover(root: string, names: ReadonlySet<string>): string[] {
     visitedDirectories += 1
     let entries
     try {
-      entries = readdirSync(dir, { withFileTypes: true })
+      entries = await readdir(dir, { withFileTypes: true })
     } catch {
       return
     }
     for (const entry of entries) {
       if (files.length >= MAX_FILES) break
       const path = join(dir, entry.name)
-      if (entry.isDirectory()) visit(path, depth + 1)
+      if (entry.isDirectory()) await visit(path, depth + 1)
       else if (
         entry.isFile() &&
         normalizedNames.has(entry.name.toLowerCase()) &&
         canonicalInside(path, root)
       )
-        files.push(realpathSync(path))
+        files.push(await realpath(path))
     }
   }
-  visit(root, 0)
+  await visit(root, 0)
   return files
 }
 
@@ -391,7 +397,7 @@ export async function listBehaviourFiles(
   query?: string | BehaviourQuery
 ): Promise<BehaviourFile[]> {
   const normalized = normalizeQuery(query)
-  const discovered = discover(
+  const discovered = await discover(
     normalized.workspaceRoot,
     new Set(['AGENTS.md', 'AGENTS.override.md', 'CLAUDE.md', 'CLAUDE.local.md'])
   )

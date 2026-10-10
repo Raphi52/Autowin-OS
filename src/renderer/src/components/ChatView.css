@@ -341,6 +341,17 @@
 .conv-item.active .conv-pick {
   color: var(--text);
 }
+/* CASE DE L'INDICATEUR D'ETAT. Sa largeur = la taille du <Spinner size={18}/> de ChatView.tsx.
+   Sans elle, chaque indicateur prenait sa largeur propre (pastille 7 ou 11px, points 15px,
+   spinner 18px) : le titre demarrait a un x different selon l'etat, et le spinner, aligne a
+   gauche, avait son centre ~3,5px a droite de celui des pastilles (conv-144, 2026-10-10). */
+.conv-state-slot {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
 .conversation-state {
   position: relative;
   display: inline-block;
@@ -406,16 +417,79 @@
      point jaune parmi d'autres jaunes (`is-unread`). Elle porte donc un TRIANGLE D'ALERTE, pas un
      disque : la FORME se lit sans comparer des teintes. On annule ici la geometrie de pastille
      (disque + halo). DEMANDE DU 2026-09-13 : le triangle devient TROIS POINTS qui sautillent
-     (« ... ») — la forme dit « j'attends ta reponse ». Trois fonds radiaux, sans balise ajoutee. */
-  width: 15px;
-  height: 9px;
+     (« ... ») — la forme dit « j'attends ta reponse ». Trois fonds radiaux, sans balise ajoutee.
+     DEMANDE DU 2026-10-10 : les points tournent de 90 degres — une COLONNE, comme les reponses
+     proposees listees l'une sous l'autre — precedee d'un « ? » (::before). Les deux animations
+     sont COMBINEES en UN cycle de 1.8s : le « ? » gigote (0-26 %), PUIS chaque point avance a
+     droite a tour de role, de haut en bas (26-74 %), puis pause. Les deux @keyframes ont la MEME
+     duree et demarrent ensemble (meme element, meme changement de classe) : elles restent calees.
+     Boite de 18px : le « ? » a gauche, puis une piste de 9px ou la colonne avance de 5px. Tout est
+     DANS la boite : la ligne de liste ne rogne rien et le titre ne chevauche rien. */
+  width: 18px;
+  height: 15px;
   border-radius: 0;
   box-shadow: none;
-  background:
-    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 0 100% / 4px 4px no-repeat,
-    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 50% 100% / 4px 4px no-repeat,
-    radial-gradient(circle, currentColor 1.8px, transparent 2.2px) 100% 100% / 4px 4px no-repeat;
-  animation: conv-asking-dots 1.2s infinite ease-in-out;
+  /* `none` d'abord : la pastille de base peint tout son fond en currentColor. */
+  background: none;
+  background-image:
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px),
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px),
+    radial-gradient(circle, currentColor 1.8px, transparent 2.2px);
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+  background-position: 9px 0, 9px 50%, 9px 100%;
+  animation: conv-asking-list 1.8s infinite ease-in-out;
+}
+.conversation-state.is-asking::before {
+  content: '?';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  font: 700 12px/1 system-ui, sans-serif;
+  color: currentColor;
+  transform-origin: 50% 75%;
+  animation: conv-asking-wiggle 1.8s infinite ease-in-out;
+}
+/* Temps 1 du cycle : le « ? » s'agite, puis se tient droit pendant que la colonne defile. */
+@keyframes conv-asking-wiggle {
+  0%,
+  26%,
+  100% {
+    transform: rotate(0);
+  }
+  5% {
+    transform: rotate(-16deg);
+  }
+  10% {
+    transform: rotate(13deg);
+  }
+  15% {
+    transform: rotate(-8deg);
+  }
+  20% {
+    transform: rotate(4deg);
+  }
+}
+/* Temps 2 du cycle : la colonne « liste » ses points, de haut en bas (100 % = bord droit). */
+@keyframes conv-asking-list {
+  0%,
+  26%,
+  74%,
+  100% {
+    background-position: 9px 0, 9px 50%, 9px 100%;
+  }
+  38% {
+    background-position: 100% 0, 9px 50%, 9px 100%;
+  }
+  50% {
+    background-position: 9px 0, 100% 50%, 9px 100%;
+  }
+  62% {
+    background-position: 9px 0, 9px 50%, 100% 100%;
+  }
 }
 @keyframes conv-asking-dots {
   0%,
@@ -446,10 +520,13 @@
   animation: conv-asking-dots 1.2s infinite ease-in-out;
 }
 @media (prefers-reduced-motion: reduce) {
-  .conversation-state.is-waiting,
-  .conversation-state.is-asking {
+  .conversation-state.is-waiting {
     animation: none;
     background-position: 0 50%, 50% 50%, 100% 50%;
+  }
+  .conversation-state.is-asking,
+  .conversation-state.is-asking::before {
+    animation: none;
   }
 }
 /* Meme famille JAUNE que la question ouverte — les deux disent « c'est a toi » — mais une teinte
@@ -1380,13 +1457,23 @@
   margin: 0;
   text-align: left;
 }
+/* IMAGE ENVOYÉE EN CAPSULE (conv-178, 2026-10-10) : collée à DROITE sous ta bulle, comme tout ce
+   que tu écris — à gauche, elle se lisait comme une image de l'agent. Le nom passe à sa gauche. */
+.attachment-list.sent .artifact-capsule > summary {
+  flex-direction: row-reverse;
+}
+.attachment-list.sent .artifact-capsule > summary .thinking-status {
+  text-align: right;
+}
 .attachment-chip {
   display: inline-flex;
   max-width: min(310px, 100%);
   align-items: center;
   gap: 6px;
   padding: 5px 7px;
-  border: 1px solid rgba(104, 207, 250, 0.3);
+  /* BLANC, pas cyan : demande du 2026-10-10 (conv-186). Le blanc n'est transpose par aucun
+     theme Nebuleuse, donc il reste blanc partout. */
+  border: 1px solid #ffffff;
   border-radius: 7px;
   background: rgba(8, 19, 28, 0.94);
   color: var(--text-dim);
@@ -1485,7 +1572,8 @@
   border: 0;
   border-radius: 50%;
   background: rgba(var(--voile-rgb), 0.08);
-  color: var(--text-dim);
+  /* Croix BLANCHE (conv-186) : `--text-dim` etait bleute en Nebuleuse de verre. */
+  color: #ffffff;
   cursor: pointer;
   line-height: 16px;
 }
@@ -2264,54 +2352,25 @@ ol.md-list li {
   margin-left: auto;
 }
 
-.workflow-toggle {
-  position: relative;
-  display: inline-flex;
-  height: 34px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 6px;
-  border: 0;
-  background: transparent;
-  color: var(--chat-wf-bascule);
-  font: 700 10px/1 var(--font);
-  white-space: nowrap;
-  cursor: pointer;
+/* Bouton Détails = capsule Raisonnement / Actions (conv-178, 2026-10-10). Il n'a PLUS de style
+   propre : `.thinking-block` le dessine (voir ChatView.tsx). Seuls restent sa place dans l'en-tête
+   et l'anneau de focus clavier. */
+.workflow-capsule {
+  margin: 0;
 }
-
-.workflow-toggle::after {
-  position: absolute;
-  right: 6px;
-  bottom: 0;
-  left: 6px;
-  height: 1px;
-  background: rgba(var(--voile-rgb), 0.24);
-  content: '';
-}
-
-.workflow-toggle:hover,
-.workflow-toggle:focus-visible,
-.workflow-toggle.is-active {
-  color: var(--chat-wf-bascule-active);
+/* LA FLECHE DE DETAILS POINTE A GAUCHE QUAND LE PANNEAU EST OUVERT (conv-177, 2026-10-10 : « la
+   fleche doit pointer vers la gauche pas vers le haut quand le paneau est ouvert »). Les capsules
+   Raisonnement / Actions se deplient VERS LE BAS : ouvertes, leur chevron monte (-135deg, plus
+   bas). Le panneau Details, lui, s'ouvre SUR LE COTE, a droite : ferme, la fleche pointe vers lui
+   (a droite, -45deg, inchange) ; ouvert, elle pointe a GAUCHE, le sens qui le replie. */
+.thinking-block.workflow-capsule[open] > summary .thinking-capsule::after {
+  transform: rotate(135deg);
 }
 
 .workflow-toggle:focus-visible {
   outline: 1px solid rgba(255, 212, 90, 0.72);
   outline-offset: 3px;
-}
-
-.workflow-toggle.is-active::after {
-  height: 2px;
-  background: linear-gradient(90deg, var(--chat-wf-trait-rose), var(--chat-wf-trait-or));
-}
-
-.workflow-toggle svg {
-  flex: none;
-  color: var(--chat-wf-icone);
-}
-
-.workflow-toggle.is-active svg {
-  color: var(--chat-wf-icone-active);
+  border-radius: 999px;
 }
 
 .model-select-shell {
@@ -2633,19 +2692,13 @@ ol.md-list li {
   background: linear-gradient(180deg, rgba(2, 4, 6, 0.74), var(--chat-saisie-fond) 30%);
 }
 
-/* LE FILET EST LA JAUGE DE CONTEXTE (demande utilisateur conv-240, reference claude.exe).
-   Le trait gris qui separe le fil de la zone de saisie porte desormais la part occupee de la
-   fenetre du modele : rien n'est ajoute a l'ecran, la place prise reste la meme. Peint en
-   `::before` d'un pixel pose SUR le filet -- pas en `border-image`, qui aurait empeche le repli
-   gris quand l'occupation est inconnue.
-   Sans `[data-context-level]` (occupation inconnue), aucune regle ne s'applique : filet gris. */
-/* PAS de prefixe de theme : le filet existe dans TOUS les themes, la jauge doit donc s'y peindre
-   partout. Rattachee a `.cosmic-outline` seul, elle disparaissait des que le theme changeait. */
+/* LE TRAIT QUI SEPARE LE FIL DE LA ZONE DE SAISIE. Il portait la jauge de contexte (conv-240) ;
+   depuis conv-179 elle est le separateur sous l'en-tete du chat (`.chat-context-rule`, plus bas).
+   Le trait reste, seul. PAS de prefixe de theme : il existe dans TOUS les themes. */
 .composer {
   position: relative;
 }
-/* LE RAIL : trait BLANC discret, TOUJOURS present, dans tous les themes. Sans lui la jauge
-   flottait sur du vide et se lisait « il n'y a pas de barre ». */
+/* LE RAIL : trait BLANC discret, TOUJOURS present, dans tous les themes. */
 .composer::after {
   content: '';
   position: absolute;
@@ -2656,7 +2709,74 @@ ol.md-list li {
   background: rgba(var(--voile-rgb), 0.14);
   pointer-events: none;
 }
-/* LA JAUGE : meme trait, en DEGRADE GRIS -> BLANC PUR sur la part occupee. Choix utilisateur du
+
+/* LA JAUGE DE CONTEXTE, SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (conv-179, 2026-10-10 :
+   « la barre de contexte met-la en haut comme separateur entre le header du chat et le chat »).
+   Composant ChatContextRule, dernier enfant de `.chat-head`. Elle se pose SUR le filet du bas de
+   l'en-tete, qui lui sert de piste : rien n'est ajoute a la hauteur de l'ecran. La racine est une
+   BANDE DE SURVOL transparente de 12 px centree sur ce filet (un trait de 2 px est inatteignable a
+   la souris) ; le rail et le remplissage sont ses pseudo-elements. Occupation inconnue : le
+   composant ne rend rien, le filet de l'en-tete reste gris. */
+.chat-head {
+  position: relative;
+}
+.chat-context-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 12px;
+  z-index: 3;
+  /* Place reservee au mot « contexte » entre la pointe du remplissage et la reprise du rail. */
+  --context-libelle-largeur: 60px;
+}
+/* LE RAIL reprend APRES le mot « contexte » (conv-189) : le mot s'ecrit dans une coupure du trait,
+   pas sur lui. Sous le remplissage le rail ne se voit pas, il n'a donc pas a partir de 0. Le mot
+   est borne au bord droit : a 100 % il recouvre la fin du trait plutot que de sortir de l'ecran. */
+.chat-context-rule::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: calc(
+    min(var(--context-fill, 0%), 100% - var(--context-libelle-largeur)) + var(--context-libelle-largeur)
+  );
+  right: 0;
+  height: 2px;
+  background: rgba(var(--voile-rgb), 0.14);
+  pointer-events: none;
+  transition: left 220ms ease;
+}
+/* LE MOT « contexte » AU BOUT DE LA JAUGE (conv-189, 2026-10-10 : « qu'il y ait ecrit contexte au
+   bout de la jauge, pas tout a droite mais a droite de la jauge qui progresse ») : il suit la
+   pointe du remplissage au meme rythme que la decoupe (220 ms), centre sur le trait. Remonte de
+   2 px (conv-189 : « remonter un poil le texte contexte ») : centrer la BOITE de 12 px laissait le
+   milieu des minuscules 2,1 px sous le milieu du trait (mesure dans l'app, police Segoe UI 10 px). */
+/* DANS UNE CAPSULE NOIRE (conv-189 : « le texte contexte doit etre dans une capsule noire pour etre
+   visible par-dessus du texte blanc du chat ») : le mot deborde sous l'en-tete, sur le fil qui
+   defile, ou les messages blancs le noyaient. Noir et blanc ECRITS EN DUR, pas le voile : la
+   capsule porte son propre contraste dans tous les themes. Geometrie : capsule de 15 px centree
+   sur le trait (-2 + 15/2 = 5,5 px, milieu du trait de 3 px pose a 4 px) ; les 3 px de bas
+   remontent les minuscules, dont le milieu tombe ~1,6 px sous celui de leur ligne de 12 px. */
+.chat-context-rule-libelle {
+  position: absolute;
+  top: -2px;
+  left: min(var(--context-fill, 0%), 100% - var(--context-libelle-largeur));
+  box-sizing: border-box;
+  width: var(--context-libelle-largeur);
+  height: 15px;
+  padding-bottom: 3px;
+  border-radius: 999px;
+  background: #000000;
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+  transition: left 220ms ease;
+}
+/* LE REMPLISSAGE : meme trait, en DEGRADE GRIS -> BLANC PUR sur la part occupee. Choix utilisateur du
    2026-09-04 : aucune couleur de palier (le rouge alarmait a tort), et le degrade remplace le
    blanc plat — la pointe blanche marque le bord courant, la naissance grise se fond dans le rail.
    PROGRESSIVE, PAS DEGRESSIVE (demande utilisateur du 2026-09-04) : le degrade est cale sur la
@@ -2664,10 +2784,10 @@ ol.md-list li {
    et la barre s'eclaircit a mesure que le fil se remplit. Porter la largeur sur l'element, au
    contraire, recomprimait le degrade a chaque tour : la teinte du bord ne bougeait plus, seule la
    longueur changeait — un remplissage qui se relit comme une decroissance. */
-.composer[data-context-level]::before {
+.chat-context-rule::before {
   content: '';
   position: absolute;
-  top: 0;
+  top: 5px;
   left: 0;
   right: 0;
   z-index: 1;
@@ -2791,10 +2911,12 @@ ol.md-list li {
   width: 26px;
   height: 26px;
   padding: 0;
-  border: 1px solid var(--line-strong);
+  /* Gris au repos, blanc au survol, AUCUNE teinte (retour utilisateur conv-203) : des jetons
+     neutres, pas --text-faint/--cyan que chaque theme colore (lavande puis bleu en Nebuleuse). */
+  border: 1px solid rgba(var(--voile-rgb), 0.2);
   border-radius: 8px;
   background: transparent;
-  color: var(--text-faint);
+  color: var(--chat-icone-tour);
   cursor: pointer;
   transition:
     color 120ms ease,
@@ -2802,9 +2924,9 @@ ol.md-list li {
     background 120ms ease;
 }
 .msg-turn-icon:hover {
-  color: var(--cyan);
-  border-color: var(--cyan);
-  background: var(--bg-2);
+  color: var(--chat-icone-tour-survol);
+  border-color: rgba(var(--voile-rgb), 0.6);
+  background: rgba(var(--voile-rgb), 0.06);
 }
 
 .cosmic-outline .composer-field textarea {
@@ -3938,23 +4060,67 @@ button.chat-project-dot:disabled {
   visibility: hidden;
 }
 
-/* BLOC « Réflexion » dans la bulle : la pensée du modèle, repliable, écrite en direct.
-   Volontairement DISCRET — c'est un satellite de la réponse, pas la réponse. */
+/* BLOCS « Raisonnement » et « Actions » dans la bulle : la pensée du modèle et les actions du tour,
+   repliables, écrits en direct. Volontairement DISCRETS — des satellites de la réponse.
+   En-tête « R5 · Sous la ligne » (choix sur maquettes, conv-162, 2026-10-10) : une CAPSULE à bord
+   dégradé porte l'icône, le libellé, les compteurs et le chevron ; le signe de vie reste DEHORS.
+   Plus de filet à gauche du bloc.
+   Habillage « Fumé net » (choix sur maquettes, conv-173, 2026-10-10) : verre FUMÉ sans teinte
+   (reflet bombé en arc), bord dégradé de 2 px, icône dans un rond dégradé cerclé de blanc,
+   durées dans une pastille sombre cerclée ; la barre de temps des actions reste SOUS la ligne et
+   déborde sous le signe de vie. Tour fini : bord à 55 %, reflet éteint, textes adoucis. */
+/* CAPSULE SUR UN BOUTON (conv-181, 2026-10-10 : « ces boutons [de mise à jour] avec la même gueule
+   que le bouton Détails »). Un <button class="capsule-bouton"> qui contient le même balisage
+   (`thinking-capsule`, `thinking-capsule-icone`, `thinking-label`, `thinking-duree`) est dessiné par
+   les MÊMES règles que les capsules ci-dessous : chacune liste aussi `.capsule-bouton`, en sélecteur
+   séparé pour ne pas changer la priorité des règles existantes. Au repos, l'aspect de Détails
+   fermé (`is-done`) ; au survol et au focus, celui de Détails ouvert. Pas de chevron : un bouton
+   d'action ne déplie rien. */
+.thinking-block,
+.capsule-bouton {
+  /* Les deux couleurs de la capsule. Un thème les pose sur :root (Nébuleuse de verre : le bleu et
+     le rose des bulles de l'utilisateur) ; par défaut, le cyan et l'or de la marque. */
+  --capsule-froid: var(--thinking-capsule-froid, var(--cyan));
+  --capsule-chaud: var(--thinking-capsule-chaud, var(--gold-doux));
+}
 .thinking-block {
-  margin: 2px 0 8px;
-  border-left: 1px solid rgba(212, 169, 79, 0.35);
-  padding-left: 10px;
+  margin: 2px 0 4px;
+}
+.capsule-bouton {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+  cursor: pointer;
+}
+.capsule-bouton:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+.capsule-bouton:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--capsule-chaud) 72%, transparent);
+  outline-offset: 3px;
+  border-radius: 999px;
 }
 .thinking-block > summary {
   display: flex;
+  /* La barre de temps passe A LA LIGNE, sous la capsule (`flex-basis: 100%`). */
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  column-gap: 8px;
+  row-gap: 3px;
   cursor: pointer;
   list-style: none;
   font-size: 12px;
   color: var(--text-faint);
   user-select: none;
-  padding: 2px 0;
+  padding: 1px 0;
   overflow: visible;
   /* La ligne doit etre PLUS HAUTE que le chevron tourne (6px * 1.41 ~ 8.5px) : sans hauteur mini,
      le carre rogne sa pointe basse sur la boite de la ligne (constat 2026-09-05). */
@@ -3964,10 +4130,163 @@ button.chat-project-dot:disabled {
 .thinking-block > summary::-webkit-details-marker {
   display: none;
 }
-/* CHEVRON DESSINE, pas un glyphe. Le caractere « ▾ » a 10px et 0.55 d'opacite etait illisible :
-   « on voit pas ou elle pointe » (2026-09-01). Deux bordures sur un carre donnent un chevron net,
-   epais et net a n'importe quelle taille. Ferme -> pointe a DROITE ; ouvert -> pointe en HAUT. */
-.thinking-block > summary::after {
+.thinking-block > summary .thinking-capsule,
+.capsule-bouton .thinking-capsule {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0.25em 0.85em 0.25em 0.25em;
+  border-radius: 999px;
+  white-space: nowrap;
+  /* VERRE FUME, REFLET BOMBE (« reflet bombé », conv-173) : une lumiere BLANCHE neutre (aucune
+     teinte — « sans fond rose ») en ARC, plus forte au centre du haut, qui fait paraitre la
+     capsule bombee comme une pilule de verre. */
+  background: radial-gradient(
+    55% 85% at 50% 0%,
+    rgba(255, 255, 255, 0.4),
+    rgba(255, 255, 255, 0.1) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  /* PAS de reflet `inset 0 3px` : il depassait de 1 px sous le bord degrade et tracait un trait
+     gris sous lui — « ca fait pas pur » (conv-176, 2026-10-10). Le bord se suffit. */
+}
+/* DE L'AIR SOUS LE BORD (conv-192, 2026-10-10 : « pareil pour image read / Image sent / Détails /
+   Raisonnement et Actions », après « il est trop petit le cadre » sur le bouton de mise à jour).
+   À 0.25em (3 px à 12 px), le bord dégradé de 2 px laissait 1 px autour du rond de l'icône. 0.4em
+   en haut, en bas et à gauche en laisse ≈ 2,8 px ; la droite garde 0.85em, où loge le chevron.
+   Règle À PART : `.capsule-bouton` (« Faire réparer ») n'était pas visé et garde sa marge. */
+.thinking-block > summary .thinking-capsule {
+  padding-block: 0.4em;
+  padding-left: 0.4em;
+}
+/* S'ALLUME AU SURVOL, COMME « FUSIONNER » (conv-192, 2026-10-10 : « je veux que ça les allume
+   quand je les hover comme le bouton Fusionner »). Les règles « éteinte » d'une capsule de tour
+   fini (images lues / envoyées, Détails fermé, Raisonnement, Actions) ne valent plus que capsule
+   NON survolée et en-tête SANS focus clavier — le même `:not(:hover, :focus-visible)` que
+   `.capsule-bouton`. Survolée, elle prend l'aspect allumé : reflet bombé, texte et icône clairs.
+   Le survol est pris sur la CAPSULE, pas sur toute la ligne d'en-tête, comme le bouton. */
+.thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover),
+.capsule-bouton:is(:disabled, :not(:hover, :focus-visible)) .thinking-capsule {
+  background: radial-gradient(
+    55% 85% at 50% 0%,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.03) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+/* BORD DEGRADE : un calque evide par masque, comme les cartes de fichier du theme Nebuleuse de
+   verre. `border-image` ignore l'arrondi, et un fond `border-box` masquerait le fil sous la
+   capsule. 2 px depuis Fumé net. Tour fini : le bord palit a 55 %, la capsule reste lisible sans
+   tirer l'oeil. */
+.thinking-block > summary .thinking-capsule::before,
+.capsule-bouton .thinking-capsule::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: 2px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+/* Le bord reste PLEIN au repos (conv-182, 2026-10-10 : « le même bleu plein partout — le repos
+   s'atténue autrement (texte, reflet), pas la couleur »). L'ancien `opacity: 0.55` d'un tour fini
+   faisait un bleu de plus à l'écran. Le repos se lit au reflet plus faible et au texte adouci. */
+/* Texte adouci d'un tour fini : entre le texte et le gris lavande, encore lisible. */
+.thinking-block,
+.capsule-bouton {
+  --capsule-texte-fini: color-mix(in srgb, var(--text) 40%, var(--text-dim));
+}
+/* ICONE dans un rond DEGRADE (les deux couleurs de la capsule), sans anneau, les deux blocs
+   pareils. Tour fini : le dégradé reste PLEIN (conv-182), seul le trait de l'icône s'adoucit. */
+.thinking-block > summary .thinking-capsule-icone,
+.capsule-bouton .thinking-capsule-icone {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
+  color: #fff;
+  /* PAS d'anneau blanc : il se lisait comme un cercle gris autour de l'icone, comme le trait sous
+     le bord — « autour de l'icone aussi » (conv-176, 2026-10-10). */
+}
+.thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-capsule-icone,
+.capsule-bouton:is(:disabled, :not(:hover, :focus-visible)) .thinking-capsule-icone {
+  color: var(--text);
+  box-shadow: none;
+}
+.thinking-block > summary .thinking-capsule-icone svg,
+.capsule-bouton .thinking-capsule-icone svg {
+  display: block;
+  width: 0.92em;
+  height: 0.92em;
+}
+.thinking-block > summary .thinking-label,
+.capsule-bouton .thinking-label {
+  color: var(--text);
+  font-weight: 600;
+}
+.thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-label,
+.capsule-bouton:is(:disabled, :not(:hover, :focus-visible)) .thinking-label {
+  color: var(--capsule-texte-fini);
+}
+/* Secondes du raisonnement (« pas les mots, seulement un compteur de secondes ») et duree totale
+   des actions : chiffres a chasse fixe, pour que le compteur ne fasse pas danser la capsule.
+   Fumé net : chacune dans une PASTILLE sombre cerclée d'un filet clair. */
+.thinking-block > summary .thinking-secondes,
+.thinking-block > summary .thinking-duree,
+.capsule-bouton .thinking-duree {
+  flex: none;
+  padding: 0 0.6em;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.thinking-block > summary .thinking-nombre {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.3em;
+  height: 1.3em;
+  padding: 0 0.3em;
+  border-radius: 999px;
+  background: var(--capsule-froid);
+  color: #fff;
+  font-size: 0.75em;
+  font-weight: 700;
+  line-height: 1;
+}
+/* La pastille reste SOMBRE dans tous les themes : son texte reste donc CLAIR, juste adouci. Le gris
+   des libelles finis y etait illisible sur theme clair (capture du 2026-10-10, conv-173). */
+.thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-secondes,
+.thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-duree,
+.capsule-bouton:is(:disabled, :not(:hover, :focus-visible)) .thinking-duree {
+  color: rgba(255, 255, 255, 0.72);
+}
+/* CHEVRON DESSINE, pas un glyphe, DANS la capsule (R5 : on voit que c'est elle qui se clique).
+   Le caractere « ▾ » a 10px et 0.55 d'opacite etait illisible : « on voit pas ou elle pointe »
+   (2026-09-01). Deux bordures sur un carre donnent un chevron net a n'importe quelle taille.
+   Ferme -> pointe a DROITE ; ouvert -> pointe en HAUT. Fumé net : clair sur le verre fumé. */
+.thinking-block > summary .thinking-capsule::after {
   content: '';
   /* Tourne a 45deg, un carre de cote C occupe C*1.41 en hauteur : a 6px il debordait de la ligne
      d'en-tete et le bas du chevron etait rogne (« le bas est coupe, elle est trop grosse »,
@@ -3977,51 +4296,49 @@ button.chat-project-dot:disabled {
   box-sizing: border-box;
   width: 6px;
   height: 6px;
-  margin: 0 1px 2px 2px;
-  border-right: 1.25px solid var(--gold-doux);
-  border-bottom: 1.25px solid var(--gold-doux);
+  margin: 0 1px 2px 1px;
+  border-right: 1.25px solid color-mix(in srgb, var(--text) 92%, transparent);
+  border-bottom: 1.25px solid color-mix(in srgb, var(--text) 92%, transparent);
   opacity: 0.9;
   transform: rotate(-45deg);
   transform-origin: center;
   transition: transform 0.15s ease;
 }
-.thinking-block[open] > summary::after {
+.thinking-block[open] > summary .thinking-capsule::after {
   transform: rotate(-135deg);
 }
-.thinking-block.is-live > summary .thinking-label {
-  color: var(--gold-doux);
+.thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover)::after {
+  border-color: var(--capsule-texte-fini);
 }
-/* Signe de vie technique du provider, DANS l'en-tete du bloc Reflexion : il vivait a cote du
-   texte de l'agent (« a cote du texte agent au lieu de dans son bloc », 2026-09-01). Discret,
+/* Signe de vie technique du provider, DANS l'en-tete du bloc, HORS de la capsule : il vivait a cote
+   du texte de l'agent (« a cote du texte agent au lieu de dans son bloc », 2026-09-01). Discret,
    il ne doit jamais concurrencer ni la reponse ni la pensee. */
 .thinking-block > summary .thinking-status {
-  margin-left: 6px;
   color: var(--text-dim);
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 10px;
   opacity: 0.7;
   /* UNE SEULE LIGNE. En `overflow-wrap: anywhere` un long signe de vie s'etalait sur 2-3 lignes
      DANS l'en-tete, bloc replie compris (« ya trop de choses », 2026-09-01). Tronque en « … » :
-     le texte entier reste au survol (title) et le corps deplie garde TOUTES les lignes. */
-  flex: 0 1 auto;
+     le texte entier reste au survol (title) et le corps deplie garde TOUTES les lignes.
+     Base 0 : dans un en-tete qui passe a la ligne, une base « auto » enverrait un long signe de
+     vie SOUS la capsule au lieu de le tronquer a cote d'elle. */
+  flex: 1 1 0;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* DEUX blocs empiles (2026-09-12) : « Raisonnement » puis « Actions ». Le second est distingue
-   par un filet plus froid, pour qu'on voie d'un coup d'oeil lequel porte la pensee. */
-.thinking-block--actions {
-  margin-top: -4px;
-  border-left-color: rgba(169, 178, 196, 0.35);
-}
 .thinking-block--actions .thinking-body {
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 11px;
 }
+/* Corps deplie : le filet de gauche que portait tout le bloc avant R5 ne borde plus que le corps,
+   aux couleurs de la capsule. */
 .thinking-block .thinking-body {
   margin: 6px 0 0;
-  padding: 0;
+  padding: 0 0 0 10px;
+  border-left: 1px solid color-mix(in srgb, var(--capsule-chaud) 35%, transparent);
   max-height: 240px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -4030,6 +4347,9 @@ button.chat-project-dot:disabled {
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-dim);
+}
+.thinking-block--actions > .thinking-body {
+  border-left-color: color-mix(in srgb, var(--capsule-froid) 35%, transparent);
 }
 
 /* Interrupteur de vue liste <-> mosaique — deplace depuis ui-system.css, qui ne porte que
@@ -4426,6 +4746,23 @@ button.chat-project-dot:disabled {
   width: 16px;
   height: 16px;
 }
+/* LE MICRO, CENTRÉ À TOUS LES ZOOMS (2026-10-10). Le tracé remplit TOUTE la boîte du bouton et y
+   est peint par un masque étiré à 100 % : il est arrondi au pixel exactement comme le rond, donc
+   concentrique à chaque cran Ctrl+molette. Un <svg> de 16 px centré par flex était arrondi à part
+   et glissait d'un demi-pixel selon le zoom (cf. IconeMicroTrait, ChatComposer.tsx).
+   LA TAILLE DU MICRO VIT DANS LA viewBox, pas dans une largeur : 24 unités de tracé sur 40,6 =
+   13 px dans les 22 px intérieurs du rond de 24 px (« COMPOSER PLUS BAS », plus bas dans ce
+   fichier : c'est la taille réelle du micro, l'ancien <svg> y faisait 13 px). JAMAIS de
+   `translate` ici : un décalage fixe réglé à un zoom est faux aux autres. Verrouillé par
+   ChatComposer.dictee.centrage.test.ts. */
+.composer-dictee-trait {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-8.3077 -8.3077 40.6154 40.6154'%3E%3Cg fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='2' width='6' height='11' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0'/%3E%3Cpath d='M12 18v3'/%3E%3C/g%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+}
 /* La ligne modèle/prix/quota vient se poser sur la rangée des boutons. */
 .composer-input-row > .composer-meta,
 .cosmic-outline .composer-input-row > .composer-meta {
@@ -4438,6 +4775,19 @@ button.chat-project-dot:disabled {
 }
 .composer-input-row > .composer-meta .composer-hint {
   display: none;
+}
+
+/* PERLE D'ETAT DE L'EN-TETE (conv-158, 2026-10-10) : la ligne d'infos rogne ses elements
+   (`overflow: hidden`, pour les « … »), ce qui coupait le halo de la perle et les orbites du
+   spinner. La case garde ses 18 px fixes : elle ne se retrecit pas et ne rogne rien. Le `:root`
+   renforce le selecteur : les themes Nebuleuse posent `overflow: hidden` sur `.chat-runtime > *`
+   avec quatre classes. */
+:root .cosmic-outline .chat-runtime > .conv-state-slot.chat-runtime-etat,
+.chat-runtime > .conv-state-slot.chat-runtime-etat {
+  flex: none;
+  min-width: 18px;
+  max-width: none;
+  overflow: visible;
 }
 
 /* La depense du fil, remontee dans la barre du haut : elle s'aligne sur la ligne technique. */
@@ -4530,21 +4880,12 @@ button.chat-project-dot:disabled {
   line-height: 1.45;
 }
 
-/* INFOBULLE DE LA JAUGE DE CONTEXTE (demande utilisateur du 2026-09-04).
-   Le filet est peint en `::before`/`::after` avec `pointer-events: none` : il ne peut donc pas
-   porter de survol. Une bande fine transparente est posee dessus pour capter le hover, et la
-   bulle est peinte en clair au-dessus du fil — le `title` natif reste en repli. */
-.composer-context-tip {
+/* INFOBULLE DE LA JAUGE DE CONTEXTE (demande utilisateur du 2026-09-04). La bande de survol
+   (`.chat-context-rule`) la porte ; depuis conv-179 elle s'ouvre VERS LE BAS, dans le fil, sous
+   l'en-tete. Le `title` natif reste en repli. */
+.chat-context-rule-bulle {
   position: absolute;
-  top: -5px;
-  left: 0;
-  right: 0;
-  height: 12px;
-  z-index: 3;
-}
-.composer-context-tip-bulle {
-  position: absolute;
-  bottom: 14px;
+  top: 14px;
   left: 0;
   max-width: 420px;
   padding: 6px 9px;
@@ -4557,22 +4898,21 @@ button.chat-project-dot:disabled {
   white-space: normal;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(3px);
+  transform: translateY(-3px);
   transition:
     opacity 120ms ease,
     transform 120ms ease;
   pointer-events: none;
 }
-/* LE PANNEAU DE DETAIL POSE SUR LE FILET (demande du 2026-09-08) : meme contenu que celui de la
-   barre de l en-tete. Il s ancre AU-DESSUS du filet et reprend les evenements de pointeur, que la
-   bande de survol neutralise pour la bulle — sinon le bouton Compacter serait inatteignable. */
+/* LE PANNEAU DE DETAIL POSE SUR LE FILET (demande du 2026-09-08) : il s'ancre SOUS le filet et
+   reprend les evenements de pointeur, sinon le bouton Compacter serait inatteignable. */
 /* LE PONT — sans lui, le panneau est INATTEIGNABLE (signale le 2026-09-08).
-   Le panneau est decale de quelques pixels au-dessus de sa barre : en montant vers lui, le pointeur
+   Le panneau est decale de quelques pixels de sa barre : en allant vers lui, le pointeur
    traverse ce vide, qui n appartient a personne. La sortie se declenche, le panneau se ferme, et le
    bouton Compacter ne peut JAMAIS etre clique. Une zone transparente comble l ecart : le trajet
    reste a l interieur, sans rien changer a l apparence. */
 .chat-context-gauge-root .model-quota-popover::before,
-.composer-context-tip .model-quota-popover::before {
+.chat-context-rule .model-quota-popover::before {
   content: '';
   position: absolute;
   left: 0;
@@ -4582,17 +4922,17 @@ button.chat-project-dot:disabled {
   z-index: -1;
 }
 
-.composer-context-tip .model-quota-popover {
+.chat-context-rule .model-quota-popover {
   position: absolute;
-  bottom: 16px;
+  top: 16px;
   left: 0;
   right: auto;
-  top: auto;
+  bottom: auto;
   width: min(380px, 100%);
   pointer-events: auto;
 }
 
-.composer-context-tip:hover .composer-context-tip-bulle {
+.chat-context-rule:hover .chat-context-rule-bulle {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
@@ -4744,22 +5084,22 @@ button.chat-project-dot:disabled {
   color: var(--text);
   opacity: 1;
 }
-.composer-input-row > .attachment-button:not(:disabled) .attachment-icon,
-.composer-input-row > .composer-dictee:not(.is-recording):not(:disabled) svg {
+/* Le micro n'a plus de règle ici : son tracé (`.composer-dictee-trait`) est peint en
+   `currentColor`, donc il prend déjà le `--text` posé sur le bouton juste au-dessus. */
+.composer-input-row > .attachment-button:not(:disabled) .attachment-icon {
   stroke: var(--text);
   color: var(--text);
 }
 
-/* CENTRAGE OPTIQUE DES DEUX GLYPHES (demande du 2026-09-08). Les deux traces sont
-   geometriquement centres mais paraissent decales : le trombone d'un pixel trop bas,
-   le micro d'un pixel trop a droite. On ne bouge que le DESSIN, pas la pastille. */
+/* CENTRAGE OPTIQUE DU TROMBONE (demande du 2026-09-08) : géométriquement centré, il paraît d'un
+   pixel trop bas. On ne bouge que le DESSIN, pas la pastille.
+   Le micro avait ici un `translateX(-0.5px)` (« un pixel trop à droite ») : RETIRÉ le 2026-10-10.
+   Son tracé est symétrique ; ce qu'on voyait était l'arrondi au pixel qui varie avec le zoom
+   (cf. `.composer-dictee-trait`), et ce décalage fixe le poussait jusqu'à 2 px à gauche aux
+   grands zooms (mesuré dans Electron, 26 crans × 40 positions). */
 .composer-input-row > .attachment-button .attachment-icon,
 .cosmic-outline .composer-input-row > .attachment-button .attachment-icon {
   transform: translateY(-0.5px);
-}
-.composer-input-row > .composer-dictee svg,
-.cosmic-outline .composer-input-row > .composer-dictee svg {
-  transform: translateX(-0.5px);
 }
 
 /* ============================================================================
@@ -4890,6 +5230,13 @@ button.chat-project-dot:disabled {
   border-color: var(--gold);
   color: var(--gold-bright);
 }
+/* Icones et libelles des boutons du pied : MASQUES ici. Seul un theme qui les dessine les montre
+   (Nebuleuse de verre, capsule a trois cases choisie en conv-171) ; les autres themes gardent
+   leur pied d'avant, sans un pixel de change. */
+.conv-foot-icone,
+.conv-foot-libelle {
+  display: none;
+}
 
 /*
  * Barre de sélection multiple — style « liste d'actions » (choix conv-815, 2026-09-23) :
@@ -4928,37 +5275,41 @@ button.chat-project-dot:disabled {
 .conv-bulk-bar .conv-date-sort:nth-child(3) { border-left-color: var(--chat-lot-bleu); }
 .conv-bulk-bar .conv-date-sort.conv-bulk-del { border-left-color: var(--danger); }
 
-/* Bloc Actions — variante C3 « frise » (2026-09-24) : barre de temps puis frise a pastilles.
-   Icones, pastilles et « … » en CSS : le texte du corps reste les lignes d'action. */
-.thinking-block > summary .thinking-bilan {
-  margin-left: 6px;
-  color: var(--gold-clair);
-  font-size: 12px;
-  /* Ne se laisse pas ecraser par le signe de vie voisin : sans ca, « 7.3 s » passait a un
-     caractere par ligne (capture conv-836, 2026-09-24). C'est le statut qui se tronque. */
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
+/* Bloc Actions — variante C3 « frise » (2026-09-24) : frise a pastilles dans le corps deplie.
+   Icones, pastilles et « … » en CSS : le texte du corps reste les lignes d'action.
+   La BARRE DE TEMPS (un segment par action) est passee SOUS la ligne d'en-tete avec R5
+   (conv-162) : visible bloc plie, et plus dessinee une seconde fois dans le corps. */
 .thinking-block .thinking-frise {
   white-space: normal;
 }
 .thinking-frise-barre {
   display: flex;
   gap: 2px;
-  height: 6px;
-  margin: 2px 0 8px;
+  height: 3px;
+}
+/* Dans l'en-tete : toute une ligne a elle seule (`flex-basis: 100%` force le retour a la ligne),
+   mais un trait de 26em au plus. Le padding droit en % se mesure sur la largeur de l'en-tete :
+   max(0, 100% - 26em) laisse donc au contenu min(largeur, 26em) — une `max-width` laisserait la
+   barre remonter sur la ligne de la capsule des que la colonne est assez large.
+   Elle reste HORS de la capsule et deborde sous le signe de vie : un essai « Fumé net » qui la
+   mettait dans la capsule a ete refuse (conv-173, « mets-la comme avant en dessous »). */
+.thinking-block > summary .thinking-frise-barre {
+  flex: 0 0 100%;
+  box-sizing: border-box;
+  padding: 0 max(0px, calc(100% - 26em - 0.25em)) 0 0.25em;
+  margin-bottom: 1px;
 }
 .thinking-frise-barre > span {
   flex-basis: 0;
   min-width: 3px;
-  border-radius: 2px;
+  border-radius: 1px;
   background: var(--chat-frise-ok);
 }
 .thinking-frise-barre > span[data-etat='ko'] {
   background: var(--chat-frise-ko);
 }
 .thinking-frise-barre > span[data-etat='encours'] {
-  background: var(--gold-clair);
+  background: var(--capsule-chaud, var(--gold-clair));
 }
 .thinking-frise-liste {
   border-left: 1px solid rgba(var(--voile-rgb), 0.13);

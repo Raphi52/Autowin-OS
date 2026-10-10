@@ -334,23 +334,23 @@
   padding: 14px 16px;
 }
 
-/* Aperçu visuel replié : le bandeau SEUL, aucune image ni pied de carte. */
-.artifact-preview[data-collapsed='true'] .artifact-preview__header {
-  border-bottom: none;
+/* IMAGE EN CAPSULE (image lue, image envoyée -- conv-178, 2026-10-10). La capsule elle-même n'est
+   PAS dessinée ici : ce sont les règles `.thinking-block` de ChatView.css, reprises telles quelles
+   par ArtifactPreview.tsx. Ici, seulement le corps DÉPLIÉ, sur le modèle de `.thinking-body` : un
+   filet à gauche aux couleurs de la capsule, l'image et son pied dessous. */
+.artifact-capsule__corps {
+  width: min(760px, 100%);
+  box-sizing: border-box;
+  margin: 6px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 1px solid color-mix(in srgb, var(--capsule-froid) 35%, transparent);
 }
 
-.artifact-preview__toggle {
-  flex: 0 0 auto;
-  padding: 3px 7px;
-  border: 1px solid rgb(255 255 255 / 16%);
-  border-radius: 5px;
-  background: transparent;
-  color: #c6cad3;
-  font: inherit;
-  cursor: pointer;
+.artifact-capsule__corps > .artifact-preview__body {
+  border-radius: 10px;
 }
 
-.artifact-preview__toggle:hover {
-  border-color: rgb(242 201 76 / 48%);
-  color: #f2c94c;
+.artifact-capsule__corps > .artifact-preview__footer {
+  padding: 6px 2px 0;
+  border-top: 0;
 }

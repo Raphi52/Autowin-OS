@@ -10,78 +10,54 @@
   padding: 0 4px 6px;
 }
 
+/* « Fusionner origin/main » et « Faire réparer » : des CAPSULES, la même gueule que le bouton
+   Détails du chat (conv-181, 2026-10-10). Elles ne sont PAS dessinées ici : la classe
+   `capsule-bouton` reprend les règles de la capsule de ChatView.css (bord dégradé, verre fumé,
+   icône dans un rond dégradé, compteur dans une pastille sombre). Il ne reste ici que leur place
+   dans le rail. L'ancien cadre doré à angles droits (« Or royal ») est retiré. */
 .rail-update-btn {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 37px;
-  padding: 6px 8px;
-  border: 1px solid color-mix(in srgb, var(--gold, #e9bd4e) 48%, var(--line));
-  border-radius: 0;
-  background: transparent;
-  color: var(--gold, #e9bd4e);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color var(--dur) var(--ease),
-    background var(--dur) var(--ease),
-    box-shadow var(--dur) var(--ease);
+  align-self: flex-start;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.rail-update-btn:hover:not(:disabled) {
-  border-color: var(--violet, #8f7cff);
-  background: color-mix(in srgb, var(--gold, #e9bd4e) 5%, transparent);
-  box-shadow: inset 0 -1px var(--violet, #8f7cff);
+/* LA PLACE DU RAIL (mesure conv-181, Segoe UI, rail de 216 px) : à 12 px — la taille de Détails —
+   « Fusionner origin/main » demandait 121 px et n'en avait que 104, le libellé finissait en
+   « origin/… ». Deux reprises : 11 px pour les capsules du rail, et un bout de pilule SERRÉ autour de
+   la pastille « +1 » (0.25em, comme à gauche autour de l'icône) puisqu'il n'y a pas de chevron à
+   loger. Le libellé tient alors en entier. */
+.rail-update-btn.capsule-bouton,
+.rail-update-repair.capsule-bouton,
+.rail-update-who {
+  font-size: 11px;
 }
 
-.rail-update-btn:focus-visible {
-  outline: 1px solid var(--violet, #8f7cff);
-  outline-offset: 2px;
-  border-color: var(--violet, #8f7cff);
+/* Le libellé cède avant de déborder du rail : « … », le texte entier reste dans l'infobulle.
+   Double classe : `.capsule-bouton .thinking-capsule` (ChatView.css) pose `flex: none` à la même
+   priorité, et l'ordre de chargement des deux feuilles n'est pas garanti.
+   MARGE INTÉRIEURE de 0.4em tout autour (conv-192, 2026-10-10 : « il est trop petit le cadre ») :
+   à 0.25em, le bord dégradé de 2 px laissait moins d'1 px d'air autour du rond de l'icône et de la
+   pastille « +1 ». À 0.4em (≈ 4,4 px à 11 px), il en reste ≈ 2,4 px. Le libellé cède ces px. */
+.rail-update-btn.capsule-bouton .thinking-capsule {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.4em;
 }
 
-.rail-update-btn:disabled {
-  opacity: 0.72;
-  cursor: default;
-}
-
-.rail-update-icon {
-  display: grid;
-  width: 17px;
-  height: 17px;
-  flex: none;
-  place-items: center;
+.rail-update-btn .rail-update-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rail-update-btn.is-applying .rail-update-icon {
   animation: rail-update-spin 900ms linear infinite;
 }
 
+/* Mise à jour échouée : le dégradé de la capsule finit en ROUGE au lieu de la couleur chaude. */
 .rail-update-btn.is-error {
-  border-color: var(--danger, #e6635b);
-  color: var(--danger, #e6635b);
-}
-
-.rail-update-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex: 1;
-  color: var(--text);
-}
-
-/* Le nombre de commits en retard : présent, mais jamais au premier plan. */
-.rail-update-count {
-  margin-left: auto;
-  color: var(--gold, #e9bd4e);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  --capsule-chaud: var(--danger, #e6635b);
 }
 
 /* Le message d'erreur de git peut faire dix lignes : non borne, il POUSSAIT le bouton
@@ -110,23 +86,19 @@
   border: 0;
 }
 
-/* Or et non rose : le fond et la bordure de ce bouton sont deja or, et il porte le geste d'un
-   AVERTISSEMENT de mise a jour -- le role que le theme donne a l'or (--warn: var(--gold)). Il
-   lisait `var(--accent, ...)`, donc rose sur fond or, avec un repli mort : --accent est toujours
-   defini, la couleur de repli ne pouvait jamais s'appliquer et ne servait qu'a masquer l'ecart. */
+/* « Faire réparer » : capsule comme Détails (voir `.rail-update-btn`), sous le message d'erreur. */
 .rail-update-repair {
+  align-self: flex-start;
   margin-top: 4px;
-  padding: 3px 8px;
-  font-size: 11px;
-  color: var(--gold-doux);
-  background: rgba(212, 169, 79, 0.08);
-  border: 1px solid rgba(212, 169, 79, 0.28);
-  border-radius: 5px;
-  cursor: pointer;
 }
 
-.rail-update-repair:hover {
-  background: rgba(212, 169, 79, 0.16);
+/* MÊME AIR QUE « FUSIONNER » (conv-192, 2026-10-10) : 0.4em en haut, en bas et à gauche au lieu
+   de 0.25em, où le bord dégradé de 2 px collait au rond de la clé. La droite garde les 0.85em de la
+   capsule : le libellé y finit, sans pastille ni chevron, et 0.4em l'aurait collé au bord.
+   AVANT la règle du rail replié (même priorité) : replié, le rond garde 0.25em comme Fusionner. */
+.rail-update-repair.capsule-bouton .thinking-capsule {
+  padding-block: 0.4em;
+  padding-left: 0.4em;
 }
 
 /* Rail replié : l'icône seule, centrée, dans la MÊME largeur que le bouton principal (36 px).
@@ -135,9 +107,13 @@
 .rail-update-repair.is-glyph {
   width: 36px;
   align-self: center;
-  padding-inline: 0;
-  text-align: center;
-  font-size: 13px;
+  justify-content: center;
+}
+
+/* Capsule réduite à son icône (rail replié) : un rond, marge égale tout autour. */
+.rail-update-repair.is-glyph .thinking-capsule,
+.rail.is-collapsed .rail-update-btn .thinking-capsule {
+  padding: 0.25em;
 }
 
 .rail-update-repair.is-visually-hidden {
@@ -157,8 +133,8 @@
 
 .rail.is-collapsed .rail-update-btn {
   width: 36px;
+  align-self: center;
   justify-content: center;
-  padding-inline: 0;
 }
 
 @keyframes rail-update-spin {
@@ -272,35 +248,82 @@
 }
 
 .rail-update-row .rail-update-btn {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
-  gap: 7px;
-  padding-inline: 6px;
 }
 
+/* L'ŒIL — A5 « Œil qui s'ouvre » (conv-182, 2026-10-10 : « le petit oeil rose c'est horrible »).
+   Un rond JUMEAU de la capsule voisine, 23 px comme elle : même bord dégradé (calque évidé par
+   masque, comme `.capsule-bouton .thinking-capsule::before` de ChatView.css), même reflet bombé,
+   MÊMES ÉTATS. Le bord reste PLEIN dans les deux (conv-182 : « le même bleu plein partout »).
+   Liste repliée : reflet faible, trait adouci. Liste dépliée, survol ou focus : reflet bombé,
+   trait clair. Le DESSIN de
+   l'œil (fermé / ouvert) est choisi dans UpdateBanner.tsx. Aucune couleur écrite en dur : les deux
+   teintes sont celles de la capsule, posées par le thème. */
 .rail-update-who {
+  --capsule-froid: var(--thinking-capsule-froid, var(--cyan));
+  --capsule-chaud: var(--thinking-capsule-chaud, var(--gold-doux));
+  position: relative;
+  isolation: isolate;
   display: grid;
   flex: none;
   place-items: center;
-  width: 16px;
-  height: 22px;
+  box-sizing: border-box;
+  /* MÊME HAUTEUR QUE « FUSIONNER » (conv-192, 2026-10-10) : la capsule mesure le rond de son icône
+     (1.6em) + sa marge haute et basse (2 × 0.4em) = 2.4em, à la même taille de police (11 px, 13 px
+     en thème malvoyant). Les 23 px fixes d'avant restaient derrière ses ≈ 26 px. */
+  width: 2.4em;
+  height: 2.4em;
   padding: 0;
   border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: color-mix(in srgb, var(--gold, #e9bd4e) 70%, var(--fg, #fff));
+  border-radius: 50%;
+  background: radial-gradient(
+    55% 85% at 50% 0%,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.03) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  color: color-mix(in srgb, var(--text) 40%, var(--text-dim));
   cursor: pointer;
   transition: color var(--dur) var(--ease);
 }
 
-.rail-update-who:hover,
-.rail-update-who[aria-expanded='true'] {
-  color: var(--gold, #e9bd4e);
+.rail-update-who::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: 2px;
+  border-radius: inherit;
+  /* De GAUCHE à DROITE, comme le bord de la capsule — pas en diagonale (conv-182). */
+  background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.rail-update-who:is(:hover, :focus-visible, [aria-expanded='true']) {
+  background: radial-gradient(
+    55% 85% at 50% 0%,
+    rgba(255, 255, 255, 0.4),
+    rgba(255, 255, 255, 0.1) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  color: var(--text);
+}
+
+.rail-update-who svg {
+  display: block;
+  width: 12px;
+  height: 12px;
 }
 
 .rail-update-who:focus-visible {
-  outline: 1px solid var(--gold, #e9bd4e);
-  outline-offset: 1px;
+  outline: 1px solid color-mix(in srgb, var(--capsule-chaud) 72%, transparent);
+  outline-offset: 2px;
 }
 
 /* Rail replié : 36 px de large, le bouton les prend tous — l'œil passe AU-DESSUS, centré. */
@@ -312,6 +335,12 @@
 
 .rail.is-collapsed .rail-update-row .rail-update-btn {
   flex: none;
+}
+
+/* Replié, la capsule n'est plus que son rond d'icône à 0.25em de marge : 1.6em + 2 × 0.25em. */
+.rail.is-collapsed .rail-update-who {
+  width: 2.1em;
+  height: 2.1em;
 }
 
 .rail-update-incoming {
@@ -329,6 +358,19 @@
 /* Rail replié (54 px) : la liste ne tient pas dedans, elle s'ouvre À CÔTÉ du rail. */
 .rail.is-collapsed .rail-update {
   position: relative;
+}
+
+/* ET PAR-DESSUS CE QUI EST À CÔTÉ (conv-208, 2026-10-10 : « quand je click sur l'oeil dans la left
+   barre le popup est caché »). Le rail est sa propre COUCHE : son flou de fond (app-shell.css, tous
+   les thèmes) et ses coins coupés (`clip-path`, Nébuleuse verre) l'isolent. Le `z-index: 40` de la
+   liste ne vaut donc QU'À L'INTÉRIEUR du rail, et le panneau des conversations, peint après lui dans
+   `.main`, la recouvrait entièrement (0 point sur 15 au premier plan, mesuré). C'est le RAIL qui
+   monte, et seulement tant que la liste flotte : au repos, rien ne change dans l'ordre des couches.
+   30 : devant le séparateur des panneaux (4) et le panneau Détails en fenêtre étroite (25), derrière
+   les menus et modales plein écran de la vue (60 et plus). Le rail est un enfant flex de `.shell` :
+   le z-index s'y applique sans `position`. */
+.rail:has(.rail-update-incoming.is-floating) {
+  z-index: 30;
 }
 
 .rail-update-incoming.is-floating {

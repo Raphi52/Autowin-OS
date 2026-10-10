@@ -24,6 +24,13 @@ interface PersistChatUsageSettlementInput {
    */
   derniereEntree?: number
   derniereEntreeCache?: number
+  /**
+   * Le tour a ete coupe par l'utilisateur (bouton Stop), tel que tranche par `terminalDuTour`.
+   * Le superviseur, lui, ne connait que « regle » ou « rate » : il range l'appel coupe dans
+   * `failedCalls` (comptabilite de budget, inchangee). Sans ce drapeau, l'etape s'affichait
+   * « echec » en rouge pour un arret VOULU (conv-191, tour 4929e6b0, 2026-10-10).
+   */
+  arretVoulu?: boolean
   activityRoot?: string
   traceStore: TraceStore
 }
@@ -161,7 +168,14 @@ export function persistChatUsageSettlement(
     timestamp: new Date().toISOString(),
     sequence: input.traceStore.nextSequence(input.conversationId),
     type: 'boundary',
-    status: current.activeCalls > 0 ? 'running' : current.failedCalls > 0 ? 'failed' : 'completed',
+    status:
+      current.activeCalls > 0
+        ? 'running'
+        : current.failedCalls > 0
+          ? input.arretVoulu
+            ? 'cancelled'
+            : 'failed'
+          : 'completed',
     actor: {
       id: 'execution-supervisor',
       kind: 'system',

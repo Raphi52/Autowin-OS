@@ -360,6 +360,18 @@ describe('WorkflowExecutionGraph', () => {
       ?.querySelector('.workflow-execution-node-meta')
     expect(toolMeta?.textContent).toContain('aucune skill')
     expect(toolMeta?.textContent).toContain('chat direct')
+    // Un chat direct sans skill est NORMAL : l'absence se lit en discret, pas dans la couleur
+    // d'accent en gras d'un vrai nom de skill (lue comme une alarme, 2026-10-10).
+    expect(meta?.querySelector('.workflow-execution-skill')?.classList.contains('is-absent')).toBe(true)
+  })
+
+  it('ne peint pas en rouge une étape annulée : un Stop n’est pas un échec', () => {
+    const css = readFileSync(join(__dirname, 'WorkflowExecutionGraph.css'), 'utf8')
+    const regleRouge = css.match(/[^{}]*\{[^{}]*background:\s*var\(--err\)[^{}]*\}/)?.[0] ?? ''
+
+    expect(regleRouge).toContain('.is-failed')
+    expect(regleRouge).not.toContain('.is-cancelled')
+    expect(css).toMatch(/\.is-cancelled \.workflow-execution-dot[^{]*\{[^}]*var\(--text-faint\)/)
   })
 
   it('relie chaque card enfant avec une flèche orientée vers elle', () => {

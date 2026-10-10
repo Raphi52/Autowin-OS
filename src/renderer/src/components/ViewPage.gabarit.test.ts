@@ -145,3 +145,167 @@ describe('Gabarit des vues : un seul cadre de page', () => {
     )
   })
 })
+
+/**
+ * LE RETRAIT HORIZONTAL DU CONTENU, une seule valeur (conv-160, 2026-10-10 : « Aligne le retrait
+ * horizontal du contenu de toutes les vues sur une seule valeur du gabarit »).
+ *
+ * Mesure au rendu (`ui-capture.mjs --retraits`, distance bord du cadre -> bloc peint le plus a
+ * gauche) avant correction : 18 px dans Task Manager, Observatory, Memory, Modeles et cinq onglets
+ * de Settings ; 22 dans Tickets, 30 dans Workflows, 36 dans Routage, 38 dans Skills et Behaviour.
+ * Chaque ecart venait d'un conteneur du contenu qui AJOUTAIT son retrait lateral par-dessus celui
+ * du cadre. Le gabarit : le cadre pose `--view-retrait`, rien a l'interieur n'en rajoute ; le TEXTE
+ * des en-tetes va plus loin, de `--view-head-retrait`, et seulement par ce jeton.
+ */
+
+/** Composantes [haut, droite, bas, gauche] d'un raccourci padding/margin (parentheses respectees). */
+function composantes(valeur: string): string[] {
+  const parts: string[] = []
+  let profondeur = 0
+  let courant = ''
+  for (const c of valeur.replace(/!important/i, '').trim()) {
+    if (c === '(') profondeur++
+    if (c === ')') profondeur--
+    if (profondeur === 0 && /\s/.test(c)) {
+      if (courant) parts.push(courant)
+      courant = ''
+    } else courant += c
+  }
+  if (courant) parts.push(courant)
+  const [h, d = h, b = h, g = d] = parts
+  return [h, d, b, g]
+}
+
+/** Les valeurs LATERALES (gauche, droite) qu'une declaration pose, ou [] si elle n'en pose pas. */
+function lateraux(prop: string, valeur: string): string[] {
+  if (prop === 'padding' || prop === 'margin') {
+    const [, d, , g] = composantes(valeur)
+    return [g, d]
+  }
+  if (prop === 'padding-inline' || prop === 'margin-inline') {
+    const [g, d = g] = composantes(valeur)
+    return [g, d]
+  }
+  if (/^(padding|margin)-(left|right|inline-start|inline-end)$/.test(prop)) return [valeur.trim()]
+  return []
+}
+
+/** Toute declaration laterale posee sur une des classes, dans toutes les feuilles. */
+function declarationsLaterales(classes: string[]): { ou: string; valeurs: string[] }[] {
+  // L'element CIBLE est la fin du selecteur : `.domain-content .x` vise `.x`, pas l'enveloppe. On
+  // tolere en queue un modificateur (`--galaxy`) et des pseudo-classes ou attributs (`:only-child`).
+  const motifs = classes.map(
+    (c) => new RegExp(`(^|[^\\w-])${c}(--[\\w-]+)?(?![\\w-])([.:\\[][^\\s>+~]*)?$`)
+  )
+  const trouve: { ou: string; valeurs: string[] }[] = []
+  for (const fichier of feuilles(RENDERER)) {
+    postcss.parse(readFileSync(fichier, 'utf8')).walkRules((regle) => {
+      const cibles = regle.selectors.filter(
+        (s) => !dernierCompose(s).includes('::') && motifs.some((m) => m.test(s.trim()))
+      )
+      if (cibles.length === 0) return
+      regle.walkDecls((d) => {
+        if (d.parent !== regle) return
+        const valeurs = lateraux(d.prop, d.value)
+        if (valeurs.length === 0) return
+        trouve.push({
+          ou: `${fichier.slice(RENDERER.length + 1)} « ${cibles.join(', ')} » ${d.prop}: ${d.value}`,
+          valeurs
+        })
+      })
+    })
+  }
+  return trouve
+}
+
+/**
+ * Les conteneurs PLEINE LARGEUR du contenu : la racine de chaque vue (le meme element que
+ * `.view-page` — un padding pose ici ecraserait celui du cadre), l'enveloppe des vues a onglets, la
+ * racine de chaque sous-vue, et les enveloppes de corps qui ajoutaient leur propre retrait.
+ * `interface-view` n'y est pas : c'est un PANNEAU (`.surface-panel`), son retrait est interieur.
+ */
+const CONTENEURS_DU_CONTENU = [
+  '\\.task-manager-view',
+  '\\.tickets-view',
+  '\\.tests-view',
+  '\\.worktree-tab',
+  '\\.observatory-view',
+  '\\.domain-shell',
+  '\\.domain-content',
+  ...Object.values(RACINES_DE_CONTENU)
+    .filter((c) => c !== 'interface-view')
+    .map((c) => `\\.${c}`),
+  '\\.cockpit-scroll',
+  '\\.tickets-toolbar',
+  '\\.tickets-actions'
+]
+
+/** Les BLOCS du contenu (panneau borde, message) : leur padding est INTERIEUR, seule une marge
+ *  laterale les decale du retrait commun. */
+const BLOCS_DU_CONTENU = [
+  '\\.behaviour-inspection',
+  '\\.behaviour-error',
+  '\\.workflow-profiles-head'
+]
+
+/** Les en-tetes dont le TEXTE suit le retrait des titres de page. */
+const ENTETES_DE_TEXTE = [
+  '\\.view-topbar',
+  '\\.graph-toolbar',
+  '\\.tickets-head',
+  '\\.observatory-head',
+  '\\.cockpit-header',
+  '\\.topology-toolbar',
+  '\\.behaviour-view\\s*>\\s*header',
+  '\\.router-view\\s*>\\s*\\.module-header'
+]
+
+describe('Gabarit des vues : un seul retrait horizontal du contenu', () => {
+  it('le cadre pose le retrait du contenu par SON jeton, declare une seule fois', () => {
+    const cadre = readFileSync(join(ICI, 'ViewPage.css'), 'utf8')
+    const regleCadre = regle(cadre, '.view-page')
+    expect(regleCadre).toMatch(/--view-retrait:\s*\d+px\s*;/)
+    expect(regleCadre).toMatch(/--view-head-pad:\s*\S+\s+var\(--view-head-retrait\)\s+\S+\s*;/)
+    expect(regleCadre).toMatch(/\n\s*padding:\s*\S+\s+var\(--view-retrait\)\s*;/)
+    // Une seule source : un theme qui redefinirait le jeton recreerait une valeur par vue.
+    const ailleurs = feuilles(RENDERER).filter(
+      (f) => !f.endsWith('ViewPage.css') && /--view-retrait\s*:/.test(readFileSync(f, 'utf8'))
+    )
+    expect(ailleurs).toEqual([])
+  })
+
+  it('aucun conteneur du contenu n ajoute de retrait lateral, dans aucune feuille', () => {
+    const fautifs = declarationsLaterales(CONTENEURS_DU_CONTENU)
+      .filter(({ valeurs }) => valeurs.some((v) => !/^(0|0px|auto)$/.test(v)))
+      .map(({ ou }) => ou)
+    expect(fautifs).toEqual([])
+  })
+
+  it('aucun bloc du contenu ne se decale par une marge laterale, dans aucune feuille', () => {
+    const fautifs = declarationsLaterales(BLOCS_DU_CONTENU)
+      .filter(({ ou }) => / margin(-[a-z-]+)?: /.test(ou))
+      .filter(({ valeurs }) => valeurs.some((v) => !/^(0|0px|auto)$/.test(v)))
+      .map(({ ou }) => ou)
+    expect(fautifs).toEqual([])
+  })
+
+  it('le texte des en-tetes ne prend son retrait lateral QUE des jetons du gabarit', () => {
+    const fautifs = declarationsLaterales(ENTETES_DE_TEXTE)
+      .filter(({ valeurs }) =>
+        valeurs.some((v) => !/^var\(--view-head-(retrait|pad)\b/.test(v) && !/^(0|0px)$/.test(v))
+      )
+      .map(({ ou }) => ou)
+    expect(fautifs).toEqual([])
+  })
+})
+
+function regle(css: string, selecteur: string): string {
+  for (const bloc of css.split('}')) {
+    const coupe = bloc.lastIndexOf('{')
+    if (coupe < 0) continue
+    if (bloc.slice(0, coupe).replace(/\/\*[\s\S]*?\*\//g, '').trim() === selecteur) {
+      return bloc.slice(coupe + 1)
+    }
+  }
+  return ''
+}

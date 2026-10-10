@@ -13,6 +13,7 @@ import { ChatView } from './components/ChatView'
 import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
 import { DecorDeFond } from './components/DecorDeFond'
+import { installerBalaiDesPanneaux } from './panneaux-balai'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 // L'onglet Worktrees porte la vue à FRISE D'HISTORIQUE GIT (`WorktreeView`), restaurée sur demande de
@@ -174,6 +175,10 @@ export function MainApp(): React.JSX.Element {
   useEffect(() => {
     document.title = testInstance ? 'Autowin OS Test' : 'Autowin OS'
   }, [testInstance])
+
+  // Reflets des panneaux qui suivent la souris (conv-191) : le script ne pose que des positions, le
+  // thème Nébuleuse de verre les peint ; les autres thèmes ne les lisent pas.
+  useEffect(() => installerBalaiDesPanneaux(window), [])
 
   useEffect(() => {
     migrateAutowinStorage(localStorage)
@@ -481,19 +486,13 @@ export function MainApp(): React.JSX.Element {
             title={railCollapsed ? 'Déployer le menu' : 'Réduire le menu'}
             onClick={() => setRailCollapsed((collapsed) => !collapsed)}
           >
-            <svg
-              viewBox="0 0 24 24"
-              width="15"
-              height="15"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d={railCollapsed ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'} />
-            </svg>
+            {/* CHEVRON PEINT PAR MASQUE, PAS UN <svg> ENFANT (2026-10-10, « cette flèche aussi
+                devrait être un chouya à gauche »). Un <svg> de 15 px est arrondi au pixel à part
+                du rond : jusqu'à 1,1 px de décalage selon le zoom Ctrl+molette (526/1040 positions
+                mesurées). Ce <span> remplit le bouton, donc il est arrondi comme lui ; le tracé,
+                recentré dans sa viewBox, vit dans app-shell.css (`.rail-toggle-trait`) :
+                0/1040. Le sens suit `.rail.is-collapsed`. */}
+            <span className="rail-toggle-trait" aria-hidden="true" />
           </button>
         </div>
         <nav className="nav">
