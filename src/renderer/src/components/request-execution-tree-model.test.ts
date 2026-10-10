@@ -104,7 +104,9 @@ describe('projectLatestRequestExecution', () => {
     expect(skill?.parentId).toBe(quote?.id)
   })
 
-  it('projette deux runs sous un workspace commun sans collision entre les tours', () => {
+  // Deux runs du MÊME tour (fan-out, reprise). Des runs de tours DIFFÉRENTS ne se mélangent plus
+  // depuis le 2026-10-10 : voir « choix du tour quand la conversation contient un run ».
+  it('projette deux runs d’un même tour sous un workspace commun sans collision', () => {
     const workspace = (runId: string, path: string) => ({
       stage: 'workspace' as const,
       runId,
@@ -132,13 +134,13 @@ describe('projectLatestRequestExecution', () => {
           taskId: 'task-1'
         }
       }),
-      runTrace('run-2-workspace', 'turn-2', 3, 'run-2', {
+      runTrace('run-2-workspace', 'turn-1', 3, 'run-2', {
         timestamp: '2026-07-30T12:01:00.000Z',
         type: 'boundary',
         run: workspace('run-2', 'C:\\worktrees\\run-2'),
         execution: { runId: 'run-2' }
       }),
-      runTrace('run-2-agent', 'turn-2', 4, 'run-2', {
+      runTrace('run-2-agent', 'turn-1', 4, 'run-2', {
         timestamp: '2026-07-30T12:01:01.000Z',
         execution: {
           runId: 'run-2',
@@ -749,5 +751,100 @@ describe('choix du tour projeté', () => {
 
     expect(projection.turnId).toBe('turn-recent')
     expect(projection.events.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * UN RUN ANCIEN NE CONFISQUE PLUS LE GRAPHE.
+ *
+ * La vue des runs passait AVANT le choix du tour et lisait TOUS les tours : dès qu'une conversation
+ * contenait un seul run orchestré, le sélecteur disparaissait (aucune liste de tours rendue), le tour
+ * choisi était ignoré, et le tour annoncé était le DERNIER même quand le graphe montrait un vieux run.
+ * Le panneau apparie le fil des sous-agents sur ce tour annoncé : il associait donc le mauvais fil.
+ * Mesuré le 2026-10-10 sur les traces réelles : 25 conversations ont un run, 9 d'entre elles finissent
+ * par un tour sans run — leur dernière demande était inatteignable.
+ */
+describe('choix du tour quand la conversation contient un run', () => {
+  const workspaceFact = (id: string, turnId: string, sequence: number, runId: string) =>
+    runTrace(id, turnId, sequence, runId, {
+      type: 'boundary',
+      execution: { runId },
+      run: {
+        stage: 'workspace',
+        runId,
+        timestampMs: 100,
+        workspace: { mode: 'worktree', repositoryPath: 'C:\\repo', path: `C:\\wt\\${runId}` }
+      }
+    })
+  const runPuisChat = (): ReturnType<typeof buildHarnessTimelineFromTrace> =>
+    buildHarnessTimelineFromTrace([
+      trace('m-run', 'turn-run', 1, {
+        type: 'message',
+        payloads: [{ kind: 'user-message', content: 'UTILISATEUR: lance le build' }]
+      }),
+      workspaceFact('ws-run', 'turn-run', 2, 'run-1'),
+      runTrace('agent-run', 'turn-run', 3, 'run-1', {
+        execution: { runId: 'run-1', attemptId: 'attempt-1', phase: 'build', agentId: 'builder' }
+      }),
+      trace('m-chat', 'turn-chat', 4, {
+        type: 'message',
+        payloads: [{ kind: 'user-message', content: 'UTILISATEUR: explique le graphe' }],
+        provider: { id: 'claude', model: 'opus' }
+      })
+    ])
+
+  it('un run au tour 1 et un chat simple au tour 2 : deux tours au sélecteur, le tour 2 affiché', () => {
+    const projection = projectLatestRequestExecution(runPuisChat())
+
+    expect(projection.turns?.map((turn) => turn.id)).toEqual(['turn-chat', 'turn-run'])
+    expect(projection.turnId).toBe('turn-chat')
+    expect(projection.events.some((event) => event.id === 'm-chat')).toBe(true)
+    expect(projection.events.some((event) => event.display?.kind === 'workspace')).toBe(false)
+  })
+
+  it('le tour du run choisi montre CE run et annonce CE tour', () => {
+    const projection = projectLatestRequestExecution(runPuisChat(), { turnId: 'turn-run' })
+
+    expect(projection.turnId).toBe('turn-run')
+    expect(projection.runIds).toEqual(['run-1'])
+    expect(projection.turns?.map((turn) => turn.id)).toEqual(['turn-chat', 'turn-run'])
+    expect(projection.events.some((event) => event.display?.kind === 'agent')).toBe(true)
+    expect(projection.events.some((event) => event.id === 'm-chat')).toBe(false)
+  })
+
+  it('deux runs de deux tours : chaque tour ne montre QUE son run', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      workspaceFact('ws-1', 'turn-1', 1, 'run-1'),
+      workspaceFact('ws-2', 'turn-2', 2, 'run-2')
+    ])
+
+    expect(projectLatestRequestExecution(timeline).runIds).toEqual(['run-2'])
+    expect(projectLatestRequestExecution(timeline, { turnId: 'turn-1' }).runIds).toEqual(['run-1'])
+  })
+
+  it('un run repris dans un autre tour garde son dépôt et sa clôture d’origine', () => {
+    // `relaunch-resumable-run.ts` persiste le cycle de vie repris sous `resumeTurnId` : les faits
+    // d'un même run se répartissent alors sur deux tours, et le tour de reprise doit le montrer ENTIER.
+    const timeline = buildHarnessTimelineFromTrace([
+      workspaceFact('ws-1', 'turn-1', 1, 'run-1'),
+      runTrace('closure-1', 'turn-reprise', 2, 'run-1', {
+        timestamp: '2026-07-30T12:05:00.000Z',
+        type: 'gate',
+        execution: { runId: 'run-1' },
+        run: {
+          stage: 'closure',
+          runId: 'run-1',
+          timestampMs: 200,
+          closure: { status: 'green', totalDurationMs: 10, totalCostUsd: 0 }
+        }
+      })
+    ])
+
+    const projection = projectLatestRequestExecution(timeline, { turnId: 'turn-reprise' })
+    expect(projection.turnId).toBe('turn-reprise')
+    expect(projection.events.some((event) => event.id === 'workspace:run:run-1')).toBe(true)
+    expect(projection.events.find((event) => event.id === 'closure:run-1')?.status).toBe(
+      'completed'
+    )
   })
 })
