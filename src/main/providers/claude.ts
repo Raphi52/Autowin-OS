@@ -1042,9 +1042,18 @@ function dureeLisible(secondes: number): string {
  * `success` (0,95 USD, commande valide) ecrit 300 s pile avant le kill, sans `.exit.json` : le
  * processus n'est jamais sorti. La fin d'appel n'etait decidee que sur `close` ; la reponse complete
  * a ete jetee, l'appel compte « non chiffre », le travail refait de zero. Meme signature le meme jour
- * sur `44f0ca6a`, `3841b95d`. Pourquoi le CLI reste en vie apres `result` : non localise, hors depot.
- * Ce que fait Autowin : la reponse est terminale des `result` ; passe ce delai, on arrete le
- * processus et on la rend. 30 s = 7x le maximum mesure (4,1 s sur 173 journaux, mediane 0,9 s).
+ * sur `44f0ca6a`, `3841b95d`. Ce que fait Autowin : la reponse est terminale des `result` ; passe ce
+ * delai, on arrete le processus et on la rend. 30 s = 7x le maximum mesure (4,1 s sur 173 journaux,
+ * mediane 0,9 s).
+ *
+ * POURQUOI LE CLI RESTE EN VIE APRES `result` — hypothese mesuree le 2026-10-10, pas une preuve : sur
+ * les 6 journaux `run-stdout/` du poste qui ont un `result` mais aucun `.exit.json`, 4 ont plus de
+ * `task_started` que de `task_notification` (une commande de fond encore ouverte). Le CLI attend
+ * cette tache pour traiter sa notification (5 journaux sur 302 finissent par un 2e `result`
+ * `origin.kind` = `task-notification`). La tuer ici a un effet DIFFERE : a la reprise suivante, le CLI
+ * signale « Background shell command didn't finish before the previous session ended » et emet un
+ * `result` a 0 tour AVANT la demande — conv-217 : tue au tour f7d4bc2d-…, panne au tour 1d809770-…
+ * (voir `resultatDeNotification`).
  */
 /**
  * Ce `result` a-t-il ete produit par le CLI pour traiter une NOTIFICATION de tache de fond, et non
