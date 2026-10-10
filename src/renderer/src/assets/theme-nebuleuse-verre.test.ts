@@ -164,4 +164,34 @@ describe('theme Nebuleuse de verre', () => {
     expect(actif).toContain('rgba(212, 169, 79, 0.75)')
     expect(actif).not.toMatch(/251, 91, 171/)
   })
+
+  /**
+   * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-157) : « met des borders degrade [...] sur les
+   * elements du chat qui ont un cadre comme ca » (capture de la carte de fichier du fil), precise :
+   * « ca doit etre les memes couleurs que mes messages dans le chat ». Le bord rose plein de la
+   * couche generee laisse place a un calque au degrade EXACT des bulles de l'utilisateur, qui
+   * garde les coins arrondis.
+   */
+  it('borde les cartes de fichier du fil du degrade des bulles de l utilisateur', () => {
+    const decls = (selecteur: string): Record<string, string> => {
+      const valeurs: Record<string, string> = {}
+      postcss.parse(lire('./theme-nebuleuse-verre.css')).walkRules((regle) => {
+        if (!regle.selectors.some((s) => s.replace(/\s+/g, ' ').trim() === selecteur)) return
+        regle.walkDecls((d) => {
+          valeurs[d.prop] = d.value
+        })
+      })
+      return valeurs
+    }
+    const carte = decls(`${PREFIXE} .artifact-preview`)
+    expect(carte.border).toBe('0')
+    expect(carte.position).toBe('relative')
+    const bord = decls(`${PREFIXE} .artifact-preview::before`)
+    const bulle = decls(`${PREFIXE} .msg.user .msg-body`)
+    expect(bulle.background).toBe('linear-gradient(135deg, #e63ca0, #3c6eeb)')
+    expect(bord.background).toBe(bulle.background)
+    expect(bord['border-radius']).toBe('inherit')
+    expect(bord['mask-composite']).toBe('exclude')
+    expect(bord['pointer-events']).toBe('none')
+  })
 })
