@@ -103,4 +103,25 @@ describe('theme Nebuleuse de verre', () => {
     }
     expect(fautifs).toEqual([])
   })
+
+  /**
+   * AUCUN FLOU DE FOND (2026-10-10, conv-124). Un parent porteur d'un `backdrop-filter` devient le
+   * repere des enfants `position: fixed` : la fenetre des quotas (ModelQuotaIndicator.tsx), ancree
+   * sur la fenetre de l'app, se calculait depuis le bloc de saisie et disparaissait. Le theme
+   * sombre d'origine met deja `--container-blur` a 0 pour la meme raison (ui-system.css).
+   */
+  it('ne pose aucun flou de fond qui decalerait les fenetres ancrees sur la fenetre', () => {
+    const fautifs: string[] = []
+    for (const fichier of ['./theme-nebuleuse-verre.css', './theme-nebuleuse-verre.genere.css']) {
+      postcss.parse(lire(fichier)).walkDecls((decl) => {
+        if (/backdrop-filter$/.test(decl.prop) && decl.value.trim() !== 'none') {
+          fautifs.push(`${fichier} : ${decl.prop}: ${decl.value}`)
+        }
+        if (decl.prop === '--container-blur' && !/^0(px)?$/.test(decl.value.trim())) {
+          fautifs.push(`${fichier} : --container-blur: ${decl.value}`)
+        }
+      })
+    }
+    expect(fautifs).toEqual([])
+  })
 })

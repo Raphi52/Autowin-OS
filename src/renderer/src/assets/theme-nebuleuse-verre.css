@@ -108,8 +108,18 @@
     rgba(255, 206, 120, 0) min(45%, 240px)
   );
   --nv-orbe-reflet: inset 0 1px 2px rgba(255, 236, 190, 0.7);
-  --nv-flou: blur(18px) saturate(1.25);
-  --nv-flottant: rgba(22, 18, 44, 0.92);
+  /* PAS DE FLOU DE FOND (backdrop-filter) DANS CE THEME -- retire le 2026-10-10, conv-124.
+     Un parent qui porte un backdrop-filter devient, en CSS, le repere de ses enfants
+     `position: fixed`. Or une quinzaine de fenetres d'Autowin s'ancrent sur la FENETRE de l'app
+     (quotas : ModelQuotaIndicator.tsx l.496 ; jauge de contexte ; menu d'un fil ; choix du
+     modele...). Le flou pose sur le fil et la saisie faisait calculer la fenetre des quotas depuis
+     le bloc de saisie : elle sortait de la colonne et disparaissait (« le quota de la semaine et
+     jour n'est plus bien aligne, on voit plus ou on en est »). Le verre de ce theme tient a son
+     fond translucide, a sa bordure et a son reflet ; derriere lui il n'y a que des degrades doux,
+     deja flous. Garde-fou : theme-nebuleuse-verre.test.ts. */
+  /* Fenetres flottantes (menus, quotas, palette /) : OPAQUES. Sans flou de fond, 8 % de
+     transparence laissaient lire le texte du fil au travers (capture du 2026-10-10). */
+  --nv-flottant: #16122c;
   --nv-lueur-rose: 0 0 18px rgba(255, 61, 154, 0.45);
   --nv-rond: 16px;
 
@@ -252,7 +262,9 @@
     rgba(255, 214, 140, 0.25) 50%,
     rgba(255, 214, 140, 0.65)
   );
-  --container-blur: 18px;
+  /* 0, comme le theme sombre d'origine (ui-system.css) : ce jeton allume un backdrop-filter sur
+     Agent Studio, Settings, Observatory et Router, avec le meme effet sur leurs fenetres fixes. */
+  --container-blur: 0px;
   --module-title-font: var(--display);
   --module-title-color: #ffffff;
   --module-eyebrow-color: #8f89ad;
@@ -322,7 +334,6 @@
   border-top-color: var(--nv-bord-dore);
   border-radius: 18px;
   background: var(--nv-voile-dore), rgba(255, 255, 255, 0.045);
-  backdrop-filter: var(--nv-flou);
   box-shadow: var(--nv-reflet-dore);
 }
 :root[data-theme='nebuleuse-verre'] .theme-serious .brand {
@@ -368,7 +379,6 @@
   border-color: var(--nv-bord);
   border-top-color: var(--nv-bord-dore);
   background: var(--nv-voile-dore), var(--nv-verre);
-  backdrop-filter: var(--nv-flou);
   box-shadow: var(--nv-reflet-dore);
 }
 /* Le grand panneau de chaque vue : le filet dore du haut + le voile chaud. */
@@ -474,7 +484,6 @@
   border-top-color: var(--nv-bord-dore);
   border-radius: 14px;
   background: var(--nv-voile-dore), var(--nv-flottant);
-  backdrop-filter: var(--nv-flou);
   box-shadow:
     0 18px 50px rgba(6, 4, 20, 0.6),
     var(--nv-reflet-dore);
@@ -499,7 +508,6 @@
   border-top-color: var(--nv-bord-dore);
   border-radius: var(--nv-rond);
   background: var(--nv-voile-dore), var(--nv-verre);
-  backdrop-filter: var(--nv-flou);
   box-shadow: var(--nv-reflet-dore);
 }
 /* LA COLONNE DU FIL S'ASSOMBRIT (variante 3 « Pose sur le fil », choisie le 2026-10-09,
@@ -695,7 +703,6 @@
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 22px;
   background: rgba(10, 8, 26, 0.62);
-  backdrop-filter: var(--nv-flou);
   box-shadow: var(--nv-reflet);
 }
 /* Focus : le bord passe au rose, SANS halo autour. Le halo de 3 px se lisait, sur le haut
