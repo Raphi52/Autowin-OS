@@ -11,21 +11,33 @@ import { quotaGradientColor } from './quota-gradient'
  */
 describe('teinte du degrade des quotas', () => {
   it('rend les couleurs des arrets connus', () => {
-    expect(quotaGradientColor(0)).toBe('rgb(184, 32, 26)')
-    expect(quotaGradientColor(12)).toBe('rgb(184, 32, 26)')
-    expect(quotaGradientColor(68)).toBe('rgb(239, 192, 35)')
-    expect(quotaGradientColor(100)).toBe('rgb(53, 208, 127)')
+    expect(quotaGradientColor(0)).toBe('var(--quota-rouge)')
+    expect(quotaGradientColor(12)).toBe('var(--quota-rouge)')
+    expect(quotaGradientColor(68)).toBe('var(--quota-jaune)')
+    expect(quotaGradientColor(100)).toBe('var(--quota-vert)')
   })
 
   it('interpole entre deux arrets au lieu de sauter au palier', () => {
-    const teinte = quotaGradientColor(74)
-    expect(teinte).not.toBe('rgb(53, 208, 127)')
-    expect(teinte).not.toBe('rgb(239, 192, 35)')
-    const [r, v, b] = teinte.match(/\d+/g)!.map(Number)
-    expect(r).toBeLessThan(239)
-    expect(r).toBeGreaterThan(53)
-    expect(v).toBeGreaterThan(192)
-    expect(b).toBeGreaterThan(35)
+    // 74 % = un tiers du chemin entre le jaune (68 %) et le vert (86 %).
+    expect(quotaGradientColor(74)).toBe(
+      'color-mix(in srgb, var(--quota-vert) 33.3%, var(--quota-jaune))'
+    )
+    // 21 % = la moitie entre le rouge (12 %) et l'orange (30 %).
+    expect(quotaGradientColor(21)).toBe(
+      'color-mix(in srgb, var(--quota-orange) 50%, var(--quota-rouge))'
+    )
+  })
+
+  /**
+   * DEFAUT DU 2026-10-10 (conv-197) : la pastille recopiait la palette de BASE (vert #35d07f) alors
+   * que le theme Nebuleuse repeint la barre en #4fd1a5 — deux verts cote a cote. Aucune couleur
+   * ecrite en dur ne doit sortir d'ici : seules les variables que le theme pose.
+   */
+  it('ne rend jamais une couleur en dur, seulement les variables du theme', () => {
+    for (let p = 0; p <= 100; p += 1) {
+      // `\brgba?\(` : une couleur rgb(...) ; le mot `srgb` de color-mix n'en est pas une.
+      expect(quotaGradientColor(p)).not.toMatch(/#|\brgba?\(/)
+    }
   })
 
   it('borne les valeurs hors echelle', () => {
