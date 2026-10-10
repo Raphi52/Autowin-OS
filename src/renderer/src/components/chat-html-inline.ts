@@ -463,6 +463,30 @@ function prefixerIdentifiantsCss(selector: string, prefixe: string): string {
     )
 }
 
+/**
+ * LA LARGEUR QUI COMPTE EST CELLE DE LA COLONNE, PAS CELLE DE LA FENETRE.
+ *
+ * Un bloc du fil vit dans la colonne de reponse, dont la largeur depend de la fenetre ET des
+ * panneaux ouverts. Un `@media (max-width: …)` y mesurait pourtant la FENETRE. Mesure conv-139,
+ * tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : fenetre 1600 px, colonne 860 px, le palier « zoom .9 »
+ * du modele s'est declenche et sa scene a pris 1440 px — coupee a droite, avec la moitie des
+ * differences entre variantes hors de vue.
+ *
+ * Une requete qui ne porte QUE sur la largeur devient donc une requete de CONTENEUR, et le bloc
+ * devient ce conteneur (voir `sanitizeChatHtml`). Tout le reste (`print`, `prefers-*`, hauteur,
+ * orientation, `device-width`, listes a virgule, `not`) garde son sens de page et reste `@media`.
+ */
+const FEATURE_LARGEUR = String.raw`\(\s*(?:(?:min-|max-)?width\s*:[^()]*|[^():]*(?<![\w-])width(?![\w-])[^():]*)\)`
+const MEDIA_DE_LARGEUR = new RegExp(
+  String.raw`^@media\s+(?:(?:only\s+)?(?:screen|all)\s+and\s+)?(${FEATURE_LARGEUR}(?:\s+and\s+${FEATURE_LARGEUR})*)\s*$`,
+  'i'
+)
+
+function requeteDeLargeurSurLeBloc(prelude: string): string {
+  const largeur = MEDIA_DE_LARGEUR.exec(prelude)
+  return largeur ? `@container ${largeur[1]}` : prelude
+}
+
 function scopeSelector(selector: string, scope: string): string {
   return selector
     .split(',')
@@ -622,7 +646,7 @@ export function scopeChatStyleSheet(
     if (/^@(?:import|charset|namespace)/i.test(prelude)) continue
     if (/^@(?:media|supports|layer|container)/i.test(prelude)) {
       const inner = scopeChatStyleSheet(body, scope, racine, revelateurs)
-      if (inner.trim()) out.push(`${prelude}{${inner}}`)
+      if (inner.trim()) out.push(`${requeteDeLargeurSurLeBloc(prelude)}{${inner}}`)
       continue
     }
     // `@keyframes` et `@font-face` n'ont pas de selecteur a prefixer ; leur corps est inerte.
@@ -740,7 +764,12 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
           // jamais le document de l'application.
           scopeChatStyleSheet(node.textContent ?? '', scopeSelector_, template.content)
         : ''
-      if (scoped) node.textContent = scoped
+      // Une requete de conteneur (ecrite par le modele ou convertie d'un `@media` de largeur) a
+      // besoin d'un conteneur : c'est le bloc lui-meme, donc la colonne ou il s'affiche. Pose
+      // SEULEMENT dans ce cas — un bloc sans requete de largeur garde exactement sa mise en page.
+      if (scoped && /@container\b/i.test(scoped))
+        node.textContent = `${scopeSelector_}{container-type:inline-size}\n${scoped}`
+      else if (scoped) node.textContent = scoped
       else node.remove()
       return
     }
