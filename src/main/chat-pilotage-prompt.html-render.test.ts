@@ -24,4 +24,14 @@ describe('chat HTML rendering contract', () => {
     // Le garde-fou inverse : le HTML ne doit pas devenir obligatoire pour deux phrases.
     expect(prompt).toContain('court et purement')
   })
+
+  it('dit que le bloc vit dans une colonne de largeur variable et donne l outil qui le montre ainsi', () => {
+    // conv-139, tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : scene fixe de 1600 px coupee dans la
+    // colonne, verifiee sur une copie a 1640 px — saisie ts=1791619766383 « je vois les 6 memes ».
+    const prompt = buildChatPilotagePrompt([])
+    expect(prompt).toContain('LARGEUR DU BLOC')
+    expect(prompt).toMatch(/COLONNE de réponse/u)
+    expect(prompt).toMatch(/jamais une scène de taille fixe réduite par zoom/u)
+    expect(prompt).toContain('node scripts/html-render-apercu.mjs')
+  })
 })

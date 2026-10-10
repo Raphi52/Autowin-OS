@@ -383,6 +383,22 @@ export function buildChatPilotagePrompt(
     `nécessaires. Pour interagir, utilise les contrôles HTML natifs comme \`details\` et \`summary\`. ` +
     `Au-delà d'environ 1 Mo, fournis plutôt la page comme artefact \`.html\`. N'utilise jamais ce ` +
     `bloc pour un simple exemple de code HTML.\n` +
+    // LARGEUR DE COLONNE (conv-139, tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8, 2026-10-10). Six
+    // variantes dessinees sur une scene fixe de 1600 px reduite par paliers @media : dans la
+    // colonne de 860 px, scene de 1440 px coupee a droite, la moitie des differences hors de vue.
+    // L'agent avait « verifie » sa copie dans Edge a 1640 px, zoom et onglet forces. Saisie
+    // ts=1791619766383 : « je vois les 6 memes … elles devraient etre responsive dans l'espace de
+    // chat ». Rien ici ne disait que le bloc vit dans une colonne de largeur variable.
+    `LARGEUR DU BLOC : il s'affiche dans la COLONNE de réponse, dont la largeur change avec la ` +
+    `fenêtre et les panneaux ouverts (souvent 500 à 900 px), jamais à la largeur de l'écran. ` +
+    `Dessine-le FLUIDE : largeur 100 %, flex avec flex-wrap, aucune largeur fixe en px au-delà ` +
+    `d'environ 480 px, jamais une scène de taille fixe réduite par zoom. Un \`@media\` de largeur y ` +
+    `mesure la colonne. Avant de montrer une maquette ou des variantes, passe le bloc par ` +
+    `\`node scripts/html-render-apercu.mjs <fichier>\` (dépôt Autowin) : il l'affiche comme le chat ` +
+    `(même filtre, plusieurs largeurs de colonne), clique chaque onglet, et son code de sortie ` +
+    `refuse un débordement (3), une balise retirée (4) ou des onglets quasi identiques (5). Une ` +
+    `capture de TA copie, à une autre largeur ou avec un onglet forcé, ne montre pas ce que voit ` +
+    `l'utilisateur.\n` +
     // VERIFICATION CIBLEE AVANT L'ACTE FINAL (conv-1530, 2026-08-29). Une modif d'UNE ligne d'UI
     // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
     // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve
