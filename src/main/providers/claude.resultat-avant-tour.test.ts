@@ -20,6 +20,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
  * `.exit.json`, aucun second `result`), tour affiché « terminé » avec 0 token et le coût
  * 0,3023 USD du PREMIER tour recopié. L'utilisateur a attendu 17 min puis : « je crois que cette
  * conv a planté en route » (saisie ts 1791666005400).
+ *
+ * fix-ok: conv-217 tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — cause mesurée dans le journal
+ * c4cf11ed l.1-3 : un `result` à `origin.kind = 'task-notification'` armait la coupure avant le
+ * vrai tour (rouge sur l'ancien claude.ts : texte absent, coût 0,3023 recopié ; vert sous 4f094b4f).
  */
 const etat = vi.hoisted(() => ({
   avant: [] as Array<Record<string, unknown>>,
