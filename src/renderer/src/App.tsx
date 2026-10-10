@@ -47,6 +47,10 @@ import {
 } from './tabs'
 import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
+// AVANT la base claire (theme-modes.css) : la couche generee d'Holographique blanc ne traduit que
+// ce que la base claire et la feuille du theme ne repeignent pas. Placee apres, elle les ecrasait a
+// specificite egale (decor etoile revenu, menu actif efface -- captures du 2026-10-11, conv-212).
+import './assets/theme-holographique-clair.genere.css'
 import './assets/theme-modes.css'
 import '@fontsource/atkinson-hyperlegible/400.css'
 import '@fontsource/atkinson-hyperlegible/700.css'

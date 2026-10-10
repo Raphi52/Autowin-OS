@@ -1,0 +1,2181 @@
+/* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
+   Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
+   (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
+   566 regles, 858 declarations. Voir genererCoucheClaire. */
+
+/* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
+:root[data-theme='holographique-clair'] .topology-state {
+    border: 1px solid #09712c;
+    background: #fdfdff;
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .topology-state.is-saving {
+    background: #fdfdff;
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .topology-state.is-error {
+    background: #fdfdff;
+    color: #970c24
+}
+:root[data-theme='holographique-clair'] .topology-model {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .topology-model:hover, :root[data-theme='holographique-clair'] .topology-model.is-selected {
+    border-color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .topology-model-mark {
+    background: #fdfdff;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .topology-model-mark.is-claude {
+    background: #fdfdff;
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .topology-authority-note {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .topology-authority-note b {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .topology-panel.is-gold {
+    border-top-color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .topology-panel.is-cyan {
+    border-top-color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .topology-panel.is-pink {
+    border-top-color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .topology-panel.is-drop-target {
+    border-color: #0e31aa;
+    background: rgba(253, 253, 255, 0.84)
+}
+:root[data-theme='holographique-clair'] .topology-panel > header {
+    border-bottom: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .topology-slot {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .topology-slot > button {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff;
+    color: #7e2533
+}
+:root[data-theme='holographique-clair'] .topology-slot > em {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .topology-empty {
+    border: 1px dashed rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .topology-assign-button:hover:not(:disabled) {
+    border-color: #0e31aa;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .topology-runtime-limit {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.78)
+}
+:root[data-theme='holographique-clair'] .topology-runtime-limit b {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .agents-topology-loading {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff;
+    color: #1c172b
+}
+:root[data-theme='holographique-clair'] .theme-serious .topology-model.is-selected {
+    border-color: rgba(170, 14, 95, 0.88)
+}
+:root[data-theme='holographique-clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
+    border-color: rgba(170, 14, 95, 0.7);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .theme-serious .topology-panel.is-drop-target {
+    border-color: rgba(170, 14, 95, 0.82);
+    background: rgba(253, 253, 255, 0.86)
+}
+
+/* ---- src/renderer/src/components/ArtifactPreview.css ---- */
+:root[data-theme='holographique-clair'] .artifact-preview {
+    border: 1px solid color-mix(in srgb, var(--accent, #aa0e5f) 28%, rgba(20, 15, 40, 0.2));
+    background: color-mix(in srgb, #fdfdff 94%, transparent)
+}
+:root[data-theme='holographique-clair'] .artifact-preview__kind {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .artifact-preview__image, :root[data-theme='holographique-clair'] .artifact-preview__video {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .artifact-preview__source.is-diff {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .artifact-table-wrap th {
+    background: #fdfdff;
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .artifact-archive__summary {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .artifact-slide {
+    background: linear-gradient(145deg, #fdfdff, #fdfdff);
+    color: #1c172b
+}
+:root[data-theme='holographique-clair'] .artifact-preview__reveal:hover {
+    color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/BehaviourView.css ---- */
+:root[data-theme='holographique-clair'] .behaviour-field-excerpt pre {
+    background: rgba(20, 15, 40, 0.038)
+}
+
+/* ---- src/renderer/src/components/BrainMarkdown.css ---- */
+:root[data-theme='holographique-clair'] .brain-markdown__meta {
+    border-bottom: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .brain-markdown__meta div {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .brain-markdown__meta dd {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .brain-markdown h2 {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .brain-markdown h3 {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .brain-markdown h4 {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .brain-markdown a {
+    color: #0e31aa;
+    text-decoration-color: rgba(14, 49, 170, 0.35)
+}
+:root[data-theme='holographique-clair'] .brain-markdown a:hover {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .brain-markdown li::marker {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .brain-markdown blockquote {
+    border-left: 3px solid #aa0e5f;
+    background: linear-gradient(90deg, rgba(208, 43, 140, 0.1), transparent)
+}
+:root[data-theme='holographique-clair'] .brain-markdown code {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .brain-markdown pre {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .brain-markdown th, :root[data-theme='holographique-clair'] .brain-markdown td {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .brain-markdown th {
+    background: #fdfdff;
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .brain-markdown tr:nth-child(even) td {
+    background: rgba(253, 253, 255, 0.55)
+}
+:root[data-theme='holographique-clair'] .node-panel .brain-markdown pre {
+    border-color: rgba(20, 15, 40, 0.2);
+    background: #fdfdff;
+    color: #25577e
+}
+
+/* ---- src/renderer/src/components/CadrageHypotheses.css ---- */
+:root[data-theme='holographique-clair'] .cadrage-hyp .askd-badge {
+    border: 1px solid rgba(170, 14, 95, 0.45)
+}
+
+/* ---- src/renderer/src/components/CandidatsPickPanel.css ---- */
+:root[data-theme='holographique-clair'] .cpick-tete {
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
+}
+
+/* ---- src/renderer/src/components/CapabilitiesView.css ---- */
+:root[data-theme='holographique-clair'] .cockpit-sources .is-green {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .control-source-badge.is-codex {
+    border-color: rgba(9, 113, 44, 0.42);
+    background: rgba(0, 190, 70, 0.1);
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .control-toggle {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .control-toggle.is-on {
+    border-color: #09712c
+}
+:root[data-theme='holographique-clair'] .inspector-impact {
+    border: 1px solid rgba(9, 113, 44, 0.28);
+    background: rgba(0, 190, 70, 0.06)
+}
+:root[data-theme='holographique-clair'] .inspector-impact b {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .control-error {
+    background: #fdfdff;
+    color: #970c1f
+}
+:root[data-theme='holographique-clair'] .control-notice {
+    border: 1px solid rgba(9, 113, 44, 0.3);
+    background: rgba(0, 190, 70, 0.08);
+    color: #09712c
+}
+
+/* ---- src/renderer/src/components/ChatMosaic.css ---- */
+:root[data-theme='holographique-clair'] .chat-mosaic-window[data-etat='occupe'] {
+    border-color: rgba(170, 14, 95, 0.28)
+}
+:root[data-theme='holographique-clair'] .chat-mosaic-window[data-etat='attention'] {
+    border-color: rgba(170, 14, 95, 0.5)
+}
+:root[data-theme='holographique-clair'] .chat-mosaic-window[data-etat='attention']::after {
+    background: conic-gradient(
+    from var(--mosaic-shiny-angle),
+    rgba(208, 43, 140, 0.55) 0%,
+    rgba(208, 43, 140, 0.75) 10%,
+    #fffdf5 15%,
+    #ffffff 17%,
+    #fff3c4 20%,
+    rgba(208, 43, 140, 0.75) 28%,
+    rgba(208, 43, 140, 0.55) 45%,
+    rgba(208, 43, 140, 0.55) 100%
+  )
+}
+:root[data-theme='holographique-clair'] .chat-mosaic-window-jump {
+    border: 1px solid rgba(170, 14, 95, 0.5);
+    background: rgba(253, 253, 255, 0.9);
+    color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/ChatView.capsule-orchestration.css ---- */
+:root[data-theme='holographique-clair'] .thinking-block--orchestration .orch-texte {
+    background: var(--bg-inset, rgba(20, 15, 40, 0.068))
+}
+
+/* ---- src/renderer/src/components/ChatView.css ---- */
+:root[data-theme='holographique-clair'] .conv-highlight {
+    background: rgba(208, 43, 140, 0.28)
+}
+:root[data-theme='holographique-clair'] .conv-menu-pop {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .workflow-panel-head {
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.45), rgba(170, 14, 95, 0.04)) 1
+}
+:root[data-theme='holographique-clair'] .chat-find {
+    background: rgba(253, 253, 255, 0.92)
+}
+:root[data-theme='holographique-clair'] ::highlight(chat-find) {
+    background-color: rgba(208, 43, 140, 0.28)
+}
+:root[data-theme='holographique-clair'] ::highlight(chat-find-actif) {
+    background-color: rgba(208, 43, 140, 0.75)
+}
+:root[data-theme='holographique-clair'] .md-final-summary {
+    border: 1px solid rgba(170, 14, 95, 0.66);
+    background: linear-gradient(145deg, rgba(208, 43, 140, 0.14), rgba(253, 253, 255, 0.76))
+}
+:root[data-theme='holographique-clair'] .attachment-button {
+    border: 1px solid rgba(14, 49, 170, 0.16);
+    background: rgba(20, 15, 40, 0.045);
+    color: rgba(14, 49, 170, 0.74)
+}
+:root[data-theme='holographique-clair'] .attachment-button:hover:not(:disabled) {
+    border-color: rgba(9, 113, 44, 0.48);
+    background: rgba(0, 190, 70, 0.09)
+}
+:root[data-theme='holographique-clair'] .attachment-button:focus-visible {
+    outline: 2px solid rgba(9, 113, 44, 0.72)
+}
+:root[data-theme='holographique-clair'] .attachment-chip {
+    border: 1px solid rgba(20, 15, 40, 0.16);
+    background: rgba(253, 253, 255, 0.94)
+}
+:root[data-theme='holographique-clair'] .image-lightbox {
+    background: rgba(253, 253, 255, 0.86)
+}
+:root[data-theme='holographique-clair'] .image-lightbox-close {
+    background: rgba(253, 253, 255, 0.94)
+}
+:root[data-theme='holographique-clair'] .delete-confirm-layer {
+    background: rgba(253, 253, 255, 0.7)
+}
+:root[data-theme='holographique-clair'] .rename-conv-input:focus {
+    border-color: rgba(170, 14, 95, 0.72)
+}
+:root[data-theme='holographique-clair'] .file-drop-overlay {
+    border: 2px dashed rgba(14, 49, 170, 0.82);
+    background: rgba(253, 253, 255, 0.92)
+}
+:root[data-theme='holographique-clair'] .md-badge-good {
+    border-color: rgba(9, 113, 44, 0.35);
+    background: rgba(0, 190, 70, 0.12)
+}
+:root[data-theme='holographique-clair'] .md-badge-warn {
+    border-color: rgba(170, 14, 95, 0.35);
+    background: rgba(208, 43, 140, 0.12)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-layout {
+    border: 1px solid rgba(14, 49, 170, 0.2);
+    background: radial-gradient(circle at 68% 18%, rgba(60, 110, 235, 0.07), transparent 28%),
+    radial-gradient(circle at 91% 82%, rgba(208, 43, 140, 0.06), transparent 25%),
+    var(--chat-fond-page)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-pane {
+    border-right: 1px solid rgba(14, 49, 170, 0.18);
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-head > .btn {
+    border-color: rgba(170, 14, 95, 0.48)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-search {
+    border-color: rgba(14, 49, 170, 0.26)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-search:focus-within {
+    border-color: rgba(14, 49, 170, 0.72)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item:hover {
+    border-color: rgba(14, 49, 170, 0.24)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item.active {
+    border-color: rgba(170, 14, 95, 0.42);
+    background: linear-gradient(100deg, rgba(208, 43, 140, 0.18), rgba(253, 253, 255, 0.92))
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-head {
+    border-bottom: 1px solid rgba(14, 49, 170, 0.18)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-head-signal {
+    border: 1px solid rgba(170, 14, 95, 0.56)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-head .btn-accent {
+    border-color: rgba(170, 14, 95, 0.6);
+    background: rgba(208, 43, 140, 0.22)
+}
+:root[data-theme='holographique-clair'] .workflow-toggle:focus-visible {
+    outline: 1px solid rgba(170, 14, 95, 0.72)
+}
+:root[data-theme='holographique-clair'] .model-select-menu {
+    background: rgba(253, 253, 255, 0.99)
+}
+:root[data-theme='holographique-clair'] .model-select-status:not(:empty) {
+    border: 1px solid rgba(170, 14, 95, 0.45)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg-body {
+    border-color: rgba(20, 15, 40, 0.16);
+    background: rgba(253, 253, 255, 0.9)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.assistant .msg-body {
+    border-left: 2px solid rgba(14, 49, 170, 0.7)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body {
+    border-color: rgba(170, 14, 95, 0.54);
+    background: linear-gradient(135deg, rgba(208, 43, 140, 0.34), rgba(253, 253, 255, 0.55))
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-welcome {
+    background: radial-gradient(circle at 50% 0, rgba(60, 110, 235, 0.1), transparent 48%)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer {
+    background: linear-gradient(180deg, rgba(253, 253, 255, 0.74), var(--chat-saisie-fond) 30%)
+}
+:root[data-theme='holographique-clair'] .chat-context-rule-libelle {
+    background: #fdfdff;
+    color: rgba(28, 23, 43, 0.6)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-send {
+    border: 1px solid rgba(170, 14, 95, 0.55);
+    background: rgba(208, 43, 140, 0.14)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-send:hover:not(:disabled) {
+    background: rgba(208, 43, 140, 0.3)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .runs-pane {
+    border-left: 1px solid rgba(14, 49, 170, 0.18);
+    background: rgba(253, 253, 255, 0.97)
+}
+:root[data-theme='holographique-clair'] .conv-new-row:focus-visible {
+    outline: 2px solid rgba(170, 14, 95, 0.78)
+}
+:root[data-theme='holographique-clair'] .conv-new-row.active {
+    background: rgba(208, 43, 140, 0.12)
+}
+:root[data-theme='holographique-clair'] .effort-matrix-overlay {
+    background: rgba(253, 253, 255, 0.72)
+}
+:root[data-theme='holographique-clair'] .effort-cran.is-filled i {
+    background: rgba(208, 43, 140, 0.45)
+}
+:root[data-theme='holographique-clair'] .effort-cran.is-memorized.is-selected i {
+    background: rgba(208, 43, 140, 0.75)
+}
+:root[data-theme='holographique-clair'] .chat-travail-non-publie {
+    border-left: 2px solid rgba(170, 14, 95, 0.55)
+}
+:root[data-theme='holographique-clair'] .chat-travail-non-publie button {
+    border: 1px solid rgba(170, 14, 95, 0.45)
+}
+:root[data-theme='holographique-clair'] .chat-travail-non-publie button:hover {
+    border-color: rgba(170, 14, 95, 0.85)
+}
+:root[data-theme='holographique-clair'] .tnp {
+    border-left: 2px solid rgba(170, 14, 95, 0.55)
+}
+:root[data-theme='holographique-clair'] .tnp-ligne-tete button {
+    border: 1px solid rgba(170, 14, 95, 0.4)
+}
+:root[data-theme='holographique-clair'] .tnp-patch {
+    background: rgba(20, 15, 40, 0.042)
+}
+:root[data-theme='holographique-clair'] .model-select-menu {
+    --accent-soft: rgba(208, 43, 140, 0.16);
+    background: radial-gradient(
+      120% 90% at 100% 0%,
+      color-mix(in srgb, var(--accent) 9%, transparent),
+      transparent 62%
+    ),
+    rgba(253, 253, 255, 0.985)
+}
+:root[data-theme='holographique-clair'] .thinking-block > summary .thinking-secondes, :root[data-theme='holographique-clair'] .thinking-block > summary .thinking-duree, :root[data-theme='holographique-clair'] .capsule-bouton .thinking-duree {
+    background: rgba(253, 253, 255, 0.5);
+    color: #1c172b
+}
+:root[data-theme='holographique-clair'] .conv-mosaic-close-all {
+    border: 1px solid rgba(170, 14, 95, 0.35)
+}
+:root[data-theme='holographique-clair'] .conv-view-toggle {
+    border: 1px solid rgba(170, 14, 95, 0.45);
+    background: rgba(208, 43, 140, 0.08)
+}
+:root[data-theme='holographique-clair'] .conv-view-toggle[aria-checked='true'] {
+    background: rgba(208, 43, 140, 0.18)
+}
+:root[data-theme='holographique-clair'] .msg.user.is-orientation {
+    border-left: 2px solid rgba(170, 14, 95, 0.55)
+}
+:root[data-theme='holographique-clair'] .chat-context-rule-bulle {
+    background: rgba(253, 253, 255, 0.97)
+}
+:root[data-theme='holographique-clair'] .composer-input-row > .composer-send, :root[data-theme='holographique-clair'] .cosmic-outline .composer-input-row > .composer-send {
+    border: 1px solid rgba(9, 113, 44, 0.85)
+}
+:root[data-theme='holographique-clair'] .composer-auto.actif {
+    border-color: rgba(170, 14, 95, 0.75);
+    background: rgba(208, 43, 140, 0.16)
+}
+:root[data-theme='holographique-clair'] .conv-density-toggle {
+    border: 1px solid rgba(170, 14, 95, 0.45);
+    background: rgba(208, 43, 140, 0.08)
+}
+:root[data-theme='holographique-clair'] .conv-foot {
+    border-top: 1px solid rgba(170, 14, 95, 0.2)
+}
+:root[data-theme='holographique-clair'] .conv-status-filter {
+    border: 1px solid rgba(170, 14, 95, 0.45);
+    background: rgba(208, 43, 140, 0.08)
+}
+
+/* ---- src/renderer/src/components/ConversationCostIndicator.css ---- */
+:root[data-theme='holographique-clair'] .conv-cost-btn:hover {
+    color: var(--text, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .conv-cost-btn.warn {
+    color: var(--warning, #aa0e5f);
+    border-color: var(--warning, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .conv-cost-panel {
+    background: #fdfdff;
+    border: 1px solid var(--border, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .conv-cost-refresh {
+    border: 1px solid var(--border, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .conv-cost-warn {
+    color: var(--warning, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .conv-cost-key {
+    color: var(--text, #0e31aa)
+}
+
+/* ---- src/renderer/src/components/DiffView.css ---- */
+:root[data-theme='holographique-clair'] .diff-view {
+    border: 1px solid var(--line, rgba(20, 15, 40, 0.2));
+    background: var(--surface, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .diff-line {
+    border-bottom: 1px solid color-mix(in srgb, var(--line, rgba(20, 15, 40, 0.2)) 55%, transparent)
+}
+:root[data-theme='holographique-clair'] .diff-gutter {
+    border-right: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .diff-add {
+    color: var(--ok, #09712c)
+}
+:root[data-theme='holographique-clair'] .diff-hunk {
+    color: var(--accent, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .diff-commenter {
+    border: 1px solid var(--gold, #aa0e5f);
+    background: var(--surface, #fdfdff);
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .diff-comment, :root[data-theme='holographique-clair'] .diff-editeur {
+    border-left: 2px solid var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .diff-editeur-texte {
+    border: 1px solid var(--line, rgba(20, 15, 40, 0.2));
+    background: var(--surface, #fdfdff);
+    color: var(--text, #1c172b)
+}
+
+/* ---- src/renderer/src/components/DomainShell.css ---- */
+:root[data-theme='holographique-clair'] .domain-tabs button.is-active {
+    background: rgba(208, 43, 140, 0.09)
+}
+
+/* ---- src/renderer/src/components/Evidence.css ---- */
+:root[data-theme='holographique-clair'] .evidence-item {
+    background: rgba(20, 15, 40, 0.042)
+}
+:root[data-theme='holographique-clair'] .evidence-item .evidence-exit.st-ok {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .evidence-diff .diff-add {
+    color: #09712c;
+    background: rgba(0, 190, 70, 0.12)
+}
+:root[data-theme='holographique-clair'] .run-cost-recap {
+    background: rgba(20, 15, 40, 0.03)
+}
+:root[data-theme='holographique-clair'] .fanout-grid > .subagent-step {
+    background: rgba(20, 15, 40, 0.03)
+}
+:root[data-theme='holographique-clair'] .subagent-thinking pre {
+    background: rgba(20, 15, 40, 0.033)
+}
+
+/* ---- src/renderer/src/components/FirstRunWizard.css ---- */
+:root[data-theme='holographique-clair'] .frw-overlay {
+    background: radial-gradient(circle at 78% 12%, rgba(157, 121, 237, 0.1), transparent 42%),
+    rgba(253, 253, 255, 0.72)
+}
+:root[data-theme='holographique-clair'] .frw-card {
+    background: var(--surface-panel, rgba(253, 253, 255, 0.96));
+    border: 1px solid var(--container-border, rgba(20, 15, 40, 0.16));
+    color: var(--text, #254b7e)
+}
+:root[data-theme='holographique-clair'] .frw-checks li.ok .frw-icon {
+    color: var(--success, #09712c)
+}
+:root[data-theme='holographique-clair'] .frw-checks li.ko .frw-icon {
+    color: var(--warning, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .frw-detail {
+    color: var(--warning, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .frw-actions button:hover:not(:disabled) {
+    border-color: var(--rose, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .frw-actions .frw-primary {
+    border-color: var(--rose, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .frw-repair {
+    color: var(--text, #0e31aa);
+    border: 1px solid var(--warning, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .frw-optional {
+    border: 1px solid var(--line-strong, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .frw-optional:hover:not(:disabled) {
+    color: var(--text, #0e31aa)
+}
+
+/* ---- src/renderer/src/components/GraphView.css ---- */
+:root[data-theme='holographique-clair'] .graph-toolbar select, :root[data-theme='holographique-clair'] .theme-sidebar input {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.95);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .graph-refresh {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.95);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .graph-mode-switch__track {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: linear-gradient(180deg, #fdfdff, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .graph-mode-switch__thumb {
+    background: radial-gradient(circle at 32% 30%, #3a4a5e, #fdfdff 68%)
+}
+:root[data-theme='holographique-clair'] .graph-mode-switch.is-galaxy .graph-mode-switch__track {
+    border-color: rgba(20, 15, 40, 0.16);
+    background: linear-gradient(120deg, #fdfdff, #3d1150 55%, #131c3f)
+}
+:root[data-theme='holographique-clair'] .graph-clean-memory {
+    border: 1px solid rgba(9, 113, 44, 0.52);
+    background: rgba(20, 15, 40, 0.051);
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .graph-clean-memory:hover {
+    background: rgba(0, 190, 70, 0.12)
+}
+:root[data-theme='holographique-clair'] .graph-toolbar__stats strong {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .theme-list::-webkit-scrollbar-track, :root[data-theme='holographique-clair'] .visibility-sidebar::-webkit-scrollbar-track, :root[data-theme='holographique-clair'] .node-panel pre::-webkit-scrollbar-track {
+    background: rgba(253, 253, 255, 0.95)
+}
+:root[data-theme='holographique-clair'] .theme-filter:hover, :root[data-theme='holographique-clair'] .theme-filter.is-active {
+    background: #fdfdff;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .node-search-results {
+    border-bottom: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .search-results-heading {
+    color: var(--gold-bright, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .node-search-result i {
+    color: var(--rose-bright, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .node-search-result small {
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .theme-sidebar__note {
+    border-top: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .graph-settings-button {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.92);
+    color: #1c172b
+}
+:root[data-theme='holographique-clair'] .graph-settings-button:hover, :root[data-theme='holographique-clair'] .graph-settings-button.is-active {
+    border-color: #0e31aa;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .graph-settings-popover {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .graph-settings-popover__heading {
+    border-bottom: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .graph-observatory--serious .graph-stage, :root[data-theme='holographique-clair'] .graph-observatory--serious .graph-canvas {
+    background: rgba(253, 253, 255, 0.95)
+}
+:root[data-theme='holographique-clair'] .graph-health-lens {
+    border: 1px solid rgba(20, 15, 40, 0.16);
+    background: rgba(253, 253, 255, 0.92)
+}
+:root[data-theme='holographique-clair'] .tree-branch-controls button {
+    border: 1px solid rgba(14, 49, 170, 0.28);
+    background: #fdfdff;
+    color: #254f7e
+}
+:root[data-theme='holographique-clair'] .tree-branch-controls button:hover, :root[data-theme='holographique-clair'] .tree-branch-controls button:focus-visible, :root[data-theme='holographique-clair'] .tree-branch-controls button.is-collapsed {
+    border-color: #0e31aa;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .graph-health-issue button {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff;
+    color: #254e7e
+}
+:root[data-theme='holographique-clair'] .theme-cluster-label {
+    background: rgba(253, 253, 255, 0.9)
+}
+:root[data-theme='holographique-clair'] .theme-cluster-label:hover, :root[data-theme='holographique-clair'] .theme-cluster-label:focus-visible, :root[data-theme='holographique-clair'] .theme-cluster-label.is-active {
+    background: color-mix(in srgb, var(--theme-color) 16%, rgba(253, 253, 255, 0.94))
+}
+:root[data-theme='holographique-clair'] .graph-status {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.9);
+    color: #1c172b
+}
+:root[data-theme='holographique-clair'] .graph-loading {
+    background: radial-gradient(circle, rgba(20, 15, 40, 0.051), transparent 42%)
+}
+:root[data-theme='holographique-clair'] .selected-node {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.92);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .theme-nodes-panel__heading strong {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .settings-section {
+    border-bottom: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .node-links {
+    border-right: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.95)
+}
+:root[data-theme='holographique-clair'] .node-links button:hover {
+    background: #fdfdff;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .node-panel__theme {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .node-panel h2 {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .node-panel pre {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff;
+    color: #1c172b
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .theme-sidebar, :root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
+    background: linear-gradient(180deg, rgba(253, 253, 255, 0.98), rgba(253, 253, 255, 0.98))
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .theme-sidebar {
+    border-right-color: rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
+    border-left-color: rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .graph-stage {
+    background: radial-gradient(ellipse at 18% 24%, rgba(60, 110, 235, 0.18), transparent 27%),
+    radial-gradient(ellipse at 78% 68%, rgba(208, 43, 140, 0.2), transparent 31%),
+    radial-gradient(ellipse at 52% 43%, rgba(121, 62, 222, 0.34), transparent 39%),
+    radial-gradient(ellipse at 64% 18%, rgba(255, 178, 69, 0.08), transparent 22%), #fdfdff
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .graph-canvas::after {
+    background-image: radial-gradient(ellipse at 16% 30%, rgba(60, 110, 235, 0.18), transparent 23%),
+    radial-gradient(ellipse at 82% 67%, rgba(255, 57, 202, 0.18), transparent 28%),
+    radial-gradient(ellipse at 53% 47%, rgba(132, 82, 255, 0.16), transparent 34%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(60, 110, 235, 0.82) 0 1px, transparent 1.8px),
+    radial-gradient(circle, rgba(255, 135, 230, 0.78) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle, rgba(208, 43, 140, 0.72) 0 0.7px, transparent 1.4px)
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .selected-node {
+    background: linear-gradient(120deg, rgba(253, 253, 255, 0.94), rgba(253, 253, 255, 0.94))
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .node-panel pre {
+    border-color: rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.92)
+}
+@media (max-width: 760px) {
+    :root[data-theme='holographique-clair'] .graph-observatory .visibility-sidebar {
+        border-top: 1px solid rgba(20, 15, 40, 0.2)
+    }
+}
+@media (max-width: 760px) {
+    :root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
+        border-top-color: rgba(20, 15, 40, 0.2)
+    }
+}
+:root[data-theme='holographique-clair'] .theme-sidebar, :root[data-theme='holographique-clair'] .visibility-sidebar {
+    background: rgba(253, 253, 255, 0.97)
+}
+:root[data-theme='holographique-clair'] .graph-stage {
+    background: radial-gradient(circle at 52% 42%, #fdfdff 0, #fdfdff 52%, #fdfdff 82%)
+}
+:root[data-theme='holographique-clair'] .theme-filter:hover, :root[data-theme='holographique-clair'] .theme-filter.is-active {
+    background: rgba(208, 43, 140, 0.08)
+}
+:root[data-theme='holographique-clair'] .graph-status, :root[data-theme='holographique-clair'] .selected-node {
+    background: rgba(253, 253, 255, 0.94)
+}
+:root[data-theme='holographique-clair'] .graph-workbench-button {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.92);
+    color: #1c172b
+}
+:root[data-theme='holographique-clair'] .graph-workbench-button:hover, :root[data-theme='holographique-clair'] .graph-workbench-button.is-active {
+    border-color: #0e31aa;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .graph-workbench-popover {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__head {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__head > strong {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__head > button {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.92);
+    color: #1c172b
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__list > li {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__list summary {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__type {
+    background: rgba(60, 110, 235, 0.14);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__dup {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__meta code {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__meta dd[data-sha-state='stale'] .knowledge-inbox__sha {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__meta dd[data-sha-state='current'] .knowledge-inbox__sha {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__twins {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__body {
+    background: rgba(20, 15, 40, 0.068)
+}
+:root[data-theme='holographique-clair'] .knowledge-inbox__actions .is-promote {
+    border: 1px solid #09712c;
+    background: rgba(0, 190, 70, 0.24);
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .brain-bench {
+    border-top: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .brain-bench__head {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .brain-bench__ask input {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.92);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .brain-bench__ask button {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(60, 110, 235, 0.14);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .brain-bench__status {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .brain-bench__status.is-empty {
+    border-color: rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .brain-bench__status.is-unavailable {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .brain-budget-cut {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .brain-bench__cut {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .theme-sidebar__retrieval {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .theme-sidebar__retrieval.is-unavailable {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .graph-truncation {
+    background: rgba(253, 253, 255, 0.92);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .graph-brains-retry, :root[data-theme='holographique-clair'] .graph-themes-retry, :root[data-theme='holographique-clair'] .graph-theme-nodes-retry, :root[data-theme='holographique-clair'] .graph-status__retry, :root[data-theme='holographique-clair'] .graph-empty-reindex, :root[data-theme='holographique-clair'] .graph-empty-brains, :root[data-theme='holographique-clair'] .graph-truncation__extend, :root[data-theme='holographique-clair'] .node-panel__retry {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: rgba(253, 253, 255, 0.95);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .graph-brains-retry:hover, :root[data-theme='holographique-clair'] .graph-themes-retry:hover, :root[data-theme='holographique-clair'] .graph-theme-nodes-retry:hover, :root[data-theme='holographique-clair'] .graph-status__retry:hover, :root[data-theme='holographique-clair'] .graph-empty-reindex:hover, :root[data-theme='holographique-clair'] .graph-empty-brains:hover, :root[data-theme='holographique-clair'] .graph-truncation__extend:hover, :root[data-theme='holographique-clair'] .node-panel__retry:hover {
+    border-color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .graph-brains-retry:focus-visible, :root[data-theme='holographique-clair'] .graph-themes-retry:focus-visible, :root[data-theme='holographique-clair'] .graph-theme-nodes-retry:focus-visible, :root[data-theme='holographique-clair'] .graph-status__retry:focus-visible, :root[data-theme='holographique-clair'] .graph-empty-reindex:focus-visible, :root[data-theme='holographique-clair'] .graph-empty-brains:focus-visible, :root[data-theme='holographique-clair'] .graph-truncation__extend:focus-visible, :root[data-theme='holographique-clair'] .node-panel__retry:focus-visible {
+    outline: 2px solid #aa0e5f
+}
+:root[data-theme='holographique-clair'] .graph-status--empty {
+    border-color: rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .node-panel__details {
+    border: 1px solid rgba(170, 14, 95, 0.22)
+}
+:root[data-theme='holographique-clair'] .node-panel__details > summary {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .node-panel__relations em {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .node-links__saut > summary {
+    color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/HomeView.css ---- */
+:root[data-theme='holographique-clair'] .home-view__masthead {
+    background: var(--bg-1, rgba(253, 253, 255, 0.56));
+    border: 1px solid var(--line, rgba(20, 15, 40, 0.16))
+}
+:root[data-theme='holographique-clair'] .home-tile__panel {
+    background: rgba(253, 253, 255, 0.72);
+    border: 1px solid rgba(20, 15, 40, 0.16)
+}
+:root[data-theme='holographique-clair'] .home-notices button {
+    background: rgba(208, 43, 140, 0.07)
+}
+:root[data-theme='holographique-clair'] .home-notices li[data-kind='missed'] button {
+    background: rgba(208, 43, 140, 0.06)
+}
+:root[data-theme='holographique-clair'] .home-threads__who {
+    color: var(--gold-bright, #aa0e5f);
+    background: rgba(208, 43, 140, 0.08);
+    border: 1px solid rgba(170, 14, 95, 0.3)
+}
+:root[data-theme='holographique-clair'] .home-notices__acquitter {
+    background: var(--bg-inset, rgba(253, 253, 255, 0.58))
+}
+:root[data-theme='holographique-clair'] .home-convs button {
+    background: rgba(208, 43, 140, 0.06)
+}
+:root[data-theme='holographique-clair'] .home-convs button:hover, :root[data-theme='holographique-clair'] .home-convs button:focus-visible {
+    background: rgba(208, 43, 140, 0.14)
+}
+:root[data-theme='holographique-clair'] .jarvis {
+    border: 1px solid rgba(170, 14, 95, 0.2);
+    background: linear-gradient(180deg, rgba(253, 253, 255, 0.92), rgba(253, 253, 255, 0.96)),
+    repeating-linear-gradient(0deg, rgba(208, 43, 140, 0.035) 0 1px, transparent 1px 5px)
+}
+:root[data-theme='holographique-clair'] .jarvis__bascule {
+    border: 1px solid rgba(170, 14, 95, 0.32);
+    background: linear-gradient(
+    135deg,
+    rgba(208, 43, 140, 0.14),
+    rgba(208, 43, 140, 0.02) 58%,
+    rgba(208, 43, 140, 0.1)
+  )
+}
+:root[data-theme='holographique-clair'] .jarvis__mute {
+    border: 1px solid rgba(170, 14, 95, 0.3);
+    background: rgba(208, 43, 140, 0.07)
+}
+:root[data-theme='holographique-clair'] .jarvis__mute:hover, :root[data-theme='holographique-clair'] .jarvis__mute:focus-visible {
+    border-color: rgba(170, 14, 95, 0.65);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .jarvis__bascule:hover, :root[data-theme='holographique-clair'] .jarvis__bascule:focus-visible {
+    color: #aa0e5f;
+    border-color: rgba(170, 14, 95, 0.65)
+}
+:root[data-theme='holographique-clair'] .jarvis__whisper-bouton {
+    background: rgba(208, 43, 140, 0.08)
+}
+:root[data-theme='holographique-clair'] .jarvis__partiel {
+    border-left: 1px solid rgba(170, 14, 95, 0.35)
+}
+:root[data-theme='holographique-clair'] .jarvis__envoi {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .jarvis__paroles li::before {
+    color: rgba(170, 14, 95, 0.5)
+}
+:root[data-theme='holographique-clair'] .jarvis__jauge-piste {
+    border: 1px solid rgba(170, 14, 95, 0.18);
+    background: repeating-linear-gradient(90deg, rgba(208, 43, 140, 0.14) 0 1px, transparent 1px 9px),
+    rgba(253, 253, 255, 0.55)
+}
+:root[data-theme='holographique-clair'] .jarvis__audio > summary {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .jarvis__audio-champ select, :root[data-theme='holographique-clair'] .jarvis__audio-champ input[type='range'] {
+    background: rgba(208, 43, 140, 0.05);
+    border: 1px solid rgba(170, 14, 95, 0.22)
+}
+:root[data-theme='holographique-clair'] .jarvis__audio-champ select {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .jarvis__audio-champ input[type='text'] {
+    background: #fdfdff;
+    border: 1px solid rgba(170, 14, 95, 0.22);
+    color: #25447e
+}
+:root[data-theme='holographique-clair'] .jarvis__audio-champ select option {
+    background: #fdfdff;
+    color: #25447e
+}
+:root[data-theme='holographique-clair'] .jarvis__paroles li::before {
+    color: rgba(170, 14, 95, 0.5)
+}
+:root[data-theme='holographique-clair'] .jarvis__jauge-piste {
+    border: 1px solid rgba(170, 14, 95, 0.18);
+    background: repeating-linear-gradient(90deg, rgba(208, 43, 140, 0.14) 0 1px, transparent 1px 9px),
+    rgba(253, 253, 255, 0.55)
+}
+:root[data-theme='holographique-clair'] .jarvis__audio > summary {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .jarvis__audio-champ select, :root[data-theme='holographique-clair'] .jarvis__audio-champ input[type='range'] {
+    background: rgba(208, 43, 140, 0.05);
+    border: 1px solid rgba(170, 14, 95, 0.22)
+}
+:root[data-theme='holographique-clair'] .enregistrements {
+    background: linear-gradient(
+      180deg,
+      rgba(var(--hud), 0.07),
+      rgba(253, 253, 255, 0.9) 48%,
+      rgba(var(--or), 0.05)
+    ),
+    repeating-linear-gradient(0deg, rgba(var(--hud), 0.045) 0 1px, transparent 1px 4px)
+}
+:root[data-theme='holographique-clair'] .enregistrements__bouton {
+    color: #aa0e5f;
+    background: radial-gradient(circle at 14px 50%, rgba(var(--hud), 0.32), transparent 60%),
+    linear-gradient(135deg, rgba(var(--or), 0.14), rgba(20, 15, 40, 0.053) 60%, rgba(var(--hud), 0.12))
+}
+:root[data-theme='holographique-clair'] .enregistrements__champ select {
+    background: #fdfdff;
+    border: 1px solid rgba(170, 14, 95, 0.22);
+    color: #25447e
+}
+:root[data-theme='holographique-clair'] .enregistrements__audio > summary {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .enregistrements__titre {
+    color: rgba(170, 14, 95, 0.7);
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.45), rgba(170, 14, 95, 0.02)) 1
+}
+:root[data-theme='holographique-clair'] .enregistrements__fichier:hover, :root[data-theme='holographique-clair'] .enregistrements__fichier:focus-visible {
+    border-color: rgba(170, 14, 95, 0.4);
+    border-left-color: rgba(170, 14, 95, 0.9);
+    background: linear-gradient(90deg, rgba(208, 43, 140, 0.12), transparent 70%)
+}
+:root[data-theme='holographique-clair'] .home-view__settings {
+    background: var(--bg-1, rgba(253, 253, 255, 0.72));
+    border: 1px solid var(--line, rgba(20, 15, 40, 0.16))
+}
+:root[data-theme='holographique-clair'] .jarvis__anneau-ambre {
+    stroke: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .jarvis__anneau-coeur {
+    stroke: rgba(170, 14, 95, 0.26)
+}
+:root[data-theme='holographique-clair'] .jarvis__anneau-texte > strong {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .home-inter__bar {
+    background: var(--bg-1, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .home-chat__ligne[data-moi='true'] .home-chat__bulle {
+    background: rgba(60, 110, 235, 0.07)
+}
+:root[data-theme='holographique-clair'] .home-chat__repondre {
+    background: var(--bg-1, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .home-chat__depot-calque {
+    background: rgba(253, 253, 255, 0.92)
+}
+:root[data-theme='holographique-clair'] .home-threads__alerte:has(input:checked) {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .home-threads__alerte input:checked {
+    border-color: rgba(170, 14, 95, 0.55);
+    background: rgba(208, 43, 140, 0.22)
+}
+:root[data-theme='holographique-clair'] .perf-widget__barre button[aria-pressed='true'] {
+    border-color: rgba(170, 14, 95, 0.55);
+    background: rgba(208, 43, 140, 0.22);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] [data-couleur='vert'] {
+    border-left-color: #09712c;
+    color: #09712c
+}
+
+/* ---- src/renderer/src/components/HumanJson.css ---- */
+:root[data-theme='holographique-clair'] .human-json__toggle {
+    border: 1px solid rgba(9, 113, 44, 0.38);
+    background: rgba(253, 253, 255, 0.72);
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .human-json__toggle:hover {
+    background: rgba(0, 190, 70, 0.14)
+}
+:root[data-theme='holographique-clair'] .human-json__tree {
+    border: 1px solid rgba(20, 15, 40, 0.16);
+    background: rgba(253, 253, 255, 0.62);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .human-json__group summary {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .human-json__string {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .human-json__number {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .human-json__boolean {
+    color: #09712c
+}
+
+/* ---- src/renderer/src/components/JugesPanel.css ---- */
+:root[data-theme='holographique-clair'] .jpan-tete {
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
+}
+:root[data-theme='holographique-clair'] .jpan-vote.is-valide {
+    color: #09712c
+}
+
+/* ---- src/renderer/src/components/ModelActivityLogPane.css ---- */
+:root[data-theme='holographique-clair'] .model-log-count {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .model-log-row {
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.28), rgba(170, 14, 95, 0.03)) 1
+}
+:root[data-theme='holographique-clair'] .model-log-more {
+    color: rgba(170, 14, 95, 0.7)
+}
+:root[data-theme='holographique-clair'] .model-log-expand {
+    border-left: 2px solid rgba(170, 14, 95, 0.35)
+}
+:root[data-theme='holographique-clair'] .model-log-copy {
+    color: #aa0e5f;
+    border: 1px solid rgba(170, 14, 95, 0.4)
+}
+:root[data-theme='holographique-clair'] .model-log-copy:hover {
+    background: rgba(208, 43, 140, 0.12)
+}
+:root[data-theme='holographique-clair'] .model-log-tour__head strong {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .model-log-voie.is-seule {
+    border-color: rgba(170, 14, 95, 0.45);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .model-log-toggle.is-piste {
+    color: #aa0e5f;
+    border-color: rgba(170, 14, 95, 0.45)
+}
+
+/* ---- src/renderer/src/components/ModelQuestionPopup.css ---- */
+:root[data-theme='holographique-clair'] .model-question-layer {
+    --mq-surface: rgba(253, 253, 255, 0.96);
+    --mq-border: rgba(20, 15, 40, 0.16);
+    background: radial-gradient(circle at 78% 12%, rgba(157, 121, 237, 0.1), transparent 42%),
+    radial-gradient(circle at 15% 90%, rgba(208, 43, 140, 0.08), transparent 45%),
+    rgba(253, 253, 255, 0.72)
+}
+:root[data-theme='holographique-clair'] .model-question-source {
+    color: var(--gold-bright, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .model-question-source.loop {
+    background: rgba(208, 43, 140, 0.12);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .model-question-options button:hover {
+    background: rgba(208, 43, 140, 0.1)
+}
+:root[data-theme='holographique-clair'] .model-question-popup textarea {
+    background: rgba(20, 15, 40, 0.053)
+}
+
+/* ---- src/renderer/src/components/ModelQuotaIndicator.css ---- */
+:root[data-theme='holographique-clair'] .model-quota-bar-value {
+    border: 1px solid color-mix(in srgb, var(--quota-teinte, var(--quota-color, #09712c)) 45%, transparent);
+    background: color-mix(in srgb, var(--quota-teinte, var(--quota-color, #35d07f)) 16%, #fdfdff);
+    color: var(--quota-teinte, var(--quota-color, #09712c))
+}
+:root[data-theme='holographique-clair'] .model-quota-popover {
+    border: 1px solid rgba(14, 49, 170, 0.2);
+    background: rgba(253, 253, 255, 0.98);
+    color: #25617e
+}
+:root[data-theme='holographique-clair'] .model-quota-popover header, :root[data-theme='holographique-clair'] .model-quota-popover footer {
+    border-bottom: 1px solid rgba(14, 49, 170, 0.1)
+}
+:root[data-theme='holographique-clair'] .model-quota-popover header button {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .model-quota-row {
+    border-bottom: 1px solid rgba(14, 49, 170, 0.08)
+}
+:root[data-theme='holographique-clair'] .model-quota-scope {
+    border: 1px solid rgba(170, 14, 95, 0.24);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .model-quota-window > strong {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .model-quota-meter {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .model-quota-popover footer {
+    border-top: 1px solid rgba(14, 49, 170, 0.1)
+}
+:root[data-theme='holographique-clair'] .quota-context-gauge .quota-context-compact {
+    border: 1px solid var(--border, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .model-quota-tip {
+    border: 1px solid var(--line, rgba(20, 15, 40, 0.16));
+    background: rgba(253, 253, 255, 0.96);
+    color: #25447e
+}
+:root[data-theme='holographique-clair'] .model-quota-provider-chip.is-active {
+    border-color: rgba(170, 14, 95, 0.55);
+    color: #aa0e5f;
+    background: rgba(208, 43, 140, 0.12)
+}
+:root[data-theme='holographique-clair'] .model-quota-resets {
+    border-bottom: 1px solid rgba(14, 49, 170, 0.08)
+}
+:root[data-theme='holographique-clair'] .model-quota-reset {
+    border: 1px solid rgba(14, 49, 170, 0.12)
+}
+:root[data-theme='holographique-clair'] .model-quota-reset button {
+    border: 1px solid rgba(9, 113, 44, 0.35);
+    background: rgba(0, 190, 70, 0.08);
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .model-quota-reset-message {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .model-quota-popover .router-accounts {
+    border-bottom: 1px solid rgba(14, 49, 170, 0.08)
+}
+
+/* ---- src/renderer/src/components/ObservatoryView.css ---- */
+:root[data-theme='holographique-clair'] .observatory-panel-title {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-turn-focus {
+    border: 1px solid rgba(14, 49, 170, 0.42);
+    background: rgba(60, 110, 235, 0.18)
+}
+:root[data-theme='holographique-clair'] .observatory-native-diagnostics {
+    border: 1px solid rgba(14, 49, 170, 0.28)
+}
+:root[data-theme='holographique-clair'] .observatory-rag-causal-step {
+    border: 1px solid rgba(9, 113, 44, 0.42);
+    background: linear-gradient(90deg, rgba(0, 190, 70, 0.09), transparent 58%), var(--surface-inset)
+}
+:root[data-theme='holographique-clair'] .observatory-rag-causal-step > header > span {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .observatory-rag-causal-step > header > b {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .observatory-rag-node-badge {
+    color: #09712c !important;
+    border-color: rgba(9, 113, 44, 0.42) !important
+}
+:root[data-theme='holographique-clair'] .rag-trace-card.is-injected {
+    border-color: rgba(9, 113, 44, 0.45)
+}
+:root[data-theme='holographique-clair'] .rag-trace-card.is-injected > header strong {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .observatory-conversations > button, :root[data-theme='holographique-clair'] .observatory-calls button, :root[data-theme='holographique-clair'] .observatory-transcripts button, :root[data-theme='holographique-clair'] .observatory-diagnostics button {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .observatory-conversations > button.is-active {
+    border-color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-calls button.is-active {
+    border-color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-diagnostics button {
+    border-color: rgba(170, 14, 95, 0.27);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-diagnostics button:hover, :root[data-theme='holographique-clair'] .observatory-diagnostics button:focus-visible {
+    border-color: #aa0e5f;
+    outline: 1px solid #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-causal-node-wrap > button.is-critical {
+    border-color: rgba(14, 49, 170, 0.46);
+    background: linear-gradient(90deg, rgba(60, 110, 235, 0.1), var(--surface-card))
+}
+:root[data-theme='holographique-clair'] .observatory-turn > header span {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-group {
+    border: 1px solid color-mix(in srgb, var(--zone-accent) 55%, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .observatory-event {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .observatory-event:hover, :root[data-theme='holographique-clair'] .observatory-event.is-selected {
+    border-color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-event.is-response-displayed > i, :root[data-theme='holographique-clair'] .observatory-event.is-response-displayed > span:nth-child(2) b, :root[data-theme='holographique-clair'] .observatory-event.is-response-displayed p strong {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .observatory-event.is-tool-call > i, :root[data-theme='holographique-clair'] .observatory-event.is-tool-call > span:nth-child(2) b, :root[data-theme='holographique-clair'] .observatory-event.is-tool-call p strong {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .observatory-event.is-tool-result > i, :root[data-theme='holographique-clair'] .observatory-event.is-tool-result > span:nth-child(2) b, :root[data-theme='holographique-clair'] .observatory-event.is-tool-result p strong {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .observatory-event.is-gate > i, :root[data-theme='holographique-clair'] .observatory-event.is-gate > span:nth-child(2) b, :root[data-theme='holographique-clair'] .observatory-event.is-gate p strong {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-load b {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-event-detail {
+    border: 1px solid rgba(170, 14, 95, 0.45)
+}
+:root[data-theme='holographique-clair'] .observatory-call-detail {
+    border: 1px solid #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-call-metrics b {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-injections li > b {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-injections li[data-testid='observatory-injection-unattributed'] > span, :root[data-theme='holographique-clair'] .observatory-injections li[data-testid='observatory-injection-unattributed'] > b {
+    color: var(--warn, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .observatory-turn-load {
+    background: rgba(253, 253, 255, 0.95)
+}
+:root[data-theme='holographique-clair'] .observatory-diff {
+    border: 1px solid #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-diff tr[data-change='changed'], :root[data-theme='holographique-clair'] .observatory-diff tr[data-change='added'], :root[data-theme='holographique-clair'] .observatory-diff tr[data-change='removed'] {
+    background: rgba(60, 110, 235, 0.06)
+}
+:root[data-theme='holographique-clair'] .observatory-decision-ledger article, :root[data-theme='holographique-clair'] .observatory-authority-ledger article {
+    border-left: 3px solid #09712c
+}
+:root[data-theme='holographique-clair'] .observatory-authority-ledger article {
+    border-left-color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-authority-ledger article[data-decision='confirm'] {
+    border-left-color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-decision-ledger article[data-status='open'] {
+    border-left-color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-decision-ledger article > header > b {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .observatory-decision-ledger article[data-status='open'] > header > b {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .observatory-event:focus-visible {
+    outline: 2px solid #0e31aa
+}
+:root[data-theme='holographique-clair'] .theme-serious .observatory-view {
+    --surface-selected: rgba(208, 43, 140, 0.1)
+}
+:root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-conversations > button.is-active, :root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-calls button.is-active, :root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-event.is-selected {
+    border-color: rgba(170, 14, 95, 0.88)
+}
+:root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-view-switch button.is-active {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-quick-filters button.is-active, :root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-causal-controls button.is-active {
+    border-color: rgba(170, 14, 95, 0.88);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-turn-focus {
+    border-color: rgba(170, 14, 95, 0.52);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-event-detail {
+    border-color: rgba(170, 14, 95, 0.52)
+}
+:root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-event:focus-visible {
+    outline-color: rgba(170, 14, 95, 0.88)
+}
+:root[data-theme='holographique-clair'] .theme-serious .observatory-view .observatory-causal-node-wrap > button.is-selected {
+    outline: 1px solid rgba(170, 14, 95, 0.88)
+}
+:root[data-theme='holographique-clair'] .brain-nav-candidates > li.is-retained {
+    background: rgba(0, 190, 70, 0.1)
+}
+:root[data-theme='holographique-clair'] .brain-nav-candidates > li.is-retained .brain-nav-badge {
+    color: var(--ok, #09712c)
+}
+:root[data-theme='holographique-clair'] .brain-nav-note {
+    background: rgba(20, 15, 40, 0.038)
+}
+:root[data-theme='holographique-clair'] .rag-trace-card details.rag-source-text pre, :root[data-theme='holographique-clair'] .rag-trace-card details.rag-injected-full pre {
+    background: rgba(20, 15, 40, 0.038)
+}
+:root[data-theme='holographique-clair'] .observatory-conversation-filter {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .observatory-conversation-filter:focus-visible {
+    border-color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .observatory-conversation-more {
+    border: 1px dashed rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .observatory-empty button {
+    border: 1px solid rgba(20, 15, 40, 0.2)
+}
+
+/* ---- src/renderer/src/components/OrchestrationBudgetSettings.css ---- */
+:root[data-theme='holographique-clair'] .orchestration-budget-message {
+    color: #09712c !important
+}
+
+/* ---- src/renderer/src/components/ProdPassphraseGate.css ---- */
+:root[data-theme='holographique-clair'] .ppg {
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
+}
+:root[data-theme='holographique-clair'] .ppg-kicker {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .ppg-champ:focus {
+    border-color: rgba(170, 14, 95, 0.65)
+}
+:root[data-theme='holographique-clair'] .ppg-message {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .ppg-valider {
+    border-color: rgba(170, 14, 95, 0.55);
+    color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/ProdProtectionSettings.css ---- */
+:root[data-theme='holographique-clair'] .settings-prod-protection .prod-etat-active {
+    color: #09712c;
+    border-color: rgba(9, 113, 44, 0.45)
+}
+:root[data-theme='holographique-clair'] .settings-prod-protection .prod-etat-inactive {
+    color: #aa0e5f;
+    border-color: rgba(170, 14, 95, 0.45)
+}
+:root[data-theme='holographique-clair'] .settings-prod-protection .prod-faits {
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
+}
+:root[data-theme='holographique-clair'] .settings-prod-protection .prod-message-ok {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .settings-prod-protection .prod-niveaux legend {
+    color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/ProjectPane.css ---- */
+:root[data-theme='holographique-clair'] .project-pane .pp-noeud.is-active {
+    background: rgba(208, 43, 140, 0.16)
+}
+:root[data-theme='holographique-clair'] .project-pane .pp-editeur {
+    border-left: 2px solid rgba(170, 14, 95, 0.55)
+}
+:root[data-theme='holographique-clair'] .project-pane .pp-zone {
+    background: rgba(20, 15, 40, 0.042)
+}
+:root[data-theme='holographique-clair'] .project-pane .pp-noeud.is-modifie .pp-nom {
+    color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/RouterView.css ---- */
+:root[data-theme='holographique-clair'] .router-badge.is-authenticated {
+    color: #09712c;
+    border-color: rgba(9, 113, 44, 0.4);
+    background: rgba(0, 190, 70, 0.12)
+}
+:root[data-theme='holographique-clair'] .router-badge.is-standby {
+    color: #0e31aa;
+    border-color: rgba(14, 49, 170, 0.38)
+}
+:root[data-theme='holographique-clair'] .router-actions .router-standby {
+    border-color: rgba(14, 49, 170, 0.32);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .router-account-chip {
+    background: var(--surface-card, rgba(20, 15, 40, 0.069))
+}
+:root[data-theme='holographique-clair'] .router-account-chip.is-active, :root[data-theme='holographique-clair'] .router-account-chip.is-active:disabled {
+    background: var(--surface-selected, rgba(208, 43, 140, 0.14));
+    border-color: var(--accent, #aa0e5f)
+}
+
+/* ---- src/renderer/src/components/RunBilanCard.css ---- */
+:root[data-theme='holographique-clair'] .run-bilan {
+    border-left: 2px solid rgba(170, 14, 95, 0.55)
+}
+:root[data-theme='holographique-clair'] .run-bilan__kicker {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .run-bilan[data-verdict='vert'] .run-bilan__verdict {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .run-bilan[data-verdict='en cours'] .run-bilan__verdict {
+    color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/RunInspector.css ---- */
+:root[data-theme='holographique-clair'] .run-inspector__summary, :root[data-theme='holographique-clair'] .run-inspector__nav {
+    border-bottom: 1px solid rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .run-inspector__nav button {
+    border: 1px solid rgba(20, 15, 40, 0.2);
+    background: #fdfdff;
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .run-inspector__apercu {
+    border-image: linear-gradient(90deg, rgba(170, 14, 95, 0.55), rgba(170, 14, 95, 0.06)) 1
+}
+:root[data-theme='holographique-clair'] .run-inspector__kicker {
+    color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/RunProgress.css ---- */
+:root[data-theme='holographique-clair'] .run-progress__list {
+    border-left: 1px solid var(--border, rgba(20, 15, 40, 0.18))
+}
+:root[data-theme='holographique-clair'] .run-progress__step {
+    border-left: 2px solid var(--ok, #09712c)
+}
+
+/* ---- src/renderer/src/components/SandboxedHtmlPreview.css ---- */
+:root[data-theme='holographique-clair'] .html-render-preview {
+    border: 1px solid color-mix(in srgb, var(--accent, #aa0e5f) 34%, rgba(20, 15, 40, 0.2));
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .html-render-preview__identity > span {
+    color: var(--accent, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .html-render-preview__toolbar button:hover, :root[data-theme='holographique-clair'] .html-render-preview__toolbar button:focus-visible, :root[data-theme='holographique-clair'] .html-render-preview__toolbar button.is-active {
+    border-color: color-mix(in srgb, var(--accent, #aa0e5f) 50%, transparent)
+}
+:root[data-theme='holographique-clair'] .html-render-preview__frame {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .html-render-preview__source {
+    color: #1c172b;
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .html-render-preview__too-large {
+    color: #1c172b;
+    background: radial-gradient(circle at 12% 22%, rgb(242 201 76 / 10%), transparent 36%), #fdfdff
+}
+:root[data-theme='holographique-clair'] .html-render-preview.is-expanded {
+    border-color: color-mix(in srgb, var(--accent, #aa0e5f) 55%, rgba(20, 15, 40, 0.2))
+}
+
+/* ---- src/renderer/src/components/SlashPalette.css ---- */
+:root[data-theme='holographique-clair'] .slash-palette {
+    border: 1px solid var(--container-border, rgba(20, 15, 40, 0.16));
+    background: var(--surface-panel, rgba(253, 253, 255, 0.96))
+}
+:root[data-theme='holographique-clair'] .slash-item.is-selected, :root[data-theme='holographique-clair'] .slash-item:hover {
+    background: rgba(208, 43, 140, 0.12)
+}
+:root[data-theme='holographique-clair'] .slash-name {
+    color: var(--gold-bright, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .slash-detail {
+    border: 1px solid var(--container-border, rgba(20, 15, 40, 0.16));
+    background: linear-gradient(
+      var(--surface-panel, rgba(253, 253, 255, 0.96)),
+      var(--surface-panel, rgba(253, 253, 255, 0.96))
+    ),
+    var(--bg-0, #fdfdff)
+}
+
+/* ---- src/renderer/src/components/SourceControlPane.css ---- */
+:root[data-theme='holographique-clair'] .sc-repo {
+    border-bottom: 1px solid var(--line, rgba(20, 15, 40, 0.2));
+    background: var(--surface-panel, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .sc-loading {
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-toggle.is-on {
+    border-color: rgba(9, 113, 44, 0.75);
+    color: #09712c;
+    background: rgba(0, 190, 70, 0.14)
+}
+:root[data-theme='holographique-clair'] .sc-toggle.is-off {
+    border-color: var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sc-repo-btn.is-active {
+    border-color: var(--gold, #aa0e5f);
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-sect {
+    border-bottom: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sc-branch {
+    color: var(--accent, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .sc-btn {
+    border: 1px solid var(--line2, rgba(20, 15, 40, 0.2));
+    background: var(--surface2, #fdfdff);
+    color: var(--text, #1c172b)
+}
+:root[data-theme='holographique-clair'] .sc-btn:hover {
+    border-color: var(--accent, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .sc-flux-step {
+    border: 1px solid var(--line2, rgba(20, 15, 40, 0.2));
+    background: var(--surface2, #fdfdff);
+    color: var(--text, #1c172b)
+}
+:root[data-theme='holographique-clair'] .sc-flux-step:hover {
+    border-color: var(--accent, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .sc-flux-step.is-suggested {
+    border-color: var(--gold, #aa0e5f);
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-flux-step.is-suggested .sc-flux-detail {
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-file:hover {
+    color: var(--accent, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .sc-file-open {
+    color: var(--accent, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .sc-diff-card {
+    border: 1px solid var(--line2, rgba(20, 15, 40, 0.2));
+    background: var(--surface, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .sc-diff-head {
+    border-bottom: 1px solid var(--line, rgba(20, 15, 40, 0.2));
+    background: var(--surface2, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .sc-diff-wrap-mode {
+    border: 1px solid var(--line2, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sc-diff-actions {
+    border-top: 1px solid var(--line, rgba(20, 15, 40, 0.2));
+    background: var(--surface2, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .sc-m-added {
+    color: var(--ok, #09712c)
+}
+:root[data-theme='holographique-clair'] .sc-m-renamed {
+    color: var(--accent, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .sc-m-committed {
+    color: var(--ok, #09712c)
+}
+:root[data-theme='holographique-clair'] .sc-autoclose-last {
+    border: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sc-brain-call {
+    border-top: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sc-brain-kind {
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-diff-action {
+    border-color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-relecture {
+    border-left: 2px solid var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-relecture-compte b {
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-relecture-envoyer {
+    border-color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-lancement {
+    border-left: 2px solid var(--line2, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sc-lancement[data-statut='en-cours'] {
+    border-left-color: var(--ok, #09712c)
+}
+:root[data-theme='holographique-clair'] .sc-lancement-bouton {
+    border-color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-lancement-commande {
+    border: 1px solid var(--line2, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sc-lancement-info a {
+    color: var(--gold-bright, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .sc-lancement-sortie pre {
+    border: 1px solid var(--line, rgba(20, 15, 40, 0.2));
+    background: var(--surface, #fdfdff);
+    color: var(--text, #1c172b)
+}
+
+/* ---- src/renderer/src/components/SuggestionGrid.css ---- */
+:root[data-theme='holographique-clair'] .sg-key {
+    color: var(--accent, #0e31aa);
+    border: 1px solid var(--line2, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sg-chip {
+    color: var(--text, #1c172b);
+    background: var(--surface2, #fdfdff);
+    border: 1px solid var(--line2, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .sg-chip:hover {
+    border-color: var(--accent, #0e31aa);
+    background: var(--surface, #fdfdff)
+}
+
+/* ---- src/renderer/src/components/TaskManagerView.css ---- */
+:root[data-theme='holographique-clair'] .task-manager-health.is-ok {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .task-manager-primary {
+    color: var(--rose-bright, #aa0e5f) !important
+}
+:root[data-theme='holographique-clair'] .task-manager-dot.mode-active-only, :root[data-theme='holographique-clair'] .task-manager-mode.mode-active-only {
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .task-manager-occurrence .status-completed {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .watchdog-stats .watchdog-pending strong {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .watchdog-stats .watchdog-cancelled strong, :root[data-theme='holographique-clair'] .watchdog-status.status-cancelled {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .watchdog-outcome.is-neutral {
+    color: #09712c;
+    border-color: rgba(9, 113, 44, 0.35);
+    background: rgba(0, 190, 70, 0.12)
+}
+:root[data-theme='holographique-clair'] .watchdog-outcome.is-act {
+    color: #aa0e5f;
+    border-color: rgba(170, 14, 95, 0.35);
+    background: rgba(208, 43, 140, 0.12)
+}
+:root[data-theme='holographique-clair'] .watchdog-fields-warning {
+    border: 1px solid rgba(170, 14, 95, 0.4);
+    color: #aa0e5f;
+    background: rgba(208, 43, 140, 0.1)
+}
+
+/* ---- src/renderer/src/components/TestsView.css ---- */
+:root[data-theme='holographique-clair'] .tests-summary .ok {
+    color: #09712c
+}
+:root[data-theme='holographique-clair'] .tests-progress {
+    color: var(--dore, #aa0e5f);
+    background: rgba(208, 43, 140, 0.08);
+    border-bottom: 1px solid rgba(170, 14, 95, 0.25)
+}
+
+/* ---- src/renderer/src/components/TicketsView.css ---- */
+:root[data-theme='holographique-clair'] .tickets-treat-selection {
+    color: var(--rose-bright, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .ticket-open-conversation {
+    border: 1px solid color-mix(in srgb, var(--gold, #aa0e5f) 55%, transparent)
+}
+:root[data-theme='holographique-clair'] .ticket-open-conversation:hover, :root[data-theme='holographique-clair'] .ticket-open-conversation:focus-visible {
+    border-color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .ticket-open-conversation.is-prepared, :root[data-theme='holographique-clair'] .ticket-open-conversation.is-running {
+    border-color: color-mix(in srgb, var(--rose, #aa0e5f) 70%, transparent)
+}
+:root[data-theme='holographique-clair'] .ticket-open-conversation.is-succeeded {
+    border-color: var(--success, #09712c)
+}
+
+/* ---- src/renderer/src/components/UpdateBanner.css ---- */
+:root[data-theme='holographique-clair'] .rail-update-more {
+    border: 1px solid color-mix(in srgb, var(--gold, #aa0e5f) 30%, var(--line));
+    color: color-mix(in srgb, var(--gold, #aa0e5f) 78%, var(--fg, #fff))
+}
+:root[data-theme='holographique-clair'] .rail-update-more:hover:not(:disabled) {
+    border-color: var(--gold, #aa0e5f);
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .rail-update-more:focus-visible {
+    outline: 2px solid var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .rail-update-choice {
+    border: 1px solid color-mix(in srgb, var(--gold, #aa0e5f) 22%, var(--line));
+    color: color-mix(in srgb, var(--gold, #aa0e5f) 72%, var(--fg, #fff))
+}
+:root[data-theme='holographique-clair'] .rail-update-choice:hover:not(:disabled) {
+    border-color: var(--gold, #aa0e5f);
+    color: var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .rail-update-choice:focus-visible {
+    outline: 2px solid var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .rail-update-incoming {
+    border-left: 1px solid color-mix(in srgb, var(--gold, #aa0e5f) 30%, var(--line))
+}
+:root[data-theme='holographique-clair'] .rail-update-incoming.is-floating {
+    border: 1px solid color-mix(in srgb, var(--gold, #aa0e5f) 40%, var(--line))
+}
+:root[data-theme='holographique-clair'] .rail-update-commit-when {
+    color: var(--gold, #aa0e5f)
+}
+
+/* ---- src/renderer/src/components/WorkflowCanvas.css ---- */
+:root[data-theme='holographique-clair'] .wf-ph-remake {
+    --wf-hue: var(--gold-bright, #aa0e5f)
+}
+
+/* ---- src/renderer/src/components/WorkflowProfilesView.css ---- */
+:root[data-theme='holographique-clair'] .workflow-profiles-empty {
+    border: 1px dashed var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .workflow-profile {
+    border: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .workflow-profile.is-active {
+    border-left-color: var(--cyan, #0e31aa)
+}
+:root[data-theme='holographique-clair'] .workflow-profiles-actions button {
+    color: var(--text-dim, #1c172b);
+    background: var(--surface-card, #fdfdff);
+    border: 1px solid var(--container-border, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .workflow-profiles-actions button:focus-visible {
+    outline: 2px solid var(--accent, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] input.workflow-profile-name:hover {
+    border-color: var(--container-border, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] input.workflow-profile-name:focus-visible {
+    border-color: var(--accent, #aa0e5f);
+    background: var(--surface-inset, #fdfdff)
+}
+:root[data-theme='holographique-clair'] .workflow-profile-remove {
+    border-left: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .workflow-profile-action {
+    border-left: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .workflow-profile-confirm {
+    border-left: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .wf-badge {
+    border: 1px solid var(--container-border, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .wf-badge.is-on {
+    color: var(--accent, #aa0e5f);
+    border-color: var(--accent-dim, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .wf-tn {
+    background: var(--surface-card, #fdfdff);
+    border: 1px solid var(--container-border, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .workflow-graph-editor {
+    border-top: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .workflow-profile-prompt blockquote {
+    border-left: 2px solid var(--container-border, rgba(20, 15, 40, 0.2))
+}
+
+/* ---- src/renderer/src/components/WorkflowVerdict.css ---- */
+:root[data-theme='holographique-clair'] .workflow-verdict-table th, :root[data-theme='holographique-clair'] .workflow-verdict-table td {
+    border-bottom: 1px solid var(--line, rgba(20, 15, 40, 0.2))
+}
+:root[data-theme='holographique-clair'] .workflow-verdict-table .is-recommended {
+    background: var(--accent-soft, rgba(60, 110, 235, 0.08))
+}
+
+/* ---- src/renderer/src/components/WorktreeView.css ---- */
+:root[data-theme='holographique-clair'] .wt-st-entete {
+    background-color: var(--surface-panel, #fdfdff);
+    color: var(--text-faint, rgba(37, 67, 126, 0.45))
+}
+:root[data-theme='holographique-clair'] .wt-geste {
+    border: 1px solid var(--gold, #aa0e5f)
+}
+:root[data-theme='holographique-clair'] .wt-geste code {
+    background: rgba(20, 15, 40, 0.053)
+}
+:root[data-theme='holographique-clair'] .wt-geste-resultat.is-ok {
+    border-left-color: var(--ok, #09712c)
+}
+
+/* ---- src/renderer/src/assets/app-shell.css ---- */
+:root[data-theme='holographique-clair'] .brand {
+    background: linear-gradient(135deg, rgba(253, 253, 255, 0.76), rgba(253, 253, 255, 0.72))
+}
+:root[data-theme='holographique-clair'] .nav-item.active {
+    background: rgba(208, 43, 140, 0.09)
+}
+
+/* ---- src/renderer/src/assets/cosmic-outline.css ---- */
+:root[data-theme='holographique-clair'] .cosmic-outline :where(.input, .select, textarea.input) {
+    background-color: #fdfdff
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .btn-accent {
+    border-color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .theme-sidebar, :root[data-theme='holographique-clair'] .visibility-sidebar, :root[data-theme='holographique-clair'] .graph-stage {
+    background-color: rgba(253, 253, 255, 0.96)
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .theme-sidebar {
+    border-right-color: rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .graph-observatory--galaxy .visibility-sidebar {
+    border-left-color: rgba(20, 15, 40, 0.2)
+}
+:root[data-theme='holographique-clair'] .theme-filter, :root[data-theme='holographique-clair'] .node-search-result, :root[data-theme='holographique-clair'] .settings-section, :root[data-theme='holographique-clair'] .node-links button {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .theme-filter.is-active, :root[data-theme='holographique-clair'] .node-search-result:hover {
+    background: rgba(208, 43, 140, 0.07)
+}
+:root[data-theme='holographique-clair'] .conv-item, :root[data-theme='holographique-clair'] .run-row, :root[data-theme='holographique-clair'] .control-row {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .conv-item.active, :root[data-theme='holographique-clair'] .run-row.active {
+    background: rgba(208, 43, 140, 0.09)
+}
+:root[data-theme='holographique-clair'] .model-question-layer {
+    background: radial-gradient(circle at 84% 8%, rgba(208, 43, 140, 0.12), transparent 28%), var(--bg-0)
+}
+:root[data-theme='holographique-clair'] .model-question-popup {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .model-question-options button {
+    background: #fdfdff
+}
+:root[data-theme='holographique-clair'] .model-question-options button:hover {
+    background: rgba(208, 43, 140, 0.09)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat > .composer {
+    background: linear-gradient(rgba(20, 15, 40, 0.063), rgba(20, 15, 40, 0.063)), var(--surface-panel)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-search:focus-within, :root[data-theme='holographique-clair'] .cosmic-outline .composer-field:focus-within {
+    border-color: rgba(170, 14, 95, 0.72)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item, :root[data-theme='holographique-clair'] .cosmic-outline .conv-item:hover {
+    background: rgba(20, 15, 40, 0.036)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-item.active {
+    border-color: rgba(170, 14, 95, 0.76);
+    background: rgba(208, 43, 140, 0.12)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-head-signal {
+    border-color: rgba(170, 14, 95, 0.7)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg-body, :root[data-theme='holographique-clair'] .cosmic-outline .msg.assistant .msg-body {
+    border-left-color: rgba(170, 14, 95, 0.78);
+    background: rgba(20, 15, 40, 0.069)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.assistant .msg-role {
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body {
+    border-color: rgba(170, 14, 95, 0.58);
+    background: rgba(208, 43, 140, 0.48)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-welcome {
+    background: rgba(20, 15, 40, 0.039)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer {
+    background: rgba(20, 15, 40, 0.063)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer > .btn {
+    border-color: rgba(170, 14, 95, 0.62);
+    background: rgba(208, 43, 140, 0.74)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-send.is-resume {
+    border-color: rgba(9, 113, 44, 0.74)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.assistant .msg-body {
+    border-left: 2px solid rgba(170, 14, 95, 0.74)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body {
+    border: 1px solid rgba(170, 14, 95, 0.45);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-group {
+    border-left: 2px solid #0e31aa;
+    background: rgba(20, 15, 40, 0.045)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-group:hover {
+    background: rgba(20, 15, 40, 0.068)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-group.failed, :root[data-theme='holographique-clair'] .cosmic-outline .activity-group[data-state='failed'] {
+    background: linear-gradient(
+    100deg,
+    rgba(255, 109, 143, 0.24) 0%,
+    rgba(255, 109, 143, 0.07) 45%,
+    rgba(20, 15, 40, 0.045) 85%
+  )
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-group[data-state='running'] {
+    border-left-color: #0e31aa;
+    background: linear-gradient(
+    100deg,
+    rgba(60, 110, 235, 0.22) 0%,
+    rgba(60, 110, 235, 0.07) 45%,
+    rgba(20, 15, 40, 0.045) 85%
+  )
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
+    background: linear-gradient(
+    100deg,
+    rgba(232, 163, 61, 0.22) 0%,
+    rgba(232, 163, 61, 0.07) 45%,
+    rgba(20, 15, 40, 0.045) 85%
+  )
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-group[data-state='done'] {
+    border-left-color: #09712c;
+    background: linear-gradient(
+    100deg,
+    rgba(0, 190, 70, 0.2) 0%,
+    rgba(0, 190, 70, 0.06) 45%,
+    rgba(20, 15, 40, 0.045) 85%
+  )
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-step-toggle:hover {
+    border-color: rgba(14, 49, 170, 0.6);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-step-detail {
+    background: rgba(20, 15, 40, 0.053)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-resume {
+    border: 1px solid rgba(14, 49, 170, 0.4);
+    background: rgba(60, 110, 235, 0.08);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-resume:hover {
+    border-color: rgba(14, 49, 170, 0.75);
+    background: rgba(60, 110, 235, 0.16);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-jump-latest {
+    border: 1px solid rgba(170, 14, 95, 0.5);
+    background: rgba(253, 253, 255, 0.9);
+    color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-steps {
+    border-left: 1px dashed rgba(14, 49, 170, 0.35)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-step-icon {
+    background: rgba(60, 110, 235, 0.16)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .activity-step-link {
+    border: 1px dashed rgba(14, 49, 170, 0.4);
+    color: #0e31aa
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
+    border: 1px solid rgba(170, 14, 95, 0.55);
+    border-top-color: rgba(170, 14, 95, 0.85);
+    border-bottom-color: rgba(170, 14, 95, 0.95)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
+    border-color: rgba(170, 14, 95, 0.9);
+    border-top-color: rgba(170, 14, 95, 0.95);
+    border-bottom-color: rgba(170, 14, 95, 0.85)
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled):active {
+    border-top-color: rgba(170, 14, 95, 0.9);
+    border-bottom-color: rgba(170, 14, 95, 0.6)
+}
+
+/* ---- src/renderer/src/assets/theme-modes.css ---- */
+:root[data-theme='holographique-clair'] .theme-serious .rail {
+    background: #fdfdff;
+    border-right-color: rgba(20, 15, 40, 0.16)
+}
+:root[data-theme='holographique-clair'] .theme-serious .brand {
+    background: rgba(253, 253, 255, 0.95)
+}
+
+/* ---- src/renderer/src/assets/theme.css ---- */
+:root[data-theme='holographique-clair'] {
+    --bg-0: #fdfdff;
+    --bg-1: rgba(253, 253, 255, 0.56);
+    --bg-2: rgba(20, 15, 40, 0.063);
+    --bg-3: rgba(20, 15, 40, 0.048);
+    --bg-inset: rgba(253, 253, 255, 0.58);
+    --gold: #aa0e5f;
+    --gold-bright: #aa0e5f;
+    --gold-doux: #aa0e5f;
+    --gold-clair: #aa0e5f;
+    --rose-bright: #aa0e5f;
+    --cyan: #0e31aa;
+    --accent-soft: rgba(208, 43, 140, 0.13);
+    --chat-recherche-fond: #fdfdff;
+    --chat-recherche-fond-vue: #fdfdff;
+    --chat-conv-survol: #fdfdff;
+    --chat-conv-filet-active: #aa0e5f;
+    --chat-conv-separateur: #aa0e5f;
+    --chat-liste-bouton: #aa0e5f;
+    --chat-fond-page: #fdfdff;
+    --chat-tete-bouton-fond: #fdfdff;
+    --chat-suggestion-fond: #fdfdff;
+    --chat-md-bon: #09712c;
+    --chat-md-alerte: #aa0e5f;
+    --chat-consigne-fond: #fdfdff;
+    --chat-consigne-meta-filet: rgba(20, 15, 40, 0.2);
+    --chat-consigne-limite: #aa0e5f;
+    --chat-consigne-bloc-filet: rgba(20, 15, 40, 0.2);
+    --chat-consigne-bloc-fond: #fdfdff;
+    --chat-role-agent: #0e31aa;
+    --chat-role-vous: #aa0e5f;
+    --chat-modele-texte: #0e31aa;
+    --chat-modele-etat-fond: #fdfdff;
+    --chat-modele-etat-texte: #aa0e5f;
+    --chat-effort-fond: #fdfdff;
+    --chat-matrice-fond: #fdfdff;
+    --chat-cran-vif: #aa0e5f;
+    --chat-cran-reco: #09712c;
+    --chat-cran-focus: #aa0e5f;
+    --chat-saisie-fond: #fdfdff;
+    --chat-depot-texte: #0e31aa
+}
+:root[data-theme='holographique-clair'] body::after {
+    background: linear-gradient(
+      90deg,
+      rgba(60, 110, 235, 0.022),
+      transparent 16%,
+      transparent 84%,
+      rgba(208, 43, 140, 0.018)
+    ),
+    linear-gradient(180deg, rgba(60, 110, 235, 0.035), transparent 1px)
+}
+:root[data-theme='holographique-clair'] .spinner::before {
+    border-top-color: #0e31aa;
+    border-right-color: rgba(14, 49, 170, 0.4)
+}
+:root[data-theme='holographique-clair'] .spinner::after {
+    border-top-color: #aa0e5f
+}
+:root[data-theme='holographique-clair'] .aw-atom__trail--1 {
+    background: conic-gradient(
+    from 0deg,
+    rgba(0, 245, 255, 0) 0 16%,
+    rgba(0, 190, 70, 0.6) 58%,
+    rgba(0, 245, 255, 1) 99%,
+    transparent 100%
+  )
+}
+:root[data-theme='holographique-clair'] .aw-atom__trail--2 {
+    background: conic-gradient(
+    from 0deg,
+    rgba(208, 43, 140, 0) 0 16%,
+    rgba(180, 60, 255, 0.6) 58%,
+    rgba(255, 0, 170, 1) 99%,
+    transparent 100%
+  )
+}
+
+/* ---- src/renderer/src/assets/ui-system.css ---- */
+:root[data-theme='holographique-clair'] .shell {
+    --surface-page: rgba(20, 15, 40, 0.066);
+    --surface-panel: rgba(20, 15, 40, 0.048);
+    --surface-card: rgba(20, 15, 40, 0.069);
+    --surface-inset: rgba(253, 253, 255, 0.58);
+    --surface-selected: rgba(208, 43, 140, 0.11)
+}
+:root[data-theme='holographique-clair'] .shell.theme-serious {
+    --surface-panel: rgba(253, 253, 255, 0.95);
+    --surface-card: rgba(253, 253, 255, 0.95);
+    --surface-inset: rgba(253, 253, 255, 0.95)
+}
