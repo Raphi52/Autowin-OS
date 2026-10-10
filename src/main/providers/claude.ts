@@ -530,6 +530,9 @@ export function materializeClaudeAttachments(attachments: Attachment[]): Materia
    * mais un seul titre « PIÈCES JOINTES FOURNIES PAR L'UTILISATEUR » sur deux `image.png` (la sienne
    * et celle de son premier message, rejointe d'office). Le modele a repondu « Je regarde tes deux
    * captures » avant de les ouvrir : la provenance ne tenait qu'a un suffixe entre parentheses.
+   * fix-ok: conv-150 tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 — cause mesuree dans la session
+   * Claude eceabf8f (ligne 205, 08:24:53Z) : le prompt listait `1-image.png` et `2-image.png
+   * (jointe a un message precedent)` sous UN seul titre ; test rouge 2/2 puis vert 48/48.
    */
   const ligne = (index: number): string => `- ${paths[index]} — ${attachments[index]?.name ?? ''}`
   const courantes = attachments.flatMap((a, i) => (a.provenance === 'message-precedent' ? [] : [i]))
