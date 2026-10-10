@@ -1046,6 +1046,20 @@ function dureeLisible(secondes: number): string {
  * Ce que fait Autowin : la reponse est terminale des `result` ; passe ce delai, on arrete le
  * processus et on la rend. 30 s = 7x le maximum mesure (4,1 s sur 173 journaux, mediane 0,9 s).
  */
+/**
+ * Ce `result` a-t-il ete produit par le CLI pour traiter une NOTIFICATION de tache de fond, et non
+ * pour repondre a la demande ? Le CLI le dit lui-meme : `origin.kind` = `task-notification`
+ * (absent des `result` ordinaires — mesure sur 302 journaux `run-stdout/` le 2026-10-10).
+ */
+export function resultatDeNotification(o: Record<string, unknown>): boolean {
+  const origine = o['origin']
+  return (
+    typeof origine === 'object' &&
+    origine !== null &&
+    (origine as { kind?: unknown }).kind === 'task-notification'
+  )
+}
+
 export function delaiFinApresResultatMs(env: NodeJS.ProcessEnv = process.env): number {
   const brut = Number(env.AUTOWIN_CLAUDE_FIN_APRES_RESULTAT_MS)
   return Number.isFinite(brut) && brut > 0 ? brut : 30_000
@@ -1959,6 +1973,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           reasoningFragments.push(delta.thinking)
           queue.push({ delta: '', reasoning: delta.thinking })
         }
+        return
+      }
+      // fix-ok: conv-217 tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — un `result` de notification emis AVANT la demande etait pris pour sa fin
+      if (t === 'result' && !resultSeen && resultatDeNotification(o)) {
+        /*
+         * CE `result` NE REPOND PAS A LA DEMANDE. A la reprise d'une session (`--resume`) dont une
+         * commande de fond avait ete coupee, le CLI traite d'abord cette notification et emet un
+         * `result` a 0 tour (`origin.kind` = `task-notification`), PUIS seulement il joue notre
+         * demande. Journal `run-stdout/c4cf11ed-…` l.1-3, conv-217 : pris pour la fin du tour, il
+         * armait la coupure de 30 s — CLI tue en plein travail, tour affiche « termine » a 0 token,
+         * et son cumul (0,3023 USD, celui du 1er tour) facture au tour. On l'ignore en entier :
+         * ni fin, ni texte, ni cout, ni avis. Les `result` de notification APRES la reponse (5 sur
+         * 302 journaux mesures le 2026-10-10) arrivent quand `resultSeen` est deja vrai : inchanges.
+         */
         return
       }
       if (t === 'result') {
