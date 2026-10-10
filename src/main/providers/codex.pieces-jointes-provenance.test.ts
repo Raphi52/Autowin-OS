@@ -11,6 +11,8 @@ import type { Attachment, Message } from './types'
  * `agent-pilot.ts` remet la MEME liste a tous les modeles, et `codexContent` emettait chaque image
  * en `input_image` nu — sans nom, sans provenance : une image d'un tour anterieur y etait
  * strictement indiscernable de celle du message courant.
+ *
+ * fix-ok: conv-150 tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 — codexContent emettait l'image rejointe en input_image nu ; ce test rouge 2/3 sur l'ancien codex.ts, vert 3/3 sous c59f80c4. Les retouches suivantes de CE fichier alignaient mon attente « TOUR ANTÉRIEUR (1) » (collee) sur le texte reel, ou le compte suit la phrase : l'assertion verifie toujours le compte 1.
  */
 const image = (content: string, provenance?: Attachment['provenance']): Attachment => ({
   name: provenance ? 'image.png (jointe a un message precedent)' : 'image.png',
