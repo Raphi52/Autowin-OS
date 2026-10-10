@@ -29,10 +29,10 @@ if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Lanceur Dev
 # ICO REUTILISE tel quel s il existe deja.
 #
 # MESURE du 2026-09-07 (conv-335) : ce script reconstruisait TOUJOURS l ico en reechantillonnant le
-# seul PNG 512px. Or l ico du depot porte volontairement DEUX dessins - une variante aux points
-# blancs elargis pour les cadres 16 a 32 px, sinon les trois atomes se noient dans l epaisseur des
-# orbites. Reconstruire depuis le PNG effacait ce reglage a chaque passage. Le fichier livre est donc
-# la source de verite ; la reconstruction n est plus qu un SECOURS quand il manque.
+# seul PNG 512px. Or l ico du depot porte un dessin NATIF par taille (16 a 256 px), rendu par
+# scripts/logo_anneau.py : reechantillonner le 512 rend les petits cadres flous. Le fichier livre est
+# donc la source de verite ; la reconstruction n est plus qu un SECOURS quand il manque. Pour changer
+# le logo : py -3 scripts/logo_anneau.py (il reecrit tous les PNG, ICO, ICNS et SVG du produit).
 if (Test-Path -LiteralPath $ico -PathType Leaf) {
   Write-Host ('ICO existant reutilise (aucune reconstruction) : ' + $ico)
 } else {

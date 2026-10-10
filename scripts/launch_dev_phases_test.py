@@ -233,10 +233,32 @@ verifie("_ATONE" not in _splash_src,
         "le gris atone invente ne doit pas revenir : les petits textes sont dores")
 verifie(_splash_src.count("fg=_DORE") >= 3,
         "sous-titre, chrono et detail doivent etre dores")
-verifie('text="Autowin OS"' in _splash_src and "fg=_TEXTE" in _splash_src,
-        "le gros titre reste BLANC")
-verifie("background: #000" in _html and '_FOND = "#000000"' in _splash_src,
-        "le fond doit etre NOIR des deux cotes")
+verifie(_mod._TITRE == "Autowin OS" and "fg=_TEXTE" in _splash_src,
+        "le gros titre dit « Autowin OS » et l'etape en cours reste BLANCHE")
+# FOND : le noir violace de la capture de reference (demande du 2026-10-11, conv-228 : « refais la
+# gueule du launcher pour qu'il fasse plus moderne comme ce screenshot »). Il remplace le noir pur
+# qu'exigeait cette garde jusque-la. Il est LU dans le module du logo, source unique, jamais recopie.
+import logo_anneau as _logo  # noqa: E402
+
+verifie(_mod._FOND.lower() == "#%02x%02x%02x" % _logo.FOND,
+        "le fond du lanceur doit etre celui du logo (logo_anneau.FOND), pas une valeur recopiee")
+verifie(sum(_logo.FOND) / 3 < 30, "le fond reste SOMBRE : c'est un noir violace, pas un violet")
+if _logo.PILLOW:
+    # On verifie l'IMAGE reellement peinte, pas le texte du fichier.
+    _fond = _mod._peindre_fond()
+    _blanc = tuple(int(_mod._TEXTE[i : i + 2], 16) for i in (1, 3, 5))
+    _bande = _fond.crop((0, _mod._HAUT_TITRE, _mod._LARGEUR, _mod._HAUT_TITRE + _mod._CAPITALE))
+    _comptes = {couleur: n for n, couleur in _bande.getcolors(_bande.width * _bande.height)}
+    verifie(_comptes.get(_blanc, 0) > 2000,
+            "le titre « Autowin OS » doit etre peint en BLANC (#f5f7fb), en gros, sous l'anneau")
+    _halo = _fond.getpixel((_mod._CENTRE[0] + _mod._DIAMETRE // 2 + 4, _mod._CENTRE[1]))
+    verifie(sum(_halo) > sum(_logo.FOND) + 60,
+            "un halo violet doit entourer l'anneau, comme sur la capture de reference")
+    # Sous le titre, les etiquettes tkinter ont un fond OPAQUE : le halo doit y valoir zero, sinon
+    # chaque etiquette dessine un rectangle visible (defaut de la premiere version, vu a la capture).
+    _y_etiquettes = _mod._HAUT_TITRE + _mod._CAPITALE + 22
+    verifie(all(_fond.getpixel((x, _y_etiquettes)) == _logo.FOND for x in (60, _mod._LARGEUR // 2, 460)),
+            "le halo doit etre ETEINT la ou se posent les etiquettes : sinon un rectangle apparait")
 # Le vert de la premiere version ne doit pas resurgir : il n'appartient a aucune des deux palettes.
 verifie("#7ee2a8" not in _splash_src,
         "l'accent vert d'origine doit avoir disparu : il n'est pas dans la palette du produit")
